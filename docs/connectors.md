@@ -116,8 +116,8 @@ App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读�
    HTTP client 一律用 `Egress.HTTPClient` 建：配了走代理、没配直连，填错了报错而不是悄悄直连。`github.proxy` 就是这样来的（#1106）；
    代理地址的解析在 `netproxy`，`google.proxy` 也用它。还没接上的：Telegram（MTProto 不是 HTTP）、子进程 / 第三方连接器（要把代理传给程序），见 #1106。
 
-> **微信（wechat-connector）是进程插件连接器的范例**，而且不写在 hub 里：连接器是外部 API 服务 wechat-connector 的客户端，以插件包（`.tar.gz` 加 sha256）交付，
-> 用插件协议 1 加连接器协议 v2 和 hub 说话，本仓库没有它的代码。接入手册见 [wechat-connector.md](wechat-connector.md)。
+> **微信（wechat-connector）是进程扩展连接器的范例**，而且不写在 hub 里：连接器是外部 API 服务 wechat-connector 的客户端，以扩展包（`.tar.gz` 加 sha256）交付，
+> 用扩展协议 1 加连接器协议 v2 和 hub 说话，声明 `fallback`（每个收件箱条目带兜底分级），本仓库没有它的代码。接入手册见 [wechat-connector.md](wechat-connector.md)。
 > 怎么给这样的外部程序做一致性测试：插件一侧的起停和握手用 `conformance.Program`（[extensions.md](extensions.md)「一致性测试」），
 > 连接器一侧逐个能力的检查用 `CheckProgram` 加合成的线上夹具（[connector-protocol.md](connector-protocol.md)「一致性测试」）。
 

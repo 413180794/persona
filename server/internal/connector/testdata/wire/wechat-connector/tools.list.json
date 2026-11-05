@@ -51,7 +51,7 @@
     },
     {
       "name": "wechat-connector_search",
-      "description": "在 wechat-connector 保存的微信消息里找字：空格分开的几个词（最多 8 个）都要出现，不区分大小写，也查链接标题、文件名、引用等的摘要；按字找，不按意思找，不支持通配。较旧的 wechat-connector 只支持区分大小写的字面子串、只查纯文本（返回的 match 会写明）。每次只查看一段（最多 5000 条记录），返回 cursor 时可用它继续往更早找，结果可能少于 limit 甚至为空；没找到不代表没有。跨会话按意思找以前的消息请先用 kb_search。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只有占位，链接、文件、引用等只有 wechat-connector 给出的摘要；群里标着「发言人未确认」的名字是 wechat-connector 没能确认的发言人。全文检索请用 kb_search。",
+      "description": "在 wechat-connector 保存的微信消息里找字：空格分开的几个词（最多 8 个）都要出现，不区分大小写，也查链接标题、文件名、引用等的摘要；按字找，不按意思找，不支持通配。较旧的 wechat-connector 只支持区分大小写的字面子串、只查纯文本（返回的 match 会写明）。每次只查看一段（最多 5000 条记录），多个账号依次查；返回 cursor 时可用它继续找（更早的或下一个账号的），结果可能少于 limit 甚至为空；没找到不代表没有。跨会话按意思找以前的消息请先用 kb_search。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只有占位，链接、文件、引用等只有 wechat-connector 给出的摘要；群里标着「发言人未确认」的名字是 wechat-connector 没能确认的发言人。全文检索请用 kb_search。",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -69,7 +69,7 @@
           },
           "cursor": {
             "type": "string",
-            "description": "上一次返回的 cursor，用来继续往更早找。"
+            "description": "上一次返回的 cursor，用来继续找（更早的或下一个账号的）。"
           }
         },
         "required": [

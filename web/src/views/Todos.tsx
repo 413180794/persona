@@ -36,6 +36,7 @@ import {
 import type { Interaction, Launcher, Machine } from "../lib/types";
 import { Button, cx, Dialog, IconButton, Menu, StatusDot, toast, useMenu } from "../ui/atoms";
 import { Icon } from "../ui/icons";
+import { t } from "../i18n";
 
 export function TodosView({
   selectedId,
@@ -110,9 +111,9 @@ export function TodosView({
       await updateTodo(todo.id, { done: !todo.done_at });
       await refreshTodos();
       await refresh();
-      toast(todo.done_at ? "已重新打开待办" : "已完成待办", "ok");
+      toast(todo.done_at ? t("todos.reopened") : t("todos.completed"), "ok");
     } catch (e) {
-      toast(`操作失败：${errorText(e)}`, "error");
+      toast(t("todos.action_failed", { error: errorText(e) }), "error");
     }
   };
 
@@ -124,9 +125,9 @@ export function TodosView({
       await refresh();
       setDeleteConfirm(false);
       setActiveId(undefined);
-      toast("已删除待办", "ok");
+      toast(t("todos.deleted"), "ok");
     } catch (e) {
-      toast(`删除失败：${errorText(e)}`, "error");
+      toast(t("todos.delete_failed", { error: errorText(e) }), "error");
     }
   };
 
@@ -135,16 +136,16 @@ export function TodosView({
       {/* Top Header */}
       <header className="flex h-13 shrink-0 items-center justify-between border-b border-line bg-surface px-4 sm:px-6">
         <div className="flex items-center gap-3">
-          {onToggleSidebar && <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />}
+          {onToggleSidebar && <IconButton icon="sidebar" label={t("agents-agentsview.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />}
           <div className="flex items-baseline gap-2">
-            <h1 className="text-[16px] font-semibold text-ink">待办</h1>
+            <h1 className="text-[16px] font-semibold text-ink">{t("todos.title")}</h1>
             <span className="text-[12px] text-ink-3">
-              没完成 {uncompleted.length} · 已完成 {completed.length}
+              {t("todos.summary", { open: uncompleted.length, done: completed.length })}
             </span>
           </div>
         </div>
         <Button tone="secondary" icon="plus" onClick={() => setNewOpen(true)} className="h-8 text-[12.5px]">
-          新建待办
+          {t("todos.new_todo")}
         </Button>
       </header>
 
@@ -158,7 +159,7 @@ export function TodosView({
               <Icon name="search" size={13} stroke={2} className="text-ink-3" />
               <input
                 type="text"
-                placeholder="搜索待办"
+                placeholder={t("todos.search_placeholder")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
@@ -175,7 +176,7 @@ export function TodosView({
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
             {filteredUncompleted.length === 0 && filteredCompleted.length === 0 ? (
               <div className="py-12 text-center text-[13px] text-ink-3">
-                {search ? "没有找到符合条件的待办" : "暂无待办，点击上方新建"}
+                {search ? t("todos.no_match") : t("todos.empty")}
               </div>
             ) : (
               <div className="flex flex-col gap-1">
@@ -202,7 +203,7 @@ export function TodosView({
                       onClick={() => setShowDone((v) => !v)}
                       className="flex h-8 w-full items-center justify-between rounded-control px-2.5 text-[12px] text-ink-3 transition-colors hover:bg-hover hover:text-ink-2"
                     >
-                      <span>已完成 · {filteredCompleted.length}</span>
+                      <span>{t("todos.done_section", { count: filteredCompleted.length })}</span>
                       <Icon
                         name="chevron"
                         size={12}
@@ -253,7 +254,7 @@ export function TodosView({
             />
           ) : (
             <div className="flex flex-1 items-center justify-center text-[13px] text-ink-3">
-              选择左侧待办查看详情
+              {t("todos.pick_hint")}
             </div>
           )}
         </div>
@@ -272,16 +273,16 @@ export function TodosView({
       )}
 
       {activeTodo && (
-        <Dialog open={deleteConfirm} onClose={() => setDeleteConfirm(false)} title="删除待办">
+        <Dialog open={deleteConfirm} onClose={() => setDeleteConfirm(false)} title={t("todos.delete_title")}>
           <div className="py-2 text-[13.5px] text-ink-2">
-            确定要删除「{activeTodo.title}」吗？已关联的 Agent 不受影响。
+            {t("todos.delete_confirm", { title: activeTodo.title })}
           </div>
           <div className="mt-4 flex justify-end gap-2">
             <Button tone="secondary" onClick={() => setDeleteConfirm(false)}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button tone="danger" onClick={handleDelete}>
-              删除
+              {t("todos.delete")}
             </Button>
           </div>
         </Dialog>
@@ -335,7 +336,7 @@ function TodoListItem({
   const urgentIx = urgent
     ? interactions.find((i) => i.machine_id === urgent.agent.machine_id && i.session_id === urgent.agent.session_id)
     : undefined;
-  const urgentKicker = urgentIx?.kind === "plan" ? "计划待批准" : urgentIx?.kind === "permission" ? "需要授权" : urgentIx?.kind === "screen" ? "终端对话框" : "在问你";
+  const urgentKicker = urgentIx?.kind === "plan" ? t("todos.kicker_plan") : urgentIx?.kind === "permission" ? t("todos.kicker_permission") : urgentIx?.kind === "screen" ? t("todos.kicker_screen") : t("todos.kicker_question");
 
   return (
     <div
@@ -357,7 +358,7 @@ function TodoListItem({
       {/* Checkbox button: touch-hit makes the 16px circle a 44px target on touch, its own (no row underneath) */}
       <button
         type="button"
-        aria-label={todo.done_at ? "重新打开待办" : "完成待办"}
+        aria-label={todo.done_at ? t("todos.reopen_todo") : t("todos.complete_todo")}
         onClick={(e) => {
           e.stopPropagation();
           onToggleDone();
@@ -388,11 +389,11 @@ function TodoListItem({
           {!todo.done_at && activeCount > 0 && (
             <>
               <span className="text-ink-3">·</span>
-              <span className="text-ink-3">{activeCount} 个 Agent</span>
+              <span className="text-ink-3">{t("todos.agent_count", { count: activeCount })}</span>
             </>
           )}
           {!todo.done_at && activeCount === 0 && (
-            <span className="text-ink-3">· 还没交给 Agent</span>
+            <span className="text-ink-3">· {t("todos.not_handed")}</span>
           )}
         </div>
 
@@ -406,7 +407,7 @@ function TodoListItem({
           <div className="mt-1 truncate text-[11.5px] text-ink-3">
             {urgent.status === "needs_you" && (
               <span className="font-medium text-red">
-                {urgent.agent.title || urgent.session.title || "Agent"} {urgentKicker}：
+                {t("todos.urgent_line", { name: urgent.agent.title || urgent.session.title || "Agent", kicker: urgentKicker })}
               </span>
             )}
             {urgentNow.kind === "words" ? plainMarkdown(urgentNow.text) : urgentNow.text}
@@ -467,9 +468,9 @@ function TodoDetail({
       await unlinkSpaceFromTodo(todo.id, mid, space);
       await refreshTodos();
       await refresh();
-      toast("已移出项目", "ok");
+      toast(t("todos.space_removed"), "ok");
     } catch (e) {
-      toast(`移出失败：${errorText(e)}`, "error");
+      toast(t("todos.space_remove_failed", { error: errorText(e) }), "error");
     }
   };
 
@@ -488,7 +489,7 @@ function TodoDetail({
       await updateTodo(todo.id, { title: title.trim() });
       await refreshTodos();
     } catch (e) {
-      toast(`保存标题失败：${errorText(e)}`, "error");
+      toast(t("todos.save_title_failed", { error: errorText(e) }), "error");
     } finally {
       setSavingTitle(false);
     }
@@ -501,7 +502,7 @@ function TodoDetail({
       await updateTodo(todo.id, { notes: notes.trim() });
       await refreshTodos();
     } catch (e) {
-      toast(`保存说明失败：${errorText(e)}`, "error");
+      toast(t("todos.save_notes_failed", { error: errorText(e) }), "error");
     } finally {
       setSavingNotes(false);
     }
@@ -512,9 +513,9 @@ function TodoDetail({
       await unlinkAgentFromTodo(todo.id, agent.machine_id, agent.session_id);
       await refreshTodos();
       await refresh();
-      toast("已移除启动失败的 Agent", "ok");
+      toast(t("todos.failed_agent_removed"), "ok");
     } catch (e) {
-      toast(`移除失败：${errorText(e)}`, "error");
+      toast(t("todos.remove_failed", { error: errorText(e) }), "error");
     }
   };
 
@@ -554,10 +555,10 @@ function TodoDetail({
               e.currentTarget.blur();
             }
           }}
-          placeholder="待办标题"
+          placeholder={t("todos.title_placeholder")}
           className="min-w-0 flex-1 bg-transparent text-[22px] font-bold text-ink outline-none transition-colors focus:border-b focus:border-accent"
         />
-        <IconButton icon="more" label="更多选项" onClick={menu.open} active={Boolean(menu.anchor)} />
+        <IconButton icon="more" label={t("todos.more_options")} onClick={menu.open} active={Boolean(menu.anchor)} />
         {menu.anchor && (
           <Menu
             anchor={menu.anchor}
@@ -566,7 +567,7 @@ function TodoDetail({
             items={[
               {
                 key: "delete",
-                label: "删除待办…",
+                label: t("todos.delete_menu"),
                 icon: "x" as const,
                 danger: true,
                 onSelect: onDeleteClick,
@@ -583,13 +584,13 @@ function TodoDetail({
           {todoStatusLabel(todo, status)}
         </span>
         <span className="text-ink-3">·</span>
-        <span>{activeAgents.length} 个 Agent</span>
+        <span>{t("todos.agent_count", { count: activeAgents.length })}</span>
         <span className="text-ink-3">·</span>
-        <span>{clock(todo.created_at)} 创建</span>
+        <span>{t("todos.created_at", { time: clock(todo.created_at) })}</span>
       </div>
       {isAutoDone(todo) && (
         <p className="mt-2 text-[12.5px] leading-[1.6] text-ink-3">
-          Agent 停下后判断已经做完，自动标成了完成{todo.done_reason ? `：${todo.done_reason}` : ""}。没做完就点「重新打开」。
+          {todo.done_reason ? t("todos.auto_done_reason", { reason: todo.done_reason }) : t("todos.auto_done")}
         </p>
       )}
 
@@ -602,7 +603,7 @@ function TodoDetail({
             disabled={savingNotes}
             onChange={(e) => setNotes(e.target.value)}
             onBlur={saveNotes}
-            placeholder="填写待办说明，交给 Agent 时作为上下文一起发出…"
+            placeholder={t("todos.notes_placeholder")}
             className="w-full resize-none bg-transparent text-[13.5px] leading-[1.65] text-ink outline-none placeholder:text-ink-3"
           />
         </div>
@@ -614,7 +615,7 @@ function TodoDetail({
       {spacesSupported !== false && todo.spaces && todo.spaces.length > 0 && (
         <div className="mt-6">
           <div className="mb-2 text-[11.5px] font-medium tracking-[0.04em] text-ink-3 uppercase">
-            项目 · {todo.spaces.length}
+            {t("todos.spaces_section", { count: todo.spaces.length })}
           </div>
           <div className="flex flex-col gap-2">
             {todo.spaces.map((sp) => {
@@ -631,7 +632,7 @@ function TodoDetail({
                     </span>
                     {!live && (
                       <span className="shrink-0 rounded bg-hover px-1.5 py-0.5 text-[10.5px] text-ink-3">
-                        当前没有 Agent
+                        {t("todos.space_no_agent")}
                       </span>
                     )}
                   </div>
@@ -640,7 +641,7 @@ function TodoDetail({
                     className="shrink-0 text-ink-3 hover:bg-red-tint/50 hover:text-red whitespace-nowrap px-2 py-1 text-[12px]"
                     onClick={() => void removeSpace(sp.machine_id, sp.space)}
                   >
-                    移出
+                    {t("todos.space_remove")}
                   </Button>
                 </div>
               );
@@ -657,7 +658,7 @@ function TodoDetail({
 
         {activeAgents.length === 0 ? (
           <div className="rounded-control border border-dashed border-line p-6 text-center text-[13px] text-ink-3">
-            还没把这件事交给 Agent 执行，点击下方按钮开始
+            {t("todos.no_agents")}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -666,7 +667,7 @@ function TodoDetail({
               const st = session ? stateOf(session) : "offline";
               const now = taskNow(session, st === "working");
               const isExpired = !session && !agent.start_error;
-              const displayTitle = session?.title || agent.title || "未命名会话";
+              const displayTitle = session?.title || agent.title || t("lib-format.untitled_session");
 
               // 电脑 · 空间 › tab（电脑名用 machines 里的显示名）
               const mName = machines.find((m) => m.id === agent.machine_id)?.name || agent.machine_id;
@@ -676,7 +677,7 @@ function TodoDetail({
                 : `${mName} · ${shortPath(session?.cwd || agent.cwd)}`;
 
               const ix = interactions.find((i) => i.machine_id === agent.machine_id && i.session_id === agent.session_id);
-              const kicker = ix?.kind === "plan" ? "计划待批准" : ix?.kind === "permission" ? "需要授权" : ix?.kind === "screen" ? "终端对话框" : "在问你";
+              const kicker = ix?.kind === "plan" ? t("todos.kicker_plan") : ix?.kind === "permission" ? t("todos.kicker_permission") : ix?.kind === "screen" ? t("todos.kicker_screen") : t("todos.kicker_question");
               const sourceLabel = formatAgentSource(agent, todo.spaces, lookup);
 
               return (
@@ -704,7 +705,7 @@ function TodoDetail({
                         </span>
                       )}
                       {isExpired && (
-                        <span className="rounded bg-hover px-1.5 py-0.5 text-[10.5px] text-ink-3">已结束</span>
+                        <span className="rounded bg-hover px-1.5 py-0.5 text-[10.5px] text-ink-3">{t("todos.ended")}</span>
                       )}
                     </div>
                     <div className="mt-0.5 truncate text-[12px] text-ink-3">{displaySub}</div>
@@ -712,7 +713,7 @@ function TodoDetail({
                     {/* Error / Last Text */}
                     {agent.start_error ? (
                       <div className="mt-1.5 flex items-center justify-between gap-2 rounded bg-red-tint/50 px-2 py-1 text-[12px] text-red">
-                        <span className="truncate">启动失败：{agent.start_error}</span>
+                        <span className="truncate">{t("todos.start_failed", { error: agent.start_error })}</span>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -721,13 +722,13 @@ function TodoDetail({
                           }}
                           className="shrink-0 font-medium hover:underline"
                         >
-                          移除
+                          {t("todos.remove")}
                         </button>
                       </div>
                     ) : now ? (
                       <div className="mt-1 line-clamp-2 text-[12.5px] text-ink-2">
                         {st === "needs_you" && (
-                          <span className="font-medium text-red">{kicker}：</span>
+                          <span className="font-medium text-red">{t("todos.kicker_line", { kicker })}</span>
                         )}
                         {now.kind === "words" ? plainMarkdown(now.text) : now.text}
                       </div>
@@ -755,7 +756,7 @@ function TodoDetail({
                 size={11}
                 className={cx("transition-transform duration-200", showReleased ? "rotate-180" : "")}
               />
-              <span>参与过 · {releasedAgents.length}</span>
+              <span>{t("todos.released_section", { count: releasedAgents.length })}</span>
             </button>
             {showReleased && (
               <div className="mt-2 flex flex-col gap-1.5">
@@ -771,7 +772,7 @@ function TodoDetail({
                         <span className="truncate font-medium text-ink-2">{agent.title || agent.session_id}</span>
                         <div className="text-[11px] text-ink-3">{displaySub}</div>
                       </div>
-                      <span className="shrink-0 text-[11px]">{ago(agent.released_at ?? undefined)} 离开</span>
+                      <span className="shrink-0 text-[11px]">{t("todos.left_at", { time: ago(agent.released_at ?? undefined) })}</span>
                     </div>
                   );
                 })}
@@ -784,10 +785,10 @@ function TodoDetail({
       {/* Bottom Action Bar */}
       <div className="mt-8 flex flex-wrap items-center gap-2.5 border-t border-line pt-4">
         <Button tone="accent" icon="hand" onClick={onOpenHandover} className="h-8.5 px-3.5 text-[13px]">
-          交给 Agent
+          {t("todos.hand_over")}
         </Button>
         <Button tone="secondary" icon="check" onClick={onToggleDone} className="h-8.5 px-3 text-[13px]">
-          {todo.done_at ? "重新打开" : "完成"}
+          {todo.done_at ? t("todos.reopen") : t("todos.complete")}
         </Button>
       </div>
     </div>
@@ -848,38 +849,38 @@ function DecisionsSection({ todo, lookup }: { todo: Todo; lookup: ReturnType<typ
     try {
       await setDecisionSupersedes(todo.id, d.id, old);
       await load();
-      toast(old ? "已标为改判" : "已撤销改判", "ok");
+      toast(old ? t("todos.marked_superseded") : t("todos.unmarked_superseded"), "ok");
     } catch (e) {
-      toast(`操作失败：${errorText(e)}`, "error");
+      toast(t("todos.action_failed", { error: errorText(e) }), "error");
     }
   };
 
   return (
     <div className="mt-6">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="text-[11.5px] font-medium tracking-[0.04em] text-ink-3 uppercase">决策 · {effective.length}</span>
+        <span className="text-[11.5px] font-medium tracking-[0.04em] text-ink-3 uppercase">{t("todos.decisions_section", { count: effective.length })}</span>
         <div className="flex shrink-0 items-center gap-1">
           {replaced > 0 && (
             <Button tone="quiet" className="whitespace-nowrap px-2 py-1 text-[12px]" onClick={() => setShowAll((v) => !v)}>
-              {showAll ? "只看生效的" : `看全历史（${replaced} 条已改判）`}
+              {showAll ? t("todos.show_effective") : t("todos.show_history", { count: replaced })}
             </Button>
           )}
           <Button tone="quiet" icon="plus" className="whitespace-nowrap px-2 py-1 text-[12px]" onClick={() => setForm({})}>
-            记一条
+            {t("todos.add_decision")}
           </Button>
         </div>
       </div>
 
       {failed && all === null ? (
         <div className="flex items-center justify-between gap-3 rounded-control border border-dashed border-line p-4 text-[12.5px] text-ink-3">
-          <span className="min-w-0 truncate">决策没加载出来：{failed}</span>
+          <span className="min-w-0 truncate">{t("todos.decisions_failed", { error: failed })}</span>
           <Button tone="quiet" className="shrink-0 whitespace-nowrap px-2 py-1 text-[12px]" onClick={() => void load()}>
-            重试
+            {t("todos.retry")}
           </Button>
         </div>
       ) : all === null ? null : shown.length === 0 ? (
         <div className="rounded-control border border-dashed border-line p-4 text-[12.5px] leading-[1.6] text-ink-3">
-          这件事上拍过的板记在这里：Agent 提问时你的回答会自动记一条，也可以手动记。交给 Agent 时会带上生效的这些。
+          {t("todos.decisions_empty")}
         </div>
       ) : (
         <ol className="flex flex-col gap-2">
@@ -896,12 +897,12 @@ function DecisionsSection({ todo, lookup }: { todo: Todo; lookup: ReturnType<typ
                   <div className="min-w-0 flex-1">
                     <div className={cx("text-[13.5px] font-semibold", off ? "text-ink-3 line-through" : "text-ink")}>{d.question}</div>
                     <div className={cx("mt-1 text-[13px] whitespace-pre-wrap", off ? "text-ink-3 line-through" : "text-ink")}>
-                      <span className="text-ink-3">选了：</span>
+                      <span className="text-ink-3">{t("todos.chose")}</span>
                       {d.choice}
                     </div>
                     {d.reason && (
                       <div className={cx("mt-0.5 text-[12.5px] whitespace-pre-wrap text-ink-2", off && "line-through")}>
-                        <span className="text-ink-3">原因：</span>
+                        <span className="text-ink-3">{t("todos.reason")}</span>
                         {d.reason}
                       </div>
                     )}
@@ -912,13 +913,13 @@ function DecisionsSection({ todo, lookup }: { todo: Todo; lookup: ReturnType<typ
                       {off && (
                         <>
                           <span>·</span>
-                          <span>已被改判</span>
+                          <span>{t("todos.superseded")}</span>
                         </>
                       )}
                       {!off && replaces && (
                         <>
                           <span>·</span>
-                          <span className="truncate">改判了「{replaces.choice}」</span>
+                          <span className="truncate">{t("todos.supersedes", { choice: replaces.choice })}</span>
                         </>
                       )}
                     </div>
@@ -926,12 +927,12 @@ function DecisionsSection({ todo, lookup }: { todo: Todo; lookup: ReturnType<typ
                   {!off && (
                     <div className="flex shrink-0 items-center gap-0.5">
                       <Button tone="quiet" className="whitespace-nowrap px-2 py-1 text-[12px]" onClick={() => setForm({ supersedes: d })}>
-                        改判
+                        {t("todos.supersede")}
                       </Button>
                       {(candidates.length > 0 || d.supersedes_id) && (
                         <IconButton
                           icon="more"
-                          label="更多"
+                          label={t("todos.more")}
                           size={26}
                           active={linking?.id === d.id && Boolean(menu.anchor)}
                           onClick={(e) => {
@@ -958,11 +959,11 @@ function DecisionsSection({ todo, lookup }: { todo: Todo; lookup: ReturnType<typ
           items={[
             ...supersedeCandidates(linking, all ?? []).map((c) => ({
               key: c.id,
-              label: `改判了「${c.question} → ${c.choice}」`,
+              label: t("todos.supersedes_pair", { question: c.question, choice: c.choice }),
               onSelect: () => void markSupersedes(linking, c.id),
             })),
             ...(linking.supersedes_id
-              ? [{ key: "undo", label: "撤销改判", divider: true, onSelect: () => void markSupersedes(linking, "") }]
+              ? [{ key: "undo", label: t("todos.undo_supersede"), divider: true, onSelect: () => void markSupersedes(linking, "") }]
               : []),
           ]}
         />
@@ -1012,10 +1013,10 @@ function DecisionDialog({
     try {
       await addTodoDecision(todoId, { question, choice, reason, supersedes_id: supersedes?.id });
       await onSaved();
-      toast(supersedes ? "已改判" : "已记下", "ok");
+      toast(supersedes ? t("todos.superseded_toast") : t("todos.recorded"), "ok");
       onClose();
     } catch (err) {
-      toast(`保存失败：${errorText(err)}`, "error");
+      toast(t("todos.save_failed", { error: errorText(err) }), "error");
     } finally {
       setBusy(false);
     }
@@ -1023,34 +1024,34 @@ function DecisionDialog({
 
   const field = "w-full rounded-control border border-line bg-canvas px-3 py-1.5 text-[13.5px] text-ink outline-none focus:border-accent";
   return (
-    <Dialog open={open} onClose={onClose} title={supersedes ? "改判" : "记一条决策"}>
+    <Dialog open={open} onClose={onClose} title={supersedes ? t("todos.supersede") : t("todos.decision_title")}>
       <form onSubmit={submit} className="flex flex-col gap-3.5">
         {supersedes && (
           <p className="text-[12.5px] leading-[1.6] text-ink-3">
-            原来选的「{supersedes.choice}」会保留、划掉，交给 Agent 时只带新的这条。
+            {t("todos.supersede_hint", { choice: supersedes.choice })}
           </p>
         )}
         <div>
-          <label htmlFor="decision-question" className="mb-1 block text-[12px] font-medium text-ink-2">问题</label>
+          <label htmlFor="decision-question" className="mb-1 block text-[12px] font-medium text-ink-2">{t("todos.question")}</label>
           <input id="decision-question" type="text" required autoFocus={!supersedes} value={question}
-            onChange={(e) => setQuestion(e.target.value)} placeholder="要定的是什么…" className={field} />
+            onChange={(e) => setQuestion(e.target.value)} placeholder={t("todos.question_placeholder")} className={field} />
         </div>
         <div>
-          <label htmlFor="decision-choice" className="mb-1 block text-[12px] font-medium text-ink-2">选了什么</label>
+          <label htmlFor="decision-choice" className="mb-1 block text-[12px] font-medium text-ink-2">{t("todos.choice")}</label>
           <input id="decision-choice" type="text" required autoFocus={Boolean(supersedes)} value={choice}
-            onChange={(e) => setChoice(e.target.value)} placeholder="定下来的方案…" className={field} />
+            onChange={(e) => setChoice(e.target.value)} placeholder={t("todos.choice_placeholder")} className={field} />
         </div>
         <div>
-          <label htmlFor="decision-reason" className="mb-1 block text-[12px] font-medium text-ink-2">原因（选填）</label>
+          <label htmlFor="decision-reason" className="mb-1 block text-[12px] font-medium text-ink-2">{t("todos.reason_optional")}</label>
           <textarea id="decision-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)}
-            placeholder="为什么这么定、否了什么…" className={cx(field, "resize-y text-[13px]")} />
+            placeholder={t("todos.reason_placeholder")} className={cx(field, "resize-y text-[13px]")} />
         </div>
         <div className="mt-2 flex justify-end gap-2">
           <Button tone="secondary" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="accent" type="submit" disabled={!question.trim() || !choice.trim() || busy} busy={busy}>
-            {supersedes ? "改判" : "记下"}
+            {supersedes ? t("todos.supersede") : t("todos.record")}
           </Button>
         </div>
       </form>
@@ -1088,50 +1089,50 @@ function NewTodoDialog({
       const todo = await createTodo(title, notes);
       await refreshTodos();
       await refresh();
-      toast("已创建待办", "ok");
+      toast(t("todos.created"), "ok");
       onClose();
       onCreated(todo.id);
       navigate(`/todos?id=${encodeURIComponent(todo.id)}`);
     } catch (err) {
-      toast(`创建失败：${errorText(err)}`, "error");
+      toast(t("todos.create_failed", { error: errorText(err) }), "error");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title="新建待办">
+    <Dialog open={open} onClose={onClose} title={t("todos.new_todo")}>
       <form onSubmit={submit} className="flex flex-col gap-3.5">
         <div>
-          <label className="mb-1 block text-[12px] font-medium text-ink-2">标题</label>
+          <label className="mb-1 block text-[12px] font-medium text-ink-2">{t("todos.title_label")}</label>
           <input
             type="text"
             required
             autoFocus
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="待办要做什么…"
+            placeholder={t("todos.new_title_placeholder")}
             className="w-full rounded-control border border-line bg-canvas px-3 py-1.5 text-[13.5px] text-ink outline-none focus:border-accent"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-[12px] font-medium text-ink-2">说明（选填）</label>
+          <label className="mb-1 block text-[12px] font-medium text-ink-2">{t("todos.notes_optional")}</label>
           <textarea
             rows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="详细内容，交给 Agent 时作为上下文一起发出…"
+            placeholder={t("todos.new_notes_placeholder")}
             className="w-full resize-y rounded-control border border-line bg-canvas px-3 py-1.5 text-[13px] text-ink outline-none focus:border-accent"
           />
         </div>
 
         <div className="mt-2 flex justify-end gap-2">
           <Button tone="secondary" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="accent" type="submit" disabled={!title.trim() || busy} busy={busy}>
-            创建
+            {t("todos.create")}
           </Button>
         </div>
       </form>
@@ -1211,10 +1212,10 @@ function HandoverDialog({
         attachments: [],
         todoId: todo.id,
       });
-      toast("已启动并交给 Agent", "ok");
+      toast(t("todos.launched"), "ok");
       onClose();
     } catch (e) {
-      toast(`启动失败：${errorText(e)}`, "error");
+      toast(t("todos.launch_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
     }
@@ -1237,18 +1238,18 @@ function HandoverDialog({
       });
       await refreshTodos();
       await refresh();
-      toast("已发送并交给 Agent", "ok");
+      toast(t("todos.sent"), "ok");
       onClose();
       navigate({ name: "session", mid: s.machine_id, sid: s.session_id });
     } catch (e) {
-      toast(`发送失败：${errorText(e)}`, "error");
+      toast(t("todos.send_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title="交给 Agent" width={520}>
+    <Dialog open={open} onClose={onClose} title={t("todos.hand_over")} width={520}>
       <div className="flex flex-col gap-4">
         {/* Tab Switcher */}
         <div className="flex rounded-control bg-field p-0.5">
@@ -1260,7 +1261,7 @@ function HandoverDialog({
               tab === "new" ? "bg-surface text-ink shadow-hairline" : "text-ink-3 hover:text-ink-2",
             )}
           >
-            新开一个 Agent
+            {t("todos.tab_new")}
           </button>
           <button
             type="button"
@@ -1270,7 +1271,7 @@ function HandoverDialog({
               tab === "existing" ? "bg-surface text-ink shadow-hairline" : "text-ink-3 hover:text-ink-2",
             )}
           >
-            交给已有的 Agent
+            {t("todos.tab_existing")}
           </button>
         </div>
 
@@ -1278,7 +1279,7 @@ function HandoverDialog({
         {tab === "new" && (
           <div className="flex flex-col gap-3">
             <div>
-              <label className="mb-1 block text-[12px] font-medium text-ink-2">电脑</label>
+              <label className="mb-1 block text-[12px] font-medium text-ink-2">{t("todos.computer")}</label>
               <select
                 value={mid}
                 onChange={(e) => setMid(e.target.value)}
@@ -1293,10 +1294,10 @@ function HandoverDialog({
             </div>
 
             <div>
-              <label className="mb-1 block text-[12px] font-medium text-ink-2">工作目录（选填）</label>
+              <label className="mb-1 block text-[12px] font-medium text-ink-2">{t("todos.cwd_optional")}</label>
               <input
                 type="text"
-                placeholder="~/project 或留空"
+                placeholder={t("todos.cwd_placeholder")}
                 value={cwd}
                 onChange={(e) => setCwd(e.target.value)}
                 className="w-full rounded-control border border-line bg-canvas px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-accent"
@@ -1305,7 +1306,7 @@ function HandoverDialog({
 
             {launchers.length > 0 && (
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-ink-2">启动器</label>
+                <label className="mb-1 block text-[12px] font-medium text-ink-2">{t("todos.launcher")}</label>
                 <select
                   value={launcher}
                   onChange={(e) => setLauncher(e.target.value)}
@@ -1325,9 +1326,9 @@ function HandoverDialog({
         {/* Tab 2: Existing Agent */}
         {tab === "existing" && (
           <div>
-            <label className="mb-1 block text-[12px] font-medium text-ink-2">选择 Agent</label>
+            <label className="mb-1 block text-[12px] font-medium text-ink-2">{t("todos.pick_agent")}</label>
             {liveSessions.length === 0 ? (
-              <div className="py-6 text-center text-[12.5px] text-ink-3">当前没有可用的在线 Agent</div>
+              <div className="py-6 text-center text-[12.5px] text-ink-3">{t("todos.no_live_agents")}</div>
             ) : (
               <div className="max-h-44 overflow-y-auto rounded-control border border-line p-1">
                 {liveSessions.map((s) => {
@@ -1344,7 +1345,7 @@ function HandoverDialog({
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <StatusDot state={st} size={6} />
-                        <span className="truncate font-medium">{s.title || s.cwd || "未命名"}</span>
+                        <span className="truncate font-medium">{s.title || s.cwd || t("todos.unnamed")}</span>
                         <span className={cx("text-[11px]", isSel ? "text-white/80" : "text-ink-3")}>
                           {s.space_name || s.machine_id}
                         </span>
@@ -1360,22 +1361,22 @@ function HandoverDialog({
 
         {/* Prompt Input */}
         <div>
-          <label className="mb-1 block text-[12px] font-medium text-ink-2">要它做什么</label>
+          <label className="mb-1 block text-[12px] font-medium text-ink-2">{t("todos.prompt_label")}</label>
           <textarea
             rows={2}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="例如：请把网络层的测试补齐，覆盖请求重试和超时…"
+            placeholder={t("todos.prompt_placeholder")}
             className="w-full resize-none rounded-control border border-line bg-canvas px-3 py-1.5 text-[13px] text-ink outline-none focus:border-accent"
           />
         </div>
 
         {/* Context Preview Card */}
         <div>
-          <label className="mb-1 block text-[11px] font-medium text-ink-3">发送内容预览</label>
+          <label className="mb-1 block text-[11px] font-medium text-ink-3">{t("todos.preview")}</label>
           <div className="flex flex-col gap-1 rounded-control bg-field p-2.5 shadow-hairline">
             <div className="rounded border-l-2 border-accent bg-surface px-2.5 py-1.5 text-left shadow-hairline">
-              <div className="text-[11.5px] font-medium text-ink-2">待办 · {todo.title}</div>
+              <div className="text-[11.5px] font-medium text-ink-2">{t("todos.preview_todo", { title: todo.title })}</div>
               {todo.notes && <div className="mt-0.5 line-clamp-2 text-[12px] text-ink-3">{todo.notes}</div>}
             </div>
             {prompt.trim() && (
@@ -1387,11 +1388,11 @@ function HandoverDialog({
         {/* Footer Buttons */}
         <div className="mt-2 flex justify-end gap-2">
           <Button tone="secondary" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           {tab === "new" ? (
             <Button tone="accent" onClick={submitNew} disabled={!mid || busy} busy={busy}>
-              启动并交给 Agent
+              {t("todos.launch_and_hand")}
             </Button>
           ) : (
             <Button
@@ -1400,7 +1401,7 @@ function HandoverDialog({
               disabled={!selectedSid || busy || liveSessions.length === 0}
               busy={busy}
             >
-              发送并交给 Agent
+              {t("todos.send_and_hand")}
             </Button>
           )}
         </div>

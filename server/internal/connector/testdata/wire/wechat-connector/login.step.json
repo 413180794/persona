@@ -1,8 +1,17 @@
 {
-  "step": "credentials",
+  "step": "connect",
   "fields": [
-    {"name": "base_url", "label": "wechat-connector 地址", "placeholder": "https://wechat-connector.example.com"},
-    {"name": "app_key", "label": "应用密钥", "secret": true, "placeholder": "wcpat_…"}
+    {
+      "name": "base_url",
+      "label": "wechat-connector 地址",
+      "placeholder": "https://wechat-connector.example.com"
+    },
+    {
+      "name": "app_key",
+      "label": "应用密钥",
+      "secret": true,
+      "placeholder": "wcpat_…"
+    }
   ],
-  "hint": "在 wechat-connector 开发者中心创建一把「读取 + 事件」应用密钥。发送权限不用在这里配置。"
+  "hint": "在 wechat-connector 开发者中心创建一把「读取 + 事件」应用密钥填在这里；发送权限不用在这里配置。登录后，私聊会进入 Persona 的知识库和收件箱，内容会发给你配置的模型供应商；群聊默认不进知识库，群里只有 @ 你或 @所有人 的消息进收件箱（可在 设置 › 插件 里调整）；知识库只有 wechat-connector 能提供的消息（以 wechat-connector 的保留设置为准），不是微信的完整历史；图片、语音、视频只显示占位。"
 }

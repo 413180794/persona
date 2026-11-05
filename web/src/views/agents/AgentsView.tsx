@@ -27,6 +27,7 @@ import { href, onLinkClick } from "../../lib/router";
 import { Button, cx, EASE, IconButton, Loading, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
+import { formatDate, t } from "../../i18n";
 
 export function AgentsView({ id, onToggleSidebar }: { id?: string; onToggleSidebar: () => void }) {
   return id ? <AgentSessionView id={id} onToggleSidebar={onToggleSidebar} /> : <AgentList onToggleSidebar={onToggleSidebar} />;
@@ -35,7 +36,7 @@ export function AgentsView({ id, onToggleSidebar }: { id?: string; onToggleSideb
 function Header({ title, sub, avatar, onToggleSidebar }: { title: string; sub?: string; avatar?: AvatarSession; onToggleSidebar: () => void }) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
-      <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+      <IconButton icon="sidebar" label={t("agents-agentsview.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
       {avatar && <AgentAvatar s={avatar} size={28} />}
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-[14px] font-semibold text-ink">{title}</h1>
@@ -53,30 +54,30 @@ function AgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const groups = arrangeSessions(sessions, prefs, q);
   return (
     <div className="flex h-full flex-col">
-      <Header title="个人 Agent" sub="lark-connector 里配对的个人 Agent" onToggleSidebar={onToggleSidebar} />
+      <Header title={t("agents-agentsview.title")} sub={t("agents-agentsview.subtitle")} onToggleSidebar={onToggleSidebar} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[760px] px-5 py-6 sm:px-8">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索会话" className="mb-4 h-9 w-full rounded-control bg-inset px-3 text-[13px] text-ink shadow-hairline outline-none placeholder:text-ink-3" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("agents-agentsview.search_placeholder")} className="mb-4 h-9 w-full rounded-control bg-inset px-3 text-[13px] text-ink shadow-hairline outline-none placeholder:text-ink-3" />
           {!loaded && <Loading />}
           {error && <p className="text-[13px] text-red">{error}</p>}
-          {loaded && !error && !groups.length && (q || !hints.length) && <p className="text-[13px] text-ink-3">{q ? "没有匹配的会话" : "还没有个人 Agent 会话"}</p>}
+          {loaded && !error && !groups.length && (q || !hints.length) && <p className="text-[13px] text-ink-3">{q ? t("agents-agentsview.no_match") : t("agents-agentsview.empty")}</p>}
           {loaded && !error && !sessions.length && !q && hints.map((h) => <p key={h} className="mb-1 text-[13px] text-ink-3">{h}</p>)}
           {groups.map((g, i) => (
             <section key={g.key} className="mb-4 overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} ${i * 60}ms both` }}>
               <h2 className="flex items-center gap-2 px-4 pt-3 pb-1 text-[12px] font-medium text-ink-3">
-                <span className="flex-1">{g.label || "全部"}</span>
+                <span className="flex-1">{g.label || t("agents-agentsview.group_all")}</span>
                 <span className="tabular-nums">{g.sessions.length}</span>
               </h2>
               {g.sessions.map((s) => (
                 <a key={s.id} href={href({ name: "agents", id: s.id })} onClick={(e) => onLinkClick(e, { name: "agents", id: s.id })} className="flex items-center gap-2 px-4 py-2 hover:bg-hover">
                   <AgentAvatar s={s} size={22} />
-                  <span className={cx("min-w-0 flex-1 truncate text-[13px]", s.unreadCount ? "font-medium text-ink" : "text-ink-2")}>{s.title || "未命名会话"}</span>
+                  <span className={cx("min-w-0 flex-1 truncate text-[13px]", s.unreadCount ? "font-medium text-ink" : "text-ink-2")}>{s.title || t("lib-format.untitled_session")}</span>
                   {s.unreadCount > 0 && <span className="rounded-full bg-accent px-1.5 text-[10.5px] font-semibold text-white tabular-nums">{s.unreadCount}</span>}
                   <span className="shrink-0 text-[11px] text-ink-3">{s.rankTimeMs ? ago(new Date(s.rankTimeMs).toISOString()) : ""}</span>
                   <button
                     type="button"
-                    title={prefs.pins.includes(s.id) ? "取消置顶" : "置顶"}
-                    aria-label={prefs.pins.includes(s.id) ? "取消置顶" : "置顶"}
+                    title={prefs.pins.includes(s.id) ? t("agents-agentsview.unpin") : t("agents-agentsview.pin")}
+                    aria-label={prefs.pins.includes(s.id) ? t("agents-agentsview.unpin") : t("agents-agentsview.pin")}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -176,7 +177,7 @@ function AgentSessionView({ id, onToggleSidebar }: { id: string; onToggleSidebar
     try {
       const r = await sendMessage(id, o.clientId, o.text);
       const failed = r.outbox?.status === "failed";
-      setOut((xs) => xs.map((x) => (x.clientId === o.clientId ? { ...x, status: failed ? "failed" : "sent", error: failed ? r.outbox.error || "发送失败" : undefined } : x)));
+      setOut((xs) => xs.map((x) => (x.clientId === o.clientId ? { ...x, status: failed ? "failed" : "sent", error: failed ? r.outbox.error || t("agents-agentsview.send_failed") : undefined } : x)));
       void loadLatest(false);
     } catch (e) {
       setOut((xs) => xs.map((x) => (x.clientId === o.clientId ? { ...x, status: "failed", error: errorText(e) } : x)));
@@ -186,7 +187,7 @@ function AgentSessionView({ id, onToggleSidebar }: { id: string; onToggleSidebar
   const canSend = session?.canSend ?? false;
   return (
     <div className="flex h-full flex-col">
-      <Header title={session?.title || "未命名会话"} sub={session ? providerLabel(session.provider) : undefined} avatar={session ?? undefined} onToggleSidebar={onToggleSidebar} />
+      <Header title={session?.title || t("lib-format.untitled_session")} sub={session ? providerLabel(session.provider) : undefined} avatar={session ?? undefined} onToggleSidebar={onToggleSidebar} />
       <div
         ref={scroller}
         onScroll={(e) => {
@@ -198,26 +199,26 @@ function AgentSessionView({ id, onToggleSidebar }: { id: string; onToggleSidebar
         <div className="mx-auto flex max-w-[760px] flex-col gap-3 px-5 py-6 sm:px-8">
           {hasMore && (
             <div className="flex justify-center">
-              <Button tone="quiet" busy={older} onClick={() => void loadOlder()}>加载更早的消息</Button>
+              <Button tone="quiet" busy={older} onClick={() => void loadOlder()}>{t("agents-agentsview.load_older")}</Button>
             </div>
           )}
           {!messages && !error && <Loading />}
           {error && <p className="text-[13px] text-red">{error}</p>}
-          {messages && !messages.length && !shown.length && <p className="text-center text-[13px] text-ink-3">还没有消息</p>}
+          {messages && !messages.length && !shown.length && <p className="text-center text-[13px] text-ink-3">{t("agents-agentsview.no_messages")}</p>}
           {messages?.map((m) => <MessageRow key={m.externalId} m={m} />)}
           {shown.map((o) => (
             <div key={o.clientId} className="flex flex-col items-end gap-1">
               <div className={cx("max-w-[85%] rounded-[14px] bg-accent-tint px-3 py-2 text-[13.5px] whitespace-pre-wrap text-ink", o.status === "failed" && "ring-1 ring-red")}>{o.text}</div>
               <div className="flex items-center gap-2 text-[11px] text-ink-3">
-                {o.status === "sending" && <><Spinner size={10} /> 发送中</>}
-                {o.status === "sent" && "已发送"}
+                {o.status === "sending" && <><Spinner size={10} /> {t("agents-agentsview.sending")}</>}
+                {o.status === "sent" && t("agents-agentsview.sent")}
                 {o.status === "failed" && (
                   <>
-                    <span className="text-red">{o.error || "发送失败"}</span>
+                    <span className="text-red">{o.error || t("agents-agentsview.send_failed")}</span>
                     <button type="button" onClick={() => void deliver(o)} className="flex items-center gap-1 text-accent hover:underline">
-                      <Icon name="retry" size={11} /> 重试
+                      <Icon name="retry" size={11} /> {t("agents-agentsview.retry")}
                     </button>
-                    <button type="button" onClick={() => setOut((xs) => xs.filter((x) => x.clientId !== o.clientId))} className="hover:text-ink-2">丢弃</button>
+                    <button type="button" onClick={() => setOut((xs) => xs.filter((x) => x.clientId !== o.clientId))} className="hover:text-ink-2">{t("agents-agentsview.discard")}</button>
                   </>
                 )}
               </div>
@@ -225,7 +226,7 @@ function AgentSessionView({ id, onToggleSidebar }: { id: string; onToggleSidebar
           ))}
         </div>
       </div>
-      <AgentComposer disabled={!canSend} reason={session ? "这个会话不能从 Persona 发消息" : "加载中…"} onSend={(text) => void deliver({ clientId: uuid(), text, at: Date.now(), status: "sending" })} />
+      <AgentComposer disabled={!canSend} reason={session ? t("agents-agentsview.cannot_send") : t("agents-agentsview.loading")} onSend={(text) => void deliver({ clientId: uuid(), text, at: Date.now(), status: "sending" })} />
     </div>
   );
 }
@@ -244,22 +245,22 @@ function MessageRow({ m }: { m: AgentMessage }) {
           );
         if (v.kind === "reaction")
           return (
-            <span key={i} className="inline-flex items-center gap-1 rounded-full bg-inset px-2 py-0.5 text-[12px] text-ink-2 shadow-hairline" title="回应了你的消息">
-              <span className="text-[15px] leading-none">{v.emoji}</span> 回应了
+            <span key={i} className="inline-flex items-center gap-1 rounded-full bg-inset px-2 py-0.5 text-[12px] text-ink-2 shadow-hairline" title={t("agents-agentsview.reaction_title")}>
+              <span className="text-[15px] leading-none">{v.emoji}</span> {t("agents-agentsview.reacted")}
             </span>
           );
         if (v.kind === "tool")
           return (
             <details key={i} className="max-w-full rounded-control bg-inset px-2.5 py-1 text-[12px] text-ink-2 shadow-hairline">
               <summary className="flex cursor-pointer items-center gap-1.5 select-none"><Icon name="tool" size={11} /> {v.name}</summary>
-              {v.detail ? <pre className="mt-1 max-h-60 overflow-auto text-[11px] whitespace-pre-wrap text-ink-3">{v.detail}</pre> : <p className="mt-1 text-[11px] text-ink-3">没有更多细节</p>}
+              {v.detail ? <pre className="mt-1 max-h-60 overflow-auto text-[11px] whitespace-pre-wrap text-ink-3">{v.detail}</pre> : <p className="mt-1 text-[11px] text-ink-3">{t("agents-agentsview.no_detail")}</p>}
             </details>
           );
         return (
           <pre key={i} className="max-w-full overflow-auto rounded-control bg-inset px-2.5 py-1.5 text-[11px] whitespace-pre-wrap text-ink-3 shadow-hairline">{v.json}</pre>
         );
       })}
-      <span className="text-[10.5px] text-ink-3" title={new Date(m.createTimeMs).toLocaleString()}>
+      <span className="text-[10.5px] text-ink-3" title={formatDate(m.createTimeMs, { dateStyle: "medium", timeStyle: "short" })}>
         {m.role !== "user" && m.role !== "assistant" ? `${m.role} · ` : ""}
         {clock(new Date(m.createTimeMs).toISOString())}
       </span>
@@ -270,9 +271,9 @@ function MessageRow({ m }: { m: AgentMessage }) {
 function AgentComposer({ disabled, reason, onSend }: { disabled: boolean; reason: string; onSend: (text: string) => void }) {
   const [text, setText] = useState("");
   const submit = () => {
-    const t = text.trim();
-    if (!t || disabled) return;
-    onSend(t);
+    const body = text.trim();
+    if (!body || disabled) return;
+    onSend(body);
     setText("");
   };
   return (
@@ -289,10 +290,10 @@ function AgentComposer({ disabled, reason, onSend }: { disabled: boolean; reason
             }
           }}
           rows={Math.min(8, Math.max(1, text.split("\n").length))}
-          placeholder={disabled ? reason : "发消息给这个 Agent（Enter 发送，Shift+Enter 换行）"}
+          placeholder={disabled ? reason : t("agents-agentsview.composer_placeholder")}
           className="min-h-8 flex-1 resize-none bg-transparent px-1.5 py-1 text-[13.5px] text-ink outline-none placeholder:text-ink-3 disabled:cursor-not-allowed"
         />
-        <IconButton icon="up" label="发送" disabled={disabled || !text.trim()} onClick={submit} />
+        <IconButton icon="up" label={t("agents-agentsview.send")} disabled={disabled || !text.trim()} onClick={submit} />
       </div>
     </div>
   );

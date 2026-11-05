@@ -5,7 +5,7 @@
         "id": "primary.wxid_example_a",
         "name": "Example A",
         "kind": "dm",
-        "updated_at": "2026-11-04T08:23:00.000Z"
+        "updated_at": "2026-11-04T08:24:00.000Z"
       },
       "messages": [
         {
@@ -39,6 +39,14 @@
             }
           ],
           "sender_name": "Example A"
+        },
+        {
+          "id": "880000000004",
+          "position": "4",
+          "mine": true,
+          "type": "TEXT",
+          "text": "Synthetic reply from the account owner",
+          "at": "2026-11-04T08:24:00.000Z"
         }
       ]
     }

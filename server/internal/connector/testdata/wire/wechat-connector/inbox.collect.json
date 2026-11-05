@@ -21,14 +21,20 @@
           "value": "wxid_example_a",
           "name": "Example A"
         }
-      ]
+      ],
+      "extra": {
+        "rule_tier": "action"
+      }
     },
     {
       "thread": "primary.wxid_example_a",
       "kind": "dm",
       "at": "2026-11-04T08:25:00.000Z",
       "last": "5",
-      "done": "replied"
+      "done": "replied",
+      "extra": {
+        "rule_tier": "action"
+      }
     }
   ]
 }

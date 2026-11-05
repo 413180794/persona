@@ -1,7 +1,7 @@
 {
   "protocol": 1,
   "id": "wechat-connector",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "contributes": {
     "connectors": [
       {
@@ -15,7 +15,8 @@
           "inbox",
           "archive",
           "login",
-          "threads"
+          "threads",
+          "fallback"
         ],
         "confirm_always": [
           "wechat-connector_send"

@@ -354,9 +354,10 @@ func Testwechat-connectorProgramLive(t *testing.T) {
 		t.Skip("set PERSONA_TEST_wechat-connector_PROGRAM (a connector program's launcher) and wechat-connector_FIXTURE_SERVER (a compatible fixture server's script) to run it (docs/connector-protocol.md「一致性测试」)")
 	}
 	login := startFixtureServer(t, server)
-	// The package is what the program sits in: persona-plugin.json next to bin/.
+	// The package is what the program sits in: its manifest next to bin/, under the new name or the old one, as the
+	// hub reads an installed package.
 	pkg := filepath.Dir(filepath.Dir(program))
-	raw, err := os.ReadFile(filepath.Join(pkg, extension.ManifestFile))
+	raw, err := os.ReadFile(extension.ManifestPath(pkg))
 	if err != nil {
 		t.Fatal(err)
 	}

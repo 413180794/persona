@@ -15,6 +15,7 @@ import {
 import type { Session } from "../lib/types";
 import { Button, cx, Dialog, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
+import { t } from "../i18n";
 
 export interface LinkTargetSpace {
   machineId: string;
@@ -39,7 +40,7 @@ export function LinkTodoDialog({
   onClose: () => void;
 }) {
   const todos = useStore((s) => s.todos);
-  const uncompleted = useMemo(() => todos.filter((t) => !t.done_at), [todos]);
+  const uncompleted = useMemo(() => todos.filter((todo) => !todo.done_at), [todos]);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -66,20 +67,20 @@ export function LinkTodoDialog({
         await linkSpaceToTodo(todo.id, space.machineId, space.space);
         await refreshTodos();
         await refresh();
-        toast(`已挂到待办「${todo.title}」`, "ok");
+        toast(t("linktododialog.space_linked", { title: todo.title }), "ok");
       } else if (session) {
         await linkAgentToTodo(todo.id, session.machine_id, session.session_id);
         await refreshTodos();
         await refresh();
-        toast(`已关联到待办「${todo.title}」`, "ok");
+        toast(t("linktododialog.session_linked", { title: todo.title }), "ok");
       }
       onClose();
     } catch (e) {
       if (space && isLegacySpacesRouteError(e)) {
         setSpacesSupported(false);
-        toast("当前服务不支持整组挂入待办", "error");
+        toast(t("linktododialog.space_unsupported"), "error");
       } else {
-        toast(`${space ? "挂到待办" : "关联"}失败：${errorText(e)}`, "error");
+        toast(space ? t("linktododialog.space_link_failed", { error: errorText(e) }) : t("linktododialog.session_link_failed", { error: errorText(e) }), "error");
       }
       void refreshTodos();
     } finally {
@@ -95,19 +96,19 @@ export function LinkTodoDialog({
         await unlinkSpaceFromTodo(currentTodoId, space.machineId, space.space);
         await refreshTodos();
         await refresh();
-        toast("已移出待办", "ok");
+        toast(t("linktododialog.space_unlinked"), "ok");
       } else if (session) {
         await unlinkAgentFromTodo(currentTodoId, session.machine_id, session.session_id);
         await refreshTodos();
         await refresh();
-        toast("已解除关联", "ok");
+        toast(t("linktododialog.session_unlinked"), "ok");
       }
       onClose();
     } catch (e) {
       if (space && isLegacySpacesRouteError(e)) {
         setSpacesSupported(false);
       }
-      toast(`${space ? "移出待办" : "解除关联"}失败：${errorText(e)}`, "error");
+      toast(space ? t("linktododialog.space_unlink_failed", { error: errorText(e) }) : t("linktododialog.session_unlink_failed", { error: errorText(e) }), "error");
       void refreshTodos();
     } finally {
       setBusy(false);
@@ -123,24 +124,24 @@ export function LinkTodoDialog({
       try {
         if (space) {
           await linkSpaceToTodo(created.id, space.machineId, space.space);
-          toast(`已新建并挂到待办「${created.title}」`, "ok");
+          toast(t("linktododialog.space_created_linked", { title: created.title }), "ok");
         } else if (session) {
           await linkAgentToTodo(created.id, session.machine_id, session.session_id);
-          toast(`已新建并关联到待办「${created.title}」`, "ok");
+          toast(t("linktododialog.session_created_linked", { title: created.title }), "ok");
         }
       } catch (linkErr) {
         if (space && isLegacySpacesRouteError(linkErr)) {
           setSpacesSupported(false);
-          toast(`待办已创建，但当前服务不支持整组挂入：${errorText(linkErr)}`, "error");
+          toast(t("linktododialog.created_space_unsupported", { error: errorText(linkErr) }), "error");
         } else {
-          toast(`待办已创建，但${space ? "挂到待办" : "关联"}失败：${errorText(linkErr)}`, "error");
+          toast(space ? t("linktododialog.created_space_link_failed", { error: errorText(linkErr) }) : t("linktododialog.created_session_link_failed", { error: errorText(linkErr) }), "error");
         }
       }
       await refreshTodos();
       await refresh();
       onClose();
     } catch (e) {
-      toast(`创建失败：${errorText(e)}`, "error");
+      toast(t("linktododialog.create_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
     }
@@ -148,15 +149,15 @@ export function LinkTodoDialog({
 
   const dialogTitle = space
     ? currentTodoId
-      ? "改挂到其他待办"
-      : "挂到待办"
+      ? t("linktododialog.title_move")
+      : t("linktododialog.title_space_link")
     : currentTodoId
-      ? "改挂到其他待办"
-      : "关联到待办";
+      ? t("linktododialog.title_move")
+      : t("linktododialog.title_session_link");
 
   const description = space
-    ? `选择一个未完成的待办，把项目「${space.space}」整组挂上：`
-    : `选择一个待办，把「${session?.title || session?.session_id}」挂到该待办上：`;
+    ? t("linktododialog.space_description", { space: space.space })
+    : t("linktododialog.session_description", { name: session?.title || session?.session_id || "" });
 
   return (
     <Dialog open={open} onClose={onClose} title={dialogTitle} width={420}>
@@ -164,23 +165,23 @@ export function LinkTodoDialog({
         <div className="text-[12.5px] text-ink-3">{description}</div>
 
         {uncompleted.length === 0 ? (
-          <div className="py-4 text-center text-[13px] text-ink-3">暂无未完成的待办</div>
+          <div className="py-4 text-center text-[13px] text-ink-3">{t("linktododialog.empty")}</div>
         ) : (
           <div className="flex max-h-56 flex-col gap-1 overflow-y-auto rounded-control border border-line p-1">
-            {uncompleted.map((t) => {
-              const isCurrent = t.id === currentTodoId;
+            {uncompleted.map((todo) => {
+              const isCurrent = todo.id === currentTodoId;
               return (
                 <button
-                  key={t.id}
+                  key={todo.id}
                   type="button"
                   disabled={busy}
-                  onClick={() => handleSelect(t)}
+                  onClick={() => handleSelect(todo)}
                   className={cx(
                     "flex w-full items-center justify-between gap-2 rounded px-2.5 py-2 text-left text-[13px] transition-colors whitespace-nowrap",
                     isCurrent ? "bg-accent-tint text-accent font-medium" : "hover:bg-hover text-ink",
                   )}
                 >
-                  <span className="truncate">{t.title}</span>
+                  <span className="truncate">{todo.title}</span>
                   {isCurrent && <Icon name="check" size={13} stroke={2.5} />}
                 </button>
               );
@@ -204,15 +205,15 @@ export function LinkTodoDialog({
                   setCreating(false);
                 }
               }}
-              placeholder="输入新待办标题…"
+              placeholder={t("linktododialog.new_placeholder")}
               className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
             />
             <div className="flex items-center justify-end gap-2">
               <Button tone="quiet" className="px-2 py-1 text-[12px] whitespace-nowrap" onClick={() => setCreating(false)} disabled={busy}>
-                取消
+                {t("common.cancel")}
               </Button>
               <Button tone="primary" className="px-2 py-1 text-[12px] whitespace-nowrap" onClick={() => void handleCreateAndLink()} disabled={busy || !newTitle.trim()}>
-                创建并挂上
+                {t("linktododialog.create_and_link")}
               </Button>
             </div>
           </div>
@@ -227,20 +228,20 @@ export function LinkTodoDialog({
             className="flex items-center gap-1.5 rounded-control px-2 py-1.5 text-left text-[12.5px] font-medium text-accent hover:bg-hover whitespace-nowrap"
           >
             <Icon name="plus" size={12} stroke={2.5} />
-            <span>新建待办…</span>
+            <span>{t("linktododialog.new_todo")}</span>
           </button>
         )}
 
         <div className="mt-2 flex justify-between gap-2">
           {currentTodoId ? (
             <Button tone="quiet" onClick={handleUnlink} disabled={busy} className="text-red hover:bg-red-tint/50 whitespace-nowrap">
-              {space ? "移出待办" : "解除关联"}
+              {space ? t("linktododialog.space_unlink") : t("linktododialog.session_unlink")}
             </Button>
           ) : (
             <div />
           )}
           <Button tone="secondary" onClick={onClose} className="whitespace-nowrap">
-            取消
+            {t("common.cancel")}
           </Button>
         </div>
       </div>
