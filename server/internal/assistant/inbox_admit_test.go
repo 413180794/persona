@@ -347,3 +347,28 @@ func TestInboxBuiltinSourcesAsBefore(t *testing.T) {
 		t.Fatalf("triage %+v", status)
 	}
 }
+
+// An item read elsewhere while untriaged is settled by triage, but one the user filed while the model was thinking
+// stays filed as the user filed it.
+func TestInboxTriageKeepsWhatTheUserFiled(t *testing.T) {
+	model, client := newTriageModel(t, "slow", `{"tier":"fyi","summary":"示例","reason":"示例"}`)
+	model.delay = 300 * time.Millisecond
+	h, _ := admitHub(t, client)
+	it := &InboxItem{ID: "mail:1", Source: "mail", Kind: KindMail, Last: "a", Read: true, Context: "示例：周报",
+		UpdatedAt: time.Now(), Mail: &InboxMail{AccountID: "acc1"}}
+	h.inbox.mu.Lock()
+	h.inbox.items[it.ID] = it
+	h.inbox.mu.Unlock()
+	done := make(chan bool, 1)
+	go func() { done <- h.triageOne(context.Background(), it) }()
+	time.Sleep(100 * time.Millisecond) // the model is thinking
+	if _, err := h.setInboxDone(context.Background(), it.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	h.inbox.mu.Lock()
+	defer h.inbox.mu.Unlock()
+	if it.DoneBy != "user" {
+		t.Fatalf("filed by the user, then triage said %q", it.DoneBy)
+	}
+}

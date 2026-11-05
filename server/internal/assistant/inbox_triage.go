@@ -92,8 +92,8 @@ func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
 		it.Tier, it.Reason = fallback, "按规则"
 	}
 	it.TriagedAt = last
-	// Triage can settle an item read elsewhere while it was still untriaged.
-	if it.Read && it.Tier != TierAction {
+	// Triage can settle an item read elsewhere while it was still untriaged (not one filed while the model thought).
+	if it.Read && it.Tier != TierAction && it.open() {
 		it.done(time.Now(), "read")
 	}
 	return true
