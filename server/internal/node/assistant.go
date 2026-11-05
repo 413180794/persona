@@ -993,6 +993,7 @@ func (n *Node) assistantSessions() []proto.Session {
 				m := n.meta(path, st)
 				s.Title, s.Model, s.LastText, s.Rev = m.title, m.model, snippet(m.lastText), st.Size()
 				s.PermissionMode, s.Effort = n.currentModes(p.id, m)
+				setContext(&s, m)
 				untitled(&s, m)
 				if !p.busy {
 					s.UpdatedAt = lastUsed(m, st)

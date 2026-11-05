@@ -30,6 +30,7 @@ import { hasLoop, LOOP_TEXT } from "../../lib/loop-command";
 import { PendingCards } from "./Interactions";
 import { DOCK_MAX, turnStart } from "./dock";
 import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
+import { ContextMeter } from "./ContextMeter";
 import { NARROW, SHORT, useFinePointer, useMedia } from "../../lib/viewport";
 import { UserBubble } from "./SegmentView";
 import { ActivityChips } from "./Activity";
@@ -960,6 +961,7 @@ export function Header({
           {/* narrow: the dot before the title says the state; the pill would leave the title a word or two */}
           <h1 className="truncate text-[14px] font-semibold text-ink">{title}</h1>
           {session && !assistant && state !== "idle" && <span className="hidden sm:contents"><StatePill state={state} /></span>}
+          {session && !assistant && <ContextMeter session={session} />}
         </div>
         {sub && !(session?.todo && !assistant) && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
         {/* the todo it works for, up top (#1836): opens the todo, 改挂 picks another */}

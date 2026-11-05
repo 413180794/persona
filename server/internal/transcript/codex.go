@@ -53,6 +53,7 @@ type codexPayload struct {
 		Last struct {
 			InputTokens int `json:"input_tokens"`
 		} `json:"last_token_usage"`
+		ModelContextWindow int `json:"model_context_window"`
 	} `json:"info"`
 }
 
@@ -178,6 +179,9 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 	case "token_count":
 		if p.Info != nil {
 			meta.ContextTokens, meta.OutputTokens = p.Info.Last.InputTokens, p.Info.Total.OutputTokens
+			if p.Info.ModelContextWindow > 0 {
+				meta.ContextWindow = p.Info.ModelContextWindow
+			}
 		}
 		return nil
 	case "task_started":

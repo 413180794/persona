@@ -113,6 +113,9 @@ type Meta struct {
 	// CodexSandbox: Codex rollouts' sandbox of the latest turn (read-only, workspace-write…); PermissionMode is its approval policy.
 	CodexSandbox  string
 	ContextTokens int // input + cache read + cache creation of the latest reply: what the model last saw
+	// ContextWindow is the model's context window when the transcript says it (a Codex rollout's token_count carries
+	// model_context_window); 0 for Claude Code, whose transcripts do not (node/contextwindow.go knows by model id).
+	ContextWindow int
 	OutputTokens  int // total generated, counted once per message
 	Compactions   int
 	Turns         int // user prompts

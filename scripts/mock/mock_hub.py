@@ -427,6 +427,24 @@ SESSIONS = [
          "搜索做好了，支持按食材和用时筛选。", space_kind=None, space_id=None, space_name=None, slot_id=None, slot_name=None),
 ]
 
+# #2430 agent-details: what the node reads off a transcript for the 「Agent 行显示详情」 line and the session header's
+# context bar — the model id as Claude Code records it, the latest reply's input tokens, the model's window. Some
+# sessions say nothing (no reply yet, a model the node does not know), as real ones do.
+_CONTEXT = {
+    WIDGET: ("claude-opus-5-5", 78_000, 200_000),            # 39% used, 61% left
+    TESTS: ("claude-sonnet-5-5", 31_000, 200_000),           # 16% used
+    PHOTOS: ("claude-opus-5-5", 172_000, 200_000),           # 86% used: the warning colour
+    BLOG: ("claude-opus-5-5[1m]", 240_000, 1_000_000),       # a 1M variant
+    ORDERS: ("gpt-5.5", 392_000, 475_000),                   # Codex records its own window: 83% used
+    REVIEW: ("claude-opus-5-5", 0, 0),                       # nothing to say yet
+}
+for _s in SESSIONS:
+    if _s["session_id"] in _CONTEXT:
+        _model, _tokens, _window = _CONTEXT[_s["session_id"]]
+        _s["model"] = _model
+        if _tokens:
+            _s.update(context_tokens=_tokens, context_window=_window)
+
 # MOCK_STALE_DONE=1 (#2069): the widget session as the hub listed it while herdr said done through a turn the phone
 # started (status done, state idle, its activity still moving): the Agents list before the node's fix.
 if os.environ.get("MOCK_STALE_DONE") == "1":

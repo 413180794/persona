@@ -228,6 +228,8 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
 
 思考强度（`docs/codex.md`「思考强度」）：手机经 app-server 驱动的 Codex 会话（`codex_app_server` 里能发送的，和接上共享守护进程的 herdr 窗格，后者没有 `source_kind`）带 `efforts`：`POST …/modes` 的 `effort` 能取的档位，从弱到强（这个 thread 的模型在 `model/list` 报的，拿不到时是 Codex 的 minimal … ultra）；`effort` 是它现在的值，`permission_mode` 不带。这类会话的 `/modes` 只收 `effort`，带 `permission_mode` 报错，档位不在 `efforts` 里也报错；没改成（app-server 断开、没有及时回应、Codex 拒绝）也报错，不会先回成功。其他会话都不带 `efforts`：Claude Code 和助手照旧用客户端自己的那套档位，别的不能改。客户端按 `efforts` 非空且能发送决定只显示思考强度，不按 Agent 种类猜；旧客户端忽略这个字段。
 
+上下文用量（#2430）：会话带 `context_tokens`（agent 最近一次回复时模型看到的 token：Claude 是 `input + cache_read + cache_creation`，Codex 是 rollout 最近一条 `token_count` 的 `last_token_usage.input_tokens`）和 `context_window`（模型的窗口）；node 从 `readQuickMetaSince` 已经在读的 transcript 尾部算，不多读文件，尾部没有回复时沿用上一次读到的（`node/contextwindow.go`）。窗口：Codex 用 rollout 自己记的 `model_context_window`；Claude 按模型 id——`[1m]` 后缀是 100 万，已经看过超过 20 万 token 的也算 100 万（transcript 里的 id 没有后缀），其余 `claude-*` 是 20 万；不是 Claude 的模型（网关自己的）不知道窗口，只带 `context_tokens`。不知道的字段不带（`omitempty`）：还没有回复、老 node。客户端用 `context_tokens / context_window` 算百分比，缺任何一个都不画。
+
 `POST /api/v1/sessions/{mid}/{sid}/attach`：用户要求实时接入，node 只对原实例仍 loaded、owner 唯一的 thread 请求 resume，且不带运行配置覆盖。发现/普通读历史不调用 resume。加入许可按 thread/稳定实例记在 settings；断线重验 owner，不自动冷恢复或换实例。loaded/list 与 resume 不原子，不能承诺中间没有 unload 竞态。
 
 外部发送同样用 `/messages`，必须带 `client_msg_id` 并成功登记 Postgres 去重记录；不能在存储不可用时无保护地发出。未知发送结果（包括可能发生在 admission 后的通用 server error）返回 `delivered: unknown`，不能自动重发或将 steer 失败改成 start。发送记录不按一天过期，避免恢复很久以前的 outbox 后重复执行；只有明确未发送的记录可忘记。

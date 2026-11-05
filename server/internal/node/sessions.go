@@ -146,6 +146,10 @@ type quickMeta struct {
 	effort   string
 	effortAt time.Time
 	sandbox  string // Codex: the turn's sandbox, which with mode (its approval policy) gives the app's mode back
+	// contextTokens / contextWindow: the latest reply's input tokens and, for Codex, the window its rollout records
+	// (transcript.Meta; Session.ContextTokens / ContextWindow, #2430). Carried over from the last read when the tail
+	// holds no reply (one huge line can fill it).
+	contextTokens, contextWindow int
 	// turnClosed: the tail ends with a turn finished (transcript.Meta.TurnClosed): a Codex rollout's, a Claude
 	// transcript's (turn_duration, an interrupt)
 	turnClosed bool
@@ -285,6 +289,10 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 	m.claudeTurn = !tm.Codex && tm.TurnOpen
 	m.turnError, m.turnErrorKind = tm.TurnError, tm.TurnErrorKind
 	m.mode, m.modeAt, m.effort, m.effortAt, m.sandbox = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt, tm.CodexSandbox
+	m.contextTokens, m.contextWindow = tm.ContextTokens, tm.ContextWindow
+	if m.contextTokens == 0 && prev.size > 0 && prev.size <= st.Size() {
+		m.contextTokens, m.contextWindow = prev.contextTokens, prev.contextWindow // no reply in the tail: the last read's stands
+	}
 	return m
 }
 
@@ -659,6 +667,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 				s.Model, s.LastText, s.UpdatedAt, s.Rev = m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
 				s.TurnError, s.TurnErrorKind = m.turnError, m.turnErrorKind
 				s.Activity, s.ActivityAt = m.activityOf()
+				setContext(&s, m)
 				if a.Agent != "codex" && a.Agent != traexAgent {
 					s.PermissionMode, s.Effort = n.currentModes(id, m)
 				}
@@ -866,6 +875,7 @@ func (n *Node) scanOffline() []proto.Session {
 			LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, c.st), Rev: c.st.Size(),
 		}
 		s.Activity, s.ActivityAt = m.activityOf()
+		setContext(&s, m)
 		s.PermissionMode, s.Effort = n.currentModes(id, m)
 		untitled(&s, m)
 		out = append(out, s)

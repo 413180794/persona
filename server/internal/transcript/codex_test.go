@@ -120,3 +120,14 @@ func TestHistoryMutationRollout(t *testing.T) {
 		t.Fatalf("turn still open after task_complete: %v", err)
 	}
 }
+
+// A rollout's token_count carries the model's context window next to the latest request's input (#2430).
+func TestCodexContextWindow(t *testing.T) {
+	f := NewFile(filepath.Join("testdata", "codex-0.163.jsonl"))
+	if _, err := f.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if m := f.Meta(); m.ContextWindow != 475000 || m.ContextTokens <= 0 || m.ContextTokens >= m.ContextWindow {
+		t.Fatalf("context %d of window %d", m.ContextTokens, m.ContextWindow)
+	}
+}

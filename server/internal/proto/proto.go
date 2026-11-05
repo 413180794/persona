@@ -599,6 +599,12 @@ type Session struct {
 	// drives through its app-server has an Effort too (Codex's levels, see Efforts) but never a PermissionMode.
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Effort         string `json:"effort,omitempty"`
+	// ContextTokens is what the model saw in the agent's latest reply (Claude: input + cache read + cache creation;
+	// Codex: the last token_count's input) and ContextWindow the model's window, both read off the transcript tail the
+	// node already reads (#2430). ContextTokens is omitted while unknown (no reply yet); ContextWindow too, when the
+	// node cannot tell the model's window. The apps show used / window as the context bar.
+	ContextTokens int `json:"context_tokens,omitempty"`
+	ContextWindow int `json:"context_window,omitempty"`
 	// Efforts are the levels session.modes takes for Effort when they are not Claude Code's (which the apps know): a
 	// Codex thread the phone drives through its app-server (node/codex_effort.go), its model's levels weakest first.
 	// Only Effort can change there. Empty for every other session: Claude's and the assistant's keep the apps' own

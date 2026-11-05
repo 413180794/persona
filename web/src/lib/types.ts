@@ -140,6 +140,9 @@ export interface Session {
   model?: string;
   permission_mode?: string;
   effort?: string;
+  /** What the model saw in the latest reply and the model's window, in tokens (#2430); omitted while the node cannot tell. */
+  context_tokens?: number;
+  context_window?: number;
   /** The levels `effort` may be set to when they are not Claude Code's: a Codex thread driven through its app-server (only its effort changes; docs/protocol.md). */
   efforts?: string[];
   assistant?: boolean;

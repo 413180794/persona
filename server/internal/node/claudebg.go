@@ -126,6 +126,7 @@ func (n *Node) claudeBgSessions(procs []claudeProc, seen map[string]bool) []prot
 			s.Title = c.Name
 		}
 		untitled(&s, m)
+		setContext(&s, m)
 		s.Activity, s.ActivityAt = m.activityOf()
 		s.PermissionMode, s.Effort = n.currentModes(id, m)
 		for _, t := range m.bg { // as for a pane's session: background subagents are listed as subagents

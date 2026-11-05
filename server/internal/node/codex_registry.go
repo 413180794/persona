@@ -377,6 +377,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 				}
 				s.Cwd, s.Model, s.LastText, s.UpdatedAt, s.Rev = m.cwd, m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
 				s.TurnError, s.TurnErrorKind = m.turnError, m.turnErrorKind
+				setContext(&s, m)
 				s.Title = threadTitle(src.home, src.thread)
 				untitled(&s, m)
 			}

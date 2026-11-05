@@ -211,6 +211,7 @@ func (n *Node) mergeRuntimeTranscript(s *proto.Session) string {
 	if s.PermissionMode == "" && s.Effort == "" {
 		s.PermissionMode, s.Effort = n.currentModes(s.SessionID, m)
 	}
+	setContext(s, m)
 	s.LastText, s.Rev = snippet(m.lastText), st.Size()
 	if u := lastUsed(m, st); u.After(s.UpdatedAt) {
 		s.UpdatedAt = u.UTC()

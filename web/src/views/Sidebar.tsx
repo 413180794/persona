@@ -35,6 +35,7 @@ import { machineNode, termPaneNode, termSpaceNode, termTabNode, type MenuNode } 
 import { contextMenuProps } from "../ui/context-menu";
 import type { MenuAt } from "../ui/menu-model";
 import { useSidebarTerminals } from "../lib/sidebar-terminals";
+import { rowDetail, useAgentDetails, useContextAsUsed } from "../lib/context-usage";
 import { usePanes } from "../lib/terminal-panes";
 import { buildTerminalTree, shellsOnly, type TermSpace } from "../lib/terminals";
 import { setTheme, useTheme, type Theme } from "./theme";
@@ -1150,6 +1151,10 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
   const t = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
   const row = useRef<HTMLAnchorElement | null>(null);
+  // 设置 › 外观 › Agent 行显示详情 (#2430): a second line under an agent's title — folder · model · context · age
+  const details = useAgentDetails();
+  const contextUsed = useContextAsUsed();
+  const detail = details && showState && !s.assistant ? rowDetail(s, contextUsed) : [];
   // what sits at the row's end steps aside for the hover ⋯; the open row leaves room for its ⋯ instead
   const aside = active ? undefined : "group-hover/row:invisible";
   const link = (
@@ -1173,9 +1178,26 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>
       {prefix}
-      <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
-        {label ?? sessionTitle(s)}
-      </span>
+      {detail.length > 0 ? (
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className={cx("truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
+            {label ?? sessionTitle(s)}
+          </span>
+          {/* one line high: a piece that does not fit wraps out of sight instead of squeezing the others */}
+          <span className="flex h-4 min-w-0 flex-wrap gap-x-1 overflow-hidden whitespace-nowrap text-[11px] leading-4 text-ink-3">
+            {detail.map((d, i) => (
+              <span key={i} title={d.title} className={cx("flex shrink-0 items-center gap-1 tabular-nums", d.warn && "font-medium text-orange")}>
+                {i > 0 && <span aria-hidden="true">·</span>}
+                {d.text}
+              </span>
+            ))}
+          </span>
+        </span>
+      ) : (
+        <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
+          {label ?? sessionTitle(s)}
+        </span>
+      )}
       {host && <span className={cx("shrink-0 rounded bg-hover px-1 text-[10px] leading-4 text-ink-3", aside)}>{host}</span>}
       {showTodoTag && s.todo && (
         <span

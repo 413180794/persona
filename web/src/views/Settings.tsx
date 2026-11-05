@@ -14,6 +14,7 @@ import { Group, Row, Pill, RowConfirm, Switch } from "./settings/SettingsParts";
 import { LanguageRow } from "./settings/LanguageRow";
 import { setReplyMotionEnabled, useReplyMotionSetting } from "../ui/stream/motion";
 import { setSidebarTerminals, useSidebarTerminals } from "../lib/sidebar-terminals";
+import { setAgentDetails, setContextAsUsed, useAgentDetails, useContextAsUsed } from "../lib/context-usage";
 import { setAttentionSoundEnabled, useAttentionSoundSetting } from "../lib/attention";
 import { HubList } from "./Hubs";
 import { ModelConfiguration } from "./settings/ModelConfiguration";
@@ -247,6 +248,8 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
   const theme = useTheme();
   const replyMotion = useReplyMotionSetting();
   const sidebarTerminals = useSidebarTerminals();
+  const agentDetails = useAgentDetails();
+  const contextAsUsed = useContextAsUsed();
   const attentionSound = useAttentionSoundSetting();
   const machines = useStore((s) => s.machines);
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
@@ -292,6 +295,12 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
         </Row>
         <Row label="侧边栏显示终端" hint="在 Agent 按机器分组里，每台电脑的 Agent 下面列出它终端里的普通 shell，点开就是「终端」页。默认关；只对这个浏览器生效。">
           <Switch on={sidebarTerminals} onChange={setSidebarTerminals} label="侧边栏显示终端" />
+        </Row>
+        <Row label="Agent 行显示详情" hint="Agent 行多一行：模型、上下文、多久没动、目录；会话顶栏显示模型和上下文条。默认关。">
+          <Switch on={agentDetails} onChange={setAgentDetails} label="Agent 行显示详情" />
+        </Row>
+        <Row label="上下文显示为已用" hint="上下文写已用多少（已用 39%），不写还剩多少（还剩 61%）；用到 80% 起变警告色。默认关。">
+          <Switch on={contextAsUsed} onChange={setContextAsUsed} label="上下文显示为已用" />
         </Row>
       </Group>
 
