@@ -4,14 +4,15 @@
 // wrong (with the steps to fix it); one the user signs in to here (`login`) also gets its switch, the sign-in a step
 // at a time (fields the hub asks for, GitHub's device code, or a QR code to scan), 进知识库 / 进收件箱, sign-out and delete. GitHub adds
 // where its token comes from (a computer's gh, or the device flow), the scopes it lacks, and its inbox options.
+// 信息 (iMessage) adds 交给 Persona and deleting what the hub kept (iOS MessagesConnectorView, /api/v1/imessage…).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import {
-  canSendStep, CI_MODES, connectorBrand, connectorLogin, connectorLogout, connectorState, connectorSummary, connectorTone, deleteConnectorArchive,
+  canSendStep, CI_MODES, deleteIMessageData, imessageAIFooter, imessageStatus, setIMessageAI, connectorBrand, connectorLogin, connectorLogout, connectorState, connectorSummary, connectorTone, deleteConnectorArchive,
   deleteConnectorData, deletedLine, feedsFooter, fieldInput, githubAuth, githubInboxFooter, githubMachineLine, githubMachineWarns, githubOptions,
   githubScopeAdvice, isEnabled, isPolledStep, isSignedIn, isStarting, listConnectors, logoutMessage, mutableRepo, otherConnectors, setConnector, setGitHubAuth,
   signInFooter, signsInHere, stepView, storesData, switchFooter, switchLabel, undescribed,
-  type ConnectorPrompt, type ConnectorTone, type GitHubAuth, type GitHubInboxOptions, type HubConnector,
+  type ConnectorPrompt, type ConnectorTone, type GitHubAuth, type GitHubInboxOptions, type HubConnector, type IMessageStatus,
 } from "../../lib/connectors";
 import { useChannels } from "../../lib/channels";
 import { ago } from "../../lib/format";
@@ -138,11 +139,10 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
         {err && <p className={cx("border-t border-line px-4 py-2.5 text-[12px] break-words select-text", rateLimited ? "text-ink-2" : "text-red")}>{err}</p>}
       </section>
       {onChannel && <ChannelLink id={id} onOpen={onChannel} />}
-      {c && !signsInHere(c) && !undescribed(c) && (
-        <p className="-mt-4 mb-6 px-1 text-[11.5px] leading-relaxed text-ink-3">
-          {id === "imessage" ? t("settings-hubconnector.imessage_note") : t("settings-hubconnector.hub_side_note")}
-        </p>
+      {c && id !== "imessage" && !signsInHere(c) && !undescribed(c) && (
+        <p className="-mt-4 mb-6 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("settings-hubconnector.hub_side_note")}</p>
       )}
+      {c && id === "imessage" && <IMessageSections />}
 
       {c && id === "github" && signsInHere(c) && <GitHubSections c={c} reload={reload} />}
       {c && id !== "github" && (signsInHere(c) || undescribed(c)) && <SignInSections c={c} reload={reload} />}
@@ -305,6 +305,112 @@ function Confirm({ open, title, message, action, busy, onClose, onConfirm }: {
     >
       <p className="text-[12.5px] leading-relaxed text-ink-2">{message}</p>
     </Dialog>
+  );
+}
+
+// ── 信息 (iMessage) ──────────────────────────────────────
+
+/** 信息's 交给 Persona switch and deleting what the hub kept (iOS MessagesConnectorView); a hub without the switch
+ *  (no `ai` in GET /imessage, or no Mac chosen yet) shows only the read-only line. */
+export function IMessageSections() {
+  const [st, setSt] = useState<IMessageStatus | null>(null);
+  const [busy, setBusy] = useState<"" | "ai" | "delete">("");
+  const [confirm, setConfirm] = useState(false);
+  const [deleted, setDeleted] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    imessageStatus().then(setSt, () => setSt(null));
+  }, []);
+
+  const setAI = async (on: boolean) => {
+    setBusy("ai");
+    try {
+      setSt(await setIMessageAI(on));
+      setDeleted("");
+      setError("");
+    } catch (e) {
+      setError(t("settings-hubconnector.imessage_ai_failed", { error: errorText(e) }));
+    } finally {
+      setBusy("");
+    }
+  };
+  const remove = async () => {
+    setBusy("delete");
+    try {
+      setDeleted(deletedLine(await deleteIMessageData()));
+      setError("");
+      setConfirm(false);
+    } catch (e) {
+      setError(t("settings-hubconnector.imessage_delete_failed", { error: errorText(e) }));
+      setConfirm(false);
+    } finally {
+      setBusy("");
+    }
+  };
+
+  return (
+    <IMessageGroups
+      ai={st?.ai}
+      busy={busy}
+      deleted={deleted}
+      error={error}
+      confirm={confirm}
+      onAI={(on) => void setAI(on)}
+      onDelete={() => setConfirm(true)}
+      onCancel={() => setConfirm(false)}
+      onConfirm={() => void remove()}
+    />
+  );
+}
+
+/** The groups as drawn, apart from loading them (for the tests). */
+export function IMessageGroups({ ai, busy, deleted, error, confirm, onAI, onDelete, onCancel, onConfirm }: {
+  ai?: boolean;
+  busy: "" | "ai" | "delete";
+  deleted: string;
+  error: string;
+  confirm: boolean;
+  onAI: (on: boolean) => void;
+  onDelete: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const label = t("settings-hubconnector.imessage_ai");
+  return (
+    <>
+      {ai !== undefined && (
+        <Group footer={imessageAIFooter(ai)}>
+          <div className="flex items-center gap-3 px-4 py-2.5">
+            <Icon name="spark" size={15} className="shrink-0 text-accent" />
+            <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{label}</span>
+            {busy === "ai" && <Spinner />}
+            <Switch on={ai} disabled={!!busy} label={label} onChange={onAI} />
+          </div>
+          <div className="px-4 py-2.5">
+            <button
+              type="button"
+              disabled={ai || !!busy}
+              onClick={onDelete}
+              className="text-[13px] whitespace-nowrap text-red enabled:hover:underline disabled:opacity-50"
+            >
+              {t("settings-hubconnector.imessage_delete")}
+            </button>
+          </div>
+          {deleted && <p className="px-4 py-2.5 text-[12px] text-ink-2">{deleted}</p>}
+          {error && <p role="alert" className="px-4 py-2.5 text-[12px] break-words text-red">{error}</p>}
+          <Confirm
+            open={confirm}
+            title={t("settings-hubconnector.imessage_delete_title")}
+            message={t("settings-hubconnector.imessage_delete_message")}
+            action={t("settings-hubconnector.delete")}
+            busy={busy === "delete"}
+            onClose={onCancel}
+            onConfirm={onConfirm}
+          />
+        </Group>
+      )}
+      <p className="-mt-4 mb-6 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("settings-hubconnector.imessage_read_only")}</p>
+    </>
   );
 }
 

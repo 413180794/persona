@@ -10,7 +10,6 @@
   "no_status": "读不到状态",
   "signed_in_via": "登录",
   "last_sync": "最近一次同步",
-  "imessage_note": "「交给 Persona」和删除已存的数据在手机 App 的 设置 › 连接器 › 信息 里。",
   "hub_side_note": "登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。",
   "fix_title": "怎么修好",
   "to_knowledge": "进知识库",
@@ -52,5 +51,12 @@
   "unmute": "不再静音 {repo}",
   "mute_placeholder": "静音仓库：owner/name",
   "mute_repo": "静音仓库",
-  "add": "添加"
+  "add": "添加",
+  "imessage_ai": "交给 Persona",
+  "imessage_delete": "删除 hub 上已存的信息",
+  "imessage_delete_title": "删除 hub 上已存的信息？",
+  "imessage_delete_message": "知识库里的信息会话和人、收件箱里的信息条目都会删掉；那台 Mac 上的消息不受影响。",
+  "imessage_read_only": "Persona 只读，不会替你发消息；直接读那台 Mac，看了也不会标成已读。",
+  "imessage_ai_failed": "没改成：{error}",
+  "imessage_delete_failed": "没删成：{error}"
 }

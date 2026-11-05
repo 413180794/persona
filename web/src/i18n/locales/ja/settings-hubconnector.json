@@ -10,7 +10,6 @@
   "no_status": "状態を取得できません",
   "signed_in_via": "サインイン",
   "last_sync": "最終同期",
-  "imessage_note": "「Persona に任せる」と保存済みデータの削除は、スマートフォンのアプリの 設定 › コネクタ › メッセージ にあります。",
   "hub_side_note": "サインインはハブ側で設定します（hub.json、docs/config.md を参照）。ここでは状態のみ表示します。",
   "fix_title": "解決方法",
   "to_knowledge": "ナレッジに追加",
@@ -52,5 +51,12 @@
   "unmute": "{repo}のミュートを解除",
   "mute_placeholder": "ミュートするリポジトリ：owner/name",
   "mute_repo": "ミュートするリポジトリ",
-  "add": "追加"
+  "add": "追加",
+  "imessage_ai": "Persona に任せる",
+  "imessage_delete": "hub に保存済みのメッセージを削除",
+  "imessage_delete_title": "hub に保存済みのメッセージを削除しますか？",
+  "imessage_delete_message": "ナレッジベースのメッセージの会話と人、受信箱のメッセージの項目が削除されます。その Mac 上のメッセージには影響しません。",
+  "imessage_read_only": "Persona は読むだけで、代わりに送信することはありません。その Mac を直接読み、既読にもしません。",
+  "imessage_ai_failed": "変更できませんでした：{error}",
+  "imessage_delete_failed": "削除できませんでした：{error}"
 }

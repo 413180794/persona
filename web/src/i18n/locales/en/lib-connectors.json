@@ -69,5 +69,7 @@
   "chat_group_members_other": "Group · {n} members",
   "chat_channel": "Channel",
   "chat_channel_members_one": "Channel · {n} subscriber",
-  "chat_channel_members_other": "Channel · {n} subscribers"
+  "chat_channel_members_other": "Channel · {n} subscribers",
+  "imessage_ai_on": "People in your contacts and chats you have replied to go to the knowledge base and the inbox (sorted like Feishu), and the assistant can search and summarize them; verification codes are masked. Turning it off stops at once; to delete what the hub kept, turn it off first.",
+  "imessage_ai_off": "Not handed to Persona now: nothing syncs, nothing goes to the inbox, and the assistant can't read it. What the hub kept before is still there and can be deleted."
 }

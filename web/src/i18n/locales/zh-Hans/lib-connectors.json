@@ -67,5 +67,7 @@
   "chat_group": "群聊",
   "chat_group_members_other": "群聊 · {n} 位成员",
   "chat_channel": "频道",
-  "chat_channel_members_other": "频道 · {n} 位订阅者"
+  "chat_channel_members_other": "频道 · {n} 位订阅者",
+  "imessage_ai_on": "通讯录里的人和你回复过的会话会进知识库和收件箱（和飞书一样分拣），助手能查、能总结；验证码会打码。关掉立刻停止；要删 hub 上已存的，先关掉。",
+  "imessage_ai_off": "现在不交给 Persona：不同步、不进收件箱，助手读不到。hub 上之前存下的还在，可以删除。"
 }

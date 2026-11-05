@@ -10,7 +10,6 @@
   "no_status": "Status unavailable",
   "signed_in_via": "Signed in via",
   "last_sync": "Last sync",
-  "imessage_note": "“Hand to Persona” and deleting saved data are in the phone app under Settings › Connectors › Messages.",
   "hub_side_note": "Sign-in is set up on the hub (hub.json, see docs/config.md). This page only shows the status.",
   "fix_title": "How to fix it",
   "to_knowledge": "Add to knowledge base",
@@ -52,5 +51,12 @@
   "unmute": "Unmute {repo}",
   "mute_placeholder": "Mute repository: owner/name",
   "mute_repo": "Mute repository",
-  "add": "Add"
+  "add": "Add",
+  "imessage_ai": "Hand to Persona",
+  "imessage_delete": "Delete messages saved on the hub",
+  "imessage_delete_title": "Delete messages saved on the hub?",
+  "imessage_delete_message": "Messages chats and people in the knowledge base and Messages items in the inbox will be deleted. Messages on that Mac are not affected.",
+  "imessage_read_only": "Persona only reads and never sends for you; it reads that Mac directly and marks nothing as read.",
+  "imessage_ai_failed": "Couldn't change it: {error}",
+  "imessage_delete_failed": "Couldn't delete: {error}"
 }

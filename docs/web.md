@@ -325,7 +325,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   GitHub、Telegram、信息和扩展提供的连接器，一行一个（标志、名字、状态圆点和账号）。详情照 iOS `HubConnectorView`：状态、登录来源、最近一次同步、错误（限流时灰字）和「怎么修好」的步骤；
   能在这里登录的（`login`）有「同步 X」开关、分步登录（按 hub 给的字段填，`secret` 的是密码框；GitHub 的设备码大字显示、可复制、按 `interval` 自动再问；微信这类 `kind: qr` 画 hub 给的二维码、能「保存二维码」、按 `interval` 自动再问，二维码和渠道页共用 `settings/LoginSteps.tsx`；只缺点阵时给可复制的链接；画不了的步骤（不认识的 `kind`、没点阵也没链接、没有字段）说明画不了和下一步、给「重新开始」，不留灰掉的「下一步」，#1693）、进知识库 / 进收件箱、
   删除已存的知识库内容、退出登录、删除已存的数据（都先确认）；刚打开、进程还没报能力的每秒再问一次（最多 15 秒）。GitHub 另有「从哪里登录」（各台电脑上的 gh 或设备码，`/connectors/github/auth`）、
-  权限不够时缺哪些 scope 和影响什么、收件箱选项（CI 失败档位、静音仓库，`PUT …/github/settings {options}`）。信息（iMessage）只看状态，「交给 Persona」和删除在手机上；「这台 iPhone」只在手机上有；
+  权限不够时缺哪些 scope 和影响什么、收件箱选项（CI 失败档位、静音仓库，`PUT …/github/settings {options}`）。信息（iMessage）照 iOS `MessagesConnectorView`：状态之外有「交给 Persona」开关（`GET /imessage` 的 `ai`，改了立即 `PUT /imessage/settings {ai}`，下面的说明随开关变）和「删除 hub 上已存的信息」（开关关着才能点，先确认，`DELETE /imessage/data`，写明删了几个会话、几个人、几条收件箱；老 hub 没有 `ai` 时这一组不出现，#2898）；会话浏览只在手机上；「这台 iPhone」只在手机上有；
   「hub」（`settings/HubSettings.tsx`，逻辑 `lib/hub-update.ts`，`docs/hub-update.md`「App 里」）：版本、渠道、上次检查、检查更新，新版本和说明、回滚过 / 自动更新不装的提示、
   「更新 hub」，等空闲时列出在忙的 Agent 和「现在就更新…」（先确认），Docker 部署给要改的镜像和命令（可复制），自动更新开关、首次「已开启」提示、各台电脑上的 personad 版本、更新记录；
   跟着 `hub_update` 推送刷新，旧 hub（没有这个接口）只显示一句说明；
@@ -940,7 +940,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 助手的 Skills | 有 | #1325 | 设置 › 助手，只读（同 iOS） |
 | 连接器：GitHub（登录来源、设备码登录、权限、收件箱选项） | 有 | #1324 | |
 | 连接器：Telegram、扩展提供的连接器（开关、分步登录、进知识库 / 进收件箱、退出、删除） | 有 | #1324、#1425 | 品牌、页脚、「在 X 里回复」按连接器 id 查 `lib/connectors.ts` 的一张表；表里没有的扩展连接器用通用图标和通用文案（带它自己的名字）；微信的品牌图未定，先用通用图标 |
-| 连接器：信息（iMessage） | 部分 | #1324 | 只看状态；「交给 Persona」开关和删除数据只在手机上 |
+| 连接器：信息（iMessage） | 有 | #1324、#2898 | 状态、「交给 Persona」开关、删除 hub 上已存的信息；浏览那台 Mac 的会话只在手机上 |
 | 扩展（列表、开关、按 schema 的表单、只写的密钥） | 有 | #1207 | 安装、升级、卸载在 hub 机器上（同 iOS） |
 | 键盘快捷键、命令面板 | 有 | #2330 | 见「快捷键和命令面板」；手机端没有实体键盘 |
 | 翻译 | 有 | #433 | 存在当前浏览器、不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上，网页没有；网页打开时按需翻 |

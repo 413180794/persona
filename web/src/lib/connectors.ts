@@ -416,6 +416,37 @@ export function deleteConnectorArchive(id: string): Promise<ConnectorDeleted> {
   return api<ConnectorDeleted>(`/connectors/${enc(id)}/archive`, { method: "DELETE" });
 }
 
+// ── 信息 (iMessage): 交给 Persona and deleting what the hub kept (iOS MessagesConnectorView) ──
+
+/** GET /api/v1/imessage: the Mac's status; `ai` is 交给 Persona (absent from a hub before it). */
+export interface IMessageStatus {
+  machine: string;
+  status: string;
+  error?: string;
+  guide?: string[];
+  via?: string;
+  ai?: boolean;
+}
+
+export function imessageStatus(): Promise<IMessageStatus> {
+  return api<IMessageStatus>("/imessage");
+}
+
+/** 交给 Persona on or off: off stops at once, what the hub kept stays until deleteIMessageData. */
+export function setIMessageAI(on: boolean): Promise<IMessageStatus> {
+  return api<IMessageStatus>("/imessage/settings", { method: "PUT", json: { ai: on } });
+}
+
+/** What the hub kept of iMessage (knowledge base chats and people, inbox items); the hub refuses while 交给 Persona is on. */
+export function deleteIMessageData(): Promise<ConnectorDeleted> {
+  return api<ConnectorDeleted>("/imessage/data", { method: "DELETE" });
+}
+
+/** The words under the 交给 Persona switch, as iOS says them. */
+export function imessageAIFooter(on: boolean): string {
+  return on ? t("lib-connectors.imessage_ai_on") : t("lib-connectors.imessage_ai_off");
+}
+
 export function githubAuth(): Promise<GitHubAuth> {
   return api<GitHubAuth>("/connectors/github/auth");
 }

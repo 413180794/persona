@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ConnectorPrompt } from "../../lib/connectors";
-import { SignInStep } from "./HubConnector";
+import { IMessageGroups, SignInStep } from "./HubConnector";
 
 // 设置 › 连接器's login card (#1693): a QR code step is drawn and a step the page can't draw says so, never an empty
 // form whose 下一步 stays grey forever.
@@ -60,5 +60,42 @@ describe("a sign-in step", () => {
     expect(html).toContain("手机号");
     expect(html).toContain("下一步");
     expect(html).not.toContain("画不了");
+  });
+});
+
+// 设置 › 连接器 › 信息 (#2898): 交给 Persona and deleting what the hub kept, as on iOS.
+const imessage = (ai: boolean | undefined, extra: Partial<Parameters<typeof IMessageGroups>[0]> = {}) =>
+  renderToStaticMarkup(
+    <IMessageGroups ai={ai} busy="" deleted="" error="" confirm={false} onAI={() => {}} onDelete={() => {}} onCancel={() => {}} onConfirm={() => {}} {...extra} />,
+  );
+
+describe("信息's page", () => {
+  it("draws 交给 Persona on, with delete held back until it is off", () => {
+    const html = imessage(true);
+    expect(html).toContain('role="switch" aria-checked="true" aria-label="交给 Persona"');
+    expect(html).toMatch(/<button type="button" disabled="".*删除 hub 上已存的信息/);
+    expect(html).toContain("关掉立刻停止");
+    expect(html).not.toContain("在手机 App");
+  });
+
+  it("lets the user delete once 交给 Persona is off, and says what went", () => {
+    const html = imessage(false, { deleted: "已删除：知识库里 2 个会话、1 个人，收件箱里 3 条。" });
+    expect(html).toContain('aria-checked="false"');
+    expect(html).not.toMatch(/disabled="".{0,200}删除 hub 上已存的信息/);
+    expect(html).toContain("现在不交给 Persona");
+    expect(html).toContain("收件箱里 3 条");
+  });
+
+  it("shows only the read-only line on a hub without the switch", () => {
+    const html = imessage(undefined);
+    expect(html).not.toContain('role="switch"');
+    expect(html).not.toContain("删除 hub 上已存的信息");
+    expect(html).toContain("Persona 只读");
+  });
+
+  it("holds both while a change is saving, and shows its error", () => {
+    const html = imessage(false, { busy: "ai", error: "没改成：no database" });
+    expect(html).toMatch(/role="switch" aria-checked="false" aria-label="交给 Persona" disabled=""|disabled="".{0,80}role="switch"/);
+    expect(html).toContain("没改成：no database");
   });
 });
