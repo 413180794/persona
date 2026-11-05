@@ -16,6 +16,7 @@ spec/
     answer/           回复与交互
     terminal/         终端
     wire/             协议解码
+    injected/         hub 注入给模型的消息怎么认
     tokens/           设计 token 的校验夹具（如该领域提供）
   tokens/             设计 token 的来源文件，见 D7
 ```
@@ -30,6 +31,7 @@ spec/
 | answer | 见各自 [README](fixtures/answer/README.md) |
 | terminal | 见各自 [README](fixtures/terminal/README.md) |
 | wire | 见各自 [README](fixtures/wire/README.md) |
+| injected | 见各自 [README](fixtures/injected/README.md)：hub 注入给模型的消息（任务通知、定时任务……）怎么认 |
 | tokens | 见各自 [README](tokens/README.md)；校验夹具如放在 `fixtures/tokens/`，结构由该领域 README 说明 |
 
 ## 夹具约定

@@ -349,6 +349,7 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
  "client_msg_id":"…",                                 // 这条来自 App 带这个 client_msg_id 发的消息（文字、图片，或 /compact 变成的 notice），
                                                       // 由 node 认出，见「待发消息的对应」；旧 hub / node 不带
  "wake":true,                                         // 仅 notice：后台任务完成时 Claude 已空闲，这条通知开启了新的一轮
+ "injected":{"kind":"task_notice","state":"done",…},   // 仅 user text：这条是 Persona 发给模型的消息（任务通知、定时任务、叫醒……），不是用户写的；hub 下发时补上，见「Persona 注入的消息」
  "compact":{"trigger":"manual|auto","pre_tokens":151467}, // 仅 notice：这里压缩了上下文（Claude Code 的 compact_boundary）；App 画成一条分隔线，紧跟的「已从压缩的上下文继续」和空闲压缩的说明并进它
  "task":{"kind":"shell|monitor|agent|task",              // 仅 notice：后台任务的通知（命令、Monitor 事件 / 结束、子 Agent），text 是一行摘要
          "status":"completed|failed|killed|stopped|event|ended|waiting","title":"description 或命令第一行",
@@ -1714,4 +1715,51 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | `<attached_images>` 每行一个路径 `</attached_images>` | hub（手机发图） | 消息附带的图片；气泡上方方形缩略图 |
 | `<jarvis-context kind="context\|edit\|doc\|instructions" title="…" url="…">文字</jarvis-context>` | 手机（链接卡片里选中文字）、hub（飞书 /agent 的说明和上下文） | 不是用户写的：所有块收成气泡旁一行「上下文 · N 项」（只有一块时「上下文 · 标题」），默认折叠；展开是标题列表，每项再点开看正文和链接。属性顺序任意、可以缺（`url` 常缺）；标签外的文字才是用户写的 |
 | `<cross-session-message from-name="…">…</cross-session-message>` | Claude Code（会话间消息） | 左侧「来自 名字」卡片，正文按 Markdown 显示 |
+
+## Persona 注入的消息
+
+hub 会以「用户输入」的身份往对话里发一些给模型看的消息（#2360、#2358）。transcript 里它们和用户打的字一样是 `role:"user", kind:"text"`，
+但不是用户写的，**客户端不画成用户气泡，也不显示里面给模型的说明**。模型收到的文字不变（模板在 `server/internal/prompts/`），
+识别全在下发时做：hub 按模板认出这一行（`prompts.ParseInjected`，和渲染互测），给 item 补上 `injected`。分页（`/items`）、推送（`items` 事件、订阅时的 backlog）、
+`/items/{iid}/full` 都带；按文本认，所以老消息、旧 node 写的也带。App 自己带 `client_msg_id` 发的那行永远不认。
+
+```jsonc
+"injected": {
+  "kind": "task_notice|followup|system",
+  "state": "…",            // 见下表
+  "title": "README 去掉扩展列表", // 任务名 / 定时任务的标题 / 叫醒时在等的事；可能空
+  "machine": "公司 example-machine",  // 仅 task_notice：Agent 在哪台电脑（名字，可能空）
+  "todo_id": "td_…",        // 仅 task_notice：hub 认得出是哪个任务时（任务还开着、标题唯一）；可能空，客户端再按标题去找同一对话的任务卡
+  "line": "任务「README 去掉扩展列表」做完了", // 给人看的一句话，直接显示
+  "detail": "…"             // 仅 followup 的 once / daily / interval：任务本身的要求（用户在定时任务里写的那段），可以折叠着给人看；其余为空
+}
+```
+
+| 来源（模板） | 文字的开头 | `kind` | `state` | `line` |
+| --- | --- | --- | --- | --- |
+| 主对话派出的安静任务有了结果（`assistant/task_notice.md`） | `🔔 任务「标题」做完了（电脑）`，第二或第三行是「（这是 Persona 的任务通知，……」 | `task_notice` | `done` / `needs` / `interrupted` / `failed` | 任务「x」做完了 / 在等你 / 被打断了 / 没开起来 |
+| 定时任务、跟进到时间（`assistant/task_run.md`） | `⏰ 标题（你之前安排的跟进）` / `（定时任务）` / `（定时任务，每 30 分钟）` | `followup` | `once` / `daily` / `interval` | 跟进「x」到时间了 / 定时任务「x」开始运行 |
+| 叫醒等待中的 Agent（`agents/wake.md`，Agents 的对话） | `⏰（Persona 叫醒你，第 N 次）` | `followup` | `wake` | Persona 叫醒了它：看看「等的事」好了没有 |
+| node 重启丢了后台任务（`assistant/lost_tasks.md`） | `⚠️ 运行你的 node 刚重启过` | `system` | `lost_tasks` | node 重启过，N 个后台任务停了 |
+
+**怎么显示**（各端一样）：
+
+- 画成居中的一行轻量系统提示：图标 + `line`，不是右侧的用户气泡，不露出原文。`task_notice` 点一下打开任务（`todo_id`，没有就按 `title` 找这段对话的任务卡 / 待办；都找不到就不可点）；
+  `followup` 的 once / daily / interval 可以点开看 `detail`；其余不可点。
+- 主对话里同一个任务的卡片（回执、任务卡）已经在上方时，这一行可以并进卡片，不再单独画；绝不重复 Agent 最后说的话（卡片上有）。
+- 不算用户发的消息：不当成一轮的开头去配对待发气泡（`client_msg_id` / 按字认）、不进「你说的」类统计；对话列表的预览、搜索结果、复制「用户的话」时用 `line`，不用原文。
+- 队列里还没发进去的任务通知，`sessions` 的 `queued` 里本来就只写「任务「x」的通知」。
+
+**旧 hub 没有 `injected` 时**按文字认（只认 `role:"user", kind:"text"`、没有 `client_msg_id` 的行；先去掉开头的空白和 `<jarvis-context>` 快照块）：
+
+- `task_notice`：第一行匹配 `^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$`，且全文含「这是 Persona 的任务通知」。
+  第 2 组映射 `done` / `needs` / `interrupted` / `failed`，第 3 组是 `machine`。
+- `followup`：第一行匹配 `^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$`：「你之前安排的跟进」是 `once`，「定时任务，每 …」是 `interval`，「定时任务」是 `daily`；
+  `detail` 是第一个空行之后的正文（去掉末尾以「（知识库」开头的那段提示）。第一行以 `⏰（Persona 叫醒你，第` 开头的是 `wake`，`title` 取「在等「…」」里的那段。
+- `system`：以 `⚠️ 运行你的 node 刚重启过` 开头；`- ` 开头的行数是停掉的任务数。
+- 认不出的照旧是用户气泡（宁可漏认，不把用户的话藏起来）。
+- 共用夹具 `spec/fixtures/injected/cases.json`（Go 测试 `TestParseInjected` 按模板生成，`UPDATE_GOLDEN=1` 重写）：`input.text` → `expected`（`null` 是不认）；各端的兜底识别都跑这一份。
+
+别的「不是用户写的」消息已经有各自的形状，不归这里：别的对话发来的（`<jarvis-context title="来自对话「x」">`）、接上旧主对话的背景（`<jarvis-context title="接上旧主对话">`）
+按上面的标签收成「上下文」；后台任务的通知是 `kind:"notice"` + `task`；`/model`、压缩等是 `kind:"notice"`。
 

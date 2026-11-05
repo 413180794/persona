@@ -126,7 +126,7 @@
   Agents 页、主对话里的任务卡、任务坞、问题卡和实时快照都照常。
 - **改由主对话说**：做完 / 被打断（`taskTurnEnded`）、没开起来（`startPlanTask`）、在等用户（hub 发 `interaction.raised`）时，助手往主对话投一条通知
   （`prompts/assistant/task_notice.md`：「🔔 任务「xx」做完了（电脑）」、Agent 最后说的或它在问什么，再说明这是任务通知、由你决定怎么告诉用户），
-  主对话据此回答，回答照常推送到手机。
+  主对话据此回答，回答照常推送到手机。这条通知在对话里不画成用户气泡：hub 下发时给它带上 `injected`，各端只显示一行「任务「xx」做完了」（`docs/protocol.md`「Persona 注入的消息」）。
 - **合并**：同一个任务第一次变化后等 15 秒（`quietNoticeDelay`），这期间的变化只留最新的，通知里写「这期间它还等过用户」；
   等用户的通知发出前用户已经答了，就不发。主对话正在跑时，通知排进对话之间的队列（和 `conversation_send` 同一个，输入框上方显示「任务「xx」的通知」），这一轮结束再投；
   队列里已经有同一个任务的通知就原地换成新的，不再排第二条。实现在 `server/internal/assistant/quiet.go`。

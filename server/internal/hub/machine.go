@@ -465,6 +465,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 			m.lastSeq[p.SessionID] = last
 		}
 		m.mu.Unlock()
+		p.Items = m.hub.withInjected(p.Items)
 		m.hub.itemsToSubscribers(m.cfg.ID, p.SessionID, p.Items, p.itemSpan)
 		m.hub.followedItems(m.cfg.ID, p.SessionID, p.Items) // the assistant's channels follow it (assistant_channels.go)
 	case "session.screen":

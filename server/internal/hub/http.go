@@ -467,6 +467,7 @@ func (h *Hub) sessionItems(w http.ResponseWriter, r *http.Request, m *Machine) {
 		callErr(w, err)
 		return
 	}
+	res.Items = h.withInjected(res.Items)
 	if q.Get("lazy_images") == "1" {
 		res.Items = proto.WithoutImageData(res.Items)
 	}
@@ -483,7 +484,7 @@ func (h *Hub) sessionItemFull(w http.ResponseWriter, r *http.Request, m *Machine
 		callErr(w, err)
 		return
 	}
-	writeJSON(w, it)
+	writeJSON(w, h.withInjected([]proto.Item{it})[0])
 }
 
 // sessionImage serves one item's image as raw bytes. An item's image never changes, so the app may cache it forever.
@@ -1149,6 +1150,7 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 			c.sendJSON(map[string]any{"type": "error", "machine_id": m.cfg.ID, "session_id": sid, "error": err.Error()})
 			return
 		}
+		res.Items = h.withInjected(res.Items)
 		if lazy {
 			res.Items = proto.WithoutImageData(res.Items)
 		}

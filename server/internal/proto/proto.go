@@ -920,6 +920,10 @@ type Item struct {
 	Wake bool `json:"wake,omitempty"`
 	// From names the Claude session that sent this message (cross-session messaging), not the user.
 	From string `json:"from,omitempty"`
+	// Injected: this user line is a message Persona put into the conversation for the model (a task's notice, a
+	// scheduled run, a wake-up…), not something the user wrote. Set by the hub from the line's text
+	// (prompts.ParseInjected) on its way to the apps; docs/protocol.md「Persona 注入的消息」.
+	Injected *Injected `json:"injected,omitempty"`
 	Fold *Fold  `json:"fold,omitempty"`
 	// Task: this notice is a background task reporting back (a command, a Monitor, a subagent).
 	Task         *TaskNote     `json:"task,omitempty"`
@@ -927,6 +931,24 @@ type Item struct {
 	// Compact: this notice is where the context was compacted (Claude Code's compact_boundary).
 	Compact *Compact `json:"compact,omitempty"`
 }
+
+// Injected says what a message Persona wrote for the model is, for the apps to show one line instead of it.
+type Injected struct {
+	Kind    string `json:"kind"`              // InjectedTaskNotice | InjectedFollowup | InjectedSystem
+	State   string `json:"state,omitempty"`   // task_notice: done|needs|interrupted|failed; followup: once|daily|interval|wake; system: lost_tasks
+	Title   string `json:"title,omitempty"`   // the task's, the scheduled task's, or what a woken agent waits for
+	Machine string `json:"machine,omitempty"` // task_notice: where its agent runs (a name)
+	TodoID  string `json:"todo_id,omitempty"` // task_notice: the task, when the hub can tell
+	Line    string `json:"line"`              // the one line to show
+	Detail  string `json:"detail,omitempty"`  // followup once|daily|interval: what the task asks, as the user wrote it
+}
+
+// Injected kinds.
+const (
+	InjectedTaskNotice = "task_notice"
+	InjectedFollowup   = "followup"
+	InjectedSystem     = "system"
+)
 
 // Compact says how a compaction came about: Trigger "manual" (/compact) or "auto", and the context's size before it.
 type Compact struct {
