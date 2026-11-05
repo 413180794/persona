@@ -2,6 +2,7 @@ package persona.feature.machines
 
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalResources
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -53,7 +54,8 @@ private fun MachinesRouteContent(
         val lifecycle = LocalLifecycleOwner.current.lifecycle
         LaunchedEffect(model, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { model.poll() } }
         val feedback = LocalAppFeedback.current
-        LaunchedEffect(actions, feedback) { actions?.notices?.collect { feedback?.notice(it) } }
+        val resources = LocalResources.current
+        LaunchedEffect(actions, feedback, resources) { actions?.notices?.collect { feedback?.notice(it.text(resources)) } }
         val extensions = if (id != null && extensionSections != null) extensionSections(id) else null
         MachinesScreen(id, model, navigator, actions, launcherPages = launchers, extensionSections = extensions)
     }

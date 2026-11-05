@@ -1,0 +1,139 @@
+package persona.feature.machines
+
+import android.graphics.Bitmap
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.dp
+import androidx.navigation3.runtime.NavKey
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonElement
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import persona.core.contracts.*
+import persona.core.contracts.api.*
+import persona.core.designsystem.*
+import persona.core.navigation.AppTab
+import persona.core.navigation.Navigator
+import java.io.File
+import java.time.ZoneOffset
+import java.util.Locale
+
+/**
+ * 机器监控 and a machine's page in each of the app's languages, Glass and Brief, light and dark (docs/i18n.md). Written
+ * as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.
+ */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class MachinesShotsTest {
+    @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
+
+    private fun out(): File = File(System.getProperty("persona.shots") ?: "build/i18n-shots").also { it.mkdirs() }
+
+    @Config(sdk = [35], qualifiers = "zh-w400dp-h5200dp-xhdpi")
+    @Test fun simplifiedChinese() {
+        assertEquals("2026年11月2日 08:30", MetricFormat.boot(1_793_579_400.0, Locale.SIMPLIFIED_CHINESE, ZoneOffset.ofHours(8)))
+        shots("zh", listTitle = "机器监控", detail = "引擎与连接")
+    }
+
+    @Config(sdk = [35], qualifiers = "en-w400dp-h5200dp-xhdpi")
+    @Test fun english() {
+        assertTrue(MetricFormat.boot(1_793_579_400.0, Locale.ENGLISH, ZoneOffset.ofHours(8))!!.startsWith("Nov 2, 2026"))
+        shots("en", listTitle = "Machines", detail = "Engine and connection")
+    }
+
+    @Config(sdk = [35], qualifiers = "ja-w400dp-h5200dp-xhdpi")
+    @Test fun japanese() = shots("ja", listTitle = "マシン", detail = "エンジンと接続")
+
+    private val now = 1_793_600_000L
+    private val lab = Machine("lab", name = "Lab", kind = "ssh", sshHost = "lab.example.com", online = true, hostname = "lab.local",
+        herdrVersion = "0.9.1", claudeVersion = "2.1.0", nodeVersion = "abc1234", nodeMismatch = true,
+        system = MachineSystem(os = "linux", name = "Ubuntu 24.04", version = "24.04", kernel = "6.8.0", arch = "x86_64",
+            model = "Workstation", cpu = "AMD Ryzen 9", cores = 4, memory = 64L shl 30, bootTime = (now - 3 * 86_400 - 5 * 3600).toDouble()))
+    private val mac = Machine("mac", name = "MacBook", kind = "local", online = false, lastSeen = "2026-11-02T08:30:00Z",
+        error = "ssh: connection refused", system = MachineSystem(os = "darwin", distro = "macos", name = "macOS 26", cores = 10, memory = 32L shl 30))
+    private val sample = MetricSample(now - 5, cpu = 93.5, cores = listOf(91.0, 88.5, 97.0, 12.0), load = 6.2, memUsed = 54L shl 30,
+        memTotal = 64L shl 30, swapUsed = 0, swapTotal = 8L shl 30, netRx = 1.5 * 1024 * 1024, netTx = 240.0 * 1024,
+        diskUsed = 410L shl 30, diskTotal = 500L shl 30)
+    private val points = (0 until 360).map { i ->
+        val t = now - 3600 + i * 10
+        MetricPoint(t, cpu = 40.0 + 30 * kotlin.math.sin(i / 20.0), load = 3.0 + kotlin.math.cos(i / 30.0), mem = (50L shl 30).toDouble(),
+            rx = 1024.0 * (300 + i), tx = 1024.0 * 100, disk = (400L shl 30).toDouble())
+    }
+    private val labMetrics = MachineMetrics("lab", true, lab.system, sample, points)
+    private val macMetrics = MachineMetrics("mac", false, mac.system)
+
+    private val api = object : MachineMetricsApi {
+        override suspend fun dashboard() = MetricsDashboard(listOf(labMetrics, macMetrics), step = 10)
+        override suspend fun history(machineId: String, range: MetricRange) = MetricsHistory(labMetrics, range.wire, range.step)
+    }
+    private val repository = object : SessionsRepository {
+        override val machines = MutableStateFlow(listOf(lab, mac))
+        override val sessions = MutableStateFlow(listOf(
+            Session("lab", "s1", title = "Fix the login flow", cwd = "/home/me/app", status = "working"),
+            Session("lab", "s2", title = "Write release notes", cwd = "/home/me/docs", status = "blocked"),
+        ))
+        override suspend fun refresh() = Unit
+    }
+    private val management = object : MachineManagement {
+        override suspend fun launchers(machineId: String) = listOf(AgentLauncher("claude", model = "anthropic/claude-opus-5"), AgentLauncher("codex"))
+        override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) = LauncherQuotaAnswer()
+        override suspend fun reconnect(machineId: String) = Unit
+        override suspend fun deploy(machineId: String) = Unit
+        override suspend fun herdr(machineId: String): HerdrState = error("unused")
+        override suspend fun startHerdr(machineId: String): HerdrState = error("unused")
+        override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId, engine = engine)
+        override suspend fun claudeSettings(machineId: String) = emptyList<ClaudeSetting>()
+        override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) = emptyList<ClaudeSetting>()
+    }
+    private val navigator = object : Navigator {
+        override fun navigate(key: NavKey) = Unit
+        override fun back() = Unit
+        override fun selectTab(tab: AppTab) = Unit
+    }
+
+    private fun shots(language: String, listTitle: String, detail: String) {
+        val list = MachinesViewModel(api, repository, null) { now }
+        val page = MachinesViewModel(api, repository, "lab") { now }
+        runBlocking { list.load(MetricRange.Hour); page.load(MetricRange.Hour) }
+        val actions = MachineActionsViewModel(management, repository)
+        var style by mutableStateOf(AppStyle.Glass)
+        var dark by mutableStateOf(false)
+        var detailPage by mutableStateOf(false)
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
+                Box(Modifier.testTag("shot").width(400.dp).height(if (detailPage) 5200.dp else 1000.dp).background(PersonaTheme.palette.background)) {
+                    if (detailPage) MachinesScreen("lab", page, navigator, actions) else MachinesScreen(null, list, navigator)
+                }
+            }
+        }
+        for (d in listOf(true, false)) for (s in listOf(AppStyle.Glass, AppStyle.entries.last())) for (dk in listOf(false, true)) {
+            if (s != AppStyle.Glass && dk) continue
+            detailPage = d; style = s; dark = dk
+            rule.waitForIdle()
+            val bitmap = rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap()
+            val name = "machines-${if (d) "detail" else "list"}-$language-${s.name.lowercase()}-${if (dk) "dark" else "light"}.png"
+            File(out(), name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            rule.onNodeWithText(if (d) detail else listTitle).assertExists()
+        }
+    }
+}

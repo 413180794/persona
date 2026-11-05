@@ -1,5 +1,6 @@
 package persona.feature.files
 
+import androidx.annotation.StringRes
 import org.xml.sax.Attributes
 import org.xml.sax.InputSource
 import org.xml.sax.helpers.DefaultHandler
@@ -117,7 +118,7 @@ internal object Delimited {
 }
 
 /** A workbook that can't be read: what to say. */
-internal class SheetFailure(message: String) : Exception(message)
+internal class SheetFailure(@StringRes val reason: Int) : Exception()
 
 /**
  * An Excel workbook (.xlsx, Office Open XML): each sheet's cells as the text Excel would show for the plain cases:
@@ -129,7 +130,7 @@ internal object Xlsx {
 
     fun read(bytes: ByteArray): List<TableSheet> {
         val files = unzip(bytes)
-        val workbook = files["xl/workbook.xml"] ?: throw SheetFailure("没有 workbook.xml，可能不是 xlsx 文件")
+        val workbook = files["xl/workbook.xml"] ?: throw SheetFailure(R.string.files_sheet_no_workbook)
         val sheets = Xml.elements(workbook, setOf("sheet"))
         val targets = files["xl/_rels/workbook.xml.rels"]?.let { Xml.elements(it, setOf("Relationship")) }.orEmpty()
             .mapNotNull { r ->
@@ -144,7 +145,7 @@ internal object Xlsx {
             val path = s["r:id"]?.let(targets::get) ?: "xl/worksheets/sheet${i + 1}.xml"
             files[path]?.let { cells(it, name, strings, dates) }
         }
-        if (out.isEmpty()) throw SheetFailure("没有工作表")
+        if (out.isEmpty()) throw SheetFailure(R.string.files_sheet_no_sheets)
         return out
     }
 
@@ -170,7 +171,7 @@ internal object Xlsx {
                         val n = zip.read(buffer)
                         if (n < 0) break
                         total += n
-                        if (total > MAX_INFLATED) throw SheetFailure("工作簿解压后太大，手机上打不开")
+                        if (total > MAX_INFLATED) throw SheetFailure(R.string.files_sheet_too_big)
                         data.write(buffer, 0, n)
                     }
                     out[entry.name] = data.toByteArray()
@@ -179,9 +180,9 @@ internal object Xlsx {
         } catch (e: SheetFailure) {
             throw e
         } catch (e: Exception) {
-            if (out.isEmpty()) throw SheetFailure("文件不完整或不是 xlsx")
+            if (out.isEmpty()) throw SheetFailure(R.string.files_sheet_not_xlsx)
         }
-        if (out.isEmpty()) throw SheetFailure("文件不完整或不是 xlsx")
+        if (out.isEmpty()) throw SheetFailure(R.string.files_sheet_not_xlsx)
         return out
     }
 

@@ -74,3 +74,6 @@ internal class FakeAudio : VoiceAudio {
 }
 
 internal const val Ready = """{"type":"ready","input_rate":16000,"output_rate":24000}"""
+
+/** The page's words as the app shows them in the test's language (Simplified Chinese unless the test says otherwise). */
+internal fun voiceText() = VoiceText(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources)

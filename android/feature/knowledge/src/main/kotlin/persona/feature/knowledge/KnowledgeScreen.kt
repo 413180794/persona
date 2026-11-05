@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.text.AnnotatedString
@@ -55,7 +56,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URI
 import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 
 /** Timeline lines shown before 显示全部, related entries of one kind before 全部 (as iOS and the old app). */
 private const val LOG_SHOWN = 6
@@ -68,30 +71,33 @@ internal fun KnowledgeScreen(model: KnowledgeViewModel, navigator: Navigator) {
     var ignored by rememberSaveable(page.scope?.path) { mutableStateOf(false) }
     val search = page.filter.query.isNotBlank()
     val shown = if (search) page.groups.isNotEmpty() else page.entries.isNotEmpty()
-    JListPage("知识库", onBack = navigator::back, largeTitle = true,
+    JListPage(stringResource(R.string.knowledge_title), onBack = navigator::back, largeTitle = true,
         refreshing = page.loading && shown, onRefresh = model::refresh,
         actions = {
-            if (!search) JIconButton(PhIcons.FunnelSimple, page.filter.tag?.let { "按标签筛选，当前 #$it" } ?: "按标签筛选", { tagMenu = true },
+            if (!search) JIconButton(PhIcons.FunnelSimple, page.filter.tag?.let { stringResource(R.string.knowledge_filter_tag_current, it) }
+                ?: stringResource(R.string.knowledge_filter_tag), { tagMenu = true },
                 badge = page.filter.tag != null)
-            JIconButton(PhIcons.ArrowClockwise, "刷新知识库", model::refresh, enabled = !page.loading)
+            JIconButton(PhIcons.ArrowClockwise, stringResource(R.string.knowledge_refresh), model::refresh, enabled = !page.loading)
         }) {
         item("search") {
-            JSearchField(page.filter.query, model::query, "搜索档案和聊天记录", Modifier.padding(vertical = Tokens.Space.s))
+            JSearchField(page.filter.query, model::query, stringResource(R.string.knowledge_search), Modifier.padding(vertical = Tokens.Space.s))
         }
         // Search covers every kind: the chips (one of them lit) would say otherwise.
         if (!search) item("kinds") {
             KindChips(page.filter.kind, page.entries.size.takeIf { page.loaded }, model::kind)
-            page.filter.tag?.let { JTag("标签：#$it", Modifier.padding(top = Tokens.Space.s)) }
+            page.filter.tag?.let { JTag(stringResource(R.string.knowledge_tag_chip, it), Modifier.padding(top = Tokens.Space.s)) }
         }
         when {
-            !page.paired -> item("unpaired") { JEmptyState("还没连接 hub", "配对后，就能查看 Persona 整理的知识库。") }
+            !page.paired -> item("unpaired") {
+                JEmptyState(stringResource(R.string.knowledge_unpaired_title), stringResource(R.string.knowledge_unpaired_text))
+            }
             search -> searchResults(page, navigator)
             else -> listContent(page, ignored, { ignored = !ignored }, navigator, model::refresh)
         }
     }
-    if (tagMenu) JActionSheet(listOf(JAction("全部", checked = page.filter.tag == null) { model.tag(null) }) +
+    if (tagMenu) JActionSheet(listOf(JAction(stringResource(R.string.knowledge_all), checked = page.filter.tag == null) { model.tag(null) }) +
         page.tags.map { tag -> JAction("#$tag", checked = page.filter.tag == tag) { model.tag(tag) } },
-        { tagMenu = false }, "按标签筛选")
+        { tagMenu = false }, stringResource(R.string.knowledge_filter_tag))
 }
 
 /** The six kinds as chips; the chosen one says how many it holds once loaded. */
@@ -103,7 +109,7 @@ private fun KindChips(kind: KnowledgeKind, count: Int?, onPick: (KnowledgeKind) 
     ) {
         KnowledgeKind.entries.forEach { option ->
             val on = option == kind
-            JChip(option.title, selected = on, onClick = { onPick(option) }, count = if (on) count else null)
+            JChip(option.label(), selected = on, onClick = { onPick(option) }, count = if (on) count else null)
         }
     }
 }
@@ -111,24 +117,24 @@ private fun KindChips(kind: KnowledgeKind, count: Int?, onPick: (KnowledgeKind) 
 private fun LazyListScope.listContent(page: KnowledgePage, showIgnored: Boolean, toggleIgnored: () -> Unit, navigator: Navigator, retry: () -> Unit) {
     val kind = page.filter.kind
     when {
-        page.entries.isEmpty() && page.message != null -> item("error") { RetryState("读不到知识库", requireNotNull(page.message), retry) }
+        page.entries.isEmpty() && page.message != null -> item("error") { RetryState(stringResource(R.string.knowledge_error_title), stringResource(requireNotNull(page.message)), retry) }
         page.entries.isEmpty() && !page.loaded -> item("loading") { JLoading() }
         page.entries.isEmpty() -> item("empty") {
-            JEmptyState(page.filter.tag?.let { "没有带 #$it 的${kind.title}" } ?: "还没有${kind.title}",
-                "hub 会把飞书和邮件里的会话归档、压缩，自动整理出项目、人、文档和会议，并按重要级和相关性排好。")
+            JEmptyState(page.filter.tag?.let { stringResource(kind.words.emptyTag, it) } ?: stringResource(kind.words.empty),
+                stringResource(R.string.knowledge_empty_text))
         }
         else -> {
             val sections = if (kind == KnowledgeKind.Projects) projectSections(page.entries) else kindSections(page.entries, page.filter.tag)
             sections.forEach { section ->
-                item(key = "section/${section.title}", contentType = "section") {
-                    JSectionHeader(section.title, count = section.entries.size,
+                item(key = "section/${section.key}", contentType = "section") {
+                    JSectionHeader(section.tag?.let { "#$it" } ?: stringResource(section.title), count = section.entries.size,
                         onClick = if (section.collapsed) toggleIgnored else null,
-                        trailing = if (section.collapsed) (if (showIgnored) "收起" else "展开") else null)
+                        trailing = if (section.collapsed) stringResource(if (showIgnored) R.string.knowledge_collapse else R.string.knowledge_expand) else null)
                 }
                 if (!section.collapsed || showIgnored) items(section.entries, key = { "entry/${it.key}" }, contentType = { "entry" }) {
                     KnowledgeRow(it, onClick = { navigator.open(it) })
                 }
-                section.note?.let { note -> item(key = "note/${section.title}", contentType = "note") { Note(note) } }
+                section.note?.let { note -> item(key = "note/${section.key}", contentType = "note") { Note(stringResource(note)) } }
             }
         }
     }
@@ -137,20 +143,20 @@ private fun LazyListScope.listContent(page: KnowledgePage, showIgnored: Boolean,
 private fun LazyListScope.searchResults(page: KnowledgePage, navigator: Navigator) {
     val query = page.filter.query.trim()
     when {
-        page.groups.isEmpty() && page.message != null -> item("error") { RetryState("没有搜到", requireNotNull(page.message), null) }
+        page.groups.isEmpty() && page.message != null -> item("error") { RetryState(stringResource(R.string.knowledge_search_error), stringResource(requireNotNull(page.message)), null) }
         page.groups.isEmpty() && !page.loaded -> item("searching") { JLoading() }
         page.groups.isEmpty() -> item("nothing") {
-            JEmptyState("没有找到", "档案和聊天记录里没有「$query」。", icon = PhIcons.MagnifyingGlass)
+            JEmptyState(stringResource(R.string.knowledge_nothing_found), stringResource(R.string.knowledge_nothing_found_text, query), icon = PhIcons.MagnifyingGlass)
         }
         else -> searchSections(page.groups).forEach { (kind, groups) ->
-            item(key = "hits/${kind.wire}", contentType = "section") { JSectionHeader(kind.title, count = groups.size) }
+            item(key = "hits/${kind.wire}", contentType = "section") { JSectionHeader(kind.label(), count = groups.size) }
             items(groups, key = { "hit/${it.key}" }, contentType = { "hit" }) { group ->
-                KnowledgeRow(group.entry, metadata = group.named, onClick = { navigator.open(group.entry) }, trailing = {
-                    if (group.hits.size > 2) Text("${group.hits.size} 处", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3, maxLines = 1)
+                KnowledgeRow(group.entry, metadata = group.named, name = if (group.named) group.entry.name else kind.label(), onClick = { navigator.open(group.entry) }, trailing = {
+                    if (group.hits.size > 2) Text(pluralStringResource(R.plurals.knowledge_hits, group.hits.size, group.hits.size), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3, maxLines = 1)
                 }) {
                     group.hits.take(2).forEach { hit ->
                         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
-                            Text(hit.source, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(hit.source.label(), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(marked(hit.text, query), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2,
                                 maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
@@ -184,13 +190,14 @@ private fun KnowledgeRow(
     entry: KnowledgeEntry,
     onClick: () -> Unit,
     metadata: Boolean = true,
+    name: String = entry.name,
     trailing: @Composable () -> Unit = {},
     extra: @Composable ColumnScope.() -> Unit = {},
 ) {
     JCard(Modifier.padding(bottom = Tokens.Space.m), onClick = onClick) {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                Text(entry.name, style = PersonaTheme.type.title, color = PersonaTheme.palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                Text(name, style = PersonaTheme.type.title, color = PersonaTheme.palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f))
                 trailing()
             }
@@ -210,17 +217,18 @@ private fun EntryMetadata(entry: KnowledgeEntry, allTags: Boolean = false) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s - Tokens.Space.xxs), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s - Tokens.Space.xxs)) {
         entry.importance?.takeIf { it.isNotBlank() }?.let { JTag(it, status = importanceStatus(it)) }
         if (entry.isProject) {
-            JTag(if (entry.projectKind == "long") "长期项目" else "短期项目")
-            entry.projectStatusLabel?.let { JTag(it) }
+            JTag(stringResource(if (entry.projectKind == "long") R.string.knowledge_project_long else R.string.knowledge_project_short))
+            entry.projectStatusLabel?.let { JTag(stringResource(it)) }
         }
-        if (entry.relevance > 0) JTag("相关 ${entry.relevance.coerceIn(0, 100)}", status = relevanceStatus(entry.relevance))
+        if (entry.relevance > 0) JTag(stringResource(R.string.knowledge_relevance, entry.relevance.coerceIn(0, 100)), status = relevanceStatus(entry.relevance))
         entry.tags.orEmpty().let { if (allTags) it else it.take(3) }.forEach { JTag("#$it") }
     }
-    val updated = remember(entry.updated) {
+    val locale = currentLocale
+    val updated = remember(entry.updated, locale) {
         runCatching { OffsetDateTime.parse(entry.updated).takeIf { it.year > 1970 }
-            ?.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) }.getOrNull()
+            ?.let { LocalizedFormats.format(it.toInstant(), LocalizedFormats.DATE_TIME, locale) } }.getOrNull()
     }
-    updated?.let { Text("更新于 $it", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
+    updated?.let { Text(stringResource(R.string.knowledge_updated, it), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
 }
 
 /** P0 in the 需要你 tone, P1 in the 工作中 tone (iOS `ImportanceBadge`); P2 and P3 quiet. */
@@ -251,10 +259,12 @@ internal fun KnowledgeDetailScreen(
     var recent by rememberSaveable(page.scope?.path) { mutableStateOf(false) }
     var openLinks by rememberSaveable(page.scope?.path) { mutableStateOf(listOf<String>()) }
     var editing by rememberSaveable(page.scope?.path) { mutableStateOf(false) }
-    var question by rememberSaveable(page.scope?.path) { mutableStateOf("请说说最新进展、需要我处理的事，以及接下来该做什么。") }
+    val defaultQuestion = stringResource(R.string.knowledge_question_default)
+    var question by rememberSaveable(page.scope?.path) { mutableStateOf(defaultQuestion) }
     var linkMessage by remember(page.scope) { mutableStateOf<String?>(null) }
     val currentOpenLink by rememberUpdatedState(openLinkInApp)
     val context = LocalContext.current
+    val resources = LocalResources.current
     val feedback = LocalAppFeedback.current
     val uriHandler = remember(page.scope) {
         object : UriHandler {
@@ -262,7 +272,7 @@ internal fun KnowledgeDetailScreen(
                 val parsed = runCatching { URI(uri) }.getOrNull()
                 if (parsed != null && parsed.scheme?.lowercase() in setOf("http", "https") && !parsed.host.isNullOrBlank() && parsed.userInfo == null) {
                     currentOpenLink(uri)
-                } else linkMessage = "暂不支持打开这个链接"
+                } else linkMessage = resources.getString(R.string.knowledge_link_unsupported)
             }
         }
     }
@@ -275,24 +285,30 @@ internal fun KnowledgeDetailScreen(
     LaunchedEffect(tagging.saved) { if (tagging.saved > 0) editing = false }
     val detail = page.detail
     val entry = detail?.entry()
+    val kindName = KnowledgeKind.fromWire(detail?.kind.orEmpty())?.label().orEmpty()
     fun startAgent(detail: KnowledgeDetail) {
-        val start = agentStart(detail)
+        val start = agentStart(detail, kindName)
         if (onNewAgent != null) { onNewAgent(start); return }
         // Until the shell can open 新建会话 with these filled in: the context goes on the clipboard and Agents opens.
-        (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("项目背景", start.prompt))
+        (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(resources.getString(R.string.knowledge_clip_label), start.prompt))
         navigator.selectTab(AppTab.Agents)
-        feedback?.notice("项目背景已复制：新建会话后粘贴为第一条消息" + (start.cwd?.let { "，目录 ${pathTail(it)}" } ?: ""))
+        feedback?.notice(start.cwd?.let { resources.getString(R.string.knowledge_context_copied_dir, pathTail(it)) }
+            ?: resources.getString(R.string.knowledge_context_copied))
     }
     CompositionLocalProvider(LocalUriHandler provides uriHandler) {
-        JListPage(entry?.name ?: "知识库详情", onBack = navigator::back,
+        JListPage(entry?.name ?: stringResource(R.string.knowledge_detail_title), onBack = navigator::back,
             refreshing = page.loading && detail != null, onRefresh = model::refresh,
             actions = {
-                JIconButton(PhIcons.Hash, "打标", { model.dismissTagError(); editing = true }, enabled = detail != null)
-                JIconButton(PhIcons.ArrowClockwise, "刷新详情", model::refresh, enabled = !page.loading)
+                JIconButton(PhIcons.Hash, stringResource(R.string.knowledge_tag_action), { model.dismissTagError(); editing = true }, enabled = detail != null)
+                JIconButton(PhIcons.ArrowClockwise, stringResource(R.string.knowledge_refresh_detail), model::refresh, enabled = !page.loading)
             }) {
             when {
-                !page.paired -> item("unpaired") { JEmptyState("还没连接 hub", "配对后可查看这份档案。") }
-                detail == null && page.message != null -> item("error") { RetryState("读不到这一项", requireNotNull(page.message), model::refresh) }
+                !page.paired -> item("unpaired") {
+                    JEmptyState(stringResource(R.string.knowledge_unpaired_title), stringResource(R.string.knowledge_unpaired_detail))
+                }
+                detail == null && page.message != null -> item("error") {
+                    RetryState(stringResource(R.string.knowledge_entry_error), stringResource(requireNotNull(page.message)), model::refresh)
+                }
                 detail == null || entry == null -> item("loading") { JLoading() }
                 else -> {
                     item("header", contentType = "header") {
@@ -301,14 +317,14 @@ internal fun KnowledgeDetailScreen(
                             entry.oneLine?.takeIf { it.isNotBlank() }?.let { Text(it, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink) }
                             // A field of the page: the chat's composer frame brings its own inset (and the board's rule
                             // across the page), so it stood out of line with the tags and the buttons.
-                            JTextField(question, { question = it }, placeholder = "想问 Persona 什么", enabled = !sending.busy)
+                            JTextField(question, { question = it }, placeholder = stringResource(R.string.knowledge_ask_placeholder), enabled = !sending.busy)
                             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                                JButton("问 Persona", { model.ask(question) }, Modifier.weight(1f), icon = PhIcons.Sparkle,
-                                    enabled = question.isNotBlank(), loading = sending.busy, loadingText = "正在交给 Persona…")
-                                if (entry.isProject) JButton("开 Agent", { startAgent(detail) }, Modifier.weight(1f),
+                                JButton(stringResource(R.string.knowledge_ask), { model.ask(question, kindName) }, Modifier.weight(1f), icon = PhIcons.Sparkle,
+                                    enabled = question.isNotBlank(), loading = sending.busy, loadingText = stringResource(R.string.knowledge_asking))
+                                if (entry.isProject) JButton(stringResource(R.string.knowledge_start_agent), { startAgent(detail) }, Modifier.weight(1f),
                                     kind = JButtonKind.Secondary, icon = PhIcons.Robot)
                             }
-                            sending.message?.let { JNotice(it) }
+                            sending.message?.let { JNotice(stringResource(it)) }
                             linkMessage?.let { JNotice(it) }
                         }
                     }
@@ -317,7 +333,7 @@ internal fun KnowledgeDetailScreen(
                     val profileText = profile(detail.summary, entry.oneLine)
                     // A card like the other sections (and iOS): bare text sat at the card edge, left of every heading.
                     if (profileText.isNotBlank()) item("profile", contentType = "markdown") {
-                        JSectionHeader("档案")
+                        JSectionHeader(stringResource(R.string.knowledge_profile))
                         JGroupItem(GroupPosition.Single) {
                             Box(Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m)) { KnowledgeMarkdown(profileText) }
                         }
@@ -327,10 +343,10 @@ internal fun KnowledgeDetailScreen(
                     }, navigator)
                     dirs(detail.meta.strings("dirs"))
                     if (!detail.recent.isNullOrBlank()) {
-                        item("recent-header", contentType = "section") { JSectionHeader("聊天记录") }
+                        item("recent-header", contentType = "section") { JSectionHeader(stringResource(R.string.knowledge_chat_history)) }
                         item("recent-toggle", contentType = "row") {
                             JGroupItem(GroupPosition(first = true, last = !recent)) {
-                                JRow("最近 7 天的消息", leadingIcon = PhIcons.ChatCircleDots, onClick = { recent = !recent }, chevron = false,
+                                JRow(stringResource(R.string.knowledge_recent_messages), leadingIcon = PhIcons.ChatCircleDots, onClick = { recent = !recent }, chevron = false,
                                     trailing = { JIcon(if (recent) PhIcons.CaretUp else PhIcons.CaretDown, null, tint = PersonaTheme.palette.ink3) })
                             }
                         }
@@ -344,14 +360,14 @@ internal fun KnowledgeDetailScreen(
                         }
                     }
                     item("path", contentType = "text") {
-                        JSectionHeader("目录")
+                        JSectionHeader(stringResource(R.string.knowledge_directory))
                         JGroupItem(GroupPosition.Single) {
                             SelectionContainer {
                                 Text(detail.path, style = PersonaTheme.type.code, color = PersonaTheme.palette.ink2,
                                     modifier = Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
                             }
                         }
-                        Note("Persona、AI 分身和各台电脑上的 Agent 都能直接读这个目录。")
+                        Note(stringResource(R.string.knowledge_directory_note))
                     }
                 }
             }
@@ -363,7 +379,7 @@ internal fun KnowledgeDetailScreen(
 /** 在做这个项目的 Agent: the hub's live sessions in the project's code directories; a tap opens the conversation. */
 private fun LazyListScope.agents(agents: List<Session>, navigator: Navigator) {
     if (agents.isEmpty()) return
-    item("agents-header", contentType = "section") { JSectionHeader("在做这个项目的 Agent", count = agents.size) }
+    item("agents-header", contentType = "section") { JSectionHeader(stringResource(R.string.knowledge_agents), count = agents.size) }
     itemsIndexed(agents, key = { _, session -> "agent/${session.key.path}" }, contentType = { _, _ -> "agent" }) { index, session ->
         val status = session.agentState.status()
         AgentRow(session.displayTitle, status, onClick = { navigator.navigate(ChatRoute(session.machineId, session.sessionId, ConversationKind.Agent)) },
@@ -388,13 +404,14 @@ private fun LazyListScope.timeline(lines: List<KnowledgeLogLine>, all: Boolean, 
     val more = lines.size > LOG_SHOWN
     val shown = if (all) lines else lines.take(LOG_SHOWN)
     val count = shown.size + if (more) 1 else 0
-    item("timeline-header", contentType = "section") { JSectionHeader("时间线", count = lines.size) }
+    item("timeline-header", contentType = "section") { JSectionHeader(stringResource(R.string.knowledge_timeline), count = lines.size) }
     itemsIndexed(shown, key = { index, _ -> "log/$index" }, contentType = { _, _ -> "log" }) { index, line ->
         JGroupItem(GroupPosition.of(index, count)) { TimelineLine(line, newest = index == 0) }
     }
     if (more) item("timeline-more", contentType = "row") {
         JGroupItem(GroupPosition(first = false, last = true)) {
-            JRow(if (all) "收起" else "显示全部 ${lines.size} 条", onClick = toggle, chevron = false)
+            JRow(if (all) stringResource(R.string.knowledge_collapse)
+                else pluralStringResource(R.plurals.knowledge_show_all, lines.size, lines.size), onClick = toggle, chevron = false)
         }
     }
 }
@@ -428,7 +445,7 @@ private fun LazyListScope.links(groups: List<Pair<KnowledgeKind, List<KnowledgeE
         val more = entries.size > LINKS_SHOWN
         val shown = if (all) entries else entries.take(LINKS_SHOWN)
         val count = shown.size + if (more) 1 else 0
-        item("links-header/${kind.wire}", contentType = "section") { JSectionHeader("关联的${kind.title}", count = entries.size) }
+        item("links-header/${kind.wire}", contentType = "section") { JSectionHeader(stringResource(kind.words.linked), count = entries.size) }
         itemsIndexed(shown, key = { _, linked -> "link/${kind.wire}/${linked.key}" }, contentType = { _, _ -> "link" }) { index, linked ->
             JGroupItem(GroupPosition.of(index, count)) {
                 JRow(linked.name, subtitle = linked.oneLine?.takeIf { it.isNotBlank() }, subtitleLines = 1, onClick = { navigator.open(linked) })
@@ -436,7 +453,8 @@ private fun LazyListScope.links(groups: List<Pair<KnowledgeKind, List<KnowledgeE
         }
         if (more) item("links-more/${kind.wire}", contentType = "row") {
             JGroupItem(GroupPosition(first = false, last = true)) {
-                JRow(if (all) "收起" else "全部 ${entries.size} 个", onClick = { toggle(kind.wire) }, chevron = false)
+                JRow(if (all) stringResource(R.string.knowledge_collapse)
+                else pluralStringResource(R.plurals.knowledge_all_count, entries.size, entries.size), onClick = { toggle(kind.wire) }, chevron = false)
             }
         }
     }
@@ -445,7 +463,7 @@ private fun LazyListScope.links(groups: List<Pair<KnowledgeKind, List<KnowledgeE
 /** A project's code directories: the path's last folders, and the machine they are on. */
 private fun LazyListScope.dirs(dirs: List<String>) {
     if (dirs.isEmpty()) return
-    item("dirs-header", contentType = "section") { JSectionHeader("代码目录", count = dirs.size) }
+    item("dirs-header", contentType = "section") { JSectionHeader(stringResource(R.string.knowledge_code_dirs), count = dirs.size) }
     itemsIndexed(dirs, key = { index, _ -> "dir/$index" }, contentType = { _, _ -> "dir" }) { index, dir ->
         val (machine, path) = dirParts(dir)
         JGroupItem(GroupPosition.of(index, dirs.size)) { JRow(path, subtitle = machine, leadingIcon = PhIcons.FolderSimple) }
@@ -501,5 +519,37 @@ private fun Navigator.open(entry: KnowledgeEntry) {
 }
 
 @Composable private fun RetryState(title: String, message: String, retry: (() -> Unit)?) {
-    JEmptyState(title, message, action = retry?.let { { JButton("重试", it, kind = JButtonKind.Secondary) } })
+    JEmptyState(title, message, action = retry?.let { { JButton(stringResource(R.string.knowledge_retry), it, kind = JButtonKind.Secondary) } })
+}
+
+/** A kind's words: its name, and the empty list and the related entries that say it. */
+private class KindWords(@StringRes val name: Int, @StringRes val empty: Int, @StringRes val emptyTag: Int, @StringRes val linked: Int)
+
+private val KnowledgeKind.words: KindWords
+    get() = when (this) {
+        KnowledgeKind.Projects -> KindWords(R.string.knowledge_kind_projects, R.string.knowledge_empty_projects,
+            R.string.knowledge_empty_tag_projects, R.string.knowledge_linked_projects)
+        KnowledgeKind.Chats -> KindWords(R.string.knowledge_kind_chats, R.string.knowledge_empty_chats,
+            R.string.knowledge_empty_tag_chats, R.string.knowledge_linked_chats)
+        KnowledgeKind.People -> KindWords(R.string.knowledge_kind_people, R.string.knowledge_empty_people,
+            R.string.knowledge_empty_tag_people, R.string.knowledge_linked_people)
+        KnowledgeKind.Docs -> KindWords(R.string.knowledge_kind_docs, R.string.knowledge_empty_docs,
+            R.string.knowledge_empty_tag_docs, R.string.knowledge_linked_docs)
+        KnowledgeKind.Meetings -> KindWords(R.string.knowledge_kind_meetings, R.string.knowledge_empty_meetings,
+            R.string.knowledge_empty_tag_meetings, R.string.knowledge_linked_meetings)
+        KnowledgeKind.Events -> KindWords(R.string.knowledge_kind_events, R.string.knowledge_empty_events,
+            R.string.knowledge_empty_tag_events, R.string.knowledge_linked_events)
+    }
+
+/** The kind's name in the page's language (项目 · Projects · プロジェクト). */
+@Composable
+internal fun KnowledgeKind.label(): String = stringResource(words.name)
+
+@Composable
+private fun KnowledgeHitSource.label(): String = when (this) {
+    is KnowledgeHitSource.Messages -> stringResource(R.string.knowledge_source_messages, day)
+    KnowledgeHitSource.Profile -> stringResource(R.string.knowledge_profile)
+    KnowledgeHitSource.Timeline -> stringResource(R.string.knowledge_timeline)
+    KnowledgeHitSource.Details -> stringResource(R.string.knowledge_source_info)
+    is KnowledgeHitSource.File -> name
 }

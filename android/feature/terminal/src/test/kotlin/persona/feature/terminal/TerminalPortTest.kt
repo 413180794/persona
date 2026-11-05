@@ -63,7 +63,7 @@ class TerminalPortTest {
     @Test fun aFailedKeyRequestDropsWhatWasWaitingAndSaysSo() = test { dispatcher ->
         val transport = FakeTerminal().apply { features.value = emptySet() }
         val model = TerminalViewModel(SessionKey("machine", "session"), transport, dispatcher)
-        val notices = mutableListOf<String>()
+        val notices = mutableListOf<TerminalNotice>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.notices.collect { notices += it } }
         val run = launch { model.run() }
         runCurrent()
@@ -72,7 +72,7 @@ class TerminalPortTest {
         model.press("enter"); model.type("y")
         transport.gate!!.complete(Unit); runCurrent()
         assertEquals(1, transport.keys.size) // an Enter after lost text would land out of context
-        assertEquals(listOf("按键没有发出去，请再试一次"), notices)
+        assertEquals(listOf(TerminalNotice.KeysNotSent), notices)
         // Offline nothing is typed at all.
         transport.connection.value = ConnectionState.Connecting; advanceTimeBy(260); runCurrent()
         model.type("z"); runCurrent()

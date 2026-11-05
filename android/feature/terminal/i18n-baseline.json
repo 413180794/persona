@@ -1,6 +1,0 @@
-{
-  "feature/terminal/src/main/kotlin/persona/feature/terminal/TerminalCanvasView.kt": 1,
-  "feature/terminal/src/main/kotlin/persona/feature/terminal/TerminalScreen.kt": 25,
-  "feature/terminal/src/main/kotlin/persona/feature/terminal/TerminalSelectText.kt": 5,
-  "feature/terminal/src/main/kotlin/persona/feature/terminal/TerminalViewModel.kt": 8
-}

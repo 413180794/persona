@@ -1,5 +1,6 @@
 package persona.feature.files
 
+import androidx.annotation.StringRes
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -38,7 +39,7 @@ internal object Notebooks {
 
     data class Notebook(val cells: List<Cell>, val language: String, val kernel: String?, val format: String)
 
-    class Invalid(message: String) : Exception(message)
+    class Invalid(@StringRes val reason: Int) : Exception()
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -48,15 +49,15 @@ internal object Notebooks {
     private val csi = Regex("\u001b\\[[0-9;?]*[ -/]*[@-~]")
     private val osc = Regex("\u001b\\][^\u0007]*\u0007")
 
-    /** Text cut to [max] lines, saying how many lines were left out. */
-    fun capLines(s: String, max: Int = MAX_OUTPUT_LINES): String {
+    /** Text cut to [max] lines, saying how many lines were left out ([more]: the line that says so, for a count). */
+    fun capLines(s: String, more: (Int) -> String, max: Int = MAX_OUTPUT_LINES): String {
         var i = -1
         repeat(max) {
             i = s.indexOf('\n', i + 1)
             if (i < 0) return s
         }
         val rest = s.substring(i + 1).removeSuffix("\n").split('\n').size
-        return "${s.substring(0, i + 1)}… 还有 $rest 行没有显示"
+        return s.substring(0, i + 1) + more(rest)
     }
 
     /** HTML as the text it shows: tags dropped, block ends as line breaks, table cells apart, entities decoded. */
@@ -96,16 +97,16 @@ internal object Notebooks {
     private val images = listOf("image/png", "image/jpeg", "image/gif", "image/webp")
 
     /** The one representation of a rich output the viewer shows, best first (as Jupyter's own front ends choose). */
-    private fun rich(data: JsonObject): Output? {
+    private fun rich(data: JsonObject, more: (Int) -> String): Output? {
         for (mime in images) data[mime]?.let { return Output.Image(mime, str(it).replace(Regex("\\s+"), "")) }
-        data["text/html"]?.let { return Output.Html(capLines(htmlText(str(it)))) }
+        data["text/html"]?.let { return Output.Html(capLines(htmlText(str(it)), more)) }
         data["text/markdown"]?.let { return Output.Markdown(str(it)) }
         data["text/latex"]?.let { v ->
             val tex = str(v).trim()
             return Output.Markdown(if (tex.startsWith("$")) tex else "$$\n$tex\n$$")
         }
-        data["application/json"]?.let { return Output.Text(capLines(prettyJson.encodeToString(JsonElement.serializer(), it))) }
-        data["text/plain"]?.let { return Output.Text(capLines(stripAnsi(str(it)))) }
+        data["application/json"]?.let { return Output.Text(capLines(prettyJson.encodeToString(JsonElement.serializer(), it), more)) }
+        data["text/plain"]?.let { return Output.Text(capLines(stripAnsi(str(it)), more)) }
         return null
     }
 
@@ -117,11 +118,11 @@ internal object Notebooks {
 
     private fun v3Bundle(o: JsonObject) = JsonObject(o.mapNotNull { (k, v) -> (v3Keys[k] ?: k.takeIf { '/' in it })?.let { it to v } }.toMap())
 
-    private fun output(o: JsonObject): Output? = when (str(o["output_type"])) {
+    private fun output(o: JsonObject, more: (Int) -> String): Output? = when (str(o["output_type"])) {
         // v3 names the stream "stream", v4 "name".
-        "stream" -> Output.Stream(str(o["name"] ?: o["stream"]) == "stderr", capLines(stripAnsi(str(o["text"]))))
-        "execute_result", "display_data" -> rich(o["data"] as? JsonObject ?: v3Bundle(o))
-        "pyout" -> rich(v3Bundle(o))
+        "stream" -> Output.Stream(str(o["name"] ?: o["stream"]) == "stderr", capLines(stripAnsi(str(o["text"])), more))
+        "execute_result", "display_data" -> rich(o["data"] as? JsonObject ?: v3Bundle(o), more)
+        "pyout" -> rich(v3Bundle(o), more)
         "error", "pyerr" -> Output.Error(str(o["ename"]), str(o["evalue"]),
             // whole: a traceback cut short loses the line that failed
             stripAnsi((o["traceback"] as? JsonArray)?.joinToString("\n") { str(it) } ?: str(o["traceback"])))
@@ -139,13 +140,16 @@ internal object Notebooks {
         return merged
     }
 
-    /** A notebook's JSON into cells; throws [Invalid] with a readable reason for what is not one. */
-    fun parse(text: String): Notebook {
+    /**
+     * A notebook's JSON into cells; throws [Invalid] with a readable reason for what is not one. [more] says how many
+     * lines of a long output were left out (「… 还有 3 行没有显示」).
+     */
+    fun parse(text: String, more: (Int) -> String): Notebook {
         val nb = try {
             json.parseToJsonElement(text)
         } catch (e: Exception) {
-            throw Invalid("不是有效的笔记本文件（JSON 解析失败）")
-        } as? JsonObject ?: throw Invalid("不是有效的笔记本文件")
+            throw Invalid(R.string.files_notebook_invalid_json)
+        } as? JsonObject ?: throw Invalid(R.string.files_notebook_invalid)
         val meta = nb["metadata"] as? JsonObject ?: JsonObject(emptyMap())
         val kernelspec = meta["kernelspec"] as? JsonObject ?: JsonObject(emptyMap())
         val langInfo = meta["language_info"] as? JsonObject ?: JsonObject(emptyMap())
@@ -154,7 +158,7 @@ internal object Notebooks {
         val raw = when {
             nb["cells"] is JsonArray -> nb["cells"] as JsonArray
             nb["worksheets"] is JsonArray -> ((nb["worksheets"] as JsonArray).firstOrNull() as? JsonObject)?.get("cells") as? JsonArray ?: JsonArray(emptyList())
-            else -> throw Invalid("不是有效的笔记本文件（没有 cells）")
+            else -> throw Invalid(R.string.files_notebook_no_cells)
         }
         val cells = raw.mapNotNull { it as? JsonObject }.map { c ->
             val kind = str(c["cell_type"])
@@ -162,9 +166,9 @@ internal object Notebooks {
             var source = str(c["source"] ?: c["input"])
             if (kind == "heading") source = "#".repeat(((c["level"] as? JsonPrimitive)?.intOrNull ?: 1).coerceIn(1, 6)) + " " + source
             val attachments = (c["attachments"] as? JsonObject).orEmpty().mapNotNull { (name, bundle) ->
-                ((bundle as? JsonObject)?.let(::rich) as? Output.Image)?.let { name to it.base64 }
+                ((bundle as? JsonObject)?.let { b -> rich(b, more) } as? Output.Image)?.let { name to it.base64 }
             }.toMap()
-            val outputs = if (type == CellType.Code) mergeStreams((c["outputs"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::output) }) else emptyList()
+            val outputs = if (type == CellType.Code) mergeStreams((c["outputs"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let { o -> output(o, more) } }) else emptyList()
             val count = ((c["execution_count"] ?: c["prompt_number"]) as? JsonPrimitive)?.intOrNull
             Cell(type, source, count, outputs, attachments)
         }

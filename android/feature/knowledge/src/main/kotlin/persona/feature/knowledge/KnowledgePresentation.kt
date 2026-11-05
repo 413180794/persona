@@ -3,15 +3,21 @@ package persona.feature.knowledge
 import persona.core.contracts.Session
 import persona.core.contracts.api.*
 import kotlinx.serialization.json.*
+import androidx.annotation.StringRes
 import java.time.LocalDate
 
 internal data class KnowledgeSection(
-    val title: String,
+    @StringRes val title: Int,
     val entries: List<KnowledgeEntry>,
     val collapsed: Boolean = false,
     /** Said under a folded section: why its entries are there and how they come back. */
-    val note: String? = null,
-)
+    @StringRes val note: Int? = null,
+    /** A section named by a tag (#tag) instead of [title]. */
+    val tag: String? = null,
+) {
+    /** Stable across languages, for list keys. */
+    val key: String get() = tag?.let { "#$it" } ?: title.toString()
+}
 
 /** One entry found by a search, with up to all of its hits; [named] once a list told us the entry's name. */
 internal data class KnowledgeSearchGroup(
@@ -33,17 +39,17 @@ internal fun projectSections(entries: List<KnowledgeEntry>): List<KnowledgeSecti
     val (done, active) = visible.partition { it.projectStatus == "done" }
     val (focus, rest) = active.partition { it.importance in setOf("P0", "P1") }
     return listOf(
-        KnowledgeSection("重点", focus),
-        KnowledgeSection(if (focus.isEmpty()) "进行中" else "其他进行中", rest),
-        KnowledgeSection("已完成", done),
-        KnowledgeSection("不是项目", ignored, collapsed = true,
-            note = "只在通知、营销邮件、机器人会话里出现的，不会再更新。打标里改回「进行中」就恢复。"),
+        KnowledgeSection(R.string.knowledge_section_focus, focus),
+        KnowledgeSection(if (focus.isEmpty()) R.string.knowledge_section_active else R.string.knowledge_section_other_active, rest),
+        KnowledgeSection(R.string.knowledge_section_done, done),
+        KnowledgeSection(R.string.knowledge_section_not_projects, ignored, collapsed = true,
+            note = R.string.knowledge_section_not_projects_note),
     ).filter { it.entries.isNotEmpty() }
 }
 
 /** The other kinds keep the hub's order (importance, then relevance); a tag names the section. */
 internal fun kindSections(entries: List<KnowledgeEntry>, tag: String?): List<KnowledgeSection> =
-    if (entries.isEmpty()) emptyList() else listOf(KnowledgeSection(tag?.let { "#$it" } ?: "按重要级和相关性", entries))
+    if (entries.isEmpty()) emptyList() else listOf(KnowledgeSection(R.string.knowledge_section_ranked, entries, tag = tag))
 
 /** A project's `extra` is "short|long · active|paused|done|ignored"; missing halves read as short and active. */
 internal val KnowledgeEntry.projectKind: String
@@ -53,11 +59,12 @@ internal val KnowledgeEntry.projectStatus: String
 internal val KnowledgeEntry.isProject: Boolean get() = kind == KnowledgeKind.Projects.wire
 
 /** 暂停 / 已完成 / 不是项目: a project's status when it is not the usual 进行中. */
-internal val KnowledgeEntry.projectStatusLabel: String?
+@get:StringRes
+internal val KnowledgeEntry.projectStatusLabel: Int?
     get() = if (!isProject) null else when (projectStatus) {
-        "paused" -> "暂停"
-        "done" -> "已完成"
-        "ignored" -> "不是项目"
+        "paused" -> R.string.knowledge_status_paused
+        "done" -> R.string.knowledge_status_done
+        "ignored" -> R.string.knowledge_status_ignored
         else -> null
     }
 
@@ -70,16 +77,25 @@ internal fun KnowledgeHit.reference(): Pair<KnowledgeKind, String>? {
     return if (id.isEmpty()) null else kind to id
 }
 
+/** Which file a line is from: a day's messages, the profile, the timeline, the details, or another file by name. */
+internal sealed interface KnowledgeHitSource {
+    data class Messages(val day: String) : KnowledgeHitSource
+    data object Profile : KnowledgeHitSource
+    data object Timeline : KnowledgeHitSource
+    data object Details : KnowledgeHitSource
+    data class File(val name: String) : KnowledgeHitSource
+}
+
 /** Which file the line is from, said plainly. */
-internal val KnowledgeHit.source: String
+internal val KnowledgeHit.source: KnowledgeHitSource
     get() {
         val file = path.substringAfterLast('/')
-        if ("/messages/" in path) return "聊天记录 · " + file.substringBeforeLast('.')
+        if ("/messages/" in path) return KnowledgeHitSource.Messages(file.substringBeforeLast('.'))
         return when (file) {
-            "summary.md" -> "档案"
-            "log.md" -> "时间线"
-            "meta.json" -> "资料"
-            else -> if (file.endsWith(".json")) "资料" else file
+            "summary.md" -> KnowledgeHitSource.Profile
+            "log.md" -> KnowledgeHitSource.Timeline
+            "meta.json" -> KnowledgeHitSource.Details
+            else -> if (file.endsWith(".json")) KnowledgeHitSource.Details else KnowledgeHitSource.File(file)
         }
     }
 
@@ -108,8 +124,8 @@ internal fun searchGroups(hits: List<KnowledgeHit>, index: Map<String, Knowledge
         val (reference, list) = value
         val known = index[key]
         KnowledgeSearchGroup(reference.first, reference.second,
-            known ?: KnowledgeEntry(reference.first.wire, reference.second, reference.first.title), known != null,
-            list.filter { it.source != "资料" } + list.filter { it.source == "资料" })
+            known ?: KnowledgeEntry(reference.first.wire, reference.second, ""), known != null,
+            list.filter { it.source != KnowledgeHitSource.Details } + list.filter { it.source == KnowledgeHitSource.Details })
     }
 }
 
@@ -177,7 +193,7 @@ internal fun profile(markdown: String?, oneLine: String?): String {
     val one = oneLine?.trim().orEmpty()
     return dropTitle(markdown.orEmpty()).lines().filter { line ->
         val text = line.trim()
-        !(text.startsWith("重要级 ") && "相关性" in text) && (one.isEmpty() || text != one)
+        !(text.startsWith("重要级 ") && "相关性" in text) && (one.isEmpty() || text != one) // i18n-ignore: the hub's generated profile line
     }.joinToString("\n").trim()
 }
 
@@ -244,24 +260,29 @@ internal data class KnowledgeTagForm(
             status = entry.projectStatus,
         )
         val IMPORTANCE = listOf("P0", "P1", "P2", "P3")
-        val PROJECT_KINDS = listOf("short" to "短期（需求）", "long" to "长期（使命）")
-        val PROJECT_STATUSES = listOf("active" to "进行中", "paused" to "暂停", "done" to "已完成", "ignored" to "不是项目")
+        val PROJECT_KINDS = listOf("short" to R.string.knowledge_kind_short, "long" to R.string.knowledge_kind_long)
+        val PROJECT_STATUSES = listOf("active" to R.string.knowledge_status_active, "paused" to R.string.knowledge_status_paused,
+            "done" to R.string.knowledge_status_done, "ignored" to R.string.knowledge_status_ignored)
     }
 }
 
-internal fun knowledgeContext(detail: KnowledgeDetail): String {
+/**
+ * The entry as context for the main chat: [kindName] (the kind in the app's language) and the name title it; the body
+ * is for the model and keeps the knowledge base's own words.
+ */
+internal fun knowledgeContext(detail: KnowledgeDetail, kindName: String): String {
     fun attribute(value: String) = value.replace("&", "&amp;").replace("\"", "&quot;")
         .replace("<", "&lt;").replace(">", "&gt;")
-    val title = "${KnowledgeKind.fromWire(detail.kind)?.title.orEmpty()} · ${detail.entry().name}"
+    val title = "$kindName · ${detail.entry().name}"
     val text = buildString {
         append(detail.summary.orEmpty().ifBlank { detail.entry().oneLine.orEmpty() })
         detail.log.orEmpty().takeLast(10).takeIf { it.isNotEmpty() }?.let {
-            append("\n\n最近时间线：\n").append(it.joinToString("\n"))
+            append("\n\n最近时间线：\n").append(it.joinToString("\n")) // i18n-ignore: context for the model
         }
         detail.meta.strings("dirs").takeIf { it.isNotEmpty() }?.let {
-            append("\n\n代码目录：\n").append(it.joinToString("\n"))
+            append("\n\n代码目录：\n").append(it.joinToString("\n")) // i18n-ignore: context for the model
         }
-        append("\n\n知识库目录：").append(detail.path)
+        append("\n\n知识库目录：").append(detail.path) // i18n-ignore: context for the model
     }.replace("</jarvis-context>", "&lt;/jarvis-context&gt;")
         .replace("<jarvis-context", "&lt;jarvis-context")
     return "<jarvis-context kind=\"context\" title=\"${attribute(title)}\" url=\"\">\n$text\n</jarvis-context>"
@@ -270,7 +291,7 @@ internal fun knowledgeContext(detail: KnowledgeDetail): String {
 /** What 开 Agent hands the new-Agent page: where to start (a project's first code directory) and the first message. */
 data class KnowledgeAgentStart(val machineId: String?, val cwd: String?, val prompt: String)
 
-internal fun agentStart(detail: KnowledgeDetail): KnowledgeAgentStart {
+internal fun agentStart(detail: KnowledgeDetail, kindName: String): KnowledgeAgentStart {
     val dir = firstDir(detail.meta.strings("dirs"))
-    return KnowledgeAgentStart(dir?.first, dir?.second, knowledgeContext(detail) + "\n\n")
+    return KnowledgeAgentStart(dir?.first, dir?.second, knowledgeContext(detail, kindName) + "\n\n")
 }

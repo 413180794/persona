@@ -25,7 +25,7 @@ internal sealed interface VoiceEvent {
     data class Tool(val id: String, val label: String?, val done: Boolean) : VoiceEvent
 
     /** Something went wrong; after a [fatal] one the extension closes the socket. */
-    data class Error(val message: String, val fatal: Boolean) : VoiceEvent
+    data class Error(val message: String?, val fatal: Boolean) : VoiceEvent
 
     companion object {
         private val SampleRates = 8_000..96_000
@@ -41,7 +41,7 @@ internal sealed interface VoiceEvent {
                 "clear" -> Clear
                 "transcript" -> Transcript(string("id") ?: return null, string("role") == "user", string("text").orEmpty(), flag("final"))
                 "tool" -> Tool(string("id") ?: return null, string("label")?.takeIf { it.isNotBlank() }, flag("done"))
-                "error" -> Error(string("message")?.takeIf { it.isNotBlank() } ?: "出错了", flag("fatal"))
+                "error" -> Error(string("message")?.takeIf { it.isNotBlank() }, flag("fatal"))
                 else -> null
             }
         }
@@ -82,10 +82,10 @@ internal const val InterruptFrame = """{"type":"interrupt"}"""
 internal data class OpenTools(private val open: List<Pair<String, String>> = emptyList()) {
     val current: String? get() = open.lastOrNull()?.second
 
-    fun with(event: VoiceEvent.Tool): OpenTools = when {
+    fun with(event: VoiceEvent.Tool, unnamed: String): OpenTools = when {
         event.done -> copy(open = open.filterNot { it.first == event.id })
         open.any { it.first == event.id } -> copy(open = open.map { if (it.first == event.id) it.first to (event.label ?: it.second) else it })
-        else -> copy(open = open + (event.id to (event.label ?: VoiceText.Working)))
+        else -> copy(open = open + (event.id to (event.label ?: unnamed)))
     }
 }
 

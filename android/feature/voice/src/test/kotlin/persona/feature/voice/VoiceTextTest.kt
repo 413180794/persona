@@ -12,19 +12,25 @@ import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.test.ext.junit.runners.AndroidJUnit4
 
 /** What the page says, which model a conversation gets, and where its sound goes. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class VoiceTextTest {
+    private val text = voiceText()
     private val live = VoiceState(phase = VoiceState.Phase.Live)
 
     @Test fun theStatusLineSaysWhatIsHappening() {
-        assertEquals("正在连接…", statusText(VoiceState()))
-        assertEquals("在听", statusText(live))
-        assertEquals("正在说，直接开口就能打断", statusText(live.copy(speaking = true)))
-        assertEquals("已静音", statusText(live.copy(muted = true)))
-        assertEquals("A tool is said over speaking and muting", "查日程…", statusText(live.copy(tool = "查日程", speaking = true, muted = true)))
-        assertEquals("Speaking is said over muted", "正在说，直接开口就能打断", statusText(live.copy(speaking = true, muted = true)))
-        assertEquals("对话已结束", statusText(live.copy(phase = VoiceState.Phase.Ended, tool = "查日程", speaking = true)))
+        assertEquals("正在连接…", statusText(VoiceState(), text))
+        assertEquals("在听", statusText(live, text))
+        assertEquals("正在说，直接开口就能打断", statusText(live.copy(speaking = true), text))
+        assertEquals("已静音", statusText(live.copy(muted = true), text))
+        assertEquals("A tool is said over speaking and muting", "查日程…", statusText(live.copy(tool = "查日程", speaking = true, muted = true), text))
+        assertEquals("Speaking is said over muted", "正在说，直接开口就能打断", statusText(live.copy(speaking = true, muted = true), text))
+        assertEquals("对话已结束", statusText(live.copy(phase = VoiceState.Phase.Ended, tool = "查日程", speaking = true), text))
     }
 
     @Test fun theOrbFollowsTheSameState() {
@@ -36,53 +42,53 @@ class VoiceTextTest {
     }
 
     @Test fun aVoiceReadsAsGenderLanguagesAndDefault() {
-        assertEquals("女声 · 中文、英文 · 默认", voiceDetail(VoiceOption("a", "温柔", "female", listOf("zh", "en")), isDefault = true))
-        assertEquals("男声", voiceDetail(VoiceOption("b", "沉稳", "male", listOf("xx")), isDefault = false))
-        assertEquals("日语", voiceDetail(VoiceOption("c", "元气", null, listOf("ja")), isDefault = false))
-        assertNull(voiceDetail(VoiceOption("d", "无名"), isDefault = false))
+        assertEquals("女声 · 中文、英文 · 默认", voiceDetail(VoiceOption("a", "温柔", "female", listOf("zh", "en")), isDefault = true, text = text))
+        assertEquals("男声", voiceDetail(VoiceOption("b", "沉稳", "male", listOf("xx")), isDefault = false, text = text))
+        assertEquals("日语", voiceDetail(VoiceOption("c", "元气", null, listOf("ja")), isDefault = false, text = text))
+        assertNull(voiceDetail(VoiceOption("d", "无名"), isDefault = false, text = text))
     }
 
     @Test fun aSocketThatFailsSaysWhy() {
-        assertEquals("hub 上没有语音扩展", connectFailure(IOException("Expected HTTP 101"), 404, live = false))
-        assertEquals("Mid-conversation it is a restart or the network", VoiceText.Restarted, connectFailure(IOException("Broken pipe"), null, live = true))
-        assertEquals("连不上语音服务：连不上 hub", connectFailure(HubFailure(HubError.ConnectionRefused), null, live = false))
-        assertEquals("连不上语音服务：连不上 hub", connectFailure(IOException("unexpected end of stream"), null, live = false))
-        assertEquals("连不上语音服务：语音服务没有响应", connectFailure(HubFailure(HubError.Server, "plugin voice is not answering", 502), 502, live = false))
-        assertEquals("连不上语音服务：这台设备不能用语音对话", connectFailure(HubFailure(HubError.PairingExpired, "forbidden", 403), 403, live = false))
-        assertEquals("连不上语音服务：配对已失效，请重新扫码", connectFailure(HubFailure(HubError.PairingExpired, "unauthorized", 401), 401, live = false))
-        assertEquals("连不上语音服务：HTTP 418", connectFailure(HubFailure(HubError.Server, "teapot", 418), 418, live = false))
-        assertEquals("连不上语音服务：连接失败", connectFailure(HubFailure(HubError.Protocol), null, live = false))
+        assertEquals("hub 上没有语音扩展", connectFailure(IOException("Expected HTTP 101"), 404, live = false, text = text))
+        assertEquals("Mid-conversation it is a restart or the network", text.restarted, connectFailure(IOException("Broken pipe"), null, live = true, text = text))
+        assertEquals("连不上语音服务：连不上 hub", connectFailure(HubFailure(HubError.ConnectionRefused), null, live = false, text = text))
+        assertEquals("连不上语音服务：连不上 hub", connectFailure(IOException("unexpected end of stream"), null, live = false, text = text))
+        assertEquals("连不上语音服务：语音服务没有响应", connectFailure(HubFailure(HubError.Server, "plugin voice is not answering", 502), 502, live = false, text = text))
+        assertEquals("连不上语音服务：这台设备不能用语音对话", connectFailure(HubFailure(HubError.PairingExpired, "forbidden", 403), 403, live = false, text = text))
+        assertEquals("连不上语音服务：配对已失效，请重新扫码", connectFailure(HubFailure(HubError.PairingExpired, "unauthorized", 401), 401, live = false, text = text))
+        assertEquals("连不上语音服务：HTTP 418", connectFailure(HubFailure(HubError.Server, "teapot", 418), 418, live = false, text = text))
+        assertEquals("连不上语音服务：连接失败", connectFailure(HubFailure(HubError.Protocol), null, live = false, text = text))
     }
 
     @Test fun aCloseSaysWhyOnlyWhenThereIsSomethingToSay() {
-        assertEquals(VoiceText.Restarted, closeMessage(1001, "", live = false))
-        assertNull("The plugin ended it", closeMessage(1000, "bye", live = true))
-        assertEquals("会话超时", closeMessage(4000, " 会话超时 ", live = true))
-        assertEquals(VoiceText.Restarted, closeMessage(1011, "", live = true))
-        assertNull(closeMessage(1011, "", live = false))
+        assertEquals(text.restarted, closeMessage(1001, "", live = false, text = text))
+        assertNull("The plugin ended it", closeMessage(1000, "bye", live = true, text = text))
+        assertEquals("会话超时", closeMessage(4000, " 会话超时 ", live = true, text = text))
+        assertEquals(text.restarted, closeMessage(1011, "", live = true, text = text))
+        assertNull(closeMessage(1011, "", live = false, text = text))
     }
 
     @Test fun readFailuresAreToldApartFromNoConfiguration() {
-        assertEquals("连不上 hub，连上后点重试。", loadFailure(HubFailure(HubError.Timeout)))
-        assertEquals("hub 没有给出结果：upstream", loadFailure(HubFailure(HubError.Server, "upstream", 502)))
-        assertEquals("hub 没有给出结果。", loadFailure(HubFailure(HubError.Protocol)))
-        assertEquals("配对已失效，请重新扫码", loadFailure(HubFailure(HubError.PairingExpired, "unauthorized", 401)))
-        assertEquals("连不上 hub", voicesFailure(HubFailure(HubError.Unreachable)))
-        assertEquals("no such plugin", voicesFailure(HubFailure(HubError.Server, "no such plugin", 404)))
-        assertEquals("音色列表没拿到：连不上 hub", VoiceText.voicesFailed(voicesFailure(IOException("reset"))))
+        assertEquals("连不上 hub，连上后点重试。", loadFailure(HubFailure(HubError.Timeout), text))
+        assertEquals("hub 没有给出结果：upstream", loadFailure(HubFailure(HubError.Server, "upstream", 502), text))
+        assertEquals("hub 没有给出结果。", loadFailure(HubFailure(HubError.Protocol), text))
+        assertEquals("配对已失效，请重新扫码", loadFailure(HubFailure(HubError.PairingExpired, "unauthorized", 401), text))
+        assertEquals("连不上 hub", voicesFailure(HubFailure(HubError.Unreachable), text))
+        assertEquals("no such plugin", voicesFailure(HubFailure(HubError.Server, "no such plugin", 404), text))
+        assertEquals("音色列表没拿到：连不上 hub", text.voicesFailed(voicesFailure(IOException("reset"), text)))
     }
 
     @Test fun theModelComesFromTheModelConfigurationAndIsNeverQuietlySwapped() {
         val models = VoiceModelOptions(listOf(VoiceModelOption("fast", "快"), VoiceModelOption("deep")), default = "deep")
-        assertEquals("An older hub: the plugin's default", VoiceSetup.Ready("deep"), resolveVoiceModel(null, models))
-        assertEquals("No models and no default: none named", VoiceSetup.Ready(null), resolveVoiceModel(null, VoiceModelOptions()))
-        assertEquals(VoiceSetup.Ready("fast"), resolveVoiceModel(VoiceModelChoice("fast", null), models))
-        assertEquals("未验证 is usable", VoiceSetup.Ready("fast"), resolveVoiceModel(VoiceModelChoice("fast", "未验证"), models))
-        assertEquals("Nothing chosen: the plugin's default", VoiceSetup.Ready("deep"), resolveVoiceModel(VoiceModelChoice(null, " "), models))
-        assertEquals(VoiceSetup.Unavailable("读不到扩展模型列表"), resolveVoiceModel(VoiceModelChoice("fast", "读不到扩展模型列表"), models))
-        assertEquals(VoiceSetup.Unavailable(VoiceText.ModelMissing), resolveVoiceModel(VoiceModelChoice("retired", null), models))
+        assertEquals("An older hub: the plugin's default", VoiceSetup.Ready("deep"), resolveVoiceModel(null, models, text))
+        assertEquals("No models and no default: none named", VoiceSetup.Ready(null), resolveVoiceModel(null, VoiceModelOptions(), text))
+        assertEquals(VoiceSetup.Ready("fast"), resolveVoiceModel(VoiceModelChoice("fast", null), models, text))
+        assertEquals("未验证 is usable", VoiceSetup.Ready("fast"), resolveVoiceModel(VoiceModelChoice("fast", "未验证"), models, text))
+        assertEquals("Nothing chosen: the plugin's default", VoiceSetup.Ready("deep"), resolveVoiceModel(VoiceModelChoice(null, " "), models, text))
+        assertEquals(VoiceSetup.Unavailable("读不到扩展模型列表"), resolveVoiceModel(VoiceModelChoice("fast", "读不到扩展模型列表"), models, text))
+        assertEquals(VoiceSetup.Unavailable(text.modelMissing), resolveVoiceModel(VoiceModelChoice("retired", null), models, text))
         assertEquals("A plugin without a catalog has no room for a configured model",
-            VoiceSetup.Unavailable(VoiceText.ModelMissing), resolveVoiceModel(VoiceModelChoice("fast", null), VoiceModelOptions()))
+            VoiceSetup.Unavailable(text.modelMissing), resolveVoiceModel(VoiceModelChoice("fast", null), VoiceModelOptions(), text))
     }
 
     @Test fun soundGoesToAHeadsetElseTheLoudspeakerNeverTheEarpiece() {

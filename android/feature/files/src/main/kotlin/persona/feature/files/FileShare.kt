@@ -38,7 +38,7 @@ internal object FileShare {
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
-        context.startActivity(Intent.createChooser(send, "分享").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        context.startActivity(Intent.createChooser(send, context.getString(R.string.files_share)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         return true
     }
 

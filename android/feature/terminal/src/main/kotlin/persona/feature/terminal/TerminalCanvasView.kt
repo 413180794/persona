@@ -92,7 +92,7 @@ internal class TerminalCanvasView(context: Context, terminalText: Int, terminalB
 
     init {
         isFocusable = true; isFocusableInTouchMode = true
-        contentDescription = "终端画面"
+        contentDescription = context.getString(R.string.terminal_screen_description)
         importantForAutofill = IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         font(TerminalFontSize.DEFAULT)
     }

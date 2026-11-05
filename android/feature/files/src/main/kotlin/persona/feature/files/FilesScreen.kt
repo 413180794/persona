@@ -15,6 +15,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,12 +52,14 @@ fun SessionFilesScreen(
     }.orEmpty() }
     key(session, base, api, asked) {
         if (base.isBlank()) {
-            JListPage("文件", modifier, onBack = onBackToChat) {
-                item { JEmptyState("还没有会话目录", "恢复会话后再打开文件。", action = { JButton("回到对话", onBackToChat) }) }
+            JListPage(stringResource(R.string.files_title), modifier, onBack = onBackToChat) {
+                item { JEmptyState(stringResource(R.string.files_no_folder_title), stringResource(R.string.files_no_folder_message),
+                    action = { JButton(stringResource(R.string.files_back_to_chat), onBackToChat) }) }
             }
         } else {
             val scope = rememberCoroutineScope()
-            val controller = remember { FilesController(api, session.machineId, base, scope, ::filesLoadError) }
+            val resources = LocalResources.current
+            val controller = remember { FilesController(api, session.machineId, base, scope) { filesLoadError(resources, it) } }
             val images = remember { MarkdownImages(api, session.machineId, base) }
             val state by controller.state.collectAsStateWithLifecycle()
             var pane by rememberSaveable { mutableStateOf(if (asked != null) FilesPane.Files else initialPane) }
@@ -84,20 +88,23 @@ private fun FilesBrowser(
     onInsertPath: (String) -> Unit,
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val feedback = LocalAppFeedback.current
     var hidden by rememberShowHidden()
     var menu by remember { mutableStateOf(false) }
     val here = state.here
     JListPage(
         title = FilesPaths.name(here), subtitle = here, onBack = onBackToChat, largeTitle = true,
-        actions = { JIconButton(PhIcons.ArrowClockwise, "刷新", { controller.directory(); controller.refreshGit() },
+        actions = { JIconButton(PhIcons.ArrowClockwise, stringResource(R.string.files_refresh), { controller.directory(); controller.refreshGit() },
             enabled = !state.directoryLoading && !state.gitLoading) },
     ) {
         item("panes") {
             val changes = state.git?.files?.size?.takeIf { it > 0 }
             // Git stays offered while its status loads (the chat menu only opens it for repositories); it goes when there is none.
-            val options = if (state.git?.isRepo == false) listOf(JSegment("对话"), JSegment("文件"))
-                else listOf(JSegment("对话"), JSegment("文件"), JSegment("Git", count = changes))
+            val chat = JSegment(stringResource(R.string.files_pane_chat))
+            val files = JSegment(stringResource(R.string.files_pane_files))
+            val options = if (state.git?.isRepo == false) listOf(chat, files)
+                else listOf(chat, files, JSegment("Git", count = changes))
             JSegmented(options, if (pane == FilesPane.Files || options.size < 3) 1 else 2,
                 { when (it) { 0 -> onBackToChat(); 1 -> onPane(FilesPane.Files); else -> onPane(FilesPane.Git) } },
                 Modifier.padding(vertical = Tokens.Space.s))
@@ -105,20 +112,20 @@ private fun FilesBrowser(
         if (pane == FilesPane.Files || state.git?.isRepo == false) {
             item("crumbs") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (state.belowRoot) JIconButton(PhIcons.ArrowUp, "上一级", controller::up)
+                    if (state.belowRoot) JIconButton(PhIcons.ArrowUp, stringResource(R.string.files_up), controller::up)
                     Crumbs(state.crumbs, onPick = { controller.directory(it) }, modifier = Modifier.weight(1f))
-                    JIconButton(PhIcons.DotsThree, "文件选项", { menu = true })
+                    JIconButton(PhIcons.DotsThree, stringResource(R.string.files_options), { menu = true })
                 }
             }
             filesBrowser(state, controller, hidden, onInsertPath)
         } else gitBrowser(state, controller)
     }
     if (menu) JActionSheet(buildList {
-        add(JAction("显示隐藏文件", PhIcons.Eye, checked = hidden) { hidden = !hidden })
-        state.parent?.let { add(JAction("上一级文件夹", PhIcons.ArrowUp) { controller.up() }) }
-        add(JAction("拷贝目录", PhIcons.Copy) { copyText(context, here, feedback, "已拷贝路径") })
-        add(JAction("插入目录", PhIcons.CursorText) { onInsertPath(here) })
-    }, { menu = false }, title = "目录操作")
+        add(JAction(stringResource(R.string.files_show_hidden), PhIcons.Eye, checked = hidden) { hidden = !hidden })
+        state.parent?.let { add(JAction(stringResource(R.string.files_parent_folder), PhIcons.ArrowUp) { controller.up() }) }
+        add(JAction(stringResource(R.string.files_copy_folder), PhIcons.Copy) { copyText(context, here, feedback, resources.getString(R.string.files_path_copied)) })
+        add(JAction(stringResource(R.string.files_insert_folder), PhIcons.CursorText) { onInsertPath(here) })
+    }, { menu = false }, title = stringResource(R.string.files_folder_actions))
 }
 
 /** The folders from the breadcrumb's top down to the one shown, as chips; it follows you to the end as you go in. */
@@ -140,28 +147,29 @@ private fun Crumbs(levels: List<Pair<String, String>>, onPick: (String) -> Unit,
 private fun LazyListScope.filesBrowser(state: FilesState, controller: FilesController, hidden: Boolean, insert: (String) -> Unit) {
     val listing = state.directory
     when {
-        listing == null && state.directoryError != null -> item { RetryState("打不开这个文件夹", state.directoryError) { controller.directory() } }
+        listing == null && state.directoryError != null -> item { RetryState(stringResource(R.string.files_folder_failed), state.directoryError) { controller.directory() } }
         listing == null -> item { Loading() }
         else -> {
-            if (state.directoryError != null) item("stale") { Notice("刷新失败：${state.directoryError}", padded = false) }
+            if (state.directoryError != null) item("stale") { Notice(stringResource(R.string.files_refresh_failed, state.directoryError), padded = false) }
             val entries = listing.entries.filter { hidden || !it.name.startsWith('.') }
                 .sortedWith(compareByDescending<SessionFileEntry> { it.dir }.thenBy { it.name.lowercase() })
             if (entries.isEmpty()) item {
-                if (listing.entries.isEmpty()) JEmptyState("空文件夹", "这个文件夹里什么都没有。")
-                else JEmptyState("只有隐藏文件", "在路径右边的 ⋯ 里打开「显示隐藏文件」就能看到。")
+                if (listing.entries.isEmpty()) JEmptyState(stringResource(R.string.files_empty_folder), stringResource(R.string.files_empty_folder_message))
+                else JEmptyState(stringResource(R.string.files_only_hidden), stringResource(R.string.files_only_hidden_message))
             }
             val now = Instant.now()
             itemsIndexed(entries, key = { _, it -> "entry:${it.name}" }, contentType = { _, _ -> "entry" }) { index, entry ->
                 val context = LocalContext.current
+                val resources = LocalResources.current
                 val feedback = LocalAppFeedback.current
                 val path = joinRemotePath(listing.path.ifEmpty { state.here }, entry.name)
                 JGroupItem(GroupPosition.of(index, entries.size)) {
                     FileRow(entry, gitChange(state.git, path, entry.dir), now,
                         open = { if (entry.dir) controller.directory(path) else controller.push(FileSelection.File(path)) },
-                        copy = { copyText(context, path, feedback, "已拷贝路径") }, insert = { insert(path) })
+                        copy = { copyText(context, path, feedback, resources.getString(R.string.files_path_copied)) }, insert = { insert(path) })
                 }
             }
-            if (listing.truncated) item { Notice("文件太多，只列出了前 2000 个", padded = false) }
+            if (listing.truncated) item { Notice(stringResource(R.string.files_too_many, LocalizedFormats.number(MAX_LISTED, currentLocale)), padded = false) }
         }
     }
 }
@@ -171,13 +179,15 @@ private fun LazyListScope.filesBrowser(state: FilesState, controller: FilesContr
 private fun FileRow(entry: SessionFileEntry, change: SessionGitFile?, now: Instant, open: () -> Unit, copy: () -> Unit, insert: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val palette = PersonaTheme.palette
-    val meta = listOfNotNull(if (entry.dir) "文件夹" else fileSize(entry.size), fileDate(entry.mtime, now), if (entry.symlink) "符号链接" else null)
+    val resources = LocalResources.current
+    val meta = listOfNotNull(if (entry.dir) stringResource(R.string.files_folder) else fileSize(entry.size, currentLocale),
+        fileDate(resources, entry.mtime, now), if (entry.symlink) stringResource(R.string.files_symlink) else null)
     JRow(onClick = open, onLongClick = { menu = true }, trailing = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (change != null) {
-                if (entry.dir) JTag("有改动", status = if (change.conflicted) Status.NeedsYou else Status.Unknown) else GitLetter(change)
+                if (entry.dir) JTag(stringResource(R.string.files_changed), status = if (change.conflicted) Status.NeedsYou else Status.Unknown) else GitLetter(change)
             }
-            JIconButton(PhIcons.DotsThree, "${entry.name} 的操作", { menu = true })
+            JIconButton(PhIcons.DotsThree, stringResource(R.string.files_entry_actions, entry.name), { menu = true })
         }
     }) {
         JIcon(if (entry.dir) PhIcons.FolderSimple else fileIcon(entry.name), null, tint = palette.ink2, decorative = true)
@@ -189,7 +199,8 @@ private fun FileRow(entry: SessionFileEntry, change: SessionGitFile?, now: Insta
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
-    if (menu) JActionSheet(listOf(JAction("插入路径", PhIcons.CursorText, onClick = insert), JAction("拷贝路径", PhIcons.Copy, onClick = copy)),
+    if (menu) JActionSheet(listOf(JAction(stringResource(R.string.files_insert_path), PhIcons.CursorText, onClick = insert),
+        JAction(stringResource(R.string.files_copy_path), PhIcons.Copy, onClick = copy)),
         { menu = false }, entry.name)
 }
 
@@ -213,8 +224,11 @@ internal fun fileIcon(name: String): PhIcon = when (FilesPaths.extension(name)) 
 @Composable internal fun Loading() { JLoading() }
 
 @Composable internal fun RetryState(title: String, message: String, retry: () -> Unit) {
-    JEmptyState(title, message, action = { JButton("重试", retry, kind = JButtonKind.Secondary) })
+    JEmptyState(title, message, action = { JButton(stringResource(R.string.files_retry), retry, kind = JButtonKind.Secondary) })
 }
+
+/** The most entries a folder listing brings (the node cuts it there and says it's truncated). */
+private const val MAX_LISTED = 2000
 
 /** Copies [text] and says so through the app's one notice line. */
 internal fun copyText(context: Context, text: String, feedback: AppFeedback?, notice: String) {

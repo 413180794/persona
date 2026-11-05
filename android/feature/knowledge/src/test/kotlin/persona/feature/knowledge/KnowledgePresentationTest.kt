@@ -21,7 +21,8 @@ class KnowledgePresentationTest {
 
     @Test fun projectsGroupLikeIos() {
         val sections = projectSections(projects)
-        assertEquals(listOf("重点", "其他进行中", "已完成", "不是项目"), sections.map { it.title })
+        assertEquals(listOf(R.string.knowledge_section_focus, R.string.knowledge_section_other_active, R.string.knowledge_section_done,
+            R.string.knowledge_section_not_projects), sections.map { it.title })
         assertEquals(listOf("a", "e"), sections[0].entries.map { it.id })
         assertEquals(listOf("b"), sections[1].entries.map { it.id })
         assertEquals(listOf("c"), sections[2].entries.map { it.id })
@@ -29,13 +30,13 @@ class KnowledgePresentationTest {
         assertTrue(sections[3].collapsed)
         assertNotNull(sections[3].note)
         // Without anything important the rest is just 进行中.
-        assertEquals("进行中", projectSections(projects.filter { it.id == "b" }).single().title)
+        assertEquals(R.string.knowledge_section_active, projectSections(projects.filter { it.id == "b" }).single().title)
         assertEquals("long", projects[1].projectKind)
         assertEquals("short", projects[0].projectKind)
-        assertEquals("暂停", projects[4].projectStatusLabel)
+        assertEquals(R.string.knowledge_status_paused, projects[4].projectStatusLabel)
         assertNull(projects[0].projectStatusLabel)
         assertEquals("active", KnowledgeEntry("projects", "x", "X").projectStatus)
-        assertEquals(listOf("#iOS"), kindSections(listOf(KnowledgeEntry("people", "p", "P")), "iOS").map { it.title })
+        assertEquals(listOf("#iOS"), kindSections(listOf(KnowledgeEntry("people", "p", "P")), "iOS").map { it.key })
         assertTrue(kindSections(emptyList(), null).isEmpty())
     }
 
@@ -54,10 +55,10 @@ class KnowledgePresentationTest {
         assertNull(KnowledgeHit("README.md", "").reference())
         assertNull(KnowledgeHit("other/x/y.md", "").reference())
         assertNull(KnowledgeHit("projects/../summary.md", "").reference())
-        assertEquals("聊天记录 · 2026-10-30", KnowledgeHit("chats/lark-1/messages/2026-10-30.md", "").source)
-        assertEquals("档案", KnowledgeHit("chats/c/summary.md", "").source)
-        assertEquals("时间线", KnowledgeHit("projects/p/log.md", "").source)
-        assertEquals("资料", KnowledgeHit("docs/d1.json", "").source)
+        assertEquals(KnowledgeHitSource.Messages("2026-10-30"), KnowledgeHit("chats/lark-1/messages/2026-10-30.md", "").source)
+        assertEquals(KnowledgeHitSource.Profile, KnowledgeHit("chats/c/summary.md", "").source)
+        assertEquals(KnowledgeHitSource.Timeline, KnowledgeHit("projects/p/log.md", "").source)
+        assertEquals(KnowledgeHitSource.Details, KnowledgeHit("docs/d1.json", "").source)
         assertEquals("天气 App", KnowledgeHit("p", "  \"name\": \"天气 App\",").text)
         assertEquals("进展", KnowledgeHit("p", "- 进展").text)
         assertEquals("标题", KnowledgeHit("p", "## 标题").text)
@@ -73,8 +74,8 @@ class KnowledgePresentationTest {
             KnowledgeHit("README.md", "x"),
         ), known)
         assertEquals(listOf("projects/p", "chats/c"), groups.map { it.key })
-        assertEquals(listOf("档案", "资料"), groups[0].hits.map { it.source })
-        assertEquals("项目", groups[0].entry.name)
+        assertEquals(listOf(KnowledgeHitSource.Profile, KnowledgeHitSource.Details), groups[0].hits.map { it.source })
+        assertEquals("Named by its kind on the page until a list names it", "", groups[0].entry.name)
         assertFalse(groups[0].named)
         assertEquals("项目群", groups[1].entry.name)
         assertTrue(groups[1].named)
@@ -122,13 +123,13 @@ class KnowledgePresentationTest {
         val detail = KnowledgeDetail("projects", "weather", "/data/projects/weather",
             meta = buildJsonObject { put("name", "天气 App"); put("dirs", buildJsonArray { add("laptop:/code/weather") }) },
             summary = "档案", log = listOf("- 10-30 · 进展"))
-        val start = agentStart(detail)
+        val start = agentStart(detail, "项目")
         assertEquals("laptop", start.machineId)
         assertEquals("/code/weather", start.cwd)
         assertTrue(start.prompt.startsWith("<jarvis-context kind=\"context\" title=\"项目 · 天气 App\" url=\"\">"))
         // The cursor lands after the context, on a line of its own.
         assertTrue(start.prompt.endsWith("</jarvis-context>\n\n"))
-        assertNull(agentStart(detail.copy(meta = buildJsonObject { put("name", "X") })).machineId)
+        assertNull(agentStart(detail.copy(meta = buildJsonObject { put("name", "X") }), "项目").machineId)
     }
 
     @Test fun detailMetaMakesTheEntry() {
@@ -143,7 +144,7 @@ class KnowledgePresentationTest {
         assertEquals(70, entry.relevance)
         assertEquals(listOf("t1", "t2"), entry.tags)
         assertEquals("long · done", entry.extra)
-        assertEquals("已完成", entry.projectStatusLabel)
+        assertEquals(R.string.knowledge_status_done, entry.projectStatusLabel)
         assertEquals(1, detail.agents?.size)
         // A project the hub has not given a kind or status reads as short and active.
         assertEquals("short · active", KnowledgeDetail("projects", "b", "x", meta = buildJsonObject { }).entry().extra)

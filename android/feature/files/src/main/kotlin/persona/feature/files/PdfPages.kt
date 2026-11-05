@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import persona.core.contracts.api.SessionFileContent
 import persona.core.designsystem.*
@@ -50,7 +51,7 @@ internal fun PdfPages(file: SessionFileContent, contentPadding: PaddingValues, h
         when (val state = load) {
             PdfLoad.Opening -> item { JLoading() }
             PdfLoad.Failed -> item {
-                JEmptyState("无法显示这个 PDF", if (file.truncated) "文件超过 2 MB，只读到了前面的部分。" else "文件可能已损坏，或者不是 PDF。")
+                JEmptyState(stringResource(R.string.files_pdf_failed), if (file.truncated) stringResource(R.string.files_pdf_truncated) else stringResource(R.string.files_pdf_damaged))
             }
             is PdfLoad.Ready -> items(state.document.pages.size, key = { "page:$it" }, contentType = { "page" }) { index ->
                 PdfPage(state.document, index, Modifier.padding(horizontal = side))
@@ -68,7 +69,7 @@ private fun PdfPage(document: PdfDocument, index: Int, modifier: Modifier) {
             value = withContext(Dispatchers.IO) { document.render(index, width) }
         }
         val frame = Modifier.fillMaxWidth().aspectRatio(page.width.toFloat() / page.height.coerceAtLeast(1)).shadow(Tokens.Space.xxs)
-        bitmap?.let { Image(it.asImageBitmap(), "第 ${index + 1} 页", frame) }
+        bitmap?.let { Image(it.asImageBitmap(), stringResource(R.string.files_pdf_page, index + 1), frame) }
             ?: Box(frame.background(PersonaTheme.palette.surfaceOpaque))
     }
 }

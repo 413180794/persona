@@ -22,6 +22,7 @@ internal class VoiceSession(
     private val voice: String?,
     private val model: String?,
     private val audio: VoiceAudio,
+    private val text: VoiceText,
 ) {
     private val mutable = MutableStateFlow(VoiceState())
     val state: StateFlow<VoiceState> = mutable.asStateFlow()
@@ -53,9 +54,9 @@ internal class VoiceSession(
             if (!stopped && synchronized(lock) { audible }) audio.play(bytes)
         }
 
-        override fun onClosed(code: Int, reason: String) = end(closeMessage(code, reason, live()))
+        override fun onClosed(code: Int, reason: String) = end(closeMessage(code, reason, live(), text))
 
-        override fun onFailure(error: Throwable, status: Int?) = end(connectFailure(error, status, live()))
+        override fun onFailure(error: Throwable, status: Int?) = end(connectFailure(error, status, live(), text))
     }
 
     private val microphone = object : VoiceAudio.Listener {
@@ -71,7 +72,7 @@ internal class VoiceSession(
             if (!stopped) mutable.update { if (it.speaking == speaking) it else it.copy(speaking = speaking) }
         }
 
-        override fun onMicrophoneLost() = end(VoiceText.Microphone)
+        override fun onMicrophoneLost() = end(text.microphone)
     }
 
     fun start() {
@@ -79,7 +80,7 @@ internal class VoiceSession(
             extensions.connect(extensionId, listener)
         } catch (error: Exception) {
             // No route or a pairing that just changed: the same as a socket that would not open.
-            end(connectFailure(error, null, live = false))
+            end(connectFailure(error, null, live = false, text = text))
             return
         }
         val late = synchronized(lock) {
@@ -107,13 +108,14 @@ internal class VoiceSession(
             VoiceEvent.Clear -> if (synchronized(lock) { audible }) audio.clear()
             is VoiceEvent.Transcript -> mutable.update { it.copy(lines = it.lines.with(event)) }
             is VoiceEvent.Tool -> {
-                tools = tools.with(event)
+                tools = tools.with(event, text.working)
                 val current = tools.current
                 mutable.update { it.copy(tool = current) }
             }
             is VoiceEvent.Error -> {
-                mutable.update { it.copy(error = event.message) }
-                if (event.fatal) end(event.message)
+                val message = event.message ?: text.error
+                mutable.update { it.copy(error = message) }
+                if (event.fatal) end(message)
             }
         }
     }
@@ -126,7 +128,7 @@ internal class VoiceSession(
         }
         val ok = try { audio.start(ready.inputRate, ready.outputRate, microphone) } catch (_: Exception) { false }
         if (!ok) {
-            end(VoiceText.Microphone)
+            end(text.microphone)
             return
         }
         mutable.update { if (it.phase == VoiceState.Phase.Connecting && !stopped) it.copy(phase = VoiceState.Phase.Live) else it }

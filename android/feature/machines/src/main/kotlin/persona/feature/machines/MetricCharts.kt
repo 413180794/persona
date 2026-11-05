@@ -17,15 +17,21 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.MetricPoint
+import persona.core.designsystem.currentLocale
+import java.util.Locale
 import persona.core.designsystem.JCard
 import persona.core.designsystem.PersonaPalette
 import persona.core.designsystem.PersonaTheme
 import kotlin.math.max
 
 /** [percent] kinds are drawn against a fixed 0–100 axis. Disk points carry a percentage ([diskPercentPoints]). */
-internal enum class MetricKind(val label: String, val percent: Boolean = false) {
-    Cpu("CPU", percent = true), Memory("内存"), Rx("下行"), Tx("上行"), Load("负载"), Disk("磁盘", percent = true);
+internal enum class MetricKind(@StringRes val label: Int, val percent: Boolean = false) {
+    Cpu(R.string.machines_metric_cpu, percent = true), Memory(R.string.machines_metric_memory), Rx(R.string.machines_metric_rx),
+    Tx(R.string.machines_metric_tx), Load(R.string.machines_metric_load), Disk(R.string.machines_metric_disk, percent = true);
     fun color(palette: PersonaPalette) = when (this) {
         Cpu -> palette.working.dot; Memory -> palette.done.dot
         Rx -> palette.needsYou.dot; Tx -> palette.accent; Load -> palette.ink2; Disk -> palette.ink3
@@ -33,11 +39,11 @@ internal enum class MetricKind(val label: String, val percent: Boolean = false) 
     fun value(point: MetricPoint): Double? = when (this) {
         Cpu -> point.cpu; Memory -> point.mem; Rx -> point.rx; Tx -> point.tx; Load -> point.load; Disk -> point.disk
     }
-    fun format(value: Double?): String = when (this) {
-        Cpu, Disk -> MetricFormat.percent(value)
-        Memory -> MetricFormat.bytes(value)
-        Rx, Tx -> MetricFormat.rate(value)
-        Load -> MetricFormat.number(value)
+    fun format(value: Double?, locale: Locale): String = when (this) {
+        Cpu, Disk -> MetricFormat.percent(value, locale)
+        Memory -> MetricFormat.bytes(value, locale)
+        Rx, Tx -> MetricFormat.rate(value, locale)
+        Load -> MetricFormat.number(value, locale)
     }
 }
 
@@ -48,27 +54,29 @@ internal fun MetricChart(
     reference: Double? = null,
 ) {
     val picked = remember(points, selection, step) { selection?.let { selectedPoint(points, it, step) } }
+    val locale = currentLocale
     JCard(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
         Text(title, style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
-        Text(selection?.let(MetricFormat::time) ?: "现在", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+        Text(selection?.let { MetricFormat.time(it, locale) } ?: stringResource(R.string.machines_now), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
         kinds.forEachIndexed { index, kind ->
             val value = if (selection != null) picked?.let(kind::value) else nowValues.getOrNull(index)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.padding(top = 6.dp).size(8.dp).background(kind.color(PersonaTheme.palette), PersonaTheme.shapes.controlShape))
-                Text("${kind.label} ${kind.format(value)}", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink)
+                Text("${stringResource(kind.label)} ${kind.format(value, locale)}", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink)
             }
         }
-        if (selection != null && picked == null) Text("这个时段没有采样", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
-        if (reference != null) Text("虚线：${reference.toInt()} 核", style = PersonaTheme.type.micro,
+        if (selection != null && picked == null) Text(stringResource(R.string.machines_chart_no_sample), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
+        if (reference != null) Text(pluralStringResource(R.plurals.machines_chart_reference, reference.toInt(), reference.toInt()), style = PersonaTheme.type.micro,
             color = PersonaTheme.palette.ink3)
+        val separator = stringResource(R.string.machines_chart_summary_separator)
         val summary = kinds.mapIndexed { index, kind ->
             val peak = points.filter { !it.gap && it.t in (end - span)..end }.mapNotNull(kind::value).maxOrNull()
-            "${kind.label}，现在 ${kind.format(nowValues.getOrNull(index))}，最高 ${kind.format(peak)}"
-        }.joinToString("；")
+            stringResource(R.string.machines_chart_summary, stringResource(kind.label), kind.format(nowValues.getOrNull(index), locale), kind.format(peak, locale))
+        }.joinToString(separator)
         Plot(points, kinds, end, span, step, Modifier.fillMaxWidth().height(180.dp).semantics { contentDescription = summary },
             axes = true, reference = reference, selection = selection, onSelect = onSelect)
         if (points.none { !it.gap && it.t in (end - span)..end && kinds.any { kind -> kind.value(it) != null } }) {
-            Text("这段时间还没有监控数据", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
+            Text(stringResource(R.string.machines_chart_empty), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
         }
     }
 }
@@ -87,8 +95,9 @@ internal fun Plot(
     val axis = PersonaTheme.palette.ink3
     val grid = PersonaTheme.palette.line
     val measure = rememberTextMeasurer()
+    val locale = currentLocale
     val textStyle = PersonaTheme.type.micro.copy(color = axis)
-    val labels = if (axes) listOf(maximum, maximum / 2, 0.0).map { measure.measure(kinds.first().format(it), textStyle) } else emptyList()
+    val labels = if (axes) listOf(maximum, maximum / 2, 0.0).map { measure.measure(kinds.first().format(it, locale), textStyle) } else emptyList()
     val right = labels.maxOfOrNull { it.size.width }?.toFloat()?.plus(10f) ?: 0f
     val bottom = if (axes) measure.measure("00:00", textStyle).size.height.toFloat() + 10f else 0f
     val latestSelect by rememberUpdatedState(onSelect)
@@ -113,7 +122,7 @@ internal fun Plot(
             }
             // Text is measured with an explicit neutral color, independent of the app accent.
             repeat(3) { index ->
-                val label = measure.measure(MetricFormat.time(start + span * index / 2), textStyle)
+                val label = measure.measure(MetricFormat.time(start + span * index / 2, locale), textStyle)
                 drawText(label, topLeft = Offset((width * index / 2 - label.size.width / 2).coerceIn(0f, max(0f, width - label.size.width)), height + 8f))
             }
         }

@@ -2,11 +2,20 @@ package persona.feature.files
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.robolectric.RuntimeEnvironment
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.Locale
+import org.robolectric.annotation.Config
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class FilesPathsTest {
+    private val res get() = RuntimeEnvironment.getApplication().resources
+
     @Test fun pathsFromAConversationResolveAgainstTheSessionFolder() {
         val cwd = "/Users/me/code/weather"
         assertEquals("/Users/me/code/weather/Sources/App.swift", FilesPaths.resolve("Sources/App.swift", cwd))
@@ -79,28 +88,42 @@ class FilesPathsTest {
     @Test fun listTimesAreRelativeThenDates() {
         val now = Instant.parse("2026-11-02T12:00:00Z")
         val zone = ZoneOffset.UTC
-        assertEquals("刚刚", relativeTime(now.minusSeconds(30), now, zone))
-        assertEquals("5 分钟前", relativeTime(now.minusSeconds(300), now, zone))
-        assertEquals("3 小时前", relativeTime(now.minusSeconds(3 * 3600), now, zone))
-        assertEquals("2 天前", relativeTime(now.minusSeconds(2 * 86_400), now, zone))
-        assertEquals("10月1日", relativeTime(Instant.parse("2026-10-01T09:00:00Z"), now, zone))
-        assertEquals("2025年12月30日", relativeTime(Instant.parse("2025-12-30T09:00:00Z"), now, zone))
-        assertEquals("3 小时前", fileDate("2026-11-02T17:00:00+08:00", now, zone))
-        assertNull(fileDate("0001-01-01T00:00:00Z", now, zone))
+        assertEquals("刚刚", relativeTime(res, now.minusSeconds(30), now, zone))
+        assertEquals("5 分钟前", relativeTime(res, now.minusSeconds(300), now, zone))
+        assertEquals("3 小时前", relativeTime(res, now.minusSeconds(3 * 3600), now, zone))
+        assertEquals("2 天前", relativeTime(res, now.minusSeconds(2 * 86_400), now, zone))
+        assertEquals("10月1日", relativeTime(res, Instant.parse("2026-10-01T09:00:00Z"), now, zone))
+        assertEquals("2025年12月30日", relativeTime(res, Instant.parse("2025-12-30T09:00:00Z"), now, zone))
+        assertEquals("3 小时前", fileDate(res, "2026-11-02T17:00:00+08:00", now, zone))
+        assertNull(fileDate(res, "0001-01-01T00:00:00Z", now, zone))
     }
 
     @Test fun aCommitsWholeDateIsInThePhonesZone() {
-        assertEquals("2026年10月31日 13:58", fullDate("2026-10-31T05:58:40Z", ZoneId.of("Asia/Shanghai")))
-        assertEquals("2026年10月31日 13:58", fullDate("2026-10-31T13:58:40+08:00", ZoneId.of("Asia/Shanghai")))
-        assertNull(fullDate("0001-01-01T00:00:00Z", ZoneOffset.UTC))
+        assertEquals("2026年10月31日 13:58", fullDate("2026-10-31T05:58:40Z", Locale.SIMPLIFIED_CHINESE, ZoneId.of("Asia/Shanghai")))
+        assertEquals("2026年10月31日 13:58", fullDate("2026-10-31T13:58:40+08:00", Locale.SIMPLIFIED_CHINESE, ZoneId.of("Asia/Shanghai")))
+        assertNull(fullDate("0001-01-01T00:00:00Z", Locale.SIMPLIFIED_CHINESE, ZoneOffset.UTC))
     }
 
     @Test fun sizesUseBinaryUnits() {
-        assertEquals("0 B", fileSize(0))
-        assertEquals("1023 B", fileSize(1023))
-        assertEquals("1 KB", fileSize(1024))
-        assertEquals("1.5 KB", fileSize(1536))
-        assertEquals("165 KB", fileSize(165 * 1024 + 100))
-        assertEquals("2 MB", fileSize(2L shl 20))
+        assertEquals("0 B", fileSize(0, Locale.US))
+        assertEquals("1,023 B", fileSize(1023, Locale.US))
+        assertEquals("1 KB", fileSize(1024, Locale.US))
+        assertEquals("1.5 KB", fileSize(1536, Locale.US))
+        assertEquals("165 KB", fileSize(165 * 1024 + 100, Locale.US))
+        assertEquals("2 MB", fileSize(2L shl 20, Locale.US))
+        assertEquals("9.9 KB", fileSize(10_137, Locale.US))
+        // The language's decimal mark.
+        assertEquals("1,5 KB", fileSize(1536, Locale.GERMANY))
+    }
+
+    @Config(sdk = [35], qualifiers = "en")
+    @Test fun listTimesInEnglish() {
+        val now = Instant.parse("2026-11-02T12:00:00Z")
+        val zone = ZoneOffset.UTC
+        assertEquals("Just now", relativeTime(res, now.minusSeconds(30), now, zone))
+        assertEquals("1 minute ago", relativeTime(res, now.minusSeconds(60), now, zone))
+        assertEquals("3 hours ago", relativeTime(res, now.minusSeconds(3 * 3600), now, zone))
+        assertEquals("Oct 1", relativeTime(res, Instant.parse("2026-10-01T09:00:00Z"), now, zone))
+        assertEquals("Dec 30, 2025", relativeTime(res, Instant.parse("2025-12-30T09:00:00Z"), now, zone))
     }
 }

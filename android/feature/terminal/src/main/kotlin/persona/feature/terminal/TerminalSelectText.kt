@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.terminal.TerminalText
@@ -28,16 +29,19 @@ internal fun TerminalSelectText(text: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val feedback = LocalAppFeedback.current
     val palette = PersonaTheme.palette
+    val clipLabel = stringResource(R.string.terminal_clip_label)
+    val copied = stringResource(R.string.terminal_copied)
     JFullScreen(onDismiss) {
-        JPage("选择文本", onBack = onDismiss, actions = {
-            JTextButton("全部拷贝", {
-                context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("终端", text))
-                feedback?.notice("已拷贝")
+        JPage(stringResource(R.string.terminal_select_text), onBack = onDismiss, actions = {
+            JTextButton(stringResource(R.string.terminal_copy_all), {
+                context.getSystemService(ClipboardManager::class.java)
+                    ?.setPrimaryClip(ClipData.newPlainText(clipLabel, text))
+                feedback?.notice(copied)
                 onDismiss()
             }, enabled = text.isNotEmpty())
         }) { padding ->
             if (text.isEmpty()) Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                JEmptyState("终端里还没有文字", "等终端显示内容后再来选择。", icon = PhIcons.TerminalWindow)
+                JEmptyState(stringResource(R.string.terminal_select_empty_title), stringResource(R.string.terminal_select_empty_body), icon = PhIcons.TerminalWindow)
             } else SelectionContainer(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
                 // Shown with glyphs the monospaced face has (⏵ was an empty box); 全部拷贝 copies the terminal's own text.
                 val shown = remember(text) { TerminalText.readable(text) }

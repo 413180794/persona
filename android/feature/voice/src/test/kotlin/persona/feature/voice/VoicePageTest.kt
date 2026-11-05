@@ -15,9 +15,14 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.test.ext.junit.runners.AndroidJUnit4
 
 /** Setting up a conversation: the model from the hub's configuration, the voice kept with the pairing. */
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class VoicePageTest {
     private val directory: File = Files.createTempDirectory("voice-page").toFile()
     private val prefs = VoicePrefs(File(directory, "voice.json"))
@@ -26,7 +31,7 @@ class VoicePageTest {
 
     @After fun clean() { directory.deleteRecursively() }
 
-    private fun TestScope.page() = VoicePage(extensions, "voice", prefs, this) { FakeAudio().also { audios += it } }
+    private fun TestScope.page() = VoicePage(extensions, "voice", prefs, this, voiceText()) { FakeAudio().also { audios += it } }
 
     @Test fun anOlderHubTalksWithTheExtensionsOwnDefaultModel() = runTest {
         extensions.choice = null
@@ -56,7 +61,7 @@ class VoicePageTest {
         extensions.choice = VoiceModelChoice("retired", null)
         page.begin()
         advanceUntilIdle()
-        assertEquals(VoiceSetup.Unavailable(VoiceText.ModelMissing), page.state.value.setup)
+        assertEquals(VoiceSetup.Unavailable(voiceText().modelMissing), page.state.value.setup)
 
         extensions.choice = VoiceModelChoice("fast", "未验证")
         page.begin()
@@ -104,7 +109,7 @@ class VoicePageTest {
         assertEquals("""{"type":"start","model":"deep","voice":"soft"}""", extensions.socket.texts.single())
         assertEquals("soft", prefs.voice("voice"))
         assertEquals("深 · 温柔", page.state.value.subtitle)
-        assertEquals("Kept on this phone for the next time", "soft", VoicePage(extensions, "voice", prefs, this) { FakeAudio() }.state.value.voice)
+        assertEquals("Kept on this phone for the next time", "soft", VoicePage(extensions, "voice", prefs, this, voiceText()) { FakeAudio() }.state.value.voice)
         page.close()
     }
 

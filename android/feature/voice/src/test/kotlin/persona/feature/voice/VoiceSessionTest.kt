@@ -7,12 +7,17 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.test.ext.junit.runners.AndroidJUnit4
 
 /** One conversation as the socket and the audio drive it, without either. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class VoiceSessionTest {
     private val extensions = FakeExtensions()
     private val audio = FakeAudio()
-    private val session = VoiceSession(extensions, "voice", voice = "soft", model = "fast", audio = audio)
+    private val session = VoiceSession(extensions, "voice", voice = "soft", model = "fast", audio = audio, text = voiceText())
     private val state get() = session.state.value
 
     private fun live() {
@@ -54,7 +59,7 @@ class VoiceSessionTest {
         assertTrue(session.level.value > 0f)
         session.setMuted(true)
         assertTrue(state.muted)
-        assertEquals("已静音", statusText(state))
+        assertEquals("已静音", statusText(state, voiceText()))
         val frame = byteArrayOf(5, 6, 7, 8)
         repeat(12) { microphone.onFrame(frame, 4, 0.8f) }
         assertArrayEquals("Muted frames still go, as silence", byteArrayOf(0, 0, 0, 0), extensions.socket.frames.last())
@@ -73,11 +78,11 @@ class VoiceSessionTest {
         assertEquals(listOf(Line("u1", true, "今天下午有什么会？", true), Line("a1", false, "我看一下", false)), state.lines)
         extensions.extension.onText("""{"type":"tool","id":"t1","label":"查日程","done":false}""")
         audio.listener!!.onSpeaking(true)
-        assertEquals("查日程…", statusText(state))
+        assertEquals("查日程…", statusText(state, voiceText()))
         extensions.extension.onText("""{"type":"tool","id":"t1","done":true}""")
-        assertEquals("正在说，直接开口就能打断", statusText(state))
+        assertEquals("正在说，直接开口就能打断", statusText(state, voiceText()))
         audio.listener!!.onSpeaking(false)
-        assertEquals("在听", statusText(state))
+        assertEquals("在听", statusText(state, voiceText()))
         extensions.extension.onText("""{"type":"something_new"}""")
         assertEquals(VoiceState.Phase.Live, state.phase)
     }
@@ -109,16 +114,16 @@ class VoiceSessionTest {
         live()
         audio.listener!!.onSpeaking(true)
         extensions.extension.onClosed(1001, "going away")
-        assertEquals(VoiceText.Restarted, state.error)
+        assertEquals(voiceText().restarted, state.error)
         assertEquals(VoiceState.Phase.Ended, state.phase)
         assertFalse(state.speaking)
 
-        val again = VoiceSession(extensions, "voice", null, null, FakeAudio())
+        val again = VoiceSession(extensions, "voice", null, null, FakeAudio(), voiceText())
         again.start()
         extensions.extension.onOpen()
         extensions.extension.onText(Ready)
         extensions.extension.onFailure(IOException("Broken pipe"), null)
-        assertEquals(VoiceText.Restarted, again.state.value.error)
+        assertEquals(voiceText().restarted, again.state.value.error)
     }
 
     @Test fun failingBeforeTheConversationSaysWhy() {
@@ -127,13 +132,13 @@ class VoiceSessionTest {
         assertEquals("hub 上没有语音扩展", state.error)
         assertEquals(VoiceState.Phase.Ended, state.phase)
 
-        val unreachable = VoiceSession(extensions, "voice", null, null, FakeAudio())
+        val unreachable = VoiceSession(extensions, "voice", null, null, FakeAudio(), voiceText())
         unreachable.start()
         extensions.extension.onFailure(IOException("Failed to connect"), null)
         assertEquals("连不上语音服务：连不上 hub", unreachable.state.value.error)
 
         extensions.connectError = IOException("no route")
-        val noRoute = VoiceSession(extensions, "voice", null, null, FakeAudio())
+        val noRoute = VoiceSession(extensions, "voice", null, null, FakeAudio(), voiceText())
         noRoute.start()
         assertEquals("连不上语音服务：连不上 hub", noRoute.state.value.error)
         assertEquals(VoiceState.Phase.Ended, noRoute.state.value.phase)
@@ -160,7 +165,7 @@ class VoiceSessionTest {
         extensions.extension.onClosed(1000, "")
         assertEquals(VoiceState.Phase.Ended, state.phase)
         assertNull(state.error)
-        assertEquals("对话已结束", statusText(state))
+        assertEquals("对话已结束", statusText(state, voiceText()))
     }
 
     @Test fun stoppingIsFinal() {

@@ -12,7 +12,6 @@ import kotlinx.coroutines.test.*
 import kotlinx.serialization.json.JsonElement
 import org.junit.Assert.*
 import org.junit.Test
-import java.time.ZoneOffset
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MachineActionsTest {
@@ -56,7 +55,7 @@ class MachineActionsTest {
             model.reconnect("lab")
             runCurrent()
             assertEquals(listOf("reconnect:lab"), management.calls)
-            assertEquals("已连上", model.notices.first())
+            assertEquals(MachineNotice.Connected, model.notices.first())
             assertFalse(model.state.value.reconnecting)
         } finally { model.viewModelScope.cancel() }
     }
@@ -72,7 +71,7 @@ class MachineActionsTest {
             assertTrue(model.state.value.reconnecting)
             advanceTimeBy(3_001)
             runCurrent()
-            assertEquals("已连上", model.notices.first())
+            assertEquals(MachineNotice.Connected, model.notices.first())
             assertEquals(1, sessions.refreshes)
             advanceTimeBy(30_000)
             runCurrent()
@@ -89,14 +88,14 @@ class MachineActionsTest {
             assertTrue(model.state.value.reconnecting)
             advanceTimeBy(15_001)
             runCurrent()
-            assertEquals("还没连上：ssh: connection refused", model.notices.first())
+            assertEquals(MachineNotice.NotYet("ssh: connection refused"), model.notices.first())
             assertFalse(model.state.value.reconnecting)
             val refused = Management().apply { failure = HubFailure(HubError.Server, "machine is offline", 503) }
             val other = MachineActionsViewModel(refused, sessions)
             try {
                 other.reconnect("lab")
                 runCurrent()
-                assertEquals("重新连接失败：machine is offline", other.notices.first())
+                assertEquals(MachineNotice.ReconnectFailed("machine is offline"), other.notices.first())
             } finally { other.viewModelScope.cancel() }
         } finally { model.viewModelScope.cancel() }
     }
@@ -115,7 +114,7 @@ class MachineActionsTest {
             management.failure = HubFailure(HubError.Server, "这台电脑已经是 hub 这一版", 409)
             model.deploy("mac")
             runCurrent()
-            assertEquals("部署失败：这台电脑已经是 hub 这一版", model.notices.first())
+            assertEquals(MachineNotice.DeployFailed("这台电脑已经是 hub 这一版"), model.notices.first())
         } finally { model.viewModelScope.cancel() }
     }
 
@@ -134,7 +133,7 @@ class MachineActionsTest {
             management.failure = HubFailure(HubError.Server, "mac: machine is offline", 503)
             model.loadLaunchers("mac", online = true)
             runCurrent()
-            assertEquals("读不到启动器：mac: machine is offline", model.state.value.launchersError)
+            assertEquals("mac: machine is offline", model.state.value.launchersError)
             // What was read before stays listed.
             assertEquals(2, model.state.value.launchers?.size)
         } finally { model.viewModelScope.cancel() }
@@ -148,8 +147,8 @@ class MachineActionsTest {
         val points = listOf(MetricPoint(1, disk = 50.0), MetricPoint(2, gap = true), MetricPoint(3))
         assertEquals(listOf(25.0, null, null), diskPercentPoints(points, 200).map { it.disk })
         assertTrue(diskPercentPoints(points, null).all { it.disk == null })
-        assertEquals("2026年11月2日 08:30", MetricFormat.boot(1_793_579_400.0, ZoneOffset.ofHours(8)))
-        assertNull(MetricFormat.boot(0.0))
+        // The boot time's words are the language's (MachinesShotsTest reads them in each language).
+        assertNull(MetricFormat.boot(0.0, java.util.Locale.ENGLISH))
         assertTrue(MetricKind.Disk.percent && MetricKind.Cpu.percent && !MetricKind.Memory.percent)
     }
 }

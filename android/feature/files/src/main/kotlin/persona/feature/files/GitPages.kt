@@ -14,6 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.contracts.api.SessionGitCommit
@@ -26,23 +29,23 @@ import java.time.Instant
 internal fun LazyListScope.gitBrowser(state: FilesState, controller: FilesController) {
     val git = state.git
     when {
-        state.gitError && git == null -> item { RetryState("读不到 Git 状态", "请检查连接后重试。", controller::refreshGit) }
+        state.gitError && git == null -> item { RetryState(stringResource(R.string.files_git_failed), stringResource(R.string.files_error_connection), controller::refreshGit) }
         git == null -> item { Loading() }
-        !git.isRepo -> item { JEmptyState("不是 Git 仓库", "这个会话目录没有 Git 仓库。") }
+        !git.isRepo -> item { JEmptyState(stringResource(R.string.files_git_not_repo), stringResource(R.string.files_git_not_repo_message)) }
         else -> {
-            if (state.gitError) item { RetryState("刷新失败", "下方保留上次读取的状态。", controller::refreshGit) }
+            if (state.gitError) item { RetryState(stringResource(R.string.files_git_refresh_failed), stringResource(R.string.files_git_refresh_failed_message), controller::refreshGit) }
             if (state.gitLoading) item { JLinearProgress(null, Modifier.fillMaxWidth()) }
             item("branch") {
-                JSectionHeader(git.branch ?: "分离的 HEAD")
+                JSectionHeader(git.branch ?: stringResource(R.string.files_git_detached))
                 JGroupItem(GroupPosition.Single) {
-                    JRow(git.upstream ?: "没有上游分支", subtitle = git.root, leadingIcon = PhIcons.GitBranch, value = gitSync(git))
+                    JRow(git.upstream ?: stringResource(R.string.files_git_no_upstream), subtitle = git.root, leadingIcon = PhIcons.GitBranch, value = gitSync(LocalResources.current, git))
                 }
             }
             item("changes") {
                 val (added, deleted) = GitDiffs.totals(git.files)
                 // The totals at the heading's far end, on its baseline (the heading's own trailing slot sits mid-row).
                 Row {
-                    JSectionHeader("改动", Modifier.weight(1f).alignByBaseline(), count = git.files.size)
+                    JSectionHeader(stringResource(R.string.files_git_changes), Modifier.weight(1f).alignByBaseline(), count = git.files.size)
                     if (added + deleted > 0) {
                         Text("+$added", Modifier.alignByBaseline(), style = PersonaTheme.type.micro, color = PersonaTheme.palette.diffAdd, maxLines = 1)
                         Spacer(Modifier.width(Tokens.Space.s))
@@ -51,13 +54,13 @@ internal fun LazyListScope.gitBrowser(state: FilesState, controller: FilesContro
                     }
                 }
             }
-            if (git.files.isEmpty()) item { JEmptyState("工作区是干净的", "当前没有未提交的改动。") }
+            if (git.files.isEmpty()) item { JEmptyState(stringResource(R.string.files_git_clean), stringResource(R.string.files_git_clean_message)) }
             itemsIndexed(git.files, key = { _, it -> "file:${it.path}" }, contentType = { _, _ -> "change" }) { index, file ->
                 JGroupItem(GroupPosition.of(index, git.files.size)) {
                     ChangeRow(file, stage = true) { controller.push(FileSelection.Diff(file, file.staged && !file.unstaged)) }
                 }
             }
-            item("history") { JSectionHeader("提交历史") }
+            item("history") { JSectionHeader(stringResource(R.string.files_git_history)) }
             val commits = git.commits + state.older
             val remote = remoteOf(git.upstream)
             itemsIndexed(commits, key = { _, it -> "commit:${it.hash}" }, contentType = { _, _ -> "commit" }) { index, commit ->
@@ -65,9 +68,9 @@ internal fun LazyListScope.gitBrowser(state: FilesState, controller: FilesContro
                     CommitRow(commit, head = commit.hash == git.head?.hash, remote = remote) { controller.push(FileSelection.Commit(commit.hash)) }
                 }
             }
-            if (git.commits.isEmpty()) item { Notice("还没有提交", padded = false) }
+            if (git.commits.isEmpty()) item { Notice(stringResource(R.string.files_git_no_commits), padded = false) }
             if (!state.noMore) item {
-                JTextButton(when { state.moreLoading -> "正在加载…"; state.moreError -> "加载失败，重试"; else -> "加载更早的提交" },
+                JTextButton(when { state.moreLoading -> stringResource(R.string.files_git_loading); state.moreError -> stringResource(R.string.files_git_more_failed); else -> stringResource(R.string.files_git_more) },
                     controller::more, Modifier.fillMaxWidth(), enabled = !state.moreLoading && !state.gitLoading)
             }
         }
@@ -92,9 +95,9 @@ private fun ChangeRow(file: SessionGitFile, stage: Boolean, onClick: () -> Unit)
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                 GitLetter(file, stage)
-                if (stage) JTag(file.stage, status = file.tone)
+                if (stage) JTag(stringResource(file.stage), status = file.tone)
             }
-            if (file.binary) OneLine("二进制")
+            if (file.binary) OneLine(stringResource(R.string.files_git_binary))
             else if (file.added + file.deleted > 0) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                 Text("+${file.added}", style = PersonaTheme.type.micro, color = palette.diffAdd, maxLines = 1)
                 Text("−${file.deleted}", style = PersonaTheme.type.micro, color = palette.diffDel, maxLines = 1)
@@ -116,7 +119,7 @@ private fun CommitRow(commit: SessionGitCommit, head: Boolean, remote: String, o
                 Text(commit.shortHash, style = type.micro, color = palette.accent, maxLines = 1)
                 Text(commit.author, style = type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false))
-                fileDate(commit.date, now)?.let { Text(it, style = type.caption, color = palette.ink2, maxLines = 1) }
+                fileDate(LocalResources.current, commit.date, now)?.let { Text(it, style = type.caption, color = palette.ink2, maxLines = 1) }
                 if (head) Text("HEAD", style = type.micro, color = palette.accent, maxLines = 1)
             }
             val refs = commit.refNames
@@ -132,19 +135,21 @@ private fun CommitRow(commit: SessionGitCommit, head: Boolean, remote: String, o
 @Composable
 internal fun CommitPage(hash: String, state: FilesState, controller: FilesController, back: () -> Unit) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val feedback = LocalAppFeedback.current
     val show = state.commit
     val commit = show?.commit ?: (state.git?.commits.orEmpty() + state.older).firstOrNull { it.hash == hash } ?: SessionGitCommit(hash)
     var menu by remember { mutableStateOf(false) }
-    val copyHash = { copyText(context, commit.hash, feedback, "已拷贝提交号") }
-    JListPage(commit.shortHash, subtitle = "提交", onBack = back, actions = { JIconButton(PhIcons.DotsThree, "提交选项", { menu = true }) }) {
+    val copyHash = { copyText(context, commit.hash, feedback, resources.getString(R.string.files_git_hash_copied)) }
+    JListPage(commit.shortHash, subtitle = stringResource(R.string.files_git_commit), onBack = back,
+        actions = { JIconButton(PhIcons.DotsThree, stringResource(R.string.files_git_commit_options), { menu = true }) }) {
         item("commit") { CommitCard(commit, copyHash) }
         when {
-            state.previewError != null -> item { RetryState("读不到这个提交", state.previewError, controller::reload) }
+            state.previewError != null -> item { RetryState(stringResource(R.string.files_git_commit_failed), state.previewError, controller::reload) }
             show == null -> item { Loading() }
             else -> {
-                item("files") { JSectionHeader("${show.files.size} 个文件") }
-                if (show.files.isEmpty()) item { Notice("这个提交没有改动文件。", padded = false) }
+                item("files") { JSectionHeader(pluralStringResource(R.plurals.files_git_file_count, show.files.size, show.files.size)) }
+                if (show.files.isEmpty()) item { Notice(stringResource(R.string.files_git_commit_empty), padded = false) }
                 itemsIndexed(show.files, key = { _, it -> "file:${it.path}" }, contentType = { _, _ -> "change" }) { index, file ->
                     JGroupItem(GroupPosition.of(index, show.files.size)) {
                         ChangeRow(file, stage = false) { controller.push(FileSelection.CommitFile(hash, file)) }
@@ -154,10 +159,10 @@ internal fun CommitPage(hash: String, state: FilesState, controller: FilesContro
         }
     }
     if (menu) JActionSheet(buildList {
-        add(JAction("拷贝提交号", PhIcons.Hash, onClick = copyHash))
-        show?.diff?.takeIf { it.isNotEmpty() }?.let { diff -> add(JAction("拷贝 diff", PhIcons.Copy) { copyText(context, diff, feedback, "已拷贝 diff") }) }
-        add(JAction("刷新", PhIcons.ArrowClockwise) { controller.reload() })
-    }, { menu = false }, "提交")
+        add(JAction(stringResource(R.string.files_git_copy_hash), PhIcons.Hash, onClick = copyHash))
+        show?.diff?.takeIf { it.isNotEmpty() }?.let { diff -> add(JAction(stringResource(R.string.files_copy_diff), PhIcons.Copy) { copyText(context, diff, feedback, resources.getString(R.string.files_diff_copied)) }) }
+        add(JAction(stringResource(R.string.files_refresh), PhIcons.ArrowClockwise) { controller.reload() })
+    }, { menu = false }, stringResource(R.string.files_git_commit))
 }
 
 @Composable
@@ -174,11 +179,11 @@ private fun CommitCard(commit: SessionGitCommit, copy: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             if (commit.author.isNotEmpty()) Text(commit.author, style = type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false))
-            fullDate(commit.date)?.let { Text(it, style = type.caption, color = palette.ink2, maxLines = 1) }
+            fullDate(commit.date, currentLocale)?.let { Text(it, style = type.caption, color = palette.ink2, maxLines = 1) }
         }
         Spacer(Modifier.height(Tokens.Space.xs))
         Row(
-            Modifier.clip(PersonaTheme.shapes.controlShape).clickable(role = Role.Button, onClickLabel = "拷贝提交号", onClick = copy)
+            Modifier.clip(PersonaTheme.shapes.controlShape).clickable(role = Role.Button, onClickLabel = stringResource(R.string.files_git_copy_hash), onClick = copy)
                 .padding(vertical = Tokens.Space.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -193,31 +198,32 @@ private fun CommitCard(commit: SessionGitCommit, copy: () -> Unit) {
 @Composable
 internal fun CommitFilePage(selection: FileSelection.CommitFile, state: FilesState, controller: FilesController, back: () -> Unit) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val feedback = LocalAppFeedback.current
     val file = selection.file
     val show = state.commit
     val part = remember(show, file) { show?.let { GitDiffs.part(it.diff, file) } }
     var menu by remember { mutableStateOf(false) }
     val root = state.git?.root ?: controller.cwd
-    JPage(file.name, subtitle = file.folder.ifEmpty { "仓库根目录" }, onBack = back,
-        actions = { JIconButton(PhIcons.DotsThree, "改动选项", { menu = true }) }) { padding ->
+    JPage(file.name, subtitle = file.folder.ifEmpty { stringResource(R.string.files_git_repo_root) }, onBack = back,
+        actions = { JIconButton(PhIcons.DotsThree, stringResource(R.string.files_git_change_options), { menu = true }) }) { padding ->
         val diff = part?.diff
         when {
-            state.previewError != null -> LazyColumn(contentPadding = padding) { item { RetryState("读不到改动", state.previewError, controller::reload) } }
+            state.previewError != null -> LazyColumn(contentPadding = padding) { item { RetryState(stringResource(R.string.files_diff_failed), state.previewError, controller::reload) } }
             show == null -> LazyColumn(contentPadding = padding) { item { Loading() } }
             diff.isNullOrBlank() -> LazyColumn(contentPadding = padding) {
                 item {
-                    if (show.truncated && diff == null) JEmptyState("改动太大，没有带回来", "整个提交的 diff 超过 512 KB，这个文件在截断之后。")
-                    else JEmptyState("没有文本改动", "可能是二进制文件、只改了权限，或者改动已被撤销。")
+                    if (show.truncated && diff == null) JEmptyState(stringResource(R.string.files_git_part_cut), stringResource(R.string.files_git_part_cut_message))
+                    else JEmptyState(stringResource(R.string.files_diff_no_text), stringResource(R.string.files_diff_no_text_message))
                 }
             }
             else -> FileText(diff, diff = true, contentPadding = padding, header = {
-                if (show.truncated && part.last) item("truncated") { Notice("改动太大，只显示了前 512 KB") }
+                if (show.truncated && part.last) item("truncated") { Notice(stringResource(R.string.files_diff_truncated)) }
             })
         }
     }
     if (menu) JActionSheet(buildList {
-        part?.diff?.takeIf { it.isNotEmpty() }?.let { diff -> add(JAction("拷贝 diff", PhIcons.Copy) { copyText(context, diff, feedback, "已拷贝 diff") }) }
-        add(JAction("拷贝路径", PhIcons.Copy) { copyText(context, joinRemotePath(root, file.path), feedback, "已拷贝路径") })
+        part?.diff?.takeIf { it.isNotEmpty() }?.let { diff -> add(JAction(stringResource(R.string.files_copy_diff), PhIcons.Copy) { copyText(context, diff, feedback, resources.getString(R.string.files_diff_copied)) }) }
+        add(JAction(stringResource(R.string.files_copy_path), PhIcons.Copy) { copyText(context, joinRemotePath(root, file.path), feedback, resources.getString(R.string.files_path_copied)) })
     }, { menu = false }, file.name)
 }

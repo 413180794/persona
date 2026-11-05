@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English is the fallback for every language the app does not have (docs/i18n.md); values-zh and values-ja hold the same keys. -->
+<resources>
+    <!-- Lists -->
+    <string name="machines_title">Machines</string>
+    <string name="machines_title_detail">Machine details</string>
+    <string name="machines_summary">%1$d of %2$d online · %3$d needing attention</string>
+    <string name="machines_refresh">Refresh</string>
+    <string name="machines_sessions_failure">The machine and session lists haven\'t updated yet.</string>
+    <string name="machines_empty_title">No machines yet</string>
+    <string name="machines_empty_unavailable">Can\'t see machines right now</string>
+    <string name="machines_empty_body">Once the hub connects to your computers, their status shows here.</string>
+    <string name="machines_failure_unavailable">Monitoring isn\'t available yet. Make sure the machine is still listed, then check again after deploying a newer hub and node.</string>
+    <string name="machines_failure_offline">Can\'t update right now. It retries once the hub is reachable.</string>
+    <string name="machines_gone">This machine is no longer on the hub.</string>
+    <!-- The machine card -->
+    <string name="machines_status_offline">Offline</string>
+    <string name="machines_status_attention">Attention</string>
+    <string name="machines_status_online">Online</string>
+    <string name="machines_last_seen">Last online: %1$s</string>
+    <string name="machines_unknown">Unknown</string>
+    <string name="machines_card_sessions">Running %1$d · Working %2$d · Needs you %3$d</string>
+    <string name="machines_node_mismatch">Persona on this computer isn\'t from the same deploy as the hub</string>
+    <string name="machines_computer">Computer</string>
+    <plurals name="machines_cores">
+        <item quantity="one">%d core</item>
+        <item quantity="other">%d cores</item>
+    </plurals>
+    <string name="machines_alert_cpu">High CPU</string>
+    <string name="machines_alert_memory">Low memory</string>
+    <string name="machines_alert_disk">Disk almost full</string>
+    <string name="machines_alert_load">High load</string>
+    <!-- The machine page -->
+    <string name="machines_now">Now</string>
+    <string name="machines_up_for">Up %1$s</string>
+    <string name="machines_uptime_days">%1$dd %2$dh</string>
+    <string name="machines_uptime_hours">%1$dh %2$dm</string>
+    <string name="machines_uptime_minutes">%1$d min</string>
+    <string name="machines_metric_cpu" translatable="false">CPU</string>
+    <string name="machines_metric_memory">Memory</string>
+    <string name="machines_metric_network">Network</string>
+    <string name="machines_metric_rx">Download</string>
+    <string name="machines_metric_tx">Upload</string>
+    <string name="machines_metric_load">Load</string>
+    <string name="machines_metric_disk">Disk</string>
+    <string name="machines_metric_swap">Swap</string>
+    <string name="machines_swap_off">Off</string>
+    <string name="machines_no_sample">No new samples yet</string>
+    <string name="machines_offline_history">The machine is offline; the charts below keep past samples.</string>
+    <string name="machines_history">History</string>
+    <string name="machines_range_hours">%1$dh</string>
+    <string name="machines_long_press_hint">Long-press a chart to see the values at one moment</string>
+    <string name="machines_back_to_now">Back to now</string>
+    <string name="machines_disk_total">Disk (%1$s total)</string>
+    <string name="machines_sessions_title">Running sessions</string>
+    <string name="machines_no_sessions">No sessions running on this machine</string>
+    <string name="machines_system_title">System</string>
+    <string name="machines_system_os">System</string>
+    <string name="machines_system_version">Version</string>
+    <string name="machines_system_kernel">Kernel</string>
+    <string name="machines_system_arch">Architecture</string>
+    <string name="machines_system_model">Model</string>
+    <string name="machines_system_cpu">Processor</string>
+    <string name="machines_system_cores">Cores</string>
+    <string name="machines_system_connection">Connection</string>
+    <string name="machines_system_boot">Booted</string>
+    <string name="machines_connection_local">The hub machine</string>
+    <string name="machines_connection_ssh">Over SSH</string>
+    <string name="machines_method">CPU is whole-machine usage; memory leaves out reclaimable cache. Network counts physical interfaces only, and disk uses the node\'s system disk figures.</string>
+    <string name="machines_per_core">Per core</string>
+    <string name="machines_core_n">Core %1$d</string>
+    <!-- Charts -->
+    <string name="machines_chart_no_sample">No samples at this time</string>
+    <plurals name="machines_chart_reference">
+        <item quantity="one">Dashed line: %d core</item>
+        <item quantity="other">Dashed line: %d cores</item>
+    </plurals>
+    <string name="machines_chart_summary">%1$s, now %2$s, peak %3$s</string>
+    <string name="machines_chart_summary_separator">"; "</string>
+    <string name="machines_chart_empty">No monitoring data for this period yet</string>
+    <!-- Engine, connection, deploy and launchers -->
+    <string name="machines_deploying">Installing the hub\'s Persona build on this computer…</string>
+    <string name="machines_deploy_failed_last">Last deploy failed: %1$s</string>
+    <string name="machines_redeploy">Redeploy</string>
+    <string name="machines_controls_title">Engine and connection</string>
+    <string name="machines_engine">Engine</string>
+    <string name="machines_reconnecting">Reconnecting…</string>
+    <string name="machines_reconnect">Reconnect</string>
+    <string name="machines_engine_note">Only sessions in the chosen engine are shown.</string>
+    <string name="machines_local_note">The hub machine; it runs the node directly.</string>
+    <string name="machines_ssh_note">The hub reaches it with ssh %1$s.</string>
+    <string name="machines_launchers">Launchers</string>
+    <string name="machines_launchers_offline">The machine is offline; they show once it connects</string>
+    <string name="machines_launchers_empty">No launchers available on this machine</string>
+    <string name="machines_launchers_error">Couldn\'t read launchers: %1$s</string>
+    <!-- Notices after an action -->
+    <string name="machines_notice_connected">Connected</string>
+    <string name="machines_notice_not_yet">Not connected yet</string>
+    <string name="machines_notice_not_yet_reason">Not connected yet: %1$s</string>
+    <string name="machines_notice_reconnect_failed">Reconnect failed: %1$s</string>
+    <string name="machines_notice_deploy_failed">Deploy failed: %1$s</string>
+</resources>

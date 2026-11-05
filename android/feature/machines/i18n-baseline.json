@@ -1,8 +1,0 @@
-{
-  "feature/machines/src/main/kotlin/persona/feature/machines/MachineActions.kt": 5,
-  "feature/machines/src/main/kotlin/persona/feature/machines/MachineManagementSections.kt": 13,
-  "feature/machines/src/main/kotlin/persona/feature/machines/MachinesScreen.kt": 36,
-  "feature/machines/src/main/kotlin/persona/feature/machines/MachinesViewModel.kt": 2,
-  "feature/machines/src/main/kotlin/persona/feature/machines/MetricCharts.kt": 7,
-  "feature/machines/src/main/kotlin/persona/feature/machines/MetricsPresentation.kt": 9
-}

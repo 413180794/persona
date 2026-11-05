@@ -1,9 +1,13 @@
 package persona.feature.machines
 
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.*
+import persona.core.designsystem.LocalizedFormats
+import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 
@@ -13,17 +17,17 @@ internal fun percent(used: Number?, total: Number?): Double? =
 internal fun MachineMetrics.current(now: Long): MetricSample? =
     latest?.takeIf { online && now - it.t in 0..30 }
 
-internal data class MetricAlert(val label: String, val critical: Boolean)
+internal data class MetricAlert(@StringRes val label: Int, val critical: Boolean)
 internal fun alerts(sample: MetricSample?, cores: Int?): List<MetricAlert> {
     if (sample == null) return emptyList()
     val result = mutableListOf<MetricAlert>()
-    fun add(label: String, value: Double?, warning: Double, critical: Double) {
+    fun add(@StringRes label: Int, value: Double?, warning: Double, critical: Double) {
         if (value != null && value.isFinite() && value >= warning) result += MetricAlert(label, value >= critical)
     }
-    add("CPU 高", sample.cpu, 75.0, 90.0)
-    add("内存紧张", percent(sample.memUsed, sample.memTotal), 80.0, 90.0)
-    add("磁盘快满", percent(sample.diskUsed, sample.diskTotal), 80.0, 90.0)
-    add("负载高", cores?.takeIf { it > 0 }?.let { sample.load?.div(it) }, 1.0, 2.0)
+    add(R.string.machines_alert_cpu, sample.cpu, 75.0, 90.0)
+    add(R.string.machines_alert_memory, percent(sample.memUsed, sample.memTotal), 80.0, 90.0)
+    add(R.string.machines_alert_disk, percent(sample.diskUsed, sample.diskTotal), 80.0, 90.0)
+    add(R.string.machines_alert_load, cores?.takeIf { it > 0 }?.let { sample.load?.div(it) }, 1.0, 2.0)
     return result.sortedByDescending { it.critical }
 }
 
@@ -64,31 +68,42 @@ internal fun selectedPoint(points: List<MetricPoint>, time: Long, step: Int): Me
         ?.takeIf { abs(it.t - time) <= 2L * step }
 }
 
+/** Numbers, sizes, rates and times on the machine pages, in the language of the page (docs/i18n.md). */
 internal object MetricFormat {
-    fun number(value: Double?): String = value?.takeIf(Double::isFinite)?.let { String.format(Locale.ROOT, "%.1f", it) } ?: "—"
-    fun percent(value: Double?): String = value?.takeIf(Double::isFinite)?.let { "${number(it)}%" } ?: "—"
-    fun bytes(value: Number?): String {
+    private fun oneDecimal(format: NumberFormat) = format.apply { minimumFractionDigits = 1; maximumFractionDigits = 1 }
+    fun number(value: Double?, locale: Locale): String =
+        value?.takeIf(Double::isFinite)?.let { oneDecimal(NumberFormat.getNumberInstance(locale)).format(it) } ?: "—"
+    /** [value] is already a percentage (0–100). */
+    fun percent(value: Double?, locale: Locale): String =
+        value?.takeIf(Double::isFinite)?.let { oneDecimal(NumberFormat.getPercentInstance(locale)).format(it / 100) } ?: "—"
+    fun bytes(value: Number?, locale: Locale): String {
         var v = value?.toDouble()?.takeIf { it.isFinite() && it >= 0 } ?: return "—"
         val units = listOf("B", "KB", "MB", "GB", "TB")
         var unit = 0
         while (v >= 1024 && unit < units.lastIndex) { v /= 1024; unit++ }
-        return "${number(v)} ${units[unit]}"
+        return "${number(v, locale)} ${units[unit]}"
     }
-    fun rate(value: Double?): String = if (value == null) "—" else "${bytes(value)}/s"
-    fun time(seconds: Long): String = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochSecond(seconds))
-    fun lastSeen(value: String?): String = parseTime(value)?.let {
-        DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(it)
-    } ?: "未知"
+    fun rate(value: Double?, locale: Locale): String = if (value == null) "—" else "${bytes(value, locale)}/s"
+    fun time(seconds: Long, locale: Locale): String = LocalizedFormats.format(Instant.ofEpochSecond(seconds), LocalizedFormats.TIME, locale)
+    /** When the machine was last online (month, day and time), or null when the hub did not say. */
+    fun lastSeen(value: String?, locale: Locale): String? = parseTime(value)?.let {
+        LocalizedFormats.format(it, LocalizedFormats.MONTH_DAY_TIME, locale)
+    }
     /** When the machine started, as 2026年11月2日 08:30 in the phone's zone. */
-    fun boot(boot: Double?, zone: ZoneId = ZoneId.systemDefault()): String? = boot?.takeIf { it.isFinite() && it > 0 }?.let {
-        DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm").withZone(zone).format(Instant.ofEpochSecond(it.toLong()))
+    fun boot(boot: Double?, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String? = boot?.takeIf { it.isFinite() && it > 0 }?.let {
+        LocalizedFormats.format(Instant.ofEpochSecond(it.toLong()), LocalizedFormats.DATE_TIME, locale, zone)
     }
-    fun uptime(boot: Double?, now: Long): String? = boot?.takeIf { it.isFinite() && it > 0 && it <= now }?.let {
-        val minutes = (now - it.toLong()) / 60
-        when {
-            minutes >= 1440 -> "${minutes / 1440} 天 ${minutes % 1440 / 60} 小时"
-            minutes >= 60 -> "${minutes / 60} 小时 ${minutes % 60} 分钟"
-            else -> "$minutes 分钟"
-        }
+    /** How long it has been up, in minutes, or null without a boot time. */
+    fun uptimeMinutes(boot: Double?, now: Long): Long? = boot?.takeIf { it.isFinite() && it > 0 && it <= now }?.let { (now - it.toLong()) / 60 }
+}
+
+/** How long it has been up: 3 天 4 小时 · 3d 4h · 3日4時間. */
+@Composable
+internal fun uptimeText(boot: Double?, now: Long): String? = MetricFormat.uptimeMinutes(boot, now)?.let { minutes ->
+    when {
+        minutes >= 1440 -> stringResource(R.string.machines_uptime_days, (minutes / 1440).toInt(), (minutes % 1440 / 60).toInt())
+        minutes >= 60 -> stringResource(R.string.machines_uptime_hours, (minutes / 60).toInt(), (minutes % 60).toInt())
+        else -> stringResource(R.string.machines_uptime_minutes, minutes.toInt())
     }
 }
+

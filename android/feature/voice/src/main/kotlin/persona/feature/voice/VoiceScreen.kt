@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -47,7 +48,8 @@ internal fun VoiceScreen(
     onModelConfiguration: ((String) -> Unit)?,
 ) {
     val context = LocalContext.current
-    val title = route.title.ifBlank { VoiceText.Title }
+    val text = rememberVoiceText()
+    val title = route.title.ifBlank { text.title }
     var granted by remember { mutableStateOf(microphoneAllowed(context)) }
     var denied by remember { mutableStateOf(false) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed ->
@@ -69,11 +71,11 @@ internal fun VoiceScreen(
     JPage(title, onBack = navigator::back) { padding ->
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
             JEmptyState(
-                if (denied) VoiceText.DeniedTitle else VoiceText.AskTitle,
-                if (denied) VoiceText.DeniedText else VoiceText.AskText,
+                if (denied) text.deniedTitle else text.askTitle,
+                if (denied) text.deniedText else text.askText,
                 icon = PhIcons.MicrophoneSlash,
                 action = {
-                    JButton(VoiceText.Allow, {
+                    JButton(text.allow, {
                         // Once the system stops asking (denied for good), only its settings can turn the microphone on.
                         val activity = context.activity()
                         if (!denied || activity == null || ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO)) {
@@ -98,9 +100,10 @@ private fun VoiceConversation(
     onModelConfiguration: ((String) -> Unit)?,
 ) {
     val app = LocalContext.current.applicationContext
+    val text = rememberVoiceText()
     val scope = rememberCoroutineScope()
     val page = remember(extensions, extensionId, identity) {
-        VoicePage(extensions, extensionId, VoicePrefs.of(app.filesDir, identity), scope) {
+        VoicePage(extensions, extensionId, VoicePrefs.of(app.filesDir, identity), scope, text) {
             VoiceAudioOverride.factory?.invoke() ?: AndroidVoiceAudio(app)
         }
     }
@@ -135,35 +138,35 @@ private fun VoiceConversation(
         title, subtitle = state.subtitle, onBack = navigator::back, ambience = ambienceOf(talk, problem),
         actions = {
             VoiceMenu(buildList {
-                onModelConfiguration?.let { open -> add(JAction("模型配置", PhIcons.SlidersHorizontal) { open(voicePurposeId(extensionId)) }) }
-                if (setup is VoiceSetup.Ready) add(JAction(VoiceText.Voices, PhIcons.Waveform) { picking = true })
+                onModelConfiguration?.let { open -> add(JAction(stringResource(R.string.voice_model_configuration), PhIcons.SlidersHorizontal) { open(voicePurposeId(extensionId)) }) }
+                if (setup is VoiceSetup.Ready) add(JAction(text.voices, PhIcons.Waveform) { picking = true })
             })
         },
         bottomBar = if (problem) null else ({
             VoiceControlBar {
                 if (talk.phase == VoiceState.Phase.Ended) {
-                    VoiceControl(PhIcons.ArrowClockwise, "重新开始", page::begin, kind = VoiceControlKind.Filled)
+                    VoiceControl(PhIcons.ArrowClockwise, stringResource(R.string.voice_restart), page::begin, kind = VoiceControlKind.Filled)
                 } else {
                     VoiceControl(
-                        if (talk.muted) PhIcons.MicrophoneSlash else PhIcons.Microphone, if (talk.muted) "取消静音" else "静音",
+                        if (talk.muted) PhIcons.MicrophoneSlash else PhIcons.Microphone, if (talk.muted) stringResource(R.string.voice_unmute) else stringResource(R.string.voice_mute),
                         { running?.setMuted(!talk.muted) }, kind = if (talk.muted) VoiceControlKind.Filled else VoiceControlKind.Plain,
                         enabled = running != null,
                     )
-                    VoiceControl(PhIcons.HandPalm, "打断", { running?.interrupt() }, enabled = talk.speaking)
+                    VoiceControl(PhIcons.HandPalm, stringResource(R.string.voice_interrupt), { running?.interrupt() }, enabled = talk.speaking)
                 }
-                VoiceControl(PhIcons.PhoneDisconnect, "挂断", navigator::back, kind = VoiceControlKind.Danger)
+                VoiceControl(PhIcons.PhoneDisconnect, stringResource(R.string.voice_hang_up), navigator::back, kind = VoiceControlKind.Danger)
             }
         }),
     ) { padding ->
         when (setup) {
             is VoiceSetup.Unavailable -> Problem(
-                VoiceText.ModelUnavailable, setup.reason, padding, page::begin,
+                text.modelUnavailable, setup.reason, padding, page::begin,
                 onConfigure = onModelConfiguration?.let { open -> { open(voicePurposeId(extensionId)) } },
             )
-            is VoiceSetup.Failed -> Problem(VoiceText.ConfigUnreadable, setup.message, padding, page::begin)
+            is VoiceSetup.Failed -> Problem(text.configUnreadable, setup.message, padding, page::begin)
             else -> Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
                 VoiceOrb(orbMode(talk), Modifier.fillMaxWidth().weight(0.44f).padding(vertical = Tokens.Space.l), level = { level?.value ?: 0f })
-                VoiceStatus(statusText(talk), error = talk.error)
+                VoiceStatus(statusText(talk, text), error = talk.error)
                 Captions(talk.lines, Modifier.fillMaxWidth().weight(0.56f), padding.calculateBottomPadding())
             }
         }
@@ -179,7 +182,7 @@ private fun VoiceMenu(actions: List<JAction>) {
         0 -> Unit
         1 -> actions.single().let { JIconButton(it.icon ?: PhIcons.DotsThree, it.label, it.onClick) }
         else -> Box {
-            JIconButton(PhIcons.DotsThree, "模型和音色", { open = true })
+            JIconButton(PhIcons.DotsThree, stringResource(R.string.voice_menu), { open = true })
             JMenu(open, { open = false }, actions)
         }
     }
@@ -211,8 +214,8 @@ private fun Problem(title: String, text: String, padding: PaddingValues, onRetry
     Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
         JEmptyState(title, text, icon = PhIcons.WarningCircle, action = {
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                onConfigure?.let { JButton("模型配置", it, kind = JButtonKind.Secondary) }
-                JButton("重试", onRetry)
+                onConfigure?.let { JButton(stringResource(R.string.voice_model_configuration), it, kind = JButtonKind.Secondary) }
+                JButton(stringResource(R.string.voice_retry), onRetry)
             }
         })
     }
@@ -222,19 +225,20 @@ private fun Problem(title: String, text: String, padding: PaddingValues, onRetry
 @Composable
 private fun VoiceSheet(state: VoicePageState, onPick: (String) -> Unit, onDismiss: () -> Unit) {
     val palette = PersonaTheme.palette
-    JSheet(onDismiss, title = VoiceText.Voices) {
+    val text = rememberVoiceText()
+    JSheet(onDismiss, title = text.voices) {
         val voices = state.voices
         when {
-            voices == null && state.voicesError != null -> JNotice(VoiceText.voicesFailed(state.voicesError), icon = PhIcons.WarningCircle)
+            voices == null && state.voicesError != null -> JNotice(text.voicesFailed(state.voicesError), icon = PhIcons.WarningCircle)
             voices == null -> JLoading()
-            voices.voices.isEmpty() -> Text(VoiceText.NoVoices, style = PersonaTheme.type.callout, color = palette.ink2)
+            voices.voices.isEmpty() -> Text(text.noVoices, style = PersonaTheme.type.callout, color = palette.ink2)
             else -> LazyColumn {
                 itemsIndexed(voices.voices, key = { _, voice -> voice.id }) { index, voice ->
                     val checked = voice.id == state.checkedVoice
                     JGroupItem(GroupPosition.of(index, voices.voices.size)) {
                         JRow(
-                            voice.name.ifBlank { voice.id }, subtitle = voiceDetail(voice, voice.id == voices.default), chevron = false,
-                            trailing = if (checked) ({ JIcon(PhIcons.Check, "当前音色", tint = palette.accent) }) else null,
+                            voice.name.ifBlank { voice.id }, subtitle = voiceDetail(voice, voice.id == voices.default, text), chevron = false,
+                            trailing = if (checked) ({ JIcon(PhIcons.Check, stringResource(R.string.voice_current_voice), tint = palette.accent) }) else null,
                             onClick = { onDismiss(); onPick(voice.id) },
                         )
                     }

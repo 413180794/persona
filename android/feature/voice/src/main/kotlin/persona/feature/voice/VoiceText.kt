@@ -5,34 +5,52 @@ import persona.core.contracts.api.VoiceModelOptions
 import persona.core.contracts.api.VoiceOption
 import persona.core.designsystem.operationFeedback
 import persona.core.domain.FailureAction
+import android.content.res.Resources
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalResources
 
-/** The voice page's words (docs/android.md「语音对话」). */
-internal object VoiceText {
-    const val Title = "语音"
-    const val Connecting = "正在连接…"
-    const val Listening = "在听"
-    const val Speaking = "正在说，直接开口就能打断"
-    const val Muted = "已静音"
-    const val Ended = "对话已结束"
+/** The voice page's words (docs/android.md「语音对话」), in the language of [resources]. */
+internal class VoiceText(private val resources: Resources) {
+    private fun get(@StringRes id: Int, vararg args: Any): String = resources.getString(id, *args)
+
+    val title get() = get(R.string.voice_title)
+    val connecting get() = get(R.string.voice_connecting)
+    val listening get() = get(R.string.voice_listening)
+    val speaking get() = get(R.string.voice_speaking)
+    val muted get() = get(R.string.voice_muted)
+    val ended get() = get(R.string.voice_ended)
     /** A tool the extension did not name. */
-    const val Working = "处理中"
-    const val Restarted = "连接断了（语音服务可能刚重启，或网络不稳），点下面的按钮重新开始"
-    const val NoExtension = "hub 上没有语音扩展"
-    const val Microphone = "麦克风打不开"
-    const val ModelMissing = "配置的语音模型不在扩展目录中，请在模型配置里重新选择。"
-    const val ModelUnavailable = "语音模型不可用"
-    const val ConfigUnreadable = "读不到语音模型配置"
-    const val AskTitle = "语音对话要用麦克风"
-    const val AskText = "只在这一页打开时听，离开就结束，不在后台录音。"
-    const val DeniedTitle = "没有麦克风权限"
-    const val DeniedText = "语音对话用不了。可以在系统设置里给 Persona 打开麦克风。"
-    const val Allow = "允许使用麦克风"
-    const val Voices = "音色"
-    const val NoVoices = "这个模型没有可选的音色。"
+    val working get() = get(R.string.voice_working)
+    val restarted get() = get(R.string.voice_restarted)
+    val noExtension get() = get(R.string.voice_no_extension)
+    val microphone get() = get(R.string.voice_microphone)
+    val modelMissing get() = get(R.string.voice_model_missing)
+    val modelUnavailable get() = get(R.string.voice_model_unavailable)
+    val configUnreadable get() = get(R.string.voice_config_unreadable)
+    val askTitle get() = get(R.string.voice_ask_title)
+    val askText get() = get(R.string.voice_ask_text)
+    val deniedTitle get() = get(R.string.voice_denied_title)
+    val deniedText get() = get(R.string.voice_denied_text)
+    val allow get() = get(R.string.voice_allow)
+    val voices get() = get(R.string.voice_voices)
+    val noVoices get() = get(R.string.voice_no_voices)
+    /** An error frame without words. */
+    val error get() = get(R.string.voice_error)
 
-    fun unreachable(reason: String) = "连不上语音服务：$reason"
-    fun tool(label: String) = "$label…"
-    fun voicesFailed(reason: String) = "音色列表没拿到：$reason"
+    fun unreachable(reason: String) = get(R.string.voice_unreachable, reason)
+    fun tool(label: String) = get(R.string.voice_tool, label)
+    fun voicesFailed(reason: String) = get(R.string.voice_voices_failed, reason)
+
+    internal fun string(@StringRes id: Int, vararg args: Any) = get(id, *args)
+}
+
+/** The page's words in the language it is shown in. */
+@Composable
+internal fun rememberVoiceText(): VoiceText {
+    val resources = LocalResources.current
+    return remember(resources) { VoiceText(resources) }
 }
 
 /** What one conversation is doing, as the page shows it. */
@@ -51,74 +69,76 @@ internal data class VoiceState(
 }
 
 /** The status line under the orb. A tool in use is said over speaking: it is why Persona is quiet or still going. */
-internal fun statusText(state: VoiceState): String = when {
-    state.phase == VoiceState.Phase.Connecting -> VoiceText.Connecting
-    state.phase == VoiceState.Phase.Ended -> VoiceText.Ended
-    state.tool != null -> VoiceText.tool(state.tool)
-    state.speaking -> VoiceText.Speaking
-    state.muted -> VoiceText.Muted
-    else -> VoiceText.Listening
+internal fun statusText(state: VoiceState, text: VoiceText): String = when {
+    state.phase == VoiceState.Phase.Connecting -> text.connecting
+    state.phase == VoiceState.Phase.Ended -> text.ended
+    state.tool != null -> text.tool(state.tool)
+    state.speaking -> text.speaking
+    state.muted -> text.muted
+    else -> text.listening
 }
 
 /** How a voice reads in the 音色 sheet: 女声 · 中文、英文 · 默认. */
-internal fun voiceDetail(voice: VoiceOption, isDefault: Boolean): String? = listOfNotNull(
-    when (voice.gender) { "female" -> "女声"; "male" -> "男声"; else -> null },
-    voice.languages.mapNotNull { Languages[it] }.joinToString("、").ifEmpty { null },
-    "默认".takeIf { isDefault },
+internal fun voiceDetail(voice: VoiceOption, isDefault: Boolean, text: VoiceText): String? = listOfNotNull(
+    when (voice.gender) { "female" -> text.string(R.string.voice_female); "male" -> text.string(R.string.voice_male); else -> null },
+    voice.languages.mapNotNull { Languages[it] }.joinToString(text.string(R.string.voice_list_separator)) { text.string(it) }.ifEmpty { null },
+    text.string(R.string.voice_default).takeIf { isDefault },
 ).joinToString(" · ").ifEmpty { null }
 
 private val Languages = mapOf(
-    "zh" to "中文", "en" to "英文", "ja" to "日语", "ko" to "韩语", "es" to "西班牙语", "fr" to "法语", "de" to "德语", "yue" to "粤语",
+    "zh" to R.string.voice_language_zh, "en" to R.string.voice_language_en, "ja" to R.string.voice_language_ja,
+    "ko" to R.string.voice_language_ko, "es" to R.string.voice_language_es, "fr" to R.string.voice_language_fr,
+    "de" to R.string.voice_language_de, "yue" to R.string.voice_language_yue,
 )
 
 /** Why the socket could not be used. [live]: it dropped in the middle of a conversation. */
-internal fun connectFailure(error: Throwable, status: Int?, live: Boolean): String = when {
-    status == 404 -> VoiceText.NoExtension
+internal fun connectFailure(error: Throwable, status: Int?, live: Boolean, text: VoiceText): String = when {
+    status == 404 -> text.noExtension
     // Mid-conversation it is nearly always the extension or the hub restarting, or the network; say that, not the error.
-    live -> VoiceText.Restarted
-    else -> VoiceText.unreachable(reason(error, status))
+    live -> text.restarted
+    else -> text.unreachable(reason(error, status, text))
 }
 
 /** The extension or the hub closed the socket: 1001 is an extension restarting (a deploy); 1000 is the end of it. */
-internal fun closeMessage(code: Int, reason: String, live: Boolean): String? = when {
-    code == 1001 -> VoiceText.Restarted
+internal fun closeMessage(code: Int, reason: String, live: Boolean, text: VoiceText): String? = when {
+    code == 1001 -> text.restarted
     code == 1000 -> null
     reason.isNotBlank() -> reason.trim()
-    live -> VoiceText.Restarted
+    live -> text.restarted
     else -> null
 }
 
 /** Why the model configuration or the extension's models could not be read; the page offers to try again. */
-internal fun loadFailure(error: Throwable): String {
+internal fun loadFailure(error: Throwable, text: VoiceText): String {
     val feedback = operationFeedback(error)
     return when {
-        feedback.offline -> "连不上 hub，连上后点重试。"
+        feedback.offline -> text.string(R.string.voice_load_offline)
         feedback.action == FailureAction.PairAgain || feedback.action == FailureAction.UpdateHub -> feedback.message
-        else -> "hub 没有给出结果" + (hubMessage(error)?.let { "：$it" } ?: "。")
+        else -> hubMessage(error)?.let { text.string(R.string.voice_load_no_result_reason, it) } ?: text.string(R.string.voice_load_no_result)
     }
 }
 
 /** Why the voices could not be read, to follow 音色列表没拿到：. */
-internal fun voicesFailure(error: Throwable): String {
+internal fun voicesFailure(error: Throwable, text: VoiceText): String {
     val feedback = operationFeedback(error)
     return when {
-        feedback.offline -> "连不上 hub"
+        feedback.offline -> text.string(R.string.voice_hub_unreachable)
         feedback.action == FailureAction.PairAgain || feedback.action == FailureAction.UpdateHub -> feedback.message
-        else -> hubMessage(error) ?: "hub 没有给出结果"
+        else -> hubMessage(error) ?: text.string(R.string.voice_no_result)
     }
 }
 
-private fun reason(error: Throwable, status: Int?): String {
+private fun reason(error: Throwable, status: Int?, text: VoiceText): String {
     val feedback = operationFeedback(error)
     return when {
         // The hub refuses extensions to a device that may only read and answer (docs/extensions.md); not an expired pairing.
-        status == 403 -> "这台设备不能用语音对话"
+        status == 403 -> text.string(R.string.voice_device_not_allowed)
         status == 401 || feedback.action == FailureAction.PairAgain -> feedback.message
-        status != null && status >= 500 -> "语音服务没有响应"
+        status != null && status >= 500 -> text.string(R.string.voice_service_no_response)
         status != null -> "HTTP $status"
         feedback.action == FailureAction.UpdateHub -> feedback.message
-        feedback.offline -> "连不上 hub"
-        else -> hubMessage(error) ?: "连接失败"
+        feedback.offline -> text.string(R.string.voice_hub_unreachable)
+        else -> hubMessage(error) ?: text.string(R.string.voice_connect_failed)
     }
 }
 
@@ -149,11 +169,11 @@ internal sealed interface VoiceSetup {
  * models: an older hub without model configuration (null) gets the extension's default; a purpose whose status says it
  * cannot be used, or a model the extension no longer offers, is not quietly swapped for another.
  */
-internal fun resolveVoiceModel(choice: VoiceModelChoice?, models: VoiceModelOptions): VoiceSetup {
+internal fun resolveVoiceModel(choice: VoiceModelChoice?, models: VoiceModelOptions, text: VoiceText): VoiceSetup {
     val default = models.default?.takeIf { it.isNotBlank() }
     if (choice == null) return VoiceSetup.Ready(default)
-    choice.status?.trim()?.takeIf { it.isNotEmpty() && it != "未验证" }?.let { return VoiceSetup.Unavailable(it) }
+    choice.status?.trim()?.takeIf { it.isNotEmpty() && it != "未验证" }?.let { return VoiceSetup.Unavailable(it) } // i18n-ignore: the hub's status token for a usable, unverified model
     val model = choice.model?.takeIf { it.isNotBlank() } ?: return VoiceSetup.Ready(default)
-    if (models.models.none { it.id == model }) return VoiceSetup.Unavailable(VoiceText.ModelMissing)
+    if (models.models.none { it.id == model }) return VoiceSetup.Unavailable(text.modelMissing)
     return VoiceSetup.Ready(model)
 }

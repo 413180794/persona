@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English is the fallback for every language the app does not have (docs/i18n.md); values-zh and values-ja hold the same keys. -->
+<resources>
+    <string name="terminal_control_active">Controlling</string>
+    <string name="terminal_control_starting">Taking over</string>
+    <string name="terminal_control_watching">Read-only</string>
+    <string name="terminal_select_text">Select text</string>
+    <string name="terminal_display_settings">Display settings</string>
+    <string name="terminal_retry">Retry</string>
+    <string name="terminal_busy_title">Take over the terminal?</string>
+    <string name="terminal_busy_text">Another program on the computer is using this terminal. Taking over disconnects it, and the terminal is sized for your phone.</string>
+    <string name="terminal_take_over">Take over</string>
+    <string name="terminal_paste_title">Paste several lines?</string>
+    <string name="terminal_paste">Paste</string>
+    <string name="terminal_subtitle_phone">Phone %1$d×%2$d</string>
+    <string name="terminal_subtitle_starting">Taking over…</string>
+    <string name="terminal_subtitle_computer">Computer %1$d×%2$d</string>
+    <string name="terminal_subtitle_polling">Updates every second</string>
+    <string name="terminal_display">Display</string>
+    <string name="terminal_font_size">Font size</string>
+    <string name="terminal_font_size_note">Relaid out at the new size while you have control</string>
+    <string name="terminal_font_size_value">Font size %1$s</string>
+    <string name="terminal_wrap">Wrap lines</string>
+    <string name="terminal_wrap_on_note">While watching, lines wrap to the phone\'s width; turn it off to scroll sideways</string>
+    <string name="terminal_wrap_off_note">With control, it\'s laid out at the phone\'s width, so nothing needs wrapping</string>
+    <string name="terminal_keyboard_hide">Hide</string>
+    <string name="terminal_keyboard_show">Keyboard</string>
+    <string name="terminal_keyboard_hide_description">Hide keyboard; double-tap for Enter</string>
+    <string name="terminal_keyboard_show_description">Show keyboard; double-tap for Enter</string>
+    <string name="terminal_modifier_off">Off</string>
+    <string name="terminal_modifier_once">Next key only</string>
+    <string name="terminal_modifier_held">Held</string>
+    <string name="terminal_modifier_locked">Locked</string>
+    <string name="terminal_key_left">Left</string>
+    <string name="terminal_key_down">Down</string>
+    <string name="terminal_key_up">Up</string>
+    <string name="terminal_key_right">Right</string>
+    <string name="terminal_key_enter">Enter</string>
+    <string name="terminal_key_backspace">Backspace</string>
+    <string name="terminal_copy_all">Copy all</string>
+    <string name="terminal_clip_label">Terminal</string>
+    <string name="terminal_copied">Copied</string>
+    <string name="terminal_select_empty_title">No text in the terminal yet</string>
+    <string name="terminal_select_empty_body">Come back once the terminal shows something.</string>
+    <string name="terminal_screen_description">Terminal screen</string>
+    <string name="terminal_note_offline">Can\'t reach the hub; showing the last screen</string>
+    <string name="terminal_note_no_terminal">No terminal: it shows once the session is resumed</string>
+    <string name="terminal_note_read_failed">Couldn\'t read the terminal; retrying</string>
+    <string name="terminal_note_disconnected">Disconnected; what you just typed wasn\'t sent</string>
+    <string name="terminal_note_stream_stopped">The terminal stream stopped; retrying</string>
+    <string name="terminal_note_busy">Another program on the computer is using this terminal</string>
+    <string name="terminal_note_unsupported">This computer can only be watched, not taken over</string>
+    <string name="terminal_note_taken">The terminal was taken over; you can only watch now</string>
+    <string name="terminal_notice_keys_not_sent">The keys didn\'t go out. Try again.</string>
+    <!-- The font size steps: the same in every language (a full-width plus, as the minus beside it). -->
+    <string name="terminal_font_down" translatable="false">A−</string>
+    <string name="terminal_font_up" translatable="false">A＋</string>
+</resources>

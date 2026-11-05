@@ -11,6 +11,7 @@ import persona.core.designsystem.operationFeedback
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
+import androidx.annotation.StringRes
 import java.io.IOException
 import java.util.UUID
 
@@ -31,7 +32,7 @@ internal data class KnowledgePage(
     val entries: List<KnowledgeEntry> = emptyList(),
     val tags: List<String> = emptyList(),
     val groups: List<KnowledgeSearchGroup> = emptyList(),
-    val message: String? = null,
+    @StringRes val message: Int? = null,
     /** The list or search shown is the answer to [filter] (not what an earlier one left while this one loads). */
     val loaded: Boolean = false,
 )
@@ -103,11 +104,11 @@ internal data class KnowledgeDetailPage(
     val paired: Boolean = true,
     val detail: KnowledgeDetail? = null,
     val agents: List<Session> = emptyList(),
-    val message: String? = null,
+    @StringRes val message: Int? = null,
 )
-internal data class KnowledgeSending(val busy: Boolean = false, val message: String? = null)
+internal data class KnowledgeSending(val busy: Boolean = false, @StringRes val message: Int? = null)
 
-/** The tag editor's save: [saved] counts the saves that went through, so the sheet closes on each. */
+/** The tag editor's save: [saved] counts the saves that went through, so the sheet closes on each; [error] says why one did not. */
 internal data class KnowledgeTagging(val busy: Boolean = false, val error: String? = null, val saved: Int = 0)
 
 internal class KnowledgeDetailViewModel(
@@ -155,13 +156,14 @@ internal class KnowledgeDetailViewModel(
 
     fun refresh() { revision.update { it + 1 } }
 
-    fun ask(question: String) {
+    /** Hands [question] about the entry to the main chat; [kindName] is the entry's kind in the app's language. */
+    fun ask(question: String, kindName: String) {
         if (_sending.value.busy || question.isBlank()) return
         val repository = connection.current.value ?: return
         val currentPage = page.value
         val detail = currentPage.detail ?: return
         if (currentPage.scope != repository.scope) return
-        val text = knowledgeContext(detail) + "\n\n" + question.trim()
+        val text = knowledgeContext(detail, kindName) + "\n\n" + question.trim()
         val messageId = attempt?.takeIf { it.first == text }?.second ?: UUID.randomUUID().toString()
         attempt = text to messageId
         _sending.value = KnowledgeSending(busy = true)
@@ -172,11 +174,11 @@ internal class KnowledgeDetailViewModel(
                 sender.sendToMain(text, messageId)
                 checkCurrent(repository)
                 attempt = null
-                _sending.value = KnowledgeSending(message = "已交给 Persona，发送状态请在对话中查看")
+                _sending.value = KnowledgeSending(message = R.string.knowledge_handed)
                 opened.send(Unit)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) {
-                _sending.value = KnowledgeSending(message = "暂时没能交给 Persona，请重试；已提交的消息会沿用同一发送标识")
+                _sending.value = KnowledgeSending(message = R.string.knowledge_hand_failed)
             }
         }
     }
@@ -199,7 +201,7 @@ internal class KnowledgeDetailViewModel(
                 _tagging.value = KnowledgeTagging(saved = saved)
                 throw cancelled
             } catch (error: Exception) {
-                _tagging.value = KnowledgeTagging(error = "没有保存：${operationFeedback(error).message}", saved = saved)
+                _tagging.value = KnowledgeTagging(error = operationFeedback(error).message, saved = saved)
             }
         }
     }
@@ -211,5 +213,6 @@ internal class KnowledgeDetailViewModel(
     }
 }
 
-private fun loadMessage(error: Exception): String = if (error is IOException) "暂时连不上知识库，请稍后重试"
-    else "知识库暂时无法读取，请重试"
+@StringRes
+private fun loadMessage(error: Exception): Int = if (error is IOException) R.string.knowledge_unreachable
+    else R.string.knowledge_unreadable

@@ -1,10 +1,13 @@
 package persona.feature.files
 
+import android.content.res.Resources
+import persona.core.designsystem.LocalizedFormats
+import java.math.RoundingMode
+import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 // Pure helpers of the file browser and the previews: paths on the session's machine, sizes and times.
@@ -100,15 +103,19 @@ internal object FilesPaths {
     fun keepEnd(s: String, max: Int = 48): String = if (s.length <= max) s else "…" + s.takeLast(max - 1)
 }
 
-/** 1023 B, 1.5 KB, 12 MB (binary units, one decimal under 10). */
-internal fun fileSize(size: Long): String {
-    if (size < 1024) return "$size B"
+/** 1023 B, 1.5 KB, 12 MB (binary units, one decimal under 10), the number in [locale]'s digits and decimal mark. */
+internal fun fileSize(size: Long, locale: Locale): String {
+    if (size < 1024) return "${LocalizedFormats.number(size, locale)} B"
     val units = listOf("KB", "MB", "GB", "TB")
     var value = size / 1024.0
     var unit = 0
     while (value >= 1024 && unit < units.lastIndex) { value /= 1024; unit++ }
-    return if (value < 10) String.format(Locale.ROOT, "%.1f %s", value, units[unit]).replace(".0 ", " ")
-    else "${value.toLong()} ${units[unit]}"
+    val number = NumberFormat.getInstance(locale).apply {
+        maximumFractionDigits = if (value < 10) 1 else 0
+        // Under 10 rounded to one decimal, above that the whole units only.
+        roundingMode = if (value < 10) RoundingMode.HALF_UP else RoundingMode.DOWN
+    }
+    return "${number.format(value)} ${units[unit]}"
 }
 
 /**
@@ -121,25 +128,25 @@ internal fun fileTime(value: String?): Instant? {
     return runCatching { OffsetDateTime.parse(value.trim()).toInstant() }.getOrNull()
 }
 
-/** 刚刚 / 5 分钟前 / 3 小时前 / 2 天前, then the date (the year only when it is not this one). */
-internal fun relativeTime(time: Instant, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String {
+/** 刚刚 / 5 分钟前 / 3 小时前 / 2 天前, then the date (the year only when it is not this one), in [resources]' language. */
+internal fun relativeTime(resources: Resources, time: Instant, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String {
     val seconds = Duration.between(time, now).seconds
     return when {
-        seconds < 60 -> "刚刚"
-        seconds < 3600 -> "${seconds / 60} 分钟前"
-        seconds < 86_400 -> "${seconds / 3600} 小时前"
-        seconds < 7 * 86_400 -> "${seconds / 86_400} 天前"
+        seconds < 60 -> resources.getString(R.string.files_time_just_now)
+        seconds < 3600 -> (seconds / 60).toInt().let { resources.getQuantityString(R.plurals.files_time_minutes_ago, it, it) }
+        seconds < 86_400 -> (seconds / 3600).toInt().let { resources.getQuantityString(R.plurals.files_time_hours_ago, it, it) }
+        seconds < 7 * 86_400 -> (seconds / 86_400).toInt().let { resources.getQuantityString(R.plurals.files_time_days_ago, it, it) }
         else -> {
-            val date = time.atZone(zone)
-            date.format(DateTimeFormatter.ofPattern(if (date.year == now.atZone(zone).year) "M月d日" else "yyyy年M月d日"))
+            val thisYear = time.atZone(zone).year == now.atZone(zone).year
+            LocalizedFormats.format(time, if (thisYear) LocalizedFormats.MONTH_DAY else LocalizedFormats.DATE, resources.configuration.locales[0], zone)
         }
     }
 }
 
 /** A modification or commit time for a list row; empty when the node sent none (or one this cannot read). */
-internal fun fileDate(value: String?, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String? =
-    fileTime(value)?.let { relativeTime(it, now, zone) }
+internal fun fileDate(resources: Resources, value: String?, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String? =
+    fileTime(value)?.let { relativeTime(resources, it, now, zone) }
 
-/** The whole date of a commit: 2026年10月31日 13:58. */
-internal fun fullDate(value: String?, zone: ZoneId = ZoneId.systemDefault()): String? =
-    fileTime(value)?.atZone(zone)?.format(DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm"))
+/** The whole date of a commit: 2026年10月31日 13:58 · Oct 31, 2026, 1:58 PM. */
+internal fun fullDate(value: String?, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String? =
+    fileTime(value)?.let { LocalizedFormats.format(it, LocalizedFormats.DATE_TIME, locale, zone) }

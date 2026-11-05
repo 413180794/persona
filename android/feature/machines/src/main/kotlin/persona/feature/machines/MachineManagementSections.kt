@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.contracts.Machine
 import persona.core.contracts.api.AgentLauncher
@@ -20,15 +21,15 @@ import persona.core.domain.engines.Engines
 internal fun MachineDeployLine(machine: Machine, starting: Boolean, onDeploy: (() -> Unit)?) {
     val busy = machine.deploying || starting
     val text = when {
-        busy -> "正在把 hub 这一版的 Persona 装到这台电脑…"
-        !machine.deployError.isNullOrBlank() -> "上次部署没成：${machine.deployError}"
-        else -> "这台电脑上的 Persona 和 hub 不是同一次部署"
+        busy -> stringResource(R.string.machines_deploying)
+        !machine.deployError.isNullOrBlank() -> stringResource(R.string.machines_deploy_failed_last, machine.deployError.orEmpty())
+        else -> stringResource(R.string.machines_node_mismatch)
     }
     JInlineStatus(
         text, Modifier.padding(top = Tokens.Space.s),
         tone = when { busy -> InlineTone.Busy; machine.deployError.isNullOrBlank() -> InlineTone.Caution; else -> InlineTone.Failed },
         action = if (busy || onDeploy == null || !machine.online) null else ({
-            JButton("重新部署", onDeploy, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+            JButton(stringResource(R.string.machines_redeploy), onDeploy, kind = JButtonKind.Secondary, size = JButtonSize.Small)
         }),
     )
 }
@@ -43,23 +44,23 @@ internal fun LazyListScope.machineControls(
     onEngine: () -> Unit,
     onReconnect: () -> Unit,
 ) {
-    item("controls-title") { JSectionHeader("引擎与连接") }
+    item("controls-title") { JSectionHeader(stringResource(R.string.machines_controls_title)) }
     item("engine") {
         JGroupItem(GroupPosition.of(0, 2)) {
-            JRow("引擎", leadingIcon = PhIcons.TerminalWindow, value = Engines.currentName(machine), onClick = onEngine)
+            JRow(stringResource(R.string.machines_engine), leadingIcon = PhIcons.TerminalWindow, value = Engines.currentName(machine), onClick = onEngine)
         }
     }
     item("reconnect") {
         JGroupItem(GroupPosition.of(1, 2)) {
-            JRow(if (reconnecting) "正在重新连接…" else "重新连接", leadingIcon = PhIcons.ArrowClockwise, enabled = !reconnecting,
+            JRow(stringResource(if (reconnecting) R.string.machines_reconnecting else R.string.machines_reconnect), leadingIcon = PhIcons.ArrowClockwise, enabled = !reconnecting,
                 onClick = onReconnect, chevron = false, trailing = if (reconnecting) ({ JSpinner() }) else null)
         }
     }
     item("controls-note") {
         Column(Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            MachineCaption("只显示所选引擎里的会话。")
-            MachineCaption(if (machine.kind == "local") "hub 所在的机器，直接运行 node。"
-                else "hub 通过 ssh ${machine.sshHost?.takeIf { it.isNotBlank() } ?: machine.id} 接入。")
+            MachineCaption(stringResource(R.string.machines_engine_note))
+            MachineCaption(if (machine.kind == "local") stringResource(R.string.machines_local_note)
+                else stringResource(R.string.machines_ssh_note, machine.sshHost?.takeIf { it.isNotBlank() } ?: machine.id))
         }
     }
 }
@@ -70,15 +71,15 @@ internal fun LazyListScope.machineControls(
  */
 internal fun LazyListScope.machineLaunchers(online: Boolean, state: MachineActionsState, onLauncher: ((String) -> Unit)? = null) {
     val launchers = state.launchers.orEmpty()
-    item("launchers-title") { JSectionHeader("启动器", count = launchers.size.takeIf { online && state.launchers != null }) }
+    item("launchers-title") { JSectionHeader(stringResource(R.string.machines_launchers), count = launchers.size.takeIf { online && state.launchers != null }) }
     when {
-        !online -> item("launchers-offline") { MachineCaption("机器离线，连上后显示", Modifier.padding(horizontal = rowPadding)) }
+        !online -> item("launchers-offline") { MachineCaption(stringResource(R.string.machines_launchers_offline), Modifier.padding(horizontal = rowPadding)) }
         state.launchersError != null && launchers.isEmpty() -> item("launchers-error") {
-            JInlineStatus(state.launchersError, tone = InlineTone.Failed)
+            JInlineStatus(stringResource(R.string.machines_launchers_error, state.launchersError), tone = InlineTone.Failed)
         }
         state.launchersLoading && state.launchers == null -> item("launchers-loading") { JLoading() }
         state.launchers != null && launchers.isEmpty() -> item("launchers-empty") {
-            MachineCaption("这台机器没有可用的启动器", Modifier.padding(horizontal = rowPadding))
+            MachineCaption(stringResource(R.string.machines_launchers_empty), Modifier.padding(horizontal = rowPadding))
         }
     }
     itemsIndexed(launchers, key = { _, it -> "launcher-${it.name}" }, contentType = { _, _ -> "launcher" }) { index, launcher ->

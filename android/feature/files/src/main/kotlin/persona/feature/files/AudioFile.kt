@@ -9,6 +9,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -63,6 +65,7 @@ private sealed interface AudioLoad {
 internal fun AudioFile(file: SessionFileContent, download: suspend (path: String, into: File) -> Long, contentPadding: PaddingValues,
     header: LazyListScope.() -> Unit) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val load by produceState<AudioLoad>(AudioLoad.Fetching, file.path, file.size) {
         value = withContext(Dispatchers.IO) {
             val dir = File(context.cacheDir, "files-audio").apply { mkdirs() }
@@ -84,8 +87,8 @@ internal fun AudioFile(file: SessionFileContent, download: suspend (path: String
                 if (older && data != null && !file.truncated) {
                     val part = File(into.path + ".part-" + System.nanoTime())
                     part.writeBytes(Base64.getMimeDecoder().decode(data))
-                    if (part.renameTo(into)) AudioLoad.Ready(into) else AudioLoad.Failed("写不进缓存。").also { part.delete() }
-                } else AudioLoad.Failed(if (older) "这台机器的 node 太旧，不能下载整个文件；更新后再试。" else filesLoadError(e))
+                    if (part.renameTo(into)) AudioLoad.Ready(into) else AudioLoad.Failed(resources.getString(R.string.files_audio_cache_failed)).also { part.delete() }
+                } else AudioLoad.Failed(if (older) resources.getString(R.string.files_audio_node_outdated) else filesLoadError(resources, e))
             }
         }
     }
@@ -94,8 +97,8 @@ internal fun AudioFile(file: SessionFileContent, download: suspend (path: String
         item("player") {
             Box(Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.l)) {
                 when (val state = load) {
-                    AudioLoad.Fetching -> AudioCard(file.name) { JLoading(text = "正在读取音频…") }
-                    is AudioLoad.Failed -> JEmptyState("放不了这个音频", state.reason)
+                    AudioLoad.Fetching -> AudioCard(file.name) { JLoading(text = stringResource(R.string.files_audio_loading)) }
+                    is AudioLoad.Failed -> JEmptyState(stringResource(R.string.files_audio_failed), state.reason)
                     is AudioLoad.Ready -> AudioPlayer(file.name, state.file)
                 }
             }
@@ -156,7 +159,7 @@ internal fun AudioPlayer(name: String, file: File) {
     }
     AudioCard(name) {
         if (failed) {
-            Text("手机放不了这种编码。可以分享到别的 App 里听。", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+            Text(stringResource(R.string.files_audio_codec), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
             return@AudioCard
         }
         val p = player
@@ -165,11 +168,11 @@ internal fun AudioPlayer(name: String, file: File) {
             onValueChangeFinished = {
                 seeking?.let { f -> val to = (f * total).toLong(); p?.seekTo(to.toInt()); position = to }
                 seeking = null
-            }, contentDescription = "播放进度")
+            }, contentDescription = stringResource(R.string.files_audio_progress))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(AudioFiles.clock(seeking?.let { (it * total).toLong() } ?: position), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             Spacer(Modifier.weight(1f))
-            JIconButton(if (playing) PhIcons.Pause else PhIcons.Play, if (playing) "暂停" else "播放", {
+            JIconButton(if (playing) PhIcons.Pause else PhIcons.Play, if (playing) stringResource(R.string.files_audio_pause) else stringResource(R.string.files_audio_play), {
                 val mp = p ?: return@JIconButton
                 if (playing) { mp.pause(); playing = false } else {
                     if (position >= duration) { mp.seekTo(0); position = 0 }

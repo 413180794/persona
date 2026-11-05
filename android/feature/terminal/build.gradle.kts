@@ -4,7 +4,10 @@ plugins {
     id("jarvis.hilt")
 }
 
-android { namespace = "persona.feature.terminal" }
+android { namespace = "persona.feature.terminal"
+    // Its pages in pictures in each language (Robolectric's native graphics, docs/i18n.md).
+    testOptions { unitTests { isIncludeAndroidResources = true } }
+}
 
 dependencies {
     implementation(project(":core:contracts"))
@@ -20,4 +23,9 @@ dependencies {
     implementation(libs.coroutines.android)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.test.ext:junit:1.3.0")
 }

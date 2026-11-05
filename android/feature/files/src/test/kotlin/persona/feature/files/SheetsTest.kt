@@ -4,11 +4,19 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class SheetsTest {
+    private val res get() = RuntimeEnvironment.getApplication().resources
+
     @Test fun delimitedFollowsRfc4180() {
         val rows = Delimited.parse("a,\"b,1\",\"say \"\"hi\"\"\"\r\n\"two\nlines\",,x\n\n3", ',')
         assertEquals(listOf(listOf("a", "b,1", "say \"hi\""), listOf("two\nlines", "", "x"), listOf("3")), rows)
@@ -106,8 +114,8 @@ class SheetsTest {
 
     @Test fun summary() {
         val sheet = Delimited.sheet("a.csv", "a,b\n1,2,3")
-        assertEquals("2 行 × 3 列", sheetSummary(sheet, false))
-        assertEquals("2 行 × 3 列 · 只读了前 2 MB", sheetSummary(sheet, true))
+        assertEquals("2 行 × 3 列", sheetSummary(res, sheet, false))
+        assertEquals("2 行 × 3 列 · 只读了前 2 MB", sheetSummary(res, sheet, true))
     }
 
     companion object {

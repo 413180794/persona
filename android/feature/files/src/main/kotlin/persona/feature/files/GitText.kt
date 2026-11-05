@@ -1,5 +1,7 @@
 package persona.feature.files
 
+import android.content.res.Resources
+import androidx.annotation.StringRes
 import persona.core.contracts.api.SessionGitCommit
 import persona.core.contracts.api.SessionGitFile
 import persona.core.contracts.api.SessionGitStatus
@@ -19,12 +21,13 @@ internal val SessionGitFile.tone: Status get() = when {
 }
 
 /** Where a change stands: 有冲突, 未跟踪, 部分已暂存, 已暂存 or 未暂存. */
-internal val SessionGitFile.stage: String get() = when {
-    conflicted -> "有冲突"
-    untracked -> "未跟踪"
-    staged && unstaged -> "部分已暂存"
-    staged -> "已暂存"
-    else -> "未暂存"
+@get:StringRes
+internal val SessionGitFile.stage: Int get() = when {
+    conflicted -> R.string.files_git_conflicted
+    untracked -> R.string.files_git_untracked
+    staged && unstaged -> R.string.files_git_partly_staged
+    staged -> R.string.files_git_staged
+    else -> R.string.files_git_unstaged
 }
 
 /** Branch and tag names of a commit (`%D`): "HEAD -> main" becomes "main", a bare HEAD is dropped. */
@@ -43,13 +46,13 @@ internal fun remoteOf(upstream: String?) = upstream?.substringBefore('/')?.takeI
 internal val SessionGitCommit.shortHash: String get() = short.ifEmpty { hash.take(7) }
 
 /** How the branch stands against its upstream: 已同步, or ↑ ahead ↓ behind; the stash when there is one. */
-internal fun gitSync(git: SessionGitStatus): String? {
+internal fun gitSync(resources: Resources, git: SessionGitStatus): String? {
     val sync = when {
         git.upstream == null -> null
-        git.ahead == 0 && git.behind == 0 -> "已同步"
+        git.ahead == 0 && git.behind == 0 -> resources.getString(R.string.files_git_synced)
         else -> listOfNotNull(git.ahead.takeIf { it > 0 }?.let { "↑$it" }, git.behind.takeIf { it > 0 }?.let { "↓$it" }).joinToString("  ")
     }
-    return listOfNotNull(sync, git.stashes.takeIf { it > 0 }?.let { "贮藏 $it" }).joinToString("  ").ifEmpty { null }
+    return listOfNotNull(sync, git.stashes.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.files_git_stashes, it, it) }).joinToString("  ").ifEmpty { null }
 }
 
 internal object GitDiffs {

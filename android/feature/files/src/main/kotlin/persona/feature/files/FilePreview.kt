@@ -13,6 +13,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import persona.core.contracts.api.SessionFileContent
@@ -32,6 +34,7 @@ import java.util.Base64
 internal fun FilePreview(state: FilesState, controller: FilesController, images: MarkdownImages, insert: (String) -> Unit, back: () -> Unit) {
     val selection = state.selection ?: return
     val context = LocalContext.current
+    val resources = LocalResources.current
     val feedback = LocalAppFeedback.current
     val scope = rememberCoroutineScope()
     var menu by remember(selection) { mutableStateOf(false) }
@@ -52,25 +55,25 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
     }
     val title = when (selection) {
         is FileSelection.Diff -> selection.file.name
-        else -> file?.name?.ifEmpty { null } ?: path?.let(FilesPaths::name) ?: "文件"
+        else -> file?.name?.ifEmpty { null } ?: path?.let(FilesPaths::name) ?: stringResource(R.string.files_title)
     }
     JPage(title, subtitle = path, onBack = back, actions = {
-        if (path != null) JTextButton("插入路径", { insert(path) })
-        JIconButton(PhIcons.DotsThree, "预览选项", { menu = true })
+        if (path != null) JTextButton(stringResource(R.string.files_insert_path), { insert(path) })
+        JIconButton(PhIcons.DotsThree, stringResource(R.string.files_preview_options), { menu = true })
     }) { padding ->
         val diff = state.diff
         val error = state.previewError
         val header: LazyListScope.() -> Unit = {
             if (selection is FileSelection.Diff && selection.file.staged && selection.file.unstaged) item("staging") {
-                JSegmented(listOf(JSegment("未暂存"), JSegment("已暂存")), if (selection.staged) 1 else 0,
+                JSegmented(listOf(JSegment(stringResource(R.string.files_git_unstaged)), JSegment(stringResource(R.string.files_git_staged))), if (selection.staged) 1 else 0,
                     { controller.preview(selection.copy(staged = it == 1)) }, Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s))
             }
             if (file != null) item("size") { FileMeta(file.size, file.truncated) }
-            if (diff?.truncated == true) item("truncated") { Notice("改动太大，只显示了前 512 KB") }
+            if (diff?.truncated == true) item("truncated") { Notice(stringResource(R.string.files_diff_truncated)) }
         }
         when {
             error != null -> LazyColumn(contentPadding = padding) {
-                item { RetryState(if (selection is FileSelection.Diff) "读不到改动" else "打不开这个文件", error, controller::reload) }
+                item { RetryState(if (selection is FileSelection.Diff) stringResource(R.string.files_diff_failed) else stringResource(R.string.files_file_failed), error, controller::reload) }
             }
             file != null && table && !source -> key(file.path) { SheetFile(file, padding, header) }
             file != null && notebook && !source -> key(file.path) {
@@ -86,33 +89,33 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
             file != null -> key(file.path) { FileBody(file, markdown && !source, padding, header, controller, images) }
             diff != null -> key(selection) {
                 if (diff.diff.isBlank()) LazyColumn(contentPadding = padding) {
-                    header(); item { JEmptyState("没有文本改动", "可能是二进制文件、只改了权限，或者改动已被撤销。") }
+                    header(); item { JEmptyState(stringResource(R.string.files_diff_no_text), stringResource(R.string.files_diff_no_text_message)) }
                 } else FileText(diff.diff, diff = true, contentPadding = padding, header = header)
             }
             else -> LazyColumn(contentPadding = padding) { item { Loading() } }
         }
     }
     if (menu) JActionSheet(buildList {
-        if (markdown) add(JAction(if (source) "渲染 Markdown" else "查看源文件", if (source) PhIcons.FileText else PhIcons.Code) { source = !source })
-        if (delimited) add(JAction(if (source) "查看表格" else "查看源文件", if (source) PhIcons.SquaresFour else PhIcons.Code) { source = !source })
-        if (notebook) add(JAction(if (source) "查看笔记本" else "查看源文件", if (source) PhIcons.BookOpen else PhIcons.Code) { source = !source })
+        if (markdown) add(JAction(if (source) stringResource(R.string.files_render_markdown) else stringResource(R.string.files_view_source), if (source) PhIcons.FileText else PhIcons.Code) { source = !source })
+        if (delimited) add(JAction(if (source) stringResource(R.string.files_view_table) else stringResource(R.string.files_view_source), if (source) PhIcons.SquaresFour else PhIcons.Code) { source = !source })
+        if (notebook) add(JAction(if (source) stringResource(R.string.files_view_notebook) else stringResource(R.string.files_view_source), if (source) PhIcons.BookOpen else PhIcons.Code) { source = !source })
         if (html) {
-            add(JAction(if (source) "预览网页" else "查看源文件", if (source) PhIcons.GlobeSimple else PhIcons.Code) { source = !source })
+            add(JAction(if (source) stringResource(R.string.files_preview_web) else stringResource(R.string.files_view_source), if (source) PhIcons.GlobeSimple else PhIcons.Code) { source = !source })
             if (!source) {
-                add(JAction("允许运行脚本", PhIcons.Lightning, checked = policy.scripts) { policy = policy.copy(scripts = !policy.scripts) })
-                add(JAction("允许联网", PhIcons.WifiHigh, checked = policy.network) { policy = policy.copy(network = !policy.network) })
+                add(JAction(stringResource(R.string.files_allow_scripts), PhIcons.Lightning, checked = policy.scripts) { policy = policy.copy(scripts = !policy.scripts) })
+                add(JAction(stringResource(R.string.files_allow_network), PhIcons.WifiHigh, checked = policy.network) { policy = policy.copy(network = !policy.network) })
             }
         }
-        if (path != null) add(JAction("拷贝路径", PhIcons.Copy) { copyText(context, path, feedback, "已拷贝路径") })
-        file?.text?.let { text -> add(JAction("拷贝内容", PhIcons.Copy) { copyText(context, text, feedback, "已拷贝内容") }) }
-        state.diff?.diff?.takeIf { it.isNotEmpty() }?.let { text -> add(JAction("拷贝 diff", PhIcons.Copy) { copyText(context, text, feedback, "已拷贝 diff") }) }
-        if (file != null && FileShare.canShare(file)) add(JAction("分享", PhIcons.ShareNetwork) {
+        if (path != null) add(JAction(stringResource(R.string.files_copy_path), PhIcons.Copy) { copyText(context, path, feedback, resources.getString(R.string.files_path_copied)) })
+        file?.text?.let { text -> add(JAction(stringResource(R.string.files_copy_content), PhIcons.Copy) { copyText(context, text, feedback, resources.getString(R.string.files_content_copied)) }) }
+        state.diff?.diff?.takeIf { it.isNotEmpty() }?.let { text -> add(JAction(stringResource(R.string.files_copy_diff), PhIcons.Copy) { copyText(context, text, feedback, resources.getString(R.string.files_diff_copied)) }) }
+        if (file != null && FileShare.canShare(file)) add(JAction(stringResource(R.string.files_share), PhIcons.ShareNetwork) {
             scope.launch {
                 val shared = runCatching { FileShare.share(context, file) }.getOrDefault(false)
-                if (!shared) feedback?.notice("这个文件分享不了")
+                if (!shared) feedback?.notice(resources.getString(R.string.files_share_failed))
             }
         })
-        add(JAction("刷新", PhIcons.ArrowClockwise, separatorBefore = true) { controller.reload() })
+        add(JAction(stringResource(R.string.files_refresh), PhIcons.ArrowClockwise, separatorBefore = true) { controller.reload() })
     }, { menu = false }, title)
 }
 
@@ -137,7 +140,10 @@ private fun FileBody(file: SessionFileContent, rendered: Boolean, padding: Paddi
         AudioFiles.isAudio(file) -> AudioFile(file, controller::download, padding, header)
         else -> LazyColumn(contentPadding = padding) {
             header()
-            item { JEmptyState("无法预览", "${mime.ifEmpty { "二进制文件" }}，${fileSize(file.size)}。可以插入路径或分享。") }
+            item {
+                JEmptyState(stringResource(R.string.files_no_preview),
+                    stringResource(R.string.files_no_preview_message, mime.ifEmpty { stringResource(R.string.files_binary_file) }, fileSize(file.size, currentLocale)))
+            }
         }
     }
 }
@@ -145,7 +151,8 @@ private fun FileBody(file: SessionFileContent, rendered: Boolean, padding: Paddi
 /** The size line above a file's content: the size, and that only the first 2 MB came when the file is bigger. */
 @Composable
 internal fun FileMeta(size: Long, truncated: Boolean) {
-    Notice(fileSize(size) + if (truncated) "，只显示前 2 MB" else "")
+    val text = fileSize(size, currentLocale)
+    Notice(if (truncated) stringResource(R.string.files_size_truncated, text) else text)
 }
 
 /** Reads images a Markdown file names from the same machine (the hub's file read, base64 bytes). */
@@ -182,7 +189,7 @@ private fun FileImage(file: SessionFileContent, modifier: Modifier) {
     Box(modifier.fillMaxWidth().clipToBounds()) {
         when {
             bytes == null -> Loading()
-            bytes!!.isEmpty() || failed -> JEmptyState("图片无法显示", "图片数据不完整，或格式暂不支持。")
+            bytes!!.isEmpty() || failed -> JEmptyState(stringResource(R.string.files_image_failed), stringResource(R.string.files_image_failed_message))
             else -> AsyncImage(model = bytes, contentDescription = file.name, contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize().transformable(gestures).graphicsLayer {
                     scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y

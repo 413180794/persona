@@ -58,7 +58,7 @@ class FilesController(
     val cwd: String,
     private val scope: CoroutineScope,
     /** Why a load failed, in words for the page (the hub's message when the machine said why). */
-    private val describe: (Throwable) -> String = { "请检查连接后重试。" },
+    private val describe: (Throwable) -> String = { it.message.orEmpty() },
 ) {
     private val mutable = MutableStateFlow(FilesState(root = cwd, here = cwd))
     val state = mutable.asStateFlow()

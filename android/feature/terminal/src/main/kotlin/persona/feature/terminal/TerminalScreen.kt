@@ -14,7 +14,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,7 +48,8 @@ fun TerminalScreen(model: TerminalViewModel, onBack: () -> Unit, sessionTitle: S
     val palette = PersonaTheme.palette
     val feedback = LocalAppFeedback.current
     LaunchedEffect(model, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { model.run() } }
-    LaunchedEffect(model, feedback) { model.notices.collect { feedback?.notice(it) } }
+    val resources = LocalResources.current
+    LaunchedEffect(model, feedback, resources) { model.notices.collect { feedback?.notice(resources.getString(it.text)) } }
     LaunchedEffect(typing) { if (!typing) { keyboard = false; paste = null } }
     DisposableEffect(model) { onDispose { canvas?.keyboard(false) } }
     fun pasteClipboard() {
@@ -62,10 +65,12 @@ fun TerminalScreen(model: TerminalViewModel, onBack: () -> Unit, sessionTitle: S
         JTopBar(sessionTitle, subtitle = terminalSubtitle(state), onBack = onBack, actions = {
             val watching = active || state.control == TerminalControl.Starting
             // Taking over needs the stream: a screen read once a second (an old hub or node) can only be watched.
-            JChip(when { active -> "已接管"; watching -> "接管中"; else -> "只读" }, selected = active,
+            JChip(stringResource(when {
+                active -> R.string.terminal_control_active; watching -> R.string.terminal_control_starting; else -> R.string.terminal_control_watching
+            }), selected = active,
                 onClick = if (watching) ({ model.watch() }) else if (state.online && state.streaming) ({ model.takeOver() }) else null)
-            JIconButton(PhIcons.Copy, "选择文本", { selecting = model.screenText() }, enabled = state.loaded)
-            JIconButton(PhIcons.SlidersHorizontal, "显示设置", { display = true })
+            JIconButton(PhIcons.Copy, stringResource(R.string.terminal_select_text), { selecting = model.screenText() }, enabled = state.loaded)
+            JIconButton(PhIcons.SlidersHorizontal, stringResource(R.string.terminal_display_settings), { display = true })
         })
     }, bottomBar = {
         TerminalKeyBar(state.modifiers, typing, { key, action, quick -> if (typing) model.modifier(key, action, quick) }, model::press, keyboard,
@@ -75,7 +80,8 @@ fun TerminalScreen(model: TerminalViewModel, onBack: () -> Unit, sessionTitle: S
             // OSC 8 links open where every link opens: the shell's in-app card (other schemes are confirmed first).
             val uriHandler = LocalUriHandler.current
             // The notice sits above the terminal, never over its text.
-            state.note?.let { note -> JNotice(note, Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s), actionLabel = "重试", onAction = model::retry) }
+            state.note?.let { note -> JNotice(stringResource(note.text), Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s),
+                actionLabel = stringResource(R.string.terminal_retry), onAction = model::retry) }
             Box(Modifier.fillMaxWidth().weight(1f).background(palette.terminalBackground)) {
                 AndroidView(factory = { ctx -> TerminalCanvasView(ctx, palette.terminalText.toArgb(), palette.terminalBackground.toArgb()).also { view ->
                     canvas = view
@@ -91,23 +97,25 @@ fun TerminalScreen(model: TerminalViewModel, onBack: () -> Unit, sessionTitle: S
         }
     }
     }
-    if (state.control == TerminalControl.Busy) JDialog(onDismiss = { model.watch(remember = false) }, title = "接管终端？",
-        text = "电脑上另一个程序正在使用这个终端。接管后，它会断开连接，终端按手机尺寸显示。",
-        confirm = "接管" to { model.takeOver(force = true) }, dismiss = "只读" to { model.watch(remember = false) })
-    paste?.let { text -> JDialog(onDismiss = { paste = null }, title = "粘贴多行内容？",
+    if (state.control == TerminalControl.Busy) JDialog(onDismiss = { model.watch(remember = false) }, title = stringResource(R.string.terminal_busy_title),
+        text = stringResource(R.string.terminal_busy_text),
+        confirm = stringResource(R.string.terminal_take_over) to { model.takeOver(force = true) },
+        dismiss = stringResource(R.string.terminal_control_watching) to { model.watch(remember = false) })
+    paste?.let { text -> JDialog(onDismiss = { paste = null }, title = stringResource(R.string.terminal_paste_title),
         content = { Text(text, style = PersonaTheme.type.code, color = PersonaTheme.palette.ink, maxLines = 8, overflow = TextOverflow.Ellipsis) },
-        confirm = "粘贴" to { model.type(text); paste = null }) }
+        confirm = stringResource(R.string.terminal_paste) to { model.type(text); paste = null }) }
     selecting?.let { text -> TerminalSelectText(text) { selecting = null } }
     if (display) TerminalDisplaySheet(state.fontSize, model::font, wrap, { wrap = it }, wrapEnabled = !active, onDismiss = { display = false })
 }
 
 /** Under the title: the grid the phone drives, taking it over, the pane it mirrors, or the screen read once a second. */
+@Composable
 private fun terminalSubtitle(state: TerminalUiState): String? = when {
-    state.driving && state.cols > 0 -> "手机 ${state.cols}×${state.rows}"
-    state.online && state.control == TerminalControl.Starting -> "正在接管…"
+    state.driving && state.cols > 0 -> stringResource(R.string.terminal_subtitle_phone, state.cols, state.rows)
+    state.online && state.control == TerminalControl.Starting -> stringResource(R.string.terminal_subtitle_starting)
     !state.loaded || !state.online -> null
-    state.streaming && state.cols > 0 -> "电脑 ${state.cols}×${state.rows}"
-    !state.streaming -> "每秒读一次屏幕"
+    state.streaming && state.cols > 0 -> stringResource(R.string.terminal_subtitle_computer, state.cols, state.rows)
+    !state.streaming -> stringResource(R.string.terminal_subtitle_polling)
     else -> null
 }
 
@@ -117,17 +125,18 @@ private fun TerminalDisplaySheet(
     fontSize: Float, onFont: (Boolean) -> Unit, wrap: Boolean, onWrap: (Boolean) -> Unit, wrapEnabled: Boolean, onDismiss: () -> Unit,
 ) {
     val palette = PersonaTheme.palette
-    JSheet(onDismiss, title = "显示") {
-        JRow("字号", subtitle = "接管时按新字号重新排版", trailing = {
+    JSheet(onDismiss, title = stringResource(R.string.terminal_display)) {
+        JRow(stringResource(R.string.terminal_font_size), subtitle = stringResource(R.string.terminal_font_size_note), trailing = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-                JButton("A−", { onFont(false) }, kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = fontSize > TerminalFontSize.MIN)
+                JButton(stringResource(R.string.terminal_font_down), { onFont(false) }, kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = fontSize > TerminalFontSize.MIN)
+                val sizeDescription = stringResource(R.string.terminal_font_size_value, TerminalFontSize.label(fontSize))
                 Text(TerminalFontSize.label(fontSize), style = PersonaTheme.type.micro, color = palette.ink, textAlign = TextAlign.Center,
-                    maxLines = 1, modifier = Modifier.widthIn(min = Tokens.Space.xxxl).semantics { contentDescription = "字号 ${TerminalFontSize.label(fontSize)}" })
-                JButton("A＋", { onFont(true) }, kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = fontSize < TerminalFontSize.MAX)
+                    maxLines = 1, modifier = Modifier.widthIn(min = Tokens.Space.xxxl).semantics { contentDescription = sizeDescription })
+                JButton(stringResource(R.string.terminal_font_up), { onFont(true) }, kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = fontSize < TerminalFontSize.MAX)
             }
         })
-        JSwitchRow("自动换行", wrap, onWrap, enabled = wrapEnabled,
-            subtitle = if (wrapEnabled) "只看时按手机宽度折行，关掉后左右滑动" else "接管时按手机的宽度排版，不用折行")
+        JSwitchRow(stringResource(R.string.terminal_wrap), wrap, onWrap, enabled = wrapEnabled,
+            subtitle = stringResource(if (wrapEnabled) R.string.terminal_wrap_on_note else R.string.terminal_wrap_off_note))
     }
 }
 
@@ -139,10 +148,13 @@ private fun TerminalKeyBar(
     val currentModifierAction by rememberUpdatedState(modifierAction)
     val currentToggle by rememberUpdatedState(toggleKeyboard)
     val currentPress by rememberUpdatedState(press)
+    val keyboardDescription = stringResource(if (keyboard) R.string.terminal_keyboard_hide_description else R.string.terminal_keyboard_show_description)
+    val modifierStates = ModifierState.entries.associateWith { stringResource(it.description) }
+    val keyNames = keyNameSources.mapValues { (_, name) -> if (name is Int) stringResource(name) else name.toString() }
     ComposerFrame(trailing = {
-        JChip(if (keyboard) "收起" else "键盘", selected = keyboard, icon = PhIcons.Keyboard,
+        JChip(stringResource(if (keyboard) R.string.terminal_keyboard_hide else R.string.terminal_keyboard_show), selected = keyboard, icon = PhIcons.Keyboard,
                 modifier = Modifier.heightIn(min = 48.dp).semantics {
-                    role = Role.Button; contentDescription = if (keyboard) "收起键盘，双击回车" else "打开键盘，双击回车"
+                    role = Role.Button; contentDescription = keyboardDescription
                     onClick { currentToggle(); true }
                 }.pointerInput(Unit) { detectTapGestures(onTap = { currentToggle() }, onDoubleTap = { currentPress("enter") }) })
     }, field = {
@@ -155,7 +167,7 @@ private fun TerminalKeyBar(
                 JKeyCap(label, state = value.keyCap, enabled = enabled, modifier = Modifier
                     .semantics {
                         role = Role.Button; contentDescription = name; selected = value != ModifierState.OFF
-                        stateDescription = when (value) { ModifierState.OFF -> "未启用"; ModifierState.ONCE -> "下一个键生效"; ModifierState.HELD -> "按住"; ModifierState.LOCKED -> "已锁定" }
+                        stateDescription = modifierStates.getValue(value)
                         onClick { currentModifierAction(key, "tap", false); true }
                     }.pointerInput(key) {
                         var lastTap = Long.MIN_VALUE / 2
@@ -182,9 +194,17 @@ private fun TerminalKeyBar(
                 "→" to "right", "↵" to "enter", "⌫" to "backspace").forEach { (label, key) ->
                 JKeyCap(label, onClick = { press(key) }, enabled = enabled, contentDescription = keyNames[key])
             }
-            JKeyCap("粘贴", onClick = paste, enabled = enabled)
+            JKeyCap(stringResource(R.string.terminal_paste), onClick = paste, enabled = enabled)
         }
     })
+}
+
+/** What a screen reader says a modifier is doing. */
+private val ModifierState.description: Int get() = when (this) {
+    ModifierState.OFF -> R.string.terminal_modifier_off
+    ModifierState.ONCE -> R.string.terminal_modifier_once
+    ModifierState.HELD -> R.string.terminal_modifier_held
+    ModifierState.LOCKED -> R.string.terminal_modifier_locked
 }
 
 private val ModifierState.keyCap: KeyCapState get() = when (this) {
@@ -194,6 +214,7 @@ private val ModifierState.keyCap: KeyCapState get() = when (this) {
     ModifierState.LOCKED -> KeyCapState.Locked
 }
 
-/** What a screen reader says for the keys whose labels are symbols. */
-private val keyNames = mapOf("shift+tab" to "Shift Tab", "ctrl+c" to "Control C", "left" to "左", "down" to "下", "up" to "上",
-    "right" to "右", "enter" to "回车", "backspace" to "退格")
+/** What a screen reader says for the keys whose labels are symbols: key names, or resources for the words. */
+private val keyNameSources: Map<String, Any> = mapOf("shift+tab" to "Shift Tab", "ctrl+c" to "Control C",
+    "left" to R.string.terminal_key_left, "down" to R.string.terminal_key_down, "up" to R.string.terminal_key_up,
+    "right" to R.string.terminal_key_right, "enter" to R.string.terminal_key_enter, "backspace" to R.string.terminal_key_backspace)

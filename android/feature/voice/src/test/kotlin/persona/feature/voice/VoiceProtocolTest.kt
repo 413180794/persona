@@ -30,7 +30,7 @@ class VoiceProtocolTest {
         assertNull(VoiceEvent.parse("""["ready"]"""))
         assertEquals(VoiceEvent.Transcript("a1", false, "", true), VoiceEvent.parse("""{"type":"transcript","id":"a1","role":"assistant","final":true}"""))
         assertEquals(VoiceEvent.Tool("t2", null, false), VoiceEvent.parse("""{"type":"tool","id":"t2","label":"  "}"""))
-        assertEquals("An error without words still says something", VoiceEvent.Error("出错了", false), VoiceEvent.parse("""{"type":"error"}"""))
+        assertEquals("An error without words: the session says something", VoiceEvent.Error(null, false), VoiceEvent.parse("""{"type":"error"}"""))
     }
 
     @Test fun subtitlesRestateByIdAndAppendNewOnes() {
@@ -61,16 +61,16 @@ class VoiceProtocolTest {
     @Test fun theNewestOpenToolIsTheOneSaid() {
         var tools = OpenTools()
         assertNull(tools.current)
-        tools = tools.with(VoiceEvent.Tool("kb", "查知识库", false))
-        tools = tools.with(VoiceEvent.Tool("main", "交给主对话", false))
+        tools = tools.with(VoiceEvent.Tool("kb", "查知识库", false), "处理中")
+        tools = tools.with(VoiceEvent.Tool("main", "交给主对话", false), "处理中")
         assertEquals("交给主对话", tools.current)
-        tools = tools.with(VoiceEvent.Tool("kb", null, false))
+        tools = tools.with(VoiceEvent.Tool("kb", null, false), "处理中")
         assertEquals("A restated tool keeps its place and its name", "交给主对话", tools.current)
-        tools = tools.with(VoiceEvent.Tool("main", null, true))
+        tools = tools.with(VoiceEvent.Tool("main", null, true), "处理中")
         assertEquals("查知识库", tools.current)
-        tools = tools.with(VoiceEvent.Tool("x", null, false))
+        tools = tools.with(VoiceEvent.Tool("x", null, false), "处理中")
         assertEquals("A tool without a name", "处理中", tools.current)
-        tools = tools.with(VoiceEvent.Tool("x", null, true)).with(VoiceEvent.Tool("kb", null, true)).with(VoiceEvent.Tool("gone", null, true))
+        tools = tools.with(VoiceEvent.Tool("x", null, true), "处理中").with(VoiceEvent.Tool("kb", null, true), "处理中").with(VoiceEvent.Tool("gone", null, true), "处理中")
         assertNull(tools.current)
     }
 

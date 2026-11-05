@@ -5,10 +5,18 @@ import persona.core.contracts.api.*
 import persona.core.designsystem.Status
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 import java.time.Instant
 
 /** The node's answers as they come (shapes from a real node; times with the machine's offset), read by the Git pages. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class GitModelsTest {
+    private val res get() = RuntimeEnvironment.getApplication().resources
+
     @Test fun decodesStatus() {
         val status = JsonCodec.decodeFromString<SessionGitStatus>(
             """{"is_repo":true,"root":"/r","branch":"main","upstream":"origin/main","ahead":2,"behind":0,"stashes":1,
@@ -23,27 +31,27 @@ class GitModelsTest {
         assertEquals(listOf("main", "origin/main", "tag: v1"), status.head!!.refNames)
         assertEquals(Instant.parse("2026-06-01T02:00:00Z"), fileTime(status.head!!.date))
         assertNull(fileTime(status.commits[0].date)) // Go's zero time
-        assertNull(fileDate(status.commits[0].date))
+        assertNull(fileDate(res, status.commits[0].date))
         val (partly, untracked, renamed, conflict) = status.files
         assertEquals("M", partly.letter)
         assertTrue(partly.staged && partly.unstaged)
-        assertEquals("部分已暂存", partly.stage)
+        assertEquals("部分已暂存", res.getString(partly.stage))
         assertEquals(Status.Unread, partly.tone)
         assertEquals("b.kt", partly.name)
         assertEquals("a", partly.folder)
         assertEquals("U", untracked.letter)
         assertFalse(untracked.staged)
-        assertEquals("未跟踪", untracked.stage)
+        assertEquals("未跟踪", res.getString(untracked.stage))
         assertEquals(Status.Unknown, untracked.tone)
         assertEquals("R", renamed.letter)
         assertTrue(renamed.staged && !renamed.unstaged)
         assertEquals("old.go", renamed.originalPath)
         assertEquals("", renamed.folder)
-        assertEquals("已暂存", renamed.stage)
+        assertEquals("已暂存", res.getString(renamed.stage))
         assertEquals("!", conflict.letter)
-        assertEquals("有冲突", conflict.stage)
+        assertEquals("有冲突", res.getString(conflict.stage))
         assertEquals(Status.NeedsYou, conflict.tone)
-        assertEquals("↑2  贮藏 1", gitSync(status))
+        assertEquals("↑2  贮藏 1", gitSync(res, status))
     }
 
     @Test fun nodeAnswersDecode() {
@@ -54,15 +62,15 @@ class GitModelsTest {
         assertEquals(Instant.parse("2026-10-31T05:58:40Z"), fileTime(status.head?.date))
         assertEquals(listOf("master"), status.head?.refNames)
         assertEquals(listOf("M", "U"), status.files.map { it.letter })
-        assertEquals("未暂存", status.files[0].stage)
-        assertNull(gitSync(status)) // no upstream, no stash: nothing to say
+        assertEquals("未暂存", res.getString(status.files[0].stage))
+        assertNull(gitSync(res, status)) // no upstream, no stash: nothing to say
         val listing = JsonCodec.decodeFromString<SessionDirectory>(
             """{"entries":[{"name":"src","dir":true,"size":4096,"mtime":"2026-10-31T13:58:40.205893083+08:00"}],"path":"/tmp/t","truncated":false}""",
         )
         assertEquals(Instant.parse("2026-10-31T05:58:40.205893083Z"), fileTime(listing.entries.single().mtime))
         val synced = status.copy(upstream = "origin/master")
-        assertEquals("已同步", gitSync(synced))
-        assertEquals("↑1  ↓3", gitSync(synced.copy(ahead = 1, behind = 3)))
+        assertEquals("已同步", gitSync(res, synced))
+        assertEquals("↑1  ↓3", gitSync(res, synced.copy(ahead = 1, behind = 3)))
     }
 
     @Test fun refNamesDropABareHead() {

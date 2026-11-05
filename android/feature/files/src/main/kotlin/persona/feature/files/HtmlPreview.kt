@@ -1,6 +1,7 @@
 package persona.feature.files
 
 import android.annotation.SuppressLint
+import android.content.res.Resources
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.viewinterop.AndroidView
@@ -68,14 +70,14 @@ internal object HtmlPreview {
     fun opens(scheme: String) = scheme.lowercase() in openable
 
     /** The line above the page: what is off, and what can't load. */
-    fun notice(p: Policy, refs: Int): String = buildList {
+    fun notice(resources: Resources, p: Policy, refs: Int): String = buildList {
         add(when {
-            p.scripts && p.network -> "已允许脚本和联网"
-            p.scripts -> "已允许脚本，联网已关闭"
-            p.network -> "已允许联网，脚本已关闭"
-            else -> "预览：脚本和联网已关闭，可在 ⋯ 里打开"
+            p.scripts && p.network -> resources.getString(R.string.files_html_scripts_network)
+            p.scripts -> resources.getString(R.string.files_html_scripts)
+            p.network -> resources.getString(R.string.files_html_network)
+            else -> resources.getString(R.string.files_html_off)
         })
-        if (refs > 0) add("页面引用的 $refs 个相邻文件不会加载")
+        if (refs > 0) add(resources.getQuantityString(R.plurals.files_html_refs, refs, refs))
     }.joinToString(" · ")
 }
 
@@ -89,7 +91,7 @@ internal fun HtmlFile(file: SessionFileContent, policy: HtmlPreview.Policy, modi
     val open by rememberUpdatedState<(String) -> Unit>({ runCatching { links.openUri(it) } })
     val background = PersonaTheme.palette.background.toArgb()
     Column(modifier) {
-        Notice(HtmlPreview.notice(policy, remember(html) { HtmlPreview.relativeRefs(html) }))
+        Notice(HtmlPreview.notice(LocalResources.current, policy, remember(html) { HtmlPreview.relativeRefs(html) }))
         // The policy too: with the network on the document is the same whether scripts are on or not.
         key(document, policy) {
             AndroidView(

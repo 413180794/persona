@@ -20,9 +20,11 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -32,6 +34,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import android.content.res.Resources
+import androidx.annotation.StringRes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import persona.core.contracts.api.SessionFileContent
@@ -42,7 +46,7 @@ import java.util.Base64
 /** A table file read for the viewer: its sheets, or what went wrong. */
 internal sealed interface SheetLoad {
     data object Reading : SheetLoad
-    class Failed(val reason: String) : SheetLoad
+    class Failed(@StringRes val reason: Int) : SheetLoad
     class Ready(val sheets: List<TableSheet>) : SheetLoad
 }
 
@@ -54,12 +58,12 @@ internal fun readSheets(file: SessionFileContent): SheetLoad = try {
         TableFiles.isDelimited(file.name) && file.data != null ->
             SheetLoad.Ready(listOf(Delimited.sheet(file.name, String(Base64.getMimeDecoder().decode(file.data), Charsets.UTF_8))))
         file.data != null -> SheetLoad.Ready(Xlsx.read(Base64.getMimeDecoder().decode(file.data)))
-        else -> SheetLoad.Failed("没有读到文件内容")
+        else -> SheetLoad.Failed(R.string.files_sheet_no_content)
     }
 } catch (e: SheetFailure) {
-    SheetLoad.Failed(e.message.orEmpty())
+    SheetLoad.Failed(e.reason)
 } catch (e: IllegalArgumentException) {
-    SheetLoad.Failed("文件内容不完整")
+    SheetLoad.Failed(R.string.files_sheet_incomplete)
 }
 
 /**
@@ -76,7 +80,10 @@ internal fun SheetFile(file: SessionFileContent, contentPadding: PaddingValues, 
         SheetLoad.Reading -> LazyColumn(contentPadding = contentPadding) { header(); item { JLoading() } }
         is SheetLoad.Failed -> LazyColumn(contentPadding = contentPadding) {
             header()
-            item { JEmptyState("无法显示这个表格", if (file.truncated) "文件超过 2 MB，只读到了前面的部分。${state.reason}" else state.reason) }
+            item {
+                val reason = stringResource(state.reason)
+                JEmptyState(stringResource(R.string.files_sheet_failed), if (file.truncated) stringResource(R.string.files_sheet_failed_truncated, reason) else reason)
+            }
         }
         is SheetLoad.Ready -> SheetGrid(state.sheets, file.truncated, contentPadding, header)
     }
@@ -103,6 +110,7 @@ internal fun SheetGrid(sheets: List<TableSheet>, truncated: Boolean, contentPadd
         }
     }
     val context = LocalContext.current
+    val resources = LocalResources.current
     val feedback = LocalAppFeedback.current
     val palette = PersonaTheme.palette
     Column(Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding()).testTag("sheet")) {
@@ -112,10 +120,10 @@ internal fun SheetGrid(sheets: List<TableSheet>, truncated: Boolean, contentPadd
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
             header()
-            if (truncated) item("cut") { Notice("文件超过 2 MB，只显示了前面读到的行") }
-            if (sheet.capped) item("capped") { Notice("表格太长，只显示了前 ${TableSheet.MAX_ROWS} 行") }
+            if (truncated) item("cut") { Notice(stringResource(R.string.files_sheet_truncated)) }
+            if (sheet.capped) item("capped") { Notice(stringResource(R.string.files_sheet_capped, LocalizedFormats.number(TableSheet.MAX_ROWS, currentLocale))) }
             if (sheet.rows.isEmpty()) {
-                item("empty") { JEmptyState("这个工作表是空的", "没有任何单元格。") }
+                item("empty") { JEmptyState(stringResource(R.string.files_sheet_empty), stringResource(R.string.files_sheet_empty_message)) }
                 return@LazyColumn
             }
             // The column letters and the file's first row (its header, as iOS pins it) stay at the top.
@@ -133,13 +141,13 @@ internal fun SheetGrid(sheets: List<TableSheet>, truncated: Boolean, contentPadd
             }
         }
         SheetFooter(sheet, selected, truncated, Modifier.background(palette.surfaceOpaque).padding(bottom = contentPadding.calculateBottomPadding())) {
-            copyText(context, it, feedback, "已拷贝单元格")
+            copyText(context, it, feedback, resources.getString(R.string.files_cell_copied))
         }
     }
     menu?.let { (r, c) ->
         JActionSheet(listOf(
-            JAction("拷贝单元格", PhIcons.Copy) { copyText(context, sheet[r, c], feedback, "已拷贝单元格") },
-            JAction("拷贝整行", PhIcons.Copy) { copyText(context, sheet.rowText(r), feedback, "已拷贝整行") },
+            JAction(stringResource(R.string.files_copy_cell), PhIcons.Copy) { copyText(context, sheet[r, c], feedback, resources.getString(R.string.files_cell_copied)) },
+            JAction(stringResource(R.string.files_copy_row), PhIcons.Copy) { copyText(context, sheet.rowText(r), feedback, resources.getString(R.string.files_row_copied)) },
         ), { menu = null }, TableSheet.columnName(c) + (r + 1))
     }
 }
@@ -163,6 +171,7 @@ private fun SheetRow(numberWidth: Dp, height: Dp, horizontal: ScrollState, label
 private fun SheetCell(text: String, width: Dp, height: Dp, header: Boolean, numeric: Boolean, selected: Boolean, strong: Boolean = false,
     onClick: (() -> Unit)? = null, onLongClick: (() -> Unit)? = null) {
     val palette = PersonaTheme.palette
+    val empty = stringResource(R.string.files_empty_cell)
     val fill = when {
         selected -> palette.accentSoft
         header -> palette.sunken
@@ -170,7 +179,7 @@ private fun SheetCell(text: String, width: Dp, height: Dp, header: Boolean, nume
     }
     Box(Modifier.size(width, height).then(if (fill != null) Modifier.background(fill) else Modifier).gridLines(palette.line)
         .then(if (onClick != null) Modifier.combinedClickable(onLongClick = onLongClick, onClick = onClick) else Modifier)
-        .semantics { if (text.isEmpty()) contentDescription = "空单元格" }
+        .semantics { if (text.isEmpty()) contentDescription = empty }
         .padding(horizontal = Tokens.Space.s),
         contentAlignment = if (header) Alignment.Center else if (numeric) Alignment.CenterEnd else Alignment.CenterStart) {
         Text(text.replace('\n', ' '), style = when { header -> PersonaTheme.type.caption; strong -> cellStyle().copy(fontWeight = FontWeight.SemiBold); else -> cellStyle() }, color = if (header) palette.ink2 else palette.ink,
@@ -191,18 +200,21 @@ private fun SheetFooter(sheet: TableSheet, selected: Pair<Int, Int>?, truncated:
             SelectionContainer(Modifier.weight(1f)) {
                 Text(text.ifEmpty { " " }, style = PersonaTheme.type.callout, color = palette.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
-            JIconButton(PhIcons.Copy, "拷贝单元格", { copy(text) })
+            JIconButton(PhIcons.Copy, stringResource(R.string.files_copy_cell), { copy(text) })
         } else {
-            Text(sheetSummary(sheet, truncated), Modifier.weight(1f), style = PersonaTheme.type.label, color = palette.ink2,
+            Text(sheetSummary(LocalResources.current, sheet, truncated), Modifier.weight(1f), style = PersonaTheme.type.label, color = palette.ink2,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
-internal fun sheetSummary(sheet: TableSheet, truncated: Boolean): String = buildList {
-    add("${sheet.rows.size} 行 × ${sheet.columns} 列")
-    if (sheet.capped) add("只显示了前 ${TableSheet.MAX_ROWS} 行")
-    else if (truncated) add("只读了前 2 MB")
+internal fun sheetSummary(resources: Resources, sheet: TableSheet, truncated: Boolean): String = buildList {
+    val locale = resources.configuration.locales[0]
+    val rows = resources.getQuantityString(R.plurals.files_sheet_rows, sheet.rows.size, LocalizedFormats.number(sheet.rows.size, locale))
+    val columns = resources.getQuantityString(R.plurals.files_sheet_columns, sheet.columns, LocalizedFormats.number(sheet.columns, locale))
+    add(resources.getString(R.string.files_sheet_size, rows, columns))
+    if (sheet.capped) add(resources.getString(R.string.files_sheet_capped_short, LocalizedFormats.number(TableSheet.MAX_ROWS, locale)))
+    else if (truncated) add(resources.getString(R.string.files_sheet_truncated_short))
 }.joinToString(" · ")
 
 @Composable private fun cellStyle(): TextStyle = PersonaTheme.type.callout
@@ -232,7 +244,7 @@ private fun columnWidths(sheet: TableSheet): List<Dp> {
     // One measurement for a character cell (half a CJK glyph, or a digit if wider), times each column's widest text in
     // cells: a sheet can have thousands of columns, too many to lay each one's text out on the main thread.
     val cell = remember(style, density) {
-        with(density) { maxOf(measurer.measure("国", style).size.width / 2f, measurer.measure("0", style).size.width.toFloat()).toDp() }
+        with(density) { maxOf(measurer.measure("国", style).size.width / 2f, measurer.measure("0", style).size.width.toFloat()).toDp() } // i18n-ignore: glyphs to measure, not shown
     }
     return remember(sheet, cell, pad, min, max) {
         List(sheet.columns) { c ->
@@ -288,7 +300,7 @@ private fun rowHeight(): Dp {
     val measurer = rememberTextMeasurer()
     val style = cellStyle()
     val density = LocalDensity.current
-    return remember(style, density) { with(density) { measurer.measure("国Ag", style, maxLines = 1).size.height.toDp() } + Tokens.Space.s * 2 }
+    return remember(style, density) { with(density) { measurer.measure("国Ag", style, maxLines = 1).size.height.toDp() } + Tokens.Space.s * 2 } // i18n-ignore: glyphs to measure, not shown
 }
 
 /** The row-number column: wide enough for the last row's number. */

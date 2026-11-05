@@ -47,6 +47,7 @@ internal class VoicePage(
     private val extensionId: String,
     private val prefs: VoicePrefs,
     private val scope: CoroutineScope,
+    private val text: VoiceText,
     private val audio: () -> VoiceAudio,
 ) {
     private val mutable = MutableStateFlow(VoicePageState(voice = prefs.voice(extensionId)))
@@ -69,7 +70,7 @@ internal class VoicePage(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                VoiceSetup.Failed(loadFailure(error))
+                VoiceSetup.Failed(loadFailure(error, text))
             }
             mutable.update { it.copy(setup = setup) }
             if (setup !is VoiceSetup.Ready) return@launch
@@ -83,7 +84,7 @@ internal class VoicePage(
         val choice = async { extensions.modelChoice(extensionId) }
         val catalog = models.await()
         mutable.update { it.copy(models = catalog) }
-        resolveVoiceModel(choice.await(), catalog)
+        resolveVoiceModel(choice.await(), catalog, text)
     }
 
     /** A voice list that cannot be read does not stop the conversation: the picked voice (or the default) is used. */
@@ -94,12 +95,12 @@ internal class VoicePage(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            mutable.update { it.copy(voices = null, voicesError = voicesFailure(error)) }
+            mutable.update { it.copy(voices = null, voicesError = voicesFailure(error, text)) }
         }
     }
 
     private fun talk(model: String?) {
-        val session = VoiceSession(extensions, extensionId, state.value.chosenVoice, model, audio())
+        val session = VoiceSession(extensions, extensionId, state.value.chosenVoice, model, audio(), text)
         current.value = session
         session.start()
     }

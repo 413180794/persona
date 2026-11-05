@@ -1,10 +1,16 @@
 package persona.feature.machines
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import persona.core.contracts.*
 import persona.core.contracts.api.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+
+/** Why the metrics are not current: the hub or node has no monitoring yet, or the hub is out of reach. */
+internal enum class MachinesFailure(@StringRes val text: Int) {
+    Unavailable(R.string.machines_failure_unavailable), Offline(R.string.machines_failure_offline)
+}
 
 internal data class MachinesState(
     val dashboard: MetricsDashboard? = null,
@@ -12,7 +18,7 @@ internal data class MachinesState(
     val range: MetricRange = MetricRange.Hour,
     val now: Long = 0,
     val loading: Boolean = true,
-    val failure: String? = null,
+    val failure: MachinesFailure? = null,
     val sessionsFailure: Boolean = false,
 )
 
@@ -62,8 +68,7 @@ internal class MachinesViewModel(
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
             mutable.update { it.copy(now = clock(), loading = false, failure = if (error is MetricsUnavailable)
-                "暂时没有监控接口。请确认机器仍在列表中，部署新版本的 hub 和 node 后再看。"
-                else "暂时无法更新，连上 hub 后会自动重试。") }
+                MachinesFailure.Unavailable else MachinesFailure.Offline) }
         }
     }
 }

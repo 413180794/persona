@@ -35,7 +35,7 @@ class KnowledgeFlowTest {
             assertEquals(listOf("project", "other"), list.page.value.groups.map { it.id })
             assertEquals(1, list.page.value.groups.first().hits.size)
             assertEquals("示例项目", list.page.value.groups.first().entry.name)
-            assertEquals("文档", list.page.value.groups.last().entry.name)
+            assertFalse(list.page.value.groups.last().named)
             assertFalse(list.page.value.groups.last().named)
             assertTrue(repository.oldCancelled)
             repository.old.complete(listOf(KnowledgeHit("people/old/summary.md", "过时结果")))
@@ -52,11 +52,11 @@ class KnowledgeFlowTest {
             runCurrent()
             var handoffs = 0
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { detail.handoffs.collect { handoffs++ } }
-            detail.ask("下一步呢？"); runCurrent()
+            detail.ask("下一步呢？", "项目"); runCurrent()
             assertFalse(detail.sending.value.busy)
             assertNotNull(detail.sending.value.message)
             assertEquals(0, handoffs)
-            detail.ask("下一步呢？"); runCurrent()
+            detail.ask("下一步呢？", "项目"); runCurrent()
             assertEquals(1, handoffs)
             assertEquals(2, sender.sent.size)
             assertEquals(sender.sent[0].third, sender.sent[1].third)
@@ -67,7 +67,7 @@ class KnowledgeFlowTest {
             assertTrue(text.contains("demo:/workspace/example"))
             assertTrue(text.contains("进展 11"))
             assertFalse(text.contains("进展 0\n"))
-            detail.ask("整理一下"); runCurrent()
+            detail.ask("整理一下", "项目"); runCurrent()
             assertEquals(2, handoffs)
             assertEquals(PendingMainConversation, sender.sent.last().first)
             assertNotEquals(sender.sent[1].third, sender.sent[2].third)
@@ -75,7 +75,7 @@ class KnowledgeFlowTest {
             connection.current.value = null; runCurrent()
             assertNull(detail.page.value.detail)
             assertFalse(list.page.value.paired)
-            detail.ask("不能发送旧档案"); runCurrent()
+            detail.ask("不能发送旧档案", "项目"); runCurrent()
             assertEquals(3, sender.sent.size)
         } finally {
             backgroundScope.cancel()
@@ -107,7 +107,7 @@ class KnowledgeTaggingFlowTest {
             repository.fail = true
             detail.saveTags(KnowledgeUpdate("P0", 90, listOf("iOS")))
             runCurrent()
-            assertTrue(detail.tagging.value.error.orEmpty().startsWith("没有保存："))
+            assertNotNull(detail.tagging.value.error)
             assertEquals(0, detail.tagging.value.saved)
             assertEquals("P2", list.page.value.entries.single().importance)
 

@@ -7,8 +7,10 @@ import persona.feature.files.Notebooks.CellType
 import persona.feature.files.Notebooks.Output
 
 class NotebooksTest {
+    private val more = { lines: Int -> "… 还有 $lines 行没有显示" }
+
     @Test fun readsCellsAndOutputs() {
-        val nb = Notebooks.parse(SAMPLE)
+        val nb = Notebooks.parse(SAMPLE, more)
         assertEquals("Python 3", nb.kernel)
         assertEquals("python", nb.language)
         assertEquals("4.5", nb.format)
@@ -40,7 +42,7 @@ class NotebooksTest {
               {"output_type":"stream","stream":"stderr","text":"warn\n"},
               {"output_type":"pyout","prompt_number":1,"text":["1"],"metadata":{}},
               {"output_type":"display_data","png":"iVBORw0KGgo=","text":["<Figure>"]},
-              {"output_type":"display_data","html":["<b>hi</b>"]}]}]}]}""")
+              {"output_type":"display_data","html":["<b>hi</b>"]}]}]}]}""", more)
         assertEquals("julia", nb.language)
         assertEquals("## 小节", nb.cells[0].source)
         assertEquals(1, nb.cells[1].count)
@@ -51,21 +53,21 @@ class NotebooksTest {
 
     @Test fun latexBecomesDisplayMath() {
         val nb = Notebooks.parse("""{"nbformat":4,"cells":[{"cell_type":"code","source":"","outputs":[
-            {"output_type":"execute_result","data":{"text/latex":"x^2"}}]}]}""")
+            {"output_type":"execute_result","data":{"text/latex":"x^2"}}]}]}""", more)
         assertEquals(listOf(Output.Markdown("$$\nx^2\n$$")), nb.cells[0].outputs)
     }
 
     @Test fun notANotebookSaysWhy() {
-        val bad = runCatching { Notebooks.parse("{oops") }.exceptionOrNull()
+        val bad = runCatching { Notebooks.parse("{oops", more) }.exceptionOrNull()
         assertTrue(bad is Notebooks.Invalid)
-        val noCells = runCatching { Notebooks.parse("{}") }.exceptionOrNull()
-        assertEquals("不是有效的笔记本文件（没有 cells）", noCells?.message)
+        val noCells = runCatching { Notebooks.parse("{}", more) }.exceptionOrNull()
+        assertEquals(R.string.files_notebook_no_cells, (noCells as? Notebooks.Invalid)?.reason)
     }
 
     @Test fun capsLongOutput() {
         val text = (1..5).joinToString("\n")
-        assertEquals("1\n2\n… 还有 3 行没有显示", Notebooks.capLines(text, 2))
-        assertEquals(text, Notebooks.capLines(text, 10))
+        assertEquals("1\n2\n… 还有 3 行没有显示", Notebooks.capLines(text, more, 2))
+        assertEquals(text, Notebooks.capLines(text, more, 10))
     }
 
     @Test fun stripsAnsi() {

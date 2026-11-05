@@ -1,5 +1,6 @@
 package persona.feature.terminal
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import persona.core.contracts.*
@@ -9,10 +10,21 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 enum class TerminalControl { Watching, Starting, Active, Busy }
+
+/** What the notice above the terminal says about the stream; the page shows it in its language. */
+enum class TerminalNote(@StringRes val text: Int) {
+    Offline(R.string.terminal_note_offline), NoTerminal(R.string.terminal_note_no_terminal),
+    ReadFailed(R.string.terminal_note_read_failed), Disconnected(R.string.terminal_note_disconnected),
+    StreamStopped(R.string.terminal_note_stream_stopped), Busy(R.string.terminal_note_busy),
+    Unsupported(R.string.terminal_note_unsupported), TakenOver(R.string.terminal_note_taken),
+}
+
+/** One-off messages for the shell's feedback. */
+enum class TerminalNotice(@StringRes val text: Int) { KeysNotSent(R.string.terminal_notice_keys_not_sent) }
 data class TerminalUiState(
     val lines: List<TermRow> = emptyList(), val cols: Int = 0, val rows: Int = 0,
     val cursor: TerminalCursor? = null, val control: TerminalControl = TerminalControl.Watching,
-    val loaded: Boolean = false, val online: Boolean = false, val note: String? = null,
+    val loaded: Boolean = false, val online: Boolean = false, val note: TerminalNote? = null,
     val marked: String = "", val modifiers: Map<TerminalModifiers.Key, ModifierState> = emptyMap(),
     val streaming: Boolean = false,
     /** Where the live screen starts in [lines]: the rows above it scrolled off while the phone drove the terminal. */
@@ -33,7 +45,7 @@ class TerminalViewModel(val key: SessionKey, private val transport: TerminalTran
                         private val preferences: TerminalPreferences = MemoryTerminalPreferences()) : ViewModel() {
     private val _state = MutableStateFlow(TerminalUiState(fontSize = preferences.fontSize, drive = preferences.drive))
     val state = _state.asStateFlow()
-    private val _notices = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    private val _notices = MutableSharedFlow<TerminalNotice>(extraBufferCapacity = 4)
     /** One-off messages for the shell's feedback (a key that did not go out); the page's notice is the stream's state. */
     val notices = _notices.asSharedFlow()
     private val frames = TerminalFrames()
@@ -73,7 +85,7 @@ class TerminalViewModel(val key: SessionKey, private val transport: TerminalTran
                 _state.update { it.copy(online = online, wheel = "terminal_scroll" in transport.features.value) }
                 if (!online) {
                     subscribed = false
-                    _state.update { it.copy(control = TerminalControl.Watching, note = "连不上 hub，显示的是上次画面") }
+                    _state.update { it.copy(control = TerminalControl.Watching, note = TerminalNote.Offline) }
                 } else if ("terminal_stream" in transport.features.value && !unsupported) {
                     if (!subscribed && now >= retryAt) subscribe()
                 } else if (now >= pollAt) {
@@ -88,10 +100,10 @@ class TerminalViewModel(val key: SessionKey, private val transport: TerminalTran
                         // with a 重试 that only brought it back said it a second time, and changed the terminal's height.
                         if (version == revision) _state.update { it.copy(lines = lines, cols = lines.maxOfOrNull { row -> row.size } ?: 0,
                             rows = lines.size, cursor = null, screenStart = 0, loaded = true,
-                            note = if (screen.status == "offline") "没有终端：恢复会话后就能看到" else null) }
+                            note = if (screen.status == "offline") TerminalNote.NoTerminal else null) }
                         pollAt = now + 1000
                     } catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { failed("读取终端失败，正在重试"); pollAt = retryAt }
+                    catch (_: Exception) { failed(TerminalNote.ReadFailed); pollAt = retryAt }
                 }
                 delay(250)
             }
@@ -209,13 +221,13 @@ class TerminalViewModel(val key: SessionKey, private val transport: TerminalTran
                 catch (_: Exception) {
                     // Later keys would land out of context (an Enter after lost text): drop them with it.
                     while (legacyKeys.take() != null) Unit
-                    _notices.tryEmit("按键没有发出去，请再试一次")
+                    _notices.tryEmit(TerminalNotice.KeysNotSent)
                 }
             }
         }
     }
     private fun disconnectedInput() {
-        _state.update { it.copy(control = TerminalControl.Watching, note = "连接已断开，刚才的输入没有发出") }; subscribed = false
+        _state.update { it.copy(control = TerminalControl.Watching, note = TerminalNote.Disconnected) }; subscribed = false
     }
     private fun publishModifiers() { _state.update { it.copy(modifiers = TerminalModifiers.Key.entries.associateWith { key -> modifiers[key] }) } }
     private fun remember(drive: Boolean) {
@@ -243,7 +255,7 @@ class TerminalViewModel(val key: SessionKey, private val transport: TerminalTran
         if (frame.error != null) {
             subscribed = false; unsupported = frame.unsupported; frames.forget()
             _state.update { it.copy(control = TerminalControl.Watching) }
-            failed(if (frame.error?.contains("not running") == true) "没有终端：恢复会话后就能看到" else "终端流已停止，正在重试")
+            failed(if (frame.error?.contains("not running") == true) TerminalNote.NoTerminal else TerminalNote.StreamStopped)
             return
         }
         val version = revision
@@ -268,15 +280,15 @@ class TerminalViewModel(val key: SessionKey, private val transport: TerminalTran
         if (!subscribed) return
         when (event.state) {
             "active" -> if (wanted) _state.update { it.copy(control = TerminalControl.Active, note = null) }
-            "busy" -> { wanted = false; frames.forgetScrollback(); _state.update { it.copy(control = TerminalControl.Busy, note = "电脑上另一个程序正在使用这个终端") } }
+            "busy" -> { wanted = false; frames.forgetScrollback(); _state.update { it.copy(control = TerminalControl.Busy, note = TerminalNote.Busy) } }
             else -> {
                 wanted = false; resize?.cancel(); frames.forgetScrollback()
                 _state.update { it.copy(control = TerminalControl.Watching, marked = "",
-                    note = if (event.state == "unsupported") "这台电脑只能看，不能接管" else "终端已被接管，现在只能看") }
+                    note = if (event.state == "unsupported") TerminalNote.Unsupported else TerminalNote.TakenOver) }
             }
         }
     }
-    private fun failed(note: String) {
+    private fun failed(note: TerminalNote) {
         failures++
         retryAt = now + minOf(15_000L, 1000L shl minOf(failures - 1, 4))
         _state.update { it.copy(note = note, loaded = true) }

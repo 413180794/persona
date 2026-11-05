@@ -15,6 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -27,7 +31,7 @@ import java.util.Base64
 
 private sealed interface NotebookLoad {
     data object Reading : NotebookLoad
-    class Failed(val reason: String) : NotebookLoad
+    class Failed(@StringRes val reason: Int) : NotebookLoad
     class Ready(val notebook: Notebooks.Notebook) : NotebookLoad
 }
 
@@ -39,9 +43,11 @@ private sealed interface NotebookLoad {
 @Composable
 internal fun NotebookFile(text: String, base: String, contentPadding: PaddingValues, header: LazyListScope.() -> Unit,
     onOpenPath: (String) -> Unit, loadImage: suspend (String) -> ByteArray?, truncated: Boolean = false) {
-    val load by produceState<NotebookLoad>(NotebookLoad.Reading, text) {
+    val resources = LocalResources.current
+    val load by produceState<NotebookLoad>(NotebookLoad.Reading, text, resources) {
         value = withContext(Dispatchers.Default) {
-            try { NotebookLoad.Ready(Notebooks.parse(text)) } catch (e: Notebooks.Invalid) { NotebookLoad.Failed(e.message.orEmpty()) }
+            val more = { lines: Int -> resources.getQuantityString(R.plurals.files_notebook_lines_hidden, lines, lines) }
+            try { NotebookLoad.Ready(Notebooks.parse(text, more)) } catch (e: Notebooks.Invalid) { NotebookLoad.Failed(e.reason) }
         }
     }
     val side = pagePadding
@@ -52,12 +58,15 @@ internal fun NotebookFile(text: String, base: String, contentPadding: PaddingVal
             NotebookLoad.Reading -> item { JLoading() }
             is NotebookLoad.Failed -> item {
                 // A notebook cut at 2 MB is JSON cut in half: say that, not just that it doesn't parse.
-                JEmptyState("无法显示这个笔记本", if (truncated) "文件超过 2 MB，只读到了前面的部分，笔记本不完整。可以在 ⋯ 里查看源文件。" else state.reason)
+                JEmptyState(stringResource(R.string.files_notebook_failed), if (truncated) stringResource(R.string.files_notebook_truncated) else stringResource(state.reason))
             }
             is NotebookLoad.Ready -> {
                 val nb = state.notebook
-                item("about") { Notice(listOf(nb.kernel ?: nb.language, "${nb.cells.size} 个单元格", "nbformat ${nb.format}").joinToString(" · ")) }
-                if (nb.cells.isEmpty()) item("empty") { JEmptyState("笔记本是空的", "没有任何单元格。") }
+                item("about") {
+                    val cells = pluralStringResource(R.plurals.files_notebook_cells, nb.cells.size, nb.cells.size)
+                    Notice(listOf(nb.kernel ?: nb.language, cells, "nbformat ${nb.format}").joinToString(" · "))
+                }
+                if (nb.cells.isEmpty()) item("empty") { JEmptyState(stringResource(R.string.files_notebook_empty), stringResource(R.string.files_notebook_empty_message)) }
                 itemsIndexed(nb.cells, key = { i, _ -> "cell:$i" }, contentType = { _, c -> c.type }) { _, cell ->
                     NotebookCell(cell, nb.language, base, onOpenPath, loadImage, Modifier.padding(horizontal = side, vertical = Tokens.Space.s))
                 }
@@ -128,6 +137,6 @@ private fun OutputImage(image: Notebooks.Output.Image) {
         value = withContext(Dispatchers.Default) { runCatching { Base64.getMimeDecoder().decode(image.base64) }.getOrNull() }
     }
     val data = bytes ?: return
-    AsyncImage(model = data, contentDescription = "输出的图片", contentScale = ContentScale.FillWidth,
+    AsyncImage(model = data, contentDescription = stringResource(R.string.files_notebook_output_image), contentScale = ContentScale.FillWidth,
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(Tokens.Radius.badge)))
 }

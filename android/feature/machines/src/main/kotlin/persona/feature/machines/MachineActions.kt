@@ -1,5 +1,6 @@
 package persona.feature.machines
 
+import android.content.res.Resources
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import persona.core.contracts.api.AgentLauncher
@@ -15,12 +16,30 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+/** What a finished action says; the route turns it into text in the page's language. */
+internal sealed interface MachineNotice {
+    data object Connected : MachineNotice
+    /** Still offline after the wait, with the machine's error when the hub has one. */
+    data class NotYet(val reason: String?) : MachineNotice
+    data class ReconnectFailed(val reason: String) : MachineNotice
+    data class DeployFailed(val reason: String) : MachineNotice
+
+    fun text(resources: Resources): String = when (this) {
+        Connected -> resources.getString(R.string.machines_notice_connected)
+        is NotYet -> reason?.let { resources.getString(R.string.machines_notice_not_yet_reason, it) }
+            ?: resources.getString(R.string.machines_notice_not_yet)
+        is ReconnectFailed -> resources.getString(R.string.machines_notice_reconnect_failed, reason)
+        is DeployFailed -> resources.getString(R.string.machines_notice_deploy_failed, reason)
+    }
+}
+
 private const val RECONNECT_POLL_MILLIS = 3_000L
 
 internal data class MachineActionsState(
     /** The machine's launchers; null until read (offline machines have none to list). */
     val launchers: List<AgentLauncher>? = null,
     val launchersLoading: Boolean = false,
+    /** Why the launchers could not be read (the hub's reason), shown as 读不到启动器：… */
     val launchersError: String? = null,
     val reconnecting: Boolean = false,
     /** Machines whose 重新部署 was sent and not answered yet; the hub's `deploying` takes over after that. */
@@ -38,7 +57,7 @@ internal class MachineActionsViewModel(
 ) : ViewModel() {
     private val mutable = MutableStateFlow(MachineActionsState())
     val state = mutable.asStateFlow()
-    private val noticeChannel = Channel<String>(Channel.BUFFERED)
+    private val noticeChannel = Channel<MachineNotice>(Channel.BUFFERED)
     /** One notice per finished action, for the app's feedback. */
     val notices = noticeChannel.receiveAsFlow()
     private var launchersJob: Job? = null
@@ -57,7 +76,7 @@ internal class MachineActionsViewModel(
                 mutable.update { it.copy(launchers = launchers, launchersLoading = false) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
-                mutable.update { it.copy(launchersLoading = false, launchersError = "读不到启动器：${failureReason(error)}") }
+                mutable.update { it.copy(launchersLoading = false, launchersError = failureReason(error)) }
             }
         }
     }
@@ -70,7 +89,7 @@ internal class MachineActionsViewModel(
                 try { management.reconnect(machineId) }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (error: Exception) {
-                    noticeChannel.trySend("重新连接失败：${failureReason(error)}")
+                    noticeChannel.trySend(MachineNotice.ReconnectFailed(failureReason(error)))
                     return@launch
                 }
                 val back = withTimeoutOrNull(reconnectWaitMillis) {
@@ -85,9 +104,8 @@ internal class MachineActionsViewModel(
                         sessions.machines.first { list -> list.any { it.id == machineId && it.online } }.also { poll.cancel() }
                     }
                 }
-                noticeChannel.trySend(if (back != null) "已连上" else {
-                    val why = sessions.machines.value.firstOrNull { it.id == machineId }?.error?.takeIf { it.isNotBlank() }
-                    "还没连上" + (why?.let { "：$it" } ?: "")
+                noticeChannel.trySend(if (back != null) MachineNotice.Connected else {
+                    MachineNotice.NotYet(sessions.machines.value.firstOrNull { it.id == machineId }?.error?.takeIf { it.isNotBlank() })
                 })
             } finally { mutable.update { it.copy(reconnecting = false) } }
         }
@@ -102,7 +120,7 @@ internal class MachineActionsViewModel(
                 // Progress and the outcome come with the machine list (deploying, deploy_error, node_mismatch).
                 try { sessions.refresh() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { noticeChannel.trySend("部署失败：${failureReason(error)}") }
+            catch (error: Exception) { noticeChannel.trySend(MachineNotice.DeployFailed(failureReason(error))) }
             finally { mutable.update { it.copy(deployStarting = it.deployStarting - machineId) } }
         }
     }
