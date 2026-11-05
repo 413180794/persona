@@ -49,6 +49,8 @@ func TestRetirable(t *testing.T) {
 		{"background shell", func(s *proto.Session) { s.Background = []proto.BackgroundTask{{}} }, done, false},
 		{"subagent running", func(s *proto.Session) { s.Subagents = []proto.Subagent{{Running: true}} }, done, false},
 		{"subagent finished", func(s *proto.Session) { s.Subagents = []proto.Subagent{{}} }, done, true},
+		{"workflow running", func(s *proto.Session) { s.Workflows = []proto.Workflow{{TaskID: "w", Running: true}} }, done, false},
+		{"workflow ended", func(s *proto.Session) { s.Workflows = []proto.Workflow{{TaskID: "w", Status: proto.WorkflowCompleted}} }, done, true},
 		{"loop", func(s *proto.Session) { s.Loop = &proto.LoopInfo{} }, done, false},
 		{"serving a port", func(s *proto.Session) { s.Ports = []proto.Port{{}} }, done, false},
 		{"offline", func(s *proto.Session) { s.Status, s.PaneID = proto.StatusOffline, "" }, done, false},

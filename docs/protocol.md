@@ -341,8 +341,20 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
  // 关联的未完成待办（docs/todos.md）：只在当前有关联（未 released）且待办未完成时出现，由 hub 补齐
  "todo":{"id":"todo_…","title":"天气 App 发 1.3 版"},
  "quiet":true,   // 给安静的任务干活（干过）的 Agent（#1731，docs/unified-entry.md「安静的任务」）：不进任务通知和全局角标，任务做完后也一直带着
- "background":[{"id":"b85polnoj","kind":"shell|agent","description":"…","command":"…",   // 还没回报的后台命令 / 子代理
-                "output_file":"/private/tmp/…/b85polnoj.output","started_at":"..."}],
+ "background":[{"id":"b85polnoj","kind":"shell|agent|monitor|workflow","description":"…","command":"…",   // 还没回报的后台命令 / 子代理 / Monitor / workflow
+                "output_file":"/private/tmp/…/b85polnoj.output","started_at":"...",
+                "expires_at":"...",          // Monitor：到这个时间自己停（结果里的 expires in 30m），没说就不带
+                "run_id":"wf_c1d9daf8-cd2"}], // workflow：对应 workflows 里的哪一次运行；只有在跑的 workflow 在这里（旧客户端照样当后台任务）
+ // Claude Code 的 workflow（Workflow 工具在后台跑的多 agent 脚本，#2935，docs/agent-states.md「后台 workflow」）：最近一天的，新的在前。
+ // 在跑的（running=true）算后台工作：hub 把 state 算成 working，不推「做完了」，待办不判完成、不自动关这个 Agent。旧 node 没有这个字段
+ "workflows":[{"task_id":"wdp5zxh37","run_id":"wf_c1d9daf8-cd2","name":"parity-audit","summary":"…",
+               "status":"running|completed|failed|killed|stalled","running":true,   // stalled：没收到结束通知，但 30 分钟没有动静（它的 claude 没了），不算在跑
+               "phases":["Audit","Verify"],"phase":"Verify","phase_index":2,       // 脚本 meta 里的阶段；phase 是最近开始的、还在跑的 agent 所在的阶段，phase_index 从 1 数，0 = 不知道
+               "agents_started":185,"agents_done":169,"agents_running":16,        // 总数要跑完才知道（脚本边跑边派）：显示「完成数 / 已开始数」
+               "started_at":"...","ended_at":"...","updated_at":"...",           // ended_at 跑完才有；耗时 = (ended_at 或现在) - started_at
+               "error":"Error: Workflow aborted",                                 // failed / killed 的第一行
+               "agents":[{"id":"a55ab0b9…","session_id":"<id>@a55ab0b9…","label":"audit:chat-rich","phase":"Audit",   // 按开始的顺序，最多 60 个（留最新的）
+                          "running":false,"started_at":"...","updated_at":"...","last_text":"…"}]}],                   // 每个 agent 当子 Agent 读：GET 会话 session_id 的内容
  // 用户最近一次手动压缩（只有助手对话，POST …/compact 之后才有）：running → done | failed（error 是给人看的原因）；node 记着，直到下一次
  "compaction":{"state":"running|done|failed","error":"…","started_at":"...","finished_at":"..."}}
 

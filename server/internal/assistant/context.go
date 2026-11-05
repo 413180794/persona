@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"cmp"
 	"context"
 	"sort"
 	"sync"
@@ -96,7 +97,7 @@ func (s *Service) takeSnapshot(done chan struct{}) {
 		snap.Machines = append(snap.Machines, prompts.SnapshotMachine{Name: m.Name, ID: m.ID, Online: m.Online})
 	}
 	web := s.webBase(ctx) // the agents' and tasks' links (#2194)
-	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Working = s.snapshotAgents(ctx, devices, web)
+	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Working, snap.Workflows = s.snapshotAgents(ctx, devices, web)
 	snap.Tasks = s.snapshotTasks(ctx, web)
 	if e, err := s.kbGet(ctx); err == nil {
 		snap.KB = e.Prompt(6, 8)
@@ -125,7 +126,8 @@ func (s *Service) ProfileChanged(context.Context) {
 
 // snapshotAgents sorts the agents by what they need: the work state (agents_work.go, docs/agent-work.md) says what a stopped one
 // waits for or concluded. Each has its page in the web app at web ("" for none).
-func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web string) (needs, unread, waiting, done []prompts.SnapshotAgent, working []string) {
+func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web string) (needs, unread, waiting, done []prompts.SnapshotAgent,
+	working []string, workflows []prompts.SnapshotWorkflow) {
 	for _, m := range devices {
 		list, _ := s.sessions(ctx, m.ID)
 		for _, c := range list {
@@ -134,6 +136,10 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 			}
 			a := prompts.SnapshotAgent{Label: agentLabel(c), Machine: m.ID, Session: short(c.SessionID),
 				Link: sessionLink(web, m.ID, c.SessionID, false)}
+			for _, w := range runningWorkflows(c, time.Now()) {
+				w.Agent, w.Machine, w.Session = a.Label, a.Machine, a.Session
+				workflows = append(workflows, w)
+			}
 			w := c.Work
 			if w != nil && w.Phase != proto.WorkWorking {
 				a.Line = w.Line
@@ -155,7 +161,24 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 			}
 		}
 	}
-	return needs, unread, waiting, done, working
+	return needs, unread, waiting, done, working, workflows
+}
+
+// runningWorkflows are c's background workflow runs still running, as the snapshot tells them (#2935).
+func runningWorkflows(c proto.Session, now time.Time) []prompts.SnapshotWorkflow {
+	var out []prompts.SnapshotWorkflow
+	for _, w := range c.Workflows {
+		if !w.Running {
+			continue
+		}
+		sw := prompts.SnapshotWorkflow{Name: cmp.Or(w.Name, w.Summary, w.TaskID), Phase: w.Phase, PhaseIndex: w.PhaseIndex,
+			Phases: len(w.Phases), Done: w.AgentsDone, Started: w.AgentsStarted}
+		if d := now.Sub(w.StartedAt); !w.StartedAt.IsZero() && d >= time.Minute {
+			sw.For = humanDuration(d)
+		}
+		out = append(out, sw)
+	}
+	return out
 }
 
 // connectorSnapshots are the live states of the hub's signed-in connectors that keep one (connector.Snapshot: a chat

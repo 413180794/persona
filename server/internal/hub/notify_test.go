@@ -135,6 +135,23 @@ func TestTurnTracker(t *testing.T) {
 		}
 	})
 
+	t.Run("a running workflow counts as background (#2935)", func(t *testing.T) {
+		tr := newTurnTracker()
+		tr.working("k", at(0))
+		gen := tr.ended("k", at(30))
+		s := proto.Session{Status: proto.StatusDone, Workflows: []proto.Workflow{{TaskID: "w1", Status: proto.WorkflowRunning, Running: true}}}
+		if v, _ := tr.settle("k", gen, s, false, false, false, at(90), hold); v != finishHold {
+			t.Fatalf("%v", v)
+		}
+		// The workflow's notification wakes it; that turn's end is the push.
+		tr.working("k", at(900))
+		gen = tr.ended("k", at(960))
+		s = proto.Session{Status: proto.StatusDone, WokeByTask: true, Workflows: []proto.Workflow{{TaskID: "w1", Status: proto.WorkflowCompleted}}}
+		if v, _ := tr.settle("k", gen, s, false, false, false, at(1020), hold); v != finishPush {
+			t.Fatalf("after the workflow: %v", v)
+		}
+	})
+
 	t.Run("background that never finishes is given up", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))

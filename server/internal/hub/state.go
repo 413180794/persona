@@ -37,7 +37,7 @@ func agentState(s proto.Session, seenAt time.Time) string {
 }
 
 // backgroundState is an agent's state once its background work counts (#2228): a Claude whose turn ended while its
-// background commands or subagents still run is working, not 完成未看 or 已看 — they wake it with their results, and it
+// background commands, subagents, Monitors or workflows still run is working, not 完成未看 or 已看 — they wake it with their results, and it
 // goes on. Needs-you stays first; a stopped one (offline) has nothing running. Not the assistant's conversations:
 // their Monitors and background tasks stay on, and a conversation always 工作中 would skip every scheduled run.
 // What waits for a turn to end (the finished push, scheduled runs, the hub's own update) reads the host's status.

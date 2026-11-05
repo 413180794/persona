@@ -281,5 +281,10 @@ func backgroundRunning(s proto.Session) bool {
 			return true
 		}
 	}
+	for _, w := range s.Workflows { // a running one is in Background too; not from every source
+		if w.Running {
+			return true
+		}
+	}
 	return false
 }

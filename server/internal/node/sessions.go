@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -128,9 +129,11 @@ type quickMeta struct {
 	activity time.Time // last real exchange; zero when unknown
 	queue    []string
 	loop     *proto.LoopInfo
-	goal     *proto.GoalInfo // from backgroundTasks too: a goal is often set at the start of a long transcript
+	goal     *proto.GoalInfo        // from backgroundTasks too: a goal is often set at the start of a long transcript
 	bg       []proto.BackgroundTask // from backgroundTasks: the tail alone misses tasks started earlier in a long turn
 	bgWait   bool                   // bg and loop are not known yet (a big first read is running)
+	wf       []proto.Workflow       // workflow runs, as the transcript tells them (bgWorkflows)
+	wfScript map[string]string      // their script files by run id
 	cwd      string
 	model    string
 	lastText string
@@ -187,6 +190,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 	if ok && (m.size == st.Size() && m.mtime.Equal(st.ModTime()) || time.Since(m.readAt) < metaMinInterval) {
 		if m.bgWait { // the background read may be done now
 			m.bg, m.loop, m.goal, m.bgWait = n.backgroundTasks(path)
+			m.wf, m.wfScript = n.bgWorkflows(path)
 			n.mu.Lock()
 			n.metas[path] = m
 			n.mu.Unlock()
@@ -201,6 +205,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 	m = readQuickMetaSince(path, st, m) // m: the last read's, zero when there is none
 	m.readAt = time.Now()
 	m.bg, m.loop, m.goal, m.bgWait = n.backgroundTasks(path)
+	m.wf, m.wfScript = n.bgWorkflows(path)
 	n.mu.Lock()
 	n.metas[path] = m
 	n.mu.Unlock()
@@ -691,12 +696,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					s.Queued = m.queue // an idle agent has taken everything; stale entries are from outside the tail
 				}
 				// Background shells keep running after the turn ends; background subagents are listed as subagents.
-				s.Background = nil
-				for _, t := range m.bg {
-					if t.Kind != "agent" {
-						s.Background = append(s.Background, t)
-					}
-				}
+				n.setBackground(&s, m)
 				s.Loop, s.Goal = m.loop, m.goal
 				s.Subagents = n.subagents(id)
 			}
@@ -2265,7 +2265,8 @@ var bgSlot = make(chan struct{}, 1)
 
 var bgMarkers = [][]byte{[]byte("ScheduleWakeup"), []byte("Next wakeup scheduled"), []byte("CronCreate"), []byte("CronDelete"),
 	[]byte("run_in_background"), []byte("in background with ID"), []byte("moved to the background"), []byte("Async agent launched"),
-	[]byte("task-notification"), []byte(`"name":"Agent"`), []byte(`"name":"Task"`), []byte(`"TaskStop"`), []byte(`"KillShell"`)}
+	[]byte("task-notification"), []byte(`"name":"Agent"`), []byte(`"name":"Task"`), []byte(`"TaskStop"`), []byte(`"KillShell"`),
+	[]byte(`"name":"Workflow"`), []byte("Workflow launched in background"), []byte(`"name":"Monitor"`), []byte("Monitor started")}
 
 func (n *Node) backgroundTasks(path string) (tasks []proto.BackgroundTask, loop *proto.LoopInfo, goal *proto.GoalInfo, pending bool) {
 	n.mu.Lock()
@@ -2299,7 +2300,8 @@ func (n *Node) backgroundTasks(path string) (tasks []proto.BackgroundTask, loop 
 	}
 	scanBackground(f, &sc.off, &sc.meta, st.Size())
 	for _, t := range sc.meta.Background {
-		if time.Since(t.StartedAt) < 24*time.Hour { // older ones are surely gone (claude restarted)
+		// Older ones are surely gone (claude restarted); a Monitor past its expiry has stopped.
+		if time.Since(t.StartedAt) < 24*time.Hour && (t.ExpiresAt == nil || time.Now().Before(*t.ExpiresAt)) {
 			tasks = append(tasks, t)
 		}
 	}
@@ -2315,6 +2317,22 @@ func (n *Node) backgroundTasks(path string) (tasks []proto.BackgroundTask, loop 
 		goal = &c
 	}
 	return tasks, loop, goal, false
+}
+
+// bgWorkflows is the workflow runs the last backgroundTasks scan of path found, and their script files.
+func (n *Node) bgWorkflows(path string) ([]proto.Workflow, map[string]string) {
+	n.mu.Lock()
+	sc := n.bgScans[path]
+	n.mu.Unlock()
+	if sc == nil {
+		return nil, nil
+	}
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	if sc.pending || len(sc.meta.Workflows) == 0 {
+		return nil, nil
+	}
+	return slices.Clone(sc.meta.Workflows), maps.Clone(sc.meta.WorkflowScripts)
 }
 
 // scanBackground reads the marker lines between *off and size into m, streamed (the first look at a 300 MB

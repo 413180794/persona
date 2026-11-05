@@ -47,7 +47,9 @@ func (n *Node) subagentFile(id string) (*transcript.File, error) {
 	}
 	p := filepath.Join(dir, "agent-"+agent+".jsonl")
 	if _, err := os.Stat(p); err != nil {
-		return nil, fmt.Errorf("subagent %s not found", agent)
+		if p = workflowAgentFile(dir, agent); p == "" { // one of a workflow run's agents (workflows.go)
+			return nil, fmt.Errorf("subagent %s not found", agent)
+		}
 	}
 	return transcript.NewSubagentFile(p), nil
 }

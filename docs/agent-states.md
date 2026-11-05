@@ -8,7 +8,7 @@ App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计�
 | 状态 | 含义 | 来自 herdr | Persona 补充 | 颜色 |
 | --- | --- | --- | --- | --- |
 | `needs_you` 需要你 | 卡在需要人参与的地方 | `blocked`（TUI 里的提问 / 确认框） | 有待处理的提问、计划、授权、终端交互（hook 拦下来时 herdr 还显示 working） | 红，呼吸 |
-| `working` 工作中 | 正在跑 | `working` | Claude：herdr 报 `done` / `idle` / `unknown`，但会话有 hook（Persona 的，或全局只报告的）时 hook 的轮次计数说这一轮没结束（见下「hook 的轮次信号」）；没有 hook 的会话是终端标题是 Claude Code 工作中的转圈字形（◐◓◑◒，旧版是盲文点阵），或 transcript 里这一轮已经开始、还没结束（没有 `turn_duration`、没被中断）且 45 秒内写过（#2069；transcript 里这一轮已经结束时照 herdr 的）；或这一轮停了、但它的后台命令 / 子 Agent 还在跑（#2228：跑完会把结果交给它、它接着做；不含助手对话） | 琥珀，呼吸 |
+| `working` 工作中 | 正在跑 | `working` | Claude：herdr 报 `done` / `idle` / `unknown`，但会话有 hook（Persona 的，或全局只报告的）时 hook 的轮次计数说这一轮没结束（见下「hook 的轮次信号」）；没有 hook 的会话是终端标题是 Claude Code 工作中的转圈字形（◐◓◑◒，旧版是盲文点阵），或 transcript 里这一轮已经开始、还没结束（没有 `turn_duration`、没被中断）且 45 秒内写过（#2069；transcript 里这一轮已经结束时照 herdr 的）；或这一轮停了、但它的后台命令 / 子 Agent / Monitor / workflow 还在跑（#2228、#2935：跑完会把结果交给它、它接着做；不含助手对话） | 琥珀，呼吸 |
 | `unread` 完成未看 | 一轮做完，结果还没看 | `done`（herdr 没被聚焦过） | 且 App 里在它完成之后没看过 | 绿 |
 | `idle` 已看 | 做完且看过，等输入 | `idle`（herdr 里看过） | 或 herdr 还是 `done` 但 App 里看过 | 灰 |
 | `offline` 未运行 | 不在宿主里，只有 transcript，发消息会 `--resume` | — | — | 浅灰 |
@@ -74,6 +74,19 @@ Claude Code 自己写的 `sessions/<pid>.json` 还有 `status`（busy / idle）�
 颜色只有一份：`apple/Shared/StatusPalette.swift`，App、手表和实时活动共用（`docs/ios.md`「设计语言」）。
 Agents 列表另有「待唤醒」：状态是已看，但 `/loop` 还没到点（`Session.isWaiting`），之后会有新消息。后台命令 / 子 Agent 还在跑的，hub 直接算工作中（#2228，`backgroundState`），不再进待唤醒；助手对话的后台任务和 Monitor 常驻，不算。
 后台起的常驻进程（如开发服务器）会让 Agent 一直是工作中，直到它退出（node 不再列出超过 24 小时的后台任务）。「完成」推送、hub 自更新等一轮结束的判断看宿主状态，不受这一条影响。
+
+### 后台 workflow、Monitor（#2935）
+
+Claude Code 的 Workflow 工具把一个多 agent 脚本放到后台跑，这一轮随即结束、等它跑完的通知（`<task-notification>`）再被叫醒；Monitor 也一样，事件来了叫醒它。
+它们和后台命令一样算后台工作：Agent 是工作中，「做完了」推送先压着，待办的收据、判完成和自动关闭（#1696）都等它们结束；通知把主会话叫醒后，那一轮结束时照常判断。
+
+- **从哪读**：transcript 里 Workflow 工具的结果「Workflow launched in background. Task ID: … Run ID: wf_…」（`turn_duration` 的 `pendingWorkflowCount` 也说明有在跑的），
+  Monitor 的「Monitor started (task …, expires in 30m …)」；结束看同一 task id 的通知（带 `<status>`）或 `TaskStop`。node 的后台扫描读整个 transcript，不会因为只看尾巴漏掉。
+- **进度在磁盘上**：`<会话>/subagents/workflows/<run>/journal.jsonl`（`started` 一行一个 agent，带 label、phase；`result` 是它回来了）、同目录的 `agent-<id>.jsonl` / `.meta.json`（每个 agent 的对话，按子 Agent 读），
+  跑完写 `<会话>/workflows/<run>.json`（status、error、耗时），脚本 `<会话>/workflows/scripts/<名字>-<run>.js` 的 `meta` 里有名字和阶段。
+- **会话字段** `workflows`（`docs/protocol.md`）：名字、状态、当前阶段、完成数 / 已开始数、耗时、子 agent 列表和每个的最后一句；在跑的同时放进 `background`（kind `workflow`），旧客户端和旧 hub 也能认出「后台还有活」。
+- **兜底**：没收到通知也没有状态文件、但 30 分钟没有任何写入的算 `stalled`（它的 claude 没了），不再算在跑；Monitor 过了 `expires_at` 不算；结束一天后不再列出。
+- 助手的实时快照和 `agents_list` 写出在跑的 workflow（「这一轮停着是在等结果，不是做完了」），它不会去催或关这些 Agent。
 列表的排序（三种分组都一样）：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，同状态按最后更新时间（`docs/ios.md`）。
 
 ### 「看过」

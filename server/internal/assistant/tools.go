@@ -496,6 +496,9 @@ func (s *Service) describeAgents(ctx context.Context, state, machine, query stri
 			fmt.Fprintf(&b, " · 后台任务 %d", n)
 		}
 		b.WriteString("\n")
+		for _, w := range runningWorkflows(c, time.Now()) { // its turn ended to wait for them: not done (#2935)
+			fmt.Fprintf(&b, "    后台 workflow 在跑（在等它的结果，没做完）：%s\n", prompts.RenderSnapshotWorkflow(w))
+		}
 		for _, p := range pending[[2]string{r.m.ID, c.SessionID}] {
 			fmt.Fprintf(&b, "    等你：%s\n", p)
 		}

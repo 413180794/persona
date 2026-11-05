@@ -717,6 +717,15 @@ func TestBackgroundState(t *testing.T) {
 		{"needs you first", proto.StateNeedsYou, proto.Session{Background: shell}, proto.StateNeedsYou},
 		{"offline", proto.StateOffline, proto.Session{Background: shell}, proto.StateOffline},
 		{"the assistant's own tasks", proto.StateIdle, proto.Session{Assistant: true, Background: shell, Subagents: running}, proto.StateIdle},
+		// #2935: a turn that ended to wait for its workflow's notification is not done.
+		{"unread with a workflow running", proto.StateUnread, proto.Session{Workflows: []proto.Workflow{{TaskID: "w1",
+			Status: proto.WorkflowRunning, Running: true}}}, proto.StateWorking},
+		{"a workflow that ended", proto.StateUnread, proto.Session{Workflows: []proto.Workflow{{TaskID: "w1",
+			Status: proto.WorkflowCompleted}}}, proto.StateUnread},
+		{"a stalled workflow", proto.StateIdle, proto.Session{Workflows: []proto.Workflow{{TaskID: "w1",
+			Status: proto.WorkflowStalled}}}, proto.StateIdle},
+		{"a Monitor watching", proto.StateUnread, proto.Session{Background: []proto.BackgroundTask{{ID: "b2", Kind: "monitor"}}},
+			proto.StateWorking},
 	}
 	for _, c := range cases {
 		if got := backgroundState(c.state, c.s); got != c.want {

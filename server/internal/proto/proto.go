@@ -722,6 +722,9 @@ type Session struct {
 	Background []BackgroundTask `json:"background,omitempty"`
 	// Subagents the agent launched (Agent / Task tool); each one's transcript is the session "<id>@<agent id>".
 	Subagents []Subagent `json:"subagents,omitempty"`
+	// Workflows are the Claude Code workflow runs (the Workflow tool) the agent launched in the last day, newest first:
+	// a running one is background work, as Background is (a running one is in Background too, kind "workflow").
+	Workflows []Workflow `json:"workflows,omitempty"`
 	// Loop is the /loop driving this agent, when there is one (it wakes itself up on a schedule).
 	Loop *LoopInfo `json:"loop,omitempty"`
 	// Goal is the goal the agent works toward, when one is set (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md).
@@ -1236,14 +1239,71 @@ func TextResult(text string, isErr bool) ToolResult {
 	return ToolResult{Content: []Content{{Type: "text", Text: text}}, IsError: isErr}
 }
 
-// BackgroundTask is a Bash command or subagent Claude runs in the background (run_in_background).
+// BackgroundTask is a Bash command, subagent, Monitor or workflow Claude runs in the background (run_in_background).
 type BackgroundTask struct {
 	ID          string    `json:"id"`   // task id from the tool result (e.g. "b85polnoj")
-	Kind        string    `json:"kind"` // "shell" | "agent"
+	Kind        string    `json:"kind"` // "shell" | "agent" | "monitor" | "workflow"
 	Description string    `json:"description,omitempty"`
 	Command     string    `json:"command,omitempty"`
 	OutputFile  string    `json:"output_file,omitempty"`
 	StartedAt   time.Time `json:"started_at"`
+	// ExpiresAt: when a Monitor stops by itself ("expires in 30m"); zero when it does not say.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// RunID: a workflow's run ("wf_…"), the key of its entry in Session.Workflows.
+	RunID string `json:"run_id,omitempty"`
+}
+
+// Workflow is a Claude Code workflow run (the Workflow tool): a script that drives many agents in the background and
+// reports back to the session with a task notification when it ends (docs/agent-states.md「后台 workflow」).
+type Workflow struct {
+	TaskID  string `json:"task_id"`          // the background task's id, as in Background and the task notification
+	RunID   string `json:"run_id,omitempty"` // "wf_…": its directory under <session>/subagents/workflows/
+	Name    string `json:"name,omitempty"`   // the script's meta.name ("parity-audit")
+	Summary string `json:"summary,omitempty"`
+	// Status is one of the Workflow* values. Running is Status == WorkflowRunning, for clients that only need that.
+	Status  string `json:"status"`
+	Running bool   `json:"running"`
+	// Phases are the script's phase titles in order; Phase is the one its latest started agent is in, PhaseIndex its
+	// 1-based place in Phases (0: not known).
+	Phases     []string `json:"phases,omitempty"`
+	Phase      string   `json:"phase,omitempty"`
+	PhaseIndex int      `json:"phase_index,omitempty"`
+	// AgentsStarted counts the agents it started so far (the total is not known before it ends: scripts fan out as
+	// they go), AgentsDone those that returned, AgentsRunning those still at it.
+	AgentsStarted int       `json:"agents_started"`
+	AgentsDone    int       `json:"agents_done"`
+	AgentsRunning int       `json:"agents_running"`
+	StartedAt     time.Time `json:"started_at"`
+	EndedAt       *time.Time `json:"ended_at,omitempty"`   // nil while it runs
+	UpdatedAt     time.Time `json:"updated_at,omitempty"` // its last sign of life (journal or an agent's transcript)
+	Error         string    `json:"error,omitempty"`      // a failed or killed run's error, first line
+	// Agents are its agents in the order they started (at most WorkflowAgentsMax, the latest kept).
+	Agents []WorkflowAgent `json:"agents,omitempty"`
+}
+
+// WorkflowAgentsMax caps Workflow.Agents.
+const WorkflowAgentsMax = 60
+
+// A workflow's statuses. Stalled: no notification and no state file, yet nothing written for a long while (its
+// claude went away): not counted as running.
+const (
+	WorkflowRunning   = "running"
+	WorkflowCompleted = "completed"
+	WorkflowFailed    = "failed"
+	WorkflowKilled    = "killed"
+	WorkflowStalled   = "stalled"
+)
+
+// WorkflowAgent is one agent of a workflow run. Its transcript reads like a subagent's, as the session SessionID.
+type WorkflowAgent struct {
+	ID        string    `json:"id"`
+	SessionID string    `json:"session_id"` // "<parent>@<agent id>"
+	Label     string    `json:"label,omitempty"`
+	Phase     string    `json:"phase,omitempty"`
+	Running   bool      `json:"running"`
+	StartedAt time.Time `json:"started_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	LastText  string    `json:"last_text,omitempty"`
 }
 
 // GoalInfo is a goal the agent keeps working toward until it holds (docs/agent-goal.md): Claude Code's /goal, whose

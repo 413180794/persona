@@ -104,6 +104,11 @@ func retirable(s proto.Session, doneAt, now time.Time) bool {
 			return false
 		}
 	}
+	for _, w := range s.Workflows { // closing it would kill the run (#2935)
+		if w.Running {
+			return false
+		}
+	}
 	if s.Agent != "" && s.Agent != "claude" && s.Agent != "codex" && s.Agent != "traex" {
 		return false
 	}

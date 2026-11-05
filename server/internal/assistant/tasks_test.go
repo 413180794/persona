@@ -167,6 +167,33 @@ func TestTaskReceipt(t *testing.T) {
 	}
 }
 
+// A turn that ends to wait for its background workflow is no end of the task (#2935): the hub reports the agent
+// working (backgroundState) while the run goes on, so no receipt, nothing judged or closed; the turn its notification
+// wakes is judged as usual.
+func TestTaskReceiptWaitsForWorkflow(t *testing.T) {
+	s, f := newTaskService(t)
+	startedTask(t, s, f)
+	ctx := context.Background()
+	run := proto.Workflow{TaskID: "w1", RunID: "wf_1", Name: "parity-audit", Status: proto.WorkflowRunning, Running: true}
+	f.setSessions("box", proto.Session{SessionID: "s1", MachineID: "box", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking,
+		State: proto.StateWorking, UpdatedAt: time.Now()})
+	s.taskWorking(ctx, "box", "s1")
+	f.setSessions("box", proto.Session{SessionID: "s1", MachineID: "box", Cwd: "/code/app", Agent: "claude", Status: proto.StatusDone,
+		State: proto.StateWorking, LastText: "审计在后台跑，等它的结果", UpdatedAt: time.Now(), Workflows: []proto.Workflow{run},
+		Background: []proto.BackgroundTask{{ID: "w1", Kind: "workflow", RunID: "wf_1"}}})
+	s.taskTurnEnded(ctx, "box", "s1")
+	if n := strings.Count(feedKinds(s, "conv1"), "receipt"); n != 0 {
+		t.Fatalf("%d receipts while the workflow runs", n)
+	}
+	run.Status, run.Running = proto.WorkflowCompleted, false
+	f.setSessions("box", proto.Session{SessionID: "s1", MachineID: "box", Cwd: "/code/app", Agent: "claude", Status: proto.StatusDone,
+		State: proto.StateUnread, LastText: "审计做完了，清单在 #1", UpdatedAt: time.Now(), Workflows: []proto.Workflow{run}, WokeByTask: true})
+	s.taskTurnEnded(ctx, "box", "s1")
+	if n := strings.Count(feedKinds(s, "conv1"), "receipt"); n != 1 {
+		t.Fatalf("%d receipts after the workflow", n)
+	}
+}
+
 func TestResolutionAnswer(t *testing.T) {
 	yes, no := true, false
 	q := proto.Interaction{Kind: proto.IxQuestion, Questions: []proto.Question{{Question: "怎么改？"}}}
@@ -311,6 +338,21 @@ func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
 				SessionID: "c1", State: proto.StateWorking, UpdatedAt: now, Activity: "在读 tasks.go", ActivityAt: &started}}, now),
 			got,
 		}}))
+	// #2935: a run in the background shows on its task and in its own line: the turn ended to wait for it.
+	wfLead := proto.Session{MachineID: "mac-a", SessionID: "d4a7f6ff-4a9b", State: proto.StateWorking, UpdatedAt: now,
+		LastText: "审计在后台跑，等结果", Workflows: []proto.Workflow{
+			{TaskID: "w1", Name: "parity-audit", Running: true, Status: proto.WorkflowRunning, Phases: []string{"Audit", "Verify"},
+				Phase: "Verify", PhaseIndex: 2, AgentsStarted: 185, AgentsDone: 169, StartedAt: now.Add(-14 * time.Minute)},
+			{TaskID: "w0", Name: "早就停了的", Status: proto.WorkflowKilled},
+		}}
+	wfTask := snapshotTask(Todo{ID: "todo_3", Title: "各端对齐审计"}, "working", []proto.Session{wfLead}, now)
+	if len(wfTask.Workflows) != 1 || wfTask.Workflows[0].For != "14 分钟" {
+		t.Fatalf("task workflows: %+v", wfTask.Workflows)
+	}
+	running := runningWorkflows(wfLead, now)
+	running[0].Agent, running[0].Machine, running[0].Session = "各端对齐审计", "mac-a", "d4a7f6ff"
+	golden(t, "assistant_snapshot.workflows", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",
+		Working: []string{"各端对齐审计"}, Workflows: running, Tasks: []prompts.SnapshotTask{wfTask}}))
 	linked := got
 	linked.Link = todoLink("https://hub.example.com", "todo_1")
 	golden(t, "assistant_snapshot.links", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",

@@ -128,6 +128,11 @@ type Meta struct {
 	// Background holds background shells / agents that have not reported back (see trackBackground).
 	Background []proto.BackgroundTask
 	bgPending  map[string]proto.BackgroundTask // tool_use_id → started, waiting for the tool result with its id
+	// Workflows are the workflow runs the session launched (the Workflow tool), oldest first, at most workflowsKept:
+	// what the transcript says (launched, the notification that it ended); the node adds the progress from disk.
+	Workflows []proto.Workflow
+	// WorkflowScripts: a workflow run's script file (run id → path), where its name and phases are.
+	WorkflowScripts map[string]string
 	// Loop is the /loop this session runs, if any (see trackBackground).
 	Loop        *proto.LoopInfo
 	loopPending map[string]proto.LoopInfo
@@ -316,7 +321,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		content := rawString(e.Content)
 		if strings.Contains(content, "<task-notification>") {
 			// A background task reporting back is queued like input, but it is not something the user typed.
-			meta.taskFinished(content)
+			meta.taskFinished(content, e.Timestamp)
 			return nil
 		}
 		meta.applyQueue(e.Operation, content)
@@ -396,7 +401,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			}
 		}
 		if strings.Contains(text, "<task-notification>") {
-			meta.taskFinished(text)
+			meta.taskFinished(text, e.Timestamp)
 			return userText(mk, text, meta) // a "background task finished" notice
 		}
 		if notification {
@@ -487,7 +492,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		var s string
 		if json.Unmarshal(e.Message.Content, &s) == nil {
 			if strings.Contains(s, "<task-notification>") {
-				meta.taskFinished(s)
+				meta.taskFinished(s, e.Timestamp)
 			}
 			if e.IsMeta {
 				return nil
@@ -510,7 +515,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			switch b.Type {
 			case "text":
 				if strings.Contains(b.Text, "<task-notification>") {
-					meta.taskFinished(b.Text)
+					meta.taskFinished(b.Text, e.Timestamp)
 				}
 				if e.IsMeta {
 					continue
@@ -606,8 +611,16 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 // Background tasks: Bash with run_in_background and subagents launched async answer with a task id right away
 // ("Command running in background with ID: b85polnoj. Output is being written to: …" / "Async agent launched …
 // agentId: …") and report back later with a <task-notification> carrying the same id. TaskStop / KillShell end them too.
+// A workflow answers "Workflow launched in background. Task ID: w5k2nd1ap\nSummary: …\nTranscript dir: …\nScript file:
+// …\nRun ID: wf_…"; a Monitor "Monitor started (task bqke1prjm, expires in 30m unless …)".
 var (
-	bgIDRe     = regexp.MustCompile(`(?:running in background with ID|agentId):\s*([A-Za-z0-9_-]+)`)
+	bgIDRe     = regexp.MustCompile(`(?:running in background with ID|agentId|in background\. Task ID|Monitor started \(task):?\s*([A-Za-z0-9_-]+)`)
+	wfRunRe    = regexp.MustCompile(`(?m)^Run ID:\s*(wf_[A-Za-z0-9_-]+)`)
+	wfSumRe    = regexp.MustCompile(`(?m)^Summary:\s*(.+)$`)
+	wfScriptRe = regexp.MustCompile(`(?m)^Script file:\s*(\S+\.js)\s*$`)
+	wfDirRe    = regexp.MustCompile(`(?m)^Transcript dir:\s*\S*/(wf_[A-Za-z0-9_-]+)\s*$`)
+	wfNameRe   = regexp.MustCompile("\\bname:\\s*['\"`]([^'\"`\\n]+)['\"`]")
+	expiresRe  = regexp.MustCompile(`expires in (\d+)(ms|s|m|h)\b`)
 	wakeInRe   = regexp.MustCompile(`Next wakeup scheduled for [^(]*\(in (\d+)s\)`)
 	bgMovedRe  = regexp.MustCompile(`moved to the background \(ID: ([A-Za-z0-9_-]+)\)`) // a foreground command that timed out
 	bgOutputRe = regexp.MustCompile(`Output is being written to:\s*(\S+?)\.?(?:\s|$)`)
@@ -627,6 +640,10 @@ func (m *Meta) trackBackground(toolUseID, name string, raw json.RawMessage, ts t
 		Stop      bool    `json:"stop"`
 		Cron      string  `json:"cron"`
 		Recurring *bool   `json:"recurring"`
+		// Workflow
+		WorkflowName string `json:"name"`
+		Script       string `json:"script"`
+		ScriptPath   string `json:"scriptPath"`
 	}
 	_ = json.Unmarshal(raw, &in)
 	switch name {
@@ -657,8 +674,20 @@ func (m *Meta) trackBackground(toolUseID, name string, raw json.RawMessage, ts t
 	case "Agent", "Task":
 		// Whether it went to the background shows in the result ("Async agent launched").
 		m.pend(toolUseID, proto.BackgroundTask{Kind: "agent", Description: in.Description, StartedAt: ts})
+	case "Monitor":
+		m.pend(toolUseID, proto.BackgroundTask{Kind: "monitor", Command: in.Command, Description: in.Description, StartedAt: ts})
+	case "Workflow":
+		name := in.WorkflowName
+		if mm := wfNameRe.FindStringSubmatch(in.Script); name == "" && mm != nil {
+			name = mm[1]
+		}
+		if name == "" {
+			name = scriptName(in.ScriptPath)
+		}
+		m.pend(toolUseID, proto.BackgroundTask{Kind: "workflow", Description: name, StartedAt: ts})
 	case "TaskStop", "KillShell", "KillBash":
 		m.removeBackground(in.TaskID + in.ShellID)
+		m.workflowEnded(in.TaskID+in.ShellID, proto.WorkflowKilled, ts)
 	}
 }
 
@@ -716,8 +745,94 @@ func (m *Meta) backgroundStarted(toolUseID, result string, isError bool, ts time
 	if t.StartedAt.IsZero() {
 		t.StartedAt = ts
 	}
+	switch t.Kind {
+	case "monitor":
+		if e := expiresRe.FindStringSubmatch(result); e != nil {
+			n, _ := strconv.Atoi(e[1])
+			unit := map[string]time.Duration{"ms": time.Millisecond, "s": time.Second, "m": time.Minute, "h": time.Hour}[e[2]]
+			at := ts.Add(time.Duration(n) * unit)
+			t.ExpiresAt = &at
+		}
+	case "workflow":
+		m.workflowStarted(&t, result)
+	}
 	m.removeBackground(t.ID)
 	m.Background = append(m.Background, t)
+}
+
+// workflowsKept: how many workflow runs a session's Meta remembers.
+const workflowsKept = 8
+
+func (m *Meta) workflowStarted(t *proto.BackgroundTask, result string) {
+	w := proto.Workflow{TaskID: t.ID, Name: t.Description, Status: proto.WorkflowRunning, Running: true, StartedAt: t.StartedAt}
+	if r := wfRunRe.FindStringSubmatch(result); r != nil {
+		w.RunID = r[1]
+	} else if r := wfDirRe.FindStringSubmatch(result); r != nil {
+		w.RunID = r[1]
+	}
+	if r := wfSumRe.FindStringSubmatch(result); r != nil {
+		w.Summary = strings.TrimSpace(r[1])
+	}
+	if r := wfScriptRe.FindStringSubmatch(result); r != nil && w.RunID != "" {
+		if m.WorkflowScripts == nil {
+			m.WorkflowScripts = map[string]string{}
+		}
+		m.WorkflowScripts[w.RunID] = r[1]
+		if w.Name == "" {
+			w.Name = scriptName(r[1])
+		}
+	}
+	t.RunID = w.RunID
+	if t.Description == "" {
+		t.Description = cmpOr(w.Name, w.Summary)
+	}
+	for i, o := range m.Workflows {
+		if o.TaskID == w.TaskID {
+			m.Workflows = append(m.Workflows[:i:i], m.Workflows[i+1:]...)
+			break
+		}
+	}
+	m.Workflows = append(m.Workflows, w)
+	if n := len(m.Workflows) - workflowsKept; n > 0 {
+		for _, o := range m.Workflows[:n] {
+			delete(m.WorkflowScripts, o.RunID)
+		}
+		m.Workflows = append([]proto.Workflow(nil), m.Workflows[n:]...)
+	}
+}
+
+// workflowEnded records that the workflow with task id ended with status (its notification, a TaskStop).
+func (m *Meta) workflowEnded(id, status string, ts time.Time) {
+	for i := range m.Workflows {
+		w := &m.Workflows[i]
+		if w.TaskID != id || !w.Running {
+			continue
+		}
+		switch status {
+		case proto.WorkflowFailed, proto.WorkflowKilled:
+		case "stopped":
+			status = proto.WorkflowKilled
+		default:
+			status = proto.WorkflowCompleted
+		}
+		w.Status, w.Running, w.EndedAt = status, false, &ts
+	}
+}
+
+// scriptName is a workflow's name from its script file: "<name>-wf_<run>.js" (a saved one: "<name>.js").
+func scriptName(path string) string {
+	base := strings.TrimSuffix(path[strings.LastIndexAny(path, "/\\")+1:], ".js")
+	if i := strings.Index(base, "-wf_"); i > 0 {
+		base = base[:i]
+	}
+	return base
+}
+
+func cmpOr(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func outputFile(result string) string {
@@ -727,9 +842,10 @@ func outputFile(result string) string {
 	return ""
 }
 
-func (m *Meta) taskFinished(notification string) {
+func (m *Meta) taskFinished(notification string, ts time.Time) {
 	if id := firstTag(notification, "task-id"); id != "" {
 		m.removeBackground(id)
+		m.workflowEnded(id, firstTag(notification, "status"), ts)
 	}
 }
 

@@ -302,3 +302,9 @@ Claude Code 2.1.309 在一轮结束后弹出 auto mode 计费通知（「We're c
 Persona 只看 herdr 和 hook，于是 3 个被挡住的 Agent 显示成「完成未看」好几分钟；发消息时 `checkPane` 读屏看到对话框一律拒绝，助手也关不掉。
 现在 node 定期读歇着的 Claude 的屏幕，有对话框就记为「需要你」（`node/dialogstatus.go`）；只按回车就关的通知可以用 `dismiss_notice` 先关掉再发。
 这个通知在走网关（非 anthropic.com 的 base URL）的会话上出现，Claude Code 没有关掉它的设置：按回车后记下 `autoModeClassifierBillingNoticeAcknowledgedAt`，24 小时后会再弹。
+
+## 后台 workflow 跑着，Agent 被判成做完、待办被自动关（#2935）
+
+2026-11-05：一个 Agent 用 Workflow 工具在后台跑多 agent 审计，主轮结束等通知，hub 把它判成「完成未看」、待办判完成并推了「做完了」，按 #1696 还可能被自动关掉、连带杀掉 workflow。
+原因是 node 只认 Bash / Agent 的后台任务：Workflow 的结果文案是「Workflow launched in background. Task ID: …」，它的 agent 也不在 `subagents/agent-*.meta.json`，而在 `subagents/workflows/<run>/` 下，一个都没扫到。
+Claude Code 新加的后台类工具（Workflow、Monitor）都要在 `transcript.trackBackground` 和 node 的 `bgMarkers` 里登记，否则「这一轮结束但还有后台活」就会被当成做完；`turn_duration` 的 `pending*Count` 字段可以用来发现新的种类。

@@ -1141,6 +1141,7 @@ func snapshotTask(t Todo, st string, agents []proto.Session, now time.Time) prom
 			task.Subagents = append(task.Subagents, clip(oneLine(cmp.Or(sa.Description, sa.Type, "子任务")), 40))
 		}
 	}
+	task.Workflows = runningWorkflows(last, now)
 	return task
 }
 

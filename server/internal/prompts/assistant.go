@@ -100,7 +100,19 @@ type SnapshotTask struct {
 	// yet, and DoingFor how long that step has gone on ("3 分钟"), "" when unknown or not working.
 	Doing, DoingFor string
 	Subagents       []string // that agent's running subagents, what each is for: on top of its own step, never instead
-	Link            string   // the todo's page in the hub's web app ("" when the hub has no public_url)
+	// Workflows: that agent's background workflow runs still running (#2935): its turn ended to wait for them.
+	Workflows []SnapshotWorkflow
+	Link      string // the todo's page in the hub's web app ("" when the hub has no public_url)
+}
+
+// SnapshotWorkflow is a Claude Code workflow run still running in an agent's background (#2935): the agent's turn
+// ended to wait for its result, which wakes it.
+type SnapshotWorkflow struct {
+	Agent, Machine, Session string // whose run: its label, machine and short session id (left empty inside a task)
+	Name, Phase             string
+	PhaseIndex, Phases      int    // Phase's 1-based place among the script's phases; 0 when not known
+	Done, Started           int    // its agents that returned, and started so far
+	For                     string // how long it has run ("12 分钟"), "" under a minute
 }
 
 // Snapshot is the live context a starting assistant gets in its system prompt.
@@ -113,6 +125,7 @@ type Snapshot struct {
 	// within a day, with the conclusion (docs/agent-work.md「Persona 知道」).
 	Waiting, Done []SnapshotAgent
 	Working       []string
+	Workflows     []SnapshotWorkflow // background workflow runs still running, newest first
 	PhoneOnline   bool
 	KB            string            // RenderKBDigest, "" leaves it out
 	Chats         *SnapshotChats    // nil: Feishu did not answer in time
@@ -150,6 +163,11 @@ func (s Snapshot) Upcoming() *SnapshotCalendar {
 }
 
 func RenderSnapshot(s Snapshot) string { return render("assistant/snapshot", s) }
+
+// RenderSnapshotWorkflow is one running workflow, in a line ("「parity-audit」阶段 Verify（2/2），169/185 个 agent 完成，已跑 14 分钟").
+func RenderSnapshotWorkflow(w SnapshotWorkflow) string {
+	return render("assistant/snapshot_workflow", w)
+}
 
 // AssistantContext is the hub's answer to assistant.context: the snapshot, for the main conversation with a line
 // saying so first (assistant/context). Node puts what changed of it at the start of each message (TurnContext).
