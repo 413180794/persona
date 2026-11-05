@@ -494,6 +494,15 @@ nonisolated struct APIClient: Sendable {
         struct R: Decodable { var machines: [MachineMetrics] }
         return try await get("/api/v1/metrics", as: R.self).machines
     }
+    /// The subscription accounts and their rate-limit windows (docs/usage-windows.md); [] from a hub before them (404).
+    func usageWindows() async throws -> [UsageAccount] {
+        struct R: Decodable { var accounts: [UsageAccount]? }
+        do {
+            return try await get("/api/v1/usage/windows", as: R.self).accounts ?? []
+        } catch let e as APIError where e.status == 404 {
+            return []
+        }
+    }
     func machineMetrics(_ machine: String, range: MetricRange) async throws -> MachineMetrics {
         struct R: Decodable { var metrics: MachineMetrics }
         return try await get("/api/v1/machines/\(machine)/metrics", query: ["range": range.rawValue], as: R.self).metrics

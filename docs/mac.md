@@ -27,7 +27,8 @@
   - **知识库**：项目 / 会话 / 人 / 文档 / 会议 / 日程。
     列表在左（约 340pt，宽度可拖、记住，`MacListBeside`），点一条在右边打开详情、列表里选中那条（`macSelected`），没选时右边一行提示；搜索结果同样在右边打开，详情里再点进去的（某一天、关联条目、合并到的项目）在右栏里推进，‹ 和标题在右栏的标题行（`MacKnowledgePage`、`KBOpenEntry`，#2318）。手机和 Persona 里推进去的知识库照旧是推页面。
   - **机器**：所有机器（Agent 数和监控在一页）+ 每台机器。
-  - 底部：连接状态（等待网络 / 连接中…，点开是连接详情）。已做（`MacConnectionFooter`，连上时不显示；`-showConnection connecting` 截图看过）。
+  - 底部：订阅额度的细条（最满的两个账号，点开是每个窗口的浮层，`MacUsageFooter`，#2889，`docs/usage-windows.md`「界面（iOS / Mac）」；没有数据时不画）。
+  - 最底下：连接状态（等待网络 / 连接中…，点开是连接详情）。已做（`MacConnectionFooter`，连上时不显示；`-showConnection connecting` 截图看过）。
 - 列表栏：iOS 同一份列表内容（Agents 列表的分组、卡片 / 紧凑、折叠空间、置顶），Mac 上行高更紧，选中用系统高亮，
   键盘 ↑↓ 移动选中、⏎ 打开、空格预览（Quick Look 式：对话最后几条）。
 - 详情：对话页。顶部工具栏（`.toolbar`）：标题 + 状态·机器·空间›标签，同空间的标签做成工具栏里的分段 / 下拉；

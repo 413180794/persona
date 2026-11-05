@@ -91,6 +91,9 @@ struct MachinesView: View {
                 } else {
                     grid(machines, tallies: tallies, alerts: alerts)
                 }
+                #if !os(macOS)
+                UsageWindowsCard() // the Mac has it at the foot of its sections column
+                #endif
                 if machines.isEmpty {
                     EmptyStateView(symbol: Theme.Icon.machines, title: "还没有机器", message: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。")
                 } else if !unmonitored {
@@ -120,6 +123,9 @@ struct MachinesView: View {
         .refreshable {
             await model.refresh()
             await loadMetrics()
+            #if !os(macOS)
+            await UsageWindowsStore.shared.load(model)
+            #endif
         }
         #if os(macOS)
         .macRefreshes { // ⌘R: no pull to refresh on the Mac
@@ -134,6 +140,12 @@ struct MachinesView: View {
                 try? await Task.sleep(for: .seconds(10))
             }
         }
+        #if !os(macOS)
+        .tabActiveTask(id: phase == .active ? "usage" : "") {
+            guard phase == .active else { return }
+            await UsageWindowsStore.shared.poll(model)
+        }
+        #endif
     }
 
     /// The cards, what needs a look first.

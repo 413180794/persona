@@ -277,6 +277,8 @@ private struct MacShell: View {
                               badge: badge(section), identifier: "mac.section.\(section.rawValue)") { shell.go(section, model) }
             }
             Spacer(minLength: 0)
+            // The subscription accounts' windows (docs/usage-windows.md), as the web's sidebar ends; nothing without any.
+            MacUsageFooter()
             // The sidebar's foot: while the hub is out of reach, 等待网络 / 连接中… (a click explains), as the
             // iPhone's title spot does (docs/mac.md「主窗口」).
             MacConnectionFooter()

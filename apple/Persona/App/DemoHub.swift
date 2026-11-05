@@ -106,6 +106,23 @@ final class DemoHub {
 
     private static func iso(_ d: Date) -> String { d.formatted(.iso8601) }
 
+    /// 订阅额度 (docs/usage-windows.md): a Claude and a Codex account, their windows relative to now.
+    private static func usageWindows(now: Date = .now) -> JSONValue {
+        func win(_ label: String, _ mins: Int, _ used: Double, _ left: TimeInterval) -> JSONValue {
+            ["label": .string(label), "window_minutes": .number(Double(mins)), "used_percent": .number(used),
+             "resets_at": .string(iso(now.addingTimeInterval(left)))]
+        }
+        let accounts: [JSONValue] = [
+            ["id": "claude-demo", "provider": "claude", "name": "Claude", "plan": "Max", "local": true,
+             "sampled_at": .string(iso(now.addingTimeInterval(-20))),
+             "windows": .array([win("5h", 300, 72, 80 * 60), win("7d", 10080, 38, (2 * 24 + 6) * 3600)])],
+            ["id": "codex-demo", "provider": "codex", "name": "Codex Pro", "plan": "pro", "local": true,
+             "sampled_at": .string(iso(now.addingTimeInterval(-240))),
+             "windows": .array([win("5h", 300, 18, 3 * 3600), win("7d", 10080, 64, (3 * 24 + 2) * 3600)])],
+        ]
+        return ["accounts": .array(accounts), "checked_at": .string(iso(now))]
+    }
+
     // MARK: HTTP
 
     func answer(_ req: LocalRequest) async throws -> Data {
@@ -161,6 +178,7 @@ final class DemoHub {
         case ["machines"]: return ["machines": .array(machines)]
         case ["metrics"]: return ["machines": .array(machines.compactMap { $0["id"]?.string }.map { metrics($0, span: 3600, step: 60) }), "step": 60]
         case ["sessions"]: return ["sessions": .array(sessions)]
+        case ["usage", "windows"]: return Self.usageWindows()
         case ["interactions"]: return ["interactions": .array(interactions)]
         case ["interactions", "history"]: return ["interactions": .array([])]
         case ["auth", "tokens"]: return ["tokens": .array(tokens), "current": "dev_phone"]

@@ -1,0 +1,84 @@
+import SwiftUI
+
+/// The foot of the sections column (docs/usage-windows.md「界面」, as the web's sidebar has it): the two fullest
+/// subscription accounts as thin bars, name and fullest window's percentage; a click opens every account's windows with
+/// the reset countdowns, the sample ages and the pace. Not drawn while the hubs have no accounts.
+struct MacUsageFooter: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var phase
+    var store = UsageWindowsStore.shared
+    @State private var open = false
+    @State private var hovering = false
+
+    var body: some View {
+        let live = UsageWindows.live(store.accounts)
+        let top = UsageWindows.top(live)
+        // A stack, not a Group: with no account a Group has no view to run the task on, and nothing would ever load.
+        VStack(spacing: 0) {
+            if !top.isEmpty {
+                Button { open.toggle() } label: {
+                    VStack(alignment: .leading, spacing: Theme.Space.s) {
+                        ForEach(top) { a in bar(a) }
+                    }
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.s)
+                    .background {
+                        if hovering || open {
+                            RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).fill(Theme.Fill.macHover)
+                        }
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering = $0 }
+                .help(Self.tooltip(top))
+                .accessibilityLabel("订阅额度：" + top.map { "\($0.name) 已用 \(UsageWindows.percentText(UsageWindows.fullest($0)))" }.joined(separator: "，"))
+                .accessibilityHint("查看每个账号的窗口")
+                .accessibilityIdentifier("mac.usage")
+                .popover(isPresented: $open, arrowEdge: .trailing) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Theme.Space.m) {
+                            Text("订阅额度").font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
+                                .accessibilityAddTraits(.isHeader)
+                            UsageAccountsList(accounts: store.accounts)
+                        }
+                        .padding(Theme.Space.l)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .scaledFrame(width: Theme.Size.box300)
+                    .frame(maxHeight: Theme.Size.box380)
+                }
+            }
+        }
+        // While the window's app is in front: the column is always on screen, so that is when the bars are seen.
+        .task(id: phase == .active) {
+            guard phase == .active else { return }
+            await store.poll(model)
+        }
+    }
+
+    private func bar(_ a: UsageAccount) -> some View {
+        let used = UsageWindows.fullest(a)
+        return VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                Text(a.name).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(1)
+                Spacer(minLength: Theme.Space.s)
+                Text(UsageWindows.percentText(used)).font(Theme.Font.label.monospacedDigit())
+                    .foregroundStyle(UsageWindows.isWarn(used) ? Theme.cautionText : Color.primary).lineLimit(1)
+            }
+            UsageMeter(used: used)
+        }
+        .opacity(a.stale ? 0.6 : 1)
+    }
+
+    /// Where the bars' numbers came from, and which are old (the web's title on each bar).
+    static func tooltip(_ accounts: [UsageAccount]) -> String {
+        accounts.map { a in
+            let from = UsageWindows.sourceNames(a)
+            var parts = [a.name]
+            if !from.isEmpty { parts.append("来源：" + from.joined(separator: " · ")) }
+            if a.stale { parts.append("数据已过期") }
+            return parts.joined(separator: " · ")
+        }.joined(separator: "\n")
+    }
+}

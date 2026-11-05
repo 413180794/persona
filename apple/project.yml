@@ -488,6 +488,7 @@ targets:
       - path: PersonaTests/NotificationActionsTests.swift
       - path: PersonaTests/NotifyPrefsTests.swift
       - path: PersonaTests/PushCryptoTests.swift
+      - path: PersonaTests/UsageWindowsTests.swift
     dependencies:
       - target: PersonaMac
     settings:
