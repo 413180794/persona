@@ -454,6 +454,11 @@ func (p *probe) login() bool {
 		if prompt.Done {
 			return true
 		}
+		if prompt.Kind == connector.PromptQRCode {
+			// A fixture has nobody to scan: it says the scan happened when asked again, as the app does.
+			step, values = prompt.Step, nil
+			continue
+		}
 		if prompt.Error != "" || prompt.Kind != "" {
 			p.failf("login.step %q: cannot go on (error %q, kind %q)", step, prompt.Error, prompt.Kind)
 			return false

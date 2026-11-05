@@ -359,6 +359,8 @@
 - 查法：`journalctl --user -u jarvisd` 里每次启动的版本号（`git describe`），和线上 `web/index.html` 的修改时间（tar 保留了构建时间）；
   看线上 bundle 里有没有某个 PR 独有的字符串，就知道网页是哪一版。
 - 现在 `deploy.sh` 要求 HEAD 包含 `origin/master`，否则拒绝；要故意部署旧版本用 `PERSONA_DEPLOY_ANY_COMMIT=1`。
+- 别的语言写的连接器程序，假后端测不出依赖的问题（2026-11-04，#1487）：LarkAgentX 固定的 `SQLAlchemy==2.0.30` 在 Python 3.13 上一导入就崩，`CheckProgram` 全绿也看不到，要打真的包、走一遍真的 pip 和导入才发现。不需要账号的部分（依赖、导入、二维码初始化、解码一帧合成的推送）都能这样验。
+- `./scripts/test/test-server.sh ./... | tail` 看不到失败的包：Go 按包名排序，`cmd/` 排在最前，`tail` 只留下最后一行 `FAIL`（2026-11-04）。输出存文件再 grep `^FAIL`；zsh 里退出码是 `$pipestatus`，不是 `$PIPESTATUS`。hub 机器连不上 proxy.golang.org 时，用了新依赖的包是 `[setup failed]`，不是测试失败。
 
 ## Mac 上打的插件包装不上（2026-11-04，#1590）
 

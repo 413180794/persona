@@ -11,6 +11,8 @@
 **#392 的明确例外**：用户要求在飞书设置增加默认关闭的「首页显示消息」开关，开启后首页增加「消息」，浏览全部私聊与群聊。
 它与收件箱共用账号、聊天页、发件箱和同步，不增加第二套实现；其他飞书功能页仍不迁入。详见 [飞书能力整合](lark-connector-migration.md)。
 
+飞书有三种接入：lark-connector（私有插件 `lark-connector`）、官方 `lark-cli`（`docs/plan-lark-cli.md`）和 LarkAgentX（私有插件 `larkx`），都在 hub 上可选。这篇写的是 lark-connector 这一路。
+
 ## 保留什么
 
 | 能力 | 位置 | 说明 |

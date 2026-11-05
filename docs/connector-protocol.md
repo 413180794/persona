@@ -228,7 +228,7 @@ hub 只对这些连接器读它，而且只有 `extra` 里带了上面那几个�
 | `thread.media` | `connector.Media` | 页面里有 ref 才调一次 |
 | `archive.changes` | `serve.ChangesResult` | 沿 `next` 走到 `more` 为假，再用最后的游标多问一次：有数据时 `next` 非空、不回到 `""`、不原地不动；同一会话的消息 id 不重复交付；消息有 `id`、`at`、文字或媒体（知识库只追加、不去重，会丢掉没日期、没内容的）；`sender_handles` 有 `kind` 和 `value` |
 | `items.list` | `serve.ItemsResult` | `kind` 是 `docs` / `meetings` / `events`，有 `id` 和 `title` |
-| `login.step` | `connector.Prompt` | 要么有 `fields`，要么 `done`，要么 `device_code`；要填的一步有名字（空名字是从头再来）；`done` 要有 `account` |
+| `login.step` | `connector.Prompt` | 要么有 `fields`，要么 `done`，要么 `device_code`，要么 `qr`（要有 `url`、`interval`、`step`，`WithLogin` 再问同一步直到 `done`）；要填的一步有名字（空名字是从头再来）；`done` 要有 `account` |
 | `logout` | `{}` | 只在 `WithLogin` 登录之后最后调：登出后状态不再是 `ok`，密钥从 hub 的存放里删掉了（`secrets.delete`） |
 | 事件 `connector.changed` | `serve.ChangedEvent` | `contribution` 是自己的连接器，且声明了 `events`；`scope` 是 hub 认得的 |
 | 程序调 `secrets.*` | `{contribution, data?}` | 带 `contribution`，是自己的连接器 |
@@ -260,6 +260,13 @@ cd server
 PERSONA_TEST_wechat-connector_PROGRAM=<插件目录>/<runtime.command> \
 wechat-connector_FIXTURE_SERVER=<夹具服务脚本> \
 go test ./internal/connector/conformance -run wechat-connector -v
+```
+
+没有夹具服务、程序自带假后端的，用 `TestConnectorProgramLive`（`internal/` 包只有这个仓库能导入，所以别的仓库的程序在这里跑）。选假后端的环境变量由调用的人设，程序继承；登录的每一步不给值，二维码一步由假后端自己说扫完了：
+
+```sh
+cd server
+PERSONA_TEST_CONNECTOR_PROGRAM=<仓库>/<插件>/bin/<程序> go test ./internal/connector/conformance -run ConnectorProgramLive -v
 ```
 
 程序所在的包里 `persona-plugin.json` 在 `bin/` 的上一级。夹具服务起来后在 stdout 打印**一行** JSON：`base_url`、`outbound_sends_enabled`，和 `accounts`（每个账号的 `key` 是读取 + 事件的应用密钥，另有带发送范围的 `send_key`）。

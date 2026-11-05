@@ -404,8 +404,12 @@ func checkPrompt(raw json.RawMessage) (connector.Prompt, error) {
 		if p.URL == "" || p.UserCode == "" || p.Interval <= 0 {
 			is.add("a device_code step needs url, user_code and interval")
 		}
+	case p.Kind == connector.PromptQRCode:
+		if p.URL == "" || p.Interval <= 0 || p.Step == "" {
+			is.add("a qr step needs url, interval and a step (the app asks the same one again)")
+		}
 	case p.Kind != "":
-		is.add("kind %q is neither empty nor device_code", p.Kind)
+		is.add("kind %q is none of empty, device_code and qr", p.Kind)
 	case len(p.Fields) == 0:
 		is.add("neither fields nor done (the user has nothing to do)")
 	case p.Step == "":

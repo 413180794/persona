@@ -10,7 +10,8 @@ rename docs, which name the retired paths on purpose.
 Relative Markdown link targets in the same docs, [text](path) and [text](path#anchor), must exist too; only the file is
 checked, not the anchor.
 
-Every top-level doc must also be listed in CLAUDE.md's 文档索引, the place Agents look for the design docs.
+Every top-level doc must also be listed in CLAUDE.md's 文档索引, the place Agents look for the design docs, and every
+record under docs/archive/ in the table of docs/archive/README.md.
 """
 from pathlib import Path
 import re
@@ -277,6 +278,13 @@ class DocPathTests(unittest.TestCase):
         missing = [doc for doc in docs if doc not in UNINDEXED and f"`{doc}`" not in rows]
         self.assertEqual([], missing, "add these docs to the 文档索引 in CLAUDE.md")
         self.assertEqual([], [doc for doc in UNINDEXED if doc not in docs], "UNINDEXED names docs that are gone")
+
+    def test_archive_records_are_in_the_archive_table(self):
+        archive = ROOT / "docs/archive"
+        rows = "\n".join(line for line in (archive / "README.md").read_text().splitlines() if line.startswith("|"))
+        records = sorted(p.relative_to(archive).as_posix() for p in archive.rglob("*.md") if p.name != "README.md")
+        missing = [record for record in records if f"`{record}`" not in rows]
+        self.assertEqual([], missing, "add these records to the table in docs/archive/README.md")
 
 
 if __name__ == "__main__":

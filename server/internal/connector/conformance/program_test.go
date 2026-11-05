@@ -353,7 +353,25 @@ func Testwechat-connectorProgramLive(t *testing.T) {
 	if program == "" || server == "" {
 		t.Skip("set PERSONA_TEST_wechat-connector_PROGRAM (a connector program's launcher) and wechat-connector_FIXTURE_SERVER (a compatible fixture server's script) to run it (docs/connector-protocol.md「一致性测试」)")
 	}
-	login := startFixtureServer(t, server)
+	checkLive(t, program, startFixtureServer(t, server))
+}
+
+// A connector program of another repository on a fixture backend of its own, so there is no server to start: what
+// selects the fixture comes from the environment of this test, which the program inherits, and the sign-in gives no
+// values. Skips without the path:
+//
+//	PERSONA_TEST_CONNECTOR_PROGRAM=<repository>/<plugin>/bin/<program> go test ./internal/connector/conformance -run ConnectorProgramLive -v
+func TestConnectorProgramLive(t *testing.T) {
+	program := os.Getenv("PERSONA_TEST_CONNECTOR_PROGRAM")
+	if program == "" {
+		t.Skip("set PERSONA_TEST_CONNECTOR_PROGRAM to run a connector program (docs/connector-protocol.md)")
+	}
+	checkLive(t, program, map[string]string{})
+}
+
+// checkLive holds a program, started twice, to the plugin protocol and the connector protocol, signing in with login.
+func checkLive(t *testing.T, program string, login map[string]string) {
+	t.Helper()
 	// The package is what the program sits in: its manifest next to bin/, under the new name or the old one, as the
 	// hub reads an installed package.
 	pkg := filepath.Dir(filepath.Dir(program))
