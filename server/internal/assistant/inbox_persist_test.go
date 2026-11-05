@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -186,6 +187,87 @@ func TestInboxForgetSerializesWithPersistence(t *testing.T) {
 	}
 	if s.hasRow(item.ID) {
 		t.Fatal("the completed snapshot resurrected a forgotten item")
+	}
+}
+
+// inboxForgetStore fails deletes on demand, then recovers, so a forget can be retried.
+type inboxForgetStore struct {
+	*inboxMemStore
+	deleteFail error
+	calls      atomic.Int32
+}
+
+func (s *inboxForgetStore) DeleteInboxItems(ctx context.Context, ids []string) error {
+	s.calls.Add(1)
+	if s.deleteFail != nil {
+		return s.deleteFail
+	}
+	return s.inboxMemStore.DeleteInboxItems(ctx, ids)
+}
+
+// InboxForget deletes the rows before dropping items from memory: a failed delete keeps everything in place, and the
+// contracted retry finishes the deletion instead of reporting success with the rows still stored.
+func TestInboxForgetPersistsBeforeMemoryDelete(t *testing.T) {
+	st := &inboxForgetStore{inboxMemStore: newInboxMemStore(), deleteFail: errMuteStoreDown}
+	f := newFakeHub().withMachine()
+	in := newFakeInbox()
+	f.inbox = in
+	h := New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf})
+	if err := h.inboxReady(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	items := []*InboxItem{
+		{ID: "mail:1", Source: "mail", UpdatedAt: time.Now()},
+		{ID: "mail:2", Source: "mail", UpdatedAt: time.Now()},
+	}
+	h.inbox.mu.Lock()
+	for _, it := range items {
+		h.inbox.items[it.ID] = it
+		raw, _ := json.Marshal(it)
+		if err := st.PutInboxItem(context.Background(), it.ID, raw, it.UpdatedAt, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.inbox.mu.Unlock()
+
+	if n, err := h.InboxForget(context.Background(), "mail"); !errors.Is(err, errMuteStoreDown) || n != 0 {
+		t.Fatalf("forget with the store down: n=%d err=%v", n, err)
+	}
+	h.inbox.mu.Lock()
+	for _, it := range items {
+		if h.inbox.items[it.ID] != it {
+			t.Fatalf("item %s left memory after a failed delete", it.ID)
+		}
+	}
+	h.inbox.mu.Unlock()
+	st.imu.Lock()
+	rowsAfterFail := len(st.rows)
+	st.imu.Unlock()
+	if rowsAfterFail != 2 {
+		t.Fatalf("a failed delete left %d rows, want 2", rowsAfterFail)
+	}
+	if pushes := in.pushes(); pushes != 0 {
+		t.Fatalf("a failed forget told the apps %d times, want 0", pushes)
+	}
+
+	st.deleteFail = nil
+	if n, err := h.InboxForget(context.Background(), "mail"); err != nil || n != 2 {
+		t.Fatalf("retry: n=%d err=%v", n, err)
+	}
+	h.inbox.mu.Lock()
+	left := len(h.inbox.items)
+	h.inbox.mu.Unlock()
+	st.imu.Lock()
+	rowsAfterRetry := len(st.rows)
+	st.imu.Unlock()
+	if left != 0 || rowsAfterRetry != 0 {
+		t.Fatalf("after the retry: %d items in memory, %d rows stored", left, rowsAfterRetry)
+	}
+	if pushes := in.pushes(); pushes != 1 {
+		t.Fatalf("the successful forget told the apps %d times, want 1", pushes)
+	}
+	if st.calls.Load() != 2 {
+		t.Fatalf("the store saw %d delete calls, want 2", st.calls.Load())
 	}
 }
 

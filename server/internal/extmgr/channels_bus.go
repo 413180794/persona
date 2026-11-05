@@ -127,9 +127,9 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		var id string
 		var err error
 		if a.ReplyTo != "" {
-			id, err = api.Reply(ctx, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), "", false)
+			id, err = api.Reply(ctx, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), feishuReplyUUID(a.ReplyTo, "t", a.Text), false)
 		} else {
-			id, err = api.Send(ctx, "chat_id", set.Owner.ChatID, feishubot.TypeText, feishubot.TextContent(a.Text), "")
+			id, err = api.Send(ctx, "chat_id", set.Owner.ChatID, feishubot.TypeText, feishubot.TextContent(a.Text), feishuSendUUID())
 		}
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuUpdateCard:

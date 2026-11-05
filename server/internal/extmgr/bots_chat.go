@@ -2,8 +2,13 @@ package extmgr
 
 import (
 	"context"
+	crand "crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	mrand "math/rand/v2"
 	"regexp"
 	"slices"
 	"strings"
@@ -72,6 +77,40 @@ func (h *Manager) claimBotMessage(id string) bool {
 	return true
 }
 
+// feishuMaxUUID is the open platform's uuid length cap on the send/reply message APIs.
+const feishuMaxUUID = 50
+
+// feishuReplyUUID is the deterministic idempotency key for a reply: same parent message, same purpose (kind:
+// c card, f rich-text fallback, t plain text, n note) and same content replay the same key even across a restart;
+// different content (the several cards of one turn, or the card vs its fallback) gets a different key, so the
+// gateway does not dedupe it.
+func feishuReplyUUID(messageID, kind, content string) string {
+	sum := sha256.Sum256([]byte(content))
+	fp := hex.EncodeToString(sum[:6])
+	u := "r:" + messageID + ":" + kind + fp
+	if len(u) <= feishuMaxUUID {
+		return u
+	}
+	keep := feishuMaxUUID - len("r:") - len(":"+kind) - len(fp)
+	if keep < 1 {
+		keep = 1
+	}
+	return "r:" + messageID[:keep] + ":" + kind + fp
+}
+
+// feishuSendUUID is a one-logical-send key for sends without a parent message to anchor to (pairing notes, test
+// messages): random per call, never content-derived, so two legitimate sends are never deduped; the client's retries
+// still replay this same key.
+func feishuSendUUID() string {
+	var b [8]byte
+	if _, err := crand.Read(b[:]); err != nil {
+		// crypto/rand failing is extraordinary; all-zero keys would make the gateway dedupe every send, so mix the
+		// clock with the process RNG instead.
+		binary.LittleEndian.PutUint64(b[:], uint64(time.Now().UnixNano())^mrand.Uint64())
+	}
+	return "s:" + hex.EncodeToString(b[:6])
+}
+
 // botTell sends a short note to someone, at most every 10 minutes per person (pairing hints, refusals).
 func (h *Manager) botTell(api *feishubot.Client, openID, chatID, text string) {
 	b := &h.bots
@@ -87,7 +126,7 @@ func (h *Manager) botTell(api *feishubot.Client, openID, chatID, text string) {
 	b.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if _, err := api.Send(ctx, "chat_id", chatID, feishubot.TypeText, feishubot.TextContent(text), ""); err != nil {
+	if _, err := api.Send(ctx, "chat_id", chatID, feishubot.TypeText, feishubot.TextContent(text), feishuSendUUID()); err != nil {
 		h.logf("bots: tell: %v", err)
 	}
 }
@@ -254,7 +293,7 @@ func (h *Manager) botName(ctx context.Context, api *feishubot.Client, openID str
 
 // botNote replies to a message with a line of text.
 func (h *Manager) botNote(ctx context.Context, api *feishubot.Client, messageID, text string) {
-	if _, err := api.Reply(ctx, messageID, feishubot.TypeText, feishubot.TextContent(text), "", false); err != nil {
+	if _, err := api.Reply(ctx, messageID, feishubot.TypeText, feishubot.TextContent(text), feishuReplyUUID(messageID, "n", text), false); err != nil {
 		h.logf("bots: note: %v", err)
 	}
 }
@@ -266,19 +305,27 @@ func (h *Manager) botPost(ctx context.Context, api *feishubot.Client, chatID, re
 }
 
 func (h *Manager) botPostJSON(ctx context.Context, api *feishubot.Client, chatID, replyTo, card, fallback string) (string, error) {
-	send := func(typ, content string) (string, error) {
-		if replyTo != "" {
-			return api.Reply(ctx, replyTo, typ, content, "", false)
-		}
-		return api.Send(ctx, "chat_id", chatID, typ, content, "")
+	cardUUID := feishuSendUUID()
+	if replyTo != "" {
+		cardUUID = feishuReplyUUID(replyTo, "c", card)
 	}
-	id, err := send(feishubot.TypeInteractive, card)
+	send := func(typ, content, uuid string) (string, error) {
+		if replyTo != "" {
+			return api.Reply(ctx, replyTo, typ, content, uuid, false)
+		}
+		return api.Send(ctx, "chat_id", chatID, typ, content, uuid)
+	}
+	id, err := send(feishubot.TypeInteractive, card, cardUUID)
 	if err != nil && feishubot.CardRejected(err) {
 		h.logf("bots: card refused (%v); sending it as rich text", err)
 		if fallback == "" {
 			fallback = i18n.T(h.botLang(ctx), "hub-bots_chat.card_refused")
 		}
-		return send(feishubot.TypePost, feishubot.PostMarkdown(fallback))
+		fallbackUUID := feishuSendUUID()
+		if replyTo != "" {
+			fallbackUUID = feishuReplyUUID(replyTo, "f", fallback)
+		}
+		return send(feishubot.TypePost, feishubot.PostMarkdown(fallback), fallbackUUID)
 	}
 	return id, err
 }

@@ -1187,21 +1187,29 @@ func (s *Service) InboxForget(ctx context.Context, source string) (int, error) {
 	for id, it := range b.items {
 		if it.Source == source {
 			ids = append(ids, id)
-			delete(b.items, id)
-			b.replies.Delete(id)
 		}
 	}
 	b.mu.Unlock()
-	if st := s.inboxDB(); st != nil && len(ids) > 0 {
+	if len(ids) == 0 {
+		b.saving.Unlock()
+		return 0, nil
+	}
+	// Persist the deletion first: if it fails the items stay in memory, so a retry collects the same ids and
+	// finishes the job (the connector delete contract relies on a retry cleaning up what is left).
+	if st := s.inboxDB(); st != nil {
 		if err := st.DeleteInboxItems(ctx, ids); err != nil {
 			b.saving.Unlock()
 			return 0, err
 		}
 	}
-	b.saving.Unlock()
-	if len(ids) > 0 {
-		s.inboxChanged(ctx, nil)
+	b.mu.Lock()
+	for _, id := range ids {
+		delete(b.items, id)
+		b.replies.Delete(id)
 	}
+	b.mu.Unlock()
+	b.saving.Unlock()
+	s.inboxChanged(ctx, nil)
 	return len(ids), nil
 }
 

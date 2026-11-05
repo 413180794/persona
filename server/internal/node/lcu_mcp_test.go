@@ -80,6 +80,10 @@ func TestLCUToolTranslation(t *testing.T) {
 	if err != nil || name != "js" || !strings.Contains(args["code"].(string), `pressKey("return")`) || !strings.Contains(args["code"].(string), `appNamed("Notes")`) {
 		t.Fatalf("%s %v %v", name, args, err)
 	}
+	// args null is no args: an object for LCU's tools/call, not "arguments": null.
+	if name, args, err := lcuTool("js", json.RawMessage(`null`)); err != nil || name != "js" || args == nil {
+		t.Fatalf("args null: %s %v %v", name, args, err)
+	}
 	if _, _, err := lcuTool("clipboard_read", json.RawMessage(`{}`)); err == nil {
 		t.Fatal("clipboard is not forwarded")
 	}

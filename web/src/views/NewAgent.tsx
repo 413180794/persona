@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { hubLabel } from "../lib/mesh";
 import { api, ApiError, enc, errorText } from "../lib/api";
 import { pickAttachment, releaseAttachments, type LocalAttachment } from "../lib/attachments";
-import { launchAgent, presetPrompt, type NewAgentPreset } from "../lib/new-agent";
+import { browserStartKeys, launchAgent, presetPrompt, type NewAgentPreset } from "../lib/new-agent";
 import { AttachmentTray } from "../ui/AttachmentTray";
 import { modelPurpose, modelSummary, type ModelBinding } from "../lib/model-config";
 import {
@@ -59,6 +59,7 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
   const [browse, setBrowse] = useState("");
   const [loadingDirs, setLoadingDirs] = useState(false);
   const [prompt, setPrompt] = useState(() => localStorage.getItem("draft:new-agent") ?? "");
+  const keys = useMemo(browserStartKeys, []);
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -384,7 +385,7 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
               }}
               rows={3}
               aria-label={t("newagent.first_message")}
-              placeholder={t("newagent.prompt_placeholder")}
+              placeholder={keys ? t("newagent.prompt_placeholder_keys", { keys }) : t("newagent.prompt_placeholder")}
               className="w-full resize-none bg-transparent px-3 py-2 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink-3"
             />
             <div className="flex items-center gap-2 px-2 pb-2">

@@ -8,7 +8,7 @@
 | node 发送 | `server/internal/node/metrics.go` |
 | 管理者存储、降采样、清理、API（hub 转发 `devicewire.MetricsRoutes`） | `server/internal/devices/metrics.go`、`server/internal/db/metrics.go`、迁移 `0051_machine_metrics.sql` |
 | App | `apple/Persona/Views/Machines/`（`MachinesView` 机器页、`MachineDetailView` 机器详情、`MetricCharts`、`OSBadge`），模型 `apple/Shared/MachineMetrics.swift` |
-| 本机看采集结果 / 开销 | `jarvisd sysmon [n]`：打印系统信息和 n+1 个样本（每 10 秒一个），最后一行是每次采集耗时和 personad 的 CPU |
+| 本机看采集结果 / 开销 | `jarvisd sysmon [n]`：打印系统信息和 n+1 个样本（每 10 秒一个，n 最多 8640，即一天），最后一行是实际采到的样本数、每次采集耗时和 personad 的 CPU（Ctrl-C 马上停） |
 
 ## 谁连电脑（2026-11-04）
 

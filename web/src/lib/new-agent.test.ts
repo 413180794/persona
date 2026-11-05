@@ -6,10 +6,11 @@ vi.mock("./store", () => {
 });
 vi.mock("./router", () => ({ href: (r: { mid: string; sid: string }) => `/s/${r.mid}/${r.sid}`, navigate: vi.fn() }));
 
-import { acknowledgeLaunch, deliverLaunch, launchAgent, onOpenNewAgent, openNewAgent, presetPrompt } from "./new-agent";
+import { acknowledgeLaunch, deliverLaunch, launchAgent, onOpenNewAgent, openNewAgent, presetPrompt, startKeys } from "./new-agent";
 import { getState, upsertSession } from "./store";
 import { navigate } from "./router";
 import { pickAttachment } from "./attachments";
+import { platformOf } from "./shortcuts";
 
 const session = { machine_id: "desktop", session_id: "remote-id", title: "示例", cwd: "/workspace/project", status: "idle" };
 const input = { machineId: "desktop", cwd: "/workspace/project", launcher: "", text: "看一下附件", attachments: [] };
@@ -189,5 +190,15 @@ describe("opened from another page", () => {
     off();
     openNewAgent({ prompt: "y" });
     expect(got).toEqual([{ prompt: "x", machineId: "m", cwd: "/a" }]);
+  });
+});
+
+describe("startKeys", () => {
+  it("names ⌘ ↵ on Apple, Ctrl ↵ elsewhere, nothing on a touch-only device", () => {
+    expect(startKeys(platformOf({ platform: "MacIntel" }), false)).toBe("⌘ ↵");
+    expect(startKeys(platformOf({ platform: "Win32" }), false)).toBe("Ctrl ↵");
+    expect(startKeys(platformOf({ platform: "Linux x86_64" }), false)).toBe("Ctrl ↵");
+    expect(startKeys("mac", true)).toBeNull();
+    expect(startKeys("other", true)).toBeNull();
   });
 });

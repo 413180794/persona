@@ -412,6 +412,9 @@ func lcuTool(tool string, raw json.RawMessage) (string, map[string]any, error) {
 	if len(raw) > 0 && json.Unmarshal(raw, &args) != nil {
 		return "", nil, errors.New("computer.call: args must be an object")
 	}
+	if args == nil { // "args": null is no args, not "arguments": null to LCU
+		args = map[string]any{}
+	}
 	switch tool {
 	case "js", "js_reset":
 		return tool, args, nil

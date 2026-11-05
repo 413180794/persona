@@ -247,6 +247,9 @@ func computerCall(ctx context.Context, params json.RawMessage) (*proto.ComputerR
 			return nil, errors.New("computer.call: args must be an object")
 		}
 	}
+	if args == nil { // "args": null: Unmarshal set the map to nil, and writing the session label to it would panic
+		args = map[string]any{}
+	}
 	if _, ok := args["session"]; !ok && p.Session != "" {
 		args["session"] = p.Session
 	}

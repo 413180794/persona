@@ -102,8 +102,8 @@ const usage = `usage:
   personad extension …      extensions on the hub's machine: list, install, upgrade, rollback, enable, disable, config,
                            secret, uninstall, markets (docs/extensions.md「命令行」; personad extension for the details;
                            also personad ext …, and personad plugin … as before)
-  personad sysmon [n]       print this machine's system info and 1 + n metric samples (n default 3, every 10 s),
-                           with what they cost
+  personad sysmon [n]       print this machine's system info and 1 + n metric samples (n default 3, at most 8640,
+                           every 10 s), with what they cost
   personad release manifest|check-next …
                            the publisher's release manifest and checks (scripts/release/publish.sh, docs/hub-update.md「发布」)
   personad update-watch <pending>
@@ -475,6 +475,10 @@ func runHook(ctx context.Context) {
 	os.Stdout.Write([]byte("\n"))
 }
 
+// sysmonMaxCount caps `sysmon [n]` at a day of 10-second samples: a bigger n never ends in practice, and the
+// largest ints overflowed n+1 in the summary.
+const sysmonMaxCount = 8640
+
 // sysmonCount reads `sysmon [n]`: how many samples after the first, 3 when not given.
 func sysmonCount(args []string) (int, error) {
 	if len(args) == 0 {
@@ -484,7 +488,30 @@ func sysmonCount(args []string) (int, error) {
 	if len(args) > 1 || err != nil || n < 0 {
 		return 0, fmt.Errorf("usage: personad sysmon [n]   (n: how many 10-second samples after the first, 0 or more)")
 	}
+	if n > sysmonMaxCount {
+		return 0, fmt.Errorf("personad sysmon: n is at most %d (a day of 10-second samples), not %d", sysmonMaxCount, n)
+	}
 	return n, nil
+}
+
+// sysmonSamples calls sample 1 + n times, one `every` apart, and says how many it took: fewer when ctx ends
+// (Ctrl-C), which also cuts the wait in between short.
+func sysmonSamples(ctx context.Context, n int, every time.Duration, sample func()) int {
+	taken := 0
+	for i := 0; i <= n && ctx.Err() == nil; i++ {
+		if i > 0 {
+			t := time.NewTimer(every)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return taken
+			case <-t.C:
+			}
+		}
+		sample()
+		taken++
+	}
+	return taken
 }
 
 // runSysmon shows what a node would report (docs/machines.md), and the CPU time it took: how the collection cost
@@ -499,19 +526,20 @@ func runSysmon(ctx context.Context, n int) {
 	cpu0 := osproc.CPUTime()
 	began := time.Now()
 	var took time.Duration
-	for i := 0; i <= n && ctx.Err() == nil; i++ {
-		if i > 0 {
-			time.Sleep(10 * time.Second)
-		}
+	taken := sysmonSamples(ctx, n, 10*time.Second, func() {
 		t := time.Now()
 		s := c.Sample(t)
 		took += time.Since(t)
 		_ = enc.Encode(s)
+	})
+	if taken == 0 {
+		fmt.Println("0 samples: stopped before the first")
+		return
 	}
 	cpu := osproc.CPUTime() - cpu0
 	wall := time.Since(began)
 	fmt.Printf("%d samples: %v each; jarvisd CPU %v over %v (%.3f%%), not counting iostat / vm_stat on macOS\n",
-		n+1, (took / time.Duration(n+1)).Round(time.Microsecond), cpu.Round(time.Millisecond), wall.Round(time.Second),
+		taken, (took / time.Duration(taken)).Round(time.Microsecond), cpu.Round(time.Millisecond), wall.Round(time.Second),
 		100*cpu.Seconds()/wall.Seconds())
 }
 

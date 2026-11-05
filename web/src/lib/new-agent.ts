@@ -4,6 +4,7 @@ import { api, ApiError, errorText, sessionPath } from "./api";
 import { parseUserText } from "./turns";
 import { imagePayload, quotePath, releaseAttachments, sendFile, type LocalAttachment } from "./attachments";
 import { uuid } from "./format";
+import { currentPlatform, modName, type Platform } from "./shortcuts";
 import { href, navigate } from "./router";
 import { getState, putLaunch, upsertSession } from "./store";
 import type { Session } from "./types";
@@ -161,6 +162,20 @@ export function onOpenNewAgent(l: (preset: NewAgentPreset) => void) {
   return () => {
     openers.delete(l);
   };
+}
+
+/**
+ * The keys that start 新建 Agent from the first-message box, for its placeholder: Mod ↵ (⌘ on Apple, Ctrl elsewhere, as
+ * the shortcuts name it), and none on a touch-only device (a phone has no ⌘ key, so the hint would only take up room).
+ */
+export function startKeys(platform: Platform, touchOnly: boolean): string | null {
+  return touchOnly ? null : `${modName(platform)} ↵`;
+}
+
+/** startKeys for this browser. */
+export function browserStartKeys(): string | null {
+  const touchOnly = typeof matchMedia === "function" && matchMedia("(hover: none) and (pointer: coarse)").matches;
+  return startKeys(currentPlatform(), touchOnly);
 }
 
 /** The first message with a preset: its text first, then what was already being written (a draft isn't lost). */

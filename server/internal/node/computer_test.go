@@ -186,6 +186,11 @@ func TestComputerCall(t *testing.T) {
 			t.Errorf("%s is not the hub's to call", tool)
 		}
 	}
+	// args null is no args: not a panic (a nil map written to) that takes the whole node down.
+	res, err = computerCall(ctx, json.RawMessage(`{"session": "persona-c1", "tool": "list_apps", "args": null}`))
+	if err != nil || !strings.Contains(string(res.Output), `"session":"persona-c1"`) {
+		t.Fatalf("args null: %s %v", res.Output, err)
+	}
 	cuaBin = func() string { return "" }
 	if _, err := computerCall(ctx, json.RawMessage(`{"tool": "list_apps"}`)); err == nil || !strings.Contains(err.Error(), "没有装") {
 		t.Fatalf("not installed: %v", err)
