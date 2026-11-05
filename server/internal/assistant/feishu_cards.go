@@ -739,8 +739,10 @@ func botHelp(l i18n.Lang, f FeishuFeatures) string {
 }
 
 // botCommand runs a /command. Not handled, the message goes on with the text returned: as it is for a command it does
-// not know (it may be the agent's own, like /compact), without the command for "/new <message>".
-func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, text string) (bool, string) {
+// not know (it may be the agent's own, like /compact), without the command for "/new <message>". root and parent are
+// the message's thread root and the message it replies to: the commands that act on a conversation follow the target
+// the thread binds, like a normal message does.
+func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, text, root, parent string) (bool, string) {
 	l := s.botLang(ctx)
 	cmd, rest, _ := strings.Cut(strings.TrimSpace(text), " ")
 	rest = strings.TrimSpace(rest)
@@ -789,7 +791,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		}
 		reply(s.startAgentCard(ctx, rest))
 	case "/stop", "/停":
-		rt, err := s.resolveBotTarget(ctx, s.botTargetFor("", ""))
+		rt, err := s.resolveBotTarget(ctx, s.botTargetFor(root, parent))
 		if err != nil || rt.isNew {
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.nothing_running"))
 			return true, ""
@@ -801,7 +803,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.stopped", i18n.Args{"label": rt.label}))
 	case "/status", "/状态":
 		var b strings.Builder
-		b.WriteString(i18n.T(l, "assistant-feishu_cards.status_to", i18n.Args{"target": feishubot.EscapeMarkdown(s.targetLabel(ctx, s.botTargetFor("", "")))}))
+		b.WriteString(i18n.T(l, "assistant-feishu_cards.status_to", i18n.Args{"target": feishubot.EscapeMarkdown(s.targetLabel(ctx, s.botTargetFor(root, parent)))}))
 		if running := len(s.channelRuns(channel.Feishu)); running > 0 {
 			b.WriteString(i18n.T(l, "assistant-feishu_cards.status_waiting", i18n.Args{"count": running}))
 		}

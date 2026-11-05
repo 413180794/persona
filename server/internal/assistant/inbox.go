@@ -595,19 +595,31 @@ func (x *threadIndex) note(it *InboxItem) {
 	}
 }
 
-// openFor finds the open item of a thread (one this round started too); done is the newest done one.
+// openFor finds the open item of a thread (one this round started too); done is the newest done one. A thread can
+// have two open items (an older one moved back after a newer one started): the newest gathers what comes next, the
+// same one every collection, so the older one does not become a copy of it (#3796).
 func (x *threadIndex) openFor(thread string) (open, done *InboxItem) {
 	for _, it := range x.by[thread] {
 		if k, ok := x.key(it); !ok || k != thread {
 			continue
 		}
 		if it.open() {
-			open = it
+			if open == nil || newerItem(it, open) {
+				open = it
+			}
 		} else if done == nil || it.UpdatedAt.After(done.UpdatedAt) {
 			done = it
 		}
 	}
 	return open, done
+}
+
+// newerItem: a holds a later move than b (by its time, then its id, so a tie picks the same one every time).
+func newerItem(a, b *InboxItem) bool {
+	if !a.UpdatedAt.Equal(b.UpdatedAt) {
+		return a.UpdatedAt.After(b.UpdatedAt)
+	}
+	return a.ID > b.ID
 }
 
 // each calls f for every item, and every item the running round started, under b.mu.
@@ -779,6 +791,19 @@ func (b *inboxBook) applyMail(a assistantwire.InboxMailAccount, msgs []assistant
 				}
 			}
 			unseen = fresh
+		}
+		// Mail the thread's other items hold (a done one still unread on the server, an older one moved back) is
+		// theirs: it does not come into the open one too, counted twice (#3796).
+		held := map[uint32]bool{}
+		for _, it := range index.by[t] {
+			if k, ok := index.key(it); ok && k == t && it != open {
+				for _, uid := range it.Mail.UIDs {
+					held[uid] = true
+				}
+			}
+		}
+		if len(held) > 0 {
+			unseen = slices.DeleteFunc(unseen, func(m assistantwire.InboxMailSummary) bool { return held[m.UID] })
 		}
 		if len(unseen) == 0 {
 			// Read in another client: done unless it needs the user.

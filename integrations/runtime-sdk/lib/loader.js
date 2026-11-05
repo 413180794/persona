@@ -45,6 +45,7 @@ export function createLoader(opts) {
   let switching = false
   let pending // an offer that came before the first version finished starting
   let stopped = false
+  let stops = 0 // bumped by stop(): a switch under way when it is called starts nothing after it
 
   const short = (h) => String(h ?? '').slice(0, 12) || 'none'
 
@@ -145,6 +146,8 @@ export function createLoader(opts) {
     }
     if (switching || offer.hash === current.hash) return
     switching = true
+    const mine = stops
+    const gone = () => stopped || stops !== mine // stop() came (and maybe start() again) while this switch awaited
     const old = current
     let oldStopped = false
     let target = offer.hash
@@ -156,13 +159,20 @@ export function createLoader(opts) {
       const dir = storeVersion(store, hash, files)
       log(`jarvis: ${name} ${short(hash)} from the node is stored; switching from ${short(old.hash)} once no card waits on the phone`)
       const since = Date.now()
-      while (!stopped && current === old && old.instance.busy?.() && Date.now() - since < maxWaitMs) {
+      while (!gone() && current === old && old.instance.busy?.() && Date.now() - since < maxWaitMs) {
         await new Promise((r) => setTimeout(r, idleEveryMs).unref?.())
       }
-      if (stopped || current !== old) return
+      if (gone() || current !== old) return
       await stopInstance(old)
       oldStopped = true
-      current = await run({ hash, dir, shipped: false })
+      if (gone()) return
+      const next = await run({ hash, dir, shipped: false })
+      if (gone()) {
+        // Stopped while it started: stop() has already stopped what it found running (the old version).
+        await stopInstance(next)
+        return
+      }
+      current = next
       writeJSON(join(store, 'current.json'), { hash, shipped: shippedHash, version: typeof offer.version === 'string' ? offer.version : '', at: new Date().toISOString() })
       prune([hash, old.hash, shippedHash])
       log(`jarvis: ${name} switched to ${short(hash)} (was ${short(old.hash)})`)
@@ -170,11 +180,13 @@ export function createLoader(opts) {
       bad.add(target)
       bad.add(offer.hash)
       log(`jarvis: ${name} update to ${short(target)} failed: ${err.message}; staying on ${short(old.hash)}`)
-      if (oldStopped && !stopped) {
+      if (oldStopped && !gone()) {
         try {
-          current = await run(old)
+          const again = await run(old)
+          if (gone()) await stopInstance(again)
+          else current = again
         } catch (e) {
-          current = undefined
+          if (!gone()) current = undefined
           log(`jarvis: ${name} ${short(old.hash)} did not start again: ${e.message}`)
         }
       }
@@ -195,6 +207,7 @@ export function createLoader(opts) {
     /** Stop whatever version runs. */
     async stop() {
       stopped = true
+      stops++
       pending = undefined
       if (starting) await starting.catch(() => {})
       const v = current

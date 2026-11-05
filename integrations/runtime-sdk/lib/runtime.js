@@ -245,6 +245,11 @@ export function createRuntime(driver, options) {
    * nothing to dial again: the node does.
    */
   async function adopt(socket, state = {}) {
+    if (dialing && (stopped || state.run !== run)) {
+      // Dialed by a run stop() has ended (the socket connected after it): not this runtime's connection any more.
+      socket.destroy()
+      return
+    }
     if (peer) {
       const old = peer
       peer = undefined

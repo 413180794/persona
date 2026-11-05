@@ -427,3 +427,14 @@ test('stop() then start() while hello is in flight: the failed hello of the old 
   await new Promise((r) => setTimeout(r, 1000))
   assert.equal(n.hellos, 2, 'the old hello failing does not dial again')
 })
+
+test('stop() before the dial has connected: the connection is dropped, not taken (dialing mode)', async (t) => {
+  const n = await startFakeNode(t)
+  const rt = createRuntime(minimal(), { runtime: 'toy', socketPath: n.path, retryMs: 20, refreshMs: 0 })
+  t.after(() => rt.stop())
+  rt.start()
+  rt.stop() // the socket is still connecting
+  await new Promise((r) => setTimeout(r, 300))
+  assert.equal(n.hellos, 0, 'a stopped runtime says no hello')
+  assert.equal(rt.connected, false)
+})

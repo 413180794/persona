@@ -121,14 +121,45 @@ func TestBotStepAndStripContext(t *testing.T) {
 func TestBotCommandsPassTheRestOn(t *testing.T) {
 	s := newTestService(t, newFakeHub().withMachine())
 	ctx := context.Background()
-	if h, rest := s.botCommand(ctx, FeishuFeatures{Main: true}, "om", "/new 帮我写周报"); h || rest != "帮我写周报" {
+	if h, rest := s.botCommand(ctx, FeishuFeatures{Main: true}, "om", "/new 帮我写周报", "", ""); h || rest != "帮我写周报" {
 		t.Fatalf("/new with text: handled=%v rest=%q", h, rest)
 	}
 	if got := s.botTargetFor("", ""); got.Kind != targetJarvis || got.SessionID != "" {
 		t.Fatalf("/new points the chat at a new conversation: %+v", got)
 	}
-	if h, rest := s.botCommand(ctx, FeishuFeatures{}, "om", "/compact"); h || rest != "/compact" {
+	if h, rest := s.botCommand(ctx, FeishuFeatures{}, "om", "/compact", "", ""); h || rest != "/compact" {
 		t.Fatalf("an unknown command goes on as it is: handled=%v rest=%q", h, rest)
+	}
+}
+
+// "/stop" in an agent's thread (or replying to one of its cards) stops that agent, not the chat's current target;
+// without a bound thread it stops the current target, as before (#3844).
+func TestBotStopFollowsTheRepliedThread(t *testing.T) {
+	f := newFakeHub().withMachine()
+	f.setSessions("box", proto.Session{SessionID: "cur0001", MachineID: "box", Agent: "claude"},
+		proto.Session{SessionID: "agent01", MachineID: "box", Agent: "claude"})
+	s := newTestService(t, f)
+	ctx := context.Background()
+	s.setBotCurrent(botTarget{Kind: targetAgent, MachineID: "box", SessionID: "cur0001"})
+	s.rememberBotThread("om_agent", botTarget{Kind: targetAgent, MachineID: "box", SessionID: "agent01"}, "agent")
+	for _, c := range []struct {
+		name         string
+		root, parent string
+		want         string
+	}{
+		{"no reply stops the current target", "", "", "box/cur0001"},
+		{"the card it replies to binds the agent", "", "om_agent", "box/agent01"},
+		{"the thread root binds the agent too", "om_agent", "om_reply", "box/agent01"},
+		{"an unbound thread falls back to current", "om_other", "om_reply", "box/cur0001"},
+	} {
+		before := len(f.interrupted())
+		if h, _ := s.botCommand(ctx, FeishuFeatures{Agents: true}, "om_cmd", "/stop", c.root, c.parent); !h {
+			t.Fatalf("%s: /stop was not handled", c.name)
+		}
+		got := f.interrupted()[before:]
+		if len(got) != 1 || got[0] != c.want {
+			t.Fatalf("%s: interrupted %v, want [%s]", c.name, got, c.want)
+		}
 	}
 }
 

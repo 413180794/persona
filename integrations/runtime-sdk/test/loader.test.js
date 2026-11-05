@@ -166,3 +166,15 @@ test('autoUpdate off (a daemon): reports its package, never switches', async (t)
   assert.equal(n.packageCalls.length, 0)
   assert.deepEqual(host.starts, ['v1'])
 })
+
+test('stopped while it switches: the version being started is stopped too, not left connected', async (t) => {
+  const { n, loader } = await setup(t)
+  n.offer = packageOf('v2', 'await new Promise((r) => setTimeout(r, 300))') // its import takes a while
+  await loader.start()
+  await until('the package fetched', () => n.packageCalls.length === 1)
+  await new Promise((r) => setTimeout(r, 100)) // v1 stopped, v2 importing
+  await loader.stop()
+  await new Promise((r) => setTimeout(r, 600))
+  assert.equal(loader.running, undefined)
+  assert.ok(!n.peer || n.peer.closed, `still connected as ${n.hello?.version}`)
+})

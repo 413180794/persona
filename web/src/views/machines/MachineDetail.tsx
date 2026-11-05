@@ -217,10 +217,16 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
           )}
         </div>
         {!online && !expectedDisconnect && (
-          <div className="mx-4 mb-3.5 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">
-            <p className="break-words">{m.error || t("machines-machinedetail.unreachable")}</p>
-            {connFailure && <p className="mt-0.5 font-medium">{t("node-health.failure_line", { title: connFailure.title, next: connFailure.next })}</p>}
+          <div className="mx-4 mb-3.5 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red" data-offline-box>
+            {/* The plain reason and next step lead when the error text says why; the raw error then goes last, small and
+                grey, for whoever debugs it. Without a known reason the raw text (or the generic line) stays first. */}
+            {connFailure ? (
+              <p className="break-words font-medium" data-failure={connFailure.kind}>{t("node-health.failure_line", { title: connFailure.title, next: connFailure.next })}</p>
+            ) : (
+              <p className="break-words">{m.error || t("machines-machinedetail.unreachable")}</p>
+            )}
             <p className="mt-0.5 text-red/80">{[m.last_seen && ago(m.last_seen) && t("machines-machinedetail.last_seen", { when: ago(m.last_seen) }), connectionText(m)].filter(Boolean).join(" · ")}</p>
+            {connFailure && m.error && <p className="mt-1 break-words font-mono text-[11px] text-ink-3" data-raw-error>{m.error}</p>}
           </div>
         )}
         {online && m.error && <p className="mx-4 mb-3.5 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">{m.error}</p>}
