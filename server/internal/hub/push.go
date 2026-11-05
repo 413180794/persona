@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/pushcrypto"
 	"github.com/nwverse/persona/server/internal/relayproto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Device is an iPhone, a Mac or a Watch that wants push notifications.
@@ -589,7 +591,7 @@ func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority strin
 		lang := p.langOf(d)
 		b, ok := byLang[lang]
 		if !ok {
-			b.payload = build(lang)
+			b.payload = cleanAlert(build(lang))
 			if p.hubID != nil {
 				b.payload = maps.Clone(b.payload)
 				b.payload["hub_id"] = p.hubID()
@@ -690,7 +692,7 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 	}
 	return map[string]any{
 		"aps": map[string]any{
-			"alert":              map[string]any{"title": title, "subtitle": ix.SessionTitle + " · " + machine, "body": body},
+			"alert":              map[string]any{"title": title, "subtitle": joinPlace(transcript.StripInjected(ix.SessionTitle), machine), "body": body},
 			"sound":              "default",
 			"thread-id":          ix.SessionID,
 			"category":           category,
@@ -720,3 +722,36 @@ func donePayloadIn(l i18n.Lang, machineID, machine, sessionID, title, text strin
 }
 
 func (p *Pusher) clear(string) {}
+
+// joinPlace is "会话 · 机器" without the parts that are empty.
+func joinPlace(parts ...string) string {
+	return strings.Join(slices.DeleteFunc(parts, func(s string) bool { return strings.TrimSpace(s) == "" }), " · ")
+}
+
+// cleanAlert is payload with the context blocks a session title or message can carry taken out of its alert's
+// lines (a headless conversation's title is its first message, <jarvis-context …> and all): a notification shows
+// what the user wrote, and a line left empty is not shown. Every alert goes out through here (APNs, notifyMessage).
+func cleanAlert(payload map[string]any) map[string]any {
+	aps, _ := payload["aps"].(map[string]any)
+	alert, _ := aps["alert"].(map[string]any)
+	if alert == nil {
+		return payload
+	}
+	clean := maps.Clone(alert)
+	for _, k := range []string{"title", "subtitle", "body"} {
+		v, ok := clean[k].(string)
+		if !ok || !strings.Contains(v, "<") {
+			continue
+		}
+		if v = transcript.StripInjected(v); v == "" {
+			delete(clean, k)
+		} else {
+			clean[k] = v
+		}
+	}
+	aps = maps.Clone(aps)
+	aps["alert"] = clean
+	payload = maps.Clone(payload)
+	payload["aps"] = aps
+	return payload
+}

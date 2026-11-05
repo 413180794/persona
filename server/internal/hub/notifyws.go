@@ -83,6 +83,7 @@ func (h *Hub) notifyWSIn(kind string, build localized, wants func(NotifyPrefs) b
 }
 
 func notifyMessage(kind string, payload map[string]any) map[string]any {
+	payload = cleanAlert(payload)
 	aps := payload["aps"].(map[string]any)
 	alert := aps["alert"].(map[string]any)
 	msg := map[string]any{

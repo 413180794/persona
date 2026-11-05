@@ -88,3 +88,21 @@ func TestLightKeepsTheRequestAndEveryTitle(t *testing.T) {
 		t.Fatal("an answer was cut like a message with context")
 	}
 }
+
+func TestStripInjected(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"现在部署 hub", "现在部署 hub"},
+		{`<jarvis-context kind="context" title="快照">` + "\n机器：a\n</jarvis-context>\n现在把 hub 部署到最新 master", "现在把 hub 部署到最新 master"},
+		{"<jarvis-context>\n快照\n</jarvis-context>\n" + `<jarvis-context kind="doc" title="文档">正文</jarvis-context>` + "\n看看这个", "看看这个"},
+		{"问题\n<persona-view-errors>\n坏了\n</persona-view-errors>", "问题"},
+		{"<system-reminder>别管</system-reminder>好的", "好的"},
+		{`前面<pasted_content id="ab12">贴的</pasted_content id="ab12">`, "前面贴的"},
+		{`<jarvis-context kind="context" title="快照">` + "\n很长的快照被截断", ""}, // clipped inside the block
+		{`<jarvis-context kind="context">只有块</jarvis-context>`, ""},
+		{"a < b", "a < b"},
+	} {
+		if got := StripInjected(c.in); got != c.want {
+			t.Errorf("StripInjected(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

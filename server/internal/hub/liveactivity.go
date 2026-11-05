@@ -18,6 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // The "Fleet" Live Activity (docs/live-activity.md): one activity per phone, on the lock screen and in the Dynamic
@@ -301,7 +302,7 @@ func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) Fle
 }
 
 func agentTitle(s proto.Session) string {
-	t := s.Title
+	t := transcript.StripInjected(s.Title)
 	if t == "" || t == "Claude Code" {
 		t = path.Base(s.Cwd)
 	}

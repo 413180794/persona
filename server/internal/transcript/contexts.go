@@ -102,3 +102,29 @@ func lightContexts(s string, limit int) (string, bool) {
 	}
 	return b.String(), true
 }
+
+// injectedBlockRes are the blocks Persona and Claude Code put into a user message around what the user wrote: the
+// <jarvis-context> snapshot and attributed blocks, the <persona-view-errors> feedback, <system-reminder>s.
+var injectedBlockRes = []*regexp.Regexp{
+	regexp.MustCompile(`(?s)<jarvis-context\b[^>]*>.*?</jarvis-context>`),
+	regexp.MustCompile(`(?s)<persona-view-errors\b[^>]*>.*?</persona-view-errors>`),
+	regexp.MustCompile(`(?s)<system-reminder\b[^>]*>.*?</system-reminder>`),
+}
+
+// injectedOpenRe is one of those blocks left open: a message clipped inside it (Meta.FirstUser is) ends there.
+var injectedOpenRe = regexp.MustCompile(`<(?:jarvis-context|persona-view-errors|system-reminder)\b`)
+
+// StripInjected is what the user wrote in a message, for a line that shows it (a title, a notification): without the
+// injected blocks, a block cut off by a clip, and the paste wrappers (what was pasted stays). "" when nothing is left.
+func StripInjected(s string) string {
+	if !strings.Contains(s, "<") {
+		return strings.TrimSpace(s)
+	}
+	for _, re := range injectedBlockRes {
+		s = re.ReplaceAllString(s, " ")
+	}
+	if loc := injectedOpenRe.FindStringIndex(s); loc != nil {
+		s = s[:loc[0]]
+	}
+	return strings.TrimSpace(pastedRe.ReplaceAllString(s, ""))
+}

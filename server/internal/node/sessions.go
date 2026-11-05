@@ -926,10 +926,11 @@ func lastUsed(m quickMeta, st os.FileInfo) time.Time {
 	return st.ModTime().UTC()
 }
 
-// untitled gives sessions without an AI title (headless ones) their first message as title.
+// untitled gives sessions without an AI title (headless ones) their first message as title: what the user wrote,
+// not the context blocks it starts with (the main conversation's, a Feishu /agent request's).
 func untitled(s *proto.Session, m quickMeta) {
-	if s.Title == "" && m.first != "" {
-		r := []rune(snippet(m.first))
+	if first := transcript.StripInjected(m.first); s.Title == "" && first != "" {
+		r := []rune(snippet(first))
 		if len(r) > 40 {
 			r = append(r[:40], '…')
 		}
