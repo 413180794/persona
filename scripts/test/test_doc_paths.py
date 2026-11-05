@@ -5,6 +5,8 @@ at the old place sends the next reader, or Agent, looking for a file that is gon
 starts with a top-level directory of the repository, and Go paths written relative to server/ (internal/hub/...). Dated
 records under docs/archive/ and the redesign drafts keep the paths of their own time and are not checked; neither are the
 rename docs, which name the retired paths on purpose.
+
+Every top-level doc must also be listed in CLAUDE.md's 文档索引, the place Agents look for the design docs.
 """
 from pathlib import Path
 import re
@@ -67,6 +69,9 @@ ELSEWHERE = {
 }
 
 QUOTED = re.compile(r"`([^`\s]+)`")
+
+# Top-level docs that stay out of CLAUDE.md's 文档索引: a redirect left by a rename.
+UNINDEXED = {"docs/plugins.md"}
 
 
 def doc_files():
@@ -170,6 +175,14 @@ class DocPathTests(unittest.TestCase):
                     continue
                 missing += [f"{doc.relative_to(ROOT)}:{number}: {path}" for path in quoted_paths(line) if not exists(path)]
         self.assertEqual([], missing, "docs quote paths that are not in the repository; update them to where the file is now")
+
+    def test_top_level_docs_are_in_the_index(self):
+        index = (ROOT / "CLAUDE.md").read_text().split("\n## 文档索引\n", 1)[1]
+        rows = "\n".join(line for line in index.splitlines() if line.startswith("|"))
+        docs = sorted(doc.relative_to(ROOT).as_posix() for doc in (ROOT / "docs").glob("*.md"))
+        missing = [doc for doc in docs if doc not in UNINDEXED and f"`{doc}`" not in rows]
+        self.assertEqual([], missing, "add these docs to the 文档索引 in CLAUDE.md")
+        self.assertEqual([], [doc for doc in UNINDEXED if doc not in docs], "UNINDEXED names docs that are gone")
 
 
 if __name__ == "__main__":

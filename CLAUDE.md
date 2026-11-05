@@ -26,7 +26,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
   因为 squash 合并直接把 PR 标题和正文当成 master 上的 commit 信息。代码注释也用英文；文档、issue 用中文；App 界面文案用中文。
 - **随时沉淀经验**：踩坑、怪异行为当场写进 `docs/lessons/<主题>.md`（索引 `docs/lessons/README.md`），设计取舍写进 `docs/<主题>.md`；
   跨模块、最常踩的再在本文件「最常踩的坑」留一行。本文件只放约定和最核心的东西，别再往里堆细节。这条规则本身也要保留。
-  一次性的车道方案、验证 / 验收报告、审计快照做完放 `docs/archive/`，不进顶层和文档索引；挪了文件同时改文档里的路径（`scripts/test/test_doc_paths.py` 会查）。
+  一次性的车道方案、验证 / 验收报告、审计快照做完放 `docs/archive/`，不进顶层和文档索引；挪了文件同时改文档里的路径，顶层新加的文档写进下面的文档索引（`scripts/test/test_doc_paths.py` 都会查）。
 - **质量标准**：按 App Store 榜首水准设计和测试。每个界面都要在模拟器上截图检查（深色 / 浅色），手表界面也要截图，不能只看编译通过。
 
 ### 隐私和密钥
@@ -205,6 +205,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/hub-update.md` | hub 的版本、检测更新和自动更新（方案）：skill 从二进制拿出来、一种二进制、签名的版本清单、自动发布和灰度、下载 → 校验 → 等空闲 → 重启 → 回滚、App 里怎么显示 |
 | `docs/push-relay.md` | 推送中继（端到端加密）：没有 APNs key 的 hub 经发布方的 `personad relay` 推送，正文用手机公钥加密、通知服务扩展解密；谁知道什么、防滥用、接口、部署 |
 | `docs/extensions.md` | 扩展（原「插件」，#1843）：术语（扩展 / 扩展点 / 贡献）、命名和兼容（老名字照旧能用、保留到何时）、内置 / hub.json / 安装的三种来源、扩展点、清单 `persona-extension.json`（字段、配置表单的 schema 子集、权限）、安装 / 升级 / 回滚 / 卸载和 `personad extension`、扩展市场和自动升级、按需激活和崩溃降级、配置和密钥怎么到扩展、`/api/v1/extensions` 接口、进程扩展协议和一致性测试；语音扩展和 App 之间的契约；内置的 GPT-Live 语音扩展 `personad voice` |
+| `docs/extension-messaging.md` | 扩展点 `messaging`（#2138）：App 里一套通用的原生消息组件，会话、消息和动作由扩展提供；清单、能力、接口、发送、输入框模式、发件箱 / 草稿 / 账号、实时事件和收件箱、版本兼容，飞书（lark-connector）怎么对上 |
 | `docs/ports.md` | 端口转发：node 找出 Agent 在监听的端口、App 认出回答里的 localhost 链接，手机本地监听 + WebSocket 经 hub 转到那台机器，取舍和安全边界 |
 | `docs/prompts.md` | 提示词：`server/internal/prompts/` 的目录结构、每个提示词干什么用、模板规矩、怎么改 / 加、golden 测试怎么更新 |
 | `docs/machines.md` | 机器监控：OS 识别、CPU / 内存 / 网络 / 磁盘的采集口径（哪些网卡算）、开销实测、24 小时历史的存储 / 降采样 / 清理、App 的「机器」页（Agent 和监控合在一起）和机器详情 |
@@ -253,6 +254,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/lark-connector-migration.md` | 飞书迁移的授权范围：可选消息页与现有收件箱共用能力 |
 | `docs/feishu.md` | 飞书在 Persona 里的定位（不做第二个飞书）：保留哪些、经插件的飞书（`/api/v1/lark/…` 由插件提供）、给 AI 用的接口速查 |
 | `docs/lark-attachments.md` | iOS 飞书聊天发图片和文件（#410）：选择、预览、发送和确认 |
+| `docs/lark-encryption.md` | 飞书加密消息（#689）：读取展示（`olk` 投影、解密失败时的对外展示）、手机解锁后发加密文字、部署与授权、版本不支持时、重试与本机存储、验证 |
 | `docs/channels.md` | 渠道（channel）：所有和 Persona 对话的入口（App、微信、飞书机器人、飞书 /agent、语音）的盘点和统一抽象：渠道的接口和能力、hub 的统一管线（进对话、跟踪这一轮、答案发回、文字 / 卡片提问、去重、来源标记）、插件的 `channel` 扩展点和协议、兼容迁移、`/api/v1/channels`、设置 › 插件 › 渠道 |
 | `docs/bots.md` | 飞书机器人：私聊机器人就是和 Persona 主对话说话，回答发回飞书，提问 / 批准在飞书里点卡片，推送和主对话同步，在飞书里驱动各台电脑上的 Agent；开放平台长连接、配对、只认主人、卡片 JSON 2.0 的坑 |
 | `docs/wechat.md` | 微信机器人（内置插件 `jarvisd-wechat`，腾讯 iLink）：扫码绑定，私聊机器人就是和主对话说话，回答发回微信，提问 / 批准用文字往返；插件只管和微信说话（`channel` 扩展点），其余走 hub 的渠道管线；和飞书机器人比 |
@@ -281,6 +283,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/android.md` | Android App：模块职责与依赖、入口接线、常驻连接通知、多 hub（分组、组后缀的会话键、组内换线路）、构建 / 测试 / 假 hub 截图命令 |
 | `docs/android-design.md` | Android 三套界面风格（玻璃 / 晨报 / 看板）、设计 token、组件清单和写页面的规矩、玻璃的降级 |
 | `docs/web.md` | 网页版：hub 托管、登录换设备 token、各页面（收件箱、终端 / 文件 / Git 的侧边面板、链接、互联的 hub 标注）、连接与补洞、细节约定、和手机端的差距表 |
+| `docs/workspace-board.md` | 网页的工作区看板（#1646）：默认关闭、设置里的开关，一张卡绑定一台电脑上的一个代码目录并关联其中的 Agent；状态、持久化、权限与刷新、升级兼容 |
 
 ### 测试和发布
 

@@ -18,6 +18,8 @@ jobs:
           persist-credentials: false
       - name: Privacy check
         run: python3 scripts/privacy_check.py
+      - name: No references into external service repositories
+        run: python3 -B scripts/test/test_external_service_refs.py
       - name: Issue-link workflow tests
         run: node scripts/test/pr_needs_issue_test.mjs
       - name: Android translations (docs/i18n.md)

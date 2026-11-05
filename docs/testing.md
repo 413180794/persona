@@ -597,6 +597,7 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
 
 - 网页手动检查：`cd web && npm run check:privacy`。
 - `npm run build` 的 `prebuild` 自动运行全仓隐私扫描，网页部署和公开发布都经过这个入口。
+- 外部服务仓库引用：`python3 -B scripts/test/test_external_service_refs.py`（CI 的隐私检查 job 也跑）。已跟踪的文本文件里不能有 `nwverse/<其他仓库>`（`#n`、链接都算）和 `<占位>/integrations/`、`<占位>/test/fixtures/` 这类外仓路径；wechat-connector 这类外部服务只引用公开契约（OpenAPI、公开文档、错误码）。Persona 公开依赖的仓库在脚本的 `ALLOWED_REPOS` 里写明理由，组织名本身（`"publisher": "nwverse"`）不算。
 - Python 回归测试：`python3 -B -m unittest discover -s scripts/release -p 'test*privacy*.py' && python3 -B -m unittest discover -s scripts/test -p 'test_privacy*.py'`；`npm test` 不包含它。
   包含公开 Go 二进制的依赖常量分类、依赖校验 / replace / 工具失败时拒绝，以及真实个人值不被公共常量掩盖的测试。
   测试用隔离 HOME/Git 配置的临时仓库验证真实提交钩子、暂存区与工作树差异，不操作主工作区的暂存区或历史。

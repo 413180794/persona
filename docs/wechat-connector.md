@@ -34,7 +34,7 @@ wechat-connector 服务（外部，另行部署）
 | 项 | 要求 |
 | --- | --- |
 | 服务地址 | 一个 origin，如 `https://wechat-connector.example.com`，hub 所在的机器要访问得到。只收 `https://`；仅本机回环（`127.0.0.1`、`localhost`）可用 `http://` |
-| 应用密钥 | 绑定一个微信账号，`wcpat_` 开头；范围 `read`、`events`（登录必需），`send` 可选（见「发送的三道锁」）。绑定方式（`identity_binding`）建议选 `device`（服务方的默认）：hub 常驻、没人盯着，微信重新登录后这把密钥照样能用。`current_session` 只认签发时观测到的那个登录身份：换号后被拒，同一个号重新登录、服务重启后也可能一直被拒，状态变成 `not_signed_in`，收件箱不再进新消息，要重新签发才恢复。`device` 跟着 wechat-connector 的账号，不认登录身份：这个账号上换了别的微信号，新号的消息也会进来，所以换号前先在 Persona 退出登录 |
+| 应用密钥 | 绑定一个微信账号，`wcpat_` 开头；范围 `read`、`events`（登录必需），`send` 可选（见「发送的三道锁」）。绑定方式建议选账号绑定（`identity_binding: device`，服务方的默认）：hub 常驻、没人盯着，微信重新登录后这把密钥照样能用。`current_session` 只认签发时的登录身份：换号后被拒，同一个号重新登录、或 wechat-connector 服务重启后也可能一直被拒，状态变成 `not_signed_in`，收件箱不再进新消息，要重新签发才恢复。账号绑定跟着 wechat-connector 的账号，不认登录身份：这个账号上换了别的微信号，新号的消息也会进来，所以换号前先在 Persona 退出登录 |
 | 允许来源 | 把你要填的服务地址的 origin（协议、主机、端口）加进服务方的允许来源。实时通道握手会核对 `Origin`；REST 能通而实时通道不通，几乎总是这一项 |
 | 事件推送 | 微信账号已在 wechat-connector 上登录，wechat-connector 侧已为该账号开启事件推送。没开时事件流按设计为空，状态是 `error` 而不是 `ok` |
 | 外发开关 | 服务方的策略，默认关。只管发送，不影响读取；Persona 不会去开它 |
@@ -238,7 +238,7 @@ personad extension config wechat-connector group_inbox=off 'exclude_chats=["wxid
 | 登录停在「连不上 wechat-connector」 | 日志 `reason=unreachable` / `timeout` | hub 机器能不能访问这个地址、TLS 证书对不对 |
 | 状态写「· 轮询」 | 实时通道握手不通（REST 通） | 请服务方把提示里的 origin 加进允许来源，前置代理要转发 WebSocket 升级；轮询期间消息最多晚约 5 秒 |
 | 登录说密钥无效，或状态 `not_signed_in` | 401，日志 `reason=unauthorized` | 重新签发后重新登录 |
-| 微信重新登录以后状态变成 `not_signed_in`，收件箱不再进新消息 | 403，日志 `feed ended … problem=forbidden`；密钥是 `current_session` 绑定，只认签发时的登录身份 | 签发 `device` 绑定的新密钥（范围同前），在 Persona 重新登录 |
+| 微信重新登录以后状态变成 `not_signed_in`，收件箱不再进新消息 | 403，日志 `feed ended … problem=forbidden`；密钥是 `current_session` 绑定，只认签发时的登录身份 | 签发账号绑定（`identity_binding: device`）的新密钥（范围同前），在 Persona 重新登录 |
 | 状态 `no_permission` | 403，或密钥范围缺项 | 重新签发含 `read`、`events` 的密钥；换过微信号的话也要重签 |
 | 状态 `error`：wechat-connector 侧未开启这个账号的事件推送 | 状态字段 | 请服务方开启；这期间不会收到新消息 |
 | 状态 `error`：wechat-connector 服务未就绪（…） | 括号里服务给的状态码 | 等一会儿；一直不好请服务方检查这个账号 |
