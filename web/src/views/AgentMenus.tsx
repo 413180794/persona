@@ -1,6 +1,6 @@
 // The Agents list's menus (iOS AgentRowMenu / SpaceMenuItems): a row's ⋯ or right click, a space's ⋯ on its header,
 // and the confirmation of 全部标为已读. What they do is in lib/agent-actions.ts.
-import { flipMute, flipPin, flipSpaceMute, flipSpacePin, handToPersona } from "../lib/agent-actions";
+import { attachLive, flipMute, flipPin, flipSpaceMute, flipSpacePin, handToPersona } from "../lib/agent-actions";
 import { isSpaceMuted, unreadOf, type SpaceLike } from "../lib/agent-filter";
 import { errorText } from "../lib/api";
 import { resumeCommand, sessionCan, sessionDeletable, sessionMenuActions } from "../lib/format";
@@ -20,9 +20,12 @@ import { t } from "../i18n";
 /** What a row's ⋯ (and its right click) offers. `onLinkTodo`: the row can hang on a todo (关联到待办…; 改挂到其他待办… and
  *  解除关联 when it does). Everything a row offers is here, so a touch screen (no right click; iOS Safari sends no contextmenu on a
  *  long press) reaches it from the ⋯ (#1996). */
-export function agentRowMenuItems(s: Session, o: { pinned: boolean; muted: boolean; onRename: (s: Session) => void; onDelete: (s: Session) => void; onLinkTodo?: (s: Session) => void }): MenuItem[] {
-  const { onRename, onDelete, onLinkTodo } = o;
+export function agentRowMenuItems(s: Session, o: { pinned: boolean; muted: boolean; onRename: (s: Session) => void; onDelete: (s: Session) => void; onLinkTodo?: (s: Session) => void; onCloseAgent?: (s: Session) => void }): MenuItem[] {
+  const { onRename, onDelete, onLinkTodo, onCloseAgent } = o;
+  // 实时接入 and 关闭 Agent show when the chat's ⋯ shows them (sessionMenuActions), and do the same (#3405)
+  const allowed = sessionMenuActions(s);
   return [
+    ...(allowed.includes("attach") ? [{ key: "attach", label: t("chat-chatview.attach"), icon: "link" as const, onSelect: () => void attachLive(s) }] : []),
     { key: "pin", label: o.pinned ? t("agentmenus.unpin") : t("agentmenus.pin"), icon: "pin", accel: "p", onSelect: () => void flipPin(s) },
     ...(sessionCan(s, "send") && !s.source_kind ? [{ key: "rename", label: t("agentmenus.rename"), icon: "pencil" as const, accel: "r", onSelect: () => onRename(s) }] : []),
     { key: "mute", label: o.muted ? t("agentmenus.unmute") : t("agentmenus.mute"), icon: o.muted ? "bell" : "bellOff", onSelect: () => void flipMute(s) },
@@ -31,7 +34,8 @@ export function agentRowMenuItems(s: Session, o: { pinned: boolean; muted: boole
     ...(onLinkTodo ? [{ key: "link-todo", label: s.todo ? t("agentmenus.move_to_other_todo") : t("agentmenus.link_to_todo"), icon: "todo" as const, divider: true, onSelect: () => onLinkTodo(s) }] : []),
     ...(onLinkTodo && s.todo ? [{ key: "unlink-todo", label: t("agentmenus.unlink"), icon: "x" as const, onSelect: () => void unlinkTodo(s, s.todo!.id) }] : []),
     ...(s.cwd ? [{ key: "cwd", label: t("agentmenus.copy_folder"), icon: "folder" as const, accel: "c", onSelect: () => copyText(s.cwd) }] : []),
-    ...(sessionMenuActions(s).includes("resume") ? [{ key: "resume", label: t("agentmenus.copy_resume"), icon: "terminal" as const, onSelect: () => copyText(resumeCommand(s)) }] : []),
+    ...(allowed.includes("resume") ? [{ key: "resume", label: t("agentmenus.copy_resume"), icon: "terminal" as const, onSelect: () => copyText(resumeCommand(s)) }] : []),
+    ...(onCloseAgent && allowed.includes("close") ? [{ key: "close", label: t("chat-chatview.close_agent_menu"), icon: "x" as const, danger: true, onSelect: () => onCloseAgent(s) }] : []),
     ...(sessionDeletable(s) ? [{ key: "delete", label: t("agentmenus.delete_chat"), icon: "trash" as const, danger: true, onSelect: () => onDelete(s) }] : []),
   ];
 }
@@ -49,7 +53,7 @@ async function unlinkTodo(s: Session, todo: string) {
 
 /** The row's menu, then what any pane offers (copy its ids, split, git, close): src/lib/node-actions.ts. The path and the
  *  rename are the row's own above. `at`: where a right click opened it (the pointer); without it, beside `anchor`. */
-export function AgentRowMenu({ s, anchor, at, onClose, ...o }: { s: Session; anchor: HTMLElement; at?: MenuAt; onClose: () => void; onRename: (s: Session) => void; onDelete: (s: Session) => void; onLinkTodo?: (s: Session) => void }) {
+export function AgentRowMenu({ s, anchor, at, onClose, ...o }: { s: Session; anchor: HTMLElement; at?: MenuAt; onClose: () => void; onRename: (s: Session) => void; onDelete: (s: Session) => void; onLinkTodo?: (s: Session) => void; onCloseAgent?: (s: Session) => void }) {
   const pinned = useStore((st) => isPinned(s, st.pins));
   const muted = useStore((st) => isMuted(s, st.mutes));
   const online = useStore((st) => st.machines.find((m) => m.id === s.machine_id)?.online !== false);

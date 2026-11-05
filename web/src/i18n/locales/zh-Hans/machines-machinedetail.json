@@ -1,6 +1,5 @@
 {
   "no_metrics_hub": "这个 hub 还没有监控数据：部署新版本的 hub 和这台电脑上的 node 后再看。",
-  "reconnect_failed": "重新连接失败：{error}",
   "connected": "已连上",
   "not_connected": "还没连上",
   "not_connected_error": "还没连上：{error}",
@@ -15,7 +14,6 @@
   "route_hint": "hub 怎么连到这台电脑",
   "route": "线路：{route}",
   "connecting": "正在连接",
-  "reconnect": "重新连接",
   "unreachable": "hub 连不上这台电脑",
   "last_seen": "最后在线：{when}",
   "no_agents": "没有运行中的 Agent",

@@ -137,7 +137,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
     try {
       await api(`/machines/${enc(mid)}/reconnect`, { method: "POST" });
     } catch (e) {
-      toast(t("machines-machinedetail.reconnect_failed", { error: errorText(e) }), "error");
+      toast(t("machines.reconnect_failed", { error: errorText(e) }), "error");
       setReconnecting(false);
       return;
     }
@@ -211,7 +211,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
           </div>
           {!online && !expectedDisconnect && (
             <Button tone="secondary" icon="retry" busy={reconnecting} onClick={() => void reconnect()}>
-              {reconnecting ? t("machines-machinedetail.connecting") : t("machines-machinedetail.reconnect")}
+              {reconnecting ? t("machines-machinedetail.connecting") : t("machines.reconnect")}
             </Button>
           )}
         </div>

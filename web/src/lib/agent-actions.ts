@@ -3,11 +3,12 @@
 import { t } from "../i18n";
 import { toast } from "../ui/atoms";
 import { agentHandoffText } from "./agent-handoff";
-import { api, errorText } from "./api";
+import { api, attachSession, errorText } from "./api";
+import { sessionCan } from "./format";
 import { askPersona } from "./outbox";
 import { isPinned, isSpacePinned, spaceKey, togglePin, toggleSpacePin, toggled, type AgentPins } from "./pins";
 import { isMuted, toggleMute } from "./session-actions";
-import { getState, setMutes, setPins } from "./store";
+import { getSession, getState, refresh, setMutes, setPins } from "./store";
 import type { Session } from "./types";
 
 async function putPins(next: AgentPins, done: string) {
@@ -69,3 +70,16 @@ export async function handToPersona(s: Session, machineName?: string) {
 
 // Source compatibility for integrations written before the product rename.
 export const handToJarvis = handToPersona;
+
+/** 实时接入: link a session from another source (a Codex app-server thread…) live. The chat's ⋯ and the row menu both
+ *  call this; it reads the session again first, since the menu may have opened on an older copy. */
+export async function attachLive(s: Pick<Session, "machine_id" | "session_id">) {
+  if (!sessionCan(getSession(s.machine_id, s.session_id), "attach")) return;
+  try {
+    await attachSession(s.machine_id, s.session_id);
+    await refresh();
+    toast(t("chat-chatview.attached"), "ok");
+  } catch (e) {
+    toast(t("chat-chatview.attach_failed", { error: errorText(e) }), "error");
+  }
+}

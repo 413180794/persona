@@ -79,6 +79,15 @@ describe("Machines", () => {
     expect(alert()).toBeNull();
   });
 
+  it("calls the offline card's button 重新连接, as the machine's page does (#3634)", async () => {
+    fake.machines = [{ id: "mac", name: "电脑 A", online: false }];
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await flush();
+    const labels = [...host.querySelectorAll("button")].map((b) => b.textContent?.trim());
+    expect(labels).toContain("重新连接");
+    expect(labels).not.toContain("重连");
+  });
+
   it("says it cannot see the machines when the first load fails", async () => {
     replies = [503];
     act(() => root.render(<Machines onToggleSidebar={() => {}} />));

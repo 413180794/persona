@@ -44,7 +44,7 @@ import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
 import { HerdrNotices } from "./agents/HerdrNotices";
 import { HubNoticeLine } from "./agents/HubNoticeRow";
-import { DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
+import { CloseAgentDialog, DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
 import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
 import { NodeMenu } from "./NodeMenu";
 import { NodePrompt } from "./NodePrompt";
@@ -505,6 +505,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const [renaming, setRenaming] = useState<Session | null>(null);
   const [renamingSpace, setRenamingSpace] = useState<Session | null>(null);
   const [deleting, setDeleting] = useState<Session | null>(null);
+  const [closingAgent, setClosingAgent] = useState<Session | null>(null);
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
   // stable, like `go`: every row gets it, and a new one each render would re-render them all (SessionRow's memo)
   const onRowMenu = useCallback<RowMenuFn>((s, anchor, at) => setRowMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at })), []);
@@ -644,9 +645,9 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       </div>
       </Collapse>
       </FoldScope.Provider>
-      {/* the row's ⋯ (and its right click): pin, rename, mute, the todo it hangs on, delete — a long press on iOS
+      {/* the row's ⋯ (and its right click): pin, rename, mute, the todo it hangs on, close, delete — a long press on iOS
           Safari sends no contextmenu, so nothing lives only there */}
-      {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} at={rowMenu.at} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} onLinkTodo={setLinkTargetSession} />}
+      {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} at={rowMenu.at} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} onLinkTodo={setLinkTargetSession} onCloseAgent={setClosingAgent} />}
       {spaceMenu && (
         <SpaceMenu
           sp={spaceMenu.sp}
@@ -663,6 +664,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       {renaming && <RenameDialog open session={renaming} onClose={() => setRenaming(null)} />}
       {renamingSpace && <RenameSpaceDialog open session={renamingSpace} onClose={() => setRenamingSpace(null)} />}
       {deleting && <DeleteSessionDialog open session={deleting} machineName={machineWithHub(deleting.machine_id, machines)} onClose={() => setDeleting(null)} />}
+      {closingAgent && <CloseAgentDialog open session={closingAgent} machineName={machineWithHub(closingAgent.machine_id, machines)} onClose={() => setClosingAgent(null)} />}
       <MarkSeenDialog list={confirmSeen} onClose={() => setConfirmSeen(null)} onDone={() => setKept(new Set())} />
       <LinkTodoDialog open={Boolean(linkTargetSession)} session={linkTargetSession} onClose={() => setLinkTargetSession(undefined)} />
       <LinkTodoDialog open={Boolean(linkTargetSpace)} space={linkTargetSpace} onClose={() => setLinkTargetSpace(undefined)} />

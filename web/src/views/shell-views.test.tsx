@@ -111,6 +111,18 @@ describe("a sidebar row's ⋯", () => {
     expect(label(session())).toBe("关联到待办…");
     expect(label(session({ todo: { id: "t1", title: "发版" } } as Partial<Session>))).toBe("改挂到其他待办…");
   });
+  it("offers 关闭 Agent and 实时接入 when the chat's ⋯ does (#3405)", () => {
+    const keys = (s: Session, close = true) => agentRowMenuItems(s, { pinned: false, muted: false, onRename: () => {}, onDelete: () => {}, ...(close ? { onCloseAgent: () => {} } : {}) }).map((i) => i.key);
+    expect(keys(session())).toContain("close");
+    expect(keys(session({ state: "offline", status: "offline" }))).not.toContain("close");
+    expect(keys(session({ assistant: true } as Partial<Session>))).not.toContain("close");
+    expect(keys(session(), false)).not.toContain("close");
+    const live = { source_kind: "codex_app_server", capabilities: { attach: true } } as Partial<Session>;
+    expect(keys(session(live))).toContain("attach");
+    expect(keys(session(live))).not.toContain("close"); // no terminal capability
+    expect(keys(session({ ...live, attached: true } as Partial<Session>))).not.toContain("attach");
+    expect(keys(session())).not.toContain("attach");
+  });
   it("leaves the todo out where the list gives no way to link one", () => {
     expect(agentRowMenuItems(session(), { pinned: false, muted: false, onRename: () => {}, onDelete: () => {} }).map((i) => i.key)).not.toContain("link-todo");
   });

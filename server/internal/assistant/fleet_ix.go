@@ -725,7 +725,7 @@ func (s *Service) expireLoop(ctx context.Context) {
 		var plans []string
 		seen := map[string]bool{}
 		for _, p := range s.fleet.interactions {
-			if p.ix.Kind == proto.IxPlan && !seen[p.ix.MachineID] {
+			if terminalReconciled(p) && !seen[p.ix.MachineID] {
 				plans = append(plans, p.ix.MachineID)
 				seen[p.ix.MachineID] = true
 			}
@@ -942,17 +942,18 @@ func (s *Service) codexPending(machine string, ix proto.Interaction) *pending {
 	return p
 }
 
-// ---- plans answered in the terminal ----
+// ---- plans and permissions answered in the terminal ----
 
-// A plan answered in the terminal can outlive its PermissionRequest hook. Reconcile the pending card with the
-// completed ExitPlanMode call, not the agent's status or words: working is not proof that anyone approved a plan.
+// A plan or a tool's permission answered in the terminal can outlive its PermissionRequest hook: Claude Code does not
+// end the hook when its own dialog is answered, so the card stayed on the phone until the hook's timeout (#3563).
+// Reconcile the pending card with the completed tool call, not the agent's status or words: working is not proof
+// that anyone approved anything.
 func (s *Service) syncPlanInteractions(machine string) {
 	now := time.Now()
 	s.fleet.mu.Lock()
 	var check []*pending
 	for _, p := range s.fleet.interactions {
-		if p.ix.MachineID != machine || p.ix.Kind != proto.IxPlan || p.ix.ToolName != "ExitPlanMode" || p.local != nil ||
-			p.checking || now.Sub(p.checkedAt) < 2*time.Second {
+		if p.ix.MachineID != machine || !terminalReconciled(p) || p.checking || now.Sub(p.checkedAt) < 2*time.Second {
 			continue
 		}
 		p.checking, p.checkedAt = true, now
@@ -962,6 +963,22 @@ func (s *Service) syncPlanInteractions(machine string) {
 	for _, p := range check {
 		go s.checkPlanInteraction(machine, p)
 	}
+}
+
+// terminalReconciled: p is a hook's card whose tool call's end the transcript shows: a plan, or a Claude Code hook's
+// permission that names its tool call (one without an id is never guessed at; Codex's and a runtime's cards end
+// through their own sources). Callers hold s.fleet.mu.
+func terminalReconciled(p *pending) bool {
+	if p.local != nil || p.claimed {
+		return false
+	}
+	switch p.ix.Kind {
+	case proto.IxPlan:
+		return p.ix.ToolName == "ExitPlanMode"
+	case proto.IxPermission:
+		return p.ix.ToolUseID != "" && p.ix.Agent == "" && p.ix.Resumable
+	}
+	return false
 }
 
 func (s *Service) checkPlanInteraction(machine string, p *pending) {
@@ -1004,7 +1021,7 @@ func (s *Service) checkPlanInteraction(machine string, p *pending) {
 func planCallFinished(ix proto.Interaction, items []proto.Item) bool {
 	id := ix.ToolUseID
 	if id == "" {
-		if ix.CreatedAt.IsZero() {
+		if ix.Kind == proto.IxPermission || ix.CreatedAt.IsZero() { // only a plan's call is guessed at
 			return false
 		}
 		for _, it := range items {
@@ -1032,9 +1049,9 @@ func planCallFinished(ix proto.Interaction, items []proto.Item) bool {
 
 func (s *Service) finishExternalPlan(p *pending) {
 	s.fleet.mu.Lock()
-	if s.fleet.interactions[p.ix.ID] != p {
+	if s.fleet.interactions[p.ix.ID] != p || p.claimed {
 		s.fleet.mu.Unlock()
-		return // the phone answered or this card was replaced while the read was in flight
+		return // the phone answered (its answer is the history's) or this card was replaced while the read was in flight
 	}
 	delete(s.fleet.interactions, p.ix.ID)
 	if p.orphaned != nil {

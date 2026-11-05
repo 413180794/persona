@@ -5,7 +5,7 @@
 | 配置 | 位置 | 谁读 | 管什么 |
 | --- | --- | --- | --- |
 | 构建 / 部署配置 | 开发机上的 `~/.config/persona/config.json`（可用 `PERSONA_CONFIG` 指到别处，旧 `JARVIS_CONFIG` 兼容），模板是仓库根目录的 `config.example.json` | `scripts/*`（经 `scripts/persona_config.py`）、XcodeGen（经生成的 `apple/Config.xcconfig`） | App 的 bundle id 和团队、App Store Connect 账号、TestFlight 测试员、hub 在哪台机器 / 地址、要部署的机器、模拟器 |
-| hub 运行配置 | hub 所在机器的 `~/.persona/hub.json`（0600，含 token、数据库密码，第一次运行 `personad hub` 自动生成） | `personad hub` | 监听地址、对外地址、接入哪些机器、助手是谁的助手和它该知道什么、Gmail 代理、AI 网关、lark-connector |
+| hub 运行配置 | hub 所在机器的 `~/.persona/hub.json`（0600，含 token、数据库密码，第一次运行 `personad hub` 自动生成） | `personad hub` | 监听地址、对外地址、接入哪些机器、助手是谁的助手和它该知道什么、Gmail 代理、AI 网关、lark-cli、手写的扩展 |
 
 配置放在仓库外面：发布在干净的 worktree 里跑（`docs/release.md`），worktree 里没有仓库外的东西就会缺；也避免误提交。
 `apple/Config.xcconfig` 和 `CLAUDE.local.md` 在 `.gitignore` 里。
@@ -83,7 +83,7 @@ Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数�
    ```
 
    `ssh_host` 是 **hub 机器** SSH 到这台的主机名（两边各自的 `~/.ssh/config`，可以和第 1 步的 `ssh` 不同）；`id` 最好和第 1 步一致；
-   `name` 是 App 里显示的名字；`icon` 取 `server` / `laptop` / `desktop`。`personad` 不在 `~/.persona/bin/personad` 时用 `remote_bin` 指定。
+   `name` 是 App 里显示的名字；`icon` 取 `server` / `laptop` / `desktop`。`remote_bin` 是那台电脑上 `personad` 的路径，不写时 hub 用 `~/.jarvis/bin/jarvisd`（部署脚本装的 `jarvisd`，`personad` 是它的软链）；装在别处时写上。
    顺便可以填 `assistant`（见下文 hub.json 一节）。公网直连另加 `public.tls_listen`、`public.advertise`，按 [网络文档](network.md) 放行 TLS 端口；`public_url` 保留旧 App 能用的地址。
 
 4. **重启 hub 让它读到新配置**：`./scripts/deploy/deploy.sh <hub 机器 id>`（或在 hub 机器上 `systemctl --user restart jarvisd`）。
@@ -142,13 +142,14 @@ Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数�
 | `app_store.*` | `release.sh` / `asc*.py`（`asc_cli.py` 把它们交给 App Store Connect CLI，`docs/release.md`「用 asc 发版」）：API key（`key_id`、`issuer_id`、`key_path`）、App 记录的数字 ID、内部测试员、TestFlight 反馈邮箱；`external` 是外部测试（群组名、公开链接开关和人数上限（`public_link_limit`，0 为不限）、隐私政策地址、另外按邮箱邀请的测试员、Beta App Review 联系人和备注，`docs/release.md`）。环境变量 `ASC_KEY_ID` 等仍可覆盖（key 文件路径 `ASC_KEY_PATH` 或 `ASC_PRIVATE_KEY_PATH`） |
 | `hub.machine` | hub 跑在哪台机器（`machines` 里的 id）：`deploy.sh` 在它上面起 Postgres 和 systemd 服务，`test-server.sh` 在它上面跑测试，`sim.sh` 从它上面读 token |
 | `hub.url` | `sim.sh` 配对模拟器用的地址；示例中的 HTTP 仅用于内网 / VPN，公网入口另配 `hub.json` 的 `public` |
-| `machines[]` | `deploy.sh` 要装 `personad` 的机器：`ssh` 是 ssh 主机名，`os` 决定装哪个二进制（`linux` / `darwin`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh；跑部署的那台要写上，没写的一律走 ssh） |
+| `machines[]` | `deploy.sh` 要装 `personad` 的机器：`ssh` 是 ssh 主机名，`os` 决定装哪个二进制（`linux` / `darwin`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh；跑部署的那台要写上，没写的一律走 ssh）；`via` 是另一台的 id：开发机连不上这台时，经那台再 ssh 一次把二进制传过去（那台上不留文件），这时 `ssh` 是那台上的主机名 |
 | `simulator` | `sim.sh` 默认的模拟器 UDID（`SIM=<udid>` 覆盖） |
 | `publish.site_url` | `publish.sh` 把 `personad` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 personad」）；不写就不发布 |
 | `publish.wrangler` | 部署那个 worker 用的 wrangler 命令（比如包了鉴权的脚本）；不写就 `npx wrangler` |
 | `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`persona_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
 | `android.application_id` | Android App 的 application id（`scripts/app/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |
 | `android.google_oauth_scheme` | Android App 接 Gmail 的 Google 登录回调用的 scheme：hub `google.client_id` 的反向 client ID（`docs/mail.md`「Android」）；不写就只能用应用专用密码加 Gmail |
+| `mac.link_bundle_id` | Mac 菜单栏 App「Persona Link」的 bundle id（`scripts/app/mac-link.sh`，`docs/link.md`）；环境变量 `PERSONA_LINK_BUNDLE_ID`（旧 `JARVIS_LINK_BUNDLE_ID`）优先，不写用占位的 `com.example.jarvis.link` |
 
 `python3 scripts/persona_config.py env` 打印 shell 变量（脚本开头都 `eval` 它），`xcconfig` 生成 `apple/Config.xcconfig`；
 `sim.sh` / `release.sh` 会自动生成。直接跑 `xcodegen` 或打开 Xcode 之前先跑一次 `python3 scripts/persona_config.py xcconfig`。
@@ -232,7 +233,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `machines[].tailcat_addr`（可选）：那台电脑 `personad node tailcat init` 打印的 `tc…` 地址，hub ssh 不过去时经 tailcat 连
   （`docs/server.md`「tailcat 打洞」）。地址是密钥（带 WireGuard 的预共享密钥），和 token 一样只放 hub.json。`kind: "tailcat"` 表示
   只走 tailcat、不试 ssh（没有 `ssh_host`）；`kind: "ssh"` 加 `tailcat_addr` 是先 ssh、不行再 tailcat。
-- 环境变量 `JARVIS_DATABASE_URL`、`JARVIS_PUBLIC_URL`、`JARVIS_LISTEN`、`JARVIS_ADMIN_ACCESS` 覆盖同名的设置（不写回文件），Docker 部署靠它们
+- 环境变量 `JARVIS_DATABASE_URL`、`JARVIS_PUBLIC_URL`、`JARVIS_LISTEN`、`JARVIS_ADMIN_ACCESS` 覆盖同名的设置（新名 `PERSONA_*` 优先，不写回文件），Docker 部署靠它们；`JARVIS_ADMIN_ACCESS` 有值时连同 `JARVIS_ADMIN_CIDRS` 一起换掉整个 `admin` 的访问范围，只设 `JARVIS_ADMIN_CIDRS` 不生效
   （`docs/docker.md`「环境变量」）；`JARVIS_LOCAL_NODE=0` 时第一次运行不写本机那台。
 - `tailcat.derp_map_url`（可选）：用自建的 DERP 中继（derper，做法见 `docs/server.md`「自建中继」）代替 Tailscale 的公共中继时，它的 DERP map 地址；各台电脑
   `init` 时要带同一个 `--derp-map-url`。
@@ -259,6 +260,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `machines[].usage_windows`（可选，默认开）：写 `false` 时那台电脑的 node 不读 Codex / Claude 的订阅额度窗口（不读 rollout 里的 `rate_limits`，
   不读 `~/.persona/usage/claude*.json`），hub 也不问它；不写就读，只读本机文件、不碰任何登录凭据，每 5 分钟一次（`docs/usage-windows.md`）。
   node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
+- `machines[].launchers`（可选）：给这台电脑另加 node 列不出来的启动器（比如 shell 包装函数），或改 node 报上来的同名启动器的 `agent_type`、`base_url`、`model`（没写的字段照旧），
+  比如 `[{"name":"example_wrapper","agent_type":"codex"}]`：包装函数实际跑的是 Codex（`agent_type` 是 `claude` / `codex` / `traex` 或 runtime 的 agent；`docs/protocol.md`、`docs/model-config.md`）。
 - `usage`（可选）：账号池网关（relay-history 之类）的订阅额度来源，合并进侧边栏的用量条（`docs/usage-windows.md`「账号池网关」，#2595）。
   `usage.sources[]`（最多 8 个）：`id`、`name`（侧边栏上的来源名）、`type`（`relay-history` / `generic`）、`url`、`key`（网关的管理 Key，**密钥：只存在 `hub.json`（0600）**，管理界面和接口读不回来，日志里没有）、`enabled`（写 `false` 停用这一个）。
   `usage.enabled`（写 `false` 是总开关）、`usage.poll_minutes`（每个来源多久读一次，默认 5，1 到 1440）。hub 只读网关缓存的数字（`refresh=false`），在 hub 这一侧请求，节点不碰网关。
@@ -329,7 +332,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   不写时这些用途自动用 hub 上能直接调用的接入（「设置 › 模型供应商」里带 Key 的，见 `docs/model-config.md`「编辑与继承」）；一个都没有才报「还没有能直接调用的模型」。
   `api` 取 `messages`（Anthropic Messages，默认）或 `responses`（OpenAI Responses，总是流式请求，兼容只接受 `stream: true` 的转发服务）；
   `base_url` 拼上 `/v1/messages` 或 `/v1/responses`；`api_key_file` 是 hub 机器上的 key 文件（0600，调用时才读）；`model`；
-  `reasoning_effort` 只对 `responses` 生效（比如 `low`）。
+  `reasoning_effort` 只对 `responses` 生效（比如 `low`）；`bearer`（默认 `false`）写 `true` 时 Messages API 的 key 用 `Authorization: Bearer` 发，不用 `x-api-key`，给只认 Bearer 的网关用（`responses` 总是 Bearer）。
 - `agents.triage`：一轮停下后的分诊（[agent-work.md](agent-work.md)「开关」）。开关在 App 的「设置 › 会话分诊」里（存 hub 的 settings，默认全关），
   这里只放上限：`max_retries`（自动继续最多几次，默认 3）、`max_wakes`（叫醒最多几次，默认 6）、`settle_seconds`（停下多久才分诊，默认 15）；
   `enabled` / `auto_continue` / `wake` / `decide` 只是 App 里从没保存过时的初始值（不写就是关）。分诊是管理者（助手进程）做的，这一节经握手交给它，改了重启 hub 后生效。
@@ -375,8 +378,13 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   连接器的条目带了自己的规则（`rules`，如插件设置的 `triage_rules`）时用那一份，不用这里的。
 - `bots.feishu`（可选）：在飞书里和 Persona 对话的机器人的应用凭证 `app_id`、`app_secret`、`domain`（`feishu` / `lark` / 开放平台地址），
   给不想在 App 里填的人用；App 里（设置 › 连接器 › 飞书机器人）存过的优先，开关、配对、各项功能都在 App 里（`docs/bots.md`）。
-- `plugins`：手写在 hub.json 里、hub 跑起来、转发给 App 的插件（语音对话等），`id`、`kind`、`command` + `args`（或只给 `socket`：跑在别处的插件）、`config`（插件自己的设置），见 `docs/extensions.md`「hub.json 里的插件」；用 `personad plugin install` 装的插件不写这里，登记在数据库；
-  personad 自带的语音插件（GPT-Live）写 `"command": "jarvisd", "args": ["voice"]`，上游放 `config.providers`（`docs/extensions.md`「内置语音插件」）。
+- `extensions`（旧键 `plugins` 照样读）：手写在 hub.json 里、hub 跑起来、转发给 App 的扩展（语音对话等）：`id`、`name`、`kind`、`command` + `args`（或只给 `socket`：跑在别处的扩展）、
+  `dir`（工作目录）、`env`（另加的环境变量）、`disabled`（`true` 停用但保留配置）、`config`（扩展自己的设置），见 `docs/extensions.md`「hub.json 里的扩展」；
+  用 `personad extension install` 装的扩展不写这里，登记在数据库。personad 自带的语音扩展（GPT-Live）写 `"command": "jarvisd", "args": ["voice"]`，
+  上游放 `config.providers`（`docs/extensions.md`「内置语音扩展」）。改了要重启 hub。
+- `trusted_extension_markets`（可选）：另外信任的扩展市场的签名公钥（key id，或 `market.pub` 里的 `ed25519:…`），从这些市场装的扩展和官方市场的一样默认不进沙箱（`docs/extensions.md`「沙箱」）。
+- `hook_timeout_minutes`（默认 30，写 0 或负数也按 30）：Claude Code 的 hook 等手机回答（提问、审批）最多等多久，超时就交回终端处理（`docs/claude-integration.md`）。
+- `shutdown_timeout_seconds`（默认 8）：hub 关停的总预算，包括关数据库连接池；外部的 `docker stop -t` 要比它长（`docs/server.md`「关停」）。
 
 ## DDNS（public.ddns）
 

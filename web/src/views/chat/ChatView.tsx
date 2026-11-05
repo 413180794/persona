@@ -1,6 +1,6 @@
 // One conversation: an agent in herdr on one of your computers, or a Persona assistant conversation.
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/api";
+import { api, ApiError, errorText, sessionPath } from "../../lib/api";
 import { ago, attentionReason, externalLink, failureReason, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
 import { navigate, type SessionView } from "../../lib/router";
 import { canShowTerminal, otherView, useSessionView } from "../../lib/session-view";
@@ -8,7 +8,7 @@ import { openLink } from "../../lib/links";
 import { togglePanel, usePanel } from "../../lib/panel";
 import { machineWithHub } from "../../lib/mesh";
 import { hasEffortOnly, hasModes, isMuted, toggleMute } from "../../lib/session-actions";
-import { flipPin } from "../../lib/agent-actions";
+import { attachLive, flipPin } from "../../lib/agent-actions";
 import { isPinned } from "../../lib/pins";
 import { acknowledgeLaunch, launchMessageId } from "../../lib/new-agent";
 import { getSession, getState, listenSession, markSeenLocally, refresh, refreshTodos, setMutes, useStore } from "../../lib/store";
@@ -50,7 +50,7 @@ import { latestPlan, PlanPill, usePlanOutOfView } from "./PlanCard";
 import { ChatContext, type ChatContextValue } from "./chat-context";
 import { ChatLineView, closedRecap, closeRecap, OpenRecapLine } from "./Lines";
 import { useTranscript } from "./useTranscript";
-import { DeleteSessionDialog, ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
+import { CloseAgentDialog, DeleteSessionDialog, ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
 import { ChatActionsContext, type ChatActions } from "./chat-actions";
 import { QueueStrip } from "./QueueStrip";
 import { ChatSearch, type LoadOutcome } from "./ChatSearch";
@@ -1139,14 +1139,7 @@ export function Header({
     ? [sourceSubtitle(session), session?.launcher, session?.updated_at ? ago(session.updated_at) : ""].filter(Boolean).join(" · ")
     : [sourceSubtitle(session), machineName, session?.space_name, session && tabLabel(session)].filter(Boolean).join(" › ");
   const allowed = session ? sessionMenuActions(session) : [];
-  const attach = async () => {
-    if (!session || !sessionCan(getSession(session.machine_id, session.session_id), "attach")) return;
-    try {
-      await attachSession(session.machine_id, session.session_id);
-      await refresh();
-      toast(t("chat-chatview.attached"), "ok");
-    } catch (e) { toast(t("chat-chatview.attach_failed", { error: errorText(e) }), "error"); }
-  };
+  const attach = () => session && attachLive(session);
   const others = chrome ? [] : siblings.filter((s) => s.session_id !== session?.session_id);
   // a task's panel stands for the task: its title above, and the agent's own todo line would only repeat it
   const todoLine = Boolean(session?.todo && !assistant && !chrome?.title);
@@ -1314,7 +1307,7 @@ export function Header({
       </div>
       {pick.anchor && chrome?.agents && <Menu anchor={pick.anchor} onClose={pick.close} items={chrome.agents} width={320} />}
       {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" items={items} />}
-      {session && <CloseAgent open={closing} onClose={() => setClosing(false)} session={session} machineName={machineName} />}
+      {session && <CloseAgentDialog open={closing} onClose={() => setClosing(false)} onClosed={() => navigate({ name: "home" })} session={session} machineName={machineName} />}
       {session && <SessionInfoDialog open={dialog === "info"} onClose={() => setDialog(null)} session={session} machineName={machineName} />}
       {session && <RenameDialog open={dialog === "rename"} onClose={() => setDialog(null)} session={session} />}
       {session && <RenameSpaceDialog open={dialog === "space"} onClose={() => setDialog(null)} session={session} />}
@@ -1332,41 +1325,3 @@ function headerSlot(centered: boolean, side: "start" | "end"): string {
   return cx(HEADER_SLOT, side === "start" ? HEADER_SLOT_START : HEADER_SLOT_END, "lg:contents");
 }
 
-function CloseAgent({ open, onClose, session, machineName }: { open: boolean; onClose: () => void; session: Session; machineName: string }) {
-  const [busy, setBusy] = useState(false);
-  const go = async () => {
-    if (!sessionCan(getSession(session.machine_id, session.session_id), "terminal")) return;
-    setBusy(true);
-    try {
-      await api(`${sessionPath(session.machine_id, session.session_id)}/close`, { method: "POST" });
-      toast(t("chat-chatview.closed"), "ok");
-      onClose();
-      navigate({ name: "home" });
-    } catch (e) {
-      toast(t("chat-chatview.close_failed", { error: errorText(e) }), "error");
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title={t("chat-chatview.close_agent_title")}
-      footer={
-        <>
-          <Button tone="quiet" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button tone="danger" busy={busy} onClick={go}>
-            {t("chat-chatview.close_agent")}
-          </Button>
-        </>
-      }
-    >
-      <p className="text-[13px] leading-relaxed text-ink-2">
-        {t("chat-chatview.close_agent_detail", { machine: machineName, where: [session.space_name, tabLabel(session)].filter(Boolean).join(" › ") || sessionTitle(session) })}
-      </p>
-    </Dialog>
-  );
-}

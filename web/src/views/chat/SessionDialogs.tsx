@@ -1,12 +1,13 @@
-// The chat's ⋯ menu dialogs: session info, rename (the agent / its space), delete, and the run-mode chips under the composer.
+// The chat's ⋯ menu dialogs: session info, rename (the agent / its space), delete, close, and the run-mode chips under the composer.
 import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText, sessionPath } from "../../lib/api";
-import { ago, externalLink, resumeCommand, sessionTitle, shortPath } from "../../lib/format";
+import { ago, externalLink, resumeCommand, sessionCan, sessionTitle, shortPath, tabLabel } from "../../lib/format";
 import { openLink } from "../../lib/links";
 import { BYPASS_MODE, BYPASS_WARNING, effortOptions, effortTitle, modeTitle, renameBody, switchableModes } from "../../lib/session-actions";
 import { canSwitchModel, onModelPicker } from "../../lib/model-switch";
-import { href, navigate } from "../../lib/router";
-import { dropSession, refresh, refreshAssistant, upsertSession } from "../../lib/store";
+import { href, navigate, parse, showsSession } from "../../lib/router";
+import { stripBase } from "../../lib/base";
+import { dropSession, getSession, refresh, refreshAssistant, upsertSession } from "../../lib/store";
 import type { Session } from "../../lib/types";
 import { Button, copyText, cx, Dialog, Loading, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -367,6 +368,52 @@ export function DeleteSessionDialog({ session, machineName, open, onClose }: { s
     >
       <p className="text-[13px] leading-relaxed text-ink-2">
         {t("chat-sessiondialogs.delete_detail", { title: sessionTitle(session), machine: machineName })}
+      </p>
+    </Dialog>
+  );
+}
+
+// 关闭 Agent: quits the agent and closes its tab. The chat's ⋯ and the Agents list's row menu both ask here (#3405).
+// `onClosed`: what to do once it is closed; without it, the page leaves the agent's chat only when that chat is open.
+export function CloseAgentDialog({ open, onClose, onClosed, session, machineName }: { open: boolean; onClose: () => void; onClosed?: () => void; session: Session; machineName: string }) {
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    // the agent went away while the dialog was open: nothing left to close, so don't leave a button that does nothing
+    if (!sessionCan(getSession(session.machine_id, session.session_id), "terminal")) {
+      onClose();
+      return;
+    }
+    setBusy(true);
+    try {
+      await api(`${sessionPath(session.machine_id, session.session_id)}/close`, { method: "POST" });
+      toast(t("chat-chatview.closed"), "ok");
+      onClose();
+      if (onClosed) onClosed();
+      else if (showsSession(parse(stripBase(location.pathname), location.search), session.machine_id, session.session_id)) navigate({ name: "home" });
+    } catch (e) {
+      toast(t("chat-chatview.close_failed", { error: errorText(e) }), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={t("chat-chatview.close_agent_title")}
+      footer={
+        <>
+          <Button tone="quiet" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button tone="danger" busy={busy} onClick={go}>
+            {t("chat-chatview.close_agent")}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-[13px] leading-relaxed text-ink-2">
+        {t("chat-chatview.close_agent_detail", { machine: machineName, where: [session.space_name, tabLabel(session)].filter(Boolean).join(" › ") || sessionTitle(session) })}
       </p>
     </Dialog>
   );

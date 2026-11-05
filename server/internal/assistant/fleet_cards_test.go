@@ -659,6 +659,84 @@ func TestPlanReconcileCrossesAPageAndKeepsUnrelatedApprovals(t *testing.T) {
 	}
 }
 
+// #3563: Claude Code does not end a PermissionRequest hook whose dialog was answered in the terminal: the tool's card
+// stayed on the phone until the hook's timeout. Its tool call's result ends it, as a plan's does; a permission card
+// that names no tool call is never guessed at, and one the phone just answered keeps its answer.
+func TestTerminalPermissionResultClearsTheCard(t *testing.T) {
+	at := time.Now()
+	items := []proto.Item{
+		{ID: "call#0", Seq: 10, TS: at.Add(-time.Millisecond), Role: "assistant", Kind: proto.KindToolUse, ToolName: "Bash", ToolUseID: "bash-call"},
+		{ID: "result#0", Seq: 11, TS: at.Add(time.Second), Role: "user", Kind: proto.KindToolResult, ToolUseID: "bash-call", Text: "ok"},
+	}
+	ft := planFleet(t, true, func(int) ([]proto.Item, bool, error) { return items, false, nil })
+	s := ft.s
+	ix := proto.Interaction{ID: "perm", MachineID: "mac", SessionID: "session", Kind: proto.IxPermission, ToolName: "Bash",
+		ToolUseID: "bash-call", CreatedAt: at, ExpiresAt: at.Add(time.Hour), Resumable: true}
+	p := &pending{ix: ix, done: make(chan proto.Resolution, 1)}
+	putPending(s, p)
+	s.record(ix)
+	noID := &pending{ix: proto.Interaction{ID: "perm-no-id", MachineID: "mac", SessionID: "session", Kind: proto.IxPermission,
+		ToolName: "Bash", CreatedAt: at}, done: make(chan proto.Resolution, 1)}
+	putPending(s, noID)
+	ft.sessions("mac", proto.Session{SessionID: "session", Status: proto.StatusWorking})
+	ft.waitPending(1)
+	select {
+	case r := <-p.done:
+		if !r.Dismiss || r.Allow != nil || r.Always {
+			t.Fatalf("a terminal answer must only release the hook: %+v", r)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the hook stayed blocked")
+	}
+	if status, res, _ := ft.st.InteractionOutcome(context.Background(), ix.ID); status != "dismissed" || res != nil {
+		t.Fatalf("must not record a made-up phone answer: %s %+v", status, res)
+	}
+	s.fleet.mu.Lock()
+	kept := s.fleet.interactions["perm-no-id"] == noID
+	s.fleet.mu.Unlock()
+	if !kept {
+		t.Fatal("a permission card without its tool call's id was dismissed by another call's result")
+	}
+}
+
+func TestPermissionCallIsNeverGuessed(t *testing.T) {
+	at := time.Now()
+	// A plan's call and result right before and after the card: a plan without an id takes them, a permission does not.
+	if planCallFinished(proto.Interaction{Kind: proto.IxPermission, ToolName: "Bash", CreatedAt: at}, planItems(at)) {
+		t.Fatal("a permission card without its tool call's id was ended by another call's result")
+	}
+	for _, p := range []*pending{
+		{ix: proto.Interaction{Kind: proto.IxPermission, ToolUseID: "c", Resumable: true, Agent: "codex"}},
+		{ix: proto.Interaction{Kind: proto.IxPermission, ToolUseID: "c"}},
+		{ix: proto.Interaction{Kind: proto.IxPermission, Resumable: true}},
+	} {
+		if terminalReconciled(p) {
+			t.Fatalf("only a Claude Code hook's permission naming its call is reconciled: %+v", p.ix)
+		}
+	}
+}
+
+func TestTerminalReconcileKeepsAPhoneAnswer(t *testing.T) {
+	at := time.Now()
+	ft := planFleet(t, false, func(int) ([]proto.Item, bool, error) { return planItems(at), false, nil })
+	s := ft.s
+	p := &pending{ix: proto.Interaction{ID: "plan", MachineID: "mac", SessionID: "session", Kind: proto.IxPlan,
+		ToolName: "ExitPlanMode", ToolUseID: "plan-call", CreatedAt: at}, done: make(chan proto.Resolution, 1), claimed: true}
+	putPending(s, p)
+	s.checkPlanInteraction("mac", p)
+	s.fleet.mu.Lock()
+	still := s.fleet.interactions["plan"] == p
+	s.fleet.mu.Unlock()
+	if !still {
+		t.Fatal("a card the phone answered was dismissed under its answer")
+	}
+	select {
+	case r := <-p.done:
+		t.Fatalf("the hook got a dismiss instead of the phone's answer: %+v", r)
+	default:
+	}
+}
+
 func TestAnInFlightPlanReadDoesNotDismissANewerCard(t *testing.T) {
 	at := time.Now()
 	started, release := make(chan struct{}), make(chan struct{})

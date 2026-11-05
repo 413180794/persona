@@ -1,6 +1,5 @@
 {
   "no_metrics_hub": "This hub has no monitoring data yet. Deploy the new hub and the node on this computer, then check again.",
-  "reconnect_failed": "Couldn't reconnect: {error}",
   "connected": "Connected",
   "not_connected": "Not connected yet",
   "not_connected_error": "Not connected yet: {error}",
@@ -15,7 +14,6 @@
   "route_hint": "How the hub reaches this computer",
   "route": "Route: {route}",
   "connecting": "Connecting",
-  "reconnect": "Reconnect",
   "unreachable": "The hub can't reach this computer",
   "last_seen": "Last seen: {when}",
   "no_agents": "No agents running",

@@ -1,6 +1,5 @@
 {
   "no_metrics_hub": "このハブにはまだ監視データがありません。新しいバージョンのハブとこのコンピューターのノードをデプロイしてから確認してください。",
-  "reconnect_failed": "再接続できませんでした：{error}",
   "connected": "接続しました",
   "not_connected": "まだ接続されていません",
   "not_connected_error": "まだ接続されていません：{error}",
@@ -15,7 +14,6 @@
   "route_hint": "ハブがこのコンピューターに接続する経路",
   "route": "経路：{route}",
   "connecting": "接続中",
-  "reconnect": "再接続",
   "unreachable": "ハブがこのコンピューターに接続できません",
   "last_seen": "最終オンライン：{when}",
   "no_agents": "実行中のエージェントはありません",

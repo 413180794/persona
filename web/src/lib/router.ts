@@ -156,6 +156,11 @@ export function navigate(r: Route | string, replace = false) {
   listeners.forEach((l) => l());
 }
 
+/** The route shows this agent's chat: its own address (/s/…) or its tab's (/t/…/<sid>). */
+export function showsSession(r: Route, mid: string, sid: string): boolean {
+  return (r.name === "session" || r.name === "tab") && r.mid === mid && r.sid === sid;
+}
+
 export function useRoute(): Route {
   // The query is part of the route (/todos?id=…): a change to it alone must re-render too.
   const at = useSyncExternalStore(
