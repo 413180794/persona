@@ -657,12 +657,15 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	if err != nil {
 		return nil, err
 	}
-	stderr, err := cmd.StderrPipe()
+	stderr, closeStderrWriter, err := assistantStderrPipe(cmd)
 	if err != nil {
 		return nil, err
 	}
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start %s: %w", launcher, err)
+	startErr := cmd.Start()
+	closeStderrWriter()
+	if startErr != nil {
+		_ = stderr.Close()
+		return nil, fmt.Errorf("start %s: %w", launcher, startErr)
 	}
 	started = true
 	p := &assistantProc{id: id, agent: "claude", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}), ready: make(chan struct{}),
@@ -673,6 +676,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		if err := p.write(first); err != nil {
 			_ = osproc.StopGroup(cmd.Process.Pid, true)
 			_ = cmd.Wait()
+			_ = stderr.Close()
 			releaseGates() // started, but the exit watcher below never runs
 			return nil, fmt.Errorf("start the agent sdk bridge: %w", err)
 		}
@@ -712,16 +716,32 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	return p, nil
 }
 
+func assistantStderrPipe(cmd *exec.Cmd) (io.ReadCloser, func(), error) {
+	if cmd.Stderr != nil {
+		return nil, nil, errors.New("exec: Stderr already set")
+	}
+	if cmd.Process != nil {
+		return nil, nil, errors.New("exec: StderrPipe after process started")
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd.Stderr = w
+	return r, func() { _ = w.Close() }, nil
+}
+
 // watchAssistantStderr logs an assistant process's error lines, and, when its stderr ends (it exited) within
 // assistantEarlyExit of born, its last lines whatever they say: it did not start. WSL's "open terminal failed: not a
 // terminal" has no "error" in it, and the assistant stayed silent with nothing in any log (#1994).
 // The tail is kept on the process too (without blank lines and terminal colors): a send that started it reports it when
 // it exits before starting (awaitStart).
-func watchAssistantStderr(logger *log.Logger, p *assistantProc, stderr io.Reader) {
+func watchAssistantStderr(logger *log.Logger, p *assistantProc, stderr io.ReadCloser) {
 	id, launcher, born := p.id, p.launcher, p.born
 	if p.stderrDone != nil {
 		defer close(p.stderrDone)
 	}
+	defer stderr.Close()
 	var tail []string
 	sc := bufio.NewScanner(stderr)
 	for sc.Scan() {
@@ -737,6 +757,10 @@ func watchAssistantStderr(logger *log.Logger, p *assistantProc, stderr io.Reader
 			p.stderrTail = append([]string(nil), tail...)
 			p.mu.Unlock()
 		}
+	}
+	if err := sc.Err(); err != nil {
+		logger.Printf("assistant %s: stderr read: %v", id[:8], err)
+		_, _ = io.Copy(io.Discard, stderr)
 	}
 	if lived := time.Since(born); lived < assistantEarlyExit && len(tail) > 0 {
 		logger.Printf("assistant %s: %s exited %s after it started: %s", id[:8], launcher, lived.Round(time.Millisecond),
