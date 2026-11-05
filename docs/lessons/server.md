@@ -295,7 +295,8 @@
   补救：`wrangler deployments list` 找到上一次发布的版本，`wrangler rollback <版本>`（自定义域名不跟着版本走，不受影响），约 3 分钟恢复。
 - 只改了 `site/`（域名、页面）用 `SITE_ONLY=1 ./scripts/release/publish.sh`：沿用线上已发布的产物重新部署，不发新版（#951）。
   这台机器下载线上的大文件常被重置连接，所以它的 curl 带 `--retry-all-errors`（默认的 `--retry` 不重试「Connection reset」）。
-- 换域名时旧域名要留着：已发出的 App 里写死了推送中继地址，已部署的 personad 也从旧域名的 `/dl/` 检查更新。
+- 换域名时想清楚旧域名怎么办：已发出的 App 里写死了推送中继地址，已部署的 personad 也从旧域名的 `/dl/` 检查更新。
+  只做 301 跳转时 POST（推送中继）不会原样重发，这部分会断；2026-11-05 用户决定接受，旧域名整站 301（#2389，`docs/site.md`「旧域名」）。
 
 ## 国内访问加速（2026-11-04，#1134，`docs/site.md`）
 

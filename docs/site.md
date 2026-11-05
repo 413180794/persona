@@ -1,6 +1,7 @@
 # 官网：托管、香港入口、以后的分线路
 
-`<官网域名>` 是配置里 `publish.site_url` 的域名（具体值在构建配置和 `CLAUDE.local.md`），`<旧域名>` 是早期构建写死的那个，仍直连 Worker。
+`<官网域名>` 是配置里 `publish.site_url` 的域名（具体值在构建配置和 `CLAUDE.local.md`）。`<旧域名>` 是早期构建写死的那个，2026-11-05 起（#2389）
+不再连 Worker，整站 301 到 `<官网域名>` 的同一路径（见下面「旧域名」）。
 
 官网（`site/`）本身是 Cloudflare 上的 Worker `jarvis-site`：静态页面、公开的 personad 下载（`/dl/`）、安装脚本（`/install.sh`）、
 推送中继的入口（`/relay/*`，`docs/push-relay.md`）都在它上面。只经 `scripts/release/publish.sh` 部署（`docs/release.md`）。
@@ -9,7 +10,7 @@
 
 ```
 任何人 ──► <官网域名>（A 记录，仅 DNS）──► 阿里云香港 ECS 上的 nginx ──► origin.<官网域名>（Worker 自定义域名）──► Worker
-旧构建 / 已部署的 hub ──► <旧域名>（Worker 自定义域名）──► Worker
+旧构建 / 已部署的 hub ──► <旧域名> ──► 301 到 <官网域名> 的同一路径
 ```
 
 - **为什么**：Cloudflare 免费版在大陆没有节点，国内访问被分到欧洲、日本的机房，往返约 300ms、丢包明显，页面时常卡十几秒。
@@ -21,11 +22,15 @@
 - **客户端地址**：经入口转发后 `cf-connecting-ip` 是入口自己的地址。入口带上 `x-persona-edge-secret`（Worker secret `EDGE_SECRET`）
   和 `X-Forwarded-For: <客户端>`，`site/worker.mjs` 只有密钥对上时才信 `X-Forwarded-For`，推送中继按它限流；密钥不对、没配都照旧。
   密钥在 1Password，入口那份在 `/etc/nginx/persona/edge-secret.conf`（0600）。
-- **证书**：入口自己的 Let's Encrypt 证书，certbot 用 HTTP 验证、systemd 定时器自动续期；Worker 两个自定义域名的证书 Cloudflare 自管。
+- **证书**：入口自己的 Let's Encrypt 证书，certbot 用 HTTP 验证、systemd 定时器自动续期；Worker 的自定义域名（只剩 `origin.<官网域名>`）的证书 Cloudflare 自管。
 - **`site/wrangler.jsonc` 里没有 `<官网域名>`**：部署会把配置里没有的自定义域名去掉、把列着的重新占上；
   <官网域名> 由 DNS 指向入口，列进去会被部署抢回 Worker。`origin.<官网域名>` 必须列着（入口靠它回源）。
 - **退路**：入口出问题时，把 <官网域名> 改回 Worker 自定义域名（`PUT /accounts/<id>/workers/domains`，hostname <官网域名>，
-  service jarvis-site），几分钟恢复；`<旧域名>` 一直直连 Worker。
+  service jarvis-site），几分钟恢复。
+- **旧域名**：不在 `site/wrangler.jsonc` 里（部署会把它从 Worker 上摘掉），由它所在 zone 的一条 proxied 占位 DNS 记录（AAAA `100::`）
+  加一条 Single Redirect 规则整站 301 到 `<官网域名>`，路径和 query 原样带上；规则和记录只在 Cloudflare 上，不进仓库。
+  代价是用户接受的：301 之后客户端不会原样重发 POST，还写着旧域名的旧版 App / hub 的推送中继会断；检查更新、下载是 GET，跟随跳转的客户端照常，
+  但不保证每个旧版本都跟随。要恢复只能升级到写着新域名的构建。
 
 ## 为什么没用别的办法（都实测过）
 
