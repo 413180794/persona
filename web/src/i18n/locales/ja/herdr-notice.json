@@ -7,12 +7,12 @@
   "exited_code": "herdr は起動直後に終了しました（終了コード {code}）",
   "killed": "herdr は起動直後に停止されました（{signal}）",
   "exited": "herdr は起動直後に終了しました",
-  "not_installed": "このコンピュータに herdr がインストールされていません（PATH にもログインシェルにも herdr コマンドがありません）",
+  "not_installed": "このコンピューターに herdr がインストールされていません（PATH にもログインシェルにも herdr コマンドがありません）",
   "no_answer_within": "herdr は起動しましたが、{seconds} 秒以内に応答しませんでした",
   "no_answer": "herdr は起動しましたが、応答がありません",
   "cannot_run": "herdr コマンドを実行できませんでした",
-  "node_too_old": "このコンピュータの Persona が古いため herdr を起動できません。更新してからもう一度お試しください",
-  "offline": "このコンピュータはオフラインです",
+  "node_too_old": "このコンピューターの Persona が古いため herdr を起動できません。更新してからもう一度お試しください",
+  "offline": "このコンピューターはオフラインです",
   "timeout": "herdr の起動に時間がかかっています。しばらくしてから確認してください",
   "no_answer_after_start": "起動を指示しましたが、herdr はまだ応答していません"
 }

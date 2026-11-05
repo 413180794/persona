@@ -22,5 +22,5 @@
   "load_failed": "マシンの監視を読み込めません：{error}",
   "empty_title": "マシンはまだありません",
   "empty_unavailable": "いまマシンを表示できません",
-  "empty_body": "hub がつながると、hub のマシンと接続しているコンピュータがここに表示されます。"
+  "empty_body": "hub がつながると、hub のマシンと接続しているコンピューターがここに表示されます。"
 }

@@ -348,7 +348,7 @@
     <string name="settings_src_messages_on_machine">%1$s のメッセージ</string>
     <string name="settings_src_messages_state_ok">読み取れます</string>
     <string name="settings_src_messages_state_no_permission">フルディスクアクセスがありません</string>
-    <string name="settings_src_messages_state_not_configured">そのコンピュータにメッセージがありません</string>
+    <string name="settings_src_messages_state_not_configured">そのコンピューターにメッセージがありません</string>
     <string name="settings_src_messages_state_failed">読み取れません</string>
     <string name="settings_src_messages_chats">会話</string>
     <string name="settings_src_messages_read_failed">メッセージの状態を読み取れません：%1$s</string>

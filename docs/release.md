@@ -270,6 +270,7 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.persona/bin/personad
 - `release.sh` 传完 TestFlight 后接着跑它，版本号是 `<提交>-<构建号>`，和这一版 TestFlight 对得上；`NO_PUBLISH=1` 只发 TestFlight，
   配置里没有 `publish.site_url` 也不发。单独跑：`./scripts/release/publish.sh`，`NO_DEPLOY=1` 只编译和检查（产物在 `build-publish/`）。
 - 只改了官网页面（`site/`）：`SITE_ONLY=1 ./scripts/release/publish.sh`，不编译新版，把线上正在发的版本的小文件（`VERSION`、`SHA256SUMS`、`latest.json`、`SLOT`、`install.sh`）取回来，和已提交的 `site/` 一起部署，压缩包留在 R2 里不动；部署后核对线上小文件没变、每个压缩包都还在（`HEAD` 的大小）。线上还没有 `dl/SLOT`（R2 之前的发布）时会拒绝，先完整发一次。**不要在 `site/` 里直接 `wrangler deploy`**：会让 `/dl/` 和 `install.sh` 404（`docs/lessons/server.md`）。
+- 网页依赖固定从官方 npm 源装（`npm ci --registry=https://registry.npmjs.org/`，`JARVIS_NPM_REGISTRY` 可改），不跟本机的 npm 配置：`package-lock.json` 本来就指向官方源，本机配的镜像可能缺包（2026-11-06 缺 `elkjs`，发布停在打包网页前）。
 - 编四个平台（linux / darwin × amd64 / arm64），`-tags public -trimpath -s -w`，写进 `channel=release`、build 号（UTC `YYYYMMDDHHMM`）和 `updateURL`：
   - **网页打进二进制**（`server/internal/hub/webdist`，`go:embed`）：hub 机器上没有 `~/.persona/web` 时就用二进制里的；有就照旧用目录里的。
   - **不带任何 skill**：lark-connector 是从私有的上游仓库拷来的（GPL-3.0），不能再分发；skill 放在各台机器的 `~/.persona/skills/`，

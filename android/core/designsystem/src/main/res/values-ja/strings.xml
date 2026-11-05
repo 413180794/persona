@@ -238,7 +238,7 @@
     <string name="designsystem_connection_certificate">ハブの証明書が変わりました</string>
     <string name="designsystem_connection_revoked">ペアリングが無効になりました</string>
     <string name="designsystem_connection_online_text">メッセージと状態は最新です。</string>
-    <string name="designsystem_connection_connecting_text">ネットワークはありますが、ハブにつながりません（ハブのコンピュータが電源オフ、スリープ、オフラインの可能性があります）。自動で再試行を続けます。</string>
+    <string name="designsystem_connection_connecting_text">ネットワークはありますが、ハブにつながりません（ハブのコンピューターが電源オフ、スリープ、オフラインの可能性があります）。自動で再試行を続けます。</string>
     <string name="designsystem_connection_updating_text">再接続しました。切断中のメッセージと保留中のリクエストを取り込んでいます。</string>
     <string name="designsystem_connection_waiting_text">この端末は今ネットワークにつながっていません。復旧すると自動で接続し、その間に書いたメッセージも自動で送信されます。</string>
     <string name="designsystem_connection_local_network_text">同じネットワークのハブに接続するには、ローカルネットワークの許可が必要です。接続設定で許可してください。</string>

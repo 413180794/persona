@@ -106,7 +106,10 @@ mkdir -p "$OUT/bin"
 WEBDIST=server/internal/hub/webdist
 cleanup() { find "$WEBDIST" -mindepth 1 ! -name README.md -exec rm -rf {} + 2>/dev/null || true; }
 trap cleanup EXIT
-(cd web && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npm run build) >/dev/null
+# The public registry, whatever this machine's npm is set to: package-lock.json resolves there, and a mirror can miss
+# a package (2026-11-06 one lacked elkjs and the release stopped here).
+NPM_REGISTRY="${JARVIS_NPM_REGISTRY:-https://registry.npmjs.org/}"
+(cd web && { [ -d node_modules ] || npm ci --no-audit --no-fund --registry="$NPM_REGISTRY"; } && npm run build) >/dev/null
 cleanup
 cp -R web/dist/. "$WEBDIST/"
 
