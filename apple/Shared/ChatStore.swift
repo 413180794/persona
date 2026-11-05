@@ -614,6 +614,15 @@ final class ChatStore {
         liveEnds = text
     }
 
+    /// A batch was taken in (`apply`): if it holds the streamed message (`pending`: a newer text kept back to draw), its
+    /// live copy goes once its row comes (`endLive`). True when it did: what was kept back is stale now.
+    func landed(_ new: [Item], pending: String?) -> Bool {
+        let live = pending ?? liveText
+        guard !live.isEmpty, new.contains(where: { $0.role == "assistant" && $0.kind == .text && ($0.text ?? "").hasPrefix(live) }) else { return false }
+        endLive(live)
+        return true
+    }
+
     /// The stream was cleared (`text`: the newest text streamed). The hub clears it when the turn ends or the next
     /// request starts, and the message's transcript line can come after that: cleared then, the reply was gone until it
     /// did, the chat ending at the message before it. The live copy stays until the item comes (`endLive`), 5 s at most

@@ -1088,6 +1088,7 @@ final class AppModel {
     func reload(_ key: SessionKey) async {
         guard let api = api(key.group), let page = try? await api.items(key, beforeSeq: nil) else { return }
         chat(key).replace(with: page.items, hasMore: page.hasMore, span: page.span)
+        ChatTrace.shared.note(key, "reload n=\(page.items.count) to=\(page.span.to.map(String.init) ?? "?") kept=\(chat(key).items.count - page.items.count)")
     }
 
     /// Fetches the work a fold stands for into the chat, once at a time per fold (several rows of one open work line
@@ -1399,12 +1400,13 @@ final class AppModel {
         case .items(let key, let items, let backlog, let hasMore, let span, let moreAfter):
             if backlog { connection.caughtUp(Self.catchUpPart(key)) }
             let store = chat(key)
-            settle(key, store.apply(items, span: span, backlog: backlog, hasMore: hasMore, moreAfter: moreAfter))
+            let gap = store.apply(items, span: span, backlog: backlog, hasMore: hasMore, moreAfter: moreAfter)
+            ChatTrace.shared.note(key, ChatTrace.batch(items, span: span, backlog: backlog, gap: gap, resets: store.resets, covered: store.covered))
+            settle(key, gap)
             // The streamed message landed in the transcript: stop drawing its live copy (and the newer one kept back).
-            let live = deltas.pendingText(key) ?? store.liveText
-            if !live.isEmpty, items.contains(where: { $0.role == "assistant" && $0.kind == .text && ($0.text ?? "").hasPrefix(live) }) {
+            if store.landed(items, pending: deltas.pendingText(key)) {
                 deltas.drop(key)
-                store.endLive(live)
+                ChatTrace.shared.note(key, "landed live=\(store.liveText.count)")
             }
         case .screen(let key, let text, let status):
             let c = chat(key)
@@ -1413,6 +1415,10 @@ final class AppModel {
             c.screenUpdatedAt = .now
         case .delta(let key, let text):
             let newest = deltas.pendingText(key)
+            // The stream's start and its end, not every delta (#3783).
+            if text.isEmpty != chat(key).liveText.isEmpty {
+                ChatTrace.shared.note(key, text.isEmpty ? "delta clear live=\(chat(key).liveText.count)" : "delta start")
+            }
             switch deltas.offer(key, text, now: .now) {
             case .draw(let t) where t.isEmpty: chat(key).clearLive(newest: newest)
             case .draw(let t): chat(key).liveText = t

@@ -645,6 +645,7 @@ struct ChatView: View {
         // restored, AppModel.rememberChat) then opens at the same line, not only after leaving the chat.
         .onChange(of: scenePhase) { _, phase in if phase == .background { rememberReadPosition() } }
         .onDisappear {
+            ChatTrace.shared.note(shownKey, "close")
             rememberReadPosition()
             if viewing != nil { model.unsubscribe(shownKey, by: owner) }
             model.unsubscribe(key, by: owner)
@@ -704,6 +705,8 @@ struct ChatView: View {
         }
         scratch.lines = lines
         scratch.linesKey = key
+        ChatTrace.shared.note(shownKey, ChatTrace.screen(lines, live: store.liveText.count, streaming: key.streaming, running: key.live != nil,
+                                                         frozen: frozen != nil, withheld: items.count - cut))
         return lines
     }
 
@@ -2044,6 +2047,7 @@ struct ChatView: View {
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: store.resets) { _, _ in frozen = nil } // the snapshot's items are gone
         .onChange(of: follow.holdsBack) { _, holds in
+            ChatTrace.shared.note(shownKey, "\(holds ? "hold back" : "let go") mode=\(follow.mode) near=\(follow.near ? 1 : 0) touching=\(follow.touching ? 1 : 0)")
             if !holds {
                 frozen = nil
             } else if let last = store.items.last {
@@ -2646,6 +2650,7 @@ struct ChatView: View {
     }
 
     private func appeared() {
+            ChatTrace.shared.note(shownKey, "open items=\(store.items.count) covered=\(store.covered)")
             #if DEBUG
             let id = shownKey.machineID + "/" + shownKey.sessionID
             Self.appearances[id, default: 0] += 1

@@ -11,7 +11,7 @@ import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktre
 import { keyedRefs } from "../lib/keyed-refs";
 import { buildMachineTree, paneRoute, resolveTab, tabRowKeys, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
-import { api, setToken } from "../lib/api";
+import { api, handleUnauthorized, setToken } from "../lib/api";
 import { TOKEN_ID_KEY } from "../lib/auth";
 import { useInboxBadge } from "../lib/inbox";
 import { useLarkHome } from "../lib/lark-chats";
@@ -734,6 +734,8 @@ function AccountRow({ phase, online, total }: { phase: ConnPhase; online: number
     { k: "dark", label: t("sidebar.theme_dark"), icon: "moon" },
   ];
   const logout = async () => {
+    // signing out on purpose: a request that gets a 401 meanwhile must not show "this browser was signed out"
+    handleUnauthorized(() => {});
     const id = localStorage.getItem(TOKEN_ID_KEY);
     if (id) await api(`/auth/tokens/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
     localStorage.removeItem(TOKEN_ID_KEY);

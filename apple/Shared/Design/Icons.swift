@@ -174,6 +174,8 @@ extension Theme {
         static let enter = "return"
         static let link = "link"
         static let id = "number"
+        /// A chat's structure-only trace (拷贝诊断, #3783).
+        static let diagnostics = "stethoscope"
         static let pin = "pin"
         static let unpin = "pin.slash"
         /// Archive a conversation (out of the list, kept under 已归档) and bring it back.
@@ -393,17 +395,7 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video's thumbnail: it plays elsewhere (the chat app).
-        static let playMedia = "play.circle.fill"
-        /// Send someone a message.
-        static let message = "bubble.left.fill"
-        static let credentials = "key"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
-        /// Feishu [removed] words: encoded for the eye, not encrypted.
-        static let braveClimb = "shield"
-        static let memory = "brain"
-        /// Search (a list's, the sidebar's).
+        /// A video''s, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

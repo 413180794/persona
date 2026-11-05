@@ -376,6 +376,8 @@ struct AssistantTopBar: View {
             Button { copy(infoText, "已拷贝对话信息") } label: { Label("拷贝信息", systemImage: Theme.Icon.copy) }
             if let key {
                 Button { copy(key.sessionID, "已拷贝会话 ID") } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
+                // What the chat last went through, structure only (ChatTrace): to paste into a report.
+                Button { copy(ChatTrace.shared.text(key), "已拷贝诊断") } label: { Label("拷贝诊断", systemImage: Theme.Icon.diagnostics) }
             }
         }
         if model.canCompact(key) || model.canStartNewMain(key) {

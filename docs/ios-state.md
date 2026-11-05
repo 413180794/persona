@@ -309,6 +309,29 @@ App 端 `apple/Persona/App/ScreenProbe.swift`，DEBUG，`-probes YES` 才挂：
 
 测试：`ScreenTruthTests`（`docs/testing.md`「真实性与及时性」）。
 
+## 对话诊断（拷贝诊断，#3783）
+
+探针只在 DEBUG 里有。TestFlight 上一条回复「流式时显示、结束后没了、重进对话才回来」，事后分不清是归进了抽屉、被冻住在等，还是数据被冲掉了。
+所以每个对话留一份只记结构的记录（`apple/Persona/App/ChatTrace.swift`），DEBUG 和 TestFlight 都有：
+
+- 记什么：
+  - 每批条目：条数、行号范围、各类多少、span、store 怎么处理的（`gap`）、`covered`、`resets`；
+  - 流式文本开始和清掉的时刻，回复落进条目的时刻（`landed`）；
+  - 每次重建后对话最后 5 行，按类型和行号记：`a118` 是回答，`u101` 是消息，`work(5,live)` 是工作行，`wakes(tail=2,answer=112,live)` 是后台任务小条，带抽屉里有几行、答案是哪一行；
+  - 同时记当时的 `live`（流式文本长度）、`streaming`、`running`、`frozen`、`withheld`（冻住时等着的条数）；
+  - 跟随状态翻转（`hold back` / `let go`，带 mode、near、touching），以及对话的打开和关闭。
+- 不记消息的任何文字、名字、链接，也不记条目 id。
+- 留最近 4 个对话，每个对话最新的 240 行，存在 `Caches/state/chat-trace.json`。App 被杀掉以后也还在。
+- 拷出来：
+  - 新外壳：抽屉里长按对话 ›「拷贝诊断」；
+  - 旧布局：助手顶栏菜单 ›「拷贝诊断」。
+
+读法：
+- 最后一行有 `a<回复的行号>`：回复画出来了。
+- `wakes(tail>0,answer=<更早的行号>)`：回复归进了抽屉。
+- `frozen=1 withheld>0`：对话被冻住，回复在等。
+- `items … resets=` 变了，或者出现 `reload`：数据重来过一遍。
+
 ## 回到最新：对话页的「跟随最新处」（2026-11-04，梳理；#1046 按下面的方案改了）
 
 Agents 对话和 Jarvis 对话是同一个 `ChatView`：列表倒着放（最新的在偏移 0），右下角的 ↓（「回到最新」）和「跟随最新处」都在这里。

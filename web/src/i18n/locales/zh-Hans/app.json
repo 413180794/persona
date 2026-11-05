@@ -1,4 +1,5 @@
 {
+  "signed_out": "这个浏览器的登录已失效，可能在「设置 › 设备」里被撤销了。请重新连接。",
   "link_token_invalid": "链接里的 token 不对，贴一个新的",
   "title_new_chat": "新对话",
   "title_history": "Persona 的对话",

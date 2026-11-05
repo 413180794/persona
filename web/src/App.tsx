@@ -102,6 +102,8 @@ export function App() {
     handleUnauthorized(() => {
       setToken("");
       reset();
+      // say why the sign-in page is back: this browser's credential stopped working (revoked, or the hub forgot it)
+      setLinkError(t("app.signed_out"));
       setAuthed(false);
     });
   }, []);
