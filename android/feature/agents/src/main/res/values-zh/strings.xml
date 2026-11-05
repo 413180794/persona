@@ -382,6 +382,8 @@
     <string name="agents_picker_current">当前</string>
     <!-- A herdr tab's row (#2320): the most urgent agent's latest words, after its name -->
     <string name="agents_tab_lead_words">%1$s：%2$s</string>
+    <string name="agents_source_feishu">飞书群</string>
+    <string name="agents_source_feishu_open">在飞书里打开这个话题</string>
     <string name="agents_filter_feishu">飞书群</string>
     <string name="agents_filter_terminal">终端</string>
     <string name="agents_botmux">botmux</string>

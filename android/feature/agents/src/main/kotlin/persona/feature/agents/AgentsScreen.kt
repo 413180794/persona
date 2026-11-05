@@ -527,6 +527,14 @@ internal fun SlotRow(
     var menu by remember { mutableStateOf(false) }
     val session = row.session
     val source = session.source
+    val links = androidx.compose.ui.platform.LocalUriHandler.current
+    // 飞书群 / 终端 under the time (#3132, #3043); a botmux session's tag opens its Feishu topic when it has one.
+    val origin = session.agentSource?.takeIf { !session.assistant }?.let { kind ->
+        val link = session.externalLink.takeIf { kind == AgentSource.Feishu }
+        RowSource(stringResource(if (kind == AgentSource.Feishu) R.string.agents_source_feishu else R.string.agents_filter_terminal),
+            if (kind == AgentSource.Feishu) SourceKind.Feishu else SourceKind.Terminal,
+            onClick = link?.let { { links.openUri(it) } }, clickLabel = link?.let { stringResource(R.string.agents_source_feishu_open) })
+    }
     JSwipeActions(end = onClose?.let { SwipeAction(stringResource(R.string.agents_close), PhIcons.X, Status.NeedsYou, it, destructive = true) }) {
     AgentRow(
         title = session.displayTitle, status = row.state.designStatus, depth = depth, position = position,
@@ -567,7 +575,7 @@ internal fun SlotRow(
             if (pinned) add(RowFlag(stringResource(R.string.agents_row_pinned), PhIcons.PushPin))
             if (muted) add(RowFlag(stringResource(R.string.agents_row_muted), PhIcons.Prohibit))
         },
-        launcher = launcher, branch = branch,
+        launcher = launcher, branch = branch, source = origin,
         // Its running Workflows (#2935): 「后台 workflow「parity-audit」 · Verify 2/2 · 169/185 · 14 分」.
         note = WorkflowSummary.line(session, now)?.let { RowNote(it.text(), WorkflowIcon) },
     )

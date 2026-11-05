@@ -382,6 +382,8 @@
     <string name="agents_picker_current">現在</string>
     <!-- A herdr tab's row (#2320): the most urgent agent's latest words, after its name -->
     <string name="agents_tab_lead_words">%1$s：%2$s</string>
+    <string name="agents_source_feishu">Lark グループ</string>
+    <string name="agents_source_feishu_open">このトピックを Lark で開く</string>
     <string name="agents_filter_feishu">Feishu グループ</string>
     <string name="agents_filter_terminal">ターミナル</string>
     <string name="agents_botmux">botmux</string>

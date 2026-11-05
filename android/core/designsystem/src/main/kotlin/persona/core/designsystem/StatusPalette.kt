@@ -58,7 +58,17 @@ data class PersonaPalette(
     val userBubble: Color = if (dark) Tokens.Semantic.Glass.Dark.userBubble else Tokens.Semantic.Glass.Light.userBubble,
     /** The words on [userBubble] when it is a deep colour of its own (a 主题色 like 珊瑚橙); null: the page's ink. */
     val userBubbleText: Color? = null,
+    /** Where an agent was opened (#3132, iOS `Theme.sourceFeishu` / `sourceTerminal`): a Feishu group's topic, a terminal pane. */
+    val sourceFeishu: StatusColors = if (dark) StatusColors(Color(0xFF82AAFF), Color(0xFF82AAFF), Color(0x2982AAFF))
+        else StatusColors(Color(0xFF1D5FD6), Color(0xFF1D5FD6), Color(0x1A1D5FD6)),
+    val sourceTerminal: StatusColors = if (dark) StatusColors(Color(0xFFBEA3FF), Color(0xFFBEA3FF), Color(0x29BEA3FF))
+        else StatusColors(Color(0xFF6A46C2), Color(0xFF6A46C2), Color(0x1A6A46C2)),
 ) {
+    fun source(kind: SourceKind): StatusColors = when (kind) {
+        SourceKind.Feishu -> sourceFeishu
+        SourceKind.Terminal -> sourceTerminal
+    }
+
     fun status(status: Status): StatusColors = when (status) {
         Status.NeedsYou -> needsYou
         Status.Working -> working
@@ -124,6 +134,9 @@ internal object Palettes {
         positive = Color(0xFF1E8E5A), caution = Color(0xFFE0A800), cautionText = Color(0xFF8A6400),
         diffAdd = Color(0xFF1E8E5A), diffDel = Color(0xFFCC3A2E),
         terminalBackground = Color(0xFF141922), terminalText = Color(0xFFE9E6DF), scrim = Color(0x66141922), dark = false,
+        // paper and ink: a source tag is ink on a grey slip, like any other tag
+        sourceFeishu = StatusColors(Color(0xFF5C6573), Color(0xFF5C6573), Color(0xFFE9ECF0)),
+        sourceTerminal = StatusColors(Color(0xFF5C6573), Color(0xFF5C6573), Color(0xFFE9ECF0)),
     )
     val BriefDark = PersonaPalette(
         background = Color(0xFF0E1117), surface = Color(0xFF181C24), surfaceOpaque = Color(0xFF181C24),
@@ -141,6 +154,8 @@ internal object Palettes {
         positive = Color(0xFF4CC38A), caution = Color(0xFFE9C846), cautionText = Color(0xFFF2D876),
         diffAdd = Color(0xFF4CC38A), diffDel = Color(0xFFFF7A6E),
         terminalBackground = Color(0xFF07090D), terminalText = Color(0xFFE9E6DF), scrim = Color(0x99000000), dark = true,
+        sourceFeishu = StatusColors(Color(0xFF9CA4B3), Color(0xFF9CA4B3), Color(0xFF242934)),
+        sourceTerminal = StatusColors(Color(0xFF9CA4B3), Color(0xFF9CA4B3), Color(0xFF242934)),
     )
 
     // 看板: a grey board with white strips; the strip holder colour is the state.
@@ -214,6 +229,9 @@ internal fun PersonaPalette.legacy() = PersonaColors(
  * (docs/extensions.md「声明式 UI」) name these four and never a colour.
  */
 enum class Tone { Neutral, Positive, Caution, Danger }
+
+/** Where an agent was opened, each on its own tint ([PersonaPalette.source]): a Feishu group's topic or a terminal pane. */
+enum class SourceKind { Feishu, Terminal }
 
 /** [tone]'s colours: positive is the done green, caution the needs-you amber, danger red, neutral the idle grey. */
 fun PersonaPalette.tone(tone: Tone): StatusColors = when (tone) {

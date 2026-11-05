@@ -312,6 +312,8 @@ fun AgentRow(
     note: RowNote? = null,
     launcher: Boolean = false,
     branch: Boolean = false,
+    /** Where it was opened (飞书群 / 终端, #3132): under the time, right-aligned, so the title keeps the whole line (#3043). */
+    source: RowSource? = null,
     end: (@Composable () -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
@@ -340,6 +342,8 @@ fun AgentRow(
                 }
             }
             agent?.let { Spacer(Modifier.width(Tokens.Space.s)); Text(it, style = type.micro, color = palette.ink2, maxLines = 1) }
+            // one line only: the tag goes before the time
+            if (compact) source?.let { Spacer(Modifier.width(Tokens.Space.s)); SourceTag(it) }
             time?.takeIf { it.isNotEmpty() }?.let { Spacer(Modifier.width(Tokens.Space.s)); Text(it, style = type.micro, color = palette.ink3, maxLines = 1) }
         }
         if (!compact) {
@@ -348,7 +352,14 @@ fun AgentRow(
                 if (statusText != null && !preview.isNullOrBlank()) append("  ")
                 preview?.takeIf { it.isNotBlank() }?.let { append(it.replace('\n', ' ')) }
             }
-            if (line.isNotEmpty()) Text(line, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val lineText: @Composable () -> Unit = {
+                Text(line, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (source != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { if (line.isNotEmpty()) lineText() }
+                Spacer(Modifier.width(Tokens.Space.s))
+                SourceTag(source)
+            } else if (line.isNotEmpty()) lineText()
             note?.let { RowNoteLine(it) }
             if (facts.isNotEmpty()) Text(
                 buildAnnotatedString {
@@ -490,6 +501,20 @@ private fun HolderGlyph(status: Status) {
         Status.Offline -> JIcon(PhIcons.Power, null, size = Caret, tint = ink)
         else -> JIcon(PhIcons.Checks, null, size = Caret, tint = ink)
     }
+}
+
+/** An agent row's source tag ([AgentRow]'s `source`): its word, its tint and, for 飞书群 with a topic, what a tap opens. */
+@Immutable
+data class RowSource(val label: String, val kind: SourceKind, val onClick: (() -> Unit)? = null, val clickLabel: String? = null)
+
+/** The source tag: the time's size, a tight slip in the source's tint; a button when it opens something. */
+@Composable
+private fun SourceTag(source: RowSource) {
+    val colors = PersonaTheme.palette.source(source.kind)
+    val shape = RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) Tokens.Space.xs else Tokens.Space.s - Tokens.Space.xxs)
+    val tap = source.onClick?.let { Modifier.clickable(role = Role.Button, onClickLabel = source.clickLabel, onClick = it) } ?: Modifier
+    Text(source.label, style = PersonaTheme.type.micro.copy(fontWeight = FontWeight.Medium), color = colors.text, maxLines = 1,
+        modifier = Modifier.clip(shape).then(tap).background(colors.tint).padding(horizontal = Tokens.Space.xs, vertical = Tokens.Space.xxs / 2))
 }
 
 // ------------------------------------------------------------------ quick filters

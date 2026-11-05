@@ -27,6 +27,7 @@ minSdk 30（Android 11），compileSdk 37，targetSdk 36。界面中文。
 
 - **排序**：列表设置里「排序：状态优先 / 最近更新」（iOS `AgentSort`，存在本机）。最近更新时每组里的会话只按时间排，有动静的空间、仓库、电脑按各自最新的会话排在前面；按状态时分段不变，只是段里按时间。逻辑在 `core:domain` 的 `AgentList.kt`（`AgentListSettings.sort`）。
 - **来源筛选和 botmux 开关**：快速筛选多了「飞书群 / 终端」（#2526，botmux 会话 / herdr 窗格，按 `pane_id` 前缀判断，`SessionSource.kt` 的 `agentSource`）。和 iOS / 网页一样，筛选只露出有 Agent 的项，选中的那项变空时留着。项数多到一排放不下时（六项都有 Agent），晨报的标签和看板的计数格都改成横滑（看板每格最窄 92dp，放得下时仍按宽度平分；横滑时边上露出下一格的一截），不再挤成省略号（截图 `AgentsParityShotsTest.sixFilters`，360dp 宽）。筛选下面的「botmux」胶囊（网页 #2786）在本机隐藏 / 重新显示 botmux 会话，有 botmux 会话或已隐藏时出现，数字是当前范围、电脑和搜索下的 botmux 会话数（没隐藏时直接用「飞书群」的计数，隐藏时单独数一遍，不再多建一次列表）；「飞书群」下隐藏会回到「全部」，隐藏时选「飞书群」会重新显示。
+- **会话行的来源标签**（#3132，同 iOS / 网页 #2698，位置按 #3043）：botmux 的会话标「飞书群」，herdr 的窗格标「终端」，其他宿主不标、Persona 自己的对话不标。标签在右上角时间下面、右对齐，字号同时间，标题从行首开始、不被挤；细列表只有一行，标签放在时间前面。飞书群有 https 的 `external_url` 时点标签打开那个话题（走外壳的链接处理，在 App 里打开）。颜色取设计系统的来源色（`PersonaPalette.sourceFeishu` / `sourceTerminal`，同 iOS `Theme.sourceFeishu` / `sourceTerminal`；晨报只用墨色）。截图 `AgentsSourceShotsTest`。
 - **空状态分三种**（iOS `ChatsView`）：搜索没结果是「没有找到「xx」」，不放「新建会话」；整体没有会话是「开始第一个开发会话 / 这台机器上没有会话」+「新建会话」；快速筛选为空是「没有 XX 的会话」+「看全部」。
 - **herdr 没启动的原因**：「xx 的 herdr 没在运行」那张卡下面一直留着红字「没启动：原因」（node 的已知错误翻成人话，同 iOS `HerdrFailure.says`），到下一次启动或读到 herdr 在运行为止；长按复制 hub 原文和 HTTP 状态。
 - **订阅额度**：机器监控页（总览）最上面列出 `GET /api/v1/usage/windows` 的全部账号，最满的在前、过期的在后：每个窗口的用量条（80% 起变成提醒色）、重置倒计时、采样时间、用得偏快 / 偏慢，网关读不到时标出来；hub 没有数据（或旧 hub 没这个接口）时整节不显示，页面在前台时每分钟读一次。逻辑在 `feature:machines` 的 `UsageWindows.kt`，规则同网页 `lib/usage-windows.ts`。
