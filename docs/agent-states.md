@@ -8,7 +8,7 @@ App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计�
 | 状态 | 含义 | 来自 herdr | Persona 补充 | 颜色 |
 | --- | --- | --- | --- | --- |
 | `needs_you` 需要你 | 卡在需要人参与的地方 | `blocked`（TUI 里的提问 / 确认框） | 有待处理的提问、计划、授权、终端交互（hook 拦下来时 herdr 还显示 working） | 红，呼吸 |
-| `working` 工作中 | 正在跑 | `working` | Claude：herdr 报 `done` / `idle` / `unknown`，但终端标题是 Claude Code 工作中的转圈字形（◐◓◑◒，旧版是盲文点阵），或 transcript 里这一轮已经开始、还没结束（没有 `turn_duration`、没被中断）且 45 秒内写过（#2069；transcript 里这一轮已经结束时照 herdr 的）；或这一轮停了、但它的后台命令 / 子 Agent 还在跑（#2228：跑完会把结果交给它、它接着做；不含助手对话） | 琥珀，呼吸 |
+| `working` 工作中 | 正在跑 | `working` | Claude：herdr 报 `done` / `idle` / `unknown`，但会话有 hook（Persona 的，或全局只报告的）时 hook 的轮次计数说这一轮没结束（见下「hook 的轮次信号」）；没有 hook 的会话是终端标题是 Claude Code 工作中的转圈字形（◐◓◑◒，旧版是盲文点阵），或 transcript 里这一轮已经开始、还没结束（没有 `turn_duration`、没被中断）且 45 秒内写过（#2069；transcript 里这一轮已经结束时照 herdr 的）；或这一轮停了、但它的后台命令 / 子 Agent 还在跑（#2228：跑完会把结果交给它、它接着做；不含助手对话） | 琥珀，呼吸 |
 | `unread` 完成未看 | 一轮做完，结果还没看 | `done`（herdr 没被聚焦过） | 且 App 里在它完成之后没看过 | 绿 |
 | `idle` 已看 | 做完且看过，等输入 | `idle`（herdr 里看过） | 或 herdr 还是 `done` 但 App 里看过 | 灰 |
 | `offline` 未运行 | 不在宿主里，只有 transcript，发消息会 `--resume` | — | — | 浅灰 |
@@ -16,6 +16,52 @@ App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计�
 | `unknown` 未知 | 宿主认出了 agent 但判断不了状态 | `unknown` | — | 灰 |
 
 排序优先级：需要你 → 工作中 → 完成未看 → 已看 → 未知 → 未运行。
+
+### hook 的轮次信号
+
+herdr 的状态常常不对（`done` 还在干活，#2069），标题字形和 transcript 的修改时间只是推断。Persona 启动的 Claude 会话带 Persona 的 hook，用户自己起的会话在打开 `claude_global_hooks` 后由全局只报告的 hook（`claude-integration.md`「全局只报告的 hooks」）
+报同样的 `UserPromptSubmit` / `Stop`，两路进同一套计数：它们直接说一轮什么时候开始、什么时候结束，node 据此判断（`server/internal/node/hookturn.go` 的 `judgeHookTurn`，`claudeStatus` 调用）。
+借鉴 moshi-hook 的做法，每个会话在 node 内存里记：
+
+| 字段 | 来源 | 用途 |
+| --- | --- | --- |
+| `prompts` | 每个 `UserPromptSubmit` 加一 | 开了几轮 |
+| `completed` | `Stop` 时置为当时的 `prompts` | 答完了几轮 |
+| 进程 pid + 启动时刻 | hook 进程往上找到 claude（`~/.claude/sessions/<pid>.json` 的 `sessionId` 对得上的那个祖先），Linux 取 `/proc/<pid>/stat` 第 22 项，存成 `linux:<starttime>`；macOS 取不到启动时刻，只存 pid | 分清活着的 claude 和被复用的 pid |
+| 回复签名 | `Stop` 的 `last_assistant_message` 去空白后的 SHA-256 前 8 字节 | hub 给「完成」推送去重 |
+
+两路来源的区别只在两点，别的都一样：Persona 启动的会话（含助手）只算插件 hook 的那一份，全局那一份在计数**之前**就丢掉，否则一次提交数两次；
+全局的事件带 `report_only`，hub 不据此认为会话有 Persona 的 hook（否则屏幕卡片会为一张不来的 hook 卡片白等）。
+
+判断（herdr 说 `done` / `idle` / `unknown` 时；`blocked`、`working` 照 herdr）：
+
+- **有 hook 且 `prompts > completed`**：工作中，覆盖 herdr 的 `done`。
+- **有 hook 且 `prompts == completed` 并且见过 `Stop`**：没在工作，终端标题里残留的转圈字形也不算。例外：transcript 里有一轮在 `Stop` 之后（加 5 秒宽限，让收尾的几行写完）才写的、还没结束的，
+  是 hook 没通知的新一轮（后台任务或 `/loop` 唤醒 Claude、Stop hook 又让它接着干），这一轮按没有 hook 的规则判断。
+- **什么都没数到**（node 刚重启、只收到 `SessionStart`）：hook 没有发言，照没有 hook 的会话判断。计数在内存里，重启后第一个 `UserPromptSubmit` / `Stop` 起重新有效；这是安全的方向，
+  所以不进 Postgres、没有迁移。
+- **agent 进程不在了或启动时刻对不上**（pid 被别的程序复用）：丢掉这个会话的 hook 状态，一个死进程留下的「没结束的一轮」不再算工作中，改走没有 hook 的规则。
+  没直接判成未运行，因为同一个会话可能已经被手动 `claude --resume` 在同一个窗格里接着跑（那时没有 hook）；窗格里真没有 agent 时，herdr 本来就不列它。
+
+**中断（Esc）不触发 `Stop`**，所以 `prompts > completed` 会一直不平。按这个顺序结束这一轮：
+
+1. transcript 末尾在这次 prompt **之后**写了结束标记（`[Request interrupted by user]` 或 `turn_duration`）：结束。
+2. 标题没有转圈字形，且 transcript 自 prompt 或最后一次写入起安静了 8 秒，标题是 Claude 的等待标记 ✳：结束（✳ 是 Claude 自己画的「在等输入」，证据足）。
+3. 同上但标题认不出来（旧版本、用户自己改了标题）：安静 90 秒（`2 × claudeFresh`）才结束，因为长工具调用可以很久不写 transcript。
+4. 标题有转圈字形：一直算工作中，长时间没输出的工具调用不会被误判。
+
+有 `UserPromptSubmit` 却没有 `Stop` 的情况（本地命令是否如此没有实测）走同一条路。
+
+**完成推送去重**：推送由 hub 在状态 working → done 时发出，状态抖动（working → done → working → done）可能给同一轮发两次。node 把 `Stop` 的回复签名放进 `hook.event`（`stop_sig`），
+hub 在发「完成」推送前比较：同一个会话、同一个签名、中间没有新的 `UserPromptSubmit`，就不发第二次（`Machine.stopDuplicate`）。
+全局只报告的 `Stop` 也带签名，照样去重。没有签名（没有 hook、`Stop` 没带回复）的不拦；新的 prompt 清掉记录，所以两轮碰巧回复一样（「好的」）也都会推。hub 重启后记录丢失，最坏多推一次。
+
+**同一套防 pid 复用的做法也用在「别处已打开」的判断上**（`openelsewhere.go`）：Claude Code 自己写的 `sessions/<pid>.json` 带 `procStart`（Linux 上就是 `/proc/<pid>/stat` 第 22 项，实测一致），
+留着的旧文件对应的 pid 被别的程序占用时，以前被当成「这个会话在别处开着」而拒绝从手机恢复；现在启动时刻对不上就算那个 claude 已经退出。
+
+未验证 / 已知局限：Claude Code 的后台任务唤醒、`/loop` 到点是否触发 `UserPromptSubmit` 没有实测（按触发和不触发两种情况都能判对，见上面的例外）；
+macOS 上 pid 复用的防护只有「进程是否还活着」；Windows 上找不到祖先进程，不记 pid，其余信号照常。
+Claude Code 自己写的 `sessions/<pid>.json` 还有 `status`（busy / idle）和 `statusUpdatedAt`，今后可以当作另一路信号（本次没用）。
 
 **工作态**（2026-11-04，#1686，[agent-work.md](agent-work.md)）：上面是宿主视角，「完成未看」只说明这一轮停了。hub 在一轮停下后分诊，
 给会话加上工作态 `work`：工作中 / 卡在具名的前置条件上（等你决定、等另一个 Agent、等外部事件、瞬时错误）/ 做完了，带一行「在等什么」或结论。

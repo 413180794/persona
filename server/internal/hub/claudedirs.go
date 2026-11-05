@@ -67,7 +67,7 @@ func (m *Machine) botmux() bool { return m.cfg.Botmux == nil || *m.cfg.Botmux }
 func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer) {
 	params := map[string]any{"machine_id": m.cfg.ID, "codex": m.codexConfig(ctx), "claude_dirs": m.claudeDirs(ctx),
 		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux(), "claude_start_dir": m.cfg.ClaudeStartDir,
-		"herdr_autostart": m.herdrAutostart(ctx)}
+		"herdr_autostart": m.herdrAutostart(ctx), "claude_global_hooks": m.cfg.ClaudeGlobalHooks}
 	// The sessions it lists however quiet are the assistant's to say (its profile); before it said, the node keeps
 	// what it has.
 	if keep, ok := m.hub.keptOn(m.cfg.ID); ok {

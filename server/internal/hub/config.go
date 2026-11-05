@@ -60,6 +60,10 @@ type MachineConfig struct {
 	// HerdrAutostart false: the machine's node never starts herdr's server itself when it is not running
 	// (docs/engines.md「herdr 没在运行时」); unset starts it when needed.
 	HerdrAutostart *bool `json:"herdr_autostart,omitempty"`
+	// ClaudeGlobalHooks true: the machine's node puts report-only hooks into its default claude config directory's
+	// settings.json, so the sessions Persona did not start report their turns and cards too (docs/claude-integration.md
+	// 「全局只报告的 hooks」). Off unless set; false (or removing the key) takes them out again.
+	ClaudeGlobalHooks bool `json:"claude_global_hooks,omitempty"`
 
 	// ClaudeStartDir is the CLAUDE_CONFIG_DIR the agents Persona starts with plain claude use on this machine, for a
 	// computer whose claude is logged in under a profile directory rather than ~/.claude (#1459); "~/" is the remote

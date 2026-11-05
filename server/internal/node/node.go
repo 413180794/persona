@@ -90,6 +90,7 @@ type Node struct {
 	events    *herdrEvents               // herdr's event stream (herdrevents.go)
 	hostSig   map[string]*watcherSignals // change signals of the registered watcher hosts, by host kind (herdrevents.go)
 	cdirs     *claudeDirs                // Claude Code config directories in use (claudedirs.go)
+	hooks     *hookTurns                 // per-session turn counters from Persona's hooks (hookturn.go)
 	codices   *codexRegistry
 	machineID string
 	sends     sentLog         // recent client_msg_ids (sendsafe.go)
@@ -196,6 +197,7 @@ func New(version string) (*Node, error) {
 		driving:  map[string]bool{},
 		events:   newHerdrEvents(),
 		cdirs:    newClaudeDirs(),
+		hooks:    &hookTurns{},
 		codices:  newCodexRegistry(),
 		runtimes: newRuntimeRegistry(),
 	}
@@ -475,6 +477,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			// HerdrAutostart: start herdr's server when it is not running (hub.json machines[].herdr_autostart,
 			// herdrstart.go); nil (an older hub) leaves it on.
 			HerdrAutostart *bool `json:"herdr_autostart"`
+			// ClaudeGlobalHooks: report-only hooks in the default claude config directory's settings.json
+			// (hub.json machines[].claude_global_hooks, globalhooks.go); nil (an older hub) leaves them as they are.
+			ClaudeGlobalHooks *bool `json:"claude_global_hooks"`
 		}
 		if err := json.Unmarshal(params, &c); err != nil {
 			return nil, err
@@ -506,6 +511,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if c.HerdrAutostart != nil {
 			n.setHerdrAutostart(*c.HerdrAutostart)
+		}
+		if c.ClaudeGlobalHooks != nil {
+			n.applyGlobalHooks(*c.ClaudeGlobalHooks)
 		}
 		return map[string]any{"claude_dirs": n.claudeConfigDirs()}, nil
 	case "launchers.list":

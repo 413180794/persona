@@ -31,18 +31,27 @@ func peerPID(c net.Conn) (int, error) {
 	return int(cred.Pid), nil
 }
 
-// parentPID is pid's parent process (/proc/<pid>/stat: the field after the name in parentheses).
-func parentPID(pid int) (int, error) {
+// procStat is the fields of /proc/<pid>/stat after the process name (which may hold spaces and parentheses, so it is
+// found from the right): index 0 is field 3, the state.
+func procStat(pid int) ([]string, error) {
 	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	s := string(b)
 	i := strings.LastIndexByte(s, ')')
 	if i < 0 {
-		return 0, fmt.Errorf("/proc/%d/stat: no name", pid)
+		return nil, fmt.Errorf("/proc/%d/stat: no name", pid)
 	}
-	f := strings.Fields(s[i+1:])
+	return strings.Fields(s[i+1:]), nil
+}
+
+// parentPID is pid's parent process (field 4 of /proc/<pid>/stat).
+func parentPID(pid int) (int, error) {
+	f, err := procStat(pid)
+	if err != nil {
+		return 0, err
+	}
 	if len(f) < 2 {
 		return 0, fmt.Errorf("/proc/%d/stat: short", pid)
 	}

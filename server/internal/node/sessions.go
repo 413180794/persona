@@ -1531,25 +1531,47 @@ const claudeFresh = 45 * time.Second
 
 // claudeStatus is a Claude's status with its own signs of work over its host's (#2069: herdr 0.9.3 said done through a
 // whole turn started from the phone, so the app showed it as finished while it searched code). When the host says
-// done, idle or does not know, it is working while its terminal title shows Claude Code's spinner, or its transcript has
-// a turn started and not finished (no turn_duration, no interrupt) written to within claudeFresh. A transcript whose
-// turn has finished keeps the host's word: a title read just before Claude redrew it says nothing then.
+// done, idle or does not know:
+//
+//   - a session that runs Persona's hooks is judged by their turn counters first (judgeHookTurn): a prompt no Stop has
+//     answered is working, a Stop with no prompt after it is not;
+//   - otherwise, or while the hooks have said nothing yet, it is working while its terminal title shows Claude Code's
+//     spinner, or its transcript has a turn started and not finished (no turn_duration, no interrupt) written to
+//     within claudeFresh. A transcript whose turn has finished keeps the host's word: a title read just before Claude
+//     redrew it says nothing then.
+//
+// Hooks whose claude process is gone (or whose pid now belongs to another program) are forgotten.
 func (n *Node) claudeStatus(id string, a host.Agent, now time.Time) string {
 	if a.Agent != "claude" || a.AgentStatus != proto.StatusDone && a.AgentStatus != proto.StatusIdle && a.AgentStatus != proto.StatusUnknown {
 		return a.AgentStatus
 	}
 	var m quickMeta
-	fresh := false
+	var mod time.Time
+	hasFile := false
 	if p := n.transcriptPath(id); p != "" {
 		if st, err := os.Stat(p); err == nil {
-			m = n.meta(p, st)
-			fresh = now.Sub(st.ModTime()) < claudeFresh
+			m, mod, hasFile = n.meta(p, st), st.ModTime(), true
+		}
+	}
+	fresh := hasFile && now.Sub(mod) < claudeFresh
+	spinner := claudeSpinnerTitle(a.RawTitle)
+	if t, ok := n.hooks.get(id); ok {
+		if t.pid > 0 && !processAlive(t.pid, t.start) {
+			n.hooks.forget(id) // a dead process' turn is over, and a reused pid is not it
+		} else {
+			switch judgeHookTurn(hookSignals{turn: t, spinner: spinner, waiting: claudeWaitingTitle(a.RawTitle), hasFile: hasFile,
+				fileMod: mod, turnOpen: m.claudeTurn, turnClosed: m.turnClosed, now: now}) {
+			case hookWorking:
+				return proto.StatusWorking
+			case hookResting:
+				return a.AgentStatus
+			}
 		}
 	}
 	switch {
 	case m.turnClosed:
 		return a.AgentStatus
-	case claudeSpinnerTitle(a.RawTitle), m.claudeTurn && fresh:
+	case spinner, m.claudeTurn && fresh:
 		return proto.StatusWorking
 	}
 	return a.AgentStatus
@@ -1560,6 +1582,12 @@ func (n *Node) claudeStatus(id string, a host.Agent, now time.Time) string {
 func claudeSpinnerTitle(title string) bool {
 	r, _ := utf8.DecodeRuneInString(strings.TrimSpace(title))
 	return r >= '◐' && r <= '◓' || r >= 0x2800 && r <= 0x28FF
+}
+
+// claudeWaitingTitle: the title starts with the mark Claude Code shows in it while it waits for input (✳).
+func claudeWaitingTitle(title string) bool {
+	r, _ := utf8.DecodeRuneInString(strings.TrimSpace(title))
+	return r == '✳'
 }
 
 // pollAgents refreshes the hosts' state every second (only the ones due) and pushes sessions.changed when anything

@@ -312,3 +312,34 @@ func TestConfigureNodeSaysClaudeStartDir(t *testing.T) {
 		t.Fatalf("not looked in: %v", m.claudeDirs(ctx))
 	}
 }
+
+// hub.json machines[].claude_global_hooks reaches the node on every connect, off unless set: the node needs the false
+// to take the entries out again.
+func TestConfigureNodeSaysClaudeGlobalHooks(t *testing.T) {
+	_, _, m, _ := dirsHub(t)
+	f := connectDirsNode(t, m)
+	ctx := context.Background()
+	m.configureNode(ctx, m.peer)
+	m.cfg.ClaudeGlobalHooks = true
+	m.configureNode(ctx, m.peer)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.configure) != 2 || string(f.configure[0]["claude_global_hooks"]) != "false" || string(f.configure[1]["claude_global_hooks"]) != "true" {
+		t.Fatalf("claude_global_hooks in node.configure: %v", f.configure)
+	}
+}
+
+// A report-only hook event (node/globalhooks.go) is not Persona's hooks running in the session: the hub must not wait
+// for them to ask for a card (hasHooks), but a hook of Persona's own still counts.
+func TestReportOnlyHookEventDoesNotMeanPersonaHooks(t *testing.T) {
+	h := newTestHub(t)
+	m := newMachine(h, MachineConfig{ID: "box", Name: "box"})
+	m.onEvent("hook.event", json.RawMessage(`{"session_id":"s-report","event":"Stop","report_only":true}`))
+	if m.hasHooks(proto.Session{SessionID: "s-report"}) {
+		t.Error("a report-only event made the hub wait for a card that never comes")
+	}
+	m.onEvent("hook.event", json.RawMessage(`{"session_id":"s-own","event":"Stop"}`))
+	if !m.hasHooks(proto.Session{SessionID: "s-own"}) {
+		t.Error("a hook event of Persona's own no longer counts")
+	}
+}

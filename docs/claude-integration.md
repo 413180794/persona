@@ -158,6 +158,50 @@ hooks、MCP 和技能插件都是 node 启动时写出来的文件，坏了没�
 - `hub doctor` 管 hub 的配置和网络，不管这些；node 这边的检查另起 `node doctor`，没有往 `hub doctor` 里塞。
 - 测试在临时目录里跑（`node/doctor_test.go`）；手动试 `--fix` 用临时 `HOME`，别对真实的 `~/.persona` 跑。
 
+## 全局只报告的 hooks（可选，默认关）
+
+Persona 只在自己启动的 claude 上有 hooks（上一节）。用户自己在 herdr 里起的会话没有，状态和卡片靠读屏幕和 transcript 推断（脆弱：TUI 卡片、多选、预览）。
+`hub.json` 的 `machines[].claude_global_hooks: true` 让那台机器的 node 往**默认配置目录**（`$CLAUDE_CONFIG_DIR` 或 `~/.claude`）的 `settings.json` 里加一组只报告的 hooks，
+这样别的会话也把回合和提问事件告诉 Persona。不写就是关；写 `false` 或删掉这个键，下次 node 连上时把 Persona 加的条目拿掉。
+手改 `hub.json` 要重启 hub，node 重连时生效（和 `botmux`、`herdr_autostart` 一样走 `node.configure`）。
+
+**为什么不能直接把 Persona 的 hooks 装到全局**：全局 `settings.json` 里常常已经有别的工具的同步 `PermissionRequest` hook（本机的 moshi-hook、Orca）。
+再加一个会阻塞的就会叠加审批：第一个阻塞的 hook 拖住后面的和终端对话框；而 Persona 的提问 / 授权 hook 要等手机（`timeout` 86400），
+装进全局之后坐在电脑前的人在终端里也答不了，直到手机回答或超时。这和 `codex.md` 不采用 Codex 的 `PermissionRequest` hook 是同一个原因。所以全局这一组：
+
+- **只报告**：SessionStart、UserPromptSubmit、Stop、Notification，以及 AskUserQuestion / ExitPlanMode 的 PreToolUse、PostToolUse（卡片出现和被回答的信号）。
+  每一条都是 `async: true`、`timeout: 10`；**没有** PermissionRequest、Elicitation，也没有会等手机的 PreToolUse。
+- **不回答**：这些会话的手机回答照旧走屏幕卡片和按键（`多选提问的屏幕卡` 一节）。
+- **hook 进程**：命令是 `<personad> hook --persona-global`（`runHook`）。没有 herdr / Orca 窗格的环境变量（`HookPane` 为空）或 `node.sock` 不存在就**立刻退出、什么也不输出**，不连 socket、不等；
+  连上了最多等 3 秒，输出永远为空。和插件的 hook 一样带上它所在 claude 的 pid 和启动时刻，计数才防得住 pid 复用。
+- **不重复报告**：Persona 自己启动的会话已经加载 `persona-hooks` 插件，全局这组不能再报一遍。node 按会话 id 认：`n.state` 里有的（Persona 启动的、恢复的、fork 的）和助手会话一律不处理，也不进轮次计数
+  （`takesReport`，`node/hooks.go`）。用环境变量标记要改 Persona 的启动命令（在用户的 shell 函数前面加变量赋值，fish 和 zsh 行为不同），所以没有这样做。
+- **不绑窗格**：全局这组不调 `bindPane`。tmux 服务器（botmux）会把 `HERDR_PANE_ID` 传给它后来起的每个 claude，按这个绑会把窗格从真正在里面的 claude 手里抢走（见「会话 id 与 transcript」）。
+  窗格对哪个会话由 node 自己找。
+- **hub 不当成 Persona 的 hooks**：node 的 `hook.event` 带 `report_only: true`，hub 不把这个会话记进 `hooked`（`hasHooks`）。否则屏幕卡片会为一张永远不来的 hook 卡片白等 1.5 秒。
+  `hook_event` 事件照旧广播（用于刷新会话运行状态，`protocol.md`），`Stop` 的 `stop_sig` 照样去重。
+- **照样驱动轮次计数**：用户自己起的会话只有这组信号可用，`UserPromptSubmit` / `Stop` 进 node 的轮次计数，状态怎么判见 `agent-states.md`「hook 的轮次信号」。
+
+**写 `settings.json` 的规矩**（`node/globalhooks.go`）：
+
+- 只加 / 只删**带标记的条目**。标记是命令本身以 `hook --persona-global` 结尾，别的工具的命令不会这样写。同一个 matcher 组里用户自己加了别的 hook 时，只拿掉我们那条。
+- 幂等：已经是想要的内容就**不写文件**（也不备份、不动排版）；Persona 二进制换了路径，旧条目被替换，不会重复。
+- 其他键、其他工具的 hooks 原样保留，顺序不变；因为是经 JSON 编码器写回，排版统一成文件自己的缩进（取第一行缩进，没有就两个空格），原文件的行内数组会展开。
+  `&`、`<` 不转义。文件权限不变，经符号链接（dotfiles 管理）写到真实文件，链接还在。
+- 改之前先备份成 `settings.json.persona-bak-<UTC 时间>`（只在真的要改的时候）。文件不是 JSON 对象、`hooks` 不是对象、某个事件不是列表时一律不碰，只记日志。
+- 配置目录不存在（这台机器没装 claude）不创建。只管默认配置目录；用 `CLAUDE_CONFIG_DIR` 起的别的 profile 目录不动（那是启动器的文件）。
+- 和 Claude Code 自己同时写 `settings.json` 有极小的竞争窗口（先写临时文件再改名，不会写出半个文件，但可能丢掉另一边刚写的那一下）。
+
+**为什么没选 `CLAUDE_CODE_PLUGIN_DIRS`**（2026-11-04，Claude Code 2.1.318 实测）：这个环境变量**真实存在**。`claude --help` 里没有，但二进制里有读取它的代码：
+值是绝对路径的列表，分隔符是平台的 PATH 分隔符（`path.delimiter`，Linux / macOS 是 `:`），不接受 `~` 开头的和非绝对路径（跳过并警告），
+和 `--plugin-dir` 合并（重复的去掉）；报错提示里说「在环境里，或在设置的 `env` 块里」设置，也就是 `settings.json` 的 `env` 也行。
+没选它是因为它只有**一个变量**：本机的 moshi-hook 已经把自己的插件目录写在全局 `settings.json` 的 `env.CLAUDE_CODE_PLUGIN_DIRS` 里，
+Persona 要用就得去改别人写的那个值（moshi 重装时多半又会改回去）；而 `hooks` 是按事件叠加的，互不覆盖。
+shell 里 `export` 能不能被 `settings.json` 的 `env` 盖掉，这里没有验证。没有这个冲突的机器，也可以自己让一个 Persona 写的插件目录进这个变量。
+
+**没验证的**：真实 Claude Code 对这组条目的触发（`async` 在 `settings.json` 里的 hooks 已被本机别的工具使用，字段本身没问题，但这组条目没有在真实会话里跑过）；
+`PreToolUse` 的 matcher 写成 `AskUserQuestion` / `ExitPlanMode` 两个组而不是一个 `|` 的写法，是照别的工具的写法；Windows 上命令的引号。
+
 ## MCP elicitation hooks
 
 2026-10-31 在本机只读核对：`claude --version` 输出 **2.1.306（Claude Code）**，安装包的 `package.json` 版本同为 `2.1.306`。这是本次实际运行的版本，和本文其他章节此前记录的版本分开看。
@@ -208,7 +252,7 @@ Persona 的接入约定：
 
 用户自己用启动器起的 claude（比如 profile 目录下的 `--settings <profile>/settings.json`）不加载 Persona 的 hooks（上一节只注入 Persona 启动的会话），
 AskUserQuestion 就弹在终端里，手机上只有屏幕卡。以前屏幕卡不认多选，把 `[ ] 甲` 当成选项文字、按数字只是勾一下、也找不到提交，所以「提交不了」。
-不替用户往他自己的配置目录里装 hooks（那是用户的文件）；改成屏幕卡认得多选、答得了。
+默认不替用户往他自己的配置目录里装 hooks（那是用户的文件；可选的只报告 hooks 见「全局只报告的 hooks」，它也答不了题）；所以改成屏幕卡认得多选、答得了。
 
 多选的样子（`server/internal/screen/testdata/claude-2.1.316-*`，在隔离的 herdr 里录的，文字换成了占位符）：
 

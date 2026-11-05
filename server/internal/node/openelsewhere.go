@@ -49,6 +49,9 @@ type claudeProc struct {
 	ParkedJobID string `json:"parkedJobId"`
 	JobID       string `json:"jobId"` // a background session's job (claudebg.go)
 	Spare       bool   `json:"spare"` // a warm background process no session has claimed yet
+	// ProcStart is when that process started, as Claude Code writes it (on Linux the starttime of /proc/<pid>/stat): a
+	// file left by a claude that exited names a pid that may belong to another program by now.
+	ProcStart string `json:"procStart"`
 }
 
 // liveClaudes reads the sessions/<pid>.json of every claude still running, in every config directory, once per pid.
@@ -71,8 +74,8 @@ func (n *Node) liveClaudes() []claudeProc {
 				continue
 			}
 			c := claudeProc{pid: p}
-			if json.Unmarshal(b, &c) != nil || !alive(p) {
-				continue // a file left by a claude that exited
+			if json.Unmarshal(b, &c) != nil || !sameProcess(p, claudeFileStart(c.ProcStart)) {
+				continue // a file left by a claude that exited (its pid may have been reused)
 			}
 			seen[p] = true
 			out = append(out, c)

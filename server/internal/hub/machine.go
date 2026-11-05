@@ -59,7 +59,10 @@ type Machine struct {
 	watchers  map[string]int // session id -> subscribed clients
 	lastSeq   map[string]int // session id -> highest item seq seen
 	hooked    map[string]bool
-	kick      chan struct{}
+	// stopSig: the signature of the reply each session's latest Stop ended its turn with; pushedSig: the one a
+	// "finished" push was already sent for, cleared when the next prompt comes (stopDuplicate).
+	stopSig, pushedSig map[string]string
+	kick               chan struct{}
 	// deploying: the hub is sending this machine its node build (deploy.go); deployErr: why the last try failed.
 	deploying   bool
 	deployErr   string
@@ -553,12 +556,17 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		var p map[string]any
 		if json.Unmarshal(params, &p) == nil {
 			if sid, _ := p["session_id"].(string); sid != "" {
-				m.mu.Lock()
-				if m.hooked == nil {
-					m.hooked = map[string]bool{}
+				// A report-only hook (node/globalhooks.go) is not Persona's hooks running in the session: it asks for
+				// no card, so it must not hold the screen's back (hasHooks). Its Stop still counts for stopDuplicate.
+				if p["report_only"] != true {
+					m.mu.Lock()
+					if m.hooked == nil {
+						m.hooked = map[string]bool{}
+					}
+					m.hooked[sid] = true
+					m.mu.Unlock()
 				}
-				m.hooked[sid] = true
-				m.mu.Unlock()
+				m.noteStop(sid, p)
 			}
 			p["type"] = "hook_event"
 			p["machine_id"] = m.cfg.ID
@@ -648,6 +656,51 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 	return nil, fmt.Errorf("unknown method %s", method)
 }
 
+// noteStop keeps what a hook event says about completions for stopDuplicate: a Stop's reply signature, and that a
+// prompt starts something new.
+func (m *Machine) noteStop(sid string, p map[string]any) {
+	event, _ := p["event"].(string)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	switch event {
+	case "UserPromptSubmit":
+		delete(m.pushedSig, sid)
+		delete(m.stopSig, sid)
+	case "Stop":
+		sig, _ := p["stop_sig"].(string)
+		if sig == "" {
+			delete(m.stopSig, sid)
+			return
+		}
+		if m.stopSig == nil {
+			m.stopSig = map[string]string{}
+		}
+		m.stopSig[sid] = sig
+	}
+}
+
+// stopDuplicate says whether the "finished" push about to go out repeats one already sent: the same reply (by the
+// signature the node hashed from the Stop hook's last_assistant_message) with no prompt in between. That is the same
+// completion seen twice, as when the status flaps working → done → working → done around one turn. A session without
+// hooks, or a Stop without a reply, has no signature and is never held back. Otherwise it records the push. In
+// memory: after a hub restart at worst one repeat gets through.
+func (m *Machine) stopDuplicate(sid string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	sig := m.stopSig[sid]
+	if sig == "" {
+		return false
+	}
+	if m.pushedSig[sid] == sig {
+		return true
+	}
+	if m.pushedSig == nil {
+		m.pushedSig = map[string]string{}
+	}
+	m.pushedSig[sid] = sig
+	return false
+}
+
 // notifyFinished decides, after the delay, whether this end of a turn is worth a push (notify.go) and to which devices.
 func (m *Machine) notifyFinished(id string, gen int) {
 	ncfg := m.hub.cfg.Notify
@@ -669,7 +722,7 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	m.hub.mu.Unlock()
 	seen := agentState(s, m.hub.seenAt(m.cfg.ID, id)) == proto.StateIdle
 	verdict, took := m.hub.turns.settle(m.cfg.ID+"/"+id, gen, s, seen, m.hub.muted(m.cfg.ID, id), pushed, time.Now(), ncfg.backgroundHold())
-	if verdict != finishPush {
+	if verdict != finishPush || m.stopDuplicate(id) {
 		return
 	}
 	title := s.Title

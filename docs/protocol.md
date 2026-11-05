@@ -614,7 +614,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `interaction` | `interaction`（新的待处理，推给所有客户端） |
 | `interaction_resolved` | `id`；助手代答时另带 `answered_by: "assistant"`（#1602） |
 | `fleet` | `fleet`（实时活动汇总，与 HTTP `/api/v1/fleet` 的内容对应） |
-| `hook_event` | node hook 事件的原字段，hub 补 `machine_id` 并置 `type: hook_event`；用于刷新会话运行状态 |
+| `hook_event` | node hook 事件的原字段，hub 补 `machine_id` 并置 `type: hook_event`；用于刷新会话运行状态；`Stop` 带 `stop_sig`（回复签名，hub 用来给「完成」推送去重，见 `agent-states.md`「hook 的轮次信号」）；全局只报告的 hooks（`claude-integration.md`「全局只报告的 hooks」）带 `report_only: true`，hub 不据此认为会话有 Persona 的 hooks，其余照旧 |
 | `tool_call` | `call_id`, `name`, `args`（只发给已 `register_phone` 且提供该工具的手机） |
 | `desktops` | `desktops`：连着的桌面端（Mac App），`[{"device","name","since"}]`，`device` 是它的设备凭据 id（用配对凭据连的为空，不能单独退出）。连上时发一次，之后有桌面端连上 / 断开就推给所有客户端（feature `desktops`）。iPhone 据此显示「Mac 上的 Persona 已登录」 |
 | `notify` | `kind: interaction / done / assistant`、`machine_id`、`session_id`、`title`、`subtitle`、`body`，交互另带 `interaction_id`；只发给声明 `ws_notify` 的连接，见下文 |

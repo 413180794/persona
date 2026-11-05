@@ -389,6 +389,10 @@ func runHook(ctx context.Context) {
 	if err != nil || !json.Valid(input) {
 		return
 	}
+	if len(os.Args) > 2 && os.Args[2] == "--persona-global" { // an entry in the user's settings.json: report only
+		node.ReportHook(ctx, input, node.HookPane(os.Getenv))
+		return
+	}
 	out := node.Hook(ctx, input, node.HookPane(os.Getenv))
 	if len(out) == 0 {
 		return

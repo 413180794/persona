@@ -47,6 +47,11 @@ type sockRequest struct {
 	// Attempt is the hook process's own id, the same on each reconnect; Resume marks those reconnects.
 	Attempt string `json:"attempt,omitempty"`
 	Resume  bool   `json:"resume,omitempty"`
+	// AgentPID / AgentStart: the claude the hook runs under and when it started (hookAgent); 0 / "" when not found.
+	AgentPID   int    `json:"agent_pid,omitempty"`
+	AgentStart string `json:"agent_start,omitempty"`
+	// ReportOnly: the hook is one of the global report-only entries (globalhooks.go), which never ask the phone.
+	ReportOnly bool `json:"report_only,omitempty"`
 }
 
 func (n *Node) listenHookSocket(ctx context.Context) (net.Listener, error) {
@@ -251,7 +256,19 @@ func interactionID(in hookInput, attempt string) string {
 // errNodeGone when this node lost the hub before the phone answered.
 func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	var in hookInput
-	if json.Unmarshal(req.Input, &in) != nil || n.peer == nil {
+	if json.Unmarshal(req.Input, &in) != nil {
+		return nil, nil
+	}
+	if req.ReportOnly && !n.takesReport(in) {
+		return nil, nil // before the counters: a session the plugin reports for would count each prompt twice
+	}
+	stopSig := n.recordHookTurn(req, in, time.Now())
+	if n.peer == nil {
+		return nil, nil
+	}
+	if req.ReportOnly {
+		n.rememberTranscript(in)
+		n.notifyHookEvent(in, stopSig, true)
 		return nil, nil
 	}
 	// An Orca pane is bound only on a machine whose engine is Orca: elsewhere nothing could drive it, and the hook
@@ -262,17 +279,9 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	if in.HookEventName == "SessionStart" {
 		n.resumeOnSessionStart(req.Pane, in.SessionID) // herdr's restore follows it to the new session (herdrresume.go)
 	}
-	if in.TranscriptPath != "" && validID(in.SessionID) {
-		n.mu.Lock()
-		n.paths[in.SessionID] = in.TranscriptPath
-		delete(n.pathsAt, in.SessionID) // Claude said so: no need to look again
-		n.mu.Unlock()
-	}
+	n.rememberTranscript(in)
 	if !req.Resume { // the event was reported on the first attempt
-		_ = n.peer.Notify("hook.event", map[string]any{
-			"session_id": in.SessionID, "event": in.HookEventName, "tool_name": in.ToolName,
-			"message": in.Message, "last_assistant_message": snippet(in.LastAssistantMessage), "cwd": in.Cwd,
-		})
+		n.notifyHookEvent(in, stopSig, false)
 	}
 
 	ix := proto.Interaction{
@@ -397,6 +406,74 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	return nil, nil
 }
 
+// recordHookTurn feeds the session's turn counters (hookturn.go) from a hook event and returns the signature of the
+// reply a Stop ended the turn with. A subagent's events and a reconnecting hook's repeat do not count: they are not
+// the main agent's turns.
+func (n *Node) recordHookTurn(req sockRequest, in hookInput, now time.Time) (stopSig string) {
+	if req.Resume || in.AgentID != "" || !validID(in.SessionID) {
+		return ""
+	}
+	n.hooks.agent(in.SessionID, req.AgentPID, req.AgentStart, now) // before counting: a new process starts from zero
+	switch in.HookEventName {
+	case "UserPromptSubmit":
+		n.hooks.prompt(in.SessionID, now)
+	case "Stop":
+		n.hooks.stop(in.SessionID, now)
+		return stopSignature(in.LastAssistantMessage)
+	}
+	return ""
+}
+
+// rememberTranscript keeps the transcript path a hook names for its session.
+func (n *Node) rememberTranscript(in hookInput) {
+	if in.TranscriptPath == "" || !validID(in.SessionID) {
+		return
+	}
+	n.mu.Lock()
+	n.paths[in.SessionID] = in.TranscriptPath
+	delete(n.pathsAt, in.SessionID) // Claude said so: no need to look again
+	n.mu.Unlock()
+}
+
+// notifyHookEvent tells the hub what a hook saw. reportOnly marks an event from a global hook (globalhooks.go), so
+// that the hub does not take the session for one with Persona's hooks, which would hold its screen cards back for a
+// hook card that never comes (hub/machine.go, hasHooks). stopSig lets the hub tell a second completion of the same
+// reply from a new one.
+func (n *Node) notifyHookEvent(in hookInput, stopSig string, reportOnly bool) {
+	p := map[string]any{
+		"session_id": in.SessionID, "event": in.HookEventName, "tool_name": in.ToolName,
+		"message": in.Message, "last_assistant_message": snippet(in.LastAssistantMessage), "cwd": in.Cwd,
+		"stop_sig": stopSig,
+	}
+	if reportOnly {
+		p["report_only"] = true
+	}
+	_ = n.peer.Notify("hook.event", p)
+}
+
+// reportedEvent: what a global report-only hook (globalhooks.go) may tell the hub; the tools are the cards.
+func reportedEvent(in hookInput) bool {
+	switch in.HookEventName {
+	case "SessionStart", "UserPromptSubmit", "Stop", "Notification":
+		return true
+	case "PreToolUse", "PostToolUse":
+		return in.ToolName == "AskUserQuestion" || in.ToolName == "ExitPlanMode"
+	}
+	return false
+}
+
+// takesReport says whether an event from a global report-only hook is for the hub and the counters. A session Persona
+// started or the assistant reports through its own hooks (hooksplugin.go), so it is not taken twice. A report-only
+// event never binds a pane (a claude that a tmux server started inherits the pane's variable without being in it, and
+// would take the pane from the claude that is; the node finds the session of a pane by itself, sessions.go).
+func (n *Node) takesReport(in hookInput) bool {
+	if !validID(in.SessionID) || !reportedEvent(in) {
+		return false
+	}
+	_, ours := n.state.get(in.SessionID)
+	return !ours && !n.isAssistantSession(in.SessionID)
+}
+
 func permissionDecision(d map[string]any) any {
 	return map[string]any{"hookSpecificOutput": map[string]any{"hookEventName": "PermissionRequest", "decision": d}}
 }
@@ -484,6 +561,7 @@ func HookPane(getenv func(string) string) string {
 // No node at all: nil at once, the TUI asks as usual.
 func Hook(ctx context.Context, input json.RawMessage, pane string) json.RawMessage {
 	req := sockRequest{Kind: "hook", Input: input, Pane: pane, Attempt: newUUID()}
+	req.AgentPID, req.AgentStart = hookAgentOf(input)
 	// A live node answers by the interaction's expiry; a socket that is there but never answers must not hold Claude.
 	ctx, cancel := context.WithTimeout(ctx, HookTimeout+ResumeWait)
 	defer cancel()
@@ -534,6 +612,36 @@ func dialResumable(ctx context.Context, dial Dialer, req sockRequest) ([]byte, e
 		req.Resume = true
 		line, err = dial(ctx, req)
 	}
+}
+
+// hookAgentOf finds the claude this hook process runs under (hookAgent), by the session id in its input.
+func hookAgentOf(input json.RawMessage) (pid int, start string) {
+	var who struct {
+		SessionID string `json:"session_id"`
+	}
+	_ = json.Unmarshal(input, &who)
+	home, _ := os.UserHomeDir()
+	return hookAgent(who.SessionID, os.Getppid(), claudeDirOf(home), parentPID)
+}
+
+// reportTimeout is how long a report-only hook waits for the node; it asks for nothing, so a node that does not
+// answer at once is not worth holding the process for.
+const reportTimeout = 3 * time.Second
+
+// ReportHook hands a global report-only hook's input to the node and returns at once when there is nothing to report
+// to: not in a pane Persona knows, or no node socket. It prints nothing either way (the entries are async).
+func ReportHook(ctx context.Context, input json.RawMessage, pane string) {
+	if pane == "" {
+		return
+	}
+	if _, err := os.Stat(SocketPath()); err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, reportTimeout)
+	defer cancel()
+	req := sockRequest{Kind: "hook", Input: input, Pane: pane, ReportOnly: true}
+	req.AgentPID, req.AgentStart = hookAgentOf(input) // the counters need it as much as a plugin hook's do
+	_, _ = DialSocket(ctx, req)
 }
 
 // resumeRetry is how often a resuming hook tries the node socket.

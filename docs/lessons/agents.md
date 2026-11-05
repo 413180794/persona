@@ -232,3 +232,24 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
   记下的选择也要绑定当时的连接和 thread，换了就作废。
 - 实测方法：临时 `CODEX_HOME` 里起 stdio 的 `codex app-server`，`thread/start` 不需要登录也不调模型，能验设置类接口；别碰正在用的 `~/.codex`。
   详见 `docs/codex.md`「思考强度」。
+
+## 中断（Esc）不触发 Stop，pid 文件自带 procStart（2026-11-04）
+
+- Claude 的 `Stop` hook 只在一轮正常结束时触发，Esc 中断没有 `Stop`（本地斜杠命令有没有没实测）：只数 hook 会让「提交数 > 完成数」永远不平。
+  node 的 `judgeHookTurn` 用 transcript 的中断行和标题的 ✳ 等待标记兜底，见 `docs/agent-states.md`「hook 的轮次信号」。
+- `~/.claude/sessions/<pid>.json` 里有 `procStart`（Linux 上等于 `/proc/<pid>/stat` 第 22 项，五个实例都对得上）、`pidDomain`、`status`（busy / idle）和 `statusUpdatedAt`。
+  判断一个 pid 文件是不是还活着的那个 claude，别只 `kill -0`：pid 被别的程序复用后会一直显示「别处开着」，要把 `procStart` 和当前进程的启动时刻比。
+- hook 进程的父进程多半是 shell，不是 claude：找 agent 进程要往上走，取 `sessions/<pid>.json` 的 `sessionId` 对得上的那个祖先，别按进程名猜。
+- 本机的 Go 工具链要和 `go.mod` 一致（1.27.1）；依赖里有 `go 1.27.1` 的模块，降低 `go` 行也编不过。沙箱里 `go` 自动下载工具链失败时，
+  从 go.dev 下载并校验 SHA-256 后解压到临时目录，设 `GOROOT`、`GOTOOLCHAIN=local`（环境里的 `GOROOT` 指向别的版本时不设会用错标准库）。
+
+## 往用户全局 settings.json 装 hooks：只能异步、只报告（2026-11-04）
+
+- 往用户**全局** `~/.claude/settings.json` 装 hooks 之前先看里面已有什么（本机有 moshi-hook、Orca 的同步 `PermissionRequest` hook）：同一事件的 hooks 是叠加的，
+  几个阻塞的 hook 一个接一个跑，终端对话框要等它们都返回；Persona 的授权 / 提问 hook 要等手机（`timeout` 86400），装进全局后坐在电脑前的人在终端里也答不了。
+  所以全局只能装异步、短超时、只报告的（`hub.json machines[].claude_global_hooks`，`docs/claude-integration.md`「全局只报告的 hooks」），阻塞的留在 `--plugin-dir` 的插件里，只管 Persona 启动的会话。
+- `CLAUDE_CODE_PLUGIN_DIRS` 是真的（路径列表，PATH 分隔符，绝对路径），但只有一个变量，别的工具（moshi）已经占了 `settings.json` 的 `env` 里那一份，Persona 再用就得改别人写的值。
+- 全局条目要能认出来：命令以 `hook --persona-global` 结尾，装 / 卸只动这样的条目；不要用 `hook --global` 这类别的工具也会用的词。
+- 全局这组也不能按环境里的 `HERDR_PANE_ID` 绑窗格：tmux 服务器（botmux）起的 claude 继承了它却不在那个窗格里。
+- 全局只报告的事件照样要进轮次计数（它们是用户自己开的会话唯一的 hook 信号），但不能算「这个会话跑着 Persona 的 hooks」：后者让 hub 把屏幕卡片压住等一张永远不来的 hook 卡片；
+  Persona 自己起的会话已经由插件上报，全局这组要在计数之前先丢掉，否则一次提交数两次。见 `docs/agent-states.md`「hook 的轮次信号」。
