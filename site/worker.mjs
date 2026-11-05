@@ -1,4 +1,12 @@
-// The site is static files, except /relay/*: the push relay (docs/push-relay.md), which runs elsewhere (`jarvisd relay`)
+// The site is static files, except /relay/* and the downloads /dl/*.gz.
+//
+// /dl/*.gz (the public personad, docs/release.md「发布 jarvisd」) come from the R2 bucket bound as DL: a Workers static
+// file is at most 25 MiB and personad outgrew it (#2541). publish.sh uploads a release's files to one of two slots,
+// <slot>/<name>, and deploys the site with dl/SLOT naming it; the other slot keeps the release before, so a download
+// that started before a deploy still finishes. The small files (VERSION, SHA256SUMS, latest.json, SLOT) stay static
+// files, deployed with the site: the manifest and the slot it points at change in one deploy.
+//
+// /relay/*: the push relay (docs/push-relay.md), which runs elsewhere (`jarvisd relay`)
 // and is reached at RELAY_ORIGIN, e.g. a Cloudflare Tunnel hostname. Both values are Worker secrets, not in the repo:
 //   npx wrangler secret put RELAY_ORIGIN         # https://<tunnel host>
 //   npx wrangler secret put RELAY_PROXY_SECRET   # the relay's proxy_secret
@@ -22,9 +30,70 @@ function sameSecret(a, b) {
   return d === 0;
 }
 
+const download = /^\/dl\/([A-Za-z0-9][A-Za-z0-9._-]*\.gz)$/;
+
+async function servedSlot(request, env) {
+  const r = await env.ASSETS.fetch(new Request(new URL("/dl/SLOT", request.url)));
+  if (!r.ok) return "";
+  const slot = (await r.text()).trim();
+  return slot === "a" || slot === "b" ? slot : "";
+}
+
+// The bytes R2 returned for a range request, as the start and end (inclusive) of the whole object.
+function rangeOf(object) {
+  const r = object.range;
+  if (!r) return null;
+  if ("suffix" in r) {
+    const length = Math.min(r.suffix, object.size);
+    return { start: object.size - length, end: object.size - 1 };
+  }
+  const start = r.offset ?? 0;
+  const length = r.length ?? object.size - start;
+  return { start, end: start + length - 1 };
+}
+
+async function serveDownload(request, env, name) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
+  }
+  if (!env.DL) return new Response("downloads not configured", { status: 503 });
+  const slot = await servedSlot(request, env);
+  if (!slot) return new Response("not found", { status: 404 });
+  const key = `${slot}/${name}`;
+  const ranged = request.method === "GET" && request.headers.has("range");
+  const object = request.method === "HEAD"
+    ? await env.DL.head(key)
+    : await env.DL.get(key, { onlyIf: request.headers, ...(ranged ? { range: request.headers } : {}) });
+  if (!object) return new Response("not found", { status: 404 });
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  if (!headers.has("content-type")) headers.set("content-type", "application/gzip");
+  headers.set("etag", object.httpEtag);
+  headers.set("accept-ranges", "bytes");
+  headers.set("cache-control", "public, max-age=0, must-revalidate");
+  if (request.method === "HEAD") {
+    headers.set("content-length", String(object.size));
+    return new Response(null, { status: 200, headers });
+  }
+  // onlyIf did not hold: R2 gives the metadata without a body.
+  if (!("body" in object) || !object.body) {
+    return new Response(null, { status: request.headers.has("if-none-match") ? 304 : 412, headers });
+  }
+  const range = ranged ? rangeOf(object) : null;
+  if (range) {
+    headers.set("content-range", `bytes ${range.start}-${range.end}/${object.size}`);
+    headers.set("content-length", String(range.end - range.start + 1));
+    return new Response(object.body, { status: 206, headers });
+  }
+  headers.set("content-length", String(object.size));
+  return new Response(object.body, { status: 200, headers });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const dl = download.exec(url.pathname);
+    if (dl) return serveDownload(request, env, dl[1]);
     if (!url.pathname.startsWith("/relay/")) return env.ASSETS.fetch(request);
     if (!env.RELAY_ORIGIN || !env.RELAY_PROXY_SECRET) {
       return Response.json({ error: "push relay not configured" }, { status: 503 });

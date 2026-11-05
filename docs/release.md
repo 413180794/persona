@@ -267,7 +267,7 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.persona/bin/personad
 
 - `release.sh` 传完 TestFlight 后接着跑它，版本号是 `<提交>-<构建号>`，和这一版 TestFlight 对得上；`NO_PUBLISH=1` 只发 TestFlight，
   配置里没有 `publish.site_url` 也不发。单独跑：`./scripts/release/publish.sh`，`NO_DEPLOY=1` 只编译和检查（产物在 `build-publish/`）。
-- 只改了官网页面（`site/`）：`SITE_ONLY=1 ./scripts/release/publish.sh`，不编译新版，把线上正在发的版本（`SHA256SUMS` 里的每个文件、`VERSION`、`latest.json`、`install.sh`）下载回来、按 `SHA256SUMS` 校验，和已提交的 `site/` 一起部署，部署后核对线上文件没变。这台机器下载大文件常被重置连接时，先在网络稳的机器上把 `SHA256SUMS` 里的文件下到一个目录、拷回来，加 `SITE_ONLY_FROM=<目录>`：小文件照样从线上取，大文件照样按线上的 `SHA256SUMS` 校验。**不要在 `site/` 里直接 `wrangler deploy`**：会让 `/dl/` 和 `install.sh` 404（`docs/lessons/server.md`）。
+- 只改了官网页面（`site/`）：`SITE_ONLY=1 ./scripts/release/publish.sh`，不编译新版，把线上正在发的版本的小文件（`VERSION`、`SHA256SUMS`、`latest.json`、`SLOT`、`install.sh`）取回来，和已提交的 `site/` 一起部署，压缩包留在 R2 里不动；部署后核对线上小文件没变、每个压缩包都还在（`HEAD` 的大小）。线上还没有 `dl/SLOT`（R2 之前的发布）时会拒绝，先完整发一次。**不要在 `site/` 里直接 `wrangler deploy`**：会让 `/dl/` 和 `install.sh` 404（`docs/lessons/server.md`）。
 - 编四个平台（linux / darwin × amd64 / arm64），`-tags public -trimpath -s -w`，写进 `channel=release`、build 号（UTC `YYYYMMDDHHMM`）和 `updateURL`：
   - **网页打进二进制**（`server/internal/hub/webdist`，`go:embed`）：hub 机器上没有 `~/.persona/web` 时就用二进制里的；有就照旧用目录里的。
   - **不带任何 skill**：lark-connector 是从私有的上游仓库拷来的（GPL-3.0），不能再分发；skill 放在各台机器的 `~/.persona/skills/`，
@@ -283,15 +283,18 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.persona/bin/personad
     要求二进制的 `public` 标记、未 replace 的依赖及 checksum 与 `server/go.sum` 一致，构建前 `go mod verify`。已登记的个人值始终优先拦截，见 `docs/lessons/testing.md`。
 - 同样四个平台再编连接器 `jarvis-link-<os>-<arch>`（2026-11-02，node 服务，`install.sh --node`，见 `docs/link.md`「装 node 服务」），一样过隐私扫描、压缩、进 `SHA256SUMS`。
 - 下载包是 `jarvisd-<os>-<arch>.gz`：原始二进制先过隐私扫描，再用 `gzip -n -9` 压缩，`SHA256SUMS` 校验压缩包；安装脚本校验通过后解压安装，校验失败 / 解压失败不覆盖旧版本。
-  Workers 静态资源每个文件最多 25 MiB（[官方限制](https://developers.cloudflare.com/workers/platform/limits/#static-assets)），上传前 `check_asset_sizes.py` 检查整个发布目录；本地 `build-publish/bin` 保留未压缩二进制供排查，但不上传。
+  **压缩包放 R2 桶 `persona-dl`，不放进站点**（#2541）：Workers 静态资源每个文件最多 25 MiB（[官方限制](https://developers.cloudflare.com/workers/platform/limits/#static-assets)），
+  #1002 嵌进分级形象的图后 jarvisd 压缩后超过了它。Worker 绑定桶为 `DL`（`site/wrangler.jsonc`），`/dl/*.gz` 由 `worker.mjs` 从桶里读（`GET` / `HEAD` / `Range` / `If-None-Match`），
+  其余 `/dl/` 文件仍是静态文件。桶里有 `a`、`b` 两个槽位：发布先把压缩包传到线上没在用的那个（`<槽位>/<文件名>`），再部署站点，站点里的 `dl/SLOT` 和 `latest.json` 一起换过去；
+  另一个槽位留着上一版到下一次发布，部署那一刻正在下载的照样能下完。站点里只剩小文件，`check_asset_sizes.py` 照旧检查整个站点目录；本地 `build-publish/bin` 保留未压缩二进制供排查，但不上传。
   回归：`python3 -B -m unittest discover -s scripts/deploy -p 'test_compressed_publish.py'`。
 - **hub 比 App 先发时，先过一遍已发布 App 的兼容**（#1693）：这一版 hub 让客户端多画一种东西（连接器登录的新 `kind`、新的 interaction 类型、
   新的卡片 / 事件字段），而最新的 TestFlight 还没有对应的客户端改动时，已装的 App 会把它画成空白或报错（微信插件的 `kind: qr` 在没有 #1401 的 App 上
   是一个空表单加永远灰着的「下一步」）。发 hub 前对照最新 TestFlight 的提交（`git merge-base --is-ancestor <客户端改动> <TestFlight 的提交>`）：
   没包含就先发 TestFlight，或者让新东西在旧 App 上有能看懂的退路，或者把 `proto.MinAppBuild`（`server/internal/proto/proto.go`，hello 和
   `latest.json` 的 `min_app_build`）提到包含它的构建号，让旧 App 提示更新。提高 `min_app_build` 会让所有旧 App 都用不了这版 hub，先问用户。
-- 只托管最新一版：每次部署整个替换 `dl/`。部署用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
-  报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION`、`dl/SHA256SUMS`、`dl/latest.json` 确认上去的就是刚编的。
+- 只托管最新一版（R2 里多留上一版，见上）。上传桶和部署都用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
+  报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION`、`dl/SHA256SUMS`、`dl/latest.json`、`dl/SLOT` 确认上去的就是刚编的，并对每个压缩包 `HEAD` 核对大小。
   推送中继在同一个 Worker 里（`/relay/*`），每次发布会把它一起重新部署。
 - 推送中继已部署（2026-11-02）：常驻 `personad relay` + Cloudflare Tunnel + 官网 Worker 转发，公网健康、源站保护、登记和鉴权已验证。
   发版配置需填 `app.push_relay`，安装带通知扩展的新 TestFlight 才会登记；真实设备上的通知解密仍要单独验收，见 `docs/push-relay.md`。

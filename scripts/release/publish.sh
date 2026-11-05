@@ -11,29 +11,48 @@
 #   ./scripts/release/publish.sh            # build, check, deploy
 #   NO_DEPLOY=1 ./scripts/release/publish.sh  # build and check only (build-publish/site)
 #   SITE_ONLY=1 ./scripts/release/publish.sh  # the pages only: site/ as committed with the release already served
-#   SITE_ONLY_FROM=<dir>                      # with SITE_ONLY: that release's downloads already fetched into <dir>
 #
 # Never deploy site/ with a plain `wrangler deploy`: it serves without dl/ and install.sh, and every hub's update
 # check and the install script 404 (docs/lessons/server.md).
 #
-# Only the newest version is served (dl/ is replaced on every deploy). release.sh runs this after uploading to TestFlight.
+# The downloads (dl/*.gz) live in the R2 bucket DL_BUCKET, not in the site: a Workers static file is at most 25 MiB
+# (#2541). A release goes to one of two slots, <slot>/<name>, the one not served now; the deploy then switches dl/SLOT
+# (a static file, deployed with latest.json) to it. The slot left keeps the release before until the next one, so a
+# download that started before the deploy finishes. Only the newest version is served. release.sh runs this after
+# uploading to TestFlight.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 eval "$(python3 scripts/jarvis_config.py env)"
 [ -n "$JARVIS_PUBLISH_URL" ] || { echo "publish.site_url is not set in the config (docs/config.md)" >&2; exit 2; }
 WRANGLER="${JARVIS_WRANGLER:-}"
+DL_BUCKET="${JARVIS_DL_BUCKET:-persona-dl}" # the r2_buckets binding DL in site/wrangler.jsonc
+# wr <dir> <args…>: wrangler in <dir> (a copy of site/, for its account).
+wr() { local dir="$1"; shift; (cd "$dir" && if [ -n "$WRANGLER" ]; then "$WRANGLER" "$@"; else npx wrangler "$@"; fi); }
+# check_served <SHA256SUMS> <slot>: what the site serves now is that release: dl/SLOT, and every download at its size.
+check_served() {
+  local sums="$1" slot="$2" dir name size got
+  dir="$(dirname "$sums")"
+  [ "$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/SLOT" 2>/dev/null)" = "$slot" ] || { echo "served dl/SLOT is not $slot" >&2; return 1; }
+  while read -r _ name; do
+    size=""
+    [ -f "$dir/$name" ] && size="$(wc -c <"$dir/$name" | tr -d ' ')"
+    got="$(curl -fsSI "$JARVIS_PUBLISH_URL/dl/$name" | tr -d '\r' | awk 'tolower($1)=="content-length:"{print $2}')"
+    [ -n "$got" ] || { echo "served dl/$name is missing" >&2; return 1; }
+    [ -z "$size" ] || [ "$got" = "$size" ] || { echo "served dl/$name is $got bytes, not $size" >&2; return 1; }
+  done < "$sums"
+}
 # deploy_site <dir>: deploy that copy of site/ (with dl/ and install.sh in it), the log in <dir>/../deploy.log.
 deploy_site() {
   local dir="$1" log="$1/../deploy.log"
   # cf's OAuth token lasts about an hour and wrangler does not renew it; any cf call that finds it stale does (twice a
   # release failed here with "Authentication error" until `cf auth whoami` ran).
   command -v cf >/dev/null && cf auth whoami >/dev/null 2>&1 || true
-  (cd "$dir" && if [ -n "$WRANGLER" ]; then "$WRANGLER" deploy; else npx wrangler deploy; fi) >"$log" 2>&1 \
+  wr "$dir" deploy >"$log" 2>&1 \
     || { tail -20 "$log" >&2; echo "deploy failed; see $log (only run cf auth login for authentication errors)" >&2; exit 1; }
 }
 
-# SITE_ONLY: no new build. The release served now (every file in its SHA256SUMS, plus VERSION, latest.json and
-# install.sh) is fetched back, checked against its SHA256SUMS and deployed again next to site/ as committed.
+# SITE_ONLY: no new build. The release served now (VERSION, SHA256SUMS, latest.json, SLOT and install.sh) is fetched
+# back and deployed again next to site/ as committed; its downloads stay where they are, in the bucket's served slot.
 if [ -n "${SITE_ONLY:-}" ]; then
   if [ -z "${NO_DEPLOY:-}" ] && [ -n "$(git status --porcelain -- site)" ]; then
     echo "site/ has changes not committed: commit them first" >&2; exit 1
@@ -41,16 +60,15 @@ if [ -n "${SITE_ONLY:-}" ]; then
   OUT=build-publish-site
   rm -rf "$OUT"
   mkdir -p "$OUT/dl"
-  get() { curl -fsSL -C - --retry 20 --retry-all-errors --retry-delay 3 --max-time 900 "$JARVIS_PUBLISH_URL/$1" -o "$2"; }
+  get() { curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 --max-time 60 "$JARVIS_PUBLISH_URL/$1" -o "$2"; }
   for f in VERSION SHA256SUMS latest.json; do get "dl/$f" "$OUT/dl/$f"; done
   get install.sh "$OUT/install.sh"
-  # SITE_ONLY_FROM=<dir>: the downloads are already in <dir> (fetched where the network is steadier); the small files
-  # above still come from the site, and the check below holds them to its SHA256SUMS all the same.
+  get dl/SLOT "$OUT/dl/SLOT" 2>/dev/null || { echo "the site serves no dl/SLOT (a release from before the bucket, #2541): run a full publish" >&2; exit 1; }
+  SLOT="$(cat "$OUT/dl/SLOT")"
+  case "$SLOT" in a|b) ;; *) echo "unexpected served dl/SLOT: $SLOT" >&2; exit 1 ;; esac
   while read -r _ name; do
     case "$name" in */*|""|.*) echo "unexpected name in the served SHA256SUMS: $name" >&2; exit 1 ;; esac
-    if [ -n "${SITE_ONLY_FROM:-}" ]; then cp "$SITE_ONLY_FROM/$name" "$OUT/dl/$name"; else get "dl/$name" "$OUT/dl/$name"; fi
   done < "$OUT/dl/SHA256SUMS"
-  (cd "$OUT/dl" && shasum -a 256 -c SHA256SUMS >/dev/null) || { echo "the served files do not match their SHA256SUMS" >&2; exit 1; }
   VERSION="$(cat "$OUT/dl/VERSION")"
   cp -R site "$OUT/site"
   cp -R "$OUT/dl" "$OUT/site/public/dl"
@@ -62,6 +80,7 @@ if [ -n "${SITE_ONLY:-}" ]; then
     curl -fsSL "$JARVIS_PUBLISH_URL/dl/$f" | cmp -s - "$OUT/dl/$f" || { echo "served dl/$f differs after the deploy" >&2; exit 1; }
   done
   curl -fsSL "$JARVIS_PUBLISH_URL/install.sh" | cmp -s - "$OUT/install.sh" || { echo "served install.sh differs after the deploy" >&2; exit 1; }
+  check_served "$OUT/dl/SHA256SUMS" "$SLOT" || exit 1
   echo "site deployed with jarvisd $VERSION unchanged: $JARVIS_PUBLISH_URL"
   exit 0
 fi
@@ -138,7 +157,7 @@ done
 curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json" -o "$OUT/served.json" 2>/dev/null || : > "$OUT/served.json"
 "$host_bin" release check-next "$OUT/served.json" --build "$BUILD" --commit "$COMMIT" || exit 1
 
-# 隐私扫描检查未压缩的原始二进制；只把压缩包发布到 Workers，避免单资源超过 25 MiB。
+# The privacy scan checked the raw binaries; only the gzipped ones are published (to the bucket, see above).
 for bin in "$OUT/bin"/jarvisd-* "$OUT/bin"/jarvis-link-*; do
   gzip -n -9 -c "$bin" > "$bin.gz"
 done
@@ -152,13 +171,24 @@ done
 rm -rf "$OUT/site"
 cp -R site "$OUT/site"
 mkdir -p "$OUT/site/public/dl"
-cp "$OUT/bin/"*.gz "$OUT/bin/SHA256SUMS" "$OUT/bin/VERSION" "$OUT/bin/latest.json" "$OUT/site/public/dl/"
+# The slot not served now (a when nothing is): the release before stays in the other one until the next release.
+served_slot="$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/SLOT" 2>/dev/null || true)"
+SLOT=a
+[ "$served_slot" = a ] && SLOT=b
+printf '%s\n' "$SLOT" > "$OUT/bin/SLOT"
+cp "$OUT/bin/SHA256SUMS" "$OUT/bin/VERSION" "$OUT/bin/latest.json" "$OUT/bin/SLOT" "$OUT/site/public/dl/"
 cp "$OUT/install.sh" "$OUT/site/public/install.sh"
 python3 scripts/deploy/check_asset_sizes.py "$OUT/site/public"
 if [ -n "${NO_DEPLOY:-}" ]; then
   echo "jarvisd $VERSION built and checked in $OUT (not deployed)."
   exit 0
 fi
+# The downloads first, into the slot no one is served from; then the deploy that points dl/SLOT at it.
+command -v cf >/dev/null && cf auth whoami >/dev/null 2>&1 || true
+for gz in "$OUT/bin/"*.gz; do
+  wr "$OUT/site" r2 object put "$DL_BUCKET/$SLOT/${gz##*/}" --file "$gz" --content-type application/gzip --remote \
+    >>"$OUT/upload.log" 2>&1 || { tail -20 "$OUT/upload.log" >&2; echo "upload of ${gz##*/} to R2 failed; see $OUT/upload.log" >&2; exit 1; }
+done
 deploy_site "$OUT/site"
 
 # What is served now is what was built.
@@ -169,4 +199,5 @@ if [ "$served" != "$VERSION" ]; then
 fi
 curl -fsSL "$JARVIS_PUBLISH_URL/dl/SHA256SUMS" | cmp -s - "$OUT/bin/SHA256SUMS" || { echo "served SHA256SUMS differs" >&2; exit 1; }
 curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json" | cmp -s - "$OUT/bin/latest.json" || { echo "served latest.json differs" >&2; exit 1; }
+check_served "$OUT/bin/SHA256SUMS" "$SLOT" || exit 1
 echo "jarvisd $VERSION published: curl -fsSL $JARVIS_PUBLISH_URL/install.sh | sh"

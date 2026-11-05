@@ -455,3 +455,9 @@ PR 冒烟按路径触发、不含 `integrations/**`，所以合并前没跑。�
 - Go 的 `encoding/json` 会大小写不敏感地匹配结构体字段：先按精确的原始键把已知字段分出来再解码，否则额外的 `UI` 会被当成 `ui`。Swift 对开放对象用 single-value container 编解码 String-key 字典，避免调用方的 snake_case 策略改写额外键；直接调用字典的 `init(from:)`／`encode(to:)` 仍会走 key 转换，回归测试实测失败，不能拿它替代 container 的 `decode`／`encode`。
 - 四语言共用含嵌套 JSON、大小写近似键、`additionalProperties`、`__proto__`／`constructor` 的 fixture，同时跑 SDK 的 manifest／initialize 握手；schema 的透传能力不等于 hub 的授权或安装校验。
 
+
+## personad 的下载超过 Workers 静态文件 25 MiB（2026-11-05，#2541）
+
+#1002 往 hub 里嵌了 3.1 MB 的分级形象 PNG（已经是压缩格式，gzip 几乎不再变小），jarvisd 压缩后从 22.4 MiB 涨到 25.8 MiB，
+`check_asset_sizes.py` 把 publish 拦在上传前；TestFlight 照常上传，只有 personad 没发出去。四个平台本来离上限就只剩一两 MiB，
+压图只能顶一阵，所以压缩包改放 R2（Worker 转发，两个槽位轮换），站点里只留小文件。往 `server/` 里嵌大的资源前先看一眼发布包的大小。

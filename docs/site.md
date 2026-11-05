@@ -3,7 +3,7 @@
 `<官网域名>` 是配置里 `publish.site_url` 的域名（具体值在构建配置和 `CLAUDE.local.md`）。`<旧域名>` 是早期构建写死的那个，2026-11-05 起（#2389）
 不再连 Worker，整站 301 到 `<官网域名>` 的同一路径（见下面「旧域名」）。
 
-官网（`site/`）本身是 Cloudflare 上的 Worker `jarvis-site`：静态页面、公开的 personad 下载（`/dl/`）、安装脚本（`/install.sh`）、
+官网（`site/`）本身是 Cloudflare 上的 Worker `jarvis-site`：静态页面、公开的 personad 下载（`/dl/`，压缩包从 R2 桶 `persona-dl` 读，见 `docs/release.md`「发布 jarvisd」）、安装脚本（`/install.sh`）、
 推送中继的入口（`/relay/*`，`docs/push-relay.md`）都在它上面。只经 `scripts/release/publish.sh` 部署（`docs/release.md`）。
 
 ## 现在的走法（2026-11-04 起，#1134）
