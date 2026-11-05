@@ -34,6 +34,7 @@ import { useExtensionPlace } from "./lib/extension-slots";
 const AgentsView = lazy(() => import("./views/agents/AgentsView").then((m) => ({ default: m.AgentsView })));
 const WorkspaceBoard = lazy(() => import("./views/WorkspaceBoard").then((m) => ({ default: m.WorkspaceBoard })));
 const Machines = lazy(() => import("./views/Machines").then((m) => ({ default: m.Machines })));
+const TerminalPage = lazy(() => import("./views/terminal/TerminalPage").then((m) => ({ default: m.TerminalPage })));
 const MachineDetail = lazy(() => import("./views/machines/MachineDetail").then((m) => ({ default: m.MachineDetail })));
 const Settings = lazy(() => import("./views/Settings").then((m) => ({ default: m.Settings })));
 const History = lazy(() => import("./views/assistant/History").then((m) => ({ default: m.History })));
@@ -231,7 +232,7 @@ function Shell() {
   const extensionTitle = useExtensionPlace(route.name === "extension" ? route.extension : "", route.name === "extension" ? route.ui : "")?.title;
   const title =
     pane ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱" : route.name === "messages" ? "消息"
-      : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "workspace-board" ? "工作流看板" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "settings" ? "设置"
+      : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "workspace-board" ? "工作流看板" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "terminal" ? "终端" : route.name === "settings" ? "设置"
       : route.name === "agents" ? "个人 Agent" : route.name === "agent-list" ? "Agents" : route.name === "extension" ? extensionTitle || "扩展" : "总览";
   useEffect(() => {
     document.title = title === "Persona" ? title : `${title} · Persona`;
@@ -288,6 +289,9 @@ function Shell() {
       break;
     case "machines":
       main = <Machines onToggleSidebar={toggle} />;
+      break;
+    case "terminal":
+      main = <TerminalPage route={route} onToggleSidebar={toggle} />;
       break;
     case "machine":
       main = <MachineDetail key={route.mid} mid={route.mid} onToggleSidebar={toggle} />;

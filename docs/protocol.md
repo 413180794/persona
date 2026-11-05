@@ -42,7 +42,7 @@
 
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`file_upload`。
-- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）。
+- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 
@@ -461,6 +461,8 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | POST | `/api/v1/workspace-board` | `{revision,action,...}` → 更新后的完整看板；仅 `full`，过期版本 409 `conflict` |
 | GET | `/api/v1/workspaces` | `{workspaces:[Workspace],errors?:[{machine_id,error}]}`；独立于 Agent 的工作区发现，失败保留历史信息，`answer` 可读 |
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
+| GET | `/api/v1/machines/{mid}/panes` | 终端浏览器的树（feature `terminal_panes`，仅 `full`）：`{hosts:[{kind, stream, control, new_tab, workspaces:[{id,label,number?,cwd?,branch?}], tabs:[{id,workspace_id,label,number?}], panes:[{pane, terminal, tab_id, workspace_id, agent?, status?, title?, cwd?, session_id?}]}]}`；包括没有 Agent 的 shell 窗格。`terminal` 是终端流用的地址 `pane:<pane>`，`session_id` 是跑在那个窗格里的 Agent 会话（有就用它开终端） |
+| POST | `/api/v1/machines/{mid}/panes` | `{workspace_id, kind?}`：在这个空间新开一个 shell 标签页（不抢电脑上的焦点，目录是空间自己的，请求不能指定）→ `{pane, terminal, tab_id}`；仅 `full`，只有用户点了才调用 |
 | PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"\|"paseo"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
 | GET | `/api/v1/machines/{mid}/computer` | 这台 Mac 现在有没有 Cua Driver、能不能被助手操控（hub 当场问 node 的 `computer.status`）→ 200 `Computer`（`{enabled, installed, version?, daemon, accessibility?, screen_recording?, desktop?, screen_sharing, ready, note?, job?}`，[computer-use.md](computer-use.md)）；插件 `cua` 没开、或不是 Mac → 404 |
 | PUT | `/api/v1/machines/{mid}/computer` | `{"enabled": bool}`：机器页「允许助手操控这台电脑」开关，写进插件 `cua` 配置里的 `machines` → 200 `Computer`；插件没开、不是 Mac → 404。改完照常推 `machines` |
@@ -986,6 +988,9 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
 - App 收到的帧 `seq` 不连续（中间丢了）或者 `epoch` 变了却不是 `full`，就丢掉本地网格、重新 `terminal_subscribe`（不带 epoch）。
 - 收到 `error`：hub 已经丢掉这条流；`unsupported` 时改用 `/screen` 轮询，否则过几秒再订阅。WebSocket 断了重连后重新订阅（带 epoch / seq 续上）。
 - 第一个订阅的 App 让 hub 发 `terminal.watch`，最后一个退订（或断开）时发 `terminal.unwatch`。旧 App 不发这些消息，照旧轮询 `/screen`。
+- 窗格地址（`features` 有 `terminal_panes`，`docs/terminal.md` 第十九节）：没有 Agent 的窗格没有会话 id，`terminal_subscribe` / `terminal_input` / `terminal_unsubscribe` 的 `session_id`
+  可以写 `pane:<窗格 id>`（`/machines/{mid}/panes` 给出的 `terminal`）；`GET …/sessions/{mid}/pane:…/screen`（轮询退路）和 `screen/before` 也认。**只有 `full` 设备能用**：`answer` 设备订阅（连只看也算）
+  收到 `error: forbidden…`，HTTP 读屏 403。别的 `session.*` 不认这个地址。
 - 手机接管（`features` 有 `terminal_control`，`docs/terminal.md` 第十一节）：订阅带 `control` 时网格是手机的尺寸，帧格式不变；
   键和新尺寸走 `terminal_input`；离开（退订 / 断开）后窗格回到电脑上的尺寸，还有别人在看就改回镜像（新 epoch）。
 
@@ -1051,6 +1056,8 @@ hub → node 请求：
 | `session.keys` | `{session_id, keys, text}` |
 | `session.interrupt` | `{session_id}` |
 | `session.screen` | `{session_id, lines, source, format?}` → `{text, status}`（`format: "ansi"` 带颜色） |
+| `panes.list` | `{}` → `{hosts:[…]}`，同 REST `/machines/{mid}/panes`：node 用最近一次宿主快照（超过 3 秒才再拍一次）回空间 / 标签页 / 全部窗格，不另起轮询 |
+| `panes.new` | `{workspace_id, kind?}` → `{pane, terminal, tab_id}`：宿主的 `CreateSlot` 开一个 shell 标签页（目录取空间自己的）；空间不在、宿主不会开标签页时报错 |
 | `terminal.watch` / `terminal.unwatch` | `{session_id, control?: {cols, rows, takeover}}`；watch → `{cols, rows, control}`，之后 node 推 `terminal.frame`；已经在推时 watch 会重开一条流（新 epoch、从整帧开始）。herdr 没有 observe 时报 `unsupported: …`。带 `control` 时 node 用 `herdr terminal session control` 接管（回包 `control: true`；旧 node 没有这个字段），槽位被占着又没 `takeover` 时报错 `code: attach_busy` |
 | `git.pull` | `{cwd}` → `{status, updated}`，同 REST 的安全拉取 |
 | `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | 同 REST（参数同名） |

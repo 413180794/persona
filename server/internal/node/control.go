@@ -707,10 +707,12 @@ func (n *Node) screen(ctx context.Context, id string, lines int, source string, 
 	}
 	a, ok := n.agent(id)
 	if !ok {
-		if _, err := n.paneFor(ctx, id); err != nil {
+		pane, err := n.terminalPane(ctx, id) // also a "pane:" address (panes.go)
+		if err != nil {
 			return "", proto.StatusOffline, nil
 		}
 		a, _ = n.agent(id)
+		a.PaneID = pane
 	}
 	if ansi && n.plainScreen(a.PaneID) {
 		// No colors in this host: the plain rows, ended as colored ones are.
@@ -1041,10 +1043,12 @@ func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lin
 	}
 	a, ok := n.agent(id)
 	if !ok {
-		if _, err := n.paneFor(ctx, id); err != nil {
+		pane, err := n.terminalPane(ctx, id) // also a "pane:" address (panes.go)
+		if err != nil {
 			return nil, err
 		}
 		a, _ = n.agent(id)
+		a.PaneID = pane
 	}
 	text, err := n.readPane(ctx, a.PaneID, "recent", herdrScrollbackLines)
 	if err != nil {

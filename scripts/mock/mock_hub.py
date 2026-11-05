@@ -31,6 +31,7 @@ def features():
             "screen_dialog", "resumable_interactions", "secret_prompts", "request_id", "file_upload",
             "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb", "git_blob"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
                 ["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else []) + (
+                ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (
                 ["assistant_compact", "assistant_main_new"] if os.environ.get("MOCK_MAIN_ACTIONS") == "1" else [])
 
 
@@ -2275,6 +2276,49 @@ TERMINAL_INPUT = []
 
 def cell_width(ch):
     return 2 if unicodedata.east_asian_width(ch) in "WF" else 1
+
+
+# MOCK_TERMINAL_PANES=1 (with MOCK_TERMINAL_STREAM / MOCK_TERMINAL_CONTROL): the hub says terminal_panes and lists made-up
+# workspaces, tabs and panes of the machines (agents of the mock sessions and plain shells, GET /api/v1/machines/{mid}/panes);
+# POST there opens a new shell tab. A terminal addressed "pane:<id>" is a made-up shell, not the Claude screen.
+PANES_NEW = {}  # machine id -> [(workspace id, pane)] opened by POST
+
+
+def mock_panes(mid):
+    sessions = [s for s in SESSIONS if s.get("machine_id") == mid and s.get("pane_id")][:2]
+    if mid == "studio":
+        return {"hosts": []}
+    ws = [{"id": "w1", "label": "persona", "number": 1, "cwd": "/home/me/persona", "branch": "main"},
+          {"id": "w2", "label": "notes", "number": 2, "cwd": "/home/me/notes"}]
+    tabs = [{"id": "w1:t1", "workspace_id": "w1", "label": "agent-1", "number": 1},
+            {"id": "w1:t2", "workspace_id": "w1", "label": "shell", "number": 2},
+            {"id": "w2:t1", "workspace_id": "w2", "label": "shell", "number": 1}]
+    panes = [{"pane": "w1:p2", "terminal": "pane:w1:p2", "tab_id": "w1:t2", "workspace_id": "w1", "title": "zsh", "cwd": "/home/me/persona"},
+             {"pane": "w1:p3", "terminal": "pane:w1:p3", "tab_id": "w1:t2", "workspace_id": "w1", "title": "npm run dev", "cwd": "/home/me/persona/web"},
+             {"pane": "w2:p1", "terminal": "pane:w2:p1", "tab_id": "w2:t1", "workspace_id": "w2", "title": "zsh", "cwd": "/home/me/notes"}]
+    for i, sess in enumerate(sessions):
+        panes.insert(i, {"pane": "w1:p%d" % (i + 1) if i == 0 else "w1:p9", "terminal": "pane:w1:p%d" % (i + 1) if i == 0 else "pane:w1:p9",
+                         "tab_id": "w1:t1", "workspace_id": "w1", "agent": sess.get("agent", "claude"), "status": sess.get("status", "idle"),
+                         "title": sess.get("title"), "cwd": sess.get("cwd"), "session_id": sess["session_id"]})
+    for wid, extra in PANES_NEW.get(mid, []):
+        panes.append(extra)
+        if not any(t["id"] == extra["tab_id"] for t in tabs):
+            tabs.append({"id": extra["tab_id"], "workspace_id": wid, "label": "shell-2", "number": 3})
+    return {"hosts": [{"kind": "herdr", "stream": True, "control": True, "new_tab": True, "workspaces": ws, "tabs": tabs, "panes": panes}]}
+
+
+def shell_screen(cols, rows, typed="", tick=0):
+    """A made-up zsh at cols × rows: a few commands run, the prompt with what is typed."""
+    E = "\x1b["
+    g, b, d, r = E + "32m", E + "1;34m", E + "2m", E + "0m"
+    out = [g + "me@host" + r + " " + b + "~/persona" + r + " $ git status -sb",
+           "## main...origin/main", " M web/src/App.tsx", "?? web/src/views/terminal/",
+           g + "me@host" + r + " " + b + "~/persona" + r + " $ ls web", d + "dist  node_modules  package.json  src" + r,
+           g + "me@host" + r + " " + b + "~/persona" + r + " $ echo 你好，终端", "你好，终端"]
+    prompt = g + "me@host" + r + " " + b + "~/persona" + r + " $ " + typed
+    lines = (out + [prompt])[-rows:]
+    lines = [l[:max(cols * 4, 1)] for l in lines]
+    return lines, len(lines) - 1
 
 
 def phone_screen(cols, rows, typed="", tick=0):
@@ -8795,6 +8839,8 @@ class H(BaseHTTPRequestHandler):
                                    "permission_mode": s.get("permission_mode"), "effort": s.get("effort"),
                                    "context_tokens": 48200, "output_tokens": 12800, "compactions": 0, "turns": 6,
                                    "started_at": ago(minutes=40), "last_activity": ago()})
+        if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/panes", p):
+            return self.send_json(mock_panes(p.split("/")[4]))
         if p.startswith("/api/v1/sessions/") and p.endswith("/screen"):
             fail = os.environ.get("MOCK_SCREEN_FAIL_AFTER")
             if fail:
@@ -8932,6 +8978,13 @@ class H(BaseHTTPRequestHandler):
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if history_route(self, p, parse_qs(urlparse(self.path).query)): return
         if plugins_route(self, p, self.last_body): return
+        if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/panes", p):  # 新建终端
+            mid, req = p.split("/")[4], json.loads(self.last_body or b"{}")
+            n = len(PANES_NEW.setdefault(mid, [])) + 4
+            pane = {"pane": "%s:p%d" % (req.get("workspace_id", "w1"), n), "terminal": "pane:%s:p%d" % (req.get("workspace_id", "w1"), n),
+                    "tab_id": "%s:t%d" % (req.get("workspace_id", "w1"), n), "workspace_id": req.get("workspace_id", "w1"), "title": "zsh", "cwd": "/home/me/persona"}
+            PANES_NEW[mid].append((req.get("workspace_id", "w1"), pane))
+            return self.send_json({"pane": pane["pane"], "terminal": pane["terminal"], "tab_id": pane["tab_id"]})
         if p.startswith("/api/v1/machines/") and p.endswith("/computer/clipboard") and os.environ.get("MOCK_SCREEN") == "fake":
             FAKE_SCREEN["clipboard"] = json.loads(self.last_body or b"{}").get("text", "")  # pbcopy on the Mac (#1343)
             return self.send_json({"ok": True})
@@ -10183,12 +10236,12 @@ class H(BaseHTTPRequestHandler):
                     drive.update(cols=ctl["cols"], rows=ctl["rows"], typed=drive.get("typed", ""), seq=0, tick=0)
 
                     def frame(full=False, sid=sid, mid=mid):
-                        lines, at = (scrolling_screen if TERMINAL_SCROLL else phone_screen)(drive["cols"], drive["rows"], drive["typed"], drive["tick"])
+                        lines, at = (shell_screen if str(sid).startswith("pane:") else scrolling_screen if TERMINAL_SCROLL else phone_screen)(drive["cols"], drive["rows"], drive["typed"], drive["tick"])
                         E = "\x1b["
                         body = E + "2J" + "".join(E + "%d;1H" % (i + 1) + l for i, l in enumerate(lines)) if full else \
                             "".join(E + "%d;1H" % (i + 1) + l + E + "K" for i, l in enumerate(lines)) if TERMINAL_SCROLL else \
                             E + "%d;1H" % (at + 1) + lines[at] + E + "K" + "".join(E + "%d;1H" % (i + 1) + l + E + "K" for i, l in enumerate(lines) if "Brewing" in l)
-                        col = 3 + sum(cell_width(c) for c in drive["typed"])
+                        col = (len("me@host ~/persona $ ") if str(sid).startswith("pane:") else 2) + 1 + sum(cell_width(c) for c in drive["typed"])
                         data = E + "?2026h" + E + "?25l" + body + E + "%d;%dH" % (at + 1, col) + E + "?25h" + E + "?2026l"
                         drive["seq"] += 1
                         send({"type": "terminal", "machine_id": mid, "session_id": sid, "epoch": "mock-ctl", "seq": drive["seq"],

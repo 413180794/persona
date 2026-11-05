@@ -11,7 +11,7 @@
 - **由 hub 自己托管**：hub 把 `<hub 数据目录>/web`（默认 `~/.persona/web`）当静态站，和 API 同一个端口（hub 的 `listen`，默认 `:18660`，即所有网卡）。
   同源，所以没有 CORS，WebSocket 和图片也用同一个 token。没有这个目录时非 `/api/` 路径照旧 404。
   不是文件的路径都回 `index.html`（前端路由：`/`（Persona 主对话）、`/overview`（总览）、`/s/<机器>/<会话>`、`/t/<机器>/<空间>/<tab>[/<会话>]`（herdr 的一个 tab，#1963）、`/j`、`/j/<会话>`、`/j/new`、`/history`、`/inbox`、`/inbox/<件>`、`/messages`、`/messages/<会话>`、`/routines`、
-  `/kb`、`/kb/<类型>/<条目>`、`/workspace-board`（工作流看板）、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`、`/extension/<扩展>/<页面>`（扩展的整页））；
+  `/kb`、`/kb/<类型>/<条目>`、`/workspace-board`（工作流看板）、`/machines`、`/machines/<机器>`、`/terminal`、`/terminal/<机器>/<终端 id>`、`/assistant`（助手资料页）、`/settings`、`/extension/<扩展>/<页面>`（扩展的整页））；
   `/assets/` 下是带内容哈希的文件，永久缓存，`index.html` 不缓存（`server/internal/hub/web.go`）。
 - 部署：`./scripts/deploy/deploy.sh web`（只构建、传网页，不重启 hub）；部署 hub 时也会顺带部署网页：网页和 Go 二进制一起先编好，编不过就打出编译输出（含隐私扫描的命中行）、什么都不装；hub 重启之后再上传。
 - 本地开发：`cd web && npm ci && npm run dev`，Vite 把 `/api` 代理到 `JARVIS_HUB_URL`（`eval "$(python3 ../scripts/persona_config.py env)"`）。
@@ -49,8 +49,14 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 
 - **工作流看板**（`/workspace-board`，#1646）：从侧边栏进入，绑定已有工作区或在线机器的真实目录，手工管理列、卡片顺序、置顶和归档；详情关联同目录的 Agents，并打开文件、Git 或显式新建 Agent。卡片和列状态存 Postgres，Agent 状态不迁列，离线保留卡片。操作、权限、升级和来源见 [工作区看板](workspace-board.md)。
 
+- **终端**（`/terminal`、`/terminal/<机器>/<终端 id>`，`src/views/terminal/TerminalPage.tsx`、`src/lib/terminals.ts`，`docs/terminal.md` 第十九节）：不开 Agent 也能开终端。
+  机器 → herdr 空间 → 标签页 → 窗格，Agent 带状态点，普通 shell 是终端图标；点一个窗格在右边（窄屏整页）打开成终端，里面就是「侧边面板 › 终端」的那个 `TerminalPanel`，接管 / 只看 / 键栏 / 历史都一样。
+  空间旁的「+」新建一个 shell 标签页（`POST /machines/{mid}/panes`，电脑上不抢焦点）；列表上面的输入框是 Jump To（标题 / 目录 / 分支 / 机器，↑ ↓ 回车）；每台机器最近打开的 2 个终端挂着，切换立即有画面，
+  标签页进后台时只留正在看的那个，离开页面全部放手。窗格终端等于那台电脑的 shell，只有完整设备能开（手表令牌、扩展令牌都不行）。截图用 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 的假 hub。
+  路由为什么是整页而不是侧边面板：侧边面板挨着一段对话，没有对话时没有可挨的；整页有地址，可以收藏和前进后退。
+
 - **侧边栏**（宽屏常驻，窄屏是抽屉，两者同一份）：连接状态和在线电脑数、⌘K 搜索；第一项是 **Persona**（形象头像、加粗，打开主对话，主对话在工作 / 需要你时带状态点或件数），
-  下面是总览 / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 /（扩展的页面，见「设置」里的「UI 插槽」）/ 设置；再下面「Persona 对话」（除主对话外最近 5 段，末尾「全部对话」；
+  下面是总览 / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 / 终端（hub 有 `terminal_panes` 才有）/（扩展的页面，见「设置」里的「UI 插槽」）/ 设置；再下面「Persona 对话」（除主对话外最近 5 段，末尾「全部对话」；
   标题右边「+」开一次性的新对话 `/j/new`）、个人 Agent、Agents（标题右边「+」是新建 Agent，⌘K 面板里也有）。
   **为什么默认落在 Persona**（#1239）：和 iOS 一致（App 打开是「助手」，Agents 是第二个 tab），主对话本身带任务坞和「需要你」（#930），
   要处理的事在这里就能看到、能交代；总览更像 Agents 的仪表盘，挪到 `/overview`。主对话只有一个入口：`/`、旧的 `/j`、`/persona`、`/j/<主对话 id>` 都选中 Persona 这一行，
@@ -568,6 +574,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 终端：实时流、接管 / 只看、打字 / 滚轮 / 点击、断线重试 | 有 | #297 | |
 | 终端：键栏、快捷命令、往上翻 herdr 历史、换行开关、字号、中文空隙 | 有 | #433 | 见「侧边面板 › 终端」 |
 | 终端：粘贴 / 拖入图片和文件（传到电脑，路径敲进窗格） | 有 | — | iOS / Android 还没有入口，接口可以共用（`docs/terminal.md` 第十八节） |
+| 终端：不开 Agent 的独立终端（机器 → 空间 → 标签页 → 窗格、新建 shell、Jump To） | 有 | — | 见「页面 › 终端」；手机端还没有 |
 | 终端：只看时打字、配色 / 字体、键栏自选键 / 自动收起 / 输入框模式 / 补全、触屏手势 | 没有 | — | 电脑上有实体键盘；手机上用 App |
 | 端口转发（回答里的 localhost 链接） | 没有 | — | 手机是本机监听再经 hub 转发；浏览器不能监听端口，要 hub 做 HTTP 反向代理，安全边界要重新定（`docs/ports.md`），单独评估 |
 | 听写 | 不适用 | — | 用系统输入法 / 浏览器自带的听写 |

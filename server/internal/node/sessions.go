@@ -936,6 +936,9 @@ var errNoHost = errors.New("no terminal host")
 type layout struct {
 	spaces map[string]host.Space
 	slots  map[string]host.Slot
+	// panes is every pane of the snapshot, agent or not: the terminal browser lists shells from it (panes.go).
+	panes []host.Agent
+	at    time.Time
 }
 
 // refreshHosts takes one snapshot of every host, or of only the hosts given: agents plus the space / slot names shown
@@ -1026,7 +1029,7 @@ func (n *Node) lookAt(ctx context.Context, h host.Host, epoch uint64) (agents []
 		}
 		return agents, false, nil
 	}
-	l := layout{spaces: map[string]host.Space{}, slots: map[string]host.Slot{}}
+	l := layout{spaces: map[string]host.Space{}, slots: map[string]host.Slot{}, panes: snap.Panes, at: time.Now()}
 	for _, w := range snap.Spaces {
 		l.spaces[w.ID] = w
 	}

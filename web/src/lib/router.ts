@@ -21,6 +21,9 @@ export type Route =
   | { name: "kb"; kind?: string; id?: string }
   | { name: "machines" }
   | { name: "machine"; mid: string }
+  // the terminal browser (docs/terminal.md「独立终端」): every pane of every machine; `id` is the terminal opened (an agent
+  // session's id, or "pane:<pane>" for a plain shell)
+  | { name: "terminal"; mid?: string; id?: string }
   | { name: "settings" }
   | { name: "agents"; id?: string }
   // the phone's「Agents」page (#1996): the sidebar's Agents block on a page of its own, next to 助手
@@ -43,6 +46,7 @@ export function parse(path: string): Route {
   if (p[0] === "routines") return { name: "routines" };
   if (p[0] === "kb") return { name: "kb", kind: p[1], id: p[2] };
   if (p[0] === "machines") return p[1] ? { name: "machine", mid: p[1] } : { name: "machines" };
+  if (p[0] === "terminal") return p[1] && p[2] ? { name: "terminal", mid: p[1], id: p[2] } : { name: "terminal" };
   if (p[0] === "a") return { name: "agents", id: p[1] };
   if (p[0] === "agents") return { name: "agent-list" };
   if (p[0] === "settings") return { name: "settings" };
@@ -81,6 +85,8 @@ export function href(r: Route): string {
       return "/machines";
     case "machine":
       return `/machines/${encodeURIComponent(r.mid)}`;
+    case "terminal":
+      return r.mid && r.id ? `/terminal/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.id)}` : "/terminal";
     case "workspace-board":
       return "/workspace-board";
     case "settings":

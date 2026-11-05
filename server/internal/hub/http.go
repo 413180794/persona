@@ -143,11 +143,15 @@ func (h *Hub) routes() http.Handler {
 		h.markSeen(m.cfg.ID, r.PathValue("sid"))
 		writeJSON(w, map[string]any{"ok": true})
 	}))
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/screen/before", h.proxyBody("session.screen.before"))
-	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/screen", h.proxy("session.screen", func(r *http.Request) any {
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/screen/before", paneAddressFullOnly(h.proxyBody("session.screen.before")))
+	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/screen", paneAddressFullOnly(h.proxy("session.screen", func(r *http.Request) any {
 		q := r.URL.Query()
 		return map[string]any{"session_id": r.PathValue("sid"), "lines": atoi(q.Get("lines")), "source": q.Get("source"), "format": q.Get("format")}
-	}))
+	})))
+	// The terminal browser (docs/terminal.md「独立终端」): a machine's workspaces, tabs and panes with plain shells, and
+	// 新建终端. A pane is full shell access on the computer: full devices only (paneRoutesFullOnly).
+	api.HandleFunc("GET /api/v1/machines/{mid}/panes", h.proxy("panes.list", nil))
+	api.HandleFunc("POST /api/v1/machines/{mid}/panes", h.withMachine(h.newShell))
 	api.HandleFunc("GET /api/v1/interactions", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"interactions": visibleInteractions(h.pendingInteractions(), h.requestHasElicitation(r))})
 	})
@@ -1018,6 +1022,10 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 	case "ping":
 		h.onAppPing(c, data)
 	case "terminal_subscribe":
+		if c.role != roleFull && paneAddress(msg.SessionID) { // a shell by pane: full devices only (panes.go)
+			c.sendJSON(map[string]any{"type": "terminal", "machine_id": msg.MachineID, "session_id": msg.SessionID, "error": "forbidden: a terminal opened by pane needs a full device"})
+			return
+		}
 		if c.role != roleFull && msg.Control != nil { // driving a terminal is typing into it: an answer-only device only watches
 			msg.Control, msg.Takeover = nil, false
 			c.sendTerm(termControlMessage(msg.MachineID, msg.SessionID, "unsupported", nil, "这台设备只能看，不能接管"))

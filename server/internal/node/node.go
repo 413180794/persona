@@ -712,6 +712,16 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		_ = json.Unmarshal(params, &a)
 		return n.terminalWatch(ctx, p.SessionID, a.Control)
+	case "panes.list": // the terminal browser: every workspace, tab and pane, agent or shell (panes.go)
+		n.configured()
+		return n.listPanes(ctx)
+	case "panes.new": // an explicit 新建终端 from the browser: a shell tab in a workspace (panes.go)
+		var a struct {
+			Kind        string `json:"kind"`
+			WorkspaceID string `json:"workspace_id"`
+		}
+		_ = json.Unmarshal(params, &a)
+		return n.newShell(ctx, a.Kind, a.WorkspaceID)
 	case "terminal.unwatch":
 		n.terminalUnwatch(p.SessionID)
 		return ok(nil)

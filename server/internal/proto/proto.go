@@ -259,6 +259,7 @@ var Features = []string{
 	"terminal_control",       // terminal_subscribe with control: the phone drives the terminal at its size; terminal_input
 	"terminal_scroll",        // terminal_input with scroll: the wheel over a terminal the app drives, to herdr (docs/terminal.md)
 	"terminal_click",         // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/terminal.md)
+	"terminal_panes",         // GET/POST /api/v1/machines/{mid}/panes, terminal ids "pane:<id>": any pane as a terminal (docs/terminal.md「独立终端」)
 	"file_download",          // GET /api/v1/machines/{mid}/file/download
 	"file_stream",            // file?stream=1 (binary described, bytes by Range), file/download?inline=1, sniffed MIME
 	"file_thumb",             // GET /api/v1/machines/{mid}/file/thumb (docs/protocol.md「文件预览」)

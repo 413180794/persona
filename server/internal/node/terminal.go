@@ -224,7 +224,7 @@ func (n *Node) terminalWatch(ctx context.Context, id string, ctl *termControl) (
 	if !n.canObserve() {
 		return nil, errNoTermStream
 	}
-	pane, err := n.paneFor(ctx, id)
+	pane, err := n.terminalPane(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +465,7 @@ func (n *Node) terminalLoop(ctx context.Context, id string, s *termStream) {
 // observeOnce streams one epoch: from a whole frame until the pane changes size, herdr ends it or the replay is full.
 // Returns how many frames went out.
 func (n *Node) observeOnce(ctx context.Context, id string) (int, error) {
-	pane, err := n.paneFor(ctx, id)
+	pane, err := n.terminalPane(ctx, id)
 	if err != nil {
 		return 0, err
 	}

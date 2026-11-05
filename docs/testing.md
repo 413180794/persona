@@ -96,6 +96,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 终端实时流：`MOCK_TERMINAL_STREAM=1` 启动 mock（hello 带 `terminal_stream`，订阅后先发一个编造的 Claude 界面整帧，再每秒一帧让 spinner 走秒；
   再加 `MOCK_TERMINAL_FIXTURE=apple/PersonaTests/Fixtures/terminal-observe.jsonl` 改为回放从 herdr 录下的真实帧：颜色、框里的中文、emoji、链接、200 字的长行），
   `-openPane terminal`，`-terminalWrap NO` 看不换行，`-terminalPages 1` 加载一页（mock 的 `/screen/before` 回一段带颜色的历史）。
+- 独立终端（网页，`docs/terminal.md` 第十九节）：再加 `MOCK_TERMINAL_PANES=1`（hello 带 `terminal_panes`，`GET/POST /api/v1/machines/{mid}/panes` 回编造的空间 / 标签页 / 窗格，`pane:` 地址打开的是编造的 zsh）。
 - 手机接管终端：再加 `MOCK_TERMINAL_CONTROL=1`（hello 带 `terminal_control`，按 App 给的列 × 行排编造的 Claude 界面，打的字出现在输入框，
   `GET /mock/terminal_input` 看收到的字节），`MOCK_TERMINAL_BUSY=1` 看「电脑上另一个程序正在使用这个终端」的弹窗；`-terminalSize phone|mirror` 选模式。
   UI 测试 `TerminalTypingTests/testDrivingTheTerminalSendsItsBytes` 要连这样的 mock；其余终端 UI 测试固定 `-terminalSize mirror`。

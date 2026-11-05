@@ -107,6 +107,8 @@ export type NavPage = { k: string; to: Route; icon: IconName; label: string; sho
 export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Route; onSearch: () => void; onNewAgent: () => void; onNavigate?: () => void }) {
   const conn = useStore((s) => s.conn);
   const machines = useStore((s) => s.machines);
+  // 终端 (docs/terminal.md「独立终端」) is there where the hub can list panes
+  const terminalPanes = useStore((s) => s.features.includes("terminal_panes"));
   const assistant = useStore((s) => s.assistant);
   const todos = useStore((s) => s.todos);
   const todosSupported = useStore((s) => s.todosSupported);
@@ -138,6 +140,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
     routines: { k: "routines", to: { name: "routines" }, icon: "clock", label: "定时任务" },
     kb: { k: "kb", to: { name: "kb" }, icon: "book", label: "知识库" },
     machines: { k: "machines", to: { name: "machines" }, icon: "machine", label: "机器", hint: machines.length ? `${online}/${machines.length}` : undefined },
+    terminal: terminalPanes && { k: "terminal", to: { name: "terminal" }, icon: "terminal", label: "终端" },
     settings: { k: "settings", to: { name: "settings" }, icon: "gear", label: "设置" },
   };
   const pages = NAV_PAGES.flatMap((k): NavPage[] => [

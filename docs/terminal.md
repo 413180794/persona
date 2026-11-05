@@ -486,3 +486,66 @@ Persona 网页看的是 observe / control 流，「实测」一节是它们给�
 - DEC 2031（颜色方案变化通知）同理，没有人收。
 
 没验证：herdr 在 DEC 2031 打开后，主题变化时会不会主动发 `CSI ? 997 ; n n`（只测了一问一答）。
+
+## 十九、独立终端：不开 Agent 也能开终端（2026-11-04，网页）
+
+起因：用户问「Persona 没有终端功能吗？」。终端一直有，但只在 Agent 会话的侧边面板里（`sessionCan(s, "terminal")`），
+没有 Agent 的普通 shell 窗格、一台电脑上新开的 shell、herdr 里的空间 / 标签页 / 窗格怎么摆，都看不到。Moshi 的网页端有「机器 → herdr 工作区 → 标签页 → 窗格」的树，
+任何窗格都能开成终端、能新开标签页。这里照着做，**复用同一条终端流和同一个 `TerminalPanel`，不另写终端**。
+
+### 窗格地址：`pane:<窗格 id>`
+
+终端流（第二、十一节）原来按会话 id 找窗格（`paneFor`：`agents[id].PaneID`）。没有 Agent 的窗格没有会话 id，所以流的 id 多一种写法：
+`pane:w1:p2`（herdr 的窗格 id 前面加 `pane:`；别的宿主的窗格已经带自己的前缀，如 `pane:orca:…`）。**只有三个终端调用认这个地址**：
+`terminal.watch` / `terminal.unwatch`（含接管、键、滚轮、点击、keepalive，它们按流的 id 找，不管是会话还是地址）、`session.screen` 和 `session.screen.before`
+（没有实时流的老 node / herdr 退回轮询读屏、往上翻历史）。别的 `session.*`（`send`、`interrupt`、`keys`……）仍然只认会话 id：
+**不能借地址往 shell 里发消息**（`TestPaneAddressReachesOnlyTheTerminal`）。
+
+node 收到地址先查：窗格必须在宿主最近一次快照里（不在就拍一次再查），否则报 `pane … is not running`，不会把流指向快照以外的东西。
+有 Agent 会话的窗格网页按**会话 id** 打开（和聊天页的终端面板共用 hub 的同一条流，接管 / 被抢的规则一样）；只有没有会话的窗格才用地址。
+
+### 列出窗格：`panes.list`
+
+不另起轮询：`lookAt`（node 每次 herdr 有变化拍的 `session.snapshot`）本来就拿到全部窗格（`Layout.Panes`，Agent 或 shell），现在连同空间 / 标签页一起留在 node 的 `layouts` 里。
+`panes.list` 读这份缓存；缓存超过 3 秒（或这台宿主还没拍过）才拍一次。回包按宿主分组：
+`{hosts: [{kind, stream, control, new_tab, workspaces, tabs, panes}]}`，窗格带 `agent` / `status`（宿主说的状态）/ `title` / `cwd` / `session_id`（有 Agent 会话时）/ `terminal`（上面的地址）。
+hub：`GET /api/v1/machines/{mid}/panes`，feature `terminal_panes`。
+
+### 新建终端：`panes.new`（可选，显式操作）
+
+`POST /api/v1/machines/{mid}/panes {workspace_id, kind?}` → node 用宿主的 `CreateSlot`（herdr：`tab create --no-focus`，电脑上的视图不跳）在那个空间开一个标签页，
+名字 `shell`（重名加 `-2`），目录是**空间自己的目录**（宿主报的，没有就是 home）；**请求里不能指定目录**。回 `{pane, terminal, tab_id}`，网页接着把它打开。只有用户点了空间旁边的「+」才会调用。
+
+### 权限
+
+窗格终端等于那台电脑上的完整 shell，所以比 Agent 会话的终端更严：
+
+- 必须是已登录的设备令牌，没有新的免登录入口；hub 的 `allowed()` 里 `GET/POST /machines/{mid}/panes` 不在 `answer`（手表）的白名单里，扩展令牌的 `routeScopes` 里也没有（`route_scopes.txt` 记为 `-`，只有完整凭据）。
+- WebSocket：`terminal_subscribe` 带 `pane:` 地址时，**只要不是 `full` 角色就拒绝，连「只看」也不行**（Agent 会话的终端 `answer` 设备仍能看，接管才要 `full`）；`panes.new` 同样只给 `full`。
+- 地址也不能绕到 HTTP：`GET …/sessions/{mid}/{sid}/screen`（扩展有 `agents.read` 时可读 Agent 的屏）遇到 `pane:` 的 sid 要 `full`（`paneAddressFullOnly`）。
+- 接管、被占（`attach_busy`）、被抢（`taken`）、租约（75 秒）、放手后窗格回到电脑尺寸，全部是第十一节的原样。
+
+### 网页
+
+- 侧边栏「终端」（`/terminal`，hub 有 `terminal_panes` 才显示）；`/terminal/<机器>/<终端 id>` 是打开着的那个，id 里的冒号编码（`pane%3Aw1%3Ap2`）。
+- 宽屏：左边是机器 → 空间 → 标签页 → 窗格（Agent 带状态点，用会话自己的状态，没有会话就用宿主的 `status`；shell 是终端图标），右边是终端；窄屏列表和终端各占一页，终端头上的 × 回到列表。
+  选了「整页」而不是侧边面板：侧边面板是「挨着一段对话」的东西，没有对话时它没有可挨的；整页有地址，可以收藏、前进后退。
+- 列表上面的输入框是 Jump To：按标题、目录、分支、标签页、机器名过滤，↑ ↓ 选、回车打开、Esc 清空。
+- 每台机器最近打开的 2 个终端保持挂着（藏起来但保持原尺寸，流不断），切回去立刻有画面（`keepRecent`）。注意它们还「接管」着窗格，电脑上的窗格保持这个网页的尺寸，直到被挤出这 2 个、点 ×、
+  离开这个页面（组件卸载，`terminal_unsubscribe`）或浏览器标签页进后台（只留正在看的那个，`keepOnlyShown`）。
+- 旧 hub（没有 `terminal_panes`）不显示入口；node 旧（不认 `panes.list`）时列表读不出，显示错误和「重试」。
+
+### 没做
+
+- iOS / Android 还没有独立终端（它们只有会话里的终端，`terminal_subscribe` 只用会话 id）。协议已经够用：同一个接口、同一个地址。
+- 关闭窗格 / 标签页、重命名、分屏：不在这一版，需要时在电脑上做。
+- 没有会话也没有 herdr 的宿主（Paseo、botmux）：没有窗格，列表为空。
+- ⌘K 搜索面板没有并入窗格（它只搜会话）；窗格的 Jump To 在终端页自己的输入框里。
+
+### 验证
+
+`TestPanesListHasShellsAndAgents`、`TestPanesListRefreshesAStaleLayout`、`TestPaneAddressReachesOnlyTheTerminal`、`TestTerminalWatchStreamsAShellByPaneAddress`、
+`TestNewShellOpensATabInTheWorkspace`（node）；`TestPaneTerminalNeedsAFullDevice`、`TestPaneScreenReadsNeedAFullDevice`、`TestNewShellIsAFullDevicesAndNamesNoDirectory`、
+`TestPaneRoutesAreNotForAnswerOnlyDevices`（hub）；`web/src/lib/terminals.test.ts`。截图用 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 的假 hub（编造的窗格树，`pane:` 地址是一个编造的 zsh）。
+真 herdr 上用 `PERSONA_LIVE_PANES=1 go test -tags herdrlive -run TestLivePanes ./internal/node/`（`panes_live_test.go`）：列出它的空间 / 标签页 / 窗格（快照里确实有没有 Agent 的窗格，herdr 0.9.5），
+用 `tab create --no-focus` 临时开一个标签页、按地址 `terminal.watch` 拿到帧、再关掉这个标签页；不碰已有的窗格，没有往里打字。

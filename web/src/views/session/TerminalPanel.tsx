@@ -32,7 +32,7 @@ function useFeed(feed: TerminalFeed | null): FeedView | null {
   return useSyncExternalStore(feed?.subscribe ?? nothing, () => feed?.snapshot() ?? null);
 }
 
-export function TerminalPanel({ mid, sid, onClose }: { mid: string; sid: string; onClose: () => void }) {
+export function TerminalPanel({ mid, sid, label, onClose }: { mid: string; sid: string; label?: string; onClose: () => void }) {
   const session = useStore(() => getSession(mid, sid));
   const machine = useStore((s) => machineWithHub(mid, s.machines));
   const canDrive = useStore((s) => s.features.includes("terminal_control"));
@@ -55,7 +55,7 @@ export function TerminalPanel({ mid, sid, onClose }: { mid: string; sid: string;
     return () => f.dispose();
   }, [mid, sid]);
 
-  const subtitle = [session ? sessionTitle(session) : "", machine].filter(Boolean).join(" · ");
+  const subtitle = [label ?? (session ? sessionTitle(session) : ""), machine].filter(Boolean).join(" · ");
   const streaming = v?.mode === "stream";
   const takeBack = Boolean(v && streaming && v.wants && v.control === "declined" && v.why !== "unsupported");
   const driving = v?.control === "active" || v?.control === "starting";
