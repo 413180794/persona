@@ -1499,16 +1499,9 @@ struct ChatView: View {
                 // on its app-server takes its effort alone (setsEffortOnly).
                 // In the shell the modes are in the composer's model menu (ShellComposerBar, #1091).
                 let modes = viewing == nil && !usesShellComposer && session?.canSend == true && (session.map({ $0.assistant || $0.isClaude || $0.setsEffortOnly }) ?? true)
-                // While typing, a button at the row's end puts the keyboard away: the iPhone keyboard has no key for it
-                // and on iPhone Duo's side bars a drag on the few rows left is easy to miss (2026-11-04). The shell's
-                // composer has it in its own row (`dismissesKeyboard`): a row for it alone was a gap over the composer.
-                if modes || (composerTyping && !usesShellComposer) {
-                    HStack(spacing: Theme.Space.s) {
-                        if modes { SessionModeBar(key: key, session: session) } else { Spacer(minLength: 0) }
-                        if composerTyping { KeyboardDismissChip().transition(.opacity) }
-                    }
-                    .padding(.leading, Theme.Space.xs)
-                    .animation(Theme.Motion.standard, value: composerTyping)
+                if modes {
+                    SessionModeBar(key: key, session: session)
+                        .padding(.leading, Theme.Space.xs)
                 }
                 if let s = session, !s.canSend, let reason = s.sourceSubtitle {
                     Text(reason).font(Theme.Font.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
@@ -2686,24 +2679,6 @@ struct ChatSkeleton: View {
     }
 }
 
-/// Message input: text, photos, quick slash commands; turns into a stop button while Claude works.
-/// Puts the keyboard away: a chip like the mode chips beside it, the symbol only.
-struct KeyboardDismissChip: View {
-    var body: some View {
-        Button { Haptics.tap(); Keyboard.dismiss() } label: {
-            Image(systemName: Theme.Icon.dismissKeyboard)
-                .font(Theme.Font.labelStrong)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, Theme.Space.m)
-                .padding(.vertical, Theme.Space.sm)
-                .background(Color.primary.opacity(0.06), in: .capsule)
-                .contentShape(.capsule)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("收起键盘")
-    }
-}
-
 /// Claude's suggested next message over the composer: a tap puts it in the box to edit, 直接发送 (long press) sends it.
 /// A session Persona is still starting (node/starting.go): what is sent now waits and goes in once it is ready. Or why
 /// it did not start.
@@ -2984,7 +2959,6 @@ struct Composer: View, Equatable {
                                  stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                                  modesTitle: modesTitle,
                                  quotes: contexts,
-                                 dismissesKeyboard: true,
                                  send: { Task { await sendText(text) } }) {
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if CameraPicker.isAvailable {

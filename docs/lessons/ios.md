@@ -9,6 +9,11 @@
 
 visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内容背景。用 `Color.clear.frame(width: 0, height: 0)` 会引入不必要的固定尺寸；iOS 的 token 检查扫描共享源码，不会因为它位于 visionOS 分支就忽略。直接返回 `EmptyView()`，既不绘制内容，也不占布局空间；不为这个空替身新增零尺寸 token，不提高基线或添加豁免。
 
+## 对话输入区的收键盘按钮与模型显示（#2200）
+
+- 2026-11-05：App 的收键盘图标有两个来源：新外壳的 `ShellComposerBar`（主对话和 Agents 共用）以及旧布局的 `KeyboardDismissChip`。按用户要求删除时要同时移除旧布局仅为按钮创建的条件行，不能用透明占位替代；`composerTyping` 仍控制侧边栏布局的页头折叠，`Keyboard.dismiss` 与 `Theme.Icon.dismissKeyboard` 仍供手势和终端键栏使用，不能全局删除。
+- GPT 名称格式化只发生在显示层，版本和后缀都保留。模型选择项用计算属性提供友好名称，`AgentModel.id`、`name`、配置值和请求编码保持原样；独立的自定义名称优先。不要修改通用 `Fmt.model`，也不要让原本只去掉供应商前缀的非 GPT 标签被顺手缩写。UI 回归在旧实现上先确认失败，再验证两种布局、主对话／Agents、键盘展开／手势收起及长标签下的按钮尺寸。
+
 ## 视频导出
 
 - 2026-11-04，#1045：生成的灰色视频在真实压缩测试中触发 `EXC_BREAKPOINT / SIGTRAP`，调用栈位于 Swift AVFoundation 的 `AVAssetExportSession.ProgressStates.Iterator.StateInternal.init`。

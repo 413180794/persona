@@ -93,6 +93,45 @@ import Testing
         #expect(decoded.machine == "desk")
     }
 
+    @Test func gptNamesDoNotChangeIDsOrCustomAliases() throws {
+        let raw = "gpt-6.1-sol"
+        let l = try list("""
+        {"agent":"codex","models":[
+          {"id":"gpt-6.1","name":"GPT-6.1","default":true},
+          {"id":"gpt-6.1-sol","name":"GPT-6.1-Sol"},
+          {"id":"gpt-6.1-mini","name":"我的日常模型"},
+          {"id":"custom-alias","name":"gpt-6.1-sol","resolved":"gpt-6.1-sol"},
+          {"id":"gpt-6.1-codex"},
+          {"id":"glm-5.3","name":"GLM 5.3"}
+        ]}
+        """)
+        var c = LauncherModelChoice(list: l, picked: raw)
+        #expect(c.title == "6.1 Sol")
+        #expect(c.selected?.displayName == SessionModes.modelName(raw))
+        #expect(c.selected?.id == raw && c.selected?.name == "GPT-6.1-Sol")
+        #expect(c.sent == raw && c.detail == raw)
+        #expect(l.models[2].displayName == "我的日常模型")
+        #expect(l.models[3].displayName == "gpt-6.1-sol") // explicit alias, not a raw id
+        #expect(l.models[4].displayName == "6.1 Codex")
+        #expect(l.models[5].displayName == "GLM 5.3")
+        let customDefault = AgentModel(id: "custom-model", name: "gpt-6.1-sol", isDefault: true)
+        #expect(LauncherModelChoice(list: LauncherModels(agent: "codex", models: [customDefault])).defaultDetail == "gpt-6.1-sol")
+        #expect(c.matching("6.1 Sol").contains { $0.id == raw })
+        c.picked = ""
+        #expect(c.title == "默认" && c.sent == nil && c.defaultDetail == "6.1")
+        c.configured = raw
+        #expect(c.defaultDetail == "模型配置：6.1 Sol" && c.configured == raw)
+        c.picked = "not-listed"
+        #expect(c.title == "默认" && c.unlisted == "not-listed" && c.sent == nil)
+        let request = APIClient.StartRequest(machineID: "example-box", cwd: "/code", launcher: "codex", model: raw)
+        let body = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any]
+        #expect(body?["model"] as? String == raw)
+        let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(l)) as? [String: Any]
+        let entries = encoded?["models"] as? [[String: Any]]
+        #expect(entries?[1]["id"] as? String == raw)
+        #expect(entries?[1]["name"] as? String == "GPT-6.1-Sol")
+    }
+
     @Test func aStartCarriesThePick() throws {
         let req = APIClient.StartRequest(machineID: "box", cwd: "/code", launcher: "claude", model: "opus")
         let body = try JSONSerialization.jsonObject(with: JSONEncoder().encode(req)) as? [String: Any]

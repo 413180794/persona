@@ -694,7 +694,7 @@ struct BeautifulStarterComposer: View {
     /// The machine's launchers; until they load, the current one alone, so the button shows what a new
     /// conversation starts with.
     private var models: [PromptModel] {
-        let list = launchers.map { PromptModel(id: $0.name, name: $0.name, tag: Fmt.model($0.model) ?? "") }
+        let list = launchers.map { PromptModel(id: $0.name, name: $0.name, tag: SessionModes.gptModelName($0.model) ?? Fmt.model($0.model) ?? "") }
         return list.isEmpty ? [PromptModel(id: currentLauncher, name: currentLauncher, tag: "")] : list
     }
 
@@ -877,7 +877,7 @@ struct StarterModelChip: View {
                     launcher = l.name
                     Haptics.tap()
                 } label: {
-                    if l.name == current { Label(l.name, systemImage: Theme.Icon.done) } else { Text("\(l.name)  \(Fmt.model(l.model) ?? "")") }
+                    if l.name == current { Label(l.name, systemImage: Theme.Icon.done) } else { Text("\(l.name)  \(SessionModes.gptModelName(l.model) ?? Fmt.model(l.model) ?? "")") }
                 }
             }
         } label: {

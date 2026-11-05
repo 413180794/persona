@@ -377,7 +377,7 @@ struct NewChatView: View {
                     LauncherModelPicker(choice: c, picked: $pickedModel, refresh: { await loadModels(refresh: true) },
                                         defaultFooter: "不指定模型：按启动器自己的设置\(c.configured.isEmpty ? "" : "和「模型配置」")运行。")
                 } label: {
-                    modelLabel(title: c.selected?.name ?? "默认模型", detail: c.detail, trailing: nil)
+                    modelLabel(title: c.selected?.displayName ?? "默认模型", detail: c.detail, trailing: nil)
                 }
                 .accessibilityIdentifier("newChat.model")
             } else {

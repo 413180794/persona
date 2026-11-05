@@ -164,6 +164,15 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests`。
 写 UI 测试时先在没有修复的代码上跑一次确认它会失败，再上修复。
 
+对话输入区（#2200）：先确认端口空闲，再 `PORT=<独立端口> python3 scripts/mock/composer_hub.py`。
+这个独立入口复用编造数据，只把主对话和 Agents 对话的模型改成短／长 GPT ID，不修改其他车道的 mock 夹具。
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<独立端口> xcodebuild test … -only-testing:PersonaUITests/ComposerKeyboardTests`
+检查新旧布局的 App 收键盘按钮不存在、输入和换行、手势收键盘且保留草稿、发送、侧边栏布局页头折叠，以及模型标签与菜单一致。
+`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 切风格；用 `simctl ui <udid> appearance light|dark` 切实际外观，
+`TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，`TEST_RUNNER_JARVIS_SHOTS_APPEARANCE` 仅给截图命名。
+使用新建的专用模拟器，只配对这个假 hub；不得将本组测试指向真实主对话。夹具回归：
+`python3 -B -m unittest discover -s scripts/mock -p 'test_composer_hub.py'`。
+
 通知按钮（`NotificationActionTests`）不连真实 hub，连 `scripts/mock/mock_hub.py`：
 `PORT=18791 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/NotificationActionTests`。
 它在 SpringBoard 上长按横幅、点「拒绝」，再读 mock 的 `GET /mock/resolved` 确认 hub 收到了 resolve。

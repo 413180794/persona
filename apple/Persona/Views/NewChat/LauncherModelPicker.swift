@@ -23,7 +23,7 @@ nonisolated struct LauncherModelChoice: Equatable {
     var sent: String? { canPick && selected?.isDefault == false ? picked : nil }
 
     /// The row's title: the picked model's name, else 默认.
-    var title: String { selected.map(\.name) ?? "默认" }
+    var title: String { selected.map(\.displayName) ?? "默认" }
     /// The row's second line: the picked model's (`AgentModel.detail`), or what the default runs.
     var detail: String? {
         if let m = selected { return m.detail }
@@ -31,8 +31,11 @@ nonisolated struct LauncherModelChoice: Equatable {
     }
     /// What runs with no pick: 模型配置's model, or the one the agent defaults to.
     var defaultDetail: String? {
-        if !configured.isEmpty { return "\(configuredLabel)：\(configured)" }
-        return defaultModel.map { $0.resolved ?? $0.name }
+        if !configured.isEmpty { return "\(configuredLabel)：\(SessionModes.gptModelName(configured) ?? configured)" }
+        return defaultModel.map { model in
+            if let resolved = model.resolved { return SessionModes.gptModelName(resolved) ?? resolved }
+            return model.displayName
+        }
     }
 
     /// The thinking efforts the model that will run takes; nil: not known (every level stays offered).
@@ -57,16 +60,25 @@ nonisolated struct LauncherModelChoice: Equatable {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return choices }
         return choices.filter { m in
-            [m.name, m.id, m.resolved ?? "", m.description ?? ""].contains { $0.localizedCaseInsensitiveContains(q) }
+            [m.displayName, m.name, m.id, m.resolved ?? "", m.description ?? ""].contains { $0.localizedCaseInsensitiveContains(q) }
         }
     }
 }
 
 extension AgentModel {
-    /// Its second line: the id when the name is another word for it, and the model an alias stands for.
+    /// A separate name is a custom alias and takes precedence over GPT id formatting. Stored/wire fields stay raw.
+    nonisolated var displayName: String {
+        let raw = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bareID = Fmt.model(id) ?? id
+        guard raw.isEmpty || raw.caseInsensitiveCompare(id) == .orderedSame
+                || raw.caseInsensitiveCompare(bareID) == .orderedSame else { return name }
+        return SessionModes.gptModelName(id) ?? (raw.isEmpty ? id : name)
+    }
+
+    /// Its second line: the id when the displayed name is another word for it, and the model an alias stands for.
     nonisolated var detail: String? {
         var parts: [String] = []
-        if id != name { parts.append(id) }
+        if id != displayName { parts.append(id) }
         if let r = resolved, r != name, r != id { parts.append("→ \(r)") }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
@@ -92,7 +104,7 @@ struct LauncherModelPicker: View {
                 Section {
                     row(title: "默认", detail: choice.defaultDetail, description: nil, id: "")
                     if allowsCustom, let id = choice.unlisted {
-                        row(title: id, detail: "当前配置，列表里没有", description: nil, id: id)
+                        row(title: SessionModes.gptModelName(id) ?? id, detail: "当前配置，列表里没有：\(id)", description: nil, id: id)
                     }
                 } footer: {
                     Text(defaultFooter)
@@ -100,7 +112,7 @@ struct LauncherModelPicker: View {
             }
             Section {
                 ForEach(shown) { m in
-                    row(title: m.name, detail: m.detail, description: m.description, id: m.id)
+                    row(title: m.displayName, detail: m.detail, description: m.description, id: m.id)
                 }
             } header: {
                 if !shown.isEmpty { Text("\(shown.count) 个模型") }

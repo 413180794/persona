@@ -302,7 +302,7 @@ struct ModelPurposeEditorView: View {
         } label: {
             LabeledContent("具体模型") {
                 VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
-                    Text(choice.selected?.name ?? choice.unlisted ?? "默认").lineLimit(1)
+                    Text(choice.selected?.displayName ?? choice.unlisted.map { SessionModes.gptModelName($0) ?? $0 } ?? "默认").lineLimit(1)
                     if let detail = choice.unlisted != nil ? "列表里没有" : choice.detail {
                         Text(detail).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     }
