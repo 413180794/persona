@@ -312,7 +312,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 两页叫「助手」「Agents」（2026-11-01 用户要求，原来叫「聊天」「工作」）；新对话页和旧布局一样是欢迎页（2026-11-02 用户要回来的，原来没有待办时什么都不放，整页空白）；设置 › 外观 › 布局 里留一个「旧布局」开关过渡几天（`AppModel.oldLayout`，`ui.oldLayout`）。
 #392：飞书设置打开「首页显示消息」后，顶部增加第三页「消息」，默认仍是两页；旧布局与 iPad 对应增加 Tab。它只浏览会话并复用现有聊天页，边界见 [飞书迁移](lark-connector-migration.md)。
 #1530：经 lark-connector 接飞书由私有插件提供，依赖 `/api/v1/lark/…` 的入口只在 hub 的 features 里有 `lark` 时出现（`LarkFeatures`，`App/LarkFeatures.swift`）：「消息」页和它的切换按钮 / Tab（开关保留原值，装上插件就回来）、设置 › 连接器 › 飞书、翻译里的「飞书会话」、链接打开飞书文档的原生阅读器；公司圈帖子的原生阅读器还要 `lark_moments`。没有时飞书文档和公司圈链接照普通网页打开；收件箱里带 `lark` / `doc` / `moment` 块的条目只有插件给，照常画。features 为空（还没收到 hello、体验模式）或只有 `lark_attachments` 没有 `lark`（插件之前自己接飞书的 hub）按原样全部显示。假 hub 用 `MOCK_NO_LARK=1` 模拟没装插件。
-只在 iPhone 宽度（compact）生效；iPad、iPhone Duo 打开、Mac、手表不变。代码在 `Persona/Views/Shell/`，组件在
+只在 iPhone 宽度（compact）生效；iPad、iPhone Duo 打开、Mac、手表不变（iPad 和 iPhone Duo 打开时 Persona 的侧边栏照抽屉排，见「iPad」）。代码在 `Persona/Views/Shell/`，组件在
 `DesignSystem/ShellComponents.swift`、`ShellComposerBar.swift`，颜色和尺寸是 `Theme.Shell`（各风格都用这一套中性色）。
 
 | 部分 | 做法 |
@@ -436,6 +436,11 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 - iPad 上左栏用 `Theme.Size.sidebar`（340…480，理想 400；系统默认太窄，Agents 卡片的标题全折行），Persona tab 的对话列表也一样，切 tab 时左栏不跳。
   iPhone Duo 不设宽度（系统按折痕分栏）。
 - iPad 支持四个方向（分屏和台前调度要求）；iPhone 仍然只竖屏。
+- 侧边栏和 iPhone 新外壳的抽屉一样（2026-11-05 用户要求）：最上面是 Persona（主对话），一条分隔线，收件箱、待办、定时任务、知识库、机器，再是对话历史；
+  底部「新对话」药丸 + 设置，下面仍是形象、在线状态和机器那一行。顶部的 Tab 只有 Persona、Agents（和可选的「消息」），收件箱和设置不再是 Tab：
+  收件箱、待办、机器推到 Persona 的右栏（`ShellDestinations`），设置是浮层（右上角 ×）。路由照旧写 `AppModel.selectedTab`，
+  `PadRouter`（`RootView.swift`）把 `.mail` 转成「在 Persona 页推收件箱」、`.settings` 转成「打开设置浮层」。旧布局还是四个 Tab。
+  `IPadSidebarTests` 守着（竖屏、横屏：顺序、底部按钮、没有收件箱 / 设置 Tab、收件箱在右栏打开、设置浮层能关）。
 - 欢迎页的内容宽度不超过 `Theme.Size.readable`（560），不在大屏上铺满。
 - 从对话里打开的详情页（任务详情、坞里的 Agent、对话里的待办条、hub 链接 `/todos?id=`）在常规宽度下推进对话所在的栈、铺满详情栏，
   不用 sheet：`presentationDetents` 在常规宽度下不起作用，sheet 会是屏幕中间的小表单（2026-11-05 用户反馈，#2816）。统一用

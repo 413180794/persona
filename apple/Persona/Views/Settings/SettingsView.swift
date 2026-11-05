@@ -4,6 +4,8 @@ import VisionKit
 
 struct SettingsView: View {
     @Environment(\.shell) private var shell
+    /// Shown as a sheet without the shell (the iPad's, `PadRoutes`): the same × to close it.
+    @Environment(\.settingsSheet) private var inSheet
     @Environment(AppModel.self) private var model
     @State private var confirmUnpair = false
     @State private var showPair = false
@@ -221,7 +223,7 @@ struct SettingsView: View {
             .themedPage()
             .pageToolbar {
                     // As a sheet over the shell (docs/ios.md「新外壳」): ChatGPT's × to close it.
-                    if shell != nil {
+                    if shell != nil || inSheet {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { model.shellSettings = false } label: { Label("关闭", systemImage: Theme.Icon.close) }
                                 .foregroundStyle(Color.primary)
@@ -1168,4 +1170,9 @@ struct SettingsButtonLook: ViewModifier {
         if AppStyle.current.usesBeautifulUI { content.buttonStyle(.plain) } else { content }
         #endif
     }
+}
+
+extension EnvironmentValues {
+    /// 设置 is a sheet of its own (the iPad's, docs/ios.md「iPad」): its × closes it, as over the shell.
+    @Entry var settingsSheet = false
 }

@@ -10,6 +10,10 @@ struct AssistantView: View {
     @Environment(\.horizontalSizeClass) private var widthClass
     /// The ChatGPT-style shell (docs/ios.md「新外壳」): it owns the drawer, and pushes its pages here.
     @Environment(\.shell) private var shell
+    #if os(iOS)
+    /// The iPad's tabs without 收件箱 and 设置 (`RootTabs.padSidebar`): the sidebar column lists them as the shell's does.
+    @Environment(\.padRouter) private var padRouter
+    #endif
     @State private var pending: PendingStart?
     /// Pages pushed by value: the shell's 收件箱 and 机器 (and what they push themselves).
     @State private var path = NavigationPath()
@@ -33,6 +37,23 @@ struct AssistantView: View {
     @StoredValue("assistant.newEffort") private var starterEffort = ""
 
     private var current: SessionKey? { model.assistantCurrent }
+
+    /// The sidebar column has the shell's places (收件箱, 待办, 机器) and 设置 (the iPad, `padRouter`).
+    private var padPlaces: Bool {
+        #if os(iOS)
+        padRouter != nil && widthClass == .regular
+        #else
+        false
+        #endif
+    }
+
+    /// What the shell or the iPad's tabs asked this page to show.
+    private var request: (page: ShellPage, serial: Int)? {
+        #if os(iOS)
+        if shell == nil, let padRouter { return padRouter.request }
+        #endif
+        return shell?.request
+    }
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
@@ -72,21 +93,28 @@ struct AssistantView: View {
         }
     }
 
-    /// The sidebar, as the drawer (compact) or as a column of the split (regular, the tab bar beside it: no 设置).
+    /// The sidebar, as the drawer (compact) or as a column of the split (regular, the tab bar beside it: no 设置; on
+    /// the iPad, whose tabs have neither, the shell's places and 设置 as on the iPhone, `padPlaces`).
     private func sidebar(column: Bool) -> some View {
-        AssistantSidebar(current: pending == nil ? current : nil,
-                         open: { key in
-                             model.assistantCurrent = key
-                             pending = nil
-                             drawer.close()
-                         },
-                         newConversation: { newConversation(); drawer.close() },
-                         openProfile: { drawer.close(); showProfile = true },
-                         openRoutines: { drawer.close(); showRoutines = true },
-                         openKnowledge: { drawer.close(); showKnowledge = true },
-                         openSettings: column ? nil : { drawer.close(); model.selectedTab = .settings },
-                         drawer: column ? nil : drawer,
-                         openTodos: { drawer.close(); showTodos = true })
+        let places = column && padPlaces
+        return AssistantSidebar(current: pending == nil ? current : nil,
+                                open: { key in
+                                    model.assistantCurrent = key
+                                    pending = nil
+                                    drawer.close()
+                                    // The conversation, not the page pushed over it (the same one open: no change to see).
+                                    if places { backToRoot() }
+                                },
+                                newConversation: { newConversation(); drawer.close(); if places { backToRoot() } },
+                                openProfile: { drawer.close(); showProfile = true },
+                                openRoutines: { drawer.close(); showRoutines = true },
+                                openKnowledge: { drawer.close(); showKnowledge = true },
+                                openSettings: places ? { model.shellSettings = true }
+                                    : column ? nil : { drawer.close(); model.selectedTab = .settings },
+                                drawer: column ? nil : drawer,
+                                openInbox: places ? { show(.inbox) } : nil,
+                                openTodos: places ? { show(.todos) } : { drawer.close(); showTodos = true },
+                                onMachines: places ? { show(.machines) } : nil)
     }
 
     /// 历史对话: the drawer on a phone, the sidebar column beside the conversation on a wide display.
@@ -157,14 +185,14 @@ struct AssistantView: View {
             .navigationDestination(isPresented: $showKnowledge) { KnowledgeView() }
             .navigationDestination(isPresented: $showRoutines) { AssistantRoutinesView() }
             .navigationDestination(isPresented: $showTodos) { TodosView() }
-            .modifier(ShellDestinations(path: $path, enabled: shell != nil))
-            .modifier(ClassicTodoDetailDestination(enabled: shell == nil))
+            .modifier(ShellDestinations(path: $path, enabled: shell != nil || padPlaces))
+            .modifier(ClassicTodoDetailDestination(enabled: shell == nil && !padPlaces))
             // On appear too (a cold launch onto 收件箱 asks before this page exists), but each request once: the root
             // appears again after every pop, and replaying the last request pushed the inbox right back.
-            .onChange(of: shell?.request?.serial, initial: true) { _, serial in
+            .onChange(of: request?.serial, initial: true) { _, serial in
                 guard let serial, serial > handledRequest else { return }
                 handledRequest = serial
-                show(shell?.request?.page)
+                show(request?.page)
             }
             .onChange(of: atRoot, initial: true) { _, root in shell?.chatAtRoot = root }
             // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root. So does 问 Persona

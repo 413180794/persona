@@ -116,6 +116,19 @@ struct RootView: View {
 
 @MainActor private struct RootTabs: View {
     @Environment(AppModel.self) private var model
+    #if os(iOS)
+    @State private var pad = PadRouter()
+    #endif
+
+    /// iPad (and iPhone Duo open) without 旧布局: 收件箱 and 设置 are in Persona's sidebar, as in the iPhone's drawer, not
+    /// tabs (docs/ios.md「iPad」, 2026-11-05 user). 旧布局 keeps the four tabs; Apple Vision Pro keeps them too.
+    private var padSidebar: Bool {
+        #if os(iOS)
+        !model.oldLayout
+        #else
+        false
+        #endif
+    }
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
@@ -128,11 +141,89 @@ struct RootView: View {
             #if os(iOS) || os(visionOS)
             if LarkHomePreference.shared.shows { FeishuRootTab() }
             #endif
-            InboxRootTab()
-            SettingsRootTab()
+            if !padSidebar {
+                InboxRootTab()
+                SettingsRootTab()
+            }
+        }
+        #if os(iOS)
+        .modifier(PadRoutes(router: pad, enabled: padSidebar))
+        #endif
+    }
+}
+
+#if os(iOS)
+/// Where the iPad's routes to 收件箱 and 设置 land without their tabs (`RootTabs.padSidebar`): every route in the app still
+/// sets `AppModel.selectedTab` (notifications, Siri, the inbox's rows…). `.mail` opens the inbox on the Persona tab's page,
+/// beside its sidebar; `.settings` the sheet, over the tab that was in front. As the iPhone's shell does (`ShellState.route`).
+@MainActor @Observable final class PadRouter: TabRouter {
+    /// What the Persona tab is asked to show; `serial` makes the same request count twice.
+    private(set) var request: (page: ShellPage, serial: Int)?
+    /// The tab in front, for 设置 to go back to.
+    @ObservationIgnored private var front = AppTab.assistant
+
+    func show(_ page: ShellPage) {
+        request = (page, (request?.serial ?? 0) + 1)
+    }
+
+    func attach(to model: AppModel) {
+        model.tabRouter = self
+        route(model.selectedTab, in: model)
+    }
+
+    func detach(from model: AppModel) {
+        guard model.tabRouter === self else { return }
+        model.tabRouter = nil
+    }
+
+    func route(_ t: AppTab, in model: AppModel) {
+        guard !model.oldLayout else { return detach(from: model) }
+        switch t {
+        case .mail:
+            show(.inbox)
+            front = .assistant
+            model.selectedTab = .assistant
+        case .settings:
+            model.shellSettings = true
+            model.selectedTab = front
+        default:
+            front = t
         }
     }
 }
+
+/// The iPad's routes (`PadRouter`) and its 设置 sheet, on the tabs.
+private struct PadRoutes: ViewModifier {
+    @Environment(AppModel.self) private var model
+    let router: PadRouter
+    var enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            @Bindable var model = model
+            content
+                .environment(\.padRouter, router)
+                .sheet(isPresented: $model.shellSettings) {
+                    // As the shell's: the look is its identity too (the sheet outlives RootView's rebuild for a new look).
+                    SettingsView()
+                        .environment(\.settingsSheet, true)
+                        .id(model.look)
+                        // The page's height, not the form's: 设置 is a long list.
+                        .presentationSizing(.page)
+                }
+                .onAppear { router.attach(to: model) }
+                .onDisappear { router.detach(from: model) }
+        } else {
+            content
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// Set on the iPad's tabs when 收件箱 and 设置 are in Persona's sidebar (`RootTabs.padSidebar`); nil otherwise.
+    @Entry var padRouter: PadRouter?
+}
+#endif
 
 /// A tab's page, drawn again only by what it reads itself. Each tab's badge (the agents waiting, the inbox's 需要你) is read
 /// by its `Tab`, and the hub changes them with nearly every push: without this the `Tab` built its page again each time,

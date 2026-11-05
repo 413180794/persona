@@ -688,7 +688,8 @@ struct AssistantSidebar: View {
     var openSettings: (() -> Void)?
     /// The drawer it is in (nil as a column). The drawer's sidebar stays built while closed: closing it clears the search.
     var drawer: AssistantDrawer?
-    /// The shell's drawer (docs/ios.md「新外壳」) also lists 收件箱 and 机器, and ends in 新对话 + 设置 like ChatGPT's.
+    /// The shell's drawer (docs/ios.md「新外壳」) also lists 收件箱 and 机器, and ends in 新对话 + 设置 like ChatGPT's;
+    /// so does the iPad's column (docs/ios.md「iPad」), whose tab bar has no 收件箱 or 设置.
     var openInbox: (() -> Void)? = nil
     var openTodos: (() -> Void)? = nil
     var onMachines: (() -> Void)? = nil
@@ -813,7 +814,7 @@ struct AssistantSidebar: View {
             }
         } else {
             HStack {
-                Text(model.persona.name).font(isShell ? Theme.Font.display : Theme.Font.title).foregroundStyle(Color.primary).lineLimit(1)
+                Text(model.persona.name).font(isShell && !besideBar ? Theme.Font.display : Theme.Font.title).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: Theme.Space.s)
                 if besideBar {
                     // The same button as the top bar's beside it (2026-11-04: on iPhone Duo open, this one stood lower
@@ -839,13 +840,13 @@ struct AssistantSidebar: View {
         searching = true
     }
 
-    /// The split's list column (a wide display), beside the conversation's top bar: the header is that bar's row.
-    /// The drawer and the shell keep their own; on the Mac both sit in the title bar's row already (#830).
+    /// The split's list column (a wide display), beside the conversation's top bar: the header is that bar's row, with
+    /// the shell's places or without. The drawer keeps its own; on the Mac both sit in the title bar's row already (#830).
     private var besideBar: Bool {
         #if os(macOS)
         false
         #else
-        drawer == nil && !isShell
+        drawer == nil
         #endif
     }
 
@@ -1277,6 +1278,11 @@ struct AssistantSidebar: View {
     @ViewBuilder private var footer: some View {
         if isShell {
             shellFooter
+            // The iPad's column (the shell's places beside the conversation): Persona's face and where it runs stay
+            // at the foot, under the shell's 新对话 + 设置 (2026-11-05 user: 左下角没什么问题).
+            if drawer == nil {
+                AssistantProfileFooter(machineID: machineID, openProfile: openProfile, openSettings: nil)
+            }
         } else {
             #if os(macOS)
             if macPlacesGroup {
