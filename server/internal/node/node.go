@@ -379,7 +379,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		ResumeOnly     bool            `json:"resume_only"`
 		AtItemID       string          `json:"at_item_id"` // session.fork: the reply to branch off at
 		Refresh        bool            `json:"refresh"`    // launchers.models: ask again, not the kept list
-		Configured     bool            `json:"configured"` // launchers.models: hub.json names this launcher
+		Configured     bool            `json:"configured"` // launchers.models, .probe, .http, .model.check: hub.json names this launcher
 		Raw            json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
@@ -543,6 +543,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		n.setManaged(c.Launchers)
 		return map[string]any{"ok": true}, nil
 	case "launchers.model.check":
+		if err := n.runnableLauncher(ctx, p.Name, p.Configured); err != nil {
+			return nil, err
+		}
 		agent, err := n.launcherModelCheck(ctx, p.Name, p.Model)
 		return map[string]any{"agent": agent}, err
 	case "launchers.show":
@@ -551,6 +554,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "launchers.check":
 		return n.launcherCheck(ctx, p.Name), nil
 	case "launchers.probe":
+		if err := n.runnableLauncher(ctx, p.Name, p.Configured); err != nil {
+			return nil, err
+		}
 		return map[string]any{"detail": n.launcherProbeCached(ctx, p.Name)}, nil
 	case "launchers.models":
 		if !p.Configured && p.AgentType == "" && !n.knownLauncher(ctx, p.Name) { // either: the hub vouches, from hub.json
@@ -558,6 +564,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		return n.launcherModels(ctx, p.Name, p.AgentType, p.Refresh)
 	case "launchers.http":
+		if err := n.runnableLauncher(ctx, p.Name, p.Configured); err != nil {
+			return nil, err
+		}
 		return n.launcherHTTP(ctx, p.Name, p.HTTP)
 	case "dirs.list":
 		return n.dirs(p.Path)

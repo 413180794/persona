@@ -294,3 +294,48 @@ func TestLauncherModelsOtherAgents(t *testing.T) {
 		t.Fatal("ran an invalid launcher name")
 	}
 }
+
+// The probe, the gateway (quota) and the --model check run the launcher too: the same rule as its models. A word this
+// machine does not offer as a launcher is not run, unless the hub's hub.json names it (#1185).
+func TestLauncherProbesOnlyRunKnownLaunchers(t *testing.T) {
+	home := fakeCLIHome(t)
+	n, _ := testNode(t)
+	n.home, n.dir = home, filepath.Join(home, ".jarvis")
+	marker := filepath.Join(home, "ran")
+	f, err := os.OpenFile(filepath.Join(home, ".zshrc"), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("notalauncher() { echo ran >> " + marker + " }\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	probeCache.Lock()
+	delete(probeCache.at, "notalauncher")
+	probeCache.Unlock()
+	ask := func(method, name string, configured bool) error {
+		params, _ := json.Marshal(map[string]any{"name": name, "model": "claude-opus-5-5", "configured": configured})
+		_, err := n.handle(context.Background(), method, params)
+		return err
+	}
+	methods := []string{"launchers.probe", "launchers.http", "launchers.model.check"}
+	for _, method := range methods {
+		for _, name := range []string{"notalauncher", "true"} {
+			if err := ask(method, name, false); err == nil || !strings.Contains(err.Error(), "unknown launcher") {
+				t.Errorf("%s %s, not a launcher: %v", method, name, err)
+			}
+		}
+	}
+	if b, err := os.ReadFile(marker); err == nil {
+		t.Fatalf("ran what is not a launcher: %s", b)
+	}
+	for _, method := range methods {
+		if err := ask(method, "mine", false); err != nil && strings.Contains(err.Error(), "unknown launcher") {
+			t.Errorf("%s of a launcher of this machine refused: %v", method, err)
+		}
+	}
+	_ = ask("launchers.probe", "notalauncher", true) // the hub vouches for it: asked, whatever it answers
+	if _, err := os.ReadFile(marker); err != nil {
+		t.Fatalf("a launcher in hub.json was not probed: %v", err)
+	}
+}

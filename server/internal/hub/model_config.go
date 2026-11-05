@@ -616,7 +616,9 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 				var result struct {
 					Agent string `json:"agent"`
 				}
-				if err := m.call(ctx, "launchers.model.check", map[string]any{"name": strings.TrimPrefix(b.Provider, "launcher."), "model": b.Model}, &result); err != nil {
+				name := strings.TrimPrefix(b.Provider, "launcher.")
+				params := map[string]any{"name": name, "model": b.Model, "configured": m.configuredLauncher(name)}
+				if err := m.call(ctx, "launchers.model.check", params, &result); err != nil {
 					return fmt.Errorf("无法验证启动器的具体模型: %w", err)
 				}
 				if p.ID == "agent.new" && result.Agent != "claude" && result.Agent != "codex" {

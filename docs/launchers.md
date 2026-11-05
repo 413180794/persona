@@ -81,7 +81,13 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
 环境比，只算启动器改了的（跑 `dsh` 的启动器认成 DSH，不会真把 DSH 跑起来，也不再当成 Claude 去起）。
 Claude 的参数里有 `--settings`（`alias work="claude --settings ~/.claude/settings.work.json"`，最后一个为准，文件或内联 JSON）时，
 那份 settings 的 `env` 盖在探测到的环境上（和 Claude Code 一样 settings 优先）：网关和 Key 常写在那里，不读的话页面看不到网关、「额度」以为没有网关（#1378）。
-读不了就照旧。页面上按电脑显示（各台一样就合成一组）：
+读不了就照旧。
+
+探测会在登录 shell 里运行 `( <名字> )`，所以 hub 来问的探测、额度（`launchers.http`）、`--model` 检查和模型列表只对这台电脑认得的启动器做
+（~/.zshrc 列出的、托管的、runtime 的、`claude` / `traex`），或者 hub.json 里写了的（hub 带 `configured` 担保）；别的名字一律「unknown launcher」，
+不会被当成命令运行（比如 `reboot`，#1185）。所以 hub.json 里加的包装脚本，要先部署 hub 再部署 node，否则旧 hub 不带 `configured`，新 node 不认它。
+
+页面上按电脑显示（各台一样就合成一组）：
 
 - 运行：Agent（Claude Code / Codex / TRAEX）、网关、Key 放在哪个变量（值不显示）
 - 模型：主模型、Fable / Opus / Sonnet / Haiku、小模型、子 Agent，各自的变量名；Codex 看 `-m`

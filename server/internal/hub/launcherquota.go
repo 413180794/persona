@@ -175,7 +175,7 @@ func (h *Hub) launcherGateway(ctx context.Context, name, machine string) (launch
 	var gw struct {
 		BaseURL string `json:"base_url"`
 	}
-	if err := m.call(ctx, "launchers.http", map[string]any{"name": name}, &gw); err != nil {
+	if err := m.call(ctx, "launchers.http", map[string]any{"name": name, "configured": m.configuredLauncher(name)}, &gw); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
 			return out, errors.New(m.cfg.Name + " 上的 node 太旧：更新后才能查额度")
 		}
@@ -184,7 +184,7 @@ func (h *Hub) launcherGateway(ctx context.Context, name, machine string) (launch
 	out.base = gw.BaseURL
 	out.send = func(ctx context.Context, r quota.Request) (quota.Response, error) {
 		var resp quota.Response
-		err := m.call(ctx, "launchers.http", map[string]any{"name": name, "http": r}, &resp)
+		err := m.call(ctx, "launchers.http", map[string]any{"name": name, "http": r, "configured": m.configuredLauncher(name)}, &resp)
 		return resp, err
 	}
 	return out, nil

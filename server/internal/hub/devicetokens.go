@@ -18,6 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/link"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 // One credential per device (docs/protocol.md「鉴权」). The pairing token in hub.json still opens everything (the CLI,
@@ -267,6 +268,26 @@ func answerMayResolve(r proto.Resolution) bool {
 		return false
 	}
 	return len(r.Keys) == 0 || len(r.Keys) == 1 && answerKey.MatchString(r.Keys[0])
+}
+
+// picksFreeText: the answer picks a screen card's free-text field ("Type something", screen.KindTypeSomething), alone
+// or among a multi-select's options. That field takes the text the answer brings, and an answer-only device brings
+// none: the node would open the field and press enter on nothing (#1185). Checked before the card is claimed, so a
+// refused answer leaves it pending.
+func (h *Hub) picksFreeText(id string, r proto.Resolution) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	p := h.interactions[id]
+	if p == nil || p.ix.Dialog == nil {
+		return false
+	}
+	d := p.ix.Dialog
+	for _, k := range append([]string{r.Option}, r.Options...) {
+		if o := d.Option(k); k != "" && o != nil && o.Kind == screen.KindTypeSomething {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Hub) tokenRoutes(api *http.ServeMux) {

@@ -428,7 +428,7 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 						var res struct {
 							Detail proto.LauncherDetail `json:"detail"`
 						}
-						if err := m.call(ctx, "launchers.probe", map[string]any{"name": name}, &res); err == nil {
+						if err := m.call(ctx, "launchers.probe", map[string]any{"name": name, "configured": m.configuredLauncher(name)}, &res); err == nil {
 							mu.Lock()
 							v.Details[id] = res.Detail
 							mu.Unlock()
@@ -680,6 +680,17 @@ func (h *Hub) launcherModels(w http.ResponseWriter, r *http.Request, m *Machine)
 		return
 	}
 	writeJSON(w, res)
+}
+
+// configuredLauncher: m's hub.json names launcher name. The node asks a launcher that runs (its probe, gateway, models)
+// only when it offers it itself or the hub vouches for it like this (node runnableLauncher).
+func (m *Machine) configuredLauncher(name string) bool {
+	for _, l := range m.cfg.Launchers {
+		if l.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // askLauncherModels asks machine m's node for launcher name's /model list (node/launcher_models.go).

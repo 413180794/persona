@@ -104,6 +104,16 @@ func (n *Node) launcherModels(ctx context.Context, name, agentType string, refre
 
 // knownLauncher: asking a launcher for its models runs it under the login shell, so only what this machine offers as a
 // launcher is asked. One the hub's hub.json names (a wrapper the node may not list) is the hub's to vouch for.
+// runnableLauncher: what the hub asks about a launcher (its probe, gateway, models, whether it forwards --model) runs it in
+// a login shell as `( name … )`, so it is asked only of a launcher this machine offers (knownLauncher) or one the hub's
+// hub.json names (configured). Any other word would run as a command: `reboot` (#1185).
+func (n *Node) runnableLauncher(ctx context.Context, name string, configured bool) error {
+	if configured || n.knownLauncher(ctx, name) {
+		return nil
+	}
+	return fmt.Errorf("unknown launcher %q", name)
+}
+
 func (n *Node) knownLauncher(ctx context.Context, name string) bool {
 	if name == "claude" || name == traexAgent {
 		return true

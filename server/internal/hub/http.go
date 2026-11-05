@@ -170,7 +170,7 @@ func (h *Hub) routes() http.Handler {
 			return
 		}
 		res.AnsweredBy = "" // only the assistant's interaction_answer says it answered
-		if answerOnly(r) && !answerMayResolve(res) {
+		if answerOnly(r) && (!answerMayResolve(res) || h.picksFreeText(r.PathValue("id"), res)) {
 			writeErr(w, http.StatusForbidden, errors.New("this device can only answer with a card's own choices"))
 			return
 		}

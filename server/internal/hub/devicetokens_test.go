@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 // tokenStore keeps device tokens in memory, like the device_tokens table.
@@ -367,5 +369,64 @@ func TestAnswerRoleAnswersCardsWithoutTyping(t *testing.T) {
 		if code, _ := call(t, mux, "POST", "/api/v1/inbox/ix_x/reply", c.tok, string(body)); code == http.StatusForbidden {
 			t.Errorf("reply %q: %d", c.text, code)
 		}
+	}
+}
+
+// An answer-only device brings no text, so it may not pick a screen card's free-text field: the node would open it and
+// press enter on nothing (#1185). Refused before the card is claimed, so the card stays for the phone; its own
+// choices still go through.
+func TestAnswerRoleCannotPickTheFreeTextField(t *testing.T) {
+	h := newTestHub(t)
+	h.store = &tokenStore{memStore: *newMemStore(), rows: map[string]db.DeviceToken{}, rev: map[string]bool{}}
+	mux := h.routes()
+	_, phone := call(t, mux, "POST", "/api/v1/auth/tokens", h.cfg.Token, `{"name":"iPhone","kind":"phone"}`)
+	_, watch := call(t, mux, "POST", "/api/v1/auth/tokens", phone["token"].(string), `{"name":"Watch","kind":"watch"}`)
+	watchTok := watch["token"].(string)
+	var answered []proto.Resolution
+	card := func(id string, multi bool) {
+		d := &screen.Dialog{Rev: "r1", Multi: multi, Options: []screen.Option{
+			{Key: "1", Label: "Yes", Keys: []string{"1"}},
+			{Key: "2", Label: "Type something.", Kind: screen.KindTypeSomething, Keys: []string{"2"}},
+			{Key: "3", Label: "Chat about this", Kind: screen.KindChat, Keys: []string{"3"}},
+		}}
+		h.mu.Lock()
+		h.interactions[id] = &pending{ix: proto.Interaction{ID: id, MachineID: "box", SessionID: "s1", Kind: proto.IxScreen, Dialog: d},
+			local: func(r proto.Resolution) error { answered = append(answered, r); return nil }}
+		h.mu.Unlock()
+	}
+	stillPending := func(id string) bool {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		return h.interactions[id] != nil
+	}
+	card("ix_one", false)
+	card("ix_many", true)
+	for _, c := range []struct{ id, body string }{
+		{"ix_one", `{"option":"2"}`},
+		{"ix_many", `{"options":["1","2"]}`},
+		{"ix_many", `{"option":"2"}`},
+	} {
+		if code, _ := call(t, mux, "POST", "/api/v1/interactions/"+c.id+"/resolve", watchTok, c.body); code != http.StatusForbidden {
+			t.Errorf("answer %s to %s: %d, want 403", c.body, c.id, code)
+		}
+		if !stillPending(c.id) {
+			t.Errorf("%s was claimed by a refused answer", c.id)
+		}
+	}
+	if len(answered) > 0 {
+		t.Fatalf("a refused answer reached the card: %+v", answered)
+	}
+	if code, body := call(t, mux, "POST", "/api/v1/interactions/ix_one/resolve", watchTok, `{"option":"1"}`); code != 200 {
+		t.Fatalf("the card's own choice: %d %v", code, body)
+	}
+	if code, body := call(t, mux, "POST", "/api/v1/interactions/ix_many/resolve", watchTok, `{"option":"3"}`); code != 200 {
+		t.Fatalf("Chat about this: %d %v", code, body)
+	}
+	if len(answered) != 2 {
+		t.Fatalf("answered %+v", answered)
+	}
+	card("ix_phone", false)
+	if code, _ := call(t, mux, "POST", "/api/v1/interactions/ix_phone/resolve", phone["token"].(string), `{"option":"2","text":"用另一种做法"}`); code != 200 {
+		t.Errorf("a full device writes its own answer: %d", code)
 	}
 }
