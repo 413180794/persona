@@ -118,8 +118,8 @@ type liveOptions struct {
 	node *Node    // the node answering it (default: a fresh one that knows no app-server)
 }
 
-// liveNode is a node on the isolated herdr that knows no app-server.
-func liveNode(c *herdr.Client) *Node {
+// liveCodexNode is a node on the isolated herdr that knows no app-server.
+func liveCodexNode(c *herdr.Client) *Node {
 	home, _ := os.UserHomeDir()
 	return &Node{home: home, hosts: herdrHosts(c), agents: map[string]host.Agent{}, paths: map[string]string{}, panes: map[string]string{},
 		files: map[string]*transcript.File{}, procs: map[string]*assistantProc{}, watches: map[string]*watch{},
@@ -129,7 +129,7 @@ func liveNode(c *herdr.Client) *Node {
 func startLiveCodex(t *testing.T, bin, work string, o liveOptions) *liveCodex {
 	lc := &liveCodex{t: t, c: herdr.New(), n: o.node}
 	if lc.n == nil {
-		lc.n = liveNode(lc.c)
+		lc.n = liveCodexNode(lc.c)
 	}
 	out, err := liveRun(bin, "--version")
 	if err != nil {

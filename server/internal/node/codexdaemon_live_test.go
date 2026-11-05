@@ -264,7 +264,7 @@ func (h *liveHub) isWithdrawn(id string) bool {
 // daemonNode is a node that knows only the test app-server, reconnects to it the way runCodex does, and joins and
 // lists cards on its own (watchCodexCards).
 func daemonNode(t *testing.T, c *herdr.Client, d *liveDaemon) (*Node, *liveHub) {
-	n := liveNode(c)
+	n := liveCodexNode(c)
 	n.logger = log.New(os.Stderr, "node: ", log.Lmicroseconds)
 	n.metas, n.bgScans = map[string]quickMeta{}, map[string]*bgScan{}
 	n.dir = t.TempDir()

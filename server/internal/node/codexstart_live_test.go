@@ -43,7 +43,7 @@ func TestLiveCodexStart(t *testing.T) {
 		n, _ = daemonNode(t, c, d)
 		words = append(words, "--remote", "unix://"+d.sock)
 	case "plain", "config":
-		n = liveNode(c)
+		n = liveCodexNode(c)
 	default:
 		t.Fatalf("JARVIS_CODEX_START=%s", variant)
 	}
@@ -85,7 +85,7 @@ func TestLiveCodexStart(t *testing.T) {
 	// A launcher that cannot run: the start says so at once.
 	start := time.Now()
 	dir := mkdir(t, filepath.Join(work, "start-missing"+os.Getenv("JARVIS_CODEX_COLS")))
-	_, err := n.start(bg, dir, "missing", "hi", "", "", "", "", "", "")
+	_, err := n.start(bg, dir, "missing", "hi", "", "", "", "", "", "", "")
 	if err == nil || !strings.Contains(err.Error(), "not found in PATH") || time.Since(start) > 20*time.Second {
 		failed++
 		t.Errorf("LIVE %s start-%s missing launcher: FAIL: %v after %s", version, variant, err, time.Since(start))
@@ -115,7 +115,7 @@ func liveStartRound(t *testing.T, n *Node, c *herdr.Client, work, launcher, vari
 	defer closeWorkspaceOf(c, dir)
 	prompt := startPrompt(r)
 	began := time.Now()
-	s, err := n.start(bg, dir, launcher, prompt, "", "", "", "", "", "")
+	s, err := n.start(bg, dir, launcher, prompt, "", "", "", "", "", "", "")
 	if err != nil {
 		return fmt.Errorf("start: %w", err)
 	}

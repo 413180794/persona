@@ -62,7 +62,6 @@ var rolloutIDRe = regexp.MustCompile(`([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 
 func (n *Node) codexHome() string { return filepath.Join(n.home, ".codex") }
 
-func (n *Node) codexRollouts() []codexRollout { return rollouts(n.codexHome()) }
 func (n *Node) codexPath(id string) string {
 	if s, ok := n.codexSource(id); ok {
 		return rolloutPath(s.home, s.thread)

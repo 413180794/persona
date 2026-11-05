@@ -23,7 +23,6 @@ type hubCalls struct {
 	mu    sync.Mutex
 	tools []json.RawMessage
 	calls []json.RawMessage
-	asked []proto.Interaction
 }
 
 // assistantHub answers what the hub answers an assistant on a runtime: the snapshot, its tools, their calls.
