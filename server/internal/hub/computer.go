@@ -41,7 +41,7 @@ func cuaManifest(h *Hub) *extension.Manifest {
 	return &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: cuaExtensionID, Name: "操控电脑（Cua）", Version: h.version,
 		Description: "让助手经 Cua Driver 操控你的 Mac：看窗口和屏幕、点按、输入、截图。要在那台 Mac 上装好 Cua Driver 并给它辅助功能和屏幕录制权限。",
 		Homepage:    "https://github.com/trycua/cua", Contributes: map[string]json.RawMessage{"computer": items},
-		Configuration: json.RawMessage(cuaConfig)}
+		Configuration: json.RawMessage(cuaConfig), Node: builtinNode("machines")}
 }
 
 // cuaSettings is the plugin's state: On when it is on, then the machines it is on for and whether to ask first.

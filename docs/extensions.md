@@ -1452,7 +1452,12 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
   已经开着一台时再开另一台，hub 回 400 `invalid_config`，`field: machines`，「只能读一台 Mac，先关掉「<那台>」」。连接器 `imessage` 还是原来那个，
   只是读哪台改从这里取：扩展开着、选了一台就用它，否则 hub.json 的 `imessage.machine`，都没有就没有这个连接器（`hub/imessage_extension.go`）。
   hub.json 的值在 hub 启动时迁一次：名字换成机器 id、打开扩展，迁过记一个标记（`imessage.migrated_to_extension`），用户之后关掉或换一台不会被盖回；
-  名字对不上任何机器、写不进去时只记一行日志，下次启动再试，这期间照旧读 hub.json。hub.json 的字段不改不删，保留一个版本。重连时的 `refreshComputer`、`refreshBrowser`、`tellNoLock` 先照旧，等两条路在真机上稳了再收进 `plugin.node.sync`。
+  名字对不上任何机器、写不进去时只记一行日志，下次启动再试，这期间照旧读 hub.json。hub.json 的字段不改不删，保留一个版本。
+  三个内置扩展的清单都写 `node: {command: "builtin", machines: "machines"}`（`NodeBuiltin`）。装的包写 `builtin` 装不上，只有 hub 自己的内置扩展能用。
+  `Manifest.NodeProgram()` 对它们是 nil：不发包、不进 `plugin.node.sync`、不出 `nodes` / `node_machines`、不补「将在这台电脑上运行…」的确认、
+  权限页没有 node 那几行、同意摘要和没有 node 段时一样。所以界面一点不变。凡是和包、状态、确认、同意有关的地方，用 `NodeProgram()`，不直接看 `Node`。
+  电脑连上时的对账（`reconcileNodePrograms`，`hub/builtin_programs.go`）：先做内置程序各自要问的（cua 的状态、不自动锁屏、光标，ego 的状态，
+  `builtinConnected`；扩展关着也跑，各自知道关着时该说什么），再同步装的包，每样各自起一个 goroutine，互不等待，和以前连上时做的事一样。
 
 ## schema 和四端的类型
 

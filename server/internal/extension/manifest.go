@@ -150,6 +150,26 @@ type NodeRuntime struct {
 	Permissions NodePermissions `json:"permissions,omitzero"`
 }
 
+// NodeBuiltin is node.command of a program built into personad (cua, ego, imessage; node/builtin.go): there is no
+// package, the node answers plugin.node.call itself. Only the hub's own built-in extensions have it; a package with it
+// is refused.
+const NodeBuiltin = "builtin"
+
+// Builtin says whether this is a program built into personad (node.command "builtin").
+func (r *NodeRuntime) Builtin() bool {
+	return r != nil && r.Command.ByPlatform == nil && r.Command.Path == NodeBuiltin
+}
+
+// NodeProgram is the node section of a program the hub sends to computers as a package: nil without one, and nil for
+// a built-in program (NodeBuiltin), which has no package, no lease, no permission lines and no consent of its own. Use
+// it, not Node, wherever packages, states, the field's confirm or consent are concerned.
+func (m *Manifest) NodeProgram() *NodeRuntime {
+	if m == nil || m.Node.Builtin() {
+		return nil
+	}
+	return m.Node
+}
+
 // NodePermissions are what the program on the computers asks for, shown before installing and before a machine is
 // switched on. Like Permissions, shown and recorded; the node does not enforce them yet.
 type NodePermissions struct {
@@ -509,7 +529,9 @@ func checkEnv(at string, env map[string]string) []error {
 func (r *NodeRuntime) validate(m *Manifest) []error {
 	var errs []error
 	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
-	if len(r.Command.ByPlatform) == 0 {
+	if r.Builtin() {
+		bad("node.command: %q is only for the hub's own built-in extensions", NodeBuiltin)
+	} else if len(r.Command.ByPlatform) == 0 {
 		bad("node.command: one program per platform (\"darwin-arm64\": \"node/bin/x\")")
 	}
 	for platform, p := range r.Command.ByPlatform {
@@ -564,7 +586,7 @@ func (r *NodeRuntime) validate(m *Manifest) []error {
 
 // NodeMachines is the configuration field that picks the computers of the node program; nil without one.
 func (m *Manifest) NodeMachines() *Field {
-	if m.Node == nil || m.Node.Machines == "" {
+	if m.NodeProgram() == nil || m.Node.Machines == "" {
 		return nil
 	}
 	sc, err := ParseSchema(m.Configuration)

@@ -38,7 +38,7 @@ const imessageConfig = `{
 func imessageManifest(h *Hub) *extension.Manifest {
 	return &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: imessageExtensionID, Name: "信息（iMessage）", Version: h.version,
 		Description: "读你一台 Mac 上「信息」App 的短信和 iMessage（只读，不发送），交给收件箱、知识库和助手。读哪台在这里选；「交给 Persona」和删除已存的数据在 设置 › 连接器 › 信息。",
-		Contributes: map[string]json.RawMessage{}, Configuration: json.RawMessage(imessageConfig)}
+		Contributes: map[string]json.RawMessage{}, Configuration: json.RawMessage(imessageConfig), Node: builtinNode("machines")}
 }
 
 // imessageExtensionMachines is the Macs picked in the extension's settings, and whether it is on.

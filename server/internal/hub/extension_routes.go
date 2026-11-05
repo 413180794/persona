@@ -59,7 +59,7 @@ func (ps *extensions) detail(ctx context.Context, p *extension.Extension) Extens
 	if d.Permissions == nil {
 		d.Permissions = []extension.PermissionLine{}
 	}
-	if m.Node != nil {
+	if m.NodeProgram() != nil { // not cua / ego / imessage: built in, their machines show as they always did
 		d.NodeMachines = m.Node.Machines
 		d.Form = nodeConfirmForm(p.Schema, m)
 	}

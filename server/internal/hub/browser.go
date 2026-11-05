@@ -34,7 +34,7 @@ func egoManifest(h *Hub) *extension.Manifest {
 	return &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: egoExtensionID, Name: "浏览器（ego lite）", Version: h.version,
 		Description: "让助手在你的 Mac 上用 ego lite 打开网页、点按、填表、截图，用的是你在 ego 里登录过的网站。要在那台 Mac 上装好 ego lite 并做完它的首次设置。",
 		Homepage:    "https://lite.ego.app", Contributes: map[string]json.RawMessage{"browser": items},
-		Configuration: json.RawMessage(egoConfig)}
+		Configuration: json.RawMessage(egoConfig), Node: builtinNode("machines")}
 }
 
 // browserOf is m's proto.Machine.Browser: nil unless the plugin is on and m is a Mac; else the last status its node

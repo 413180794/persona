@@ -83,6 +83,14 @@ type nodeConsent struct {
 	Secrets     []string        `json:"secrets,omitempty"`
 }
 
+// secretNames are the secrets its computers get (none without a program).
+func (r *NodeRuntime) secretNames() []string {
+	if r == nil {
+		return nil
+	}
+	return r.Secrets
+}
+
 func (r *NodeRuntime) consent() *nodeConsent {
 	if r == nil {
 		return nil
@@ -103,7 +111,7 @@ func Digest(m *Manifest) string {
 		Events      []string     `json:"events,omitempty"`
 		Surfaces    []string     `json:"surfaces,omitempty"`
 		Node        *nodeConsent `json:"node,omitempty"`
-	}{m.Runtime != nil, m.Permissions.normalized(), m.Topics(), m.Surfaces(), m.Node.consent()})
+	}{m.Runtime != nil, m.Permissions.normalized(), m.Topics(), m.Surfaces(), m.NodeProgram().consent()})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
@@ -167,8 +175,8 @@ func nodeLines(r, old *NodeRuntime) []PermissionLine {
 // nodeSecrets are the titles of the secrets m sends to the computers that old (nil: none) did not.
 func nodeSecrets(m, old *Manifest) []string {
 	var out []string
-	for _, name := range m.Node.Secrets {
-		if old != nil && old.Node != nil && slices.Contains(old.Node.Secrets, name) {
+	for _, name := range m.NodeProgram().secretNames() {
+		if old.NodeProgram() != nil && slices.Contains(old.Node.Secrets, name) {
 			continue
 		}
 		for _, s := range m.Secrets {
@@ -183,7 +191,7 @@ func nodeSecrets(m, old *Manifest) []string {
 // NodeAdds says whether m's program on computers asks for more than old's: a first one, more systems, hosts,
 // permissions or secrets sent to the computers.
 func NodeAdds(old, m *Manifest) bool {
-	return m.Node != nil && (len(nodeLines(m.Node, old.Node)) > 0 || len(nodeSecrets(m, old)) > 0)
+	return m.NodeProgram() != nil && (len(nodeLines(m.Node, old.NodeProgram())) > 0 || len(nodeSecrets(m, old)) > 0)
 }
 
 // Explain is every line the user is shown before installing m.
@@ -237,7 +245,7 @@ func Explain(m *Manifest) []PermissionLine {
 		}
 		out = append(out, PermissionLine{Key: "secrets", Title: "使用你填的密钥", Detail: strings.Join(names, "、")})
 	}
-	if m.Node != nil {
+	if m.NodeProgram() != nil {
 		out = append(out, nodeLines(m.Node, nil)...)
 		if names := nodeSecrets(m, nil); len(names) > 0 {
 			out = append(out, PermissionLine{Key: "node_secrets", Title: "把密钥发给这些电脑", Detail: strings.Join(names, "、")})
@@ -305,8 +313,8 @@ func Added(old, m *Manifest) []PermissionLine {
 	if len(names) > 0 {
 		out = append(out, PermissionLine{Key: "secrets", Title: "使用更多密钥", Detail: strings.Join(names, "、")})
 	}
-	if m.Node != nil {
-		out = append(out, nodeLines(m.Node, old.Node)...)
+	if m.NodeProgram() != nil {
+		out = append(out, nodeLines(m.Node, old.NodeProgram())...)
 		if names := nodeSecrets(m, old); len(names) > 0 {
 			out = append(out, PermissionLine{Key: "node_secrets", Title: "把更多密钥发给这些电脑", Detail: strings.Join(names, "、")})
 		}

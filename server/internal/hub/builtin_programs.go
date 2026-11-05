@@ -6,8 +6,37 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/proto"
 )
+
+// builtinNode is a built-in extension's node section: its program is in personad (node.command "builtin",
+// node/builtin.go), on the computers picked in its field machines. No package, lease, state rows or consent of its own
+// (Manifest.NodeProgram is nil for it): what it is on each machine shows as it always did (the machine page, the
+// settings' rows).
+func builtinNode(machines string) *extension.NodeRuntime {
+	return &extension.NodeRuntime{Command: extension.Command{Path: extension.NodeBuiltin}, Machines: machines}
+}
+
+// builtinConnected are the built-in programs' part of a machine's reconcile when it connects (reconcileNodePrograms):
+// what each asks of the machine again. They run whether the extension is on or not: each knows what to do when it is
+// off (tellNoLock says off again, the rest ask nothing).
+var builtinConnected = []func(h *Hub, ctx context.Context, m *Machine){
+	func(h *Hub, ctx context.Context, m *Machine) { h.refreshComputer(ctx, m) }, // cua: only when it is on for m (computer.go)
+	func(h *Hub, ctx context.Context, m *Machine) { h.tellNoLock(ctx, m) },      // cua's 「扩展开着时不自动锁屏」 (computer_nolock.go)
+	func(h *Hub, ctx context.Context, m *Machine) { h.tellCursor(ctx, m) },      // cua's 「显示 Agent 的光标」 (computer_cursor.go)
+	func(h *Hub, ctx context.Context, m *Machine) { h.refreshBrowser(ctx, m) },  // ego (browser.go)
+}
+
+// reconcileNodePrograms brings a machine that just connected in line with what should run on it: the built-in
+// programs ask what they need (builtinConnected), the packaged ones are synced (plugin.node.sync). Each on its own,
+// none waits for another.
+func (h *Hub) reconcileNodePrograms(ctx context.Context, m *Machine) {
+	for _, connected := range builtinConnected {
+		go connected(h, ctx, m)
+	}
+	go h.syncExtensionNodes(ctx, m) // plugins' programs on this computer (extension_nodes.go)
+}
 
 // builtinPrefixes are the extensions whose programs are built into personad (cua, ego; node/builtin.go) by the prefix of
 // their old method names.

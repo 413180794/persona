@@ -253,7 +253,7 @@ func (ps *extensions) view(ctx context.Context, p *extension.Extension) Extensio
 	if ps.h != nil {
 		ps.h.extensionUpgrades().decorate(ctx, &v, p)
 	}
-	if m.Node != nil {
+	if m.NodeProgram() != nil {
 		v.Nodes = ps.nodes.views(p.Record.ID)
 	}
 	if st := ps.sandboxOf(ctx, p); st.applies {
@@ -373,7 +373,7 @@ func (ps *extensions) changed(c extension.Change) {
 	}
 	ps.apply(ctx, c.ID)
 	ps.modelChanged(ctx, c)
-	if now := ps.reg.Get(c.ID); ps.h != nil && (now != nil && now.Manifest.Node != nil || c.Old != nil && c.Old.Manifest.Node != nil) {
+	if now := ps.reg.Get(c.ID); ps.h != nil && (now != nil && now.Manifest.NodeProgram() != nil || c.Old != nil && c.Old.Manifest.NodeProgram() != nil) {
 		ps.h.syncExtensionNodesEverywhere(ctx) // its program on computers starts, changes or stops there (extension_nodes.go)
 	}
 	if c.ID == cuaExtensionID && ps.h != nil {

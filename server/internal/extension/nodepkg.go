@@ -18,7 +18,7 @@ import (
 // everything but the other platforms' node programs and the hub's programs, in a fixed order with no times or owners,
 // so the same package always makes the same bytes, and the node can tell by the digest that it has it already.
 func NodePackage(m *Manifest, root, platform string, w io.Writer) error {
-	if m.Node == nil {
+	if m.NodeProgram() == nil {
 		return fmt.Errorf("plugin %s has no program for computers", m.ID)
 	}
 	mine, ok := m.Node.Command.For(platform)
@@ -137,7 +137,7 @@ func UnpackNodePackage(file, to string) error { return untar(file, to) }
 
 // NodePlatforms are the platforms a manifest has programs on computers for, sorted.
 func (m *Manifest) NodePlatforms() []string {
-	if m.Node == nil {
+	if m.NodeProgram() == nil {
 		return nil
 	}
 	var out []string
@@ -150,7 +150,7 @@ func (m *Manifest) NodePlatforms() []string {
 
 // NodeRuns says whether m's program on computers can run on a machine of goos / goarch.
 func (m *Manifest) NodeRuns(goos, goarch string) bool {
-	if m.Node == nil {
+	if m.NodeProgram() == nil {
 		return false
 	}
 	_, ok := m.Node.Command.For(strings.ToLower(goos) + "-" + strings.ToLower(goarch))

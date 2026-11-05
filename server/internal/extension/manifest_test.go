@@ -725,6 +725,7 @@ func TestParseNodeProgram(t *testing.T) {
 func TestParseRefusesNodeProgram(t *testing.T) {
 	cases := map[string]func(node, machines map[string]any){
 		"one path for every platform": func(n, _ map[string]any) { n["command"] = "node/helper" },
+		"built in (only the hub's own)": func(n, _ map[string]any) { n["command"] = "builtin" },
 		"no platform":                 func(n, _ map[string]any) { n["command"] = map[string]any{} },
 		"windows":                     func(n, _ map[string]any) { n["command"] = map[string]any{"windows-amd64": "node/x.exe"} },
 		"outside the package":         func(n, _ map[string]any) { n["command"] = map[string]any{"darwin-arm64": "../x"} },

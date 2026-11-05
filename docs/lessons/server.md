@@ -420,3 +420,7 @@ PR 冒烟按路径触发、不含 `integrations/**`，所以合并前没跑。�
   - 这台机器没装常驻 node（`jarvisd-node`）时，hub 起的本机 `node --stdio` 和它的助手 claude 都在 `jarvisd.service` 里，hub 重启会一起停（见 `docs/hub-restart.md`「对话不中断」）。
   - `herdrstart_test.go` 没有覆盖 `systemd-run` 那条分支的命令行。
   - macOS 上 `setsid` 能否让 herdr 躲过 launchd 停 job 时的清理，没在 Mac 上核实；Windows 上 node 不拉起 herdr，没有对应问题。
+- 一个字段既能是「要发的包」又能是「内置的、没有包」时，给「要发的包」单独一个访问器（2026-11-05，#1830 收尾，`Manifest.NodeProgram()`）：
+  cua / ego 的清单加上 `node: {command: "builtin"}` 以后，十几处 `m.Node != nil` 会让它们去发包、出状态行、补确认、改同意摘要（界面就变了）。
+  全改成 `NodeProgram() != nil`，再用一个测试守住「加了内置 node 段，摘要、权限行、`node_machines` 都和没有时一样」。新代码碰包、状态、同意时用访问器，不直接看字段。
+

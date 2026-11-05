@@ -110,7 +110,7 @@ func (pn *extensionNodes) views(pluginID string) []ExtensionNodeView {
 
 // nodeMachines are the machines p's program on computers is switched on for (its node.machines field).
 func (ps *extensions) nodeMachines(p *extension.Extension) []string {
-	if p == nil || p.Manifest.Node == nil {
+	if p == nil || p.Manifest.NodeProgram() == nil {
 		return nil
 	}
 	var cfg map[string]json.RawMessage
@@ -123,7 +123,7 @@ func (ps *extensions) nodeMachines(p *extension.Extension) []string {
 // nodeRunsOn says whether p's program should run on m now: the plugin is on and set up, m is picked, and the program
 // has a build for m's platform.
 func (ps *extensions) nodeRunsOn(ctx context.Context, p *extension.Extension, m *Machine) bool {
-	if p.Manifest.Node == nil || !p.Record.Enabled || p.Problem != "" || len(ps.reg.Missing(ctx, p)) > 0 {
+	if p.Manifest.NodeProgram() == nil || !p.Record.Enabled || p.Problem != "" || len(ps.reg.Missing(ctx, p)) > 0 {
 		return false
 	}
 	if !slices.Contains(ps.nodeMachines(p), m.cfg.ID) {
@@ -246,7 +246,7 @@ func (h *Hub) syncExtensionNodes(ctx context.Context, m *Machine) {
 	online := m.isOnline()
 	for _, p := range all {
 		id := p.Record.ID
-		if p.Manifest.Node == nil {
+		if p.Manifest.NodeProgram() == nil { // none, or built in (no package to keep there)
 			continue
 		}
 		if !ps.nodeRunsOn(ctx, p, m) {
@@ -410,7 +410,7 @@ func (h *Hub) nodesCall(ctx context.Context, id string, params json.RawMessage) 
 		return nil, &rpc.Error{Code: extension.CodeUnsupported, Message: "nodes.call: machine and method"}
 	}
 	pl := h.extensions.reg.Get(id)
-	if pl == nil || pl.Manifest.Node == nil {
+	if pl == nil || pl.Manifest.NodeProgram() == nil {
 		return nil, &rpc.Error{Code: extension.CodePermissionDenied, Message: "nodes.call: the plugin has no program on computers"}
 	}
 	m := h.machineByID(p.Machine)
@@ -441,7 +441,7 @@ func (h *Hub) serveNodeExtensionHTTP(w http.ResponseWriter, r *http.Request) {
 		p = h.extensions.reg.Get(id)
 	}
 	m := h.machineByID(mid)
-	if p == nil || p.Manifest.Node == nil || !p.Manifest.Node.HTTP || m == nil || !h.extensions.nodeRunsOn(r.Context(), p, m) {
+	if p == nil || p.Manifest.NodeProgram() == nil || !p.Manifest.Node.HTTP || m == nil || !h.extensions.nodeRunsOn(r.Context(), p, m) {
 		writeErrCode(w, http.StatusNotFound, "not_found", fmt.Errorf("plugin %s serves nothing on machine %s", id, mid))
 		return
 	}

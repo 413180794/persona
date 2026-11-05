@@ -330,7 +330,8 @@ hub.json 的旧配置迁到扩展：装上扩展后在 设置 › 扩展（或 `
    （做完：状态写在选电脑那个字段的每一行里；确认由 hub 补进字段的 `confirm`，App 照旧画；清单的 JSON Schema 和四端生成的类型加上 `node`。Android 的插件设置没跟。）
 5. cua / ego 换成内置的 node 程序，不改界面。
    （做完：node 在 `node.info` 报 `builtin_programs`，hub 对报了的 node 经 `plugin.node.call` 问、对旧 node 照旧用 `computer.*` / `browser.*`，见 `docs/extensions.md`「内置的 node 程序」。
-   清单里写 `node.command: "builtin"` 和把重连钩子收进 `plugin.node.sync` 放到下一个 PR：这一步只换路，清单、同意摘要、界面都不动。）
+   收尾（#1830 最后一个 PR）：cua、ego、imessage 的清单写上 `node.command: "builtin"`，`Manifest.NodeProgram()` 对它们是 nil，同意摘要、界面都不动；
+   连上时的 `refreshComputer`、`refreshBrowser`、`tellNoLock`、`tellCursor` 收进 `reconcileNodePrograms`，和装的包的同步走同一个入口。）
 6. iMessage 迁成扩展，迁移 hub.json 里的配置。
    （做完：内置扩展「信息（iMessage）」，设置里一个选 Mac 的字段，只能开一台；连接器还是原来那个，读哪台从扩展取，没选再看 hub.json；
    hub.json 的值启动时迁一次（名字换成 id、打开扩展、记标记），迁不了就继续读 hub.json；node 的 `builtin_programs` 加 `imessage`，
