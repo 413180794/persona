@@ -15,10 +15,14 @@ import (
 // written.
 //
 // What is followed here is the narrowest thing that identifies this: two of the user's own messages hanging from the
-// same parent. The earlier one, and everything that grew from it, is an abandoned branch and is left out of the items
-// (the later one may itself be abandoned by a third). Other forks are ordinary — parallel tool results, an attachment
-// beside a reply, a hook's line — and a compaction starts a new chain (parentUuid null) on purpose, so the walk back
-// from the last line, which is what a resume does, would lose them: it is not used.
+// same parent, the earlier one having been answered (an assistant line grew from it). That one, and everything that
+// grew from it, is an abandoned branch and is left out of the items (the later one may itself be abandoned by a
+// third). An earlier message nothing answered is not one: pressing Esc on a message that has no reply yet and sending
+// it again (or another) writes the same two siblings, and there is nothing that was gone back over — hiding it made the
+// history token move for no reason and cut the interrupted turn from the chat (#3036); the terminal shows it, so
+// does the chat. Other forks are ordinary — parallel tool results, an attachment beside a reply, a hook's line — and a
+// compaction starts a new chain (parentUuid null) on purpose, so the walk back from the last line, which is what a
+// resume does, would lose them: it is not used.
 //
 // Clients hold items they were already sent. A branch is abandoned when the next message is written (or when the node
 // itself rewound, File.Rewound), so the history token (Span.History) carries how many abandoned branches the file has:
@@ -29,27 +33,32 @@ import (
 type treeLine struct {
 	uuid, parent string
 	sidechain    bool
+	assistant    bool // the line is the assistant's (a reply, a tool call): the message it grew from was answered
 }
 
-// treeRec is a line with a uuid, as the tree keeps it: prompt says it is one of the user's own messages.
+// treeRec is a line with a uuid, as the tree keeps it: prompt says it is one of the user's own messages, reply that it
+// is the assistant's.
 type treeRec struct {
 	uuid, parent string
 	prompt       bool
+	reply        bool
 }
 
 // branchTree tracks the lines read so far (file order) and which of them lie on abandoned branches.
 type branchTree struct {
-	recs   []treeRec
-	kids   map[string][]string // parent → the lines hanging from it
-	last   map[string]string   // parent → the latest message of the user's hanging from it
-	hidden map[string]bool     // lines on abandoned branches
-	roots  map[string]bool     // where each abandoned branch starts
-	manual map[string]bool     // roots set by File.Rewound: they survive a rebuild
+	recs    []treeRec
+	replies map[string]bool     // lines that are the assistant's
+	kids    map[string][]string // parent → the lines hanging from it
+	last    map[string]string   // parent → the latest message of the user's hanging from it
+	hidden  map[string]bool     // lines on abandoned branches
+	roots   map[string]bool     // where each abandoned branch starts
+	manual  map[string]bool     // roots set by File.Rewound: they survive a rebuild
 }
 
 func (t *branchTree) init() {
 	if t.kids == nil {
 		t.kids, t.last, t.hidden, t.roots = map[string][]string{}, map[string]string{}, map[string]bool{}, map[string]bool{}
+		t.replies = map[string]bool{}
 	}
 }
 
@@ -59,6 +68,9 @@ func (t *branchTree) add(r treeRec) (drop bool, newly []string) {
 	t.init()
 	t.recs = append(t.recs, r)
 	t.kids[r.parent] = append(t.kids[r.parent], r.uuid)
+	if r.reply {
+		t.replies[r.uuid] = true
+	}
 	if t.hidden[r.uuid] {
 		return true, nil // a line repeated in the file (a resume copies lines)
 	}
@@ -71,11 +83,30 @@ func (t *branchTree) add(r treeRec) (drop bool, newly []string) {
 	}
 	prev := t.last[r.parent]
 	t.last[r.parent] = r.uuid
-	if prev == "" || prev == r.uuid || t.hidden[prev] {
+	if prev == "" || prev == r.uuid || t.hidden[prev] || !t.answered(prev) {
 		return false, nil
 	}
 	t.roots[prev] = true
 	return false, t.hideFrom(prev)
+}
+
+// answered says an assistant line grew from a line (or from what grew from it): there is a turn that would be gone back
+// over. It looks at the lines read so far, which for a line already there is everything its branch wrote.
+func (t *branchTree) answered(uuid string) bool {
+	seen := map[string]bool{}
+	for todo := []string{uuid}; len(todo) > 0; {
+		u := todo[len(todo)-1]
+		todo = todo[:len(todo)-1]
+		if seen[u] {
+			continue
+		}
+		seen[u] = true
+		if t.replies[u] {
+			return true
+		}
+		todo = append(todo, t.kids[u]...)
+	}
+	return false
 }
 
 // hideFrom marks a line and everything that grew from it abandoned; it returns the ones that were not yet.
@@ -179,7 +210,7 @@ func trackLine(t *branchTree, meta *Meta, items []proto.Item, kept, sent *[]prot
 	if tl.uuid == "" || tl.sidechain || meta.Sidechain || meta.Codex {
 		return false
 	}
-	drop, newly := t.add(treeRec{uuid: tl.uuid, parent: tl.parent, prompt: isMessage(items)})
+	drop, newly := t.add(treeRec{uuid: tl.uuid, parent: tl.parent, prompt: isMessage(items), reply: tl.assistant})
 	if len(newly) > 0 {
 		gone := setOf(newly)
 		if kept != nil {

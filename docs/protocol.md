@@ -902,8 +902,10 @@ hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/s
   `rewind_nothing`（Claude 里没有可回退的消息）、`rewind_mismatch`（列表里没找到那条、位置对不上、确认页上不是它）、`rewind_failed`（屏幕不是下一步需要的样子，或确认之后面板没关）。
   旧 node 回 409 `node_outdated`。确认之后面板没关时 node 不再按任何键（回退可能已经发生，Esc 也撤不回）。
 - **Claude Code 不删对话记录里被回退的那部分**（2.1.318 实测）：文件是棵树（`parentUuid`），回退后的下一条消息挂在目标前一条下面，被回退的几轮还在文件里。
-  node 读 transcript 时**跟着没被放弃的那条分支走**（`transcript/branch.go`）：同一个 `parentUuid` 下有两条用户自己的消息，较早那条和从它长出来的所有行是被放弃的分支，不出 item
-  （item 的 `seq` 还是文件里的行号，被放弃的行成了空档）。别的分叉不算（并行工具结果、挂在回复旁边的 attachment、压缩的 `compact_boundary`：它 `parentUuid` 为 null、旧链在 `logicalParentUuid`）。
+  node 读 transcript 时**跟着没被放弃的那条分支走**（`transcript/branch.go`）：同一个 `parentUuid` 下有两条用户自己的消息、且较早那条**有过回复**（assistant 的行从它长出来），较早那条和从它长出来的所有行是被放弃的分支，不出 item
+  （item 的 `seq` 还是文件里的行号，被放弃的行成了空档）。**没人回复的较早那条不算回退**（#3036）：按 Esc 取消一条还没回复的消息再发（同样的话，或者换一句），Claude 把后一条写成前一条的兄弟，
+  但没有任何一轮被回退掉——两条都留着，和终端里看到的一样，`history` 令牌也不动（动了所有客户端都会丢掉本地内容重取，被打断的那一轮还从对话里消失）。
+  别的分叉不算（并行工具结果、挂在回复旁边的 attachment、压缩的 `compact_boundary`：它 `parentUuid` 为 null、旧链在 `logicalParentUuid`）。
   node 自己回退成功后马上标出这一段（`File.Rewound`），不等下一条消息。客户端怎么知道：`history`（见「items 的连续性」）末尾多一个 `.r<被放弃的分支数>`，变了就丢掉本地内容重新取——
   和文件被改写同一个机制，所以网页、iOS、Android 都不用改（iOS 的 `ChatStore.apply`、Android 的 `reducer.history`、网页的 `useTranscript` 都已经这样处理），
   hub 的助手快照、通知、知识库归档读的也是 node 的 items。令牌只由文件内容决定，node 重启后不变。
@@ -989,6 +991,9 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
 - `to_seq`：这批读到的最后一行（包括没有 item 的行）；`from_seq`：这批接在哪一行之后（只有接续的批次——补发、实时推送、`after_seq`——才有）。
 - App 记 `covered`（本地从头连续拿到的最后一行）：`from_seq <= covered` 就把 `covered` 推到 `to_seq`；`from_seq > covered` 说明中间丢了一批，
   稍等 1.5 秒（订阅时的补发可能还在路上）再用 `after_seq=covered` 补齐，超过 8 页改取最新一页。重连订阅带 `since_seq=covered`。
+- **推送不会悄悄丢一条**（#3036）：订阅者的发送队列（512 条）满了，hub 断开这条连接（`too slow`），不是只丢这一条——后者让一次长输出（几千条 item）的尾巴到不了一个落在后面的页面，
+  而 Agent 已经停了，没有下一批来提醒它缺了一段。客户端重连后带 `since_seq=covered` 重新订阅，补发从那里接上（网页 `useTranscript`、iOS `AppModel`、Android `ContinuitySync` 都是这样）。
+  `delta` / `live` / `screen` 这些不留存的推送同理。订阅按电脑自己的 id 记，用被吸收的旧 id（`hub.json` 里合并掉的条目）订阅也收得到推送。
 - 老 hub 不带这些字段：App 照旧按 id 合并。新 hub 的字段对老 App 只是多出来的键。
 
 ### 真实记录的轮次用时

@@ -58,6 +58,9 @@ describe("项目 › 待办 › Agent 三层树 (#2526)", () => {
     const all = [s("a", "working", "/code/p"), s("hand", "idle", "/code/p", { space_kind: "herdr" }), s("bot", "idle", "/code/q", { pane_id: "botmux:x" })];
     const tree = buildTodoTree(all, machines, [todo("t1", [link("a")])], noMutes, NOW);
     expect(tree.loose.map((g) => [g.key, g.sessions.map((x) => x.session_id)])).toEqual([["todo:manual", ["hand"]], ["todo:none", ["bot"]]]);
+    // the loose groups keep the line saying why their agents are there (#3057)
+    expect(tree.loose[0].hint).toContain("在终端（herdr）里开的");
+    expect(tree.loose[1].hint).toContain("没挂在任何待办上");
   });
 
   it("未归属里有等你（含中断）时展开", () => {

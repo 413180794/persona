@@ -53,7 +53,10 @@ node 列离线会话只读 transcript 最后 384 KB（`quickTail`）取标题和
 `last_text` 变成空的，任务卡片和主对话快照显示了 7 分钟「还没有动静」。现在 `readQuickMetaSince` 在窗口里没有文字时沿用上一次读到的，
 没有上一次（node 刚起来）就往前一段段找（`lastWordsBefore`，最多 8 MB）。凡是「最后一个 X」这类只在尾部找的值，都要想到它可能已经在窗口外面。
 - **Claude Code 的 transcript 是棵树**（`uuid` / `parentUuid`）：回退（`/rewind`）、↑ 编辑重发会把下一条消息写成较早那条的兄弟，被回退的几轮留在文件里。读法见
-  `transcript/branch.go`（同一个 parent 下两条用户自己的消息 → 较早那条的整棵子树不出 item）和 `docs/protocol.md`「回退到某条消息」；
+  `transcript/branch.go`（同一个 parent 下两条用户自己的消息、较早那条有过 assistant 的回复 → 较早那条的整棵子树不出 item）和 `docs/protocol.md`「回退到某条消息」；
+  **按 Esc 取消一条还没回复的消息再发，写出来的也是同一对兄弟**（#3036，实测：两条同样的话挂在同一行「[Request interrupted by user]」下，前一条没有任何回复），
+  它不是回退：旧版本只看「两条兄弟」就把它当回退，`history` 多出 `.r1`、所有客户端丢掉本地内容重取，被打断的那一轮也从对话里消失。
+  判断回退要看较早那条有没有被回复过；Persona 自己的回退不靠这个猜（`File.Rewound` 由 node 标出）。
   不要沿 parentUuid 从末尾往回走（并行工具结果是正常分叉，`compact_boundary` 的 parent 是 null）。放弃一个分支只改 `history` 令牌（`.r<n>`），
   item 结构没变，所以 App 的 `ChatCache` 目录版本号不用加；客户端本来就在令牌变时丢掉本地内容重取。验证用真实语料：
   `go test -c ./internal/transcript` 旧版和新版各出一个，`-test.run 'TestCorpus$' -corpus <目录> -out <文件>` 逐文件比 item 条数，再跑 `TestCorpusWindowed`。

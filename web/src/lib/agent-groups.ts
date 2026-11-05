@@ -59,6 +59,8 @@ export interface AgentGroup {
   folded?: boolean;
   todoId?: string;
   todoStatus?: string;
+  /** What the group is and why its agents are in it, for a name that does not say it alone (a tooltip). */
+  hint?: string;
 }
 
 export function splitAgentSessions(all: Session[], machines: Machine[]) {

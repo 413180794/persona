@@ -338,7 +338,7 @@ export function buildTodoAgentGroups(
   const manual = rest.filter(isManualHerdr);
   if (manual.length > 0) {
     manual.sort(byRank);
-    groups.push({ key: "todo:manual", name: t("lib-todos.manual"), sessions: manual });
+    groups.push({ key: "todo:manual", name: t("lib-todos.manual"), hint: t("lib-todos.manual_hint"), sessions: manual });
   }
 
   // 没挂待办的放最后「未归属」一段，默认折叠
@@ -348,6 +348,7 @@ export function buildTodoAgentGroups(
     groups.push({
       key: "todo:none",
       name: t("lib-todos.unassigned"),
+      hint: t("lib-todos.unassigned_hint"),
       sessions: unassigned,
       // folded below todos, unless something in it needs you (unread alone stays folded: many lists always have some);
       // with no todo above it is the whole list, so open

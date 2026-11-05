@@ -456,3 +456,89 @@ func TestTreeStartsOverWithTheFile(t *testing.T) {
 		t.Fatalf("history %q", span.History)
 	}
 }
+
+// #3036: pressing Esc on a message that has not been answered and sending it again writes the second one as a sibling
+// of the first (same parent, usually the same words). Nothing was gone back over: the first one has no reply, there is
+// nothing to hide, and the token must not move (a moving token makes every client start over).
+func TestResentUnansweredMessageIsNotARewind(t *testing.T) {
+	l := &tline{}
+	l.user("u1", "", "一", 1)
+	l.reply("a1", "u1", "答一", 2)
+	l.turnEnd("t1", "a1", 3)
+	l.user("u2", "t1", "二", 4) // sent, then cancelled before any reply
+	p := writeLines(t, l)
+	f := NewFile(p)
+	_, span1, err := f.RefreshSpan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	more := &tline{}
+	more.user("u3", "t1", "二", 5) // the same words, sent again
+	more.reply("a3", "u3", "答二", 6)
+	appendLines(t, p, more)
+	fresh, span2, err := f.RefreshSpan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want(t, fresh, "二", "答二")
+	want(t, allItems(f), "一", "答一", "二", "二", "答二")
+	if span2.History != span1.History || strings.Contains(span2.History, ".r") {
+		t.Fatalf("history %q → %q: an unanswered message resent was taken for going back", span1.History, span2.History)
+	}
+	// A fresh read of the whole file says the same.
+	g := NewFile(p)
+	_, span3, _ := g.RefreshSpan()
+	want(t, allItems(g), "一", "答一", "二", "二", "答二")
+	if span3.History != span2.History {
+		t.Fatalf("a fresh read: %q, want %q", span3.History, span2.History)
+	}
+}
+
+// The same after an interrupted turn: both messages hang from the "[Request interrupted by user]" line (the lead's own
+// session had exactly this), and the work before it stays.
+func TestResentAfterAnInterruptKeepsTheInterruptedTurn(t *testing.T) {
+	l := &tline{}
+	l.user("u1", "", "读文件", 1)
+	l.toolUse("a1", "u1", "tu1", 2)
+	l.user("i1", "a1", "[Request interrupted by user for tool use]", 3)
+	l.user("u2", "i1", "换个办法", 4)
+	l.user("u3", "i1", "换个办法", 5)
+	l.reply("a3", "u3", "好", 6)
+	f := NewFile(writeLines(t, l))
+	_, span, _ := f.RefreshSpan()
+	got := texts(allItems(f))
+	if n := strings.Count(strings.Join(got, "|"), "换个办法"); n != 2 {
+		t.Fatalf("items %q: both sends of the message stay", got)
+	}
+	var calls int
+	for _, it := range allItems(f) {
+		if it.Kind == proto.KindToolUse {
+			calls++
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("%d tool calls, the interrupted one stays", calls)
+	}
+	if strings.Contains(span.History, ".r") {
+		t.Fatalf("history %q", span.History)
+	}
+}
+
+// A message that was answered only by tool calls was still answered: going back over it is a rewind.
+func TestRewindOverATurnOfOnlyToolCalls(t *testing.T) {
+	l := &tline{}
+	l.user("u1", "", "一", 1)
+	l.reply("a1", "u1", "答一", 2)
+	l.turnEnd("t1", "a1", 3)
+	l.user("u2", "t1", "二", 4)
+	l.toolUse("a2", "u2", "tu2", 5)
+	l.toolResult("r2", "a2", "tu2", "结果", 6)
+	l.user("u3", "t1", "二改", 7)
+	l.reply("a3", "u3", "答二改", 8)
+	f := NewFile(writeLines(t, l))
+	_, span, _ := f.RefreshSpan()
+	want(t, allItems(f), "一", "答一", "二改", "答二改")
+	if !strings.HasSuffix(span.History, ".r1") {
+		t.Fatalf("history %q", span.History)
+	}
+}

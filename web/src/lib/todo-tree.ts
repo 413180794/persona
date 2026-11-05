@@ -53,6 +53,7 @@ export interface LooseGroup {
   projects: TreeTodo[];
   sessions: Session[];
   folded: boolean;
+  hint?: string;
 }
 
 export interface TodoTree {
@@ -223,7 +224,7 @@ function looseTree(g: AgentGroup, now: number): LooseGroup {
   projects.sort((a, b) => Number(a.key.endsWith("\u0000")) - Number(b.key.endsWith("\u0000")) || TREE_RANK[a.state] - TREE_RANK[b.state] || a.name.localeCompare(b.name));
   const state = worst(projects.map((p) => p.state));
   // folded below the todos (buildTodoAgentGroups), unless it says 等你: an interrupted agent counts here too
-  return { key: g.key, name: g.name, state, projects, sessions: g.sessions, folded: Boolean(g.folded) && state !== "needs_you" };
+  return { key: g.key, name: g.name, hint: g.hint, state, projects, sessions: g.sessions, folded: Boolean(g.folded) && state !== "needs_you" };
 }
 
 /** The todos page's list by project (#2526): open todos under the project their agents work in, the ones with no agent

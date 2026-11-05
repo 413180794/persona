@@ -170,7 +170,7 @@ func (c *client) queue(b []byte) {
 // dropSlow closes a client too slow to take what it is sent, in the background and once: the close waits on its stuck
 // connection (up to about 10 s), and until it ends the client is still sent to, each send finding the queue full.
 func (c *client) dropSlow() {
-	if c.conn != nil && c.dropped.CompareAndSwap(false, true) {
+	if c.dropped.CompareAndSwap(false, true) && c.conn != nil {
 		go c.conn.Close(websocket.StatusPolicyViolation, "too slow")
 	}
 }

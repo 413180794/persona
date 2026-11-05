@@ -36,6 +36,7 @@
   网页用 `npx vite preview`（开发服务器在刷新时偶尔中断模块加载），跑 `python3 scripts/test/web_sidebar_collapse_e2e.py <网页地址> [--shots <目录>]`。
   对话停在最新处的端到端检查（首次打开、刷新、侧栏切换、内容一块块进来、输入框变高、往上翻了不被拉回、慢网分页，主对话和 Agent 对话、宽屏和窄屏，#1340）：
   假 hub 带 `MOCK_TASKS=1 MOCK_LONG_ASSISTANT=1 MOCK_LONG_HISTORY=1` 起，再跑 `python3 scripts/test/web_chat_scroll_e2e.py <网页地址> [--hub <假 hub 地址>] [--shots <目录>]`。
+  对话不刷新就能看到新内容的端到端检查（#3036：对话视图、终端 ⇄ 对话来回切几次之后、终端页时推来的、`history` 令牌变了页面重取之后，新回复都出现）：假 hub 带 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 起（`GET /mock/say?user=…&text=…[&history=<令牌>]` 给每个页面订阅着的对话加一条回复、可顺带换 `history`），跑 `python3 scripts/test/web_chat_live_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`。
   主对话任务坞的端到端检查（「全部 N」和胶囊同高、上下边对齐，胶囊行没有滚动条、仍能横滑；Chrome 开着常显的滚动条跑，WebKit 可选）：假 hub 带
   `MOCK_TASKS=1 MOCK_TASKS_DOCK=pair|many` 起，再跑 `python3 scripts/test/web_task_dock_e2e.py <网页地址> [--browser chromium|webkit|all] [--shots <目录>]`。
   侧边面板打开正在提问的任务不把整页顶上去的端到端检查（#1282：面板里的卡片像窄屏一样折起、底部区域限高，输入框聚焦不滚祖先）：假 hub 带
@@ -159,7 +160,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     屏蔽来自 hub `/mutes`，需要你不受屏蔽降级，普通已看仍归已看；项目内单独开启通知的 Agent 不算屏蔽。
     组内按时间降序、同时间按会话 ID 排序；工作中按 `state_since`（缺失回退 `updated_at`），不随每条输出换位。
     状态分组的行补项目上下文，多机时还补机器名称。
-  - **按待办**：每个有挂着 Agent 的未完成待办一段，段头是待办标题和状态，点段头进待办；没挂待办的 Agent 放最后「未归属」一段，上面有待办时默认折叠（里面有需要你的除外）。列表里同时有两种以上宿主（herdr、botmux、Orca…）时，不在 herdr 的行带宿主小标签（`botmux`，从 `pane_id` 前缀判断），只有一种时不显示。置顶、屏蔽、「最近（未运行）」的规则和「按状态」一致。其他分组下挂了待办的行显示待办图标标签。
+  - **按待办**：每个有挂着 Agent 的未完成待办一段，段头是待办标题和状态，点段头进待办；没挂待办的 Agent 放最后「没挂待办的」一段（原叫「未归属」），上面有待办时默认折叠（里面有需要你的除外）；它和「在终端里开的」（原叫「手动开的」）段头下各有一行灰字，说明这些 Agent 是什么、右键一行（或点 ⋯）› 关联到待办… 可以归过去，折叠时也显示（#3057；iOS / Mac 仍是旧名）。列表里同时有两种以上宿主（herdr、botmux、Orca…）时，不在 herdr 的行带宿主小标签（`botmux`，从 `pane_id` 前缀判断），只有一种时不显示。置顶、屏蔽、「最近（未运行）」的规则和「按状态」一致。其他分组下挂了待办的行显示待办图标标签。
   - **最近（未运行）**在三种分组下都保留：会话 offline 或机器离线 / 已不在机器列表时只进这里，不重复进入 live 分组；助手不混入 Agents。
     展开先显示 8 条，可继续显示到最近 40 条。折叠内容退出键盘焦点和无障碍树。
   - **快速筛选**（#433，iOS `QuickFilterBar`，`src/lib/agent-filter.ts`）：Agents 标题下「全部 / 需要你 / 未读 / 工作中」胶囊带件数，只露出有 Agent 的状态，和三种分组叠加，存在当前浏览器。筛选这一排最后有「botmux」开关（#2786，有 botmux 会话时出现，已隐藏时也留着方便恢复）：点一下在列表里隐藏 / 重新显示 botmux 会话（划线表示已隐藏），和任何筛选、分组叠加，存在当前浏览器；「飞书群」只有 botmux 会话，所以在「飞书群」下隐藏会回到「全部」，隐藏时选「飞书群」会重新显示；它只管这个列表，机器详情 › 引擎里的「同时显示 botmux 会话」照旧决定那台电脑的 botmux 会话列不列出来。

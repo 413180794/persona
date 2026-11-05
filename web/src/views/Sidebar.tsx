@@ -719,16 +719,18 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
 }
 
 // Every group in the sidebar is one of these: its title folds it, and the fold is kept in this browser (useFolded).
-function Section({ title, children, folded, onToggle, right, onMenu, first }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement) => void; first?: boolean }) {
+function Section({ title, children, folded, onToggle, right, onMenu, first, hint }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement) => void; first?: boolean; hint?: string }) {
   return (
     <div className={first ? "mt-1" : "mt-3"}>
       <div className="group/sec flex items-center gap-1 px-2 pb-1" {...(onMenu ? contextMenuProps(onMenu) : {})}>
-        <button type="button" aria-expanded={!folded} onClick={onToggle} className="touch-hit relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase hover:text-ink-2">
+        <button type="button" aria-expanded={!folded} onClick={onToggle} title={hint} className="touch-hit relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase hover:text-ink-2">
           <span className="min-w-0 truncate">{title}</span>
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
         {right}
       </div>
+      {/* a group whose name does not say why its agents are here (没挂待办的, 在终端里开的) says it in one line, folded too */}
+      {hint && <p className="px-2 pb-1 text-[11px] leading-[1.45] text-ink-3">{hint}</p>}
       <Collapse open={!folded}>
         <div className="flex flex-col gap-px" inert={folded || undefined}>{children}</div>
       </Collapse>
@@ -776,7 +778,7 @@ function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey
   );
 
   return (
-    <Section title={titleNode} folded={folded} onToggle={toggle} right={rightNode}>
+    <Section title={titleNode} folded={folded} onToggle={toggle} right={rightNode} hint={group.hint}>
       {group.sessions.map(row)}
     </Section>
   );
@@ -800,13 +802,13 @@ function TodoTreeView({ tree, ...p }: { tree: TodoTree } & TreeRowProps) {
         <TreeProjectSection key={pr.key} k={pr.key} name={pr.name} state={pr.state} folded={pr.folded} sessions={pr.sessions} todos={pr.todos} {...p} />
       ))}
       {tree.loose.map((g) => (
-        <TreeProjectSection key={g.key} k={g.key} name={g.name} state={g.state} folded={g.folded} sessions={g.sessions} todos={g.projects} loose {...p} />
+        <TreeProjectSection key={g.key} k={g.key} name={g.name} state={g.state} folded={g.folded} sessions={g.sessions} todos={g.projects} hint={g.hint} loose {...p} />
       ))}
     </>
   );
 }
 
-function TreeProjectSection({ k, name, state, folded: initial, sessions, todos, loose, ...p }: { k: string; name: string; state: TreeState; folded: boolean; sessions: Session[]; todos: TreeTodo[]; loose?: boolean } & TreeRowProps) {
+function TreeProjectSection({ k, name, state, folded: initial, sessions, todos, loose, hint, ...p }: { k: string; name: string; state: TreeState; folded: boolean; sessions: Session[]; todos: TreeTodo[]; loose?: boolean; hint?: string } & TreeRowProps) {
   const [folded, toggle] = useFolded(k, initial, { follow: true, holds: holdsRow(sessions, p.activeKey) });
   return (
     <Section
@@ -814,6 +816,7 @@ function TreeProjectSection({ k, name, state, folded: initial, sessions, todos, 
       folded={folded}
       onToggle={toggle}
       right={<TreeStateText state={state} />}
+      hint={hint}
     >
       {todos.map((td) => <TreeTodoRows key={td.key} td={td} {...p} />)}
     </Section>

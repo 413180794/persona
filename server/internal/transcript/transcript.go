@@ -283,7 +283,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	if err := json.Unmarshal(line, &e); err != nil {
 		return nil
 	}
-	meta.tree = treeLine{uuid: e.UUID, parent: e.ParentUUID, sidechain: e.IsSidechain}
+	meta.tree = treeLine{uuid: e.UUID, parent: e.ParentUUID, sidechain: e.IsSidechain, assistant: e.Type == "assistant"}
 	if e.Cwd != "" {
 		meta.Cwd = e.Cwd
 	}

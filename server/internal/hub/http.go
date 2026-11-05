@@ -839,10 +839,7 @@ func (h *Hub) toSubscribersWith(machineID, sessionID, feature string, v any) {
 		sub := c.subs[key]
 		c.mu.Unlock()
 		if sub && (feature == "" || c.wants(feature)) {
-			select {
-			case c.out <- b:
-			default:
-			}
+			c.queue(b) // a full queue drops the client (it asks again from its cursor), never just this message (#3036)
 		}
 	}
 }
@@ -882,10 +879,7 @@ func (h *Hub) itemsToSubscribers(machineID, sessionID string, items []proto.Item
 			b = msg(its)
 			msgs[f] = b
 		}
-		select {
-		case c.out <- b:
-		default:
-		}
+		c.queue(b) // not select/default: a burst's tail dropped here left a page behind with nothing to tell it (#3036)
 	}
 }
 
@@ -1112,7 +1106,8 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		if m == nil {
 			return
 		}
-		key := [2]string{msg.MachineID, msg.SessionID}
+		// Kept under the computer's own id, which is what its pushes carry (a page may have asked by an absorbed one).
+		key := [2]string{m.cfg.ID, msg.SessionID}
 		c.mu.Lock()
 		already := c.subs[key]
 		c.subs[key] = true
@@ -1128,12 +1123,16 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		}
 		go h.sendBacklog(ctx, c, m, msg.SessionID, msg.SinceSeq)
 	case "unsubscribe":
-		key := [2]string{msg.MachineID, msg.SessionID}
+		m := h.localMachine(msg.MachineID)
+		if m == nil {
+			return
+		}
+		key := [2]string{m.cfg.ID, msg.SessionID}
 		c.mu.Lock()
 		had := c.subs[key]
 		delete(c.subs, key)
 		c.mu.Unlock()
-		if m := h.localMachine(msg.MachineID); m != nil && had {
+		if had {
 			m.removeWatcher(msg.SessionID)
 		}
 	case "register_phone":

@@ -295,7 +295,9 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
     ];
 
     const groups = buildTodoAgentGroups(all, machines, todos, mutes);
-    expect(groups.map((g) => g.name)).toEqual(["天气 App 发 1.3 版", "博客迁移到 Astro", "未归属"]);
+    expect(groups.map((g) => g.name)).toEqual(["天气 App 发 1.3 版", "博客迁移到 Astro", "没挂待办的"]);
+    expect(groups[2].hint).toContain("没挂在任何待办上");
+    expect(groups[0].hint).toBeUndefined();
     expect(groups[groups.length - 1].folded).toBe(true);
     expect(groups[0].todoStatus).toBe("needs_you");
     expect(groups[0].sessions.map((s) => s.session_id)).toEqual(["weather-tests", "weather-widget"]);
@@ -315,7 +317,9 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
 
     const groups = buildTodoAgentGroups([sOnTodo, sManual, sByPersona, sBotmux], machines, todos, mutes);
     expect(groups.map((g) => g.key)).toEqual(["todo:todo-a", "todo:manual", "todo:none"]);
-    expect(groups[1].name).toBe("手动开的");
+    expect(groups[1].name).toBe("在终端里开的");
+    // the name alone does not say why these are here: the group says it (#3057)
+    expect(groups[1].hint).toContain("没挂在待办上");
     expect(groups[1].folded).toBeFalsy();
     expect(groups[1].sessions.map((s) => s.session_id)).toEqual(["manual-herdr"]);
     expect(groups[2].sessions.map((s) => s.session_id).sort()).toEqual(["botmux-chat", "persona-herdr"]);
@@ -341,7 +345,7 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
 
     const groups = buildTodoAgentGroups([sDoneTask], machines, todos, mutes);
     // 因为 todo-done 已完成，不作为未完成待办生成段，该 session 归入「未归属」
-    expect(groups.map((g) => g.name)).toEqual(["未归属"]);
+    expect(groups.map((g) => g.name)).toEqual(["没挂待办的"]);
     // nothing above it: the whole list, open
     expect(groups[0].folded).toBe(false);
     expect(groups[0].sessions.map((s) => s.session_id)).toEqual(["done-task"]);

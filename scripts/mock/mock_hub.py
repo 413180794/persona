@@ -6023,6 +6023,7 @@ def find_items(sid):
 # Every items batch says where it sits in the transcript (docs/protocol.md): one history per session here, to_seq the
 # last seq, from_seq for batches that continue from a seq.
 HISTORY = "mock-1"
+HISTORY_NOW = {"token": HISTORY}  # what pushes and pages say now (/mock/say?history=…)
 # MOCK_GAP=1: the first conversation's subscribe backlog leaves out its last items, then a live push brings only the
 # final two, as if a batch in between had been lost; the app should notice the hole and fetch it (after_seq).
 PHOTO = "a1f3c2d4-0000-4000-8000-00000000000c"
@@ -6861,7 +6862,7 @@ def last_turns(items, n):
 
 
 def span(items, frm=None, to=None):
-    out = {"history": HISTORY, "to_seq": to if to is not None else (items[-1]["seq"] if items else 0)}
+    out = {"history": HISTORY_NOW["token"], "to_seq": to if to is not None else (items[-1]["seq"] if items else 0)}
     if frm is not None:
         out["from_seq"] = frm
     return out
@@ -9535,6 +9536,9 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/lark_send_delay": return self.send_json(set_lark_send_delay(q.get("s", [""])[0]))  # LarkSendTests
         if p == "/mock/say":  # ChatFollowTests: a reply arrives in every open conversation (?text=…, ?user=… a message before it)
             # &steps=50&ms=80: the hub's own pace (a delta every 80 ms, node/assistant.go).
+            # &history=mock-1.r1: the transcript's history token from now on, on pushes and pages alike (a branch was abandoned,
+            # the file was rewritten: docs/protocol.md「items 的连续性」); /mock/reset puts mock-1 back.
+            if q.get("history", [""])[0]: HISTORY_NOW["token"] = q["history"][0]
             args = (SAY_PRESETS.get(q.get("preset", [""])[0]) or q.get("text", ["好了。"])[0], q["user"][0] if "user" in q else None, q.get("stream", ["0"])[0] == "1",
                     int(q.get("steps", ["10"])[0]), int(q.get("ms", ["300"])[0]), int(q.get("late", ["0"])[0]))
             threading.Thread(target=say, args=args, daemon=True).start()
@@ -9656,6 +9660,7 @@ class H(BaseHTTPRequestHandler):
             HERDR_MODE["start"] = os.environ.get("MOCK_HERDR_START", ""); HERDR_MODE["gen"] += 1
             # A test that died before putting them back: the start-up delay (MOCK_DELAY), no paging.
             NET["delay"], PAGING["on"] = float(os.environ.get("MOCK_DELAY", "0")), False
+            HISTORY_NOW["token"] = HISTORY
             for m in MACHINES:
                 m["engine"] = "herdr"
                 if m["id"] == "lab":
