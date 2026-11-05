@@ -15,8 +15,8 @@ import { Button, copyText, Dialog, toast, type MenuItem } from "../ui/atoms";
 import type { MenuAt } from "../ui/menu-model";
 import { NodeMenu } from "./NodeMenu";
 
-/** What a row's ⋯ (and its right click) offers. `onLinkTodo`: the row can hang on a todo (关联到待办…, and 解除关联 when
- *  it does). Everything a row offers is here, so a touch screen (no right click; iOS Safari sends no contextmenu on a
+/** What a row's ⋯ (and its right click) offers. `onLinkTodo`: the row can hang on a todo (关联到待办…; 改挂到其他待办… and
+ *  解除关联 when it does). Everything a row offers is here, so a touch screen (no right click; iOS Safari sends no contextmenu on a
  *  long press) reaches it from the ⋯ (#1996). */
 export function agentRowMenuItems(s: Session, o: { pinned: boolean; muted: boolean; onRename: (s: Session) => void; onDelete: (s: Session) => void; onLinkTodo?: (s: Session) => void }): MenuItem[] {
   const { onRename, onDelete, onLinkTodo } = o;
@@ -25,7 +25,8 @@ export function agentRowMenuItems(s: Session, o: { pinned: boolean; muted: boole
     ...(sessionCan(s, "send") && !s.source_kind ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, accel: "r", onSelect: () => onRename(s) }] : []),
     { key: "mute", label: o.muted ? "恢复通知" : "屏蔽通知", icon: o.muted ? "bell" : "bellOff", onSelect: () => void flipMute(s) },
     { key: "jarvis", label: "交给 Persona", icon: "spark", onSelect: () => void handToPersona(s, machineWithHub(s.machine_id, getState().machines)) },
-    ...(onLinkTodo ? [{ key: "link-todo", label: "关联到待办…", icon: "todo" as const, divider: true, onSelect: () => onLinkTodo(s) }] : []),
+    // on a todo, the same dialog moves it to another (the hub releases the old link), so it says so (#2348)
+    ...(onLinkTodo ? [{ key: "link-todo", label: s.todo ? "改挂到其他待办…" : "关联到待办…", icon: "todo" as const, divider: true, onSelect: () => onLinkTodo(s) }] : []),
     ...(onLinkTodo && s.todo ? [{ key: "unlink-todo", label: "解除关联", icon: "x" as const, onSelect: () => void unlinkTodo(s, s.todo!.id) }] : []),
     ...(s.cwd ? [{ key: "cwd", label: "拷贝目录", icon: "folder" as const, accel: "c", onSelect: () => copyText(s.cwd) }] : []),
     ...(sessionMenuActions(s).includes("resume") ? [{ key: "resume", label: "拷贝恢复命令", icon: "terminal" as const, onSelect: () => copyText(resumeCommand(s)) }] : []),

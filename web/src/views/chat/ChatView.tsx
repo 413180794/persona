@@ -853,7 +853,7 @@ export function Header({
               },
               {
                 key: "relink-todo",
-                label: "关联到待办…",
+                label: "改挂到其他待办…",
                 icon: "todo" as const,
                 onSelect: () => setLinkTodoOpen(true),
               },

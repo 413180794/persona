@@ -76,9 +76,12 @@ struct MacInboxItemDetail: View {
             if case .doc(let url, _) = route, let u = URL(string: url) { link = LinkTarget(url: u) } else { path.append(route) }
         }
         .macOpensLinksInPanel($link)
-        .macLinkPanel($link)
+        .macLinkPanel($link, wide: true)
         // Outside the link panel: the actions stay at the window's edge, the document opens between them and the item.
-        .macInboxActions(current, draft: { drafting = true }, handOff: { handingOff = true })
+        // While a document is open they are a row over the item, and the filters and the list fold away (`reading`).
+        .macInboxActions(current, reading: link != nil, draft: { drafting = true }, handOff: { handingOff = true })
+        .onChange(of: link != nil, initial: true) { _, open in MacInboxState.shared.reading = open }
+        .onDisappear { if link != nil { MacInboxState.shared.reading = false } }
         .navigationTitle(current.title)
         .navigationSubtitle(subtitle)
         .sheet(isPresented: $drafting) { InboxDraftSheet(item: current, accounts: accounts).macSheet() }
@@ -147,13 +150,18 @@ struct MacInboxPage: View {
     @State private var dragging: Double?
     /// The page's whole width: filters, list and detail.
     @State private var total: CGFloat = 0
+    private var state: MacInboxState { .shared }
+    private var listFolded: Bool { state.reading && !state.listWhileReading && state.query.isEmpty }
 
     /// The list's width: the one dragged to, narrowed (down to its least) while the detail would get less than
     /// `macDetailMin` (#1200: in the narrowest window the detail was cut off at the window's edge).
     private var listShown: CGFloat {
-        let wanted = min(max(dragging ?? listWidth, Theme.Size.macInboxListMin), Theme.Size.macInboxListMax)
+        // Reading a document: the list at its least, the room is the document's (#2113).
+        let reading = MacInboxState.shared.reading
+        let wanted = reading ? Theme.Size.macInboxListMin : min(max(dragging ?? listWidth, Theme.Size.macInboxListMin), Theme.Size.macInboxListMax)
         guard total > 0 else { return wanted }
-        let room = total - Theme.Size.macInboxFiltersWidth - Theme.Size.line - Theme.Size.macResizeHitWidth - Theme.Size.macDetailMin
+        let filters = reading ? 0 : Theme.Size.macInboxFiltersWidth + Theme.Size.line
+        let room = total - filters - Theme.Size.macResizeHitWidth - Theme.Size.macDetailMin
         return max(Theme.Size.macInboxListMin, min(wanted, room))
     }
 
@@ -163,25 +171,40 @@ struct MacInboxPage: View {
             // Below the title bar's row: the page's title is drawn there over the filters (#1243). Not the list beside
             // them: the title is not over it, and there the system's scroll edge effect keeps its pinned group header
             // legible (kept below the row, the header sat on the rows scrolled under it).
-            MacInboxFilters()
-                .modifier(MacBelowTitleRow())
-                .frame(width: Theme.Size.macInboxFiltersWidth)
-                .frame(maxHeight: .infinity)
-            // Up into the title bar's row, as the shell's divider: the list reaches up there and the filters do not,
-            // so a divider stopping under the row left a step between them (#1736, as #830).
-            Divider().ignoresSafeArea(.container, edges: .top)
+            // Folded away while a document is read beside the item: the page is the document's (#2113).
+            if !MacInboxState.shared.reading {
+                MacInboxFilters()
+                    .modifier(MacBelowTitleRow())
+                    .frame(width: Theme.Size.macInboxFiltersWidth)
+                    .frame(maxHeight: .infinity)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                // Up into the title bar's row, as the shell's divider: the list reaches up there and the filters do not,
+                // so a divider stopping under the row left a step between them (#1736, as #830).
+                Divider().ignoresSafeArea(.container, edges: .top)
+            }
+            // Folded too while a document is read (2026-11-05 user: 选 B), back with the actions row's 显示列表, a
+            // search, or the document closing. Narrowed to nothing rather than left out: the window's toolbar and
+            // search field are the list's, and they stay.
             MacInboxList()
-                .frame(width: listShown)
-            MacPanelResizeHandle { delta in
-                dragging = min(max((dragging ?? listWidth) + delta, Theme.Size.macInboxListMin), Theme.Size.macInboxListMax)
-            } ended: {
-                if let dragging { listWidth = dragging }
-                dragging = nil
+                .frame(width: listFolded ? 0 : listShown)
+                .clipped()
+                .opacity(listFolded ? 0 : 1)
+                .allowsHitTesting(!listFolded)
+                .accessibilityHidden(listFolded)
+            if !listFolded {
+                MacPanelResizeHandle { delta in
+                    dragging = min(max((dragging ?? listWidth) + delta, Theme.Size.macInboxListMin), Theme.Size.macInboxListMax)
+                } ended: {
+                    if let dragging { listWidth = dragging }
+                    dragging = nil
+                }
             }
             MacInboxDetail()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { total = $0 }
+        .animation(Theme.Motion.layout, value: state.reading)
+        .animation(Theme.Motion.layout, value: listFolded)
         // The pages' color, as Agents and Persona have: the window's own took the wallpaper's tint in dark mode, brown
         // beside the other pages' gray (2026-11-02).
         .background(Theme.pageBackground)

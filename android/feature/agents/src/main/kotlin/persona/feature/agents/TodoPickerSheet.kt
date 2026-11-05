@@ -20,9 +20,12 @@ fun TodoPickerSheet(
     sessionLookup: (SessionKey) -> Session?,
     onDismiss: () -> Unit,
     onPick: (Todo) -> Unit,
+    title: String = "关联到待办",
+    // The todo the agent is on: marked and not picked again (linking it again would only rewrite its source, #2348).
+    currentTodoId: String? = null,
 ) {
     val uncompleted = todos.filter { !it.isDone }.ordered(sessionLookup)
-    JSheet(onDismiss = onDismiss, title = "关联到待办") {
+    JSheet(onDismiss = onDismiss, title = title) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -46,9 +49,9 @@ fun TodoPickerSheet(
                             title = todo.title,
                             subtitle = todo.notes.takeIf { it.isNotBlank() },
                             leading = { JStatusDot(status) },
-                            trailing = { JTag(state.title) },
-                            chevron = true,
-                            onClick = { onPick(todo) }
+                            trailing = { JTag(if (todo.id == currentTodoId) "当前" else state.title) },
+                            chevron = todo.id != currentTodoId,
+                            onClick = { if (todo.id != currentTodoId) onPick(todo) }
                         )
                     }
                 }

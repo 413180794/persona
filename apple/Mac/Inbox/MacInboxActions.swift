@@ -10,6 +10,8 @@ struct MacInboxActions: View {
     var item: InboxItem
     /// A column at the trailing edge (the buttons one under another), or a strip over the item (side by side).
     var column: Bool
+    /// A document is open beside the item: the strip starts with 显示列表 / 收起列表 (the list folds away for it).
+    var reading = false
     var draft: () -> Void
     var handOff: () -> Void
 
@@ -29,8 +31,8 @@ struct MacInboxActions: View {
                 // The words while they fit; a narrow strip keeps the icons (each says what it does on hover) rather
                 // than cutting the words to 「查…」「交给…」.
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: Theme.Space.s) { buttons(iconsOnly: false) }.fixedSize()
-                    HStack(spacing: Theme.Space.s) { buttons(iconsOnly: true) }
+                    HStack(spacing: Theme.Space.s) { listButton; buttons(iconsOnly: false) }.fixedSize()
+                    HStack(spacing: Theme.Space.s) { listButton; buttons(iconsOnly: true) }
                 }
             }
             .padding(.horizontal, Theme.Space.l)
@@ -38,6 +40,17 @@ struct MacInboxActions: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.bar)
             .overlay(alignment: .bottom) { Divider() }
+        }
+    }
+
+    /// While a document is read: brings the folded list back beside it, or folds it again.
+    @ViewBuilder private var listButton: some View {
+        if reading {
+            let state = MacInboxState.shared
+            action(state.listWhileReading ? "收起列表" : "显示列表", Theme.Icon.list, iconsOnly: true,
+                   help: state.listWhileReading ? "收起列表，把地方留给文档" : "显示收件箱列表（关掉文档也会回来）") {
+                state.listWhileReading.toggle()
+            }
         }
     }
 
@@ -97,23 +110,26 @@ struct MacInboxActions: View {
 
 extension View {
     /// The item's actions (`MacInboxActions`) beside it when the detail has room for a column, over it otherwise.
-    func macInboxActions(_ item: InboxItem, draft: @escaping () -> Void, handOff: @escaping () -> Void) -> some View {
-        modifier(MacInboxActionsHost(item: item, draft: draft, handOff: handOff))
+    func macInboxActions(_ item: InboxItem, reading: Bool = false, draft: @escaping () -> Void, handOff: @escaping () -> Void) -> some View {
+        modifier(MacInboxActionsHost(item: item, reading: reading, draft: draft, handOff: handOff))
     }
 }
 
 private struct MacInboxActionsHost: ViewModifier {
     var item: InboxItem
+    /// A document is open beside the item: the actions are a row over it, the column's width is the document's.
+    var reading: Bool
     var draft: () -> Void
     var handOff: () -> Void
-    @State private var room = true
+    @State private var wide = true
+    private var room: Bool { wide && !reading }
 
     /// Siblings, as the link panel and 会话信息 are: the item narrows rather than running under the column. One
     /// structure for both, so crossing the width keeps the item (its scroll position, what was pushed).
     func body(content: Content) -> some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                if !room { MacInboxActions(item: item, column: false, draft: draft, handOff: handOff) }
+                if !room { MacInboxActions(item: item, column: false, reading: reading, draft: draft, handOff: handOff) }
                 content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             if room {
@@ -124,6 +140,6 @@ private struct MacInboxActionsHost: ViewModifier {
         }
         .onGeometryChange(for: Bool.self) {
             $0.size.width >= Theme.Size.macInboxActionsWidth + Theme.Size.macInboxActionsPageMin
-        } action: { room = $0 }
+        } action: { wide = $0 }
     }
 }

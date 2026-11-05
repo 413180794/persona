@@ -106,6 +106,11 @@ describe("a sidebar row's ⋯", () => {
     expect(items(offline)).not.toContain("unlink-todo");
     expect(items(session({ todo: { id: "t1", title: "发版" } } as Partial<Session>))).toEqual(expect.arrayContaining(["link-todo", "unlink-todo"]));
   });
+  it("says 改挂到其他待办… on an agent that already works for a todo (#2348)", () => {
+    const label = (s: Session) => agentRowMenuItems(s, { pinned: false, muted: false, onRename: () => {}, onDelete: () => {}, onLinkTodo: () => {} }).find((i) => i.key === "link-todo")?.label;
+    expect(label(session())).toBe("关联到待办…");
+    expect(label(session({ todo: { id: "t1", title: "发版" } } as Partial<Session>))).toBe("改挂到其他待办…");
+  });
   it("leaves the todo out where the list gives no way to link one", () => {
     expect(agentRowMenuItems(session(), { pinned: false, muted: false, onRename: () => {}, onDelete: () => {} }).map((i) => i.key)).not.toContain("link-todo");
   });

@@ -72,7 +72,7 @@ final class UnfoldTrace: NSObject {
         start = CACurrentMediaTime()
         tapped = .now
         bodiesAtStart = PerfCount.bodies
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
         #else
         guard let link = NSScreen.main?.displayLink(target: self, selector: #selector(tick(_:))) else { return }

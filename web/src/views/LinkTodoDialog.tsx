@@ -151,7 +151,7 @@ export function LinkTodoDialog({
       ? "改挂到其他待办"
       : "挂到待办"
     : currentTodoId
-      ? "改关联到其他待办"
+      ? "改挂到其他待办"
       : "关联到待办";
 
   const description = space

@@ -209,6 +209,12 @@ struct AgentRowMenu: View, Equatable {
         if TodoStore.shared.isSupported, let current = now(),
             TodosLogic.isOnTodosHub(sessionGroup: current.key.group, hubGroup: model.hub?.group) {
             if let todo = current.todo {
+                // the same sheet moves it to another todo (the hub releases the old link, #2348)
+                Button {
+                    if let s = now() { actions.linkTodo(s) }
+                } label: {
+                    Label("改挂到其他待办…", systemImage: Theme.Icon.todo)
+                }
                 Button {
                     guard let s = now() else { return }
                     Task {

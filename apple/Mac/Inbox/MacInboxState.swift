@@ -74,6 +74,15 @@ enum MacInboxFilter: Hashable, Identifiable {
 final class MacInboxState {
     static let shared = MacInboxState()
 
+    /// A document is open beside the selected item (the link panel): the page gives it the filters' and the actions'
+    /// columns (#2113, `MacInboxPage`, `macInboxActions`).
+    var reading = false {
+        didSet { if !reading { listWhileReading = false } }
+    }
+    /// The list brought back beside a document being read (its button in the item's actions row); folded again when
+    /// the document closes.
+    var listWhileReading = false
+
     /// "" all, "feishu", or a mail account id (the iPhone's `inbox.source`).
     var source: String = UserDefaults.standard.string(forKey: "inbox.source") ?? "" {
         didSet { UserDefaults.standard.set(source, forKey: "inbox.source") }

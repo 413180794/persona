@@ -89,10 +89,13 @@ private struct Surface<S: Shape>: ViewModifier {
 extension View {
     /// A `Menu` drawn as its label and nothing more, as on iOS (a ⋯, a chip that draws its own ⌃⌄). The Mac's default
     /// is a bordered pop-up button with its own ⌄ beside the label: a second arrow and a frame around the chip, a wide
-    /// pill under the round ⋯ (#502). iOS unchanged.
+    /// pill under the round ⋯ (#502). visionOS draws a glass platter under the label, a blank white pill once the
+    /// tertiary ⋯ fades into it. iOS unchanged.
     @ViewBuilder func labelOnlyMenu() -> some View {
         #if os(macOS)
         menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        #elseif os(visionOS)
+        menuStyle(.button).buttonStyle(.plain)
         #else
         self
         #endif

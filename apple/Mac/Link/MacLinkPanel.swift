@@ -11,19 +11,36 @@ import WebKit
 
 extension View {
     /// Shows `link` in a panel at the trailing edge. `key` is the conversation 「AI 修改」 / 「作为上下文」 go to; without
-    /// one (收件箱, 知识库) they go to Persona' main conversation.
-    func macLinkPanel(_ link: Binding<LinkTarget?>, key: SessionKey? = nil) -> some View {
-        modifier(MacLinkPanelHost(link: link, key: key))
+    /// one (收件箱, 知识库) they go to Persona' main conversation. `wide`: the panel starts as wide as the page beside it
+    /// allows (收件箱, #2113), its dragged width remembered apart from the others'.
+    func macLinkPanel(_ link: Binding<LinkTarget?>, key: SessionKey? = nil, wide: Bool = false) -> some View {
+        modifier(MacLinkPanelHost(link: link, key: key, wide: wide))
     }
 
     /// Links followed inside this view (`openURL`) open in the panel; the Feishu ones in the native reader there.
     func macOpensLinksInPanel(_ link: Binding<LinkTarget?>) -> some View {
-        environment(\.openURL, OpenURLAction { url in
-            guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return LinkPolicy.system(url) }
-            link.wrappedValue = LinkTarget(url: url)
-            return .handled
-        })
-        .environment(\.openLink) { link.wrappedValue = LinkTarget(url: $0) }
+        modifier(MacPanelLinks(link: link))
+    }
+}
+
+/// Web links open in the panel; with ⌥ held, in a window of their own (`MacLinkWindow`, #2113), as a browser's
+/// ⌘-click opens a tab.
+private struct MacPanelLinks: ViewModifier {
+    @Binding var link: LinkTarget?
+    @Environment(\.openWindow) private var openWindow
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.openURL, OpenURLAction { url in
+                guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return LinkPolicy.system(url) }
+                open(url)
+                return .handled
+            })
+            .environment(\.openLink) { open($0) }
+    }
+
+    private func open(_ url: URL) {
+        if NSEvent.modifierFlags.contains(.option) { openWindow(id: MacLinkWindow.id, value: url) } else { link = LinkTarget(url: url) }
     }
 }
 
@@ -32,21 +49,29 @@ extension View {
 private struct MacLinkPanelHost: ViewModifier {
     @Binding var link: LinkTarget?
     var key: SessionKey?
-    @AppStorage("mac.linkPanel.width") private var width: Double = Theme.Size.macLinkPanelIdeal
+    var wide = false
+    @AppStorage("mac.linkPanel.width") private var narrowWidth: Double = Theme.Size.macLinkPanelIdeal
+    /// Past any window's width until dragged: `clamp` makes it the most the page beside allows.
+    @AppStorage("mac.linkPanel.wideWidth") private var wideWidth: Double = .greatestFiniteMagnitude
+    private var width: Double {
+        get { wide ? wideWidth : narrowWidth }
+        nonmutating set { if wide { wideWidth = newValue } else { narrowWidth = newValue } }
+    }
+    private var pageMin: CGFloat { wide ? Theme.Size.macLinkPanelWidePageMin : Theme.Size.macLinkPanelPageMin }
     /// The width while a drag is going (written to `width` when it ends, so the store is not hit every frame).
     @State private var dragging: Double?
 
     func body(content: Content) -> some View {
         GeometryReader { geo in
             // Too narrow for both side by side: the panel covers the column, as a page pushed on it would.
-            let beside = geo.size.width >= Theme.Size.macLinkPanelMin + Theme.Size.macLinkPanelPageMin
+            let beside = geo.size.width >= Theme.Size.macLinkPanelMin + pageMin
             HStack(spacing: 0) {
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 if let link, beside {
                     let w = clamp(dragging ?? width, in: geo.size.width)
                     MacPanelResizeHandle { delta in
-                        dragging = clamp((dragging ?? width) - delta, in: geo.size.width)
+                        dragging = clamp((dragging ?? Double(w)) - delta, in: geo.size.width)
                     } ended: {
                         if let dragging { width = dragging }
                         dragging = nil
@@ -70,7 +95,7 @@ private struct MacLinkPanelHost: ViewModifier {
 
     /// At least the panel's smallest, and never so wide the page goes under its smallest.
     private func clamp(_ w: Double, in total: CGFloat) -> CGFloat {
-        let most = max(Theme.Size.macLinkPanelMin, total - Theme.Size.macLinkPanelPageMin)
+        let most = max(Theme.Size.macLinkPanelMin, total - pageMin)
         return min(max(w, Theme.Size.macLinkPanelMin), most)
     }
 }

@@ -18,7 +18,7 @@ struct TodoLinkAgentSheet: View {
     private var currentTodoID: String? { target.currentTodoID(in: store.todos) }
     private var title: String {
         if target.isSpace { return currentTodoID == nil ? "挂到待办" : "改挂到其他待办" }
-        return currentTodoID == nil ? "关联到待办" : "改关联到其他待办"
+        return currentTodoID == nil ? "关联到待办" : "改挂到其他待办"
     }
 
     private var openTodos: [TodoItem] {
@@ -92,7 +92,8 @@ struct TodoLinkAgentSheet: View {
                         submit { try await store.link(target, to: draft.selectedTodoID) }
                     }
                     .lineLimit(1)
-                    .disabled(draft.selectedTodoID.isEmpty || draft.busy)
+                    // the todo it is on already: nothing to move (linking it again would only rewrite its source, #2348)
+                    .disabled(draft.selectedTodoID.isEmpty || draft.selectedTodoID == currentTodoID || draft.busy)
                 }
             }
         }

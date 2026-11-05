@@ -31,6 +31,8 @@ extension Theme.Size {
     static let macLinkPanelIdeal: CGFloat = 520
     static let macLinkPanelMin: CGFloat = 360
     static let macLinkPanelPageMin: CGFloat = 360
+    /// The page beside a wide panel (收件箱's item while a document is read, #2113): a conversation's bubbles still fit.
+    static let macLinkPanelWidePageMin: CGFloat = 300
     /// How wide a draggable divider takes the mouse (the line itself is a hairline).
     static let macResizeHitWidth: CGFloat = 8
     /// The inbox's list column (until the window's three columns take it over) and its filters column.

@@ -331,6 +331,8 @@ internal fun AgentsScreen(
     pickingTodoForSession?.let { targetSession ->
         TodoPickerSheet(
             todos = todos,
+            title = if (targetSession.todo != null) "改挂到其他待办" else "关联到待办",
+            currentTodoId = targetSession.todo?.id,
             sessionLookup = { k -> page.sessions.firstOrNull { it.key == k } },
             onDismiss = { pickingTodoForSession = null },
             onPick = { todo ->
@@ -461,6 +463,8 @@ internal fun AgentSessionMenuItems(
         add(JAction(if (pinned) "取消置顶" else "置顶", PhIcons.PushPin, enabled = !busy, onClick = onPin))
         add(JAction(if (muted) "取消屏蔽" else "屏蔽", PhIcons.Prohibit, enabled = !busy, onClick = onMute))
         if (session.todo != null && onUnlinkTodo != null) {
+            // The same picker moves it to another todo: the hub releases the old link (#2348).
+            onLinkTodo?.let { add(JAction("改挂到其他待办…", PhIcons.ListChecks, enabled = !busy, onClick = it)) }
             add(JAction("解除关联待办", PhIcons.ListChecks, enabled = !busy, onClick = onUnlinkTodo))
         } else if (onLinkTodo != null) {
             add(JAction("关联到待办…", PhIcons.ListChecks, enabled = !busy, onClick = onLinkTodo))
