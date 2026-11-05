@@ -20,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import persona.core.contracts.api.*
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcon
@@ -46,13 +47,15 @@ fun SessionFilesScreen(
     modifier: Modifier = Modifier,
     initialPath: String? = null,
     initialLine: Int? = null,
+    /** The hub connection: the pane reads again what failed once it is back online. */
+    connection: StateFlow<ConnectionState>? = null,
 ) {
     val asked = initialPath?.trim()?.takeIf { it.isNotEmpty() }
     // A path from the conversation that names its machine fully can open before the session's folder is known.
     val base = cwd.ifBlank { asked?.takeIf { it.startsWith("/") || FilesPaths.isHome(it) }?.let { start ->
         if (FilesPaths.namesDirectory(start)) FilesPaths.resolve(start, "/") else FilesPaths.parent(FilesPaths.resolve(start, "/")) ?: "/"
     }.orEmpty() }
-    key(session, base, api, asked, initialLine) {
+    key(session, base, api, asked, initialLine, connection) {
         if (base.isBlank()) {
             JListPage(stringResource(R.string.files_title), modifier, onBack = onBackToChat) {
                 item { JEmptyState(stringResource(R.string.files_no_folder_title), stringResource(R.string.files_no_folder_message),
@@ -62,7 +65,7 @@ fun SessionFilesScreen(
             val scope = rememberCoroutineScope()
             val resources = LocalResources.current
             val controller = remember { FilesController(api, session.machineId, base, scope, { filesLoadError(resources, it) },
-                { resources.getString(if (it) R.string.files_git_pulled else R.string.files_git_pull_current) }) }
+                { resources.getString(if (it) R.string.files_git_pulled else R.string.files_git_pull_current) }, connection) }
             val images = remember { MarkdownImages(api, session.machineId, base) }
             val state by controller.state.collectAsStateWithLifecycle()
             var pane by rememberSaveable { mutableStateOf(if (asked != null) FilesPane.Files else initialPane) }

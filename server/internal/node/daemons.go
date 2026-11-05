@@ -466,6 +466,13 @@ func (s *wsStream) Read(p []byte) (int, error) {
 			s.r = r
 		}
 		n, err := s.r.Read(p)
+		// One message is one JSON object, which may span lines (pretty-printed); the peer reads a line per object.
+		// A raw newline in JSON can only be whitespace (never inside a string), so a space means the same.
+		for i, b := range p[:n] {
+			if b == '\n' {
+				p[i] = ' '
+			}
+		}
 		if errors.Is(err, io.EOF) {
 			s.r, s.nl = nil, true
 			if n > 0 {

@@ -5,6 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -67,6 +68,8 @@ class FilesController(
     private val describe: (Throwable) -> String = { it.message.orEmpty() },
     /** A pull's success line: 已拉取最新代码 when it brought commits, 已经是最新代码 otherwise. */
     private val pulled: (updated: Boolean) -> String = { if (it) "updated" else "up to date" },
+    /** The hub connection: coming back online reads again what failed while it was away. */
+    private val connection: StateFlow<ConnectionState>? = null,
 ) {
     private val mutable = MutableStateFlow(FilesState(root = cwd, here = cwd))
     val state = mutable.asStateFlow()
@@ -74,6 +77,7 @@ class FilesController(
     private var gitJob: Job? = null
     private var previewJob: Job? = null
     private var moreJob: Job? = null
+    private var watcher: Job? = null
     private var directoryGeneration = 0
     private var gitGeneration = 0
     private var previewGeneration = 0
@@ -94,6 +98,16 @@ class FilesController(
      * saying it is one) opens in the browser as its top. [initialLine] opens a file at that line (iOS `goTo(line)`).
      */
     fun start(initialPath: String? = null, initialLine: Int? = null) {
+        if (watcher == null) connection?.let { states ->
+            // Best effort: a StateFlow can fold a quick drop and return into one Online, and nothing is retried then.
+            watcher = scope.launch {
+                var was = states.value
+                states.collect { now ->
+                    if (now == ConnectionState.Online && was != ConnectionState.Online) recover()
+                    was = now
+                }
+            }
+        }
         refreshGit()
         val asked = initialPath?.trim()?.takeIf { it.isNotEmpty() }
         when {
@@ -130,6 +144,19 @@ class FilesController(
                 if (generation == directoryGeneration) mutable.update { it.copy(directoryLoading = false, directoryError = describe(error)) }
             }
         }
+    }
+
+    /**
+     * Back online: reads again whatever failed or is still on its way (the folder, Git's status or its older history,
+     * the page on top), so a dropped network does not leave the page on its error until the user taps 重试. A read
+     * started while offline may still fail after this, so it is started again too. A pull is not run again.
+     */
+    private fun recover() {
+        val now = state.value
+        if (now.directoryError != null || now.directoryLoading) directory()
+        if (now.gitError || now.gitLoading) refreshGit()
+        else if (now.moreError || now.moreLoading) { moreJob?.cancel(); mutable.update { it.copy(moreLoading = false) }; more() }
+        if (now.stack.isNotEmpty() && now.content == null && now.diff == null && now.commit == null) reload()
     }
 
     /** Into a folder: below the top it extends the breadcrumb; anywhere else it becomes the top. */

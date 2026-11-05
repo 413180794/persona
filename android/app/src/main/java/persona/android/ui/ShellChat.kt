@@ -107,7 +107,8 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
                 openedPath = null
                 openedLine = null
                 composer.focusRequest++
-            }, initialPane = pane!!, initialPath = openedPath, initialLine = openedLine)
+            }, initialPane = pane!!, initialPath = openedPath, initialLine = openedLine,
+                connection = (wiring?.connection ?: session.connection).state)
         }
     }
 }

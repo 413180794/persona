@@ -2,6 +2,8 @@ package persona.feature.files
 
 import persona.core.contracts.api.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -14,11 +16,16 @@ private class FakeMachine : SessionFiles {
     val folders = setOf("/", "/Users", "/Users/me", "/Users/me/code", "/Users/me/code/weather", "/Users/me/code/weather/Sources",
         "/Users/me/code/weather/Sources/App")
     var failing: Exception? = null
+    var gitFailing: Exception? = null
+    var logFailing: Exception? = null
+    /** Holds a folder read until completed: a request still on its way when the connection comes back. */
+    var gate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
 
     private fun expand(path: String) = if (path == "~" || path.startsWith("~/")) "/Users/me" + path.removePrefix("~") else path
 
     override suspend fun directory(machineId: String, cwd: String, path: String): SessionDirectory {
         asked += "fs $path"
+        gate?.await()
         failing?.let { throw it }
         val real = expand(path)
         require(real in folders) { "not a folder: $real" }
@@ -39,6 +46,7 @@ private class FakeMachine : SessionFiles {
     var askedStatus = false
     override suspend fun status(machineId: String, cwd: String): SessionGitStatus {
         if (askedStatus) asked += "status"
+        gitFailing?.let { throw it }
         return gitStatus
     }
     override suspend fun pull(machineId: String, cwd: String): SessionGitPull {
@@ -46,7 +54,11 @@ private class FakeMachine : SessionFiles {
         return pulling()
     }
     override suspend fun diff(machineId: String, cwd: String, path: String, staged: Boolean) = SessionGitDiff(path, "")
-    override suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int) = SessionGitLog()
+    override suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int): SessionGitLog {
+        asked += "log $skip"
+        logFailing?.let { throw it }
+        return SessionGitLog()
+    }
     override suspend fun show(machineId: String, cwd: String, hash: String): SessionGitShow {
         asked += "show $hash"
         return SessionGitShow(SessionGitCommit(hash, subject = "Add README"), files = listOf(SessionGitFile("README.md", index = "M")),
@@ -329,5 +341,98 @@ class FilesControllerTest {
         files.pull()
         runCurrent()
         assertTrue(machine.asked.isEmpty())
+    }
+    @Test fun comingBackOnlineReadsAgainWhatFailed() = runTest {
+        val machine = FakeMachine()
+        val online = MutableStateFlow(ConnectionState.Online)
+        val files = FilesController(machine, "macbook", cwd, this, describe = { it.message ?: "?" }, connection = online)
+        files.start()
+        runCurrent()
+        // The network drops: the next folder and Git's status fail.
+        online.value = ConnectionState.Connecting
+        machine.failing = IllegalStateException("unreachable")
+        machine.gitFailing = IllegalStateException("unreachable")
+        files.directory("$cwd/Sources")
+        files.refreshGit()
+        runCurrent()
+        assertEquals("unreachable", files.state.value.directoryError)
+        assertTrue(files.state.value.gitError)
+
+        // Back online: both are read again without a tap on 重试.
+        machine.failing = null
+        machine.gitFailing = null
+        online.value = ConnectionState.Online
+        runCurrent()
+        assertNull(files.state.value.directoryError)
+        assertEquals(listOf("App"), files.state.value.directory!!.entries.map { it.name })
+        assertFalse(files.state.value.gitError)
+
+        // A file that failed while away opens once the connection is back; nothing is asked when nothing failed.
+        online.value = ConnectionState.WaitingForNetwork
+        machine.failing = IllegalStateException("unreachable")
+        files.preview(FileSelection.File("$cwd/README.md"))
+        runCurrent()
+        assertEquals("unreachable", files.state.value.previewError)
+        machine.failing = null
+        online.value = ConnectionState.Online
+        runCurrent()
+        assertNull(files.state.value.previewError)
+        assertEquals("hello", files.state.value.content?.text)
+        machine.asked.clear()
+        machine.askedStatus = true
+        online.value = ConnectionState.Connecting
+        online.value = ConnectionState.Online
+        runCurrent()
+        assertTrue(machine.asked.isEmpty())
+        coroutineContext.cancelChildren()
+    }
+    @Test fun aReadStillOnItsWayWhenTheConnectionReturnsIsAskedAgain() = runTest {
+        val machine = FakeMachine()
+        val online = MutableStateFlow(ConnectionState.Connecting)
+        val files = FilesController(machine, "macbook", cwd, this, describe = { it.message ?: "?" }, connection = online)
+        val stuck = kotlinx.coroutines.CompletableDeferred<Unit>()
+        machine.gate = stuck
+        files.start()
+        runCurrent()
+        assertTrue(files.state.value.directoryLoading)
+        // Back online before the first read gave up: it is asked again, and its late failure does not show.
+        machine.gate = null
+        online.value = ConnectionState.Online
+        runCurrent()
+        machine.failing = IllegalStateException("unreachable")
+        stuck.complete(Unit)
+        runCurrent()
+        assertNull(files.state.value.directoryError)
+        assertEquals(listOf("Sources"), files.state.value.directory!!.entries.map { it.name })
+        coroutineContext.cancelChildren()
+    }
+
+    @Test fun olderHistoryIsAskedAgainOnReconnectButAPullIsNot() = runTest {
+        val machine = FakeMachine().apply {
+            gitStatus = SessionGitStatus(true, root = cwd, branch = "main", upstream = "origin/main",
+                commits = List(30) { SessionGitCommit("c$it") })
+            pulling = { throw IllegalStateException("unreachable") }
+        }
+        val online = MutableStateFlow(ConnectionState.Online)
+        val files = FilesController(machine, "macbook", cwd, this, describe = { it.message ?: "?" }, connection = online)
+        files.start()
+        runCurrent()
+        online.value = ConnectionState.Connecting
+        // The failed pull reads the status again (which starts the history over), then older history fails too.
+        files.pull()
+        runCurrent()
+        assertTrue(files.state.value.pullFailed)
+        machine.logFailing = IllegalStateException("unreachable")
+        files.more()
+        runCurrent()
+        assertTrue(files.state.value.moreError)
+        machine.logFailing = null
+        machine.asked.clear()
+        online.value = ConnectionState.Online
+        runCurrent()
+        assertFalse(files.state.value.moreError)
+        assertTrue("log 30" in machine.asked)
+        assertTrue(machine.asked.none { it.startsWith("pull") })
+        coroutineContext.cancelChildren()
     }
 }

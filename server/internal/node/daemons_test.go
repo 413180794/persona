@@ -716,3 +716,64 @@ func TestDaemonGetsNoPackage(t *testing.T) {
 		t.Fatalf("a daemon fetched a package: %v", out)
 	}
 }
+
+// A message is one JSON object whatever its whitespace (docs/daemons.md「帧」): a daemon that pretty-prints its JSON
+// is still heard, and a message that ends without a newline is still its own line.
+func TestDaemonMessagesMaySpanLines(t *testing.T) {
+	got := make(chan json.RawMessage, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.CloseNow()
+		ctx := r.Context()
+		_ = c.Write(ctx, websocket.MessageText, []byte("{\n  \"id\": \"d1\",\n  \"method\": \"ping\",\r\n  \"params\": {\"a\": [1,\n 2]}\n}"))
+		_ = c.Write(ctx, websocket.MessageText, []byte(`{"id":"d2","method":"ping","params":{"b":true}}`))
+		for range 2 {
+			_, b, err := c.Read(ctx)
+			if err != nil {
+				return
+			}
+			got <- b
+		}
+		<-ctx.Done()
+	}))
+	defer srv.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+	stream := &wsStream{c: ws, ctx: ctx}
+	p := rpc.New("n", stream)
+	p.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
+		return map[string]any{"method": method, "params": params}, nil
+	}
+	go func() { _ = p.Serve(ctx, stream) }()
+	want := map[string]string{"d1": `{"a":[1,2]}`, "d2": `{"b":true}`}
+	for range 2 {
+		select {
+		case b := <-got:
+			var m struct {
+				ID     string `json:"id"`
+				Result struct {
+					Params json.RawMessage `json:"params"`
+				} `json:"result"`
+			}
+			if err := json.Unmarshal(b, &m); err != nil {
+				t.Fatalf("%s: %v", b, err)
+			}
+			var c bytes.Buffer
+			_ = json.Compact(&c, m.Result.Params)
+			if w, ok := want[m.ID]; !ok || c.String() != w {
+				t.Fatalf("answer %s", b)
+			}
+			delete(want, m.ID)
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no answer to %v: a message with newlines in it was dropped", want)
+		}
+	}
+}
