@@ -839,6 +839,11 @@ func (n *Node) scanOffline() []proto.Session {
 			assistant = append(assistant, cand{p, st})
 			continue
 		}
+		// Another platform's runs (agentfilters.go) go before the newest are counted: hundreds a day would crowd out
+		// the user's own.
+		if !forked[id] && n.agentFiltered("claude", p) {
+			continue
+		}
 		cands = append(cands, cand{p, st})
 	}
 	newest := func(list []cand, limit int) []cand {

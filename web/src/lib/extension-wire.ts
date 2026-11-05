@@ -172,6 +172,7 @@ export interface Contributes {
   prompts?: PromptItem[];
   themes?: ThemeItem[];
   triage_templates?: TriageTemplateItem[];
+  agent_filters?: AgentFilterItem[];
 }
 
 /**
@@ -230,6 +231,35 @@ export interface TriageTemplateItem {
   id: string;
   title: string;
   text: string;
+}
+
+/**
+ * Agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and any of the matchers
+ * fits it.
+ */
+export interface AgentFilterItem {
+  id: string;
+  /** What the extension's contributions list calls it. */
+  title?: string;
+  /**
+   * A boolean field of the configuration: the filter holds only while it is true, and that field is its only switch.
+   * Without it the filter holds while the extension is on.
+   */
+  when?: string;
+  /** Whose sessions: Claude Code, Codex; none: both. */
+  agents?: string[];
+  /** Codex: session_meta.originator of the rollout, exactly. */
+  originators?: string[];
+  /**
+   * Claude Code: a directory the session was given besides its own (additionalWorkingDirectories), this or under it;
+   * ~/ is the home directory.
+   */
+  added_dirs?: string[];
+  /**
+   * The first user message starts with one of these (leading blanks ignored): a fallback for sessions without a
+   * marker.
+   */
+  first_message_prefixes?: string[];
 }
 
 /**

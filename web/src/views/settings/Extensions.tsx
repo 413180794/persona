@@ -510,9 +510,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
             </Group>
           )}
           {!!p.contributions?.length && (
-            <Group title="贡献开关" footer="只关这一项，其余能力和设置不变；跟着连接器的项目请在连接器设置里改。">
+            <Group title="贡献开关" footer="只关这一项，其余能力和设置不变；跟着连接器的项目请在连接器设置里改，跟着扩展设置的在上面的设置里改。">
               {p.contributions.map((c) => (
-                <Row key={`${c.point}/${c.id}`} label={c.title || c.id} hint={`${pointText(c.point)} · ${c.id}${c.via === "connector" ? " · 跟着连接器" : ""}`}>
+                <Row key={`${c.point}/${c.id}`} label={c.title || c.id} hint={`${pointText(c.point)} · ${c.id}${c.via === "connector" ? " · 跟着连接器" : c.via === "config" ? " · 跟着扩展设置" : ""}`}>
                   <Switch label={c.title || c.id} on={c.enabled} disabled={!editable || toggling || !c.can_disable} onChange={(on) => void toggleContribution(c, on)} />
                 </Row>
               ))}

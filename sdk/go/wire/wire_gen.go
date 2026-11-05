@@ -161,6 +161,7 @@ type Contributes struct {
 	Prompts         []PromptItem         `json:"prompts,omitempty"`
 	Themes          []ThemeItem          `json:"themes,omitempty"`
 	TriageTemplates []TriageTemplateItem `json:"triage_templates,omitempty"`
+	AgentFilters    []AgentFilterItem    `json:"agent_filters,omitempty"`
 }
 
 // SkillItem: A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.
@@ -215,6 +216,27 @@ type TriageTemplateItem struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	Text  string `json:"text"`
+}
+
+// AgentFilterItem: agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and
+// any of the matchers fits it.
+type AgentFilterItem struct {
+	ID string `json:"id"`
+	// What the extension's contributions list calls it.
+	Title string `json:"title,omitempty"`
+	// A boolean field of the configuration: the filter holds only while it is true, and that field is its only switch.
+	// Without it the filter holds while the extension is on.
+	When string `json:"when,omitempty"`
+	// Whose sessions: Claude Code, Codex; none: both.
+	Agents []string `json:"agents,omitempty"`
+	// Codex: session_meta.originator of the rollout, exactly.
+	Originators []string `json:"originators,omitempty"`
+	// Claude Code: a directory the session was given besides its own (additionalWorkingDirectories), this or under it;
+	// ~/ is the home directory.
+	AddedDirs []string `json:"added_dirs,omitempty"`
+	// The first user message starts with one of these (leading blanks ignored): a fallback for sessions without a
+	// marker.
+	FirstMessagePrefixes []string `json:"first_message_prefixes,omitempty"`
 }
 
 // ConnectorItem: the connector protocol's manifest (docs/connector-protocol.md).
@@ -1152,6 +1174,7 @@ var newDef = map[string]func() any{
 	"ThemeColors":           func() any { return new(ThemeColors) },
 	"ThemeItem":             func() any { return new(ThemeItem) },
 	"TriageTemplateItem":    func() any { return new(TriageTemplateItem) },
+	"AgentFilterItem":       func() any { return new(AgentFilterItem) },
 	"ConnectorItem":         func() any { return new(ConnectorItem) },
 	"NamedItem":             func() any { return new(NamedItem) },
 	"QuotaItem":             func() any { return new(QuotaItem) },

@@ -142,6 +142,8 @@ type extensions struct {
 	badges sync.Map
 	// kbEvents keep slow extension programs out of the assistant bus read loop.
 	kbEvents kbExtensionEvents
+	// filtersSent are the agent filters last handed to the nodes, as JSON (agent_filters.go); nil before the first.
+	filtersSent []byte
 	// invalid are the extensions' ui.invalidate waiting to be told to the apps (extension_ui.go), at most one a second.
 	invalid invalidations
 	// widgets are the views drawn for widgets and the widgets each device has (extension_system.go).
@@ -338,6 +340,8 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 			ps.apply(ctx, p.Record.ID)
 		}
 	}
+	// A node that connected while the extensions were loading was told of none (agent_filters.go).
+	h.agentFiltersChanged(ctx)
 }
 
 // dataDirOrTemp is where plugins keep their packages and sockets.
@@ -375,6 +379,9 @@ func (ps *extensions) changed(c extension.Change) {
 	ps.modelChanged(ctx, c)
 	if now := ps.reg.Get(c.ID); ps.h != nil && (now != nil && now.Manifest.NodeProgram() != nil || c.Old != nil && c.Old.Manifest.NodeProgram() != nil) {
 		ps.h.syncExtensionNodesEverywhere(ctx) // its program on computers starts, changes or stops there (extension_nodes.go)
+	}
+	if ps.h != nil {
+		ps.h.agentFiltersChanged(ctx) // only when they changed (agent_filters.go)
 	}
 	if c.ID == cuaExtensionID && ps.h != nil {
 		ps.h.computerChanged(ctx)

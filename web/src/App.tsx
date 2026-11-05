@@ -8,7 +8,10 @@ import { drawerA11y, focusBack, useDrawerDrag } from "./lib/drawer";
 import { acceptHubs, rememberHub, takeHubs } from "./lib/hubs";
 import { closePanel, getPanel } from "./lib/panel";
 import { resolveTab, tabOfSessionLink, tabPagePane } from "./lib/herdr-tree";
-import { href, navigate, useRoute } from "./lib/router";
+import { resolveSessionLink, sessionLinkRoute } from "./lib/session-link";
+import { href, navigate, onLinkClick, useRoute } from "./lib/router";
+import { ago, sessionTitle, shortPath } from "./lib/format";
+import type { Session } from "./lib/types";
 import { unreachable } from "./lib/shell";
 import { NARROW, useKeyboardFrame, useMedia } from "./lib/viewport";
 import { connect, disconnect, reset, useStore } from "./lib/store";
@@ -124,11 +127,15 @@ function Shell() {
   const tabPane = useMemo(() => (route.name === "tab" ? resolveTab(tabSessions ?? [], route) : undefined), [tabSessions, path]);
   // an old `/s/…` link of a pane in a tab becomes that tab's `/t/…` (in place: Back doesn't come here again)
   const tabLink = route.name === "session" ? tabOfSessionLink(tabSessions ?? [], route) : undefined;
-  const tabLinkPath = tabLink ? href(tabLink) : "";
+  // a `/s/…` link with only the front of an id (the 8-character ones shown everywhere, #2464): the whole id's link,
+  // in place; several sessions starting with it are listed to pick from
+  const link = route.name === "session" ? resolveSessionLink(tabSessions ?? [], route.mid, route.sid, loaded) : undefined;
+  const linkTo = link?.kind === "prefix" && route.name === "session" ? sessionLinkRoute(tabSessions ?? [], link.session, route.view) : undefined;
+  const tabLinkPath = tabLink ? href(tabLink) : linkTo ? href(linkTo) : "";
   useEffect(() => {
     if (tabLinkPath) navigate(tabLinkPath, true);
   }, [tabLinkPath]);
-  const pane = route.name === "session" ? { mid: route.mid, sid: route.sid }
+  const pane = route.name === "session" ? (link?.kind === "exact" || link?.kind === "unlisted" ? { mid: route.mid, sid: route.sid } : undefined)
     : route.name === "tab" ? tabPagePane(tabPane, route, loaded)
     : undefined;
   const launch = useStore((s) => (pane ? s.launches[pane.sid] : undefined));
@@ -243,7 +250,8 @@ function Shell() {
   else switch (route.name) {
     case "session":
     case "tab":
-      main = !pane ? (loaded ? <TabGone onToggleSidebar={toggle} /> : <Loading />)
+      main = link?.kind === "ambiguous" ? <SessionChoices sid={route.name === "session" ? route.sid : ""} candidates={link.candidates} all={tabSessions ?? []} onToggleSidebar={toggle} />
+        : !pane ? (loaded && route.name === "tab" ? <TabGone onToggleSidebar={toggle} /> : <Loading />)
         : launch ? <StartingAgent launch={launch} onToggleSidebar={toggle} />
         : <ChatView key={`${pane.mid}/${pane.sid}`} mid={pane.mid} sid={pane.sid} starting={starting} onToggleSidebar={toggle} inPage />;
       break;
@@ -376,6 +384,32 @@ function TabGone({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
       <p className="text-[13px] text-ink-2">这个标签页已经不在了</p>
+      <button type="button" onClick={onToggleSidebar} className="whitespace-nowrap rounded-control px-2.5 py-1.5 text-[12.5px] font-medium text-accent-ink hover:bg-hover lg:hidden">打开侧边栏</button>
+    </div>
+  );
+}
+
+// A `/s/…` link whose id prefix more than one session on the machine starts with (#2464): pick one, none is guessed.
+function SessionChoices({ sid, candidates, all, onToggleSidebar }: { sid: string; candidates: Session[]; all: Session[]; onToggleSidebar: () => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <p className="text-[13px] text-ink-2">有 {candidates.length} 个会话的 id 以 {sid} 开头，选一个打开</p>
+      <ul className="flex w-full max-w-96 flex-col gap-1">
+        {candidates.map((s) => {
+          const to = sessionLinkRoute(all, s);
+          return (
+            <li key={s.session_id}>
+              <a href={href(to)} onClick={(e) => onLinkClick(e, to)} className="flex flex-col items-start gap-0.5 rounded-control px-3 py-2 text-left hover:bg-hover">
+                <span className="w-full truncate text-[13px] font-medium text-ink">{sessionTitle(s)}</span>
+                <span className="w-full truncate font-mono text-[11.5px] text-ink-3">{s.session_id}</span>
+                {(s.cwd || s.activity_at || s.updated_at) && (
+                  <span className="w-full truncate text-[11.5px] text-ink-3">{[shortPath(s.cwd), ago(s.activity_at || s.updated_at)].filter(Boolean).join(" · ")}</span>
+                )}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
       <button type="button" onClick={onToggleSidebar} className="whitespace-nowrap rounded-control px-2.5 py-1.5 text-[12.5px] font-medium text-accent-ink hover:bg-hover lg:hidden">打开侧边栏</button>
     </div>
   );

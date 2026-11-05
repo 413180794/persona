@@ -223,6 +223,7 @@ data class ExtensionContributes(
     val prompts: List<ExtensionPromptItem>? = null,
     val themes: List<ExtensionThemeItem>? = null,
     @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
+    @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
 )
 
 /**
@@ -300,6 +301,42 @@ data class ExtensionTriageTemplateItem(
     val id: String = "",
     val title: String = "",
     val text: String = "",
+)
+
+/**
+ * Agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and any of the matchers
+ * fits it.
+ */
+@Serializable
+data class ExtensionAgentFilterItem(
+    val id: String = "",
+    /**
+     * What the extension's contributions list calls it.
+     */
+    val title: String? = null,
+    /**
+     * A boolean field of the configuration: the filter holds only while it is true, and that field is its only
+     * switch. Without it the filter holds while the extension is on.
+     */
+    val `when`: String? = null,
+    /**
+     * Whose sessions: Claude Code, Codex; none: both.
+     */
+    val agents: List<String>? = null,
+    /**
+     * Codex: session_meta.originator of the rollout, exactly.
+     */
+    val originators: List<String>? = null,
+    /**
+     * Claude Code: a directory the session was given besides its own (additionalWorkingDirectories), this or under
+     * it; ~/ is the home directory.
+     */
+    @SerialName("added_dirs") val addedDirs: List<String>? = null,
+    /**
+     * The first user message starts with one of these (leading blanks ignored): a fallback for sessions without a
+     * marker.
+     */
+    @SerialName("first_message_prefixes") val firstMessagePrefixes: List<String>? = null,
 )
 
 /**

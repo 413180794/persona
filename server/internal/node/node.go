@@ -157,6 +157,9 @@ type Node struct {
 
 	// claudeV is claude's version as last asked (agentplugin.go).
 	claudeV claudeVersionCache
+
+	// agentFilters: the extensions' filters of sessions kept out of the list (node.configure, agentfilters.go)
+	agentFilters []proto.AgentFilter
 }
 
 func New(version string) (*Node, error) {
@@ -491,6 +494,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			// ClaudeGlobalHooks: report-only hooks in the default claude config directory's settings.json
 			// (hub.json machines[].claude_global_hooks, globalhooks.go); nil (an older hub) leaves them as they are.
 			ClaudeGlobalHooks *bool `json:"claude_global_hooks"`
+			// AgentFilters: the extensions' filters of sessions left out (agentfilters.go); nil (an older hub, a call
+			// that says nothing of them) leaves them as they are.
+			AgentFilters *[]proto.AgentFilter `json:"agent_filters"`
 		}
 		if err := json.Unmarshal(params, &c); err != nil {
 			return nil, err
@@ -525,6 +531,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if c.ClaudeGlobalHooks != nil {
 			n.applyGlobalHooks(*c.ClaudeGlobalHooks)
+		}
+		if c.AgentFilters != nil {
+			n.setAgentFilters(*c.AgentFilters)
 		}
 		return map[string]any{"claude_dirs": n.claudeConfigDirs()}, nil
 	case "launchers.list":

@@ -346,7 +346,11 @@ private fun LazyListScope.contributions(
                     contribution.title?.ifBlank { null } ?: contribution.id, contribution.enabled,
                     { change(contribution, it) }, subtitle = ExtensionText.point(contribution.point), enabled = !busy,
                 ) else JRow(contribution.title?.ifBlank { null } ?: contribution.id,
-                    subtitle = ExtensionText.point(contribution.point) + if (contribution.via == "connector") " · 跟随连接器开关，在连接器设置里修改" else " · 只读",
+                    subtitle = ExtensionText.point(contribution.point) + when (contribution.via) {
+                        "connector" -> " · 跟随连接器开关，在连接器设置里修改"
+                        "config" -> " · 跟随扩展设置里的开关"
+                        else -> " · 只读"
+                    },
                     value = if (contribution.enabled) "启用" else "停用")
             }
         }

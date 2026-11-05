@@ -456,8 +456,9 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
     var prompts: [ExtensionPromptItem]?
     var themes: [ExtensionThemeItem]?
     var triageTemplates: [ExtensionTriageTemplateItem]?
+    var agentFilters: [ExtensionAgentFilterItem]?
 
-    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil) {
+    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil) {
         self.connectors = connectors
         self.voice = voice
         self.computer = computer
@@ -475,6 +476,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.prompts = prompts
         self.themes = themes
         self.triageTemplates = triageTemplates
+        self.agentFilters = agentFilters
     }
 
     enum CodingKeys: String, CodingKey {
@@ -495,6 +497,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         case prompts
         case themes
         case triageTemplates = "triage_templates"
+        case agentFilters = "agent_filters"
     }
 
     init(from decoder: Decoder) throws {
@@ -516,6 +519,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.prompts = try? c.decodeIfPresent([ExtensionPromptItem].self, forKey: .prompts)
         self.themes = try? c.decodeIfPresent([ExtensionThemeItem].self, forKey: .themes)
         self.triageTemplates = try? c.decodeIfPresent([ExtensionTriageTemplateItem].self, forKey: .triageTemplates)
+        self.agentFilters = try? c.decodeIfPresent([ExtensionAgentFilterItem].self, forKey: .agentFilters)
     }
 }
 
@@ -675,6 +679,58 @@ nonisolated struct ExtensionTriageTemplateItem: Codable, Hashable, Sendable {
         self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
         self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
         self.text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
+    }
+}
+
+/// Agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and any of the
+/// matchers fits it.
+nonisolated struct ExtensionAgentFilterItem: Codable, Hashable, Sendable {
+    var id: String
+    /// What the extension's contributions list calls it.
+    var title: String?
+    /// A boolean field of the configuration: the filter holds only while it is true, and that field is its only
+    /// switch. Without it the filter holds while the extension is on.
+    var when: String?
+    /// Whose sessions: Claude Code, Codex; none: both.
+    var agents: [String]?
+    /// Codex: session_meta.originator of the rollout, exactly.
+    var originators: [String]?
+    /// Claude Code: a directory the session was given besides its own (additionalWorkingDirectories), this or under
+    /// it; ~/ is the home directory.
+    var addedDirs: [String]?
+    /// The first user message starts with one of these (leading blanks ignored): a fallback for sessions without a
+    /// marker.
+    var firstMessagePrefixes: [String]?
+
+    init(id: String = "", title: String? = nil, when: String? = nil, agents: [String]? = nil, originators: [String]? = nil, addedDirs: [String]? = nil, firstMessagePrefixes: [String]? = nil) {
+        self.id = id
+        self.title = title
+        self.when = when
+        self.agents = agents
+        self.originators = originators
+        self.addedDirs = addedDirs
+        self.firstMessagePrefixes = firstMessagePrefixes
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case when
+        case agents
+        case originators
+        case addedDirs = "added_dirs"
+        case firstMessagePrefixes = "first_message_prefixes"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.title = try? c.decodeIfPresent(String.self, forKey: .title)
+        self.when = try? c.decodeIfPresent(String.self, forKey: .when)
+        self.agents = try? c.decodeIfPresent([String].self, forKey: .agents)
+        self.originators = try? c.decodeIfPresent([String].self, forKey: .originators)
+        self.addedDirs = try? c.decodeIfPresent([String].self, forKey: .addedDirs)
+        self.firstMessagePrefixes = try? c.decodeIfPresent([String].self, forKey: .firstMessagePrefixes)
     }
 }
 

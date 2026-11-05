@@ -16,7 +16,8 @@ type ContributionView struct {
 	Title   string `json:"title,omitempty"`
 	Enabled bool   `json:"enabled"`
 	// CanDisable: the user can switch it here. Not for hub.json's extensions, nor where the switch is elsewhere
-	// (Via: "connector" — a connector, or a channel bound to one, goes with the connector's switch).
+	// (Via: "connector" — a connector, or a channel bound to one, goes with the connector's switch; "config" — an agent
+	// filter goes with a field of the extension's settings).
 	CanDisable bool   `json:"can_disable"`
 	Via        string `json:"via,omitempty"`
 }
@@ -37,6 +38,10 @@ func (ps *extensions) contributionViews(p *extension.Extension) []ContributionVi
 			if m.SwitchedElsewhere(point, id) {
 				v.Via, v.CanDisable = "connector", false
 				v.Enabled = ps.connectorOn(m, point, id)
+			}
+			if _, ok := m.SwitchedByConfig(point, id); ok { // an agent filter's switch is its when field (agentfilters.go)
+				v.Via, v.CanDisable = "config", false
+				v.Enabled = p.Record.Enabled && ps.agentFilterHolds(p, id)
 			}
 			out = append(out, v)
 		}

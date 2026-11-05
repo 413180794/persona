@@ -50,7 +50,7 @@ func (m *Manifest) Without(disabled []string) *Manifest {
 		kept := items[:0:0]
 		for _, raw := range items {
 			id, err := item(raw)
-			if err == nil && slices.Contains(disabled, ContributionKey(name, id)) && !m.SwitchedElsewhere(name, id) {
+			if err == nil && slices.Contains(disabled, ContributionKey(name, id)) && !m.SwitchedElsewhere(name, id) && !m.switchedByConfig(name, id) {
 				continue
 			}
 			kept = append(kept, raw)
@@ -105,6 +105,22 @@ func ContributionTitle(m *Manifest, point, id string) string {
 // ErrSwitchedElsewhere: the contribution's switch is not the extension's (a connector's).
 var ErrSwitchedElsewhere = errors.New("这一项跟着连接器的开关")
 
+// ErrSwitchedByConfig: the contribution goes with a field of the extension's configuration (an agent filter's when).
+var ErrSwitchedByConfig = errors.New("这一项跟着扩展设置里的开关")
+
+// SwitchedByConfig says whether a contribution's switch is a field of the extension's configuration, and which.
+func (m *Manifest) SwitchedByConfig(point, id string) (string, bool) {
+	if !m.switchedByConfig(point, id) {
+		return "", false
+	}
+	for _, f := range m.AgentFilters() {
+		if f.ID == id {
+			return f.When, true
+		}
+	}
+	return "", false
+}
+
 // SetContribution switches one contribution of extension id on or off; the extension restarts with it taken out
 // (Change kind contributions). hub.json's are changed there only.
 func (r *Registry) SetContribution(ctx context.Context, id, point, cid string, on bool, actor string) error {
@@ -117,6 +133,9 @@ func (r *Registry) SetContribution(ctx context.Context, id, point, cid string, o
 	}
 	if p.Full.SwitchedElsewhere(point, cid) {
 		return ErrSwitchedElsewhere
+	}
+	if p.Full.switchedByConfig(point, cid) {
+		return ErrSwitchedByConfig
 	}
 	key := ContributionKey(point, cid)
 	r.mu.Lock()

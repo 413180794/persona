@@ -491,6 +491,9 @@ func (m *Manifest) Validate() error {
 			bad("configuration: %v", err)
 		}
 	}
+	for _, msg := range m.agentFilterSwitches() {
+		bad("%s", msg)
+	}
 	if len(m.Secrets) > SecretsMost {
 		bad("secrets: more than %d", SecretsMost)
 	}

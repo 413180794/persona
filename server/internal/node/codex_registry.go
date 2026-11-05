@@ -393,6 +393,9 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		if n.programRun(id, src) {
 			continue
 		}
+		if n.agentFiltered("codex", src.path) && !n.keptSessions()[id] { // another platform's runs (agentfilters.go)
+			continue
+		}
 		s := proto.Session{SessionID: id, Agent: "codex", SourceKind: "codex_history", SourceThreadID: src.thread, Status: proto.StatusOffline,
 			Capabilities: &proto.SessionCapabilities{Read: true}, ReadOnlyReason: "仅查看：未发现可共享的 app-server 入口，请在电脑上打开会话"}
 		var m quickMeta

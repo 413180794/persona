@@ -72,6 +72,7 @@ internal object ExtensionText {
         "prompts" -> "提示词"
         "themes" -> "主题色"
         "triage_templates" -> "分拣规则模板"
+        "agent_filters" -> "Agents 过滤"
         "computer" -> "操控电脑"
         "browser" -> "浏览器"
         "widgets" -> "小组件"

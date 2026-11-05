@@ -84,6 +84,7 @@ hub 给老路径的每次调用按路由计数（`extension_compat.go` 的 `lega
 | `prompts`（版本 1） | — | `id`、`kind`：`instructions`（`file`：包里的 `.md`）/ `quick`（`title`、`text`） | 纯声明即可 | 接在助手 CLAUDE.md 后的说明；App 输入框的快捷提示，见「纯声明贡献」 |
 | `themes`（版本 1） | — | `id`、`name`、`light` / `dark`：角色色 `accent`（必填）、`positive`、`caution`、`danger`、`ai` 的 `#RRGGBB` | 纯声明即可 | 设置 › 外观 › 主题色里多一种，见「纯声明贡献」 |
 | `triage_templates`（版本 1） | — | `id`、`title`（≤ 40 字）、`text`（≤ 4000 字） | 纯声明即可 | 填收件箱分拣规则（`triage_rules`）时能选的模板，见「纯声明贡献」 |
+| `agent_filters`（版本 1） | — | `id`、`title?`（≤ 40 字）、`when?`（配置里一个布尔字段的名字）、`agents?`（`claude` / `codex`）、`originators?`、`added_dirs?`、`first_message_prefixes?`（至少一种） | 纯声明即可 | 各台电脑上哪些 Agent 会话不进 Agents，见下面「Agent 过滤」 |
 
 hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后加扩展点（知识库来源、链接识别……），在这张表里加一行。
 
@@ -1317,6 +1318,30 @@ App 里是「设置 › 模型供应商 › 新增」的「从扩展添加」（
   再按各端自己的 `StyleSpecTests` 一类的检查（真实背景、各界面风格）过一遍，不合格的同样不出现；扩展停用或关掉这一项后，选着它的退回默认主题色。
 - **快捷提示**：各端在输入框的快捷提示 / 斜杠菜单里列出来（标题单行、截断），选了把 `text` 放进输入框（不直接发出去）。
 - **分拣模板**：设置里编辑一个来源的「分拣规则」时，有模板就多一个「从模板填」，选了把 `text` 填进去（替换前确认）。
+
+## Agent 过滤（#2428）
+
+别的平台在你的电脑上派起来的 claude / codex（比如云端 Agent 平台的工作区聊天、自动化，一周上千个）和你自己的会话用同一个 `~/.claude`、`~/.codex`，
+「屏蔽配置目录」按目录分不开它们。接这个平台的扩展用 `agent_filters` 声明它们的标记，hub 把生效的规则发给每台电脑的 node（`node.configure` 的 `agent_filters`，
+连上时一次、规则变了再一次，并重新拿一次会话列表），node 列会话时把对得上的拿掉：Agents 页、`agents_list`、实时快照都从这个列表来，所以都看不到。会话文件不动，关掉规则就都回来，已有的历史会话一样。
+
+```json
+"configuration": {"type": "object", "properties": {
+  "hide_agents": {"type": "boolean", "title": "在 Persona 里隐藏平台派起来的 Agent", "default": true}}},
+"contributes": {"agent_filters": [
+  {"id": "codex", "title": "平台的 Codex 会话", "when": "hide_agents", "agents": ["codex"], "originators": ["codex-bot"]},
+  {"id": "claude", "title": "平台的 Claude Code 会话", "when": "hide_agents", "agents": ["claude"], "added_dirs": ["~/.bot/skills"]}]}
+```
+
+- **匹配**：`agents` 里的（不写就是两种）会话，下面任何一种对上就拿掉：
+  - `originators`：Codex rollout 第一行 `session_meta` 的 `originator`，整串相等（Persona 自己开的是 `jarvis`，CLI 是 `codex-tui`，桌面 App 是 `Codex Desktop`）；
+  - `added_dirs`：Claude Code transcript 里环境附件的附加工作目录（`additionalWorkingDirectories`）是这个目录或在它下面；绝对路径或 `~/…`，至少两层；
+  - `first_message_prefixes`：第一条用户消息（去掉开头空白）以它开头，8–200 字。只当没有稳定标记的会话的兜底：写得太泛会误伤自己的会话。
+- **开关**：写了 `when` 的规则只在扩展配置里这个布尔字段为真时生效（字段必须在 `configuration` 里、是 `boolean`，否则装不上），
+  这个字段就是它唯一的开关：贡献列表里显示成 `via: "config"`、`can_disable: false`，单独开关它回 409。不写 `when` 的跟着扩展的开关，也能在贡献列表里单独关。扩展停用、卸载，规则就没了。
+- **不会拿掉的**：助手的会话、保留的会话（主对话）、分支出来的会话、宿主里的 Agent（herdr 的窗格、runtime）。规则只看磁盘上找到的 transcript / rollout。
+- **代价**：node 读每个文件开头（最多 512 KB，读到第一条消息后不再读），结果按文件缓存；Claude 的会话在「最新 80 个」截断之前过滤，平台的会话不会把自己的挤出去。
+- 代码：`server/internal/extension/agentfilters.go`（扩展点和校验）、`server/internal/hub/agent_filters.go`（下发）、`server/internal/node/agentfilters.go`（读标记、过滤）、`server/internal/proto/agentfilters.go`（规则和匹配）。
 
 ## App：设置 › 扩展
 

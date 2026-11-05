@@ -1,6 +1,7 @@
 // A session's items: the newest page over HTTP, then live over the WebSocket (docs/protocol.md「items 的连续性」).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errorText, sessionPath } from "../../lib/api";
+import { sessionLoadError } from "../../lib/session-link";
 import { listenSession, send, type ItemsEvent } from "../../lib/store";
 import { mergeItems } from "../../lib/turns";
 import type { Item, ItemsPage } from "../../lib/types";
@@ -107,7 +108,7 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
       } catch (e) {
         if (dead) return;
         // a session that is still starting has no transcript yet
-        if (!opts.starting) setError(errorText(e));
+        if (!opts.starting) setError(sessionLoadError(errorText(e)));
       } finally {
         if (!dead) setLoading(false);
       }
@@ -134,7 +135,7 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
       apply(p.items ?? []);
       setHasMore(Boolean(p.has_more));
     } catch (e) {
-      setError(errorText(e));
+      setError(sessionLoadError(errorText(e)));
     } finally {
       setLoadingEarlier(false);
     }

@@ -764,6 +764,9 @@ func (h *Hub) machineConnected(ctx context.Context, m *Machine, at time.Time) de
 	if b, err := json.Marshal(m.codexConfig(ctx)); err == nil {
 		out.Configure["codex"] = b
 	}
+	if b, err := json.Marshal(h.agentFilters()); err == nil { // the extensions' agent filters (agent_filters.go)
+		out.Configure["agent_filters"] = b
+	}
 	if b, err := json.Marshal(map[string]any{"launchers": h.managedForNodes(ctx)}); err == nil {
 		out.Calls = append(out.Calls, devicewire.NodeCall{MachineID: m.cfg.ID, Method: "launchers.managed", Params: b})
 	}
