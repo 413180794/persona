@@ -1055,10 +1055,91 @@ export interface ViewAction {
   error?: string;
   updated_at?: string;
   at: string;
+  /**
+   * Absent or action: a declared Action (action is its id). html: an HTML bridge reply (action is the html
+   * component's key, text the confirmed reply).
+   */
+  kind?: ViewActionKind;
+  /**
+   * The card version the user saw and confirmed when this was committed; absent on records committed before #2019.
+   */
+  version?: number;
+  /** kind html only: the reply text the user confirmed. */
+  text?: string;
 }
 
 export type ViewActionStatus = "pending" | "sent" | "failed" | (string & {});
 export const VIEW_ACTION_STATUSES = ["pending", "sent", "failed"] as const;
+
+export type ViewActionKind = "action" | "html" | (string & {});
+export const VIEW_ACTION_KINDS = ["action", "html"] as const;
+
+/**
+ * The body of POST /api/v1/assistant/conversations/{id}/views/{key}/actions. The reply text and form definition are
+ * read from the stored View, never from the client.
+ */
+export interface ViewActionInput {
+  /** A declared reply action's id. */
+  action: string;
+  /** The named page the action is on; absent for the root page. */
+  page?: string;
+  /** The fields this action submits, by name. */
+  values?: Record<string, string>;
+  client_msg_id: string;
+  /** The user confirmed the action's confirm prompt natively. */
+  confirmed?: boolean;
+  /**
+   * The card version shown (and confirmed) to the user. Required when the action has confirm; a different stored
+   * version answers 409 view_changed.
+   */
+  expected_version?: number;
+}
+
+export type AssistantHTMLActionKind = "reply" | "open" | (string & {});
+export const ASSISTANT_HTMLACTION_KINDS = ["reply", "open"] as const;
+
+/**
+ * The body of POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions: a persona.reply / persona.open call
+ * of a keyed html component, after the user confirmed it natively.
+ */
+export interface AssistantHTMLActionInput {
+  kind: AssistantHTMLActionKind;
+  /** The key of the html component on that page of the stored card. */
+  component_key: string;
+  /** The named page the component is on; absent for the root page. */
+  page?: string;
+  /** The card version that ran the HTML and was shown in the confirmation. */
+  expected_version: number;
+  /** reply only: the text shown in full in the confirmation. */
+  text?: string;
+  /** open only: an https or supported persona:// target. */
+  url?: string;
+  client_msg_id: string;
+  /** Always true: the call was confirmed natively, outside the HTML. */
+  confirmed: boolean;
+}
+
+/**
+ * What an html-actions open answers: the validated target to open inside the app, and the card version it was checked
+ * against.
+ */
+export interface AssistantHTMLOpenResult {
+  open: string;
+  version: number;
+}
+
+/**
+ * 409 code view_changed: the stored card is not the version the user saw. Refresh, keep the draft and confirm again;
+ * never resubmit with the new version automatically.
+ */
+export interface ViewChangedError {
+  error: string;
+  code: string;
+  /** The current stored version. */
+  version: number;
+  /** The current card, as feed.views carries it (a transcript card: id is its key, version 1). */
+  view?: AssistantView;
+}
 
 /**
  * What a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push or pop a

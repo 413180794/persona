@@ -1505,6 +1505,19 @@ data class ExtensionViewAction(
     val error: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     val at: String = "",
+    /**
+     * Absent or action: a declared Action (action is its id). html: an HTML bridge reply (action is the html
+     * component's key, text the confirmed reply).
+     */
+    val kind: String? = null,
+    /**
+     * The card version the user saw and confirmed when this was committed; absent on records committed before #2019.
+     */
+    val version: Long? = null,
+    /**
+     * kind html only: the reply text the user confirmed.
+     */
+    val text: String? = null,
 )
 
 /**
@@ -1516,6 +1529,116 @@ object ExtensionViewActionStatus {
     const val FAILED = "failed"
     val ALL = listOf("pending", "sent", "failed")
 }
+
+/**
+ * Values of ViewActionKind.
+ */
+object ExtensionViewActionKind {
+    const val ACTION = "action"
+    const val HTML = "html"
+    val ALL = listOf("action", "html")
+}
+
+/**
+ * The body of POST /api/v1/assistant/conversations/{id}/views/{key}/actions. The reply text and form definition are
+ * read from the stored View, never from the client.
+ */
+@Serializable
+data class ExtensionViewActionInput(
+    /**
+     * A declared reply action's id.
+     */
+    val action: String = "",
+    /**
+     * The named page the action is on; absent for the root page.
+     */
+    val page: String? = null,
+    /**
+     * The fields this action submits, by name.
+     */
+    val values: Map<String, String>? = null,
+    @SerialName("client_msg_id") val clientMsgId: String = "",
+    /**
+     * The user confirmed the action's confirm prompt natively.
+     */
+    val confirmed: Boolean? = null,
+    /**
+     * The card version shown (and confirmed) to the user. Required when the action has confirm; a different stored
+     * version answers 409 view_changed.
+     */
+    @SerialName("expected_version") val expectedVersion: Long? = null,
+)
+
+/**
+ * Values of AssistantHTMLActionKind.
+ */
+object ExtensionAssistantHTMLActionKind {
+    const val REPLY = "reply"
+    const val OPEN = "open"
+    val ALL = listOf("reply", "open")
+}
+
+/**
+ * The body of POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions: a persona.reply / persona.open call
+ * of a keyed html component, after the user confirmed it natively.
+ */
+@Serializable
+data class ExtensionAssistantHTMLActionInput(
+    val kind: String = "",
+    /**
+     * The key of the html component on that page of the stored card.
+     */
+    @SerialName("component_key") val componentKey: String = "",
+    /**
+     * The named page the component is on; absent for the root page.
+     */
+    val page: String? = null,
+    /**
+     * The card version that ran the HTML and was shown in the confirmation.
+     */
+    @SerialName("expected_version") val expectedVersion: Long = 0L,
+    /**
+     * reply only: the text shown in full in the confirmation.
+     */
+    val text: String? = null,
+    /**
+     * open only: an https or supported persona:// target.
+     */
+    val url: String? = null,
+    @SerialName("client_msg_id") val clientMsgId: String = "",
+    /**
+     * Always true: the call was confirmed natively, outside the HTML.
+     */
+    val confirmed: Boolean = false,
+)
+
+/**
+ * What an html-actions open answers: the validated target to open inside the app, and the card version it was checked
+ * against.
+ */
+@Serializable
+data class ExtensionAssistantHTMLOpenResult(
+    val open: String = "",
+    val version: Long = 0L,
+)
+
+/**
+ * 409 code view_changed: the stored card is not the version the user saw. Refresh, keep the draft and confirm again;
+ * never resubmit with the new version automatically.
+ */
+@Serializable
+data class ExtensionViewChangedError(
+    val error: String = "",
+    val code: String = "",
+    /**
+     * The current stored version.
+     */
+    val version: Long = 0L,
+    /**
+     * The current card, as feed.views carries it (a transcript card: id is its key, version 1).
+     */
+    val view: ExtensionAssistantView? = null,
+)
 
 /**
  * What a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push or pop a

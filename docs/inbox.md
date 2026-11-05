@@ -87,8 +87,8 @@ hub 在转给管理者之前就拦下（403，管理者那边也查）；连接�
 - App：行的头像换成文档类型的方块（表格绿、多维表格紫、文档蓝），类型标签「@我」/「评论」，第二行是「多维表格 · 李雷提及了你」，
   下面一行是第一条提到我的行和它的状态（点一下就是菜单，选了直接写进文档）、「+N 行」。点开是 `InboxDocDetailView`：
   「打开多维表格」（App 内的文档阅读器）、每行一张卡片（字段 + 每个状态列一个菜单）、回复会发到哪。
-- 测试：`inbox_docs_test.go`（表格 / 多维表格找行、状态列、指纹、回复目标、AI 的改动校验）；`TestDocsLive` 对自己的 demo 文档真改一次状态再改回来、
-  可选地留一条评论（`JARVIS_LIVE_DOCS`，链接只在环境变量里）；UI 测试 `InboxDocTests`（`MOCK_DOCS=1`）。别拿别人的表测。
+- 测试：找行、状态列、指纹、回复目标、AI 的改动校验，以及对自己的 demo 文档真改一次状态再改回来的测试，#1571 起随飞书的收件箱在接飞书的插件里（原来是 hub 的 inbox_docs_test.go、TestDocsLive）；
+  本仓库留块类型（`assistant/inbox_blocks.go`）的 `inbox_agent_test.go`、`inbox_golden_test.go`，UI 测试 `InboxDocTests`（`MOCK_DOCS=1`）。别拿别人的表测。
 
 ## AI 分拣
 

@@ -1011,6 +1011,13 @@ type ViewAction struct {
 	Error       string            `json:"error,omitempty"`
 	UpdatedAt   time.Time         `json:"updated_at,omitzero"`
 	At          time.Time         `json:"at"`
+	// Absent or action: a declared Action (action is its id). html: an HTML bridge reply (action is the html component's
+	// key, text the confirmed reply).
+	Kind string `json:"kind,omitempty"`
+	// The card version the user saw and confirmed when this was committed; absent on records committed before #2019.
+	Version int64 `json:"version,omitempty"`
+	// kind html only: the reply text the user confirmed.
+	Text string `json:"text,omitempty"`
 }
 
 // Values of ViewActionStatus.
@@ -1022,6 +1029,78 @@ const (
 
 // ViewActionStatuses are the values of ViewActionStatus, in order.
 var ViewActionStatuses = []string{"pending", "sent", "failed"}
+
+// Values of ViewActionKind.
+const (
+	ViewActionKindAction = "action"
+	ViewActionKindHtml   = "html"
+)
+
+// ViewActionKinds are the values of ViewActionKind, in order.
+var ViewActionKinds = []string{"action", "html"}
+
+// ViewActionInput: the body of POST /api/v1/assistant/conversations/{id}/views/{key}/actions. The reply text and form
+// definition are read from the stored View, never from the client.
+type ViewActionInput struct {
+	// A declared reply action's id.
+	Action string `json:"action"`
+	// The named page the action is on; absent for the root page.
+	Page string `json:"page,omitempty"`
+	// The fields this action submits, by name.
+	Values      map[string]string `json:"values,omitempty"`
+	ClientMsgID string            `json:"client_msg_id"`
+	// The user confirmed the action's confirm prompt natively.
+	Confirmed bool `json:"confirmed,omitempty"`
+	// The card version shown (and confirmed) to the user. Required when the action has confirm; a different stored
+	// version answers 409 view_changed.
+	ExpectedVersion int64 `json:"expected_version,omitempty"`
+}
+
+// Values of AssistantHTMLActionKind.
+const (
+	AssistantHTMLActionKindReply = "reply"
+	AssistantHTMLActionKindOpen  = "open"
+)
+
+// AssistantHTMLActionKinds are the values of AssistantHTMLActionKind, in order.
+var AssistantHTMLActionKinds = []string{"reply", "open"}
+
+// AssistantHTMLActionInput: the body of POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions: a
+// persona.reply / persona.open call of a keyed html component, after the user confirmed it natively.
+type AssistantHTMLActionInput struct {
+	Kind string `json:"kind"`
+	// The key of the html component on that page of the stored card.
+	ComponentKey string `json:"component_key"`
+	// The named page the component is on; absent for the root page.
+	Page string `json:"page,omitempty"`
+	// The card version that ran the HTML and was shown in the confirmation.
+	ExpectedVersion int64 `json:"expected_version"`
+	// reply only: the text shown in full in the confirmation.
+	Text string `json:"text,omitempty"`
+	// open only: an https or supported persona:// target.
+	URL         string `json:"url,omitempty"`
+	ClientMsgID string `json:"client_msg_id"`
+	// Always true: the call was confirmed natively, outside the HTML.
+	Confirmed bool `json:"confirmed"`
+}
+
+// AssistantHTMLOpenResult: what an html-actions open answers: the validated target to open inside the app, and the
+// card version it was checked against.
+type AssistantHTMLOpenResult struct {
+	Open    string `json:"open"`
+	Version int64  `json:"version"`
+}
+
+// ViewChangedError: 409 code view_changed: the stored card is not the version the user saw. Refresh, keep the draft
+// and confirm again; never resubmit with the new version automatically.
+type ViewChangedError struct {
+	Error string `json:"error"`
+	Code  string `json:"code"`
+	// The current stored version.
+	Version int64 `json:"version"`
+	// The current card, as feed.views carries it (a transcript card: id is its key, version 1).
+	View *AssistantView `json:"view,omitempty"`
+}
 
 // Action: what a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push
 // or pop a page) are fields added here.
@@ -1204,93 +1283,97 @@ type CardPart struct {
 
 // newDef makes a value of each definition, for tests that read examples by definition name.
 var newDef = map[string]func() any{
-	"Manifest":              func() any { return new(Manifest) },
-	"Dependency":            func() any { return new(Dependency) },
-	"Exports":               func() any { return new(Exports) },
-	"ExportedPoint":         func() any { return new(ExportedPoint) },
-	"PackMember":            func() any { return new(PackMember) },
-	"Engines":               func() any { return new(Engines) },
-	"Runtime":               func() any { return new(Runtime) },
-	"Resources":             func() any { return new(Resources) },
-	"NodeRuntime":           func() any { return new(NodeRuntime) },
-	"NodePermissions":       func() any { return new(NodePermissions) },
-	"SecretSpec":            func() any { return new(SecretSpec) },
-	"Permissions":           func() any { return new(Permissions) },
-	"Contributes":           func() any { return new(Contributes) },
-	"SkillItem":             func() any { return new(SkillItem) },
-	"PromptItem":            func() any { return new(PromptItem) },
-	"ThemeColors":           func() any { return new(ThemeColors) },
-	"ThemeItem":             func() any { return new(ThemeItem) },
-	"TriageTemplateItem":    func() any { return new(TriageTemplateItem) },
-	"AgentFilterItem":       func() any { return new(AgentFilterItem) },
-	"ConnectorItem":         func() any { return new(ConnectorItem) },
-	"NamedItem":             func() any { return new(NamedItem) },
-	"QuotaItem":             func() any { return new(QuotaItem) },
-	"ProviderItem":          func() any { return new(ProviderItem) },
-	"ProviderModel":         func() any { return new(ProviderModel) },
-	"APIItem":               func() any { return new(APIItem) },
-	"APIReceipt":            func() any { return new(APIReceipt) },
-	"AssistantItem":         func() any { return new(AssistantItem) },
-	"UIItem":                func() any { return new(UIItem) },
-	"AgentSourceItem":       func() any { return new(AgentSourceItem) },
-	"ChannelItem":           func() any { return new(ChannelItem) },
-	"ChannelCapabilities":   func() any { return new(ChannelCapabilities) },
-	"EventsItem":            func() any { return new(EventsItem) },
-	"ShortcutItem":          func() any { return new(ShortcutItem) },
-	"ShortcutParam":         func() any { return new(ShortcutParam) },
-	"Frame":                 func() any { return new(Frame) },
-	"RPCError":              func() any { return new(RPCError) },
-	"InitializeParams":      func() any { return new(InitializeParams) },
-	"ExportedContribution":  func() any { return new(ExportedContribution) },
-	"HubInfo":               func() any { return new(HubInfo) },
-	"ExtensionInfo":         func() any { return new(ExtensionInfo) },
-	"InitializeResult":      func() any { return new(InitializeResult) },
-	"UIParams":              func() any { return new(UIParams) },
-	"UIMachine":             func() any { return new(UIMachine) },
-	"UILauncher":            func() any { return new(UILauncher) },
-	"UIInboxItem":           func() any { return new(UIInboxItem) },
-	"BadgeEvent":            func() any { return new(BadgeEvent) },
-	"InvalidateEvent":       func() any { return new(InvalidateEvent) },
-	"UIContext":             func() any { return new(UIContext) },
-	"UIRequest":             func() any { return new(UIRequest) },
-	"UIPlace":               func() any { return new(UIPlace) },
-	"UIPlaces":              func() any { return new(UIPlaces) },
-	"WidgetPlace":           func() any { return new(WidgetPlace) },
-	"WidgetPlaces":          func() any { return new(WidgetPlaces) },
-	"WidgetRequest":         func() any { return new(WidgetRequest) },
-	"WidgetAnswer":          func() any { return new(WidgetAnswer) },
-	"DeviceWidget":          func() any { return new(DeviceWidget) },
-	"DeviceWidgets":         func() any { return new(DeviceWidgets) },
-	"WidgetPush":            func() any { return new(WidgetPush) },
-	"ShortcutPlace":         func() any { return new(ShortcutPlace) },
-	"ShortcutPlaces":        func() any { return new(ShortcutPlaces) },
-	"ShortcutRequest":       func() any { return new(ShortcutRequest) },
-	"ShortcutRunParams":     func() any { return new(ShortcutRunParams) },
-	"ShortcutResult":        func() any { return new(ShortcutResult) },
-	"NotifyAction":          func() any { return new(NotifyAction) },
-	"NotifyActionInput":     func() any { return new(NotifyActionInput) },
-	"ExtensionNotification": func() any { return new(ExtensionNotification) },
-	"View":                  func() any { return new(View) },
-	"Section":               func() any { return new(Section) },
-	"Component":             func() any { return new(Component) },
-	"AssistantView":         func() any { return new(AssistantView) },
-	"ViewAction":            func() any { return new(ViewAction) },
-	"Action":                func() any { return new(Action) },
-	"Push":                  func() any { return new(Push) },
-	"Search":                func() any { return new(Search) },
-	"Filter":                func() any { return new(Filter) },
-	"More":                  func() any { return new(More) },
-	"Avatar":                func() any { return new(Avatar) },
-	"Thumbnail":             func() any { return new(Thumbnail) },
-	"TableColumn":           func() any { return new(TableColumn) },
-	"EmptyButton":           func() any { return new(EmptyButton) },
-	"Badge":                 func() any { return new(Badge) },
-	"Choice":                func() any { return new(Choice) },
-	"ChartSeries":           func() any { return new(ChartSeries) },
-	"ChartPoint":            func() any { return new(ChartPoint) },
-	"Stat":                  func() any { return new(Stat) },
-	"ActionResult":          func() any { return new(ActionResult) },
-	"PersonaCard":           func() any { return new(PersonaCard) },
-	"CardAmount":            func() any { return new(CardAmount) },
-	"CardPart":              func() any { return new(CardPart) },
+	"Manifest":                 func() any { return new(Manifest) },
+	"Dependency":               func() any { return new(Dependency) },
+	"Exports":                  func() any { return new(Exports) },
+	"ExportedPoint":            func() any { return new(ExportedPoint) },
+	"PackMember":               func() any { return new(PackMember) },
+	"Engines":                  func() any { return new(Engines) },
+	"Runtime":                  func() any { return new(Runtime) },
+	"Resources":                func() any { return new(Resources) },
+	"NodeRuntime":              func() any { return new(NodeRuntime) },
+	"NodePermissions":          func() any { return new(NodePermissions) },
+	"SecretSpec":               func() any { return new(SecretSpec) },
+	"Permissions":              func() any { return new(Permissions) },
+	"Contributes":              func() any { return new(Contributes) },
+	"SkillItem":                func() any { return new(SkillItem) },
+	"PromptItem":               func() any { return new(PromptItem) },
+	"ThemeColors":              func() any { return new(ThemeColors) },
+	"ThemeItem":                func() any { return new(ThemeItem) },
+	"TriageTemplateItem":       func() any { return new(TriageTemplateItem) },
+	"AgentFilterItem":          func() any { return new(AgentFilterItem) },
+	"ConnectorItem":            func() any { return new(ConnectorItem) },
+	"NamedItem":                func() any { return new(NamedItem) },
+	"QuotaItem":                func() any { return new(QuotaItem) },
+	"ProviderItem":             func() any { return new(ProviderItem) },
+	"ProviderModel":            func() any { return new(ProviderModel) },
+	"APIItem":                  func() any { return new(APIItem) },
+	"APIReceipt":               func() any { return new(APIReceipt) },
+	"AssistantItem":            func() any { return new(AssistantItem) },
+	"UIItem":                   func() any { return new(UIItem) },
+	"AgentSourceItem":          func() any { return new(AgentSourceItem) },
+	"ChannelItem":              func() any { return new(ChannelItem) },
+	"ChannelCapabilities":      func() any { return new(ChannelCapabilities) },
+	"EventsItem":               func() any { return new(EventsItem) },
+	"ShortcutItem":             func() any { return new(ShortcutItem) },
+	"ShortcutParam":            func() any { return new(ShortcutParam) },
+	"Frame":                    func() any { return new(Frame) },
+	"RPCError":                 func() any { return new(RPCError) },
+	"InitializeParams":         func() any { return new(InitializeParams) },
+	"ExportedContribution":     func() any { return new(ExportedContribution) },
+	"HubInfo":                  func() any { return new(HubInfo) },
+	"ExtensionInfo":            func() any { return new(ExtensionInfo) },
+	"InitializeResult":         func() any { return new(InitializeResult) },
+	"UIParams":                 func() any { return new(UIParams) },
+	"UIMachine":                func() any { return new(UIMachine) },
+	"UILauncher":               func() any { return new(UILauncher) },
+	"UIInboxItem":              func() any { return new(UIInboxItem) },
+	"BadgeEvent":               func() any { return new(BadgeEvent) },
+	"InvalidateEvent":          func() any { return new(InvalidateEvent) },
+	"UIContext":                func() any { return new(UIContext) },
+	"UIRequest":                func() any { return new(UIRequest) },
+	"UIPlace":                  func() any { return new(UIPlace) },
+	"UIPlaces":                 func() any { return new(UIPlaces) },
+	"WidgetPlace":              func() any { return new(WidgetPlace) },
+	"WidgetPlaces":             func() any { return new(WidgetPlaces) },
+	"WidgetRequest":            func() any { return new(WidgetRequest) },
+	"WidgetAnswer":             func() any { return new(WidgetAnswer) },
+	"DeviceWidget":             func() any { return new(DeviceWidget) },
+	"DeviceWidgets":            func() any { return new(DeviceWidgets) },
+	"WidgetPush":               func() any { return new(WidgetPush) },
+	"ShortcutPlace":            func() any { return new(ShortcutPlace) },
+	"ShortcutPlaces":           func() any { return new(ShortcutPlaces) },
+	"ShortcutRequest":          func() any { return new(ShortcutRequest) },
+	"ShortcutRunParams":        func() any { return new(ShortcutRunParams) },
+	"ShortcutResult":           func() any { return new(ShortcutResult) },
+	"NotifyAction":             func() any { return new(NotifyAction) },
+	"NotifyActionInput":        func() any { return new(NotifyActionInput) },
+	"ExtensionNotification":    func() any { return new(ExtensionNotification) },
+	"View":                     func() any { return new(View) },
+	"Section":                  func() any { return new(Section) },
+	"Component":                func() any { return new(Component) },
+	"AssistantView":            func() any { return new(AssistantView) },
+	"ViewAction":               func() any { return new(ViewAction) },
+	"ViewActionInput":          func() any { return new(ViewActionInput) },
+	"AssistantHTMLActionInput": func() any { return new(AssistantHTMLActionInput) },
+	"AssistantHTMLOpenResult":  func() any { return new(AssistantHTMLOpenResult) },
+	"ViewChangedError":         func() any { return new(ViewChangedError) },
+	"Action":                   func() any { return new(Action) },
+	"Push":                     func() any { return new(Push) },
+	"Search":                   func() any { return new(Search) },
+	"Filter":                   func() any { return new(Filter) },
+	"More":                     func() any { return new(More) },
+	"Avatar":                   func() any { return new(Avatar) },
+	"Thumbnail":                func() any { return new(Thumbnail) },
+	"TableColumn":              func() any { return new(TableColumn) },
+	"EmptyButton":              func() any { return new(EmptyButton) },
+	"Badge":                    func() any { return new(Badge) },
+	"Choice":                   func() any { return new(Choice) },
+	"ChartSeries":              func() any { return new(ChartSeries) },
+	"ChartPoint":               func() any { return new(ChartPoint) },
+	"Stat":                     func() any { return new(Stat) },
+	"ActionResult":             func() any { return new(ActionResult) },
+	"PersonaCard":              func() any { return new(PersonaCard) },
+	"CardAmount":               func() any { return new(CardAmount) },
+	"CardPart":                 func() any { return new(CardPart) },
 }

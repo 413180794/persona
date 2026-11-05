@@ -48,6 +48,38 @@ struct RFBClientTests {
         #expect(digest == "7297662dcde95fa331069915030ec2edd3b6f208103e19afeadc6529d058b119")
     }
 
+    /// A ZRLE rectangle the framebuffer cannot hold (#2373) is refused before any pixel is written, raw tiles included.
+    @Test func zrleRefusesARectangleOutsideTheFramebuffer() {
+        let fb = RFBFramebuffer(width: 8, height: 8)
+        let z = RFBZRLE()
+        let rawTile = [UInt8(0)] + [UInt8](repeating: 0xff, count: 4 * 4 * 3)
+        for (x, y, w, h) in [(6, 0, 4, 4), (0, 6, 4, 4), (-1, 0, 4, 4), (0, 0, 9, 1), (0, 0, -1, 1)] {
+            #expect(throws: RFBZRLE.Failure.tile) { try z.draw(rawTile, x: x, y: y, w: w, h: h, into: fb) }
+        }
+        #expect(Data(bytes: fb.pixels, count: 8 * 8 * 4) == Data(count: 8 * 8 * 4))
+        // One that fits still draws.
+        #expect(throws: Never.self) { try z.draw(rawTile, x: 4, y: 4, w: 4, h: 4, into: fb) }
+        #expect(fb.pixel(7, 7) == [255, 255, 255, 255])
+    }
+
+    /// A pixel outside the framebuffer is dropped, not written past the buffer (#2373, behind draw's own check).
+    @Test func framebufferDropsAPixelOutsideIt() {
+        let fb = RFBFramebuffer(width: 4, height: 4)
+        for (x, y) in [(-1, 0), (0, -1), (4, 0), (0, 4), (4, 4)] { fb.set(x, y, b: 1, g: 2, r: 3) }
+        #expect(Data(bytes: fb.pixels, count: 4 * 4 * 4) == Data(count: 4 * 4 * 4))
+        fb.set(3, 3, b: 1, g: 2, r: 3)
+        #expect(fb.pixel(3, 3) == [1, 2, 3, 255])
+    }
+
+    /// A server's prime that is empty, even or too long (#2373) is refused rather than trapping or spinning in modPow.
+    @Test func ardRefusesABadPrime() {
+        for prime in [[], hex("d0ebe5c2"), [UInt8](repeating: 0xff, count: RFBAuth.maxPrimeBytes + 1)] {
+            #expect(throws: RFBAuth.Failure.crypto) {
+                try RFBAuth.ard(generator: hex("0002"), prime: prime, serverKey: prime, account: "me", password: "pw")
+            }
+        }
+    }
+
     /// A whole session against a script of what a server says: VeNCrypt Plain with the account and password asked for,
     /// the pixel format and encodings asked, two ZRLE rectangles, CopyRect and Raw, the clipboard; and what the client
     /// sent back, in order.

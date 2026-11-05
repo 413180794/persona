@@ -24,7 +24,7 @@
 | Siri / 快捷指令（问 Persona） | `apple/Persona/Intents`（`docs/siri.md`） | 主对话 | App 里轮询 `items` 最多 24 秒，读出最后的话 | 没有 | 渠道 `app` 的一个端（它自己的轮询是第二份「等一轮答完」，见「还没做」） |
 | 微信机器人 | 内置插件 `wechat`（`server/internal/wechat`，`docs/wechat.md`，#1447） | 主对话，或 `/new` 开的对话 | 插件经 hub 的 API 每 2 秒看一次会话，取这一轮的答案，发文字 | 文字往返（回复序号、允许 / 拒绝） | 渠道 `wechat`（插件贡献） |
 | 飞书机器人 | 收发在 hub（`hub/bots*.go`、`feishubot/`），对话的事在助手（`assistant/feishu*.go`，`docs/bots.md`） | 主对话、`/new` 的对话、`/agents` 选的 Agent、回复绑定了目标的那条消息 | hub 内部 watch 会话，进度卡 + 答案卡 | 卡片按钮 | 渠道 `feishu`（内置） |
-| 飞书里的 `/agent` | `hub/lark_agent.go`、`lark_agent_docs.go`（`docs/lark-agent.md`） | 每个请求 / 话题一段新的无头对话 | Agent 调 `lark_agent_reply`，以**我的名义**回复那条消息 / 评论 | 没有 | 渠道 `lark_agent`（内置，只读设置） |
+| 飞书里的 `/agent` | 接飞书的插件里（#1571 起；原来是 hub 的 lark_agent.go、lark_agent_docs.go；`docs/lark-agent.md`） | 每个请求 / 话题一段新的无头对话 | Agent 调 `lark_agent_reply`，以**我的名义**回复那条消息 / 评论 | 没有 | 不在 hub 的渠道列表里（#1571 起不再是内置渠道，`GET /api/v1/channels` 不列它）；`lark_agent` 仍是保留 id，插件渠道不能用它 |
 | 语音 | hub.json 的插件 `voice`、内置语音插件（`server/internal/voice`，`docs/extensions.md`「语音」） | 语音模型自己说；要交给主对话的事经 hub 的 API 发进主对话 | 声音 | 没有 | 渠道 `voice`（插件贡献的 `voice` 扩展点，列出来但不走下面的管线） |
 | Telegram | 扩展 `telegram` 的**连接器**（扩展市场 `nwverse/persona-extensions`；用户自己的账号，MTProto，#1704） | —— | —— | —— | **不是渠道**：只是数据来源。现在没有 Telegram 的对话机器人；以后做就是一个插件渠道（Bot API），见「还没做」 |
 | 邮件 | 连接器 `mail` | 收件箱 | AI 分身起草、点一下发送 | —— | 不是渠道（数据来源） |
@@ -35,6 +35,8 @@
 结论：**真正「外面的消息进对话、答案发回去」的有三份实现**——飞书机器人（hub 里，`bots_runs.go`）、微信机器人（插件里，`wechat/turns.go`，
 注释里写着规则照飞书机器人）、Siri（App 里）。`/agent` 和语音的形状不一样（一个以我的名义回复、每次新对话；一个自己就是模型），
 列进渠道表，但不进统一管线。
+
+> 盘点时的 bots_runs.go、wechat/turns.go 已删：#1521 起飞书机器人和微信机器人都走统一管线（现在在 `assistant/channels_runs.go`），#2079 起飞书机器人对话的事在助手（`assistant/feishu.go`），hub 只管收发（`hub/bots.go`、`bots_chat.go`）。
 
 ## 二、渠道的接口
 
@@ -66,14 +68,14 @@
 | `id` | `^[a-z][a-z0-9_]*$`，全局唯一（内置的和插件贡献的不能撞）。也是这个渠道发进对话的消息的 `client_msg_id` 前缀：`<id>-<消息 id>`（见「来源标记」） |
 | `name` | 给人看的名字 |
 | `kind` | `app`（Persona 自己的 App 端）、`im`（第三方 IM 里的机器人：微信、飞书机器人、以后的 Telegram / Slack / Discord）、`mention`（在别人的会话里叫它、以我的名义回复：飞书 `/agent`）、`voice`（语音） |
-| `source` | `builtin`（hub 自带：`app`、`feishu`、`lark_agent`）、`plugin`（插件贡献，`plugin` 是插件 id）、`market`（插件市场里有、还没装：`installed: false`，只给去安装的入口） |
+| `source` | `builtin`（hub 自带：`app`、`feishu`）、`plugin`（插件贡献，`plugin` 是插件 id）、`market`（插件市场里有、还没装：`installed: false`，只给去安装的入口） |
 | `enabled` | 渠道的总开关。插件渠道：插件启用 **且** 它的连接器开着；飞书机器人：`bots.feishu.enabled` |
 | `state` | `connected`（绑好了、在收消息）、`not_connected`（没绑 / 没配）、`error`（`error` 写原因，给人看的一句话）、`disabled`（关着）、`not_installed`（市场里的） |
 | `account` | 绑定的账号 `{id?, name}`：只给人看（微信是 iLink 给的 id 的末几位，飞书是主人的名字），不放手机号、邮箱 |
 | `capabilities` | 见下表 |
 | `target` | 消息进哪个对话：`{kind: "main"}`（主对话，默认）、`{kind: "conversation", machine_id, session_id, title}`（某段对话）、`{kind: "new"}`（下一条消息开一段新对话，开了以后变成 `conversation`）。飞书机器人还有 `{kind: "agent", …}`（`/agents` 选的 Agent） |
 | `features` | 这个渠道能单独开关的功能，`{id, title, description, on}` 的列表：App 照列表画开关，不认识的也能画。飞书机器人是 `main`、`cards`、`all_cards`、`pushes`、`sync`、`agents`（`docs/bots.md`「能做什么」）；插件渠道统一是 `asks`（提问和批准）、`all_asks`（所有 Agent 的提问）、`pushes`（推送也发到这里）、`sync`（主对话里别处问的也同步过来），按能力出现 |
-| `bind` | 怎么绑定：`qr`（扫码）、`code`（App 给一个配对码，在 IM 里发给机器人）、`fields`（填凭据，再可能接一步 `code`）、`none`（不用绑：`app`、`voice`）、`config`（只能在 hub.json 里配：`lark_agent`） |
+| `bind` | 怎么绑定：`qr`（扫码）、`code`（App 给一个配对码，在 IM 里发给机器人）、`fields`（填凭据，再可能接一步 `code`）、`none`（不用绑：`app`、`voice`）、`config`（只能在 hub.json 里配；#1571 起没有渠道用它） |
 | `owner` | 不在接口里：**谁能用**永远是绑定的那一个人（扫码的微信、配对的飞书账号）。只有他的消息进对话；别人发来只回一句「这个机器人只为绑定它的人服务」（同一个人 10 分钟一次），群里一律不处理。判断谁是主人是渠道自己的事（只有它认得 IM 里的身份），hub 只收主人的消息 |
 
 **能力**（`channel.Capabilities`）：

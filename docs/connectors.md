@@ -22,7 +22,7 @@
 | `imessage` | 信息 | 读在 Mac 的 node 上，hub 里是个转 RPC 的适配（`connector/imessage`） | `Archive`（ROWID） | 有 | `imessage_chats/read/search` | 没有 | 没有（给 Mac 上的 personad 完全磁盘访问权限） |
 | `telegram` | Telegram | 扩展市场 `nwverse/persona-extensions` 里的扩展 `telegram`（#1704、#2057，代码不在本仓库），hub 经插件协议调（`connector/proc`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
 | `wechat` | 微信 | 内置插件的单独程序 `jarvisd-wechat`（`docs/wechat.md`）：微信里的机器人，不是数据来源，是渠道（`docs/channels.md`）；连接器只管绑定和状态 | 没有 | 没有 | 没有 | 没有 | `Login` 扫码（`kind: qr`），token 加密存 `connector_secrets` |
-| `lark` | 飞书 | hub 里（`hub/lark_connector.go`，包住原来的 lark-connector 代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | hub 自己的收件箱块（`inbox_own.go`） | `lark_chats/messages/search` | 走 lark-connector skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的 lark-connector 里登录 |
+| `lark` | 飞书 | #1571 起由接飞书的插件注册（原来是 hub 的 lark_connector.go，包住原来的 lark-connector 代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | 插件给的收件箱块（块类型在 `assistant/inbox_blocks.go`；原来是 hub 的 inbox_own.go） | `lark_chats/messages/search` | 走 lark-connector skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的 lark-connector 里登录 |
 | `mail` | 邮件 | hub 里（`hub/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |
 
 ### 接口：一份清单，按清单分派
@@ -199,7 +199,7 @@ type Batch struct {
 - 已经是 `Archive` 的 4 个连接器：只改名和返回结构。
 - `Items`：并进 `Batch.Items`；`DocTitle`（按链接查文档标题）不是「变化」，留成一个可选的查询（以后并进 v1 计划里的「链接」）。
 - 飞书的会话：用一个适配器 `connector.PerChat(kb.Source)` 把「每个会话一个游标」包成一个复合游标，引擎挑会话的逻辑搬进适配器。
-  **飞书是最大的来源，这一步风险最高，放最后**，必须过 M0 的对照基线（`hub/connector_baseline_test.go`）和真实数据对照。
+  **飞书是最大的来源，这一步风险最高，放最后**，必须过 M0 的对照基线（当时 hub 的 connector_baseline_test.go，#1571 随 hub 的飞书来源删掉）和真实数据对照。
 - **不并进去的**：往回补（读更早的历史，方向和「从上次到现在」相反）留成可选的 `Backfill`；附件（`Download`）留成可选的 `Media`。
   硬塞进 `Changes` 会让游标同时表示两个方向，更难懂。
 

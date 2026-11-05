@@ -62,6 +62,7 @@ nonisolated final class RFBFramebuffer: @unchecked Sendable {
     }
 
     func set(_ x: Int, _ y: Int, b: UInt8, g: UInt8, r: UInt8) {
+        guard x >= 0, y >= 0, x < width, y < height else { return } // defense in depth: draw checks the rectangle
         let p = pixels + (y * width + x) * 4
         p[0] = b; p[1] = g; p[2] = r; p[3] = 255
     }
@@ -113,8 +114,9 @@ nonisolated final class RFBZRLE {
         return result
     }
 
-    /// Draws a rectangle's inflated tiles.
+    /// Draws a rectangle's inflated tiles. A rectangle that does not fit the framebuffer is the server's error.
     func draw(_ data: [UInt8], x: Int, y: Int, w: Int, h: Int, into fb: RFBFramebuffer) throws {
+        guard x >= 0, y >= 0, w >= 0, h >= 0, x + w <= fb.width, y + h <= fb.height else { throw Failure.tile }
         var at = 0
         func byte() throws -> UInt8 {
             guard at < data.count else { throw Failure.tile }

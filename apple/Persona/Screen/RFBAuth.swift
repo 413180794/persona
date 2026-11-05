@@ -16,12 +16,17 @@ nonisolated enum RFBAuth {
 
     enum Failure: Error, Equatable { case crypto }
 
+    /// The longest Diffie-Hellman prime accepted, 4096 bits; macOS sends 128 bytes.
+    static let maxPrimeBytes = 512
+
     /// Apple Remote Desktop's sign-in (security type 30), from the server's generator, prime and public key: the 128
     /// bytes sealing the account and password, then this side's public key, to send in that order. The shared
     /// secret's MD5 is the AES-128 key (ECB); the account and password take 64 bytes each, NUL-ended, the rest random.
-    /// privateKey and fill are for the tests (random otherwise).
+    /// privateKey and fill are for the tests (random otherwise). The prime comes from the server: it must be odd
+    /// (Montgomery's modPow traps otherwise) and at most maxPrimeBytes long (the exponentiation grows with its cube).
     static func ard(generator: [UInt8], prime: [UInt8], serverKey: [UInt8], account: String, password: String,
                     privateKey: [UInt8]? = nil, fill: [UInt8]? = nil) throws -> (sealed: [UInt8], publicKey: [UInt8]) {
+        guard (1...maxPrimeBytes).contains(prime.count), prime[prime.count - 1] & 1 == 1 else { throw Failure.crypto }
         let length = prime.count
         let p = RFBBigUInt(bytes: prime)
         let x = RFBBigUInt(bytes: privateKey ?? random(length))

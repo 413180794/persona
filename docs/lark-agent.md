@@ -66,7 +66,7 @@
 }
 ```
 
-## 文档评论里的 /agent（`lark_agent_docs.go`）
+## 文档评论里的 /agent（插件里；原来是 hub 的 lark_agent_docs.go）
 
 - 自己写的评论没有实时事件，也不进文档通知中心。写评论时要打开文档，文档会排到飞书「最近」的最前面，
   所以 hub 每 20 秒读一次 `documents/recent`：最近 15 分钟有动静的文档（每次最多 5 个）读它们的评论（多维表格走 `documents/base/comments`）。

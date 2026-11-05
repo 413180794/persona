@@ -3229,8 +3229,15 @@ nonisolated struct ExtensionViewAction: Codable, Hashable, Sendable {
     var error: String?
     var updatedAt: String?
     var at: String
+    /// Absent or action: a declared Action (action is its id). html: an HTML bridge reply (action is the html
+    /// component's key, text the confirmed reply).
+    var kind: String?
+    /// The card version the user saw and confirmed when this was committed; absent on records committed before #2019.
+    var version: Int64?
+    /// kind html only: the reply text the user confirmed.
+    var text: String?
 
-    init(key: String = "", action: String = "", page: String? = nil, values: [String: String]? = nil, clientMsgId: String = "", status: String = "", revision: Int64? = nil, error: String? = nil, updatedAt: String? = nil, at: String = "") {
+    init(key: String = "", action: String = "", page: String? = nil, values: [String: String]? = nil, clientMsgId: String = "", status: String = "", revision: Int64? = nil, error: String? = nil, updatedAt: String? = nil, at: String = "", kind: String? = nil, version: Int64? = nil, text: String? = nil) {
         self.key = key
         self.action = action
         self.page = page
@@ -3241,6 +3248,9 @@ nonisolated struct ExtensionViewAction: Codable, Hashable, Sendable {
         self.error = error
         self.updatedAt = updatedAt
         self.at = at
+        self.kind = kind
+        self.version = version
+        self.text = text
     }
 
     enum CodingKeys: String, CodingKey {
@@ -3254,6 +3264,9 @@ nonisolated struct ExtensionViewAction: Codable, Hashable, Sendable {
         case error
         case updatedAt = "updated_at"
         case at
+        case kind
+        case version
+        case text
     }
 
     init(from decoder: Decoder) throws {
@@ -3268,6 +3281,9 @@ nonisolated struct ExtensionViewAction: Codable, Hashable, Sendable {
         self.error = try? c.decodeIfPresent(String.self, forKey: .error)
         self.updatedAt = try? c.decodeIfPresent(String.self, forKey: .updatedAt)
         self.at = (try? c.decodeIfPresent(String.self, forKey: .at)) ?? ""
+        self.kind = try? c.decodeIfPresent(String.self, forKey: .kind)
+        self.version = try? c.decodeIfPresent(Int64.self, forKey: .version)
+        self.text = try? c.decodeIfPresent(String.self, forKey: .text)
     }
 }
 
@@ -3277,6 +3293,174 @@ nonisolated enum ExtensionViewActionStatus {
     static let sent = "sent"
     static let failed = "failed"
     static let all = ["pending", "sent", "failed"]
+}
+
+/// Values of ViewActionKind.
+nonisolated enum ExtensionViewActionKind {
+    static let action = "action"
+    static let html = "html"
+    static let all = ["action", "html"]
+}
+
+/// The body of POST /api/v1/assistant/conversations/{id}/views/{key}/actions. The reply text and form definition are
+/// read from the stored View, never from the client.
+nonisolated struct ExtensionViewActionInput: Codable, Hashable, Sendable {
+    /// A declared reply action's id.
+    var action: String
+    /// The named page the action is on; absent for the root page.
+    var page: String?
+    /// The fields this action submits, by name.
+    var values: [String: String]?
+    var clientMsgId: String
+    /// The user confirmed the action's confirm prompt natively.
+    var confirmed: Bool?
+    /// The card version shown (and confirmed) to the user. Required when the action has confirm; a different stored
+    /// version answers 409 view_changed.
+    var expectedVersion: Int64?
+
+    init(action: String = "", page: String? = nil, values: [String: String]? = nil, clientMsgId: String = "", confirmed: Bool? = nil, expectedVersion: Int64? = nil) {
+        self.action = action
+        self.page = page
+        self.values = values
+        self.clientMsgId = clientMsgId
+        self.confirmed = confirmed
+        self.expectedVersion = expectedVersion
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case action
+        case page
+        case values
+        case clientMsgId = "client_msg_id"
+        case confirmed
+        case expectedVersion = "expected_version"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.action = (try? c.decodeIfPresent(String.self, forKey: .action)) ?? ""
+        self.page = try? c.decodeIfPresent(String.self, forKey: .page)
+        self.values = try? c.decodeIfPresent([String: String].self, forKey: .values)
+        self.clientMsgId = (try? c.decodeIfPresent(String.self, forKey: .clientMsgId)) ?? ""
+        self.confirmed = try? c.decodeIfPresent(Bool.self, forKey: .confirmed)
+        self.expectedVersion = try? c.decodeIfPresent(Int64.self, forKey: .expectedVersion)
+    }
+}
+
+/// Values of AssistantHTMLActionKind.
+nonisolated enum ExtensionAssistantHTMLActionKind {
+    static let reply = "reply"
+    static let open = "open"
+    static let all = ["reply", "open"]
+}
+
+/// The body of POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions: a persona.reply / persona.open
+/// call of a keyed html component, after the user confirmed it natively.
+nonisolated struct ExtensionAssistantHTMLActionInput: Codable, Hashable, Sendable {
+    var kind: String
+    /// The key of the html component on that page of the stored card.
+    var componentKey: String
+    /// The named page the component is on; absent for the root page.
+    var page: String?
+    /// The card version that ran the HTML and was shown in the confirmation.
+    var expectedVersion: Int64
+    /// reply only: the text shown in full in the confirmation.
+    var text: String?
+    /// open only: an https or supported persona:// target.
+    var url: String?
+    var clientMsgId: String
+    /// Always true: the call was confirmed natively, outside the HTML.
+    var confirmed: Bool
+
+    init(kind: String = "", componentKey: String = "", page: String? = nil, expectedVersion: Int64 = 0, text: String? = nil, url: String? = nil, clientMsgId: String = "", confirmed: Bool = false) {
+        self.kind = kind
+        self.componentKey = componentKey
+        self.page = page
+        self.expectedVersion = expectedVersion
+        self.text = text
+        self.url = url
+        self.clientMsgId = clientMsgId
+        self.confirmed = confirmed
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case componentKey = "component_key"
+        case page
+        case expectedVersion = "expected_version"
+        case text
+        case url
+        case clientMsgId = "client_msg_id"
+        case confirmed
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? ""
+        self.componentKey = (try? c.decodeIfPresent(String.self, forKey: .componentKey)) ?? ""
+        self.page = try? c.decodeIfPresent(String.self, forKey: .page)
+        self.expectedVersion = (try? c.decodeIfPresent(Int64.self, forKey: .expectedVersion)) ?? 0
+        self.text = try? c.decodeIfPresent(String.self, forKey: .text)
+        self.url = try? c.decodeIfPresent(String.self, forKey: .url)
+        self.clientMsgId = (try? c.decodeIfPresent(String.self, forKey: .clientMsgId)) ?? ""
+        self.confirmed = (try? c.decodeIfPresent(Bool.self, forKey: .confirmed)) ?? false
+    }
+}
+
+/// What an html-actions open answers: the validated target to open inside the app, and the card version it was
+/// checked against.
+nonisolated struct ExtensionAssistantHTMLOpenResult: Codable, Hashable, Sendable {
+    var open: String
+    var version: Int64
+
+    init(open: String = "", version: Int64 = 0) {
+        self.open = open
+        self.version = version
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case open
+        case version
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.open = (try? c.decodeIfPresent(String.self, forKey: .open)) ?? ""
+        self.version = (try? c.decodeIfPresent(Int64.self, forKey: .version)) ?? 0
+    }
+}
+
+/// 409 code view_changed: the stored card is not the version the user saw. Refresh, keep the draft and confirm again;
+/// never resubmit with the new version automatically.
+nonisolated struct ExtensionViewChangedError: Codable, Hashable, Sendable {
+    var error: String
+    var code: String
+    /// The current stored version.
+    var version: Int64
+    /// The current card, as feed.views carries it (a transcript card: id is its key, version 1).
+    var view: ExtensionAssistantView?
+
+    init(error: String = "", code: String = "", version: Int64 = 0, view: ExtensionAssistantView? = nil) {
+        self.error = error
+        self.code = code
+        self.version = version
+        self.view = view
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case error
+        case code
+        case version
+        case view
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.error = (try? c.decodeIfPresent(String.self, forKey: .error)) ?? ""
+        self.code = (try? c.decodeIfPresent(String.self, forKey: .code)) ?? ""
+        self.version = (try? c.decodeIfPresent(Int64.self, forKey: .version)) ?? 0
+        self.view = try? c.decodeIfPresent(ExtensionAssistantView.self, forKey: .view)
+    }
 }
 
 /// What a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push or pop
