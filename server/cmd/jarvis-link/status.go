@@ -27,6 +27,9 @@ type report struct {
 	HubName string `json:"hub_name,omitempty"`
 	// Endpoints: the candidates in link.json, in the order they are tried.
 	Endpoints []link.Endpoint `json:"endpoints,omitempty"`
+	// Trust: how the hub is checked, "pin" (its key, from the pairing) | "system" (behind an HTTPS reverse proxy:
+	// the system's CAs and the host name).
+	Trust string `json:"trust,omitempty"`
 	// Link is the last status the running jarvis-link reported; with running false, the last one before it stopped.
 	Link *link.SavedStatus `json:"link,omitempty"`
 	// Passive is passive mode's pairing, whichever mode is on.
@@ -66,6 +69,10 @@ func gather(e *env) report {
 	r := report{Running: link.Running(cfg), Mode: link.ModeActive, Config: cfg, Log: e.logPath()}
 	if c, err := link.Load(cfg); err == nil {
 		r.Paired, r.Machine, r.HubID, r.HubName, r.Endpoints = true, c.Machine, c.Hub, c.HubName, link.Ranked(c.Endpoints)
+		r.Trust = "pin"
+		if c.SystemTrust() {
+			r.Trust = link.TrustSystem
+		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		r.Error = err.Error()
 	}
@@ -191,6 +198,9 @@ func (r report) text(now time.Time, user string) string {
 			}
 		}
 		line("这台电脑：hub 上的「%s」", r.Machine)
+		if r.Trust == link.TrustSystem {
+			line("校验：经反向代理 · 系统证书（按系统信任的 CA 和域名，没有钉住 hub 的公钥）")
+		}
 		if len(r.Endpoints) > 0 {
 			line("候选地址（按尝试顺序）：")
 			for _, ep := range r.Endpoints {
@@ -323,7 +333,7 @@ func kindName(kind string) string {
 func addressText(kind, address string) string {
 	host := address
 	if u, err := url.Parse(address); err == nil && u.Host != "" {
-		host = u.Host
+		host = u.Host + u.Path // a reverse proxy's path says which hub
 	}
 	return kindName(kind) + " " + host
 }

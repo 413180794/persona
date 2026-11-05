@@ -602,3 +602,37 @@ func TestStatusWithoutTheUserInstance(t *testing.T) {
 		t.Fatalf("output:\n%s", out)
 	}
 }
+
+// A hub behind an HTTPS reverse proxy (no pin): status says how it is checked and shows the proxy's path.
+func TestStatusBehindAReverseProxy(t *testing.T) {
+	f := newFakeEnv(t)
+	err := link.Update(f.configPath(), func(c *link.Config) error {
+		*c = link.Config{Hub: "0f1e2d3c-0000-4000-8000-000000000000", Machine: "pi", Trust: link.TrustSystem, Token: "jd_x",
+			Endpoints: []link.Endpoint{{URL: "https://hub.example.com:443/prefix", Kind: "name"}}}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := link.LockRun(f.configPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	since := f.now().Add(-5 * time.Minute)
+	f.saveStatus(t, link.Status{State: "connected", Machine: "pi", Kind: "name", Address: "https://hub.example.com:443/prefix", Since: &since,
+		Node: "online", Trust: link.TrustSystem}, 4321)
+	_ = status(f.env, nil)
+	for _, want := range []string{"链路：已连接 · 域名 hub.example.com:443/prefix · 已连 5 分钟\n",
+		"校验：经反向代理 · 系统证书（按系统信任的 CA 和域名，没有钉住 hub 的公钥）\n", "  · 域名 https://hub.example.com:443/prefix（在用）\n"} {
+		if !strings.Contains(f.out.String(), want) {
+			t.Fatalf("no %q in:\n%s", want, f.out)
+		}
+	}
+	f.out.Reset()
+	_ = status(f.env, []string{"--json"})
+	var r report
+	if err := json.Unmarshal(f.out.Bytes(), &r); err != nil || r.Trust != link.TrustSystem || !r.Paired {
+		t.Fatalf("%v %s", err, f.out)
+	}
+}

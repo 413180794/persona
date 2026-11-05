@@ -160,6 +160,7 @@ struct StatusBlock: View {
         case "connected":
             var out = [Line(symbol: "point.3.connected.trianglepath.dotted",
                             text: "\(LinkText.kinds[s.kind ?? ""] ?? "地址") · \(LinkText.host(s.address))", primary: true, tint: .green)]
+            if s.systemTrust { out.append(Line(symbol: "lock.shield", text: LinkText.systemTrust)) }
             if let hub { out.append(hub) }
             if let since = s.since {
                 out.append(Line(symbol: "clock", text: "已连接 \(LinkText.duration(since: since, now: now))"))

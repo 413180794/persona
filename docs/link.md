@@ -17,7 +17,7 @@
 
 | 模式 | 谁连谁 | 适合 | 要什么 |
 | --- | --- | --- | --- |
-| **主动**（我去连 hub） | jarvis-link 拨 hub 的 WSS `/api/v1/link`（下面「链路」） | 笔记本、在 NAT 后面、经常换网络的电脑 | hub 开着 TLS 端口（`public.tls_listen`），这台连得到 hub |
+| **主动**（我去连 hub） | jarvis-link 拨 hub 的 WSS `/api/v1/link`（下面「链路」） | 笔记本、在 NAT 后面、经常换网络的电脑 | hub 开着 TLS 端口（`public.tls_listen`），或者在 HTTPS 反向代理后面（下面「[hub 在反向代理后面](#hub-在反向代理后面)」）；这台连得到 hub |
 | **被动**（让 hub 来连） | hub 拨 jarvis-link 在本机监听的 TLS 端口（下面「被动模式」） | 地址固定、hub 连得到的电脑：服务器、开发工作站、家里的台式机 | hub 连得到这台的端口（直连或经 SOCKS 代理），这台的防火墙只对 hub 放行这个端口 |
 
 怎么选：这台电脑连得到 hub、hub 连不到它（笔记本、公司内网里的机器连家里的 hub）→ 主动；hub 连得到它、它连不到 hub（hub 在公网不可达的地方，
@@ -100,6 +100,8 @@ jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_li
 **TLS**
 - 按配对时拿到的 hub 公钥指纹（SubjectPublicKeyInfo 的 SHA-256）钉扎，内网也走 TLS。
 - hub 的证书是自签的，信任靠的就是这个指纹，和 App 的公网直连一样（[network.md](network.md)「TLS 与公钥钉扎」）。
+- 配对链接没有指纹（hub 自己不开 TLS，在 HTTPS 反向代理后面）时，按系统信任的 CA 和主机名校验代理的证书，见「[hub 在反向代理后面](#hub-在反向代理后面)」。
+  有指纹的配对只认钉住的公钥，不会回落到系统 CA。
 
 **上报**
 - 连上后第一条消息 hello，报这台的机器 id、jarvis-link 的版本和用的哪个地址。
@@ -138,6 +140,56 @@ jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_li
 - 只转给 `~/.persona/node-attach.sock`，只连回这条链路用的那个 hub 地址，流 id 只能是字母、数字、`-`、`_`。hub 没法让它去连别的地址。
 - 流上开 permessage-deflate 压缩。原来的 ssh 开了 `Compression=yes`，原因见 `devices/machine.go` 的注释（hub 和管理者之间是本机回环，那一段不压缩）。
 - 对常驻 node 来说，每条流就是一次新的 attach 连接，新的顶掉旧的，和 ssh 时一样。
+
+## hub 在反向代理后面
+
+hub 自己不开 TLS、挂在反向代理的子路径下（`public_url` 是 `https://<域名>/<前缀>`，证书在代理上、来自公共 CA，代理去掉前缀转给 hub 的明文端口）时，
+手机 App 和网页本来就能用（[network.md](network.md)「反向代理的子路径（Android）」），主动模式的 Persona Link 也能用（#2573）：
+
+```text
+jarvis-link ── WSS https://<域名>/<前缀>/api/v1/link ──▶ 反向代理（TLS，公共 CA）── 去掉 /<前缀>，明文 ──▶ hub 的 listen 端口
+```
+
+- **配对**：hub 没开 TLS 时，`personad hub pair --machine <id>`（和管理界面的「配对链接」）照样给链接，只要 `public_url` 是 `https://…`：链接里 `url` 就是 `public_url`，
+  没有 `fp` 和 `tls`。jarvis-link 收下这种链接：地址保留路径前缀、端口写全（`https://<域名>:443/<前缀>`，和 hub 下发的候选一致），
+  link.json 记 `"trust": "system"`、不记指纹。链接里没有 `fp`、`url` 也不是 `https://` 时拒绝（没有能用的地址）。
+- **校验**：这种配对的每个候选都按系统信任的 CA 和主机名校验（TLS 1.2 起，`http/1.1`），和浏览器开网页版一样。有 `fp` 的配对照旧只认钉住的公钥：
+  代理的证书对不上指纹就是「TLS 公钥指纹和配对时的不一样」，不会回落到系统 CA。
+- **链路**：`/api/v1/link`、`/api/v1/link/stream`、配对时的 `/api/v1/auth/tokens` 都拼在前缀后面；心跳、重连退避、选路都和上面一样。hub 下发的候选里 `public_url` 本来就带前缀。
+- **hub 这边**：经代理进来的是明文请求，hub 只在这两种情况放链路进来（凭据照旧要对）：
+  - 代理和 hub 在同一台机器上（来源是回环）；
+  - 代理在内网另一台机器上（来源是内网地址），并且转发头说它收的是 HTTPS：`X-Forwarded-Proto: https`（或 `Forwarded: proto=https`）。
+
+  公网来源的明文一律拒绝（`403 tls_required`），带什么头都一样；别的入口（App 的 API、总线、互联）不受影响。hub 在 Docker 里经端口映射、来源显示成容器网关时按公网处理，
+  要把网关写进 `security.trusted_cidrs`（[network.md](network.md)「来源判断与反向代理」）。转发头可以伪造：在内网里伪造它，只能让自己的链路凭据走明文，Persona Link 自己从不发明文。
+- **状态**：`jarvis-link status` 多一行「校验：经反向代理 · 系统证书」，`--json` 的 `trust` 是 `system`（钉扎时是 `pin`）；运行中的状态行带 `"trust": "system"`；
+  菜单栏 App 在连接方式下面显示「经反向代理 · 系统证书」，配对窗口的地址列表上方也有说明。证书不受系统信任、证书上的域名对不上时，失败原因分别写「证书不受系统信任」「证书上的域名对不上」。
+
+nginx 的写法（占位符按自己的改；`map` 放在 `http { }` 里，`location` 放在 443 的 `server { }` 里）：
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+location /<前缀>/ {
+    proxy_pass http://<hub 地址>:<hub 的 listen 端口>/;   # 末尾的 / 去掉前缀
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;              # WebSocket：/api/v1/ws、/api/v1/link、/api/v1/link/stream
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto https;            # 代理在另一台机器上时 hub 认它，才让明文的链路进来
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_buffering off;
+    proxy_read_timeout 1h;                               # 长连接：至少要比 10 秒的心跳长，默认 60 秒也够，留余量
+    proxy_send_timeout 1h;
+}
+```
+
+**取舍**：钉扎只信 hub 的一把公钥；系统信任则信系统里所有的 CA，任何一家给这个域名签了证书（被入侵或误签的 CA、能往这台电脑装根证书的设备管理）都能冒充 hub，
+拿到这台电脑的链路凭据、把 hub 的流接到这台的常驻 node 上。这和浏览器访问网页版一样：比明文好、比钉扎弱。代理到 hub 那一段是明文，要放在可信的网络里（同机或内网）。
+能用 hub 自带 TLS 和指纹时优先用它；hub 开了 TLS 时配对链接总带 `fp`，就不会走系统信任。
 
 ## 被动模式（hub 来连）
 
@@ -237,9 +289,10 @@ jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_li
   - `personad hub pair --machine <id>`：专给这台的配对码（`pair_tokens.machine_id`）。链接是 `jarvis://link?…&machine=<id>`，
     只能换成这台的链路凭据，别的什么都做不了。标准输出只有链接，说明打在标准错误，方便用管道。
   - App 用的普通配对码（`personad hub pair`），再指定机器 id：命令行 `jarvis-link pair --machine <id>`，App 里填「机器 id」。
-- hub 要开着 TLS（`public.tls_listen`），没开时 `--machine` 返回 409。
-- 鉴权失败按 hub 原有的规矩限流（公网来源计数）。公网只收 TLS；内网也不收明文，只有回环可以。
-- 凭据存在 `~/.persona/link.json`（0600）：hub id、机器 id、指纹、凭据、候选地址（hub 下发的加上手动加的）。
+- hub 要开着 TLS（`public.tls_listen`），或者 `public_url` 是 `https://` 的反向代理地址；都没有时 `--machine` 返回 409。
+- 鉴权失败按 hub 原有的规矩限流（公网来源计数）。公网只收 TLS；内网也不收明文，只有回环可以，
+  或者内网的反向代理说它收的是 HTTPS（`X-Forwarded-Proto: https`，见「[hub 在反向代理后面](#hub-在反向代理后面)」）。
+- 凭据存在 `~/.persona/link.json`（0600）：hub id、机器 id、指纹（或 `"trust": "system"`：没有指纹，按系统 CA 校验）、凭据、候选地址（hub 下发的加上手动加的）。
 
 ## 接入一台电脑（以 Mac 为例）
 
@@ -338,6 +391,7 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 - `node`：`online` / `offline` / `unknown`，原因在 `node_error`。
 - `waiting` / `refused` 时带 `error`（多个候选的失败用「；」隔开）和 `retry`（下次尝试的时间）。
 - `hub_name`、`mesh_hubs`：见「hub 的名字和互联组」，旧 hub 时没有。
+- `trust`：主动模式按系统 CA 校验 hub（在反向代理后面，没有指纹）时是 `system`，钉扎时没有这一项。
 - 不带凭据。
 - 每一行同时写进 `~/.persona/link.status.json`（加上 `pid`、`version`、`updated`；正常退出时写 `"state":"stopped"`），给
   `jarvis-link status` 读：它没法问正在跑的那个。
@@ -413,7 +467,7 @@ WantedBy=default.target
 | 命令 | 做什么 |
 | --- | --- |
 | `jarvis-link status` | 模式、链路（哪条地址、连了多久；没连上时每个候选为什么失败）、hub 的名字和互联组台数、本机 node、机器 id、候选地址、systemd 服务（active / enabled / linger）、pid 和版本、日志在哪。被动模式换成：监听地址、在监听还是 hub 连着、配对的 hub 和什么时候配的、上一次 hub 什么时候从哪连进来、连接器指纹、hub 可以用的本机地址。连着（被动模式：在监听也算）时退出码 0，否则 1 |
-| `jarvis-link status --json` | 同上给脚本用：`running`、`mode`、`paired`、`machine`、`hub_id`、`hub_name`、`endpoints`、`link`（最后报的状态）、`passive`（`listen`、`paired`、`hub_id`、`hub_name`、`machine`、`paired_at`、`code_expires`、`fp`）、`service`、`config`、`log`；不含凭据和它的 hash |
+| `jarvis-link status --json` | 同上给脚本用：`running`、`mode`、`paired`、`machine`、`hub_id`、`hub_name`、`endpoints`、`trust`（`pin` / `system`）、`link`（最后报的状态）、`passive`（`listen`、`paired`、`hub_id`、`hub_name`、`machine`、`paired_at`、`code_expires`、`fp`）、`service`、`config`、`log`；不含凭据和它的 hash |
 | `jarvis-link logs [-f] [-n 行数]` | `~/.persona/link.log` 的最后 100 行（`-n` 改），`-f` 一直跟着，日志换文件也跟得上；没有日志文件、装了服务时看 journal |
 | `jarvis-link uninstall` | 停掉、禁用、删掉 systemd 用户服务，凭据留着 |
 | `jarvis-link uninstall --purge` | 再删凭据、状态、日志和 `~/.persona/bin/jarvis-link`；还有别的 jarvis-link 在跑（菜单栏 App、手动起的）时拒绝。hub 那边的凭据去 App「设置 › 设备」撤销 |
@@ -461,6 +515,9 @@ WantedBy=default.target
 | `pair --listen` 说找不到地址 | 只有回环、隧道或临时地址：`--addr <hub 连这台用的域名或地址>` |
 | 菜单写「链路是通的，但 hub 连不上本机的 node」 | 常驻 node 没在跑：`launchctl print gui/$(id -u)/com.jarvis.node`，日志在 `~/.persona/node-attach.log` |
 | 「hub 不认这台的凭据」 | 凭据被撤销了，或者 hub 换了数据库：重新配对 |
+| 经反向代理：「证书不受系统信任」「证书上的域名对不上」 | 代理的证书不是公共 CA 签的、过期了，或者 `public_url` 的域名和证书对不上：修代理的证书或 `public_url`，重新配对 |
+| 经反向代理：hub 回了 HTTP 403 | hub 日志里是 `tls_required`：代理在另一台机器上却没带 `X-Forwarded-Proto: https`，或者 hub 把代理的地址当成公网（容器网关、公网地址）：见「[hub 在反向代理后面](#hub-在反向代理后面)」 |
+| 经反向代理：hub 回了 HTTP 404 / 400，或者连上就断 | 前缀没去掉、WebSocket 没转（`Upgrade` / `Connection` 头）、`proxy_read_timeout` 太短 |
 | 「这台电脑在别处又连了一条链路」 | 同一个 link.json 被拷到了别的电脑，或者开了两个 jarvis-link |
 | 内网候选「不可达」，网络却是好的 | 看本地网络权限 |
 | Linux：`install` 说「连不上你的 systemd 用户实例」 | `su` / `sudo -u` / `docker exec` 进来、又没开 linger：用 ssh 直接登录这个用户，或者先 `sudo loginctl enable-linger <用户>` |

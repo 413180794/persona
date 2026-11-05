@@ -13,6 +13,7 @@ import SwiftUI
             LinkEndpoint(url: "https://[2001:db8:1::10]:18662", kind: "ipv6"),
             LinkEndpoint(url: "https://hub.example.com:18662", kind: "name", manual: true),
         ]
+        let proxied = [LinkEndpoint(url: "https://hub.example.com:443/prefix", kind: "name")]
         func status(_ state: String, _ change: (inout LinkStatus) -> Void = { _ in }) -> LinkStatus {
             var s = LinkStatus(state: state, machine: "macbook", endpoints: endpoints)
             change(&s)
@@ -68,6 +69,10 @@ import SwiftUI
             ("passive-waiting", passive("waiting") {
                 $0.retry = now.addingTimeInterval(8); $0.error = ":18663：端口被占用了"
             }, nil),
+            // Last, so the indexes above stay: a hub behind an HTTPS reverse proxy, checked with the system's CAs.
+            ("connected-proxy", LinkStatus(state: "connected", machine: "macbook", address: proxied[0].url, kind: "name",
+                                           since: now.addingTimeInterval(-600), node: "online", endpoints: proxied, hubName: "家里",
+                                           meshHubs: 1, trust: "system"), nil),
         ]
         for dark in [false, true] {
             let mode = dark ? "dark" : "light"
@@ -105,6 +110,9 @@ import SwiftUI
             both.show(menus[9].1, endpoints: endpoints, machine: "macbook", mode: "passive", passive: pairedPassive)
             png(PairView(model: both, tab: "active"), dark: dark, to: dir.appendingPathComponent("pair-switch-back-\(mode).png"))
             png(PairView(model: both, tab: "passive"), dark: dark, to: dir.appendingPathComponent("pair-passive-paired-\(mode).png"))
+            let viaProxy = LinkModel()
+            viaProxy.show(menus.last!.1, endpoints: proxied, machine: "macbook")
+            png(PairView(model: viaProxy), dark: dark, to: dir.appendingPathComponent("pair-proxy-\(mode).png"))
             png(icons(dark: dark), dark: dark, to: dir.appendingPathComponent("icons-\(mode).png"), plain: true)
         }
     }

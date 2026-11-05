@@ -86,8 +86,9 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 				writeErr(w, http.StatusBadRequest, fmt.Errorf("hub.json has no machine %q of kind link", req.Machine))
 				return
 			}
-			if port, _ := h.tlsPin(); port == 0 {
-				writeErr(w, http.StatusConflict, errors.New("Persona Link only uses TLS: set public.tls_listen in hub.json"))
+			if !h.linkPairable() {
+				writeErr(w, http.StatusConflict, errors.New("Persona Link only uses TLS: set public.tls_listen in hub.json, "+
+					"or public_url to the https address of the reverse proxy in front of the hub"))
 				return
 			}
 		}

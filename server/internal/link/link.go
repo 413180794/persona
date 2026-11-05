@@ -23,7 +23,8 @@ import (
 	"github.com/coder/websocket"
 )
 
-// The link is a WebSocket on the hub's TLS port; each node connection the hub opens on it is another WebSocket.
+// The link is a WebSocket on the hub's TLS port (or under the path of the HTTPS reverse proxy in front of it); each node
+// connection the hub opens on it is another WebSocket.
 const (
 	Path       = "/api/v1/link"
 	StreamPath = "/api/v1/link/stream"
@@ -63,7 +64,8 @@ type Message struct {
 	Error string `json:"error,omitempty"`
 }
 
-// Endpoint is a hub URL on its TLS port and what kind of address it is.
+// Endpoint is a hub URL on its TLS port, or a reverse proxy's https URL with the path the hub sits under (no trailing
+// slash: the API paths are joined to it), and what kind of address it is.
 type Endpoint struct {
 	URL  string `json:"url"`
 	Kind string `json:"kind"` // lan | ipv6 | name | ipv4
@@ -80,7 +82,12 @@ type Config struct {
 	// HubName is what the hub calls itself, as it last said (endpoints); empty until a hub that says it.
 	HubName string `json:"hub_name,omitempty"`
 	// FP pins the hub: SHA-256 of its TLS SubjectPublicKeyInfo, base64url (the hub's certificate is self-signed).
-	FP        string     `json:"fp"`
+	// With FP set every candidate is checked against it and nothing else.
+	FP string `json:"fp"`
+	// Trust is TrustSystem when the pairing link had no FP: the hub has no TLS of its own and sits behind an HTTPS
+	// reverse proxy, whose certificate is checked against the system's CAs and the host name (docs/link.md「hub 在反向
+	// 代理后面」). Ignored while FP is set.
+	Trust     string     `json:"trust,omitempty"`
 	Token     string     `json:"token"`
 	Endpoints []Endpoint `json:"endpoints"`
 	// Mode is ModeActive (also when empty: files from before passive mode) or ModePassive.
@@ -93,6 +100,12 @@ const (
 	ModeActive  = "active"  // jarvis-link dials the hub's /api/v1/link
 	ModePassive = "passive" // the hub dials the TLS port jarvis-link listens on
 )
+
+// TrustSystem: the hub is checked with the system's CAs and its host name, not a pin (Config.Trust).
+const TrustSystem = "system"
+
+// SystemTrust: c checks the hub with the system's CAs (no pin).
+func (c *Config) SystemTrust() bool { return c != nil && c.FP == "" && c.Trust == TrustSystem }
 
 // CurrentMode is the mode c is in.
 func (c *Config) CurrentMode() string {
@@ -128,7 +141,7 @@ func Load(path string) (*Config, error) {
 	if c.Token == "" && c.FP == "" && c.Machine == "" {
 		return nil, ErrUnpaired
 	}
-	if c.Token == "" || c.FP == "" || c.Machine == "" {
+	if c.Token == "" || (c.FP == "" && c.Trust != TrustSystem) || c.Machine == "" {
 		return nil, fmt.Errorf("%s is incomplete: pair again (jarvis-link pair)", path)
 	}
 	return c, nil

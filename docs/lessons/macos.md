@@ -280,3 +280,5 @@
   第一次打开对话主线程 CPU 中位数 162 → 177 ms（约 +9%），再次打开 139 → 141 ms（持平），轮与轮之间差得比这还多。
   比 `docs/lessons/ios.md` 里文件查看器长文档的 +40% 小，所以只给回答、用户气泡、别的 Agent 的消息和工具详情开；
   还在生成的回复（`StreamingText`，每 80 ms 重排一次）不开，生成完就能选。MarkdownUI 一块一个 Text，只能在块内选，整条用悬停的「拷贝」。
+- Persona Link 菜单栏 App（`apple/PersonaLink`）在 Xcode 26.1 上 `swift build` / `mac-link.sh` 报 `PairView.swift` 的「unable to type-check this expression in reasonable time」（2026-11-05，#2573，master 上就有）：
+  被动模式那页的 `Text("…" + (optional.map { … } ?? "") + …)` 一串可选值拼接拖垮了整个 `VStack` 的类型推断。拼字符串挪进一个标了类型的静态函数（`pairedText`）就好；SwiftUI 的 `body` 里不要写长的 `+` 拼接。

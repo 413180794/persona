@@ -312,7 +312,7 @@ func TestLinkRefusesWhatItShouldNot(t *testing.T) {
 	if resp, err := srv.Client().Do(req); err != nil || resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("machines with a link credential: %v %v", err, resp)
 	}
-	// Plaintext: refused from the LAN as well, only loopback may skip TLS.
+	// Plaintext: refused from the LAN as well; only loopback, or a LAN reverse proxy that took HTTPS, may skip TLS.
 	w := securityRequest(h.routes(), "GET", link.Path, token, "", "[fd00::20]:5000", false)
 	requireCode(t, w, http.StatusForbidden, "tls_required")
 	// A hello for another machine.

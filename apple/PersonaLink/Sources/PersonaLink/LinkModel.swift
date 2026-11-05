@@ -35,11 +35,15 @@ struct LinkStatus: Decodable, Equatable {
     var lastSeen: Date?
     var from: String?
     var codeExpires: Date?
+    /// "system": the hub sits behind an HTTPS reverse proxy and is checked with the system's CAs and its host name, not
+    /// a pin (docs/link.md「hub 在反向代理后面」); nil when pinned or with older helpers.
+    var trust: String?
 
     var passive: Bool { mode == "passive" }
+    var systemTrust: Bool { trust == "system" }
 
     enum CodingKeys: String, CodingKey {
-        case state, machine, address, kind, since, node, error, retry, endpoints, mode, listen, addrs, from
+        case state, machine, address, kind, since, node, error, retry, endpoints, mode, listen, addrs, from, trust
         case nodeError = "node_error"
         case hubName = "hub_name"
         case meshHubs = "mesh_hubs"
@@ -110,11 +114,15 @@ enum LinkLook {
 enum LinkText {
     static let kinds = ["lan": "内网", "ipv6": "公网 IPv6", "name": "域名", "ipv4": "公网 IPv4"]
 
+    /// The host and port of a hub URL, and the path a reverse proxy puts the hub under.
     static func host(_ url: String?) -> String {
         guard let url, let c = URLComponents(string: url), let host = c.host else { return url ?? "" }
         let shown = host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
-        return c.port.map { "\(shown):\($0)" } ?? shown
+        return (c.port.map { "\(shown):\($0)" } ?? shown) + c.percentEncodedPath
     }
+
+    /// How a hub behind an HTTPS reverse proxy is checked.
+    static let systemTrust = "经反向代理 · 系统证书"
 
     static func duration(since: Date, now: Date) -> String {
         let s = max(0, Int(now.timeIntervalSince(since)))

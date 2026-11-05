@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -22,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode"
@@ -75,6 +77,9 @@ type Status struct {
 	Address string     `json:"address,omitempty"`
 	Kind    string     `json:"kind,omitempty"`
 	Since   *time.Time `json:"since,omitempty"`
+	// Trust: "system" when the hub is checked with the system's CAs and host name (it sits behind an HTTPS reverse
+	// proxy, Config.Trust); empty when it is pinned.
+	Trust string `json:"trust,omitempty"`
 	// connected: whether the hub got through to the resident node (online | offline | unknown), and why not.
 	Node      string `json:"node,omitempty"`
 	NodeError string `json:"node_error,omitempty"`
@@ -173,6 +178,67 @@ func pinned(fp string, onConn func(net.Conn)) *http.Client {
 	}
 }
 
+// systemRoots replaces the system's CAs for systemTrusted (UseRootsForTesting); nil means the system's.
+var systemRoots atomic.Pointer[x509.CertPool]
+
+// UseRootsForTesting makes the system-trust client trust pool instead of the system's CAs, until restore is called.
+// For tests (a reverse proxy with a test CA), never the keychain.
+func UseRootsForTesting(pool *x509.CertPool) (restore func()) {
+	old := systemRoots.Swap(pool)
+	return func() { systemRoots.Store(old) }
+}
+
+// systemTrusted is the HTTP/1.1 client for a hub without a pin: it sits behind an HTTPS reverse proxy whose
+// certificate comes from a public CA (docs/link.md「hub 在反向代理后面」). The certificate must chain to the system's
+// CAs and name the host dialed; nothing else is accepted. onConn is pinned's.
+func systemTrusted(onConn func(net.Conn)) *http.Client {
+	d := &net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: nil,
+			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				raw, err := d.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+				host, _, _ := net.SplitHostPort(addr)
+				c := tls.Client(raw, &tls.Config{MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1"},
+					ServerName: host, RootCAs: systemRoots.Load()})
+				if err := c.HandshakeContext(ctx); err != nil {
+					raw.Close()
+					return nil, err
+				}
+				if onConn != nil {
+					onConn(raw)
+				}
+				return c, nil
+			},
+			ResponseHeaderTimeout: dialTimeout,
+			MaxIdleConns:          1,
+			IdleConnTimeout:       30 * time.Second,
+		},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}
+
+// hubClient is how c's hub is checked: pinned to its key when the pairing gave one (never anything else then), else
+// with the system's CAs.
+func hubClient(c *Config, onConn func(net.Conn)) *http.Client {
+	if c.FP != "" {
+		return pinned(c.FP, onConn)
+	}
+	return systemTrusted(onConn)
+}
+
+// trustOf is Status.Trust for c.
+func trustOf(c *Config) string {
+	if c.FP == "" {
+		return TrustSystem
+	}
+	return ""
+}
+
+// wsURL joins path under base: base keeps the path a reverse proxy puts the hub under.
 func wsURL(base, path string) string {
 	return "wss" + strings.TrimPrefix(base, "https") + path
 }
@@ -244,13 +310,24 @@ func parsePairLink(raw string) (token string, c Config, err error) {
 	if token == "" {
 		return "", c, errors.New("配对链接里没有 token")
 	}
-	port := q.Get("tls")
-	if c.FP == "" || port == "" {
-		return "", c, errors.New("这台 hub 没开 TLS（hub.json 的 public.tls_listen）：电脑链路只走 TLS")
-	}
-	if base, err := url.Parse(q.Get("url")); err == nil && base.Hostname() != "" {
-		u := "https://" + net.JoinHostPort(base.Hostname(), port)
-		c.Endpoints = append(c.Endpoints, Endpoint{URL: u, Kind: kindOf(u)})
+	if c.FP != "" {
+		// The hub's own TLS port, pinned: url names the host, tls the port (the hub serves the API at its root).
+		port := q.Get("tls")
+		if port == "" {
+			return "", c, errors.New("配对链接有指纹却没有 TLS 端口：在 hub 上重新运行 jarvisd hub pair --machine")
+		}
+		if base, err := url.Parse(q.Get("url")); err == nil && base.Hostname() != "" {
+			u := "https://" + net.JoinHostPort(base.Hostname(), port)
+			c.Endpoints = append(c.Endpoints, Endpoint{URL: u, Kind: kindOf(u)})
+		}
+	} else {
+		// No pin: the hub has no TLS of its own and url is the HTTPS reverse proxy in front of it, path and all.
+		e, err := proxyEndpoint(q.Get("url"))
+		if err != nil {
+			return "", c, errors.New("这台 hub 没开 TLS（hub.json 的 public.tls_listen），public_url 也不是 https 的反向代理地址：电脑链路只走 HTTPS")
+		}
+		c.Trust = TrustSystem
+		c.Endpoints = append(c.Endpoints, e)
 	}
 	for _, alt := range q["alt"] {
 		if e, err := normalize(alt, nil); err == nil {
@@ -262,6 +339,24 @@ func parsePairLink(raw string) (token string, c Config, err error) {
 		return "", c, errors.New("配对链接里没有 hub 的地址")
 	}
 	return token, c, nil
+}
+
+// proxyEndpoint is the candidate for a hub behind an HTTPS reverse proxy: its https URL with the port spelled out (as
+// the hub's own list has it) and the path prefix kept.
+func proxyEndpoint(raw string) (Endpoint, error) {
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "https://") {
+		return Endpoint{}, errors.New("not an https URL")
+	}
+	e, err := normalize(raw, nil)
+	if err != nil {
+		return Endpoint{}, err
+	}
+	u, _ := url.Parse(e.URL)
+	if u.Port() == "" {
+		u.Host = net.JoinHostPort(u.Hostname(), "443")
+	}
+	u.Host = strings.ToLower(u.Host)
+	return Endpoint{URL: u.String(), Kind: kindOf(u.String())}, nil
 }
 
 // Pair redeems a pairing link for this computer's credential and writes link.json. machine names the computer in
@@ -281,7 +376,7 @@ func Pair(ctx context.Context, raw, machine, name, path string) (*Config, error)
 		return nil, errors.New("要填这台电脑在 hub 里的机器 id（hub.json 里 kind 为 link 的那台）")
 	}
 	body, _ := json.Marshal(map[string]string{"name": name, "kind": "link", "machine": c.Machine})
-	client := pinned(c.FP, nil)
+	client := hubClient(&c, nil)
 	defer client.CloseIdleConnections()
 	type redeemed struct {
 		Token string `json:"token"`
@@ -507,7 +602,7 @@ func runActive(ctx context.Context, o Options, rep *reporter) {
 			continue
 		}
 		rep.set(func(s *Status) {
-			*s = Status{State: "connecting", Machine: c.Machine, HubName: c.HubName, Endpoints: ranked(c.Endpoints)}
+			*s = Status{State: "connecting", Machine: c.Machine, HubName: c.HubName, Trust: trustOf(c), Endpoints: ranked(c.Endpoints)}
 		})
 		l, err := dial(ctx, c)
 		var end error
@@ -545,7 +640,7 @@ func runActive(ctx context.Context, o Options, rep *reporter) {
 		o.Logf("link: %v; next attempt in %s", end, wait.Round(time.Second))
 		rep.set(func(s *Status) {
 			*s = Status{State: state, Machine: c.Machine, HubName: c.HubName, Error: summary(end), Retry: &retry,
-				Endpoints: ranked(c.Endpoints)}
+				Trust: trustOf(c), Endpoints: ranked(c.Endpoints)}
 		})
 		o.wait(ctx, wait)
 	}
@@ -610,7 +705,7 @@ func summary(err error) string {
 	if errors.As(err, &ae) {
 		host := ae.ep.URL
 		if u, err := url.Parse(ae.ep.URL); err == nil {
-			host = u.Host
+			host = u.Host + u.Path // a reverse proxy's path says which hub
 		}
 		return kindNames[ae.ep.Kind] + " " + host + "：" + describe(ae.err)
 	}
@@ -631,6 +726,10 @@ func describe(err error) string {
 		return "hub 回了 " + he.Error()
 	case errors.Is(err, errPin):
 		return errPin.Error()
+	case errors.As(err, new(x509.HostnameError)):
+		return "证书上的域名对不上（系统证书校验）"
+	case errors.As(err, new(x509.UnknownAuthorityError)), errors.As(err, new(*tls.CertificateVerificationError)):
+		return "证书不受系统信任（系统证书校验）"
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &ne) && ne.Timeout():
 		return "超时"
 	case errors.Is(err, syscall.ECONNREFUSED):
@@ -650,14 +749,14 @@ type link struct {
 	conn    *websocket.Conn
 	ep      Endpoint
 	local   netip.Addr   // this side's address of the link's TCP connection
-	streams *http.Client // pinned the same way; streams go where the link went
+	streams *http.Client // checked the same way (pin or system CAs); streams go where the link went
 	token   string
 }
 
 func dial(ctx context.Context, c *Config) (*link, error) {
 	l, ep, err := race(ctx, c.Endpoints, func(ctx context.Context, ep Endpoint) (*link, error) {
 		var local netip.Addr
-		client := pinned(c.FP, func(raw net.Conn) {
+		client := hubClient(c, func(raw net.Conn) {
 			if a, err := netip.ParseAddrPort(raw.LocalAddr().String()); err == nil {
 				local = a.Addr().Unmap()
 			}
@@ -667,7 +766,7 @@ func dial(ctx context.Context, c *Config) (*link, error) {
 			return nil, handshakeError(resp, err)
 		}
 		conn.SetReadLimit(1 << 20)
-		return &link{conn: conn, local: local, streams: pinned(c.FP, nil), token: c.Token}, nil
+		return &link{conn: conn, local: local, streams: hubClient(c, nil), token: c.Token}, nil
 	}, func(l *link) { l.conn.CloseNow() })
 	if err != nil {
 		return nil, err
@@ -690,7 +789,7 @@ func (l *link) serve(ctx context.Context, c *Config, o Options, rep *reporter) e
 	since := time.Now()
 	rep.set(func(s *Status) {
 		*s = Status{State: "connected", Machine: c.Machine, HubName: c.HubName, Address: l.ep.URL, Kind: l.ep.Kind, Since: &since,
-			Node: "unknown", Endpoints: ranked(c.Endpoints)}
+			Node: "unknown", Trust: trustOf(c), Endpoints: ranked(c.Endpoints)}
 	})
 	o.Logf("link: connected to %s (%s)", l.ep.URL, l.ep.Kind)
 	drop := func(err error) {

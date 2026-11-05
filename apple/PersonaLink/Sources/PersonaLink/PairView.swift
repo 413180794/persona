@@ -68,6 +68,13 @@ struct PairView: View {
         }
     }
 
+    /// Passive mode's pairing in one sentence; its own function so the view below type-checks in time.
+    private static func pairedText(_ p: PassivePairing) -> String {
+        let hub: String = p.hubName.map { "「\($0)」" } ?? ""
+        let machine: String = p.machine.map { "，这台是上面的「\($0)」" } ?? ""
+        return "已经和 hub\(hub)配对\(machine)。再生成链接、换一台 hub 配对，原来的就连不进来了。"
+    }
+
     private var passivePairing: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("让 hub 来连这台电脑").font(.title3.weight(.semibold))
@@ -77,9 +84,7 @@ struct PairView: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let p = model.passivePairing, p.paired {
                 Label {
-                    Text("已经和 hub" + (p.hubName.map { "「\($0)」" } ?? "") + "配对" + (p.machine.map { "，这台是上面的「\($0)」" } ?? "")
-                         + "。再生成链接、换一台 hub 配对，原来的就连不进来了。")
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(Self.pairedText(p)).fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "checkmark.seal").foregroundStyle(.green)
                 }
@@ -207,6 +212,11 @@ struct PairView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("hub 的地址").font(.headline)
                 Text("按这个顺序尝试；连上以后 hub 会更新这份列表").font(.caption).foregroundStyle(.secondary)
+            }
+            if model.status?.systemTrust == true {
+                Label("\(LinkText.systemTrust)：按系统信任的 CA 和域名校验，没有钉住 hub 的公钥", systemImage: "lock.shield")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             if model.endpoints.isEmpty {
                 Text("还没有：配对以后会从链接和 hub 那里拿到。").font(.callout).foregroundStyle(.secondary)

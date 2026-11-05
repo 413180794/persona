@@ -3,14 +3,18 @@ package link
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -395,5 +399,153 @@ func TestRaceCalledOffIsAnError(t *testing.T) {
 		func(ctx context.Context, ep Endpoint) (*int, error) { return nil, ctx.Err() }, func(*int) {})
 	if got != nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("%v %v: a race that was called off must not look like a win", got, err)
+	}
+}
+
+func TestParsePairLinkWithoutAPinIsAReverseProxy(t *testing.T) {
+	q := url.Values{"url": {"https://Hub.Example.com/prefix/"}, "token": {"jp_x"}, "hub": {"h1"}, "machine": {"laptop"},
+		"alt": {"https://hub.example.com:443/prefix"}}
+	token, c, err := parsePairLink("jarvis://link?" + q.Encode())
+	if err != nil || token != "jp_x" || c.FP != "" || c.Trust != TrustSystem || !c.SystemTrust() {
+		t.Fatalf("%v %+v", err, c)
+	}
+	// The path stays, the port is spelled out as in the hub's list (the alt is the same address).
+	if eps := ranked(c.Endpoints); len(eps) != 1 || eps[0].URL != "https://hub.example.com:443/prefix" || eps[0].Kind != "name" || eps[0].Manual {
+		t.Fatalf("candidates %+v", eps)
+	}
+	if got := wsURL(c.Endpoints[0].URL, StreamPath+"?id=s1"); got != "wss://hub.example.com:443/prefix/api/v1/link/stream?id=s1" {
+		t.Fatalf("stream URL %s", got)
+	}
+	q.Set("url", "https://hub.example.com:8443")
+	if _, c, err = parsePairLink("jarvis://link?" + q.Encode()); err != nil || c.Endpoints[0].URL != "https://hub.example.com:8443" {
+		t.Fatalf("%v %+v", err, c)
+	}
+	// No pin and no https: there is nothing the link may use.
+	for _, bad := range []string{"http://hub.example.com/prefix", "", "https://user@hub.example.com/prefix", "https://hub.example.com/p?x=1"} {
+		q.Set("url", bad)
+		if _, _, err := parsePairLink("jarvis://link?" + q.Encode()); err == nil || !strings.Contains(err.Error(), "HTTPS") {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+	// With a pin the hub's own TLS port is used, never the proxy's path, and the trust stays the pin.
+	q.Set("url", "https://hub.example.com/prefix")
+	q.Set("fp", "pin")
+	q.Set("tls", "18662")
+	q.Del("alt")
+	if _, c, err = parsePairLink("jarvis://link?" + q.Encode()); err != nil || c.Trust != "" || c.SystemTrust() ||
+		len(c.Endpoints) != 1 || c.Endpoints[0].URL != "https://hub.example.com:18662" {
+		t.Fatalf("%v %+v", err, c)
+	}
+}
+
+func TestLoadTakesASystemTrustPairing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "link.json")
+	_ = Update(path, func(c *Config) error {
+		*c = Config{Machine: "laptop", Token: "jd_x", Endpoints: []Endpoint{{URL: "https://hub.example.com:443/prefix", Kind: "name"}}}
+		return nil
+	})
+	if _, err := Load(path); err == nil {
+		t.Fatal("neither a pin nor system trust loaded")
+	}
+	_ = Update(path, func(c *Config) error { c.Trust = TrustSystem; return nil })
+	if c, err := Load(path); err != nil || !c.SystemTrust() {
+		t.Fatalf("%+v %v", c, err)
+	}
+}
+
+// testCA is an httptest TLS server's certificate as the only "system" CA.
+func testCA(t *testing.T, srv *httptest.Server) {
+	t.Helper()
+	pool := x509.NewCertPool()
+	pool.AddCert(srv.Certificate())
+	t.Cleanup(UseRootsForTesting(pool))
+}
+
+func TestSystemTrustChecksTheCAAndTheHostName(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	get := func(raw string) error {
+		resp, err := systemTrusted(nil).Get(raw)
+		if err == nil {
+			resp.Body.Close()
+		}
+		return err
+	}
+	// Not in the (system) pool: refused.
+	t.Cleanup(UseRootsForTesting(x509.NewCertPool()))
+	if err := get(srv.URL); err == nil || describe(err) != "证书不受系统信任（系统证书校验）" {
+		t.Fatalf("an unknown CA: %v (%s)", err, describe(err))
+	}
+	testCA(t, srv)
+	if err := get(srv.URL); err != nil {
+		t.Fatal(err)
+	}
+	// The certificate names 127.0.0.1 and example.com: the same server under another name is refused.
+	port := srv.Listener.Addr().(*net.TCPAddr).Port
+	if err := get("https://localhost:" + strconv.Itoa(port)); err == nil || describe(err) != "证书上的域名对不上（系统证书校验）" {
+		t.Fatalf("another host name: %v (%s)", err, describe(err))
+	}
+}
+
+func TestAPinNeverFallsBackToSystemTrust(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	testCA(t, srv) // the system would trust it...
+	resp, err := hubClient(&Config{FP: "not-its-pin", Trust: TrustSystem}, nil).Get(srv.URL)
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("a pinned pairing talked to a hub the system trusts but the pin does not")
+	}
+	if !errors.Is(err, errPin) {
+		t.Fatalf("error %v", err)
+	}
+}
+
+// A hub behind a reverse proxy at /prefix: the link and its streams go under the prefix, checked with the system's CAs.
+func TestLinkUnderAProxyPath(t *testing.T) {
+	var paths sync.Map
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths.Store(r.URL.Path, true)
+		if r.URL.Path != "/prefix"+Path || r.Header.Get("Authorization") != "Bearer jd_x" {
+			http.Error(w, "no", http.StatusNotFound)
+			return
+		}
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.CloseNow()
+		for {
+			if _, _, err := c.Read(r.Context()); err != nil {
+				return
+			}
+		}
+	}))
+	t.Cleanup(srv.Close)
+	testCA(t, srv)
+	path := filepath.Join(t.TempDir(), "link.json")
+	_ = Update(path, func(c *Config) error {
+		*c = Config{Machine: "laptop", Trust: TrustSystem, Token: "jd_x", Endpoints: []Endpoint{{URL: srv.URL + "/prefix", Kind: "lan"}}}
+		return nil
+	})
+	ch := make(chan Status, 64)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = Run(ctx, Options{Path: path, Status: func(s Status) {
+			select {
+			case ch <- s:
+			default:
+			}
+		}})
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+	s := waitFor(t, ch, func(s Status) bool { return s.State == "connected" })
+	if s.Trust != TrustSystem || s.Address != srv.URL+"/prefix" {
+		t.Fatalf("status %+v", s)
+	}
+	if _, ok := paths.Load("/prefix" + Path); !ok {
+		t.Fatal("the link did not go under the prefix")
 	}
 }

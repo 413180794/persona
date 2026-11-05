@@ -119,8 +119,8 @@ func (h *Hub) adminMachines() []adminMachine {
 
 func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/admin/machines", func(w http.ResponseWriter, r *http.Request) {
-		port, _ := h.tlsPin()
-		writeJSON(w, map[string]any{"machines": h.adminMachines(), "tls": port > 0, "restart": h.pendingRestart(h.requestLang(r))})
+		// "tls": whether a Persona Link can be paired (the hub's TLS port, or an HTTPS reverse proxy in front of it).
+		writeJSON(w, map[string]any{"machines": h.adminMachines(), "tls": h.linkPairable(), "restart": h.pendingRestart(h.requestLang(r))})
 	})
 	mux.HandleFunc("POST /api/v1/admin/machines", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -308,8 +308,9 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			writeErrCode(w, http.StatusBadRequest, "not_link", errors.New("only a link machine pairs a Persona Link"))
 			return
 		}
-		if port, _ := h.tlsPin(); port == 0 {
-			writeErrCode(w, http.StatusConflict, "tls_required", errors.New("Persona Link only uses TLS: turn on the TLS listener first"))
+		if !h.linkPairable() {
+			writeErrCode(w, http.StatusConflict, "tls_required", errors.New("Persona Link only uses TLS: turn on the TLS listener, "+
+				"or put the hub behind an HTTPS reverse proxy (public_url)"))
 			return
 		}
 		p, err := h.adminPairCode(r, id)

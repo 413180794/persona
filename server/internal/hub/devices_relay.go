@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,14 +66,15 @@ func (h *Hub) relayRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+devicewire.RelayPath, h.serveRelay)
 }
 
-// linkCaller checks a link request: a Persona Link credential, for a machine of kind link, over TLS.
+// linkCaller checks a link request: a Persona Link credential, for a machine of kind link, over TLS (the hub's own, or
+// the reverse proxy's in front of it: plainLinkAllowed).
 func (h *Hub) linkCaller(w http.ResponseWriter, r *http.Request) (principal, bool) {
 	p := principalOf(r.Context())
 	if p.Role != roleLink {
 		writeErr(w, http.StatusForbidden, errors.New("only a Persona Link credential opens a machine link"))
 		return p, false
 	}
-	if r.TLS == nil && h.sourceOf(r) != sourceLoopback {
+	if r.TLS == nil && !h.plainLinkAllowed(r) {
 		h.securityError(w, r, http.StatusForbidden, "tls_required", 0)
 		return p, false
 	}
@@ -80,6 +83,49 @@ func (h *Hub) linkCaller(w http.ResponseWriter, r *http.Request) (principal, boo
 		return p, false
 	}
 	return p, true
+}
+
+// plainLinkAllowed: a link request that reached the hub without TLS is let in from this machine (a reverse proxy beside
+// the hub), or from the LAN when it came through a reverse proxy that took it over HTTPS (X-Forwarded-Proto or
+// Forwarded proto=https; docs/link.md「hub 在反向代理后面」). The header is never trusted from the internet: that is
+// refused before (gate) and here. A client lying in it only gets to send its own link credential in plaintext over
+// the LAN; Persona Link itself only speaks HTTPS.
+func (h *Hub) plainLinkAllowed(r *http.Request) bool {
+	switch h.sourceOf(r) {
+	case sourceLoopback:
+		return true
+	case sourceLAN:
+		return forwardedHTTPS(r)
+	}
+	return false
+}
+
+// forwardedHTTPS: the proxy that passed r on says its client spoke HTTPS to it.
+func forwardedHTTPS(r *http.Request) bool {
+	if v := r.Header.Get("X-Forwarded-Proto"); v != "" {
+		first, _, _ := strings.Cut(v, ",")
+		return strings.EqualFold(strings.TrimSpace(first), "https")
+	}
+	for _, v := range r.Header.Values("Forwarded") {
+		element, _, _ := strings.Cut(v, ",")
+		for _, pair := range strings.Split(element, ";") {
+			k, val, ok := strings.Cut(strings.TrimSpace(pair), "=")
+			if ok && strings.EqualFold(strings.TrimSpace(k), "proto") {
+				return strings.EqualFold(strings.Trim(strings.TrimSpace(val), `"`), "https")
+			}
+		}
+	}
+	return false
+}
+
+// linkPairable: a Persona Link can reach this hub, on its TLS port (pinned) or through the HTTPS reverse proxy
+// public_url names (the hub has no TLS of its own; the link checks the proxy's certificate with the system's CAs).
+func (h *Hub) linkPairable() bool {
+	if port, _ := h.tlsPin(); port > 0 {
+		return true
+	}
+	u, err := url.Parse(strings.TrimSpace(h.cfg.PublicURL))
+	return err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil
 }
 
 // enterWS counts a WebSocket handler for the shutdown (stopWebSockets), unless the hub is already stopping.
