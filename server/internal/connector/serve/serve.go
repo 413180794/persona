@@ -313,8 +313,8 @@ type server struct {
 	once writes
 	// chid is the channel the connector is (the plugin protocol's active channel; its own id when none).
 	chid string
-	// sent are the refs of the latest channel.send done, and what each answered: the hub sends one again when it
-	// did not hear back.
+	// sent are the refs of the latest channel.send done (or still running), and what each answered: the hub sends
+	// one again when it did not hear back.
 	sent sentRefs
 }
 
@@ -401,35 +401,49 @@ func (s *server) channelCall(ctx context.Context, method string, params json.Raw
 }
 
 // sentRefs runs each channel.send once by its ref (a failed one may go again): the latest doneMost.
+// A send still running holds its ref, so the hub's retry of it (it timed out waiting) waits for that send
+// instead of sending the message again.
 type sentRefs struct {
-	mu    sync.Mutex
-	done  map[string]channel.SendResult
+	mu   sync.Mutex
+	sent map[string]*sentRef
+	// order is the refs sent successfully, oldest first; a running or failed send is not in it.
 	order []string
+}
+
+type sentRef struct {
+	done chan struct{}
+	res  channel.SendResult
+	err  error
 }
 
 func (r *sentRefs) do(ref string, send func() (channel.SendResult, error)) (channel.SendResult, error) {
 	r.mu.Lock()
-	if res, ok := r.done[ref]; ok {
+	if prev, ok := r.sent[ref]; ok {
 		r.mu.Unlock()
-		return res, nil
+		<-prev.done
+		return prev.res, prev.err
+	}
+	if r.sent == nil {
+		r.sent = map[string]*sentRef{}
+	}
+	cur := &sentRef{done: make(chan struct{})}
+	r.sent[ref] = cur
+	r.mu.Unlock()
+	cur.res, cur.err = send()
+	r.mu.Lock()
+	if cur.err != nil {
+		// Forget a failed send before waking its waiters, so the ref may be sent again.
+		delete(r.sent, ref)
+	} else {
+		r.order = append(r.order, ref)
+		if len(r.order) > doneMost {
+			delete(r.sent, r.order[0])
+			r.order = r.order[1:]
+		}
 	}
 	r.mu.Unlock()
-	res, err := send()
-	if err != nil {
-		return res, err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.done == nil {
-		r.done = map[string]channel.SendResult{}
-	}
-	r.done[ref] = res
-	r.order = append(r.order, ref)
-	if len(r.order) > doneMost {
-		delete(r.done, r.order[0])
-		r.order = r.order[1:]
-	}
-	return res, nil
+	close(cur.done)
+	return cur.res, cur.err
 }
 
 func (s *server) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
