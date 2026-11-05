@@ -228,4 +228,6 @@
     <string name="designsystem_queue_actions">待機中メッセージの操作</string>
     <string name="designsystem_queue_item">%1$d件目：%2$s</string>
     <string name="designsystem_draft_ready">Personaが返信を下書きしました</string>
+    <string name="designsystem_workflow_show_agents">agent を表示</string>
+    <string name="designsystem_workflow_hide_agents">agent を隠す</string>
 </resources>

@@ -18,11 +18,13 @@ import persona.core.contracts.LoopInfo
 import persona.core.contracts.Machine
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
+import persona.core.contracts.Workflow
 import persona.core.contracts.api.DeliveryState
 import persona.core.contracts.api.OutboxMessage
 import persona.core.contracts.resultUnknown
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
+import persona.core.domain.sort.WorkflowSummary
 import persona.core.domain.sort.resumeCommand
 
 @Composable
@@ -37,6 +39,7 @@ internal fun ChatStatusSheet(
 ) {
     val clipboard = LocalClipboardManager.current
     val res = LocalResources.current
+    val expandedWorkflows = remember { mutableStateListOf<String>() }
     JSheet(onDismiss = onDismiss, title = stringResource(R.string.chat_status_title)) {
         LazyColumn(contentPadding = PaddingValues(bottom = Tokens.Space.m),
             verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
@@ -136,7 +139,16 @@ internal fun ChatStatusSheet(
                     }
                 }
             } }
-            val tasks = session?.background.orEmpty()
+            // Its Workflow runs (#2935), one card each, newest first; a running one is not listed again under background.
+            val workflows = session?.workflows.orEmpty()
+            if (workflows.isNotEmpty()) item { JSectionHeader(stringResource(R.string.chat_status_workflows), count = workflows.size) }
+            items(workflows, key = { "workflow:" + (it.runId ?: it.taskId) }) { workflow ->
+                val id = workflow.runId ?: workflow.taskId
+                WorkflowRunCard(workflow, expanded = id in expandedWorkflows,
+                    onToggle = { if (!expandedWorkflows.remove(id)) expandedWorkflows.add(id) },
+                    onOpenAgent = if (onOpenSession != null && session != null) { agent -> onOpenSession(SessionKey(session.machineId, agent)) } else null)
+            }
+            val tasks = session?.backgroundTasks.orEmpty()
             if (tasks.isNotEmpty()) item { JSectionHeader(stringResource(R.string.chat_status_background), count = tasks.size) }
             itemsIndexed(tasks) { index, task ->
                 JGroupItem(GroupPosition.of(index, tasks.size)) {
@@ -149,6 +161,28 @@ internal fun ChatStatusSheet(
             }
         }
     }
+}
+
+/**
+ * One Workflow run in an agent's details (#2935): its name, status, time, phases, progress, error, and its agents once
+ * [expanded]; tapping an agent opens its transcript by its session id ([onOpenAgent]), as a subagent's.
+ */
+@Composable
+internal fun WorkflowRunCard(workflow: Workflow, expanded: Boolean, onToggle: () -> Unit, onOpenAgent: ((String) -> Unit)?) {
+    val clock by rememberNow(60_000, workflow.isRunning) // its time, once a minute while it runs
+    JWorkflowCard(
+        title = workflow.title ?: stringResource(R.string.chat_status_workflow_untitled),
+        status = workflow.state, statusText = WorkflowSummary.status(workflow).text(),
+        elapsed = WorkflowSummary.elapsed(workflow, clock)?.text(),
+        phases = workflow.phases.orEmpty(), current = workflow.currentPhase,
+        progress = WorkflowSummary.progress(workflow)?.text(), error = workflow.error,
+        agents = WorkflowSummary.agents(workflow).map { agent ->
+            WorkflowAgentLine(agent.sessionId.ifBlank { agent.id }, agent.label?.takeIf(String::isNotBlank) ?: agent.id,
+                agent.phase, agent.running, agent.lastText,
+                onClick = onOpenAgent?.takeIf { agent.sessionId.isNotBlank() }?.let { open -> { open(agent.sessionId) } })
+        },
+        expanded = expanded, onToggle = onToggle,
+    )
 }
 
 /**

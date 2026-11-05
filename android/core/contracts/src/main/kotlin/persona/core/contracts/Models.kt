@@ -117,7 +117,14 @@ data class BackgroundTask(
     @SerialName("command") val command: String? = null,
     @SerialName("output_file") val outputFile: String? = null,
     @WireTime @SerialName("started_at") val startedAt: String? = null,
-)
+    /** When a Monitor stops by itself; absent when it does not say. */
+    @WireTime @SerialName("expires_at") val expiresAt: String? = null,
+    /** A workflow's run (`wf_…`): which of [Session.workflows] it is. */
+    @SerialName("run_id") val runId: String? = null,
+) {
+    /** A Workflow run: shown from [Session.workflows] where the hub sends them, never counted twice. */
+    val isWorkflow: Boolean get() = kind == "workflow"
+}
 
 /** What a session with a [Session.sourceKind] allows; a missing field is a refusal (docs/protocol.md「Codex 来源与能力」). */
 @KeepGeneratedSerializer
@@ -225,6 +232,11 @@ data class Session(
     @WireTime @SerialName("seen_at") val seenAt: String? = null,
     @SerialName("queued") val queued: List<String>? = null,
     @SerialName("background") val background: List<BackgroundTask>? = null,
+    /**
+     * Its Workflow runs of the last day, newest first (docs/agent-states.md「后台 workflow、Monitor」): a running one is
+     * in [background] too, as kind `workflow`. Older hubs never send it (null).
+     */
+    val workflows: List<Workflow>? = null,
     @SerialName("loop") val loop: LoopInfo? = null,
     @WireTime @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("last_text") val lastText: String? = null,
@@ -288,6 +300,18 @@ data class Session(
      */
     val canDelete: Boolean get() = !assistant && !starting && status in setOf("offline", "done", "unknown")
     val updated: Instant? get() = parseTime(updatedAt)
+    /** Its workflows still running, newest first. */
+    val runningWorkflows: List<Workflow> get() = workflows.orEmpty().filter { it.isRunning }
+    /**
+     * How much runs in the background without counting a workflow twice: its other background tasks and its running
+     * workflows. An older hub sends no [workflows]: every background entry counts, as before.
+     */
+    val backgroundCount: Int get() = if (workflows == null) background.orEmpty().size
+        else background.orEmpty().count { !it.isWorkflow } + runningWorkflows.size
+    /** The background tasks that are not workflows, where the hub lists those apart ([workflows]). */
+    val backgroundTasks: List<BackgroundTask> get() = if (workflows == null) background.orEmpty() else background.orEmpty().filter { !it.isWorkflow }
+    /** An older hub says a workflow runs in [background] but sends no [workflows] to show. */
+    val legacyWorkflowRunning: Boolean get() = workflows == null && background.orEmpty().any { it.isWorkflow }
 }
 
 @KeepGeneratedSerializer
@@ -531,6 +555,8 @@ object LoopInfoSerializer : WireSerializer<LoopInfo>(LoopInfo.generatedSerialize
 object BackgroundTaskSerializer : WireSerializer<BackgroundTask>(BackgroundTask.generatedSerializer())
 object SessionCapabilitiesSerializer : WireSerializer<SessionCapabilities>(SessionCapabilities.generatedSerializer())
 object SessionTodoSerializer : WireSerializer<SessionTodo>(SessionTodo.generatedSerializer())
+object WorkflowSerializer : WireSerializer<Workflow>(Workflow.generatedSerializer())
+object WorkflowAgentSerializer : WireSerializer<WorkflowAgent>(WorkflowAgent.generatedSerializer())
 object SessionSerializer : WireSerializer<Session>(Session.generatedSerializer())
 object WorkStateSerializer : WireSerializer<WorkState>(WorkState.generatedSerializer())
 object WorkAgentSerializer : WireSerializer<WorkAgent>(WorkAgent.generatedSerializer())

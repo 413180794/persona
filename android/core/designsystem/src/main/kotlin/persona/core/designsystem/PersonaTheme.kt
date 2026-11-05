@@ -40,10 +40,11 @@ data class PersonaShapes(
 
 /**
  * Durations and curves; [PersonaTheme.reduceMotion] collapses them to instant changes. [count] is how long a number
- * that changed takes to count to its new value, and a chart's marks to move (#2811).
+ * that changed takes to count to its new value, and a chart's marks to move (#2811); [breathe] one half of a breathing
+ * mark's cycle (a running workflow's chip, #2935).
  */
 @Immutable
-data class PersonaMotion(val quick: Int, val standard: Int, val springy: Boolean, val count: Int) {
+data class PersonaMotion(val quick: Int, val standard: Int, val springy: Boolean, val count: Int, val breathe: Int = 1300) {
     fun <T> enter(): FiniteAnimationSpec<T> =
         if (springy) spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow) else tween(standard, easing = FastOutSlowInEasing)
     fun size(): FiniteAnimationSpec<IntSize> =

@@ -377,4 +377,6 @@
     <string name="chat_content_tool_no_result">无结果记录</string>
     <string name="chat_content_output">输出</string>
     <string name="chat_content_plan_failed">更新失败</string>
+    <string name="chat_status_workflows">后台 workflow</string>
+    <string name="chat_status_workflow_untitled">workflow</string>
 </resources>

@@ -358,4 +358,21 @@
     <string name="designsystem_core_close_unconfirmed">关闭结果待确认，只会核对，不会重复关闭</string>
     <string name="designsystem_core_day_today">今天 · %1$s</string>
     <string name="designsystem_core_day_yesterday">昨天 · %1$s</string>
+    <string name="designsystem_core_workflow_line">后台 workflow「%1$s」</string>
+    <string name="designsystem_core_workflow_line_untitled">后台 workflow</string>
+    <string name="designsystem_core_workflow_phase">%1$s %2$d/%3$d</string>
+    <string name="designsystem_core_workflow_progress">%1$d/%2$d</string>
+    <plurals name="designsystem_core_workflow_more">
+        <item quantity="other">等 %1$d 个</item>
+    </plurals>
+    <string name="designsystem_core_workflow_background_running">后台运行中</string>
+    <string name="designsystem_core_workflow_running">在跑</string>
+    <string name="designsystem_core_workflow_completed">完成</string>
+    <string name="designsystem_core_workflow_failed">失败</string>
+    <string name="designsystem_core_workflow_killed">已停止</string>
+    <string name="designsystem_core_workflow_stalled">没动静了</string>
+    <string name="designsystem_core_workflow_agents_done">%1$d/%2$d 个 agent 完成</string>
+    <plurals name="designsystem_core_workflow_agents_running">
+        <item quantity="other">%1$d 个在跑</item>
+    </plurals>
 </resources>

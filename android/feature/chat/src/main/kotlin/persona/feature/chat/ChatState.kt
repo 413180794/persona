@@ -98,10 +98,11 @@ internal fun chatStatusState(
     requestSummary = requests.singleOrNull()?.headline?.shown,
     stopping = snapshot.stopping,
     working = session?.status == "working",
-    waiting = session?.loop != null || !session?.background.isNullOrEmpty(),
+    waiting = session?.loop != null || !session?.background.isNullOrEmpty() || session?.runningWorkflows?.isNotEmpty() == true,
     waitingDetail = when {
         session?.loop != null -> res.getString(R.string.chat_state_looping)
-        !session?.background.isNullOrEmpty() -> session?.background?.size?.let { res.getQuantityString(R.plurals.chat_state_background, it, it) }
+        // a running workflow is in background too: counted once (#2935)
+        (session?.backgroundCount ?: 0) > 0 -> session?.backgroundCount?.let { res.getQuantityString(R.plurals.chat_state_background, it, it) }
         else -> null
     },
 )

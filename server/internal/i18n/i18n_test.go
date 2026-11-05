@@ -1,10 +1,15 @@
 package i18n
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"net/http/httptest"
+	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -123,4 +128,166 @@ func TestCatalogsAgree(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Server code's literal keys exist and get every placeholder: a missing key reads as the key itself and a missing
+// argument as "{name}" (the web has the same guard in web/src/i18n/catalog.test.ts). Keys and Args built at run
+// time are not checked.
+func TestCallSitesUseKnownKeys(t *testing.T) {
+	cat := catalogs[ZhHans]
+	ph := regexp.MustCompile(`\{(\w+)\}`)
+	plurals := []string{"zero", "one", "two", "few", "many", "other"}
+	root := filepath.Join("..", "..")
+	calls := 0
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if p != root && (d.Name() == "testdata" || strings.HasPrefix(d.Name(), ".")) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+			return nil
+		}
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, p, nil, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		pkg := importName(f)
+		if pkg == "" {
+			return nil
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if id, ok := sel.X.(*ast.Ident); !ok || id.Name != pkg {
+				return true
+			}
+			at := map[string]int{"T": 1, "Err": 0}
+			i, ok := at[sel.Sel.Name]
+			if !ok || len(call.Args) <= i {
+				return true
+			}
+			key, ok := stringLit(call.Args[i])
+			if !ok {
+				return true
+			}
+			calls++
+			pos := fset.Position(call.Pos())
+			// Exact first: a key like "pick_one" is a key, not a plural form.
+			var forms []string
+			_, exact := cat[key]
+			if exact {
+				forms = append(forms, key)
+			}
+			plural := false
+			for _, s := range plurals {
+				if _, ok := cat[key+"_"+s]; ok {
+					forms = append(forms, key+"_"+s)
+					plural = true
+				}
+			}
+			if len(forms) == 0 {
+				t.Errorf("%s: %s.%s key %q is not in the catalogs", pos, pkg, sel.Sel.Name, key)
+				return true
+			}
+			if len(call.Args) <= i+1 {
+				// No Args fills nothing, which some texts mean ({id} in a route); a plural-only key needs a count.
+				if !exact {
+					t.Errorf("%s: %s.%s(%q) has only plural forms but no count", pos, pkg, sel.Sel.Name, key)
+				}
+				return true
+			}
+			args, ok := argsLit(call.Args[i+1], pkg)
+			if !ok {
+				return true
+			}
+			var need []string
+			for _, k := range forms {
+				for _, m := range ph.FindAllStringSubmatch(cat[k], -1) {
+					if !slices.Contains(need, m[1]) {
+						need = append(need, m[1])
+					}
+				}
+			}
+			if plural && !exact && !slices.Contains(need, "count") {
+				need = append(need, "count")
+			}
+			for _, name := range need {
+				if !args[name] {
+					t.Errorf("%s: %s.%s(%q) does not pass {%s}", pos, pkg, sel.Sel.Name, key, name)
+				}
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls < 100 {
+		t.Fatalf("found only %d calls with a literal key under %s; is the walk looking in the right place?", calls, root)
+	}
+}
+
+// importName is the name f uses for this package, "" when f does not import it.
+func importName(f *ast.File) string {
+	for _, imp := range f.Imports {
+		p, _ := strconv.Unquote(imp.Path.Value)
+		if !strings.HasSuffix(p, "/internal/i18n") {
+			continue
+		}
+		if imp.Name != nil {
+			return imp.Name.Name
+		}
+		return "i18n"
+	}
+	return ""
+}
+
+func stringLit(e ast.Expr) (string, bool) {
+	lit, ok := e.(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return "", false
+	}
+	s, err := strconv.Unquote(lit.Value)
+	return s, err == nil
+}
+
+// argsLit is the names an <pkg>.Args{...} literal sets; false when e is something else or a name is not a literal.
+func argsLit(e ast.Expr, pkg string) (map[string]bool, bool) {
+	lit, ok := e.(*ast.CompositeLit)
+	if !ok {
+		return nil, false
+	}
+	sel, ok := lit.Type.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Args" {
+		return nil, false
+	}
+	if id, ok := sel.X.(*ast.Ident); !ok || id.Name != pkg {
+		return nil, false
+	}
+	out := map[string]bool{}
+	for _, el := range lit.Elts {
+		kv, ok := el.(*ast.KeyValueExpr)
+		if !ok {
+			return nil, false
+		}
+		name, ok := stringLit(kv.Key)
+		if !ok {
+			return nil, false
+		}
+		out[name] = true
+	}
+	return out, true
 }

@@ -1,0 +1,86 @@
+package persona.core.domain.sort
+
+import persona.core.contracts.CoreText
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.Session
+import persona.core.contracts.Workflow
+import persona.core.contracts.WorkflowAgent
+import persona.core.contracts.WorkflowStatus
+import persona.core.contracts.parseTime
+import java.time.Duration
+import java.time.Instant
+
+/**
+ * The words for an agent's background Workflow runs (docs/agent-states.md「后台 workflow、Monitor」, #2935): the one line
+ * the Agents list and the task cards add under an agent, and the parts of a run's card in the chat's details. The same
+ * as iOS and the web: 「后台 workflow「parity-audit」· Verify 2/2 · 169/185 · 14 分」.
+ */
+object WorkflowSummary {
+    private const val SEPARATOR = " · "
+
+    /**
+     * The line for [session]'s running workflows: the newest one, then 「等 N 个」 for the others. An older hub that sends
+     * no workflows but has one in its background says 「后台运行中」. Null when no workflow runs.
+     */
+    fun line(session: Session?, now: Instant): CoreText? {
+        session ?: return null
+        val running = session.runningWorkflows
+        if (running.isEmpty()) return if (session.legacyWorkflowRunning) CoreText.of(Key.WorkflowBackgroundRunning) else null
+        val parts = listOf(of(running.first(), now)) + listOfNotNull((running.size - 1).takeIf { it > 0 }?.let { CoreText.of(Key.WorkflowMore, it) })
+        return CoreText.joined(SEPARATOR, parts)
+    }
+
+    /** One run on one line: its name, phase, done / started agents and how long it has run. */
+    fun of(workflow: Workflow, now: Instant): CoreText = CoreText.joined(SEPARATOR, listOfNotNull(
+        workflow.title?.let { CoreText.of(Key.WorkflowLine, it) } ?: CoreText.of(Key.WorkflowLineUntitled),
+        phase(workflow),
+        workflow.agentsStarted.takeIf { it > 0 }?.let { CoreText.of(Key.WorkflowProgress, workflow.agentsDone, it) },
+        elapsed(workflow, now),
+    ))
+
+    /** 「Verify 2/2」 where the hub knows its place among the phases, else the phase's name alone. */
+    fun phase(workflow: Workflow): CoreText? {
+        val index = workflow.currentPhase
+        val phases = workflow.phases.orEmpty()
+        val name = workflow.phase?.trim()?.takeIf(String::isNotEmpty) ?: index?.let { phases[it - 1].trim() }?.takeIf(String::isNotEmpty)
+            ?: return null
+        return if (index != null) CoreText.of(Key.WorkflowPhase, name, index, phases.size) else CoreText.plain(name)
+    }
+
+    /** How long it ran: until it ended, or until [now] while it runs; null without a start. */
+    fun elapsedSeconds(workflow: Workflow, now: Instant): Long? {
+        val start = parseTime(workflow.startedAt) ?: return null
+        val end = parseTime(workflow.endedAt) ?: now
+        return Duration.between(start, end).seconds.coerceAtLeast(0)
+    }
+
+    /** [elapsedSeconds] in whole minutes (it is redrawn once a minute): at least 1 分, then hours and minutes. */
+    fun elapsed(workflow: Workflow, now: Instant): CoreText? = elapsedSeconds(workflow, now)?.let { s ->
+        when {
+            s < 3600 -> CoreText.of(Key.DurationMinutes, (s / 60).coerceAtLeast(1))
+            s % 3600 / 60 == 0L -> CoreText.of(Key.DurationHours, s / 3600)
+            else -> CoreText.of(Key.DurationHoursMinutes, s / 3600, s % 3600 / 60)
+        }
+    }
+
+    /** The status chip's words: 在跑, 完成, 失败, 已停止, 没动静了. */
+    fun status(workflow: Workflow): CoreText = CoreText.of(when (workflow.state) {
+        WorkflowStatus.Running -> Key.WorkflowRunning
+        WorkflowStatus.Completed -> Key.WorkflowCompleted
+        WorkflowStatus.Failed -> Key.WorkflowFailed
+        WorkflowStatus.Killed -> Key.WorkflowKilled
+        WorkflowStatus.Stalled -> Key.WorkflowStalled
+    })
+
+    /** 「169/185 个 agent 完成 · 16 个在跑」; the running part only while some are. Null before it started any. */
+    fun progress(workflow: Workflow): CoreText? {
+        if (workflow.agentsStarted <= 0) return null
+        return CoreText.joined(SEPARATOR, listOfNotNull(
+            CoreText.of(Key.WorkflowAgentsDone, workflow.agentsDone, workflow.agentsStarted),
+            workflow.agentsRunning.takeIf { it > 0 }?.let { CoreText.of(Key.WorkflowAgentsRunning, it) },
+        ))
+    }
+
+    /** Its agents to list: the running ones first, each part newest first (the hub sends them in the order they started). */
+    fun agents(workflow: Workflow): List<WorkflowAgent> = workflow.agents.orEmpty().asReversed().sortedBy { !it.running }
+}

@@ -1076,6 +1076,17 @@ hub 分诊停下的会话（[agent-work.md](agent-work.md)）以后，`Session.w
 hub 会替它等的（`WorkState.hubWaits`）排进「待唤醒」。开关在「设置 › AI › 会话分诊」（`TriageSettingsPage`，`GET / PUT /api/v1/agents/triage`，默认全关），
 「分诊模型」一行跳到模型配置的 `agent.triage`。调试直达：`--es debug.openPage triage`。
 
+## 后台 workflow（#2935）
+
+主轮结束、Workflow 还在跑的 Agent 由 hub 算成 `state: working`，状态不用改；新字段 `Session.workflows`（旧 hub 没有，为 null）和 `background[].expires_at / run_id` 在 `core/contracts`，
+解码全是可选的，不认识的 status 当完成（`Workflow.state`）。在跑的 workflow 同时在 `background` 里（kind `workflow`），不重复计数：`Session.backgroundCount`
+= 非 workflow 的后台条数 + 在跑的 workflow 数（旧 hub 照旧数 `background`）。文案都在 `core/domain` 的 `WorkflowSummary`。
+
+- Agents 列表行（`SlotRow`）：最后一句话下面一行 `AgentRow(note = RowNote)`，ai 色图标 `WorkflowIcon`，「后台 workflow「parity-audit」 · Verify 2/2 · 169/185 · 14 分」，多个时加「等 N 个」；旧 hub 只有 kind 为 workflow 的后台条目时写「后台运行中」。
+- 对话的状态面板（`ChatStatusSheet`）：后台任务上面一段「后台 workflow」，每个 run 一张 `JWorkflowCard`（设计系统）：名字（缺省 summary）、状态（在跑是 ai 色呼吸，完成 / 失败 / 已停止 / 没动静了）、耗时（在跑时每分钟刷新）、阶段条、「169/185 个 agent 完成 · 16 个在跑」、错误一行、「展开 agent」（在跑的在前，点开按 `session_id` 进子 Agent 一样的只读对话）。
+- 主对话的任务卡：子 Agent 那一行下面同一句摘要。
+- 截图：`:feature:agents:testDebugUnitTest --tests '*AgentWorkflowRowShotsTest*'`（`build/workflow-row-shots/`）、`:feature:chat:testDebugUnitTest --tests '*WorkflowShotsTest*'`（`build/workflow-shots/`），三种风格 × 深浅色；单测 `WorkflowContractTest`、`WorkflowSummaryTest`。
+
 ## 翻译（设置 › 翻译，#1744）
 
 和 iOS（`docs/ios.md`「翻译」）、网页（`docs/web.md`）同一套：开了「自动翻译」以后，不是目标语言（默认简体中文）的内容由 hub 的翻译模型（模型配置的 `translate` 用途）翻译。范围是邮件（默认开）和设置里选中的飞书会话（默认一个都不翻，只翻别人发的）。

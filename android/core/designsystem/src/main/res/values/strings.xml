@@ -256,4 +256,6 @@
     <string name="designsystem_queue_actions">Queued message actions</string>
     <string name="designsystem_queue_item">Item %1$d: %2$s</string>
     <string name="designsystem_draft_ready">Persona drafted a reply</string>
+    <string name="designsystem_workflow_show_agents">Show agents</string>
+    <string name="designsystem_workflow_hide_agents">Hide agents</string>
 </resources>

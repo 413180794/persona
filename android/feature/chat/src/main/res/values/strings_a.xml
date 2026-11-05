@@ -402,4 +402,6 @@
     <string name="chat_content_tool_no_result">No result recorded</string>
     <string name="chat_content_output">Output</string>
     <string name="chat_content_plan_failed">Update failed</string>
+    <string name="chat_status_workflows">Background workflows</string>
+    <string name="chat_status_workflow_untitled">Workflow</string>
 </resources>

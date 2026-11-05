@@ -386,4 +386,23 @@
     <string name="designsystem_core_close_unconfirmed">Closing isn’t confirmed yet. It will only be checked, not closed again</string>
     <string name="designsystem_core_day_today">Today · %1$s</string>
     <string name="designsystem_core_day_yesterday">Yesterday · %1$s</string>
+    <string name="designsystem_core_workflow_line">Background workflow “%1$s”</string>
+    <string name="designsystem_core_workflow_line_untitled">Background workflow</string>
+    <string name="designsystem_core_workflow_phase">%1$s %2$d/%3$d</string>
+    <string name="designsystem_core_workflow_progress">%1$d/%2$d</string>
+    <plurals name="designsystem_core_workflow_more">
+        <item quantity="one">+%1$d more</item>
+        <item quantity="other">+%1$d more</item>
+    </plurals>
+    <string name="designsystem_core_workflow_background_running">Running in background</string>
+    <string name="designsystem_core_workflow_running">Running</string>
+    <string name="designsystem_core_workflow_completed">Done</string>
+    <string name="designsystem_core_workflow_failed">Failed</string>
+    <string name="designsystem_core_workflow_killed">Stopped</string>
+    <string name="designsystem_core_workflow_stalled">Gone quiet</string>
+    <string name="designsystem_core_workflow_agents_done">%1$d/%2$d agents done</string>
+    <plurals name="designsystem_core_workflow_agents_running">
+        <item quantity="one">%1$d running</item>
+        <item quantity="other">%1$d running</item>
+    </plurals>
 </resources>

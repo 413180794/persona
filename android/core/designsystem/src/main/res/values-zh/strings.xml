@@ -228,4 +228,6 @@
     <string name="designsystem_queue_actions">排队消息的操作</string>
     <string name="designsystem_queue_item">第 %1$d 条：%2$s</string>
     <string name="designsystem_draft_ready">Persona 拟好了回复</string>
+    <string name="designsystem_workflow_show_agents">展开 agent</string>
+    <string name="designsystem_workflow_hide_agents">收起 agent</string>
 </resources>

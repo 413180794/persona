@@ -388,3 +388,63 @@ object EndpointsResponseSerializer : WireSerializer<EndpointsResponse>(Endpoints
 object HealthSerializer : WireSerializer<Health>(Health.generatedSerializer())
 object HeartbeatSerializer : WireSerializer<Heartbeat>(Heartbeat.generatedSerializer())
 object ErrorBodySerializer : WireSerializer<ErrorBody>(ErrorBody.generatedSerializer())
+
+/** Where a [Workflow] run stands; a status this app does not know reads as [Completed] (docs/protocol.md). */
+enum class WorkflowStatus { Running, Completed, Failed, Killed, Stalled }
+
+/**
+ * A Claude Code Workflow run (the Workflow tool, `proto.Workflow`): a script driving many agents in the background.
+ * [agentsStarted] is not the total, which is only known once it ends: progress reads done / started. [endedAt] is
+ * absent while it runs.
+ */
+@KeepGeneratedSerializer
+@Serializable(with = WorkflowSerializer::class)
+data class Workflow(
+    @SerialName("task_id") val taskId: String = "",
+    @SerialName("run_id") val runId: String? = null,
+    val name: String? = null,
+    val summary: String? = null,
+    @WireEnum("running", "completed", "failed", "killed", "stalled", "unknown") val status: String = "unknown",
+    val running: Boolean = false,
+    val phases: List<String>? = null,
+    val phase: String? = null,
+    /** 1-based place of [phase] in [phases]; 0 or absent: not known. */
+    @SerialName("phase_index") val phaseIndex: Int? = null,
+    @SerialName("agents_started") val agentsStarted: Int = 0,
+    @SerialName("agents_done") val agentsDone: Int = 0,
+    @SerialName("agents_running") val agentsRunning: Int = 0,
+    @WireTime @SerialName("started_at") val startedAt: String? = null,
+    @WireTime @SerialName("ended_at") val endedAt: String? = null,
+    @WireTime @SerialName("updated_at") val updatedAt: String? = null,
+    /** A failed or killed run's error, its first line. */
+    val error: String? = null,
+    /** Its agents in the order they started (the hub keeps the latest 60). */
+    val agents: List<WorkflowAgent>? = null,
+) {
+    val state: WorkflowStatus get() = when (status) {
+        "running" -> WorkflowStatus.Running
+        "failed" -> WorkflowStatus.Failed
+        "killed" -> WorkflowStatus.Killed
+        "stalled" -> WorkflowStatus.Stalled
+        else -> WorkflowStatus.Completed
+    }
+    val isRunning: Boolean get() = state == WorkflowStatus.Running
+    /** Its script's name, else its summary; null when it has neither. */
+    val title: String? get() = name?.trim()?.takeIf(String::isNotEmpty) ?: summary?.trim()?.takeIf(String::isNotEmpty)
+    /** [phaseIndex] when it points into [phases]. */
+    val currentPhase: Int? get() = phaseIndex?.takeIf { it in 1..phases.orEmpty().size }
+}
+
+/** One agent of a [Workflow]; its transcript reads like a subagent's, as the session [sessionId] (`<parent>@<id>`). */
+@KeepGeneratedSerializer
+@Serializable(with = WorkflowAgentSerializer::class)
+data class WorkflowAgent(
+    val id: String = "",
+    @SerialName("session_id") val sessionId: String = "",
+    val label: String? = null,
+    val phase: String? = null,
+    val running: Boolean = false,
+    @WireTime @SerialName("started_at") val startedAt: String? = null,
+    @WireTime @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("last_text") val lastText: String? = null,
+)

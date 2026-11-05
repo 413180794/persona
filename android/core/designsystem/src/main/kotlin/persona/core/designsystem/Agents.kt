@@ -50,6 +50,13 @@ data class RowFlag(val label: String, val icon: PhIcon, val caution: Boolean = f
 @Immutable
 data class RowFact(val text: String, val caution: Boolean = false)
 
+/**
+ * A line of its own under a session row's latest words, after an AI-coloured [icon]: work it runs in the background
+ * (a Workflow, #2935) that the facts' short words cannot hold.
+ */
+@Immutable
+data class RowNote(val text: String, val icon: PhIcon)
+
 // ------------------------------------------------------------------ measures
 
 private val Step = 22.dp
@@ -302,6 +309,7 @@ fun AgentRow(
     muted: Boolean = false,
     selected: Boolean = false,
     label: String? = null,
+    note: RowNote? = null,
     launcher: Boolean = false,
     branch: Boolean = false,
     end: (@Composable () -> Unit)? = null,
@@ -341,6 +349,7 @@ fun AgentRow(
                 preview?.takeIf { it.isNotBlank() }?.let { append(it.replace('\n', ' ')) }
             }
             if (line.isNotEmpty()) Text(line, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            note?.let { RowNoteLine(it) }
             if (facts.isNotEmpty()) Text(
                 buildAnnotatedString {
                     facts.forEachIndexed { index, fact ->
@@ -383,6 +392,17 @@ fun AgentRow(
         Spacer(Modifier.width(gap))
         Column(Modifier.weight(1f).padding(top = if (compact) None else Tokens.Space.xxs), content = text)
         end?.let { Box(Modifier.align(Alignment.CenterVertically)) { it() } }
+    }
+}
+
+@Composable
+private fun RowNoteLine(note: RowNote) {
+    val palette = PersonaTheme.palette
+    Row(Modifier.padding(top = Tokens.Space.xxs), verticalAlignment = Alignment.CenterVertically) {
+        JIcon(note.icon, null, size = Caret, tint = palette.ai)
+        Spacer(Modifier.width(Tokens.Space.xs))
+        Text(note.text, style = PersonaTheme.type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

@@ -466,7 +466,7 @@ fun JTag(text: String, tone: Tone, modifier: Modifier = Modifier, animated: Bool
     JTagColored(text, modifier, PersonaTheme.palette.tone(tone).takeIf { tone != Tone.Neutral }, animated)
 
 @Composable
-private fun JTagColored(text: String, modifier: Modifier, tone: StatusColors?, animated: Boolean = false) {
+internal fun JTagColored(text: String, modifier: Modifier, tone: StatusColors?, animated: Boolean = false) {
     val palette = PersonaTheme.palette
     val shape = RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 4.dp else 6.dp)
     val style = PersonaTheme.type.micro.copy(fontWeight = FontWeight.SemiBold)

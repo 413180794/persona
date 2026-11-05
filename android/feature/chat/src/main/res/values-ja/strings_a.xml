@@ -377,4 +377,6 @@
     <string name="chat_content_tool_no_result">結果の記録なし</string>
     <string name="chat_content_output">出力</string>
     <string name="chat_content_plan_failed">更新に失敗</string>
+    <string name="chat_status_workflows">バックグラウンド workflow</string>
+    <string name="chat_status_workflow_untitled">workflow</string>
 </resources>

@@ -68,6 +68,8 @@ import persona.core.designsystem.JStatusDot
 import persona.core.designsystem.PersonaTheme
 import persona.core.designsystem.Status
 import persona.core.designsystem.Tokens
+import persona.core.designsystem.WorkflowIcon
+import persona.core.domain.sort.WorkflowSummary
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.tasks.AssistantExtra
@@ -323,6 +325,12 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
                 if (subagents.isNotEmpty()) Text(if (subagents.size > 3) pluralStringResource(R.plurals.chat_tasks_subagents_many, subagents.size, names, subagents.size)
                     else stringResource(R.string.chat_tasks_subagents, names), style = PersonaTheme.type.caption,
                     color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Its running Workflows next to its subagents, the same line as the Agents list's (#2935).
+                val workflow = if (state == TaskState.Working || state == TaskState.NeedsYou) WorkflowSummary.line(lead, clock) else null
+                if (workflow != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+                    JIcon(WorkflowIcon, null, size = Tokens.Space.m, tint = PersonaTheme.palette.ai)
+                    Text(workflow.text(), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
             if (state != TaskState.Done) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(state.label.text(), Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.status(state.status()).text)

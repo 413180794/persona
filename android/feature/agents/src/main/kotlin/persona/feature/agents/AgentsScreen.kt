@@ -458,7 +458,8 @@ internal fun SlotRow(
             slotLabel?.let { add(RowFact(it)) }
             if (requestCount > 0) add(RowFact(pluralStringResource(R.plurals.agents_row_requests, requestCount, requestCount), caution = true))
             session.loop?.let { add(RowFact(it.nextRunLabel(agentResources(), now))) }
-            session.background?.size?.takeIf { it > 0 }?.let { add(RowFact(stringResource(R.string.agents_row_background, it))) }
+            // a running workflow is in background too: counted once (#2935)
+            session.backgroundCount.takeIf { it > 0 }?.let { add(RowFact(stringResource(R.string.agents_row_background, it))) }
             session.subagents?.count { it.running == true }?.takeIf { it > 0 }?.let { add(RowFact(stringResource(R.string.agents_row_subagents, it))) }
             if (metadata.needsConfirmation) add(RowFact(if (metadata.verifying) PendingStatus.Verifying.localizedLabel else PendingStatus.Unconfirmed.localizedLabel, caution = true))
             if (metadata.pendingCount > 0) add(RowFact(stringResource(R.string.agents_row_queued, metadata.pendingCount), caution = true))
@@ -477,6 +478,8 @@ internal fun SlotRow(
             if (muted) add(RowFlag(stringResource(R.string.agents_row_muted), PhIcons.Prohibit))
         },
         launcher = launcher, branch = branch,
+        // Its running Workflows (#2935): 「后台 workflow「parity-audit」 · Verify 2/2 · 169/185 · 14 分」.
+        note = WorkflowSummary.line(session, now)?.let { RowNote(it.text(), WorkflowIcon) },
     )
     }
     if (menu) JActionSheet(menuItems(), { menu = false }, title = session.displayTitle)

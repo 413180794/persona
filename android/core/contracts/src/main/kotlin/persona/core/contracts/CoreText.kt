@@ -318,6 +318,19 @@ data class CoreText(val key: Key, val args: List<Any> = emptyList()) {
         CloseUnconfirmed("Closing isn’t confirmed yet. It will only be checked, not closed again"),
         DayToday("Today · %1\$s"),
         DayYesterday("Yesterday · %1\$s"),
+        WorkflowLine("Background workflow “%1\$s”"),
+        WorkflowLineUntitled("Background workflow"),
+        WorkflowPhase("%1\$s %2\$d/%3\$d"),
+        WorkflowProgress("%1\$d/%2\$d"),
+        WorkflowMore("+%1\$d more"),
+        WorkflowBackgroundRunning("Running in background"),
+        WorkflowRunning("Running"),
+        WorkflowCompleted("Done"),
+        WorkflowFailed("Failed"),
+        WorkflowKilled("Stopped"),
+        WorkflowStalled("Gone quiet"),
+        WorkflowAgentsDone("%1\$d/%2\$d agents done"),
+        WorkflowAgentsRunning("%1\$d running"),
     }
 
     /** The English words with [args] filled in, for logs and messages; the screen uses the app's resources. */

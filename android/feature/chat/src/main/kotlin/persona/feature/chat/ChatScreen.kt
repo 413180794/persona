@@ -127,12 +127,21 @@ private fun ChatPage(
     val allMessages by sender.outbox.collectAsStateWithLifecycle()
     val parent = sessionList.firstOrNull { it.machineId == key.machineId && it.subagents.orEmpty().any { child -> child.sessionId == key.sessionId } }
     val child = parent?.subagents?.firstOrNull { it.sessionId == key.sessionId }
-    val readOnly = historyReadOnly || child != null || key.sessionId.contains('@')
+    // A workflow's agent reads like a subagent (`<session>@<agent id>`, #2935).
+    val workflowParent = if (child != null) null else sessionList.firstOrNull { s ->
+        s.machineId == key.machineId && s.workflows.orEmpty().any { w -> w.agents.orEmpty().any { it.sessionId == key.sessionId } }
+    }
+    val workflowAgent = workflowParent?.workflows.orEmpty().firstNotNullOfOrNull { w -> w.agents.orEmpty().firstOrNull { it.sessionId == key.sessionId } }
+    val readOnly = historyReadOnly || child != null || workflowAgent != null || key.sessionId.contains('@')
     var lastSession by remember { mutableStateOf<Session?>(null) }
     val session = sessionList.firstOrNull { it.key == key } ?: child?.let {
         parent?.copy(sessionId = it.sessionId, title = it.description?.takeIf(String::isNotBlank) ?: it.type,
             status = if (it.running) "working" else "done", state = if (it.running) "working" else "unread", subagents = emptyList(),
             queued = null, loop = null, background = null, pendingInteractions = 0)
+    } ?: workflowAgent?.let {
+        workflowParent?.copy(sessionId = it.sessionId, title = it.label?.takeIf(String::isNotBlank) ?: it.id,
+            status = if (it.running) "working" else "done", state = if (it.running) "working" else "unread", subagents = emptyList(),
+            queued = null, loop = null, background = null, workflows = null, pendingInteractions = 0)
     } ?: lastSession
     SideEffect { if (session != null) lastSession = session }
     // What the session's source lets the phone do (docs/protocol.md「Codex 来源与能力」). Older sessions, and one whose
