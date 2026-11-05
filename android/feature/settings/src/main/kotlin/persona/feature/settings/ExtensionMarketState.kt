@@ -6,12 +6,16 @@ import persona.core.contracts.api.ExtensionCatalog
 import persona.core.contracts.api.ExtensionDetail
 import persona.core.contracts.api.ExtensionMarket
 import persona.core.contracts.api.ExtensionMarkets
+import persona.core.contracts.api.ExtensionOperation
 import persona.core.contracts.api.ExtensionPreview
 import persona.core.designsystem.failureReason
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeoutOrNull
 
 // 设置 › 扩展 › 扩展市场 (docs/extensions.md「扩展市场」): the words, the catalog, one extension of it (preview, then install,
 // upgrade or remove) and the markets. The pages are in ExtensionMarketScreen.kt.
@@ -157,14 +161,112 @@ internal data class CatalogExtensionState(
     val actionError: String? = null,
     /** It is gone from the catalog (the market dropped it, or the market was removed). */
     val missing: Boolean = false,
+    /**
+     * Its install, upgrade or removal in steps (a hub with `extension_operations`): going on, or stopped at a step; one
+     * that ended well is gone again (the page says so once).
+     */
+    val operation: ExtensionOperation? = null,
+    /** The operation whose preview the sheet shows: agreeing goes on with it, closing the sheet cancels it. */
+    val consentFor: String? = null,
 ) {
-    val busy: Boolean get() = loading || previewing || acting
+    val busy: Boolean get() = loading || previewing || acting || operation?.active == true
 }
 
-/** One extension of a market: its permissions, preview → install / upgrade, remove. */
+/**
+ * One extension of a market: its permissions, preview → install / upgrade, remove. With a hub that has
+ * `extension_operations` each runs in steps the page shows as they go ([watch]); with an older one the calls wait.
+ */
 internal class CatalogExtensionModel(private val api: ExtensionMarkets, private val market: String, private val id: String, private val res: Resources) {
     private val mutable = MutableStateFlow(CatalogExtensionState())
     val state = mutable.asStateFlow()
+    /** Says an operation ended well (set by [watch]). */
+    private var onDone: (String) -> Unit = {}
+
+    /** The hub runs installs in steps; asked when something starts (a hub without the flag: no). */
+    private suspend fun stepped(): Boolean = try {
+        withTimeoutOrNull(1_000) { api.operationsAvailable.first() } ?: false
+    } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { false }
+
+    /**
+     * While the page is open: follows this extension's operations as the hub pushes them, and lists them again after
+     * each hello (opening, a reconnect), since what was missed is not replayed. [done] is what to tell the user.
+     */
+    suspend fun watch(done: (String) -> Unit) {
+        onDone = done
+        api.operationUpdates.onStart { emit(null) }.collect { op -> if (op == null) relist() else track(op) }
+    }
+
+    private suspend fun relist() {
+        if (!stepped()) return
+        val list = try { api.operations() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { return }
+        list.filter(::mine).maxByOrNull { OperationText.instant(it.startedAt) }?.let { track(it) }
+    }
+
+    private fun mine(op: ExtensionOperation) = op.extension == id && (op.market.isNullOrEmpty() || op.market == market)
+
+    /** Keeps op when it is this extension's and newer than what the page has; what it waits for or how it ended follows. */
+    private suspend fun track(op: ExtensionOperation) {
+        if (!mine(op)) return
+        val was = state.value.operation
+        if (was != null && was.id == op.id && !OperationText.newer(op, was)) return
+        // One that ended before the page knew it is not news; a failed one still shows where it stopped.
+        if (was?.id != op.id && !op.active && !op.failed) return
+        when (op.state) {
+            ExtensionOperation.Succeeded -> {
+                mutable.update { it.copy(operation = null, consentFor = null, preview = if (it.consentFor == op.id) null else it.preview) }
+                onDone(OperationText.done(res, op, state.value.extension?.label ?: op.name ?: op.extension))
+                load()
+            }
+            ExtensionOperation.Canceled -> mutable.update {
+                it.copy(operation = null, consentFor = null, preview = if (it.consentFor == op.id) null else it.preview)
+            }
+            else -> {
+                mutable.update { it.copy(operation = op) }
+                if (op.state == ExtensionOperation.NeedsConsent && state.value.consentFor != op.id) askConsent(op)
+            }
+        }
+    }
+
+    /** The package is checked: its preview, for the user's yes. */
+    private suspend fun askConsent(op: ExtensionOperation) {
+        mutable.update { it.copy(consentFor = op.id) }
+        try {
+            val preview = op.preview ?: api.operation(op.id).preview ?: return
+            if (state.value.consentFor == op.id) mutable.update { it.copy(preview = preview) }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            mutable.update { it.copy(consentFor = null, actionError = res.getString(R.string.settings_ext_no_package, failureReason(error))) }
+        }
+    }
+
+    /** Shows the permissions an operation waits for again (the sheet could not be opened). */
+    suspend fun review() {
+        state.value.operation?.takeIf { it.state == ExtensionOperation.NeedsConsent }?.let { askConsent(it) }
+    }
+
+    /** A failed operation again, from where it can. */
+    suspend fun retry(): Boolean {
+        val op = state.value.operation?.takeIf { it.failed && it.retryable } ?: return false
+        if (state.value.acting) return false
+        mutable.update { it.copy(acting = true, actionError = null) }
+        return try { track(api.retryOperation(op.id)); true }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_op_not_retried, failureReason(error))) }
+            false
+        } finally { mutable.update { it.copy(acting = false) } }
+    }
+
+    /** Stops one that downloads or checks (the hub then says it is canceled), or puts away one that failed. */
+    suspend fun closeOperation() {
+        val op = state.value.operation ?: return
+        if (!op.active) mutable.update { it.copy(operation = null) }
+        try { api.cancelOperation(op.id) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            if (op.active) mutable.update { it.copy(actionError = failureReason(error)) }
+        }
+    }
 
     suspend fun load() {
         if (state.value.loading) return
@@ -186,8 +288,8 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
         if (state.value.busy) return false
         mutable.update { it.copy(previewing = true, actionError = null) }
         return try {
-            val preview = api.previewFromMarket(market, id)
-            mutable.update { it.copy(preview = preview) }
+            if (stepped()) track(api.startFromMarket(market, id))
+            else mutable.update { it.copy(preview = api.previewFromMarket(market, id)) }
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
@@ -196,13 +298,31 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
         } finally { mutable.update { it.copy(previewing = false) } }
     }
 
-    fun dismissPreview() = mutable.update { it.copy(preview = null) }
+    /** The user said no: an operation waiting for the yes is canceled. */
+    suspend fun dismissPreview() {
+        val waiting = state.value.consentFor
+        mutable.update { it.copy(preview = null, consentFor = null, operation = if (waiting != null) null else it.operation) }
+        if (waiting != null) try { api.cancelOperation(waiting) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {}
+    }
 
-    /** The user agreed: installs or upgrades with the preview's permissions. Returns what to tell them, or null. */
+    /**
+     * The user agreed: installs or upgrades with the preview's permissions. Returns what to tell them, or null (an
+     * operation says it when it ends).
+     */
     suspend fun confirm(): String? {
         val preview = state.value.preview ?: return null
         if (state.value.acting || !preview.canConfirm) return null
         mutable.update { it.copy(acting = true, actionError = null) }
+        if (state.value.consentFor != null) return try {
+            val op = api.agree(preview, if (preview.upgrade) id else null)
+            mutable.update { it.copy(preview = null) }
+            track(op)
+            null
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            mutable.update { it.copy(preview = null, consentFor = null, actionError = res.getString(if (preview.upgrade) R.string.settings_ext_not_upgraded else R.string.settings_ext_not_installed, failureReason(error))) }
+            null
+        } finally { mutable.update { it.copy(acting = false) } }
         return try {
             val detail = if (preview.upgrade) api.upgrade(id, preview) else api.install(preview)
             mutable.update { it.copy(preview = null, acting = false) }
@@ -215,10 +335,15 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
         } finally { mutable.update { it.copy(acting = false) } }
     }
 
+    /** Removes it; true when it is gone now. In steps it returns false at once and says it when it ends. */
     suspend fun uninstall(keepData: Boolean): Boolean {
         if (state.value.busy) return false
         mutable.update { it.copy(acting = true, actionError = null) }
         return try {
+            if (stepped()) {
+                track(api.startUninstall(id, keepData))
+                return false
+            }
             api.uninstall(id, keepData)
             mutable.update { it.copy(acting = false) }
             load()

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An extension's install, upgrade or removal in steps (docs/protocol.md「扩展的安装、升级、卸载进度」, #3277); 简体中文. -->
+<resources>
+    <string name="settings_ext_op_title">安装进度</string>
+    <string name="settings_ext_op_title_upgrade">升级进度</string>
+    <string name="settings_ext_op_title_uninstall">卸载进度</string>
+    <string name="settings_ext_op_step_download">下载</string>
+    <string name="settings_ext_op_step_verify">校验</string>
+    <string name="settings_ext_op_step_unpack">解包</string>
+    <string name="settings_ext_op_step_check">检查</string>
+    <string name="settings_ext_op_step_consent">等你同意</string>
+    <string name="settings_ext_op_step_install">安装</string>
+    <string name="settings_ext_op_step_upgrade">升级</string>
+    <string name="settings_ext_op_step_start">启动</string>
+    <string name="settings_ext_op_step_nodes">同步到电脑</string>
+    <string name="settings_ext_op_step_stop">停止</string>
+    <string name="settings_ext_op_step_remove">删除</string>
+    <string name="settings_ext_op_cached">用本机缓存</string>
+    <string name="settings_ext_op_bytes_of">%1$s / %2$s</string>
+    <string name="settings_ext_op_machines">%1$d / %2$d 台</string>
+    <string name="settings_ext_op_needs_consent">等你确认权限</string>
+    <string name="settings_ext_op_failed_at">卡在「%1$s」</string>
+    <string name="settings_ext_op_canceled">已取消</string>
+    <string name="settings_ext_op_starting">准备中…</string>
+    <string name="settings_ext_op_running">%1$s…</string>
+    <string name="settings_ext_op_progress">%1$d / %2$d</string>
+    <string name="settings_ext_op_error">原因：%1$s</string>
+    <string name="settings_ext_op_machine_error">%1$s：%2$s</string>
+    <string name="settings_ext_op_retry">重试</string>
+    <string name="settings_ext_op_dismiss">关闭</string>
+    <string name="settings_ext_op_cancel">取消</string>
+    <string name="settings_ext_op_review">查看权限</string>
+    <string name="settings_ext_op_not_retried">没能重试：%1$s</string>
+    <string name="settings_ext_op_installed">已安装 %1$s</string>
+    <string name="settings_ext_op_step_done">完成</string>
+    <string name="settings_ext_op_step_failed">失败</string>
+</resources>

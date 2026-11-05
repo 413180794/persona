@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import persona.core.contracts.api.CatalogExtension
 import persona.core.contracts.api.ExtensionManagement
 import persona.core.contracts.api.ExtensionMarket
+import persona.core.contracts.api.ExtensionOperation
 import persona.core.contracts.api.ExtensionPermission
 import persona.core.contracts.api.ExtensionPreview
 import persona.core.designsystem.*
@@ -149,19 +150,26 @@ fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, ext
     val feedback = LocalAppFeedback.current
     var removing by remember { mutableStateOf(false) }
     LaunchedEffect(model) { model.load() }
+    // In steps (a hub with extension_operations): the hub's pushes, and the one going on when the page opens again.
+    LaunchedEffect(model) { model.watch { feedback?.notice(it) } }
     val extension = state.extension
     val actions = extension?.let(CatalogText::actions).orEmpty()
+    val op = state.operation
+    // While one goes on the button says which step it is at.
+    val going = state.previewing || op?.active == true
+    val goingText = op?.takeIf { it.active }?.let { OperationText.line(res, it) } ?: stringResource(R.string.settings_ext_downloading)
     JListPage(title = extension?.label ?: stringResource(R.string.settings_ext_title), onBack = onBack, largeTitle = false,
         refreshing = state.loading && extension != null, onRefresh = { scope.launch { model.load() } },
         bottomBar = if (actions.isEmpty()) null else ({
             Column(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                val removal = op?.kind == "uninstall"
                 if (CatalogAction.Install in actions) JButton(stringResource(R.string.settings_ext_install), { scope.launch { model.preview() } }, Modifier.fillMaxWidth(),
-                    loading = state.previewing, loadingText = stringResource(R.string.settings_ext_downloading), enabled = !state.busy)
+                    loading = going && !removal, loadingText = goingText, enabled = !state.busy)
                 if (CatalogAction.Upgrade in actions) JButton(stringResource(R.string.settings_ext_upgrade_to, extension?.version.orEmpty()), { scope.launch { model.preview() } }, Modifier.fillMaxWidth(),
-                    loading = state.previewing, loadingText = stringResource(R.string.settings_ext_downloading), enabled = !state.busy)
+                    loading = going && !removal, loadingText = goingText, enabled = !state.busy)
                 if (CatalogAction.Uninstall in actions) JButton(stringResource(R.string.settings_ext_uninstall), { removing = true }, Modifier.fillMaxWidth(),
                     kind = JButtonKind.Destructive, size = if (actions.size > 1) JButtonSize.Small else JButtonSize.Large,
-                    loading = state.acting && state.preview == null, enabled = !state.busy)
+                    loading = state.acting && state.preview == null || op?.active == true && removal, enabled = !state.busy)
             }
         })) {
         when {
@@ -174,10 +182,13 @@ fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, ext
                 JEmptyState(stringResource(R.string.settings_ext_market_missing_title), stringResource(R.string.settings_ext_market_missing_text), icon = PhIcons.Cube)
             }
         }
-        if (extension != null) catalogExtensionBody(extension, state, res, onOpenInstalled = { onInstalled(extension.id) })
+        if (extension != null) catalogExtensionBody(extension, state, res, onOpenInstalled = { onInstalled(extension.id) },
+            operation = { op -> OperationSteps(op, busy = state.acting, modifier = Modifier.padding(top = Tokens.Space.m),
+                onRetry = { scope.launch { model.retry() } }, onClose = { scope.launch { model.closeOperation() } },
+                onReview = { scope.launch { model.review() } }) })
     }
     state.preview?.let { preview ->
-        PreviewSheet(extension, preview, busy = state.acting, onDismiss = model::dismissPreview,
+        PreviewSheet(extension, preview, busy = state.acting, onDismiss = { scope.launch { model.dismissPreview() } },
             onConfirm = { scope.launch { model.confirm()?.let { feedback?.notice(it) } } })
     }
     if (removing && extension != null) UninstallDialog(extension.label, onDismiss = { removing = false }) { keep ->
@@ -186,7 +197,10 @@ fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, ext
     }
 }
 
-private fun LazyListScope.catalogExtensionBody(extension: CatalogExtension, state: CatalogExtensionState, res: Resources, onOpenInstalled: () -> Unit) {
+private fun LazyListScope.catalogExtensionBody(
+    extension: CatalogExtension, state: CatalogExtensionState, res: Resources, onOpenInstalled: () -> Unit,
+    operation: @Composable (ExtensionOperation) -> Unit,
+) {
     item("header") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) {
             // Why it cannot be installed is said in red below; the header keeps to the version.
@@ -195,6 +209,7 @@ private fun LazyListScope.catalogExtensionBody(extension: CatalogExtension, stat
                 trailing = CatalogText.badge(res, extension)?.let { badge -> { JTag(badge, standingTone(extension)) } })
         }
     }
+    state.operation?.let { op -> item("operation") { operation(op) } }
     extension.description?.takeIf { it.isNotBlank() }?.let { item("description") { Note(it) } }
     extension.tags.orEmpty().takeIf { it.isNotEmpty() }?.let { tags -> item("tags") { Tags(tags) } }
     state.actionError?.let { error -> item("action-error") { JInlineStatus(error, Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed) } }

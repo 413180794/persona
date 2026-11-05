@@ -5,6 +5,9 @@ package persona.core.contracts.api
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.Serializable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * 扩展市场 (docs/extensions.md「扩展市场」): indexes of extensions the hub has registered; a full device browses them,
@@ -48,7 +51,39 @@ interface ExtensionMarkets {
     /** `PUT /api/v1/extensions/-/upgrades`: turns it on or off; the hub's answer. */
     suspend fun setAutoUpgrades(auto: Boolean): Boolean =
         throw UnsupportedOperationException("Auto-upgrades unsupported by this hub")
+
+    // ---- in steps (docs/protocol.md「扩展的安装、升级、卸载进度」): only with a hub that says `extension_operations`;
+    // an older one keeps the calls above.
+
+    /** The selected hub runs installs as operations. */
+    val operationsAvailable: Flow<Boolean> get() = flowOf(false)
+
+    /** Each `extension_operation` the hub pushes; null after each hello: what was missed is listed again. */
+    val operationUpdates: Flow<ExtensionOperation?> get() = emptyFlow()
+
+    /** `POST …/-/catalog/preview` with `async`: downloads and checks it in the background; the operation, at its first step. */
+    suspend fun startFromMarket(market: String, extension: String): ExtensionOperation = unsupported()
+
+    /** The user agreed to an operation's preview: `POST …/-/install` (or `{upgradeOf}/-/upgrade`) with `async`, the same operation goes on. */
+    suspend fun agree(preview: ExtensionPreview, upgradeOf: String? = null): ExtensionOperation = unsupported()
+
+    /** `DELETE …/{id}/-/?async=1`. */
+    suspend fun startUninstall(id: String, keepData: Boolean = true): ExtensionOperation = unsupported()
+
+    /** `GET …/-/operations`: those going on and those ended in the last minutes. */
+    suspend fun operations(): List<ExtensionOperation> = emptyList()
+
+    /** `GET …/-/operations/{id}`: with its preview while it waits for consent. */
+    suspend fun operation(id: String): ExtensionOperation = unsupported()
+
+    /** `POST …/-/operations/{id}/retry`: a failed one again, from where it can. */
+    suspend fun retryOperation(id: String): ExtensionOperation = unsupported()
+
+    /** `DELETE …/-/operations/{id}`: cancels one that downloads or waits for consent, forgets one that ended. */
+    suspend fun cancelOperation(id: String): Unit = unsupported()
 }
+
+private fun unsupported(): Nothing = throw UnsupportedOperationException("Extension operations unsupported by this hub")
 
 /** `GET /api/v1/extensions`: the list, and what this device may do with it. */
 data class ExtensionListing(

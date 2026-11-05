@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An extension's install, upgrade or removal in steps (docs/protocol.md「扩展的安装、升级、卸载进度」, #3277); English is the fallback. -->
+<resources>
+    <string name="settings_ext_op_title">Install progress</string>
+    <string name="settings_ext_op_title_upgrade">Upgrade progress</string>
+    <string name="settings_ext_op_title_uninstall">Removal progress</string>
+    <string name="settings_ext_op_step_download">Download</string>
+    <string name="settings_ext_op_step_verify">Verify</string>
+    <string name="settings_ext_op_step_unpack">Unpack</string>
+    <string name="settings_ext_op_step_check">Check</string>
+    <string name="settings_ext_op_step_consent">Your consent</string>
+    <string name="settings_ext_op_step_install">Install</string>
+    <string name="settings_ext_op_step_upgrade">Upgrade</string>
+    <string name="settings_ext_op_step_start">Start</string>
+    <string name="settings_ext_op_step_nodes">Sync to computers</string>
+    <string name="settings_ext_op_step_stop">Stop</string>
+    <string name="settings_ext_op_step_remove">Remove</string>
+    <string name="settings_ext_op_cached">From the local cache</string>
+    <string name="settings_ext_op_bytes_of">%1$s / %2$s</string>
+    <string name="settings_ext_op_machines">%1$d / %2$d computers</string>
+    <string name="settings_ext_op_needs_consent">Waiting for you to confirm permissions</string>
+    <string name="settings_ext_op_failed_at">Stuck at “%1$s”</string>
+    <string name="settings_ext_op_canceled">Canceled</string>
+    <string name="settings_ext_op_starting">Getting ready…</string>
+    <string name="settings_ext_op_running">%1$s…</string>
+    <string name="settings_ext_op_progress">%1$d / %2$d</string>
+    <string name="settings_ext_op_error">Reason: %1$s</string>
+    <string name="settings_ext_op_machine_error">%1$s: %2$s</string>
+    <string name="settings_ext_op_retry">Retry</string>
+    <string name="settings_ext_op_dismiss">Close</string>
+    <string name="settings_ext_op_cancel">Cancel</string>
+    <string name="settings_ext_op_review">Review permissions</string>
+    <string name="settings_ext_op_not_retried">Could not retry: %1$s</string>
+    <string name="settings_ext_op_installed">Installed %1$s</string>
+    <string name="settings_ext_op_step_done">Done</string>
+    <string name="settings_ext_op_step_failed">Failed</string>
+</resources>

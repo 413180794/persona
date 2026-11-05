@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An extension's install, upgrade or removal in steps (docs/protocol.md「扩展的安装、升级、卸载进度」, #3277); 日本語. -->
+<resources>
+    <string name="settings_ext_op_title">インストールの進み具合</string>
+    <string name="settings_ext_op_title_upgrade">アップグレードの進み具合</string>
+    <string name="settings_ext_op_title_uninstall">アンインストールの進み具合</string>
+    <string name="settings_ext_op_step_download">ダウンロード</string>
+    <string name="settings_ext_op_step_verify">検証</string>
+    <string name="settings_ext_op_step_unpack">展開</string>
+    <string name="settings_ext_op_step_check">チェック</string>
+    <string name="settings_ext_op_step_consent">あなたの同意</string>
+    <string name="settings_ext_op_step_install">インストール</string>
+    <string name="settings_ext_op_step_upgrade">アップグレード</string>
+    <string name="settings_ext_op_step_start">起動</string>
+    <string name="settings_ext_op_step_nodes">コンピュータに同期</string>
+    <string name="settings_ext_op_step_stop">停止</string>
+    <string name="settings_ext_op_step_remove">削除</string>
+    <string name="settings_ext_op_cached">ローカルのキャッシュ</string>
+    <string name="settings_ext_op_bytes_of">%1$s / %2$s</string>
+    <string name="settings_ext_op_machines">%1$d / %2$d 台</string>
+    <string name="settings_ext_op_needs_consent">権限の確認を待っています</string>
+    <string name="settings_ext_op_failed_at">「%1$s」で止まりました</string>
+    <string name="settings_ext_op_canceled">キャンセルしました</string>
+    <string name="settings_ext_op_starting">準備中…</string>
+    <string name="settings_ext_op_running">%1$s…</string>
+    <string name="settings_ext_op_progress">%1$d / %2$d</string>
+    <string name="settings_ext_op_error">理由：%1$s</string>
+    <string name="settings_ext_op_machine_error">%1$s：%2$s</string>
+    <string name="settings_ext_op_retry">再試行</string>
+    <string name="settings_ext_op_dismiss">閉じる</string>
+    <string name="settings_ext_op_cancel">キャンセル</string>
+    <string name="settings_ext_op_review">権限を確認</string>
+    <string name="settings_ext_op_not_retried">再試行できませんでした：%1$s</string>
+    <string name="settings_ext_op_installed">%1$s をインストールしました</string>
+    <string name="settings_ext_op_step_done">完了</string>
+    <string name="settings_ext_op_step_failed">失敗</string>
+</resources>

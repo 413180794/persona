@@ -9,6 +9,8 @@ import dagger.hilt.components.SingletonComponent
 import persona.core.contracts.GroupKeys
 import persona.core.contracts.HubUpdateEvent
 import persona.core.contracts.ExtensionUiEvent
+import persona.core.contracts.ExtensionOperationEvent
+import persona.core.contracts.Hello
 import persona.core.contracts.api.*
 import persona.core.hub.HttpConnectorsManagement
 import persona.core.hub.HttpHubUpdates
@@ -30,6 +32,8 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.transform
 import kotlinx.serialization.json.JsonObject
 import javax.inject.Singleton
 
@@ -98,7 +102,15 @@ object MachineManagementModule {
         // a newer one under both.
         private fun api() = runtime.connection().let { HttpExtensionManagement(it, available, legacy = "extensions" !in it.serverFeatures.value) }
         private val updates = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-        override val changes: Flow<Unit> = updates
+        // Installs in steps (docs/protocol.md「扩展的安装、升级、卸载进度」): the hub's pushes, and each hello (null: list
+        // them again, what was missed is not replayed).
+        override val operationsAvailable: Flow<Boolean> = features.map { "extension_operations" in it }.distinctUntilChanged()
+        override val operationUpdates: Flow<ExtensionOperation?> = (application as PersonaApp).hub
+            .flatMapLatest { hub -> hub?.connection?.events ?: emptyFlow() }
+            .transform { event -> if (event is Hello) emit(null) else if (event is ExtensionOperationEvent) emit(event.operation) }
+        // One that ended well changed the list as a synchronous call would have.
+        override val changes: Flow<Unit> = kotlinx.coroutines.flow.merge(updates,
+            operationUpdates.filter { it?.state == ExtensionOperation.Succeeded }.map { })
         private suspend fun <T> changed(block: suspend () -> T): T = block().also { updates.tryEmit(Unit) }
         override suspend fun quickPrompts() = api().quickPrompts()
         override suspend fun themes() = api().themes()
@@ -128,6 +140,13 @@ object MachineManagementModule {
         override suspend fun install(preview: ExtensionPreview) = changed { api().install(preview) }
         override suspend fun upgrade(id: String, preview: ExtensionPreview) = changed { api().upgrade(id, preview) }
         override suspend fun uninstall(id: String, keepData: Boolean) = changed { api().uninstall(id, keepData) }
+        override suspend fun startFromMarket(market: String, extension: String) = api().startFromMarket(market, extension)
+        override suspend fun agree(preview: ExtensionPreview, upgradeOf: String?) = api().agree(preview, upgradeOf)
+        override suspend fun startUninstall(id: String, keepData: Boolean) = api().startUninstall(id, keepData)
+        override suspend fun operations() = api().operations()
+        override suspend fun operation(id: String) = api().operation(id)
+        override suspend fun retryOperation(id: String) = api().retryOperation(id)
+        override suspend fun cancelOperation(id: String) = api().cancelOperation(id)
     }
 
     // 设置 › hub 版本 (docs/hub-update.md「App 里」): the selected group's hub, following its `hub_update` pushes.

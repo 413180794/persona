@@ -8,6 +8,7 @@ import persona.core.contracts.api.ExtensionDetail
 import persona.core.contracts.api.ExtensionListing
 import persona.core.contracts.api.ExtensionManagement
 import persona.core.contracts.api.ExtensionMarket
+import persona.core.contracts.api.ExtensionOperation
 import persona.core.contracts.api.ExtensionPreview
 import persona.core.contracts.api.ExtensionUiContext
 import persona.core.contracts.api.ExtensionUiForbidden
@@ -207,6 +208,38 @@ class HttpExtensionManagement internal constructor(
         call(path(id, "-", "") + if (keepData) "?keep_data=1" else "", "DELETE")
     }
 
+    // ---- in steps (docs/protocol.md「扩展的安装、升级、卸载进度」): 202 `{operation}`
+
+    override suspend fun startFromMarket(market: String, extension: String): ExtensionOperation =
+        accepted(call(hubPath("catalog", "preview"), "POST", buildJsonObject {
+            put("market", market); put("extension", extension); put("async", true)
+        }))
+
+    override suspend fun agree(preview: ExtensionPreview, upgradeOf: String?): ExtensionOperation {
+        val body = JsonObject(agreed(preview) + ("async" to JsonPrimitive(true)))
+        return accepted(call(if (upgradeOf != null) path(upgradeOf, "-", "upgrade") else hubPath("install"), "POST", body))
+    }
+
+    override suspend fun startUninstall(id: String, keepData: Boolean): ExtensionOperation =
+        accepted(call(path(id, "-", "") + if (keepData) "?async=1&keep_data=1" else "?async=1", "DELETE"))
+
+    override suspend fun operations(): List<ExtensionOperation> {
+        val list = (parse(call(hubPath("operations"), "GET")) as? JsonObject)?.get("operations") as? JsonArray ?: return emptyList()
+        return decode { JsonCodec.decodeFromJsonElement(ListSerializer(ExtensionOperation.serializer()), list) }
+    }
+
+    override suspend fun operation(id: String): ExtensionOperation = read(call(hubPath("operations", opId(id)), "GET"), ExtensionOperation.serializer())
+
+    override suspend fun retryOperation(id: String): ExtensionOperation =
+        accepted(call(hubPath("operations", opId(id), "retry"), "POST", JsonObject(emptyMap())))
+
+    override suspend fun cancelOperation(id: String) { call(hubPath("operations", opId(id)), "DELETE") }
+
+    private fun accepted(body: String): ExtensionOperation {
+        val op = (parse(body) as? JsonObject)?.get("operation") ?: throw HubFailure(HubError.Protocol)
+        return decode { JsonCodec.decodeFromJsonElement(ExtensionOperation.serializer(), op) }
+    }
+
     // ---- auto-upgrades (docs/extensions.md「自动升级」)
 
     override suspend fun setAutoUpgrade(id: String, auto: Boolean) =
@@ -280,6 +313,9 @@ class HttpExtensionManagement internal constructor(
     // Market and UI ids come from the hub; anything else must not become a path.
     private fun id(value: String): String = value.also { require(it.matches(ExtensionId)) { "Invalid id" } }
 
+    // Operation ids come from the hub (`op-…`); anything else must not become a path.
+    private fun opId(value: String): String = value.also { require(it.matches(OperationId)) { "Invalid operation id" } }
+
     // Secret names come from the extension's manifest; anything else must not become a path ("..").
     private fun secret(name: String): String = name.also { require(it.matches(SecretName)) { "Invalid secret name" } }
 
@@ -299,6 +335,7 @@ class HttpExtensionManagement internal constructor(
         private val json = "application/json; charset=utf-8".toMediaType()
         private val ExtensionId = Regex("[A-Za-z0-9_-]{1,64}")
         private val ContributionPoint = Regex("[a-z][a-z0-9_-]{0,63}(?:\\.[a-z][a-z0-9_-]{0,63})?")
+        private val OperationId = Regex("[A-Za-z0-9_.-]{1,128}")
         private val SecretName = Regex("[A-Za-z][A-Za-z0-9_]{0,63}")
     }
 }
