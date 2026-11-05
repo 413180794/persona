@@ -69,15 +69,18 @@ func (m chanMutex) TryLock() bool {
 	}
 }
 
-// claimChannelMessage: the first time channel id's message is seen.
-func (s *Service) claimChannelMessage(id, msg string) bool {
+// claimChannelMessage: the first time channel id's message is seen; an error while the messages seen can't be read.
+func (s *Service) claimChannelMessage(id, msg string) (bool, error) {
 	c := &s.chans
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	s.loadChannelStateLocked(context.Background())
+	if !c.stLoaded {
+		return false, errChannelsUnread
+	}
 	seen := c.st.Seen[id]
 	if msg == "" || slices.Contains(seen, msg) {
-		return false
+		return false, nil
 	}
 	seen = append(seen, msg)
 	if len(seen) > channelSeenKeep {
@@ -85,8 +88,10 @@ func (s *Service) claimChannelMessage(id, msg string) bool {
 	}
 	c.st.Seen[id] = seen
 	s.saveChannelStateLocked()
-	return true
+	return true, nil
 }
+
+var errChannelsUnread = errors.New("the channels' state could not be read")
 
 // sinkFor is how channel id's runs reach it: nil when it has gone (a plugin uninstalled), an error when that can't be
 // told now (the hub could not be asked).

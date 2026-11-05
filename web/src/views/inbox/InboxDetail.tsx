@@ -1,4 +1,4 @@
-// One item opened: what it is and where from, 已处理 on the right; the AI's summary with AI 草拟回复 / 交给 AI; then
+// One item opened: what it is and where from, 已处理 on the right; the AI's summary, its 线索 (InboxLine), AI 草拟回复 / 交给 AI; then
 // the thing itself — the Feishu chat at its first new message, the mail, the document's rows, the 公司圈 post — or,
 // when the extension whose connector brought the item in draws its page (inbox_item), the extension's View.
 import { useEffect, useState } from "react";
@@ -13,6 +13,7 @@ import { DocBody, MailBody, MomentBody } from "./InboxBodies";
 import { DraftDialog, HandOffDialog } from "./InboxDialogs";
 import { AgentWorking, ItemAvatar, Spark, Tag } from "./InboxParts";
 import { InboxExtensionBody } from "./InboxExtensionBody";
+import { InboxLine } from "./InboxLine";
 import { chatOfItem, LarkThread } from "./LarkThread";
 
 export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
@@ -76,6 +77,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
               {item.summary}
             </p>
           )}
+          <InboxLine item={item} />
           {!done && agentWorking(item) && <div className="mt-2"><AgentWorking it={item} /></div>}
           <div className="mt-3 flex flex-wrap gap-2">
             {canDraft(item) ? (

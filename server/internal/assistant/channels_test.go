@@ -353,3 +353,74 @@ func TestFoldedRunAnswer(t *testing.T) {
 		t.Errorf("one message: %q (as before: the last words)", texts(got))
 	}
 }
+
+// A failed read of the channels' settings, their runs or the Feishu chat's state used to leave an empty copy in
+// memory that the next change wrote over the stored one (every other channel's settings, the runs waiting, the chat's
+// target, threads and pairing), and the first message after it wrote into a nil map: a panic that took the assistant
+// down. Now nothing is written until a read succeeds, and a message is handed back to the hub to try again.
+func TestChannelsReadFailureNeverOverwrites(t *testing.T) {
+	ctx := context.Background()
+	store := &flakyScheduleStore{data: map[string][]byte{}}
+	_ = store.PutSetting(ctx, channelsKey, map[string]*channelPrefs{"telegram": {Features: map[string]bool{"asks": false}}})
+	_ = store.PutSetting(ctx, channelsStateKey, channelsState{Runs: []*channel.Run{{ID: "wechat_x_m0", Channel: "wechat_x"}},
+		Seen: map[string][]string{"wechat_x": {"m0"}}})
+	pairing := "ou_example"
+	_ = store.PutSetting(ctx, botStateKey, botState{Current: botTarget{Kind: targetMain}, Pairing: &pairing,
+		Threads: map[string]*botThread{"om_old": {Target: botTarget{Kind: targetMain}}}})
+	before := map[string]string{}
+	for k, v := range store.data {
+		before[k] = string(v)
+	}
+	store.puts, store.failRead = 0, true
+	h := newServiceOn(t, newFakeHub(), store)
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("panicked while the state could not be read: %v", r)
+			}
+		}()
+		err := h.ChannelReceive(ctx, ChannelReceive{Channel: "wechat_x", Message: []byte(`{"id":"m1","text":"示例"}`)})
+		var re *rpc.Error
+		if !errors.As(err, &re) || re.Code != CodeTryAgain {
+			t.Fatalf("channels.receive while unreadable: %v, want %s", err, CodeTryAgain)
+		}
+		if first, err := h.claimBotMessage("om_new"); first || err == nil {
+			t.Fatalf("a Feishu message while unreadable: first %v, err %v", first, err)
+		}
+		h.rememberBotThread("om_bot", botTarget{Kind: targetMain}, "示例")
+		h.setBotCurrent(botTarget{Kind: targetAgent, MachineID: "server", SessionID: "s2"})
+		h.noteChannelConversation("wechat_x", "server", "s1")
+		h.startChannelRun(&channel.Run{ID: "wechat_x_m2", Channel: "wechat_x", MachineID: "server", SessionID: "s1"})
+	}()
+	if store.puts != 0 {
+		t.Fatalf("%d writes while the state could not be read", store.puts)
+	}
+	for k, v := range store.data {
+		if before[k] != string(v) {
+			t.Fatalf("%s changed while unreadable:\n before %s\n after  %s", k, before[k], v)
+		}
+	}
+
+	// Readable again: what was stored is what is read, and a message is taken once.
+	store.failRead = false
+	if err := h.ChannelReceive(ctx, ChannelReceive{Channel: "wechat_x", Message: []byte(`{"id":"m0","text":"示例"}`)}); err != nil {
+		t.Fatalf("a message seen before: %v", err)
+	}
+	if first, err := h.claimChannelMessage("wechat_x", "m3"); !first || err != nil {
+		t.Fatalf("a new message: first %v, err %v", first, err)
+	}
+	var prefs map[string]*channelPrefs
+	_, _ = store.Setting(ctx, channelsKey, &prefs)
+	if prefs["telegram"] == nil {
+		t.Fatalf("the channels' settings: %s", store.data[channelsKey])
+	}
+	if first, err := h.claimBotMessage("om_new"); !first || err != nil {
+		t.Fatalf("a Feishu message once readable: first %v, err %v", first, err)
+	}
+	var bot botState
+	_, _ = store.Setting(ctx, botStateKey, &bot)
+	if bot.Pairing == nil || *bot.Pairing != pairing || bot.Threads["om_old"] == nil {
+		t.Fatalf("the chat's state: %s", store.data[botStateKey])
+	}
+}

@@ -105,6 +105,33 @@ export interface InboxItem {
   agent?: InboxAgent;
   /** New foreign mail translated by the hub as it came in (for a device whose 设置 › 翻译 asks), by target language. */
   translations?: Record<string, { subject: string; preview: string }>;
+  /** What it grew out of (docs/inbox.md「线索」): another item, a todo or an agent session ("<machine>/<session>"). */
+  parent?: InboxParent;
+}
+
+export type InboxParentKind = "inbox" | "todo" | "session";
+export interface InboxParent { kind: InboxParentKind; id: string; by?: "continues" | "connector" | "user" }
+
+/** GET /api/v1/inbox/tree/{kind}/{id}: the node's ancestors (nearest first; the last may be a todo or a session,
+ * with no item) and the items right under it. */
+export interface InboxTree {
+  node: InboxParent;
+  item?: InboxItem;
+  ancestors: (InboxParent & { item?: InboxItem })[];
+  children: InboxItem[];
+}
+
+export function fetchInboxTree(kind: InboxParentKind, id: string): Promise<InboxTree> {
+  const path = kind === "session" ? id.split("/").map(enc).join("/") : enc(id).replace(/%3A/gi, ":");
+  return api<InboxTree>(`/inbox/tree/${kind}/${path}`);
+}
+
+/** Where a node of a line opens. */
+export function parentRoute(p: InboxParent): Route | undefined {
+  if (p.kind === "inbox") return { name: "inbox", id: p.id };
+  if (p.kind === "todo") return { name: "todos", id: p.id };
+  const i = p.id.indexOf("/");
+  return i > 0 && i < p.id.length - 1 ? { name: "session", mid: p.id.slice(0, i), sid: p.id.slice(i + 1) } : undefined;
 }
 
 export interface InboxConnector {

@@ -106,9 +106,11 @@ func (s *Service) loadChannelsLocked(ctx context.Context) {
 	c.loaded = true
 }
 
+// saveChannelsLocked writes the settings, once they were read: saving what is in memory after a failed read would
+// write one channel's settings over every other's.
 func (s *Service) saveChannelsLocked() {
 	st := s.store()
-	if st == nil {
+	if st == nil || !s.chans.loaded {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -158,9 +160,10 @@ func (s *Service) loadChannelStateLocked(ctx context.Context) {
 	}
 }
 
+// saveChannelStateLocked writes the runs, asks and seen messages, once they were read (the same as the settings).
 func (s *Service) saveChannelStateLocked() {
 	st := s.store()
-	if st == nil {
+	if st == nil || !s.chans.stLoaded {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -593,7 +596,11 @@ func (s *Service) ChannelReceive(_ context.Context, p ChannelReceive) error {
 	if m.ID == "" {
 		return badRequest(errors.New("a message without an id"))
 	}
-	if !s.claimChannelMessage(p.Channel, m.ID) {
+	first, err := s.claimChannelMessage(p.Channel, m.ID)
+	if err != nil {
+		return &rpc.Error{Code: CodeTryAgain, Message: err.Error()} // the hub hands it over again
+	}
+	if !first {
 		return nil // delivered again
 	}
 	go s.channelReceive(p.Channel, m, p.Action)

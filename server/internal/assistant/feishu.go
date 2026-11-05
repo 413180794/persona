@@ -115,8 +115,13 @@ func (s *Service) loadBotLocked(ctx context.Context) {
 	}
 }
 
+// saveBotStateLocked writes the chat's state, once it was read: what is in memory after a failed read would be
+// written over the stored target, threads and pairing.
 func (s *Service) saveBotStateLocked() {
 	b := &s.fbot
+	if !b.loaded {
+		return
+	}
 	if len(b.st.Seen) > botSeenKeep {
 		b.st.Seen = b.st.Seen[len(b.st.Seen)-botSeenKeep:]
 	}
@@ -270,19 +275,25 @@ func (s *Service) botName(ctx context.Context, openID string) string {
 
 // ---- the chat's state ----
 
-// claimBotMessage: the first time this message is taken (Feishu delivers again what it thinks was missed).
-func (s *Service) claimBotMessage(id string) bool {
+// claimBotMessage: the first time this message is taken (Feishu delivers again what it thinks was missed); an error
+// while the chat's state can't be read.
+func (s *Service) claimBotMessage(id string) (bool, error) {
 	b := &s.fbot
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	s.loadBotLocked(context.Background())
+	if !b.loaded {
+		return false, errBotUnread
+	}
 	if id == "" || containsString(b.st.Seen, id) {
-		return false
+		return false, nil
 	}
 	b.st.Seen = append(b.st.Seen, id)
 	s.saveBotStateLocked()
-	return true
+	return true, nil
 }
+
+var errBotUnread = errors.New("the chat's state could not be read")
 
 func containsString(list []string, s string) bool {
 	for _, x := range list {
@@ -326,6 +337,9 @@ func (s *Service) rememberBotThread(messageID string, t botTarget, title string)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	s.loadBotLocked(context.Background())
+	if !b.loaded {
+		return // its threads could not be read: nothing to add to
+	}
 	b.st.Threads[messageID] = &botThread{Target: t, Title: title, At: b.clock().UTC()}
 	s.saveBotStateLocked()
 }
@@ -529,7 +543,11 @@ func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 	if err != nil {
 		return &rpc.Error{Code: CodeTryAgain, Message: "the bot's status: " + err.Error()}
 	}
-	if !s.claimBotMessage(ev.Message.MessageID) {
+	first, err := s.claimBotMessage(ev.Message.MessageID)
+	if err != nil {
+		return &rpc.Error{Code: CodeTryAgain, Message: err.Error()}
+	}
+	if !first {
 		return nil // redelivered, or handed over again after a call that was cut off
 	}
 	go s.feishuMessage(ev, st)
