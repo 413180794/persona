@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 设置 › 扩展 › 渠道 (docs/channels.md「界面」): every way of talking to Persona in three sections — Persona's own
+ * 设置 › 渠道 (docs/channels.md「界面」): every way of talking to Persona in three sections — Persona's own
  * apps, the ones installed (connected or not), and the ones an extension market offers (opening the market's page).
  */
 @Composable
@@ -89,7 +89,7 @@ internal fun ChannelsPage(
     }
 }
 
-/** 设置's 渠道 row, under 扩展: how many are connected, in the danger colour with the broken ones when any went wrong. */
+/** Settings' standalone channel row: connected count, or broken channels in the danger colour. */
 @Composable
 internal fun ChannelsSettingsRow(list: List<HubChannel>?, position: GroupPosition, selected: Boolean, onClick: () -> Unit) {
     val summary = ChannelText.listSummary(list)
@@ -110,7 +110,7 @@ private fun ChannelStateMark(channel: HubChannel) =
 private fun ChannelNote(text: String) = SettingsCaption(text, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
 
 /**
- * 设置 › 扩展 › 渠道 › one: how it is doing; its switch; binding it (a step at a time: fields, a QR code to scan, a
+ * 设置 › 渠道 › one: how it is doing; its switch; binding it (a step at a time: fields, a QR code to scan, a
  * code to send to the bot) or undoing that; where its messages go; its features; a test message; and its own fuller
  * page when Android has one ([onOpen]). Persona's own apps, /agent in Feishu and voice are set up elsewhere: only shown.
  */

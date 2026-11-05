@@ -336,7 +336,7 @@ function SignInSteps({ c, reload, footer }: { c: HubConnector; reload: () => Pro
     live.current = true; // again after StrictMode's extra unmount in development
     return () => void (live.current = false);
   }, []);
-  // Also a channel (WeChat): a step this page cannot draw can be done in 设置 › 扩展 › 渠道 instead.
+  // Also a channel (WeChat): a step this page cannot draw can be done in 设置 › 渠道 instead.
   const isChannel = useChannels().some((x) => x.id === c.id);
 
   /** True when signing in is done. */
@@ -440,7 +440,7 @@ export function SignInStep({ name, prompt, values, busy, isChannel, onChange, on
       ) : view === "qr_link" ? (
         <QRLinkStep url={prompt.url!} app={name} onCancel={onCancel} />
       ) : view === "unsupported" ? (
-        <UnsupportedStep elsewhere={isChannel ? `也可以到 设置 › 扩展 › 渠道 › ${name} 里绑定。` : undefined} onRestart={onRestart} onCancel={onCancel} />
+        <UnsupportedStep elsewhere={isChannel ? `也可以到 设置 › 渠道 › ${name} 里绑定。` : undefined} onRestart={onRestart} onCancel={onCancel} />
       ) : (
         <form
           className="flex flex-col"

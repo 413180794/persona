@@ -15,6 +15,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -35,8 +36,8 @@ import java.time.Instant
 
 /**
  * The Persona tab's history drawer drawn on the JVM with Robolectric's native graphics (no emulator), in every style,
- * light and dark: the main conversation first, as 「Persona」 with Persona's face, and 更多 without 资料页 (it is
- * 设置 › Persona). Each is checked to draw something and written as a PNG to `build/drawer-shots/` (or
+ * light and dark: the main conversation first, as 「Persona」 with Persona's face, and 更多 without 资料页.
+ * Assistant details remain available from the Persona toolbar, not settings. Each is written as a PNG to `build/drawer-shots/` (or
  * `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)
@@ -73,20 +74,30 @@ class AssistantDrawerShotsTest {
         var groups by mutableStateOf(ConversationGroups(main, listOf(pinned), recent))
         var opened: SessionKey? = null
         var mainTapped = false
+        var info: String? = null
+        var settingsTapped = false
         rule.setContent {
             PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
                 Box(Modifier.testTag("shot").width(400.dp).height(1100.dp).background(PersonaTheme.palette.background)) {
                     AssistantDrawer(PersonaState.Idle, "", {}, groups, active = null, hasMain = groups.main != null,
-                        onEnd = null, onMain = { mainTapped = true }, onOpen = { opened = it }, onInfo = {},
-                        onNew = {}, onHome = {}, onSettings = {}, onTodos = {}, todoCount = 2)
+                        onEnd = null, onMain = { mainTapped = true }, onOpen = { opened = it }, onInfo = { info = it },
+                        onNew = {}, onHome = {}, onSettings = { settingsTapped = true }, onTodos = {}, todoCount = 2)
                 }
             }
         }
         // The main conversation reads 「Persona」 (the session keeps its own title), and 资料页 is gone.
         rule.onAllNodesWithText("主对话").assertCountEquals(0)
         rule.onAllNodesWithText("资料页").assertCountEquals(0)
+        rule.onAllNodesWithText("认识 Persona").assertCountEquals(0)
+        rule.onAllNodesWithText("Persona").assertCountEquals(2) // Header and the main conversation, not an introduction.
         rule.onAllNodesWithText("Persona")[1].performClick()
         assertEquals(main.key, opened)
+        rule.onNodeWithText("启动器").performClick()
+        assertEquals("启动器", info)
+        rule.onNodeWithText("会话信息").performClick()
+        assertEquals("会话信息", info)
+        rule.onNodeWithContentDescription("设置").performClick()
+        assertTrue(settingsTapped)
         for (s in AppStyle.entries) for (d in listOf(false, true)) {
             style = s; dark = d
             capture("drawer-${s.name.lowercase()}-${if (d) "dark" else "light"}")

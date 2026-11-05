@@ -276,28 +276,24 @@ private fun SettingsContent(
             } }
             item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Notifications), title = "通知", leadingIcon = PhIcons.BellSimple, subtitle = "需要你、做完了和系统通知渠道", onClick = { open(SettingsPage.Notifications) }) } }
             item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Readiness), title = "后台保活", leadingIcon = PhIcons.BatteryCharging, subtitle = "通知、电池和系统后台设置", onClick = { open(SettingsPage.Readiness) }) } }
-            // The assistant page lives in the assistant module; only a navigation host can open it.
-            if (onOpen != null) {
-                item { JSectionHeader("助手") }
-                item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Assistant), title = "Persona", leadingIcon = PhIcons.Sparkle, subtitle = "在哪台机器上运行、关于我、记忆和时区", onClick = { open(SettingsPage.Assistant) }) } }
-            }
             item { JSectionHeader("AI") }
             item { JGroupItem(GroupPosition.of(0, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = "模型配置", leadingIcon = PhIcons.Brain, subtitle = "对话、分拣、翻译和各项 AI 功能统一选择模型", onClick = { open(SettingsPage.ModelConfig) }) } }
             item { JGroupItem(GroupPosition.of(1, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Translation), title = "翻译", leadingIcon = PhIcons.Translate, subtitle = "邮件和选中的飞书会话自动翻译", value = translationValue, onClick = { open(SettingsPage.Translation) }) } }
             item { JGroupItem(GroupPosition.of(2, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Triage), title = "会话分诊", leadingIcon = PhIcons.ListChecks, subtitle = "Agent 停下后判断做完没、在等什么", onClick = { open(SettingsPage.Triage) }) } }
-            // 扩展 shows only when the hub manages extensions (docs/extensions.md); its value says how many need the user.
-            // 渠道 right under it while the hub has channels (docs/channels.md「界面」): how many are connected, red when one went wrong.
-            val extensions = listOfNotNull("plugins".takeIf { extensionsAvailable }, "channels".takeIf { channelsAvailable })
-            if (extensions.isNotEmpty()) item { JSectionHeader("扩展") }
+            // Extension management and conversation channels are independent hub capabilities.
             if (extensionsAvailable) {
-                item { JGroupItem(GroupPosition.of(extensions.indexOf("plugins"), extensions.size)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Extensions), title = "扩展", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = extensionSummary, onClick = { open(SettingsPage.Extensions) }) } }
-            }
-            if (channelsAvailable) item {
-                ChannelsSettingsRow(channelList, GroupPosition.of(extensions.indexOf("channels"), extensions.size),
-                    selected = detailKey == SettingsPageRoute(SettingsPage.Channels), onClick = { open(SettingsPage.Channels) })
+                item { JSectionHeader("扩展") }
+                item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Extensions), title = "扩展", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = extensionSummary, onClick = { open(SettingsPage.Extensions) }) } }
             }
             item { JSectionHeader("电脑") }
             item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ClaudeCode), title = "Claude Code 设置", leadingIcon = PhIcons.TerminalWindow, subtitle = "各台电脑上的常用选项，可以一起改", onClick = { open(SettingsPage.ClaudeCode) }) } }
+            if (channelsAvailable) {
+                item { JSectionHeader("渠道") }
+                item {
+                    ChannelsSettingsRow(channelList, GroupPosition.Single,
+                        selected = detailKey == SettingsPageRoute(SettingsPage.Channels), onClick = { open(SettingsPage.Channels) })
+                }
+            }
             item { JSectionHeader("连接器") }
             val connectorRows = connectorRows(hubConnectors, lark = larkChats)
             fun connectorPosition(row: ConnectorRow) = GroupPosition.of(connectorRows.indexOf(row), connectorRows.size)

@@ -3,12 +3,8 @@ package persona.feature.settings
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -20,28 +16,42 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import persona.core.contracts.Machine
+import persona.core.contracts.ServerEvent
+import persona.core.contracts.Session
 import persona.core.contracts.api.*
 import persona.core.designsystem.*
-import persona.core.designsystem.icons.PhIcons
+import persona.core.navigation.LocalDetailKey
+import persona.core.navigation.SettingsPage
+import persona.core.navigation.SettingsPageRoute
+import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.time.Instant
 
 /**
- * 设置 › 扩展 › 渠道 drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark:
- * the 渠道 row of the settings home, the list, WeChat's page, a QR code to scan and a pairing code to send (binding a
+ * 设置 › 渠道 drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark:
+ * the real settings home, the list, WeChat's page, a QR code to scan and a pairing code to send (binding a
  * step at a time). The data is the mock hub's MOCK_CHANNELS. Each is checked to draw something and written as a PNG to
  * `build/channel-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md「渠道」).
  */
@@ -103,7 +113,7 @@ class ChannelsShotsTest {
 
     /** MOCK_CHANNELS, with [unbound] ones not bound yet so that binding them shows its steps. */
     private inner class FakeChannels(private val unbound: Set<String> = emptySet()) : ChannelManagement {
-        override val available = flowOf(true)
+        override val available = MutableStateFlow(true)
         override val conversations = flowOf(emptyList<persona.core.contracts.Session>())
         private fun of(id: String) = channels.first { it.id == id }.let {
             if (id in unbound) it.copy(state = "not_connected", account = null, lastEventAt = null) else it
@@ -144,13 +154,14 @@ class ChannelsShotsTest {
         var shot by mutableStateOf(Shot.Settings)
         // A new page (and a new model) for every picture: binding starts from its first step each time.
         var run by mutableIntStateOf(0)
+        val services = settingsServices(FakeChannels())
         rule.setContent {
             PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
                 key(run) {
-                    Box(Modifier.testTag("shot").width(400.dp).then(if (shot == Shot.Settings) Modifier else Modifier.height(if (shot == Shot.WeChat) 2050.dp else 1500.dp))
+                    Box(Modifier.testTag("shot").width(400.dp).height(if (shot == Shot.Settings || shot == Shot.WeChat) 2050.dp else 1500.dp)
                         .background(PersonaTheme.palette.background)) {
                         when (shot) {
-                            Shot.Settings -> SettingsRows()
+                            Shot.Settings -> SettingsScreen(services, onOpen = {})
                             Shot.List -> ChannelsPage(FakeChannels(), onBack = {}, onChannel = {}, onMarketExtension = { _, _ -> })
                             Shot.WeChat -> ChannelPage(FakeChannels(), "wechat", onBack = {}, onOpen = {})
                             Shot.Qr -> ChannelPage(FakeChannels(setOf("wechat")), "wechat", onBack = {}, onOpen = {})
@@ -167,6 +178,7 @@ class ChannelsShotsTest {
                 shot = next; run++
                 rule.waitForIdle()
                 when (next) {
+                    Shot.Settings -> assertSettingsEntryOrder()
                     Shot.Qr -> rule.onNode(hasText("扫码绑定") and hasClickAction()).performClick()
                     Shot.PairCode -> rule.onNode(hasText("绑定") and hasClickAction()).performClick()
                     else -> Unit
@@ -176,15 +188,103 @@ class ChannelsShotsTest {
         }
     }
 
-    /** The settings home's 「扩展」 as it shows with channels: 扩展, then 渠道 (once fine, once with a broken one). */
-    @Composable
-    private fun SettingsRows() {
-        LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = Tokens.Space.l, vertical = Tokens.Space.l)) {
-            item { JSectionHeader("扩展") }
-            item { JGroupItem(GroupPosition.of(0, 2)) { JRow("扩展", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = "6 个") } }
-            item { ChannelsSettingsRow(channels.filter { it.state != "error" }, GroupPosition.of(1, 2), selected = false, onClick = {}) }
-            item { JSectionHeader("有一个出错时") }
-            item { ChannelsSettingsRow(channels, GroupPosition.Single, selected = false, onClick = {}) }
-        }
+    private fun assertSettingsEntryOrder() {
+        // With a navigation host, the removed introduction row used to be present.
+        rule.onAllNodesWithText("助手").assertCountEquals(0)
+        rule.onAllNodesWithText("Persona").assertCountEquals(0)
+        rule.onAllNodesWithText("认识 Persona").assertCountEquals(0)
+        rule.onNodeWithText("这台手机").performScrollTo()
+        rule.onAllNodesWithText("渠道").assertCountEquals(2) // Its own section header and its one clickable row.
+        val computer = rule.onNode(hasText("Claude Code 设置") and hasClickAction()).fetchSemanticsNode().boundsInRoot
+        val channelHeader = rule.onNode(hasText("渠道") and !hasClickAction()).fetchSemanticsNode().boundsInRoot
+        val channelRow = rule.onNode(hasText("渠道") and hasClickAction()).fetchSemanticsNode().boundsInRoot
+        val connectors = rule.onNodeWithText("连接器").fetchSemanticsNode().boundsInRoot
+        assertTrue(computer.bottom <= channelHeader.top)
+        assertTrue(channelHeader.bottom <= channelRow.top)
+        assertTrue(channelRow.bottom <= connectors.top)
     }
+
+    @Test fun channelEntryWorksWithoutExtensionsAndTracksCapabilityChanges() {
+        val api = FakeChannels()
+        val services = settingsServices(api, extensions = false)
+        var opened: SettingsPage? = null
+        rule.setContent {
+            PersonaTheme(reduceMotion = true) {
+                Box(Modifier.width(400.dp).height(2050.dp)) {
+                    androidx.compose.runtime.CompositionLocalProvider(LocalDetailKey provides SettingsPageRoute(SettingsPage.Channels)) {
+                        SettingsScreen(services, onOpen = { opened = it })
+                    }
+                }
+            }
+        }
+        assertSettingsEntryOrder()
+        rule.onAllNodesWithText("扩展").assertCountEquals(0)
+        val row = rule.onNode(hasText("渠道") and hasClickAction())
+        row.assertIsSelected().performClick()
+        assertEquals(SettingsPage.Channels, opened)
+        api.available.value = false
+        rule.onAllNodesWithText("渠道").assertCountEquals(0)
+        api.available.value = true
+        rule.onNode(hasText("渠道") and hasClickAction()).performScrollTo().performClick()
+        assertEquals(SettingsPage.Channels, opened)
+    }
+
+    @Test fun extensionsRemainIndependentWhenChannelsAreUnavailable() {
+        val api = FakeChannels().also { it.available.value = false }
+        val services = settingsServices(api)
+        var opened: SettingsPage? = null
+        rule.setContent {
+            PersonaTheme(reduceMotion = true) {
+                Box(Modifier.width(400.dp).height(2050.dp)) {
+                    SettingsScreen(services, onOpen = { opened = it })
+                }
+            }
+        }
+        rule.onAllNodesWithText("渠道").assertCountEquals(0)
+        rule.onAllNodesWithText("扩展").assertCountEquals(2)
+        rule.onNode(hasText("扩展") and hasClickAction()).performScrollTo().performClick()
+        assertEquals(SettingsPage.Extensions, opened)
+    }
+
+    @Test fun standaloneSettingsStillOpensChannelsAndDemoHidesThem() {
+        val services = settingsServices(FakeChannels())
+        var demo by mutableStateOf(false)
+        rule.setContent {
+            PersonaTheme(reduceMotion = true) {
+                key(demo) {
+                    Box(Modifier.width(400.dp).height(2050.dp)) { SettingsScreen(services.copy(demo = demo)) }
+                }
+            }
+        }
+        rule.onNode(hasText("渠道") and hasClickAction()).performScrollTo().performClick()
+        rule.onNodeWithText("和 Persona 对话的入口：", substring = true).assertExists()
+        demo = true
+        rule.onAllNodesWithText("渠道").assertCountEquals(0)
+        rule.onAllNodesWithText("扩展").assertCountEquals(0)
+    }
+
+    /** Only the APIs actually read by the real settings home; no hub, Hilt application or network is involved. */
+    private fun settingsServices(api: ChannelManagement, extensions: Boolean = true) = SettingsServices(
+        pairing = object : PairingService {
+            override val isPaired = MutableStateFlow(true)
+            override suspend fun pair(request: PairingRequest) = error("not used")
+            override suspend fun unpair() = error("not used")
+        },
+        connection = object : HubConnection {
+            override val state = MutableStateFlow(ConnectionState.Online)
+            override val events = MutableSharedFlow<ServerEvent>()
+            override fun reconnect() = error("not used")
+            override fun send(message: JsonObject) = false
+        },
+        sessions = object : SessionsRepository {
+            override val machines = MutableStateFlow(emptyList<Machine>())
+            override val sessions = MutableStateFlow(emptyList<Session>())
+            override suspend fun refresh() {}
+        },
+        updates = object : AppUpdates { override suspend fun check(): AppUpdate? = null },
+        extensions = if (extensions) object : ExtensionApiStub() {
+            override suspend fun extensions() = emptyList<HubExtension>()
+        } else null,
+        channels = api,
+    )
 }

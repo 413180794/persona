@@ -36,7 +36,7 @@ describe("a sign-in step", () => {
     const html = draw({ step: "qr", kind: "qr", hint: "用微信扫一扫" }, true);
     expect(html).not.toContain('role="img"'); // no QR code
     expect(html).toContain("这一步当前页面画不了");
-    expect(html).toContain("设置 › 扩展 › 渠道 › 微信");
+    expect(html).toContain("设置 › 渠道 › 微信");
     expect(html).toContain("重新开始");
     expect(html).not.toContain("下一步");
   });

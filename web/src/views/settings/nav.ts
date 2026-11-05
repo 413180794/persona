@@ -4,10 +4,10 @@
 import { settingsTab } from "../../lib/channels";
 import type { IconName } from "../../ui/icons";
 
-export type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "connectors" | "extensions" | "translate" | "devices" | "hub";
-export const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "connectors", "extensions", "translate", "devices", "hub"];
+export type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "channels" | "connectors" | "extensions" | "translate" | "devices" | "hub";
+export const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "channels", "connectors", "extensions", "translate", "devices", "hub"];
 // The tab whose page opens one of its items, and the query parameter that names it.
-const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", extensions: "extension", connectors: "connector" };
+const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", channels: "channel", extensions: "extension", connectors: "connector" };
 
 export const TAB_INFO: Record<Tab, { label: string; icon: IconName }> = {
   general: { label: "通用", icon: "gear" },
@@ -16,6 +16,7 @@ export const TAB_INFO: Record<Tab, { label: string; icon: IconName }> = {
   "model-config": { label: "模型配置", icon: "gear" },
   claude: { label: "Claude Code", icon: "terminal" },
   codex: { label: "Codex", icon: "terminal" },
+  channels: { label: "渠道", icon: "chat" },
   connectors: { label: "连接器", icon: "link" },
   extensions: { label: "扩展", icon: "extension" },
   translate: { label: "翻译", icon: "translate" },
@@ -27,7 +28,7 @@ export const TAB_INFO: Record<Tab, { label: string; icon: IconName }> = {
 export const LIST_GROUPS: { title: string; tabs: Tab[] }[] = [
   { title: "通用", tabs: ["general", "assistant", "translate"] },
   { title: "模型和 Agent", tabs: ["models", "model-config", "claude", "codex"] },
-  { title: "连接", tabs: ["connectors", "extensions", "devices", "hub"] },
+  { title: "连接", tabs: ["channels", "connectors", "extensions", "devices", "hub"] },
 ];
 
 /** The category and item a URL's query names; `tab` is null when it names none (the phone's list). */
@@ -37,7 +38,10 @@ export function settingsAt(search: string): { tab: Tab | null; sub: string | nul
   if (!TABS.includes(t)) return { tab: null, sub: null };
   const param = SUB[t];
   // ?tab=plugins&plugin=<id>: a link from before #1845
-  return { tab: t, sub: param ? (q.get(param) ?? (t === "extensions" ? q.get("plugin") : null)) : null };
+  const sub = param ? (q.get(param) ?? (t === "extensions" ? q.get("plugin") : null)) : null;
+  if (t === "extensions" && sub === "-channels") return { tab: "channels", sub: null };
+  if (t === "extensions" && sub?.startsWith("-channels/")) return { tab: "channels", sub: sub.slice("-channels/".length) };
+  return { tab: t, sub };
 }
 
 /** The URL of a category (and its open item). 通用 is plain /settings on a wide screen, where that opens it; on a

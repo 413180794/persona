@@ -1,11 +1,11 @@
-// 设置 › 扩展 › 渠道 (docs/channels.md「界面」, iOS ChannelsView): every way of talking to Persona, connected or not, and
+// 设置 › 渠道 (docs/channels.md「界面」, iOS ChannelsView): every way of talking to Persona, connected or not, and
 // each one's page — its switch, binding a step at a time (a QR code to scan in the chat app, a pairing code to send the
 // bot, credentials), where its messages go, what it does, a test message to the owner — and, for a market's, the way
 // to install it. Read-only ones (the apps, /agent, voice) say where they are set up.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import {
-  bindChannel, bindTitle, useChannels, canBind, capabilityText, channelDetail, channelSections, channelStateText, channelSubtitle, channelsSummary,
+  bindChannel, bindTitle, useChannels, canBind, capabilityText, channelDetail, channelSections, channelStateText, channelSubtitle,
   channelTone, forgetChannels, isBound, isPolled, listChannels, targetText, testChannel, unbindChannel, updateChannel,
   type Channel, type ChannelDetail, type ChannelPrompt, type ChannelTarget, type ChannelTone,
 } from "../../lib/channels";
@@ -45,7 +45,7 @@ export function ChannelLink({ id, onOpen }: { id: string; onOpen: (id: string) =
         label={
           <span className="flex items-center gap-2">
             <ChannelMark c={c} size={18} />
-            在 设置 › 扩展 › 渠道 里设置{c.name}
+            在 设置 › 渠道 里设置{c.name}
           </span>
         }
         onClick={() => onOpen(id)}
@@ -54,35 +54,9 @@ export function ChannelLink({ id, onOpen }: { id: string; onOpen: (id: string) =
   );
 }
 
-// ── the row on 设置 › 扩展 ───────────────────────────────
-
-/** The 渠道 row at the top of 设置 › 扩展: how many are connected, and the way in. */
-export function ChannelsEntry({ onOpen }: { onOpen: () => void }) {
-  const [list, setList] = useState<Channel[] | null>(null);
-  useEffect(() => {
-    listChannels().then(setList, () => setList([]));
-  }, []);
-  const bad = list?.some((c) => c.state === "error");
-  return (
-    <Group title="渠道" footer="和 Persona 对话的入口：Persona 自己的各端、微信、飞书机器人……在这里绑定、开关、选消息发到哪段对话。">
-      <Row
-        label={
-          <span className="flex items-center gap-2">
-            <Icon name="chat" size={13} className="shrink-0 text-ink-3" />
-            渠道
-          </span>
-        }
-        onClick={onOpen}
-      >
-        {list && <span className={cx(bad && "text-red")}>{channelsSummary(list)}</span>}
-      </Row>
-    </Group>
-  );
-}
-
 // ── the list ─────────────────────────────────────────────
 
-export function ChannelList({ onOpen, onBack, onMarketItem }: { onOpen: (id: string) => void; onBack: () => void; onMarketItem: (market: string, plugin: string) => void }) {
+export function ChannelList({ onOpen, onMarketItem }: { onOpen: (id: string) => void; onMarketItem: (market: string, plugin: string) => void }) {
   const [list, setList] = useState<Channel[] | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -99,7 +73,6 @@ export function ChannelList({ onOpen, onBack, onMarketItem }: { onOpen: (id: str
   return (
     <>
       <div className="mb-3 flex items-center gap-2">
-        <Button tone="quiet" icon="chevronLeft" onClick={onBack} className="-ml-2">扩展</Button>
         <span className="flex-1" />
         <IconButton icon="retry" label="刷新渠道" onClick={load} disabled={loading} />
       </div>

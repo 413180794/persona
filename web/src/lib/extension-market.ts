@@ -208,9 +208,8 @@ export const agreeLabel = (pv: MarketPreview) => (pv.upgrade ? (pv.more_permissi
 
 /**
  * What the extensions tab shows, from its `extension` parameter: an extension's id (its page), `<id>/ui/<ui>` (a page it draws),
- * `-market` (the catalog), `-market/<market>/<extension>` (one extension of a market), `-markets` (the markets),
- * `-channels` (渠道, docs/channels.md) and `-channels/<id>` (one channel). An extension's id never starts with "-" or has "/"
- * (the hub keeps `-` for itself).
+ * `-market` (the catalog), `-market/<market>/<extension>` (one extension of a market), `-markets` (the markets).
+ * An extension's id never starts with "-" or has "/" (the hub keeps `-` for itself).
  */
 export type ExtensionsRoute =
   | { kind: "list" }
@@ -218,17 +217,12 @@ export type ExtensionsRoute =
   | { kind: "page"; id: string; ui: string }
   | { kind: "catalog" }
   | { kind: "item"; market: string; id: string }
-  | { kind: "markets" }
-  | { kind: "channels" }
-  | { kind: "channel"; id: string };
+  | { kind: "markets" };
 
 export function extensionsRoute(sub: string | null | undefined): ExtensionsRoute {
   if (!sub) return { kind: "list" };
   if (sub === "-market") return { kind: "catalog" };
   if (sub === "-markets") return { kind: "markets" };
-  if (sub === "-channels") return { kind: "channels" };
-  const channel = /^-channels\/([^/]+)$/.exec(sub);
-  if (channel) return { kind: "channel", id: channel[1] };
   const item = /^-market\/([^/]+)\/([^/]+)$/.exec(sub);
   if (item) return { kind: "item", market: item[1], id: item[2] };
   const page = /^([^/-][^/]*)\/ui\/([^/]+)$/.exec(sub);
@@ -251,9 +245,5 @@ export function routeSub(r: ExtensionsRoute): string | null {
       return `-market/${r.market}/${r.id}`;
     case "markets":
       return "-markets";
-    case "channels":
-      return "-channels";
-    case "channel":
-      return `-channels/${r.id}`;
   }
 }

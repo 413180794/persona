@@ -15,7 +15,6 @@ class SettingsNavigationTest {
             SettingsPage.Devices to "devices",
             SettingsPage.About to "about",
             SettingsPage.Pairing to "pair",
-            SettingsPage.Assistant to "assistant",
             SettingsPage.ClaudeCode to "claude",
             SettingsPage.ModelConfig to "models",
             SettingsPage.Hubs to "hubs",
@@ -39,6 +38,6 @@ class SettingsNavigationTest {
     }
 
     @Test fun rootAndUnknownNamesHaveNoDetailDestination() {
-        listOf("settings", "", "unknown", "DIAG").forEach { assertNull(settingsPageFromInitialPage(it)) }
+        listOf("settings", "assistant", "", "unknown", "DIAG").forEach { assertNull(settingsPageFromInitialPage(it)) }
     }
 }

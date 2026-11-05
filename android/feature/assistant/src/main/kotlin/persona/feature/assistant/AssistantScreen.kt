@@ -704,7 +704,7 @@ internal fun AssistantDrawer(
                     if (query.isBlank()) "发一句话，开始和 Persona 聊聊。" else "换个关键词再试试。") }
             }
             item { JSectionHeader("更多") }
-            // 资料页 is in 设置 › Persona now, like iOS's 认识 Persona.
+            // Assistant details remain available from the Persona tab's toolbar, not as a drawer row.
             val totalMore = if (showTodos && onTodos != null) 6 else 5
             // Each row's place in the group is taken while the list is built: counted inside an item's own content, it
             // was counted again whenever only some rows recomposed, and the group's corners landed on the wrong rows.

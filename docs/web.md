@@ -18,6 +18,8 @@
   测试 `npm test`（vitest，`src/lib/*.test.ts`），类型检查 `npm run typecheck`。
   侧边栏入口的端到端检查（Persona 进主对话、两个「+」、老链接、窄屏抽屉；Python Playwright 驱动本机 Chrome）：起假 hub 和 `npx vite` 后跑
   `python3 scripts/test/web_sidebar_e2e.py <网页地址> [--shots <目录>]`，用法见脚本开头，`--shots` 顺带拍浅色 / 深色 / 窄屏截图。
+  设置入口的端到端检查（#2196：渠道在连接器前、旧扩展链接兼容、渠道与连接器互相跳转、窄屏返回设置）：假 hub 带 `MOCK_CHANNELS=1 MOCK_PLUGINS=1` 起，
+  跑 `python3 scripts/test/web_settings_entries_e2e.py <网页地址> [--shots <目录>]`，检查宽屏 / 窄屏 × 浅色 / 深色。
   任务「重试」的端到端检查（#1396：卡片、失败回执、计划卡红字、连点、再失败、离线；桌面 / 手机宽度 × 浅色 / 深色）：假 hub 带 `MOCK_TASKS=1` 起，
   跑 `python3 scripts/test/web_task_retry_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`（假 hub 的 `GET /mock/retry?mode=|fail|offline` 复原失败的任务、选重试的结果）。
   侧栏分组收起的端到端检查（「其他 Agent」收起 / 展开 / 刷新后保持，五种分组方式下每组都能收起，触屏常显箭头，#1417）：假 hub 带 `MOCK_SOURCES=1` 起，再跑
@@ -209,7 +211,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 
   ![网页版侧边栏的个人 Agent：按来源分组，带头像、未读数、搜索和筛选按钮](screenshots/web-personal-agents.png)
 
-- **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：十个分类（hub 带 `extension_manager` 或老的 `plugin_manager` 时十一个），和 App 的设置同一套接口。
+- **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：分类是否显示按 hub 能力决定，和 App 的设置同一套接口。渠道是独立分类，紧挨在连接器前（#2196）；设置没有「认识 Persona」入口，资料页仍从对话菜单打开。
   「通用」是外观（跟随系统 / 浅色 / 深色）、形象、Persona 助手的运行位置（模型在「模型配置」tab，#1291）、这个浏览器（hub 地址、hub 名、互联的 hub、断开）；
   「助手」（`settings/AssistantSettings.tsx`）：主动做事（进定时任务）、关于我（`PUT /assistant {notes}`，点保存或离开时存）、
   记忆（`/assistant/memory`：标题先取 MEMORY.md 索引里的中文标题，查看 / 编辑整个文件 / 删除，索引只读）、Skills（`GET /skills`，跑助手那台电脑上的 skill，只读，`settings/Skills.tsx`）、运行在哪（只读；没有模型入口，模型在「模型配置 › 主对话」）；
@@ -235,14 +237,14 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   **新老接口**（#1845，`lib/extension-api.ts`，[extensions.md](extensions.md)「命名和兼容」）：hello 的 features 有 `extensions` 时问 `/api/v1/extensions/…`（字段 `extensions` / `extension` / `extension_name`），
   没有（老 hub，或 hello 之前）问 `/api/v1/plugins/…`（`plugins` / `plugin` / `plugin_name`），两套字段都读；市场预览 `{market, extension, plugin}` 两个键都带。
   事件收 `extension_ui`；hub 有新接口时它也会发一份老的 `plugin_ui` 给老 App，网页只在老 hub 上读 `plugin_ui`。市场的签名状态（#1848 的 `signature`）写在市场那一行（「签名已验证」「未签名」……）。
-  **渠道**（#1466，`settings/Channels.tsx`，逻辑 `lib/channels.ts`，[channels.md](channels.md)；hub 的 features 有 `channels` 才出现）：扩展列表顶上一行「渠道」（几个已连接、几个出错），
-  点进 `&extension=-channels`：分「Persona」（各端）、「已接入」、「可以安装」（市场里的，点了进市场的详情）三组，每行是渠道的标志（飞书用自己的，其余按种类的图标）、名字、账号或说明、状态圆点和文字。
-  单个渠道 `&extension=-channels/<id>`：状态、账号、最近一条；「启用」；没绑时「绑定」按 `bind` 分步走（填字段、扫码时画 hub 给的二维码并能「保存二维码」、配对码时大字显示并轮询），绑了是账号和「解除绑定」（先确认）；
+  **渠道**（#1466、#2196，`settings/Channels.tsx`，逻辑 `lib/channels.ts`，[channels.md](channels.md)；hub 的 features 有 `channels` 才出现）：设置里的独立分类，放在连接器前，不再嵌在扩展列表中。
+  点进 `?tab=channels`：分「Persona」（各端）、「已接入」、「可以安装」（市场里的，点了进市场的详情）三组，每行是渠道的标志（飞书用自己的，其余按种类的图标）、名字、账号或说明、状态圆点和文字。
+  单个渠道 `?tab=channels&channel=<id>`（旧的 `?tab=extensions&extension=-channels[/<id>]`、`?tab=plugins&plugin=-channels[/<id>]` 链接仍打开对应渠道）：状态、账号、最近一条；「启用」；没绑时「绑定」按 `bind` 分步走（填字段、扫码时画 hub 给的二维码并能「保存二维码」、配对码时大字显示并轮询），绑了是账号和「解除绑定」（先确认）；
   「消息发到」（主对话 / 新对话 / 选一段助手的对话）；按 `features` 画的开关；在等几个回答和提问、最近进过的对话；它能做什么；「发一条测试消息」（只发给自己）；有 `settings_url` 的多一行「更多设置」（飞书机器人进原来的弹窗）。
   只读的（Persona、飞书 /agent、语音）只显示信息。连接器页的微信、飞书机器人顶上有一行链到这里。对话页里从渠道来的消息（`client_msg_id` 是 `<渠道>-…`）气泡下面一行「来自 微信」，
   对话列表在标题旁画最近那个渠道（会话的 `channels`）的小标志。截图用 `MOCK_CHANNELS=1` 的假 hub。
 
-  ![设置 › 扩展 › 渠道（浅色）](screenshots/web-channels-light.png)
+  ![渠道列表（浅色；截图为入口调整前）](screenshots/web-channels-light.png)
 
   ![微信渠道的设置（深色）](screenshots/web-channel-wechat-dark.png)
 

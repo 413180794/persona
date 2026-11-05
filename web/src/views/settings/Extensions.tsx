@@ -18,33 +18,16 @@ import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from ".
 import { Icon } from "../../ui/icons";
 import { MarketCatalog, MarketItem, Markets, UninstallDialog } from "./ExtensionMarket";
 import { ExtensionUI } from "./ExtensionView";
-import { ChannelList, ChannelPage, ChannelsEntry } from "./Channels";
-import { settingsTarget } from "../../lib/channels";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
 
 /**
  * The tab's pages, by its `extension` parameter (lib/extension-market.ts extensionsRoute): the list, an extension, a page an extension
  * draws, and the market (its catalog, one extension of it, the markets).
  */
-export function Extensions({ open, onOpen, onTab }: { open: string | null; onOpen: (id: string | null) => void; onTab?: (tab: string, sub: string | null) => void }) {
+export function Extensions({ open, onOpen }: { open: string | null; onOpen: (id: string | null) => void }) {
   const r = extensionsRoute(open);
   const go = (to: Parameters<typeof routeSub>[0]) => onOpen(routeSub(to));
   switch (r.kind) {
-    case "channels":
-      return <ChannelList onBack={() => onOpen(null)} onOpen={(id) => go({ kind: "channel", id })} onMarketItem={(market, id) => go({ kind: "item", market, id })} />;
-    case "channel":
-      return (
-        <ChannelPage
-          key={r.id}
-          id={r.id}
-          onBack={() => go({ kind: "channels" })}
-          onSettings={(url) => {
-            const t = settingsTarget(url);
-            if (t?.tab === "extensions") onOpen(t.sub);
-            else if (t) onTab?.(t.tab, t.sub);
-          }}
-        />
-      );
     case "extension":
       return (
         <ExtensionDetail
@@ -64,7 +47,7 @@ export function Extensions({ open, onOpen, onTab }: { open: string | null; onOpe
     case "markets":
       return <Markets onBack={() => go({ kind: "catalog" })} />;
     default:
-      return <ExtensionList onOpen={onOpen} onMarket={() => go({ kind: "catalog" })} onMarkets={() => go({ kind: "markets" })} onChannels={() => go({ kind: "channels" })} />;
+      return <ExtensionList onOpen={onOpen} onMarket={() => go({ kind: "catalog" })} onMarkets={() => go({ kind: "markets" })} />;
   }
 }
 
@@ -104,8 +87,7 @@ function StateDot({ extension }: { extension?: HubExtension | null }) {
 
 // ── the list ────────────────────────────────────────────
 
-function ExtensionList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (id: string) => void; onMarket: () => void; onMarkets: () => void; onChannels: () => void }) {
-  const hasChannels = useStore((s) => s.features.includes("channels"));
+function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) => void; onMarket: () => void; onMarkets: () => void }) {
   const [extensions, setExtensions] = useState<HubExtension[] | null>(null);
   const [markets, setMarkets] = useState(false);
   const [error, setError] = useState("");
@@ -124,7 +106,6 @@ function ExtensionList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (i
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">
         扩展给 Persona 加上新的连接器、语音对话等能力：hub 自带的、写在 hub.json 里的和装在 hub 机器上的都列在这里。
       </p>
-      {hasChannels && <ChannelsEntry onOpen={onChannels} />}
       <Group
         title={
           <span className="flex items-center gap-2">

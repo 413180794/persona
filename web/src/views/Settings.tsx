@@ -20,6 +20,9 @@ import { Connectors } from "./settings/Connectors";
 import { TriageSettings } from "./settings/TriageSettings";
 import { TranslationSettings } from "./settings/TranslationSettings";
 import { Extensions } from "./settings/Extensions";
+import { ChannelList, ChannelPage } from "./settings/Channels";
+import { settingsTarget } from "../lib/channels";
+import { routeSub } from "../lib/extension-market";
 import { HubSettings } from "./settings/HubSettings";
 import { LauncherQuota } from "./settings/LauncherQuota";
 import { LauncherExtensionSections } from "./settings/ExtensionView";
@@ -118,7 +121,8 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const { sub } = at;
   // 扩展 only on a hub with the extension base (docs/extensions.md「hub 的接口」); a link to it still opens it.
   const hasExtensions = useStore((s) => hubHasExt(s.features, "manager"));
-  const shown = (k: Tab) => k !== "extensions" || hasExtensions || tab === "extensions";
+  const hasChannels = useStore((s) => s.features.includes("channels"));
+  const shown = (k: Tab) => (k !== "extensions" || hasExtensions || tab === "extensions") && (k !== "channels" || hasChannels || tab === "channels");
   const tabs = TABS.filter(shown).map((k) => ({ k, ...TAB_INFO[k] }));
   const pick = (k: Tab, id: string | null = null) => {
     setAt({ tab: k, sub: id });
@@ -178,8 +182,16 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
             {tab === "assistant" && <AssistantSettings />}
             {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
-            {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("extensions", `-channels/${id}`)} />}
-            {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} onTab={(t, id) => TABS.includes(t as Tab) && pick(t as Tab, id)} />}
+            {tab === "channels" && (sub ? (
+              <ChannelPage key={sub} id={sub} onBack={() => pick("channels")} onSettings={(url) => {
+                const t = settingsTarget(url);
+                if (t && TABS.includes(t.tab as Tab)) pick(t.tab as Tab, t.sub);
+              }} />
+            ) : (
+              <ChannelList onOpen={(id) => pick("channels", id)} onMarketItem={(market, id) => pick("extensions", routeSub({ kind: "item", market, id }))} />
+            ))}
+            {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("channels", id)} />}
+            {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} />}
             {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
             {tab === "devices" && <Devices />}
             {tab === "hub" && <HubSettings />}

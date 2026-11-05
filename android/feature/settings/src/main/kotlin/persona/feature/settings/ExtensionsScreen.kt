@@ -104,7 +104,7 @@ private fun ExtensionStateMark(extension: HubExtension?) {
 @Composable
 fun ExtensionPage(
     extensions: ExtensionManagement?, extensionId: String, onBack: () -> Unit, onPage: ((ExtensionUiPlace) -> Unit)? = null,
-    /** Opens one of the channels it contributes (设置 › 扩展 › 渠道); without it the line is left out. */
+    /** Opens one of the channels it contributes (设置 › 渠道); without it the line is left out. */
     onChannel: ((String) -> Unit)? = null,
 ) {
     if (extensions == null) {
@@ -199,7 +199,7 @@ private fun LazyListScope.channelLink(detail: ExtensionDetail, onChannel: (Strin
     val id = detail.extension.contributes.orEmpty()["channel"]?.firstOrNull { it.isNotBlank() } ?: return
     item("channel-link") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-            JRow("这是一个对话渠道", subtitle = "在 设置 › 扩展 › 渠道 里设置", leadingIcon = PhIcons.ChatsCircle, onClick = { onChannel(id) })
+            JRow("这是一个对话渠道", subtitle = "在 设置 › 渠道 里设置", leadingIcon = PhIcons.ChatsCircle, onClick = { onChannel(id) })
         }
     }
 }

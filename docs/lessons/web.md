@@ -35,6 +35,7 @@
 
 - 这台开发机的 npm 默认源是公司内部的镜像：`npm i` 会把内部域名写进 `package-lock.json` 的 `resolved`（隐私扫描要拦的东西）。加依赖一律带
   `--registry=https://registry.npmjs.org/`，加完 `grep -o '"resolved": "https://[^/]*' web/package-lock.json | sort | uniq -c` 只能有 registry.npmjs.org。
+- 从仓库外跑生产预览时，`npm --prefix <web> exec -- vite preview` 不会把当前目录切到网页根（2026-11-05，#2196）：端口能起来，但 `/settings` 是 404。给 Vite 显式传根目录（`node <web>/node_modules/vite/bin/vite.js preview <web> …`），并先用 HTTP 检查实际页面，不能只看端口在监听。
 - xterm 只在打开终端时动态 import：Vite dev 第一次遇到它时才预构建依赖、重新载入页面，那一次面板卡在「正在连接终端」。`vite.config.ts` 的 `optimizeDeps.include` 先把它预构建好（只影响 dev，构建产物没事）。
 
 ### xterm.js

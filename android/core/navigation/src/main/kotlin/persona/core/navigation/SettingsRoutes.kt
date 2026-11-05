@@ -34,5 +34,5 @@ data class ExtensionCatalogRoute(val marketId: String, val extensionId: String) 
 @Serializable @SerialName("persona.core.navigation.LauncherRoute")
 data class LauncherRoute(val machineId: String, val name: String) : NavKey
 
-/** One channel of 设置 › 扩展 › 渠道 (docs/channels.md「界面」), by the hub's channel id. */
+/** One channel of 设置 › 渠道 (docs/channels.md「界面」), by the hub's channel id. */
 @Serializable @SerialName("persona.core.navigation.ChannelRoute") data class ChannelRoute(val channelId: String) : NavKey

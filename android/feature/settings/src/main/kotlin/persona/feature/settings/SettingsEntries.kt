@@ -51,7 +51,7 @@ data class SettingsServices(
     val extensions: ExtensionManagement? = null,
     /** Where the selected hub's extensions draw (nav pages, cards, machine sections), kept by the shell; null without. */
     val extensionSlots: ExtensionSlots? = null,
-    /** 设置 › 扩展 › 渠道 on the paired hub; null in 体验模式. */
+    /** 设置 › 渠道 on the paired hub; null in 体验模式. */
     val channels: ChannelManagement? = null,
     /** The phone's hub groups (settings › hub); null where there is no real pairing (体验模式). */
     val hubs: HubGroups? = null,

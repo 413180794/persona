@@ -13,7 +13,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.EntryPointAccessors
 import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.AssistantConfig
@@ -21,40 +20,10 @@ import persona.core.contracts.api.AssistantManagement
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
-import persona.core.navigation.ChatRoute
-import persona.core.navigation.ConversationKind
-import persona.core.navigation.Navigator
-import persona.feature.assistant.AssistantAppHost
-import persona.feature.assistant.AssistantEntryPoint
 import persona.feature.assistant.LocalAssistantHost
 import persona.feature.assistant.conversationTime
 import persona.feature.assistant.proactive.AssistantProactiveScreen
 import kotlinx.coroutines.launch
-
-/**
- * 设置 › 助手 as a destination of its own (a wide window shows it beside the settings list). It needs the pairing's
- * assistant transport; the demo has none and says so.
- */
-@Composable
-fun AssistantSettingsDestination(navigator: Navigator, onBack: () -> Unit) = AssistantAppHost(navigator) {
-    val host = LocalAssistantHost.current
-    if (host == null) {
-        JListPage(title = "助手", onBack = onBack) {
-            item {
-                JEmptyState("体验模式里没有助手设置", "连上自己的 hub 以后，可以在这里选 Persona 在哪台机器上运行，改关于我和记忆。",
-                    icon = PhIcons.Sparkle)
-            }
-        }
-        return@AssistantAppHost
-    }
-    val context = LocalContext.current.applicationContext
-    val conversations = remember(context) {
-        EntryPointAccessors.fromApplication(context, AssistantEntryPoint::class.java).assistantConversations()
-    }
-    AssistantSettingsScreen(host.management, host.machines, onBack, onMoved = { conversations.refresh() },
-        // An assistant conversation belongs to the Persona tab, which shows it on its home.
-        onOpenConversation = { navigator.navigate(ChatRoute(it.machineId, it.sessionId, kind = ConversationKind.Assistant)) })
-}
 
 /** Debug builds open one part of the page directly for captures (`debug.assistantSettings`); release never sets it. */
 object AssistantSettingsPreview {
@@ -66,7 +35,7 @@ private enum class SettingsSheet { Machine, Zone }
 
 /**
  * Where the assistant runs (machine, directory, and what lives where; its model is 模型配置 › 主对话, #1291), what it knows about the user
- * (关于我, memory) and its time zone. Sub-pages stay inside this destination, so they open in the same pane.
+ * (关于我, memory) and its time zone. Opened in place from the Persona tab; sub-pages keep their own back handling.
  */
 @Composable
 internal fun AssistantSettingsScreen(

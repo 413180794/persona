@@ -498,7 +498,6 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             }
             entry<SettingsPageRoute> { route ->
                 if (route.page == SettingsPage.PhoneData && session.phone != null) PhoneToolsScreen(session.phone, navigator)
-                else if (route.page == SettingsPage.Assistant) persona.feature.assistant.settings.AssistantSettingsDestination(navigator, navigator::back)
                 else ShellSettings(services, navigator, shell, route.page.toInitialPage())
             }
             entry<PairingRoute> { ShellSettings(services, navigator, shell, "pair") }
