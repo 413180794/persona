@@ -482,8 +482,8 @@ var Points = map[string]Point{
 		if u.Icon != "" && (u.Placement != "nav_page" || !slices.Contains(UIIcons, u.Icon)) {
 			return u.ID, fmt.Errorf("ui %s: only a nav_page has an icon, one of %s", u.ID, strings.Join(UIIcons, ", "))
 		}
-		if u.Opens != "" && u.Placement != "overview_card" && u.Placement != "widget" {
-			return u.ID, fmt.Errorf("ui %s: only an overview_card or a widget opens a page", u.ID)
+		if u.Opens != "" && u.Placement != "overview_card" && u.Placement != "capsule_card" && u.Placement != "widget" {
+			return u.ID, fmt.Errorf("ui %s: only an overview_card, capsule_card or widget opens a page", u.ID)
 		}
 		if u.Placement == "widget" {
 			if len(u.Families) == 0 {

@@ -7466,7 +7466,7 @@ _PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "e
 # ---------- MOCK_PLUGINS: declarative UI (docs/extensions.md「声明式 UI」) ----------
 # example-gateway draws a page (plugin_page "home") and a section on every launcher's page (launcher_section "panel"),
 # with every kind of item; its buttons answer (a toast, a new view, a link), the form's values come back.
-_UI_STATE = {"note": "", "auto": "true", "plan": "team", "refreshed": 0}
+_UI_STATE = {"note": "", "auto": "true", "plan": "team", "refreshed": 0, "capsule_refreshed": 0}
 
 
 _DAYS = ["10-29", "10-30", "10-31", "11-01", "11-02", "11-03", "11-04"]
@@ -7482,6 +7482,15 @@ def _chart(kind, series, title=None, stacked=False, unit="M tokens"):
     if title: item["title"] = title
     if stacked: item["stacked"] = True
     return item
+
+
+def _capsule_view():
+    """An opt-in overlay card: a real ui.action changes its count and returns a visible receipt."""
+    count = _UI_STATE["capsule_refreshed"]
+    return {"title": "胶囊扩展", "state": "refreshed=%d" % count, "sections": [{"items": [
+        {"type": "text", "text": "扩展卡片已接入"},
+        {"type": "metric", "label": "摘要刷新", "value": "%d 次" % count},
+        {"type": "button", "title": "刷新摘要", "action": {"id": "capsule:refresh"}}]}]}
 
 
 def _slot_view(ui, range_="7d", machine=None):
@@ -7893,7 +7902,10 @@ def markets_route(handler, p, body):
         placement = q.get("placement", "")
         ui = []
         if "example-gateway" in PLUGINS and PLUGINS["example-gateway"]["enabled"]:
-            if placement != "launcher_section":
+            if placement == "capsule_card":
+                ui = [{"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "capsule", "title": "胶囊扩展",
+                       "placement": "capsule_card", "size": "compact", "opens": "usage"}]
+            elif placement != "launcher_section":
                 ui = [u for u in PLUGINS["example-gateway"]["ui"] + _SLOT_UI if placement in ("", u["placement"])]
             elif q.get("launcher"):
                 # "elsewhere" has no hosts (listed on every launcher) and always says the launcher is not its gateway:
@@ -7912,6 +7924,13 @@ def markets_route(handler, p, body):
         if parts[7] == "elsewhere":
             handler.send_json({"error": "this launcher's gateway is not the plugin's", "code": "unsupported"}, 404); return True
         ctx = req.get("context") or {}
+        if parts[7] == "capsule":
+            action = req.get("action")
+            if action and action != "capsule:refresh":
+                handler.send_json({"error": "no such capsule action", "code": "not_found"}, 404); return True
+            if action:
+                _UI_STATE["capsule_refreshed"] += 1
+            handler.send_json({"view": _capsule_view(), **({"toast": "摘要已刷新"} if action else {})}); return True
         if parts[7] in ("usage", "today", "gpu"):
             if parts[7] == "gpu" and not ctx.get("machine"):
                 handler.send_json({"error": "没有这台机器", "code": "not_found"}, 404); return True

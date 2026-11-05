@@ -73,7 +73,7 @@ hub 给老路径的每次调用按路由计数（`extension_compat.go` 的 `lega
 | `providers`（版本 1） | `provider.` | `id`、`name`、`description?`、`kind?`（`launcher` / `api`）、`api?`（`messages` / `responses`）、`base_url`、`model?`、`small_model?`、`models?: [{id, name?}]`、`dynamic_models?`、`key_hint?` | 纯声明即可；`dynamic_models` 要进程说协议 | 设置 › 模型供应商的「从扩展添加」，见下面「模型供应商」 |
 | `api`（版本 1） | `api.` | `id`、`prefix`（一段路径）、`features?`、`events?`、`receipts?`（`[{method, path, kind}]`：要发送回执的写） | `runtime.http`，`on_startup`；有 `events` 要进程说协议 | App 用的一段接口 `/api/v1/<prefix>/…`，见下面「App 接口」 |
 | `assistant`（版本 1） | `assistant.` | `id`、`skills?`（包里的目录，各有 `SKILL.md`）、`instructions?`（包里的 `.md`）、`gate?`（包里的 `.json`：技能里一个命令的闸门） | 包里有这些文件；`gate` 要有 `skills`，要凭据时进程说协议 | 助手的技能、说明和命令闸门，见下面「助手」 |
-| `ui`（版本 2） | `ui.` | `id`、`title`、`placement`（插槽，见「UI 插槽」：`extension_page`（老名字 `plugin_page`） / `launcher_section` / `nav_page` / `overview_card` / `machine_section` / `inbox_item` / `widget`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，扩展自己判断）、`icon?`（只有 `nav_page`）、`opens?`（只有 `overview_card` 和 `widget`）、`connector?`（只有 `inbox_item`，而且必须写：扩展自己贡献的一个连接器的 id）、`families` / `refresh_minutes?`（只有 `widget`，`families` 必须写，见「系统级位置」） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 扩展详情里的页面、启动器页上的一节、主导航、总览、机器详情、收件箱条目的详情、App 外的小组件和表盘，见下面「声明式 UI」「UI 插槽」「系统级位置」 |
+| `ui`（版本 2） | `ui.` | `id`、`title`、`placement`（插槽，见「UI 插槽」：`extension_page`（老名字 `plugin_page`） / `launcher_section` / `nav_page` / `overview_card` / `capsule_card` / `machine_section` / `inbox_item` / `widget`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，扩展自己判断）、`icon?`（只有 `nav_page`）、`opens?`（只有 `overview_card`、`capsule_card` 和 `widget`）、`connector?`（只有 `inbox_item`，而且必须写：扩展自己贡献的一个连接器的 id）、`families` / `refresh_minutes?`（只有 `widget`，`families` 必须写，见「系统级位置」） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 扩展详情里的页面、启动器页上的一节、主导航、总览、机器详情、收件箱条目的详情、App 外的小组件和表盘，见下面「声明式 UI」「UI 插槽」「系统级位置」 |
 | `agent_sources`（版本 1） | `agentsrc.` | `id`（`a-z0-9_-`，也是会话 id 的来源段 `<id>:<sessionKey>`）、`name`、`providers?`（`a-z0-9_`，如 `grok_bot`） | 进程说协议，`on_startup` | Agents 页的个人 Agent，和 hub 自己的 lark-connector 来源并列，见下面「个人 Agent 来源」 |
 | `channel`（版本 1） | `channel.` | `id`（`^[a-z][a-z0-9_]{0,31}$`，不能是 8 位十六进制）、`name`、`kind`（`im`）、`connector?`（绑定和状态来自同一个扩展的这个连接器）、`bind?`（`qr` / `code` / `fields`）、`description?`、`capabilities`（收图片 / 文件 / 语音、`format`、`max_text`、`asks`、`push`、`typing`、`progress`、`threads`） | 进程说协议；没有 `connector` 时 `on_startup` | 和 Persona 对话的渠道：hub 跑统一管线（进对话、跟踪这一轮、答案发回、提问），扩展只管和 IM 说话，见 [channels.md](channels.md) |
 | `events`（版本 1） | `event.` | `id`、`subscribe`（事件名的列表，见「事件」） | 进程说协议，`on_startup` | 只是告诉扩展 hub 上发生了什么，见下面「事件」 |
@@ -799,6 +799,7 @@ hub 不认识的 `type`（给更新的 hub 写的扩展）从 View 里拿掉、�
 | `launcher_section` | 启动器详情页的一节（见上面「声明式 UI」） | full | `launcher` | — | 已由 `launcher_keys` 展示 | 1 |
 | `nav_page` | **主导航上的一个入口**，点进去是一整页 | full | — | 有 | 主导航上的入口 | 2 |
 | `overview_card` | **「总览」上的一张卡片**，点卡片打开 `opens` 指的页 | compact | — | — | 总览上的卡片 | 2 |
+| `capsule_card` | **Android 跨 App 悬浮胶囊展开后的卡片**，可用 `opens` 打开完整页面 | compact | — | — | Android 跨 App 悬浮胶囊里的卡片（在 App 外显示） | 3 |
 | `machine_section` | **机器详情页里的一节**，在机器自己的各节后面 | full | `machine` | — | 机器详情页里的一节（会知道是哪台机器） | 2 |
 | `inbox_item` | **收件箱里一件事的详情正文**：`connector` 收进来的条目，App 自己的头部下面（见下面「收件箱条目」） | full | `item` | — | 收件箱里它的连接器的条目详情（会读到那一条的标题、总结和分级） | 2 |
 | `widget` | **App 外**：主屏幕小组件、锁屏和表盘的复杂功能（见下面「系统级位置」）；不在 `GET …/-/ui` 里，单独列 | `families` 里的一个 | — | — | 主屏幕小组件和表盘（在 App 外显示） | 3 |
@@ -850,6 +851,28 @@ App 画一个插槽时在 `context` 里说清楚是给谁画、画在哪，hub �
 | `machine` | `machine_section`：机器 id（机器名也认） | `{id, name, os, online}`；`machine_section` 没有它回 404 |
 | `launcher` | `launcher_section`：启动器名（`machine` 是它所在的电脑） | `{name, base_url, query_id}`，见上面「声明式 UI」 |
 | `item` | `inbox_item`：收件箱条目的 id | `{id, title, summary?, tier?, reason?, done, meta, extra?}`，见下面「收件箱条目」；`inbox_item` 没有它回 404 |
+
+### Android 悬浮胶囊（#2124）
+
+`capsule_card` 是 Android 原生悬浮模块开放的声明式内容与动作插槽，App 在“设置 › 悬浮胶囊”中开启并获系统悬浮授权后才能显示。
+扩展清单新增这个位置会进入安装权限摘要和升级确认，明确说明内容会在 App 外显示；开关、窗口、拖动、键盘和系统权限始终归客户端。
+其他客户端忽略不支持的插槽。扩展不能通过此插槽执行手机代码、取得截屏或麦克风权限。
+
+```json
+"contributes": {"ui": [
+  {"id": "home", "title": "任务详情", "placement": "extension_page"},
+  {"id": "task", "title": "任务状态", "placement": "capsule_card", "opens": "home"}
+]}
+```
+
+胶囊展开时查询 `GET /api/v1/extensions/-/ui?placement=capsule_card`，按卡片请求 `ui.render`，扩展收到
+`placement: "capsule_card"`、`size: "compact"`、`platform: "android"`。沿用卡片上限（最多 2 节、12 项，不带 field / search / filter / more），
+按钮、行和分段选择走原来的 `ui.action`。需要确认的按钮在胶囊内部先显示确认行，确认后才发动作，错误和回执也留在卡片内。
+`opens`、动作的 `push` 打开 App 内完整扩展页，链接只允许 https。`refresh_after` 和 `ui.invalidate` 只在卡片展开、窗口可见时刷新；
+收起、关闭、退出配对或切换身份时移除组合并取消请求，不增加另一条 WebSocket。
+
+写清单时把 `engines.persona` 设为首个支持此插槽的 hub 构建号；老 hub 会明确拒绝未知位置。完整清单示例见
+`schema/extension/examples/Manifest.capsule-card.json`。客户端接入入口是 `ExtensionCapsuleCards(api, onOpen)`。
 
 ### 收件箱条目（`inbox_item`，#1681）
 

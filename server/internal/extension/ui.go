@@ -28,12 +28,12 @@ type UIItem struct {
 	// name, the extension is told the one it wrote), launcher_section (a section
 	// on the page of a launcher whose gateway is one of Hosts, or of any launcher when there are none: the plugin then
 	// answers unsupported for gateways not its own; it may send requests there with the key, as quota does), nav_page,
-	// overview_card, machine_section, inbox_item.
+	// overview_card, capsule_card, machine_section, inbox_item.
 	Placement string   `json:"placement"`
 	Hosts     []string `json:"hosts,omitempty"`
 	// Icon is a nav_page's icon, from UIIcons (each app draws its own); the default when empty.
 	Icon string `json:"icon,omitempty"`
-	// Opens is the ui (a nav_page or extension_page of the same extension) an overview_card or a widget opens when
+	// Opens is the ui (a nav_page or extension_page of the same extension) a compact card or widget opens when
 	// tapped.
 	Opens string `json:"opens,omitempty"`
 	// Connector is the connector an inbox_item draws the items of: one of the plugin's own connectors.
@@ -73,6 +73,7 @@ var UISlots = []UISlot{
 	{Name: "launcher_section", Size: SizeFull, Context: "launcher", Since: 1},
 	{Name: "nav_page", Size: SizeFull, Badge: true, Shown: "主导航上的入口", Since: 2},
 	{Name: "overview_card", Size: SizeCompact, Shown: "总览上的卡片", Since: 2},
+	{Name: "capsule_card", Size: SizeCompact, Shown: "Android 跨 App 悬浮胶囊里的卡片（在 App 外显示）", Since: 3},
 	{Name: "machine_section", Size: SizeFull, Context: "machine", Shown: "机器详情页里的一节（会知道是哪台机器）", Since: 2},
 	// inbox_item draws the body of an inbox item from the plugin's connector (its own header stays the app's): the
 	// same items a plugin's connector brought in, with the hub's triage on them. Drawn with UI version 2's items.

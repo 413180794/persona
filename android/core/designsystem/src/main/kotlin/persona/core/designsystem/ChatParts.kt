@@ -234,7 +234,7 @@ fun ChatNoteChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modi
  * name, one line.
  */
 @Composable
-fun PathChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun PathChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modifier = Modifier, onClickLabel: String = "查看文件") {
     val palette = PersonaTheme.palette
     val style = PersonaTheme.style
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(PersonaTheme.shapes.chip)
@@ -242,7 +242,7 @@ fun PathChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modifier
         modifier.heightIn(min = 32.dp).clip(shape)
             .background(if (style == AppStyle.Board) palette.surface else palette.accentSoft)
             .then(if (style == AppStyle.Board) Modifier.border(1.dp, palette.line, shape) else Modifier)
-            .clickable(role = Role.Button, onClickLabel = "查看文件", onClick = onClick).padding(horizontal = 10.dp),
+            .clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick).padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         JIcon(icon, null, size = 14.dp, tint = palette.accent)

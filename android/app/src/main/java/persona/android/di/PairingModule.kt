@@ -35,13 +35,13 @@ object PairingModule {
         updates: AppUpdates, diagnostics: SettingsDiagnostics, devices: WiredDeviceSettings, runtime: ConnectionRuntime,
         machines: MachineManagement, models: ModelConfiguration, extensions: ExtensionManagement, providers: ProviderSetup,
         connectors: ConnectorsManagement, channels: ChannelManagement, platform: persona.android.platform.PlatformPairing,
-        hubUpdates: HubUpdates, translation: TranslationSettings, triage: AgentTriage,
+        hubUpdates: HubUpdates, translation: TranslationSettings, triage: AgentTriage, capsule: persona.android.capsule.CapsuleRuntime,
     ) = SettingsServices(pairing, connection, sessions, updates, diagnostics, binding = devices.binding,
         // Explicit: the runtime cannot be a ConnectionEndpoints itself (its HubConnection.state has another type).
         disconnect = { pairing.unpair() }, endpoints = runtime.endpoints, machines = machines, models = models, extensions = extensions, providers = providers,
         channels = channels, hubUpdates = hubUpdates,
         hubs = runtime.hubGroups, addHub = platform.adding, connectors = connectors,
-        translation = translation, triage = triage)
+        translation = translation, triage = triage, capsule = capsule)
 }
 
 /** Pairs with pinned probing and hands verified credentials to the connection runtime, which stores and connects. */

@@ -19,7 +19,7 @@ class PortLinksTest {
 
     @Test fun otherLinksAreNot() {
         assertNull(PortLinks.link("http://localhost/")) // no port: not a dev server's link
-        assertNull(PortLinks.link("http://192.168.1.5:3000/")) // a LAN address opens as a web page
+        assertNull(PortLinks.link("http://192.0.2.5:3000/")) // a LAN address opens as a web page
         assertNull(PortLinks.link("https://example.com:8443/"))
         assertNull(PortLinks.link("http://other:3000/", listOf("macbook")))
         assertNull(PortLinks.link("ftp://localhost:21/"))
@@ -27,7 +27,7 @@ class PortLinksTest {
     }
 
     @Test fun findsThemInTextIncludingBareOnes() {
-        val text = "Local:   http://localhost:5173/\n  Network: http://192.168.1.5:5173/\nAPI at 127.0.0.1:8000/docs, and http://localhost:5173/ again."
+        val text = "Local:   http://localhost:5173/\n  Network: http://192.0.2.5:5173/\nAPI at 127.0.0.1:8000/docs, and http://localhost:5173/ again."
         assertEquals(listOf(PortLink(5173, "/", false), PortLink(8000, "/docs", false)), PortLinks.find(text))
         assertEquals(emptyList<PortLink>(), PortLinks.find("no links here"))
         // A bare host inside a longer URL is not another link.

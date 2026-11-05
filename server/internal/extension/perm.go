@@ -224,7 +224,11 @@ func Explain(m *Manifest) []PermissionLine {
 		out = append(out, PermissionLine{Key: "events", Title: "收到 hub 的事件", Detail: strings.Join(what, "；")})
 	}
 	if surfaces := m.Surfaces(); len(surfaces) > 0 {
-		out = append(out, PermissionLine{Key: "ui_surfaces", Title: "在 App 里显示自己的界面", Detail: surfacesDetail(m, surfaces)})
+		title := "在 App 里显示自己的界面"
+		if slices.Contains(surfaces, "capsule_card") {
+			title = "在 App 内外显示自己的界面"
+		}
+		out = append(out, PermissionLine{Key: "ui_surfaces", Title: title, Detail: surfacesDetail(m, surfaces)})
 	}
 	if len(m.Secrets) > 0 {
 		names := make([]string, 0, len(m.Secrets))

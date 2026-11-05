@@ -65,6 +65,7 @@ data class SettingsServices(
     val translation: TranslationSettings? = null,
     /** 设置 › 会话分诊 on the paired hub (docs/agent-work.md「开关」); null in 体验模式. */
     val triage: AgentTriage? = null,
+    val capsule: FloatingCapsuleSettings? = null,
 )
 
 fun EntryProviderScope<NavKey>.settingsEntries(navigator: Navigator, services: SettingsServices? = null) {

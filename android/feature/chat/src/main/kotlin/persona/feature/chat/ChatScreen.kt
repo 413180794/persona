@@ -464,6 +464,8 @@ private fun ChatPage(
                             }
                             // The space's other tabs under the title (iOS SiblingTabs); not for the assistant's conversation.
                             if (showTopBar && renderStyle != ChatRenderStyle.Assistant) ChatSiblingTabs(session, sessionList, chrome.onOpenSession)
+                            // The ports it listens on (its dev servers, docs/ports.md): a tap opens the page.
+                            if (showTopBar && renderStyle != ChatRenderStyle.Assistant) ChatPortChips(session?.ports)
 
                             ChatTasks(projection.tasks, lines, chatList,
                                 onFreeze = { timeline.freeze(currentItems, currentLive); timelineVersion++ },

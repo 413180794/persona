@@ -44,6 +44,7 @@ class Router(
         SettingsRoute -> ResolvedRoute(AppTab.Settings, key)
         ConnectionSettingsRoute -> resolve(SettingsPageRoute(SettingsPage.Diagnostics))
         PairingRoute, is SettingsPageRoute -> ResolvedRoute(AppTab.Settings, key)
+        is ExtensionUiRoute -> key.takeIf { it.extensionId.isNotBlank() && it.uiId.isNotBlank() }?.let { ResolvedRoute(AppTab.Settings, it) }
         is InboxItemRoute -> key.takeIf { it.itemId.isNotBlank() }?.let { ResolvedRoute(AppTab.Inbox, it) }
         is LarkChatRoute -> key.takeIf { it.chatId.isNotBlank() }?.let { ResolvedRoute(AppTab.Inbox, it) }
         is ChatRoute -> normalizedChat(key)?.let { ResolvedRoute(it.kind.tab, it) }
@@ -94,6 +95,8 @@ class Router(
                 if (parameters["target"] == "request") InteractionRoute(chat, parameters["request"] ?: return null)
                 else chat
             }
+            "extension" -> ExtensionUiRoute(parameters["extension"] ?: return null, parameters["ui"] ?: return null,
+                parameters["title"].orEmpty(), parameters["state"])
             "inbox" -> InboxItemRoute(parameters["item"] ?: return null)
             "lark" -> LarkChatRoute(parameters["chat"] ?: return null)
             "settings" -> SettingsPageRoute(SettingsPage.entries.firstOrNull {

@@ -40,7 +40,7 @@ data class InboxItemUiRoute(val itemId: String, val extensionId: String, val uiI
 @Serializable @SerialName("jarvis.core.navigation.PairingRoute") data object PairingRoute : NavKey
 @Serializable @SerialName("jarvis.core.navigation.TodosRoute") data object TodosRoute : NavKey
 @Serializable @SerialName("jarvis.core.navigation.TodoDetailRoute") data class TodoDetailRoute(val todoId: String) : NavKey
-@Serializable enum class SettingsPage { Diagnostics, Readiness, Notifications, PhoneData, Appearance, Devices, About, Pairing, Assistant, ClaudeCode, ModelConfig, Hubs, Persona, Extensions, Mail, Feishu, Channels, HubUpdate, Translation, Triage }
+@Serializable enum class SettingsPage { Diagnostics, Readiness, Notifications, PhoneData, Appearance, Devices, About, Pairing, Assistant, ClaudeCode, ModelConfig, Hubs, Persona, Extensions, Mail, Feishu, Channels, HubUpdate, Translation, Triage, Capsule }
 @Serializable @SerialName("jarvis.core.navigation.SettingsPageRoute") data class SettingsPageRoute(val page: SettingsPage) : NavKey
 
 enum class AppTab { Jarvis, Agents, Inbox, Settings }

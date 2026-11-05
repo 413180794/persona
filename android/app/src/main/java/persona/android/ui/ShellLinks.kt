@@ -58,7 +58,17 @@ internal fun ShellLinkHost(session: ShellSession, navigator: Navigator, feedback
             onContext = contextElsewhere.takeIf { handToPersona == null },
             onEdit = editElsewhere.takeIf { handToPersona == null },
             onHandToPersona = handToPersona,
-        ) { _ -> content() }
+        ) { _ ->
+            val uri = androidx.compose.ui.platform.LocalUriHandler.current
+            val pending = persona.android.MainActivity.pendingCapsuleUrl.value
+            LaunchedEffect(pending) {
+                pending?.let { url ->
+                    uri.openUri(url)
+                    if (persona.android.MainActivity.pendingCapsuleUrl.value == url) persona.android.MainActivity.pendingCapsuleUrl.value = null
+                }
+            }
+            content()
+        }
     }
     picked?.let { selection ->
         HandToPersonaDialog(selection, onDismiss = { picked = null }) { message ->

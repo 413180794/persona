@@ -179,3 +179,30 @@
 
 
 - herdr 的 `herdr_running` / `herdr_running_known` 是 node.info 字段，hub 的普通 `machines` 快照没有转发它们。Android 要从 `GET /api/v1/machines/{mid}/herdr` 读 `{autostart, running, known}`；`known: false` 表示未知。显式启动后用确认的结果更新提示，并防止更早的状态查询覆盖它（#1916）。
+
+
+## 悬浮窗 addView 后还没有 attach（#2124）
+
+冷启动后快速回桌面，会在窗口注册后、首次绘制 attach 前触发配对重建或隐藏。`WindowManager.addView()` 已经注册成功时，
+`View.isAttachedToWindow` 仍可能为 false；只按 attached 决定是否移除，会留下等待 attach 的窗口，然后它带着已 DESTROYED 的 LifecycleOwner
+进入 Compose，报 `Cannot configure ComposeView to disposeComposition at Lifecycle ON_DESTROY`。
+
+宿主单独记录注册成功，隐藏时先 `removeViewImmediate` 撤掉已注册的窗口，再 dispose composition 和销毁 owner。清理先清本地注册标记，
+避免重入重复移除。模拟器验收应包含保留 always 设置的冷启动、马上 Home、重新打开与关闭，不只测停稳后的拖动和点击。
+
+
+## Compose 浮层的头部拖动（#2124）
+
+Compose 的可点击内容可能调用 `requestDisallowInterceptTouchEvent`，父 FrameLayout 的 `onInterceptTouchEvent` 不一定能接管拖动；
+空的 Compose 拖动检测器还会和窗口手势竞争。窗口层在向 Compose 分发前，用 raw 屏幕坐标识别头部拖动；超过触摸阈值时向子控件发送一次 CANCEL，
+再移动 WindowManager 的窗口。拖动期间暂停按旧停靠位置的布局校正，松手才保存新的边和高度比例。验收要核对实际窗口 frame 和持久化位置，
+不能只看截图以为拖动成功。
+
+
+## 浮层 IME inset 的坐标范围（#2124）
+
+WindowInsets 回给浮层 View 的 IME bottom 可能只是该窗口与键盘的重叠量，不能直接从整屏高度减去它。
+现场 display 高 2400、键盘 top 1517，旧卡片 bottom 2305，输入框和发送按钮被遮住。
+优先使用 WindowMetrics 的全屏 IME inset；View 局部 inset 要先按窗口屏幕位置与高度换算，再用于屏幕边界。
+窗口已移到键盘上方时局部重叠会变为零，IME 仍可见时保留已知边界，明确隐藏时才清除。
+卡片的任务 / 扩展独立滚动，输入框和发送固定在底部，验收核对整块卡片 bottom 在键盘 top 以上，并实际点击发送。

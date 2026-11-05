@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(project(":platform:notify"))
     implementation(project(":platform:shortcuts"))
+    implementation(project(":platform:capsule"))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
     implementation(libs.compose.icons)

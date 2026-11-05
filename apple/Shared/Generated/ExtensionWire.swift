@@ -958,7 +958,7 @@ nonisolated struct ExtensionUIItem: Codable, Equatable, Sendable {
     var hosts: [String]?
     /// nav_page only.
     var icon: String?
-    /// overview_card and widget only: a nav_page or extension_page of the same extension.
+    /// overview_card, capsule_card and widget only: a nav_page or extension_page of the same extension.
     var opens: String?
     /// inbox_item only: one of the extension's own connectors.
     var connector: String?
@@ -2328,7 +2328,8 @@ nonisolated enum ExtensionPlacement {
     static let inboxItem = "inbox_item"
     static let extensionPage = "extension_page"
     static let widget = "widget"
-    static let all = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget"]
+    static let capsuleCard = "capsule_card"
+    static let all = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget", "capsule_card"]
 }
 
 /// How much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn for

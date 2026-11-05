@@ -801,7 +801,8 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 - 打开：对话的链接入口（`ChatLinkHost`，`LocalChatPorts` 给它会话所在的机器）先认端口链接：端口在这台机器某个 Agent 的 `ports` 里就直接转发，不在就先 `POST …/ports/{port}/open`，404 时提示「端口 :N 已经没有在监听」，链接不动。网页卡片标题下写「机器名 :端口」，菜单只有「重新加载」（手机回环上的地址别的 App 打不开）。
 - 转发（`core/hub/PortForwarder`）：在手机 127.0.0.1 上绑同一个端口号，被占就随机一个，再在 ::1 绑同一个号；只绑回环。每条连接一个 `…/ports/{port}/connect` 的 WebSocket（设备 token、配对钉住的证书，跟当前线路走），从 hub 来的字节在读线程上直接写给浏览器，往 hub 发的排队超过 512 KB 就先不读浏览器，两边都不在内存里堆。多 hub 时按会话所在的组转（`PortOpener.inGroup`）。
 - 端口链接不预加载；端口页不走磁盘缓存，再打开时重新加载（地址每次一样，dev server 已经变了，iOS #1934）。
-- 还没有：会话顶部的端口条、回复和 Bash 输出下面的端口 Badge（变灰）→ #2144 后两步；https 的 dev server（系统 CA 不认自签证书）。
+- 会话顶部的端口条（`ChatPortChips.kt`，iOS `SessionPortChips`）：Agent 对话的标签条下面一行，`Session.ports` 每个端口一枚 `PathChip`（地球图标、「:端口 页面标题」），点了和点链接一样经转发打开；没有端口、Persona 的对话、不能打开端口时不显示。
+- 还没有：回复和 Bash 输出下面的端口 Badge（变灰）→ #2144 第三步；https 的 dev server（系统 CA 不认自签证书）。
 
 ## 机器、引擎、模型配置与新建 Agent
 
@@ -1059,3 +1060,24 @@ Agents 页可见时每 5 秒读取在线经典 herdr / herdr-both 机器的 `GET
 离线机器、Herdr App、历史范围以及状态未知或接口不可用的机器不显示。提示使用设计系统 `JNotice`，三种风格共用。
 点「启动」才发 `POST /api/v1/machines/{mid}/herdr/start`，不修改自动启动设置；请求期间隐藏启动按钮，
 确认运行后移除提示，失败时说明原因并保留入口。启动确认后的状态不会被更早发起的查询覆盖；启动请求不自动重试。
+
+
+## 跨 App 悬浮胶囊（#2124）
+
+设置 › 悬浮胶囊：默认关闭，可选择“有任务时显示”或“一直显示”，首次开启时到系统授予“显示在其他应用上层”权限。
+它是 Android 原生 `TYPE_APPLICATION_OVERLAY` 浮层，和系统状态栏的 Live Updates 胶囊独立，在项目支持的 Android 12+ 上可用。
+
+- 收起时显示 Persona 形象，工作中、需要处理和完成未看时带摘要；拖动头部后贴到最近的屏幕边缘，记住相对高度。
+- 点开后切换任务、看最近消息、发消息和补充要求；“查看并处理”打开原会话里的提问 / 审批，“打开会话”进入完整对话。
+- 各会话草稿互相独立；同一合并会话键经既有持久发件箱发送，多 hub 路由保持原样。卡片展开时才观察聊天记录，胶囊收起时停止观察。
+- 回到 Persona、锁屏、熄屏、关闭、撤销系统权限或退出配对时移除浮层。任务结束后已展开的卡片保持，等用户收起。
+- 浮层使用同一界面风格和形象，适配转屏与输入法；系统和厂商的后台限制仍按“后台保活”设置处理。
+
+代码分工：`android/platform/capsule/` 管窗口、权限、展示策略和公开 `CapsuleContentSource`；
+`android/app/src/main/java/persona/android/capsule/` 把现有会话、消息和配对接到浮层；设置只依赖 `FloatingCapsuleSettings`。
+
+扩展声明 `contributes.ui[].placement = "capsule_card"` 可贡献 compact 卡片和动作，使用现有 `ui.render` / `ui.action`；
+Android 只在卡片展开时渲染，确认、错误与动作回执在卡片内显示。安装 / 升级需接受这项 App 外展示能力。
+扩展页面和链接由完整 App 打开；扩展不在手机运行代码，系统浮层权限由用户和原生宿主管理。详见 [extensions.md](extensions.md)。
+
+本轮交付基础浮层、开关、会话入口和声明式扩展插槽。长按语音、双击发送当前屏幕、原地完成全部类型的审批仍为 #2124 后续项，Issue 保持开启。

@@ -179,6 +179,7 @@ private fun SettingsContent(
             onDiagnostics = { open(SettingsPage.Diagnostics) }, diagnostics = services.diagnostics, onBack = back,
             footer = { onDemo?.let { Action("没有 hub？先体验一下", onClick = it) }; deviceFeedback() },
             machines = services.machines.takeUnless { services.demo })
+        "capsule" -> CapsuleSettingsPage(services.capsule, back)
         "claude" -> ClaudeSettingsPage(services.sessions, services.machines.takeUnless { services.demo }, back)
         "models" -> purpose?.let { id -> ModelPurposePage(services.models.takeUnless { services.demo }, id, onBack = { purpose = null },
                 providers = services.providers.takeUnless { services.demo }) }
@@ -267,6 +268,12 @@ private fun SettingsContent(
             item { JGroupItem(GroupPosition.of(hubRows + 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Devices), title = "设备", leadingIcon = PhIcons.DeviceMobile, subtitle = "已配对设备和访问权限", onClick = { open(SettingsPage.Devices) }) } }
             item { JGroupItem(GroupPosition.of(hubRows + 2, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Diagnostics), title = "连接诊断", leadingIcon = PhIcons.Gauge, subtitle = "连接路径、探测结果和记录", onClick = { open(SettingsPage.Diagnostics) }) } }
             item { JSectionHeader("通知与后台") }
+            if (services.capsule != null) item { JGroupItem(GroupPosition.Single) {
+                val mode by services.capsule.mode.collectAsState()
+                JRow(title = "悬浮胶囊", leadingIcon = PhIcons.ChatCircle, value = CapsuleSettingsText.label(mode),
+                    subtitle = "在其他 App 中查看任务、继续对话", selected = detailKey == SettingsPageRoute(SettingsPage.Capsule),
+                    onClick = { open(SettingsPage.Capsule) })
+            } }
             item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Notifications), title = "通知", leadingIcon = PhIcons.BellSimple, subtitle = "需要你、做完了和系统通知渠道", onClick = { open(SettingsPage.Notifications) }) } }
             item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Readiness), title = "后台保活", leadingIcon = PhIcons.BatteryCharging, subtitle = "通知、电池和系统后台设置", onClick = { open(SettingsPage.Readiness) }) } }
             // The assistant page lives in the assistant module; only a navigation host can open it.

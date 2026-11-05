@@ -394,7 +394,7 @@ data class ExtensionUIItem(
      */
     val icon: String? = null,
     /**
-     * overview_card and widget only: a nav_page or extension_page of the same extension.
+     * overview_card, capsule_card and widget only: a nav_page or extension_page of the same extension.
      */
     val opens: String? = null,
     /**
@@ -968,7 +968,8 @@ object ExtensionPlacement {
     const val INBOX_ITEM = "inbox_item"
     const val EXTENSION_PAGE = "extension_page"
     const val WIDGET = "widget"
-    val ALL = listOf("plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget")
+    const val CAPSULE_CARD = "capsule_card"
+    val ALL = listOf("plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget", "capsule_card")
 }
 
 /**

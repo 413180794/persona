@@ -160,6 +160,11 @@ class MainActivity : ComponentActivity() {
 
     private fun handle(intent: Intent?) {
         if (intent == null) return
+        intent.getStringExtra(EXTRA_CAPSULE_URL)?.let { url ->
+            val target = android.net.Uri.parse(url)
+            if (target.scheme == "https" && !target.host.isNullOrBlank()) pendingCapsuleUrl.value = url
+            intent.removeExtra(EXTRA_CAPSULE_URL)
+        }
         if (intent.getBooleanExtra(LockScreenTests.EXTRA_LOCK_TEST, false)) {
             pendingLockTest.value = true
             intent.removeExtra(LockScreenTests.EXTRA_LOCK_TEST)
@@ -211,6 +216,8 @@ class MainActivity : ComponentActivity() {
     companion object {
         val pendingLockTest = mutableStateOf(false)
         const val EXTRA_SESSION = "session"
+        const val EXTRA_CAPSULE_URL = "persona.capsule.url"
+        val pendingCapsuleUrl = mutableStateOf<String?>(null)
         /** A pairing link the activity was opened with, for the pairing screen to confirm. */
         val pendingPairLink = mutableStateOf<String?>(null)
     }

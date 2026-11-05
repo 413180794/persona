@@ -292,7 +292,7 @@ type UIItem struct {
 	Hosts []string `json:"hosts,omitempty"`
 	// nav_page only.
 	Icon string `json:"icon,omitempty"`
-	// overview_card and widget only: a nav_page or extension_page of the same extension.
+	// overview_card, capsule_card and widget only: a nav_page or extension_page of the same extension.
 	Opens string `json:"opens,omitempty"`
 	// inbox_item only: one of the extension's own connectors.
 	Connector string `json:"connector,omitempty"`
@@ -754,10 +754,11 @@ const (
 	PlacementInboxItem       = "inbox_item"
 	PlacementExtensionPage   = "extension_page"
 	PlacementWidget          = "widget"
+	PlacementCapsuleCard     = "capsule_card"
 )
 
 // Placements are the values of Placement, in order.
-var Placements = []string{"plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget"}
+var Placements = []string{"plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget", "capsule_card"}
 
 // Size: how much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn
 // for (WidgetFamily).

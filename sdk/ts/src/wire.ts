@@ -311,7 +311,7 @@ export interface UIItem {
   hosts?: string[];
   /** nav_page only. */
   icon?: NavIcon;
-  /** overview_card and widget only: a nav_page or extension_page of the same extension. */
+  /** overview_card, capsule_card and widget only: a nav_page or extension_page of the same extension. */
   opens?: string;
   /** inbox_item only: one of the extension's own connectors. */
   connector?: string;
@@ -736,8 +736,8 @@ export const BUTTON_ROLES = ["normal", "destructive"] as const;
  * A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI version 3):
  * the hub takes both and answers the new API with extension_page, the old one with plugin_page.
  */
-export type Placement = "plugin_page" | "launcher_section" | "nav_page" | "overview_card" | "machine_section" | "inbox_item" | "extension_page" | "widget" | (string & {});
-export const PLACEMENTS = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget"] as const;
+export type Placement = "plugin_page" | "launcher_section" | "nav_page" | "overview_card" | "machine_section" | "inbox_item" | "extension_page" | "widget" | "capsule_card" | (string & {});
+export const PLACEMENTS = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget", "capsule_card"] as const;
 
 /**
  * How much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn for
