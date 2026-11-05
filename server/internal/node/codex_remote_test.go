@@ -184,7 +184,9 @@ func connectRemoteFixture(t *testing.T, n *Node, home, id string, threads ...str
 	f := &remoteFixture{home: home, threads: threads}
 	server := httptest.NewServer(http.HandlerFunc(f.serve))
 	ctx, cancel := context.WithCancel(context.Background())
-	spec := proto.CodexServer{ID: id, Home: home, Endpoint: "ws" + strings.TrimPrefix(server.URL, "http")}
+	// The node canonicalizes every server's home before it dials (configureCodex, discoverCodex); macOS's TempDir
+	// lives under the /var -> /private/var symlink, so a raw home never matches the app-server's codexHome.
+	spec := proto.CodexServer{ID: id, Home: canonicalCodexHome(home, n.home), Endpoint: "ws" + strings.TrimPrefix(server.URL, "http")}
 	n.ensureCodexRemote(ctx, spec)
 	waitFor(t, "remote connected", func() bool {
 		n.codices.mu.Lock()
@@ -401,8 +403,12 @@ func TestCodexDiscoverySpacesAliasesAndRememberedHomes(t *testing.T) {
 func TestCodexRemotePrivateUnixWebSocket(t *testing.T) {
 	n := remoteTestNode(t)
 	home := t.TempDir()
-	dir := filepath.Join(home, "control")
-	_ = os.Mkdir(dir, 0700)
+	// A Unix socket path must fit sun_path (104 bytes on macOS); TempDir under /var/folders with this test's name does not.
+	dir, err := os.MkdirTemp("/tmp", "cxr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "server.sock")
 	ln, err := net.Listen("unix", socket)
 	if err != nil {
@@ -415,7 +421,7 @@ func TestCodexRemotePrivateUnixWebSocket(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	n.ensureCodexRemote(ctx, proto.CodexServer{ID: "unix", Home: home, Endpoint: "unix://" + socket})
+	n.ensureCodexRemote(ctx, proto.CodexServer{ID: "unix", Home: canonicalCodexHome(home, n.home), Endpoint: "unix://" + socket})
 	waitFor(t, "Unix WebSocket handshake", func() bool {
 		id := n.registerCodex(home, remoteRaw, "")
 		_, _, err := n.codexOwner(id)
