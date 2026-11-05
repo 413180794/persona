@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -393,5 +394,93 @@ func TestUnknownIDRefusal(t *testing.T) {
 	err = c.Send(context.Background(), orcart.Target{Handle: "term_1"}, "x")
 	if !orcart.IsCode(err, "request_too_large") || !orcart.Refused(err) || time.Since(start) > 2*time.Second {
 		t.Errorf("unknown id: %v after %s", err, time.Since(start))
+	}
+}
+
+// orcaEnv clears the variables MetaPaths reads (the test may itself run inside Orca) and points the home at a fresh
+// directory.
+func orcaEnv(t *testing.T) (home string) {
+	home = t.TempDir()
+	for _, k := range []string{"ORCA_USER_DATA_PATH", "ORCA_USER_DATA", "XDG_DATA_HOME", "XDG_CONFIG_HOME"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	return home
+}
+
+// The desktop app's file comes first, orcad's (~/.orca, the runtime another computer's Orca starts over SSH) after;
+// Orca's own overrides move them.
+func TestMetaPathsDesktopThenOrcad(t *testing.T) {
+	home := orcaEnv(t)
+	paths := orcart.MetaPaths()
+	if len(paths) == 0 || paths[len(paths)-1] != filepath.Join(home, ".orca", "orca-runtime.json") {
+		t.Fatalf("orcad's file is not last: %v", paths)
+	}
+	if runtime.GOOS == "linux" && paths[0] != filepath.Join(home, ".config", "orca", "orca-runtime.json") {
+		t.Errorf("desktop file on linux: %v", paths)
+	}
+	data := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+	if got := orcart.MetaPaths(); got[len(got)-1] != filepath.Join(data, "Orca", "orca-runtime.json") {
+		t.Errorf("XDG_DATA_HOME: %v", got)
+	}
+	t.Setenv("ORCA_USER_DATA", "/srv/orcad")
+	if got := orcart.MetaPaths(); got[len(got)-1] != filepath.Join("/srv/orcad", "orca-runtime.json") {
+		t.Errorf("ORCA_USER_DATA: %v", got)
+	}
+	t.Setenv("ORCA_USER_DATA_PATH", "/srv/desktop")
+	if got := orcart.MetaPaths(); len(got) != 1 || got[0] != filepath.Join("/srv/desktop", "orca-runtime.json") {
+		t.Errorf("ORCA_USER_DATA_PATH is the only place: %v", got)
+	}
+}
+
+// Of the files there, the one written last is read (an earlier runtime may have left its own behind); with none, the
+// desktop app's path (Orca not running).
+func TestMetaPathNewestFile(t *testing.T) {
+	orcaEnv(t)
+	paths := orcart.MetaPaths()
+	if got := orcart.MetaPath(); got != paths[0] {
+		t.Errorf("no file: %s, want %s", got, paths[0])
+	}
+	old := time.Now().Add(-time.Hour)
+	for i, p := range paths {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		at := old
+		if i == len(paths)-1 {
+			at = time.Now()
+		}
+		if err := os.Chtimes(p, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := orcart.MetaPath(); got != paths[len(paths)-1] {
+		t.Errorf("newest: %s, want %s", got, paths[len(paths)-1])
+	}
+}
+
+// A client from New finds a runtime that starts after it, in orcad's directory.
+func TestNewFindsOrcadRuntimeStartedLater(t *testing.T) {
+	home := orcaEnv(t)
+	f := orcarttest.New(t)
+	f.Stop()
+	c := orcart.New()
+	if _, err := c.Probe(context.Background()); !errors.Is(err, orcart.ErrNotRunning) {
+		t.Fatalf("before Orca runs: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".orca"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	f.MetaPath = filepath.Join(home, ".orca", "orca-runtime.json")
+	if err := f.Restart("t2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Probe(context.Background()); err != nil {
+		t.Fatalf("after orcad started: %v", err)
 	}
 }

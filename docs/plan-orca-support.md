@@ -124,7 +124,10 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
   `node.info` 里 Orca 不可用并带一句 `note`。元数据文件不在、没有本平台的本地传输（macOS / Linux 是 `unix`，Windows 是 `named-pipe`，其次 `unix`）、socket / 管道不在或拒绝连接都算「没开」（`host.ErrNotRunning`）：
   立刻答「没有终端」，从没连上过就不记日志；连不上或 `unauthorized` 时重读元数据文件再试一次（Orca 重启换了 socket 和 token）；
   回复的 `_meta.runtimeId` 和元数据对不上时下次重读。Orca 读不懂的请求（坏 JSON、太大）以 id `unknown` 回错误，按这个请求的拒绝处理。
-  元数据路径：`$ORCA_USER_DATA_PATH/orca-runtime.json`，否则 macOS `~/Library/Application Support/orca/`、Windows `%APPDATA%\orca\`、Linux `$XDG_CONFIG_HOME/orca/`。
+  元数据路径：设了 `$ORCA_USER_DATA_PATH` 就只看它；否则看两处，都在时读最近写的那份（之前的 runtime 可能留下旧文件）：
+  桌面 App 的目录（macOS `~/Library/Application Support/orca/`、Windows `%APPDATA%\orca\`、Linux `$XDG_CONFIG_HOME/orca/`），
+  和 orcad 的目录（另一台电脑上的 Orca 经 SSH 在这台起的远程 runtime，不分平台：`$ORCA_USER_DATA`，否则 `$XDG_DATA_HOME/Orca`，否则 `~/.orca`；
+  Orca 1.4.246 的 orcad，#2070）。文件读不到时下次调用重新找，Orca 比 node 晚启动也能找到。
 - **超时**：`terminal.list`、`worktree.ps` 3 秒（每次刷新都调），`status.get`、`terminal.read`、`terminal.agentStatus` 5 秒，`terminal.send` 30 秒
   （Agent 提示是 Orca 那边的长轮询，期间发 keepalive），`terminal.close` 10 秒。
 - **没有推送**：不实现 `Watcher`。选了 Orca 的机器没有事件流，node 的轮询每秒取一次快照，不是 herdr 有事件流时的 10 秒慢快照。

@@ -19,7 +19,7 @@
 | `herdr` | herdr | 终端里运行 `herdr`，在它的窗格里开 `claude` / `codex`（没在运行时 node 按需拉起，见「herdr 没在运行时」） | herdr 的 socket 能连上，或装了 `herdr` 命令 |
 | `herdr-core` | Herdr App | Herdr 桌面 App 里开的终端（App 背后的 herdr-core） | herdr-core 的 socket 有回应 |
 | `herdr-both` | herdr + Herdr App | 上面两个同时在用 | 两个运行时都检测得到 |
-| `orca` | Orca | Orca 桌面 App 里开的终端 | Orca 在运行，而且它的版本 Persona 认得 |
+| `orca` | Orca | Orca 桌面 App 里开的终端，或另一台电脑上的 Orca 经 SSH 在这台起的远程 runtime 里的终端 | Orca（桌面 App 或远程 runtime）在运行，而且它的版本 Persona 认得 |
 | `paseo` | Paseo | Paseo 里的 Agent（它的桌面 App、`paseo` 命令开的；Claude Code、Codex、ACP 都算） | Paseo 的 daemon 在运行：它 home 里的 `paseo.pid` 写的地址有回应 |
 
 herdr 和 Herdr App 是同一家的两个产品，但互不相通：在 Herdr App 里开的会话 herdr 看不到，反过来也一样。只装 / 只用一个时按实际选；

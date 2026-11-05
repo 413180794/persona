@@ -41,6 +41,9 @@ const (
 type Client struct {
 	// MetaPath is orca-runtime.json (MetaPath()); empty: Orca is not there.
 	MetaPath string
+	// auto: MetaPath came from MetaPath() (New) and is looked up again when it cannot be read; a path set by hand
+	// (tests, the live check) stays.
+	auto bool
 	// Log gets one line when calls start failing and one when they work again; Orca never seen running is not
 	// logged. nil: silent. The auth token is never logged.
 	Log func(format string, args ...any)
@@ -56,37 +59,68 @@ type Client struct {
 	compat *compat      // the status.get check of meta's runtime
 }
 
-// New is a client of this user's Orca.
-func New() *Client { return &Client{MetaPath: MetaPath()} }
+// New is a client of this user's Orca: the metadata file is looked up again whenever it is not there (Orca started
+// after the node, or in the other of its two data directories).
+func New() *Client { return &Client{MetaPath: MetaPath(), auto: true} }
 
-// MetaPath is orca-runtime.json in Orca's user data directory (Electron's userData for the app name "orca"):
-// $ORCA_USER_DATA_PATH when set, else ~/Library/Application Support/orca on macOS, %APPDATA%\orca on Windows and
-// $XDG_CONFIG_HOME/orca (~/.config/orca) elsewhere.
+// MetaPath is the orca-runtime.json to read: $ORCA_USER_DATA_PATH's when set; else, of the files that exist in
+// MetaPaths, the one written last (a runtime that ran before may have left its file behind); else the desktop app's.
 func MetaPath() string {
+	paths := MetaPaths()
+	best, bestAt := "", time.Time{}
+	for _, p := range paths {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() && (best == "" || st.ModTime().After(bestAt)) {
+			best, bestAt = p, st.ModTime()
+		}
+	}
+	if best == "" && len(paths) > 0 {
+		best = paths[0]
+	}
+	return best
+}
+
+// MetaPaths are where an Orca runtime of this user writes orca-runtime.json, the desktop app's first. Just
+// $ORCA_USER_DATA_PATH's when set (Orca's own override). Otherwise two places:
+//   - the desktop app's user data directory (Electron's userData for the app name "orca"): ~/Library/Application
+//     Support/orca on macOS, %APPDATA%\orca on Windows, $XDG_CONFIG_HOME/orca (~/.config/orca) elsewhere;
+//   - orcad's, the runtime another computer's Orca starts over SSH: $ORCA_USER_DATA, else $XDG_DATA_HOME/Orca, else
+//     ~/.orca, on every platform (Orca 1.4.246's orcad).
+func MetaPaths() []string {
+	const name = "orca-runtime.json"
 	if d := os.Getenv("ORCA_USER_DATA_PATH"); d != "" {
-		return filepath.Join(d, "orca-runtime.json")
+		return []string{filepath.Join(d, name)}
 	}
 	home, _ := os.UserHomeDir()
-	var dir string
+	var dirs []string
 	switch runtime.GOOS {
 	case "darwin":
-		if home == "" {
-			return ""
+		if home != "" {
+			dirs = append(dirs, filepath.Join(home, "Library", "Application Support", "orca"))
 		}
-		dir = filepath.Join(home, "Library", "Application Support", "orca")
 	case "windows":
-		dir = filepath.Join(os.Getenv("APPDATA"), "orca")
-	default:
-		cfg := os.Getenv("XDG_CONFIG_HOME")
-		if cfg == "" {
-			if home == "" {
-				return ""
-			}
-			cfg = filepath.Join(home, ".config")
+		if d := os.Getenv("APPDATA"); d != "" {
+			dirs = append(dirs, filepath.Join(d, "orca"))
 		}
-		dir = filepath.Join(cfg, "orca")
+	default:
+		if cfg := os.Getenv("XDG_CONFIG_HOME"); cfg != "" {
+			dirs = append(dirs, filepath.Join(cfg, "orca"))
+		} else if home != "" {
+			dirs = append(dirs, filepath.Join(home, ".config", "orca"))
+		}
 	}
-	return filepath.Join(dir, "orca-runtime.json")
+	switch {
+	case os.Getenv("ORCA_USER_DATA") != "":
+		dirs = append(dirs, os.Getenv("ORCA_USER_DATA"))
+	case os.Getenv("XDG_DATA_HOME") != "":
+		dirs = append(dirs, filepath.Join(os.Getenv("XDG_DATA_HOME"), "Orca"))
+	case home != "":
+		dirs = append(dirs, filepath.Join(home, ".orca"))
+	}
+	out := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		out = append(out, filepath.Join(d, name))
+	}
+	return out
 }
 
 // runtimeMeta is what the client keeps of orca-runtime.json.
@@ -172,6 +206,10 @@ const (
 
 // readMeta reads orca-runtime.json: the first transport of localKinds it lists (in that order) and the token.
 func (c *Client) readMeta() (*runtimeMeta, error) {
+	if c.auto {
+		// Each read (c.mu is held): the runtime that wrote its file last wins, as in MetaPath.
+		c.MetaPath = MetaPath()
+	}
 	if c.MetaPath == "" {
 		return nil, ErrNotRunning
 	}
