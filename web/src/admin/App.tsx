@@ -1,4 +1,5 @@
 // The admin page's root: ask the hub where we stand (password set? signed in?) and show setup, sign-in or the shell.
+import { t } from "../i18n";
 import { useCallback, useEffect, useState } from "react";
 import { Button, Spinner, Toasts } from "../ui/atoms";
 import { adminApi, errorText, handleLoginRequired, setCsrf } from "./api";
@@ -25,7 +26,7 @@ export function AdminApp() {
   useEffect(() => {
     load();
     handleLoginRequired(() => {
-      setNotice("登录过期了，请重新登录");
+      setNotice(t("admin-api.err_login_required"));
       setState((s) => (s ? { ...s, logged_in: false, csrf: "" } : s));
     });
   }, [load]);
@@ -36,7 +37,7 @@ export function AdminApp() {
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-page px-6 text-center">
         <p className="text-[13px] text-ink-2">{error}</p>
         <Button icon="retry" onClick={load}>
-          重试
+          {t("admin-app.retry")}
         </Button>
       </div>
     ) : (

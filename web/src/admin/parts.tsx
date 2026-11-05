@@ -1,4 +1,5 @@
 // Small building blocks of the admin pages, on the web client's tokens (src/styles.css) and atoms.
+import { t } from "../i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, copyText, cx, EASE, IconButton, PixelGrid, Shimmer } from "../ui/atoms";
 import { errorText } from "./api";
@@ -69,7 +70,7 @@ export function Line({ label, hint, children, mono, top }: { label: React.ReactN
   );
 }
 
-export function CopyValue({ value, label = "拷贝", mono = true, className }: { value: string; label?: string; mono?: boolean; className?: string }) {
+export function CopyValue({ value, label = t("admin-parts.copy"), mono = true, className }: { value: string; label?: string; mono?: boolean; className?: string }) {
   return (
     <span className={cx("flex min-w-0 items-center gap-1", className)}>
       <span className={cx("min-w-0 truncate text-[12.5px] text-ink-2", mono && "font-mono text-[12px]")} title={value}>
@@ -190,14 +191,14 @@ export function ConfirmButton({ label, confirm, onConfirm, icon = "trash", busy 
   const [asking, setAsking] = useState(false);
   useEffect(() => {
     if (!asking) return;
-    const t = setTimeout(() => setAsking(false), 6000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setAsking(false), 6000);
+    return () => clearTimeout(timer);
   }, [asking]);
   if (asking)
     return (
       <span className="flex items-center gap-1" style={{ animation: `pop-in 140ms ${EASE} both` }}>
         <Button tone="quiet" className="h-7 px-2" onClick={() => setAsking(false)}>
-          取消
+          {t("admin-parts.cancel")}
         </Button>
         <Button tone="danger" className="h-7 px-2.5" busy={busy} onClick={() => void Promise.resolve(onConfirm()).finally(() => setAsking(false))}>
           {confirm}
@@ -227,7 +228,7 @@ export function Qr({ rows, size = 196, label }: { rows: string[]; size?: number;
   );
 }
 
-export function Loader({ label = "加载中" }: { label?: string }) {
+export function Loader({ label = t("admin-parts.loading") }: { label?: string }) {
   return (
     <div className="flex items-center gap-2.5 px-1 py-6">
       <PixelGrid />
@@ -238,7 +239,7 @@ export function Loader({ label = "加载中" }: { label?: string }) {
 
 export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   return (
-    <Notice tone="red" icon="alert" title="没取到数据" action={onRetry && <Button icon="retry" onClick={onRetry}>重试</Button>}>
+    <Notice tone="red" icon="alert" title={t("admin-parts.load_failed")} action={onRetry && <Button icon="retry" onClick={onRetry}>{t("admin-parts.retry")}</Button>}>
       {errorText(error)}
     </Notice>
   );
@@ -309,7 +310,7 @@ export function Segmented<T extends string>({
 }
 
 // CodeBlock shows a command or link in full (wrapped), with a copy button.
-export function CodeBlock({ value, label, copyLabel = "拷贝" }: { value: string; label?: string; copyLabel?: string }) {
+export function CodeBlock({ value, label, copyLabel = t("admin-parts.copy") }: { value: string; label?: string; copyLabel?: string }) {
   return (
     <div className="rounded-control bg-inset p-2.5 shadow-hairline">
       {label && <div className="mb-1 text-[11px] font-medium text-ink-3">{label}</div>}

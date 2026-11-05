@@ -1,5 +1,6 @@
 // The admin shell: navigation (left on wide screens, a strip on top on narrow ones), the restart banner, the page.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 import { Button, cx, Dialog, EASE, toast } from "../ui/atoms";
 import { setTheme, useTheme, type Theme } from "../views/theme";
 import { adminApi, errorText } from "./api";
@@ -35,7 +36,7 @@ export function Shell({ hubName, onLogout }: { hubName: string; onLogout: () => 
   }, [page]);
 
   useEffect(() => {
-    document.title = `${NAV.find((n) => n.page === page)?.label ?? "管理"} · ${name || "Persona"} 管理`;
+    document.title = t("admin-shell.document_title", { page: NAV.find((n) => n.page === page)?.label ?? t("admin-shell.admin"), name: name || "Persona" });
   }, [page, name]);
 
   const logout = async () => {
@@ -56,7 +57,7 @@ export function Shell({ hubName, onLogout }: { hubName: string; onLogout: () => 
           <ThemeSwitch />
           <button type="button" onClick={logout} className="mt-1 flex h-8 w-full items-center gap-2 whitespace-nowrap rounded-control px-2 text-[12.5px] text-ink-2 transition-colors hover:bg-hover hover:text-ink">
             <AdminIcon name="logout" size={14} />
-            退出登录
+            {t("admin-shell.sign_out")}
           </button>
         </div>
       </aside>
@@ -65,12 +66,12 @@ export function Shell({ hubName, onLogout }: { hubName: string; onLogout: () => 
           <Brand name={name} compact />
           <div className="ml-auto flex items-center gap-1">
             <ThemeSwitch compact />
-            <button type="button" onClick={logout} aria-label="退出登录" title="退出登录" className="flex size-8 items-center justify-center rounded-[8px] text-ink-3 hover:bg-hover hover:text-ink">
+            <button type="button" onClick={logout} aria-label={t("admin-shell.sign_out")} title={t("admin-shell.sign_out")} className="flex size-8 items-center justify-center rounded-[8px] text-ink-3 hover:bg-hover hover:text-ink">
               <AdminIcon name="logout" size={15} />
             </button>
           </div>
         </div>
-        <nav aria-label="管理分类" className="flex items-center gap-0.5 overflow-x-auto px-2 pb-2">
+        <nav aria-label={t("admin-shell.sections")} className="flex items-center gap-0.5 overflow-x-auto px-2 pb-2">
           {NAV.map((n, i) => [
             n.advanced && !NAV[i - 1]?.advanced && <span key="advanced" aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line-strong" />,
             <a
@@ -121,7 +122,7 @@ function Brand({ name, compact }: { name: string; compact?: boolean }) {
       </span>
       <div className="min-w-0">
         <div className="truncate text-[13px] font-semibold text-ink">{name || "Persona hub"}</div>
-        <div className="truncate text-[11px] text-ink-3">hub 管理</div>
+        <div className="truncate text-[11px] text-ink-3">{t("admin-shell.hub_admin")}</div>
       </div>
     </div>
   );
@@ -139,7 +140,7 @@ function SideNav({ page }: { page: Page }) {
     setPos((p) => (p?.top === next?.top && p?.height === next?.height ? p : next));
   });
   return (
-    <nav ref={box} aria-label="管理分类" onMouseLeave={() => setHover(null)} className="relative flex flex-col gap-px px-2.5">
+    <nav ref={box} aria-label={t("admin-shell.sections")} onMouseLeave={() => setHover(null)} className="relative flex flex-col gap-px px-2.5">
       <span
         aria-hidden
         className="pointer-events-none absolute inset-x-2.5 rounded-[7px] bg-hover"
@@ -148,7 +149,7 @@ function SideNav({ page }: { page: Page }) {
       {NAV.map((n, i) => [
         n.advanced && !NAV[i - 1]?.advanced && (
           <div key="advanced" className="px-2 pt-4 pb-1 text-[11px] font-medium text-ink-3">
-            高级
+            {t("admin-shell.advanced")}
           </div>
         ),
         <a
@@ -171,15 +172,15 @@ function SideNav({ page }: { page: Page }) {
 }
 
 const THEMES: { t: Theme; icon: AdminIconName; label: string }[] = [
-  { t: "system", icon: "monitor", label: "跟随系统" },
-  { t: "light", icon: "sun", label: "浅色" },
-  { t: "dark", icon: "moon", label: "深色" },
+  { t: "system", icon: "monitor", label: t("admin-shell.theme_system") },
+  { t: "light", icon: "sun", label: t("admin-shell.theme_light") },
+  { t: "dark", icon: "moon", label: t("admin-shell.theme_dark") },
 ];
 
 function ThemeSwitch({ compact }: { compact?: boolean }) {
   const theme = useTheme();
   return (
-    <div role="radiogroup" aria-label="外观" className={cx("flex items-center gap-0.5 rounded-control bg-inset p-0.5 shadow-hairline", !compact && "w-full")}>
+    <div role="radiogroup" aria-label={t("admin-shell.appearance")} className={cx("flex items-center gap-0.5 rounded-control bg-inset p-0.5 shadow-hairline", !compact && "w-full")}>
       {THEMES.map((o) => (
         <button
           key={o.t}
@@ -228,7 +229,7 @@ function RestartBanner() {
         if (startedAt ? o.hub.started_at !== startedAt : down) {
           share({ restart: o.restart, canRestart: o.hub.can_restart, tls: o.tls, hubName: o.hub.name, startedAt: o.hub.started_at });
           setPhase("idle");
-          toast("hub 已重启", "ok");
+          toast(t("admin-shell.restarted"), "ok");
           return;
         }
       } catch {
@@ -240,41 +241,41 @@ function RestartBanner() {
 
   if (phase === "restarting")
     return (
-      <Banner tone="accent" title="正在重启 hub…" detail="通常几秒钟就好；这期间 App 会短暂断开再自己连上。" />
+      <Banner tone="accent" title={t("admin-shell.restarting")} detail={t("admin-shell.restarting_detail")} />
     );
   if (phase === "slow")
-    return <Banner tone="red" title="hub 还没回来" detail="已经等了 90 秒。到 hub 机器上看看日志：systemd 用 journalctl --user -u jarvisd，Docker 用 docker compose logs hub。" action={<Button onClick={() => setPhase("idle")}>知道了</Button>} />;
+    return <Banner tone="red" title={t("admin-shell.slow")} detail={t("admin-shell.slow_detail")} action={<Button onClick={() => setPhase("idle")}>{t("admin-shell.got_it")}</Button>} />;
 
   return (
     <>
       <Banner
         tone="orange"
         title={restartText(restart)}
-        detail={canRestart ? restart.reasons.join("；") : `${restart.reasons.join("；")}。在 hub 机器上重启：systemctl --user restart jarvisd，或 docker compose restart hub。`}
+        detail={canRestart ? restart.reasons.join(t("admin-shell.reason_separator")) : t("admin-shell.restart_manual", { reasons: restart.reasons.join(t("admin-shell.reason_separator")) })}
         action={canRestart && (
           <Button tone="primary" onClick={() => setAsking(true)}>
             <AdminIcon name="power" size={13} stroke={2.2} />
-            重启 hub
+            {t("admin-shell.restart_hub")}
           </Button>
         )}
       />
       <Dialog
         open={asking}
         onClose={() => setAsking(false)}
-        title="重启 hub？"
+        title={t("admin-shell.restart_confirm_title")}
         footer={
           <>
             <Button tone="quiet" onClick={() => setAsking(false)}>
-              取消
+              {t("admin-parts.cancel")}
             </Button>
             <Button tone="primary" onClick={run}>
-              重启
+              {t("admin-shell.restart")}
             </Button>
           </>
         }
       >
         <p className="text-[13px] leading-relaxed text-ink-2">
-          hub 会退出，由 systemd 或 Docker 马上拉起来。重启期间手机和网页会断开几秒钟，正在进行的 Agent 不受影响（它们跑在各自的电脑上）。
+          {t("admin-shell.restart_confirm_body")}
         </p>
       </Dialog>
     </>
@@ -293,7 +294,7 @@ function MemberBanner() {
       icon="mesh"
       title={n.title}
       detail={n.detail}
-      action={n.offline && page !== "peers" && <Button onClick={() => navigate("peers")}>换中心</Button>}
+      action={n.offline && page !== "peers" && <Button onClick={() => navigate("peers")}>{t("admin-shell.change_primary")}</Button>}
     />
   );
 }

@@ -1,6 +1,7 @@
 // How an extension runs (docs/extensions.md「运行情况」, #1857): the error rate and p95 on its row, and in its details the
 // calls and errors, the latency, why it exited, and its log (search, follow it live, copy). A hub from before #1857 has
 // none of it (404): the rows and details show nothing of it then.
+import { formatNumber, t } from "../../i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ExtensionChart } from "../../views/extensions/ExtensionChart";
 import { Button, cx, toast } from "../../ui/atoms";
@@ -11,9 +12,9 @@ import type { ExtensionMetrics, ExtensionOverview, LogLine, MetricsWindow } from
 import { Loader, Segmented, Tag } from "../parts";
 
 const WINDOWS: { value: MetricsWindow; label: string }[] = [
-  { value: "1h", label: "1 小时" },
-  { value: "24h", label: "24 小时" },
-  { value: "7d", label: "7 天" },
+  { value: "1h", label: t("admin-pages-extensionrunning.window_1h") },
+  { value: "24h", label: t("admin-pages-extensionrunning.window_24h") },
+  { value: "7d", label: t("admin-pages-extensionrunning.window_7d") },
 ];
 
 /** The row's two columns: the error rate and p95 over the last 24 hours. */
@@ -21,8 +22,8 @@ export function RunColumns({ o }: { o?: ExtensionOverview }) {
   if (!o) return null;
   const tone = rateTone(o.error_rate, o.calls);
   return (
-    <div className="hidden shrink-0 items-center gap-4 sm:flex" title={`近 24 小时：${o.calls} 次调用，${o.errors} 次出错`}>
-      <Column label="错误率" className={tone === "red" ? "text-red" : tone === "orange" ? "text-orange" : "text-ink-2"}>
+    <div className="hidden shrink-0 items-center gap-4 sm:flex" title={t("admin-pages-extensionrunning.last_24h", { calls: o.calls, errors: o.errors })}>
+      <Column label={t("admin-pages-extensionrunning.error_rate")} className={tone === "red" ? "text-red" : tone === "orange" ? "text-orange" : "text-ink-2"}>
         {rateText(o.error_rate, o.calls)}
       </Column>
       <Column label="p95" className="text-ink-2">
@@ -59,10 +60,10 @@ export function ExtensionRunning({ id }: { id: string }) {
         },
       );
     void load();
-    const t = setInterval(load, 30_000);
+    const timer = setInterval(load, 30_000);
     return () => {
       live = false;
-      clearInterval(t);
+      clearInterval(timer);
     };
   }, [id, win]);
   if (absent) return null; // a hub from before #1857
@@ -70,8 +71,8 @@ export function ExtensionRunning({ id }: { id: string }) {
     <>
       <section className="grid min-w-0 gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-[12px] font-medium text-ink-2">运行情况</h4>
-          <Segmented value={win} options={WINDOWS} onChange={setWin} label="时间范围" />
+          <h4 className="text-[12px] font-medium text-ink-2">{t("admin-pages-extensionrunning.running")}</h4>
+          <Segmented value={win} options={WINDOWS} onChange={setWin} label={t("admin-pages-extensionrunning.time_range")} />
         </div>
         {!m ? failed ? <p className="text-[12px] text-red">{errorText(failed)}</p> : <Loader /> : <Running m={m} />}
       </section>
@@ -82,38 +83,38 @@ export function ExtensionRunning({ id }: { id: string }) {
 
 function Running({ m }: { m: ExtensionMetrics }) {
   const charts = useMemo(() => metricsCharts(m), [m]);
-  const t = m.total;
-  if (t.calls === 0 && m.starts === 0 && m.exits === 0) {
-    return <p className="text-[12px] text-ink-3">这段时间没有调用，也没有启动过。按需启动的扩展用到时才跑。</p>;
+  const total = m.total;
+  if (total.calls === 0 && m.starts === 0 && m.exits === 0) {
+    return <p className="text-[12px] text-ink-3">{t("admin-pages-extensionrunning.no_activity")}</p>;
   }
-  const tone = rateTone(t.error_rate, t.calls);
+  const tone = rateTone(total.error_rate, total.calls);
   const reasons = Object.entries(m.exit_reasons ?? {}).sort((a, b) => b[1] - a[1]);
   return (
     <div className="grid min-w-0 gap-3">
       <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Figure label="调用">{t.calls.toLocaleString()}</Figure>
-        <Figure label="错误率" className={tone === "red" ? "text-red" : tone === "orange" ? "text-orange" : undefined}>
-          {rateText(t.error_rate, t.calls)}
-          {t.errors > 0 && <span className="ml-1 text-[11px] text-ink-3">（{t.errors} 次）</span>}
+        <Figure label={t("admin-pages-extensionrunning.calls")}>{formatNumber(total.calls)}</Figure>
+        <Figure label={t("admin-pages-extensionrunning.error_rate")} className={tone === "red" ? "text-red" : tone === "orange" ? "text-orange" : undefined}>
+          {rateText(total.error_rate, total.calls)}
+          {total.errors > 0 && <span className="ml-1 text-[11px] text-ink-3">{t("admin-pages-extensionrunning.error_count", { count: total.errors })}</span>}
         </Figure>
-        <Figure label="延迟 p95">
-          {msText(t.p95_ms)}
+        <Figure label={t("admin-pages-extensionrunning.latency_p95")}>
+          {msText(total.p95_ms)}
           <span className="mt-0.5 block truncate text-[11px] text-ink-3">
-            p50 {msText(t.p50_ms)} · p99 {msText(t.p99_ms)}
+            p50 {msText(total.p50_ms)} · p99 {msText(total.p99_ms)}
           </span>
         </Figure>
-        <Figure label="启动 / 出错退出" className={m.exits > 0 ? "text-orange" : undefined}>
+        <Figure label={t("admin-pages-extensionrunning.starts_exits")} className={m.exits > 0 ? "text-orange" : undefined}>
           {m.starts} / {m.exits}
         </Figure>
       </dl>
       <div className="grid min-w-0 gap-3 lg:grid-cols-2">
         <div className="min-w-0 rounded-control bg-inset p-3 shadow-hairline">
-          <p className="mb-1 text-[11.5px] text-ink-3">调用和出错</p>
+          <p className="mb-1 text-[11.5px] text-ink-3">{t("admin-pages-extensionrunning.calls_errors")}</p>
           <ExtensionChart item={charts.calls} />
         </div>
         {charts.latency && (
           <div className="min-w-0 rounded-control bg-inset p-3 shadow-hairline">
-            <p className="mb-1 text-[11.5px] text-ink-3">延迟（p95）</p>
+            <p className="mb-1 text-[11.5px] text-ink-3">{t("admin-pages-extensionrunning.latency_chart")}</p>
             <ExtensionChart item={charts.latency} />
           </div>
         )}
@@ -123,11 +124,11 @@ function Running({ m }: { m: ExtensionMetrics }) {
           <table className="w-full min-w-[460px] text-[12px]">
             <thead>
               <tr className="text-left text-[11px] text-ink-3">
-                <th className="py-1 pr-3 font-normal">方法</th>
-                <th className="py-1 pr-3 text-right font-normal">调用</th>
-                <th className="py-1 pr-3 text-right font-normal">错误率</th>
+                <th className="py-1 pr-3 font-normal">{t("admin-pages-extensionrunning.method")}</th>
+                <th className="py-1 pr-3 text-right font-normal">{t("admin-pages-extensionrunning.calls")}</th>
+                <th className="py-1 pr-3 text-right font-normal">{t("admin-pages-extensionrunning.error_rate")}</th>
                 <th className="py-1 pr-3 text-right font-normal">p95</th>
-                <th className="py-1 font-normal">出错的码</th>
+                <th className="py-1 font-normal">{t("admin-pages-extensionrunning.error_codes")}</th>
               </tr>
             </thead>
             <tbody>
@@ -152,7 +153,7 @@ function Running({ m }: { m: ExtensionMetrics }) {
       )}
       {reasons.length > 0 && (
         <div className="grid gap-1">
-          <p className="text-[11.5px] text-ink-3">出错退出的原因</p>
+          <p className="text-[11.5px] text-ink-3">{t("admin-pages-extensionrunning.exit_reasons")}</p>
           {reasons.slice(0, 5).map(([r, n]) => (
             <p key={r} className="flex items-start gap-1.5 text-[12px] leading-relaxed text-orange">
               <AdminIcon name="alert" size={13} className="mt-0.5 shrink-0" />
@@ -160,7 +161,7 @@ function Running({ m }: { m: ExtensionMetrics }) {
               <span className="ml-auto shrink-0 font-mono text-ink-3">×{n}</span>
             </p>
           ))}
-          {m.recent_exits.length > 0 && <p className="text-[11px] text-ink-3">最近一次：{dateTime(m.recent_exits[m.recent_exits.length - 1].at)}</p>}
+          {m.recent_exits.length > 0 && <p className="text-[11px] text-ink-3">{t("admin-pages-extensionrunning.last_exit", { time: dateTime(m.recent_exits[m.recent_exits.length - 1].at) })}</p>}
         </div>
       )}
     </div>
@@ -189,7 +190,7 @@ function ExtensionLogs({ id }: { id: string }) {
   // The kept lines, again whenever the search changes (0.3 s after the last key).
   useEffect(() => {
     let live = true;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       getExtensionLogs(id, q.trim()).then(
         (r) => live && (setLines(r.lines), setNext(r.next), setFailed(null)),
         (e) => live && setFailed(e),
@@ -197,7 +198,7 @@ function ExtensionLogs({ id }: { id: string }) {
     }, 300);
     return () => {
       live = false;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
   }, [id, q]);
 
@@ -214,7 +215,7 @@ function ExtensionLogs({ id }: { id: string }) {
       },
       () => {
         setFollowing(false);
-        toast("实时日志断开了", "error");
+        toast(t("admin-pages-extensionrunning.follow_broke"), "error");
       },
     );
     // next and lines only matter when following starts
@@ -230,33 +231,33 @@ function ExtensionLogs({ id }: { id: string }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(logText(lines ?? []));
-      toast(`已拷贝 ${lines?.length ?? 0} 行`, "ok");
+      toast(t("admin-pages-extensionrunning.copied_lines", { count: lines?.length ?? 0 }), "ok");
     } catch {
-      toast("拷贝失败", "error");
+      toast(t("admin-pages-extensionrunning.copy_failed"), "error");
     }
   };
 
   return (
     <section className="grid min-w-0 gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h4 className="mr-auto text-[12px] font-medium text-ink-2">日志</h4>
+        <h4 className="mr-auto text-[12px] font-medium text-ink-2">{t("admin-pages-extensionrunning.logs")}</h4>
         <label className="flex h-7 min-w-[160px] items-center gap-1.5 rounded-control bg-inset px-2 shadow-hairline">
           <AdminIcon name="search" size={12} className="shrink-0 text-ink-3" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索日志"
-            aria-label="搜索日志"
+            placeholder={t("admin-pages-extensionrunning.search_logs")}
+            aria-label={t("admin-pages-extensionrunning.search_logs")}
             className="min-w-0 flex-1 bg-transparent text-[12px] text-ink outline-none placeholder:text-ink-3"
           />
         </label>
         <Button tone={following ? "primary" : "quiet"} className="h-7 px-2" onClick={() => setFollowing((f) => !f)} aria-pressed={following}>
           <AdminIcon name={following ? "x" : "pulse"} size={12} />
-          {following ? "停止跟随" : "实时跟随"}
+          {following ? t("admin-pages-extensionrunning.stop_following") : t("admin-pages-extensionrunning.follow")}
         </Button>
         <Button tone="quiet" className="h-7 px-2" onClick={() => void copy()} disabled={!lines?.length}>
           <AdminIcon name="copy" size={12} />
-          拷贝
+          {t("admin-parts.copy")}
         </Button>
       </div>
       {failed && !lines ? (
@@ -273,7 +274,7 @@ function ExtensionLogs({ id }: { id: string }) {
           className="max-h-[320px] overflow-auto rounded-control bg-inset px-3 py-2 font-mono text-[11.5px] leading-[1.6] shadow-hairline"
         >
           {lines.length === 0 ? (
-            <p className="py-4 text-center font-sans text-ink-3">{q.trim() ? "没有匹配的行" : "还没有日志：扩展在 stderr 上写的和 hub 关于它的话会出现在这里"}</p>
+            <p className="py-4 text-center font-sans text-ink-3">{q.trim() ? t("admin-pages-extensionrunning.no_match") : t("admin-pages-extensionrunning.no_logs")}</p>
           ) : (
             lines.map((l) => (
               <div key={l.seq} className="flex gap-2 whitespace-pre-wrap break-all">
@@ -289,7 +290,7 @@ function ExtensionLogs({ id }: { id: string }) {
           )}
         </div>
       )}
-      <p className="text-[11px] text-ink-3">每个扩展留最近 2000 行，hub 重启后清空；像密钥的内容在进来前已换成 ***。</p>
+      <p className="text-[11px] text-ink-3">{t("admin-pages-extensionrunning.logs_footer")}</p>
     </section>
   );
 }

@@ -1,4 +1,6 @@
 // First visit (set the admin password) and sign-in (docs/admin.md「管理员密码和会话」).
+import { t } from "../../i18n";
+import { tRich } from "../../i18n/rich";
 import { useState } from "react";
 import { Button, EASE } from "../../ui/atoms";
 import { adminApi, AdminError, errorText, setCsrf } from "../api";
@@ -39,14 +41,12 @@ export function Setup({ state, onDone }: { state: AdminState; onDone: (s: AdminS
 
   if (!state.can_setup)
     return (
-      <Frame hubName={state.hub_name} title="还没有管理员密码" subtitle="为了不让别人抢先设置，第一次设置密码只能在 hub 所在的局域网里做。">
+      <Frame hubName={state.hub_name} title={t("admin-pages-auth.no_password_title")} subtitle={t("admin-pages-auth.no_password_subtitle")}>
         <div className="rounded-card bg-surface p-4 text-[12.5px] leading-relaxed text-ink-2 shadow-card">
-          <p>任选一种：</p>
+          <p>{t("admin-pages-auth.pick_either")}</p>
           <ul className="mt-2 list-disc space-y-1.5 pl-4 marker:text-ink-3">
-            <li>用和 hub 同一个局域网里的电脑或手机打开这个页面；</li>
-            <li>
-              在 hub 机器上运行 <code className="whitespace-nowrap rounded-[5px] bg-field px-1 py-0.5 font-mono text-[11.5px] shadow-hairline">{CMD}</code> 直接设密码。
-            </li>
+            <li>{t("admin-pages-auth.open_on_lan")}</li>
+            <li>{tRich("admin-pages-auth.run_reset", { command: <code className="whitespace-nowrap rounded-[5px] bg-field px-1 py-0.5 font-mono text-[11.5px] shadow-hairline">{CMD}</code> })}</li>
           </ul>
         </div>
       </Frame>
@@ -71,37 +71,37 @@ export function Setup({ state, onDone }: { state: AdminState; onDone: (s: AdminS
     }
   };
   return (
-    <Frame hubName={state.hub_name} title="设置管理员密码" subtitle="第一次打开管理界面，先设一个密码，以后用它登录。">
+    <Frame hubName={state.hub_name} title={t("admin-pages-auth.setup_title")} subtitle={t("admin-pages-auth.setup_subtitle")}>
       <form onSubmit={submit} className="rounded-card bg-surface p-4 shadow-card">
         {needCode && (
           <div className="mb-4 border-b border-line pb-4">
             <div className="mb-3 rounded-control bg-inset px-3 py-2.5 text-[12px] leading-relaxed text-ink-2 shadow-hairline">
-              <p>你是在 hub 机器本机上打开的（或经过同一台机器上的反向代理）。为了确认你能操作 hub 机器，先输入一次性设置码：10 分钟内有效，用一次就失效。任选一处取：</p>
+              <p>{t("admin-pages-auth.code_intro")}</p>
               <ul className="mt-1.5 list-disc space-y-1 pl-4 marker:text-ink-3">
                 <li>
-                  hub 启动日志：<span className="whitespace-nowrap font-mono text-[11.5px]">journalctl --user -u jarvisd</span>，Docker 是{" "}
-                  <span className="whitespace-nowrap font-mono text-[11.5px]">docker compose logs hub</span>
+                  {tRich("admin-pages-auth.code_from_logs", {
+                    systemd: <span className="whitespace-nowrap font-mono text-[11.5px]">journalctl --user -u jarvisd</span>,
+                    docker: <span className="whitespace-nowrap font-mono text-[11.5px]">docker compose logs hub</span>,
+                  })}
                 </li>
-                <li>
-                  在 hub 机器上运行 <span className="whitespace-nowrap font-mono text-[11.5px]">jarvisd hub admin setup-code</span>
-                </li>
+                <li>{tRich("admin-pages-auth.code_from_command", { command: <span className="whitespace-nowrap font-mono text-[11.5px]">jarvisd hub admin setup-code</span> })}</li>
               </ul>
             </div>
-            <Field label="设置码" value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder="ABCD-EFGH" mono autoFocus autoComplete="one-time-code" autoCapitalize="characters" maxLength={32} />
+            <Field label={t("admin-pages-auth.setup_code")} value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder="ABCD-EFGH" mono autoFocus autoComplete="one-time-code" autoCapitalize="characters" maxLength={32} />
           </div>
         )}
         <div className="space-y-3">
-          <Field label="密码" type="password" value={pw} onChange={setPw} autoFocus={!needCode} autoComplete="new-password" error={short ? "至少 8 个字符" : undefined} />
-          <Field label="再输一遍" type="password" value={again} onChange={setAgain} autoComplete="new-password" error={mismatch ? "两次输的不一样" : undefined} />
+          <Field label={t("admin-pages-auth.password")} type="password" value={pw} onChange={setPw} autoFocus={!needCode} autoComplete="new-password" error={short ? t("admin-pages-auth.too_short") : undefined} />
+          <Field label={t("admin-pages-auth.again")} type="password" value={again} onChange={setAgain} autoComplete="new-password" error={mismatch ? t("admin-pages-auth.mismatch") : undefined} />
         </div>
         <Button type="submit" tone="primary" busy={busy} disabled={!pw || short || mismatch || again !== pw || (needCode && !code.trim())} className="mt-4 h-9 w-full">
-          设置并进入
+          {t("admin-pages-auth.set_and_enter")}
         </Button>
         <p className="mt-3 min-h-5 text-center text-[12.5px] text-red" role="alert">
           {error}
         </p>
         <p className="text-center text-[11.5px] leading-relaxed text-ink-3">
-          以后忘了密码，在 hub 机器上运行 <span className="whitespace-nowrap font-mono">{CMD}</span>。
+          {tRich("admin-pages-auth.forgot_later", { command: <span className="whitespace-nowrap font-mono">{CMD}</span> })}
         </p>
       </form>
     </Frame>
@@ -129,7 +129,7 @@ export function Login({ state, onDone, notice }: { state: AdminState; onDone: (s
     }
   };
   return (
-    <Frame hubName={state.hub_name} title="登录 hub 管理" subtitle="输入管理员密码。">
+    <Frame hubName={state.hub_name} title={t("admin-pages-auth.login_title")} subtitle={t("admin-pages-auth.login_subtitle")}>
       <form onSubmit={submit} className="rounded-card bg-surface p-1.5 shadow-card">
         <label className="flex h-10 items-center gap-2 rounded-control bg-inset px-3 shadow-hairline focus-within:shadow-[0_0_0_1px_var(--line-strong)]">
           <AdminIcon name="lock" size={14} className="text-ink-3" />
@@ -138,21 +138,21 @@ export function Login({ state, onDone, notice }: { state: AdminState; onDone: (s
             type="password"
             value={pw}
             onChange={(e) => setPw(e.target.value)}
-            placeholder="管理员密码"
-            aria-label="管理员密码"
+            placeholder={t("admin-pages-auth.admin_password")}
+            aria-label={t("admin-pages-auth.admin_password")}
             autoComplete="current-password"
             className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
           />
         </label>
         <Button type="submit" tone="primary" busy={busy} disabled={!pw} className="mt-1.5 h-9 w-full">
-          登录
+          {t("admin-pages-auth.sign_in")}
         </Button>
       </form>
       <p className="mt-3 min-h-5 text-center text-[12.5px] text-red" role="alert">
         {error}
       </p>
       <p className="text-center text-[11.5px] leading-relaxed text-ink-3">
-        忘了密码：在 hub 机器上运行 <span className="whitespace-nowrap font-mono">{CMD}</span>。
+        {tRich("admin-pages-auth.forgot", { command: <span className="whitespace-nowrap font-mono">{CMD}</span> })}
       </p>
     </Frame>
   );

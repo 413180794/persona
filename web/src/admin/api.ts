@@ -1,5 +1,6 @@
 // The admin API client (docs/admin.md「接口」): a session cookie, not the web client's bearer token. Writes carry the
 // session's CSRF token, which lives in memory only (GET state hands it out again after a reload).
+import { currentLanguage, t } from "../i18n";
 import { previewConsent } from "../lib/extension-model";
 import { catalogOf, catalogQuery, marketView, type Catalog, type Market } from "../lib/extension-market";
 import type { AddedMachine, AdminExtension, AdminExtensions, ConnectorRepair, ExtensionMetrics, ExtensionPreview, LinkPair, LogLine, LogsPage, MeshView, MetricsOverview, MetricsWindow } from "./types";
@@ -39,7 +40,8 @@ export function handleLoginRequired(fn: () => void) {
 type Method = "GET" | "POST" | "PUT" | "DELETE";
 
 export async function adminApi<T>(path: string, method: Method = "GET", json?: unknown): Promise<T> {
-  const headers: Record<string, string> = {};
+  // the hub writes its error text in this language (docs/i18n.md「协议」)
+  const headers: Record<string, string> = { "Accept-Language": currentLanguage() };
   let body: string | undefined;
   if (method !== "GET") {
     headers["Content-Type"] = "application/json";
@@ -52,7 +54,7 @@ export async function adminApi<T>(path: string, method: Method = "GET", json?: u
 // adminUpload posts a file as it is (application/octet-stream): the one admin write whose body is not JSON (an extension
 // package, docs/admin.md「扩展」). query carries what the body cannot.
 export async function adminUpload<T>(path: string, file: Blob, query: Record<string, string>): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
+  const headers: Record<string, string> = { "Content-Type": "application/octet-stream", "Accept-Language": currentLanguage() };
   if (csrf) headers["X-Jarvis-CSRF"] = csrf;
   const q = new URLSearchParams(Object.entries(query).filter(([, v]) => v)).toString();
   return answer<T>(await transport(`/api/v1/admin${path}?${q}`, { method: "POST", headers, body: file, credentials: "same-origin", cache: "no-store" }));
@@ -81,50 +83,50 @@ async function answer<T>(res: Response): Promise<T> {
 }
 
 const MESSAGES: Record<string, string> = {
-  bad_password: "密码不对",
-  weak_password: "密码至少 8 个字符",
-  already_set: "已经有人设好了管理员密码，请直接登录",
-  setup_local_only: "首次设置只能在 hub 所在的局域网里做",
-  setup_code_required: "先输入设置码",
-  bad_setup_code: "设置码不对或过期了，在 hub 机器上运行 jarvisd hub admin setup-code 取一个新的",
-  login_required: "登录过期了，请重新登录",
-  csrf: "页面过期了，刷新一下再试",
-  tls_required: "需要经 TLS 端口访问",
-  widen_cli_only: "放宽访问范围只能在 hub 机器上用命令行或部署脚本",
-  from_env: "这一项由部署时的环境变量决定（JARVIS_ADMIN_ACCESS / JARVIS_PUBLIC_URL），这里不能改",
-  would_lock_you_out: "改完之后你就进不来了",
-  invalid_cidr: "网段格式不对，例如 192.0.2.0/24",
-  invalid_id: "id 只能用小写字母、数字和 - _ .，以字母或数字开头",
-  invalid_ssh_host: "ssh 主机别名不对",
-  invalid_name: "名字最多 40 个字，不能换行",
-  invalid_proxy: "代理要写成 socks5://主机:端口",
-  invalid_kind: "这个版本的 hub 不支持这种接入方式，先升级 hub",
-  ssh_unsupported: "不再添加 ssh 电脑：在那台电脑上装 node 服务，选「电脑来连」或「hub 来连」",
-  not_service: "这台电脑不是「hub 来连」接入的",
-  exists: "已经有这个 id 的电脑了",
-  not_active: "重启 hub 之后才能对这台电脑操作",
-  not_link: "这台电脑不是「电脑来连」接入的",
-  not_in_group: "这台 hub 已经不在组里了，刷新看看",
-  not_supervised: "这个 hub 不是由 systemd 或 Docker 管着的，请到 hub 机器上手动重启",
-  not_implemented: "这个版本的 hub 还没有这个功能",
-  invalid_address: "地址格式不对，例如 https://192.0.2.20:18662",
-  unreachable: "连不上这个地址，检查地址、端口和对方的防火墙",
-  invalid_code: "这不是一个有效的互联码",
-  no_plugins: "这台 hub 没有启用扩展",
-  busy: "正在预览另一个扩展，等它结束再试",
-  too_large: "包太大了",
-  confirm_required: "先看过它能做什么，确认后再装",
-  no_markets: "这台 hub 读不了扩展市场（没有数据库）",
+  bad_password: t("admin-api.err_bad_password"),
+  weak_password: t("admin-api.err_weak_password"),
+  already_set: t("admin-api.err_already_set"),
+  setup_local_only: t("admin-api.err_setup_local_only"),
+  setup_code_required: t("admin-api.err_setup_code_required"),
+  bad_setup_code: t("admin-api.err_bad_setup_code"),
+  login_required: t("admin-api.err_login_required"),
+  csrf: t("admin-api.err_csrf"),
+  tls_required: t("admin-api.err_tls_required"),
+  widen_cli_only: t("admin-api.err_widen_cli_only"),
+  from_env: t("admin-api.err_from_env"),
+  would_lock_you_out: t("admin-api.err_would_lock_you_out"),
+  invalid_cidr: t("admin-api.err_invalid_cidr"),
+  invalid_id: t("admin-api.err_invalid_id"),
+  invalid_ssh_host: t("admin-api.err_invalid_ssh_host"),
+  invalid_name: t("admin-api.err_invalid_name"),
+  invalid_proxy: t("admin-api.err_invalid_proxy"),
+  invalid_kind: t("admin-api.err_invalid_kind"),
+  ssh_unsupported: t("admin-api.err_ssh_unsupported"),
+  not_service: t("admin-api.err_not_service"),
+  exists: t("admin-api.err_exists"),
+  not_active: t("admin-api.err_not_active"),
+  not_link: t("admin-api.err_not_link"),
+  not_in_group: t("admin-api.err_not_in_group"),
+  not_supervised: t("admin-api.err_not_supervised"),
+  not_implemented: t("admin-api.err_not_implemented"),
+  invalid_address: t("admin-api.err_invalid_address"),
+  unreachable: t("admin-api.err_unreachable"),
+  invalid_code: t("admin-api.err_invalid_code"),
+  no_plugins: t("admin-api.err_no_plugins"),
+  busy: t("admin-api.err_busy"),
+  too_large: t("admin-api.err_too_large"),
+  confirm_required: t("admin-api.err_confirm_required"),
+  no_markets: t("admin-api.err_no_markets"),
 };
 
 // errorText is what a person reads for a failed call. Codes not listed here (pair_failed, member_hub,
 // center_unreachable…) carry a message the hub wrote for people: shown as it is.
 export function errorText(e: unknown): string {
   if (e instanceof AdminError) {
-    if (e.code === "rate_limited") return e.retryAfter ? `试错太多次了，${e.retryAfter} 秒后再试` : "试错太多次了，稍后再试";
+    if (e.code === "rate_limited") return e.retryAfter ? t("admin-api.rate_limited_seconds", { count: e.retryAfter }) : t("admin-api.rate_limited");
     return MESSAGES[e.code] ?? e.message;
   }
-  if (e instanceof TypeError) return "连不上 hub";
+  if (e instanceof TypeError) return t("admin-api.hub_unreachable");
   return e instanceof Error ? e.message : String(e);
 }
 

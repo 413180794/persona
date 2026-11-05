@@ -1,30 +1,15 @@
 // Pure helpers behind the admin pages, kept apart so they can be tested without a browser.
+import { formatDate, formatLocale, t } from "../i18n";
 import type { UIItem } from "../lib/extension-ui";
 import type { Access, AdminMachine, AdminExtension, Device, DoctorItem, ExtensionMetrics, LogLine, MeshHub, MeshView, MetricsWindow, Peer, PeerProbe, Restart } from "./types";
 
 // ── access scope (docs/admin.md「访问范围」) ──────────────
 
 export const ACCESS_INFO: Record<Access, { label: string; detail: string; risk: string }> = {
-  loopback: {
-    label: "只有本机",
-    detail: "只能在 hub 机器上打开（127.0.0.1）。Docker 里等于只能进容器用。",
-    risk: "最安全；别的电脑都打不开，要用 ssh 隧道。",
-  },
-  lan: {
-    label: "局域网",
-    detail: "本机，加上和 hub 在同一网段的私网地址，以及 security.trusted_cidrs。",
-    risk: "默认值。同一个局域网里的设备都能看到登录页，靠密码挡住。",
-  },
-  cidrs: {
-    label: "指定网段",
-    detail: "本机，加上 admin.cidrs 里列的网段（例如 VPN 的网段）。",
-    risk: "只放你列出的网段；公网网段也只能走 TLS。",
-  },
-  any: {
-    label: "任何地方（需 TLS）",
-    detail: "局域网照样能进；此外任何来源经 TLS 端口都能打开。",
-    risk: "公网上的人都能看到登录页，只靠密码和限流挡住。",
-  },
+  loopback: { label: t("admin-logic.access_loopback"), detail: t("admin-logic.access_loopback_detail"), risk: t("admin-logic.access_loopback_risk") },
+  lan: { label: t("admin-logic.access_lan"), detail: t("admin-logic.access_lan_detail"), risk: t("admin-logic.access_lan_risk") },
+  cidrs: { label: t("admin-logic.access_cidrs"), detail: t("admin-logic.access_cidrs_detail"), risk: t("admin-logic.access_cidrs_risk") },
+  any: { label: t("admin-logic.access_any"), detail: t("admin-logic.access_any_detail"), risk: t("admin-logic.access_any_risk") },
 };
 
 export const ACCESS_ORDER: Access[] = ["loopback", "lan", "cidrs", "any"];
@@ -97,16 +82,16 @@ export function qrPath(rows: string[], margin = 0): { d: string; size: number } 
 // ── time ─────────────────────────────────────────────────
 
 export function uptime(startedAt: string | undefined, now = Date.now()): string {
-  const t = startedAt ? Date.parse(startedAt) : NaN;
-  if (!Number.isFinite(t)) return "—";
-  const s = Math.max(0, Math.floor((now - t) / 1000));
+  const at = startedAt ? Date.parse(startedAt) : NaN;
+  if (!Number.isFinite(at)) return "—";
+  const s = Math.max(0, Math.floor((now - at) / 1000));
   const d = Math.floor(s / 86400),
     h = Math.floor((s % 86400) / 3600),
     m = Math.floor((s % 3600) / 60);
-  if (d > 0) return h ? `${d} 天 ${h} 小时` : `${d} 天`;
-  if (h > 0) return m ? `${h} 小时 ${m} 分钟` : `${h} 小时`;
-  if (m > 0) return `${m} 分钟`;
-  return "不到 1 分钟";
+  if (d > 0) return h ? t("admin-logic.uptime_days_hours", { d, h }) : t("admin-logic.uptime_days", { count: d });
+  if (h > 0) return m ? t("admin-logic.uptime_hours_minutes", { h, m }) : t("admin-logic.uptime_hours", { count: h });
+  if (m > 0) return t("admin-logic.uptime_minutes", { count: m });
+  return t("admin-logic.uptime_under_minute");
 }
 
 // countdown is m:ss until expiresAt, or "" once it has passed.
@@ -120,7 +105,7 @@ export function countdown(expiresAt: string | undefined, now = Date.now()): stri
 export function dateTime(iso?: string): string {
   const t = iso ? Date.parse(iso) : NaN;
   if (!Number.isFinite(t)) return "";
-  return new Date(t).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatDate(t, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 // ── labels ───────────────────────────────────────────────
@@ -128,7 +113,7 @@ export function dateTime(iso?: string): string {
 export function restartText(r?: Restart | null): string {
   if (!r?.required) return "";
   const n = r.reasons.length;
-  return n > 1 ? `有 ${n} 项改动重启 hub 后生效` : "有改动要重启 hub 后生效";
+  return n > 1 ? t("admin-logic.restart_changes", { count: n }) : t("admin-logic.restart_change");
 }
 
 export function groupDoctor(items: DoctorItem[]): Record<DoctorItem["level"], DoctorItem[]> {
@@ -139,12 +124,12 @@ export function groupDoctor(items: DoctorItem[]): Record<DoctorItem["level"], Do
 
 // How a hub reaches a computer, in the words the admin page uses (kind of a hub.json entry, or a path's via).
 export const KIND_LABEL: Record<string, string> = {
-  local: "本机",
-  service: "hub 来连",
-  link: "电脑来连",
+  local: t("admin-logic.kind_local"),
+  service: t("admin-logic.kind_service"),
+  link: t("admin-logic.kind_link"),
   ssh: "ssh",
   tailcat: "tailcat",
-  hub: "经成员 hub",
+  hub: t("admin-logic.kind_hub"),
 };
 
 export function viaLabel(via?: string): string {
@@ -152,38 +137,38 @@ export function viaLabel(via?: string): string {
 }
 
 export function machineStatus(m: AdminMachine): { tone: "green" | "red" | "orange" | "gray"; label: string } {
-  if (m.state === "pending_add") return { tone: "orange", label: "重启后加入" };
-  if (m.state === "pending_remove") return { tone: "gray", label: "重启后移除" };
-  if (m.online) return { tone: "green", label: "在线" };
-  if (m.error) return { tone: "red", label: "连不上" };
-  return { tone: "gray", label: "离线" };
+  if (m.state === "pending_add") return { tone: "orange", label: t("admin-logic.machine_pending_add") };
+  if (m.state === "pending_remove") return { tone: "gray", label: t("admin-logic.machine_pending_remove") };
+  if (m.online) return { tone: "green", label: t("admin-logic.online") };
+  if (m.error) return { tone: "red", label: t("admin-logic.unreachable") };
+  return { tone: "gray", label: t("admin-logic.offline") };
 }
 
 export function deviceKindLabel(kind: string): string {
-  return ({ phone: "手机", watch: "手表", link: "Persona Link", other: "网页 / 其他" } as Record<string, string>)[kind] ?? kind;
+  return ({ phone: t("admin-logic.device_phone"), watch: t("admin-logic.device_watch"), link: "Persona Link", other: t("admin-logic.device_web") } as Record<string, string>)[kind] ?? kind;
 }
 
 export function roleLabel(role: string): string {
-  return ({ full: "完整权限", answer: "只能回答", link: "电脑链路" } as Record<string, string>)[role] ?? role;
+  return ({ full: t("admin-logic.role_full"), answer: t("admin-logic.role_answer"), link: t("admin-logic.role_link") } as Record<string, string>)[role] ?? role;
 }
 
 export function activeDevices(list: Device[]): Device[] {
   return list.filter((d) => !d.revoked_at);
 }
 
-export const REFUSED_TEXT = "对方已断开或不认这台 hub 的凭据";
+export const REFUSED_TEXT = t("admin-logic.peer_refused");
 
 // peerStatus: how a peer's link reads. A refused link shows as offline with why (its own error, else the usual cause).
 export function peerStatus(p: Peer): { tone: "green" | "orange" | "gray"; label: string; error?: string } {
   switch (p.state) {
     case "connected":
-      return { tone: "green", label: "已连接" };
+      return { tone: "green", label: t("admin-logic.peer_connected") };
     case "connecting":
-      return { tone: "orange", label: "连接中", error: p.error };
+      return { tone: "orange", label: t("admin-logic.peer_connecting"), error: p.error };
     case "refused":
-      return { tone: "gray", label: "离线", error: p.error || REFUSED_TEXT };
+      return { tone: "gray", label: t("admin-logic.offline"), error: p.error || REFUSED_TEXT };
     default:
-      return { tone: "gray", label: "离线", error: p.error };
+      return { tone: "gray", label: t("admin-logic.offline"), error: p.error };
   }
 }
 
@@ -193,7 +178,7 @@ export function probeLinkable(p: PeerProbe): boolean {
 }
 
 export function endpointKindLabel(kind: string): string {
-  return ({ ipv6: "IPv6", name: "域名", lan: "局域网", ipv4: "IPv4" } as Record<string, string>)[kind] ?? kind;
+  return ({ ipv6: "IPv6", name: t("admin-logic.endpoint_name"), lan: t("admin-logic.endpoint_lan"), ipv4: "IPv4" } as Record<string, string>)[kind] ?? kind;
 }
 
 // Machine ids end up in URLs and hub.json: the same rule the hub enforces.
@@ -207,7 +192,7 @@ export function validMachineId(id: string): boolean {
 export function hubLabel(mesh: MeshView | null | undefined, hubId: string | undefined, selfId?: string): string {
   if (!hubId) return "";
   const h = mesh?.hubs.find((x) => x.hub_id === hubId);
-  if (h?.self || hubId === selfId) return "这台 hub";
+  if (h?.self || hubId === selfId) return t("admin-logic.this_hub");
   return h?.name || hubId.slice(0, 8);
 }
 
@@ -252,6 +237,7 @@ export function isLegacy(m: AdminMachine): boolean {
 // needsRepair: a service computer whose connector no longer takes this hub's credential (paired with another hub,
 // reinstalled). The hub's error then asks to pair it again.
 export function needsRepair(m: AdminMachine): boolean {
+  // i18n-ignore: matches the hub's error text
   return m.kind === "service" && /重新配对/.test(m.error ?? "");
 }
 
@@ -307,7 +293,7 @@ export function linuxInstallCommand(pairUrl: string): string {
 // sortMeshHubs: the center first, then this hub, then by name.
 export function sortMeshHubs(hubs: MeshHub[]): MeshHub[] {
   const rank = (h: MeshHub) => (h.role === "center" ? 0 : h.self ? 1 : 2);
-  return [...hubs].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, "zh-CN"));
+  return [...hubs].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, formatLocale()));
 }
 
 export function centerName(mesh: MeshView): string {
@@ -320,10 +306,8 @@ export function memberNotice(mesh: MeshView | null | undefined): { title: string
   const name = centerName(mesh);
   const offline = !mesh.center.online;
   return {
-    title: `这台 hub 是组里的成员，组由中心「${name}」管理`,
-    detail: offline
-      ? "设备、互联等去中心的管理界面。中心现在连不上：这期间 App 连这台会提示中心不可达；它回不来的话，可以在「互联」把这台设为中心。"
-      : "设备、互联等去中心的管理界面。",
+    title: t("admin-logic.member_title", { name }),
+    detail: offline ? t("admin-logic.member_detail_offline") : t("admin-logic.member_detail"),
     offline,
   };
 }
@@ -336,32 +320,32 @@ export function extensionStatus(p: Pick<AdminExtension, "status">): { tone: "gre
     // Running or idle until something needs it (stopped): both are on, as the switch says.
     case "running":
     case "stopped":
-      return { tone: "green", label: "启动" };
+      return { tone: "green", label: t("admin-logic.ext_on") };
     case "starting":
-      return { tone: "orange", label: "正在启动" };
+      return { tone: "orange", label: t("admin-logic.ext_starting") };
     case "needs_setup":
-      return { tone: "orange", label: "需要设置" };
+      return { tone: "orange", label: t("admin-logic.ext_needs_setup") };
     case "disabled":
-      return { tone: "gray", label: "停用" };
+      return { tone: "gray", label: t("admin-logic.ext_disabled") };
     case "incompatible":
-      return { tone: "red", label: "这台 hub 用不了" };
+      return { tone: "red", label: t("admin-logic.ext_incompatible") };
     case "error":
-      return { tone: "red", label: "出错了" };
+      return { tone: "red", label: t("admin-logic.ext_error") };
   }
-  return { tone: "gray", label: "状态未知" };
+  return { tone: "gray", label: t("admin-logic.ext_unknown") };
 }
 
 // extensionRunNote: whether an enabled extension's program runs right now (the details' small print); "" otherwise.
 export function extensionRunNote(p: Pick<AdminExtension, "status">): string {
-  return p.status === "running" ? "正在运行" : p.status === "stopped" ? "暂未运行，用到时自动启动" : "";
+  return p.status === "running" ? t("admin-logic.run_running") : p.status === "stopped" ? t("admin-logic.run_stopped") : "";
 }
 
 export function extensionSourceLabel(source?: string): string {
-  return ({ builtin: "内置", "hub.json": "hub.json", installed: "已安装" } as Record<string, string>)[source ?? ""] ?? source ?? "";
+  return ({ builtin: t("admin-logic.source_builtin"), "hub.json": "hub.json", installed: t("admin-logic.source_installed") } as Record<string, string>)[source ?? ""] ?? source ?? "";
 }
 
 export function pointLabel(point: string): string {
-  return ({ connectors: "连接器", voice: "语音对话" } as Record<string, string>)[point] ?? point;
+  return ({ connectors: t("admin-logic.point_connectors"), voice: t("admin-logic.point_voice") } as Record<string, string>)[point] ?? point;
 }
 
 // canUpgrade: only what was installed (built-in ones come with personad, hub.json's are changed there).
@@ -379,18 +363,18 @@ export function canRollBack(p: AdminExtension): boolean {
 export function sourceProblem(raw: string): string {
   const s = raw.trim();
   if (!s) return "";
-  if (s.startsWith("http://")) return "只收 https 链接";
-  if (s.startsWith("https://")) return /#sha256=[0-9a-fA-F]{64}$/.test(s) ? "" : "链接后面要带 #sha256=<64 位 hex>，下载后校验";
-  if (s.startsWith("remote:")) return /^remote:(?:(?:rpc|http)=[^,]+)(?:,(?:rpc|http)=[^,]+)?$/.test(s) ? "" : "写成 remote:rpc=<socket>,http=<socket>（至少一个）";
-  if (/^(?:dir|file):/.test(s)) return /^(?:dir|file):(?:\/|~\/)/.test(s) ? "" : "写 hub 机器上的绝对路径";
+  if (s.startsWith("http://")) return t("admin-logic.source_https_only");
+  if (s.startsWith("https://")) return /#sha256=[0-9a-fA-F]{64}$/.test(s) ? "" : t("admin-logic.source_needs_sha");
+  if (s.startsWith("remote:")) return /^remote:(?:(?:rpc|http)=[^,]+)(?:,(?:rpc|http)=[^,]+)?$/.test(s) ? "" : t("admin-logic.source_remote_form");
+  if (/^(?:dir|file):/.test(s)) return /^(?:dir|file):(?:\/|~\/)/.test(s) ? "" : t("admin-logic.source_absolute");
   if (s.startsWith("/") || s.startsWith("~/")) return "";
-  return "写 hub 机器上的路径、带 sha256 的 https 链接，或 remote:";
+  return t("admin-logic.source_unknown");
 }
 
 // uploadProblem: a file the hub would refuse, before sending it ("" when fine).
 export function uploadProblem(file: { name: string; size: number }, most: number): string {
-  if (!/\.(?:tar\.gz|tgz|zip)$/i.test(file.name)) return "只能上传 .tar.gz、.tgz 或 .zip";
-  if (most > 0 && file.size > most) return `包超过 ${Math.floor(most / (1 << 20))} MB`;
+  if (!/\.(?:tar\.gz|tgz|zip)$/i.test(file.name)) return t("admin-logic.upload_type");
+  if (most > 0 && file.size > most) return t("admin-logic.upload_too_large", { mb: Math.floor(most / (1 << 20)) });
   return "";
 }
 
@@ -424,7 +408,7 @@ export function stepLabel(iso: string, window: MetricsWindow): string {
   const d = new Date(iso);
   const two = (n: number) => String(n).padStart(2, "0");
   const hm = `${two(d.getHours())}:${two(d.getMinutes())}`;
-  return window === "7d" ? `${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}时` : hm;
+  return window === "7d" ? t("admin-logic.step_day_hour", { month: two(d.getMonth() + 1), day: two(d.getDate()), hour: two(d.getHours()) }) : hm;
 }
 
 /** The two charts of an extension's 运行情况: calls (answered and failed, stacked) and the p95 latency. */
@@ -434,10 +418,10 @@ export function metricsCharts(m: Pick<ExtensionMetrics, "series" | "window">): {
     type: "chart",
     kind: "bar",
     stacked: true,
-    unit: "次",
+    unit: t("admin-logic.unit_calls"),
     series: [
-      { name: "成功", points: m.series.map((p) => ({ label: label(p.at), value: p.calls - p.errors })) },
-      { name: "出错", tone: "danger", points: m.series.map((p) => ({ label: label(p.at), value: p.errors })) },
+      { name: t("admin-logic.series_ok"), points: m.series.map((p) => ({ label: label(p.at), value: p.calls - p.errors })) },
+      { name: t("admin-logic.series_errors"), tone: "danger", points: m.series.map((p) => ({ label: label(p.at), value: p.errors })) },
     ],
   };
   if (!m.series.some((p) => p.p95_ms !== null)) return { calls, latency: null };

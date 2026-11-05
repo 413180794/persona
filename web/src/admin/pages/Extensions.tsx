@@ -1,6 +1,8 @@
 // 扩展: what extends this hub (docs/extensions.md), installed, upgraded, rolled back, switched and uninstalled from here as
 // `personad extension` does on the hub's machine. Installing runs a new program there, so nothing installs before the
 // page has shown what it may do (the preview) and the user agreed to exactly that (its permissions digest).
+import { t } from "../../i18n";
+import { tRich } from "../../i18n/rich";
 import { useEffect, useRef, useState } from "react";
 import { dependencyText, previewBlocked } from "../../lib/extension-model";
 import { bytes } from "../../lib/format";
@@ -42,8 +44,8 @@ export function Extensions() {
   // An extension's state moves on its own (starting, running, idle).
   useEffect(() => {
     if (!data) return;
-    const t = setInterval(reload, 15_000);
-    return () => clearInterval(t);
+    const timer = setInterval(reload, 15_000);
+    return () => clearInterval(timer);
   }, [data, reload]);
 
   // How each runs, over the last day (docs/extensions.md「运行情况」); a hub from before #1857 has none (null).
@@ -56,10 +58,10 @@ export function Extensions() {
         () => live && setRunning(null),
       );
     void load();
-    const t = setInterval(load, 60_000);
+    const timer = setInterval(load, 60_000);
     return () => {
       live = false;
-      clearInterval(t);
+      clearInterval(timer);
     };
   }, []);
 
@@ -69,21 +71,21 @@ export function Extensions() {
   return (
     <>
       <PageHeader
-        title="扩展"
-        subtitle="给这台 hub 加能力：连接器、语音……装扩展就是在 hub 机器上运行一个新程序，所以先看清它能做什么，同意了才装。"
+        title={t("admin-nav.extensions")}
+        subtitle={t("admin-pages-extensions.subtitle")}
         right={
           data?.can_install && (
             <Button tone="primary" onClick={() => setInstalling(true)}>
               <AdminIcon name="plus" size={13} />
-              安装扩展
+              {t("admin-pages-extensions.install_extension")}
             </Button>
           )
         }
       />
       {missing ? (
         <Card>
-          <EmptyState icon="puzzle" title="这台 hub 还不能在这里管扩展">
-            先把 hub 升级到新版本；在那之前，在 hub 机器上用 <span className="font-mono">personad extension …</span> 安装和管理。
+          <EmptyState icon="puzzle" title={t("admin-pages-extensions.unsupported_title")}>
+            {tRich("admin-pages-extensions.unsupported_detail", { command: <span className="font-mono">personad extension …</span> })}
           </EmptyState>
         </Card>
       ) : !data ? (
@@ -91,17 +93,17 @@ export function Extensions() {
       ) : (
         <>
           {!data.can_install && (
-            <Notice tone="gray" icon="info" title="这台 hub 没有数据库，装不了扩展">
-              内置的和 hub.json 里的扩展照常能用；装、升级、卸载要 hub 连上 Postgres。
+            <Notice tone="gray" icon="info" title={t("admin-pages-extensions.no_db_title")}>
+              {t("admin-pages-extensions.no_db_detail")}
             </Notice>
           )}
           <Card
-            title={`${data.extensions.length} 个扩展`}
-            footer="设置和密钥在 App 的「设置 › 扩展」里填。内置的不能卸载，hub.json 里的只能去 hub.json 改。这里的每一步都以「管理界面」记进扩展的审计。"
+            title={t("admin-pages-extensions.count", { count: data.extensions.length })}
+            footer={t("admin-pages-extensions.list_footer")}
           >
             {data.extensions.length === 0 ? (
-              <EmptyState icon="puzzle" title="还没有扩展" action={data.can_install && <Button onClick={() => setInstalling(true)}>安装扩展</Button>}>
-                扩展可以来自 hub 机器上的目录或包、带 sha256 的 https 链接、跑在别处的扩展（socket），也可以从这里上传。
+              <EmptyState icon="puzzle" title={t("admin-pages-extensions.empty_title")} action={data.can_install && <Button onClick={() => setInstalling(true)}>{t("admin-pages-extensions.install_extension")}</Button>}>
+                {t("admin-pages-extensions.empty_detail")}
               </EmptyState>
             ) : (
               data.extensions.map((p) => (
@@ -146,7 +148,7 @@ function ExtensionRow({
     setBusy(true);
     try {
       onChanged(await setExtensionEnabled(p.id, on));
-      toast(on ? `已启用「${p.name}」` : `已停用「${p.name}」`, "ok");
+      toast(on ? t("admin-pages-extensions.enabled", { name: p.name }) : t("admin-pages-extensions.disabled", { name: p.name }), "ok");
     } catch (e) {
       toast(errorText(e), "error");
     } finally {
@@ -185,31 +187,31 @@ function ExtensionRow({
           {canUpgrade(p) && (
             <Button tone="quiet" className="h-7 px-2" onClick={onUpgrade}>
               <AdminIcon name="up" size={13} />
-              升级
+              {t("admin-pages-extensionmarket.upgrade")}
             </Button>
           )}
           {canRollBack(p) && (
             <Button tone="quiet" className="h-7 px-2" onClick={onRollBack}>
               <AdminIcon name="undo" size={13} />
-              回滚
+              {t("admin-pages-extensions.roll_back")}
             </Button>
           )}
           {p.source === "installed" && (
             <button
               type="button"
-              title="卸载"
-              aria-label={`卸载「${p.name}」`}
+              title={t("admin-pages-extensions.uninstall")}
+              aria-label={t("admin-pages-extensions.uninstall_title", { name: p.name })}
               onClick={onRemove}
               className="flex size-7 shrink-0 items-center justify-center rounded-[8px] text-ink-3 transition-colors hover:bg-red-tint hover:text-red"
             >
               <AdminIcon name="trash" size={14} />
             </button>
           )}
-          {!p.read_only && <Switch on={p.enabled} disabled={busy} onChange={(on) => void toggle(on)} label={`启用「${p.name}」`} />}
+          {!p.read_only && <Switch on={p.enabled} disabled={busy} onChange={(on) => void toggle(on)} label={t("admin-pages-extensions.enable_label", { name: p.name })} />}
           <button
             type="button"
-            title={open ? "收起" : "详情"}
-            aria-label={open ? `收起「${p.name}」` : `「${p.name}」的详情`}
+            title={open ? t("admin-pages-extensions.collapse") : t("admin-pages-extensions.details")}
+            aria-label={open ? t("admin-pages-extensions.collapse_label", { name: p.name }) : t("admin-pages-extensions.details_label", { name: p.name })}
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
             className="flex size-7 shrink-0 items-center justify-center rounded-[8px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
@@ -220,25 +222,25 @@ function ExtensionRow({
       </div>
       {p.error && <p className="mt-2 ml-12 text-[12px] leading-relaxed text-red">{p.error}</p>}
       {p.needs_setup && p.needs_setup.length > 0 && (
-        <p className="mt-2 ml-12 text-[12px] leading-relaxed text-orange">还缺：{p.needs_setup.join("、")}（在 App 的「设置 › 扩展」里填）</p>
+        <p className="mt-2 ml-12 text-[12px] leading-relaxed text-orange">{t("admin-pages-extensions.needs_setup", { items: p.needs_setup.join(t("admin-pages-extensions.list_sep")) })}</p>
       )}
       <Collapse open={open} lazy>
         <div className="mt-3 ml-12 grid min-w-0 gap-3 pr-px pb-px">
-          {p.permissions.length > 0 && <Permissions lines={p.permissions} title="它可以" />}
+          {p.permissions.length > 0 && <Permissions lines={p.permissions} title={t("admin-pages-extensions.can")} />}
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12px]">
-            {extensionRunNote(p) && <Meta label="现在">{extensionRunNote(p)}</Meta>}
-            {contributes.length > 0 && <Meta label="提供">{contributes.map(([point, ids]) => `${pointLabel(point)}：${ids.join("、")}`).join("；")}</Meta>}
-            {p.previous_version && <Meta label="上一个版本" mono>{p.previous_version}</Meta>}
-            {p.origin && <Meta label="安装自" mono>{p.origin}</Meta>}
-            {p.publisher && <Meta label="发布者">{p.publisher}</Meta>}
+            {extensionRunNote(p) && <Meta label={t("admin-pages-extensions.now")}>{extensionRunNote(p)}</Meta>}
+            {contributes.length > 0 && <Meta label={t("admin-pages-extensions.provides")}>{contributes.map(([point, ids]) => t("admin-pages-extensions.provides_item", { point: pointLabel(point), ids: ids.join(t("admin-pages-extensions.list_sep")) })).join(t("admin-pages-extensions.group_sep"))}</Meta>}
+            {p.previous_version && <Meta label={t("admin-pages-extensions.previous_version")} mono>{p.previous_version}</Meta>}
+            {p.origin && <Meta label={t("admin-pages-extensions.installed_from")} mono>{p.origin}</Meta>}
+            {p.publisher && <Meta label={t("admin-pages-extensions.publisher")}>{p.publisher}</Meta>}
             {p.homepage && (
-              <Meta label="主页">
+              <Meta label={t("admin-pages-extensions.homepage")}>
                 <a href={p.homepage} target="_blank" rel="noreferrer noopener" className="text-accent-ink hover:underline">
                   {p.homepage}
                 </a>
               </Meta>
             )}
-            {p.read_only && <Meta label="改动">写在 hub.json 里，只能去 hub.json 改</Meta>}
+            {p.read_only && <Meta label={t("admin-pages-extensions.changes")}>{t("admin-pages-extensions.changes_hub_json")}</Meta>}
           </dl>
           {p.warnings?.map((w) => (
             <p key={w} className="flex items-start gap-1.5 text-[12px] leading-relaxed text-orange">
@@ -284,27 +286,27 @@ export function Permissions({ lines, title, tone }: { lines: PermissionLine[]; t
 type Way = "path" | "url" | "remote" | "upload";
 
 const WAYS: { value: Way; label: string; icon: AdminIconName }[] = [
-  { value: "path", label: "hub 机器上", icon: "folder" },
-  { value: "url", label: "链接", icon: "web" },
-  { value: "upload", label: "上传", icon: "upload" },
-  { value: "remote", label: "跑在别处", icon: "link" },
+  { value: "path", label: t("admin-pages-extensions.way_path"), icon: "folder" },
+  { value: "url", label: t("admin-pages-extensions.way_url"), icon: "web" },
+  { value: "upload", label: t("admin-pages-extensions.way_upload"), icon: "upload" },
+  { value: "remote", label: t("admin-pages-extensions.way_remote"), icon: "link" },
 ];
 
 const WAY_FIELD: Record<Exclude<Way, "upload">, { label: string; placeholder: string; hint: string }> = {
   path: {
-    label: "目录或包的路径",
+    label: t("admin-pages-extensions.path_label"),
     placeholder: "/opt/persona-extensions/example-notes",
-    hint: "hub 机器上的目录（拷一份进来，原目录以后改了不影响已装的），或 .tar.gz / .zip 包。",
+    hint: t("admin-pages-extensions.path_hint"),
   },
   url: {
-    label: "下载链接",
+    label: t("admin-pages-extensions.url_label"),
     placeholder: "https://example.com/example-notes-1.2.0.tar.gz#sha256=…",
-    hint: "只收 https，链接后面必须带 #sha256=<64 位 hex>：hub 下载后校验，对不上就不装。",
+    hint: t("admin-pages-extensions.url_hint"),
   },
   remote: {
     label: "socket",
     placeholder: "remote:rpc=/run/example-notes.sock,http=/run/example-notes-http.sock",
-    hint: "扩展跑在别处、经 hub 机器上的 unix socket 接入：不拷文件，清单问扩展要。",
+    hint: t("admin-pages-extensions.remote_hint"),
   },
 };
 
@@ -356,7 +358,7 @@ function InstallDialog({ open, upgrade, uploadMost, onClose, onDone }: { open: b
     setError("");
     try {
       const p = upgrade ? await upgradeExtension(upgrade.id, preview) : await installExtension(preview);
-      toast(upgrade ? `「${p.name}」已升级到 ${p.version}` : `已安装「${p.name}」`, "ok");
+      toast(upgrade ? t("admin-pages-extensionmarket.upgraded", { name: p.name, version: p.version ?? "" }) : t("admin-pages-extensionmarket.installed", { name: p.name }), "ok");
       onDone();
       onClose();
     } catch (e) {
@@ -366,7 +368,7 @@ function InstallDialog({ open, upgrade, uploadMost, onClose, onDone }: { open: b
     }
   };
 
-  const title = upgrade ? `升级「${upgrade.name}」` : "安装扩展";
+  const title = upgrade ? t("admin-pages-extensionmarket.upgrade_title", { name: upgrade.name }) : t("admin-pages-extensions.install_extension");
   const now = useNow(1000);
   return (
     <Dialog
@@ -378,19 +380,19 @@ function InstallDialog({ open, upgrade, uploadMost, onClose, onDone }: { open: b
         preview ? (
           <>
             <Button tone="quiet" onClick={() => (setPreview(null), setError(""))}>
-              换一个
+              {t("admin-pages-extensions.another")}
             </Button>
             <Button tone={preview.more_permissions ? "danger" : "primary"} busy={busy} disabled={previewBlocked(preview, now)} onClick={() => void agree()}>
-              {upgrade ? (preview.more_permissions ? "同意新权限并升级" : "升级") : "同意并安装"}
+              {upgrade ? (preview.more_permissions ? t("admin-pages-extensionmarket.agree_upgrade") : t("admin-pages-extensionmarket.upgrade")) : t("admin-pages-extensionmarket.agree_install")}
             </Button>
           </>
         ) : (
           <>
             <Button tone="quiet" onClick={onClose}>
-              取消
+              {t("admin-parts.cancel")}
             </Button>
             <Button tone="primary" busy={busy} disabled={!ready} onClick={() => void look()}>
-              看看它能做什么
+              {t("admin-pages-extensions.preview")}
             </Button>
           </>
         )
@@ -402,23 +404,23 @@ function InstallDialog({ open, upgrade, uploadMost, onClose, onDone }: { open: b
         <div className="grid gap-3">
           {upgrade && (
             <p className="text-[12.5px] leading-relaxed text-ink-2">
-              现在是 <span className="font-mono text-ink">{upgrade.version}</span>。选新版本的包，先看它能做什么，再决定升不升；配置和密钥留着。
+              {tRich("admin-pages-extensions.upgrade_intro", { version: <span className="font-mono text-ink">{upgrade.version}</span> })}
             </p>
           )}
-          <Segmented value={way} options={WAYS} onChange={(w) => (setWay(w), setError(""))} label="扩展从哪来" />
+          <Segmented value={way} options={WAYS} onChange={(w) => (setWay(w), setError(""))} label={t("admin-pages-extensions.where_from")} />
           {way === "upload" ? (
             <div>
-              <span className="mb-1 block text-[12px] font-medium text-ink-2">扩展包</span>
+              <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("admin-pages-extensions.package")}</span>
               <div className="flex flex-wrap items-center gap-2 rounded-control bg-inset px-3 py-2.5 shadow-hairline">
                 <Button onClick={() => input.current?.click()}>
                   <AdminIcon name="upload" size={13} />
-                  选择文件
+                  {t("admin-pages-extensions.choose_file")}
                 </Button>
-                <span className={cx("min-w-0 flex-1 truncate text-[12.5px]", file ? "text-ink" : "text-ink-3")}>{file ? `${file.name} · ${bytes(file.size)}` : "还没选"}</span>
+                <span className={cx("min-w-0 flex-1 truncate text-[12.5px]", file ? "text-ink" : "text-ink-3")}>{file ? `${file.name} · ${bytes(file.size)}` : t("admin-pages-extensions.no_file")}</span>
                 <input ref={input} type="file" accept=".tar.gz,.tgz,.zip,application/gzip,application/zip" hidden onChange={(e) => (setFile(e.target.files?.[0] ?? null), (e.target.value = ""))} />
               </div>
               <span className={cx("mt-1 block text-[11.5px] leading-relaxed", fileProblem ? "text-red" : "text-ink-3")}>
-                {fileProblem || `.tar.gz、.tgz 或 .zip，最大 ${Math.floor(uploadMost / (1 << 20)) || 200} MB。上传后先放在 hub 的暂存目录里，10 分钟内不装就删掉。`}
+                {fileProblem || t("admin-pages-extensions.upload_hint", { mb: Math.floor(uploadMost / (1 << 20)) || 200 })}
               </span>
             </div>
           ) : (
@@ -462,25 +464,25 @@ export function PreviewBody({ pv }: { pv: ExtensionPreview }) {
         </div>
       </div>
       {pv.upgrade && pv.more_permissions && (
-        <Notice tone="red" icon="alert" title="新版本要的权限变多了">
-          它比你当初同意的能做更多的事。看清下面新增的几项再决定；不同意就不升级，旧版本照常用。
+        <Notice tone="red" icon="alert" title={t("admin-pages-extensions.more_permissions_title")}>
+          {t("admin-pages-extensions.more_permissions_detail")}
         </Notice>
       )}
-      {pv.upgrade && (pv.added_permissions?.length ?? 0) > 0 && <Permissions lines={pv.added_permissions!} title="新增" tone="orange" />}
+      {pv.upgrade && (pv.added_permissions?.length ?? 0) > 0 && <Permissions lines={pv.added_permissions!} title={t("admin-pages-extensions.added")} tone="orange" />}
       {pv.permissions.length > 0 ? (
-        <Permissions lines={pv.permissions} title={pv.upgrade ? "新版本可以" : "它可以"} />
+        <Permissions lines={pv.permissions} title={pv.upgrade ? t("admin-pages-extensions.new_can") : t("admin-pages-extensions.can")} />
       ) : (
-        <p className="text-[12.5px] text-ink-2">它只有清单，不运行程序、不要任何权限。</p>
+        <p className="text-[12.5px] text-ink-2">{t("admin-pages-extensions.manifest_only")}</p>
       )}
       {contributes.length > 0 && (
         <p className="text-[12px] leading-relaxed text-ink-2">
-          <span className="text-ink-3">提供：</span>
-          {contributes.map(([point, items]) => `${pointLabel(point)} ${items.length} 项`).join("、")}
+          <span className="text-ink-3">{t("admin-pages-extensions.provides_prefix")}</span>
+          {contributes.map(([point, items]) => t("admin-pages-extensions.provides_count", { point: pointLabel(point), count: items.length })).join(t("admin-pages-extensions.list_sep"))}
         </p>
       )}
-      {!!pv.depends?.length && <div className="grid gap-1 text-ink-2">{pv.depends.map((d) => <p key={d.id}>{d.name || d.id}：{dependencyText(d)}</p>)}</div>}
-      {!!pv.bundle?.length && <div className="grid gap-3"><p className="font-medium text-ink">一起安装（逐项确认权限）</p>{pv.bundle.map((b) => <div key={b.preview_id} className="rounded-control bg-inset p-3"><PreviewBody pv={b} /></div>)}</div>}
-      {!!pv.unresolved?.length && <p role="alert" className="text-red">还不能安装：{pv.unresolved.join("、")}。补齐后重新预览。</p>}
+      {!!pv.depends?.length && <div className="grid gap-1 text-ink-2">{pv.depends.map((d) => <p key={d.id}>{t("admin-pages-extensions.dependency", { name: d.name || d.id, text: dependencyText(d) })}</p>)}</div>}
+      {!!pv.bundle?.length && <div className="grid gap-3"><p className="font-medium text-ink">{t("admin-pages-extensions.bundle")}</p>{pv.bundle.map((b) => <div key={b.preview_id} className="rounded-control bg-inset p-3"><PreviewBody pv={b} /></div>)}</div>}
+      {!!pv.unresolved?.length && <p role="alert" className="text-red">{t("admin-pages-extensions.unresolved", { items: pv.unresolved.join(t("admin-pages-extensions.list_sep")) })}</p>}
       {pv.warnings?.map((w) => (
         <p key={w} className="flex items-start gap-1.5 text-[12px] leading-relaxed text-orange">
           <AdminIcon name="alert" size={13} className="mt-0.5 shrink-0" />
@@ -488,8 +490,7 @@ export function PreviewBody({ pv }: { pv: ExtensionPreview }) {
         </p>
       ))}
       <p className="text-[11.5px] leading-relaxed text-ink-3">
-        {left ? <>这份预览还有 <span className="font-mono text-ink-2">{left}</span> 有效，</> : "这份预览过期了，点「换一个」重新预览；"}
-        装的就是你看到的这一份（按权限摘要核对）。
+        {left ? tRich("admin-pages-extensions.preview_left", { left: <span className="font-mono text-ink-2">{left}</span> }) : t("admin-pages-extensions.preview_expired")}
       </p>
     </div>
   );
@@ -504,7 +505,7 @@ function RollBackDialog({ extension, onClose, onDone }: { extension: AdminExtens
     setBusy(true);
     try {
       const p = await rollbackExtension(extension.id);
-      toast(`「${p.name}」回到了 ${p.version}`, "ok");
+      toast(t("admin-pages-extensions.rolled_back", { name: p.name, version: p.version ?? "" }), "ok");
       onDone(p);
     } catch (e) {
       setError(errorText(e));
@@ -516,20 +517,20 @@ function RollBackDialog({ extension, onClose, onDone }: { extension: AdminExtens
     <Dialog
       open={Boolean(extension)}
       onClose={onClose}
-      title={extension ? `回滚「${extension.name}」` : ""}
+      title={extension ? t("admin-pages-extensions.roll_back_title", { name: extension.name }) : ""}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("admin-parts.cancel")}
           </Button>
           <Button tone="primary" busy={busy} onClick={() => void go()}>
-            回到 {extension?.previous_version}
+            {t("admin-pages-extensions.back_to", { version: extension?.previous_version ?? "" })}
           </Button>
         </>
       }
     >
       <p className="text-[12.5px] leading-relaxed text-ink-2">
-        从 <span className="font-mono text-ink">{extension?.version}</span> 回到上一个版本 <span className="font-mono text-ink">{extension?.previous_version}</span>。只能回一步；配置和密钥留着，权限回到旧版本的那一份。
+        {tRich("admin-pages-extensions.roll_back_detail", { from: <span className="font-mono text-ink">{extension?.version}</span>, to: <span className="font-mono text-ink">{extension?.previous_version}</span> })}
       </p>
       {error && <p className="mt-2 text-[12.5px] text-red">{error}</p>}
     </Dialog>
@@ -546,7 +547,7 @@ function UninstallDialog({ extension, onClose, onDone }: { extension: AdminExten
     setBusy(true);
     try {
       await uninstallExtension(extension.id, keep);
-      toast(`已卸载「${extension.name}」`, "ok");
+      toast(t("admin-pages-extensions.uninstalled", { name: extension.name }), "ok");
       onDone();
     } catch (e) {
       setError(errorText(e));
@@ -558,27 +559,27 @@ function UninstallDialog({ extension, onClose, onDone }: { extension: AdminExten
     <Dialog
       open={Boolean(extension)}
       onClose={onClose}
-      title={extension ? `卸载「${extension.name}」` : ""}
+      title={extension ? t("admin-pages-extensions.uninstall_title", { name: extension.name }) : ""}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("admin-parts.cancel")}
           </Button>
           <Button tone="danger" busy={busy} onClick={() => void go()}>
-            卸载
+            {t("admin-pages-extensions.uninstall")}
           </Button>
         </>
       }
     >
       <p className="text-[12.5px] leading-relaxed text-ink-2">
-        停掉它的程序，删掉它的包、配置和密钥；它提供的连接器从收件箱、知识库和助手里拿掉。要再用得重新安装。
+        {t("admin-pages-extensions.uninstall_detail")}
       </p>
       <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-control bg-inset px-3 py-2.5 shadow-hairline">
         <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} className="mt-0.5 size-3.5 shrink-0 accent-[var(--accent)]" />
         <span className="min-w-0">
-          <span className="block text-[12.5px] font-medium text-ink">保留它的数据</span>
+          <span className="block text-[12.5px] font-medium text-ink">{t("admin-pages-extensions.keep_data")}</span>
           <span className="mt-0.5 block text-[11.5px] leading-relaxed break-all text-ink-3">
-            <span className="font-mono">~/.persona/extensions/data/{extension?.id}/</span> 留着，以后重装能接着用。
+            {tRich("admin-pages-extensions.keep_data_detail", { path: <span className="font-mono">~/.persona/extensions/data/{extension?.id}/</span> })}
           </span>
         </span>
       </label>

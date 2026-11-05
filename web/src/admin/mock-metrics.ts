@@ -63,6 +63,7 @@ export function mockMetrics(id: string, window: MetricsWindow, now = Date.now())
     };
   });
   const exits = Math.min(pr.exits, window === "1h" ? 1 : pr.exits);
+  // i18n-ignore: mock data, an exit reason as a hub writes it
   const reason = id === "voice" ? "连不上 /run/persona/voice.sock：connect: no such file or directory" : "exit status 2";
   return {
     extension: id,
