@@ -128,7 +128,7 @@ struct MailDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
-                Text(translated.flatMap { $0.subject.isEmpty ? nil : $0.subject } ?? (summary.subject?.isEmpty == false ? summary.subject! : "（无主题）"))
+                Text(translated.flatMap { $0.subject.isEmpty ? nil : $0.subject } ?? (summary.subject?.isEmpty == false ? summary.subject! : String(localized: "（无主题）")))
                     .font(Theme.Font.title)
                 HStack(alignment: .top, spacing: Theme.Space.m) {
                     Monogram(name: summary.from?.display ?? "", fill: Theme.accent.opacity(0.15), ink: Theme.accent)
@@ -136,7 +136,7 @@ struct MailDetailView: View {
                         Text(summary.from?.display ?? "").font(Theme.Font.secondaryStrong)
                         Text(summary.from?.email ?? "").font(Theme.Font.label).foregroundStyle(.secondary)
                         if let to = message?.to, !to.isEmpty {
-                            Text("收件人：" + to.map(\.display).joined(separator: "，")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
+                            Text("收件人：\(Self.recipients(to))").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                         }
                     }
                     Spacer()
@@ -158,7 +158,7 @@ struct MailDetailView: View {
                     if let atts = m.attachments, !atts.isEmpty {
                         VStack(alignment: .leading, spacing: Theme.Space.sm) {
                             ForEach(Array(atts.enumerated()), id: \.offset) { _, a in
-                                Label("\(a.filename ?? "附件")  \(ByteCountFormatter.string(fromByteCount: Int64(a.size ?? 0), countStyle: .file))", systemImage: Theme.Icon.attachment)
+                                Label("\(a.filename ?? String(localized: "附件"))  \(ByteCountFormatter.string(fromByteCount: Int64(a.size ?? 0), countStyle: .file))", systemImage: Theme.Icon.attachment)
                                     .font(Theme.Font.caption)
                             }
                         }
@@ -184,7 +184,7 @@ struct MailDetailView: View {
         }
         .sheet(item: $reply) { d in ComposeView(draft: d, accounts: accounts) }
         .sheet(isPresented: $askClaude) {
-            NewChatPrefilled(prompt: "请用 mail_read 读取邮件（account_id: \(summary.accountID)，mailbox: \(summary.mailbox)，uid: \(summary.uid)，主题：\(summary.subject ?? "")），总结要点，并给出建议的回复草稿。")
+            NewChatPrefilled(prompt: String(localized: "请用 mail_read 读取邮件（account_id: \(summary.accountID)，mailbox: \(summary.mailbox)，uid: \(summary.uid)，主题：\(summary.subject ?? "")），总结要点，并给出建议的回复草稿。"))
         }
         #if DEBUG && os(macOS)
         // `-showMailAskClaude YES` (with an inbox mail open): the 「让 Claude 处理」 sheet.
@@ -204,6 +204,11 @@ struct MailDetailView: View {
 }
 
 extension MailDetailView {
+    /// The recipients' names in one line, joined with the language's separator.
+    static func recipients(_ to: [MailAddress]) -> String {
+        to.map(\.display).joined(separator: String(localized: "，", comment: "Separator between mail recipients"))
+    }
+
     /// While translating, or once translated: what happened and the way back to the original (or to the translation).
     @ViewBuilder var translationBar: some View {
         if translating {
@@ -342,7 +347,7 @@ struct ComposeDraft: Identifiable {
         d.inReplyTo = message?.messageID ?? s.messageID
         d.references = (message?.references ?? []) + [message?.messageID ?? s.messageID].compactMap { $0 }
         let quoted = (message?.text ?? "").split(separator: "\n", omittingEmptySubsequences: false).prefix(40).map { "> " + $0 }.joined(separator: "\n")
-        d.body = "\n\n\(s.date.map { $0.formatted() } ?? "")，\(s.from?.display ?? "") 写道：\n" + quoted
+        d.body = String(localized: "\n\n\(s.date.map { $0.formatted() } ?? "")，\(s.from?.display ?? "") 写道：\n") + quoted
         return d
     }
 }
@@ -390,7 +395,7 @@ struct ComposeView: View {
     }
 
     private func addresses(_ s: String) -> [MailAddress] {
-        s.split(whereSeparator: { $0 == "," || $0 == "，" || $0 == ";" })
+        s.split(whereSeparator: { $0 == "," || $0 == "，" || $0 == ";" }) // i18n-ignore: parsing what was typed
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             .map { MailAddress(name: nil, email: $0) }
     }
@@ -404,7 +409,7 @@ struct ComposeView: View {
                                          subject: draft.subject, text: draft.body, inReplyTo: draft.inReplyTo,
                                          references: draft.references?.joined(separator: " ")))
             Haptics.success()
-            model.toast = Toast("已发送", style: .success)
+            model.toast = Toast(String(localized: "已发送"), style: .success)
             dismiss()
         } catch {
             self.error = error.shown
@@ -436,7 +441,7 @@ struct MailAccountsView: View {
                             MailProviderMark(provider: a.provider ?? "")
                             VStack(alignment: .leading) {
                                 Text(a.email).font(Theme.Font.heading)
-                                Text(a.status == "error" ? (a.error ?? "错误") : a.auth == "oauth2" ? (a.provider == "outlook" ? "Outlook · Microsoft 账号登录" : "Gmail · Google 账号登录") : "\(a.provider == "feishu" ? "飞书邮箱" : (a.imapHost ?? ""))")
+                                Text(a.status == "error" ? (a.error ?? String(localized: "错误")) : a.auth == "oauth2" ? (a.provider == "outlook" ? String(localized: "Outlook · Microsoft 账号登录") : String(localized: "Gmail · Google 账号登录")) : (a.provider == "feishu" ? String(localized: "飞书邮箱") : (a.imapHost ?? "")))
                                     .font(Theme.Font.label).foregroundStyle(a.status == "error" ? Theme.danger : .secondary)
                             }
                         }
@@ -462,7 +467,7 @@ struct MailAccountsView: View {
                 }
             }
             .themedPage()
-            .detailTitle("邮箱")
+            .detailTitle(String(localized: "邮箱"))
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $adding, onDismiss: { Task { await load() } }) { AddMailAccountView() }
             .task { await load() }
@@ -528,13 +533,13 @@ struct AddMailAccountView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Picker("类型", selection: $form.kind) { ForEach(Kind.allCases) { Text($0.rawValue).tag($0) } }
+                Picker("类型", selection: $form.kind) { ForEach(Kind.allCases) { Text($0.title).tag($0) } }
                     .pickerStyle(.segmented)
                     .listRowBackground(Color.clear)
                 if form.kind == .gmail {
                     Section {
                         Button { Task { await signInWithGoogle() } } label: {
-                            AccountSignInLabel(mark: Theme.Brand.google, title: saving ? "正在连接 Gmail…" : "使用 Google 账号登录", busy: saving)
+                            AccountSignInLabel(mark: Theme.Brand.google, title: saving ? String(localized: "正在连接 Gmail…") : String(localized: "使用 Google 账号登录"), busy: saving)
                         }
                         .buttonStyle(.plain)
                         .disabled(saving)
@@ -550,7 +555,7 @@ struct AddMailAccountView: View {
                         TextField("邮箱地址", text: $form.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                         // The mail server's password or a code made for one client, handed to the hub (kept there,
                         // encrypted): not this app's password, so not offered to the system's passwords (#1598).
-                        SecretField("密码 / 授权码", filled: "已填写，点连接", text: $form.password, identifier: "mail.password")
+                        SecretField(String(localized: "密码 / 授权码"), filled: String(localized: "已填写，点连接"), text: $form.password, identifier: "mail.password")
                     } footer: {
                         switch form.kind {
                         case .gmail, .outlook: EmptyView()

@@ -41,7 +41,7 @@ import SwiftUI
     }
 
     /// One-tap questions (the web's): each starts a health conversation with it.
-    static let suggestions = ["这周我睡得怎么样？", "最近 7 天步数和上周比怎么样", "我的静息心率最近有变化吗", "帮我记一下今天体重 62.5 kg"]
+    static let suggestions = [String(localized: "这周我睡得怎么样？"), String(localized: "最近 7 天步数和上周比怎么样"), String(localized: "我的静息心率最近有变化吗"), String(localized: "帮我记一下今天体重 62.5 kg")]
 }
 
 struct HealthView: View {
@@ -60,9 +60,9 @@ struct HealthView: View {
                 .themedPage()
             Group {
                 if AppStyle.current.usesBeautifulUI {
-                    BeautifulStarterComposer(disabled: disabled, launcher: $launcher, placeholder: "问健康相关的问题…", send: send)
+                    BeautifulStarterComposer(disabled: disabled, launcher: $launcher, placeholder: String(localized: "问健康相关的问题…"), send: send)
                 } else {
-                    StarterComposer(disabled: disabled, placeholder: "问健康相关的问题…", send: send)
+                    StarterComposer(disabled: disabled, placeholder: String(localized: "问健康相关的问题…"), send: send)
                 }
             }
             .padding(.horizontal, Theme.Space.m)
@@ -73,7 +73,7 @@ struct HealthView: View {
             .background(Theme.groupedPage.ignoresSafeArea(edges: .bottom))
         }
         .background(Theme.groupedPage)
-        .pageTitle("健康")
+        .pageTitle(String(localized: "健康"))
         .task { await page.load() }
         .refreshable { await page.load() }
     }
@@ -128,9 +128,9 @@ struct HealthView: View {
                     Text("健康对话里记下的目标、过敏、用药等，单独存放，不会流到其他对话；可以随时查看和删除。")
                 }
                 Section {
-                    source(Theme.Icon.health, "Apple Health", "经你的 iPhone 读取步数、睡眠、心率、体重等汇总，需要 Persona 在手机上打开并授权。")
-                    source(Theme.Icon.edit, "记一条数据", "说「记一下体重」「喝了 300 毫升水」，手机上确认后写进健康。")
-                    source(Theme.Icon.photo, "化验单和报告", "发图片，逐项读出来并标出超出参考范围的。")
+                    source(Theme.Icon.health, "Apple Health", String(localized: "经你的 iPhone 读取步数、睡眠、心率、体重等汇总，需要 Persona 在手机上打开并授权。"))
+                    source(Theme.Icon.edit, String(localized: "记一条数据"), String(localized: "说「记一下体重」「喝了 300 毫升水」，手机上确认后写进健康。"))
+                    source(Theme.Icon.photo, String(localized: "化验单和报告"), String(localized: "发图片，逐项读出来并标出超出参考范围的。"))
                 } header: {
                     Text("数据来源")
                 }
@@ -157,9 +157,9 @@ struct HealthView: View {
     }
 
     private static let privacy = [
-        "健康对话只在这里：Persona 的其他对话看不到、读不到。",
-        "对话和记忆都留在 hub 所在的机器上，不进知识库。",
-        "这里给的是解释和建议，不能替代医生的诊断和治疗。",
+        String(localized: "健康对话只在这里：Persona 的其他对话看不到、读不到。"),
+        String(localized: "对话和记忆都留在 hub 所在的机器上，不进知识库。"),
+        String(localized: "这里给的是解释和建议，不能替代医生的诊断和治疗。"),
     ]
 
     private var hero: some View {
@@ -181,7 +181,7 @@ struct HealthView: View {
     }
 
     private func row(_ s: Session) -> some View {
-        let title = s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title
+        let title = s.title.isEmpty || s.title == "Claude Code" ? String(localized: "新对话") : s.title
         return Button { model.openAssistantConversation(s.key) } label: {
             HStack(spacing: Theme.Space.m) {
                 Image(systemName: Theme.Icon.healthFilled)

@@ -29,16 +29,16 @@ struct ExtensionMarketView: View {
             if let items = page.items {
                 if page.markets.isEmpty {
                     Section {
-                        EmptyStateView(symbol: Theme.Icon.pluginMarket, title: "还没有扩展市场",
-                                       message: "扩展市场是一个仓库或网站发布的扩展索引。添加一个市场后，这里列出它的扩展，可以直接安装。")
+                        EmptyStateView(symbol: Theme.Icon.pluginMarket, title: String(localized: "还没有扩展市场"),
+                                       message: String(localized: "扩展市场是一个仓库或网站发布的扩展索引。添加一个市场后，这里列出它的扩展，可以直接安装。"))
                         NavigationLink(value: SettingsPage.pluginMarkets) { Text("添加市场").lineLimit(1) }
                             .accessibilityIdentifier("market-add-first")
                     }
                     .listRowBackground(Color.clear)
                 } else if items.isEmpty {
                     Section {
-                        EmptyStateView(symbol: Theme.Icon.search, title: "没有找到扩展",
-                                       message: page.query.isEmpty ? "这个市场里还没有扩展。" : "换个词试试，名字、说明、发布者和标签都能搜。")
+                        EmptyStateView(symbol: Theme.Icon.search, title: String(localized: "没有找到扩展"),
+                                       message: page.query.isEmpty ? String(localized: "这个市场里还没有扩展。") : String(localized: "换个词试试，名字、说明、发布者和标签都能搜。"))
                     }
                     .listRowBackground(Color.clear)
                 } else {
@@ -80,9 +80,9 @@ struct ExtensionMarketView: View {
         .contentMargins(.top, Theme.Space.s, for: .scrollContent)
         #endif
         .overlay { if page.items == nil && page.error == nil { ProgressView() } }
-        .detailTitle("扩展市场")
+        .detailTitle(String(localized: "扩展市场"))
         .navigationBarTitleDisplayMode(.inline)
-        .pageSearchable(text: $page.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、说明、发布者或标签")
+        .pageSearchable(text: $page.query, placement: .navigationBarDrawer(displayMode: .always), prompt: String(localized: "名字、说明、发布者或标签"))
         #if os(iOS) || os(visionOS)
         .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -102,7 +102,7 @@ struct ExtensionMarketView: View {
 
     private var marketChips: some View {
         FlowLayoutRow {
-            FilterChip(title: "全部", on: page.market == nil) { choose(nil) }
+            FilterChip(title: String(localized: "全部"), on: page.market == nil) { choose(nil) }
                 .accessibilityIdentifier("market-filter-all")
             ForEach(page.markets) { m in
                 FilterChip(title: m.title, on: page.market == m.id) { choose(m.id) }
@@ -159,10 +159,10 @@ private struct MarketStateChip: View {
 
     var body: some View {
         switch ExtensionMarketText.step(item) {
-        case .install: Chip(text: "可安装", look: .tint(Theme.accent))
-        case .upgrade: Chip(text: "可升级", look: .tint(Theme.caution))
-        case .upToDate: Chip(text: "已安装", look: .tint(Theme.positive))
-        case .unavailable: Chip(text: "装不了", look: .neutral)
+        case .install: Chip(text: String(localized: "可安装"), look: .tint(Theme.accent))
+        case .upgrade: Chip(text: String(localized: "可升级"), look: .tint(Theme.caution))
+        case .upToDate: Chip(text: String(localized: "已安装"), look: .tint(Theme.positive))
+        case .unavailable: Chip(text: String(localized: "装不了"), look: .neutral)
         }
     }
 }
@@ -185,7 +185,7 @@ struct MarketExtensionDetailView: View {
                     Section {
                         ForEach(perms) { PermissionLine(permission: $0) }
                     } header: {
-                        SettingsHeading("它可以")
+                        SettingsHeading(String(localized: "它可以"))
                     } footer: {
                         Text("安装前会再列一次，以下载到的包为准；新版本要得更多时，升级前会单独列出多出来的。")
                     }
@@ -193,15 +193,15 @@ struct MarketExtensionDetailView: View {
                 about(p)
             } else if let e = page.error {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.error, title: "读不到这个扩展", message: e,
-                                   action: ("重试", { Task { await page.load() } }))
+                    EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "读不到这个扩展"), message: e,
+                                   action: (String(localized: "重试"), { Task { await page.load() } }))
                 }
                 .listRowBackground(Color.clear)
             }
         }
         .themedPage()
         .overlay { if page.item == nil && page.error == nil { ProgressView() } }
-        .detailTitle(page.item?.name ?? "扩展")
+        .detailTitle(page.item?.name ?? String(localized: "扩展"))
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("停用依赖它的扩展后再卸载？", isPresented: Binding(
             get: { page.uninstallConfirmation != nil }, set: { if !$0 { page.uninstallConfirmation = nil } }),
@@ -223,7 +223,7 @@ struct MarketExtensionDetailView: View {
                 let upgrade = pv.upgrade == true
                 if await page.confirm() {
                     Haptics.success()
-                    app.toast = Toast(upgrade ? "已升级" : "已安装", style: .success)
+                    app.toast = Toast(upgrade ? String(localized: "已升级") : String(localized: "已安装"), style: .success)
                     return true
                 }
                 return false
@@ -259,13 +259,13 @@ struct MarketExtensionDetailView: View {
         Section {
             switch ExtensionMarketText.step(p) {
             case .install:
-                primary("安装", symbol: Theme.Icon.install, id: "market-install")
+                primary(String(localized: "安装"), symbol: Theme.Icon.install, id: "market-install")
             case .upgrade:
-                primary("升级到 \(p.version)", symbol: Theme.Icon.upgrade, id: "market-upgrade")
+                primary(String(localized: "升级到 \(p.version)"), symbol: Theme.Icon.upgrade, id: "market-upgrade")
             case .upToDate:
                 LabeledContent("已安装", value: p.installed ?? p.version)
             case .unavailable:
-                Label { Text(p.problem ?? "这台 hub 装不了") } icon: {
+                Label { Text(p.problem ?? String(localized: "这台 hub 装不了")) } icon: {
                     Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
                 }
                 .font(Theme.Font.label)
@@ -285,7 +285,7 @@ struct MarketExtensionDetailView: View {
                 .accessibilityIdentifier("market-uninstall")
                 .confirmationDialog("卸载「\(p.name)」？", isPresented: $confirmRemove, titleVisibility: .visible) {
                     Button(role: .destructive) {
-                        Task { if await page.uninstall() { app.toast = Toast("已卸载", style: .success) } }
+                        Task { if await page.uninstall() { app.toast = Toast(String(localized: "已卸载"), style: .success) } }
                     } label: { Text(page.isPack ? "只卸载合集" : "卸载").lineLimit(1) }
                     .accessibilityIdentifier("market-uninstall-confirm")
                     if page.isPack {
@@ -338,7 +338,7 @@ struct MarketExtensionDetailView: View {
                 Link(destination: url) { Label("主页", systemImage: Theme.Icon.openExternal).lineLimit(1) }
             }
         } header: {
-            SettingsHeading("关于")
+            SettingsHeading(String(localized: "关于"))
         }
     }
 }
@@ -386,26 +386,26 @@ private struct ExtensionInstallSheet: View {
                                     .foregroundStyle(dependency.state == "ok" ? Color.secondary : Theme.cautionText)
                             }
                         }
-                    } header: { SettingsHeading("依赖") }
+                    } header: { SettingsHeading(String(localized: "依赖")) }
                 }
                 if let members = preview.manifest.extensionPack, !members.isEmpty {
                     Section {
                         ForEach(members, id: \.id) { member in
                             LabeledContent(member.id, value: member.version ?? "")
                         }
-                    } header: { SettingsHeading("合集成员") }
+                    } header: { SettingsHeading(String(localized: "合集成员")) }
                 }
                 if let bundle = preview.bundle, !bundle.isEmpty {
                     ForEach(bundle) { member in
                         Section {
                             LabeledContent(member.manifest.name ?? member.manifest.id, value: member.manifest.version ?? "")
                             ForEach(member.permissions) { PermissionLine(permission: $0) }
-                        } header: { SettingsHeading("一起安装") }
+                        } header: { SettingsHeading(String(localized: "一起安装")) }
                     }
                 }
                 if let unresolved = preview.unresolved, !unresolved.isEmpty {
                     Section {
-                        Text("市场里找不到：" + unresolved.joined(separator: "、"))
+                        Text("市场里找不到：\(unresolved.joined(separator: "、"))")
                             .font(Theme.Font.secondary).foregroundStyle(Theme.cautionText)
                     } footer: { Text("先添加提供这些扩展的市场，再重新预览。没有装好依赖时不会安装。") }
                 }
@@ -419,7 +419,7 @@ private struct ExtensionInstallSheet: View {
                     Section {
                         ForEach(added) { PermissionLine(permission: $0, tone: Theme.caution) }
                     } header: {
-                        SettingsHeading("新版本多要的")
+                        SettingsHeading(String(localized: "新版本多要的"))
                     } footer: {
                         Text("升级就是同意这些。")
                     }
@@ -433,7 +433,7 @@ private struct ExtensionInstallSheet: View {
                         ForEach(preview.permissions) { PermissionLine(permission: $0) }
                     }
                 } header: {
-                    SettingsHeading(upgrade ? "新版本可以" : "它可以")
+                    SettingsHeading(upgrade ? String(localized: "新版本可以") : String(localized: "它可以"))
                 } footer: {
                     Text("扩展按预览列出的权限和 hub 的隔离配置运行。包已按市场给的校验和核对过。")
                 }
@@ -490,9 +490,9 @@ struct ExtensionMarketsView: View {
         SettingsForm {
             if page.markets.isEmpty && !page.loading && page.error == nil {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.pluginMarket, title: "还没有扩展市场",
-                                   message: "填一个市场的地址：https://… 的索引、github:owner/repo（私有仓库要一个只读 token），或 git:…（用 hub 机器的 SSH 凭据）。",
-                                   action: ("添加市场", { adding = true }))
+                    EmptyStateView(symbol: Theme.Icon.pluginMarket, title: String(localized: "还没有扩展市场"),
+                                   message: String(localized: "填一个市场的地址：https://… 的索引、github:owner/repo（私有仓库要一个只读 token），或 git:…（用 hub 机器的 SSH 凭据）。"),
+                                   action: (String(localized: "添加市场"), { adding = true }))
                 }
                 .listRowBackground(Color.clear)
             }
@@ -533,7 +533,7 @@ struct ExtensionMarketsView: View {
         }
         .themedPage()
         .overlay { if page.markets.isEmpty && page.loading { ProgressView() } }
-        .detailTitle("市场")
+        .detailTitle(String(localized: "市场"))
         .navigationBarTitleDisplayMode(.inline)
         #if os(iOS) || os(visionOS)
         .pageToolbar {
@@ -545,12 +545,12 @@ struct ExtensionMarketsView: View {
         }
         #endif
         .sheet(isPresented: $adding) {
-            MarketTokenSheet(title: "添加市场", asksSpec: true, hasToken: false) { spec, token in
+            MarketTokenSheet(title: String(localized: "添加市场"), asksSpec: true, hasToken: false) { spec, token in
                 await page.addMarket(spec: spec, token: token)
             }
         }
         .sheet(item: $tokenFor) { m in
-            MarketTokenSheet(title: "「\(m.title)」的 token", asksSpec: false, hasToken: m.hasToken) { _, token in
+            MarketTokenSheet(title: String(localized: "「\(m.title)」的 token"), asksSpec: false, hasToken: m.hasToken) { _, token in
                 await page.setToken(m.id, token: token)
             }
         }
@@ -590,8 +590,8 @@ private struct MarketRow: View {
         }
         .padding(.vertical, Theme.Space.xxs)
         HStack(spacing: Theme.Space.l) {
-            action("刷新", .refresh, id: "market-refresh-\(market.id)")
-            action(market.hasToken ? "换 token" : "设 token", .token, id: "market-token-\(market.id)")
+            action(String(localized: "刷新"), .refresh, id: "market-refresh-\(market.id)")
+            action(market.hasToken ? String(localized: "换 token") : String(localized: "设 token"), .token, id: "market-token-\(market.id)")
             Spacer(minLength: 0)
             Button(role: .destructive) { confirmRemove = true } label: { Text("删除").lineLimit(1) }
             .buttonStyle(.borderless)
@@ -642,16 +642,16 @@ private struct MarketTokenSheet: View {
                             .autocorrectionDisabled()
                             .accessibilityIdentifier("market-spec")
                     } header: {
-                        SettingsHeading("地址")
+                        SettingsHeading(String(localized: "地址"))
                     } footer: {
-                        Text(verbatim: "三种写法：https://example.com/extensions/（不以 .json 结尾的读它下面的 persona-extensions.json，没有再读 persona-plugins.json）；github:owner/repo（仓库根目录的那份，私有的要 token）；git:<地址>[#分支]（git@host:path.git、ssh://…、https://…，用 hub 机器自己的 SSH 凭据，不用 token）。")
+                        Text(String(localized: "三种写法：https://example.com/extensions/（不以 .json 结尾的读它下面的 persona-extensions.json，没有再读 persona-plugins.json）；github:owner/repo（仓库根目录的那份，私有的要 token）；git:<地址>[#分支]（git@host:path.git、ssh://…、https://…，用 hub 机器自己的 SSH 凭据，不用 token）。"))
                     }
                 }
                 Section {
-                    SecretField(hasToken ? "输入新的 token 替换" : (asksSpec ? "公开的市场不用填" : "输入 token"), filled: "已填写，点保存",
+                    SecretField(hasToken ? String(localized: "输入新的 token 替换") : (asksSpec ? String(localized: "公开的市场不用填") : String(localized: "输入 token")), filled: String(localized: "已填写，点保存"),
                                 text: $token, identifier: "market-token")
                 } header: {
-                    SettingsHeading(asksSpec ? "Token（可选）" : "Token")
+                    SettingsHeading(asksSpec ? String(localized: "Token（可选）") : "Token")
                 } footer: {
                     Text("私有仓库用只读的 token（GitHub：这个仓库的 Contents 读权限）。加密存在 hub 上，只发给市场自己，存好后不再显示。git: 市场用 hub 机器的 SSH 凭据，不用填。")
                 }

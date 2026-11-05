@@ -19,7 +19,7 @@ struct ThreadComposer: View {
             VStack(alignment: .leading, spacing: 0) {
                 if let quote {
                     QuoteBarRow(heading: quote.heading, summary: quote.summary, lines: 1, tint: LarkColor.blue,
-                                removeLabel: "取消回复", remove: cancelQuote)
+                                removeLabel: String(localized: "取消回复"), remove: cancelQuote)
                         .padding(.leading, Theme.Space.l)
                         .padding(.trailing, Theme.Space.xs)
                         .padding(.top, Theme.Space.s)

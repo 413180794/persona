@@ -48,14 +48,14 @@ nonisolated struct APIError: LocalizedError, Sendable {
     var details: JSONValue?
     var errorDescription: String? {
         guard status >= 500, let requestID else { return message }
-        return "\(message)（请求 \(requestID)）"
+        return String(localized: "\(message)（请求 \(requestID)）")
     }
     var code: String? { fields["code"] }
 
     /// The hub's words for a call that ran out of time (Go's context deadline, a node call's timeout).
     static func isTimeoutText(_ message: String) -> Bool {
         let m = message.lowercased()
-        return m.contains("deadline exceeded") || m.contains("timed out") || m.contains("timeout") || m.contains("超时")
+        return m.contains("deadline exceeded") || m.contains("timed out") || m.contains("timeout") || m.contains("超时") // i18n-ignore: matches the hub's text
     }
 
     static func fields(in data: Data) -> [String: String] {
@@ -72,7 +72,7 @@ nonisolated struct APIError: LocalizedError, Sendable {
         let message = err["message"]?.string
         let code = err["code"]?.string
         switch (message, code) {
-        case let (m?, c?): return "\(m)（\(c)）"
+        case let (m?, c?): return String(localized: "\(m)（\(c)）", comment: "An error message and its code")
         case let (m?, nil): return m
         case let (nil, c?): return c
         default: return nil
@@ -82,7 +82,7 @@ nonisolated struct APIError: LocalizedError, Sendable {
 
 nonisolated enum DemoText {
     /// What a 体验模式 action that would reach a computer, Feishu or mail says instead.
-    static let notSent = "体验模式下不会真的发送"
+    static var notSent: String { String(localized: "体验模式下不会真的发送") }
     /// `APIError.code` of such a refusal.
     static let code = "demo"
 }
@@ -176,10 +176,11 @@ nonisolated struct APIClient: Sendable {
             if opID != nil { try Self.checkReceipt(data, status: nil) }
             return data
         }
-        if config.isDemo { throw APIError(status: 503, message: "体验模式不可用") }
+        if config.isDemo { throw APIError(status: 503, message: String(localized: "体验模式不可用")) }
         var req = URLRequest(url: url(path, query: query), timeoutInterval: timeout)
         req.httpMethod = method
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
         let requestID = String(UUID().uuidString.prefix(8)).lowercased()
         req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
         for (name, value) in headers { req.setValue(value, forHTTPHeaderField: name) }
@@ -201,8 +202,8 @@ nonisolated struct APIClient: Sendable {
               case .object(let obj)? = try? JSON.decoder.decode(JSONValue.self, from: data), obj.count == 1,
               let state = obj["state"]?.string else { return }
         switch state {
-        case "pending": throw APIError(status: 202, message: "上一次的请求还在处理", fields: ["code": OpReceipt.pendingCode])
-        case "unknown": throw APIError(status: 202, message: "不确定上一次有没有执行", fields: ["code": OpReceipt.unknownCode])
+        case "pending": throw APIError(status: 202, message: String(localized: "上一次的请求还在处理"), fields: ["code": OpReceipt.pendingCode])
+        case "unknown": throw APIError(status: 202, message: String(localized: "不确定上一次有没有执行"), fields: ["code": OpReceipt.unknownCode])
         default: return
         }
     }
@@ -229,6 +230,7 @@ nonisolated struct APIClient: Sendable {
         }
         var req = URLRequest(url: url(path, query: query), timeoutInterval: 30)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
         let requestID = String(UUID().uuidString.prefix(8)).lowercased()
         req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
         if let etag { req.setValue(etag, forHTTPHeaderField: "If-None-Match") }
@@ -248,6 +250,7 @@ nonisolated struct APIClient: Sendable {
         var req = URLRequest(url: url(path, query: query), timeoutInterval: timeout)
         req.httpMethod = "POST"
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
         req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         let requestID = String(UUID().uuidString.prefix(8)).lowercased()
         req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
@@ -272,6 +275,7 @@ nonisolated struct APIClient: Sendable {
         var req = URLRequest(url: url("/api/v1/machines/\(machine)/files", query: query), timeoutInterval: 120)
         req.httpMethod = "POST"
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
         let requestID = String(UUID().uuidString.prefix(8)).lowercased()
         req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
         req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
@@ -291,6 +295,7 @@ nonisolated struct APIClient: Sendable {
         }
         var req = URLRequest(url: url(path, query: query), timeoutInterval: 120)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
         let requestID = String(UUID().uuidString.prefix(8)).lowercased()
         req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
         let (temp, response) = try await Self.uncachedSession.download(for: req, delegate: DownloadProgress(progress))
@@ -304,7 +309,7 @@ nonisolated struct APIClient: Sendable {
         try Task.checkCancellation()
         let size = (try FileManager.default.attributesOfItem(atPath: temp.path)[.size] as? NSNumber)?.int64Value ?? 0
         if response.expectedContentLength >= 0, size != response.expectedContentLength {
-            throw APIError(status: 0, message: "文件没有下载完整，请重试")
+            throw APIError(status: 0, message: String(localized: "文件没有下载完整，请重试"))
         }
         try FileManager.default.moveItem(at: temp, to: destination)
         progress(size, size)
@@ -589,6 +594,7 @@ nonisolated struct APIClient: Sendable {
         if config.isDemo { return try await request("GET", "/api/v1/sessions/\(parts[0])/\(parts[1])/items/\(parts[2])/image") }
         var req = URLRequest(url: itemURL(machine: parts[0], session: parts[1], item: parts[2], "image"), timeoutInterval: 60)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
         let (data, resp) = try await Self.uncachedSession.data(for: req) // ChatImageLoader keeps it on disk
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
@@ -602,6 +608,7 @@ nonisolated struct APIClient: Sendable {
         if config.isDemo { return try JSON.decoder.decode(Item.self, from: try await request("GET", sp(k) + "/items/\(id)/full")) }
         var req = URLRequest(url: itemURL(machine: k.machineID, session: k.sessionID, item: id, "full"), timeoutInterval: 60)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
         let (data, resp) = try await Self.uncachedSession.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
@@ -1130,8 +1137,10 @@ nonisolated struct APIClient: Sendable {
         var pushKey: String?
         var relayURL: String?
         var relayGrant: String?
+        /// The interface language pushes to this device use (docs/i18n.md「协议」).
+        var locale: String? = LanguageStore.shared.launched
         enum CodingKeys: String, CodingKey {
-            case name, kind, topic
+            case name, kind, topic, locale
             case deviceID = "device_id", apnsToken = "apns_token", apnsEnv = "apns_env"
             case pushKey = "push_key", relayURL = "relay_url", relayGrant = "relay_grant"
         }

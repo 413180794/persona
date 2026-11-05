@@ -12,14 +12,14 @@ struct AssistantAvatar: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .mochi: "团子"
-            case .circuit: "汇流"
-            case .visor: "面罩"
-            case .pixel: "像素"
-            case .facet: "晶面"
-            case .blob: "软糖"
-            case .spark: "火花"
-            case .halo: "光环"
+            case .mochi: String(localized: "团子")
+            case .circuit: String(localized: "汇流")
+            case .visor: String(localized: "面罩")
+            case .pixel: String(localized: "像素")
+            case .facet: String(localized: "晶面")
+            case .blob: String(localized: "软糖")
+            case .spark: String(localized: "火花")
+            case .halo: String(localized: "光环")
             }
         }
     }

@@ -69,13 +69,13 @@ nonisolated extension ExtensionPersonaCard {
         switch type {
         case ExtensionPersonaCardKind.stat:
             s.title = nil
-            s.items.append(.metric(ExtensionMetricComponent(label: Self.nonEmpty(title) ?? "数值", value: Self.amount(value ?? 0, unit),
+            s.items.append(.metric(ExtensionMetricComponent(label: Self.nonEmpty(title) ?? String(localized: "数值", comment: "Chart card: label of a single value"), value: Self.amount(value ?? 0, unit),
                                                             detail: Self.nonEmpty(note))))
         case ExtensionPersonaCardKind.stackedBar:
             var u = unit, total = sum
             if let t = self.total { u = Self.nonEmpty(t.unit) ?? unit; total = t.value }
-            s.items.append(.metric(ExtensionMetricComponent(label: "合计", value: Self.amount(total, u), detail: Self.nonEmpty(note))))
-            let label = Self.nonEmpty(title) ?? "合计"
+            s.items.append(.metric(ExtensionMetricComponent(label: String(localized: "合计"), value: Self.amount(total, u), detail: Self.nonEmpty(note))))
+            let label = Self.nonEmpty(title) ?? String(localized: "合计")
             let shown = parts.count > 4 ? Array(parts.prefix(3)) : parts
             var series: [ExtensionChartSeries] = shown.enumerated().map { i, p in
                 ExtensionChartSeries(name: p.label, tone: rest != nil && i == parts.count - 1 ? ExtensionTone.neutral : nil,
@@ -83,7 +83,7 @@ nonisolated extension ExtensionPersonaCard {
             }
             if parts.count > 4 {
                 let other = parts.dropFirst(3).reduce(0) { $0 + $1.value }
-                series.append(ExtensionChartSeries(name: "其他", tone: ExtensionTone.neutral,
+                series.append(ExtensionChartSeries(name: String(localized: "其他", comment: "Chart series: the remaining items"), tone: ExtensionTone.neutral,
                                                    points: [ExtensionChartPoint(label: label, value: other, display: Self.amount(other, u))]))
             }
             s.items.append(.chart(ExtensionChartComponent(kind: ExtensionChartKind.bar, series: series, unit: Self.nonEmpty(u), stacked: true)))
@@ -91,7 +91,7 @@ nonisolated extension ExtensionPersonaCard {
                 s.items.append(.row(ExtensionRowComponent(title: p.label, subtitle: Self.nonEmpty(p.note), value: Self.amount(p.value, u))))
             }
         default: // line, bar
-            if let v = value { s.items.append(.metric(ExtensionMetricComponent(label: "当前", value: Self.amount(v, unit)))) }
+            if let v = value { s.items.append(.metric(ExtensionMetricComponent(label: String(localized: "当前", comment: "Chart card: the current value"), value: Self.amount(v, unit)))) }
             let pts = (points ?? []).suffix(120).map { ExtensionChartPoint(label: $0.label, value: $0.value, display: Self.amount($0.value, unit)) }
             s.items.append(.chart(ExtensionChartComponent(kind: type == ExtensionPersonaCardKind.bar ? ExtensionChartKind.bar : ExtensionChartKind.line,
                                                           series: [ExtensionChartSeries(points: Array(pts))], unit: Self.nonEmpty(unit),

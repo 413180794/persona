@@ -35,7 +35,7 @@ extension APIClient {
         do { return try JSON.decoder.decode(T.self, from: await request(method, path, query: query, body: body)) }
         catch let error as APIError where [404, 405].contains(error.status)
             && ["", "not_found", "method_not_allowed"].contains(error.code?.lowercased() ?? "") {
-            throw APIError(status: 426, message: "升级 Hub 后可使用 Pin 消息。请在设置中打开 Hub，检查更新。", fields: ["code": "lark_hub_upgrade_required"])
+            throw APIError(status: 426, message: String(localized: "升级 Hub 后可使用 Pin 消息。请在设置中打开 Hub，检查更新。"), fields: ["code": "lark_hub_upgrade_required"])
         }
     }
 
@@ -58,7 +58,7 @@ extension APIClient {
             body: Body(account_id: account, message_id: message, pin_id: pin, remove: pin != nil))
         guard result.account_id == account else { throw LarkChatPinsModel.accountChanged }
         guard result.pinned == (pin == nil) else {
-            throw APIError(status: 502, message: "尚未确认操作结果，请重新加载 Pin 列表查看", fields: ["code": "lark_pin_result_unknown"])
+            throw APIError(status: 502, message: String(localized: "尚未确认操作结果，请重新加载 Pin 列表查看"), fields: ["code": "lark_pin_result_unknown"])
         }
     }
 }
@@ -96,7 +96,7 @@ extension APIClient {
     @ObservationIgnored private var stopped = false
     @ObservationIgnored private var seenCursors = Set<String>()
     var busy: Bool { loading || loadingMore || changing || locating != nil }
-    static var accountChanged: APIError { APIError(status: 409, message: "飞书账号已切换，请重新打开会话", fields: ["code": "lark_account_changed"]) }
+    static var accountChanged: APIError { APIError(status: 409, message: String(localized: "飞书账号已切换，请重新打开会话"), fields: ["code": "lark_account_changed"]) }
 
     init(account: String? = nil, deps: Deps) { accountID = account; self.deps = deps }
 
@@ -196,9 +196,9 @@ extension APIClient {
         if let e = error as? APIError, e.code?.hasPrefix("lark_pin") == true || e.code?.hasSuffix("upgrade_required") == true {
             return e.message
         }
-        return LarkLoadProblem.of(error, subject: " Pin 消息").message
+        return LarkLoadProblem.of(error, subject: String(localized: " Pin 消息")).message
     }
-    private static var incomplete: APIError { APIError(status: 502, message: "Pin 列表暂时不完整，请重新加载") }
+    private static var incomplete: APIError { APIError(status: 502, message: String(localized: "Pin 列表暂时不完整，请重新加载")) }
     private static func merged(_ old: [LarkChatPin], _ new: [LarkChatPin]) -> [LarkChatPin] {
         var seen = Set<String>(); return (old + new).filter { seen.insert($0.id).inserted }
     }

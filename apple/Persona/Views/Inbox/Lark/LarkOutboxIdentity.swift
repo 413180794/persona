@@ -22,9 +22,9 @@ nonisolated struct LarkOutboxIdentity: Hashable, Sendable {
         case unavailable, changed, removed
         var errorDescription: String? {
             switch self {
-            case .unavailable: "暂时无法确认飞书账号，请检查连接后重试"
-            case .changed: "飞书账号已切换，原消息未发送。请切回原账号后重试"
-            case .removed: "已断开此 Hub，消息未发送"
+            case .unavailable: String(localized: "暂时无法确认飞书账号，请检查连接后重试")
+            case .changed: String(localized: "飞书账号已切换，原消息未发送。请切回原账号后重试")
+            case .removed: String(localized: "已断开此 Hub，消息未发送")
             }
         }
     }

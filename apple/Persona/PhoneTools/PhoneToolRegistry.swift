@@ -17,11 +17,11 @@ enum PhoneAuthStatus: String, Sendable {
 
     var title: String {
         switch self {
-        case .notDetermined: "未授权"
-        case .granted: "已授权"
-        case .denied: "已拒绝"
-        case .limited: "部分授权"
-        case .notNeeded: "无需授权"
+        case .notDetermined: String(localized: "未授权")
+        case .granted: String(localized: "已授权")
+        case .denied: String(localized: "已拒绝")
+        case .limited: String(localized: "部分授权")
+        case .notNeeded: String(localized: "无需授权")
         }
     }
 }
@@ -120,11 +120,11 @@ enum PhoneToolRegistry {
         confirm: (String) async -> Bool
     ) async -> (content: [ToolContent], isError: Bool) {
         guard let tool = all.first(where: { $0.spec.name == name }) else {
-            return ([.text("未知工具 / Unknown tool: \(name). 可用工具 / Available tools: \(enabledSpecs().map(\.name).joined(separator: ", ")).")], true)
+            return ([.text("未知工具 / Unknown tool: \(name). 可用工具 / Available tools: \(enabledSpecs().map(\.name).joined(separator: ", ")).")], true) // i18n-ignore
         }
         guard tool.source.isEnabled else {
-            return ([.text("“\(tool.source.title)” 已在手机上关闭 / The \(tool.source.rawValue) data source is turned off on the phone. "
-                + "The user can enable it in Persona › 设置 › 连接器 › 这台 iPhone.")], true)
+            return ([.text("“\(tool.source.title)” 已在手机上关闭 / The \(tool.source.rawValue) data source is turned off on the phone. " // i18n-ignore
+                + "The user can enable it in Persona › 设置 › 连接器 › 这台 iPhone.")], true) // i18n-ignore
         }
         if let summary = tool.confirmation?(args) {
             let allowed = await confirm(summary)
@@ -134,7 +134,7 @@ enum PhoneToolRegistry {
         }
         do {
             let content = try await tool.run(args)
-            return (content.isEmpty ? [.text("完成 / Done.")] : content, false)
+            return (content.isEmpty ? [.text("完成 / Done.")] : content, false) // i18n-ignore
         } catch {
             return ([.text(ToolErrors.describe(error))], true)
         }

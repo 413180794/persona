@@ -101,17 +101,17 @@ nonisolated enum FeishuDocsKind: String, Sendable {
 
     var label: String {
         switch self {
-        case .folder: "文件夹"
-        case .doc: "文档"
-        case .sheet: "表格"
-        case .bitable: "多维表格"
-        case .mindnote: "思维笔记"
-        case .file: "文件"
-        case .slides: "幻灯片"
-        case .wiki: "知识库"
-        case .page: "页面"
-        case .whiteboard: "画板"
-        case .other: "文档"
+        case .folder: String(localized: "文件夹")
+        case .doc: String(localized: "文档")
+        case .sheet: String(localized: "表格")
+        case .bitable: String(localized: "多维表格")
+        case .mindnote: String(localized: "思维笔记")
+        case .file: String(localized: "文件")
+        case .slides: String(localized: "幻灯片")
+        case .wiki: String(localized: "知识库")
+        case .page: String(localized: "页面")
+        case .whiteboard: String(localized: "画板")
+        case .other: String(localized: "文档")
         }
     }
 
@@ -706,7 +706,7 @@ nonisolated struct FeishuDocsMarkdownTable: Equatable, Sendable {
     /// One cell's Markdown as display text: `<br>` → line break, images → [图片].
     static func cellMarkdown(_ s: String) -> String {
         s.replacingOccurrences(of: #"<br\s*/?>"#, with: "\n", options: [.regularExpression, .caseInsensitive])
-            .replacingOccurrences(of: #"!\[[^\]]*\]\([^)]*\)"#, with: "[图片]", options: .regularExpression)
+            .replacingOccurrences(of: #"!\[[^\]]*\]\([^)]*\)"#, with: String(localized: "[图片]"), options: .regularExpression)
     }
 }
 
@@ -719,18 +719,18 @@ nonisolated struct FeishuDocsFailure: LocalizedError, Sendable {
 
     var errorDescription: String? {
         switch code {
-        case "DOCUMENT_EXPORT_FORBIDDEN": "作者禁止导出这篇文档"
-        case "DOCUMENT_FORMAT_UNSUPPORTED": "这种文档暂不支持在 Persona 中阅读"
-        case "DOCUMENT_NOT_FOUND": "文档不存在或已被删除"
-        case "DOCUMENT_FORBIDDEN", "DOCUMENT_PERMISSION_DENIED": "没有这篇文档的访问权限"
-        case "DOCUMENT_TIMEOUT": "飞书响应超时，请稍后重试"
-        case "DOCUMENT_INVALID_URL": "无法识别的文档链接"
+        case "DOCUMENT_EXPORT_FORBIDDEN": String(localized: "作者禁止导出这篇文档")
+        case "DOCUMENT_FORMAT_UNSUPPORTED": String(localized: "这种文档暂不支持在 Persona 中阅读")
+        case "DOCUMENT_NOT_FOUND": String(localized: "文档不存在或已被删除")
+        case "DOCUMENT_FORBIDDEN", "DOCUMENT_PERMISSION_DENIED": String(localized: "没有这篇文档的访问权限")
+        case "DOCUMENT_TIMEOUT": String(localized: "飞书响应超时，请稍后重试")
+        case "DOCUMENT_INVALID_URL": String(localized: "无法识别的文档链接")
         default:
             switch status {
-            case 401: "飞书登录已失效"
-            case 403: "没有访问权限"
-            case 404: "内容不存在或已被删除"
-            case 502, 503, 504: "飞书服务暂时不可用，请稍后重试"
+            case 401: String(localized: "飞书登录已失效")
+            case 403: String(localized: "没有访问权限")
+            case 404: String(localized: "内容不存在或已被删除")
+            case 502, 503, 504: String(localized: "飞书服务暂时不可用，请稍后重试")
             default: code ?? HTTPURLResponse.localizedString(forStatusCode: status)
             }
         }

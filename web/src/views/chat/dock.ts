@@ -64,9 +64,23 @@ export const AWAIT_MS = 60_000;
  * at work (#3654): the transcript has the message before the node's next sessions push says working, and in between the
  * chat showed nothing. True for AWAIT_MS after the message; never while offline or waiting on you.
  */
-export function awaitingTurn(last: Pick<Segment, "user" | "steps" | "answer"> | undefined, state: AgentState, now: number): boolean {
+export function awaitingTurn(
+  last: Pick<Segment, "user" | "steps" | "answer"> | undefined,
+  state: AgentState,
+  now: number,
+  /** The session's failure, if it has one: when its state last changed (the turn the host stopped, botmux). */
+  failure?: { since?: string },
+): boolean {
   if (!last?.user || last.steps.length || last.answer) return false;
   if (state !== "idle" && state !== "unread" && state !== "unknown") return false;
   const at = last.user.ts ? Date.parse(last.user.ts) : NaN;
-  return !Number.isNaN(at) && now - at < AWAIT_MS;
+  if (Number.isNaN(at) || now - at >= AWAIT_MS) return false;
+  // the turn failed before writing anything: its FailureNote says so, nothing is worked on (#3935). A failure
+  // without a time, or from before the message (the hub clears it once a message goes in), is taken as this one's
+  // only when it is not older.
+  if (failure) {
+    const since = failure.since ? Date.parse(failure.since) : NaN;
+    if (Number.isNaN(since) || since >= at) return false;
+  }
+  return true;
 }

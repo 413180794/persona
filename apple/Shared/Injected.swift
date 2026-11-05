@@ -56,15 +56,24 @@ nonisolated struct Injected: Codable, Hashable, Sendable {
     // MARK: Reading the text
 
     private static let memo = TextMemo<Injected?>(limit: 1024)
-    private static let noticeHead = try! NSRegularExpression(pattern: #"^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$"#)
-    private static let followupHead = try! NSRegularExpression(pattern: #"^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$"#)
-    private static let wakeHead = try! NSRegularExpression(pattern: #"^⏰（Persona 叫醒你，第 \d+ 次）你上一轮停下时说在等「(.*?)」"#)
-    private static let leadContext = try! NSRegularExpression(pattern: #"^\s*<(?:jarvis|persona)-context\b[^>]*>[\s\S]*?</(?:jarvis|persona)-context>"#)
-    private static let noticeMarker = "这是 Persona 的任务通知"
-    private static let lostTasksHead = "⚠️ 运行你的 node 刚重启过"
-    private static let kbHintHead = "（知识库"
-    private static let noticeStates = ["做完了": "done", "在等用户": "needs", "被模型服务出错打断了": "interrupted", "没开起来": "failed"]
-    private static let noticeLines = ["done": "做完了", "needs": "在等你", "interrupted": "被打断了", "failed": "没开起来"]
+    private static let noticeHead = try! NSRegularExpression(pattern: #"^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$"#) // i18n-ignore: matches the hub's text
+    private static let followupHead = try! NSRegularExpression(pattern: #"^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$"#) // i18n-ignore: matches the hub's text
+    private static let wakeHead = try! NSRegularExpression(pattern: #"^⏰（Persona 叫醒你，第 \d+ 次）你上一轮停下时说在等「(.*?)」"#) // i18n-ignore: matches the hub's text
+    private static let leadContext = try! NSRegularExpression(pattern: #"^\s*<(?:jarvis|persona)-context\b[^>]*>[\s\S]*?</(?:jarvis|persona)-context>"#) // i18n-ignore: matches the hub's text
+    private static let noticeMarker = "这是 Persona 的任务通知" // i18n-ignore: matches the hub's text
+    private static let lostTasksHead = "⚠️ 运行你的 node 刚重启过" // i18n-ignore: matches the hub's text
+    private static let kbHintHead = "（知识库" // i18n-ignore: matches the hub's text
+    private static let noticeStates = ["做完了": "done", "在等用户": "needs", "被模型服务出错打断了": "interrupted", "没开起来": "failed"] // i18n-ignore: matches the hub's text
+    /// A task notice in one sentence per state, so a translation can put the title where it belongs.
+    private static func noticeLine(_ state: String, title: String) -> String {
+        switch state {
+        case "done": String(localized: "任务「\(title)」做完了")
+        case "needs": String(localized: "任务「\(title)」在等你")
+        case "interrupted": String(localized: "任务「\(title)」被打断了")
+        case "failed": String(localized: "任务「\(title)」没开起来")
+        default: String(localized: "任务「\(title)」")
+        }
+    }
 
     private static func compute(_ raw: String) -> Injected? {
         var text = raw
@@ -82,31 +91,31 @@ nonisolated struct Injected: Codable, Hashable, Sendable {
             head = text
             rest = ""
         }
-        if head.hasPrefix("🔔 任务「") {
+        if head.hasPrefix("🔔 任务「") { // i18n-ignore
             guard let g = groups(noticeHead, head), rest.contains(noticeMarker), let state = noticeStates[g[1] ?? ""] else { return nil }
             let title = g[0] ?? ""
             return Injected(kind: "task_notice", state: state, title: title, machine: g[2].flatMap { $0.isEmpty ? nil : $0 },
-                            line: "任务「\(title)」\(noticeLines[state] ?? "")")
+                            line: noticeLine(state, title: title))
         }
-        if head.hasPrefix("⏰（") {
+        if head.hasPrefix("⏰（") { // i18n-ignore
             guard let g = groups(wakeHead, head) else { return nil }
             let wait = g[0] ?? ""
-            return Injected(kind: "followup", state: "wake", title: wait, line: "Persona 叫醒了它：看看「\(wait)」好了没有")
+            return Injected(kind: "followup", state: "wake", title: wait, line: String(localized: "Persona 叫醒了它：看看「\(wait)」好了没有"))
         }
         if head.hasPrefix("⏰ ") {
             guard let g = groups(followupHead, head) else { return nil }
             let title = g[0] ?? "", what = g[1] ?? ""
             let detail = followupDetail(rest)
             let d = detail.isEmpty ? nil : detail
-            if what == "你之前安排的跟进" {
-                return Injected(kind: "followup", state: "once", title: title, line: "跟进「\(title)」到时间了", detail: d)
+            if what == "你之前安排的跟进" { // i18n-ignore
+                return Injected(kind: "followup", state: "once", title: title, line: String(localized: "跟进「\(title)」到时间了"), detail: d)
             }
-            return Injected(kind: "followup", state: what.hasPrefix("定时任务，每 ") ? "interval" : "daily", title: title,
-                            line: "定时任务「\(title)」开始运行", detail: d)
+            return Injected(kind: "followup", state: what.hasPrefix("定时任务，每 ") ? "interval" : "daily", title: title, // i18n-ignore
+                            line: String(localized: "定时任务「\(title)」开始运行"), detail: d)
         }
         if head.hasPrefix(lostTasksHead) {
             let n = rest.split(separator: "\n", omittingEmptySubsequences: false).filter { $0.hasPrefix("- ") }.count
-            return Injected(kind: "system", state: "lost_tasks", line: n > 0 ? "node 重启过，\(n) 个后台任务停了" : "node 重启过，后台任务停了")
+            return Injected(kind: "system", state: "lost_tasks", line: n > 0 ? String(localized: "node 重启过，\(n) 个后台任务停了") : String(localized: "node 重启过，后台任务停了"))
         }
         return nil
     }

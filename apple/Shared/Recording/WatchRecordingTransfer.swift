@@ -80,7 +80,7 @@ final class WatchRecordingTransfer {
         let count = failed ? (attempts[key] ?? 0) + 1 : 0
         attempts[key] = count
         retryAt[key] = Date().addingTimeInterval(failed ? min(300, 5 * pow(2, Double(min(count, 6)))) : 60)
-        if failed { error = "录音回传暂未完成，会自动重试" }
+        if failed { error = String(localized: "录音回传暂未完成，会自动重试") }
     }
 
     private func received(_ receipt: RecordingReceipt) {
@@ -91,7 +91,7 @@ final class WatchRecordingTransfer {
             do {
                 try library.save(entry)
                 try? FileManager.default.removeItem(at: library.audio(entry.id, index))
-            } catch { self.error = "回传确认没有保存，音频仍保留在手表"; return }
+            } catch { self.error = String(localized: "回传确认没有保存，音频仍保留在手表"); return }
         }
         if let total = receipt.total, entry.expectedSegments == total { library.change(entry.id) { $0.endDelivered = true } }
         error = nil

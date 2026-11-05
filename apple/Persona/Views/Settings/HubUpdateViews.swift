@@ -126,9 +126,9 @@ struct HubSettingsPage: View {
     private func versionSection(_ s: HubUpdateStatus) -> some View {
         Section {
             Group {
-                info("版本", s.version, code: true)
-                info("渠道", s.channelTitle)
-                if let at = s.lastCheck { info("上次检查", Fmt.relative(at)) }
+                info(String(localized: "版本"), s.version, code: true)
+                info(String(localized: "渠道"), s.channelTitle)
+                if let at = s.lastCheck { info(String(localized: "上次检查"), Fmt.relative(at)) }
                 Button {
                     Task { await model.check() }
                 } label: {
@@ -149,7 +149,7 @@ struct HubSettingsPage: View {
             if s.channel == "docker" {
                 dockerRows(s)
             } else if !s.canUpdate {
-                Text(s.whyNot.map { "这个 hub 不会自己更新：\($0)。" } ?? "这个 hub 不会自己更新。").foregroundStyle(.secondary)
+                Text(s.whyNot.map { String(localized: "这个 hub 不会自己更新：\($0)。") } ?? String(localized: "这个 hub 不会自己更新。")).foregroundStyle(.secondary)
             } else if let l = s.latest, l.newer {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text("新版本 \(l.version)").font(Theme.Font.bodyStrong).lineLimit(1)
@@ -194,7 +194,7 @@ struct HubSettingsPage: View {
                 Text(e).font(Theme.Font.secondary).foregroundStyle(s.state == "rolled_back" ? Theme.caution : Theme.danger)
             }
         } header: {
-            SettingsHeading("更新")
+            SettingsHeading(String(localized: "更新"))
         } footer: {
             if s.canUpdate {
                 Text("更新会等助手和所有 Agent 都空闲时再重启 hub；新版本起不来会自动回到上一版。重启期间连接会断开一会儿。")
@@ -272,14 +272,14 @@ struct HubSettingsPage: View {
                     HStack(spacing: Theme.Space.s) {
                         Text(m.name).lineLimit(1)
                         Spacer(minLength: Theme.Space.s)
-                        if m.nodeMismatch == true { Chip(text: "版本不同", look: .tone(StatusPalette.working)) }
-                        Text(m.nodeVersion ?? (m.online ? "未知" : "离线"))
+                        if m.nodeMismatch == true { Chip(text: String(localized: "版本不同"), look: .tone(StatusPalette.working)) }
+                        Text(m.nodeVersion ?? (m.online ? String(localized: "未知") : String(localized: "离线")))
                             .font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     }
                 }
             }
         } header: {
-            SettingsHeading("各台电脑上的 personad")
+            SettingsHeading(String(localized: "各台电脑上的 personad"))
         } footer: {
             Text("hub 更新后会把各台电脑上的 personad 也换成同一个版本；没换上的可以点进去「重新部署」。")
         }
@@ -293,7 +293,7 @@ struct HubSettingsPage: View {
                         Text(r.resultTitle).font(Theme.Font.bodyStrong)
                             .foregroundStyle(r.result == "updated" ? Theme.positive : ["rolled_back", "held"].contains(r.result) ? Theme.caution : Theme.danger)
                             .lineLimit(1)
-                        if r.auto { Chip(text: "自动", look: .outline) }
+                        if r.auto { Chip(text: String(localized: "自动"), look: .outline) }
                         Spacer(minLength: Theme.Space.s)
                         if let at = r.ended ?? r.started { Text(Fmt.relative(at)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1) }
                     }
@@ -302,7 +302,7 @@ struct HubSettingsPage: View {
                 }
             }
         } header: {
-            SettingsHeading("更新记录")
+            SettingsHeading(String(localized: "更新记录"))
         }
     }
 
@@ -353,13 +353,13 @@ struct HubNoticeRow: View {
 
     private func text(_ n: HubNotice) -> String {
         switch n {
-        case .appTooOld: "App 版本太旧，配不上这个 hub：请到 TestFlight 更新"
-        case .hubTooOld: "hub 版本太旧，部分功能用不了"
-        case .updating(let what): "hub 正在更新：" + what
+        case .appTooOld: String(localized: "App 版本太旧，配不上这个 hub：请到 TestFlight 更新")
+        case .hubTooOld: String(localized: "hub 版本太旧，部分功能用不了")
+        case .updating(let what): String(localized: "hub 正在更新：\(what)")
         case .rolledBack(let why, _): why
-        case .autoOn: "hub 会在空闲时自动更新"
-        case .available(let v, _): "hub 有新版本 " + v
-        case .newImage(let v): "hub 有新镜像 " + v
+        case .autoOn: String(localized: "hub 会在空闲时自动更新")
+        case .available(let v, _): String(localized: "hub 有新版本 \(v)")
+        case .newImage(let v): String(localized: "hub 有新镜像 \(v)")
         }
     }
 
@@ -380,7 +380,7 @@ struct HubNoticeRow: View {
     @ViewBuilder private func actions(_ n: HubNotice) -> some View {
         switch n {
         case .autoOn:
-            Button("关闭") { Task { await HubUpdateModel().setAuto(false) } }.lineLimit(1).accessibilityIdentifier("hubNotice.autoOff")
+            Button(String(localized: "action.turnOff", defaultValue: "关闭")) { Task { await HubUpdateModel().setAuto(false) } }.lineLimit(1).accessibilityIdentifier("hubNotice.autoOff")
             Button("知道了") { Task { await HubUpdateModel().noticeSeen() } }.lineLimit(1).accessibilityIdentifier("hubNotice.seen")
         case .available:
             Button("更新") { Task { await HubUpdateModel().update(now: false) } }.lineLimit(1).accessibilityIdentifier("hubNotice.update")
@@ -417,7 +417,7 @@ struct HubNoticeRow: View {
             let r = try await api.skills()
             (skills, machine, error) = (r.skills, r.machine, nil)
         } catch {
-            self.error = error.shown ?? "读不到"
+            self.error = error.shown ?? String(localized: "读不到")
         }
         loaded = true
     }
@@ -432,8 +432,8 @@ struct SkillsPage: View {
         SettingsForm {
             if model.loaded && model.skills.isEmpty {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.skills, title: model.error == nil ? "还没有 skill" : "读不到 skill",
-                                   message: model.error ?? "把 skill 放进跑助手的那台电脑的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。")
+                    EmptyStateView(symbol: Theme.Icon.skills, title: model.error == nil ? String(localized: "还没有 skill") : String(localized: "读不到 skill"),
+                                   message: model.error ?? String(localized: "把 skill 放进跑助手的那台电脑的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。"))
                 }
             } else {
                 Section {
@@ -442,7 +442,7 @@ struct SkillsPage: View {
                             HStack(spacing: Theme.Space.s) {
                                 Text(s.name).font(Theme.Font.bodyStrong).lineLimit(1)
                                 Spacer(minLength: Theme.Space.s)
-                                Chip(text: s.source == "builtin" ? "内置" : "我的", look: s.source == "builtin" ? .outline : .neutral)
+                                Chip(text: s.source == "builtin" ? String(localized: "内置") : String(localized: "我的"), look: s.source == "builtin" ? .outline : .neutral)
                             }
                             if let d = s.description, !d.isEmpty {
                                 Text(d).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(3)
@@ -450,7 +450,8 @@ struct SkillsPage: View {
                         }
                     }
                 } footer: {
-                    Text("放在\(model.machine.map { " \($0) " } ?? "跑助手的那台电脑")的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。更新 personad 不会动它们；改了以后，下一段新对话起生效。")
+                    Text(model.machine.map { String(localized: "放在 \($0) 的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。更新 personad 不会动它们；改了以后，下一段新对话起生效。") }
+                         ?? String(localized: "放在跑助手的那台电脑的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。更新 personad 不会动它们；改了以后，下一段新对话起生效。"))
                 }
             }
         }

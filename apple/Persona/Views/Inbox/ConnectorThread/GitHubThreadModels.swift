@@ -42,33 +42,33 @@ nonisolated enum GitHubThread {
     /// The pull request's or issue's state in a word (state pill).
     static func stateTitle(_ state: String?) -> String {
         switch state {
-        case "merged": "已合并"
-        case "closed": "已关闭"
-        case "draft": "草稿"
-        default: "打开"
+        case "merged": String(localized: "已合并")
+        case "closed": String(localized: "github.closed", defaultValue: "已关闭")
+        case "draft": String(localized: "草稿")
+        default: String(localized: "github.open", defaultValue: "打开")
         }
     }
 
     /// What a review did, in a few words.
     static func reviewTitle(_ review: String?) -> String {
         switch review {
-        case "approved": "批准了"
-        case "changes_requested": "要求修改"
-        case "dismissed": "评审已撤销"
-        default: "评审了"
+        case "approved": String(localized: "批准了")
+        case "changes_requested": String(localized: "要求修改")
+        case "dismissed": String(localized: "评审已撤销")
+        default: String(localized: "评审了")
         }
     }
 
     /// The checks in one line: 3 项检查 · 1 项失败 · 1 项进行中.
     static func checksSummary(_ checks: [ThreadMessage]) -> String {
         let states = checks.compactMap { $0.check?.state }
-        var parts = ["\(states.count) 项检查"]
+        var parts = [String(localized: "\(states.count) 项检查")]
         let failed = states.filter { $0 == "failure" }.count
         let pending = states.filter { $0 == "pending" }.count
         let passed = states.filter { $0 == "success" }.count
-        if failed > 0 { parts.append("\(failed) 项失败") }
-        if pending > 0 { parts.append("\(pending) 项进行中") }
-        if failed == 0 && pending == 0 && passed == states.count { parts.append("全部通过") }
+        if failed > 0 { parts.append(String(localized: "\(failed) 项失败")) }
+        if pending > 0 { parts.append(String(localized: "\(pending) 项进行中")) }
+        if failed == 0 && pending == 0 && passed == states.count { parts.append(String(localized: "全部通过")) }
         return parts.joined(separator: " · ")
     }
 

@@ -30,7 +30,7 @@ struct OutlookSignInSection: View {
     private func signIn(_ config: APIClient.MicrosoftConfig) -> some View {
         Section {
             Button { Task { await signInWithMicrosoft() } } label: {
-                AccountSignInLabel(mark: Theme.Brand.microsoft, title: busy ? "正在连接 Outlook…" : "使用 Microsoft 账号登录", busy: busy)
+                AccountSignInLabel(mark: Theme.Brand.microsoft, title: busy ? String(localized: "正在连接 Outlook…") : String(localized: "使用 Microsoft 账号登录"), busy: busy)
             }
             .buttonStyle(.plain)
             .disabled(busy)
@@ -95,7 +95,7 @@ struct OutlookSignInSection: View {
         do {
             config = try await api.microsoftConfig()
         } catch {
-            self.error = error.shown.map { "读不到 Outlook 登录的设置：\($0)" }
+            self.error = error.shown.map { String(localized: "读不到 Outlook 登录的设置：\($0)") }
         }
     }
 

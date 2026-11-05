@@ -23,7 +23,7 @@ struct ShellHome: View {
     /// What the page shows: the start error, or under `-showHomeState error` a sample one (screenshots).
     private var shownError: String? {
         #if DEBUG
-        if UserDefaults.standard.string(forKey: "showHomeState") == "error" { return "没能开始对话：hub 没有回应（请求超时）" }
+        if UserDefaults.standard.string(forKey: "showHomeState") == "error" { return "没能开始对话：hub 没有回应（请求超时）" } // i18n-ignore
         #endif
         return error
     }
@@ -233,13 +233,13 @@ struct ShellNeedsYou: View {
     /// are among them it says 需要你, and with only agents left it opens Agents.
     private func more(_ hidden: ArraySlice<Line>) -> (text: String, open: () -> Void) {
         let agents = hidden.filter { if case .agent = $0 { true } else { false } }.count
-        let text = agents > 0 ? "还有 \(hidden.count) 件需要你" : "还有 \(hidden.count) 件在收件箱"
+        let text = agents > 0 ? String(localized: "还有 \(hidden.count) 件需要你") : String(localized: "还有 \(hidden.count) 件在收件箱")
         return (text, { [model] in model.selectedTab = agents == hidden.count ? .chats : .mail })
     }
 
     /// BeautifulUI's list card: a heading with how many wait, then one row per thing (its mark, who, what, a chevron).
     private func beautiful(_ all: [Line], shown: Int) -> some View {
-        BUIListSection("需要你", count: all.count) {
+        BUIListSection(String(localized: "需要你"), count: all.count) {
             ForEach(all.prefix(shown)) { line in beautifulRow(line) }
             if all.count > shown {
                 let rest = more(all.dropFirst(shown))

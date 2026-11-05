@@ -17,7 +17,7 @@ struct InboxMutesView: View {
                 .listStyle(.plain)
                 .overlay {
                     if mutes.isEmpty {
-                        EmptyStateView(symbol: Theme.Icon.mute, title: "没有静音的", message: "在收件箱里长按一条，可以静音它的仓库、会话或发件人。")
+                        EmptyStateView(symbol: Theme.Icon.mute, title: String(localized: "没有静音的"), message: String(localized: "在收件箱里长按一条，可以静音它的仓库、会话或发件人。"))
                     }
                 }
             }

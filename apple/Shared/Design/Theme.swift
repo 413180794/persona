@@ -575,12 +575,12 @@ nonisolated enum Theme {
 extension AgentState {
     var label: String {
         switch self {
-        case .needsYou: "需要你"
-        case .working: "工作中"
-        case .unread: "完成未看"
-        case .idle: "已看"
-        case .offline: "未运行"
-        case .unknown: "未知"
+        case .needsYou: String(localized: "需要你")
+        case .working: String(localized: "工作中")
+        case .unread: String(localized: "完成未看")
+        case .idle: String(localized: "已看")
+        case .offline: String(localized: "未运行")
+        case .unknown: String(localized: "未知")
         }
     }
 
@@ -601,12 +601,12 @@ extension AgentState {
 extension SessionStatus {
     var label: String {
         switch self {
-        case .working: "工作中"
-        case .blocked: "等你处理"
-        case .idle: "空闲"
-        case .done: "已完成"
-        case .unknown: "未知"
-        case .offline: "未运行"
+        case .working: String(localized: "工作中")
+        case .blocked: String(localized: "等你处理")
+        case .idle: String(localized: "空闲")
+        case .done: String(localized: "已完成")
+        case .unknown: String(localized: "未知")
+        case .offline: String(localized: "未运行")
         }
     }
 }
@@ -615,11 +615,11 @@ nonisolated enum Fmt {
     static func relative(_ date: Date?, now: Date = .now) -> String {
         guard let date, date.isMeaningful else { return "" }
         let s = now.timeIntervalSince(date)
-        if s < 45 { return "刚刚" }
-        if s < 3600 { return "\(max(1, Int(s / 60))) 分钟前" }
+        if s < 45 { return String(localized: "刚刚") }
+        if s < 3600 { return String(localized: "\(max(1, Int(s / 60))) 分钟前") }
         let cal = Calendar.current
         if cal.isDateInToday(date) { return date.formatted(.dateTime.hour().minute()) }
-        if cal.isDateInYesterday(date) { return "昨天" }
+        if cal.isDateInYesterday(date) { return String(localized: "昨天") }
         if s < 6 * 86400 { return date.formatted(.dateTime.weekday(.wide)) }
         return date.formatted(.dateTime.month().day())
     }

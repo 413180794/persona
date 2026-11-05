@@ -29,12 +29,16 @@ nonisolated final class LarkAttachment: Identifiable, Equatable, Sendable {
     static func == (lhs: LarkAttachment, rhs: LarkAttachment) -> Bool { lhs.id == rhs.id }
     deinit { if temporary { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) } }
 
-    enum Failure: String, LocalizedError {
-        case invalid = "无法读取附件，请重新选择"
-        case empty = "不能发送空文件"
-        case tooLarge = "文件不能超过 100 MiB"
-        case imageTooLarge = "图片过大，请选择较小的图片"
-        var errorDescription: String? { rawValue }
+    enum Failure: LocalizedError {
+        case invalid, empty, tooLarge, imageTooLarge
+        var errorDescription: String? {
+            switch self {
+            case .invalid: String(localized: "无法读取附件，请重新选择")
+            case .empty: String(localized: "不能发送空文件")
+            case .tooLarge: String(localized: "文件不能超过 100 MiB")
+            case .imageTooLarge: String(localized: "图片过大，请选择较小的图片")
+            }
+        }
     }
 
     static func stageFile(_ source: URL) async throws -> LarkAttachment {
@@ -79,7 +83,7 @@ nonisolated final class LarkAttachment: Identifiable, Equatable, Sendable {
             let file = dir.appending(path: "photo.jpg")
             do { try bytes.write(to: file, options: .atomic) }
             catch { try? FileManager.default.removeItem(at: dir); throw error }
-            return LarkAttachment(kind: .image, file: file, name: "照片.jpg", mime: "image/jpeg", size: bytes.count, thumbnail: thumb)
+            return LarkAttachment(kind: .image, file: file, name: String(localized: "照片.jpg"), mime: "image/jpeg", size: bytes.count, thumbnail: thumb)
         }.value
     }
 
@@ -108,7 +112,7 @@ nonisolated struct LarkSendReceipt: Decodable, Sendable {
 
     enum Failure: LocalizedError {
         case missing
-        var errorDescription: String? { "尚未收到有效的发送结果，请稍后检查" }
+        var errorDescription: String? { String(localized: "尚未收到有效的发送结果，请稍后检查") }
     }
 }
 

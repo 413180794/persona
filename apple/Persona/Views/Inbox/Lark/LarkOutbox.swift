@@ -46,7 +46,7 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
 
     /// Drawn like my other messages: my name and avatar from the last one I sent here.
     func message(like mine: LarkMessage?) -> LarkMessage {
-        var message = LarkMessage(id: rowID, position: "", senderID: mine?.senderID, senderName: mine?.senderName ?? "我",
+        var message = LarkMessage(id: rowID, position: "", senderID: mine?.senderID, senderName: mine?.senderName ?? String(localized: "我"),
                     senderAvatar: mine?.senderAvatar, senderType: mine?.senderType, isMine: true, type: "TEXT", text: text,
                     createdAt: at, recalled: false, replyCount: 0, replyTo: thread ? nil : replyTo)
         if let encrypted {
@@ -150,12 +150,12 @@ enum LarkReply {
             .filter { !$0.isEmpty }.joined(separator: " ")
         if !line.isEmpty { return line }
         switch m.type.uppercased() {
-        case "IMAGE": return "[图片]"
-        case "FILE": return "[文件]"
-        case "MEDIA": return "[视频]"
-        case "AUDIO": return "[语音]"
-        case "STICKER": return "[贴纸]"
-        default: return "[消息]"
+        case "IMAGE": return String(localized: "[图片]")
+        case "FILE": return String(localized: "[文件]")
+        case "MEDIA": return String(localized: "[视频]")
+        case "AUDIO": return String(localized: "[语音]")
+        case "STICKER": return String(localized: "[贴纸]")
+        default: return String(localized: "[消息]")
         }
     }
 
@@ -227,11 +227,11 @@ struct LarkSendMarkView: View {
 
     private var hint: String {
         if case .failed(let why) = mark.state { return why }
-        return mark.canRetry ? "连接中断，尚未确认发送结果。重试前会先检查已有消息。" : "尚未确认文件是否发出。只检查发送结果，不重复上传。"
+        return mark.canRetry ? String(localized: "连接中断，尚未确认发送结果。重试前会先检查已有消息。") : String(localized: "尚未确认文件是否发出。只检查发送结果，不重复上传。")
     }
 
     private var retryTitle: String {
-        guard mark.state == .unconfirmed else { return "重发" }
-        return mark.canRetry ? "检查并重试" : "检查发送结果"
+        guard mark.state == .unconfirmed else { return String(localized: "重发") }
+        return mark.canRetry ? String(localized: "检查并重试") : String(localized: "检查发送结果")
     }
 }

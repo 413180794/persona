@@ -143,6 +143,8 @@ extension Theme {
         static let layout = "rectangle.topthird.inset.filled"
         /// 设置 › 外观 › 深浅色, and its 跟随系统.
         static let colorScheme = "circle.lefthalf.filled"
+        /// 设置 › 外观 › 语言: the interface language.
+        static let language = "character.bubble"
         /// 深浅色 › 浅色.
         static let lightMode = "sun.max"
         /// 深浅色 › 深色.

@@ -22,7 +22,7 @@ struct InboxView: View {
         SplitNavigation(path: $path, destinations: InboxDestinations(accounts: accountState.accounts)) {
             InboxPage(path: $path, accountState: accountState)
         } empty: {
-            SplitPlaceholder(symbol: Theme.Icon.inbox, title: "选一件事", message: "左边列表里点一件事，详情会在这里打开。")
+            SplitPlaceholder(symbol: Theme.Icon.inbox, title: String(localized: "选一件事"), message: String(localized: "左边列表里点一件事，详情会在这里打开。"))
         }
         .environment(\.feishuOpen) { path.append($0) }
         .feishuHandlesLinks { path.append($0) }
@@ -57,11 +57,11 @@ struct InboxPage: View {
     private var store: InboxStore { .shared }
 
     /// The kind filters, by key.
-    static let kinds = [("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")]
+    static let kinds = [("mention", String(localized: "@我")), ("dm", String(localized: "私聊")), ("group", String(localized: "群聊")), ("mail", String(localized: "邮件")), ("agent", "Agent")]
 
     private func matches(_ it: InboxItem) -> Bool {
         if !source.isEmpty && it.account != source { return false }
-        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && (it.kind == "doc" || it.kind == "moment" && it.kindLabel == "@我")) { return false }
+        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && (it.kind == "doc" || it.kind == "moment" && it.kindLabel == String(localized: "@我"))) { return false }
         if query.isEmpty { return true }
         return [it.title, it.sender ?? "", it.preview, it.summary ?? ""].contains { $0.localizedCaseInsensitiveContains(query) }
     }
@@ -100,9 +100,9 @@ struct InboxPage: View {
             list
                 .navigationTitle("收件箱")
                 .navigationBarTitleDisplayMode(.inline)
-                .pageSearchable(text: $query, prompt: "搜索标题、发件人、内容")
+                .pageSearchable(text: $query, prompt: String(localized: "搜索标题、发件人、内容"))
                 .pageToolbar {
-                    ToolbarItem(placement: .principal) { ConnectionTitle(title: "收件箱") }
+                    ToolbarItem(placement: .principal) { ConnectionTitle(title: String(localized: "收件箱")) }
                     if model.isMultiHub {
                         // Each hub has its own inbox (docs/multi-hub.md「hub 级页面」): whose this is, and the others.
                         ToolbarItem(placement: .topBarLeading) { HubSwitcher(compact: true) }
@@ -162,7 +162,7 @@ struct InboxPage: View {
     private var filterNames: [String] {
         var names: [String] = []
         if source == "feishu" {
-            names.append("飞书")
+            names.append(String(localized: "飞书"))
         } else if let a = accounts.first(where: { $0.id == source }) {
             names.append(Self.short(a.email))
         } else if let c = connectorSources.first(where: { $0.id == source }) {
@@ -222,8 +222,8 @@ struct InboxPage: View {
                     .themedRow()
             }
             if openItems.isEmpty && waitingAgents.isEmpty && !store.loading {
-                EmptyStateView(symbol: "checkmark.seal", title: query.isEmpty ? "都处理完了" : "没有匹配的",
-                               message: query.isEmpty ? "新的飞书消息和邮件会出现在这里。" : "换个关键词试试。")
+                EmptyStateView(symbol: "checkmark.seal", title: query.isEmpty ? String(localized: "都处理完了") : String(localized: "没有匹配的"),
+                               message: query.isEmpty ? String(localized: "新的飞书消息和邮件会出现在这里。") : String(localized: "换个关键词试试。"))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
@@ -239,7 +239,7 @@ struct InboxPage: View {
                         }
                     } header: {
                         sectionHeader(tier.title, count: items.count + agents.count, key: tier.rawValue,
-                                      clear: tier == .action ? nil : (tier == .fyi ? "全部看过" : "全部清除", { store.setDone(items, true) }))
+                                      clear: tier == .action ? nil : (tier == .fyi ? String(localized: "全部看过") : String(localized: "全部清除"), { store.setDone(items, true) }))
                     }
                 }
             }
@@ -247,7 +247,7 @@ struct InboxPage: View {
                 Section {
                     if expanded.contains("done") { ForEach(shownDone) { row($0) } }
                 } header: {
-                    sectionHeader("已处理", count: doneItems.count, key: "done", clear: nil)
+                    sectionHeader(String(localized: "已处理"), count: doneItems.count, key: "done", clear: nil)
                 }
             }
         }
@@ -341,8 +341,8 @@ struct InboxPage: View {
     @ViewBuilder private var filters: some View {
         if AppStyle.current.usesBeautifulUI {
             LarkFlowLayout(spacing: Theme.Space.xs, lineSpacing: Theme.Space.sm) {
-                filterChip("全部", on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
-                filterChip("飞书", on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
+                filterChip(String(localized: "全部"), on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
+                filterChip(String(localized: "飞书"), on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
                 ForEach(accounts) { a in
                     filterChip(Self.short(a.email), on: source == a.id) { source = source == a.id ? "" : a.id }
                 }
@@ -370,8 +370,8 @@ struct InboxPage: View {
     private var plainFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Space.s) {
-                chip("全部", on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
-                chip("飞书", symbol: Theme.Icon.feishuChats, on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
+                chip(String(localized: "全部"), on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
+                chip(String(localized: "飞书"), symbol: Theme.Icon.feishuChats, on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
                 ForEach(accounts) { a in
                     chip(Self.short(a.email), symbol: Theme.Icon.mail, on: source == a.id) { source = source == a.id ? "" : a.id }
                 }
@@ -449,7 +449,7 @@ struct InboxRow: View {
                             .accessibilityLabel("已翻译")
                     }
                     if let label = item.kindLabel {
-                        Chip(text: label, look: item.kind == "mention" || item.kind == "doc" && label == "@我" ? .tint(Theme.danger) : .neutral)
+                        Chip(text: label, look: item.kind == "mention" || item.kind == "doc" && label == String(localized: "@我") ? .tint(Theme.danger) : .neutral)
                     }
                     Spacer(minLength: 4)
                     Text(LarkTime.short(item.updatedAt)).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize()
@@ -487,7 +487,7 @@ struct InboxRow: View {
                     } else if item.agentWorking {
                         HStack(spacing: Theme.Space.sm) {
                             if AppStyle.current.usesBeautifulUI { BUISpinner(size: Theme.Size.dotXL) } else { ProgressView().controlSize(.mini) }
-                            Text(item.agent?.state == "queued" ? "AI 分身排队中" : "AI 分身正在处理" + (item.agent?.task.map { "：" + $0 } ?? ""))
+                            Text(item.agent?.state == "queued" ? String(localized: "AI 分身排队中") : item.agent?.task.map { String(localized: "AI 分身正在处理：\($0)") } ?? String(localized: "AI 分身正在处理"))
                                 .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                         .padding(.top, Theme.Space.xxs)
@@ -502,14 +502,14 @@ struct InboxRow: View {
     /// Who wrote what (under the AI's summary once it has one).
     private var from: String {
         if let doc = item.doc { return doc.typeName + " · " + item.preview } // the preview names who: 李雷提及了你
-        if item.moment != nil { return (item.sender ?? "") + "：" + item.preview } // who commented, on the post in the title
+        if item.moment != nil { return String(localized: "\(item.sender ?? "")：\(item.preview)", comment: "Who wrote it: what they wrote") } // who commented, on the post in the title
         if let c = item.connector { // example-org/example-repo#12 · bob：请看一下
-            let who = [item.sender ?? "", item.preview].filter { !$0.isEmpty }.joined(separator: "：")
+            let who = [item.sender ?? "", item.preview].filter { !$0.isEmpty }.joined(separator: String(localized: "：", comment: "Separator between a label and its value"))
             return [c.reference ?? "", who].filter { !$0.isEmpty }.joined(separator: " · ")
         }
-        if let t = translated?.preview, !t.isEmpty, let sender = item.sender, !sender.isEmpty { return sender + "：" + t }
+        if let t = translated?.preview, !t.isEmpty, let sender = item.sender, !sender.isEmpty { return String(localized: "\(sender)：\(t)", comment: "Who wrote it: what they wrote") }
         guard let sender = item.sender, !sender.isEmpty, item.lark?.isGroup != false || !item.isLark else { return item.preview }
-        return sender + "：" + item.preview
+        return String(localized: "\(sender)：\(item.preview)", comment: "Who wrote it: what they wrote")
     }
 
     private var avatar: some View {

@@ -32,7 +32,8 @@ struct DocStatusMenu: View {
                 } else {
                     Circle().fill(DocStatusColor.dot(status, in: status.value)).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                 }
-                Text((showName ? status.name + "：" : "") + (status.value.isEmpty ? "未设置" : status.value))
+                let value = status.value.isEmpty ? String(localized: "未设置") : status.value
+                Text(showName ? String(localized: "\(status.name)：\(value)") : value)
                 Image(systemName: Theme.Icon.choices).font(Theme.Font.labelStrong).foregroundStyle(.secondary)
             }
             .font(Theme.Font.captionMedium)
@@ -44,7 +45,7 @@ struct DocStatusMenu: View {
         }
         .tint(.primary) // the label keeps its own colors, not the app's accent
         .disabled(moving || item.isDone)
-        .accessibilityLabel("\(status.name)：\(status.value.isEmpty ? "未设置" : status.value)，点按修改")
+        .accessibilityLabel("\(status.name)：\(status.value.isEmpty ? String(localized: "未设置") : status.value)，点按修改")
     }
 }
 
@@ -152,7 +153,7 @@ struct InboxDocDetailView: View {
                 } header: {
                     Text("提到你的行").textCase(nil)
                 } footer: {
-                    Text("改状态会直接写进\(doc?.typeName ?? "文档")。").textCase(nil)
+                    Text("改状态会直接写进\(doc?.typeName ?? String(localized: "文档"))。").textCase(nil)
                 }
             }
             if let reply = doc?.reply {
@@ -192,7 +193,7 @@ struct InboxDocDetailView: View {
 enum DocChangeText {
     static func line(_ change: InboxItem.DocChange, in doc: InboxItem.Doc?) -> String {
         guard let (row, st) = doc?.describe(change) else { return change.value }
-        let from = st.value.isEmpty ? "未设置" : st.value
-        return "\(st.name)：\(from) → \(change.value) · \(row.title)"
+        let from = st.value.isEmpty ? String(localized: "未设置") : st.value
+        return String(localized: "\(st.name)：\(from) → \(change.value) · \(row.title)")
     }
 }

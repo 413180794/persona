@@ -451,16 +451,16 @@ nonisolated func runningSubagents(_ lead: Session?) -> [String] {
             if !desc.isEmpty { return desc }
             let typ = $0.type?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !typ.isEmpty { return typ }
-            return "子任务"
+            return String(localized: "子任务")
         }
 }
 
 /// A single summary line of running subagents for task cards: "子 Agent 在跑：A、B" (at most 3; "等 N 个" if more).
 nonisolated func subagentsSummaryLine(_ subagents: [String]) -> String? {
     guard !subagents.isEmpty else { return nil }
-    let head = subagents.prefix(3).joined(separator: "、")
-    let tail = subagents.count > 3 ? " 等 \(subagents.count) 个" : ""
-    return "子 Agent 在跑：\(head)\(tail)"
+    let head = subagents.prefix(3).joined(separator: String(localized: "、", comment: "Separator between names in a list"))
+    if subagents.count > 3 { return String(localized: "子 Agent 在跑：\(head) 等 \(subagents.count) 个", comment: "Running subagents: the first three names and how many in all") }
+    return String(localized: "子 Agent 在跑：\(head)")
 }
 
 // MARK: - Endpoints

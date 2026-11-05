@@ -35,7 +35,7 @@ nonisolated struct GitHubAuth: Codable, Equatable, Sendable {
     }
 
     /// The scopes a token lacks, as people read them: repo、notifications.
-    static func names(_ missing: [Missing]) -> String { missing.map(\.scope).joined(separator: "、") }
+    static func names(_ missing: [Missing]) -> String { missing.map(\.scope).joined(separator: String(localized: "、", comment: "Separator between items in a list")) }
 }
 
 extension APIClient {
@@ -65,7 +65,7 @@ struct GitHubConnectorSections: View {
         sourceSection
         if auth?.source == "device", connector.isEnabled, !connector.isSignedIn {
             ConnectorSignInSteps(name: connector.name, model: model, reload: { await reload(); await load() },
-                                 footer: "设备码登录的授权加密存在 hub 上；改用电脑上的 gh 登录时会忘掉。")
+                                 footer: String(localized: "设备码登录的授权加密存在 hub 上；改用电脑上的 gh 登录时会忘掉。"))
         }
         if let auth, let missing = auth.missing, !missing.isEmpty, connector.isSignedIn {
             scopeSection(auth, missing)
@@ -83,7 +83,7 @@ struct GitHubConnectorSections: View {
                         choose(machine: m.id)
                     }
                 }
-                row(key: "device", icon: Theme.Icon.deviceCode, title: "设备码登录", subtitle: "不用电脑：在 GitHub 上输入验证码授权",
+                row(key: "device", icon: Theme.Icon.deviceCode, title: String(localized: "设备码登录"), subtitle: String(localized: "不用电脑：在 GitHub 上输入验证码授权"),
                     warn: false, selected: auth.source == "device") {
                     choose(machine: nil)
                 }
@@ -94,7 +94,7 @@ struct GitHubConnectorSections: View {
                 }
             }
         } header: {
-            SettingsHeading("从哪里登录")
+            SettingsHeading(String(localized: "从哪里登录"))
         } footer: {
             Text("选一台电脑就用它上面 gh 的登录；设备码登录不依赖任何电脑。换一个就是退出上一个。")
         }
@@ -129,21 +129,21 @@ struct GitHubConnectorSections: View {
     private func subtitle(_ m: GitHubAuth.Machine) -> String {
         switch m.state {
         case "signed_in":
-            let who = "gh 已登录" + (m.account.map { " · " + $0 } ?? "")
-            if let missing = m.missing, !missing.isEmpty { return who + " · 少 " + GitHubAuth.names(missing) + " 权限" }
+            let who = m.account.map { String(localized: "gh 已登录 · \($0)") } ?? String(localized: "gh 已登录")
+            if let missing = m.missing, !missing.isEmpty { return String(localized: "\(who) · 少 \(GitHubAuth.names(missing)) 权限") }
             return who
-        case "not_signed_in": return "gh 没有登录"
-        case "no_gh": return "没装 gh"
-        case "too_old": return "jarvisd 太旧，读不了 gh 的登录"
-        case "offline": return "离线"
-        default: return "读不了 gh 的登录" + (m.error.map { "：" + $0 } ?? "")
+        case "not_signed_in": return String(localized: "gh 没有登录")
+        case "no_gh": return String(localized: "没装 gh")
+        case "too_old": return String(localized: "jarvisd 太旧，读不了 gh 的登录")
+        case "offline": return String(localized: "离线")
+        default: return m.error.map { String(localized: "读不了 gh 的登录：\($0)") } ?? String(localized: "读不了 gh 的登录")
         }
     }
 
     @ViewBuilder private func scopeSection(_ auth: GitHubAuth, _ missing: [GitHubAuth.Missing]) -> some View {
         let names = GitHubAuth.names(missing)
         let flags = missing.map(\.scope).joined(separator: ",")
-        let machine = auth.machines.first { $0.id == auth.machine }?.name ?? "这台电脑"
+        let machine = auth.machines.first { $0.id == auth.machine }?.name ?? String(localized: "这台电脑")
         Section {
             Label {
                 Text(auth.source == "device"
@@ -158,7 +158,7 @@ struct GitHubConnectorSections: View {
                 Text(a).font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
         } header: {
-            SettingsHeading("权限不够")
+            SettingsHeading(String(localized: "权限不够"))
         }
     }
 

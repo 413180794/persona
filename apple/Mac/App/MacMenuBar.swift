@@ -202,13 +202,13 @@ extension MacMenuBar {
             return q.options.map { o in
                 // The card's 推荐 tag, in words; the answer keeps the label as it came.
                 let (name, recommended) = QuestionOption.display(o.label)
-                return QuickAnswer(title: recommended ? name + "（推荐）" : name, resolution: Resolution(answers: [q.question: o.label]))
+                return QuickAnswer(title: recommended ? String(localized: "\(name)（推荐）") : name, resolution: Resolution(answers: [q.question: o.label]))
             }
         case .permission:
-            return [QuickAnswer(title: "允许", resolution: Resolution(allow: true)),
-                    QuickAnswer(title: "拒绝", resolution: Resolution(allow: false))]
+            return [QuickAnswer(title: String(localized: "允许"), resolution: Resolution(allow: true)),
+                    QuickAnswer(title: String(localized: "拒绝"), resolution: Resolution(allow: false))]
         case .plan:
-            return [QuickAnswer(title: "批准", resolution: Resolution(approve: true, mode: "acceptEdits"))]
+            return [QuickAnswer(title: String(localized: "批准"), resolution: Resolution(approve: true, mode: "acceptEdits"))]
         case .screen:
             guard ix.dialog != nil, let d = ix.screenDialog else { return nil }
             let plain = d.options.filter { $0.kind == .plain && $0.label.count <= 24 }
@@ -220,10 +220,10 @@ extension MacMenuBar {
     /// One line on what it asks.
     static func summary(_ ix: Interaction) -> String {
         let s: String = switch ix.kind {
-        case .question: ix.questions?.first?.question ?? "Claude 在问你"
+        case .question: ix.questions?.first?.question ?? String(localized: "Claude 在问你")
         case .plan: PlanText.title(ix.plan ?? "")
-        case .permission: [ix.toolName, ix.summary].compactMap { $0 }.joined(separator: "：")
-        case .screen: ix.screenDialog?.question ?? "终端在问你"
+        case .permission: [ix.toolName, ix.summary].compactMap { $0 }.joined(separator: String(localized: "：", comment: "Separator between two parts of a one-line summary, e.g. a tool name and what it does"))
+        case .screen: ix.screenDialog?.question ?? String(localized: "终端在问你")
         }
         return String(s.prefix(80))
     }

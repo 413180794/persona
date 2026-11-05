@@ -45,7 +45,7 @@ final class DemoHub {
     private var made = 0
 
     private static let history = "demo-1"
-    static let reply = "这是体验模式：消息没有真的发到电脑上，这里的 Agent 也只是演示数据。连接你自己的 hub 之后，Claude 会在那台电脑上接着做。"
+    static let reply = String(localized: "这是体验模式：消息没有真的发到电脑上，这里的 Agent 也只是演示数据。连接你自己的 hub 之后，Claude 会在那台电脑上接着做。")
 
     /// The demo's agents and conversations (drafts typed into them go with the demo).
     var sessionKeys: Set<SessionKey> {
@@ -141,7 +141,7 @@ final class DemoHub {
         req.body.flatMap { try? JSON.decoder.decode(JSONValue.self, from: $0) } ?? .object([:])
     }
 
-    private func notFound() -> APIError { APIError(status: 404, message: "体验模式里没有这项数据") }
+    private func notFound() -> APIError { APIError(status: 404, message: String(localized: "体验模式里没有这项数据")) }
 
     private func logMiss(_ req: LocalRequest) {
         #if DEBUG
@@ -203,7 +203,7 @@ final class DemoHub {
         case ["mail", "accounts"]: return ["accounts": data["mail_accounts"] ?? .array([])]
         case ["mail", "messages"]: return ["messages": .array([]), "has_more": false]
         case ["lark", "unread-count"]: return ["count": 4]
-        case ["lark", "status"]: return ["configured": true, "connected": true, "name": "我", "last_event_at": .number((Date.now.timeIntervalSince1970 - 95).rounded(.down))]
+        case ["lark", "status"]: return ["configured": true, "connected": true, "name": "我", "last_event_at": .number((Date.now.timeIntervalSince1970 - 95).rounded(.down))] // i18n-ignore
         case ["lark", "conversations"]: return ["conversations": data["lark_conversations"] ?? .array([]), "next_cursor": "", "account_id": "demo-lark-account"]
         case ["lark", "pinned"]: return ["conversations": .array([]), "next_cursor": "", "account_id": "demo-lark-account"]
         case ["lark", "labels"]: return ["labels": .array([])]
@@ -309,7 +309,7 @@ final class DemoHub {
             let id = p[2]
             let catalog = DemoModelCatalog.configuration(tasks: tasks, overrides: modelBindings)
             guard let purpose = catalog["purposes"]?.array?.first(where: { $0["id"]?.string == id }) else { throw notFound() }
-            guard body["revision"]?.int == purpose["revision"]?.int else { throw APIError(status: 409, message: "配置已修改，请重新加载") }
+            guard body["revision"]?.int == purpose["revision"]?.int else { throw APIError(status: 409, message: String(localized: "配置已修改，请重新加载")) }
             var binding = purpose["override"]?.object ?? [:]
             for field in ["provider", "model", "effort", "runtime"] {
                 guard let value = body[field] else { continue }
@@ -321,7 +321,7 @@ final class DemoHub {
         if let answer = try providers.change(method, p, body) { return answer }
         switch p {
         case ["sessions"]:
-            throw APIError(status: 403, message: "体验模式下不能新建会话：连接你自己的 hub 后再试")
+            throw APIError(status: 403, message: String(localized: "体验模式下不能新建会话：连接你自己的 hub 后再试"))
         case ["assistant", "conversations"]:
             return ["session": startConversation(body["prompt"]?.string ?? "")]
         case ["assistant", "tasks"]: // a new one: saved as it is, next run at its time
@@ -333,12 +333,12 @@ final class DemoHub {
             return ["task": .object(t)]
         case ["inbox", "refresh"]: return ["items": .array(inbox)]
         case ["translate"], ["translate", "mail"]:
-            throw APIError(status: 403, message: "体验模式里不翻译：连接你自己的 hub 后再试")
+            throw APIError(status: 403, message: String(localized: "体验模式里不翻译：连接你自己的 hub 后再试"))
         case ["todos"]:
             made += 1
             let newTodo: JSONValue = .object([
                 "id": .string("todo_demo\(made)"),
-                "title": body["title"] ?? "新待办",
+                "title": body["title"] ?? "新待办", // i18n-ignore
                 "notes": body["notes"] ?? .null,
                 "done_at": .null,
                 "created_at": .string(Self.iso(.now)),
@@ -406,7 +406,7 @@ final class DemoHub {
                 "session_id": .string(p[4]),
                 "linked_at": .string(Self.iso(.now)),
                 "released_at": .null,
-                "title": .string("演示 Agent"),
+                "title": .string("演示 Agent"), // i18n-ignore
                 "agent": .string("claude")
             ]), at: 0)
             t["agents"] = .array(ags)
@@ -446,14 +446,14 @@ final class DemoHub {
             return ["ok": true]
         case ("inbox", 3) where p[2] == "draft":
             let it = inbox.first { $0["id"]?.string == p[1] }
-            return ["text": it?["agent"]?["draft"] ?? "好的，我看一下，晚点回复你。"]
+            return ["text": it?["agent"]?["draft"] ?? "好的，我看一下，晚点回复你。"] // i18n-ignore
         case ("inbox", 3) where p[2] == "reply": throw refuse()
         case ("lark", 4) where p[1] == "conversations" && p[3] == "read": return ["ok": true]
         case ("mail", 5) where p[1] == "messages" && p[4] == "flags": return ["ok": true] // opening a mail marks it read
         case ("lark", 4) where p[1] == "conversations" && p[3] == "messages":
             let n = (lark[p[2]]?.compactMap { $0["position"]?.string.flatMap(Int.init) }.max() ?? 0) + 1
             let text = body["text"]?.string ?? ""
-            lark[p[2], default: []].append(["id": .string("om_demo_\(n)"), "position": .string(String(n)), "sender_name": "我",
+            lark[p[2], default: []].append(["id": .string("om_demo_\(n)"), "position": .string(String(n)), "sender_name": "我", // i18n-ignore
                                              "is_mine": true, "type": "TEXT", "text": .string(text), "recalled": false, "reply_count": 0,
                                              "created_at": .string(Self.iso(.now)), "parts": [["kind": "text", "text": .string(text)]]])
             onNotSent?()
@@ -473,7 +473,7 @@ final class DemoHub {
             guard let raw = body["engine"]?.string,
                   MachineEngine.allCases.contains(MachineEngine(rawValue: raw)) ||
                     machine["engines"]?.array?.contains(where: { $0["id"]?.string == raw && $0["available"]?.bool == true }) == true else {
-                throw APIError(status: 400, message: "未知引擎")
+                throw APIError(status: 400, message: String(localized: "未知引擎"))
             }
             machine["engine"] = .string(raw)
             machines[i] = .object(machine)
@@ -576,7 +576,7 @@ final class DemoHub {
         broadcastSessions(m)
         Task {
             try? await Task.sleep(for: .seconds(1.5))
-            respond(k, "收到，按你的选择接着做。\n\n" + Self.reply)
+            respond(k, String(localized: "收到，按你的选择接着做。\n\n\(Self.reply)"))
         }
     }
 
@@ -584,7 +584,7 @@ final class DemoHub {
         made += 1
         let sid = String(format: "d0e0a0b0-0000-4000-8000-%012d", made)
         let title = String(prompt.prefix(20))
-        sessions.append(["machine_id": "server", "session_id": .string(sid), "title": .string(title.isEmpty ? "新对话" : title),
+        sessions.append(["machine_id": "server", "session_id": .string(sid), "title": .string(title.isEmpty ? "新对话" : title), // i18n-ignore
                          "cwd": "/home/me/.jarvis/assistant", "status": "working", "state": "working", "agent": "claude",
                          "launcher": "claude", "model": "opus", "started_by_jarvis": true, "assistant": true,
                          "updated_at": .string(Self.iso(.now)), "last_text": "", "permission_mode": "default", "effort": "high",

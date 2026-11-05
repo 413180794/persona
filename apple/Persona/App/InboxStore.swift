@@ -192,13 +192,13 @@ final class InboxStore {
         for i in items.indices where covers(items[i]) {
             items[i].doneAt = .now
             items[i].doneBy = "read"
-            items[i].reason = "已静音：" + option.name
+            items[i].reason = String(localized: "已静音：\(option.name)")
         }
         Haptics.success()
         Task {
             do {
                 _ = try await AppModel.shared.api?.muteInbox(item.id, tag: option.tag)
-                AppModel.shared.toast = Toast("已静音「\(option.name)」，以后不再进收件箱", style: .success)
+                AppModel.shared.toast = Toast(String(localized: "已静音「\(option.name)」，以后不再进收件箱"), style: .success)
             } catch {
                 items = before
                 AppModel.shared.show(error)
@@ -230,13 +230,13 @@ final class InboxStore {
         do {
             try await api.inboxReply(item.id, text: text, changes: changes)
             Haptics.success()
-            AppModel.shared.toast = Toast("已发送，标为已处理", style: .success)
+            AppModel.shared.toast = Toast(String(localized: "已发送，标为已处理"), style: .success)
             return true
         } catch {
             if let before, let i = items.firstIndex(where: { $0.id == item.id }) { items[i] = before }
             if !text.isEmpty { unsentReplies[item.id] = text }
             if let shown = error.shown {
-                AppModel.shared.toast = Toast("回复没发出去：\(shown)", style: .error)
+                AppModel.shared.toast = Toast(String(localized: "回复没发出去：\(shown)"), style: .error)
                 Haptics.error()
             }
             return false
@@ -263,7 +263,7 @@ final class InboxStore {
                 if let j = items.firstIndex(where: { $0.id == item.id }) { items[j] = fresh }
                 let snapshot = items
                 saver.run { StateCache.save(Self.stateName, snapshot) }
-                AppModel.shared.toast = Toast("「\(status.name)」改成了\(value)", style: .success)
+                AppModel.shared.toast = Toast(String(localized: "「\(status.name)」改成了\(value)"), style: .success)
             } catch {
                 if let j = items.firstIndex(where: { $0.id == item.id }) { items[j] = before }
                 AppModel.shared.show(error)

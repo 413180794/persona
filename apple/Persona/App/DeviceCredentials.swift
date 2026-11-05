@@ -145,7 +145,7 @@ struct DevicesView: View {
             }
             let revoked = tokens.filter { $0.revokedAt != nil }
             if !revoked.isEmpty {
-                Section("已撤销") {
+                Section(String(localized: "section.revoked", defaultValue: "已撤销")) {
                     ForEach(revoked) { t in row(t).foregroundStyle(.secondary) }
                 }
             }
@@ -157,7 +157,7 @@ struct DevicesView: View {
             }
         }
         .themedPage()
-        .detailTitle("设备")
+        .detailTitle(String(localized: "设备"))
         .task { await load() }
         .refreshable { await load() }
         .sheet(isPresented: $connecting, onDismiss: { Task { await load() } }) {
@@ -168,21 +168,21 @@ struct DevicesView: View {
             if UserDefaults.standard.string(forKey: "openConnectDevice") != nil { try? await Task.sleep(for: .seconds(1)); connecting = true }
         }
         #endif
-        .confirmationDialog(revoking.map { "撤销「\($0.name)」？" } ?? "", isPresented: Binding(
+        .confirmationDialog(revoking.map { String(localized: "撤销「\($0.name)」？") } ?? "", isPresented: Binding(
             get: { revoking != nil }, set: { if !$0 { revoking = nil } }
         ), titleVisibility: .visible, presenting: revoking) { t in
-            Button(t.id == current ? "撤销并退出配对" : "撤销", role: .destructive) { Task { await revoke(t) } }
+            Button(t.id == current ? String(localized: "撤销并退出配对") : String(localized: "action.revoke", defaultValue: "撤销"), role: .destructive) { Task { await revoke(t) } }
         } message: { t in
-            Text(t.id == current ? Self.revokeSelfNote : "那台设备会立刻断开，要重新配对才能用。")
+            Text(t.id == current ? Self.revokeSelfNote : String(localized: "那台设备会立刻断开，要重新配对才能用。"))
         }
     }
 
     #if os(macOS)
-    private static let upgradeNote = "hub 更新后，这台 Mac 会自动换成自己的凭据。"
-    private static let revokeSelfNote = "这台 Mac 会立刻断开，要重新粘贴配对链接。"
+    private static let upgradeNote = String(localized: "hub 更新后，这台 Mac 会自动换成自己的凭据。")
+    private static let revokeSelfNote = String(localized: "这台 Mac 会立刻断开，要重新粘贴配对链接。")
     #else
-    private static let upgradeNote = "hub 更新后，这台 iPhone 会自动换成自己的凭据。"
-    private static let revokeSelfNote = "这台 iPhone 会立刻断开，要重新扫码配对。"
+    private static let upgradeNote = String(localized: "hub 更新后，这台 iPhone 会自动换成自己的凭据。")
+    private static let revokeSelfNote = String(localized: "这台 iPhone 会立刻断开，要重新扫码配对。")
     #endif
 
     private func row(_ t: APIClient.DeviceToken) -> some View {
@@ -193,14 +193,14 @@ struct DevicesView: View {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 HStack(spacing: Theme.Space.sm) {
                     Text(t.name).lineLimit(1)
-                    if t.id == current { Chip(text: "本机", look: .outline) }
-                    if t.role == "answer" { Chip(text: "只能回答") }
+                    if t.id == current { Chip(text: String(localized: "本机"), look: .outline) }
+                    if t.role == "answer" { Chip(text: String(localized: "只能回答")) }
                 }
                 Text(detail(t)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
             if t.revokedAt == nil {
-                Button("撤销", role: .destructive) { revoking = t }
+                Button(String(localized: "action.revoke", defaultValue: "撤销"), role: .destructive) { revoking = t }
                     .buttonStyle(.borderless)
                     .lineLimit(1)
             }
@@ -208,9 +208,9 @@ struct DevicesView: View {
     }
 
     private func detail(_ t: APIClient.DeviceToken) -> String {
-        if let r = t.revokedAt { return "撤销于 " + r.formatted(.relative(presentation: .named)) }
-        if let s = t.lastSeen { return "最近使用 " + s.formatted(.relative(presentation: .named)) }
-        return "添加于 " + (t.createdAt?.formatted(date: .abbreviated, time: .shortened) ?? "")
+        if let r = t.revokedAt { return String(localized: "撤销于 \(r.formatted(.relative(presentation: .named)))") }
+        if let s = t.lastSeen { return String(localized: "最近使用 \(s.formatted(.relative(presentation: .named)))") }
+        return String(localized: "添加于 \(t.createdAt?.formatted(date: .abbreviated, time: .shortened) ?? "")")
     }
 
     private func load() async {

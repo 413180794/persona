@@ -43,37 +43,37 @@ enum ToolPresentation {
         let n = baseName(name)
         if let own = PersonaToolNames.verb(name) { return own }
         if n.hasPrefix("phone_") { return "iPhone" }
-        if n.hasPrefix("mail_") { return "邮件" }
+        if n.hasPrefix("mail_") { return String(localized: "邮件") }
         switch n {
         // Persona managing its own conversations (docs/assistant.md「管理自己的对话」).
-        case "conversations_list": return "查看对话列表"
-        case "conversation_read": return "读对话"
-        case "conversation_rename": return "重命名对话"
-        case "conversation_archive": return "归档对话"
-        case "conversation_unarchive": return "取消归档"
-        case "conversation_new": return "新开对话"
-        case "conversation_send": return "发到对话"
+        case "conversations_list": return String(localized: "查看对话列表")
+        case "conversation_read": return String(localized: "读对话")
+        case "conversation_rename": return String(localized: "重命名对话")
+        case "conversation_archive": return String(localized: "归档对话")
+        case "conversation_unarchive": return String(localized: "取消归档")
+        case "conversation_new": return String(localized: "新开对话")
+        case "conversation_send": return String(localized: "发到对话")
         // Operating a Mac through Cua Driver (docs/computer-use.md).
-        case "computer_state": return "看电脑"
-        case "computer_run": return "操控电脑"
-        case "browser_run": return "用浏览器"
-        case "browser_look": return "看浏览器"
-        case "Bash": return "运行"
-        case "Read": return "读取"
-        case "Edit", "MultiEdit": return "编辑"
-        case "Write": return "写入"
-        case "Grep": return "搜索"
-        case "Glob", "LS": return "查找"
-        case "WebFetch": return "打开网页"
-        case "WebSearch": return "网页搜索"
-        case "Task", "Agent": return "子任务"
-        case "TodoWrite": return "更新待办"
-        case "AskUserQuestion", "ask_user": return "提问"
-        case "ExitPlanMode": return "提交计划"
-        case "EnterPlanMode": return "进入计划模式"
-        case "ToolSearch": return "加载工具"
-        case "Skill": return "使用技能"
-        case "Monitor": return "监视"
+        case "computer_state": return String(localized: "看电脑")
+        case "computer_run": return String(localized: "操控电脑")
+        case "browser_run": return String(localized: "用浏览器")
+        case "browser_look": return String(localized: "看浏览器")
+        case "Bash": return String(localized: "运行")
+        case "Read": return String(localized: "读取")
+        case "Edit", "MultiEdit": return String(localized: "编辑")
+        case "Write": return String(localized: "写入")
+        case "Grep": return String(localized: "搜索")
+        case "Glob", "LS": return String(localized: "查找")
+        case "WebFetch": return String(localized: "打开网页")
+        case "WebSearch": return String(localized: "网页搜索")
+        case "Task", "Agent": return String(localized: "子任务")
+        case "TodoWrite": return String(localized: "更新待办")
+        case "AskUserQuestion", "ask_user": return String(localized: "提问")
+        case "ExitPlanMode": return String(localized: "提交计划")
+        case "EnterPlanMode": return String(localized: "进入计划模式")
+        case "ToolSearch": return String(localized: "加载工具")
+        case "Skill": return String(localized: "使用技能")
+        case "Monitor": return String(localized: "监视")
         default: return n
         }
     }
@@ -106,7 +106,7 @@ enum ToolPresentation {
         case "conversation_new", "conversation_send": return firstLine(s("text") ?? "")
         case "conversation_read", "conversation_archive", "conversation_unarchive": return String((s("id") ?? "").prefix(8))
         case "ToolSearch": return s("query") ?? ""
-        case "computer_state": return [mac(), s("app") ?? "整个屏幕"].compactMap { $0 }.joined(separator: " · ")
+        case "computer_state": return [mac(), s("app") ?? String(localized: "整个屏幕")].compactMap { $0 }.joined(separator: " · ")
         case "browser_look": return mac() ?? ""
         case "browser_run": return [mac(), s("script").map { firstLine($0.trimmingCharacters(in: .whitespacesAndNewlines)) }].compactMap { $0 }.joined(separator: " · ")
         case "computer_run": return [mac(), ComputerSteps.describe(call.name, input: i)].compactMap { $0 }.joined(separator: " · ")
@@ -265,16 +265,16 @@ enum ToolRunSummary {
                                monospacedDetail: one && ascii, isError: error)
         }
         switch kind {
-        case .read: return named("读取", many: "\(calls.count) 个文件")
-        case .search: return named(ToolPresentation.verb(first.name), many: "\(calls.count) 次")
-        case .run: return named("运行", many: "\(calls.count) 条命令")
+        case .read: return named(String(localized: "读取"), many: String(localized: "\(calls.count) 个文件"))
+        case .search: return named(ToolPresentation.verb(first.name), many: String(localized: "\(calls.count) 次"))
+        case .run: return named(String(localized: "运行"), many: String(localized: "\(calls.count) 条命令"))
         case .todo:
             // The latest list is the state of the to-dos.
-            return ToolChipGroup.Chip(symbol: Theme.Icon.todo, label: "待办", detail: ToolPresentation.subject(calls[calls.count - 1]),
+            return ToolChipGroup.Chip(symbol: Theme.Icon.todo, label: String(localized: "待办"), detail: ToolPresentation.subject(calls[calls.count - 1]),
                                       monospacedDetail: true, isError: error)
         case .other(let verb):
             return ToolChipGroup.Chip(symbol: ToolPresentation.symbol(first.name), label: verb,
-                                      detail: one ? subject : "\(calls.count) 次", monospacedDetail: one && ascii, isError: error)
+                                      detail: one ? subject : String(localized: "\(calls.count) 次"), monospacedDetail: one && ascii, isError: error)
         case .edit:
             var adds = 0, dels = 0
             var files: [String] = []
@@ -287,8 +287,8 @@ enum ToolRunSummary {
             }
             return ToolChipGroup.Chip(
                 symbol: ToolPresentation.symbol(first.name),
-                label: files.count == 1 ? ToolPresentation.verb(first.name) : "编辑",
-                detail: files.count == 1 ? (files[0] as NSString).lastPathComponent : "\(files.count) 个文件",
+                label: files.count == 1 ? ToolPresentation.verb(first.name) : String(localized: "编辑"),
+                detail: files.count == 1 ? (files[0] as NSString).lastPathComponent : String(localized: "\(files.count) 个文件"),
                 monospacedDetail: files.count == 1,
                 additions: adds, deletions: dels, isError: error
             )
@@ -705,7 +705,7 @@ struct CodeBlock: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             .macHoverActions {
-                MacHoverButton(title: "拷贝", symbol: Theme.Icon.copy) { MacHover.copy(text) }
+                MacHoverButton(title: String(localized: "拷贝"), symbol: Theme.Icon.copy) { MacHover.copy(text) }
             }
             if clipped {
                 Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(Theme.Font.labelMedium)

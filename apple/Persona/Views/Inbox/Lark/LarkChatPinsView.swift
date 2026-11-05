@@ -53,7 +53,7 @@ struct LarkChatPinsView: View {
                     if pins.loading {
                         ProgressView("加载 Pin 消息…").frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl)
                     } else if pins.loaded && pins.problem == nil {
-                        EmptyStateView(symbol: Theme.Icon.pin, title: "还没有 Pin 消息", message: "长按聊天中的消息，选择「添加 Pin」。")
+                        EmptyStateView(symbol: Theme.Icon.pin, title: String(localized: "还没有 Pin 消息"), message: String(localized: "长按聊天中的消息，选择「添加 Pin」。"))
                     }
                 } else {
                     Section {
@@ -159,11 +159,12 @@ struct LarkChatPinsView: View {
     }
 
     private func summary(_ pin: LarkChatPin) -> String {
-        guard let m = pin.message, m.deleted != true else { return "原消息已不可用" }
+        guard let m = pin.message, m.deleted != true else { return String(localized: "原消息已不可用") }
         let policy = display.accountID == pins.accountID ? display : .hidden
-        guard policy.showsBody(of: m) else { return "消息已撤回" }
-        let text = policy.summary(m.displayText.trimmingCharacters(in: .whitespacesAndNewlines))
-        let fallback = m.type == "IMAGE" ? "[图片]" : m.type == "FILE" ? "[文件]" : "消息"
-        return (text.isEmpty ? fallback : text) + (m.recalled ? " · 已撤回" : "")
+        guard policy.showsBody(of: m) else { return String(localized: "消息已撤回") }
+        let body = policy.summary(m.displayText.trimmingCharacters(in: .whitespacesAndNewlines))
+        let fallback = m.type == "IMAGE" ? String(localized: "[图片]") : m.type == "FILE" ? String(localized: "[文件]") : String(localized: "消息", comment: "Summary of a pinned message that has no text")
+        let text = body.isEmpty ? fallback : body
+        return m.recalled ? String(localized: "\(text) · 已撤回") : text
     }
 }

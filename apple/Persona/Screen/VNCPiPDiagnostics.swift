@@ -11,19 +11,19 @@ struct VNCPiPDiagnostics: View {
     private var facts: [(String, String)] {
         let audio = AVAudioSession.sharedInstance()
         return [
-            ("支持画中画", VNCPiP.supported ? "是" : "否"),
-            ("小窗开着", VNCPiP.shared.active ? "是" : "否"),
-            ("音频会话", Self.categories[audio.category] ?? audio.category.rawValue),
-            ("后台音频", (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("audio") == true ? "有" : "没有"),
+            (String(localized: "支持画中画"), VNCPiP.supported ? String(localized: "是") : String(localized: "否")),
+            (String(localized: "小窗开着"), VNCPiP.shared.active ? String(localized: "是") : String(localized: "否")),
+            (String(localized: "音频会话"), Self.categories[audio.category] ?? audio.category.rawValue),
+            (String(localized: "后台音频"), (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("audio") == true ? String(localized: "有") : String(localized: "没有")),
         ]
     }
 
     private static let categories: [AVAudioSession.Category: String] = [
-        .playback: "播放", .soloAmbient: "默认（不能后台）", .ambient: "环境", .playAndRecord: "播放和录音", .record: "录音",
+        .playback: String(localized: "播放"), .soloAmbient: String(localized: "默认（不能后台）"), .ambient: String(localized: "环境"), .playAndRecord: String(localized: "播放和录音"), .record: String(localized: "录音"),
     ]
 
     private var text: String {
-        (facts.map { "\($0.0)：\($0.1)" } + VNCPiPLog.lines).joined(separator: "\n")
+        (facts.map { String(localized: "\($0.0)：\($0.1)", comment: "Diagnostics fact: name and value") } + VNCPiPLog.lines).joined(separator: "\n")
     }
 
     var body: some View {
@@ -50,7 +50,7 @@ struct VNCPiPDiagnostics: View {
                 Section {
                     Button {
                         UIPasteboard.general.string = text
-                        model.toast = Toast("已复制", style: .success)
+                        model.toast = Toast(String(localized: "已复制"), style: .success)
                     } label: {
                         Label("复制全部", systemImage: Theme.Icon.copy).lineLimit(1)
                     }

@@ -366,23 +366,23 @@ struct MessageActionBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            action("复制", "doc.on.doc") {
+            action(String(localized: "复制"), "doc.on.doc") {
                 UIPasteboard.general.string = text
                 Haptics.success()
             }
-            action("选择", "selection.pin.in.out") { menu.selecting = SelectableText(text: text) }
-            action("引用", "quote.opening") { menu.quote?(text, id, isUser) }
-            action("分享", "square.and.arrow.up") {
+            action(String(localized: "选择"), "selection.pin.in.out") { menu.selecting = SelectableText(text: text) }
+            action(String(localized: "引用"), "quote.opening") { menu.quote?(text, id, isUser) }
+            action(String(localized: "分享"), "square.and.arrow.up") {
                 menu.sharing = ShareMessage(text: text, isUser: isUser, source: menu.source(), date: date, agent: menu.agent())
             }
             if isUser {
-                action("编辑", "pencil") { menu.edit?(text) }
+                action(String(localized: "编辑"), "pencil") { menu.edit?(text) }
             }
             if Self.rewinds(id: id, isUser: isUser, menu: menu) {
-                action("回退", Theme.Icon.rewindChat) { menu.rewinding = RewindAsk(id: id, text: text) }
+                action(String(localized: "回退"), Theme.Icon.rewindChat) { menu.rewinding = RewindAsk(id: id, text: text) }
             }
             if Self.forks(id: id, isUser: isUser, menu: menu) {
-                action("更多", Theme.Icon.more) { menu.more = id }
+                action(String(localized: "更多"), Theme.Icon.more) { menu.more = id }
             }
         }
         .padding(.horizontal, Theme.Space.sm)

@@ -293,9 +293,13 @@ struct MetricChart: View {
         let parts = series.indices.map { i in
             let vals = points.compactMap { series[i].value($0) }
             let now = i < self.now.count ? self.now[i] : nil
-            return "\(series.count > 1 ? series[i].name + " " : "")现在 \(now.map(format) ?? "未知")，最高 \(vals.max().map(format) ?? "未知")"
+            let current = now.map(format) ?? String(localized: "未知")
+            let peak = vals.max().map(format) ?? String(localized: "未知")
+            return series.count > 1
+                ? String(localized: "\(series[i].name) 现在 \(current)，最高 \(peak)")
+                : String(localized: "现在 \(current)，最高 \(peak)")
         }
-        return parts.joined(separator: "；")
+        return parts.joined(separator: String(localized: "；", comment: "Separator between chart series summaries"))
     }
 }
 

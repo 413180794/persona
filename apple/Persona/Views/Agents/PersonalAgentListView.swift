@@ -77,7 +77,7 @@ struct PersonalAgentListView: View {
             }
         }
         .navigationTitle("个人 Agent")
-        .pageSearchable(text: $query, prompt: "搜索会话")
+        .pageSearchable(text: $query, prompt: String(localized: "搜索会话"))
         .pageToolbar {
             ToolbarItem(placement: .primaryAction) { viewMenu }
         }
@@ -175,7 +175,7 @@ struct PersonalAgentListView: View {
             error = nil
         } catch {
             // Say it plainly instead of showing stale rows as if they were current (§6 step 1).
-            self.error = "无法连接个人 Agent：\(error.localizedDescription)"
+            self.error = String(localized: "无法连接个人 Agent：\(error.localizedDescription)")
         }
         _ = await p
         loaded = true

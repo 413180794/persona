@@ -57,7 +57,7 @@ final class TerminalFeed {
 
     static let page = 200
     static let scrollbackLimit = 3000
-    static let linkDown = "连不上 hub"
+    static let linkDown = String(localized: "连不上 hub")
 
     init(key: SessionKey) { self.key = key }
 
@@ -150,11 +150,11 @@ final class TerminalFeed {
             control = .busy
         case "unsupported":
             control = .declined
-            controlNote = why ?? "这台电脑只能看，不能接管"
+            controlNote = why ?? String(localized: "这台电脑只能看，不能接管")
             leaveControl()
         default: // taken, lost: watching from now on
             control = .declined
-            controlNote = why ?? "终端已回到电脑上的尺寸"
+            controlNote = why ?? String(localized: "终端已回到电脑上的尺寸")
             leaveControl()
         }
     }
@@ -226,7 +226,7 @@ final class TerminalFeed {
                 return
             }
             offline = why.contains("not running")
-            failed(offline ? "会话没有在 herdr 里运行" : why)
+            failed(offline ? String(localized: "会话没有在 herdr 里运行") : why)
             loaded = true
             if control == .active || control == .starting { control = .off } // it asks again when it subscribes again
         case .reconnected:
@@ -304,7 +304,7 @@ final class TerminalFeed {
             nextTry = Date().addingTimeInterval(1)
         } catch {
             guard !error.isCancellation else { return }
-            failed(error.shown ?? "读取终端失败")
+            failed(error.shown ?? String(localized: "读取终端失败"))
         }
         loaded = true
     }

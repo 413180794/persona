@@ -63,16 +63,16 @@ struct MachineDetailView: View {
                     if let browser = machine.browser { BrowserSection(ref: ref, browser: browser, online: online) }
                     if machine.browser?.setUp == true { BrowserLoginsSection(ref: ref, online: online) }
                     VStack(alignment: .leading, spacing: Theme.Space.m) {
-                        heading("监控")
+                        heading(String(localized: "监控"))
                         if let s = data?.latest, online { NowGrid(sample: s, cores: system?.cores) }
-                        SegmentedChoice("时间范围", MetricRange.allCases.map { ($0, $0.title) }, selection: $range)
+                        SegmentedChoice(String(localized: "时间范围"), MetricRange.allCases.map { ($0, $0.title) }, selection: $range)
                             .accessibilityIdentifier("metric-range")
                         charts(system: system)
                         if let cores = data?.latest?.cores, online, cores.count > 1 { CoreBars(cores: cores) }
                     }
                     if let system {
                         VStack(alignment: .leading, spacing: Theme.Space.m) {
-                            heading("系统")
+                            heading(String(localized: "系统"))
                             SystemFacts(system: system, machine: machine)
                         }
                     }
@@ -88,7 +88,7 @@ struct MachineDetailView: View {
                 } else if model.machines.isEmpty {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xxl)
                 } else {
-                    EmptyStateView(symbol: Theme.Icon.machines, title: "找不到这台机器", message: "hub 的配置里已经没有它了。")
+                    EmptyStateView(symbol: Theme.Icon.machines, title: String(localized: "找不到这台机器"), message: String(localized: "hub 的配置里已经没有它了。"))
                 }
             }
             .padding(Theme.Space.l)
@@ -217,7 +217,7 @@ struct MachineDetailView: View {
 
     private func launchersSection(_ machine: Machine) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            heading("启动器", count: machine.online && !launchers.isEmpty ? launchers.count : nil)
+            heading(String(localized: "启动器"), count: machine.online && !launchers.isEmpty ? launchers.count : nil)
             VStack(alignment: .leading, spacing: 0) {
                 if !machine.online {
                     Text("机器离线，连上后显示").font(Theme.Font.secondary).foregroundStyle(.secondary).padding(.vertical, Theme.Space.s)
@@ -282,9 +282,9 @@ struct MachineDetailView: View {
         } catch {
             if error.isCancellation { return }
             if let e = error as? APIError, e.status == 404 {
-                failure = "这个 hub 还没有监控数据：部署新版本的 hub 和这台电脑上的 node 后再看。"
+                failure = String(localized: "这个 hub 还没有监控数据：部署新版本的 hub 和这台电脑上的 node 后再看。")
             } else if data == nil {
-                failure = error.shown ?? "连不上 hub。连上后这里会自动刷新。"
+                failure = error.shown ?? String(localized: "连不上 hub。连上后这里会自动刷新。")
             }
         }
     }
@@ -295,7 +295,7 @@ struct MachineDetailView: View {
             launchers = try await model.launchers(ref, refresh: refresh)
             launcherError = nil
         } catch {
-            launcherError = error.shown.map { "读不到启动器：\($0)" }
+            launcherError = error.shown.map { String(localized: "读不到启动器：\($0)") }
         }
     }
 
@@ -306,7 +306,7 @@ struct MachineDetailView: View {
         do {
             try await model.api(ref.group)?.reconnect(machine: machineID)
         } catch {
-            if let m = error.shown { model.toast = Toast("重新连接失败：\(m)", style: .error) }
+            if let m = error.shown { model.toast = Toast(String(localized: "重新连接失败：\(m)"), style: .error) }
             return
         }
         for _ in 0..<10 {
@@ -319,7 +319,7 @@ struct MachineDetailView: View {
             }
         }
         let err = model.machine(ref)?.error
-        model.toast = Toast("还没连上\(err.map { "：\($0)" } ?? "")", style: .error)
+        model.toast = Toast(err.map { String(localized: "还没连上：\($0)") } ?? String(localized: "还没连上"), style: .error)
     }
 
     // MARK: Charts
@@ -337,16 +337,16 @@ struct MachineDetailView: View {
                 MetricChart(title: "CPU", points: data.points, series: [ChartSeries(name: "CPU", color: MetricColor.cpu) { $0.cpu }],
                             domain: domain, step: step, yDomain: 0...100, format: { MetricFormat.percent($0) },
                             now: [live?.cpu], selection: $selection)
-                MetricChart(title: memTotal > 0 ? "内存（共 \(MetricFormat.bytes(memTotal))）" : "内存", points: data.points,
-                            series: [ChartSeries(name: "内存", color: MetricColor.mem) { p in p.mem.map { memTotal > 0 ? 100 * $0 / memTotal : 0 } }],
+                MetricChart(title: memTotal > 0 ? String(localized: "内存（共 \(MetricFormat.bytes(memTotal))）") : String(localized: "内存"), points: data.points,
+                            series: [ChartSeries(name: String(localized: "内存"), color: MetricColor.mem) { p in p.mem.map { memTotal > 0 ? 100 * $0 / memTotal : 0 } }],
                             domain: domain, step: step, yDomain: 0...100, format: { MetricFormat.percent($0) },
                             now: [live?.memPercent], selection: $selection)
-                MetricChart(title: "网络", points: data.points, series: [
-                    ChartSeries(name: "下行", color: MetricColor.rx) { $0.rx },
-                    ChartSeries(name: "上行", color: MetricColor.tx) { $0.tx },
+                MetricChart(title: String(localized: "网络"), points: data.points, series: [
+                    ChartSeries(name: String(localized: "下行"), color: MetricColor.rx) { $0.rx },
+                    ChartSeries(name: String(localized: "上行"), color: MetricColor.tx) { $0.tx },
                 ], domain: domain, step: step, format: { MetricFormat.rate($0) }, now: [live?.netRx, live?.netTx], selection: $selection)
-                MetricChart(title: "负载（1 分钟）", points: data.points, series: [ChartSeries(name: "负载", color: MetricColor.load) { $0.load }],
-                            domain: domain, step: step, reference: cores > 0 ? (cores, "\(Int(cores)) 核") : nil,
+                MetricChart(title: String(localized: "负载（1 分钟）"), points: data.points, series: [ChartSeries(name: String(localized: "负载"), color: MetricColor.load) { $0.load }],
+                            domain: domain, step: step, reference: cores > 0 ? (cores, String(localized: "\(Int(cores)) 核")) : nil,
                             format: { MetricFormat.load($0) }, now: [live?.load], selection: $selection)
             }
             .animation(.default, value: shownRange)
@@ -355,7 +355,7 @@ struct MachineDetailView: View {
                     .font(Theme.Font.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
             }
         } else if let failure {
-            EmptyStateView(symbol: "chart.xyaxis.line", title: "看不到监控数据", message: failure)
+            EmptyStateView(symbol: "chart.xyaxis.line", title: String(localized: "看不到监控数据"), message: failure)
                 .padding(.vertical, 30)
         } else {
             ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60)
@@ -373,15 +373,15 @@ private struct NowGrid: View {
         LazyVGrid(columns: cols, spacing: 10) {
             tile("CPU", MetricFormat.percent(sample.cpu), detail: nil, fraction: sample.cpu.map { $0 / 100 }, color: MetricColor.cpu,
                  level: MetricLevel.of(sample.cpu, warn: 75, crit: 90))
-            tile("内存", MetricFormat.percent(sample.memPercent), detail: MetricFormat.bytes(sample.memUsed) + " / " + MetricFormat.bytes(sample.memTotal),
+            tile(String(localized: "内存"), MetricFormat.percent(sample.memPercent), detail: MetricFormat.bytes(sample.memUsed) + " / " + MetricFormat.bytes(sample.memTotal),
                  fraction: sample.memPercent.map { $0 / 100 }, color: MetricColor.mem, level: MetricLevel.of(sample.memPercent, warn: 80, crit: 90))
-            tile("网络", "↓ " + MetricFormat.rate(sample.netRx), detail: "↑ " + MetricFormat.rate(sample.netTx), fraction: nil, color: MetricColor.rx, level: .normal)
-            tile("负载", MetricFormat.load(sample.load), detail: cores.map { "\($0) 核" }, fraction: nil, color: MetricColor.load,
+            tile(String(localized: "网络"), "↓ " + MetricFormat.rate(sample.netRx), detail: "↑ " + MetricFormat.rate(sample.netTx), fraction: nil, color: MetricColor.rx, level: .normal)
+            tile(String(localized: "负载"), MetricFormat.load(sample.load), detail: cores.map { String(localized: "\($0) 核") }, fraction: nil, color: MetricColor.load,
                  level: MetricLevel.of(sample.load.flatMap { l in cores.map { l / Double(max($0, 1)) } }, warn: 1, crit: 2))
-            tile("磁盘", MetricFormat.percent(sample.diskPercent), detail: MetricFormat.bytes(sample.diskUsed) + " / " + MetricFormat.bytes(sample.diskTotal),
+            tile(String(localized: "磁盘"), MetricFormat.percent(sample.diskPercent), detail: MetricFormat.bytes(sample.diskUsed) + " / " + MetricFormat.bytes(sample.diskTotal),
                  fraction: sample.diskPercent.map { $0 / 100 }, color: .secondary, level: MetricLevel.of(sample.diskPercent, warn: 80, crit: 90))
-            tile("交换", sample.swapTotal > 0 ? MetricFormat.bytes(sample.swapUsed) : "未启用",
-                 detail: sample.swapTotal > 0 ? "共 " + MetricFormat.bytes(sample.swapTotal) : nil,
+            tile(String(localized: "交换"), sample.swapTotal > 0 ? MetricFormat.bytes(sample.swapUsed) : String(localized: "未启用"),
+                 detail: sample.swapTotal > 0 ? String(localized: "共 \(MetricFormat.bytes(sample.swapTotal))") : nil,
                  fraction: sample.swapPercent.map { $0 / 100 }, color: .secondary, level: .normal)
         }
     }
@@ -390,7 +390,7 @@ private struct NowGrid: View {
         if AppStyle.current.usesBeautifulUI {
             // Its stat tile: what it is (偏高 / 过高 after it), the number, the line under it, a meter for what has a
             // share; a high reading colors the number and its meter.
-            BUIStatTile(level > .normal ? "\(title) · \(level == .critical ? "过高" : "偏高")" : title, value: value, detail: detail ?? " ",
+            BUIStatTile(level > .normal ? (level == .critical ? String(localized: "\(title) · 过高") : String(localized: "\(title) · 偏高")) : title, value: value, detail: detail ?? " ",
                         tone: level == .critical ? .red : level > .normal ? .orange : .neutral, progress: fraction)
         } else {
             plainTile(title, value, detail: detail, fraction: fraction, color: color, level: level)
@@ -478,17 +478,17 @@ private struct SystemFacts: View {
     }
 
     private var facts: [(String, String)] {
-        var out: [(String, String)] = [("系统", system.name + (system.build.map { "（\($0)）" } ?? ""))]
-        if let k = system.kernel, !k.isEmpty { out.append(("内核", k)) }
-        out.append(("架构", system.arch ?? machine?.arch ?? "—"))
-        if let m = system.model, !m.isEmpty { out.append(("机型", m)) }
-        if let c = system.cpu, !c.isEmpty { out.append(("处理器", c)) }
-        out.append(("核心", "\(system.cores)"))
-        out.append(("内存", MetricFormat.bytes(system.memory)))
-        if let h = machine?.hostname, !h.isEmpty { out.append(("主机名", h)) }
+        var out: [(String, String)] = [(String(localized: "系统"), system.build.map { String(localized: "\(system.name)（\($0)）") } ?? system.name)]
+        if let k = system.kernel, !k.isEmpty { out.append((String(localized: "内核"), k)) }
+        out.append((String(localized: "架构"), system.arch ?? machine?.arch ?? "—"))
+        if let m = system.model, !m.isEmpty { out.append((String(localized: "机型"), m)) }
+        if let c = system.cpu, !c.isEmpty { out.append((String(localized: "处理器"), c)) }
+        out.append((String(localized: "核心"), "\(system.cores)"))
+        out.append((String(localized: "内存"), MetricFormat.bytes(system.memory)))
+        if let h = machine?.hostname, !h.isEmpty { out.append((String(localized: "主机名"), h)) }
         if let boot = system.bootDate {
-            out.append(("开机于", boot.formatted(date: .abbreviated, time: .shortened)))
-            if machine?.online == true { out.append(("已运行", MetricFormat.uptime(since: boot))) }
+            out.append((String(localized: "开机于"), boot.formatted(date: .abbreviated, time: .shortened)))
+            if machine?.online == true { out.append((String(localized: "machine.uptime", defaultValue: "已运行"), MetricFormat.uptime(since: boot))) }
         }
         if let h = machine?.herdrVersion, !h.isEmpty { out.append(("herdr", h)) }
         if let c = machine?.claudeVersion, !c.isEmpty { out.append(("Claude Code", c)) }

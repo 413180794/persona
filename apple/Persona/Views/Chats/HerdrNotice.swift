@@ -41,7 +41,7 @@ nonisolated struct HerdrFailure: Equatable, Sendable {
             return
         }
         var detail = e.message + "\nHTTP \(e.status)"
-        if let id = e.requestID { detail += "\n请求 \(id)" }
+        if let id = e.requestID { detail += String(localized: "\n请求 \(id)") }
         self.init(text: Self.says(e.message), detail: detail)
     }
 
@@ -51,19 +51,19 @@ nonisolated struct HerdrFailure: Equatable, Sendable {
         let m = message.trimmingCharacters(in: .whitespacesAndNewlines)
         if let r = m.range(of: "herdr server stopped right after starting") {
             let why = m[r.upperBound...]
-            if let code = why.firstMatch(of: /exit status (-?\d+)/)?.1 { return "herdr 起来后马上退出了（退出码 \(code)）" }
-            if let sig = why.firstMatch(of: /signal: ([\w ]+)/)?.1 { return "herdr 起来后马上被结束了（\(sig)）" }
-            return "herdr 起来后马上退出了"
+            if let code = (why.firstMatch(of: /exit status (-?\d+)/)?.1).map(String.init) { return String(localized: "herdr 起来后马上退出了（退出码 \(code)）") }
+            if let sig = (why.firstMatch(of: /signal: ([\w ]+)/)?.1).map(String.init) { return String(localized: "herdr 起来后马上被结束了（\(sig)）") }
+            return String(localized: "herdr 起来后马上退出了")
         }
-        if m.contains("herdr is not installed") { return "这台电脑上没装 herdr（PATH 和登录 shell 里都找不到 herdr 命令）" }
+        if m.contains("herdr is not installed") { return String(localized: "这台电脑上没装 herdr（PATH 和登录 shell 里都找不到 herdr 命令）") }
         if m.contains("herdr did not answer on") {
-            if let s = m.firstMatch(of: /within (\d+)s/)?.1 { return "herdr 启动了，但 \(s) 秒内没有应答" }
-            return "herdr 启动了，但一直没有应答"
+            if let s = (m.firstMatch(of: /within (\d+)s/)?.1).map(String.init) { return String(localized: "herdr 启动了，但 \(s) 秒内没有应答") }
+            return String(localized: "herdr 启动了，但一直没有应答")
         }
-        if m.contains("start herdr server:") { return "没能运行 herdr 命令" }
-        if m.contains("unknown method herdr.server.start") { return "这台电脑上的 Persona 版本太旧，不会启动 herdr，更新后再试" }
-        if m.contains("machine is offline") { return "这台电脑现在离线" }
-        if APIError.isTimeoutText(m) { return "等了很久 herdr 还没起来，稍后再看看" }
+        if m.contains("start herdr server:") { return String(localized: "没能运行 herdr 命令") }
+        if m.contains("unknown method herdr.server.start") { return String(localized: "这台电脑上的 Persona 版本太旧，不会启动 herdr，更新后再试") }
+        if m.contains("machine is offline") { return String(localized: "这台电脑现在离线") }
+        if APIError.isTimeoutText(m) { return String(localized: "等了很久 herdr 还没起来，稍后再看看") }
         return m
     }
 }
@@ -136,7 +136,7 @@ nonisolated struct HerdrFailure: Equatable, Sendable {
                 started.insert(m.ref)
                 withAnimation(Theme.Motion.state) { _ = stopped.remove(m.ref) }
             } else {
-                failures[m.ref] = HerdrFailure(text: "叫它启动了，但 herdr 还没有应答", detail: "herdr.server.start: running false")
+                failures[m.ref] = HerdrFailure(text: String(localized: "叫它启动了，但 herdr 还没有应答"), detail: "herdr.server.start: running false")
             }
         } catch {
             failures[m.ref] = HerdrFailure(error)
@@ -185,7 +185,7 @@ struct HerdrNoticeRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 if !starting, let failure = watch.failures[machine.ref] {
-                    Text("没启动：" + failure.text)
+                    Text("没启动：\(failure.text)")
                         .foregroundStyle(Theme.danger)
                         .lineLimit(3)
                         .accessibilityIdentifier("herdrNotice.failure")

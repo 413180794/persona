@@ -73,7 +73,7 @@ extension MarkdownUI.Theme {
         }
         .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
         .macHoverActions {
-            MacHoverButton(title: "拷贝代码", symbol: Theme.Icon.copy) { MacHover.copy(config.content, said: "已拷贝代码") }
+            MacHoverButton(title: String(localized: "拷贝代码"), symbol: Theme.Icon.copy) { MacHover.copy(config.content, said: String(localized: "已拷贝代码")) }
         }
     }
 }
@@ -197,7 +197,7 @@ struct UserBubble: View, Equatable {
 extension UserBubble {
     /// `<attached_images>` (current), and the plain-text notes older builds appended (own last line / old wording).
     nonisolated private static let notePatterns = [#"\s*<attached_images>[\s\S]*?</attached_images>\s*"#,
-                                       #"(?:\A|\n)\s*相关图片：[^\n]*\z"#, #"\s*（我从手机发来了图片，请用 Read 查看：[^）]*）\s*\z"#]
+                                       #"(?:\A|\n)\s*相关图片：[^\n]*\z"#, #"\s*（我从手机发来了图片，请用 Read 查看：[^）]*）\s*\z"#] // i18n-ignore
 
     /// What was typed: the note the phone appends for attached photos becomes thumbnails above the bubble instead.
     nonisolated private static let displayMemo = TextMemo<String>()
@@ -222,7 +222,7 @@ extension UserBubble {
         for pattern in notePatterns {
             guard let r = text.range(of: pattern, options: .regularExpression) else { continue }
             var note = String(text[r])
-            for token in ["<attached_images>", "</attached_images>", "相关图片：", "（我从手机发来了图片，请用 Read 查看：", "）"] {
+            for token in ["<attached_images>", "</attached_images>", "相关图片：", "（我从手机发来了图片，请用 Read 查看：", "）"] { // i18n-ignore
                 note = note.replacingOccurrences(of: token, with: "\n")
             }
             return note.components(separatedBy: CharacterSet(charactersIn: "\n、"))
@@ -515,9 +515,9 @@ private struct AnswerHoverActions: ViewModifier {
     func body(content: Content) -> some View {
         if on {
             content.macHoverFooter {
-                MacHoverButton(title: "拷贝", symbol: Theme.Icon.copy) { MacHover.copy(text) }
+                MacHoverButton(title: String(localized: "拷贝"), symbol: Theme.Icon.copy) { MacHover.copy(text) }
                 if let quote = menu?.quote {
-                    MacHoverButton(title: "引用", symbol: Theme.Icon.quote) { quote(text, id, false) }
+                    MacHoverButton(title: String(localized: "引用"), symbol: Theme.Icon.quote) { quote(text, id, false) }
                 }
             }
         } else {
@@ -561,7 +561,7 @@ struct ThinkingRow: View {
             } label: {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: Theme.Icon.memory).font(Theme.Font.label)
-                    Text(open ? "思考过程" : ToolPresentation.firstLine(item.text ?? ""))
+                    Text(open ? String(localized: "思考过程") : ToolPresentation.firstLine(item.text ?? ""))
                         .font(Theme.Font.label)
                         .lineLimit(1)
                     Spacer(minLength: 0)
@@ -590,7 +590,7 @@ struct ThinkingRow: View {
     private var chipRow: some View {
         let text = item.text ?? ""
         return VStack(alignment: .leading, spacing: 0) {
-            ToolChipRow(BeautifulUI.ToolCall(id: item.id, .think, label: "思考", chip: ToolPresentation.firstLine(text), monospacedChip: false),
+            ToolChipRow(BeautifulUI.ToolCall(id: item.id, .think, label: String(localized: "思考"), chip: ToolPresentation.firstLine(text), monospacedChip: false),
                         isOpen: open) {
                 Haptics.tap()
                 toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
@@ -617,7 +617,7 @@ struct ThinkingRow: View {
         return ThinkingState(
             .reasoning,
             isWorking: false,
-            doneTitle: open ? "思考过程" : ToolPresentation.firstLine(text),
+            doneTitle: open ? String(localized: "思考过程") : ToolPresentation.firstLine(text),
             rows: [BeautifulUI.ThinkingRow(id: item.id, text)],
             isExpanded: Binding(get: { open }, set: { v in toggleInPlace(pin, pinKey, animation: Theme.Motion.standard) { open = v } }),
             maxWidth: .infinity
@@ -641,7 +641,10 @@ struct CompactDivider: View {
 
     private var notes: [String] {
         var n = item.compact?.notes ?? [item.text ?? ""]
-        if let ts = item.ts { n.append("压缩于 " + ts.formatted(date: .abbreviated, time: .shortened)) }
+        if let ts = item.ts {
+            let at = ts.formatted(date: .abbreviated, time: .shortened)
+            n.append(String(localized: "压缩于 \(at)"))
+        }
         return n.filter { !$0.isEmpty }
     }
 
@@ -680,7 +683,7 @@ struct CompactDivider: View {
             }
             .buttonStyle(.plain)
             .chatPinned("compact-" + item.id)
-            .accessibilityLabel(title + (open ? "，收起说明" : "，展开说明"))
+            .accessibilityLabel(open ? String(localized: "\(title)，收起说明") : String(localized: "\(title)，展开说明"))
             .accessibilityIdentifier("compact-divider")
             if open {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -778,17 +781,25 @@ struct NoticeRow: View {
     private static func computeWakeSummary(_ s: String) -> (text: String, failed: Bool) {
         guard let m = s.firstMatch(of: /^(.*?)\s*"(.+)"\s*(.*)$/) else { return (s, false) }
         let kind = switch String(m.1) {
-        case "Background command": "后台命令"
-        case "Agent": "子 Agent "
-        case "Monitor": "监控"
-        default: "后台任务"
+        case "Background command": String(localized: "后台命令")
+        case "Agent": String(localized: "子 Agent ")
+        case "Monitor": String(localized: "监控")
+        default: String(localized: "后台任务")
         }
         let rest = m.3.lowercased()
         let code = rest.firstMatch(of: /exit code (\d+)/).flatMap { Int($0.1) }
         let failed = rest.contains("fail") || rest.contains("error") || (code ?? 0) != 0
-        let state = failed ? "失败" : rest.contains("kill") || rest.contains("stop") ? "已停止"
-            : rest.contains("complet") ? "完成" : "有更新"
-        return ("\(kind)\(state) · \(m.2)", failed)
+        let what = String(m.2)
+        let text = if failed {
+            String(localized: "\(kind)失败 · \(what)")
+        } else if rest.contains("kill") || rest.contains("stop") {
+            String(localized: "\(kind)已停止 · \(what)")
+        } else if rest.contains("complet") {
+            String(localized: "\(kind)完成 · \(what)")
+        } else {
+            String(localized: "\(kind)有更新 · \(what)")
+        }
+        return (text, failed)
     }
 }
 
@@ -809,7 +820,7 @@ struct WakeChip: View {
                     Image(systemName: failed ? Theme.Icon.errorFilled : "bell.fill")
                         .foregroundStyle(failed ? Theme.danger : Theme.accent)
                 }
-                Text(live ? "后台任务完成 · 正在处理" : summary?.text ?? "\(notices.count) 个后台任务完成")
+                Text(live ? String(localized: "后台任务完成 · 正在处理") : summary?.text ?? String(localized: "\(notices.count) 个后台任务完成"))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong)
@@ -899,6 +910,7 @@ struct RecapCard: View {
 struct RecapStrip: View {
     var item: Item
     var close: () -> Void
+    private var recap: String { item.text ?? "" }
 
     var body: some View {
         Button {
@@ -933,7 +945,7 @@ struct RecapStrip: View {
         }
         .buttonStyle(.plain)
         .contextMenu { CopyButton(text: item.text ?? "") }
-        .accessibilityLabel("离开期间回顾：" + (item.text ?? "") + "。点按关闭")
+        .accessibilityLabel(String(localized: "离开期间回顾：\(recap)。点按关闭"))
         .accessibilityIdentifier("chat.recapStrip")
     }
 }
@@ -944,6 +956,12 @@ struct RecapDrawer: View {
     /// Oldest first, as they came; shown newest first (it is the one that says where things are now).
     var items: [Item]
 
+    /// When a recap was written; the newest of several says so.
+    private static func written(_ ts: Date, latest: Bool) -> String {
+        let when = Fmt.relative(ts)
+        return latest ? String(localized: "最新 · 写于 \(when)") : String(localized: "写于 \(when)")
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -952,7 +970,7 @@ struct RecapDrawer: View {
                         if n > 0 { Divider() }
                         VStack(alignment: .leading, spacing: Theme.Space.m) {
                             if let ts = item.ts, ts.isMeaningful {
-                                Text((n == 0 && items.count > 1 ? "最新 · " : "") + "写于 " + Fmt.relative(ts))
+                                Text(Self.written(ts, latest: n == 0 && items.count > 1))
                                     .font(Theme.Font.caption).foregroundStyle(.secondary)
                             }
                             Markdown(Links.markdown(MathMarkdown.rewrite(item.text ?? "")))

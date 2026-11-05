@@ -4,8 +4,17 @@ import Foundation
 /// `AddMailAccountView` binds to it and talks to the hub; `MailAccountFormTests` checks it.
 struct MailAccountForm: Equatable {
     enum Kind: String, CaseIterable, Identifiable {
-        case gmail = "Gmail", outlook = "Outlook", feishu = "飞书", imap = "其他 IMAP"
+        case gmail = "Gmail", outlook = "Outlook", feishu = "飞书", imap = "其他 IMAP" // i18n-ignore: ids; shown via `title`
         var id: String { rawValue }
+        /// The segment's label (the raw value is the id).
+        var title: String {
+            switch self {
+            case .gmail: "Gmail"
+            case .outlook: "Outlook"
+            case .feishu: String(localized: "飞书")
+            case .imap: String(localized: "其他 IMAP")
+            }
+        }
     }
 
     var kind: Kind = .gmail

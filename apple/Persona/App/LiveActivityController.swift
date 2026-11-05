@@ -272,12 +272,12 @@ extension LiveActivityController {
         }
         UserDefaults.standard.set(try? JSONEncoder().encode(island), forKey: Self.islandKey)
         let now = Date.now.timeIntervalSince1970
-        let ask = FleetState.Item(id: "macbook/s1", title: "补齐网络层的单元测试", place: "MacBook · weather", kind: .permission,
+        let ask = FleetState.Item(id: "macbook/s1", title: "补齐网络层的单元测试", place: "MacBook · weather", kind: .permission, // i18n-ignore
                                   detail: "Bash: swift test --parallel", interaction: "ix_sample", since: now - 90)
-        let plan = FleetState.Item(id: "studio/s2", title: "照片同步支持 HEIC", place: "Studio · photo-sync", kind: .plan,
-                                   detail: "支持 HEIC", interaction: "ix_plan", since: now - 300)
-        let work = FleetState.Item(id: "studio/s3", title: "重构设置页", place: "Studio · notes", kind: .working, since: now - 754)
-        let done = FleetState.Item(id: "macbook/s4", title: "升级依赖", place: "MacBook · api", kind: .unread, detail: "全部测试通过，已提交", since: now - 60)
+        let plan = FleetState.Item(id: "studio/s2", title: "照片同步支持 HEIC", place: "Studio · photo-sync", kind: .plan, // i18n-ignore
+                                   detail: "支持 HEIC", interaction: "ix_plan", since: now - 300) // i18n-ignore
+        let work = FleetState.Item(id: "studio/s3", title: "重构设置页", place: "Studio · notes", kind: .working, since: now - 754) // i18n-ignore
+        let done = FleetState.Item(id: "macbook/s4", title: "升级依赖", place: "MacBook · api", kind: .unread, detail: "全部测试通过，已提交", since: now - 60) // i18n-ignore
         var state: FleetState = switch phase {
         case "working": FleetState(phase: .working, working: 3, unread: 1, items: [work, done], workingSince: now - 754)
         case "done", "thinking": FleetState(phase: .done, unread: 1, items: [done])

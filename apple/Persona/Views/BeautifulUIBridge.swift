@@ -61,23 +61,23 @@ extension BUITheme {
 extension BUIStrings {
     /// What the components show and VoiceOver says. The open state uses the Agents list's words.
     static let jarvis: BUIStrings = {
-        var w = BUIStrings(expanded: "已展开", collapsed: "已折叠")
-        w.prompt = "输入框"
-        w.listening = "正在听…"
-        w.attach = "添加" // the + of the old composer read so too
-        w.mention = "提及文件或会话"
-        w.commands = "指令"
-        w.chooseModel = "选择模型"
-        w.startDictation = "听写"
-        w.stopDictation = "停止听写"
-        w.send = "发送"
-        w.stop = "中断"
-        w.connect = "连接"
-        w.connected = "已连接"
-        w.sourcesHint = "接着输入可以筛选"
-        w.commandsHint = "选中后会填进输入框，点发送才发出"
-        w.noMatches = "没有「%@」"
-        w.remove = "移除 %@"
+        var w = BUIStrings(expanded: String(localized: "已展开"), collapsed: String(localized: "已折叠"))
+        w.prompt = String(localized: "输入框")
+        w.listening = String(localized: "正在听…")
+        w.attach = String(localized: "添加") // the + of the old composer read so too
+        w.mention = String(localized: "提及文件或会话")
+        w.commands = String(localized: "指令")
+        w.chooseModel = String(localized: "选择模型")
+        w.startDictation = String(localized: "听写")
+        w.stopDictation = String(localized: "停止听写")
+        w.send = String(localized: "发送")
+        w.stop = String(localized: "中断")
+        w.connect = String(localized: "连接")
+        w.connected = String(localized: "已连接")
+        w.sourcesHint = String(localized: "接着输入可以筛选")
+        w.commandsHint = String(localized: "选中后会填进输入框，点发送才发出")
+        w.noMatches = String(localized: "没有「%@」")
+        w.remove = String(localized: "移除 %@")
         return w
     }()
 }

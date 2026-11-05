@@ -149,7 +149,7 @@ extension APIClient {
             adopt(try await api.feishuBot())
             error = nil
         } catch {
-            self.error = error.shown.map { "读不到机器人的状态：\($0)" }
+            self.error = error.shown.map { String(localized: "读不到机器人的状态：\($0)") }
         }
     }
 
@@ -175,7 +175,7 @@ extension APIClient {
             error = nil
             return true
         } catch {
-            self.error = error.shown.map { "\(what)：\($0)" }
+            self.error = error.shown.map { String(localized: "\(what)：\($0)", comment: "What failed, and why") }
             return false
         }
     }
@@ -183,13 +183,13 @@ extension APIClient {
     func saveCredentials() async {
         let id = appID.trimmingCharacters(in: .whitespaces)
         let secret = appSecret.trimmingCharacters(in: .whitespaces)
-        if await run("保存失败", { try await $0.updateFeishuBot(.init(appID: id, appSecret: secret.isEmpty ? nil : secret, domain: domain)) }) {
-            deps.toast(Toast("应用凭证已验证并保存", style: .success))
+        if await run(String(localized: "保存失败"), { try await $0.updateFeishuBot(.init(appID: id, appSecret: secret.isEmpty ? nil : secret, domain: domain)) }) {
+            deps.toast(Toast(String(localized: "应用凭证已验证并保存"), style: .success))
         }
     }
 
     func setEnabled(_ on: Bool) async {
-        await run(on ? "打开失败" : "关闭失败") { try await $0.updateFeishuBot(.init(enabled: on)) }
+        await run(on ? String(localized: "打开失败") : String(localized: "关闭失败")) { try await $0.updateFeishuBot(.init(enabled: on)) }
     }
 
     func set(_ key: WritableKeyPath<FeishuBotStatus.Features, Bool>, _ on: Bool) async {
@@ -197,13 +197,13 @@ extension APIClient {
         f[keyPath: key] = on
         if key == \.cards && !on { f.allCards = false }
         if key == \.allCards && on { f.cards = true }
-        await run("保存失败") { try await $0.updateFeishuBot(.init(features: f)) }
+        await run(String(localized: "保存失败")) { try await $0.updateFeishuBot(.init(features: f)) }
     }
 
-    func pair() async { await run("拿不到配对码") { try await $0.pairFeishuBot() } }
+    func pair() async { await run(String(localized: "拿不到配对码")) { try await $0.pairFeishuBot() } }
 
     func unpair() async {
-        if await run("解除失败", { try await $0.unpairFeishuBot() }) { deps.toast(Toast("已解除配对", style: .success)) }
+        if await run(String(localized: "解除失败"), { try await $0.unpairFeishuBot() }) { deps.toast(Toast(String(localized: "已解除配对"), style: .success)) }
     }
 
     func test() async {
@@ -212,27 +212,27 @@ extension APIClient {
         defer { saving = false }
         do {
             try await api.testFeishuBot()
-            deps.toast(Toast("已发一条测试消息到飞书", style: .success))
+            deps.toast(Toast(String(localized: "已发一条测试消息到飞书"), style: .success))
             error = nil
         } catch {
-            self.error = error.shown.map { "测试消息没发出去：\($0)" }
+            self.error = error.shown.map { String(localized: "测试消息没发出去：\($0)") }
         }
     }
 
     /// What the connection row says.
     var stateText: String {
-        guard let st = status else { return loading ? "正在检查…" : "读不到状态" }
-        if !st.enabled { return "未打开" }
-        if !st.hasSecret { return "还没填应用凭证" }
-        if !st.connected { return st.error.map { "连不上：\($0)" } ?? "正在连接…" }
-        return st.owner == nil ? "已连接，等你配对" : "已连接"
+        guard let st = status else { return loading ? String(localized: "正在检查…") : String(localized: "读不到状态") }
+        if !st.enabled { return String(localized: "未打开") }
+        if !st.hasSecret { return String(localized: "还没填应用凭证") }
+        if !st.connected { return st.error.map { String(localized: "连不上：\($0)") } ?? String(localized: "正在连接…") }
+        return st.owner == nil ? String(localized: "已连接，等你配对") : String(localized: "已连接")
     }
 
     /// The settings list's one-word summary.
     static func summary(_ st: FeishuBotStatus?) -> String {
         guard let st else { return "" }
-        if !st.enabled { return "未打开" }
-        if !st.connected { return "连不上" }
-        return st.owner == nil ? "待配对" : "已连接"
+        if !st.enabled { return String(localized: "未打开") }
+        if !st.connected { return String(localized: "连不上") }
+        return st.owner == nil ? String(localized: "待配对") : String(localized: "已连接")
     }
 }

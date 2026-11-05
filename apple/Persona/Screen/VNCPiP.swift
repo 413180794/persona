@@ -63,15 +63,15 @@ import Synchronization
             return true
         }
         end()
-        guard Self.supported else { return note("这台设备不支持画中画") }
+        guard Self.supported else { return note(String(localized: "这台设备不支持画中画")) }
         let audio = AVAudioSession.sharedInstance()
         do {
             try audio.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
             try audio.setActive(true)
         } catch {
-            note("音频会话没打开：\(error.localizedDescription)")
+            note(String(localized: "音频会话没打开：\(error.localizedDescription)"))
         }
-        guard let window = Self.mainWindow() else { return note("找不到 App 的主窗口") }
+        guard let window = Self.mainWindow() else { return note(String(localized: "找不到 App 的主窗口")) }
         let session = VNC.hold(ref)
         let size = Self.size(session.size, width: Theme.Size.pictureInPictureSource)
         let v = VNCScreenUIView(frame: CGRect(x: 0, y: window.bounds.maxY - size.height, width: size.width, height: size.height))
@@ -82,7 +82,7 @@ import Synchronization
         if Self.showsSource {
             v.frame.origin = CGPoint(x: window.bounds.maxX - size.width - Theme.Space.page, y: window.safeAreaInsets.top + Theme.Space.xxl)
             v.accessibilityIdentifier = "vnc-pip-source"
-            v.accessibilityLabel = "小窗：实时画面" // until the card says otherwise (draw)
+            v.accessibilityLabel = String(localized: "小窗：实时画面") // until the card says otherwise (draw)
             window.addSubview(v)
         } else {
             v.accessibilityElementsHidden = true
@@ -104,7 +104,7 @@ import Synchronization
                 Task { @MainActor in VNCPiP.shared.possibleChanged(possible) }
             }
         }
-        VNCPiPLog.add("准备好了：源 \(Int(size.width))×\(Int(size.height))pt，\(automatic ? "回桌面时自己开" : "等开")，现在能开：\(VNCPiPLog.yes(controller?.isPictureInPicturePossible == true))")
+        VNCPiPLog.add("准备好了：源 \(Int(size.width))×\(Int(size.height))pt，\(automatic ? "回桌面时自己开" : "等开")，现在能开：\(VNCPiPLog.yes(controller?.isPictureInPicturePossible == true))") // i18n-ignore
         // The card at once while there is no picture: the source is not empty in the tap that asked.
         draw()
         drawing = Task { [weak self] in
@@ -121,15 +121,15 @@ import Synchronization
     /// that, the page, saying why.
     func start(_ ref: MachineRef, from: SessionKey? = nil) {
         if self.ref == ref, active { return }
-        VNCPiPLog.add("要小窗")
-        guard prepare(ref, from: from, automatic: true) else { return fallBack(ref, from, why: VNCPiPLog.last ?? "这台设备不支持画中画") }
+        VNCPiPLog.add("要小窗") // i18n-ignore
+        guard prepare(ref, from: from, automatic: true) else { return fallBack(ref, from, why: VNCPiPLog.last ?? String(localized: "这台设备不支持画中画")) }
         wanted = true
         starting = false
         tries = 0
         // With nothing in the source the system took the call and did nothing (TestFlight 161's 小窗诊断); the card
         // is in it now (prepare).
         attempt(inTap: true)
-        if tries == 0 { VNCPiPLog.add("现在还不能开：能开了就开") }
+        if tries == 0 { VNCPiPLog.add("现在还不能开：能开了就开") } // i18n-ignore
         waiting?.cancel()
         waiting = Task { [weak self] in
             let deadline = ContinuousClock.now + Self.patience
@@ -139,8 +139,8 @@ import Synchronization
                 self.attempt(inTap: false)
             }
             guard let self, !Task.isCancelled, self.wanted, !self.active, self.ref == ref else { return }
-            if Self.showsSource { return VNCPiPLog.add("没有画中画（DEBUG）：只把源摆在前面") }
-            self.fallBack(ref, self.from, why: self.tries == 0 ? "系统说现在不能开" : "开了 \(self.tries) 次，系统都没反应")
+            if Self.showsSource { return VNCPiPLog.add("没有画中画（DEBUG）：只把源摆在前面") } // i18n-ignore
+            self.fallBack(ref, self.from, why: self.tries == 0 ? String(localized: "系统说现在不能开") : String(localized: "开了 \(self.tries) 次，系统都没反应"))
         }
     }
 
@@ -152,13 +152,13 @@ import Synchronization
               tries == 0 || ContinuousClock.now - lastTry >= (tries == 1 ? .milliseconds(400) : .seconds(1)) else { return }
         tries += 1
         lastTry = .now
-        VNCPiPLog.add(inTap ? "在点按里开" : tries == 1 ? "能开了，开" : "系统没反应，再开一次（第 \(tries) 次）")
+        VNCPiPLog.add(inTap ? "在点按里开" : tries == 1 ? "能开了，开" : "系统没反应，再开一次（第 \(tries) 次）") // i18n-ignore
         c.startPictureInPicture()
     }
 
     private func possibleChanged(_ possible: Bool) {
         guard let c = controller, c.isPictureInPicturePossible == possible else { return }
-        VNCPiPLog.add("现在能开：\(VNCPiPLog.yes(possible))")
+        VNCPiPLog.add("现在能开：\(VNCPiPLog.yes(possible))") // i18n-ignore
         if possible { attempt(inTap: false) }
     }
 
@@ -170,14 +170,14 @@ import Synchronization
         let now = VNCPiPCard.State(session.phase, pictured: session.pictured), was = card
         card = now
         if now != was {
-            VNCPiPLog.add("小窗显示：\(now?.line ?? "实时画面")")
+            VNCPiPLog.add("小窗显示：\(now?.line ?? "实时画面")") // i18n-ignore
             let failed = if case .failed = now { true } else { false }
             paused.withLock { $0 = failed }
             controller?.invalidatePlaybackState()
-            if Self.showsSource { host.accessibilityLabel = "小窗：" + (now?.line ?? "实时画面") }
+            if Self.showsSource { host.accessibilityLabel = now.map { String(localized: "小窗：\($0.line)") } ?? String(localized: "小窗：实时画面") }
         }
         if now == .signIn, wanted || active, UIApplication.shared.applicationState == .active, AppModel.shared.screenOpen?.machine != ref {
-            VNCPiPLog.add("整页重新登录")
+            VNCPiPLog.add("整页重新登录") // i18n-ignore
             return AppModel.shared.openScreen(ref, from: from) // the small window hands over to it
         }
         guard let now else {
@@ -196,7 +196,7 @@ import Synchronization
     /// The small window's ▶ after it could not connect: again (the card turns again).
     private func reconnect() {
         guard let ref, let session = VNC.current(ref), case .closed = session.phase else { return }
-        VNCPiPLog.add("在小窗里重新连接")
+        VNCPiPLog.add("在小窗里重新连接") // i18n-ignore
         session.start()
     }
 
@@ -222,8 +222,8 @@ import Synchronization
         let pageUp = AppModel.shared.screenOpen?.machine == ref
         end()
         if let why {
-            VNCPiPLog.add("改用整页：\(why)")
-            AppModel.shared.toast = Toast("小窗打不开：\(why)，已改用整页", style: .error)
+            VNCPiPLog.add("改用整页：\(why)") // i18n-ignore
+            AppModel.shared.toast = Toast(String(localized: "小窗打不开：\(why)，已改用整页"), style: .error)
         }
         if !pageUp { AppModel.shared.openScreen(ref, from: from) }
     }
@@ -280,14 +280,14 @@ import Synchronization
         MainActor.assumeIsolated {
             wanted = true // also when it starts by itself, the app going to the background with the page up
             starting = true
-            VNCPiPLog.add("小窗要开了")
+            VNCPiPLog.add("小窗要开了") // i18n-ignore
         }
     }
 
     nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ c: AVPictureInPictureController) {
         MainActor.assumeIsolated {
             waiting?.cancel()
-            VNCPiPLog.add("小窗开了")
+            VNCPiPLog.add("小窗开了") // i18n-ignore
             // The small window has it now: the page closes as its × does (ScreenWindowRoot), its connection held here.
             AppModel.shared.vncPiP = ref
         }
@@ -297,7 +297,7 @@ import Synchronization
                                                 restoreUserInterfaceForPictureInPictureStopWithCompletionHandler done: @escaping (Bool) -> Void) {
         MainActor.assumeIsolated {
             // 还原 (or a tap on it): the full page, which holds the session before this lets go.
-            VNCPiPLog.add("还原成整页")
+            VNCPiPLog.add("还原成整页") // i18n-ignore
             restoring = true
             if let ref { AppModel.shared.openScreen(ref, from: from) }
             restoring = false
@@ -307,7 +307,7 @@ import Synchronization
 
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ c: AVPictureInPictureController) {
         MainActor.assumeIsolated {
-            VNCPiPLog.add("小窗关了")
+            VNCPiPLog.add("小窗关了") // i18n-ignore
             wanted = false
             starting = false
             AppModel.shared.vncPiP = nil
@@ -326,7 +326,7 @@ import Synchronization
         MainActor.assumeIsolated {
             starting = false
             guard let ref else { return }
-            fallBack(ref, from, why: "系统没让开（\(error.localizedDescription)）")
+            fallBack(ref, from, why: String(localized: "系统没让开（\(error.localizedDescription)）"))
         }
     }
 
@@ -433,7 +433,7 @@ import Synchronization
     private(set) static var lines: [String] = []
     static var last: String? { lines.last.map { String($0.drop { $0 != " " }.dropFirst()) } }
 
-    static func yes(_ on: Bool) -> String { on ? "是" : "否" }
+    static func yes(_ on: Bool) -> String { on ? "是" : "否" } // i18n-ignore
 
     static func add(_ line: String) {
         lines.append(Date.now.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits)) + " " + line)

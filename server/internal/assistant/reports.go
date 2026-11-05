@@ -24,6 +24,14 @@ import (
 // reportDelay is how long a change waits for others before the card goes out (reportBook.delay overrides it).
 const reportDelay = time.Minute
 
+// reportRetryDelay is how long a batch Feishu could not take waits before it is sent again (reportBook.retry
+// overrides it). reportMaxRetries caps the retries after the first attempt: then the batch is given up and logged,
+// so a dead transport cannot pin the queue (and terminal reports) forever.
+const (
+	reportRetryDelay = 30 * time.Second
+	reportMaxRetries = 3
+)
+
 // Report states, in the order a card lists them after the decisions.
 const (
 	reportNeeds       = "needs"
@@ -122,15 +130,18 @@ type reportItem struct {
 	text    string
 	ix      *proto.Interaction
 	at      time.Time
+	tries   int // sends already attempted for this change (0: the first send is pending)
 }
 
 type reportBook struct {
 	mu      sync.Mutex
+	sending sync.Mutex             // serializes sendReports: a later timer must not take a batch while a post is still in flight
 	pending map[string]*reportItem // by todo id: the latest change of each
 	timer   *time.Timer
 	stages  map[string]todoStage // by todo id (reportStagesKey)
 	loaded  bool
 	delay   time.Duration // 0: reportDelay (the tests' is shorter)
+	retry   time.Duration // 0: reportRetryDelay (the tests' is shorter)
 }
 
 type todoStage struct {
@@ -227,8 +238,13 @@ func (s *Service) todoStages(ctx context.Context) map[string]todoStage {
 
 // sendReports sends the changes noted since the last card: one card, the decisions first. Nothing goes out while the
 // bot is off, unpaired or its reports switch is off (the changes are dropped: a later card says how things are then).
+// A transport failure is not a drop: the batch goes back to pending and is retried (requeueReports).
 func (s *Service) sendReports() {
 	b := &s.reports
+	// Hold sending for the whole post: a normal-delay timer that fires while a long post is still in flight waits
+	// here, so its run cannot snapshot the newer items a failed run needs to merge with.
+	b.sending.Lock()
+	defer b.sending.Unlock()
 	b.mu.Lock()
 	items := make([]*reportItem, 0, len(b.pending))
 	for _, it := range b.pending {
@@ -272,8 +288,11 @@ func (s *Service) sendReports() {
 		return keep[i].at.Before(keep[j].at)
 	})
 	c, summary := s.reportCard(ctx, keep)
+	// A timeout whose card Feishu actually received (answer lost on the way back) reposts the card; report cards
+	// carry no idempotency key (unlike decision cards), so a duplicate line is possible — bounded by the retry cap.
 	if _, err := s.botPost(ctx, "", c, summary); err != nil {
 		s.logf("bots: report: %v", err)
+		s.requeueReports(keep)
 		return
 	}
 	// A decision to make gets its own card with the choices, answerable there, unless one is already in the chat.
@@ -281,6 +300,45 @@ func (s *Service) sendReports() {
 		if it.state == reportNeeds && it.ix != nil && !s.botCardOut(it.ix.ID) {
 			s.feishuInteractionAlways(*it.ix)
 		}
+	}
+}
+
+// requeueReports puts a batch the transport could not deliver back for a short-delayed retry. It keeps the semantic
+// drops sendReports already made (deleted, answered, quiet-synced items are not in the batch). A change of the same
+// todo that arrived while the send was in flight replaces the failed one when it is newer; items that have used
+// reportMaxRetries retries are given up (and logged). Whatever is pending afterwards — requeued or newly arrived —
+// gets one timer.
+func (s *Service) requeueReports(items []*reportItem) {
+	b := &s.reports
+	b.mu.Lock()
+	if b.pending == nil {
+		b.pending = map[string]*reportItem{}
+	}
+	var gaveUp []string
+	for _, it := range items {
+		if cur, ok := b.pending[it.todo]; ok && cur.at.After(it.at) {
+			continue // a newer change of this todo arrived meanwhile
+		}
+		if it.tries >= reportMaxRetries {
+			gaveUp = append(gaveUp, it.todo)
+			continue
+		}
+		it.tries++
+		b.pending[it.todo] = it
+	}
+	if len(b.pending) > 0 {
+		if b.timer != nil {
+			b.timer.Stop() // a new change's normal-delay timer: the failed batch gets the short retry delay
+		}
+		d := b.retry
+		if d <= 0 {
+			d = reportRetryDelay
+		}
+		b.timer = time.AfterFunc(d, s.sendReports)
+	}
+	b.mu.Unlock()
+	for _, id := range gaveUp {
+		s.logf("bots: report: giving up task %s after %d failed sends", id, reportMaxRetries+1)
 	}
 }
 

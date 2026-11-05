@@ -53,8 +53,8 @@ struct AutoConversationsView: View {
             .themedPage()
             .overlay {
                 if shown.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.autoConversations, title: "这里没有对话",
-                                   message: "收件箱的 AI 分身、定时任务、飞书 /agent 开的对话会按来源收在这里。")
+                    EmptyStateView(symbol: Theme.Icon.autoConversations, title: String(localized: "这里没有对话"),
+                                   message: String(localized: "收件箱的 AI 分身、定时任务、飞书 /agent 开的对话会按来源收在这里。"))
                 }
             }
             .navigationTitle("全部对话")
@@ -87,8 +87,8 @@ struct AutoConversationsView: View {
     /// 全部, 我的 and each source, the chosen one tinted.
     private func filters(_ groups: [AutoConversations.Group], all: Int, mine: Int) -> some View {
         FlowLayoutRow {
-            chip("全部", symbol: Theme.Icon.list, count: all, filter: .all)
-            chip("我的", symbol: Theme.Icon.user, count: mine, filter: .mine)
+            chip(String(localized: "全部"), symbol: Theme.Icon.list, count: all, filter: .all)
+            chip(String(localized: "我的"), symbol: Theme.Icon.user, count: mine, filter: .mine)
             ForEach(groups, id: \.source) { g in chip(g.source.name, symbol: g.source.symbol, count: g.sessions.count, filter: .source(g.source.id)) }
         }
         .padding(.vertical, Theme.Space.xs)
@@ -110,7 +110,7 @@ struct AutoConversationsView: View {
     }
 
     private func row(_ s: Session) -> some View {
-        let title = s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title
+        let title = s.title.isEmpty || s.title == "Claude Code" ? String(localized: "新对话") : s.title
         let from = AutoConversations.source(of: s, tasks: taskChats.known)
         let detail = [filter == .all ? from?.name : nil, [.working, .needsYou, .unread].contains(s.state) ? s.state.label : s.updatedAt.map { Fmt.relative($0) }]
             .compactMap { $0 }.joined(separator: " · ")
@@ -135,7 +135,7 @@ struct AutoConversationsView: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel([title, detail.isEmpty ? nil : detail].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityLabel([title, detail.isEmpty ? nil : detail].compactMap { $0 }.joined(separator: String(localized: "，", comment: "Separator between the parts of a VoiceOver label")))
         .accessibilityIdentifier("auto-conversation")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button { Task { await model.archiveConversation(s.key, true) } } label: {

@@ -26,9 +26,9 @@ nonisolated enum InboxLine {
 
     static func label(_ kind: String) -> String {
         switch kind {
-        case "todo": "待办"
-        case "session": "Agent 会话"
-        default: "事件"
+        case "todo": String(localized: "待办")
+        case "session": String(localized: "Agent 会话")
+        default: String(localized: "事件")
         }
     }
 
@@ -48,13 +48,13 @@ nonisolated enum InboxLine {
                 title = p.sessionKey.flatMap(sessionTitle) ?? p.id
                 target = p.sessionKey.map(Target.session)
             default:
-                title = a.item?.title ?? "已不在收件箱里"
+                title = a.item?.title ?? String(localized: "已不在收件箱里")
                 target = a.item.map(Target.item)
             }
             return Row(id: "up:\(p.kind):\(p.id)", kind: p.kind, label: label(p.kind), title: title, target: target, up: true)
         }
         let downs = tree.children.map {
-            Row(id: "down:\($0.id)", kind: "inbox", label: "下一步", title: $0.title, target: .item($0), up: false)
+            Row(id: "down:\($0.id)", kind: "inbox", label: String(localized: "下一步"), title: $0.title, target: .item($0), up: false)
         }
         return ups + downs
     }
@@ -138,7 +138,7 @@ struct InboxLineSection: View {
         .padding(.vertical, Theme.Space.xs)
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(r.label + "：" + r.title)
+        .accessibilityLabel(String(localized: "\(r.label)：\(r.title)"))
     }
 }
 

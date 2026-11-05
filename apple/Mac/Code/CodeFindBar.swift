@@ -113,9 +113,9 @@ struct CodeFindBar: View {
                         .lineLimit(1)
                         .fixedSize()
                 }
-                option("Aa", "区分大小写", on: $find.options.caseSensitive)
-                option("整词", "全字匹配", on: $find.options.wholeWord)
-                option(".*", "正则表达式", on: $find.options.regex)
+                option("Aa", String(localized: "区分大小写"), on: $find.options.caseSensitive)
+                option(String(localized: "整词"), String(localized: "全字匹配"), on: $find.options.wholeWord)
+                option(".*", String(localized: "正则表达式"), on: $find.options.regex)
             }
             .padding(.horizontal, Theme.Space.s)
             .padding(.vertical, Theme.Space.xs)
@@ -196,8 +196,8 @@ struct CodeFindBar: View {
     }
 
     private var count: String {
-        if find.invalid { return "正则有误" }
-        guard !find.matches.isEmpty else { return "没有找到" }
+        if find.invalid { return String(localized: "正则有误") }
+        guard !find.matches.isEmpty else { return String(localized: "没有找到") }
         return "\((find.current ?? 0) + 1) / \(find.matches.count)"
     }
 }

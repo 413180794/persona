@@ -7,13 +7,13 @@ nonisolated enum KBKind: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .projects: "项目"
-        case .chats: "会话"
-        case .people: "人"
-        case .docs: "文档"
-        case .meetings: "会议"
-        case .events: "日程"
-        case .recordings: "录音"
+        case .projects: String(localized: "项目")
+        case .chats: String(localized: "会话")
+        case .people: String(localized: "人")
+        case .docs: String(localized: "文档")
+        case .meetings: String(localized: "会议")
+        case .events: String(localized: "日程")
+        case .recordings: String(localized: "录音")
         }
     }
     var symbol: String {
@@ -48,7 +48,7 @@ nonisolated struct KBEntry: Codable, Identifiable, Hashable, Sendable {
     /// Projects: "short · active" → 短期 / 长期 and the status.
     var projectKind: String? {
         guard kind == KBKind.projects.rawValue, let extra else { return nil }
-        return extra.hasPrefix("long") ? "长期" : "短期"
+        return extra.hasPrefix("long") ? String(localized: "长期") : String(localized: "短期")
     }
     var projectDone: Bool { kind == KBKind.projects.rawValue && (extra ?? "").hasSuffix("done") }
     /// Marked "not a project" (by hand, or because it only came from notifications).
@@ -98,7 +98,7 @@ nonisolated struct KBMomentPost: Decodable, Sendable {
 
 /// What the company feed is called on a page: the archive's name for it, else 公司圈 (no tenant's own name is built in).
 nonisolated enum KBMoments {
-    static let defaultName = "公司圈"
+    static var defaultName: String { String(localized: "公司圈") }
 
     static func feedName(_ feed: String?) -> String {
         let f = feed?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -215,12 +215,12 @@ nonisolated struct KBHit: Decodable, Hashable, Sendable {
     /// Which file the line is from, said plainly.
     var source: String {
         let file = (path as NSString).lastPathComponent
-        if let day { return "聊天记录 · " + day }
+        if let day { return String(localized: "聊天记录 · \(day)") }
         switch file {
-        case "summary.md": return "档案"
-        case "log.md": return "时间线"
-        case "meta.json": return "资料"
-        default: return file.hasSuffix(".json") ? "资料" : file
+        case "summary.md": return String(localized: "档案")
+        case "log.md": return String(localized: "时间线")
+        case "meta.json": return String(localized: "资料")
+        default: return file.hasSuffix(".json") ? String(localized: "资料") : file
         }
     }
 

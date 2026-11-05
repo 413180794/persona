@@ -134,7 +134,7 @@ struct EngineSelectionView: View {
             if let machine, let selection { saveBar(selection, machine) }
         }
         #endif
-        .detailTitle("选择引擎")
+        .detailTitle(String(localized: "选择引擎"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: ref) {
             guard let machine else { return }
@@ -143,11 +143,11 @@ struct EngineSelectionView: View {
             let api = { [ref] in app.api(ref.group) }
             let model = BotmuxSwitchModel(deps: .init(
                 load: { [ref] in
-                    guard let api = api() else { throw APIError(status: 0, message: "还没连接 hub") }
+                    guard let api = api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
                     return try await api.botmux(machine: ref.id)
                 },
                 save: { [ref] on in
-                    guard let api = api() else { throw APIError(status: 0, message: "还没连接 hub") }
+                    guard let api = api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
                     return try await api.setBotmux(machine: ref.id, on: on)
                 }))
             botmux = model
@@ -159,9 +159,9 @@ struct EngineSelectionView: View {
     }
 
     private func detection(_ engine: MachineEngine, _ machine: Machine) -> String {
-        guard machine.online else { return "离线，暂无检测信息" }
-        guard let found = machine.engines.first(where: { $0.id == engine.rawValue }) else { return "暂无检测信息" }
-        let status = found.available ? "检测到可用" : "没检测到"
+        guard machine.online else { return String(localized: "离线，暂无检测信息") }
+        guard let found = machine.engines.first(where: { $0.id == engine.rawValue }) else { return String(localized: "暂无检测信息") }
+        let status = found.available ? String(localized: "检测到可用") : String(localized: "没检测到")
         return found.available && !(found.version ?? "").isEmpty ? "\(status) · \(found.version!)" : status
     }
 

@@ -86,7 +86,7 @@ nonisolated struct LarkAccount: Codable, Identifiable, Hashable, Sendable {
         case signedIn = "signed_in"
     }
 
-    var title: String { name?.isEmpty == false ? name! : "账号 \(id)" }
+    var title: String { name?.isEmpty == false ? name! : String(localized: "账号 \(String(id))") }
 }
 
 /// A flagged message in 标记, with the chat it belongs to.

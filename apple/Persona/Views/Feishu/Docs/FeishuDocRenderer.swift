@@ -240,7 +240,7 @@ struct FeishuDocsBlock: View {
         case "image":
             FeishuDocsImage(node: node)
         case "missingImage":
-            placeholder("photo", node.attr("caption").flatMap { $0.isEmpty ? nil : $0 } ?? "图片无法显示")
+            placeholder("photo", node.attr("caption").flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "图片无法显示"))
         case "bookmark":
             card(symbol: Theme.Icon.link, hue: "blue", title: node.attr("title") ?? node.attr("href") ?? "", subtitle: node.attr("summary"), href: node.attr("href"))
         case "embedLink":
@@ -269,11 +269,11 @@ struct FeishuDocsBlock: View {
         case "toc", "readReceipt", "widgetEmpty":
             EmptyView()
         case "unsupported":
-            placeholder("square.dashed", node.attr("kind") == "isv" ? "第三方小组件，在飞书中查看" : "这个内容块暂不支持，在飞书中查看",
+            placeholder("square.dashed", node.attr("kind") == "isv" ? String(localized: "第三方小组件，在飞书中查看") : String(localized: "这个内容块暂不支持，在飞书中查看"),
                         href: node.attr("sourceUrl"))
         default:
             if node.children.isEmpty {
-                placeholder("square.dashed", "这个内容块暂不支持，在飞书中查看", href: node.attr("sourceUrl") ?? node.attr("href"))
+                placeholder("square.dashed", String(localized: "这个内容块暂不支持，在飞书中查看"), href: node.attr("sourceUrl") ?? node.attr("href"))
             } else if node.children.allSatisfy({ ["text", "mention", "hardBreak", "equation"].contains($0.type) }) {
                 inline(node.children)
             } else {
@@ -361,7 +361,7 @@ struct FeishuDocsBlock: View {
                             LarkAvatarImage(name: p.name, url: p.avatarUrl, size: 16)
                         }
                         if let d = node.attr("due").flatMap(JSON.parseDate) {
-                            Text("截止 " + d.formatted(.dateTime.month().day())).font(Theme.Font.label).foregroundStyle(.secondary)
+                            Text("截止 \(d.formatted(.dateTime.month().day()))").font(Theme.Font.label).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -375,12 +375,12 @@ struct FeishuDocsBlock: View {
     @ViewBuilder private var embed: some View {
         let kind = node.attr("kind") ?? ""
         let (symbol, hue, label): (String, String, String) = switch kind {
-        case "sheet": ("tablecells.fill", "green", "电子表格")
-        case "bitable", "base": ("square.grid.3x2.fill", "purple", "多维表格")
-        case "mindnote": ("point.3.connected.trianglepath.dotted", "wathet", "思维笔记")
-        case "chat": ("bubble.left.and.bubble.right.fill", "blue", "群聊")
-        case "calendarEvent": ("calendar", "orange", "日程")
-        default: ("link", "blue", "链接")
+        case "sheet": ("tablecells.fill", "green", String(localized: "电子表格"))
+        case "bitable", "base": ("square.grid.3x2.fill", "purple", String(localized: "多维表格"))
+        case "mindnote": ("point.3.connected.trianglepath.dotted", "wathet", String(localized: "思维笔记"))
+        case "chat": ("bubble.left.and.bubble.right.fill", "blue", String(localized: "群聊"))
+        case "calendarEvent": ("calendar", "orange", String(localized: "日程"))
+        default: ("link", "blue", String(localized: "链接"))
         }
         let title = node.attr("title").flatMap { $0.isEmpty ? nil : $0 } ?? label
         let href = node.attr("href").flatMap { $0.hasPrefix("http") ? $0 : nil }
@@ -598,7 +598,7 @@ struct FeishuDocsImage: View {
                     .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(node.attr("alt").flatMap { $0.isEmpty ? nil : $0 } ?? "图片")
+            .accessibilityLabel(node.attr("alt").flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "图片"))
             if let c = node.attr("caption"), !c.isEmpty {
                 Text(c).font(Theme.Font.label).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
@@ -612,7 +612,7 @@ struct FeishuDocsFileBlock: View {
     @State private var request: (url: String, name: String)?
 
     var body: some View {
-        let name = node.attr("name") ?? "文件"
+        let name = node.attr("name") ?? String(localized: "文件")
         let icon = FeishuDocsFileKind.symbol(ext: node.attr("extension"), title: name)
         let size = node.number("size").flatMap { $0 > 0 ? ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) : nil }
         Button {
@@ -626,7 +626,7 @@ struct FeishuDocsFileBlock: View {
                 FeishuAppIcon(symbol: icon.symbol, hue: icon.hue, size: 36)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(name).font(Theme.Font.secondaryMedium).lineLimit(1)
-                    Text(size ?? "附件").font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text(size ?? String(localized: "附件")).font(Theme.Font.label).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.down.circle").foregroundStyle(LarkColor.blue)

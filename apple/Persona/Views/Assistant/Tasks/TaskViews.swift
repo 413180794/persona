@@ -29,13 +29,13 @@ struct TaskMark: View {
 extension TaskState {
     var label: String {
         switch self {
-        case .needsYou: "等你"
-        case .working: "在做"
-        case .unread: "做完了"
-        case .followup: "停着"
-        case .notStarted: "正在开"
-        case .done: "完成"
-        case .failed: "没开起来"
+        case .needsYou: String(localized: "等你")
+        case .working: String(localized: "在做")
+        case .unread: String(localized: "做完了")
+        case .followup: String(localized: "停着")
+        case .notStarted: String(localized: "正在开")
+        case .done: String(localized: "完成")
+        case .failed: String(localized: "没开起来")
         }
     }
 
@@ -51,7 +51,7 @@ struct TaskRemoval: ViewModifier {
     @Binding var pending: TodoItem?
 
     func body(content: Content) -> some View {
-        content.confirmationDialog(pending.map { "移除「\($0.title)」？" } ?? "",
+        content.confirmationDialog(pending.map { String(localized: "移除「\($0.title)」？") } ?? "",
                                    isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
                                    titleVisibility: .visible, presenting: pending) { todo in
             Button("移除", role: .destructive) { Task { await TasksStore.shared.remove(todo) } }
@@ -96,10 +96,10 @@ enum TaskClock {
     static func since(_ date: Date?, now: Date = .now) -> String? {
         guard let date, date.isMeaningful else { return nil }
         let m = max(0, Int(now.timeIntervalSince(date) / 60))
-        if m < 1 { return "刚开始" }
-        if m < 60 { return "\(m) 分钟" }
+        if m < 1 { return String(localized: "刚开始") }
+        if m < 60 { return String(localized: "\(m) 分钟") }
         let h = m / 60
-        return m % 60 == 0 ? "\(h) 小时" : "\(h) 小时 \(m % 60) 分"
+        return m % 60 == 0 ? String(localized: "\(h) 小时") : String(localized: "\(h) 小时 \(m % 60) 分")
     }
 }
 
@@ -137,8 +137,8 @@ struct PlanCard: View {
     var body: some View {
         switch plan.state {
         case .open: open
-        case .started: settled(symbol: Theme.Icon.done, text: "开了 \(plan.tasks.count) 个任务", failed: plan.tasks.filter { $0.error != nil })
-        case .dismissed, .unknown: settled(symbol: Theme.Icon.close, text: "没开 · \(plan.tasks.count) 个任务", failed: [])
+        case .started: settled(symbol: Theme.Icon.done, text: String(localized: "开了 \(plan.tasks.count) 个任务"), failed: plan.tasks.filter { $0.error != nil })
+        case .dismissed, .unknown: settled(symbol: Theme.Icon.close, text: String(localized: "没开 · \(plan.tasks.count) 个任务"), failed: [])
         }
     }
 
@@ -225,10 +225,10 @@ struct PlanTaskRow: View {
             FlowLayoutRow(spacing: Theme.Space.xs) {
                 Chip(text: TaskPlace.machineName(task.machine), symbol: Theme.Icon.laptop)
                 Chip(text: task.project, symbol: Theme.Icon.folder)
-                Chip(text: task.model.flatMap { $0.isEmpty ? nil : $0 } ?? task.launcher.flatMap { $0.isEmpty ? nil : $0 } ?? "默认模型",
+                Chip(text: task.model.flatMap { $0.isEmpty ? nil : $0 } ?? task.launcher.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "默认模型"),
                      symbol: Theme.Icon.cpu)
                 if task.isReadOnly {
-                    Chip(text: "只读", symbol: Theme.Icon.view, look: .tint(Theme.accent))
+                    Chip(text: String(localized: "只读"), symbol: Theme.Icon.view, look: .tint(Theme.accent))
                 } else if let p = task.permission, !p.isEmpty {
                     Chip(text: Self.permissionLabel(p))
                 }
@@ -241,10 +241,10 @@ struct PlanTaskRow: View {
 
     static func permissionLabel(_ mode: String) -> String {
         switch mode {
-        case "acceptEdits": "可以改文件"
-        case "plan": "先出方案"
-        case "bypassPermissions": "全部放行"
-        default: "每步都问"
+        case "acceptEdits": String(localized: "可以改文件")
+        case "plan": String(localized: "先出方案")
+        case "bypassPermissions": String(localized: "全部放行")
+        default: String(localized: "每步都问")
         }
     }
 }
@@ -383,11 +383,11 @@ struct TaskNowLine: View {
     var body: some View {
         let now = TaskNow(lead: lead, working: state == .working)
         let text: String = {
-            if state == .needsYou { return "有事等你回答" }
-            if state == .failed { return "没开起来：\(store.startFailure(todo) ?? "原因不明")" }
+            if state == .needsYou { return String(localized: "有事等你回答") }
+            if state == .failed { return String(localized: "没开起来：\(store.startFailure(todo) ?? String(localized: "原因不明"))") }
             if let now { return now.text }
-            if let e = todo.agents.first?.startError, !e.isEmpty { return "没开起来：\(e)" }
-            return state == .notStarted ? "正在开 Agent" : "还没有动静"
+            if let e = todo.agents.first?.startError, !e.isEmpty { return String(localized: "没开起来：\(e)") }
+            return state == .notStarted ? String(localized: "正在开 Agent") : String(localized: "还没有动静")
         }()
         let tint: Color? = state == .needsYou ? state.agentState.tone.text : state == .failed ? Theme.danger : nil
         let since: Date? = if state != .needsYou, state != .failed, case .step(_, let at)? = now { at } else { nil }
@@ -501,7 +501,7 @@ struct FeedLine: View {
         }
     }
 
-    private var taskTitle: String { item.ref.flatMap { store.todos[$0]?.title } ?? "任务" }
+    private var taskTitle: String { item.ref.flatMap { store.todos[$0]?.title } ?? String(localized: "任务") }
 
     private var routed: some View {
         VStack(alignment: .trailing, spacing: Theme.Space.xs) {
@@ -579,7 +579,7 @@ struct AnsweredLine: View {
                 } else {
                     Text(taskTitle).lineLimit(1)
                 }
-                Text("· \(item.answer ?? "回答了")").lineLimit(1)
+                Text("· \(item.answer ?? String(localized: "回答了"))").lineLimit(1)
             }
             if expandable {
                 Image(systemName: Theme.Icon.disclosure)
@@ -716,7 +716,7 @@ struct ReceiptCard: View {
                 .font(Theme.Font.heading)
                 .foregroundStyle(tint)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Text(item.failed ? "\(item.title ?? "任务")没开起来" : "\(item.title ?? "任务") 完成")
+                Text(item.failed ? "\(item.title ?? String(localized: "任务"))没开起来" : "\(item.title ?? String(localized: "任务")) 完成")
                     .font(Theme.Font.bodyStrong)
                 if let s = item.summary, !s.isEmpty {
                     Text(s).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(4)
@@ -865,7 +865,7 @@ struct TaskDock: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Agent \(agent.title)，\(agent.isWaiting ? "等你" : "在做")")
+        .accessibilityLabel("Agent \(agent.title)，\(agent.isWaiting ? String(localized: "等你") : String(localized: "在做"))")
         .accessibilityIdentifier("task-dock.agent")
         .transition(.scale.combined(with: .opacity))
     }

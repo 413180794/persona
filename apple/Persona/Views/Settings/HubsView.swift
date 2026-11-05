@@ -31,7 +31,7 @@ struct HubsView: View {
                 }
                 #else
                 Button { showPair = true } label: {
-                    SettingsRow(title: "添加 hub", symbol: Theme.Icon.add, tint: Theme.accent)
+                    SettingsRow(title: String(localized: "添加 hub"), symbol: Theme.Icon.add, tint: Theme.accent)
                 }
                 .modifier(SettingsButtonLook())
                 .accessibilityIdentifier("hubs.add")
@@ -51,7 +51,7 @@ struct HubsView: View {
         } message: {
             Text("只改这台设备上的叫法；留空用 hub 自己的名字。")
         }
-        .confirmationDialog(removingGroup.map { "断开「\(model.groupName($0))」？" } ?? "", isPresented: Binding(
+        .confirmationDialog(removingGroup.map { String(localized: "断开「\(model.groupName($0))」？") } ?? "", isPresented: Binding(
             get: { removingGroup != nil }, set: { if !$0 { removingGroup = nil } }
         ), titleVisibility: .visible, presenting: removingGroup) { g in
             Button("断开这一组", role: .destructive) { model.removeGroup(g); removingGroup = nil }
@@ -59,7 +59,7 @@ struct HubsView: View {
             Text(model.groupIDs.count > 1 ? "这一组的机器、Agent 和缓存的对话会从这台设备上移除，别的组不受影响。要再用得重新配对。"
                                          : "断开后需要重新扫码配对。")
         }
-        .confirmationDialog(removingHub.map { "断开「\($0.displayName)」？" } ?? "", isPresented: Binding(
+        .confirmationDialog(removingHub.map { String(localized: "断开「\($0.displayName)」？") } ?? "", isPresented: Binding(
             get: { removingHub != nil }, set: { if !$0 { removingHub = nil } }
         ), titleVisibility: .visible, presenting: removingHub) { h in
             Button("断开这台 hub", role: .destructive) { model.removeHub(h.id); removingHub = nil }
@@ -88,7 +88,7 @@ struct HubsView: View {
             // same ids twice in one section, and the Mac showed only one of the two sets of rows (#1221).
             ForEach(members, id: \.sshRowID) { h in
                 NavigationLink(value: SettingsPage.sshTunnel(h.id)) {
-                    SettingsRow(title: members.count > 1 ? "SSH 隧道 · \(h.displayName)" : "SSH 隧道", symbol: Theme.Icon.sshTunnel,
+                    SettingsRow(title: members.count > 1 ? String(localized: "SSH 隧道 · \(h.displayName)") : String(localized: "SSH 隧道"), symbol: Theme.Icon.sshTunnel,
                                 tint: Theme.Hue.green, value: sshValue(h), look: .oneLine)
                 }
                 .accessibilityIdentifier("hubs.ssh.\(h.id)")
@@ -111,17 +111,17 @@ struct HubsView: View {
             #else
             if model.isMultiHub, model.hub?.group != g {
                 Button { model.selectHub(g) } label: {
-                    SettingsRow(title: "设为当前 hub", symbol: Theme.Icon.successFilled, tint: Theme.positive)
+                    SettingsRow(title: String(localized: "设为当前 hub"), symbol: Theme.Icon.successFilled, tint: Theme.positive)
                 }
                 .modifier(SettingsButtonLook())
             }
             Button { newName = model.registry.groupNames[g] ?? ""; renaming = g } label: {
-                SettingsRow(title: "改名", symbol: Theme.Icon.edit, tint: Theme.Hue.gray)
+                SettingsRow(title: String(localized: "改名"), symbol: Theme.Icon.edit, tint: Theme.Hue.gray)
             }
             .modifier(SettingsButtonLook())
             .accessibilityIdentifier("hubs.rename.\(g)")
             Button(role: .destructive) { removingGroup = g } label: {
-                SettingsRow(title: model.groupIDs.count > 1 ? "断开这一组" : "断开并忘记服务器", symbol: Theme.Icon.end, tint: Theme.danger)
+                SettingsRow(title: model.groupIDs.count > 1 ? String(localized: "断开这一组") : String(localized: "断开并忘记服务器"), symbol: Theme.Icon.end, tint: Theme.danger)
             }
             .modifier(SettingsButtonLook())
             .accessibilityIdentifier("hubs.remove.\(g)")
@@ -134,7 +134,7 @@ struct HubsView: View {
         HStack(spacing: Theme.Space.sm) {
             if let live = model.socket(g) { HubStatusDot(live: live) }
             SettingsHeading(model.groupName(g))
-            if model.isMultiHub, model.hub?.group == g { Chip(text: "当前", look: .outline) }
+            if model.isMultiHub, model.hub?.group == g { Chip(text: String(localized: "当前"), look: .outline) }
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("hubs.group.\(g)")
@@ -142,18 +142,20 @@ struct HubsView: View {
 
     /// What the SSH 隧道 row says: not set, used now, or there as the fallback / for every connection.
     private func sshValue(_ h: PairedHub) -> String {
-        guard let route = h.ssh, route.isUsable else { return "未设置" }
-        if SSHTunnels.shared.routed.contains(h.id) { return "使用中" }
-        return route.always ? "总是" : "后备"
+        guard let route = h.ssh, route.isUsable else { return String(localized: "未设置") }
+        if SSHTunnels.shared.routed.contains(h.id) { return String(localized: "使用中") }
+        return route.always ? String(localized: "总是") : String(localized: "后备")
     }
 
     private func footer(_ g: String) -> String {
         let n = model.registry.members(g).count + meshOnly(g).count
-        let via = model.tunnel(g)?.routed == true ? "（经 SSH 隧道）" : ""
-        let state = model.isLive(g) ? "已连接" + via : model.socket(g)?.state == .connecting ? "连接中" + via : "未连接"
-        let group = n > 1 ? "组里 \(n) 台 hub 互联，看到的是整组的机器；连着的那台掉了会换组里别的。" : ""
-        let current = model.isMultiHub && model.hub?.group == g ? "Persona、收件箱和 hub 相关的设置用这一组。" : ""
-        return state + "。" + group + current
+        let routed = model.tunnel(g)?.routed == true
+        let state = model.isLive(g) ? (routed ? String(localized: "已连接（经 SSH 隧道）") : String(localized: "已连接"))
+            : model.socket(g)?.state == .connecting ? (routed ? String(localized: "连接中（经 SSH 隧道）") : String(localized: "连接中"))
+            : String(localized: "未连接")
+        let group = n > 1 ? String(localized: "组里 \(n) 台 hub 互联，看到的是整组的机器；连着的那台掉了会换组里别的。") : ""
+        let current = model.isMultiHub && model.hub?.group == g ? String(localized: "Persona、收件箱和 hub 相关的设置用这一组。") : ""
+        return String(localized: "\(state)。", comment: "Sentence end after the connection state; more sentences may follow") + group + current
     }
 
     private func meshOnly(_ g: String) -> [MeshHub] {
@@ -179,7 +181,7 @@ struct HubsView: View {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 HStack(spacing: Theme.Space.sm) {
                     Text(h.displayName).lineLimit(1)
-                    if inUse { Chip(text: "在用", look: .outline) }
+                    if inUse { Chip(text: String(localized: "在用"), look: .outline) }
                     if SSHTunnels.shared.routed.contains(h.id) { Chip(text: "SSH", look: .neutral) }
                 }
                 Text(h.config.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
@@ -198,10 +200,10 @@ struct HubsView: View {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 HStack(spacing: Theme.Space.sm) {
                     Text(m.name ?? m.hubID).lineLimit(1)
-                    Chip(text: "经互联", look: .neutral)
-                    if inUse { Chip(text: "在用", look: .outline) }
+                    Chip(text: String(localized: "经互联"), look: .neutral)
+                    if inUse { Chip(text: String(localized: "在用"), look: .outline) }
                 }
-                Text(m.online == false ? "离线" : (m.endpoints?.first ?? "")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                Text(m.online == false ? String(localized: "离线") : (m.endpoints?.first ?? "")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
         }

@@ -78,7 +78,7 @@ nonisolated enum ScreenUnlock {
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "showUnlockWithoutAuth") { return true } // UI tests: no Face ID on the simulator
         #endif
-        return (try? await LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "在「\(name)」的锁屏上输入记住的密码")) ?? false
+        return (try? await LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: String(localized: "在「\(name)」的锁屏上输入记住的密码"))) ?? false
     }
 }
 

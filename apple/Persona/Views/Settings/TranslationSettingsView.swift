@@ -17,7 +17,7 @@ struct TranslationSettingsView: View {
         SettingsForm {
             Section {
                 Toggle(isOn: $enabled) { Label("自动翻译", systemImage: Theme.Icon.translate) }
-                ModelConfigurationLink(title: "翻译模型", purposeID: "translate")
+                ModelConfigurationLink(title: String(localized: "翻译模型"), purposeID: "translate")
             } footer: {
                 Text("内容不是目标语言时自动翻译，原文随时可以切回来。翻译由「模型配置」中的翻译模型处理。")
             }
@@ -68,7 +68,7 @@ struct TranslationSettingsView: View {
             }
         }
         .themedGroupedPage()
-        .detailTitle("翻译")
+        .detailTitle(String(localized: "翻译"))
         .navigationBarTitleDisplayMode(.inline)
         .animation(Theme.Motion.state, value: enabled)
         // The hub translates new mail before it is opened: it needs to know.
@@ -128,7 +128,7 @@ struct TranslationChatPicker: View {
                 }
             }
             .overlay { if loading && conversations.isEmpty { ProgressView() } }
-            .pageSearchable(text: $query, prompt: "搜索会话")
+            .pageSearchable(text: $query, prompt: String(localized: "搜索会话"))
             .navigationTitle("要翻译的会话")
             .navigationBarTitleDisplayMode(.inline)
             .sheetCancel(unsaved: opened.map { $0 != Set(selected.map(\.id)) } ?? false) { dismiss() }

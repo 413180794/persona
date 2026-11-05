@@ -176,8 +176,8 @@ struct LarkReplyBar: View {
     var cancel: () -> Void
 
     var body: some View {
-        QuoteBarRow(heading: "回复 \(reply.senderName)", summary: Fmt.plain(reply.displayText), lines: 1, tint: LarkColor.blue,
-                    removeLabel: "取消回复", remove: cancel)
+        QuoteBarRow(heading: String(localized: "回复 \(reply.senderName)"), summary: Fmt.plain(reply.displayText), lines: 1, tint: LarkColor.blue,
+                    removeLabel: String(localized: "取消回复"), remove: cancel)
             .accessibilityIdentifier("lark.replyBar")
     }
 }

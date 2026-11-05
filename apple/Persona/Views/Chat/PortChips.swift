@@ -79,7 +79,7 @@ private struct PortBadgeRow: View {
     static func detail(_ state: PortPresence.State?) -> String? {
         switch state {
         case .live(let title): title
-        case .gone: "已停止"
+        case .gone: String(localized: "已停止")
         case nil: nil
         }
     }

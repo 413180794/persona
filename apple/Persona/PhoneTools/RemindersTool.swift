@@ -42,9 +42,10 @@ enum RemindersTool {
                 ),
                 source: .reminders,
                 confirmation: { args in
-                    var summary = "新建提醒事项「\(ToolArgs.string(args, "title") ?? "(无标题)")」"
-                    if let due = ToolArgs.string(args, "due") { summary += "\n到期：\(due)" }
-                    if let list = ToolArgs.string(args, "list") { summary += "\n列表：\(list)" }
+                    let title = ToolArgs.string(args, "title") ?? String(localized: "(无标题)")
+                    var summary = String(localized: "新建提醒事项「\(title)」")
+                    if let due = ToolArgs.string(args, "due") { summary += String(localized: "\n到期：\(due)") }
+                    if let list = ToolArgs.string(args, "list") { summary += String(localized: "\n列表：\(list)") }
                     return summary
                 },
                 run: { args in try await create(args) }
@@ -180,7 +181,7 @@ enum RemindersTool {
             reminder.calendar = fallback
         }
         guard reminder.calendar != nil else {
-            throw ToolFailure(.unavailable, "此 iPhone 上没有可写入的提醒事项列表 / No writable reminder list is configured")
+            throw ToolFailure(.unavailable, "此 iPhone 上没有可写入的提醒事项列表 / No writable reminder list is configured") // i18n-ignore
         }
         try store.save(reminder, commit: true)
         return Output.json(encode(reminder))
@@ -225,13 +226,13 @@ enum RemindersTool {
     /// then fails with invalidArgument, so the text does not promise anything about running.
     static func completeSummary(id: String?, target: CompletionTarget?) -> String {
         guard let target else {
-            return "找不到这条提醒（或没有提醒事项权限）：\(id ?? "?")"
+            let shown = id ?? "?"
+            return String(localized: "找不到这条提醒（或没有提醒事项权限）：\(shown)")
         }
-        let title = target.title.isEmpty ? "(无标题)" : target.title
-        var summary = "把「\(title)」"
-        if let list = target.list { summary += "（\(list)）" }
-        summary += "标记为已完成"
-        if let due = target.due { summary += "\n到期：\(due)" }
+        let title = target.title.isEmpty ? String(localized: "(无标题)") : target.title
+        var summary = target.list.map { list in String(localized: "把「\(title)」（\(list)）标记为已完成") }
+            ?? String(localized: "把「\(title)」标记为已完成")
+        if let due = target.due { summary += String(localized: "\n到期：\(due)") }
         return summary
     }
 

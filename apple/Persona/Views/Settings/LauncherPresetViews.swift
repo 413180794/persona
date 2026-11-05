@@ -30,11 +30,11 @@ struct LauncherPresetSections: View {
             }
         }
         Section {
-            SecretField("API Key", filled: "已填写，点保存", text: $model.apiKey, identifier: "launcher.preset.key")
+            SecretField("API Key", filled: String(localized: "已填写，点保存"), text: $model.apiKey, identifier: "launcher.preset.key")
         } header: {
             Text("Key")
         } footer: {
-            Text([model.selected?.keyHint, "Key 加密存在 hub，不会返回到客户端。"].compactMap { $0 }.joined(separator: "\n"))
+            Text([model.selected?.keyHint, String(localized: "Key 加密存在 hub，不会返回到客户端。")].compactMap { $0 }.joined(separator: "\n"))
         }
         if let p = model.selected {
             Section {

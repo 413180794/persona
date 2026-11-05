@@ -18,6 +18,8 @@ final class LiveActivityShots: XCTestCase {
             // `demo`, which needs JARVIS_MOCK_HUB to be downloaded from).
             if let persona = env["JARVIS_PERSONA"] { app.launchArguments += ["-openPersona", persona] }
             if let pair = Self.pair { app.launchArguments += ["-pairURL", pair] }
+            // JARVIS_UI_LANGUAGE=en|ja|zh-Hans: the activity in that interface language (docs/ios.md「界面语言」).
+            if let lang = env["JARVIS_UI_LANGUAGE"] { app.launchArguments += ["-AppleLanguages", "(\(lang))"] }
             app.launchPinned()
             sleep(env["JARVIS_MOCK_HUB"] == nil ? 4 : 8) // a package is downloaded first
         }
@@ -52,7 +54,8 @@ final class LiveActivityShots: XCTestCase {
         // First time only: the system asks whether Persona may show Live Activities (on the lock screen). Its 允许 is
         // also the activity's own button: with the activity showing (拒绝 is there), do not tap it.
         let allow = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "允许"])).firstMatch
-        let ours = springboard.buttons.matching(NSPredicate(format: "label CONTAINS %@", "拒绝")).firstMatch
+        let ours = springboard.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@ OR label CONTAINS %@",
+                                                              "拒绝", "Deny", "拒否")).firstMatch
         if !ours.exists, allow.exists {
             allow.tap()
             sleep(2)

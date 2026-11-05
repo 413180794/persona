@@ -89,6 +89,8 @@ internal fun KnowledgeScreen(model: KnowledgeViewModel, navigator: Navigator) {
             KindChips(page.filter.kind, page.entries.size.takeIf { page.loaded }, model::kind)
             page.filter.tag?.let { JTag(stringResource(R.string.knowledge_tag_chip, it), Modifier.padding(top = Tokens.Space.s)) }
         }
+        // A reload that failed over what is still shown says so above it (the whole-page error is for an empty page, #3991).
+        if (page.paired && shown) page.message?.let { message -> item("reload-error") { JNotice(stringResource(message), Modifier.padding(vertical = Tokens.Space.s), status = Status.NeedsYou) } }
         when {
             !page.paired -> item("unpaired") {
                 JEmptyState(stringResource(R.string.knowledge_unpaired_title), stringResource(R.string.knowledge_unpaired_text))
@@ -314,6 +316,8 @@ internal fun KnowledgeDetailScreen(
                 }
                 detail == null || entry == null -> item("loading") { JLoading() }
                 else -> {
+                    // A reload that failed keeps the entry; this says it could not be read again (#3991).
+                    page.message?.let { message -> item("reload-error") { JNotice(stringResource(message), Modifier.padding(vertical = Tokens.Space.s), status = Status.NeedsYou) } }
                     item("header", contentType = "header") {
                         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                             EntryMetadata(entry, allTags = true)

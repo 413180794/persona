@@ -117,12 +117,12 @@ struct QuickResultCard: View {
     static func when(_ date: Date, allDayish: Bool = false, now: Date = .now) -> String {
         let cal = Calendar.current
         let time = date.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
-        if cal.isDate(date, inSameDayAs: now) { return "今天 " + time }
-        if let tomorrow = cal.date(byAdding: .day, value: 1, to: now), cal.isDate(date, inSameDayAs: tomorrow) { return "明天 " + time }
+        if cal.isDate(date, inSameDayAs: now) { return String(localized: "今天 \(time)") }
+        if let tomorrow = cal.date(byAdding: .day, value: 1, to: now), cal.isDate(date, inSameDayAs: tomorrow) { return String(localized: "明天 \(time)") }
         if let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day, (2..<7).contains(days) {
-            return date.formatted(.dateTime.weekday(.abbreviated).locale(Locale(identifier: "zh_CN"))) + " " + time
+            return date.formatted(.dateTime.weekday(.abbreviated)) + " " + time
         }
-        return date.formatted(.dateTime.month().day().locale(Locale(identifier: "zh_CN"))) + " " + time
+        return date.formatted(.dateTime.month().day()) + " " + time
     }
 }
 
@@ -137,15 +137,15 @@ struct TaskTrustView: View {
         List {
             if let kinds {
                 if kinds.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.taskTrust, title: "还没有",
-                                   message: "在对话的计划卡上勾「这类以后直接开」，同一台电脑、同一个目录、同样读或改的任务以后就不再先问。")
+                    EmptyStateView(symbol: Theme.Icon.taskTrust, title: String(localized: "还没有"),
+                                   message: String(localized: "在对话的计划卡上勾「这类以后直接开」，同一台电脑、同一个目录、同样读或改的任务以后就不再先问。"))
                         .listRowBackground(Color.clear)
                 } else {
                     Section {
                         ForEach(kinds, id: \.key) { k in
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text((k.cwd as NSString).lastPathComponent).font(Theme.Font.body)
-                                Text("\(TaskPlace.machineName(k.machine)) · \(k.readonly ? "只读" : "可以改文件") · \(k.cwd)")
+                                Text("\(TaskPlace.machineName(k.machine)) · \(k.readonly ? String(localized: "只读") : String(localized: "可以改文件")) · \(k.cwd)")
                                     .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                             .themedRow()
@@ -156,7 +156,7 @@ struct TaskTrustView: View {
                     }
                 }
             } else if let error {
-                EmptyStateView(symbol: Theme.Icon.error, title: "没读到", message: error).listRowBackground(Color.clear)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "没读到"), message: error).listRowBackground(Color.clear)
             } else {
                 ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
             }

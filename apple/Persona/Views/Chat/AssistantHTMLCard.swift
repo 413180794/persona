@@ -261,14 +261,14 @@ struct AssistantHTMLCard: View {
 
     private var alertTitle: String {
         switch actions.pending {
-        case .open: "卡片要打开链接"
-        default: "卡片要替你回复"
+        case .open: String(localized: "卡片要打开链接")
+        default: String(localized: "卡片要替你回复")
         }
     }
 
     private func confirmTitle(_ r: HTMLCardRequest) -> String {
-        if case .open = r { return "打开" }
-        return "发送"
+        if case .open = r { return String(localized: "打开") }
+        return String(localized: "发送")
     }
 
     private func stop() {
@@ -412,7 +412,7 @@ final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelega
             guard !Task.isCancelled, let self, let web, generation == ticket else { return }
             started = false
             guard let rules else {
-                web.loadHTMLString("<p>无法隔离网络，不运行这张卡片</p>", baseURL: nil)
+                web.loadHTMLString("<p>\(String(localized: "无法隔离网络，不运行这张卡片"))</p>", baseURL: nil)
                 return
             }
             let controller = web.configuration.userContentController
@@ -593,12 +593,14 @@ private struct HTMLCardSample: ViewModifier {
     @State private var opened: URL?
     private let showingLinks = UserDefaults.standard.string(forKey: "showSampleHTMLCard") == "open"
 
+    // i18n-ignore
     private static let linkPage = """
         <!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
         <p>只有确认后才会打开链接。</p>
         <button onclick="persona.open('https://example.com/card')">打开链接</button>
         """
 
+    // i18n-ignore
     static let page = """
         <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
         <style>
@@ -622,20 +624,20 @@ private struct HTMLCardSample: ViewModifier {
             NavigationStack {
                 ScrollView {
                     VStack(spacing: Theme.Space.l) {
-                        AssistantHTMLCard(title: showingLinks ? "链接确认" : "三个方案的得分",
+                        AssistantHTMLCard(title: showingLinks ? "链接确认" : "三个方案的得分", // i18n-ignore
                                           html: showingLinks ? Self.linkPage : Self.page, height: 240,
-                                          fallback: showingLinks ? "打开前需要确认。" : "A 62 分，B 88 分，C 45 分；B 最高。",
+                                          fallback: showingLinks ? "打开前需要确认。" : "A 62 分，B 88 分，C 45 分；B 最高。", // i18n-ignore
                                           autoRun: false, onReply: { replied = $0; return true }, onOpen: { opened = $0 })
-                        AssistantHTMLCard(title: showingLinks ? "链接确认（运行中）" : "三个方案的得分（运行中）",
+                        AssistantHTMLCard(title: showingLinks ? "链接确认（运行中）" : "三个方案的得分（运行中）", // i18n-ignore
                                           html: showingLinks ? Self.linkPage : Self.page, height: 240,
-                                          fallback: showingLinks ? "打开前需要确认。" : "A 62 分，B 88 分，C 45 分。",
+                                          fallback: showingLinks ? "打开前需要确认。" : "A 62 分，B 88 分，C 45 分。", // i18n-ignore
                                           autoRun: true, onReply: { replied = $0; return true }, onOpen: { opened = $0 })
-                        if let replied { Text("已回复：\(replied)").font(Theme.Font.secondary).accessibilityIdentifier("html-card-replied") }
-                        if let opened { Text("已打开：\(opened.absoluteString)").font(Theme.Font.secondary).accessibilityIdentifier("html-card-opened") }
+                        if let replied { Text("已回复：\(replied)").font(Theme.Font.secondary).accessibilityIdentifier("html-card-replied") } // i18n-ignore
+                        if let opened { Text("已打开：\(opened.absoluteString)").font(Theme.Font.secondary).accessibilityIdentifier("html-card-opened") } // i18n-ignore
                     }
                     .padding(Theme.Space.page)
                 }
-                .navigationTitle("HTML 卡片")
+                .navigationTitle("HTML 卡片") // i18n-ignore
             }
         }
     }

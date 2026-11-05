@@ -848,7 +848,7 @@ struct AssistantSidebar: View {
                 if besideBar {
                     // The same button as the top bar's beside it (2026-11-04: on iPhone Duo open, this one stood lower
                     // and larger than 历史对话 / 新对话 in the next column).
-                    AssistantTopBar.circle(Theme.Icon.search, label: "搜索对话", id: "assistant-sidebar-search", action: openSearch)
+                    AssistantTopBar.circle(Theme.Icon.search, label: String(localized: "搜索对话"), id: "assistant-sidebar-search", action: openSearch)
                 } else {
                     Button(action: openSearch) {
                         Image(systemName: Theme.Icon.search)
@@ -882,7 +882,7 @@ struct AssistantSidebar: View {
     /// The open search field; in the BeautifulUI style SidebarNav's.
     @ViewBuilder private var searchField: some View {
         if AppStyle.current.usesBeautifulUI {
-            BUISearchField("搜索对话", text: $query, focused: $searching, clearLabel: "清除搜索")
+            BUISearchField(String(localized: "搜索对话"), text: $query, focused: $searching, clearLabel: String(localized: "清除搜索"))
                 .autocorrectionDisabled()
         } else {
             HStack(spacing: Theme.Space.s) {
@@ -911,14 +911,14 @@ struct AssistantSidebar: View {
             VStack(alignment: .leading, spacing: 0) {
                 mainItem(all)
                 Divider().padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
-                action("收件箱", Theme.Icon.inbox, id: "sidebar-inbox", count: InboxStore.shared.actionCount, run: openInbox)
+                action(String(localized: "收件箱"), Theme.Icon.inbox, id: "sidebar-inbox", count: InboxStore.shared.actionCount, run: openInbox)
                 if TodoStore.shared.isSupported {
-                    action("待办", Theme.Icon.todo, id: "sidebar-todos", count: TodoStore.shared.badgeCount, run: { (openTodos ?? openInbox)() })
+                    action(String(localized: "待办"), Theme.Icon.todo, id: "sidebar-todos", count: TodoStore.shared.badgeCount, run: { (openTodos ?? openInbox)() })
                 }
-                action("定时任务", Theme.Icon.schedule, run: openRoutines)
-                action("知识库", Theme.Icon.knowledge, run: openKnowledge)
-                if let openHealth { action("健康", Theme.Icon.health, id: "sidebar-health", run: openHealth) }
-                action("机器", Theme.Icon.machines, id: "sidebar-machines", run: onMachines)
+                action(String(localized: "定时任务"), Theme.Icon.schedule, run: openRoutines)
+                action(String(localized: "知识库"), Theme.Icon.knowledge, run: openKnowledge)
+                if let openHealth { action(String(localized: "健康"), Theme.Icon.health, id: "sidebar-health", run: openHealth) }
+                action(String(localized: "机器"), Theme.Icon.machines, id: "sidebar-machines", run: onMachines)
                 extensionRows
             }
         } else {
@@ -926,8 +926,8 @@ struct AssistantSidebar: View {
             // One row as the conversations' (#2113): 新对话 is the title row's button and ⇧⌘N, 知识库 the window's
             // sections column (2026-11-05 user: not twice). Headed by nothing: a heading over one row is noise.
             if !AppStyle.current.usesBeautifulUI {
-                macPlace("定时任务", Theme.Icon.schedule, run: openRoutines)
-                if let openHealth { macPlace("健康", Theme.Icon.health, run: openHealth) }
+                macPlace(String(localized: "定时任务"), Theme.Icon.schedule, run: openRoutines)
+                if let openHealth { macPlace(String(localized: "健康"), Theme.Icon.health, run: openHealth) }
             } else {
                 phoneActions
             }
@@ -939,10 +939,10 @@ struct AssistantSidebar: View {
 
     private var phoneActions: some View {
         VStack(alignment: .leading, spacing: 0) {
-            action("新对话", Theme.Icon.conversation, id: "sidebar-new", run: newConversation)
-            action("定时任务", Theme.Icon.schedule, run: openRoutines)
-            action("知识库", Theme.Icon.knowledge, run: openKnowledge)
-            if let openHealth { action("健康", Theme.Icon.health, id: "sidebar-health", run: openHealth) }
+            action(String(localized: "新对话"), Theme.Icon.conversation, id: "sidebar-new", run: newConversation)
+            action(String(localized: "定时任务"), Theme.Icon.schedule, run: openRoutines)
+            action(String(localized: "知识库"), Theme.Icon.knowledge, run: openKnowledge)
+            if let openHealth { action(String(localized: "健康"), Theme.Icon.health, id: "sidebar-health", run: openHealth) }
             extensionRows
         }
     }
@@ -1037,14 +1037,14 @@ struct AssistantSidebar: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel([Self.mainTitle, main.flatMap(stateWord)].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityLabel([Self.mainTitle, main.flatMap(stateWord)].compactMap { $0 }.joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("sidebar-main")
         .contextMenu {
             if let main {
                 Button {
                     UIPasteboard.general.string = main.sessionID
-                    model.toast = Toast("已拷贝会话 ID", style: .success)
+                    model.toast = Toast(String(localized: "已拷贝会话 ID"), style: .success)
                 } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
                 Button {
                     UIPasteboard.general.string = ChatTrace.shared.text(main.key) // structure only, to paste into a report
@@ -1100,7 +1100,7 @@ struct AssistantSidebar: View {
             .sorted { $0.key == main && $1.key != main } // the main one first
         let mainAbove = isShell && all.contains { $0.key == main }
         if !pinned.isEmpty {
-            heading("置顶") {
+            heading(String(localized: "section.pinned", defaultValue: "置顶")) {
                 if pinned.contains(where: { $0.key != main }) {
                     Button { unpinAll() } label: { Label("全部取消置顶", systemImage: Theme.Icon.unpin) }
                 }
@@ -1117,7 +1117,7 @@ struct AssistantSidebar: View {
                 .font(Theme.Font.secondary).foregroundStyle(.secondary)
                 .padding(.horizontal, Theme.Space.m).padding(.top, Theme.Space.xl)
         } else {
-            heading("最近") {
+            heading(String(localized: "最近")) {
                 Button { newConversation() } label: { Label("新对话", systemImage: Theme.Icon.compose) }
                 if split.supported {
                     Button { autoList = AutoConversationsRoute(source: nil) } label: { Label("全部对话", systemImage: Theme.Icon.list) }
@@ -1177,8 +1177,8 @@ struct AssistantSidebar: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(["自动对话 \(split.auto.count) 个", stateWords(needsYou: split.needsYou, working: split.working, unread: split.unread)]
-            .compactMap { $0 }.joined(separator: "，"))
+        .accessibilityLabel([String(localized: "自动对话 \(split.auto.count) 个"), stateWords(needsYou: split.needsYou, working: split.working, unread: split.unread)]
+            .compactMap { $0 }.joined(separator: String(localized: "，", comment: "Separator between the parts of a VoiceOver label")))
         .accessibilityValue(autoOpen ? "已展开" : "已收起")
         .accessibilityIdentifier("sidebar-auto")
         if autoOpen {
@@ -1186,7 +1186,7 @@ struct AssistantSidebar: View {
                 sourceRow(g.source.name, symbol: g.source.symbol, count: g.sessions.count, needsYou: g.needsYou, working: g.working,
                           id: g.source.id) { autoList = AutoConversationsRoute(source: g.source.id) }
             }
-            sourceRow("全部对话", symbol: Theme.Icon.list, count: nil, needsYou: 0, working: false, id: "all") {
+            sourceRow(String(localized: "全部对话"), symbol: Theme.Icon.list, count: nil, needsYou: 0, working: false, id: "all") {
                 autoList = AutoConversationsRoute(source: nil)
             }
         }
@@ -1214,7 +1214,7 @@ struct AssistantSidebar: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel([count.map { "\(name) \($0) 个" } ?? name, stateWords(needsYou: needsYou, working: working, unread: 0)].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityLabel([count.map { String(localized: "\(name) \($0) 个") } ?? name, stateWords(needsYou: needsYou, working: working, unread: 0)].compactMap { $0 }.joined(separator: String(localized: "，", comment: "Separator between the parts of a VoiceOver label")))
         .accessibilityIdentifier("sidebar-auto-" + id)
     }
 
@@ -1230,9 +1230,9 @@ struct AssistantSidebar: View {
     }
 
     private func stateWords(needsYou: Int, working: Bool, unread: Int) -> String? {
-        if needsYou > 0 { return "\(needsYou) 个在等你" }
-        if working { return "有在工作的" }
-        if unread > 0 { return "\(unread) 个未读" }
+        if needsYou > 0 { return String(localized: "\(needsYou) 个在等你") }
+        if working { return String(localized: "有在工作的") }
+        if unread > 0 { return String(localized: "\(unread) 个未读") }
         return nil
     }
 
@@ -1263,7 +1263,7 @@ struct AssistantSidebar: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 40)
         } else {
-            heading("\(hits.count) 个对话") { EmptyView() }
+            heading(String(localized: "\(hits.count) 个对话")) { EmptyView() }
             ForEach(hits) { row($0) }
         }
     }
@@ -1281,7 +1281,7 @@ struct AssistantSidebar: View {
                     }
                     .tint(Color.secondary)
                     .labelOnlyMenu()
-                    .accessibilityLabel(text + "的更多操作")
+                    .accessibilityLabel(String(localized: "\(text)的更多操作"))
                 }
             }
             .scaledFrame(minHeight: HeadingMenu.minHeight(Menu.self))
@@ -1305,7 +1305,7 @@ struct AssistantSidebar: View {
                 }
                 .tint(Color.secondary) // a gray ⋯, not the accent
                 .labelOnlyMenu()
-                .accessibilityLabel(text + "的更多操作")
+                .accessibilityLabel(String(localized: "\(text)的更多操作"))
             }
         }
         .scaledFrame(minHeight: HeadingMenu.minHeight(Menu.self))
@@ -1329,7 +1329,7 @@ struct AssistantSidebar: View {
     private func row(_ s: Session) -> some View {
         let selected = s.key == current
         let isMain = s.key == model.assistantMain
-        let title = isMain ? Self.mainTitle : s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title
+        let title = isMain ? Self.mainTitle : s.title.isEmpty || s.title == "Claude Code" ? String(localized: "新对话") : s.title
         let preview = s.lastText.map { Fmt.plain($0).replacingOccurrences(of: "\n", with: " ") } ?? ""
         return Button { open(s.key) } label: {
             HStack(spacing: Theme.Space.m) {
@@ -1361,7 +1361,7 @@ struct AssistantSidebar: View {
         .tag(s.key)
         .macListRow(selected: selected, in: Rectangle(), drawsShade: false) // the row draws its own (`selectedFill`)
         .accessibilityLabel([title, isMain && s.title != title ? s.title : nil, stateWord(s), preview.isEmpty ? nil : preview]
-            .compactMap { $0 }.joined(separator: "，"))
+            .compactMap { $0 }.joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("sidebar-conversation")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -1388,7 +1388,7 @@ struct AssistantSidebar: View {
             }
             Button {
                 UIPasteboard.general.string = s.sessionID
-                model.toast = Toast("已拷贝会话 ID", style: .success)
+                model.toast = Toast(String(localized: "已拷贝会话 ID"), style: .success)
             } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
             Button {
                 UIPasteboard.general.string = ChatTrace.shared.text(s.key) // structure only, to paste into a report
@@ -1525,6 +1525,7 @@ private struct AssistantProfileFooter: View {
         // Behind another section (the Mac keeps the page): the machine as it is now, not each push's heartbeat.
         let machine = model.machine(model.hubRef(machineID), inFront: inFront)
         let online = machine?.online ?? false
+        let state = online ? String(localized: "在线") : String(localized: "离线")
         return VStack(spacing: 0) {
             Divider()
             HStack(spacing: Theme.Space.m) {
@@ -1539,7 +1540,7 @@ private struct AssistantProfileFooter: View {
                             HStack(spacing: Theme.Space.xs) {
                                 Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5))
                                     .scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
-                                Text((online ? "在线 · " : "离线 · ") + (machine?.name ?? machineID)).lineLimit(1)
+                                Text(online ? String(localized: "在线 · \(machine?.name ?? machineID)") : String(localized: "离线 · \(machine?.name ?? machineID)")).lineLimit(1)
                             }
                             .font(Theme.Font.label)
                             .foregroundStyle(.secondary)
@@ -1549,7 +1550,7 @@ private struct AssistantProfileFooter: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(model.persona.name)，\(online ? "在线" : "离线")，查看资料")
+                .accessibilityLabel("\(model.persona.name)，\(state)，查看资料")
                 Spacer(minLength: Theme.Space.s)
                 if let openSettings {
                     Button(action: openSettings) {
@@ -1580,13 +1581,14 @@ private struct AssistantStatusLine: View {
         let machine = model.machine(model.hubRef(machineID), inFront: inFront)
         let online = machine?.online ?? false
         let place = machine?.name ?? machineID
+        let state = online ? String(localized: "在线") : String(localized: "离线")
         VStack(spacing: 0) {
             Divider()
             Button(action: openProfile) {
                 HStack(spacing: Theme.Space.s) {
                     Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5))
                         .scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
-                    Text("\(model.persona.name) \(online ? "在线" : "离线") · \(place)").lineLimit(1)
+                    Text("\(model.persona.name) \(state) · \(place)").lineLimit(1)
                     Spacer(minLength: 0)
                 }
                 .font(Theme.Font.caption)
@@ -1597,7 +1599,7 @@ private struct AssistantStatusLine: View {
             }
             .buttonStyle(.plain)
             .help("查看 \(model.persona.name) 的资料")
-            .accessibilityLabel("\(model.persona.name)，\(online ? "在线" : "离线")，\(place)，查看资料")
+            .accessibilityLabel("\(model.persona.name)，\(state)，\(place)，查看资料")
         }
     }
 }
@@ -1622,7 +1624,7 @@ struct ConversationMark: View {
 
 /// The sidebar's conversations by day, newest first: 今天, 昨天, 最近 7 天, 更早 (and those without a time).
 nonisolated enum AssistantSidebarGroups {
-    static let older = "更早"
+    static let older = String(localized: "更早")
 
     struct Group: Equatable {
         var title: String
@@ -1649,7 +1651,7 @@ nonisolated enum AssistantSidebarGroups {
         for s in sorted {
             let title: String
             if let d = s.updatedAt, d.isMeaningful {
-                title = d >= today ? "今天" : d >= yesterday ? "昨天" : d >= week ? "最近 7 天" : older
+                title = d >= today ? String(localized: "今天") : d >= yesterday ? String(localized: "昨天") : d >= week ? String(localized: "最近 7 天") : older
             } else {
                 title = older
             }

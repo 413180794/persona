@@ -9,7 +9,7 @@ struct ImageEditor: View {
     @Environment(\.dismiss) private var dismiss
     let image: UIImage
     /// Title of the done button (what happens with the result: "加到输入框", "完成").
-    var doneTitle: String = "完成"
+    var doneTitle: String = String(localized: "完成")
     var onDone: (UIImage) -> Void
 
     enum Tool: String, CaseIterable { case pen, box }
@@ -85,8 +85,8 @@ struct ImageEditor: View {
                 }
             }
             HStack(spacing: Theme.Space.m) {
-                toolButton(.box, "框选", "rectangle")
-                toolButton(.pen, "画笔", "scribble")
+                toolButton(.box, String(localized: "框选"), "rectangle")
+                toolButton(.pen, String(localized: "画笔"), "scribble")
                 Spacer(minLength: 0)
                 Button { _ = marks.popLast() } label: { Image(systemName: Theme.Icon.undo).scaledFrame(width: Theme.Size.icon) }
                     .themedButton().disabled(marks.isEmpty).accessibilityLabel("撤销")

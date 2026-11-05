@@ -5,10 +5,10 @@ import SwiftUI
 extension InteractionKind {
     var title: String {
         switch self {
-        case .question: "Claude 在问你"
-        case .plan: "计划等你审批"
-        case .permission: "需要你授权"
-        case .screen: "终端等你处理"
+        case .question: String(localized: "Claude 在问你")
+        case .plan: String(localized: "计划等你审批")
+        case .permission: String(localized: "需要你授权")
+        case .screen: String(localized: "终端等你处理")
         }
     }
 
@@ -26,11 +26,11 @@ extension Interaction {
     /// The assistant asks through its ask_user tool: it is Persona asking, not a Claude Code agent; a Codex card names
     /// Codex.
     var title: String {
-        if toolName == "ask_user" { return "Persona 在问你" }
+        if toolName == "ask_user" { return String(localized: "Persona 在问你") }
         if let name = agentName {
             switch kind {
-            case .question: return "\(name) 在问你"
-            case .permission: return "\(name) 需要你授权"
+            case .question: return String(localized: "\(name) 在问你")
+            case .permission: return String(localized: "\(name) 需要你授权")
             default: break
             }
         }
@@ -131,7 +131,7 @@ struct InteractionPreviewCard: View {
     /// A terminal dialog that reads as a question is titled like one (as in the chat's panel).
     private var title: String {
         if interaction.kind == .screen, interaction.screenDialog != nil {
-            return "\(agentLabel) 在问你"
+            return String(localized: "\(agentLabel) 在问你")
         }
         return interaction.title
     }
@@ -148,7 +148,7 @@ struct InteractionPreviewCard: View {
         switch interaction.kind {
         case .question: interaction.questions?.first?.question ?? ""
         case .plan: PlanText.title(interaction.plan ?? "")
-        case .permission: [interaction.toolName, interaction.summary].compactMap { $0 }.joined(separator: "：")
+        case .permission: [interaction.toolName, interaction.summary].compactMap { $0 }.joined(separator: String(localized: "：", comment: "Separator between a tool name and what it runs"))
         case .screen: interaction.screenDialog?.question ?? ""
         }
     }
@@ -212,7 +212,7 @@ struct FlowButtons: View {
                     }
                     .themedButton()
                     .controlSize(.small)
-                    .accessibilityLabel(text + (recommended ? "，推荐" : ""))
+                    .accessibilityLabel(text + (recommended ? String(localized: "，推荐", comment: "Accessibility suffix: the recommended option") : ""))
                 }
             }
         }
@@ -224,7 +224,7 @@ struct FlowButtons: View {
 /// terminal dialog and the quick answers on the Agents card draw the same tag, in the AI's color (it is Claude's
 /// suggestion; the accent would read as something to tap).
 struct RecommendedTag: View {
-    var body: some View { Chip(text: "推荐", look: .tint(Theme.ai)) }
+    var body: some View { Chip(text: String(localized: "推荐"), look: .tint(Theme.ai)) }
 }
 
 enum PlanText {
@@ -233,7 +233,7 @@ enum PlanText {
             let t = line.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "#* "))
             if !t.isEmpty { return t }
         }
-        return "执行计划"
+        return String(localized: "执行计划")
     }
 }
 
@@ -360,7 +360,8 @@ struct InteractionPanel: View {
     /// A terminal dialog that reads as a question is titled like one.
     private var panelTitle: String {
         if interaction.kind == .screen, interaction.screenDialog != nil {
-            return "\(model.session(interaction.sessionKey)?.agentLabel ?? "Claude") 在问你"
+            let name = model.session(interaction.sessionKey)?.agentLabel ?? "Claude"
+            return String(localized: "\(name) 在问你")
         }
         return interaction.title
     }
@@ -392,7 +393,7 @@ struct QuestionForm: View {
                 if questions.count > 1 || q.header != nil || q.multiSelect {
                     Text([q.header.flatMap { $0.isEmpty ? nil : $0 },
                           questions.count > 1 ? "\(page + 1)/\(questions.count)" : nil,
-                          q.multiSelect ? "可多选" : nil].compactMap { $0 }.joined(separator: " · "))
+                          q.multiSelect ? String(localized: "可多选") : nil].compactMap { $0 }.joined(separator: " · "))
                         .monospacedDigit()
                     .font(Theme.Font.labelStrong)
                     .foregroundStyle(.secondary)
@@ -456,7 +457,7 @@ struct QuestionForm: View {
         }
         .buttonStyle(.plain)
         .disabled(sending)
-        .accessibilityLabel(label + (recommended ? "，推荐" : "") + (selected ? "，已选" : ""))
+        .accessibilityLabel(label + (recommended ? String(localized: "，推荐", comment: "Accessibility suffix: the recommended option") : "") + (selected ? String(localized: "，已选", comment: "Accessibility suffix: a selected option") : ""))
     }
 
     /// "其他": a quiet row; tapping it turns it into a field with its own send arrow.
@@ -653,7 +654,7 @@ struct PermissionForm: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: ToolPresentation.symbol(interaction.toolName ?? "")).foregroundStyle(Theme.accent)
-                Text(interaction.toolName ?? "工具").font(Theme.Font.secondaryStrong)
+                Text(interaction.toolName ?? String(localized: "工具")).font(Theme.Font.secondaryStrong)
             }
             Text(interaction.summary ?? interaction.toolInput?.pretty ?? "")
                 .font(Theme.Font.code)
@@ -708,7 +709,7 @@ struct AgentPermissionForm: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: ToolPresentation.symbol(interaction.toolName ?? "")).foregroundStyle(Theme.accent)
-                Text(interaction.toolName ?? "工具").font(Theme.Font.secondaryStrong)
+                Text(interaction.toolName ?? String(localized: "工具")).font(Theme.Font.secondaryStrong)
             }
             if let reason = interaction.reason, !reason.isEmpty {
                 Text(reason)
@@ -913,12 +914,12 @@ struct ScreenForm: View {
         }
         .buttonStyle(.plain)
         .disabled(sending != nil)
-        .accessibilityLabel(label + (recommended ? "，推荐" : ""))
+        .accessibilityLabel(label + (recommended ? String(localized: "，推荐", comment: "Accessibility suffix: the recommended option") : ""))
     }
 
     /// The header, and 可多选 for a multi-select question.
     nonisolated static func eyebrow(_ d: ScreenParser.Dialog) -> String? {
-        let parts = [d.steps.isEmpty ? d.header.flatMap { $0.isEmpty ? nil : $0 } : nil, d.multi ? "可多选" : nil].compactMap { $0 }
+        let parts = [d.steps.isEmpty ? d.header.flatMap { $0.isEmpty ? nil : $0 } : nil, d.multi ? String(localized: "可多选") : nil].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -971,7 +972,7 @@ struct ScreenForm: View {
         }
         .buttonStyle(.plain)
         .disabled(sending != nil)
-        .accessibilityLabel(label + (recommended ? "，推荐" : "") + (on ? "，已选" : ""))
+        .accessibilityLabel(label + (recommended ? String(localized: "，推荐", comment: "Accessibility suffix: the recommended option") : "") + (on ? String(localized: "，已选", comment: "Accessibility suffix: a selected option") : ""))
     }
 
     /// The free-text field of a multi-select question: sent with the ticks, checked when it holds something.
@@ -1063,7 +1064,7 @@ struct ScreenForm: View {
             Group {
                 if interaction.secret == true {
                     // A password the terminal asks for (sudo, ssh): typed once, never offered to the system's passwords.
-                    SecretField("输入密码（不会保存）", filled: "已填写，点发送", text: $text, identifier: "terminal.secret")
+                    SecretField(String(localized: "输入密码（不会保存）"), filled: String(localized: "已填写，点发送"), text: $text, identifier: "terminal.secret")
                 } else {
                     TextField("输入文字发送到终端", text: $text)
                 }
@@ -1158,16 +1159,16 @@ extension Interaction {
         let screen = [
             " Ran 1 shell command",
             "────────────────────────────────────────────────",
-            " ←  ☐ 取消部署  ☐ 推送代码  ✔ Submit  →",
+            " ←  ☐ 取消部署  ☐ 推送代码  ✔ Submit  →", // i18n-ignore
             "",
-            " │预览环境第一次构建失败：我加的图片压缩库要更新的 Node，",
-            " │换版本后构建通过，修复也已推送（3f2a9c1）。但失败的那次部署 #128",
-            " │卡在构建阶段，没法重新构建。要取消它吗？",
+            " │预览环境第一次构建失败：我加的图片压缩库要更新的 Node，", // i18n-ignore
+            " │换版本后构建通过，修复也已推送（3f2a9c1）。但失败的那次部署 #128", // i18n-ignore
+            " │卡在构建阶段，没法重新构建。要取消它吗？", // i18n-ignore
             "",
-            "❯ 1. 同意取消 #128 (Recommended)",
-            "     用 deploy cancel 128 取消，然后用修复后的 commit 重新部署一次。",
-            "  2. 先不取消",
-            "     我停在这里；预览环境和 e2e 都先不动，上一个版本也暂时保留。",
+            "❯ 1. 同意取消 #128 (Recommended)", // i18n-ignore
+            "     用 deploy cancel 128 取消，然后用修复后的 commit 重新部署一次。", // i18n-ignore
+            "  2. 先不取消", // i18n-ignore
+            "     我停在这里；预览环境和 e2e 都先不动，上一个版本也暂时保留。", // i18n-ignore
             "  3. Type something.",
             "────────────────────────────────────────────────",
             "  4. Chat about this",
@@ -1197,7 +1198,7 @@ extension Interaction {
             "id": "sample-cxa", "machine_id": key.machineID, "session_id": key.sessionID, "kind": "permission", "agent": "codex",
             "tool_name": "Bash", "summary": command, "tool_input": ["command": command],
             "reason": "Allow this command to access localhost:8080 over the network?",
-            "always_label": "以后不再问以 curl -s 开头的命令",
+            "always_label": "以后不再问以 curl -s 开头的命令", // i18n-ignore
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
         return try? JSON.decoder.decode(Interaction.self, from: data)
@@ -1205,6 +1206,7 @@ extension Interaction {
 
     /// Codex's request_user_input in Plan mode (two questions with headers and descriptions), for screenshots.
     static func sampleCodexQuestion(_ key: SessionKey) -> Interaction? {
+        // i18n-ignore
         let json = """
         {"id":"sample-cxq","machine_id":"\(key.machineID)","session_id":"\(key.sessionID)","kind":"question","agent":"codex",
          "tool_name":"request_user_input","questions":[
@@ -1219,6 +1221,7 @@ extension Interaction {
     }
 
     static func sampleQuestion(_ key: SessionKey) -> Interaction? {
+        // i18n-ignore
         let json = """
         {"id":"sample-q","machine_id":"\(key.machineID)","session_id":"\(key.sessionID)","kind":"question","questions":[
          {"question":"一轮对话里有后台任务把 Claude 唤醒时，哪一段算「真正的回复」？","header":"真正的回复","multi_select":false,"options":[
@@ -1262,8 +1265,8 @@ struct BUIQuestionForm: View {
     private var questions: [Question] { interaction.questions ?? [] }
 
     var body: some View {
-        ApprovalCard(questions: questions.map(Self.card), skipLabel: nil, continueLabel: "下一题", sendLabel: "提交",
-                     customPlaceholder: "其他回答…", sentMessage: "已发送", options: .panel()) { answers in
+        ApprovalCard(questions: questions.map(Self.card), skipLabel: nil, continueLabel: String(localized: "下一题"), sendLabel: String(localized: "提交"),
+                     customPlaceholder: String(localized: "其他回答…"), sentMessage: String(localized: "已发送"), options: .panel()) { answers in
             Haptics.tap()
             Task { await model.resolve(interaction, Resolution(answers: Self.answers(answers, questions))) }
         }
@@ -1274,7 +1277,7 @@ struct BUIQuestionForm: View {
             id: q.question, q.question, kind: q.multiSelect ? .multiple : .single,
             choices: q.options.map { o in
                 let (label, recommended) = display(o.label)
-                return ApprovalQuestion.Choice(label, detail: o.description, tag: recommended ? "推荐" : nil)
+                return ApprovalQuestion.Choice(label, detail: o.description, tag: recommended ? String(localized: "推荐") : nil)
             },
             eyebrow: eyebrow(q)
         )
@@ -1282,7 +1285,7 @@ struct BUIQuestionForm: View {
 
     /// "header · 可多选" above the question, when there is either.
     private static func eyebrow(_ q: Question) -> String? {
-        let parts = [q.header.flatMap { $0.isEmpty ? nil : $0 }, q.multiSelect ? "可多选" : nil].compactMap { $0 }
+        let parts = [q.header.flatMap { $0.isEmpty ? nil : $0 }, q.multiSelect ? String(localized: "可多选") : nil].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -1313,14 +1316,14 @@ struct BUIPlanForm: View {
     @Binding var showFull: Bool
 
     private static let choices = [
-        ApprovalQuestion.Choice("批准并自动执行", detail: "之后不再逐个确认"),
-        ApprovalQuestion.Choice("批准，自动接受编辑", detail: "改文件不问，其他操作照常确认"),
+        ApprovalQuestion.Choice(String(localized: "批准并自动执行"), detail: String(localized: "之后不再逐个确认")),
+        ApprovalQuestion.Choice(String(localized: "批准，自动接受编辑"), detail: String(localized: "改文件不问，其他操作照常确认")),
     ]
 
     var body: some View {
-        ApprovalCard(questions: [ApprovalQuestion("按这个计划做吗？", choices: Self.choices,
-                                                  customPlaceholder: "打回并说明要怎么改…")],
-                     skipLabel: nil, sendLabel: "发送", sentMessage: "已发送",
+        ApprovalCard(questions: [ApprovalQuestion(String(localized: "按这个计划做吗？"), choices: Self.choices,
+                                                  customPlaceholder: String(localized: "打回并说明要怎么改…"))],
+                     skipLabel: nil, sendLabel: String(localized: "发送"), sentMessage: String(localized: "已发送"),
                      options: .panel()) { answers in
             Haptics.tap()
             Task { await model.resolve(interaction, Self.resolution(answers)) }
@@ -1366,22 +1369,24 @@ struct BUIPermissionForm: View {
 
     private var choices: [ApprovalQuestion.Choice] {
         if interaction.agentName != nil {
-            var c = [ApprovalQuestion.Choice("同意")]
-            if let always = interaction.alwaysLabel, !always.isEmpty { c.append(ApprovalQuestion.Choice("总是同意", detail: always)) }
-            c.append(ApprovalQuestion.Choice("拒绝"))
+            var c = [ApprovalQuestion.Choice(String(localized: "同意"))]
+            if let always = interaction.alwaysLabel, !always.isEmpty { c.append(ApprovalQuestion.Choice(String(localized: "总是同意"), detail: always)) }
+            c.append(ApprovalQuestion.Choice(String(localized: "拒绝")))
             return c
         }
-        var c = [ApprovalQuestion.Choice("允许")]
-        if interaction.sessionID != "" { c.append(ApprovalQuestion.Choice("本会话总是允许", detail: "这个会话里同样的操作不再问")) }
-        c.append(ApprovalQuestion.Choice("拒绝"))
+        var c = [ApprovalQuestion.Choice(String(localized: "允许"))]
+        if interaction.sessionID != "" { c.append(ApprovalQuestion.Choice(String(localized: "本会话总是允许"), detail: String(localized: "这个会话里同样的操作不再问"))) }
+        c.append(ApprovalQuestion.Choice(String(localized: "拒绝")))
         return c
     }
 
     var body: some View {
         let choices = choices
-        ApprovalCard(questions: [ApprovalQuestion("\(interaction.agentName == nil ? "允许" : "同意") \(interaction.toolName ?? "这个工具") 吗？", choices: choices,
-                                                  customPlaceholder: "拒绝并说明原因…")],
-                     skipLabel: nil, sendLabel: "发送", sentMessage: "已发送",
+        let tool = interaction.toolName ?? String(localized: "这个工具")
+        let ask = interaction.agentName == nil ? String(localized: "允许 \(tool) 吗？") : String(localized: "同意 \(tool) 吗？")
+        ApprovalCard(questions: [ApprovalQuestion(ask, choices: choices,
+                                                  customPlaceholder: String(localized: "拒绝并说明原因…"))],
+                     skipLabel: nil, sendLabel: String(localized: "发送"), sentMessage: String(localized: "已发送"),
                      options: .panel()) { answers in
             Haptics.tap()
             Task { await model.resolve(interaction, Self.resolution(answers, choices: choices)) }
@@ -1415,9 +1420,10 @@ struct BUIPermissionForm: View {
     static func resolution(_ a: ApprovalAnswers, choices: [ApprovalQuestion.Choice]) -> Resolution {
         let reason = (a.custom[0] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !reason.isEmpty { return Resolution(allow: false, message: reason) }
+        // The labels are localized: compare with the same localized words the choices were built from.
         switch a.picks[0]?.first.map({ choices[$0].label }) {
-        case "允许", "同意": return Resolution(allow: true)
-        case "本会话总是允许", "总是同意": return Resolution(allow: true, always: true)
+        case String(localized: "允许"), String(localized: "同意"): return Resolution(allow: true)
+        case String(localized: "本会话总是允许"), String(localized: "总是同意"): return Resolution(allow: true, always: true)
         default: return Resolution(allow: false)
         }
     }
@@ -1468,12 +1474,12 @@ struct BUIScreenForm: View {
                     d.question.isEmpty ? (d.header ?? "") : d.question, kind: d.multi ? .multiple : .single,
                     choices: choices.map { o in
                         let (label, recommended) = QuestionForm.display(o.label)
-                        return ApprovalQuestion.Choice(label, detail: o.detail, tag: recommended ? "推荐" : nil)
+                        return ApprovalQuestion.Choice(label, detail: o.detail, tag: recommended ? String(localized: "推荐") : nil)
                     },
                     eyebrow: d.question.isEmpty ? nil : ScreenForm.eyebrow(d),
-                    allowsCustom: typing != nil, customPlaceholder: "其他回答…")],
+                    allowsCustom: typing != nil, customPlaceholder: String(localized: "其他回答…"))],
                 answers: shown,
-                skipLabel: nil, sendLabel: d.multi ? (d.submit == "Next" ? "下一题" : "提交") : "发送", sentMessage: "已发送",
+                skipLabel: nil, sendLabel: d.multi ? (d.submit == "Next" ? String(localized: "下一题") : String(localized: "提交")) : String(localized: "发送"), sentMessage: String(localized: "已发送"),
                 options: .panel(sending: sending != nil)
             ) { answers in
                 let text = (answers.custom[0] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1530,7 +1536,7 @@ struct BUIScreenForm: View {
             Group {
                 if interaction.secret == true {
                     // A password the terminal asks for (sudo, ssh): typed once, never offered to the system's passwords.
-                    SecretField("输入密码（不会保存）", filled: "已填写，点发送", text: $text, identifier: "terminal.secret")
+                    SecretField(String(localized: "输入密码（不会保存）"), filled: String(localized: "已填写，点发送"), text: $text, identifier: "terminal.secret")
                 } else {
                     TextField("输入文字发送到终端", text: $text)
                 }

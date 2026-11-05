@@ -29,7 +29,7 @@ struct SecretField: View {
     @Binding var text: String
     var identifier: String?
 
-    init(_ placeholder: String, filled: String = "已填写", text: Binding<String>, identifier: String? = nil) {
+    init(_ placeholder: String, filled: String = String(localized: "已填写"), text: Binding<String>, identifier: String? = nil) {
         self.placeholder = placeholder
         self.filled = filled
         _text = text

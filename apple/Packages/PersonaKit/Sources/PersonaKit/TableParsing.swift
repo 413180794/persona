@@ -145,9 +145,9 @@ public nonisolated struct ZipArchive: Sendable {
         case notZip, unsupported(String), corrupt(String)
         public var errorDescription: String? {
             switch self {
-            case .notZip: "不是有效的 xlsx 文件（不是 zip）"
-            case .unsupported(let what): "不支持的 xlsx 文件：\(what)"
-            case .corrupt(let what): "xlsx 文件已损坏：\(what)"
+            case .notZip: String(localized: "不是有效的 xlsx 文件（不是 zip）")
+            case .unsupported(let what): String(localized: "不支持的 xlsx 文件：\(what)")
+            case .corrupt(let what): String(localized: "xlsx 文件已损坏：\(what)")
             }
         }
     }
@@ -171,13 +171,13 @@ public nonisolated struct ZipArchive: Sendable {
         var p = Int(Self.u32(bytes, eocd + 16))
         guard p < bytes.count, count != 0xFFFF else { throw Failure.unsupported("zip64") }
         for _ in 0..<count {
-            guard p + 46 <= bytes.count, Self.u32(bytes, p) == 0x0201_4B50 else { throw Failure.corrupt("目录") }
+            guard p + 46 <= bytes.count, Self.u32(bytes, p) == 0x0201_4B50 else { throw Failure.corrupt(String(localized: "目录")) }
             let method = Self.u16(bytes, p + 10)
             let compressed = Self.u32(bytes, p + 20), size = Self.u32(bytes, p + 24)
             let nameLength = Int(Self.u16(bytes, p + 28)), extra = Int(Self.u16(bytes, p + 30)), comment = Int(Self.u16(bytes, p + 32))
             let offset = Self.u32(bytes, p + 42)
             guard compressed != 0xFFFF_FFFF, size != 0xFFFF_FFFF, offset != 0xFFFF_FFFF else { throw Failure.unsupported("zip64") }
-            guard p + 46 + nameLength <= bytes.count else { throw Failure.corrupt("目录") }
+            guard p + 46 + nameLength <= bytes.count else { throw Failure.corrupt(String(localized: "目录")) }
             let name = String(decoding: bytes[(p + 46)..<(p + 46 + nameLength)], as: UTF8.self)
             entries[name] = Entry(name: name, method: method, compressed: Int(compressed), size: Int(size), offset: Int(offset))
             p += 46 + nameLength + extra + comment
@@ -196,7 +196,7 @@ public nonisolated struct ZipArchive: Sendable {
         switch e.method {
         case 0: return raw
         case 8: return try Self.inflate(raw, size: e.size, name: name)
-        default: throw Failure.unsupported("压缩方式 \(e.method)")
+        default: throw Failure.unsupported(String(localized: "压缩方式 \(e.method)"))
         }
     }
 
@@ -230,7 +230,7 @@ public nonisolated struct ZipArchive: Sendable {
 public nonisolated enum XLSXReader {
     public static func read(_ data: Data) throws -> [TableSheet] {
         let zip = try ZipArchive(data)
-        guard let workbook = try zip.file("xl/workbook.xml") else { throw ZipArchive.Failure.corrupt("没有 workbook.xml") }
+        guard let workbook = try zip.file("xl/workbook.xml") else { throw ZipArchive.Failure.corrupt(String(localized: "没有 workbook.xml")) }
         let sheets = XMLCollector.elements(workbook, named: ["sheet"])
         let rels = try zip.file("xl/_rels/workbook.xml.rels").map { XMLCollector.elements($0, named: ["Relationship"]) } ?? []
         var targets: [String: String] = [:]
@@ -247,7 +247,7 @@ public nonisolated enum XLSXReader {
             guard let xml = try zip.file(path) else { continue }
             out.append(SheetCells.parse(xml, name: name, strings: strings, dates: dates))
         }
-        guard !out.isEmpty else { throw ZipArchive.Failure.corrupt("没有工作表") }
+        guard !out.isEmpty else { throw ZipArchive.Failure.corrupt(String(localized: "没有工作表")) }
         return out
     }
 

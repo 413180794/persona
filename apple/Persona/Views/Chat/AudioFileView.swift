@@ -51,7 +51,7 @@ final class AudioFileModel {
         error = nil
         received = 0
         guard let api else {
-            error = "尚未连接 hub"
+            error = String(localized: "尚未连接 hub")
             return
         }
         let mine = generation
@@ -68,7 +68,7 @@ final class AudioFileModel {
             guard generation == mine else { return }
             let asset = AVURLAsset(url: fetched)
             guard try await asset.load(.isPlayable) else {
-                throw APIError(status: 0, message: "这个音频的格式在这台设备上放不了，可以转成 MP3、AAC（M4A）或 WAV 再试")
+                throw APIError(status: 0, message: String(localized: "这个音频的格式在这台设备上放不了，可以转成 MP3、AAC（M4A）或 WAV 再试"))
             }
             let seconds = try await asset.load(.duration).seconds
             guard generation == mine else { return }
@@ -132,7 +132,7 @@ struct AudioFileView: View {
     var body: some View {
         Group {
             if let error = model.error {
-                EmptyStateView(symbol: Theme.Icon.error, title: "音频放不了", message: error)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "音频放不了"), message: error)
             } else if model.player != nil {
                 player
             } else {
@@ -204,7 +204,7 @@ struct AudioFileView: View {
                     ForEach(AudioFileType.speeds, id: \.self) { s in Text(Self.speedText(s)).tag(s) }
                 }
             } label: {
-                Text("速度 " + Self.speedText(model.speed)).font(Theme.Font.caption).lineLimit(1)
+                Text("速度 \(Self.speedText(model.speed))").font(Theme.Font.caption).lineLimit(1)
             }
             .arrowlessMenu()
             .accessibilityIdentifier("audio-speed")

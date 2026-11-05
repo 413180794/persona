@@ -31,20 +31,20 @@ struct MachineSpacesView: View {
                 Section {
                     ForEach(active) { g in row(g, busy: true) }
                 } header: {
-                    SectionHeader(title: "进行中", count: active.count, tone: StatusPalette.working)
+                    SectionHeader(title: String(localized: "进行中"), count: active.count, tone: StatusPalette.working)
                 }
             }
             if !quiet.isEmpty {
                 Section {
                     ForEach(quiet) { g in row(g, busy: false) }
                 } header: {
-                    SectionHeader(title: "空闲", count: quiet.count, tone: StatusPalette.idle)
+                    SectionHeader(title: String(localized: "空闲"), count: quiet.count, tone: StatusPalette.idle)
                 }
             }
             if groups.isEmpty {
                 Section {
-                    EmptyStateView(symbol: machine?.symbol ?? Theme.Icon.machine, title: "没有在跑的 Agent",
-                                   message: machine?.online == false ? "这台机器现在离线。" : "在这台机器的 herdr 里启动 Claude、Codex 或 TRAEX，就会出现在这里。")
+                    EmptyStateView(symbol: machine?.symbol ?? Theme.Icon.machine, title: String(localized: "没有在跑的 Agent"),
+                                   message: machine?.online == false ? String(localized: "这台机器现在离线。") : String(localized: "在这台机器的 herdr 里启动 Claude、Codex 或 TRAEX，就会出现在这里。"))
                 }
                 .listRowBackground(Color.clear)
             }
@@ -74,7 +74,8 @@ struct MachineSpacesView: View {
                     Text(m.online ? "在线" : "离线").font(Theme.Font.secondaryStrong)
                     if let h = m.hostname, !h.isEmpty { Text(h).font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1) }
                 }
-                Text("\(spaces) 个项目 · \(sessions.count) 个 Agent").font(Theme.Font.label).foregroundStyle(.secondary)
+                // Two counts, two plural rules: localize each piece, join with a neutral separator.
+                Text(verbatim: "\(String(localized: "\(spaces) 个项目")) · \(String(localized: "\(sessions.count) 个 Agent"))").font(Theme.Font.label).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
             StateCounts(group: SpaceGroup(id: "m-" + m.id, machineID: m.id, spaceID: "-", name: m.name, index: 0, sessions: sessions))

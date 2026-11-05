@@ -77,7 +77,7 @@ enum HealthTool {
                     do {
                         return try HealthSample(args).summary
                     } catch {
-                        return "参数有误，不会写入健康：\(ToolErrors.describe(error))"
+                        return String(localized: "参数有误，不会写入健康：\(ToolErrors.describe(error))")
                     }
                 },
                 run: { args in try await write(args) }
@@ -90,7 +90,7 @@ enum HealthTool {
         try HealthAccess.requireAccess()
         let sample = try HealthSample(args)
         guard let type = HealthSample.type(of: sample.metric), let object = sample.object() else {
-            throw ToolFailure(.unavailable, "此设备不能写入 \(sample.metric) / This device cannot save \(sample.metric)")
+            throw ToolFailure(.unavailable, "此设备不能写入 \(sample.metric) / This device cannot save \(sample.metric)") // i18n-ignore
         }
         let store = HKHealthStore()
         if store.authorizationStatus(for: type) == .notDetermined {
@@ -99,7 +99,7 @@ enum HealthTool {
             _ = try? await store.requestAuthorization(toShare: writeTypes, read: readTypes)
         }
         guard store.authorizationStatus(for: type) == .sharingAuthorized else {
-            throw ToolFailure(.unavailable, "健康没有允许 Persona 写入 \(sample.metric)：可在 iOS 设置 › 健康 › 数据访问与设备 › Persona 里打开"
+            throw ToolFailure(.unavailable, "健康没有允许 Persona 写入 \(sample.metric)：可在 iOS 设置 › 健康 › 数据访问与设备 › Persona 里打开" // i18n-ignore
                 + " / Health does not allow Persona to save \(sample.metric): turn it on in iOS Settings › Health › Data Access & Devices › Persona.")
         }
         let id = object.uuid.uuidString
@@ -277,7 +277,7 @@ enum HealthTool {
         calendar: Calendar
     ) async throws -> [String: JSONValue] {
         guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
-            throw ToolFailure(.unavailable, "此设备不支持睡眠数据 / Sleep analysis is not available")
+            throw ToolFailure(.unavailable, "此设备不支持睡眠数据 / Sleep analysis is not available") // i18n-ignore
         }
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
         let samples: [HKCategorySample] = try await withCheckedThrowingContinuation { continuation in
@@ -329,8 +329,8 @@ struct HealthSample {
     /// What one sample can hold: more is a slip (grams for kilograms, a week's steps at once).
     private static let limits: [String: Double] = ["steps": 100_000, "distance": 300_000, "active_energy": 10_000, "weight": 500]
 
-    private static let names = ["steps": "步数", "distance": "步行和跑步距离", "active_energy": "活动能量", "weight": "体重", "sleep": "睡眠"]
-    private static let shownUnits = ["steps": "步", "distance": "米", "active_energy": "千卡", "weight": "千克"]
+    private static let names = ["steps": String(localized: "步数"), "distance": String(localized: "步行和跑步距离"), "active_energy": String(localized: "活动能量"), "weight": String(localized: "体重"), "sleep": String(localized: "睡眠")]
+    private static let shownUnits = ["steps": String(localized: "步"), "distance": String(localized: "米"), "active_energy": String(localized: "千卡"), "weight": String(localized: "千克")]
 
     var metric: String
     /// The amount in the metric's unit; nil for sleep, whose length is the period.
@@ -378,9 +378,9 @@ struct HealthSample {
     var summary: String {
         let name = Self.names[metric] ?? metric
         let what = value.map { "\(name) \(Self.format($0)) \(Self.shownUnits[metric] ?? "")" }
-            ?? "\(name) \(Self.format(end.timeIntervalSince(start) / 3600)) 小时"
+            ?? String(localized: "\(name) \(Self.format(end.timeIntervalSince(start) / 3600)) 小时")
         let when = start == end ? ToolDate.string(start) : "\(ToolDate.string(start)) → \(ToolDate.string(end))"
-        return "写入健康：\(what)\n\(when)"
+        return String(localized: "写入健康：\(what)\n\(when)")
     }
 
     static func type(of metric: String) -> HKSampleType? {

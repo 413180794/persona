@@ -55,8 +55,8 @@ nonisolated enum AddTodoFlow {
 
 /// Wording for AddTodoIntent. Pure, so SiriIntentsTests can pin it.
 nonisolated enum TodoIntentText {
-    static let askTitle = "要记什么待办？"
-    static let oldHub = "hub 的版本还不支持待办，先更新 hub。"
+    static let askTitle = String(localized: "要记什么待办？")
+    static let oldHub = String(localized: "hub 的版本还不支持待办，先更新 hub。")
 
     /// Trimmed text, or nil when nothing is left.
     static func cleaned(_ text: String?) -> String? {
@@ -65,7 +65,7 @@ nonisolated enum TodoIntentText {
     }
 
     static func added(_ title: String) -> String {
-        "已记下待办：「\(IntentText.excerpt(title, limit: 60))」"
+        String(localized: "已记下待办：「\(IntentText.excerpt(title, limit: 60))」")
     }
 
     static func failure(_ error: Error) -> String {

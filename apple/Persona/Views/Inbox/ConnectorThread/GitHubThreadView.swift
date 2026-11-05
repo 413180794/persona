@@ -72,8 +72,8 @@ struct GitHubThreadView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if model.chat?.reply != nil {
-                ThreadComposer(placeholder: "评论到 #\(model.thread.split(separator: "#").last ?? "")", text: $text, selection: $selection,
-                               focused: $focused, quote: quoted.map { ("引用 \($0.isMine ? "自己" : $0.sender.name)", $0.summary) },
+                ThreadComposer(placeholder: String(localized: "评论到 #\(String(model.thread.split(separator: "#").last ?? ""))"), text: $text, selection: $selection,
+                               focused: $focused, quote: quoted.map { ($0.isMine ? String(localized: "引用 自己") : String(localized: "引用 \($0.sender.name)"), $0.summary) },
                                sending: model.sending, cancelQuote: { quoted = nil }, send: send)
             }
         }
@@ -163,7 +163,7 @@ struct GitHubThreadHeader: View {
             HStack(spacing: Theme.Space.s) {
                 Chip(text: GitHubThread.stateTitle(chat.state), symbol: stateSymbol, look: .tint(stateColor))
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("状态：" + GitHubThread.stateTitle(chat.state)) // not the symbol's name
+                    .accessibilityLabel("状态：\(GitHubThread.stateTitle(chat.state))") // not the symbol's name
                     .accessibilityIdentifier("github.state")
                 if let a = chat.author {
                     ThreadAvatar(connector: connector, name: a.name, ref: a.avatar, size: Theme.Size.iconS)
@@ -237,7 +237,7 @@ struct GitHubDescription: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if let a = chat.author {
-                GitHubByline(connector: connector, person: a, detail: "描述", at: nil)
+                GitHubByline(connector: connector, person: a, detail: String(localized: "描述"), at: nil)
             }
             if let body = chat.body, !body.isEmpty {
                 GitHubMarkdown(text: body)
@@ -299,7 +299,7 @@ struct GitHubCommentCard: View {
             GitHubByline(connector: connector, person: m.sender, detail: detail, detailSymbol: reviewSymbol, detailColor: reviewColor, at: m.at)
             if let code = m.code { GitHubCodeRef(code: code) }
             if let q = m.replyTo {
-                QuoteCard(heading: q.from ?? "评论", summary: q.text.flatMap { $0.isEmpty ? nil : $0 } ?? "（原评论）", tint: LarkColor.blue,
+                QuoteCard(heading: q.from ?? String(localized: "评论"), summary: q.text.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "（原评论）"), tint: LarkColor.blue,
                           ink: .primary) {}
             }
             if !words.isEmpty { GitHubMarkdown(text: words) }
@@ -326,7 +326,7 @@ struct GitHubCommentCard: View {
     private var detail: String? {
         switch m.kind {
         case "review": GitHubThread.reviewTitle(m.review)
-        case "code": "评论了代码"
+        case "code": String(localized: "评论了代码")
         default: nil
         }
     }

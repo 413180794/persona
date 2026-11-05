@@ -15,9 +15,9 @@ nonisolated enum ColorSchemeChoice: String, CaseIterable, Identifiable, Sendable
 
     var title: String {
         switch self {
-        case .system: "跟随系统"
-        case .light: "浅色"
-        case .dark: "深色"
+        case .system: String(localized: "跟随系统")
+        case .light: String(localized: "浅色")
+        case .dark: String(localized: "深色")
         }
     }
 

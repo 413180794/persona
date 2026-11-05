@@ -53,11 +53,11 @@ nonisolated struct ModelLimit: Codable, Hashable, Sendable {
 
     /// The hub's wording, counted from `now`: 额度用完，23 分钟后重试.
     func text(now: Date = .now) -> String {
-        let what = reason == "quota" ? "额度用完" : "并发已满"
+        let what = reason == "quota" ? String(localized: "额度用完") : String(localized: "并发已满")
         let left = until.timeIntervalSince(now)
-        if left <= 0 { return "\(what)，稍后重试" }
-        if left < 60 { return "\(what)，\(Int(left.rounded(.up))) 秒后重试" }
-        return "\(what)，\(Int((left / 60).rounded(.up))) 分钟后重试"
+        if left <= 0 { return String(localized: "\(what)，稍后重试") }
+        if left < 60 { return String(localized: "\(what)，\(Int(left.rounded(.up))) 秒后重试") }
+        return String(localized: "\(what)，\(Int((left / 60).rounded(.up))) 分钟后重试")
     }
 }
 
@@ -128,7 +128,7 @@ nonisolated enum AssistantRuntime {
     /// What an assistant conversation runs on, for its status: 「已退回 CLI：找不到 Node.js 22+」 when the node could not
     /// run the Agent SDK, 「Agent SDK」 while it does; nil on the CLI as set (nothing to say).
     static func status(runtime: String?, fallback: String?) -> String? {
-        if let f = fallback?.trimmingCharacters(in: .whitespaces), !f.isEmpty { return "已退回 CLI：\(f)" }
+        if let f = fallback?.trimmingCharacters(in: .whitespaces), !f.isEmpty { return String(localized: "已退回 CLI：\(f)") }
         return runtime == agentSDK ? title(agentSDK) : nil
     }
 }

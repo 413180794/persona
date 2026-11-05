@@ -26,32 +26,39 @@ nonisolated extension ContextRef {
     #if DEBUG
     /// `-showSampleQuotes YES`: what 作为上下文 on a page and @ on a session put over the box.
     static let samples = [
-        ContextRef(kind: "context", title: "WidgetKit 时间线", url: "https://example.com/docs/widgetkit/timeline",
-                   text: "时间线里的每一项都有一个日期，系统按这个日期换上新的内容；刷新策略决定时间线用完以后什么时候再要一条。"),
-        ContextRef(kind: "context", title: "照片同步支持 HEIC", url: "jarvis://session/studio/a1f3c2d4-0000-4000-8000-000000000005",
-                   text: "另一个会话：照片同步支持 HEIC（Claude）\n目录：~/code/photo-sync\n它最近说：计划写好了，等你批准后开始改。"),
+        ContextRef(kind: "context", title: "WidgetKit 时间线", url: "https://example.com/docs/widgetkit/timeline", // i18n-ignore
+                   text: "时间线里的每一项都有一个日期，系统按这个日期换上新的内容；刷新策略决定时间线用完以后什么时候再要一条。"), // i18n-ignore
+        ContextRef(kind: "context", title: "照片同步支持 HEIC", url: "jarvis://session/studio/a1f3c2d4-0000-4000-8000-000000000005", // i18n-ignore
+                   text: "另一个会话：照片同步支持 HEIC（Claude）\n目录：~/code/photo-sync\n它最近说：计划写好了，等你批准后开始改。"), // i18n-ignore
     ]
     #endif
+
+    /// The page quoted as a whole: the text is the marker the link sheet puts there, not the user's words.
+    private var isWholePage: Bool { text == "（整篇）" } // i18n-ignore: marker
 
     /// The quote's first line: whom or what it quotes.
     var quoteHeading: String {
         switch kind {
-        case "quote": return title == "我" ? "引用 你的消息" : "引用 \(title.isEmpty ? "消息" : title)"
-        case "edit": return "要改的文字 · \(label)"
+        case "quote":
+            let mine = title == "我" // i18n-ignore: the sender name Lark gives the user's own messages
+            if mine { return String(localized: "引用 你的消息") }
+            let who = title.isEmpty ? String(localized: "消息") : title
+            return String(localized: "引用 \(who)")
+        case "edit": return String(localized: "要改的文字 · \(label)")
         default:
-            if isSession { return "引用会话 \(label)" }
-            if !url.isEmpty { return text == "（整篇）" ? "引用 \(label)" : "引用选中的文字 · \(label)" }
-            return "引用 \(label)"
+            if isSession { return String(localized: "引用会话 \(label)") }
+            if !url.isEmpty { return isWholePage ? String(localized: "引用 \(label)") : String(localized: "引用选中的文字 · \(label)") }
+            return String(localized: "引用 \(label)")
         }
     }
 
     /// A line or two of what is quoted, its line breaks as spaces.
     var quoteSummary: String {
-        if text == "（整篇）" { return host }
+        if isWholePage { return host }
         var flat = text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if isSession, flat.count > 1 { flat.removeFirst() } // 「另一个会话：…」: the heading names it already
         let joined = flat.joined(separator: " ")
-        return joined.isEmpty ? "没有内容" : String(joined.prefix(240))
+        return joined.isEmpty ? String(localized: "没有内容") : String(joined.prefix(240))
     }
 }
 
@@ -129,7 +136,7 @@ struct QuoteBarRow: View {
     var lines = 2
     var tint: Color?
     /// What × says to VoiceOver (Feishu's reply: 取消回复).
-    var removeLabel = "取消引用"
+    var removeLabel = String(localized: "取消引用")
     var remove: () -> Void
     @Environment(\.buiTheme) private var theme
 

@@ -194,38 +194,38 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
 nonisolated enum FleetText {
     static func headline(_ s: FleetState) -> String {
         switch s.phase {
-        case .needsYou: "\(s.needsYou) 个需要你"
-        case .working: "\(s.working) 个在工作"
-        case .done: "\(s.unread) 个做完了"
-        case .none: "都处理完了"
+        case .needsYou: interfaceText("\(s.needsYou) 个需要你")
+        case .working: interfaceText("\(s.working) 个在工作")
+        case .done: interfaceText("\(s.unread) 个做完了")
+        case .none: interfaceText("都处理完了")
         }
     }
 
     /// "授权：Bash: go test" / "计划等你批准" / "Claude 在问你" … for one item.
     static func line(_ item: FleetState.Item) -> String {
         switch item.kind {
-        case .permission: item.detail.isEmpty ? "等你授权" : "授权：" + item.detail
-        case .plan: item.detail.isEmpty ? "计划等你批准" : "计划：" + item.detail
-        case .question: item.detail.isEmpty ? "在问你" : item.detail
-        case .screen: item.detail.isEmpty ? "终端等你处理" : item.detail
-        case .working: "工作中"
-        case .unread: item.detail.isEmpty ? "做完了" : item.detail
+        case .permission: item.detail.isEmpty ? interfaceText("等你授权") : interfaceText("授权：\(item.detail)")
+        case .plan: item.detail.isEmpty ? interfaceText("计划等你批准") : interfaceText("计划：\(item.detail)")
+        case .question: item.detail.isEmpty ? interfaceText("在问你") : item.detail
+        case .screen: item.detail.isEmpty ? interfaceText("终端等你处理") : item.detail
+        case .working: interfaceText("工作中")
+        case .unread: item.detail.isEmpty ? interfaceText("做完了") : item.detail
         }
     }
 
     /// What a hidden (lock screen without details) request says instead of its title.
     static func anonymous(_ item: FleetState.Item) -> String {
         switch item.kind {
-        case .permission: "有个授权等你"
-        case .plan: "有个计划等你批准"
-        case .question: "有个提问等你回答"
-        case .screen: "有个终端等你处理"
-        case .working: "工作中"
-        case .unread: "做完了"
+        case .permission: interfaceText("有个授权等你")
+        case .plan: interfaceText("有个计划等你批准")
+        case .question: interfaceText("有个提问等你回答")
+        case .screen: interfaceText("有个终端等你处理")
+        case .working: interfaceText("工作中")
+        case .unread: interfaceText("做完了")
         }
     }
 
-    static func more(_ n: Int) -> String { "+\(n) 个" }
+    static func more(_ n: Int) -> String { interfaceText("+\(n) 个") }
 
     /// 980 / 1.2k / 12k / 4.2M / 42M: numbers that fit beside the camera.
     static func short(_ n: Int) -> String {
@@ -246,11 +246,11 @@ nonisolated enum FleetText {
     /// The words for a number on the expanded island / lock screen.
     static func stat(_ cell: IslandCell) -> String? {
         switch cell {
-        case let .tpm(n): "\(short(n))/分"
-        case let .tokens(n): "今日 \(short(n))"
-        case let .requests(n): "今日 \(short(n)) 次"
-        case let .assistant(on): on ? "助手在回答" : "助手空闲"
-        case let .load(name, p): name.isEmpty ? "负载 \(p)%" : "\(name) \(p)%"
+        case let .tpm(n): interfaceText(LocalizedStringResource("\(short(n))/分", comment: "Tokens per minute"))
+        case let .tokens(n): interfaceText(LocalizedStringResource("今日 \(short(n))", comment: "Tokens today"))
+        case let .requests(n): interfaceText(LocalizedStringResource("今日 \(short(n)) 次", comment: "Requests today"))
+        case let .assistant(on): on ? interfaceText("助手在回答") : interfaceText("助手空闲")
+        case let .load(name, p): name.isEmpty ? interfaceText("负载 \(p)%") : "\(name) \(p)%"
         default: nil
         }
     }
@@ -266,14 +266,14 @@ nonisolated enum IslandSlot: String, Codable, Hashable, Sendable, CaseIterable {
 
     var title: String {
         switch self {
-        case .status: "状态数量"
-        case .tpm: "每分钟 token"
-        case .tokens: "今日 token"
-        case .requests: "今日请求数"
-        case .assistant: "Persona 助手"
-        case .load: "机器负载"
-        case .timer: "最久那一轮的计时"
-        case .none: "不显示"
+        case .status: interfaceText("状态数量")
+        case .tpm: interfaceText("每分钟 token")
+        case .tokens: interfaceText("今日 token")
+        case .requests: interfaceText("今日请求数")
+        case .assistant: interfaceText("Persona 助手")
+        case .load: interfaceText("机器负载")
+        case .timer: interfaceText("最久那一轮的计时")
+        case .none: interfaceText("不显示")
         }
     }
 }
@@ -289,10 +289,10 @@ nonisolated struct IslandPrefs: Codable, Hashable, Sendable {
 
         var title: String {
             switch self {
-            case .a: "状态"
-            case .b: "状态 + 速度"
-            case .c: "状态 + 今日 token"
-            case .custom: "自定义"
+            case .a: interfaceText("状态")
+            case .b: interfaceText("状态 + 速度")
+            case .c: interfaceText("状态 + 今日 token")
+            case .custom: interfaceText("自定义")
             }
         }
     }

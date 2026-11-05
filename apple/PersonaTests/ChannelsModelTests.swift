@@ -169,7 +169,7 @@ struct ChannelsModelTests {
     @Test func capabilityLines() throws {
         let c = try JSON.decoder.decode(HubChannel.Capabilities.self, from: Data(
             #"{"images_in":true,"voice_in":true,"format":"plain","max_text":3500,"asks":"text","typing":true}"#.utf8))
-        #expect(ChannelText.capabilities(c) == ["收文字、图片、语音", "回答是纯文字", "一条最多 3500 字，长的拆开发", "提问和批准回复序号或文字", "处理时显示「正在输入」"])
+        #expect(ChannelText.capabilities(c) == ["收文字、图片、语音", "回答是纯文字", "一条最多 3,500 字，长的拆开发", "提问和批准回复序号或文字", "处理时显示「正在输入」"])
     }
 
     /// 「来自 微信」: the client_msg_id's prefix names a channel the hub has; the app's UUIDs never do.

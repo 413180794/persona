@@ -36,6 +36,6 @@ nonisolated enum LinkPolicy {
     @MainActor private static func copy(_ url: URL) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(url.absoluteString, forType: .string)
-        AppModel.shared.toast = Toast("这种链接不在 App 里打开，已拷贝：\(url.absoluteString.prefix(60))")
+        AppModel.shared.toast = Toast(String(localized: "这种链接不在 App 里打开，已拷贝：\(String(url.absoluteString.prefix(60)))"))
     }
 }

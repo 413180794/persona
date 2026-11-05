@@ -281,7 +281,10 @@ final class AppModel {
             return all
         }
 
+        // 设置 › 外观 › 语言 (docs/ios.md「界面语言」): written for the next launch, the extensions and the watch.
+        let language = LanguageStore.shared.apply()
         WatchSync.shared.onActivated = { [weak self] in
+            WatchSync.shared.push(language: language)
             guard let self, self.isPaired, !self.isDemo else { return }
             self.pushWatchConfigs()
             WatchSync.shared.push(summary: self.watchSummary())
@@ -418,7 +421,7 @@ final class AppModel {
     func pair(_ new: ServerConfig, ssh: SSHRoute? = nil) async throws {
         retryRegistry()
         // Unknown pairings would be written over (the keychain is not readable before the first unlock).
-        guard !registryUnreadable else { throw APIError(status: 0, message: "现在读不到已保存的配对，解锁手机后再试") }
+        guard !registryUnreadable else { throw APIError(status: 0, message: String(localized: "现在读不到已保存的配对，解锁手机后再试")) }
         let tunnels = SSHTunnels.shared
         // Paired again: the tunnel it has, unless the pairing page set one.
         let ssh = ssh ?? registry.hubs.first { $0.config.url == new.url }?.ssh
@@ -507,7 +510,7 @@ final class AppModel {
         muteWhileDesktop = false
         selectedTab = .chats
         demo.live.connect(.demo)
-        toast = Toast("已进入体验模式，数据都是编造的")
+        toast = Toast(String(localized: "已进入体验模式，数据都是编造的"))
     }
 
     /// Out of 体验模式 (退出 or pairing): what it showed goes with it.
@@ -666,7 +669,7 @@ final class AppModel {
     /// Brings up ref's VNC on the whole screen; `unlock`: and types its kept password on the lock screen (一键解锁,
     /// #1507 a-2); `from`: the chat it came from (我完成了 hands back to its agent).
     func openScreen(_ ref: MachineRef, unlock: Bool = false, from: SessionKey? = nil) {
-        guard api(ref.group) != nil else { toast = Toast("尚未连接 hub", style: .error); return }
+        guard api(ref.group) != nil else { toast = Toast(String(localized: "尚未连接 hub"), style: .error); return }
         if VNCPiP.shared.ref == ref { VNCPiP.shared.handOver() }
         screenOpen = ScreenOpen(machine: ref, unlock: unlock, from: from)
     }
@@ -677,11 +680,11 @@ final class AppModel {
     /// VNC for ref, from an entry (a machine's page, a tool, the running work, a chat's ··· menu): straight into the
     /// small window when this device keeps the Mac's sign-in, else the whole screen, where it is signed in to.
     func openVNC(_ ref: MachineRef, from: SessionKey? = nil) {
-        guard api(ref.group) != nil else { toast = Toast("尚未连接 hub", style: .error); return }
+        guard api(ref.group) != nil else { toast = Toast(String(localized: "尚未连接 hub"), style: .error); return }
         let kept = ScreenCredentials.load(ref) != nil
         #if os(iOS)
-        VNCPiPLog.add("点了 VNC：支持画中画 \(VNCPiPLog.yes(VNCPiP.supported))，整页开着 \(VNCPiPLog.yes(screenOpen != nil))，记住了登录 \(VNCPiPLog.yes(kept))"
-                      + (kept ? "" : "（先进整页登录）"))
+        VNCPiPLog.add("点了 VNC：支持画中画 \(VNCPiPLog.yes(VNCPiP.supported))，整页开着 \(VNCPiPLog.yes(screenOpen != nil))，记住了登录 \(VNCPiPLog.yes(kept))" // i18n-ignore
+                      + (kept ? "" : "（先进整页登录）")) // i18n-ignore
         #endif
         if VNCPiP.supported, screenOpen == nil, kept {
             VNCPiP.shared.start(ref, from: from)
@@ -794,7 +797,7 @@ final class AppModel {
                 assistantLaunchers[main] = nil
                 assistantModels[main] = nil
             }
-            toast = Toast("Persona 下一条消息起使用 \(launcher)", style: .success)
+            toast = Toast(String(localized: "Persona 下一条消息起使用 \(launcher)"), style: .success)
         } catch { show(error) }
     }
 
@@ -1546,7 +1549,7 @@ final class AppModel {
             if res.already == true, let existing = res.resolution {
                 // Resolved already on server, show what was effective
                 let lines = Answered.answerLines(ix, existing)
-                let text = (lines.first?.answer.isEmpty == false) ? "已回答：\(lines.first!.answer)" : "已回答"
+                let text = (lines.first?.answer.isEmpty == false) ? String(localized: "已回答：\(lines.first!.answer)") : String(localized: "已回答")
                 toast = Toast(text, style: .success)
             }
             Haptics.success()
@@ -1555,7 +1558,7 @@ final class AppModel {
             endedInteractionIDs.remove(ix.id)
             interactions[ix.uid] = ix
             Haptics.attention()
-            toast = Toast("终端上的对话框已经变了，这次没有按任何键：看看新的再答", style: .error)
+            toast = Toast(String(localized: "终端上的对话框已经变了，这次没有按任何键：看看新的再答"), style: .error)
         } catch let e as APIError where e.status == 410 {
             let reason = Answered.endedText(e.fields["status"])
             toast = Toast(reason, style: .error)
@@ -1584,7 +1587,7 @@ final class AppModel {
                 drafts[key] = current.isEmpty ? pulled[index] : current + "\n" + pulled[index]
             }
             Haptics.success()
-            toast = Toast(delete ? "已从队列删除" : "已撤回到输入框，改好再发送", style: .success)
+            toast = Toast(delete ? String(localized: "已从队列删除") : String(localized: "已撤回到输入框，改好再发送"), style: .success)
         } catch {
             show(error)
         }
@@ -1599,7 +1602,7 @@ final class AppModel {
     func allowSend(_ key: SessionKey) -> Bool {
         guard let s = session(key) else { return false }
         guard s.canSend else {
-            toast = Toast(s.sourceSubtitle ?? "此会话仅可查看", style: .error)
+            toast = Toast(s.sourceSubtitle ?? String(localized: "此会话仅可查看"), style: .error)
             return false
         }
         return true
@@ -1626,7 +1629,7 @@ final class AppModel {
                 return s.key
             }
         }
-        toast = Toast("已发送 /clear，新会话出现后在列表里打开", style: .info)
+        toast = Toast(String(localized: "已发送 /clear，新会话出现后在列表里打开"), style: .info)
         return nil
     }
 
@@ -1802,7 +1805,7 @@ final class AppModel {
         do {
             try await api.attach(key)
             await refresh()
-            toast = Toast("已实时接入", style: .success)
+            toast = Toast(String(localized: "已实时接入"), style: .success)
         } catch { show(error) }
     }
 
@@ -1845,7 +1848,9 @@ final class AppModel {
             let new = SessionKey(group: key.group, machineID: key.machineID, sessionID: id)
             if var copy = latest(key) { // listed at once with its name, until the hub's next list has it
                 copy.sessionID = id
-                copy.title = copy.title.hasPrefix("分支 · ") ? copy.title : "分支 · " + copy.title
+                // The hub names the copy with its own (Chinese) prefix; either one means it is already there
+                let prefix = String(localized: "分支 · ", comment: "Prefix of a forked session's title")
+                copy.title = copy.title.hasPrefix(prefix) || copy.title.hasPrefix("分支 · ") ? copy.title : prefix + copy.title // i18n-ignore
                 copy.status = .offline
                 copy.state = .offline
                 copy.paneID = nil // offline, in no tab: the header shows its own name, not the original's place
@@ -1864,7 +1869,7 @@ final class AppModel {
                 adopt(copy)
             }
             if session(key)?.assistant == true { openAssistantConversation(new) }
-            toast = Toast("已分支到新聊天", style: .success)
+            toast = Toast(String(localized: "已分支到新聊天"), style: .success)
             Haptics.success()
             return new
         } catch {
@@ -1880,12 +1885,12 @@ final class AppModel {
     func rewind(_ key: SessionKey, items: [Item], at itemID: String, text: String, restore: Rewind.Restore) async -> Bool {
         guard let api = api(key.group), rewinding.insert(key).inserted else { return false }
         defer { rewinding.remove(key) }
-        toast = Toast("正在回退…")
+        toast = Toast(String(localized: "正在回退…"))
         do {
             var full: String?
             if let cut = Rewind.cutItem(items, id: itemID) { full = try await api.fullItem(key, id: cut).text }
             guard let target = Rewind.target(items, id: itemID, full: full) else {
-                toast = Toast("这条消息没有文字，没法回退到它", style: .error)
+                toast = Toast(String(localized: "这条消息没有文字，没法回退到它"), style: .error)
                 return false
             }
             let data = try await api.rewind(key, prompt: target.prompt, occurrence: target.occurrence,
@@ -1895,7 +1900,8 @@ final class AppModel {
                 drafts[key] = text
                 toast = Toast(Rewind.done(result, asked: restore), style: .success)
             } else {
-                toast = Toast(Rewind.done(result, asked: restore) + "。" + Rewind.inputKept, style: .info)
+                let done = Rewind.done(result, asked: restore)
+                toast = Toast(String(localized: "\(done)。\(Rewind.inputKept)"), style: .info)
             }
             Haptics.success()
             return true
@@ -1910,11 +1916,11 @@ final class AppModel {
     @discardableResult
     func close(_ key: SessionKey) async -> Bool {
         guard let session = latest(key), session.canTerminal else {
-            toast = Toast("这个 Agent 不支持从手机停止并关闭", style: .error)
+            toast = Toast(String(localized: "这个 Agent 不支持从手机停止并关闭"), style: .error)
             return false
         }
         guard let api = api(key.group) else {
-            toast = Toast("未连接到这个 Agent 的 hub，标签已保留", style: .error)
+            toast = Toast(String(localized: "未连接到这个 Agent 的 hub，标签已保留"), style: .error)
             return false
         }
         do {
@@ -1930,13 +1936,13 @@ final class AppModel {
             }
             if let list = sessionsByMachine[key.machineRef] { sessionsByMachine[key.machineRef] = ended(list) }
             if let list = pendingSessions[key.machineRef] { pendingSessions[key.machineRef] = ended(list) }
-            toast = Toast("已停止并关闭 Agent，对话记录已保留", style: .success)
+            toast = Toast(String(localized: "已停止并关闭 Agent，对话记录已保留"), style: .success)
             Haptics.success()
             return true
         } catch {
             toast = Toast(error.isCancellation
-                ? "尚未确认 Agent 已停止，标签已保留，请检查后重试"
-                : "停止并关闭失败：" + error.localizedDescription, style: .error)
+                ? String(localized: "尚未确认 Agent 已停止，标签已保留，请检查后重试")
+                : String(localized: "停止并关闭失败：\(error.localizedDescription)"), style: .error)
             Haptics.error()
             return false
         }
@@ -1951,7 +1957,7 @@ final class AppModel {
     @discardableResult
     func deleteSession(_ key: SessionKey) async -> Bool {
         guard let api = api(key.group) else {
-            toast = Toast("未连接到这个对话的 hub，没有删除", style: .error)
+            toast = Toast(String(localized: "未连接到这个对话的 hub，没有删除"), style: .error)
             return false
         }
         do {
@@ -1959,12 +1965,12 @@ final class AppModel {
             if let list = sessionsByMachine[key.machineRef] { sessionsByMachine[key.machineRef] = list.filter { $0.key != key } }
             if let list = pendingSessions[key.machineRef] { pendingSessions[key.machineRef] = list.filter { $0.key != key } }
             deletedSession = key
-            toast = Toast("已删除对话", style: .success)
+            toast = Toast(String(localized: "已删除对话"), style: .success)
             Haptics.success()
             return true
         } catch {
             if error.isOffline { show(error) } else {
-                toast = Toast("删除失败：" + error.localizedDescription, style: .error)
+                toast = Toast(String(localized: "删除失败：\(error.localizedDescription)"), style: .error)
                 Haptics.error()
             }
             return false
@@ -2312,7 +2318,7 @@ final class AppModel {
         }
         do {
             try await api.renameSession(k, tabName: tab?.isEmpty == false ? tab : nil, title: title?.isEmpty == false ? title : nil)
-            toast = Toast("已重命名", style: .success)
+            toast = Toast(String(localized: "已重命名"), style: .success)
         } catch { show(error) }
         await refresh()
     }
@@ -2325,7 +2331,7 @@ final class AppModel {
         Haptics.tap()
         do {
             try await api.archiveConversation(k.sessionID, archived: archived)
-            toast = Toast(archived ? "已归档" : "已取消归档", style: .success)
+            toast = Toast(archived ? String(localized: "已归档") : String(localized: "已取消归档"), style: .success)
         } catch {
             edit(machine: k.machineRef) { s in if s.sessionID == k.sessionID { s.archived = !archived } }
             show(error)
@@ -2343,8 +2349,8 @@ final class AppModel {
     /// Asks the agent to end its /loop: nothing outside claude can cancel a scheduled wakeup or its cron job,
     /// so the agent is told to (it wakes up for the message and stops scheduling).
     func stopLoop(_ key: SessionKey) {
-        sendNow(key, text: "停止当前的 /loop：调用 ScheduleWakeup(stop: true) 结束循环（如果用 CronCreate 建过定时任务，用 CronDelete 删掉），"
-            + "不要再安排下一次唤醒，回复一句「循环已停止」即可。")
+        sendNow(key, text: "停止当前的 /loop：调用 ScheduleWakeup(stop: true) 结束循环（如果用 CronCreate 建过定时任务，用 CronDelete 删掉），" // i18n-ignore
+            + "不要再安排下一次唤醒，回复一句「循环已停止」即可。") // i18n-ignore
     }
 
     /// Everything again from every group's hub (pull to refresh, coming back to the app).
@@ -2419,7 +2425,7 @@ final class AppModel {
     func notDone() {
         guard Date.now.timeIntervalSince(lastNotDone) > 4 else { return }
         lastNotDone = .now
-        toast = Toast(connection.networkUp ? "连不上 hub，刚才的操作没有生效" : "没有网络，刚才的操作没有生效", style: .info)
+        toast = Toast(connection.networkUp ? String(localized: "连不上 hub，刚才的操作没有生效") : String(localized: "没有网络，刚才的操作没有生效"), style: .info)
         Haptics.attention()
     }
 

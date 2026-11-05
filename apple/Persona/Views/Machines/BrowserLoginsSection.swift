@@ -74,14 +74,14 @@ struct BrowserLoginsSection: View {
             }
             .accessibilityIdentifier("browser-logins-clear-confirm")
         } message: {
-            Text(clearing.map { if case .all = $0 { "这台 Mac 上 ego lite 的所有 cookie 都会删掉，所有网站都要重新登录。" } else { "这个网站在这台 Mac 的 ego lite 里会退出登录。" } }.map { $0 + "你自己在 ego 里的登录也一样。" } ?? "")
+            Text(clearing.map { if case .all = $0 { String(localized: "这台 Mac 上 ego lite 的所有 cookie 都会删掉，所有网站都要重新登录。你自己在 ego 里的登录也一样。") } else { String(localized: "这个网站在这台 Mac 的 ego lite 里会退出登录。你自己在 ego 里的登录也一样。") } } ?? "")
         }
     }
 
     private var clearTitle: String {
         switch clearing {
-        case .site(let s): "清除 \(s) 的登录？"
-        case .all: "清除所有网站的登录？"
+        case .site(let s): String(localized: "清除 \(s) 的登录？")
+        case .all: String(localized: "清除所有网站的登录？")
         case nil: ""
         }
     }
@@ -143,7 +143,11 @@ struct BrowserLoginsSection: View {
     }
 
     static func detail(count: Int, expires: Date?) -> String {
-        "\(count) 条" + (expires.map { " · 最晚 \($0.formatted(date: .numeric, time: .omitted)) 过期" } ?? " · 关掉浏览器就失效")
+        if let expires {
+            let date = expires.formatted(date: .numeric, time: .omitted)
+            return String(localized: "\(count) 条 · 最晚 \(date) 过期")
+        }
+        return String(localized: "\(count) 条 · 关掉浏览器就失效")
     }
 
     // MARK: Calls
@@ -176,9 +180,10 @@ struct BrowserLoginsSection: View {
             sites = a.sites
             file = nil // the file's contents are gone once sent
             let skipped = a.skipped ?? 0
-            model.toast = Toast("已导入 \(a.imported ?? 0) 条" + (skipped > 0 ? "，跳过 \(skipped) 条过期或格式不对的" : ""), style: .success)
+            let imported = a.imported ?? 0
+            model.toast = Toast(skipped > 0 ? String(localized: "已导入 \(imported) 条，跳过 \(skipped) 条过期或格式不对的") : String(localized: "已导入 \(imported) 条"), style: .success)
         } catch {
-            if let m = error.shown { model.toast = Toast("导入失败：\(m)", style: .error) }
+            if let m = error.shown { model.toast = Toast(String(localized: "导入失败：\(m)"), style: .error) }
         }
     }
 
@@ -190,9 +195,10 @@ struct BrowserLoginsSection: View {
             let site: String? = if case .site(let s) = what { s } else { nil }
             let a = try await api.clearBrowserCookies(machine: ref.id, site: site)
             sites = a.sites
-            model.toast = Toast("已清除 \(a.removed ?? 0) 条", style: .success)
+            let removed = a.removed ?? 0
+            model.toast = Toast(String(localized: "已清除 \(removed) 条"), style: .success)
         } catch {
-            if let m = error.shown { model.toast = Toast("清除失败：\(m)", style: .error) }
+            if let m = error.shown { model.toast = Toast(String(localized: "清除失败：\(m)"), style: .error) }
         }
     }
 }
@@ -230,7 +236,7 @@ private struct CookiePickSheet: View {
                             .accessibilityIdentifier("browser-logins-pick")
                         }
                     } header: {
-                        Text("\(f.name) · \(f.sites.count) 个网站" + (f.bad > 0 ? " · \(f.bad) 行读不懂，已略过" : ""))
+                        Text(f.bad > 0 ? String(localized: "\(f.name) · \(f.sites.count) 个网站 · \(f.bad) 行读不懂，已略过") : String(localized: "\(f.name) · \(f.sites.count) 个网站"))
                     } footer: {
                         Text("默认一个都不勾，只导你勾选的。导进这台 Mac 的 ego lite 默认配置：你自己在 ego 里浏览时也会用这些登录。")
                     }
@@ -255,9 +261,13 @@ private struct CookiePickSheet: View {
     }
 
     static func detail(_ s: CookieFileSite) -> String {
-        var t = "\(s.cookies.count) 条"
-        if let e = s.expires { t += " · 最晚 \(Date(timeIntervalSince1970: e).formatted(date: .numeric, time: .omitted)) 过期" }
-        if s.expired > 0 { t += " · \(s.expired) 条已过期，不导入" }
-        return t
+        let count = s.cookies.count
+        let date = s.expires.map { Date(timeIntervalSince1970: $0).formatted(date: .numeric, time: .omitted) }
+        switch (date, s.expired > 0) {
+        case let (date?, true): return String(localized: "\(count) 条 · 最晚 \(date) 过期 · \(s.expired) 条已过期，不导入")
+        case let (date?, false): return String(localized: "\(count) 条 · 最晚 \(date) 过期")
+        case (nil, true): return String(localized: "\(count) 条 · \(s.expired) 条已过期，不导入")
+        case (nil, false): return String(localized: "cookies.count", defaultValue: "\(count) 条")
+        }
     }
 }

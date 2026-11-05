@@ -115,7 +115,7 @@ struct VNCPage: View {
             Button { toPictureInPicture() } label: { Label("小窗", systemImage: Theme.Icon.pictureInPicture) }
             #endif
             #if DEBUG
-            if let s = session { Text(String(format: "%.0f 帧/秒", s.fps) + (s.latency.map { String(format: " · %.0f 毫秒", $0) } ?? "")) }
+            if let s = session { Text(String(format: "%.0f 帧/秒", s.fps) + (s.latency.map { String(format: " · %.0f 毫秒", $0) } ?? "")) } // i18n-ignore
             #endif
         } label: {
             Image(systemName: Theme.Icon.more).font(Theme.Font.labelStrong)
@@ -163,9 +163,9 @@ struct VNCPage: View {
     }
 
     #if os(iOS) || os(visionOS)
-    static let fromPhone = "从 iPhone 粘贴", toPhone = "复制到 iPhone"
+    static let fromPhone = String(localized: "从 iPhone 粘贴"), toPhone = String(localized: "复制到 iPhone")
     #else
-    static let fromPhone = "从这台 Mac 粘贴", toPhone = "复制到这台 Mac"
+    static let fromPhone = String(localized: "从这台 Mac 粘贴"), toPhone = String(localized: "复制到这台 Mac")
     #endif
 
     private func stepLine(_ a: ComputerActivity) -> some View {
@@ -197,7 +197,7 @@ struct VNCPage: View {
             }
         case .closed(let why):
             VStack(spacing: Theme.Space.m) {
-                Text(why ?? "已断开。").font(Theme.Font.secondary).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Text(why ?? String(localized: "已断开。")).font(Theme.Font.secondary).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 Button("重新连接") { s.start() }.themedButton(prominent: true).lineLimit(1)
             }
             .padding(Theme.Space.xl)
@@ -220,10 +220,10 @@ struct VNCPage: View {
 
     private var phaseLabel: String {
         switch session?.phase {
-        case .live: "已连接"
-        case .signIn: "要登录"
-        case .closed: "没连上"
-        default: "连接中"
+        case .live: String(localized: "已连接")
+        case .signIn: String(localized: "要登录")
+        case .closed: String(localized: "没连上")
+        default: String(localized: "连接中")
         }
     }
 
@@ -247,7 +247,7 @@ struct VNCPage: View {
 
     private func handBack() {
         guard let from else { return }
-        Task { _ = await model.send(from, text: "我在电脑上操作完了，你继续吧。") }
+        Task { _ = await model.send(from, text: String(localized: "我在电脑上操作完了，你继续吧。")) }
         onClose()
     }
 
@@ -262,17 +262,17 @@ struct VNCPage: View {
         let text = NSPasteboard.general.string(forType: .string)
         #endif
         guard let text, !text.isEmpty, let s = session else {
-            model.toast = Toast("剪贴板里没有文字", style: .error)
+            model.toast = Toast(String(localized: "剪贴板里没有文字"), style: .error)
             return
         }
         let ok = andPaste ? await s.paste(text) : await s.setMacClipboard(text)
-        model.toast = ok ? Toast(andPaste ? "已粘贴到 \(name)" : "已放进 \(name) 的剪贴板")
-            : Toast("没能写进 \(name) 的剪贴板" + (andPaste ? "，没有粘贴" : ""), style: .error)
+        model.toast = ok ? Toast(andPaste ? String(localized: "已粘贴到 \(name)") : String(localized: "已放进 \(name) 的剪贴板"))
+            : Toast(andPaste ? String(localized: "没能写进 \(name) 的剪贴板，没有粘贴") : String(localized: "没能写进 \(name) 的剪贴板"), style: .error)
     }
 
     private func copyToPhone() async {
         guard let s = session, let text = await s.readMacClipboard(), !text.isEmpty else {
-            model.toast = Toast("\(name) 的剪贴板里没有文字", style: .error)
+            model.toast = Toast(String(localized: "\(name) 的剪贴板里没有文字"), style: .error)
             return
         }
         #if os(iOS) || os(visionOS)
@@ -281,7 +281,7 @@ struct VNCPage: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         #endif
-        model.toast = Toast("已复制 \(name) 的剪贴板")
+        model.toast = Toast(String(localized: "已复制 \(name) 的剪贴板"))
     }
 }
 
@@ -304,7 +304,8 @@ private struct VNCSignIn: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             Text("登录这台 Mac 的屏幕共享").font(Theme.Font.heading)
-            Text("用 \(name) 上的 macOS 账号和密码。只发给那台 Mac" + (remember ? "；记住的话存在这台设备的钥匙串里，不上传。" : "，不保存。"))
+            Text(remember ? String(localized: "用 \(name) 上的 macOS 账号和密码。只发给那台 Mac；记住的话存在这台设备的钥匙串里，不上传。")
+                 : String(localized: "用 \(name) 上的 macOS 账号和密码。只发给那台 Mac，不保存。"))
                 .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if let failed {
                 Text(failed).font(Theme.Font.label).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
@@ -346,9 +347,9 @@ private struct VNCSignIn: View {
 /// 「在这台手机上记住」 on the phone, 「在这台 Mac 上记住」 on the Mac.
 enum ScreenKeep {
     #if os(macOS)
-    static let label = "在这台 Mac 上记住"
+    static let label = String(localized: "在这台 Mac 上记住")
     #else
-    static let label = "在这台手机上记住"
+    static let label = String(localized: "在这台手机上记住")
     #endif
 }
 
@@ -360,21 +361,21 @@ struct VNCHelp: View {
         NavigationStack {
             List {
                 Section("移动操作") {
-                    row(Theme.Icon.pointer, "鼠标模式（默认）", "轻点在那里点击；单指拖动就是拖拽；两指拖动滚动；两指轻点或按住不放是右键。")
-                    row(Theme.Icon.search, "放大", "双指开合放大、缩小。放大以后，两指拖动是移动画面，不再滚动。")
+                    row(Theme.Icon.pointer, String(localized: "鼠标模式（默认）"), String(localized: "轻点在那里点击；单指拖动就是拖拽；两指拖动滚动；两指轻点或按住不放是右键。"))
+                    row(Theme.Icon.search, String(localized: "放大"), String(localized: "双指开合放大、缩小。放大以后，两指拖动是移动画面，不再滚动。"))
                 }
                 Section("输入和剪贴板") {
-                    row(Theme.Icon.keyboard, "打字", "点底栏的键盘。键盘上面一排是 Mac 的快捷键：⌘ ⌥ ⌃ ⇧ 点一下按住、再点松开，还有 Esc、Tab、方向键和 ⌘C ⌘V ⌘Z ⌘Tab ⌘空格。中文照常输入，上屏的字经剪贴板粘贴过去。")
-                    row(Theme.Icon.clipboard, "复制和粘贴", "点底栏的剪贴板：「\(VNCPage.fromPhone)」把这边的文字放进 Mac 的剪贴板并粘贴；「\(VNCPage.toPhone)」把 Mac 剪贴板里的文字拿过来。")
+                    row(Theme.Icon.keyboard, String(localized: "打字"), String(localized: "点底栏的键盘。键盘上面一排是 Mac 的快捷键：⌘ ⌥ ⌃ ⇧ 点一下按住、再点松开，还有 Esc、Tab、方向键和 ⌘C ⌘V ⌘Z ⌘Tab ⌘空格。中文照常输入，上屏的字经剪贴板粘贴过去。"))
+                    row(Theme.Icon.clipboard, String(localized: "复制和粘贴"), String(localized: "点底栏的剪贴板：「\(VNCPage.fromPhone)」把这边的文字放进 Mac 的剪贴板并粘贴；「\(VNCPage.toPhone)」把 Mac 剪贴板里的文字拿过来。"))
                 }
                 Section("何时用触控板模式") {
-                    row(Theme.Icon.trackpad, "触控板模式", "从右上角「…」里打开。手指在屏幕上移动指针；轻点在指针处点击；轻点后马上拖动是拖拽。指针跑偏了用「指针居中」。")
+                    row(Theme.Icon.trackpad, String(localized: "触控板模式"), String(localized: "从右上角「…」里打开。手指在屏幕上移动指针；轻点在指针处点击；轻点后马上拖动是拖拽。指针跑偏了用「指针居中」。"))
                 }
                 Section("小窗") {
-                    row(Theme.Icon.pictureInPicture, "小窗", "「…」里的「小窗」把画面放进画中画，切到别的 App 或回到桌面也浮着；点小窗回到这里。小窗只能看，关掉小窗就断开。")
+                    row(Theme.Icon.pictureInPicture, String(localized: "小窗"), String(localized: "「…」里的「小窗」把画面放进画中画，切到别的 App 或回到桌面也浮着；点小窗回到这里。小窗只能看，关掉小窗就断开。"))
                 }
                 Section("交还电脑") {
-                    row(Theme.Icon.handBack, "我完成了", "Agent 等你在电脑上操作时，做完点底栏的「我完成了」，它就接着做。直接关掉画面也算交还。")
+                    row(Theme.Icon.handBack, String(localized: "我完成了"), String(localized: "Agent 等你在电脑上操作时，做完点底栏的「我完成了」，它就接着做。直接关掉画面也算交还。"))
                 }
             }
             .navigationTitle("使用 VNC")

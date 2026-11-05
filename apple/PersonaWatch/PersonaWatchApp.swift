@@ -238,7 +238,7 @@ struct WatchRootView: View {
                     // A group the phone could not get the watch a credential for: none of its agents is below (#1185).
                     if !model.missing.isEmpty {
                         Section {
-                            Text("「\(model.missing.map { model.names[$0] ?? $0 }.joined(separator: "、"))」还没有手表的凭据")
+                            Text("「\(model.missing.map { model.names[$0] ?? $0 }.joined(separator: String(localized: "、", comment: "Separator between names in a list")))」还没有手表的凭据")
                                 .font(.footnote).foregroundStyle(.secondary).lineLimit(3)
                                 .watchCard()
                             WatchSyncButton().watchCard()
@@ -253,7 +253,7 @@ struct WatchRootView: View {
                                             .font(.footnote.weight(.semibold))
                                             .foregroundStyle(Theme.needsYou)
                                         Text(ix.watchSummary).font(.headline).lineLimit(3)
-                                        Text(ix.taskTitle.map { "任务 · " + $0 } ?? ix.sessionTitle ?? "")
+                                        Text(ix.taskTitle.map { String(localized: "任务 · \($0)") } ?? ix.sessionTitle ?? "")
                                             .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
@@ -369,10 +369,10 @@ extension View {
 extension InteractionKind {
     var watchTitle: String {
         switch self {
-        case .question: "提问"
-        case .plan: "计划审批"
-        case .permission: "授权"
-        case .screen: "终端"
+        case .question: String(localized: "提问")
+        case .plan: String(localized: "计划审批")
+        case .permission: String(localized: "授权")
+        case .screen: String(localized: "终端")
         }
     }
 
@@ -390,9 +390,9 @@ extension Interaction {
     var watchSummary: String {
         switch kind {
         case .question: questions?.first?.question ?? ""
-        case .plan: (plan ?? "").split(separator: "\n").first.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "# ")) } ?? "执行计划"
-        case .permission: [toolName, summary].compactMap { $0 }.joined(separator: "：")
-        case .screen: "终端里有对话框"
+        case .plan: (plan ?? "").split(separator: "\n").first.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "# ")) } ?? String(localized: "执行计划")
+        case .permission: [toolName, summary].compactMap { $0 }.joined(separator: String(localized: "：", comment: "Separator between a label and its value"))
+        case .screen: String(localized: "终端里有对话框")
         }
     }
 }
@@ -426,7 +426,7 @@ struct WatchInteractionView: View {
                                 HStack(spacing: Theme.Space.sm) {
                                     Text(text).font(.footnote).lineLimit(1).minimumScaleFactor(0.8)
                                     if recommended {
-                                        Text("推荐").font(.caption2.weight(.semibold)).foregroundStyle(Theme.ai)
+                                        Text(LocalizedStringResource("watch.recommended", defaultValue: "推荐", comment: "Tag on the recommended answer, beside it on one watch button: as short as possible")).font(.caption2.weight(.semibold)).foregroundStyle(Theme.ai)
                                             .padding(.horizontal, 5).padding(.vertical, 1)
                                             .background(Theme.ai.opacity(0.2), in: .capsule)
                                             .fixedSize()
@@ -443,7 +443,7 @@ struct WatchInteractionView: View {
                 case .plan:
                     Text(WatchText.shown(interaction.plan ?? "")).font(.footnote)
                     Button("批准并执行") { act(Resolution(approve: true, mode: "bypassPermissions")) }.buttonStyle(.borderedProminent)
-                    Button("打回") { act(Resolution(approve: false, feedback: "请重新考虑这个计划")) }
+                    Button("打回") { act(Resolution(approve: false, feedback: "请重新考虑这个计划")) } // i18n-ignore: feedback sent to the agent
                 case .permission:
                     Text(interaction.summary ?? "").font(.caption2.monospaced())
                     if interaction.requiresInput {
@@ -599,7 +599,7 @@ struct WatchSessionView: View {
                         Task { await model.send(session.key, t); await load() }
                     }
                 HStack {
-                    Button("继续") { Task { await model.send(session.key, "继续") } }.lineLimit(1).disabled(!session.canSend)
+                    Button("继续") { Task { await model.send(session.key, String(localized: "继续")) } }.lineLimit(1).disabled(!session.canSend)
                     if session.status.isActive && session.canInterrupt {
                         Button { Task { await model.interrupt(session.key) } } label: { Image(systemName: Theme.Icon.interrupt) }
                             .tint(Theme.danger)
@@ -711,9 +711,9 @@ struct WatchInboxRow: View {
     var item: InboxItem
 
     private var source: String {
-        if item.isLark { return item.kindLabel ?? "飞书" }
+        if item.isLark { return item.kindLabel ?? String(localized: "飞书") }
         if item.connector != nil { return WatchInboxText.connectorSource(item) }
-        return "邮件"
+        return String(localized: "邮件")
     }
 
     var body: some View {
@@ -749,7 +749,7 @@ struct WatchInboxItemView: View {
                 if let s = item.summary, !s.isEmpty {
                     Text(s).font(.headline)
                 }
-                Text([item.sender, item.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "："))
+                Text([item.sender, item.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: String(localized: "：", comment: "Separator between a label and its value")))
                     .font(.footnote).foregroundStyle(.secondary)
                 if item.connector != nil {
                     Text("在手机上打开回复").font(.footnote).foregroundStyle(.tertiary)
@@ -818,6 +818,6 @@ struct WatchWorkflowChip: View {
         .padding(.vertical, Theme.Space.xxs)
         .background(Theme.ai.opacity(0.2), in: .capsule)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("后台 " + text)
+        .accessibilityLabel(String(localized: "后台 \(text)"))
     }
 }

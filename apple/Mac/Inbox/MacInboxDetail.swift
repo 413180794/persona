@@ -11,7 +11,7 @@ struct MacInboxDetail: View {
         let sel = state.selection
         if sel.count > 1 {
             VStack(spacing: Theme.Space.l) {
-                EmptyStateView(symbol: Theme.Icon.inbox, title: "已选 \(sel.count) 件", message: "按 E 把它们都标为已处理。")
+                EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "已选 \(sel.count) 件"), message: String(localized: "按 E 把它们都标为已处理。"))
                 Button("全部标为已处理") { state.toggleDone(sel, model: model) }
                     .controlSize(.large)
                     .lineLimit(1)
@@ -36,7 +36,7 @@ struct MacInboxDetail: View {
                 }
             }
         } else {
-            SplitPlaceholder(symbol: Theme.Icon.inbox, title: "选一件事", message: "左边列表里选一件事，详情会在这里打开。")
+            SplitPlaceholder(symbol: Theme.Icon.inbox, title: String(localized: "选一件事"), message: String(localized: "左边列表里选一件事，详情会在这里打开。"))
                 .navigationTitle("收件箱")
         }
     }
@@ -109,7 +109,7 @@ struct MacInboxItemDetail: View {
 
     private var subtitle: String {
         if current.doc != nil { return current.doc?.typeName ?? "" }
-        if current.isLark { return current.lark?.isGroup == true ? "飞书群聊" : "飞书" }
+        if current.isLark { return current.lark?.isGroup == true ? String(localized: "飞书群聊") : String(localized: "飞书") }
         return current.accountName
     }
 
@@ -142,7 +142,7 @@ struct MacInboxItemWindow: View {
             if let itemID, let item = InboxStore.shared.items.first(where: { $0.id == itemID }) {
                 MacInboxItemDetail(item: item, accounts: MacInboxState.shared.accounts)
             } else {
-                EmptyStateView(symbol: Theme.Icon.inbox, title: "这件事不在收件箱里了", message: "可能已经过期，回到主窗口看看。")
+                EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "这件事不在收件箱里了"), message: String(localized: "可能已经过期，回到主窗口看看。"))
             }
         }
         .macLook(model)

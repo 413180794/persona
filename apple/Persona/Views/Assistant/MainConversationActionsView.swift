@@ -27,7 +27,7 @@ extension AppModel {
         } catch {
             compactionRequests[key] = nil
             Haptics.error()
-            toast = Toast("没开始压缩：" + (error.shown ?? "请稍后再试"), style: .error)
+            toast = Toast(String(localized: "没开始压缩：\(error.shown ?? String(localized: "请稍后再试"))"), style: .error)
         }
     }
 
@@ -39,16 +39,16 @@ extension AppModel {
             let r = try await api.newMainConversation(carry: carry, expect: main.sessionID)
             await toEmptyMain()
             Haptics.success()
-            toast = Toast(r.carried == true ? "已新建主对话，会带上旧对话的摘要" : "已新建主对话", style: .success)
+            toast = Toast(r.carried == true ? String(localized: "已新建主对话，会带上旧对话的摘要") : String(localized: "已新建主对话"), style: .success)
             return true
         } catch let e as APIError where e.code == "main_changed" {
             // Another device replaced it already: show what the hub has now.
             await toEmptyMain()
-            toast = Toast("主对话已在别的设备上换过了，已刷新", style: .info)
+            toast = Toast(String(localized: "主对话已在别的设备上换过了，已刷新"), style: .info)
             return true
         } catch {
             Haptics.error()
-            toast = Toast("没新建：" + (error.shown ?? "请稍后再试"), style: .error)
+            toast = Toast(String(localized: "没新建：\(error.shown ?? String(localized: "请稍后再试"))"), style: .error)
             return false
         }
     }

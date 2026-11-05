@@ -73,8 +73,8 @@ struct AgentsListMenu: View {
             items(machines)
         } else {
             Menu { items(machines) } label: { label(chosen, hub: hub) }
-                .accessibilityLabel((hub.map { "当前 hub：\($0)，" } ?? "") + (chosen.map { "当前机器：\($0.name)，" } ?? "")
-                                    + "分组：" + shownGrouping.title)
+                .accessibilityLabel((hub.map { String(localized: "当前 hub：\($0)，") } ?? "") + (chosen.map { String(localized: "当前机器：\($0.name)，") } ?? "")
+                                    + String(localized: "分组：\(shownGrouping.title)"))
         }
     }
 

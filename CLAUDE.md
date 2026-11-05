@@ -118,6 +118,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - 常变的状态别写 UserDefaults：每写一次，App 里每个 `@AppStorage` 视图都重算（2026-11-01，每次推送都写，Agents 列表滚动中跟着重排、内容跳），放 `StateCache`。Mac 上拖窗口时分栏自己每帧写一次，重的视图用 `@StoredValue`（只为自己的键重算，#1337）。（`ios.md`、`lessons/macos.md`）
 - App 目标默认 MainActor 隔离：交给系统在别的队列上回调的闭包写成 `{ @Sendable … in`，否则运行时崩；`apple/Shared` 的纯数据类型标 `nonisolated`。（`ios.md`）
 - 轮询和上报已读只该在页面在前台时做：新外壳的两页和不摘窗的容器里，藏起来的页不会触发 `onDisappear`，用 `.tabActiveTask`、`.onTabVisibility`；消息订阅、听写、计时不用。（`ios.md`）
+- Apple 端界面有中英日三种语言（`docs/ios.md`「界面语言」）：新的中文界面文字要走 `String(localized:)` / `Text`，编一次后 `scripts/i18n/apple_l10n.py sync <DerivedData>` 加进 catalog、补 en 和 ja，`check` 会拦；不是界面的中文（发给 Agent 的、匹配 hub 文字的）标 `// i18n-ignore`。测试按中文跑（scheme 固定 zh-Hans）。
 - 截图验证用 DEBUG 启动参数 + `simctl io screenshot`，不用 computer-use；界面改动必须真的看到截图（看不到是网关丢图，见 `testing.md`）。
 - 共用页面里一直在动的 `TimelineView(.animation)` 在 Mac 上可能每帧整窗重新布局（实测：「需要你」圆点的呼吸圈让 Agents 页空闲占一个核的 14%）：Mac 上常驻动画交给 Core Animation（`MacBreathingRing`）。（`lessons/macos.md`）
 - hub 的内存状态随时会被别人重新部署清掉：跨请求的流程要自包含或落库。（`server.md`）

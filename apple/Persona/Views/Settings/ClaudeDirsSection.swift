@@ -19,12 +19,12 @@ nonisolated enum ClaudeDirsLogic {
     /// Under the path: where it came from, how many sessions, how many claudes run from it, the rule blocking it.
     static func meta(_ d: Dir, home: String?) -> String {
         var parts: [String] = []
-        if d.isDefault == true { parts.append("默认目录，不能屏蔽") }
-        else if d.source == "config" { parts.append("hub.json 里配的") }
-        else { parts.append("自动发现") }
-        if let n = d.sessions, n > 0 { parts.append("\(n) 个会话") }
-        if d.running > 0 { parts.append("\(d.running) 个正在运行") }
-        if d.blocked == true, let by = d.blockedBy, !by.isEmpty, !samePath(by, d.path, home: home) { parts.append("由规则 \(by) 屏蔽") }
+        if d.isDefault == true { parts.append(String(localized: "默认目录，不能屏蔽")) }
+        else if d.source == "config" { parts.append(String(localized: "hub.json 里配的")) }
+        else { parts.append(String(localized: "自动发现")) }
+        if let n = d.sessions, n > 0 { parts.append(String(localized: "\(n) 个会话")) }
+        if d.running > 0 { parts.append(String(localized: "\(d.running) 个正在运行")) }
+        if d.blocked == true, let by = d.blockedBy, !by.isEmpty, !samePath(by, d.path, home: home) { parts.append(String(localized: "由规则 \(by) 屏蔽")) }
         return parts.joined(separator: " · ")
     }
 
@@ -50,10 +50,10 @@ nonisolated enum ClaudeDirsLogic {
     /// Why a typed rule cannot be added (nil = it can).
     static func problem(_ input: String, existing: [String]) -> String? {
         let p = cleaned(input)
-        if p.isEmpty { return "填一个目录或通配，例如 ~/.automation/*" }
-        if !p.hasPrefix("/") && !p.hasPrefix("~/") { return "要以 / 或 ~/ 开头（~ 是那台电脑的家目录）" }
-        if p == "~" || p == "/" { return "不能屏蔽整个家目录或根目录" }
-        if existing.contains(p) { return "已经屏蔽了" }
+        if p.isEmpty { return String(localized: "填一个目录或通配，例如 ~/.automation/*") }
+        if !p.hasPrefix("/") && !p.hasPrefix("~/") { return String(localized: "要以 / 或 ~/ 开头（~ 是那台电脑的家目录）") }
+        if p == "~" || p == "/" { return String(localized: "不能屏蔽整个家目录或根目录") }
+        if existing.contains(p) { return String(localized: "已经屏蔽了") }
         return nil
     }
 
@@ -62,12 +62,12 @@ nonisolated enum ClaudeDirsLogic {
     /// and saying nothing left it spinning for good (#744).
     static func loadFailure(_ error: Error) -> String? {
         if error.isCancellation { return nil }
-        if error.isTimeout || error.isOffline { return "连不上 hub，读不到这台电脑的配置目录" }
-        return "读不到这台电脑的配置目录：\(error.localizedDescription)"
+        if error.isTimeout || error.isOffline { return String(localized: "连不上 hub，读不到这台电脑的配置目录") }
+        return String(localized: "读不到这台电脑的配置目录：\(error.localizedDescription)")
     }
 
     /// No connection to this machine's hub at all (not paired, or its group gone).
-    static let noHub = "还没连上这台电脑所在的 hub"
+    static var noHub: String { String(localized: "还没连上这台电脑所在的 hub") }
 }
 
 /// 设置 › Claude Code › 屏蔽的配置目录 (docs/claude-integration.md「屏蔽配置目录」): the machine's Claude Code config
@@ -85,9 +85,9 @@ struct ClaudeDirsSection: View {
 
     private typealias L = ClaudeDirsLogic
     #if os(macOS)
-    private static let fieldTitle = "要屏蔽的目录"
+    private static var fieldTitle: String { String(localized: "要屏蔽的目录") }
     #else
-    private static let fieldTitle = "~/.automation/* 或具体路径"
+    private static var fieldTitle: String { String(localized: "~/.automation/* 或具体路径") }
     #endif
 
     var body: some View {
@@ -106,7 +106,7 @@ struct ClaudeDirsSection: View {
                         if d.isDefault != true {
                             Button(d.blocked == true ? "取消屏蔽" : "屏蔽") {
                                 let label = L.shortPath(d.path, home: state.home)
-                                Task { await save(L.toggled(state, d), key: d.path, done: d.blocked == true ? "已取消屏蔽 \(d.blockedBy ?? label)" : "已屏蔽 \(label)") }
+                                Task { await save(L.toggled(state, d), key: d.path, done: d.blocked == true ? String(localized: "已取消屏蔽 \(d.blockedBy ?? label)") : String(localized: "已屏蔽 \(label)")) }
                             }
                             .lineLimit(1)
                             .formButton()
@@ -115,9 +115,9 @@ struct ClaudeDirsSection: View {
                     }
                 }
                 ForEach(L.looseRules(state), id: \.self) { p in
-                    row(p, meta: "规则", blocked: true) {
+                    row(p, meta: String(localized: "规则"), blocked: true) {
                         Button("删除", role: .destructive) {
-                            Task { await save(state.blocked.filter { $0 != p }, key: p, done: "已删除规则 \(p)") }
+                            Task { await save(state.blocked.filter { $0 != p }, key: p, done: String(localized: "已删除规则 \(p)")) }
                         }
                         .lineLimit(1)
                         .formButton()
@@ -161,7 +161,7 @@ struct ClaudeDirsSection: View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: Theme.Space.m) {
                 // A Mac form would show the title as the row's label, the field empty beside it (#1221).
-                TextField(Self.fieldTitle, text: $input, prompt: Text(verbatim: "~/.automation/* 或具体路径"))
+                TextField(Self.fieldTitle, text: $input, prompt: Text("~/.automation/* 或具体路径"))
                     #if os(macOS)
                     .labelsHidden()
                     #endif
@@ -187,7 +187,7 @@ struct ClaudeDirsSection: View {
     private func add(_ state: APIClient.ClaudeDirsState) async {
         guard L.problem(input, existing: state.blocked) == nil else { return }
         let p = L.cleaned(input)
-        if await save(state.blocked + [p], key: "+", done: "已屏蔽 \(p)") { input = "" }
+        if await save(state.blocked + [p], key: "+", done: String(localized: "已屏蔽 \(p)")) { input = "" }
     }
 
     private func load() async {
@@ -218,7 +218,7 @@ struct ClaudeDirsSection: View {
         } catch {
             if !error.isCancellation {
                 Haptics.error()
-                self.error = "没有改成：\(error.shown ?? error.localizedDescription)"
+                self.error = String(localized: "没有改成：\(error.shown ?? error.localizedDescription)")
             }
             return false
         }

@@ -11,11 +11,13 @@ nonisolated struct ExtensionDependencyStatus: Codable, Hashable, Sendable, Ident
     var title: String { name?.isEmpty == false ? name! : id }
     var description: String {
         switch state {
-        case "ok": return installed.map { "已就绪 · \($0)" } ?? "已就绪"
-        case "missing": return "先安装这个扩展"
-        case "disabled": return "先启用这个扩展"
-        case "old": return "需要 \(version ?? "更新的版本")，当前 \(installed ?? "未知")"
-        default: return "状态未知"
+        case "ok": return installed.map { String(localized: "已就绪 · \($0)") } ?? String(localized: "已就绪")
+        case "missing": return String(localized: "先安装这个扩展")
+        case "disabled": return String(localized: "先启用这个扩展")
+        case "old":
+            let needed = version ?? String(localized: "更新的版本"), current = installed ?? String(localized: "未知")
+            return String(localized: "需要 \(needed)，当前 \(current)")
+        default: return String(localized: "状态未知")
         }
     }
 }
@@ -47,7 +49,8 @@ nonisolated struct ExtensionDisableConfirmation {
         dependents = (error.details?["dependents"]?.array ?? []).compactMap { item in
             item["name"]?.string ?? item["id"]?.string
         }
-        message = dependents.isEmpty ? error.message : "以下扩展依赖它，将一起停用：" + dependents.joined(separator: "、") + "。只停用，不卸载；设置和数据保留。"
+        let names = dependents.joined(separator: "、")
+        message = dependents.isEmpty ? error.message : String(localized: "以下扩展依赖它，将一起停用：\(names)。只停用，不卸载；设置和数据保留。")
     }
 }
 

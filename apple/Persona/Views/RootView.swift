@@ -90,7 +90,7 @@ struct RootView: View {
         .overlay(alignment: .topLeading) {
             if model.vncPiP != nil {
                 Color.clear.frame(width: Theme.Size.hairline, height: Theme.Size.hairline)
-                    .accessibilityElement().accessibilityLabel("VNC 小窗开着").accessibilityIdentifier("vnc-pip-on")
+                    .accessibilityElement().accessibilityLabel("VNC 小窗开着").accessibilityIdentifier("vnc-pip-on") // i18n-ignore
             }
         }
         .screenProbe("connection", ConnectionShown(shown: "\(model.connection.shown)", network: model.connection.networkUp))

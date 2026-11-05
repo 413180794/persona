@@ -262,7 +262,7 @@ nonisolated enum LarkPartRenderer {
         case "docs":
             var s = style
             s.link = p.url.flatMap(safeURL)
-            return [.symbol("doc.text", LarkColor.blue), .text(" " + (p.text ?? "文档"), s)]
+            return [.symbol("doc.text", LarkColor.blue), .text(" " + (p.text ?? String(localized: "文档")), s)]
         case "emotion":
             let key = p.refId ?? p.text ?? ""
             let label = LarkMedia.labelFallback(key, text: p.text)
@@ -422,7 +422,7 @@ struct LarkSticker: View {
                     RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Color.primary.opacity(0.05)).scaledFrame(width: Theme.Size.box80, height: Theme.Size.box80)
                 }
             }
-            .accessibilityLabel(part.text ?? "贴纸")
+            .accessibilityLabel(part.text ?? String(localized: "贴纸"))
             .task(id: url) { image = await LarkMedia.shared.image(url, maxPixel: 400) }
         }
     }
@@ -434,7 +434,7 @@ struct LarkFileCard: View {
     @Environment(\.larkOpenFile) private var openFile
 
     var body: some View {
-        let name = part.text ?? "文件"
+        let name = part.text ?? String(localized: "文件")
         let ext = (part.metaString("extension") ?? (name as NSString).pathExtension).uppercased()
         Button {
             if let url = part.url { openFile?(url, name) }
@@ -545,12 +545,12 @@ struct LarkCodeBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(language?.isEmpty == false ? language! : "代码").font(Theme.Font.labelMedium).foregroundStyle(.secondary)
+                Text(language?.isEmpty == false ? language! : String(localized: "代码")).font(Theme.Font.labelMedium).foregroundStyle(.secondary)
                 Spacer()
                 Button {
                     UIPasteboard.general.string = code
                     Haptics.success()
-                    AppModel.shared.toast = Toast("已拷贝代码", style: .success)
+                    AppModel.shared.toast = Toast(String(localized: "已拷贝代码"), style: .success)
                 } label: { Image(systemName: Theme.Icon.copy).font(Theme.Font.label) }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)

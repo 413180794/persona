@@ -21,7 +21,7 @@ nonisolated struct GitHubInboxOptions: Codable, Equatable, Sendable {
     }
 
     /// The CI choices, most quiet first: (value, title).
-    static let ciModes: [(String, String)] = [("off", "关闭"), ("default_branch", "只看默认分支"), ("mine", "加上我的 PR"), ("all", "全部")]
+    static let ciModes: [(String, String)] = [("off", String(localized: "state.off", defaultValue: "关闭")), ("default_branch", String(localized: "只看默认分支")), ("mine", String(localized: "加上我的 PR")), ("all", String(localized: "全部"))]
 }
 
 extension APIClient {
@@ -76,14 +76,14 @@ struct GitHubInboxSettings: View {
 
     private var footer: String {
         let ci = switch options.ci {
-        case "off": "CI 失败不进收件箱。"
-        case "default_branch": "只有默认分支的 CI 失败进收件箱，算「需要你」。"
-        case "all": "所有分支的 CI 失败都算「需要你」。"
-        default: "默认分支和你自己开着的 PR 的 CI 失败算「需要你」，其他分支的算「知悉即可」。"
+        case "off": String(localized: "CI 失败不进收件箱。")
+        case "default_branch": String(localized: "只有默认分支的 CI 失败进收件箱，算「需要你」。")
+        case "all": String(localized: "所有分支的 CI 失败都算「需要你」。")
+        default: String(localized: "默认分支和你自己开着的 PR 的 CI 失败算「需要你」，其他分支的算「知悉即可」。")
         }
-        let auto = (options.ignoreBranches ?? ["train/*"]).joined(separator: "、")
-        return ci + "同一个分支的失败合成一件，重跑也算同一件；后来跑成功、分支删了或 PR 合了就自动处理掉。自动分支（\(auto)）不提醒。"
-            + "真人的 @、请你 review、要求修改算「需要你」，机器人发的算「知悉即可」。静音的仓库什么都不进收件箱，已有的也会处理掉。"
+        let auto = (options.ignoreBranches ?? ["train/*"]).joined(separator: String(localized: "、", comment: "Separator between items in a list"))
+        return ci + String(localized: "同一个分支的失败合成一件，重跑也算同一件；后来跑成功、分支删了或 PR 合了就自动处理掉。自动分支（\(auto)）不提醒。")
+            + String(localized: "真人的 @、请你 review、要求修改算「需要你」，机器人发的算「知悉即可」。静音的仓库什么都不进收件箱，已有的也会处理掉。")
     }
 
     private func add() {
@@ -103,7 +103,7 @@ struct GitHubInboxSettings: View {
                     saved(c)
                 }
             } catch {
-                self.error = error.shown.map { "没存上：\($0)" }
+                self.error = error.shown.map { String(localized: "没存上：\($0)") }
             }
         }
     }

@@ -7,7 +7,7 @@ import Foundation
 nonisolated enum AssistantCardText {
     static let view = "persona-view"
     static let card = "persona-card"
-    static let mark = "〔卡片〕"
+    static var mark: String { String(localized: "〔卡片〕", comment: "Stands in for a card in plain text") }
 
     /// `text` with every card block replaced by its words; anything else is left as it is.
     static func replacingCards(_ text: String) -> String {

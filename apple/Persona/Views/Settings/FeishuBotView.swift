@@ -25,7 +25,7 @@ struct FeishuBotView: View {
             setupSection
         }
         .themedPage()
-        .detailTitle("飞书机器人")
+        .detailTitle(String(localized: "飞书机器人"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
         .refreshable { await model.load() }
@@ -50,7 +50,7 @@ struct FeishuBotView: View {
             HStack(spacing: Theme.Space.m) {
                 BrandMark(Theme.Brand.lark, side: Theme.Size.wellM)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(model.status?.botName ?? "飞书机器人").font(Theme.Font.heading).lineLimit(1)
+                    Text(model.status?.botName ?? String(localized: "飞书机器人")).font(Theme.Font.heading).lineLimit(1)
                     HStack(spacing: Theme.Space.sm) {
                         Circle().fill(tint).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                         Text(model.stateText).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
@@ -88,7 +88,7 @@ struct FeishuBotView: View {
             TextField("App ID", text: $model.appID)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .font(Theme.Font.code)
-            SecretField(model.status?.hasSecret == true ? "App Secret（已保存，留空不改）" : "App Secret", filled: "已填写，点验证并保存",
+            SecretField(model.status?.hasSecret == true ? String(localized: "App Secret（已保存，留空不改）") : "App Secret", filled: String(localized: "已填写，点验证并保存"),
                         text: $model.appSecret, identifier: "bot.appSecret")
             #endif
             Picker("平台", selection: $model.domain) {
@@ -126,7 +126,7 @@ struct FeishuBotView: View {
     @ViewBuilder private var pairingSection: some View {
         Section {
             if let owner = model.status?.owner {
-                LabeledContent("已配对") { Text(owner.name.isEmpty ? "飞书用户" : owner.name).lineLimit(1) }
+                LabeledContent("已配对") { Text(owner.name.isEmpty ? String(localized: "飞书用户") : owner.name).lineLimit(1) }
                 if let target = model.status?.target, !target.isEmpty {
                     LabeledContent("消息现在发给") { Text(target).lineLimit(1) }
                 }
@@ -209,7 +209,7 @@ struct FeishuBotView: View {
         return st.owner == nil ? Theme.caution : Theme.positive
     }
 
-    private func feature(_ key: WritableKeyPath<FeishuBotStatus.Features, Bool>, _ symbol: String, _ title: String, _ detail: String) -> some View {
+    private func feature(_ key: WritableKeyPath<FeishuBotStatus.Features, Bool>, _ symbol: String, _ title: LocalizedStringKey, _ detail: LocalizedStringKey) -> some View {
         Toggle(isOn: Binding(get: { model.features[keyPath: key] }, set: { on in Task { await model.set(key, on) } })) {
             Label {
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
@@ -223,7 +223,7 @@ struct FeishuBotView: View {
         .disabled(model.saving)
     }
 
-    private func step(_ n: Int, _ text: String) -> some View {
+    private func step(_ n: Int, _ text: LocalizedStringKey) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
             Text("\(n)").font(Theme.Font.captionStrong).foregroundStyle(Theme.accent).monospacedDigit()
             Text(text).font(Theme.Font.caption).foregroundStyle(.secondary)

@@ -9,27 +9,27 @@ nonisolated enum StorageKind: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .agentChats: "Agent 对话"
-        case .chatImages: "对话里的图片"
-        case .feishuMedia: "飞书图片和文件"
-        case .pageState: "列表和飞书会话"
-        case .web: "网页"
-        case .network: "网络缓存"
-        case .other: "其他缓存"
-        case .appData: "App 数据"
+        case .agentChats: String(localized: "Agent 对话")
+        case .chatImages: String(localized: "对话里的图片")
+        case .feishuMedia: String(localized: "飞书图片和文件")
+        case .pageState: String(localized: "列表和飞书会话")
+        case .web: String(localized: "网页")
+        case .network: String(localized: "网络缓存")
+        case .other: String(localized: "其他缓存")
+        case .appData: String(localized: "App 数据")
         }
     }
 
     var detail: String {
         switch self {
-        case .agentChats: "每个对话最近两轮，打开时先显示，后台同步也写在这里"
-        case .chatImages: "截图等图片，看过一次就不再下载"
-        case .feishuMedia: "飞书消息里的图片、视频和文件"
-        case .pageState: "Agents、收件箱列表和飞书会话最近的消息"
-        case .web: "App 内打开的网页（不含登录状态）"
-        case .network: "系统为网络请求保存的副本"
-        case .other: "临时文件和其他缓存"
-        case .appData: "设置、配对信息，清除缓存时保留"
+        case .agentChats: String(localized: "每个对话最近两轮，打开时先显示，后台同步也写在这里")
+        case .chatImages: String(localized: "截图等图片，看过一次就不再下载")
+        case .feishuMedia: String(localized: "飞书消息里的图片、视频和文件")
+        case .pageState: String(localized: "Agents、收件箱列表和飞书会话最近的消息")
+        case .web: String(localized: "App 内打开的网页（不含登录状态）")
+        case .network: String(localized: "系统为网络请求保存的副本")
+        case .other: String(localized: "临时文件和其他缓存")
+        case .appData: String(localized: "设置、配对信息，清除缓存时保留")
         }
     }
 
@@ -197,7 +197,7 @@ struct StorageView: View {
             Section {
                 VStack(alignment: .leading, spacing: Theme.Space.m) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(usage == nil ? "计算中…" : total.storageText)
+                        Text(usage == nil ? String(localized: "计算中…") : total.storageText)
                             .font(Theme.Font.display).fontDesign(.rounded)
                             .contentTransition(.numericText())
                         Spacer()
@@ -244,14 +244,14 @@ struct StorageView: View {
             }
         }
         .themedPage()
-        .detailTitle("存储空间")
+        .detailTitle(String(localized: "存储空间"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await measure() }
         .refreshable { await measure() }
         .confirmationDialog("清除全部 \(clearableTotal.storageText) 缓存？设置和配对信息会保留。", isPresented: $confirmAll, titleVisibility: .visible) {
             Button("清除", role: .destructive) { Task { await clear(StorageKind.allCases.filter(\.clearable)) } }
         }
-        .confirmationDialog(confirmOne.map { "清除「\($0.title)」\((usage?[$0] ?? 0).storageText)？" } ?? "",
+        .confirmationDialog(confirmOne.map { String(localized: "清除「\($0.title)」\((usage?[$0] ?? 0).storageText)？") } ?? "",
                             isPresented: Binding(get: { confirmOne != nil }, set: { if !$0 { confirmOne = nil } }), titleVisibility: .visible) {
             Button("清除", role: .destructive) { if let k = confirmOne { Task { await clear([k]) } } }
         }

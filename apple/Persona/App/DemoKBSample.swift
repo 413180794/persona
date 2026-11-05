@@ -1,4 +1,5 @@
 #if DEBUG
+// i18n-ignore-file: DEBUG-only made-up knowledge-base sample for screenshots
 import Foundation
 
 /// Knowledge-base search for screenshots of the demo (DEBUG only): the demo's search answers nothing, so its hits, an

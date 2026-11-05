@@ -32,7 +32,7 @@ struct MacUsageFooter: View {
                 .buttonStyle(.plain)
                 .onHover { hovering = $0 }
                 .help(Self.tooltip(top))
-                .accessibilityLabel("订阅额度：" + top.map { "\($0.name) 已用 \(UsageWindows.percentText(UsageWindows.fullest($0)))" }.joined(separator: "，"))
+                .accessibilityLabel(Self.summary(top))
                 .accessibilityHint("查看每个账号的窗口")
                 .accessibilityIdentifier("mac.usage")
                 .popover(isPresented: $open, arrowEdge: .trailing) {
@@ -72,12 +72,24 @@ struct MacUsageFooter: View {
     }
 
     /// Where the bars' numbers came from, and which are old (the web's title on each bar).
+    /// The footer for VoiceOver: each account and how full its fullest window is.
+    static func summary(_ accounts: [UsageAccount]) -> String {
+        let parts = accounts.map { a in
+            let used = UsageWindows.percentText(UsageWindows.fullest(a))
+            return String(localized: "\(a.name) 已用 \(used)")
+        }.joined(separator: String(localized: "，", comment: "Separator between the parts of a VoiceOver label"))
+        return String(localized: "订阅额度：\(parts)")
+    }
+
     static func tooltip(_ accounts: [UsageAccount]) -> String {
         accounts.map { a in
             let from = UsageWindows.sourceNames(a)
             var parts = [a.name]
-            if !from.isEmpty { parts.append("来源：" + from.joined(separator: " · ")) }
-            if a.stale { parts.append("数据已过期") }
+            if !from.isEmpty {
+                let names = from.joined(separator: " · ")
+                parts.append(String(localized: "来源：\(names)"))
+            }
+            if a.stale { parts.append(String(localized: "数据已过期")) }
             return parts.joined(separator: " · ")
         }.joined(separator: "\n")
     }

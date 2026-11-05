@@ -108,9 +108,9 @@ private struct LarkConversationsPage: View {
                             .themedRow()
                     }
                     if rows.isEmpty, !query.isEmpty, !searchingOn {
-                        EmptyStateView(symbol: Theme.Icon.search, title: "没有找到「\(query)」",
-                                       message: store.nextCursor == nil ? "会话的名称和最近消息都能搜，换个词试试。"
-                                                                        : "已搜索最近 \(store.conversations.count) 个会话。")
+                        EmptyStateView(symbol: Theme.Icon.search, title: String(localized: "没有找到「\(query)」"),
+                                       message: store.nextCursor == nil ? String(localized: "会话的名称和最近消息都能搜，换个词试试。")
+                                                                        : String(localized: "已搜索最近 \(store.conversations.count) 个会话。"))
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                     }
@@ -170,7 +170,7 @@ private struct LarkConversationsPage: View {
                 } else if old == .tracking && phase != .interacting { pins.cancelDrag() }
             }
             .themedPage()
-            .pageSearchable(text: $query, prompt: "搜索会话")
+            .pageSearchable(text: $query, prompt: String(localized: "lark.searchChats", defaultValue: "搜索会话", comment: "Search field over the Lark chats list"))
             .navigationTitle("消息")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(shell == nil ? .visible : .hidden, for: .navigationBar)
@@ -252,11 +252,11 @@ private struct LarkConversationsPage: View {
         if store.loading {
             ProgressView("加载中…").frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xxl)
         } else if store.status?.configured == false {
-            notice("还没有连接飞书", detail: "连接 Hub 上的飞书账号后，会话会显示在这里。", action: "连接设置") { openConnectionSettings() }
+            notice(String(localized: "还没有连接飞书"), detail: String(localized: "连接 Hub 上的飞书账号后，会话会显示在这里。"), action: String(localized: "连接设置")) { openConnectionSettings() }
         } else if store.needsUpgrade {
-            notice("需要更新 Hub", detail: "更新后可显示置顶会话，并同步当前飞书账号。", action: "重新检查") { Task { await store.refresh() } }
+            notice(String(localized: "需要更新 Hub"), detail: String(localized: "更新后可显示置顶会话，并同步当前飞书账号。"), action: String(localized: "重新检查")) { Task { await store.refresh() } }
         } else if store.failed {
-            notice("暂时无法加载会话", detail: "请检查飞书连接，稍后重试。", action: "重试") { Task { await store.refresh() } }
+            notice(String(localized: "暂时无法加载会话"), detail: String(localized: "请检查飞书连接，稍后重试。"), action: String(localized: "重试")) { Task { await store.refresh() } }
         } else {
             Text("暂无会话").font(Theme.Font.body).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xxl)
@@ -289,7 +289,7 @@ private struct LarkConversationsPage: View {
                     .dynamicTypeSize(...Theme.Shell.compactSwitchLargestTypeSize)
             }
             Spacer(minLength: 0)
-            ShellCircleButton(symbol: Theme.Icon.settings, label: "飞书设置", id: "feishu-settings") { openConnectionSettings() }
+            ShellCircleButton(symbol: Theme.Icon.settings, label: String(localized: "飞书设置"), id: "feishu-settings") { openConnectionSettings() }
         }
         .padding(.horizontal, Theme.Space.l).padding(.top, Theme.Space.xxs)
         .shellTopBarScaled().modifier(ShellBarAtRest(page: 2))

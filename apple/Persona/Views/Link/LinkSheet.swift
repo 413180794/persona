@@ -66,11 +66,11 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable {
 
     /// What the row of a message's contexts says, folded: the one context's title, or how many.
     static func summary(_ refs: [ContextRef]) -> String {
-        if refs.count == 1, let r = refs.first { return "\(r.kind == "edit" ? "要改的内容" : "上下文") · \(r.label)" }
-        return "上下文 · \(refs.count) 项"
+        if refs.count == 1, let r = refs.first { return r.kind == "edit" ? String(localized: "要改的内容 · \(r.label)") : String(localized: "上下文 · \(r.label)") }
+        return String(localized: "上下文 · \(refs.count) 项")
     }
 
-    var label: String { title.isEmpty ? (url.isEmpty ? "引用" : host) : title }
+    var label: String { title.isEmpty ? (url.isEmpty ? String(localized: "引用") : host) : title }
 
     var icon: String {
         switch kind {
@@ -147,7 +147,7 @@ struct LinkSheet: View {
     private var header: some View {
         HStack(spacing: Theme.Space.m) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "公司圈" : (target.forwarded != nil ? nil : target.url.host) ?? "网页") : title)
+                Text(title.isEmpty ? (isFeishuDoc ? String(localized: "飞书文档") : feishuRoute != nil ? String(localized: "公司圈") : (target.forwarded != nil ? nil : target.url.host) ?? String(localized: "网页")) : title)
                     .font(Theme.Font.secondaryStrong).lineLimit(1)
                 Text(target.forwarded ?? target.url.host ?? target.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -187,25 +187,25 @@ struct LinkSheet: View {
 
     private func pick(_ text: String, kind: String) {
         guard let key else {
-            model.toast = Toast("请从会话打开链接，再交给 Agent 处理", style: .info)
+            model.toast = Toast(String(localized: "请从会话打开链接，再交给 Agent 处理"), style: .info)
             return
         }
         let ref = ContextRef(kind: kind, title: title.isEmpty ? (target.url.host ?? "") : title, url: target.url.absoluteString,
-                             text: text.isEmpty ? "（整篇）" : text)
+                             text: text.isEmpty ? "（整篇）" : text) // i18n-ignore: sentinel in the context XML, compared in QuoteViews
         if kind == "edit" {
             instruction = ""
             editing = ref
         } else {
             model.composerContexts[key, default: []].append(ref)
             Haptics.success()
-            model.toast = Toast("已作为上下文，会随下一条消息发送", style: .success)
+            model.toast = Toast(String(localized: "已作为上下文，会随下一条消息发送"), style: .success)
         }
     }
 
     private func sendEdit() {
         guard let ref = editing, let key else { return }
         let ask = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        model.sendNow(key, text: ref.xml + "\n\n" + (ask.isEmpty ? "按上面选中的内容修改。" : "按要求修改上面选中的内容：" + ask))
+        model.sendNow(key, text: ref.xml + "\n\n" + (ask.isEmpty ? "按上面选中的内容修改。" : "按要求修改上面选中的内容：" + ask)) // i18n-ignore
         instruction = ""
         editing = nil
     }
@@ -296,8 +296,8 @@ final class SelectableWebView: WKWebView {
     override func buildMenu(with builder: any UIMenuBuilder) {
         super.buildMenu(with: builder)
         let actions = UIMenu(options: .displayInline, children: [
-            UIAction(title: "AI 修改", image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pickSelection("edit") },
-            UIAction(title: "作为上下文", image: UIImage(systemName: Theme.Icon.addContext)) { [weak self] _ in self?.pickSelection("context") },
+            UIAction(title: String(localized: "AI 修改"), image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pickSelection("edit") },
+            UIAction(title: String(localized: "作为上下文"), image: UIImage(systemName: Theme.Icon.addContext)) { [weak self] _ in self?.pickSelection("context") },
         ])
         builder.insertChild(actions, atStartOfMenu: .root)
     }
@@ -500,8 +500,8 @@ struct PickAction: Hashable, Sendable {
     var kind: String
 
     /// The chat's link sheet: AI 修改 and 作为上下文.
-    static let ai = [PickAction(title: "AI 修改", icon: Theme.Icon.ai, kind: "edit"),
-                     PickAction(title: "作为上下文", icon: Theme.Icon.addContext, kind: "context")]
+    static let ai = [PickAction(title: String(localized: "AI 修改"), icon: Theme.Icon.ai, kind: "edit"),
+                     PickAction(title: String(localized: "作为上下文"), icon: Theme.Icon.addContext, kind: "context")]
 }
 
 /// The paragraph in a text view where any span can be selected; its selection menu has `actions` (AI 修改 and

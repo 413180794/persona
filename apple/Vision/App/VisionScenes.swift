@@ -32,9 +32,9 @@ struct VisionChatWindow: View {
                         // The first page of its own window: nothing to go back to (no back arrow).
                         .environment(\.splitDetail, SplitDetail(isFirstPage: true))
                 }
-                .navigationTitle(model.session(key)?.displayTitle ?? "对话")
+                .navigationTitle(model.session(key)?.displayTitle ?? String(localized: "对话"))
             } else {
-                EmptyStateView(symbol: Theme.Icon.agents, title: "没有对话", message: "这个窗口打开的对话已经不在了。")
+                EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "没有对话"), message: String(localized: "这个窗口打开的对话已经不在了。"))
             }
         }
         .frame(minWidth: Theme.Size.visionChatWindowMinWidth, minHeight: Theme.Size.visionChatWindowMinHeight)

@@ -18,7 +18,7 @@ struct ArchivedConversationsView: View {
             .themedPage()
             .overlay {
                 if list.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.archive, title: "没有归档的对话", message: "在对话列表里左滑一个对话就能归档，它会收在这里。")
+                    EmptyStateView(symbol: Theme.Icon.archive, title: String(localized: "没有归档的对话"), message: String(localized: "在对话列表里左滑一个对话就能归档，它会收在这里。"))
                 }
             }
             .navigationTitle("已归档")
@@ -41,7 +41,7 @@ struct ArchivedConversationsView: View {
     }
 
     private func row(_ s: Session) -> some View {
-        let title = s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title
+        let title = s.title.isEmpty || s.title == "Claude Code" ? String(localized: "新对话") : s.title
         return Button { open(s.key) } label: {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 if let t = ConversationTitle(title) {

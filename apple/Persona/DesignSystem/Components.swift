@@ -457,8 +457,8 @@ struct CloseAgentSheet: View {
             .padding(.horizontal, Theme.Space.xl)
 
             VStack(alignment: .leading, spacing: Theme.Space.m) {
-                fact(Theme.Icon.end, "停止当前任务并退出 \(session.agentLabel)，关闭它的终端标签（分屏时只关这个窗格）")
-                fact(Theme.Icon.retry, "对话记录保留，之后可以用 \(session.resumeCommand) 接着聊")
+                fact(Theme.Icon.end, String(localized: "停止当前任务并退出 \(session.agentLabel)，关闭它的终端标签（分屏时只关这个窗格）"))
+                fact(Theme.Icon.retry, String(localized: "对话记录保留，之后可以用 \(session.resumeCommand) 接着聊"))
             }
             .padding(Theme.Space.l)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -485,7 +485,7 @@ struct CloseAgentSheet: View {
                             onClosed(session.key)
                             dismiss()
                         } else {
-                            failure = model.toast?.message ?? "停止失败，Agent 和标签已保留，请重试"
+                            failure = model.toast?.message ?? String(localized: "停止失败，Agent 和标签已保留，请重试")
                             closing = false
                         }
                     }
@@ -602,7 +602,7 @@ struct LoadableContent<Value, Content: View>: View {
         case .loading:
             if AppStyle.current.usesBeautifulUI {
                 // A page loading, not a row: BeautifulUI's pixel loader is fine here.
-                LoadingState("正在载入", pattern: .dots).frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingState(String(localized: "正在载入"), pattern: .dots).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -610,7 +610,7 @@ struct LoadableContent<Value, Content: View>: View {
             content(value)
         case .failed(let message):
             if AppStyle.current.usesBeautifulUI {
-                BUIEmptyState(symbol: Theme.Icon.error, title: message, actionTitle: retry == nil ? nil : "重试", action: retry)
+                BUIEmptyState(symbol: Theme.Icon.error, title: message, actionTitle: retry == nil ? nil : String(localized: "重试"), action: retry)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ContentUnavailableView {

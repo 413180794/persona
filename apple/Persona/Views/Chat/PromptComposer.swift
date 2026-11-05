@@ -181,9 +181,9 @@ struct PromptComposer: View {
 /// What the composer's menus offer.
 enum PromptItems {
     static func attachments(camera: Bool) -> [PromptSource] {
-        var out = [PromptSource(id: "photo", name: "照片", detail: "照片或视频，最多 4 个", icon: .symbol("photo.on.rectangle"), kind: .attach)]
-        if camera { out.append(PromptSource(id: "camera", name: "拍照", detail: "用相机拍一张", icon: .symbol("camera"), kind: .attach)) }
-        out.append(PromptSource(id: "file", name: "文件", detail: "传到那台电脑，路径插进输入框", icon: .symbol("doc"), kind: .attach))
+        var out = [PromptSource(id: "photo", name: String(localized: "照片"), detail: String(localized: "照片或视频，最多 4 个"), icon: .symbol("photo.on.rectangle"), kind: .attach)]
+        if camera { out.append(PromptSource(id: "camera", name: String(localized: "拍照"), detail: String(localized: "用相机拍一张"), icon: .symbol("camera"), kind: .attach)) }
+        out.append(PromptSource(id: "file", name: String(localized: "文件"), detail: String(localized: "传到那台电脑，路径插进输入框"), icon: .symbol("doc"), kind: .attach))
         return out
     }
 
@@ -191,16 +191,16 @@ enum PromptItems {
     /// Code's own commands.
     static func commands(clear: Bool) -> [PromptCommand] {
         var out = SlashCommand.all.map { PromptCommand($0.word, detail: $0.detail, insert: $0.text) }
-        if clear { out.append(PromptCommand("/clear", detail: "清空上下文，开新会话")) }
+        if clear { out.append(PromptCommand("/clear", detail: String(localized: "清空上下文，开新会话"))) }
         return out
     }
 
     /// Claude Code's `/model` aliases: picking one sends `/model <alias>` to the session.
     static let claudeModels: [PromptModel] = [
-        PromptModel(id: "default", name: "默认", tag: "账号默认"),
-        PromptModel(id: "opus", name: "Opus", tag: "最强"),
-        PromptModel(id: "sonnet", name: "Sonnet", tag: "均衡"),
-        PromptModel(id: "haiku", name: "Haiku", tag: "最快"),
+        PromptModel(id: "default", name: String(localized: "默认"), tag: String(localized: "账号默认")),
+        PromptModel(id: "opus", name: "Opus", tag: String(localized: "最强")),
+        PromptModel(id: "sonnet", name: "Sonnet", tag: String(localized: "均衡")),
+        PromptModel(id: "haiku", name: "Haiku", tag: String(localized: "最快")),
     ]
 
     /// The alias a session's model reads as ("claude-opus-…" → opus).
@@ -220,7 +220,7 @@ enum PromptItems {
             let rel = !cwd.isEmpty && path.hasPrefix(cwd + "/") ? String(path.dropFirst(cwd.count + 1)) : path
             let name = (rel as NSString).lastPathComponent
             let dir = (rel as NSString).deletingLastPathComponent
-            out.append(PromptSource(id: "file:" + path, name: name, detail: dir.isEmpty ? "本会话用过的文件" : dir,
+            out.append(PromptSource(id: "file:" + path, name: name, detail: dir.isEmpty ? String(localized: "本会话用过的文件") : dir,
                                     icon: .symbol("doc.text"), insert: "@\(rel) "))
             if out.count == 12 { break }
         }
@@ -242,9 +242,9 @@ enum PromptItems {
     /// The quote for a picked session (`ContextRef`, sent as a `<jarvis-context>` tag before the message).
     static func quote(_ source: PromptSource, in all: [Session]) -> ContextRef? {
         guard source.id.hasPrefix("session:"), let s = all.first(where: { "session:" + $0.id == source.id }) else { return nil }
-        var lines = ["另一个会话：\(s.displayTitle)（\(s.agentLabel)）", "目录：\(s.cwd)"]
+        var lines = ["另一个会话：\(s.displayTitle)（\(s.agentLabel)）", "目录：\(s.cwd)"] // i18n-ignore
         if let last = s.lastText?.trimmingCharacters(in: .whitespacesAndNewlines), !last.isEmpty {
-            lines.append("它最近说：\(String(last.prefix(600)))")
+            lines.append("它最近说：\(String(last.prefix(600)))") // i18n-ignore
         }
         return ContextRef(kind: "context", title: s.displayTitle, url: "jarvis://session/\(s.machineID)/\(s.sessionID)",
                           text: lines.joined(separator: "\n"))
@@ -262,19 +262,36 @@ final class Dictation {
     @ObservationIgnored private let microphoneOwner = UUID()
     @ObservationIgnored private var listeningRun = UUID()
 
+    /// A recognizer for the app's interface language (its region when supported, else any region of it);
+    /// Chinese, and languages speech recognition does not know, use zh-CN as before.
+    private static func recognizer() -> SFSpeechRecognizer? {
+        let fallback = Locale(identifier: "zh-CN") // i18n-ignore
+        let language = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "zh-Hans").language.languageCode?.identifier
+        guard let language, language != "zh" else { return SFSpeechRecognizer(locale: fallback) }
+        let supported = SFSpeechRecognizer.supportedLocales()
+        if let region = Locale.current.region?.identifier,
+           let match = supported.first(where: { $0.language.languageCode?.identifier == language && $0.region?.identifier == region }) {
+            return SFSpeechRecognizer(locale: match)
+        }
+        if let match = supported.sorted(by: { $0.identifier < $1.identifier }).first(where: { $0.language.languageCode?.identifier == language }) {
+            return SFSpeechRecognizer(locale: match)
+        }
+        return SFSpeechRecognizer(locale: fallback)
+    }
+
     /// Starts listening; `update` gets the whole transcript so far. Returns what went wrong, if it could not start.
     func start(update: @escaping (String) -> Void) async -> String? {
         #if os(iOS) || os(visionOS)
-        guard RecordingCapture.shared.state == .idle else { return "录音正在进行，请先结束录音再听写" }
+        guard RecordingCapture.shared.state == .idle else { return String(localized: "录音正在进行，请先结束录音再听写") }
         #endif
-        guard await Self.allowed() else { return "没有麦克风或语音识别的权限，可以到 设置 › Persona 打开" }
+        guard await Self.allowed() else { return String(localized: "没有麦克风或语音识别的权限，可以到 设置 › Persona 打开") }
         #if os(iOS) || os(visionOS)
-        guard RecordingCapture.shared.state == .idle else { return "录音正在进行，请先结束录音再听写" }
+        guard RecordingCapture.shared.state == .idle else { return String(localized: "录音正在进行，请先结束录音再听写") }
         #endif
-        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")), recognizer.isAvailable else {
-            return "语音识别现在用不了"
+        guard let recognizer = Self.recognizer(), recognizer.isAvailable else {
+            return String(localized: "语音识别现在用不了")
         }
-        guard RecordingMicrophone.shared.claim(microphoneOwner) else { return "麦克风正在使用，请先结束录音或听写" }
+        guard RecordingMicrophone.shared.claim(microphoneOwner) else { return String(localized: "麦克风正在使用，请先结束录音或听写") }
         #if os(iOS) || os(visionOS) // a Mac has no audio session to configure: the engine takes the input as it is
         do {
             let session = AVAudioSession.sharedInstance()
@@ -282,7 +299,7 @@ final class Dictation {
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             RecordingMicrophone.shared.release(microphoneOwner)
-            return "麦克风打不开"
+            return String(localized: "麦克风打不开")
         }
         #endif
         let engine = AVAudioEngine()
@@ -296,7 +313,7 @@ final class Dictation {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             #endif
             RecordingMicrophone.shared.release(microphoneOwner)
-            return "麦克风打不开"
+            return String(localized: "麦克风打不开")
         }
         self.engine = engine
         self.request = request

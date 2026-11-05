@@ -32,9 +32,9 @@ enum ContactsAccess {
     static func requireAccess() throws {
         switch status() {
         case .granted, .limited: return
-        case .denied: throw ToolFailure(.denied, "通讯录 / Contacts")
+        case .denied: throw ToolFailure(.denied, "通讯录 / Contacts") // i18n-ignore
         case .notDetermined:
-            throw ToolFailure(.denied, "通讯录尚未授权 / Contacts access has not been requested yet")
+            throw ToolFailure(.denied, "通讯录尚未授权 / Contacts access has not been requested yet") // i18n-ignore
         case .notNeeded: return
         }
     }
@@ -79,8 +79,8 @@ enum CalendarAccess {
     static func requireEvents() throws {
         switch status() {
         case .granted, .limited: return
-        case .denied: throw ToolFailure(.denied, "日历 / Calendar")
-        case .notDetermined: throw ToolFailure(.denied, "日历尚未授权 / Calendar access has not been requested yet")
+        case .denied: throw ToolFailure(.denied, "日历 / Calendar") // i18n-ignore
+        case .notDetermined: throw ToolFailure(.denied, "日历尚未授权 / Calendar access has not been requested yet") // i18n-ignore
         case .notNeeded: return
         }
     }
@@ -88,8 +88,8 @@ enum CalendarAccess {
     static func requireReminders() throws {
         switch reminderStatus() {
         case .granted, .limited: return
-        case .denied: throw ToolFailure(.denied, "提醒事项 / Reminders")
-        case .notDetermined: throw ToolFailure(.denied, "提醒事项尚未授权 / Reminders access has not been requested yet")
+        case .denied: throw ToolFailure(.denied, "提醒事项 / Reminders") // i18n-ignore
+        case .notDetermined: throw ToolFailure(.denied, "提醒事项尚未授权 / Reminders access has not been requested yet") // i18n-ignore
         case .notNeeded: return
         }
     }
@@ -187,10 +187,10 @@ enum HealthAccess {
 
     static func requireAccess() throws {
         guard HKHealthStore.isHealthDataAvailable() else {
-            throw ToolFailure(.unavailable, "此设备不支持健康数据 / Health data is not available on this device")
+            throw ToolFailure(.unavailable, "此设备不支持健康数据 / Health data is not available on this device") // i18n-ignore
         }
         guard cachedStatus() != .notDetermined else {
-            throw ToolFailure(.denied, "健康数据尚未授权 / Health access has not been requested yet")
+            throw ToolFailure(.denied, "健康数据尚未授权 / Health access has not been requested yet") // i18n-ignore
         }
     }
 }
@@ -216,8 +216,8 @@ enum PhotosAccess {
     static func requireAccess() throws {
         switch status() {
         case .granted, .limited: return
-        case .denied: throw ToolFailure(.denied, "照片 / Photos")
-        case .notDetermined: throw ToolFailure(.denied, "照片尚未授权 / Photos access has not been requested yet")
+        case .denied: throw ToolFailure(.denied, "照片 / Photos") // i18n-ignore
+        case .notDetermined: throw ToolFailure(.denied, "照片尚未授权 / Photos access has not been requested yet") // i18n-ignore
         case .notNeeded: return
         }
     }

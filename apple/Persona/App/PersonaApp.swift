@@ -26,7 +26,11 @@ struct PersonaApp: App {
                     if let link = ExtensionSystemLink(url: url) { model.openExtension(link); return }
                     guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
                     Task {
-                        do { try await model.pair(cfg); model.toast = Toast("已连接到 \(cfg.url.host() ?? "服务器")", style: .success) }
+                        do {
+                            try await model.pair(cfg)
+                            let host = cfg.url.host() ?? String(localized: "服务器")
+                            model.toast = Toast(String(localized: "已连接到 \(host)"), style: .success)
+                        }
                         catch { model.show(error) }
                     }
                 }
@@ -314,9 +318,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Delivered while the app is in the background, like a real push.
         for await _ in NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification) { break }
         let content = UNMutableNotificationContent()
-        content.title = kind == .plan ? "计划等你审批" : "需要你授权"
-        content.subtitle = "测试会话 · 测试机器"
-        content.body = kind == .plan ? "支持 HEIC" : "Bash: swift test"
+        content.title = kind == .plan ? "计划等你审批" : "需要你授权" // i18n-ignore
+        content.subtitle = "测试会话 · 测试机器" // i18n-ignore
+        content.body = kind == .plan ? "支持 HEIC" : "Bash: swift test" // i18n-ignore
         content.categoryIdentifier = NotificationActions.category(kind)
         content.userInfo = ["interaction_id": "ix_test_\(kind.rawValue)", "machine_id": "test", "session_id": "test"]
         try? await center.add(UNNotificationRequest(identifier: "test-\(kind.rawValue)", content: content,

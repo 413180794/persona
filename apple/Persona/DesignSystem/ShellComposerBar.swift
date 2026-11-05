@@ -93,7 +93,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                     }
                     mic
                     if canSend {
-                        round(Theme.Icon.send, label: "发送", id: "shell-composer-send", action: sendTyped)
+                        round(Theme.Icon.send, label: String(localized: "发送"), id: "shell-composer-send", action: sendTyped)
                             .keyboardShortcut(.return, modifiers: .command)
                     } else if let stop {
                         stopButton(stop)

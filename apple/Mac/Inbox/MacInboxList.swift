@@ -16,9 +16,9 @@ struct MacInboxFilters: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                MacSidebarHeading(title: "来源") // the page's title says 收件箱 above it (#830)
+                MacSidebarHeading(title: String(localized: "来源")) // the page's title says 收件箱 above it (#830)
                 ForEach(state.sources) { row($0) }
-                MacSidebarHeading(title: "类型")
+                MacSidebarHeading(title: String(localized: "类型"))
                 ForEach(state.kinds) { row($0) }
             }
             .padding(.horizontal, Theme.Space.s)
@@ -67,14 +67,14 @@ struct MacInboxList: View {
                     }
                 } header: {
                     header(t.tier.title, count: t.items.count + t.agents.count, key: t.tier.rawValue,
-                           clear: t.tier == .action ? nil : (t.tier == .fyi ? "全部看过" : "全部清除", { store.setDone(t.items, true) }))
+                           clear: t.tier == .action ? nil : (t.tier == .fyi ? String(localized: "全部看过") : String(localized: "全部清除"), { store.setDone(t.items, true) }))
                 }
             }
             if !sections.done.isEmpty {
                 Section {
                     if state.expanded.contains("done") { ForEach(sections.done) { row($0) } }
                 } header: {
-                    header("已处理", count: sections.done.count, key: "done", clear: nil)
+                    header(String(localized: "已处理"), count: sections.done.count, key: "done", clear: nil)
                 }
             }
         }
@@ -83,8 +83,8 @@ struct MacInboxList: View {
         .scrollContentBackground(.hidden) // the page's color (MacInboxPage)
         .overlay {
             if sections.isEmpty && !store.loading {
-                EmptyStateView(symbol: Theme.Icon.success, title: state.query.isEmpty ? "都处理完了" : "没有匹配的",
-                               message: state.query.isEmpty ? "新的飞书消息和邮件会出现在这里。" : "换个关键词试试。")
+                EmptyStateView(symbol: Theme.Icon.success, title: state.query.isEmpty ? String(localized: "都处理完了") : String(localized: "没有匹配的"),
+                               message: state.query.isEmpty ? String(localized: "新的飞书消息和邮件会出现在这里。") : String(localized: "换个关键词试试。"))
             } else if store.loading && store.items.isEmpty {
                 ProgressView()
             }
@@ -100,7 +100,7 @@ struct MacInboxList: View {
             return .handled
         }
         .onDeleteCommand { state.toggleDone(state.selection, model: model) }
-        .pageSearchable(text: $state.query, placement: .toolbar, prompt: "搜索标题、发件人、内容")
+        .pageSearchable(text: $state.query, placement: .toolbar, prompt: String(localized: "搜索标题、发件人、内容"))
         .pageToolbar { toolbar }
         .sheet(isPresented: $state.showAccounts, onDismiss: { Task { await state.loadAccounts(model) } }) {
             MailAccountsView().macSheet()
@@ -271,7 +271,7 @@ struct MacInboxList: View {
     private func copy(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
-        model.toast = Toast("已拷贝", style: .success)
+        model.toast = Toast(String(localized: "已拷贝"), style: .success)
     }
 }
 

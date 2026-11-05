@@ -57,13 +57,13 @@ struct ModelLaunchersView: View {
                         Button("新增供应商…") { adding = .pick }.lineLimit(1).formButton()
                     }
                     #endif
-                } header: { header("Persona 管理", managed.count) } footer: {
+                } header: { header(String(localized: "Persona 管理"), managed.count) } footer: {
                     if !managed.isEmpty { Text("Key 加密存在 hub，启动时才交给那台电脑，不写进文件。") }
                 } }
                 if !zshrc.isEmpty {
                     Section {
                         ForEach(zshrc) { row($0) }
-                    } header: { header("来自 ~/.zshrc", zshrc.count) } footer: {
+                    } header: { header(String(localized: "来自 ~/.zshrc"), zshrc.count) } footer: {
                         Text("各台电脑 ~/.zshrc 里调用 claude 的函数，每次打开这页时同步；新加的函数会自动出现。")
                     }
                 }
@@ -76,7 +76,7 @@ struct ModelLaunchersView: View {
                             withAnimation(Theme.Motion.standard) { showHidden.toggle() }
                         } label: {
                             HStack(spacing: Theme.Space.xs) {
-                                header("已隐藏", hidden.count)
+                                header(String(localized: "已隐藏"), hidden.count)
                                 Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong)
                                     .rotationEffect(.degrees(open ? 90 : 0))
                                 Spacer(minLength: 0)
@@ -86,7 +86,7 @@ struct ModelLaunchersView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(!query.isEmpty)
-                        .accessibilityLabel("已隐藏 \(hidden.count) 个，" + (open ? "已展开" : "已折叠"))
+                        .accessibilityLabel(open ? String(localized: "已隐藏 \(hidden.count) 个，已展开") : String(localized: "已隐藏 \(hidden.count) 个，已折叠"))
                         .accessibilityAddTraits(.isButton)
                     } footer: {
                         if open { Text("只是在 Persona 里不显示，~/.zshrc 没有改。点进去可以恢复。") }
@@ -98,9 +98,9 @@ struct ModelLaunchersView: View {
                 Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
         }
-        .detailTitle("模型供应商")
+        .detailTitle(String(localized: "模型供应商"))
         .navigationBarTitleDisplayMode(.inline)
-        .pageSearchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、模型、网关或电脑")
+        .pageSearchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: String(localized: "名字、模型、网关或电脑"))
         #if os(iOS) || os(visionOS)
         .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -221,7 +221,7 @@ struct ModelLaunchersView: View {
 
     private func machineNames(_ l: LauncherView) -> String? {
         guard let ids = l.machines, !ids.isEmpty else { return nil }
-        return ids.map { model.machine(model.hubRef($0))?.name ?? $0 }.joined(separator: "、")
+        return ids.map { model.machine(model.hubRef($0))?.name ?? $0 }.joined(separator: String(localized: "、", comment: "Separator between computer names in a list"))
     }
 
     private func load() async {
@@ -286,7 +286,7 @@ struct ModelLauncherDetailView: View {
             let name = model.machine(model.hubRef(id))?.name ?? id
             if let i = out.firstIndex(where: { $0.detail == d }) {
                 out[i].machines.append(id)
-                out[i].names += "、" + name
+                out[i].names += String(localized: "、", comment: "Separator between computer names in a list") + name
             } else {
                 out.append(DetailGroup(machines: [id], names: name, detail: d))
             }
@@ -300,8 +300,8 @@ struct ModelLauncherDetailView: View {
         SettingsForm {
             if let l = launcher {
                 Section {
-                    LabeledContent("来源", value: l.managed ? "Persona 管理" : "~/.zshrc 里的函数")
-                    if l.kind == "api" { LabeledContent("接入方式", value: "直接 API · \(l.api == "responses" ? "Responses" : "Messages")") }
+                    LabeledContent("来源", value: l.managed ? String(localized: "Persona 管理") : String(localized: "~/.zshrc 里的函数"))
+                    if l.kind == "api" { LabeledContent("接入方式", value: String(localized: "直接 API · \(l.api == "responses" ? "Responses" : "Messages")")) }
                     // A ~/.zshrc launcher's gateway and models are in the sections it was probed into below.
                     if l.managed || (l.details ?? [:]).isEmpty {
                         if let u = l.baseURL, !u.isEmpty { mono("Base URL", u) }
@@ -316,12 +316,12 @@ struct ModelLauncherDetailView: View {
                     }
                     if let o = l.origin, o.hasPrefix("zshrc:") { mono("导入自", "~/.zshrc · " + o.dropFirst("zshrc:".count)) }
                     if let ms = l.models, ms.count > 1 { mono("可用模型", ms.map(\.id).joined(separator: "、")) }
-                    if l.hasHeaders == true { LabeledContent("请求头", value: "已设置（不显示）") }
-                    if l.managed { LabeledContent("API Key", value: l.hasKey == true ? "已设置（不显示）" : "未设置") }
+                    if l.hasHeaders == true { LabeledContent("请求头", value: String(localized: "已设置（不显示）")) }
+                    if l.managed { LabeledContent("API Key", value: l.hasKey == true ? String(localized: "已设置（不显示）") : String(localized: "未设置")) }
                     if l.managed, l.api != "responses" { LabeledContent("认证方式", value: l.bearerAuth ? "Bearer" : "x-api-key") }
                     if let a = l.args, !a.isEmpty { mono("额外参数", a.joined(separator: " ")) }
                     if let ids = l.machines, !ids.isEmpty {
-                        LabeledContent("电脑", value: ids.map { model.machine(model.hubRef($0))?.name ?? $0 }.joined(separator: "、"))
+                        LabeledContent("电脑", value: ids.map { model.machine(model.hubRef($0))?.name ?? $0 }.joined(separator: String(localized: "、", comment: "Separator between computer names in a list")))
                     }
                 }
                 if l.managed {
@@ -411,9 +411,11 @@ struct ModelLauncherDetailView: View {
         }
     }
 
-    private func mono(_ label: String, _ value: String) -> some View {
-        LabeledContent(label) {
+    private func mono(_ label: LocalizedStringResource, _ value: String) -> some View {
+        LabeledContent {
             Text(value).font(Theme.Font.body.monospaced()).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+        } label: {
+            Text(label)
         }
     }
 
@@ -451,7 +453,7 @@ struct ModelLauncherDetailView: View {
             for id in machines {
                 group.addTask {
                     let c = (try? await api.checkLauncher(name, machine: id.isEmpty ? nil : id))
-                        ?? LauncherCheck(ok: false, millis: 0, error: "请求没有完成")
+                        ?? LauncherCheck(ok: false, millis: 0, error: String(localized: "请求没有完成"))
                     return (id, c)
                 }
             }
@@ -613,7 +615,7 @@ struct LauncherEditor: View {
         Section {
             TextField("https://…", text: $baseURL)
                 .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-            SecretField(isNew || existing?.hasKey != true ? "API Key" : "API Key（不改就留空）", filled: "已填写，点保存",
+            SecretField(isNew || existing?.hasKey != true ? "API Key" : String(localized: "API Key（不改就留空）"), filled: String(localized: "已填写，点保存"),
                         text: $apiKey, identifier: "launcher.editor.key")
             if !usesResponses {
                 Picker("认证方式", selection: $auth) {
@@ -704,7 +706,7 @@ struct LauncherDetailSections: View {
             Section {
                 LabeledContent("Agent", value: detail.agentName)
                 if let u = detail.baseURL, !u.isEmpty { mono("网关", u) }
-                if let a = detail.auth { mono("Key", "已设置 · " + a) }
+                if let a = detail.auth { mono("Key", String(localized: "已设置 · \(a)")) }
             } header: { title("运行") }
             if let models = detail.models, !models.isEmpty {
                 Section {
@@ -722,10 +724,10 @@ struct LauncherDetailSections: View {
             }
             if detail.contextWindow != nil || detail.compactWindow != nil || detail.effort != nil || detail.timeoutMS != nil {
                 Section {
-                    if let w = detail.contextWindow, w > 0 { LabeledContent("上下文窗口", value: LauncherDetail.tokens(w) + " tokens") }
-                    if let c = detail.compactWindow, c > 0 { LabeledContent("自动压缩窗口", value: LauncherDetail.tokens(c) + " tokens") }
+                    if let w = detail.contextWindow, w > 0 { LabeledContent("上下文窗口", value: String(localized: "\(LauncherDetail.tokens(w)) tokens")) }
+                    if let c = detail.compactWindow, c > 0 { LabeledContent("自动压缩窗口", value: String(localized: "\(LauncherDetail.tokens(c)) tokens")) }
                     if let e = detail.effort, !e.isEmpty { LabeledContent("思考强度", value: e) }
-                    if let t = detail.timeoutMS, t > 0 { LabeledContent("请求超时", value: t >= 60_000 ? "\(t / 60_000) 分钟" : "\(t / 1000) 秒") }
+                    if let t = detail.timeoutMS, t > 0 { LabeledContent("请求超时", value: t >= 60_000 ? String(localized: "\(t / 60_000) 分钟") : String(localized: "\(t / 1000) 秒")) }
                 } header: { title("上下文") }
             }
             if let args = detail.args, !args.isEmpty {
@@ -746,11 +748,16 @@ struct LauncherDetailSections: View {
         }
     }
 
-    private func title(_ s: String) -> Text { Text(place.map { "\(s) · \($0)" } ?? s) }
+    private func title(_ resource: LocalizedStringResource) -> Text {
+        let s = String(localized: resource)
+        return Text(place.map { "\(s) · \($0)" } ?? s)
+    }
 
-    private func mono(_ label: String, _ value: String) -> some View {
-        LabeledContent(label) {
+    private func mono(_ label: LocalizedStringResource, _ value: String) -> some View {
+        LabeledContent {
             Text(value).font(Theme.Font.body.monospaced()).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+        } label: {
+            Text(label)
         }
     }
 }
@@ -772,12 +779,12 @@ struct LauncherCheckRow: View {
             .frame(width: Theme.Size.iconS)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 HStack(spacing: Theme.Space.sm) {
-                    Text(machine ?? "hub 所在的机器").font(Theme.Font.heading).lineLimit(1)
+                    Text(machine ?? String(localized: "hub 所在的机器")).font(Theme.Font.heading).lineLimit(1)
                     if let c = check { Text(Self.seconds(c.millis)).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary) }
                 }
                 if let c = check {
                     if c.ok {
-                        Text([c.model, c.answer.map { "回答「\($0)」" }].compactMap { $0 }.joined(separator: " · "))
+                        Text([c.model, c.answer.map { String(localized: "回答「\($0)」") }].compactMap { $0 }.joined(separator: " · "))
                             .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                     } else if let e = c.error {
                         Text(e).font(Theme.Font.code).foregroundStyle(Theme.danger).lineLimit(6).textSelection(.enabled)
@@ -790,5 +797,5 @@ struct LauncherCheckRow: View {
         .padding(.vertical, Theme.Space.xxs)
     }
 
-    static func seconds(_ ms: Int) -> String { ms >= 10_000 ? "\(ms / 1000) 秒" : String(format: "%.1f 秒", Double(ms) / 1000) }
+    static func seconds(_ ms: Int) -> String { ms >= 10_000 ? String(localized: "\(ms / 1000) 秒") : String(localized: "\((Double(ms) / 1000).formatted(.number.precision(.fractionLength(1)))) 秒") }
 }

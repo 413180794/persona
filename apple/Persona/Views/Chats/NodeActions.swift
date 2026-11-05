@@ -112,9 +112,9 @@ nonisolated enum NodeMenu {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .pull: "拉取"
-            case .push: "推送"
-            case .fetch: "获取"
+            case .pull: String(localized: "拉取")
+            case .push: String(localized: "推送")
+            case .fetch: String(localized: "获取")
             }
         }
         var symbol: String {
@@ -127,7 +127,8 @@ nonisolated enum NodeMenu {
         /// The toast after it ran: the node's one-line summary ("已经是最新"), or 完成.
         func done(_ message: String?) -> String {
             let m = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return "\(title)：\(m.isEmpty ? "完成" : m)"
+            let said = m.isEmpty ? String(localized: "完成") : m
+            return String(localized: "\(title)：\(said)")
         }
     }
 
@@ -144,7 +145,7 @@ nonisolated enum NodeMenu {
     enum Direction: String, CaseIterable, Identifiable, Sendable {
         case right, down
         var id: String { rawValue }
-        var title: String { self == .right ? "向右拆分" : "向下拆分" }
+        var title: String { self == .right ? String(localized: "向右拆分") : String(localized: "向下拆分") }
         var symbol: String { self == .right ? Theme.Icon.splitRight : Theme.Icon.splitDown }
     }
 
@@ -219,7 +220,7 @@ final class NodeActions {
 
     private func git(_ op: NodeMenu.GitOp, machine: MachineRef, body: [String: String]) {
         guard let api = model.api(machine.group) else { return }
-        model.toast = Toast("正在\(op.title)…")
+        model.toast = Toast(String(localized: "正在\(op.title)…"))
         Task {
             do {
                 let data = try await api.nodeAction(machine: machine.id, "panes/git", body, timeout: 100)
@@ -227,7 +228,7 @@ final class NodeActions {
                 model.toast = Toast(op.done(result?.message), style: .success)
                 Haptics.success()
             } catch {
-                fail("\(op.title)失败", error)
+                fail(String(localized: "\(op.title)失败"), error)
             }
         }
     }
@@ -237,10 +238,10 @@ final class NodeActions {
         Task {
             do {
                 try await api.nodeAction(machine: s.machineID, "panes/split", NodeMenu.splitBody(pane: pane, direction))
-                model.toast = Toast("已新建窗格", style: .success)
+                model.toast = Toast(String(localized: "已新建窗格"), style: .success)
                 await model.refresh()
             } catch {
-                fail("新建窗格失败", error)
+                fail(String(localized: "新建窗格失败"), error)
             }
         }
     }
@@ -257,17 +258,17 @@ final class NodeActions {
         Task {
             do {
                 try await api.nodeAction(machine: c.machine.id, "tabs/close", NodeMenu.closeTabBody(tabID: c.tabID, kind: c.kind))
-                model.toast = Toast("已关闭标签页", style: .success)
+                model.toast = Toast(String(localized: "已关闭标签页"), style: .success)
                 await model.refresh()
             } catch {
-                fail("关闭失败", error)
+                fail(String(localized: "nodeActions.closeTabFailed", defaultValue: "关闭失败", comment: "Closing a terminal tab failed"), error)
             }
         }
     }
 
     func fail(_ what: String, _ error: Error) {
         if error.isOffline || error.isQuiet { model.show(error); return }
-        model.toast = Toast("\(what)：\(error.shown ?? error.localizedDescription)", style: .error)
+        model.toast = Toast(String(localized: "\(what)：\(error.shown ?? error.localizedDescription)"), style: .error)
         Haptics.error()
     }
 }
@@ -400,9 +401,9 @@ struct RunAgentHereSheet: View {
         let launchers = loaded.launchers.filter(NodeMenu.launchableHere)
         if shells.isEmpty {
             let canOpen = NodeMenu.herdrHost(loaded.panes)?.newTab == true
-            EmptyStateView(symbol: Theme.Icon.terminal, title: "没有空闲的终端",
-                           message: "「\(group.name)」里的窗格都在运行 Agent。新开一个终端标签页，在那里运行。",
-                           action: canOpen && !busy ? (title: "新开终端标签页", run: { openShell() }) : nil)
+            EmptyStateView(symbol: Theme.Icon.terminal, title: String(localized: "没有空闲的终端"),
+                           message: String(localized: "「\(group.name)」里的窗格都在运行 Agent。新开一个终端标签页，在那里运行。"),
+                           action: canOpen && !busy ? (title: String(localized: "新开终端标签页"), run: { openShell() }) : nil)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(Theme.Space.page)
         } else {
@@ -437,7 +438,7 @@ struct RunAgentHereSheet: View {
     }
 
     private func load() async {
-        guard let api = model.api(group.group) else { state = .failed("尚未连接 hub"); return }
+        guard let api = model.api(group.group) else { state = .failed(String(localized: "尚未连接 hub")); return }
         state = .loading
         do {
             async let panes = api.terminalPanes(machine: group.machineID)
@@ -464,7 +465,7 @@ struct RunAgentHereSheet: View {
                 try await api.nodeAction(machine: group.machineID, "panes", body)
                 await load()
             } catch {
-                NodeActions.shared.fail("没能新开终端", error)
+                NodeActions.shared.fail(String(localized: "没能新开终端"), error)
             }
         }
     }
@@ -478,12 +479,12 @@ struct RunAgentHereSheet: View {
             defer { busy = false }
             do {
                 try await api.nodeAction(machine: group.machineID, "panes/agent", ["pane": pane, "launcher": name], timeout: 130)
-                model.toast = Toast("已在窗格里启动 \(name)", style: .success)
+                model.toast = Toast(String(localized: "已在窗格里启动 \(name)"), style: .success)
                 Haptics.success()
                 dismiss()
                 await model.refresh()
             } catch {
-                failure = "启动失败：\(error.shown ?? error.localizedDescription)"
+                failure = String(localized: "启动失败：\(error.shown ?? error.localizedDescription)")
                 Haptics.error()
             }
         }
@@ -566,14 +567,14 @@ nonisolated enum WorktreeForm: Sendable {
     /// Why git would not take this as a branch name (`git check-ref-format --branch`), nil when it would.
     static func branchProblem(_ raw: String) -> String? {
         let b = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if b.isEmpty { return "请填写分支名" }
-        if b.hasPrefix("-") { return "分支名不能以 - 开头" }
+        if b.isEmpty { return String(localized: "请填写分支名") }
+        if b.hasPrefix("-") { return String(localized: "分支名不能以 - 开头") }
         let bad = CharacterSet(charactersIn: "~^:?*[\\").union(.whitespacesAndNewlines).union(.controlCharacters)
-        if b == "@" || b.unicodeScalars.contains(where: bad.contains) { return "分支名里有不能用的字符" }
-        if b.contains("..") || b.contains("@{") || b.contains("//") { return "分支名里有不能用的写法" }
-        if b.hasPrefix("/") || b.hasSuffix("/") || b.hasSuffix(".") || b.hasSuffix(".lock") { return "分支名的开头或结尾不合法" }
+        if b == "@" || b.unicodeScalars.contains(where: bad.contains) { return String(localized: "分支名里有不能用的字符") }
+        if b.contains("..") || b.contains("@{") || b.contains("//") { return String(localized: "分支名里有不能用的写法") }
+        if b.hasPrefix("/") || b.hasSuffix("/") || b.hasSuffix(".") || b.hasSuffix(".lock") { return String(localized: "分支名的开头或结尾不合法") }
         if b.split(separator: "/").contains(where: { $0.hasPrefix(".") || $0.hasSuffix(".lock") }) {
-            return "分支名的每一段都不能以 . 开头或以 .lock 结尾"
+            return String(localized: "分支名的每一段都不能以 . 开头或以 .lock 结尾")
         }
         return nil
     }
@@ -600,10 +601,10 @@ nonisolated enum WorktreeForm: Sendable {
 
     /// What stops it being sent; nil when nothing does.
     static func problem(_ s: State) -> String? {
-        branchProblem(s.branch) ?? (s.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "请填写检出路径" : nil)
+        branchProblem(s.branch) ?? (s.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "请填写检出路径") : nil)
     }
 
-    static let needsUpdate = "这台电脑上的 Persona 版本太旧，更新后才能新建 worktree"
+    static var needsUpdate: String { String(localized: "这台电脑上的 Persona 版本太旧，更新后才能新建 worktree") }
 
     /// A hub or node without these calls answers 404 / 405 / 501 or "unknown method": told to update.
     static func isTooOld(_ error: Error) -> Bool {
@@ -616,7 +617,7 @@ nonisolated enum WorktreeForm: Sendable {
     static func describe(_ error: Error, what: String) -> String {
         if isTooOld(error) { return needsUpdate }
         let m = error.shown ?? error.localizedDescription
-        return m.isEmpty ? what : "\(what)：\(m)"
+        return m.isEmpty ? what : String(localized: "\(what)：\(m)")
     }
 
     static func body(workspaceID: String, kind: String?) -> [String: String] {
@@ -728,7 +729,7 @@ struct NewWorktreeSheet: View {
     }
 
     private func prepare() async {
-        guard let api = model.api(group.group), !workspaceID.isEmpty else { repo = .failed("尚未连接 hub"); return }
+        guard let api = model.api(group.group), !workspaceID.isEmpty else { repo = .failed(String(localized: "尚未连接 hub")); return }
         repo = .loading
         do {
             let data = try await api.nodeAction(machine: group.machineID, "worktree/prepare",
@@ -737,7 +738,7 @@ struct NewWorktreeSheet: View {
             if !form.pathEdited { form.path = WorktreeForm.suggestedPath(base: r.path, branch: form.branch) }
             repo = .loaded(r)
         } catch {
-            repo = .failed(WorktreeForm.describe(error, what: "没能读取这个仓库"))
+            repo = .failed(WorktreeForm.describe(error, what: String(localized: "没能读取这个仓库")))
         }
     }
 
@@ -753,12 +754,12 @@ struct NewWorktreeSheet: View {
             do {
                 let data = try await api.nodeAction(machine: group.machineID, "worktree/create", body, timeout: 160)
                 let made = try JSON.decoder.decode(WorktreeCreated.self, from: data)
-                model.toast = Toast("已新建 worktree", style: .success)
+                model.toast = Toast(String(localized: "已新建 worktree"), style: .success)
                 Haptics.success()
                 await model.refresh()
                 created = made
             } catch {
-                failure = WorktreeForm.describe(error, what: "没能新建 worktree")
+                failure = WorktreeForm.describe(error, what: String(localized: "没能新建 worktree"))
                 Haptics.error()
             }
         }

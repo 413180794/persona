@@ -84,25 +84,25 @@ nonisolated struct HubUpdateStatus: Codable, Equatable, Sendable {
     /// The channel, for people.
     var channelTitle: String {
         switch channel {
-        case "release": "发布版"
+        case "release": String(localized: "发布版")
         case "docker": "Docker"
-        default: "开发版"
+        default: String(localized: "开发版")
         }
     }
 
     /// What the progress row says.
     var stateTitle: String {
         switch state {
-        case "checking": "正在检查"
-        case "downloading": "正在下载"
-        case "waiting_idle": busy.isEmpty ? "等助手和 Agent 空闲" : "等 \(busy.count) 个在忙的结束"
-        case "restarting": "正在重启，会断开一会儿"
-        case "confirming": "新版本正在确认"
-        case "updated": "已更新"
-        case "rolled_back": "已回滚"
-        case "failed": "没更新成功"
-        case "available": "有新版本"
-        default: "已是最新"
+        case "checking": String(localized: "正在检查")
+        case "downloading": String(localized: "正在下载")
+        case "waiting_idle": busy.isEmpty ? String(localized: "等助手和 Agent 空闲") : String(localized: "等 \(busy.count) 个在忙的结束")
+        case "restarting": String(localized: "正在重启，会断开一会儿")
+        case "confirming": String(localized: "新版本正在确认")
+        case "updated": String(localized: "已更新")
+        case "rolled_back": String(localized: "已回滚")
+        case "failed": String(localized: "没更新成功")
+        case "available": String(localized: "有新版本")
+        default: String(localized: "已是最新")
         }
     }
 }
@@ -121,10 +121,10 @@ nonisolated struct HubUpdateRecord: Codable, Equatable, Sendable, Identifiable {
 
     var resultTitle: String {
         switch result {
-        case "updated": "已更新"
-        case "rolled_back": "已回滚"
-        case "held": "没有自动装"
-        default: "没更新成功"
+        case "updated": String(localized: "已更新")
+        case "rolled_back": String(localized: "已回滚")
+        case "held": String(localized: "没有自动装")
+        default: String(localized: "没更新成功")
         }
     }
 

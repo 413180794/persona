@@ -546,6 +546,35 @@ herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模�
 - 截图 / 测试：`mock_hub.py` 的 504 号邮件是英文、「设计评审」（f2）会话里有英文消息，`/api/v1/translate` 回「【译】原文」；
   UI 测试 `TranslationTests`；DEBUG `-openTranslationSettings YES` 打开设置页。
 
+## 界面语言（国际化，#2457）
+
+iOS、Mac、visionOS、手表和扩展的界面有简体中文、English、日本語三种（共同约定见 `docs/i18n.md`）。
+
+- **词条**：String Catalog，源语言 zh-Hans，**中文原文就是 key**（现有界面、单元测试和像素 / 布局基线都不变）。
+  `apple/Shared/Localization/Localizable.xcstrings` 是所有 target 共用的一份（App、Mac、visionOS、手表经 `Shared/` 编进去，小组件在 `project.yml` 里单独加）；
+  快捷指令的说法在 `Persona/Intents/AppShortcuts.xcstrings`；权限说明在各 target 的 `InfoPlist.xcstrings`（iOS、Mac、visionOS、手表各一份，因为文字不完全一样）。
+  `knownRegions` 由 XcodeGen 从这些 catalog 里的语言生成，不手改 pbxproj。Info.plist 的 `CFBundleDevelopmentRegion` 是 `en`：系统语言是三种之外的，Bundle 落到英文。
+- **写代码**：`Text("…")`、`Button("…")`、`Label`、`.navigationTitle` 这类 SwiftUI 参数本来就是 `LocalizedStringKey`；其余给人看的 `String` 一律 `String(localized: "…")`，
+  App Intents 用 `LocalizedStringResource`。整句带插值写成一个词条（`"共 \(n) 个"`），不拼半句；数量的复数在 catalog 里给英文 one / other；
+  日期、数字用 `FormatStyle`，不写死 `zh_CN`（机器格式仍是 `en_US_POSIX`）。同一句中文在不同地方要不同译法时，用 `String(localized: "<英文 key>", defaultValue: "关闭")` 拆开。
+  不是界面的中文（发给 hub / Agent 的提示词和消息、协议值、匹配 hub 或终端文字、日志、预览、DEBUG 页）行尾标 `// i18n-ignore`，整个文件是样例数据的在前 20 行写 `// i18n-ignore-file: <原因>`。
+- **加新文案后**：`xcodebuild … SWIFT_EMIT_LOC_STRINGS=YES` 编一次，`python3 scripts/i18n/apple_l10n.py sync <DerivedData>` 把新词条加进 catalog（Xcode IDE 编译时会自动做，命令行不会），
+  再补上 en、ja。`python3 scripts/i18n/apple_l10n.py check`（`scripts/test/test_apple_l10n.py` 跑它）查三种语言齐全、占位符一致、源码里没有漏进 catalog 的中文；
+  `apple_l10n.py strict <DerivedData>` 用编译器的提取结果逐个核对没被本地化的中文字面量。
+- **选语言**：设置 › 外观 › 语言：跟随系统（默认）/ 简体中文 / English / 日本語（`AppLanguage`、`LanguageStore`，`Shared/Localization/AppLanguage.swift`）。
+  选择在 App 内做而不是只靠系统的「按 App 选语言」：docs/i18n.md 要求统一的设置项；跟随系统要按 docs/i18n.md 的规则解析（法文 → English、繁体 → 简体中文），系统的 Bundle 匹配做不到；
+  手表和扩展没有自己的入口；Mac 上系统的按 App 语言藏得很深。两边是同一个值：App 把结果写进自己的 `AppleLanguages`（系统的按 App 语言写的也是它），
+  在系统设置里改了，下次打开 App 时被当成新的选择。
+- **什么时候生效**：Foundation 在进程启动时选定语言，`String(localized:)` 在运行中换不了（试过换 `Bundle` 的类、改 `AppleLanguages`，都只对 SwiftUI 的 `Text` 有效，会变成半中半英），
+  所以选了以后**下次打开 App 生效**，设置页提示，Mac 上有「立即重新打开」。`-AppleLanguages (ja)` 启动参数这一次优先、不保存（截图、测试）。
+- **手表、扩展**：手表跟随 iPhone：iPhone 经 WatchConnectivity 的 application context 发 `language`，手表写进自己的 `AppleLanguages`；没收到前按手表自己的系统语言。
+  小组件、实时活动读 App Group 里的 `persona.language.resolved`：扩展进程一跑几个小时，所以它画的文字用 `interfaceText(_:)`（带这个语言的 `LocalizedStringResource`）
+  和 `.environment(\.locale, LanguageStore.drawingLocale)`，App 改了语言下一次刷新就换；手表下次启动生效。
+- **告诉 hub**：每个 HTTP 请求和 WebSocket 握手带 `Accept-Language: <代码>`，连上后发 `{"type":"client_hello","locale":…}`（只带 locale，features / 心跳 / platform 不变），
+  `POST /api/v1/devices` 带 `locale`。值是这次启动的界面语言（`LanguageStore.launched`）。
+- **测试**：scheme 的测试动作固定 `language: zh-Hans`、`region: CN`，单元测试、UI 测试、像素 / 布局测试都按中文跑；`AppLanguageTests` 测解析规则和存取。
+- **还没覆盖**：hub 推来的文字（实时活动的标题、详情和「终端等你处理」、推送正文、助手回答）由 hub 按语言出；体验模式的演示数据（对话、人名）只有中文。
+
 ## 设计语言
 
 - 代码结构（2026-10-31，方案见 bui-adopt 的 ARCH-PLAN）：

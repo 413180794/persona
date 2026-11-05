@@ -25,11 +25,11 @@ struct APIErrorCard: View {
             out.append(ToolChipGroup.Chip(symbol: Theme.Icon.error, label: "\(s)", isError: true))
         }
         switch info.transient {
-        case true?: out.append(ToolChipGroup.Chip(symbol: Theme.Icon.retry, label: "临时故障"))
-        case false?: out.append(ToolChipGroup.Chip(symbol: Theme.Icon.askFirst, label: "要处理"))
+        case true?: out.append(ToolChipGroup.Chip(symbol: Theme.Icon.retry, label: String(localized: "临时故障")))
+        case false?: out.append(ToolChipGroup.Chip(symbol: Theme.Icon.askFirst, label: String(localized: "要处理")))
         case nil: break
         }
-        if count > 1 { out.append(ToolChipGroup.Chip(symbol: Theme.Icon.recurring, label: "连续 \(count) 次")) }
+        if count > 1 { out.append(ToolChipGroup.Chip(symbol: Theme.Icon.recurring, label: String(localized: "连续 \(count) 次"))) }
         return out
     }
 
@@ -42,8 +42,8 @@ struct APIErrorCard: View {
     /// Whether it passes by itself, under the reason.
     private var subtitle: String? {
         switch info.transient {
-        case true?: "临时故障，过一会儿多半会好"
-        case false?: "要你处理，重试没有用"
+        case true?: String(localized: "临时故障，过一会儿多半会好")
+        case false?: String(localized: "要你处理，重试没有用")
         case nil: nil
         }
     }
@@ -79,9 +79,9 @@ struct APIErrorCard: View {
 
             if open {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
-                    if let id = info.requestID { field("请求 ID", id) }
+                    if let id = info.requestID { field(String(localized: "请求 ID"), id) }
                     if let s = info.session { field("Session", s) }
-                    if let at { field("时间", at.formatted(.dateTime.month().day().hour().minute().second()), copyable: false) }
+                    if let at { field(String(localized: "时间"), at.formatted(.dateTime.month().day().hour().minute().second()), copyable: false) }
                     // Wrapped, not a sideways-scrolling block: the raw text is usually one long line.
                     Text(info.raw)
                         .font(Theme.Font.code)
@@ -135,18 +135,18 @@ struct APIErrorCard: View {
                     Haptics.tap()
                     retry()
                 } label: {
-                    BUIPill("重试", tone: .red, icon: .retry)
+                    BUIPill(String(localized: "重试"), tone: .red, icon: .retry)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("重试")
             } else {
-                BUIPill(info.transient == false ? "要处理" : "失败", tone: info.transient == false ? .orange : .red)
+                BUIPill(info.transient == false ? String(localized: "要处理") : String(localized: "失败"), tone: info.transient == false ? .orange : .red)
             }
         } detail: {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                if let id = info.requestID { field("请求 ID", id) }
+                if let id = info.requestID { field(String(localized: "请求 ID"), id) }
                 if let s = info.session { field("Session", s) }
-                if let at { field("时间", at.formatted(.dateTime.month().day().hour().minute().second()), copyable: false) }
+                if let at { field(String(localized: "时间"), at.formatted(.dateTime.month().day().hour().minute().second()), copyable: false) }
                 // Wrapped, not a sideways-scrolling block: the raw text is usually one long line.
                 Text(info.raw)
                     .font(Theme.Font.code)
@@ -187,6 +187,6 @@ struct APIErrorCard: View {
     private func copy(_ s: String) {
         UIPasteboard.general.string = s
         Haptics.tap()
-        model.toast = Toast("已复制")
+        model.toast = Toast(String(localized: "已复制"))
     }
 }

@@ -69,7 +69,7 @@ struct ComposerRoundButton: View {
 extension ComposerRoundButton {
     /// Interrupts the agent: shown in send's place while it works and nothing is typed.
     static func stop(id: String = "composer-stop", _ action: @escaping () -> Void) -> ComposerRoundButton {
-        ComposerRoundButton(symbol: Theme.Icon.interrupt, label: "中断", id: id, action: action)
+        ComposerRoundButton(symbol: Theme.Icon.interrupt, label: String(localized: "中断"), id: id, action: action)
     }
 }
 

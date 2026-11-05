@@ -1,4 +1,5 @@
 #if DEBUG
+// i18n-ignore-file: DEBUG-only mock attachment fixtures
 import SwiftUI
 
 /// Mock-only drafts exercise the actual preview, queue, transport and retry paths without touching an account.

@@ -11,7 +11,7 @@ nonisolated struct LarkMention: Codable, Hashable, Sendable {
         case name
     }
 
-    static let everyone = LarkMention(userID: "all", name: "所有人")
+    static let everyone = LarkMention(userID: "all", name: String(localized: "所有人"))
 }
 
 /// A chat member for the @ picker: `name` is the group nickname when there is one.

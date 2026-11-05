@@ -27,7 +27,7 @@ struct TaskDetailSheet: View {
                 } else if let todo = todoID.flatMap({ store.todos[$0] }) {
                     content(todo)
                 } else {
-                    EmptyStateView(symbol: Theme.Icon.todo, title: "没有这个任务了", message: "它可能被删了。")
+                    EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "没有这个任务了"), message: String(localized: "它可能被删了。"))
                 }
             }
             // The agent's page hides the bar (it draws its own header): the sheet's close is in the task's header.
@@ -52,10 +52,10 @@ struct TaskDetailSheet: View {
                 if let key {
                     agentPage(key)
                 } else if let failure = store.startFailure(todo) ?? todo.agents.first?.startError {
-                    EmptyStateView(symbol: Theme.Icon.errorFilled, title: "Agent 没开起来", message: failure,
-                                   action: (title: "移除任务", run: { store.askRemove(todo, pending: $removing) }))
+                    EmptyStateView(symbol: Theme.Icon.errorFilled, title: String(localized: "Agent 没开起来"), message: failure,
+                                   action: (title: String(localized: "移除任务"), run: { store.askRemove(todo, pending: $removing) }))
                 } else {
-                    EmptyStateView(symbol: Theme.Icon.working, title: "正在开 Agent", message: "开好以后这里就是它的对话。")
+                    EmptyStateView(symbol: Theme.Icon.working, title: String(localized: "正在开 Agent"), message: String(localized: "开好以后这里就是它的对话。"))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -126,7 +126,7 @@ extension TaskDetailSheet {
                 if let session { StatusDot(state: session.state, size: Theme.Size.dotL).scaledFrame(width: Theme.Size.markM) }
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(session?.displayTitle ?? "Agent").font(Theme.Font.heading).lineLimit(2)
-                    AgentMarkLine(text: "Agent · 不是从对话开的")
+                    AgentMarkLine(text: String(localized: "Agent · 不是从对话开的"))
                 }
                 Spacer(minLength: Theme.Space.s)
                 if !pushed, session != nil { expandButton(key) }
@@ -141,7 +141,7 @@ extension TaskDetailSheet {
                 if session != nil {
                     agentPage(key)
                 } else {
-                    EmptyStateView(symbol: Theme.Icon.agents, title: "没有这个 Agent 了", message: "它可能已经关掉了。")
+                    EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "没有这个 Agent 了"), message: String(localized: "它可能已经关掉了。"))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -214,15 +214,15 @@ struct TaskBoardSheet: View {
             let agents = store.agents(of: conversation)
             List {
                 if rows.isEmpty && agents.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.todo, title: "还没有任务", message: "在对话里说要做的事，Persona 会把它变成任务。")
+                    EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "还没有任务"), message: String(localized: "在对话里说要做的事，Persona 会把它变成任务。"))
                         .listRowBackground(Color.clear)
                 }
-                section("等你", rows.filter { $0.state == .needsYou }, agents: agents.filter(\.isWaiting))
-                section("在做", rows.filter { $0.state == .working || $0.state == .notStarted }, agents: agents.filter { !$0.isWaiting })
-                section("做完了", rows.filter { $0.state == .unread })
-                section("停着", rows.filter { $0.state == .followup })
-                section("已完成", rows.filter { $0.state == .done })
-                section("没开起来", rows.filter { $0.state == .failed })
+                section(String(localized: "等你"), rows.filter { $0.state == .needsYou }, agents: agents.filter(\.isWaiting))
+                section(String(localized: "在做"), rows.filter { $0.state == .working || $0.state == .notStarted }, agents: agents.filter { !$0.isWaiting })
+                section(String(localized: "做完了"), rows.filter { $0.state == .unread })
+                section(String(localized: "停着"), rows.filter { $0.state == .followup })
+                section(String(localized: "已完成"), rows.filter { $0.state == .done })
+                section(String(localized: "没开起来"), rows.filter { $0.state == .failed })
             }
             .themedGroupedPage()
             .navigationTitle("任务")

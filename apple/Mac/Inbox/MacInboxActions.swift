@@ -54,8 +54,8 @@ struct MacInboxActions: View {
     @ViewBuilder private var listButton: some View {
         if reading {
             let state = MacInboxState.shared
-            action(state.listWhileReading ? "收起列表" : "显示列表", Theme.Icon.list, iconsOnly: true,
-                   help: state.listWhileReading ? "收起列表，把地方留给文档" : "显示收件箱列表（关掉文档也会回来）") {
+            action(state.listWhileReading ? String(localized: "收起列表") : String(localized: "显示列表"), Theme.Icon.list, iconsOnly: true,
+                   help: state.listWhileReading ? String(localized: "收起列表，把地方留给文档") : String(localized: "显示收件箱列表（关掉文档也会回来）")) {
                 state.listWhileReading.toggle()
             }
         }
@@ -75,7 +75,8 @@ struct MacInboxActions: View {
         if item.agentWorking {
             HStack(spacing: Theme.Space.sm) {
                 ProgressView().controlSize(.mini)
-                Text(item.agent?.state == "queued" ? "AI 分身排队中" : "AI 分身正在处理" + (item.agent?.task.map { "：" + $0 } ?? ""))
+                Text(item.agent?.state == "queued" ? String(localized: "AI 分身排队中")
+                     : item.agent?.task.map { String(localized: "AI 分身正在处理：\($0)") } ?? String(localized: "AI 分身正在处理"))
                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(column ? 3 : 1)
             }
         }
@@ -85,18 +86,18 @@ struct MacInboxActions: View {
     @ViewBuilder private func buttons(iconsOnly: Bool) -> some View {
         // A connector's thread that cannot be answered here (a CI run, a text message) is answered in its own app.
         if item.connector.map({ $0.canReply == true }) ?? true {
-            action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", Theme.Icon.draftReply, prominent: true, iconsOnly: iconsOnly,
-                   help: item.agentDraft == nil ? "让 AI 用你的口吻草拟一条回复" : "AI 分身草拟好了回复，看看再发", perform: draft)
+            action(item.agentDraft == nil ? String(localized: "AI 草拟回复") : String(localized: "查看草稿"), Theme.Icon.draftReply, prominent: true, iconsOnly: iconsOnly,
+                   help: item.agentDraft == nil ? String(localized: "让 AI 用你的口吻草拟一条回复") : String(localized: "AI 分身草拟好了回复，看看再发"), perform: draft)
         } else if let open = item.connector?.openURL, let url = InboxActionBar.systemURL(open, draft: item.agentDraft) {
             let sms = url.scheme == "sms"
             action(InboxActionBar.openTitle(item, sms: sms), sms ? Theme.Icon.messagesApp : Theme.Icon.openExternal,
-                   prominent: true, iconsOnly: iconsOnly, help: "在它自己的 App 里回复") { openURL(url) }
+                   prominent: true, iconsOnly: iconsOnly, help: String(localized: "在它自己的 App 里回复")) { openURL(url) }
         }
-        action("交给 AI", Theme.Icon.handToAI, iconsOnly: iconsOnly, help: "把这件事交给 Persona 或一个 Agent", perform: handOff)
+        action(String(localized: "交给 AI"), Theme.Icon.handToAI, iconsOnly: iconsOnly, help: String(localized: "把这件事交给 Persona 或一个 Agent"), perform: handOff)
         if item.isDone {
-            action("移回", Theme.Icon.undo, iconsOnly: iconsOnly, help: "移回收件箱") { InboxStore.shared.setDone(item, false) }
+            action(String(localized: "移回"), Theme.Icon.undo, iconsOnly: iconsOnly, help: String(localized: "移回收件箱")) { InboxStore.shared.setDone(item, false) }
         } else {
-            action("已处理", Theme.Icon.done, iconsOnly: iconsOnly, help: "标为已处理（列表里按 E）") {
+            action(String(localized: "已处理"), Theme.Icon.done, iconsOnly: iconsOnly, help: String(localized: "标为已处理（列表里按 E）")) {
                 MacInboxState.shared.toggleDone([.item(item.id)], model: model)
             }
         }

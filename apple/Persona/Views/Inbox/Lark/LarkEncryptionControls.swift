@@ -52,9 +52,9 @@ struct LarkEncryptionModeBar: View {
     }
 
     private var mode: (title: String, icon: String) {
-        if draft != nil { ("加密消息", Theme.Icon.locked) }
-        else if climbing { ("", Theme.Icon.braveClimb) }
-        else { ("普通消息", Theme.Icon.message) }
+        if draft != nil { (String(localized: "加密消息"), Theme.Icon.locked) }
+        else if climbing { (String(localized: ""), Theme.Icon.braveClimb) }
+        else { (String(localized: "普通消息"), Theme.Icon.message) }
     }
 }
 
@@ -101,7 +101,7 @@ struct LarkEncryptionCoverPicker: View {
         loading = true; problem = nil
         defer { loading = false }
         do { lines = try await api.larkEncryptionCovers(account: account, feed: feed) }
-        catch { if !error.isCancellation { problem = error.shown ?? "暂时无法加载，请重试" } }
+        catch { if !error.isCancellation { problem = error.shown ?? String(localized: "暂时无法加载，请重试") } }
     }
 }
 
@@ -135,7 +135,7 @@ struct LarkEncryptionUnlockSheet: View {
                                 guard result.accountId == account, !result.locked else { throw LarkOutboxIdentity.Failure.changed }
                                 dismiss()
                                 unlocked()
-                            } catch { problem = error.shown ?? "解锁失败，请重试" }
+                            } catch { problem = error.shown ?? String(localized: "解锁失败，请重试") }
                         }
                     } label: {
                         HStack(spacing: Theme.Space.s) {

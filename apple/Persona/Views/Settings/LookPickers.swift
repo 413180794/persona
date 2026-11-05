@@ -62,7 +62,7 @@ struct ThemeColorPicker: View {
     private func origin(_ c: ThemeColor) -> String {
         switch c {
         case .style: model.style.component.colors.title
-        case .persona: model.persona.palette == nil ? "这个形象没带" : model.persona.name
+        case .persona: model.persona.palette == nil ? String(localized: "这个形象没带") : model.persona.name
         default: c.preset?.subtitle ?? ""
         }
     }

@@ -15,31 +15,36 @@ struct AppearanceSection: View {
         Section {
             Group {
                 NavigationLink(value: SettingsPage.persona) {
-                    SettingsRow(title: "形象", symbol: Theme.Icon.persona, tint: Theme.persona, value: model.persona.cardTitle, look: .oneLine)
+                    SettingsRow(title: String(localized: "形象"), symbol: Theme.Icon.persona, tint: Theme.persona, value: model.persona.cardTitle, look: .oneLine)
                 }
                 .settingsListRow(SettingsPage.persona)
                 .accessibilityIdentifier("settings-persona")
                 NavigationLink(value: SettingsPage.themeColor) {
-                    SettingsRow(title: "主题色", symbol: Theme.Icon.themeColor, tint: Theme.accent, value: model.themeColor.title, look: .oneLine)
+                    SettingsRow(title: String(localized: "主题色"), symbol: Theme.Icon.themeColor, tint: Theme.accent, value: model.themeColor.title, look: .oneLine)
                 }
                 .settingsListRow(SettingsPage.themeColor)
                 .accessibilityIdentifier("settings-color")
                 NavigationLink(value: SettingsPage.style) {
-                    SettingsRow(title: "界面风格", symbol: Theme.Icon.style, tint: Theme.Hue.purple, value: styleSummary, look: .oneLine)
+                    SettingsRow(title: String(localized: "界面风格"), symbol: Theme.Icon.style, tint: Theme.Hue.purple, value: styleSummary, look: .oneLine)
                 }
                 .settingsListRow(SettingsPage.style)
                 .accessibilityIdentifier("settings-style")
+                NavigationLink(value: SettingsPage.language) {
+                    SettingsRow(title: String(localized: "语言"), symbol: Theme.Icon.language, tint: Theme.Hue.green,
+                                value: AppLanguage.settingsSummary, look: .oneLine)
+                }
+                .accessibilityIdentifier("settings-language")
                 #if os(iOS) || os(visionOS)
                 NavigationLink(value: SettingsPage.colorScheme) {
-                    SettingsRow(title: "深浅色", symbol: Theme.Icon.colorScheme, tint: Theme.Hue.indigo,
+                    SettingsRow(title: String(localized: "深浅色"), symbol: Theme.Icon.colorScheme, tint: Theme.Hue.indigo,
                                 value: model.colorScheme.title, look: .oneLine)
                 }
                 .settingsListRow(SettingsPage.colorScheme)
                 .accessibilityIdentifier("settings-scheme")
                 if UIDevice.current.userInterfaceIdiom == .phone {
                     NavigationLink(value: SettingsPage.layout) {
-                        SettingsRow(title: "布局", symbol: Theme.Icon.layout, tint: Theme.Hue.blue,
-                                    value: model.oldLayout ? "旧布局" : "新布局", look: .oneLine)
+                        SettingsRow(title: String(localized: "布局"), symbol: Theme.Icon.layout, tint: Theme.Hue.blue,
+                                    value: model.oldLayout ? String(localized: "旧布局") : String(localized: "新布局"), look: .oneLine)
                     }
                     .settingsListRow(SettingsPage.layout)
                     .accessibilityIdentifier("settings-layout")
@@ -48,13 +53,13 @@ struct AppearanceSection: View {
             }
             .bareListRow()
         } header: {
-            SettingsHeading("外观")
+            SettingsHeading(String(localized: "外观"))
         }
     }
 
     /// The style, and the text size when it is not the standard one.
     private var styleSummary: String {
-        model.textSize == .standard ? model.style.title : "\(model.style.title) · 字号\(model.textSize.title)"
+        model.textSize == .standard ? model.style.title : String(localized: "\(model.style.title) · 字号\(model.textSize.title)")
     }
 }
 
@@ -87,7 +92,7 @@ struct PersonaSettingsPage: View {
             }
         }
         .themedGroupedPage()
-        .detailTitle("形象")
+        .detailTitle(String(localized: "形象"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -104,7 +109,7 @@ struct ThemeColorSettingsPage: View {
             }
         }
         .themedGroupedPage()
-        .detailTitle("主题色")
+        .detailTitle(String(localized: "主题色"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -124,7 +129,7 @@ struct StyleSettingsPage: View {
             Section {
                 Group {
                     if AppStyle.current.usesBeautifulUI {
-                        BUIListRow("字号") {
+                        BUIListRow(String(localized: "字号")) {
                             BUIIconTile(Theme.Icon.textSize, tint: Theme.Hue.gray)
                         } trailing: {
                             BUISegmented(TextSize.allCases.map { .init($0, $0.title) },
@@ -150,7 +155,7 @@ struct StyleSettingsPage: View {
             }
         }
         .themedGroupedPage()
-        .detailTitle("界面风格")
+        .detailTitle(String(localized: "界面风格"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

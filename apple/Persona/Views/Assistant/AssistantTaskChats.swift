@@ -34,7 +34,7 @@ nonisolated struct AssistantTaskChats: Equatable, Sendable {
         if ids.contains(sessionID) { return true }
         let parts = title.split(separator: "|", maxSplits: 2).map { $0.trimmingCharacters(in: .whitespaces) }
         guard parts.count == 3, parts[0].count == 4, parts[0].allSatisfy(\.isASCII), parts[0].allSatisfy(\.isNumber),
-              parts[1] == "定时", !parts[2].isEmpty else { return false }
+              parts[1] == "定时", !parts[2].isEmpty else { return false } // i18n-ignore: the hub's place name
         // The hub cuts the task's title to fit: either may be the longer.
         return topics.contains { $0.hasPrefix(parts[2]) || parts[2].hasPrefix($0) }
     }
@@ -73,14 +73,14 @@ nonisolated struct AssistantTaskChats: Equatable, Sendable {
 
     /// What a chat's link says: when a run last went into it (今天 09:05, 昨天 21:30, 11月1日 09:00), else its place.
     static func label(_ chat: Chat, index: Int, now: Date = .now) -> String {
-        guard let at = chat.at else { return "对话 \(index + 1)" }
+        guard let at = chat.at else { return String(localized: "对话 \(index + 1)") }
         let cal = Calendar.current
         let time = String(format: "%02d:%02d", cal.component(.hour, from: at), cal.component(.minute, from: at))
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: at), to: cal.startOfDay(for: now)).day ?? 0
         switch days {
-        case 0: return "今天 \(time)"
-        case 1: return "昨天 \(time)"
-        default: return "\(cal.component(.month, from: at))月\(cal.component(.day, from: at))日 \(time)"
+        case 0: return String(localized: "今天 \(time)")
+        case 1: return String(localized: "昨天 \(time)")
+        default: return String(localized: "\(at.formatted(.dateTime.month().day())) \(time)", comment: "A day and a time of day")
         }
     }
 }

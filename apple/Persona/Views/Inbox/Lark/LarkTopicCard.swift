@@ -82,7 +82,7 @@ struct LarkTopicCard: View {
                 HStack(spacing: Theme.Space.xs) {
                     Text(m.senderName).font(Theme.Font.secondaryMedium).lineLimit(1)
                         .onTapGesture { showProfile() }
-                    if m.senderType == "bot" { LarkNameTag(text: "机器人") }
+                    if m.senderType == "bot" { LarkNameTag(text: String(localized: "机器人")) }
                 }
                 Text(LarkChatLayout.dayLabel(m.createdAt)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -109,10 +109,10 @@ struct LarkTopicCard: View {
     private var actions: some View {
         HStack(spacing: Theme.Space.s) {
             if react != nil && !topic.recalled {
-                action(Theme.Icon.react, "表情回复", id: "lark.topic.react") { picking = true }
+                action(Theme.Icon.react, String(localized: "表情回复"), id: "lark.topic.react") { picking = true }
             }
             if canOpen {
-                action(Theme.Icon.reply, "回复", id: "lark.topic.reply") { openThread(focus: true) }
+                action(Theme.Icon.reply, String(localized: "回复"), id: "lark.topic.reply") { openThread(focus: true) }
             }
             Spacer(minLength: 0)
             Group {
@@ -219,9 +219,10 @@ private struct LarkTopicReplyPreview: View {
 
     /// VoiceOver reads the preview as one line: what it shows, in order.
     private func spoken(count: Int, earlier: Int, shown: [LarkMessage]) -> String {
-        guard !shown.isEmpty else { return "\(count) 条回复，正在读取" }
-        let lines = shown.map { "\($0.senderName)：\(said($0))" }
-        return ((earlier > 0 ? ["查看更早 \(earlier) 条回复"] : []) + lines).joined(separator: "，")
+        guard !shown.isEmpty else { return String(localized: "\(count) 条回复，正在读取") }
+        let lines = shown.map { String(localized: "\($0.senderName)：\(said($0))") }
+        return ((earlier > 0 ? [String(localized: "查看更早 \(earlier) 条回复")] : []) + lines)
+            .joined(separator: String(localized: "，", comment: "Separator between the lines of a spoken summary"))
     }
 
     private func said(_ r: LarkMessage) -> String { LarkTopicReplies.line(of: r, display: display) }

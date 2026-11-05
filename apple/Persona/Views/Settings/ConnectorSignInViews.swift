@@ -129,7 +129,7 @@ struct ConnectorDeps {
         defer { busy = false }
         do {
             let r = try await api.deleteConnectorData(id)
-            deleted = "已删除：知识库里 \(r.chats ?? 0) 个会话、\(r.people ?? 0) 个人，收件箱里 \(r.inbox ?? 0) 条。"
+            deleted = String(localized: "已删除：知识库里 \(r.chats ?? 0) 个会话、\(r.people ?? 0) 个人，收件箱里 \(r.inbox ?? 0) 条。")
         } catch {
             deps.report(error)
         }
@@ -151,7 +151,7 @@ struct ConnectorDeps {
         defer { busy = false }
         do {
             let r = try await api.deleteConnectorArchive(id)
-            archiveDeleted = "已删除：知识库里 \(r.chats ?? 0) 个会话、\(r.people ?? 0) 个人。"
+            archiveDeleted = String(localized: "已删除：知识库里 \(r.chats ?? 0) 个会话、\(r.people ?? 0) 个人。")
         } catch {
             deps.report(error)
         }
@@ -217,11 +217,12 @@ struct ConnectorSwitchSection: View {
     }
 
     private var footer: String {
-        switch (connector.isEnabled, connector.storesData) {
-        case (true, true): "关掉后不再读 \(connector.name)；登录状态和已经存下的数据都留着。"
-        case (true, false): "关掉后 \(connector.name) 停下来；登录状态留着。"
-        case (false, false): "打开后才能登录。"
-        case (false, true): "打开后才能登录，登录后\(ConnectorText.profile(connector.id).reads ?? "它的内容")进知识库和收件箱，助手也能查。"
+        let reads = ConnectorText.profile(connector.id).reads ?? String(localized: "它的内容")
+        return switch (connector.isEnabled, connector.storesData) {
+        case (true, true): String(localized: "关掉后不再读 \(connector.name)；登录状态和已经存下的数据都留着。")
+        case (true, false): String(localized: "关掉后 \(connector.name) 停下来；登录状态留着。")
+        case (false, false): String(localized: "打开后才能登录。")
+        case (false, true): String(localized: "打开后才能登录，登录后\(reads)进知识库和收件箱，助手也能查。")
         }
     }
 }
@@ -237,10 +238,10 @@ struct ConnectorFeedsSection: View {
         if connector.archive != nil || connector.inbox != nil {
             Section {
                 if let on = connector.archive {
-                    toggle("进知识库", on: on, feed: .archive).accessibilityIdentifier("connector.archive")
+                    toggle(String(localized: "进知识库"), on: on, feed: .archive).accessibilityIdentifier("connector.archive")
                 }
                 if let on = connector.inbox {
-                    toggle("进收件箱", on: on, feed: .inbox).accessibilityIdentifier("connector.inbox")
+                    toggle(String(localized: "进收件箱"), on: on, feed: .inbox).accessibilityIdentifier("connector.inbox")
                 }
                 if connector.archive != nil {
                     Button(role: .destructive) { confirmDelete = true } label: { Text("删除已存的知识库内容").lineLimit(1) }
@@ -266,11 +267,11 @@ struct ConnectorFeedsSection: View {
     private var footer: String {
         var lines: [String] = []
         if connector.archive != nil {
-            lines.append(connector.archive == true ? "进知识库：\(connector.name) 的内容存进知识库，助手和 AI 分身都能查。关掉后不再存新的，已存的留着。"
-                         : "不进知识库：不再存新的内容。收件箱和助手查 \(connector.name) 照常。")
+            lines.append(connector.archive == true ? String(localized: "进知识库：\(connector.name) 的内容存进知识库，助手和 AI 分身都能查。关掉后不再存新的，已存的留着。")
+                         : String(localized: "不进知识库：不再存新的内容。收件箱和助手查 \(connector.name) 照常。"))
         }
         if connector.inbox == false {
-            lines.append("不进收件箱：不再收新的，已有的条目留着。")
+            lines.append(String(localized: "不进收件箱：不再收新的，已有的条目留着。"))
         }
         return lines.joined(separator: "\n")
     }
@@ -355,7 +356,7 @@ struct ConnectorSignInSteps: View {
     var reload: () async -> Void
     var footer: String
     /// The section's heading and the first button: 登录 for a connector, 绑定 / 扫码绑定 for a channel.
-    var heading = "登录"
+    var heading = String(localized: "登录")
     var start: String?
 
     var body: some View {
@@ -458,7 +459,7 @@ struct ConnectorSignInSteps: View {
                     Button {
                         Task { await model.start() }
                     } label: {
-                        Text(start ?? "登录 \(name)").lineLimit(1).formActionWidth()
+                        Text(start ?? String(localized: "登录 \(name)")).lineLimit(1).formActionWidth()
                     }
                     .formButton(prominent: true)
                     .disabled(model.busy)
@@ -531,7 +532,7 @@ struct ConnectorSignInSteps: View {
         #if os(iOS) || os(visionOS)
         if f.secret == true {
             // A token, an API hash, another service's password: never offered to the system's passwords (#1598).
-            SecretField(f.placeholder ?? f.label, filled: "已填写", text: text, identifier: "connector.field." + f.name)
+            SecretField(f.placeholder ?? f.label, filled: String(localized: "已填写"), text: text, identifier: "connector.field." + f.name)
         } else {
             TextField(f.label, text: text, prompt: prompt)
                 .keyboardType(Self.keyboard(f.name))

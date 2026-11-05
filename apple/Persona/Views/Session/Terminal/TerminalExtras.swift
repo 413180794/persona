@@ -24,8 +24,8 @@ enum TerminalPrefs {
     static let size = "terminalSize"
     static let defaultFontSize = 15.0 // as Moshi reads: about 46 columns on a 6.9-inch phone
     static let defaultShortcuts = ["git status", "git diff --stat", "ls -la", "/compact", "/status"]
-    static let allKeys: [(id: String, label: String)] = [("esc", "esc"), ("tab", "tab"), ("ctrlc", "⌃C"), ("shortcuts", "快捷命令"),
-                                                         ("paste", "粘贴"), ("files", "照片 / 文件"), ("alt", "alt"), ("shift", "⇧ shift"), ("pad", "方向键")]
+    static let allKeys: [(id: String, label: String)] = [("esc", "esc"), ("tab", "tab"), ("ctrlc", "⌃C"), ("shortcuts", String(localized: "快捷命令")),
+                                                         ("paste", String(localized: "粘贴")), ("files", String(localized: "照片 / 文件")), ("alt", "alt"), ("shift", "⇧ shift"), ("pad", String(localized: "方向键"))]
     /// alt and shift are a tap away in the settings (Moshi shows only ctrl too): the rest fits a phone's width. So is
     /// the photos / files key: holding paste offers the same.
     static let defaultKeys = allKeys.map(\.id).filter { !["alt", "shift", "files"].contains($0) }.joined(separator: ",")
@@ -43,7 +43,7 @@ enum TerminalPrefs {
 /// Saved commands over the key bar: a tap puts one in the text field, a double tap sends it with return.
 struct ShortcutsPanel: View {
     var items: [String]
-    var hint = "快捷 · 单击填入，双击发送"
+    var hint = String(localized: "快捷 · 单击填入，双击发送")
     var fill: (String) -> Void
     var send: (String) -> Void
     var edit: () -> Void
@@ -114,7 +114,7 @@ struct TerminalSettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    SegmentedChoice("终端尺寸", [("phone", TerminalSizeText.own), ("mirror", "电脑尺寸")], selection: $size)
+                    SegmentedChoice(String(localized: "终端尺寸"), [("phone", TerminalSizeText.own), ("mirror", String(localized: "电脑尺寸"))], selection: $size)
                 } header: {
                     Text("尺寸")
                 } footer: {
@@ -148,11 +148,11 @@ struct TerminalSettingsView: View {
                     Text(TerminalHelpText.textFooter)
                 }
                 Section {
-                    SegmentedChoice("输入方式", [("direct", "直接打字"), ("field", "输入框")], selection: $inputMode)
+                    SegmentedChoice(String(localized: "输入方式"), [("direct", String(localized: "直接打字")), ("field", String(localized: "输入框"))], selection: $inputMode)
                 } header: {
                     Text("输入")
                 } footer: {
-                    Text(inputMode == "field" ? "在终端下方的输入框里写好，按回车一次发出去；键栏的 ctrl / alt / ⇧ 对输入框里打的下一个字也生效。"
+                    Text(inputMode == "field" ? String(localized: "在终端下方的输入框里写好，按回车一次发出去；键栏的 ctrl / alt / ⇧ 对输入框里打的下一个字也生效。")
                          : TerminalHelpText.directFooter)
                 }
                 #if os(macOS)
@@ -165,7 +165,7 @@ struct TerminalSettingsView: View {
                          : "Option 照常打出特殊字符（Option+2 是 ™）；打开后 Option+键 发出 Esc+键，和「终端」App 的同名设置一样。")
                 }
                 Section {
-                    SegmentedChoice("接管时的鼠标", [(MacTerminalMouse.Mode.program.rawValue, "交给程序"), (MacTerminalMouse.Mode.local.rawValue, "本地选择")],
+                    SegmentedChoice(String(localized: "接管时的鼠标"), [(MacTerminalMouse.Mode.program.rawValue, String(localized: "交给程序")), (MacTerminalMouse.Mode.local.rawValue, String(localized: "本地选择"))],
                                     selection: $mouseMode)
                 } header: {
                     Text("鼠标")
@@ -279,7 +279,7 @@ struct TerminalPreview: View {
     var wrap: Bool
 
     private static let sample: TerminalContent = {
-        let ansi = "\u{1B}[38;2;215;119;87m⏺\u{1B}[0m 好的，先跑一下测试：\r\n"
+        let ansi = "\u{1B}[38;2;215;119;87m⏺\u{1B}[0m " + String(localized: "好的，先跑一下测试：", comment: "Sample terminal output in the terminal settings preview") + "\r\n"
             + "  ⎿  \u{1B}[32mok\u{1B}[0m  ./screen  \u{1B}[2m0.41s\u{1B}[0m\r\n"
             + "\u{1B}[38;2;136;136;136m" + String(repeating: "─", count: 60) + "\u{1B}[0m\r\n"
             + "❯ \u{1B}[7m \u{1B}[0m\r\n"
@@ -388,19 +388,19 @@ struct SuggestionStrip: View {
 /// The terminal's size wording: the phone's size on iOS, the window's on the Mac (a Mac takes over at its panel's size).
 enum TerminalSizeText {
     #if os(macOS)
-    static let own = "窗口尺寸"
-    static let ownFooter = "打开终端时由这个窗口接管：电脑上的窗格变成窗口的行列数，Claude 按窗口宽度排版；离开终端或断线后，窗格回到电脑上的尺寸。"
-    static let mirrorFooter = "不改电脑上的窗格，按电脑的宽度显示，长行在窗口里折行（或左右滚动）。"
-    static let wrap = "长行按窗口宽度换行"
-    static let takeOver = "比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成这个窗口的尺寸；离开终端时窗格回到电脑上的尺寸。"
+    static let own = String(localized: "窗口尺寸")
+    static let ownFooter = String(localized: "打开终端时由这个窗口接管：电脑上的窗格变成窗口的行列数，Claude 按窗口宽度排版；离开终端或断线后，窗格回到电脑上的尺寸。")
+    static let mirrorFooter = String(localized: "不改电脑上的窗格，按电脑的宽度显示，长行在窗口里折行（或左右滚动）。")
+    static let wrap = String(localized: "长行按窗口宽度换行")
+    static let takeOver = String(localized: "比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成这个窗口的尺寸；离开终端时窗格回到电脑上的尺寸。")
     static let icon = Theme.Icon.laptop
     static let takeOverIcon = Theme.Icon.takeOverWindow
     #else
-    static let own = "手机尺寸"
-    static let ownFooter = "打开终端时由手机接管：电脑上的窗格变成手机的行列数，Claude 按手机宽度排版；离开终端、App 进后台或断线后，窗格回到电脑上的尺寸。"
-    static let mirrorFooter = "不改电脑上的窗格，按电脑的宽度显示，长行在手机上折行（或左右滑）。"
-    static let wrap = "长行按手机宽度换行"
-    static let takeOver = "比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成手机的尺寸；离开终端时窗格回到电脑上的尺寸。"
+    static let own = String(localized: "手机尺寸")
+    static let ownFooter = String(localized: "打开终端时由手机接管：电脑上的窗格变成手机的行列数，Claude 按手机宽度排版；离开终端、App 进后台或断线后，窗格回到电脑上的尺寸。")
+    static let mirrorFooter = String(localized: "不改电脑上的窗格，按电脑的宽度显示，长行在手机上折行（或左右滑）。")
+    static let wrap = String(localized: "长行按手机宽度换行")
+    static let takeOver = String(localized: "比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成手机的尺寸；离开终端时窗格回到电脑上的尺寸。")
     static let icon = Theme.Icon.phone
     static let takeOverIcon = Theme.Icon.handoff
     #endif
@@ -415,29 +415,29 @@ enum TerminalHelpText {
     }
 
     #if os(macOS)
-    static let loadOlder = "往上滚动加载更早的输出"
-    static let noWrap = "不换行 · 左右滚动"
-    static let noWrapValue = "关，左右滚动看"
-    static let textFooter = "⌘+ / ⌘− / ⌘0 或在触控板上捏合也能调字号。中文用系统字体，每个字占两格。"
-    static let directFooter = "点一下终端就能直接打字，每个键发到终端（输入法也能用），⌘ 组合键留给 App；键栏的键盘按钮把输入移到终端或移开，双击它是回车。点终端同时是点在终端里（比如 Claude 的「Jump to bottom」）。"
-    static let shortcutsFooter = "在键栏的闪电里：单击输入，双击带回车执行。右键一条可以上移、下移或删除。"
-    static let keysFooter = "ctrl 一直在，键盘按钮和方向键在最右。放不下时键栏可以左右滚动。"
+    static let loadOlder = String(localized: "往上滚动加载更早的输出")
+    static let noWrap = String(localized: "不换行 · 左右滚动")
+    static let noWrapValue = String(localized: "关，左右滚动看")
+    static let textFooter = String(localized: "⌘+ / ⌘− / ⌘0 或在触控板上捏合也能调字号。中文用系统字体，每个字占两格。")
+    static let directFooter = String(localized: "点一下终端就能直接打字，每个键发到终端（输入法也能用），⌘ 组合键留给 App；键栏的键盘按钮把输入移到终端或移开，双击它是回车。点终端同时是点在终端里（比如 Claude 的「Jump to bottom」）。")
+    static let shortcutsFooter = String(localized: "在键栏的闪电里：单击输入，双击带回车执行。右键一条可以上移、下移或删除。")
+    static let keysFooter = String(localized: "ctrl 一直在，键盘按钮和方向键在最右。放不下时键栏可以左右滚动。")
     static let gestures: [Gesture] = [
-        Gesture(text: "点终端：开始打字，也是点在终端里（Claude 的「Jump to bottom」、顶上的提问）", symbol: Theme.Icon.click),
-        Gesture(text: "滚轮或触控板：在终端里滚动（Claude 往回翻对话）", symbol: Theme.Icon.upDown),
-        Gesture(text: "拖动选择，⌘C 拷贝；右键菜单里有拷贝、粘贴、全选", symbol: Theme.Icon.contextMenu),
-        Gesture(text: "⌘V：粘贴剪贴板（多行先问一下）", symbol: Theme.Icon.paste),
-        Gesture(text: "⌘+ / ⌘− / ⌘0、触控板捏合：调字号", symbol: Theme.Icon.enlarge),
-        Gesture(text: "触控板三指左右轻扫：切换同一空间里的 Agent（系统设置 › 触控板里「在页面之间轻扫」选三指时）", symbol: Theme.Icon.swipe),
+        Gesture(text: String(localized: "点终端：开始打字，也是点在终端里（Claude 的「Jump to bottom」、顶上的提问）"), symbol: Theme.Icon.click),
+        Gesture(text: String(localized: "滚轮或触控板：在终端里滚动（Claude 往回翻对话）"), symbol: Theme.Icon.upDown),
+        Gesture(text: String(localized: "拖动选择，⌘C 拷贝；右键菜单里有拷贝、粘贴、全选"), symbol: Theme.Icon.contextMenu),
+        Gesture(text: String(localized: "⌘V：粘贴剪贴板（多行先问一下）"), symbol: Theme.Icon.paste),
+        Gesture(text: String(localized: "⌘+ / ⌘− / ⌘0、触控板捏合：调字号"), symbol: Theme.Icon.enlarge),
+        Gesture(text: String(localized: "触控板三指左右轻扫：切换同一空间里的 Agent（系统设置 › 触控板里「在页面之间轻扫」选三指时）"), symbol: Theme.Icon.swipe),
     ]
     #else
-    static let loadOlder = "上滑加载更早的输出"
-    static let noWrap = "不换行 · 左右滑"
-    static let noWrapValue = "关，左右滑动看"
-    static let textFooter = "在终端上双指捏合也能调字号。中文用系统字体，每个字占两格。"
-    static let directFooter = "点键栏右边的键盘按钮弹出键盘，每个键直接发到终端（像在电脑上一样，输入法、听写都能用）；双击键盘按钮是回车。点终端是点在终端里（比如 Claude 的「Jump to bottom」），不会弹键盘。"
-    static let shortcutsFooter = "在键栏的闪电里：单击输入，双击带回车执行。左上角「编辑」可以删除、排序。"
-    static let keysFooter = "ctrl 一直在，键盘按钮和方向键在最右。放不下时键栏可以左右滑。"
+    static let loadOlder = String(localized: "上滑加载更早的输出")
+    static let noWrap = String(localized: "不换行 · 左右滑")
+    static let noWrapValue = String(localized: "关，左右滑动看")
+    static let textFooter = String(localized: "在终端上双指捏合也能调字号。中文用系统字体，每个字占两格。")
+    static let directFooter = String(localized: "点键栏右边的键盘按钮弹出键盘，每个键直接发到终端（像在电脑上一样，输入法、听写都能用）；双击键盘按钮是回车。点终端是点在终端里（比如 Claude 的「Jump to bottom」），不会弹键盘。")
+    static let shortcutsFooter = String(localized: "在键栏的闪电里：单击输入，双击带回车执行。左上角「编辑」可以删除、排序。")
+    static let keysFooter = String(localized: "ctrl 一直在，键盘按钮和方向键在最右。放不下时键栏可以左右滑。")
     #endif
     #if os(macOS)
 

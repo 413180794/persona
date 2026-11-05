@@ -69,7 +69,7 @@ struct ConnectorThreadView: View {
             if !model.loaded {
                 ProgressView()
             } else if model.messages.isEmpty && model.failure == nil {
-                EmptyStateView(symbol: Theme.Icon.messagesApp, title: "没有消息", message: "这个会话里还没有能显示的消息。")
+                EmptyStateView(symbol: Theme.Icon.messagesApp, title: String(localized: "没有消息"), message: String(localized: "这个会话里还没有能显示的消息。"))
             }
         }
         .safeAreaInset(edge: .top) {
@@ -132,7 +132,7 @@ struct ConnectorThreadView: View {
     /// Back to what a quote answers: the message shown, highlighted; read back a few pages for one not loaded yet.
     private func jump(to id: String) async -> Bool {
         guard await model.reach(id) else {
-            notice = "原消息太早了，往上翻几页再找"
+            notice = String(localized: "原消息太早了，往上翻几页再找")
             return false
         }
         withAnimation(Theme.Motion.standard) { position.scrollTo(id: id, anchor: .center) }
@@ -147,8 +147,8 @@ struct ConnectorThreadView: View {
     }
 
     private var composer: some View {
-        ThreadComposer(placeholder: "回复 \(model.chat?.name ?? "")", text: $text, selection: $selection, focused: $focused,
-                       quote: replyTo.map { ("回复 \($0.isMine ? "自己" : $0.sender.name)", $0.summary) }, sending: model.sending,
+        ThreadComposer(placeholder: String(localized: "回复 \(model.chat?.name ?? "")"), text: $text, selection: $selection, focused: $focused,
+                       quote: replyTo.map { ($0.isMine ? String(localized: "回复 自己") : String(localized: "回复 \($0.sender.name)"), $0.summary) }, sending: model.sending,
                        cancelQuote: { replyTo = nil }, send: send)
     }
 
@@ -238,7 +238,7 @@ struct ConnectorThreadRow: View {
         } else {
             WidestColumn(spacing: Theme.Space.sm) {
                 if let q = m.replyTo {
-                    QuoteCard(heading: q.from ?? "消息", summary: q.text.flatMap { $0.isEmpty ? nil : $0 } ?? "（原消息）", tint: LarkColor.blue,
+                    QuoteCard(heading: q.from ?? String(localized: "消息"), summary: q.text.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "（原消息）"), tint: LarkColor.blue,
                               ink: .primary) {
                         Task {
                             if await jump(q.id) { Haptics.tap() } else { Haptics.attention() }
@@ -297,7 +297,7 @@ struct ThreadMediaView: View {
                     .scaledFrame(width: Theme.Size.box120, height: Theme.Size.box120)
                     .accessibilityLabel("贴纸 \(media.emoji ?? "")")
             } else {
-                placeholder(Theme.Icon.photo, "贴纸 \(media.emoji ?? "")")
+                placeholder(Theme.Icon.photo, String(localized: "贴纸 \(media.emoji ?? "")"))
             }
         case "video":
             ZStack(alignment: .bottomLeading) {
@@ -310,7 +310,7 @@ struct ThreadMediaView: View {
                             Image(systemName: Theme.Icon.playMedia).font(Theme.Font.display).foregroundStyle(.white.opacity(0.9))
                         }
                 } else {
-                    placeholder(Theme.Icon.video, "视频")
+                    placeholder(Theme.Icon.video, String(localized: "视频"))
                 }
                 Text(ThreadMediaText.duration(media.duration ?? 0))
                     .font(Theme.Font.caption).monospacedDigit().foregroundStyle(.white)
@@ -328,7 +328,7 @@ struct ThreadMediaView: View {
             }
             .foregroundStyle(.primary)
         default:
-            let name = media.name ?? "文件"
+            let name = media.name ?? String(localized: "文件")
             HStack(spacing: Theme.Space.m) {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text(name).font(Theme.Font.secondaryMedium).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.leading)
@@ -358,7 +358,7 @@ struct ThreadMediaView: View {
                 .fullScreenCover(isPresented: $viewing) { ImageViewer(urls: [url], index: 0).navigationTransition(.zoom(sourceID: url, in: zoom)) }
                 .accessibilityLabel("图片")
         } else {
-            placeholder(Theme.Icon.photo, "图片")
+            placeholder(Theme.Icon.photo, String(localized: "图片"))
         }
     }
 

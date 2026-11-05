@@ -8,10 +8,10 @@ enum LauncherName {
         let n = name.trimmingCharacters(in: .whitespaces)
         guard !n.isEmpty else { return nil }
         if n.range(of: "^[A-Za-z_][A-Za-z0-9_-]*$", options: .regularExpression) == nil {
-            return "名字只能用字母、数字、_ 和 -，以字母或 _ 开头"
+            return String(localized: "名字只能用字母、数字、_ 和 -，以字母或 _ 开头")
         }
         // The hub's reservedLauncherNames: claude itself and the /api/v1/launchers/<word> routes.
-        if ["claude", "presets", "test", "discover", "import"].contains(n) { return "不能叫 \(n)" }
+        if ["claude", "presets", "test", "discover", "import"].contains(n) { return String(localized: "不能叫 \(n)") }
         return nil
     }
 }

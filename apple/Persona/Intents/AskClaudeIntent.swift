@@ -40,7 +40,7 @@ struct AskClaudeIntent: AppIntent {
 
     nonisolated func perform() async throws -> some IntentResult & ProvidesDialog & OpensIntent {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty else { throw IntentFailureSentence("要跟 Claude 说什么？") }
+        guard !body.isEmpty else { throw IntentFailureSentence(String(localized: "要跟 Claude 说什么？")) }
 
         do {
             let target = try await resolveMachine()
@@ -73,7 +73,7 @@ struct AskClaudeIntent: AppIntent {
         guard let session = IntentPicker.session(sessions, machine: machine.ref.id, group: machine.ref.group) else {
             throw IntentFailure.noSession(machine.name)
         }
-        guard session.canSend else { throw IntentFailureSentence(session.sourceSubtitle ?? "此会话仅可查看") }
+        guard session.canSend else { throw IntentFailureSentence(session.sourceSubtitle ?? String(localized: "此会话仅可查看")) }
         try await api.send(session.key, text: text)
         return session
     }

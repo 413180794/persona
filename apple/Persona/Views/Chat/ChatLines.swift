@@ -150,7 +150,7 @@ struct ChatLines {
     static func isRetry(_ line: ChatLine) -> Bool {
         guard case .row(.user(let i)) = line.content else { return false }
         let t = (i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return ["继续", "重试", "再试一次", "continue", "retry", "go on"].contains(t)
+        return ["继续", "重试", "再试一次", "continue", "retry", "go on", "続けて", "続行", "再試行", "もう一度"].contains(t) // i18n-ignore
     }
 
     /// Open work lines get their steps as lines of their own and a 收起 line after the last.

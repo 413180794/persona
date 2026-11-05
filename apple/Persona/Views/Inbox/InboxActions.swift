@@ -24,7 +24,7 @@ struct InboxActionBar: View {
             HStack(spacing: Theme.Space.s) {
                 // A connector's thread that cannot be answered (a CI run) has only 交给 AI.
                 if item.connector.map({ $0.canReply == true }) ?? true {
-                    action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
+                    action(item.agentDraft == nil ? String(localized: "AI 草拟回复") : String(localized: "查看草稿"), symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
                 } else if let open = item.connector?.openURL, let url = Self.systemURL(open, draft: item.agentDraft) {
                     // Answered in the source's own app (在信息里回复: Messages with the number, and the AI 分身's draft;
                     // 在 Telegram 里回复: the conversation in Telegram; else 打开).
@@ -33,7 +33,7 @@ struct InboxActionBar: View {
                         openURL(url)
                     }
                 }
-                action("交给 AI", symbol: Theme.Icon.handToAI, prominent: false, perform: handOff)
+                action(String(localized: "交给 AI"), symbol: Theme.Icon.handToAI, prominent: false, perform: handOff)
             }
         }
         .padding(.horizontal, Theme.Space.l)
@@ -45,9 +45,9 @@ struct InboxActionBar: View {
 
     /// What the button that opens the item's `open_url` says: where the user answers it, else just 打开.
     nonisolated static func openTitle(_ item: InboxItem, sms: Bool) -> String {
-        if sms { return "在信息里回复" }
-        if let app = ConnectorText.profile(item.source).app { return "在 \(app) 里回复" }
-        return "打开"
+        if sms { return String(localized: "在信息里回复") }
+        if let app = ConnectorText.profile(item.source).app { return String(localized: "在 \(app) 里回复") }
+        return String(localized: "打开")
     }
 
     /// The item's `open_url` for the system; an sms: one carries the draft as its body.
@@ -183,12 +183,12 @@ struct InboxDraftSheet: View {
 
     // Spelled out instead of one nested ternary: Swift 6.2 (Xcode 26.0) cannot type-check that in reasonable time.
     private var title: String {
-        if item.moment != nil { return "评论公司圈" }
-        if item.doc != nil { return "评论 " + item.title }
+        if item.moment != nil { return String(localized: "评论公司圈") }
+        if item.doc != nil { return String(localized: "评论 \(item.title)") }
         if let connector = item.connector {
-            return "评论 " + (connector.reference?.split(separator: "/").last.map(String.init) ?? item.title)
+            return String(localized: "评论 \(connector.reference?.split(separator: "/").last.map(String.init) ?? item.title)")
         }
-        return item.isLark ? "回复 " + item.title : "回复邮件"
+        return item.isLark ? String(localized: "回复 \(item.title)") : String(localized: "回复邮件")
     }
 
     private var keptChanges: [InboxItem.DocChange] { proposed.filter { (kept ?? Set(proposed)).contains($0) } }
@@ -253,7 +253,7 @@ struct InboxHandOffSheet: View {
     @State private var sending = false
     @State private var error: String?
 
-    private static let presets = ["总结一下，告诉我要做什么，给出建议的回复", "查清楚背景再告诉我", "直接帮我处理，回复前先问我"]
+    private static let presets = [String(localized: "总结一下，告诉我要做什么，给出建议的回复"), String(localized: "查清楚背景再告诉我"), String(localized: "直接帮我处理，回复前先问我")]
 
     private var agents: [Session] {
         model.allSessions.filter { !$0.assistant }
@@ -346,15 +346,15 @@ struct InboxHandOffSheet: View {
 
     /// The item as context the chat shows as a chip, then the ask.
     static func message(_ it: InboxItem, ask: String) -> String {
-        let title = (it.connector != nil ? it.accountName + " · " : it.isLark ? "飞书 · " : "邮件 · ") + it.title
-        var text = it.context?.isEmpty == false ? it.context! : [it.sender ?? "", it.preview].filter { !$0.isEmpty }.joined(separator: "：")
+        let title = it.connector != nil ? "\(it.accountName) · \(it.title)" : it.isLark ? String(localized: "飞书 · \(it.title)") : String(localized: "邮件 · \(it.title)")
+        var text = it.context?.isEmpty == false ? it.context! : [it.sender ?? "", it.preview].filter { !$0.isEmpty }.joined(separator: "：") // i18n-ignore: context for the agent
         if let l = it.lark {
-            let account = l.olAccount.map { "，在飞书账号 \($0)（lark_messages 传 account=\($0)）" } ?? ""
-            text += "\n\n（飞书会话 feedId \(l.feedID)\(account)，可用飞书工具读更多上下文或回复）"
+            let account = l.olAccount.map { String(localized: "，在飞书账号 \($0)（lark_messages 传 account=\($0)）") } ?? ""
+            text += String(localized: "\n\n（飞书会话 feedId \(l.feedID)\(account)，可用飞书工具读更多上下文或回复）")
         }
-        if let c = it.connector, let url = c.url { text += "\n\n（\(it.accountName)：\(url)）" }
+        if let c = it.connector, let url = c.url { text += "\n\n（\(it.accountName)：\(url)）" } // i18n-ignore: context for the agent
         if let m = it.mail, let uid = m.uids.last {
-            text += "\n\n（邮件 account_id \(m.accountID)，mailbox \(m.mailbox)，uid \(uid)，可用 mail_read 读全文、mail_send 回复）"
+            text += "\n\n（邮件 account_id \(m.accountID)，mailbox \(m.mailbox)，uid \(uid)，可用 mail_read 读全文、mail_send 回复）" // i18n-ignore
         }
         let ref = ContextRef(kind: "context", title: title, url: "", text: text)
         return ref.xml + "\n\n" + ask

@@ -194,7 +194,7 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
             addGestureRecognizer(swipe)
         }
         isAccessibilityElement = true
-        accessibilityLabel = "终端"
+        accessibilityLabel = String(localized: "终端")
         accessibilityIdentifier = "terminal-screen"
         accessibilityTraits = .staticText
     }
@@ -638,14 +638,14 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration,
                              suggestedActions: [UIMenuElement]) -> UIMenu? {
         UIMenu(children: [
-            UIAction(title: "拷贝", image: UIImage(systemName: Theme.Icon.copy)) { [weak self] _ in
+            UIAction(title: String(localized: "拷贝"), image: UIImage(systemName: Theme.Icon.copy)) { [weak self] _ in
                 guard let self else { return }
                 UIPasteboard.general.string = self.selectedText()
                 self.onCopy?()
                 self.selection = nil
                 self.canvas.setNeedsDisplay()
             },
-            UIAction(title: "全选", image: UIImage(systemName: Theme.Icon.select)) { [weak self] _ in
+            UIAction(title: String(localized: "全选"), image: UIImage(systemName: Theme.Icon.select)) { [weak self] _ in
                 guard let self, !self.lines.isEmpty else { return }
                 self.selection = (CellPoint(line: 0, col: 0),
                                   CellPoint(line: self.lines.count - 1, col: max(0, self.lines[self.lines.count - 1].to - self.lines[self.lines.count - 1].from - 1)))
@@ -672,7 +672,7 @@ final class TerminalCanvas: UIView {
 enum TerminalFont: String, CaseIterable {
     case jetbrains, system
 
-    var name: String { self == .jetbrains ? "JetBrains Mono" : "SF Mono（系统）" }
+    var name: String { self == .jetbrains ? "JetBrains Mono" : String(localized: "SF Mono（系统）") }
 
     func font(size: CGFloat, bold: Bool) -> UIFont {
         if self == .jetbrains, Self.registered, let f = UIFont(name: bold ? "JetBrainsMono-Bold" : "JetBrainsMono-Regular", size: size) {
@@ -897,7 +897,7 @@ final class SelectionHandle: UIView {
         isOpaque = false
         backgroundColor = .clear
         isAccessibilityElement = true
-        accessibilityLabel = atTop ? "选择开始" : "选择结束"
+        accessibilityLabel = atTop ? String(localized: "选择开始") : String(localized: "选择结束")
         accessibilityIdentifier = atTop ? "selection-start" : "selection-end"
     }
 

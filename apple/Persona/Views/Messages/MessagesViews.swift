@@ -24,7 +24,7 @@ struct MessagesConnectorView: View {
                     Image(systemName: Theme.Icon.messagesApp).resizable().scaledToFit().foregroundStyle(Theme.positive)
                         .scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                        Text(status.map { "\($0.machine) 上的信息" } ?? "信息").font(Theme.Font.heading).lineLimit(1)
+                        Text(status.map { String(localized: "\($0.machine) 上的信息") } ?? String(localized: "信息")).font(Theme.Font.heading).lineLimit(1)
                         HStack(spacing: Theme.Space.sm) {
                             Circle().fill(tint).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                             Text(stateText).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
@@ -57,7 +57,7 @@ struct MessagesConnectorView: View {
                     }
                     .disabled(loading)
                 } header: {
-                    SettingsHeading("在 \(status?.machine ?? "那台 Mac") 上打开权限")
+                    SettingsHeading(String(localized: "在 \(status?.machine ?? String(localized: "那台 Mac")) 上打开权限"))
                 }
             }
             if let ai = status?.ai {
@@ -92,7 +92,7 @@ struct MessagesConnectorView: View {
             Text("知识库里的信息会话和人、收件箱里的信息条目都会删掉；那台 Mac 上的消息不受影响。")
         }
         .themedPage()
-        .detailTitle("信息")
+        .detailTitle(String(localized: "信息"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
@@ -108,12 +108,12 @@ struct MessagesConnectorView: View {
     }
 
     private var stateText: String {
-        guard let status else { return loading ? "正在检查…" : "读不到状态" }
+        guard let status else { return loading ? String(localized: "正在检查…") : String(localized: "读不到状态") }
         switch status.status {
-        case "ok": return "可以读"
-        case "no_permission": return "没有完全磁盘访问权限"
-        case "not_configured": return "那台电脑上没有「信息」"
-        default: return "读不了"
+        case "ok": return String(localized: "可以读")
+        case "no_permission": return String(localized: "没有完全磁盘访问权限")
+        case "not_configured": return String(localized: "那台电脑上没有「信息」")
+        default: return String(localized: "读不了")
         }
     }
 
@@ -124,7 +124,7 @@ struct MessagesConnectorView: View {
             status = try await model.api?.messagesStatus()
             failure = nil
         } catch {
-            failure = error.shown.map { "读不到信息的状态：\($0)" }
+            failure = error.shown.map { String(localized: "读不到信息的状态：\($0)") }
         }
     }
 
@@ -136,7 +136,7 @@ struct MessagesConnectorView: View {
             deleted = nil
             failure = nil
         } catch {
-            failure = error.shown.map { "没改成：\($0)" }
+            failure = error.shown.map { String(localized: "没改成：\($0)") }
         }
     }
 
@@ -145,11 +145,11 @@ struct MessagesConnectorView: View {
         defer { saving = false }
         do {
             if let d = try await model.api?.deleteMessagesData() {
-                deleted = "已删除 \(d.chats) 个会话、\(d.people) 个人、\(d.inbox) 件收件箱条目"
+                deleted = String(localized: "已删除 \(d.chats) 个会话、\(d.people) 个人、\(d.inbox) 件收件箱条目")
             }
             failure = nil
         } catch {
-            failure = error.shown.map { "没删成：\($0)" }
+            failure = error.shown.map { String(localized: "没删成：\($0)") }
         }
     }
 }
@@ -187,13 +187,13 @@ struct MessagesChatListView: View {
             if !page.loaded {
                 ProgressView()
             } else if chats.isEmpty && page.failure == nil {
-                EmptyStateView(symbol: Theme.Icon.messagesApp, title: query.isEmpty ? "没有会话" : "没有找到",
-                               message: query.isEmpty ? "那台 Mac 上的「信息」还没有会话。" : "换个名字或号码试试。")
+                EmptyStateView(symbol: Theme.Icon.messagesApp, title: query.isEmpty ? String(localized: "没有会话") : String(localized: "没有找到"),
+                               message: query.isEmpty ? String(localized: "那台 Mac 上的「信息」还没有会话。") : String(localized: "换个名字或号码试试。"))
             }
         }
-        .detailTitle("会话")
+        .detailTitle(String(localized: "会话"))
         .navigationBarTitleDisplayMode(.inline)
-        .pageSearchable(text: $query, prompt: "搜索名字或号码")
+        .pageSearchable(text: $query, prompt: String(localized: "搜索名字或号码"))
         .task { if !page.loaded { await page.load() } }
         .refreshable { await page.load() }
     }
@@ -227,7 +227,7 @@ struct MessagesChatRow: View {
 
     private var preview: String {
         let text = chat.preview ?? ""
-        return chat.fromMe == true && !text.isEmpty ? "你：" + text : text
+        return chat.fromMe == true && !text.isEmpty ? String(localized: "你：\(text)") : text
     }
 
     @ViewBuilder private var avatar: some View {
@@ -290,7 +290,7 @@ struct MessagesThreadView: View {
             if !page.loaded {
                 ProgressView()
             } else if page.messages.isEmpty && page.failure == nil {
-                EmptyStateView(symbol: Theme.Icon.messagesApp, title: "没有消息", message: "这个会话里还没有能显示的消息。")
+                EmptyStateView(symbol: Theme.Icon.messagesApp, title: String(localized: "没有消息"), message: String(localized: "这个会话里还没有能显示的消息。"))
             }
         }
         .navigationTitle(page.chat?.name ?? title)
@@ -327,7 +327,7 @@ struct MessagesLine: Identifiable {
                 if group, !m.isMine, !m.isEvent { line.sender = m.sender?.shown }
             }
             if services, !m.isEvent, let s = m.service, !s.isEmpty, s != service {
-                line.service = s == "SMS" ? "短信" : s
+                line.service = s == "SMS" ? String(localized: "短信") : s
                 service = s
             }
             out.append(line)
@@ -342,8 +342,8 @@ nonisolated enum MessagesTime {
     static func separator(_ d: Date, now: Date = .now) -> String {
         let cal = Calendar.current
         let time = d.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-        if cal.isDateInToday(d) { return "今天 " + time }
-        if cal.isDateInYesterday(d) { return "昨天 " + time }
+        if cal.isDateInToday(d) { return String(localized: "今天 \(time)") }
+        if cal.isDateInYesterday(d) { return String(localized: "昨天 \(time)") }
         if now.timeIntervalSince(d) < 6 * 86400, d < now { return d.formatted(.dateTime.weekday(.wide)) + " " + time }
         if cal.isDate(d, equalTo: now, toGranularity: .year) { return d.formatted(.dateTime.month().day()) + " " + time }
         return d.formatted(.dateTime.year().month().day()) + " " + time
@@ -397,7 +397,7 @@ struct MessagesLineView: View {
 
     private var eventText: String {
         guard m.unsent == true, !m.isEvent else { return m.text ?? "" }
-        return (m.isMine ? "你" : m.sender?.shown ?? "对方") + "撤回了一条消息"
+        return m.isMine ? String(localized: "你撤回了一条消息") : String(localized: "\(m.sender?.shown ?? String(localized: "对方"))撤回了一条消息")
     }
 
     private var bubble: some View {
@@ -438,10 +438,10 @@ struct MessagesAttachmentRow: View {
 
     private var title: String {
         switch attachment.kind {
-        case "image": "图片" + (attachment.name.map { " · " + $0 } ?? "")
-        case "video": "视频" + (attachment.name.map { " · " + $0 } ?? "")
-        case "audio": "语音"
-        default: attachment.name ?? "文件"
+        case "image": attachment.name.map { String(localized: "图片 · \($0)") } ?? String(localized: "图片")
+        case "video": attachment.name.map { String(localized: "视频 · \($0)") } ?? String(localized: "视频")
+        case "audio": String(localized: "语音")
+        default: attachment.name ?? String(localized: "文件")
         }
     }
 

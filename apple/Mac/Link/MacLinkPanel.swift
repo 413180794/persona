@@ -170,7 +170,7 @@ struct MacLinkPanel: View {
     }
 
     private var shownTitle: String {
-        title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "公司圈" : target.url.host ?? "网页") : title
+        title.isEmpty ? (isFeishuDoc ? String(localized: "飞书文档") : feishuRoute != nil ? String(localized: "公司圈") : target.url.host ?? String(localized: "网页")) : title
     }
 
     private var header: some View {
@@ -211,7 +211,7 @@ struct MacLinkPanel: View {
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(target.url.absoluteString, forType: .string)
-                    model.toast = Toast("已拷贝链接", style: .success)
+                    model.toast = Toast(String(localized: "已拷贝链接"), style: .success)
                 } label: { Label("拷贝链接", systemImage: Theme.Icon.link) }
                 ShareLink(item: target.url) { Label("分享", systemImage: Theme.Icon.share) }
             } label: { Image(systemName: Theme.Icon.moreMenu) }
@@ -238,22 +238,22 @@ struct MacLinkPanel: View {
 
     private func pick(_ text: String, kind: String) {
         let ref = ContextRef(kind: kind, title: title.isEmpty ? (target.url.host ?? "") : title, url: target.url.absoluteString,
-                             text: text.isEmpty ? "（整篇）" : text)
+                             text: text.isEmpty ? "（整篇）" : text) // i18n-ignore: sentinel in the context XML, compared in QuoteViews
         if kind == "edit" {
             instruction = ""
             editing = ref
         } else if let destination {
             model.composerContexts[destination, default: []].append(ref)
-            model.toast = Toast(key == nil ? "已作为上下文，会随下一条发给 Persona 的消息发送" : "已作为上下文，会随下一条消息发送", style: .success)
+            model.toast = Toast(key == nil ? String(localized: "已作为上下文，会随下一条发给 Persona 的消息发送") : String(localized: "已作为上下文，会随下一条消息发送"), style: .success)
         } else {
-            Task { await model.askJarvis(ref.xml + "\n\n先记下这段，我接着说。") }
+            Task { await model.askJarvis(ref.xml + "\n\n先记下这段，我接着说。") } // i18n-ignore: sent to the assistant
         }
     }
 
     private func sendEdit() {
         guard let ref = editing else { return }
         let ask = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        let text = ref.xml + "\n\n" + (ask.isEmpty ? "按上面选中的内容修改。" : "按要求修改上面选中的内容：" + ask)
+        let text = ref.xml + "\n\n" + (ask.isEmpty ? "按上面选中的内容修改。" : "按要求修改上面选中的内容：" + ask) // i18n-ignore: instruction sent to the agent
         if let key { model.sendNow(key, text: text) } else { Task { await model.askJarvis(text) } }
         instruction = ""
         editing = nil
@@ -272,7 +272,7 @@ struct MacLinkWindow: View {
             if let url {
                 MacLinkPanel(target: LinkTarget(url: url), key: nil, close: nil)
             } else {
-                EmptyStateView(symbol: Theme.Icon.link, title: "没有链接", message: "从对话或收件箱里打开一个链接。")
+                EmptyStateView(symbol: Theme.Icon.link, title: String(localized: "没有链接"), message: String(localized: "从对话或收件箱里打开一个链接。"))
             }
         }
         .macLook(model)

@@ -12,12 +12,12 @@ nonisolated struct LarkEncryption: Codable, Hashable, Sendable {
     var visibleParts: [LarkPart] { isOpen ? (bodyParts ?? []) : publicParts }
     var sharesKey: Bool { isOpen && keyHandout == true }
     var hasBody: Bool { !visibleParts.isEmpty }
-    var coverLabel: String { state == "unavailable" ? "加密消息 · 仅显示公开内容" : "加密消息 · 对外展示" }
+    var coverLabel: String { state == "unavailable" ? String(localized: "加密消息 · 仅显示公开内容") : String(localized: "加密消息 · 对外展示") }
     var textSummary: String { visibleParts.compactMap(\.text).joined().trimmingCharacters(in: .whitespacesAndNewlines) }
     var summary: String {
         let text = textSummary
         if !text.isEmpty { return text }
-        return sharesKey ? "分发了本群的加密钥匙" : "加密消息"
+        return sharesKey ? String(localized: "分发了本群的加密钥匙") : String(localized: "加密消息")
     }
     var cached: Self { Self(version: version, state: "unavailable", publicParts: publicParts) }
 }
@@ -131,8 +131,8 @@ extension LarkReplyTo {
     nonisolated var displayText: String {
         guard let olk else { return text }
         guard !olk.isOpen else { return olk.summary }
-        guard olk.hasBody else { return "加密消息" }
-        return olk.textSummary.isEmpty ? olk.coverLabel : "\(olk.coverLabel)：\(olk.textSummary)"
+        guard olk.hasBody else { return String(localized: "加密消息") }
+        return olk.textSummary.isEmpty ? olk.coverLabel : String(localized: "\(olk.coverLabel)：\(olk.textSummary)")
     }
 
     nonisolated func encode(to encoder: Encoder) throws {

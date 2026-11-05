@@ -48,10 +48,10 @@ nonisolated enum LarkReadMark: Equatable {
     /// What VoiceOver reads.
     var label: String {
         switch self {
-        case .read: "已读"
-        case .unread: "未读"
-        case .allRead: "全部已读"
-        case .progress(let read, let total): "\(total - read) 人未读"
+        case .read: String(localized: "已读")
+        case .unread: String(localized: "未读")
+        case .allRead: String(localized: "全部已读")
+        case .progress(let read, let total): String(localized: "\(total - read) 人未读")
         }
     }
 }

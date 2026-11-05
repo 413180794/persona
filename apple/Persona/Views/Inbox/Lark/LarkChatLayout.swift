@@ -42,22 +42,20 @@ nonisolated enum LarkChatLayout {
     }
 
     /// The separator's words, tiered like the list's times (`LarkTime.tier`): 14:32, 昨天 14:32, 星期三 14:32,
-    /// 10月21日 14:32, 2025年10月21日 14:32. Fixed wording: the App speaks Chinese whatever the phone's region.
+    /// 10月21日 14:32, 2025年10月21日 14:32. Days and dates follow the current locale; the time stays 24-hour.
     static func dayLabel(_ d: Date?, now: Date = .now, calendar cal: Calendar = .current) -> String {
         guard let d else { return "" }
-        let c = cal.dateComponents([.year, .month, .day, .weekday, .hour, .minute], from: d)
+        let c = cal.dateComponents([.hour, .minute], from: d)
         let time = String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+        let style = Date.FormatStyle(locale: .current, calendar: cal, timeZone: cal.timeZone)
         return switch LarkTime.tier(of: d, now: now, calendar: cal) {
         case .today: time
-        case .yesterday: "昨天 " + time
-        case .thisWeek: weekdays[((c.weekday ?? 1) - 1 + 7) % 7] + " " + time
-        case .thisYear: "\(c.month ?? 0)月\(c.day ?? 0)日 " + time
-        case .older: "\(c.year ?? 0)年\(c.month ?? 0)月\(c.day ?? 0)日 " + time
+        case .yesterday: String(localized: "昨天 \(time)")
+        case .thisWeek: d.formatted(style.weekday(.wide)) + " " + time
+        case .thisYear: d.formatted(style.month().day()) + " " + time
+        case .older: d.formatted(style.year().month().day()) + " " + time
         }
     }
-
-    /// Gregorian weekday 1 is Sunday.
-    private static let weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
 
     /// Which side a message sits on: mine on the right (Feishu on the phone), everyone else's on the left.
     enum Side: Equatable {

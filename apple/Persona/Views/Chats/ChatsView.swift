@@ -91,12 +91,12 @@ enum DevGrouping: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .repo: "按仓库"
-        case .space: "按项目"
-        case .todo: "按待办"
-        case .state: "按状态"
-        case .machine: "按机器"
-        case .recent: "最近使用"
+        case .repo: String(localized: "按仓库")
+        case .space: String(localized: "按项目")
+        case .todo: String(localized: "按待办")
+        case .state: String(localized: "按状态")
+        case .machine: String(localized: "按机器")
+        case .recent: String(localized: "最近使用")
         }
     }
     var symbol: String {
@@ -118,8 +118,8 @@ enum AgentSort: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .state: "状态优先"
-        case .updated: "最近更新"
+        case .state: String(localized: "状态优先")
+        case .updated: String(localized: "最近更新")
         }
     }
     var symbol: String {
@@ -138,10 +138,10 @@ nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .all: "全部"
-        case .needsYou: "需要你"
-        case .unread: "未读"
-        case .working: "工作中"
+        case .all: String(localized: "全部")
+        case .needsYou: String(localized: "需要你")
+        case .unread: String(localized: "未读")
+        case .working: String(localized: "工作中")
         case .feishu: SessionSource.feishu.label
         case .terminal: SessionSource.terminal.label
         }
@@ -262,8 +262,8 @@ struct ChatsView: View {
                 .overlay(alignment: .topTrailing) {
                     if shell == nil { // always on the Mac: its window is not the phone's shell
                         HStack(spacing: Theme.Space.s) {
-                            MacTitleRowButton("个人 Agent", symbol: Theme.Icon.personalAgents) { openFromList(PersonalAgentsRoute()) }
-                            MacTitleRowButton("新建会话", symbol: Theme.Icon.compose) { showNew = true }
+                            MacTitleRowButton(String(localized: "个人 Agent"), symbol: Theme.Icon.personalAgents) { openFromList(PersonalAgentsRoute()) }
+                            MacTitleRowButton(String(localized: "新建会话"), symbol: Theme.Icon.compose) { showNew = true }
                         }
                         .padding(.trailing, Theme.Space.l)
                         .frame(height: Theme.Size.macToolbarHeight)
@@ -318,8 +318,8 @@ struct ChatsView: View {
                     if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(MachineRef(path: machineFilter)) == nil { machineFilter = "" }
                 }
         } empty: {
-            SplitPlaceholder(symbol: Theme.Icon.agents, title: "选一个 Agent",
-                             message: "左边列表里点一个 Agent，对话会在这里打开。")
+            SplitPlaceholder(symbol: Theme.Icon.agents, title: String(localized: "选一个 Agent"),
+                             message: String(localized: "左边列表里点一个 Agent，对话会在这里打开。"))
         }
         // While searching the field rises into the bar the shell's floats over: the bar makes way (the field has its
         // own 取消), as a system search takes the navigation bar, and comes back when the search closes (TestFlight 70:
@@ -386,9 +386,9 @@ struct ChatsView: View {
 /// The Agents list itself: what follows the hub's pushes (`ChatsView` holds the navigation and the toolbar).
 private struct AgentsList: View {
     #if os(macOS)
-    static let emptyMessage = "在任意一台电脑的 herdr 里启动 Claude，在这里实时看、随时接手。"
+    static let emptyMessage = String(localized: "在任意一台电脑的 herdr 里启动 Claude，在这里实时看、随时接手。")
     #else
-    static let emptyMessage = "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。"
+    static let emptyMessage = String(localized: "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。")
     #endif
     @Environment(AppModel.self) private var model
     @Environment(\.shell) private var shell
@@ -680,7 +680,7 @@ private struct AgentsList: View {
                         }
                     }
                 } header: {
-                    SectionHeader(title: "需要你处理", count: interactions.count, tone: StatusPalette.needsYou)
+                    SectionHeader(title: String(localized: "需要你处理"), count: interactions.count, tone: StatusPalette.needsYou)
                 }
             }
 
@@ -726,7 +726,7 @@ private struct AgentsList: View {
                     // No state word: the dot and the name's color already say it.
                     ForEach(pinnedAgents) { s in slotRow(s, context: true, inStateSection: true) }
                 } header: {
-                    SectionHeader(title: "置顶", count: nil, tone: StatusPalette.idle)
+                    SectionHeader(title: String(localized: "section.pinned", defaultValue: "置顶"), count: nil, tone: StatusPalette.idle)
                 }
             }
 
@@ -747,24 +747,25 @@ private struct AgentsList: View {
             if base.isEmpty, !query.isEmpty {
                 // Nothing matches the search: not 开始第一个开发会话 with its 新建会话, which read as if the agents were gone.
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.search, title: "没有找到「\(query)」",
-                                   message: "空间、标签、会话的标题和内容都能搜，换个词试试。")
+                    EmptyStateView(symbol: Theme.Icon.search, title: String(localized: "没有找到「\(query)」"),
+                                   message: String(localized: "空间、标签、会话的标题和内容都能搜，换个词试试。"))
                 }
                 .listRowBackground(Color.clear)
             } else if base.isEmpty {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.agents,
-                                   title: machineFilter.isEmpty ? "开始第一个开发会话" : "这台机器上没有会话",
+                                   title: machineFilter.isEmpty ? String(localized: "开始第一个开发会话") : String(localized: "这台机器上没有会话"),
                                    message: Self.emptyMessage,
-                                   action: ("新建会话", { showNew = true }))
+                                   action: (String(localized: "新建会话"), { showNew = true }))
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(capsules ? .hidden : .automatic)
             } else if filtered.isEmpty, let st = quick.state {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.success, title: "没有\(st.label)的会话",
-                                   message: machineFilter.isEmpty ? "各台电脑上的 Agent 有新动静会出现在这里。" : "这台机器上的 Agent 有新动静会出现在这里。",
-                                   action: ("看全部", { choose(.all, base) }))
+                    EmptyStateView(symbol: Theme.Icon.success, title: String(localized: "没有\(st.label)的会话"),
+                                   message: machineFilter.isEmpty ? String(localized: "各台电脑上的 Agent 有新动静会出现在这里。")
+                                                                  : String(localized: "这台机器上的 Agent 有新动静会出现在这里。"),
+                                   action: (String(localized: "看全部"), { choose(.all, base) }))
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(capsules ? .hidden : .automatic)
@@ -810,7 +811,7 @@ private struct AgentsList: View {
         // on a phone: pinned, it stayed under the folded field (TestFlight 35, ~120 pt of blurred list).
         // On the list itself, before the alerts, as it always was.
         .pageSearchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .automatic),
-                        prompt: "搜索空间、标签、会话、内容")
+                        prompt: String(localized: "搜索空间、标签、会话、内容"))
         .refreshable { await model.refresh() }
         // Whether each machine's herdr runs, while the list is in sight (a modifier of its own: in this chain the
         // compiler ran out of time type-checking it).
@@ -1010,12 +1011,12 @@ private struct AgentsList: View {
                 let still = quiet.filter { $0.machineRef == ref }
                 hostGroup(ref, sessions: (mine + still).flatMap(\.sessions)) {
                     ForEach(mine) { g in spaceSection(g, namesMachine: false) }
-                    quietSection(still, title: "空闲的空间", namesMachine: false)
+                    quietSection(still, title: String(localized: "空闲的空间"), namesMachine: false)
                 }
             }
         } else {
             ForEach(active) { g in spaceSection(g, namesMachine: machineFilter.isEmpty) }
-            quietSection(quiet, title: "空闲的空间", namesMachine: machineFilter.isEmpty)
+            quietSection(quiet, title: String(localized: "空闲的空间"), namesMachine: machineFilter.isEmpty)
         }
     }
 
@@ -1054,7 +1055,7 @@ private struct AgentsList: View {
             let idle = rows.idle.flatMap(\.sessions)
             if expandedIdle.contains(key) || !query.isEmpty {
                 ForEach(rows.idle) { e in entryRows(e, depth: depth) }
-                if query.isEmpty { collapseRow("收起空闲的 \(idle.count) 个", key: key, depth: depth) }
+                if query.isEmpty { collapseRow(String(localized: "收起空闲的 \(idle.count) 个"), key: key, depth: depth) }
             } else {
                 expandRow(idle, key: key, depth: depth)
             }
@@ -1175,7 +1176,7 @@ private struct AgentsList: View {
         quietSection(host.repos.filter(isQuiet).map { r in
             SpaceGroup(id: r.id, machineID: r.machine.id, spaceID: "-", group: r.machine.group, name: r.name, index: 0,
                        sessions: ordered(r.sessions))
-        }, title: "空闲的仓库", namesMachine: false, repos: true)
+        }, title: String(localized: "空闲的仓库"), namesMachine: false, repos: true)
     }
 
     /// A machine's heading and, unless the machine is folded, the sections under it (its quiet ones last). iOS: the heading is a section of its own, the sections follow it.
@@ -1372,9 +1373,10 @@ private struct AgentsList: View {
     private func ordered(_ list: [Session]) -> [Session] { order.ordered(list) }
 
     private static let stateTitles: [(key: String, title: String, tint: StatusTone)] = [
-        ("needs", "需要你", StatusPalette.needsYou), ("unread", "完成未看", StatusPalette.unread),
-        ("working", "工作中", StatusPalette.working), ("waiting", "待唤醒", StatusTone(dot: Theme.loop, text: Theme.loop)),
-        ("muted", "已屏蔽", StatusPalette.idle), ("idle", "已看", StatusPalette.idle),
+        ("needs", String(localized: "需要你"), StatusPalette.needsYou), ("unread", String(localized: "完成未看"), StatusPalette.unread),
+        ("working", String(localized: "工作中"), StatusPalette.working),
+        ("waiting", String(localized: "待唤醒"), StatusTone(dot: Theme.loop, text: Theme.loop)),
+        ("muted", String(localized: "已屏蔽"), StatusPalette.idle), ("idle", String(localized: "已看"), StatusPalette.idle),
     ]
 
     /// The fold ids of the sections 按状态 / 按机器 shows now (全部折叠).
@@ -1399,7 +1401,7 @@ private struct AgentsList: View {
                         ForEach(rows) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
                     }
                 } header: {
-                    FoldButton(title: b.title, folded: isFolded(id), detail: "\(rows.count) 个") { toggleFold(id) } label: {
+                    FoldButton(title: b.title, folded: isFolded(id), detail: String(localized: "\(rows.count) 个")) { toggleFold(id) } label: {
                         SectionHeader(title: b.title, count: rows.count, tone: b.tint)
                     }
                     .modifier(FoldAnchor(id: id, reader: feed.reader))
@@ -1424,7 +1426,7 @@ private struct AgentsList: View {
                         ForEach(g.sessions) { s in slotRow(s, context: true, showHost: mixedHosts) }
                     }
                 } header: {
-                    FoldButton(title: g.name, folded: folded, detail: "\(g.sessions.count) 个") { toggleFold(id, shown: folded) } label: {
+                    FoldButton(title: g.name, folded: folded, detail: String(localized: "\(g.sessions.count) 个")) { toggleFold(id, shown: folded) } label: {
                         HStack(spacing: Theme.Space.sm) {
                             if compact {
                                 Text(g.name).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
@@ -1468,7 +1470,7 @@ private struct AgentsList: View {
                 if !isFolded(id) {
                     if quick == .all {
                         ForEach(rows.filter(stays)) { s in slotRow(s, context: true) }
-                        foldedRows(rows.filter { !stays($0) }, key: "machine-" + m.ref.path, label: "空闲")
+                        foldedRows(rows.filter { !stays($0) }, key: "machine-" + m.ref.path, label: String(localized: "空闲"))
                     } else {
                         ForEach(rows) { s in slotRow(s, context: true) }
                     }
@@ -1487,7 +1489,7 @@ private struct AgentsList: View {
         if !rows.isEmpty {
             if expandedIdle.contains(key) || !query.isEmpty {
                 ForEach(rows) { s in slotRow(s, context: true, inStateSection: inStateSection) }
-                if query.isEmpty { collapseRow("收起\(label)的 \(rows.count) 个", key: key) }
+                if query.isEmpty { collapseRow(String(localized: "收起\(label)的 \(rows.count) 个"), key: key) }
             } else {
                 expandRow(rows, key: key)
             }
@@ -2259,7 +2261,8 @@ struct FoldButton<Content: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([title, folded ? "已折叠" : "已展开", detail].filter { !$0.isEmpty }.joined(separator: "，"))
+        .accessibilityLabel([title, folded ? String(localized: "已折叠") : String(localized: "已展开"), detail].filter { !$0.isEmpty }
+            .joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -2337,9 +2340,10 @@ struct SpaceHeader: View {
         }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([group.name, folded ? "已折叠" : "已展开", pinned ? "已置顶" : "", muted ? "已屏蔽" : "",
+        .accessibilityLabel([group.name, folded ? String(localized: "已折叠") : String(localized: "已展开"),
+                             pinned ? String(localized: "已置顶") : "", muted ? String(localized: "已屏蔽") : "",
                              showMachine ? machine?.title ?? "" : "", StateCounts.spoken(group)]
-            .filter { !$0.isEmpty }.joined(separator: "，"))
+            .filter { !$0.isEmpty }.joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -2351,8 +2355,8 @@ struct StateCounts: View {
     /// "3 个需要你，12 个工作中，35 个完成未看，4 个空闲" for VoiceOver (and the UI tests).
     static func spoken(_ group: SpaceGroup) -> String {
         let idle = group.count(.idle) + group.count(.unknown)
-        return ([AgentState.needsYou, .working, .unread].compactMap { st in group.count(st) > 0 ? "\(group.count(st)) 个\(st.label)" : nil }
-            + (idle > 0 ? ["\(idle) 个空闲"] : [])).joined(separator: "，")
+        return ([AgentState.needsYou, .working, .unread].compactMap { st in group.count(st) > 0 ? String(localized: "\(group.count(st)) 个\(st.label)") : nil }
+            + (idle > 0 ? [String(localized: "\(idle) 个空闲")] : [])).joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label"))
     }
 
     var body: some View {
@@ -2579,7 +2583,7 @@ nonisolated struct SlotRow: View, Equatable {
     /// "Claude · app › tests · MacBook": the end gives way when the line is short.
     @MainActor private var meta: String {
         var parts = [pane?.name ?? session.sourceSubtitle ?? session.agentLabel]
-        if pane?.launcher == true { parts.append("发起者") }
+        if pane?.launcher == true { parts.append(String(localized: "发起者")) }
         if let host { parts.append(host) }
         let slot = pane == nil ? session.slotLabel : nil
         if let space, !space.isEmpty {
@@ -2588,7 +2592,7 @@ nonisolated struct SlotRow: View, Equatable {
             parts.append(slot)
         }
         if let machine { parts.append(machine) }
-        if let todo = session.todo { parts.append("待办：" + todo.title) }
+        if let todo = session.todo { parts.append(String(localized: "待办：\(todo.title)")) }
         return parts.joined(separator: " · ")
     }
 }
@@ -2735,7 +2739,7 @@ struct QuietSpaceRow: View {
             Image(systemName: repo ? Theme.Icon.folder : Theme.Icon.space).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(group.name).font(Theme.Font.heading).lineLimit(1)
-                Text([showMachine ? machine?.title : nil, "\(group.sessions.count) 个 Agent",
+                Text([showMachine ? machine?.title : nil, String(localized: "\(group.sessions.count) 个 Agent"),
                       group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
@@ -2778,7 +2782,7 @@ struct QuietSpaceCardHead: View {
 
     var body: some View {
         TaskRow(TaskItem(id: group.id, title: group.name,
-                         subtitle: [showMachine ? machine?.title : nil, "\(group.sessions.count) 个 Agent",
+                         subtitle: [showMachine ? machine?.title : nil, String(localized: "\(group.sessions.count) 个 Agent"),
                                     group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
                          status: .pending(step: 0)),
@@ -3188,7 +3192,7 @@ struct AgentsTopBar: View, Equatable {
         HStack(alignment: .top, spacing: Theme.Space.s) {
             ShellPersonaButton(id: "work-sidebar-button") { shell.drawer.open() }
             Spacer(minLength: 0)
-            ShellCircleButton(symbol: Theme.Icon.compose, label: "新建会话", id: "agents-new", action: newSession)
+            ShellCircleButton(symbol: Theme.Icon.compose, label: String(localized: "新建会话"), id: "agents-new", action: newSession)
         }
         .overlay(alignment: .top) {
             ShellSwitch(tab: $model.selectedTab) { EmptyView() } workMenu: {

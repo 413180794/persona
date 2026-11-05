@@ -28,12 +28,12 @@ struct TodoDetailView: View {
                 content(todo)
             } else {
                 VStack(spacing: Theme.Space.l) {
-                    EmptyStateView(symbol: Theme.Icon.todo, title: "待办不存在或已删除", message: "")
+                    EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "待办不存在或已删除"), message: "")
                 }
                 .themedPage()
             }
         }
-        .detailTitle(currentTodo?.title ?? "待办详情")
+        .detailTitle(currentTodo?.title ?? String(localized: "待办详情"))
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -276,13 +276,13 @@ struct TodoDetailView: View {
         let key = SessionKey(group: model.hub?.group ?? "", machineID: a.machineID, sessionID: a.sessionID)
         let s = lookup(a.machineID, a.sessionID)
         let isFailed = a.startError.map { !$0.isEmpty } ?? false
-        let title = a.title ?? s?.displayTitle ?? "Agent 会话"
+        let title = a.title ?? s?.displayTitle ?? String(localized: "Agent 会话")
         let subtitle: String = {
             if isFailed, let err = a.startError {
-                return "启动失败：\(err)"
+                return String(localized: "启动失败：\(err)")
             }
             if isReleased {
-                return "已结束"
+                return String(localized: "已结束")
             }
             if let s, let last = s.lastText, !last.isEmpty {
                 return Fmt.plain(last)

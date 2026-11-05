@@ -106,13 +106,13 @@ struct CompactQuietSpaceRow: View {
         }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([group.name, expanded ? "已展开" : "已折叠", showMachine ? machine?.name ?? "" : "",
-                             count, at].filter { !$0.isEmpty }.joined(separator: "，"))
+        .accessibilityLabel([group.name, expanded ? String(localized: "已展开") : String(localized: "已折叠"), showMachine ? machine?.name ?? "" : "",
+                             count, at].filter { !$0.isEmpty }.joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(.isButton)
     }
 
     /// Agents counted, not tabs: a tab may hold several (#2320).
-    private var count: String { "\(group.sessions.count) 个 Agent" }
+    private var count: String { String(localized: "\(group.sessions.count) 个 Agent") }
 }
 
 /// 细列表: something waiting for you (a plan, a question, a permission) as one row like an agent's: its kind's mark in

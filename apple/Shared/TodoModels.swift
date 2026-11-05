@@ -53,7 +53,7 @@ nonisolated extension TodoItem {
 
     /// The state's label for this todo: 「自动完成」 for one the hub closed (docs/todos.md「自动完成」).
     func statusLabel(_ state: TaskState) -> String {
-        state == .done && autoDone ? "自动完成" : state.todoLabel
+        state == .done && autoDone ? String(localized: "自动完成") : state.todoLabel
     }
 
     /// Why the hub closed it, when it did.
@@ -66,13 +66,13 @@ nonisolated extension TodoItem {
 nonisolated extension TaskState {
     var todoLabel: String {
         switch self {
-        case .done: "已完成"
-        case .needsYou: "等你"
-        case .unread: "待查看"
-        case .working: "进行中"
-        case .followup: "待跟进"
-        case .notStarted: "未开始"
-        case .failed: "没开起来"
+        case .done: String(localized: "已完成")
+        case .needsYou: String(localized: "等你")
+        case .unread: String(localized: "待查看")
+        case .working: String(localized: "进行中")
+        case .followup: String(localized: "待跟进")
+        case .notStarted: String(localized: "未开始")
+        case .failed: String(localized: "没开起来")
         }
     }
 
@@ -154,15 +154,15 @@ nonisolated enum TodosLogic {
         case "space":
             let via = agent.via ?? ""
             let name = via.firstIndex(of: "/").map { String(via[via.index(after: $0)...]) } ?? via
-            return name.isEmpty ? "随项目" : "随项目 \(name)"
+            return name.isEmpty ? String(localized: "随项目") : String(localized: "随项目 \(name)")
         case "spawned":
             if let via = agent.via, let slash = via.firstIndex(of: "/"),
                let parent = lookup?(String(via[..<slash]), String(via[via.index(after: slash)...])),
                !parent.title.isEmpty {
-                return "由 \(parent.title) 派出"
+                return String(localized: "由 \(parent.title) 派出")
             }
-            return "派生"
-        case "chat": return "同群"
+            return String(localized: "派生")
+        case "chat": return String(localized: "同群")
         default: return nil
         }
     }
@@ -183,7 +183,9 @@ nonisolated enum TodosLogic {
     }
 
     static func createdLinkFailure(_ error: Error, isSpace: Bool) -> String {
-        "待办已创建，但\(isSpace ? "挂到待办" : "关联")失败：\(error.localizedDescription)"
+        isSpace
+            ? String(localized: "待办已创建，但挂到待办失败：\(error.localizedDescription)")
+            : String(localized: "待办已创建，但关联失败：\(error.localizedDescription)")
     }
 
     /// Whether a session may take a todo's actions here. The todos are the selected hub's (`AppModel.hub`), so a
@@ -394,7 +396,7 @@ nonisolated enum TodosLogic {
         // todo), so they get a section of their own, open, before 未归属 (#2608, #2917).
         let manual = rest.filter(isManualHerdr).sorted(by: byRank)
         if !manual.isEmpty {
-            groups.append(TodoAgentGroup(key: "todo:manual", name: "手动开的", sessions: manual, todoID: nil, todoStatus: nil))
+            groups.append(TodoAgentGroup(key: "todo:manual", name: String(localized: "手动开的"), sessions: manual, todoID: nil, todoStatus: nil))
         }
 
         let unassigned = rest.filter { !isManualHerdr($0) }
@@ -402,7 +404,7 @@ nonisolated enum TodosLogic {
             let sortedUnassigned = unassigned.sorted(by: byRank)
             groups.append(TodoAgentGroup(
                 key: "todo:none",
-                name: "未归属",
+                name: String(localized: "未归属"),
                 sessions: sortedUnassigned,
                 todoID: nil,
                 todoStatus: nil,
@@ -424,7 +426,7 @@ nonisolated enum TodosLogic {
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
         let body = (notes ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return "<jarvis-context kind=\"context\" title=\"待办 · \(t)\" url=\"\">\(body)</jarvis-context>"
+        return "<jarvis-context kind=\"context\" title=\"待办 · \(t)\" url=\"\">\(body)</jarvis-context>" // i18n-ignore: context sent to the agent
     }
 }
 

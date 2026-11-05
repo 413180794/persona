@@ -103,9 +103,9 @@ struct MacTodosPage: View {
                 if openList.isEmpty && doneList.isEmpty {
                     EmptyStateView(
                         symbol: Theme.Icon.todo,
-                        title: query.isEmpty ? "没有待办" : "没有找到待办",
-                        message: query.isEmpty ? "记下一件要做的事，交给 Agent 执行并跟踪进度。" : "换个搜索词试试",
-                        action: query.isEmpty ? ("新建待办", { showCreate = true }) : nil
+                        title: query.isEmpty ? String(localized: "没有待办") : String(localized: "没有找到待办"),
+                        message: query.isEmpty ? String(localized: "记下一件要做的事，交给 Agent 执行并跟踪进度。") : String(localized: "换个搜索词试试"),
+                        action: query.isEmpty ? (String(localized: "新建待办"), { showCreate = true }) : nil
                     )
                 }
             }
@@ -113,7 +113,7 @@ struct MacTodosPage: View {
         // In the list column's own title row, at its trailing edge, as the Agents list's buttons (#1223, #2318): as a
         // window toolbar item its glyph came out gray, as if disabled; the open todo's menu keeps the window's edge.
         .overlay(alignment: .topTrailing) {
-            MacTitleRowButton("新建待办", symbol: Theme.Icon.add) {
+            MacTitleRowButton(String(localized: "新建待办"), symbol: Theme.Icon.add) {
                 creatingTitle = ""
                 creatingNotes = ""
                 showCreate = true
@@ -206,7 +206,7 @@ struct MacTodosPage: View {
     private func mostUrgentSummary(urgent: TodoMostUrgent?) -> String? {
         guard let urgent else { return nil }
         if urgent.isFailed, let err = urgent.agent.startError, !err.isEmpty {
-            return "启动失败：\(err)"
+            return String(localized: "启动失败：\(err)")
         }
         if let s = urgent.session {
             if let last = s.lastText, !last.isEmpty {
@@ -251,7 +251,7 @@ struct MacTodosPage: View {
             // One empty state a page (docs/mac-design.md): the list's says there is nothing, the detail stays plain.
             Color.clear
         } else {
-            SplitPlaceholder(symbol: Theme.Icon.todo, title: "选一个待办", message: "左边列表里选一个待办，详情会在这里打开。")
+            SplitPlaceholder(symbol: Theme.Icon.todo, title: String(localized: "选一个待办"), message: String(localized: "左边列表里选一个待办，详情会在这里打开。"))
         }
     }
 

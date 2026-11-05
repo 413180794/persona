@@ -19,15 +19,15 @@ struct TriageSettingsView: View {
                 }
             } else {
                 Section {
-                    toggle(\.enabled, "会话分诊", "列表里显示在等什么；做完的不再算完成未看", Theme.Icon.triage, id: "triage-enabled")
-                    ModelConfigurationLink(title: "分诊模型", purposeID: "agent.triage")
+                    toggle(\.enabled, String(localized: "会话分诊"), String(localized: "列表里显示在等什么；做完的不再算完成未看"), Theme.Icon.triage, id: "triage-enabled")
+                    ModelConfigurationLink(title: String(localized: "分诊模型"), purposeID: "agent.triage")
                 } footer: {
                     Text("Agent 每停下一轮，hub 用分诊模型读它最后的回复（每轮一次，用的是「模型配置 › 会话分诊」里选的模型）。")
                 }
                 Section {
-                    toggle(\.decide, "要你决定的开卡片", "Agent 在等你拍板时，问题和选项放进「需要你」", Theme.Icon.askFirst, id: "triage-decide")
-                    toggle(\.autoContinue, "出错自动继续", "模型服务临时出错（503 等）后自动发「继续」，最多 3 次", Theme.Icon.retry, id: "triage-continue")
-                    toggle(\.wake, "到点叫醒", "在等部署、CI 或另一个 Agent 的，到点叫醒它自己去查", Theme.Icon.wakeUp, id: "triage-wake")
+                    toggle(\.decide, String(localized: "要你决定的开卡片"), String(localized: "Agent 在等你拍板时，问题和选项放进「需要你」"), Theme.Icon.askFirst, id: "triage-decide")
+                    toggle(\.autoContinue, String(localized: "出错自动继续"), String(localized: "模型服务临时出错（503 等）后自动发「继续」，最多 3 次"), Theme.Icon.retry, id: "triage-continue")
+                    toggle(\.wake, String(localized: "到点叫醒"), String(localized: "在等部署、CI 或另一个 Agent 的，到点叫醒它自己去查"), Theme.Icon.wakeUp, id: "triage-wake")
                 } header: {
                     Text("分诊之后")
                 } footer: {
@@ -37,18 +37,18 @@ struct TriageSettingsView: View {
         }
         .overlay { if model?.switches == nil && model?.error == nil && model?.unsupported != true { ProgressView() } }
         .themedGroupedPage()
-        .detailTitle("会话分诊")
+        .detailTitle(String(localized: "会话分诊"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if model == nil {
                 let api = { [app] in app.api }
                 model = TriageSettingsModel(deps: .init(
                     load: {
-                        guard let api = api() else { throw APIError(status: 0, message: "还没连接 hub") }
+                        guard let api = api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
                         return try await api.agentTriage()
                     },
                     save: { next in
-                        guard let api = api() else { throw APIError(status: 0, message: "还没连接 hub") }
+                        guard let api = api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
                         return try await api.setAgentTriage(next)
                     }))
             }

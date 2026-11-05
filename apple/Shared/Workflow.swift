@@ -131,14 +131,14 @@ nonisolated struct WorkflowRun: Codable, Identifiable, Hashable, Sendable {
 
     /// One line (list rows, task cards): 「后台 workflow「parity-audit」· Verify 2/2 · 169/185」; the time apart.
     var line: String {
-        var parts = [(isRunning ? "后台 workflow" : "workflow") + "「\(title)」"]
+        var parts = [isRunning ? String(localized: "后台 workflow「\(title)」") : String(localized: "workflow「\(title)」")]
         if let p = phaseLabel { parts.append(p) }
         if let pr = progress { parts.append("\(pr.done)/\(pr.started)") }
         switch outcome {
         case .running, .completed: break
-        case .failed: parts.append("失败")
-        case .stopped: parts.append("已停止")
-        case .stalled: parts.append("没动静了")
+        case .failed: parts.append(String(localized: "失败"))
+        case .stopped: parts.append(String(localized: "已停止"))
+        case .stalled: parts.append(String(localized: "没动静了"))
         }
         return parts.joined(separator: " · ")
     }
@@ -147,12 +147,12 @@ nonisolated struct WorkflowRun: Codable, Identifiable, Hashable, Sendable {
     static func duration(_ t: TimeInterval, seconds: Bool = true) -> String {
         let s = max(0, Int(t))
         if !seconds {
-            if s < 60 { return "不到 1 分钟" }
-            return s < 3600 ? "\(s / 60) 分钟" : "\(s / 3600) 小时 \(s % 3600 / 60) 分钟"
+            if s < 60 { return String(localized: "不到 1 分钟") }
+            return s < 3600 ? String(localized: "\(s / 60) 分钟") : String(localized: "\(s / 3600) 小时 \(s % 3600 / 60) 分钟")
         }
-        if s < 60 { return "\(s) 秒" }
-        if s < 3600 { return "\(s / 60) 分 \(s % 60) 秒" }
-        return "\(s / 3600) 时 \(s % 3600 / 60) 分"
+        if s < 60 { return String(localized: "\(s) 秒") }
+        if s < 3600 { return String(localized: "\(s / 60) 分 \(s % 60) 秒") }
+        return String(localized: "\(s / 3600) 时 \(s % 3600 / 60) 分")
     }
 
     /// How long it has run (to now while running).
@@ -239,5 +239,5 @@ nonisolated extension Session {
 
 extension Session {
     /// The state's word with the background marked: 「工作中（后台）」 (`AgentState.label` is the main actor's).
-    var stateLabel: String { isBackgroundWorking ? "工作中（后台）" : state.label }
+    var stateLabel: String { isBackgroundWorking ? String(localized: "工作中（后台）") : state.label }
 }

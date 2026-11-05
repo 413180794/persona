@@ -95,7 +95,7 @@ extension AppModel {
     /// The group's name as lists label it: the user's name for it, else its first hub's (`hub_name`), else what the
     /// hub the socket is on calls itself, else the address. Not the connected hub's first: that changes with the route.
     func groupName(_ group: String) -> String {
-        if link(group)?.isDemo == true { return "体验模式" }
+        if link(group)?.isDemo == true { return String(localized: "体验模式") }
         if let n = registry.groupNames[group]?.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty { return n }
         if let n = registry.primary(group)?.hubName?.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty { return n }
         if let name = link(group)?.hello.hubName, !name.isEmpty { return name }

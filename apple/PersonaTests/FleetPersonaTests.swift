@@ -357,8 +357,8 @@ struct FleetPersonaTests {
         #expect(rows.map(\.title) == ["结论", "形象", "App 这次启动写进 App Group", "容器里", "扩展最近一次"])
         let text = IslandDiagnostics.text(rows)
         #expect(text.contains("实时活动的内容里：visor · a/1"))
-        #expect(text.contains("faces/a_1：成功 · 9000 字节"))
+        #expect(text.contains("faces/a_1：成功 · 9,000 字节"))
         #expect(text.contains("容器：/AppGroup/1/Fleet"))
-        #expect(text.contains("形象包的图：idle.png · 3600 字节 · a/1"))
+        #expect(text.contains("形象包的图：idle.png · 3,600 字节 · a/1"))
     }
 }

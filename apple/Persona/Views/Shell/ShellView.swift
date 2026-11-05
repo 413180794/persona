@@ -186,11 +186,11 @@ private struct ShellMovingBar: View {
                 Spacer(minLength: 0)
                 ZStack {
                     // 新对话 is dimmed on an empty chat (AssistantTopBar).
-                    ShellCircleButton(symbol: Theme.Icon.compose, label: "新对话", id: "shell-moving-new") {}
+                    ShellCircleButton(symbol: Theme.Icon.compose, label: String(localized: "新对话"), id: "shell-moving-new") {}
                         .opacity(max(0, 1 - p) * (model.assistantCurrent == nil ? 0.4 : 1))
-                    ShellCircleButton(symbol: Theme.Icon.compose, label: "新建会话", id: "shell-moving-agents-new") {}
+                    ShellCircleButton(symbol: Theme.Icon.compose, label: String(localized: "新建会话"), id: "shell-moving-agents-new") {}
                         .opacity(max(0, 1 - abs(p - 1)))
-                    ShellCircleButton(symbol: Theme.Icon.settings, label: "飞书设置", id: "shell-moving-feishu-settings") {}
+                    ShellCircleButton(symbol: Theme.Icon.settings, label: String(localized: "飞书设置"), id: "shell-moving-feishu-settings") {}
                         .opacity(max(0, p - 1))
                 }
             }

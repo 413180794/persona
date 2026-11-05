@@ -9,10 +9,10 @@ enum SessionPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .chat: "对话"
-        case .terminal: "终端"
+        case .chat: String(localized: "对话")
+        case .terminal: String(localized: "终端")
         case .git: "Git"
-        case .files: "文件"
+        case .files: String(localized: "文件")
         }
     }
 
@@ -235,10 +235,10 @@ struct TerminalPanel: View {
             #endif
         }
         .alert("电脑上另一个程序正在使用这个终端", isPresented: Binding(get: { feed.control == .busy }, set: { shown in
-            if !shown, feed.control == .busy { feed.watchOnly("只看：电脑上另一个程序在用这个终端") }
+            if !shown, feed.control == .busy { feed.watchOnly(String(localized: "只看：电脑上另一个程序在用这个终端")) }
         })) {
             Button("接管") { feed.takeOver(model) }
-            Button("只看", role: .cancel) { feed.watchOnly("只看：电脑上另一个程序在用这个终端") }
+            Button("只看", role: .cancel) { feed.watchOnly(String(localized: "只看：电脑上另一个程序在用这个终端")) }
         } message: {
             Text(TerminalSizeText.takeOver)
         }
@@ -311,7 +311,7 @@ struct TerminalPanel: View {
                     .overlay(alignment: .bottomLeading) {
                         if showShortcuts {
                             ShortcutsPanel(items: TerminalPrefs.decode(shortcutsJSON),
-                                           hint: direct ? "快捷 · 单击输入，双击执行" : "快捷 · 单击填入，双击发送",
+                                           hint: direct ? String(localized: "快捷 · 单击输入，双击执行") : String(localized: "快捷 · 单击填入，双击发送"),
                                            fill: fillShortcut,
                                            send: { send(["enter"], text: $0); showShortcuts = false },
                                            edit: { showShortcuts = false; showSettings = true })
@@ -412,7 +412,7 @@ struct TerminalPanel: View {
                              onInput: inputHandler,
                              onNearTop: { Task { await feed.loadOlder(model) } },
                              onOpenURL: { openURL($0) },
-                             onCopy: { model.toast = Toast("已拷贝", style: .success) },
+                             onCopy: { model.toast = Toast(String(localized: "已拷贝"), style: .success) },
                              onFontSize: pinched,
                              onSwipe: swipe,
                              onDoubleTap: pasteClipboard,
@@ -548,8 +548,8 @@ struct TerminalPanel: View {
     /// while driving or taking the terminal over: scrolling up is the program's own history then.
     private var historyEnd: String? {
         if feed.drives || feed.control == .starting { return nil }
-        if feed.atLimit { return "— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —" }
-        if !feed.hasOlder { return "— 已到最前面 —" }
+        if feed.atLimit { return String(localized: "— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —") }
+        if !feed.hasOlder { return String(localized: "— 已到最前面 —") }
         return nil
     }
 
@@ -624,7 +624,7 @@ struct TerminalPanel: View {
             Haptics.tap()
             wrap.toggle()
         } label: {
-            Label(wrap ? "换行" : TerminalHelpText.noWrap, systemImage: wrap ? "arrow.turn.down.left" : "arrow.left.and.right")
+            Label(wrap ? String(localized: "换行") : TerminalHelpText.noWrap, systemImage: wrap ? "arrow.turn.down.left" : "arrow.left.and.right")
                 .font(Theme.Font.labelStrong)
                 .lineLimit(1)
                 .fixedSize()
@@ -635,7 +635,7 @@ struct TerminalPanel: View {
         .buttonStyle(.plain)
         .foregroundStyle(Color(hex: side.foreground).opacity(0.75))
         .accessibilityLabel("长行换行")
-        .accessibilityValue(wrap ? "开" : TerminalHelpText.noWrapValue)
+        .accessibilityValue(wrap ? String(localized: "开", comment: "Long-line wrapping: on") : TerminalHelpText.noWrapValue)
     }
 
     /// Over the terminal while files go to its machine.
@@ -679,7 +679,7 @@ struct TerminalPanel: View {
                 sources.append(.data(data, name: TerminalPaste.photoName(type)))
             }
         }
-        if failed > 0 { model.toast = Toast("有 \(failed) 个照片读不出来（可能还在 iCloud 里没下载完）", style: .error) }
+        if failed > 0 { model.toast = Toast(String(localized: "有 \(failed) 个照片读不出来（可能还在 iCloud 里没下载完）"), style: .error) }
         takeFiles(sources)
     }
 
@@ -708,7 +708,7 @@ struct TerminalPanel: View {
     /// Double tap: the clipboard goes to the terminal as typed (no return); several lines ask first.
     private func pasteClipboard() {
         guard let text = UIPasteboard.general.string, !text.isEmpty else {
-            model.toast = Toast("剪贴板里没有文字", style: .error)
+            model.toast = Toast(String(localized: "剪贴板里没有文字"), style: .error)
             return
         }
         if text.contains("\n") { pasting = text } else { paste(text) }
@@ -717,7 +717,7 @@ struct TerminalPanel: View {
     private func paste(_ text: String) {
         Haptics.tap()
         send([], text: text)
-        model.toast = Toast("已粘贴", style: .success)
+        model.toast = Toast(String(localized: "已粘贴"), style: .success)
         pasting = nil
     }
 
@@ -804,9 +804,9 @@ struct TerminalPanel: View {
     }
 
     static func placeholder(_ mods: TerminalModifiers) -> String {
-        guard mods.active else { return "发送文字到终端" }
+        guard mods.active else { return String(localized: "发送文字到终端") }
         let down = mods.apply("").dropLast()
-        return "下一个字符按 \(down) 发送"
+        return String(localized: "下一个字符按 \(down) 发送")
     }
 }
 
@@ -883,7 +883,7 @@ struct TerminalTips: View {
         .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous)) // no shadow over the surface
     }
 
-    private func tip(_ symbol: String, _ text: String) -> some View {
+    private func tip(_ symbol: String, _ text: LocalizedStringKey) -> some View {
         Label { Text(text).lineLimit(1).minimumScaleFactor(0.8) } icon: {
             Image(systemName: symbol).foregroundStyle(Theme.accent).scaledFrame(width: Theme.Size.iconXS)
         }
@@ -936,17 +936,19 @@ struct TerminalLinkStatus: View {
 
     /// "上次更新 12 秒前" / "还没有拿到终端".
     static func headline(lastOK: Date?, now: Date) -> String {
-        guard let lastOK else { return "还没有拿到终端" }
+        guard let lastOK else { return String(localized: "还没有拿到终端") }
         let s = max(0, Int(now.timeIntervalSince(lastOK)))
-        return "上次更新 " + (s < 60 ? "\(s) 秒前" : s < 3600 ? "\(s / 60) 分钟前" : lastOK.formatted(date: .omitted, time: .shortened))
+        if s < 60 { return String(localized: "上次更新 \(s) 秒前") }
+        if s < 3600 { return String(localized: "上次更新 \(s / 60) 分钟前") }
+        return String(localized: "上次更新 \(lastOK.formatted(date: .omitted, time: .shortened))")
     }
 
     /// When it tries again, then why (the reason may be cut off, the countdown never): "4 秒后重试 · 连不上 hub",
     /// or "等待电脑回应…" while a request hangs.
     static func detail(failure: String?, nextTry: Date, now: Date) -> String {
-        guard let failure else { return "等待电脑回应…" }
+        guard let failure else { return String(localized: "等待电脑回应…") }
         let s = Int(ceil(nextTry.timeIntervalSince(now)))
-        return (s > 0 ? "\(s) 秒后重试" : "正在重试…") + " · " + failure
+        return s > 0 ? String(localized: "\(s) 秒后重试 · \(failure)") : String(localized: "正在重试… · \(failure)")
     }
 }
 
@@ -991,7 +993,7 @@ struct BackgroundTasksStrip: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(tasks.count) 个后台任务，\(expanded ? "收起" : "展开")")
+            .accessibilityLabel("\(tasks.count) 个后台任务，\(expanded ? String(localized: "收起") : String(localized: "展开"))")
             if expanded {
                 if AppStyle.current.usesBeautifulUI {
                     VStack(spacing: 0) {
@@ -1073,9 +1075,9 @@ struct BackgroundTasksStrip: View {
 
     static func elapsed(from start: Date, to now: Date) -> String {
         let s = max(0, Int(now.timeIntervalSince(start)))
-        if s < 60 { return "\(s) 秒" }
-        if s < 3600 { return "\(s / 60) 分 \(s % 60) 秒" }
-        return "\(s / 3600) 时 \(s % 3600 / 60) 分"
+        if s < 60 { return String(localized: "\(s) 秒") }
+        if s < 3600 { return String(localized: "\(s / 60) 分 \(s % 60) 秒") }
+        return String(localized: "\(s / 3600) 时 \(s % 3600 / 60) 分")
     }
 }
 
@@ -1117,8 +1119,14 @@ struct ActivityChips: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel([loop.map { "循环中，" + Self.loopLabel($0, now: .now) },
-                             background.isEmpty ? nil : "\(background.count) 个后台任务"].compactMap { $0 }.joined(separator: "，") + "，点按查看")
+        .accessibilityLabel(a11yLabel)
+    }
+
+    private var a11yLabel: String {
+        let parts = [loop.map { String(localized: "循环中，\(Self.loopLabel($0, now: .now))") },
+                     background.isEmpty ? nil : String(localized: "\(background.count) 个后台任务")].compactMap { $0 }
+        let list = parts.joined(separator: String(localized: "，", comment: "Separator between items of a spoken list"))
+        return String(localized: "\(list)，点按查看")
     }
 
     private func chip(_ tint: Color, text: Color, @ViewBuilder _ content: () -> some View) -> some View {
@@ -1133,13 +1141,13 @@ struct ActivityChips: View {
     /// The loop beside the arrows when room is short: the next time, or that it is running.
     static func shortLoopLabel(_ loop: LoopInfo, now: Date) -> String {
         if let next = loop.nextAt, next > now { return next.formatted(date: .omitted, time: .shortened) }
-        return loop.nextAt != nil ? "执行中" : "循环"
+        return loop.nextAt != nil ? String(localized: "执行中") : String(localized: "循环")
     }
 
     static func loopLabel(_ loop: LoopInfo, now: Date) -> String {
-        if let next = loop.nextAt, next > now { return "下次 " + next.formatted(date: .omitted, time: .shortened) }
-        if loop.nextAt != nil { return "循环执行中" }
-        return loop.cadence ?? "循环中"
+        if let next = loop.nextAt, next > now { return String(localized: "下次 \(next.formatted(date: .omitted, time: .shortened))") }
+        if loop.nextAt != nil { return String(localized: "循环执行中") }
+        return loop.cadence ?? String(localized: "循环中")
     }
 }
 
@@ -1186,7 +1194,7 @@ struct LoopStrip: View {
                     .font(Theme.Font.captionHeavy)
                     .foregroundStyle(Theme.loop)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text("循环中" + (loop.cadence.map { " · " + $0 } ?? "")).font(Theme.Font.captionStrong).lineLimit(1)
+                    Text(loop.cadence.map { String(localized: "循环中 · \($0)") } ?? String(localized: "循环中")).font(Theme.Font.captionStrong).lineLimit(1)
                     if let next = loop.nextAt {
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(next > ctx.date ? "下次唤醒 \(next.formatted(date: .omitted, time: .shortened))（\(Self.until(next, now: ctx.date))）"
@@ -1226,7 +1234,8 @@ extension LoopStrip {
     /// "还有 4 分钟" / "还有 1 小时 5 分".
     static func until(_ date: Date, now: Date) -> String {
         let m = max(1, Int(ceil(date.timeIntervalSince(now) / 60)))
-        return m < 60 ? "还有 \(m) 分钟" : "还有 \(m / 60) 小时" + (m % 60 > 0 ? " \(m % 60) 分" : "")
+        if m < 60 { return String(localized: "还有 \(m) 分钟") }
+        return m % 60 > 0 ? String(localized: "还有 \(m / 60) 小时 \(m % 60) 分") : String(localized: "还有 \(m / 60) 小时")
     }
 }
 
@@ -1272,7 +1281,7 @@ struct AgentStrip: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Theme.Space.sm) {
-                    chip(title: "主 Agent", symbol: Theme.Icon.user, running: false, done: false, on: viewing == nil) { select(nil) }
+                    chip(title: String(localized: "主 Agent"), symbol: Theme.Icon.user, running: false, done: false, on: viewing == nil) { select(nil) }
                         .id("main")
                     ForEach(agents) { a in
                         chip(title: a.title, symbol: nil, running: a.running, done: !a.running, on: viewing == a.id) { select(a) }
@@ -1302,7 +1311,7 @@ struct AgentStrip: View {
         let open = { Haptics.tap(); showAll = true }
         Group {
             if AppStyle.current.usesBeautifulUI {
-                BUIFilterChip("全部子 Agent", count: all.count, isActive: false, action: open)
+                BUIFilterChip(String(localized: "全部子 Agent"), count: all.count, isActive: false, action: open)
             } else {
                 Button(action: open) {
                     HStack(spacing: Theme.Space.sm) {
@@ -1327,7 +1336,7 @@ struct AgentStrip: View {
         if AppStyle.current.usesBeautifulUI {
             // Its filter chip: a dot in the working color while the subagent runs, green once it is done.
             BUIFilterChip(title, dot: running ? Theme.busy : done ? Theme.positive : nil, isActive: on, action: action)
-                .accessibilityLabel(title + (running ? "，运行中" : done ? "，已完成" : ""))
+                .accessibilityLabel(running ? String(localized: "\(title)，运行中") : done ? String(localized: "\(title)，已完成") : title)
         } else {
             plainChip(title: title, symbol: symbol, running: running, done: done, on: on, action: action)
         }
@@ -1353,7 +1362,7 @@ struct AgentStrip: View {
             .foregroundStyle(on ? Theme.accent : Color.primary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title + (running ? "，运行中" : done ? "，已完成" : ""))
+        .accessibilityLabel(running ? String(localized: "\(title)，运行中") : done ? String(localized: "\(title)，已完成") : title)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
@@ -1386,6 +1395,15 @@ struct SubagentTreeSheet: View {
         .presentationDragIndicator(.visible)
     }
 
+    /// VoiceOver: its title, how it is going, what it is, how deep.
+    private static func label(_ r: Subagent.TreeRow) -> String {
+        let a = r.agent
+        var parts = [a.title, a.running ? String(localized: "运行中") : String(localized: "已结束")]
+        if a.fork == true { parts.append(String(localized: "分叉")) } else if let t = a.type { parts.append(t) }
+        if r.depth > 0 { parts.append(String(localized: "第 \(r.depth + 1) 层")) }
+        return parts.joined(separator: String(localized: "，", comment: "Separator between items of a spoken list"))
+    }
+
     private func row(_ r: Subagent.TreeRow) -> some View {
         let a = r.agent, on = viewing == a.id
         return Button { select(a) } label: {
@@ -1402,7 +1420,7 @@ struct SubagentTreeSheet: View {
                     HStack(spacing: Theme.Space.sm) {
                         Text(a.running ? "运行中" : "已结束").foregroundStyle(a.running ? Theme.busy : .secondary)
                         if a.fork == true {
-                            Chip(text: "分叉", symbol: Theme.Icon.gitBranch)
+                            Chip(text: String(localized: "分叉"), symbol: Theme.Icon.gitBranch)
                         } else if let t = a.type {
                             Text("· " + t).foregroundStyle(.secondary).lineLimit(1)
                         }
@@ -1427,8 +1445,7 @@ struct SubagentTreeSheet: View {
         .buttonStyle(.plain)
         .padding(.leading, CGFloat(min(r.depth, Self.maxIndent)) * Theme.Space.l)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(a.title + "，" + (a.running ? "运行中" : "已结束") + (a.fork == true ? "，分叉" : a.type.map { "，" + $0 } ?? "")
-                            + (r.depth > 0 ? "，第 \(r.depth + 1) 层" : ""))
+        .accessibilityLabel(Self.label(r))
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
@@ -1444,7 +1461,7 @@ struct SubagentFooter: View {
                 .font(Theme.Font.secondaryStrong)
                 .foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text("子 Agent · " + (agent.type ?? "Agent")).font(Theme.Font.captionStrong).lineLimit(1)
+                Text("子 Agent · \(agent.type ?? "Agent")").font(Theme.Font.captionStrong).lineLimit(1)
                 Text(agent.running ? "运行中，只读" : "已完成，只读").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 6)

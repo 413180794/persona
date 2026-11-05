@@ -26,15 +26,15 @@ enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .contacts: "通讯录"
-        case .calendar: "日历"
-        case .reminders: "提醒事项"
-        case .location: "位置"
-        case .health: "健康"
-        case .photos: "照片"
-        case .device: "设备信息"
-        case .clipboard: "剪贴板"
-        case .notifications: "通知"
+        case .contacts: String(localized: "通讯录")
+        case .calendar: String(localized: "日历")
+        case .reminders: String(localized: "提醒事项")
+        case .location: String(localized: "位置")
+        case .health: String(localized: "健康")
+        case .photos: String(localized: "照片")
+        case .device: String(localized: "设备信息")
+        case .clipboard: String(localized: "剪贴板")
+        case .notifications: String(localized: "通知")
         }
     }
 
@@ -67,15 +67,15 @@ enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
 
     var detail: String {
         switch self {
-        case .contacts: "查找联系人的电话、邮箱、公司"
-        case .calendar: "查看日程，经你确认后新建日程"
-        case .reminders: "查看和新建提醒事项"
-        case .location: "当前位置和地址"
-        case .health: "步数、心率、睡眠等汇总，经你确认后写入"
-        case .photos: "最近的照片和截图"
-        case .device: "电量、存储、系统版本、网络"
-        case .clipboard: "读取和写入剪贴板"
-        case .notifications: "让 Claude 给你发本地通知"
+        case .contacts: String(localized: "查找联系人的电话、邮箱、公司")
+        case .calendar: String(localized: "查看日程，经你确认后新建日程")
+        case .reminders: String(localized: "查看和新建提醒事项")
+        case .location: String(localized: "当前位置和地址")
+        case .health: String(localized: "步数、心率、睡眠等汇总，经你确认后写入")
+        case .photos: String(localized: "最近的照片和截图")
+        case .device: String(localized: "电量、存储、系统版本、网络")
+        case .clipboard: String(localized: "读取和写入剪贴板")
+        case .notifications: String(localized: "让 Claude 给你发本地通知")
         }
     }
 
@@ -98,8 +98,8 @@ enum PhoneToolError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .denied(let s): "没有权限：\(s)。请在 iPhone 的 Persona › 设置 › 连接器 › 这台 iPhone 里授权。"
-        case .invalidArgument(let s): "参数错误：\(s)"
+        case .denied(let s): "没有权限：\(s)。请在 iPhone 的 Persona › 设置 › 连接器 › 这台 iPhone 里授权。" // i18n-ignore
+        case .invalidArgument(let s): "参数错误：\(s)" // i18n-ignore
         case .unavailable(let s): s
         }
     }

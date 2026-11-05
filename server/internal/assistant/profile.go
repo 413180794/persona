@@ -188,12 +188,31 @@ func (s *Service) recordingDays(ctx context.Context) int {
 	return kb.DefaultRecordingDays
 }
 
-// recordingDaysNow is recordingDays for the knowledge base's engine, which has no context of its own; while the
-// settings cannot be read it keeps the default (savedSettings caches the last read).
+// settingsLastGood is savedSettings, except that a transient read failure serves the settings read last when there
+// are any. Callers whose default would be destructive use it: the recording retention falling back to 14 days for one
+// locked-database round would make the next KB prune delete recordings the user kept for longer (#4008). Callers for
+// which a stale value is risky (kbZone: moving the archive into a possibly old time zone) keep using savedSettings.
+func (s *Service) settingsLastGood(ctx context.Context) (Settings, bool) {
+	if v, ok := s.savedSettings(ctx); ok {
+		return v, true
+	}
+	s.prefs.mu.Lock()
+	cached := s.prefs.cached // a save during the failed read may already have put newer settings here
+	var v Settings
+	if cached != nil {
+		v = *cached
+	}
+	s.prefs.mu.Unlock()
+	return v, cached != nil
+}
+
+// recordingDaysNow is recordingDays for the knowledge base's engine, which has no context of its own. A transient
+// settings read failure keeps the value read last (settingsLastGood); only settings never successfully read fall back
+// to the default, so one locked-database round can never shorten the retention and prune recordings early.
 func (s *Service) recordingDaysNow() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	v, ok := s.savedSettings(ctx)
+	v, ok := s.settingsLastGood(ctx)
 	if !ok || v.RecordingDays == nil || *v.RecordingDays < minRecordingDays || *v.RecordingDays > maxRecordingDays {
 		return kb.DefaultRecordingDays
 	}

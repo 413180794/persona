@@ -38,7 +38,7 @@ private struct MacKnowledgeDetail: View {
                 if let open {
                     KnowledgeDetailView(entry: open.entry, query: open.query)
                 } else {
-                    SplitPlaceholder(symbol: Theme.Icon.knowledge, title: "选一个条目", message: "左边列表里选一个，详情会在这里打开。")
+                    SplitPlaceholder(symbol: Theme.Icon.knowledge, title: String(localized: "选一个条目"), message: String(localized: "左边列表里选一个，详情会在这里打开。"))
                 }
             }
             .modifier(MacBelowTitleRow()) // under the title row, as the list beside it

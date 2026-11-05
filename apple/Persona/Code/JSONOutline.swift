@@ -69,7 +69,7 @@ nonisolated struct JSONOutline: Sendable {
                 if b[j] == 34 { return j + 1 }
                 j += 1
             }
-            throw ParseError(offset: from, message: "字符串没有结束")
+            throw ParseError(offset: from, message: String(localized: "字符串没有结束"))
         }
         func add(_ kind: Kind, _ start: Int, _ end: Int) {
             let parent = stack.last ?? -1
@@ -81,12 +81,12 @@ nonisolated struct JSONOutline: Sendable {
             nodes.append(n)
         }
         func readKey() throws {
-            guard i < b.count, b[i] == 34 else { throw fail("这里应该是键（带引号的字符串）") }
+            guard i < b.count, b[i] == 34 else { throw fail(String(localized: "这里应该是键（带引号的字符串）")) }
             let e = try stringEnd(i)
             pendingKey = (Int32(i + 1), Int32(e - 1))
             i = e
             skip()
-            guard i < b.count, b[i] == 58 else { throw fail("键后面应该是冒号") }
+            guard i < b.count, b[i] == 58 else { throw fail(String(localized: "键后面应该是冒号")) }
             i += 1
             skip()
         }
@@ -103,15 +103,15 @@ nonisolated struct JSONOutline: Sendable {
                     continue
                 }
                 if c == 125 || c == 93 {
-                    guard let top = stack.popLast() else { throw fail("多了一个 \(c == 125 ? "}" : "]")") }
+                    guard let top = stack.popLast() else { let bracket = c == 125 ? "}" : "]"; throw fail(String(localized: "多了一个 \(bracket)")) }
                     nodes[Int(top)].valueEnd = Int32(i + 1)
                     nodes[Int(top)].end = Int32(nodes.count)
                     i += 1
                     skip()
-                    if stack.isEmpty, i < b.count { throw fail("JSON 后面还有别的内容") }
+                    if stack.isEmpty, i < b.count { throw fail(String(localized: "JSON 后面还有别的内容")) }
                     continue
                 }
-                throw fail("这里应该是逗号或括号")
+                throw fail(String(localized: "这里应该是逗号或括号"))
             }
             switch c {
             case 123, 91: // { [
@@ -131,7 +131,7 @@ nonisolated struct JSONOutline: Sendable {
                 i = e
             case 116, 102, 110: // true false null
                 let word: [UInt8] = c == 116 ? Array("true".utf8) : c == 102 ? Array("false".utf8) : Array("null".utf8)
-                guard SyntaxLexer.at(b, i, b.count, word) else { throw fail("不认识的值") }
+                guard SyntaxLexer.at(b, i, b.count, word) else { throw fail(String(localized: "不认识的值")) }
                 add(c == 110 ? .null : .bool, i, i + word.count)
                 i += word.count
             case 45, 48...57:
@@ -140,14 +140,14 @@ nonisolated struct JSONOutline: Sendable {
                 while i < b.count, (b[i] >= 48 && b[i] <= 57) || b[i] == 46 || b[i] == 101 || b[i] == 69 || b[i] == 43 || b[i] == 45 { i += 1 }
                 add(.number, s, i)
             default:
-                throw fail("不认识的值")
+                throw fail(String(localized: "不认识的值"))
             }
             expectValue = false
             skip()
-            if stack.isEmpty, i < b.count { throw fail("JSON 后面还有别的内容") }
+            if stack.isEmpty, i < b.count { throw fail(String(localized: "JSON 后面还有别的内容")) }
         }
-        if !stack.isEmpty { throw ParseError(offset: b.count, message: "括号没有闭合") }
-        if nodes.isEmpty { throw ParseError(offset: 0, message: "空文件") }
+        if !stack.isEmpty { throw ParseError(offset: b.count, message: String(localized: "括号没有闭合")) }
+        if nodes.isEmpty { throw ParseError(offset: 0, message: String(localized: "空文件")) }
         return nodes
 
     }
@@ -294,7 +294,7 @@ nonisolated struct JSONOutline: Sendable {
                     out.append(NSAttributedString(string: o, attributes: SyntaxStyle.plain))
                 } else {
                     out.append(NSAttributedString(string: o + " … " + c + comma, attributes: SyntaxStyle.plain))
-                    let what = n.kind == .object ? "\(n.children) 个键" : "\(n.children) 项"
+                    let what = n.kind == .object ? String(localized: "\(n.children) 个键") : String(localized: "\(n.children) 项")
                     out.append(NSAttributedString(string: "  " + what, attributes: SyntaxStyle.attributes(.comment)))
                 }
             } else {
@@ -361,10 +361,11 @@ nonisolated struct JSONOutline: Sendable {
         let value = outline.value(n)
         let path = outline.path(idx)
         var items: [UIMenuElement] = [
-            UIAction(title: "拷贝这个值", image: UIImage(systemName: Theme.Icon.copy)) { _ in UIPasteboard.general.string = value },
+            UIAction(title: String(localized: "拷贝这个值"), image: UIImage(systemName: Theme.Icon.copy)) { _ in UIPasteboard.general.string = value },
         ]
         if !path.isEmpty {
-            items.append(UIAction(title: "拷贝路径 \(path.count > 40 ? "…" + path.suffix(39) : path)", image: UIImage(systemName: "point.topleft.down.to.point.bottomright.curvepath")) { _ in
+            let shownPath = path.count > 40 ? "…" + path.suffix(39) : path
+            items.append(UIAction(title: String(localized: "拷贝路径 \(shownPath)"), image: UIImage(systemName: "point.topleft.down.to.point.bottomright.curvepath")) { _ in
                 UIPasteboard.general.string = path
             })
         }

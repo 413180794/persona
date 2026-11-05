@@ -31,7 +31,7 @@ struct WorkflowLine: View {
     private func text(_ run: WorkflowRun, now: Date) -> String {
         var s = run.line
         if let t = run.elapsed(now: now) { s += " · " + WorkflowRun.duration(t, seconds: false) }
-        if runs.count > 1 { s += " · 等 \(runs.count - 1) 个" }
+        if runs.count > 1 { s += String(localized: " · 等 \(runs.count - 1) 个") }
         return s
     }
 }
@@ -129,12 +129,18 @@ struct WorkflowCard: View {
 
     private func progressText(_ pr: (done: Int, started: Int)) -> String {
         let running = run.runningAgents
-        return "\(pr.done)/\(pr.started) 个 agent 完成" + (run.isRunning && running > 0 ? " · \(running) 个在跑" : "")
+        let done = String(localized: "\(pr.done)/\(pr.started) 个 agent 完成")
+        return run.isRunning && running > 0 ? done + String(localized: " · \(running) 个在跑") : done
     }
 }
 
 /// The phases in a row: the ones before the current one done, the current one marked, the rest quiet.
 struct WorkflowPhases: View {
+    /// VoiceOver: 「阶段：Plan、Build（当前）、Verify」.
+    static func spokenPhases(_ phases: [String], current: Int) -> String {
+        let list = phases.enumerated().map { i, p in i + 1 == current ? String(localized: "\(p)（当前）") : p }.joined(separator: "、")
+        return String(localized: "阶段：\(list)")
+    }
     var phases: [String]
     /// From 1; 0: not known.
     var current: Int
@@ -143,7 +149,7 @@ struct WorkflowPhases: View {
     var body: some View {
         ScrollView(.horizontal) { row }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("阶段：" + phases.enumerated().map { i, p in p + (i + 1 == current ? "（当前）" : "") }.joined(separator: "、"))
+            .accessibilityLabel(Self.spokenPhases(phases, current: current))
     }
 
     private var row: some View {
@@ -199,7 +205,7 @@ struct WorkflowAgentRow: View {
         if let open {
             Button { Haptics.tap(); open() } label: { content }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(agent.title)，\(agent.running ? "在跑" : "已结束")，点按查看")
+                .accessibilityLabel("\(agent.title)，\(agent.running ? String(localized: "在跑") : String(localized: "已结束"))，点按查看")
         } else {
             content.accessibilityElement(children: .combine)
         }
@@ -219,19 +225,19 @@ enum WorkflowLook {
 
     static func word(_ run: WorkflowRun) -> String {
         switch run.outcome {
-        case .running: "在跑"
-        case .completed: "完成"
-        case .failed: "失败"
-        case .stopped: "已停止"
-        case .stalled: "没动静了"
+        case .running: String(localized: "在跑")
+        case .completed: String(localized: "完成")
+        case .failed: String(localized: "失败")
+        case .stopped: String(localized: "已停止")
+        case .stalled: String(localized: "没动静了")
         }
     }
 
     /// VoiceOver: 「后台 workflow parity-audit，在跑，阶段 Verify 2/2，169/185 个 agent 完成」.
     static func spoken(_ run: WorkflowRun) -> String {
-        var s = "后台 workflow \(run.title)，\(word(run))"
-        if let p = run.phaseLabel { s += "，阶段 \(p)" }
-        if let pr = run.progress { s += "，\(pr.done)/\(pr.started) 个 agent 完成" }
+        var s = String(localized: "后台 workflow \(run.title)，\(word(run))")
+        if let p = run.phaseLabel { s += String(localized: "，阶段 \(p)") }
+        if let pr = run.progress { s += String(localized: "，\(pr.done)/\(pr.started) 个 agent 完成") }
         return s
     }
 }

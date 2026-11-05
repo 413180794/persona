@@ -31,7 +31,7 @@ import Observation
             on = try await deps.save(next)
         } catch {
             on = before
-            self.error = "保存失败：\(error.localizedDescription)"
+            self.error = String(localized: "保存失败：\(error.localizedDescription)")
         }
     }
 }

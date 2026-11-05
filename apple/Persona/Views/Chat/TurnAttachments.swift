@@ -122,15 +122,15 @@ struct DocumentCards: View {
     /// What a document is, as the Files app says it.
     static func kind(_ path: String) -> String {
         switch (path as NSString).pathExtension.lowercased() {
-        case "docx", "doc": "Word 文档"
-        case "xlsx", "xls": "Excel 表格"
-        case "pptx", "ppt": "PowerPoint 演示文稿"
-        case "pages": "Pages 文稿"
-        case "numbers": "Numbers 表格"
-        case "key": "Keynote 演示文稿"
-        case "rtf": "RTF 文档"
-        case "pdf": "PDF 文档"
-        default: "文档"
+        case "docx", "doc": String(localized: "Word 文档")
+        case "xlsx", "xls": String(localized: "Excel 表格")
+        case "pptx", "ppt": String(localized: "PowerPoint 演示文稿")
+        case "pages": String(localized: "Pages 文稿")
+        case "numbers": String(localized: "Numbers 表格")
+        case "key": String(localized: "Keynote 演示文稿")
+        case "rtf": String(localized: "RTF 文档")
+        case "pdf": String(localized: "PDF 文档")
+        default: String(localized: "文档")
         }
     }
 }
@@ -223,9 +223,9 @@ struct ViewedImagesRow: View, Equatable {
     /// The name of the file, or what took the picture.
     func title(_ im: ViewedImage) -> String {
         switch im.source {
-        case .screenshot: "屏幕截图"
-        case .browser: "网页截图"
-        case .read, .mcp, .tool: im.name ?? (im.source == .mcp ? Self.toolName(im.tool) : "图片")
+        case .screenshot: String(localized: "屏幕截图")
+        case .browser: String(localized: "网页截图")
+        case .read, .mcp, .tool: im.name ?? (im.source == .mcp ? Self.toolName(im.tool) : String(localized: "图片"))
         }
     }
 

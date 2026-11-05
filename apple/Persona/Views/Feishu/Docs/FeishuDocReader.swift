@@ -33,7 +33,7 @@ final class FeishuDocsReaderModel {
     var loading = false
 
     func load(url: String, title: String?) async {
-        guard let api = AppModel.shared.api else { error = "还没有连接 hub"; return }
+        guard let api = AppModel.shared.api else { error = String(localized: "还没有连接 hub"); return }
         loading = true
         defer { loading = false }
         async let header: FeishuDocsHeader? = try? api.feishuDocsGet("documents/header", query: ["url": url])
@@ -54,7 +54,7 @@ final class FeishuDocsReaderModel {
     static func read(_ api: APIClient, url: String, title: String?) async throws -> FeishuDocsContent {
         let kind = FeishuDocsKind.from(url: url)
         if kind == .bitable {
-            return .unsupported(.init(kind: .bitable, title: title ?? "多维表格", message: "多维表格暂不支持在 Persona 中查看", file: nil, image: nil))
+            return .unsupported(.init(kind: .bitable, title: title ?? String(localized: "多维表格"), message: String(localized: "多维表格暂不支持在 Persona 中查看"), file: nil, image: nil))
         }
         if kind != .file && kind != .whiteboard {
             do {
@@ -68,24 +68,24 @@ final class FeishuDocsReaderModel {
         do {
             view = try await api.feishuDocsGet("documents/read", query: ["url": url, "format": "json"])
         } catch let e as FeishuDocsFailure where e.code == "DOCUMENT_FORMAT_UNSUPPORTED" || e.status == 422 {
-            return .unsupported(.init(kind: kind, title: title ?? kind.label, message: "这种内容暂不支持在 Persona 中查看", file: nil, image: nil))
+            return .unsupported(.init(kind: kind, title: title ?? kind.label, message: String(localized: "这种内容暂不支持在 Persona 中查看"), file: nil, image: nil))
         }
         let name = view.title.isEmpty ? (title ?? kind.label) : view.title
         if view.isBase {
-            return .unsupported(.init(kind: .bitable, title: name, message: "多维表格暂不支持在 Persona 中查看", file: nil, image: nil))
+            return .unsupported(.init(kind: .bitable, title: name, message: String(localized: "多维表格暂不支持在 Persona 中查看"), file: nil, image: nil))
         }
         if let o = view.object {
             switch o.kind {
             case "file":
-                return .unsupported(.init(kind: .file, title: name, message: "云空间文件，可以下载后预览", file: (o.token, o.extension), image: nil))
+                return .unsupported(.init(kind: .file, title: name, message: String(localized: "云空间文件，可以下载后预览"), file: (o.token, o.extension), image: nil))
             case "whiteboard":
-                return .unsupported(.init(kind: .whiteboard, title: name, message: o.empty == true ? "这是一个空白画板" : "画板", file: nil, image: o.image))
+                return .unsupported(.init(kind: .whiteboard, title: name, message: o.empty == true ? String(localized: "这是一个空白画板") : String(localized: "画板"), file: nil, image: o.image))
             default:
-                return .unsupported(.init(kind: kind, title: name, message: "这种内容暂不支持在 Persona 中查看", file: nil, image: nil))
+                return .unsupported(.init(kind: kind, title: name, message: String(localized: "这种内容暂不支持在 Persona 中查看"), file: nil, image: nil))
             }
         }
         if view.isSpreadsheet && view.content.children.isEmpty {
-            return .unsupported(.init(kind: .sheet, title: name, message: "作者禁止导出这个表格，请在飞书中查看", file: nil, image: nil))
+            return .unsupported(.init(kind: .sheet, title: name, message: String(localized: "作者禁止导出这个表格，请在飞书中查看"), file: nil, image: nil))
         }
         return .tree(view)
     }
@@ -141,8 +141,8 @@ struct FeishuDocReader: View {
                         FeishuDocsUnsupportedView(info: u, url: url)
                     case nil:
                         if let e = model.error {
-                            EmptyStateView(symbol: Theme.Icon.missingFile, title: "打不开这篇文档", message: e,
-                                           action: ("重试", { Task { await model.load(url: url, title: title) } }))
+                            EmptyStateView(symbol: Theme.Icon.missingFile, title: String(localized: "打不开这篇文档"), message: e,
+                                           action: (String(localized: "重试"), { Task { await model.load(url: url, title: title) } }))
                                 .padding(.top, 60)
                             Button("在飞书中打开") { FeishuDocsLinks.openInFeishu(url) }
                                 .lineLimit(1).frame(maxWidth: .infinity)
@@ -219,9 +219,9 @@ struct FeishuDocReader: View {
     private var docTitle: String {
         switch model.content {
         case .markdown(_, let t, _): t
-        case .tree(let v): v.title.isEmpty ? (title ?? "文档") : v.title
+        case .tree(let v): v.title.isEmpty ? (title ?? String(localized: "文档")) : v.title
         case .unsupported(let u): u.title
-        case nil: title ?? "文档"
+        case nil: title ?? String(localized: "文档")
         }
     }
 
@@ -259,7 +259,7 @@ struct FeishuDocReader: View {
     private var breadcrumb: String? {
         guard let h = model.header else { return nil }
         let names = (h.path ?? []).map(\.name)
-        if h.inMySpace == true { return (["我的空间"] + names).joined(separator: " / ") }
+        if h.inMySpace == true { return ([String(localized: "我的空间")] + names).joined(separator: " / ") }
         return names.isEmpty ? nil : names.joined(separator: " / ")
     }
 
@@ -270,17 +270,17 @@ struct FeishuDocReader: View {
         guard let when else { return nil }
         let t = FeishuTime.short(when)
         let owner = (model.info?.owner ?? treeOwner)?.name
-        if let who = model.header?.editorName, !who.isEmpty, who != owner { return "\(who) 更新于 \(t)" }
-        return "更新于 \(t)"
+        if let who = model.header?.editorName, !who.isEmpty, who != owner { return String(localized: "\(who) 更新于 \(t)") }
+        return String(localized: "更新于 \(t)")
     }
 
     private var statsLine: String? {
         guard let i = model.info else { return nil }
         var parts: [String] = []
-        if let v = i.views, v > 0 { parts.append("\(v) 次阅读") }
-        if let v = i.visitors, v > 0 { parts.append("\(v) 人看过") }
-        if let l = i.likes, l > 0 { parts.append("\(l) 个赞") }
-        if let c = i.comments, c > 0 { parts.append("\(c) 条评论") }
+        if let v = i.views, v > 0 { parts.append(String(localized: "\(v) 次阅读")) }
+        if let v = i.visitors, v > 0 { parts.append(String(localized: "\(v) 人看过")) }
+        if let l = i.likes, l > 0 { parts.append(String(localized: "\(l) 个赞")) }
+        if let c = i.comments, c > 0 { parts.append(String(localized: "\(c) 条评论")) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

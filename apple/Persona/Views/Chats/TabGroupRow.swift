@@ -35,11 +35,11 @@ struct TabGroupRow: View {
         .padding(.vertical, compact ? 0 : Theme.Space.xxs)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(["标签页 \(name)", count, lead.stateLabel, folded ? "已折叠" : "已展开"].joined(separator: "，"))
+        .accessibilityLabel([String(localized: "标签页 \(name)"), count, lead.stateLabel, folded ? String(localized: "已折叠") : String(localized: "已展开")].joined(separator: String(localized: "，")))
         .accessibilityHint(folded ? "展开这个标签页的 Agent" : "收起")
         .accessibilityAddTraits(.isButton)
     }
 
-    private var name: String { group.label ?? "标签页" }
-    private var count: String { "\(group.sessions.count) 个 Agent" }
+    private var name: String { group.label ?? String(localized: "标签页") }
+    private var count: String { String(localized: "\(group.sessions.count) 个 Agent") }
 }

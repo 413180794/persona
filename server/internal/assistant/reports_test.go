@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -164,4 +165,240 @@ func TestSaidDeployed(t *testing.T) {
 			t.Errorf("said(%q) = %v, want %v", text, got, want)
 		}
 	}
+}
+
+// failingPosts replaces the FeishuPost answer: every card is recorded; report cards (the header emoji marks them)
+// fail — the first attempt only, or every attempt with alwaysFail — anything else goes through.
+func failingPosts(f *fakeHub, alwaysFail bool) (posts func() []string, reportAttempts func() int) {
+	var mu sync.Mutex
+	var got []string
+	var attempts int
+	f.answerApp(AppFeishu, FeishuPost, func(p json.RawMessage) (any, error) {
+		var m struct {
+			Card string `json:"card"`
+		}
+		_ = json.Unmarshal(p, &m)
+		mu.Lock()
+		got = append(got, m.Card)
+		isReport := strings.Contains(m.Card, `"content":"📋 `)
+		if isReport {
+			attempts++
+		}
+		fail := isReport && (alwaysFail || attempts == 1)
+		mu.Unlock()
+		if fail {
+			return nil, errors.New("network jitter")
+		}
+		return map[string]any{"message_id": "om_r"}, nil
+	})
+	return func() []string {
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]string(nil), got...)
+		}, func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return attempts
+		}
+}
+
+func reportsState(s *Service) (n int, timer bool) {
+	s.reports.mu.Lock()
+	defer s.reports.mu.Unlock()
+	return len(s.reports.pending), s.reports.timer != nil
+}
+
+// A transport failure keeps the whole batch (its terminal reports with it), schedules a retry; the second attempt
+// posts the card and only then the needs decision card; success clears pending and the timer.
+func TestTaskReportRetriesAfterTransportFailure(t *testing.T) {
+	s, f, _ := reportService(t, true)
+	s.reports.mu.Lock()
+	s.reports.retry = testReportDelay
+	s.reports.mu.Unlock()
+	todo := startedTask(t, s, f)
+	agentTurn(s, f, proto.StatusBlocked, "", 1)
+	// A second todo, whose failure is reported together with the first one's decision.
+	other := Todo{ID: "todo_b", Title: "修支付崩溃", Origin: "conv1"}
+	s.todos.mu.Lock()
+	s.todos.todos[other.ID] = &other
+	s.todos.mu.Unlock()
+	ix := proto.Interaction{ID: "ix-r1", MachineID: "box", SessionID: "s1", Kind: proto.IxQuestion,
+		Questions: []proto.Question{{Question: "用哪个分支？", Options: []proto.QuestionOption{{Label: "main"}}}}}
+	f.answerApp(AppInteractions, InteractionsGet, func(json.RawMessage) (any, error) {
+		return map[string]any{"ok": true, "interaction": ix}, nil
+	})
+	posts, attempts := failingPosts(f, false)
+	s.taskReport(todo, reportNeeds, "box", [2]string{"box", "s1"}, noticeAsk(ix), &ix)
+	s.taskReport(other, reportFailed, "box", [2]string{}, "另一台离线", nil)
+	waitFor(t, "the first failed attempt", func() bool { return attempts() == 1 })
+	waitFor(t, "the batch back in pending with a retry timer", func() bool {
+		n, timer := reportsState(s)
+		return n == 2 && timer
+	})
+	waitFor(t, "the retried report and the question card", func() bool { return len(posts()) == 3 })
+	got := posts()
+	for i := 0; i < 2; i++ {
+		if !strings.Contains(got[i], "1 件事等你拍板") || !strings.Contains(got[i], "另一台离线") ||
+			!strings.Contains(got[i], "修支付崩溃") {
+			t.Fatalf("attempt %d report:\n%s", i+1, got[i])
+		}
+	}
+	if !strings.Contains(got[2], `"a":"ix"`) || !strings.Contains(got[2], "main") {
+		t.Fatalf("question card posted without the retried report:\n%s", got[2])
+	}
+	waitFor(t, "pending cleared after success", func() bool {
+		n, timer := reportsState(s)
+		return n == 0 && !timer
+	})
+	time.Sleep(4 * testReportDelay)
+	if len(posts()) != 3 {
+		t.Fatalf("%d posts after success", len(posts()))
+	}
+}
+
+// While the bot is unpaired the batch stays dropped (a later card says how things are then): becoming ready does not
+// deliver it, and no retry timer is left.
+func TestTaskReportDroppedWhenBotNotReady(t *testing.T) {
+	s, f, _ := reportService(t, true)
+	todo := startedTask(t, s, f)
+	f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
+		return FeishuStatus{Ready: false}, nil
+	})
+	posts, _ := failingPosts(f, false)
+	s.taskReport(todo, reportDone, "box", [2]string{}, "做完了", nil)
+	time.Sleep(6 * testReportDelay)
+	if got := posts(); len(got) != 0 {
+		t.Fatalf("not ready, posted %q", got)
+	}
+	if n, timer := reportsState(s); n != 0 || timer {
+		t.Fatalf("not ready: %d pending, timer=%v", n, timer)
+	}
+	f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
+		return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_me", PublicURL: "https://hub.example.com",
+			Features: FeishuFeatures{Main: true, Cards: true, Reports: true}}, nil
+	})
+	time.Sleep(6 * testReportDelay)
+	if got := posts(); len(got) != 0 {
+		t.Fatalf("the dropped batch was sent after the bot got ready: %q", got)
+	}
+}
+
+// After reportMaxRetries retries the batch is given up: the queue does not pin a dead transport forever.
+func TestTaskReportGivesUpAfterMaxRetries(t *testing.T) {
+	s, f, _ := reportService(t, true)
+	s.reports.mu.Lock()
+	s.reports.retry = testReportDelay
+	s.reports.mu.Unlock()
+	todo := startedTask(t, s, f)
+	posts, attempts := failingPosts(f, true)
+	s.taskReport(todo, reportDone, "box", [2]string{}, "做完了", nil)
+	want := reportMaxRetries + 1
+	waitFor(t, "the first send and every retry to fail", func() bool { return attempts() == want })
+	time.Sleep(8 * testReportDelay)
+	if got := attempts(); got != want {
+		t.Fatalf("%d report attempts, want %d then stop", got, want)
+	}
+	if n, timer := reportsState(s); n != 0 || timer {
+		t.Fatalf("after giving up: %d pending, timer=%v", n, timer)
+	}
+	if len(posts()) != want {
+		t.Fatalf("%d posts, want %d", len(posts()), want)
+	}
+}
+
+// A newer change of the same todo arriving while a failed batch waits for retry replaces the failed item; the retry
+// sends the newer state.
+func TestTaskReportRetryKeepsNewerChange(t *testing.T) {
+	s, f, _ := reportService(t, true)
+	s.reports.mu.Lock()
+	s.reports.retry = time.Second
+	s.reports.mu.Unlock()
+	todo := startedTask(t, s, f)
+	posts, attempts := failingPosts(f, false)
+	s.taskReport(todo, reportFailed, "box", [2]string{}, "第一次失败原因", nil)
+	waitFor(t, "the first failed attempt", func() bool { return attempts() == 1 })
+	waitFor(t, "the batch back in pending", func() bool {
+		n, timer := reportsState(s)
+		return n == 1 && timer
+	})
+	s.taskReport(todo, reportDone, "box", [2]string{"box", "s1"}, "第二次进展", nil)
+	waitFor(t, "the retried report", func() bool { return attempts() == 2 && len(posts()) == 2 })
+	card := posts()[1]
+	if !strings.Contains(card, "第二次进展") || !strings.Contains(card, "这一轮做完") {
+		t.Fatalf("retried card lacks the newer done change:\n%s", card)
+	}
+	if strings.Contains(card, "第一次失败原因") || strings.Contains(card, "没开起来") {
+		t.Fatalf("retried card still carries the superseded failure:\n%s", card)
+	}
+	waitFor(t, "pending cleared", func() bool {
+		n, timer := reportsState(s)
+		return n == 0 && !timer
+	})
+}
+
+// A newer change of the same todo arriving while the first card is still being posted merges inside requeueReports:
+// the superseded item is never posted, the retry carries the newer state. The first post is gated open only after the
+// newer change landed.
+func TestTaskReportMergesChangeArrivedDuringPost(t *testing.T) {
+	s, f, _ := reportService(t, true)
+	s.reports.mu.Lock()
+	s.reports.delay = time.Second // the newer change's normal-delay timer must not fire while the post is gated
+	s.reports.retry = testReportDelay
+	s.reports.mu.Unlock()
+	todo := startedTask(t, s, f)
+	var mu sync.Mutex
+	var got []string
+	var attempts int
+	entered := make(chan struct{})
+	gate := make(chan struct{})
+	var once sync.Once
+	f.answerApp(AppFeishu, FeishuPost, func(p json.RawMessage) (any, error) {
+		var m struct {
+			Card string `json:"card"`
+		}
+		_ = json.Unmarshal(p, &m)
+		mu.Lock()
+		got = append(got, m.Card)
+		firstReport := strings.Contains(m.Card, `"content":"📋 `)
+		if firstReport {
+			attempts++
+		}
+		first := firstReport && attempts == 1
+		mu.Unlock()
+		if first {
+			once.Do(func() { close(entered) })
+			<-gate
+			return nil, errors.New("network jitter")
+		}
+		return map[string]any{"message_id": "om_r"}, nil
+	})
+	state := func() (int, int) {
+		mu.Lock()
+		defer mu.Unlock()
+		return attempts, len(got)
+	}
+	cards := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), got...)
+	}
+	s.taskReport(todo, reportFailed, "box", [2]string{}, "第一次失败原因", nil)
+	<-entered // the first post is in flight, pending already cleared
+	s.taskReport(todo, reportDone, "box", [2]string{}, "第二次进展", nil)
+	close(gate)
+	waitFor(t, "the retried report", func() bool {
+		a, n := state()
+		return a == 2 && n == 2
+	})
+	card := cards()[1]
+	if !strings.Contains(card, "第二次进展") || !strings.Contains(card, "这一轮做完") {
+		t.Fatalf("retried card lacks the newer done change:\n%s", card)
+	}
+	if strings.Contains(card, "第一次失败原因") || strings.Contains(card, "没开起来") {
+		t.Fatalf("the superseded failure was posted:\n%s", card)
+	}
+	waitFor(t, "pending cleared", func() bool {
+		n, timer := reportsState(s)
+		return n == 0 && !timer
+	})
 }

@@ -84,7 +84,7 @@ struct AssistantDeps {
         withAnimation { tasks.removeAll { $0.id == t.id } }
         do {
             try await api.deleteTask(t.id)
-            deps.toast(Toast("已删除「\(AssistantScheduleText.title(t))」", style: .success))
+            deps.toast(Toast(String(localized: "已删除「\(AssistantScheduleText.title(t))」"), style: .success))
         } catch {
             deps.report(error)
             if let fresh = try? await api.scheduledTasks() { tasks = fresh }

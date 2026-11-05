@@ -95,7 +95,7 @@ struct MachinesView: View {
                 UsageWindowsCard() // the Mac has it at the foot of its sections column
                 #endif
                 if machines.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.machines, title: "还没有机器", message: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。")
+                    EmptyStateView(symbol: Theme.Icon.machines, title: String(localized: "还没有机器"), message: String(localized: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。"))
                 } else if !unmonitored {
                     Text("CPU、内存、网络每 10 秒更新，曲线是最近 1 小时。")
                         .font(Theme.Font.label).foregroundStyle(.secondary)
@@ -310,7 +310,7 @@ struct MachineCard: View {
     static func subtitle(_ m: Machine, system: MachineSystem?) -> String {
         guard let sys = system else { return m.hostname ?? m.sshHost ?? m.id }
         var parts = [sys.name]
-        if sys.cores > 0 { parts.append("\(sys.cores) 核") }
+        if sys.cores > 0 { parts.append(String(localized: "\(sys.cores) 核")) }
         if sys.memory > 0 { parts.append(MetricFormat.bytes(sys.memory)) }
         return parts.joined(separator: " · ")
     }
@@ -338,23 +338,23 @@ struct MachineCard: View {
         let end = Date.now
         let domain = end.addingTimeInterval(-3600)...end
         return HStack(alignment: .top, spacing: Theme.Space.m) {
-            MetricCell(title: "CPU", value: MetricFormat.percent(s?.cpu), detail: s?.load.map { "负载 " + MetricFormat.load($0) },
+            MetricCell(title: "CPU", value: MetricFormat.percent(s?.cpu), detail: s?.load.map { String(localized: "负载 \(MetricFormat.load($0))") },
                        level: MetricLevel.of(s?.cpu, warn: 75, crit: 90)) {
                 Sparkline(points: points, series: [ChartSeries(name: "CPU", color: MetricColor.cpu) { $0.cpu }], domain: domain, yMax: 100)
             }
-            MetricCell(title: "内存", value: MetricFormat.percent(s?.memPercent),
+            MetricCell(title: String(localized: "内存"), value: MetricFormat.percent(s?.memPercent),
                        detail: s.map { MetricFormat.bytes($0.memUsed) + " / " + MetricFormat.bytes($0.memTotal) },
                        level: MetricLevel.of(s?.memPercent, warn: 80, crit: 90)) {
                 let total = Double(s?.memTotal ?? metrics?.system?.memory ?? 0)
-                Sparkline(points: points, series: [ChartSeries(name: "内存", color: MetricColor.mem) { p in
+                Sparkline(points: points, series: [ChartSeries(name: String(localized: "内存"), color: MetricColor.mem) { p in
                     p.mem.map { total > 0 ? 100 * $0 / total : 0 }
                 }], domain: domain, yMax: 100)
             }
-            MetricCell(title: "网络", value: s == nil ? "—" : "↓ " + MetricFormat.rate(s?.netRx),
+            MetricCell(title: String(localized: "网络"), value: s == nil ? "—" : "↓ " + MetricFormat.rate(s?.netRx),
                        detail: s == nil ? nil : "↑ " + MetricFormat.rate(s?.netTx), level: .normal) {
                 Sparkline(points: points, series: [
-                    ChartSeries(name: "下行", color: MetricColor.rx) { $0.rx },
-                    ChartSeries(name: "上行", color: MetricColor.tx) { $0.tx },
+                    ChartSeries(name: String(localized: "下行"), color: MetricColor.rx) { $0.rx },
+                    ChartSeries(name: String(localized: "上行"), color: MetricColor.tx) { $0.tx },
                 ], domain: domain, yMax: nil)
             }
         }
@@ -368,9 +368,9 @@ struct AgentCounts: View {
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
-            item(tally.needsYou, "需要你", tone: StatusPalette.needsYou, ink: StatusPalette.needsYou.text)
-            item(tally.working, "工作中", tone: StatusPalette.working, ink: StatusPalette.working.text)
-            item(tally.idle, "空闲", tone: StatusPalette.idle, ink: Color.primary)
+            item(tally.needsYou, String(localized: "需要你"), tone: StatusPalette.needsYou, ink: StatusPalette.needsYou.text)
+            item(tally.working, String(localized: "工作中"), tone: StatusPalette.working, ink: StatusPalette.working.text)
+            item(tally.idle, String(localized: "空闲"), tone: StatusPalette.idle, ink: Color.primary)
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
@@ -431,7 +431,7 @@ struct AlertChip: View {
         .padding(.horizontal, Theme.Space.s)
         .padding(.vertical, Theme.Space.xs)
         .background(color.opacity(0.16), in: .capsule)
-        .accessibilityLabel((alert.level == .critical ? "严重：" : "注意：") + alert.label)
+        .accessibilityLabel(alert.level == .critical ? String(localized: "严重：\(alert.label)") : String(localized: "注意：\(alert.label)"))
     }
 }
 
@@ -462,9 +462,9 @@ struct DeployRow: View {
     }
 
     private func text(_ busy: Bool) -> String {
-        if busy { return "正在把 hub 这一版的 Persona 装到这台电脑…" }
-        if let e = machine.deployError, !e.isEmpty { return "上次部署没成：\(e)" }
-        return "这台电脑上的 Persona 和 hub 不是同一次部署"
+        if busy { return String(localized: "正在把 hub 这一版的 Persona 装到这台电脑…") }
+        if let e = machine.deployError, !e.isEmpty { return String(localized: "上次部署没成：\(e)") }
+        return String(localized: "这台电脑上的 Persona 和 hub 不是同一次部署")
     }
 
     private func deploy() async {
@@ -475,7 +475,7 @@ struct DeployRow: View {
             Haptics.tap()
             await model.refresh()
         } catch {
-            if let m = error.shown { model.toast = Toast("部署失败：\(m)", style: .error) }
+            if let m = error.shown { model.toast = Toast(String(localized: "部署失败：\(m)"), style: .error) }
         }
     }
 }

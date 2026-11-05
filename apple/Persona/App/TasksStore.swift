@@ -240,7 +240,7 @@ final class TasksStore {
             Haptics.success()
             inbox.reload()
         } catch {
-            AppModel.shared.toast = Toast("回复没发出去：\(error.localizedDescription)", style: .error)
+            AppModel.shared.toast = Toast(String(localized: "回复没发出去：\(error.localizedDescription)"), style: .error)
         }
     }
 
@@ -261,7 +261,7 @@ final class TasksStore {
             undone.insert(result.callID)
             Haptics.success()
         } catch {
-            AppModel.shared.toast = Toast("没撤销成功：\(error.localizedDescription)", style: .error)
+            AppModel.shared.toast = Toast(String(localized: "没撤销成功：\(error.localizedDescription)"), style: .error)
         }
     }
 
@@ -275,7 +275,7 @@ final class TasksStore {
             Haptics.success()
         } catch {
             self.error = error.localizedDescription
-            AppModel.shared.toast = Toast("没开起来：\(error.localizedDescription)", style: .error)
+            AppModel.shared.toast = Toast(String(localized: "没开起来：\(error.localizedDescription)"), style: .error)
         }
     }
 
@@ -289,7 +289,7 @@ final class TasksStore {
             if detailTask == todo.id { detailTask = nil }
             Haptics.success()
         } catch {
-            AppModel.shared.toast = Toast("没移除：\(error.localizedDescription)", style: .error)
+            AppModel.shared.toast = Toast(String(localized: "没移除：\(error.localizedDescription)"), style: .error)
         }
     }
 
@@ -312,7 +312,7 @@ final class TasksStore {
             do {
                 received(try await api.route(conversation: conversation, todoID: todoID, text: text))
             } catch {
-                AppModel.shared.toast = Toast("没送到：\(error.localizedDescription)", style: .error)
+                AppModel.shared.toast = Toast(String(localized: "没送到：\(error.localizedDescription)"), style: .error)
             }
         }
         return true

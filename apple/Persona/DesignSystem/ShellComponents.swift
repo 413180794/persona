@@ -66,13 +66,13 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
     private var row: some View {
         HStack(spacing: .zero) {
             if opensMenu(.assistant) {
-                Menu { chatMenu() } label: { segment("助手", selected: true) }
+                Menu { chatMenu() } label: { segment(String(localized: "shell.assistant", defaultValue: "助手", comment: "The chat side of the top switch (72 pt wide)"), selected: true) }
                     .menuStyle(.button)
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("shell-assistant")
                     .accessibilityHint("对话的菜单")
             } else {
-                button("助手", .assistant, id: "shell-assistant")
+                button(String(localized: "shell.assistant", defaultValue: "助手", comment: "The chat side of the top switch (72 pt wide)"), .assistant, id: "shell-assistant")
             }
             ZStack(alignment: .topTrailing) {
                 if opensMenu(.chats) {
@@ -88,7 +88,7 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
             }
             #if os(iOS) || os(visionOS)
             if LarkHomePreference.shared.shows {
-                button("消息", .feishu, id: "shell-feishu")
+                button(String(localized: "消息"), .feishu, id: "shell-feishu")
             }
             #endif
         }
@@ -285,8 +285,8 @@ struct ShellPersonaButton: View {
             }
         }
         .accessibilityLabel("历史对话")
-        .accessibilityValue([model.persona.name + "，" + state.title, inbox ? "收件箱有事等你" : nil]
-            .compactMap { $0 }.joined(separator: "，"))
+        .accessibilityValue([String(localized: "\(model.persona.name)，\(state.title)"), inbox ? String(localized: "收件箱有事等你") : nil]
+            .compactMap { $0 }.joined(separator: String(localized: "，", comment: "List separator")))
         .accessibilityHint("打开侧边栏")
         .accessibilityIdentifier(id)
     }

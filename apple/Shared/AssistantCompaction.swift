@@ -42,31 +42,38 @@ nonisolated enum MainConversationActions {
         case .failed:
             guard dismissed != key, sawIt || age <= failedRecent else { return nil }
             let e = (c.error ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return .failed(key: key, error: e.isEmpty ? "未知错误" : e)
+            return .failed(key: key, error: e.isEmpty ? String(localized: "未知错误") : e)
         }
     }
 
     /// The title the hub gives the archived main conversation: 旧主对话 · 至 11月4日.
     static func archivedTitle(_ now: Date = Date(), calendar: Calendar = .current) -> String {
-        let d = calendar.dateComponents([.month, .day], from: now)
-        return "旧主对话 · 至 \(d.month ?? 1)月\(d.day ?? 1)日"
+        var style = Date.FormatStyle.dateTime.month().day()
+        style.calendar = calendar
+        style.timeZone = calendar.timeZone
+        style.locale = .interface
+        return String(localized: "旧主对话 · 至 \(now.formatted(style))", comment: "Title of the archived main chat, with the day it was archived")
     }
 }
 
 nonisolated extension Compaction {
     /// The divider's words, as the web and Android draw it: 以上内容已压缩 · 手动 · 压缩前 18.1 万 token (the parts known).
     var dividerTitle: String {
-        var parts = ["以上内容已压缩"]
+        var parts = [String(localized: "以上内容已压缩")]
         if let source { parts.append(source) }
-        if let t = preTokens, t > 0 { parts.append("压缩前 \(Self.tokens(t)) token") }
+        if let t = preTokens, t > 0 { parts.append(String(localized: "压缩前 \(Self.tokens(t)) token")) }
         return parts.joined(separator: " · ")
     }
 
     /// 18.1 万, 8,500.
     static func tokens(_ n: Int) -> String {
+        // Chinese counts in 万 (as the web and Android); other languages in their own compact form (181K, 18万).
+        if n >= 10_000, LanguageStore.shared.launched != "zh-Hans" {
+            return n.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)).locale(.interface))
+        }
         if n >= 10_000 {
             let s = String(format: "%.1f", Double(n) / 10_000)
-            return (s.hasSuffix(".0") ? String(s.dropLast(2)) : s) + " 万"
+            return (s.hasSuffix(".0") ? String(s.dropLast(2)) : s) + " 万" // i18n-ignore: Chinese-only unit, other languages return above
         }
         let f = NumberFormatter()
         f.numberStyle = .decimal

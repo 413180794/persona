@@ -19,23 +19,24 @@ nonisolated enum ComputerSteps {
         let base = ToolPresentation.baseName(name)
         switch base {
         case "computer_state":
-            return "看" + (input["app"]?.string.flatMap { $0.isEmpty ? nil : " " + $0 } ?? "整个屏幕")
+            if let app = input["app"]?.string, !app.isEmpty { return String(localized: "看 \(app)", comment: "A computer tool step: look at an app's window") }
+            return String(localized: "看整个屏幕")
         case "computer_run":
             if let steps = input["steps"]?.array, !steps.isEmpty {
                 return join(steps.compactMap { step(of: $0, defaultApp: input["app"]?.string) })
             }
             if let script = input["script"]?.string {
                 let first = firstLine(script.trimmingCharacters(in: .whitespacesAndNewlines))
-                return first.isEmpty ? "运行脚本" : "运行脚本：" + first
+                return first.isEmpty ? String(localized: "运行脚本") : String(localized: "运行脚本：\(first)")
             }
-            return "操控电脑"
+            return String(localized: "操控电脑")
         default:
             // Cua Driver's own tool: its name is the action, its input the target.
             let tool = base.replacingOccurrences(of: "-", with: "_")
             if tool == "run_steps", let steps = input["steps"]?.array {
                 return join(steps.compactMap { step(of: $0, defaultApp: input["app"]?.string) })
             }
-            if tool == "run_script" { return "运行脚本" }
+            if tool == "run_script" { return String(localized: "运行脚本") }
             return action(tool, args: input) ?? tool
         }
     }
@@ -45,8 +46,8 @@ nonisolated enum ComputerSteps {
         var out: [String] = []
         var clicking = false
         for w in words {
-            let click = w.hasPrefix("点 ")
-            out.append(click && clicking ? String(w.dropFirst(2)) : w)
+            let click = w.hasPrefix(clickVerb)
+            out.append(click && clicking ? String(w.dropFirst(clickVerb.count)) : w)
             clicking = click
         }
         return out.joined(separator: " → ")
@@ -59,30 +60,43 @@ nonisolated enum ComputerSteps {
         for (key, args) in o where !["wait_for", "expect", "args", "tool"].contains(key) {
             return action(key, args: args)
         }
-        return o["expect"] != nil || o["wait_for"] != nil ? "检查" : nil
+        return o["expect"] != nil || o["wait_for"] != nil ? String(localized: "检查", comment: "A computer tool step that only checks the screen") : nil
     }
+
+    /// A click's verb, kept once for a run of clicks by `join` (点 AC → 6 → ×): the target follows it directly.
+    static var clickVerb: String { String(localized: "点 ", comment: "Click verb prefix, followed by a button name; a run of clicks shows it once: 点 AC → 6 → ×") }
 
     /// One action: its verb and what it acts on.
     static func action(_ tool: String, args: JSONValue) -> String? {
-        let target = targetName(args)
+        let target = targetName(args) ?? String(localized: "一处", comment: "An unnamed spot on screen that a click acts on")
         switch tool {
-        case "click": return "点 " + (target ?? "一处")
-        case "double_click": return "双击 " + (target ?? "一处")
-        case "right_click": return "右键 " + (target ?? "一处")
-        case "type_text": return "输入「\(short(args["text"]?.string ?? ""))」"
-        case "set_value": return "填「\(short(args["value"]?.string ?? ""))」"
-        case "press_key": return "按 " + key(args["key"]?.string ?? "")
+        case "click": return clickVerb + target
+        case "double_click": return String(localized: "双击 \(target)")
+        case "right_click": return String(localized: "右键 \(target)")
+        case "type_text":
+            let text = short(args["text"]?.string ?? "")
+            return String(localized: "输入「\(text)」")
+        case "set_value":
+            let value = short(args["value"]?.string ?? "")
+            return String(localized: "填「\(value)」")
+        case "press_key":
+            let k = key(args["key"]?.string ?? "")
+            return String(localized: "按 \(k)", comment: "A computer tool step: press a key or shortcut")
         case "hotkey":
-            let keys = args["keys"]?.array?.compactMap(\.string) ?? []
-            return "按 " + keys.map(key).joined()
-        case "scroll": return "滚动"
-        case "drag": return "拖动"
-        case "launch_app": return "打开 " + (args["name"]?.string ?? args["bundle_id"]?.string ?? "App")
-        case "bring_to_front": return "切到 " + (args["app"]?.string ?? args["name"]?.string ?? "前台")
-        case "get_window_state": return "看窗口"
-        case "get_desktop_state", "screenshot": return "截屏"
-        case "get_accessibility_tree", "list_windows", "list_apps": return "看屏幕上有什么"
-        case "zoom": return "放大看"
+            let keys = (args["keys"]?.array?.compactMap(\.string) ?? []).map(key).joined()
+            return String(localized: "按 \(keys)", comment: "A computer tool step: press a key or shortcut")
+        case "scroll": return String(localized: "滚动")
+        case "drag": return String(localized: "拖动")
+        case "launch_app":
+            let app = args["name"]?.string ?? args["bundle_id"]?.string ?? "App"
+            return String(localized: "打开 \(app)", comment: "A computer tool step: launch an app")
+        case "bring_to_front":
+            if let app = args["app"]?.string ?? args["name"]?.string { return String(localized: "切到 \(app)") }
+            return String(localized: "切到前台")
+        case "get_window_state": return String(localized: "看窗口")
+        case "get_desktop_state", "screenshot": return String(localized: "截屏")
+        case "get_accessibility_tree", "list_windows", "list_apps": return String(localized: "看屏幕上有什么")
+        case "zoom": return String(localized: "放大看")
         default: return nil
         }
     }
@@ -108,7 +122,7 @@ nonisolated enum ComputerSteps {
         case "return", "enter": "⏎"
         case "escape", "esc": "esc"
         case "tab": "⇥"
-        case "space": "空格"
+        case "space": String(localized: "空格", comment: "The space bar key")
         case "delete", "backspace": "⌫"
         default: k.count == 1 ? k.uppercased() : k
         }

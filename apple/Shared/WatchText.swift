@@ -7,28 +7,34 @@ import Foundation
 nonisolated enum WatchText {
     private static let context = try! NSRegularExpression(
         pattern: #"<(?:jarvis|persona)-context\b(?:[^>]*?title="([^"]*)")?[^>]*>[\s\S]*?</(?:jarvis|persona)-context>\s*"#)
-    private static let rules: [(String, String)] = [
-        (#"\s*<attached_images>[\s\S]*?</attached_images>\s*"#, "\n〔图片〕\n"),
-        // Videos sent as files (<jarvis-file kind="video" …/>, VideoAttach.swift).
-        (#"\s*<jarvis-file\b[^>]*?kind="video"[^>]*>(?:\s*</jarvis-file>)?\s*"#, "\n〔视频〕\n"),
-        (#"\s*<jarvis-file\b[^>]*>(?:\s*</jarvis-file>)?\s*"#, "\n〔文件〕\n"),
-        (#"(〔视频〕\s*)+"#, "〔视频〕 "),
-        (#"\[Image #\d+\]\s*"#, "〔图片〕"),
-        (#"</?pasted_content[^>]*>"#, ""),
-        (#"(〔图片〕\s*)+"#, "〔图片〕 "),
-        // Markdown, line by line (?m): fences, headings, quotes, rules, then list dashes; inline marks after.
-        (#"(?m)^[ \t]*```.*\n?"#, ""),
-        (#"(?m)^#{1,6}[ \t]+"#, ""),
-        (#"(?m)^[ \t]*>[ \t]?"#, ""),
-        (#"(?m)^[ \t]*([-*_][ \t]*){3,}$"#, ""),
-        (#"(?m)^([ \t]*)[-*+][ \t]+"#, "$1• "),
-        (#"\*\*([^*\n]+)\*\*"#, "$1"),
-        (#"__([^_\n]+)__"#, "$1"),
-        (#"(?<![*A-Za-z0-9_])\*([^*\s][^*\n]*?)\*(?![*A-Za-z0-9_])"#, "$1"), // *italic*, also between CJK; not 2 * 3 or a*b*c
-        (#"`([^`\n]+)`"#, "$1"),
-        (#"\[([^\]\n]+)\]\([^)\s]+\)"#, "$1"),
-        (#"\n{3,}"#, "\n\n"),
-    ]
+    /// The marks a phone shows for what the watch cannot draw, in the interface language.
+    private static var rules: [(String, String)] {
+        let image = String(localized: "〔图片〕", comment: "Watch: stands in for an image in a message")
+        let video = String(localized: "〔视频〕", comment: "Watch: stands in for a video in a message")
+        let file = String(localized: "〔文件〕", comment: "Watch: stands in for a file in a message")
+        return [
+            (#"\s*<attached_images>[\s\S]*?</attached_images>\s*"#, "\n" + image + "\n"),
+            // Videos sent as files (<jarvis-file kind="video" …/>, VideoAttach.swift).
+            (#"\s*<jarvis-file\b[^>]*?kind="video"[^>]*>(?:\s*</jarvis-file>)?\s*"#, "\n" + video + "\n"),
+            (#"\s*<jarvis-file\b[^>]*>(?:\s*</jarvis-file>)?\s*"#, "\n" + file + "\n"),
+            ("(" + NSRegularExpression.escapedPattern(for: video) + #"\s*)+"#, video + " "),
+            (#"\[Image #\d+\]\s*"#, image),
+            (#"</?pasted_content[^>]*>"#, ""),
+            ("(" + NSRegularExpression.escapedPattern(for: image) + #"\s*)+"#, image + " "),
+            // Markdown, line by line (?m): fences, headings, quotes, rules, then list dashes; inline marks after.
+            (#"(?m)^[ \t]*```.*\n?"#, ""),
+            (#"(?m)^#{1,6}[ \t]+"#, ""),
+            (#"(?m)^[ \t]*>[ \t]?"#, ""),
+            (#"(?m)^[ \t]*([-*_][ \t]*){3,}$"#, ""),
+            (#"(?m)^([ \t]*)[-*+][ \t]+"#, "$1• "),
+            (#"\*\*([^*\n]+)\*\*"#, "$1"),
+            (#"__([^_\n]+)__"#, "$1"),
+            (#"(?<![*A-Za-z0-9_])\*([^*\s][^*\n]*?)\*(?![*A-Za-z0-9_])"#, "$1"), // *italic*, also between CJK; not 2 * 3 or a*b*c
+            (#"`([^`\n]+)`"#, "$1"),
+            (#"\[([^\]\n]+)\]\([^)\s]+\)"#, "$1"),
+            (#"\n{3,}"#, "\n\n"),
+        ]
+    }
 
     static func shown(_ raw: String) -> String {
         // The assistant's cards first: their words, not their JSON (the fence rule below would leave the JSON).
@@ -38,7 +44,7 @@ nonisolated enum WatchText {
         var t = context.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
         if let first = blocks.first {
             let title = first.range(at: 1).location == NSNotFound ? "" : ns.substring(with: first.range(at: 1))
-            t = (blocks.count == 1 && !title.isEmpty ? "〔\(title)〕\n" : "〔上下文 \(blocks.count) 项〕\n") + t
+            t = (blocks.count == 1 && !title.isEmpty ? "〔\(title)〕\n" : String(localized: "〔上下文 \(blocks.count) 项〕") + "\n") + t
         }
         for (pattern, with) in rules {
             t = t.replacingOccurrences(of: pattern, with: with, options: .regularExpression)

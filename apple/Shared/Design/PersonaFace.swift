@@ -9,11 +9,11 @@ nonisolated enum PersonaState: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .idle: "空闲"
-        case .thinking: "思考中"
-        case .working: "工作中"
-        case .needsYou: "等你处理"
-        case .offline: "离线"
+        case .idle: String(localized: "空闲")
+        case .thinking: String(localized: "思考中")
+        case .working: String(localized: "工作中")
+        case .needsYou: String(localized: "等你处理")
+        case .offline: String(localized: "离线")
         }
     }
 }

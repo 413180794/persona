@@ -118,7 +118,7 @@ struct TodosView: View {
             }
         }
         .themedPage()
-        .detailTitle("待办")
+        .detailTitle(String(localized: "待办"))
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -177,9 +177,9 @@ struct TodosView: View {
         Section {
             EmptyStateView(
                 symbol: Theme.Icon.todo,
-                title: query.isEmpty ? "没有待办" : "没有找到待办",
-                message: query.isEmpty ? "记下一件要做的事，交给 Agent 执行并跟踪进度。" : "换个搜索词试试",
-                action: query.isEmpty ? ("新建待办", { showCreate = true }) : nil
+                title: query.isEmpty ? String(localized: "没有待办") : String(localized: "没有找到待办"),
+                message: query.isEmpty ? String(localized: "记下一件要做的事，交给 Agent 执行并跟踪进度。") : String(localized: "换个搜索词试试"),
+                action: query.isEmpty ? (String(localized: "新建待办"), { showCreate = true }) : nil
             )
         }
         .listRowBackground(Color.clear)
@@ -305,7 +305,7 @@ struct TodoRow: View {
     private func mostUrgentSummary(urgent: TodoMostUrgent?) -> String? {
         guard let urgent else { return nil }
         if urgent.isFailed, let err = urgent.agent.startError, !err.isEmpty {
-            return "启动失败：\(err)"
+            return String(localized: "启动失败：\(err)")
         }
         if let s = urgent.session {
             if let last = s.lastText, !last.isEmpty {

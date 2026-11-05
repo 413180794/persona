@@ -1,4 +1,5 @@
 import Foundation
+// i18n-ignore-file: demo mode stand-in for the hub: its made-up replies and errors, as the hub words them
 
 /// 体验模式's 设置 › 模型供应商 (#2455): a provider kept in Persona, two from a made-up ~/.zshrc, and the wizard's and the
 /// import's answers. Nothing reaches a gateway: 测试连接 and 获取模型列表 answer with made-up values, and no key is kept.

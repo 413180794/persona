@@ -17,8 +17,8 @@ struct TodoLinkAgentSheet: View {
 
     private var currentTodoID: String? { target.currentTodoID(in: store.todos) }
     private var title: String {
-        if target.isSpace { return currentTodoID == nil ? "挂到待办" : "改挂到其他待办" }
-        return currentTodoID == nil ? "关联到待办" : "改挂到其他待办"
+        if target.isSpace { return currentTodoID == nil ? String(localized: "挂到待办") : String(localized: "改挂到其他待办") }
+        return currentTodoID == nil ? String(localized: "关联到待办") : String(localized: "改挂到其他待办")
     }
 
     private var openTodos: [TodoItem] {

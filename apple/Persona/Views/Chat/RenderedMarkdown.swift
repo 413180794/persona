@@ -111,7 +111,7 @@ final class MarkdownRenderer {
             throw Failure(message: Self.scriptMessage(error))
         }
         guard let box = answer as? [NSNumber], box.count == 4, box[2].doubleValue > 0, box[3].doubleValue > 0 else {
-            throw Failure(message: "没有画出内容")
+            throw Failure(message: String(localized: "没有画出内容"))
         }
         let rect = CGRect(x: max(0, box[0].doubleValue), y: max(0, box[1].doubleValue),
                           width: min(box[2].doubleValue, Self.maxWidth), height: min(box[3].doubleValue, Self.maxWidth * 4))
@@ -183,7 +183,7 @@ final class MarkdownRenderer {
                 forIdentifier: "persona-render-offline", encodedContentRuleList: Self.offline) {
                 web.configuration.userContentController.add(rules)
             }
-            guard let html = Bundle.main.url(forResource: "render", withExtension: "html") else { throw Failure(message: "缺少渲染页面") }
+            guard let html = Bundle.main.url(forResource: "render", withExtension: "html") else { throw Failure(message: String(localized: "缺少渲染页面")) }
             let loader = Loader()
             web.navigationDelegate = loader
             web.loadFileURL(html, allowingReadAccessTo: html.deletingLastPathComponent())
@@ -343,7 +343,7 @@ struct RenderedBlock<Fallback: View>: View {
                 self.error = error.localizedDescription
             }
         }
-        .fullScreenCover(item: $full) { full in ImageViewer(items: [ViewerImage(payload: full.payload, title: "图表")], index: 0) }
+        .fullScreenCover(item: $full) { full in ImageViewer(items: [ViewerImage(payload: full.payload, title: String(localized: "图表"))], index: 0) }
     }
 
     @ViewBuilder private func picture(_ image: UIImage) -> some View {

@@ -169,9 +169,9 @@ struct DataChart: View {
     /// VoiceOver reads each series' values by category instead of the marks one by one.
     private var accessibilitySummary: String {
         series.map { s in
-            let pairs = labels.indices.prefix(s.values.count).map { "\(labels[$0]) \(s.text($0, format))" }.joined(separator: "，")
-            return series.count > 1 && !s.name.isEmpty ? "\(s.name)：\(pairs)" : pairs
-        }.joined(separator: "；")
+            let pairs = labels.indices.prefix(s.values.count).map { "\(labels[$0]) \(s.text($0, format))" }.joined(separator: String(localized: "，", comment: "List separator"))
+            return series.count > 1 && !s.name.isEmpty ? String(localized: "\(s.name)：\(pairs)", comment: "Chart series name and its values") : pairs
+        }.joined(separator: String(localized: "；", comment: "Separator between chart series"))
     }
 
     /// A short number: whole ones as they are, a few decimals at most, large ones as 1.2k / 3.4M / 5.6B.

@@ -18,9 +18,15 @@ struct TodoHandoffSheet: View {
     @State private var errorMessage: String?
 
     enum Mode: String, CaseIterable, Identifiable {
-        case newAgent = "新开一个"
-        case existingAgent = "交给已有的"
+        case newAgent = "新开一个" // i18n-ignore: id; shown via `title`
+        case existingAgent = "交给已有的" // i18n-ignore: id; shown via `title`
         var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .newAgent: String(localized: "新开一个")
+            case .existingAgent: String(localized: "交给已有的")
+            }
+        }
     }
 
     /// The hub the todo is on (`AppModel.hubRef`): only its Agents can take the todo, and only its computers start one.
@@ -38,7 +44,7 @@ struct TodoHandoffSheet: View {
                 Section {
                     Picker("模式", selection: $mode) {
                         ForEach(Mode.allCases) { m in
-                            Text(m.rawValue).tag(m)
+                            Text(m.title).tag(m)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -167,7 +173,7 @@ struct TodoHandoffSheet: View {
         let instr = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         let fullMessage = instr.isEmpty ? contextTag : "\(contextTag)\n\n\(instr)"
         guard let api = model.api(key.group) else {
-            errorMessage = "连不上这个 Agent 所在的 hub，请稍后再试。"
+            errorMessage = String(localized: "连不上这个 Agent 所在的 hub，请稍后再试。")
             return
         }
         do {

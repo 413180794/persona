@@ -43,8 +43,8 @@ enum MacAttention {
     }
 
     static func text(_ s: Session, _ state: AgentState) -> (title: String, body: String) {
-        let title = s.displayTitle + (state == .needsYou ? " 需要你" : " 做完了")
-        let body = s.lastText?.replacingOccurrences(of: "\n", with: " ") ?? (state == .needsYou ? "Agent 停下来等你处理" : "Agent 做完了")
+        let title = state == .needsYou ? String(localized: "\(s.displayTitle) 需要你") : String(localized: "\(s.displayTitle) 做完了")
+        let body = s.lastText?.replacingOccurrences(of: "\n", with: " ") ?? (state == .needsYou ? String(localized: "Agent 停下来等你处理") : String(localized: "Agent 做完了"))
         return (title, String(body.prefix(200)))
     }
 }

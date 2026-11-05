@@ -35,8 +35,8 @@ struct FeishuDocsCommentsView: View {
                         FeishuDocsListState(loading: model.loadError == nil, error: model.loadError, empty: ("text.bubble", "", ""),
                                             retry: { await model.load() })
                     } else if shown.isEmpty {
-                        EmptyStateView(symbol: Theme.Icon.conversation, title: resolved ? "没有已解决的评论" : "没有未解决的评论",
-                                       message: resolved ? "解决后的评论会收在这里" : (writes ? "在下面写一条，或者划选正文评论" : "在飞书里对文档发表的评论会出现在这里"))
+                        EmptyStateView(symbol: Theme.Icon.conversation, title: resolved ? String(localized: "没有已解决的评论") : String(localized: "没有未解决的评论"),
+                                       message: resolved ? String(localized: "解决后的评论会收在这里") : (writes ? String(localized: "在下面写一条，或者划选正文评论") : String(localized: "在飞书里对文档发表的评论会出现在这里")))
                             .padding(.top, Theme.Space.xxl)
                     } else {
                         ForEach(shown) { t in
@@ -113,16 +113,16 @@ struct FeishuDocsCommentsView: View {
 
     private func placeholder(_ t: FeishuDocsCommentsModel.Target) -> String {
         switch t {
-        case .document: "评论全文"
-        case .thread: "回复"
-        case .passage: "评论这段"
+        case .document: String(localized: "评论全文")
+        case .thread: String(localized: "回复")
+        case .passage: String(localized: "评论这段")
         }
     }
 
     /// 评论这段 over the box while it comments on a passage; × goes back to commenting on the document.
     private func passageBar(_ model: FeishuDocsCommentsModel) -> (heading: String, summary: String, removeLabel: String, remove: () -> Void)? {
         guard case .passage(let quote, _) = model.target else { return nil }
-        return ("评论这段", quote, "不评论这段", { model.target = .document })
+        return (String(localized: "评论这段"), quote, String(localized: "不评论这段"), { model.target = .document })
     }
 
     private func replyBar(_ t: FeishuDocsCommentsModel.Target) -> LarkReplyTo? {
@@ -157,8 +157,8 @@ struct FeishuDocsThreadCard: View {
                         .overlay(alignment: .leading) { Capsule().fill(LarkColor.hue("yellow")).frame(width: Theme.Size.bar) }
                 }
                 Spacer(minLength: 0)
-                if thread.resolved { FeishuDocsTag(text: "已解决", hue: "green") }
-                if thread.visibility != nil { FeishuDocsTag(text: "部分可见", hue: "grey") }
+                if thread.resolved { FeishuDocsTag(text: String(localized: "已解决"), hue: "green") }
+                if thread.visibility != nil { FeishuDocsTag(text: String(localized: "部分可见"), hue: "grey") }
             }
             ForEach(thread.replies) { r in
                 HStack(alignment: .top, spacing: Theme.Space.s) {
@@ -272,7 +272,7 @@ struct FeishuDocsCommentable: ViewModifier {
                 Button { picking = true } label: { Label("选一段评论…", systemImage: Theme.Icon.select) }
             }
             .sheet(isPresented: $picking) {
-                PickTextSheet(text: text, actions: [PickAction(title: "评论", icon: Theme.Icon.conversation, kind: "comment")]) { picked, _ in
+                PickTextSheet(text: text, actions: [PickAction(title: String(localized: "评论"), icon: Theme.Icon.conversation, kind: "comment")]) { picked, _ in
                     comment(picked, blockID)
                 }
             }

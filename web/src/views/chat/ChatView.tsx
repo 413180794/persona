@@ -190,9 +190,13 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const segs = useMemo(() => segments(tr.items), [tr.items]);
   const lastSeg = segs[segs.length - 1];
   const [awaitNow, setAwaitNow] = useState(() => Date.now());
-  const awaiting = !readOnly && awaitingTurn(lastSeg, state, awaitNow);
+  const failure = session?.failure_reason ? { since: session.state_since } : undefined;
+  const awaiting = !readOnly && awaitingTurn(lastSeg, state, awaitNow, failure);
+  const lastAnswered = Boolean(lastSeg?.steps.length || lastSeg?.answer);
   useEffect(() => {
-    // draw again when the wait runs out, so a message nobody picks up stops looking worked on
+    // draw again when the wait runs out, so a message nobody picks up stops looking worked on; once something answers
+    // it there is nothing to wait for (and no clock to reset on every streamed item)
+    if (lastAnswered) return;
     const at = lastSeg?.user?.ts ? Date.parse(lastSeg.user.ts) : NaN;
     if (Number.isNaN(at)) return;
     setAwaitNow(Date.now());
@@ -200,7 +204,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     if (left <= 0) return;
     const timer = window.setTimeout(() => setAwaitNow(Date.now()), left + 10);
     return () => clearTimeout(timer);
-  }, [lastSeg, state]);
+  }, [lastSeg, state, lastAnswered]);
   const working = state === "working" || Boolean(tr.streaming) || outgoing > 0 || awaiting;
   // still starting only until the conversation has anything in it: the flag the caller passes may outlive the start
   const starting = Boolean(launching) && !tr.items.length && !tr.streaming && state !== "working";

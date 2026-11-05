@@ -94,7 +94,7 @@ struct AssistantTopBar: View {
     private var macBar: some View {
         let link = model.connection.shown
         return HStack(spacing: Theme.Space.s) {
-            MacTitleRowButton("历史对话", symbol: sidebarIsColumn ? "sidebar.left" : "line.3.horizontal", action: openSidebar)
+            MacTitleRowButton(String(localized: "历史对话"), symbol: sidebarIsColumn ? "sidebar.left" : "line.3.horizontal", action: openSidebar)
                 .accessibilityIdentifier("assistant-sidebar-button")
             Menu { menuItems(link) } label: {
                 HStack(spacing: Theme.Space.xs) {
@@ -119,12 +119,12 @@ struct AssistantTopBar: View {
             .buttonStyle(.plain)
             .fixedSize()
             .help("知识库、详细信息、拷贝目录和对话信息")
-            .accessibilityLabel(link != .online ? "\(name)，\(link.title)" : name)
+            .accessibilityLabel(link != .online ? String(localized: "\(name)，\(link.title)") : name)
             .accessibilityIdentifier("jarvis-avatar")
             .connectionDetails($showLink)
             .layoutPriority(-1)
             Spacer(minLength: Theme.Space.s)
-            MacTitleRowButton("新对话（⇧⌘N）", symbol: Theme.Icon.compose, action: newConversation)
+            MacTitleRowButton(String(localized: "新对话（⇧⌘N）"), symbol: Theme.Icon.compose, action: newConversation)
                 .disabled(key == nil)
                 .accessibilityIdentifier("assistant-new")
         }
@@ -149,7 +149,7 @@ struct AssistantTopBar: View {
             Spacer(minLength: Theme.Space.s)
             ShellSwitch(tab: $model.selectedTab) { menuItems(link) }
             Spacer(minLength: Theme.Space.s)
-            ShellCircleButton(symbol: Theme.Icon.compose, label: "新对话", id: "assistant-new", action: newConversation)
+            ShellCircleButton(symbol: Theme.Icon.compose, label: String(localized: "新对话"), id: "assistant-new", action: newConversation)
                 .disabled(key == nil)
                 .opacity(key == nil ? 0.4 : 1)
         }
@@ -165,7 +165,7 @@ struct AssistantTopBar: View {
     private var classicBar: some View {
         HStack(alignment: .top) {
             GlassEffectContainer {
-                Self.circle(sidebarIsColumn ? "sidebar.left" : "line.3.horizontal", label: "历史对话", id: "assistant-sidebar-button") {
+                Self.circle(sidebarIsColumn ? "sidebar.left" : "line.3.horizontal", label: String(localized: "历史对话"), id: "assistant-sidebar-button") {
                     Haptics.tap()
                     openSidebar()
                 }
@@ -174,7 +174,7 @@ struct AssistantTopBar: View {
             face
             Spacer(minLength: 8)
             GlassEffectContainer {
-                Self.circle("square.and.pencil", label: "新对话", id: "assistant-new") {
+                Self.circle("square.and.pencil", label: String(localized: "新对话"), id: "assistant-new") {
                     Haptics.tap()
                     newConversation()
                 }
@@ -269,7 +269,7 @@ struct AssistantTopBar: View {
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
-        .accessibilityLabel(link != .online ? "\(name)，\(link.title)" : name)
+        .accessibilityLabel(link != .online ? String(localized: "\(name)，\(link.title)") : name)
         .accessibilityHint("知识库、详细信息、拷贝目录和对话信息")
         .accessibilityIdentifier("jarvis-avatar")
         .connectionDetails($showLink)
@@ -296,7 +296,7 @@ struct AssistantTopBar: View {
         model.assistantModels[key] = picked
         Haptics.tap()
         let what = picked == nil ? launcher : "\(launcher) · \(picked ?? "")"
-        model.toast = Toast("下一条消息起使用 \(what)", style: .success)
+        model.toast = Toast(String(localized: "下一条消息起使用 \(what)"), style: .success)
     }
 
     /// What the conversation runs with no pick of its own: 主对话 the launcher in 设置 › 助手, another its own.
@@ -310,7 +310,7 @@ struct AssistantTopBar: View {
         model.assistantLaunchers[key] = nil
         model.assistantModels[key] = nil
         Haptics.tap()
-        model.toast = Toast("下一条消息起使用默认的 \(defaultLauncher)", style: .success)
+        model.toast = Toast(String(localized: "下一条消息起使用默认的 \(defaultLauncher)"), style: .success)
     }
 
     /// Each launcher's /model list; a failure just leaves the submenu without entries.
@@ -372,12 +372,12 @@ struct AssistantTopBar: View {
             }
         }
         Section {
-            Button { copy(cwd, "已拷贝工作目录") } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
-            Button { copy(infoText, "已拷贝对话信息") } label: { Label("拷贝信息", systemImage: Theme.Icon.copy) }
+            Button { copy(cwd, String(localized: "已拷贝工作目录")) } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
+            Button { copy(infoText, String(localized: "已拷贝对话信息")) } label: { Label("拷贝信息", systemImage: Theme.Icon.copy) }
             if let key {
-                Button { copy(key.sessionID, "已拷贝会话 ID") } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
+                Button { copy(key.sessionID, String(localized: "已拷贝会话 ID")) } label: { Label(String(localized: "拷贝会话 ID"), systemImage: Theme.Icon.id) }
                 // What the chat last went through, structure only (ChatTrace): to paste into a report.
-                Button { copy(ChatTrace.shared.text(key), "已拷贝诊断") } label: { Label("拷贝诊断", systemImage: Theme.Icon.diagnostics) }
+                Button { copy(ChatTrace.shared.text(key), String(localized: "已拷贝诊断")) } label: { Label(String(localized: "拷贝诊断"), systemImage: Theme.Icon.diagnostics) }
             }
         }
         if model.canCompact(key) || model.canStartNewMain(key) {
@@ -430,9 +430,9 @@ struct AssistantTopBar: View {
     }
 
     private var baseMenuTitle: String {
-        guard let key else { return "新对话 · \(launcher)" }
+        guard let key else { return String(localized: "新对话 · \(launcher)") }
 
-        let title = name == model.persona.name && key == model.assistantMain ? "主对话" : name
+        let title = name == model.persona.name && key == model.assistantMain ? String(localized: "主对话") : name
         return [title, launcher, Fmt.model(pickedModel ?? session?.model)].compactMap { $0 }.joined(separator: " · ")
     }
 
@@ -456,13 +456,16 @@ nonisolated enum AssistantCopyText {
     static func info(title: String?, isMain: Bool, sessionID: String?, machine: String?, machineID: String, cwd: String,
                      launcher: String, model: String?) -> String {
         var lines: [String] = []
-        let name = [isMain ? "主对话" : nil, title.map { "「\($0)」" }].compactMap { $0 }.joined(separator: " ")
-        lines.append(sessionID == nil ? "Persona 助手（hub 上的 Claude）" : "Persona 助手的对话" + (name.isEmpty ? "" : " " + name))
-        if let sessionID { lines.append("会话 ID：\(sessionID)") }
-        lines.append("所在机器：" + (machine.map { $0 == machineID ? $0 : "\($0)（\(machineID)）" } ?? machineID))
-        lines.append("工作目录：\(cwd)")
-        lines.append("启动器：\(launcher)" + (model.map { " · 模型：\($0)" } ?? ""))
-        if let sessionID { lines.append("在那台机器上接着聊：cd \(cwd) && claude --resume \(sessionID)") }
+        let name = [isMain ? String(localized: "主对话") : nil, title.map { String(localized: "「\($0)」", comment: "A chat title in quotes") }]
+            .compactMap { $0 }.joined(separator: " ")
+        lines.append(sessionID == nil ? String(localized: "Persona 助手（hub 上的 Claude）")
+                     : name.isEmpty ? String(localized: "Persona 助手的对话") : String(localized: "Persona 助手的对话 \(name)"))
+        if let sessionID { lines.append(String(localized: "会话 ID：\(sessionID)")) }
+        let place = machine.map { $0 == machineID ? $0 : String(localized: "\($0)（\(machineID)）") } ?? machineID
+        lines.append(String(localized: "所在机器：\(place)"))
+        lines.append(String(localized: "工作目录：\(cwd)"))
+        lines.append(model.map { String(localized: "启动器：\(launcher) · 模型：\($0)") } ?? String(localized: "启动器：\(launcher)"))
+        if let sessionID { lines.append(String(localized: "在那台机器上接着聊：cd \(cwd) && claude --resume \(sessionID)")) }
         return lines.joined(separator: "\n")
     }
 }

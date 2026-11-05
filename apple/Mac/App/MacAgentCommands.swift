@@ -29,7 +29,7 @@ enum MacAgentCommands {
             return q.options.prefix(9).map { o in
                 // The card's 推荐 tag, in words: a menu item is text only. The answer keeps the label as it came.
                 let (name, recommended) = QuestionOption.display(o.label)
-                return .init(title: recommended ? name + "（推荐）" : name, resolution: Resolution(answers: [q.question: o.label]))
+                return .init(title: recommended ? String(localized: "\(name)（推荐）") : name, resolution: Resolution(answers: [q.question: o.label]))
             }
         case .screen:
             guard ix.dialog != nil, let d = ix.screenDialog else { return [] }
@@ -150,12 +150,12 @@ struct MacAgentMenu: Commands {
             Button(key.map { model.isMuted($0) } == true ? "开启通知" : "屏蔽") { if let key { model.toggleMute(key) } }
                 .disabled(key == nil)
             Divider()
-            Button("拷贝会话 ID") { if let key { copy(key.sessionID, "已拷贝会话 ID") } }
+            Button("拷贝会话 ID") { if let key { copy(key.sessionID, String(localized: "已拷贝会话 ID")) } }
                 .disabled(key == nil)
             if !terminalOff {
                 Button("拷贝恢复命令") {
                     if let key, let s = model.session(key), s.canTerminal {
-                        copy(MacAgentCommands.resumeLine(cwd: s.cwd, command: s.resumeCommand, id: s.sourceThreadID ?? key.sessionID), "已拷贝恢复命令")
+                        copy(MacAgentCommands.resumeLine(cwd: s.cwd, command: s.resumeCommand, id: s.sourceThreadID ?? key.sessionID), String(localized: "已拷贝恢复命令"))
                     }
                 }
                 .disabled(current?.canTerminal != true)

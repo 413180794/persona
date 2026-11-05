@@ -74,12 +74,12 @@ enum MacSection: String, CaseIterable, Identifiable {
         switch self {
         case .assistant: "Persona"
         case .agents: "Agents"
-        case .todos: "待办"
-        case .messages: "消息"
-        case .inbox: "收件箱"
-        case .knowledge: "知识库"
-        case .machines: "机器"
-        case .settings: "设置"
+        case .todos: String(localized: "待办")
+        case .messages: String(localized: "消息")
+        case .inbox: String(localized: "收件箱")
+        case .knowledge: String(localized: "知识库")
+        case .machines: String(localized: "机器")
+        case .settings: String(localized: "设置")
         }
     }
 
@@ -342,7 +342,7 @@ private struct MacShell: View {
         case .assistant: n = model.badges.assistant
         case .agents: n = model.badges.agents
         case .inbox: n = InboxStore.shared.actionCount
-        case .settings: return model.isDemo ? .word("体验") : nil
+        case .settings: return model.isDemo ? .word(String(localized: "体验", comment: "Sidebar badge: demo mode is on")) : nil
         }
         return n > 0 ? .count(n) : nil
     }

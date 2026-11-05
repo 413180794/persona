@@ -13,10 +13,10 @@ enum TaskNoteText {
     /// "后台命令" / "Monitor 事件" / "Monitor 结束" / "子 Agent".
     static func label(_ n: TaskNote) -> String {
         switch n.kind {
-        case "shell": "后台命令"
-        case "monitor": n.status == "event" ? "Monitor 事件" : "Monitor 结束"
-        case "agent": "子 Agent"
-        default: "后台任务"
+        case "shell": String(localized: "后台命令")
+        case "monitor": n.status == "event" ? String(localized: "Monitor 事件") : String(localized: "Monitor 结束")
+        case "agent": String(localized: "子 Agent")
+        default: String(localized: "后台任务")
         }
     }
 
@@ -31,10 +31,10 @@ enum TaskNoteText {
         var parts: [String] = []
         switch n.status {
         case "completed", "ended": parts.append("✓")
-        case "failed": parts.append(n.exitCode.map { "✗ 退出码 \($0)" } ?? "✗")
-        case "killed", "stopped": parts.append("已停止")
-        case "waiting": parts.append("等待中")
-        default: if let c = n.exitCode, c != 0 { parts.append("✗ 退出码 \(c)") }
+        case "failed": parts.append(n.exitCode.map { String(localized: "✗ 退出码 \($0)") } ?? "✗")
+        case "killed", "stopped": parts.append(String(localized: "已停止"))
+        case "waiting": parts.append(String(localized: "等待中"))
+        default: if let c = n.exitCode, c != 0 { parts.append(String(localized: "✗ 退出码 \(c)")) }
         }
         if n.status != "event", let s = startedAt, let e = at, e > s { parts.append(took(Int(e.timeIntervalSince(s)))) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -42,9 +42,9 @@ enum TaskNoteText {
 
     /// How long it ran, short (the row keeps room for its description): "40 秒", "5 分", "2 小时 5 分".
     static func took(_ s: Int) -> String {
-        if s < 60 { return "\(s) 秒" }
-        if s < 3600 { return "\(s / 60) 分" }
-        return s % 3600 / 60 == 0 ? "\(s / 3600) 小时" : "\(s / 3600) 小时 \(s % 3600 / 60) 分"
+        if s < 60 { return String(localized: "\(s) 秒") }
+        if s < 3600 { return String(localized: "\(s / 60) 分") }
+        return s % 3600 / 60 == 0 ? String(localized: "\(s / 3600) 小时") : String(localized: "\(s / 3600) 小时 \(s % 3600 / 60) 分")
     }
 
     /// The outcome as a status pill: done in green, failed in red, stopped plain, waiting in amber; with how long it ran.
@@ -53,12 +53,12 @@ enum TaskNoteText {
         if n.status != "event", let s = startedAt, let e = at, e > s { ran = took(Int(e.timeIntervalSince(s))) }
         func with(_ word: String) -> String { ran.map { word + " · " + $0 } ?? word }
         switch n.status {
-        case "completed", "ended": return (with("已完成"), .green)
-        case "failed": return (with(n.exitCode.map { "退出码 \($0)" } ?? "失败"), .red)
-        case "killed", "stopped": return (with("已停止"), .neutral)
-        case "waiting": return ("等待中", .orange)
+        case "completed", "ended": return (with(String(localized: "已完成")), .green)
+        case "failed": return (with(n.exitCode.map { String(localized: "退出码 \($0)") } ?? String(localized: "失败")), .red)
+        case "killed", "stopped": return (with(String(localized: "已停止")), .neutral)
+        case "waiting": return (String(localized: "等待中"), .orange)
         default:
-            if let c = n.exitCode, c != 0 { return (with("退出码 \(c)"), .red) }
+            if let c = n.exitCode, c != 0 { return (with(String(localized: "退出码 \(c)")), .red) }
             return nil
         }
     }
@@ -76,16 +76,16 @@ enum TaskNoteText {
     static func badge(_ notes: [TaskNote]) -> (text: String, failed: Bool) {
         let events = notes.filter { $0.status == "event" }.count
         guard let last = notes.last(where: { $0.status != "event" }) else {
-            return (events > 0 ? "后台 · \(events) 个事件" : "后台 · 运行中", false)
+            return (events > 0 ? String(localized: "后台 · \(events) 个事件") : String(localized: "后台 · 运行中"), false)
         }
         let state = switch last.status {
-        case "failed": "失败"
-        case "killed", "stopped": "已停止"
-        case "waiting": "等待中"
-        case "ended": "已结束"
-        default: "已完成"
+        case "failed": String(localized: "失败")
+        case "killed", "stopped": String(localized: "已停止")
+        case "waiting": String(localized: "等待中")
+        case "ended": String(localized: "已结束")
+        default: String(localized: "已完成")
         }
-        return ("后台 · " + state + (events > 0 ? " · \(events) 个事件" : ""), last.failed)
+        return (events > 0 ? String(localized: "后台 · \(state) · \(events) 个事件") : String(localized: "后台 · \(state)"), last.failed)
     }
 
     static func firstLine(_ s: String) -> String? {

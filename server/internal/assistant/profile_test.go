@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -78,6 +80,71 @@ func TestPutSettings(t *testing.T) {
 	}
 	if code, out := put(`{"main":"-"}`); code != http.StatusOK || out["main"] != nil {
 		t.Fatalf("clear main: %d %v", code, out)
+	}
+}
+
+// A transient settings read failure keeps serving the settings read last instead of the defaults: one locked-database
+// round must not silently turn a 365-day recording retention into 14 days and let the next KB prune delete recordings.
+// Only settings never successfully read fall back to the default.
+func TestRecordingDaysKeepsLastGoodOnReadFailure(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeHub().withMachine()
+	st := &memStore{}
+	s := withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: testLogf(t)}))
+	expire := func() {
+		s.prefs.mu.Lock()
+		s.prefs.at = time.Now().Add(-settingsFresh - time.Second)
+		s.prefs.mu.Unlock()
+	}
+	days := func(n int) *int { return &n }
+
+	// Never successfully read, and the read fails: there is no good value to keep.
+	expire()
+	st.failSetting = errors.New("database locked")
+	if _, ok := s.settingsLastGood(ctx); ok {
+		t.Fatal("never read + failure: want !ok")
+	}
+	if d := s.recordingDaysNow(); d != kb.DefaultRecordingDays {
+		t.Fatalf("never read + failure: days=%d, want %d", d, kb.DefaultRecordingDays)
+	}
+
+	// The user picked 365; a failure past the 5s freshness keeps serving 365 instead of falling back to 14.
+	st.failSetting = nil
+	setSettings(t, s, func(v *Settings) { v.RecordingDays = days(365) })
+	expire()
+	st.failSetting = errors.New("database locked")
+	if v, ok := s.settingsLastGood(ctx); !ok || v.RecordingDays == nil || *v.RecordingDays != 365 {
+		t.Fatalf("failure with last-good: ok=%v days=%v", ok, v.RecordingDays)
+	}
+	if d := s.recordingDaysNow(); d != 365 {
+		t.Fatalf("failure with last-good: days=%d, want 365", d)
+	}
+
+	// Plain savedSettings still reports the failure (kbZone must not move the archive on a value it could not re-read).
+	if _, ok := s.savedSettings(ctx); ok {
+		t.Fatal("savedSettings still reports a failed read")
+	}
+
+	// A successful refresh still picks up a value another hub wrote (the 5s freshness behaviour is unchanged).
+	st.failSetting = nil
+	if err := st.PutSetting(ctx, settingsKey, Settings{RecordingDays: days(30)}); err != nil {
+		t.Fatal(err)
+	}
+	expire()
+	if d := s.recordingDaysNow(); d != 30 {
+		t.Fatalf("successful refresh: days=%d, want 30", d)
+	}
+
+	// Failing again serves the new last-good value (30); once the database recovers the read works again.
+	expire()
+	st.failSetting = errors.New("database busy")
+	if d := s.recordingDaysNow(); d != 30 {
+		t.Fatalf("failure after refresh: days=%d, want 30", d)
+	}
+	st.failSetting = nil
+	expire()
+	if d := s.recordingDaysNow(); d != 30 {
+		t.Fatalf("recovered: days=%d, want 30", d)
 	}
 }
 

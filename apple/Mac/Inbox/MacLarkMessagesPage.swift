@@ -140,9 +140,9 @@ private struct MacLarkMessagesContent: View {
                         }
                 }
                 if rows.isEmpty, !query.isEmpty, !searchingOn {
-                    EmptyStateView(symbol: Theme.Icon.search, title: "没有找到「\(query)」",
-                                   message: store.nextCursor == nil ? "会话的名称和最近消息都能搜，换个词试试。"
-                                                                    : "已搜索最近 \(store.conversations.count) 个会话。")
+                    EmptyStateView(symbol: Theme.Icon.search, title: String(localized: "没有找到「\(query)」"),
+                                   message: store.nextCursor == nil ? String(localized: "会话的名称和最近消息都能搜，换个词试试。")
+                                                                    : String(localized: "已搜索最近 \(store.conversations.count) 个会话。"))
                         .listRowSeparator(.hidden)
                         .listRowBackground(Theme.pageBackground)
                 }
@@ -191,7 +191,7 @@ private struct MacLarkMessagesContent: View {
                     .accessibilityIdentifier("feishu-settings")
             }
         }
-        .pageSearchable(text: $query, placement: .toolbar, prompt: "搜索会话")
+        .pageSearchable(text: $query, placement: .toolbar, prompt: String(localized: "lark.searchChats", defaultValue: "搜索会话", comment: "Search field over the Lark chats list"))
     }
 
     /// A chat: opens beside the list, the open one in the shell's selected shade (as 知识库's rows, `KBEntryLink`).
@@ -216,16 +216,16 @@ private struct MacLarkMessagesContent: View {
         if store.loading {
             ProgressView()
         } else if store.status?.configured == false {
-            EmptyStateView(symbol: Theme.Icon.feishuChats, title: "还没有连接飞书", message: "连接 Hub 上的飞书账号后，会话会显示在这里。",
-                           action: ("连接设置", { openConnectionSettings() }))
+            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "还没有连接飞书"), message: String(localized: "连接 Hub 上的飞书账号后，会话会显示在这里。"),
+                           action: (String(localized: "连接设置"), { openConnectionSettings() }))
         } else if store.needsUpgrade {
-            EmptyStateView(symbol: Theme.Icon.feishuChats, title: "需要更新 Hub", message: "更新后可显示置顶会话，并同步当前飞书账号。",
-                           action: ("重新检查", { Task { await store.refresh() } }))
+            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "需要更新 Hub"), message: String(localized: "更新后可显示置顶会话，并同步当前飞书账号。"),
+                           action: (String(localized: "重新检查"), { Task { await store.refresh() } }))
         } else if store.failed {
-            EmptyStateView(symbol: Theme.Icon.feishuChats, title: "暂时无法加载会话", message: "请检查飞书连接，稍后重试。",
-                           action: ("重试", { Task { await store.refresh() } }))
+            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "暂时无法加载会话"), message: String(localized: "请检查飞书连接，稍后重试。"),
+                           action: (String(localized: "重试"), { Task { await store.refresh() } }))
         } else {
-            EmptyStateView(symbol: Theme.Icon.feishuChats, title: "暂无会话", message: "飞书的私聊和群聊会显示在这里。")
+            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "暂无会话"), message: String(localized: "飞书的私聊和群聊会显示在这里。"))
         }
     }
 
@@ -270,7 +270,7 @@ private struct MacLarkChatColumn: View {
                         // Over the part kept below the row, not inside it: clipped there, the title did not show.
                         .pageTitle(conversation.name, subtitle: subtitle(conversation))
                 } else {
-                    SplitPlaceholder(symbol: Theme.Icon.feishuChats, title: "选一个会话", message: "左边列表里选一个会话，聊天会在这里打开。")
+                    SplitPlaceholder(symbol: Theme.Icon.feishuChats, title: String(localized: "选一个会话"), message: String(localized: "左边列表里选一个会话，聊天会在这里打开。"))
                         .modifier(MacBelowTitleRow())
                 }
             }
@@ -291,6 +291,6 @@ private struct MacLarkChatColumn: View {
     }
 
     private func subtitle(_ c: LarkConversation) -> String {
-        [c.isTopic == true ? "飞书话题群" : c.isGroup ? "飞书群聊" : "飞书", c.accountName].compactMap { $0 }.joined(separator: " · ")
+        [c.isTopic == true ? String(localized: "飞书话题群") : c.isGroup ? String(localized: "飞书群聊") : String(localized: "飞书"), c.accountName].compactMap { $0 }.joined(separator: " · ")
     }
 }

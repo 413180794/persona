@@ -192,7 +192,7 @@ nonisolated enum ServerEvent: Sendable {
         case "hook_event":
             guard let key else { return nil }
             return .hookEvent(key, event: e.event ?? "", message: e.message, lastText: e.lastAssistantMessage)
-        case "error": return .error(key, e.error ?? "未知错误")
+        case "error": return .error(key, e.error ?? String(localized: "未知错误"))
         case "revs":
             guard let m = e.machineID, let revs = e.revs else { return nil }
             return .revs(machineID: m, revs)
@@ -468,6 +468,7 @@ final class LiveConnection {
         comps.queryItems = Self.queryItems(cursor)
         var req = URLRequest(url: HubTransport.resolve(comps.url!, hub: config.url))
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
         req.timeoutInterval = 15
         resumed = false // until this socket's hello says so
         let t = session.webSocketTask(with: req)
@@ -548,6 +549,7 @@ final class LiveConnection {
                     self.note(meta) // before onConnected: it reads whether this hello resumed
                     if first {
                         self.state = .connected
+                        self.sayHello()
                         self.backoff = 1
                         self.rejected = false
                         self.onConnected?()
@@ -560,7 +562,7 @@ final class LiveConnection {
                     // The handshake's answer: 401 is the hub refusing this credential, not the hub being away.
                     let refused = (t.response as? HTTPURLResponse)?.statusCode == 401
                     if refused != self.rejected { self.rejected = refused }
-                    self.state = .failed(refused ? "hub 不认这台设备的凭据（401）" : err.localizedDescription)
+                    self.state = .failed(refused ? String(localized: "hub 不认这台设备的凭据（401）") : err.localizedDescription)
                     self.stalled = false
                     self.scheduleReconnect(gen)
                 }
@@ -571,7 +573,7 @@ final class LiveConnection {
     /// 体验模式: no network, no heartbeat; the made-up hub's messages arrive like a socket's.
     private func openLocal(_ gen: Int) {
         guard let make = Self.makeLocal else {
-            state = .failed("体验模式不可用")
+            state = .failed(String(localized: "体验模式不可用"))
             return
         }
         let socket = make()
@@ -661,6 +663,13 @@ final class LiveConnection {
             guard gen == self.generation else { return }
             self.open()
         }
+    }
+
+    /// client_hello (docs/protocol.md, docs/i18n.md「协议」): this connection's interface language, so the hub's
+    /// notices and errors on it, and the user's language for what it produces later, match the app. Only `locale`:
+    /// features, heartbeat and platform stay as before (the URL, the legacy-iOS defaults). Old hubs ignore it.
+    private func sayHello() {
+        send(["type": "client_hello", "locale": LanguageStore.shared.launched])
     }
 
     func send(_ object: [String: Any]) {

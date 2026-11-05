@@ -51,12 +51,12 @@ struct ModelConfigurationView: View {
                         .font(Theme.Font.caption)
                 }
             } else if page.loaded && page.error == nil {
-                EmptyStateView(symbol: Theme.Icon.model, title: "暂无模型配置", message: "连接支持四类模型配置的 hub 后，可在这里统一设置。")
+                EmptyStateView(symbol: Theme.Icon.model, title: String(localized: "暂无模型配置"), message: String(localized: "连接支持四类模型配置的 hub 后，可在这里统一设置。"))
                     .listRowBackground(Color.clear)
             }
         }
         .themedPage()
-        .detailTitle("模型配置")
+        .detailTitle(String(localized: "模型配置"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await page.load() }
         .refreshable { await page.load() }
@@ -95,7 +95,7 @@ struct ModelConfigurationView: View {
                 .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             if let limit = category.limit {
                 ModelLimitLine(limit: limit, font: Theme.Font.caption)
-            } else if let status = category.status, !status.isEmpty, status != "未验证" {
+            } else if let status = category.status, !status.isEmpty, status != "未验证" { // i18n-ignore: status value from the hub
                 Text(status).font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
             }
         }
@@ -139,7 +139,7 @@ struct ModelPurposeEditorView: View {
         SettingsForm {
             if let purpose = page.purpose {
                 Section("当前生效") {
-                    LabeledContent("模型", value: page.summary(purpose).isEmpty ? "未配置" : page.summary(purpose))
+                    LabeledContent("模型", value: page.summary(purpose).isEmpty ? String(localized: "未配置") : page.summary(purpose))
                     if let source = purpose.inheritedFrom, !source.isEmpty {
                         LabeledContent("继承来源", value: source)
                     }
@@ -222,7 +222,7 @@ struct ModelPurposeEditorView: View {
             }
         }
         .themedPage()
-        .detailTitle(page.purpose?.name ?? "模型配置")
+        .detailTitle(page.purpose?.name ?? String(localized: "模型配置"))
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             #if os(macOS)
@@ -275,7 +275,7 @@ struct ModelPurposeEditorView: View {
     private var launcherChoice: LauncherModelChoice? {
         guard let list = launcherList, listFor == listProvider, !list.models.isEmpty, let purpose = page.purpose else { return nil }
         let inherited = page.draft.provider == nil && (purpose.override.model ?? "").isEmpty ? purpose.effective.model ?? "" : ""
-        return LauncherModelChoice(list: list, picked: page.draft.model ?? "", configured: inherited, configuredLabel: "继承")
+        return LauncherModelChoice(list: list, picked: page.draft.model ?? "", configured: inherited, configuredLabel: String(localized: "继承"))
     }
 
     @ViewBuilder private func launcherModelRow(_ choice: LauncherModelChoice) -> some View {
@@ -284,7 +284,7 @@ struct ModelPurposeEditorView: View {
             LabeledContent("具体模型") {
                 VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
                     HStack(spacing: Theme.Space.xs) {
-                        Text(choice.unlisted ?? "默认").lineLimit(1)
+                        Text(choice.unlisted ?? String(localized: "默认")).lineLimit(1)
                         Image(systemName: Theme.Icon.locked).foregroundStyle(.secondary)
                     }
                     Text(locked).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
@@ -296,15 +296,23 @@ struct ModelPurposeEditorView: View {
         }
     }
 
+    /// Footer under the model list: what leaving it empty does, and which computer the list came from.
+    private var defaultModelFooter: String {
+        let source = launcherList?.machine.map { String(localized: "（来自 \($0)）") } ?? ""
+        return page.draft.provider == nil
+            ? String(localized: "留空：继承上一级的设置。列表和在终端里输入 /model 看到的一样\(source)。")
+            : String(localized: "留空：用这个供应商的默认模型。列表和在终端里输入 /model 看到的一样\(source)。")
+    }
+
     private func unlockedModelRow(_ choice: LauncherModelChoice) -> some View {
         NavigationLink {
             LauncherModelPicker(choice: choice, picked: optional(\.model), refresh: { await loadList(refresh: true) }, allowsCustom: true,
-                                defaultFooter: "留空：\(page.draft.provider == nil ? "继承上一级的设置" : "用这个供应商的默认模型")。列表和在终端里输入 /model 看到的一样\(launcherList?.machine.map { "（来自 \($0)）" } ?? "")。")
+                                defaultFooter: defaultModelFooter)
         } label: {
             LabeledContent("具体模型") {
                 VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
-                    Text(choice.selected?.displayName ?? choice.unlisted.map { SessionModes.gptModelName($0) ?? $0 } ?? "默认").lineLimit(1)
-                    if let detail = choice.unlisted != nil ? "列表里没有" : choice.detail {
+                    Text(choice.selected?.displayName ?? choice.unlisted.map { SessionModes.gptModelName($0) ?? $0 } ?? String(localized: "默认")).lineLimit(1)
+                    if let detail = choice.unlisted != nil ? String(localized: "列表里没有") : choice.detail {
                         Text(detail).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     }
                 }
@@ -428,7 +436,7 @@ private struct ModelConfigurationSheet: ViewModifier {
 
 /// A row that opens 模型配置 (or one purpose's editor) as a sheet (`modelConfigurationSheet`).
 struct ModelConfigurationLink: View {
-    var title = "模型配置"
+    var title = String(localized: "模型配置")
     var purposeID: String?
     var summary: String?
     @State private var showing = false
@@ -437,11 +445,11 @@ struct ModelConfigurationLink: View {
         Button { showing = true } label: {
             if AppStyle.current.usesBeautifulUI {
                 BUIListRow(title) { BUIIconTile(Theme.Icon.model, tint: Theme.accent) } trailing: {
-                    Text(summary ?? "统一管理").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                    Text(summary ?? String(localized: "统一管理")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                 }
             } else {
                 LabeledContent {
-                    Text(summary ?? "统一管理").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                    Text(summary ?? String(localized: "统一管理")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                 } label: {
                     Label(title, systemImage: Theme.Icon.model).lineLimit(1)
                 }

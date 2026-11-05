@@ -129,21 +129,85 @@ class KnowledgeTaggingFlowTest {
     }
 }
 
+/** A reload that fails keeps what the page showed and says it could not reload (#3991). */
+class KnowledgeReloadFailureTest {
+    @Test fun aFailedReloadKeepsTheListAndTheEntryOnScreen() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val store = ViewModelStore()
+        try {
+            val repository = TaggingKnowledge()
+            val connection = object : KnowledgeConnection { override val current = MutableStateFlow<KnowledgeRepository?>(repository) }
+            val list = KnowledgeViewModel(connection, StandardTestDispatcher(testScheduler))
+            val detail = KnowledgeDetailViewModel(KnowledgeKind.Projects, "weather", connection, FakeSender())
+            store.put("list", list); store.put("detail", detail)
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { list.page.collect() }
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { detail.page.collect() }
+            runCurrent()
+            assertEquals(listOf("weather"), list.page.value.entries.map { it.id })
+            assertNotNull(detail.page.value.detail)
+
+            repository.failReads = true
+            list.refresh(); detail.refresh(); runCurrent()
+            assertEquals(R.string.knowledge_unreachable, list.page.value.message)
+            assertEquals(listOf("weather"), list.page.value.entries.map { it.id })
+            assertTrue(list.page.value.loaded)
+            assertFalse(list.page.value.loading)
+            assertFalse(detail.page.value.loading)
+            assertEquals(R.string.knowledge_unreachable, detail.page.value.message)
+            assertEquals("weather", detail.page.value.detail?.id)
+            assertEquals(listOf("s1"), detail.page.value.agents.map { it.sessionId })
+
+            // Failing again still keeps it; once it reads, the notice goes.
+            list.refresh(); runCurrent()
+            assertEquals(listOf("weather"), list.page.value.entries.map { it.id })
+            repository.failReads = false
+            list.refresh(); detail.refresh(); runCurrent()
+            assertNull(list.page.value.message)
+            assertNull(detail.page.value.message)
+            assertEquals(listOf("weather"), list.page.value.entries.map { it.id })
+
+            // Search results stay too when the same search fails again.
+            list.query("天气"); advanceTimeBy(300); runCurrent()
+            assertEquals(listOf("weather"), list.page.value.groups.map { it.id })
+            repository.failReads = true
+            list.refresh(); advanceTimeBy(300); runCurrent()
+            assertEquals(listOf("weather"), list.page.value.groups.map { it.id })
+            assertEquals(R.string.knowledge_unreachable, list.page.value.message)
+            list.query("")
+            runCurrent()
+
+            // Another kind never shown before has nothing to keep: the whole-page error.
+            repository.failReads = true
+            list.kind(KnowledgeKind.People); runCurrent()
+            assertTrue(list.page.value.entries.isEmpty())
+            assertEquals(R.string.knowledge_unreachable, list.page.value.message)
+            assertFalse(list.page.value.loaded)
+        } finally {
+            backgroundScope.cancel()
+            store.clear()
+            runCurrent()
+            Dispatchers.resetMain()
+        }
+    }
+}
+
 private class TaggingKnowledge : KnowledgeRepository {
     override val scope = HubScope("demo", "tagging")
     var importance = "P2"
     var fail = false
+    var failReads = false
     val saved = mutableListOf<KnowledgeUpdate>()
-    override suspend fun list(kind: KnowledgeKind, tag: String?) = KnowledgeList(
+    override suspend fun list(kind: KnowledgeKind, tag: String?) = if (failReads) throw IOException("offline") else KnowledgeList(
         if (kind == KnowledgeKind.Projects) listOf(KnowledgeEntry("projects", "weather", "天气 App", importance = importance)) else emptyList())
     override suspend fun detail(kind: KnowledgeKind, id: String) = KnowledgeDetail(kind.wire, id, "data/projects/$id",
         meta = buildJsonObject { put("name", "天气 App"); put("importance", importance) })
-    override suspend fun entry(kind: KnowledgeKind, id: String) = KnowledgeDetailResponse(detail(kind, id), listOf(
+    override suspend fun entry(kind: KnowledgeKind, id: String) = if (failReads) throw IOException("offline") else KnowledgeDetailResponse(detail(kind, id), listOf(
         persona.core.contracts.Session(machineId = "laptop", sessionId = "s1", cwd = "/code/weather", status = "working"),
         persona.core.contracts.Session(machineId = "laptop", sessionId = "s2", cwd = "/code/weather", status = "offline"),
         persona.core.contracts.Session(machineId = "server", sessionId = "jarvis", assistant = true, status = "idle"),
     ))
-    override suspend fun search(query: String) = emptyList<KnowledgeHit>()
+    override suspend fun search(query: String) =
+        if (failReads) throw IOException("offline") else listOf(KnowledgeHit("projects/weather/summary.md", "天气"))
     override suspend fun update(kind: KnowledgeKind, id: String, update: KnowledgeUpdate) {
         if (fail) throw IOException("HTTP 502")
         saved += update

@@ -62,7 +62,7 @@ struct DesktopPresenceSheet: View {
                     Section {
                         LabeledContent {
                             if let since = d.since {
-                                Text("登录于 " + since.formatted(.relative(presentation: .named))).lineLimit(1)
+                                Text(String(localized: "登录于 \(since.formatted(.relative(presentation: .named)))")).lineLimit(1)
                             }
                         } label: {
                             Label(d.name, systemImage: Theme.Icon.laptop).lineLimit(1)
@@ -84,7 +84,7 @@ struct DesktopPresenceSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
             }
-            .confirmationDialog(signingOut.map { "退出「\($0.name)」上的 Persona？" } ?? "",
+            .confirmationDialog(signingOut.map { String(localized: "退出「\($0.name)」上的 Persona？") } ?? "",
                                 isPresented: Binding(get: { signingOut != nil }, set: { if !$0 { signingOut = nil } }),
                                 titleVisibility: .visible) {
                 Button("退出", role: .destructive) {

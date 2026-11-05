@@ -67,6 +67,11 @@ final class WatchSync: NSObject, WCSessionDelegate {
         #endif
     }
 
+    /// The iPhone's interface language (docs/i18n.md: the watch follows the phone), as a code.
+    func push(language: String) {
+        update(["language": language])
+    }
+
     #if os(iOS) || os(visionOS)
     /// A paired watch with the app on it: the phone gets it credentials only then.
     var watchAppInstalled: Bool { WCSession.isSupported() && WCSession.default.isPaired && WCSession.default.isWatchAppInstalled }
@@ -121,6 +126,9 @@ final class WatchSync: NSObject, WCSessionDelegate {
     }
 
     private func apply(_ ctx: [String: Any]) {
+        #if os(watchOS)
+        if let language = ctx["language"] as? String { LanguageStore.shared.follow(language) }
+        #endif
         if let data = ctx["configs"] as? Data, let all = try? JSONDecoder().decode(WatchConfigs.self, from: data) {
             onConfigs?(all)
         } else if let data = ctx["config"] as? Data, let cfg = try? JSONDecoder().decode(ServerConfig.self, from: data) {

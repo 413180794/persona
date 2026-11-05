@@ -130,11 +130,11 @@ nonisolated struct ThreadMessage: Codable, Hashable, Sendable, Identifiable {
 nonisolated enum ThreadMediaText {
     static func describe(_ m: ThreadMedia) -> String {
         switch m.kind {
-        case "image": "[图片]"
-        case "sticker": "[贴纸\(m.emoji.map { " " + $0 } ?? "")]"
-        case "voice": "[语音 \(duration(m.duration ?? 0))]"
-        case "video": "[视频 \(duration(m.duration ?? 0))]"
-        default: "[文件 \(m.name ?? "")]"
+        case "image": String(localized: "[图片]")
+        case "sticker": String(localized: "[贴纸\(m.emoji.map { " " + $0 } ?? "")]")
+        case "voice": String(localized: "[语音 \(duration(m.duration ?? 0))]")
+        case "video": String(localized: "[视频 \(duration(m.duration ?? 0))]")
+        default: String(localized: "[文件 \(m.name ?? "")]")
         }
     }
 
@@ -187,7 +187,7 @@ nonisolated enum ThreadLayout {
     static func stamp(_ m: ThreadMessage, calendar: Calendar = .current) -> String {
         let c = calendar.dateComponents([.hour, .minute], from: m.at)
         let time = String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
-        return m.edited == true ? "已编辑 " + time : time
+        return m.edited == true ? String(localized: "已编辑 \(time)") : time
     }
 
     /// The line under the page's title, as the Feishu chat's (飞书 / 飞书话题群): the source, the kind of chat, and how
@@ -195,8 +195,8 @@ nonisolated enum ThreadLayout {
     static func subtitle(_ chat: ThreadChat?, source: String, locale: Locale = .current) -> String {
         let count = chat?.members.flatMap { $0 > 0 ? $0.formatted(.number.locale(locale)) : nil }
         switch chat?.kind {
-        case "group": return source + " 群聊" + (count.map { " · \($0) 位成员" } ?? "")
-        case "channel": return source + " 频道" + (count.map { " · \($0) 位订阅者" } ?? "")
+        case "group": return count.map { String(localized: "\(source) 群聊 · \($0) 位成员") } ?? String(localized: "\(source) 群聊")
+        case "channel": return count.map { String(localized: "\(source) 频道 · \($0) 位订阅者") } ?? String(localized: "\(source) 频道")
         default: return source
         }
     }
@@ -315,8 +315,8 @@ nonisolated enum ThreadLayout {
     /// A failure in words: a rate limit's says how long to wait (the hub's), a declined reply says so.
     private static func said(_ error: Error) -> String {
         if let e = error as? APIError {
-            return e.status == 403 ? "没有发送：hub 不允许" : e.message
+            return e.status == 403 ? String(localized: "没有发送：hub 不允许") : e.message
         }
-        return error.shown ?? "读不到"
+        return error.shown ?? String(localized: "读不到")
     }
 }

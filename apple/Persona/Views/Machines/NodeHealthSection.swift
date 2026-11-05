@@ -41,25 +41,25 @@ struct NodeHealthSection: View {
     private func makeModel() -> NodeHealthModel {
         NodeHealthModel(deps: .init(
             check: { [ref, app] in
-                guard let api = app.api(ref.group) else { throw APIError(status: 0, message: "还没连接 hub") }
+                guard let api = app.api(ref.group) else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
                 return try await api.nodeDoctor(machine: ref.id)
             },
             fix: { [ref, app] in
-                guard let api = app.api(ref.group) else { throw APIError(status: 0, message: "还没连接 hub") }
+                guard let api = app.api(ref.group) else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
                 return try await api.fixNodeDoctor(machine: ref.id)
             }))
     }
 
     private var fixMessage: String {
         let files = model?.report.map { NodeHealth.fixable($0).map(\.name).joined(separator: "、") } ?? ""
-        return "在这台电脑上把 Persona 自己生成的 hooks、MCP 配置和技能文件按当前版本重写一遍（\(files)），写完再检查一次。不会改你自己的 Claude Code 设置。"
+        return String(localized: "在这台电脑上把 Persona 自己生成的 hooks、MCP 配置和技能文件按当前版本重写一遍（\(files)），写完再检查一次。不会改你自己的 Claude Code 设置。")
     }
 
     // MARK: Content
 
     @ViewBuilder private var content: some View {
         if !machine.online {
-            line("机器离线，连上后可以检查这台电脑能做什么")
+            line(String(localized: "机器离线，连上后可以检查这台电脑能做什么"))
         } else if let model {
             switch model.load {
             case .idle, .loading:
@@ -83,7 +83,7 @@ struct NodeHealthSection: View {
                 reportView(report, model: model)
             }
         } else {
-            line("正在检查这台电脑…")
+            line(String(localized: "正在检查这台电脑…"))
         }
     }
 
@@ -221,11 +221,11 @@ struct NodeHealthSection: View {
             .padding(.horizontal, Theme.Space.l)
             .padding(.vertical, Theme.Space.m)
         case .oldHub:
-            line("hub 的版本还不支持自检，更新 hub 后可以在这里看")
+            line(String(localized: "hub 的版本还不支持自检，更新 hub 后可以在这里看"))
         case .forbidden:
-            line("这个设备只能回答问题，自检要用完整权限的设备")
+            line(String(localized: "这个设备只能回答问题，自检要用完整权限的设备"))
         case .offline:
-            line("这台电脑刚离线，连上后再检查")
+            line(String(localized: "这台电脑刚离线，连上后再检查"))
         }
     }
 
@@ -252,7 +252,7 @@ struct NodeHealthSection: View {
             Haptics.tap()
             await app.refresh()
         } catch {
-            if let m = error.shown { app.toast = Toast("部署失败：\(m)", style: .error) }
+            if let m = error.shown { app.toast = Toast(String(localized: "部署失败：\(m)"), style: .error) }
         }
     }
 }

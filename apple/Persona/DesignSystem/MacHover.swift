@@ -115,7 +115,7 @@ enum MacHover {
     #endif
 
     /// Puts `text` on the pasteboard and says so.
-    @MainActor static func copy(_ text: String, said: String = "已拷贝") {
+    @MainActor static func copy(_ text: String, said: String = String(localized: "已拷贝")) {
         #if os(macOS)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)

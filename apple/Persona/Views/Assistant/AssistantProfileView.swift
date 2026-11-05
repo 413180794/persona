@@ -23,7 +23,8 @@ struct AssistantProfileView: View {
     /// The machines the hub connects to, by name ("服务器、笔记本…"), from the hub's own list.
     private var machinesLine: String {
         let names = model.machines.map(\.name)
-        return names.isEmpty ? "hub 接入的各台电脑（ssh）" : names.joined(separator: "、") + "（ssh）"
+        let list = names.joined(separator: String(localized: "、", comment: "Separator between machine names"))
+        return names.isEmpty ? String(localized: "hub 接入的各台电脑（ssh）") : String(localized: "\(list)（ssh）")
     }
 
     var body: some View {
@@ -64,7 +65,7 @@ struct AssistantProfileView: View {
                 NavigationLink { AssistantRoutinesView() } label: {
                     row("定时任务", "alarm", detail: tasks.map { t in
                         let on = t.filter(\.enabled).count
-                        return on == 0 ? "未开启" : "\(on) 个开启"
+                        return on == 0 ? String(localized: "未开启") : String(localized: "\(on) 个开启")
                     })
                 }
                 NavigationLink { AssistantRunsView() } label: {
@@ -81,7 +82,7 @@ struct AssistantProfileView: View {
                     row("关于我", "person.text.rectangle", detail: nil)
                 }
                 NavigationLink { AssistantMemoryView() } label: {
-                    row("记忆", "brain", detail: memoryCount.flatMap { $0 > 0 ? "\($0) 条" : nil })
+                    row("记忆", "brain", detail: memoryCount.flatMap { $0 > 0 ? String(localized: "\($0) 条", comment: "Memory count") : nil })
                 }
             } header: {
                 Text("了解你")
@@ -131,15 +132,15 @@ struct AssistantProfileView: View {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 header
                 if !upcoming.isEmpty {
-                    BUIListSection("接下来") {
+                    BUIListSection(String(localized: "接下来")) {
                         ForEach(upcoming) { u in AssistantUpcomingRow(item: u) }
                     }
                 }
-                BUIListSection("主动做事", footer: "到点自己开始工作、跟进答应你的事，跑完推送到手机。在对话里说「每天 9 点给我早报」「一小时后提醒我」就会加到这里。") {
+                BUIListSection(String(localized: "主动做事"), footer: String(localized: "到点自己开始工作、跟进答应你的事，跑完推送到手机。在对话里说「每天 9 点给我早报」「一小时后提醒我」就会加到这里。")) {
                     NavigationLink { AssistantRoutinesView() } label: {
                         buiRow("定时任务", Theme.Icon.schedule, detail: tasks.map { t in
                             let on = t.filter(\.enabled).count
-                            return on == 0 ? "未开启" : "\(on) 个开启"
+                            return on == 0 ? String(localized: "未开启") : String(localized: "\(on) 个开启")
                         })
                     }
                     NavigationLink { AssistantRunsView() } label: {
@@ -147,34 +148,34 @@ struct AssistantProfileView: View {
                     }
                     NavigationLink { TaskTrustView() } label: { buiRow("直接开的任务", Theme.Icon.taskTrust, detail: nil) }
                 }
-                BUIListSection("了解你", footer: "「关于我」是你告诉 Persona 的；「记忆」是它在对话里自己记下的，都可以改。") {
+                BUIListSection(String(localized: "了解你"), footer: String(localized: "「关于我」是你告诉 Persona 的；「记忆」是它在对话里自己记下的，都可以改。")) {
                     NavigationLink { AssistantNotesView() } label: {
                         buiRow("关于我", "person.text.rectangle", detail: nil)
                     }
                     NavigationLink { AssistantMemoryView() } label: {
-                        buiRow("记忆", "brain", detail: memoryCount.flatMap { $0 > 0 ? "\($0) 条" : nil })
+                        buiRow("记忆", "brain", detail: memoryCount.flatMap { $0 > 0 ? String(localized: "\($0) 条", comment: "Memory count") : nil })
                     }
                 }
                 if let quiet = quietTasks {
-                    BUIListSection("任务通知", footer: Self.quietFooter) {
+                    BUIListSection(String(localized: "任务通知"), footer: Self.quietFooter) {
                         BUIListRow(Self.quietTitle) { BUIIconTile(Theme.Icon.notifications, tint: Theme.accent) } trailing: {
                             Toggle(Self.quietTitle, isOn: quiet).labelsHidden()
                                 .accessibilityIdentifier("assistant-main-tasks-quiet")
                         }
                     }
                 }
-                BUIListSection("设置", footer: "每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。用哪个模型在「设置 › 模型配置 › 主对话」里选，单段对话在它自己的菜单里换。") {
+                BUIListSection(String(localized: "设置"), footer: String(localized: "每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。用哪个模型在「设置 › 模型配置 › 主对话」里选，单段对话在它自己的菜单里换。")) {
                     NavigationLink { SkillsPage() } label: { buiRow("Skills", Theme.Icon.skills, detail: nil) }
-                    BUIListRow("运行在", value: machineName)
-                    BUIListRow("工作目录", value: assistantCwd)
+                    BUIListRow(String(localized: "运行在"), value: machineName)
+                    BUIListRow(String(localized: "工作目录"), value: assistantCwd)
                 }
-                BUIListSection("能访问", footer: "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。") {
+                BUIListSection(String(localized: "能访问"), footer: String(localized: "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。")) {
                     buiReach(machinesLine, Theme.Icon.machines)
-                    buiReach("各台电脑上的 Agent：看状态、读对话、发消息、开新的", "rectangle.stack.badge.person.crop")
-                    buiReach("飞书：消息、日历、文档、会议纪要、任务、邮件", "building.2")
-                    buiReach("iPhone：通讯录、日历、提醒、位置、健康、照片", Theme.Icon.phone)
-                    buiReach("你添加的所有邮箱", Theme.Icon.mail)
-                    buiReach("在手机上问你、给你推送", Theme.Icon.notifications)
+                    buiReach(String(localized: "各台电脑上的 Agent：看状态、读对话、发消息、开新的"), "rectangle.stack.badge.person.crop")
+                    buiReach(String(localized: "飞书：消息、日历、文档、会议纪要、任务、邮件"), "building.2")
+                    buiReach(String(localized: "iPhone：通讯录、日历、提醒、位置、健康、照片"), Theme.Icon.phone)
+                    buiReach(String(localized: "你添加的所有邮箱"), Theme.Icon.mail)
+                    buiReach(String(localized: "在手机上问你、给你推送"), Theme.Icon.notifications)
                 }
             }
             .padding(.horizontal, Theme.Space.l)
@@ -194,10 +195,10 @@ struct AssistantProfileView: View {
                 .lineLimit(1)
             HStack(spacing: Theme.Space.s) {
                 let online = model.machine(model.hubRef(machineID))?.online ?? false
-                Chip(text: online ? "在线" : "离线", symbol: online ? Theme.Icon.successFilled : "moon.zzz", look: online ? .tint(Theme.positive) : .neutral)
-                if working { Chip(text: "工作中", symbol: Theme.Icon.more, look: .tint(Theme.accent)) }
+                Chip(text: online ? String(localized: "在线") : String(localized: "离线"), symbol: online ? Theme.Icon.successFilled : "moon.zzz", look: online ? .tint(Theme.positive) : .neutral)
+                if working { Chip(text: String(localized: "工作中"), symbol: Theme.Icon.more, look: .tint(Theme.accent)) }
                 if let next = upcoming.first {
-                    Chip(text: "下一件 \(AssistantScheduleText.moment(next.at))", symbol: Theme.Icon.schedule)
+                    Chip(text: String(localized: "下一件 \(AssistantScheduleText.moment(next.at))"), symbol: Theme.Icon.schedule)
                 }
             }
         }
@@ -227,24 +228,24 @@ struct AssistantProfileView: View {
         guard let on = model.assistantConfig?.mainTasksQuiet else { return nil }
         return Binding(get: { on }, set: { v in Task { await model.setMainTasksQuiet(v) } })
     }
-    private static let quietTitle = "只在主对话里通知"
-    private static let quietFooter = "主对话派出去的任务不进灵动岛、推送和角标，做完、等你回答或出错时由 Persona 在主对话里告诉你。只影响之后派的任务。"
+    private static let quietTitle = String(localized: "只在主对话里通知")
+    private static let quietFooter = String(localized: "主对话派出去的任务不进灵动岛、推送和角标，做完、等你回答或出错时由 Persona 在主对话里告诉你。只影响之后派的任务。")
 
     private var upcoming: [AssistantUpcoming] {
         AssistantUpcoming.merge(tasks ?? []).prefix(3).map { $0 }
     }
 
-    private func row(_ title: String, _ symbol: String, detail: String?) -> some View {
+    private func row(_ title: LocalizedStringResource, _ symbol: String, detail: String?) -> some View {
         LabeledContent {
             if let detail { Text(detail).lineLimit(1) }
         } label: {
-            Label(title, systemImage: symbol).lineLimit(1)
+            Label(String(localized: title), systemImage: symbol).lineLimit(1)
         }
     }
 
     /// The BeautifulUI style's row that opens a page: its mark, its name, what is there now.
-    private func buiRow(_ title: String, _ symbol: String, detail: String?) -> some View {
-        BUIListRow(title, value: detail, accessory: .disclosure) { BUIIconTile(symbol, tint: Theme.accent) }
+    private func buiRow(_ title: LocalizedStringResource, _ symbol: String, detail: String?) -> some View {
+        BUIListRow(String(localized: title), value: detail, accessory: .disclosure) { BUIIconTile(symbol, tint: Theme.accent) }
     }
 
     /// The BeautifulUI style's row for what Persona can reach.
@@ -282,7 +283,7 @@ struct AssistantUpcoming: Identifiable, Hashable {
             guard let next = t.nextRun ?? t.at else { continue }
             if t.repeats == .once {
                 out.append(.init(id: "t-" + t.id, at: next, title: AssistantScheduleText.title(t), routine: false,
-                                 detail: t.sessionID == nil ? "跟进 · 新对话" : "跟进 · 接着原来的对话",
+                                 detail: t.sessionID == nil ? String(localized: "跟进 · 新对话") : String(localized: "跟进 · 接着原来的对话"),
                                  key: t.sessionID.map { SessionKey(machineID: t.machineID ?? "", sessionID: $0) }))
             } else {
                 out.append(.init(id: "t-" + t.id, at: next, title: AssistantScheduleText.title(t), routine: true,
@@ -341,9 +342,9 @@ struct AssistantUpcomingRow: View {
 enum AssistantRunText {
     static func statusWord(_ r: APIClient.ScheduleRun) -> String {
         switch r.status {
-        case "ok": "已运行"
-        case "skipped": "已跳过"
-        default: "失败"
+        case "ok": String(localized: "已运行")
+        case "skipped": String(localized: "已跳过")
+        default: String(localized: "失败")
         }
     }
 
@@ -357,13 +358,13 @@ enum AssistantRunText {
 
     /// "准时" / "晚了 21 秒" / "手动运行" / the error.
     static func detail(_ r: APIClient.ScheduleRun) -> String {
-        if r.manual == true { return "手动运行" }
+        if r.manual == true { return String(localized: "手动运行") }
         if r.status != "ok" { return r.error ?? statusWord(r) }
         let late = r.at.timeIntervalSince(r.due)
-        if late < 5 { return "准时" }
-        if late < 120 { return "晚了 \(Int(late)) 秒" }
-        if late < 7200 { return "晚了 \(Int(late / 60)) 分钟" }
-        return "晚了 \(Int(late / 3600)) 小时"
+        if late < 5 { return String(localized: "准时") }
+        if late < 120 { return String(localized: "晚了 \(Int(late)) 秒") }
+        if late < 7200 { return String(localized: "晚了 \(Int(late / 60)) 分钟") }
+        return String(localized: "晚了 \(Int(late / 3600)) 小时")
     }
 }
 
@@ -394,7 +395,7 @@ struct AssistantRunsView: View {
                                        description: Text("定时任务和跟进每跑一次（包括失败和跳过的）都记在这里。"))
             }
         }
-        .pageTitle("运行记录")
+        .pageTitle(String(localized: "运行记录"))
         .task { await load() }
         .refreshable { await load() }
     }

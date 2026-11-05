@@ -10,30 +10,30 @@ nonisolated enum SessionModes {
     }
 
     static let permissionModes: [Option] = [
-        Option(id: "default", title: "手动确认", detail: "改文件、跑命令前都先问你", symbol: Theme.Icon.askFirst),
-        Option(id: "acceptEdits", title: "自动改文件", detail: "改文件不问，跑命令还会问", symbol: "pencil.line"),
-        Option(id: "plan", title: "只做计划", detail: "只读代码、写计划，批准后才动手", symbol: "list.bullet.clipboard"),
-        Option(id: "auto", title: "自动", detail: "自己判断风险，安全的直接做", symbol: "wand.and.sparkles"),
-        Option(id: "bypassPermissions", title: "全部放行", detail: "什么都不问；只能在新开时选", symbol: Theme.Icon.allowEverything),
+        Option(id: "default", title: String(localized: "手动确认"), detail: String(localized: "改文件、跑命令前都先问你"), symbol: Theme.Icon.askFirst),
+        Option(id: "acceptEdits", title: String(localized: "自动改文件"), detail: String(localized: "改文件不问，跑命令还会问"), symbol: "pencil.line"),
+        Option(id: "plan", title: String(localized: "只做计划"), detail: String(localized: "只读代码、写计划，批准后才动手"), symbol: "list.bullet.clipboard"),
+        Option(id: "auto", title: String(localized: "自动", comment: "Permission mode: the agent judges the risk itself"), detail: String(localized: "自己判断风险，安全的直接做"), symbol: "wand.and.sparkles"),
+        Option(id: "bypassPermissions", title: String(localized: "全部放行"), detail: String(localized: "什么都不问；只能在新开时选"), symbol: Theme.Icon.allowEverything),
     ]
 
     static let effortLevels: [Option] = [
-        Option(id: "low", title: "低", detail: "最快，简单的事够用", symbol: "gauge.with.dots.needle.0percent"),
-        Option(id: "medium", title: "中", detail: "快一些", symbol: Theme.Icon.context),
-        Option(id: "high", title: "高", detail: "大多数任务的默认", symbol: Theme.Icon.effort),
-        Option(id: "xhigh", title: "很高", detail: "更仔细，也更慢、更贵", symbol: "gauge.with.dots.needle.67percent"),
-        Option(id: "max", title: "最高", detail: "最慢最仔细", symbol: "gauge.with.dots.needle.100percent"),
+        Option(id: "low", title: String(localized: "低", comment: "Thinking effort level"), detail: String(localized: "最快，简单的事够用"), symbol: "gauge.with.dots.needle.0percent"),
+        Option(id: "medium", title: String(localized: "中", comment: "Thinking effort level"), detail: String(localized: "快一些"), symbol: Theme.Icon.context),
+        Option(id: "high", title: String(localized: "高", comment: "Thinking effort level"), detail: String(localized: "大多数任务的默认"), symbol: Theme.Icon.effort),
+        Option(id: "xhigh", title: String(localized: "很高", comment: "Thinking effort level"), detail: String(localized: "更仔细，也更慢、更贵"), symbol: "gauge.with.dots.needle.67percent"),
+        Option(id: "max", title: String(localized: "最高", comment: "Thinking effort level"), detail: String(localized: "最慢最仔细"), symbol: "gauge.with.dots.needle.100percent"),
     ]
 
     /// Codex's reasoning efforts (node/codex_effort.go); a thread offers its model's, in `Session.efforts`.
     static let codexEffortLevels: [Option] = [
-        Option(id: "minimal", title: "极低", detail: "几乎不思考，最快", symbol: effortLevels[0].symbol),
-        Option(id: "low", title: "低", detail: "快，简单的事够用", symbol: effortLevels[0].symbol),
-        Option(id: "medium", title: "中", detail: "快慢适中", symbol: effortLevels[1].symbol),
-        Option(id: "high", title: "高", detail: "更仔细", symbol: effortLevels[2].symbol),
-        Option(id: "xhigh", title: "很高", detail: "更仔细，也更慢、更贵", symbol: effortLevels[3].symbol),
-        Option(id: "max", title: "最高", detail: "最慢最仔细", symbol: effortLevels[4].symbol),
-        Option(id: "ultra", title: "极高", detail: "最仔细，还会主动分给多个子 Agent 一起做", symbol: effortLevels[4].symbol),
+        Option(id: "minimal", title: String(localized: "极低", comment: "Thinking effort level"), detail: String(localized: "几乎不思考，最快"), symbol: effortLevels[0].symbol),
+        Option(id: "low", title: String(localized: "低", comment: "Thinking effort level"), detail: String(localized: "快，简单的事够用"), symbol: effortLevels[0].symbol),
+        Option(id: "medium", title: String(localized: "中", comment: "Thinking effort level"), detail: String(localized: "快慢适中"), symbol: effortLevels[1].symbol),
+        Option(id: "high", title: String(localized: "高", comment: "Thinking effort level"), detail: String(localized: "更仔细"), symbol: effortLevels[2].symbol),
+        Option(id: "xhigh", title: String(localized: "很高", comment: "Thinking effort level"), detail: String(localized: "更仔细，也更慢、更贵"), symbol: effortLevels[3].symbol),
+        Option(id: "max", title: String(localized: "最高", comment: "Thinking effort level"), detail: String(localized: "最慢最仔细"), symbol: effortLevels[4].symbol),
+        Option(id: "ultra", title: String(localized: "极高", comment: "Thinking effort level"), detail: String(localized: "最仔细，还会主动分给多个子 Agent 一起做"), symbol: effortLevels[4].symbol),
     ]
 
     /// Modes a running session can switch to (bypassPermissions only at start, see node/modes.go).
@@ -42,7 +42,7 @@ nonisolated enum SessionModes {
     /// Every mode for an assistant conversation (the main one too, new or running): the node restarts its Claude in
     /// 全部放行 (#2416), so the option doesn't say "only when new".
     static let assistantModes = permissionModes.map { o in
-        o.id == "bypassPermissions" ? Option(id: o.id, title: o.title, detail: "改文件、跑命令都不问你", symbol: o.symbol) : o
+        o.id == "bypassPermissions" ? Option(id: o.id, title: o.title, detail: String(localized: "改文件、跑命令都不问你"), symbol: o.symbol) : o
     }
 
     /// The modes a running session can switch to: every one for an assistant conversation, `switchableModes` otherwise.
@@ -70,10 +70,10 @@ nonisolated enum SessionModes {
     /// Why the model cannot be switched right now (nil when it can): the node refuses the same cases.
     static func modelBusy(_ s: Session?) -> String? {
         switch s?.state {
-        case .working?: "工作中，停下后再切换模型"
-        case .needsYou?: "等你回答，答完后再切换模型"
-        case .offline?: "没在运行"
-        default: s?.starting == true ? "正在启动" : nil
+        case .working?: String(localized: "工作中，停下后再切换模型")
+        case .needsYou?: String(localized: "等你回答，答完后再切换模型")
+        case .offline?: String(localized: "没在运行")
+        default: s?.starting == true ? String(localized: "正在启动") : nil
         }
     }
 
@@ -91,6 +91,8 @@ nonisolated enum SessionModes {
     }
 
     /// "手动确认" for known modes, the raw value otherwise (Codex approval policies, newer Claude Code modes).
+    /// For a mode or effort the session has not reported.
+    static var unknown: String { String(localized: "未知") }
     static func modeLabel(_ id: String?) -> String? { id.map { mode($0)?.title ?? $0 } }
     static func effortLabel(_ id: String?) -> String? { id.map { effort($0)?.title ?? $0 } }
 
@@ -107,7 +109,7 @@ nonisolated enum SessionModes {
     static func composerTitle(model: String?, effort: String?) -> ComposerTitle? {
         switch (model, effort) {
         case let (m?, e): ComposerTitle(model: m, effort: e)
-        case let (nil, e?): ComposerTitle(model: "思考", effort: e)
+        case let (nil, e?): ComposerTitle(model: String(localized: "思考", comment: "Composer button title when no model is known: thinking effort follows"), effort: e)
         case (nil, nil): nil
         }
     }
@@ -168,10 +170,10 @@ struct SessionModeBar: View {
                     .pickerStyle(.inline)
                 } label: {
                     ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst,
-                             text: SessionModes.modeLabel(mode) ?? "权限模式", tint: SessionModes.modeTint(mode), known: mode != nil)
+                             text: SessionModes.modeLabel(mode) ?? String(localized: "权限模式"), tint: SessionModes.modeTint(mode), known: mode != nil)
                 }
                 .labelOnlyMenu()
-                .accessibilityLabel("权限模式：\(SessionModes.modeLabel(mode) ?? "未知")")
+                .accessibilityLabel("权限模式：\(SessionModes.modeLabel(mode) ?? SessionModes.unknown)")
             }
             Menu {
                 Picker("思考强度", selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
@@ -192,17 +194,17 @@ struct SessionModeBar: View {
                         .pickerStyle(.inline)
                         .disabled(busy != nil)
                         // A menu draws no section footers: the note is a row of its own (not tappable).
-                        Text(busy ?? "所选模型也会成为新会话的默认")
+                        Text(busy ?? String(localized: "所选模型也会成为新会话的默认"))
                     }
                 }
             } label: {
                 ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
-                         text: effort.map { "思考\(SessionModes.effortLabel($0) ?? $0)" } ?? "思考强度", tint: .secondary, known: effort != nil)
+                         text: effort.map { String(localized: "思考\(SessionModes.effortLabel($0) ?? $0)") } ?? String(localized: "思考强度"), tint: .secondary, known: effort != nil)
             }
             .labelOnlyMenu()
             .accessibilityLabel(SessionModes.switchesModel(session)
-                ? "思考强度与模型：\(SessionModes.effortLabel(effort) ?? "未知")，\(SessionModes.modelName(session?.model) ?? "模型未知")"
-                : "思考强度：\(SessionModes.effortLabel(effort) ?? "未知")")
+                ? String(localized: "思考强度与模型：\(SessionModes.effortLabel(effort) ?? String(localized: "未知"))，\(SessionModes.modelName(session?.model) ?? String(localized: "模型未知"))")
+                : String(localized: "思考强度：\(SessionModes.effortLabel(effort) ?? String(localized: "未知"))"))
             if changing { ProgressView().controlSize(.mini) }
             Spacer(minLength: 0)
         }
@@ -268,7 +270,7 @@ struct SessionModesMenu: View {
                 }
                 .pickerStyle(.inline)
             } else {
-                Text(SessionModes.modelName(session?.model) ?? "模型未知") // what it runs; changed where it was started
+                Text(SessionModes.modelName(session?.model) ?? String(localized: "模型未知")) // what it runs; changed where it was started
             }
         }
         if setsModes || setsEffortOnly {
@@ -288,7 +290,7 @@ struct SessionModesMenu: View {
                     Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
                 }
             } label: {
-                Label("权限模式：\(SessionModes.modeLabel(mode) ?? "未知")", systemImage: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst)
+                Label("权限模式：\(SessionModes.modeLabel(mode) ?? SessionModes.unknown)", systemImage: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst)
             }
             .pickerStyle(.menu)
         }
@@ -355,7 +357,7 @@ struct NewSessionModePicker: View {
                 .pickerStyle(.inline)
             } label: {
                 ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst,
-                         text: SessionModes.mode(mode)?.title ?? "权限：默认", tint: SessionModes.modeTint(mode), known: !mode.isEmpty)
+                         text: SessionModes.mode(mode)?.title ?? String(localized: "权限：默认"), tint: SessionModes.modeTint(mode), known: !mode.isEmpty)
             }
             .labelOnlyMenu()
             Menu {
@@ -366,7 +368,7 @@ struct NewSessionModePicker: View {
                 .pickerStyle(.inline)
             } label: {
                 ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
-                         text: SessionModes.effort(effort).map { "思考\($0.title)" } ?? "思考：默认", tint: .secondary, known: !effort.isEmpty)
+                         text: SessionModes.effort(effort).map { String(localized: "思考\($0.title)") } ?? String(localized: "思考：默认"), tint: .secondary, known: !effort.isEmpty)
             }
             .labelOnlyMenu()
         }

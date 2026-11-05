@@ -142,7 +142,7 @@ final class TodoStore {
     }
 
     func create(title: String, notes: String? = nil, api injected: APIClient? = nil) async throws -> TodoItem {
-        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: "未连接 hub") }
+        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: String(localized: "未连接 hub")) }
         let targetGeneration = generation
         let created = try await api.createTodo(title: title, notes: notes)
         guard generation == targetGeneration else { return created }
@@ -153,7 +153,7 @@ final class TodoStore {
     }
 
     func update(id: String, title: String? = nil, notes: String? = nil, done: Bool? = nil, api injected: APIClient? = nil) async throws -> TodoItem {
-        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: "未连接 hub") }
+        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: String(localized: "未连接 hub")) }
         let targetGeneration = generation
         let res = try await api.updateTodo(id: id, title: title, notes: notes, done: done)
         guard generation == targetGeneration else { return res }
@@ -191,7 +191,7 @@ final class TodoStore {
     }
 
     func delete(id: String, api injected: APIClient? = nil) async throws {
-        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: "未连接 hub") }
+        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: String(localized: "未连接 hub")) }
         let targetGeneration = generation
         try await api.deleteTodo(id: id)
         guard generation == targetGeneration else { return }
@@ -201,7 +201,7 @@ final class TodoStore {
     }
 
     func linkAgent(todoID: String, machineID: String, sessionID: String, api injected: APIClient? = nil) async throws {
-        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: "未连接 hub") }
+        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: String(localized: "未连接 hub")) }
         let targetGeneration = generation
         do {
             try await api.linkTodoAgent(todoID: todoID, machineID: machineID, sessionID: sessionID)
@@ -217,7 +217,7 @@ final class TodoStore {
     }
 
     func unlinkAgent(todoID: String, machineID: String, sessionID: String, api injected: APIClient? = nil) async throws {
-        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: "未连接 hub") }
+        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: String(localized: "未连接 hub")) }
         let targetGeneration = generation
         do {
             try await api.unlinkTodoAgent(todoID: todoID, machineID: machineID, sessionID: sessionID)
@@ -235,8 +235,8 @@ final class TodoStore {
     /// Membership changes immediately; the hub then supplies the authoritative Agent attachments.
     @discardableResult
     func setSpace(todoID: String, space: TodoItem.Space, linked: Bool, api injected: APIClient? = nil) async throws -> Bool {
-        guard !changingSpaces else { throw APIError(status: 409, message: "正在更新项目，请稍后再试") }
-        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: "未连接 hub") }
+        guard !changingSpaces else { throw APIError(status: 409, message: String(localized: "正在更新项目，请稍后再试")) }
+        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: String(localized: "未连接 hub")) }
         let targetGeneration = generation
         changingSpaces = true
         defer { changingSpaces = false }
@@ -268,7 +268,7 @@ final class TodoStore {
             apply(original)
             if TodosLogic.isLegacySpacesRoute(error) {
                 spacesSupported = false
-                let upgrade = APIError(status: 404, message: "这台 hub 还不支持整组挂，升级 hub 后再试")
+                let upgrade = APIError(status: 404, message: String(localized: "这台 hub 还不支持整组挂，升级 hub 后再试"))
                 self.error = upgrade.message
                 throw upgrade
             }
@@ -301,7 +301,7 @@ final class TodoStore {
     /// Creation failure throws; a later link failure returns a message that preserves the created todo.
     func createAndLink(title: String, target: TodoLinkTarget, api: APIClient? = nil) async throws -> String? {
         if target.isSpace && changingSpaces {
-            throw APIError(status: 409, message: "正在更新项目，请稍后再试")
+            throw APIError(status: 409, message: String(localized: "正在更新项目，请稍后再试"))
         }
         let created = try await create(title: title, api: api)
         do {

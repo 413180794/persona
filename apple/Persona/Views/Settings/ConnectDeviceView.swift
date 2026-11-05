@@ -9,7 +9,7 @@ import SwiftUI
 enum ConnectTarget: String, CaseIterable, Identifiable, Sendable {
     case app, web
     var id: String { rawValue }
-    var title: String { self == .app ? "Persona App" : "浏览器" }
+    var title: String { self == .app ? "Persona App" : String(localized: "浏览器") }
 }
 
 /// The words and arithmetic, kept apart from the view to test.
@@ -51,8 +51,8 @@ enum ConnectDeviceText {
     }
 
     static func hint(_ t: ConnectTarget) -> String {
-        t == .app ? "在新设备的 Persona 配对页扫这个码。Mac 和 Android 也可以拷贝配对链接后粘贴。"
-            : "用手机相机扫码直接在浏览器里打开，或把登录链接拷到另一台电脑的浏览器。"
+        t == .app ? String(localized: "在新设备的 Persona 配对页扫这个码。Mac 和 Android 也可以拷贝配对链接后粘贴。")
+            : String(localized: "用手机相机扫码直接在浏览器里打开，或把登录链接拷到另一台电脑的浏览器。")
     }
 }
 
@@ -98,7 +98,7 @@ enum ConnectDeviceText {
     func make() async {
         phase = .loading
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
             hubURL = api.config.url
             // The credentials there are now: the one that shows up later is the device that used this code.
             known = Set(try await api.deviceTokens().tokens.map(\.id))
@@ -259,7 +259,7 @@ struct ConnectDeviceSheet: View {
                 .accessibilityIdentifier("connectDevice.code")
             }
             if let link {
-                Button { copy(link, said: target == .app ? "已拷贝配对链接" : "已拷贝登录链接") } label: {
+                Button { copy(link, said: target == .app ? String(localized: "已拷贝配对链接") : String(localized: "已拷贝登录链接")) } label: {
                     Label(target == .app ? "拷贝配对链接" : "拷贝登录链接", systemImage: Theme.Icon.copy).lineLimit(1)
                 }
                 .accessibilityIdentifier("connectDevice.copy")

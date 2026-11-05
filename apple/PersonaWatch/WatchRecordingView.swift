@@ -5,7 +5,16 @@ struct WatchRecordingView: View {
     @State private var capture = RecordingCapture.shared
     @State private var library = RecordingLibrary.shared
     @State private var transfer = WatchRecordingTransfer.shared
-    @State private var locale = "zh-CN"
+    /// Starts in the app's UI language; the button cycles through the three the recorder supports.
+    @State private var locale = WatchRecordingView.defaultLocale
+
+    private static var defaultLocale: String {
+        switch LanguageStore.shared.launched {
+        case "en": "en-US"
+        case "ja": "ja-JP"
+        default: "zh-CN"
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -19,7 +28,7 @@ struct WatchRecordingView: View {
                         let index = languages.firstIndex(of: locale) ?? 0
                         locale = languages[(index + 1) % languages.count]
                     } label: {
-                        Text("语言：\(locale == "zh-CN" ? "中文" : locale == "en-US" ? "英语" : "日语")")
+                        Text("语言：\(locale == "zh-CN" ? String(localized: "中文") : locale == "en-US" ? String(localized: "英语") : String(localized: "日语"))")
                             .font(Theme.Font.secondary).lineLimit(1)
                     }
                     .buttonStyle(.bordered)
@@ -54,7 +63,7 @@ struct WatchRecordingView: View {
                 ForEach(Array(library.entries.filter { $0.source == .watch }.prefix(10))) { entry in
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         Text(entry.displayTitle).font(Theme.Font.secondaryMedium).lineLimit(2)
-                        Text("\(RecordingFormat.clock(entry.duration)) · \(transfer.pending(entry.id) == 0 && entry.endDelivered ? "已回传手机" : "等待回传")")
+                        Text("\(RecordingFormat.clock(entry.duration)) · \(transfer.pending(entry.id) == 0 && entry.endDelivered ? String(localized: "已回传手机") : String(localized: "等待回传"))")
                             .font(Theme.Font.caption).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

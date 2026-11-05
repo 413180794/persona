@@ -1061,3 +1061,20 @@ UIKit 的栈却还推着一页，上面只有系统的返回按钮「Agents」�
 - 泛型 `@Observable` 类（`StoredValueBox<Value>`）的属性每读一次都要在运行时实例化 key path（`swift_getKeyPath`），放在每个元素的闭包里读很贵，先读到局部变量。
 - 先用 Time Profiler 看清时间花在哪（`docs/testing.md`「Agents 列表的结构推送」）：只看 body 次数会以为是 body 贵，这次 body 只占五分之一。
 
+
+## 国际化（#2457）
+
+### 运行中换不了 `String(localized:)` 的语言
+- **现象**：想在设置里选完语言立即生效。改 `AppleLanguages`、把 `Bundle.main` 换成覆盖 `localizedString(forKey:…)` 的子类，SwiftUI 的 `Text` 跟着变了，`String(localized:)` 还是启动时的语言，界面半中半英。
+- **原因**：Foundation 在进程启动时定下语言；Swift 的 `String(localized:)` 不经过 `Bundle.localizedString(forKey:)`（macOS 27 实测）。`String(localized:locale:)` 的 `locale` 只管格式化，不管查哪种语言；只有 `LocalizedStringResource.locale` 能指定。
+- **做法**：选择写进 `AppleLanguages`，下次打开生效，设置页提示（Mac 有「立即重新打开」）。长期不重启的小组件扩展用 `interfaceText(_:)`（`LocalizedStringResource` + App Group 里的语言）和 `.environment(\.locale, …)`。见 `docs/ios.md`「界面语言」。
+
+### 开发区域是 en 时，没有 zh-Hans 条目的复数词条落到英文
+- **现象**：Info.plist 的 `CFBundleDevelopmentRegion` 改成 `en`（三种之外的语言落到英文）后，中文界面里「7 分钟」变成「7 min」，只有带复数规则的词条这样。
+- **原因**：zh-Hans 的表里没有这个 key，Foundation 退到开发区域（en）的 stringsdict，用了英文的复数形式。
+- **做法**：catalog 里每个要翻译的词条都写一条 zh-Hans 的值（就是中文原文），`scripts/i18n/apple_l10n.py check` 查。
+
+### `String(localized:)` 插值的整数带千分位
+- **现象**：`String(localized: "一条最多 \(n) 字")` 显示「3,500」，原来拼字符串时是「3500」；端口、id 也会变成「8,080」。
+- **原因**：本地化字符串里的整数按 locale 格式化（`Text("\(n)")` 一直是这样）。
+- **做法**：数量照用；端口、id、年份这种不是数量的写 `\(String(port))`。

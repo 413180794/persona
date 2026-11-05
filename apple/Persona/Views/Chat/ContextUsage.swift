@@ -27,7 +27,7 @@ nonisolated struct ContextUsage: Equatable, Sendable {
     init?(_ session: Session?) { self.init(tokens: session?.contextTokens, window: session?.contextWindow) }
 
     /// 「还剩 61%」.
-    var label: String { "还剩 \(left)%" }
+    var label: String { String(localized: "还剩 \(left)%") }
     /// 「172K / 200K」 (for VoiceOver).
     var detail: String { "\(Self.short(tokens)) / \(Self.short(window))" }
 

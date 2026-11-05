@@ -28,7 +28,7 @@ struct ApproveFirstIntent: AppIntent {
             let sessions = try await api.sessions()
             let session = sessions.first { $0.key == first.sessionKey }
             guard session?.canApprove == true else {
-                let hint = "此会话不允许审批，请打开 App 查看"
+                let hint = String(localized: "此会话不允许审批，请打开 App 查看")
                 return .result(value: hint, dialog: IntentSupport.dialog(hint))
             }
             try await api.resolve(first.id, resolution)

@@ -271,11 +271,11 @@ struct FileViewer: View {
             case .audio:
                 if let audio = page.audio { AudioFileView(model: audio) }
             case .binary:
-                EmptyStateView(symbol: Theme.Icon.missingFile, title: "无法预览",
-                               message: "\(file.mime ?? "二进制文件") · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
+                EmptyStateView(symbol: Theme.Icon.missingFile, title: String(localized: "无法预览"),
+                               message: "\(file.mime ?? String(localized: "二进制文件")) · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
             }
         } else if let error = page?.error {
-            EmptyStateView(symbol: Theme.Icon.error, title: "打不开这个文件", message: error)
+            EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "打不开这个文件"), message: error)
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -472,12 +472,14 @@ final class FileViewerModel {
     private(set) var language: String?
     /// What is not shown yet (pages on the machine, why a .json shows as text).
     private(set) var note: String?
+    /// The "read so far" note last shown, to clear it once reading is done.
+    @ObservationIgnored private var progressNote: String?
     /// Lines past the coloring caps: only said where the text itself shows (not over a JSON outline).
     private(set) var colorNote: String?
 
     var shownNote: String? {
         let parts = [note, shownSource === code ? colorNote : nil].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: "；")
+        return parts.isEmpty ? nil : parts.joined(separator: String(localized: "；", comment: "Separator between two notes about a file"))
     }
     /// Bumped when the shown source is a new one.
     private(set) var version = 0
@@ -579,7 +581,7 @@ final class FileViewerModel {
         case .notebook: await buildNotebook()
         default: break
         }
-        if f.truncated, f.next == nil { note = "文件太大，只显示了前 \(ByteCountFormatter.string(fromByteCount: Int64(text.utf8.count), countStyle: .file))" }
+        if f.truncated, f.next == nil { note = String(localized: "文件太大，只显示了前 \(ByteCountFormatter.string(fromByteCount: Int64(text.utf8.count), countStyle: .file))") }
     }
 
     /// Opened at a line (a message's `path:12`): the source, read up to that line, with the line marked. Rendered
@@ -615,7 +617,7 @@ final class FileViewerModel {
         source.onColored = { [weak self, weak source] in
             guard let self, let source else { return }
             self.perf.mark("colored", bytes: 0)
-            self.colorNote = source.doc.capped ? "只给前 \(source.doc.highlightedLines) 行上了色，后面是纯文本" : nil
+            self.colorNote = source.doc.capped ? String(localized: "只给前 \(source.doc.highlightedLines) 行上了色，后面是纯文本") : nil
         }
         version += 1
         updateNote()
@@ -626,8 +628,9 @@ final class FileViewerModel {
         if next > 0 {
             let read = ByteCountFormatter.string(fromByteCount: next, countStyle: .file)
             let all = ByteCountFormatter.string(fromByteCount: f.size, countStyle: .file)
-            note = kind == .json ? "已读 \(read) / \(all)，正在读完整个文件…" : "已读 \(read) / \(all)，往下滑接着读"
-        } else if note?.hasPrefix("已读") == true {
+            note = kind == .json ? String(localized: "已读 \(read) / \(all)，正在读完整个文件…") : String(localized: "已读 \(read) / \(all)，往下滑接着读")
+            progressNote = note
+        } else if note != nil, note == progressNote {
             note = nil
         }
     }
@@ -673,7 +676,7 @@ final class FileViewerModel {
         let parsed = await Task.detached(priority: .userInitiated) { Result { try Notebook(data: data) } }.value
         switch parsed {
         case .success(let n): notebook = n
-        case .failure(let e): note = next > 0 ? "文件太大，按文本显示" : e.localizedDescription
+        case .failure(let e): note = next > 0 ? String(localized: "文件太大，按文本显示") : e.localizedDescription
         }
     }
 
@@ -691,8 +694,8 @@ final class FileViewerModel {
             version += 1
             perf.mark("outline", bytes: o.bytes.count)
         case .failure(let e):
-            let why = (e as? JSONOutline.ParseError).map { "\($0.message)（第 \($0.offset) 字节）" } ?? e.localizedDescription
-            note = next > 0 ? "文件太大，按文本显示" : "不是有效的 JSON，按文本显示：\(why)"
+            let why = (e as? JSONOutline.ParseError).map { String(localized: "\($0.message)（第 \($0.offset) 字节）") } ?? e.localizedDescription
+            note = next > 0 ? String(localized: "文件太大，按文本显示") : String(localized: "不是有效的 JSON，按文本显示：\(why)")
         }
     }
 }

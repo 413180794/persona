@@ -195,7 +195,7 @@ struct ExtensionSlotsSettingsSection: View {
                     }
                     .bareListRow()
                 } header: {
-                    SettingsHeading("扩展")
+                    SettingsHeading(String(localized: "扩展"))
                 }
             }
         }

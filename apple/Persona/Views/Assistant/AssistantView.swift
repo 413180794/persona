@@ -370,7 +370,7 @@ struct FirstMessagePending: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
-            TypingIndicator(text: "\(name) 正在准备…")
+            TypingIndicator(text: String(localized: "\(name) 正在准备…"))
         }
         .padding(.horizontal, Theme.Space.l) // the chat's list margins
         .frame(maxWidth: ChatView.readableWidth)
@@ -472,12 +472,12 @@ struct AssistantWelcome: View {
     var send: (String, [ImagePayload]) -> Void
 
     private let suggestions: [(symbol: String, title: String, prompt: String)] = [
-        ("calendar", "今天的安排", "看一下我今天的安排：iPhone 日历和飞书日历都查，合并后按时间列出来。"),
-        (Theme.Icon.mailAccounts, "要处理的邮件", "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"),
-        ("macbook.and.iphone", "电脑在忙什么", "我各台电脑上的 Agent 现在都在忙什么？哪些在等我、哪些跑完了还没看？"),
-        ("bubble.left.and.text.bubble.right", "飞书消息", "总结一下我今天飞书上收到的重要消息，哪些需要我回复。"),
-        ("person.2.wave.2", "会前准备", "看看我今天接下来的会，挑最重要的一个帮我准备：议程、相关文档、上次的纪要和没完成的待办。"),
-        ("heart.text.square", "这周的健康", "根据我 iPhone 上的健康数据，总结一下这周的步数、睡眠和运动情况。"),
+        ("calendar", String(localized: "今天的安排"), String(localized: "看一下我今天的安排：iPhone 日历和飞书日历都查，合并后按时间列出来。")),
+        (Theme.Icon.mailAccounts, String(localized: "要处理的邮件"), String(localized: "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。")),
+        ("macbook.and.iphone", String(localized: "电脑在忙什么"), String(localized: "我各台电脑上的 Agent 现在都在忙什么？哪些在等我、哪些跑完了还没看？")),
+        ("bubble.left.and.text.bubble.right", String(localized: "飞书消息"), String(localized: "总结一下我今天飞书上收到的重要消息，哪些需要我回复。")),
+        ("person.2.wave.2", String(localized: "会前准备"), String(localized: "看看我今天接下来的会，挑最重要的一个帮我准备：议程、相关文档、上次的纪要和没完成的待办。")),
+        ("heart.text.square", String(localized: "这周的健康"), String(localized: "根据我 iPhone 上的健康数据，总结一下这周的步数、睡眠和运动情况。")),
     ]
 
     var body: some View {
@@ -490,7 +490,7 @@ struct AssistantWelcome: View {
             }
             if AppStyle.current.usesBeautifulUI {
                 // BeautifulUI's list card: one row per thing to ask, its mark, what it is and how it is put.
-                BUIListSection("可以问我") {
+                BUIListSection(String(localized: "可以问我")) {
                     ForEach(suggestions, id: \.title) { s in
                         Button {
                             Haptics.tap()
@@ -557,10 +557,10 @@ struct AssistantWelcome: View {
 
     private var greeting: String {
         switch Calendar.current.component(.hour, from: .now) {
-        case 5..<11: "早上好"
-        case 11..<13: "中午好"
-        case 13..<18: "下午好"
-        default: "晚上好"
+        case 5..<11: String(localized: "早上好")
+        case 11..<13: String(localized: "中午好")
+        case 13..<18: String(localized: "下午好")
+        default: String(localized: "晚上好")
         }
     }
 }
@@ -664,7 +664,7 @@ struct StarterComposer: View {
         let files = videos.ready
         // Nothing to send: a second ⏎ on the Mac before the field redraws (#785) would start an empty conversation.
         guard !videos.busy, !t.isEmpty || !images.isEmpty || !files.isEmpty else { return }
-        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? "请看视频" : "请看图片") : t, files: files)
+        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? String(localized: "请看视频") : String(localized: "请看图片")) : t, files: files)
         // The keyboard goes down with the send: the conversation that takes over has a field of its own, and the keyboard
         // coming back up and going down again on the way moved the first message up and down with it (#1911).
         focused = false
@@ -689,7 +689,7 @@ struct StarterComposer: View {
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             if !images.isEmpty { ComposerImages(images: $images) }
             if let shell {
-                ShellComposerBar(placeholder: "问 \(model.persona.name)", text: $text, selection: $selection, focused: $focused,
+                ShellComposerBar(placeholder: String(localized: "问 \(model.persona.name)"), text: $text, selection: $selection, focused: $focused,
                                  canSend: canSend, hasAttachments: !images.isEmpty || !videos.items.isEmpty,
                                  modesTitle: StarterModesMenu.title(modes: shell, launchers: launchers, model: model),
                                  history: "assistant.new", send: submit) {
@@ -699,7 +699,7 @@ struct StarterComposer: View {
                 }
                 .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID)))?.filter(\.runsAssistant) ?? [] }
             } else {
-                ComposerRow(placeholder: placeholder ?? "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
+                ComposerRow(placeholder: placeholder ?? String(localized: "问 \(model.persona.name)…"), text: $text, selection: $selection, focused: $focused, canSend: canSend,
                             send: submit, history: "assistant.new") {
                     attachments
                 }
@@ -727,7 +727,7 @@ struct StarterComposer: View {
                 if !movies.isEmpty { videos.start(movies, machine: machine, model: model) }
                 for item in items where !PickedMovie.isVideo(item) {
                     guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
-                        AppModel.shared.toast = Toast("有照片读不出来（可能还在 iCloud 里没下载完）", style: .error)
+                        AppModel.shared.toast = Toast(String(localized: "有照片读不出来（可能还在 iCloud 里没下载完）"), style: .error)
                         continue
                     }
                     let scaled = img.scaledDown(maxSide: 1600)
@@ -779,7 +779,7 @@ struct BeautifulStarterComposer: View {
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             if !images.isEmpty { ComposerImages(images: $images) }
-            PromptComposer(placeholder: placeholder ?? "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused,
+            PromptComposer(placeholder: placeholder ?? String(localized: "问 \(model.persona.name)…"), text: $text, selection: $selection, focused: $focused,
                            hasAttachments: !images.isEmpty || !videos.items.isEmpty || !quotes.isEmpty, disabled: disabled,
                            attach: PromptItems.attachments(camera: false),
                            mentions: { PromptItems.sessions(model.sessionsNow, except: nil) },
@@ -805,12 +805,12 @@ struct BeautifulStarterComposer: View {
                                let typed = text
                                let t = typed.trimmingCharacters(in: .whitespacesAndNewlines)
                                if videos.busy { // nothing goes; the bar clears the box right after this, so it is put back
-                                   model.toast = Toast("视频还在上传，传完再发送")
+                                   model.toast = Toast(String(localized: "视频还在上传，传完再发送"))
                                    Task { text = typed }
                                    return
                                }
                                let files = videos.ready
-                               let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? "参考上面的内容。" : "请看视频") : "请看图片") : t,
+                               let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? String(localized: "参考上面的内容。") : String(localized: "请看视频")) : String(localized: "请看图片")) : t,
                                                                files: files)
                                // Quoted sessions ride along as <jarvis-context> tags before what was typed, as in a chat.
                                send(quotes.isEmpty ? body : quotes.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
@@ -844,7 +844,7 @@ struct BeautifulStarterComposer: View {
                 if !movies.isEmpty { videos.start(movies, machine: machine, model: model) }
                 for item in items where !PickedMovie.isVideo(item) {
                     guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
-                        AppModel.shared.toast = Toast("有照片读不出来（可能还在 iCloud 里没下载完）", style: .error)
+                        AppModel.shared.toast = Toast(String(localized: "有照片读不出来（可能还在 iCloud 里没下载完）"), style: .error)
                         continue
                     }
                     let scaled = img.scaledDown(maxSide: 1600)
@@ -926,14 +926,14 @@ struct AssistantToolsRow: View {
             let n = ToolPresentation.baseName(c.name)
             let label: String
             if n.hasPrefix("phone_") { label = "iPhone" }
-            else if n.hasPrefix("mail_") { label = "邮件" }
-            else if n == "Bash" { label = (c.input["command"]?.string ?? "").contains("ssh ") ? "电脑" : "命令" }
-            else if n == "Skill" { label = c.input["skill"]?.string ?? "技能" }
-            else if n.hasPrefix("Web") { label = "网页" }
+            else if n.hasPrefix("mail_") { label = String(localized: "邮件") }
+            else if n == "Bash" { label = (c.input["command"]?.string ?? "").contains("ssh ") ? String(localized: "电脑") : String(localized: "命令") }
+            else if n == "Skill" { label = c.input["skill"]?.string ?? String(localized: "技能") }
+            else if n.hasPrefix("Web") { label = String(localized: "网页") }
             else { label = ToolPresentation.verb(c.name) }
             if !seen.contains(label) { seen.append(label) }
         }
-        return seen.prefix(4).joined(separator: "、")
+        return seen.prefix(4).joined(separator: String(localized: "、", comment: "Separator between list items"))
     }
 }
 
@@ -1002,7 +1002,7 @@ struct StarterModesMenu: View {
             Text("跟随启动器").tag("")
             ForEach(SessionModes.assistantModes) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
         } label: {
-            Label("权限模式：\(SessionModes.mode(modes.mode)?.title ?? "跟随启动器")", systemImage: SessionModes.mode(modes.mode)?.symbol ?? Theme.Icon.askFirst)
+            Label("权限模式：\(SessionModes.mode(modes.mode)?.title ?? String(localized: "跟随启动器"))", systemImage: SessionModes.mode(modes.mode)?.symbol ?? Theme.Icon.askFirst)
         }
         .pickerStyle(.menu)
     }

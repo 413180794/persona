@@ -14,9 +14,9 @@ enum TextSize: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .small: "小"
-        case .standard: "标准"
-        case .large: "大"
+        case .small: String(localized: "小", comment: "Text size: small")
+        case .standard: String(localized: "标准", comment: "Text size: standard")
+        case .large: String(localized: "大", comment: "Text size: large")
         }
     }
 

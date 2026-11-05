@@ -18,17 +18,17 @@ nonisolated enum RecordingSpeechError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unsupportedLanguage: "这台设备没有适用于所选语言的本机转写模型"
-        case .noSpeechPermission: "语音识别权限未开启，请到系统设置中允许 Persona 使用"
-        case .modelUnavailable: "本机语音模型下载失败，请检查网络后重试"
-        case .empty: "录音中没有识别到语音"
+        case .unsupportedLanguage: String(localized: "这台设备没有适用于所选语言的本机转写模型")
+        case .noSpeechPermission: String(localized: "语音识别权限未开启，请到系统设置中允许 Persona 使用")
+        case .modelUnavailable: String(localized: "本机语音模型下载失败，请检查网络后重试")
+        case .empty: String(localized: "录音中没有识别到语音")
         }
     }
 }
 
 /// Groups timed words / tokens into sentences: ends at terminal punctuation, on a long pause, or when very long.
 nonisolated enum RecordingSentenceBuilder {
-    static let terminators: Set<Character> = [".", "?", "!", "。", "？", "！", "…", "؟", "।"]
+    static let terminators: Set<Character> = [".", "?", "!", "。", "？", "！", "…", "؟", "।"] // i18n-ignore
 
     /// Languages written without spaces between words.
     static func usesSpaces(_ locale: Locale) -> Bool {

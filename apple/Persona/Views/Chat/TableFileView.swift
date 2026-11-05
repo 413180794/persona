@@ -58,7 +58,7 @@ final class TableFileModel {
             return
         }
         guard let api else {
-            error = "尚未连接 hub"
+            error = String(localized: "尚未连接 hub")
             return
         }
         do {
@@ -147,13 +147,13 @@ struct TableFileView: View {
             if model.sheets.count > 1 { sheetBar }
             if let sheet = model.current {
                 if sheet.rows.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.sheet, title: "空表格", message: "这个工作表里没有内容")
+                    EmptyStateView(symbol: Theme.Icon.sheet, title: String(localized: "空表格"), message: String(localized: "这个工作表里没有内容"))
                 } else {
                     grid(sheet)
                     footer(sheet)
                 }
             } else if let error = model.error {
-                EmptyStateView(symbol: Theme.Icon.error, title: "打不开这个表格", message: error)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "打不开这个表格"), message: error)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -349,11 +349,11 @@ struct TableFileView: View {
     }
 
     private func summary(_ sheet: TableSheet) -> String {
-        var parts = ["\(sheet.rows.count) 行 × \(sheet.columns) 列"]
+        var parts = [String(localized: "\(sheet.rows.count) 行 × \(sheet.columns) 列")]
         if model.next > 0 {
-            parts.append("已读 \(ByteCountFormatter.string(fromByteCount: model.next, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: model.file.size, countStyle: .file))，往下滑接着读")
+            parts.append(String(localized: "已读 \(ByteCountFormatter.string(fromByteCount: model.next, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: model.file.size, countStyle: .file))，往下滑接着读"))
         }
-        if sheet.capped { parts.append("只显示了前 \(TableSheet.maxRows) 行") }
+        if sheet.capped { parts.append(String(localized: "只显示了前 \(TableSheet.maxRows) 行")) }
         return parts.joined(separator: " · ")
     }
 }

@@ -71,7 +71,7 @@ final class QuickLookFileModel {
         error = nil
         received = 0
         guard let api else {
-            error = "尚未连接 hub"
+            error = String(localized: "尚未连接 hub")
             return
         }
         let mine = generation
@@ -103,7 +103,7 @@ struct QuickLookFileView: View {
     var body: some View {
         Group {
             if let error = model.error {
-                EmptyStateView(symbol: Theme.Icon.error, title: "无法预览", message: error)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "无法预览"), message: error)
             } else if let url = model.localURL {
                 QuickLookView(url: url)
                     .accessibilityIdentifier("file-quicklook")

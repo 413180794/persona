@@ -40,7 +40,7 @@ struct AskJarvisIntent: AppIntent {
     /// The question as sent, the answer if it came in time, and the sentence to speak.
     private nonisolated func ask() async throws -> (String, String?, String) {
         let body = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty else { throw IntentFailureSentence("要问 Persona 什么？") }
+        guard !body.isEmpty else { throw IntentFailureSentence(String(localized: "要问 Persona 什么？")) }
         do {
             let api = try IntentSupport.client()
             let answer = try await AskPersonaFlow.ask(api, text: body)
@@ -90,7 +90,7 @@ nonisolated enum AskPersonaFlow {
 
 /// Pure wording / extraction for AskJarvisIntent (tested in SiriIntentsTests).
 nonisolated enum AskPersonaText {
-    static let pending = "已发给 Persona，它还在想。回答会出现在 Persona 的主对话里。"
+    static let pending = String(localized: "已发给 Persona，它还在想。回答会出现在 Persona 的主对话里。")
 
     /// The assistant's visible text after the user's message, in order.
     static func answer(in items: [Item]) -> String? {

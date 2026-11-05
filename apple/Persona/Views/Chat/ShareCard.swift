@@ -32,7 +32,7 @@ struct MessageShareCard: View {
             HStack(spacing: 10) {
                 avatar
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(message.isUser ? "我" : message.agent).font(.system(size: 15, weight: .semibold))
+                    Text(message.isUser ? String(localized: "我") : message.agent).font(.system(size: 15, weight: .semibold))
                     if !message.source.isEmpty {
                         Text(message.source).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -193,17 +193,17 @@ struct MessageShareSheet: View {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
             Haptics.error()
-            AppModel.shared.toast = Toast("没有相册权限：请在 设置 › Persona › 照片 里允许「仅添加照片」", style: .error)
+            AppModel.shared.toast = Toast(String(localized: "没有相册权限：请在 设置 › Persona › 照片 里允许「仅添加照片」"), style: .error)
             return
         }
         do {
             // `@Sendable`: Photos runs the block on its own queue, where main-actor code is a crash (BackgroundCallbackTests).
             try await PHPhotoLibrary.shared().performChanges { @Sendable in PHAssetChangeRequest.creationRequestForAsset(from: image) }
             Haptics.success()
-            AppModel.shared.toast = Toast("已保存到相册", style: .success)
+            AppModel.shared.toast = Toast(String(localized: "已保存到相册"), style: .success)
         } catch {
             Haptics.error()
-            if !error.isCancellation { AppModel.shared.toast = Toast("保存失败：\(error.localizedDescription)", style: .error) }
+            if !error.isCancellation { AppModel.shared.toast = Toast(String(localized: "保存失败：\(error.localizedDescription)"), style: .error) }
         }
     }
 }

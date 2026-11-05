@@ -23,29 +23,29 @@ nonisolated struct LarkLoadProblem: Equatable, Sendable {
     static let notLoggedInCode = "lark_not_logged_in"
 
     /// `subject` names what did not load in the catch-all title (这个会话, 这个话题).
-    static func of(_ error: Error, subject: String = "这个会话") -> LarkLoadProblem {
+    static func of(_ error: Error, subject: String = String(localized: "这个会话")) -> LarkLoadProblem {
         if isNotLoggedIn(error) {
-            return LarkLoadProblem(kind: .notLoggedIn, title: "飞书登录已失效",
-                                   message: "hub 所在机器上的飞书网关没有登录飞书。在那台机器上重新登录飞书网关，再回来重试。",
+            return LarkLoadProblem(kind: .notLoggedIn, title: String(localized: "飞书登录已失效"),
+                                   message: String(localized: "hub 所在机器上的飞书网关没有登录飞书。在那台机器上重新登录飞书网关，再回来重试。"),
                                    symbol: Theme.Icon.credentials,
-                                   inline: "飞书登录已失效：在 hub 所在的机器上重新登录飞书网关")
+                                   inline: String(localized: "飞书登录已失效：在 hub 所在的机器上重新登录飞书网关"))
         }
         if error.isOffline {
-            return LarkLoadProblem(kind: .offline, title: "连不上 hub", message: "检查网络连接后重试。",
+            return LarkLoadProblem(kind: .offline, title: String(localized: "连不上 hub"), message: String(localized: "检查网络连接后重试。"),
                                    symbol: Theme.Icon.offline, inline: nil)
         }
         if error.isTimeout {
-            return LarkLoadProblem(kind: .timeout, title: "加载超时", message: "hub 一直没有回应，稍后重试。",
+            return LarkLoadProblem(kind: .timeout, title: String(localized: "加载超时"), message: String(localized: "hub 一直没有回应，稍后重试。"),
                                    symbol: Theme.Icon.error, inline: nil)
         }
-        return LarkLoadProblem(kind: .other, title: "没能加载\(subject)", message: error.localizedDescription,
+        return LarkLoadProblem(kind: .other, title: String(localized: "没能加载\(subject)"), message: error.localizedDescription,
                                symbol: Theme.Icon.error, inline: error.shown)
     }
 
     /// The hub's code says so; a hub from before the code (502 with the Lark gateway's「未登录飞书」) is read by its words.
     static func isNotLoggedIn(_ error: Error) -> Bool {
         guard let e = error as? APIError else { return false }
-        return e.code == notLoggedInCode || (e.status == 502 && e.message.contains("未登录飞书"))
+        return e.code == notLoggedInCode || (e.status == 502 && e.message.contains("未登录飞书")) // i18n-ignore
     }
 }
 

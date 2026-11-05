@@ -54,8 +54,10 @@ struct WorktreeRow: View {
         .padding(.vertical, compact ? 0 : Theme.Space.xxs)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([main ? "主工作树" : "工作树", name, quiet ? "空闲" : "\(count) 个 Agent", open ? "已展开" : "已折叠"]
-            .joined(separator: "，"))
+        .accessibilityLabel([main ? String(localized: "主工作树") : String(localized: "工作树"), name,
+                             quiet ? String(localized: "空闲") : String(localized: "\(count) 个 Agent"),
+                             open ? String(localized: "已展开") : String(localized: "已折叠")]
+            .joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -87,8 +89,8 @@ struct ChildSpacesRow: View {
         .padding(.vertical, compact ? 0 : Theme.Space.xxs)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(["\(count) 个子项", StateCounts.spoken(group), open ? "已展开" : "已折叠"].filter { !$0.isEmpty }
-            .joined(separator: "，"))
+        .accessibilityLabel([String(localized: "\(count) 个子项"), StateCounts.spoken(group), open ? String(localized: "已展开") : String(localized: "已折叠")].filter { !$0.isEmpty }
+            .joined(separator: String(localized: "，", comment: "Separator between the parts of a VoiceOver label")))
         .accessibilityAddTraits(.isButton)
     }
 }

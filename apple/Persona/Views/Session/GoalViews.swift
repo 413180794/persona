@@ -18,7 +18,13 @@ extension GoalInfo {
                          ?? "\(used) tokens")
         }
         if let s = seconds, s > 0 {
-            parts.append(s < 3600 ? "\(max(s / 60, 1)) 分钟" : "\(s / 3600) 小时 \(s % 3600 / 60) 分")
+            if s < 3600 {
+                let m = max(s / 60, 1)
+                parts.append(String(localized: "\(m) 分钟"))
+            } else {
+                let h = s / 3600, m = s / 60
+                parts.append(String(localized: "\(h) 小时 \(m % 60) 分"))
+            }
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

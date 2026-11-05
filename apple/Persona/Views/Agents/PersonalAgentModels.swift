@@ -48,9 +48,9 @@ nonisolated struct PersonalAgentSourceStatus: Codable, Hashable, Sendable {
     /// What to do so this source lists agents, for an empty list; nil when it is set up.
     var setupHint: String? {
         switch setup {
-        case "missing": return "飞书网关的版本还没有个人 Agent，升级飞书网关后再试"
-        case "disabled": return "提供个人 Agent 的扩展没有开启它：按扩展的说明开启后重启"
-        case "no_accounts": return "还没有连接个人 Agent 账号：在飞书网关的设置里添加 Cue 或 Grok Bot"
+        case "missing": return String(localized: "飞书网关的版本还没有个人 Agent，升级飞书网关后再试")
+        case "disabled": return String(localized: "提供个人 Agent 的扩展没有开启它：按扩展的说明开启后重启")
+        case "no_accounts": return String(localized: "还没有连接个人 Agent 账号：在飞书网关的设置里添加 Cue 或 Grok Bot")
         default: return nil
         }
     }

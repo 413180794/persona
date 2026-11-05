@@ -680,7 +680,7 @@ final class TerminalScreenView: NSView, NSTextInputClient, NSMenuItemValidation 
         super.init(frame: frame)
         setAccessibilityElement(true)
         setAccessibilityRole(.staticText)
-        setAccessibilityLabel("终端")
+        setAccessibilityLabel(String(localized: "终端"))
         setAccessibilityIdentifier("terminal-screen")
         registerForDraggedTypes([.fileURL])
     }
@@ -801,9 +801,9 @@ final class TerminalScreenView: NSView, NSTextInputClient, NSMenuItemValidation 
             i.target = self
             menu.addItem(i)
         }
-        item("拷贝", Theme.Icon.copy, #selector(copy(_:)), "c")
-        if host?.canPaste == true { item("粘贴", Theme.Icon.paste, #selector(paste(_:)), "v") }
-        item("全选", Theme.Icon.select, #selector(selectAll(_:)), "a")
+        item(String(localized: "拷贝"), Theme.Icon.copy, #selector(copy(_:)), "c")
+        if host?.canPaste == true { item(String(localized: "粘贴"), Theme.Icon.paste, #selector(paste(_:)), "v") }
+        item(String(localized: "全选"), Theme.Icon.select, #selector(selectAll(_:)), "a")
         return menu
     }
 

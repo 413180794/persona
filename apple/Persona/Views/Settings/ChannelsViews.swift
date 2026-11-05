@@ -40,7 +40,7 @@ struct ChannelsEntryRow: View {
                 Group {
                     NavigationLink(value: SettingsPage.channels) {
                         if AppStyle.current.usesBeautifulUI {
-                            SettingsRow(title: "渠道", symbol: Theme.Icon.channels, tint: Theme.accent, value: ChannelText.summary(channels), look: .oneLine)
+                            SettingsRow(title: String(localized: "渠道"), symbol: Theme.Icon.channels, tint: Theme.accent, value: ChannelText.summary(channels), look: .oneLine)
                         } else {
                             LabeledContent {
                                 Text(ChannelText.summary(channels)).lineLimit(1)
@@ -75,7 +75,7 @@ struct ChannelsView: View {
         SettingsForm {
             if let list = page.channels, list.isEmpty {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.channels, title: "没有渠道", message: "这个 hub 还没列出任何渠道。")
+                    EmptyStateView(symbol: Theme.Icon.channels, title: String(localized: "没有渠道"), message: String(localized: "这个 hub 还没列出任何渠道。"))
                         .listRowBackground(Color.clear)
                 }
             }
@@ -100,7 +100,7 @@ struct ChannelsView: View {
         }
         .themedPage()
         .overlay { if page.channels == nil && page.loading { ProgressView() } }
-        .detailTitle("渠道")
+        .detailTitle(String(localized: "渠道"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await page.load() }
         .refreshable { await page.load() }
@@ -187,11 +187,11 @@ struct ChannelDetailView: View {
             }
         }
         .themedPage()
-        .detailTitle(page.channel?.name ?? "渠道")
+        .detailTitle(page.channel?.name ?? String(localized: "渠道"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: model.config) { await page.load() }
         .refreshable { await page.load() }
-        .confirmationDialog("解除和\(page.channel?.name ?? "它")的绑定？", isPresented: $confirmUnbind, titleVisibility: .visible) {
+        .confirmationDialog("解除和\(unbindName)的绑定？", isPresented: $confirmUnbind, titleVisibility: .visible) {
             Button("解除绑定", role: .destructive) { Task { await page.unbind() } }
         } message: {
             Text("解除后它不再把消息交给 Persona，在等的回答和提问一起清掉。再用要重新绑定。")
@@ -250,8 +250,11 @@ struct ChannelDetailView: View {
         }
     }
 
+    /// The channel in the unbind question.
+    private var unbindName: String { page.channel?.name ?? String(localized: "它", comment: "The channel, when its name is unknown") }
+
     private var stateText: String {
-        guard let c = page.channel else { return page.loading ? "正在读取…" : "读不到" }
+        guard let c = page.channel else { return page.loading ? String(localized: "正在读取…") : String(localized: "读不到") }
         var parts = [ChannelText.state(c)]
         if let a = c.account?.name, !a.isEmpty, !c.isMarket { parts.append(a) }
         return parts.joined(separator: " · ")
@@ -283,26 +286,26 @@ struct ChannelDetailView: View {
     @ViewBuilder private func bind(_ c: HubChannel) -> some View {
         if c.isBound {
             Section {
-                LabeledContent("绑定的账号") { Text(c.account?.name ?? "已绑定").lineLimit(1) }
+                LabeledContent("绑定的账号") { Text(c.account?.name ?? String(localized: "已绑定")).lineLimit(1) }
                 Button(role: .destructive) { confirmUnbind = true } label: { Text("解除绑定").lineLimit(1) }
                     .disabled(page.busy)
                     .accessibilityIdentifier("channel-unbind")
             } header: {
-                SettingsHeading("绑定")
+                SettingsHeading(String(localized: "绑定"))
             } footer: {
                 Text("只有绑定的这个人发给机器人的消息会交给 Persona；别人发来只回一句说明，群里一律不处理。")
             }
         } else if c.enabled {
             ConnectorSignInSteps(name: c.name, model: binding, reload: { await page.load(quietly: true) },
-                                 footer: bindFooter(c), heading: "绑定", start: ChannelText.bindTitle(c))
+                                 footer: bindFooter(c), heading: String(localized: "绑定"), start: ChannelText.bindTitle(c))
         }
     }
 
     private func bindFooter(_ c: HubChannel) -> String {
         switch c.bind {
-        case "qr": "用\(c.name)扫码，扫码的人就是这个渠道的主人；登录状态加密存在 hub 上，解除绑定时删掉。"
-        case "code": "把配对码发给机器人，发码的人就是这个渠道的主人。"
-        default: "凭据加密存在 hub 上，只交给这个渠道；之后可能还要配对一次，配对的人就是这个渠道的主人。"
+        case "qr": String(localized: "用\(c.name)扫码，扫码的人就是这个渠道的主人；登录状态加密存在 hub 上，解除绑定时删掉。")
+        case "code": String(localized: "把配对码发给机器人，发码的人就是这个渠道的主人。")
+        default: String(localized: "凭据加密存在 hub 上，只交给这个渠道；之后可能还要配对一次，配对的人就是这个渠道的主人。")
         }
     }
 
@@ -341,7 +344,7 @@ struct ChannelDetailView: View {
     private func choices(_ c: HubChannel) -> [Choice] {
         let main = model.assistantMain
         var out = model.assistantConversations.filter { $0.key != main }.prefix(15).map { s in
-            Choice(tag: "c:" + s.machineID + "/" + s.sessionID, title: s.title.isEmpty ? "新对话" : s.title)
+            Choice(tag: "c:" + s.machineID + "/" + s.sessionID, title: s.title.isEmpty ? String(localized: "新对话") : s.title)
         }
         if let t = c.target, t.kind == "conversation", case let tag = Self.tag(t), !out.contains(where: { $0.tag == tag }) {
             out.insert(Choice(tag: tag, title: ChannelText.target(t)), at: 0)
@@ -385,7 +388,7 @@ struct ChannelDetailView: View {
                 .accessibilityIdentifier("channel-feature-\(f.id)")
             }
         } header: {
-            SettingsHeading("功能")
+            SettingsHeading(String(localized: "功能"))
         }
     }
 
@@ -406,7 +409,7 @@ struct ChannelDetailView: View {
                         LabeledContent {
                             if let at = conv.at { Text(Fmt.relative(at)).lineLimit(1) }
                         } label: {
-                            Label { Text(conv.title?.isEmpty == false ? conv.title! : "一段对话").lineLimit(1) } icon: {
+                            Label { Text(conv.title?.isEmpty == false ? conv.title! : String(localized: "一段对话")).lineLimit(1) } icon: {
                                 Image(systemName: Theme.Icon.conversation)
                             }
                         }
@@ -414,7 +417,7 @@ struct ChannelDetailView: View {
                     .foregroundStyle(Color.primary)
                 }
             } header: {
-                SettingsHeading("最近")
+                SettingsHeading(String(localized: "最近"))
             }
         }
     }
@@ -423,7 +426,7 @@ struct ChannelDetailView: View {
         Section {
             Text(c.surfaces.joined(separator: "、")).font(Theme.Font.body)
         } header: {
-            SettingsHeading("这些地方都能用")
+            SettingsHeading(String(localized: "这些地方都能用"))
         }
     }
 
@@ -433,7 +436,7 @@ struct ChannelDetailView: View {
                 Text(line).font(Theme.Font.body)
             }
         } header: {
-            SettingsHeading("能做什么")
+            SettingsHeading(String(localized: "能做什么"))
         }
     }
 
@@ -447,7 +450,7 @@ struct ChannelDetailView: View {
             .disabled(page.busy)
             .accessibilityIdentifier("channel-test")
         } footer: {
-            Text(page.testResult ?? "只发给绑定的你自己，看看\(c.name)能不能收到。")
+            Text(page.testResult ?? String(localized: "只发给绑定的你自己，看看\(c.name)能不能收到。"))
         }
     }
 
@@ -464,9 +467,9 @@ struct ChannelDetailView: View {
 
     private func moreTitle(_ dest: SettingsPage) -> String {
         switch dest {
-        case .modelConfiguration: "模型配置"
-        case .plugin: "扩展设置"
-        default: "更多设置"
+        case .modelConfiguration: String(localized: "模型配置")
+        case .plugin: String(localized: "扩展设置")
+        default: String(localized: "更多设置")
         }
     }
 }

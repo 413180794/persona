@@ -52,7 +52,7 @@ import SwiftUI
 
     func start() {
         guard client == nil, let api = AppModel.shared.api(ref.group) else {
-            if AppModel.shared.api(ref.group) == nil { phase = .closed("连不上 hub") }
+            if AppModel.shared.api(ref.group) == nil { phase = .closed(String(localized: "连不上 hub")) }
             return
         }
         run(RFBClient(transport: RFBWebSocket(api: api, machine: ref.id)) { [weak self] in await self?.credentials() })
@@ -101,7 +101,7 @@ import SwiftUI
         if let t = typed { return t.0 }
         return await withCheckedContinuation { k in
             asked = k
-            phase = .signIn(failed: refusedKept ? "记住的密码不对了（那台 Mac 可能改过密码）：重新输入，连上后替换记住的那个" : nil)
+            phase = .signIn(failed: refusedKept ? String(localized: "记住的密码不对了（那台 Mac 可能改过密码）：重新输入，连上后替换记住的那个") : nil)
         }
     }
 
@@ -145,7 +145,7 @@ import SwiftUI
                 return
             }
             typed = nil
-            phase = .signIn(failed: why.isEmpty || why.contains("Authentication") ? "账号或密码不对" : "没登录上：\(why)")
+            phase = .signIn(failed: why.isEmpty || why.contains("Authentication") ? String(localized: "账号或密码不对") : String(localized: "没登录上：\(why)"))
             client = nil
         case .failed(let why):
             if case .closed = phase { return }
@@ -205,7 +205,7 @@ import SwiftUI
         input.type(text) { [weak self] in
             guard let self else { return }
             let name = AppModel.shared.machine(self.ref)?.name ?? self.ref.id
-            AppModel.shared.toast = Toast("没能写进 \(name) 的剪贴板，有一段字没打上", style: .error)
+            AppModel.shared.toast = Toast(String(localized: "没能写进 \(name) 的剪贴板，有一段字没打上"), style: .error)
         }
     }
 

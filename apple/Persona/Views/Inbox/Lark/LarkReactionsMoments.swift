@@ -117,7 +117,7 @@ struct LarkMomentsCard: View {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: "circle.hexagongrid.fill").font(Theme.Font.label).foregroundStyle(LarkColor.blue)
-                    Text(preview?.title ?? "公司圈动态").font(Theme.Font.secondaryStrong).lineLimit(1)
+                    Text(preview?.title ?? String(localized: "公司圈动态")).font(Theme.Font.secondaryStrong).lineLimit(1)
                 }
                 if let author = card?.author {
                     HStack(spacing: Theme.Space.s) {

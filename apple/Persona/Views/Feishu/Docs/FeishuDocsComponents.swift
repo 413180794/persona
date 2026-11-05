@@ -12,6 +12,7 @@ extension APIClient {
     func feishuDocsGet<T: Decodable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {
         var req = URLRequest(url: url("/api/v1/lark/raw/" + path, query: query), timeoutInterval: 60)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
         let (data, resp) = try await session.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else { throw FeishuDocsFailure(status: status, code: FeishuDocsFailure.code(from: data)) }
@@ -25,17 +26,17 @@ extension Error {
         if isCancellation { return nil }
         if let e = self as? URLError {
             switch e.code {
-            case .notConnectedToInternet, .networkConnectionLost: return "网络不可用"
-            case .timedOut: return "请求超时，请稍后重试"
+            case .notConnectedToInternet, .networkConnectionLost: return String(localized: "网络不可用")
+            case .timedOut: return String(localized: "请求超时，请稍后重试")
             #if os(macOS)
-            case .cannotConnectToHost, .cannotFindHost: return "连不上 hub（确认这台 Mac 能访问 hub）"
+            case .cannotConnectToHost, .cannotFindHost: return String(localized: "连不上 hub（确认这台 Mac 能访问 hub）")
             #else
-            case .cannotConnectToHost, .cannotFindHost: return "连不上 hub（确认手机能访问 hub）"
+            case .cannotConnectToHost, .cannotFindHost: return String(localized: "连不上 hub（确认手机能访问 hub）")
             #endif
             default: break
             }
         }
-        if self is DecodingError { return "飞书返回了无法识别的数据" }
+        if self is DecodingError { return String(localized: "飞书返回了无法识别的数据") }
         return localizedDescription
     }
 }
@@ -72,7 +73,7 @@ struct FeishuDocsListState: View {
             if loading {
                 ProgressView().controlSize(.large).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box260)
             } else if let error {
-                EmptyStateView(symbol: Theme.Icon.offline, title: "加载失败", message: error, action: ("重试", { Task { await retry() } }))
+                EmptyStateView(symbol: Theme.Icon.offline, title: String(localized: "加载失败"), message: error, action: (String(localized: "重试"), { Task { await retry() } }))
             } else {
                 EmptyStateView(symbol: empty.symbol, title: empty.title, message: empty.message)
             }

@@ -1,4 +1,5 @@
 #if DEBUG
+// i18n-ignore-file: DEBUG-only made-up recording for screenshots
 import Foundation
 
 /// 演示与截图只使用虚构文字，不启动麦克风；配对了 hub 时照常同步进它的知识库（UI 测试用 mock hub 验这一步）。

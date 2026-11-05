@@ -35,13 +35,13 @@ final class RecordingCapture {
             MainActor.assumeIsolated {
                 guard let self, self.state == .recording else { return }
                 do { try self.writer?.restartAfterConfigurationChange() }
-                catch { self.error = "麦克风发生变化，录音已暂停"; self.writer?.pause(); self.state = .paused }
+                catch { self.error = String(localized: "麦克风发生变化，录音已暂停"); self.writer?.pause(); self.state = .paused }
             }
         })
         observers.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { @Sendable [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, self.state == .recording else { return }
-                self.stop(); self.error = "系统音频服务已重置，已保存定稿部分，请重新开始录音"
+                self.stop(); self.error = String(localized: "系统音频服务已重置，已保存定稿部分，请重新开始录音")
             }
         })
     }
@@ -80,10 +80,10 @@ final class RecordingCapture {
         state = .starting; error = nil
         let allowed = await Self.permission()
         guard generation == token, state == .starting else { return }
-        guard allowed else { state = .idle; error = "请在系统设置中允许 Persona 使用麦克风"; return }
+        guard allowed else { state = .idle; error = String(localized: "请在系统设置中允许 Persona 使用麦克风"); return }
         if let problem = Self.resourceProblem(starting: true) { state = .idle; error = problem; return }
         guard RecordingMicrophone.shared.claim(microphoneOwner) else {
-            state = .idle; error = "麦克风正在用于听写，请先结束听写再录音"; return
+            state = .idle; error = String(localized: "麦克风正在用于听写，请先结束听写再录音"); return
         }
         do {
             try configureSession()
@@ -105,7 +105,7 @@ final class RecordingCapture {
             recordingID = nil; state = .idle
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             RecordingMicrophone.shared.release(microphoneOwner)
-            self.error = "麦克风打不开，请稍后重试"
+            self.error = String(localized: "麦克风打不开，请稍后重试")
         }
     }
 
@@ -120,7 +120,7 @@ final class RecordingCapture {
         if state == .recording { writer.pause(); state = .paused }
         else if state == .paused {
             do { try configureSession(); try writer.resume(); state = .recording }
-            catch { self.error = "麦克风打不开，录音仍已保存" }
+            catch { self.error = String(localized: "麦克风打不开，录音仍已保存") }
         }
     }
 
@@ -187,10 +187,10 @@ final class RecordingCapture {
     private static func resourceProblem(starting: Bool) -> String? {
         let attributes = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory())
         let free = (attributes?[.systemFreeSize] as? NSNumber)?.int64Value
-        if let free, free < (starting ? 300_000_000 : 150_000_000) { return "存储空间不足，已保存的录音不会丢失" }
+        if let free, free < (starting ? 300_000_000 : 150_000_000) { return String(localized: "存储空间不足，已保存的录音不会丢失") }
         #if os(watchOS)
         let device = WKInterfaceDevice.current(); device.isBatteryMonitoringEnabled = true
-        if device.batteryState == .unplugged, device.batteryLevel >= 0, device.batteryLevel < 0.05 { return "手表电量过低，已保存的录音不会丢失" }
+        if device.batteryState == .unplugged, device.batteryLevel >= 0, device.batteryLevel < 0.05 { return String(localized: "手表电量过低，已保存的录音不会丢失") }
         #endif
         return nil
     }

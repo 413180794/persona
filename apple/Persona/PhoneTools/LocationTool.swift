@@ -26,8 +26,8 @@ enum LocationTool {
     static func current() async throws -> [ToolContent] {
         switch LocationAccess.status() {
         case .granted: break
-        case .denied: throw ToolFailure(.denied, "位置 / Location")
-        case .notDetermined: throw ToolFailure(.denied, "位置尚未授权 / Location access has not been requested yet")
+        case .denied: throw ToolFailure(.denied, "位置 / Location") // i18n-ignore
+        case .notDetermined: throw ToolFailure(.denied, "位置尚未授权 / Location access has not been requested yet") // i18n-ignore
         case .limited, .notNeeded: break
         }
 
@@ -107,7 +107,7 @@ nonisolated final class OneShotLocation: NSObject, CLLocationManagerDelegate, @u
                 guard let self else { return }
                 self.pending = nil
                 gate.fail(ToolFailure(.unavailable,
-                    "15 秒内没拿到定位 / No location fix within 15 seconds. "
+                    "15 秒内没拿到定位 / No location fix within 15 seconds. " // i18n-ignore
                         + "The phone may be indoors or location services may be off."))
             }
         }
@@ -115,7 +115,7 @@ nonisolated final class OneShotLocation: NSObject, CLLocationManagerDelegate, @u
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else {
-            pending?.fail(ToolFailure(.unavailable, "定位服务没有返回位置 / Location services returned no location"))
+            pending?.fail(ToolFailure(.unavailable, "定位服务没有返回位置 / Location services returned no location")) // i18n-ignore
             pending = nil
             return
         }
@@ -126,8 +126,8 @@ nonisolated final class OneShotLocation: NSObject, CLLocationManagerDelegate, @u
     func locationManager(_ manager: CLLocationManager, didFailWithError error: any Error) {
         let code = (error as? CLError)?.code
         let message = code == .denied
-            ? "定位被拒绝 / Location access was denied"
-            : "定位失败 / Location failed: \(error.localizedDescription)"
+            ? "定位被拒绝 / Location access was denied" // i18n-ignore
+            : "定位失败 / Location failed: \(error.localizedDescription)" // i18n-ignore
         pending?.fail(ToolFailure(code == .denied ? .denied : .unavailable, message))
         pending = nil
     }

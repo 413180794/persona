@@ -4,7 +4,7 @@ nonisolated extension ColorSpec {
     /// Claude's terracotta, the original Persona look. Once a style of its own (Liquid Glass in this color); since
     /// 主题色 is a choice of its own it is only a color (`AppearanceChoice` moves a saved Claude to 液态玻璃 + this).
     static let coral = ColorSpec(
-        title: "珊瑚橙", subtitle: "Claude",
+        title: String(localized: "珊瑚橙"), subtitle: "Claude",
         // Dark enough for white words on solid buttons and selected chips (≥ 3.5:1).
         accent: Pair(light: 0xD4683F, dark: 0xCD6E45),
         // White words on the bubble need ≥ 4.5:1: deeper than the accent.

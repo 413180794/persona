@@ -88,7 +88,7 @@ struct KnowledgeView: View {
         .modifier(MacBelowTitleRowIfAsked()) // under 知识库's title in the window: the list starts below it (#1243)
         #endif
         .themedPage()
-        .detailTitle("知识库") // pushed in Persona's page: ‹ 知识库 in the title row on the Mac
+        .detailTitle(String(localized: "知识库")) // pushed in Persona's page: ‹ 知识库 in the title row on the Mac
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             #if os(macOS)
@@ -98,7 +98,7 @@ struct KnowledgeView: View {
         }
         // Always shown: the drawer that hides on scroll folded away as soon as results replaced the list (the chips
         // row goes), taking the typed text out of sight (2026-10-31).
-        .pageSearchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索档案和聊天记录")
+        .pageSearchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: String(localized: "搜索档案和聊天记录"))
         .task(id: query) { await search() }
         .task(id: "\(kind.rawValue)|\(tag ?? "")") { await load() }
         .onChange(of: kind) { showIgnored = false }
@@ -144,8 +144,8 @@ struct KnowledgeView: View {
     @ViewBuilder private func content(_ list: KBList) -> some View {
         if list.items.isEmpty {
             Section {
-                EmptyStateView(symbol: kind.symbol, title: tag == nil ? "还没有\(kind.title)" : "没有带 #\(tag!) 的\(kind.title)",
-                               message: "hub 会把飞书和邮件里的会话归档、压缩，自动整理出项目、人、文档和会议，并按重要级和相关性排好。")
+                EmptyStateView(symbol: kind.symbol, title: tag == nil ? String(localized: "还没有\(kind.title)") : String(localized: "没有带 #\(tag!) 的\(kind.title)"),
+                               message: String(localized: "hub 会把飞书和邮件里的会话归档、压缩，自动整理出项目、人、文档和会议，并按重要级和相关性排好。"))
             }
             .listRowBackground(Color.clear)
         } else if kind == .projects {
@@ -154,9 +154,9 @@ struct KnowledgeView: View {
             let rest = active.filter { $0.importance != "P0" && $0.importance != "P1" }
             let done = list.items.filter(\.projectDone)
             let ignored = list.items.filter(\.projectIgnored)
-            if !focus.isEmpty { Section { rows(focus) } header: { header("重点", focus.count) } }
-            if !rest.isEmpty { Section { rows(rest) } header: { header(focus.isEmpty ? "进行中" : "其他进行中", rest.count) } }
-            if !done.isEmpty { Section { rows(done) } header: { header("已完成", done.count) } }
+            if !focus.isEmpty { Section { rows(focus) } header: { header(String(localized: "重点"), focus.count) } }
+            if !rest.isEmpty { Section { rows(rest) } header: { header(focus.isEmpty ? String(localized: "进行中") : String(localized: "其他进行中"), rest.count) } }
+            if !done.isEmpty { Section { rows(done) } header: { header(String(localized: "已完成"), done.count) } }
             if !ignored.isEmpty {
                 Section {
                     Button { withAnimation(Theme.Motion.standard) { showIgnored.toggle() } } label: {
@@ -180,7 +180,7 @@ struct KnowledgeView: View {
             let ranked = tag != nil ? list.items : list.items.filter { !($0.importance ?? "").isEmpty }
             let rest = tag != nil ? [] : list.items.filter { ($0.importance ?? "").isEmpty }
             if !ranked.isEmpty {
-                Section { rows(ranked) } header: { header(tag.map { "#" + $0 } ?? "按重要级和相关性", ranked.count) }
+                Section { rows(ranked) } header: { header(tag.map { "#" + $0 } ?? String(localized: "按重要级和相关性"), ranked.count) }
             }
             if !rest.isEmpty {
                 Section {
@@ -407,7 +407,7 @@ struct KBKindBar: View {
     }
 
     /// 1985 → "1985" (no grouping comma: the chip is narrow), past 9999 → "1万+".
-    static func count(_ n: Int) -> String { n > 9999 ? "1万+" : String(n) }
+    static func count(_ n: Int) -> String { n > 9999 ? String(localized: "1万+") : String(n) }
 }
 
 /// One ranked entry: a kind tile carrying the importance, the name, its one-line state, then tags and when it changed.
@@ -445,8 +445,8 @@ struct KBRow: View {
     private func badges(tags: Int) -> some View {
         HStack(spacing: Theme.Space.sm) {
             ImportanceBadge(importance: entry.importance)
-            if let k = entry.projectKind { KBPill(text: k, tint: k == "长期" ? Theme.Hue.blue : nil) }
-            if entry.relevance > 0 { KBPill(text: "相关 \(entry.relevance)", tint: RelevanceMeter.tint(entry.relevance)) }
+            if let k = entry.projectKind { KBPill(text: k, tint: (entry.extra ?? "").hasPrefix("long") ? Theme.Hue.blue : nil) }
+            if entry.relevance > 0 { KBPill(text: String(localized: "相关 \(entry.relevance)"), tint: RelevanceMeter.tint(entry.relevance)) }
             ForEach((entry.tags ?? []).prefix(tags), id: \.self) { t in
                 Text("#" + t).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).fixedSize()
             }
@@ -464,7 +464,7 @@ struct KBAvatar: View {
         let kind = KBKind(rawValue: entry.kind)
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).fill(tint.opacity(0.14))
-            if kind == .people || kind == .chats, let c = entry.name.first(where: { !$0.isWhitespace && !"#@（(【[「『《〈\"'“‘".contains($0) }) {
+            if kind == .people || kind == .chats, let c = entry.name.first(where: { !$0.isWhitespace && !"#@（(【[「『《〈\"'“‘".contains($0) }) { // i18n-ignore
                 Text(String(c).uppercased()).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(tint)
             } else {
                 Image(systemName: kind?.symbol ?? Theme.Icon.unchecked).font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(tint)
@@ -621,7 +621,7 @@ struct KnowledgeDetailView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                    } header: { sectionHeader("在做这个项目的 Agent", agents.count) }
+                    } header: { sectionHeader(String(localized: "在做这个项目的 Agent"), agents.count) }
                 }
                 if let log = d.log, !log.isEmpty { timeline(log) }
                 // Empty once the header's parts are taken out (a summary that is just the one line): no blank card.
@@ -715,9 +715,9 @@ struct KnowledgeDetailView: View {
                     Text(e.name).font(Theme.Font.title).lineLimit(3)
                     HStack(spacing: Theme.Space.sm) {
                         ImportanceBadge(importance: e.importance)
-                        if let k = e.projectKind { KBPill(text: k + "项目", tint: k == "长期" ? Theme.Hue.blue : nil) }
+                        if let k = e.projectKind { KBPill(text: String(localized: "\(k)项目"), tint: (e.extra ?? "").hasPrefix("long") ? Theme.Hue.blue : nil) }
                         if let st = projectStatus { KBPill(text: st) }
-                        if e.relevance > 0 { KBPill(text: "相关 \(e.relevance)", tint: RelevanceMeter.tint(e.relevance)) }
+                        if e.relevance > 0 { KBPill(text: String(localized: "相关 \(e.relevance)"), tint: RelevanceMeter.tint(e.relevance)) }
                     }
                 }
             }
@@ -762,10 +762,10 @@ struct KnowledgeDetailView: View {
     private var projectStatus: String? {
         guard entry.kind == KBKind.projects.rawValue, let st = detail?.detail.meta?["status"]?.string ?? entry.extra?.components(separatedBy: " · ").last else { return nil }
         switch st {
-        case "paused": return "暂停"
-        case "done": return "已完成"
-        case "ignored": return "不是项目"
-        case "merged": return "已合并"
+        case "paused": return String(localized: "暂停")
+        case "done": return String(localized: "已完成")
+        case "ignored": return String(localized: "不是项目")
+        case "merged": return String(localized: "已合并")
         default: return nil
         }
     }
@@ -793,7 +793,7 @@ struct KnowledgeDetailView: View {
                     Text(allMoments ? "收起" : "全部 \(moments.count) 条").font(Theme.Font.secondaryMedium).lineLimit(1)
                 }
             }
-        } header: { sectionHeader("相关" + KBMoments.feedName(moments), moments.count) }
+        } header: { sectionHeader(String(localized: "相关\(KBMoments.feedName(moments))"), moments.count) }
     }
 
     /// A project merged into another (same work under two names): where it went.
@@ -883,7 +883,7 @@ struct KnowledgeDetailView: View {
                 }
                 .listRowSeparator(.hidden)
             }
-        } header: { sectionHeader("时间线", lines.count) }
+        } header: { sectionHeader(String(localized: "时间线"), lines.count) }
     }
 
     // MARK: Related
@@ -909,7 +909,7 @@ struct KnowledgeDetailView: View {
                             Text(open ? "收起" : "全部 \(group.count) 个").font(Theme.Font.secondaryMedium).lineLimit(1)
                         }
                     }
-                } header: { sectionHeader("关联的" + k.title, group.count) }
+                } header: { sectionHeader(String(localized: "关联的\(k.title)"), group.count) }
             }
         }
         if !dirs.isEmpty {
@@ -921,7 +921,7 @@ struct KnowledgeDetailView: View {
                         Image(systemName: Theme.Icon.folder).foregroundStyle(.secondary)
                     }
                 }
-            } header: { sectionHeader("代码目录", dirs.count) }
+            } header: { sectionHeader(String(localized: "代码目录"), dirs.count) }
         }
     }
 
@@ -931,7 +931,7 @@ struct KnowledgeDetailView: View {
         let one = oneLine?.trimmingCharacters(in: .whitespaces) ?? ""
         return dropTitle(md).components(separatedBy: "\n").filter { line in
             let t = line.trimmingCharacters(in: .whitespaces)
-            return !(t.hasPrefix("重要级 ") && t.contains("相关性")) && (one.isEmpty || t != one)
+            return !(t.hasPrefix("重要级 ") && t.contains("相关性")) && (one.isEmpty || t != one) // i18n-ignore
         }
         .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -957,8 +957,8 @@ struct KnowledgeDetailView: View {
     private var context: ContextRef {
         let kindTitle = KBKind(rawValue: entry.kind)?.title ?? ""
         var text = detail?.detail.summary ?? entry.oneLine ?? ""
-        if let log = detail?.detail.log, !log.isEmpty { text += "\n\n时间线（最近）：\n" + log.suffix(10).joined(separator: "\n") }
-        if let path = detail?.detail.path { text += "\n\n知识库目录：\(path)" }
+        if let log = detail?.detail.log, !log.isEmpty { text += "\n\n时间线（最近）：\n" + log.suffix(10).joined(separator: "\n") } // i18n-ignore
+        if let path = detail?.detail.path { text += "\n\n知识库目录：\(path)" } // i18n-ignore
         return ContextRef(kind: "context", title: "\(kindTitle) · \(shown.name)", url: "", text: text)
     }
 
@@ -967,7 +967,7 @@ struct KnowledgeDetailView: View {
     }
 
     private func ask() async {
-        await model.askJarvis(context.xml + "\n\n说说「\(shown.name)」现在怎么样了：最新进展、在等我的事、接下来该做什么，能替我处理的先处理。")
+        await model.askJarvis(context.xml + "\n\n说说「\(shown.name)」现在怎么样了：最新进展、在等我的事、接下来该做什么，能替我处理的先处理。") // i18n-ignore
     }
 
     private func load() async {
@@ -1076,16 +1076,17 @@ struct ItemFacts {
         guard let k = KBKind(rawValue: kind), [.docs, .meetings, .events].contains(k), let meta else { return nil }
         at = meta["at"]?.string.flatMap(Self.parse)
         url = meta["url"]?.string.flatMap { $0.isEmpty ? nil : URL(string: $0) }
-        whenLabel = k == .docs ? "提到的时间" : k == .meetings ? "开会时间" : "时间"
-        openLabel = k == .docs ? "打开文档" : k == .meetings ? "打开会议纪要" : "打开日程"
+        whenLabel = k == .docs ? String(localized: "提到的时间") : k == .meetings ? String(localized: "开会时间") : String(localized: "时间")
+        openLabel = k == .docs ? String(localized: "打开文档") : k == .meetings ? String(localized: "打开会议纪要") : String(localized: "打开日程")
     }
 
     /// "10月30日 周五 14:00" (24-hour: SwiftUI's hour style is 12-hour in Chinese, docs/lessons/ios.md), the year when not this one.
     static func format(_ d: Date, now: Date = .now) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
+        f.locale = .current
         let sameYear = Calendar.current.component(.year, from: d) == Calendar.current.component(.year, from: now)
-        f.dateFormat = sameYear ? "M月d日 EEE HH:mm" : "yyyy年M月d日 HH:mm"
+        // Templates with HH keep the 24-hour clock; zh-Hans renders "M月d日 EEE HH:mm" / "y年M月d日 HH:mm".
+        f.setLocalizedDateFormatFromTemplate(sameYear ? "MMMdEEEHHmm" : "yMMMdHHmm")
         return f.string(from: d)
     }
 
@@ -1107,7 +1108,7 @@ struct KBMatchRow: View {
     var body: some View {
         let hit = match.hit
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Text(hit.day.map { "聊天记录 · " + KBDayView.title($0) } ?? hit.source)
+            Text(hit.day.map { String(localized: "聊天记录 · \(KBDayView.title($0))") } ?? hit.source)
                 .font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
             if match.day != nil {
                 if let b = match.before?.last { context(b) }
@@ -1122,7 +1123,7 @@ struct KBMatchRow: View {
 
     private func context(_ raw: String) -> some View {
         let l = KBMessageLine(raw)
-        return Text(l.sender.isEmpty ? l.text : l.sender + "：" + l.text)
+        return Text(l.sender.isEmpty ? l.text : String(localized: "\(l.sender)：\(l.text)"))
             .font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
     }
 }
@@ -1258,14 +1259,14 @@ struct KBDayView: View {
     }()
     private static let shortFormat: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "M月d日 EEE"
+        f.locale = .current
+        f.setLocalizedDateFormatFromTemplate("MMMdEEE") // zh-Hans: "M月d日 EEE"
         return f
     }()
     private static let longFormat: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "yyyy年M月d日 EEE"
+        f.locale = .current
+        f.setLocalizedDateFormatFromTemplate("yMMMdEEE") // zh-Hans: "y年M月d日 EEE"
         return f
     }()
 }
@@ -1432,10 +1433,10 @@ struct KBTagEditor: View {
 enum AgentHandoff {
     static func prompt(_ s: Session, machine: String?) -> String {
         let title = s.title.isEmpty ? (s.cwd as NSString).lastPathComponent : s.title
-        var text = "机器：\(machine ?? s.machineID)（\(s.machineID)）\n会话：\(s.sessionID)\n目录：\(s.cwd)\n状态：\(s.state.rawValue)"
-        if let last = s.lastText, !last.isEmpty { text += "\n最后说的：\(String(last.prefix(800)))" }
+        var text = "机器：\(machine ?? s.machineID)（\(s.machineID)）\n会话：\(s.sessionID)\n目录：\(s.cwd)\n状态：\(s.state.rawValue)" // i18n-ignore
+        if let last = s.lastText, !last.isEmpty { text += "\n最后说的：\(String(last.prefix(800)))" } // i18n-ignore
         let ref = ContextRef(kind: "context", title: "Agent · \(title)", url: "", text: text)
-        return ref.xml + "\n\n看一下这个 Agent（agent_read）：它在做什么、做到哪了、有没有在等我。它属于哪个项目就把进展记进项目（kb_update，没登记目录的顺便登记 dirs）；"
-            + "需要我拍板的列出来，能替我推进的直接推进。"
+        return ref.xml + "\n\n看一下这个 Agent（agent_read）：它在做什么、做到哪了、有没有在等我。它属于哪个项目就把进展记进项目（kb_update，没登记目录的顺便登记 dirs）；" // i18n-ignore
+            + "需要我拍板的列出来，能替我推进的直接推进。" // i18n-ignore
     }
 }

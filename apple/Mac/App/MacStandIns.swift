@@ -42,6 +42,7 @@ final class WatchSync: NSObject {
 
     func activate() {}
     func push(_ all: WatchConfigs) {}
+    func push(language: String) {}
 
     func push(summary: @autoclosure () -> WatchSummary) {}
 }

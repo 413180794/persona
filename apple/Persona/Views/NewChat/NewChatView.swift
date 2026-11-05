@@ -61,7 +61,7 @@ struct NewChatView: View {
     private var defaultLabel: String {
         model.launcherDefaults[ref]?.label
             ?? LauncherDefault(provider: defaultLauncher.isEmpty ? nil : "launcher." + defaultLauncher, model: configuredModel).label
-            ?? "跟随模型配置"
+            ?? String(localized: "跟随模型配置")
     }
 
     /// The launcher runs Codex: it starts with its first message (Codex makes the thread then) and the start waits for it.
@@ -77,7 +77,8 @@ struct NewChatView: View {
         return SessionModes.effortLevels.filter { efforts.contains($0.id) }
     }
 
-    private var promptHint: String { codex ? "想让 Codex 做什么？（必填：Codex 收到第一条消息才建会话）" : "想让 Claude 做什么？（可以留空）" }
+    private var promptHint: String { codex ? String(localized: "想让 Codex 做什么？（必填：Codex 收到第一条消息才建会话）")
+                                       : String(localized: "想让 Claude 做什么？（可以留空）") }
 
     /// Nothing missing for 开始对话.
     private var ready: Bool {
@@ -85,7 +86,10 @@ struct NewChatView: View {
             && !(codex && contextBlock == nil && prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
-    private var startingLabel: String { "正在 \(machine?.name ?? "") 上启动\(codex ? " Codex" : "")…" }
+    private var startingLabel: String {
+        let name = machine?.name ?? ""
+        return codex ? String(localized: "正在 \(name) 上启动 Codex…") : String(localized: "正在 \(name) 上启动…")
+    }
 
     @ViewBuilder private var promptField: some View {
         #if os(macOS)
@@ -127,7 +131,7 @@ struct NewChatView: View {
                         HStack {
                             Image(systemName: Theme.Icon.folderFilled).foregroundStyle(Theme.accent)
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                                Text(cwd.isEmpty ? "选择目录" : (cwd as NSString).lastPathComponent).font(Theme.Font.heading)
+                                Text(cwd.isEmpty ? String(localized: "选择目录") : (cwd as NSString).lastPathComponent).font(Theme.Font.heading)
                                 if !cwd.isEmpty {
                                     Text(Fmt.path(cwd, home: machine?.home)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
                                 }
@@ -166,9 +170,9 @@ struct NewChatView: View {
                             Image(systemName: Theme.Icon.model).foregroundStyle(Theme.accent)
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 HStack(spacing: Theme.Space.sm) {
-                                    Text(launcher.isEmpty ? (unifiedModels ? defaultLabel : "选择启动器") : launcher).font(Theme.Font.heading.monospaced()).lineLimit(1)
+                                    Text(launcher.isEmpty ? (unifiedModels ? defaultLabel : String(localized: "选择启动器")) : launcher).font(Theme.Font.heading.monospaced()).lineLimit(1)
                                     // A pick over the default is for this start only.
-                                    if unifiedModels, !launcher.isEmpty { Chip(text: "仅这一次") }
+                                    if unifiedModels, !launcher.isEmpty { Chip(text: String(localized: "仅这一次")) }
                                 }
                                 if let l = launchers.first(where: { $0.name == launcher }), let m = l.model, !m.isEmpty {
                                     Text(m).font(Theme.Font.label).foregroundStyle(.secondary)
@@ -181,8 +185,9 @@ struct NewChatView: View {
                     .accessibilityIdentifier("newChat.launcher")
                     modelRow
                 } header: { Text(models?.models.isEmpty == false ? "启动器与模型（本次覆盖）" : "启动器（本次覆盖）") } footer: {
-                    Text((unifiedModels ? "默认使用「模型配置 › 新建 Agent」的设置。手动选择只影响这次会话，不改变全局默认。" : "来自这台机器的 Claude Code / Codex 启动器，会在终端引擎里新开一个标签页运行。")
-                         + (modelChoice?.canPick == true ? "模型和在终端里输入 /model 看到的一样。" : ""))
+                    let about = unifiedModels ? String(localized: "默认使用「模型配置 › 新建 Agent」的设置。手动选择只影响这次会话，不改变全局默认。")
+                        : String(localized: "来自这台机器的 Claude Code / Codex 启动器，会在终端引擎里新开一个标签页运行。")
+                    Text(modelChoice?.canPick == true ? String(localized: "\(about)模型和在终端里输入 /model 看到的一样。") : about)
                 }
 
                 if !codex { // Claude Code's modes; a Codex keeps its own
@@ -199,7 +204,8 @@ struct NewChatView: View {
                         }
                     } header: { Text("权限与思考") } footer: {
                         Text(SessionModes.mode(mode)?.detail
-                             ?? (effortOptions.isEmpty ? "这个模型不能调思考强度。权限模式在对话里也能随时改。" : "权限模式和思考强度在对话里也能随时改。"))
+                             ?? (effortOptions.isEmpty ? String(localized: "这个模型不能调思考强度。权限模式在对话里也能随时改。")
+                                                    : String(localized: "权限模式和思考强度在对话里也能随时改。")))
                     }
                     .pickerStyle(.menu)
                     .tint(Theme.accent)
@@ -230,7 +236,7 @@ struct NewChatView: View {
                 #if os(macOS)
                 // A Mac sheet's primary button sits beside 取消 and answers ⏎ (docs/mac.md「和 iOS 的对应」).
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(starting ? startingLabel : "开始对话") { Task { await start() } }
+                    Button(starting ? startingLabel : String(localized: "开始对话")) { Task { await start() } }
                         .lineLimit(1)
                         .disabled(starting || loading || !ready)
                 }
@@ -254,7 +260,7 @@ struct NewChatView: View {
                 } label: {
                     HStack(spacing: Theme.Space.s) {
                         if starting { ProgressView().tint(.white) }
-                        Text(starting ? startingLabel : "开始对话").font(Theme.Font.heading)
+                        Text(starting ? startingLabel : String(localized: "开始对话")).font(Theme.Font.heading)
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
                     .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
@@ -317,7 +323,7 @@ struct NewChatView: View {
                 }
                 Text(m.name).font(Theme.Font.secondaryStrong).lineLimit(1)
                 // Several groups of hubs: which group the machine is in, where the host name was.
-                Text(m.online ? (m.groupLabel ?? m.hostname ?? "在线") : "离线").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                Text(m.online ? (m.groupLabel ?? m.hostname ?? String(localized: "在线")) : String(localized: "离线")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             .scaledFrame(width: Theme.Size.box120, alignment: .leading)
             .padding(Theme.Space.m)
@@ -386,17 +392,18 @@ struct NewChatView: View {
             if c.canPick {
                 NavigationLink {
                     LauncherModelPicker(choice: c, picked: $pickedModel, refresh: { await loadModels(refresh: true) },
-                                        defaultFooter: "不指定模型：按启动器自己的设置\(c.configured.isEmpty ? "" : "和「模型配置」")运行。")
+                                        defaultFooter: c.configured.isEmpty ? String(localized: "不指定模型：按启动器自己的设置运行。")
+                                            : String(localized: "不指定模型：按启动器自己的设置和「模型配置」运行。"))
                 } label: {
-                    modelLabel(title: c.selected?.displayName ?? "默认模型", detail: c.detail, trailing: nil)
+                    modelLabel(title: c.selected?.displayName ?? String(localized: "默认模型"), detail: c.detail, trailing: nil)
                 }
                 .accessibilityIdentifier("newChat.model")
             } else {
-                modelLabel(title: "默认模型", detail: c.list.locked, trailing: Theme.Icon.locked)
+                modelLabel(title: String(localized: "默认模型"), detail: c.list.locked, trailing: Theme.Icon.locked)
                     .accessibilityIdentifier("newChat.model.locked")
             }
         } else if modelsLoading {
-            modelLabel(title: "模型", detail: "正在读取 \(runLauncher) 的模型列表…", trailing: nil)
+            modelLabel(title: String(localized: "模型"), detail: String(localized: "正在读取 \(runLauncher) 的模型列表…"), trailing: nil)
                 .accessibilityIdentifier("newChat.model.loading")
         }
     }
@@ -443,7 +450,7 @@ struct NewChatView: View {
 
     private func start() async {
         guard let api = model.api(ref.group) else {
-            error = "连不上这台电脑所在的 hub，请稍后再试。"
+            error = String(localized: "连不上这台电脑所在的 hub，请稍后再试。")
             return
         }
         starting = true
@@ -495,7 +502,7 @@ struct LauncherPicker: View {
     @Binding var selection: String
     var allowDefault = false
     /// The first row's words: 「默认：…」 (what runs with no pick).
-    var defaultLabel = "跟随模型配置"
+    var defaultLabel = String(localized: "跟随模型配置")
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
 
@@ -524,7 +531,7 @@ struct LauncherPicker: View {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
                             Text(l.name).font(Theme.Font.heading.monospaced()).foregroundStyle(.primary)
                             HStack(spacing: Theme.Space.sm) {
-                                if allowDefault, l.name == selection { Chip(text: "仅这一次", look: .tint(Theme.accent)) }
+                                if allowDefault, l.name == selection { Chip(text: String(localized: "仅这一次"), look: .tint(Theme.accent)) }
                                 if l.isCodex { Chip(text: "Codex") }
                                 if let m = l.model, !m.isEmpty { Chip(text: m) }
                                 if let host = l.baseURL.flatMap({ URL(string: $0)?.host() }) {
@@ -538,7 +545,7 @@ struct LauncherPicker: View {
                 }
             }
         }
-        .pageSearchable(text: $query, prompt: "函数名或模型")
+        .pageSearchable(text: $query, prompt: String(localized: "函数名或模型"))
         .themedPage()
         .navigationTitle("启动器")
     }
@@ -619,7 +626,7 @@ struct DirectoryBrowser: View {
             }
         }
         .themedPage()
-        .navigationTitle((path as NSString).lastPathComponent.isEmpty ? "目录" : (path as NSString).lastPathComponent)
+        .navigationTitle((path as NSString).lastPathComponent.isEmpty ? String(localized: "目录") : (path as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load(start) }
     }

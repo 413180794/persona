@@ -105,11 +105,16 @@ extension AppModel {
     func openPairing(_ url: URL) {
         guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
         guard MacPairing.accepts(isPaired: isPaired, isDemo: isDemo) else {
-            toast = Toast("已经连着 \(config?.url.host() ?? "一个 hub")：要换 hub，先在 设置 › 服务器 里断开", style: .error)
+            let host = config?.url.host() ?? String(localized: "一个 hub")
+            toast = Toast(String(localized: "已经连着 \(host)：要换 hub，先在 设置 › 服务器 里断开"), style: .error)
             return
         }
         Task {
-            do { try await pair(cfg); toast = Toast("已连接到 \(cfg.url.host() ?? "服务器")", style: .success) }
+            do {
+                try await pair(cfg)
+                let host = cfg.url.host() ?? String(localized: "服务器")
+                toast = Toast(String(localized: "已连接到 \(host)"), style: .success)
+            }
             catch { show(error) }
         }
     }

@@ -73,7 +73,7 @@ struct IslandSettingsView: View {
 
             if island.sides.left == .load || island.sides.right == .load {
                 Section("负载看哪台") {
-                    Picker("机器", selection: Binding(get: { island.machine ?? "" }, set: { island.machine = $0.isEmpty ? nil : $0 })) {
+                    Picker(String(localized: "picker.machine", defaultValue: "机器"), selection: Binding(get: { island.machine ?? "" }, set: { island.machine = $0.isEmpty ? nil : $0 })) {
                         Text("最忙的那台").tag("")
                         ForEach(model.machines) { Text($0.name).tag($0.id) }
                     }
@@ -102,7 +102,7 @@ struct IslandSettingsView: View {
         #endif
     }
 
-    private func preview(_ title: String, _ state: FleetState, _ island: IslandPrefs) -> some View {
+    private func preview(_ title: LocalizedStringKey, _ state: FleetState, _ island: IslandPrefs) -> some View {
         VStack(spacing: Theme.Space.sm) {
             IslandPreview(state: state.tailored(island: island, details: false), look: model.fleetLook)
             Text(title).font(Theme.Font.label).foregroundStyle(.secondary)
@@ -115,10 +115,10 @@ struct IslandSettingsView: View {
 
     static func summary(_ preset: IslandPrefs.Preset) -> String {
         switch preset {
-        case .a: "左边最急的数量，右边下一类：需要你、在工作、做完未看"
-        case .b: "左边状态，右边所有 Agent 每分钟输出的 token"
-        case .c: "左边状态，右边今天用掉的 token"
-        case .custom: "左右两侧各选一项"
+        case .a: String(localized: "左边最急的数量，右边下一类：需要你、在工作、做完未看")
+        case .b: String(localized: "左边状态，右边所有 Agent 每分钟输出的 token")
+        case .c: String(localized: "左边状态，右边今天用掉的 token")
+        case .custom: String(localized: "左右两侧各选一项")
         }
     }
 

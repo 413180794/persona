@@ -11,9 +11,9 @@ struct HubSSHTunnelPage: View {
             SSHTunnelForm(saved: hub.ssh, onSave: { model.setSSH($0, hub: hubID) }) {
                 if hub.ssh?.isUsable == true { status(hub) }
             }
-            .detailTitle("SSH 隧道")
+            .detailTitle(String(localized: "SSH 隧道"))
         } else {
-            EmptyStateView(symbol: Theme.Icon.sshTunnel, title: "这台 hub 已经断开", message: "回到 设置 › hub 重新配对。")
+            EmptyStateView(symbol: Theme.Icon.sshTunnel, title: String(localized: "这台 hub 已经断开"), message: String(localized: "回到 设置 › hub 重新配对。"))
         }
     }
 
@@ -21,8 +21,8 @@ struct HubSSHTunnelPage: View {
         let tunnels = SSHTunnels.shared
         let routed = tunnels.routed.contains(hub.id)
         let live = model.isLive(hub.group)
-        let now: String = routed ? (live ? "正在经 SSH 隧道连 hub" : "正在经 SSH 隧道连接…")
-            : live ? "没有使用：直连 hub 正常" : "未连接"
+        let now: String = routed ? (live ? String(localized: "正在经 SSH 隧道连 hub") : String(localized: "正在经 SSH 隧道连接…"))
+            : live ? String(localized: "没有使用：直连 hub 正常") : String(localized: "未连接")
         return Section {
             SettingsRow(title: now, symbol: routed ? Theme.Icon.sshTunnel : Theme.Icon.server, tint: routed ? Theme.positive : Theme.Hue.gray)
                 .accessibilityIdentifier("ssh.status")
@@ -30,7 +30,7 @@ struct HubSSHTunnelPage: View {
                 Text("上次失败：\(why)").font(Theme.Font.caption).foregroundStyle(Theme.danger)
             }
         } header: {
-            SettingsHeading("状态")
+            SettingsHeading(String(localized: "状态"))
         }
     }
 }
@@ -86,19 +86,19 @@ struct SSHTunnelForm<Status: View>: View {
             status()
             keySection
             Section {
-                field("主机", $host, prompt: "ssh.example.com", id: "ssh.host")
-                field("端口", $port, prompt: "22", digits: true, id: "ssh.port")
-                field("用户名", $user, prompt: "user 或 user:target", id: "ssh.user")
+                field(String(localized: "主机"), $host, prompt: "ssh.example.com", id: "ssh.host")
+                field(String(localized: "端口"), $port, prompt: "22", digits: true, id: "ssh.port")
+                field(String(localized: "用户名"), $user, prompt: String(localized: "user 或 user:target"), id: "ssh.user")
             } header: {
-                SettingsHeading("SSH 服务器")
+                SettingsHeading(String(localized: "SSH 服务器"))
             } footer: {
                 Text("这台设备能访问、它又能访问 hub 的 SSH 服务器。Warpgate 这类堡垒机的用户名写成 user:target。")
             }
             Section {
-                field("地址", $targetHost, prompt: SSHRoute.defaultTargetHost, id: "ssh.targetHost")
-                field("端口", $targetPort, prompt: String(SSHRoute.defaultTargetPort), digits: true, id: "ssh.targetPort")
+                field(String(localized: "地址"), $targetHost, prompt: SSHRoute.defaultTargetHost, id: "ssh.targetHost")
+                field(String(localized: "端口"), $targetPort, prompt: String(SSHRoute.defaultTargetPort), digits: true, id: "ssh.targetPort")
             } header: {
-                SettingsHeading("隧道目标")
+                SettingsHeading(String(localized: "隧道目标"))
             } footer: {
                 Text("从 SSH 服务器上看 hub 的地址。hub 就在这台服务器上时用 127.0.0.1:18660。")
             }
@@ -115,7 +115,7 @@ struct SSHTunnelForm<Status: View>: View {
                     }
                     .accessibilityIdentifier("ssh.hostKey")
                 } header: {
-                    SettingsHeading("服务器指纹")
+                    SettingsHeading(String(localized: "服务器指纹"))
                 } footer: {
                     Text("第一次连接时确认过。之后服务器的指纹变了会拒绝连接，不会自动接受。")
                 }
@@ -158,7 +158,7 @@ struct SSHTunnelForm<Status: View>: View {
             if saved != nil {
                 Section {
                     Button(role: .destructive) { removing = true } label: {
-                        SettingsRow(title: "删除 SSH 隧道", symbol: Theme.Icon.delete, tint: Theme.danger)
+                        SettingsRow(title: String(localized: "删除 SSH 隧道"), symbol: Theme.Icon.delete, tint: Theme.danger)
                     }
                     .modifier(SettingsButtonLook())
                     .bareListRow()
@@ -200,8 +200,8 @@ struct SSHTunnelForm<Status: View>: View {
 
     private var confirmTitle: String {
         switch confirm {
-        case .changed: "SSH 服务器的指纹变了"
-        default: "确认 SSH 服务器的指纹"
+        case .changed: String(localized: "SSH 服务器的指纹变了")
+        default: String(localized: "确认 SSH 服务器的指纹")
         }
     }
 
@@ -231,13 +231,13 @@ struct SSHTunnelForm<Status: View>: View {
                 .buttonStyle(.bordered)
                 #else
                 Button { copy(line) } label: {
-                    SettingsRow(title: "复制公钥", symbol: Theme.Icon.sshKey, tint: Theme.accent)
+                    SettingsRow(title: String(localized: "复制公钥"), symbol: Theme.Icon.sshKey, tint: Theme.accent)
                 }
                 .modifier(SettingsButtonLook())
                 .accessibilityIdentifier("ssh.copyKey")
                 .bareListRow()
                 Button { copy(authorizedKeysLine(key)) } label: {
-                    SettingsRow(title: "复制 authorized_keys 行", symbol: Theme.Icon.copy, tint: Theme.accent)
+                    SettingsRow(title: String(localized: "复制 authorized_keys 行"), symbol: Theme.Icon.copy, tint: Theme.accent)
                 }
                 .modifier(SettingsButtonLook())
                 .accessibilityIdentifier("ssh.copyAuthorizedKeys")
@@ -247,7 +247,7 @@ struct SSHTunnelForm<Status: View>: View {
                 Text(keyProblem).font(Theme.Font.secondary).foregroundStyle(Theme.danger)
             }
         } header: {
-            SettingsHeading("这台设备的公钥")
+            SettingsHeading(String(localized: "这台设备的公钥"))
         } footer: {
             Text("把「authorized_keys 行」加到 SSH 服务器上这个用户的 ~/.ssh/authorized_keys：它带着 restrict 和 permitopen，这把钥匙只能转发到下面的隧道目标，不能登录 shell。私钥只存在这台设备的钥匙串里。")
         }
@@ -295,7 +295,7 @@ struct SSHTunnelForm<Status: View>: View {
     private func copy(_ s: String) {
         UIPasteboard.general.string = s
         Haptics.tap()
-        model.toast = Toast("已复制", style: .success)
+        model.toast = Toast(String(localized: "已复制"), style: .success)
     }
 
     // MARK: Fields
@@ -392,7 +392,7 @@ struct SSHTunnelForm<Status: View>: View {
             pinned = seen
             onSave(route)
             Haptics.success()
-            model.toast = Toast("SSH 隧道已保存", style: .success)
+            model.toast = Toast(String(localized: "SSH 隧道已保存"), style: .success)
             if dismissOnSave { dismiss() }
         } catch SSHTunnelError.hostKeyUnknown(let fp, let alg) {
             Haptics.attention()
@@ -412,13 +412,13 @@ struct SSHTunnelForm<Status: View>: View {
         let target = route.targetHost.contains(":") ? "[\(route.targetHost)]:\(route.targetPort)" : "\(route.targetHost):\(route.targetPort)"
         return switch e {
         case .notAuthorized:
-            "SSH 服务器没有接受这台设备的公钥。把「复制 authorized_keys 行」拷的那一行加到服务器上 \(route.user) 的 ~/.ssh/authorized_keys（Warpgate：加到这个用户的公钥里），再试。"
+            String(localized: "SSH 服务器没有接受这台设备的公钥。把「复制 authorized_keys 行」拷的那一行加到服务器上 \(route.user) 的 ~/.ssh/authorized_keys（Warpgate：加到这个用户的公钥里），再试。")
         case .targetRefused(let why):
-            "登录成功，但服务器打不开到 \(target) 的转发（\(why)）。检查隧道目标、hub 是否在这个端口上，以及 authorized_keys 里 permitopen 的地址和这里一致。"
+            String(localized: "登录成功，但服务器打不开到 \(target) 的转发（\(why)）。检查隧道目标、hub 是否在这个端口上，以及 authorized_keys 里 permitopen 的地址和这里一致。")
         case .unreachable(let why):
-            "连不上 \(route.host):\(route.port)（\(why)）。检查地址和端口，以及这台设备能不能访问它。"
+            String(localized: "连不上 \(route.host):\(String(route.port))（\(why)）。检查地址和端口，以及这台设备能不能访问它。")
         case .handshake(let why):
-            "SSH 握手失败（\(why)）。服务器需要支持 Ed25519 或 ECDSA 主机密钥和 AES-GCM 加密。"
+            String(localized: "SSH 握手失败（\(why)）。服务器需要支持 Ed25519 或 ECDSA 主机密钥和 AES-GCM 加密。")
         default:
             e.localizedDescription
         }

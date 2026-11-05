@@ -10,6 +10,8 @@ options:
     watchOS: "10.0"
     macOS: "26.0"
     visionOS: "26.0"
+  # The String Catalogs' source language: the Chinese text is the key (docs/ios.md「界面语言」). The Info.plists say
+  # CFBundleDevelopmentRegion en, so a language the app does not have falls back to English (docs/i18n.md).
   developmentLanguage: zh-Hans
   createIntermediateGroups: true
 packages:
@@ -121,7 +123,7 @@ targets:
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleDevelopmentRegion: en
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
             CFBundleURLSchemes: [jarvis, persona]
@@ -177,7 +179,7 @@ targets:
         excludes: ["**/*.md"]
       - path: Shared
       - path: Persona
-        excludes: ["**/*.md", "App/PersonaApp.swift", "App/LiveActivityController.swift", "Resources/Info.plist", "Resources/Persona.entitlements"]
+        excludes: ["**/*.md", "App/PersonaApp.swift", "App/LiveActivityController.swift", "Resources/Info.plist", "Resources/InfoPlist.xcstrings", "Resources/Persona.entitlements"]
     dependencies:
       - target: PersonaMacNotify
       - package: MarkdownUI
@@ -235,7 +237,7 @@ targets:
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleDevelopmentRegion: en
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
             CFBundleURLSchemes: [jarvis, persona]
@@ -269,7 +271,7 @@ targets:
         excludes: ["**/*.md"]
       - path: Shared
       - path: Persona
-        excludes: ["**/*.md", "Resources/Info.plist", "Resources/Persona.entitlements"]
+        excludes: ["**/*.md", "Resources/Info.plist", "Resources/InfoPlist.xcstrings", "Resources/Persona.entitlements"]
       # The persona's pictures as the Live Activity keeps them (FleetFaces, FleetLookStore): AppModel reads them.
       - path: LiveActivity/FleetPersona.swift
       - path: LiveActivity/FleetIslandViews.swift
@@ -310,7 +312,7 @@ targets:
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleDevelopmentRegion: en
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
             CFBundleURLSchemes: [jarvis, persona]
@@ -350,6 +352,8 @@ targets:
       - path: Shared/Design/IslandMetrics.swift
       # The persona's face (the app's JarvisAvatar draws it too), on the activity's leading side.
       - path: Shared/Design/PersonaFace.swift
+      # The app's String Catalog and interface language (docs/ios.md「界面语言」).
+      - path: Shared/Localization
     entitlements:
       path: PersonaWidgets/PersonaWidgets.entitlements
       properties:
@@ -363,7 +367,7 @@ targets:
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleDevelopmentRegion: en
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
@@ -448,7 +452,7 @@ targets:
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleDevelopmentRegion: en
         WKApplication: true
         WKCompanionAppBundleIdentifier: $(JARVIS_BUNDLE_ID)
         UIBackgroundModes: [audio]
@@ -531,6 +535,9 @@ schemes:
       config: Debug
     test:
       targets: [PersonaTests, PersonaUITests]
+      # The tests' expectations and the pixel / layout baselines are the Chinese UI (docs/ios.md「界面语言」).
+      language: zh-Hans
+      region: CN
   PersonaWatch:
     build:
       targets:
@@ -546,6 +553,8 @@ schemes:
       config: Debug
     test:
       targets: [PersonaMacTests]
+      language: zh-Hans
+      region: CN
   PersonaVision:
     build:
       targets:
@@ -563,6 +572,9 @@ schemes:
       config: Debug
     test:
       targets: [PersonaTests, PersonaUITests]
+      # The tests' expectations and the pixel / layout baselines are the Chinese UI (docs/ios.md「界面语言」).
+      language: zh-Hans
+      region: CN
   JarvisWatch:
     build:
       targets:
@@ -578,3 +590,5 @@ schemes:
       config: Debug
     test:
       targets: [PersonaMacTests]
+      language: zh-Hans
+      region: CN

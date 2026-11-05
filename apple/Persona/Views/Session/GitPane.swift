@@ -68,7 +68,7 @@ struct GitPane: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: Theme.Icon.gitBranch).foregroundStyle(Theme.accent)
-                Text(s.branch ?? "分离的 HEAD").font(Theme.Font.heading).lineLimit(1)
+                Text(s.branch ?? String(localized: "分离的 HEAD")).font(Theme.Font.heading).lineLimit(1)
                 Spacer(minLength: Theme.Space.xs)
                 if s.ahead > 0 { sync(Theme.Icon.send, s.ahead, .secondary) }
                 if s.upstream != nil { pullButton(s) }
@@ -103,7 +103,7 @@ struct GitPane: View {
         } label: {
             HStack(spacing: Theme.Space.xs) {
                 if pullModel.isPulling { ProgressView().controlSize(.mini) }
-                Chip(text: pullModel.isPulling ? "拉取中" : s.behind > 0 ? "拉取 \(s.behind)" : "拉取",
+                Chip(text: pullModel.isPulling ? String(localized: "拉取中") : s.behind > 0 ? String(localized: "拉取 \(s.behind)") : String(localized: "拉取"),
                      symbol: pullModel.isPulling ? nil : Theme.Icon.down,
                      look: .tint(s.behind > 0 ? Theme.cautionText : Theme.accent))
                     .monospacedDigit()
@@ -151,7 +151,7 @@ struct GitPane: View {
     }
 
     @ViewBuilder private func history(_ s: GitStatus) -> some View {
-        Section("提交") {
+        Section(String(localized: "git.commits", defaultValue: "提交")) {
             ForEach(s.commits + older) { c in
                 Button { commit = c } label: { GitCommitRow(commit: c, isHead: c.hash == s.head?.hash) }
                     .buttonStyle(.plain)
@@ -331,7 +331,7 @@ struct GitDiffSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if target.file.isStaged && target.file.hasUnstaged {
-                    SegmentedChoice("", [(false, "未暂存"), (true, "已暂存")], selection: $target.staged)
+                    SegmentedChoice("", [(false, String(localized: "未暂存")), (true, String(localized: "已暂存"))], selection: $target.staged)
                     .padding(.horizontal, Theme.Space.l)
                     .padding(.vertical, Theme.Space.s)
                 }
@@ -348,7 +348,7 @@ struct GitDiffSheet: View {
                 }
             }
             .navigationTitle(target.file.name)
-            .navigationSubtitle(target.file.folder.isEmpty ? "仓库根目录" : target.file.folder)
+            .navigationSubtitle(target.file.folder.isEmpty ? String(localized: "仓库根目录") : target.file.folder)
             .navigationBarTitleDisplayMode(.inline)
             .pageToolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }

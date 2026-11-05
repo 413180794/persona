@@ -129,16 +129,16 @@ enum PhotosTool {
             throw ToolFailure(.invalidArgument, "no photo with id \"\(id)\"; call phone_photos_recent for current ids")
         }
         guard asset.mediaType == .image else {
-            throw ToolFailure(.unavailable, "这条是视频，只支持图片 / That asset is a video; only still images can be returned")
+            throw ToolFailure(.unavailable, "这条是视频，只支持图片 / That asset is a video; only still images can be returned") // i18n-ignore
         }
 
         let data: Data = try await loadImageData(asset)
         guard let source = UIImage(data: data) else {
-            throw ToolFailure(.unavailable, "无法解码这张照片 / Could not decode the photo data")
+            throw ToolFailure(.unavailable, "无法解码这张照片 / Could not decode the photo data") // i18n-ignore
         }
         let resized = resized(source, maxEdge: CGFloat(maxSize))
         guard let jpeg = resized.jpegData(compressionQuality: 0.7) else {
-            throw ToolFailure(.unavailable, "无法编码这张照片 / Could not encode the photo as JPEG")
+            throw ToolFailure(.unavailable, "无法编码这张照片 / Could not encode the photo as JPEG") // i18n-ignore
         }
 
         let description = Output.object([
@@ -167,7 +167,7 @@ enum PhotosTool {
             PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { @Sendable data, _, _, info in
                 // The handler can be called more than once (degraded, then full).
                 if let cancelled = info?[PHImageCancelledKey] as? Bool, cancelled {
-                    gate.fail(ToolFailure(.unavailable, "照片读取被取消 / The photo request was cancelled"))
+                    gate.fail(ToolFailure(.unavailable, "照片读取被取消 / The photo request was cancelled")) // i18n-ignore
                     return
                 }
                 if let error = info?[PHImageErrorKey] as? any Error {
@@ -177,7 +177,7 @@ enum PhotosTool {
                 if let data, !data.isEmpty {
                     gate.succeed(data)
                 } else if let inCloud = info?[PHImageResultIsInCloudKey] as? Bool, inCloud {
-                    gate.fail(ToolFailure(.unavailable, "照片还在 iCloud 里且无法下载 / The photo is in iCloud and could not be downloaded"))
+                    gate.fail(ToolFailure(.unavailable, "照片还在 iCloud 里且无法下载 / The photo is in iCloud and could not be downloaded")) // i18n-ignore
                 }
             }
         }

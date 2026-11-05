@@ -64,7 +64,7 @@ struct LarkPinnedShelf: View {
             }.frame(maxWidth: .infinity).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("置顶：" + conversation.name)
+        .accessibilityLabel(String(localized: "置顶：\(conversation.name)"))
         .accessibilityValue(conversation.badge > 0 ? "\(conversation.badge) 条未读" : "无未读消息")
         .accessibilityIdentifier("feishu-pin-" + conversation.id)
     }

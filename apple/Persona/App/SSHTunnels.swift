@@ -12,7 +12,7 @@ enum SSHKeys {
     static let account = "ssh.identity"
 
     struct Unavailable: LocalizedError {
-        var errorDescription: String? { "现在读不到这台设备的 SSH 密钥（解锁设备后再试）" }
+        var errorDescription: String? { String(localized: "现在读不到这台设备的 SSH 密钥（解锁设备后再试）") }
     }
 
     /// The key, made and saved when there is none yet. A keychain that cannot be read now (before the first unlock)

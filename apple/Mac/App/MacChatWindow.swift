@@ -15,9 +15,9 @@ struct MacChatWindow: View {
                         // The first page of its own window: nothing to go back to (no back arrow).
                         .environment(\.splitDetail, SplitDetail(isFirstPage: true, ownWindow: true))
                 }
-                .navigationTitle(model.session(key)?.displayTitle ?? "对话")
+                .navigationTitle(model.session(key)?.displayTitle ?? String(localized: "对话"))
             } else {
-                EmptyStateView(symbol: Theme.Icon.agents, title: "没有对话", message: "这个窗口打开的对话已经不在了。")
+                EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "没有对话"), message: String(localized: "这个窗口打开的对话已经不在了。"))
             }
         }
         .frame(minWidth: Theme.Size.macWindowMinHeight, minHeight: Theme.Size.macWindowMinHeight)
@@ -72,9 +72,9 @@ struct MacTerminalWindow: View {
             if let key {
                 TerminalPanel(key: key, switchTo: nil, grab: TerminalGrab(dragged: { _ in }, released: { _, _ in }, close: { NSApp.keyWindow?.close() }))
                     .padding(Theme.Space.xs)
-                    .navigationTitle("终端 · " + (model.session(key)?.displayTitle ?? key.sessionID))
+                    .navigationTitle(String(localized: "终端 · \(model.session(key)?.displayTitle ?? key.sessionID)"))
             } else {
-                EmptyStateView(symbol: Theme.Icon.terminal, title: "没有终端", message: "这个窗口打开的 Agent 已经不在了。")
+                EmptyStateView(symbol: Theme.Icon.terminal, title: String(localized: "没有终端"), message: String(localized: "这个窗口打开的 Agent 已经不在了。"))
             }
         }
         .frame(minWidth: Theme.Size.macWindowMinHeight, minHeight: Theme.Size.macWindowMinHeight)

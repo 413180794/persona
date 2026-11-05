@@ -9,16 +9,27 @@ import SwiftUI
 // MARK: - Formatting
 
 enum AssistantScheduleText {
-    static let dayNames = ["一", "二", "三", "四", "五", "六", "日"]
+    /// Short weekday names, Monday first.
+    static var dayNames: [String] {
+        [String(localized: "一", comment: "Weekday, short: Monday"), String(localized: "二", comment: "Weekday, short: Tuesday"),
+         String(localized: "三", comment: "Weekday, short: Wednesday"), String(localized: "四", comment: "Weekday, short: Thursday"),
+         String(localized: "五", comment: "Weekday, short: Friday"), String(localized: "六", comment: "Weekday, short: Saturday"),
+         String(localized: "日", comment: "Weekday, short: Sunday")]
+    }
+    /// "一、三、五": the separator between weekday names.
+    private static func dayList(_ days: Set<Int>) -> String {
+        days.sorted().map { dayNames[$0 - 1] }.joined(separator: String(localized: "、", comment: "Separator between weekday names, e.g. Mon, Wed"))
+    }
     static let workdays = [1, 2, 3, 4, 5]
 
     /// "每天" / "工作日" / "周末" / "每周一、三、五".
     static func repeats(_ days: [Int]) -> String {
         let d = Set(days)
-        if d.isEmpty || d.count == 7 { return "每天" }
-        if d == Set(workdays) { return "工作日" }
-        if d == [6, 7] { return "周末" }
-        return "每周" + d.sorted().map { dayNames[$0 - 1] }.joined(separator: "、")
+        if d.isEmpty || d.count == 7 { return String(localized: "每天") }
+        if d == Set(workdays) { return String(localized: "工作日") }
+        if d == [6, 7] { return String(localized: "周末") }
+        let list = dayList(d)
+        return String(localized: "每周\(list)")
     }
 
     /// The rule in words, as Reminders says it: "每个工作日 早上 9:00" / "每天 晚上 9:30" / "每周五 下午 5:00" /
@@ -26,16 +37,17 @@ enum AssistantScheduleText {
     static func sentence(_ r: APIClient.ScheduledTask) -> String {
         switch r.repeats {
         case .interval: return every(r.everyMinutes)
-        case .once: return r.at.map { "一次 · \(moment($0))" } ?? "一次"
+        case .once: return r.at.map { String(localized: "一次 · \(moment($0))") } ?? String(localized: "一次")
         case .daily: break
         }
         let d = Set(r.weekdays)
         let days: String
-        if d.isEmpty || d.count == 7 { days = "每天" }
-        else if d == Set(workdays) { days = "每个工作日" }
-        else if d == [6, 7] { days = "每个周末" }
-        else { days = "每周" + d.sorted().map { dayNames[$0 - 1] }.joined(separator: "、") }
-        return "\(days) \(clock(r.time))"
+        if d.isEmpty || d.count == 7 { days = String(localized: "每天") }
+        else if d == Set(workdays) { days = String(localized: "每个工作日") }
+        else if d == [6, 7] { days = String(localized: "每个周末") }
+        else { let list = dayList(d); days = String(localized: "每周\(list)") }
+        let time = clock(r.time)
+        return String(localized: "\(days) \(time)", comment: "Repeat rule and time of day, e.g. Every weekday 9:00 AM")
     }
 
     /// "09:00" → "早上 9:00", "21:30" → "晚上 9:30", "00:15" → "凌晨 12:15".
@@ -43,33 +55,34 @@ enum AssistantScheduleText {
         let parts = hhmm.split(separator: ":").compactMap { Int($0) }
         guard parts.count == 2 else { return hhmm }
         let (h, m) = (parts[0], parts[1])
-        let part = switch h {
-        case 0..<5: "凌晨"
-        case 5..<9: "早上"
-        case 9..<12: "上午"
-        case 12..<13: "中午"
-        case 13..<18: "下午"
-        default: "晚上"
-        }
         let h12 = h % 12 == 0 ? 12 : h % 12
-        return String(format: "%@ %d:%02d", part, h12, m)
+        let time = String(format: "%d:%02d", h12, m)
+        return switch h {
+        case 0..<5: String(localized: "凌晨 \(time)", comment: "12-hour time, 0:00–4:59")
+        case 5..<9: String(localized: "早上 \(time)", comment: "12-hour time, 5:00–8:59")
+        case 9..<12: String(localized: "上午 \(time)", comment: "12-hour time, 9:00–11:59")
+        case 12..<13: String(localized: "中午 \(time)", comment: "12-hour time, 12:00–12:59")
+        case 13..<18: String(localized: "下午 \(time)", comment: "12-hour time, 13:00–17:59")
+        default: String(localized: "晚上 \(time)", comment: "12-hour time, 18:00–23:59")
+        }
     }
 
     /// The day part of a moment: "今天" / "明天" / "昨天" / "周三" / "11月2日".
     static func day(_ date: Date, now: Date = .now) -> String {
         let cal = Calendar.current
-        if cal.isDateInToday(date) { return "今天" }
-        if cal.isDateInTomorrow(date) { return "明天" }
-        if cal.isDateInYesterday(date) { return "昨天" }
+        if cal.isDateInToday(date) { return String(localized: "今天") }
+        if cal.isDateInTomorrow(date) { return String(localized: "明天") }
+        if cal.isDateInYesterday(date) { return String(localized: "昨天") }
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
-        if abs(days) < 7 { return "周\(dayNames[(cal.component(.weekday, from: date) + 5) % 7])" }
-        return "\(cal.component(.month, from: date))月\(cal.component(.day, from: date))日"
+        if abs(days) < 7 { let name = dayNames[(cal.component(.weekday, from: date) + 5) % 7]; return String(localized: "周\(name)") }
+        return date.formatted(.dateTime.month().day())
     }
 
     /// "每 30 分钟" / "每 2 小时" / "每 1 小时 30 分钟".
     static func every(_ minutes: Int) -> String {
-        if minutes < 60 { return "每 \(minutes) 分钟" }
-        return minutes % 60 == 0 ? "每 \(minutes / 60) 小时" : "每 \(minutes / 60) 小时 \(minutes % 60) 分钟"
+        if minutes < 60 { return String(localized: "每 \(minutes) 分钟") }
+        let hours = minutes / 60, rest = minutes % 60
+        return rest == 0 ? String(localized: "每 \(hours) 小时") : String(localized: "每 \(hours) 小时 \(rest) 分钟")
     }
 
     /// The intervals the editor offers.
@@ -84,14 +97,14 @@ enum AssistantScheduleText {
     /// A row's rule line: the rule in words (a one-off: where it runs), then 只在提醒时推送 when 跑完推送 is
     /// 只在它自己提醒时 (on the line rather than as a second pill, which squeezes the title on a phone).
     static func ruleLine(_ r: APIClient.ScheduledTask) -> String {
-        let rule = r.repeats == .once ? (r.sessionID == nil ? "一次 · 新对话" : "一次 · 接着原来的对话") : sentence(r)
-        return r.pushesOnlyAsked ? rule + " · 只在提醒时推送" : rule
+        let rule = r.repeats == .once ? (r.sessionID == nil ? String(localized: "一次 · 新对话") : String(localized: "一次 · 接着原来的对话")) : sentence(r)
+        return r.pushesOnlyAsked ? String(localized: "\(rule) · 只在提醒时推送") : rule
     }
 
     /// What it runs with when that isn't the default, in a few words: "claude-fast · 自动改文件 · 思考低"; `danger`
     /// for 全部放行.
     static func runsWith(_ r: APIClient.ScheduledTask) -> (text: String, danger: Bool)? {
-        let parts = [r.launcher, SessionModes.modeLabel(r.permissionMode), r.effort.map { "思考\(SessionModes.effortLabel($0) ?? $0)" }]
+        let parts = [r.launcher, SessionModes.modeLabel(r.permissionMode), r.effort.map { let e = SessionModes.effortLabel($0) ?? $0; return String(localized: "思考\(e)") }]
             .compactMap { $0 }
         return parts.isEmpty ? nil : (parts.joined(separator: " · "), r.permissionMode == "bypassPermissions")
     }
@@ -100,23 +113,24 @@ enum AssistantScheduleText {
     static func lastRun(_ r: APIClient.ScheduledTask) -> (text: String, failed: Bool)? {
         guard let at = r.lastRun else { return nil }
         let word = switch r.lastStatus {
-        case "failed": "失败"
-        case "skipped": "已跳过"
-        case "ok": "已运行"
-        default: "已运行"
+        case "failed": String(localized: "失败")
+        case "skipped": String(localized: "已跳过")
+        case "ok": String(localized: "已运行")
+        default: String(localized: "已运行")
         }
-        return ("上次 \(moment(at)) · \(word)", r.lastStatus == "failed")
+        let when = moment(at)
+        return (String(localized: "上次 \(when) · \(word)"), r.lastStatus == "failed")
     }
 
     /// An SF Symbol for a task, from its title.
     static func symbol(_ r: APIClient.ScheduledTask) -> String {
-        let t = r.title
-        if t.contains("早") { return "sun.horizon" }
-        if t.contains("晚") || t.contains("回顾") { return "moon.stars" }
-        if t.contains("周报") || t.contains("报告") { return "doc.text" }
-        if t.contains("会") { return "person.2" }
-        if t.contains("盘点") || t.contains("待办") { return "checklist" }
-        if t.contains("巡检") || t.contains("检查") { return "binoculars" }
+        let t = r.title // matched against the Chinese titles of the templates and of what Persona creates
+        if t.contains("早") { return "sun.horizon" } // i18n-ignore
+        if t.contains("晚") || t.contains("回顾") { return "moon.stars" } // i18n-ignore
+        if t.contains("周报") || t.contains("报告") { return "doc.text" } // i18n-ignore
+        if t.contains("会") { return "person.2" } // i18n-ignore
+        if t.contains("盘点") || t.contains("待办") { return "checklist" } // i18n-ignore
+        if t.contains("巡检") || t.contains("检查") { return "binoculars" } // i18n-ignore
         return switch r.repeats {
         case .once: "arrow.turn.down.right"
         case .interval: "arrow.triangle.2.circlepath"
@@ -127,15 +141,16 @@ enum AssistantScheduleText {
     /// A future moment, roughly: "马上" / "25 分钟后" / "2 小时后" / "3 天后".
     static func until(_ date: Date, now: Date = .now) -> String {
         let s = date.timeIntervalSince(now)
-        if s < 60 { return s < -60 ? "已过时间" : "马上" }
-        if s < 3600 { return "\(Int(s / 60)) 分钟后" }
+        if s < 60 { return s < -60 ? String(localized: "已过时间") : String(localized: "马上") }
+        if s < 3600 { let minutes = Int(s / 60); return String(localized: "\(minutes) 分钟后") }
         if s < 86400 {
             let h = Int(s / 3600), m = Int(s.truncatingRemainder(dividingBy: 3600) / 60)
-            return h < 3 && m >= 10 ? "\(h) 小时 \(m) 分钟后" : "\(h) 小时后"
+            return h < 3 && m >= 10 ? String(localized: "\(h) 小时 \(m) 分钟后") : String(localized: "\(h) 小时后")
         }
         let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: now),
                                                    to: Calendar.current.startOfDay(for: date)).day ?? 0
-        return "\(max(days, 1)) 天后"
+        let n = max(days, 1)
+        return String(localized: "\(n) 天后")
     }
 
     /// "17:05", always 24-hour: `.hour(.twoDigits(amPM: .omitted))` in a Chinese locale gives the 12-hour "05:05".
@@ -151,11 +166,12 @@ enum AssistantScheduleText {
     static func moment(_ date: Date, now: Date = .now) -> String {
         let cal = Calendar.current
         let time = hm(date)
-        if cal.isDateInToday(date) { return "今天 \(time)" }
-        if cal.isDateInTomorrow(date) { return "明天 \(time)" }
+        if cal.isDateInToday(date) { return String(localized: "今天 \(time)") }
+        if cal.isDateInTomorrow(date) { return String(localized: "明天 \(time)") }
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
-        if days > 1, days < 7 { return "周\(dayNames[(cal.component(.weekday, from: date) + 5) % 7]) \(time)" }
-        return "\(cal.component(.month, from: date))月\(cal.component(.day, from: date))日 \(time)"
+        if days > 1, days < 7 { let name = dayNames[(cal.component(.weekday, from: date) + 5) % 7]; return String(localized: "周\(name) \(time)") }
+        let day = date.formatted(.dateTime.month().day())
+        return String(localized: "\(day) \(time)", comment: "Date and 24-hour time, e.g. Nov 2 09:00")
     }
 }
 
@@ -228,7 +244,7 @@ struct AssistantRoutinesView: View {
                                        description: Text("点右上角的 ＋，或者在对话里说「每天 9 点给我早报」「每 30 分钟巡检一次」，让 Persona 定时做一件事。"))
             }
         }
-        .pageTitle("定时任务")
+        .pageTitle(String(localized: "定时任务"))
         .pageToolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -331,9 +347,9 @@ struct AssistantTaskRow: View {
         let t = task
         let with = AssistantScheduleText.runsWith(t)
         let next = t.enabled ? (t.nextRun ?? t.at) : nil
-        let notes = [t.enabled ? next.map { "下次 \(AssistantScheduleText.moment($0))" } : "已关闭",
+        let notes = [t.enabled ? next.map { let m = AssistantScheduleText.moment($0); return String(localized: "下次 \(m)") } : String(localized: "已关闭"),
                      with?.text, AssistantScheduleText.lastRun(t)?.text,
-                     t.createdBy == "assistant" && t.repeats != .once ? "Persona 建的" : nil].compactMap { $0 }
+                     t.createdBy == "assistant" && t.repeats != .once ? String(localized: "Persona 建的") : nil].compactMap { $0 }
         return TaskRow(TaskItem(id: t.id, title: AssistantScheduleText.title(t),
                                 subtitle: AssistantScheduleText.ruleLine(t),
                                 footnote: notes.joined(separator: " · "), status: .pending(step: 0)),
@@ -428,17 +444,21 @@ struct AssistantRoutineTemplate: Identifiable {
     static let blank = APIClient.ScheduledTask(title: "", prompt: "", time: "09:00", weekdays: AssistantScheduleText.workdays)
 
     static let all: [AssistantRoutineTemplate] = [
-        .init(routine: .init(title: "会前准备", prompt: "看看今天飞书日历和 iPhone 日历里的会。对每个需要准备的会，用 schedule_followup 在会前 10 分钟" +
-                             "安排一次会前准备：相关文档、上次的会议纪要、还没定的事、我该说的要点。今天没有要准备的会就简单说一声。",
+        .init(routine: .init(title: String(localized: "会前准备"),
+                             prompt: "看看今天飞书日历和 iPhone 日历里的会。对每个需要准备的会，用 schedule_followup 在会前 10 分钟" + // i18n-ignore: prompt for the assistant (docs/i18n.md: prompts stay Chinese)
+                             "安排一次会前准备：相关文档、上次的会议纪要、还没定的事、我该说的要点。今天没有要准备的会就简单说一声。", // i18n-ignore
                              time: "08:45", weekdays: AssistantScheduleText.workdays), symbol: "person.2.badge.gearshape"),
-        .init(routine: .init(title: "周报", prompt: "帮我起草这周的周报：从飞书日历、会议纪要、文档和消息里整理这周做了什么、进展和结果、" +
-                             "遇到的问题、下周计划；各台电脑上的 Agent 这周完成的主要改动也算进去。先给我草稿，问我要不要改，不要直接发出去。",
+        .init(routine: .init(title: String(localized: "周报"),
+                             prompt: "帮我起草这周的周报：从飞书日历、会议纪要、文档和消息里整理这周做了什么、进展和结果、" + // i18n-ignore
+                             "遇到的问题、下周计划；各台电脑上的 Agent 这周完成的主要改动也算进去。先给我草稿，问我要不要改，不要直接发出去。", // i18n-ignore
                              time: "17:00", weekdays: [5]), symbol: Theme.Icon.document),
-        .init(routine: .init(title: "Agent 巡检", prompt: "看看各台电脑上的 Agent：哪些在等我、哪些卡住或报错了、哪些跑完了没人看。" +
-                             "有要我处理的就列出来（一行一个，说清楚在哪台电脑、等什么）；都正常就回一句「都正常」。",
+        .init(routine: .init(title: String(localized: "Agent 巡检"),
+                             prompt: "看看各台电脑上的 Agent：哪些在等我、哪些卡住或报错了、哪些跑完了没人看。" + // i18n-ignore
+                             "有要我处理的就列出来（一行一个，说清楚在哪台电脑、等什么）；都正常就回一句「都正常」。", // i18n-ignore
                              repeats: .interval, everyMinutes: 30), symbol: "binoculars"),
-        .init(routine: .init(title: "下班前盘点", prompt: "下班前盘点：今天还有哪些消息没回、答应别人的事还没做、各台电脑上还在跑或在等我的 Agent，" +
-                             "明天上午有哪些会要准备。按紧急程度列出来，最后问我哪些要设提醒。",
+        .init(routine: .init(title: String(localized: "下班前盘点"),
+                             prompt: "下班前盘点：今天还有哪些消息没回、答应别人的事还没做、各台电脑上还在跑或在等我的 Agent，" + // i18n-ignore
+                             "明天上午有哪些会要准备。按紧急程度列出来，最后问我哪些要设提醒。", // i18n-ignore
                              time: "18:30", weekdays: AssistantScheduleText.workdays), symbol: Theme.Icon.todo),
     ]
 }
@@ -560,7 +580,7 @@ struct AssistantTaskEditor: View {
             }
         }
         .themedPage()
-        .navigationTitle(creating ? "新建定时任务" : (draft.title.isEmpty ? "定时任务" : draft.title))
+        .navigationTitle(creating ? String(localized: "新建定时任务") : (draft.title.isEmpty ? String(localized: "定时任务") : draft.title))
         .navigationBarTitleDisplayMode(.inline)
         .sheetCancel(unsaved: !Self.same(opened, draft), when: creating) { dismiss() }
         .toolbar {
@@ -643,7 +663,7 @@ struct AssistantTaskEditor: View {
     /// 跑完推送 (docs/assistant.md「跑完推送」): every run's answer is pushed, or only what a run sends with notify_user.
     private var pushSection: some View {
         Section {
-            SegmentedChoice("跑完推送", [(value: "", label: "每次"), (value: APIClient.ScheduledTask.pushAsked, label: "只在它自己提醒时")],
+            SegmentedChoice(String(localized: "跑完推送"), [(value: "", label: String(localized: "每次")), (value: APIClient.ScheduledTask.pushAsked, label: String(localized: "只在它自己提醒时"))],
                             selection: push)
                 .accessibilityIdentifier("task-push")
         } header: {
@@ -675,7 +695,7 @@ struct AssistantTaskEditor: View {
             saved?.runMachineID = t.runMachineID
             saved?.runSessionID = t.runSessionID
             Haptics.success()
-            model.toast = Toast("下次运行会开一段新对话", style: .success)
+            model.toast = Toast(String(localized: "下次运行会开一段新对话"), style: .success)
         } catch {
             model.show(error)
         }
@@ -685,7 +705,7 @@ struct AssistantTaskEditor: View {
         Section {
             Group {
                 if AppStyle.current.usesBeautifulUI {
-                    BUISegmented([.init(APIClient.ScheduledTask.Repeat.once, "一次"), .init(.daily, "每天"), .init(.interval, "每隔")],
+                    BUISegmented([.init(APIClient.ScheduledTask.Repeat.once, String(localized: "一次")), .init(.daily, String(localized: "每天")), .init(.interval, String(localized: "每隔"))],
                                  selection: repeats, fills: true)
                 } else {
                     Picker("重复", selection: repeats) {
@@ -731,7 +751,7 @@ struct AssistantTaskEditor: View {
     /// The model (launcher), permission mode and effort a run starts claude with; "" in a picker = the default.
     private var runsWithSection: some View {
         Section {
-            ModelConfigurationLink(title: draft.id.isEmpty ? "任务默认模型" : "任务模型",
+            ModelConfigurationLink(title: draft.id.isEmpty ? String(localized: "任务默认模型") : String(localized: "任务模型"),
                                    purposeID: draft.id.isEmpty ? "schedule" : "task.\(draft.id)")
             // A Menu around an inline picker: a menu-style Picker greys out a value that has an icon, and 全部放行 is red.
             LabeledContent {
@@ -739,14 +759,14 @@ struct AssistantTaskEditor: View {
                     Picker("权限模式", selection: mode) {
                         Label { Text("默认"); Text("和平时一样：改文件、跑命令前先问你") } icon: { Image(systemName: Theme.Icon.askFirst) }.tag("")
                         ForEach(SessionModes.permissionModes.filter { $0.id != "default" }) { o in
-                            Label { Text(o.title); Text(o.id == "bypassPermissions" ? "什么都不问，有风险" : o.detail) } icon: { Image(systemName: o.symbol) }
+                            Label { Text(o.title); Text(o.id == "bypassPermissions" ? String(localized: "什么都不问，有风险") : o.detail) } icon: { Image(systemName: o.symbol) }
                                 .tag(o.id)
                         }
                     }
                     .pickerStyle(.inline)
                 } label: {
                     HStack(spacing: Theme.Space.xs) {
-                        Text(SessionModes.modeLabel(draft.permissionMode) ?? "默认").lineLimit(1)
+                        Text(SessionModes.modeLabel(draft.permissionMode) ?? String(localized: "默认")).lineLimit(1)
                         Image(systemName: Theme.Icon.choices).font(Theme.Font.labelStrong).imageScale(.small)
                     }
                     .foregroundStyle(draft.permissionMode == "bypassPermissions" ? Theme.danger : Theme.accent)
@@ -762,8 +782,8 @@ struct AssistantTaskEditor: View {
                 Label("全部放行：运行时跑命令、改文件都不再问你。", systemImage: "exclamationmark.shield.fill")
                     .foregroundStyle(Theme.danger)
             } else {
-                Text("定时任务在后台跑，要你批准时会推送到手机，没人点就一直等着。要它跑命令也不问你，可以选「自动」（自己判断风险）。"
-                     + (draft.sessionID != nil ? "接着原来的对话运行时，那段对话也会换成这里的设置。" : ""))
+                Text(String(localized: "定时任务在后台跑，要你批准时会推送到手机，没人点就一直等着。要它跑命令也不问你，可以选「自动」（自己判断风险）。")
+                     + (draft.sessionID != nil ? String(localized: "接着原来的对话运行时，那段对话也会换成这里的设置。", comment: "Appended right after the previous sentence") : ""))
             }
         }
     }
@@ -830,7 +850,7 @@ struct AssistantTaskEditor: View {
         guard !deleted, changed else { return saved }
         guard isValid else {
             if leaving {
-                model.toast = Toast(draft.repeats == .once ? "提示词要填，这次的修改没有保存" : "标题和提示词都要填，这次的修改没有保存", style: .error)
+                model.toast = Toast(draft.repeats == .once ? String(localized: "提示词要填，这次的修改没有保存") : String(localized: "标题和提示词都要填，这次的修改没有保存"), style: .error)
             }
             return nil
         }
@@ -883,15 +903,15 @@ struct AssistantWeekdayPicker: View {
                             .background(Circle().fill(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.secondary.opacity(0.14))))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("周\(AssistantScheduleText.dayNames[d - 1])")
+                    .accessibilityLabel(String(localized: "周\(AssistantScheduleText.dayNames[d - 1])"))
                     .accessibilityAddTraits(on ? .isSelected : [])
                     .frame(maxWidth: .infinity)
                 }
             }
             HStack(spacing: Theme.Space.s) {
-                shortcut("每天", [])
-                shortcut("工作日", AssistantScheduleText.workdays)
-                shortcut("周末", [6, 7])
+                shortcut(String(localized: "每天"), [])
+                shortcut(String(localized: "工作日"), AssistantScheduleText.workdays)
+                shortcut(String(localized: "周末"), [6, 7])
                 Spacer(minLength: 0)
             }
         }
@@ -971,10 +991,10 @@ struct AssistantMemoryEntry: Identifiable, Hashable {
 
     var typeTitle: String? {
         switch type {
-        case "user": "用户"
-        case "feedback": "反馈"
-        case "project": "项目"
-        case "reference": "参考"
+        case "user": String(localized: "用户", comment: "Memory kind")
+        case "feedback": String(localized: "反馈", comment: "Memory kind")
+        case "project": String(localized: "项目", comment: "Memory kind")
+        case "reference": String(localized: "参考", comment: "Memory kind")
         default: type
         }
     }
@@ -1055,7 +1075,7 @@ struct AssistantMemoryView: View {
             if let index, !entries.isEmpty {
                 Section {
                     NavigationLink {
-                        AssistantMemoryDetail(entry: AssistantMemoryEntry(index), title: "索引", space: page.space, onSaved: nil)
+                        AssistantMemoryDetail(entry: AssistantMemoryEntry(index), title: String(localized: "索引"), space: page.space, onSaved: nil)
                     } label: {
                         Label { Text("索引").foregroundStyle(Color.primary) } icon: { Image(systemName: Theme.Icon.list) }
                     }
@@ -1076,12 +1096,12 @@ struct AssistantMemoryView: View {
                                                                 : "Persona 会把你的偏好、纠正过它的地方记在这里。"))
             }
         }
-        .pageTitle(health ? "健康记忆" : "记忆")
+        .pageTitle(health ? String(localized: "健康记忆") : String(localized: "记忆"))
         .confirmationDialog("删除这条记忆？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible, presenting: pendingDelete) { e in
             Button("删除", role: .destructive) { Task { await delete(e) } }
         } message: { e in
-            Text("\(health ? "健康对话" : "Persona")以后不再记得「\(titles[e.file.name]?.title ?? e.name ?? e.file.name)」。")
+            Text("\(health ? String(localized: "健康对话") : "Persona")以后不再记得「\(titles[e.file.name]?.title ?? e.name ?? e.file.name)」。")
         }
         .navigationDestination(item: $debugOpen) { e in
             AssistantMemoryDetail(entry: e, title: titles[e.file.name]?.title, space: page.space, onSaved: { await load() })
@@ -1162,7 +1182,7 @@ struct AssistantMemoryDetail: View {
                     }
                     Divider()
                 }
-                Markdown(entry.body.isEmpty ? "（空）" : Links.markdown(entry.body))
+                Markdown(entry.body.isEmpty ? String(localized: "（空）") : Links.markdown(entry.body))
                     .markdownTheme(.jarvis)
                     .textSelection(.enabled)
                     .environment(\.openURL, OpenURLAction { url in
@@ -1278,7 +1298,7 @@ struct AssistantNotesView: View {
             }
         }
         .themedPage()
-        .pageTitle("关于我")
+        .pageTitle(String(localized: "关于我"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -1306,7 +1326,7 @@ struct AssistantNotesView: View {
             focused = false
             await model.refreshAssistant()
             Haptics.success()
-            model.toast = Toast("已保存，新对话生效", style: .success)
+            model.toast = Toast(String(localized: "已保存，新对话生效"), style: .success)
         } catch {
             model.show(error)
         }

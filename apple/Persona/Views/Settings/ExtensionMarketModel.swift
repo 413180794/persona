@@ -137,10 +137,10 @@ nonisolated struct ExtensionPreview: Decodable, Hashable, Sendable, Identifiable
     func confirmationProblem(at now: Date) -> String? {
         let all = [self] + (bundle ?? [])
         if all.contains(where: { $0.expiresAt.map { $0 <= now } == true }) {
-            return "预览已过期，关闭后重新预览。"
+            return String(localized: "预览已过期，关闭后重新预览。")
         }
         if all.contains(where: { $0.unresolved?.isEmpty == false }) {
-            return "还有未解决的依赖，添加对应市场后重新预览。"
+            return String(localized: "还有未解决的依赖，添加对应市场后重新预览。")
         }
         let bundled = Set((bundle ?? []).map { $0.manifest.id })
         if !all.allSatisfy({ preview in
@@ -148,7 +148,7 @@ nonisolated struct ExtensionPreview: Decodable, Hashable, Sendable, Identifiable
                 dependency.state == "ok" || (["missing", "old"].contains(dependency.state) && bundled.contains(dependency.id))
             }
         }) {
-            return "依赖尚未就绪，先安装、启用或升级对应扩展，再重新预览。"
+            return String(localized: "依赖尚未就绪，先安装、启用或升级对应扩展，再重新预览。")
         }
         return nil
     }
@@ -226,18 +226,18 @@ enum ExtensionMarketText {
     /// The row's word on it: 可安装 / 可升级到 1.1.0 / 已安装 1.2.0 / 装不了.
     static func state(_ p: ExtensionCatalogItem) -> String {
         switch step(p) {
-        case .install: "可安装"
-        case .upgrade: "可升级 · \(p.installed ?? "") → \(p.version)"
-        case .upToDate: "已安装 · \(p.installed ?? p.version)"
-        case .unavailable: "装不了"
+        case .install: String(localized: "可安装")
+        case .upgrade: String(localized: "可升级 · \(p.installed ?? "") → \(p.version)")
+        case .upToDate: String(localized: "已安装 · \(p.installed ?? p.version)")
+        case .unavailable: String(localized: "装不了")
         }
     }
 
     /// A market's line: how many plugins, when it was read.
     static func marketSummary(_ m: ExtensionMarket) -> String {
-        var parts = ["\(m.plugins ?? 0) 个扩展"]
-        if m.hasToken { parts.append("有 token") }
-        if let t = m.fetchedAt { parts.append(Fmt.relative(t) + "读取") }
+        var parts = [String(localized: "\(m.plugins ?? 0) 个扩展")]
+        if m.hasToken { parts.append(String(localized: "有 token")) }
+        if let t = m.fetchedAt { let when = Fmt.relative(t); parts.append(String(localized: "\(when)读取", comment: "When a market's index was read; the time is relative, e.g. 5 minutes ago")) }
         return parts.joined(separator: " · ")
     }
 }
@@ -315,7 +315,7 @@ enum ExtensionMarketText {
     func addMarket(spec: String, token: String) async -> String? {
         let spec = spec.trimmingCharacters(in: .whitespacesAndNewlines)
         let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !spec.isEmpty else { return "填市场的地址" }
+        guard !spec.isEmpty else { return String(localized: "填市场的地址") }
         do {
             let m = try await api().addExtensionMarket(spec: spec, token: token.isEmpty ? nil : token)
             markets.removeAll { $0.id == m.id }
@@ -364,7 +364,7 @@ enum ExtensionMarketText {
     }
 
     private func api() throws -> APIClient {
-        guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
+        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
         return api
     }
 }
@@ -383,7 +383,7 @@ enum ExtensionMarketText {
     private(set) var working = false
     private(set) var isPack = false
     private(set) var removingMembers = false
-    private(set) var removalMessage = "已卸载"
+    private(set) var removalMessage = String(localized: "已卸载")
     var uninstallConfirmation: ExtensionDisableConfirmation?
     @ObservationIgnored private let deps: ExtensionMarketModel.Deps
 
@@ -402,7 +402,7 @@ enum ExtensionMarketText {
         do {
             let c = try await api().pluginCatalog(market: market)
             guard let it = c.plugins.first(where: { $0.pluginID == pluginID }) else {
-                throw APIError(status: 404, message: "这个市场里已经没有这个扩展了")
+                throw APIError(status: 404, message: String(localized: "这个市场里已经没有这个扩展了"))
             }
             item = it
             if it.installed != nil, let detail = try? await api().plugin(pluginID) {
@@ -439,8 +439,8 @@ enum ExtensionMarketText {
             do {
                 let result = try await api.uninstallExtension(self.pluginID, cascade: cascade, members: members)
                 self.removalMessage = members
-                    ? result.removedMembers.map { "合集已卸载；成功卸载 \($0.count) 个成员" } ?? "合集已卸载，成员结果未返回"
-                    : "已卸载"
+                    ? result.removedMembers.map { String(localized: "合集已卸载；成功卸载 \($0.count) 个成员") } ?? String(localized: "合集已卸载，成员结果未返回")
+                    : String(localized: "已卸载")
                 self.uninstallConfirmation = nil
             } catch let e as APIError where !cascade && e.code == "has_dependents" {
                 self.uninstallConfirmation = ExtensionDisableConfirmation(error: e)
@@ -466,7 +466,7 @@ enum ExtensionMarketText {
     }
 
     private func api() throws -> APIClient {
-        guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
+        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
         return api
     }
 }

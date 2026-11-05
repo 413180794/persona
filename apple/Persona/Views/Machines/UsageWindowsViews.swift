@@ -84,7 +84,7 @@ struct UsageAccountBlock: View {
                 let note = ([plan] + [from.joined(separator: " · ")]).filter { !$0.isEmpty }.joined(separator: " · ")
                 if !note.isEmpty {
                     Text(note).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(1)
-                        .accessibilityLabel(from.isEmpty ? note : (plan.isEmpty ? "" : plan + "，") + "来源：" + from.joined(separator: "、"))
+                        .accessibilityLabel(from.isEmpty ? note : Self.sourceLabel(plan: plan, from: from))
                 }
                 if !problem.isEmpty {
                     Text(problem).font(Theme.Font.label).foregroundStyle(Theme.cautionText).fixedSize(horizontal: false, vertical: true)
@@ -94,6 +94,12 @@ struct UsageAccountBlock: View {
         }
         .opacity(a.stale ? 0.6 : 1)
         .accessibilityElement(children: .contain)
+    }
+
+    /// The note for VoiceOver: the plan, then where the numbers came from, as one sentence.
+    static func sourceLabel(plan: String, from: [String]) -> String {
+        let names = from.joined(separator: "、")
+        return plan.isEmpty ? String(localized: "来源：\(names)") : String(localized: "\(plan)，来源：\(names)")
     }
 }
 
@@ -127,8 +133,8 @@ struct UsageWindowRow: View {
             UsageMeter(used: w.usedPercent, expected: pace?.expected, tall: true)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([name, w.label, w.model, "已用 \(used)", pace.flatMap { $0.state == .on ? nil : UsageWindows.paceLabel($0.state) }, reset]
-            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "，"))
+        .accessibilityLabel([name, w.label, w.model, String(localized: "已用 \(used)"), pace.flatMap { $0.state == .on ? nil : UsageWindows.paceLabel($0.state) }, reset]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: String(localized: "，", comment: "Separator between the parts of a VoiceOver label")))
     }
 }
 

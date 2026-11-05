@@ -40,35 +40,35 @@ struct TodayCard: View {
         var out: [TodayRow.Model] = []
         if let done = today.done, !done.isEmpty {
             out.append(.init(symbol: Theme.Icon.successFilled, tint: Theme.positive,
-                             title: done.count == 1 ? "做完了：\(done[0].title)" : "做完了 \(done.count) 个任务",
-                             detail: done.count > 1 ? done.map(\.title).joined(separator: "、") : nil,
-                             action: "看看", run: .open(done[0].id)))
+                             title: done.count == 1 ? String(localized: "做完了：\(done[0].title)") : String(localized: "做完了 \(done.count) 个任务"),
+                             detail: done.count > 1 ? done.map(\.title).joined(separator: String(localized: "、", comment: "Separator between list items")) : nil,
+                             action: String(localized: "看看"), run: .open(done[0].id)))
         }
         if let waiting = today.waiting, !waiting.isEmpty {
             out.append(.init(symbol: Theme.Icon.askFirst, tint: AgentState.needsYou.tone.text,
-                             title: waiting.count == 1 ? "等你：\(waiting[0].title)" : "\(waiting.count) 件等你",
-                             detail: waiting.count > 1 ? waiting.map(\.title).joined(separator: "、") : nil,
-                             action: "去看", run: .open(waiting[0].id)))
+                             title: waiting.count == 1 ? String(localized: "等你：\(waiting[0].title)") : String(localized: "\(waiting.count) 件等你"),
+                             detail: waiting.count > 1 ? waiting.map(\.title).joined(separator: String(localized: "、", comment: "Separator between list items")) : nil,
+                             action: String(localized: "去看"), run: .open(waiting[0].id)))
         }
         if let working = today.working, working > 0 {
-            out.append(.init(symbol: Theme.Icon.working, tint: AgentState.working.tone.text, title: "\(working) 个任务在做",
-                             detail: nil, action: "全部", run: .board))
+            out.append(.init(symbol: Theme.Icon.working, tint: AgentState.working.tone.text, title: String(localized: "\(working) 个任务在做"),
+                             detail: nil, action: String(localized: "全部"), run: .board))
         }
         for m in (today.meetings ?? []).prefix(3) {
             let time = m.start.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
             out.append(.init(symbol: Theme.Icon.addedEvent, tint: Theme.accent, title: "\(time) \(m.title)", detail: nil,
-                             action: "准备", run: .say("帮我准备一下 \(time) 的「\(m.title)」：要看的文档、上次的结论、要我拍板的事")))
+                             action: String(localized: "准备"), run: .say(String(localized: "帮我准备一下 \(time) 的「\(m.title)」：要看的文档、上次的结论、要我拍板的事"))))
         }
         if let chats = today.atMe, !chats.isEmpty {
             out.append(.init(symbol: Theme.Icon.mention, tint: Theme.loop,
-                             title: "飞书 \(chats.count) 个会话 @你" + ((today.unread ?? 0) > 0 ? " · 其他未读 \(today.unread ?? 0)" : ""),
-                             detail: chats.prefix(2).map { $0.name + ($0.preview.map { "：" + $0 } ?? "") }.joined(separator: "\n"),
-                             action: "过一遍", run: .say("帮我过一遍飞书里 @我 的消息：哪些要我回，能起草的先起草")))
+                             title: (today.unread ?? 0) > 0 ? String(localized: "飞书 \(chats.count) 个会话 @你 · 其他未读 \(today.unread ?? 0)") : String(localized: "飞书 \(chats.count) 个会话 @你"),
+                             detail: chats.prefix(2).map { c in c.preview.map { String(localized: "\(c.name)：\($0)") } ?? c.name }.joined(separator: "\n"),
+                             action: String(localized: "过一遍"), run: .say(String(localized: "帮我过一遍飞书里 @我 的消息：哪些要我回，能起草的先起草"))))
         }
         for r in reminders.prefix(3) {
             out.append(.init(symbol: Theme.Icon.addedReminder, tint: Theme.caution,
                              title: (r.due.map { $0.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute()) + " " } ?? "") + r.title,
-                             detail: "提醒", action: nil, run: nil))
+                             detail: String(localized: "提醒"), action: nil, run: nil))
         }
         return out
     }
@@ -159,11 +159,11 @@ struct DayLine: View {
 
     static func label(_ date: Date, now: Date = .now) -> String {
         let cal = Calendar.current
-        let day = date.formatted(.dateTime.month().day().weekday(.abbreviated).locale(Locale(identifier: "zh_CN")))
-        if cal.isDate(date, inSameDayAs: now) { return "今天 · " + day }
-        if let y = cal.date(byAdding: .day, value: -1, to: now), cal.isDate(date, inSameDayAs: y) { return "昨天 · " + day }
+        let day = date.formatted(.dateTime.month().day().weekday(.abbreviated))
+        if cal.isDate(date, inSameDayAs: now) { return String(localized: "今天 · \(day)") }
+        if let y = cal.date(byAdding: .day, value: -1, to: now), cal.isDate(date, inSameDayAs: y) { return String(localized: "昨天 · \(day)") }
         if !cal.isDate(date, equalTo: now, toGranularity: .year) {
-            return date.formatted(.dateTime.year().month().day().weekday(.abbreviated).locale(Locale(identifier: "zh_CN")))
+            return date.formatted(.dateTime.year().month().day().weekday(.abbreviated))
         }
         return day
     }

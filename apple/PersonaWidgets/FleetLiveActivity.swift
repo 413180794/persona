@@ -24,6 +24,8 @@ struct FleetLiveActivity: Widget {
                 .dynamicTypeSize(...DynamicTypeSize.large)
                 .widgetURL(FleetLink.whole(context.state))
                 .activitySystemActionForegroundColor(FleetPalette.accent)
+                // The app's interface language now, not the one this long-lived process started in.
+                .environment(\.locale, LanguageStore.drawingLocale)
         } dynamicIsland: { context in
             let state = context.state
             return DynamicIsland {
@@ -66,6 +68,7 @@ struct FleetLiveActivity: Widget {
                     }
                     .padding(.horizontal, 4)
                     .padding(.top, 4)
+                    .environment(\.locale, LanguageStore.drawingLocale)
                 }
             } compactLeading: {
                 IslandSide(state: state, leading: true, stale: context.isStale)
@@ -193,17 +196,18 @@ struct FleetCounts: View {
     var short = false
     var body: some View {
         HStack(spacing: short ? 8 : 10) {
-            if state.needsYou > 0 { chip(Image(systemName: FleetSymbol.needsYou), "\(state.needsYou)", "需要你", FleetPalette.needsYou) }
-            if state.working > 0 { chip(Image(systemName: FleetSymbol.working), "\(state.working)", "在工作", FleetPalette.working) }
-            if state.unread > 0 { chip(Image(systemName: FleetSymbol.unread).font(.system(size: 7)), "\(state.unread)", "未看", FleetPalette.unread) }
+            if state.needsYou > 0 { chip(Image(systemName: FleetSymbol.needsYou), "\(state.needsYou)", interfaceText("\(state.needsYou) 需要你"), FleetPalette.needsYou) }
+            if state.working > 0 { chip(Image(systemName: FleetSymbol.working), "\(state.working)", interfaceText("\(state.working) 在工作"), FleetPalette.working) }
+            if state.unread > 0 { chip(Image(systemName: FleetSymbol.unread).font(.system(size: 7)), "\(state.unread)", interfaceText("\(state.unread) 未看"), FleetPalette.unread) }
         }
         .layoutPriority(1)
     }
 
-    private func chip(_ symbol: some View, _ count: String, _ words: String, _ color: Color) -> some View {
+    /// `full` is the count with its words, one localized string (「2 需要你」), so a language can reorder them.
+    private func chip(_ symbol: some View, _ count: String, _ full: String, _ color: Color) -> some View {
         HStack(spacing: 4) {
             symbol.foregroundStyle(color).font(.footnote)
-            Text(short ? count : count + " " + words).font(.subheadline.weight(.semibold)).monospacedDigit().lineLimit(1)
+            Text(short ? count : full).font(.subheadline.weight(.semibold)).monospacedDigit().lineLimit(1)
         }
         .fixedSize()
     }
@@ -271,7 +275,7 @@ struct FleetActionRow: View {
         }
     }
 
-    private func label(_ text: String, _ symbol: String) -> some View {
+    private func label(_ text: LocalizedStringKey, _ symbol: String) -> some View {
         Label(text, systemImage: symbol)
             .font(.subheadline.weight(.semibold))
             .lineLimit(1)

@@ -94,14 +94,14 @@ struct SiblingTabs: View {
             if AppStyle.current.usesBeautifulUI {
                 // Its filter chip: the state's dot (none for a quiet, seen or idle one) and the tab's name; the current
                 // one is the raised capsule.
-                BUIFilterChip(launcher ? label + " · 发起" : label, dot: quiet ? nil : tone.dot, isActive: on) {
+                BUIFilterChip(launcher ? String(localized: "\(label) · 发起", comment: "Chip of the agent that started the tab") : label, dot: quiet ? nil : tone.dot, isActive: on) {
                     if !on { Haptics.tap(); select(s.key) }
                 }
             } else {
                 plainTab(s, label: label, launcher: launcher, on: on, tone: tone, quiet: quiet)
             }
         }
-        .accessibilityLabel("\(label)\(launcher ? "（发起者）" : "")，\(s.stateLabel)")
+        .accessibilityLabel(String(localized: "\(label)\(launcher ? String(localized: "（发起者）") : "")，\(s.stateLabel)"))
         .accessibilityAddTraits(on ? .isSelected : [])
         .contextMenu {
             if s.canTerminal {
@@ -150,7 +150,8 @@ struct SiblingTabs: View {
                 .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("同一空间的 \(siblings.count) 个 Agent" + (waiting ? "，有 Agent 需要你" : ""))
+        .accessibilityLabel(waiting ? String(localized: "同一空间的 \(siblings.count) 个 Agent，有 Agent 需要你")
+                                    : String(localized: "同一空间的 \(siblings.count) 个 Agent"))
         #if DEBUG
         // `-showSpaceTabs YES`: open this sheet (screenshots); `new` opens its new-tab form on top.
         .task { if ["YES", "new"].contains(UserDefaults.standard.string(forKey: "showSpaceTabs")) { try? await Task.sleep(for: .seconds(2)); showAll = true } }
@@ -188,7 +189,7 @@ private struct SiblingList: View {
                 if await model.close(latest.key) {
                     closed(latest.key, closeOrder)
                 } else {
-                    failure = model.toast?.message ?? "停止失败，标签已保留，请重试"
+                    failure = model.toast?.message ?? String(localized: "停止失败，标签已保留，请重试")
                 }
                 stopping = nil
             }
@@ -275,7 +276,7 @@ private struct SiblingList: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(label)\(role?.launcher == true ? "（发起者）" : "")，\(s.stateLabel)" + (Fmt.model(s.model).map { "，\($0)" } ?? ""))
+                    .accessibilityLabel(String(localized: "\(label)\(role?.launcher == true ? String(localized: "（发起者）") : "")，\(s.stateLabel)") + (Fmt.model(s.model).map { String(localized: "，\($0)") } ?? ""))
                     .accessibilityAddTraits(on ? .isSelected : [])
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
@@ -390,7 +391,7 @@ struct SpaceView: View {
             .padding(Theme.Space.l)
         }
         .themedGroupedPage()
-        .navigationTitle(first?.spaceName ?? "空间")
+        .navigationTitle(first?.spaceName ?? String(localized: "空间"))
         .navigationBarTitleDisplayMode(.large)
         .pageToolbar {
             if let g = SpaceGroup.build(sessions).first {
@@ -443,7 +444,7 @@ struct SlotCard: View {
             }
             Text(session.displayTitle).font(Theme.Font.secondaryStrong).lineLimit(2)
             // The 发起者 says so beside its state: the header's chips are cut first in a narrow card.
-            Text(session.stateLabel + (pane?.launcher == true ? " · 发起者" : "") + (pending > 0 ? " · \(pending) 件待处理" : ""))
+            Text(session.stateLabel + (pane?.launcher == true ? String(localized: " · 发起者") : "") + (pending > 0 ? String(localized: " · \(pending) 件待处理") : ""))
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(tone.text)
             if let t = session.listPreview {

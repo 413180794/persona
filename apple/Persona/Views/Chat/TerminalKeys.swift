@@ -141,7 +141,7 @@ struct TerminalKeyBar: View {
             modifier(.ctrl, "Ctrl", name: "Control")
             if visible.contains("esc") { key("Esc", name: "esc") { press("esc") } }
             if visible.contains("tab") { key("Tab", name: "tab") { press("tab") } }
-            if visible.contains("ctrlc") { key("⌃C", name: "发送 Control C") { send(["ctrl+c"]) } }
+            if visible.contains("ctrlc") { key("⌃C", name: String(localized: "发送 Control C")) { send(["ctrl+c"]) } }
             if visible.contains("shortcuts"), let shortcuts {
                 Button { Haptics.tap(); shortcuts() } label: {
                     KeyCap(symbol: shortcutsOn ? "bolt.fill" : "bolt", state: shortcutsOn ? .once : .off)

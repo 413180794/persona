@@ -131,7 +131,7 @@ struct NotificationSettingsView: View {
             #endif
         }
         .themedPage()
-        .detailTitle("通知")
+        .detailTitle(String(localized: "通知"))
         .navigationBarTitleDisplayMode(.inline)
         .disabled(prefs == nil)
         .overlay { if prefs == nil { ProgressView() } }
@@ -188,8 +188,7 @@ struct NotificationSettingsView: View {
     private var doneFooter: String {
         let delay = NotifyPrefs.duration(prefs?.doneDelaySeconds)
         let long = NotifyPrefs.duration(prefs?.longTurnSeconds)
-        return "做完后等 \(delay)，这期间在电脑上或 App 里看过就不推；后台任务、子 Agent 都结束后才推一次。"
-            + "「长任务」指干了 \(long)以上的那一轮，秒回的问题在哪问的就在哪看。"
+        return String(localized: "做完后等 \(delay)，这期间在电脑上或 App 里看过就不推；后台任务、子 Agent 都结束后才推一次。「长任务」指干了 \(long)以上的那一轮，秒回的问题在哪问的就在哪看。")
     }
 
     private func binding<V>(_ path: WritableKeyPath<NotifyPrefs, V>) -> Binding<V> {

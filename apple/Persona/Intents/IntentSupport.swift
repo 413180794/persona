@@ -17,13 +17,14 @@ nonisolated enum IntentText {
 
     static func sent(to title: String) -> String {
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return "已发给 \(name.isEmpty ? "会话" : name)"
+        // The untitled case is its own sentence, so "会话" is not translated as a bare noun.
+        return name.isEmpty ? String(localized: "已发给 会话") : String(localized: "已发给 \(name)")
     }
 
     static func status(working: Int, waiting: Int, first: String?) -> String {
-        let head = "\(working) 个在工作，\(waiting) 个等你处理"
+        let head = String(localized: "\(working) 个在工作，\(waiting) 个等你处理")
         guard let first, !first.isEmpty else { return head }
-        return "\(head)：\n「\(excerpt(first, limit: 80))」"
+        return String(localized: "\(head)：\n「\(excerpt(first, limit: 80))」")
     }
 
     /// One line describing what is waiting, for the status dialog.
@@ -31,33 +32,33 @@ nonisolated enum IntentText {
         switch ix.kind {
         case .question:
             if let q = ix.questions?.first?.question, !q.isEmpty { return q }
-            return ix.summary ?? "有个提问在等你"
+            return ix.summary ?? String(localized: "有个提问在等你")
         case .plan:
             // Plans are markdown documents; a dialog needs one line.
-            if let plan = ix.plan ?? ix.summary, !plan.isEmpty { return "计划：" + excerpt(plan, limit: 120) }
-            return "有个计划在等你批准"
+            if let plan = ix.plan ?? ix.summary, !plan.isEmpty { return String(localized: "计划：\(excerpt(plan, limit: 120))") }
+            return String(localized: "有个计划在等你批准")
         case .permission:
             if let s = ix.summary, !s.isEmpty { return s }
-            if let tool = ix.toolName, !tool.isEmpty { return "\(tool) 在申请授权" }
-            return "有个授权在等你"
+            if let tool = ix.toolName, !tool.isEmpty { return String(localized: "\(tool) 在申请授权") }
+            return String(localized: "有个授权在等你")
         case .screen:
-            return "终端在等你输入"
+            return String(localized: "终端在等你输入")
         }
     }
 
     static func approvedPermission(_ tool: String?) -> String {
-        guard let tool, !tool.isEmpty else { return "已允许" }
-        return "已允许 \(tool)"
+        guard let tool, !tool.isEmpty else { return String(localized: "已允许") }
+        return String(localized: "已允许 \(tool)")
     }
 
-    static let approvedPlan = "已批准计划，开始执行"
+    static let approvedPlan = String(localized: "已批准计划，开始执行")
 
     /// Only permission and plan can be settled without looking at the screen.
     static func needsApp(_ kind: InteractionKind) -> String {
         switch kind {
-        case .question: "这是个提问，需要打开 Persona 回答。"
-        case .screen: "终端在等你输入，需要打开 Persona。"
-        case .plan, .permission: "需要打开 Persona 处理。"
+        case .question: String(localized: "这是个提问，需要打开 Persona 回答。")
+        case .screen: String(localized: "终端在等你输入，需要打开 Persona。")
+        case .plan, .permission: String(localized: "需要打开 Persona 处理。")
         }
     }
 
@@ -72,10 +73,10 @@ nonisolated enum IntentText {
 /// Shortcut wording. The provider spells the same sentences out as `AppShortcutPhrase` interpolations (the system
 /// needs the `\(.applicationName)` token there); these templates keep the readable version testable.
 nonisolated enum IntentPhrases {
-    static let askClaude = "用 %@ 问 Claude"
-    static let status = "%@ 状态"
-    static let approve = "用 %@ 批准第一个"
-    static let addTodo = "用 %@ 新建待办"
+    static let askClaude = "用 %@ 问 Claude" // i18n-ignore
+    static let status = "%@ 状态" // i18n-ignore
+    static let approve = "用 %@ 批准第一个" // i18n-ignore
+    static let addTodo = "用 %@ 新建待办" // i18n-ignore
 
     static func fill(_ template: String, appName: String) -> String {
         template.replacingOccurrences(of: "%@", with: appName)
@@ -96,17 +97,17 @@ nonisolated enum IntentFailure: LocalizedError {
     var sentence: String {
         switch self {
         case .notPaired:
-            "还没配对。先打开 Persona 扫 `personad hub pair` 的二维码。"
+            String(localized: "还没配对。先打开 Persona 扫 `personad hub pair` 的二维码。")
         case .noMachine:
-            "现在没有在线的机器。看看 hub 上的 personad 和各台电脑的 SSH 连接。"
+            String(localized: "现在没有在线的机器。看看 hub 上的 personad 和各台电脑的 SSH 连接。")
         case .offline(let name):
-            "\(name) 现在离线，看看 personad 和 SSH 隧道。"
+            String(localized: "\(name) 现在离线，看看 personad 和 SSH 隧道。")
         case .noSession(let name):
-            "\(name) 上没有运行中的会话。打开 Persona 新建一个，或者说「新会话」。"
+            String(localized: "\(name) 上没有运行中的会话。打开 Persona 新建一个，或者说「新会话」。")
         case .noLauncher(let name):
-            "还没在 \(name) 上用过新对话。打开 Persona 新建一次，之后 Siri 就知道用哪个目录和启动器了。"
+            String(localized: "还没在 \(name) 上用过新对话。打开 Persona 新建一次，之后 Siri 就知道用哪个目录和启动器了。")
         case .noPending:
-            "没有等你处理的事。"
+            String(localized: "没有等你处理的事。")
         }
     }
 
@@ -115,21 +116,21 @@ nonisolated enum IntentFailure: LocalizedError {
         if let failure = error as? IntentFailure { return failure.sentence }
         if let api = error as? APIError {
             switch api.status {
-            case 401, 403: return "配对已失效，打开 Persona 重新配对。"
-            case 410: return "这个已经处理过了。"
+            case 401, 403: return String(localized: "配对已失效，打开 Persona 重新配对。")
+            case 410: return String(localized: "这个已经处理过了。")
             default: return api.message
             }
         }
-        let whereHub = host.map { "（\($0)）" } ?? ""
+        let whereHub = host.map { String(localized: "（\($0)）", comment: "Hub host appended to a connection error") } ?? ""
         if let url = error as? URLError {
             switch url.code {
-            case .timedOut: return "hub 没响应\(whereHub)，稍后再试。"
-            case .notConnectedToInternet, .networkConnectionLost: return "手机没网\(whereHub)。"
-            default: return "连不上 hub\(whereHub)，确认手机能访问 hub（同一个网络或 VPN）。"
+            case .timedOut: return String(localized: "hub 没响应\(whereHub)，稍后再试。")
+            case .notConnectedToInternet, .networkConnectionLost: return String(localized: "手机没网\(whereHub)。")
+            default: return String(localized: "连不上 hub\(whereHub)，确认手机能访问 hub（同一个网络或 VPN）。")
             }
         }
         if (error as NSError).domain == NSURLErrorDomain {
-            return "连不上 hub\(whereHub)，确认手机能访问 hub（同一个网络或 VPN）。"
+            return String(localized: "连不上 hub\(whereHub)，确认手机能访问 hub（同一个网络或 VPN）。")
         }
         return error.localizedDescription
     }

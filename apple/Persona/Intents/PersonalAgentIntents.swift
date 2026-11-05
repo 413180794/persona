@@ -86,7 +86,7 @@ struct AgentTaskIntent: AppIntent {
 
     nonisolated func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
         let body = task.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty else { throw IntentFailureSentence("要让 Agent 做什么？") }
+        guard !body.isEmpty else { throw IntentFailureSentence(String(localized: "要让 Agent 做什么？")) }
         do {
             let api = try IntentSupport.client()
             let target: PersonalAgentEntity
@@ -167,7 +167,7 @@ nonisolated enum PersonalAgentIntentPicker {
 }
 
 nonisolated enum PersonalAgentIntentText {
-    static let noSession = "还没有能发消息的个人 Agent 会话。先在飞书网关里开一个。"
+    static let noSession = String(localized: "还没有能发消息的个人 Agent 会话。先在飞书网关里开一个。")
 
     static func name(title: String, id: String) -> String {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -175,28 +175,31 @@ nonisolated enum PersonalAgentIntentText {
     }
 
     static func subtitle(provider: String, unread: Int) -> String {
-        unread > 0 ? "\(provider) · \(unread) 条未读" : provider
+        unread > 0 ? String(localized: "\(provider) · \(unread) 条未读") : provider
     }
 
-    static func cannotSend(_ title: String) -> String { "「\(title)」不能从这里发消息。" }
+    static func cannotSend(_ title: String) -> String { String(localized: "「\(title)」不能从这里发消息。") }
 
     static func sent(status: String, to title: String, error: String?) -> String {
         switch status {
-        case "failed": "发给「\(title)」失败：\(error ?? "未知错误")"
-        case "sending": "正在发给「\(title)」"
-        default: "已交给「\(title)」"
+        case "failed": String(localized: "发给「\(title)」失败：\(error ?? String(localized: "未知错误"))")
+        case "sending": String(localized: "正在发给「\(title)」")
+        default: String(localized: "已交给「\(title)」")
         }
     }
 
     static func status(_ all: [PersonalAgentEntity], limit: Int = 3) -> String {
-        guard !all.isEmpty else { return "没有个人 Agent 会话。" }
+        guard !all.isEmpty else { return String(localized: "没有个人 Agent 会话。") }
         let unread = all.filter { $0.unread > 0 }
         guard !unread.isEmpty else {
-            return "没有未读。最近的是：" + all.prefix(limit).map { "「\($0.title)」" }.joined(separator: "、")
+            let recent = all.prefix(limit).map { String(localized: "「\($0.title)」") }
+                .joined(separator: String(localized: "、", comment: "Separator between quoted session titles"))
+            return String(localized: "没有未读。最近的是：\(recent)")
         }
         let total = unread.reduce(0) { $0 + $1.unread }
-        let list = unread.prefix(limit).map { "「\($0.title)」\($0.unread) 条" }.joined(separator: "，")
-        return "\(unread.count) 个会话共 \(total) 条未读：\(list)"
+        let list = unread.prefix(limit).map { String(localized: "「\($0.title)」\($0.unread) 条") }
+            .joined(separator: String(localized: "，", comment: "Separator between sessions in the unread list"))
+        return String(localized: "\(unread.count) 个会话共 \(total) 条未读：\(list)")
     }
 }
 

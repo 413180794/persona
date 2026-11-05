@@ -56,9 +56,9 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         /// The menu's words for it.
         var title: String {
             switch tag {
-            case "repo": "静音这个仓库"
-            case "chat": "静音这个会话"
-            default: "静音这个发件人"
+            case "repo": String(localized: "静音这个仓库")
+            case "chat": String(localized: "静音这个会话")
+            default: String(localized: "静音这个发件人")
             }
         }
     }
@@ -172,10 +172,10 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         /// 表格 / 多维表格 / 文档.
         var typeName: String {
             switch type {
-            case "sheet": "表格"
-            case "base": "多维表格"
-            case "docx", "doc": "文档"
-            default: "云文档"
+            case "sheet": String(localized: "表格")
+            case "base": String(localized: "多维表格")
+            case "docx", "doc": String(localized: "文档")
+            default: String(localized: "云文档")
             }
         }
 
@@ -249,9 +249,9 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         case action, fyi, noise
         var title: String {
             switch self {
-            case .action: "需要你"
-            case .fyi: "知悉即可"
-            case .noise: "已折叠"
+            case .action: String(localized: "需要你")
+            case .fyi: String(localized: "知悉即可")
+            case .noise: String(localized: "已折叠")
             }
         }
     }
@@ -263,12 +263,12 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var kindLabel: String? {
         if let c = connector { return c.label }
         return switch kind {
-        case "dm": "私聊"
+        case "dm": String(localized: "私聊")
         // Read elsewhere: the @ is no longer unread, so the row stops flagging it (it stays for its tier).
-        case "mention": read == true ? nil : lark?.atAll == true ? "@所有人" : "@我"
-        case "bot": "机器人"
-        case "doc": doc?.notice == "comment" || doc?.notice == "reply" ? "评论" : "@我"
-        case "moment": moment?.notice?.hasPrefix("atIn") == true ? "@我" : "公司圈"
+        case "mention": read == true ? nil : lark?.atAll == true ? String(localized: "@所有人") : String(localized: "@我")
+        case "bot": String(localized: "机器人")
+        case "doc": doc?.notice == "comment" || doc?.notice == "reply" ? String(localized: "评论") : String(localized: "@我")
+        case "moment": moment?.notice?.hasPrefix("atIn") == true ? String(localized: "@我") : String(localized: "公司圈")
         default: nil
         }
     }
@@ -474,9 +474,9 @@ nonisolated struct InboxMute: Codable, Identifiable, Hashable, Sendable {
     /// What kind of thing it is, for people: 仓库 / 会话 / 发件人.
     var tagName: String {
         switch tag {
-        case "repo": "仓库"
-        case "chat": "会话"
-        default: "发件人"
+        case "repo": String(localized: "仓库")
+        case "chat": String(localized: "会话")
+        default: String(localized: "发件人")
         }
     }
 }

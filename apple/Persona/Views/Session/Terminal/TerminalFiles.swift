@@ -12,11 +12,11 @@ nonisolated enum TerminalPaste {
     /// The hub's limit for a terminal upload (`proto.MaxTerminalUploadBytes`).
     static let limit: Int64 = 50 << 20
 
-    static let notDriving = "接管终端后才能粘贴文件"
-    static let switched = "上传期间终端已切换，没有粘贴"
-    static let released = "上传期间不再接管终端，没有粘贴"
-    static let folders = "文件夹传不了，拖里面的文件进来"
-    static let hubTooOld = "hub 版本太旧，还不能上传文件：更新 hub 后再试"
+    static let notDriving = String(localized: "接管终端后才能粘贴文件")
+    static let switched = String(localized: "上传期间终端已切换，没有粘贴")
+    static let released = String(localized: "上传期间不再接管终端，没有粘贴")
+    static let folders = String(localized: "文件夹传不了，拖里面的文件进来")
+    static let hubTooOld = String(localized: "hub 版本太旧，还不能上传文件：更新 hub 后再试")
 
     /// Characters a path keeps as they are; everything else ASCII gets a backslash (the web's `escapePastePath`).
     private static let plain = Set("@%+=:,./-_".unicodeScalars)
@@ -58,8 +58,8 @@ nonisolated enum TerminalPaste {
 
     /// Why a file is not uploaded, for the toast; nil when it may go.
     static func refusal(name: String, size: Int64) -> String? {
-        if size <= 0 { return "「\(name)」是空的" }
-        if size > limit { return "「\(name)」超过 \(limit >> 20) MB，没有上传" }
+        if size <= 0 { return String(localized: "「\(name)」是空的") }
+        if size > limit { return String(localized: "「\(name)」超过 \(limit >> 20) MB，没有上传") }
         return nil
     }
 
@@ -88,19 +88,22 @@ nonisolated enum TerminalPaste {
 
     /// "正在上传 shot.png…" / "正在上传 shot.png 等 3 个文件…".
     static func uploadingText(_ names: [String]) -> String {
-        guard names.count > 1 else { return "正在上传 \(names.first ?? "文件")…" }
-        return "正在上传 \(names[0]) 等 \(names.count) 个文件…"
+        guard names.count > 1 else {
+            let name = names.first ?? String(localized: "terminalUpload.fileFallback", defaultValue: "文件", comment: "A single file of unknown name being uploaded")
+            return String(localized: "正在上传 \(name)…")
+        }
+        return String(localized: "正在上传 \(names[0]) 等 \(names.count) 个文件…")
     }
 
     /// What to say when a file did not make it; nil when the upload was cancelled.
     static func failure(_ error: Error, name: String) -> String? {
         if error.isCancellation { return nil }
         if let e = error as? APIError {
-            if e.code == "too_large" { return "「\(name)」超过 \(limit >> 20) MB，没有上传" }
+            if e.code == "too_large" { return String(localized: "「\(name)」超过 \(limit >> 20) MB，没有上传") }
             if e.code == "node_outdated" { return e.message }
             if e.status == 404 { return hubTooOld }
         }
-        return "上传「\(name)」失败：\(error.localizedDescription)"
+        return String(localized: "上传「\(name)」失败：\(error.localizedDescription)")
     }
 }
 
@@ -137,7 +140,7 @@ final class TerminalUploads {
     init() {
         #if DEBUG
         // `-showTerminalUpload YES`: the bar as if two files were on their way, for screenshots.
-        if UserDefaults.standard.bool(forKey: "showTerminalUpload") { names = ["截图.png", "build.log"] }
+        if UserDefaults.standard.bool(forKey: "showTerminalUpload") { names = ["截图.png", "build.log"] } // i18n-ignore
         #endif
     }
 

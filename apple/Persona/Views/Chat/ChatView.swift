@@ -337,7 +337,7 @@ struct ChatView: View {
 
     /// 终端 | 对话 (the web's session switch, #2445): the middle of the page is one or the other, ⇧⌘J flips it.
     private var macViewSwitch: some View {
-        SegmentedChoice("显示", [(SessionPane.terminal, SessionPane.terminal.title), (SessionPane.chat, SessionPane.chat.title)],
+        SegmentedChoice(String(localized: "显示"), [(SessionPane.terminal, SessionPane.terminal.title), (SessionPane.chat, SessionPane.chat.title)],
                         selection: Binding(get: { pane == .terminal ? .terminal : .chat }, set: { setMacView($0) }))
             .labelsHidden()
             .fixedSize()
@@ -355,7 +355,7 @@ struct ChatView: View {
     /// One agent of the Mac's sibling menu: its title (its agent beside its tab mates), its state; the open one ticked.
     @ViewBuilder private func macSiblingButton(_ s: Session, role: TabPanes.Role?) -> some View {
         let title = s.title.isEmpty ? s.agentLabel : s.title
-        let name = role.map { "\($0.name)\($0.launcher ? "（发起者）" : "") · \(title)" } ?? title
+        let name = role.map { $0.launcher ? String(localized: "\($0.name)（发起者） · \(title)") : "\($0.name) · \(title)" } ?? title
         Button { if s.key != key { switchTo(s.key) } } label: {
             if s.key == key { Label(name, systemImage: Theme.Icon.success) } else { Text("\(name) · \(s.stateLabel)") }
         }
@@ -371,7 +371,7 @@ struct ChatView: View {
                     case .agent(let s):
                         macSiblingButton(s, role: nil)
                     case .tab(let g):
-                        Section("\(g.label ?? "标签页") · \(g.sessions.count) 个 Agent") {
+                        Section(String(localized: "\(g.label ?? String(localized: "标签页")) · \(g.sessions.count) 个 Agent")) {
                             ForEach(g.sessions) { s in macSiblingButton(s, role: g.role(of: s)) }
                         }
                     }
@@ -404,9 +404,13 @@ struct ChatView: View {
 
     /// The activity button's name: the /loop's next run and the background work, as their chips said.
     private var macActivityTitle: String {
-        let loop = session?.loop.map { "循环 · " + ActivityChips.shortLoopLabel($0, now: .now) }
-        let background = (session?.background ?? []).isEmpty ? nil : "后台 \((session?.background ?? []).count)"
-        return [loop, background].compactMap { $0 }.joined(separator: "，")
+        let loop = session?.loop.map { l in
+            let next = ActivityChips.shortLoopLabel(l, now: .now)
+            return String(localized: "循环 · \(next)")
+        }
+        let count = (session?.background ?? []).count
+        let background = count == 0 ? nil : String(localized: "后台 \(count)")
+        return [loop, background].compactMap { $0 }.joined(separator: String(localized: "，", comment: "List separator"))
     }
 
     /// What of the header has no place in the toolbar: the goal, the ports it listens on and the running subagents, a row over
@@ -777,7 +781,7 @@ struct ChatView: View {
             let r0 = scratch.lineY[reply] ?? .nan, end0 = scratch.lineY[w + "-end"] ?? .nan
             toggleWork(w, fromHeader: false); await pause()
             let r1 = scratch.lineY[reply] ?? .nan
-            log.append("收起 at \(Int(end0)), reply at \(Int(r0)): folding moved the reply \(Int(r1 - r0)); header now \(Int(scratch.workHeadY[w] ?? .nan))")
+            log.append("收起 at \(Int(end0)), reply at \(Int(r0)): folding moved the reply \(Int(r1 - r0)); header now \(Int(scratch.workHeadY[w] ?? .nan))") // i18n-ignore
         }
         if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             try? log.joined(separator: "\n").write(to: dir.appending(path: "fold.txt"), atomically: true, encoding: .utf8)
@@ -1071,7 +1075,7 @@ struct ChatView: View {
             // trying again can help (not a login or a bad request).
             APIErrorCard(info: info, count: count, at: item.ts,
                          retry: info.transient != false && !status.isActive && currentLines().last?.id == line.id
-                             ? { model.sendNow(key, text: "继续") } : nil)
+                             ? { model.sendNow(key, text: "继续") } : nil) // i18n-ignore
         case .userImages(_, let items):
             // Close to the bubble below it, like the photos on a message being sent (the list's spacing is 14).
             SentPhotos(images: items.compactMap(\.image)).padding(.bottom, -8)
@@ -1807,7 +1811,7 @@ struct ChatView: View {
                 if let s = session, !s.canSend, let reason = s.sourceSubtitle {
                     Text(reason).font(Theme.Font.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Composer(key: key, status: status, placeholder: style == .assistant ? "问 \(model.persona.name)…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
+                Composer(key: key, status: status, placeholder: style == .assistant ? String(localized: "问 \(model.persona.name)…") : String(localized: "给 \(session?.agentLabel ?? "Claude") 发消息"),
                          onCleared: { switchTo($0) }, onFocus: { composerTyping = $0 })
                     // The shell's expanding field stays in the page's layout graph; so does BeautifulUI's prompt bar,
                     // whose menus hang above it: an island's hosting view takes no touches outside its bounds.
@@ -1881,7 +1885,7 @@ struct ChatView: View {
             // (`FirstMessagePending`), where the turn's work line comes in. Without it the chat that took over showed
             // the message a line lower, then pushed it up when the turn began (#1911).
             if frozen == nil, startingTurn(pending) {
-                TypingIndicator(text: "\(style == .assistant ? model.persona.name : (session?.agentLabel ?? "Claude")) 正在准备…")
+                TypingIndicator(text: String(localized: "\(style == .assistant ? model.persona.name : (session?.agentLabel ?? "Claude")) 正在准备…"))
                     .flippedBack()
                     .id("starting-turn")
             }
@@ -1915,7 +1919,7 @@ struct ChatView: View {
             if !store.loadedOnce && rows.isEmpty {
                 ChatSkeleton().flippedBack()
             } else if rows.isEmpty && store.pending.isEmpty { // a first message on its way is not 还没有消息
-                EmptyStateView(symbol: Theme.Icon.conversation, title: "还没有消息", message: "发一句话开始吧。").flippedBack()
+                EmptyStateView(symbol: Theme.Icon.conversation, title: String(localized: "还没有消息"), message: String(localized: "发一句话开始吧。")).flippedBack()
             }
             if store.hasMore {
                 // Reaching the far (oldest) end loads the page before it — only once the user has dragged the list.
@@ -2265,7 +2269,7 @@ struct ChatView: View {
                 }
                 ForEach(panes.filter { $0 == .files || $0 == .git }) { p in
                     Button { withAnimation(Theme.Motion.standard) { pane = p } } label: {
-                        Label(paneBadges[p].map { "\(p.title)（\($0)）" } ?? p.title, systemImage: p.symbol)
+                        Label(paneBadges[p].map { String(localized: "\(p.title)（\($0)）") } ?? p.title, systemImage: p.symbol)
                     }
                 }
             }
@@ -2401,7 +2405,7 @@ struct ChatView: View {
         guard s.state == .working, status.isActive, case .turn(let t)? = store.blocks.last, let start = t.startedAt else { return s.state.label }
         let m = Int(now.timeIntervalSince(start)) / 60
         if m < 1 { return s.state.label }
-        return s.state.label + " " + (m < 60 ? "\(m) 分" : "\(m / 60) 小时 \(m % 60) 分")
+        return s.state.label + " " + (m < 60 ? String(localized: "\(m) 分") : String(localized: "\(m / 60) 小时 \(m % 60) 分"))
     }
 
     /// The Agents header: back, title (with the state), the terminal and ⋯; under them, when there are any, the other
@@ -2512,7 +2516,7 @@ struct ChatView: View {
             }
             ForEach(panes.filter { ($0 == .git || $0 == .files) && $0 != pane }) { p in
                 Button { Haptics.tap(); withAnimation(Theme.Motion.standard) { pane = p } } label: {
-                    Label(paneBadges[p].map { "\(p.title)（\($0)）" } ?? p.title, systemImage: p.symbol)
+                    Label(paneBadges[p].map { String(localized: "\(p.title)（\($0)）") } ?? p.title, systemImage: p.symbol)
                 }
             }
             Menu { moreMenuItems } label: { Label("更多", systemImage: Theme.Icon.more) }
@@ -2737,7 +2741,7 @@ struct ChatView: View {
                     // Typing: a character every 120 ms into the draft, as the text field's binding writes it.
                     FrameStats.shared.start()
                     for i in 0..<40 {
-                        model.drafts[key] = String(repeating: "字", count: i + 1)
+                        model.drafts[key] = String(repeating: "字", count: i + 1) // i18n-ignore
                         try? await Task.sleep(for: .milliseconds(120))
                     }
                     model.drafts[key] = ""
@@ -2957,7 +2961,7 @@ struct ChatView: View {
     /// with your old message.
     private func bindMenu() {
         menu.quote = { [model, key] text, id, isUser in
-            let from = isUser ? "我" : (model.session(key)?.agentLabel ?? "Claude")
+            let from = isUser ? String(localized: "我") : (model.session(key)?.agentLabel ?? "Claude")
             var quotes = model.composerContexts[key] ?? []
             guard !quotes.contains(where: { $0.kind == "quote" && $0.msg == id && !id.isEmpty }) else { return }
             quotes.append(.quote(text, from: from, msg: id))
@@ -2977,7 +2981,7 @@ struct ChatView: View {
             Task { await model.rewind(key, items: model.chat(key).items, at: itemID, text: text, restore: restore) }
         }
         menu.rewindBlock = { [model, key] in
-            model.rewinding.contains(key) ? "正在回退" : Rewind.block(model.session(key))
+            model.rewinding.contains(key) ? String(localized: "正在回退") : Rewind.block(model.session(key))
         }
         menu.agent = { [model, key] in model.session(key)?.agentLabel ?? "Claude" }
         menu.source = { [model, key] in
@@ -3029,15 +3033,15 @@ struct ChatView: View {
     private var title: String {
         let t = session?.title ?? ""
         if style == .assistant { return t.isEmpty || t == "Claude Code" ? "Persona" : t }
-        return t.isEmpty ? "对话" : t
+        return t.isEmpty ? String(localized: "对话") : t
     }
 
     private var subtitle: String {
         guard let s = session else { return "" }
         if style == .assistant {
-            if !model.interactions(for: key).isEmpty { return "等你确认" }
+            if !model.interactions(for: key).isEmpty { return String(localized: "等你确认") }
             let launcher = model.assistantLaunchers[key] ?? s.launcher
-            return s.status.isActive ? "正在处理…" : ([launcher, Fmt.model(s.model)].compactMap { $0 }.joined(separator: " · "))
+            return s.status.isActive ? String(localized: "正在处理…") : ([launcher, Fmt.model(s.model)].compactMap { $0 }.joined(separator: " · "))
         }
         let machine = model.namedMachine(s.machineRef)?.title ?? s.machineID
         let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
@@ -3343,7 +3347,7 @@ struct Composer: View, Equatable {
 
     private var promptCommands: [PromptCommand] {
         PromptItems.commands(clear: canClear && !status.isActive && !clearing) + declarations.prompts.map {
-            PromptCommand("/扩展/" + $0.title, detail: $0.ownerName, insert: $0.text)
+            PromptCommand(String(localized: "/扩展/\($0.title)", comment: "Menu name of a prompt an extension adds"), detail: $0.ownerName, insert: $0.text)
         }
     }
 
@@ -3394,7 +3398,7 @@ struct Composer: View, Equatable {
     /// The model button's title; with nothing to show or pick, no button.
     private var modesTitle: SessionModes.ComposerTitle? {
         let effort = setsModes || setsEffortOnly
-        return SessionModesMenu.title(model.session(key), setsModes: effort) ?? (effort || canPickModel ? .init(model: "模型") : nil)
+        return SessionModesMenu.title(model.session(key), setsModes: effort) ?? (effort || canPickModel ? .init(model: String(localized: "模型")) : nil)
     }
 
     /// The @ menu: files this chat's tools touched, then other agents' sessions.
@@ -3428,7 +3432,7 @@ struct Composer: View, Equatable {
                 // host takes the message and the list catches up.
                 FailureNote(reason: reason, link: s.externalLink) {
                     retried = reason
-                    model.sendNow(key, text: "继续")
+                    model.sendNow(key, text: "继续") // i18n-ignore
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -3457,8 +3461,8 @@ struct Composer: View, Equatable {
             }
             if usesShellComposer {
                 // The shell's composer (docs/ios.md「新外壳」), whatever the style: the assistant's and an agent's (#1091).
-                ShellComposerBar(placeholder: status.isActive ? "补充说明（会排队发送）"
-                                     : (suggestion ?? (shellChat ? "问 \(model.persona.name)" : placeholder ?? "给 Claude 发消息")),
+                ShellComposerBar(placeholder: status.isActive ? String(localized: "补充说明（会排队发送）")
+                                     : (suggestion ?? (shellChat ? String(localized: "问 \(model.persona.name)") : placeholder ?? String(localized: "给 Claude 发消息"))),
                                  text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
                                  hasAttachments: hasAttachments,
                                  stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
@@ -3480,7 +3484,7 @@ struct Composer: View, Equatable {
                 }
             } else if AppStyle.current.usesBeautifulUI {
                 // The BeautifulUI style's prompt bar; every other style keeps the original input line.
-                PromptComposer(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
+                PromptComposer(placeholder: status.isActive ? String(localized: "补充说明（会排队发送）") : (suggestion ?? placeholder ?? String(localized: "给 Claude 发消息")),
                                text: textBinding, selection: $selection, focused: $focused,
                                hasAttachments: hasAttachments,
                                stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
@@ -3515,7 +3519,7 @@ struct Composer: View, Equatable {
                                    Task { await sendText(t) }
                                })
             } else {
-                ComposerRow(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
+                ComposerRow(placeholder: status.isActive ? String(localized: "补充说明（会排队发送）") : (suggestion ?? placeholder ?? String(localized: "给 Claude 发消息")),
                             text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
                             stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                             send: { Task { await sendText(text) } }, quotes: contexts, history: key.path) {
@@ -3688,7 +3692,7 @@ struct Composer: View, Equatable {
         let files = videos.ready
         guard !t.isEmpty || !images.isEmpty || !files.isEmpty || !ctx.isEmpty else { return }
         // Picked page excerpts ride along as <jarvis-context> tags before what was typed, videos as <jarvis-file> after.
-        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? "参考上面的内容。" : "请看视频") : "请看图片") : t, files: files)
+        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? String(localized: "参考上面的内容。") : String(localized: "请看视频")) : String(localized: "请看图片")) : t, files: files)
         let message = ctx.isEmpty ? body : ctx.map(\.xml).joined(separator: "\n") + "\n\n" + body
         // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
         // Not with videos: they are on this conversation's machine, the task's agent may be on another.
@@ -3708,7 +3712,7 @@ struct Composer: View, Equatable {
     /// A send while a video is still on its way: nothing goes; what was typed goes back in the box (the prompt bar
     /// clears it right after asking to send).
     private func holdForVideos(restoring raw: String? = nil) {
-        model.toast = Toast("视频还在上传，传完再发送")
+        model.toast = Toast(String(localized: "视频还在上传，传完再发送"))
         if let raw, text.isEmpty { Task { text = raw } }
     }
 
@@ -3743,13 +3747,13 @@ struct Composer: View, Equatable {
         }
         picks = []
         if failed > 0 {
-            model.toast = Toast("有 \(failed) 张照片读不出来（可能还在 iCloud 里没下载完）", style: .error)
+            model.toast = Toast(String(localized: "有 \(failed) 张照片读不出来（可能还在 iCloud 里没下载完）"), style: .error)
         }
     }
 
     private func add(_ img: UIImage) {
         guard images.count < 4 else {
-            model.toast = Toast("一次最多 4 张", style: .error)
+            model.toast = Toast(String(localized: "一次最多 4 张"), style: .error)
             return
         }
         let scaled = img.scaledDown(maxSide: 1600)
@@ -3773,11 +3777,11 @@ struct SlashCommand: Identifiable {
     var id: String { word }
 
     static let all: [SlashCommand] = [
-        SlashCommand(title: "继续", symbol: "forward", word: "/继续", detail: "让它接着做", text: "继续"),
-        SlashCommand(title: "压缩上下文 /compact", symbol: Theme.Icon.collapseAll, word: "/compact", detail: "压缩上下文", text: "/compact"),
-        SlashCommand(title: "查看上下文 /context", symbol: "chart.pie", word: "/context", detail: "查看上下文", text: "/context"),
-        SlashCommand(title: "提交并推送", symbol: "arrow.up.doc", word: "/提交", detail: "按规范提交并推送", text: "把当前改动按规范提交并推送"),
-        SlashCommand(title: "汇报进展", symbol: Theme.Icon.list, word: "/汇报", detail: "汇报进展、还剩什么", text: "简要汇报一下目前的进展、还剩什么"),
+        SlashCommand(title: String(localized: "继续", comment: "Slash command title: let the agent keep going"), symbol: "forward", word: String(localized: "/继续", comment: "Slash command word the user can type"), detail: String(localized: "让它接着做"), text: String(localized: "继续")),
+        SlashCommand(title: String(localized: "压缩上下文 /compact"), symbol: Theme.Icon.collapseAll, word: "/compact", detail: String(localized: "压缩上下文"), text: "/compact"),
+        SlashCommand(title: String(localized: "查看上下文 /context"), symbol: "chart.pie", word: "/context", detail: String(localized: "查看上下文"), text: "/context"),
+        SlashCommand(title: String(localized: "提交并推送"), symbol: "arrow.up.doc", word: String(localized: "/提交", comment: "Slash command word the user can type"), detail: String(localized: "按规范提交并推送"), text: String(localized: "把当前改动按规范提交并推送", comment: "Message sent to the agent when the command is picked")),
+        SlashCommand(title: String(localized: "汇报进展"), symbol: Theme.Icon.list, word: String(localized: "/汇报", comment: "Slash command word the user can type"), detail: String(localized: "汇报进展、还剩什么"), text: String(localized: "简要汇报一下目前的进展、还剩什么", comment: "Message sent to the agent when the command is picked")),
     ]
 }
 
@@ -3792,11 +3796,14 @@ struct SlashMenuRow: Identifiable, Equatable {
     /// What a quick message sends, shown at the row's end; a command is its own text.
     var preview: String? { text.hasPrefix("/") ? nil : text }
 
-    static let model = SlashMenuRow(word: "/model", detail: "切换模型", text: "/model ")
-    static let clear = SlashMenuRow(word: "/clear", detail: "清空对话，从头开始", text: "/clear")
+    static let model = SlashMenuRow(word: "/model", detail: String(localized: "切换模型"), text: "/model ")
+    static let clear = SlashMenuRow(word: "/clear", detail: String(localized: "清空对话，从头开始"), text: "/clear")
 
     /// The web's order: its quick messages, then Claude Code's commands. A quick command added later goes after these.
-    private static let order = ["/继续", "/提交", "/汇报", "/compact", "/context"]
+    /// The words as `SlashCommand.all` has them (localized), so the order holds in every language.
+    private static let order = [String(localized: "/继续", comment: "Slash command word the user can type"),
+                                String(localized: "/提交", comment: "Slash command word the user can type"),
+                                String(localized: "/汇报", comment: "Slash command word the user can type"), "/compact", "/context"]
 
     /// The rows an agent's chat offers: /model where the phone can pick one, /clear where the pane takes it.
     static func rows(model: Bool, clear: Bool) -> [SlashMenuRow] {
@@ -4024,32 +4031,32 @@ struct SessionInfoSheet: View {
                 if let link = session?.externalLink { Section { FeishuLink(url: link) } }
                 if let info {
                     Section("运行") {
-                        row(Theme.Icon.model, "模型", Fmt.model(info.model) ?? info.model)
-                        if let l = info.launcher ?? session?.launcher, !l.isEmpty { row("bolt", "启动器", l) }
+                        row(Theme.Icon.model, String(localized: "模型"), Fmt.model(info.model) ?? info.model)
+                        if let l = info.launcher ?? session?.launcher, !l.isEmpty { row("bolt", String(localized: "启动器"), l) }
                         if let r = AssistantRuntime.status(runtime: session?.runtime, fallback: session?.runtimeFallback) {
-                            row(Theme.Icon.terminal, "运行方式", r)
+                            row(Theme.Icon.terminal, String(localized: "运行方式"), r)
                         }
                         row("shippingbox", agent, info.version)
                         if let route = session?.codexRoute { routeRow(route, note: session?.codexRouteNote) }
-                        row("lock.open", "权限", SessionModes.modeLabel(info.permissionMode))
-                        row("gauge.with.dots.needle.50percent", "思考强度", SessionModes.effortLabel(info.effort))
+                        row("lock.open", String(localized: "权限"), SessionModes.modeLabel(info.permissionMode))
+                        row("gauge.with.dots.needle.50percent", String(localized: "思考强度"), SessionModes.effortLabel(info.effort))
                     }
                     Section("用量") {
-                        row(Theme.Icon.context, "上下文", Self.tokens(info.contextTokens) + " tokens")
+                        row(Theme.Icon.context, String(localized: "上下文"), Self.tokens(info.contextTokens) + " tokens")
                         // The share of the window, live from the session list (#3289); nil while the window is unknown.
                         if let usage = ContextUsage(model.session(key) ?? session) { ContextUsageRow(usage: usage) }
-                        if info.compactions > 0 { row("rectangle.compress.vertical", "压缩", "\(info.compactions) 次") }
-                        row(Theme.Icon.conversation, "对话", "\(info.turns) 轮")
-                        row("text.word.spacing", "共生成", Self.tokens(info.outputTokens) + " tokens")
+                        if info.compactions > 0 { row("rectangle.compress.vertical", String(localized: "压缩"), String(localized: "\(info.compactions) 次")) }
+                        row(Theme.Icon.conversation, String(localized: "对话"), String(localized: "\(info.turns) 轮"))
+                        row("text.word.spacing", String(localized: "共生成"), Self.tokens(info.outputTokens) + " tokens")
                         if let started = info.startedAt, started.isMeaningful {
-                            row(Theme.Icon.time, "开始", started.formatted(date: .abbreviated, time: .shortened))
+                            row(Theme.Icon.time, String(localized: "开始"), started.formatted(date: .abbreviated, time: .shortened))
                         }
                     }
                     Section("位置") {
                         if let s = session, let todo = s.todo,
                             TodosLogic.isOnTodosHub(sessionGroup: s.key.group, hubGroup: model.hub?.group) {
                             Button { showTodo = true } label: {
-                                row(Theme.Icon.todo, "待办", todo.title)
+                                row(Theme.Icon.todo, String(localized: "待办"), todo.title)
                             }
                             .sheet(isPresented: $showTodo) {
                                 NavigationStack { TodoDetailView(todoID: todo.id).macSheetDone { showTodo = false } }
@@ -4062,13 +4069,13 @@ struct SessionInfoSheet: View {
                                     #endif
                             }
                         }
-                        row(Theme.Icon.folder, "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.namedMachine(key.machineRef)?.home), mono: true)
-                        if let b = info.gitBranch, !b.isEmpty { row("arrow.triangle.branch", "分支", b, mono: true) }
+                        row(Theme.Icon.folder, String(localized: "目录"), Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.namedMachine(key.machineRef)?.home), mono: true)
+                        if let b = info.gitBranch, !b.isEmpty { row("arrow.triangle.branch", String(localized: "分支"), b, mono: true) }
                     }
                     Section {
-                        copyButton("拷贝 session id", symbol: Theme.Icon.id, text: info.sessionID, toast: "已拷贝 session id")
+                        copyButton(String(localized: "拷贝 session id"), symbol: Theme.Icon.id, text: info.sessionID, toast: String(localized: "已拷贝 session id"))
                         if session?.canTerminal == true {
-                            copyButton("拷贝恢复命令", symbol: Theme.Icon.terminal, text: "cd \(info.cwd ?? "") && " + resume(session?.sourceThreadID ?? info.sessionID), toast: "已拷贝恢复命令")
+                            copyButton(String(localized: "拷贝恢复命令"), symbol: Theme.Icon.terminal, text: "cd \(info.cwd ?? "") && " + resume(session?.sourceThreadID ?? info.sessionID), toast: String(localized: "已拷贝恢复命令"))
                         }
                     } footer: {
                         Text(info.sessionID).font(Theme.Font.label.monospaced()).textSelection(.enabled)
@@ -4114,7 +4121,7 @@ struct SessionInfoSheet: View {
         let place = [model.namedMachine(key.machineRef)?.title ?? key.machineID, s?.spaceName, s?.slotLabel]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " › ")
         return VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            Text(s?.displayTitle ?? "会话").font(Theme.Font.title).lineLimit(2)
+            Text(s?.displayTitle ?? String(localized: "会话")).font(Theme.Font.title).lineLimit(2)
             HStack(spacing: Theme.Space.sm) {
                 if let st = s?.state {
                     HStack(spacing: Theme.Space.xs) {
@@ -4147,7 +4154,7 @@ struct SessionInfoSheet: View {
     /// How Persona reaches this Codex (docs/codex.md「守护进程上的会话」): its shared app-server, or the terminal and why.
     private func routeRow(_ route: String, note: String?) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            row(Theme.Icon.link, "连接", route == "app_server" ? "app-server（结构化）" : "终端（读屏幕）")
+            row(Theme.Icon.link, String(localized: "连接"), route == "app_server" ? String(localized: "app-server（结构化）") : String(localized: "终端（读屏幕）"))
             if route != "app_server", let note, !note.isEmpty {
                 Text(note).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -4501,7 +4508,7 @@ struct WorkEndView: View, Equatable {
             if !files.isEmpty {
                 let list = all ? files : Array(files.prefix(Self.shown))
                 FileDiffChips(list.map { FileDiff(file: ($0.path as NSString).lastPathComponent, additions: $0.adds, deletions: $0.dels) },
-                              moreLabel: files.count > list.count ? "+\(files.count - list.count) 个文件" : nil,
+                              moreLabel: files.count > list.count ? String(localized: "+\(files.count - list.count) 个文件") : nil,
                               onMore: { all = true },
                               onSelect: openFile.map { open in { diff in
                                   if let f = files.first(where: { ($0.path as NSString).lastPathComponent == diff.file }) { open(f.path) }
@@ -4589,17 +4596,17 @@ nonisolated struct WorkSummary: Equatable {
         var short: [String] = []
         if AppStyle.current.usesBeautifulUI {
             // BeautifulUI's header words: "5 次工具调用，2 条消息".
-            if calls > 0 { full.append("\(calls) 次工具调用"); short.append("\(calls) 次工具调用") }
-            if thoughts > 0 { full.append("\(thoughts) 次思考") }
-            if texts > 0 { full.append("\(texts) 条消息") }
-            if full.isEmpty && notices > 0 { full.append("\(notices) 条后台通知") }
-            if short.isEmpty && notices > 0 { short.append("\(notices) 条后台通知") }
+            if calls > 0 { full.append(String(localized: "\(calls) 次工具调用")); short.append(String(localized: "\(calls) 次工具调用")) }
+            if thoughts > 0 { full.append(String(localized: "\(thoughts) 次思考")) }
+            if texts > 0 { full.append(String(localized: "\(texts) 条消息")) }
+            if full.isEmpty && notices > 0 { full.append(String(localized: "\(notices) 条后台通知")) }
+            if short.isEmpty && notices > 0 { short.append(String(localized: "\(notices) 条后台通知")) }
         } else {
-            if calls > 0 { full.append("工具 \(calls)"); short.append("工具 \(calls)") }
-            if thoughts > 0 { full.append("思考 \(thoughts)") }
-            if texts > 0 { full.append("回复 \(texts)") }
-            if full.isEmpty && notices > 0 { full.append("后台通知 \(notices)") }
-            if short.isEmpty && notices > 0 { short.append("后台通知 \(notices)") }
+            if calls > 0 { full.append(String(localized: "工具 \(calls)")); short.append(String(localized: "工具 \(calls)")) }
+            if thoughts > 0 { full.append(String(localized: "思考 \(thoughts)")) }
+            if texts > 0 { full.append(String(localized: "回复 \(texts)")) }
+            if full.isEmpty && notices > 0 { full.append(String(localized: "后台通知 \(notices)")) }
+            if short.isEmpty && notices > 0 { short.append(String(localized: "后台通知 \(notices)")) }
         }
         self.full = full
         self.short = short
@@ -4724,21 +4731,21 @@ struct WorkLine: View, Equatable {
         guard AppStyle.current.usesBeautifulUI else {
             // Persona' own: "工具 3 · 思考 1 · 1 分 20 秒", "正在工作 39 秒 · 工具 2".
             var p = parts
-            if live { p.insert("正在工作 \(took)", at: 0) } else if !took.isEmpty { p.append(took) }
-            return p.isEmpty ? "已完成" : p.joined(separator: " · ")
+            if live { p.insert(String(localized: "正在工作 \(took)"), at: 0) } else if !took.isEmpty { p.append(took) }
+            return p.isEmpty ? String(localized: "已完成") : p.joined(separator: " · ")
         }
-        let what = parts.joined(separator: "，")
-        if live { return what.isEmpty ? "正在工作 \(took)" : "正在工作 \(took) · " + what }
-        if what.isEmpty { return took.isEmpty ? "已完成" : "已完成 · " + took }
+        let what = parts.joined(separator: String(localized: "，", comment: "List separator"))
+        if live { return what.isEmpty ? String(localized: "正在工作 \(took)") : String(localized: "正在工作 \(took) · \(what)") }
+        if what.isEmpty { return took.isEmpty ? String(localized: "已完成") : String(localized: "已完成 · \(took)") }
         return took.isEmpty ? what : what + " · " + took
     }
 
     static func duration(from start: Date?, to end: Date) -> String {
         guard let start else { return "" }
         let s = max(0, Int(end.timeIntervalSince(start)))
-        if s < 60 { return "\(s) 秒" }
-        if s < 3600 { return s % 60 == 0 ? "\(s / 60) 分" : "\(s / 60) 分 \(s % 60) 秒" }
-        return "\(s / 3600) 小时 \(s % 3600 / 60) 分"
+        if s < 60 { return String(localized: "\(s) 秒") }
+        if s < 3600 { return s % 60 == 0 ? String(localized: "\(s / 60) 分") : String(localized: "\(s / 60) 分 \(s % 60) 秒") }
+        return String(localized: "\(s / 3600) 小时 \(s % 3600 / 60) 分")
     }
 }
 

@@ -80,7 +80,7 @@ final class LarkChatOutbox {
             preparationProblem = nil
             canRecover = false
         } catch {
-            preparationProblem = (error as? LarkOutboxStore.Failure)?.localizedDescription ?? "暂时无法读取本机草稿，请重试"
+            preparationProblem = (error as? LarkOutboxStore.Failure)?.localizedDescription ?? String(localized: "暂时无法读取本机草稿，请重试")
             canRecover = false
             if let reason = error as? LarkOutboxStore.Failure {
                 switch reason {
@@ -136,7 +136,7 @@ final class LarkChatOutbox {
         do { try await saveDraft(draft, attachments: attachments) }
         catch {
             if !invalidated, draftRevision == revision, pendingDraft == nil { pendingDraft = (draft, attachments) }
-            storageProblem = "草稿尚未保存，请检查本机存储空间"
+            storageProblem = String(localized: "草稿尚未保存，请检查本机存储空间")
         }
     }
 
@@ -218,9 +218,9 @@ final class LarkChatOutbox {
             } catch {
                 guard !invalidated else { return }
                 if let i = snapshot.items.firstIndex(where: { $0.id == id }) {
-                    snapshot.items[i].state = .failed("消息尚未提交，请检查本机存储空间后重试")
+                    snapshot.items[i].state = .failed(String(localized: "消息尚未提交，请检查本机存储空间后重试"))
                 }
-                storageProblem = "消息未发送，无法保存发送进度，请检查本机存储空间"
+                storageProblem = String(localized: "消息未发送，无法保存发送进度，请检查本机存储空间")
                 return
             }
             guard !invalidated, !Task.isCancelled, items.contains(where: { $0.id == id && $0.state == .sending }) else { return }
@@ -240,7 +240,7 @@ final class LarkChatOutbox {
                         snapshot.items[i].messageID = receipt.messageID
                         snapshot.items[i].state = .sent
                     }
-                    storageProblem = "发送结果尚未保存到本机，请留在此页等待同步"
+                    storageProblem = String(localized: "发送结果尚未保存到本机，请留在此页等待同步")
                 }
                 refreshTasks[id] = Task {
                     defer { refreshTasks[id] = nil }
@@ -265,7 +265,7 @@ final class LarkChatOutbox {
                         guard let i = snapshot.items.firstIndex(where: { $0.id == id }) else { return }
                         snapshot.items[i].state = state
                     }
-                } catch { storageProblem = "发送状态未保存，请检查本机存储空间" }
+                } catch { storageProblem = String(localized: "发送状态未保存，请检查本机存储空间") }
                 Haptics.error()
             }
         }

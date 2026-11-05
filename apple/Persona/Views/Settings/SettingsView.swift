@@ -20,14 +20,14 @@ struct SettingsView: View {
     private var hubSummary: String {
         guard let s = model.hubUpdate else { return "" }
         if s.working { return s.stateTitle }
-        if s.latest?.newer == true { return s.channel == "docker" ? "有新镜像" : "有新版本" }
+        if s.latest?.newer == true { return s.channel == "docker" ? String(localized: "有新镜像") : String(localized: "有新版本") }
         return s.version
     }
 
     nonisolated private struct SlotsKey: Hashable, Sendable { var source: ExtensionSlots.Source; var depth: Int }
 
     /// 翻译's row value: off, or the target language.
-    private var translationSummary: String { translating ? TranslationPrefs.name(of: translateTarget) : "关闭" }
+    private var translationSummary: String { translating ? TranslationPrefs.name(of: translateTarget) : String(localized: "state.off", defaultValue: "关闭") }
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
@@ -81,30 +81,30 @@ struct SettingsView: View {
                 Section {
                     Group {
                         NavigationLink(value: ModelLaunchersRoute()) {
-                            SettingsRow(title: "模型供应商", symbol: Theme.Icon.cpu, tint: Theme.Hue.purple)
+                            SettingsRow(title: String(localized: "模型供应商"), symbol: Theme.Icon.cpu, tint: Theme.Hue.purple)
                         }
                         .settingsListRow(ModelLaunchersRoute())
                         NavigationLink(value: SettingsPage.modelConfiguration) {
-                            SettingsRow(title: "模型配置", symbol: Theme.Icon.model, tint: Theme.ai)
+                            SettingsRow(title: String(localized: "模型配置"), symbol: Theme.Icon.model, tint: Theme.ai)
                         }
                         .settingsListRow(SettingsPage.modelConfiguration)
                         NavigationLink(value: SettingsPage.assistant) {
                             // No model here: the assistant's model is 模型配置 › 主对话 (#1291).
-                            SettingsRow(title: "助手", symbol: Theme.Icon.ai, tint: Theme.ai)
+                            SettingsRow(title: String(localized: "助手"), symbol: Theme.Icon.ai, tint: Theme.ai)
                         }
                         .settingsListRow(SettingsPage.assistant)
                         .accessibilityIdentifier("settings-assistant")
                         NavigationLink(value: SettingsPage.triage) {
-                            SettingsRow(title: "会话分诊", symbol: Theme.Icon.triage, tint: Theme.ai)
+                            SettingsRow(title: String(localized: "会话分诊"), symbol: Theme.Icon.triage, tint: Theme.ai)
                         }
                         .settingsListRow(SettingsPage.triage)
                         .accessibilityIdentifier("settings-triage")
                         NavigationLink(value: SettingsPage.claude) {
-                            SettingsRow(title: "Claude Code 设置", symbol: Theme.Icon.options, tint: Theme.Hue.orange)
+                            SettingsRow(title: String(localized: "Claude Code 设置"), symbol: Theme.Icon.options, tint: Theme.Hue.orange)
                         }
                         .settingsListRow(SettingsPage.claude)
                         NavigationLink(value: SettingsPage.codex) {
-                            SettingsRow(title: "Codex 设置", symbol: Theme.Icon.options, tint: Theme.Hue.gray)
+                            SettingsRow(title: String(localized: "Codex 设置"), symbol: Theme.Icon.options, tint: Theme.Hue.gray)
                         }
                         .settingsListRow(SettingsPage.codex)
                     }
@@ -120,7 +120,7 @@ struct SettingsView: View {
                     Section {
                         Group {
                             NavigationLink(value: SettingsPage.plugins) {
-                                SettingsRow(title: "扩展", symbol: Theme.Icon.plugins, tint: Theme.Hue.purple,
+                                SettingsRow(title: String(localized: "扩展"), symbol: Theme.Icon.plugins, tint: Theme.Hue.purple,
                                             value: ExtensionText.listSummary(plugins), look: .oneLine)
                             }
                             .settingsListRow(SettingsPage.plugins)
@@ -136,19 +136,19 @@ struct SettingsView: View {
                         NavigationLink(value: MachineListRoute()) { MachinesSettingsRow() }
                         .settingsListRow(MachineListRoute())
                         NavigationLink(value: SettingsPage.devices) {
-                            SettingsRow(title: "设备", symbol: Theme.Icon.credentials, tint: Theme.Hue.gray)
+                            SettingsRow(title: String(localized: "设备"), symbol: Theme.Icon.credentials, tint: Theme.Hue.gray)
                         }
                         .settingsListRow(SettingsPage.devices)
                         NavigationLink(value: SettingsPage.notifications) {
-                            SettingsRow(title: "通知", symbol: Theme.Icon.notifications, tint: Theme.danger)
+                            SettingsRow(title: String(localized: "通知"), symbol: Theme.Icon.notifications, tint: Theme.danger)
                         }
                         .settingsListRow(SettingsPage.notifications)
                         NavigationLink(value: SettingsPage.translation) {
-                            SettingsRow(title: "翻译", symbol: Theme.Icon.translate, tint: Theme.accent, value: translationSummary, look: .oneLine)
+                            SettingsRow(title: String(localized: "翻译"), symbol: Theme.Icon.translate, tint: Theme.accent, value: translationSummary, look: .oneLine)
                         }
                         .settingsListRow(SettingsPage.translation)
                         NavigationLink(value: SettingsPage.storage) {
-                            SettingsRow(title: "存储空间", symbol: "internaldrive", tint: Theme.Hue.gray, value: storage?.storageText ?? "", look: .digits)
+                            SettingsRow(title: String(localized: "存储空间"), symbol: "internaldrive", tint: Theme.Hue.gray, value: storage?.storageText ?? "", look: .digits)
                         }
                         .settingsListRow(SettingsPage.storage)
                     }
@@ -167,7 +167,7 @@ struct SettingsView: View {
                             // one hub: it is where a second one is added (the only row the single-hub page gained).
                             NavigationLink(value: SettingsPage.hubs) {
                                 SettingsRow(title: "hub", symbol: Theme.Icon.hubGroup, tint: Theme.Hue.green,
-                                            value: model.isMultiHub ? "\(model.groupIDs.count) 组" : model.groupName(model.hub?.group ?? ""),
+                                            value: model.isMultiHub ? String(localized: "\(model.groupIDs.count) 组") : model.groupName(model.hub?.group ?? ""),
                                             look: .oneLine)
                             }
                             .settingsListRow(SettingsPage.hubs)
@@ -177,10 +177,10 @@ struct SettingsView: View {
                             }
                             .settingsListRow(SettingsPage.hub)
                             .accessibilityIdentifier("settings.hub")
-                            Button { showPair = true } label: { SettingsRow(title: "重新配对", symbol: "qrcode.viewfinder", tint: Theme.accent) }
+                            Button { showPair = true } label: { SettingsRow(title: String(localized: "重新配对"), symbol: "qrcode.viewfinder", tint: Theme.accent) }
                                 .modifier(SettingsButtonLook())
                             Button(role: .destructive) { confirmUnpair = true } label: {
-                                SettingsRow(title: model.isMultiHub ? "断开所有 hub" : "断开并忘记服务器", symbol: Theme.Icon.end, tint: Theme.danger)
+                                SettingsRow(title: model.isMultiHub ? String(localized: "断开所有 hub") : String(localized: "断开并忘记服务器"), symbol: Theme.Icon.end, tint: Theme.danger)
                                     #if os(macOS)
                                     .foregroundStyle(Theme.danger) // a plain row on the Mac: red says what it does
                                     #endif
@@ -189,7 +189,7 @@ struct SettingsView: View {
                         }
                         .bareListRow()
                     } header: {
-                        SettingsHeading("服务器")
+                        SettingsHeading(String(localized: "服务器"))
                     }
                 }
 
@@ -197,10 +197,10 @@ struct SettingsView: View {
                     Group {
                         let version = "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))"
                         // The commit this build was made from (stamped at build time, `project.yml`): which one is on the phone.
-                        let commit = Bundle.main.object(forInfoDictionaryKey: "JarvisCommit") as? String ?? "未知"
+                        let commit = Bundle.main.object(forInfoDictionaryKey: "JarvisCommit") as? String ?? String(localized: "未知")
                         if AppStyle.current.usesBeautifulUI {
-                            BUIListRow("版本", value: version)
-                            BUIListRow("构建") { EmptyView() } trailing: {
+                            BUIListRow(String(localized: "版本"), value: version)
+                            BUIListRow(String(localized: "构建")) { EmptyView() } trailing: {
                                 Text(commit).font(Theme.Font.code).foregroundStyle(.secondary).textSelection(.enabled)
                             }
                         } else {
@@ -214,7 +214,7 @@ struct SettingsView: View {
                     }
                     .bareListRow()
                 } header: {
-                    SettingsHeading("关于")
+                    SettingsHeading(String(localized: "关于"))
                 }
             }
             .accessibilityIdentifier("settings-list")
@@ -264,7 +264,7 @@ struct SettingsView: View {
             .onAppear { if UserDefaults.standard.bool(forKey: "openPairSheet") { showPair = true } }
             #endif
         } empty: {
-            SplitPlaceholder(symbol: Theme.Icon.settings, title: "设置", message: "左边选一项。")
+            SplitPlaceholder(symbol: Theme.Icon.settings, title: String(localized: "设置"), message: String(localized: "左边选一项。"))
                 #if os(macOS)
                 // As System Settings: the window opens on the first page, not on an empty pane.
                 .onAppear { if model.settingsPath.isEmpty { model.settingsPath.append(SettingsPage.persona) } }
@@ -278,9 +278,9 @@ struct SettingsView: View {
 
     /// The header's line about the link: connected (and how, when it goes through the hub's SSH tunnel), or why not.
     private var linkState: String {
-        guard model.live.looksConnected else { return model.connection.phase == .online ? "未连接" : model.connection.phase.title }
+        guard model.live.looksConnected else { return model.connection.phase == .online ? String(localized: "未连接") : model.connection.phase.title }
         let tunneled = model.hub.flatMap { model.tunnel($0.group) }?.routed == true
-        return tunneled ? "已连接 hub · 经 SSH 隧道" : "已连接 hub"
+        return tunneled ? String(localized: "已连接 hub · 经 SSH 隧道") : String(localized: "已连接 hub")
     }
 
     #if DEBUG
@@ -371,17 +371,17 @@ struct SettingsView: View {
         guard model.isPaired else { return }
         guard WatchSync.shared.watchAppInstalled else {
             Haptics.error()
-            model.toast = Toast("没找到装了 Persona 的 Apple Watch：先在 iPhone 的「Watch」App 里安装", style: .error)
+            model.toast = Toast(String(localized: "没找到装了 Persona 的 Apple Watch：先在 iPhone 的「Watch」App 里安装"), style: .error)
             return
         }
         await model.upgradeCredentials()
         WatchSync.shared.push(summary: model.watchSummary())
         if model.watchConfigs().missing?.isEmpty == false {
             Haptics.error()
-            model.toast = Toast("没能给手表拿到凭据：检查网络后再试；hub 版本太旧时先更新 hub", style: .error)
+            model.toast = Toast(String(localized: "没能给手表拿到凭据：检查网络后再试；hub 版本太旧时先更新 hub"), style: .error)
         } else {
             Haptics.success()
-            model.toast = Toast("已发送到 Apple Watch，打开手表上的 Persona 即可", style: .success)
+            model.toast = Toast(String(localized: "已发送到 Apple Watch，打开手表上的 Persona 即可"), style: .success)
         }
     }
 
@@ -392,7 +392,7 @@ struct SettingsView: View {
                     Task { await syncWatch() }
                 } label: {
                     if AppStyle.current.usesBeautifulUI {
-                        SettingsRow(title: "同步到 Apple Watch", symbol: Theme.Icon.watch, tint: Theme.accent)
+                        SettingsRow(title: String(localized: "同步到 Apple Watch"), symbol: Theme.Icon.watch, tint: Theme.accent)
                     } else {
                         Label("同步到 Apple Watch", systemImage: Theme.Icon.watch).lineLimit(1)
                     }
@@ -408,7 +408,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case persona, themeColor, style, layout, colorScheme, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
+    case persona, themeColor, style, layout, colorScheme, language, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
     /// 设置 › 会话分诊 (docs/agent-work.md「开关」).
     case triage
     /// 设置 › hub: the hubs paired, by group (docs/multi-hub.md).
@@ -455,6 +455,7 @@ private struct SettingsDestinations: ViewModifier {
         case .persona: PersonaSettingsPage()
         case .themeColor: ThemeColorSettingsPage()
         case .style: StyleSettingsPage()
+        case .language: LanguageSettingsPage()
         #if os(iOS) || os(visionOS)
         case .layout: LayoutSettingsPage()
         case .colorScheme: ColorSchemeSettingsPage()
@@ -505,11 +506,11 @@ private struct DemoSection: View {
                 // Rows like the list's other rows on the Mac (#1224 B4): as buttons they were two small gray capsules
                 // at the list's leading edge, the sidebar-style list's own button look.
                 Button(action: pair) {
-                    SettingsRow(title: "连接我的 hub…", symbol: "qrcode.viewfinder", tint: Theme.accent)
+                    SettingsRow(title: String(localized: "连接我的 hub…"), symbol: "qrcode.viewfinder", tint: Theme.accent)
                 }
                 .modifier(SettingsButtonLook())
                 Button(role: .destructive) { model.unpair() } label: {
-                    SettingsRow(title: "退出体验模式", symbol: "rectangle.portrait.and.arrow.right", tint: Theme.danger)
+                    SettingsRow(title: String(localized: "退出体验模式"), symbol: "rectangle.portrait.and.arrow.right", tint: Theme.danger)
                         .foregroundStyle(Theme.danger)
                 }
                 .modifier(SettingsButtonLook())
@@ -517,7 +518,7 @@ private struct DemoSection: View {
                 #else
                 Button(action: pair) {
                     if AppStyle.current.usesBeautifulUI {
-                        SettingsRow(title: "连接我的 hub", symbol: "qrcode.viewfinder", tint: Theme.accent)
+                        SettingsRow(title: String(localized: "连接我的 hub"), symbol: "qrcode.viewfinder", tint: Theme.accent)
                     } else {
                         Label("连接我的 hub", systemImage: "qrcode.viewfinder").lineLimit(1)
                     }
@@ -525,7 +526,7 @@ private struct DemoSection: View {
                 .modifier(SettingsButtonLook())
                 Button(role: .destructive) { model.unpair() } label: {
                     if AppStyle.current.usesBeautifulUI {
-                        SettingsRow(title: "退出体验模式", symbol: "rectangle.portrait.and.arrow.right", tint: Theme.danger)
+                        SettingsRow(title: String(localized: "退出体验模式"), symbol: "rectangle.portrait.and.arrow.right", tint: Theme.danger)
                     } else {
                         Label("退出体验模式", systemImage: "rectangle.portrait.and.arrow.right").lineLimit(1)
                     }
@@ -536,7 +537,7 @@ private struct DemoSection: View {
             }
             .bareListRow()
         } header: {
-            SettingsHeading("体验模式")
+            SettingsHeading(String(localized: "体验模式"))
         } footer: {
             Text("现在看到的机器、Agent、对话和收件箱都是演示数据，不连接任何服务器，发消息、审批等操作也不会真的发出去。连接自己的 hub 后自动退出体验模式。")
         }
@@ -613,7 +614,7 @@ struct PhoneDataView: View {
             Haptics.tap()
         } else {
             // Refused: iOS asks only once, so the rest is in its Settings; the switch stays off until it is allowed there.
-            model.toast = Toast("在系统设置里允许 Persona 访问\(s.title)", style: .info)
+            model.toast = Toast(String(localized: "在系统设置里允许 Persona 访问\(s.title)"), style: .info)
             s.isEnabled = true // on its own once allowed there
             enabled[s] = true
             if let url = URL(string: UIApplication.openSettingsURLString) { await UIApplication.shared.open(url) }
@@ -696,11 +697,11 @@ struct WelcomeView: View {
     @State private var appear = false
     // The iPhone scans the QR code `personad hub pair` prints; the Mac has no camera and pastes the link it prints.
     #if os(macOS)
-    private static let tagline = "把每台电脑上的 Claude 收进一个窗口"
+    private static let tagline = String(localized: "把每台电脑上的 Claude 收进一个窗口")
     private static let pairIcon = Theme.Icon.link
     private static let pairHint: LocalizedStringKey = "在 hub 所在的机器上运行 `personad hub pair`，拷贝它打印的链接"
     #else
-    private static let tagline = "把每台电脑上的 Claude 装进口袋"
+    private static let tagline = String(localized: "把每台电脑上的 Claude 装进口袋")
     private static let pairIcon = "qrcode.viewfinder"
     private static let pairHint: LocalizedStringKey = "在 hub 所在的机器上运行 `personad hub pair` 显示二维码"
     #endif
@@ -719,16 +720,16 @@ struct WelcomeView: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, Theme.Space.sm)
             VStack(alignment: .leading, spacing: Theme.Space.l) {
-                feature("bubble.left.and.text.bubble.right", "像聊天一样驱动 Claude", "你的每台电脑，herdr 里的同一个会话")
-                feature("bolt.horizontal", "实时看它在做什么", "思考、工具调用、终端画面，流式更新")
+                feature("bubble.left.and.text.bubble.right", String(localized: "像聊天一样驱动 Claude"), String(localized: "你的每台电脑，herdr 里的同一个会话"))
+                feature("bolt.horizontal", String(localized: "实时看它在做什么"), String(localized: "思考、工具调用、终端画面，流式更新"))
                 #if os(macOS)
                 // A Mac decides in its own window and has no health data (PhoneDataSource.onThisDevice).
-                feature(Theme.Icon.click, "在一个窗口里拍板", "回答提问、审批计划、授权工具，不用切到终端")
+                feature(Theme.Icon.click, String(localized: "在一个窗口里拍板"), String(localized: "回答提问、审批计划、授权工具，不用切到终端"))
                 // The phone's data comes from the iPhone's Persona; the Mac is a desktop (AppModel.registration).
-                feature(Theme.Icon.mailAccounts, "带上邮箱和你的 iPhone", "Gmail 等邮箱；日历、通讯录、照片来自 iPhone 上的 Persona")
+                feature(Theme.Icon.mailAccounts, String(localized: "带上邮箱和你的 iPhone"), String(localized: "Gmail 等邮箱；日历、通讯录、照片来自 iPhone 上的 Persona"))
                 #else
-                feature("hand.tap", "在手机上拍板", "回答提问、审批计划、授权工具，手表也行")
-                feature("iphone.gen3", "带上你的手机和邮箱", "日历、提醒、通讯录、健康、照片、Gmail")
+                feature("hand.tap", String(localized: "在手机上拍板"), String(localized: "回答提问、审批计划、授权工具，手表也行"))
+                feature("iphone.gen3", String(localized: "带上你的手机和邮箱"), String(localized: "日历、提醒、通讯录、健康、照片、Gmail"))
                 #endif
             }
             .padding(.top, 40)
@@ -839,7 +840,7 @@ struct PairView: View {
                     TextField("服务器地址", text: $url).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     // A one-time credential, not a password: beside the address it looks like a login form, and iOS
                     // would offer to save it as one ("Save Password?") once the sheet goes (#1598).
-                    SecretField("Token", filled: "已填写，点连接", text: $token, identifier: "pair.token")
+                    SecretField("Token", filled: String(localized: "已填写，点连接"), text: $token, identifier: "pair.token")
                     #endif
                 }
                 Section {
@@ -860,7 +861,7 @@ struct PairView: View {
                     NavigationLink {
                         SSHTunnelForm(saved: ssh, dismissOnSave: true) { ssh = $0 }.navigationTitle("SSH 隧道")
                     } label: {
-                        SettingsRow(title: "经 SSH 隧道连接", symbol: Theme.Icon.sshTunnel, tint: Theme.Hue.green,
+                        SettingsRow(title: String(localized: "经 SSH 隧道连接"), symbol: Theme.Icon.sshTunnel, tint: Theme.Hue.green,
                                     value: ssh.map { $0.label } ?? "", look: .oneLine)
                     }
                     .accessibilityIdentifier("pair.ssh")
@@ -916,12 +917,12 @@ struct PairView: View {
             dismiss()
         } catch {
             if ssh != nil {
-                if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)" }
+                if !error.isCancellation { self.error = String(localized: "连接失败：\(error.localizedDescription)") }
             } else {
             #if os(macOS)
-            if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。确认这台 Mac 能访问这个地址（比如在同一个网络或 VPN 上），或者经 SSH 隧道连接。" }
+            if !error.isCancellation { self.error = String(localized: "连接失败：\(error.localizedDescription)。确认这台 Mac 能访问这个地址（比如在同一个网络或 VPN 上），或者经 SSH 隧道连接。") }
             #else
-            if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。确认手机能访问这个地址（比如在同一个网络或 VPN 上），或者经 SSH 隧道连接。" }
+            if !error.isCancellation { self.error = String(localized: "连接失败：\(error.localizedDescription)。确认手机能访问这个地址（比如在同一个网络或 VPN 上），或者经 SSH 隧道连接。") }
             #endif
             }
             Haptics.error()
@@ -968,12 +969,12 @@ struct QRScanner: UIViewControllerRepresentable {
 enum AgentSettingsKind {
     case claude, codex
 
-    var title: String { self == .claude ? "Claude Code 设置" : "Codex 设置" }
+    var title: String { self == .claude ? String(localized: "Claude Code 设置") : String(localized: "Codex 设置") }
 
     var footer: String {
         switch self {
-        case .claude: "改的是那台机器的 ~/.claude/settings.json，只动下面这几项；新开的 Claude 会话生效，正在跑的会话一般要重启才生效。"
-        case .codex: "改的是那台机器的 ~/.codex/config.toml，只动下面这几项，文件里别的配置（模型提供方、项目信任等）原样保留；新开的 Codex 会话生效。"
+        case .claude: String(localized: "改的是那台机器的 ~/.claude/settings.json，只动下面这几项；新开的 Claude 会话生效，正在跑的会话一般要重启才生效。")
+        case .codex: String(localized: "改的是那台机器的 ~/.codex/config.toml，只动下面这几项，文件里别的配置（模型提供方、项目信任等）原样保留；新开的 Codex 会话生效。")
         }
     }
 }
@@ -993,7 +994,7 @@ struct ClaudeSettingsView: View {
     var body: some View {
         SettingsForm {
             Section {
-                Picker("机器", selection: $machineID) {
+                Picker(String(localized: "picker.machine", defaultValue: "机器"), selection: $machineID) {
                     ForEach(model.machines.filter(\.online), id: \.ref) { m in Text(m.title).tag(m.ref.path) }
                 }
                 Toggle("同时改所有在线机器", isOn: $applyAll)
@@ -1035,7 +1036,7 @@ struct ClaudeSettingsView: View {
                 } label: { title(s) }
             default:
                 title(s)
-                TextField(s.default?.string.flatMap { $0.isEmpty ? nil : $0 } ?? "未设置",
+                TextField(s.default?.string.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "未设置"),
                           text: Binding(get: { strings[s.key] ?? value?.string ?? "" }, set: { strings[s.key] = $0 }))
                     .onSubmit { Task { await set(s.key, .string(strings[s.key] ?? "")) } }
                     .submitLabel(.done)
@@ -1082,12 +1083,12 @@ struct ClaudeSettingsView: View {
                     : try await api.setCodexSetting(machine: target.id, key: key, value: value)
                 if target == ref { settings = list }
             } catch {
-                if !error.isCancellation { failed.append("\(model.machine(target)?.title ?? target.id)：\(error.localizedDescription)") }
+                if !error.isCancellation { failed.append(String(localized: "\(model.machine(target)?.title ?? target.id)：\(error.localizedDescription)")) }
             }
         }
         if failed.isEmpty {
             Haptics.success()
-            model.toast = Toast(targets.count > 1 ? "已应用到 \(targets.count) 台机器" : "已保存", style: .success)
+            model.toast = Toast(targets.count > 1 ? String(localized: "已应用到 \(targets.count) 台机器") : String(localized: "已保存"), style: .success)
         } else {
             Haptics.error()
             error = failed.joined(separator: "\n")
@@ -1101,8 +1102,8 @@ private struct MachinesSettingsRow: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        SettingsRow(title: "机器", symbol: Theme.Icon.machines, tint: Theme.Hue.blue,
-                    value: "\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
+        SettingsRow(title: String(localized: "机器"), symbol: Theme.Icon.machines, tint: Theme.Hue.blue,
+                    value: String(localized: "\(model.machines.filter(\.online).count) / \(model.machines.count) 在线"))
     }
 }
 

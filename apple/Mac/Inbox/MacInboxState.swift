@@ -32,12 +32,15 @@ enum MacInboxFilter: Hashable, Identifiable {
     }
 
     /// The kinds, in the iPhone's chip order.
-    static let kinds: [(key: String, title: String)] = [("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")]
+    static var kinds: [(key: String, title: String)] {
+        [("mention", String(localized: "@我")), ("dm", String(localized: "私聊")), ("group", String(localized: "群聊")),
+         ("mail", String(localized: "邮件")), ("agent", "Agent")]
+    }
 
     var title: String {
         switch self {
-        case .all: "全部"
-        case .feishu: "飞书"
+        case .all: String(localized: "全部")
+        case .feishu: String(localized: "飞书")
         case .account(let a): InboxView.short(a.email)
         case .connector(_, let name): name
         case .kind(let k): Self.kinds.first { $0.key == k }?.title ?? k

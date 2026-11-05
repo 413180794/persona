@@ -103,8 +103,8 @@ nonisolated enum TerminalWrap {
         return next.width == 2 || prev.width == 0 // next to a wide (Chinese) character
     }
 
-    static let closing: Set<String> = ["，", "。", "、", "：", "；", "！", "？", "）", "】", "」", "』", "》", "”", "’", ",", ".", ":", ";", "!", "?", ")", "]", "}"]
-    static let opening: Set<String> = ["（", "【", "「", "『", "《", "“", "‘", "(", "[", "{"]
+    static let closing: Set<String> = ["，", "。", "、", "：", "；", "！", "？", "）", "】", "」", "』", "》", "”", "’", ",", ".", ":", ";", "!", "?", ")", "]", "}"] // i18n-ignore
+    static let opening: Set<String> = ["（", "【", "「", "『", "《", "“", "‘", "(", "[", "{"] // i18n-ignore
 
     /// Where a folded row's continuation lines start: after its leading spaces and borders, and a list marker with the
     /// spaces after it. At most half a line.

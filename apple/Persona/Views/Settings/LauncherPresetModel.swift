@@ -49,7 +49,7 @@ import Observation
 
     func load() async {
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
             presets = try await api.launcherPresets()
             if selected == nil { selectedID = presets.first?.id }
             error = nil
@@ -79,7 +79,7 @@ import Observation
 enum LauncherPresetText {
     /// "直接 API · api.example.com", "Claude Code 启动器 · gateway.example.com".
     static func subtitle(_ p: LauncherPreset) -> String {
-        let kind = p.kind == "api" ? "直接 API" : "Claude Code 启动器"
+        let kind = p.kind == "api" ? String(localized: "直接 API") : String(localized: "Claude Code 启动器")
         guard let host = URL(string: p.baseURL)?.host(), !host.isEmpty else { return kind }
         return "\(kind) · \(host)"
     }

@@ -9,42 +9,42 @@ enum ConnectorText {
     /// This device as a connector: 这台 iPhone / iPad / Mac.
     static var device: String {
         #if os(macOS)
-        "这台 Mac"
+        String(localized: "这台 Mac")
         #else
-        UIDevice.current.userInterfaceIdiom == .pad ? "这台 iPad" : "这台 iPhone"
+        UIDevice.current.userInterfaceIdiom == .pad ? String(localized: "这台 iPad") : String(localized: "这台 iPhone")
         #endif
     }
 
     static func deviceSummary() -> String {
         let on = PhoneDataSource.onThisDevice.filter(\.isEnabled).count
-        return on == 0 ? "未打开" : "\(on) 项已打开"
+        return on == 0 ? String(localized: "未打开") : String(localized: "\(on) 项已打开")
     }
 
     static func mailSummary(_ accounts: [MailAccount]?) -> String {
         guard let accounts else { return "" }
-        if accounts.isEmpty { return "未添加" }
-        if accounts.contains(where: { $0.status == "error" }) { return "\(accounts.count) 个 · 有错误" }
-        return "\(accounts.count) 个账户"
+        if accounts.isEmpty { return String(localized: "未添加") }
+        if accounts.contains(where: { $0.status == "error" }) { return String(localized: "\(accounts.count) 个 · 有错误") }
+        return String(localized: "\(accounts.count) 个账户")
     }
 
     static func larkSummary(_ st: LarkStatus?) -> String {
         guard let st else { return "" }
-        if !st.configured { return "未配置" }
-        return st.connected ? (st.name ?? "已连接") : "连不上"
+        if !st.configured { return String(localized: "未配置") }
+        return st.connected ? (st.name ?? String(localized: "已连接")) : String(localized: "连不上")
     }
 
     /// A hub connector's state in a word or two (its row, its page). Only "error" is 出错了: a state this app does not
     /// know yet (a newer hub's) is not one.
     static func state(_ c: HubConnector) -> String {
         switch c.status {
-        case "ok": "已连接"
-        case "not_configured": "未配置"
-        case "not_signed_in": "未登录"
-        case "no_permission": "没有权限"
-        case "rate_limited": "请求太多，暂停中"
-        case "disabled": "已关闭"
-        case "error": "出错了"
-        default: "状态未知"
+        case "ok": String(localized: "已连接")
+        case "not_configured": String(localized: "未配置")
+        case "not_signed_in": String(localized: "未登录")
+        case "no_permission": String(localized: "没有权限")
+        case "rate_limited": String(localized: "请求太多，暂停中")
+        case "disabled": String(localized: "已关闭")
+        case "error": String(localized: "出错了")
+        default: String(localized: "状态未知")
         }
     }
 
@@ -79,32 +79,33 @@ enum ConnectorText {
     nonisolated static func profile(_ id: String) -> ConnectorProfile {
         switch id {
         case "github": ConnectorProfile(brand: Theme.Brand.github)
-        case "telegram": ConnectorProfile(brand: Theme.Brand.telegram, app: "Telegram", reads: "它的私聊和群",
-                                          signInFooter: "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。",
+        case "telegram": ConnectorProfile(brand: Theme.Brand.telegram, app: "Telegram", reads: String(localized: "它的私聊和群"),
+                                          signInFooter: String(localized: "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。"),
                                           logoutEndsRemoteSession: true)
         // No mark yet: 微信's and its terms of use are undecided, so it draws the generic icon until they are.
-        case "wechat-connector": ConnectorProfile(signInFooter: "应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。")
+        case "wechat-connector": ConnectorProfile(signInFooter: String(localized: "应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。"))
         default: ConnectorProfile()
         }
     }
 
     /// The sign-in step's footer: where the credentials live.
     nonisolated static func signInFooter(_ c: HubConnector) -> String {
-        profile(c.id).signInFooter ?? "登录状态加密存在 hub 上，退出登录时删掉。"
+        profile(c.id).signInFooter ?? String(localized: "登录状态加密存在 hub 上，退出登录时删掉。")
     }
 
     /// The sign-out confirmation. Only a connector known to end the session at the service says so; signing out of any
     /// other (GitHub's device token, a plugin's key) only has the hub forget its copy, and the authorization stays there.
     nonisolated static func logoutMessage(_ c: HubConnector) -> String {
         profile(c.id).logoutEndsRemoteSession
-            ? "hub 上存的 API 凭据和登录状态都会删掉，\(c.name) 那边这个设备会话也会结束。再用要重新登录。"
-            : "hub 上存的凭据和登录状态会删掉，再用要重新登录。对方服务里的授权不会自动撤销，需要的话到那边撤销。"
+            ? String(localized: "hub 上存的 API 凭据和登录状态都会删掉，\(c.name) 那边这个设备会话也会结束。再用要重新登录。")
+            : String(localized: "hub 上存的凭据和登录状态会删掉，再用要重新登录。对方服务里的授权不会自动撤销，需要的话到那边撤销。")
     }
 
     /// A conversation's message opened where it came from: 在 Telegram 里打开; a connector without an app of its own
     /// says its name.
     nonisolated static func openInTitle(_ id: String, name: String) -> String {
-        "在 \(profile(id).app ?? name) 里打开"
+        let place = profile(id).app ?? name
+        return String(localized: "在 \(place) 里打开")
     }
 }
 
@@ -274,12 +275,12 @@ struct ConnectorsSection: View {
                     switch row {
                     case .mail:
                         NavigationLink(value: SettingsPage.mail) {
-                            ConnectorRowLabel(title: "邮箱", symbol: Theme.Icon.mailAccounts, value: ConnectorText.mailSummary(accounts))
+                            ConnectorRowLabel(title: String(localized: "邮箱"), symbol: Theme.Icon.mailAccounts, value: ConnectorText.mailSummary(accounts))
                         }
                         .settingsListRow(SettingsPage.mail)
                     case .lark:
                         NavigationLink(value: SettingsPage.feishu) {
-                            ConnectorRowLabel(title: "飞书", symbol: Theme.Icon.mailAccounts, brand: Theme.Brand.lark, value: ConnectorText.larkSummary(lark))
+                            ConnectorRowLabel(title: String(localized: "飞书"), symbol: Theme.Icon.mailAccounts, brand: Theme.Brand.lark, value: ConnectorText.larkSummary(lark))
                         }
                         .settingsListRow(SettingsPage.feishu)
                     case .hub(let c):
@@ -290,13 +291,13 @@ struct ConnectorsSection: View {
                     }
                 }
                 NavigationLink(value: SettingsPage.feishuBot) {
-                    ConnectorRowLabel(title: "飞书机器人", symbol: Theme.Icon.chatBot, value: FeishuBotModel.summary(bot))
+                    ConnectorRowLabel(title: String(localized: "飞书机器人"), symbol: Theme.Icon.chatBot, value: FeishuBotModel.summary(bot))
                 }
                 .settingsListRow(SettingsPage.feishuBot)
             }
             .bareListRow()
         } header: {
-            SettingsHeading("连接器")
+            SettingsHeading(String(localized: "连接器"))
         } footer: {
             Text("Persona 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。")
         }
@@ -362,7 +363,7 @@ struct FeishuConnectorView: View {
                 HStack(spacing: Theme.Space.m) {
                     BrandMark(Theme.Brand.lark, side: Theme.Size.wellM)
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                        Text(status?.name ?? "飞书").font(Theme.Font.heading).lineLimit(1)
+                        Text(status?.name ?? String(localized: "飞书")).font(Theme.Font.heading).lineLimit(1)
                         HStack(spacing: Theme.Space.sm) {
                             Circle().fill(tint).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                             Text(stateText).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
@@ -416,15 +417,15 @@ struct FeishuConnectorView: View {
             }
 
             Section("Persona 用飞书做什么") {
-                use(Theme.Icon.inbox, "收件箱", "私聊、@我、群消息和云文档里提到你的地方，AI 先分拣、起草回复")
-                use(Theme.Icon.knowledge, "知识库", "会话、人、群、项目归档下来，给助手和 AI 分身做上下文")
-                use(Theme.Icon.ai, "助手", "Persona 能搜消息、读文档；发消息等写操作先在手机上问你")
-                use(Theme.Icon.agents, "/agent", "在飞书任何地方以 /agent 开头说一句，就起一个 Agent 处理并替你回复")
-                ModelConfigurationLink(title: "/agent 模型", purposeID: "lark.agent")
+                use(Theme.Icon.inbox, String(localized: "收件箱"), String(localized: "私聊、@我、群消息和云文档里提到你的地方，AI 先分拣、起草回复"))
+                use(Theme.Icon.knowledge, String(localized: "知识库"), String(localized: "会话、人、群、项目归档下来，给助手和 AI 分身做上下文"))
+                use(Theme.Icon.ai, String(localized: "助手"), String(localized: "Persona 能搜消息、读文档；发消息等写操作先在手机上问你"))
+                use(Theme.Icon.agents, "/agent", String(localized: "在飞书任何地方以 /agent 开头说一句，就起一个 Agent 处理并替你回复"))
+                ModelConfigurationLink(title: String(localized: "/agent 模型"), purposeID: "lark.agent")
             }
         }
         .themedPage()
-        .detailTitle("飞书")
+        .detailTitle(String(localized: "飞书"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
@@ -436,9 +437,9 @@ struct FeishuConnectorView: View {
     }
 
     private var stateText: String {
-        guard let st = status else { return loading ? "正在检查…" : "读不到状态" }
-        if !st.configured { return "未配置" }
-        return st.connected ? "已连接" : "连不上飞书网关"
+        guard let st = status else { return loading ? String(localized: "正在检查…") : String(localized: "读不到状态") }
+        if !st.configured { return String(localized: "未配置") }
+        return st.connected ? String(localized: "已连接") : String(localized: "连不上飞书网关")
     }
 
     private func accountRow(_ account: LarkAccount, isDefault: Bool) -> some View {
@@ -450,7 +451,7 @@ struct FeishuConnectorView: View {
                     .foregroundStyle(account.signedIn ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.danger))
             }
             Spacer(minLength: Theme.Space.s)
-            if isDefault { Chip(text: "默认") }
+            if isDefault { Chip(text: String(localized: "默认")) }
             if account.signedIn, account.unread > 0 { CountBadge(count: account.unread) }
         }
         .padding(.vertical, Theme.Space.xxs)
@@ -459,9 +460,9 @@ struct FeishuConnectorView: View {
     }
 
     private func accountDetail(_ account: LarkAccount) -> String {
-        if account.quarantined == true { return "无法打开，请在飞书网关里重试或移除" }
-        if !account.signedIn { return "未登录" }
-        return account.tenant?.isEmpty == false ? account.tenant! : "已登录"
+        if account.quarantined == true { return String(localized: "无法打开，请在飞书网关里重试或移除") }
+        if !account.signedIn { return String(localized: "未登录") }
+        return account.tenant?.isEmpty == false ? account.tenant! : String(localized: "已登录")
     }
 
     private func use(_ symbol: String, _ title: String, _ detail: String) -> some View {
@@ -484,7 +485,7 @@ struct FeishuConnectorView: View {
             status = try await model.api?.larkStatus()
             failure = nil
         } catch {
-            failure = error.shown.map { "读不到飞书的状态：\($0)" }
+            failure = error.shown.map { String(localized: "读不到飞书的状态：\($0)") }
         }
         accounts = await list
     }
@@ -561,7 +562,7 @@ struct HubConnectorView: View {
                     }
                     .disabled(loading)
                 } header: {
-                    SettingsHeading("怎么修好")
+                    SettingsHeading(String(localized: "怎么修好"))
                 }
             }
             if id == "github", let connector, let options = GitHubInboxOptions(connector.options) {
@@ -600,7 +601,7 @@ struct HubConnectorView: View {
     private var tint: Color { ConnectorText.tone(connector) }
 
     private var stateText: String {
-        guard let connector else { return loading ? "正在检查…" : "读不到状态" }
+        guard let connector else { return loading ? String(localized: "正在检查…") : String(localized: "读不到状态") }
         return ConnectorText.state(connector)
     }
 
@@ -611,9 +612,9 @@ struct HubConnectorView: View {
         defer { loading = false }
         do {
             connector = try await api.connectors().first { $0.id == id }
-            failure = connector == nil ? "hub 上没有这个连接器" : nil
+            failure = connector == nil ? String(localized: "hub 上没有这个连接器") : nil
         } catch {
-            failure = error.shown.map { "读不到连接器的状态：\($0)" }
+            failure = error.shown.map { String(localized: "读不到连接器的状态：\($0)") }
         }
     }
 }

@@ -68,7 +68,7 @@ final class CompareModel {
         loading = true
         defer { loading = false }
         guard let api else {
-            error = "尚未连接 hub"
+            error = String(localized: "尚未连接 hub")
             return
         }
         do {
@@ -116,7 +116,7 @@ struct CompareView: View {
     var body: some View {
         Group {
             if let error = model.error {
-                EmptyStateView(symbol: Theme.Icon.error, title: "比较不了这两个版本", message: error)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "比较不了这两个版本"), message: error)
             } else if model.loading {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.kind == .image {
@@ -156,8 +156,8 @@ private struct TextCompareView: View {
 
     var body: some View {
         if result.rows.isEmpty {
-            EmptyStateView(symbol: Theme.Icon.document, title: "文字没有变化",
-                           message: "两个版本的文字一样，改的可能是格式、图片或版式：用下面的按钮分别打开看")
+            EmptyStateView(symbol: Theme.Icon.document, title: String(localized: "文字没有变化"),
+                           message: String(localized: "两个版本的文字一样，改的可能是格式、图片或版式：用下面的按钮分别打开看"))
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -171,8 +171,8 @@ private struct TextCompareView: View {
     }
 
     private var summary: String {
-        var parts = [added ? "新文件" : deleted ? "已删除" : "+\(result.added) −\(result.removed) 行"]
-        if result.capped { parts.append("太长，只比较了前 \(TextCompare.maxLines) 行") }
+        var parts = [added ? String(localized: "新文件") : deleted ? String(localized: "已删除") : String(localized: "+\(result.added) −\(result.removed) 行")]
+        if result.capped { parts.append(String(localized: "太长，只比较了前 \(TextCompare.maxLines) 行")) }
         return parts.joined(separator: " · ")
     }
 
@@ -212,7 +212,7 @@ private struct ImageCompareView: View {
 
     var body: some View {
         VStack(spacing: Theme.Space.m) {
-            SegmentedChoice("", [(false, "并排"), (true, "滑块")], selection: $slider)
+            SegmentedChoice("", [(false, String(localized: "并排")), (true, String(localized: "滑块"))], selection: $slider)
                 .padding(.horizontal, Theme.Space.page)
             if slider, let o = image(model.old), let n = image(model.new) {
                 GeometryReader { g in
@@ -230,8 +230,8 @@ private struct ImageCompareView: View {
                     .padding(.horizontal, Theme.Space.page)
             } else {
                 HStack(alignment: .top, spacing: Theme.Space.m) {
-                    side("旧版", model.old, missing: model.oldMissing ? "这个版本里还没有" : nil)
-                    side("新版", model.new, missing: model.newMissing ? "这个版本里已删除" : nil)
+                    side(String(localized: "旧版"), model.old, missing: model.oldMissing ? String(localized: "这个版本里还没有") : nil)
+                    side(String(localized: "新版"), model.new, missing: model.newMissing ? String(localized: "这个版本里已删除") : nil)
                 }
                 .padding(.horizontal, Theme.Space.page)
             }
@@ -254,7 +254,7 @@ private struct ImageCompareView: View {
                     .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 if let v { Text(Int64(v.data.count).storageText).font(Theme.Font.label).foregroundStyle(.tertiary) }
             } else {
-                Text(missing ?? "读不出这张图").font(Theme.Font.caption).foregroundStyle(.secondary)
+                Text(missing ?? String(localized: "读不出这张图")).font(Theme.Font.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: Theme.Size.box120)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             }

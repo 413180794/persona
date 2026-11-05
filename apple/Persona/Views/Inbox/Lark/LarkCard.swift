@@ -220,7 +220,7 @@ nonisolated enum LarkCardRuns {
         case "at_all":
             var p = s
             p.color = LarkColor.blue
-            return [.text(n.text ?? "@所有人", p)]
+            return [.text(n.text ?? String(localized: "@所有人"), p)]
         case "person_list":
             var p = s
             p.color = LarkColor.blue
@@ -394,7 +394,7 @@ struct LarkCardNodeView: View {
         case "avatar":
             return AnyView(LarkAvatarImage(name: n.text ?? "?", url: n.imageURL, size: 24))
         case "audio", "markdown_audio", "video":
-            return AnyView(Label(n.text ?? (n.tag == "video" ? "视频" : "音频"), systemImage: Theme.Icon.run)
+            return AnyView(Label(n.text ?? (n.tag == "video" ? String(localized: "视频") : String(localized: "音频")), systemImage: Theme.Icon.run)
                 .font(Theme.Font.secondary)
                 .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -707,7 +707,7 @@ struct LarkCardImage: View {
             .matchedTransitionSource(id: url, in: zoom)
             .onTapGesture { if node.raw["preview"]?.bool != false { viewing = true } }
             .fullScreenCover(isPresented: $viewing) { ImageViewer(urls: [url], index: 0).navigationTransition(.zoom(sourceID: url, in: zoom)) }
-            .accessibilityLabel(node.text ?? "图片")
+            .accessibilityLabel(node.text ?? String(localized: "图片"))
         }
     }
 }
@@ -738,7 +738,7 @@ struct LarkCardButton: View {
                 do {
                     try await AppModel.shared.api?.lark(larkAccount).larkCardAction(message: mid, action: aid)
                     Haptics.success()
-                    AppModel.shared.toast = Toast("已提交「\(label)」", style: .success)
+                    AppModel.shared.toast = Toast(String(localized: "已提交「\(label)」"), style: .success)
                     try? await Task.sleep(for: .seconds(1.2))
                     refresh?()
                 } catch {
@@ -765,7 +765,7 @@ struct LarkCardButton: View {
         .buttonStyle(.plain)
         .disabled(!enabled || pending)
         .opacity(enabled ? 1 : 0.5)
-        .accessibilityLabel(label.isEmpty ? (node.raw["tooltip"]?.string ?? "按钮") : label)
+        .accessibilityLabel(label.isEmpty ? (node.raw["tooltip"]?.string ?? String(localized: "按钮")) : label)
     }
 
     static func foreground(_ kind: String) -> Color {
@@ -917,7 +917,7 @@ struct LarkCardField: View {
             }
         } label: {
             HStack(spacing: Theme.Space.sm) {
-                Text(shown ?? (node.text ?? "请选择")).foregroundStyle(shown == nil ? Color(.placeholderText) : Color.primary).lineLimit(1)
+                Text(shown ?? (node.text ?? String(localized: "请选择"))).foregroundStyle(shown == nil ? Color(.placeholderText) : Color.primary).lineLimit(1)
                 Spacer(minLength: 4)
                 Image(systemName: symbol).font(Theme.Font.label).foregroundStyle(Color.secondary)
             }
@@ -955,7 +955,7 @@ struct LarkCardOverflow: View {
                             do {
                                 try await AppModel.shared.api?.lark(larkAccount).larkCardAction(message: mid, action: aid)
                                 Haptics.success()
-                                AppModel.shared.toast = Toast("已提交「\(text)」", style: .success)
+                                AppModel.shared.toast = Toast(String(localized: "已提交「\(text)」"), style: .success)
                                 try? await Task.sleep(for: .seconds(1.2))
                                 refresh?()
                             } catch { AppModel.shared.show(error) }
@@ -1000,7 +1000,7 @@ struct LarkCardPanel: View {
             HStack(spacing: Theme.Space.sm) {
                 if iconLeft { chevron }
                 Group {
-                    if let title { LarkCardFlow(nodes: [title]) } else { Text(node.text ?? "详情").font(Theme.Font.secondary) }
+                    if let title { LarkCardFlow(nodes: [title]) } else { Text(node.text ?? String(localized: "详情")).font(Theme.Font.secondary) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if !iconLeft { chevron }

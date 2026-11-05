@@ -12,8 +12,8 @@ nonisolated enum Rewind {
 
         var title: String {
             switch self {
-            case .conversation: "只回退对话"
-            case .codeAndConversation: "回退代码和对话"
+            case .conversation: String(localized: "只回退对话")
+            case .codeAndConversation: String(localized: "回退代码和对话")
             }
         }
     }
@@ -90,10 +90,10 @@ nonisolated enum Rewind {
     /// thread another source lists). Nil when it does not; otherwise why it is off right now ("" when it is on).
     static func block(_ session: Session?) -> String? {
         guard let s = session, !s.assistant, s.sourceKind == nil, !s.sessionID.contains("@") else { return nil }
-        if let agent = s.agent, agent != "claude" { return "仅 Claude" }
-        if s.state == .offline || s.starting == true { return "未运行" }
-        if s.state == .needsYou || s.pendingInteractions > 0 { return "待回答" }
-        if s.state == .working { return "工作中" }
+        if let agent = s.agent, agent != "claude" { return String(localized: "仅 Claude") }
+        if s.state == .offline || s.starting == true { return String(localized: "未运行") }
+        if s.state == .needsYou || s.pendingInteractions > 0 { return String(localized: "待回答") }
+        if s.state == .working { return String(localized: "工作中") }
         return ""
     }
 
@@ -112,21 +112,21 @@ nonisolated enum Rewind {
 
     /// What the toast says after it went through.
     static func done(_ result: Result, asked: Restore) -> String {
-        if asked == .codeAndConversation, result.codeRestored != true { return "已回退对话（这条之后没有代码改动）" }
-        return result.codeRestored == true ? "已回退代码和对话" : "已回退对话"
+        if asked == .codeAndConversation, result.codeRestored != true { return String(localized: "已回退对话（这条之后没有代码改动）") }
+        return result.codeRestored == true ? String(localized: "已回退代码和对话") : String(localized: "已回退对话")
     }
 
     /// The input box on the computer still holds the message (it could not be emptied).
-    static let inputKept = "已回退，但电脑上 Claude 的输入框里还留着这条消息"
+    static var inputKept: String { String(localized: "已回退，但电脑上 Claude 的输入框里还留着这条消息") }
 
     /// The hub's refusal in words for the toast.
     static func failure(_ error: Error) -> String {
         if let e = error as? APIError {
-            if (e.status == 404 || e.status == 405) && e.code != "gone" { return "这个 hub 还不支持回退，需要更新" }
-            if e.status == 403 { return "回退要用完整权限的设备" }
+            if (e.status == 404 || e.status == 405) && e.code != "gone" { return String(localized: "这个 hub 还不支持回退，需要更新") }
+            if e.status == 403 { return String(localized: "回退要用完整权限的设备") }
             return e.localizedDescription
         }
-        if (error as? URLError)?.code == .timedOut { return "回退超时：电脑上的 Claude 没有按预期响应" }
+        if (error as? URLError)?.code == .timedOut { return String(localized: "回退超时：电脑上的 Claude 没有按预期响应") }
         return error.localizedDescription
     }
 }

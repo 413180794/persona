@@ -9,11 +9,11 @@ import SwiftUI
 nonisolated enum InboxTriageText {
     /// What each state means when the hub gives no reason of its own.
     static let reasons: [String: String] = [
-        "unconfigured": "还没配分拣模型",
-        "paused": "分拣模型暂停了",
-        "error": "分拣模型出错了",
-        "timeout": "分拣模型太慢了",
-        "behind": "新消息太多，正在排队",
+        "unconfigured": String(localized: "还没配分拣模型"),
+        "paused": String(localized: "分拣模型暂停了"),
+        "error": String(localized: "分拣模型出错了"),
+        "timeout": String(localized: "分拣模型太慢了"),
+        "behind": String(localized: "新消息太多，正在排队"),
     ]
 
     /// The model purpose 去配置 opens: 信息筛选.
@@ -27,8 +27,8 @@ nonisolated enum InboxTriageText {
         let why = own.isEmpty ? reasons[t.state] : own
         let sources = (t.sources ?? []).filter { $0.waiting > 0 }
         let name = sources.count == 1 ? sources[0].name ?? "" : ""
-        let head = "有 \(t.waiting) 条\(name)消息在等分拣"
-        return why.map { head + "：" + $0 } ?? head
+        let head = name.isEmpty ? String(localized: "有 \(t.waiting) 条消息在等分拣") : String(localized: "有 \(t.waiting) 条\(name)消息在等分拣")
+        return why.map { String(localized: "\(head)：\($0)") } ?? head
     }
 
     /// 去配置 is offered: no model is set up for triage, and this device may change settings.

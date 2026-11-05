@@ -39,10 +39,10 @@ actor LarkOutboxStore {
         case version, corrupt, notReady, unconfirmedFile
         var errorDescription: String? {
             switch self {
-            case .version: "无法读取本机草稿，请更新 App 后重试"
-            case .corrupt: "本机草稿无法读取"
-            case .notReady: "本机草稿尚未恢复，请先重新读取"
-            case .unconfirmedFile: "尚未确认文件是否发出，请稍后再检查"
+            case .version: String(localized: "无法读取本机草稿，请更新 App 后重试")
+            case .corrupt: String(localized: "本机草稿无法读取")
+            case .notReady: String(localized: "本机草稿尚未恢复，请先重新读取")
+            case .unconfirmedFile: String(localized: "尚未确认文件是否发出，请稍后再检查")
             }
         }
     }
@@ -68,7 +68,7 @@ actor LarkOutboxStore {
             items: saved.items.map { item in
                 var o = LarkOutgoing(id: item.id, text: item.text, encrypted: item.encrypted, at: item.at,
                              state: item.state == .sending
-                                ? (item.attempted == false ? .failed("尚未发送，点按重试") : .unconfirmed) : item.state,
+                                ? (item.attempted == false ? .failed(String(localized: "尚未发送，点按重试")) : .unconfirmed) : item.state,
                              replyTo: item.replyTo, thread: item.thread, threadRoot: item.threadRoot,
                              attachment: item.attachment.map(attachment), messageID: item.messageID, attempted: item.attempted ?? true, mentions: item.mentions ?? [])
                 o.firstAt = item.firstAt

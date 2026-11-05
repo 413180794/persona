@@ -15,20 +15,20 @@ nonisolated enum NotificationActions {
         let permission = UNNotificationCategory(
             identifier: category(.permission),
             actions: [
-                UNNotificationAction(identifier: allow, title: "允许", options: [.authenticationRequired],
+                UNNotificationAction(identifier: allow, title: String(localized: "允许"), options: [.authenticationRequired],
                                      icon: UNNotificationActionIcon(systemImageName: "checkmark")),
-                UNNotificationAction(identifier: deny, title: "拒绝", options: [.destructive],
+                UNNotificationAction(identifier: deny, title: String(localized: "拒绝"), options: [.destructive],
                                      icon: UNNotificationActionIcon(systemImageName: "xmark")),
             ],
             intentIdentifiers: [], options: [])
         let plan = UNNotificationCategory(
             identifier: category(.plan),
             actions: [
-                UNNotificationAction(identifier: approvePlan, title: "批准", options: [.authenticationRequired],
+                UNNotificationAction(identifier: approvePlan, title: String(localized: "批准"), options: [.authenticationRequired],
                                      icon: UNNotificationActionIcon(systemImageName: "checkmark")),
-                UNTextInputNotificationAction(identifier: rejectPlan, title: "打回修改", options: [.authenticationRequired],
+                UNTextInputNotificationAction(identifier: rejectPlan, title: String(localized: "打回修改"), options: [.authenticationRequired],
                                               icon: UNNotificationActionIcon(systemImageName: "arrow.uturn.backward"),
-                                              textInputButtonTitle: "打回", textInputPlaceholder: "告诉 Claude 要怎么改…"),
+                                              textInputButtonTitle: String(localized: "打回"), textInputPlaceholder: String(localized: "告诉 Claude 要怎么改…")),
             ],
             intentIdentifiers: [], options: [])
         // Questions and terminal prompts need the screen: no buttons, a tap opens the session. Registered anyway so
@@ -64,11 +64,11 @@ nonisolated enum NotificationActions {
     /// while the agent moved on, the hub was unreachable, and so on.
     static func failureTitle(action: String) -> String {
         switch action {
-        case allow: "没能允许"
-        case deny: "没能拒绝"
-        case approvePlan: "没能批准计划"
-        case rejectPlan: "没能打回计划"
-        default: "没能完成操作"
+        case allow: String(localized: "没能允许")
+        case deny: String(localized: "没能拒绝")
+        case approvePlan: String(localized: "没能批准计划")
+        case rejectPlan: String(localized: "没能打回计划")
+        default: String(localized: "没能完成操作")
         }
     }
 }

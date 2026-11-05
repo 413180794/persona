@@ -69,7 +69,7 @@ struct InboxConnectorTextView: View {
                 }
             } footer: {
                 if let to = connector?.replyTo, connector?.canReply == true {
-                    Text("回复会" + to + "。")
+                    Text("回复会\(to)。")
                 }
             }
             // Why its conversation page could not be read (a rate limit); an item without one (a CI run) has nothing to say.
@@ -106,7 +106,7 @@ struct InboxConnectorTextView: View {
             context = try await model.api?.inboxItem(item.id).context ?? ""
             failure = nil
         } catch {
-            failure = error.shown.map { "读不到内容：\($0)" }
+            failure = error.shown.map { String(localized: "读不到内容：\($0)") }
         }
     }
 }

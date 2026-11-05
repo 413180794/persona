@@ -58,8 +58,9 @@ internal class KnowledgeViewModel(
         .flatMapLatest { (repository, selection) -> flow {
             val initial = KnowledgePage(scope = repository?.scope, filter = selection, paired = repository != null)
             if (repository == null) { emit(initial); return@flow }
-            // Reloading the same view keeps what it showed until the answer comes (a refresh, a save on an entry's page).
-            val shown = last?.takeIf { it.scope == repository.scope && it.filter.sameView(selection) && it.message == null }
+            // Reloading the same view keeps what it showed until the answer comes (a refresh, a save on an entry's page),
+            // and after a failed answer too: the page says it could not reload over what it still shows (#3991).
+            val shown = last?.takeIf { it.scope == repository.scope && it.filter.sameView(selection) }
             emit(initial.copy(loading = true, entries = shown?.entries.orEmpty(), tags = shown?.tags.orEmpty(), groups = shown?.groups.orEmpty()))
             try {
                 if (selection.query.isBlank()) {
@@ -78,7 +79,10 @@ internal class KnowledgeViewModel(
                     emit(initial.copy(groups = groups, loaded = true))
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { emit(initial.copy(message = loadMessage(error))) }
+            catch (error: Exception) {
+                emit(initial.copy(entries = shown?.entries.orEmpty(), tags = shown?.tags.orEmpty(), groups = shown?.groups.orEmpty(),
+                    message = loadMessage(error), loaded = shown?.loaded == true))
+            }
         } }
         .onEach { if (!it.loading) last = it }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(0, 0), KnowledgePage(loading = true))
@@ -137,7 +141,8 @@ internal class KnowledgeDetailViewModel(
                 val response = repository.entry(kind, id)
                 emit(initial.copy(loading = false, detail = response.detail, agents = projectAgents(response.agents)))
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { emit(initial.copy(loading = false, message = loadMessage(error))) }
+            // A failed reload keeps the entry on screen; the page says it could not reload (#3991).
+            catch (error: Exception) { emit(initial.copy(loading = false, detail = shown?.detail, agents = shown?.agents.orEmpty(), message = loadMessage(error))) }
         } }
         .onEach { if (!it.loading) last = it }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(0, 0), KnowledgeDetailPage())

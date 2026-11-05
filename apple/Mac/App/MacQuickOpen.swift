@@ -81,7 +81,7 @@ enum MacQuickOpen {
         let mail = inbox.compactMap { it -> Hit? in
             let sc = score(title: it.title, hay: [it.sender, it.preview, it.accountName], query: q)
             guard sc > 0 else { return nil }
-            return Hit(id: "i:\(it.id)", title: it.title, subtitle: [it.sender, it.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "："),
+            return Hit(id: "i:\(it.id)", title: it.title, subtitle: [it.sender, it.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: String(localized: "：", comment: "Separator between two parts of a one-line summary, e.g. a tool name and what it does")),
                        icon: Theme.Icon.inbox, target: .inbox(it.id), score: sc, date: it.updatedAt)
         }
         let fileHits = q.isEmpty ? [] : files.map { f -> Hit in
@@ -93,11 +93,11 @@ enum MacQuickOpen {
         }
         let groups = [
             Group(title: "Agent", hits: Array(ranked(agents).prefix(agentLimit))),
-            Group(title: "Persona 对话", hits: Array(ranked(conversations).prefix(otherLimit))),
-            Group(title: "文件", hits: fileHits),
-            Group(title: "收件箱", hits: Array(ranked(mail).prefix(otherLimit))),
-            Group(title: "前往", hits: places(q, supportsTodos: supportsTodos, showsMessages: showsMessages)),
-            Group(title: "动作", hits: actions(q)),
+            Group(title: String(localized: "Persona 对话"), hits: Array(ranked(conversations).prefix(otherLimit))),
+            Group(title: String(localized: "文件"), hits: fileHits),
+            Group(title: String(localized: "收件箱"), hits: Array(ranked(mail).prefix(otherLimit))),
+            Group(title: String(localized: "前往"), hits: places(q, supportsTodos: supportsTodos, showsMessages: showsMessages)),
+            Group(title: String(localized: "动作"), hits: actions(q)),
         ].filter { !$0.hits.isEmpty }
         let tier = { (g: Group) in (g.hits.map(\.score).max() ?? 0) / 20 }
         return groups.enumerated().sorted { a, b in
@@ -120,14 +120,14 @@ enum MacQuickOpen {
     /// The window's sections, with the other words they answer to.
     private static func places(_ q: String, supportsTodos: Bool, showsMessages: Bool) -> [Hit] {
         let words: [MacSection: [String]] = [
-            .assistant: ["jarvis", "assistant", "助手", "主对话"],
-            .agents: ["agents", "claude", "codex", "会话"],
-            .inbox: ["inbox", "mail", "lark", "邮件", "飞书"],
-            .todos: ["todo", "todos", "待办"],
-            .messages: ["messages", "chats", "lark", "feishu", "飞书", "私聊", "群聊", "会话"],
-            .knowledge: ["knowledge", "kb", "项目", "人", "文档", "会议"],
-            .machines: ["machines", "monitor", "电脑", "监控", "cpu", "内存"],
-            .settings: ["settings", "preferences", "偏好"],
+            .assistant: ["jarvis", "assistant", "助手", "主对话"], // i18n-ignore: search alias
+            .agents: ["agents", "claude", "codex", "会话"], // i18n-ignore: search alias
+            .inbox: ["inbox", "mail", "lark", "邮件", "飞书"], // i18n-ignore: search alias
+            .todos: ["todo", "todos", "待办"], // i18n-ignore: search alias
+            .messages: ["messages", "chats", "lark", "feishu", "飞书", "私聊", "群聊", "会话"], // i18n-ignore: search alias
+            .knowledge: ["knowledge", "kb", "项目", "人", "文档", "会议"], // i18n-ignore: search alias
+            .machines: ["machines", "monitor", "电脑", "监控", "cpu", "内存"], // i18n-ignore: search alias
+            .settings: ["settings", "preferences", "偏好"], // i18n-ignore: search alias
         ]
         return MacSection.visible(supportsTodos: supportsTodos, showsMessages: showsMessages).compactMap { s in
             let sc = score(title: s.title, hay: words[s] ?? [], query: q)
@@ -138,8 +138,10 @@ enum MacQuickOpen {
 
     private static func actions(_ q: String) -> [Hit] {
         let all: [(String, String, String, Target, [String])] = [
-            ("a:new-agent", "新建 Agent", "在一台电脑上启动 Claude Code / Codex  ⌘N", .newAgent, ["new agent", "start", "启动", "claude", "codex"]),
-            ("a:new-jarvis", "新建 Persona 对话", "问 Persona  ⇧⌘N", .newConversation, ["new chat", "jarvis", "对话", "助手"]),
+            ("a:new-agent", String(localized: "新建 Agent"), String(localized: "在一台电脑上启动 Claude Code / Codex  ⌘N"), .newAgent,
+             ["new agent", "start", "启动", "claude", "codex"]), // i18n-ignore
+            ("a:new-jarvis", String(localized: "新建 Persona 对话"), String(localized: "问 Persona  ⇧⌘N"), .newConversation,
+             ["new chat", "jarvis", "对话", "助手"]), // i18n-ignore
         ]
         return all.compactMap { id, title, sub, target, words in
             let sc = score(title: title, hay: words, query: q)

@@ -95,18 +95,19 @@ struct LarkProfileView: View {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.s) {
                     Text(displayName).font(Theme.Font.title).lineLimit(2)
-                    if profile?.userType == "bot" { LarkNameTag(text: "机器人") }
-                    if profile?.relation?.external == true { LarkNameTag(text: "外部") }
+                    if profile?.userType == "bot" { LarkNameTag(text: String(localized: "机器人")) }
+                    if profile?.relation?.external == true { LarkNameTag(text: String(localized: "外部")) }
                 }
-                let subtitle = [profile?.enName, profile?.alias?.isEmpty == false ? profile?.displayName : nil, profile?.groupNickname.map { "群昵称：\($0)" }]
+                let subtitle = [profile?.enName, profile?.alias?.isEmpty == false ? profile?.displayName : nil, profile?.groupNickname.map { String(localized: "群昵称：\($0)") }]
                     .compactMap { $0 }.filter { !$0.isEmpty && $0 != displayName }
                 if !subtitle.isEmpty { Text(subtitle.joined(separator: " · ")).font(Theme.Font.secondary).foregroundStyle(.secondary) }
                 HStack(spacing: Theme.Space.sm) {
-                    if let s = profile?.workStatus?.status, s == 1 || s == 2 { chip(s == 1 ? "请假中" : "会议中", color: .orange) }
+                    if let s = profile?.workStatus?.status, s == 1 || s == 2 { chip(s == 1 ? String(localized: "请假中") : String(localized: "会议中"), color: .orange) }
                     if let t = profile?.customStatus?.title, !t.isEmpty { chip(t, color: LarkColor.blue) }
                     if let m = profile?.medalName, !m.isEmpty { chip(m, color: .purple) }
                     if let tz = profile?.timezone, let zone = TimeZone(identifier: tz), zone.secondsFromGMT() != TimeZone.current.secondsFromGMT() {
-                        chip("当地时间 " + Date.now.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: zone)), color: .gray)
+                        let localTime = Date.now.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: zone))
+                        chip(String(localized: "当地时间 \(localTime)"), color: .gray)
                     }
                 }
                 if profile?.relation?.external == true, let t = profile?.relation?.tenantName { Text(t).font(Theme.Font.caption).foregroundStyle(.secondary) }
@@ -178,9 +179,9 @@ struct LarkProfileView: View {
     private func row(_ f: LarkProfile.Field) -> some View {
         let value = f.value?.string ?? ""
         let label = switch f.key {
-        case "B-DEPARTMENT": "部门"
-        case "B-LEADER": "直属上级"
-        case "B-EMPLOYEETYPE": "人员类型"
+        case "B-DEPARTMENT": String(localized: "部门")
+        case "B-LEADER": String(localized: "直属上级")
+        case "B-EMPLOYEETYPE": String(localized: "人员类型")
         default: f.label ?? f.key
         }
         let leader = f.url.flatMap { u in u.hasPrefix("lark://client/profile") ? URLComponents(string: u)?.queryItems?.first { $0.name == "uid" }?.value : nil }

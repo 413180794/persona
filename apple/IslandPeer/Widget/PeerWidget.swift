@@ -1,3 +1,4 @@
+// i18n-ignore-file: test fixture app (separate project) for Dynamic Island sharing, not shipped
 import ActivityKit
 import SwiftUI
 import WidgetKit

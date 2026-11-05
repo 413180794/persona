@@ -43,9 +43,9 @@ final class LarkTopicReplies {
     /// kept, then marked 已撤回, as a chat's row shows it (`LarkMessageDisplay.showsBody`); an encrypted one by its cover,
     /// as the Lark gateway's card.
     static func line(of reply: LarkMessage, display: LarkMessageDisplay) -> String {
-        guard display.showsBody(of: reply) else { return "消息已撤回" }
+        guard display.showsBody(of: reply) else { return String(localized: "消息已撤回") }
         let text = reply.olk.map { $0.cached.summary } ?? display.summary(LarkReply.summary(of: reply))
-        return reply.recalled ? text + " · 已撤回" : text
+        return reply.recalled ? String(localized: "\(text) · 已撤回") : text
     }
 
     /// A card came on screen or its reply count changed: read the topic's newest replies unless they are known at that count.

@@ -8,7 +8,7 @@ nonisolated extension ComponentSpec {
     static let beautiful: ComponentSpec = {
         var s = ComponentSpec.glass
         s.title = "BeautifulUI"
-        s.subtitle = "BeautifulUI 的卡片、工具卡片和输入框"
+        s.subtitle = String(localized: "BeautifulUI 的卡片、工具卡片和输入框")
         s.canvas = .neutral(page: Theme.systemPage, card: Theme.groupedCard)
         s.components = .beautiful
         // BeautifulUI's work card (its card color and ring), not 液态玻璃's timeline.

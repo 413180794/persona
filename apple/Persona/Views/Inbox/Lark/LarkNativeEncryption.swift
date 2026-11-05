@@ -37,7 +37,7 @@ extension APIClient {
             return try JSON.decoder.decode(T.self, from: await request(method, path, body: body, timeout: timeout))
         } catch let error as APIError where [404, 405].contains(error.status)
             && ["", "not_found", "method_not_allowed"].contains(error.code?.lowercased() ?? "") {
-            throw APIError(status: 426, message: "升级 Hub 后可使用加密消息。请在设置中打开 Hub，检查更新；升级后重新检查即可继续。",
+            throw APIError(status: 426, message: String(localized: "升级 Hub 后可使用加密消息。请在设置中打开 Hub，检查更新；升级后重新检查即可继续。"),
                            fields: ["code": "lark_hub_upgrade_required"])
         }
     }
@@ -81,7 +81,7 @@ nonisolated struct LarkOutboxSealer: Sendable {
 
     enum Failure: LocalizedError {
         case unavailable
-        var errorDescription: String? { "暂时无法读取本机加密草稿，请解锁设备后重试" }
+        var errorDescription: String? { String(localized: "暂时无法读取本机加密草稿，请解锁设备后重试") }
     }
     private static func systemKey(create: Bool) throws -> Data {
         lock.lock()

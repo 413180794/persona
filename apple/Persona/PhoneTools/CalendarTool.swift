@@ -51,9 +51,9 @@ enum CalendarTool {
                     let start = ToolArgs.string(args, "start") ?? "?"
                     let end = ToolArgs.string(args, "end") ?? "?"
                     let location = ToolArgs.string(args, "location")
-                    var summary = "新建日程「\(title)」\n\(start) → \(end)"
-                    if ToolArgs.bool(args, "all_day") == true { summary += "（全天）" }
-                    if let location { summary += "\n地点：\(location)" }
+                    var summary = String(localized: "新建日程「\(title)」\n\(start) → \(end)")
+                    if ToolArgs.bool(args, "all_day") == true { summary += String(localized: "（全天）") }
+                    if let location { summary += String(localized: "\n地点：\(location)") }
                     return summary
                 },
                 run: { args in try await create(args) }
@@ -196,7 +196,7 @@ enum CalendarTool {
             event.calendar = fallback
         }
         guard event.calendar != nil else {
-            throw ToolFailure(.unavailable, "此 iPhone 上没有可写入的日历 / No writable calendar is configured on this iPhone")
+            throw ToolFailure(.unavailable, "此 iPhone 上没有可写入的日历 / No writable calendar is configured on this iPhone") // i18n-ignore
         }
 
         try store.save(event, span: .thisEvent, commit: true)

@@ -102,8 +102,8 @@ struct PersonaPicker: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(p.id == Persona.builtinID ? "\(p.cardTitle)，默认形象"
-                            : p.isBuiltin ? p.cardTitle : here ? p.name : "\(p.name)，选中后下载")
+        .accessibilityLabel(p.id == Persona.builtinID ? String(localized: "\(p.cardTitle)，默认形象")
+                            : p.isBuiltin ? p.cardTitle : here ? p.name : String(localized: "\(p.name)，选中后下载"))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("persona-\(p.id)")
     }

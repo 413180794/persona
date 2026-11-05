@@ -31,14 +31,14 @@ nonisolated struct LarkMessageDisplay: Codable, Equatable, Sendable {
 
     func forwardedPreview(_ message: JSONValue) -> String {
         if message["isRecalled"]?.bool == true && !(antiRecall && message["hasRetainedRecallContent"]?.bool == true) {
-            return "消息已撤回"
+            return String(localized: "消息已撤回")
         }
         let text: String
         if let raw = message["olk"], raw != .null {
             let encryption = (try? JSON.encoder.encode(raw)).flatMap { try? JSON.decoder.decode(LarkEncryption.self, from: $0) }
-            text = encryption?.summary ?? "加密消息"
+            text = encryption?.summary ?? String(localized: "加密消息")
         } else { text = summary(message["textPreview"]?.string ?? message["text"]?.string ?? "") }
-        return text + (message["isRecalled"]?.bool == true ? " · 已撤回" : "")
+        return message["isRecalled"]?.bool == true ? String(localized: "\(text) · 已撤回") : text
     }
 }
 
@@ -112,7 +112,7 @@ extension APIClient {
                 if LarkLoadProblem.isNotLoggedIn(error) {
                     problem = LarkLoadProblem.of(error).message
                 } else {
-                    problem = (error as? APIError)?.status == 404 ? "请先更新 Hub 和飞书网关，再使用消息显示设置。" : "暂时无法读取设置，请连接后重试。"
+                    problem = (error as? APIError)?.status == 404 ? String(localized: "请先更新 Hub 和飞书网关，再使用消息显示设置。") : String(localized: "暂时无法读取设置，请连接后重试。")
                 }
             }
         }
@@ -131,10 +131,10 @@ extension APIClient {
                 problem = LarkLoadProblem.of(error).message
             } else {
                 switch (error as? APIError)?.status {
-                case 409: problem = "设置或账号已变化，请重新读取后再修改。"
-                case 403: problem = "当前连接没有修改权限。"
-                case 404: problem = "请先更新飞书网关，再修改这些设置。"
-                default: problem = "暂时无法确认保存结果，请重新读取设置。"
+                case 409: problem = String(localized: "设置或账号已变化，请重新读取后再修改。")
+                case 403: problem = String(localized: "当前连接没有修改权限。")
+                case 404: problem = String(localized: "请先更新飞书网关，再修改这些设置。")
+                default: problem = String(localized: "暂时无法确认保存结果，请重新读取设置。")
                 }
             }
         }
@@ -181,7 +181,7 @@ private struct LarkMessageDisplaySettingsContent: View {
         .themedPage()
         .task { await state.refresh(using: link.api) }
     }
-    private func setting(_ title: String, key: String, value: Bool) -> some View {
+    private func setting(_ title: LocalizedStringKey, key: String, value: Bool) -> some View {
         Toggle(title, isOn: Binding(get: { value }, set: { next in Task { await state.set(key, value: next, using: link.api) } }))
             .disabled(state.snapshot == nil || state.loading || state.saving)
             .accessibilityIdentifier("lark.display." + key)

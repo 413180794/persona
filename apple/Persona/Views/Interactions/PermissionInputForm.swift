@@ -14,7 +14,7 @@ struct PermissionInputForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            Text(interaction.summary ?? "确认修改设置")
+            Text(interaction.summary ?? String(localized: "确认修改设置"))
                 .font(Theme.Font.secondary)
             ForEach(interaction.fields ?? []) { field in
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -23,7 +23,7 @@ struct PermissionInputForm: View {
                         if field.secret == true {
                             // A key or a password handed to the Agent, not this app's: never offered to the system's
                             // passwords (#1598).
-                            SecretField(field.placeholder ?? field.label, filled: "已填写", text: binding(field.key),
+                            SecretField(field.placeholder ?? field.label, filled: String(localized: "已填写"), text: binding(field.key),
                                         identifier: "interaction.field." + field.key)
                         } else {
                             TextField(field.placeholder ?? field.label, text: binding(field.key))

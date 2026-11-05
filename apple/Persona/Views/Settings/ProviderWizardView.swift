@@ -73,14 +73,14 @@ struct ProviderWizard: View {
 
     private var title: String {
         switch step {
-        case .importZshrc: "从 ~/.zshrc 导入"
-        default: wizard.isNew ? "新增供应商" : "编辑 \(wizard.existing?.name ?? "")"
+        case .importZshrc: String(localized: "从 ~/.zshrc 导入")
+        default: wizard.isNew ? String(localized: "新增供应商") : String(localized: "编辑 \(wizard.existing?.name ?? "")")
         }
     }
 
     /// 「第 2 步，共 3 步 · 连接」 over each step of the wizard (not the import).
     private func stepHeader(_ n: Int, _ what: String) -> some View {
-        Text(wizard.isNew ? "第 \(n) 步，共 3 步 · \(what)" : what)
+        Text(wizard.isNew ? String(localized: "第 \(n) 步，共 3 步 · \(what)") : what)
             .accessibilityIdentifier("wizard.step")
     }
 
@@ -154,26 +154,26 @@ struct ProviderWizard: View {
 
     @ViewBuilder private var pickSections: some View {
         Section {
-            pickRow(title: "Anthropic 官方", detail: "api.anthropic.com，用 Anthropic Console 的 API Key", id: "wizard.kind.anthropic") {
+            pickRow(title: String(localized: "Anthropic 官方"), detail: String(localized: "api.anthropic.com，用 Anthropic Console 的 API Key"), id: "wizard.kind.anthropic") {
                 BrandMark(Theme.Brand.claude, side: Theme.Size.icon)
             } action: {
                 wizard.kind = .anthropic
                 step = .connect
             }
-            pickRow(title: "自定义网关", detail: "兼容 Anthropic 接口的地址，比如各家 Coding Plan、公司的代理", id: "wizard.kind.custom") {
+            pickRow(title: String(localized: "自定义网关"), detail: String(localized: "兼容 Anthropic 接口的地址，比如各家 Coding Plan、公司的代理"), id: "wizard.kind.custom") {
                 Image(systemName: Theme.Icon.server).foregroundStyle(Theme.accent)
             } action: {
                 wizard.kind = .custom
                 step = .connect
             }
-        } header: { stepHeader(1, "选供应商") } footer: {
+        } header: { stepHeader(1, String(localized: "选供应商")) } footer: {
             Text("供应商在各台电脑上以 Claude Code 运行，主对话和 Agents 都可以用；具体用哪个在「模型配置」里选。")
         }
         Section {
-            pickRow(title: "从 ~/.zshrc 导入", detail: "把一台电脑上调用 claude 的 alias 变成供应商", id: "wizard.kind.import") {
+            pickRow(title: String(localized: "从 ~/.zshrc 导入"), detail: String(localized: "把一台电脑上调用 claude 的 alias 变成供应商"), id: "wizard.kind.import") {
                 Image(systemName: Theme.Icon.terminal).foregroundStyle(Theme.accent)
             } action: { step = .importZshrc }
-            pickRow(title: "其他接入方式", detail: "直接 API（Messages / Responses）、扩展提供的供应商", id: "wizard.kind.other") {
+            pickRow(title: String(localized: "其他接入方式"), detail: String(localized: "直接 API（Messages / Responses）、扩展提供的供应商"), id: "wizard.kind.other") {
                 Image(systemName: Theme.Icon.options).foregroundStyle(.secondary)
             } action: { other = true }
         }
@@ -208,8 +208,8 @@ struct ProviderWizard: View {
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .disabled(!wizard.isNew)
                 .accessibilityIdentifier("wizard.name")
-        } header: { stepHeader(2, "连接") } footer: {
-            Text(wizard.nameProblem ?? "字母、数字、_ 和 -；在各处按这个名字选择。")
+        } header: { stepHeader(2, String(localized: "连接")) } footer: {
+            Text(wizard.nameProblem ?? String(localized: "字母、数字、_ 和 -；在各处按这个名字选择。"))
                 .foregroundStyle(wizard.nameProblem == nil ? Color.secondary : Theme.danger)
         }
         Section {
@@ -225,7 +225,7 @@ struct ProviderWizard: View {
                 }
                 .lineLimit(1)
             }
-            SecretField(wizard.hasStoredKey ? "API Key（不改就留空）" : "API Key", filled: "已填写", text: $wizard.apiKey,
+            SecretField(wizard.hasStoredKey ? String(localized: "API Key（不改就留空）") : "API Key", filled: String(localized: "已填写"), text: $wizard.apiKey,
                         identifier: "wizard.key")
         } header: { Text("网关") } footer: {
             Text(wizard.kind == .anthropic ? "Key 加密存在 hub，启动时才交给那台电脑，不会返回到客户端。"
@@ -256,7 +256,7 @@ struct ProviderWizard: View {
                 Text(e).font(Theme.Font.label).foregroundStyle(Theme.danger).lineLimit(4)
             }
         } header: { Text("检查") } footer: {
-            Text("测试连接会真的发一个很小的请求（\(wizard.testModel.isEmpty ? "先获取模型列表" : wizard.testModel)），可能产生少量费用。")
+            Text("测试连接会真的发一个很小的请求（\(wizard.testModel.isEmpty ? String(localized: "先获取模型列表") : wizard.testModel)），可能产生少量费用。")
         }
     }
 
@@ -266,7 +266,7 @@ struct ProviderWizard: View {
         @Bindable var wizard = wizard
         Section {
             if wizard.choices.isEmpty {
-                Text(wizard.discoverError.map { "模型列表没读到：\($0)。可以在下面手动添加。" } ?? "网关没有给出模型列表，在下面手动添加。")
+                Text(wizard.discoverError.map { String(localized: "模型列表没读到：\($0)。可以在下面手动添加。") } ?? String(localized: "网关没有给出模型列表，在下面手动添加。"))
                     .font(Theme.Font.label).foregroundStyle(.secondary)
             }
             ForEach(wizard.choices) { m in modelRow(m) }
@@ -279,7 +279,7 @@ struct ProviderWizard: View {
                 Button("添加") { addModel() }.lineLimit(1).buttonStyle(.borderless)
                     .disabled(newModel.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-        } header: { stepHeader(3, "勾选模型") } footer: {
+        } header: { stepHeader(3, String(localized: "勾选模型")) } footer: {
             Text("勾选这个网关要用的模型。上下文窗口超过 200K 的会以「[1m]」运行；点 ⓘ 改上下文窗口和思考档位。")
         }
         if !wizard.models.isEmpty {
@@ -313,7 +313,7 @@ struct ProviderWizard: View {
             } content: {
                 HStack(spacing: Theme.Space.sm) {
                     Text(m.title).font(Theme.Font.body).foregroundStyle(.primary).lineLimit(1)
-                    if m.id == wizard.defaultModel { Chip(text: "默认", look: .tint(Theme.accent)) }
+                    if m.id == wizard.defaultModel { Chip(text: String(localized: "默认"), look: .tint(Theme.accent)) }
                 }
                 Text(ProviderModelText.detail(wizard.model(m.id) ?? m)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -332,8 +332,8 @@ struct ProviderWizard: View {
     @ViewBuilder private func modelDetail(_ id: String) -> some View {
         let m = wizard.model(id) ?? ProviderModel(id: id)
         let levels = (m.efforts ?? []).isEmpty ? SessionModes.effortLevels.map(\.id) : (m.efforts ?? [])
-        numberField("上下文窗口", Binding(get: { m.contextWindow.map(String.init) ?? "" },
-                                     set: { v in wizard.update(id) { $0.contextWindow = Int(v) } }), "未知（按 200K）")
+        numberField(String(localized: "上下文窗口"), Binding(get: { m.contextWindow.map(String.init) ?? "" },
+                                     set: { v in wizard.update(id) { $0.contextWindow = Int(v) } }), String(localized: "未知（按 200K）"))
         Picker("默认思考档位", selection: Binding(get: { m.defaultEffort ?? "" },
                                             set: { v in wizard.update(id) { $0.defaultEffort = v.isEmpty ? nil : v } })) {
             Text("不设").tag("")
@@ -347,12 +347,12 @@ struct ProviderWizard: View {
     @ViewBuilder private var advancedFields: some View {
         @Bindable var wizard = wizard
         Group {
-            tierField("Opus 档位", $wizard.opusModel)
-            tierField("Sonnet 档位", $wizard.sonnetModel)
-            tierField("Haiku 档位", $wizard.haikuModel)
-            tierField("Fable 档位", $wizard.fableModel)
-            tierField("小模型", $wizard.smallModel)
-            tierField("子 Agent 模型", $wizard.subagentModel)
+            tierField(String(localized: "Opus 档位"), $wizard.opusModel)
+            tierField(String(localized: "Sonnet 档位"), $wizard.sonnetModel)
+            tierField(String(localized: "Haiku 档位"), $wizard.haikuModel)
+            tierField(String(localized: "Fable 档位"), $wizard.fableModel)
+            tierField(String(localized: "小模型"), $wizard.smallModel)
+            tierField(String(localized: "子 Agent 模型"), $wizard.subagentModel)
             Toggle("子 Agent 一律用这个模型", isOn: $wizard.subagentForce).lineLimit(1)
             Picker("默认思考档位", selection: $wizard.effort) {
                 Text("跟随模型").tag("")
@@ -361,9 +361,9 @@ struct ProviderWizard: View {
             .lineLimit(1)
         }
         Group {
-            numberField("自动压缩窗口", $wizard.compactWindow, "默认按模型")
-            numberField("最大上下文", $wizard.maxContext, "默认按模型")
-            numberField("请求超时（毫秒）", $wizard.timeoutMS, "默认 3000000")
+            numberField(String(localized: "自动压缩窗口"), $wizard.compactWindow, String(localized: "默认按模型"))
+            numberField(String(localized: "最大上下文"), $wizard.maxContext, String(localized: "默认按模型"))
+            numberField(String(localized: "请求超时（毫秒）"), $wizard.timeoutMS, String(localized: "默认 3000000"))
             TextField("代理，比如 http://127.0.0.1:7890", text: $wizard.proxy)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
             TextField("不走代理的地址（NO_PROXY）", text: $wizard.noProxy)
@@ -441,7 +441,7 @@ struct CheckRow<Content: View>: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel((on ? "已勾选 " : "未勾选 ") + title)
+        .accessibilityLabel(on ? String(localized: "已勾选 \(title)") : String(localized: "未勾选 \(title)"))
         .accessibilityIdentifier(id)
     }
 }
@@ -451,7 +451,10 @@ enum ProviderModelText {
     static func detail(_ m: ProviderModel) -> String {
         var parts = [m.id]
         if let w = m.contextWindow, w > 0 { parts.append(LauncherDetail.tokens(w)) }
-        if let e = m.efforts, !e.isEmpty { parts.append("思考 " + (e.count > 1 ? "\(e.first!)–\(e.last!)" : e[0])) }
+        if let e = m.efforts, !e.isEmpty {
+            let range = e.count > 1 ? "\(e.first!)–\(e.last!)" : e[0]
+            parts.append(String(localized: "思考 \(range)"))
+        }
         return parts.joined(separator: " · ")
     }
 }
@@ -539,7 +542,7 @@ struct LauncherImportSections: View {
                 } content: {
                     HStack(spacing: Theme.Space.sm) {
                         Text(p.name).font(Theme.Font.heading.monospaced()).foregroundStyle(.primary).lineLimit(1)
-                        if let e = p.existing { Chip(text: "合并到 \(e)") }
+                        if let e = p.existing { Chip(text: String(localized: "合并到 \(e)")) }
                     }
                     Text(ImportText.detail(p)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                     if let a = p.aliases, !a.isEmpty {
@@ -556,7 +559,8 @@ struct LauncherImportSections: View {
     }
 
     private var machineName: String {
-        "在 " + (machines.first { $0.id == imports.machine }?.name ?? imports.machine) + " 上找到 \(imports.providers.count) 个"
+        let name = machines.first { $0.id == imports.machine }?.name ?? imports.machine
+        return String(localized: "在 \(name) 上找到 \(imports.providers.count) 个")
     }
 
     @ViewBuilder private var resultSection: some View {
@@ -587,11 +591,11 @@ struct LauncherImportSections: View {
 enum ImportText {
     static func detail(_ p: LauncherImportPreview.Provider) -> String {
         var parts: [String] = []
-        parts.append(p.baseURL.flatMap { URL(string: $0)?.host() } ?? "Anthropic 官方")
+        parts.append(p.baseURL.flatMap { URL(string: $0)?.host() } ?? String(localized: "Anthropic 官方"))
         let models = (p.models ?? []).map(\.id)
-        if !models.isEmpty { parts.append(models.count == 1 ? models[0] : "\(models.count) 个模型") }
+        if !models.isEmpty { parts.append(models.count == 1 ? models[0] : String(localized: "\(models.count) 个模型")) }
         else if let m = p.model, !m.isEmpty { parts.append(m) }
-        if p.hasKey != true { parts.append("没有 Key") }
+        if p.hasKey != true { parts.append(String(localized: "没有 Key")) }
         return parts.joined(separator: " · ")
     }
 }

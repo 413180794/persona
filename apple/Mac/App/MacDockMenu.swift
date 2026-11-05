@@ -13,10 +13,10 @@ import AppKit
     func menu(_ s: MacMenuBar.Sections, machineName: (String) -> String, paired: Bool) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        add(s.needsYou, header: "需要你", to: menu, machineName: machineName)
-        add(s.unread, header: "做完了", to: menu, machineName: machineName)
+        add(s.needsYou, header: String(localized: "需要你"), to: menu, machineName: machineName)
+        add(s.unread, header: String(localized: "做完了"), to: menu, machineName: machineName)
         if !s.needsYou.isEmpty || !s.unread.isEmpty { menu.addItem(.separator()) }
-        let new = NSMenuItem(title: "新建 Agent 对话…", action: #selector(newAgent), keyEquivalent: "")
+        let new = NSMenuItem(title: String(localized: "新建 Agent 对话…"), action: #selector(newAgent), keyEquivalent: "")
         new.target = self
         new.isEnabled = paired
         menu.addItem(new)

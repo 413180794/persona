@@ -1,3 +1,4 @@
+// i18n-ignore-file: demo mode's made-up hub data (model settings)
 import Foundation
 
 /// Made-up model settings for 体验模式; they never reach a provider or a computer.

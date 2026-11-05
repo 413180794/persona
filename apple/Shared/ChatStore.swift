@@ -303,7 +303,7 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
                     current = Turn(id: row.id)
                     current!.process.append(row)
                     current!.ordered.append(row)
-                } else if item.task == nil, (item.text ?? "").contains("中断") {
+                } else if item.task == nil, (item.text ?? "").contains("中断") { // i18n-ignore: matches the hub's notice
                     current!.trailing.append(row)
                 } else {
                     current!.process.append(row)
@@ -775,8 +775,8 @@ final class ChatStore {
     /// it carries on with (「已从压缩的上下文继续」), and after an idle one a note about it ("Compacted while idle…").
     /// The boundary keeps the others as its notes; they are no rows of their own. A summary whose boundary is on an
     /// older page stands in for it.
-    nonisolated static let compactedText = "上下文已压缩"
-    nonisolated static let continuedText = "已从压缩的上下文继续"
+    nonisolated static let compactedText = "上下文已压缩" // i18n-ignore: matches the hub's notice
+    nonisolated static let continuedText = "已从压缩的上下文继续" // i18n-ignore: matches the hub's notice
     nonisolated static func compactions(_ items: [Item]) -> [Item] {
         func isNotice(_ it: Item, _ text: String) -> Bool { it.kind == .notice && it.task == nil && it.wake != true && it.text == text }
         func isIdleNote(_ it: Item) -> Bool { it.kind == .notice && (it.text ?? "").hasPrefix("Compacted while idle") }

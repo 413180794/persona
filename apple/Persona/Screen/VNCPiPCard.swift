@@ -18,16 +18,16 @@ struct VNCPiPCard: View {
             case .live where pictured: return nil
             case .connecting, .live: self = .connecting
             case .signIn: self = .signIn
-            case .closed(let why): self = .failed(why ?? "连接断了")
+            case .closed(let why): self = .failed(why ?? String(localized: "连接断了"))
             }
         }
 
         /// For 小窗诊断 (and the source's accessibility value under DEBUG -showPiPSource).
         var line: String {
             switch self {
-            case .connecting: "连接中"
-            case .signIn: "要重新登录"
-            case .failed(let why): "没连上：\(why)"
+            case .connecting: String(localized: "连接中")
+            case .signIn: String(localized: "要重新登录")
+            case .failed(let why): String(localized: "没连上：\(why)")
             }
         }
     }
@@ -70,8 +70,8 @@ struct VNCPiPCard: View {
 
     private var status: String {
         switch state {
-        case .connecting: "连接中…"
-        case .signIn: "记住的密码不对了"
+        case .connecting: String(localized: "连接中…")
+        case .signIn: String(localized: "记住的密码不对了")
         case .failed(let why): why
         }
     }

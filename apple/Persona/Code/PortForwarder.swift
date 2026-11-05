@@ -55,6 +55,7 @@ final class PortForwarder {
         comps.scheme = config.url.scheme == "https" ? "wss" : "ws"
         var req = URLRequest(url: HubTransport.resolve(comps.url!, hub: config.url), timeoutInterval: 15)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
         return req
     }
 }

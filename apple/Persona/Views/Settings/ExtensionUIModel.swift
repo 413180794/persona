@@ -212,7 +212,7 @@ extension APIClient {
             let r = try await call(nil, values: nil)
             failedStatus = nil
             show(r.view)
-            if r.view == nil { error = "扩展没有返回内容" }
+            if r.view == nil { error = String(localized: "扩展没有返回内容") }
         } catch let e as APIError where Self.isUnsupported(e) || (context.machine != nil && e.status == 404) {
             // A machine's section the hub says is not there (404: no such machine, or not the extension's business)
             // is not drawn at all.
@@ -387,7 +387,7 @@ extension APIClient {
     }
 
     private func call(_ action: String?, values: [String: String]?) async throws -> ExtensionActionResult {
-        guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
+        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
         return try await api.pluginUI(plugin, ui, context: context, state: view?.state ?? initialState, action: action, values: values)
     }
 

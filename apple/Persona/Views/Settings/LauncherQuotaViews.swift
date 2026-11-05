@@ -17,7 +17,7 @@ struct LauncherQuotaSection: View {
                 Label(failed, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
             } else if let a = answer {
                 if let q = a.quota { report(q) } else {
-                    Text(a.error ?? "读不到额度").font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text(a.error ?? String(localized: "读不到额度")).font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             } else {
                 HStack(spacing: Theme.Space.s) {
@@ -27,7 +27,7 @@ struct LauncherQuotaSection: View {
             }
         } header: {
             HStack {
-                Text(answer?.quota.map { "额度 · " + $0.gatewayName } ?? "额度")
+                Text(answer?.quota.map { String(localized: "额度 · \($0.gatewayName)") } ?? String(localized: "额度"))
                 Spacer()
                 if answer?.unsupported != true {
                     Button { Task { await load(refresh: true) } } label: {
@@ -68,10 +68,10 @@ struct LauncherQuotaSection: View {
 
     private func footer(_ a: LauncherQuotaAnswer) -> String {
         var parts: [String] = []
-        if let k = a.quota?.keyName, !k.isEmpty { parts.append("网关上的 Key 名：\(k)") }
-        if let m = a.machine, !m.isEmpty { parts.append("由 \(model.machine(model.hubRef(m))?.name ?? m) 读取，Key 不离开那台电脑") }
-        if let t = a.checkedAt { parts.append(Fmt.relative(t) + "读的，一分钟内再打开用这次的") }
-        return parts.joined(separator: "；") + "。"
+        if let k = a.quota?.keyName, !k.isEmpty { parts.append(String(localized: "网关上的 Key 名：\(k)")) }
+        if let m = a.machine, !m.isEmpty { parts.append(String(localized: "由 \(model.machine(model.hubRef(m))?.name ?? m) 读取，Key 不离开那台电脑")) }
+        if let t = a.checkedAt { parts.append(String(localized: "\(Fmt.relative(t))读的，一分钟内再打开用这次的")) }
+        return parts.joined(separator: String(localized: "；", comment: "Separator between footer sentences")) + String(localized: "。", comment: "Sentence-ending period after the quota footer")
     }
 
     private func load(refresh: Bool) async {
@@ -157,30 +157,30 @@ enum QuotaText {
 
     /// "已用 64%", "6401 / 10000", "$2,100 / $3,000", "已用完".
     static func amount(_ w: LauncherQuota.Window) -> String {
-        if w.exhausted == true && (w.usedRatio ?? 1) >= 1 { return "已用完" }
+        if w.exhausted == true && (w.usedRatio ?? 1) >= 1 { return String(localized: "已用完") }
         switch w.unit {
         case "usd":
             if let u = w.used, let l = w.limit { return "$\(money(u)) / $\(money(l))" }
         case "tokens":
-            if let u = w.used, let l = w.limit { return "\(count(u)) / \(count(l)) token" }
+            if let u = w.used, let l = w.limit { return String(localized: "\(count(u)) / \(count(l)) token") }
         case "requests":
-            if let u = w.used, let l = w.limit { return "\(count(u)) / \(count(l)) 次" }
+            if let u = w.used, let l = w.limit { return String(localized: "\(count(u)) / \(count(l)) 次") }
         case "credits":
             if let u = w.used, let l = w.limit { return "\(count(u)) / \(count(l))" }
         default: break
         }
-        if let r = w.usedRatio { return "已用 \(Int((r * 100).rounded()))%" }
+        if let r = w.usedRatio { return String(localized: "已用 \(Int((r * 100).rounded()))%") }
         return "—"
     }
 
     static func usage(_ u: LauncherQuota.Usage) -> String {
-        var s = "\(count(Double(u.requests))) 次 · \(count(Double(u.tokens))) token"
+        var s = String(localized: "\(count(Double(u.requests))) 次 · \(count(Double(u.tokens))) token")
         if let c = u.costUSD { s += " · $\(money(c))" }
         return s
     }
 
     static func reset(_ d: Date) -> String {
-        d.timeIntervalSinceNow <= 0 ? "已重置" : d.formatted(.dateTime.month().day().hour().minute()) + " 重置"
+        d.timeIntervalSinceNow <= 0 ? String(localized: "已重置") : String(localized: "\(d.formatted(.dateTime.month().day().hour().minute())) 重置")
     }
 
     /// 1.2 万, 3.4 亿.
@@ -189,9 +189,13 @@ enum QuotaText {
             let s = String(format: "%.1f", x)
             return s.hasSuffix(".0") ? String(s.dropLast(2)) : s
         }
+        // 万 / 亿 grouping is Chinese; other UI languages use the locale's compact notation (12K, 1.2万).
+        if Bundle.main.preferredLocalizations.first?.hasPrefix("zh") == false, abs(v) >= 1e4 {
+            return v.formatted(.number.precision(.fractionLength(0...1)).notation(.compactName))
+        }
         switch abs(v) {
-        case 1e8...: return short(v / 1e8) + " 亿"
-        case 1e4...: return short(v / 1e4) + " 万"
+        case 1e8...: return short(v / 1e8) + " 亿" // i18n-ignore: Chinese-only path
+        case 1e4...: return short(v / 1e4) + " 万" // i18n-ignore: Chinese-only path
         default: return String(format: "%.0f", v)
         }
     }

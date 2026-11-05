@@ -92,6 +92,14 @@ describe("awaitingTurn (#3654)", () => {
     expect(awaitingTurn({ steps: [] } as never, "idle", at)).toBe(false);
     expect(awaitingTurn(undefined, "idle", at)).toBe(false);
   });
+  it("is off when the turn failed after the message, before writing anything (#3935)", () => {
+    expect(awaitingTurn(seg(), "idle", at + 2_000, { since: "2026-11-05T10:00:01Z" })).toBe(false);
+    expect(awaitingTurn(seg(), "idle", at + 2_000, { since: "2026-11-05T10:00:00Z" })).toBe(false);
+    expect(awaitingTurn(seg(), "idle", at + 2_000, {})).toBe(false);
+  });
+  it("stays on past a failure from before the message", () => {
+    expect(awaitingTurn(seg(), "idle", at + 2_000, { since: "2026-11-05T09:59:00Z" })).toBe(true);
+  });
   it("leaves the hub's own states alone", () => {
     for (const st of ["working", "needs_you", "offline"] as const) expect(awaitingTurn(seg(), st, at)).toBe(false);
   });

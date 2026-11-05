@@ -114,7 +114,7 @@ struct PersonalAgentSessionView: View {
         set(p.id, .sending)
         do {
             let r = try await api.sendPersonalAgent(session.id, clientId: p.id, text: p.text)
-            if r.outbox.status == "failed" { set(p.id, .failed(r.outbox.error ?? "发送失败")) } else { set(p.id, .sent) }
+            if r.outbox.status == "failed" { set(p.id, .failed(r.outbox.error ?? String(localized: "发送失败"))) } else { set(p.id, .sent) }
             await reload(markRead: false)
         } catch {
             set(p.id, .failed(error.localizedDescription))
