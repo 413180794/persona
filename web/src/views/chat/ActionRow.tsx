@@ -32,7 +32,7 @@ export const STATUS_SLOT = "inline-flex h-[18px] w-4 shrink-0 items-center justi
 
 const COMMAND_TOOLS = new Set(["Bash", "exec_command", "shell"]);
 const FILE_TOOLS = new Set(["Read", "Edit", "Write", "MultiEdit", "NotebookEdit"]);
-const DIFF_TOOLS = new Set(["Edit", "Write", "MultiEdit"]);
+export const DIFF_TOOLS = new Set(["Edit", "Write", "MultiEdit"]);
 
 /** cindy's verbAggregator (its Chinese wording is the zh-Hans text). */
 const VERB: Record<string, string> = {
@@ -275,7 +275,7 @@ function DiffStats({ diffs }: { diffs: Op[][] }) {
   );
 }
 
-function DiffBlocks({ diffs }: { diffs: Op[][] }) {
+export function DiffBlocks({ diffs }: { diffs: Op[][] }) {
   return diffs.map((d, n) => (
     <div key={n} className="min-w-fit overflow-hidden rounded-[8px] py-1 font-mono text-[12px] leading-[1.6] shadow-hairline">
       {d.map((l, i) => (

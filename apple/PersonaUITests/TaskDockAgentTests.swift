@@ -74,5 +74,23 @@ final class TaskDockAgentTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Agent · 不是从对话开的"].waitForExistence(timeout: 5), app.debugDescription)
         sleep(2)
         try shot(app, "sheet")
+
+        // 全屏查看: the sheet goes down and the agent's page is pushed onto the assistant page; back comes to the
+        // conversation with the dock, the sheet does not rise again.
+        let expand = app.buttons["task-detail.fullscreen"]
+        XCTAssertTrue(expand.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertEqual(expand.label, "全屏查看")
+        expand.tap()
+        XCTAssertTrue(app.staticTexts["Agent · 不是从对话开的"].waitForNonExistence(timeout: 5), "the sheet stayed up")
+        XCTAssertFalse(expand.exists, "the full page still has the sheet's 全屏查看")
+        sleep(2)
+        try shot(app, "fullscreen")
+        XCTAssertFalse(board.isHittable, "the dock shows through the full page:\n\(app.debugDescription)")
+        let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5)) // the system's back swipe
+        edge.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)))
+        XCTAssertTrue(board.waitForExistence(timeout: 5) && board.isHittable, "back did not come to the conversation:\n\(app.debugDescription)")
+        sleep(1)
+        XCTAssertFalse(app.staticTexts["Agent · 不是从对话开的"].exists, "the sheet rose again after back")
+        try shot(app, "back")
     }
 }

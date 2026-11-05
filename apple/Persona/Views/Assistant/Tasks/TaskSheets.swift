@@ -84,6 +84,7 @@ struct TaskDetailSheet: View {
                     .clipShape(.circle)
                     .accessibilityLabel("更多")
                 }
+                if !pushed, let selected { expandButton(selected) }
                 if !pushed { closeButton }
             }
             if sessions.count > 1 {
@@ -128,6 +129,7 @@ extension TaskDetailSheet {
                     AgentMarkLine(text: "Agent · 不是从对话开的")
                 }
                 Spacer(minLength: Theme.Space.s)
+                if !pushed, session != nil { expandButton(key) }
                 if !pushed { closeButton }
             }
             .padding(.horizontal, Theme.Space.page)
@@ -158,6 +160,19 @@ extension TaskDetailSheet {
         } else {
             ChatView(key: key, style: .dev).id(key)
         }
+    }
+
+    /// 全屏查看, before the sheet's ✕: the sheet goes down and the agent's page is pushed onto the assistant page, the
+    /// same page the Agents tab pushes (`TasksStore.expand`). Not when pushed: there it already fills the column.
+    private func expandButton(_ key: SessionKey) -> some View {
+        Button { store.expand(key) } label: {
+            Image(systemName: Theme.Icon.enlarge).font(Theme.Font.secondaryStrong)
+                .scaledFrame(width: Theme.Size.well, height: Theme.Size.well)
+        }
+        .themedButton()
+        .clipShape(.circle)
+        .accessibilityLabel("全屏查看")
+        .accessibilityIdentifier("task-detail.fullscreen")
     }
 
     /// ✕ at the sheet's trailing edge; ‹ at the pushed page's leading one.

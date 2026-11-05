@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { askUserAnswers, baseToolName, optionDisplay, patchDiffs, pickedOption, toolQuestions, typedAnswer, withoutCutMark } from "./tool-detail";
+import { askUserAnswers, baseToolName, optionDisplay, patchDiffs, permissionDetail, pickedOption, summaryExtra, toolQuestions, typedAnswer, withoutCutMark } from "./tool-detail";
 
 describe("patchDiffs (a Codex file change, G001)", () => {
   it("is one block per hunk, the file headers left out", () => {
@@ -79,5 +79,35 @@ describe("optionDisplay (iOS QuestionOption.display)", () => {
     expect(optionDisplay("XCTest")).toEqual({ text: "XCTest", recommended: false });
     expect(optionDisplay("Recommended settings")).toEqual({ text: "Recommended settings", recommended: false });
     expect(optionDisplay("(Recommended)")).toEqual({ text: "(Recommended)", recommended: false });
+  });
+});
+
+describe("permissionDetail", () => {
+  it("splits a command from the agent's sentence", () => {
+    expect(permissionDetail("Bash", { command: "swift test", description: "运行网络层测试" })).toEqual({ note: "运行网络层测试", fields: [{ label: "command", value: "swift test" }] });
+    expect(permissionDetail("exec_command", { command: ["ls", "-la"] })).toEqual({ note: undefined, fields: [{ label: "command", value: "ls -la" }] });
+    expect(permissionDetail("shell", { command: ["bash", "-lc", "echo hi && ls"] })?.fields[0].value).toBe("bash -lc 'echo hi && ls'");
+  });
+  it("names the file, the address, the search", () => {
+    expect(permissionDetail("Edit", { file_path: "/a/b.ts", old_string: "x", new_string: "y" })?.fields).toEqual([{ label: "file", value: "/a/b.ts" }]);
+    expect(permissionDetail("WebFetch", { url: "https://example.com", prompt: "读标题" })).toEqual({ note: "读标题", fields: [{ label: "url", value: "https://example.com" }] });
+    expect(permissionDetail("Grep", { pattern: "foo", path: "src" })?.fields.map((f) => f.label)).toEqual(["pattern", "path"]);
+  });
+  it("gives up on a tool it does not know or an input without its field", () => {
+    expect(permissionDetail("mail_send", { to: "me@example.com" })).toBeNull();
+    expect(permissionDetail("Bash", {})).toBeNull();
+    expect(permissionDetail("Bash", { description: "跑测试" })).toEqual({ note: "跑测试", fields: [] });
+    expect(permissionDetail(undefined, undefined)).toBeNull();
+  });
+});
+
+describe("summaryExtra", () => {
+  const cmd = [{ label: "command" as const, value: "curl -s x" }];
+  it("keeps only what the summary adds", () => {
+    expect(summaryExtra("curl -s x", cmd)).toBe("");
+    expect(summaryExtra("curl -s x\n\nneeds network", cmd)).toBe("needs network");
+    expect(summaryExtra("给 me@example.com 发一封邮件", cmd)).toBe("给 me@example.com 发一封邮件");
+    expect(summaryExtra(undefined, cmd)).toBe("");
+    expect(summaryExtra("curl -s xyz", cmd)).toBe("curl -s xyz");
   });
 });

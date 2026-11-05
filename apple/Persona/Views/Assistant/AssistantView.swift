@@ -198,7 +198,13 @@ struct AssistantView: View {
                 }
             }
             .modifier(ShellDestinations(path: $path, enabled: shell != nil || padPlaces))
-            .modifier(ClassicTodoDetailDestination(enabled: shell == nil && !padPlaces))
+            .modifier(ClassicDestinations(enabled: shell == nil && !padPlaces))
+            // 全屏查看 in an agent's sheet (TasksStore.expand): its page pushed here, as from the Agents tab.
+            .onChange(of: TasksStore.shared.fullAgent, initial: true) { _, key in
+                guard let key else { return }
+                TasksStore.shared.fullAgent = nil
+                path.append(key)
+            }
             // On appear too (a cold launch onto 收件箱 asks before this page exists), but each request once: the root
             // appears again after every pop, and replaying the last request pushed the inbox right back.
             .onChange(of: request?.serial, initial: true) { _, serial in
@@ -1042,13 +1048,16 @@ private struct RootBarHidden: UIViewRepresentable {
 #endif
 
 /// The classic layout has no ShellDestinations, so nothing registers the todo detail route in this stack: a todo row
-/// pushed from the todo list (TodosView) would open nothing. The shell registers it itself (ShellHome.swift).
-private struct ClassicTodoDetailDestination: ViewModifier {
+/// pushed from the todo list (TodosView) would open nothing. Nor the agent page 全屏查看 pushes (`SessionKey`). The
+/// shell registers both itself (ShellHome.swift).
+private struct ClassicDestinations: ViewModifier {
     var enabled: Bool
 
     func body(content: Content) -> some View {
         if enabled {
-            content.navigationDestination(for: TodoDetailRoute.self) { r in TodoDetailView(todoID: r.id) }
+            content
+                .navigationDestination(for: TodoDetailRoute.self) { r in TodoDetailView(todoID: r.id) }
+                .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
         } else {
             content
         }

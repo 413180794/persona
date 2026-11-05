@@ -57,6 +57,8 @@ hub 在转给管理者之前就拦下（403，管理者那边也查）；连接�
 | 邮件 | 一个邮件线程里的未读邮件（主题去掉 Re: / Fwd: / 回复： / [列表名] 后相同即同一线程） | `mail:<账号>:<线程>:<第一封 uid>` |
 
 - 一个会话 / 线程同时只有一件**未处理**的事；处理后再来的消息开一件新的（只算处理时最后一条之后的）。
+  例外：「移回」（单件 `done:false`、批量 `reopen` / 撤销）不查同一线程后来有没有开新的一件，旧的照样移回，这时一个线程会有两件未处理，
+  之后的新消息固定并进最新的那件（`UpdatedAt` 最新，相同按 id，`threadIndex.openFor`，#3796），旧的那件不跟着变。
 - 什么会进来（飞书）：飞书网关的 `unread` scope（飞书的「未读」，免打扰的会话不在里面）+ `mentions` scope（免打扰群里 @我 也算）。
   私聊 → `dm`，机器人 / AI 私聊 → `bot`，群里 @我 / @所有人 → `mention`，没免打扰的群 → `group`；7 天前的未读不算。
   只看别人发的：自己发的消息不会让一个会话变成「需要你」。
@@ -237,6 +239,10 @@ hub 在转给管理者之前就拦下（403，管理者那边也查）；连接�
 点了以后这件事和同一来源里它覆盖的其他打开的事都收进已处理（原因「已静音：<名字>」），toast 说「已静音「…」，以后不再进收件箱」。
 收件箱右上角「更多」里的「已静音」列出所有静音（名字、来源 · 仓库 / 会话 / 发件人），左滑或长按「取消静音」；取消后以后的才会进来，已经收掉的不回来。
 
+- **接口**：`GET /api/v1/inbox/mutes`（列出，按添加的顺序，旧的在前）；`POST /api/v1/inbox/mutes {item_id, tag}` 按这一件在 `tag` 下的值静音（值从条目上读，
+  不由客户端给；条目不存在回 404，这件没有这个 `tag` 回 400），回 `{mute, settled}`，`settled` 是顺带收进已处理的那些；`DELETE /api/v1/inbox/mutes/{id}` 取消。
+  条目上的 `mutes` 列出它能按什么静音（菜单就照它画）。
+
 - **管理者**（`assistant/inbox_mutes.go`）：静音存在设置 `inbox_mutes`（来源 + 标签 + 值 + 名字）。每次收集收件箱都把被覆盖的打开条目收掉，所以以后来的
   新消息进来就直接是已处理。条目能按什么静音（`mutes`）：连接器条目来自它的 `InboxThing.Tags`（`repo`、`chat`、`sender`），飞书的是会话（`lark.feed_id`）
   和群里最新发言的人（`lark.sender_id`），邮件的是发件人地址（小写）；飞书的云文档和公司圈条目没有。
@@ -270,6 +276,22 @@ hub 在转给管理者之前就拦下（403，管理者那边也查）；连接�
   手表打开这件事时直接显示草稿和「发送」。
 - 本地验证模型 1、2：`JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}'` 跑 `TestInboxModelsLive`
   （在管理者的包里：`go test -run InboxModelsLive ./internal/assistant`，在 hub 机器上跑，key 文件在那台机器上）。
+
+## 线索：父子关系（#2128）
+
+一件事可以挂在一个「上级」下面（条目的 `parent: {kind, id, by}`），这样从一个会话里来、变成待办、又交给几个 Agent 的事能连成一条线。
+上级是另一件收件箱条目（`inbox`）、一个待办（`todo`）或一个 Agent 会话（`session`，id 是 `<机器>/<会话>`）。Persona 只存、只列、只跳转，不自己猜上级；
+待办那边不另存一棵树。代码 `assistant/inbox_parent.go`。
+
+- **从哪来**（`by`）：事件合成里接着上一件的新事件（`continues`）、连接器在 `InboxThing.parent` 里给的（`connector`）、用户自己设的（`user`）。
+  用户设的不会被自动来的盖掉；连接器给的盖得掉 `continues`，反过来不行。
+- **设置**：`PUT /api/v1/inbox/{id}/parent {kind, id}`，传 `null` 或 `{}` 去掉（没有 DELETE，免得和 `DELETE /api/v1/inbox/mutes/{id}` 撞）。
+  上级是条目时要存在（否则 404）、不能成环、往上最多 8 层（否则 409）；id 最长 256 个字符、不能有控制字符（400）。回改好的条目。
+- **读一条线**：`GET /api/v1/inbox/tree/{kind}/{id...}` 回 `{node, item?, ancestors, children}`：`ancestors` 从近到远（最后一个可以是没有条目的待办 / 会话，
+  或已经不在收件箱里的条目，这时没有 `item`），`children` 是直接挂在它下面的条目，按开始时间从早到晚。`kind` 可以是 `todo` / `session`，用来列一个待办或会话下面长出来的事。
+- 扩展的 token：读树要 `inbox.read`，改上级要 `inbox.write`（`extwire/scopes.go`）；手表调不了这两个接口。
+- 各端怎么画见下面「App」的「线索」（网页 `web/src/views/inbox/InboxLine.tsx`，只读，不提供改上级的入口）。
+- 测试：`inbox_parent_test.go`（`continues`、PUT 和去掉、层数、谁盖谁、树）。
 
 ## 生命周期
 

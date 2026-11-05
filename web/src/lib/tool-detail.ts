@@ -2,7 +2,7 @@
 // ContentPresentation.kt): a Codex patch as a diff, the questions an AskUserQuestion or the assistant's ask_user asked
 // (with what the user picked), and the hub's cut texts (full_size) with the mark it adds where it cut them.
 import type { Op } from "./compare";
-import { parseDiff } from "./files";
+import { parseDiff, toolFile } from "./files";
 
 /** A Codex file change (the hub maps it to an Edit with `diff`): one block per hunk; a new or deleted file the hub
  *  sends as its whole content (no hunks) is all added, or all removed when `change` is `delete` (Android patchDiff). */
@@ -107,3 +107,56 @@ export function withoutCutMark(text: string): string {
   return at >= 0 ? text.slice(0, at) : text;
 }
 
+
+/** One thing a permission card names, under a small label: the command it runs, the file, the address, the search. */
+export interface PermissionField {
+  label: "command" | "file" | "url" | "query" | "pattern" | "path";
+  value: string;
+}
+
+/** What a permission card says the tool will do, field by field (Android permissionSummary): the agent's own sentence
+ *  (`description`, WebFetch's `prompt`) as plain text, then what it acts on. null for a tool it does not know, or one
+ *  whose input lacks the field it acts on: the card shows the hub's summary or the raw input then. */
+export function permissionDetail(tool: string | undefined, input: Record<string, unknown> | undefined): { note?: string; fields: PermissionField[] } | null {
+  const inp = input ?? {};
+  const note = s(inp.description) || undefined;
+  switch (tool) {
+    case "Bash":
+    case "exec_command":
+    case "shell": {
+      // an argv array: quote the parts with spaces so it reads as the one command it is
+      const cmd = Array.isArray(inp.command) ? (inp.command as unknown[]).map((a) => (/\s/.test(String(a)) ? `'${String(a)}'` : String(a))).join(" ") : s(inp.command) || s(inp.cmd);
+      return cmd ? { note, fields: [{ label: "command", value: cmd }] } : note ? { note, fields: [] } : null;
+    }
+    case "Read":
+    case "Edit":
+    case "MultiEdit":
+    case "Write":
+    case "NotebookEdit": {
+      const path = toolFile(tool, inp)?.path;
+      return path ? { fields: [{ label: "file", value: path }] } : null;
+    }
+    case "WebFetch":
+      return s(inp.url) ? { note: s(inp.prompt) || undefined, fields: [{ label: "url", value: s(inp.url) }] } : null;
+    case "WebSearch":
+      return s(inp.query) ? { fields: [{ label: "query", value: s(inp.query) }] } : null;
+    case "Grep":
+    case "Glob": {
+      if (!s(inp.pattern)) return null;
+      const fields: PermissionField[] = [{ label: "pattern", value: s(inp.pattern) }];
+      if (s(inp.path)) fields.push({ label: "path", value: s(inp.path) });
+      return { fields };
+    }
+  }
+  return null;
+}
+
+/** What the hub's summary adds to the fields (a Codex card's reason after its command, a gate's own sentence): the
+ *  summary without the first field it starts with; "" when it only repeats it. */
+export function summaryExtra(summary: string | undefined, fields: PermissionField[]): string {
+  const sum = s(summary);
+  const first = fields[0]?.value ?? "";
+  if (!sum || sum === first) return "";
+  // only a whole first line (or more) counts as repeating it: "curl x" does not repeat inside "curl xyz"
+  return first && sum.startsWith(first) && /^\s*(\n|$)/.test(sum.slice(first.length)) ? sum.slice(first.length).trim() : sum;
+}

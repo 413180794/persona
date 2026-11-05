@@ -19,6 +19,8 @@ final class TasksStore {
     var detailTask: String?
     /// The agent (not a task's, #1113) whose page the detail sheet shows instead.
     var detailAgent: SessionKey?
+    /// The agent whose page the assistant page pushes full screen (the sheet's 全屏查看): the page takes it and clears it.
+    var fullAgent: SessionKey?
     var showBoard = false
     /// A task or an agent picked on the board, opened when the board has gone down.
     var openAfterBoard: String?
@@ -55,8 +57,17 @@ final class TasksStore {
         routes = [:]
         detailTask = nil
         detailAgent = nil
+        fullAgent = nil
         showBoard = false
         busyPlans = []
+    }
+
+    /// 全屏查看 in the detail sheet: the sheet goes down and the agent's page is pushed onto the assistant page, the
+    /// page an agent opened from the Agents tab is. Its back comes to the conversation, not to the sheet.
+    func expand(_ key: SessionKey) {
+        detailTask = nil
+        detailAgent = nil
+        fullAgent = key
     }
 
     // MARK: Loading

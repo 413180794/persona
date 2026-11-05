@@ -111,3 +111,39 @@ func TestCodexGoalUpdated(t *testing.T) {
 		t.Fatalf("cleared: %+v", m.Goal)
 	}
 }
+
+// Claude Code 2.1.318 writes failed: true when the check judges the condition impossible: the hook is gone and the
+// agent stops, so the goal is no longer active (#3905).
+func TestClaudeGoalImpossible(t *testing.T) {
+	var m Meta
+	ParseLine(1, []byte(`{"type":"attachment","uuid":"f1","timestamp":"2026-11-05T08:00:00Z","attachment":{"type":"goal_status","met":false,"sentinel":true,"condition":"make the flaky test pass"}}`), &m)
+	failed := `{"type":"attachment","uuid":"f2","timestamp":"2026-11-05T09:00:00Z","attachment":{"type":"goal_status","met":false,"failed":true,"condition":"make the flaky test pass","reason":"The test depends on a service that is down.","iterations":3,"durationMs":120000,"tokens":5000}}`
+	items := ParseLine(2, []byte(failed), &m)
+	if len(items) != 1 || items[0].Kind != proto.KindNotice || items[0].Text != "目标达不成，已停下：The test depends on a service that is down." {
+		t.Fatalf("impossible: items %+v", items)
+	}
+	if g := m.Goal; g == nil || g.Status != proto.GoalBlocked || g.Reason != "The test depends on a service that is down." || g.TokensUsed != 5000 || g.Seconds != 120 {
+		t.Fatalf("after impossible: %+v", g)
+	}
+	if again := ParseLine(3, []byte(strings.Replace(failed, `"f2"`, `"f3"`, 1)), &m); len(again) != 0 {
+		t.Fatalf("the same check twice: %+v", again)
+	}
+	// A new /goal after it starts over as active.
+	ParseLine(4, []byte(`{"type":"attachment","uuid":"f4","timestamp":"2026-11-05T09:10:00Z","attachment":{"type":"goal_status","met":false,"sentinel":true,"condition":"make the flaky test pass"}}`), &m)
+	if m.Goal == nil || m.Goal.Status != proto.GoalActive || m.Goal.Reason != "" {
+		t.Fatalf("set again after impossible: %+v", m.Goal)
+	}
+}
+
+// A failed check with no goal seen before (the set line was before what was read) still gives one notice.
+func TestClaudeGoalImpossibleWithoutSet(t *testing.T) {
+	var m Meta
+	items := ParseLine(1, []byte(`{"type":"attachment","uuid":"h1","timestamp":"2026-11-05T09:00:00Z","attachment":{"type":"goal_status","met":false,"failed":true,"condition":"x"}}`), &m)
+	if len(items) != 1 || items[0].Text != "目标达不成，已停下" || m.Goal == nil || m.Goal.Status != proto.GoalBlocked {
+		t.Fatalf("impossible without a set line: %+v %+v", items, m.Goal)
+	}
+	// An unmet check (no failed) after it is the agent going on: active again, no notice.
+	if items := ParseLine(2, []byte(`{"type":"attachment","uuid":"h2","timestamp":"2026-11-05T09:05:00Z","attachment":{"type":"goal_status","met":false,"condition":"x","reason":"not yet"}}`), &m); len(items) != 0 || m.Goal.Status != proto.GoalActive {
+		t.Fatalf("unmet check: %+v %+v", items, m.Goal)
+	}
+}

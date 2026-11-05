@@ -21,11 +21,13 @@ const (
 // GoalMarkers are the bytes a line that can change the goal contains, for readers that skip the other lines.
 var GoalMarkers = [][]byte{[]byte(`goal_status`), []byte(goalSetPrefix), []byte(goalClearedPrefix), []byte(`thread_goal_updated`)}
 
-// claudeGoalStatus is a goal_status attachment: {condition, met, sentinel?, reason?, iterations?, durationMs?, tokens?}.
-// The sentinel ones are written by the command: met false is /goal <condition>, met true is /goal clear.
+// claudeGoalStatus is a goal_status attachment: {condition, met, failed?, sentinel?, reason?, iterations?, durationMs?,
+// tokens?}. The sentinel ones are written by the command: met false is /goal <condition>, met true is /goal clear.
+// failed (with met false) is the check judging the condition impossible: the hook is removed and the agent stops.
 type claudeGoalStatus struct {
 	Condition  string `json:"condition"`
 	Met        bool   `json:"met"`
+	Failed     bool   `json:"failed"`
 	Sentinel   bool   `json:"sentinel"`
 	Reason     string `json:"reason"`
 	DurationMS int64  `json:"durationMs"`
@@ -41,7 +43,8 @@ type codexGoal struct {
 	TimeUsedSeconds int    `json:"timeUsedSeconds"`
 }
 
-// claudeGoal applies a goal_status line; a goal met comes back as a notice with the check's reason.
+// claudeGoal applies a goal_status line; a goal met, or judged impossible, comes back as a notice with the check's
+// reason. An impossible one is shown as blocked: it no longer goes on, and only the user can unblock it.
 func (m *Meta) claudeGoal(g claudeGoalStatus, at time.Time, notice func() proto.Item) []proto.Item {
 	objective := strings.TrimSpace(g.Condition)
 	switch {
@@ -57,17 +60,23 @@ func (m *Meta) claudeGoal(g claudeGoalStatus, at time.Time, notice func() proto.
 	}
 	was := m.Goal
 	next := proto.GoalInfo{Objective: objective, Status: proto.GoalActive, Reason: strings.TrimSpace(g.Reason), UpdatedAt: at}
-	if !g.Met {
+	var text string
+	switch {
+	case g.Met:
+		next.Status, text = proto.GoalComplete, "目标已达成"
+	case g.Failed:
+		next.Status, text = proto.GoalBlocked, "目标达不成，已停下"
+	default:
 		m.Goal = &next
 		return nil
 	}
-	next.Status, next.TokensUsed, next.Seconds = proto.GoalComplete, g.Tokens, int(g.DurationMS/1000)
+	next.TokensUsed, next.Seconds = g.Tokens, int(g.DurationMS/1000)
 	m.Goal = &next
-	if was != nil && was.Status == proto.GoalComplete && was.Objective == objective {
+	if was != nil && was.Status == next.Status && was.Objective == objective {
 		return nil // the same check again: one notice
 	}
 	it := notice()
-	it.Text = "目标已达成"
+	it.Text = text
 	if next.Reason != "" {
 		it.Text += "：" + next.Reason
 	}
