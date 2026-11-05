@@ -125,7 +125,7 @@ fun LarkForwardedSheet(
                             )
                             if (msg.time.isNotBlank()) {
                                 Text(
-                                    larkTime(msg.time),
+                                    larkTime(msg.time, currentLocale),
                                     style = PersonaTheme.type.micro,
                                     color = palette.ink3
                                 )

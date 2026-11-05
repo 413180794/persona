@@ -276,7 +276,7 @@ internal fun LarkBubble(
             }
             if (message.mine) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
                 readMark?.let { LarkReadMarkView(it) }
-                Text(larkTime(message.time), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+                Text(larkTime(message.time, currentLocale), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
             }
             if (message.bot) JTag(stringResource(R.string.inbox_bot))
             if (message.replyCount > 0 && onThread != null) {
@@ -302,7 +302,7 @@ internal fun LarkBubble(
     }
     if (message.mine) UserBubbleFrame(modifier, footer = footer, own = false, content = body)
     else IncomingBubbleFrame(modifier, author = message.senderName.takeIf { showSender },
-        time = larkTime(message.time).takeIf { showSender }, avatar = {
+        time = larkTime(message.time, currentLocale).takeIf { showSender }, avatar = {
             Box(Modifier.clickable {
                 if (message.senderId.isNotBlank() && onProfile != null) {
                     onProfile(LarkPersonRef(message.senderId, message.senderName, message.avatar, feedId))

@@ -13,11 +13,12 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The Feishu bot shows a turn as an agent message (feishubot's message_cot): created under the owner's message as the
-// turn starts, its process (thinking, what the conversation says between its tool calls, the calls and their
-// output) added as it goes, finished when the turn ends; the answer then goes out as a card of its own below it.
-// Where Feishu refuses agent messages (the app lacks the permission, the tenant does not have them) the run falls
-// back to its progress card, the process folded into a panel, the answer outside it.
+// New turns show in the progress card (feishu.go): an agent message can show neither the elapsed time nor what runs
+// now, and only came once a tool call did. A run that already has one (made before this version) still shows a turn
+// as an agent message (feishubot's message_cot): its process (thinking, what the conversation says between its tool
+// calls, the calls and their output) added as it goes, finished when the turn ends; the answer then goes out as a
+// card of its own below it. When an append fails, the run goes on in its progress card. cotStart, hasProcess and cotOff are
+// unused now and kept until #2857 (which touches them) is in, then removed.
 //
 // The run's Ext keeps "cot" and "cot_msg" (the agent message's ids, shared by its events as the run id) and
 // "cot_para" (the last paragraph, which the next tool calls hang under and the process ends with); "cot_off" marks a
@@ -85,13 +86,9 @@ func cotItem(it proto.Item) bool {
 	return false
 }
 
-// progressAfter: the agent message is there as soon as the turn shows any process; the card it falls back to after a
-// few seconds.
-func (f feishuSink) progressAfter(r *channel.Run) time.Duration {
-	if f.s.runExt(r, "cot_off") != "" || f.s.cotUnavailable() {
-		return channel.ProgressAfter
-	}
-	return 0
+// progressAfter: the progress card is there within a second or two of the message, before the turn is seen working.
+func (f feishuSink) progressAfter(*channel.Run) time.Duration {
+	return feishuProgressAfter
 }
 
 // cotCall is a call of the hub's Feishu transport for agent messages.
@@ -269,22 +266,13 @@ func (f feishuSink) cotProgressNow(ctx context.Context, r *channel.Run) bool {
 		return false
 	}
 	f.s.loadCot(&p.cot, r)
-	if p.cot.off {
-		return false
-	}
-	if p.cot.cot == "" {
-		if !hasProcess(items) {
-			return true // words only so far (they may be all the answer): nothing shown until a process does
-		}
-		if !f.cotStart(ctx, r, &p.cot) {
-			return !p.cot.off // not reached: nothing shown yet, the next look tries again
-		}
+	if p.cot.off || p.cot.cot == "" {
+		return false // a new turn: the card shows it
 	}
 	return f.cotPush(ctx, r, p, items, false)
 }
 
-// cotFinishNow ends r's agent message as its answer goes out, creating it first when the turn ended before one was
-// (a quick turn that still called tools). false when there is none (the card has the process).
+// cotFinishNow ends r's agent message as its answer goes out. false when there is none (the card has the process).
 func (f feishuSink) cotFinishNow(ctx context.Context, r *channel.Run) bool {
 	p, items := f.s.runItems(r.ID)
 	if p == nil {
@@ -294,13 +282,8 @@ func (f feishuSink) cotFinishNow(ctx context.Context, r *channel.Run) bool {
 	if p.cot.done {
 		return true // an answer tried again: its agent message has ended
 	}
-	if p.cot.off {
+	if p.cot.off || p.cot.cot == "" {
 		return false
-	}
-	if p.cot.cot == "" {
-		if !hasProcess(items) || !f.cotStart(ctx, r, &p.cot) {
-			return false
-		}
 	}
 	return f.cotPush(ctx, r, p, items, true)
 }

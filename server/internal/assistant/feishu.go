@@ -859,12 +859,21 @@ func botTargetOf(r *channel.Run) botTarget {
 // from OnIt to DONE.
 type feishuSink struct{ s *Service }
 
+// The Feishu card comes a second or two after the message and its elapsed time moves every few seconds, new steps
+// or not: a long turn must not look stuck.
+const (
+	feishuProgressAfter = time.Second
+	feishuProgressIdle  = 3 * time.Second
+)
+
+func (feishuSink) progressIdle() time.Duration { return feishuProgressIdle }
+
 func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Duration, steps []string, live string) {
 	s := f.s
 	if f.cotProgressNow(ctx, r) {
 		return
 	}
-	c := progressCard(s.botLang(ctx), r.Label, took, steps, live)
+	c := progressCard(s.botLang(ctx), r.Label, took, steps, live, s.runWaiting(r))
 	if card := s.runExt(r, "card"); card != "" {
 		if err := s.botUpdateCard(ctx, card, c); err != nil {
 			s.logf("bots: progress update: %v", err)
@@ -878,6 +887,21 @@ func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Dura
 	}
 	s.setRunExt(r, "card", mid)
 	s.rememberBotThread(mid, botTargetOf(r), r.Label)
+}
+
+// runWaiting is the note for a run whose message is not found in its conversation yet: queued behind a turn that
+// works ("queued_note"), or not in yet ("preparing_note"); "" once it is.
+func (s *Service) runWaiting(r *channel.Run) string {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch p := c.live[r.ID]; {
+	case p == nil || p.from != 0:
+		return ""
+	case r.Seen:
+		return "assistant-feishu.queued_note"
+	}
+	return "assistant-feishu.preparing_note"
 }
 
 func (f feishuSink) folded(ctx context.Context, o *channel.Run) {
@@ -950,9 +974,15 @@ func unreachable(err error) bool {
 	return errors.Is(err, bus.ErrOffline) || errors.Is(err, rpc.ErrClosed) || errors.Is(err, context.DeadlineExceeded)
 }
 
-func progressCard(l i18n.Lang, label string, took time.Duration, steps []string, live string) *feishubot.Card {
+// progressCard is a run's card while it goes on; waiting: the note while its message is not found in the
+// conversation yet (runWaiting), "" once it is.
+func progressCard(l i18n.Lang, label string, took time.Duration, steps []string, live, waiting string) *feishubot.Card {
 	c := feishubot.NewCard("", "", i18n.T(l, "assistant-feishu.working_summary"))
-	c.Note("⏳ " + i18n.T(l, "assistant-feishu.working_note", i18n.Args{"label": label, "took": channel.Duration(l, took)}))
+	note := "assistant-feishu.working_note"
+	if waiting != "" {
+		note = waiting
+	}
+	c.Note("⏳ " + i18n.T(l, note, i18n.Args{"label": label, "took": channel.Duration(l, took)}))
 	if n := len(steps); n > 0 {
 		var b strings.Builder
 		if n > 4 {

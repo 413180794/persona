@@ -57,6 +57,10 @@ type chanLive struct {
 	// has shown, under mu.
 	items []proto.Item
 	cot   cotProgress
+	// from is the seq of the run's own message once found (0: not yet: queued behind another turn, or not in);
+	// upTo the last item noted; looked when locateRun last read the conversation.
+	from, upTo int
+	looked     time.Time
 }
 
 // chanMutex is a mutex the watch loop can try without blocking.
@@ -347,25 +351,31 @@ func (s *Service) channelProgressTick(id string) {
 	}
 	defer prog.mu.Unlock()
 	c.mu.Lock()
-	card, started := r.Ext["card"]+r.Ext["cot"], r.Started
+	card, started, held := r.Ext["card"]+r.Ext["cot"], r.Started, r.Held
 	c.mu.Unlock()
-	after := channel.ProgressAfter
+	after, idle := channel.ProgressAfter, channel.ProgressIdle
 	if pa, ok := sink.(interface {
 		progressAfter(*channel.Run) time.Duration
 	}); ok {
 		after = pa.progressAfter(r)
 	}
-	if card == "" {
+	if pi, ok := sink.(interface{ progressIdle() time.Duration }); ok {
+		idle = pi.progressIdle()
+	}
+	// A new message gets its card before the turn is seen working (it may wait behind another turn, or be starting);
+	// a held run only once its background work starts a turn.
+	if card == "" && held {
 		sess, _, err := s.sessionNow(ctx, r.MachineID, r.SessionID)
 		if err != nil || !working(sess) {
 			return // nothing going on to show (a held run waiting on its background work)
 		}
 	}
+	s.locateRun(ctx, r, prog)
 	c.mu.Lock()
 	now := c.clock()
 	steps, live, dirty := append([]string{}, prog.steps...), prog.live, prog.dirty
 	due := !prog.finished && (card == "" && now.Sub(started) >= after ||
-		card != "" && (dirty && now.Sub(prog.updated) >= channel.ProgressEvery || now.Sub(prog.updated) >= channel.ProgressIdle))
+		card != "" && (dirty && now.Sub(prog.updated) >= channel.ProgressEvery || now.Sub(prog.updated) >= idle))
 	if due {
 		prog.dirty, prog.updated = false, now
 	}
@@ -402,30 +412,67 @@ func (s *Service) SessionItems(ctx context.Context, p SessionItems) {
 		if r.MachineID != p.MachineID || r.SessionID != p.SessionID {
 			continue
 		}
-		lp := c.live[r.ID]
-		if lp == nil {
-			continue
-		}
-		for _, it := range p.Items {
-			if it.Seq <= r.Base {
-				continue
-			}
-			if st := botStep(l, it); st != "" {
-				lp.steps = append(lp.steps, st)
-				lp.dirty = true
-			}
-			if cotItem(it) && len(lp.items) < cotItemsMost {
-				lp.items = append(lp.items, it)
-				lp.dirty = true
-			}
-			if it.Kind == proto.KindText && it.Role == "assistant" {
-				lp.live = ""
-			}
-		}
-		if len(lp.steps) > 200 {
-			lp.steps = lp.steps[len(lp.steps)-200:]
+		if lp := c.live[r.ID]; lp != nil {
+			noteRunItems(l, r, lp, p.Items)
 		}
 	}
+}
+
+// noteRunItems notes a run's new items as its steps, only from its own message on: a message queued behind another
+// turn would show that turn's steps. Under c.mu.
+func noteRunItems(l i18n.Lang, r *channel.Run, lp *chanLive, items []proto.Item) {
+	items = slices.DeleteFunc(slices.Clone(items), func(it proto.Item) bool { return it.Seq <= max(r.Base, lp.upTo) })
+	if lp.from == 0 {
+		i, ok := r.Find(items, nil)
+		if !ok || len(items) == 0 {
+			return
+		}
+		items, lp.from = items[i:], max(items[i].Seq, 1)
+	}
+	for _, it := range items {
+		lp.upTo = it.Seq
+		if st := botStep(l, it); st != "" {
+			lp.steps = append(lp.steps, st)
+			lp.dirty = true
+		}
+		if cotItem(it) && len(lp.items) < cotItemsMost {
+			lp.items = append(lp.items, it)
+			lp.dirty = true
+		}
+		if it.Kind == proto.KindText && it.Role == "assistant" {
+			lp.live = ""
+		}
+	}
+	if len(lp.steps) > 200 {
+		lp.steps = lp.steps[len(lp.steps)-200:]
+	}
+}
+
+// locateRun looks for a run's message in the conversation when the followed items have not shown it (it went in
+// before the run followed the conversation, or the assistant restarted): one page after Base, every few seconds.
+func (s *Service) locateRun(ctx context.Context, r *channel.Run, prog *chanLive) {
+	l := s.botLang(ctx) // before s.chans.mu
+	c := &s.chans
+	c.mu.Lock()
+	now := c.clock()
+	due := prog.from == 0 && now.Sub(prog.looked) >= channel.ProgressEvery
+	if due {
+		prog.looked = now
+	}
+	base := r.Base
+	c.mu.Unlock()
+	if !due {
+		return
+	}
+	var res struct {
+		Items []proto.Item `json:"items"`
+	}
+	if s.call(ctx, r.MachineID, DeviceSessionItems, map[string]any{"session_id": r.SessionID, "after_seq": base, "lazy_images": true}, &res) != nil {
+		return
+	}
+	c.mu.Lock()
+	noteRunItems(l, r, prog, res.Items)
+	c.mu.Unlock()
 }
 
 // SessionDelta is session.delta: the text a followed conversation is writing right now.
@@ -639,6 +686,7 @@ func (s *Service) finishChannelRun(r *channel.Run, res *channel.Result) {
 			delete(r.Ext, k) // the next turn gets its own agent message (and asks for one again)
 		}
 		prog.steps, prog.live, prog.dirty = nil, "", false
+		prog.from, prog.upTo = 0, 0
 		prog.items, prog.cot = nil, cotProgress{}
 	} else {
 		prog.finished = true

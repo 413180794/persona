@@ -111,7 +111,7 @@ private fun LarkDocReplyRow(reply: LarkDocCommentReply) {
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
                 Text(reply.author, Modifier.weight(1f, fill = false), style = PersonaTheme.type.headline, color = palette.ink, maxLines = 1,
                     overflow = TextOverflow.Ellipsis)
-                reply.createdAt?.let { Text(larkShortDate(it), style = PersonaTheme.type.micro, color = palette.ink3, maxLines = 1) }
+                reply.createdAt?.let { Text(larkShortDate(it, currentLocale), style = PersonaTheme.type.micro, color = palette.ink3, maxLines = 1) }
                 if (reply.edited) Text(stringResource(R.string.inbox_lark_edited), style = PersonaTheme.type.micro, color = palette.ink3, maxLines = 1)
             }
             val text = buildAnnotatedString {

@@ -19,6 +19,8 @@
   "took": "{label} · 用时 {took}",
   "working_summary": "处理中…",
   "working_note": "{label} · 处理中 · {took}",
+  "preparing_note": "{label} · 准备中… · {took}",
+  "queued_note": "{label} · 排队中… · {took}",
   "earlier_steps_one": "…前面还有 {count} 步\n",
   "earlier_steps_other": "…前面还有 {count} 步\n",
   "step_run": "运行",

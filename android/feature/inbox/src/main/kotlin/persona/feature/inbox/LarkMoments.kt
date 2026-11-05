@@ -39,7 +39,7 @@ import java.net.URI
 import java.net.URLDecoder
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /** 公司圈 share links (`…/client/moments/detail?postId=…`). */
 object LarkMoments {
@@ -56,11 +56,10 @@ object LarkMoments {
     }
 }
 
-internal fun formatMomentTime(ms: Double?): String = runCatching {
+/** A post's or comment's time in the language the app is in: 11月5日 14:30 · Nov 5, 2:30 PM. */
+internal fun formatMomentTime(ms: Double?, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String = runCatching {
     if (ms == null) return ""
-    val instant = Instant.ofEpochMilli(ms.toLong())
-    val zone = ZoneId.systemDefault()
-    DateTimeFormatter.ofPattern("MM-dd HH:mm").format(instant.atZone(zone))
+    LocalizedFormats.format(Instant.ofEpochMilli(ms.toLong()), LocalizedFormats.MONTH_DAY_TIME, locale, zone)
 }.getOrDefault("")
 
 /** A shared 公司圈 post in a chat. */
@@ -373,7 +372,7 @@ private fun MomentsPostCard(
             Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
                 Text(post.userName.orEmpty(), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
                 post.createTime?.let {
-                    Text(formatMomentTime(it), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
+                    Text(formatMomentTime(it, currentLocale), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
                 }
             }
         }
@@ -421,7 +420,7 @@ private fun MomentsCommentRow(
                     Text(comment.userName.orEmpty(), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
                     Spacer(Modifier.weight(1f))
                     comment.createTime?.let {
-                        Text(formatMomentTime(it), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+                        Text(formatMomentTime(it, currentLocale), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
                     }
                 }
                 if (!comment.replyUserName.isNullOrBlank()) {

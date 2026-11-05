@@ -19,8 +19,6 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 // A Feishu chat's extras that iOS has (LarkChatPins, LarkReadReceipts, LarkMessageDisplay): Pin 消息, the read receipt
 // beside my messages, and 风灵月影 (防撤回, 编辑历史) applied to the rows.
@@ -186,7 +184,7 @@ internal fun LarkPinsSheet(repository: InboxRepository, feedId: String, onOpen: 
                                 Text(m.senderName, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             Text(larkPinSummary(pin, policy), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                            pin.createdAt?.let(::larkPinTime)?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
+                            pin.createdAt?.let { larkPinTime(it, currentLocale) }?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
                         }
                     }
                 } })
@@ -229,8 +227,9 @@ internal fun LarkPinsSheet(repository: InboxRepository, feedId: String, onOpen: 
 internal fun larkPinPolicy(display: LarkMessageDisplay, pinsAccountId: String): LarkMessageDisplay =
     if (display.accountId.isNotBlank() && display.accountId == pinsAccountId) display else LarkMessageDisplay.Hidden
 
-private fun larkPinTime(text: String): String? = runCatching {
-    DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).format(Instant.parse(text).atZone(ZoneId.systemDefault()))
+/** A pin's or edit's date and time in the language the app is in: 2026年11月5日 14:30 · Nov 5, 2026, 2:30 PM. */
+internal fun larkPinTime(text: String, locale: java.util.Locale, zone: ZoneId = ZoneId.systemDefault()): String? = runCatching {
+    LocalizedFormats.format(Instant.parse(text), LocalizedFormats.DATE_TIME, locale, zone)
 }.getOrNull()
 
 // MARK: Read receipts
@@ -331,7 +330,7 @@ internal fun LarkEditHistorySheet(message: LarkMessage, onDismiss: () -> Unit) {
         else JGroup(rows = message.editHistory.map { v -> {
             JRow {
                 Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-                    larkPinTime(v.editedAt)?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3) }
+                    larkPinTime(v.editedAt, currentLocale)?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3) }
                     Text(v.text, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
                 }
             }

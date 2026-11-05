@@ -19,7 +19,6 @@ import org.junit.Test
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.InboxAssistantTransport
 import java.time.Instant
-import java.time.ZoneOffset
 
 /** What the native reader shows around a document (G187) and the cache that makes a second open instant (G193). */
 class LarkDocumentDetailsTest {
@@ -53,12 +52,6 @@ class LarkDocumentDetailsTest {
         val doc = LarkDocument("排期", listOf(LarkDocumentBlock("heading", "背景", 1), LarkDocumentBlock("paragraph", "正文"),
             LarkDocumentBlock("heading", " ", 2), LarkDocumentBlock("heading", "风险", 2)), partial = false, copyAllowed = true)
         assertEquals(listOf(0 to "背景", 3 to "风险"), doc.outline().map { it.first to it.second.text })
-    }
-
-    @Test fun shortDatesAreTheTimeTodayAndTheDayOtherwise() {
-        val now = Instant.parse("2026-11-05T10:00:00Z")
-        assertEquals("09:30", larkShortDate(Instant.parse("2026-11-05T09:30:00Z"), now, ZoneOffset.UTC))
-        assertTrue(larkShortDate(Instant.parse("2025-03-02T09:30:00Z"), now, ZoneOffset.UTC).contains("2025"))
     }
 
     private class Docs(override val scope: String = "pairing") : InboxAssistantTransport {

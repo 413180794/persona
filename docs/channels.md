@@ -23,7 +23,7 @@
 | Apple Watch | 手表 App，经 hub 的同一套接口 | 主对话 / 选的那段 | 同上 | 通知按钮、手表上的卡片 | 渠道 `app` 的一个端 |
 | Siri / 快捷指令（问 Persona） | `apple/Persona/Intents`（`docs/siri.md`） | 主对话 | App 里轮询 `items` 最多 24 秒，读出最后的话 | 没有 | 渠道 `app` 的一个端（它自己的轮询是第二份「等一轮答完」，见「还没做」） |
 | 微信机器人 | 内置扩展 `wechat`（`server/internal/wechat`，`docs/wechat.md`，#1447） | 主对话，或 `/new` 开的对话 | 扩展经 hub 的 API 每 2 秒看一次会话，取这一轮的答案，发文字 | 文字往返（回复序号、允许 / 拒绝） | 渠道 `wechat`（扩展贡献） |
-| 飞书机器人 | 收发在 hub（`hub/bots*.go`、`feishubot/`），对话的事在助手（`assistant/feishu*.go`，`docs/bots.md`） | 主对话、`/new` 的对话、`/agents` 选的 Agent、回复绑定了目标的那条消息 | hub 内部 watch 会话，智能体消息（过程，可折叠）+ 答案卡；拿不到智能体消息时进度卡 | 卡片按钮 | 渠道 `feishu`（内置） |
+| 飞书机器人 | 收发在 hub（`hub/bots*.go`、`feishubot/`），对话的事在助手（`assistant/feishu*.go`，`docs/bots.md`） | 主对话、`/new` 的对话、`/agents` 选的 Agent、回复绑定了目标的那条消息 | hub 内部 watch 会话，一开始就回一张进度卡、每 3 秒刷新，结束时答案写进这张卡（过程折叠）；老版本建过智能体消息的那一轮照旧收尾 | 卡片按钮 | 渠道 `feishu`（内置） |
 | 飞书里的 `/agent` | 接飞书的扩展里（#1571 起；原来是 hub 的 lark_agent.go、lark_agent_docs.go；`docs/lark-agent.md`） | 每个请求 / 话题一段新的无头对话 | Agent 调 `lark_agent_reply`，以**我的名义**回复那条消息 / 评论 | 没有 | 不在 hub 的渠道列表里（#1571 起不再是内置渠道，`GET /api/v1/channels` 不列它）；`lark_agent` 仍是保留 id，扩展渠道不能用它 |
 | 语音 | hub.json 的扩展 `voice`、内置语音扩展（`server/internal/voice`，`docs/extensions.md`「语音」） | 语音模型自己说；要交给主对话的事经 hub 的 API 发进主对话 | 声音 | 没有 | 渠道 `voice`（扩展贡献的 `voice` 扩展点，列出来但不走下面的管线） |
 | Telegram | 扩展 `telegram` 的**连接器**（扩展市场 `nwverse/persona-extensions`；用户自己的账号，MTProto，#1704） | —— | —— | —— | **不是渠道**：只是数据来源。现在没有 Telegram 的对话机器人；以后做就是一个扩展渠道（Bot API），见「还没做」 |

@@ -294,7 +294,7 @@ private fun Modifier.commentable(block: LarkDocumentBlock, enabled: Boolean, onP
 @Composable
 private fun LarkDocumentMeta(details: LarkDocumentDetails) {
     val resources = LocalResources.current
-    val edited = details.updatedAt?.let { larkShortDate(it) }?.let { time ->
+    val edited = details.updatedAt?.let { larkShortDate(it, currentLocale) }?.let { time ->
         if (details.editor.isNotBlank()) stringResource(R.string.inbox_lark_doc_edited_by, details.editor, time)
         else stringResource(R.string.inbox_lark_doc_updated, time)
     }
@@ -343,17 +343,17 @@ internal fun openInLark(context: android.content.Context, url: String) {
     }
 }
 
-/** 14:05 today, else 11月4日 this year, else 2025年11月4日 (in the phone's language). */
-internal fun larkShortDate(at: java.time.Instant, now: java.time.Instant = java.time.Instant.now(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
+/** 14:05 today, else 11月4日 this year, else 2025年11月4日 (in the language the app is in). */
+internal fun larkShortDate(at: java.time.Instant, locale: java.util.Locale, now: java.time.Instant = java.time.Instant.now(),
+                           zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
     val day = at.atZone(zone)
     val today = now.atZone(zone)
-    val locale = java.util.Locale.getDefault()
-    return when {
-        day.toLocalDate() == today.toLocalDate() -> java.time.format.DateTimeFormatter.ofPattern("HH:mm", locale).format(day)
-        day.year == today.year -> java.time.format.DateTimeFormatter.ofPattern(
-            android.text.format.DateFormat.getBestDateTimePattern(locale, "MMMd"), locale).format(day)
-        else -> java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM).withLocale(locale).format(day)
+    val skeleton = when {
+        day.toLocalDate() == today.toLocalDate() -> LocalizedFormats.TIME
+        day.year == today.year -> LocalizedFormats.MONTH_DAY
+        else -> LocalizedFormats.DATE
     }
+    return LocalizedFormats.format(at, skeleton, locale, zone)
 }
 
 @Composable

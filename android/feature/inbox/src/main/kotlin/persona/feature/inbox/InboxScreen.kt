@@ -354,7 +354,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
             sourceLabel = if (record.isConnector) record.sourceLabel
                 else stringResource(if (record.feedId != null || record.source == "lark") R.string.inbox_source_lark else R.string.inbox_source_mail),
             group = item.title.takeIf { record.feedId != null && item.kind in setOf("group", "mention", "bot") },
-            time = item.updatedAt?.let(::displayTime),
+            time = item.updatedAt?.let { displayTime(it, currentLocale) },
             preview = item.summary?.takeIf { it.isNotBlank() } ?: translated?.preview?.ifBlank { null }
                 ?: record.doc?.let { listOf(docTypeName(res, it.type), item.preview).filter { s -> s.isNotBlank() }.joinToString(" · ") } ?: item.preview,
             status = when { done -> null; record.agent?.state in setOf("running", "queued") -> Status.Working; item.triage == InboxTier.Action -> Status.NeedsYou; else -> null },
@@ -425,9 +425,9 @@ internal fun kindLabel(res: Resources, record: InboxRecord): String = when {
     else -> kindLabel(res, record.item.kind)
 }
 
-private fun displayTime(value: String): String = runCatching {
-    java.time.Instant.parse(value).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm"))
-}.getOrDefault("")
+/** A row's time in the language the app is in: 11月5日 14:30 · Nov 5, 2:30 PM. */
+internal fun displayTime(value: String, locale: java.util.Locale, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+    runCatching { LocalizedFormats.format(java.time.Instant.parse(value), LocalizedFormats.MONTH_DAY_TIME, locale, zone) }.getOrDefault("")
 
 /**
  * The connection state the inbox title shows. Every reconnect passes through Connecting and Updating, usually for a

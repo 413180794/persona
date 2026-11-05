@@ -19,6 +19,8 @@
   "took": "{label} · took {took}",
   "working_summary": "Working…",
   "working_note": "{label} · working · {took}",
+  "preparing_note": "{label} · getting ready… · {took}",
+  "queued_note": "{label} · queued… · {took}",
   "earlier_steps_one": "…{count} earlier step\n",
   "earlier_steps_other": "…{count} earlier steps\n",
   "step_run": "Run",

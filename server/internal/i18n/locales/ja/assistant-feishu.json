@@ -19,6 +19,8 @@
   "took": "{label} · 所要時間 {took}",
   "working_summary": "処理中…",
   "working_note": "{label} · 処理中 · {took}",
+  "preparing_note": "{label} · 準備中… · {took}",
+  "queued_note": "{label} · 待機中… · {took}",
   "earlier_steps_one": "…前に{count}ステップあります\n",
   "earlier_steps_other": "…前に{count}ステップあります\n",
   "step_run": "実行",
