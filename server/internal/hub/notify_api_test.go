@@ -460,3 +460,27 @@ func TestNodeScriptNotify(t *testing.T) {
 		t.Fatal("critical is not offered")
 	}
 }
+
+// A browser only ever writes its prefs (设置 › 通知) and never registers a push token: the device row its prefs made
+// takes the device token that wrote them, so revoking that token (设置 › 设备) forgets it, as it does a phone.
+// A device already registered keeps the credential it registered with.
+func TestPrefsOnlyDeviceGoesWithItsCredential(t *testing.T) {
+	h := newTestHub(t)
+	if err := h.push.setPrefsBy("web-1", "dev_web", NotifyPrefs{Input: true, Done: DoneAlways}); err != nil {
+		t.Fatal(err)
+	}
+	h.push.register(Device{DeviceID: "phone", APNSToken: "t", Credential: "dev_phone", CredentialID: "dev_phone"})
+	if err := h.push.setPrefsBy("phone", "dev_web", NotifyPrefs{Input: false, Done: DoneLong}); err != nil {
+		t.Fatal(err)
+	}
+	if d, ok := h.push.device("phone"); !ok || d.Credential != "dev_phone" {
+		t.Fatalf("phone's credential = %+v", d)
+	}
+	h.push.signedOut("dev_web")
+	if _, ok := h.push.device("web-1"); ok {
+		t.Fatal("the browser's prefs outlived its credential")
+	}
+	if _, ok := h.push.device("phone"); !ok {
+		t.Fatal("revoking the browser forgot the phone")
+	}
+}

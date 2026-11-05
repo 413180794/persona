@@ -237,11 +237,14 @@ func (d *DB) Devices(ctx context.Context) ([]Device, error) {
 }
 
 // SetDevicePrefs stores a device's notification settings. The device may not have registered for push yet (no
-// permission, the simulator): the row is created then and filled in when it does.
-func (d *DB) SetDevicePrefs(ctx context.Context, id string, prefs json.RawMessage) error {
-	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, updated_at, prefs)
-		VALUES ($1, '', '', '', '', '', now(), $2)
-		ON CONFLICT (device_id) DO UPDATE SET prefs = $2`, id, []byte(prefs))
+// permission, the simulator, a browser, which never does): the row is created then and filled in when it does.
+// credential is the device token that wrote them: a row without one takes it, so revoking that token (Pusher.signedOut)
+// also removes a row only prefs ever made; registering sets it as usual.
+func (d *DB) SetDevicePrefs(ctx context.Context, id, credential string, prefs json.RawMessage) error {
+	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, updated_at, prefs, credential)
+		VALUES ($1, '', '', '', '', '', now(), $2, $3)
+		ON CONFLICT (device_id) DO UPDATE SET prefs = $2,
+			credential = CASE WHEN devices.credential = '' THEN EXCLUDED.credential ELSE devices.credential END`, id, []byte(prefs), credential)
 	return err
 }
 

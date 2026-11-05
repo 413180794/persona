@@ -5,13 +5,14 @@ import { t } from "../../i18n";
 import { settingsTab } from "../../lib/channels";
 import type { IconName } from "../../ui/icons";
 
-export type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "channels" | "connectors" | "extensions" | "translate" | "shortcuts" | "devices" | "hub";
-export const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "channels", "connectors", "extensions", "translate", "shortcuts", "devices", "hub"];
+export type Tab = "general" | "notifications" | "assistant" | "models" | "model-config" | "claude" | "codex" | "channels" | "connectors" | "extensions" | "translate" | "shortcuts" | "devices" | "hub";
+export const TABS: Tab[] = ["general", "notifications", "assistant", "models", "model-config", "claude", "codex", "channels", "connectors", "extensions", "translate", "shortcuts", "devices", "hub"];
 // The tab whose page opens one of its items, and the query parameter that names it.
 const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", channels: "channel", extensions: "extension", connectors: "connector" };
 
 export const TAB_INFO: Record<Tab, { label: string; icon: IconName }> = {
   general: { label: t("settings-nav.tab_general"), icon: "gear" },
+  notifications: { label: t("settings-nav.tab_notifications"), icon: "bell" },
   assistant: { label: t("settings-nav.tab_assistant"), icon: "spark" },
   models: { label: t("settings-nav.tab_models"), icon: "layers" },
   "model-config": { label: t("settings-nav.tab_model_config"), icon: "gear" },
@@ -28,7 +29,7 @@ export const TAB_INFO: Record<Tab, { label: string; icon: IconName }> = {
 
 /** The phone's list: groups of categories, in the tab bar's order. */
 export const LIST_GROUPS: { title: string; tabs: Tab[] }[] = [
-  { title: t("settings-nav.group_general"), tabs: ["general", "assistant", "translate", "shortcuts"] },
+  { title: t("settings-nav.group_general"), tabs: ["general", "notifications", "assistant", "translate", "shortcuts"] },
   { title: t("settings-nav.group_models"), tabs: ["models", "model-config", "claude", "codex"] },
   { title: t("settings-nav.group_connections"), tabs: ["channels", "connectors", "extensions", "devices", "hub"] },
 ];

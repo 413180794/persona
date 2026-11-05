@@ -455,18 +455,25 @@ func (p *Pusher) prefs(id string) NotifyPrefs {
 }
 
 // setPrefs stores a device's notification settings (also for a device that has not registered a token yet).
-func (p *Pusher) setPrefs(id string, prefs NotifyPrefs) error {
+func (p *Pusher) setPrefs(id string, prefs NotifyPrefs) error { return p.setPrefsBy(id, "", prefs) }
+
+// setPrefsBy is setPrefs written with a device token (`credential`): a device that has none recorded takes it, so
+// revoking the token forgets a device only its prefs made (a browser's 设置 › 通知, which never registers a push token).
+func (p *Pusher) setPrefsBy(id, credential string, prefs NotifyPrefs) error {
 	raw, _ := json.Marshal(prefs)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.store != nil {
-		if err := p.store.SetDevicePrefs(context.Background(), id, raw); err != nil {
+		if err := p.store.SetDevicePrefs(context.Background(), id, credential, raw); err != nil {
 			return err
 		}
 	}
 	d, ok := p.devices[id]
 	if !ok {
 		d = Device{DeviceID: id}
+	}
+	if d.Credential == "" {
+		d.Credential = credential
 	}
 	d.Prefs = raw
 	p.devices[id] = d

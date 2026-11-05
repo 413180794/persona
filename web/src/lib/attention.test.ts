@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { badgeText, detectTransitions, MIN_GAP_MS, pickEvent, rateLimiter, suppressed, tabTitle } from "./attention";
+import { badgeText, detectTransitions, MIN_GAP_MS, pickEvent, rateLimiter, SETTLE_MS, suppressed, tabTitle, trackTurns } from "./attention";
 import { stateCounts } from "./sessions";
 import { agentKey } from "./pins";
 import type { AgentMutes } from "./agent-groups";
@@ -112,5 +112,27 @@ describe("限频", () => {
     allow(0);
     expect(allow(2000)).toBe(false);
     expect(allow(3000)).toBe(true);
+  });
+});
+
+describe("轮次时长（只推长任务）", () => {
+  const T0 = Date.parse("2026-01-01T10:00:00Z");
+  it("从 hub 的 state_since 算起，做完时记下结束时间", () => {
+    let turns = trackTurns(new Map(), [session("a", "working", { state_since: "2026-01-01T09:58:00Z" })], T0);
+    expect(turns.get("m/a")).toEqual({ start: T0 - 120_000 });
+    turns = trackTurns(turns, [session("a", "unread")], T0 + 5000);
+    expect(turns.get("m/a")).toEqual({ start: T0 - 120_000, endedAt: T0 + 5000 });
+  });
+  it("刚停又接着干的是同一轮；停久了再干是新的一轮", () => {
+    let turns = trackTurns(new Map(), [session("a", "working")], T0);
+    turns = trackTurns(turns, [session("a", "unread")], T0 + 1000);
+    turns = trackTurns(turns, [session("a", "working")], T0 + 1000 + SETTLE_MS - 1);
+    expect(turns.get("m/a")).toEqual({ start: T0 });
+    turns = trackTurns(turns, [session("a", "unread")], T0 + 10_000);
+    turns = trackTurns(turns, [session("a", "working", { state_since: undefined })], T0 + 60_000);
+    expect(turns.get("m/a")).toEqual({ start: T0 + 60_000 });
+  });
+  it("没在干活、也没见过它干活的会话没有轮次", () => {
+    expect(trackTurns(new Map(), [session("a", "unread")], T0).has("m/a")).toBe(false);
   });
 });

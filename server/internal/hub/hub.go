@@ -183,7 +183,7 @@ type Store interface {
 	UpsertDevice(ctx context.Context, d db.Device) error
 	Devices(ctx context.Context) ([]db.Device, error)
 	DeleteDevice(ctx context.Context, id string) error
-	SetDevicePrefs(ctx context.Context, id string, prefs json.RawMessage) error
+	SetDevicePrefs(ctx context.Context, id, credential string, prefs json.RawMessage) error
 	LiveActivities(ctx context.Context) ([]db.LiveActivity, error)
 	SaveLiveActivity(ctx context.Context, v db.LiveActivity) error
 	InsertInteraction(ctx context.Context, ix proto.Interaction) error

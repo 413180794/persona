@@ -211,7 +211,7 @@ func TestDevices(t *testing.T) {
 // Prefs survive re-registration (the app posts its token on every launch) and can be set before the device has a token.
 func TestDevicePrefs(t *testing.T) {
 	d, ctx := open(t), context.Background()
-	if err := d.SetDevicePrefs(ctx, "a", json.RawMessage(`{"done":"off"}`)); err != nil {
+	if err := d.SetDevicePrefs(ctx, "a", "", json.RawMessage(`{"done":"off"}`)); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.UpsertDevice(ctx, Device{DeviceID: "a", Name: "iPhone", APNSToken: "t1"}); err != nil {
@@ -228,6 +228,27 @@ func TestDevicePrefs(t *testing.T) {
 		if v.DeviceID == "b" && v.Prefs != nil {
 			t.Fatalf("b has prefs %s", v.Prefs)
 		}
+	}
+}
+
+// A row only prefs made takes the credential that wrote them (revoking it removes the row); a registered one keeps its own.
+func TestDevicePrefsCredential(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if err := d.SetDevicePrefs(ctx, "web-1", "dev_web", json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UpsertDevice(ctx, Device{DeviceID: "phone", APNSToken: "t", Credential: "dev_phone"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetDevicePrefs(ctx, "phone", "dev_web", json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, v := range mustDevices(t, d) {
+		got[v.DeviceID] = v.Credential
+	}
+	if got["web-1"] != "dev_web" || got["phone"] != "dev_phone" {
+		t.Fatalf("credentials = %v", got)
 	}
 }
 

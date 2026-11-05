@@ -212,7 +212,7 @@ func (h *Hub) routes() http.Handler {
 		}
 		raw, _ := json.Marshal(prefs)
 		prefs = devicePrefs(raw) // normalizes an unknown "done"
-		if err := h.push.setPrefs(r.PathValue("id"), prefs); err != nil {
+		if err := h.push.setPrefsBy(r.PathValue("id"), principalOf(r.Context()).ID, prefs); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}

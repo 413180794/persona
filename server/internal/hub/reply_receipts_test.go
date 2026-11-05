@@ -12,7 +12,7 @@ import (
 
 type failingPrefsStore struct{ Store }
 
-func (failingPrefsStore) SetDevicePrefs(context.Context, string, json.RawMessage) error {
+func (failingPrefsStore) SetDevicePrefs(context.Context, string, string, json.RawMessage) error {
 	return errors.New("storage unavailable")
 }
 

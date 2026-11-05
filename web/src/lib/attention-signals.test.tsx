@@ -1,0 +1,120 @@
+// @vitest-environment jsdom
+// The system notifications of useAttentionSignals (#2971): 需要你 at once, 做完 after the settle time and only for a
+// long turn (设置 › 通知 只推长任务), and only while the page is not in front.
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AgentState, Session } from "./types";
+
+let sessions: Session[] = [];
+let mutes: { spaces: string[]; sessions: string[]; allowed: string[] } = { spaces: [], sessions: [], allowed: [] };
+vi.mock("./store", () => ({
+  useStore: (select: (s: { loaded: boolean }) => unknown) => select({ loaded: true }),
+  getState: () => ({ mutes }),
+}));
+vi.mock("./sessions", () => ({ useCounts: () => ({ badge: 0 }), useAgentSessions: () => sessions }));
+vi.mock("./api", () => ({
+  api: async () => ({ input: true, done: "long", long_turn_seconds: 60 }),
+  enc: encodeURIComponent,
+}));
+
+const { useAttentionSignals } = await import("./attention-signals");
+const { SETTLE_MS } = await import("./attention");
+const { _setTabId, markFront } = await import("./notify");
+
+const T0 = Date.parse("2026-01-01T10:00:00Z");
+const session = (id: string, state: AgentState, since?: string): Session => ({
+  machine_id: "m", session_id: id, title: id, cwd: "/p", status: state, state, state_since: since, last_text: `${id} 的最后一句`,
+});
+
+const posted: { title: string; body?: string }[] = [];
+class FakeNotification {
+  static permission = "granted";
+  static requestPermission = async () => "granted";
+  onclick: (() => void) | null = null;
+  constructor(title: string, opts?: { body?: string }) {
+    posted.push({ title, body: opts?.body });
+  }
+  close() {}
+}
+
+function Probe() {
+  useAttentionSignals("Persona", undefined);
+  return null;
+}
+
+let root: Root;
+let focused = false;
+beforeEach(() => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  vi.setSystemTime(T0);
+  vi.stubGlobal("Notification", FakeNotification);
+  vi.spyOn(document, "hasFocus").mockImplementation(() => focused);
+  localStorage.setItem("persona.systemNotify", "1");
+  posted.length = 0;
+  focused = false;
+  mutes = { spaces: [], sessions: [], allowed: [] };
+  _setTabId("tab-me");
+  root = createRoot(document.createElement("div"));
+});
+afterEach(() => {
+  act(() => root.unmount());
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  localStorage.clear();
+});
+
+async function show(next: Session[]) {
+  sessions = next;
+  await act(async () => root.render(<Probe key="p" />));
+}
+
+describe("系统通知", () => {
+  it("需要你马上发；做完的长任务等一会儿再发，短的不发", async () => {
+    await show([session("long", "working", "2026-01-01T09:58:00Z"), session("short", "working", "2026-01-01T09:59:50Z"), session("ask", "working")]);
+    await act(async () => {}); // the prefs load
+    await show([session("long", "unread"), session("short", "unread"), session("ask", "needs_you")]);
+    expect(posted).toEqual([{ title: "ask 需要你", body: "ask 的最后一句" }]);
+    await act(async () => void vi.advanceTimersByTime(SETTLE_MS + 10));
+    expect(posted.map((p) => p.title)).toEqual(["ask 需要你", "long 做完了"]);
+  });
+
+  it("页面在前台时不发", async () => {
+    focused = true;
+    await show([session("a", "working")]);
+    await show([session("a", "needs_you")]);
+    expect(posted).toEqual([]);
+  });
+
+  it("开关没开时不发", async () => {
+    localStorage.removeItem("persona.systemNotify");
+    await show([session("a", "working")]);
+    await show([session("a", "needs_you")]);
+    expect(posted).toEqual([]);
+  });
+
+  it("屏蔽了的 Agent 需要你时不发（和手机推送、Mac 一样）", async () => {
+    mutes = { spaces: [], sessions: ["m/quiet"], allowed: [] };
+    await show([session("quiet", "working"), session("loud", "working")]);
+    await show([session("quiet", "needs_you"), session("loud", "needs_you")]);
+    expect(posted.map((p) => p.title)).toEqual(["loud 需要你"]);
+  });
+
+  it("另一个标签页在前台时不发", async () => {
+    _setTabId("tab-other");
+    markFront(true);
+    _setTabId("tab-me");
+    await show([session("a", "working")]);
+    await show([session("a", "needs_you")]);
+    expect(posted).toEqual([]);
+  });
+
+  it("同一件事别的标签页刚发过就不再发", async () => {
+    localStorage.setItem("persona.notified", JSON.stringify({ "m/a#needs": Date.now() }));
+    await show([session("a", "working"), session("b", "working")]);
+    await show([session("a", "needs_you"), session("b", "needs_you")]);
+    expect(posted.map((p) => p.title)).toEqual(["b 需要你"]);
+  });
+});

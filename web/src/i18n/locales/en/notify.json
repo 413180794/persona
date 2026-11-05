@@ -1,0 +1,6 @@
+{
+  "needs_title": "{name} needs you",
+  "finished_title": "{name} finished",
+  "needs_body": "The agent stopped and is waiting for you",
+  "finished_body": "The agent finished"
+}

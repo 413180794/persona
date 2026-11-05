@@ -1,0 +1,6 @@
+{
+  "needs_title": "{name} 需要你",
+  "finished_title": "{name} 做完了",
+  "needs_body": "Agent 停下来等你处理",
+  "finished_body": "Agent 做完了"
+}

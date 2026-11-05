@@ -1,0 +1,6 @@
+{
+  "needs_title": "{name} が対応を待っています",
+  "finished_title": "{name} が完了しました",
+  "needs_body": "エージェントが止まってあなたを待っています",
+  "finished_body": "エージェントが完了しました"
+}

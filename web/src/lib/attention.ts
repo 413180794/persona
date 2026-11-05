@@ -52,6 +52,34 @@ export function detectTransitions(prev: ReadonlyMap<string, AgentState>, session
   return { next, events };
 }
 
+/** A session's current turn as the page saw it: when it started working, and when it last stopped (ms). */
+export interface Turn {
+  start: number;
+  endedAt?: number;
+}
+
+/**
+ * Follows each session's turns between snapshots, for 只推长任务 (hub/notify.go turnTracker): a turn starts when the
+ * session starts working (the hub's state_since, else now), and one that resumes within SETTLE_MS of stopping is the
+ * same turn (the status flaps around a turn), so its start is kept. A session not working keeps its last turn, so the
+ * length of the turn that just finished can be read.
+ */
+export function trackTurns(prev: ReadonlyMap<string, Turn>, sessions: Session[], now: number): Map<string, Turn> {
+  const next = new Map<string, Turn>();
+  for (const s of sessions) {
+    const key = agentKey(s);
+    const was = prev.get(key);
+    if (stateOf(s) === "working") {
+      if (was && (was.endedAt === undefined || now - was.endedAt < SETTLE_MS)) next.set(key, { start: was.start });
+      else {
+        const since = s.state_since ? Date.parse(s.state_since) : NaN;
+        next.set(key, { start: Number.isNaN(since) ? now : Math.min(since, now) });
+      }
+    } else if (was) next.set(key, was.endedAt === undefined ? { start: was.start, endedAt: now } : was);
+  }
+  return next;
+}
+
 /** How long a finished turn must stay finished before it sounds (the status flaps working → done → working around a turn). */
 export const SETTLE_MS = 1500;
 

@@ -102,11 +102,14 @@ func (s *meshStore) DeleteDevice(_ context.Context, id string) error {
 	return nil
 }
 
-func (s *meshStore) SetDevicePrefs(_ context.Context, id string, prefs json.RawMessage) error {
+func (s *meshStore) SetDevicePrefs(_ context.Context, id, credential string, prefs json.RawMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d := s.devices[id]
 	d.DeviceID, d.Prefs = id, prefs
+	if d.Credential == "" {
+		d.Credential = credential
+	}
 	s.devices[id] = d
 	return nil
 }

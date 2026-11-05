@@ -29,6 +29,7 @@ import { TriageSettings } from "./settings/TriageSettings";
 import { TranslationSettings } from "./settings/TranslationSettings";
 import { Extensions } from "./settings/Extensions";
 import { ShortcutSettings } from "./settings/ShortcutSettings";
+import { NotificationSettings } from "./settings/NotificationSettings";
 import { ChannelList, ChannelPage } from "./settings/Channels";
 import { ConnectDevice } from "./settings/ConnectDevice";
 import { settingsTarget } from "../lib/channels";
@@ -178,6 +179,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         ) : (
           <div key={tab} className="mx-auto max-w-[760px] px-5 py-6 sm:px-8" style={{ animation: `fade-up 320ms ${EASE} both` }}>
             {tab === "general" && <General onTriageModel={() => pick("model-config", "agent.triage")} />}
+            {tab === "notifications" && <NotificationSettings />}
             {tab === "models" && <Models />}
             {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
             {tab === "assistant" && <AssistantSettings />}

@@ -1,12 +1,16 @@
 // The DOM side of the attention signals (#2332, logic in lib/attention.ts): the tab title, the favicon's badge, and the
-// optional sounds. `useAttentionSignals` is the one call App makes.
+// optional sounds, and the system notifications (#2971, lib/notify.ts). `useAttentionSignals` is the one call App makes.
 import { useEffect, useRef } from "react";
 import { stateOf } from "./format";
 import { agentKey } from "./pins";
 import { useCounts, useAgentSessions } from "./sessions";
 import { getState, useStore } from "./store";
-import { attentionSoundEnabled, badgeText, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, suppressed, tabTitle } from "./attention";
-import type { AgentState } from "./types";
+import { attentionSoundEnabled, badgeText, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
+import { claimNotification, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
+import { isMuted } from "./session-actions";
+import { href, navigate } from "./router";
+import { t } from "../i18n";
+import type { AgentState, Session } from "./types";
 
 // ── favicon ──────────────────────────────────────────────
 
@@ -132,9 +136,33 @@ export function play(kind: "needs" | "finished"): void {
 
 // ── the hook ─────────────────────────────────────────────
 
+/** The page is the one in front: its tab is showing and its window has the focus. */
+function inFront(): boolean {
+  return document.visibilityState === "visible" && document.hasFocus();
+}
+
+/** A system notification for the event (设置 › 通知): only while no tab of the app is in front (that one's title, badge
+ *  and sounds cover it), and once for all the open tabs. Clicking it opens the agent's conversation. */
+function notify(s: Session, kind: "needs" | "finished"): void {
+  if (inFront() || otherTabInFront() || !systemNotifyActive()) return;
+  const tag = `${agentKey(s)}#${kind}`;
+  if (!claimNotification(tag)) return;
+  const { title, body } = notificationText(s, kind, {
+    needs: (name) => t("notify.needs_title", { name }),
+    finished: (name) => t("notify.finished_title", { name }),
+    needsBody: t("notify.needs_body"),
+    finishedBody: t("notify.finished_body"),
+  });
+  const route = { name: "session", mid: s.machine_id, sid: s.session_id } as const;
+  const icon = document.querySelector<HTMLLinkElement>(ICONS)?.dataset.original ?? document.querySelector<HTMLLinkElement>(ICONS)?.href;
+  postNotification({ title, body, tag, url: href(route), icon }, () => navigate(route));
+}
+
 /**
- * The tab title (`label` is the page's label, as App works it out), the favicon badge and the sounds. `pane` is the
- * agent conversation on the page, if any: it is not announced while the window is focused.
+ * The tab title (`label` is the page's label, as App works it out), the favicon badge, the sounds and the system
+ * notifications. `pane` is the agent conversation on the page, if any: it is not announced while the window is focused.
+ * Sounds and notifications follow this browser's 设置 › 通知 (lib/notify.ts): 需要你 by its switch, 做完 by its three
+ * choices, a turn's length as the page saw it (trackTurns).
  */
 export function useAttentionSignals(label: string, pane: { mid: string; sid: string } | undefined): void {
   const needs = useCounts().badge;
@@ -145,13 +173,37 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
 
   useEffect(armAudio, []);
 
+  // Tells the other tabs whether this one is in front (notify: none of them posts then).
+  useEffect(() => {
+    const mark = () => markFront(inFront());
+    mark();
+    const beat = setInterval(() => inFront() && markFront(true), FRONT_BEAT_MS);
+    const away = () => markFront(false);
+    window.addEventListener("focus", mark);
+    window.addEventListener("blur", mark);
+    document.addEventListener("visibilitychange", mark);
+    window.addEventListener("pagehide", away);
+    return () => {
+      clearInterval(beat);
+      away();
+      window.removeEventListener("focus", mark);
+      window.removeEventListener("blur", mark);
+      document.removeEventListener("visibilitychange", mark);
+      window.removeEventListener("pagehide", away);
+    };
+  }, []);
+
   const sessions = useAgentSessions();
   const loaded = useStore((s) => s.loaded);
+  useEffect(() => {
+    if (loaded) loadNotifyPrefs().catch(() => {}); // the cached copy stays when the hub can't say
+  }, [loaded]);
   const key = pane ? agentKey({ machine_id: pane.mid, session_id: pane.sid }) : undefined;
   // read when an event fires, not when the effect ran
   const viewing = useRef(key);
   viewing.current = key;
   const prev = useRef<ReadonlyMap<string, AgentState>>(new Map());
+  const turns = useRef<ReadonlyMap<string, Turn>>(new Map());
   const allow = useRef(rateLimiter());
   const latest = useRef(sessions);
   latest.current = sessions;
@@ -159,25 +211,40 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
 
   useEffect(() => {
     if (!loaded) return;
+    const now = Date.now();
     const { next, events } = detectTransitions(prev.current, sessions, getState().mutes);
     prev.current = next;
-    if (!attentionSoundEnabled()) return;
+    turns.current = trackTurns(turns.current, sessions, now);
+    const prefs = notifyPrefs();
+    const ran = (k: string) => {
+      const turn = turns.current.get(k);
+      return turn?.endedAt !== undefined ? turn.endedAt - turn.start : undefined;
+    };
+    const wanted = events.filter((e) => wants(e.kind, prefs, e.kind === "finished" ? ran(e.key) : undefined));
+    const sound = attentionSoundEnabled();
     const speak = (kind: "needs" | "finished", k: string) => {
-      const focused = document.visibilityState === "visible" && document.hasFocus();
-      if (suppressed(k, { key: viewing.current, focused })) return;
+      if (!sound || suppressed(k, { key: viewing.current, focused: inFront() })) return;
       if (allow.current(Date.now())) play(kind);
     };
-    const now = events.filter((e) => e.kind === "needs");
-    const first = pickEvent(now);
+    const find = (k: string) => latest.current.find((x) => agentKey(x) === k);
+    const urgent = wanted.filter((e) => e.kind === "needs");
+    const first = pickEvent(urgent);
     if (first) speak(first.kind, first.key);
-    // A finished turn sounds once it has stayed finished (the status flaps working → done → working around a turn).
-    // Not when a 需要你 sound is going out with it: that one is the more urgent.
-    const done = first ? undefined : pickEvent(events.filter((e) => e.kind === "finished"));
-    if (done) {
+    // The sound of 需要你 does not look at mutes (detectTransitions); the notification does, as the phone's push and
+    // the Mac's do (hub announce, MacAttention.transitions).
+    for (const e of urgent) {
+      const s = find(e.key);
+      if (s && !isMuted(s, getState().mutes)) notify(s, "needs");
+    }
+    // A finished turn speaks once it has stayed finished (the status flaps working → done → working around a turn).
+    // No sound when a 需要你 one is going out with it: that one is the more urgent.
+    for (const done of wanted.filter((e) => e.kind === "finished")) {
       const t = setTimeout(() => {
         timers.current.delete(t);
-        const s = latest.current.find((x) => agentKey(x) === done.key);
-        if (s && stateOf(s) === "unread") speak("finished", done.key);
+        const s = find(done.key);
+        if (!s || stateOf(s) !== "unread") return;
+        if (!first) speak("finished", done.key);
+        notify(s, "finished");
       }, SETTLE_MS);
       timers.current.add(t);
     }

@@ -782,7 +782,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 单模型的窗口在长度旁写模型名（不参与排序），网关读不到时写一句「显示的是上次的数字」；侧边栏细条的提示里也写来源。网关在管理界面的「用量来源」里配（`docs/admin.md`）。
 代码：`lib/usage-windows.ts`（纯函数，有单测）、`views/UsageBars.tsx`；假 hub 有 `MOCK_USAGE=none` 模拟没有数据、`MOCK_USAGE=gateways` 模拟电脑和网关混合的账号。
 
-## 注意力信号（标签页标题、图标角标、提示音，#2332）
+## 注意力信号（标签页标题、图标角标、提示音、系统通知，#2332、#2971）
 
 人不盯着网页时，也要知道有 Agent 在等自己。逻辑在 `src/lib/attention.ts`（纯函数，有单测），页面副作用在 `src/lib/attention-signals.ts`，`App.tsx` 里只有一次 `useAttentionSignals(title, pane)` 调用（它接管了原来设 `document.title` 的那个 effect）。
 
@@ -798,8 +798,22 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 - **「完成」怎么判**（照 hub 的完成推送，`server/internal/hub/machine.go` 的 `notifyFinished`、`notify.go` 的 `settle`，见 `docs/agent-states.md`）：一个会话从 `working` 变成 `unread`（完成未看），且没屏蔽通知、不是安静任务。
   变成 `idle`（已看，或 hub 分诊为「做完了」）不响，和 hub 一样：它看 `seen` 就不推。后台命令 / 子 Agent 还在跑的会话 hub 本来就算工作中（`backgroundState`），所以也不会提前响。
   与 hub 的差别：① hub 等 `done_delay` 再复核，网页在 1.5 秒后看它是不是还停着（状态在 working → done → working 间抖动时不响）；② hub 丢掉「后台任务汇报唤醒的一轮」（`WokeByTask`）和「助手刚推过」的，网页看不到这两个信息，照响；
-  ③ hub 的推送还看每台设备的「完成」偏好（总是 / 长任务 / 关）和轮次时长，网页只有一个总开关；④ 同一轮回复的去重（`stopDuplicate`）在 hub 里，网页只靠 1.5 秒的复核和限频。
+  ③ 每台设备的「完成」偏好和轮次时长网页也看了（见下面「通知设置」），但轮次是网页自己按状态变化记的（`trackTurns`：从 hub 的 `state_since` 算起，1.5 秒内又开始干活算同一轮），不是 hub 的 `turnTracker`；④ 同一轮回复的去重（`stopDuplicate`）在 hub 里，网页只靠 1.5 秒的复核和限频。
 - 需要你的声音不看屏蔽（和筛选一致：需要你的永远显示），安静任务的会话两种都不响（侧边栏也不计）。
+- **通知设置**（设置 › 通知，#2971，`src/views/settings/NotificationSettings.tsx`，逻辑 `src/lib/notify.ts`，照 iOS 的 `NotificationSettingsView`）：
+  「需要你处理时」开关和「Agent 做完时」三档（不推送 / 只推长任务 / 每次都推），读写 hub 现有的按设备偏好接口 `GET / PUT /api/v1/devices/{id}/prefs`（`notify.go` 的 `NotifyPrefs`），
+  设备 id 是这个浏览器第一次打开时生成的 `web-<uuid>`（存 `persona.notifyDevice`；存不了时是这一页自己的 id，不读也不写 hub）；PUT 只带 `input`、`done`，hub 在这台设备已有的偏好上解码，其余字段不动。长任务的阈值用 hub 回的 `long_turn_seconds`（默认 60 秒），
+  「只推长任务」时不知道轮次多长的不算长（和 Mac 的 `MacAttention` 一样）。保存是乐观的，hub 拒绝就退回并提示；连着改两次时只认最后一次的回答（先发的回答晚到、先发的失败都不盖掉后一次）。
+  读不到时显示「读不到通知设置」和「重试」。提示音和系统通知都按这两项来；别的标签页改了，这一页经 `storage` 事件马上跟上。
+  hub 不给浏览器推送，这一行在 hub 的设备表里只是一份偏好（没有 APNs token）：写它的设备凭据记在行上（`Pusher.setPrefsBy`，行上原来没有凭据时才记），在设置 › 设备里退出这个浏览器时一起删掉，和手机一样。
+- **系统通知**（同一页的「弹出系统通知」，默认关，存 `persona.systemNotify`）：打开时调 `Notification.requestPermission()`，浏览器拒绝了开关就打不开，行上标「已拒绝」，说明怎么在网站设置里改；不支持 Notification API 的浏览器说不支持。
+  只在网页开着、但没有一个 Persona 标签页在前台（标签页不可见或窗口没焦点）时发，和 Mac 的 `MacAttention` 一样在本地看会话状态变化：需要你马上发，做完的在 1.5 秒复核后发；标题「<会话名> 需要你 / 做完了」，正文是最后一句（压成一行、最多 200 字），
+  屏蔽了通知的 Agent 需要你时不发通知（提示音照响，和手机推送、Mac 一样看屏蔽）。
+  开着几个标签页时：在前台的那页每 20 秒在 `persona.frontTab` 记一下自己在前台（获得 / 失去焦点、切换可见时也记，超过 60 秒没更新的不算），别的标签页看到就不发；
+  同一件事（同一个 `tag`）5 秒内只有先到的标签页发（`persona.notified`）。
+  同一个 Agent 同一种事件用同一个 `tag`，后一条替换前一条。点通知把窗口拉到前面、打开那个会话。页面自己建不了通知时（Android 上的 Chrome）交给 service worker 的 `showNotification`，
+  `notificationclick`（`src/lib/sw-click.ts`）只找这个 service worker 管着的窗口（没被管的跳不过去），有焦点 / 可见的优先，拉到前面并跳过去；没有窗口或跳不过去就开一个新窗口。
+  网页不发 `register_desktop`，开着网页时手机的「手机静音」不生效；Persona 主对话的提醒也不在这里发（`useAgentSessions` 不含助手的对话）。
 
 ## 手机上（#1996）
 
@@ -887,7 +901,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 快速筛选（全部 / 需要你 / 未读 / 工作中）、全部标为已读 | 有 | #433 | 筛选在侧边栏 Agents 标题下；全部标为已读在筛选「未读」、空间菜单、总览 |
 | 置顶 Agent / 空间 | 有 | #433 | 侧边栏最上面「置顶」一段，hub `/pins` |
 | 屏蔽通知（Agent / 空间） | 有 | #297、#433 | Agent 在对话 ⋯ 和行菜单，空间在空间标题的 ⋯ |
-| 需要你的提醒（标签页标题计数、图标角标、可选提示音） | 有 | #2332 | 见上面「注意力信号」；没有推送，只在网页开着时有效 |
+| 需要你的提醒（标签页标题计数、图标角标、可选提示音、系统通知） | 有 | #2332、#2971 | 见上面「注意力信号」；系统通知只在网页开着、不在前台时发，没有 Web Push，关掉网页就收不到 |
 | 重命名 Agent（tab 名、会话名）/ 空间 | 有 | #297 | 对话 ⋯、行菜单、空间菜单 |
 | 关闭 Agent | 有 | — | 对话 ⋯；行菜单里没有（还有停止循环、实时接入），iOS 的行菜单有 |
 | 删除对话（从列表移除） | 有 | #801 | 未运行的会话：对话 ⋯、行菜单、右键（先确认）；iOS / Mac / Android 也有（#1749） |
@@ -997,7 +1011,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 翻译 | 有 | #433 | 存在当前浏览器、不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上，网页没有；网页打开时按需翻 |
 | 设备（token 列表、撤销） | 有 | — | |
 | 扫码连新设备 | 有 | #2731 | 设置 › 设备 › 连接新设备：App 配对二维码和网页登录链接 / 二维码，一次性临时码 |
-| 通知偏好 | 不适用 | — | 网页不注册推送；浏览器通知以后再说 |
+| 通知偏好 | 有 | #2971 | 设置 › 通知：需要你开关、做完三档，按设备存在 hub；没有实时活动、锁屏这些手机的项。系统通知见「注意力信号」 |
 | 存储空间 | 不适用 | — | 浏览器自己管缓存 |
 | 互联：机器、会话标明所属 hub | 有 | #297 | 见「互联（多台 hub）」；网页不做多组 |
 
