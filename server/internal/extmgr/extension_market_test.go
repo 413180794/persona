@@ -75,6 +75,7 @@ type fakeGitHub struct {
 	leaked  bool
 	release string
 	storage string // where release assets redirect to: another host
+	stall   bool   // assets send half and then nothing (a download that stalls)
 }
 
 func (g *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +87,16 @@ func (g *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/s3/") {
 		g.leaked = g.leaked || auth != ""
-		_, _ = w.Write(g.assets[strings.TrimPrefix(r.URL.Path, "/s3/")])
+		b := g.assets[strings.TrimPrefix(r.URL.Path, "/s3/")]
+		if g.stall {
+			g.mu.Unlock()
+			_, _ = w.Write(b[:len(b)/2])
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+			g.mu.Lock()
+			return
+		}
+		_, _ = w.Write(b)
 		return
 	}
 	if g.token != "" && auth != "Bearer "+g.token {
@@ -236,7 +246,8 @@ func TestExtensionMarketGitHub(t *testing.T) {
 		t.Fatalf("upgraded from the phone: %d %v", code, out)
 	}
 
-	// A package that is not what the index pins is refused.
+	// A package that is not what the index pins is refused (the cache has the pinned one: downloaded again).
+	_ = os.RemoveAll(h.packageCache())
 	setIndex(marketEntry(t, dir, "release:v2/example-ui-1.1.0.tar.gz", v1))
 	call(t, mux, "POST", "/api/v1/plugins/-/markets/"+mk["id"].(string)+"/refresh", phone, "")
 	if code, out := call(t, mux, "POST", "/api/v1/plugins/-/catalog/preview", phone, fmt.Sprintf(`{"market": %q, "plugin": "example-ui"}`, mk["id"])); code != 400 || !strings.Contains(fmt.Sprint(out["error"]), "sha256") {

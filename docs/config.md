@@ -303,6 +303,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `github.proxy`（可选）：发往 GitHub 的全部请求（设备码登录的取码和轮询在 `github.com`，API 在 `api.github.com`，还有 CI 日志）走的 HTTP 代理，
   `http://[用户名:密码@]主机:端口`，和 `google.proxy` 同一格式；不填就直连（不读进程的 `HTTPS_PROXY`）。有的网络只通 `api.github.com`、不通 `github.com`，
   这时设备码登录拿不到验证码，就要配它。填错了不会退回直连：GitHub 的每个请求都失败，设置页写明「hub.json 的 github.proxy 不对」。具体地址只写在 hub 自己的 hub.json 里。
+  扩展市场读 GitHub 上的市场、下载 Release 里的扩展包也走它（`github.com`、`*.github.com`、`*.githubusercontent.com`；没配时按进程的 `HTTPS_PROXY`，#3277）。
   `github.inbox`（可选）是收件箱的默认规则（App 里改过以 App 为准，`docs/inbox.md`「降噪」）：`ci`（`off` / `default_branch` / `mine`（默认）/ `all`）、
   `muted_repos`（`["owner/name"]`）、`ignore_branches`（不提醒的分支，`path.Match` 模式，默认 `["train/*"]`）。
 - `personas.github_login`（可选）：分级形象（奶蛙）按谁在 NWVERSE 看板上的等级显示。不写就用 GitHub 连接器登录的账号；

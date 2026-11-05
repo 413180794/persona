@@ -283,6 +283,8 @@ type Market struct {
 	GitHubAPI string
 	// Dir is where git markets' clones are kept (the hub's data directory).
 	Dir string
+	// Cache is where downloaded packages are kept by their sha256 ("": none), docs/protocol.md「扩展的安装、升级、卸载进度」.
+	Cache string
 	// allowLocal lets tests clone a local repository.
 	allowLocal bool
 }
@@ -530,7 +532,8 @@ func (m *Market) fetchRaw(ctx context.Context) ([]byte, []byte, error) {
 }
 
 // Download fetches pkg into dir (a fresh staging directory) and checks its sha256; it returns the file and the
-// name it goes by (for its type).
+// name it goes by (for its type). A package in the cache (Cache) is taken from there; a download that gets no data
+// for StallAfter gives up (ErrDownloadStalled).
 func (m *Market) Download(ctx context.Context, pkg *MarketPackage, dir string) (string, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
@@ -538,20 +541,61 @@ func (m *Market) Download(ctx context.Context, pkg *MarketPackage, dir string) (
 		return "", "", err
 	}
 	file := filepath.Join(dir, "download")
+	if from, name := cached(m.Cache, pkg.SHA256); from != "" {
+		if err := os.Link(from, file); err != nil {
+			if err := copyFile(from, file, 0o600); err != nil {
+				return "", "", err
+			}
+		}
+		if got, err := fileSum(file); err == nil && strings.EqualFold(got, pkg.SHA256) {
+			fi, _ := os.Stat(file)
+			report(ctx, StepDownload, StepEvent{State: StepDone, Bytes: fi.Size(), Total: fi.Size(), Cached: true})
+			reportState(ctx, StepVerify, StepDone)
+			return file, name, nil
+		}
+		_ = os.Remove(from) // not what it should be: download it again
+		_ = os.Remove(file)
+	}
 	f, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return "", "", err
 	}
 	h := sha256.New()
-	name, err := m.download(ctx, pkg.URL, io.MultiWriter(f, h))
+	dctx, pw, stop := watchDownload(ctx, io.MultiWriter(f, h), pkg.Size)
+	name, err := m.download(dctx, pkg.URL, pw)
+	stalled := stop()
 	f.Close()
 	if err != nil {
+		if stalled {
+			// The stalled connection stays pooled (HTTP/2 keeps it once the stream is reset), and a retry on it stalled
+			// as well: the idle ones go.
+			m.client().CloseIdleConnections()
+			return "", "", errOfKind(ErrDownloadStalled, "下载 %s：%d 秒没有收到数据", pkg.URL, int(StallAfter/time.Second))
+		}
 		return "", "", fmt.Errorf("下载 %s：%w", pkg.URL, err)
 	}
+	report(ctx, StepDownload, StepEvent{State: StepDone, Bytes: pw.n, Total: max(pw.n, pkg.Size)})
+	reportState(ctx, StepVerify, StepRunning)
 	if got := hex.EncodeToString(h.Sum(nil)); !strings.EqualFold(got, pkg.SHA256) {
-		return "", "", fmt.Errorf("下载的包 sha256 是 %s，不是索引里写的 %s", got, strings.ToLower(pkg.SHA256))
+		return "", "", errOfKind(ErrChecksum, "下载的包 sha256 是 %s，不是索引里写的 %s", got, strings.ToLower(pkg.SHA256))
 	}
+	reportState(ctx, StepVerify, StepDone)
+	keep(m.Cache, pkg.SHA256, name, file)
 	return file, name, nil
+}
+
+// fileSum is the sha256 of a file, in hex.
+func fileSum(file string) (string, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func (m *Market) download(ctx context.Context, ref string, w io.Writer) (string, error) {

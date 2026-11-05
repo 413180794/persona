@@ -523,3 +523,12 @@ App 和网页按 `machine_id` + `session_id` 把卡放进对话；没有会话�
 
 #2645 给 `rpc.Peer` 加取消时，每个请求的 ctx 改成了处理器返回就 `cancel()`。`session.watch` 的 transcript 循环原来直接 `WithCancel(ctx)` 这个 ctx，于是 watch 刚回复就被取消：hub 订阅了、node 也回了 ok，但之后一条 `session.items` 都不推，页面只剩 `sessions_delta`，要刷新才有新内容——主会话和子 Agent 一样（子 Agent 是先被用户发现的）。单测都绿，因为测试直接调 `n.watch(...)`（用 `context.Background()`），不经 `rpc.Peer`。
 回复之后还要继续的东西（watch、流）用 `rpc.ConnContext(ctx)`；测 watch 要走一对真的 `rpc.Peer`（`node/subagent_watch_test.go` 的 `servedNode`），别绕过请求这一层。其余用请求 ctx 起 goroutine 的地方（终端流、完整界面已经用 `context.Background()`）也照这个检查。
+
+## 装扩展慢：卡在下载，不是编译或启动（2026-11-06，#3277）
+
+在隔离的测试 hub 上实测装 lark-connector、github、codebase 等：落盘、写库、启动加起来不到 1 秒，几乎全部时间都在「预览」里的下载。
+线上 hub 的日志里 `catalog/preview` 有 1–5 分钟才 400 的：GitHub 市场的包从 Release 下（14–17 MB），hub 的进程没有代理，
+市场的 HTTP 客户端也不读 hub.json 的 `github.proxy`，直连 GitHub 时有时 2–3 秒，有时一直只来一半数据，等满 5 分钟的超时才失败。
+同一个包经代理稳定 1.6 秒。改成：市场读 GitHub 走 `github.proxy`；下载 30 秒没有新数据就停（`download_stalled`），不再等 5 分钟；
+下过的包按 sha256 缓存（重试、重装不再下载）；合集的成员并行预览。还有两个坑：HTTP/2 下卡住的那条连接取消了请求也不断，留在连接池里，下一次下载（重试）复用它照样卡，所以卡住后要 `CloseIdleConnections`；别图省事改成只用 HTTP/1.1，Go 的 HTTP/1.1 经这台机器的 SG 代理连 GitHub 直接 EOF（curl 的 HTTP/1.1 却正常），实测过。查这类问题先看 hub 日志里每个请求的耗时，再在测试 hub 上按步骤计时（`extension_operation` 里每步的 `started_at` / `ended_at`）。
+

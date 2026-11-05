@@ -710,6 +710,9 @@ struct AssistantSidebar: View {
     @State private var ending: Session?
     @State private var renaming: Session?
     @State private var showArchived = false
+    /// 自动对话 open in the list (#3264): closed until the user opens it, then as they left it on this device.
+    @StoredValue("assistant.autoOpen") private var autoOpen = false
+    @State private var autoList: AutoConversationsRoute?
     @State private var feed = SidebarFeed()
     private let taskChats = AssistantTaskChatsStore.shared
     @FocusState private var searching: Bool
@@ -794,6 +797,12 @@ struct AssistantSidebar: View {
         .task(id: out ? all.count : -1) { if out { await taskChats.refresh(model.api) } }
         .confirmClose($ending)
         .renameSessionAlert($renaming)
+        .sheet(item: $autoList) { route in
+            AutoConversationsView(source: route.source) { key in
+                autoList = nil
+                open(key)
+            }
+        }
         .sheet(isPresented: $showArchived) {
             ArchivedConversationsView { key in
                 showArchived = false
@@ -1094,15 +1103,21 @@ struct AssistantSidebar: View {
             }
             ForEach(pinned) { row($0) }
         }
-        // The scheduled tasks' conversations are on 定时任务, under each task (#2838); the open one keeps its row.
-        let rest = AssistantSidebarGroups.newestFirst(taskChats.known.recent(all.filter { !isPinned($0) }, current: current))
-        if rest.isEmpty {
+        // Those Persona opened by itself are in 自动对话 (#3264); with a hub that does not say, the scheduled tasks' ones
+        // are on 定时任务, under each task (#2838). The open one keeps its row.
+        let split = AutoConversations(all.filter { !isPinned($0) }, tasks: taskChats.known, current: current,
+                                      hubSays: model.hubFeatures.contains(AutoConversationSource.feature))
+        let rest = AssistantSidebarGroups.newestFirst(split.mine)
+        if rest.isEmpty && split.auto.isEmpty {
             Text(pinned.isEmpty && !mainAbove ? "还没有对话：点上面的新对话开始" : "还没有别的对话")
                 .font(Theme.Font.secondary).foregroundStyle(.secondary)
                 .padding(.horizontal, Theme.Space.m).padding(.top, Theme.Space.xl)
         } else {
             heading("最近") {
                 Button { newConversation() } label: { Label("新对话", systemImage: Theme.Icon.compose) }
+                if split.supported {
+                    Button { autoList = AutoConversationsRoute(source: nil) } label: { Label("全部对话", systemImage: Theme.Icon.list) }
+                }
                 Button { showArchived = true } label: { Label("已归档", systemImage: Theme.Icon.archive) }
                 if rest.count > Self.recentCount {
                     Button { withAnimation(Theme.Motion.standard) { showAll.toggle() } } label: {
@@ -1110,6 +1125,8 @@ struct AssistantSidebar: View {
                     }
                 }
             }
+            // Right under 最近's name, where a closed one still shows that one waits.
+            if !split.auto.isEmpty { autoGroup(split) }
             ForEach(showAll ? rest : Array(rest.prefix(Self.recentCount))) { row($0) }
             if rest.count > Self.recentCount {
                 Button {
@@ -1128,6 +1145,91 @@ struct AssistantSidebar: View {
             }
         }
         archivedRow(archived)
+    }
+
+    /// 自动对话 (#3264, docs/protocol.md「侧边栏」): the conversations Persona opened by itself (收件箱's AI 分身, scheduled
+    /// tasks, 飞书 /agent…) in one row, closed at first. Open, a row for each source with its count (and 全部); each
+    /// opens 全部对话 filtered to it. Closed, it still says how many wait for the user (or that one works, or is unread),
+    /// as a conversation's row does.
+    @ViewBuilder private func autoGroup(_ split: AutoConversations) -> some View {
+        Button {
+            withAnimation(Theme.Motion.state) { autoOpen.toggle() }
+        } label: {
+            HStack(spacing: Theme.Space.m) {
+                if !isShell {
+                    Image(systemName: Theme.Icon.autoConversations).font(Theme.Font.label).foregroundStyle(.secondary)
+                        .scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
+                }
+                Text("自动对话").font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                Text("\(split.auto.count)").font(Theme.Font.secondary.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: Theme.Space.xs)
+                stateMark(needsYou: split.needsYou, working: split.working, unread: split.unread)
+                Image(systemName: autoOpen ? Theme.Icon.collapse : Theme.Icon.expand)
+                    .font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, Theme.Space.m)
+            .scaledFrame(minHeight: isShell ? Theme.Size.avatarXL : Theme.Size.box50)
+            .macHoverShade(in: RoundedRectangle(cornerRadius: isShell ? Theme.Radius.panel : Theme.Radius.card, style: .continuous))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(["自动对话 \(split.auto.count) 个", stateWords(needsYou: split.needsYou, working: split.working, unread: split.unread)]
+            .compactMap { $0 }.joined(separator: "，"))
+        .accessibilityValue(autoOpen ? "已展开" : "已收起")
+        .accessibilityIdentifier("sidebar-auto")
+        if autoOpen {
+            ForEach(split.bySource(tasks: taskChats.known), id: \.source) { g in
+                sourceRow(g.source.name, symbol: g.source.symbol, count: g.sessions.count, needsYou: g.needsYou, working: g.working,
+                          id: g.source.id) { autoList = AutoConversationsRoute(source: g.source.id) }
+            }
+            sourceRow("全部对话", symbol: Theme.Icon.list, count: nil, needsYou: 0, working: false, id: "all") {
+                autoList = AutoConversationsRoute(source: nil)
+            }
+        }
+    }
+
+    /// One source under an open 自动对话: a small row, set in from the group's, with its count and state (全部对话: none).
+    private func sourceRow(_ name: String, symbol: String, count: Int?, needsYou: Int, working: Bool, id: String,
+                           run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: symbol).font(Theme.Font.label).foregroundStyle(.secondary)
+                    .scaledFrame(width: Theme.Size.iconS)
+                Text(name).font(Theme.Font.secondary).foregroundStyle(Color.primary).lineLimit(1)
+                if let count {
+                    Text("\(count)").font(Theme.Font.secondary.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: Theme.Space.xs)
+                stateMark(needsYou: needsYou, working: working, unread: 0)
+                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+            }
+            .padding(.leading, isShell ? Theme.Space.xl : Theme.Space.m + Theme.Size.wellM + Theme.Space.m)
+            .padding(.trailing, Theme.Space.m)
+            .scaledFrame(minHeight: Theme.Size.tapTarget)
+            .macHoverShade(in: RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel([count.map { "\(name) \($0) 个" } ?? name, stateWords(needsYou: needsYou, working: working, unread: 0)].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityIdentifier("sidebar-auto-" + id)
+    }
+
+    /// A group's state on the right: how many wait for the user, else one working, else one unread.
+    @ViewBuilder private func stateMark(needsYou: Int, working: Bool, unread: Int) -> some View {
+        if needsYou > 0 {
+            CountBadge(count: needsYou, look: .solid(Theme.needsYou))
+        } else if working {
+            ProgressView().controlSize(.mini)
+        } else if unread > 0 {
+            Circle().fill(Theme.accent).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
+        }
+    }
+
+    private func stateWords(needsYou: Int, working: Bool, unread: Int) -> String? {
+        if needsYou > 0 { return "\(needsYou) 个在等你" }
+        if working { return "有在工作的" }
+        if unread > 0 { return "\(unread) 个未读" }
+        return nil
     }
 
     /// 已归档 (N) at the end of the list when there are any: where swiped-away conversations are.

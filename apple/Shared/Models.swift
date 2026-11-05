@@ -606,6 +606,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// The channels messages came into it from, newest first ("wechat", "feishu"; docs/channels.md「来源标记」): the
     /// sidebar draws the latest one's mark. Nil from hubs without channels.
     var channels: [String]? = nil
+    /// Who started an assistant conversation (#3266): "user" for the user's own, else what opened it ("inbox": 收件箱's
+    /// AI 分身, "routine": a scheduled task, "lark_agent": 飞书 /agent…). The sidebar keeps the others in 自动对话. Nil
+    /// from hubs that do not say, which list every conversation as before.
+    var origin: String? = nil
     /// The last compaction the user asked for in an assistant conversation (POST …/compact, #1727): running, done or
     /// failed. Nil from hubs without `assistant_compact`, and before the first one.
     var compaction: CompactionRun? = nil
@@ -720,7 +724,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", paneIndex = "pane_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, workflows, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
-             attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, compaction, work,
+             attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, origin, compaction, work,
              runtime, runtimeFallback = "runtime_fallback"
     }
 
@@ -795,6 +799,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         failureReason = try c.decodeIfPresent(String.self, forKey: .failureReason)
         externalURL = try c.decodeIfPresent(String.self, forKey: .externalURL)
         channels = try c.decodeIfPresent([String].self, forKey: .channels)
+        origin = try c.decodeIfPresent(String.self, forKey: .origin)
         compaction = try? c.decodeIfPresent(CompactionRun.self, forKey: .compaction) // an odd one never drops the session
         work = try? c.decodeIfPresent(WorkState.self, forKey: .work) // an odd one never drops the session
         hubGroup = try c.decodeIfPresent(String.self, forKey: .hubGroup)

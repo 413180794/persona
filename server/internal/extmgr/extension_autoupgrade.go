@@ -390,10 +390,11 @@ func morePermissionsText(l i18n.Lang, added []extension.PermissionLine) string {
 // install upgrades p to up.To from its market (watchUpgrade then says whether it came up: watched).
 func (u *extensionUpgrades) install(ctx context.Context, p *extension.Extension, rec extension.MarketRecord, e *extension.MarketEntry, up ExtensionUpgrade) {
 	h, reg, id := u.h, u.h.extensions.reg, p.Record.ID
+	op := h.startOp(opUpgrade, id, extensionUpgradeActor, h.contextLang(ctx), true) // the apps see it go (#3277)
 	mk, err := h.market(rec)
 	var pv *extension.Preview
 	if err == nil {
-		pv, err = reg.PreviewMarket(ctx, mk, rec.ID, e, id)
+		pv, err = reg.PreviewMarket(extension.WithProgress(ctx, h.progress(op)), mk, rec.ID, e, id)
 	}
 	if err == nil && (pv.MorePermissions || len(pv.AddedPermissions) > 0 || pv.Digest != granted(p)) {
 		reg.Discard(pv.ID) // the index said the same as the package, so this does not happen
@@ -406,16 +407,23 @@ func (u *extensionUpgrades) install(ctx context.Context, p *extension.Extension,
 		}
 		u.inflight[id] = up.To
 		u.mu.Unlock()
-		if _, err = reg.UpgradePlan(ctx, id, pv.ID, "", nil, extensionUpgradeActor); err != nil {
+		h.opPreviewed(op, pv, nil)
+		h.installing(op, pv, "")
+		h.opStep(op, extension.StepConsent, extension.StepSkipped) // nothing more than was granted: nobody is asked
+		var np *extension.Extension
+		if np, err = reg.UpgradePlan(ctx, id, pv.ID, "", nil, extensionUpgradeActor); err != nil {
 			u.mu.Lock()
 			delete(u.inflight, id)
 			u.mu.Unlock()
+		} else {
+			go h.settle(context.WithoutCancel(ctx), op, np, true)
 		}
 	}
 	if err == nil {
 		h.logf("plugin %s: upgraded itself from %s to %s", id, up.From, up.To)
 		return
 	}
+	h.opFail(op, err)
 	h.logf("plugin %s: upgrading to %s: %v", id, up.To, err)
 	u.mu.Lock()
 	if u.failed == nil {

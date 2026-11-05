@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sync"
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/extension"
@@ -284,6 +285,7 @@ func (h *Manager) stageBundle(ctx context.Context, pv *extension.Preview, market
 		pv.Unresolved = append(pv.Unresolved, graphErr.Error())
 	}
 	seen := map[string]bool{}
+	var order []string
 	var walk func(string)
 	walk = func(id string) {
 		if seen[id] {
@@ -303,10 +305,20 @@ func (h *Manager) stageBundle(ctx context.Context, pv *extension.Preview, market
 		if id == pv.Manifest.ID || choice.installed {
 			return
 		}
+		order = append(order, id)
+	}
+	walk(pv.Manifest.ID)
+	// Every member is downloaded and checked at the same time (a pack of three took three downloads one after the
+	// other, #3277); they join the bundle in dependency order.
+	members := make([]*extension.Preview, len(order))
+	why := make([]string, len(order))
+	var wg sync.WaitGroup
+	for i, id := range order {
+		choice := choices[id]
 		mk, err := h.market(choice.market)
 		if err != nil {
-			pv.Unresolved = append(pv.Unresolved, h.bundleUnresolved(ctx, id, err))
-			return
+			why[i] = h.bundleUnresolved(ctx, id, err)
+			continue
 		}
 		upgrade := ""
 		if old := reg.Snapshot(id); old != nil && old.Record.Source == extension.SourceInstalled {
@@ -316,17 +328,27 @@ func (h *Manager) stageBundle(ctx context.Context, pv *extension.Preview, market
 		if graphErr == nil {
 			extra = candidates
 		}
-		member, err := reg.PreviewMarket(ctx, mk, choice.market.ID, choice.entry, upgrade, extra...)
-		if err != nil {
-			pv.Unresolved = append(pv.Unresolved, h.bundleUnresolved(ctx, id, err))
-			return
-		}
-		if !extension.ManifestsEqual(choice.manifest, member.Manifest) {
-			reg.Discard(member.ID)
-			pv.Unresolved = append(pv.Unresolved, h.bundleUnresolved(ctx, id, i18n.Err("hub-extension_model.download_plan_mismatch")))
-			return
-		}
-		pv.Bundle = append(pv.Bundle, member)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			member, err := reg.PreviewMarket(ctx, mk, choice.market.ID, choice.entry, upgrade, extra...)
+			switch {
+			case err != nil:
+				why[i] = h.bundleUnresolved(ctx, id, err)
+			case !extension.ManifestsEqual(choice.manifest, member.Manifest):
+				reg.Discard(member.ID)
+				why[i] = h.bundleUnresolved(ctx, id, i18n.Err("hub-extension_model.download_plan_mismatch"))
+			default:
+				members[i] = member
+			}
+		}()
 	}
-	walk(pv.Manifest.ID)
+	wg.Wait()
+	for i := range order {
+		if members[i] == nil {
+			pv.Unresolved = append(pv.Unresolved, why[i])
+			continue
+		}
+		pv.Bundle = append(pv.Bundle, members[i])
+	}
 }

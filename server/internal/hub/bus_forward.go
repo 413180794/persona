@@ -124,6 +124,28 @@ func (h *Hub) relayBroadcast(message json.RawMessage) error {
 	if err := json.Unmarshal(message, &head); err != nil || head.Type == "" {
 		return errors.New("a message is a JSON object with a type")
 	}
+	if head.Type == extensionOperationEvent {
+		h.toWanting(extensionOperationsFeature, message)
+		return nil
+	}
 	h.broadcastRaw(head.Type, message)
 	return nil
+}
+
+// An install's steps (docs/protocol.md「扩展的安装、升级、卸载进度」) go only to the apps that declared they know them,
+// and not into the event log: a download pushes once a second, and an app that comes back lists them again.
+const (
+	extensionOperationEvent    = "extension_operation"
+	extensionOperationsFeature = "extension_operations"
+)
+
+// toWanting sends b to the apps that asked for feature (?features= or client_hello), outside the event log.
+func (h *Hub) toWanting(feature string, b []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		if c.wants(feature) {
+			c.queue(b)
+		}
+	}
 }

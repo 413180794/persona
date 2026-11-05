@@ -1,0 +1,9 @@
+{
+  "not_found": "没有这个安装、升级或卸载（可能结束超过 10 分钟了）",
+  "start_timeout": "{name} 没有在 {seconds} 秒内起来",
+  "start_failed": "{name} 起不来：{why}",
+  "rolled_back": "{name} {to} 起不来（{why}），已回到 {from}",
+  "cannot_cancel": "已经在安装了，现在停不下来",
+  "not_retryable": "这个没法在这里重试：重新开始一次",
+  "not_failed": "只有失败的才能重试"
+}

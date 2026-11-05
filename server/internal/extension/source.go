@@ -190,6 +190,9 @@ func Stage(ctx context.Context, src Source, dir string) (string, error) {
 		return "", err
 	}
 	out := filepath.Join(dir, "pkg")
+	if src.Kind != "https" {
+		reportState(ctx, StepUnpack, StepRunning)
+	}
 	switch src.Kind {
 	case "dir":
 		if err := copyTree(src.Path, out); err != nil {
@@ -211,9 +214,12 @@ func Stage(ctx context.Context, src Source, dir string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("下载 %s：%w", src.Path, err)
 		}
+		reportState(ctx, StepDownload, StepDone)
 		if got := hex.EncodeToString(h.Sum(nil)); got != src.SHA256 {
-			return "", fmt.Errorf("下载的包 sha256 是 %s，不是 %s", got, src.SHA256)
+			return "", errOfKind(ErrChecksum, "下载的包 sha256 是 %s，不是 %s", got, src.SHA256)
 		}
+		reportState(ctx, StepVerify, StepDone)
+		reportState(ctx, StepUnpack, StepRunning)
 		name := src.Path
 		if u, err := url.Parse(src.Path); err == nil {
 			name = u.Path

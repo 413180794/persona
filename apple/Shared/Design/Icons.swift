@@ -323,6 +323,9 @@ extension Theme {
         /// The user's own messages.
         static let user = "person.fill"
         static let inbox = "tray.full"
+        /// The conversations Persona opened by itself (收件箱's AI 分身, scheduled tasks, 飞书 /agent…): the sidebar's
+        /// 自动对话 (#3266).
+        static let autoConversations = "sparkles.rectangle.stack"
         static let mail = "envelope"
         static let mailFilled = "envelope.fill"
         /// Feishu's chats as a source (the inbox's 飞书 filter, the knowledge base's 会话).

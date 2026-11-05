@@ -140,6 +140,8 @@ type extensions struct {
 	// (extension_autoupgrade.go).
 	markets  markets
 	upgrades extensionUpgrades
+	// ops are the installs, upgrades and uninstalls in progress or just over (extension_operations.go).
+	ops extensionOps
 	// dev streams what the extensions being written log (extension_dev.go).
 	dev devTaps
 	// badges are the plugins' badges on their nav_pages' entries ("<plugin>/<ui>" → plugin.Badge; extension_ui.go).

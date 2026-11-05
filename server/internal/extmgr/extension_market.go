@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/netproxy"
 )
 
 // Plugin markets (docs/extensions.md「扩展市场」): the hub keeps the markets the user registered and their indexes, lists
@@ -211,7 +213,7 @@ func (h *Manager) market(rec extension.MarketRecord) (*extension.Market, error) 
 	if err != nil {
 		return nil, err
 	}
-	mk := &extension.Market{Spec: spec, TrustedKey: rec.SigningKey, Client: h.extensions.markets.client, GitHubAPI: h.extensions.markets.githubAPI, Dir: h.marketsDir()}
+	mk := &extension.Market{Spec: spec, TrustedKey: rec.SigningKey, Client: h.marketClient(), GitHubAPI: h.extensions.markets.githubAPI, Dir: h.marketsDir(), Cache: h.packageCache()}
 	if rec.TokenSealed != "" {
 		if mk.Token, err = (hubSealer{h}).Open(rec.TokenSealed); err != nil {
 			return nil, i18n.Err("hub-extension_market.token_unreadable")
@@ -309,6 +311,42 @@ var errNoMarket = i18n.Err("hub-extension_market.no_market")
 // marketsDir is where git markets' clones are kept.
 func (h *Manager) marketsDir() string { return filepath.Join(h.extensions.root, "markets") }
 
+// packageCache is where market packages are kept by their sha256, so installing one again does not download it again.
+func (h *Manager) packageCache() string { return filepath.Join(h.extensions.root, "cache", "packages") }
+
+// marketClient is how the hub reads markets: GitHub's hosts through hub.json's github.proxy when it is set (the
+// way the hub's other GitHub traffic goes; on a network that reaches GitHub badly a package download stalled for
+// minutes without it, #3277), everything else as the environment says (HTTPS_PROXY). Tests set their own.
+func (h *Manager) marketClient() *http.Client {
+	ms := h.marketsState()
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if ms.client != nil {
+		return ms.client
+	}
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	var gh *url.URL
+	if h.cfg != nil && h.cfg.GitHub != nil {
+		gh, _ = netproxy.Parse(h.cfg.GitHub.Proxy) // a malformed one: as the environment says (the connector says it is wrong)
+	}
+	if gh != nil {
+		t.Proxy = func(r *http.Request) (*url.URL, error) {
+			if githubHost(r.URL.Hostname()) {
+				return gh, nil
+			}
+			return http.ProxyFromEnvironment(r)
+		}
+	}
+	ms.client = &http.Client{Transport: t}
+	return ms.client
+}
+
+// githubHost says whether host is GitHub's: its site, API and where release assets and raw files are served from.
+func githubHost(host string) bool {
+	host = strings.ToLower(host)
+	return host == "github.com" || strings.HasSuffix(host, ".github.com") || host == "githubusercontent.com" || strings.HasSuffix(host, ".githubusercontent.com")
+}
+
 func marketView(s *marketState) MarketView {
 	v := MarketView{ID: s.rec.ID, Spec: s.rec.Spec, Name: s.rec.Name, HasToken: s.rec.TokenSealed != "", Warnings: s.rec.Warnings,
 		Error: s.rec.Error, FetchedAt: s.rec.FetchedAt, AddedAt: s.rec.AddedAt, Official: extension.Official.Is(s.rec.Spec),
@@ -367,7 +405,7 @@ func (h *Manager) marketAdd(ctx context.Context, specText, token string) (Market
 	if n >= extension.MarketsMost {
 		return MarketView{}, i18n.Err("hub-extension_market.too_many")
 	}
-	mk := &extension.Market{Spec: spec, Token: token, Client: ms.client, GitHubAPI: ms.githubAPI, Dir: h.marketsDir()}
+	mk := &extension.Market{Spec: spec, Token: token, Client: h.marketClient(), GitHubAPI: ms.githubAPI, Dir: h.marketsDir(), Cache: h.packageCache()}
 	f, err := mk.FetchSigned(ctx)
 	if err != nil {
 		return MarketView{}, err
@@ -460,7 +498,7 @@ func (h *Manager) marketSetSpec(ctx context.Context, id, specText string) (Marke
 	if err != nil {
 		return MarketView{}, err
 	}
-	mk := &extension.Market{Spec: spec, Token: old.Token, Client: ms.client, GitHubAPI: ms.githubAPI, Dir: h.marketsDir()}
+	mk := &extension.Market{Spec: spec, Token: old.Token, Client: h.marketClient(), GitHubAPI: ms.githubAPI, Dir: h.marketsDir(), Cache: h.packageCache()}
 	f, err := mk.FetchSigned(ctx)
 	if err != nil {
 		return MarketView{}, err
@@ -774,6 +812,8 @@ func (h *Manager) marketRoutesAt(api *http.ServeMux, base string, allow func(w h
 			Market    string `json:"market"`
 			Extension string `json:"extension"`
 			Legacy    string `json:"plugin"`
+			// Async: answer at once with the operation, and preview in the background (#3277).
+			Async bool `json:"async,omitempty"`
 		}
 		if !readExtensionJSON(w, r, &in) {
 			return
@@ -795,12 +835,28 @@ func (h *Manager) marketRoutesAt(api *http.ServeMux, base string, allow func(w h
 		if cur := h.extensions.reg.Get(in.Extension); cur != nil && cur.Record.Source == extension.SourceInstalled {
 			upgrade = in.Extension
 		}
-		pv, err := h.extensions.reg.PreviewMarket(r.Context(), mk, rec.ID, e, upgrade)
-		if err != nil {
-			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
-			return
+		kind := opInstall
+		if upgrade != "" {
+			kind = opUpgrade
 		}
-		h.resolveBundle(r.Context(), pv, rec.ID) // its missing dependencies, a pack's members (extension_model.go)
-		writeJSON(w, pv)
+		job := previewJob{kind: kind, id: in.Extension, ofMarket: true, actor: opActor(r, "personad extension"), lang: h.requestLang(r),
+			run: func(ctx context.Context) (*extension.Preview, error) {
+				pv, err := h.extensions.reg.PreviewMarket(ctx, mk, rec.ID, e, upgrade)
+				if err != nil {
+					return nil, err
+				}
+				// its missing dependencies, a pack's members, side by side (extension_model.go)
+				h.resolveBundle(extension.WithoutProgress(ctx), pv, rec.ID)
+				return pv, nil
+			}}
+		op, pv, err := h.launch(r.Context(), job, nil, in.Async)
+		switch {
+		case in.Async:
+			h.writeOp(w, op)
+		case err != nil:
+			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
+		default:
+			writeJSON(w, withOperation(pv, op))
+		}
 	}))
 }

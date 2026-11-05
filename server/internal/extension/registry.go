@@ -407,7 +407,15 @@ func (r *Registry) Preview(ctx context.Context, source, upgrade string) (*Previe
 	if err != nil {
 		return nil, err
 	}
-	return r.preview(ctx, src, upgrade, func(dir string) (string, error) { return Stage(ctx, src, dir) })
+	return r.preview(ctx, src, upgrade, func(dir string) (string, error) {
+		if src.Kind == "https" {
+			reportState(ctx, StepDownload, StepRunning)
+		} else {
+			reportState(ctx, StepDownload, StepSkipped)
+			reportState(ctx, StepVerify, StepSkipped)
+		}
+		return Stage(ctx, src, dir)
+	})
 }
 
 // PreviewMarket is Preview for a plugin of a market: its package for this hub's platform, downloaded and checked
@@ -427,6 +435,7 @@ func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID strin
 			return "", err
 		}
 		out := filepath.Join(dir, "pkg")
+		reportState(ctx, StepUnpack, StepRunning)
 		if err := unpackAs(file, name, out); err != nil {
 			return "", err
 		}
@@ -484,7 +493,12 @@ func (r *Registry) PreviewUpload(ctx context.Context, name string, body io.Reade
 	if err != nil {
 		return nil, err
 	}
-	return r.preview(ctx, Source{Kind: "upload", Path: name}, upgrade, func(dir string) (string, error) { return StageUpload(body, name, dir) })
+	return r.preview(ctx, Source{Kind: "upload", Path: name}, upgrade, func(dir string) (string, error) {
+		reportState(ctx, StepDownload, StepSkipped)
+		reportState(ctx, StepVerify, StepSkipped)
+		reportState(ctx, StepUnpack, StepRunning)
+		return StageUpload(body, name, dir)
+	})
 }
 
 // preview checks what stage put into a fresh staging directory (or what a remote plugin says of itself).
@@ -494,6 +508,10 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	var m *Manifest
 	var err error
 	if src.Kind == "remote" {
+		for _, step := range []string{StepDownload, StepVerify, StepUnpack} {
+			reportState(ctx, step, StepSkipped)
+		}
+		reportState(ctx, StepCheck, StepRunning)
 		if r.RemoteManifest == nil {
 			return nil, errors.New("this hub cannot reach remote plugins")
 		}
@@ -514,6 +532,8 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 			return nil, err
 		}
 		pv.root = root
+		reportState(ctx, StepUnpack, StepDone)
+		reportState(ctx, StepCheck, StepRunning)
 		data, err := os.ReadFile(ManifestPath(root))
 		if err == nil {
 			m, err = Parse(data)
@@ -584,7 +604,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 		pv.AddedPermissions = Added(cur.Full, m)
 	}
 	r.previews[pv.ID] = pv
-	return pv, nil
+	return pv, nil // the check is done when the hub has resolved its bundle too (it says so)
 }
 
 // checkPackage holds a staged package to what a manifest says of it: its program is in it for this platform.

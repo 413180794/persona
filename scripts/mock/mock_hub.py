@@ -33,7 +33,8 @@ def features():
                 ["terminal_control", "terminal_scroll", "terminal_click", "terminal_mouse"] if TERMINAL_CONTROL else []) + (
                 ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (["herdr_client"] + ([] if os.environ.get("MOCK_TERMINAL_FULL_NOFOCUS") else ["herdr_focus"]) if TERMINAL_FULL else []) + (
                 ["assistant_compact", "assistant_main_new"] if os.environ.get("MOCK_MAIN_ACTIONS") == "1" else []) + (
-                ["messaging"] if os.environ.get("MOCK_MESSAGING") == "1" else [])
+                ["messaging"] if os.environ.get("MOCK_MESSAGING") == "1" else []) + (
+                ["conversation_origin"] if os.environ.get("MOCK_AUTO_CONVERSATIONS") == "1" else [])
 
 
 def identity():
@@ -1057,6 +1058,30 @@ if os.environ.get("MOCK_ASSISTANT_SIDEBAR") == "1":
         _s = assistant_sess("b2e4d6f8-0000-4000-8000-%012d" % (100 + _n), "整理第 %d 周的周报" % (_n + 1),
                             10 * (_n + 1) if _n < 3 else 60 * 24 * 3 + 60 * _n, "周报整理好了。")
         _s.update(state=_state, status=STATUS_OF_STATE[_state],
+                  pending_interactions=1 if _state == "needs_you" else 0)
+        ASSISTANT.append(_s)
+
+# MOCK_AUTO_CONVERSATIONS=1 (#3264, docs/protocol.md「助手对话的来源」): the hub says who opened each assistant
+# conversation (`origin`, feature conversation_origin): the user's own say "user", and ten more were opened by Persona
+# itself: 收件箱's AI 分身 (one waits for the user, one works), scheduled tasks, 飞书 /agent and one conversation another
+# started. The sidebar keeps those in 自动对话; the list of conversations filters them by source.
+if os.environ.get("MOCK_AUTO_CONVERSATIONS") == "1":
+    for _s in ASSISTANT:
+        _s.setdefault("origin", "user")
+    _AUTO = [("inbox", "needs_you", "1105 | 收件箱 | 回复韩梅梅：下周评审改期", 6),
+             ("inbox", "working", "1105 | 收件箱 | 李雷问发布时间", 12),
+             ("inbox", "idle", "1105 | 收件箱 | 周会纪要确认", 40),
+             ("inbox", "idle", "1104 | 收件箱 | 报销单补材料", 60 * 20),
+             ("inbox", "idle", "1104 | 收件箱 | 新同学入职安排", 60 * 22),
+             ("inbox", "idle", "1103 | 收件箱 | 季度目标对齐", 60 * 45),
+             ("task", "unread", "1105 | 定时 | 晨间简报", 60 * 3),
+             ("task", "idle", "1104 | 定时 | 晨间简报", 60 * 27),
+             ("lark_agent", "idle", "1105 | 整理 | 群里的需求", 60 * 2),
+             ("spawned", "idle", "1103 | 研究 | 竞品的定价", 60 * 50)]
+    for _n, (_origin, _state, _title, _min) in enumerate(_AUTO):
+        _s = assistant_sess("b2e4d6f8-0000-4000-8000-%012d" % (300 + _n), _title, _min,
+                            "这是收件箱里的一件事，你作为我的 AI 分身先处理它……" if _origin == "inbox" else "处理好了。")
+        _s.update(origin=_origin, state=_state, status=STATUS_OF_STATE[_state],
                   pending_interactions=1 if _state == "needs_you" else 0)
         ASSISTANT.append(_s)
 
@@ -12356,6 +12381,7 @@ def features():
 MOCK_HELP.append("MOCK_REWIND=1  检查 PR 的对话里有四条你的消息（两条同样的「继续」），试「回退到这里」（#2436）；POST …/rewind 记在 REWINDS，MOCK_REWIND_ERROR=<code>:<提示> 让它像节点一样拒绝，MOCK_REWIND_DELAY=<秒> 调等待")
 MOCK_HELP.append("MOCK_INBOX_EXTRA=<n>  收件箱多 n 封知悉即可的示例通知，试一键清理的「将处理 N 件」确认")
 MOCK_HELP.append("MOCK_CHANNELS=1  设置 › 插件 › 渠道：App、飞书机器人和微信已连接、飞书 /agent 只读、一个待绑定（令牌 example-token）、一个出错、一个在市场里；主对话第一条来自微信")
+MOCK_HELP.append("MOCK_AUTO_CONVERSATIONS=1  助手对话带来源 origin（feature conversation_origin）：另有 10 段自动对话（收件箱 6、定时任务 2、飞书 /agent、对话派生），侧边栏收进「自动对话」（#3264）")
 
 
 

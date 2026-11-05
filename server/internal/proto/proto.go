@@ -275,6 +275,7 @@ var Features = []string{
 	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/extensions.md)
 	"plugin_manager",         // a plugin's detail, form, settings, secrets and switch under /api/v1/plugins/{id}/-/ (docs/extensions.md)
 	"plugin_ui_slots",        // plugins' UI slots (nav_page, overview_card, machine_section), UI version 2, plugin_ui events (docs/extensions.md「UI 插槽」)
+	"extension_operations",   // installs, upgrades and uninstalls as operations with steps: /api/v1/extensions/-/operations, extension_operation events, async: true (docs/protocol.md「扩展的安装、升级、卸载进度」)
 	"plugin_auto_upgrade",    // market plugins upgrade themselves: /api/v1/plugins/-/upgrades, …/{id}/-/auto-upgrade, plugin_upgrade events (docs/extensions.md「自动升级」)
 	// The same under the new names (docs/extensions.md「命名和兼容」, #1844): /api/v1/extensions/… answering with the
 	// keys extensions / extension / extension_name, extension_ui and extension_upgrade events. The plugin ones above

@@ -115,6 +115,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 	h.extensionUIRoutes(api)
 	h.extensionSystemRoutes(api)
 	h.marketRoutes(api)
+	h.operationRoutes(api)
 	h.upgradeRoutes(api)
 	h.extensionDevRoutes(api)
 	h.sandboxRoutes(api)
@@ -250,17 +251,34 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 		var in struct {
 			Source  string `json:"source"`
 			Upgrade string `json:"upgrade,omitempty"`
+			// Async: answer at once with the operation, and preview in the background (#3277).
+			Async bool `json:"async,omitempty"`
 		}
 		if !readExtensionJSON(w, r, &in) {
 			return
 		}
-		pv, err := ps().reg.Preview(r.Context(), in.Source, in.Upgrade)
-		if err != nil {
-			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
-			return
+		kind := opInstall
+		if in.Upgrade != "" {
+			kind = opUpgrade
 		}
-		h.resolveBundle(r.Context(), pv, "")
-		writeJSON(w, pv)
+		job := previewJob{kind: kind, id: in.Upgrade, actor: opActor(r, "personad extension"), lang: h.requestLang(r),
+			run: func(ctx context.Context) (*extension.Preview, error) {
+				pv, err := ps().reg.Preview(ctx, in.Source, in.Upgrade)
+				if err != nil {
+					return nil, err
+				}
+				h.resolveBundle(extension.WithoutProgress(ctx), pv, "")
+				return pv, nil
+			}}
+		op, pv, err := h.launch(r.Context(), job, nil, in.Async)
+		switch {
+		case in.Async:
+			h.writeOp(w, op)
+		case err != nil:
+			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
+		default:
+			writeJSON(w, withOperation(pv, op))
+		}
 	}))
 	api.HandleFunc("POST /api/v1/extensions/-/install", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -268,6 +286,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 			Digest    string `json:"permissions_digest"`
 			// Bundle are the previews that install with it (its preview's bundle), each with its digest.
 			Bundle []bundleRef `json:"bundle,omitempty"`
+			Async  bool        `json:"async,omitempty"`
 		}
 		ofMarket := func() bool {
 			for _, b := range in.Bundle {
@@ -280,18 +299,14 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, ofMarket) {
 			return
 		}
-		p, err := h.installExtensionPlan(r.Context(), "", in.PreviewID, in.Digest, in.Bundle, actorOr(r, "personad extension"))
-		if err != nil {
-			writeExtensionErr(w, http.StatusBadRequest, "install_failed", err)
-			return
-		}
-		writeJSON(w, detailOut(r, ps().detail(r.Context(), p)))
+		h.installRequest(w, r, "", in.PreviewID, in.Digest, in.Bundle, in.Async, "install_failed")
 	})
 	api.HandleFunc("POST /api/v1/extensions/{id}/-/upgrade", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			PreviewID string      `json:"preview_id"`
 			Digest    string      `json:"permissions_digest"`
 			Bundle    []bundleRef `json:"bundle,omitempty"`
+			Async     bool        `json:"async,omitempty"`
 		}
 		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, func() bool {
 			for _, member := range in.Bundle {
@@ -303,12 +318,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 		}) {
 			return
 		}
-		p, err := h.installExtensionPlan(r.Context(), r.PathValue("id"), in.PreviewID, in.Digest, in.Bundle, actorOr(r, "personad extension"))
-		if err != nil {
-			writeExtensionErr(w, http.StatusBadRequest, "upgrade_failed", err)
-			return
-		}
-		writeJSON(w, detailOut(r, ps().detail(r.Context(), p)))
+		h.installRequest(w, r, r.PathValue("id"), in.PreviewID, in.Digest, in.Bundle, in.Async, "upgrade_failed")
 	})
 	fromMarket := func(r *http.Request) func() bool {
 		return func() bool {
@@ -334,7 +344,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 		id, q, who := r.PathValue("id"), r.URL.Query(), actorOr(r, "personad extension")
 		// cascade=1: the extensions that depend on it are switched off (else 409 has_dependents); members=1: a pack's
 		// members go with it.
-		h.uninstallPack(w, r, id, uninstallOptions{keepData: q.Get("keep_data") == "1", members: q.Get("members") == "1", cascade: q.Get("cascade") == "1", owner: h.fromThisMachine(r), failureStatus: http.StatusBadRequest, actor: who})
+		h.uninstallOp(w, r, id, uninstallOptions{keepData: q.Get("keep_data") == "1", members: q.Get("members") == "1", cascade: q.Get("cascade") == "1", owner: h.fromThisMachine(r), failureStatus: http.StatusBadRequest, actor: who}, q.Get("async") == "1")
 	})
 
 	// A plugin's program on a computer: the app's requests to it (extension_nodes.go).
@@ -390,4 +400,24 @@ func nodeConfirmForm(l i18n.Lang, s *extension.Schema, m *extension.Manifest) *e
 		}
 	}
 	return &out
+}
+
+// installRequest is an install (upgrade "") or upgrade call as an operation: the one its preview made, or a new one.
+// async answers 202 with it at once; else the answer is the extension's detail, as it always was.
+func (h *Manager) installRequest(w http.ResponseWriter, r *http.Request, upgrade, previewID, digest string, refs []bundleRef, async bool, code string) {
+	ps := h.extensions
+	actor := actorOr(r, "personad extension")
+	op := h.opForInstall(ps.reg.PreviewOf(previewID), previewID, opActor(r, actor), h.requestLang(r))
+	if async {
+		ctx := context.WithoutCancel(r.Context())
+		go func() { _, _ = h.installOp(ctx, op, upgrade, previewID, digest, refs, actor) }()
+		h.writeOp(w, op)
+		return
+	}
+	p, err := h.installOp(r.Context(), op, upgrade, previewID, digest, refs, actor)
+	if err != nil {
+		writeExtensionErr(w, http.StatusBadRequest, code, err)
+		return
+	}
+	writeJSON(w, withOperation(detailOut(r, ps.detail(r.Context(), p)), op))
 }

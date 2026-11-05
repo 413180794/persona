@@ -1,0 +1,9 @@
+{
+  "not_found": "No such install, upgrade or uninstall (it may be over for more than 10 minutes)",
+  "start_timeout": "{name} did not come up within {seconds} seconds",
+  "start_failed": "{name} does not start: {why}",
+  "rolled_back": "{name} {to} does not start ({why}): back to {from}",
+  "cannot_cancel": "It is being installed already and cannot be stopped now",
+  "not_retryable": "This one cannot be tried again from here: start it again",
+  "not_failed": "Only a failed one can be tried again"
+}
