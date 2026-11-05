@@ -217,17 +217,6 @@ func (h *Hub) leftGroup() {
 // meshSettle: how long a hub that starts with peers waits for a link before driving its computers.
 const meshSettle = 10 * time.Second
 
-// meshSettling is how much longer the machines wait after a start (0: not at all): a hub with peers and no link yet.
-func (h *Hub) meshSettling() time.Duration {
-	ms := &h.mesh
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-	if !ms.running || len(ms.peers) == 0 || len(ms.links) > 0 {
-		return 0
-	}
-	return max(0, meshSettle-time.Since(ms.started))
-}
-
 // credsHandoverRetryEvery is how soon a hub retries handing over device credentials if the center rejected or dropped the call.
 var credsHandoverRetryEvery = 30 * time.Second
 

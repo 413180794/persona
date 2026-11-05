@@ -202,19 +202,6 @@ func seedTasks(t *testing.T, h *Hub, tasks ...assistant.Task) {
 	}
 }
 
-// savedTask is a scheduled task as the assistant saved it.
-func savedTask(t *testing.T, h *Hub, id string) (assistant.Task, bool) {
-	t.Helper()
-	var tasks []assistant.Task
-	assistantSetting(t, h, "assistant.tasks", &tasks)
-	for _, task := range tasks {
-		if task.ID == id {
-			return task, true
-		}
-	}
-	return assistant.Task{}, false
-}
-
 // runNow is 立即运行 in the app (POST …/tasks/{id}/run): the conversation the run went into.
 func runNow(t *testing.T, h *Hub, id string) (proto.Session, error) {
 	t.Helper()

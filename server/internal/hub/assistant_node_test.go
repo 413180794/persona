@@ -109,9 +109,3 @@ func (n *assistantNode) sent() int {
 	defer n.mu.Unlock()
 	return len(n.sends)
 }
-
-func (n *assistantNode) forget(id string) {
-	n.mu.Lock()
-	delete(n.known, id)
-	n.mu.Unlock()
-}

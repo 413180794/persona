@@ -8,6 +8,7 @@ import { errorText } from "../../lib/api";
 import { useStore } from "../../lib/store";
 import { marketOf, extensionsRoute, routeSub } from "../../lib/extension-market";
 import { ago } from "../../lib/format";
+import { composing } from "../../lib/send-history";
 import {
   choiceLabel, clearExtensionSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listExtensionsInfo, listSummary, numberProblems,
   placeholder, extensionDetail, extensionState, extensionTone, pointText, readNumber, runNote, same, secretState, setAt, setContribution, setExtensionConfig, setExtensionEnabled,
@@ -853,6 +854,7 @@ function ListControl({ field: f, path, draft, onEdit, id, ring }: Pick<FieldProp
           value={adding}
           onChange={(e) => setAdding(e.target.value)}
           onKeyDown={(e) => {
+            if (composing(e.nativeEvent)) return;
             if (e.key === "Enter") {
               e.preventDefault();
               add();

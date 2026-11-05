@@ -10,17 +10,13 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
@@ -49,54 +45,8 @@ func golden(t *testing.T, name, got string) {
 	}
 }
 
-// capturedCall is one request a captureModel answered.
+// capturedCall is one request the fake model from replies answered.
 type capturedCall struct{ System, User string }
-
-// captureModel is a model that records what it is asked and answers reply.
-func captureModel(t *testing.T, reply string) (*ai.Client, func() []capturedCall) {
-	t.Helper()
-	var mu sync.Mutex
-	var calls []capturedCall
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
-			System   string `json:"system"`
-			Messages []struct {
-				Content string `json:"content"`
-			} `json:"messages"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&in)
-		c := capturedCall{System: in.System}
-		if len(in.Messages) > 0 {
-			c.User = in.Messages[0].Content
-		}
-		mu.Lock()
-		calls = append(calls, c)
-		mu.Unlock()
-		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": reply}}})
-	}))
-	t.Cleanup(srv.Close)
-	key := filepath.Join(t.TempDir(), "key")
-	_ = os.WriteFile(key, []byte("k"), 0o600)
-	return ai.New(ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"}), func() []capturedCall {
-		mu.Lock()
-		defer mu.Unlock()
-		return append([]capturedCall(nil), calls...)
-	}
-}
-
-func onlyCall(t *testing.T, calls []capturedCall) capturedCall {
-	t.Helper()
-	if len(calls) != 1 {
-		t.Fatalf("%d model calls, want 1", len(calls))
-	}
-	return calls[0]
-}
-
-func goldenCall(t *testing.T, name string, c capturedCall) {
-	t.Helper()
-	golden(t, name+".system", c.System)
-	golden(t, name+".user", c.User)
-}
 
 // goldenSnapshot is a chat service's connector with a live state (connector.Snapshot): what a plugin serving Feishu
 // hands the assistant's snapshot.

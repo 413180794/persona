@@ -49,8 +49,6 @@ type assistantState struct {
 
 	askMu sync.Mutex
 	asked map[string]*askedOne // the questions and cards it has on the phone (by interaction id)
-
-	cardSends sync.Map // a message card's id → the lock its 发送 holds (sendFromCard)
 }
 
 // taskSettleDelay is how long the assistant lets a task's agents stay still before the task counts as done: the

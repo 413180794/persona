@@ -20,13 +20,7 @@ import (
 // migratablePrefixes are the hub's own prefixes a plugin may take over while they move out of the hub.
 var migratablePrefixes = []string{"lark"}
 
-// apiPlugin is the running plugin serving path, nil when none does.
-func (ps *extensions) apiExtension(path string) *hubExtension {
-	hp, _ := ps.apiRoute(path)
-	return hp
-}
-
-// apiRoute is apiPlugin with the contribution the path is under.
+// apiRoute is the running plugin serving path (nil when none does) and the contribution the path is under.
 func (ps *extensions) apiRoute(path string) (*hubExtension, extension.APIItem) {
 	if ps == nil || !strings.HasPrefix(path, "/api/v1/") {
 		return nil, extension.APIItem{}

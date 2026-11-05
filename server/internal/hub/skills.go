@@ -3,7 +3,6 @@ package hub
 import (
 	"context"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -32,16 +31,6 @@ func (h *Hub) machineSkills(ctx context.Context, m *Machine) ([]skill, error) {
 		return nil, err
 	}
 	return out.Skills, nil
-}
-
-// hasSkill says whether the assistant on m has the skill name. A node too old to list its skills (one that carried
-// lark-connector inside itself) is taken to have it, as it did.
-func (h *Hub) hasSkill(ctx context.Context, m *Machine, name string) bool {
-	list, err := h.machineSkills(ctx, m)
-	if err != nil {
-		return true
-	}
-	return slices.ContainsFunc(list, func(s skill) bool { return s.Name == name })
 }
 
 // serveSkills is GET /api/v1/skills: the skills of the machine that runs the assistant, read only.

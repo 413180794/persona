@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"regexp"
 	"slices"
 	"sort"
 	"sync"
@@ -65,8 +64,6 @@ func (c UsageConfig) interval() time.Duration {
 	}
 	return time.Duration(min(m, usagePollMost)) * time.Minute
 }
-
-var usageSourceID = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,31}$`)
 
 // fingerprint changes when what a source reads changes (its type, address or key): the samples of the old one are
 // not the new one's.

@@ -1015,16 +1015,6 @@ func (h *Hub) forgetConnector(ctx context.Context, id string) {
 	}
 }
 
-func logLines(r io.Reader, f func(string)) {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 64<<10), 1<<20)
-	for sc.Scan() {
-		if line := strings.TrimSpace(sc.Text()); line != "" {
-			f(line)
-		}
-	}
-}
-
 func expandHome(p string) string {
 	if strings.HasPrefix(p, "~/") {
 		home, _ := os.UserHomeDir()

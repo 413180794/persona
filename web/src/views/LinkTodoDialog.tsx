@@ -1,6 +1,7 @@
 // Dialog to link an agent session or project space to an uncompleted todo
 import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../lib/api";
+import { composing } from "../lib/send-history";
 import { refresh, refreshTodos, setSpacesSupported, useStore } from "../lib/store";
 import {
   createTodo,
@@ -198,6 +199,7 @@ export function LinkTodoDialog({
               disabled={busy}
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => {
+                if (composing(e.nativeEvent)) return;
                 if (e.key === "Enter") {
                   e.preventDefault();
                   void handleCreateAndLink();

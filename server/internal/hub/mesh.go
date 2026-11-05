@@ -144,13 +144,6 @@ type keptRecord struct {
 	Seen   time.Time  `json:"seen"`
 }
 
-func (h *Hub) meshRunning() bool {
-	ms := &h.mesh
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-	return ms.running
-}
-
 // meshView is the current picture; nil while the mesh is not running.
 func (h *Hub) meshView() *meshView { return h.mesh.view.Load() }
 

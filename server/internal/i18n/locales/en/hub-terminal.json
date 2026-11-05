@@ -3,6 +3,5 @@
   "busy": "Another program on the computer is using this terminal",
   "unsupported": "Persona or herdr on this computer is too old: you can watch but not take over",
   "lost": "The terminal went back to the computer’s size",
-  "taken_by_program": "Another program on the computer took over this terminal",
-  "offline": "Computer offline"
+  "taken_by_program": "Another program on the computer took over this terminal"
 }

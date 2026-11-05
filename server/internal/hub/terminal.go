@@ -540,11 +540,6 @@ func (c *client) sendTerm(v any) {
 	}
 }
 
-// terminalsOffline ends every stream of a machine whose node went away.
-func (h *Hub) terminalsOffline(machineID string) {
-	h.terminalsEnded(machineID, i18n.T(h.userLang(), "hub-terminal.offline"))
-}
-
 // terminalsEnded ends every terminal stream of the machine, saying why.
 func (h *Hub) terminalsEnded(machineID, why string) {
 	t := &h.terms

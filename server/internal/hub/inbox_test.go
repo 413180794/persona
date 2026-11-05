@@ -204,12 +204,6 @@ func (m *fakeManager) lastRound(t *testing.T) assistantwire.InboxRound {
 	return m.rounds[len(m.rounds)-1]
 }
 
-func (m *fakeManager) roundCount() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return len(m.rounds)
-}
-
 func sourceIn(r assistantwire.InboxRound, id string) (assistantwire.InboxSource, bool) {
 	for _, s := range r.Sources {
 		if s.ID == id {

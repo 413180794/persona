@@ -3,6 +3,5 @@
   "busy": "电脑上另一个程序正在使用这个终端",
   "unsupported": "这台电脑的 Persona 或 herdr 太旧，只能看不能接管",
   "lost": "终端已回到电脑上的尺寸",
-  "taken_by_program": "电脑上另一个程序接管了这个终端",
-  "offline": "电脑离线"
+  "taken_by_program": "电脑上另一个程序接管了这个终端"
 }

@@ -95,9 +95,6 @@ func (h *Hub) assistantProfile() assistantwire.Profile {
 	return out
 }
 
-// assistantMachine is the machine the assistant's conversations run on (nil when the hub has none).
-func (h *Hub) assistantMachine() *Machine { return h.localMachine(h.assistantProfile().MachineID) }
-
 // isMainOn: session on machine is the assistant's main conversation, as it reported.
 func (h *Hub) isMainOn(machine, session string) bool {
 	p := h.assistantProfile()

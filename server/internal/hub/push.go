@@ -697,10 +697,6 @@ func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string, w
 	p.sendLocalized(func(l i18n.Lang) map[string]any { return donePayloadIn(l, machineID, machine, sessionID, title, text) }, "", wants)
 }
 
-func donePayload(machineID, machine, sessionID, title, text string) map[string]any {
-	return donePayloadIn(i18n.Default, machineID, machine, sessionID, title, text)
-}
-
 func donePayloadIn(l i18n.Lang, machineID, machine, sessionID, title, text string) map[string]any {
 	text = plainMarkdown(text) // an agent's last words are Markdown; a notification shows them as they are
 	if text == "" {

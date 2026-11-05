@@ -16,13 +16,9 @@ import (
 
 // The formatting the assistant writes with too.
 var (
-	clip       = textfmt.Clip
-	oneLine    = textfmt.OneLine
-	firstLine  = textfmt.FirstLine
-	ago        = textfmt.Ago
-	short      = textfmt.Short
-	agentLabel = textfmt.AgentLabel
-	stateNames = textfmt.StateNames
+	clip      = textfmt.Clip
+	oneLine   = textfmt.OneLine
+	firstLine = textfmt.FirstLine
 )
 
 // mcpTool is one tool's definition from prompts/mcp.

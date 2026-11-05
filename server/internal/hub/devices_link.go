@@ -506,10 +506,10 @@ func (h *Hub) awaitManager(ctx context.Context, limit time.Duration) bool {
 func (h *Hub) applyDeviceStates(st devicewire.States) {
 	now := time.Now()
 	type change struct {
-		m                           *Machine
-		ended, offline, missedHooks bool
-		began                       bool // the node's connection is a new one (or the hub just met it): it knows no fs.watch (fswatch.go)
-		oldMux                      *streams.Mux
+		m              *Machine
+		ended, offline bool
+		began          bool // the node's connection is a new one (or the hub just met it): it knows no fs.watch (fswatch.go)
+		oldMux         *streams.Mux
 	}
 	var changes []change
 	h.fleet.mu.Lock()

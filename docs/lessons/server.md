@@ -175,7 +175,7 @@
 
 - hub 跑在 UTC，用户不在（2026-11-01「时区也都修一下」）：服务端给人看、给 AI 读的时间、按天分的东西，一律按用户的时区（`Hub.userLocation()`，知识库是 `kb.Store.Zone()`），
   别用 `.Local()` / `time.Local` / `time.Now().Format`。`internal/tzguard` 的测试扫全部非测试代码，node（跑在用户自己的电脑上）和「还不知道用户时区」时的兜底在白名单里，写明理由。
-- 测试别依赖跑测试的机器在哪个时区：时间用 UTC 造，读的时区固定传进去（hub 的 `testUserZone`、知识库 golden 的 `goldenZone`）；
+- 测试别依赖跑测试的机器在哪个时区：时间用 UTC 造，读的时区固定传进去（如 `internal/assistant` 的定时任务和提示词 golden 测试固定传 `Asia/Shanghai`，知识库 golden 的 `goldenZone`）；
   改了时间相关的代码，在 hub 上用 `TZ=UTC`、`TZ=Asia/Shanghai`、`TZ=America/Los_Angeles` 各跑一遍 `go test ./...`。
 - 只记钟点的文件（知识库的天文件、时间线）换时区要整体搬，还要记下自己是哪个时区，不能直接改写入时用的时区：
   否则同一个文件里新旧两种钟点混在一起，`Since` 按新时区解析旧行会差 8 小时，漏读压缩窗口里的消息（`docs/knowledge.md`「时区」）。

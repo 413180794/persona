@@ -24,10 +24,6 @@ func errorBody(status int, code string, err error) map[string]any {
 	return apierr.Body(status, code, err)
 }
 
-func statusErrorCode(status int) string { return apierr.StatusCode(status) }
-
-func nodeErrorCode(err error) string { return apierr.NodeCode(err) }
-
 // jsonRouteErrors only wraps ServeMux's own fallback, leaving matched handlers (including mail and streams) alone.
 func jsonRouteErrors(mux *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

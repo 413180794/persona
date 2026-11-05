@@ -86,15 +86,6 @@ func (h *Hub) channelList(ctx context.Context) []channel.View {
 	return out
 }
 
-// channelIDs are the ids of the channels there are (what a client_msg_id's prefix is matched against).
-func (h *Hub) channelIDs() []string {
-	ids := []string{channel.Feishu}
-	for _, pc := range h.extensionChannels() {
-		ids = append(ids, pc.item.ID)
-	}
-	return ids
-}
-
 func appChannel(l i18n.Lang) channel.View {
 	return channel.View{ID: channel.App, Name: "Persona", Kind: channel.KindApp, Source: channel.SourceBuiltin, Installed: true,
 		Enabled: true, State: channel.StateConnected, Bind: channel.BindNone, ReadOnly: true,

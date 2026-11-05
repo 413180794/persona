@@ -14,6 +14,7 @@ import {
   type ClaudeDirsState,
 } from "../../lib/agent-settings";
 import { api, enc, errorText } from "../../lib/api";
+import { composing } from "../../lib/send-history";
 import { t } from "../../i18n";
 import { Button, cx, EASE, Loading, toast } from "../../ui/atoms";
 import { Group } from "./SettingsParts";
@@ -102,7 +103,7 @@ export function ClaudeDirs({ mid, name }: { mid: string; name: string }) {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && void add()}
+                onKeyDown={(e) => !composing(e.nativeEvent) && e.key === "Enter" && void add()}
                 placeholder={t("settings-claudedirs.input_placeholder")}
                 spellCheck={false}
                 autoComplete="off"

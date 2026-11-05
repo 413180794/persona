@@ -45,7 +45,6 @@ const (
 
 var (
 	errNoUpdate    = i18n.Err("hub-selfupdate.err_no_update")
-	errUpdating    = i18n.Err("hub-selfupdate.err_updating")
 	errNotRelease  = i18n.Err("hub-selfupdate.err_not_release")
 	errUpdateBusy  = i18n.Err("hub-selfupdate.err_busy")
 	errUpdateAgain = i18n.Err("hub-selfupdate.err_auto_off")

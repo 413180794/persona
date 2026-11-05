@@ -28,9 +28,6 @@ func (h *Hub) machinesNow() []*Machine {
 	return slices.Clone(h.machines)
 }
 
-// fleetAll is machinesNow (every machine).
-func (h *Hub) fleetAll() []*Machine { return h.machinesNow() }
-
 // machineByID is the machine an id the apps use stands for: one the manager reported, or the machine that has the
 // computer of a hub.json entry it absorbed.
 func (h *Hub) machineByID(id string) *Machine {

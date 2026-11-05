@@ -2,7 +2,6 @@ package hub
 
 import (
 	"sort"
-	"strings"
 )
 
 // What every hub of a mesh group knows about the others (docs/mesh.md「记录」): each hub floods a record of itself —
@@ -217,28 +216,6 @@ func (v *meshView) reachableIDs() []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// hubSlug is a hub's name made fit for a machine id suffix: lowercase letters, digits and dashes; a name with none
-// of those (家里) gives the start of the hub_id.
-func hubSlug(name, hubID string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(name) {
-		switch {
-		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
-			b.WriteRune(r)
-			dash = false
-		case b.Len() > 0 && !dash:
-			b.WriteByte('-')
-			dash = true
-		}
-	}
-	s := strings.Trim(b.String(), "-")
-	if s == "" {
-		return shortID(hubID)
-	}
-	return s
 }
 
 func shortID(hubID string) string {

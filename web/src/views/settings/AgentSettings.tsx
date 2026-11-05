@@ -20,6 +20,7 @@ import {
 import { api, enc, errorText } from "../../lib/api";
 import { t } from "../../i18n";
 import { machineWithHub } from "../../lib/mesh";
+import { composing } from "../../lib/send-history";
 import { useStore } from "../../lib/store";
 import { Button, cx, EASE, IconButton, Loading, Menu, Spinner, toast, useMenu } from "../../ui/atoms";
 import { ClaudeDirs } from "./ClaudeDirs";
@@ -233,6 +234,7 @@ function TextSetting({ s, disabled, onSave }: { s: AgentSetting; disabled: boole
       onChange={(e) => setText(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
+        if (composing(e.nativeEvent)) return;
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         else if (e.key === "Escape") setText(saved);
       }}

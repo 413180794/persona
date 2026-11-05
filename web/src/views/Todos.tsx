@@ -5,6 +5,7 @@ import { ago, clock, shortPath, stateOf, tabLabel, uuid } from "../lib/format";
 import { launchAgent } from "../lib/new-agent";
 import { navigate } from "../lib/router";
 import { plainMarkdown } from "../lib/plain-markdown";
+import { composing } from "../lib/send-history";
 import { useAgentSessions } from "../lib/sessions";
 import { refresh, refreshTodos, useStore } from "../lib/store";
 import {
@@ -580,6 +581,7 @@ function TodoDetail({
           onChange={(e) => setTitle(e.target.value)}
           onBlur={saveTitle}
           onKeyDown={(e) => {
+            if (composing(e.nativeEvent)) return;
             if (e.key === "Enter") {
               e.currentTarget.blur();
             }

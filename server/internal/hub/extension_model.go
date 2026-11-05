@@ -180,11 +180,7 @@ type DependentView struct {
 	Name string `json:"name"`
 }
 
-// enabledDependents follows the complete dependent graph, deepest first.
-func (ps *extensions) enabledDependents(id string) []DependentView {
-	return ps.dependentsOf([]string{id})
-}
-
+// dependentsOf follows the complete dependent graph of ids, deepest first.
 func (ps *extensions) dependentsOf(ids []string) []DependentView {
 	seen := map[string]bool{}
 	for _, id := range ids {

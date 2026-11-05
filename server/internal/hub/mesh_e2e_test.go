@@ -56,18 +56,6 @@ type whoAt struct {
 	at  time.Time
 }
 
-// connectedAfter is how long after t the hub named hub first connected (an hour when it did not).
-func (f *meshNode) connectedAfter(hub string, t time.Time) time.Duration {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, w := range f.whoAt {
-		if w.hub == hub && w.at.After(t) {
-			return w.at.Sub(t)
-		}
-	}
-	return time.Hour
-}
-
 type meshNodeConn struct {
 	p   *rpc.Peer
 	c   net.Conn
@@ -484,12 +472,6 @@ func (a *app) wait(t *testing.T, what string, from int, ok func(map[string]any) 
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-}
-
-func (a *app) count() int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return len(a.msgs)
 }
 
 func typeIs(typ string, kv ...string) func(map[string]any) bool {

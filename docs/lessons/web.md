@@ -249,3 +249,7 @@
 ## 主屏 App 顶部状态栏是一条灰条（2026-11-05，#2102）
 
 - **iOS 用页面顶部全屏 fixed 元素的背景色当状态栏颜色，不看它的 opacity**。#1996 为了让抽屉遮罩（`bg-black/20`）能淡出，让它关着时也留在页面上（`opacity: 0`）。结果主屏 App 的状态栏一直是页面色压暗 20% 的颜色：浅色主题下是 #FAFAFB × 0.8 = #C8C8C8。浮层关上以后，必须真正离开页面（`display: none` 或者卸载），淡出要在离开之前做完（`useLingers`）。模拟器里的 Safari 浏览器看不出这个问题，要在真机的主屏 App 上才看得到。`web_mobile_shell_e2e.py` 会检查：没有浮层打开时，顶部不能有带背景色的全屏 fixed 元素。
+
+## 输入框的回车先让给输入法（2026-11-05，#2733）
+
+- **每个 `onKeyDown` 里处理回车 / Esc 的输入框，开头都要先 `if (composing(e.nativeEvent)) return;`**（`lib/send-history.ts`，判断 `isComposing || keyCode === 229`）。日文变换、拼音上屏英文时按的回车，浏览器也会照常发给页面，不判断的话就会拿还没上屏的半截字去新建待办、保存标题、添加列表项。Esc 也一样：取消组字的同时把整行关掉了。jsdom 里用 `new KeyboardEvent("keydown", { key: "Enter", isComposing: true })` 就能测（`views/ime-enter.test.tsx`）。

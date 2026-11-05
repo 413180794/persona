@@ -23,11 +23,7 @@ import (
 // service: its jarvis://connector link pasted here). ssh is not offered any more; hub.json entries of kind ssh keep
 // working.
 
-var (
-	adminMachineID = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
-	// An ssh destination: a host alias, host, user@host or [v6]:port; never starting with "-" (an ssh option).
-	adminSSHHost = regexp.MustCompile(`^[A-Za-z0-9_\[][A-Za-z0-9._@:%\[\]-]{0,252}$`)
-)
+var adminMachineID = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
 
 type adminMachine struct {
 	ID           string             `json:"id"`
