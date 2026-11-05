@@ -1,0 +1,17 @@
+{
+  "pin": "Pin",
+  "unpin": "Unpin",
+  "unpin_all": "Unpin all",
+  "rename": "Rename…",
+  "title_placeholder": "Chat title",
+  "renamed": "Renamed",
+  "rename_failed": "Couldn't rename: {error}",
+  "archive": "Archive",
+  "archived": "Archived “{title}”",
+  "copy_id": "Copy session ID",
+  "end": "End…",
+  "end_confirm": "Confirm end",
+  "ended": "Chat ended; its history is kept",
+  "end_failed": "Couldn't end the chat: {error}",
+  "actions": "Chat actions"
+}

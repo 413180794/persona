@@ -1,0 +1,17 @@
+{
+  "pin": "置顶",
+  "unpin": "取消置顶",
+  "unpin_all": "全部取消置顶",
+  "rename": "重命名…",
+  "title_placeholder": "对话标题",
+  "renamed": "已重命名",
+  "rename_failed": "重命名失败：{error}",
+  "archive": "归档",
+  "archived": "已归档「{title}」",
+  "copy_id": "拷贝会话 ID",
+  "end": "结束…",
+  "end_confirm": "确认结束",
+  "ended": "已结束对话，记录仍保留",
+  "end_failed": "没能结束对话：{error}",
+  "actions": "对话的操作"
+}

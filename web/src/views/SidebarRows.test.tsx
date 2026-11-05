@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { AgentSession } from "../lib/agents";
 import type { Session } from "../lib/types";
 import { setAgentDetails, setContextAsUsed } from "../lib/context-usage";
-import { AgentRow, SessionRow } from "./Sidebar";
+import { AgentRow, PersonaRow, PinnedHeading, SessionRow } from "./Sidebar";
+import { conversationMenuItems } from "./ConversationMenu";
 
 // the sidebar's modules read the colour scheme and this browser's settings when they load
 vi.hoisted(() => {
@@ -13,6 +14,9 @@ vi.hoisted(() => {
   const kept = new Map<string, string>();
   g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v), removeItem: (k: string) => void kept.delete(k) };
 });
+
+// the avatar reads the persona store, which has no server snapshot
+vi.mock("./assistant/Persona", async (importOriginal) => ({ ...(await importOriginal<typeof import("./assistant/Persona")>()), PersonaAvatar: () => null }));
 
 const session: Session = { machine_id: "mac", session_id: "s1", title: "整理文档", cwd: "/code", status: "idle", state: "idle" };
 const rowProps = { s: session, k: "s:mac/s1", reg: () => () => {}, hover: () => {}, to: { name: "session", mid: "mac", sid: "s1" } as const, go: () => () => {}, onMenu: () => {} };
@@ -82,5 +86,28 @@ describe("a personal agent's row", () => {
     const html = renderToStaticMarkup(<AgentRow {...props} active={false} />);
     expect(link(html)).not.toContain("aria-current");
     expect(pin(html)).toMatch(/class="[^"]*\bopacity-0\b/);
+  });
+});
+
+describe("Persona's main row", () => {
+  const main: Session = { machine_id: "hub", session_id: "main", title: "Persona", cwd: "/", status: "idle", state: "idle", assistant: true };
+  const props = { reg: () => () => {}, hover: () => {}, go: () => () => {}, main };
+  it("has a ⋯ for the conversation's menu when the main conversation is there", () => {
+    const html = renderToStaticMarkup(<PersonaRow {...props} active={false} onMenu={() => {}} />);
+    expect(html).toMatch(/<button [^>]*aria-label="对话的操作"[^>]*aria-haspopup="menu"/);
+  });
+  it("draws no ⋯ without it", () => {
+    expect(renderToStaticMarkup(<PersonaRow {...props} main={undefined} active={false} />)).not.toContain("对话的操作");
+  });
+  it("whose menu has only 拷贝会话 ID and 结束…", () => {
+    expect(conversationMenuItems(main, { main: true, pinned: false }).map((i) => i.key)).toEqual(["copy", "end"]);
+  });
+});
+
+describe("the 置顶 heading over the pinned conversations", () => {
+  it("is drawn with a ⋯ a touch screen can reach for 全部取消置顶", () => {
+    const html = renderToStaticMarkup(<PinnedHeading onMenu={() => {}} />);
+    expect(html).toContain("置顶");
+    expect(html).toMatch(/<button [^>]*aria-label="全部取消置顶"[^>]*aria-haspopup="menu"/);
   });
 });

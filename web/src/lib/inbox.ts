@@ -1026,12 +1026,14 @@ const subscribe = (l: () => void) => {
 export function useInbox<T>(select: (s: InboxState) => T): T {
   useEffect(start, []);
   const last = useRef<{ v: T } | null>(null);
-  return useSyncExternalStore(subscribe, () => {
+  const read = () => {
     const v = select(state);
     if (last.current && same(last.current.v, v)) return last.current.v;
     last.current = { v };
     return v;
-  });
+  };
+  // the same read on a server render (a test's renderToStaticMarkup): the list as it is
+  return useSyncExternalStore(subscribe, read, read);
 }
 
 /** How many unhandled「需要你」items the inbox has (the sidebar's badge). */

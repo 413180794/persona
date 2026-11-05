@@ -7,6 +7,10 @@ import {
   filterCommands,
   getPalette,
   IDLE_PANES,
+  inboxHits,
+  orderGroups,
+  placeHits,
+  type PlaceInput,
   openPalette,
   parseQuery,
   registerContextCommands,
@@ -251,5 +255,41 @@ describe("terminal panes in ⌘K", () => {
   });
   it("finds nothing on a machine whose panes could not be read", () => {
     expect(terminalHits([], "anything")).toEqual([]);
+  });
+});
+
+describe("⌘K's 收件箱 and 前往 (the Mac's quick open)", () => {
+  const places: PlaceInput[] = [
+    { key: "inbox", title: "收件箱", icon: "inbox", to: { name: "inbox" }, words: "inbox mail lark 邮件 飞书" },
+    { key: "machines", title: "机器", icon: "machine", to: { name: "machines" }, words: "machines cpu 内存" },
+    { key: "settings", title: "设置", icon: "gear", to: { name: "settings" }, words: "settings preferences" },
+  ];
+
+  it("finds a page by its name or by its other words", () => {
+    expect(placeHits(places, "设置").map((h) => h.key)).toEqual(["p:settings"]);
+    expect(placeHits(places, "mail").map((h) => h.key)).toEqual(["p:inbox"]);
+    expect(placeHits(places, "飞书").map((h) => h.key)).toEqual(["p:inbox"]);
+    expect(placeHits(places, "CPU").map((h) => h.key)).toEqual(["p:machines"]);
+    expect(placeHits(places, "").length).toBe(3);
+    expect(placeHits(places, "nothing")).toEqual([]);
+  });
+
+  it("finds inbox items by title, sender, preview or account, the best first, then the newest", () => {
+    const items = [
+      { id: "1", title: "周会纪要", sender: "Alice", preview: "下周的安排", account_name: "work", updated_at: "2026-11-01T00:00:00Z" },
+      { id: "2", title: "发票", sender: "Bob", preview: "周会前请确认", account_name: "me@example.com", updated_at: "2026-11-03T00:00:00Z" },
+      { id: "3", title: "Re: 周会", sender: "Carol", preview: "", updated_at: "2026-11-02T00:00:00Z" },
+    ];
+    expect(inboxHits(items, "周会").map((h) => h.key)).toEqual(["i:1", "i:3", "i:2"]);
+    expect(inboxHits(items, "bob").map((h) => h.key)).toEqual(["i:2"]);
+    expect(inboxHits(items, "example").map((h) => h.key)).toEqual(["i:2"]);
+    expect(inboxHits(items, "", 2).map((h) => h.key)).toEqual(["i:2", "i:3"]);
+  });
+
+  it("orders groups by their best kind of match, ties in the order given, empty ones dropped", () => {
+    const g = (name: string, ...scores: number[]) => scores.map((score) => ({ name, score }));
+    expect(orderGroups([g("chats", 40), g("inbox"), g("places", 100)]).map((x) => x[0].name)).toEqual(["places", "chats"]);
+    expect(orderGroups([g("chats", 85), g("inbox", 80), g("places", 95)]).map((x) => x[0].name)).toEqual(["chats", "inbox", "places"]);
+    expect(orderGroups([g("chats", 1), g("inbox", 1), g("places", 1)]).map((x) => x[0].name)).toEqual(["chats", "inbox", "places"]);
   });
 });

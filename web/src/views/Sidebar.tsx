@@ -18,7 +18,9 @@ import { machineWithHub } from "../lib/mesh";
 import { agentLabel } from "../lib/mentions";
 import { ago, baseName, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
-import { NAV_PAGES, firstAndCurrent, otherConversations, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
+import { NAV_PAGES, firstAndCurrent, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
+import { sidebarConversations, usePinnedConversations } from "../lib/conversation-pins";
+import { ConversationRowMenu, pinnedSectionItems } from "./ConversationMenu";
 import { useExtensionSlot } from "../lib/extension-slots";
 import { toneOf } from "../lib/extension-ui";
 import { BADGE_TONE, navIcon, pageRoute } from "./extensions/ExtensionSlots";
@@ -208,7 +210,7 @@ function useGo(onNavigate?: () => void): GoFn {
 export type NavPage = { k: string; to: Route; icon: IconName; label: string; short?: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string };
 
 /** The sidebar's pages (总览 … 设置, the extensions' pages) and the connection, shared by the sidebar and its rail. */
-function useNavPages() {
+export function useNavPages() {
   const phase = connPhase(useStore((s) => s.conn), useStore((s) => s.link));
   const machines = useStore((s) => s.machines);
   // 终端 (docs/terminal.md「独立终端」) is there where the hub can list panes
@@ -265,7 +267,13 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   // a phone's drawer has the pages as two rows of icons, so its first screen reaches the Agents (#1996)
   const narrow = useMedia(NARROW);
   const activeKey = useActiveKey(route);
-  const convs = otherConversations(assistant?.conversations ?? [], assistant?.main, 5, activeKey.startsWith("j:") ? activeKey.slice(2) : undefined);
+  const pinnedIds = usePinnedConversations();
+  const { pinned: pinnedConvs, recent } = sidebarConversations(assistant?.conversations ?? [], assistant?.main, pinnedIds, 5, activeKey.startsWith("j:") ? activeKey.slice(2) : undefined);
+  const convs = [...pinnedConvs, ...recent];
+  // a conversation row's ⋯ / right click (iOS: its long press), and the section title's 全部取消置顶
+  const [convMenu, setConvMenu] = useState<{ s: Session; anchor: HTMLElement; at?: MenuAt } | null>(null);
+  const onConvMenu: RowMenuFn = (s, anchor, at) => setConvMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at }));
+  const [chatsMenu, setChatsMenu] = useState<MenuAt | null>(null);
   const [jarvisFolded, toggleJarvis] = useFolded("jarvis", false, { holds: activeKey === "history" || convs.some((c) => activeKey === `j:${c.session_id}`) });
   // the pages fold under their own title (#2524); the drawer's grid of icons doesn't
   const [pagesFolded, togglePages] = useFolded("pages", false, { all: false });
@@ -290,7 +298,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
       <div ref={nav} data-sidebar-rows onMouseLeave={() => hover(null)} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-3">
         {highlight}
         <div className="flex flex-col gap-px pt-1">
-          <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} />
+          <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} onMenu={mainConversation ? (el, at) => onConvMenu(mainConversation, el, at) : undefined} />
           {narrow && <NavGrid pages={pages} activeKey={activeKey} go={go} />}
         </div>
         {!narrow && (
@@ -301,8 +309,9 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
 
         {assistant && (
           <Section title={t("sidebar.persona_chats")} folded={jarvisFolded} onToggle={toggleJarvis} right={<SectionAdd label={t("sidebar.new_chat")} to={{ name: "persona-new" }} go={go} />}>
+            {pinnedConvs.length > 0 && <PinnedHeading onMenu={(at) => setChatsMenu(at)} />}
             {convs.map((c) => (
-              <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={hover} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} showState={false} />
+              <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={hover} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} showState={false} icon={pinnedIds.includes(c.session_id) ? "pin" : undefined} onMenu={onConvMenu} menuLabel={t("conversation-menu.actions")} />
             ))}
             <NavRow k="history" reg={reg} hover={hover} active={activeKey === "history"} to={{ name: "history" }} go={go} icon="list" label={t("sidebar.all_chats")} hint={assistant.conversations.length > convs.length ? String(assistant.conversations.length) : undefined} />
           </Section>
@@ -313,6 +322,8 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         {/* the phone's Agents page shows them already: the drawer over it doesn't build them twice */}
         {!(narrow && route.name === "agent-list") && <AgentsBlock reg={reg} hover={hover} activeKey={activeKey} go={go} onNewAgent={onNewAgent} onNavigate={onNavigate} foldable />}
       </div>
+      {convMenu && <ConversationRowMenu s={convMenu.s} main={convMenu.s.session_id === assistant?.main} pinned={pinnedIds.includes(convMenu.s.session_id)} anchor={convMenu.anchor} at={convMenu.at} onClose={() => setConvMenu(null)} />}
+      {chatsMenu && <Menu anchor={chatsMenu.anchor ?? null} point={chatsMenu.point} onClose={() => setChatsMenu(null)} align="right" width={200} header={t("sidebar.pinned_section")} items={pinnedSectionItems(pinnedConvs.length)} />}
       {/* subscription rate-limit windows (#2432): nothing is drawn without data */}
       <SidebarUsage />
       <NodePrompt />
@@ -1389,21 +1400,29 @@ type NodeMenuFn = (node: MenuNode, at: MenuAt, header?: string, toggle?: boolean
 
 // Persona's main conversation: the first and strongest entry (its face, always in ink), with the conversation's state
 // when it is working or wants you.
-function PersonaRow({ reg, hover, active, go, main }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session }) {
+// Its menu (拷贝会话 ID, 结束…: iOS's long press on the main row) opens on a right click, the menu key or its ⋯.
+export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session; onMenu?: (anchor: HTMLElement, at?: MenuAt) => void }) {
   const to: Route = { name: "jarvis" };
   const st = main ? stateOf(main) : undefined;
   const pending = main?.pending_interactions ?? 0;
-  return (
+  const row = useRef<HTMLAnchorElement | null>(null);
+  const regRow = useMemo(() => reg("persona"), [reg]);
+  const aside = onMenu && !active ? "group-hover/row:invisible" : undefined;
+  const link = (
     <a
-      ref={reg("persona")}
+      ref={(el) => {
+        row.current = el;
+        regRow(el);
+      }}
       href={href(to)}
       onClick={go(to)}
+      {...(onMenu ? contextMenuProps((at, el) => onMenu(el, at)) : {})}
       onMouseEnter={() => hover("persona")}
       onFocus={() => hover("persona")}
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
       title={t("sidebar.persona_main")}
-      className={cx("relative z-10 mb-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW)}
+      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", !onMenu && "mb-1", active && CURRENT_ROW, onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11")}
     >
       <PersonaAvatar
         size={18}
@@ -1415,11 +1434,51 @@ function PersonaRow({ reg, hover, active, go, main }: { reg: RegFn; hover: (k: s
       />
       <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">Persona</span>
       {pending > 0 ? (
-        <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">{pending}</span>
+        <span className={cx("flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums", aside)}>{pending}</span>
       ) : st === "working" || st === "needs_you" || st === "unread" ? (
-        <StatusDot state={st} size={7} />
+        <span className={cx("flex", aside)}><StatusDot state={st} size={7} /></span>
       ) : null}
     </a>
+  );
+  if (!onMenu) return link;
+  return (
+    <div className="group/row relative mb-1">
+      {link}
+      <button
+        type="button"
+        aria-label={t("conversation-menu.actions")}
+        aria-haspopup="menu"
+        title={t("sidebar.more")}
+        tabIndex={-1}
+        onClick={() => row.current && onMenu(row.current)}
+        className={cx("absolute top-1/2 right-1 z-20 size-6 -translate-y-1/2 items-center justify-center rounded-[6px] text-ink-3 hover:text-ink group-hover/row:flex [@media(hover:none)]:right-0 [@media(hover:none)]:flex [@media(hover:none)]:size-11 [@media(hover:none)]:bg-transparent", active ? "flex hover:bg-hover" : "hidden bg-hover hover:bg-hover-2")}
+      >
+        <Icon name="more" size={14} />
+      </button>
+    </div>
+  );
+}
+
+// The 置顶 heading above the pinned conversations (iOS's heading("置顶"), Android's pinned section): its ⋯ and a right
+// click on it give 全部取消置顶, which a touch screen reaches through the ⋯.
+export function PinnedHeading({ onMenu }: { onMenu: (at: MenuAt) => void }) {
+  return (
+    <div className="flex items-center gap-1 px-2 pt-0.5 pb-0.5" {...contextMenuProps((at) => onMenu(at))}>
+      <span className="flex min-w-0 flex-1 items-center gap-1 truncate whitespace-nowrap text-[10.5px] font-medium tracking-[0.06em] text-ink-3">
+        <Icon name="pin" size={10} stroke={2.2} className="shrink-0" />
+        {t("sidebar.pinned_section")}
+      </span>
+      <button
+        type="button"
+        aria-label={t("conversation-menu.unpin_all")}
+        aria-haspopup="menu"
+        title={t("sidebar.more")}
+        onClick={(e) => onMenu({ anchor: e.currentTarget })}
+        className="touch-hit relative z-10 flex size-5 shrink-0 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover hover:text-ink-2"
+      >
+        <Icon name="more" size={12} />
+      </button>
+    </div>
   );
 }
 
@@ -1506,7 +1565,7 @@ export function SourceTag({ s }: { s: Session }) {
   return <span className={cls}>{label}</span>;
 }
 
-export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu, menuLabel = t("sidebar.agent_actions"), endRoom }: { menuLabel?: string; s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; endRoom?: boolean }) {
+export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu, menuLabel = t("sidebar.agent_actions"), endRoom, icon = "chat" }: { menuLabel?: string; /** The mark at the start when the state is not shown (a Persona conversation's; pinned: the pin). */ icon?: IconName; s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; endRoom?: boolean }) {
   const st = stateOf(s);
   const tail = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
@@ -1543,7 +1602,7 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
       className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, // room for 「N 个 Agent」 and the ⋯ beside it (instead of the ⋯'s own)
         endRoom ? "pr-[108px] [@media(hover:none)]:pr-[120px]" : cx(onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11"))}
     >
-      <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>
+      <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
       {showState && !s.assistant && <SourceTag s={s} />}
       {prefix}
       {detail.length > 0 || workflow ? (

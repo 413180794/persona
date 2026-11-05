@@ -1,0 +1,52 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.hoisted(() => {
+  const kept = new Map<string, string>();
+  (globalThis as Record<string, unknown>).localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v), removeItem: (k: string) => void kept.delete(k), clear: () => kept.clear() };
+});
+
+import { getPinnedConversations, parsePinned, sidebarConversations, togglePinnedConversation, unpinAllConversations } from "./conversation-pins";
+import type { Session } from "./types";
+
+const conv = (id: string, updated: string) => ({ machine_id: "hub", session_id: id, updated_at: updated }) as Session;
+
+beforeEach(() => unpinAllConversations());
+
+describe("pinned Persona conversations (iOS assistant.pinned)", () => {
+  it("are kept in this browser, the newest pin first, and toggle off", () => {
+    togglePinnedConversation("a");
+    togglePinnedConversation("b");
+    expect(getPinnedConversations()).toEqual(["b", "a"]);
+    togglePinnedConversation("a");
+    expect(getPinnedConversations()).toEqual(["b"]);
+    expect(localStorage.getItem("assistant.pinned")).toBe('["b"]');
+  });
+
+  it("unpins all, leaving nothing stored", () => {
+    togglePinnedConversation("a");
+    unpinAllConversations();
+    expect(getPinnedConversations()).toEqual([]);
+    expect(localStorage.getItem("assistant.pinned")).toBeNull();
+  });
+
+  it("reads a broken value as no pins", () => {
+    expect(parsePinned("{")).toEqual([]);
+    expect(parsePinned('"x"')).toEqual([]);
+    expect(parsePinned('["a", 3, ""]')).toEqual(["a"]);
+  });
+});
+
+describe("the sidebar's Persona chats", () => {
+  const list = [conv("main", "2026-11-05T09:00:00Z"), conv("a", "2026-11-01T00:00:00Z"), conv("b", "2026-11-04T00:00:00Z"), conv("c", "2026-11-03T00:00:00Z"), conv("d", "2026-11-02T00:00:00Z")];
+
+  it("puts the pinned ones first in pin order, outside the limit, and never the main one", () => {
+    const { pinned, recent } = sidebarConversations(list, "main", ["a", "main", "gone", "c"], 2);
+    expect(pinned.map((c) => c.session_id)).toEqual(["a", "c"]);
+    expect(recent.map((c) => c.session_id)).toEqual(["b", "d"]);
+  });
+
+  it("keeps the open conversation after the newest ones", () => {
+    const { recent } = sidebarConversations(list, "main", [], 2, "a");
+    expect(recent.map((c) => c.session_id)).toEqual(["b", "c", "a"]);
+  });
+});

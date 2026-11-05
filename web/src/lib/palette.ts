@@ -233,3 +233,82 @@ export function terminalHits(machines: readonly MachinePanes[], query: string): 
   out.sort((a, b) => b.score - a.score);
   return words.length ? out : out.slice(0, IDLE_PANES);
 }
+
+// ── 收件箱 and 前往 (the Mac's quick open, MacQuickOpen) ──────────
+
+/** Mac's match: the title starting with what is typed, then holding it, then every word somewhere; 1 with nothing typed. */
+export function textScore(title: string, hay: readonly (string | undefined)[], text: string): number {
+  const q = text.trim().toLowerCase();
+  if (!q) return 1;
+  const ti = title.toLowerCase();
+  if (ti.startsWith(q)) return 100;
+  if (ti.includes(q)) return 80;
+  const all = [...hay, title].filter(Boolean).join(" ").toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  return words.length && words.every((w) => all.includes(w)) ? 40 : 0;
+}
+
+/** A page ⌘K goes to: the sidebar's entries (NavPage), with the other words it answers to. */
+export interface PlaceInput {
+  key: string;
+  title: string;
+  icon: IconName;
+  to: Route;
+  /** More words that find it, space-separated (inbox mail 飞书…). */
+  words?: string;
+}
+
+export interface PlaceHit {
+  key: string;
+  place: PlaceInput;
+  score: number;
+}
+
+/** The pages whose name or words match, in the sidebar's order (all of them with nothing typed). */
+export function placeHits(places: readonly PlaceInput[], text: string): PlaceHit[] {
+  return places.flatMap((p) => {
+    const score = textScore(p.title, (p.words ?? "").split(/\s+/), text);
+    return score ? [{ key: `p:${p.key}`, place: p, score }] : [];
+  });
+}
+
+/** What ⌘K reads of an inbox item (lib/inbox.ts InboxItem). */
+export interface InboxLike {
+  id: string;
+  title: string;
+  sender?: string;
+  preview: string;
+  account_name?: string;
+  updated_at?: string;
+}
+
+export interface InboxHit<T extends InboxLike = InboxLike> {
+  key: string;
+  item: T;
+  score: number;
+}
+
+/** How many inbox items a jump lists (the Mac's otherLimit). */
+export const INBOX_LIMIT = 5;
+
+/** The open inbox items whose title, sender, preview or account match: the best first, then the newest. */
+export function inboxHits<T extends InboxLike>(items: readonly T[], text: string, limit = INBOX_LIMIT): InboxHit<T>[] {
+  return items
+    .flatMap((item) => {
+      const score = textScore(item.title, [item.sender, item.preview, item.account_name], text);
+      return score ? [{ key: `i:${item.id}`, item, score }] : [];
+    })
+    .sort((a, b) => b.score - a.score || (b.item.updated_at ?? "").localeCompare(a.item.updated_at ?? ""))
+    .slice(0, limit);
+}
+
+/** The groups in their order, empty ones dropped, unless a later group has a better kind of match (typing 设置 puts 前往
+ *  above a conversation that merely mentions it): by the best score's tier (score / 20), ties in the order given. */
+export function orderGroups<T extends { score: number }>(groups: readonly (readonly T[])[]): T[][] {
+  const tier = (g: readonly T[]) => Math.floor(Math.max(...g.map((x) => x.score)) / 20);
+  return groups
+    .map((g, i) => ({ g, i }))
+    .filter((x) => x.g.length > 0)
+    .sort((a, b) => tier(b.g) - tier(a.g) || a.i - b.i)
+    .map((x) => [...x.g]);
+}

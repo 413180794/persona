@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { closePalette, openPalette, registerContextCommands, setPaletteQuery } from "../lib/palette";
 import { registerShortcut } from "../lib/shortcuts";
-import { Palette } from "./Palette";
+import { Palette, placeWords } from "./Palette";
+import { initI18n } from "../i18n";
+import { placeHits } from "../lib/palette";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { ShortcutSettings } from "./settings/ShortcutSettings";
 
@@ -40,7 +42,7 @@ describe("the palette's command mode", () => {
   it("is the same search as ever without a `>`", () => {
     const html = render("");
     expect(html).toContain('aria-label="搜索会话"');
-    expect(html).toContain("搜索会话、终端、目录、空间、机器…");
+    expect(html).toContain("搜索会话、收件箱、终端、目录、空间、机器、页面…");
     expect(html).not.toContain("命令面板");
   });
   it("hints at `>` in the search's footer", () => {
@@ -94,5 +96,30 @@ describe("设置 › 快捷键", () => {
     expect(html).toContain("切到第 1–9 台电脑");
     // nothing is rebound: no per-row 恢复默认
     expect(html).not.toContain("的默认快捷键");
+  });
+});
+
+describe("the palette's 前往 (the Mac's quick open)", () => {
+  it("goes to a page by its name or another word for it", () => {
+    const html = render("设置");
+    expect(html).toContain("前往");
+    expect(html).toContain("设置");
+    expect(render("cpu")).toContain("机器");
+    expect(render("todo")).toContain("待办");
+  });
+});
+
+describe("a page's words", () => {
+  it("answer to the Chinese names in an English UI too (the Mac's quick open)", async () => {
+    await initI18n("en");
+    try {
+      const places = ["inbox", "todos", "kb", "machines", "settings", "persona"].map((key) => ({ key, title: key, icon: "list" as const, to: { name: "home" } as const, words: placeWords(key) }));
+      expect(placeHits(places, "飞书").map((h) => h.key)).toEqual(["p:inbox"]);
+      expect(placeHits(places, "待办").map((h) => h.key)).toEqual(["p:todos"]);
+      expect(placeHits(places, "知识库").map((h) => h.key)).toEqual(["p:kb"]);
+      expect(placeHits(places, "内存").map((h) => h.key)).toEqual(["p:machines"]);
+    } finally {
+      await initI18n("zh-Hans");
+    }
   });
 });

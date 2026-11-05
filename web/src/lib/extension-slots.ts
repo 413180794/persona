@@ -79,7 +79,7 @@ const subscribe = (l: () => void) => {
 /** The places of one slot, in the hub's order; none on a hub without plugin_ui_slots. */
 export function useExtensionSlot(placement: SlotName): UIPlace[] {
   const on = useStore((s) => hasSlots(s.features));
-  const all = useSyncExternalStore(subscribe, () => places);
+  const all = useSyncExternalStore(subscribe, () => places, () => places);
   return useMemo(() => (on ? placesOf(all, placement) : []), [on, all, placement]);
 }
 

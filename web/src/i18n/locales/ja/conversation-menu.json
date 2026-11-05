@@ -1,0 +1,17 @@
+{
+  "pin": "ピン留め",
+  "unpin": "ピン留めを外す",
+  "unpin_all": "すべてのピン留めを外す",
+  "rename": "名前を変更…",
+  "title_placeholder": "チャットのタイトル",
+  "renamed": "名前を変更しました",
+  "rename_failed": "名前を変更できませんでした：{error}",
+  "archive": "アーカイブ",
+  "archived": "「{title}」をアーカイブしました",
+  "copy_id": "セッション ID をコピー",
+  "end": "終了…",
+  "end_confirm": "終了を確認",
+  "ended": "チャットを終了しました。履歴は残ります",
+  "end_failed": "チャットを終了できませんでした：{error}",
+  "actions": "チャットの操作"
+}

@@ -6,7 +6,9 @@ import { enc, api } from "../lib/api";
 import { machineWithHub } from "../lib/mesh";
 import { createPortal } from "react-dom";
 import { ago, sessionTitle, shortPath, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
-import { appCommands, commandKeys, contextCommands, filterCommands, parseQuery, setPaletteQuery, terminalHits, usePalette, type MachinePanes, type PaletteCommand, type TerminalHit } from "../lib/palette";
+import { appCommands, commandKeys, contextCommands, filterCommands, inboxHits, orderGroups, parseQuery, placeHits, setPaletteQuery, terminalHits, usePalette, type InboxHit, type MachinePanes, type PaletteCommand, type PlaceHit, type PlaceInput, type TerminalHit } from "../lib/palette";
+import { isDone, useInbox, type InboxItem } from "../lib/inbox";
+import { useNavPages } from "./Sidebar";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions } from "../lib/sessions";
 import { chordParts, handlerOf, runShortcut, SCOPE_LABEL, useBindings } from "../lib/shortcuts";
@@ -26,8 +28,57 @@ interface Hit {
   score: number;
 }
 
-/** One selectable row of the list: a conversation, a terminal pane, a file (views/palette/FilesSection.tsx), or (command mode) a command. */
-type Row = { kind: "session"; key: string; hit: Hit } | { kind: "pane"; key: string; hit: TerminalHit } | { kind: "command"; key: string; cmd: PaletteCommand } | FileRow;
+/** One selectable row of the list: a conversation, a terminal pane, an inbox item, a page (前往), a file
+ *  (views/palette/FilesSection.tsx), or (command mode) a command. */
+type Row =
+  | { kind: "session"; key: string; hit: Hit }
+  | { kind: "pane"; key: string; hit: TerminalHit }
+  | { kind: "inbox"; key: string; hit: InboxHit<InboxItem> }
+  | { kind: "place"; key: string; hit: PlaceHit }
+  | { kind: "command"; key: string; cmd: PaletteCommand }
+  | FileRow;
+
+// The words every page answers to in any UI language (the Mac's quick open matches English and Chinese alike);
+// the catalog's words_* add the UI language's own synonyms. Search data, never shown: i18n-ignore.
+const PLACE_WORDS: Record<string, string> = {
+  persona: "jarvis assistant persona main 助手 主对话", // i18n-ignore
+  history: "history chats conversations 对话 历史", // i18n-ignore
+  home: "home overview 总览 首页", // i18n-ignore
+  inbox: "inbox mail lark feishu 邮件 飞书 收件箱", // i18n-ignore
+  health: "health 健康", // i18n-ignore
+  messages: "messages lark feishu chats 飞书 消息 聊天", // i18n-ignore
+  "workspace-board": "board kanban workflow 看板 工作流", // i18n-ignore
+  todos: "todo todos tasks 待办 任务", // i18n-ignore
+  routines: "routines schedule cron followup 定时 跟进", // i18n-ignore
+  kb: "knowledge kb people projects docs 知识库 项目 文档 会议", // i18n-ignore
+  machines: "machines monitor computers cpu memory 电脑 监控 内存", // i18n-ignore
+  terminal: "terminal shell 终端", // i18n-ignore
+  settings: "settings preferences 设置 偏好", // i18n-ignore
+};
+
+export function placeWords(key: string): string {
+  const own: Record<string, string> = {
+    persona: t("palette.words_persona"),
+    history: t("palette.words_history"),
+    home: t("palette.words_home"),
+    inbox: t("palette.words_inbox"),
+    health: t("palette.words_health"),
+    messages: t("palette.words_messages"),
+    "workspace-board": t("palette.words_board"),
+    todos: t("palette.words_todos"),
+    routines: t("palette.words_routines"),
+    kb: t("palette.words_kb"),
+    machines: t("palette.words_machines"),
+    terminal: t("palette.words_terminal"),
+    settings: t("palette.words_settings"),
+  };
+  return [PLACE_WORDS[key], own[key]].filter(Boolean).join(" ");
+}
+
+/** A group's heading above its first row (收件箱, 前往). */
+function GroupHeading({ children }: { children: React.ReactNode }) {
+  return <div className="px-2.5 pt-2 pb-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{children}</div>;
+}
 
 function score(s: Session, q: string, machine: string): number {
   if (!q) return 1;
@@ -53,6 +104,20 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
   const bySession = useStore((s) => s.sessions);
   const panesOn = useStore((s) => s.features.includes("terminal_panes"));
   const bindings = useBindings();
+  // 收件箱 and 前往 (the Mac's quick open): the open inbox items, and the sidebar's pages with Persona and 全部对话
+  const inboxItems = useInbox((s) => s.items);
+  const { pages } = useNavPages();
+  // the pages come anew each render: kept by what they are, so the list (and the highlight under it) stays put
+  const hasAssistant = Boolean(assistant);
+  const pagesKey = pages.map((p) => [p.k, p.label, p.icon, href(p.to)].join("\u0001")).join("\n");
+  const places = useMemo<PlaceInput[]>(
+    () => [
+      ...(hasAssistant ? [{ key: "persona", title: t("palette.place_persona"), icon: "spark" as const, to: { name: "jarvis" } as Route }, { key: "history", title: t("sidebar.all_chats"), icon: "list" as const, to: { name: "history" } as Route }] : []),
+      ...pages.map((p) => ({ key: p.k, title: p.label, icon: p.icon, to: p.to })),
+    ].map((p) => ({ ...p, words: placeWords(p.key) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `pages` is new each render; pagesKey says what it holds
+    [hasAssistant, pagesKey],
+  );
   const rows = useRef<(HTMLButtonElement | null)[]>([]);
   const list = useRef<HTMLDivElement>(null);
 
@@ -102,8 +167,10 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
       ...terminalHits(machinePanes, text).map((h) => ({ kind: "pane" as const, key: h.key, hit: h, score: h.score, at: "" })),
     ];
     all.sort((a, b) => b.score - a.score || b.at.localeCompare(a.at));
-    return all.slice(0, 40);
-  }, [mode, text, sessions, assistant, machines, machinePanes]);
+    const mail = inboxHits(inboxItems.filter((it) => !isDone(it)), text).map((h) => ({ kind: "inbox" as const, key: h.key, hit: h, score: h.score }));
+    const go = placeHits(places, text).map((h) => ({ kind: "place" as const, key: h.key, hit: h, score: h.score }));
+    return orderGroups<Row & { score: number }>([all.slice(0, 40), mail, go]).flat();
+  }, [mode, text, sessions, assistant, machines, machinePanes, inboxItems, places]);
 
   // command mode: what other modules offer for here, then the registered commands with their shortcuts
   const commands = useMemo((): Row[] => {
@@ -135,6 +202,8 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
     onClose();
     if (r.kind === "command") r.cmd.run();
     else if (r.kind === "file") openFileHit(r);
+    else if (r.kind === "inbox") navigate({ name: "inbox", id: r.hit.item.id });
+    else if (r.kind === "place") navigate(r.hit.place.to);
     else navigate(r.hit.to);
   };
   const command = mode === "command";
@@ -206,10 +275,42 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                 </div>
               );
             }
+            if (r.kind === "inbox" || r.kind === "place") {
+              const heading = (shown[i - 1] as Row | undefined)?.kind !== r.kind;
+              const body =
+                r.kind === "inbox" ? (
+                  <>
+                    <span className="flex size-5 shrink-0 items-center justify-center"><Icon name="inbox" size={13} className="text-ink-3" /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium text-ink">{r.hit.item.title}</span>
+                      <span className="block truncate text-[11.5px] text-ink-3">{[r.hit.item.sender, r.hit.item.preview].filter(Boolean).join(t("palette.sender_separator"))}</span>
+                    </span>
+                    <span className="shrink-0 text-[11px] text-ink-3">{ago(r.hit.item.updated_at)}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex size-5 shrink-0 items-center justify-center"><Icon name={r.hit.place.icon} size={13} className="text-ink-3" /></span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{r.hit.place.title}</span>
+                  </>
+                );
+              return (
+                <div key={r.key}>
+                  {heading && <GroupHeading>{r.kind === "inbox" ? t("palette.group_inbox") : t("palette.group_places")}</GroupHeading>}
+                  <button ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
+                    {body}
+                  </button>
+                </div>
+              );
+            }
+            // the conversations and panes have a heading only after another group (收件箱 or 前往 matched better)
+            const prev = (shown[i - 1] as Row | undefined)?.kind;
+            const sessionsHeading = i > 0 && prev !== "session" && prev !== "pane" && <GroupHeading>{t("palette.group_sessions")}</GroupHeading>;
             if (r.kind === "pane") {
               const h = r.hit;
               return (
-                <button key={r.key} ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
+                <div key={r.key}>
+                {sessionsHeading}
+                <button ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
                   <span className="flex size-5 shrink-0 items-center justify-center">{h.state === "shell" ? <Icon name="terminal" size={13} className="text-ink-3" /> : <StatusDot state={h.state} />}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-medium text-ink">{h.title}</span>
@@ -217,13 +318,16 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                   </span>
                   <span className="shrink-0 text-[11px] text-ink-3">{t("palette.terminal")}</span>
                 </button>
+                </div>
               );
             }
             const h = r.hit;
             const st = stateOf(h.s);
             const meta = h.assistant ? "Persona" : [machineWithHub(h.s.machine_id, machines), h.s.space_name, tabLabel(h.s)].filter(Boolean).join(" › ");
             return (
-              <button key={h.key} ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
+              <div key={h.key}>
+              {sessionsHeading}
+              <button ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
                 <span className="flex size-5 shrink-0 items-center justify-center">{h.assistant ? <Icon name="spark" size={13} className="text-ink-3" /> : <StatusDot state={st} />}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-medium text-ink">{sessionTitle(h.s)}</span>
@@ -231,6 +335,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                 </span>
                 <span className="shrink-0 text-[11px] text-ink-3">{st === "offline" || h.assistant ? ago(h.s.updated_at) : STATE_LABEL[st]}</span>
               </button>
+              </div>
             );
           })}
           {shown.length === 0 && command && (
