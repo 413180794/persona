@@ -1,0 +1,23 @@
+{
+  "untitled": "workflow",
+  "running_in_background": "后台运行中",
+  "line_name": "后台 workflow「{name}」",
+  "line_more": "{line}（共 {count} 个）",
+  "status_running": "在跑",
+  "status_completed": "完成",
+  "status_failed": "失败",
+  "status_killed": "已停止",
+  "status_stalled": "没动静了",
+  "title": "后台 workflow",
+  "agents_progress": "{done}/{started} 个 agent 完成",
+  "agents_running_other": "{count} 个在跑",
+  "show_agents_other": "展开 {count} 个 agent",
+  "hide_agents": "收起",
+  "open_agent": "看 {label} 的对话",
+  "agent": "agent",
+  "phase_done": "已完成的阶段",
+  "phase_current": "当前阶段",
+  "phase_next": "还没开始的阶段",
+  "waiting_note": "这一轮停着是在等它的结果，结果回来会叫醒 Agent，不算做完。",
+  "phase_aria": "{state}：{phase}"
+}

@@ -1,5 +1,5 @@
 // The overview (总览) rendered statically (#2320): a waiting card is something to do, and 「全部标为已读」 is there whenever
-// an agent is unread, though its tab is filed under 停在电脑上 or 正在工作.
+// an agent is unread, though its tab is filed under 卡住了，要你去看 or 正在工作.
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Interaction, Machine, Session } from "../lib/types";
@@ -70,7 +70,7 @@ describe("the overview", () => {
     const html = render([agent(1, 0, "working"), agent(1, 1, "unread"), agent(2, 0, "needs_you"), agent(2, 1, "unread")]);
     expect(html).not.toContain("做完了，还没看");
     expect(html).toContain("正在工作");
-    expect(html).toContain("停在电脑上");
+    expect(html).toContain("卡住了，要你去看");
     expect(markAll(html)).toBe("2");
   });
 
@@ -81,5 +81,27 @@ describe("the overview", () => {
     expect(markAll(html)).toBe("2");
     expect(html.indexOf("全部标为已读")).toBeGreaterThan(section);
     expect(markAll(render([agent(1, 0, "working")]))).toBeUndefined();
+  });
+
+  it("says the headline counts agents and why the cards can be more (#2956)", () => {
+    const a = agent(2, 0, "needs_you");
+    const card = (id: string) => ({ id, machine_id: "mac", session_id: a.session_id, kind: "question" }) as Interaction;
+    const two = render([a], [card("q1"), card("q2")]);
+    expect(two).toContain("1 个 Agent 需要你");
+    expect(two).toContain("同一个 Agent 可能连着问你几件事");
+    // one card per agent: the numbers agree, nothing to explain
+    expect(render([a], [card("q1")])).not.toContain("同一个 Agent 可能连着问你几件事");
+    // two cards on one agent beside a stuck agent without a card: still one agent with several (#2956 review)
+    const stuck = agent(3, 0, "needs_you");
+    expect(render([a, stuck], [card("q1"), card("q2")])).toContain("同一个 Agent 可能连着问你几件事");
+    // a card per agent, its agent not counted (an assistant session): nothing to explain
+    const other = { id: "q3", machine_id: "mac", session_id: "assistant-1", kind: "question" } as Interaction;
+    expect(render([a], [card("q1"), other])).not.toContain("同一个 Agent 可能连着问你几件事");
+  });
+
+  it("explains the agents that need you without a card (#2956)", () => {
+    const html = render([agent(2, 0, "needs_you")]);
+    expect(html).toContain("卡住了，要你去看");
+    expect(html).toContain("这些 Agent 没发来要你处理的卡片，多半是出错或卡住了");
   });
 });

@@ -28,6 +28,7 @@ import {
   type TaskPlan,
   type TodayBody,
 } from "../../lib/feed";
+import { runningWorkflows, workflowLine } from "../../lib/workflows";
 import { dockAgents, interruption, isRemovable, makeSessionLookup, mostUrgentAgent, runningSubagents, taskNow, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
 import { parseAPIError } from "../../lib/api-errors";
 import { navigate } from "../../lib/router";
@@ -273,6 +274,9 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   const stepFor = now === progress?.text ? progress.for : undefined;
   // Its subagents add to its own progress, below it, and never stand in for it.
   const subagents = status === "working" || status === "needs_you" ? runningSubagents(lead) : [];
+  // its turn ended to wait for a background workflow (#2935): the run's progress, under its own
+  const wfNow = useNow(60_000, runningWorkflows(lead).length > 0);
+  const workflow = status === "working" || status === "needs_you" ? workflowLine(lead, wfNow) : "";
   return (
     <div
       role="button"
@@ -300,6 +304,12 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
               {subagents.length > 3
                 ? t("assistant-tasks.subagents_running_more", { names: subagents.slice(0, 3).join(t("assistant-tasks.list_separator")), count: subagents.length })
                 : t("assistant-tasks.subagents_running", { names: subagents.slice(0, 3).join(t("assistant-tasks.list_separator")) })}
+            </span>
+          )}
+          {workflow && (
+            <span data-workflow-line className="flex min-w-0 items-center gap-1 text-[12px] text-orange">
+              <Icon name="layers" size={11} stroke={2.2} className="shrink-0" />
+              <span className="truncate tabular-nums">{workflow}</span>
             </span>
           )}
         </span>

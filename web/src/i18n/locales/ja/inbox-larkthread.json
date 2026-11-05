@@ -51,5 +51,10 @@
   "older_stopped": "今は以前のメッセージを読み込めません。クリックして再試行",
   "older_account_changed": "Feishu アカウントが切り替わりました。会話を開き直してください",
   "older_signed_out": "Feishu からログアウトしました。再接続してください",
-  "jump_latest": "最新へ"
+  "jump_latest": "最新へ",
+  "recalled_mark": "取り消し済み",
+  "edit_history": "編集履歴",
+  "edit_history_hint": "保存された以前の版を見る",
+  "edit_history_hidden": "編集履歴は非表示です",
+  "edit_version_encrypted": "暗号化"
 }

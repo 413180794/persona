@@ -184,6 +184,8 @@ export interface Session {
   /** The goal it works toward until it holds (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md). */
   goal?: GoalInfo;
   background?: BackgroundTask[];
+  /** Claude Code workflow runs it launched in the last day, newest first (#2935); older hubs leave it out. */
+  workflows?: Workflow[];
   rev?: number;
   suggestion?: string;
   /** An assistant conversation moved out of the list (docs/assistant.md「管理自己的对话」). */
@@ -253,6 +255,45 @@ export interface BackgroundTask {
   command?: string;
   output_file?: string;
   started_at?: string;
+  /** A Monitor: when it stops by itself. */
+  expires_at?: string;
+  /** A workflow: its run in Session.workflows. */
+  run_id?: string;
+}
+
+/** A Claude Code workflow run (the Workflow tool, proto.Workflow; docs/protocol.md「workflows」). */
+export interface Workflow {
+  task_id: string;
+  run_id?: string;
+  name?: string;
+  summary?: string;
+  /** running | completed | failed | killed | stalled; anything else reads as completed. */
+  status: string;
+  running: boolean;
+  phases?: string[];
+  phase?: string;
+  /** Phase's 1-based place in phases; 0 or absent: not known. */
+  phase_index?: number;
+  agents_started?: number;
+  agents_done?: number;
+  agents_running?: number;
+  started_at?: string;
+  ended_at?: string;
+  updated_at?: string;
+  error?: string;
+  agents?: WorkflowAgent[];
+}
+
+/** One agent of a workflow run; its conversation reads like a subagent's (session_id "<parent>@<id>"). */
+export interface WorkflowAgent {
+  id: string;
+  session_id: string;
+  label?: string;
+  phase?: string;
+  running: boolean;
+  started_at?: string;
+  updated_at?: string;
+  last_text?: string;
 }
 
 /** What a background task's notice says (proto.TaskNote). */

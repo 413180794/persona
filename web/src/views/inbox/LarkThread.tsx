@@ -11,6 +11,7 @@ import {
 } from "../../lib/inbox";
 import { larkPath, olAccount } from "../../lib/lark-accounts";
 import { larkAccount } from "../../lib/lark-chats";
+import { quoteSummary, showsBody, showsHistory, useLarkDisplay, useLarkDisplayState } from "../../lib/lark-display";
 import { canAddPin, changeChatPin, needsRecheck, pinProblemText, type ChatPinTarget } from "../../lib/lark-pins";
 import { historyProblem, type HistoryProblem, latestOf, nearTop, OlderPaging, screensFromEnd, showsJumpToLatest } from "../../lib/lark-history";
 import { initialCursor, LarkReadTracker } from "../../lib/lark-read";
@@ -23,6 +24,7 @@ import { t } from "../../i18n";
 import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Monogram } from "./InboxParts";
+import { LarkEditHistoryDialog } from "./LarkEditHistory";
 import { LarkPinsDialog } from "./LarkPins";
 import { isSummaryCard, LarkSummaryCard } from "./LarkSummaryCard";
 import { LarkTopicCard, LarkTopicDialog, useTopicReplies } from "./LarkTopicCard";
@@ -94,6 +96,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   // A topic group: a card per topic, its newest replies on it, its thread in a dialog (LarkTopicCard.tsx).
   const topicReplies = useTopicReplies(feed, ol);
   const [openTopic, setOpenTopic] = useState<LarkMessage | null>(null);
+  useLarkDisplayState(ol); // 防撤回 / 编辑历史 (lark-display.ts): read while the chat shows
 
   useEffect(() => {
     let live = true;
@@ -709,14 +712,17 @@ function TranslationLine({ m, target }: { m: LarkMessage; target: string }) {
 
 /** A topic's own content on its card: what a chat row holds under its header. */
 function MessageBody({ m, translateTo }: { m: LarkMessage; translateTo?: string }) {
+  const display = useLarkDisplay(useContext(ChatAccount));
+  const shown = showsBody(display, m);
   return (
     <>
       {m.reply_to && (
         <p className="mb-1 truncate border-l-2 border-line-strong pl-2 text-[12px] text-ink-3">
-          {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{m.reply_to.recalled ? t("inbox-larkthread.recalled") : m.reply_to.text}
+          {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{quoteSummary(display, m.reply_to)}
         </p>
       )}
-      {m.recalled ? <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p> : <Parts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} />}
+      {shown ? <Parts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
+      {shown && m.recalled && <p className="mt-0.5 text-[11px] text-ink-3">{t("inbox-larkthread.recalled_mark")}</p>}
       {translateTo && <TranslationLine m={m} target={translateTo} />}
     </>
   );
@@ -751,9 +757,15 @@ function Message({
   const ol = useContext(ChatAccount);
   const [thread, setThread] = useState<LarkMessage[] | null>(null);
   const [opening, setOpening] = useState(false);
+  const display = useLarkDisplay(ol);
+  const [history, setHistory] = useState(false);
   if (isSystem(m)) {
-    return <p data-pos={m.position} data-seen-pos={nested ? undefined : m.position} className="px-2 py-1.5 text-center text-[11.5px] text-ink-3">{m.text || (m.parts ?? []).map((p) => p.text).join("")}</p>;
+    return <p data-pos={m.position} data-seen-pos={nested ? undefined : m.position} className="px-2 py-1.5 text-center text-[11.5px] text-ink-3">{m.recalled ? t("inbox-larkthread.recalled") : m.text || (m.parts ?? []).map((p) => p.text).join("")}</p>;
   }
+  const shown = showsBody(display, m);
+  const edited = showsHistory(display, m) ? (
+    <button type="button" onClick={() => setHistory(true)} title={t("inbox-larkthread.edit_history_hint")} className="shrink-0 text-[11px] whitespace-nowrap text-ink-3 underline decoration-dotted underline-offset-2 hover:text-ink">{t("inbox-larkthread.edited")}</button>
+  ) : <span className="shrink-0 text-[11px] text-ink-3">{t("inbox-larkthread.edited")}</span>;
   const name = m.is_mine ? t("inbox-larkthread.me") : m.sender_name || t("inbox-larkthread.unknown");
   const compact = !nested && prev && !isSystem(prev) && prev.sender_id === m.sender_id && !m.reply_to
     && Date.parse(m.created_at ?? "") - Date.parse(prev.created_at ?? "") < 5 * 60_000;
@@ -790,7 +802,7 @@ function Message({
             <span className={cx("truncate text-[12.5px] font-medium", m.is_mine ? "text-accent-ink" : "text-ink")}>{name}</span>
             {m.sender_type === "bot" && <span className="shrink-0 rounded-[4px] bg-field px-1 text-[10px] text-ink-3">{t("inbox-larkthread.bot")}</span>}
             <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{clock(m.created_at)}</span>
-            {m.edited && <span className="shrink-0 text-[11px] text-ink-3">{t("inbox-larkthread.edited")}</span>}
+            {m.edited && edited}
             {m.sending && (
               <span className="flex items-center gap-1 text-[11px] text-ink-3">
                 <Spinner size={10} />
@@ -812,10 +824,17 @@ function Message({
         )}
         {m.reply_to && (
           <p className="mt-0.5 truncate border-l-2 border-line-strong pl-2 text-[12px] text-ink-3">
-            {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{m.reply_to.recalled ? t("inbox-larkthread.recalled") : m.reply_to.text}
+            {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{quoteSummary(display, m.reply_to)}
           </p>
         )}
-        {m.recalled ? <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p> : <Parts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} />}
+        {shown ? <Parts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
+        {((shown && m.recalled) || (compact && m.edited)) && (
+          <p className="mt-0.5 flex items-center gap-2 text-[11px] text-ink-3">
+            {shown && m.recalled && <span>{t("inbox-larkthread.recalled_mark")}</span>}
+            {compact && m.edited && edited}
+          </p>
+        )}
+        {history && <LarkEditHistoryDialog message={m} display={display} renderParts={(parts) => <Parts parts={parts} />} onClose={() => setHistory(false)} />}
         {translateTo && <TranslationLine m={m} target={translateTo} />}
         {replies > 0 && !nested && (
           <button type="button" onClick={() => void openThread()} className="mt-1 flex items-center gap-1 text-[11.5px] font-medium whitespace-nowrap text-accent-ink hover:underline">

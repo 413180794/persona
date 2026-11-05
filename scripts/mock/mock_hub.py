@@ -471,6 +471,29 @@ ASK2 = "b2e4d6f8-0000-4000-8000-000000000002"
 ASK3 = "b2e4d6f8-0000-4000-8000-000000000003"
 ASK4 = "b2e4d6f8-0000-4000-8000-000000000004"  # a long one (the top bar must not move as it scrolls)
 
+# MOCK_WORKFLOWS=1 (#2935, docs/protocol.md「workflows」): the widget agent's turn ended to wait for a workflow it runs in
+# the background (one earlier run was stopped). Each agent's transcript reads like a subagent's ("<session>@<agent>").
+MOCK_WORKFLOW_AGENTS = [
+    ("wa1", "audit:timeline", "Audit", False, "时间线刷新预算没问题：每小时 1 次，在 WidgetKit 的限额里。"),
+    ("wa2", "audit:rain", "Audit", False, "降雨概率在 0.5% 以下时显示成 0%，和 App 里不一致。"),
+    ("wa3", "audit:locale", "Audit", False, "日文和英文的小时格式都对。"),
+    ("wa4", "verify:rain#0", "Verify", True, "在核对 App 和小组件用的是不是同一个格式化函数"),
+    ("wa5", "verify:timeline#0", "Verify", False, "确认了：时间线问题不成立。"),
+    ("wa6", "verify:locale#0", "Verify", True, ""),
+]
+MOCK_WORKFLOW_RUNS = [
+    {"task_id": "wdemo1", "run_id": "wf_demo1", "name": "widget-audit", "summary": "Audit the widget per area, verify each finding",
+     "status": "running", "running": True, "phases": ["Audit", "Verify"], "phase": "Verify", "phase_index": 2,
+     "agents_started": 6, "agents_done": 4, "agents_running": 2, "started_at": ago(minutes=14), "updated_at": ago(minutes=0),
+     "agents": [{"id": a, "session_id": f"{WIDGET}@{a}", "label": label, "phase": phase, "running": run,
+                 "started_at": ago(minutes=13 - i), "updated_at": ago(minutes=0 if run else 6 - i), **({"last_text": text} if text else {})}
+                for i, (a, label, phase, run, text) in enumerate(MOCK_WORKFLOW_AGENTS)]},
+    {"task_id": "wdemo0", "run_id": "wf_demo0", "name": "widget-audit", "summary": "Audit the widget per area, verify each finding",
+     "status": "killed", "running": False, "phases": ["Audit", "Verify"], "phase": "Audit", "phase_index": 1,
+     "agents_started": 3, "agents_done": 0, "agents_running": 0, "started_at": ago(minutes=16), "ended_at": ago(minutes=15),
+     "error": "Error: Workflow aborted", "agents": []},
+]
+
 SESSIONS = [
     sess("macbook", WIDGET, "给天气 App 加主屏幕小组件", "/Users/me/code/weather", "working", "working", "weather", 1, "widget", 1, 0,
          "小组件的时间线已经能按小时刷新了，正在跑测试确认降雨概率的格式化没问题。", permission_mode="acceptEdits",
@@ -486,7 +509,11 @@ SESSIONS = [
                "next_at": (datetime.now(timezone.utc) + timedelta(minutes=17)).isoformat().replace("+00:00", "Z"), "ticks": 3},
          background=[{"id": "b1", "kind": "shell", "description": "跑小组件快照测试",
                       "command": "xcodebuild test -scheme WeatherWidget -only-testing:SnapshotTests",
-                      "output_file": "/tmp/claude/b1.output", "started_at": ago(minutes=4)}],
+                      "output_file": "/tmp/claude/b1.output", "started_at": ago(minutes=4)}]
+                    # MOCK_WORKFLOWS=1|legacy (#2935): a background workflow running; legacy: a hub without workflows
+                    + ([{"id": "wdemo1", "kind": "workflow", "description": "widget-audit", "run_id": "wf_demo1", "started_at": ago(minutes=14)}]
+                       if os.environ.get("MOCK_WORKFLOWS") in ("1", "legacy") else []),
+         **({"workflows": MOCK_WORKFLOW_RUNS} if os.environ.get("MOCK_WORKFLOWS") == "1" else {}),
          # MOCK_QUEUE=1: input typed while it works and not taken yet (POST …/queue edits it)
          **({"queued": ["顺便把 README 里的截图也换成新的小组件", "改完以后跑一遍 UI 测试，把失败的截图发给我"]}
             if os.environ.get("MOCK_QUEUE") else {})),
@@ -1552,6 +1579,9 @@ EDIT_NEW = """    func makeEntry(for date: Date) -> WeatherEntry {
     }"""
 
 ITEMS = {}
+for _a, _label, _phase, _run, _text in MOCK_WORKFLOW_AGENTS:  # MOCK_WORKFLOWS: each workflow agent's conversation
+    ITEMS[f"{WIDGET}@{_a}"] = [it("user", "text", 13, text=f"{_label}：审计小组件的这一块，列出问题")] + (
+        [it("assistant", "text", 1, text=_text)] if _text else [])
 ITEMS[WIDGET] = (
     [it("user", "text", 14, text="给天气 App 加一个主屏幕小组件：显示当前温度，下面是接下来 6 小时的降雨概率。中号和小号两种尺寸。")]
     + [it("assistant", "thinking", 14, text="先看看现在的数据层有没有逐小时的预报，再决定小组件的时间线怎么刷新。")]
@@ -4121,71 +4151,54 @@ def _lm(pos, who, text, mine=False, mins=60):
 LARK_MESSAGES = {"f2": [
     _lm("200", "Lucy Wang", "The new icon set is in the shared folder. Could you take a look before the review this afternoon?", mins=58),
     _lm("201", "李雷", "我先看了一下，标签栏的图标偏细", mins=57),
-    _lm("202", "Lucy Wang", "Agreed. I'll make the tab bar icons one weight heavier and send an update by 3 pm.", mins=56),
-    _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
-]}
-LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {"copy": True}, "content": {"type": "doc", "content": [
-    {"type": "heading", "attrs": {"level": 1}, "content": [{"type": "text", "text": "新版图标评审"}]},
-    {"type": "paragraph", "content": [{"type": "text", "text": "这一版统一了圆角和描边，深色模式单独调了对比度。"}]},
-    {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "待确认"}]},
-    {"type": "bulletList", "content": [
-        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "主色是否再暖一点"}]}]},
-        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "小尺寸下的描边粗细"}]}]}]},
-    {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
-]}}
+    _lm("202", "Lucy Wang", "Agreed. I''s [removed] words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
+    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
+    while True:
+        n, d = divmod(n, 34)
+        out = BRAVE_CLIMB_ALPHABET[d] + out
+        if n == 0:
+            return "**字" + out + "**""MOCK_LARK_BRAVE_CLIMB"):
+    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
+    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
+    words = brave_climb("标签栏改粗一号")
+    split = _lm("211", "Lucy Wang", words, mins=39)
+    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
+    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
+    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
+    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
+    reply = _lm("214", "我", "好的", mine=True, mins=36)
+    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
+    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
+    LARK_CHATS[0]["preview"] = whole["text"]
+if os.environ.get("MOCK_LARK_TRAINER"):
+    retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
+    retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
+    missing = _lm("201", "李雷", "不能展示的占位原文", mins=54)
+    missing.update(recalled=True, retained=False)
+    edited = _lm("202", "李雷", "评审地点改为线上", mins=53)
+    edited.update(edited=True, edit_history=[
+        {"edited_at": "2026-01-01T10:00:00.123Z", "text": "原定会议室 A", "parts": [{"kind": "text", "text": "原定会议室 A"}]},
+        {"edited_at": "2026-01-01T10:05:00Z", "text": "不得缓存的旧加密正文", "olk": {
+            "version": 1, "state": "locked", "publicParts": [{"kind": "text", "text": "稍后确认"}]}}
+    ])
+    quoted = _lm("203", "我", "收到，按新的安排。", mine=True, mins=52)
+    quoted["reply_to"] = {"id": retained["id"], "sender_name": "李雷", "text": retained["text"], "recalled": True, "retained": True}
+    recalled_system = _lm("204", "系统成员", "不得展示的系统撤回原文", mins=51)
+    recalled_system.update(type="SYSTEM", recalled=True, retained=True)
+    anonymous_system = _lm("205", "", "不得展示的匿名系统原文", mins=50)
+    anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
+    LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
 
-LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
-
-# MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
-if os.environ.get("MOCK_LARK_OLK"):
-    def _olk(pos, state, body, cover, handout=False):
-        m = _lm(str(pos), "李雷", body or "加密群密钥分发消息", mins=55)
-        m["parts"] = [{"kind": "text", "text": m["text"]}]
-        m["olk"] = {"version": 1, "state": state,
-                    "publicParts": [{"kind": "text", "text": cover}] if cover else []}
-        if state == "decrypted":
-            m["olk"].update(bodyParts=[{"kind": "text", "text": body}] if body else [], keyHandout=handout)
-        return m
-    LARK_MESSAGES["f2"] = [
-        _olk(200, "decrypted", "", "稍等", True),
-        _olk(201, "decrypted", "评审文档已更新，请看第二页。", "我看看"),
-        _olk(202, "decrypted", "我把调整后的版本发到这里。", "等下", True),
-        _olk(203, "locked", "不可见的正文", "午饭后再聊"),
-        _lm("204", "李雷", "加密群密钥分发消息是一个普通文本示例", mins=55),
-    ]
-    LARK_MESSAGES["f2"][2]["reply_to"] = {
-        "id": "m201", "sender_name": "李雷", "text": "旧接口摘要",
-        "olk": LARK_MESSAGES["f2"][1]["olk"],
-    }
-    LARK_MESSAGES["f2"][4]["reply_to"] = {
-        "id": "m203", "sender_name": "李雷", "text": "不可见的正文",
-        "olk": LARK_MESSAGES["f2"][3]["olk"],
-    }
-
-LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
-# Isolated pin shelf fixtures: real list endpoints, account checks and realtime changes.
-LARK_PIN_FIXTURE = {"count": 18, "account": "pin-account-one", "offline": False, "reverse": False, "unread": 3, "newest": False, "requests": 0}
-def lark_pin_rows():
-    rows = [dict(c) for c in LARK_CHATS]
-    for i in range(1, 81):
-        rows.append({"id": f"pin-{i}", "name": f"会话 {i:02d}", "is_group": i % 2 == 0,
-                     "unread": i % 4, "at_me": False, "muted": i % 3 == 0, "is_mine": False,
-                     "preview": f"第 {i} 条会话摘要", "updated_at": ago(minutes=i)})
-    rows[0]["unread"] = LARK_PIN_FIXTURE["unread"]
-    if LARK_PIN_FIXTURE["newest"]:
-        rows.insert(0, dict(rows[0], id="incoming", name="新会话", preview="实时更新的摘要"))
-        rows = [dict(c, preview="实时更新 · " + c["preview"]) for c in rows]
-    if LARK_PIN_FIXTURE["account"] != "pin-account-one":
-        rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
-    return rows
-
-LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
-                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB""MOCK_LARK_OLD_DISPLAY"):
-    del LARK_DISPLAY["brave_climb_codec"]
-
-BRAVE_CLIMB_ALPHABET = "[removed]"
-def brave_climb(text):
-    """lark-connector''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+# The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
+# one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
+# thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
+# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose lark-connector
+# lost its Feishu session.
+LARK_LOGGED_OUT = "lark: lark-connector 未登录飞书 (AUTH_SESSION_EXPIRED)"
+_LARK_EMOJI_SET = (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"), ("HEART", "爱心"), ("SMILE", "微笑"), ("LAUGH", "大笑"),
+                   ("SURPRISED", "惊讶"), ("CRY", "流泪"), ("DONE", "完成"))
+# Keyed in lower case like the hub's catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
 # flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
 LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
 LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}

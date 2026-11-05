@@ -2,24 +2,29 @@
 // from stays as it was.
 import { useStore } from "../../lib/store";
 import { subagentParent, subagentTitle } from "../../lib/tasks";
+import { workflowAgentFor, workflowName } from "../../lib/workflows";
 import { StatusDot } from "../../ui/atoms";
 import { PanelHeader } from "../SidePanel";
 import { ChatView } from "./ChatView";
 import { t } from "../../i18n";
 
 export function SubagentPanel({ mid, sid, onClose }: { mid: string; sid: string; onClose: () => void }) {
-  const agent = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === subagentParent(sid))?.subagents?.find((a) => a.session_id === sid));
+  const parent = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === subagentParent(sid)));
+  const agent = parent?.subagents?.find((a) => a.session_id === sid);
+  // one of a background workflow's agents (#2935): named by its label, under its run
+  const wf = agent ? null : workflowAgentFor(parent, sid);
+  const running = agent?.running ?? wf?.agent.running;
   return (
     <>
       <PanelHeader
         icon="agent"
         title={
           <span className="flex min-w-0 items-center gap-1.5">
-            <StatusDot state={agent?.running ? "working" : "unread"} size={7} />
-            <span className="truncate">{agent ? subagentTitle(agent) : t("chat-subagentpanel.subagent")}</span>
+            <StatusDot state={running ? "working" : "unread"} size={7} />
+            <span className="truncate">{agent ? subagentTitle(agent) : wf?.agent.label || t("chat-subagentpanel.subagent")}</span>
           </span>
         }
-        subtitle={[t("chat-subagentpanel.subagent"), agent?.fork ? t("chat-subagentpanel.fork") : agent?.type, agent?.running ? t("chat-subagentpanel.running_read_only") : t("chat-subagentpanel.read_only")].filter(Boolean).join(" · ")}
+        subtitle={[wf ? t("lib-workflows.line_name", { name: workflowName(wf.run) }) : t("chat-subagentpanel.subagent"), agent?.fork ? t("chat-subagentpanel.fork") : agent?.type ?? wf?.agent.phase, running ? t("chat-subagentpanel.running_read_only") : t("chat-subagentpanel.read_only")].filter(Boolean).join(" · ")}
         onClose={onClose}
       />
       <div className="flex min-h-0 flex-1 flex-col">

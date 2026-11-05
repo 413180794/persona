@@ -1,0 +1,9 @@
+{
+  "title": "风灵月影",
+  "anti_recall": "防撤回",
+  "anti_recall_hint": "查看 lark-connector 已留存的撤回内容，保留「已撤回」标记。未留存的内容无法恢复。",
+  "edit_history": "编辑历史",
+  "edit_history_hint": "点击消息旁的「已编辑」，查看已留存的旧版本。",
+  "reload": "重新读取",
+  "shared": "与 lark-connector 网页共用 hub 当前飞书账号的设置。只影响显示，不影响留存。"
+}

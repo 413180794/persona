@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { shortTime } from "../../lib/inbox";
 import { olAccount } from "../../lib/lark-accounts";
+import { useLarkDisplay, type LarkMessageDisplay } from "../../lib/lark-display";
 import { canOpenPin, canRemovePin, ChatPinsModel, liveChatPinsDeps, pinSummary, type ChatPin, type ChatPinTarget } from "../../lib/lark-pins";
 import { onHubEvent } from "../../lib/store";
 import { t } from "../../i18n";
@@ -21,6 +22,7 @@ export function LarkPinsDialog({ feed, topic, account, onClose, onOpen }: {
   onOpen: (target: ChatPinTarget) => void;
 }) {
   const [model] = useState(() => new ChatPinsModel(liveChatPinsDeps(feed, topic, account)));
+  const display = useLarkDisplay(account);
   const s = useSyncExternalStore(model.subscribe, () => model.state);
   const [removing, setRemoving] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -89,6 +91,7 @@ export function LarkPinsDialog({ feed, topic, account, onClose, onOpen }: {
               {s.items.map((p) => (
                 <li key={p.id}>
                   <PinRow
+                    display={display}
                     pin={p}
                     locating={s.locating === p.id}
                     disabled={busy || s.blocked}
@@ -120,8 +123,9 @@ export function LarkPinsDialog({ feed, topic, account, onClose, onOpen }: {
   );
 }
 
-function PinRow({ pin, locating, disabled, removable, confirming, onOpen, onRemove, onCancel, onConfirm }: {
+function PinRow({ pin, display, locating, disabled, removable, confirming, onOpen, onRemove, onCancel, onConfirm }: {
   pin: ChatPin;
+  display: LarkMessageDisplay;
   locating: boolean;
   disabled: boolean;
   removable: boolean;
@@ -167,7 +171,7 @@ function PinRow({ pin, locating, disabled, removable, confirming, onOpen, onRemo
             <span className="flex-1" />
             {locating ? <Spinner size={11} /> : <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{shortTime(pin.created_at)}</span>}
           </span>
-          <span className={cx("mt-0.5 line-clamp-3 text-[13px] leading-relaxed break-words whitespace-pre-wrap", gone || m?.recalled ? "text-ink-3" : "text-ink")}>{pinSummary(pin)}</span>
+          <span className={cx("mt-0.5 line-clamp-3 text-[13px] leading-relaxed break-words whitespace-pre-wrap", gone || m?.recalled ? "text-ink-3" : "text-ink")}>{pinSummary(pin, display)}</span>
           {pin.operator_name && <span className="mt-0.5 block truncate text-[11px] text-ink-3">{t("inbox-larkpins.added_by", { name: pin.operator_name })}</span>}
         </span>
       </button>

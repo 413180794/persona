@@ -6,6 +6,7 @@ import { t } from "../i18n";
 import { api, ApiError, enc, errorText } from "./api";
 import type { LarkMessage, LarkPage } from "./inbox";
 import { larkPath } from "./lark-accounts";
+import { HIDDEN_DISPLAY, showsBody, type LarkMessageDisplay } from "./lark-display";
 
 export interface ChatPin {
   id: string;
@@ -87,14 +88,15 @@ export const canRemovePin = (p: ChatPin) => p.message?.can_unpin === true;
 /** A row opens its message unless the message is gone. */
 export const canOpenPin = (p: ChatPin) => Boolean(p.message) && !p.message?.deleted;
 
-/** One line of what was pinned (the hub sends only what may be shown: the public face of an encrypted message). */
-export function pinSummary(p: ChatPin): string {
+/** One line of what was pinned (the hub sends only what may be shown: the public face of an encrypted message). A
+ * recalled one says what it said only with 防撤回 on and its content kept (lark-display.ts), marked 已撤回. */
+export function pinSummary(p: ChatPin, display: LarkMessageDisplay = HIDDEN_DISPLAY): string {
   const m = p.message;
   if (!m || m.deleted) return t("lib-lark-pins.message_unavailable");
-  if (m.recalled) return t("lib-lark-pins.message_recalled");
+  if (!showsBody(display, m)) return t("lib-lark-pins.message_recalled");
   const text = (m.text || (m.parts ?? []).map((x) => x.text ?? "").join("")).trim();
   const fallback = m.type === "IMAGE" ? t("lib-lark-pins.fallback_image") : m.type === "FILE" ? t("lib-lark-pins.fallback_file") : t("lib-lark-pins.fallback_message");
-  return text || fallback;
+  return m.recalled ? t("lib-lark-pins.recalled_kept", { text: text || fallback }) : text || fallback;
 }
 
 export function isPinNotice(e: unknown): boolean {

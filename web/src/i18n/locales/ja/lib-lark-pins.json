@@ -9,5 +9,6 @@
   "fallback_file": "[ファイル]",
   "fallback_message": "メッセージ",
   "not_logged_in": "ハブに接続されたlark-connectorがLarkにログインしていません",
-  "load_failed": "ピン留めメッセージを読み込めません：{error}"
+  "load_failed": "ピン留めメッセージを読み込めません：{error}",
+  "recalled_kept": "{text} · 取り消し済み"
 }

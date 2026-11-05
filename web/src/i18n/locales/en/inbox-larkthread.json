@@ -52,5 +52,10 @@
   "older_stopped": "Can't load earlier messages right now. Click to retry",
   "older_account_changed": "Feishu account changed. Reopen the chat",
   "older_signed_out": "Signed out of Feishu. Reconnect it",
-  "jump_latest": "Back to latest"
+  "jump_latest": "Back to latest",
+  "recalled_mark": "Recalled",
+  "edit_history": "Edit history",
+  "edit_history_hint": "View kept earlier versions",
+  "edit_history_hidden": "Edit history is hidden",
+  "edit_version_encrypted": "Encrypted"
 }

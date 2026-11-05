@@ -14,6 +14,7 @@ import { Button, cx, Dialog, IconButton, Loading, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Count, Monogram } from "../inbox/InboxParts";
 import { ConnectorDetail, ConnectorList } from "./HubConnector";
+import { LarkDisplaySettings } from "./LarkDisplaySettings";
 import { LarkHomeSwitch } from "./LarkHomeSwitch";
 import { Group, Pill, RowConfirm } from "./SettingsParts";
 import { FeishuBot } from "./FeishuBot";
@@ -356,6 +357,7 @@ function Feishu() {
         </>
       )}
       <LarkHomeSwitch />
+      <LarkDisplaySettings />
       <div className="px-4 pt-2.5 pb-1 text-[11.5px] font-medium text-ink-3">{t("settings-connectors.lark_uses")}</div>
       {USES.map((u) => (
         <div key={u.title} className="flex items-start gap-3 px-4 py-2.5">

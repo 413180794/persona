@@ -7,6 +7,8 @@ import { t } from "../../i18n";
 import { goalHeadline, goalStatusLabel, goalTone, goalUsage } from "../../lib/goal";
 import { backgroundTitle, elapsed, loopCadence, loopLabel, loopNext, loopShortLabel, loopTask } from "../../lib/tasks";
 import type { BackgroundTask, GoalInfo, LoopInfo, Session } from "../../lib/types";
+import { backgroundCount, otherBackground } from "../../lib/workflows";
+import { WorkflowCard } from "./WorkflowCard";
 import { Button, copyText, cx, Dialog, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
@@ -14,14 +16,20 @@ import { Icon } from "../../ui/icons";
 export function ActivityChips({ session, onStopLoop }: { session: Session; onStopLoop: () => void }) {
   const [open, setOpen] = useState(false);
   const loop = session.loop;
-  const bg = session.background ?? [];
+  // Workflow runs have their own cards (WorkflowCard); an older hub lists a run only as a background task (#2935).
+  const bg = otherBackground(session);
+  const runs = session.workflows ?? [];
+  const count = backgroundCount(session);
   const now = useNow(30_000, Boolean(loop));
-  if (!loop && !bg.length) return null;
-  const label = loop && bg.length
-    ? t("chat-activity.label_loop_and_background", { loop: loopLabel(loop, now), count: bg.length })
+  const hasBg = bg.length > 0 || runs.length > 0;
+  if (!loop && !hasBg) return null;
+  const label = loop && count
+    ? t("chat-activity.label_loop_and_background", { loop: loopLabel(loop, now), count })
     : loop
       ? t("chat-activity.label_loop", { loop: loopLabel(loop, now) })
-      : t("chat-activity.label_background", { count: bg.length });
+      : count
+        ? t("chat-activity.label_background", { count })
+        : t("lib-workflows.title");
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} aria-label={t("chat-activity.open_label", { label })} title={label} className="touch-hit flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1 transition-colors hover:bg-hover">
@@ -31,14 +39,14 @@ export function ActivityChips({ session, onStopLoop }: { session: Session; onSto
             <span className="hidden sm:inline">{loopShortLabel(loop, now)}</span>
           </span>
         )}
-        {bg.length > 0 && (
+        {hasBg && (
           <span className={cx("flex h-5.5 items-center gap-1 rounded-full bg-orange-tint px-2 text-[11.5px] font-medium whitespace-nowrap text-orange", loop && "max-sm:hidden")}>
-            <Icon name="gear" size={12} stroke={2.2} />
-            <span className="hidden sm:inline">{t("chat-activity.background_chip")}</span> {bg.length}
+            <Icon name={runs.some((w) => w.running) ? "layers" : "gear"} size={12} stroke={2.2} />
+            <span className="hidden sm:inline">{t("chat-activity.background_chip")}</span> {count > 0 && count}
           </span>
         )}
       </button>
-      <Dialog open={open} onClose={() => setOpen(false)} title={loop && !bg.length ? t("chat-activity.title_loop") : !loop ? t("chat-activity.title_background") : t("chat-activity.title_both")} width={520}>
+      <Dialog open={open} onClose={() => setOpen(false)} title={loop && !hasBg ? t("chat-activity.title_loop") : !loop ? t("chat-activity.title_background") : t("chat-activity.title_both")} width={520}>
         <div className="flex flex-col gap-3">
           {loop && (
             <LoopCard
@@ -48,6 +56,14 @@ export function ActivityChips({ session, onStopLoop }: { session: Session; onSto
                 onStopLoop();
               }}
             />
+          )}
+          {runs.length > 0 && (
+            <section aria-label={t("lib-workflows.title")} className="flex flex-col gap-2">
+              {runs.some((w) => w.running) && <p className="text-[12px] leading-relaxed text-ink-3">{t("lib-workflows.waiting_note")}</p>}
+              {runs.map((w) => (
+                <WorkflowCard key={w.task_id} run={w} mid={session.machine_id} onOpen={() => setOpen(false)} />
+              ))}
+            </section>
           )}
           {bg.length > 0 && (
             <BackgroundList
@@ -126,7 +142,7 @@ function BackgroundList({ tasks, onOutput }: { tasks: BackgroundTask[]; onOutput
         return (
           <div key={task.id} className={cx("flex items-start gap-2.5 px-3.5 py-2.5", i > 0 && "border-t border-line")}>
             <span className="mt-[3px] flex size-4 shrink-0 items-center justify-center text-orange">
-              <Icon name={task.kind === "agent" ? "agent" : "run"} size={13} />
+              <Icon name={task.kind === "agent" ? "agent" : task.kind === "workflow" ? "layers" : task.kind === "monitor" ? "monitor" : "run"} size={13} />
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="truncate text-[13px] font-medium text-ink">{backgroundTitle(task)}</span>

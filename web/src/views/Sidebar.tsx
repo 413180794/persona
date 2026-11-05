@@ -29,7 +29,8 @@ import { useWorkspaceBoardSetting } from "../lib/workspace-board-setting";
 import { buildTodoTree, treeStateLabel, type TodoTree, type TreeAgent, type TreeState, type TreeTodo } from "../lib/todo-tree";
 import { findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, type TodoStatus } from "../lib/todos";
 import type { AgentState, Machine, Session } from "../lib/types";
-import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu, type MenuItem } from "../ui/atoms";
+import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu, useNow, type MenuItem } from "../ui/atoms";
+import { runningWorkflows, workflowLine, workflowShortLine } from "../lib/workflows";
 import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
 import { HerdrNotices } from "./agents/HerdrNotices";
@@ -1487,6 +1488,10 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
   const details = useAgentDetails();
   const contextUsed = useContextAsUsed();
   const detail = details && showState && !s.assistant ? rowDetail(s, contextUsed) : [];
+  // a background workflow it waits for (#2935): its progress in the second line, whatever the details setting
+  const now = useNow(60_000, runningWorkflows(s).length > 0);
+  const workflow = showState && !s.assistant && st !== "offline" ? workflowShortLine(s) : "";
+  const workflowTitle = workflow ? workflowLine(s, now) : "";
   // what sits at the row's end steps aside for the hover ⋯; the open row leaves room for its ⋯ instead
   const aside = active ? undefined : "group-hover/row:invisible";
   // one ref per key, so letting go takes out only this row's entry (keyedRefs)
@@ -1514,20 +1519,26 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>
       {showState && !s.assistant && <SourceTag s={s} />}
       {prefix}
-      {detail.length > 0 ? (
+      {detail.length > 0 || workflow ? (
         <span className="flex min-w-0 flex-1 flex-col">
           <span className={cx("truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
             {label ?? sessionTitle(s)}
           </span>
           {/* one line high: a piece that does not fit wraps out of sight instead of squeezing the others */}
-          <span className="flex h-4 min-w-0 flex-wrap gap-x-1 overflow-hidden whitespace-nowrap text-[11px] leading-4 text-ink-3">
+          {workflow && (
+            <span data-workflow-line title={workflowTitle} aria-label={workflowTitle} className="flex h-4 min-w-0 items-center gap-1 text-[11px] leading-4 text-orange">
+              <Icon name="layers" size={10} stroke={2.2} className="shrink-0" />
+              <span className="truncate tabular-nums">{workflow}</span>
+            </span>
+          )}
+          {detail.length > 0 && <span className="flex h-4 min-w-0 flex-wrap gap-x-1 overflow-hidden whitespace-nowrap text-[11px] leading-4 text-ink-3">
             {detail.map((d, i) => (
               <span key={i} title={d.title} className={cx("flex shrink-0 items-center gap-1 tabular-nums", d.warn && "font-medium text-orange")}>
                 {i > 0 && <span aria-hidden="true">·</span>}
                 {d.text}
               </span>
             ))}
-          </span>
+          </span>}
         </span>
       ) : (
         <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>

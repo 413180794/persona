@@ -62,8 +62,9 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
 
           {!loaded && <Loading label={t("common.loading")} />}
 
+          {/* the headline counts agents, this counts cards: say so when one agent has several cards waiting */}
           {interactions.length > 0 && (
-            <Group title={t("home.needs_you")} count={interactions.length}>
+            <Group title={t("home.needs_you")} count={interactions.length} hint={new Set(interactions.map((ix) => `${ix.machine_id}/${ix.session_id}`)).size < interactions.length ? t("home.needs_you_hint") : undefined}>
               {interactions.map((ix, i) => {
                 const s = sessions.find((x) => x.machine_id === ix.machine_id && x.session_id === ix.session_id);
                 return (
@@ -83,7 +84,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
           )}
 
           {groups.needs.length > 0 && (
-            <Group title={t("home.waiting_on_computer")} count={groups.needs.length}>
+            <Group title={t("home.waiting_on_computer")} count={groups.needs.length} hint={t("home.waiting_on_computer_hint")}>
               {groups.needs.map((g, i) => (
                 <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="red">{t("home.state_needs_you")}</Pill>} />
               ))}
@@ -168,15 +169,17 @@ function MarkAllSeen({ count, onClick }: { count: number; onClick: () => void })
   );
 }
 
-function Group({ title, count, children, right }: { title: string; count: number; children: React.ReactNode; right?: React.ReactNode }) {
+function Group({ title, count, children, right, hint }: { title: string; count: number; children: React.ReactNode; right?: React.ReactNode; hint?: string }) {
   return (
     <section>
-      <div className="mb-2.5 flex items-baseline gap-2">
+      <div className={cx("flex items-baseline gap-2", hint ? "mb-1" : "mb-2.5")}>
         <h2 className="text-[13px] font-medium text-ink">{title}</h2>
         <span className="text-[12px] text-ink-3 tabular-nums">{count}</span>
         <span className="flex-1" />
         {right}
       </div>
+      {/* what the section is and why its rows are here, for a name that does not say it alone */}
+      {hint && <p className="mb-2.5 text-[12.5px] leading-[1.5] text-ink-2">{hint}</p>}
       <div className="flex flex-col gap-2">{children}</div>
     </section>
   );

@@ -499,7 +499,11 @@ export interface LarkMessage {
   text?: string;
   created_at?: string;
   recalled?: boolean;
+  /** lark-connector kept a recalled message's content (lark-display.ts): shown only with 防撤回 on, still marked 已撤回. */
+  retained?: boolean;
   edited?: boolean;
+  /** An edited message's earlier versions, oldest first (lark-display.ts, shown with 编辑历史 on). */
+  edit_history?: { edited_at: string; text: string; parts?: LarkPart[]; olk?: unknown }[];
   reply_count?: number;
   thread_reply_count?: number;
   at_me?: boolean;
@@ -507,7 +511,7 @@ export interface LarkMessage {
   is_read?: boolean;
   badge_count?: number;
   parts?: LarkPart[];
-  reply_to?: { id?: string; sender_name?: string; text?: string; recalled?: boolean };
+  reply_to?: { id?: string; sender_name?: string; text?: string; recalled?: boolean; retained?: boolean };
   sending?: boolean;
   failed?: boolean;
   client_id?: string;
