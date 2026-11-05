@@ -1,10 +1,13 @@
 package persona.platform.capsule
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 /** Content providers own routing and business actions; the host owns only the Android window. */
 interface CapsuleContentSource {
     val content: StateFlow<CapsuleContent>
+    val completions: Flow<CapsuleCompletion>
+    fun openCompletion(completion: CapsuleCompletion)
     fun shown(expanded: Boolean) {}
     fun selectSection(id: String)
     fun select(id: String?)
@@ -12,6 +15,8 @@ interface CapsuleContentSource {
     suspend fun perform(id: String?, actionId: String)
     fun open(id: String?)
 }
+
+data class CapsuleCompletion(val id: String, val targetId: String, val title: String)
 
 enum class CapsuleState { NeedsYou, Working, Done, Idle }
 data class CapsuleSection(val id: String, val title: String, val count: Int = 0, val list: Boolean = true)

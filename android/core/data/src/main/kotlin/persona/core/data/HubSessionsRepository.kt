@@ -18,12 +18,13 @@ class HubSessionsRepository(
     private val connection: HubConnection,
     scope: CoroutineScope,
     private val snapshots: ListSnapshotStore? = null,
-) : SessionsRepository {
+) : SessionsRepository, VerifiedSessionsRepository {
     private val mutableMachines = MutableStateFlow<List<Machine>>(emptyList())
     override val machines = mutableMachines.asStateFlow()
     private val mutableSessions = MutableStateFlow<List<Session>>(emptyList())
     override val sessions = mutableSessions.asStateFlow()
     internal val verifiedLists = MutableStateFlow(VerifiedSessionLists())
+    override fun verifiedSessions(): Map<String, List<Session>> = verifiedLists.value.sessions
     private val lock = Mutex()
     private val refreshing = Mutex()
     private var revision = 0L

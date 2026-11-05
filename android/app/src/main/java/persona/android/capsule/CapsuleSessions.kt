@@ -2,9 +2,13 @@ package persona.android.capsule
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import persona.android.ui.ShellSession
 import persona.core.contracts.*
 import persona.core.contracts.api.*
@@ -16,6 +20,7 @@ import persona.core.domain.sort.canSend
 import persona.feature.agents.AgentsPreferencesSnapshot
 import persona.feature.agents.listSession
 import persona.feature.chat.ChatWiringSource
+import persona.feature.chat.ChatAppBindings
 import persona.feature.inbox.InboxSnapshot
 import persona.platform.capsule.*
 import java.util.UUID
@@ -109,6 +114,9 @@ internal class CapsuleSessions(
     private val expanded = MutableStateFlow(false)
     private val busy = MutableStateFlow(false)
     private val failure = MutableStateFlow<String?>(null)
+    private val completionEvents = MutableSharedFlow<CapsuleCompletion>()
+    override val completions = completionEvents.asSharedFlow()
+    private val completionTargets = mutableMapOf<String, Pair<SessionKey, Boolean>>()
     private val agents = combine(session.sessions.sessions, session.assistant.assistant, session.interactions.pending,
         session.preferences.snapshots) { list, assistant, pending, preferences ->
         CapsuleAgents((list + assistant.conversations).distinctBy { it.key }, assistant.mainSession, pending, preferences)
@@ -174,6 +182,69 @@ internal class CapsuleSessions(
     }.combine(busy) { value, sending -> value.copy(busy = sending) }
         .combine(failure) { value, error -> value.copy(error = error ?: value.error) }
         .stateIn(scope, SharingStarted.Eagerly, CapsuleContent())
+
+    init {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            val tracker = CapsuleCompletionTracker()
+            val lock = Mutex()
+            val observed = mutableSetOf<String>()
+            val bindings = mutableMapOf<String, ChatAppBindings?>()
+            val preferences = session.preferences.snapshots.map<AgentsPreferencesSnapshot, AgentsPreferencesSnapshot?> { it }
+                .stateIn(this, SharingStarted.Eagerly, null)
+            fun observe(machineId: String): StateFlow<ChatAppBindings?> {
+                val source = wiring.bindingsFor(SessionKey(machineId, ""))
+                if (observed.add(machineId)) {
+                    launch(start = CoroutineStart.UNDISPATCHED) {
+                        source.flatMapLatest { binding ->
+                            binding?.connection?.state?.map { binding to it } ?: flowOf(null to null)
+                        }.collect { (binding, state) -> lock.withLock {
+                            if (source.value !== binding) return@withLock
+                            if (bindings[machineId] !== binding || state != ConnectionState.Online) tracker.reset(machineId)
+                            bindings[machineId] = binding
+                        } }
+                    }
+                }
+                return source
+            }
+            session.connection.events.onSubscription {
+                // Subscribe before reading authority so live edges wait behind initialization, rather than disappearing.
+                preferences.filterNotNull().first()
+                (session.sessions as? VerifiedSessionsRepository)?.verifiedSessions().orEmpty().forEach { (machine, sessions) ->
+                    val source = observe(machine)
+                    lock.withLock {
+                        bindings[machine] = source.value
+                        if (source.value?.connection?.state?.value == ConnectionState.Online) {
+                            tracker.update(SessionsEvent(machine, sessions)) { true }
+                        }
+                    }
+                }
+            }.filterIsInstance<SessionsEvent>().collect { event ->
+                // After a disconnect only a newly observed online snapshot reestablishes the baseline.
+                val source = observe(event.machineId)
+                val finished = lock.withLock {
+                    val binding = source.value
+                    if (bindings[event.machineId] !== binding || binding?.connection?.state?.value != ConnectionState.Online) {
+                        tracker.reset(event.machineId)
+                        bindings[event.machineId] = binding
+                    }
+                    if (binding?.connection?.state?.value != ConnectionState.Online) emptyList()
+                    else tracker.update(event) { requireNotNull(preferences.value).mutes.mutes(AgentSession(it)) }
+                }
+                finished.forEach { target ->
+                    val completion = CapsuleCompletion(completionId(target), capsuleId(target.key), target.displayTitle)
+                    completionTargets[completion.id] = target.key to target.assistant
+                    completionEvents.emit(completion)
+                }
+            }
+        }
+    }
+
+    override fun openCompletion(completion: CapsuleCompletion) {
+        scope.coroutineContext.ensureActive()
+        val (key, assistant) = completionTargets[completion.id] ?: error("完成提示已失效")
+        check(capsuleId(key) == completion.targetId && find(key) != null) { "会话已关闭" }
+        openConversation(key, assistant)
+    }
 
     private fun find(key: SessionKey): Session? =
         session.sessions.sessions.value.firstOrNull { it.key == key }

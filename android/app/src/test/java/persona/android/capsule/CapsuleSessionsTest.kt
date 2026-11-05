@@ -12,6 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -24,6 +25,8 @@ import persona.core.contracts.api.*
 import persona.feature.chat.ChatAppBindings
 import persona.feature.chat.ChatWiringSource
 import persona.platform.capsule.CapsuleState
+import persona.platform.capsule.CapsuleCompletion
+import kotlinx.serialization.json.JsonObject
 
 /** Regression cases from #2124: one surface, the original session, and an explicit destination. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -309,6 +312,152 @@ class CapsuleSessionsTest {
         assertTrue(fixture.source.content.value.messages.last().text.contains("等待网络"))
     }
 
+    @Test fun completionUsesRawEdgesEvenWhenTheRepositoryStateNeverPublishesWorking() = runTest {
+        val task = agent("home", "task", "unread").copy(rev = 1)
+        val fixture = Fixture(backgroundScope, listOf(task))
+        fixture.bindings.value = fixture.binding()
+        val notices = mutableListOf<CapsuleCompletion>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.source.completions.collect { notices += it } }
+        runCurrent()
+        fixture.connection.events.emit(SessionsEvent(task.machineId, listOf(task)))
+        fixture.connection.events.emit(SessionsEvent(task.machineId, listOf(task.copy(state = "working"))))
+        fixture.connection.events.emit(SessionsEvent(task.machineId, listOf(task.copy(state = "needs_you"))))
+        fixture.connection.events.emit(SessionsEvent(task.machineId, listOf(task.copy(rev = 2))))
+        fixture.connection.events.emit(SessionsEvent(task.machineId, listOf(task.copy(rev = 3))))
+        runCurrent()
+        assertEquals(listOf(completionId(task.copy(rev = 2))), notices.map { it.id })
+        assertEquals(task.displayTitle, notices.single().title)
+        fixture.source.openCompletion(notices.single())
+        assertEquals(listOf(task.key to false), fixture.opened)
+        val late = mutableListOf<CapsuleCompletion>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.source.completions.collect { late += it } }
+        runCurrent()
+        assertTrue(late.isEmpty())
+    }
+
+    @Test fun enablingWithFreshWorkingAuthorityRecognizesTheVeryFirstLiveCompletion() = runTest {
+        val task = agent("home", "task").copy(rev = 1)
+        val fixture = Fixture(backgroundScope, listOf(task), fresh = listOf(task))
+        val notices = mutableListOf<CapsuleCompletion>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.source.completions.collect { notices += it } }
+        runCurrent()
+        fixture.connection.events.emit(SessionsEvent("home", listOf(task.copy(state = "unread", rev = 2))))
+        runCurrent()
+        assertEquals(listOf(completionId(task.copy(state = "unread", rev = 2))), notices.map { it.id })
+        fixture.connection.state.value = ConnectionState.WaitingForNetwork
+        runCurrent()
+        fixture.connection.state.value = ConnectionState.Online
+        runCurrent()
+        fixture.connection.events.emit(SessionsEvent("home", listOf(task.copy(state = "unread", rev = 2))))
+        fixture.connection.events.emit(SessionsEvent("home", listOf(task.copy(state = "working", rev = 3))))
+        fixture.connection.events.emit(SessionsEvent("home", listOf(task.copy(state = "unread", rev = 4))))
+        runCurrent()
+        assertEquals(listOf(2L, 4L).map { completionId(task.copy(state = "unread", rev = it)) }, notices.map { it.id })
+    }
+
+    @Test fun restoredWorkingCacheDoesNotClaimTheFirstUnreadAsANewCompletion() = runTest {
+        val task = agent("home", "task")
+        val fixture = Fixture(backgroundScope, listOf(task))
+        fixture.bindings.value = fixture.binding()
+        val notices = mutableListOf<CapsuleCompletion>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.source.completions.collect { notices += it } }
+        runCurrent()
+        fixture.connection.events.emit(SessionsEvent("home", listOf(task.copy(state = "unread", rev = 2))))
+        runCurrent()
+        assertTrue(notices.isEmpty())
+    }
+
+    @Test fun reconnectAndUpdatingDiscardArmedWorkAndDoNotReplayOldCompletions() = runTest {
+        val task = agent("home", "task").copy(rev = 1)
+        val fixture = Fixture(backgroundScope, listOf(task))
+        fixture.bindings.value = fixture.binding()
+        val notices = mutableListOf<CapsuleCompletion>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.source.completions.collect { notices += it } }
+        runCurrent()
+        fixture.connection.events.emit(SessionsEvent(task.machineId, listOf(task)))
+        for (offline in listOf(ConnectionState.WaitingForNetwork, ConnectionState.Updating)) {
+            fixture.connection.state.value = offline
+            runCurrent()
+            fixture.connection.state.value = ConnectionState.Online
+            runCurrent()
+            fixture.connection.events.emit(SessionsEvent(task.machineId, listOf(task.copy(state = "unread", rev = 2))))
+            assertTrue(notices.isEmpty())
+            fixture.connection.events.emit(SessionsEvent(task.machineId, listOf(task)))
+        }
+        fixture.connection.events.emit(SessionsEvent(task.machineId, listOf(task.copy(state = "unread", rev = 3))))
+        runCurrent()
+        assertEquals(1, notices.size)
+    }
+
+    @Test fun completionFiltersMuteQuietAndInterruptedAtTheEdgeWithoutUnmuteReplay() = runTest {
+        val muted = agent("home", "muted")
+        val quiet = agent("home", "quiet", quiet = true)
+        val interrupted = agent("home", "interrupted")
+        val fixture = Fixture(backgroundScope, listOf(muted, quiet, interrupted))
+        fixture.bindings.value = fixture.binding()
+        fixture.hubPreferences.value = HubPreferencesSnapshot(mutes = HubPreferenceSet(sessions = listOf(muted.key.path)))
+        val notices = mutableListOf<CapsuleCompletion>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.source.completions.collect { notices += it } }
+        runCurrent()
+        fixture.connection.events.emit(SessionsEvent("home", listOf(muted, quiet, interrupted)))
+        fixture.connection.events.emit(SessionsEvent("home", listOf(muted.copy(state = "unread", rev = 2),
+            quiet.copy(state = "unread", rev = 2), interrupted.copy(state = "unread", rev = 2, turnError = "Model stopped"))))
+        fixture.hubPreferences.value = HubPreferencesSnapshot()
+        runCurrent()
+        fixture.connection.events.emit(SessionsEvent("home", listOf(muted, quiet.copy(quiet = false), interrupted)))
+        fixture.connection.events.emit(SessionsEvent("home", listOf(muted.copy(state = "unread", rev = 2),
+            quiet.copy(state = "unread", rev = 2, quiet = false), interrupted.copy(state = "unread", rev = 2))))
+        runCurrent()
+        assertTrue(notices.isEmpty())
+    }
+
+    @Test fun completionRoutesTheCapturedMainInAnotherHubWithoutChangingTheManualConversation() = runTest {
+        val selected = agent("machine", "same", "unread")
+        val main = agent("machine~g0a1b2c3d", "same").copy(assistant = true)
+        val fixture = Fixture(backgroundScope, listOf(selected), AssistantSnapshot(main.key, listOf(main)))
+        fixture.connection.state.value = ConnectionState.WaitingForNetwork
+        fixture.bindings.value = fixture.binding()
+        val secondary = TestConnection()
+        fixture.byMachine[main.machineId] = MutableStateFlow(fixture.binding(HubScope("other", "pairing"), secondary))
+        val notices = mutableListOf<CapsuleCompletion>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.source.completions.collect { notices += it } }
+        runCurrent()
+        fixture.source.shown(true)
+        fixture.source.select(capsuleId(selected.key))
+        runCurrent()
+        val before = fixture.source.content.value
+        fixture.connection.events.emit(SessionsEvent(main.machineId, listOf(main)))
+        fixture.connection.events.emit(SessionsEvent(main.machineId, listOf(main.copy(state = "unread", rev = 2))))
+        runCurrent()
+        fixture.source.openCompletion(notices.single())
+        assertEquals(listOf(main.key to true), fixture.opened)
+        assertEquals(before.sectionId, fixture.source.content.value.sectionId)
+        assertEquals(before.selectedId, fixture.source.content.value.selectedId)
+        fixture.source.send(before.selectedId, "Keep the manual draft target")
+        assertEquals(listOf(selected.key to "Keep the manual draft target"), fixture.sent)
+        fixture.assistant.value = AssistantSnapshot()
+        runCurrent()
+        assertTrue(runCatching { fixture.source.openCompletion(notices.single()) }.isFailure)
+    }
+
+    @Test fun cancelledScopeRejectsACapturedCompletionClick() = runTest {
+        val task = agent("home", "task")
+        val owner = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))
+        try {
+            val fixture = Fixture(owner, listOf(task))
+            fixture.bindings.value = fixture.binding()
+            val notices = mutableListOf<CapsuleCompletion>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.source.completions.collect { notices += it } }
+            runCurrent()
+            fixture.connection.events.emit(SessionsEvent("home", listOf(task)))
+            fixture.connection.events.emit(SessionsEvent("home", listOf(task.copy(state = "unread", rev = 2))))
+            runCurrent()
+            owner.cancel()
+            assertTrue(runCatching { fixture.source.openCompletion(notices.single()) }.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+            assertTrue(fixture.opened.isEmpty())
+        } finally { owner.cancel() }
+    }
+
     private fun personaAgent(session: Session) = persona.core.domain.sort.AgentSession(session)
     private fun inboxRecord(id: String, tier: String = "action", done: Boolean = false) = persona.feature.inbox.InboxRecord(
         persona.core.domain.inbox.InboxItem(id, title = "Item $id", preview = "Needs an answer", tier = tier,
@@ -320,6 +469,7 @@ class CapsuleSessionsTest {
         val scope: CoroutineScope,
         initial: List<Session> = emptyList(),
         assistantState: AssistantSnapshot = AssistantSnapshot(),
+        fresh: List<Session> = emptyList(),
     ) {
         val sessions = MutableStateFlow(initial)
         val assistant = MutableStateFlow(assistantState)
@@ -332,10 +482,13 @@ class CapsuleSessionsTest {
         val inbox = MutableStateFlow(persona.feature.inbox.InboxSnapshot())
         val hubPreferences = MutableStateFlow(HubPreferencesSnapshot())
         val messages = mutableMapOf<SessionKey, MutableStateFlow<ChatSnapshot>>()
+        val connection = TestConnection()
         private val hubScope = HubScope("hub", "pairing")
         val bindings = MutableStateFlow<ChatAppBindings?>(null)
+        val byMachine = mutableMapOf<String, MutableStateFlow<ChatAppBindings?>>()
         val wiring = object : ChatWiringSource {
             override val current = bindings
+            override fun bindingsFor(session: SessionKey) = byMachine[session.machineId] ?: bindings
         }
         private val sender = object : MessageSender {
             override val outbox = this@Fixture.outbox
@@ -351,13 +504,15 @@ class CapsuleSessionsTest {
                 mainSent += text
             }
         }
+        init { if (fresh.isNotEmpty()) bindings.value = binding() }
         private val shell = ShellSession(
             identity = hubScope.path,
-            connection = unused(),
-            sessions = object : SessionsRepository {
+            connection = connection,
+            sessions = object : SessionsRepository, VerifiedSessionsRepository {
                 override val machines = MutableStateFlow<List<Machine>>(emptyList())
                 override val sessions = this@Fixture.sessions
                 override suspend fun refresh() = Unit
+                override fun verifiedSessions() = fresh.groupBy { it.machineId }
             },
             chats = object : ChatRepository {
                 override fun observe(session: SessionKey) = messages.getOrPut(session) {
@@ -394,9 +549,16 @@ class CapsuleSessionsTest {
             }),
         )
         val source = CapsuleSessions(shell, wiring, scope, openInbox = { openedInbox += it }) { key, assistant -> opened += key to assistant }
-        fun binding(key: HubScope = hubScope) = ChatAppBindings(
-            key, scope, unused(), unused(), unused(), unused(), unused(), unused(), mainSender,
+        fun binding(key: HubScope = hubScope, connection: HubConnection = this.connection) = ChatAppBindings(
+            key, scope, unused(), connection, unused(), unused(), unused(), unused(), mainSender,
         )
+    }
+
+    private class TestConnection : HubConnection {
+        override val state = MutableStateFlow(ConnectionState.Online)
+        override val events = MutableSharedFlow<ServerEvent>()
+        override fun reconnect() = Unit
+        override fun send(message: JsonObject) = true
     }
 
     companion object {

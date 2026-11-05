@@ -6991,6 +6991,23 @@ def push_machine(mid):
         except Exception: pass
 
 
+def set_session_state(query):
+    """A targeted state change, delivered through the same sessions push as the real hub."""
+    if set(query) != {"mid", "sid", "state"} or any(len(values) != 1 or not values[0].strip() for values in query.values()):
+        return {"error": "Provide exactly one mid, sid and state"}, 400
+    mid, sid, state = (query[key][0] for key in ("mid", "sid", "state"))
+    if state not in STATUS_OF_STATE:
+        return {"error": "state is one of " + ", ".join(STATUS_OF_STATE)}, 400
+    session = next((s for s in SESSIONS + ASSISTANT if s["machine_id"] == mid and s["session_id"] == sid), None)
+    if session is None:
+        return {"error": "Session not found"}, 404
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    session.update(state=state, status=STATUS_OF_STATE[state], updated_at=now, state_since=now,
+                   rev=(session.get("rev") or 0) + 1)
+    push_machine(mid)
+    return {"session": decorated_session(session)}, 200
+
+
 def bump(what, session=None):
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     BUMPED["n"] += 1
@@ -8536,6 +8553,9 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/session_close":
             if "fail" in q: SESSION_CLOSE["fail"] = q["fail"][0] == "1"
             return self.send_json({k: SESSION_CLOSE[k] for k in ("fail", "attempts", "closed")})
+        if p == "/mock/session_state":
+            body, status = set_session_state(q)
+            return self.send_json(body, status)
         if p == "/mock/seen": return self.send_json({"seen": SEEN})
         if p == "/mock/reconnects": return self.send_json({"reconnects": RECONNECTS})
         if p == "/mock/started": return self.send_json({"started": STARTED})

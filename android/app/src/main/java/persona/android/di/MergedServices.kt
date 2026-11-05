@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.*
 private fun <T> GroupStack.mapped(flow: Flow<T>, transform: GroupNames.(T) -> T): Flow<T> =
     if (names.plain) flow else flow.map { names.transform(it) }
 
-internal fun mergedSessions(stacks: GroupStacks): SessionsRepository = object : SessionsRepository {
+internal fun mergedSessions(stacks: GroupStacks): SessionsRepository = object : SessionsRepository, VerifiedSessionsRepository {
     override val machines = stacks.merged(emptyList<Machine>(), { s ->
         s.mapped(s.repositories.sessions.machines) { list -> list.map(::machine) }
     }) { it.flatten() }
@@ -30,6 +30,11 @@ internal fun mergedSessions(stacks: GroupStacks): SessionsRepository = object : 
         s.mapped(s.repositories.sessions.sessions) { list -> list.map(::session) }
     }) { it.flatten() }
     override suspend fun refresh() = stacks.forEach { it.repositories.sessions.refresh() }
+    override fun verifiedSessions(): Map<String, List<Session>> = stacks.stacks.value.flatMap { stack ->
+        stack.repositories.sessions.verifiedSessions().map { (machine, sessions) ->
+            stack.names.machineId(machine) to sessions.map { stack.names.session(it) }
+        }
+    }.toMap()
     // A session just started (async start) and a machine whose engine changed go to their own group, in its plain ids.
     override suspend fun adopt(session: Session) = stacks.use(GroupKeys.namespaceOf(session.machineId)) {
         it.repositories.sessions.adopt(it.names.rawSession(session))

@@ -1,0 +1,47 @@
+package persona.platform.capsule
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import persona.core.designsystem.CapsuleTokens
+import persona.core.designsystem.LocalAppFeedback
+import persona.core.designsystem.PersonaFace
+import persona.core.designsystem.PersonaState
+import persona.core.designsystem.PersonaTheme
+
+/** A single-line non-focusable presentation, separate from the manual card and its chat subscription. */
+@Composable
+fun CapsuleCompletionNotice(completion: CapsuleCompletion, onOpen: (CapsuleCompletion) -> Unit) {
+    val palette = PersonaTheme.palette
+    val feedback = LocalAppFeedback.current
+    val shape = RoundedCornerShape(CapsuleTokens.compactRadius)
+    Row(Modifier.size(CapsuleTokens.completionWidth, CapsuleTokens.orb).clip(shape).background(palette.surfaceOpaque)
+        .border(CapsuleTokens.border, palette.line, shape)
+        .clickable {
+            try { onOpen(completion) }
+            catch (error: Exception) { feedback?.failure(error) }
+        }
+        .testTag("capsule.completion")
+        .semantics { contentDescription = "${completion.title} · 已完成" }
+        .padding(horizontal = CapsuleTokens.gap, vertical = CapsuleTokens.smallGap),
+        horizontalArrangement = Arrangement.spacedBy(CapsuleTokens.gap), verticalAlignment = Alignment.CenterVertically) {
+        PersonaFace(PersonaState.Idle, size = CapsuleTokens.face)
+        Text(completion.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = PersonaTheme.type.label, color = palette.ink)
+        Text("· 已完成", maxLines = 1, style = PersonaTheme.type.caption, color = palette.done.text)
+    }
+}

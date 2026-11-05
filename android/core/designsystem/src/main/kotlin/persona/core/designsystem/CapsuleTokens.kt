@@ -5,6 +5,8 @@ import androidx.compose.ui.unit.dp
 /** Native capsule geometry, shared by its window and Compose content. */
 object CapsuleTokens {
     const val revealScale = .94f
+    const val completionMillis = 4_000L
+    val completionWidth = 216.dp
     val orb = 40.dp
     val compactWidth = 64.dp
     val compactRadius = 20.dp

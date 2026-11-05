@@ -39,6 +39,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import persona.core.designsystem.AppStyleStore
@@ -60,6 +61,7 @@ class CapsuleHost(
         .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
     private val windows = windowContext.getSystemService(WindowManager::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val completions = CapsuleCompletionQueue(scope)
     private val appOps = app.getSystemService(AppOpsManager::class.java)
     private val main = Handler(Looper.getMainLooper())
     private var root: CapsuleWindow? = null
@@ -93,6 +95,13 @@ class CapsuleHost(
         ContextCompat.registerReceiver(app, configurationChanged, IntentFilter(Intent.ACTION_CONFIGURATION_CHANGED).apply {
             addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT)
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
+        scope.launch { completions.current.collect { reconcile() } }
+        scope.launch {
+            source.completions.collect { completion ->
+                completions.setVisible(allowed())
+                completions.offer(completion)
+            }
+        }
         scope.launch {
             combine(source.content, preferences.mode) { content, _ -> content }.collectLatest {
                 latest = it
@@ -104,12 +113,18 @@ class CapsuleHost(
     fun setForeground(value: Boolean) { foreground = value; reconcile() }
     fun refreshPermission() { if (!closed) reconcile() }
 
+    private fun allowed(): Boolean = started && !closed && latest.available && !foreground &&
+        preferences.mode.value != CapsuleMode.Off && CapsulePermission.granted(app) &&
+        app.getSystemService(PowerManager::class.java).isInteractive &&
+        !app.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+
     private fun reconcile() {
         if (!started || closed) return
-        val visible = latest.available && app.getSystemService(PowerManager::class.java).isInteractive &&
-            !app.getSystemService(KeyguardManager::class.java).isKeyguardLocked && CapsuleVisibility.visible(preferences.mode.value, foreground,
-            CapsulePermission.granted(app), latest.active, expanded)
-        if (!visible) hide()
+        val allowed = allowed()
+        completions.setVisible(allowed)
+        val visible = allowed && CapsuleVisibility.visible(preferences.mode.value, false, true,
+            latest.active || completions.current.value != null, expanded)
+        if (!visible) hide(clearCompletions = false)
         else if (root == null) show()
         else place()
     }
@@ -134,7 +149,13 @@ class CapsuleHost(
                 PersonaTheme(style = currentStyle) { theme {
                     androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier
                         .then(androidx.compose.ui.Modifier.heightIn(max = maxHeight))) {
-                        CapsuleSurface(latest, expanded,
+                        val completion by completions.current.collectAsState()
+                        if (!expanded && completion != null) {
+                            CapsuleCompletionNotice(completion!!) { clicked ->
+                                val target = completions.take(clicked.id)
+                                if (target != null) source.openCompletion(target)
+                            }
+                        } else CapsuleSurface(latest, expanded,
                             onExpand = { changeExpanded(true) },
                             onCollapse = { changeExpanded(false) },
                             onSelect = source::select,
@@ -180,12 +201,16 @@ class CapsuleHost(
         }
     }
 
-    private fun width(): Int = px(if (expanded) CapsuleTokens.cardWidth else CapsuleTokens.compactWidth)
-        .coerceAtMost(area().right - area().left)
+    private fun width(): Int = px(when {
+        expanded -> CapsuleTokens.cardWidth
+        completions.current.value != null -> CapsuleTokens.completionWidth
+        else -> CapsuleTokens.compactWidth
+    }).coerceAtMost(area().right - area().left)
 
     private fun changeExpanded(value: Boolean) {
         if (expanded == value) return
         expanded = value
+        completions.setManual(value)
         source.shown(value)
         imeTop = null
         params?.let {
@@ -275,7 +300,8 @@ class CapsuleHost(
         place()
     }
 
-    private fun hide() {
+    private fun hide(clearCompletions: Boolean = true) {
+        if (clearCompletions) completions.setVisible(false)
         val view = root
         val lifetime = owner
         val contentView = composition
@@ -295,6 +321,7 @@ class CapsuleHost(
         lifetime?.registry?.currentState = Lifecycle.State.DESTROYED
         lifetime?.viewModelStore?.clear()
         if (expanded) { expanded = false; source.shown(false) }
+        completions.setManual(false)
         params = null
         lastLayout = null
         imeTop = null
@@ -303,6 +330,7 @@ class CapsuleHost(
     override fun close() {
         if (closed) return
         closed = true
+        completions.close()
         hide()
         scope.cancel()
         if (started) {
