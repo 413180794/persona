@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/screen"
 	"github.com/nwverse/persona/server/internal/transcript"
@@ -121,7 +122,9 @@ func (n *Node) codexCardsNow(ctx context.Context, only string) []codexCard {
 	n.mu.Lock()
 	agents := map[string]codexAgent{}
 	for id, a := range n.agents {
-		if (a.Agent == "codex" || a.Agent == traexAgent) && a.PaneID != "" && (only == "" || id == only) {
+		// botmux's sessions are answered in Feishu, as its Claude Code ones: their screens are botmux's.
+		if (a.Agent == "codex" || a.Agent == traexAgent) && a.PaneID != "" && host.ParsePane(a.PaneID).Kind != host.Botmux &&
+			(only == "" || id == only) {
 			agents[id] = codexAgent{kind: a.Agent, pane: a.PaneID, cwd: a.Cwd, status: a.AgentStatus}
 		}
 	}

@@ -546,11 +546,19 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, Agent: a.Agent,
 			ExternalURL: a.ExternalURL,
 		}
-		switch a.Agent {
-		case "codex":
+		viaBotmux := host.ParsePane(a.PaneID).Kind == host.Botmux
+		switch {
+		case viaBotmux && (a.Agent == "codex" || a.Agent == traexAgent):
+			// The thread's name, else botmux's title of the topic; messages go through botmux, neither route.
+			if t := n.codexTitle(id); a.Agent == "codex" && t != "" {
+				s.Title = t
+			} else if t := n.traexTitle(id); a.Agent == traexAgent && t != "" {
+				s.Title = t
+			}
+		case a.Agent == "codex":
 			s.Title = n.codexTitle(id)                        // the terminal title is "dots | codex | Ready"
 			s.CodexRoute, s.CodexRouteNote = n.codexRoute(id) // codex_daemon.go
-		case traexAgent:
+		case a.Agent == traexAgent:
 			s.Title = n.traexTitle(id) // the thread's name; the terminal title adds " | <directory>"
 			s.CodexRoute, s.CodexRouteNote = codexRouteTerminal, "TRAEX 没有共享的 app-server"
 		}
@@ -1072,9 +1080,10 @@ func (n *Node) setAgents(agents []host.Agent) {
 // setAgentsAt is setAgents for a refresh of engine epoch: false (nothing set) when the engine changed since.
 func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	m := map[string]host.Agent{}
-	var unknown, codex, pi []host.Agent
+	var unknown, codex, pi, botmux []host.Agent
 	procs := n.liveClaudes()
-	parked := parkedClaudeSessions(procs) // claudebg.go
+	parked := parkedClaudeSessions(procs)    // claudebg.go
+	botmuxThreads := n.botmuxThreads(agents) // hostbotmux.go
 	// What the claude in each pane says it runs, for the panes herdr names a session for: herdr takes the session from
 	// a SessionStart hook that reported HERDR_PANE_ID, and a claude elsewhere that inherited the variable (botmux's
 	// tmux server, first started in a herdr pane, 2026-11-04) reports into the pane too. The pane's own claude wins.
@@ -1092,6 +1101,10 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	}
 	n.mu.Lock()
 	for _, a := range agents {
+		if (a.Agent == "codex" || a.Agent == traexAgent) && host.ParsePane(a.PaneID).Kind == host.Botmux {
+			botmux = append(botmux, a) // after the panes that run their thread themselves
+			continue
+		}
 		if a.Agent == "codex" {
 			codex = append(codex, a)
 			continue
@@ -1188,6 +1201,15 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		}
 		if _, taken := m[id]; id == "" || taken {
 			unnamed = append(unnamed, a)
+			continue
+		}
+		m[id] = a
+	}
+	// botmux's Codex / TRAEX sessions, by the thread their rollout names (botmuxThreads), before any guess could take
+	// that rollout for another pane. A parked one gives way to a pane that runs the same thread.
+	for _, a := range botmux {
+		id := botmuxThreads[a.PaneID]
+		if id == "" || (a.AgentStatus == proto.StatusOffline && liveTaken(m, id)) {
 			continue
 		}
 		m[id] = a

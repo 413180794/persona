@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/transcript"
 )
@@ -40,7 +41,8 @@ func (n *Node) joinCodexPanes(ctx context.Context) {
 	n.mu.Lock()
 	var ids []string
 	for id, a := range n.agents {
-		if a.Agent == "codex" && a.PaneID != "" {
+		// botmux's sessions stay botmux's: it delivers their messages, and its Codex may run on an app-server too.
+		if a.Agent == "codex" && a.PaneID != "" && host.ParsePane(a.PaneID).Kind != host.Botmux {
 			ids = append(ids, id)
 		}
 	}

@@ -73,22 +73,29 @@ iOS 和 Android App 都有这两处入口（Android 的机器页在 Agents：列
 
 ## botmux
 
-[botmux](https://github.com/deepcoldy/botmux) 把每个飞书话题接成一个 Claude Code 会话，跑在它自己的 tmux 里。它不是引擎：
+[botmux](https://github.com/deepcoldy/botmux) 把每个飞书话题接成一个 Claude Code / Codex / TRAEX 等 CLI 的会话，跑在它自己的 tmux 里。它不是引擎：
 node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之外再挂一个 botmux 宿主（`server/internal/node/hostbotmux.go`），
 典型场景是工作的 Agent 在 botmux、个人的在 herdr，两边一起看。
 
 - **列出和状态**：每次刷新一次 `botmux observe --include-raw`（所有 daemon 的所有会话，结果 5 秒内复用，发出消息后马上重看；本机约 500 个会话时 0.3–0.9 秒；observe 偶尔失败时沿用上一次的列表）。
-  只列 Claude Code 的会话：在跑的按 botmux 的状态（对话框 `tuiPromptActive` 或 botmux 的「需要你」→ 需要你，`working` / `starting` / `analyzing` → 工作中，
-  其余 → 做完）；挂起的（`not_running`、没关闭、7 天内动过）显示成「未运行」。botmux 会话 id 就是 Claude 会话 id（botmux 用它拉起 claude），对话记录照旧。
+  列 Claude Code、Codex、TRAEX 的会话（`cli.id` 为 `claude-code` / `codex` / `traex`），状态三家一样：在跑的按 botmux 的状态（对话框 `tuiPromptActive` 或 botmux 的「需要你」→ 需要你，`working` / `starting` / `analyzing` → 工作中，
+  其余 → 做完）；挂起的（`not_running`、没关闭、7 天内动过）显示成「未运行」。Claude Code：botmux 会话 id 就是 Claude 会话 id（botmux 用它拉起 claude），对话记录照旧。
+  Codex / TRAEX：observe 不给 CLI 自己的会话 id（botmux 存在自己的库里），但 botmux 发给这两种 CLI 的每条提示都以 `<session_id>botmux 会话 id</session_id>` 开头，
+  node 就在同一工作目录的 rollout 开头（前 512 KB，每个文件读到这个标记后不再读）里找这个 id，找到的 rollout 就是这个会话的线程（fork 出来的几份取最近写过的），
+  会话按线程 id 列、对话记录按 rollout 读（`docs/codex.md`），标题优先用线程名、没有就用 botmux 的话题标题（`botmuxThreads`）。
+  找不到 rollout 的不列：刚开、第一条提示还没写进 rollout 的（下一次刷新就有），以及 botmux 给 bot 单独设了 `CODEX_HOME` / `TRAE_HOME`、node 不认识的目录里的
+  （Codex 读 node 已知的各个 Codex home，TRAEX 只读 `~/.trae/cli`）。`codex-app`（botmux 走 app-server 驱动 Codex，提示里不带会话 id）和其他 CLI 不列。
   空间是工作目录（和 Herdr App 没放进空间的终端一样），名字是 botmux 的会话标题。
-- **发消息**：交给 botmux 投递（它的 dashboard 的 `POST /api/trigger`，目标是这个会话），不往终端里打字：会话忙时 botmux 排队，
+- **发消息**：三家一样，交给 botmux 投递（它的 dashboard 的 `POST /api/trigger`，目标是这个会话），不往终端里打字：会话忙时 botmux 排队，
   挂起的会话 botmux 自己续上（不会在 herdr 里另起一个 `claude --resume`；挂起超过 7 天、不在列表里的也一样），回答照常发回飞书话题。
   dashboard 的 token 由 node 跑 `botmux dashboard current` 取，只存在内存里，只连本机 127.0.0.1。消息在 Claude 那边带着 botmux 的任务标签和一段「外部事件」说明。
 - **做不到**：读屏、按键、回答对话框（在飞书里答）、关闭、改名、新建、实时终端；App 按能力隐藏或提示。
 - **为什么等你、在飞书打开**：botmux 举手（`botmux send --attention`）时带的原因，会话在「需要你」时放进 `attention_reason`，
   App 在列表行和对话页顶上显示；observe 原始数据里的话题链接（`feishuThreadLink`，只认 https）放进 `external_url`，对话页的「在飞书打开」用它。
   两个都是 botmux 的原始字段，不是稳定接口：没有就不显示。
-- **不重复**：botmux 用 herdr 后端时，它的会话本来就是 herdr 的窗格，botmux 宿主不再列；Codex / TRAEX 的 botmux 会话第一期不列。
+- **不重复**：botmux 用 herdr 后端时，它的会话本来就是 herdr 的窗格，botmux 宿主不再列。botmux 的 Codex 会话同时出现在 Codex 历史或 Codex 桌面版的列表里时（同一份 rollout），
+  只留 botmux 的那一行（能经 botmux 发消息，不是只读的历史）。botmux 的 Codex / TRAEX 会话不接 app-server（不 `thread/resume`）、不读屏幕出提问 / 审批卡片、发消息前不查输入框：
+  这些和它的 Claude Code 会话一样留在飞书和电脑上。挂起超过 7 天、botmux 不再列的 Codex 会话按 Codex 历史只读显示，去飞书里回。
 - **同一个会话两边都有**：它也开在 herdr 等引擎的窗格里（以前从手机 `--resume` 过）时，以在跑的窗格为准，botmux 的挂起记录让开。
 - **检测时机**：node 连上 hub、知道这台要不要列 botmux 时（见下一条），以及切换引擎时找 `botmux`：PATH 上的，没有就是 botmux 安装时写的 `~/.botmux/bin/botmux`（launchd 常驻的 node 只有系统的 PATH）；之后才装 botmux 的，重启那台电脑的 personad 才会显示。
 - **关掉**：hub.json 那台电脑的 `machines[]` 里写 `"botmux": false`（`docs/config.md`；老 node 不认这一项）：不再跑 `botmux observe`、`botmux dashboard current`（正在跑的那次跑完作废），Agents 里没有 `botmux:` 窗格的会话。

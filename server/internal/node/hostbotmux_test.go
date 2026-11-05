@@ -660,3 +660,204 @@ func awaitPush(t *testing.T, pushes <-chan hubPush, want func(hubPush) bool, wha
 		}
 	}
 }
+
+// bmxRollout writes a Codex / TRAEX rollout under root (<home>/.codex, <home>/.trae/cli) whose first prompt is botmux's,
+// opening with the botmux session's id (botmuxID "": a prompt typed on the computer).
+func bmxRollout(t *testing.T, root, thread, cwd, botmuxID string, written time.Time, events ...string) string {
+	t.Helper()
+	day := time.Now()
+	dir := filepath.Join(root, "sessions", day.Format("2006"), day.Format("01"), day.Format("02"))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prompt := "hello"
+	if botmuxID != "" {
+		prompt = "<session_id>" + botmuxID + "</session_id>\n<user_message>做一下</user_message>"
+	}
+	p, _ := json.Marshal(prompt)
+	lines := []string{
+		`{"timestamp":"2026-01-01T00:00:00Z","type":"session_meta","payload":{"id":"` + thread + `","cwd":"` + cwd + `","instructions":"` + strings.Repeat("x", 30<<10) + `"}}`,
+		`{"timestamp":"2026-01-01T00:00:01Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"u1","content":[{"type":"text","text":` + string(p) + `}]}}}`,
+	}
+	lines = append(lines, events...)
+	path := filepath.Join(dir, "rollout-"+day.Format("2006-01-02T15-04-05")+"-"+thread+".jsonl")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, written, written); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+const (
+	bmxThreadA  = "0c000000-0000-4000-8000-00000000000a"
+	bmxThreadB  = "0c000000-0000-4000-8000-00000000000b"
+	bmxThreadE  = "0c000000-0000-4000-8000-00000000000e"
+	bmxThreadT  = "0c000000-0000-4000-8000-0000000000aa"
+	bmxThreadF0 = "0c000000-0000-4000-8000-0000000000f0" // sidA's thread before a fork
+	bmxThreadX  = "0c000000-0000-4000-8000-0000000000cc" // a Codex conversation of the computer's, same directory
+)
+
+// botmux's Codex and TRAEX sessions are listed as their threads (found by botmux's session id in the rollout's first
+// prompt), with botmux's state, the topic's title and the rollout as the conversation. One whose rollout is not found,
+// codex-app ones, and threads in another directory are not.
+func TestBotmuxListsCodexAndTraexSessions(t *testing.T) {
+	n, f, fh, home := bmxNode(t)
+	codexRoot, traexRoot := filepath.Join(home, ".codex"), filepath.Join(home, ".trae", "cli")
+	now := time.Now()
+	bmxRollout(t, codexRoot, bmxThreadF0, bmxCwd, sidA, now.Add(-time.Hour))
+	bmxRollout(t, codexRoot, bmxThreadA, bmxCwd, sidA, now.Add(-time.Minute), // the fork botmux runs now
+		`{"timestamp":"2026-01-01T00:00:02Z","type":"event_msg","payload":{"type":"task_started"}}`)
+	bmxRollout(t, codexRoot, bmxThreadB, bmxCwd, sidB, now.Add(-time.Minute))
+	bmxRollout(t, codexRoot, bmxThreadE, bmxCwd, sidE, now.Add(-time.Hour))
+	bmxRollout(t, codexRoot, bmxThreadX, bmxCwd, "", now)
+	bmxRollout(t, codexRoot, "0c000000-0000-4000-8000-0000000000dd", "/tmp/elsewhere", sidF, now)
+	bmxRollout(t, traexRoot, bmxThreadT, bmxCwd, sidD, now.Add(-time.Minute))
+	f.rows = []map[string]any{
+		bmxRow(sidA, "codex", "alive", "working", false, "codex 任务"),
+		bmxRow(sidB, "codex", "alive", "idle", true, "asks"),
+		bmxRow(sidE, "codex", "not_running", "unknown", false, "parked"),
+		bmxRow(sidD, "traex", "alive", "idle", false, "traex 任务"),
+		bmxRow(sidF, "codex", "alive", "working", false, "elsewhere"),
+		bmxRow(sidG, "codex-app", "alive", "working", false, "app"),
+	}
+	list := listSessions(t, n)
+	m := byID(list)
+	want := map[string]struct{ botmux, agent, status, title string }{
+		bmxThreadA: {sidA, "codex", proto.StatusWorking, "codex 任务"},
+		bmxThreadB: {sidB, "codex", proto.StatusBlocked, "asks"},
+		bmxThreadE: {sidE, "codex", proto.StatusOffline, "parked"},
+		bmxThreadT: {sidD, traexAgent, proto.StatusDone, "traex 任务"},
+	}
+	for id, w := range want {
+		s, ok := m[id]
+		if !ok {
+			t.Fatalf("%s not listed: %v", id, ids(list))
+		}
+		if s.PaneID != "botmux:"+w.botmux || s.Agent != w.agent || s.Status != w.status || s.Title != w.title ||
+			s.SpaceKind != host.Botmux || s.SpaceID != dirSpace+bmxCwd || s.CodexRoute != "" {
+			t.Errorf("%s: %+v, want %+v", id, s, w)
+		}
+	}
+	if s := m[bmxThreadA]; s.Rev == 0 {
+		t.Errorf("no conversation read for %s: %+v", bmxThreadA, s)
+	}
+	for _, s := range list {
+		if s.PaneID != "" && !slices.Contains([]string{bmxThreadA, bmxThreadB, bmxThreadE, bmxThreadT}, s.SessionID) {
+			t.Errorf("listed with a pane: %s %s", s.SessionID, s.PaneID)
+		}
+		if s.SessionID == sidA || s.SessionID == sidF || s.SessionID == sidG {
+			t.Errorf("listed by botmux's id: %+v", s)
+		}
+	}
+	if s, ok := m[bmxThreadF0]; ok && s.PaneID != "" {
+		t.Errorf("the thread before the fork has the pane: %+v", s)
+	}
+	if trace := fh.calls(); len(trace) != 0 {
+		t.Errorf("herdr was asked: %v", trace)
+	}
+}
+
+// A Codex session of botmux's that Codex's history (and the desktop App's list) also has is listed once, as botmux's:
+// sendable through botmux, not a read-only history row.
+func TestBotmuxCodexSessionWinsOverCodexHistory(t *testing.T) {
+	n, f, _, home := bmxNode(t)
+	bmxRollout(t, filepath.Join(home, ".codex"), bmxThreadA, bmxCwd, sidA, time.Now().Add(-time.Minute))
+	n.codices = newCodexRegistry()
+	n.configureCodex(proto.CodexConfig{}) // ~/.codex is the legacy home: its thread ids stay as they are
+	if s := byID(listSessions(t, n))[bmxThreadA]; s.SourceKind != "codex_history" {
+		t.Fatalf("without botmux: %+v", s) // the history row botmux's session replaces
+	}
+	f.rows = []map[string]any{bmxRow(sidA, "codex", "alive", "idle", false, "codex 任务")}
+	n.hosts.Get(host.Botmux).(*botmuxHost).at = time.Time{}
+	var rows []proto.Session
+	for _, s := range listSessions(t, n) {
+		if s.SessionID == bmxThreadA || s.SourceThreadID == bmxThreadA {
+			rows = append(rows, s)
+		}
+	}
+	if len(rows) != 1 || rows[0].PaneID != "botmux:"+sidA || rows[0].SourceKind != "" || rows[0].Status != proto.StatusDone {
+		t.Fatalf("rows of the thread: %+v", rows)
+	}
+}
+
+// A message to a Codex / TRAEX session of botmux's goes to botmux as a turn of its botmux session — never typed into a
+// pane, never a resume of the thread elsewhere, no app-server join — and asks no screen first.
+func TestBotmuxCodexReplyIsDeliveredByBotmux(t *testing.T) {
+	n, f, fh, home := bmxNode(t)
+	bmxRollout(t, filepath.Join(home, ".codex"), bmxThreadA, bmxCwd, sidA, time.Now().Add(-time.Minute))
+	bmxRollout(t, filepath.Join(home, ".codex"), bmxThreadE, bmxCwd, sidE, time.Now().Add(-time.Hour))
+	bmxRollout(t, filepath.Join(home, ".trae", "cli"), bmxThreadT, bmxCwd, sidD, time.Now().Add(-time.Minute))
+	f.rows = []map[string]any{
+		bmxRow(sidA, "codex", "alive", "working", false, "a"),
+		bmxRow(sidE, "codex", "not_running", "unknown", false, "parked"),
+		bmxRow(sidD, "traex", "alive", "idle", false, "t"),
+	}
+	listSessions(t, n)
+	for _, id := range []string{bmxThreadA, bmxThreadE, bmxThreadT} {
+		if err := n.send(context.Background(), id, "继续 "+id, nil, sendOpts{}); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+	got := f.sent()
+	if len(got) != 3 {
+		t.Fatalf("triggers %v", got)
+	}
+	for i, want := range []struct{ botmux, thread string }{{sidA, bmxThreadA}, {sidE, bmxThreadE}, {sidD, bmxThreadT}} {
+		target, _ := got[i]["target"].(map[string]any)
+		if target["sessionId"] != want.botmux || got[i]["instruction"] != "继续 "+want.thread {
+			t.Errorf("trigger %d: %v", i, got[i])
+		}
+	}
+	if cards := n.codexCardsNow(context.Background(), ""); len(cards) != 0 {
+		t.Errorf("cards of botmux's sessions: %+v", cards)
+	}
+	if trace := fh.calls(); len(trace) != 0 {
+		t.Errorf("herdr was asked: %v", trace)
+	}
+}
+
+// The same Codex thread in a herdr pane and as botmux's parked row: the pane that runs it keeps it.
+func TestRunningCodexPaneWinsOverParkedBotmuxRow(t *testing.T) {
+	n, _, home := herdrNode(t)
+	bmxRollout(t, filepath.Join(home, ".codex"), bmxThreadA, bmxCwd, sidA, time.Now().Add(-time.Minute))
+	parked := host.Agent{Agent: "codex", AgentStatus: proto.StatusOffline, Cwd: bmxCwd, PaneID: "botmux:" + sidA}
+	running := host.Agent{Agent: "codex", AgentSession: &host.AgentSession{Kind: "id", Value: bmxThreadA},
+		AgentStatus: proto.StatusWorking, Cwd: bmxCwd, PaneID: "w1:p1"}
+	for _, agents := range [][]host.Agent{{parked, running}, {running, parked}} {
+		n.setAgents(agents)
+		if a, _ := n.agent(bmxThreadA); a.PaneID != "w1:p1" {
+			t.Fatalf("%v: pane %q", agents, a.PaneID)
+		}
+	}
+}
+
+// Only the head of a rollout is read for botmux's id, and a rollout that has it is not read again.
+func TestBotmuxIDsInReadsTheHeadOnce(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".codex")
+	p := bmxRollout(t, root, bmxThreadA, bmxCwd, sidA, time.Now())
+	if got := botmuxIDsIn(p); !slices.Equal(got, []string{sidA}) {
+		t.Fatalf("ids %v", got)
+	}
+	tail := `{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"text","text":"<session_id>` + sidB + `</session_id>"}]}}}` + "\n"
+	fh, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fh.WriteString(tail)
+	fh.Close()
+	if got := botmuxIDsIn(p); !slices.Equal(got, []string{sidA}) {
+		t.Fatalf("after a later prompt: %v", got)
+	}
+	big := bmxRollout(t, filepath.Join(t.TempDir(), ".codex"), bmxThreadB, bmxCwd, "", time.Now(),
+		`{"type":"event_msg","payload":{"text":"`+strings.Repeat("y", botmuxHeadMax)+`"}}`, strings.TrimSpace(tail))
+	if got := botmuxIDsIn(big); len(got) != 0 {
+		t.Fatalf("an id past the head: %v", got)
+	}
+	escaped := bmxRollout(t, filepath.Join(t.TempDir(), ".codex"), bmxThreadE, bmxCwd, "", time.Now(),
+		`{"type":"event_msg","payload":{"text":"<session_id>`+sidE+`</session_id>"}}`)
+	if got := botmuxIDsIn(escaped); !slices.Equal(got, []string{sidE}) {
+		t.Fatalf("escaped: %v", got)
+	}
+}

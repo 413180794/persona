@@ -107,6 +107,9 @@ func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) err
 	// Codex / TRAEX: their own screen (codexask.go) — a draft in the box, an approval or a question overlay refuses;
 	// the transcript pager and 0.163's question pane are only shown, and step aside.
 	if kind == "codex" || kind == traexAgent {
+		if host.ParsePane(pane).Kind == host.Botmux {
+			return nil // botmux takes the message as a turn of its own (queued behind a running one): no box to check
+		}
 		return n.codexReady(ctx, pane, false)
 	}
 	// Claude in a host that reads screens without colors (host.PlainScreen: a draft and the grey placeholder look the

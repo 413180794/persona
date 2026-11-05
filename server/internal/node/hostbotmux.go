@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -25,10 +26,11 @@ import (
 // botmuxHost is botmux, the Feishu topic ↔ AI CLI bridge (docs/engines.md「botmux」): each topic is a session of a
 // coding CLI that botmux runs (in tmux) and answers in Feishu. It is not an engine to choose: a node on a machine with
 // botmux registers it next to the engine's hosts (nodeHosts). A pane is a botmux session, its id the botmux session
-// id, which is also the Claude session id botmux starts claude with. Phase 1: listing and state (one `botmux
-// observe` for every daemon's sessions) and replies, which go to botmux's own delivery (POST /api/trigger on its
-// dashboard: queued while a turn runs, a parked session resumed by botmux) — never typed into the pane, never a
-// `claude --resume` of Persona's. No screens, keys, closing or renaming: those stay in Feishu and on the computer.
+// id: for Claude Code also the Claude session id botmux starts claude with; for Codex and TRAEX the thread is found in
+// their rollouts (botmuxThreads). Listing and state (one `botmux observe` for every daemon's sessions) and replies,
+// which go to botmux's own delivery (POST /api/trigger on its dashboard: queued while a turn runs, a parked session
+// resumed by botmux) — never typed into the pane, never a `claude --resume` of Persona's. No screens, keys, closing or
+// renaming: those stay in Feishu and on the computer.
 type botmuxHost struct {
 	// run runs the botmux CLI (tests: a fake).
 	run func(ctx context.Context, args ...string) ([]byte, error)
@@ -253,17 +255,25 @@ var botmuxTurns = map[string]string{
 	"idle": proto.StatusDone, "unknown": proto.StatusUnknown,
 }
 
-// agent is a session as an agent pane, false for the ones botmux does not drive here: closed ones, ones of a CLI
-// other than Claude Code (phase 1), ones botmux runs in herdr (herdr's own panes already). A parked one is offline, so
-// that a reply to it goes to botmux, which resumes it; Agents lists it only while its transcript is listed offline.
+// botmuxCLIs are the CLIs whose botmux sessions are listed, as the node's agent kinds. Others (codex-app, which
+// botmux drives through app-server and whose prompts carry no session id, pi, opencode…) are not.
+var botmuxCLIs = map[string]string{"claude-code": "claude", "codex": "codex", "traex": traexAgent}
+
+// agent is a session as an agent pane, false for the ones botmux does not drive here: closed ones, ones of a CLI not in
+// botmuxCLIs, ones botmux runs in herdr (herdr's own panes already). A parked one is offline, so that a reply to it
+// goes to botmux, which resumes it; Agents lists it only while its transcript is listed offline. A Claude Code session
+// names its session (the botmux id); a Codex or TRAEX one is left for the node to find (botmuxThreads).
 func (r botmuxRow) agent() (host.Agent, bool) {
-	if r.CLI.ID != "claude-code" || r.Backend.Type == "herdr" || r.Closed != false || !validID(r.Identity.SessionID) {
+	kind := botmuxCLIs[r.CLI.ID]
+	if kind == "" || r.Backend.Type == "herdr" || r.Closed != false || !validID(r.Identity.SessionID) {
 		return host.Agent{}, false
 	}
 	a := host.Agent{
-		Agent: "claude", AgentSession: &host.AgentSession{Kind: "id", Value: r.Identity.SessionID},
-		Name: botmuxTitle(r.Raw.Title), Cwd: r.WorkingDirectory, WorkspaceID: dirSpace + r.WorkingDirectory,
+		Agent: kind, Name: botmuxTitle(r.Raw.Title), Cwd: r.WorkingDirectory, WorkspaceID: dirSpace + r.WorkingDirectory,
 		PaneID: host.PaneRef{Kind: host.Botmux, ID: r.Identity.SessionID}.String(),
+	}
+	if kind == "claude" {
+		a.AgentSession = &host.AgentSession{Kind: "id", Value: r.Identity.SessionID}
 	}
 	switch {
 	case r.Liveness == "not_running":
@@ -463,4 +473,127 @@ func (h *botmuxHost) dashboard(ctx context.Context, fresh bool) (string, string,
 		return base, token, nil
 	}
 	return "", "", errors.New("botmux dashboard current: no dashboard URL in its output")
+}
+
+// botmuxThreads finds the thread of each Codex / TRAEX session botmux lists (pane → the session id the node keys it
+// on). botmux does not report it (it keeps the CLI's own id in its store), but it opens every prompt it hands these
+// CLIs with <session_id>botmux id</session_id>, so the rollout whose head carries the session's id is its thread —
+// the bridge botmux uses itself (Codex's history.jsonl, TRAEX's threads table: both say what the rollouts say). Only
+// rollouts in the session's working directory are read, each head once; of several (a fork copies the head) the most
+// recently written. A session whose rollout is not found (none yet, or a CODEX_HOME / TRAE_HOME of its own that this
+// node does not know) is not listed.
+func (n *Node) botmuxThreads(agents []host.Agent) map[string]string {
+	var out map[string]string
+	for _, kind := range []string{"codex", traexAgent} {
+		cwds := map[string]bool{}
+		var mine []host.Agent
+		for _, a := range agents {
+			if a.Agent == kind && a.Cwd != "" && host.ParsePane(a.PaneID).Kind == host.Botmux {
+				mine = append(mine, a)
+				cwds[filepath.Clean(a.Cwd)] = true
+			}
+		}
+		if len(mine) == 0 {
+			continue
+		}
+		homes := []string{n.traexHome()}
+		if kind == "codex" {
+			homes = n.botmuxCodexHomes()
+		}
+		type hit struct {
+			home, thread string
+			at           time.Time
+		}
+		best := map[string]hit{} // botmux id → its newest rollout
+		for _, home := range homes {
+			for _, r := range rollouts(home) {
+				if r.sub || r.cwd == "" || !cwds[filepath.Clean(r.cwd)] {
+					continue
+				}
+				for _, id := range botmuxIDsIn(r.path) {
+					if h, ok := best[id]; !ok || r.mtime.After(h.at) {
+						best[id] = hit{home, r.id, r.mtime}
+					}
+				}
+			}
+		}
+		for _, a := range mine {
+			h, ok := best[strings.ToLower(host.ParsePane(a.PaneID).ID)]
+			if !ok {
+				continue
+			}
+			id := h.thread
+			if kind == "codex" {
+				id = n.codexPublicID(h.home, id)
+			}
+			if out == nil {
+				out = map[string]string{}
+			}
+			out[a.PaneID] = id
+		}
+	}
+	return out
+}
+
+// botmuxCodexHomes are the Codex homes this node reads (codex_registry.go), ~/.codex among them.
+func (n *Node) botmuxCodexHomes() []string {
+	if n.codices == nil {
+		return []string{n.codexHome()}
+	}
+	var homes []string
+	for _, h := range append(n.codexInventory().Homes, n.codexHome()) {
+		if h = canonicalCodexHome(h, n.home); h != "" && !slices.Contains(homes, h) {
+			homes = append(homes, h)
+		}
+	}
+	return homes
+}
+
+// botmuxHeadMax: how much of a rollout's head is read for botmux's session id. The first line (session_meta, tens of
+// KB of instructions) comes before the first prompt, whose first block is the id.
+const botmuxHeadMax = 512 << 10
+
+// botmuxSessionRe is botmux's session block, as written or with JSON's escapes of < and >.
+var botmuxSessionRe = regexp.MustCompile(`(?:<|\\u003c)session_id(?:>|\\u003e)([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:<|\\u003c)/session_id(?:>|\\u003e)`)
+
+// botmuxHeads caches what each rollout's head says: read again only while the head is still being written.
+var botmuxHeads = struct {
+	sync.Mutex
+	byPath map[string]botmuxHead
+}{byPath: map[string]botmuxHead{}}
+
+type botmuxHead struct {
+	size int64
+	ids  []string
+}
+
+// botmuxIDsIn is the botmux session ids in a rollout's head.
+func botmuxIDsIn(path string) []string {
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	botmuxHeads.Lock()
+	h, ok := botmuxHeads.byPath[path]
+	botmuxHeads.Unlock()
+	// The first prompt, once written, is the head for good: no need to read a rollout that has its id again.
+	if ok && (len(h.ids) > 0 || h.size == st.Size() || h.size >= botmuxHeadMax) {
+		return h.ids
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	head, _ := io.ReadAll(io.LimitReader(f, botmuxHeadMax))
+	f.Close()
+	h = botmuxHead{size: int64(len(head))}
+	for _, m := range botmuxSessionRe.FindAllSubmatch(head, -1) {
+		if id := strings.ToLower(string(m[1])); !slices.Contains(h.ids, id) {
+			h.ids = append(h.ids, id)
+		}
+	}
+	botmuxHeads.Lock()
+	botmuxHeads.byPath[path] = h
+	botmuxHeads.Unlock()
+	return h.ids
 }
