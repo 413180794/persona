@@ -1107,6 +1107,9 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
   老 node 不带，hub 照旧用 `computer.*`、`browser.*`（新 node 也照答）。见 `docs/extensions.md`「内置的 node 程序」。
 - `herdr.server.start`（hub → node，无参数，回 `{running}`）：用户点了 Agents 列表的「启动」。不受 `herdr_autostart` 约束，
   起不来时按 `engine_missing` 那一套回原因。老 node 没有这个方法，hub 回 502 而不是说 herdr 起不来。
+  没装 herdr 时先装固定版本（最多等 15 秒，没装好回「正在安装 herdr …」的错误、在后台装完后自己启动；`docs/engines.md`「没装 herdr 时」）。
+- `herdr.server.status`（hub → node，无参数，回 `{running, known, installing, install_error}`）：`installing` 是 node 正在装 herdr，
+  `install_error` 是上次没装上的原因（空串是没失败过）；`GET /api/v1/machines/{mid}/herdr` 原样带出（没有时不带）。
 - `usage.windows`（hub → node，无参数，回 `{enabled, collected_at, accounts: [UsageAccount]}`，#2432）：node 读本机 Codex 的 rollout 和 Claude 状态栏落下的文件得到的订阅额度窗口，
   只读本机文件、不碰凭据。`node.configure` 的 `usage_windows`（hub.json `machines[].usage_windows`）为 false 时回 `{enabled: false, accounts: []}`。老 node 没有这个方法，hub 当它没有数据（`docs/usage-windows.md`）。
 - 并列时没有窗格的操作（新建、继续会话、改名）固定走经典 herdr（node 的 `defaultHost` / `defaultHostKind`）；

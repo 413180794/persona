@@ -88,11 +88,12 @@ func (n *Node) ensureHerdr(ctx context.Context, why string) error {
 	if !ok || h.c == nil || n.hstart.off.Load() {
 		return nil
 	}
-	return n.startHerdr(ctx, h, why)
+	return n.startOrInstallHerdr(ctx, h, why, n.hinstall.auto.Load()) // hub.json machines[].herdr_autoinstall
 }
 
 // startHerdrServer is herdr.server.start: the user pressed 启动 in the Agents list (herdr_autostart off does not stop
-// that — the switch only says whether the node may do it on its own). It reports why when it could not.
+// that — the switch only says whether the node may do it on its own), installing herdr first when there is none.
+// It reports why when it could not.
 func (n *Node) startHerdrServer(ctx context.Context) (map[string]any, error) {
 	if e := n.engine(); e != proto.EngineHerdr && e != proto.EngineHerdrBoth {
 		return nil, fmt.Errorf("这台电脑的引擎不是 herdr")
@@ -101,7 +102,7 @@ func (n *Node) startHerdrServer(ctx context.Context) (map[string]any, error) {
 	if !ok || h.c == nil {
 		return nil, fmt.Errorf("这台电脑没有 herdr")
 	}
-	if err := n.startHerdr(ctx, h, "the user asked for it"); err != nil {
+	if err := n.startOrInstallHerdr(ctx, h, "the user asked for it", true); err != nil { // the user's 启动 installs it
 		return nil, err
 	}
 	return map[string]any{"running": herdrAlive(ctx, h.c.Socket)}, nil
@@ -256,7 +257,8 @@ func (n *Node) herdrAtStart(ctx context.Context) {
 	case <-ctx.Done():
 		return
 	}
-	if err := n.ensureHerdr(ctx, "node started"); err != nil && !errors.Is(err, errHerdrNotInstalled) {
+	if err := n.ensureHerdr(ctx, "node started"); err != nil && !errors.Is(err, errHerdrNotInstalled) &&
+		!errors.Is(err, errHerdrInstalling) {
 		n.logf("herdr: not started at node start: %v", err)
 	}
 }

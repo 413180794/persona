@@ -52,10 +52,11 @@ type Node struct {
 	bin  string // absolute path of this executable
 	uid  string // the computer's own id (machineuid.go); empty when it could not be read or made
 	// managed: launchers kept by the hub (managed.go)
-	managed managedLaunchers
-	hosts   *host.Registry // the terminal hosts, by kind (hosts.go): the one of the machine's engine
-	eng     engineState    // which engine, and its change stream (engine.go)
-	hstart  herdrStarter   // starting herdr's server when it is not running (herdrstart.go)
+	managed  managedLaunchers
+	hosts    *host.Registry // the terminal hosts, by kind (hosts.go): the one of the machine's engine
+	eng      engineState    // which engine, and its change stream (engine.go)
+	hstart   herdrStarter   // starting herdr's server when it is not running (herdrstart.go)
+	hinstall herdrInstaller // installing herdr when there is none (herdrinstall.go)
 	// engEpoch counts engine switches (n.mu): a refresh applies its result only when no switch happened meanwhile.
 	engEpoch uint64
 	peer     *rpc.Peer
@@ -477,7 +478,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.startHerdrServer(ctx)
 	case "herdr.server.status": // whether it answers now: the hub asks when an app reads the row (herdrstart.go)
 		running, known := n.herdrRunning(ctx)
-		return map[string]any{"running": running, "known": known}, nil
+		installing, installErr := n.herdrInstalling() // herdrinstall.go
+		return map[string]any{"running": running, "known": known, "installing": installing, "install_error": installErr}, nil
 	case "connector.list", "connector.chats", "connector.older", "connector.changes", "connector.search": // this Mac's own data (connectors.go)
 		return localConnector(ctx, method, params)
 	case "credential.gh_token": // the GitHub connector's token from this machine's gh login (credential.go)
@@ -521,6 +523,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			// HerdrAutostart: start herdr's server when it is not running (hub.json machines[].herdr_autostart,
 			// herdrstart.go); nil (an older hub) leaves it on.
 			HerdrAutostart *bool `json:"herdr_autostart"`
+			// HerdrAutoinstall: the node's own starts install herdr when there is none (hub.json
+			// machines[].herdr_autoinstall, herdrinstall.go); nil (an older hub) leaves it as it is (off).
+			HerdrAutoinstall *bool `json:"herdr_autoinstall"`
 			// ClaudeGlobalHooks: report-only hooks in the default claude config directory's settings.json
 			// (hub.json machines[].claude_global_hooks, globalhooks.go); nil (an older hub) leaves them as they are.
 			ClaudeGlobalHooks *bool `json:"claude_global_hooks"`
@@ -561,6 +566,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if c.HerdrAutostart != nil {
 			n.setHerdrAutostart(*c.HerdrAutostart)
+		}
+		if c.HerdrAutoinstall != nil {
+			n.setHerdrAutoinstall(*c.HerdrAutoinstall)
 		}
 		if c.ClaudeGlobalHooks != nil {
 			n.applyGlobalHooks(*c.ClaudeGlobalHooks)

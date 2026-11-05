@@ -250,6 +250,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `machines[].herdr_autostart`（可选）：写 `false` 时那台电脑的 node 不在 herdr 没运行时自己拉起它的 server；不写是开
   （`docs/engines.md`「herdr 没在运行时」）。**只是默认值**：用户在「设置 › 机器 › 引擎」里按机器选过之后，以那次选择为准
   （存在 hub 的 settings，`herdr_autostart/<机器 id>`），再改这里不影响已经选过的机器。
+- `machines[].herdr_autoinstall`（可选，默认关）：写 `true` 时那台电脑没装 herdr，node 自己拉起 herdr 之前（启动时、新建 / 继续会话前）先装上固定版本；
+  不写时只有用户点 Agents 列表的「启动」才装（`docs/engines.md`「没装 herdr 时」）。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
 - `machines[].claude_global_hooks`（可选，默认关）：写 `true` 时那台电脑的 node 往默认 Claude 配置目录的 `settings.json` 里加**只报告**的 hooks（异步、短超时、不回答审批），
   让不是 Persona 启动的会话也把回合和提问事件报给 Persona；写 `false` 或删掉这个键，下次连上时把 Persona 加的条目拿掉（没有就什么都不写）。
   不会加会阻塞的 hook：用户全局配置里常有别的工具的同步 PermissionRequest hook，叠加会拖住终端对话框（`docs/claude-integration.md`「全局只报告的 hooks」）。

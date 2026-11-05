@@ -45,16 +45,21 @@ func (m *Machine) setHerdrAutostart(ctx context.Context, on bool) error {
 
 // herdrAutostartState is what GET /api/v1/machines/{mid}/herdr {autostart} answers: the setting in force. Running is
 // whether the machine's herdr answers now, and Known false when the node could not say (it is offline, or older).
+// Installing: the node is installing herdr (a 启动 on a machine without it, node/herdrinstall.go); InstallError why
+// the last install failed.
 type herdrAutostartState struct {
-	Autostart bool `json:"autostart"`
-	Running   bool `json:"running"`
-	Known     bool `json:"known"`
+	Autostart    bool   `json:"autostart"`
+	Running      bool   `json:"running"`
+	Known        bool   `json:"known"`
+	Installing   bool   `json:"installing,omitempty"`
+	InstallError string `json:"install_error,omitempty"`
 }
 
 func (d *Devices) herdrAutostartState(ctx context.Context, m *Machine) herdrAutostartState {
 	out := herdrAutostartState{Autostart: m.herdrAutostart(ctx)}
 	m.mu.Lock()
 	out.Running, out.Known = m.info.HerdrRunning, m.info.HerdrRunningKnown
+	out.Installing, out.InstallError = m.herdrInstall.installing, m.herdrInstall.err
 	m.mu.Unlock()
 	return out
 }
@@ -84,8 +89,10 @@ func (d *Devices) refreshHerdrRunning(ctx context.Context, m *Machine) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	var out struct {
-		Running bool `json:"running"`
-		Known   bool `json:"known"`
+		Running      bool   `json:"running"`
+		Known        bool   `json:"known"`
+		Installing   bool   `json:"installing"`
+		InstallError string `json:"install_error"`
 	}
 	if err := m.call(ctx, "herdr.server.status", map[string]any{}, &out); err != nil {
 		m.mu.Lock()
@@ -94,6 +101,9 @@ func (d *Devices) refreshHerdrRunning(ctx context.Context, m *Machine) {
 		return
 	}
 	m.noteHerdrRunning(out.Running, out.Known)
+	m.mu.Lock()
+	m.herdrInstall.installing, m.herdrInstall.err = out.Installing, out.InstallError
+	m.mu.Unlock()
 }
 
 // getHerdr: GET /api/v1/machines/{mid}/herdr, the machine's engine row: 需要时自动启动 herdr, and whether it runs now.

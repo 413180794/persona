@@ -169,6 +169,30 @@ final class AssistantProfileTests: XCTestCase {
         XCTAssertNotNil(try tasks().first(where: { $0["id"] as? String == "morning" })?["run_session_id"], "the run's conversation is not the task's")
     }
 
+    /// The scheduled tasks' conversations are on 定时任务, not in the drawer's 最近 (#2838): 早报's own conversation is not
+    /// listed there, the user's own ones are, and 定时任务 opens it from under 早报's row.
+    @MainActor func testATasksConversationsAreOnItsRowNotInRecent() throws {
+        let app = launch(["-ui.oldLayout", "NO"])
+        let menu = app.buttons["assistant-sidebar-button"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 15), "no ☰:\n\(app.debugDescription)")
+        menu.tapCenter()
+        let mine = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "帮我约周五和韩梅梅吃饭")).firstMatch
+        XCTAssertTrue(mine.waitForExistence(timeout: 5), "the user's own conversation is not in 最近:\n\(app.debugDescription)")
+        sleep(2) // the tasks and runs are read as the drawer comes out
+        XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "早报 · 周三")).firstMatch.exists,
+                       "早报's conversation is still in 最近:\n\(app.debugDescription)")
+        shot(app, "recent-without-tasks")
+        let routines = app.buttons.matching(NSPredicate(format: "label == '定时任务'")).firstMatch
+        XCTAssertTrue(routines.waitForExistence(timeout: 5), "no 定时任务 in the drawer")
+        routines.tap()
+        let chat = app.buttons["task-chat-morning-0"]
+        XCTAssertTrue(chat.waitForExistence(timeout: 8), "no conversation under 早报:\n\(app.debugDescription)")
+        shot(app, "routines-chats")
+        chat.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "3 封邮件需要回复")).firstMatch.waitForExistence(timeout: 8),
+                      "早报's conversation did not open:\n\(app.debugDescription)")
+    }
+
     /// The tasks the mock hub has now.
     private func tasks() throws -> [[String: Any]] {
         let data = try Data(contentsOf: URL(string: hub + "/api/v1/assistant/tasks")!)

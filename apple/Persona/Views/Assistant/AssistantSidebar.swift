@@ -696,6 +696,7 @@ struct AssistantSidebar: View {
     @State private var renaming: Session?
     @State private var showArchived = false
     @State private var feed = SidebarFeed()
+    private let taskChats = AssistantTaskChatsStore.shared
     @FocusState private var searching: Bool
     /// Conversations pinned on this phone (session ids, comma-separated); the main conversation always is.
     @StoredValue("assistant.pinned") private var pinnedRaw = ""
@@ -760,6 +761,8 @@ struct AssistantSidebar: View {
             .scrollDismissesKeyboard(.interactively)
             footer
         }
+        // Which conversations the tasks started: read again as the sidebar comes out and when a conversation came or went.
+        .task(id: out ? all.count : -1) { if out { await taskChats.refresh(model.api) } }
         .confirmClose($ending)
         .renameSessionAlert($renaming)
         .sheet(isPresented: $showArchived) {
@@ -1009,7 +1012,8 @@ struct AssistantSidebar: View {
             }
             ForEach(pinned) { row($0) }
         }
-        let rest = AssistantSidebarGroups.newestFirst(all.filter { !isPinned($0) })
+        // The scheduled tasks' conversations are on 定时任务, under each task (#2838); the open one keeps its row.
+        let rest = AssistantSidebarGroups.newestFirst(taskChats.known.recent(all.filter { !isPinned($0) }, current: current))
         if rest.isEmpty {
             Text(pinned.isEmpty && !mainAbove ? "还没有对话：点上面的新对话开始" : "还没有别的对话")
                 .font(Theme.Font.secondary).foregroundStyle(.secondary)

@@ -155,6 +155,21 @@ node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之
 - **起不来**：仍然是 `engine_missing`。没装 herdr 时文案和以前一样；装了但起不来时说「自动启动也没成功」，原因（herdr 的退出码和输出的最后几行，
   输出在 `$TMPDIR/persona-herdr-server.log`）放在详情里，也写进 node 的日志。Windows 上不拉，行为和以前一样。
 
+### 没装 herdr 时
+
+新接入的电脑常常还没装 herdr（#2847）：以前「启动」只能回「没装 herdr」，得有人登上那台电脑去装。现在 node 自己装（`node/herdrinstall.go`）：
+
+- **装什么**：herdr 官方 release 里这台电脑系统 / CPU 的二进制（linux / macos × x86_64 / aarch64），**版本写死**成和其他电脑一致的
+  （现在是 0.8.0，不跟 `latest.json`），下载后按代码里写死的 sha256 校验，不对就不装。装到 `~/.local/bin/herdr`（不用 sudo，node 的 PATH 里有它），
+  先写临时文件、校验过才改名，下载断了不会留下半个 herdr。Windows 和别的架构没有包：直接说要手动装。升级 herdr 版本时同时改版本号和四个 sha256。
+- **什么时候装**：用户点「启动」时总会装；node 自己拉起（启动时、新建 / 继续会话前）只在 hub.json 的 `machines[].herdr_autoinstall` 为 `true` 时装，
+  不写就和以前一样只说没装。同一时间只装一次，几个请求一起等它。
+- **慢的时候**：下载在后台跑（最多 15 分钟），「启动」最多等 15 秒：装好了就接着启动，答 `running`；还没装好就回「正在安装 herdr 0.8.0…装好后会自动启动」
+  （客户端照原文显示在「没启动：」后面），装好后 node 自己把 server 拉起来，Agents 列表下一次读到在跑，提示行就消失。
+  `herdr.server.status` 和 `GET /api/v1/machines/{mid}/herdr` 多带 `installing`、`install_error`（上次没装上的原因），客户端可据此显示「正在安装…」（还没接）。
+- **装不上**：连不上 GitHub、超时、HTTP 错误、校验不对都回一句中文原因；网络不通时提示「可能要走代理：给 node 设 `HTTPS_PROXY` 后重启它」
+  （下载走 Go 的 `ProxyFromEnvironment`）。原因也写进 node 的日志。
+
 ### 重启后续上 Persona 起的会话
 
 herdr server 重启后会恢复工作区、标签页、窗格，**客户端 attach 之后**再用它内置的命令续上 agent（`session.resume_agents_on_restore`，默认开），

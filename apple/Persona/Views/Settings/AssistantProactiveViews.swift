@@ -158,6 +158,7 @@ enum AssistantScheduleText {
 /// minutes; the rule in words, next and last run, an on/off switch), the one-offs it scheduled from a conversation,
 /// and the history of runs. Each opens the same editor: when, the prompt, and what it runs with.
 struct AssistantRoutinesView: View {
+    @Environment(AppModel.self) private var model
     @State private var page = AssistantRoutinesModel()
     @State private var editing: APIClient.ScheduledTask?
     @State private var creating: APIClient.ScheduledTask?
@@ -247,11 +248,14 @@ struct AssistantRoutinesView: View {
     }
 
     private func row(_ t: APIClient.ScheduledTask) -> some View {
-        AssistantTaskRow(task: t, open: { editing = t }) { on in
-            var changed = t
-            changed.enabled = on
-            Haptics.tap()
-            Task { _ = await page.save(changed) }
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            AssistantTaskRow(task: t, open: { editing = t }) { on in
+                var changed = t
+                changed.enabled = on
+                Haptics.tap()
+                Task { _ = await page.save(changed) }
+            }
+            chats(t)
         }
         .modifier(AssistantTaskRowLook())
         .swipeActions(edge: .trailing, allowsFullSwipe: t.repeats == .once) {
@@ -261,6 +265,30 @@ struct AssistantRoutinesView: View {
             Button { Task { await page.run(t) } } label: { Label("立即运行", systemImage: Theme.Icon.run) }
             Button { editing = t } label: { Label("编辑", systemImage: Theme.Icon.compose) }
             Button(role: .destructive) { Task { await page.delete(t) } } label: { Label("删除", systemImage: Theme.Icon.delete) }
+        }
+    }
+
+    /// The conversations the task's runs went into, under its row (#2838): they are kept here, not in the sidebar's
+    /// 最近. A tap opens one.
+    @ViewBuilder private func chats(_ t: APIClient.ScheduledTask) -> some View {
+        let chats = AssistantTaskChats.chats(of: t, runs: page.lastRuns, machineID: model.assistantConfig?.machineID ?? model.hubMachineID)
+        if !chats.isEmpty {
+            FlowLayoutRow(spacing: Theme.Space.xs) {
+                ForEach(Array(chats.enumerated()), id: \.element.key) { i, c in
+                    let label = AssistantTaskChats.label(c, index: i)
+                    Button {
+                        Haptics.tap()
+                        model.openAssistantConversation(model.inHub(c.key)) // a task's conversation is the hub-level group's
+                    } label: {
+                        Chip(text: label, symbol: Theme.Icon.conversation, look: .tint(Theme.accent))
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("打开「\(AssistantScheduleText.title(t))」\(label)的对话")
+                    .accessibilityIdentifier("task-chat-\(t.id)-\(i)")
+                }
+            }
+            .padding(.leading, AppStyle.current.usesBeautifulUI ? Theme.Space.l : Theme.Size.wellM + Theme.Space.m)
+            .padding(.bottom, AppStyle.current.usesBeautifulUI ? Theme.Space.s : Theme.Space.xxs)
         }
     }
 

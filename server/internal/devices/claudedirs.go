@@ -71,7 +71,7 @@ func (m *Machine) usageWindows() bool { return m.cfg.UsageWindows == nil || *m.c
 func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer, hub *devicewire.ConnectedReply) {
 	params := map[string]any{"machine_id": m.cfg.ID, "claude_dirs": m.claudeDirs(ctx),
 		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux(ctx), "claude_start_dir": m.cfg.ClaudeStartDir,
-		"herdr_autostart": m.herdrAutostart(ctx), "claude_global_hooks": m.cfg.ClaudeGlobalHooks,
+		"herdr_autostart": m.herdrAutostart(ctx), "herdr_autoinstall": m.cfg.HerdrAutoinstall, "claude_global_hooks": m.cfg.ClaudeGlobalHooks,
 		"usage_windows": m.usageWindows()}
 	// The sessions it lists however quiet are the assistant's to say (its profile); before it said, the node keeps
 	// what it has.

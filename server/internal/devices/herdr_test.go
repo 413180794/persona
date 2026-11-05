@@ -27,6 +27,13 @@ func herdrMac(t *testing.T, h *Devices, id string, starts bool) (*Machine, func(
 // has no such method).
 func herdrMacStatus(t *testing.T, h *Devices, id string, starts bool, running *atomic.Bool) (*Machine, func() []map[string]any) {
 	t.Helper()
+	return herdrMacInstall(t, h, id, starts, running, nil)
+}
+
+// herdrMacInstall is herdrMacStatus whose node's status also says it is installing herdr (install, when not nil)
+// and why its last install failed.
+func herdrMacInstall(t *testing.T, h *Devices, id string, starts bool, running *atomic.Bool, install *atomic.Pointer[string]) (*Machine, func() []map[string]any) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	h2nR, h2nW := io.Pipe()
 	n2hR, n2hW := io.Pipe()
@@ -47,7 +54,13 @@ func herdrMacStatus(t *testing.T, h *Devices, id string, starts bool, running *a
 			return map[string]any{"running": starts}, nil
 		case "herdr.server.status":
 			if running != nil {
-				return map[string]any{"running": running.Load(), "known": true}, nil
+				out := map[string]any{"running": running.Load(), "known": true}
+				if install != nil {
+					if e := install.Load(); e != nil {
+						out["installing"], out["install_error"] = *e == "", *e
+					}
+				}
+				return out, nil
 			}
 		}
 		return nil, &rpc.Error{Message: "unknown method " + method}
@@ -183,6 +196,43 @@ func TestHerdrRowAsksTheNode(t *testing.T) {
 	t.Cleanup(func() { herdrStatusFresh = prev })
 	if _, out = call(t, mux, "GET", "/api/v1/machines/mac/herdr", ""); out["running"] != false || asked() != 2 {
 		t.Fatalf("stopped since: %v, asked %d times", out, asked())
+	}
+}
+
+// A 启动 on a machine without herdr goes on installing it in the background (node/herdrinstall.go): the row reads
+// installing from the node, then why it failed; hub.json's herdr_autoinstall reaches the node in node.configure.
+func TestHerdrRowInstalling(t *testing.T) {
+	h := newTestDevices(t)
+	var running atomic.Bool
+	var install atomic.Pointer[string]
+	installing := ""
+	install.Store(&installing)
+	m, seen := herdrMacInstall(t, h, "mac", false, &running, &install)
+	prev := herdrStatusFresh
+	herdrStatusFresh = 0
+	t.Cleanup(func() { herdrStatusFresh = prev })
+	mux := h.Handler(http.NotFoundHandler())
+
+	code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", "")
+	if code != 200 || out["installing"] != true || out["running"] != false {
+		t.Fatalf("installing: %d %v", code, out)
+	}
+	failed := "没能下载 herdr 0.8.0：连不上 github.com"
+	install.Store(&failed)
+	if _, out = call(t, mux, "GET", "/api/v1/machines/mac/herdr", ""); out["installing"] != nil || out["install_error"] != failed {
+		t.Fatalf("failed: %v", out)
+	}
+
+	m.cfg.HerdrAutoinstall = true
+	m.configureNode(context.Background(), m.peer, nil)
+	var said bool
+	for _, c := range seen() {
+		if c["method"] == "node.configure" && c["herdr_autoinstall"] == true {
+			said = true
+		}
+	}
+	if !said {
+		t.Fatalf("node.configure without herdr_autoinstall: %v", seen())
 	}
 }
 

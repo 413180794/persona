@@ -42,6 +42,7 @@ type MachineConfig struct {
 	ClaudeConfigDirs []string `json:"claude_config_dirs,omitempty"`
 	Botmux           *bool    `json:"botmux,omitempty"`
 	HerdrAutostart   *bool    `json:"herdr_autostart,omitempty"`
+	HerdrAutoinstall bool     `json:"herdr_autoinstall,omitempty"`
 	ClaudeStartDir   string   `json:"claude_start_dir,omitempty"`
 	// ClaudeGlobalHooks: the node puts report-only hooks into its default claude config directory (hub/config.go).
 	ClaudeGlobalHooks bool `json:"claude_global_hooks,omitempty"`
@@ -92,6 +93,11 @@ type Machine struct {
 	linkUp                     chan struct{} // a link arrived
 	// herdrAsked: when the node last said whether herdr's server answers (herdr.go, its row).
 	herdrAsked time.Time
+	// herdrInstall: what the node last said of installing herdr (herdr.go).
+	herdrInstall struct {
+		installing bool
+		err        string
+	}
 	// first is closed once the first try to connect ended (the node answered, or it did not): until then, right after
 	// the manager started, a call waits for it instead of failing at once (firstWait).
 	first     chan struct{}
