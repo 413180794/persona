@@ -321,6 +321,7 @@ struct ConnectorsSection: View {
                 NavigationLink(value: SettingsPage.phoneData) {
                     ConnectorRowLabel(title: ConnectorText.device, symbol: Theme.Icon.thisDevice, value: ConnectorText.deviceSummary())
                 }
+                .settingsListRow(SettingsPage.phoneData)
                 #endif
                 ForEach(ConnectorRow.rows(hubConnectors, lark: model.larkFeatures.chats)) { row in
                     switch row {
@@ -328,19 +329,23 @@ struct ConnectorsSection: View {
                         NavigationLink(value: SettingsPage.mail) {
                             ConnectorRowLabel(title: "邮箱", symbol: Theme.Icon.mailAccounts, value: ConnectorText.mailSummary(accounts))
                         }
+                        .settingsListRow(SettingsPage.mail)
                     case .lark:
                         NavigationLink(value: SettingsPage.feishu) {
                             ConnectorRowLabel(title: "飞书", symbol: Theme.Icon.mailAccounts, brand: Theme.Brand.lark, value: ConnectorText.larkSummary(lark))
                         }
+                        .settingsListRow(SettingsPage.feishu)
                     case .hub(let c):
                         NavigationLink(value: SettingsPage.connector(c.id)) {
                             ConnectorRowLabel(title: c.name, symbol: ConnectorText.symbol(c.id), brand: ConnectorText.brand(c.id), value: ConnectorText.summary(c))
                         }
+                        .settingsListRow(SettingsPage.connector(c.id))
                     }
                 }
                 NavigationLink(value: SettingsPage.feishuBot) {
                     ConnectorRowLabel(title: "飞书机器人", symbol: Theme.Icon.chatBot, value: FeishuBotModel.summary(bot))
                 }
+                .settingsListRow(SettingsPage.feishuBot)
             }
             .bareListRow()
         } header: {

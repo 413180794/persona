@@ -16,26 +16,31 @@ struct AppearanceSection: View {
                 NavigationLink(value: SettingsPage.persona) {
                     SettingsRow(title: "形象", symbol: Theme.Icon.persona, tint: Theme.persona, value: model.persona.cardTitle, look: .oneLine)
                 }
+                .settingsListRow(SettingsPage.persona)
                 .accessibilityIdentifier("settings-persona")
                 NavigationLink(value: SettingsPage.themeColor) {
                     SettingsRow(title: "主题色", symbol: Theme.Icon.themeColor, tint: Theme.accent, value: model.themeColor.title, look: .oneLine)
                 }
+                .settingsListRow(SettingsPage.themeColor)
                 .accessibilityIdentifier("settings-color")
                 NavigationLink(value: SettingsPage.style) {
                     SettingsRow(title: "界面风格", symbol: Theme.Icon.style, tint: Theme.Hue.purple, value: styleSummary, look: .oneLine)
                 }
+                .settingsListRow(SettingsPage.style)
                 .accessibilityIdentifier("settings-style")
                 #if os(iOS) || os(visionOS)
                 NavigationLink(value: SettingsPage.colorScheme) {
                     SettingsRow(title: "深浅色", symbol: Theme.Icon.colorScheme, tint: Theme.Hue.indigo,
                                 value: model.colorScheme.title, look: .oneLine)
                 }
+                .settingsListRow(SettingsPage.colorScheme)
                 .accessibilityIdentifier("settings-scheme")
                 if model.appIcon.available {
                     NavigationLink(value: SettingsPage.appIcon) {
                         SettingsRow(title: "App 图标", symbol: Theme.Icon.appIcon, tint: Theme.Hue.orange,
                                     value: model.appIcon.current.title, look: .oneLine)
                     }
+                    .settingsListRow(SettingsPage.appIcon)
                     .accessibilityIdentifier("settings-app-icon")
                 }
                 if UIDevice.current.userInterfaceIdiom == .phone {
@@ -43,6 +48,7 @@ struct AppearanceSection: View {
                         SettingsRow(title: "布局", symbol: Theme.Icon.layout, tint: Theme.Hue.blue,
                                     value: model.oldLayout ? "旧布局" : "新布局", look: .oneLine)
                     }
+                    .settingsListRow(SettingsPage.layout)
                     .accessibilityIdentifier("settings-layout")
                 }
                 #endif

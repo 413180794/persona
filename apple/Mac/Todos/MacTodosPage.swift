@@ -50,18 +50,6 @@ struct MacTodosPage: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Theme.pageBackground)
-        .pageToolbar {
-            MacToolbarMiddle() // keeps these buttons off the page's title at the narrowest window (#830, #853)
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    creatingTitle = ""
-                    creatingNotes = ""
-                    showCreate = true
-                } label: {
-                    Label("新建待办", systemImage: Theme.Icon.add)
-                }
-            }
-        }
         .sheet(isPresented: $showCreate) {
             createSheet
         }
@@ -121,6 +109,18 @@ struct MacTodosPage: View {
                     )
                 }
             }
+        }
+        // In the list column's own title row, at its trailing edge, as the Agents list's buttons (#1223, #2318): as a
+        // window toolbar item its glyph came out gray, as if disabled; the open todo's menu keeps the window's edge.
+        .overlay(alignment: .topTrailing) {
+            MacTitleRowButton("新建待办", symbol: Theme.Icon.add) {
+                creatingTitle = ""
+                creatingNotes = ""
+                showCreate = true
+            }
+            .padding(.trailing, Theme.Space.l)
+            .frame(height: Theme.Size.macToolbarHeight)
+            .ignoresSafeArea(.container, edges: .top)
         }
     }
 
@@ -247,6 +247,9 @@ struct MacTodosPage: View {
                 TodoDetailView(todoID: id)
                     .id(id) // another todo gets a fresh page, so its title and notes are read from the store again
             }
+        } else if openList.isEmpty && doneList.isEmpty {
+            // One empty state a page (docs/mac-design.md): the list's says there is nothing, the detail stays plain.
+            Color.clear
         } else {
             SplitPlaceholder(symbol: Theme.Icon.todo, title: "选一个待办", message: "左边列表里选一个待办，详情会在这里打开。")
         }

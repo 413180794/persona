@@ -81,20 +81,25 @@ struct SettingsView: View {
                         NavigationLink(value: ModelLaunchersRoute()) {
                             SettingsRow(title: "模型供应商", symbol: Theme.Icon.cpu, tint: Theme.Hue.purple)
                         }
+                        .settingsListRow(ModelLaunchersRoute())
                         NavigationLink(value: SettingsPage.modelConfiguration) {
                             SettingsRow(title: "模型配置", symbol: Theme.Icon.model, tint: Theme.ai)
                         }
+                        .settingsListRow(SettingsPage.modelConfiguration)
                         NavigationLink(value: SettingsPage.assistant) {
                             // No model here: the assistant's model is 模型配置 › 主对话 (#1291).
                             SettingsRow(title: "助手", symbol: Theme.Icon.ai, tint: Theme.ai)
                         }
+                        .settingsListRow(SettingsPage.assistant)
                         .accessibilityIdentifier("settings-assistant")
                         NavigationLink(value: SettingsPage.claude) {
                             SettingsRow(title: "Claude Code 设置", symbol: Theme.Icon.options, tint: Theme.Hue.orange)
                         }
+                        .settingsListRow(SettingsPage.claude)
                         NavigationLink(value: SettingsPage.codex) {
                             SettingsRow(title: "Codex 设置", symbol: Theme.Icon.options, tint: Theme.Hue.gray)
                         }
+                        .settingsListRow(SettingsPage.codex)
                     }
                     .bareListRow()
                 }
@@ -111,6 +116,7 @@ struct SettingsView: View {
                                 SettingsRow(title: "扩展", symbol: Theme.Icon.plugins, tint: Theme.Hue.purple,
                                             value: ExtensionText.listSummary(plugins), look: .oneLine)
                             }
+                            .settingsListRow(SettingsPage.plugins)
                             .accessibilityIdentifier("settings-plugins")
                         }
                         .bareListRow()
@@ -121,18 +127,23 @@ struct SettingsView: View {
                 Section {
                     Group {
                         NavigationLink(value: MachineListRoute()) { MachinesSettingsRow() }
+                        .settingsListRow(MachineListRoute())
                         NavigationLink(value: SettingsPage.devices) {
                             SettingsRow(title: "设备", symbol: Theme.Icon.credentials, tint: Theme.Hue.gray)
                         }
+                        .settingsListRow(SettingsPage.devices)
                         NavigationLink(value: SettingsPage.notifications) {
                             SettingsRow(title: "通知", symbol: Theme.Icon.notifications, tint: Theme.danger)
                         }
+                        .settingsListRow(SettingsPage.notifications)
                         NavigationLink(value: SettingsPage.translation) {
                             SettingsRow(title: "翻译", symbol: Theme.Icon.translate, tint: Theme.accent, value: translationSummary, look: .oneLine)
                         }
+                        .settingsListRow(SettingsPage.translation)
                         NavigationLink(value: SettingsPage.storage) {
                             SettingsRow(title: "存储空间", symbol: "internaldrive", tint: Theme.Hue.gray, value: storage?.storageText ?? "", look: .digits)
                         }
+                        .settingsListRow(SettingsPage.storage)
                     }
                     .bareListRow()
                 }
@@ -152,10 +163,12 @@ struct SettingsView: View {
                                             value: model.isMultiHub ? "\(model.groupIDs.count) 组" : model.groupName(model.hub?.group ?? ""),
                                             look: .oneLine)
                             }
+                            .settingsListRow(SettingsPage.hubs)
                             .accessibilityIdentifier("settings.hubs")
                             NavigationLink(value: SettingsPage.hub) {
                                 SettingsRow(title: "hub", symbol: Theme.Icon.server, tint: Theme.Hue.blue, value: hubSummary, look: .oneLine)
                             }
+                            .settingsListRow(SettingsPage.hub)
                             .accessibilityIdentifier("settings.hub")
                             Button { showPair = true } label: { SettingsRow(title: "重新配对", symbol: "qrcode.viewfinder", tint: Theme.accent) }
                                 .modifier(SettingsButtonLook())
@@ -202,6 +215,8 @@ struct SettingsView: View {
             // Below the section's title in the title bar's row, not scrolling through it (#1243); inside the page's
             // background, which still reaches up behind the title.
             .modifier(MacBelowTitleRow())
+            // The page open beside the list, for its row's selection (`settingsListRow`).
+            .environment(\.macSettingsOpen, model.settingsPath.firstPageOnly)
             #endif
             .themedPage()
             .pageToolbar {
@@ -1121,6 +1136,16 @@ extension View {
     /// Apply it to the rows (a `Group` of them), not the `Section`: on the section it takes the header's padding too, and
     /// not on a row inside a `NavigationLink`'s label (it does not reach the list there). Other styles keep the list's insets.
     func bareListRow() -> some View { listRowInsets(.vertical, AppStyle.current.usesBeautifulUI ? 0 : nil) }
+
+    /// A row of 设置's list that opens `value`: on the Mac it stays selected while that page is open beside the list
+    /// (`MacSettingsRowSelection`, #2318). Nothing elsewhere.
+    @ViewBuilder func settingsListRow(_ value: some Hashable) -> some View {
+        #if os(macOS)
+        modifier(MacSettingsRowSelection(value: value))
+        #else
+        self
+        #endif
+    }
 }
 
 /// A section's title in 设置: the list's own; in the BeautifulUI style its heading.

@@ -95,6 +95,11 @@ extension Theme.Fill {
     static let macSelected = Color(nsColor: .tertiaryLabelColor.withAlphaComponent(0.18))
     /// A row under the pointer in those lists: half the selected row's.
     static let macHover = macSelected.opacity(0.5)
+    /// `macSelected` drawn inside a sidebar-style list's row (设置's, #2318): the list blends what a row draws (its
+    /// vibrancy), and the full shade came out about twice as dark as the sections column's, in light and dark alike.
+    /// Half of it measures the same as the sections column's (offscreen shots, 2026-11-05). The same value as
+    /// `macHover` by measurement, not by meaning: change them apart.
+    static let macSelectedInSidebarList = macSelected.opacity(0.5)
     /// The faint dim behind ⌘K (a click on it closes the panel).
     static let macScrim = Color.black.opacity(0.12)
     /// Floating panels over the page (⌘K): the window background, opaque like Xcode's Open Quickly.

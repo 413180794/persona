@@ -163,6 +163,7 @@ struct ExtensionSlotsSettingsSection: View {
                             NavigationLink(value: SettingsPage.pluginPage(plugin: page.owner, ui: page.id, title: page.title)) {
                                 ExtensionNavRow(place: page)
                             }
+                            .settingsListRow(SettingsPage.pluginPage(plugin: page.owner, ui: page.id, title: page.title))
                             .accessibilityIdentifier("plugin-nav-\(page.owner)-\(page.id)")
                         }
                     }

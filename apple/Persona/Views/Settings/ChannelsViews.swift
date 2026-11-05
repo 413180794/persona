@@ -50,6 +50,7 @@ struct ChannelsEntryRow: View {
                             }
                         }
                     }
+                    .settingsListRow(SettingsPage.channels)
                     .accessibilityIdentifier("settings-channels")
                 }
                 .bareListRow()
