@@ -388,6 +388,10 @@
 构建阶段只有 `Dockerfile` COPY 进去的目录。#1668 加了 `jarvis-paseo-runtime`，两处都没加，`v0.1.4` 的镜像构建在 `go generate` 失败；
 PR 冒烟按路径触发、不含 `integrations/**`，所以合并前没跑。加 runtime 包时 `.dockerignore`、`Dockerfile` 一起改，镜像 workflow 的 PR 路径现在包含 `integrations/**`。
 
+网页的测试也一样（2026-11-05，#2666）：web 阶段的 `npm run build` 里 `tsc -b` 连 `src/**/*.test.ts` 一起检查，#2399 的 `injected.test.ts` 从仓库根的
+`spec/fixtures/injected/` 导入用例，镜像在 `TS2307` 失败。网页（或别的构建阶段）引用 `web/` 以外的文件时，`.dockerignore` 放行、`Dockerfile` COPY 到同样的相对位置，
+镜像 workflow 的 PR 路径也加上那个目录。
+
 ## 插件的权限摘要加字段时，旧插件的摘要不能变（2026-11-05，#1830）
 
 - `plugin.Digest` 是用户同意过的那一份（存在 `plugins.granted`，安装 / 升级回传对比）。给清单加新东西（这次是 `node` 段）时，新字段放进摘要要用 `omitempty` 的指针：

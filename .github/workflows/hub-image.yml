@@ -17,6 +17,7 @@ on:
       - server/**
       - web/**
       - integrations/**
+      - spec/fixtures/injected/**
       - .github/workflows/hub-image.yml
 
 permissions:

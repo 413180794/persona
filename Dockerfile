@@ -18,6 +18,9 @@ RUN if grep -E '"resolved": "' package-lock.json | grep -v '"file:vendor/' | gre
     fi \
  && npm ci --no-audit --no-fund
 COPY web/ ./
+# The shared cases a web test imports (src/lib/injected.test.ts reads ../../../spec/fixtures/injected): tsc -b in the
+# build checks the tests too. Only this folder, so other fixtures' changes keep the cache.
+COPY spec/fixtures/injected/ /src/spec/fixtures/injected/
 # Without prebuild's privacy check: it scans the whole checkout (scripts/, git), which is not in this context. It
 # runs on the checkout before the image is built (.github/workflows/hub-image.yml; locally the hooks and web builds).
 RUN npm run build --ignore-scripts
