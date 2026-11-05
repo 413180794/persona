@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -86,8 +87,8 @@ func withoutControls(s string) string {
 func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	p := map[string]any{}
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&p); err != nil && !errors.Is(err, errEOF) {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &p, 32<<20); err != nil && !errors.Is(err, io.EOF) {
+			writeBodyErr(w, err, err)
 			return
 		}
 	}

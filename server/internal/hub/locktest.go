@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -40,8 +39,8 @@ func (h *Hub) serveLockTest(w http.ResponseWriter, r *http.Request) {
 		DelaySeconds      *int  `json:"delay_seconds"`
 		NotificationShown *bool `json:"notification_shown"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil && !errors.Is(err, io.EOF) {
-		writeErr(w, http.StatusBadRequest, errors.New("invalid lock test request"))
+	if err := decodeJSONBody(w, r, &input, 4096); err != nil && !errors.Is(err, io.EOF) {
+		writeBodyErr(w, err, errors.New("invalid lock test request"))
 		return
 	}
 	if testID != "" {

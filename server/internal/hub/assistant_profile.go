@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -195,8 +196,8 @@ func writeAssistantErr(w http.ResponseWriter, err error) {
 // or the session; an assistant conversation is the assistant's to rename (assistant.rename).
 func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) {
 	p := map[string]any{}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&p); err != nil && !errors.Is(err, errEOF) {
-		writeErr(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, r, &p, 1<<20); err != nil && !errors.Is(err, io.EOF) {
+		writeBodyErr(w, err, err)
 		return
 	}
 	if p == nil {

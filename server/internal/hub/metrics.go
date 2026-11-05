@@ -253,8 +253,12 @@ func (h *Hub) metricsRoutes(api *http.ServeMux) {
 			return
 		}
 		list, err := h.machineMetrics(r.Context(), []string{id}, rg.span, rg.step, time.Now())
-		if err != nil || len(list) == 0 {
+		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		if len(list) == 0 { // removed or unpaired while the history was read
+			writeErr(w, http.StatusNotFound, errors.New("no such machine"))
 			return
 		}
 		writeJSON(w, map[string]any{"metrics": list[0], "range": name, "step": rg.step})

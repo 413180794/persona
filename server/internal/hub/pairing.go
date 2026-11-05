@@ -118,7 +118,12 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 			Machine string `json:"machine"`
 			Web     string `json:"web"`
 		}
-		if b, _ := io.ReadAll(io.LimitReader(r.Body, 4<<10)); len(bytes.TrimSpace(b)) > 0 {
+		b, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<10))
+		if readErr != nil {
+			writeBodyErr(w, readErr, readErr)
+			return
+		}
+		if len(bytes.TrimSpace(b)) > 0 {
 			if err := json.Unmarshal(b, &req); err != nil {
 				writeErr(w, http.StatusBadRequest, err)
 				return

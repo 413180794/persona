@@ -96,7 +96,7 @@ func (h *Hub) mutateWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	var fields map[string]json.RawMessage
 	if err != nil || json.Unmarshal(body, &fields) != nil || fields["revision"] == nil || strings.TrimSpace(string(fields["revision"])) == "null" {
-		writeErr(w, 400, i18n.Err("hub-workspace_board.err_bad_request"))
+		writeBodyErr(w, err, i18n.Err("hub-workspace_board.err_bad_request"))
 		return
 	}
 	var op workspaceboard.Mutation

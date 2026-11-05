@@ -38,7 +38,7 @@ func (h *Hub) withClientOp(kind string, next http.HandlerFunc) http.HandlerFunc 
 		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 32<<20))
 		_ = r.Body.Close()
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+			writeBodyErr(w, err, err)
 			return
 		}
 		params := normalizedOpParams(raw)

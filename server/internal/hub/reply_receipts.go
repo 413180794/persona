@@ -20,7 +20,7 @@ func (h *Hub) withReplyReceipt(kind string, next http.HandlerFunc) http.HandlerF
 		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 		_ = r.Body.Close()
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+			writeBodyErr(w, err, err)
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(raw))

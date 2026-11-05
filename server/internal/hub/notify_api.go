@@ -237,8 +237,8 @@ func (h *Hub) notifyRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/v1/notify", func(w http.ResponseWriter, r *http.Request) {
 		p := principalOf(r.Context())
 		var in notifyRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &in, 16<<10); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		if p.Role != roleExtension && (len(in.Actions) > 0 || in.UI != "" || in.State != "") {

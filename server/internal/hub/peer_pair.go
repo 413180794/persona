@@ -265,8 +265,8 @@ func (h *Hub) servePeerPair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req peerInfo
-	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, r, &req, 64<<10); err != nil {
+		writeBodyErr(w, err, err)
 		return
 	}
 	me := h.selfPeerInfo()

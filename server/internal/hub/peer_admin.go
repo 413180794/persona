@@ -66,8 +66,8 @@ func (h *Hub) registerPeerAdmin(mux *http.ServeMux) {
 		var req struct {
 			Code string `json:"code"`
 		}
-		if err := json.NewDecoder(io.LimitReader(r.Body, 16<<10)).Decode(&req); err != nil || strings.TrimSpace(req.Code) == "" {
-			writeErr(w, http.StatusBadRequest, errors.New("code is required"))
+		if err := decodeJSONBody(w, r, &req, 16<<10); err != nil || strings.TrimSpace(req.Code) == "" {
+			writeBodyErr(w, err, errors.New("code is required"))
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -102,8 +102,8 @@ func (h *Hub) registerPeerAdmin(mux *http.ServeMux) {
 		var req struct {
 			Address string `json:"address"`
 		}
-		if err := json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&req); err != nil || strings.TrimSpace(req.Address) == "" {
-			writeErr(w, http.StatusBadRequest, errors.New("address is required"))
+		if err := decodeJSONBody(w, r, &req, 4<<10); err != nil || strings.TrimSpace(req.Address) == "" {
+			writeBodyErr(w, err, errors.New("address is required"))
 			return
 		}
 		info, err := probeHub(r.Context(), req.Address)
@@ -136,7 +136,11 @@ func (h *Hub) registerPeerAdmin(mux *http.ServeMux) {
 		var req struct {
 			Confirm bool `json:"confirm"`
 		}
-		_ = json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&req)
+		// No body means confirm=false; a malformed or oversized one is refused rather than read as that.
+		if err := decodeJSONBody(w, r, &req, 4<<10); err != nil && !errors.Is(err, io.EOF) {
+			writeBodyErr(w, err, err)
+			return
+		}
 		target := r.PathValue("hub_id")
 		if target != h.hubID() && !h.inGroup(target) {
 			writeErrCode(w, http.StatusNotFound, "not_in_group", i18n.Err("hub-peer_admin.not_in_group"))

@@ -11,7 +11,6 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -47,8 +46,8 @@ func (h *Hub) browserCookies(w http.ResponseWriter, r *http.Request, m *Machine)
 		var in struct {
 			Cookies []proto.BrowserCookie `json:"cookies"`
 		}
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxCookieBody)).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, i18n.Err("hub-browser_cookies.err_bad_cookies"))
+		if err := decodeJSONBody(w, r, &in, maxCookieBody); err != nil {
+			writeBodyErr(w, err, i18n.Err("hub-browser_cookies.err_bad_cookies"))
 			return
 		}
 		if len(in.Cookies) == 0 {

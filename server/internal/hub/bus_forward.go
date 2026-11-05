@@ -51,7 +51,7 @@ var errSendInDoubt = i18n.Err("hub-bus_forward.send_in_doubt")
 func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send bool) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, busHTTPLimit))
 	if err != nil {
-		writeErr(w, http.StatusRequestEntityTooLarge, err)
+		writeBodyErr(w, err, err)
 		return
 	}
 	req := assistantwire.HTTPRequest{Method: r.Method, Path: r.URL.EscapedPath(), Query: r.URL.RawQuery, Header: map[string][]string{}, Body: body}

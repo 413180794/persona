@@ -1,7 +1,10 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -69,5 +72,47 @@ func TestMetricsBook(t *testing.T) {
 	h.onSystem("m1", &proto.System{OS: "linux", Distro: "ubuntu"})
 	if s := h.metrics.system("m1"); s == nil || s.Distro != "ubuntu" {
 		t.Fatalf("system = %+v", s)
+	}
+}
+
+// vanishingMetricsStore removes the machine from the hub while the history query runs: the machine is unpaired
+// between the handler's lookup and machineMetrics' loop.
+type vanishingMetricsStore struct {
+	Store
+	metricsStore
+	h  *Hub
+	id string
+}
+
+func (s *vanishingMetricsStore) MetricSeries(context.Context, []string, time.Time, time.Time, int) (map[string][]proto.MetricPoint, error) {
+	s.h.fleet.mu.Lock()
+	delete(s.h.byID, s.id)
+	s.h.machines = nil
+	s.h.fleet.mu.Unlock()
+	return map[string][]proto.MetricPoint{}, nil
+}
+
+func TestMachineMetricsGoneDuringQueryIsNotFound(t *testing.T) {
+	h := newTestHub(t)
+	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
+	h.machines, h.byID["box"] = []*Machine{m}, m
+	h.store = &vanishingMetricsStore{h: h, id: "box"}
+	api := http.NewServeMux()
+	h.metricsRoutes(api)
+
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/machines/box/metrics", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", rec.Code, rec.Body)
+	}
+	var body struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body is not JSON: %v: %q", err, rec.Body)
+	}
+	if body.Code != "not_found" || body.Error != "no such machine" {
+		t.Fatalf("body = %+v", body)
 	}
 }

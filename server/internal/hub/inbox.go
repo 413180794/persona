@@ -509,7 +509,7 @@ func answerMayReply(w http.ResponseWriter, r *http.Request) bool {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	_ = r.Body.Close()
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err)
+		writeBodyErr(w, err, err)
 		return false
 	}
 	r.Body = io.NopCloser(bytes.NewReader(raw))

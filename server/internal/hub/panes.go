@@ -39,8 +39,8 @@ func (h *Hub) newShell(w http.ResponseWriter, r *http.Request, m *Machine) {
 		Kind        string `json:"kind"`
 		WorkspaceID string `json:"workspace_id"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil || body.WorkspaceID == "" {
-		writeErr(w, http.StatusBadRequest, errors.New("workspace_id is required"))
+	if err := decodeJSONBody(w, r, &body, 4<<10); err != nil || body.WorkspaceID == "" {
+		writeBodyErr(w, err, errors.New("workspace_id is required"))
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -74,8 +74,8 @@ func (h *Hub) nodeAction(a nodeAction) http.HandlerFunc {
 			return
 		}
 		var body map[string]any
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil {
-			writeErr(w, http.StatusBadRequest, errors.New("bad request body"))
+		if err := decodeJSONBody(w, r, &body, 4<<10); err != nil {
+			writeBodyErr(w, err, errors.New("bad request body"))
 			return
 		}
 		params := map[string]any{}

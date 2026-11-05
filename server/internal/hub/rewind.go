@@ -48,8 +48,8 @@ func (h *Hub) rewindSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 		PromptsAfter *int   `json:"prompts_after"`
 		Restore      string `json:"restore"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, rewindMaxPrompt+4<<10)).Decode(&body); err != nil {
-		writeErr(w, http.StatusBadRequest, errors.New("bad request body"))
+	if err := decodeJSONBody(w, r, &body, rewindMaxPrompt+4<<10); err != nil {
+		writeBodyErr(w, err, errors.New("bad request body"))
 		return
 	}
 	switch {

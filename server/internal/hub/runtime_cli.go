@@ -71,8 +71,8 @@ func (h *Hub) runtimeCLI(w http.ResponseWriter, r *http.Request) {
 		Args    json.RawMessage `json:"args"`
 		Timeout float64         `json:"timeout"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil || req.Cmd == "" {
-		writeErr(w, http.StatusBadRequest, errors.New("want {cmd, args, timeout}"))
+	if err := decodeJSONBody(w, r, &req, 1<<20); err != nil || req.Cmd == "" {
+		writeBodyErr(w, err, errors.New("want {cmd, args, timeout}"))
 		return
 	}
 	if len(req.Args) == 0 || string(req.Args) == "null" {

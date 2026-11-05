@@ -538,8 +538,8 @@ func (h *Hub) proxyBody(method string) http.HandlerFunc {
 	return h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
 		p := map[string]any{}
 		if r.ContentLength != 0 {
-			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&p); err != nil && !errors.Is(err, errEOF) {
-				writeErr(w, http.StatusBadRequest, err)
+			if err := decodeJSONBody(w, r, &p, 32<<20); err != nil && !errors.Is(err, io.EOF) {
+				writeBodyErr(w, err, err)
 				return
 			}
 		}
@@ -560,8 +560,6 @@ func (h *Hub) proxyBody(method string) http.HandlerFunc {
 		_, _ = w.Write(out)
 	})
 }
-
-var errEOF = errors.New("EOF")
 
 func (h *Hub) listSessions(w http.ResponseWriter, r *http.Request) {
 	mid := r.URL.Query().Get("machine_id")
@@ -602,7 +600,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		err = json.Unmarshal(body, &p)
 	}
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err)
+		writeBodyErr(w, err, err)
 		return
 	}
 	if p.TodoID != "" {

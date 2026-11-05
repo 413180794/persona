@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -272,8 +271,8 @@ func (h *Hub) channelBindRoute(api *http.ServeMux) {
 			Values map[string]string `json:"values"`
 		}
 		if r.ContentLength != 0 {
-			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
-				writeErr(w, http.StatusBadRequest, err)
+			if err := decodeJSONBody(w, r, &in, 1<<20); err != nil {
+				writeBodyErr(w, err, err)
 				return
 			}
 		}

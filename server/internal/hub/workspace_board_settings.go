@@ -2,9 +2,7 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 )
 
@@ -69,8 +67,8 @@ func (h *Hub) putWorkspaceBoardSettings(w http.ResponseWriter, r *http.Request) 
 	var body struct {
 		Enabled *bool `json:"enabled"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&body); err != nil || body.Enabled == nil {
-		writeErr(w, 400, errors.New("需要 enabled"))
+	if err := decodeJSONBody(w, r, &body, 4<<10); err != nil || body.Enabled == nil {
+		writeBodyErr(w, err, errors.New("需要 enabled"))
 		return
 	}
 	if err := h.store.PutSetting(r.Context(), workspaceBoardSettingsKey, workspaceBoardSettings{Enabled: *body.Enabled}); err != nil {
