@@ -1,9 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, errorText, getToken, handleUnauthorized, setToken } from "./lib/api";
 import { pair, takeToken } from "./lib/auth";
 import { useCloseOnBack } from "./lib/back-close";
 import { SCRIM_FADE, useLingers } from "./lib/lingers";
 import { PageBoundary } from "./views/PageBoundary";
+import { lazyPage, preloadPages } from "./lib/lazy-page";
 import { drawerA11y, focusBack, useDrawerDrag } from "./lib/drawer";
 import { acceptHubs, here, rememberHub, takeHubs } from "./lib/hubs";
 import { closePanel, getPanel } from "./lib/panel";
@@ -40,23 +41,24 @@ import { ExtensionNavPage } from "./views/extensions/ExtensionSlots";
 import { useExtensionPlace } from "./lib/extension-slots";
 import { useAttentionSignals } from "./lib/attention-signals";
 
-// The pages a first screen doesn't need load when they are opened (#1996); 对话, Persona and 总览 stay in the main
-// bundle (the extensions' page too: the sidebar already has ExtensionSlots for its icons).
-const AgentsView = lazy(() => import("./views/agents/AgentsView").then((m) => ({ default: m.AgentsView })));
-const WorkspaceBoard = lazy(() => import("./views/WorkspaceBoard").then((m) => ({ default: m.WorkspaceBoard })));
-const Machines = lazy(() => import("./views/Machines").then((m) => ({ default: m.Machines })));
-const TerminalPage = lazy(() => import("./views/terminal/TerminalPage").then((m) => ({ default: m.TerminalPage })));
-const MachineDetail = lazy(() => import("./views/machines/MachineDetail").then((m) => ({ default: m.MachineDetail })));
-const SpacePage = lazy(() => import("./views/SpacePage").then((m) => ({ default: m.SpacePage })));
-const Settings = lazy(() => import("./views/Settings").then((m) => ({ default: m.Settings })));
-const Health = lazy(() => import("./views/health/Health").then((m) => ({ default: m.Health })));
-const History = lazy(() => import("./views/assistant/History").then((m) => ({ default: m.History })));
-const Profile = lazy(() => import("./views/assistant/Profile").then((m) => ({ default: m.Profile })));
-const Routines = lazy(() => import("./views/assistant/Routines").then((m) => ({ default: m.Routines })));
-const Inbox = lazy(() => import("./views/inbox/Inbox").then((m) => ({ default: m.Inbox })));
-const Messages = lazy(() => import("./views/messages/Messages").then((m) => ({ default: m.Messages })));
-const Knowledge = lazy(() => import("./views/knowledge/Knowledge").then((m) => ({ default: m.Knowledge })));
-const TodosView = lazy(() => import("./views/Todos").then((m) => ({ default: m.TodosView })));
+// The pages a first screen doesn't need load when they are opened (#1996), or once the browser is idle after start
+// (lib/lazy-page.ts); 对话, Persona and 总览 stay in the main bundle (the extensions' page too: the sidebar already has
+// ExtensionSlots for its icons).
+const AgentsView = lazyPage(() => import("./views/agents/AgentsView").then((m) => m.AgentsView));
+const WorkspaceBoard = lazyPage(() => import("./views/WorkspaceBoard").then((m) => m.WorkspaceBoard));
+const Machines = lazyPage(() => import("./views/Machines").then((m) => m.Machines));
+const TerminalPage = lazyPage(() => import("./views/terminal/TerminalPage").then((m) => m.TerminalPage));
+const MachineDetail = lazyPage(() => import("./views/machines/MachineDetail").then((m) => m.MachineDetail));
+const SpacePage = lazyPage(() => import("./views/SpacePage").then((m) => m.SpacePage));
+const Settings = lazyPage(() => import("./views/Settings").then((m) => m.Settings));
+const Health = lazyPage(() => import("./views/health/Health").then((m) => m.Health));
+const History = lazyPage(() => import("./views/assistant/History").then((m) => m.History));
+const Profile = lazyPage(() => import("./views/assistant/Profile").then((m) => m.Profile));
+const Routines = lazyPage(() => import("./views/assistant/Routines").then((m) => m.Routines));
+const Inbox = lazyPage(() => import("./views/inbox/Inbox").then((m) => m.Inbox));
+const Messages = lazyPage(() => import("./views/messages/Messages").then((m) => m.Messages));
+const Knowledge = lazyPage(() => import("./views/knowledge/Knowledge").then((m) => m.Knowledge));
+const TodosView = lazyPage(() => import("./views/Todos").then((m) => m.TodosView));
 
 // A link with the hub's token (`?token=…` or `#token=…`) signs in without the form. The token leaves the address bar
 // before anything else runs (history, bookmarks, a copied link), and is traded for this browser's own one.
@@ -118,6 +120,15 @@ export function App() {
   );
 }
 
+// A page whose chunk is still on its way: shown only if that takes a moment, so a quick load does not flash it.
+function PageLoading() {
+  return (
+    <div className="flex h-full items-center justify-center" style={{ animation: "fade-in 150ms ease-out 250ms both" }}>
+      <Loading />
+    </div>
+  );
+}
+
 function Shell() {
   const route = useRoute();
   const conn = useStore((s) => s.conn);
@@ -157,6 +168,7 @@ function Shell() {
   const layout = useLayout();
   const [newAgent, setNewAgent] = useState(false);
   const [preset, setPreset] = useState<NewAgentPreset | null>(null);
+  useEffect(() => preloadPages(), []);
   useEffect(() => onOpenNewAgent((p) => {
     setPreset(p);
     setNewAgent(true);
@@ -358,7 +370,7 @@ function Shell() {
             <ConnectionPill />
           </div>
         )}
-        <PageBoundary page={href(route)}><Suspense fallback={<div className="flex h-full items-center justify-center"><Loading /></div>}>{main}</Suspense></PageBoundary>
+        <PageBoundary page={href(route)}><Suspense fallback={<PageLoading />}>{main}</Suspense></PageBoundary>
       </main>
       <SidePanel />
       <Palette open={palette.open} onClose={closePalette} onNewAgent={openNewAgent} pane={pane} route={route} />
