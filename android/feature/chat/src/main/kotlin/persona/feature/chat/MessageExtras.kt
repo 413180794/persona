@@ -13,7 +13,14 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import persona.core.contracts.Item
 import persona.core.contracts.Session
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import persona.core.designsystem.JAction
 import persona.core.designsystem.JChip
+import persona.core.designsystem.JMenu
 import persona.core.designsystem.JTextButton
 import persona.core.designsystem.LocalizedFormats
 import persona.core.designsystem.icons.PhIcons
@@ -103,12 +110,25 @@ internal fun FullTextButton(item: Item, onLoaded: (String) -> Unit) {
 
 /**
  * The next message Claude suggests (X1, grey in its own input box): a chip over the empty composer of an idle session;
- * a tap puts it in the composer to edit or send.
+ * a tap puts it in the composer to edit or send. With [onSend], a long press (iOS SuggestionPill's menu) offers 直接发送
+ * and 填入输入框, and 直接发送 is an accessibility action too.
  */
 @Composable
-internal fun ComposerSuggestion(session: Session?, composer: ChatComposerState) {
+internal fun ComposerSuggestion(session: Session?, composer: ChatComposerState, onSend: ((String) -> Unit)? = null) {
     val suggestion = suggestionFor(session, composer.hasContent) ?: return
-    JChip(suggestion, onClick = { composer.editMessage(suggestion); composer.focusRequest++ }, icon = PhIcons.Sparkle)
+    var menu by remember(suggestion) { mutableStateOf(false) }
+    val fill: () -> Unit = { composer.editMessage(suggestion); composer.focusRequest++ }
+    val sendLabel = stringResource(R.string.chat_suggestion_send)
+    val fillLabel = stringResource(R.string.chat_suggestion_fill)
+    Box {
+        JChip(suggestion, Modifier.then(if (onSend == null) Modifier else Modifier.semantics {
+            customActions = listOf(CustomAccessibilityAction(sendLabel) { onSend(suggestion); true })
+        }), onClick = fill, icon = PhIcons.Sparkle, onLongClick = onSend?.let { { menu = true } })
+        if (onSend != null) JMenu(menu, { menu = false }, listOf(
+            JAction(sendLabel, PhIcons.PaperPlaneRight) { onSend(suggestion) },
+            JAction(fillLabel, PhIcons.PencilSimple, onClick = fill),
+        ))
+    }
 }
 
 /** The suggestion to offer: the session's, while it is idle and nothing is typed yet. */

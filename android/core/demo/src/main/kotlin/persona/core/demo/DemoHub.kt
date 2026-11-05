@@ -223,6 +223,8 @@ class DemoHub(
         ))
     }
 
+    override suspend fun createConversation(main: Boolean, launcher: String): JsonObject = createConversation(main)
+
     override suspend fun createConversation(main: Boolean): JsonObject = locked {
         val machine = data.getValue("assistant").jsonObject.text("machine_id")
         val newSession = Session(machineId = machine, sessionId = "demo-${UUID.randomUUID()}", title = words.newChat,

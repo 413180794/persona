@@ -122,6 +122,8 @@ class HttpInboxAssistantTransport private constructor(
     override suspend fun assistant() = json(url("api", "v1", "assistant"))
     override suspend fun createConversation(main: Boolean) = json(url("api", "v1", "assistant", "conversations"),
         buildJsonObject { put("prompt", ""); put("main", main) })
+    override suspend fun createConversation(main: Boolean, launcher: String) = json(url("api", "v1", "assistant", "conversations"),
+        buildJsonObject { put("prompt", ""); put("main", main); put("launcher", launcher) })
     override suspend fun pins() = json(url("api", "v1", "pins"))
     override suspend fun mutes() = json(url("api", "v1", "mutes"))
 

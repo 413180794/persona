@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The new conversation's launcher (iOS StarterComposer, web StarterLauncherChip). -->
+<resources>
+    <string name="assistant_launcher_title">新しいチャットで使用</string>
+    <string name="assistant_launcher_default">デフォルト</string>
+    <string name="assistant_launcher_default_named">デフォルト：%1$s</string>
+    <string name="assistant_launcher_once">%1$s · 今回のみ</string>
+    <string name="assistant_launcher_loading">ランチャーを読み込み中…</string>
+    <string name="assistant_launcher_failed">ランチャーを読み込めません</string>
+    <string name="assistant_launcher_none">このコンピューターにはPersonaを実行できるランチャーがありません</string>
+    <string name="assistant_launcher_note">選んだランチャーはこの新しいチャットだけに使います。デフォルトはアシスタント設定で変更できます。</string>
+</resources>

@@ -83,12 +83,16 @@ class RealAssistantRepository(
         currentPins.value = pins
     }
 
-    override suspend fun startConversation(): SessionKey = lock.withLock {
+    override suspend fun startConversation(): SessionKey = start(null)
+
+    override suspend fun startConversation(launcher: String): SessionKey = start(launcher)
+
+    private suspend fun start(launcher: String?): SessionKey = lock.withLock {
         val transport = requireNotNull(connection.current.value) { CoreText.of(Key.PairHubFirst).shown }
         // Refresh the main pointer before deciding whether this is the first conversation.
         val config = transport.assistant()
         val isMain = config.string("main").isEmpty()
-        val result = transport.createConversation(isMain)
+        val result = if (launcher == null) transport.createConversation(isMain) else transport.createConversation(isMain, launcher)
         val session = JsonCodec.decodeFromJsonElement<Session>(result.getValue("session"))
         check(connection.current.value === transport) { CoreText.of(Key.ConnectionSwitched).shown }
         current.update {

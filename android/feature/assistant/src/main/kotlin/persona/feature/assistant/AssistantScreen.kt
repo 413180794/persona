@@ -94,6 +94,9 @@ fun AssistantScreen(
     onTodos: (() -> Unit)? = null,
     todoCount: Int = 0,
     showTodos: Boolean = true,
+    /** A new conversation on a launcher picked for it alone (the home composer's 启动器 chip); null: no chip. */
+    startConversationWith: (suspend (String) -> SessionKey)? =
+        (repository as? persona.core.contracts.api.AssistantConversations)?.let { conversations -> { launcher -> conversations.startConversation(launcher) } },
 ) = PersonaTheme {
     val snapshot by repository.assistant.collectAsStateWithLifecycle()
     val outbox by (mainConversationSender?.outbox ?: messageSender.outbox).collectAsStateWithLifecycle()
@@ -131,6 +134,14 @@ fun AssistantScreen(
     var ended by remember(management) { mutableStateOf(emptySet<SessionKey>()) }
     var archived by remember(management) { mutableStateOf(emptySet<SessionKey>()) }
     var assistantMachine by remember(management) { mutableStateOf("") }
+    // The launcher the next new conversation starts with, for it alone (iOS StarterComposer); null: the default.
+    // Both belong to this hub: another one has other launchers and conversations.
+    var starterLauncher by rememberSaveable(management) { mutableStateOf<String?>(null) }
+    // The conversation that launcher started for a message that then failed to send: its retry goes there.
+    var starterStarted by rememberSaveable(management, stateSaver = StarterStartSaver) { mutableStateOf<StarterStart?>(null) }
+    var launchers by remember(management, assistantMachine) { mutableStateOf<List<persona.core.contracts.api.AgentLauncher>?>(null) }
+    var launchersFailed by remember(management, assistantMachine) { mutableStateOf(false) }
+    var defaultLauncher by remember(management) { mutableStateOf<String?>(null) }
     val hasChat = chatContent != null || assistantChatContent != null
     var menu by remember { mutableStateOf(false) }
     var info by rememberSaveable { mutableStateOf<AssistantInfo?>(null) }
@@ -302,6 +313,9 @@ fun AssistantScreen(
         if (sending || !draftReady || !composer.hasContent || !composer.ready) return
         val sentDraft = composer.draft
         val text = composer.message()
+        // A launcher picked on the new-conversation page: a conversation of its own on it, then the message to it.
+        val launcher = starterLauncher.takeIf { active == null }
+        val startWith = startConversationWith
         sending = true
         val submitted = text.trim()
         openedMain = true
@@ -311,13 +325,22 @@ fun AssistantScreen(
         }
         scope.launch {
             try {
-                sendAssistantMessage(mainConversationSender, messageSender, active, submitted, requireNotNull(pendingClientId))
+                // Started once: a retry after the message failed sends to the same new conversation, while the
+                // launcher is still the one that started it.
+                val target = if (launcher != null && startWith != null)
+                    starterTarget(launcher, starterStarted, startWith).also { starterStarted = it }.session else active
+                sendAssistantMessage(mainConversationSender, messageSender, target, submitted, requireNotNull(pendingClientId))
                 // Clear only after the outbox commit; retries keep their original operation id.
                 composer.clearIfUnchanged(sentDraft)
                 draftEditor?.changed(composer.draft)
                 pendingClientId = null
                 pendingText = null
-                if (active == null) viewingMainQueue = true
+                if (launcher != null && target != null) {
+                    starterLauncher = null
+                    starterStarted = null
+                    assistantAttempt { repository.refresh() }
+                    openConversation(target)
+                } else if (active == null) viewingMainQueue = true
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -354,6 +377,20 @@ fun AssistantScreen(
             assistantAttempt { followPhoneZone(management.settingsApi(), StoredTimezoneChoice(context)) }
         }
     }
+    // The chip's default and list: read when the page shows and again on each open (the default may have changed in
+    // 设置; a list that could not be read is tried again), as the web reads them each time its menu opens.
+    suspend fun loadStarterLaunchers() {
+        val api = management ?: return
+        if (startConversationWith == null || demo || assistantMachine.isBlank()) return
+        val machine = assistantMachine
+        assistantAttempt { api.config().launcher }.onSuccess { defaultLauncher = it.takeIf(String::isNotBlank) }
+        if (launchers != null) return
+        launchersFailed = false
+        assistantAttempt { api.launchers(machine).filter(::runsAssistant) }
+            .onSuccess { if (machine == assistantMachine) launchers = it }
+            .onFailure { if (machine == assistantMachine) launchersFailed = true }
+    }
+    LaunchedEffect(management, assistantMachine, startConversationWith) { loadStarterLaunchers() }
     LaunchedEffect(requestedSession) {
         requestedSession?.let { openedMain = true; proactiveOpen = false; settingsOpen = false; openConversation(it) }
     }
@@ -455,7 +492,16 @@ fun AssistantScreen(
                             onSend = ::submit, onCommand = { composer.insert(it, composer.focused) },
                             onNotice = { message ->
                                 if (feedback?.notice(message) != true) scope.launch { snackbar.showSnackbar(message) }
-                            }, enabled = draftReady && !sending, placeholder = stringResource(R.string.assistant_composer_placeholder, LocalPersonaName.current))
+                            }, enabled = draftReady && !sending, placeholder = stringResource(R.string.assistant_composer_placeholder, LocalPersonaName.current),
+                            // A new conversation's launcher, for it alone (iOS StarterComposer, web StarterLauncherChip).
+                            accessory = if (active == null && management != null && startConversationWith != null && !demo) ({
+                                StarterLauncherChip(starterLauncher, defaultLauncher, launchers, launchersFailed, enabled = !sending,
+                                    onOpen = { scope.launch { loadStarterLaunchers() } }) { picked ->
+                                    // Another launcher (or the default) does not reuse what the last one started.
+                                    if (picked != starterLauncher) starterStarted = null
+                                    starterLauncher = picked
+                                }
+                            }) else null)
                     }
                 }
             }) else null,

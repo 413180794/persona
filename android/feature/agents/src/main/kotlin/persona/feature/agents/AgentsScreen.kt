@@ -448,8 +448,9 @@ internal fun SlotRow(
         title = session.displayTitle, status = row.state.designStatus, depth = depth, position = position,
         onClick = onOpen, onLongClick = { menu = true }, compact = compact, muted = muted,
         selected = isSessionSelected(LocalDetailKey.current, session.key),
-        // Where its work stands once the hub triaged its turn (docs/agent-work.md), else its last words.
-        preview = session.workLine(now)?.text() ?: session.lastText?.takeIf { it.isNotBlank() }, time = relativeTime(agentResources(), row.updatedAt, now),
+        // Why its host says it waits or stopped (iOS listPreview), where its work stands once the hub triaged its turn
+        // (docs/agent-work.md), else its last words.
+        preview = session.reasonPreview ?: session.workLine(now)?.text() ?: session.lastText?.takeIf { it.isNotBlank() }, time = relativeTime(agentResources(), row.updatedAt, now),
         // Codex, TRAEX or what the hub calls a runtime's agent ("DSH"); a session with a source names it in its facts instead.
         agent = session.agentLabel.takeIf { !session.isClaude && source == null },
         statusText = row.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label,
@@ -501,7 +502,7 @@ internal fun AgentTabEntryRow(entry: TreeTabEntry, now: Instant, compact: Boolea
     val lead = entry.tab.lead
     val session = lead.session
     val titled = entry.tab.launcher ?: entry.tab.members.first()
-    val words = session.workLine(now)?.text() ?: session.lastText?.takeIf { it.isNotBlank() }
+    val words = session.reasonPreview ?: session.workLine(now)?.text() ?: session.lastText?.takeIf { it.isNotBlank() }
     AgentTabRow(
         label = titled.session.slotLabel.orEmpty(), title = titled.session.displayTitle, status = lead.state.designStatus,
         agents = entry.tab.members.size, folded = entry.folded, onToggle = onToggle, onClick = onOpen,

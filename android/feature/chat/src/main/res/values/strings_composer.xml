@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_slash_model_detail">Switch model</string>
+    <string name="chat_slash_loop_detail">Repeat a task on a schedule</string>
+    <string name="chat_loop_usage">Format: /loop [interval] task, e.g. /loop 10m check CI. Without an interval, Claude sets the pace.</string>
+    <string name="chat_loop_every_no_task">Every %1$s: no task yet</string>
+    <string name="chat_loop_every_task">Repeats every %1$s: %2$s</string>
+    <string name="chat_loop_self_paced">Repeats at Claude\'s pace: %1$s</string>
+    <plurals name="chat_loop_seconds">
+        <item quantity="one">%d second</item>
+        <item quantity="other">%d seconds</item>
+    </plurals>
+    <plurals name="chat_loop_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <plurals name="chat_loop_hours">
+        <item quantity="one">%d hour</item>
+        <item quantity="other">%d hours</item>
+    </plurals>
+    <plurals name="chat_loop_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <string name="chat_mention">Mention a file or session</string>
+    <string name="chat_mention_used_file">File this session used</string>
+    <string name="chat_mention_session_detail">%1$s · as context</string>
+    <string name="chat_mention_no_match">No file or session matches</string>
+    <string name="chat_mention_quote_session">Another session: %1$s (%2$s)</string>
+    <string name="chat_mention_quote_cwd">Folder: %1$s</string>
+    <string name="chat_mention_quote_last">It last said: %1$s</string>
+    <string name="chat_quote_yours">Quoting your message</string>
+    <string name="chat_quote_from">Quoting %1$s</string>
+    <string name="chat_quote_session">Quoting session %1$s</string>
+    <string name="chat_failure_retry">Retry</string>
+    <string name="chat_host_open_feishu">Open in Lark</string>
+    <string name="chat_suggestion_send">Send now</string>
+    <string name="chat_suggestion_fill">Put in the box</string>
+</resources>

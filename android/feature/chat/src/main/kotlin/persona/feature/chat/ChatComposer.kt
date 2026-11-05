@@ -65,6 +65,14 @@ fun ChatComposer(
     agentName: String = "Claude",
     /** False for a session whose source does not let the phone interrupt it: no stop while it works. */
     canInterrupt: Boolean = true,
+    /** The @ menu's files and sessions (iOS PromptItems); null: no @ button and no list while typing @. */
+    mentions: ComposerMentions? = null,
+    /** A session picked in the @ menu, as the context that goes with the next message. */
+    onMention: (ChatLinkContext) -> Unit = {},
+    /** /model in the "/" list, which opens the model choices instead of typing (Claude in a terminal pane). */
+    onModel: (() -> Unit)? = null,
+    /** /loop in the "/" list, with a line under the box saying what it will do (Claude Code only, web `hasLoop`). */
+    loop: Boolean = false,
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -197,27 +205,61 @@ fun ChatComposer(
     LaunchedEffect(state.focusRequest) { if (state.focusRequest > 0) focusRequester.requestFocus() }
     // A read-only session (enabled = false) offers nothing to type with: no +, no mic, no "/" list, no send.
     val dictate = dictation?.takeIf { enabled }
-    val suggestions = if (enabled) SlashCommand.suggestions(state.value.text, canClear && !working) else emptyList()
+    val suggestions = if (enabled) SlashCommand.suggestions(state.value.text, canClear && !working, model = onModel != null, loop = loop) else emptyList()
+    val hint = if (enabled && loop) loopHint(state.value.text, resources) else null
+    // @: the word being typed just before the caret, while nothing is selected and no "/" list is open.
+    val selection = state.value.selection
+    val mention = if (enabled && mentions != null && suggestions.isEmpty() && selection.collapsed) mentionAt(state.value.text, selection.start) else null
+    val mentionRows = remember(mentions, mention?.query) { if (mentions != null && mention != null) mentionRows(mentions, mention.query) else emptyList() }
+    val usedFile = stringResource(R.string.chat_mention_used_file)
+    val mentionItems = mentionRows.map { row ->
+        when (row) {
+            is MentionRow.File -> {
+                val relative = row.insert.removePrefix("@").trimEnd()
+                ComposerSuggestion(relative.substringAfterLast('/'), relative.substringBeforeLast('/', "").ifEmpty { usedFile }, key = row.key, flexible = true)
+            }
+            is MentionRow.Quote -> ComposerSuggestion(row.session.displayTitle,
+                stringResource(R.string.chat_mention_session_detail, sessionMentionDetail(row.session)), key = row.key, flexible = true)
+        }
+    }
+    fun pickMention(picked: ComposerSuggestion) {
+        val token = mention ?: return
+        val row = mentionRows.firstOrNull { it.key == picked.key } ?: return
+        state.beginEdit()
+        when (row) {
+            is MentionRow.File -> state.value = replaceMention(state.value, token, row.insert)
+            // A session goes with the message as a quote, not as text (web pickMention).
+            is MentionRow.Quote -> { onMention(sessionQuote(row.session, resources)); state.value = replaceMention(state.value, token, "") }
+        }
+        state.focusRequest++
+    }
     val extensionPrompts = if (enabled) LocalExtensionPrompts.current else emptyList()
     val quick = ExtensionPromptText.matching(extensionPrompts, state.value.text)
     // Picking a quick message puts its words in the box to send; /clear empties the box and asks first.
     fun pick(command: SlashCommand) {
         state.beginEdit()
-        if (command.clear) { state.value = TextFieldValue(); confirmClear = true }
-        else state.value = TextFieldValue(command.text, TextRange(command.text.length))
+        when {
+            command.clear -> { state.value = TextFieldValue(); confirmClear = true }
+            command.model -> { state.value = TextFieldValue(); onModel?.invoke() }
+            else -> state.value = TextFieldValue(command.text, TextRange(command.text.length))
+        }
     }
 
     ComposerFrame(
         leading = {
             JIconButton(PhIcons.Plus, stringResource(R.string.chat_composer_add), { menu = true }, enabled = !sending && enabled)
+            if (mentions != null) JIconButton(PhIcons.At, stringResource(R.string.chat_mention), {
+                state.beginEdit(); state.value = typeMention(state.value); state.focusRequest++
+            }, enabled = enabled)
             leading?.invoke(this)
         },
         trailing = {
-            // Nothing to send: the mic where send will be, and while the agent works a stop to its right.
+            // The mic stays (iOS ShellComposerBar): more can be dictated after what is typed. Send beside it once there is
+            // something to send, else a stop while the agent works; nothing else while the box is empty.
+            dictate?.let { JIconButton(PhIcons.Microphone, stringResource(R.string.chat_composer_dictate), it, enabled = !sending) }
             when {
                 hasContent -> SendButton(onClick = onSend, enabled = enabled && state.ready && !sending, loading = sending)
                 working && canInterrupt -> {
-                    dictate?.let { JIconButton(PhIcons.Microphone, stringResource(R.string.chat_composer_dictate), it, enabled = !sending) }
                     SendButton(onClick = {
                         if (service != null) {
                             interruptPending = true
@@ -229,8 +271,7 @@ fun ChatComposer(
                         }
                     }, enabled = !sending && !interruptPending && service != null, kind = SendKind.Stop)
                 }
-                dictate != null -> JIconButton(PhIcons.Microphone, stringResource(R.string.chat_composer_dictate), dictate, enabled = !sending)
-                else -> SendButton(onClick = onSend, enabled = false, loading = sending)
+                dictate == null -> SendButton(onClick = onSend, enabled = false, loading = sending)
             }
         },
         accessory = {
@@ -247,6 +288,11 @@ fun ChatComposer(
             ComposerSuggestions(suggestions.map { ComposerSuggestion(it.word, it.detail, destructive = it.clear) },
                 onPick = { picked -> suggestions.firstOrNull { it.word == picked.word }?.let(::pick) },
                 modifier = Modifier.padding(vertical = Tokens.Space.xs))
+            // The @ menu: files this chat used, then other sessions; a word that matches nothing says so.
+            ComposerSuggestions(mentionItems, onPick = ::pickMention, modifier = Modifier.padding(vertical = Tokens.Space.xs))
+            if (mention != null && mentionItems.isEmpty()) Text(stringResource(R.string.chat_mention_no_match),
+                Modifier.padding(vertical = Tokens.Space.xs), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+            hint?.let { Text(it.text, style = PersonaTheme.type.caption, color = if (it.missing) PersonaTheme.palette.cautionText else PersonaTheme.palette.ink2) }
         },
     ) {
         BasicTextField(state.value, { state.beginEdit(); state.value = it },

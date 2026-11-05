@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The new conversation's launcher (iOS StarterComposer, web StarterLauncherChip). -->
+<resources>
+    <string name="assistant_launcher_title">新对话使用</string>
+    <string name="assistant_launcher_default">默认</string>
+    <string name="assistant_launcher_default_named">默认：%1$s</string>
+    <string name="assistant_launcher_once">%1$s · 仅这一次</string>
+    <string name="assistant_launcher_loading">正在读取启动器…</string>
+    <string name="assistant_launcher_failed">读不到启动器</string>
+    <string name="assistant_launcher_none">这台电脑上没有能运行 Persona 的启动器</string>
+    <string name="assistant_launcher_note">选的启动器只用于这一次新对话；默认的在助手设置里改。</string>
+</resources>

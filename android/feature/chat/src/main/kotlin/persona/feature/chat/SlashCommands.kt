@@ -13,6 +13,10 @@ internal const val CLEAR_WAIT_MILLIS = 20_000L
  */
 internal data class SlashCommand(val title: String, val word: String, val detail: String, val text: String) {
     val clear: Boolean get() = word == CLEAR
+    /** /model: picking it opens the model choices (the 模式 sheet) instead of typing anything (web `isModelCommand`). */
+    val model: Boolean get() = word == MODEL
+    /** /loop: picking it types `/loop ` to go on writing, a line under it saying what it will do (web `loopHint`). */
+    val loop: Boolean get() = word == LOOP
 
     companion object {
         /** Claude Code's own commands keep their words in every language; the others are Persona's, in the app's language. */
@@ -34,10 +38,22 @@ internal data class SlashCommand(val title: String, val word: String, val detail
         fun clearCommand(resources: Resources) =
             SlashCommand(resources.getString(R.string.chat_slash_clear_title), CLEAR, resources.getString(R.string.chat_slash_clear_detail), CLEAR)
 
-        /** What the "/" list offers for [draft]: everything for a bare "/", else the words starting with it (any case). */
-        fun matching(draft: String, clear: Boolean, resources: Resources): List<SlashCommand> {
+        /** Claude Code's /model and /loop (web AGENT_COMMANDS): only in the "/" list, never sent from the "+" sheet. */
+        const val MODEL = "/model"
+        const val LOOP = "/loop"
+        /** What picking /loop puts in the box: the word, the interval and the task to follow. */
+        const val LOOP_TEXT = "$LOOP "
+        fun modelCommand(resources: Resources) = resources.getString(R.string.chat_slash_model_detail).let { SlashCommand(it, MODEL, it, MODEL) }
+        fun loopCommand(resources: Resources) = resources.getString(R.string.chat_slash_loop_detail).let { SlashCommand(it, LOOP, it, LOOP_TEXT) }
+
+        /**
+         * What the "/" list offers for [draft]: everything for a bare "/", else the words starting with it (any case).
+         * [model] and [loop] add Claude Code's /model and /loop, [clear] its /clear, for a session that takes them.
+         */
+        fun matching(draft: String, clear: Boolean, resources: Resources, model: Boolean = false, loop: Boolean = false): List<SlashCommand> {
             if (!draft.startsWith("/") || draft.any { it == ' ' || it == '\n' }) return emptyList()
-            val list = all(resources) + if (clear) listOf(clearCommand(resources)) else emptyList()
+            val list = all(resources) + listOfNotNull(modelCommand(resources).takeIf { model }, loopCommand(resources).takeIf { loop },
+                clearCommand(resources).takeIf { clear })
             return list.filter { it.word.startsWith(draft, ignoreCase = true) }
         }
 
@@ -45,10 +61,13 @@ internal data class SlashCommand(val title: String, val word: String, val detail
          * The list the composer shows: [matching], except once the draft is exactly the one quick message it matches
          * (picked, or typed out): there is nothing left to choose. /clear stays, so picking it can still ask first.
          */
-        fun suggestions(draft: String, clear: Boolean, resources: Resources): List<SlashCommand> =
-            matching(draft, clear, resources).takeUnless { it.singleOrNull()?.let { only -> !only.clear && only.word.equals(draft, ignoreCase = true) } == true }.orEmpty()
+        fun suggestions(draft: String, clear: Boolean, resources: Resources, model: Boolean = false, loop: Boolean = false): List<SlashCommand> =
+            matching(draft, clear, resources, model, loop).takeUnless {
+                it.singleOrNull()?.let { only -> !only.clear && !only.model && only.word.equals(draft, ignoreCase = true) } == true
+            }.orEmpty()
 
         @Composable
-        fun suggestions(draft: String, clear: Boolean): List<SlashCommand> = suggestions(draft, clear, LocalResources.current)
+        fun suggestions(draft: String, clear: Boolean, model: Boolean = false, loop: Boolean = false): List<SlashCommand> =
+            suggestions(draft, clear, LocalResources.current, model, loop)
     }
 }

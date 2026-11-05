@@ -8,6 +8,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -404,7 +405,10 @@ fun JSegmented(options: List<JSegment>, selected: Int, onSelect: (Int) -> Unit, 
     }
 }
 
-/** A filter or a fact. With [onClick] it toggles; without, it is a quiet label. */
+/**
+ * A filter or a fact. With [onClick] it toggles; without, it is a quiet label. [onLongClick] (with [onClick]) is a long
+ * press for more (a menu of other ways to use it); the chip looks the same.
+ */
 @Composable
 fun JChip(
     text: String,
@@ -414,6 +418,7 @@ fun JChip(
     icon: PhIcon? = null,
     status: Status? = null,
     count: Int? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
     val style = PersonaTheme.style
@@ -425,7 +430,12 @@ fun JChip(
     }
     Row(
         modifier.heightIn(min = if (onClick != null) 36.dp else 28.dp).clip(shape).background(fill).border(1.dp, border, shape)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Checkbox, onClick = onClick).semantics { this.selected = selected } else Modifier)
+            .then(when {
+                onClick != null && onLongClick != null ->
+                    Modifier.combinedClickable(role = Role.Checkbox, onClick = onClick, onLongClick = onLongClick).semantics { this.selected = selected }
+                onClick != null -> Modifier.clickable(role = Role.Checkbox, onClick = onClick).semantics { this.selected = selected }
+                else -> Modifier
+            })
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -730,12 +730,15 @@ struct AssistantSidebar: View {
         let archived = feed.archived(out ? model.archivedConversations.count : nil)
         VStack(spacing: 0) {
             topBar
-                .padding(.horizontal, Theme.Space.xl)
                 #if os(macOS)
-                .padding(.leading, max(0, titleRowLeading - Theme.Space.xl))
+                // Starts where the other sections' titles do (`MacPageTitle`: `l`, past the traffic lights when the
+                // sections column is hidden), #3179.
+                .padding(.leading, max(Theme.Space.l, titleRowLeading))
+                .padding(.trailing, Theme.Space.xl)
                 // The title bar's row: centred on it as the other sections' titles are, so it does not jump (#830).
                 .frame(height: Theme.Size.macToolbarHeight)
                 #else
+                .padding(.horizontal, Theme.Space.xl)
                 .padding(.top, besideBar ? AssistantTopBar.topInset : Theme.Space.s)
                 .padding(.bottom, Theme.Space.s)
                 #endif
@@ -753,7 +756,13 @@ struct AssistantSidebar: View {
                         results(AssistantSidebarSearch.filter(all, query))
                     }
                 }
+                #if os(macOS)
+                // The list's own margin is the shell's rows' `s` (`MacSidebarRow`, 收件箱's 来源): the shade and the rows'
+                // words line up with the other sections' columns (#3179).
+                .listRowInsets(EdgeInsets())
+                #else
                 .listRowInsets(EdgeInsets(top: 0, leading: Theme.Space.s, bottom: 0, trailing: Theme.Space.s))
+                #endif
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
             }
@@ -814,7 +823,12 @@ struct AssistantSidebar: View {
             }
         } else {
             HStack {
+                #if os(macOS)
+                // The other sections' title (`MacPageTitle`), #3179.
+                Text(model.persona.name).font(Theme.Font.title).foregroundStyle(Theme.macLabel).lineLimit(1)
+                #else
                 Text(model.persona.name).font(isShell && !besideBar ? Theme.Font.display : Theme.Font.title).foregroundStyle(Color.primary).lineLimit(1)
+                #endif
                 Spacer(minLength: Theme.Space.s)
                 if besideBar {
                     // The same button as the top bar's beside it (2026-11-04: on iPhone Duo open, this one stood lower

@@ -245,6 +245,15 @@ data class Session(
     @WireTime @SerialName("activity_at") val activityAt: String? = null,
     /** Its latest turn ended in a model API error (the hub sets it while it is stopped, #1516): its task is interrupted. */
     @SerialName("turn_error") val turnError: String? = null,
+    /** Why it waits for the user, in its host's words (a botmux attention's reason); only while it needs you. */
+    @SerialName("attention_reason") val attentionReason: String? = null,
+    /**
+     * Its host stopped the turn on an error it will not retry by itself (a botmux notice), until a message goes to it
+     * (docs/protocol.md). The chat offers a retry over the composer; it is not a wait for the user.
+     */
+    @SerialName("failure_reason") val failureReason: String? = null,
+    /** Where its host shows it (a botmux session's Feishu topic, docs/engines.md「botmux」); opened only as [externalLink]. */
+    @SerialName("external_url") val externalUrl: String? = null,
     /** Where it stands in its work (docs/agent-work.md): set by the hub once it triaged a stopped turn. */
     val work: WorkState? = null,
     @SerialName("pending_interactions") val pendingInteractions: Int = 0,
@@ -294,6 +303,21 @@ data class Session(
         else -> agentLabelHint?.takeIf(String::isNotBlank) ?: agent.orEmpty()
     }
     val isLive: Boolean get() = status != "offline"
+    /** [failureReason] without the warning sign botmux starts it with (the app draws its own); null when there is none. */
+    val failureText: String? get() = failureReason?.let(::failureNoticeText)?.takeIf(String::isNotEmpty)
+    /** [externalUrl] when it is an https link (iOS `externalLink`): anything else is not offered to open. */
+    val externalLink: String? get() = externalUrl?.trim()?.takeIf { url ->
+        runCatching { java.net.URI(url) }.getOrNull()?.let { it.scheme.equals("https", ignoreCase = true) && !it.host.isNullOrEmpty() } == true
+    }
+    /**
+     * What a list row says under the title instead of the last words (iOS `listPreview`): why it waits for you while it
+     * does, else what stopped it while it is not working; null otherwise.
+     */
+    val reasonPreview: String? get() = when {
+        agentState == AgentState.NeedsYou && !attentionReason.isNullOrBlank() -> attentionReason.trim()
+        agentState != AgentState.Working -> failureText
+        else -> null
+    }
     /**
      * 删除对话 is offered: not running (offline, finished or unknown), not still starting, not the assistant's (those
      * archive). The hub accepts and then hides exactly these (server/internal/hub/deleted_sessions.go `stillDeleted`).
@@ -313,6 +337,9 @@ data class Session(
     /** An older hub says a workflow runs in [background] but sends no [workflows] to show. */
     val legacyWorkflowRunning: Boolean get() = workflows == null && background.orEmpty().any { it.isWorkflow }
 }
+
+/** A host's failure notice without its leading warning signs (U+26A0, U+FE0F) and spaces, as iOS `Session.failureText`. */
+fun failureNoticeText(reason: String): String = reason.trim().trimStart('\u26A0', '\uFE0F').trim()
 
 @KeepGeneratedSerializer
 @Serializable(with = SessionCompactionSerializer::class)

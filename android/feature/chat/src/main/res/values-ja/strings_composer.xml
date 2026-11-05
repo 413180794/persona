@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_slash_model_detail">モデルを切り替える</string>
+    <string name="chat_slash_loop_detail">タスクを定期的に繰り返す</string>
+    <string name="chat_loop_usage">形式：/loop [間隔] タスク（例：/loop 10m CI を確認）。間隔を省くと Claude がペースを決めます</string>
+    <string name="chat_loop_every_no_task">%1$sごと：タスクがまだありません</string>
+    <string name="chat_loop_every_task">%1$sごとに繰り返す：%2$s</string>
+    <string name="chat_loop_self_paced">Claude のペースで繰り返す：%1$s</string>
+    <plurals name="chat_loop_seconds">
+        <item quantity="other">%d 秒</item>
+    </plurals>
+    <plurals name="chat_loop_minutes">
+        <item quantity="other">%d 分</item>
+    </plurals>
+    <plurals name="chat_loop_hours">
+        <item quantity="other">%d 時間</item>
+    </plurals>
+    <plurals name="chat_loop_days">
+        <item quantity="other">%d 日</item>
+    </plurals>
+    <string name="chat_mention">ファイルまたはセッションを参照</string>
+    <string name="chat_mention_used_file">このセッションで使ったファイル</string>
+    <string name="chat_mention_session_detail">%1$s · コンテキストとして</string>
+    <string name="chat_mention_no_match">一致するファイルやセッションはありません</string>
+    <string name="chat_mention_quote_session">別のセッション：%1$s（%2$s）</string>
+    <string name="chat_mention_quote_cwd">フォルダ：%1$s</string>
+    <string name="chat_mention_quote_last">最近の発言：%1$s</string>
+    <string name="chat_quote_yours">あなたのメッセージを引用</string>
+    <string name="chat_quote_from">%1$s を引用</string>
+    <string name="chat_quote_session">セッション %1$s を引用</string>
+    <string name="chat_failure_retry">再試行</string>
+    <string name="chat_host_open_feishu">Larkで開く</string>
+    <string name="chat_suggestion_send">すぐに送信</string>
+    <string name="chat_suggestion_fill">入力欄に入れる</string>
+</resources>

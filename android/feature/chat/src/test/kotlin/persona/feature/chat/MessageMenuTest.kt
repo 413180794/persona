@@ -55,14 +55,11 @@ class MessageMenuTest {
         assertTrue(messageMenuWrites(readOnly = false, session = Session(machineId = "m", sessionId = "s")))
     }
 
-    @Test fun quoteGoesBeforeTheDraft() {
-        assertEquals("> a\n> b\n\n", quoted("a\nb", ""))
-        assertEquals("> a\n\nmine", quoted(" a ", "mine"))
-        val composer = ChatComposerState()
-        composer.quote("第一行\n第二行")
-        assertEquals("> 第一行\n> 第二行\n\n", composer.value.text)
-        assertEquals(composer.value.text.length, composer.value.selection.start)
-        assertEquals(1, composer.focusRequest)
+    @Test fun aQuoteGoesOverTheBoxAndLeavesTheDraft() {
+        // 引用 is a context over the composer now (iOS #986, ComposerParityTest): the words are not typed into the draft.
+        val quotes = withQuote(emptyList(), ChatLinkContext.quote("第一行\n第二行", "我", "m"))
+        assertEquals("<jarvis-context kind=\"quote\" title=\"我\" url=\"\" msg=\"m\">\n第一行\n第二行\n</jarvis-context>\n\nmine",
+            linkMessage("mine", quotes, res))
     }
 
     @Test fun handingToPersonaSendsTheMessageAsContext() {

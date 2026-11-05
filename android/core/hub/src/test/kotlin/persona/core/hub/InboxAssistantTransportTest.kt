@@ -90,4 +90,19 @@ class InboxAssistantTransportTest {
             assertEquals(3, server.requestCount)
         }
     }
+
+    @Test fun aConversationOnALauncherNamesItInThePost() = runBlocking {
+        MockWebServer().use { server ->
+            val transport = HttpInboxAssistantTransport("scope", server.url("/").toString(), "test-token", OkHttpClient())
+            server.enqueue(MockResponse().setBody("{\"session\":{\"machine_id\":\"mac\",\"session_id\":\"c\"}}"))
+            transport.createConversation(false, "cc_x")
+            val launched = server.takeRequest()
+            assertEquals("POST", launched.method)
+            assertEquals("/api/v1/assistant/conversations", launched.path)
+            assertEquals("""{"prompt":"","main":false,"launcher":"cc_x"}""", launched.body.readUtf8())
+            server.enqueue(MockResponse().setBody("{\"session\":{\"machine_id\":\"mac\",\"session_id\":\"d\"}}"))
+            transport.createConversation(true)
+            assertEquals("""{"prompt":"","main":true}""", server.takeRequest().body.readUtf8())
+        }
+    }
 }

@@ -21,8 +21,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
 import persona.core.contracts.Session
 import persona.core.domain.sort.canSend
 import persona.core.designsystem.JAction
@@ -83,7 +81,8 @@ internal fun Modifier.messageMenu(target: MessageTarget?): Modifier {
 internal fun MessageMenuSheet(
     menu: MessageMenuState,
     writes: Boolean,
-    onQuote: (String) -> Unit,
+    /** 引用: the message (its id and whose it is too), quoted over the composer. */
+    onQuote: (MessageTarget) -> Unit,
     onEdit: (String) -> Unit,
     onContext: (String) -> Unit,
     onHandToPersona: ((String) -> Unit)?,
@@ -101,7 +100,7 @@ internal fun MessageMenuSheet(
                 onNotice(resources.getString(R.string.chat_menu_copied))
             }
             MessageAction.Select -> { selecting = target.text }
-            MessageAction.Quote -> onQuote(target.text)
+            MessageAction.Quote -> onQuote(target)
             MessageAction.Share -> { if (!shareText(context, target.text)) onNotice(resources.getString(R.string.chat_menu_no_share)) }
             MessageAction.HandToPersona -> onHandToPersona?.invoke(target.text)
             MessageAction.Context -> onContext(target.text)
@@ -149,24 +148,10 @@ private fun messageMenuActions(target: MessageTarget, writes: Boolean, handOff: 
 // A session that takes no messages (a source without send, docs/protocol.md「Codex 来源与能力」) offers no quote, edit or context.
 internal fun messageMenuWrites(readOnly: Boolean, session: Session?): Boolean = !readOnly && session?.canSend != false
 
-/** 「引用」: the message quoted at the start of the composer, the cursor after what was already there. */
-internal fun ChatComposerState.quote(message: String) {
-    beginEdit()
-    val text = quoted(message, value.text)
-    value = TextFieldValue(text, TextRange(text.length))
-    focusRequest++
-}
-
 /** 「编辑」: the message back in the composer (after a draft already there), its photos as attachments again. */
 internal fun ChatComposerState.edit(message: String) {
     restoreMessage(message)
     focusRequest++
-}
-
-/** The message quoted at the start of the composer (「引用」): every line behind `> `, then what was there. */
-internal fun quoted(message: String, draft: String): String {
-    val quote = message.trim().lines().joinToString("\n") { "> $it" }
-    return if (draft.isBlank()) "$quote\n\n" else "$quote\n\n$draft"
 }
 
 /** What 「交给 Persona」 sends to the main conversation: the message as context from [title], then the ask. */

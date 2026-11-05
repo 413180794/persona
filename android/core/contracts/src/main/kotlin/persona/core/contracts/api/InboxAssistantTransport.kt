@@ -35,6 +35,9 @@ interface InboxAssistantTransport {
     suspend fun messages(feedId: String, around: Long? = null, before: String? = null, after: String? = null): JsonObject
     suspend fun assistant(): JsonObject
     suspend fun createConversation(main: Boolean): JsonObject
+    /** A conversation that runs on [launcher] (POST /api/v1/assistant/conversations `launcher`), not the default one. */
+    suspend fun createConversation(main: Boolean, launcher: String): JsonObject =
+        throw UnsupportedOperationException("Picking a launcher unavailable")
     suspend fun pins(): JsonObject
     suspend fun mutes(): JsonObject
     suspend fun media(ref: String): ByteArray
@@ -52,4 +55,6 @@ interface InboxAssistantConnection {
 interface AssistantConversations : AssistantRepository {
     val pinned: StateFlow<Set<SessionKey>>
     suspend fun startConversation(): SessionKey
+    /** A new conversation that runs on [launcher], for it alone (iOS StarterComposer's model menu): the default stays. */
+    suspend fun startConversation(launcher: String): SessionKey = throw UnsupportedOperationException("Picking a launcher unavailable")
 }

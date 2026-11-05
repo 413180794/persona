@@ -184,6 +184,10 @@ private fun ChatPage(
     var linkContexts by rememberSaveable(stateSaver = ChatLinkContextsSaver) { mutableStateOf(emptyList<ChatLinkContext>()) }
     var submittedContexts by remember { mutableStateOf(emptyList<ChatLinkContext>()) }
     var notice by remember { mutableStateOf<String?>(null) }
+    // /model in the "/" list asked for the 模式 sheet: a one-off, cleared once the sheet opened (not replayed when the bar returns).
+    var openModes by remember { mutableStateOf(false) }
+    // The host's failure notice whose 重试 went out: hidden until the list catches up; back if that send failed.
+    var hostRetried by rememberSaveable(key.path) { mutableStateOf<String?>(null) }
     val deliveryActions = remember(sender) { ChatDeliveryActions(sender) }
     var statusSheet by remember { mutableStateOf(false) }
     fun deliveryAction(message: OutboxMessage, action: DeliveryAction) {
@@ -330,15 +334,16 @@ private fun ChatPage(
         if (!wasOpen) (projection.lines.firstOrNull { it.id == id } as? ChatLine.Work)?.steps
             ?.filterIsInstance<persona.core.domain.lines.WorkItem.Folded>()?.forEach { expand(it.item.item) }
     }
-    fun send(command: String? = null) {
-        if (readOnly || !canSend) return
-        if (sending || submittedDraft != null) return
-        if (command == null && ((!composer.hasContent && linkContexts.isEmpty()) || !composer.ready)) return
+    /** Whether the message was taken (false: nothing went, the box or another send stands); [onFailed] if it then fails. */
+    fun send(command: String? = null, onFailed: () -> Unit = {}): Boolean {
+        if (readOnly || !canSend) return false
+        if (sending || submittedDraft != null) return false
+        if (command == null && ((!composer.hasContent && linkContexts.isEmpty()) || !composer.ready)) return false
         // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
         if (command == null && tasks != null && linkContexts.isEmpty() && composer.attachments.isEmpty() &&
             tasks.sendRouted(key.sessionId, composer.value.text.trim()) { notice = operationFeedback(it).message }) {
             composer.clearIfUnchanged(composer.draft)
-            return
+            return true
         }
         val draft = composer.draft
         val refs = if (command == null) linkContexts else emptyList()
@@ -354,10 +359,12 @@ private fun ChatPage(
             catch (e: Exception) {
                 submittedDraft = null; submittedContexts = emptyList()
                 if (command == SlashCommand.CLEAR) clearingPane = null
+                onFailed()
                 if (feedback?.failure(e) != true) notice = operationFeedback(e).message
             }
             finally { sending = false }
         }
+        return true
     }
     // Chat content (group A): the message menu, the image viewer, photos and paths in messages, the API error retry.
     val messageMenu = remember { MessageMenuState() }
@@ -459,6 +466,9 @@ private fun ChatPage(
                 listed, opener, portPresence)
         }
     }
+    // The @ menu: files this chat's tools used (newest first) and the other sessions, to quote (iOS PromptItems).
+    val mentionFiles = remember(snapshot.items) { chatFiles(snapshot.items) }
+    val mentions = if (readOnly || !canSend) null else ComposerMentions(mentionFiles, session?.cwd.orEmpty(), sessionList, key)
     // An assistant conversation's cards answer through its hub's store (docs/assistant-views.md); elsewhere they only draw.
     val cardsHost = remember(tasks, key.sessionId, readOnly, canSend) {
         tasks?.let { persona.core.domain.views.AssistantCardsHost(key.sessionId, it.cards, it.cardActions, interactive = !readOnly && canSend) }
@@ -542,6 +552,15 @@ private fun ChatPage(
                                 Text(it, Modifier.padding(horizontal = Tokens.Space.m), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                             }
                             if (!historyReadOnly && !readOnly) ChatStartingNote(session)
+                            // The host's own word on it: why it waits for you, or what stopped it, with a retry.
+                            if (!historyReadOnly && !readOnly) ChatHostNote(session, hostRetried, canRetry = canSend,
+                                retryEnabled = !sending && submittedDraft == null,
+                                onRetry = { reason ->
+                                    // Hidden first (a failure can come back before this returns), back if it was not taken.
+                                    val before = hostRetried
+                                    hostRetried = reason
+                                    if (!send(continueText, onFailed = { if (hostRetried == reason) hostRetried = null })) hostRetried = before
+                                })
                             if (historyReadOnly) historyFooter?.invoke()
                             else if (readOnly) Text(stringResource(R.string.chat_screen_subagent_read_only), Modifier.padding(Tokens.Space.m), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                             else {
@@ -554,6 +573,7 @@ private fun ChatPage(
                                 // A source that only lets the phone read says so where the typing would be.
                                 if (!canSend && session != null && (requests.isEmpty() || requestCollapsed)) ChatSourceNote(session)
                                 taskHost?.let { AssistantTaskBar(it) }
+                                val claudeCommands = session?.canTypeClaudeCommands == true
                                 ChatComposer(key, composer, session?.status == "working", sending || submittedDraft != null,
                                     // /clear and /model type into Claude's pane: Claude in a terminal engine only (positive check).
                                     canClear = clearingPane == null && session?.canTypeClaudeCommands == true,
@@ -564,17 +584,22 @@ private fun ChatPage(
                                     // the effort alone for a Codex thread on its app-server.
                                     leading = if (session?.canChangeModes == true || session?.canChangeEffortOnly == true) ({
                                         ChatModeBar(session, controls, connection == null || connection == ConnectionState.Online,
-                                            onOverlay = { modeOverlay = it }, onPickModel = { model -> send("/model $model") })
+                                            onOverlay = { modeOverlay = it }, onPickModel = { model -> send("/model $model") },
+                                            openRequested = openModes, onOpenHandled = { openModes = false })
                                     }) else null,
                                     modeHint = chatModeHint(session, includeModes = session?.canChangeModes == true || session?.canChangeEffortOnly == true),
                                     accessory = {
-                                        if (linkContexts.isEmpty()) ComposerSuggestion(session, composer)
+                                        if (linkContexts.isEmpty()) ComposerSuggestion(session, composer, onSend = { text -> send(text) })
                                         if (linkContexts.isNotEmpty()) Column(Modifier.heightIn(max = 140.dp).verticalScroll(rememberScrollState())) {
                                             // One line each while the link card peeks: the whole cards left no room for the composer.
                                             linkContexts.forEach { ref -> ChatContextCard(ref, compact = linkInset.value > 0f) { linkContexts = linkContexts.filterNot { it.id == ref.id } } }
                                         }
                                     }, onOverlay = { composerOverlay = it }, agentName = session?.agentLabel ?: "Claude",
-                                    canInterrupt = session?.canInterrupt ?: true)
+                                    canInterrupt = session?.canInterrupt ?: true,
+                                    mentions = mentions, onMention = { ref -> linkContexts = linkContexts + ref },
+                                    // /model opens the 模式 sheet's model choices; both need Claude in a pane (as the sheet does).
+                                    onModel = if (claudeCommands && session?.canChangeModes == true) ({ openModes = true }) else null,
+                                    loop = claudeCommands)
                             }
                         }
                     },
@@ -668,7 +693,11 @@ private fun ChatPage(
             fullText?.let { FullTextReader(it, onDismiss = { fullText = null }) }
             val menuTitle = session?.displayTitle ?: stringResource(R.string.chat_screen_untitled)
             MessageMenuSheet(messageMenu, messageMenuWrites(readOnly, session),
-                onQuote = composer::quote, onEdit = composer::edit,
+                onQuote = { target ->
+                    // Over the box as a quote that goes with the next message, the draft left as it is (iOS #986).
+                    linkContexts = withQuote(linkContexts, messageQuote(target.text, target.user, session?.agentLabel ?: "Claude", target.id))
+                    composer.focusRequest++
+                }, onEdit = composer::edit,
                 onContext = { text -> linkContexts = linkContexts + messageContext(menuTitle, text, context.resources); notice = res.getString(R.string.chat_screen_added_context) },
                 onHandToPersona = chrome.onHandToPersona?.takeIf { renderStyle != ChatRenderStyle.Assistant }
                     ?.let { hand -> { text: String -> hand(handoffMessage(menuTitle, text, context.resources)) } },

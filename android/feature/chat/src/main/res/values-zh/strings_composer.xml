@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_slash_model_detail">切换模型</string>
+    <string name="chat_slash_loop_detail">定时重复做一件事</string>
+    <string name="chat_loop_usage">格式：/loop [间隔] 要做的事，如 /loop 10m 看下 CI；不写间隔由 Claude 自己定节奏</string>
+    <string name="chat_loop_every_no_task">每 %1$s：还没写要做的事</string>
+    <string name="chat_loop_every_task">每 %1$s重复：%2$s</string>
+    <string name="chat_loop_self_paced">由 Claude 自己定节奏重复：%1$s</string>
+    <plurals name="chat_loop_seconds">
+        <item quantity="other">%d 秒</item>
+    </plurals>
+    <plurals name="chat_loop_minutes">
+        <item quantity="other">%d 分钟</item>
+    </plurals>
+    <plurals name="chat_loop_hours">
+        <item quantity="other">%d 小时</item>
+    </plurals>
+    <plurals name="chat_loop_days">
+        <item quantity="other">%d 天</item>
+    </plurals>
+    <string name="chat_mention">引用文件或会话</string>
+    <string name="chat_mention_used_file">本会话用过的文件</string>
+    <string name="chat_mention_session_detail">%1$s · 作为上下文</string>
+    <string name="chat_mention_no_match">没有对得上的文件或会话</string>
+    <string name="chat_mention_quote_session">另一个会话：%1$s（%2$s）</string>
+    <string name="chat_mention_quote_cwd">目录：%1$s</string>
+    <string name="chat_mention_quote_last">它最近说：%1$s</string>
+    <string name="chat_quote_yours">引用 你的消息</string>
+    <string name="chat_quote_from">引用 %1$s</string>
+    <string name="chat_quote_session">引用会话 %1$s</string>
+    <string name="chat_failure_retry">重试</string>
+    <string name="chat_host_open_feishu">在飞书打开</string>
+    <string name="chat_suggestion_send">直接发送</string>
+    <string name="chat_suggestion_fill">填入输入框</string>
+</resources>

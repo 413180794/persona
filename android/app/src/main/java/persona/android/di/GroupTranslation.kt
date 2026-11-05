@@ -238,6 +238,7 @@ internal fun AssistantConversations.inGroup(names: GroupNames, scope: CoroutineS
         override val pinned = source.pinned.mapIn(scope) { keys -> keys.mapTo(LinkedHashSet(), names::key) }
         override suspend fun refresh() = source.refresh()
         override suspend fun startConversation() = names.key(source.startConversation())
+        override suspend fun startConversation(launcher: String) = names.key(source.startConversation(launcher))
     }
 }
 

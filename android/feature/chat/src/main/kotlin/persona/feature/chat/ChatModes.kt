@@ -115,8 +115,15 @@ internal fun chatModeHint(session: Session?, includeModes: Boolean = true): Stri
 internal fun ChatModeBar(
     session: Session?, state: ChatChromeState, online: Boolean, onOverlay: (Boolean) -> Unit = {},
     onPickModel: ((String) -> Unit)? = null,
+    /**
+     * /model in the "/" list asked for the sheet, where the model is picked: opened, then [onOpenHandled] clears the
+     * request, so the bar coming back (after a question card hid the composer) does not open it again.
+     */
+    openRequested: Boolean = false,
+    onOpenHandled: () -> Unit = {},
 ) {
     var open by remember { mutableStateOf(false) }
+    LaunchedEffect(openRequested) { if (openRequested) { open = true; onOpenHandled() } }
     val resources = LocalResources.current
     LaunchedEffect(open) { onOverlay(open) }
     DisposableEffect(Unit) { onDispose { onOverlay(false) } }

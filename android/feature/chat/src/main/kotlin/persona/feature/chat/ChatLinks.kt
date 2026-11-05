@@ -143,17 +143,25 @@ internal object ChatLinks {
 
 /**
  * A piece of a page picked in the link sheet, carried in a message as
- * `<jarvis-context kind="context|edit" title="…" url="…">text</jarvis-context>`, written exactly as iOS's `ContextRef`
+ * `<jarvis-context kind="context|edit|quote" title="…" url="…" msg="…">text</jarvis-context>`, written exactly as iOS's `ContextRef`
  * does: the attributes escaped, the text as it is with only `</jarvis-context>` taken out (it cannot close the tag).
  */
 data class ChatLinkContext(
     val kind: String = "context", val title: String, val url: String, val text: String,
     val id: String = UUID.randomUUID().toString(),
+    /** A quoted message's id in its chat ([kind] `quote`, iOS `ContextRef.msg`): one quote per message. */
+    val msg: String = "",
 ) {
-    fun xml(): String = "<jarvis-context kind=\"${if (kind == "edit") "edit" else "context"}\" title=\"${escape(title)}\" url=\"${escape(url)}\">\n" +
-        text.replace("</jarvis-context>", "") + "\n</jarvis-context>"
+    fun xml(): String = "<jarvis-context kind=\"${if (kind == "edit" || kind == QUOTE) kind else "context"}\" title=\"${escape(title)}\" url=\"${escape(url)}\"" +
+        (if (msg.isEmpty()) "" else " msg=\"${escape(msg)}\"") + ">\n" + text.replace("</jarvis-context>", "") + "\n</jarvis-context>"
 
     companion object {
+        /** 引用 on a message of this chat (iOS `ContextRef.quote`): [title] is who wrote it, 「我」 for the user's own. */
+        const val QUOTE = "quote"
+        /** The author of the user's own quoted message on the wire, whatever the app's language (iOS writes and reads 「我」). */
+        const val QUOTE_ME = "我"
+        fun quote(text: String, from: String, msg: String) = ChatLinkContext(QUOTE, from, "", text.trim(), msg = msg)
+
         private val tags = Regex("<jarvis-context\\b([^>]*)>([\\s\\S]*?)</jarvis-context>\\s*")
         private val attributes = Regex("([a-z]+)=\"([^\"]*)\"")
         private fun escape(s: String) = s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
@@ -163,7 +171,8 @@ data class ChatLinkContext(
         internal fun parse(text: String): Pair<List<ChatLinkContext>, String> {
             val refs = tags.findAll(text).map { tag ->
                 val attrs = attributes.findAll(tag.groupValues[1]).associate { it.groupValues[1] to unescape(it.groupValues[2]) }
-                ChatLinkContext(attrs["kind"] ?: "context", attrs["title"].orEmpty(), attrs["url"].orEmpty(), unescape(tag.groupValues[2].trim()))
+                ChatLinkContext(attrs["kind"] ?: "context", attrs["title"].orEmpty(), attrs["url"].orEmpty(), unescape(tag.groupValues[2].trim()),
+                    msg = attrs["msg"].orEmpty())
             }.toList()
             return refs to tags.replace(text, "").trim()
         }
@@ -189,7 +198,24 @@ internal fun linkMessage(draft: String, contexts: List<ChatLinkContext>, resourc
     if (contexts.isEmpty()) draft
     else contexts.joinToString("\n") { it.xml() } + "\n\n" + draft.ifBlank { resources.getString(R.string.chat_links_context_default) }
 
+/**
+ * [ChatLinkContext]s kept across a configuration change: six values each after a [CONTEXTS_V2] mark (the quoted
+ * message's id the sixth); five each, without it, as saved before quotes had one.
+ */
 internal val ChatLinkContextsSaver = listSaver<List<ChatLinkContext>, String>(
-    save = { refs -> refs.flatMap { listOf(it.kind, it.title, it.url, it.text, it.id) } },
-    restore = { values -> values.chunked(5).map { ChatLinkContext(it[0], it[1], it[2], it[3], it[4]) } },
+    save = { refs -> listOf(CONTEXTS_V2) + refs.flatMap { listOf(it.kind, it.title, it.url, it.text, it.id, it.msg) } },
+    restore = { values ->
+        if (values.firstOrNull() == CONTEXTS_V2) values.drop(1).chunked(6).filter { it.size == 6 }.map { ChatLinkContext(it[0], it[1], it[2], it[3], it[4], it[5]) }
+        else values.chunked(5).filter { it.size == 5 }.map { ChatLinkContext(it[0], it[1], it[2], it[3], it[4]) }
+    },
 )
+
+private const val CONTEXTS_V2 = "contexts-v2"
+
+/** [contexts] with [quote] added (iOS `bindMenu`): a message quoted already is not quoted twice. */
+internal fun withQuote(contexts: List<ChatLinkContext>, quote: ChatLinkContext): List<ChatLinkContext> =
+    if (quote.msg.isNotEmpty() && contexts.any { it.kind == ChatLinkContext.QUOTE && it.msg == quote.msg }) contexts else contexts + quote
+
+/** 引用 on a message of this chat: the user's own is by [ChatLinkContext.QUOTE_ME] in every language, else by [agent]. */
+internal fun messageQuote(text: String, user: Boolean, agent: String, msg: String): ChatLinkContext =
+    ChatLinkContext.quote(text, if (user) ChatLinkContext.QUOTE_ME else agent, msg)
