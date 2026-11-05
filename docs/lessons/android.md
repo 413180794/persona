@@ -84,6 +84,7 @@
 
 ## 系统能力
 
+- 通知栏是另一份状态，不会跟着待处理列表走（#3401）：重连没续上（`resumed=false`）时漏掉的 `interaction_resolved` 不补发，全量刷新只修好了 App 里的列表。`HubService` 在线且列表稳定 1.5 秒后拿通知栏里带 `jarvis.request` 标记的提问通知去对列表，不在的撤掉（`InteractionNotificationReconciler`）；不按「列表比上次少了」判断，冷启动时上个进程留下的也能撤；没打开的组（关掉、合并改了 id）跳过，那些请求没答完。
 - hub 的 `fleet` 只在变化时推（`liveactivity.go` 和上次广播的比较），刚连上的客户端什么都收不到：常驻通知、小组件会一直是 0，直到哪个 Agent 状态变了。连接每次连上都要 `GET /api/v1/fleet` 一次（`FleetFeed`）。
 - 一个 PendingIntent 是不是「同一个」只看 action、data、组件和类别，不看 extras 和 flags：常驻通知上的「允许」如果和「需要你处理」通知上的用同一个 data URI，系统会把它们当成一个（一个可变带回复框、一个不可变），后创建的覆盖先创建的。常驻通知的按钮用自己的 `jarvis-notify://ongoing/…`。
 - 前台服务的 `onStartCommand` 不只跑一次：App 每次回到前台都会再 start 它，每次都要 `startForeground`。那时用的通知要是现在显示着的那条（`HubService.shown`），不能按当前数据重新算：重新算的没有「只剩做完未看满 5 分钟退回连接行」这一步，已经收起的「1 个做完了」又回来了，而收集器看到的状态没变，不会再改回去，一直挂到 fleet 下次变化（2026-11-02 模拟器上复现）。

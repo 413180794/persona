@@ -15,6 +15,8 @@ struct TodoDetailView: View {
     @State private var showHandoff = false
     @State private var showDeleteConfirm = false
     @State private var showReleased = false
+    /// The PR its work is in, opened in the app's link sheet (docs/ios.md, 链接在 App 内打开).
+    @State private var link: LinkTarget?
 
     private var currentTodo: TodoItem? {
         store.todo(id: todoID)
@@ -51,6 +53,13 @@ struct TodoDetailView: View {
                 TodoHandoffSheet(todo: todo)
             }
         }
+        #if os(macOS)
+        .macLinkPanel($link)
+        #else
+        .sheet(item: $link) { target in
+            LinkSheet(target: target, key: model.assistantMain ?? model.assistantCurrent)
+        }
+        #endif
         .alert("删除待办", isPresented: $showDeleteConfirm) {
             Button("删除", role: .destructive) {
                 Task { await deleteTodo() }
@@ -141,6 +150,8 @@ struct TodoDetailView: View {
                 .padding(.vertical, Theme.Space.xs)
             }
 
+            stageSection(todo)
+
             Section {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     HStack {
@@ -227,6 +238,31 @@ struct TodoDetailView: View {
         .themedPage()
         .safeAreaInset(edge: .bottom) {
             bottomBar(todo)
+        }
+    }
+
+    /// How far the hub says the work got (`stage`, #2776) and the PR its work is in (`pr_url`, #2768), when it has
+    /// either; a hub that sends neither draws nothing here.
+    @ViewBuilder private func stageSection(_ todo: TodoItem) -> some View {
+        let stage = todo.todoStage
+        let pr = todo.prLink
+        if stage != nil || pr != nil {
+            Section {
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
+                    if let stage {
+                        TodoStageBar(stage: stage)
+                    }
+                    if let pr {
+                        Button { link = LinkTarget(url: pr) } label: {
+                            Label(todo.prLabel ?? "查看 PR", systemImage: Theme.Icon.pullRequest)
+                                .font(Theme.Font.captionStrong)
+                                .lineLimit(1)
+                        }
+                        .themedButton()
+                    }
+                }
+                .padding(.vertical, Theme.Space.xs)
+            }
         }
     }
 

@@ -12,7 +12,9 @@ import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.AndroidEntryPoint
+import persona.core.contracts.GroupKeys
 import persona.core.contracts.SessionKey
+import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.PairingService
 import persona.core.contracts.api.InteractionCenter
@@ -122,6 +124,12 @@ open class HubService : Service() {
                         Log.w(TAG, "Notification refresh failed: ${failure.javaClass.simpleName}")
                     }
                 }
+            }
+            // Requests answered elsewhere while a reconnect did not resume (#3401).
+            scope.launch(Dispatchers.Default) {
+                InteractionNotificationReconciler(notifier::showingRequests, notifier::retract)
+                    .run(interactions.pending, connection.state.map { it == ConnectionState.Online },
+                        sessions.machines.map { list -> list.mapTo(HashSet()) { GroupKeys.namespaceOf(it.id) } })
             }
             scope.launch {
                 pairing.isPaired.collect { if (!it && !starts.deferStop()) stopSelf() }

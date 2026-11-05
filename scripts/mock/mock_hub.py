@@ -1387,6 +1387,9 @@ TODOS_INIT = [
         "id": "todo_blog",
         "title": "博客迁移到 Astro",
         "notes": "32 篇文章都能正常构建，旧链接全部加了 301 跳转。",
+        # The stage bar on the todo detail (#2776): how far the work got, and the PR it is in.
+        "stage": "review",
+        "pr_url": "https://example.com/blog/pull/128",
         "done_at": None,
         "created_at": ago(hours=5),
         "updated_at": ago(minutes=12),

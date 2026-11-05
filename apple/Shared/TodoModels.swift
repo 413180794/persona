@@ -1,8 +1,55 @@
 import Foundation
 import SwiftUI
 
+/// How far a todo's work got, as the hub sends it in `TodoItem.stage` (#2776): the six steps, in order. A hub that
+/// sends nothing, or a name this build does not know (an older or a newer hub), has none, and no stage bar is drawn.
+nonisolated enum TodoStage: String, CaseIterable, Sendable {
+    case plan, develop, review, merge, deploy, verify
+
+    /// The step's name on the bar (App copy is Chinese, docs/i18n.md).
+    var label: String {
+        switch self {
+        case .plan: "方案"
+        case .develop: "开发"
+        case .review: "审查"
+        case .merge: "合入"
+        case .deploy: "部署"
+        case .verify: "已验证"
+        }
+    }
+
+    /// How far along the six it is: 1 … 6.
+    var stepNumber: Int { (Self.allCases.firstIndex(of: self) ?? 0) + 1 }
+
+    /// How many steps the bar has.
+    static var stepCount: Int { allCases.count }
+
+    /// The stage the hub named; none for nothing or a name this build does not know.
+    init?(hub: String?) {
+        guard let hub, let stage = TodoStage(rawValue: hub) else { return nil }
+        self = stage
+    }
+}
+
 nonisolated extension TodoItem {
     var isDone: Bool { doneAt != nil }
+
+    /// The stage the hub sent (`stage`), none when it sent none or one this build does not know (#2776).
+    var todoStage: TodoStage? { TodoStage(hub: stage) }
+
+    /// The pull request its work is in (`pr_url`, #2768), when the hub sent a web address the in-app link sheet opens.
+    var prLink: URL? {
+        guard let raw = prURL?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty,
+              let url = URL(string: raw), let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else { return nil }
+        return url
+    }
+
+    /// "PR #128" from the pull request's address, the way a task's receipt names it (#2768).
+    var prLabel: String? {
+        guard let last = prLink?.absoluteString.split(separator: "/").last, Int(last) != nil else { return nil }
+        return "PR #\(last)"
+    }
 
     /// The state's label for this todo: 「自动完成」 for one the hub closed (docs/todos.md「自动完成」).
     func statusLabel(_ state: TaskState) -> String {

@@ -208,20 +208,25 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     var doneReason: String?
     var agents: [Agent]
     var spaces: [Space]?
+    /// How far its work got (`stage`): one of `TodoStage`'s values, empty when the hub does not know (#2776). Kept as
+    /// the hub sent it: a value this build does not know draws no stage bar either.
+    var stage: String?
+    /// The pull request its work is in (`pr_url`, #2768); nil from a hub without it.
+    var prURL: String?
     /// Started from the main conversation while 主对话派的任务只在主对话里通知 was on (#1731, fixed when the hub made it):
     /// the main conversation tells the user about it, nothing else does (the island, notifications, badges, the watch).
     /// Its card in the conversation shows as always. False from a hub without it.
     var quiet: Bool
 
     enum CodingKeys: String, CodingKey {
-        case id, title, notes, origin, agents, spaces, quiet
+        case id, title, notes, origin, agents, spaces, quiet, stage
         case doneAt = "done_at", createdAt = "created_at", updatedAt = "updated_at", planID = "plan_id", startError = "start_error",
-             doneBy = "done_by", doneReason = "done_reason"
+             doneBy = "done_by", doneReason = "done_reason", prURL = "pr_url"
     }
 
     init(id: String, title: String, notes: String? = nil, doneAt: Date? = nil, createdAt: Date? = nil, updatedAt: Date? = nil,
          origin: String? = nil, planID: String? = nil, startError: String? = nil, doneBy: String? = nil, doneReason: String? = nil,
-         agents: [Agent] = [], spaces: [Space]? = nil, quiet: Bool = false) {
+         agents: [Agent] = [], spaces: [Space]? = nil, quiet: Bool = false, stage: String? = nil, prURL: String? = nil) {
         self.id = id
         self.title = title
         self.notes = notes
@@ -236,6 +241,8 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         self.agents = agents
         self.spaces = spaces
         self.quiet = quiet
+        self.stage = stage
+        self.prURL = prURL
     }
 
     init(from decoder: Decoder) throws {
@@ -254,6 +261,9 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         agents = try c.decodeIfPresent([Agent].self, forKey: .agents) ?? []
         spaces = try c.decodeIfPresent([Space].self, forKey: .spaces)
         quiet = try c.decodeIfPresent(Bool.self, forKey: .quiet) ?? false
+        // A hub before #2776 / #2768 sends neither: old payloads decode as before.
+        stage = try c.decodeIfPresent(String.self, forKey: .stage)
+        prURL = try c.decodeIfPresent(String.self, forKey: .prURL)
     }
 
     var activeAgents: [Agent] { agents.filter(\.isActive) }

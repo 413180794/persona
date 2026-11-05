@@ -183,6 +183,7 @@ class Notifier @Inject constructor(
             else -> ix.headline.shown
         }
         val builder = base(CH_INPUT).forSession(ix.sessionKey).setContentTitle(title).setContentText(ix.headline.shown)
+            .addExtras(android.os.Bundle().apply { putBoolean(EXTRA_REQUEST, true) })
             .setStyle(NotificationCompat.BigTextStyle().bigText(detail.take(2000)))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
@@ -237,6 +238,16 @@ class Notifier @Inject constructor(
     }
 
     fun retract(id: String) = manager.cancel(interactionTag(id), EVENT_ID)
+
+    /**
+     * Ids of the request notifications showing now: not the verifying / result notices that reuse their tag (#3401).
+     * Empty when the system cannot be asked.
+     */
+    fun showingRequests(): Set<String> = runCatching {
+        context.getSystemService(NotificationManager::class.java).activeNotifications
+            .filter { it.id == EVENT_ID && it.notification.extras.getBoolean(EXTRA_REQUEST) }
+            .mapNotNullTo(HashSet()) { notice -> notice.tag?.takeIf { it.startsWith(INTERACTION_PREFIX) }?.removePrefix(INTERACTION_PREFIX) }
+    }.getOrDefault(emptySet())
 
     internal fun pending(id: String, session: SessionKey?, status: PendingStatus, assistant: Boolean?) =
         resultNotice(id, session, status.label(context), context.getString(R.string.notify_result_open_chat), assistant)
@@ -317,6 +328,8 @@ class Notifier @Inject constructor(
         const val CH_STATUS = "realtime_status"
         const val ONGOING_ID = 1
         private const val EVENT_ID = 2
-        private fun interactionTag(id: String) = "interaction:$id"
+        private const val INTERACTION_PREFIX = "interaction:"
+        private fun interactionTag(id: String) = "$INTERACTION_PREFIX$id"
+        private const val EXTRA_REQUEST = "jarvis.request"
     }
 }

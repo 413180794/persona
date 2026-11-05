@@ -314,8 +314,8 @@ func browserCall(ctx context.Context, params json.RawMessage) (*proto.ComputerRe
 	cmd := exec.CommandContext(cctx, bin, "nodejs")
 	cmd.Stdin = strings.NewReader(wrapped) // not in the process list, no length limit
 	cmd.Dir = dir
-	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
+	out := &keptOutput{headMost: browserHeadMost, tailMost: browserTailMost}
+	cmd.Stdout, cmd.Stderr = out, out // the same writer: exec calls its Write from one goroutine at a time
 	runErr := cmd.Run()
 	text, result := splitBrowserOutput(out.String())
 	if result == nil {
@@ -334,6 +334,70 @@ func browserCall(ctx context.Context, params json.RawMessage) (*proto.ComputerRe
 	res := &proto.ComputerResult{Output: json.RawMessage(clipJSON(raw))}
 	res.Image = screenshotImage(shot)
 	return res, nil
+}
+
+// What of a script's output is kept while it runs: the start of what it printed (the model gets a quarter of
+// browserMost of it), and the end, where its result line is (a page's snapshot in it is cut to browserMost later).
+// The rest is dropped as it comes, so a script or a page that prints without end does not grow the node (#3980).
+const (
+	browserHeadMost = 64 << 10
+	browserTailMost = 16 << 20
+)
+
+// keptOutput keeps the first headMost bytes written to it and the last tailMost; what is between is counted, not
+// kept.
+type keptOutput struct {
+	headMost, tailMost int
+	head, tail         []byte
+	dropped            int64
+}
+
+func (k *keptOutput) Write(p []byte) (int, error) {
+	n := len(p)
+	if room := k.headMost - len(k.head); room > 0 {
+		take := min(room, len(p))
+		k.head = append(k.head, p[:take]...)
+		p = p[take:]
+	}
+	if len(k.tail)+len(p) > 2*k.tailMost { // slide now and then, not on every write
+		cut := max(0, len(k.tail)+len(p)-k.tailMost)
+		if cut >= len(k.tail) {
+			k.dropped += int64(len(k.tail))
+			cut -= len(k.tail)
+			k.tail = k.tail[:0]
+			k.dropped += int64(cut)
+			p = p[cut:]
+		} else {
+			k.dropped += int64(cut)
+			k.tail = k.tail[:copy(k.tail, k.tail[cut:])]
+		}
+	}
+	if need := len(k.tail) + len(p); need > cap(k.tail) { // doubling, up to what the tail ever holds
+		grown := make([]byte, len(k.tail), min(max(need, 2*cap(k.tail), 4<<10), 2*k.tailMost))
+		copy(grown, k.tail)
+		k.tail = grown
+	}
+	k.tail = append(k.tail, p...)
+	return n, nil
+}
+
+// String is what was kept, with a line saying how much was left out between the start and the end.
+func (k *keptOutput) String() string {
+	tail, dropped := k.tail, k.dropped
+	if len(tail) > k.tailMost {
+		dropped += int64(len(tail) - k.tailMost)
+		tail = tail[len(tail)-k.tailMost:]
+	}
+	gap := ""
+	if dropped > 0 {
+		gap = fmt.Sprintf("\n… (%d bytes left out)\n", dropped)
+	}
+	var b strings.Builder
+	b.Grow(len(k.head) + len(gap) + len(tail))
+	b.Write(k.head)
+	b.WriteString(gap)
+	b.Write(tail)
+	return b.String()
 }
 
 // browserMark starts the line the wrapped script prints its result on.

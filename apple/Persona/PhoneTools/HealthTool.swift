@@ -173,6 +173,28 @@ enum HealthTool {
         ]))
     }
 
+    /// One metric's per-day values over the last `days` days (today included), keyed "yyyy-MM-dd": the numbers the
+    /// summary gives for it, read the same way, for the app's own health trends (Views/Health/HealthTrendsModel.swift).
+    /// Days without data are left out.
+    static func daily(_ metric: String, days: Int) async throws -> [String: Double] {
+        try HealthAccess.requireAccess()
+        guard metricNames.contains(metric), metric != "heart_rate" else {
+            throw ToolFailure(.invalidArgument, "no daily trend for \"\(metric)\"")
+        }
+        if metric == "weight" {
+            // As in the summary: covers people who authorized the app before weight was read.
+            _ = try? await HKHealthStore().requestAuthorization(toShare: Set<HKSampleType>(), read: readTypes)
+        }
+        let calendar = Calendar.current
+        let end = Date()
+        let start = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -(max(days, 1) - 1), to: end) ?? end)
+        let store = HKHealthStore()
+        let rows = metric == "sleep"
+            ? try await sleepByDay(store, start: start, end: end, calendar: calendar)
+            : try await quantityByDay(store, metric: metric, start: start, end: end, calendar: calendar)
+        return rows.compactMapValues(\.double)
+    }
+
     // MARK: - Queries
 
     private static func quantityByDay(
