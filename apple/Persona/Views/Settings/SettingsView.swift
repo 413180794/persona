@@ -88,6 +88,7 @@ struct SettingsView: View {
                             // No model here: the assistant's model is 模型配置 › 主对话 (#1291).
                             SettingsRow(title: "助手", symbol: Theme.Icon.ai, tint: Theme.ai)
                         }
+                        .accessibilityIdentifier("settings-assistant")
                         NavigationLink(value: SettingsPage.claude) {
                             SettingsRow(title: "Claude Code 设置", symbol: Theme.Icon.options, tint: Theme.Hue.orange)
                         }
@@ -97,6 +98,8 @@ struct SettingsView: View {
                     }
                     .bareListRow()
                 }
+
+                ChannelsEntryRow()
 
                 ConnectorsSection()
 
@@ -172,12 +175,6 @@ struct SettingsView: View {
 
                 Section {
                     Group {
-                        // Persona's profile, where the shell's sidebar had it before the main conversation took its
-                        // place (#2004).
-                        NavigationLink(value: SettingsPage.assistant) {
-                            SettingsRow(title: "认识 \(model.persona.name)", symbol: Theme.Icon.info, tint: Theme.persona)
-                        }
-                        .accessibilityIdentifier("settings-about-persona")
                         let version = "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))"
                         // The commit this build was made from (stamped at build time, `project.yml`): which one is on the phone.
                         let commit = Bundle.main.object(forInfoDictionaryKey: "JarvisCommit") as? String ?? "未知"
@@ -200,6 +197,7 @@ struct SettingsView: View {
                     SettingsHeading("关于")
                 }
             }
+            .accessibilityIdentifier("settings-list")
             #if os(macOS)
             // Below the section's title in the title bar's row, not scrolling through it (#1243); inside the page's
             // background, which still reaches up behind the title.
@@ -227,7 +225,7 @@ struct SettingsView: View {
             // memoryEdit|about`, `-openStorage YES` (存储空间), `-openNotificationSettings YES` (通知), `-openMachines YES` (机器;
             // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (设备), `-openHubUpdate YES` (hub),
             // `-openSkills YES` (Skills), `-openExtensions YES` (扩展; `-openExtension <id>` one of them; the old `-openPlugin…` names too), `-openChannels YES`
-            // (扩展 › 渠道; `-openChannel <id>` one of them).
+            // (渠道; `-openChannel <id>` one of them).
             .onAppear(perform: openDebugPage)
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
@@ -296,8 +294,7 @@ struct SettingsView: View {
                 if let ui = str("openExtensionPage") { p.append(SettingsPage.pluginPage(plugin: id, ui: ui, title: "")) }
             }
         }
-        else if d.bool(forKey: "openChannels") || d.string(forKey: "openChannel") != nil { // 设置 › 扩展 › 渠道 (› one)
-            p.append(SettingsPage.plugins)
+        else if d.bool(forKey: "openChannels") || d.string(forKey: "openChannel") != nil { // 设置 › 渠道 (› one)
             p.append(SettingsPage.channels)
             if let id = d.string(forKey: "openChannel") { p.append(SettingsPage.channel(id)) }
         }
@@ -401,7 +398,7 @@ enum SettingsPage: Hashable {
     case pluginMarket
     case marketExtension(market: String, id: String)
     case pluginMarkets
-    /// 设置 › 扩展 › 渠道, and one channel by its id (docs/channels.md).
+    /// 设置 › 渠道, and one channel by its id (docs/channels.md).
     case channels
     case channel(String)
     /// 设置 › hub › SSH 隧道 of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).

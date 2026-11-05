@@ -1,7 +1,7 @@
 import Observation
 import SwiftUI
 
-// 设置 › 扩展 › 渠道 (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
+// 设置 › 渠道 (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
 // Feishu, voice, the chat app bots plugins contribute — as GET /api/v1/channels lists them; one channel's page (its
 // switch, binding a step at a time, where its messages go, what it does, a test message); and the source of a message
 // that came from one (its client_msg_id is `<channel>-<message id>`). Only with a hub whose features have `channels`.
@@ -80,7 +80,7 @@ enum ChannelText {
             .filter { !$0.channels.isEmpty }
     }
 
-    /// 设置 › 扩展's 渠道 row: how many are connected, and how many went wrong.
+    /// 设置's 渠道 row: how many are connected, and how many went wrong.
     static func summary(_ list: [HubChannel]?) -> String {
         guard let list else { return "" }
         let on = list.filter { !$0.isApp && $0.state == "connected" }.count
@@ -195,7 +195,7 @@ enum ChannelText {
     func update(_ l: [HubChannel]) { list = l }
 }
 
-/// 设置 › 扩展 › 渠道: the list.
+/// 设置 › 渠道: the list.
 @Observable final class ChannelsModel {
     struct Deps {
         var api: () -> APIClient?
@@ -227,7 +227,7 @@ enum ChannelText {
     }
 }
 
-/// 设置 › 扩展 › 渠道 › one: its switch, where its messages go, its features, unbinding and a test message. Binding a
+/// 设置 › 渠道 › one: its switch, where its messages go, its features, unbinding and a test message. Binding a
 /// step at a time is `ConnectorSignInModel` on the channel's bind (`ChannelModel.binding`).
 @Observable final class ChannelModel {
     struct Deps {

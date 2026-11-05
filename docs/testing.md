@@ -207,8 +207,8 @@ mock 第六次问时确认，页面自己变成已连接。mock 的登录状态�
 `TEST_RUNNER_JARVIS_SECRETS_HUB=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/SecretFieldTests`：模型供应商的 API Key（自己填写、从插件添加）、飞书机器人的 App Secret、
 邮箱的密码 / 授权码、终端要的密码，填完离开后系统都不弹「保存密码？」（`PasswordPrompt.assertNone`），值照样到了 mock。终端那张卡答完就没了，再跑要重启 mock。
 
-渠道（`ChannelSettingsTests`，#1529，`docs/channels.md`「界面」）：`MOCK_CHANNELS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，
-`TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/ChannelSettingsTests`：设置 › 插件 的「渠道」行和摘要、
+渠道（`ChannelSettingsTests`，#1529、#2195，`docs/channels.md`「界面」）：`MOCK_CHANNELS=1 MOCK_PLUGINS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，
+`TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/ChannelSettingsTests`：设置中连接器前的「渠道」行和摘要、扩展页不再包含渠道、关于只保留版本和构建且助手设置仍可进入、
 三节列表（Persona / 已接入 / 可以安装）、微信的页面（账号、消息发到、功能）、用令牌绑定（错的令牌原地报错）、飞书机器人解绑后用 6 位配对码重新配对、
 主对话第一条下面的「来自 微信」。mock 的绑定状态留在进程里，换深色再跑先重启 mock；`-openChannels YES` / `-openChannel <id>` 直接打开列表 / 某个渠道。
 

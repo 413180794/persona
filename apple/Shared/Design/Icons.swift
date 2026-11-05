@@ -297,7 +297,7 @@ extension Theme {
         static let mailAccounts = "envelope.badge"
         /// A chat app's bot the user talks to Persona through (设置 › 连接器 › 飞书机器人).
         static let chatBot = "message.badge.waveform"
-        /// 设置 › 扩展 › 渠道: the ways of talking to Persona (docs/channels.md).
+        /// 设置 › 渠道: the ways of talking to Persona (docs/channels.md).
         static let channels = "ellipsis.bubble"
         /// A voice channel (talking to Persona out loud).
         static let voiceChannel = "waveform.and.mic"

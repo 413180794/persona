@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-// 设置 › 扩展 › 渠道 (docs/channels.md「界面」): the list and one channel's page; the 渠道 row on 设置 › 扩展; the line on a
+// 设置 › 渠道 (docs/channels.md「界面」): the list and one channel's page; the 渠道 row on 设置; the line on a
 // connector's page that says it is a channel; the 「来自 …」 under a message and the mark beside a conversation's title.
 
 /// A channel's mark: its brand's (飞书), else a symbol of its kind in the accent color.
@@ -29,7 +29,7 @@ private struct ChannelStateDot: View {
     }
 }
 
-/// 设置 › 扩展's first row: 渠道, how many are connected (red when one went wrong). Only with a hub that has channels.
+/// 设置's row before 连接器: 渠道, how many are connected (red when one went wrong). Only with a hub that has channels.
 struct ChannelsEntryRow: View {
     @Environment(AppModel.self) private var model
     @State private var channels: [HubChannel]?
@@ -50,7 +50,7 @@ struct ChannelsEntryRow: View {
                             }
                         }
                     }
-                    .accessibilityIdentifier("plugins-channels")
+                    .accessibilityIdentifier("settings-channels")
                 }
                 .bareListRow()
             } footer: {
@@ -66,7 +66,7 @@ struct ChannelsEntryRow: View {
     }
 }
 
-/// 设置 › 扩展 › 渠道: every way of talking to Persona, in three sections (the apps, the installed, a market's).
+/// 设置 › 渠道: every way of talking to Persona, in three sections (the apps, the installed, a market's).
 struct ChannelsView: View {
     @State private var page = ChannelsModel()
 
@@ -152,7 +152,7 @@ private struct ChannelRowLabel: View {
     }
 }
 
-/// 设置 › 扩展 › 渠道 › one: its state, switch, binding, where its messages go, its features, what waits on it, what it
+/// 设置 › 渠道 › one: its state, switch, binding, where its messages go, its features, what waits on it, what it
 /// can do, a test message, and its own page if it has one. A read-only one (the apps, /agent) is only looked at.
 struct ChannelDetailView: View {
     @Environment(AppModel.self) private var model
@@ -482,7 +482,7 @@ struct ChannelLinkSection: View {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                             Text("这是一个对话渠道").lineLimit(1)
-                            Text("在 设置 › 扩展 › 渠道 里设置").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                            Text("在 设置 › 渠道 里设置").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                     } icon: {
                         Image(systemName: Theme.Icon.channels).foregroundStyle(Theme.accent)

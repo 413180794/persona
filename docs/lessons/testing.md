@@ -2,6 +2,10 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- rebase 解冲突后，`git diff --check` 只检查还没提交的修改，干净工作树不能证明提交里没有残留冲突标记（#2195）。推送 / 合并前还要跑 `git diff origin/master...HEAD --check`，覆盖 PR 的完整差异。
+
+- 设置入口从一层移到另一层时，同时改 DEBUG 直达路径（#2195）：渠道移出扩展后，`-openChannels` / `-openChannel` 不再先压入扩展页。iPad / Mac 分栏会同时保留设置列表和详情，验证详情「没有某行」要把查询限定到详情的列表，不能对整个 App 做不存在断言；滚动也指定要检查的列表，避免滑动了旁边的详情。
+
 - macOS 的 Unix socket 回归使用 canonical 的短临时目录（2026-11-03，#277）：系统 `TMPDIR` 的长路径会超过 socket 地址长度；换成 `/tmp` 仍可能因它实际指向 `/private/tmp`，让 Codex fixture 的原始 HOME 与初始化后读回的 canonical HOME 不相等，表现为握手超时。用独立 `/private/tmp/<短目录>` 作为测试 `TMPDIR`，不因此改变运行根目录的词法兼容规则。先保留原失败日志，再在固定源码上复验；端口扫描的真实 `lsof` 缺陷单独按 #541 / #728 修复，不能归为临时目录问题。
 
 - 同一个 worktree 的 `xcodegen` 与 `xcodebuild` 不能同时读写工程（2026-11-04，#1045）：iOS 复验重新生成工程时，Mac 构建读到暂缺的 `project.pbxproj`，退出 74，编译未开始。先完整生成一次工程，再串行构建；需要并行验证则用各自的工程／worktree，不能只隔离 DerivedData。保留原退出码，生成完成后的串行复验单独记结果。

@@ -851,8 +851,7 @@ struct AssistantSidebar: View {
 
     @ViewBuilder private func actions(_ all: [Session]) -> some View {
         if let openInbox, let onMachines {
-            // The shell's: Persona (the main conversation) first, a line, then the places to go. 认识 Persona is in
-            // 设置 › 关于 (#2004).
+            // The shell's: Persona (the main conversation) first, a line, then the places to go.
             VStack(alignment: .leading, spacing: 0) {
                 mainItem(all)
                 Divider().padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)

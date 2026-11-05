@@ -1,9 +1,9 @@
 import XCTest
 
-/// 设置 › 扩展 › 渠道 (docs/channels.md): the 渠道 row on 设置 › 扩展, the list in its three sections, WeChat's page
+/// 设置 › 渠道 (docs/channels.md): the 渠道 row before 连接器, the list in its three sections, WeChat's page
 /// (bound: its account, 消息发到, its features), binding a channel with a token a step at a time, the Feishu bot's
 /// pairing code, and 「来自 微信」 under the main conversation's first message. Against scripts/mock/mock_hub.py with
-/// MOCK_CHANNELS=1: `TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the
+/// MOCK_CHANNELS=1 MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the
 /// screenshots, named by `TEST_RUNNER_JARVIS_CHANNELS_APPEARANCE` (light / dark: set with `simctl ui … appearance`).
 final class ChannelSettingsTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
@@ -33,14 +33,49 @@ final class ChannelSettingsTests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
     }
 
-    @MainActor func testTheListAndAChannel() throws {
+    @MainActor func testTheSettingsEntries() throws {
+        let app = try launch(["-tab", "settings"])
+        let settings = app.descendants(matching: .any)["settings-list"].firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 15))
+        let assistant = app.buttons["settings-assistant"]
+        for _ in 0..<8 where !assistant.isHittable { settings.swipeUp() }
+        XCTAssertTrue(assistant.exists, "助手 settings must remain")
+
+        let entry = app.buttons["settings-channels"]
+        for _ in 0..<8 where !entry.isHittable { settings.swipeUp() }
+        XCTAssertTrue(entry.exists, "渠道 must be on settings itself")
+        let connectors = app.staticTexts["连接器"]
+        XCTAssertTrue(connectors.exists, "no 连接器 heading")
+        XCTAssertLessThan(entry.frame.maxY, connectors.frame.minY, "渠道 must precede 连接器")
+        shot(app, "settings")
+
+        let build = text(app, containing: "构建")
+        for _ in 0..<12 where !build.isHittable { settings.swipeUp() }
+        XCTAssertTrue(text(app, containing: "版本").exists && build.exists, "关于 must keep version and build")
+        XCTAssertFalse(app.buttons["settings-about-persona"].exists)
+        XCTAssertFalse(text(app, containing: "认识 ").exists, "the duplicate profile entry must be gone")
+        shot(app, "about")
+    }
+
+    @MainActor func testExtensionsNoLongerContainChannels() throws {
         let app = try launch(["-tab", "settings", "-openExtensions", "YES"])
-        let entry = app.buttons["plugins-channels"]
+        XCTAssertTrue(app.buttons["plugin-example-notes"].waitForExistence(timeout: 15), "no extension list")
+        let list = app.descendants(matching: .any)["extensions-list"].firstMatch
+        XCTAssertTrue(list.exists)
+        XCTAssertFalse(list.buttons["settings-channels"].exists)
+        XCTAssertFalse(list.buttons["plugins-channels"].exists)
+        shot(app, "extensions")
+    }
+
+    @MainActor func testTheListAndAChannel() throws {
+        let app = try launch(["-tab", "settings"])
+        let entry = app.buttons["settings-channels"]
+        for _ in 0..<8 where !entry.isHittable { app.swipeUp() }
         XCTAssertTrue(entry.waitForExistence(timeout: 15), "no 渠道 row:\n\(app.debugDescription)")
         // The counts follow what the other tests bound on the same mock: the words are checked here, the counts in
         // ChannelsModelTests.
         XCTAssertTrue(text(app, containing: "个已连接 · 1 个出错").waitForExistence(timeout: 10), "the row's summary:\n\(app.debugDescription)")
-        shot(app, "plugins")
+        shot(app, "entry")
         entry.tap()
 
         let wechat = app.buttons["channel-wechat"]
