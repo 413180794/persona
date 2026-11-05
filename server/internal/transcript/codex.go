@@ -44,8 +44,9 @@ type codexPayload struct {
 	} `json:"sandbox_policy"`
 	Effort string `json:"effort"`
 	// event_msg
-	Item   *codexItem `json:"item"`
-	Reason string     `json:"reason"`
+	Item   *codexItem      `json:"item"`
+	Goal   json.RawMessage `json:"goal"` // thread_goal_updated (goal.go)
+	Reason string          `json:"reason"`
 	Info   *struct {
 		Total struct {
 			OutputTokens int `json:"output_tokens"`
@@ -206,6 +207,8 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 		it := mk(0, "", "system", proto.KindNotice)
 		it.Text = "已中断"
 		return []proto.Item{it}
+	case "thread_goal_updated":
+		return meta.codexGoalUpdated(p.Goal, l.Timestamp, func() proto.Item { return mk(0, "", "system", proto.KindNotice) })
 	case "item_completed":
 	default:
 		return nil

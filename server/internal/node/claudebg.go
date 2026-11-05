@@ -134,7 +134,7 @@ func (n *Node) claudeBgSessions(procs []claudeProc, seen map[string]bool) []prot
 				s.Background = append(s.Background, t)
 			}
 		}
-		s.Loop = m.loop
+		s.Loop, s.Goal = m.loop, m.goal
 		s.Subagents = n.subagents(id)
 		n.decorate(&s)
 		out = append(out, s)

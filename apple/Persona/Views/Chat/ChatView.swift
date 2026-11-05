@@ -35,6 +35,8 @@ struct ChatView: View {
     @State private var showTerminal = false
     @State private var file: FileRef?
     @State private var showActivity = false
+    /// The folded header's goal mark opened (`GoalSheet`); the open header's `GoalBar` keeps its own.
+    @State private var showGoal = false
     @State private var debugImages: [ImagePayload]?
     #if os(macOS)
     /// The window this chat is in (the Agent menu's requests are per window).
@@ -346,13 +348,14 @@ struct ChatView: View {
         return [loop, background].compactMap { $0 }.joined(separator: "，")
     }
 
-    /// What of the header has no place in the toolbar: the ports it listens on and the running subagents, a row over
+    /// What of the header has no place in the toolbar: the goal, the ports it listens on and the running subagents, a row over
     /// the chat only while there are any.
     @ViewBuilder private var macChrome: some View {
         let ports = session?.ports ?? []
         let all = session?.subagents ?? []
-        if !ports.isEmpty || (pane == .chat && !all.isEmpty) {
+        if !ports.isEmpty || (pane == .chat && !all.isEmpty) || session?.goal != nil {
             VStack(spacing: Theme.Space.s) {
+                if let goal = session?.goal { GoalBar(goal: goal) }
                 if !ports.isEmpty { SessionPortChips(machine: key.machineRef, ports: ports) }
                 if pane == .chat, !all.isEmpty {
                     AgentStrip(agents: all.filter { $0.running || $0.id == viewing?.id }, all: all, viewing: viewing?.id) { a in view(a) }
@@ -1708,76 +1711,82 @@ struct ChatView: View {
         scrollToEnd()
     }
 
+    /// The list's rows, newest first: apart from `chatScroll`, which as one expression Swift 6.2 could not type-check in time.
+    private func chatRows(store: ChatStore, lines: [ChatLine], pending: [PendingMessage]) -> some View {
+        let rows = store.rows
+        return LazyVStack(alignment: .leading, spacing: Theme.Space.l) {
+            // Newest first (the list is drawn upside down): the end sentinel, live text, unsent messages, lines.
+            Color.clear
+                .frame(height: Theme.Size.line)
+                .id(Self.bottomID)
+            if let err = store.error {
+                Label(err, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).flippedBack()
+            }
+            // Streamed text, the typing line and unsent messages sit at the newest end too: while you read
+            // history they wait with the rest, as they were drawn then (`Frozen`).
+            if style == .assistant { ChatLiveText(store: store, held: frozen?.text) }
+            // Sent, and the agent not on it yet: the line the new-conversation page showed under the first message
+            // (`FirstMessagePending`), where the turn's work line comes in. Without it the chat that took over showed
+            // the message a line lower, then pushed it up when the turn began (#1911).
+            if frozen == nil, startingTurn(pending) {
+                TypingIndicator(text: "\(style == .assistant ? model.persona.name : (session?.agentLabel ?? "Claude")) 正在准备…")
+                    .flippedBack()
+                    .id("starting-turn")
+            }
+            // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
+            ForEach((frozen.map { f in pending.filter { f.pending.contains($0.id) } } ?? pending).reversed()) { msg in
+                PendingBubble(msg: msg, retry: { model.retry(key, msg) }, discard: { model.discard(key, msg) })
+                    .flippedBack()
+                    .id(msg.id.uuidString)
+            }
+            // The first message of a conversation, not in the transcript yet: its day over it, as the new-conversation
+            // page drew it (`FirstMessagePending`) and the transcript's lines will (#1911).
+            if style == .assistant, lines.isEmpty, !pending.isEmpty { DayLine(date: .now).flippedBack() }
+            // Every message, timer line, tool count and answer is its own lazy row (a running turn can hold
+            // hundreds of steps; one stack of them froze the page).
+            // The oldest dozen lines start loading the page before them: by the time you reach the top it is
+            // usually there (pages with screenshots run to megabytes and take seconds).
+            let prefetch = Set(lines.prefix(12).map(\.id))
+            let openRecap = ChatLines.openRecap(lines, pending: viewing == nil ? pendingRecap : nil)
+            ForEach(lines.reversed()) { line in
+                Group {
+                    if let openRecap, openRecap.line == line.id { recapInFlow(openRecap) } else { lineView(line) }
+                }
+                    .background { if quoteFlash?.line == line.id { QuoteFlash().id(quoteFlash?.id) } }
+                    .flippedBack()
+                    .debugLineY(line.id, scratch)
+                    .landingFrame(line.id == landing, scratch)
+                    .id(line.id)
+                    .onAppear { if prefetch.contains(line.id) { prefetchOlder() } }
+                    .zIndex(menu.selected != nil && line.holds(menu.selected) ? 1 : 0)
+            }
+            if !store.loadedOnce && rows.isEmpty {
+                ChatSkeleton().flippedBack()
+            } else if rows.isEmpty && store.pending.isEmpty { // a first message on its way is not 还没有消息
+                EmptyStateView(symbol: Theme.Icon.conversation, title: "还没有消息", message: "发一句话开始吧。").flippedBack()
+            }
+            if store.hasMore {
+                // Reaching the far (oldest) end loads the page before it — only once the user has dragged the list.
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Theme.Space.sm)
+                    .task(id: "\(rows.first?.id ?? "")|\(userScrolled)") { if userScrolled { await model.loadOlder(shownKey) } }
+            }
+        }
+        .scrollTargetLayout()
+        .coordinateSpace(.named(ChatPin.space))
+        .background { ChatPin.Finder(pin: pin) }
+    }
+
     private func chatScroll() -> some View {
         let store = store
-        let rows = store.rows
         let lines = currentLines()
         let queued = session?.queued ?? []
         let pending = (store.arriving + store.pending).filter { p in !queued.contains { PendingMessage.same($0, p.text) } }
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: Theme.Space.l) {
-                // Newest first (the list is drawn upside down): the end sentinel, live text, unsent messages, lines.
-                Color.clear
-                    .frame(height: Theme.Size.line)
-                    .id(Self.bottomID)
-                if let err = store.error {
-                    Label(err, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).flippedBack()
-                }
-                // Streamed text, the typing line and unsent messages sit at the newest end too: while you read
-                // history they wait with the rest, as they were drawn then (`Frozen`).
-                if style == .assistant { ChatLiveText(store: store, held: frozen?.text) }
-                // Sent, and the agent not on it yet: the line the new-conversation page showed under the first message
-                // (`FirstMessagePending`), where the turn's work line comes in. Without it the chat that took over showed
-                // the message a line lower, then pushed it up when the turn began (#1911).
-                if frozen == nil, startingTurn(pending) {
-                    TypingIndicator(text: "\(style == .assistant ? model.persona.name : (session?.agentLabel ?? "Claude")) 正在准备…")
-                        .flippedBack()
-                        .id("starting-turn")
-                }
-                // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
-                ForEach((frozen.map { f in pending.filter { f.pending.contains($0.id) } } ?? pending).reversed()) { msg in
-                    PendingBubble(msg: msg, retry: { model.retry(key, msg) }, discard: { model.discard(key, msg) })
-                        .flippedBack()
-                        .id(msg.id.uuidString)
-                }
-                // The first message of a conversation, not in the transcript yet: its day over it, as the new-conversation
-                // page drew it (`FirstMessagePending`) and the transcript's lines will (#1911).
-                if style == .assistant, lines.isEmpty, !pending.isEmpty { DayLine(date: .now).flippedBack() }
-                // Every message, timer line, tool count and answer is its own lazy row (a running turn can hold
-                // hundreds of steps; one stack of them froze the page).
-                // The oldest dozen lines start loading the page before them: by the time you reach the top it is
-                // usually there (pages with screenshots run to megabytes and take seconds).
-                let prefetch = Set(lines.prefix(12).map(\.id))
-                let openRecap = ChatLines.openRecap(lines, pending: viewing == nil ? pendingRecap : nil)
-                ForEach(lines.reversed()) { line in
-                    Group {
-                        if let openRecap, openRecap.line == line.id { recapInFlow(openRecap) } else { lineView(line) }
-                    }
-                        .background { if quoteFlash?.line == line.id { QuoteFlash().id(quoteFlash?.id) } }
-                        .flippedBack()
-                        .debugLineY(line.id, scratch)
-                        .landingFrame(line.id == landing, scratch)
-                        .id(line.id)
-                        .onAppear { if prefetch.contains(line.id) { prefetchOlder() } }
-                        .zIndex(menu.selected != nil && line.holds(menu.selected) ? 1 : 0)
-                }
-                if !store.loadedOnce && rows.isEmpty {
-                    ChatSkeleton().flippedBack()
-                } else if rows.isEmpty && store.pending.isEmpty { // a first message on its way is not 还没有消息
-                    EmptyStateView(symbol: Theme.Icon.conversation, title: "还没有消息", message: "发一句话开始吧。").flippedBack()
-                }
-                if store.hasMore {
-                    // Reaching the far (oldest) end loads the page before it — only once the user has dragged the list.
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Theme.Space.sm)
-                        .task(id: "\(rows.first?.id ?? "")|\(userScrolled)") { if userScrolled { await model.loadOlder(shownKey) } }
-                }
-            }
-            .scrollTargetLayout()
-            .coordinateSpace(.named(ChatPin.space))
-            .background { ChatPin.Finder(pin: pin) }
+        // Two statements: as one expression Swift 6.2 could not type-check it in time.
+        let list = ScrollView {
+            chatRows(store: store, lines: lines, pending: pending)
         }
         .id(listBuild) // built again after a fold that left it drawing nothing (`listBuild`)
         // Side margins as scroll content margins, not padding: jumping to a row aligns its leading edge with the
@@ -1845,6 +1854,7 @@ struct ChatView: View {
                 setFollow { $0.touched() } // nothing changes until the finger lets go
             }
         }
+        return list
         .environment(menu)
         .environment(\.chatPin, pin)
         .onAppear {
@@ -1892,7 +1902,7 @@ struct ChatView: View {
                                 text: style == .assistant && liveShown ? store.liveText : "", pending: store.pending.map(\.id))
             }
         }
-        .onChange(of: rows.last?.id) { _, _ in contentArrived(foldChrome: false) }
+        .onChange(of: store.rows.last?.id) { _, _ in contentArrived(foldChrome: false) }
         .onChange(of: lines.count, initial: true) { _, _ in landEntry(lines) }
         .onChange(of: store.backlogBuilt) { _, _ in landEntry(lines) }
         .onChange(of: liveTurnID) { _, _ in contentArrived(foldChrome: false) }
@@ -2041,8 +2051,20 @@ struct ChatView: View {
             .accessibilityLabel(model.connection.shown != .online ? "\(model.connection.shown.title)，显示标题和标签"
                                 : "\(compactPlace)，显示标题和标签")
             Spacer(minLength: 0)
-            // A loop or background work: a small mark. Files, the terminal and Git are in the ··· menu (a tap opens the header).
+            // A goal, a loop or background work: a small mark each. Files, the terminal and Git are in the ··· menu (a tap opens the header).
             HStack(spacing: 0) {
+                if let goal = session?.goal {
+                    Button { Haptics.tap(); showGoal = true } label: {
+                        Image(systemName: Theme.Icon.goal)
+                            .font(Theme.Font.labelHeavy)
+                            .foregroundStyle(goal.tint)
+                            .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellM)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("目标，\(goal.statusLabel)：\(goal.headline)，点按查看")
+                    .sheet(isPresented: $showGoal) { GoalSheet(goal: goal) }
+                }
                 if session?.loop != nil || !(session?.background ?? []).isEmpty {
                     Button { Haptics.tap(); showActivity = true } label: { activityMark }
                         .buttonStyle(.plain)
@@ -2268,6 +2290,12 @@ struct ChatView: View {
                     .padding(.horizontal, Theme.Space.l)
                     .padding(.bottom, Theme.Space.s)
                 }
+                // The goal it works toward (docs/agent-goal.md): a tap shows all of it.
+                if let goal = session?.goal {
+                    GoalBar(goal: goal)
+                        .padding(.horizontal, Theme.Space.l)
+                        .padding(.bottom, Theme.Space.s)
+                }
                 // The ports it listens on (its dev servers, docs/ports.md): a tap opens the page.
                 if let ports = session?.ports, !ports.isEmpty {
                     SessionPortChips(machine: key.machineRef, ports: ports)
@@ -2373,6 +2401,7 @@ struct ChatView: View {
                 }
             }
         }
+        if let goal = session?.goal { GoalBar(goal: goal) }
         if let ports = session?.ports, !ports.isEmpty { SessionPortChips(machine: key.machineRef, ports: ports) }
         let all = session?.subagents ?? []
         let agents = all.filter { $0.running || $0.id == viewing?.id }

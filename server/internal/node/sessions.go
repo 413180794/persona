@@ -127,6 +127,7 @@ type quickMeta struct {
 	activity time.Time // last real exchange; zero when unknown
 	queue    []string
 	loop     *proto.LoopInfo
+	goal     *proto.GoalInfo // from backgroundTasks too: a goal is often set at the start of a long transcript
 	bg       []proto.BackgroundTask // from backgroundTasks: the tail alone misses tasks started earlier in a long turn
 	bgWait   bool                   // bg and loop are not known yet (a big first read is running)
 	cwd      string
@@ -184,7 +185,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 	// A growing file's meta is re-read at most every metaMinInterval; the list's rev comes from stat, so it stays exact.
 	if ok && (m.size == st.Size() && m.mtime.Equal(st.ModTime()) || time.Since(m.readAt) < metaMinInterval) {
 		if m.bgWait { // the background read may be done now
-			m.bg, m.loop, m.bgWait = n.backgroundTasks(path)
+			m.bg, m.loop, m.goal, m.bgWait = n.backgroundTasks(path)
 			n.mu.Lock()
 			n.metas[path] = m
 			n.mu.Unlock()
@@ -198,7 +199,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 	}
 	m = readQuickMetaSince(path, st, m) // m: the last read's, zero when there is none
 	m.readAt = time.Now()
-	m.bg, m.loop, m.bgWait = n.backgroundTasks(path)
+	m.bg, m.loop, m.goal, m.bgWait = n.backgroundTasks(path)
 	n.mu.Lock()
 	n.metas[path] = m
 	n.mu.Unlock()
@@ -685,7 +686,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 						s.Background = append(s.Background, t)
 					}
 				}
-				s.Loop = m.loop
+				s.Loop, s.Goal = m.loop, m.goal
 				s.Subagents = n.subagents(id)
 			}
 		}
@@ -1734,6 +1735,9 @@ func listKey(list []proto.Session) string {
 		if s.Loop != nil {
 			fmt.Fprintf(&b, "loop%d", s.Loop.NextAt.Unix())
 		}
+		if g := s.Goal; g != nil {
+			fmt.Fprintf(&b, "goal:%s/%q/%q\n", g.Status, g.Objective, g.Reason)
+		}
 		for _, a := range s.Subagents {
 			fmt.Fprintf(&b, "%s:%v:%d,", a.ID, a.Running, a.UpdatedAt.Unix()/10)
 		}
@@ -2220,7 +2224,7 @@ var bgMarkers = [][]byte{[]byte("ScheduleWakeup"), []byte("Next wakeup scheduled
 	[]byte("run_in_background"), []byte("in background with ID"), []byte("moved to the background"), []byte("Async agent launched"),
 	[]byte("task-notification"), []byte(`"name":"Agent"`), []byte(`"name":"Task"`), []byte(`"TaskStop"`), []byte(`"KillShell"`)}
 
-func (n *Node) backgroundTasks(path string) (tasks []proto.BackgroundTask, loop *proto.LoopInfo, pending bool) {
+func (n *Node) backgroundTasks(path string) (tasks []proto.BackgroundTask, loop *proto.LoopInfo, goal *proto.GoalInfo, pending bool) {
 	n.mu.Lock()
 	sc := n.bgScans[path]
 	if sc == nil {
@@ -2232,23 +2236,23 @@ func (n *Node) backgroundTasks(path string) (tasks []proto.BackgroundTask, loop 
 	defer sc.mu.Unlock()
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, nil, false
+		return nil, nil, nil, false
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		return nil, nil, false
+		return nil, nil, nil, false
 	}
 	if st.Size() < sc.off { // rewritten
 		sc.off, sc.meta = 0, transcript.Meta{}
 	}
 	if sc.pending {
-		return nil, nil, true
+		return nil, nil, nil, true
 	}
 	if st.Size()-sc.off > bgSyncLimit {
 		sc.pending = true
 		go n.scanBackgroundLater(path, sc, st.Size())
-		return nil, nil, true
+		return nil, nil, nil, true
 	}
 	scanBackground(f, &sc.off, &sc.meta, st.Size())
 	for _, t := range sc.meta.Background {
@@ -2263,7 +2267,11 @@ func (n *Node) backgroundTasks(path string) (tasks []proto.BackgroundTask, loop 
 			loop = &c
 		}
 	}
-	return tasks, loop, false
+	if g := sc.meta.Goal; g != nil {
+		c := *g
+		goal = &c
+	}
+	return tasks, loop, goal, false
 }
 
 // scanBackground reads the marker lines between *off and size into m, streamed (the first look at a 300 MB
@@ -2282,7 +2290,7 @@ func scanBackground(f *os.File, off *int64, m *transcript.Meta, size int64) {
 			return
 		}
 		// api-request blobs repeat everything; skip them
-		if !long && len(line) <= 64<<10 && containsAny(line, bgMarkers) {
+		if !long && len(line) <= 64<<10 && (containsAny(line, bgMarkers) || containsAny(line, transcript.GoalMarkers)) {
 			transcript.ParseLine(0, bytes.TrimSuffix(line, []byte("\n")), m)
 		}
 		long = false

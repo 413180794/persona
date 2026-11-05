@@ -227,7 +227,7 @@ func (n *Node) mergeRuntimeTranscript(s *proto.Session) string {
 			s.Background = append(s.Background, b)
 		}
 	}
-	s.Loop = m.loop
+	s.Loop, s.Goal = m.loop, m.goal
 	s.Subagents = n.subagents(s.SessionID)
 	return t
 }

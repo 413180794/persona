@@ -1,0 +1,21 @@
+import { describe, expect, it } from "vitest";
+import { goalHeadline, goalStatusLabel, goalTone, goalUsage } from "./goal";
+
+describe("goal", () => {
+  it("reads the status in words and picks a tone", () => {
+    expect(goalStatusLabel({ objective: "x", status: "active" })).toBe("进行中");
+    expect(goalStatusLabel({ objective: "x", status: "budget_limited" })).toBe("预算用完");
+    expect(goalStatusLabel({ objective: "x", status: "something_new" })).toBe("something_new");
+    expect(goalTone({ objective: "x", status: "active" })).toBe("active");
+    expect(goalTone({ objective: "x", status: "complete" })).toBe("done");
+    expect(goalTone({ objective: "x", status: "paused" })).toBe("stopped");
+  });
+  it("takes the first non-empty line", () => {
+    expect(goalHeadline({ objective: "\n  ship it  \nthen tell me", status: "active" })).toBe("ship it");
+  });
+  it("says what it spent", () => {
+    expect(goalUsage({ objective: "x", status: "active" })).toBe("");
+    expect(goalUsage({ objective: "x", status: "active", tokens_used: 12345, token_budget: 500000, seconds: 30 })).toBe("1.2万 / 50万 tokens · 1 分钟");
+    expect(goalUsage({ objective: "x", status: "complete", seconds: 3600 + 120 })).toBe("1 小时 2 分");
+  });
+});

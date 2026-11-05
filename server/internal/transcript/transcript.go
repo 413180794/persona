@@ -43,8 +43,8 @@ type entry struct {
 		Trigger   string `json:"trigger"`
 		PreTokens int    `json:"preTokens"`
 	} `json:"compactMetadata"`
-	Content          json.RawMessage `json:"content"`
-	Message          *struct {
+	Content json.RawMessage `json:"content"`
+	Message *struct {
 		Role    string          `json:"role"`
 		Model   string          `json:"model"`
 		ID      string          `json:"id"`
@@ -64,10 +64,11 @@ type entry struct {
 	Effort         string `json:"effort"` // assistant lines: the effort level the reply was generated with
 	Operation      string `json:"operation"`
 	Attachment     *struct {
-		Type        string          `json:"type"`
-		Prompt      json.RawMessage `json:"prompt"`
-		CommandMode string          `json:"commandMode"`
-		Origin      *struct {
+		Type             string          `json:"type"`
+		Prompt           json.RawMessage `json:"prompt"`
+		CommandMode      string          `json:"commandMode"`
+		claudeGoalStatus                 // type goal_status (goal.go)
+		Origin           *struct {
 			Kind string `json:"kind"`
 			Name string `json:"name"` // kind "peer": the Claude session that sent it
 			Body string `json:"body"`
@@ -130,6 +131,8 @@ type Meta struct {
 	// Loop is the /loop this session runs, if any (see trackBackground).
 	Loop        *proto.LoopInfo
 	loopPending map[string]proto.LoopInfo
+	// Goal is the goal the agent works toward (Claude Code's /goal, a Codex thread goal), nil when none is set (goal.go).
+	Goal *proto.GoalInfo
 	// LastActivity is the time of the last real exchange (user input, assistant output, tool calls). Claude Code
 	// also appends recaps, titles and mode lines to idle sessions, so the file mtime is not "last used".
 	LastActivity time.Time
@@ -321,6 +324,9 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		// Input typed while Claude was working is queued, then absorbed into the running turn; it is stored as a
 		// queued_command attachment instead of a user message, so without this it never shows up in the chat.
 		a := e.Attachment
+		if a != nil && a.Type == "goal_status" && !e.IsSidechain {
+			return meta.claudeGoal(a.claudeGoalStatus, meta.Updated, func() proto.Item { return mk(0, "system", proto.KindNotice) })
+		}
 		if a == nil || a.Type != "queued_command" {
 			return nil
 		}
@@ -837,6 +843,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 		if it.Text == "" {
 			return nil
 		}
+		meta.claudeGoalOutput(it.Text, meta.Updated)
 		return []proto.Item{it}
 	}
 	if strings.HasPrefix(trimmed, "<task-notification>") {

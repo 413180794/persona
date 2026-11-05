@@ -179,6 +179,8 @@ export interface Session {
   queued?: string[];
   subagents?: Subagent[];
   loop?: LoopInfo;
+  /** The goal it works toward until it holds (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md). */
+  goal?: GoalInfo;
   background?: BackgroundTask[];
   rev?: number;
   suggestion?: string;
@@ -211,6 +213,19 @@ export interface CompactInfo {
   trigger?: string;
   pre_tokens?: number;
   notes?: string[];
+}
+
+/** A goal the agent keeps working toward until it holds (proto.GoalInfo, docs/agent-goal.md). */
+export interface GoalInfo {
+  objective: string;
+  /** active / paused / blocked / usage_limited / budget_limited / complete (Claude Code's are only active or complete). */
+  status: string;
+  /** Claude Code's latest check of the condition: why it holds, or what is still missing. */
+  reason?: string;
+  tokens_used?: number;
+  token_budget?: number;
+  seconds?: number;
+  updated_at?: string;
 }
 
 /** A /loop: Claude re-runs a prompt on its own, scheduling each wakeup ("wakeup") or by cron ("cron"). */

@@ -74,12 +74,12 @@ func TestBackgroundTasksBigFirstReadIsAsync(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := &Node{bgScans: map[string]*bgScan{}}
-	if _, _, pending := n.backgroundTasks(path); !pending {
+	if _, _, _, pending := n.backgroundTasks(path); !pending {
 		t.Fatal("a big first read should not run on the caller's path")
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if _, _, pending := n.backgroundTasks(path); !pending {
+		if _, _, _, pending := n.backgroundTasks(path); !pending {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -93,7 +93,7 @@ func TestBackgroundTasksBigFirstReadIsAsync(t *testing.T) {
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 	f.WriteString(`{"type":"user","message":{"role":"user","content":"hi"}}` + "\n")
 	f.Close()
-	if _, _, pending := n.backgroundTasks(path); pending {
+	if _, _, _, pending := n.backgroundTasks(path); pending {
 		t.Fatal("a small append should be read in line")
 	}
 }
@@ -123,5 +123,29 @@ func TestSubagentEdgesCached(t *testing.T) {
 	st = write("two, longer")
 	if _, last := subagentEdgesCached(path, st); last == first && first != "" {
 		t.Fatalf("a changed file should be read again, still %q", last)
+	}
+}
+
+// A goal set at the start of a long transcript is still known once the start is out of the quick tail
+// (docs/agent-goal.md), and its later check is read from the appended lines.
+func TestBackgroundTasksKeepsGoal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	set := `{"type":"attachment","uuid":"g1","timestamp":"2026-11-05T08:00:00Z","attachment":{"type":"goal_status","met":false,"sentinel":true,"condition":"ship it"}}` + "\n"
+	filler := bytes.Repeat([]byte(`{"type":"assistant","uuid":"x","message":{"role":"assistant","content":[{"type":"text","text":"working"}]}}`+"\n"), quickTail/64)
+	if err := os.WriteFile(path, append([]byte(set), filler...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	n := &Node{bgScans: map[string]*bgScan{}}
+	if _, _, g, _ := n.backgroundTasks(path); g == nil || g.Objective != "ship it" || g.Status != "active" {
+		t.Fatalf("goal after the first read: %+v", g)
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(`{"type":"attachment","uuid":"g2","timestamp":"2026-11-05T09:00:00Z","attachment":{"type":"goal_status","met":true,"condition":"ship it","reason":"shipped"}}` + "\n")
+	f.Close()
+	if _, _, g, _ := n.backgroundTasks(path); g == nil || g.Status != "complete" || g.Reason != "shipped" {
+		t.Fatalf("goal after the appended check: %+v", g)
 	}
 }

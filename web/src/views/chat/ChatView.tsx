@@ -33,7 +33,7 @@ import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
 import { ContextMeter } from "./ContextMeter";
 import { NARROW, SHORT, useFinePointer, useMedia } from "../../lib/viewport";
 import { UserBubble } from "./SegmentView";
-import { ActivityChips } from "./Activity";
+import { ActivityChips, GoalChip } from "./Activity";
 import { paneRoute, tabSessions } from "../../lib/herdr-tree";
 import { useSessionLive } from "../../lib/live";
 import { PaneTabs } from "./PaneTabs";
@@ -979,6 +979,7 @@ export function Header({
       </div>
       {topCenter && <div className="flex min-w-0 flex-1 justify-center lg:hidden">{topCenter}</div>}
       <div className={headerSlot(Boolean(topCenter), "end")}>
+      {session?.goal && !assistant && <GoalChip goal={session.goal} />}
       {session && !assistant && <ActivityChips session={session} onStopLoop={onStopLoop} />}
       {others.length > 0 && (
         <button

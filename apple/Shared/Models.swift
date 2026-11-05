@@ -555,6 +555,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var background: [BackgroundTask]?
     /// The /loop driving this agent (it wakes itself up on a schedule).
     var loop: LoopInfo?
+    /// The goal it works toward until it holds (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md).
+    var goal: GoalInfo?
     /// Agents it launched (the Agent tool); each reads like a session ("<id>@<agent id>").
     var subagents: [Subagent]?
     /// The ports its processes listen on that answer HTTP (docs/ports.md): its dev servers, opened through the hub.
@@ -676,7 +678,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
-             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents, ports,
+             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
              attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, compaction
@@ -725,6 +727,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         queued = try c.decodeIfPresent([String].self, forKey: .queued)
         background = try c.decodeIfPresent([BackgroundTask].self, forKey: .background)
         loop = try c.decodeIfPresent(LoopInfo.self, forKey: .loop)
+        goal = try c.decodeIfPresent(GoalInfo.self, forKey: .goal)
         subagents = try c.decodeIfPresent([Subagent].self, forKey: .subagents)
         ports = try c.decodeIfPresent([ListeningPort].self, forKey: .ports)
         state = try c.decodeIfPresent(AgentState.self, forKey: .state) ?? AgentState(status: status)
@@ -820,6 +823,47 @@ nonisolated extension Subagent {
         // Launchers naming each other (only a runtime could write that) are reached from nowhere: list them at the top.
         for a in ordered { place(a, depth: 0) }
         return out
+    }
+}
+
+/// A goal the agent keeps working toward until it holds (docs/agent-goal.md): Claude Code's /goal, whose hook checks the
+/// condition each time it would stop, or a Codex thread goal.
+nonisolated struct GoalInfo: Codable, Hashable, Sendable {
+    var objective: String
+    /// active / paused / blocked / usage_limited / budget_limited / complete (Claude Code's are only active or complete).
+    var status: String
+    /// Claude Code's latest check of the condition: why it holds, or what is still missing.
+    var reason: String?
+    var tokensUsed: Int?
+    var tokenBudget: Int?
+    var seconds: Int?
+    var updatedAt: Date?
+
+    var isComplete: Bool { status == "complete" }
+    /// Still being worked on (anything else has stopped: done, paused, out of budget…).
+    var isActive: Bool { status == "active" }
+
+    /// The status in words, as the goal bar and its sheet say it.
+    var statusLabel: String {
+        switch status {
+        case "active": "进行中"
+        case "complete": "已达成"
+        case "paused": "已暂停"
+        case "blocked": "受阻"
+        case "usage_limited": "用量到上限"
+        case "budget_limited": "预算用完"
+        default: status
+        }
+    }
+
+    /// The objective's first line, for the one-line bar.
+    var headline: String {
+        objective.split(whereSeparator: \.isNewline).first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? objective
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case objective, status, reason, seconds
+        case tokensUsed = "tokens_used", tokenBudget = "token_budget", updatedAt = "updated_at"
     }
 }
 

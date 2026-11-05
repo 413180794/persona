@@ -38,6 +38,8 @@ extension Theme {
         /// Recent, or waiting to come back (reconnecting, last used).
         static let recent = "clock.arrow.circlepath"
         static let inProgress = "arrow.triangle.2.circlepath"
+        /// A goal the agent works toward until it holds (Claude Code's /goal, a Codex thread goal).
+        static let goal = "target"
         static let recurring = "repeat"
         static let schedule = "alarm"
         /// Persona woke a waiting agent up (a message it typed in for the model, `Injected`).
@@ -352,17 +354,7 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video's thumbnail: it plays elsewhere (the chat app).
-        static let playMedia = "play.circle.fill"
-        /// Send someone a message.
-        static let message = "bubble.left.fill"
-        static let credentials = "key"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
-        /// Feishu [removed] words: encoded for the eye, not encrypted.
-        static let braveClimb = "shield"
-        static let memory = "brain"
-        /// Search (a list's, the sidebar's).
+        /// A video''s, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

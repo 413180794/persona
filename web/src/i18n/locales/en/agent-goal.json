@@ -1,0 +1,18 @@
+{
+  "title": "Goal",
+  "status_active": "In progress",
+  "status_complete": "Achieved",
+  "status_paused": "Paused",
+  "status_blocked": "Blocked",
+  "status_usage_limited": "Usage limit reached",
+  "status_budget_limited": "Budget used up",
+  "tokens": "{used} tokens",
+  "tokens_budget": "{used} / {budget} tokens",
+  "minutes": "{minutes} min",
+  "hours": "{hours} h {minutes} min",
+  "chip_label": "Goal, {status}: {headline}. Click to view",
+  "chip_title": "Goal ({status}): {headline}",
+  "reason_met": "Why it counts as achieved",
+  "reason_check": "Latest check",
+  "hint": "To set or clear a goal, send /goal <condition> or /goal clear in the composer (Claude Code)."
+}

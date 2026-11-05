@@ -11344,6 +11344,28 @@ if os.environ.get("MOCK_CHAT_CARDS") == "1":
 MOCK_HELP.append("MOCK_TAB_PANES=1  一个 herdr 标签页里三个 Agent（#2320）：发起者（pane_index 0，工作中）和它分出的两个窗格（Codex 停在电脑上的对话框、Claude 做完未看），旁边是一个 Agent 的普通标签页和左上是 shell 的两个平级 Agent；没有卡片")
 MOCK_HELP.append("MOCK_CHAT_CARDS=1  （配合 MOCK_SPLIT_TABS=1）server 上 w1:t1 那个工作中的 Claude 同时有计划、提问、授权三张卡，两条排队消息，/loop 和一个后台任务：手机上输入区最挤的样子（#1996）")
 
+# ---------- MOCK_GOAL: an agent working toward a goal (docs/agent-goal.md, #2420) ----------
+# MOCK_GOAL=1: macbook's widget agent has an active /goal with its latest check, the PR review a goal met;
+# MOCK_GOAL=stopped: the widget agent's goal ran out of its token budget instead (a Codex status).
+def goal_mock(mode):
+    widget = next((x for x in SESSIONS if x["session_id"] == WIDGET), None)
+    review = next((x for x in SESSIONS if x["session_id"] == REVIEW), None)
+    if widget:
+        widget["goal"] = {"objective": "小组件按小时刷新、降雨概率格式统一，快照测试全部通过后提 PR\n提 PR 前先在模拟器上截图确认深浅色",
+                          "status": "budget_limited" if mode == "stopped" else "active",
+                          "reason": "" if mode == "stopped" else "快照测试还有两张没过（降雨概率的百分号位置），PR 也还没提。",
+                          "tokens_used": 486000 if mode == "stopped" else 182400, "token_budget": 500000 if mode == "stopped" else 0,
+                          "seconds": 2460, "updated_at": ago(minutes=2)}
+    if review:
+        review["goal"] = {"objective": "看完 PR #42 的改动并给出修改建议", "status": "complete",
+                          "reason": "已经逐个文件看完 PR #42，留了两条命名建议，没有发现逻辑问题。",
+                          "tokens_used": 64200, "seconds": 900, "updated_at": ago(minutes=80)}
+
+
+if os.environ.get("MOCK_GOAL"):
+    goal_mock(os.environ["MOCK_GOAL"])
+MOCK_HELP.append("MOCK_GOAL=1|stopped  macbook 上「给天气 App 加主屏幕小组件」有一个进行中的 goal（带最近一次检查的理由），「检查 PR #42 的改动」的 goal 已达成；stopped 时小组件那个 goal 用完了 token 预算（#2420）")
+
 # ---------- MOCK_PLUGINS: a hub from #1844 on (docs/extensions.md「命名和兼容」) ----------
 # It says `extensions` and the extension_* features beside the old ones and answers /api/v1/extensions/… with the new keys
 # (extensions, extension, extension_name; a market's count extensions), by way of the old routes above.

@@ -320,6 +320,8 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
                 "parent_id":"c27d03b1…","fork":true,   // 谁起的它：起它的子 Agent 的 id（主会话起的没有）；fork = 分叉出来的。父的不在列表里时当顶层
                 "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…"}],   // 子 Agent 当会话读
  "loop":{"kind":"wakeup|cron","prompt":"/loop …","reason":"…","interval_seconds":1800,"next_at":"...","cron":"*/5 * * * *","ticks":12},
+ "goal":{"objective":"…","status":"active|paused|blocked|usage_limited|budget_limited|complete","reason":"…",   // 它在做的 goal（docs/agent-goal.md）
+        "tokens_used":12345,"token_budget":500000,"seconds":600,"updated_at":"..."},                              // 没有 goal 时不带
  // Agent 的进程在监听、回 HTTP 的 TCP 端口（docs/ports.md）：一个端口一条；title 是它首页的 <title>（没有就缺省）。旧 node 没有这个字段
  "ports":[{"port":5173,"addr":"127.0.0.1","pid":4242,"process":"node","title":"Vite + React"}],
  // 关联的未完成待办（docs/todos.md）：只在当前有关联（未 released）且待办未完成时出现，由 hub 补齐

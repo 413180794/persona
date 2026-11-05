@@ -1,0 +1,18 @@
+{
+  "title": "目標",
+  "status_active": "進行中",
+  "status_complete": "達成",
+  "status_paused": "一時停止",
+  "status_blocked": "ブロック中",
+  "status_usage_limited": "使用量の上限",
+  "status_budget_limited": "予算切れ",
+  "tokens": "{used} tokens",
+  "tokens_budget": "{used} / {budget} tokens",
+  "minutes": "{minutes} 分",
+  "hours": "{hours} 時間 {minutes} 分",
+  "chip_label": "目標、{status}：{headline}。クリックで表示",
+  "chip_title": "目標（{status}）：{headline}",
+  "reason_met": "達成と判断した理由",
+  "reason_check": "最新のチェック",
+  "hint": "目標の設定・解除：入力欄で /goal <条件> または /goal clear を送信します（Claude Code）。"
+}

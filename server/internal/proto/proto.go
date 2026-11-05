@@ -276,20 +276,20 @@ var Features = []string{
 	// The same under the new names (docs/extensions.md「命名和兼容」, #1844): /api/v1/extensions/… answering with the
 	// keys extensions / extension / extension_name, extension_ui and extension_upgrade events. The plugin ones above
 	// stay for the apps out there (until at least 2027-05-05).
-	"extensions",             // GET /api/v1/extensions and the relay under /api/v1/extensions/{id}/
-	"extension_manager",      // an extension's detail, form, settings, secrets and switch under /api/v1/extensions/{id}/-/
-	"extension_ui_slots",     // UI slots under /api/v1/extensions/-/ui, extension_ui events
-	"extension_auto_upgrade", // /api/v1/extensions/-/upgrades, …/{id}/-/auto-upgrade, extension_upgrade events
-	"extension_market_spec",  // PUT /api/v1/extensions/-/markets/{id} {spec}: a market moves, keeping its id
-	"extension_ui_v3",        // UI version 3 (markdown, table, empty, loading, search, filter, more, push / pop) and extension_ui {invalidate} (docs/extensions.md「UI 版本 3」)
+	"extensions",               // GET /api/v1/extensions and the relay under /api/v1/extensions/{id}/
+	"extension_manager",        // an extension's detail, form, settings, secrets and switch under /api/v1/extensions/{id}/-/
+	"extension_ui_slots",       // UI slots under /api/v1/extensions/-/ui, extension_ui events
+	"extension_auto_upgrade",   // /api/v1/extensions/-/upgrades, …/{id}/-/auto-upgrade, extension_upgrade events
+	"extension_market_spec",    // PUT /api/v1/extensions/-/markets/{id} {spec}: a market moves, keeping its id
+	"extension_ui_v3",          // UI version 3 (markdown, table, empty, loading, search, filter, more, push / pop) and extension_ui {invalidate} (docs/extensions.md「UI 版本 3」)
 	"extension_widgets",        // widgets outside the app: GET /api/v1/extensions/-/widgets, POST …/{id}/-/widget/{ui}, PUT /api/v1/devices/{id}/widgets, extension_widget pushes (docs/extensions.md「系统级位置」)
 	"extension_shortcuts",      // extensions' actions in Shortcuts and Siri: GET /api/v1/extensions/-/shortcuts, POST …/{id}/-/shortcut/{sid} (docs/extensions.md「系统级位置」)
 	"extension_notify_actions", // notification buttons: POST /api/v1/notify actions / ui / state, aps.category and extension_notification (docs/extensions.md「系统级位置」)
 	"desktops",                 // register_desktop, the desktops event, NotifyPrefs.mute_while_desktop (手机静音)
-	"sessions_delta",         // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol.md「会话增量」)
-	"connectors",             // GET /api/v1/connectors (docs/plan-connectors.md)
-	"channels",               // GET /api/v1/channels and each channel's settings, binding, test (docs/channels.md)
-	"runtime_cli",            // phone_runtime_cli kept out of the phone's tools, POST /api/v1/phone/runtime-cli (docs/runtime-cli.md)
+	"sessions_delta",           // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol.md「会话增量」)
+	"connectors",               // GET /api/v1/connectors (docs/plan-connectors.md)
+	"channels",                 // GET /api/v1/channels and each channel's settings, binding, test (docs/channels.md)
+	"runtime_cli",              // phone_runtime_cli kept out of the phone's tools, POST /api/v1/phone/runtime-cli (docs/runtime-cli.md)
 }
 
 // Files sent from the phone (POST /api/v1/machines/{mid}/files): the hub streams the body to the node in chunks.
@@ -654,6 +654,8 @@ type Session struct {
 	Subagents []Subagent `json:"subagents,omitempty"`
 	// Loop is the /loop driving this agent, when there is one (it wakes itself up on a schedule).
 	Loop *LoopInfo `json:"loop,omitempty"`
+	// Goal is the goal the agent works toward, when one is set (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md).
+	Goal *GoalInfo `json:"goal,omitempty"`
 	// Ports are the TCP ports the agent's processes listen on that answer HTTP (docs/ports.md): the dev servers
 	// it started, which the apps open through the hub.
 	Ports     []Port    `json:"ports,omitempty"`
@@ -935,7 +937,7 @@ type Item struct {
 	// scheduled run, a wake-up…), not something the user wrote. Set by the hub from the line's text
 	// (prompts.ParseInjected) on its way to the apps; docs/protocol.md「Persona 注入的消息」.
 	Injected *Injected `json:"injected,omitempty"`
-	Fold *Fold  `json:"fold,omitempty"`
+	Fold     *Fold     `json:"fold,omitempty"`
 	// Task: this notice is a background task reporting back (a command, a Monitor, a subagent).
 	Task         *TaskNote     `json:"task,omitempty"`
 	TurnDuration *TurnDuration `json:"turn_duration,omitempty"`
@@ -1163,6 +1165,30 @@ type BackgroundTask struct {
 	OutputFile  string    `json:"output_file,omitempty"`
 	StartedAt   time.Time `json:"started_at"`
 }
+
+// GoalInfo is a goal the agent keeps working toward until it holds (docs/agent-goal.md): Claude Code's /goal, whose
+// Stop hook checks the condition each time the agent would stop, or a Codex thread goal.
+type GoalInfo struct {
+	Objective string `json:"objective"`
+	// Status is one of the Goal* values: Claude Code's goals are active until met (complete); Codex has the others too.
+	Status string `json:"status"`
+	// Reason is Claude Code's latest check of the condition: why it holds, or what is still missing.
+	Reason      string    `json:"reason,omitempty"`
+	TokensUsed  int       `json:"tokens_used,omitempty"`
+	TokenBudget int       `json:"token_budget,omitempty"` // Codex: the budget the goal may spend, 0 when there is none
+	Seconds     int       `json:"seconds,omitempty"`      // time spent on it so far
+	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+}
+
+// A goal's statuses (Codex's thread_goals.status; Claude Code's goals are only active or complete).
+const (
+	GoalActive        = "active"
+	GoalPaused        = "paused"
+	GoalBlocked       = "blocked"
+	GoalUsageLimited  = "usage_limited"
+	GoalBudgetLimited = "budget_limited"
+	GoalComplete      = "complete"
+)
 
 // LoopInfo describes a /loop: Claude re-runs Prompt on its own, either by scheduling its next wakeup each tick
 // (ScheduleWakeup, kind "wakeup") or with a cron job (CronCreate, kind "cron").
