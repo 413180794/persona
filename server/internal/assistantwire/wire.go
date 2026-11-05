@@ -763,6 +763,13 @@ const (
 	FeishuText = "feishu.text"
 	// FeishuUpdateCard: {message_id, card} → {}.
 	FeishuUpdateCard = "feishu.update_card"
+	// FeishuCotCreate: {reply_to?} → {cot_id, message_id}: an agent message (the open platform's message_cot, a
+	// collapsible process) under the message replied to, else into the owner's chat.
+	FeishuCotCreate = "feishu.cot_create"
+	// FeishuCotAppend: {cot_id, message_id, events: [feishubot.CotEvent]} → {}.
+	FeishuCotAppend = "feishu.cot_append"
+	// FeishuCotComplete: {cot_id, message_id, reason: done | error} → {}: one that will not get its RUN_FINISHED.
+	FeishuCotComplete = "feishu.cot_complete"
 	// FeishuReact: {message_id, emoji} → {reaction_id}; FeishuUnreact: {message_id, reaction_id} → {}.
 	FeishuReact   = "feishu.react"
 	FeishuUnreact = "feishu.unreact"

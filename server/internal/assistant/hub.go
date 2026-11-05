@@ -101,6 +101,9 @@ const (
 	FeishuPost            = assistantwire.FeishuPost
 	FeishuText            = assistantwire.FeishuText
 	FeishuUpdateCard      = assistantwire.FeishuUpdateCard
+	FeishuCotCreate       = assistantwire.FeishuCotCreate
+	FeishuCotAppend       = assistantwire.FeishuCotAppend
+	FeishuCotComplete     = assistantwire.FeishuCotComplete
 	FeishuReact           = assistantwire.FeishuReact
 	FeishuUnreact         = assistantwire.FeishuUnreact
 	FeishuMessages        = assistantwire.FeishuMessages

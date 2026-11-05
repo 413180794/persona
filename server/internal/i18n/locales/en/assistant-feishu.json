@@ -29,5 +29,9 @@
   "step_search_web": "Web search",
   "step_subtask": "Subtask",
   "step_todos": "Update to-dos",
-  "step_skill": "Skill"
+  "step_skill": "Skill",
+  "cot_tool_done": "✓ Done",
+  "cot_done": "Done",
+  "cot_tools_one": "Called a tool {count} time",
+  "cot_tools_other": "Called tools {count} times"
 }

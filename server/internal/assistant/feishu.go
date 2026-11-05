@@ -857,8 +857,11 @@ type feishuSink struct{ s *Service }
 
 func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Duration, steps []string, live string) {
 	s := f.s
+	if f.cotProgressNow(ctx, r) {
+		return
+	}
 	c := progressCard(s.botLang(ctx), r.Label, took, steps, live)
-	if card := r.Ext["card"]; card != "" {
+	if card := s.runExt(r, "card"); card != "" {
 		if err := s.botUpdateCard(ctx, card, c); err != nil {
 			s.logf("bots: progress update: %v", err)
 		}
@@ -877,6 +880,9 @@ func (f feishuSink) folded(ctx context.Context, o *channel.Run) {
 	if o.Ext["card"] != "" {
 		_ = f.s.botUpdateCard(ctx, o.Ext["card"], feishubot.NewCard("", "", "").Note(i18n.T(f.s.botLang(ctx), "assistant-feishu.folded")))
 	}
+	if cot := o.Ext["cot"]; cot != "" {
+		_ = f.s.cotCall(ctx, FeishuCotComplete, map[string]any{"cot_id": cot, "message_id": o.Ext["cot_msg"], "reason": "done"})
+	}
 }
 
 // answer writes the answer into the progress card (more cards when long), and marks the messages DONE. When nothing
@@ -893,9 +899,14 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 	if !quiet {
 		pieces = feishubot.Split(feishubot.CardMarkdown(answer), botAnswerPiece)
 	}
+	// The process is in the agent message above the answer, or else folded into the answer's first card.
+	inCot := f.cotFinishNow(ctx, r)
 	card := r.Ext["card"]
 	for i, piece := range pieces {
 		c := feishubot.NewCard("", "", answer)
+		if i == 0 && !inCot {
+			processPanel(f.s.botLang(ctx), c, f.s.runSteps(r.ID))
+		}
 		c.Markdown(piece)
 		if i == len(pieces)-1 {
 			c.Note(foot)
@@ -969,8 +980,17 @@ func progressCard(l i18n.Lang, label string, took time.Duration, steps []string,
 
 // botStep is one line of the progress card for a tool call, in l.
 func botStep(l i18n.Lang, it proto.Item) string {
+	name, detail := botStepParts(l, it)
+	if detail != "" {
+		return name + " " + feishubot.Code(detail)
+	}
+	return name
+}
+
+// botStepParts is what a tool call did, in l: the verb ("" when it is no tool call) and what it did it to.
+func botStepParts(l i18n.Lang, it proto.Item) (string, string) {
 	if it.Kind != proto.KindToolUse {
-		return ""
+		return "", ""
 	}
 	var in map[string]any
 	_ = json.Unmarshal(it.ToolInput, &in)
@@ -1009,8 +1029,5 @@ func botStep(l i18n.Lang, it proto.Item) string {
 			}
 		}
 	}
-	if detail = clip(oneLine(detail), 60); detail != "" {
-		return name + " " + feishubot.Code(detail)
-	}
-	return name
+	return name, clip(oneLine(detail), 60)
 }

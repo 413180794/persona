@@ -78,6 +78,17 @@ func (c *Card) Note(s string) *Card {
 	return c
 }
 
+// Collapsible adds a folded panel: title on its header, md inside.
+func (c *Card) Collapsible(title, md string) *Card {
+	if strings.TrimSpace(md) == "" {
+		return c
+	}
+	c.Body.Elements = append(c.Body.Elements, map[string]any{"tag": "collapsible_panel", "expanded": false,
+		"header":   map[string]any{"title": map[string]any{"tag": "markdown", "content": title}},
+		"elements": []any{map[string]any{"tag": "markdown", "content": md}}})
+	return c
+}
+
 func (c *Card) HR() *Card {
 	c.Body.Elements = append(c.Body.Elements, map[string]any{"tag": "hr"})
 	return c

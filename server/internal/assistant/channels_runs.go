@@ -53,6 +53,10 @@ type chanLive struct {
 	// would send the same answer twice.
 	checking chanMutex
 	failing  time.Time // its answer first failed to go out (answerAgain)
+	// items are the turn's thinking, words and tool calls (for the Feishu bot's agent message); cot what of them it
+	// has shown, under mu.
+	items []proto.Item
+	cot   cotProgress
 }
 
 // chanMutex is a mutex the watch loop can try without blocking.
@@ -343,8 +347,14 @@ func (s *Service) channelProgressTick(id string) {
 	}
 	defer prog.mu.Unlock()
 	c.mu.Lock()
-	card, started := r.Ext["card"], r.Started
+	card, started := r.Ext["card"]+r.Ext["cot"], r.Started
 	c.mu.Unlock()
+	after := channel.ProgressAfter
+	if pa, ok := sink.(interface {
+		progressAfter(*channel.Run) time.Duration
+	}); ok {
+		after = pa.progressAfter(r)
+	}
 	if card == "" {
 		sess, _, err := s.sessionNow(ctx, r.MachineID, r.SessionID)
 		if err != nil || !working(sess) {
@@ -354,7 +364,7 @@ func (s *Service) channelProgressTick(id string) {
 	c.mu.Lock()
 	now := c.clock()
 	steps, live, dirty := append([]string{}, prog.steps...), prog.live, prog.dirty
-	due := !prog.finished && (card == "" && now.Sub(started) >= channel.ProgressAfter ||
+	due := !prog.finished && (card == "" && now.Sub(started) >= after ||
 		card != "" && (dirty && now.Sub(prog.updated) >= channel.ProgressEvery || now.Sub(prog.updated) >= channel.ProgressIdle))
 	if due {
 		prog.dirty, prog.updated = false, now
@@ -402,6 +412,10 @@ func (s *Service) SessionItems(ctx context.Context, p SessionItems) {
 			}
 			if st := botStep(l, it); st != "" {
 				lp.steps = append(lp.steps, st)
+				lp.dirty = true
+			}
+			if cotItem(it) && len(lp.items) < cotItemsMost {
+				lp.items = append(lp.items, it)
 				lp.dirty = true
 			}
 			if it.Kind == proto.KindText && it.Role == "assistant" {
@@ -715,7 +729,11 @@ func (s *Service) finishChannelRun(r *channel.Run, res *channel.Result) {
 	if res.Held {
 		r.Hold(res.Last, now.UTC())
 		delete(r.Ext, "card") // the next turn gets its own progress message
+		for _, k := range []string{"cot", "cot_msg", "cot_para", "cot_done", "cot_off"} {
+			delete(r.Ext, k) // the next turn gets its own agent message (and asks for one again)
+		}
 		prog.steps, prog.live, prog.dirty = nil, "", false
+		prog.items, prog.cot = nil, cotProgress{}
 	} else {
 		prog.finished = true
 		delete(c.live, r.ID)

@@ -352,20 +352,23 @@ func (h *Hub) resolveFromChannel(ctx context.Context, params json.RawMessage) (a
 
 func (h *Hub) feishuCall(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	var a struct {
-		ReplyTo    string          `json:"reply_to"`
-		Card       string          `json:"card"`
-		Fallback   string          `json:"fallback"`
-		Text       string          `json:"text"`
-		MessageID  string          `json:"message_id"`
-		Emoji      string          `json:"emoji"`
-		ReactionID string          `json:"reaction_id"`
-		Key        string          `json:"key"`
-		Kind       string          `json:"kind"`
-		Name       string          `json:"name"`
-		MachineID  string          `json:"machine_id"`
-		OpenID     string          `json:"open_id"`
-		Enabled    *bool           `json:"enabled"`
-		Features   map[string]bool `json:"features"`
+		ReplyTo    string               `json:"reply_to"`
+		Card       string               `json:"card"`
+		Fallback   string               `json:"fallback"`
+		Text       string               `json:"text"`
+		MessageID  string               `json:"message_id"`
+		Emoji      string               `json:"emoji"`
+		ReactionID string               `json:"reaction_id"`
+		Key        string               `json:"key"`
+		Kind       string               `json:"kind"`
+		Name       string               `json:"name"`
+		MachineID  string               `json:"machine_id"`
+		OpenID     string               `json:"open_id"`
+		Enabled    *bool                `json:"enabled"`
+		Features   map[string]bool      `json:"features"`
+		CotID      string               `json:"cot_id"`
+		Events     []feishubot.CotEvent `json:"events"`
+		Reason     string               `json:"reason"`
 	}
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &a); err != nil {
@@ -410,6 +413,13 @@ func (h *Hub) feishuCall(ctx context.Context, method string, params json.RawMess
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuUpdateCard:
 		return map[string]any{}, api.UpdateCard(ctx, a.MessageID, a.Card)
+	case assistantwire.FeishuCotCreate:
+		cot, id, err := api.CotCreate(ctx, set.Owner.ChatID, a.ReplyTo)
+		return map[string]any{"cot_id": cot, "message_id": id}, err
+	case assistantwire.FeishuCotAppend:
+		return map[string]any{}, api.CotAppend(ctx, a.CotID, a.MessageID, a.Events)
+	case assistantwire.FeishuCotComplete:
+		return map[string]any{}, api.CotComplete(ctx, a.CotID, a.MessageID, a.Reason)
 	case assistantwire.FeishuReact:
 		id, err := api.React(ctx, a.MessageID, a.Emoji)
 		return map[string]any{"reaction_id": id}, err
