@@ -122,4 +122,20 @@
     <string name="inbox_lark_part_separator">、</string>
     <string name="inbox_lark_emoji_ok">OK</string>
     <string name="inbox_lark_emoji_jiayi">+1</string>
+    <string name="inbox_lark_doc_outline">目次</string>
+    <string name="inbox_lark_doc_summary">AI 要約</string>
+    <string name="inbox_lark_doc_updated">%1$s に更新</string>
+    <string name="inbox_lark_doc_edited_by">%1$s が %2$s に更新</string>
+    <plurals name="inbox_lark_doc_views">
+        <item quantity="other">%d 回閲覧</item>
+    </plurals>
+    <plurals name="inbox_lark_doc_visitors">
+        <item quantity="other">%d 人が閲覧</item>
+    </plurals>
+    <plurals name="inbox_lark_doc_likes">
+        <item quantity="other">%d 件のいいね</item>
+    </plurals>
+    <plurals name="inbox_lark_doc_comments">
+        <item quantity="other">%d 件のコメント</item>
+    </plurals>
 </resources>

@@ -156,6 +156,21 @@ data class ChatLinkContext(
         (if (msg.isEmpty()) "" else " msg=\"${escape(msg)}\"") + ">\n" + text.replace("</jarvis-context>", "") + "\n</jarvis-context>"
 
     companion object {
+        /**
+         * The text of a whole page picked as context: the agent reads the page itself. The same marker as iOS
+         * (`LinkSheet.pick`) and web (`links.ts` WHOLE); iOS's quote row keys on it to show 「引用 <title>」.
+         */
+        const val WHOLE = "（整篇）"
+
+        /**
+         * What the link card's 作为上下文 sends for the whole of a native Feishu view: a document by [WHOLE], a 公司圈 post
+         * by its text once [read] (null until then: no button); null for any other page.
+         */
+        internal fun whole(native: persona.feature.inbox.LarkNativeLink?, read: String?): String? = when (native) {
+            is persona.feature.inbox.LarkNativeLink.Document -> WHOLE
+            is persona.feature.inbox.LarkNativeLink.MomentsPost -> read?.ifBlank { WHOLE }
+            null -> null
+        }
         /** 引用 on a message of this chat (iOS `ContextRef.quote`): [title] is who wrote it, 「我」 for the user's own. */
         const val QUOTE = "quote"
         /** The author of the user's own quoted message on the wire, whatever the app's language (iOS writes and reads 「我」). */

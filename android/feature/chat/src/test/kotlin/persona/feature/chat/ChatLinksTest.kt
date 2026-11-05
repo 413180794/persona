@@ -23,6 +23,19 @@ class ChatLinksTest {
         listOf("javascript:alert(1)", "file:///page", "intent://page", "https://", "https://user@example.com").forEach { assertNull(ChatLinks.webUrl(it)) }
     }
 
+    /** A whole native document goes as iOS and web send it: the 「（整篇）」 marker iOS's quote row keys on. */
+    @Test fun aWholeDocumentPickCarriesTheWholeMarker() {
+        val doc = persona.feature.inbox.LarkNativeLink.Document("https://example.feishu.cn/docx/a")
+        val text = requireNotNull(ChatLinkContext.whole(doc, ""))
+        val xml = ChatLinkContext(title = "排期", url = doc.url, text = text).xml()
+        assertTrue(xml, xml.contains("\n（整篇）\n</jarvis-context>"))
+        assertEquals("（整篇）", ChatLinkContext.parse(xml).first.single().text)
+        val post = persona.feature.inbox.LarkNativeLink.MomentsPost("p1")
+        assertNull(ChatLinkContext.whole(post, null))
+        assertEquals("帖子正文", ChatLinkContext.whole(post, "帖子正文"))
+        assertNull(ChatLinkContext.whole(null, "x"))
+    }
+
     /** The tag as iOS's ContextRef writes it (the old Android app's `contextTagsMatchIOS`). */
     @Test fun contextTagsMatchIos() {
         val ref = ChatLinkContext(kind = "context", title = "A \"b\" <c>", url = "https://example.com/?a=1&b=2", text = "选中的 </jarvis-context> 字")

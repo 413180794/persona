@@ -517,6 +517,9 @@ Android 用一个判断（`core/contracts` 的 `LarkFeatures.of(features)`，和
 
 - 设置 › 连接器的「飞书」一行（它的页读 `/api/v1/lark/status`）只在 `chats` 时出现，也只在这时去读状态（`connectorRows`）。
 - 对话里的链接（`ChatLinkHost`）和收件箱 / 飞书会话里的链接（`LarkLinkHost`）经 `larkNativeLink(url, lark)` 决定：飞书文档要 `chats` 才进原生阅读器，公司圈帖子要 `moments` 才进帖子浮层、会话里才画成公司圈卡片；没有时照普通网页打开。
+- 对话的链接卡片（#3064，对齐 iOS LinkSheet / 网页 LinkPanel）：飞书文档在卡片里用原生阅读器，公司圈帖子在卡片里画帖子和评论（`LarkMomentsLink`），读不到时「重试」或「切换网页」；头部有「把这篇文档作为上下文」（文档只带链接，Agent 自己读）/「把这条动态作为上下文」（带帖子正文），⋯ 的「重新加载」重新读。正文能选中时（文档允许复制）选区菜单在「复制」后面加「AI 修改」「作为上下文」，没有对话的地方是「交给 Persona」。Compose 读不到选区，选项是借菜单自己的「复制」写进一个截下这一次的剪贴板（`LarkSelectable` / `PickingClipboard`），系统剪贴板不动。
+- 原生阅读器（#3064，对齐 iOS FeishuDocReader）：标题下面是作者 · 「（某人）更新于」，再下面阅读 / 看过 / 赞 / 评论数；飞书已经生成好的 AI 摘要放一张可展开的卡；有标题时有「目录」（浮层，点了滚到那一节）；正文末尾「在飞书中打开」。这几样读 `/api/v1/lark/raw/documents/reader/info`、`header`、`ai-summary`（`InboxAssistantTransport.documentExtra`），和正文同时读，哪个读不到就不显示，不挡正文。
+- 文档缓存和预读（#3064，对齐网页 `loadDoc` / iOS 预加载跳过飞书链接）：读过的文档正文在内存里每个配对各留最近 12 篇（`LarkDocumentCache.shared`，读失败的不留），再打开直接显示；所有者、阅读数、AI 摘要这些不缓存，每次打开和刷新都重新读（和网页、iOS 一样），预读也只读正文。原生视图打开的飞书链接不进 WebView 池预加载，打开时也不加载网页，点「切换网页」（或读失败自动退回网页）才取 WebView 加载，这之后卡片的刷新、进度条和「网页意外退出了 / 重新载入」都按网页走。飞书文档改成预读进这个缓存。
 - 收件箱里带 `lark` / `doc` / `moment` 的事项只有扩展给，照常画，点开照旧进飞书会话 / 云文档事项页 / 公司圈帖子页（云文档见「收件箱：云文档事项」）。Android 没有「消息」页和后台拉飞书会话，知识库也不显示存档的公司圈帖子，这几处 iOS / 网页有的开关这里没有对应。
 - 「removed」一律叫「公司圈」。单测 `LarkFeaturesTest`（`core:contracts`）、`LarkNativeLinkTest`（`feature:inbox`）、`SettingsConnectorsTest.feishuRowOnlyWhileTheHubHasFeishu`；截图用 `MOCK_NO_LARK=1` 的假 hub 对比设置页。
 
@@ -905,7 +908,7 @@ python3 scripts/app/android_shots_diff.py /tmp/shots-before-glass /tmp/shots-aft
 
 链接：
 
-- 预加载只取最后 40 条里 15 分钟内 Agent 回复的前 3 个链接，主机没有点的不算；池最多 4 个页面。
+- 预加载只取最后 40 条里 15 分钟内 Agent 回复的前 3 个链接，主机没有点的不算，原生视图打开的飞书链接也不算（飞书文档改成预读，见「飞书」）；池最多 4 个页面。
 - WebView 渲染进程崩溃 / 被杀只丢掉那一页（卡片里「重新载入」），第三方 Cookie 打开，内存紧张时销毁不在屏幕上的页面，看过的页面先用磁盘缓存；⋯ 菜单加「分享」；选中菜单的项在 `onPrepareActionMode` 里加，排在「复制」前面。
 - 对话以外的网页（外壳的卡片：知识库、Persona 首页之外的页面；收件箱打开的网页）选中文字只有「交给 Persona」：写一句要它做什么（可空），进 Persona 主对话并切到 Persona tab。收件箱网页经 `feature/inbox` 的 `LocalInboxWebSelection` 由外壳提供。
 - 对话里的 `jarvis://session|tab|assistant|inbox` 在 App 内跳转（外壳经 `LocalChatAppLinks` 接到导航），`jarvis://pair`、`jarvis://open` 不认；`mailto:` / `tel:` / 其他 App 的链接先确认再交给系统，`intent:` 按旧规则清洗；危险协议不打开。

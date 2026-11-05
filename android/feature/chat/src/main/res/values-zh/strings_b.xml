@@ -176,6 +176,10 @@
     <string name="chat_link_port_failed">打不开端口 :%1$d</string>
     <string name="chat_link_back">网页返回</string>
     <string name="chat_link_page">网页</string>
+    <string name="chat_link_lark_doc">飞书文档</string>
+    <string name="chat_link_moments">公司圈</string>
+    <string name="chat_link_context_doc">把这篇文档作为上下文</string>
+    <string name="chat_link_context_post">把这条动态作为上下文</string>
     <string name="chat_link_peek">收起到六成，继续对话</string>
     <string name="chat_link_full">铺满网页</string>
     <string name="chat_link_actions">网页操作</string>

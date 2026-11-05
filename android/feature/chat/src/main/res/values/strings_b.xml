@@ -183,6 +183,10 @@
     <string name="chat_link_port_failed">Can\'t open port :%1$d</string>
     <string name="chat_link_back">Back</string>
     <string name="chat_link_page">Web page</string>
+    <string name="chat_link_lark_doc">Lark doc</string>
+    <string name="chat_link_moments">Moments</string>
+    <string name="chat_link_context_doc">Add this document as context</string>
+    <string name="chat_link_context_post">Add this post as context</string>
     <string name="chat_link_peek">Shrink and keep chatting</string>
     <string name="chat_link_full">Fill the screen</string>
     <string name="chat_link_actions">Page actions</string>

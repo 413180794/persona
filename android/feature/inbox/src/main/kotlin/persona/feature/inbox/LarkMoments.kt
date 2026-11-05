@@ -507,3 +507,83 @@ private fun reactionLabel(type: String): String = when (type.uppercase()) {
     "OK" -> "👌"
     else -> type
 }
+
+/**
+ * A 公司圈 share link opened in a conversation's link card (iOS LarkMomentsPostView in LinkSheet, web MomentsPanel):
+ * the post and its comments, text selectable for [picks]; a read that fails offers 重试 and the web page.
+ */
+@Composable
+fun LarkMomentsLink(postId: String, url: String, modifier: Modifier = Modifier, picks: LarkLinkPicks? = null, refresh: Int = 0,
+    webpageContent: @Composable () -> Unit) {
+    LarkMomentsLinkContent(injectedInboxRepository(), postId, url, modifier, picks, refresh, webpageContent)
+}
+
+@Composable
+internal fun LarkMomentsLinkContent(repository: InboxRepository, postId: String, url: String, modifier: Modifier = Modifier,
+    picks: LarkLinkPicks? = null, refresh: Int = 0, webpageContent: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val res = LocalResources.current
+    var post by remember(postId) { mutableStateOf<LarkMomentsPost?>(null) }
+    var comments by remember(postId) { mutableStateOf<List<LarkMomentsComment>>(emptyList()) }
+    var loading by remember(postId) { mutableStateOf(true) }
+    var error by remember(postId) { mutableStateOf<String?>(null) }
+    var webpage by remember(postId) { mutableStateOf(false) }
+    var round by remember(postId) { mutableIntStateOf(0) }
+    var viewerImage by remember { mutableStateOf<Pair<List<ViewerImage>, Int>?>(null) }
+    LaunchedEffect(postId, round, refresh) {
+        loading = true
+        error = null
+        try {
+            post = repository.momentsPost(postId)
+            comments = try { repository.momentsComments(postId) } catch (e: CancellationException) { throw e } catch (_: Exception) { comments }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { error = e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.inbox_load_failed_retry) }
+        finally { loading = false }
+    }
+    val onWebpage by rememberUpdatedState(picks?.onWebpage ?: {})
+    LaunchedEffect(webpage) { onWebpage(webpage) }
+    val onLoaded by rememberUpdatedState(picks?.onLoaded ?: { _, _ -> })
+    val loaded = post
+    val name = loaded?.userName?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.inbox_moments_user_posts, it) }
+        ?: stringResource(R.string.inbox_moments_post)
+    LaunchedEffect(loaded, name) { if (loaded != null) onLoaded(name, loaded.content?.text.orEmpty()) }
+    JPage(title = name, modifier = modifier, topBar = {}) { padding ->
+        if (webpage) {
+            Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = pagePadding)) { webpageContent() }
+            return@JPage
+        }
+        LarkSelectable(loaded != null, picks?.picks.orEmpty()) {
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = pagePadding, end = pagePadding,
+                top = padding.calculateTopPadding() + Tokens.Space.m, bottom = padding.calculateBottomPadding() + Tokens.Space.m),
+                verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
+                error?.let { message ->
+                    item("error") {
+                        JNotice(message, title = stringResource(R.string.inbox_load_failed), status = Status.NeedsYou,
+                            actionLabel = stringResource(R.string.inbox_retry), onAction = { round++ })
+                    }
+                    item("web") {
+                        JButton(stringResource(R.string.inbox_lark_switch_web), onClick = { webpage = true }, kind = JButtonKind.Secondary)
+                    }
+                }
+                if (loading && loaded == null) item("loading") { JLoading(text = stringResource(R.string.inbox_moments_loading)) }
+                if (loaded != null) {
+                    item("post") { MomentsPostCard(post = loaded, onOpenImage = { images, index -> viewerImage = images to index }) }
+                    item("comments-header") {
+                        JSectionHeader(title = (loaded.commentCount ?: comments.size).let { pluralStringResource(R.plurals.inbox_moments_comments, it, it) })
+                    }
+                    if (comments.isEmpty() && !loading) item("empty-comments") {
+                        JEmptyState(stringResource(R.string.inbox_moments_no_comments_title), stringResource(R.string.inbox_moments_no_comments_text))
+                    }
+                    items(comments.size, key = { comments[it].id }) { index -> MomentsCommentRow(comments[index]) }
+                    item("footer") {
+                        Column(Modifier.fillMaxWidth().padding(top = Tokens.Space.l), horizontalAlignment = Alignment.CenterHorizontally) {
+                            JButton(stringResource(R.string.inbox_open_in_lark), onClick = { openInLark(context, url) },
+                                kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.ArrowSquareOut)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    viewerImage?.let { (images, index) -> ImageViewer(images = images, initialIndex = index, onDismiss = { viewerImage = null }) }
+}

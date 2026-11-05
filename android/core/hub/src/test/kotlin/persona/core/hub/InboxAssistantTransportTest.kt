@@ -62,6 +62,27 @@ class InboxAssistantTransportTest {
         }
     }
 
+    @Test fun documentDetailsReadOnlyTheReadersThreeExtras() = runBlocking {
+        MockWebServer().use { server ->
+            val transport = HttpInboxAssistantTransport("scope", server.url("/").toString(), "test-token", OkHttpClient())
+            for ((path, wire) in listOf("reader/info" to "/api/v1/lark/raw/documents/reader/info", "header" to "/api/v1/lark/raw/documents/header",
+                "ai-summary" to "/api/v1/lark/raw/documents/ai-summary")) {
+                server.enqueue(MockResponse().setBody("{\"views\":3}"))
+                assertEquals(3, transport.documentExtra(path, "https://example.com/docx/token")["views"]?.jsonPrimitive?.content?.toInt())
+                val read = server.takeRequest()
+                assertEquals(wire, read.requestUrl?.encodedPath)
+                assertEquals("https://example.com/docx/token", read.requestUrl?.queryParameter("url"))
+                assertEquals("Bearer test-token", read.getHeader("Authorization"))
+            }
+            for ((path, link) in listOf("comments" to "https://example.com/docx/token", "../contacts" to "https://example.com/docx/token",
+                "header" to "https://user:pass@example.com/docx/token")) {
+                try { transport.documentExtra(path, link); fail("$path for $link must be rejected") }
+                catch (_: IllegalArgumentException) { }
+            }
+            assertEquals(3, server.requestCount)
+        }
+    }
+
     @Test fun repliesPreserveClientIdAndMediaNeverForwardsCredentialsOffOrigin() = runBlocking {
         MockWebServer().use { server ->
             val transport = HttpInboxAssistantTransport("scope", server.url("/").toString(), "test-token", OkHttpClient())

@@ -176,6 +176,10 @@
     <string name="chat_link_port_failed">ポート:%1$dを開けません</string>
     <string name="chat_link_back">戻る</string>
     <string name="chat_link_page">Webページ</string>
+    <string name="chat_link_lark_doc">Larkドキュメント</string>
+    <string name="chat_link_moments">Moments</string>
+    <string name="chat_link_context_doc">このドキュメントをコンテキストに追加</string>
+    <string name="chat_link_context_post">この投稿をコンテキストに追加</string>
     <string name="chat_link_peek">6割まで縮めてチャットを続ける</string>
     <string name="chat_link_full">全画面で表示</string>
     <string name="chat_link_actions">ページの操作</string>

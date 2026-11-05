@@ -29,7 +29,11 @@ import androidx.lifecycle.compose.currentStateAsState
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.feature.inbox.LarkDocumentLink
+import persona.feature.inbox.LarkDocumentPrefetch
+import persona.feature.inbox.LarkLinkPicks
+import persona.feature.inbox.LarkMomentsLink
 import persona.feature.inbox.LarkNativeLink
+import persona.feature.inbox.LarkTextPick
 import persona.feature.inbox.larkNativeLink
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -134,11 +138,18 @@ fun ChatLinkHost(
         if (!isScrolling && lifecycleState.isAtLeast(Lifecycle.State.STARTED)) {
             delay(600)
             pool.warmUp()
-            // A machine's port is never preloaded: it would load the phone's own localhost (docs/ports.md).
-            preloadUrls.mapNotNull { ChatLinks.webUrl(it) }.filter { PortLinks.link(it, ports?.hostnames.orEmpty()) == null }
+            // A machine's port is never preloaded: it would load the phone's own localhost (docs/ports.md). Nor is a
+            // Feishu link the card shows natively: its page loads only on 切换网页 (its document is read ahead below).
+            preloadUrls.mapNotNull { ChatLinks.webUrl(it) }
+                .filter { PortLinks.link(it, ports?.hostnames.orEmpty()) == null && larkNativeLink(it, lark) == null }
                 .take(3).forEach { pool.preload(it) }
         }
     }
+    // Feishu documents among the links are read ahead into the reader's cache, as on the web (iOS skips them too).
+    val documentsAhead = remember(preloadUrls, lark) {
+        preloadUrls.mapNotNull { ChatLinks.webUrl(it) }.filter { larkNativeLink(it, lark) is LarkNativeLink.Document }.take(3)
+    }
+    if (documentsAhead.isNotEmpty() && !isScrolling && lifecycleState.isAtLeast(Lifecycle.State.STARTED)) LarkDocumentPrefetch(documentsAhead)
     val picks = if (onHandToPersona != null) listOf(ChatLinkPick.HandToPersona)
         else listOfNotNull(ChatLinkPick.Edit.takeIf { onEdit != null }, ChatLinkPick.Context.takeIf { onContext != null })
     // A web page is over the page: the page's glass goes opaque and the dock makes way (LocalWebSheets).
@@ -166,27 +177,52 @@ fun ChatLinkHost(
             url?.let { target ->
                 // A page whose renderer went away is loaded anew (a new view) when the user asks.
                 var generation by remember(target) { mutableIntStateOf(0) }
-                val view = remember(pool, target, generation) { pool.acquire(target) }
+                // A Feishu link the hub shows natively (the lark-connector extension, #1530): a document's reader or a 公司圈 post.
+                val native = remember(target, lark) { larkNativeLink(target, lark) }
+                // Whether that native view switched to the web page (切换网页, or a read that failed): then the card's
+                // 刷新, progress and crash row are the page's again.
+                var nativeWebpage by remember(target) { mutableStateOf(false) }
+                val nativeShown = native != null && !nativeWebpage
+                // The WebView is only taken (and loaded) once a page shows it: a native view reads without it.
+                val view = remember(pool, target, generation, nativeShown) { if (nativeShown) null else pool.acquire(target) }
                 var editing by remember(target) { mutableStateOf<ChatLinkContext?>(null) }
                 var handing by remember(target) { mutableStateOf<ChatLinkContext?>(null) }
                 var menu by remember { mutableStateOf(false) }
                 val pick by rememberUpdatedState(onContext)
-                DisposableEffect(view, picks) {
-                    view.picks = picks
-                    view.onPick = { kind, selected ->
-                        when (kind) {
-                            ChatLinkPick.Edit -> { editing = selected }
-                            ChatLinkPick.Context -> { pick?.invoke(selected); scope.launch { drag.animateTo(LinkDetent.Peek) } }
-                            ChatLinkPick.HandToPersona -> { handing = selected }
-                        }
+                val picked: (ChatLinkPick, ChatLinkContext) -> Unit = { kind, selected ->
+                    when (kind) {
+                        ChatLinkPick.Edit -> { editing = selected }
+                        ChatLinkPick.Context -> { pick?.invoke(selected); scope.launch { drag.animateTo(LinkDetent.Peek) } }
+                        ChatLinkPick.HandToPersona -> { handing = selected }
                     }
+                }
+                // What the native view read: its title and the text 作为上下文 sends for the whole of it (G184).
+                var nativeTitle by remember(target) { mutableStateOf<String?>(null) }
+                var nativeWhole by remember(target) { mutableStateOf<String?>(null) }
+                var nativeRefresh by remember(target) { mutableIntStateOf(0) }
+                val nativeFallback = when (native) {
+                    is LarkNativeLink.Document -> stringResource(R.string.chat_link_lark_doc)
+                    is LarkNativeLink.MomentsPost -> stringResource(R.string.chat_link_moments)
+                    null -> ""
+                }
+                val pickLabels = picks.map { stringResource(it.label) }
+                val nativePicks = remember(picks, pickLabels, target) {
+                    LarkLinkPicks(picks.zip(pickLabels) { kind, label ->
+                        LarkTextPick(label) { text ->
+                            picked(kind, ChatLinkContext(if (kind == ChatLinkPick.Edit) "edit" else "context",
+                                nativeTitle ?: nativeFallback, target, text))
+                        }
+                    }, onWebpage = { nativeWebpage = it }) { title, whole -> nativeTitle = title; nativeWhole = whole }
+                }
+                if (view != null) DisposableEffect(view, picks) {
+                    view.picks = picks
+                    view.onPick = picked
                     view.onExternal = { external = it }
                     onDispose { pool.release(view) }
                 }
                 fun close() { scope.launch { drag.animateTo(LinkDetent.Hidden) } }
-                BackHandler {
-                    if (!view.gone && view.canGoBack()) view.goBack() else close()
-                }
+                fun back() { if (view != null && !view.gone && view.canGoBack()) view.goBack() else close() }
+                BackHandler { back() }
                 val offset = drag.offset.takeIf { it.isFinite() } ?: pixels
                 val panelHeight = with(density) { (pixels - offset).coerceIn(0f, pixels).toDp() }
                 val palette = PersonaTheme.palette
@@ -200,19 +236,26 @@ fun ChatLinkHost(
                         Box(Modifier.align(Alignment.CenterHorizontally).padding(top = Tokens.Space.s).size(Tokens.Space.xxxl, Tokens.Space.xs)
                             .clip(PersonaTheme.shapes.controlShape).background(palette.ink3))
                         Row(Modifier.fillMaxWidth().padding(end = Tokens.Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                            JIconButton(PhIcons.CaretLeft, stringResource(R.string.chat_link_back), { if (!view.gone && view.canGoBack()) view.goBack() else close() })
+                            JIconButton(PhIcons.CaretLeft, stringResource(R.string.chat_link_back), { back() })
                             Column(Modifier.weight(1f)) {
-                                Text(view.pageTitle.ifBlank { stringResource(R.string.chat_link_page) }, style = PersonaTheme.type.bodyStrong, color = palette.ink,
+                                Text((if (native != null && (nativeShown || view?.pageTitle.isNullOrBlank())) nativeTitle ?: nativeFallback else view?.pageTitle.orEmpty()).ifBlank { stringResource(R.string.chat_link_page) }, style = PersonaTheme.type.bodyStrong, color = palette.ink,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(forwarded ?: view.currentUrl.ifBlank { target }, style = PersonaTheme.type.micro, color = palette.ink3,
+                                Text(forwarded ?: view?.currentUrl.orEmpty().ifBlank { target }, style = PersonaTheme.type.micro, color = palette.ink3,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
+                            // The whole of a native page as context (iOS LinkSheet, web ContextButton): a document goes
+                            // by its link and the 「（整篇）」 marker (the agent reads it), a post with its text once it is read.
+                            val whole = ChatLinkContext.whole(native, nativeWhole)
+                            if (whole != null && onContext != null) JIconButton(PhIcons.Quotes,
+                                stringResource(if (native is LarkNativeLink.Document) R.string.chat_link_context_doc else R.string.chat_link_context_post), {
+                                    picked(ChatLinkPick.Context, ChatLinkContext("context", nativeTitle ?: nativeFallback, target, whole))
+                                })
                             JIconButton(if (drag.currentValue == LinkDetent.Full) PhIcons.CaretDown else PhIcons.CaretUp,
                                 stringResource(if (drag.currentValue == LinkDetent.Full) R.string.chat_link_peek else R.string.chat_link_full),
                                 { scope.launch { drag.animateTo(if (drag.currentValue == LinkDetent.Full) LinkDetent.Peek else LinkDetent.Full) } })
                             Box {
                                 val clipboard = LocalClipboardManager.current
-                                val page = { ChatLinks.webUrl(view.currentUrl) ?: target }
+                                val page = { view?.currentUrl?.let { ChatLinks.webUrl(it) } ?: target }
                                 JIconButton(PhIcons.DotsThree, stringResource(R.string.chat_link_actions), { menu = true })
                                 val copied = stringResource(R.string.chat_link_copied)
                                 val noBrowser = stringResource(R.string.chat_link_no_browser)
@@ -221,7 +264,9 @@ fun ChatLinkHost(
                                     JAction(stringResource(R.string.chat_link_copy), PhIcons.LinkSimple) {
                                         clipboard.setText(AnnotatedString(page())); feedback?.notice(copied)
                                     }.takeIf { forwarded == null },
-                                    JAction(stringResource(R.string.chat_link_reload), PhIcons.ArrowClockwise, enabled = !view.gone) { view.reload() },
+                                    JAction(stringResource(R.string.chat_link_reload), PhIcons.ArrowClockwise, enabled = nativeShown || view?.gone == false) {
+                                        if (nativeShown) nativeRefresh++ else view?.reload()
+                                    },
                                     if (forwarded != null) null else JAction(stringResource(R.string.chat_link_open_browser), PhIcons.ArrowSquareOut) {
                                         val opened = runCatching {
                                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(page())).addCategory(Intent.CATEGORY_BROWSABLE))
@@ -237,20 +282,29 @@ fun ChatLinkHost(
                             JIconButton(PhIcons.X, stringResource(R.string.chat_link_close), ::close)
                         }
                     }
-                    if (!view.gone && view.loadProgress < 100 && view.failure == null)
+                    if (view != null && !view.gone && view.loadProgress < 100 && view.failure == null)
                         JLinearProgress(view.loadProgress / 100f, Modifier.padding(horizontal = pagePadding))
-                    (if (view.gone) stringResource(R.string.chat_link_crashed) else view.failure)?.let { error ->
+                    if (view != null) (if (view.gone) stringResource(R.string.chat_link_crashed) else view.failure)?.let { error ->
                         Row(Modifier.padding(horizontal = pagePadding), verticalAlignment = Alignment.CenterVertically) {
                             Text(error, Modifier.weight(1f).padding(vertical = Tokens.Space.s), style = PersonaTheme.type.callout,
                                 color = palette.danger.text)
                             JTextButton(stringResource(if (view.gone) R.string.chat_link_reopen else R.string.chat_link_retry), { if (view.gone) generation++ else view.reload() })
                         }
                     }
-                    if (!view.gone) key(view) {
-                        // Feishu documents in the native reader while the hub has it (the lark-connector extension, #1530).
-                        if (larkNativeLink(target, lark) is LarkNativeLink.Document) LarkDocumentLink(target, Modifier.fillMaxWidth().weight(1f)) {
-                            AndroidView(factory = { view }, modifier = Modifier.fillMaxSize(), onRelease = { pool.release(it) })
-                        } else JPage(title = stringResource(R.string.chat_link_page), modifier = Modifier.fillMaxWidth().weight(1f), topBar = {}) { padding ->
+                    if (native != null) {
+                        // Feishu documents and 公司圈 posts in their native views while the hub has them (#1530); each can
+                        // still switch to the page, which takes the WebView then (a crashed one is gone: 重新打开 above).
+                        val page: @Composable () -> Unit = {
+                            if (view != null && !view.gone) key(view) {
+                                AndroidView(factory = { view }, modifier = Modifier.fillMaxSize(), onRelease = { pool.release(it) })
+                            }
+                        }
+                        if (native is LarkNativeLink.Document)
+                            LarkDocumentLink(target, Modifier.fillMaxWidth().weight(1f), nativePicks, nativeRefresh, page)
+                        else if (native is LarkNativeLink.MomentsPost)
+                            LarkMomentsLink(native.postId, target, Modifier.fillMaxWidth().weight(1f), nativePicks, nativeRefresh, page)
+                    } else if (view != null && !view.gone) key(view) {
+                        JPage(title = stringResource(R.string.chat_link_page), modifier = Modifier.fillMaxWidth().weight(1f), topBar = {}) { padding ->
                             AndroidView(factory = { view },
                                 modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = pagePadding),
                                 onRelease = { pool.release(it) })

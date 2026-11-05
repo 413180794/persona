@@ -43,6 +43,11 @@ interface InboxAssistantTransport {
     suspend fun media(ref: String): ByteArray
     suspend fun readDocument(url: String): JsonObject = throw UnsupportedOperationException("Document reader unavailable")
     suspend fun documentMedia(ref: String): ByteArray = media(ref)
+    /**
+     * What the reader shows around a document (`/api/v1/lark/raw/documents/<path>?url=…`): [path] is `reader/info`
+     * (owner, counts), `header` (who edited it last, when) or `ai-summary` (Feishu's cached summary).
+     */
+    suspend fun documentExtra(path: String, url: String): JsonObject = throw UnsupportedOperationException("Document details unavailable")
     suspend fun momentsPost(postId: String): JsonObject = throw UnsupportedOperationException("Moments post unavailable")
     suspend fun momentsComments(postId: String): JsonObject = throw UnsupportedOperationException("Moments comments unavailable")
     suspend fun urlPreview(messageId: String, url: String): JsonObject = throw UnsupportedOperationException("URL preview unavailable")

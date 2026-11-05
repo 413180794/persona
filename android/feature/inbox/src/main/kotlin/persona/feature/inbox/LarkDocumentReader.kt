@@ -12,8 +12,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -113,12 +116,27 @@ internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -
     }
 }
 
-/** The shared conversation link host can use the current inbox pairing without changing the app shell. */
+/**
+ * The shared conversation link host can use the current inbox pairing without changing the app shell. [picks] puts
+ * the card's AI 修改 / 作为上下文 in the selection menu and hears the title; [refresh] counts the card's 刷新.
+ */
 @Composable
-fun LarkDocumentLink(url: String, modifier: Modifier = Modifier, webpageContent: @Composable () -> Unit) {
+fun LarkDocumentLink(url: String, modifier: Modifier = Modifier, picks: LarkLinkPicks? = null, refresh: Int = 0,
+    webpageContent: @Composable () -> Unit) {
     val repository = injectedInboxRepository()
     val snapshot by repository.snapshot.collectAsStateWithLifecycle()
-    LarkDocumentReader(url, snapshot.contentSource, repository, modifier, webpageContent)
+    LarkDocumentReader(url, snapshot.contentSource, repository, modifier, webpageContent, picks = picks, refresh = refresh)
+}
+
+/**
+ * Starts reading the Feishu documents among [urls] that the card would open natively, so a tap shows them at once
+ * (web `setLinkPrefetcher`); they go to [LarkDocumentCache.shared], never into the card's WebView pool.
+ */
+@Composable
+fun LarkDocumentPrefetch(urls: List<String>) {
+    val repository = injectedInboxRepository()
+    val source = repository.snapshot.collectAsStateWithLifecycle().value.contentSource ?: return
+    LaunchedEffect(urls, source.scope) { urls.take(3).forEach { LarkDocumentCache.shared.prefetch(source, it) } }
 }
 
 /** Reusable native reader for a pairing-bound source; every read failure falls back to the original webpage. */
@@ -126,25 +144,50 @@ fun LarkDocumentLink(url: String, modifier: Modifier = Modifier, webpageContent:
 fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: InboxRepository, modifier: Modifier = Modifier,
     webpageContent: (@Composable () -> Unit)? = null,
     showConnectionTitle: Boolean = true,
+    picks: LarkLinkPicks? = null,
+    refresh: Int = 0,
+    cache: LarkDocumentCache = LarkDocumentCache.shared,
 ) {
     var document by remember(url, source?.scope) { mutableStateOf<LarkDocument?>(null) }
+    var details by remember(url, source?.scope) { mutableStateOf(LarkDocumentDetails()) }
     var webpage by remember(url, source?.scope) { mutableStateOf(!isLarkDocumentUrl(url) || source == null) }
-    LaunchedEffect(url, source?.scope) {
+    // The first read may come from the cache; a 刷新 after it reads again.
+    val firstRefresh = remember(url, source?.scope) { refresh }
+    LaunchedEffect(url, source?.scope, refresh) {
         if (!webpage && source != null) {
-            try { document = withContext(Dispatchers.Default) { source.document(url) } }
+            val read = cache.load(source, url, fresh = refresh != firstRefresh)
+            try { document = read.await() }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { webpage = true }
         }
     }
+    // What is shown around the text is read on every open and 刷新 (never cached: its counts move), as on web and iOS.
+    LaunchedEffect(url, source?.scope, refresh, webpage) {
+        if (!webpage && source != null) details = try { source.details(url) } catch (e: CancellationException) { throw e } catch (_: Exception) { LarkDocumentDetails() }
+    }
+    val onWebpage by rememberUpdatedState(picks?.onWebpage ?: {})
+    LaunchedEffect(webpage) { onWebpage(webpage) }
+    val onLoaded by rememberUpdatedState(picks?.onLoaded ?: { _, _ -> })
+    val loadedTitle = document?.title.orEmpty()
+    LaunchedEffect(loadedTitle) { if (loadedTitle.isNotBlank()) onLoaded(loadedTitle, "") }
     val navigator = LocalInboxNavigator.current
     val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
+    val list = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var outlineShown by remember(url) { mutableStateOf(false) }
+    val outline = remember(document) { document?.outline().orEmpty() }
+    // The body's first item is the title block, so block i is item i + 1.
+    val jump: (Int) -> Unit = { index -> outlineShown = false; scope.launch { list.animateScrollToItem(index + 1) } }
     val connectionDetails = rememberConnectionDetails(connection, navigator?.let { nav -> { nav.navigate(ConnectionSettingsRoute) } })
     JPage(title = if (connection == ConnectionState.Online) document?.title?.ifBlank { null } ?: stringResource(R.string.inbox_lark_doc) else inboxTitle(connection), modifier = modifier,
         titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
         onTitleClick = if (connection == ConnectionState.Online) null else connectionDetails,
         onBack = navigator?.let { { it.back() } },
         topBar = if (showConnectionTitle) null else ({}),
-        actions = { JTextButton(stringResource(R.string.inbox_lark_switch_web), { webpage = true }) }) { padding ->
+        actions = {
+            if (!webpage && outline.isNotEmpty()) JIconButton(PhIcons.ListChecks, stringResource(R.string.inbox_lark_doc_outline), { outlineShown = true })
+            JTextButton(stringResource(R.string.inbox_lark_switch_web), { webpage = true })
+        }) { padding ->
         if (webpage) {
             Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = pagePadding)) {
                 if (webpageContent != null) webpageContent() else LarkDocumentWebView(url, Modifier.fillMaxSize())
@@ -158,12 +201,19 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
         } else {
             val loaded = requireNotNull(document)
             val body: @Composable () -> Unit = {
-                LazyColumn(contentPadding = PaddingValues(start = pagePadding, end = pagePadding,
+                LazyColumn(state = list, contentPadding = PaddingValues(start = pagePadding, end = pagePadding,
                     top = padding.calculateTopPadding() + Tokens.Space.m, bottom = padding.calculateBottomPadding() + Tokens.Space.m),
                     verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                    item {
-                        Text(loaded.title.ifBlank { stringResource(R.string.inbox_lark_doc) }, style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
-                        if (!showConnectionTitle) JTextButton(stringResource(R.string.inbox_lark_switch_web), { webpage = true })
+                    item(key = "title") {
+                        Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                            Text(loaded.title.ifBlank { stringResource(R.string.inbox_lark_doc) }, style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
+                            LarkDocumentMeta(details)
+                            if (!showConnectionTitle) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+                                if (outline.isNotEmpty()) JTextButton(stringResource(R.string.inbox_lark_doc_outline), { outlineShown = true }, icon = PhIcons.ListChecks)
+                                JTextButton(stringResource(R.string.inbox_lark_switch_web), { webpage = true })
+                            }
+                            if (details.summary.isNotBlank()) LarkDocumentSummary(details.summary)
+                        }
                     }
                     items(loaded.blocks) { block ->
                         when (block.kind) {
@@ -185,10 +235,90 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
                         }
                     }
                     if (loaded.partial) item { JNotice(stringResource(R.string.inbox_lark_doc_partial)) }
+                    item(key = "footer") { LarkDocumentFooter(url) }
                 }
             }
-            if (loaded.copyAllowed) SelectionContainer { body() } else body()
+            // Outside a conversation the app shell's 交给 Persona, as on the inbox's web pages (LocalInboxWebSelection).
+            val hand = LocalInboxWebSelection.current
+            val handLabel = stringResource(R.string.inbox_hand_to_persona)
+            val title = loaded.title.ifBlank { stringResource(R.string.inbox_lark_doc) }
+            val selectionPicks = picks?.picks ?: hand?.let { listOf(LarkTextPick(handLabel) { text -> it(InboxWebSelection(title, url, text)) }) }.orEmpty()
+            LarkSelectable(loaded.copyAllowed, selectionPicks) { body() }
         }
+    }
+    if (outlineShown) JSheet(onDismiss = { outlineShown = false }, title = stringResource(R.string.inbox_lark_doc_outline), scrollable = false) {
+        LazyColumn(Modifier.fillMaxWidth()) {
+            items(outline) { (index, heading) ->
+                JRow(heading.text, Modifier.padding(start = Tokens.Space.l * (heading.level - 1).coerceIn(0, 3)),
+                    onClick = { jump(index) }, chevron = false)
+            }
+        }
+    }
+}
+
+/** Who owns it, who edited it last and when; under it how often it was read (iOS FeishuDocReader's title block). */
+@Composable
+private fun LarkDocumentMeta(details: LarkDocumentDetails) {
+    val resources = LocalResources.current
+    val edited = details.updatedAt?.let { larkShortDate(it) }?.let { time ->
+        if (details.editor.isNotBlank()) stringResource(R.string.inbox_lark_doc_edited_by, details.editor, time)
+        else stringResource(R.string.inbox_lark_doc_updated, time)
+    }
+    val line = listOfNotNull(details.owner.ifBlank { null }, edited).joinToString(" · ")
+    if (line.isNotEmpty()) Text(line, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val stats = listOf(R.plurals.inbox_lark_doc_views to details.views, R.plurals.inbox_lark_doc_visitors to details.visitors,
+        R.plurals.inbox_lark_doc_likes to details.likes, R.plurals.inbox_lark_doc_comments to details.comments)
+        .filter { it.second > 0 }.joinToString(" · ") { (id, n) -> resources.getQuantityString(id, n.toInt().coerceAtLeast(0), n) }
+    if (stats.isNotEmpty()) Text(stats, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
+
+/** Feishu's cached AI summary: a few lines, the rest on 展开 (iOS summaryCard). */
+@Composable
+private fun LarkDocumentSummary(summary: String) {
+    var expanded by rememberSaveable(summary) { mutableStateOf(false) }
+    val palette = PersonaTheme.palette
+    JCard(padding = Tokens.Space.m, onClick = { expanded = !expanded }) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+            JIcon(PhIcons.Sparkle, null, tint = palette.ai, decorative = true)
+            Text(stringResource(R.string.inbox_lark_doc_summary), Modifier.weight(1f), style = PersonaTheme.type.headline, color = palette.ink, maxLines = 1)
+            JTextButton(stringResource(if (expanded) R.string.inbox_collapse else R.string.inbox_expand), { expanded = !expanded })
+        }
+        Text(summary, style = PersonaTheme.type.callout, color = palette.ink2, maxLines = if (expanded) Int.MAX_VALUE else 4,
+            overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** The end of the text: 在飞书中打开 (iOS footer, web 在新标签页打开). */
+@Composable
+private fun LarkDocumentFooter(url: String) {
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth().padding(top = Tokens.Space.xl), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        JDivider()
+        JButton(stringResource(R.string.inbox_open_in_lark), onClick = { openInLark(context, url) },
+            kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.ArrowSquareOut)
+    }
+}
+
+/** The Feishu app (or a browser) for [url]; nothing happens when no app takes it. */
+internal fun openInLark(context: android.content.Context, url: String) {
+    val link = larkWebUrl(url) ?: return
+    runCatching {
+        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(link))
+            .addCategory(android.content.Intent.CATEGORY_BROWSABLE).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+}
+
+/** 14:05 today, else 11月4日 this year, else 2025年11月4日 (in the phone's language). */
+internal fun larkShortDate(at: java.time.Instant, now: java.time.Instant = java.time.Instant.now(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
+    val day = at.atZone(zone)
+    val today = now.atZone(zone)
+    val locale = java.util.Locale.getDefault()
+    return when {
+        day.toLocalDate() == today.toLocalDate() -> java.time.format.DateTimeFormatter.ofPattern("HH:mm", locale).format(day)
+        day.year == today.year -> java.time.format.DateTimeFormatter.ofPattern(
+            android.text.format.DateFormat.getBestDateTimePattern(locale, "MMMd"), locale).format(day)
+        else -> java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM).withLocale(locale).format(day)
     }
 }
 

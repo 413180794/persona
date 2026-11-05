@@ -16,11 +16,13 @@
 
 对话里选区菜单最前面是「AI 修改」和「作为上下文」；没有对话的地方（外壳的卡片：知识库、Persona 首页之外的页面；收件箱打开的网页）只有「交给 Persona」：写一句要它做什么（可以不写，默认「看看上面这段。」），进 Persona 主对话并切到 Persona tab。菜单项在 `onPrepareActionMode` 里加、`SHOW_AS_ACTION_ALWAYS`、放在 Chromium 那一组的最小序号，才排在「复制」前面（旧 App 的经验）。
 
+卡片里的原生飞书文档 / 公司圈帖子（hub 有飞书扩展时）选区菜单在「复制」后面加同样的项（`feature/inbox` 的 `LarkSelectable`），头部另有「作为上下文」按钮带上整篇（文档的正文是和 iOS、网页一样的标记「（整篇）」，Agent 自己去读；公司圈帖子带帖子正文）。
+
 「AI 修改」可以不写要求（默认「按上面选中的内容修改。」）；「作为上下文」放进输入区，出站消息落入 outbox 后才清理，只有上下文时正文是「参考上面的内容。」。引用标签和 iOS 的 `ContextRef` 逐字一样：属性转义 `& " < >`，正文不转义、只去掉 `</jarvis-context>`；多个上下文之间一个换行，正文前空一行。读回时按 iOS 的规则解码实体，以前转义过正文的消息也读得回来。
 
 ## WebView 池
 
-池随会话页面释放，最多 4 个页面（屏幕上的一个 + 最多 3 个预加载），LRU 淘汰，系统 HTTP 缓存、DOM 存储和第三方 Cookie（页面里嵌的登录要用）；第一次加载先用磁盘缓存（看过的页面直接出来），加载完改回默认。只预加载 15 分钟内 Agent 回复里的前 3 个链接（最后 40 条里，主机没有点的不算），列表停止滚动后预启动引擎，支持时调用预渲染 API，否则普通加载；后台页面暂停并在支持时静音。渲染进程崩溃或被杀只丢掉那一个页面（`onRenderProcessGone`），卡片显示「网页意外退出了」和「重新载入」；系统内存紧张（`onTrimMemory`）时销毁不在屏幕上的页面。池容量和等待时间是实现配置，性能未实测。API 说明见 [Android WebViewCompat](https://developer.android.com/reference/androidx/webkit/WebViewCompat)。
+池随会话页面释放，最多 4 个页面（屏幕上的一个 + 最多 3 个预加载），LRU 淘汰，系统 HTTP 缓存、DOM 存储和第三方 Cookie（页面里嵌的登录要用）；第一次加载先用磁盘缓存（看过的页面直接出来），加载完改回默认。只预加载 15 分钟内 Agent 回复里的前 3 个链接（最后 40 条里，主机没有点的不算；hub 有飞书扩展时卡片原生打开的飞书文档、公司圈链接也不算，文档改成预读进阅读器的缓存，见 `docs/android.md`「飞书」），列表停止滚动后预启动引擎，支持时调用预渲染 API，否则普通加载；后台页面暂停并在支持时静音。渲染进程崩溃或被杀只丢掉那一个页面（`onRenderProcessGone`），卡片显示「网页意外退出了」和「重新载入」；系统内存紧张（`onTrimMemory`）时销毁不在屏幕上的页面。池容量和等待时间是实现配置，性能未实测。API 说明见 [Android WebViewCompat](https://developer.android.com/reference/androidx/webkit/WebViewCompat)。
 
 ## 当前 App 接线
 

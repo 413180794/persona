@@ -89,3 +89,45 @@ fun parseLarkDocument(data: JsonObject): LarkDocument {
     return LarkDocument(data.text("title"), out, data.flag("partial"),
         (authority?.get("copy") as? JsonPrimitive)?.booleanOrNull != false)
 }
+
+/** The document's headings, for 目录: each with its index in [LarkDocument.blocks]. */
+fun LarkDocument.outline(): List<Pair<Int, LarkDocumentBlock>> =
+    blocks.withIndex().filter { it.value.kind == "heading" && it.value.text.isNotBlank() }.map { it.index to it.value }
+
+/**
+ * What the reader shows around the text (iOS FeishuDocReader's title block, AI 摘要): who owns it, who edited it last
+ * and when, how often it was read, and Feishu's cached summary. Every part may be missing; none holds up the text.
+ */
+data class LarkDocumentDetails(
+    val owner: String = "", val editor: String = "", val updatedAt: java.time.Instant? = null,
+    val views: Long = 0, val visitors: Long = 0, val likes: Long = 0, val comments: Long = 0,
+    val summary: String = "",
+) {
+    val isEmpty: Boolean get() = this == LarkDocumentDetails()
+}
+
+/**
+ * [info] is `documents/reader/info`, [header] `documents/header`, [summary] `documents/ai-summary` (null: not read).
+ * The edit time is the header's, else the info's; a summary counts only once Feishu has it ready.
+ */
+fun parseLarkDocumentDetails(info: JsonObject?, header: JsonObject?, summary: JsonObject?): LarkDocumentDetails {
+    fun JsonObject.count(key: String) = (get(key) as? JsonPrimitive)?.longOrNull?.coerceAtLeast(0) ?: 0
+    val owner = (info?.get("owner") as? JsonObject)?.text("name").orEmpty().trim()
+    return LarkDocumentDetails(
+        owner = owner,
+        editor = header?.text("editorName").orEmpty().trim().takeIf { it != owner }.orEmpty(),
+        updatedAt = listOfNotNull(header?.get("editedAt"), info?.get("updatedAt")).firstNotNullOfOrNull { larkInstant(it) },
+        views = info?.count("views") ?: 0, visitors = info?.count("visitors") ?: 0,
+        likes = info?.count("likes") ?: 0, comments = info?.count("comments") ?: 0,
+        summary = summary?.takeIf { it.text("state") == "ready" }?.text("summary").orEmpty().trim(),
+    )
+}
+
+/** An ISO time, or epoch seconds / milliseconds (lark-connector writes either). */
+internal fun larkInstant(value: JsonElement): java.time.Instant? {
+    val p = value as? JsonPrimitive ?: return null
+    p.longOrNull?.let { return if (it > 100_000_000_000) java.time.Instant.ofEpochMilli(it) else java.time.Instant.ofEpochSecond(it) }
+    return p.contentOrNull?.takeIf { p.isString && it.isNotBlank() }?.let { s ->
+        runCatching { java.time.OffsetDateTime.parse(s).toInstant() }.getOrNull() ?: runCatching { java.time.Instant.parse(s) }.getOrNull()
+    }
+}

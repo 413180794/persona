@@ -134,6 +134,16 @@ class HttpInboxAssistantTransport private constructor(
             .addQueryParameter("url", url).addQueryParameter("format", "json").build())
     }
 
+    override suspend fun documentExtra(path: String, url: String): JsonObject {
+        require(path in documentExtras) { "Unknown document detail" }
+        val target = url.toHttpUrl()
+        require(target.scheme in setOf("http", "https") && target.username.isEmpty() && target.password.isEmpty())
+        return json(this.url("api", "v1", "lark", "raw", "documents", *path.split('/').toTypedArray()).newBuilder()
+            .addQueryParameter("url", url).build())
+    }
+
+    private val documentExtras = setOf("reader/info", "header", "ai-summary")
+
     override suspend fun documentMedia(ref: String): ByteArray {
         val base = mediaOrigin()
         val path = base.hubResolve(ref)?.let(base::hubPath)

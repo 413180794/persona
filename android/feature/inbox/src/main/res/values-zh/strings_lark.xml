@@ -122,4 +122,20 @@
     <string name="inbox_lark_part_separator">，</string>
     <string name="inbox_lark_emoji_ok">OK</string>
     <string name="inbox_lark_emoji_jiayi">+1</string>
+    <string name="inbox_lark_doc_outline">目录</string>
+    <string name="inbox_lark_doc_summary">AI 摘要</string>
+    <string name="inbox_lark_doc_updated">更新于 %1$s</string>
+    <string name="inbox_lark_doc_edited_by">%1$s 更新于 %2$s</string>
+    <plurals name="inbox_lark_doc_views">
+        <item quantity="other">%d 次阅读</item>
+    </plurals>
+    <plurals name="inbox_lark_doc_visitors">
+        <item quantity="other">%d 人看过</item>
+    </plurals>
+    <plurals name="inbox_lark_doc_likes">
+        <item quantity="other">%d 个赞</item>
+    </plurals>
+    <plurals name="inbox_lark_doc_comments">
+        <item quantity="other">%d 条评论</item>
+    </plurals>
 </resources>
