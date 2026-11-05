@@ -35,6 +35,8 @@ const (
 	maxTitleTopic = 14 // characters, in Chinese; titleTopicMax for the user's language
 	titlesKey     = "assistant.titles"
 	titleTask     = "定时"
+	// titleInbox is the inbox's AI 分身's kind (#3264): the hub's own, not one the model picks (titleKinds).
+	titleInbox    = "收件箱"
 	titleFallback = "探索"
 )
 
@@ -43,6 +45,7 @@ const (
 	titlePending = "pending" // started by the hub, named when its first turn ends
 	titleAuto    = "auto"
 	titleByTask  = "task"
+	titleByInbox = "inbox" // the inbox's AI 分身: 「收件箱 | the item's title」
 	titleByUser  = "user"
 	// The assistant renamed it (conversation_rename): not replaced by the automatic title, the user's rename wins.
 	titleByAssistant = "assistant"
@@ -105,16 +108,31 @@ func (s *Service) saveTitlesLocked() {
 	}
 }
 
-// titleNew notes a conversation the hub just started. task: the scheduled task's name when a task started it (the
-// title is set now); "" to name it after its first turn.
-func (s *Service) titleNew(machine, id string, started time.Time, task string) {
+// titleNew notes a conversation the hub just started, to name it after its first turn.
+func (s *Service) titleNew(machine, id string, started time.Time) {
+	s.noteTitle(machine, id, started, "", "")
+}
+
+// titleFixed names a conversation the hub just started for something that has a name already: 「MMDD | kind |
+// topic」 now, with no model call (a scheduled task's 「定时 | 任务名」, the inbox's 「收件箱 | the item's title」).
+func (s *Service) titleFixed(machine, id string, started time.Time, kind, topic string) {
+	s.noteTitle(machine, id, started, kind, topic)
+}
+
+func (s *Service) noteTitle(machine, id string, started time.Time, kind, topic string) {
 	if id == "" {
 		return
 	}
 	ctx := context.Background()
 	t := &convTitle{MachineID: machine, By: titlePending, Started: started.UTC()}
-	if task != "" {
-		t.Title, t.By = titleDay(started, s.location(ctx))+" | "+titleTask+" | "+titleTopic(task), titleByTask
+	if kind != "" {
+		if topic = titleTopic(topic); topic == "" {
+			topic = "新对话"
+		}
+		t.Title, t.By = titleDay(started, s.location(ctx))+" | "+kind+" | "+topic, titleByTask
+		if kind == titleInbox {
+			t.By = titleByInbox
+		}
 	}
 	b := &s.titles
 	b.mu.Lock()
@@ -127,7 +145,7 @@ func (s *Service) titleNew(machine, id string, started time.Time, task string) {
 		s.saveTitlesLocked()
 	}
 	b.mu.Unlock()
-	if task != "" {
+	if kind != "" {
 		s.publish(ctx)
 	}
 }

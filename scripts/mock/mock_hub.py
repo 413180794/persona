@@ -628,11 +628,18 @@ if MOCK_MACHINES:
 # space, idle ones to fold. Sessions marked seen (WS "seen" or POST …/seen) turn idle; GET /mock/seen lists them.
 # MOCK_QUIET=1: a quiet space (two seen agents, nothing running) under 空闲的空间, for screenshots of its card
 # (`-openQuietSpaces YES` opens it).
+# MOCK_QUIET=order: only one quiet space, with tab order deliberately different from activity order.
 if os.environ.get("MOCK_QUIET"):
-    for i, (slot, title, last) in enumerate((("feed", "首页信息流加下拉刷新", "下拉刷新做好了，空列表时显示占位。"),
-                                             ("rss", "抓取 RSS 时跳过重复条目", "按链接去重，测试都过了。"))):
+    quiet_rows = [("feed", "首页信息流加下拉刷新", "下拉刷新做好了，空列表时显示占位。", 60 * 24 * 2),
+                  ("rss", "抓取 RSS 时跳过重复条目", "按链接去重，测试都过了。", 60 * 24 * 3)]
+    if os.environ.get("MOCK_QUIET") == "order":
+        SESSIONS.clear()
+        quiet_rows = [("feed", "首页信息流加下拉刷新", "下拉刷新已经完成。", 41),
+                      ("rss", "抓取 RSS 时跳过重复条目", "去重检查已经完成。", 52),
+                      ("index", "刷新缓存索引", "索引刚刚更新完成。", 1)]
+    for i, (slot, title, last, minutes) in enumerate(quiet_rows):
         SESSIONS.append(sess("macbook", "e4f6a8c0-0000-4000-8000-%012d" % (i + 1), title, "/Users/me/code/news",
-                             "idle", "idle", "news-dev", 9, slot, i + 1, 60 * 24 * (i + 2), last, seen_at=ago(minutes=60 * 24)))
+                             "idle", "idle", "news-dev", 9, slot, i + 1, minutes, last, seen_at=ago(minutes=60 * 24)))
 
 if os.environ.get("MOCK_AGENTS"):
     n = 0

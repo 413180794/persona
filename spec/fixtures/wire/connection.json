@@ -68,6 +68,7 @@
         "connectors",
         "channels",
         "runtime_cli",
+        "conversation_origin",
         "task_push"
       ],
       "fp": "",
@@ -149,6 +150,7 @@
           "connectors",
           "channels",
           "runtime_cli",
+          "conversation_origin",
           "task_push"
         ],
         "/type": "hello"
@@ -221,6 +223,7 @@
         "connectors",
         "channels",
         "runtime_cli",
+        "conversation_origin",
         "task_push"
       ],
       "fp": "",
@@ -292,6 +295,7 @@
           "connectors",
           "channels",
           "runtime_cli",
+          "conversation_origin",
           "task_push"
         ],
         "/ok": true,

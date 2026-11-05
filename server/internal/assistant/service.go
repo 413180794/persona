@@ -53,6 +53,7 @@ type Service struct {
 	prefs      settingsBook      // profile.go
 	main       mainBook          // start.go
 	archived   archiveBook       // conversations.go
+	origins    originBook        // origins.go
 	relays     relayBook         // conversations.go
 	quiet      quietBook         // quiet.go
 	supervise  superviseBook     // supervise.go
@@ -94,6 +95,7 @@ func New(o Options) *Service {
 	}
 	s.models.secret = secretkey.New(o.SecretKey)
 	s.archiveRoutes()
+	s.originRoutes()
 	s.profileRoutes()
 	s.startRoutes()
 	s.scheduleRoutes()
@@ -249,6 +251,8 @@ type startParams struct {
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Purpose        string `json:"purpose,omitempty"` // the model configuration's purpose; "" is the assistant's
 	Space          string `json:"space,omitempty"`   // "health" starts it in the health space (docs/health.md)
+	Origin         string `json:"origin,omitempty"`  // where it comes from (origins.go); "" is the user's
+	OriginRef      string `json:"origin_ref,omitempty"`
 }
 
 // kbReady: there is a knowledge base (kb.go; on, opened or about to).
@@ -313,6 +317,12 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 	}
 	archived, ok := s.archivedSet()
 	snap.Partial = snap.Partial || !ok
+	origins, ok := s.conversationOrigins()
+	snap.Partial = snap.Partial || !ok
+	for id, o := range origins {
+		v := view(id, o.machine)
+		v.Origin, v.OriginRef = o.origin, o.ref
+	}
 	for id, machine := range archived {
 		view(id, machine).Archived = true
 	}
@@ -386,6 +396,7 @@ func (s *Service) InteractionResolved(ctx context.Context, r InteractionResolved
 // (todo_sessions.go).
 func (s *Service) SessionsChanged(ctx context.Context, d DeviceSessions) {
 	s.drainRelays(d.MachineID, d.Sessions)
+	s.originsChanged(d.MachineID, d.Sessions) // conversations from before origins were noted (origins.go)
 	s.todosSessionsChanged(ctx, d)
 }
 

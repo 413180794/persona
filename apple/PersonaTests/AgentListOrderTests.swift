@@ -55,6 +55,23 @@ import Testing
         #expect(order().ordered(list).map(\.sessionID) == ["c", "a", "b"])
     }
 
+    @Test func quietSpaceRowsFollowActivityWhileTheSpacesTabsKeepTheirOrder() throws {
+        var first = session("first", "idle", updated: 19), second = session("second", "idle", updated: 8)
+        var latest = session("latest", "idle", updated: 59)
+        first.slotIndex = 0
+        second.slotIndex = 1
+        latest.slotIndex = 2
+        let group = try #require(SpaceGroup.build([latest, second, first]).first)
+        #expect(group.isQuiet)
+        #expect(group.sessions.map(\.sessionID) == ["first", "second", "latest"])
+        #expect(order().ordered(group.sessions).map(\.sessionID) == ["latest", "first", "second"])
+        let rows = AgentListRows(order: order(), grouping: .space, isFolded: { _ in false }, expandedQuiet: [group.id])
+        let visible = rows.spaces(active: [], quiet: [group], hosts: nil)
+        #expect(visible.map(\.sessionID) == ["latest", "first", "second"], "navigation follows the displayed rows")
+        #expect(AgentListRows.step(visible.map(\.key), from: latest.key, by: 1) == first.key)
+        #expect(group.sessions.map(\.slotIndex) == [0, 1, 2], "list order must not rewrite the original tabs")
+    }
+
     @Test func underAQuickFilterOnlyTimeCounts() {
         let list = [session("needs", "needs_you", updated: 1), session("idle", "idle", updated: 9)]
         #expect(order(byRank: false).ordered(list).map(\.sessionID) == ["idle", "needs"])

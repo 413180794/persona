@@ -195,7 +195,7 @@ func TestInboxAgentNoMachineFails(t *testing.T) {
 	}
 }
 
-// A queued item's agent is the assistant's own conversation, untitled, on the inbox agent's model and the
+// A queued item's agent is the assistant's own conversation, named after the item, on the inbox agent's model and the
 // assistant's machine; the hub learns it is the AI 分身's from the next snapshot.
 func TestInboxAgentStarts(t *testing.T) {
 	h := agentHub(t)
@@ -214,11 +214,12 @@ func TestInboxAgentStarts(t *testing.T) {
 	if snap.Inbox == nil || len(snap.Inbox.Agents) != 1 || snap.Inbox.Agents[0].SessionID != it.Agent.SessionID {
 		t.Fatalf("the snapshot's inbox: %+v", snap.Inbox)
 	}
+	// Named after its item from the start (#3264), not after its first turn by the model.
 	h.titles.mu.Lock()
-	_, titled := h.titles.m[it.Agent.SessionID]
+	title := h.titles.m[it.Agent.SessionID]
 	h.titles.mu.Unlock()
-	if titled {
-		t.Fatal("the AI 分身's conversation is named like the assistant's")
+	if title == nil || title.By != titleByInbox || !strings.Contains(title.Title, " | 收件箱 | ") {
+		t.Fatalf("the AI 分身's conversation's title: %+v", title)
 	}
 }
 

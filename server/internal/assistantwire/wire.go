@@ -296,6 +296,11 @@ type SessionView struct {
 	Title    string   `json:"title,omitempty"`
 	Archived bool     `json:"archived,omitempty"`
 	Queued   []string `json:"queued,omitempty"` // messages from other conversations waiting for its turn to end
+	// Origin is who opened the conversation (docs/protocol.md「助手对话的来源」: user, channel, inbox, task, spawned,
+	// lark_agent, extension) and OriginRef what of (the inbox item, the task, the conversation, the channel, the
+	// extension); both "" while it is not known.
+	Origin    string `json:"origin,omitempty"`
+	OriginRef string `json:"origin_ref,omitempty"`
 	// Supervising: its current turn was started by a 督办 message about the tasks it handed out (#3124): the assistant
 	// does not push its normal finish (SupervisedFinish); it pushes what the user needs to know (notify_user).
 	Supervising bool `json:"supervising,omitempty"`
@@ -315,6 +320,10 @@ type SnapshotResult struct {
 // RoleHeader carries the role of the device a relayed request came from (the hub's auth decides it and sets the
 // header, replacing any the client sent). Absent (a test's own request) means a full device.
 const RoleHeader = "X-Persona-Role"
+
+// ExtensionHeader carries the extension a relayed request came from when RoleHeader is "extension" (set by the hub
+// like RoleHeader; never the client's).
+const ExtensionHeader = "X-Persona-Extension"
 
 // ToolCall is assistant.tool's params.
 type ToolCall struct {
@@ -608,6 +617,7 @@ var Routes = []string{
 	"POST /api/v1/assistant/conversations",
 	"POST /api/v1/assistant/conversations/{id}/compact",
 	"POST /api/v1/assistant/main/new",
+	"POST /api/v1/assistant/origins/backfill",
 	// The channels (channels.go there, docs/channels.md「接口」).
 	"GET /api/v1/channels",
 	"GET /api/v1/channels/{id}",
@@ -698,6 +708,9 @@ type StartParams struct {
 	// Untitled: not one of the conversations it names and lists as its own (the inbox's AI 分身: its result is the
 	// draft in the inbox).
 	Untitled bool `json:"untitled,omitempty"`
+	// Origin and OriginRef: who opens it (SessionView.Origin); "" is the user's.
+	Origin    string `json:"origin,omitempty"`
+	OriginRef string `json:"origin_ref,omitempty"`
 }
 
 // SendParams is assistant.send_params's params: Params are the node's assistant.send / session.send params.

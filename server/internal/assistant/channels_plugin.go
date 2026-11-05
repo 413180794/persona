@@ -270,7 +270,7 @@ func (s *Service) channelForward(ctx context.Context, id string, m channel.Messa
 	run := &channel.Run{ID: id + "_" + m.ID, Channel: id, ReplyTo: m.ID, TargetKind: channel.TargetConversation, Label: rt.label,
 		Started: time.Now().UTC(), Probe: channel.Probe(in.Text, append(slices.Clone(in.Files), in.Forward, in.Quote)...)}
 	if rt.isNew {
-		sess, err := s.Start(ctx, StartParams{Text: text, Images: images, Main: rt.main})
+		sess, err := s.Start(ctx, StartParams{Text: text, Images: images, Main: rt.main, Origin: OriginChannel, OriginRef: id})
 		if err != nil {
 			return fmt.Errorf("%s%w", i18n.T(s.botLang(ctx), "assistant-channels_plugin.not_started"), err)
 		}

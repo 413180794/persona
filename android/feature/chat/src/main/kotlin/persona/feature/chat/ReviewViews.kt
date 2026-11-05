@@ -90,7 +90,8 @@ fun ReviewChecklist(todo: Todo, modifier: Modifier = Modifier) {
                         CheckMark.Missing -> Triple(PhIcons.X, PersonaTheme.palette.danger.text, stringResource(R.string.chat_review_missing))
                         CheckMark.Open -> Triple(PhIcons.Clock, PersonaTheme.palette.ink3, stringResource(R.string.chat_review_open))
                     }
-                    Row(Modifier.semantics(mergeDescendants = true) { contentDescription = "$said：${c.criterion}" },
+                    val described = stringResource(R.string.chat_review_criterion, said, c.criterion)
+                    Row(Modifier.semantics(mergeDescendants = true) { contentDescription = described },
                         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                         JIcon(icon, decorative = true, size = Tokens.Space.m, tint = tint, modifier = Modifier.padding(top = Tokens.Space.xxs))
                         Column {

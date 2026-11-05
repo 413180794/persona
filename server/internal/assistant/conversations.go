@@ -711,11 +711,11 @@ func (s *Service) toolConversationNew(ctx context.Context, self string, args jso
 	if err != nil {
 		return "", err
 	}
-	c, err := s.startConversation(sctx, startParams{Text: relayText(msg), Space: space})
+	c, err := s.startConversation(sctx, startParams{Text: relayText(msg), Space: space, Origin: OriginSpawned, OriginRef: self})
 	if err != nil {
 		return "", err
 	}
-	s.titleNew(c.MachineID, c.SessionID, time.Now(), "")
+	s.titleNew(c.MachineID, c.SessionID, time.Now())
 	b := &s.relays
 	b.mu.Lock()
 	if s.relayLocked(ctx) {

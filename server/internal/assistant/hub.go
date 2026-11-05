@@ -200,6 +200,7 @@ const (
 	DeviceAll                = assistantwire.DeviceAll
 	NotifyPush               = assistantwire.NotifyPush
 	RoleHeader               = assistantwire.RoleHeader
+	ExtensionHeader          = assistantwire.ExtensionHeader
 	AssistantID              = assistantwire.AssistantID
 )
 

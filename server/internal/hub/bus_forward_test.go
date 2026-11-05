@@ -39,6 +39,7 @@ func TestBusForwardsTheAssistantRoutes(t *testing.T) {
 		req, _ := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 		req.Header.Set(assistantwire.RoleHeader, "forged")
+		req.Header.Set(assistantwire.ExtensionHeader, "forged")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -53,7 +54,7 @@ func TestBusForwardsTheAssistantRoutes(t *testing.T) {
 	}
 	req := <-got
 	if req.Method != "POST" || req.Path != "/api/v1/assistant/conversations/c1/route" || req.Query != "x=1" || string(req.Body) != `{"text":"你好"}` ||
-		req.Header[assistantwire.RoleHeader][0] != roleFull || req.Header["Authorization"] != nil {
+		req.Header[assistantwire.RoleHeader][0] != roleFull || req.Header["Authorization"] != nil || req.Header[assistantwire.ExtensionHeader] != nil {
 		t.Fatalf("the assistant got %+v", req)
 	}
 	if resp, body := do("GET", "/api/v1/assistant/runs", ""); resp.StatusCode != http.StatusBadGateway || !strings.Contains(body, "boom") {

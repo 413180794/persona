@@ -433,4 +433,5 @@
     <string name="chat_review_missing">不足</string>
     <string name="chat_review_note">監督メモ：%1$s</string>
     <string name="chat_review_expect">目安 %1$d 分</string>
+    <string name="chat_review_criterion">%1$s：%2$s</string>
 </resources>

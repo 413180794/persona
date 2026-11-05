@@ -465,6 +465,8 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
 
 - 发版机器的 Swift（6.3.3）和别的开发机不一样，Release 归档会报「unable to type-check this expression in reasonable time」：
   长修饰符链里的多语句闭包（`.task { … }`）会和整条链一起推断类型，报错的行号还会跟着改动乱跳。把闭包体挪成方法、id 挪成计算属性（`ChatView.prewarmRows`）。
+- Xcode 26.3（Swift 6.2.4）也会在测试夹具的长数组拼接链上类型检查超时（`RFBClientTests.sessionFollowsDesktopSize`）。
+  按协议头、矩形字段、编码分段构造 `[UInt8]`，保持原来的字节和断言；不要排除测试来绕过原始 scheme 的构建。
 - Swift 按位置先读出参数再调用后面的参数：`emit(s, i, word(…, &i, …))` 里传给 `emit` 的 `i` 是 `word` 改它之前的值（文件查看器的宏 `println!` 少了 `!`）。
   一个参数要改另一个参数用到的变量时，先把结果存进变量。
 - 改构建产物 Info.plist 的脚本阶段（设置 › 关于 › 构建 的 commit，`project.yml` 的 `Stamp the commit`）要把 `$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)`

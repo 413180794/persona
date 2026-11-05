@@ -192,7 +192,7 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 			kbc = s.kbChatContext(ctx, j.chat)
 		}
 		cctx, cancel := context.WithTimeout(ctx, 110*time.Second)
-		machineID, sessionID, err := s.startInboxAgent(cctx, cfg, j.prompt(kbc))
+		machineID, sessionID, err := s.startInboxAgent(cctx, cfg, j.it, j.prompt(kbc))
 		cancel()
 		b.mu.Lock()
 		if a := j.it.Agent; a != nil && a.State == AgentRunning && a.SessionID == "" {
@@ -224,7 +224,7 @@ func kbChatOf(it *InboxItem) string {
 
 // startInboxAgent starts a headless conversation like the assistant's (same directory, so the same tools) on the
 // inbox agent's model (模型配置 › inbox.agent), untitled: the draft in the inbox is its result.
-func (s *Service) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, prompt string) (machineID, sessionID string, err error) {
+func (s *Service) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, it *InboxItem, prompt string) (machineID, sessionID string, err error) {
 	machine := s.settings(ctx).MachineID
 	if _, ok := s.device(ctx, cfg.Machine); ok && cfg.Machine != "" {
 		machine = cfg.Machine
@@ -232,10 +232,13 @@ func (s *Service) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, pro
 	if _, ok := s.device(ctx, machine); !ok || machine == "" {
 		return "", "", errors.New("no machine for the inbox agent")
 	}
-	sess, err := s.Start(ctx, StartParams{Text: prompt, Purpose: purposeAgent, MachineID: machine, Untitled: true})
+	sess, err := s.Start(ctx, StartParams{Text: prompt, Purpose: purposeAgent, MachineID: machine, Untitled: true, Origin: OriginInbox,
+		OriginRef: it.ID})
 	if err != nil {
 		return "", "", err
 	}
+	// 「MMDD | 收件箱 | the item's title」 from the start, not its prompt's first line (#3264).
+	s.titleFixed(sess.MachineID, sess.SessionID, time.Now(), titleInbox, it.Title)
 	return sess.MachineID, sess.SessionID, nil
 }
 

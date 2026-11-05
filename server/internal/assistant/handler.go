@@ -102,3 +102,6 @@ type Handler interface {
 
 // roleFull is a device that may do everything (an answer-only watch may not).
 const roleFull = "full"
+
+// roleExtension is an extension's token (ExtensionHeader says which).
+const roleExtension = "extension"

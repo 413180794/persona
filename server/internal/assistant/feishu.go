@@ -733,7 +733,7 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 		run.Ext["reaction"] = reaction
 	}
 	if rt.isNew {
-		sess, err := s.Start(ctx, StartParams{Text: text, Images: images, Main: rt.main})
+		sess, err := s.Start(ctx, StartParams{Text: text, Images: images, Main: rt.main, Origin: OriginChannel, OriginRef: channel.Feishu})
 		if err != nil {
 			return err
 		}

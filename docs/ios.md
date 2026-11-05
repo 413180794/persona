@@ -5,6 +5,9 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 
 ## 信息架构
 
+Agents 的「空闲的空间」展开后，普通卡片、细列表、胶囊样式均复用 `AgentListOrder.ordered`，按最新活动在前显示（#2443）。
+`SpaceGroup.sessions` 仍保留原始标签顺序，空间页的标签编号和顺序不变；胶囊卡片的底部行按显示后的顺序确定。
+
 | Tab | 内容 |
 | --- | --- |
 | Persona | **Persona 助手**（2026-10-30 从「对话」改名）：hub 机器上 `~/.persona/assistant` 里**无头运行**的 Claude（`claude -p` + stream-json，不进 herdr；逐字流式；

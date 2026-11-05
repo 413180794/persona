@@ -223,6 +223,7 @@ assistant.ask        POST /api/v1/assistant/conversations
 -                    POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions
 -                    POST /api/v1/assistant/followups/{id}/run
 -                    POST /api/v1/assistant/main/new
+-                    POST /api/v1/assistant/origins/backfill
 -                    POST /api/v1/assistant/routines/{id}/run
 -                    POST /api/v1/assistant/tasks
 -                    POST /api/v1/assistant/tasks/{id}/fresh

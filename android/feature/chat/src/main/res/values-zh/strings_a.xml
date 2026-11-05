@@ -433,4 +433,5 @@
     <string name="chat_review_missing">缺口</string>
     <string name="chat_review_note">督办说明：%1$s</string>
     <string name="chat_review_expect">预计 %1$d 分钟</string>
+    <string name="chat_review_criterion">%1$s：%2$s</string>
 </resources>

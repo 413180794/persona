@@ -1117,7 +1117,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 		}
 	}
 	sess, err := s.startConversation(ctx, startParams{Text: taskPrompt(t, due, now, loc, manual, kb, false), PermissionMode: t.PermissionMode,
-		Purpose: "task." + t.ID, Space: t.Space})
+		Purpose: "task." + t.ID, Space: t.Space, Origin: OriginTask, OriginRef: t.ID})
 	if err != nil {
 		s.logf("task %s: %v", t.ID, err)
 		run.Status, run.Error = runFailed, err.Error()
@@ -1127,7 +1127,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 	run.MachineID, run.SessionID = sess.MachineID, sess.SessionID
 	s.logf("task %s ran %s after its time (new conversation %s, kept for the next runs)", t.ID, lateness(due, time.Now()), short(sess.SessionID))
 	s.adoptConversation(t.ID, sess.MachineID, sess.SessionID, sess.Launcher)
-	s.titleNew(sess.MachineID, sess.SessionID, time.Now(), t.label()) // 「MMDD | 定时 | 任务名」, the same for every run in it
+	s.titleFixed(sess.MachineID, sess.SessionID, time.Now(), titleTask, t.label()) // 「MMDD | 定时 | 任务名」, the same for every run in it
 	var m *Device
 	if d, ok := s.device(ctx, sess.MachineID); ok {
 		m = &d

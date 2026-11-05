@@ -39,7 +39,7 @@ func (n *Node) launcherRepair(ctx context.Context, name, action string) (proto.L
 	cmd := loginShell(ctx, claudeUpdateScript+" </dev/null")
 	killGroupOnCancel(cmd)
 	out, err := cmd.CombinedOutput()
-	res := proto.LauncherRepair{Output: clipText(redactSecrets(lastLines(strings.TrimSpace(string(out)), 6)), 400)}
+	res := proto.LauncherRepair{Output: clipText(redactSecrets(lastLines(strings.TrimSpace(dropShellStartupNoise(string(out))), 6)), 400)}
 	switch {
 	case ctx.Err() != nil:
 		res.Output = strings.TrimSpace(res.Output + "\n" + fmt.Sprintf("timed out after %s", launcherRepairTimeout))
@@ -51,4 +51,31 @@ func (n *Node) launcherRepair(ctx context.Context, name, action string) (proto.L
 		res.OK = true
 	}
 	return res, nil
+}
+
+// dropShellStartupNoise removes the two warnings an interactive bash prints when it has no terminal (a node run as a
+// daemon, CI), and the "exit" it echoes last when the script runs the exit builtin: they are not the repair's output
+// and would crowd it out of the last lines the user sees.
+func dropShellStartupNoise(out string) string {
+	lines := strings.Split(strings.TrimRight(out, "\r\n"), "\n")
+	kept := lines[:0]
+	for _, line := range lines {
+		if !isShellStartupNoise(strings.TrimRight(line, "\r")) {
+			kept = append(kept, line)
+		}
+	}
+	// Only a script ending in the exit builtin makes bash echo this; "claude update" itself never does.
+	if last := len(kept) - 1; last >= 0 && strings.TrimRight(kept[last], "\r") == "exit" {
+		kept = kept[:last]
+	}
+	return strings.Join(kept, "\n")
+}
+
+func isShellStartupNoise(line string) bool {
+	shell, msg, ok := strings.Cut(line, ": ")
+	if !ok || shell == "" || strings.ContainsAny(shell, " \t") {
+		return false
+	}
+	return msg == "no job control in this shell" ||
+		strings.HasPrefix(msg, "cannot set terminal process group (") && strings.HasSuffix(msg, "): Inappropriate ioctl for device")
 }

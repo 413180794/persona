@@ -157,12 +157,18 @@ func (s *Service) start(ctx context.Context, p StartParams) (proto.Session, erro
 	if errors.Is(err, ErrNoDevice) && p.MachineID == "" {
 		return proto.Session{}, errNoAssistantMachine
 	}
-	return sess, err
+	if err != nil {
+		return sess, err
+	}
+	sess.Origin, sess.OriginRef = firstNonEmpty(p.Origin, OriginUser), p.OriginRef
+	s.originSet(ctx, sess.MachineID, sess.SessionID, sess.Origin, sess.OriginRef)
+	return sess, nil
 }
 
 // startConversation starts a new conversation of the assistant's own (a scheduled task's, conversation_new's).
 func (s *Service) startConversation(ctx context.Context, p startParams) (proto.Session, error) {
-	return s.start(ctx, StartParams{Text: p.Text, PermissionMode: p.PermissionMode, Purpose: p.Purpose, Space: p.Space})
+	return s.start(ctx, StartParams{Text: p.Text, PermissionMode: p.PermissionMode, Purpose: p.Purpose, Space: p.Space,
+		Origin: p.Origin, OriginRef: p.OriginRef})
 }
 
 // Start is assistant.start: a conversation one of the hub's features starts (the inbox's AI 分身), or the channels'
@@ -173,7 +179,7 @@ func (s *Service) Start(ctx context.Context, p StartParams) (proto.Session, erro
 		return proto.Session{}, err
 	}
 	if !p.Untitled {
-		s.titleNew(sess.MachineID, sess.SessionID, time.Now(), "")
+		s.titleNew(sess.MachineID, sess.SessionID, time.Now())
 	}
 	return sess, nil
 }
@@ -236,6 +242,7 @@ func (s *Service) startMain(ctx context.Context, p StartParams) (proto.Session, 
 		p.Text = s.renderHandoff(ctx, handoff, p.Text)
 	}
 	p.MachineID, p.Purpose, p.Main = "", "", false
+	p.Origin, p.OriginRef = OriginUser, "" // the main conversation is the user's, whatever channel opened it
 	sess, err := s.start(ctx, p)
 	if err != nil {
 		return proto.Session{}, err
@@ -367,6 +374,19 @@ func (s *Service) renderHandoff(ctx context.Context, handoff mainHandoff, text s
 
 // ---- the routes ----
 
+// requestOrigin is where a conversation POST /api/v1/assistant/conversations opens comes from: an extension's
+// (a Feishu /agent when it runs on lark.agent's model), else the user's in an app.
+func requestOrigin(r *http.Request, purpose string) (origin, ref string) {
+	if r.Header.Get(RoleHeader) != roleExtension {
+		return OriginUser, ""
+	}
+	ext := r.Header.Get(ExtensionHeader)
+	if purpose == purposeLarkAgent {
+		return OriginLarkAgent, ext
+	}
+	return OriginExtension, ext
+}
+
 func (s *Service) startRoutes() {
 	s.handle("POST /api/v1/assistant/conversations", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -411,9 +431,10 @@ func (s *Service) startRoutes() {
 				return
 			}
 		}
+		origin, ref := requestOrigin(r, in.Purpose)
 		// The main conversation is the assistant's, on its machine.
 		sess, err := s.Start(ctx, StartParams{Text: in.Prompt, Images: in.Images, Launcher: in.Launcher, PermissionMode: in.PermissionMode,
-			Effort: in.Effort, Purpose: in.Purpose, MachineID: in.MachineID, Main: in.Main, Space: in.Space})
+			Effort: in.Effort, Purpose: in.Purpose, MachineID: in.MachineID, Main: in.Main, Space: in.Space, Origin: origin, OriginRef: ref})
 		if err != nil {
 			apierr.Call(w, err)
 			return

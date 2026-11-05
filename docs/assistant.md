@@ -509,17 +509,30 @@ App 的 `PUT /api/v1/assistant/tasks/{id}` 请求体里没有 `push` 时保留�
 - **什么时候起**：hub 开的新对话（App 的新对话 `POST /api/v1/assistant/conversations`）记一笔「待命名」；第一轮结束（会话从 working 变成 done / idle）时，
   助手在后台用「对话标题」用途的模型（`assistant.title`，模型配置 › 信息处理，实测 2–3 秒）读第一条消息和回复起「类型 | 主题」。不打断对话、不让助手自己做，回复不等它。
   定时任务开的对话一开始就是 `MMDD | 定时 | 任务名`，不调模型；同一个任务续在同一段对话里（上一节），标题就一直是这个。
+  收件箱 AI 分身的对话一开始就是 `MMDD | 收件箱 | 那件事的标题`（#3264，原来不起标题，侧边栏里是一串「这是收件箱里的一件事，你作…」）；「收件箱」只有 hub 用，不在模型可选的类型里。
 - **格式校验**（`parseTitle`）：取第一行，容忍引号、全角竖线、模型多写的日期；类型不在表里或主题超长就带上「上一次回的不合格式」再问一次；
   第二次类型对、主题还长就截到 14 个字；都不行就是 `MMDD | 探索 | 第一条消息的前 14 个字`（去掉标签和 Markdown 符号）。没配模型也走这个兜底。
 - **存在哪**：助手的 store（就是 hub 的 settings `assistant.titles`：会话 id → 标题、谁起的、开始时间），经快照交给 hub，发给 App 的会话列表里替换 `title`（`decorated`）。
   不写进 transcript：Claude 和 Codex 两种对话一样处理，不用动 node。
 - **只起一次，用户的优先**：App 里 重命名（抽屉里长按对话 › 重命名…，`POST /api/v1/sessions/{mid}/{sid}/rename`）记成用户起的，以后不再覆盖；
   第一轮结束前就改了名的也不会被替换。Codex 对话改名只记在 hub（node 会往 Codex 的 rollout 里写 Claude 的 custom-title 行）。
-- 已有的旧对话不补（没有「待命名」那一笔）。
+- 已有的旧对话不补（没有「待命名」那一笔）；只有收件箱 AI 分身的旧对话在回填来源时顺带补上 `MMDD | 收件箱 | …`（见下「对话的来源」）。
 - **主对话没有标题**（#1313）：发给 App 的会话列表里主对话的 `title` 一律是「Persona」（`mainTitle`，按 settings `assistant.main` 认），
   不是 node 给的（无头跑的 transcript 没有 Claude Code 的 ai-title，node 拿第一条消息当标题）、不起「MMDD | 类型 | 主题」（开主对话时记的「待命名」在第一轮结束时直接丢掉，不调模型），
   App 给它改标题返回 400「主对话没有标题可以改」（`conversation_rename` 本来就拒绝）。各端顶栏在主对话上显示形象：iOS / Mac / 安卓是形象名（默认「Persona」），网页是「Persona」。
 - App：抽屉的对话行里 `MMDD | 类型 | ` 用次要色、主题用主色，窄的时候从主题末尾截断（`ConversationTitle`）；别的标题照旧。
+
+## 对话的来源（#3264，2026-11-06）
+
+用户反馈：侧边栏「最近」里一大串收件箱 AI 分身开的对话淹没了自己的对话，要给自动开的对话打上来源标签、默认收起，但要能点进去看。
+每段助手对话记一个来源（`assistant/origins.go`，settings `assistant.origins`），经快照交给 hub 填到会话列表的 `origin` / `origin_ref`；取值、回填、各端侧边栏的规矩见 `docs/protocol.md`「助手对话的来源」。
+
+- **在哪记**：所有开对话的路都经过 `start()`，调用方带上来源：App 的 `POST /api/v1/assistant/conversations` 是 `user`（扩展的令牌来的是 `extension`，跑在 `lark.agent` 模型上的是 `lark_agent`，
+  扩展是谁由 hub 转发时的 `X-Persona-Extension` 头说，客户端发的会被丢掉）、渠道 `/new` 是 `channel`、收件箱 AI 分身 `inbox`、定时任务 `task`、`conversation_new` 是 `spawned`；主对话一律 `user`。
+- **回填**：hub 每次收到一台机器的会话列表（`SessionsChanged`，node 自己的列表，标题还是第一条消息）就在后台给没有来源的助手对话补一笔。证据按顺序：收件箱条目记的 AI 分身会话、
+  任务记的对话（`run_session_id`、运行记录里不是发进别的对话的）、标题是 hub 定的（定时 / 收件箱）、第一条消息的开头（收件箱、`⏰` 定时任务）；标题看不出来、又是 hub 开的（标题待命名 / 自动起的）
+  再读第一条消息认对话转发和 `/agent` 的 `<jarvis-context>`（node 的标题把这些块去掉了）。都不是就是 `user`。开对话时记的总是盖过回填猜的，回填从不改开对话时记的。
+- **重跑**：`POST /api/v1/assistant/origins/backfill` 立刻对助手那台机器的列表跑一遍；`redo` 重新判断回填记的，但不会把已经认出来的改回 `user`（那时拿到的是 hub 装饰过的列表，标题已经不是第一条消息）。
 
 ## 管理自己的对话（2026-11-01）
 

@@ -293,6 +293,7 @@ var Features = []string{
 	"connectors",               // GET /api/v1/connectors (docs/plan-connectors.md)
 	"channels",                 // GET /api/v1/channels and each channel's settings, binding, test (docs/channels.md)
 	"runtime_cli",              // phone_runtime_cli kept out of the phone's tools, POST /api/v1/phone/runtime-cli (docs/runtime-cli.md)
+	"conversation_origin",      // Session.origin on assistant conversations (docs/protocol.md「助手对话的来源」)
 	"task_push",                // Task.push on /api/v1/assistant/tasks: 跑完推送, every run or only what a run sends (docs/assistant.md「跑完推送」)
 }
 
@@ -694,6 +695,11 @@ type Session struct {
 	// Archived: an assistant conversation moved out of the sidebar's list (kept, listed under 已归档;
 	// internal/assistant/conversations.go).
 	Archived bool `json:"archived,omitempty"`
+	// Origin is who opened an assistant conversation and OriginRef what of (docs/protocol.md「助手对话的来源」):
+	// user, channel, inbox, task, spawned, lark_agent, extension; "" is the user's. Set by the hub from the
+	// assistant's snapshot.
+	Origin    string `json:"origin,omitempty"`
+	OriginRef string `json:"origin_ref,omitempty"`
 	// Compaction is the last compaction the user asked for in an assistant conversation (POST …/compact), kept by the
 	// node until the next one: running, then done or failed (docs/assistant.md「手动压缩」).
 	Compaction *Compaction `json:"compaction,omitempty"`

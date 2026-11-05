@@ -377,6 +377,11 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 
 ### Agents 列表（`AgentsListTests`）
 
+空闲空间的行序回归（`QuietSpaceOrderTests`，#2443）：以 `MOCK_QUIET=order PORT=<端口>` 启动 mock，
+传 `TEST_RUNNER_JARVIS_QUIET_ORDER_HUB=<mock 地址>`、`TEST_RUNNER_JARVIS_LAYOUT=shell`，运行 `-only-testing:PersonaUITests/QuietSpaceOrderTests`。
+fixture 的标签顺序是 41 / 52 / 1 分钟前，展开行必须显示为 1 / 41 / 52；用例同时检查卡片、细列表、折叠后重开。
+`TEST_RUNNER_JARVIS_UI_STYLE=glass|beautiful` 配合真实的模拟器 light / dark 外观覆盖普通卡片和胶囊；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，`TEST_RUNNER_JARVIS_STYLE` 仅标记文件名。
+
 快速筛选（全部 / 需要你 / 未读 / 工作中，计数随机器筛选变）、细列表（行数至少是卡片的 2.5 倍，重启后记住）、点空间标题折叠（折叠后标题仍报各状态计数，
 重启后记住；全部折叠 / 全部展开；折叠的空间从 ⋯「打开空间」进空间页）、空间 ⋯「全部标为已读（N）」、未读筛选下一路往下看（打开过的留在原位，
 重选筛选才消失）、筛选里「全部标为已读」确认后清空、手机上的筛选条作为列表首行随内容滚动（`testFilterBarHugsTheTop`：打开时搜索收起，下拉显示搜索，筛选条滚出屏幕后不留固定副本；

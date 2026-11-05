@@ -38,7 +38,7 @@ struct AgentListRows {
     func spaces(active: [SpaceGroup], quiet: [SpaceGroup], hosts: [MachineRef]?) -> [Session] {
         func section(_ active: [SpaceGroup], _ quiet: [SpaceGroup]) -> [Session] {
             active.flatMap { g in folded(g.id) ? [] : agentRows(g.sessions, key: g.id) }
-                + quiet.flatMap { g in searching || expandedQuiet.contains(g.id) ? TabPanes.grouped(g.sessions) : [] }
+                + quiet.flatMap { g in searching || expandedQuiet.contains(g.id) ? TabPanes.grouped(order.ordered(g.sessions)) : [] }
         }
         guard let hosts else { return section(active, quiet) }
         return hosts.flatMap { ref in

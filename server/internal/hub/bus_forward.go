@@ -60,7 +60,12 @@ func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send 
 			req.Header[k] = v
 		}
 	}
-	req.Header[assistantwire.RoleHeader] = []string{principalOf(r.Context()).Role}
+	p := principalOf(r.Context())
+	req.Header[assistantwire.RoleHeader] = []string{p.Role}
+	delete(req.Header, assistantwire.ExtensionHeader) // only the hub says which extension asks
+	if p.Role == roleExtension && p.Extension != "" {
+		req.Header[assistantwire.ExtensionHeader] = []string{p.Extension}
+	}
 	ctx := r.Context()
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc

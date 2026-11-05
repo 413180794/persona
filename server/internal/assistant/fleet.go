@@ -556,7 +556,7 @@ func changedMachines(old, now map[string]SessionView) []string {
 	}
 	for id, v := range now {
 		o, ok := old[id]
-		if !ok || o.Title != v.Title || o.Archived != v.Archived || !slices.Equal(o.Queued, v.Queued) || o.MachineID != v.MachineID {
+		if !ok || o.Title != v.Title || o.Archived != v.Archived || o.Origin != v.Origin || o.OriginRef != v.OriginRef || !slices.Equal(o.Queued, v.Queued) || o.MachineID != v.MachineID {
 			add(v.MachineID)
 			if ok {
 				add(o.MachineID)
@@ -831,6 +831,7 @@ func (s *Service) decorated(machine string) []proto.Session {
 		}
 		if list[i].Assistant {
 			list[i].Archived = shown[list[i].SessionID].Archived
+			list[i].Origin, list[i].OriginRef = shown[list[i].SessionID].Origin, shown[list[i].SessionID].OriginRef // origins.go
 			// Messages from other conversations wait in the assistant while it runs: shown like typed-ahead input.
 			if q := shown[list[i].SessionID].Queued; len(q) > 0 {
 				list[i].Queued = append(slices.Clip(list[i].Queued), q...) // the node's slice is shared: never write into it

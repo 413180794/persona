@@ -1129,7 +1129,7 @@ private struct AgentsList: View {
                             set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
                         )) {
                             let roles = TabPanes.roles(g.sessions)
-                            ForEach(TabPanes.grouped(g.sessions)) { s in slotRow(s, pane: roles[s.key]) }
+                            ForEach(TabPanes.grouped(ordered(g.sessions))) { s in slotRow(s, pane: roles[s.key]) }
                         } label: {
                             QuietSpaceRow(group: g, machine: machine(g.machineRef), showMachine: namesMachine, repo: repos)
                         }
@@ -1536,7 +1536,7 @@ private struct AgentsList: View {
         .accessibilityIdentifier("agents.quietSpace")
         if open {
             let roles = TabPanes.roles(g.sessions)
-            ForEach(TabPanes.grouped(g.sessions)) { s in slotRow(s, pane: roles[s.key]) }
+            ForEach(TabPanes.grouped(ordered(g.sessions))) { s in slotRow(s, pane: roles[s.key]) }
         }
     }
 
@@ -1602,7 +1602,7 @@ private struct AgentsList: View {
         .accessibilityIdentifier("agents.quietSpace")
         if open {
             // A card is one surface: a tab's agents sit together in it, named and marked, without a row of the tab's own.
-            let rows = TabPanes.grouped(g.sessions), roles = TabPanes.roles(g.sessions)
+            let rows = TabPanes.grouped(ordered(g.sessions)), roles = TabPanes.roles(g.sessions)
             ForEach(rows) { s in slotRow(s, cardLast: s.id == rows.last?.id, pane: roles[s.key]) }
         }
     }
