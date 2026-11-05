@@ -216,6 +216,22 @@
 - **`curl … | sh` 也能问问题**：标准输入是脚本本身，从 `/dev/tty` 读（`(: </dev/tty) 2>/dev/null` 判断有没有终端，CI 和 cron 里没有）。
   本机验证交互分支用 `script -q /dev/null <命令>` 给它一个 pty，把答案从标准输入喂进去。
 
+## 同机转发让公网连接像回环（2026-11-04，#1708）
+
+- **只看连接地址也会被骗**：公网 443 → 内网穿透 → 本机 nginx `stream`（`ssl_preread` 按 SNI 透传）→ hub 的 TLS 端口，hub 看到每条连接都是
+  `127.0.0.1`：管理界面的 `cidrs` 形同虚设（回环恒在范围内，公网 `/api/v1/admin/state` 回 `can_setup: true`）、主 token 公网可用、
+  鉴权失败不计数、日志来源全是回环。TLS 透传加不了转发头，修法是 PROXY protocol（`security.proxy_protocol`，`docs/network.md`「PROXY protocol」）。
+- **信任的上游不带头就拒绝**，不能「有头用头、没头照旧」：否则绕过代理直连的、代理忘了开头的，又全成了回环。
+  反过来，不在 `from` 里的来源的头根本不读，现有客户端零变化。v1 `UNKNOWN` / v2 `UNSPEC` 规范说「可以用连接本身的地址」，
+  对同机上游那就是回环，所以拒绝；只有 v2 `LOCAL`（代理自己的连接）用 socket 地址。
+- **头要一路传下来**：nginx 只开 `proxy_protocol on;` 而前面的内网穿透没发头时，nginx 写进头里的来源是穿透客户端的 `127.0.0.1`，hub 照样当本机。
+  hub 遇到「回环上游说来源是回环」会在日志里提示一次；要让前面那层也发头，nginx `listen … proxy_protocol` + `set_real_ip_from`。
+- **别在 Accept 里读头**：一个不说话的连接会卡住所有连接。头在连接自己的 goroutine 里、第一次 Read / Write / RemoteAddr 时读
+  （`http.Server` 在每个连接的 goroutine 开头先调 `RemoteAddr()`），带自己的 5 秒期限；调用方先设的读期限要记下来，读完头恢复，不能被头的期限覆盖或清掉。
+- **明文端口别对回环开**：`hub pair`、`hub admin`、插件都经回环连明文端口、不带头，`from` 含回环时 `listeners` 里有 `http` 就拒绝启动。
+- **测试里别假设 Accept 到的是自己的连接**：开发机上有别的进程扫回环端口（测试里 Accept 到过一条以 `GET` 开头的陌生连接，偶发失败），
+  按 socket 的对端地址挑出自己拨的那条。
+
 ## hub 互联（docs/mesh.md，2026-11-02）
 
 - （第一版，对等互联时的）给 App 的机器 id 要在**序列化之前**换：`Hub.broadcast` 原来先 `json.Marshal` 再看消息，换了 map 却没换已经编好的字节。

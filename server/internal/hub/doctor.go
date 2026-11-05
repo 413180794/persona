@@ -133,6 +133,16 @@ func (d *doctorReport) config(dir string) *Config {
 	} else {
 		d.ok("security.allow_public_plaintext", "已关闭")
 	}
+	if pp := cfg.Security.ProxyProtocol; pp != nil {
+		switch p, err := pp.policy(); {
+		case err != nil:
+			d.problem("security.proxy_protocol", "配置有误，hub 启动不了："+err.Error())
+		case p.tls && !p.http && cfg.Public.TLSListen == "":
+			d.problem("security.proxy_protocol", "只作用于 TLS 端口，但没开 public.tls_listen：现在不起作用")
+		default:
+			d.ok("security.proxy_protocol", "读 "+strings.Join(pp.From, "、")+" 发来的 PROXY 头；配好后 hub 日志里公网来源不应再是回环")
+		}
+	}
 	certFile, keyFile := cfg.Public.CertFile, cfg.Public.KeyFile
 	if certFile == "" && keyFile == "" {
 		certFile, keyFile = filepath.Join(dir, "tls", "hub.crt"), filepath.Join(dir, "tls", "hub.key")

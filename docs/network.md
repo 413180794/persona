@@ -54,6 +54,7 @@
 | `auth_max_sources` | `4096` | 来源计数表的条目上限；满后清理过期条目，再优先淘汰未封禁且最早到期的条目 |
 | `auth_cache_entries` | `2048` | 设备 token 查询缓存的条目上限，包括无效 token；缓存有效期由代码固定为 30 秒 |
 | `auth_log_interval_seconds` | `30` | 安全错误日志最短间隔，省略的日志数汇总到 `suppressed` |
+| `proxy_protocol` | 不写，不读任何 PROXY 头 | hub 前面是同机端口转发 / TCP 透传时，让 hub 按真实来源判断，见下面「[PROXY protocol](#proxy-protocol)」 |
 
 公网 IPv4 按单个地址计数，IPv6 按 /64 聚合。封禁检查在 token 查库前进行，已封禁来源即使携带有效 token 也会收到 `429` 和秒数形式的 `Retry-After`。触发阈值的那次鉴权失败仍返回 `401`，后续请求才返回 `429`。内网 / VPN 来源不计数。
 
@@ -117,13 +118,82 @@ Docker 发布端口时还要检查容器相关的转发规则，不能只凭 ufw
 
 ## 来源判断与反向代理
 
-hub 只信任连接的来源地址和本地接收地址，**不读取 `X-Forwarded-For` 或 `Forwarded` 来决定信任**。回环、私网 / ULA、链路本地、与本机接口同链路的 IPv6 前缀（/64 或更长），以及 `trusted_cidrs` 命中来源，按本地网络处理。共享运营商 IPv4 地址空间不会自动受信任，只有落在本机 VPN 接口上的连接或显式白名单才算内网。
+hub 只信任连接的来源地址和本地接收地址，**不读取 `X-Forwarded-For` 或 `Forwarded` 来决定信任**；唯一的例外是配置里指定的上游发来的 PROXY 头（见下面「[PROXY protocol](#proxy-protocol)」）。回环、私网 / ULA、链路本地、与本机接口同链路的 IPv6 前缀（/64 或更长），以及 `trusted_cidrs` 命中来源，按本地网络处理。共享运营商 IPv4 地址空间不会自动受信任，只有落在本机 VPN 接口上的连接或显式白名单才算内网。
 
 **容器网关例外**：hub 跑在容器里时，本容器的网关地址（默认路由的下一跳、各网段的第一个地址，`server/internal/hub/admin_gateway.go`）不算本地网络，按公网处理，除非写进 `trusted_cidrs`。Docker 的用户态代理（docker-proxy）可能把来自内网和公网的连接都显示成网关地址，不排除的话公网请求能用主 token、走明文。Linux 上经 iptables DNAT 进来的局域网电脑保留真实地址，不受影响；`--network host` 部署也不受影响。
 
 **Docker Desktop / OrbStack 的转发来源**不保证是网关：Docker Desktop 的 gvisor 网络可能让本机、局域网客户端都显示成同一个公网形态的地址。hub 仍按实际对端判断，所以明文 API 会回 `403 tls_required`；仅把 `docker network inspect` 中的网关加入白名单不一定有效。客户端连接时，用 `docker compose exec hub netstat -tn` 查看容器 18660 端口对应的远端地址，按 [Docker 排查说明](docker.md#docker-desktop--orbstack-的明文连接) 配置。优先使用 hub 的 TLS；仅本机试用时，先把端口绑定到 `127.0.0.1`，再把观测到的转发来源以单地址 CIDR 写进 `security.trusted_cidrs`。该来源可能代表所有经映射进来的客户端，白名单不会还原原始客户端身份。
 
-本地反向代理终止 TLS 后再连 hub，会让来源变成回环；远端代理也会让来源变成代理地址。这会影响公网明文限制、主 token 限制、health 裁剪和限流。增加转发头不能恢复这些检查。若使用反向代理，需要由代理承担公网 TLS、访问控制和限流，并阻止公网借代理访问仅限本机的配对码接口；优先直接使用 hub 自带 TLS 监听。
+本地反向代理终止 TLS 后再连 hub，会让来源变成回环；远端代理也会让来源变成代理地址。这会影响公网明文限制、主 token 限制、health 裁剪和限流。增加转发头不能恢复这些检查。若使用反向代理，需要由代理承担公网 TLS、访问控制和限流，并阻止公网借代理访问仅限本机的配对码接口；优先直接使用 hub 自带 TLS 监听。不终止 TLS、只做 TCP 转发的（端口转发、内网穿透、nginx `stream` 按 SNI 透传到 TLS 端口）可以开 PROXY protocol，把真实来源告诉 hub。
+
+### PROXY protocol
+
+**风险**：hub 前面有一层**同机**的 TCP 转发时（例如内网穿透把公网端口转到本机，再经 nginx `stream` 按 SNI 透传到 hub 的 TLS 端口），hub 看到的每条公网连接都来自 `127.0.0.1`，一律按本机处理：
+
+- 管理界面不受 `admin.access` 限制（回环总在范围内），配了 `cidrs` 公网也打得开；
+- 主 token 从公网可用；
+- 鉴权失败只对公网来源计数，于是公网猜 token / 管理密码不限流；
+- 日志里的来源全是 `127.0.0.0/24`，看不出是谁。
+
+TLS 透传加不了 HTTP 头，转发头也不该用来放行。PROXY protocol（[规范](https://www.haproxy.org/download/2.9/doc/proxy-protocol.txt)）是转发方在连接最前面、TLS 握手之前写的一行（v1 文本）或一小段（v2 二进制）头，说明它替谁转发。hub 支持 v1 和 v2，只认配置里信任的上游：
+
+```json
+{
+  "security": {
+    "proxy_protocol": {
+      "from": ["127.0.0.1/32"],
+      "listeners": ["tls"]
+    }
+  }
+}
+```
+
+| 字段 | 默认值 | 含义 |
+| --- | --- | --- |
+| `from` | 必填 | 信任的上游，CIDR 或单个地址，写 hub 看到的上游来源地址（同机一般是 `127.0.0.1/32`）。只写代理自己的地址；`0.0.0.0/0`、`::/0` 会被拒绝 |
+| `listeners` | `["tls"]` | 作用于哪些监听：`tls`（`public.tls_listen`）、`http`（`listen`）。`from` 含回环时不能加 `http`：本机的 `personad hub pair`、`hub admin`、插件都经回环连明文端口，不带头，会被拒绝 |
+
+不写 `proxy_protocol` 时，hub 不读任何 PROXY 头，行为和以前完全一样。配置有误（`from` 为空或不是地址、未知的 `listeners`、`http` 配回环）时 hub 拒绝启动，`personad hub doctor` 会指出是哪一项；只作用于 TLS 却没开 `public.tls_listen` 时只在日志里提示。改完要重启 hub。
+
+**规则**（`server/internal/proxyproto`）：
+
+- **来自 `from` 的连接必须带合法的头**，hub 把头里的源地址当作这条连接的对端：后面的来源判断、管理界面范围、主 token 限制、限流和日志全都按真实来源。没有头、头格式不对或超时的连接直接关闭，不回任何东西：否则绕过代理直连（或者代理没开 PROXY protocol）的连接又会变成回环。
+- **别的来源发来的 PROXY 头不认**：hub 根本不读，这些字节就是连接的开头，TLS 握手失败或 HTTP 回 400。现有客户端完全不受影响，不在 `from` 里的人也没法冒充任何地址。
+- **v2 的 `LOCAL`**（代理自己发起的连接，例如健康检查）按规范用连接本身的地址，也就是上游的地址。
+- **v1 的 `UNKNOWN`、v2 `PROXY` 命令配 `UNSPEC` 地址族**（上游不知道替谁转发，比如它自己是在 Unix socket 上收到的连接）一律拒绝。规范允许接收方改用连接本身的地址，但那正是上游的回环地址，等于把转发来的连接当成本机。v2 的 UDP、Unix socket 地址族也拒绝。
+- **头里的源地址是回环、上游却不是回环**（上游在别的机器上，替它自己本机的程序转发）时，用上游的地址，不把那台机器的「本机」当成 hub 的本机。
+- **超时和长度**：头要在 5 秒内到齐（策略默认值，未实测）；v1 最长 107 字节（规范的上限），v2 地址加 TLV 最多 4096 字节，TLV 读过即弃。头在这条连接自己的 goroutine 里、第一次读写或取对端地址时读，不占用 Accept：一个慢的或不说话的连接不会卡住别的连接。
+- **本地地址仍用 socket 的**，不用头里的目的地址：目的地址在上游那边（代理的监听地址，可能在另一台机器上），而 hub 用本地地址判断连接是不是从本机的 VPN 网卡进来的（`100.64.0.0/10` 的判断）。经代理来的共享地址空间来源因此按公网处理，只会更严，不会更松；需要时写进 `trusted_cidrs`。
+- systemd 的 `jarvisd.socket` 传进来的监听和 hub 自己开的监听一样套上。
+
+**一路传下来**：上游写进头里的，是它看到的来源。上游就是公网入口（直接收公网连接）时，只要让它连 hub 时发 PROXY 头，nginx `stream` 是 `proxy_protocol on;`。前面还有一层转发（内网穿透的客户端、另一个端口转发）连到上游时，上游看到的来源又是回环，这一层也要发 PROXY 头，上游收下并信任它再往下传。nginx `stream` 的写法（需要 `ngx_stream_realip_module`，`nginx -V` 里有 `--with-stream_realip_module`；地址和端口都是示例）：
+
+```nginx
+stream {
+    map $ssl_preread_server_name $backend {
+        hub.example.com 127.0.0.1:18662;   # hub 的 TLS 端口
+        default         127.0.0.1:8444;
+    }
+    server {
+        listen 127.0.0.1:8443 proxy_protocol;  # 前面那层转发也发 PROXY 头；nginx 自己就是入口时去掉 proxy_protocol
+        set_real_ip_from 127.0.0.1;            # 只信任前面那层发来的地址；nginx 自己就是入口时不要这行
+        ssl_preread on;
+        proxy_pass $backend;
+        proxy_protocol on;                     # 把客户端地址传给 hub
+    }
+}
+```
+
+前面那层怎么开 PROXY protocol 看它自己的文档（常见的名字是「proxy protocol」「send-proxy」，有 v1 / v2 可选，hub 两种都认）。`map` 里分给别的服务的后端也会收到头：它们不认 PROXY protocol 的话，给它们单独一个不带 `proxy_protocol on;` 的 `server`。
+
+**配好以后自查**：
+
+1. 重启 hub，日志里有一行 `hub: PROXY protocol on the TLS listener, from 127.0.0.1/32`；`personad hub doctor` 里 `security.proxy_protocol` 是「正常」。
+2. 用手机蜂窝网络从公网连一次。鉴权失败、管理界面登录等日志里的来源不应再是 `127.0.0.0/24`；配了 `admin.access: cidrs` 时，公网打开 `/admin` 看到的是普通网页。
+3. 日志出现 `proxy protocol: refused a connection from …`（一分钟最多一行，带累计数）：那个上游的连接没带头，查 `proxy_protocol on;` 有没有生效，或者有别的东西绕过代理直连 TLS 端口。
+4. 日志出现 `passed on a connection from loopback`（只打一次）：头里的来源仍是回环，前面那层没把地址传下来，按上面「一路传下来」补上。
+
+**注意**：开了以后，`from` 里的地址连这个端口都必须带头。本机其他程序直连 TLS 端口（例如连 `https://127.0.0.1:<TLS 端口>`）会被拒绝，改连明文端口或局域网地址。hub 在 Docker 里、经用户态代理（docker-proxy）映射端口时，所有映射进来的连接都显示成网关地址，把网关写进 `from` 就意味着这个端口只能经代理访问。
 
 公网明文 API 默认返回 `403 tls_required`，仅 `GET /api/v1/health` 放行。这个拒绝发生在请求到达之后，不能撤回已经明文发出的 token；客户端必须在发出请求前选对协议。
 
@@ -204,6 +274,7 @@ TUN 代理开启自动路由后，公网连接的回包可能被送进代理，�
 | `429 rate_limited` | 按 `Retry-After` 等待，并停止用失效 token 反复重连 |
 | 公钥不匹配 | 核对是否换过密钥、连错 hub 或经过了终止 TLS 的代理；重新可信配对，不跳过钉扎 |
 | `hub pair` 连不上本机 | hub 是否已运行，HTTP 监听是否支持 IPv4 回环，命令所读配置是否和运行实例一致 |
+| 开了 `security.proxy_protocol` 后 TLS 端口连不上 | hub 日志里的 `proxy protocol: refused …`：上游没发 PROXY 头，或有东西绕过它直连（[PROXY protocol](#proxy-protocol)） |
 
 ## 命令行验证
 

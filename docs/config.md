@@ -207,6 +207,9 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - 第一次运行只写本机一台（`kind: local`，id 是主机名），生成的 `public_url` 是本机主机名对应的 HTTP 地址；这只是内网兼容入口。TLS 默认不开启，上例显式开启 `:18662`（示例端口，可改），其他机器和域名自己配置。
 - `listen` 是保留的 HTTP 监听，默认 `:18660`；`public_url` 会进入二维码的 `url`，也会进入候选列表。现有 iOS / Watch 仍需它指向可访问的内网 / VPN 地址。
 - `public` 和 `security` 的逐项说明、默认值及放行方法见 [网络配置](network.md#hubjson-网络配置)。候选地址只在鉴权后下发。
+- `security.proxy_protocol`（可选，默认不写）：hub 前面是同机的端口转发、内网穿透或 nginx `stream` 透传时，公网连接在 hub 看来都来自回环。
+  写上 `{"from": ["127.0.0.1/32"]}`，这些上游的连接必须带 PROXY 头（v1 / v2），hub 按头里的真实来源判断；`listeners` 默认只有 `tls`。
+  写法、规则和自查见 [network.md](network.md#proxy-protocol)。
 - `name`（可选）：这台 hub 给人看的名字（比如「家里」），电脑的 jarvis-link（Mac 菜单栏）和以后的互联、多 hub 客户端都显示它。
   不写时用 hub 机器主机名的短名；主机名是 Docker 容器 id 或者 `JARVIS_LOCAL_NODE=0` 时用 `hub-<hub_id 前 6 位>`。手改文件要重启 hub；
   在管理界面「概览」里改的立刻生效（[admin.md](admin.md)）。

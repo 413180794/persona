@@ -50,7 +50,8 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
   里面的每个地址也必须在范围内（解析不了的算范围外）；只带 `Via`、`X-Forwarded-Proto` / `-Host` / `-Port` / `-Server` 而不说来源地址的，
   也算范围外（是代理，又不知道替谁转的）。所以把 hub 放在反向代理后面、代理又把公网请求转进来时，管理界面不会因为代理的地址
   是本机就对公网打开。**什么头都不加的代理挡不住**（nginx 默认的 `proxy_pass` 就是）：对公网的反向代理要么加 `X-Forwarded-For`，
-  要么直接拦掉 `/admin` 和 `/api/v1/admin/`。
+  要么直接拦掉 `/admin` 和 `/api/v1/admin/`。TCP 转发、TLS 透传（nginx `stream`）加不了头，开 `security.proxy_protocol`
+  让 hub 拿到真实来源（[network.md](network.md#proxy-protocol)）。
 - **公网来源一律要 TLS**：`cidrs` 里列了公网网段时，这些来源也只能走 TLS 端口（明文是 403 `tls_required`），密码不在公网上明文传。
 - **只能在 hub 机器上放宽**：网页里只能收窄（`any` → `lan` / `cidrs` / `loopback`，`lan` → `loopback`，`cidrs` → 更小的 `cidrs` / `loopback`）。
   放宽用命令行 `personad hub admin access <loopback|lan|cidrs|any> [--cidrs a,b]` 或部署脚本（下面「部署时选择」）。

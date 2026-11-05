@@ -26,6 +26,8 @@ type publicState struct {
 	certificate *tls.Certificate
 	server      *http.Server
 	listener    net.Listener
+	proxy       *proxyPolicy // security.proxy_protocol, read by startPublic
+	proxyLog    proxyLog
 	addresses   addressSource
 	endpoints   []Endpoint
 }
@@ -64,6 +66,17 @@ func (h *Hub) startPublic(ctx context.Context) error {
 	if err := h.initHubID(ctx); err != nil {
 		return err
 	}
+	proxy, err := h.cfg.Security.ProxyProtocol.policy()
+	if err != nil {
+		return err
+	}
+	h.public.proxy = proxy
+	if proxy != nil {
+		h.logf("hub: PROXY protocol %s", proxy)
+		if proxy.tls && !proxy.http && h.cfg.Public.TLSListen == "" {
+			h.logf("hub: security.proxy_protocol is for the TLS listener, and public.tls_listen is not set: no header is read")
+		}
+	}
 	if h.cfg.Public.TLSListen != "" {
 		if err := h.refreshTLS(time.Now()); err != nil {
 			return err
@@ -75,6 +88,8 @@ func (h *Hub) startPublic(ctx context.Context) error {
 		if activated {
 			h.logf("hub TLS: listening on the socket systemd passed (%s)", ln.Addr())
 		}
+		// The PROXY header comes before the TLS handshake: the TLS server reads through it.
+		ln = h.proxyListener(ln, func(p *proxyPolicy) bool { return p.tls })
 		h.public.listener = ln
 		h.public.server = newHubHTTPServer(h.cfg.Public.TLSListen, nil)
 		h.public.server.ErrorLog = log.New(&handshakeNoise{logf: h.logf}, "", 0)
@@ -241,6 +256,7 @@ func (h *Hub) serveHTTP(ctx context.Context) error {
 	if activated {
 		h.logf("hub: listening on the socket systemd passed (%s): restarts refuse no connection", ln.Addr())
 	}
+	ln = h.proxyListener(ln, func(p *proxyPolicy) bool { return p.http })
 	servers = append(servers, plain)
 	listeners = append(listeners, ln)
 	go func() { errs <- plain.Serve(ln) }()

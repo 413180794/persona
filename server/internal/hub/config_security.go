@@ -13,6 +13,8 @@ type SecurityConfig struct {
 	AuthMaxSources         int      `json:"auth_max_sources,omitempty"`
 	AuthCacheEntries       int      `json:"auth_cache_entries,omitempty"`
 	AuthLogIntervalSeconds int      `json:"auth_log_interval_seconds,omitempty"`
+	// ProxyProtocol: the client addresses a proxy in front passes on (proxy_protocol.go); nil reads no header.
+	ProxyProtocol *ProxyProtocolConfig `json:"proxy_protocol,omitempty"`
 }
 
 func positiveOr(value, fallback int) int {
