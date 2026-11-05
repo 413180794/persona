@@ -244,6 +244,25 @@ def later(minutes=0, hours=0):
     return (NOW + timedelta(minutes=minutes, hours=hours)).isoformat().replace("+00:00", "Z")
 
 
+def _mock_qr(text, n=29):
+    """A QR-looking grid of "0" / "1" rows for text: three finder squares and noise from its hash (not scannable)."""
+    seed = hashlib.sha256(text.encode()).digest()
+    def finder(x, y):
+        for ox, oy in ((0, 0), (n - 7, 0), (0, n - 7)):
+            if ox <= x < ox + 7 and oy <= y < oy + 7:
+                dx, dy = x - ox, y - oy
+                return "1" if max(abs(dx - 3), abs(dy - 3)) != 2 else "0"
+        return None
+    rows = []
+    for y in range(n):
+        row = ""
+        for x in range(n):
+            f = finder(x, y)
+            row += f if f is not None else ("1" if seed[(x * 7 + y * 13) % len(seed)] >> ((x + y) % 8) & 1 else "0")
+        rows.append(row)
+    return {"size": n, "rows": rows}
+
+
 # ---------- machines ----------
 MACHINES = [
     {"id": "server", "name": "服务器", "kind": "local", "icon": "server", "online": True, "hostname": "server",
@@ -9917,6 +9936,17 @@ class H(BaseHTTPRequestHandler):
                  "role": "answer" if kind == "watch" else "full", "created_at": ago(), "last_seen": ago()}
             TOKENS.append(t)
             return self.send_json({"id": t["id"], "token": "mock", "role": t["role"], "name": t["name"]})
+        if p == "/api/v1/auth/pair-codes" and self.command == "POST":  # 设置 › 设备 › 连接新设备 (#2731)
+            # A made-up QR (not scannable): the web draws the hub's rows. POST /api/v1/auth/tokens plays the device using it.
+            web = (json.loads(self.last_body or b"{}") or {}).get("web") or ""
+            tok = "jp_mock%d" % (len(TOKENS) + 1)
+            expires = (datetime.now(timezone.utc) + timedelta(seconds=int(os.environ.get("MOCK_PAIR_SECONDS") or 600)))
+            reply = {"token": tok, "expires_at": expires.isoformat().replace("+00:00", "Z"), "url": "https://hub.example.com",
+                     "pair_url": "jarvis://pair?url=https%3A%2F%2Fhub.example.com&token=" + tok, "qr": _mock_qr(tok)}
+            if web:
+                reply["web_url"] = web + "#token=" + tok
+                reply["web_qr"] = _mock_qr(reply["web_url"])
+            return self.send_json(reply)
         if p == "/mock/fault" and self.command == "POST":
             try:
                 body = json.loads(self.last_body or b"{}")

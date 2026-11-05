@@ -30,6 +30,7 @@ import { TranslationSettings } from "./settings/TranslationSettings";
 import { Extensions } from "./settings/Extensions";
 import { ShortcutSettings } from "./settings/ShortcutSettings";
 import { ChannelList, ChannelPage } from "./settings/Channels";
+import { ConnectDevice } from "./settings/ConnectDevice";
 import { settingsTarget } from "../lib/channels";
 import { routeSub } from "../lib/extension-market";
 import { HubSettings } from "./settings/HubSettings";
@@ -991,6 +992,7 @@ function Devices() {
   const [data, setData] = useState<{ tokens: DeviceToken[]; current?: string } | null>(null);
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
   const load = () =>
     api<{ tokens: DeviceToken[]; current?: string }>("/auth/tokens")
       .then((r) => (setData({ tokens: r.tokens ?? [], current: r.current }), setError("")))
@@ -1048,12 +1050,21 @@ function Devices() {
       {!data && !error && <Loading />}
       {error && <p className="text-[13px] text-red">{error}</p>}
       {data && (
-        <Group title={t("settings.devices_title", { count: active.length })} footer={t("settings.devices_footer")}>
+        <Group
+          title={t("settings.devices_title", { count: active.length })}
+          footer={t("settings.devices_footer")}
+          right={
+            <Button tone="quiet" icon="plus" onClick={() => setConnecting(true)} className="whitespace-nowrap">
+              {t("settings-connectdevice.add")}
+            </Button>
+          }
+        >
           {active.length === 0 && <p className="px-4 py-3 text-[12.5px] text-ink-3">{t("settings.no_devices")}</p>}
           {active.map((tok) => row(tok, false))}
         </Group>
       )}
       {data && revoked.length > 0 && <Group title={t("settings.revoked_title", { count: revoked.length })}>{revoked.map((tok) => row(tok, true))}</Group>}
+      <ConnectDevice open={connecting} onClose={() => setConnecting(false)} onPaired={() => void load()} />
     </>
   );
 }

@@ -226,26 +226,91 @@ func TestPairTokenExpiredAndOneUse(t *testing.T) {
 	}
 }
 
-func TestPairCodesRequireLoopbackAndMaster(t *testing.T) {
+func TestPairCodesRequireLoopbackMasterOrAFullDevice(t *testing.T) {
 	h := newTestHub(t)
 	h.store = newPairStore()
 	h.cfg.Security.TrustedCIDRs = []string{"192.0.2.0/24"}
-	_, device := call(t, h.routes(), "POST", "/api/v1/auth/tokens", h.cfg.Token, `{"kind":"phone"}`)
+	_, watch := call(t, h.routes(), "POST", "/api/v1/auth/tokens", h.cfg.Token, `{"kind":"watch"}`)
+	pair := newPairCode(t, h).Token
+	before := len(h.store.(*pairStore).pairs)
 	for _, tc := range []struct {
-		remote, token string
-		tls           bool
+		remote, token, body string
+		tls                 bool
 	}{
-		{"192.0.2.1:1", h.cfg.Token, false},
-		{"198.51.100.1:1", h.cfg.Token, true},
-		{"127.0.0.1:1", device["token"].(string), false},
+		// The master token only over loopback.
+		{"192.0.2.1:1", h.cfg.Token, "", false},
+		{"198.51.100.1:1", h.cfg.Token, "", true},
+		// Not the watch's answer-only token, nor a pairing code making another one.
+		{"127.0.0.1:1", watch["token"].(string), "", false},
+		{"198.51.100.1:1", pair, "", true},
 	} {
-		requireCode(t, securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", tc.token, "", tc.remote, tc.tls), 403, "")
+		requireCode(t, securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", tc.token, tc.body, tc.remote, tc.tls), 403, "")
 	}
-	if len(h.store.(*pairStore).pairs) != 0 {
+	if len(h.store.(*pairStore).pairs) != before {
 		t.Fatal("forbidden request created pairing code")
 	}
 	// IPv6 loopback is accepted too.
 	requireCode(t, securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", h.cfg.Token, "", "[::1]:1", false), 200, "")
+}
+
+// A signed-in device with full access pairs another one from anywhere it can reach the hub (#2731): an app code
+// with its QR code, and with {"web"} the link that signs a browser in.
+func TestPairCodesFromADevice(t *testing.T) {
+	h := newTestHub(t)
+	s := newPairStore()
+	h.store = s
+	h.cfg.PublicURL = "https://hub.example.com"
+	_, phone := call(t, h.routes(), "POST", "/api/v1/auth/tokens", h.cfg.Token, `{"name":"我的手机","kind":"phone"}`)
+	tok := phone["token"].(string)
+
+	w := securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", tok, `{"web":"https://hub.example.com/settings"}`, "198.51.100.1:1", true)
+	requireCode(t, w, 200, "")
+	if w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("a pairing code must not be cached")
+	}
+	var reply struct {
+		pairCode
+		QR     qrImage `json:"qr"`
+		WebURL string  `json:"web_url"`
+		WebQR  qrImage `json:"web_qr"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &reply); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(reply.Token, "jp_") || s.pairs[hashToken(reply.Token)].Hash == "" {
+		t.Fatal("no one-time pairing code made")
+	}
+	if !strings.HasPrefix(reply.PairURL, "jarvis://pair?") || reply.QR.Size == 0 || len(reply.QR.Rows) != reply.QR.Size {
+		t.Fatalf("app pairing link / QR: %q %d", reply.PairURL, reply.QR.Size)
+	}
+	if reply.WebURL != "https://hub.example.com/settings#token="+reply.Token || len(reply.WebQR.Rows) == 0 {
+		t.Fatalf("web sign-in link %q", reply.WebURL)
+	}
+	// The code pairs a new device once, like one from `jarvisd hub pair`.
+	code, device := call(t, h.routes(), "POST", "/api/v1/auth/tokens", reply.Token, `{"name":"另一台电脑","kind":"web"}`)
+	if code != 200 || !strings.HasPrefix(device["token"].(string), "jd_") {
+		t.Fatalf("exchange %d %v", code, device)
+	}
+	requireCode(t, securityRequest(h.routes(), "POST", "/api/v1/auth/tokens", reply.Token, `{}`, "198.51.100.1:1", true), 401, "")
+
+	// No body: just the app code.
+	w = securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", tok, "", "198.51.100.1:1", true)
+	requireCode(t, w, 200, "")
+	if strings.Contains(w.Body.String(), "web_url") {
+		t.Fatal("web sign-in link without being asked")
+	}
+
+	pairs := len(s.pairs)
+	// A code for Persona Link is still made on the hub machine only; web must be a page address for the token's #.
+	h.cfg.Machines = append(h.cfg.Machines, MachineConfig{ID: "laptop", Kind: kindLink})
+	requireCode(t, securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", tok, `{"machine":"laptop"}`, "198.51.100.1:1", true), 403, "")
+	for _, web := range []string{"javascript:alert(1)", "/settings", "https://hub.example.com/#x", "https://me:pw@hub.example.com/"} {
+		body, _ := json.Marshal(map[string]string{"web": web})
+		requireCode(t, securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", tok, string(body), "198.51.100.1:1", true), 400, "")
+	}
+	if len(s.pairs) != pairs {
+		t.Fatal("refused request created pairing code")
+	}
 }
 
 func TestPairContextExpires(t *testing.T) {

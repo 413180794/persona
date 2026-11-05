@@ -1,0 +1,22 @@
+{
+  "title": "Connect a new device",
+  "target": "What to connect",
+  "target_app": "Persona App",
+  "target_web": "Browser",
+  "qr_app": "QR code to pair the app",
+  "qr_web": "QR code to sign in on the web",
+  "hint_app": "Scan this code on the pairing screen of Persona on your phone. On a Mac or Android, you can also copy the pairing link and paste it.",
+  "hint_web": "Scan it with a phone's camera to open it in the browser, or copy the sign-in link into a browser on another computer.",
+  "loopback": "Only this computer can open this address. To sign in on another device, open the web page at the hub's address first, then make a code there.",
+  "copy_app": "Copy pairing link",
+  "copy_web": "Copy sign-in link",
+  "expires": "Expires in {time}, works once",
+  "expired": "This code has expired.",
+  "new_code": "Make a new code",
+  "retry": "Retry",
+  "paired": "Connected: {name}",
+  "paired_hint": "It has its own credential now; you can revoke it on its own in the device list.",
+  "another": "Connect another",
+  "done": "Done",
+  "add": "Connect a new device"
+}

@@ -53,9 +53,13 @@ Persona Link 的主动 `link` / 被动 `service` 机器，以及经成员 hub �
 
 ### 临时配对
 
-`POST /api/v1/auth/pair-codes` 只接受**回环来源 + 主 token**，无须请求体；请求体 `{"machine":"<id>"}` 生成给这台 link 机器的
-jarvis-link 用的配对码（返回多一个 `machine`，`pair_url` 是 `jarvis://link?…&machine=<id>`，只能兑换成这台的链路凭据，别的请求都 403；
-机器不存在或不是 link 返回 400，hub 没开 TLS 返回 409）。设备 token、临时配对 token 或非回环来源均不能创建配对码。成功为 HTTP 200，返回：
+`POST /api/v1/auth/pair-codes` 接受两种调用方：**回环来源 + 主 token**（`personad hub pair`），或**已登录的 `full` 设备 token**（任何来源，#2731：网页「设置 › 设备 › 连接新设备」）。
+无须请求体；请求体 `{"machine":"<id>"}` 生成给这台 link 机器的
+jarvis-link 用的配对码（只有主 token 可以，设备 token 带 `machine` 返回 403；返回多一个 `machine`，`pair_url` 是 `jarvis://link?…&machine=<id>`，只能兑换成这台的链路凭据，别的请求都 403；
+机器不存在或不是 link 返回 400，hub 没开 TLS 返回 409）。手表（`answer`）、链路、互联、扩展的凭据，临时配对 token 本身（不能用一个码生成下一个码），以及非回环来源的主 token 均返回 403。
+`full` 设备本来就能 `POST /api/v1/auth/tokens` 建长期凭据，这里给的是 10 分钟、只能兑换一次的码，不扩大权限；设备申请时 hub 记一行日志（设备名和 id）。
+App 用的码（不带 `machine`）多返回 `qr: {size, rows}`（配对链接的二维码，每行一串 `0` / `1`，不含静区，和 `/admin` 的一样）。
+请求体再带 `"web": "<网页地址>"`（绝对的 http(s) 地址，不带 `#` 片段和账号密码，否则 400）时多返回 `web_url`（`<网页地址>#token=<临时 token>`，网页打开即登录，`#` 后的部分不发到服务器）和它的二维码 `web_qr`。成功为 HTTP 200，返回：
 
 ```json
 {

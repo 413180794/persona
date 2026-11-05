@@ -59,11 +59,53 @@ func (p pairCode) pairURL() string {
 	return "jarvis://pair?" + values.Encode()
 }
 
+// pairCodeReply is a pairing code with what a signed-in device shows for it: the QR code of the app's pairing link
+// and, asked with {"web": the page's address}, the link that signs a browser in and its QR code (#2731).
+type pairCodeReply struct {
+	*pairCode
+	QR     *qrImage `json:"qr,omitempty"`
+	WebURL string   `json:"web_url,omitempty"`
+	WebQR  *qrImage `json:"web_qr,omitempty"`
+}
+
+type qrImage struct {
+	Size int      `json:"size"`
+	Rows []string `json:"rows"`
+}
+
+func newQRImage(text string) (*qrImage, error) {
+	rows, size, err := qrRows(text)
+	if err != nil {
+		return nil, err
+	}
+	return &qrImage{Size: size, Rows: rows}, nil
+}
+
+// webSignInBase checks the page address a device sends for the browser sign-in link: an absolute http(s) URL
+// without a fragment, since the token goes in one (`#token=`, which never reaches a server; web/src/lib/auth.ts).
+func webSignInBase(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || len(raw) > 2048 || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Fragment != "" || u.User != nil {
+		return "", errors.New("web must be the page's http(s) address, without a #fragment")
+	}
+	return raw, nil
+}
+
 // pairRoutes are the pairing endpoints: short-lived pairing tokens for `jarvisd hub pair`
-// (docs/redesign/hub-changes.md 1.3).
+// (docs/redesign/hub-changes.md 1.3), and for a signed-in device pairing another one (#2731).
 func (h *Hub) pairRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/v1/auth/pair-codes", func(w http.ResponseWriter, r *http.Request) {
-		if principalOf(r.Context()).ID != "" || h.sourceOf(r) != sourceLoopback {
+		who := principalOf(r.Context())
+		fromDevice := who.ID != ""
+		if fromDevice {
+			// A device with full access can already add devices (POST /api/v1/auth/tokens); this code is safer to
+			// hand over: it expires in ten minutes and is traded once. Not from a pairing code itself (no chain of
+			// codes), the watch, a link, a peer or an extension.
+			if who.Role != roleFull || who.PairHash != "" {
+				writeErr(w, http.StatusForbidden, errors.New("this device may not pair other devices"))
+				return
+			}
+		} else if h.sourceOf(r) != sourceLoopback {
 			writeErr(w, http.StatusForbidden, errors.New("pairing codes require the master token over loopback"))
 			return
 		}
@@ -74,9 +116,26 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 		// {"machine": id} makes a code for that link machine's jarvis-link (link.go); no body, one for an app.
 		var req struct {
 			Machine string `json:"machine"`
+			Web     string `json:"web"`
 		}
 		if b, _ := io.ReadAll(io.LimitReader(r.Body, 4<<10)); len(bytes.TrimSpace(b)) > 0 {
 			if err := json.Unmarshal(b, &req); err != nil {
+				writeErr(w, http.StatusBadRequest, err)
+				return
+			}
+		}
+		if fromDevice && req.Machine != "" {
+			writeErr(w, http.StatusForbidden, errors.New("codes for Persona Link are made on the hub machine"))
+			return
+		}
+		web := ""
+		if req.Web != "" {
+			if req.Machine != "" {
+				writeErr(w, http.StatusBadRequest, errors.New("web is for a code that pairs an app or a browser"))
+				return
+			}
+			var err error
+			if web, err = webSignInBase(req.Web); err != nil {
 				writeErr(w, http.StatusBadRequest, err)
 				return
 			}
@@ -105,8 +164,25 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
+		reply := pairCodeReply{pairCode: p}
+		if p.Machine == "" {
+			if reply.QR, err = newQRImage(p.PairURL); err != nil {
+				writeErr(w, http.StatusInternalServerError, err)
+				return
+			}
+		}
+		if web != "" {
+			reply.WebURL = web + "#token=" + url.QueryEscape(p.Token)
+			if reply.WebQR, err = newQRImage(reply.WebURL); err != nil {
+				writeErr(w, http.StatusInternalServerError, err)
+				return
+			}
+		}
+		if fromDevice {
+			h.logf("pairing code made by device %q (%s)", who.Name, who.ID)
+		}
 		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, p)
+		writeJSON(w, reply)
 	})
 }
 
