@@ -174,6 +174,88 @@ class OutboxMessageSenderTest {
         sender.close()
     }
 
+    /**
+     * 设置 › 助手 换机器 clears the hub's main conversation (`PUT {"machine_id","main":"-"}`); a binding kept from before
+     * (the app restarted, another device moved it) must not send the next main message to the old machine's
+     * conversation, which is an ordinary one now.
+     */
+    @Test fun aMainConversationTheHubNoLongerHasIsDroppedOnCatchUp() = runTest {
+        val store = FakeStore()
+        val transport = FakeTransport(online = true)
+        val old = SessionKey("old-machine", "old-main")
+        val moved = SessionKey("new-machine", "new-main")
+        var remoteMain: SessionKey? = old
+        var creates = 0
+        val resolver = object : MainConversationResolver {
+            override suspend fun findMainConversation(): SessionKey? = remoteMain
+            override suspend fun createMainConversation(): SessionKey { creates++; return moved.also { remoteMain = it } }
+        }
+        val sender = OutboxMessageSender(scope, store, transport, backgroundScope)
+        sender.connectMainConversation(resolver)
+        transport.answers += MessageTransportResult.Accepted
+        sender.sendToMain("before the move", "before")
+        runCurrent()
+        assertEquals(old, transport.requests.single().session)
+
+        remoteMain = null // moved to new-machine; the hub has no main conversation until the next message
+        sender.onReady()
+        transport.answers += MessageTransportResult.Accepted
+        sender.sendToMain("after the move", "after")
+        runCurrent()
+        assertEquals(1, creates)
+        assertEquals(moved, transport.requests.last().session)
+        assertEquals(moved, store.mainConversation())
+        sender.close()
+    }
+
+    /** mainChanged asks the hub: the binding stays while the hub names it or cannot be asked, and goes once it names another. */
+    @Test fun mainChangedKeepsTheBindingUnlessTheHubNamesAnotherOne() = runTest {
+        val store = FakeStore()
+        val transport = FakeTransport(online = true)
+        val other = SessionKey("machine", "other-main")
+        var remoteMain: SessionKey? = session
+        var failing = false
+        var hanging = false
+        var creates = 0
+        val resolver = object : MainConversationResolver {
+            override suspend fun findMainConversation(): SessionKey? {
+                if (hanging) awaitCancellation()
+                if (failing) throw java.io.IOException("hub unreachable")
+                return remoteMain
+            }
+            override suspend fun createMainConversation(): SessionKey { creates++; error("Unused") }
+        }
+        val sender = OutboxMessageSender(scope, store, transport, backgroundScope)
+        sender.mainChanged() // nothing bound, no resolver: nothing to do
+        sender.connectMainConversation(resolver)
+        transport.answers += MessageTransportResult.Accepted
+        sender.sendToMain("first", "first")
+        runCurrent()
+        assertEquals(session, store.mainConversation())
+
+        sender.mainChanged()
+        assertEquals("the hub still names it", session, store.mainConversation())
+        failing = true
+        sender.mainChanged()
+        assertEquals("the hub could not be asked", session, store.mainConversation())
+        failing = false
+        hanging = true
+        sender.mainChanged() // times out after reconciliationTimeoutMillis
+        assertEquals("a lookup that timed out is not the hub saying there is none", session, store.mainConversation())
+        hanging = false
+
+        remoteMain = other // another device replaced it
+        sender.mainChanged()
+        assertEquals(null, store.mainConversation())
+        transport.answers += MessageTransportResult.Accepted
+        sender.sendToMain("second", "second")
+        runCurrent()
+        assertEquals(0, creates)
+        assertEquals(other, transport.requests.last().session)
+        assertEquals(other, store.mainConversation())
+        sender.close()
+    }
+
     @Test fun durableQueueWaitsForNetworkAndDistinguishesRefusalFromUncertainDelivery() = runTest {
         val store = FakeStore()
         val transport = FakeTransport(online = false)

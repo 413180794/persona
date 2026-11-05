@@ -98,6 +98,12 @@ internal data class AssistantSettingsUiState(
 internal class AssistantSettingsState(
     private val api: AssistantSettingsApi,
     private val timezone: TimezoneChoice,
+    /**
+     * After a move, before [onMoved]: the hub has no main conversation now, so the outbox must forget the one it bound
+     * on the old machine ([persona.core.contracts.api.MainConversationSender.mainChanged]); otherwise the next message
+     * to the main conversation goes to that one, an ordinary conversation now.
+     */
+    private val mainChanged: suspend () -> Unit = {},
     /** After a move: the conversation list now comes from the other machine. */
     private val onMoved: suspend () -> Unit = {},
 ) {
@@ -140,6 +146,7 @@ internal class AssistantSettingsState(
             done("Persona 换到「${move.to.displayName}」上了，新对话从这里开始。")
         }
         if (!moved) return
+        quietly { mainChanged() }
         quietly { onMoved() }
         loadMemory()
     }

@@ -2407,6 +2407,7 @@ KEYS = []  # bodies of …/keys (the terminal's key bar and text field; GET /moc
 QUEUE_EDITS = []  # bodies of …/queue with the queue they pulled back (GET /mock/queue)
 UPLOADS = []  # files received (GET /mock/uploads)
 SENT = []  # bodies of sends, one per client_msg_id (GET /mock/sent)
+SENT_TO = []  # where each of them went: machine_id, session_id, client_msg_id, text (GET /mock/sent_to)
 LARK_READS = []  # Feishu read reports, {"feed", **body} (GET /mock/lark_reads): what a chat page saw
 MAIL_SENT = []  # POST /api/v1/mail/send bodies (GET /mock/mail_sent): 写邮件 / 回复
 MAIL_FLAGS = []  # POST …/mail/messages/{aid}/{uid}/flags, {"account_id", "uid", **body} (GET /mock/mail_flags)
@@ -8420,6 +8421,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/renew": return self.send_json(*renew_requests(int(q.get("minutes", ["30"])[0] or 30)))
         if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone"})
         if p == "/mock/sent": return self.send_json({"sent": SENT})
+        if p == "/mock/sent_to": return self.send_json({"sent": SENT_TO})
         if p == "/mock/lark_reads": return self.send_json({"reads": LARK_READS})
         if p == "/mock/mail_sent": return self.send_json({"sent": MAIL_SENT})
         if p == "/mock/mail_flags": return self.send_json({"flags": MAIL_FLAGS})
@@ -9445,18 +9447,25 @@ class H(BaseHTTPRequestHandler):
             sid = str(uuid.uuid4())
             session = assistant_sess(sid, "", 0, "")  # what the hub returns: no title, model or transcript rev yet
             for k in ("model", "rev", "seen_at", "agent"): session.pop(k)  # the hub sends agent only when not Claude Code
+            # On the machine the assistant runs on (设置 › 助手 can move it), and a main one becomes the hub's main
+            # conversation (hub/assistant_main.go startMain).
+            mid = body.get("machine_id") or ASSISTANT_CONFIG["machine_id"]
+            home = next((m.get("home") for m in MACHINES if m["id"] == mid), None)
+            session.update(machine_id=mid, **({"cwd": home + "/.jarvis/assistant"} if home and mid != "server" else {}))
             session.update(status="working", state="working", updated_at=now, launcher=body.get("launcher") or "claude",
                            permission_mode=body.get("permission_mode") or "", effort=body.get("effort") or "")
             session["main"] = bool(body.get("main"))
+            if session["main"]:
+                ASSISTANT_CONFIG["main"] = sid
             ASSISTANT.append(session)
-            push_machine("server")
+            push_machine(mid)
 
             def written():
                 first = [it("user", "text", 0, text=prompt, ts=now)]
                 ITEMS[sid] = first
                 for send, subscribed in list(LIVE):
                     if sid in subscribed:
-                        try: send({"type": "items", "machine_id": "server", "session_id": sid, "items": first, **span(first, 0)})
+                        try: send({"type": "items", "machine_id": mid, "session_id": sid, "items": first, **span(first, 0)})
                         except Exception: pass
             threading.Timer(float(os.environ.get("MOCK_ASSISTANT_TRANSCRIPT_SECONDS", "1")), written).start()
             return self.send_json({"session": session})
@@ -9505,6 +9514,10 @@ class H(BaseHTTPRequestHandler):
                     push_todos()
             if not any(m.get("client_msg_id") and m.get("client_msg_id") == body.get("client_msg_id") for m in SENT):
                 SENT.append(body)
+                parts = p.split("/")  # ['', 'api', 'v1', 'sessions', mid, sid, 'messages']
+                if len(parts) >= 7:
+                    SENT_TO.append({"machine_id": parts[4], "session_id": parts[5],
+                                    "client_msg_id": body.get("client_msg_id"), "text": body.get("text")})
             return self.send_json({"ok": True})
         if p == "/api/v1/inbox/refresh": return self.send_json(inbox_list(parse_qs(urlparse(self.path).query)))
         if p == "/api/v1/inbox/done" and self.command == "POST":  # 全部标为已处理 / 撤销

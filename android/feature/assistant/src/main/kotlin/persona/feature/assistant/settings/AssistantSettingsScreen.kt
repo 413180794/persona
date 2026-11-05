@@ -81,8 +81,10 @@ internal fun AssistantSettingsScreen(
 ) {
     val context = LocalContext.current
     val moved by rememberUpdatedState(onMoved)
+    // The outbox that binds the main conversation: told when a move clears it.
+    val sender by rememberUpdatedState(LocalAssistantHost.current?.mainSender)
     val controller = remember(management) {
-        AssistantSettingsState(management.settingsApi(), StoredTimezoneChoice(context)) { moved() }
+        AssistantSettingsState(management.settingsApi(), StoredTimezoneChoice(context), mainChanged = { sender?.mainChanged() }) { moved() }
     }
     val state by controller.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()

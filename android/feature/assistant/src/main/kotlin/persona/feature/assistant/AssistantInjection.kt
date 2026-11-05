@@ -105,5 +105,9 @@ object AssistantSendingModule {
             override suspend fun mainReplaced(previous: SessionKey) {
                 data.restore()?.messages?.mainReplaced(previous)
             }
+
+            override suspend fun mainChanged() {
+                data.restore()?.messages?.mainChanged()
+            }
         }
 }

@@ -317,6 +317,8 @@ fun AssistantScreen(
         }
     }
     LaunchedEffect(repository) {
+        // Another device may have moved or replaced the main conversation while this one stayed connected.
+        assistantAttempt { mainConversationSender?.mainChanged() }
         try { repository.refresh() }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { /* Cached conversations remain available while offline. */ }
@@ -481,6 +483,8 @@ fun AssistantScreen(
             // The conversations and the upload target now belong to the other machine.
             assistantAttempt { repository.refresh() }
             assistantAttempt { assistantMachine = management.notes().machineId }
+            // The old main conversation is an ordinary one on the old machine now: back here, start the new one.
+            newConversation()
         }, onOpenConversation = openFromSchedule)
         return@PersonaTheme
     }

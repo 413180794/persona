@@ -219,6 +219,7 @@ internal fun MainConversationSender.inGroup(names: GroupNames, scope: CoroutineS
         override suspend fun sendToMain(text: String, clientMessageId: String, draft: DraftSnapshot?) =
             source.sendToMain(text, clientMessageId, draft?.let(names::rawDraft))
         override suspend fun mainReplaced(previous: SessionKey) = source.mainReplaced(names.raw(previous))
+        override suspend fun mainChanged() = source.mainChanged()
     }
 }
 

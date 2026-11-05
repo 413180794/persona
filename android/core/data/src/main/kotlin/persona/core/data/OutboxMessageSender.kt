@@ -151,6 +151,8 @@ class OutboxMessageSender(
         processing.withLock {
             reconcilers.forEach { it.onReady() }
             reconcile()
+            // The main conversation may have moved while this pairing was away (another machine, another device).
+            checkMain()
         }
     }
 
@@ -217,6 +219,33 @@ class OutboxMessageSender(
         store.forgetMainConversation(previous)
         wake.trySend(Unit)
         Unit
+    }
+
+    override suspend fun mainChanged() = processing.withLock {
+        check(job.isActive) { "Pairing scope is closed" }
+        checkMain()
+        Unit
+    }
+
+    /**
+     * The hub decides which conversation is the main one: a binding it no longer names (moved with the assistant to
+     * another machine, replaced from another device) goes, and the next message resolves the main conversation again.
+     * Kept when the hub cannot be asked, and while a creation is claimed (no binding yet).
+     */
+    private suspend fun checkMain() {
+        val bound = store.mainConversation() ?: return
+        val resolver = mainResolver ?: return
+        // Boxed: a lookup that timed out (null) is not the hub saying there is none.
+        val current = try {
+            withTimeoutOrNull(reconciliationTimeoutMillis) { Result.success(resolver.findMainConversation()) } ?: return
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return
+        }
+        if (current.getOrNull() == bound) return
+        store.forgetMainConversation(bound)
+        wake.trySend(Unit)
     }
 
     /**

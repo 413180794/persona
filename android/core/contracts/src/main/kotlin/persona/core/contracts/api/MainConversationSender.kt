@@ -16,6 +16,12 @@ interface MainConversationSender {
      * message to the main conversation starts a new one instead of going to the archived one.
      */
     suspend fun mainReplaced(previous: SessionKey) = Unit
+    /**
+     * The hub's main conversation may have changed elsewhere (设置 › 助手 moved the assistant to another machine, another
+     * device started a new one): ask the hub, and forget the local one when the hub names another or none, so the next
+     * message goes where the hub says instead of to a conversation that is an ordinary one now.
+     */
+    suspend fun mainChanged() = Unit
 }
 
 /** Bind to one immutable pairing, like MessageTransport. */

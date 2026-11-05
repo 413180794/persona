@@ -99,10 +99,30 @@ class AssistantSettingsStateTest {
         assertEquals(1, moved)
     }
 
+    /** The outbox bound the old machine's main conversation: a move tells it, before the list is read again. */
+    @Test fun aMoveTellsTheOutboxTheMainConversationChangedBeforeRefreshing() = runTest {
+        val api = FakeApi()
+        val calls = mutableListOf<String>()
+        val state = AssistantSettingsState(api, Zone(), mainChanged = { calls += "main changed" }) { calls += "moved" }
+        state.load()
+        state.requestMove(laptop, listOf(server, laptop))
+        state.confirmMove()
+        assertEquals(listOf("main changed", "moved"), calls)
+
+        // A failing outbox does not undo the move or keep the list from being read again.
+        val failing = AssistantSettingsState(FakeApi(), Zone(), mainChanged = { error("pairing closed") }) { calls += "moved again" }
+        failing.load()
+        failing.requestMove(laptop, listOf(server, laptop))
+        failing.confirmMove()
+        assertEquals("laptop", failing.state.value.config?.machineId)
+        assertEquals("moved again", calls.last())
+    }
+
     @Test fun movingToAnOfflineMachineSaysSoAndAFailedMoveChangesNothing() = runTest {
         val api = FakeApi()
         var moved = 0
-        val state = AssistantSettingsState(api, Zone()) { moved++ }
+        var mainChanged = 0
+        val state = AssistantSettingsState(api, Zone(), mainChanged = { mainChanged++ }) { moved++ }
         state.load()
         state.requestMove(offline, listOf(server, offline))
         assertTrue(state.state.value.move!!.text.contains("「实验室」现在离线"))
@@ -113,6 +133,7 @@ class AssistantSettingsStateTest {
         assertEquals("main-id", state.state.value.config?.main)
         assertEquals("没换成，Persona 还在「服务器」上运行，请重试。", state.state.value.notice?.text)
         assertEquals(0, moved)
+        assertEquals("the main conversation did not change", 0, mainChanged)
     }
 
     @Test fun theHubZoneFollowsThePhoneUnlessTheUserPicksOne() = runTest {
