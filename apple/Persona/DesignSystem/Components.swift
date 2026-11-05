@@ -650,7 +650,8 @@ struct FlowLayoutRow: Layout {
 /// window resize offered the chat's header and work lines a new width, and `ViewThatFits` measured all its candidates
 /// again each time: with the composer and the list that was a whole frame over budget (#1337). Shown: the first whose
 /// ideal width fits, else the last at the offered width, like `ViewThatFits`; the others are placed out of sight.
-/// They are still in the accessibility tree: use it inside a control that says what it is (`accessibilityLabel`).
+/// They are still in the accessibility tree, 100 000 pt up, where a UI test or VoiceOver finds them and cannot reach them
+/// (#2181): give it `.firstFittingText(_:)`, one element in the shown one's place.
 struct FirstFitting: Layout {
     struct Cache { var ideal: [CGSize] }
 
@@ -680,4 +681,11 @@ struct FirstFitting: Layout {
 
     /// How far above its place a candidate not shown goes: off any window.
     private static let away: CGFloat = 100_000
+}
+
+extension View {
+    /// A `FirstFitting`'s candidates as one static text that says `text`, where the shown one is drawn.
+    func firstFittingText(_ text: String) -> some View {
+        accessibilityElement(children: .ignore).accessibilityLabel(text).accessibilityAddTraits(.isStaticText)
+    }
 }

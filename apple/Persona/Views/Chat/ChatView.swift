@@ -2006,6 +2006,7 @@ struct ChatView: View {
                     subtitleLine(s, words, [machine, place])
                     subtitleLine(s, words, [place.isEmpty ? machine : place]) // truncates when it must
                 }
+                .firstFittingText(subtitleText(s, words, [machine, place]))
             }
         }
     }
@@ -2013,7 +2014,7 @@ struct ChatView: View {
     /// Quiet states (已看, 未运行) say nothing in words (2026-10-31 user request): the dot carries them, the line is where
     /// it runs. 需要你 / 工作中 N 分 / 完成未看 still lead the line.
     private func subtitleLine(_ s: Session, _ words: String, _ rest: [String]) -> some View {
-        let parts = ([s.sourceSubtitle].compactMap { $0 } + rest).filter { !$0.isEmpty }
+        let parts = subtitleParts(s, rest)
         if Self.quiet(s.state) {
             return Text(parts.isEmpty ? words : parts.joined(separator: " · ")).foregroundStyle(.secondary).lineLimit(1)
         }
@@ -2022,6 +2023,17 @@ struct ChatView: View {
             .foregroundStyle(s.state == .idle || s.state == .offline || s.state == .unknown ? Color.secondary : s.state.tone.text)
             + Text(tail).foregroundStyle(.secondary))
             .lineLimit(1) // FirstFitting picks by the ideal (one-line) width; the last one truncates
+    }
+
+    private func subtitleParts(_ s: Session, _ rest: [String]) -> [String] {
+        ([s.sourceSubtitle].compactMap { $0 } + rest).filter { !$0.isEmpty }
+    }
+
+    /// What `subtitleLine` says, as one string.
+    private func subtitleText(_ s: Session, _ words: String, _ rest: [String]) -> String {
+        let parts = subtitleParts(s, rest)
+        if Self.quiet(s.state) { return parts.isEmpty ? words : parts.joined(separator: " · ") }
+        return ([words] + parts).joined(separator: " · ")
     }
 
     static func quiet(_ state: AgentState) -> Bool { state == .idle || state == .offline || state == .unknown }
@@ -4059,6 +4071,7 @@ struct WorkLine: View, Equatable {
             Text(label(now: now, short: false)).fixedSize()
             Text(label(now: now, short: true)).fixedSize()
         }
+        .firstFittingText(label(now: now, short: false))
     }
 
     private func label(now: Date, short: Bool) -> String {

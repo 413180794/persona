@@ -197,6 +197,9 @@
   单独都在 16.7 ms 内，一起就掉到 30 fps；`sample` 里几乎全是 SwiftUI 的布局，看不出是哪个视图。临时加一个启动参数把各块逐个换成 `Color.clear` 量（不提交），
   再在最贵的那块里逐个去掉子视图。`ViewThatFits` 每个宽度都重新量全部候选，在常随宽度变的一行里换成 `FirstFitting`（理想宽度记在 `Layout` 的缓存里）。
   `sample` 挂着时 App 会被停住、量出来的帧不能用，量帧和采样分开跑。
+- 自己写的 `Layout` 把不显示的子视图挪到看不见的地方，它们还在无障碍树里（2026-11-05，#2181）：`FirstFitting` 把没选中的那行放到上方 100 000 pt，
+  UI 测试按文字找「正在工作…」找到的是这一行（y ≈ −99 290），点不到也滚不过去；VoiceOver 同样能落到它上面。`ViewThatFits` 只把选中的放进树里，`Layout` 做不到按子视图隐藏：
+  给整块 `.firstFittingText(_:)`（`accessibilityElement(children: .ignore)` 加完整文字），树里只剩显示位置上的一个元素。
 - 冷启动时一个大页面的第一次 `body` 慢，而采样里全是 `lazy protocol witness table accessor for type ModifiedContent<…>`（2026-11-05，#1337）：
   不是代码在算，是 Swift 运行时第一次建这个页面的类型（几十个修饰符嵌套成一个类型，`swift_getTypeByMangledName` 一层层解析）。
   在长修饰符链中间用 `AnyView` 隔开几段（隔开的那处每次都是同一个类型，不丢状态），ChatView 的第一次 body 106 → 49 ms。
