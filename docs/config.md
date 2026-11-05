@@ -269,28 +269,28 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `microsoft`（可选）：Outlook 的「使用 Microsoft 账号登录」（`docs/mail.md`「Outlook 接入方式」）。`client_id` 是默认的 client ID
   （一般不用写：用户在 App 里填自己在 Microsoft Entra 注册的那个，加密存 hub，优先于这里）；`redirect_uri` 默认
   `jarvis-mail-oauth://outlook`，改了要和 Entra 里登记的一致。
-- `lark.token` / `lark.container` / `lark.base_url` / `lark.native_olk_token`（老写法，**不再生效**）：#1571 起经 lark-connector 接飞书由插件提供
+- `lark.token` / `lark.container` / `lark.base_url` / `lark.native_olk_token`（老写法，**不再生效**）：#1571 起经 lark-connector 接飞书由扩展提供
   （`docs/feishu.md` 开头、`docs/extensions.md`），hub 还会读到这几个键，但不拿它们连 lark-connector，也不交给助手；写了 `token` 或 `container` 时
-  hub 启动时在日志里提示一行。Agent token、容器、地址和加密消息的独立授权（`native_olk_token`）改在接飞书插件的设置里填，hub.json 里的可以删掉。
+  hub 启动时在日志里提示一行。Agent token、容器、地址和加密消息的独立授权（`native_olk_token`）改在接飞书扩展的设置里填，hub.json 里的可以删掉。
 - `lark.account`（可选整数，仍生效）：默认的 lark-connector 账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号，允许范围 1–999999999，
   例如 `"lark": {"account": 2}`。账号编号来自 lark-connector `/accounts` 的 `id`，不是飞书用户 ID。收件箱里来自默认账号的飞书条目操作时不带 `ol_account`，
   来自其他账号的带上它们自己的编号；收件箱 Agent 处理飞书条目时也以它为默认账号（`docs/feishu.md`「多账号」）。修改后重启 hub（`systemctl --user restart jarvisd`）。
   不同账号的服务端收件箱记录隔离并保留，切回后可继续查看。
-- `lark.cli`（可选）：飞书官方的开放平台命令行 lark-cli，作为接飞书插件（lark-connector）之外的第二种飞书来源（`docs/plan-lark-cli.md`）：
+- `lark.cli`（可选）：飞书官方的开放平台命令行 lark-cli，作为接飞书扩展（lark-connector）之外的第二种飞书来源（`docs/plan-lark-cli.md`）：
   `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`。`bin` 是命令名或绝对路径，默认 `lark-cli`，不是绝对路径时在登录 shell 里找
   （npm 全局装的常在 nvm 这类目录下，systemd 的 PATH 里没有）；`profile` 是 lark-cli 的 `--profile`，空的用它的默认档。
   应用和用户的登录都留在 lark-cli 自己那里（`~/.lark-cli`），不进 `hub.json`：在助手所在的机器上自己跑一次
   `lark-cli auth login --domain all`（全部领域的用户权限；没有浏览器加 `--no-wait --json`，在手机上点链接授权），一周内没用过要重新登录。
   现在（L1）只给助手用：它的 PATH 上有 `lark-cli`（带上配置的 `profile`），写操作过闸门（`docs/assistant.md`「飞书：lark-cli」）。
-- `lark.prefer`（可选）：接飞书的插件（lark-connector）和 lark-cli 都有时谁是主来源，`lark-connector`（默认）或 `cli`；现在只影响助手的提示词怎么分工。
-- `lark_gate`（可选，老写法，照样生效；新规则写进下面的 `connector_gate`，`connector` 写 `lark`）：助手写飞书时的闸门规则（接飞书插件的命令闸门，以及 lark-cli），排在 `connector_gate` 的 `lark` 规则之后、内置规则前面，第一条匹配的说了算：
+- `lark.prefer`（可选）：接飞书的扩展（lark-connector）和 lark-cli 都有时谁是主来源，`lark-connector`（默认）或 `cli`；现在只影响助手的提示词怎么分工。
+- `lark_gate`（可选，老写法，照样生效；新规则写进下面的 `connector_gate`，`connector` 写 `lark`）：助手写飞书时的闸门规则（接飞书扩展的命令闸门，以及 lark-cli），排在 `connector_gate` 的 `lark` 规则之后、内置规则前面，第一条匹配的说了算：
   `[{"method":"POST","path":"/conversations/*/messages","action":"allow"}]`（`action` 是 `allow` / `confirm` / `deny`，可加 `body` 按顶层字段匹配；
   `docs/assistant.md`「飞书：lark-connector skill」）。lark-cli 的命令写成 `{"method":"CLI","path":"/im/+messages-send","action":"allow"}`
   （`path` 是命令的词用 `/` 连起来，`*` / `**` 通配同上），匹配上就不再看 lark-cli 自报的风险等级。
 - `connector_gate`（可选）：连接器写操作（`github_comment` 这类）的闸门规则，第一条匹配的说了算，没有匹配的就在手机上逐次确认：
   `[{"connector":"github","action":"github_comment","match":{"repo":"example-org/*"},"decision":"allow"}]`
   （`connector`、`action` 可用 `*` 通配；`match` 按工具参数的顶层字段匹配，字符串也可以通配；`decision` 是 `allow` / `confirm` / `deny`，
-  写错了 hub 不启动；`server/internal/connector/gate.go`，`docs/plan-connectors.md`）。插件清单里 `confirm_always` 命中的写操作，`allow` 规则也会被钳成 `confirm`（`docs/extensions.md`）。
+  写错了 hub 不启动；`server/internal/connector/gate.go`，`docs/plan-connectors.md`）。扩展清单里 `confirm_always` 命中的写操作，`allow` 规则也会被钳成 `confirm`（`docs/extensions.md`）。
   助手写飞书的规则也写这里：`connector` 写 `lark`，`action` 写「方法 路径」，如 `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`、
   lark-cli 的 `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}`（路径里 `*` 一段、`**` 剩下的全部，`"*"` 是任何调用；`match` 按 body 的顶层字段）。
   它们排在老的 `lark_gate` 前面，再往后是内置规则（`docs/assistant.md`「飞书：lark-connector skill」）。
@@ -376,7 +376,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   知识库是助手（管理者）的，hub 在握手时把这一节交给它（`ai` 除外：那是 hub 的模型配置读的），助手跑在别处也以 hub 这份为准；
   `assistant.external` 时 `extra_dirs` 是助手那台机器上的路径（`docs/knowledge.md`「谁管什么」）。
 - `inbox.rules`：收件箱 AI 分拣的个人规则（自然语言，比如「某某找我的都算需要我」「某告警群只算噪音」），附在分拣提示词最后、优先于默认判断（`docs/inbox.md`）。
-  连接器的条目带了自己的规则（`rules`，如插件设置的 `triage_rules`）时用那一份，不用这里的。
+  连接器的条目带了自己的规则（`rules`，如扩展设置的 `triage_rules`）时用那一份，不用这里的。
 - `bots.feishu`（可选）：在飞书里和 Persona 对话的机器人的应用凭证 `app_id`、`app_secret`、`domain`（`feishu` / `lark` / 开放平台地址），
   给不想在 App 里填的人用；App 里（设置 › 连接器 › 飞书机器人）存过的优先，开关、配对、各项功能都在 App 里（`docs/bots.md`）。
 - `extensions`（旧键 `plugins` 照样读）：手写在 hub.json 里、hub 跑起来、转发给 App 的扩展（语音对话等）：`id`、`name`、`kind`、`command` + `args`（或只给 `socket`：跑在别处的扩展）、

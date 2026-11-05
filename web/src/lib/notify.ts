@@ -288,6 +288,18 @@ export function claimNotification(tag: string, now = Date.now()): boolean {
   return true;
 }
 
+/** Forgets that `tag` was posted just now (its notification was taken back), so the next event for it posts. */
+function releaseClaim(tag: string): void {
+  const seen = readJSON<Record<string, number>>(NOTIFIED_KEY);
+  if (!seen || !(tag in seen)) return;
+  delete seen[tag];
+  try {
+    localStorage.setItem(NOTIFIED_KEY, JSON.stringify(seen));
+  } catch {
+    // storage unavailable: nothing was kept to forget
+  }
+}
+
 /** What a notification says (MacAttention.text): the agent and what happened, its last words as the body. */
 export function notificationText(s: Pick<Session, "title" | "cwd" | "last_text">, kind: "needs" | "finished", words: { needs: (title: string) => string; finished: (title: string) => string; needsBody: string; finishedBody: string }): { title: string; body: string } {
   const name = sessionTitle(s);
@@ -305,10 +317,14 @@ export function postNotification(n: { title: string; body: string; tag: string; 
   if (!systemNotifyActive()) return;
   try {
     const note = new Notification(n.title, { body: n.body, tag: n.tag, icon: n.icon });
+    posted.set(n.tag, note);
     note.onclick = () => {
       window.focus();
       open();
       note.close();
+    };
+    note.onclose = () => {
+      if (posted.get(n.tag) === note) posted.delete(n.tag);
     };
   } catch {
     navigator.serviceWorker
@@ -316,4 +332,31 @@ export function postNotification(n: { title: string; body: string; tag: string; 
       .then((reg) => reg?.showNotification(n.title, { body: n.body, tag: n.tag, icon: n.icon, data: { url: n.url } }))
       .catch(() => {});
   }
+}
+
+/** The notifications this page made itself, by tag: what closeNotification takes back. */
+const posted = new Map<string, Notification>();
+
+/**
+ * Takes back the notification for `tag` once its event is over (answered or seen, here or elsewhere, #3458): the one
+ * this page made, and one the service worker shows for it. Does nothing where there are no notifications.
+ */
+export function closeNotification(tag: string): void {
+  // its event is over: the next one for the same agent and kind may post at once, not after NOTIFIED_WINDOW_MS
+  releaseClaim(tag);
+  const note = posted.get(tag);
+  if (note) {
+    posted.delete(tag);
+    try {
+      note.close();
+    } catch {
+      // already gone
+    }
+  }
+  if (typeof navigator === "undefined" || !navigator.serviceWorker) return;
+  navigator.serviceWorker
+    .getRegistration()
+    .then((reg) => reg?.getNotifications({ tag }))
+    .then((list) => list?.forEach((n) => n.close()))
+    .catch(() => {});
 }

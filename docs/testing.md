@@ -19,6 +19,41 @@ for f in scripts/*/test_*.py; do (cd "$(dirname "$f")" && python3 -B -m unittest
 （`server/`、`sdk/go/`、`spec/fixtures/`、`schema/extension/`、`integrations/` 等，清单在 workflow 里），同一分支的新推送会取消还在跑的旧任务。
 服务端测试新读了仓库里别的文件，要把路径加进这份清单。CI 里没有 Postgres，依赖数据库的测试没有 `JARVIS_TEST_DATABASE_URL` 会跳过，照旧靠 `scripts/test/test-server.sh` 在 hub 机器上跑。
 
+## 本地快速检查（`scripts/check-fast.sh`，#2849）
+
+按 git 改动只跑相关的本地秒级检查，互不依赖的检查并行执行，适合提交前自查：
+
+```sh
+./scripts/check-fast.sh                  # 比对 git merge-base HEAD origin/master 到工作区的改动，按路径选检查
+./scripts/check-fast.sh --base master    # 指定比对基线
+./scripts/check-fast.sh --all            # 跑除 iOS/macOS 和服务端 Postgres 全量外的所有本地快速检查
+```
+
+路径映射：
+
+| 改动路径 | 跑什么 |
+| --- | --- |
+| `web/**` | `npm ci`（仅当 `node_modules` 缺失或 `package.json` / `package-lock.json` 改动）+ `npm run typecheck` + `npm test`（vitest run） |
+| `integrations/<pkg>/**` | 该包 `node --test test/*.test.{js,mjs}`（没有测试文件的包跳过） |
+| `site/**` | `node --test site/worker.test.mjs` |
+| `sdk/ts/**` | `bun test`（没有 bun 时跳过并写明原因） |
+| `sdk/go/**` | 在 sdk/go 模块里 `go test ./...` |
+| `server/internal/foo/**`、`server/cmd/bar/**` | `go test ./internal/foo/...` 等受影响包；无法映射的服务端改动兜底 `go build ./...` |
+| `android/**`、`scripts/app/*android*`（含两个 `test_android_*` 自测） | `scripts/app/android_i18n_check.py` 及 android 检查器自己的 unittest（i18n、token baseline，不跑 gradle 构建） |
+| `.github/**` | `scripts/test/pr_needs_issue_test.mjs` |
+| `schema/**` | `scripts/test/test_extension_schema.py`、`scripts/test/test_sdk_bundle.py`，并在 sdk/go 模块 `go test ./...`（对齐 CI 的 Extension schema job 三件套） |
+| `scripts/test/test_external_service_refs.py`、`scripts/{gen,test}/sdk_bundle*` | 对应脚本本身的测试 |
+| `scripts/**` | 按改动路径选 privacy / PR / schema / refs / bundle / i18n 秒级检查；拿不准就 PR 和 schema 都跑 |
+| 只改 `docs/**`、markdown | 无代码检查，明确提示「无相关检查」；其他未映射路径会逐文件列出 |
+
+只要有改动就始终先跑 `scripts/privacy_check.py`：纯本地扫描、不联网、约几秒。每个检查都有超时（npm ci 600 s、vitest 300 s、单组 go test 300 s、其他 120 s，可用 `CHECK_FAST_TIMEOUT_NPM_CI` / `CHECK_FAST_TIMEOUT_WEB_TEST` / `CHECK_FAST_TIMEOUT_GO_TEST` / `CHECK_FAST_TIMEOUT_OTHER` 环境变量覆盖），成功、失败、超时都各打印一行结论和耗时，结尾汇总通过 / 跳过（含原因）/ 失败 / 超时清单和日志目录。退出码：全过（或无需检查）为 0；有检查失败为 1；没有失败但有超时为 124（超时不当成功，需进一步跑全套确认）。工具链缺失时，默认模式只跳过相关检查并说明，`--all` 模式下缺少核心工具（node ≥ 22、go、python3）则判失败；bun 始终可选。需要 GNU `timeout`（macOS 装 coreutils）。
+
+覆盖不了的：
+
+- iOS / macOS / watchOS 的编译、模拟器截图和 UI 测试仍需在 Mac 上跑 `scripts/app/sim.sh`、`scripts/app/ui-test.sh`；PersonaKit 用 `swift test`。
+- 服务端连真实 Postgres 的全量测试仍用 `scripts/test/test-server.sh`（`internal/db` 等包在没有 `JARVIS_TEST_DATABASE_URL` 时自行跳过；`internal/node`、`internal/hub` 等包的全套测试假定 hub 机器环境，本机快速检查超时不代表失败，以 test-server.sh 的结果为准）。
+- Android gradle 构建和截图用 `scripts/app/android.sh`。
+
 **PersonaKit**（`apple/Packages/PersonaKit`，#2095）：App 里不碰界面的逻辑挪进这个包，它的测试用 `swift test` 在 Mac 上跑，冷的约 10 秒、
 改一个文件后约 2 秒（同样的测试经 `PersonaTests` 跑，冷的约 140 秒、改一个文件后约 45 秒：要编整个 App、起模拟器）。改了包里的代码，合并前跑一遍 `swift test`；
 它不在 `PersonaTests` 里，也没有 CI job。iOS / Mac / visionOS 三个 App 依赖它，手表和小组件不依赖。

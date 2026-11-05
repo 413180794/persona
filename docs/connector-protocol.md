@@ -4,7 +4,7 @@
 为什么这样设计、和在 hub 里跑的连接器什么关系，见 `docs/connectors.md`「二 · 4」。代码：程序一侧 `server/internal/connector/serve`，
 hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/connector/conformance`。
 
-**它现在是插件协议的 `connector` 命名空间**（#1101，`docs/extensions.md`「进程插件协议」）：连接器程序是一个贡献了 `connectors` 扩展点的插件，
+**它现在是插件协议的 `connector` 命名空间**（#1101，`docs/extensions.md`「进程扩展协议」）：连接器程序是一个贡献了 `connectors` 扩展点的插件，
 hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `connector.`（`status` → `connector.status`），参数里多一个 `contribution`（连接器的 id），
 参数、结果、硬性规定一个都不变。程序调 hub 的 `secrets.*` 和事件 `changed` 也一样加前缀、带 `contribution`。进程什么时候起、怎么停、
 怎么重启、配置和用户填的密钥怎么给，都是插件底座的事（`docs/extensions.md`）。

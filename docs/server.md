@@ -470,7 +470,7 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
   - 一轮的时长 = 第一次进入 working 到最后一次结束；每台设备按自己的设置（`prefs.done`：`off` / `long` / `always`）决定收不收，
     `long` 只收不短于 `long_turn_seconds` 的；`prefs.input` 关掉就不收「需要你」。
   - 屏蔽的 Agent、助手这一轮已经用 `notify_user` 推过的，都不推。hub 重启后进行中的轮次从重启后第一次看到它算起。
-- 扩展发的（`POST /api/v1/notify`，`hub/notify_api.go`）：级别由插件定（`active` / `time-sensitive`），按设备的 `input` 开关和屏蔽过滤；判断和限频在插件，见 `docs/extensions.md`「发通知」。
+- 扩展发的（`POST /api/v1/notify`，`hub/notify_api.go`）：级别由扩展定（`active` / `time-sensitive`），按设备的 `input` 开关和屏蔽过滤；判断和限频在扩展，见 `docs/extensions.md`「发通知」。
 
 ## 关停（`hub/shutdown.go`）
 

@@ -13,10 +13,6 @@
     "reasoning_effort": ""
   },
   "lark": {},
-  "google": {
-    "client_id": ""
-  },
-  "microsoft": {},
   "machines": [
     {
       "id": "box",
@@ -44,9 +40,6 @@
     "access": "lan"
   },
   "tailcat": {},
-  "bots": {
-    "feishu": {}
-  },
   "mesh": {},
   "personas": {},
   "usage": {}

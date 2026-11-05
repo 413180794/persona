@@ -52,6 +52,22 @@ export function detectTransitions(prev: ReadonlyMap<string, AgentState>, session
   return { next, events };
 }
 
+/**
+ * The notification tags (`<agentKey>#needs` / `#finished`, as attention-signals posts them) whose event is over between
+ * two snapshots: a session no longer 需要你, or no longer 完成未看 (seen here or elsewhere), or gone from the list. Their
+ * system notifications are taken back, so one answered on the phone does not wait in the notification centre (#3458).
+ */
+export function settledTags(prev: ReadonlyMap<string, AgentState>, next: ReadonlyMap<string, AgentState>): string[] {
+  const out: string[] = [];
+  for (const [key, was] of prev) {
+    const now = next.get(key);
+    if (was === now) continue;
+    if (was === "needs_you") out.push(`${key}#needs`);
+    else if (was === "unread") out.push(`${key}#finished`);
+  }
+  return out;
+}
+
 /** A session's current turn as the page saw it: when it started working, and when it last stopped (ms). */
 export interface Turn {
   start: number;

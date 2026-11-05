@@ -47,9 +47,14 @@ const callTimeout = 30 * time.Minute
 // stdinMost is the most a command line reads from stdin (a message's text).
 const stdinMost = 1 << 20
 
+// dial reaches the node; it hangs up when ctx is cancelled (Ctrl-C, SIGTERM), so a write waiting for the user ends on
+// the node too and the hub takes its card off the phone (rpc.Peer.Cancels), instead of a card nobody waits for until
+// it expires (replaced by tests).
+var dial node.Dialer = node.DialSocketInterruptible
+
 // call asks the node to run a tool as the assistant's (replaced by tests).
 var call = func(ctx context.Context, name string, args any) (proto.ToolResult, error) {
-	line, err := node.DialSocket(ctx, map[string]any{"kind": "cli.call", "name": name, "args": args})
+	line, err := dial(ctx, map[string]any{"kind": "cli.call", "name": name, "args": args})
 	if err != nil {
 		return proto.ToolResult{}, err
 	}

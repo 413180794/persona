@@ -6,15 +6,15 @@ Persona 和它驱动的 Agent 要用户回答、批准的，以文字发到微�
 走的是腾讯给个人微信开放的 AI 机器人接口 **iLink**（`ilinkai.weixin.qq.com`）：用户用微信扫码授权，得到一个机器人的 token，之后长轮询收消息、带
 `context_token` 回消息。协议照腾讯开源的 [openclaw-weixin](https://github.com/Tencent/openclaw-weixin)（MIT，见 `THIRD_PARTY_NOTICES.md`）实现。
 
-## 为什么做成插件
+## 为什么做成扩展
 
-只对一个服务有意义的东西做成插件（`docs/extensions.md`），不往 hub 里加：它是 personad 旁边的单独程序 `jarvisd-wechat`，和 Telegram 的一样注册成**内置插件**
+只对一个服务有意义的东西做成扩展（`docs/extensions.md`），不往 hub 里加：它是 personad 旁边的单独程序 `jarvisd-wechat`，和 Telegram 的一样注册成**内置扩展**
 `wechat`（同一次构建发布、自动更新时一起换，`version -v` 和 hub 不一样就不启动）。它是一个**渠道**（`docs/channels.md`）：程序只管和微信说话，
 「消息进哪个对话、等这一轮答完、答案发回、Agent 的提问」都是统一管线（和飞书机器人是同一份，2026-11-04 起在助手里管对话；2026-11-05 起收发和微信程序也在管理者里，`docs/channels.md`「谁管什么」）。
 
 | 要做的事 | 用什么 |
 | --- | --- |
-| 扫码绑定、设置里的状态和开关 | 扩展点 `connectors`，连接器 `wechat` 只有 `status` + `login` 两个能力；登录是二维码步骤（`kind: qr`，#1351）。设置 › 插件 › 渠道 › 微信 里的「绑定」走的是同一个登录 |
+| 扫码绑定、设置里的状态和开关 | 扩展点 `connectors`，连接器 `wechat` 只有 `status` + `login` 两个能力；登录是二维码步骤（`kind: qr`，#1351）。设置 › 渠道 › 微信 里的「绑定」走的是同一个登录 |
 | 存 token、游标、主人最新的 `context_token` | `connector.secrets`（hub 用 `secret.key` 加密存数据库），整份一个 JSON |
 | 把主人的消息交给 hub、把 hub 给的话发回微信、「正在输入」 | 扩展点 `channel`（#1466）：程序调 hub 的 `channel.receive`，hub 调程序的 `channel.send`、`channel.typing` |
 | 访问微信 | 权限 `network: *.weixin.qq.com`（展示用，hub 暂不拦截） |
@@ -70,13 +70,13 @@ HTTPS 源）；机器人 `server/internal/wechat`（`wechat.go` 主循环和存�
 ## 命令
 
 渠道管线（助手）统一实现：`/help`、`/new [第一句话]`（之后的消息发给新开的对话）、`/main`（回到主对话）、`/stop`（停下当前目标这一轮，不再等它的回答）、
-`/status`（发给谁、在等几个回答、几个问题）。「消息发到」也能在 设置 › 插件 › 渠道 › 微信 里选。
+`/status`（发给谁、在等几个回答、几个问题）。「消息发到」也能在 设置 › 渠道 › 微信 里选。
 
 ## 和飞书机器人比
 
 | | 飞书机器人（`docs/bots.md`） | 微信机器人（这里） |
 | --- | --- | --- |
-| 在哪 | 收发在 hub 里（`hub/bots*.go`），对话的事在助手（`assistant/feishu*.go`） | 内置插件，单独的程序，只管和微信说话（`channel` 扩展点） |
+| 在哪 | 收发在 hub 里（`hub/bots*.go`），对话的事在助手（`assistant/feishu*.go`） | 内置扩展，单独的程序，只管和微信说话（`channel` 扩展点） |
 | 跟踪这一轮 | 助手的渠道管线（同一份，`assistant/channels_runs.go`） | 同左 |
 | 绑定 | 填自建应用的 App ID / Secret，再发配对码 | 扫码 |
 | 提问和批准 | 卡片按钮 | 文字往返 |
@@ -93,7 +93,7 @@ HTTPS 源）；机器人 `server/internal/wechat`（`wechat.go` 主循环和存�
 
 - `go test ./internal/wechat/...`：iLink 协议对着假的 iLink 服务器（扫码各状态、跳转只认腾讯的源、长轮询超时、被顶号、加解密、Markdown 过滤和拆分）；
   程序对着假的 iLink 和假的 hub（绑定、主人的消息交给 hub、陌生人、被顶号解绑、图片和文件、重投去重、没有 `context_token` 时 `cannot_send`、「正在输入」）；连接器一致性测试。
-- `go test ./internal/hub -run 'WeChat|Channel'`：hub 注册的清单（连接器、渠道、权限）、程序对着插件协议和渠道协议的一致性测试（`channel/conformance`）、
+- `go test ./internal/hub -run 'WeChat|Channel'`：hub 注册的清单（连接器、渠道、权限）、程序对着进程扩展协议和渠道协议的一致性测试（`channel/conformance`）、
   统一管线对着假的渠道程序和假的 node（消息进主对话和回答发回、拆分、去重、文字审批、在 App 里答过、发不出去、命令、目标）、旧状态的迁移。
 - App：`MOCK_WECHAT=signed_out` 的假 hub 跑 `QRSignInTests`（`docs/testing.md`）。
 - 真实的微信：要用户自己的微信扫码，CI 和单元测试都覆盖不到，部署后在用户的 hub 上实测。

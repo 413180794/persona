@@ -21,9 +21,9 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `github` | GitHub | hub 里（`connector/github`） | `Archive`（`updated_at` 游标） | 有，规则定档 + 降噪（`rules.go`） | `github_search/read/diff/checks` | `github_comment`、`github_review`（过闸门） | 读某台电脑上 `gh` 的登录（`credential.gh_token`） |
 | `imessage` | 信息 | 读在 Mac 的 node 上，hub 里是个转 RPC 的适配（`connector/imessage`） | `Archive`（ROWID） | 有 | `imessage_chats/read/search` | 没有 | 没有（给 Mac 上的 personad 完全磁盘访问权限） |
-| `telegram` | Telegram | 扩展市场 `nwverse/persona-extensions` 里的扩展 `telegram`（#1704、#2057，代码不在本仓库），hub 经插件协议调（`connector/proc`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
-| `wechat` | 微信 | 内置插件的单独程序 `jarvisd-wechat`（`docs/wechat.md`）：微信里的机器人，不是数据来源，是渠道（`docs/channels.md`）；连接器只管绑定和状态 | 没有 | 没有 | 没有 | 没有 | `Login` 扫码（`kind: qr`），token 加密存 `connector_secrets` |
-| `lark` | 飞书 | #1571 起由接飞书的插件注册（原来是 hub 的 lark_connector.go，包住原来的 lark-connector 代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | 插件给的收件箱块（块类型在 `assistant/inbox_blocks.go`；原来是 hub 的 inbox_own.go） | `lark_chats/messages/search` | 走 lark-connector skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的 lark-connector 里登录 |
+| `telegram` | Telegram | 扩展市场 `nwverse/persona-extensions` 里的扩展 `telegram`（#1704、#2057，代码不在本仓库），hub 经进程扩展协议调（`connector/proc`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
+| `wechat` | 微信 | 内置扩展的单独程序 `jarvisd-wechat`（`docs/wechat.md`）：微信里的机器人，不是数据来源，是渠道（`docs/channels.md`）；连接器只管绑定和状态 | 没有 | 没有 | 没有 | 没有 | `Login` 扫码（`kind: qr`），token 加密存 `connector_secrets` |
+| `lark` | 飞书 | #1571 起由接飞书的扩展注册（原来是 hub 的 lark_connector.go，包住原来的 lark-connector 代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | 扩展给的收件箱块（块类型在 `assistant/inbox_blocks.go`；原来是 hub 的 inbox_own.go） | `lark_chats/messages/search` | 走 lark-connector skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的 lark-connector 里登录 |
 | `mail` | 邮件 | hub 里（`hub/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |
 
 ### 接口：一份清单，按清单分派
@@ -36,7 +36,7 @@
 | `Hosts` | 链接所在的主机名（App 认链接） |
 | `AgentTools` | 哪些工具也给 Agent（不只给助手），按名字的通配（邮件是 `mail_*`） |
 | `Unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 扩展的 `tg` 命令行和 skill，`docs/connector-protocol.md`「命令行」）。不是权限 |
-| `ConfirmAlways` | 哪些写操作永远要用户在手机上确认，按名字的通配（可选）：`connector_gate` 里命中它的 `allow` 规则被钳成 `confirm`，`deny` 不变（见「闸门」）。插件清单里写 `confirm_always` |
+| `ConfirmAlways` | 哪些写操作永远要用户在手机上确认，按名字的通配（可选）：`connector_gate` 里命中它的 `allow` 规则被钳成 `confirm`，`deny` 不变（见「闸门」）。扩展清单里写 `confirm_always` |
 | `Poll` | 多久问一次 `Archive`（0 是 hub 的默认；邮件 6 分钟） |
 | `Kinds` | 收件箱条目的种类；每个种类在 `prompts/inbox/kinds/<id>.md` 里要有自己的说明（`connector.CheckKinds`，各连接器的 `TestKindsAreDescribed`），收到没声明的种类记一行日志 |
 | `Proxy` | 它替一个程序回答（子进程的 `proc.Conn`）：实现了全部接口，只有声明的那些是真的 |
@@ -63,11 +63,11 @@ hub 收到不认识的档就丢掉、交给模型分拣。
 ### 三种跑法
 
 - **在 hub 里**：Go 代码直接实现接口。
-- **子进程**（`connector/proc` ↔ `connector/serve`）：第一方、只是依赖太大不想编进 personad 的（Telegram 的 gotd；#1704 起 Telegram 是扩展，走插件协议）。hub 起程序，stdin / stdout 上跑 hub↔node 那套
+- **子进程**（`connector/proc` ↔ `connector/serve`）：第一方、只是依赖太大不想编进 personad 的（Telegram 的 gotd；#1704 起 Telegram 是扩展，走进程扩展协议）。hub 起程序，stdin / stdout 上跑 hub↔node 那套
   JSON-lines RPC（`internal/rpc`），方法一一对应接口（`serve.go` 的 `init`、`status`、`archive.changes`、`inbox.collect`、`tools.call`……），
-  程序反过来调 hub 的 `secrets.*`。hub 注册时就给 `proc.Conn` 一份静态的清单（`proc.Config.Manifest`；插件的来自它的
+  程序反过来调 hub 的 `secrets.*`。hub 注册时就给 `proc.Conn` 一份静态的清单（`proc.Config.Manifest`；扩展的来自它的
   `persona-plugin.json`），所以从没启动过、默认关着的连接器也报得出能力、能登录和退出（#666）；`init` 回的程序清单
-  （`serve.Manifest`，线上的字段是 snake_case）拿来核对，不一致记日志、仍用静态的。内置插件的程序（微信机器人）必须和 hub 同一次构建（`version -v` 一字不差）；协议有版本号（v2，`docs/connector-protocol.md`）。
+  （`serve.Manifest`，线上的字段是 snake_case）拿来核对，不一致记日志、仍用静态的。内置扩展的程序（微信机器人）必须和 hub 同一次构建（`version -v` 一字不差）；协议有版本号（v2，`docs/connector-protocol.md`）。
 - **node 中转**：数据只在某台 Mac 上（`chat.db`）。node 上有一个读本地数据的 `Reader`，hub 经 node 的 RPC（`connector.list/chats/older/changes/search`，
   `node/node.go` 里写死的 5 个方法；新 node 也经 `plugin.node.call {id: "imessage"}` 答，见 `docs/extensions.md`「内置的 node 程序」）去读，
   hub 一侧的 `imessage.Remote` 才是连接器。读哪台 Mac 在内置扩展「信息（iMessage）」里选（#1830 第 6 步），没选时看 hub.json 的 `imessage.machine`。
@@ -119,7 +119,7 @@ App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读�
 
 > **微信（wechat-connector）是进程扩展连接器的范例**，而且不写在 hub 里：连接器是外部 API 服务 wechat-connector 的客户端，以扩展包（`.tar.gz` 加 sha256）交付，
 > 用扩展协议 1 加连接器协议 v2 和 hub 说话，声明 `fallback`（每个收件箱条目带兜底分级），本仓库没有它的代码。接入手册见 [wechat-connector.md](wechat-connector.md)。
-> 怎么给这样的外部程序做一致性测试：插件一侧的起停和握手用 `conformance.Program`（[extensions.md](extensions.md)「一致性测试」），
+> 怎么给这样的外部程序做一致性测试：扩展一侧的起停和握手用 `conformance.Program`（[extensions.md](extensions.md)「一致性测试」），
 > 连接器一侧逐个能力的检查用 `CheckProgram` 加合成的线上夹具（[connector-protocol.md](connector-protocol.md)「一致性测试」）。
 
 ## 二、v2 设计
@@ -313,7 +313,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 - `qr`（#1351）：`{url, interval}`，`url` 是要用别的 App 扫的内容（微信的扫码授权）。hub 回给 App 时附上二维码的点阵 `qr: {size, rows}`（`rows` 是一行一串 `0` / `1`，
   不含四周的空白，和管理界面配对的二维码同一个生成法），App 照着画（深浅色下都是白底黑块，带安静区），每隔 `interval` 秒问一次同一步，直到 `done`；
   在同一部手机上扫不了自己的屏幕，所以下面有「保存二维码」（分享 / 存到相册，再在那个 App 里从相册识别）。iOS / Mac 和网页（设置 › 连接器，#1693）有连接器登录页，Android 还没有。
-- 客户端画不了的步骤（不认识的 `kind`、`qr` 却没有点阵、没有字段的表单）不能显示成空表单加一个永远灰着的「下一步」（#1693）：要说明这一步画不了、下一步怎么办（更新后重新开始；也是渠道的到 设置 › 插件 › 渠道 绑定），并给「重新开始」。
+- 客户端画不了的步骤（不认识的 `kind`、`qr` 却没有点阵、没有字段的表单）不能显示成空表单加一个永远灰着的「下一步」（#1693）：要说明这一步画不了、下一步怎么办（更新后重新开始；也是渠道的到 设置 › 渠道 绑定），并给「重新开始」。
   网页在 `qr` 只缺点阵、`url` 是 http(s) 时退一步显示链接（可复制，照常轮询）。iOS / Mac 一样说明这一步这个版本的 App 显示不了、更新后「重新开始」，二维码的还提示去网页版 设置 › 连接器 扫码（`ConnectorPrompt.cannotDraw`）。
 
 于是 App 只做**一个**通用登录页（填字段、打开网页、显示验证码三种步骤），Telegram、Gmail、Outlook、GitHub 都用它。

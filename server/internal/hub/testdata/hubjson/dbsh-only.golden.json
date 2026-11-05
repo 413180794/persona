@@ -13,10 +13,6 @@
     "reasoning_effort": ""
   },
   "lark": {},
-  "google": {
-    "client_id": ""
-  },
-  "microsoft": {},
   "machines": [
     {
       "id": "<host>",
@@ -37,9 +33,6 @@
   "security": {},
   "admin": {},
   "tailcat": {},
-  "bots": {
-    "feishu": {}
-  },
   "mesh": {},
   "personas": {},
   "usage": {}

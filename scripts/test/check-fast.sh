@@ -1,0 +1,522 @@
+#!/bin/bash
+# check-fast.sh — run only the local fast checks that a change needs (#2849).
+#
+#   scripts/check-fast.sh                 # diff merge-base(HEAD, origin/master)..working tree, pick checks by path
+#   scripts/check-fast.sh --base master   # diff against another ref
+#   scripts/check-fast.sh --all           # every local fast check except iOS/macOS builds and the Postgres suite
+#   scripts/check-fast.sh -h|--help
+#
+# Path mapping (diff mode):
+#   web/**                     npm ci (only with no node_modules or a changed package.json/package-lock.json),
+#                              typecheck, vitest run
+#   integrations/<pkg>/**      node --test test/*.test.{js,mjs} (packages without tests are skipped)
+#   site/**                    node --test site/worker.test.mjs
+#   sdk/ts/**                  bun test (skipped with a reason when bun is absent)
+#   sdk/go/**                  go test ./... inside the sdk/go module
+#   server/internal/foo/**     go test ./internal/foo/...   (cmd/ likewise; uncategorized server changes: go build ./...)
+#   android/**                 scripts/app/android_i18n_check.py plus the android checkers' own unittests (no gradle)
+#   .github/**                 scripts/test/pr_needs_issue_test.mjs
+#   schema/**                  the extension-schema py, the sdk bundle py, and sdk/go go test (mirrors CI's job)
+#   scripts/**                 privacy/PR/extension/refs/bundle/i18n checks picked by path; PR+extension when
+#                              ambiguous (a case "*" matches slashes, so scripts/* covers nested paths too)
+#   docs/** or markdown only   no code checks; the privacy gate still runs
+# scripts/privacy_check.py runs on every invocation that has changes (it is a seconds-long local scan, no network).
+#
+# Independent checks run in parallel; each command gets a GNU timeout (override with the CHECK_FAST_TIMEOUT_*
+# variables below). Every check prints one PASS / FAIL / TIMEOUT / SKIP line with its duration, followed by a
+# summary. The temp log directory is kept when a check fails or times out and removed on a fully clean run.
+#
+# Exit codes: 0 all checks passed, skipped or not needed; 1 one or more checks FAILED; 124 no failure but at least
+# one check TIMEOUT (a timeout is reported, not silently treated as success; run the full suite when that happens).
+# A missing optional toolchain (node < 22, go, bun) skips only its checks in diff mode; in --all mode a missing
+# core tool (node >= 22, go, python3) is a failure.
+#
+# This script never runs iOS/macOS checks (use a Mac with scripts/app/sim.sh; PersonaKit: swift test, docs/testing.md),
+# the Android gradle build (scripts/app/android.sh), or the full server suite against real Postgres
+# (scripts/test/test-server.sh).
+set -uo pipefail
+
+cd "$(dirname "$0")/../.."
+
+# Per-command timeouts in seconds (CLAUDE.md: every background step carries a timeout). Override for slow machines.
+TIMEOUT_NPM_CI="${CHECK_FAST_TIMEOUT_NPM_CI:-600}"
+TIMEOUT_WEB_TEST="${CHECK_FAST_TIMEOUT_WEB_TEST:-300}"
+TIMEOUT_GO_TEST="${CHECK_FAST_TIMEOUT_GO_TEST:-300}"
+TIMEOUT_OTHER="${CHECK_FAST_TIMEOUT_OTHER:-120}"
+
+usage() {
+  awk 'NR==1 {next} /^#/ {sub(/^# ?/, ""); print; next} {exit}' "$0"
+}
+
+ALL=0
+BASE_REF="origin/master"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --all) ALL=1 ;;
+    --base)
+      [ $# -ge 2 ] || { echo "check-fast: --base needs a git ref" >&2; exit 2; }
+      BASE_REF=$2; shift ;;
+    --base=*) BASE_REF=${1#*=} ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "check-fast: unknown argument: $1 (see --help)" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_BIN=timeout
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_BIN=gtimeout
+else
+  echo "check-fast: GNU timeout is required (macOS: brew install coreutils)" >&2
+  exit 2
+fi
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# Coarse interpreter gate: only the Node major version is checked here (22+). Each package's engines field
+# (web needs 22.13, some integrations 22.19) is npm's own check; without engine-strict npm only warns on it.
+NODE_MAJOR=0
+if have node; then
+  NODE_MAJOR=$(node -e 'console.log(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)
+fi
+node_ok() { [ "$NODE_MAJOR" -ge 22 ] 2>/dev/null; }
+HAVE_GO=0; have go && HAVE_GO=1
+HAVE_PY=0; have python3 && HAVE_PY=1
+HAVE_BUN=0; have bun && HAVE_BUN=1
+
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/check-fast.XXXXXX")
+# Keep WORK after a failure or timeout (its logs are the trail to read); a clean run removes it on exit.
+KEEP_WORK=0
+cleanup_work() { [ "$KEEP_WORK" -eq 0 ] && rm -rf "$WORK"; }
+trap cleanup_work EXIT
+
+# Job bookkeeping (plain indexed arrays for macOS's bash 3.2).
+JOB_NAME=(); JOB_FN=(); JOB_ARG=(); JOB_LOG=(); JOB_STATUS=(); JOB_PID=()
+INFO=()                 # informational SKIP lines for the summary
+
+# arr_has reports whether a token equals one of the remaining arguments (arr_has "$t" "${arr[@]:-}"), so the
+# package and go-group lists can be indexed arrays that keep spaces and glob characters in directory names.
+arr_has() {
+  local _token=$1 _x
+  shift
+  for _x in "$@"; do [ "$_x" = "$_token" ] && return 0; done
+  return 1
+}
+
+# step runs one command under a timeout; a timeout classifies the whole job and stops it.
+# JOB_HINT (set by the job body) is appended to the TIMEOUT detail; each job appends its steps to one log.
+step() {
+  local _seconds=$1 _desc=$2
+  shift 2
+  echo "+ $_desc (timeout ${_seconds}s)"
+  # tee the output so the job log stays live and a whole-suite self-timeout can still be classified as TIMEOUT
+  # instead of FAIL. One appended file per job is not reset by in_dir's subshell, so a multi-step job (web:
+  # npm ci, typecheck, vitest) keeps every step. The grep anchors on the runners' own whole-suite markers, never
+  # on the words "timed out" (a failing assertion that merely prints them must stay a FAIL):
+  #   go test panics "panic: test timed out after …" when ITS suite deadline kills the run;
+  #   node's TAP reporter emits "failureType: 'testTimeoutFailure'". A node per-test timeout under the default
+  #   reporter is a clean exit 1 naming the test, so it rightly stays a FAIL, not a whole-job TIMEOUT.
+  local _out="$WORK/job.${JOB_I:-x}.steps.log"
+  "$TIMEOUT_BIN" -k 5s "$_seconds" "$@" 2>&1 | tee -a "$_out"
+  local _rc=${PIPESTATUS[0]}
+  local _hint="${JOB_HINT:+ ($JOB_HINT)}"
+  if [ "$_rc" -eq 124 ]; then
+    printf 'TIMEOUT\t%s\t%s\t%s%s\n' "$_rc" "$SECONDS" "$_desc" "$_hint" > "$JOB_STATUS"
+    exit 0
+  fi
+  if [ "$_rc" -eq 137 ]; then
+    # SIGKILL: timeout -k's kill after a command that ignored TERM, or the OOM killer — both mean "did not finish".
+    printf 'TIMEOUT\t%s\t%s\t%s (killed: timeout SIGKILL or OOM)%s\n' "$_rc" "$SECONDS" "$_desc" "$_hint" > "$JOB_STATUS"
+    exit 0
+  fi
+  if [ "$_rc" -ne 0 ] && grep -qE "panic: test timed out after [0-9]|failureType: '?testTimeoutFailure'?" "$_out" 2>/dev/null; then
+    printf 'TIMEOUT\t%s\t%s\t%s (test suite self-timed out)%s\n' "$_rc" "$SECONDS" "$_desc" "$_hint" > "$JOB_STATUS"
+    exit 0
+  fi
+  return "$_rc"
+}
+
+skip() { printf 'SKIP\t0\t%s\t%s\n' "$SECONDS" "$1" > "$JOB_STATUS"; exit 0; }
+
+# in_dir runs the rest of the arguments in a directory; if a step there classified the job (a timeout), the whole
+# job body stops, instead of continuing with the next step.
+in_dir() {
+  local _dir=$1
+  shift
+  ( cd "$_dir" && "$@" )
+  local _rc=$?
+  [ -s "$JOB_STATUS" ] && exit 0
+  return "$_rc"
+}
+
+schedule() {  # schedule <name> <function> <arg>
+  local _i=${#JOB_NAME[@]}
+  JOB_NAME+=("$1"); JOB_FN+=("$2"); JOB_ARG+=("$3")
+  JOB_LOG+=("$WORK/job.$_i.log"); JOB_STATUS+=("$WORK/job.$_i.status")
+  echo "  queued: $1"
+}
+
+launch_all() {
+  local _i
+  for _i in "${!JOB_NAME[@]}"; do
+    (
+      JOB_STATUS=${JOB_STATUS[$_i]}
+      JOB_I=$_i
+      SECONDS=0
+      set +e
+      "${JOB_FN[$_i]}" "${JOB_ARG[$_i]}"
+      _rc=$?
+      if [ ! -s "$JOB_STATUS" ]; then
+        if [ "$_rc" -eq 0 ]; then
+          printf 'PASS\t0\t%s\t\n' "$SECONDS" > "$JOB_STATUS"
+        else
+          printf 'FAIL\t%s\t%s\texit %s\n' "$_rc" "$SECONDS" "$_rc" > "$JOB_STATUS"
+        fi
+      fi
+    ) > "${JOB_LOG[$_i]}" 2>&1 &
+    JOB_PID+=($!)
+  done
+  for _i in "${!JOB_PID[@]}"; do wait "${JOB_PID[$_i]}" 2>/dev/null || true; done
+}
+
+# --- check bodies ---------------------------------------------------------
+
+job_privacy() {
+  [ "$HAVE_PY" -eq 1 ] || skip "python3 not found"
+  step "$TIMEOUT_OTHER" "python3 scripts/privacy_check.py" python3 scripts/privacy_check.py || return $?
+}
+
+job_web() {  # $1 = ci when npm ci must run first
+  if ! node_ok; then skip "node >= 22 not found (found: $(node -v 2>/dev/null || echo none))"; fi
+  if [ "$1" = ci ]; then
+    JOB_HINT="a stale web/node_modules can cause this; remove web/node_modules and rerun"
+    in_dir web step "$TIMEOUT_NPM_CI" "web: npm ci" npm ci || return $?
+    JOB_HINT=""
+  fi
+  in_dir web step "$TIMEOUT_OTHER" "web: tsc -b (typecheck)" npm run typecheck || return $?
+  in_dir web step "$TIMEOUT_WEB_TEST" "web: vitest run" npm test
+}
+
+job_integration() {  # $1 = package directory name under integrations/
+  if ! node_ok; then skip "node >= 22 not found (found: $(node -v 2>/dev/null || echo none))"; fi
+  local _dir="integrations/$1"
+  [ -f "$_dir/package.json" ] || skip "integrations/$1 has no package.json"
+  # Build the list in the package dir so unmatched globs never reach node as literal paths (bash 3.2 has no nullglob).
+  local _tests=() _t
+  while IFS= read -r _t; do _tests+=("$_t"); done \
+    < <(cd "$_dir" 2>/dev/null && find test -maxdepth 1 \( -name '*.test.js' -o -name '*.test.mjs' \) -print 2>/dev/null)
+  [ "${#_tests[@]}" -gt 0 ] || skip "integrations/$1 has no test/*.test.{js,mjs}"
+  in_dir "$_dir" step "$TIMEOUT_OTHER" "integrations/$1: node --test" node --test "${_tests[@]}"
+}
+
+job_site() {
+  if ! node_ok; then skip "node >= 22 not found (found: $(node -v 2>/dev/null || echo none))"; fi
+  [ -f site/worker.test.mjs ] || skip "site/worker.test.mjs not found"
+  step "$TIMEOUT_OTHER" "site: node --test worker.test.mjs" node --test site/worker.test.mjs
+}
+
+job_sdk_ts() {
+  [ "$HAVE_BUN" -eq 1 ] || skip "bun not found in PATH (sdk/ts tests run on bun)"
+  in_dir sdk/ts step "$TIMEOUT_OTHER" "sdk/ts: bun test" bun test
+}
+
+job_go() {  # $1 = a package dir (internal/foo, cmd/bar) or ALL for ./...
+  [ "$HAVE_GO" -eq 1 ] || skip "go not found"
+  local _pattern _label _inner
+  if [ "$1" = ALL ]; then _pattern=./...; _label="go test ./..."; else _pattern="./$1/..."; _label="go test ./$1/..."; fi
+  _inner=$((TIMEOUT_GO_TEST - 10)); [ "$_inner" -lt 5 ] && _inner=5
+  in_dir server step "$TIMEOUT_GO_TEST" "$_label" go test -count=1 -timeout "${_inner}s" "$_pattern"
+}
+
+job_go_build() {
+  [ "$HAVE_GO" -eq 1 ] || skip "go not found"
+  in_dir server step "$TIMEOUT_GO_TEST" "go build ./..." go build ./...
+}
+
+job_sdk_go() {  # sdk/go is its own Go module (its own go.mod), not part of server/.
+  [ "$HAVE_GO" -eq 1 ] || skip "go not found"
+  local _inner=$((TIMEOUT_GO_TEST - 10)); [ "$_inner" -lt 5 ] && _inner=5
+  in_dir sdk/go step "$TIMEOUT_GO_TEST" "sdk/go: go test ./..." go test -count=1 -timeout "${_inner}s" ./...
+}
+
+job_i18n() {
+  [ "$HAVE_PY" -eq 1 ] || skip "python3 not found"
+  step "$TIMEOUT_OTHER" "python3 scripts/app/android_i18n_check.py" python3 scripts/app/android_i18n_check.py || return $?
+  # The checkers' own unittests, run from scripts/app the way CI does (their fixture paths are relative).
+  in_dir scripts/app step "$TIMEOUT_OTHER" "scripts/app: test_android_i18n_check.py self-test" \
+    python3 -B test_android_i18n_check.py || return $?
+  in_dir scripts/app step "$TIMEOUT_OTHER" "scripts/app: test_android_token_baseline.py self-test" \
+    python3 -B test_android_token_baseline.py
+}
+
+job_external_refs() {
+  [ "$HAVE_PY" -eq 1 ] || skip "python3 not found"
+  step "$TIMEOUT_OTHER" "python3 scripts/test/test_external_service_refs.py" \
+    python3 -B scripts/test/test_external_service_refs.py || return $?
+}
+
+job_sdk_bundle() {
+  [ "$HAVE_PY" -eq 1 ] || skip "python3 not found"
+  step "$TIMEOUT_OTHER" "python3 scripts/test/test_sdk_bundle.py" \
+    python3 -B scripts/test/test_sdk_bundle.py || return $?
+}
+
+job_pr_needs_issue() {
+  if ! node_ok; then skip "node >= 22 not found (found: $(node -v 2>/dev/null || echo none))"; fi
+  step "$TIMEOUT_OTHER" "node scripts/test/pr_needs_issue_test.mjs" node scripts/test/pr_needs_issue_test.mjs || return $?
+}
+
+job_extension_schema() {
+  [ "$HAVE_PY" -eq 1 ] || skip "python3 not found"
+  # The codegen-current check reformats generated Go and needs gofmt.
+  have gofmt || skip "gofmt not found (the schema codegen check needs Go installed)"
+  step "$TIMEOUT_OTHER" "python3 scripts/test/test_extension_schema.py" python3 scripts/test/test_extension_schema.py || return $?
+}
+
+# --- plan -----------------------------------------------------------------
+
+CORE_FAIL=0
+CHANGED=""
+WEB=0; SDKTS=0; ANDROID=0; PRNEEDS=0; EXTSCHEMA=0; SERVER_BUILD=0; APPLE=0; DOCS=0; UNMAPPED=0
+SITE=0; SDKGO=0; EXTREFS=0; SDKBUNDLE=0
+INTEG=(); GO_GROUPS=(); UNMAPPED_FILES=()
+CORE_MISSING=()
+
+core_missing() {  # --all treats a missing core toolchain as a failure; diff mode records a skip.
+  if [ "$ALL" -eq 1 ]; then
+    CORE_FAIL=1
+    CORE_MISSING+=("$1")
+  else
+    INFO+=("SKIP  $1")
+  fi
+}
+
+if [ "$ALL" -eq 1 ]; then
+  echo "check-fast: --all, running every local fast check (iOS/macOS and Postgres suites excluded)"
+  WEB=1; SDKTS=1; ANDROID=1; PRNEEDS=1; EXTSCHEMA=1; SITE=1; SDKGO=1; EXTREFS=1; SDKBUNDLE=1
+  for _d in integrations/*/; do
+    if [ -f "$_d/package.json" ]; then
+      _p=$(basename "$_d")
+      arr_has "$_p" "${INTEG[@]:-}" || INTEG+=("$_p")
+    fi
+  done
+else
+  if ! git rev-parse --verify "${BASE_REF}^{commit}" >/dev/null 2>&1; then
+    echo "check-fast: base ref '$BASE_REF' not found locally (fetch it, or pass --base <ref>)" >&2
+    exit 2
+  fi
+  MB=$(git merge-base HEAD "$BASE_REF" 2>/dev/null) || { echo "check-fast: no merge-base with $BASE_REF" >&2; exit 2; }
+  # Committed since the merge-base, plus staged/unstaged/untracked work, so the script works before a commit too.
+  CHANGED=$({
+    git diff --name-only -z "$MB" HEAD
+    git diff --name-only -z HEAD
+    git diff --cached --name-only -z
+    git ls-files --others --exclude-standard -z
+  } | tr '\0' '\n' | sed '/^$/d' | sort -u)
+  if [ -z "$CHANGED" ]; then
+    echo "check-fast: no changes since $(git rev-parse --short "$MB") ($BASE_REF); nothing to check."
+    exit 0
+  fi
+  echo "check-fast: $(printf '%s\n' "$CHANGED" | wc -l | tr -d ' ') changed file(s) against $(git rev-parse --short "$MB") (merge-base with $BASE_REF)"
+  while IFS= read -r f; do
+    case "$f" in
+      web/*) WEB=1 ;;
+      site/*) SITE=1 ;;
+      integrations/*/*)
+        _p=$(printf '%s' "$f" | cut -d/ -f2)
+        arr_has "$_p" "${INTEG[@]:-}" || INTEG+=("$_p") ;;
+      sdk/ts/*) SDKTS=1 ;;
+      server/*)
+        _rest=${f#server/}
+        case "$_rest" in
+          internal/*/*) ;;  # package groups are collected in a second pass below
+          cmd/*)
+            _after=${_rest#cmd/}
+            case "$_after" in
+              */*)
+                _g="cmd/${_after%%/*}"
+                arr_has "$_g" "${GO_GROUPS[@]:-}" || GO_GROUPS+=("$_g") ;;
+              *) SERVER_BUILD=1 ;;
+            esac ;;
+          *) SERVER_BUILD=1 ;;
+        esac
+        ;;
+      sdk/go/*) SDKGO=1 ;;  # sdk/go is its own module; run its tests there, not server's build
+      android/*) ANDROID=1 ;;
+      .github/*) PRNEEDS=1 ;;
+      schema/*)
+        # Mirror CI's extension-schema job: the conformance py, the sdk bundle py, and the Go wire round-trip.
+        EXTSCHEMA=1; SDKBUNDLE=1; SDKGO=1 ;;
+      scripts/app/*android*)
+        # The i18n/token checkers and their own test_android_* unittests all belong to the android check job.
+        ANDROID=1 ;;
+      scripts/test/test_external_service_refs.py) EXTREFS=1 ;;
+      scripts/gen/sdk_bundle.py|scripts/test/test_sdk_bundle.py) SDKBUNDLE=1 ;;
+      scripts/gen/*extension*|scripts/test/test_extension_schema.py) EXTSCHEMA=1 ;;
+      scripts/*)
+        # Ambiguous script change: run the seconds-level repository checks. A case "*" matches "/" too, so this
+        # also covers nested paths such as scripts/hooks/foo.sh, not only files directly under scripts/.
+        PRNEEDS=1; EXTSCHEMA=1 ;;
+      apple/*) APPLE=1 ;;
+      docs/*) DOCS=1 ;;
+      *) UNMAPPED=1; UNMAPPED_FILES+=("$f") ;;
+    esac
+  done <<< "$CHANGED"
+fi
+
+# Collect affected server packages: server/internal/foo/... -> ./internal/foo/...
+if [ "$ALL" -eq 0 ]; then
+  while IFS= read -r f; do
+    case "$f" in
+      server/internal/*/*)
+        _rest=${f#server/internal/}
+        _g="internal/${_rest%%/*}"
+        arr_has "$_g" "${GO_GROUPS[@]:-}" || GO_GROUPS+=("$_g") ;;
+    esac
+  done <<< "$CHANGED"
+fi
+
+echo "check-fast: logs in $WORK"
+
+# All jobs, privacy included, launch together in launch_all below; privacy is scheduled first so it is the first
+# line in the summary.
+if [ "$HAVE_PY" -eq 1 ]; then
+  schedule "privacy scan" job_privacy ""
+else
+  core_missing "python3 not found; privacy scan skipped"
+fi
+
+if [ "$WEB" -eq 1 ]; then
+  if node_ok || [ "$ALL" -eq 0 ]; then
+    WEB_CI=noci
+    if [ ! -d web/node_modules ]; then
+      WEB_CI=ci
+    elif [ "$ALL" -eq 0 ] && printf '%s\n' "$CHANGED" | grep -qxE 'web/(package\.json|package-lock\.json)'; then
+      # A changed manifest can make the installed node_modules stale, even when the diff touched package.json only.
+      WEB_CI=ci
+    fi
+    if node_ok; then schedule "web" job_web "$WEB_CI"; else INFO+=("SKIP  web: node >= 22 not found (found: $(node -v 2>/dev/null || echo none))"); fi
+  fi
+  if [ "$ALL" -eq 1 ] && ! node_ok; then core_missing "node >= 22 not found (found: $(node -v 2>/dev/null || echo none)); web and integration checks skipped"; fi
+fi
+
+if [ "${#INTEG[@]}" -gt 0 ]; then
+  if node_ok; then
+    for _p in "${INTEG[@]}"; do schedule "integrations/$_p" job_integration "$_p"; done
+  else
+    core_missing "node >= 22 not found (found: $(node -v 2>/dev/null || echo none)); integration tests (${INTEG[*]}) skipped"
+  fi
+fi
+
+[ "$SDKTS" -eq 1 ] && schedule "sdk/ts (bun)" job_sdk_ts ""
+if [ "$SITE" -eq 1 ]; then
+  if node_ok; then
+    schedule "site (node --test)" job_site ""
+  elif [ "$ALL" -eq 1 ]; then
+    core_missing "node >= 22 not found; site check skipped"
+  else
+    INFO+=("SKIP  site: node >= 22 not found (found: $(node -v 2>/dev/null || echo none))")
+  fi
+fi
+[ "$EXTREFS" -eq 1 ] && schedule "external service refs" job_external_refs ""
+[ "$SDKBUNDLE" -eq 1 ] && schedule "sdk bundle snapshot" job_sdk_bundle ""
+if [ "$SDKGO" -eq 1 ]; then
+  if [ "$HAVE_GO" -eq 1 ]; then
+    schedule "sdk/go go test" job_sdk_go ""
+  elif [ "$ALL" -eq 0 ]; then
+    # In --all mode the missing-go failure is already reported by the server core_missing line below.
+    INFO+=("SKIP  sdk/go tests: go not found")
+  fi
+fi
+
+if [ "$ALL" -eq 1 ]; then
+  if [ "$HAVE_GO" -eq 1 ]; then
+    schedule "server go test" job_go ALL
+  else core_missing "go not found; server and sdk/go checks skipped"; fi
+else
+  if [ "${#GO_GROUPS[@]}" -gt 0 ]; then
+    if [ "$HAVE_GO" -eq 1 ]; then
+      for _g in "${GO_GROUPS[@]}"; do schedule "server go test ./$_g/..." job_go "$_g"; done
+    else
+      INFO+=("SKIP  server go tests (${GO_GROUPS[*]}): go not found")
+    fi
+  fi
+  if [ "$SERVER_BUILD" -eq 1 ]; then
+    if [ "$HAVE_GO" -eq 1 ]; then schedule "server go build ./..." job_go_build ""; else INFO+=("SKIP  server go build: go not found"); fi
+  fi
+fi
+
+if [ "$ANDROID" -eq 1 ]; then
+  if [ "$HAVE_PY" -eq 1 ]; then schedule "android i18n" job_i18n ""; else core_missing "python3 not found; android i18n check skipped"; fi
+fi
+if [ "$PRNEEDS" -eq 1 ]; then
+  if node_ok; then schedule "pr-needs-issue workflow test" job_pr_needs_issue ""; else core_missing "node >= 22 not found; pr-needs-issue test skipped"; fi
+fi
+if [ "$EXTSCHEMA" -eq 1 ]; then
+  if [ "$HAVE_PY" -eq 1 ]; then schedule "extension schema conformance" job_extension_schema ""; else core_missing "python3 not found; extension schema test skipped"; fi
+fi
+
+if [ "$APPLE" -eq 1 ]; then
+  INFO+=("SKIP  apple/** changes: iOS/macOS checks need a Mac — scripts/app/sim.sh, PersonaKit swift test (docs/testing.md)")
+fi
+if [ "$DOCS" -eq 1 ] && [ ${#JOB_NAME[@]} -le 1 ]; then
+  INFO+=("INFO  only docs/markdown changed: no code fast checks map to this diff")
+fi
+if [ "$UNMAPPED" -eq 1 ]; then
+  INFO+=("INFO  no fast check maps to: ${UNMAPPED_FILES[*]} (privacy scan still ran; full suites in docs/testing.md)")
+fi
+
+if [ ${#JOB_NAME[@]} -eq 0 ] && [ "$CORE_FAIL" -eq 0 ]; then
+  echo "check-fast: no related checks to run."
+  for _line in "${INFO[@]:-}"; do [ -n "$_line" ] && echo "$_line"; done
+  exit 0
+fi
+
+echo "check-fast: ${#JOB_NAME[@]} check(s) running in parallel..."
+launch_all
+
+# --- summary --------------------------------------------------------------
+
+echo
+echo "== check-fast summary =="
+N_PASS=0; N_FAIL=0; N_TIMEOUT=0; N_SKIP=0
+for _i in "${!JOB_NAME[@]}"; do
+  _kind=""; _rc=""; _seconds=""; _detail=""  # don't inherit a previous job's values if this status file is missing
+  IFS=$'\t' read -r _kind _rc _seconds _detail < "${JOB_STATUS[$_i]}"
+  if [ -z "$_kind" ]; then
+    # The job subshell was killed (SIGKILL/OOM) before it could write a status; never let that count as nothing.
+    _kind=FAIL; _seconds="?"; _detail="no status: the job was killed before it could report"
+  fi
+  case "$_kind" in
+    PASS) echo "PASS     ${JOB_NAME[$_i]} (${_seconds}s)"; N_PASS=$((N_PASS+1)) ;;
+    SKIP) echo "SKIP     ${JOB_NAME[$_i]}: $_detail"; N_SKIP=$((N_SKIP+1)) ;;
+    FAIL)
+      echo "FAIL     ${JOB_NAME[$_i]} (${_seconds}s, $_detail); log: ${JOB_LOG[$_i]}"
+      sed 's/^/         /' "${JOB_LOG[$_i]}" | tail -n 25
+      N_FAIL=$((N_FAIL+1)) ;;
+    TIMEOUT)
+      echo "TIMEOUT  ${JOB_NAME[$_i]} (${_seconds}s, $_detail); log: ${JOB_LOG[$_i]}"
+      sed 's/^/         /' "${JOB_LOG[$_i]}" | tail -n 25
+      N_TIMEOUT=$((N_TIMEOUT+1)) ;;
+  esac
+done
+for _msg in "${CORE_MISSING[@]:-}"; do
+  [ -n "$_msg" ] && { echo "FAIL     core toolchain: $_msg"; N_FAIL=$((N_FAIL+1)); }
+done
+for _line in "${INFO[@]:-}"; do [ -n "$_line" ] && echo "$_line"; done
+
+echo
+if [ "$N_FAIL" -gt 0 ] || [ "$CORE_FAIL" -eq 1 ]; then
+  echo "check-fast: $N_PASS passed, $N_SKIP skipped, $N_FAIL failed, $N_TIMEOUT timed out (FAILED); logs in $WORK"
+  KEEP_WORK=1
+  exit 1
+fi
+if [ "$N_TIMEOUT" -gt 0 ]; then
+  echo "check-fast: $N_PASS passed, $N_SKIP skipped, 0 failed, $N_TIMEOUT timed out (TIMEOUT); logs in $WORK"
+  echo "check-fast: a timeout is not a pass. Rerun the timed-out job directly, or run the full suite for it"
+  echo "check-fast: (docs/testing.md: web 'npm test', server scripts/test/test-server.sh, android scripts/app/android.sh)."
+  KEEP_WORK=1
+  exit 124
+fi
+echo "check-fast: $N_PASS passed, $N_SKIP skipped, 0 failed, 0 timed out (OK)"

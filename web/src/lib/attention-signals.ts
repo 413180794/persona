@@ -5,8 +5,8 @@ import { stateOf } from "./format";
 import { agentKey } from "./pins";
 import { useCounts, useAgentSessions } from "./sessions";
 import { getState, useStore } from "./store";
-import { attentionSoundEnabled, badgeText, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
-import { claimNotification, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
+import { attentionSoundEnabled, badgeText, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, settledTags, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
+import { claimNotification, closeNotification, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
 import { isMuted } from "./session-actions";
 import { href, navigate } from "./router";
 import { t } from "../i18n";
@@ -226,6 +226,8 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
     if (!loaded) return;
     const now = Date.now();
     const { next, events } = detectTransitions(prev.current, sessions, getState().mutes);
+    // answered or seen, here or elsewhere: its system notification goes too (#3458)
+    settledTags(prev.current, next).forEach(closeNotification);
     prev.current = next;
     turns.current = trackTurns(turns.current, sessions, now);
     const prefs = notifyPrefs();

@@ -136,3 +136,18 @@ describe("轮次时长（只推长任务）", () => {
     expect(trackTurns(new Map(), [session("a", "unread")], T0).has("m/a")).toBe(false);
   });
 });
+
+describe("处理过的通知收回（#3458）", () => {
+  const snap = (...pairs: [string, AgentState][]) => new Map(pairs);
+  it("离开需要你、离开完成未看、从列表里没了的都收回", async () => {
+    const { settledTags } = await import("./attention");
+    const prev = snap(["m/a", "needs_you"], ["m/b", "unread"], ["m/c", "needs_you"], ["m/d", "working"]);
+    const next = snap(["m/a", "working"], ["m/b", "idle"], ["m/d", "unread"]);
+    expect(settledTags(prev, next)).toEqual(["m/a#needs", "m/b#finished", "m/c#needs"]);
+  });
+  it("没变的不收回", async () => {
+    const { settledTags } = await import("./attention");
+    const s = snap(["m/a", "needs_you"], ["m/b", "unread"]);
+    expect(settledTags(s, s)).toEqual([]);
+  });
+});

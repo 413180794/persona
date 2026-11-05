@@ -5,9 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/nwverse/persona/server/internal/node"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -68,8 +71,12 @@ func (f *fakeNode) call(_ context.Context, name string, args any) (proto.ToolRes
 	return proto.TextResult(name+" is not available: the command line calls only the tools of the hub's connectors that are signed in", true), nil
 }
 
+// realCall is the package's call, which the fakes replace.
+var realCall = call
+
 func run(t *testing.T, f *fakeNode, stdin string, args ...string) (int, string, string) {
 	t.Helper()
+	t.Cleanup(func() { call = realCall })
 	call = f.call
 	var out, errOut bytes.Buffer
 	code := Main(context.Background(), args, strings.NewReader(stdin), &out, &errOut)
@@ -145,5 +152,41 @@ func TestOneTool(t *testing.T) {
 	}
 	if code, _, _ := run(t, f, ""); code != exitUsage {
 		t.Fatalf("nothing: %d", code)
+	}
+}
+
+// Ctrl-C on a write waiting for the phone hangs up on the node, which takes the card off the phone; without it the
+// card stayed until it expired.
+func TestInterruptHangsUp(t *testing.T) {
+	old := dial
+	t.Cleanup(func() { dial = old })
+	call = realCall
+	hungUp := make(chan struct{})
+	dial = func(ctx context.Context, req any) ([]byte, error) {
+		<-ctx.Done() // the node waits for the phone
+		close(hungUp)
+		return nil, ctx.Err()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() {
+		var out, errOut bytes.Buffer
+		done <- Main(ctx, []string{"example_say", `{"text":"hi"}`}, strings.NewReader(""), &out, &errOut)
+	}()
+	cancel()
+	select {
+	case <-hungUp:
+	case <-time.After(3 * time.Second):
+		t.Fatal("an interrupted call kept waiting on the node")
+	}
+	if code := <-done; code != exitUnavailable {
+		t.Fatalf("exit %d", code)
+	}
+}
+
+// The command line reaches the node with the dialer that hangs up on a cancelled ctx.
+func TestDialsInterruptibly(t *testing.T) {
+	if reflect.ValueOf(dial).Pointer() != reflect.ValueOf(node.Dialer(node.DialSocketInterruptible)).Pointer() {
+		t.Fatal("personad tool must dial with node.DialSocketInterruptible")
 	}
 }

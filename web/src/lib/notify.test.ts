@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_PREFS, durationText, normalize, notificationText, wants } from "./notify";
 
 const units = { s: (n: number) => `${n} 秒`, m: (n: number) => `${n} 分钟` };
@@ -46,5 +46,54 @@ describe("通知文字", () => {
   });
   it("没有最后一句时用默认的话", () => {
     expect(notificationText({ title: "t", cwd: "/p" }, "finished", words)).toEqual({ title: "t 做完了", body: "做完" });
+  });
+});
+
+describe("收回系统通知（#3458）", () => {
+  it("关掉本页建的和 service worker 建的那条", async () => {
+    const closed: string[] = [];
+    class FakeNote {
+      onclick: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      constructor(public title: string, public opts: { tag: string }) {}
+      close() {
+        closed.push(`page:${this.opts.tag}`);
+        this.onclose?.();
+      }
+    }
+    const swNote = { close: () => closed.push("sw:m/a#needs") };
+    const getNotifications = vi.fn(async ({ tag }: { tag: string }) => (tag === "m/a#needs" ? [swNote] : []));
+    vi.stubGlobal("Notification", Object.assign(FakeNote, { permission: "granted" }));
+    vi.stubGlobal("navigator", { serviceWorker: { getRegistration: async () => ({ getNotifications }) } });
+    const store = new Map([["persona.systemNotify", "1"]]);
+    vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+    const { postNotification, closeNotification } = await import("./notify");
+    postNotification({ title: "a 需要你", body: "", tag: "m/a#needs", url: "/" }, () => {});
+    closeNotification("m/a#needs");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(closed).toEqual(["page:m/a#needs", "sw:m/a#needs"]);
+    expect(getNotifications).toHaveBeenCalledWith({ tag: "m/a#needs" });
+    closed.length = 0;
+    closeNotification("m/a#needs"); // already taken back: only the worker is asked again
+    await new Promise((r) => setTimeout(r, 0));
+    expect(closed).toEqual(["sw:m/a#needs"]);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("收回后同一件事马上能再弹（#3458 review）", () => {
+  it("A 弹出 → 别处答了收回 → 5 秒内又要 B：B 能弹出来", async () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+    vi.stubGlobal("navigator", {});
+    const { claimNotification, closeNotification } = await import("./notify");
+    const now = 1_000_000;
+    expect(claimNotification("m/a#needs", now)).toBe(true); // A
+    expect(claimNotification("m/a#needs", now + 1000)).toBe(false); // another tab, same event: still once
+    claimNotification("m/b#needs", now);
+    closeNotification("m/a#needs"); // A answered on the phone
+    expect(claimNotification("m/a#needs", now + 2000)).toBe(true); // B
+    expect(claimNotification("m/b#needs", now + 2000)).toBe(false); // the other tag's claim is kept
+    vi.unstubAllGlobals();
   });
 });
