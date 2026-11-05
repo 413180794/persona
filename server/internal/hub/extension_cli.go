@@ -195,6 +195,9 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			}
 			for _, m := range out.Markets {
 				line := fmt.Sprintf("%-10s %-24s %3d 个扩展  %-12s %s", m.ID, m.Name, m.Extensions, signatureLabel(m.Signature), m.Spec)
+				if m.Official {
+					line += "  官方"
+				}
 				if m.Error != "" {
 					line += "（" + m.Error + "）"
 				}

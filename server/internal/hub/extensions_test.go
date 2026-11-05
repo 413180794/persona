@@ -19,6 +19,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/db/dbtest"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/sandbox"
 )
 
@@ -74,6 +75,8 @@ func TestMain(m *testing.M) {
 		}
 		return
 	}
+	// The official market (#2351) is added only by the tests about it: the others' markets are their own.
+	extension.Official = extension.OfficialMarket{}
 	os.Exit(dbtest.Main(m))
 }
 

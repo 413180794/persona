@@ -50,6 +50,16 @@ class HttpExtensionManagementTest {
         assertEquals("/api/v1/extensions/-/markets", server.takeRequest().path)
         assertEquals(3, market.extensions)
         assertTrue(market.signature!!.verified)
+        assertFalse(market.official)
+
+        // The official market (#2351): the hub lists it first and says so; the order is kept as the hub gave it.
+        server.enqueue(MockResponse().setBody("""{"markets":[{"id":"o1","spec":"github:example/official","name":"官方扩展","extensions":2,"official":true},
+            {"id":"m1","spec":"github:example/team","name":"团队","extensions":3}]}"""))
+        val ordered = api.markets()
+        server.takeRequest()
+        assertEquals(listOf("o1", "m1"), ordered.map { it.id })
+        assertTrue(ordered[0].official)
+        assertFalse(ordered[1].official)
 
         server.enqueue(MockResponse().setBody("""{"markets":[],"extensions":[{"market":"m1","id":"linuxdo","name":"LINUX DO","version":"0.1.0"}]}"""))
         assertEquals(listOf("linuxdo"), api.catalog("").extensions.map { it.id })

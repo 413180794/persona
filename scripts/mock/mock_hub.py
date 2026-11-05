@@ -7788,7 +7788,7 @@ _MARKET_A, _MARKET_B = "3f2a9c1d0b", "8e01b7c4a2"
 MARKETS = {
     _MARKET_A: {"id": _MARKET_A, "spec": "https://plugins.example.com/persona/persona-extensions.json", "name": "Example 扩展",
                 "description": "Example 官方维护的插件。", "homepage": "https://plugins.example.com/", "has_token": False, "plugins": 3,
-                "warnings": [], "fetched_at": "2026-11-04T06:00:00Z", "added_at": "2026-11-01T08:00:00Z"},
+                "warnings": [], "fetched_at": "2026-11-04T06:00:00Z", "added_at": "2026-11-01T08:00:00Z", "official": True},
     _MARKET_B: {"id": _MARKET_B, "spec": "github:example/team-plugins", "name": "团队扩展", "description": "团队内部用的扩展（私有仓库）。",
                 "has_token": True, "plugins": 2, "warnings": ["第 3 个扩展：没有 manifest"], "fetched_at": "2026-11-04T05:30:00Z",
                 "added_at": "2026-11-02T08:00:00Z"},

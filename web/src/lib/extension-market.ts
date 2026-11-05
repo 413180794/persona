@@ -25,6 +25,8 @@ export interface Market {
   added_at?: string;
   /** How its index is signed (a hub with market signatures, #1848). */
   signature?: MarketSignature;
+  /** The official market every hub has (#2351), listed first; absent on other markets and older hubs. */
+  official?: boolean;
 }
 
 /** A market index's signature as the hub found it: its state and the key it trusts. */

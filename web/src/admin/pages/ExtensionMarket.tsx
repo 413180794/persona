@@ -88,6 +88,7 @@ export function ExtensionMarkets({ onChanged }: { onChanged: () => void }) {
               <div className="min-w-[200px] flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="text-[13.5px] font-medium text-ink">{m.name}</span>
+                  {m.official && <Tag tone="accent">官方</Tag>}
                   {m.has_token && (
                     <Tag>
                       <AdminIcon name="lock" size={10} />

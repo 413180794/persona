@@ -50,6 +50,8 @@ type MarketView struct {
 	Error       string     `json:"error,omitempty"`
 	FetchedAt   *time.Time `json:"fetched_at,omitempty"`
 	AddedAt     time.Time  `json:"added_at"`
+	// Official: the market every hub has without adding it (extension.Official), listed first.
+	Official bool `json:"official,omitempty"`
 	// Signature is the index's signature (docs/extensions.md「签名」): signed / unsigned / invalid / key_changed, and the
 	// key it is signed by.
 	Signature MarketSignatureView `json:"signature"`
@@ -136,7 +138,71 @@ func (h *Hub) marketsLoad(ctx context.Context) error {
 		ms.byID[r.ID] = s
 	}
 	ms.loaded = true
+	if id := h.seedOfficialMarket(ctx); id != "" {
+		ms.readLater(h, id) // its index, read in the background
+	}
 	return nil
+}
+
+// officialMarketKey is the setting that says the official market was added (its spec): once only, so a market its
+// owner removed is not added again; a new official spec is added once more.
+const officialMarketKey = "extension_official_market"
+
+// seedOfficialMarket adds the official market to a hub that has not had it yet (a new one, or one upgraded from before
+// #2351), with its pinned key; a market of the same repository the owner already added counts as it (ms.mu held).
+// It is the id of the one it added ("" none).
+func (h *Hub) seedOfficialMarket(ctx context.Context) string {
+	o := extension.Official
+	if o.Spec == "" {
+		return ""
+	}
+	var done struct {
+		Spec string `json:"spec"`
+	}
+	if found, err := h.store.Setting(ctx, officialMarketKey, &done); err != nil || (found && done.Spec == o.Spec) {
+		return ""
+	}
+	ms, st := h.marketsState(), h.marketStore()
+	mark := func() {
+		done.Spec = o.Spec
+		if err := h.store.PutSetting(ctx, officialMarketKey, done); err != nil {
+			h.logf("extension official market: %v", err)
+		}
+	}
+	for _, s := range ms.byID {
+		if o.Is(s.rec.Spec) {
+			mark()
+			return ""
+		}
+	}
+	spec, err := extension.ParseMarket(o.Spec)
+	if err != nil {
+		return ""
+	}
+	rec := extension.MarketRecord{ID: extension.MarketID(spec), Spec: spec.String(), SigningKey: o.SigningKey, AddedAt: time.Now(),
+		Warnings: []string{}}
+	if err := st.PutExtensionMarket(ctx, rec); err != nil {
+		h.logf("extension official market: %v", err)
+		return ""
+	}
+	ms.byID[rec.ID] = &marketState{rec: rec}
+	mark()
+	h.logf("extension market %s added: %s (official, key %s)", rec.ID, rec.Spec, keyIDOf(rec.SigningKey))
+	return rec.ID
+}
+
+// marketBefore orders markets: the official one first, then by when they were added.
+func marketBefore(a, b extension.MarketRecord) int {
+	if oa, ob := extension.Official.Is(a.Spec), extension.Official.Is(b.Spec); oa != ob {
+		if oa {
+			return -1
+		}
+		return 1
+	}
+	if c := a.AddedAt.Compare(b.AddedAt); c != 0 {
+		return c
+	}
+	return strings.Compare(a.ID, b.ID)
 }
 
 func (h *Hub) market(rec extension.MarketRecord) (*extension.Market, error) {
@@ -244,7 +310,7 @@ func (h *Hub) marketsDir() string { return filepath.Join(h.extensions.root, "mar
 
 func marketView(s *marketState) MarketView {
 	v := MarketView{ID: s.rec.ID, Spec: s.rec.Spec, Name: s.rec.Name, HasToken: s.rec.TokenSealed != "", Warnings: s.rec.Warnings,
-		Error: s.rec.Error, FetchedAt: s.rec.FetchedAt, AddedAt: s.rec.AddedAt,
+		Error: s.rec.Error, FetchedAt: s.rec.FetchedAt, AddedAt: s.rec.AddedAt, Official: extension.Official.Is(s.rec.Spec),
 		Signature: MarketSignatureView{State: s.rec.Signature.State, KeyID: s.rec.Signature.KeyID}}
 	if v.Signature.State == "" { // a market read before #1848
 		v.Signature.State = extension.SigUnsigned
@@ -265,11 +331,15 @@ func (h *Hub) marketViews() []MarketView {
 	ms := h.marketsState()
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
-	out := []MarketView{}
+	states := make([]*marketState, 0, len(ms.byID))
 	for _, s := range ms.byID {
+		states = append(states, s)
+	}
+	slices.SortFunc(states, func(a, b *marketState) int { return marketBefore(a.rec, b.rec) })
+	out := []MarketView{}
+	for _, s := range states {
 		out = append(out, marketView(s))
 	}
-	slices.SortFunc(out, func(a, b MarketView) int { return a.AddedAt.Compare(b.AddedAt) })
 	return out
 }
 
@@ -288,7 +358,7 @@ func (h *Hub) marketAdd(ctx context.Context, specText, token string) (MarketView
 	id := extension.MarketID(spec)
 	ms := h.marketsState()
 	ms.mu.Lock()
-	n, dup := len(ms.byID), ms.byID[id] != nil || ms.withSpec(spec.String()) != nil
+	n, dup := len(ms.byID), ms.byID[id] != nil || ms.withSpec(spec.String()) != nil || (extension.Official.Is(spec.String()) && ms.official() != nil)
 	ms.mu.Unlock()
 	if dup {
 		return MarketView{}, errors.New("已经登记过这个市场")
@@ -341,6 +411,16 @@ func (h *Hub) marketToken(id string) (string, error) {
 		return "", err
 	}
 	return mk.Token, nil
+}
+
+// official is the registered official market (ms.mu held).
+func (ms *markets) official() *marketState {
+	for _, s := range ms.byID {
+		if extension.Official.Is(s.rec.Spec) {
+			return s
+		}
+	}
+	return nil
 }
 
 // withSpec is the market registered at spec (ms.mu held).
@@ -419,7 +499,7 @@ func (h *Hub) catalog(q, market string) []CatalogItem {
 		states = append(states, s)
 	}
 	ms.mu.Unlock()
-	slices.SortFunc(states, func(a, b *marketState) int { return a.rec.AddedAt.Compare(b.rec.AddedAt) })
+	slices.SortFunc(states, func(a, b *marketState) int { return marketBefore(a.rec, b.rec) })
 	q = strings.ToLower(strings.TrimSpace(q))
 	out := []CatalogItem{}
 	for _, s := range states {
@@ -456,28 +536,31 @@ func (h *Hub) catalog(q, market string) []CatalogItem {
 func (h *Hub) refreshStale() {
 	ms := h.marketsState()
 	ms.mu.Lock()
-	var ids []string
+	defer ms.mu.Unlock()
 	for id, s := range ms.byID {
-		if ms.reading[id] || (s.rec.FetchedAt != nil && time.Since(*s.rec.FetchedAt) < marketStale) {
-			continue
+		if s.rec.FetchedAt == nil || time.Since(*s.rec.FetchedAt) >= marketStale {
+			ms.readLater(h, id)
 		}
-		if ms.reading == nil {
-			ms.reading = map[string]bool{}
+	}
+}
+
+// readLater reads market id again in the background, unless it is being read already (ms.mu held).
+func (ms *markets) readLater(h *Hub, id string) {
+	if ms.reading[id] {
+		return
+	}
+	if ms.reading == nil {
+		ms.reading = map[string]bool{}
+	}
+	ms.reading[id] = true
+	go func() {
+		defer func() { ms.mu.Lock(); delete(ms.reading, id); ms.mu.Unlock() }()
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		if _, err := h.marketRead(ctx, id); err != nil {
+			h.logf("plugin market %s: %v", id, err)
 		}
-		ms.reading[id] = true
-		ids = append(ids, id)
-	}
-	ms.mu.Unlock()
-	for _, id := range ids {
-		go func() {
-			defer func() { ms.mu.Lock(); delete(ms.reading, id); ms.mu.Unlock() }()
-			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
-			defer cancel()
-			if _, err := h.marketRead(ctx, id); err != nil {
-				h.logf("plugin market %s: %v", id, err)
-			}
-		}()
-	}
+	}()
 }
 
 // marketEntry is a market's entry for plugin id.

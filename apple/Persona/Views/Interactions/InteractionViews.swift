@@ -78,7 +78,9 @@ struct InteractionPreviewCard: View {
                         .lineLimit(1)
                 }
                 Spacer()
+                #if !os(macOS) // a phone's row says it opens; a Mac's list row does not (#2113)
                 Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+                #endif
             }
             if !summary.isEmpty {
                 Text(summary)

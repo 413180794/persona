@@ -363,6 +363,7 @@ fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
                                 state.working == market.id -> ({ JSpinner() })
                                 !market.error.isNullOrBlank() -> ({ JIcon(PhIcons.WarningCircle, "读不到", tint = PersonaTheme.palette.danger.dot) })
                                 market.signature?.failed == true -> ({ JIcon(PhIcons.WarningCircle, "签名不对", tint = PersonaTheme.palette.danger.dot) })
+                                market.official -> ({ JTag("官方") })
                                 else -> null
                             },
                             chevron = true, enabled = state.working == null, onClick = { acting = market })

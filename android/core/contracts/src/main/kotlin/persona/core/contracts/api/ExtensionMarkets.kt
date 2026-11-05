@@ -69,6 +69,8 @@ data class ExtensionMarket(
     @SerialName("added_at") val addedAt: String? = null,
     /** Whether its index is signed and checks out (#1848); a hub before it says nothing. */
     val signature: MarketSignature? = null,
+    /** The official market every hub has (#2351), which the hub lists first; false on others and older hubs. */
+    val official: Boolean = false,
 ) {
     val label: String get() = name.ifBlank { spec }
 }

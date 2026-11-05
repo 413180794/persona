@@ -1751,6 +1751,30 @@ struct QuickFilterBar: View, Equatable {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("QuickFilterBar")
         #endif
+        #if os(macOS)
+        if !AppStyle.current.usesBeautifulUI {
+            // The Mac's segmented control (#2113), every filter always there with its count: segments that came and
+            // went with the counts moved under the pointer.
+            Picker("筛选", selection: Binding(get: { selection }, set: { if $0 != selection { choose($0) } })) {
+                ForEach(AgentFilter.allCases) { f in
+                    Text(f == .all ? f.title : "\(f.title) \(counts[f] ?? 0)").tag(f)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Theme.Space.page)
+            .padding(.vertical, Theme.Space.sm)
+            .accessibilityIdentifier("agents.filter")
+        } else {
+            chipsBar
+        }
+        #else
+        chipsBar
+        #endif
+    }
+
+    private var chipsBar: some View {
         ViewThatFits(in: .horizontal) {
             if AppStyle.current.usesBeautifulUI {
                 HStack(spacing: Theme.Space.xs) { chips }

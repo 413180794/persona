@@ -466,7 +466,7 @@ personad extension pack [<目录>] [--platforms …] [--out dist] [--split]
 ## 扩展市场
 
 一个仓库或网站发布一份**索引** `persona-extensions.json`，声明它提供的所有扩展；hub 登记这个市场以后，App、网页、管理界面和命令行都能浏览、搜索、
-安装、升级、卸载里面的扩展。开源仓库不带任何市场，也不预置。代码在 `server/internal/extension/market.go`（索引、下载、校验）和 `server/internal/hub/extension_market.go`（登记、目录、接口）。
+安装、升级、卸载里面的扩展。只预置一个官方市场（见下面「官方市场」），别的市场都由用户自己登记。代码在 `server/internal/extension/market.go`（索引、下载、校验）和 `server/internal/hub/extension_market.go`（登记、目录、接口）。
 
 **市场的地址**：
 
@@ -505,7 +505,7 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 
 | 接口 | 做什么 |
 | --- | --- |
-| `GET /api/v1/extensions/-/markets` | `{markets: [{id, spec, name, description, homepage, has_token, extensions（个数）, warnings, error, fetched_at, added_at, signature: {state, key_id?}}]}`（`signature` 见下面「签名」，老路径也带） |
+| `GET /api/v1/extensions/-/markets` | `{markets: [{id, spec, name, description, homepage, has_token, extensions（个数）, warnings, error, fetched_at, added_at, official?, signature: {state, key_id?}}]}`（`signature` 见下面「签名」，老路径也带）；官方市场排第一、带 `official: true`，其余按登记时间 |
 | `POST /api/v1/extensions/-/markets` `{spec, token?, token_from?}` | 先读一次索引，读不到不登记（400，`error` 说原因：地址不对、私有要 token、token 不对）；回市场。`token_from` 是另一个已登记市场的 id：用它的 token（同一个账号的 token 读几个私有仓库），调用方看不到 token，和 `token` 只能给一个；命令行 `market add <spec> --token-from=<市场 id>` |
 | `DELETE /api/v1/extensions/-/markets/{id}` | 不再读这个市场；从它装的扩展留着 |
 | `POST /api/v1/extensions/-/markets/{id}/refresh` | 现在重读索引；签名不对时回 400 `market_signature`（上一份好的索引留着） |
@@ -521,6 +521,19 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 **谁能做**：完整权限的设备能登记 / 删除市场；预览来自市场时能拿它安装、升级（`POST /api/v1/extensions/-/install`、`…/{id}/-/upgrade`，同样带权限摘要），
 来源记成 `market:<市场 id>/<扩展 id>` 的扩展能回滚、卸载。理由：完整权限的设备本来就能经 Agent 在各台电脑上跑任意命令，开放市场不扩大信任边界；
 包由市场索引的 sha256 钉死，装之前同样列出权限。只能读和回答的设备都不行。
+
+### 官方市场
+
+（#2351）公开仓库 `github:nwverse/persona-extensions` 是官方市场，每台 hub 都有，不用手动登记（`extension.Official`，`server/internal/extension/official.go`）：
+
+- **什么时候加**：hub 第一次加载市场时（新装的、从没有这个功能的版本升级上来的都一样）登记它，在后台读一次索引；
+  settings 的 `extension_official_market` 记下已经加过（记的是 spec），所以**只加一次**：用户删掉以后不会自己回来，想要再手动加。
+  官方 spec 以后换了，会按新的再加一次。
+- **不重复**：用户之前手动加过同一个仓库（`github:` / `https://github.com/…` / `git:` 地址，带不带分支，大小写不同）的，不再加，那一个就当官方市场；
+  官方市场在的时候，再手动加同一个仓库的任何写法都回「已经登记过这个市场」。
+- **签名钉死**：登记时就记下仓库 `market.pub` 里的公钥，第一次读也用它验，不靠首次信任；换 key 照「签名」的流程由 hub 的主人确认，代码里的公钥要跟着改。
+- **排序**：`markets` 和目录里官方市场排第一，其余按登记时间（排序都在 hub，三端照 hub 给的顺序显示）。网页（设置和 `/admin`）、安卓按 `official: true` 显示「官方」标记；iOS / macOS 还没显示（另开任务）。
+- 内网市场等用户自己的市场照旧，不动。
 
 **发布一个市场**：仓库根目录放 `persona-extensions.json`，包放进 Release 附件（或仓库里、网站上），`sha256sum` 写进索引。扩展仓库的打包脚本顺手生成索引。
 

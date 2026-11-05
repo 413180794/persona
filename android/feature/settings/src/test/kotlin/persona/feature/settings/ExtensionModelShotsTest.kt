@@ -109,6 +109,30 @@ class ExtensionModelShotsTest {
         assertEquals(JsonPrimitive(template.text), current.config["triage_rules"])
     }
 
+    // 管理市场 with the official market (#2351): first, as the hub lists it, with its 官方 tag; the owner's own after it.
+    @Test fun officialMarketFirstWithItsTagInEveryStyle() {
+        var style by mutableStateOf(AppStyle.Glass)
+        var dark by mutableStateOf(false)
+        val api = object : ExtensionApiStub() {
+            override suspend fun markets() = listOf(
+                ExtensionMarket("o1", "github:example/official", "官方扩展", extensions = 2, official = true),
+                ExtensionMarket("m1", "https://plugins.example.com/team/", "团队扩展", hasToken = true, extensions = 3),
+            )
+        }
+        rule.setContent {
+            PersonaTheme(style = style, darkTheme = dark, reduceMotion = true) {
+                Box(Modifier.testTag("shot").fillMaxSize().background(PersonaTheme.palette.background)) { ExtensionMarketsPage(api, {}) }
+            }
+        }
+        rule.waitUntil { rule.onAllNodesWithText("官方扩展").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("官方").assertExists()
+        assertTrue(rule.onNodeWithText("官方扩展").fetchSemanticsNode().boundsInRoot.top < rule.onNodeWithText("团队扩展").fetchSemanticsNode().boundsInRoot.top)
+        for (s in AppStyle.entries) for (d in listOf(false, true)) {
+            style = s; dark = d
+            capture("markets-${s.key}-${if (d) "dark" else "light"}")
+        }
+    }
+
     @Test fun actualPreviewAndPermissionConfirmationInEveryStyle() {
         var style by mutableStateOf(AppStyle.Glass)
         var dark by mutableStateOf(false)

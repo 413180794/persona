@@ -618,6 +618,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-[13px] font-medium text-ink">{m.name}</span>
+                  {m.official && <Pill tone="accent">官方</Pill>}
                   {m.has_token && (
                     <Pill>
                       <Icon name="lock" size={10} className="mr-0.5" />
