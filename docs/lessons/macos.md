@@ -197,6 +197,10 @@
   单独都在 16.7 ms 内，一起就掉到 30 fps；`sample` 里几乎全是 SwiftUI 的布局，看不出是哪个视图。临时加一个启动参数把各块逐个换成 `Color.clear` 量（不提交），
   再在最贵的那块里逐个去掉子视图。`ViewThatFits` 每个宽度都重新量全部候选，在常随宽度变的一行里换成 `FirstFitting`（理想宽度记在 `Layout` 的缓存里）。
   `sample` 挂着时 App 会被停住、量出来的帧不能用，量帧和采样分开跑。
+- 冷启动时一个大页面的第一次 `body` 慢，而采样里全是 `lazy protocol witness table accessor for type ModifiedContent<…>`（2026-11-05，#1337）：
+  不是代码在算，是 Swift 运行时第一次建这个页面的类型（几十个修饰符嵌套成一个类型，`swift_getTypeByMangledName` 一层层解析）。
+  在长修饰符链中间用 `AnyView` 隔开几段（隔开的那处每次都是同一个类型，不丢状态），ChatView 的第一次 body 106 → 49 ms。
+  只在冷启动付一次，拖窗口、推送不受影响；别为了它把整个页面都拆成 `AnyView`。
 - 这台开发机的 Instruments 录不到 Animation Hitches 的显示数据（开发者模式关着、要 sudo），`CGEvent.postToPid` 发的滚轮事件被系统过滤（发事件的进程没有辅助功能授权），
   看起来都「成功」但什么都没发生。量顺不顺用 App 自己的 display link（`MacPerfHarness`），看主线程用 `sample`。
 - sheet 的最小尺寸要放在 sheet 内容的最外层，中间隔着 `GeometryReader` 就传不出去（2026-11-04，#1502）：Mac 的 sheet 按内容的最小尺寸开，

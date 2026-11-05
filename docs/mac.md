@@ -334,6 +334,13 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   顶栏约 5.8、输入框约 4.8、列表约 4.5，每块单独都是 60 fps，加起来超预算、掉到约 30 fps。顶栏副标题和工作行摘要的 `ViewThatFits`
   每个宽度都把两个候选重新量一遍（顶栏里它约占 3 ms），换成在布局缓存里记下理想宽度的 `FirstFitting`（`Components.swift`，和 `ViewThatFits` 像素一样，`FirstFittingTests`）。
   11 次交替跑的中位数（长历史、负载 9–13）：卡顿 492 → 206 ms/s，4 秒里的帧 121 → 189（满帧 240），每帧主线程约 20.4 → 15.5 ms。剩下的在输入框和列表。
+- 拖窗口时对话页剩下的（2026-11-05，#1337，#2125 之后约 15.5 ms/帧）：输入框里 AppKit 的文本框约 2 ms（换成单行的也只省 0.4），列表的滚动视图本身约 2 ms
+  （行换成固定高度的方块只省 0–1.6 ms，`onScrollTargetVisibilityChange`、`onScrollGeometryChange`、`scrollTargetLayout`、`ChatPin.Finder` 各自都在 ±0.3 ms 内），
+  窗口和侧栏约 6 ms（设置页也是这么多）。没有哪一块单独超过量的误差，先停在这里。
+- 冷启动时对话页第一次画（2026-11-05，#1337）：主线程采样里 `ChatView.body` 约 108 ms，几乎全是 Swift 运行时在建类型的元数据
+  （`lazy protocol witness table accessor for type ModifiedContent<…>`、`swift_getTypeByMangledName`）：页面外层约 60 个修饰符串成一个类型，嵌套越深越贵。
+  在 `chatPresentation`、`chatActivity`、`chatLifecycle` 的开头各用一个 `AnyView` 隔开（每次都是同一个类型，下面的身份和状态不受影响）。
+  11 次交替冷启动的中位数（负载 10–13）：`ChatView.body` 106 → 49 ms，首帧 1971 → 1713 ms（首帧跟着负载跳，参考）。
 - 外壳读 `MacTitleRowTaken` 这个 preference（打开对话时调用树里约 9.4%）：这一块大多是页面自己的更新在合并 preference 时被拉着算，拿掉不一定省这么多，要量过再改。
 
 ## SSH 隧道（Mac）

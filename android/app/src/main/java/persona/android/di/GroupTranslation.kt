@@ -93,6 +93,7 @@ internal fun ChatAppBindings.inGroup(names: GroupNames): ChatAppBindings {
         assistantManagement = assistantManagement.inGroup(names),
         mainSender = mainSender.inGroup(names, coroutineScope),
         draftVersions = { key -> source.draftVersions(names.raw(key)) },
+        ports = ports?.inGroup(names),
     )
 }
 
@@ -284,6 +285,15 @@ internal fun AgentsWiringState.inGroup(names: GroupNames, scope: CoroutineScope)
         drafts = drafts?.let { source -> AgentsDraftSource { key -> source.observe(names.raw(key)) } },
         mainSender = mainSender?.inGroup(names, scope),
     )
+}
+
+internal fun PortOpener.inGroup(names: GroupNames): PortOpener {
+    if (names.plain) return this
+    val source = this
+    return object : PortOpener {
+        override suspend fun open(machineId: String, port: Int, path: String, secure: Boolean, listed: Boolean) =
+            source.open(names.rawMachine(machineId), port, path, secure, listed)
+    }
 }
 
 internal fun SessionFiles.inGroup(names: GroupNames): SessionFiles {

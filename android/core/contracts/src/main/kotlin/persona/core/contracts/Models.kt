@@ -182,6 +182,8 @@ data class Session(
     @SerialName("slot_id") val slotId: String? = null,
     @WireTime @SerialName("state_since") val stateSince: String? = null,
     val subagents: List<Subagent>? = null,
+    /** The ports the agent's processes serve over HTTP (docs/ports.md「发现端口」): a dev server it started. */
+    val ports: List<ListeningPort>? = null,
     @SerialName("pane_id") val paneId: String? = null,
     @SerialName("agent") val agent: String? = null,
     /** What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/runtimes.md). */
@@ -472,6 +474,19 @@ data class Resolution(
 data class Launcher(@SerialName("name") val name: String, @SerialName("base_url") val baseUrl: String? = null, @SerialName("model") val model: String? = null)
 
 object MachineSerializer : WireSerializer<Machine>(Machine.generatedSerializer())
+object ListeningPortSerializer : WireSerializer<ListeningPort>(ListeningPort.generatedSerializer())
+
+/** A port one of a session's processes listens on and answers HTTP at (`proto.Port`). */
+@KeepGeneratedSerializer
+@Serializable(with = ListeningPortSerializer::class)
+data class ListeningPort(
+    val port: Int,
+    val addr: String? = null,
+    val pid: Int? = null,
+    val process: String? = null,
+    /** The `<title>` of its `/`, when it answered in time. */
+    val title: String? = null,
+)
 object DetectedEngineSerializer : WireSerializer<DetectedEngine>(DetectedEngine.generatedSerializer())
 object LoopInfoSerializer : WireSerializer<LoopInfo>(LoopInfo.generatedSerializer())
 object BackgroundTaskSerializer : WireSerializer<BackgroundTask>(BackgroundTask.generatedSerializer())

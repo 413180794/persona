@@ -23,6 +23,8 @@ data class ChatChromeBindings(
     val renamer: SessionRenamer? = null,
     /** Read-only access to the session's machine: the photos sent with messages (`<attached_images>`) load from it. */
     val files: SessionFiles? = null,
+    /** Opens the session's machine's ports on the phone (docs/ports.md); null: port links open as plain pages. */
+    val ports: persona.core.contracts.api.PortOpener? = null,
     /** Opens a path from a message or a tool card in the session's files pane; null: paths are not offered. */
     val onOpenPath: ((String) -> Unit)? = null,
     /** 「交给 Persona」 on a message: hands the given text to the main Persona conversation; null: not offered. */

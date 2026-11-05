@@ -220,7 +220,7 @@ struct ChatView: View {
     }
 
     private var chatPresentation: some View {
-        chatSurface
+        AnyView(chatSurface) // see chatActivity
         // The session's details come up from the bottom (2026-10-31: the card that dropped from the title covered the
         // chat and needed a second tap on the title; a sheet closes with a swipe or a tap above it).
         #if os(iOS) || os(visionOS)
@@ -265,7 +265,10 @@ struct ChatView: View {
     }
 
     private var chatActivity: some View {
-        chatPresentation
+        // AnyView here, in chatPresentation and in chatLifecycle: the page's modifiers as one type were ~60 levels deep, and the runtime spent
+        // about 100 ms building that type's metadata the first time the page drew (cold start, #1337). Each boundary
+        // is the same type every time, so nothing below loses its identity or state.
+        AnyView(chatPresentation)
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
         .task(id: key) {
             guard style == .assistant else { return }
@@ -346,7 +349,7 @@ struct ChatView: View {
     }
 
     private var chatLifecycle: some View {
-        chatActivity
+        AnyView(chatActivity) // see chatActivity
         .environment(\.openFile, actions.openFile)
         .environment(\.fileScope, FileScope(machine: key.machineRef, cwd: session?.cwd ?? ""))
         .environment(\.chatImages, store.images)

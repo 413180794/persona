@@ -105,6 +105,7 @@ internal suspend fun createChatWiring(
         }.distinctUntilChanged() },
         // The photos sent with messages load from the session's machine (Persona' own conversations too).
         files = HubSessionFiles(connection),
+        ports = HubPortOpener(connection),
         tasks = persona.core.domain.tasks.TasksStore(persona.core.hub.HttpTasksApi(connection), group, data.coroutineScope))
 }
 

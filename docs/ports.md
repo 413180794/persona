@@ -73,6 +73,7 @@ WKWebView ─ http://localhost:5173 ─▶ 本机 127.0.0.1:5173（App 监听）
   取出来时重新加载（正在加载的不打断），不然看到的是上次关掉时的页面（2026-11-05，#1934）。顶栏的刷新按钮（`link-reload`）用 `reloadFromOrigin`
   再要一次，飞书原生页面没有它。
 - Mac App 用同一套代码；沙盒要 `com.apple.security.network.server`（只在回环上监听）。
+- Android（#2144）：`core/hub/PortForwarder.kt` 同样在 127.0.0.1 和 ::1 上监听、每条连接一个 WebSocket，见 `docs/android.md`「端口转发」。
 
 ### hub（`server/internal/hub/ports.go`）和流（`server/internal/streams`）
 

@@ -50,6 +50,8 @@ data class ChatAppBindings(
     val draftVersions: (SessionKey) -> Flow<DraftSessionVersion> = { emptyFlow() },
     /** Read-only access to the machines (the photos sent with messages load from them); null where there is none. */
     val files: SessionFiles? = null,
+    /** The group's machines' ports on the phone (docs/ports.md); null where there is no hub. */
+    val ports: persona.core.contracts.api.PortOpener? = null,
     /** Tasks from the assistant's conversations (docs/unified-entry.md); null where the hub group has none. */
     val tasks: persona.core.domain.tasks.TasksStore? = null,
 )
@@ -161,7 +163,7 @@ fun ChatDestination(
         chrome = ChatChromeBindings(actions = wiring?.actions.takeUnless { historyReadOnly }, connection = wiring?.connection,
             onOpenSession = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) },
             onConnectionDetails = { navigator.navigate(SettingsPageRoute(SettingsPage.Diagnostics)) },
-            files = wiring?.files, onHandToPersona = handToPersona,
+            files = wiring?.files, ports = wiring?.ports, onHandToPersona = handToPersona,
             tasks = wiring?.tasks?.takeIf { style == ChatRenderStyle.Assistant && !historyReadOnly }),
         renderStyle = style,
         embedded = embedded, showTopBar = showTopBar,

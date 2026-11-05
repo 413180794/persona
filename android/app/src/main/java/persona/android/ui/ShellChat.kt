@@ -86,7 +86,7 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
                 actions = actions, connection = wiring?.connection ?: session.connection, requestId = requestId, covered = pane != null,
                 onOpenSession = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) },
                 onConnectionDetails = { navigator.navigate(SettingsPageRoute(SettingsPage.Diagnostics)) },
-                files = session.files, onOpenPath = if (filesAvailable) ({ path -> open(FilesPane.Files, path) }) else null,
+                files = session.files, ports = wiring?.ports, onOpenPath = if (filesAvailable) ({ path -> open(FilesPane.Files, path) }) else null,
                 onHandToPersona = if (assistant) null else handToPersona,
                 onOpenTodo = { todoId -> navigator.navigate(persona.core.navigation.TodoDetailRoute(todoId)) }),
             renderStyle = if (assistant) ChatRenderStyle.Assistant else ChatRenderStyle.Agent,

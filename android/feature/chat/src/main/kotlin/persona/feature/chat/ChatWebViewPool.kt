@@ -43,7 +43,7 @@ internal class ChatWebViewPool(private val context: Context) {
     }
 
     fun acquire(url: String): ChatSelectionWebView {
-        val view = pages[url] ?: create().also { pages[url] = it; it.loadUrl(url) }
+        val view = pages[url] ?: create().also { pages[url] = it; if (url in noCache) it.settings.cacheMode = WebSettings.LOAD_NO_CACHE; it.loadUrl(url) }
         active?.takeIf { it !== view }?.let { mute(it, true); it.onPause() }
         active = view
         if (speculative.remove(url)) view.loadUrl(url)
@@ -52,6 +52,21 @@ internal class ChatWebViewPool(private val context: Context) {
         trim()
         return view
     }
+
+    /**
+     * Drops the page kept for [url]: a forwarded port's address is the same every time it opens, and the dev server
+     * behind it has moved on (docs/ports.md, iOS #1934), so it loads anew, without the disk cache.
+     */
+    fun forget(url: String) {
+        noCache += url
+        speculative.remove(url)
+        val view = pages[url] ?: return
+        // The one on screen reloads in place; one kept aside goes, and the next acquire loads it anew.
+        if (view === active) { view.settings.cacheMode = WebSettings.LOAD_NO_CACHE; if (view.loadProgress >= 100) view.reload() }
+        else { pages.remove(url); (view.parent as? ViewGroup)?.removeView(view); view.destroy() }
+    }
+
+    private val noCache = mutableSetOf<String>()
 
     @androidx.annotation.OptIn(markerClass = [Profile.ExperimentalUrlPrefetch::class])
     fun preload(url: String) {
@@ -141,7 +156,7 @@ internal class ChatWebViewPool(private val context: Context) {
             }
             override fun onPageFinished(view: WebView, url: String?) {
                 currentUrl = url.orEmpty(); pageTitle = view.title.orEmpty(); loadProgress = 100
-                view.settings.cacheMode = WebSettings.LOAD_DEFAULT
+                if (view.settings.cacheMode != WebSettings.LOAD_NO_CACHE) view.settings.cacheMode = WebSettings.LOAD_DEFAULT
             }
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                 this@ChatWebViewPool.dropGone(page)

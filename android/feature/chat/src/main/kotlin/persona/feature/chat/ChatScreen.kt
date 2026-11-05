@@ -427,8 +427,15 @@ private fun ChatPage(
     val replacement = if (snapshot.replaced) sessionList.firstOrNull { candidate ->
         session != null && candidate.key != key && SessionRuntimeState.map(session, listOf(candidate), true).replaced
     } else null
+    // The machine this conversation runs on, for its port links (docs/ports.md「识别回答里的链接」).
+    val chatPorts = remember(chrome.ports, machine, sessionList, key.machineId) {
+        chrome.ports?.let { opener ->
+            ChatPorts(key.machineId, machine?.displayName ?: key.machineId, listOfNotNull(machine?.hostname?.takeIf(String::isNotBlank)),
+                sessionList.filter { it.machineId == key.machineId }.flatMap { it.ports.orEmpty() }.map { it.port }.toSet(), opener)
+        }
+    }
     CompositionLocalProvider(LocalChatMarkdownCache provides markdownCache, LocalChatRowActions provides rowActions,
-        LocalContentColor provides PersonaTheme.palette.ink) {
+        LocalContentColor provides PersonaTheme.palette.ink, LocalChatPorts provides chatPorts) {
         ChatLinkHost(Modifier.fillMaxSize().background(PersonaTheme.palette.background)
             .then(if (embedded) Modifier else Modifier.imePadding()), preloadUrls, list.isScrollInProgress,
             onContext = { if (readOnly || !canSend) notice = "当前对话只读，不能附加上下文" else linkContexts = linkContexts + it },

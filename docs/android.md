@@ -795,6 +795,14 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 
 终端页直达：`--es debug.openLink 'jarvis://open?target=terminal&machine=macbook&session=<会话 id>'`。2026-11-02 在模拟器上用上面两个终端开关看过接管 / 只读、修饰键三态、选择文本、显示面板、字号 7 / 15 / 20、只看时键盘走 `/keys`，三套风格 × 深浅色；链接部分没在模拟器上看（各车道停止构建后才写完），选中菜单的实际顺序、渲染进程崩溃后的恢复、拼音输入要在设备上确认。
 
+端口转发（#2144，`docs/ports.md`，对齐 iOS `PortForwarder` / `PortLinks`）：
+
+- 识别：`core/domain/ports/PortLinks` 认 `http(s)://localhost|127.0.0.1|0.0.0.0|[::1]|*.localhost|这台机器的主机名（带不带 .local）:端口/路径`，和不带 scheme 的 `localhost:3000/x`；没写端口的、局域网地址、别的主机不算。`Session.ports`（`ListeningPort`）跟会话列表一起来。
+- 打开：对话的链接入口（`ChatLinkHost`，`LocalChatPorts` 给它会话所在的机器）先认端口链接：端口在这台机器某个 Agent 的 `ports` 里就直接转发，不在就先 `POST …/ports/{port}/open`，404 时提示「端口 :N 已经没有在监听」，链接不动。网页卡片标题下写「机器名 :端口」，菜单只有「重新加载」（手机回环上的地址别的 App 打不开）。
+- 转发（`core/hub/PortForwarder`）：在手机 127.0.0.1 上绑同一个端口号，被占就随机一个，再在 ::1 绑同一个号；只绑回环。每条连接一个 `…/ports/{port}/connect` 的 WebSocket（设备 token、配对钉住的证书，跟当前线路走），从 hub 来的字节在读线程上直接写给浏览器，往 hub 发的排队超过 512 KB 就先不读浏览器，两边都不在内存里堆。多 hub 时按会话所在的组转（`PortOpener.inGroup`）。
+- 端口链接不预加载；端口页不走磁盘缓存，再打开时重新加载（地址每次一样，dev server 已经变了，iOS #1934）。
+- 还没有：会话顶部的端口条、回复和 Bash 输出下面的端口 Badge（变灰）→ #2144 后两步；https 的 dev server（系统 CA 不认自签证书）。
+
 ## 机器、引擎、模型配置与新建 Agent
 
 2026-11-02 从主线旧 App（单模块）按行为移植过来（分组 E：机器页、引擎、Claude Code 设置、模型配置、异步新建、预填的新建页、设备页的已撤销分组）。

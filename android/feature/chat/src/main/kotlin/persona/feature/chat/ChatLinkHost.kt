@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.domain.ports.PortLinks
 import android.content.ComponentCallbacks2
 import android.content.Intent
 import android.content.res.Configuration
@@ -64,6 +65,9 @@ fun ChatLinkHost(
     val appLinks by rememberUpdatedState(LocalChatAppLinks.current)
     val lark = LocalLarkFeatures.current
     var url by remember { mutableStateOf<String?>(null) }
+    /** "机器名 :端口" while the sheet shows one of the machine's ports (docs/ports.md「转发」). */
+    var forwarded by remember { mutableStateOf<String?>(null) }
+    val ports by rememberUpdatedState(LocalChatPorts.current)
     var unsupported by remember { mutableStateOf(false) }
     var external by remember { mutableStateOf<String?>(null) }
     var opening by remember { mutableIntStateOf(0) }
@@ -73,7 +77,18 @@ fun ChatLinkHost(
             when (ChatLinks.kind(uri)) {
                 ChatLinkKind.Web -> {
                     val target = ChatLinks.webUrl(uri)
-                    if (target == null) unsupported = true else { url = target; opening++ }
+                    // A link to this machine's localhost is one of its ports, opened through the hub (docs/ports.md).
+                    val machine = ports
+                    val port = machine?.let { PortLinks.link(uri, it.hostnames) }
+                    when {
+                        target == null -> unsupported = true
+                        machine != null && port != null -> scope.launch {
+                            runCatching { machine.opener.open(machine.machineId, port.port, port.path, port.secure, port.port in machine.listed) }
+                                .onSuccess { local -> pool.forget(local); url = local; forwarded = "${machine.name} :${port.port}"; opening++ }
+                                .onFailure { error -> if (error !is kotlinx.coroutines.CancellationException) feedback?.notice(error.message ?: "打不开端口 :${port.port}") }
+                        }
+                        else -> { url = target; forwarded = null; opening++ }
+                    }
                 }
                 ChatLinkKind.App -> {
                     val link = ChatLinks.appLink(uri)
@@ -111,7 +126,9 @@ fun ChatLinkHost(
         if (!isScrolling && lifecycleState.isAtLeast(Lifecycle.State.STARTED)) {
             delay(600)
             pool.warmUp()
-            preloadUrls.mapNotNull { ChatLinks.webUrl(it) }.take(3).forEach { pool.preload(it) }
+            // A machine's port is never preloaded: it would load the phone's own localhost (docs/ports.md).
+            preloadUrls.mapNotNull { ChatLinks.webUrl(it) }.filter { PortLinks.link(it, ports?.hostnames.orEmpty()) == null }
+                .take(3).forEach { pool.preload(it) }
         }
     }
     val picks = if (onHandToPersona != null) listOf(ChatLinkPick.HandToPersona)
@@ -136,7 +153,7 @@ fun ChatLinkHost(
             }
             LaunchedEffect(opening) { if (url != null) drag.animateTo(LinkDetent.Full) }
             LaunchedEffect(closeRequest) { if (closeRequest > 0 && url != null) drag.animateTo(LinkDetent.Hidden) }
-            LaunchedEffect(drag.settledValue) { if (drag.settledValue == LinkDetent.Hidden && !drag.isAnimationRunning) url = null }
+            LaunchedEffect(drag.settledValue) { if (drag.settledValue == LinkDetent.Hidden && !drag.isAnimationRunning) { url = null; forwarded = null } }
             content(if (url != null && drag.currentValue == LinkDetent.Peek) (height - hostBar.coerceAtMost(height)) * 0.6f else 0.dp)
             url?.let { target ->
                 // A page whose renderer went away is loaded anew (a new view) when the user asks.
@@ -179,7 +196,7 @@ fun ChatLinkHost(
                             Column(Modifier.weight(1f)) {
                                 Text(view.pageTitle.ifBlank { "网页" }, style = PersonaTheme.type.bodyStrong, color = palette.ink,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(view.currentUrl.ifBlank { target }, style = PersonaTheme.type.micro, color = palette.ink3,
+                                Text(forwarded ?: view.currentUrl.ifBlank { target }, style = PersonaTheme.type.micro, color = palette.ink3,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             JIconButton(if (drag.currentValue == LinkDetent.Full) PhIcons.CaretDown else PhIcons.CaretUp,
@@ -189,12 +206,13 @@ fun ChatLinkHost(
                                 val clipboard = LocalClipboardManager.current
                                 val page = { ChatLinks.webUrl(view.currentUrl) ?: target }
                                 JIconButton(PhIcons.DotsThree, "网页操作", { menu = true })
-                                JMenu(menu, { menu = false }, listOf(
+                                // A forwarded port's address is the phone's own loopback: no other app could open it.
+                                JMenu(menu, { menu = false }, listOfNotNull(
                                     JAction("复制链接", PhIcons.LinkSimple) {
                                         clipboard.setText(AnnotatedString(page())); feedback?.notice("已复制链接")
-                                    },
+                                    }.takeIf { forwarded == null },
                                     JAction("重新加载", PhIcons.ArrowClockwise, enabled = !view.gone) { view.reload() },
-                                    JAction("在浏览器打开", PhIcons.ArrowSquareOut) {
+                                    if (forwarded != null) null else JAction("在浏览器打开", PhIcons.ArrowSquareOut) {
                                         val opened = runCatching {
                                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(page())).addCategory(Intent.CATEGORY_BROWSABLE))
                                         }.isSuccess
@@ -203,7 +221,7 @@ fun ChatLinkHost(
                                     JAction("分享", PhIcons.ShareNetwork) {
                                         val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, page())
                                         runCatching { context.startActivity(Intent.createChooser(send, null)) }
-                                    },
+                                    }.takeIf { forwarded == null },
                                 ))
                             }
                             JIconButton(PhIcons.X, "关闭网页", ::close)
@@ -257,3 +275,17 @@ fun ChatLinkHost(
         }
     }
 }
+
+/**
+ * The machine a conversation runs on, for its port links (docs/ports.md「识别回答里的链接」): its id and name, the names
+ * it goes by in links, the ports its agents list (the hub allows those without asking), and how to open one.
+ */
+data class ChatPorts(
+    val machineId: String,
+    val name: String,
+    val hostnames: List<String>,
+    val listed: Set<Int>,
+    val opener: persona.core.contracts.api.PortOpener,
+)
+
+val LocalChatPorts = androidx.compose.runtime.compositionLocalOf<ChatPorts?> { null }
