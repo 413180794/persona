@@ -129,6 +129,7 @@ fun AssistantScreen(
     var ending by remember { mutableStateOf<Session?>(null) }
     var endingBusy by remember { mutableStateOf(false) }
     var ended by remember(management) { mutableStateOf(emptySet<SessionKey>()) }
+    var archived by remember(management) { mutableStateOf(emptySet<SessionKey>()) }
     var assistantMachine by remember(management) { mutableStateOf("") }
     val hasChat = chatContent != null || assistantChatContent != null
     var menu by remember { mutableStateOf(false) }
@@ -177,8 +178,8 @@ fun AssistantScreen(
             compaction = compaction.dismissed()
         }
     }
-    val groups = remember(snapshot, query, pinnedConversations, ended, words) {
-        conversationGroups(snapshot.copy(conversations = snapshot.conversations.map {
+    val groups = remember(snapshot, query, pinnedConversations, ended, archived, words) {
+        conversationGroups(snapshot.copy(conversations = snapshot.conversations.filter { it.key !in archived }.map {
             if (it.key in ended) it.copy(status = "offline", state = "offline") else it
         }), query, pinnedConversations, words)
     }
@@ -256,6 +257,23 @@ fun AssistantScreen(
                 say(refusal(error))
             } finally {
                 newMainBusy = false
+            }
+        }
+    }
+    // Hidden at once; after the hub's list is refreshed (it leaves archived ones out) the hub's word is the one kept,
+    // so a later message that brings the conversation back shows it again.
+    fun archive(session: Session) {
+        val target = management ?: return
+        archived = archived + session.key
+        if (active == session.key) newConversation()
+        scope.launch {
+            try {
+                target.archiveConversation(session.key)
+                assistantAttempt { repository.refresh() }.onSuccess { archived = archived - session.key }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                archived = archived - session.key
+                if (feedback?.failure(error) != true) snackbar.showSnackbar(persona.core.designsystem.operationFeedback(error).message)
             }
         }
     }
@@ -391,6 +409,7 @@ fun AssistantScreen(
                 togglePins(snapshot.conversations.map { it.key }.distinct().filter { it in pinnedConversations && it != snapshot.mainSession })
             }) else null,
             onCopy = { copyId(it.key) },
+            onArchive = if (management != null && !demo) ::archive else null,
             showAllRecent = showAllRecent,
             onShowAllRecent = { showAllRecent = true },
             onTodos = onTodos?.let { action -> { scope.launch { drawerOpen = false }; action() } },
@@ -663,6 +682,7 @@ internal fun AssistantDrawer(
     onMain: () -> Unit, onOpen: (SessionKey) -> Unit, onInfo: (AssistantInfo) -> Unit,
     onNew: () -> Unit, onHome: () -> Unit, onSettings: () -> Unit,
     onPin: ((Session) -> Unit)? = null, onUnpinAll: (() -> Unit)? = null, onCopy: (Session) -> Unit = {},
+    onArchive: ((Session) -> Unit)? = null,
     showAllRecent: Boolean = false, onShowAllRecent: () -> Unit = {},
     onTodos: (() -> Unit)? = null, todoCount: Int = 0, showTodos: Boolean = true,
 ) {
@@ -703,7 +723,8 @@ internal fun AssistantDrawer(
                 ConversationRow(session, main = false, selected = session.key == active,
                     position = GroupPosition.of(index, groups.pinned.size),
                     onOpen = { onOpen(session.key) }, onEnd = onEnd?.let { action -> { action(session) } },
-                    pinned = true, onPin = onPin?.let { pin -> { pin(session) } }, onCopy = { onCopy(session) })
+                    pinned = true, onPin = onPin?.let { pin -> { pin(session) } }, onCopy = { onCopy(session) },
+                    onArchive = onArchive?.let { action -> { action(session) } })
             }
             // The most recent 30, then one row for the rest (a search shows everything it finds).
             val recent = recentRows(groups.recent, query, showAllRecent)
@@ -713,7 +734,8 @@ internal fun AssistantDrawer(
                 ConversationRow(session, main = false, selected = session.key == active,
                     position = GroupPosition.of(index, recentCount),
                     onOpen = { onOpen(session.key) }, onEnd = onEnd?.let { action -> { action(session) } },
-                    pinned = false, onPin = onPin?.let { pin -> { pin(session) } }, onCopy = { onCopy(session) })
+                    pinned = false, onPin = onPin?.let { pin -> { pin(session) } }, onCopy = { onCopy(session) },
+                    onArchive = onArchive?.let { action -> { action(session) } })
             }
             if (recent.hidden > 0) item(key = "recent-all") {
                 JGroupItem(GroupPosition.of(recentCount - 1, recentCount)) {
@@ -750,13 +772,13 @@ internal fun AssistantDrawer(
 
 /**
  * One conversation of the history. Its menu (⋯, or a long press) pins or unpins it ([onPin]; the main conversation
- * has none), copies its session id, and ends it while it runs ([onEnd]).
+ * has none), copies its session id, archives it ([onArchive]; not the main one either), and ends it while it runs ([onEnd]).
  */
 @Composable
 private fun ConversationRow(
     session: Session, main: Boolean, selected: Boolean, onOpen: () -> Unit, onEnd: (() -> Unit)?,
     modifier: Modifier = Modifier, position: GroupPosition = GroupPosition.Single,
-    pinned: Boolean = false, onPin: (() -> Unit)? = null, onCopy: () -> Unit = {},
+    pinned: Boolean = false, onPin: (() -> Unit)? = null, onCopy: () -> Unit = {}, onArchive: (() -> Unit)? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     // The channel its latest message came in from (WeChat, the Feishu bot…), as a small mark after the title.
@@ -783,18 +805,19 @@ private fun ConversationRow(
     }
     if (menu) JActionSheet(
         title = title, onDismiss = { menu = false },
-        actions = conversationActions(androidx.compose.ui.platform.LocalResources.current, pinned, session.isLive, onPin, onCopy, onEnd),
+        actions = conversationActions(androidx.compose.ui.platform.LocalResources.current, pinned, session.isLive, onPin, onCopy, onEnd, onArchive),
     )
 }
 
-/** The history row's menu: 置顶 / 取消置顶 (when it can be pinned), 拷贝会话 ID, then 结束对话 while it runs. */
+/** The history row's menu: 置顶 / 取消置顶 (when it can be pinned), 拷贝会话 ID, 归档 (when it can be), then 结束对话 while it runs. */
 internal fun conversationActions(
     resources: android.content.res.Resources, pinned: Boolean, live: Boolean, onPin: (() -> Unit)?, onCopy: () -> Unit,
-    onEnd: (() -> Unit)?,
+    onEnd: (() -> Unit)?, onArchive: (() -> Unit)? = null,
 ): List<JAction> =
     buildList {
         onPin?.let { add(JAction(resources.getString(if (pinned) R.string.assistant_unpin else R.string.assistant_pin), PhIcons.PushPin, onClick = it)) }
         add(JAction(resources.getString(R.string.assistant_copy_session_id), PhIcons.Copy, onClick = onCopy))
+        onArchive?.let { add(JAction(resources.getString(R.string.assistant_archive), PhIcons.Archive, onClick = it)) }
         if (onEnd != null && live) add(JAction(resources.getString(R.string.assistant_end), PhIcons.Stop, destructive = true, separatorBefore = true, onClick = onEnd))
     }
 

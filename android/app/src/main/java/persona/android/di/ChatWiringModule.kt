@@ -128,6 +128,7 @@ private class RoutedAssistantManagement(
     override suspend fun launchers(machineId: String) = api().launchers(machineId)
     override suspend fun endConversation(session: SessionKey) = api().endConversation(session)
     override suspend fun compactConversation(session: SessionKey) = api().compactConversation(session)
+    override suspend fun archiveConversation(session: SessionKey) = api().archiveConversation(session)
     override suspend fun newMainConversation(carrySummary: Boolean, expect: String?) =
         api().newMainConversation(carrySummary, expect)
     override suspend fun routines() = api().routines()

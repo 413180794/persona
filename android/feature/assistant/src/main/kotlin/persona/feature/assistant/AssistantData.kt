@@ -32,7 +32,7 @@ internal fun conversationGroups(
     words: ConversationWords,
 ): ConversationGroups {
     val matches = snapshot.conversations.distinctBy { it.key }.filter {
-        (query.isBlank() || it.conversationTitle(words).contains(query.trim(), ignoreCase = true) ||
+        !it.archived && (query.isBlank() || it.conversationTitle(words).contains(query.trim(), ignoreCase = true) ||
                 it.lastText.orEmpty().contains(query.trim(), ignoreCase = true))
     }.sortedWith(compareByDescending<Session> { it.updated }.thenBy { it.key.path })
     return ConversationGroups(matches.firstOrNull { it.key == snapshot.mainSession },

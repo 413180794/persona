@@ -37,6 +37,8 @@ internal fun OutboxStatus(
                 JButton(kind = JButtonKind.Secondary, size = JButtonSize.Small, text = stringResource(R.string.chat_delivery_delete), onClick = { onAction(DeliveryAction.Delete) }, enabled = !busy)
             if (message.state.resultUnknown && onDetails != null)
                 JButton(kind = JButtonKind.Secondary, size = JButtonSize.Small, text = stringResource(R.string.chat_delivery_check), onClick = onDetails, enabled = !busy)
+            if (message.state.allows(DeliveryAction.Discard))
+                JButton(kind = JButtonKind.Secondary, size = JButtonSize.Small, text = stringResource(R.string.chat_delivery_discard), onClick = { onAction(DeliveryAction.Discard) }, enabled = !busy)
         }
     }
     if (retryConfirmation) JDialog(onDismiss = { retryConfirmation = false }, title = stringResource(R.string.chat_delivery_resend_title),

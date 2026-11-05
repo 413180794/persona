@@ -28,6 +28,7 @@
     <string name="chat_delivery_edit">Edit</string>
     <string name="chat_delivery_retry">Retry</string>
     <string name="chat_delivery_delete">Delete</string>
+    <string name="chat_delivery_discard">Discard</string>
     <string name="chat_delivery_check">Check message</string>
     <string name="chat_delivery_resend_title">Resend this message?</string>
     <string name="chat_delivery_resend_text">Delivery isn\'t confirmed yet. Resending may make the computer get it twice, so check the chat history first.</string>

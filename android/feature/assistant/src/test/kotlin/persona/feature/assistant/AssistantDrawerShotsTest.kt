@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -108,5 +109,23 @@ class AssistantDrawerShotsTest {
         rule.onNodeWithText("开始主对话").performClick()
         assertTrue(mainTapped)
         capture("drawer-no-main-glass-light")
+    }
+
+    @Test fun aConversationsMenuArchivesItButTheMainOnesDoesNot() {
+        var archived: Session? = null
+        rule.setContent {
+            PersonaTheme(darkTheme = false, reduceMotion = true, style = AppStyle.Glass) {
+                AssistantDrawer(PersonaState.Idle, "", {}, ConversationGroups(main, emptyList(), recent.take(1)), active = null,
+                    hasMain = true, onEnd = null, onMain = {}, onOpen = {}, onInfo = {}, onNew = {}, onHome = {}, onSettings = {},
+                    onArchive = { archived = it })
+            }
+        }
+        rule.onAllNodesWithContentDescription("对话操作")[0].performClick()
+        rule.onNodeWithText("拷贝会话 ID").assertExists()
+        rule.onAllNodesWithText("归档").assertCountEquals(0)
+        rule.onNodeWithText("拷贝会话 ID").performClick()
+        rule.onAllNodesWithContentDescription("对话操作")[1].performClick()
+        rule.onNodeWithText("归档").performClick()
+        assertEquals(recent.first(), archived)
     }
 }

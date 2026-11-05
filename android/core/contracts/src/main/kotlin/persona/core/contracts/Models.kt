@@ -209,6 +209,8 @@ data class Session(
     @SerialName("model") val model: String? = null,
     @SerialName("permission_mode") val permissionMode: String? = null,
     @SerialName("assistant") val assistant: Boolean = false,
+    /** An assistant conversation put away (POST /api/v1/assistant/conversations/{id}/archive): kept, not listed. */
+    @SerialName("archived") val archived: Boolean = false,
     @SerialName("space_id") val spaceId: String? = null,
     @SerialName("space_name") val spaceName: String? = null,
     @SerialName("slot_name") val slotName: String? = null,

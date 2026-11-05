@@ -28,6 +28,7 @@
     <string name="chat_delivery_edit">戻して編集</string>
     <string name="chat_delivery_retry">再試行</string>
     <string name="chat_delivery_delete">削除</string>
+    <string name="chat_delivery_discard">破棄</string>
     <string name="chat_delivery_check">メッセージを確認</string>
     <string name="chat_delivery_resend_title">このメッセージを再送しますか？</string>
     <string name="chat_delivery_resend_text">配信はまだ確認できていません。再送するとコンピューターに2回届くことがあるため、先にチャット履歴を確認してください。</string>

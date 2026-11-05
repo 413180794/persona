@@ -92,6 +92,21 @@ class ChatDeliveryStateTest {
         assertTrue(actions.busyIds.isEmpty())
     }
 
+    @Test fun onlyMessagesOfUnknownDeliveryCanBeDiscarded() = runTest {
+        val sender = FakeSender()
+        val actions = ChatDeliveryActions(sender)
+        val composer = ChatComposerState(ChatComposerDraft("草稿"))
+        val unknown = setOf(DeliveryState.Unknown, DeliveryState.Verifying, DeliveryState.NeedsConfirmation)
+        DeliveryState.entries.forEach { state ->
+            assertEquals("$state", state in unknown, state.allows(DeliveryAction.Discard))
+            sender.outbox.value = listOf(sender.message.copy(state = state))
+            assertEquals("$state", state in unknown, actions.perform("message", DeliveryAction.Discard, composer::restoreMessage))
+        }
+        assertEquals(List(unknown.size) { "discard:message" }, sender.calls)
+        assertEquals("discarding leaves the draft alone", "草稿", composer.value.text)
+        assertTrue(actions.busyIds.isEmpty())
+    }
+
     @Test fun unknownStatesUseSharedVocabularyAndSessionPriority() {
         val session = Session(sessionId = "session", status = "working")
         val snapshot = ChatSnapshot(loading = false, turnDurationSeconds = 42)
@@ -133,6 +148,11 @@ class ChatDeliveryStateTest {
         override suspend fun cancel(clientMessageId: String): Boolean {
             calls += "cancel:$clientMessageId"
             gate?.await()
+            if (accept) outbox.value = emptyList()
+            return accept
+        }
+        override suspend fun discard(clientMessageId: String): Boolean {
+            calls += "discard:$clientMessageId"
             if (accept) outbox.value = emptyList()
             return accept
         }

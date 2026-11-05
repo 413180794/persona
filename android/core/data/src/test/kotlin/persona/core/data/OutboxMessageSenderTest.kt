@@ -353,6 +353,29 @@ class OutboxMessageSenderTest {
         sender.close()
     }
 
+    @Test fun messagesOfUnknownDeliveryCanBeDiscardedAndAreNeverRetried() = runTest {
+        val store = FakeStore()
+        val transport = FakeTransport(online = true)
+        val sender = OutboxMessageSender(scope, store, transport, backgroundScope,
+            reviewTimeoutMillis = 100, reconciliationTimeoutMillis = 10)
+        transport.answers += MessageTransportResult.NoReceipt
+        transport.answers += MessageTransportResult.Accepted
+        sender.send(session, "unknown", "unknown")
+        sender.send(session, "sent", "sent")
+        runCurrent()
+        assertTrue(store.state("unknown") in setOf(OutboxState.Unknown, OutboxState.Verifying))
+        assertTrue(!sender.discard("sent"))
+        assertTrue(sender.discard("unknown"))
+        assertEquals(OutboxState.Cancelled, store.state("unknown"))
+        advanceTimeBy(111)
+        runCurrent()
+        // Discarded: no review deadline brings it back, and it is never sent again.
+        assertEquals(OutboxState.Cancelled, store.state("unknown"))
+        assertTrue(sender.outbox.value.none { it.clientMessageId == "unknown" })
+        assertEquals(listOf("unknown", "sent"), transport.requests.map { it.clientMessageId })
+        sender.close()
+    }
+
     @Test fun refusedMessagesCanBeDiscardedButSentOnesCannot() = runTest {
         val store = FakeStore()
         val transport = FakeTransport(online = true)

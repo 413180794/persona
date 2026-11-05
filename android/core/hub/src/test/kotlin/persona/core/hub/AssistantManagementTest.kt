@@ -60,6 +60,17 @@ class AssistantManagementTest {
         }
     }
 
+    @Test fun archivingPostsToTheConversationsArchiveRoute() = runBlocking {
+        MockWebServer().use { server ->
+            val api = HttpAssistantManagement(server.url("/").toString(), "test-token", OkHttpClient())
+            server.enqueue(MockResponse().setBody("""{"ok":true,"archived":true}"""))
+            api.archiveConversation(SessionKey("demo", "side-1"))
+            val archive = server.takeRequest()
+            assertEquals("POST", (archive.method).zhAny())
+            assertEquals("/api/v1/assistant/conversations/side-1/archive", (archive.path).zhAny())
+        }
+    }
+
     @Test fun compactAndNewMainSendTheirBodiesAndTurnRefusalsIntoTheHubsWords() = runBlocking {
         MockWebServer().use { server ->
             val api = HttpAssistantManagement(server.url("/").toString(), "test-token", OkHttpClient())

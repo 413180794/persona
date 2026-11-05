@@ -68,6 +68,10 @@ class HttpAssistantManagement(
             }, compactHttp)
         }
     }
+    override suspend fun archiveConversation(session: SessionKey) {
+        require(session.sessionId.isNotBlank())
+        assistant("POST", "conversations", session.sessionId, "archive", body = buildJsonObject { })
+    }
     override suspend fun newMainConversation(carrySummary: Boolean, expect: String?): NewMainResult {
         val body = buildJsonObject {
             put("carry", if (carrySummary) "summary" else "none")

@@ -22,6 +22,11 @@ interface AssistantManagement {
      */
     suspend fun compactConversation(session: SessionKey): Unit = throw UnsupportedOperationException("Compact context unavailable")
     /**
+     * Archives an assistant conversation (POST /api/v1/assistant/conversations/{id}/archive): off the list, its data
+     * kept; a new message to it brings it back. The hub refuses the main conversation.
+     */
+    suspend fun archiveConversation(session: SessionKey): Unit = throw UnsupportedOperationException("Archive unavailable")
+    /**
      * Puts the main conversation away for a new one (POST /api/v1/assistant/main/new, hub feature `assistant_main_new`):
      * it is renamed and archived, and the next message to the main conversation starts a new one. [carrySummary] brings
      * what the old one left; [expect] is the main conversation on screen (a hub where another device replaced it since

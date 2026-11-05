@@ -22,5 +22,7 @@ interface MessageSender {
     suspend fun send(session: SessionKey, text: String, clientMessageId: String, clearDraft: String? = null)
     suspend fun cancel(clientMessageId: String): Boolean = false
     suspend fun retry(clientMessageId: String): Boolean = false
+    /** Drops a message whose delivery is unknown: off the list and the queue, never retried or reconciled. */
+    suspend fun discard(clientMessageId: String): Boolean = false
     suspend fun confirm(clientMessageId: String, delivered: Boolean): Boolean = false
 }

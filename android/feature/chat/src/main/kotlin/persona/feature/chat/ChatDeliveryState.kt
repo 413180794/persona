@@ -21,18 +21,19 @@ internal val DeliveryState.pendingStatus: PendingStatus?
         DeliveryState.Sent -> null
     }
 
-internal enum class DeliveryAction { Cancel, Edit, Retry, Delete, ConfirmDelivered, ConfirmNotDelivered }
+internal enum class DeliveryAction { Cancel, Edit, Retry, Delete, Discard, ConfirmDelivered, ConfirmNotDelivered }
 
 /**
  * Cancel and edit are for what has not gone out yet; a refused message (refused by the computer, or confirmed as never
  * delivered) reached nothing either, so it can be edited (back into the box, the bubble gone) or deleted outright.
+ * One whose delivery is unknown can be discarded: the phone stops asking and retrying, whatever the computer got.
  */
 internal fun DeliveryState.allows(action: DeliveryAction): Boolean = when (action) {
     DeliveryAction.Cancel -> this == DeliveryState.Queued || this == DeliveryState.WaitingForNetwork
     DeliveryAction.Edit -> this == DeliveryState.Queued || this == DeliveryState.WaitingForNetwork || this == DeliveryState.Refused
     DeliveryAction.Delete -> this == DeliveryState.Refused
     DeliveryAction.Retry -> this == DeliveryState.Refused || this == DeliveryState.Rejected || this == DeliveryState.NeedsConfirmation
-    DeliveryAction.ConfirmDelivered, DeliveryAction.ConfirmNotDelivered -> resultUnknown
+    DeliveryAction.Discard, DeliveryAction.ConfirmDelivered, DeliveryAction.ConfirmNotDelivered -> resultUnknown
 }
 
 /** Both the timeline and the sheet share the same in-flight guard and authoritative transitions. */
@@ -49,6 +50,7 @@ internal class ChatDeliveryActions(private val sender: MessageSender) {
             val changed = when (action) {
                 DeliveryAction.Cancel, DeliveryAction.Edit, DeliveryAction.Delete -> sender.cancel(id)
                 DeliveryAction.Retry -> sender.retry(id)
+                DeliveryAction.Discard -> sender.discard(id)
                 DeliveryAction.ConfirmDelivered -> sender.confirm(id, delivered = true)
                 DeliveryAction.ConfirmNotDelivered -> sender.confirm(id, delivered = false)
             }

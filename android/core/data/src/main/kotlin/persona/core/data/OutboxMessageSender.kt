@@ -130,11 +130,14 @@ class OutboxMessageSender(
     override suspend fun cancel(clientMessageId: String): Boolean =
         change(clientMessageId, dispatchable + OutboxState.Refused, OutboxState.Cancelled)
 
+    override suspend fun discard(clientMessageId: String): Boolean =
+        change(clientMessageId, undecided, OutboxState.Cancelled)
+
     override suspend fun retry(clientMessageId: String): Boolean = change(
         clientMessageId, setOf(OutboxState.Refused, OutboxState.NeedsConfirmation), OutboxState.Queued)
 
     override suspend fun confirm(clientMessageId: String, delivered: Boolean): Boolean = change(
-        clientMessageId, reviewable + OutboxState.NeedsConfirmation,
+        clientMessageId, undecided,
         if (delivered) OutboxState.Sent else OutboxState.Refused)
 
     private suspend fun change(id: String, from: Set<OutboxState>, to: OutboxState): Boolean = lifecycle.withLock {
@@ -378,6 +381,8 @@ class OutboxMessageSender(
     companion object {
         private val uncertain = setOf(OutboxState.Sending, OutboxState.Unknown, OutboxState.Verifying)
         private val reviewable = setOf(OutboxState.Unknown, OutboxState.Verifying)
+        /** Delivery unknown, with or without the review deadline passed: the user decides (confirm or discard). */
+        private val undecided = reviewable + OutboxState.NeedsConfirmation
         private val reconcilable = uncertain + setOf(OutboxState.Sent, OutboxState.NeedsConfirmation)
         private val dispatchable = setOf(OutboxState.Queued, OutboxState.WaitingForNetwork)
         private val hidden = setOf(OutboxState.Cancelled, OutboxState.Shown)

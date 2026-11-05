@@ -175,12 +175,14 @@ private fun ChatPage(
     var submittedContexts by remember { mutableStateOf(emptyList<ChatLinkContext>()) }
     var notice by remember { mutableStateOf<String?>(null) }
     val deliveryActions = remember(sender) { ChatDeliveryActions(sender) }
+    var statusSheet by remember { mutableStateOf(false) }
     fun deliveryAction(message: OutboxMessage, action: DeliveryAction) {
         if (readOnly) return
         scope.launch {
             try {
                 if (!deliveryActions.perform(message.clientMessageId, action, composer::restoreMessage))
                     notice = res.getString(R.string.chat_screen_delivery_changed)
+                else if (action == DeliveryAction.Discard) statusSheet = false
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { notice = res.getString(R.string.chat_screen_delivery_failed) }
         }
@@ -211,7 +213,6 @@ private fun ChatPage(
     var sending by remember { mutableStateOf(false) }
     var overlay by remember { mutableStateOf(false) }
     var terminalHelp by remember { mutableStateOf(false) }
-    var statusSheet by remember { mutableStateOf(false) }
     var taskPageVisible by remember { mutableStateOf(false) }
     var fullText by remember { mutableStateOf<String?>(null) }
     var linkVisible by remember { mutableStateOf(false) }

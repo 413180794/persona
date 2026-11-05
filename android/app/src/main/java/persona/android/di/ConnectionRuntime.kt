@@ -174,6 +174,9 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
         override suspend fun cancel(clientMessageId: String) = gate.withLock {
             owner(clientMessageId)?.messages?.cancel(clientMessageId) ?: false
         }
+        override suspend fun discard(clientMessageId: String) = gate.withLock {
+            owner(clientMessageId)?.messages?.discard(clientMessageId) ?: false
+        }
         override suspend fun retry(clientMessageId: String) = gate.withLock {
             owner(clientMessageId)?.messages?.retry(clientMessageId) ?: false
         }

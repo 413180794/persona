@@ -63,6 +63,14 @@ class AssistantTest {
         assertNull(handoffTitle("早报 <jarvis-context", words))
     }
 
+    @Test fun archivedConversationsLeaveTheHistory() {
+        val kept = Session(machineId = "demo", sessionId = "kept", title = "留着")
+        val archived = Session(machineId = "demo", sessionId = "gone", title = "归档了", archived = true)
+        val result = conversationGroups(AssistantSnapshot(null, listOf(kept, archived)), "", setOf(archived.key), words)
+        assertEquals(emptyList<Session>(), result.pinned)
+        assertEquals(listOf(kept), result.recent)
+    }
+
     @Test fun theRecentGroupShowsThirtyThenTheRest() {
         val recent = (1..45).map { Session(machineId = "m", sessionId = "s$it", title = "对话 $it") }
         val folded = recentRows(recent, query = "", showAll = false)
@@ -81,6 +89,8 @@ class AssistantTest {
         assertEquals("the main conversation has no pin", listOf("拷贝会话 ID", "结束对话"), labels(pinned = false, live = true, pin = false, end = true))
         assertEquals(listOf("拷贝会话 ID"), labels(pinned = false, live = true, pin = false, end = false))
         assertTrue(conversationActions(resources, false, true, null, {}, {}).last().destructive)
+        assertEquals(listOf("置顶", "拷贝会话 ID", "归档", "结束对话"),
+            conversationActions(resources, false, true, {}, {}, {}, onArchive = {}).map { it.label })
     }
 
     @Test fun firstConversationBecomesMainAndSendUsesOutbox() = runTest {
