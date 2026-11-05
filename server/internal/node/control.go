@@ -161,8 +161,10 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	_ = launch.NameAgent(ctx, created.Pane, "j-"+id[:6])
 	n.holdResume(ctx, launch, pane, id, spec) // herdr's restore resumes it through the launcher (herdrresume.go)
 	if prompt != "" {
-		if err := n.hostPrompt(ctx, pane, prompt); err != nil {
-			return nil, fmt.Errorf("send first message: %w", err)
+		// Checked against the transcript and typed again when it was dropped; one that never goes in leaves the
+		// session needing the user, with why, not idle (firstprompt.go).
+		if err := n.firstPrompt(ctx, pane, id, prompt, a); err != nil {
+			return nil, err
 		}
 	}
 	return n.sessionFor(id, *a), nil
@@ -473,6 +475,9 @@ func (n *Node) sessionFor(id string, a host.Agent) *proto.Session {
 	n.placeIn(s, a)
 	n.decorate(s)
 	s.PermissionMode, s.Effort = n.modesOf(id)
+	if why := n.lostFirstPrompt(id, s.Status); why != "" { // firstprompt.go
+		s.Status, s.AttentionReason = proto.StatusBlocked, why
+	}
 	return s
 }
 
@@ -575,6 +580,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	}
 	if err == nil {
 		n.typing.typed(pane, text)
+		n.lostFirst.clear(id) // the message the start could not deliver went in now, or another one
 		if kind == "claude" {
 			n.ensureSubmitted(ctx, pane, text)
 		}

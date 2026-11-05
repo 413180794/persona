@@ -21,6 +21,14 @@ node 的 `session.start`：
    - 状态 idle/done 且屏幕出现输入框页脚（`shift+tab` / `? for shortcuts` / `bypass permissions` / `esc to interrupt`），连续两次 → 就绪。
    - 其他 blocked（模型选择等）→ 直接返回，hub 会把屏幕作为 `screen` 交互推给手机。
 4. 记录 pane → session，`agent rename j-<id 前 6 位>`，发首条消息（`agent prompt`）。
+5. 确认首条消息进了 transcript（`node/firstprompt.go`，#2423）：输入框出现时 Claude 不一定画完了（启动时自动更新的提示、Auto mode 的说明），
+   这时打进去的字会被吞掉，Agent 一直空闲。所以发完要看到 transcript 里出现这条 user 消息才算发出去：过了 `submitGrace` 还停在输入框里就补一次回车；
+   15 秒还没进（Claude 也没在工作）就重新 `waitReady`、确认输入框是空的再发，最多 3 次。还不行、开着对话框或者输入框里有别的东西，
+   就把会话标成「需要你」（`blocked` + `attention_reason` 写明原因），不静默空闲；之后有消息进了 transcript（手机发的、电脑上打的）就恢复原样。
+   确认在后台做，启动照旧马上回；这期间发给这个会话的消息排在后面（同一把打字锁），不会和重发的首条消息混在一起。
+   这个标记只在 node 内存里，node 重启后会话按 herdr 的状态显示。
+   没有改成把首条消息当 `claude` 的参数传：启动器可能是 zsh 函数 / alias / `jarvisd launch`，参数怎么传过去不统一，`--allowedTools` 等变长参数还会吞掉
+   后面的位置参数，长消息还得打进 shell 命令行；校验 transcript 对所有启动器都成立。
 
 Persona 启动的会话，启动器记在 node 状态里。在电脑上手动用启动器函数开的 claude 没有这条记录，启动器靠推断
 （`server/internal/node/sessions.go` 的 `matchLauncher`）：node 每 30 秒扫描一次运行中 claude 的环境变量（同一次扫描还读 `CLAUDE_CONFIG_DIR`，

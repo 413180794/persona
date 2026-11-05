@@ -314,7 +314,17 @@ func herdrNode(t *testing.T) (*Node, *fakeHerdr, string) {
 	}
 	resetGlobalCaches()
 	t.Cleanup(resetGlobalCaches)
+	withFirstPromptWaits(t, 400*time.Millisecond, 3*time.Second)
+	t.Cleanup(n.firstWait.Wait) // before the waits are put back: a check still going reads them
 	return n, f, home
+}
+
+// withFirstPromptWaits shortens how long a start waits for its first message to reach the transcript, and for the
+// input box to come back before typing it again (firstprompt.go).
+func withFirstPromptWaits(t *testing.T, wait, recover time.Duration) {
+	oldWait, oldRecover, oldPoll := firstPromptWait, firstPromptRecover, firstPromptPoll
+	firstPromptWait, firstPromptRecover, firstPromptPoll = wait, recover, 20*time.Millisecond
+	t.Cleanup(func() { firstPromptWait, firstPromptRecover, firstPromptPoll = oldWait, oldRecover, oldPoll })
 }
 
 // request runs one hub request through the node's handler; the result comes back as decoded JSON.

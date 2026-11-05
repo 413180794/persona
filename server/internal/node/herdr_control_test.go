@@ -99,6 +99,7 @@ func TestHerdrStartInTheProjectsWorkspace(t *testing.T) {
 	}, nil, nil))
 	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
 	f.screenSteps("w1:p2", isKeys(), screenFixture(t, "claude-2.1.312-trust-162.txt"), screenFixture(t, "claude-2.1.312-empty-162.txt"))
+	promptLands(t, f, home, cwd) // the transcript has it: nothing more is asked of herdr
 
 	res, err := request(t, n, "session.start", map[string]any{"session_id": startID, "cwd": "~/proj", "prompt": "fix the build",
 		"permission_mode": "plan", "effort": "high", "async": true})
@@ -200,7 +201,8 @@ func TestHerdrResumeWithoutTranscriptStartsUnderItsID(t *testing.T) {
 }
 
 // A workspace given (a tab next to another agent): no workspace lookup. A claude that comes up blocked (a dialog of
-// its own) counts as ready at once. A managed launcher (kept by the hub) runs as `jarvisd launch <name>`.
+// its own) counts as ready at once; the first message is not typed into the dialog, and the session is listed as
+// needing the user, saying so (firstprompt.go). A managed launcher (kept by the hub) runs as `jarvisd launch <name>`.
 func TestHerdrStartIntoAGivenWorkspaceReturnsOnABlockedClaude(t *testing.T) {
 	n, f, home := herdrNode(t)
 	if _, err := request(t, n, "launchers.managed", map[string]any{"launchers": []any{
@@ -232,9 +234,12 @@ func TestHerdrStartIntoAGivenWorkspaceReturnsOnABlockedClaude(t *testing.T) {
 		resumeHeld("w2:p5", startID, "/tmp/jarvis-test/jarvisd launch work_gw --resume "+startID+" --settings "+
 			filepath.Join(jarvisDir(home), "launcher-settings", "work_gw-claude-settings.json")+
 			" --mcp-config "+filepath.Join(jarvisDir(home), "mcp.json"))[1],
-		call("agent.prompt", map[string]any{"target": "w2:p5", "text": "hello"}),
 		call("session.snapshot", nil),
 	})
+	f.reply("session.snapshot", snapshot(nil, nil, []any{claudeAgent(startID, proto.StatusIdle, "w2:p5", "w2:t5", "w2", home, "")}, nil))
+	if l := listSessions(t, n); len(l) != 1 || l[0].Status != proto.StatusBlocked || l[0].AttentionReason != lostDialog {
+		t.Errorf("listed %+v", l)
+	}
 }
 
 // A tab name given (session.rename) while the tab is still being made is kept and given to the tab once it exists.

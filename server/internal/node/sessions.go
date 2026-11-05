@@ -646,6 +646,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		if s.Status == proto.StatusBlocked { // only while it still waits (not once the phone drives it)
 			s.AttentionReason = a.Attention
 		}
+		if why := n.lostFirstPrompt(id, s.Status); why != "" { // its first message did not go in (firstprompt.go)
+			s.Status, s.AttentionReason = proto.StatusBlocked, why
+		}
 		if !onList[id] { // the list's prompt is no suggestion of its
 			s.Suggestion = n.noteStatus(id, a.Agent, a.PaneID, s.Status) // suggestion.go
 		}

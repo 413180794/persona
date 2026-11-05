@@ -87,6 +87,8 @@ type Node struct {
 	terms     map[string]*termStream     // session id -> its terminal streaming to the hub (terminal.go)
 	suggests  map[string]*suggestState   // session id -> Claude's suggested next message (suggestion.go)
 	driving   map[string]bool            // session id -> Persona is working its TUI (a picker it opened is not "blocked")
+	firstWait sync.WaitGroup             // first messages being checked (firstprompt.go)
+	lostFirst lostPrompts                // session id -> why its first message did not go in (firstprompt.go)
 	events    *herdrEvents               // herdr's event stream (herdrevents.go)
 	hostSig   map[string]*watcherSignals // change signals of the registered watcher hosts, by host kind (herdrevents.go)
 	cdirs     *claudeDirs                // Claude Code config directories in use (claudedirs.go)
