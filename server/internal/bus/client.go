@@ -38,6 +38,8 @@ type Client struct {
 	// OnRequest answers the hub's calls, OnEvent takes its one-way events (nil: calls fail, events are dropped).
 	OnRequest rpc.Handler
 	OnEvent   rpc.EventHandler
+	// Cancels are the methods whose calls tell the hub when their caller stops waiting (rpc.Peer.Cancels).
+	Cancels map[string]bool
 
 	Logf func(format string, args ...any)
 	// Zero values are the protocol's: 1 s doubling to a minute; a ping every 30 s, 20 s for its pong.
@@ -111,7 +113,7 @@ func (c *Client) session(ctx context.Context) (helloed bool, err error) {
 		}
 	}()
 	p := rpc.New("s", conn)
-	p.OnRequest, p.OnEvent = c.OnRequest, c.OnEvent
+	p.OnRequest, p.OnEvent, p.Cancels = c.OnRequest, c.OnEvent, c.Cancels
 	served := make(chan error, 1)
 	go func() { served <- p.Serve(sctx, conn) }()
 

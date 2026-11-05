@@ -7,10 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
-	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // quietTodo is the task the conversation conv opened last, once its agent is linked.
@@ -95,47 +93,6 @@ func TestQuietTasksFromTheMainConversation(t *testing.T) {
 		t.Fatalf("PUT = %v, reported %+v", got, h.assistantProfile())
 	}
 
-	// s1 is the quiet task's agent, s2 the side conversation's: both working, s1 also asks something.
-	m.setSessions([]proto.Session{
-		{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p1"},
-		{SessionID: "s2", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p2"},
-	})
-	flags := map[string]bool{}
-	for _, s := range h.decorated(m) {
-		flags[s.SessionID] = s.Quiet
-	}
-	if !flags["s1"] || flags["s2"] {
-		t.Fatalf("quiet flags = %v", flags)
-	}
-	if st := h.live.snapshot(); st.Working != 1 || len(st.Items) != 1 || st.Items[0].ID != "box/s2" {
-		t.Fatalf("fleet = %+v", st)
-	}
-
-	c := &client{out: make(chan []byte, 64)}
-	h.clients[c] = struct{}{}
-	h.onClientHello(c, []byte(`{"platform":"web","version":"test","features":["ws_notify"]}`))
-	<-c.out
-	notified := func() []string {
-		var kinds []string
-		for {
-			select {
-			case raw := <-c.out:
-				var ev struct {
-					Type      string `json:"type"`
-					SessionID string `json:"session_id"`
-				}
-				_ = json.Unmarshal(raw, &ev)
-				if ev.Type == "notify" {
-					kinds = append(kinds, ev.SessionID)
-				}
-			case <-time.After(100 * time.Millisecond):
-				return kinds
-			}
-		}
-	}
-	h.announce(proto.Interaction{ID: "ix_q", MachineID: "box", SessionID: "s1", Kind: proto.IxPermission, ToolName: "Bash"})
-	h.announce(proto.Interaction{ID: "ix_s", MachineID: "box", SessionID: "s2", Kind: proto.IxPermission, ToolName: "Bash"})
-	if got := notified(); len(got) != 1 || got[0] != "s2" {
-		t.Fatalf("notify events for %v", got)
-	}
+	// A quiet task's agent flagged on the list, off the Live Activity and without a push is the manager's
+	// (assistant TestQuietAgents).
 }

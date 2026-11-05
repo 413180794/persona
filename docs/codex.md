@@ -194,7 +194,7 @@ Codex 在终端里没有能代答的 hook（见下面「调研」），node 自�
   卡片都会消失。12 小时前的 async 提问不再拿出来（node 重启会重读 rollout）。
 - TRAEX 共用 rollout 解析（`history_mutation` 里的 AgentMessage / UserMessage 也认）和屏幕解析，状态是 node 自己判断的；还没在真的 TRAEX 上测过。
 - 实现：node 每秒扫一遍 live 的 Codex / TRAEX（`node/codexask.go`；rollout 只读新增部分，第一次读最后 8 MB），开着的卡片变了就整份发给 hub
-  （`codex.interactions`）。hub 给每张卡建一个本地交互（`hub/codexcards.go`）：新的推送，不在单子里的结束，同一会话的通用屏幕卡让位；
+  （`codex.interactions`）。管理者给每张卡建一个本地交互（`assistant/fleet_ix.go`）：新的推送，不在单子里的结束，同一会话的通用屏幕卡让位；
   答案经 `codex.answer` 交回 node，node 按键 / 输入之前重读屏幕和 rollout，错误直接回给答题的人（和屏幕卡一样同步）；
   没能输入（草稿、界面不对）时卡片留着，node 说 Codex 已经不问了（`prompt_changed`）时卡片消失。node 重连后重新列出的卡不再响铃。
   hub 给 Codex 会话建通用屏幕卡前多等 3 秒，让 node 的卡先到。推送标题是「Codex 在问你」「Codex 需要你授权」。

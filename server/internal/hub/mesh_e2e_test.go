@@ -279,8 +279,7 @@ func startTestHubWith(t *testing.T, id, name string, st *meshStore, dir string, 
 		logger = log.New(os.Stderr, "["+name+"] ", log.Lmicroseconds)
 	}
 	h := &Hub{cfg: cfg, version: "test", logger: logger, byID: map[string]*Machine{}, clients: map[*client]struct{}{},
-		interactions: map[string]*pending{}, calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{},
-		turns: newTurnTracker(), push: newPusher(cfg.dir, nil, func(string, ...any) {})}
+		calls: map[string]chan proto.ToolResult{}, push: newPusher(cfg.dir, nil, func(string, ...any) {})}
 	h.live = newLiveActivities(h)
 	h.push.hubID = h.hubID
 	h.store = st

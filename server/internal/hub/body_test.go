@@ -71,6 +71,7 @@ func TestResolveBodyLimitForAnswerRole(t *testing.T) {
 	if read > 2<<20 {
 		t.Fatalf("read %d bytes of an oversized answer (cap 1 MiB)", read)
 	}
+	connectAssistant(t, h) // a normal answer goes on to the manager, which has no such card
 	if code, _ := call(t, mux, "POST", "/api/v1/interactions/ix_x/resolve", watchTok, `{"allow":true}`); code != http.StatusGone {
 		t.Fatalf("a normal answer reaches the handler (410: no such card), got %d", code)
 	}

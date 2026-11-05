@@ -199,6 +199,9 @@ func (h *Hub) serveBus(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	conn := bus.NewConn(ctx, ws)
 	c := &busConn{ident: ident, ws: ws, peer: rpc.New("h", conn), helloed: make(chan struct{})}
+	// A card the hub's own feature asks (fleet.ask) is withdrawn when that feature stops waiting (a tool call whose
+	// caller went away, #2597).
+	c.peer.Cancels = map[string]bool{assistantwire.MethodFleetAsk: true}
 	c.peer.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
 		return h.busRequest(ctx, c, method, params)
 	}
@@ -380,7 +383,6 @@ func (h *Hub) busEnded(c *busConn) {
 			go h.devicesGone() // its machines (devices_link.go)
 		}
 		if c.ident.ID == assistantwire.AssistantID {
-			h.dropFollows() // the conversations its channels followed (assistant_channels.go)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

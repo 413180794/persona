@@ -39,6 +39,17 @@ type Hello struct {
 	// Locale is the user's language (zh-Hans / en / ja, docs/i18n.md): the assistant answers in it. "" (an older hub)
 	// is zh-Hans.
 	Locale string `json:"locale,omitempty"`
+	// Notify is hub.json's notify and hook_timeout_minutes: the finished push's timings and how long a hook's card
+	// waits by default (the interactions and the pushes are the manager's, fleet.go).
+	Notify NotifyTimings `json:"notify,omitzero"`
+}
+
+// NotifyTimings are hub.json's notify section and hook_timeout_minutes, in milliseconds (0: the default).
+type NotifyTimings struct {
+	DoneDelayMS      int64 `json:"done_delay_ms,omitempty"`
+	LongTurnMS       int64 `json:"long_turn_ms,omitempty"`
+	BackgroundHoldMS int64 `json:"background_hold_ms,omitempty"`
+	HookTimeoutMS    int64 `json:"hook_timeout_ms,omitempty"`
 }
 
 // Placement is the hub's defaults for where the assistant runs.
@@ -174,6 +185,12 @@ type Notification struct {
 	// Asked: the conversation asked for this push itself (notify_user): the conversation's own finished push is left
 	// out. (The assistant sends it to the Feishu bot and the channels with pushes on itself.)
 	Asked bool `json:"asked,omitempty"`
+	// Interaction is a NotifyInput push's card.
+	Interaction *proto.Interaction `json:"interaction,omitempty"`
+	// TookMS and LongMS are a NotifyDone push's turn: how long it took, and from how long a turn counts as long (the
+	// devices' "long turns only").
+	TookMS int64 `json:"took_ms,omitempty"`
+	LongMS int64 `json:"long_ms,omitempty"`
 }
 
 // NotifyPush is the kind of the assistant's pushes.

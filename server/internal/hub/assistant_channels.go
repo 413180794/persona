@@ -5,12 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/feishubot"
@@ -34,98 +31,14 @@ import (
 
 // managerChannels is what the hub keeps of the assistant's channels.
 type managerChannels struct {
-	mu    sync.RWMutex
-	got   bool                    // a report came in since the hub started
-	marks map[[2]string][]string  // conversation → the channels its messages came from, newest first
-	turns map[[2]string]time.Time // conversation → when a channel's turn in it was answered (zero: followed now)
+	mu  sync.RWMutex
+	got bool // a report came in since the hub started
 
 	in inbound // the owner's messages waiting for the assistant, the owner actions handed over (assistant_inbound.go)
-
-	followMu sync.Mutex
-	follows  map[[2]string]bool // conversations the assistant follows (session.follow)
 
 	// ended, when set, sees every interaction.ended (tests).
 	ended func(ix proto.Interaction, r *proto.Resolution)
 }
-
-// takeChannelsReport keeps the assistant's report (nil: it could not read the channels' state; the last one stands)
-// and says the machines whose conversations' channels look different now.
-func (h *Hub) takeChannelsReport(r *assistantwire.ChannelsReport) []string {
-	if r == nil {
-		return nil
-	}
-	marks := make(map[[2]string][]string, len(r.Marks))
-	for _, m := range r.Marks {
-		marks[[2]string{m.MachineID, m.SessionID}] = m.Channels
-	}
-	turns := make(map[[2]string]time.Time, len(r.Turns))
-	for _, t := range r.Turns {
-		turns[[2]string{t.MachineID, t.SessionID}] = t.Answered
-	}
-	c := &h.chans
-	c.mu.Lock()
-	old := c.marks
-	c.marks, c.turns, c.got = marks, turns, true
-	c.mu.Unlock()
-	var machines []string
-	add := func(k [2]string) {
-		if !slices.Contains(machines, k[0]) {
-			machines = append(machines, k[0])
-		}
-	}
-	for k, v := range marks {
-		if !slices.Equal(old[k], v) {
-			add(k)
-		}
-	}
-	for k := range old {
-		if _, ok := marks[k]; !ok {
-			add(k)
-		}
-	}
-	return machines
-}
-
-// channelsOfConversations are, by conversation, the channels messages came into it from (newest first): what the
-// conversation list draws next to a title.
-func (h *Hub) channelsOfConversations() map[[2]string][]string {
-	c := &h.chans
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.marks
-}
-
-// channelAnswered: the conversation's turn is (or just was) answered in a channel, so the phone's "finished" push
-// leaves it alone. "Just": within the finished push's delay (notify.go), which is when it looks — not much longer, or
-// the push of the next turn, asked in the app, would be dropped too.
-func (h *Hub) channelAnswered(session string) bool {
-	window := 30 * time.Second
-	if h.cfg != nil {
-		window += h.cfg.Notify.doneDelay()
-	}
-	c := &h.chans
-	// Right after a hub start the assistant has not reported yet: wait a little for its first report (the push waits
-	// anyway); with none by then, as if nothing was answered in a channel.
-	for wait := time.Now().Add(channelsReportWait); time.Now().Before(wait); time.Sleep(100 * time.Millisecond) {
-		c.mu.RLock()
-		got := c.got
-		c.mu.RUnlock()
-		if got {
-			break
-		}
-	}
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	for k, at := range c.turns {
-		if k[1] == session && (at.IsZero() || time.Since(at) < window) {
-			return true
-		}
-	}
-	return false
-}
-
-// channelsReportWait is how long the finished push waits for the assistant's first report after a hub start.
-var channelsReportWait = 10 * time.Second
 
 // channelNoted tells the assistant a channel's message went into a conversation through the apps' routes (a voice
 // conversation's errand, POST …/messages with client_msg_id voice-…): the conversation shows where it came from.
@@ -133,117 +46,11 @@ func (h *Hub) channelNoted(id, machine, session string) {
 	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventChannelNoted, assistantwire.ChannelNoted{Channel: id, MachineID: machine, SessionID: session})
 }
 
-// channelsAnnounce tells the assistant about a new card (hub.go announce): the Feishu bot's card, a channel's text.
-func (h *Hub) channelsAnnounce(ix proto.Interaction) {
-	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventInteractionAnnounced, assistantwire.InteractionAnnounced{Interaction: ix})
-}
-
-// channelsEnded tells the assistant a card is over: r is how it was answered (nil: withdrawn, expired, or over after
-// the answer that was told already).
-func (h *Hub) channelsEnded(ix proto.Interaction, r *proto.Resolution) {
-	if f := h.chans.ended; f != nil {
-		f(ix, r)
-	}
-	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventInteractionEnded, assistantwire.InteractionEnded{Interaction: ix, Resolution: r})
-}
-
 // ---- following a conversation for the assistant ----
-
-func (h *Hub) follow(ctx context.Context, m *Machine, session string, on bool) {
-	k := [2]string{m.cfg.ID, session}
-	c := &h.chans
-	c.followMu.Lock()
-	had := c.follows[k]
-	if on && !had {
-		if c.follows == nil {
-			c.follows = map[[2]string]bool{}
-		}
-		c.follows[k] = true
-	} else if !on && had {
-		delete(c.follows, k)
-	}
-	c.followMu.Unlock()
-	switch {
-	case on && !had:
-		m.addWatcher(ctx, session)
-	case !on && had:
-		m.removeWatcher(session)
-	}
-}
-
-// dropFollows ends what the assistant followed: it disconnected (it follows them again when it is back).
-func (h *Hub) dropFollows() {
-	c := &h.chans
-	c.followMu.Lock()
-	gone := c.follows
-	c.follows = nil
-	c.followMu.Unlock()
-	for k := range gone {
-		if m := h.localMachine(k[0]); m != nil {
-			go m.removeWatcher(k[1])
-		}
-	}
-}
-
-func (h *Hub) followed(machine, session string) bool {
-	c := &h.chans
-	c.followMu.Lock()
-	defer c.followMu.Unlock()
-	return c.follows[[2]string{machine, session}]
-}
-
-// followedItems: new items of a watched conversation (machine.go), sent on when the assistant follows it.
-func (h *Hub) followedItems(machine, session string, items []proto.Item) {
-	if len(items) == 0 {
-		return
-	}
-	if !h.followed(machine, session) {
-		if !h.assistantPersonaView() {
-			return
-		}
-		m := h.localMachine(machine)
-		if m == nil {
-			return
-		}
-		conversation, known := m.session(session)
-		if !known || !isAssistant(conversation, m.assistantCwd()) {
-			return
-		}
-		var cards []proto.Item
-		for _, it := range items {
-			if it.Role == "assistant" && it.Kind == proto.KindText && (it.FullSize > 0 || wire.HasAssistantView(it.Text)) {
-				it.Image = nil
-				cards = append(cards, it)
-			}
-		}
-		items = cards
-		if len(items) == 0 {
-			return
-		}
-	}
-	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventSessionItems, assistantwire.SessionItems{MachineID: machine, SessionID: session, Items: items})
-}
-
-// followedDelta: the text a watched conversation is writing now.
-func (h *Hub) followedDelta(machine, session, text string) {
-	if !h.followed(machine, session) {
-		return
-	}
-	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventSessionDelta, assistantwire.SessionDelta{MachineID: machine, SessionID: session, Text: text})
-}
 
 // channelsDeviceCall answers the device methods of the channels' turns; false for the others.
 func (h *Hub) channelsDeviceCall(ctx context.Context, m *Machine, p assistantwire.DeviceCall) (json.RawMessage, bool, error) {
 	switch p.Method {
-	case assistantwire.DeviceSessionFollow, assistantwire.DeviceSessionUnfollow:
-		var a struct {
-			SessionID string `json:"session_id"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil || a.SessionID == "" {
-			return nil, true, fmt.Errorf("%s needs session_id", p.Method)
-		}
-		h.follow(ctx, m, a.SessionID, p.Method == assistantwire.DeviceSessionFollow)
-		return json.RawMessage(`{}`), true, nil
 	case assistantwire.DeviceSessionSendOnce:
 		var a map[string]any
 		if err := json.Unmarshal(p.Params, &a); err != nil {
@@ -309,11 +116,6 @@ func (h *Hub) channelsAppCall(ctx context.Context, p assistantwire.AppCall) (jso
 		out, err = h.feishuCall(ctx, p.Method, p.Params)
 	case assistantwire.AppChannels:
 		out, err = h.channelsCall(ctx, p.Method, p.Params)
-	case assistantwire.AppInteractions:
-		if p.Method != assistantwire.InteractionsResolve {
-			return nil, false, nil
-		}
-		out, err = h.resolveFromChannel(ctx, p.Params)
 	default:
 		return nil, false, nil
 	}
@@ -322,32 +124,6 @@ func (h *Hub) channelsAppCall(ctx context.Context, p assistantwire.AppCall) (jso
 	}
 	raw, err := json.Marshal(out)
 	return raw, true, err
-}
-
-// resolveFromChannel answers a card as the user answered it in a channel (interactions.resolve): only with the owner
-// action the hub handed over with that press or message (a card's for that card), once. It is the user's own answer
-// (no AnsweredBy), as when the hub's own bot answered it.
-func (h *Hub) resolveFromChannel(ctx context.Context, params json.RawMessage) (any, error) {
-	var a struct {
-		InteractionID string           `json:"interaction_id"`
-		Resolution    proto.Resolution `json:"resolution"`
-		Action        string           `json:"action"`
-	}
-	if err := json.Unmarshal(params, &a); err != nil {
-		return nil, err
-	}
-	id := strings.TrimSpace(a.InteractionID)
-	if err := h.takeOwnerAction(a.Action, id); err != nil {
-		return nil, err
-	}
-	a.Resolution.AnsweredBy = ""
-	if err := h.resolve(id, a.Resolution); err != nil {
-		if errors.Is(err, errNotPending) {
-			return map[string]any{"ok": false, "status": h.interactionOutcome(ctx, id)}, nil
-		}
-		return nil, err
-	}
-	return map[string]any{"ok": true}, nil
 }
 
 func (h *Hub) feishuCall(ctx context.Context, method string, params json.RawMessage) (any, error) {

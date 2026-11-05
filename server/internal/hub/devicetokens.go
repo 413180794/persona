@@ -274,13 +274,11 @@ func answerMayResolve(r proto.Resolution) bool {
 // none: the node would open the field and press enter on nothing (#1185). Checked before the card is claimed, so a
 // refused answer leaves it pending.
 func (h *Hub) picksFreeText(id string, r proto.Resolution) bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	p := h.interactions[id]
-	if p == nil || p.ix.Dialog == nil {
+	ix, ok := h.pendingInteraction(id) // as the manager told it (fleet_link.go)
+	if !ok || ix.Dialog == nil {
 		return false
 	}
-	d := p.ix.Dialog
+	d := ix.Dialog
 	for _, k := range append([]string{r.Option}, r.Options...) {
 		if o := d.Option(k); k != "" && o != nil && o.Kind == screen.KindTypeSomething {
 			return true

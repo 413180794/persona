@@ -71,9 +71,9 @@ func TestAssistantOverTheBus(t *testing.T) {
 		t.Helper()
 		raw, _ := json.Marshal(args)
 		params, _ := json.Marshal(map[string]any{"name": name, "args": json.RawMessage(raw), "session_id": "main-1", "assistant": true})
-		res, err := n.m.onRequest(ctx, "mcp.call", params)
-		if err != nil {
-			t.Fatal(err)
+		res, err := nodeAsks(ctx, n.m, "mcp.call", params)
+		if err != nil { // the manager is gone (the node's tools are its): as an error result
+			return proto.TextResult(err.Error(), true)
 		}
 		return res.(proto.ToolResult)
 	}

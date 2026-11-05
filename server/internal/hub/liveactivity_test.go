@@ -23,72 +23,6 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-func TestBuildFleet(t *testing.T) {
-	t0 := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
-	agent := func(id, state string, mod func(*proto.Session)) fleetInput {
-		s := proto.Session{MachineID: "m", SessionID: id, Title: "agent " + id, State: state, UpdatedAt: t0, SpaceName: "web", SlotName: "2", SlotIndex: 2}
-		if mod != nil {
-			mod(&s)
-		}
-		return fleetInput{Machine: "box", Session: s}
-	}
-	agents := []fleetInput{
-		agent("w1", proto.StateWorking, nil),
-		agent("w2", proto.StateWorking, nil),
-		agent("p", proto.StateNeedsYou, nil),
-		agent("u", proto.StateUnread, func(s *proto.Session) { s.LastText = "All tests pass.\nDetails…" }),
-		agent("idle", proto.StateIdle, nil),
-		agent("off", proto.StateOffline, nil),
-		agent("loop", proto.StateUnread, func(s *proto.Session) { s.Loop = &proto.LoopInfo{Kind: "wakeup"} }),
-		agent("asst", proto.StateWorking, func(s *proto.Session) { s.Assistant = true }),
-	}
-	agents[0].TurnStart = t0.Add(-5 * time.Minute) // w1 runs longer
-	agents[1].TurnStart = t0.Add(-1 * time.Minute)
-	muted := agent("muted", proto.StateWorking, nil)
-	muted.Muted = true
-	agents = append(agents, muted)
-	ixs := []proto.Interaction{{ID: "ix1", MachineID: "m", SessionID: "p", Kind: proto.IxPermission, Summary: "Bash: go test ./...", CreatedAt: t0}}
-
-	st := buildFleet(agents, ixs)
-	if st.Phase != "needsYou" || st.NeedsYou != 1 || st.Working != 2 || st.Unread != 1 {
-		t.Fatalf("counts %+v", st)
-	}
-	if len(st.Items) != fleetMaxItems {
-		t.Fatalf("items %d", len(st.Items))
-	}
-	first := st.Items[0]
-	if first.ID != "m/p" || first.Kind != proto.IxPermission || first.Interaction != "ix1" || first.Detail != "Bash: go test ./..." {
-		t.Fatalf("first %+v", first)
-	}
-	if first.Place != "box · web" { // slot "2" is just the index: not repeated
-		t.Fatalf("place %q", first.Place)
-	}
-	if st.Items[1].ID != "m/w1" || st.Items[2].ID != "m/w2" {
-		t.Fatalf("working order %+v", st.Items)
-	}
-	if st.WorkingSince != float64(t0.Add(-5*time.Minute).Unix()) {
-		t.Fatalf("working since %v", st.WorkingSince)
-	}
-
-	// Without the request and the workers: only the finished one, its first line.
-	st = buildFleet([]fleetInput{agents[3], agents[4]}, nil)
-	if st.Phase != "done" || len(st.Items) != 1 || st.Items[0].Detail != "All tests pass." {
-		t.Fatalf("done %+v", st)
-	}
-	if st := buildFleet([]fleetInput{agents[4], agents[5], agents[6], agents[7], muted}, nil); !st.empty() || len(st.Items) != 0 {
-		t.Fatalf("should be empty: %+v", st)
-	}
-	// A blocked agent with no interaction yet counts as a terminal prompt.
-	st = buildFleet([]fleetInput{agent("b", proto.StateNeedsYou, nil)}, nil)
-	if st.Phase != "needsYou" || st.Items[0].Kind != proto.IxScreen {
-		t.Fatalf("screen %+v", st)
-	}
-	// An interaction on a muted agent is left out.
-	if st := buildFleet([]fleetInput{muted}, []proto.Interaction{{ID: "x", MachineID: "m", SessionID: "muted", Kind: proto.IxPlan}}); !st.empty() {
-		t.Fatalf("muted interaction %+v", st)
-	}
-}
-
 // The JSON is the Swift ContentState: field names and Unix-second times must not drift.
 func TestFleetStateJSON(t *testing.T) {
 	st := FleetState{Phase: "working", Working: 1, WorkingSince: 1761700000, Items: []FleetItem{{ID: "m/s", Title: "api", Kind: "working", Since: 1761700000}}}
@@ -396,23 +330,18 @@ func TestIslandSides(t *testing.T) {
 	if p := devicePrefs(json.RawMessage(`{"island":{"preset":"zz"}}`)); p.Island.Preset != "a" {
 		t.Errorf("unknown preset kept: %+v", p.Island)
 	}
-	for in, want := range map[int64]int64{7: 7, 99: 99, 987: 990, 12345: 12000, 41614712: 42000000} {
-		if got := round2(in); got != want {
-			t.Errorf("round2(%d) = %d, want %d", in, got, want)
-		}
-	}
 }
 
 // The device's persona rides in its pushes (the widget extension cannot read the app's settings); the JSON is what
 // apple/Shared/FleetState.swift decodes. One that would bloat every push is dropped.
 func TestFleetLookForDevice(t *testing.T) {
 	look := &FleetLook{Design: "circuit", Light: 0xD4643F, Dark: 0xE8837C}
-	d := FleetState{Phase: "working", Working: 1}.forDevice(NotifyPrefs{Look: look}, FleetStats{})
+	d := forDevice(FleetState{Phase: "working", Working: 1}, NotifyPrefs{Look: look}, FleetStats{})
 	b, _ := json.Marshal(d)
 	if want := `"look":{"design":"circuit","light":13919295,"dark":15238012}`; !strings.Contains(string(b), want) {
 		t.Fatalf("got %s, want %s in it", b, want)
 	}
-	if d := (FleetState{}).forDevice(defaultPrefs(), FleetStats{}); d.Look != nil {
+	if d := forDevice(FleetState{}, defaultPrefs(), FleetStats{}); d.Look != nil {
 		t.Fatalf("a device that told nothing gets no look: %+v", d.Look)
 	}
 	p := devicePrefs(json.RawMessage(`{"look":{"design":"visor","light":1,"dark":2,"package":"mint/r1"}}`))
@@ -428,19 +357,19 @@ func TestFleetForDevice(t *testing.T) {
 	stats := FleetStats{TPM: 12000, Tokens: 42000000, Requests: 220,
 		Loads: []FleetLoad{{ID: "a", Name: "A", Percent: 30}, {ID: "b", Name: "B", Percent: 70}}}
 	st := FleetState{Phase: "working", Working: 1, Assistant: true}
-	a := st.forDevice(defaultPrefs(), stats)
+	a := forDevice(st, defaultPrefs(), stats)
 	if a.Stats != nil || a.Assistant || a.Left != SlotStatus || a.Right != SlotStatus {
 		t.Fatalf("preset a: %+v", a)
 	}
-	b := st.forDevice(NotifyPrefs{Island: IslandPrefs{Preset: "b"}, LockDetails: true}, stats)
+	b := forDevice(st, NotifyPrefs{Island: IslandPrefs{Preset: "b"}, LockDetails: true}, stats)
 	if b.Stats == nil || b.Stats.TPM != 12000 || b.Stats.Tokens != 0 || !b.Details {
 		t.Fatalf("preset b: %+v %+v", b, b.Stats)
 	}
-	c := st.forDevice(NotifyPrefs{Island: IslandPrefs{Preset: "custom", Left: SlotAssistant, Right: SlotLoad}}, stats)
+	c := forDevice(st, NotifyPrefs{Island: IslandPrefs{Preset: "custom", Left: SlotAssistant, Right: SlotLoad}}, stats)
 	if !c.Assistant || c.Stats == nil || len(c.Stats.Loads) != 1 || c.Stats.Loads[0].ID != "b" {
 		t.Fatalf("custom without a machine shows the busiest: %+v %+v", c, c.Stats)
 	}
-	c = st.forDevice(NotifyPrefs{Island: IslandPrefs{Preset: "custom", Left: SlotStatus, Right: SlotLoad, Machine: "a"}}, stats)
+	c = forDevice(st, NotifyPrefs{Island: IslandPrefs{Preset: "custom", Left: SlotStatus, Right: SlotLoad, Machine: "a"}}, stats)
 	if c.Stats.Loads[0].ID != "a" {
 		t.Fatalf("chosen machine: %+v", c.Stats)
 	}
@@ -450,10 +379,10 @@ func TestLiveActivityMetrics(t *testing.T) {
 	h, f := testLive(t)
 	la := h.live
 	now := time.Now()
+	// The island's numbers as the manager works them out from the nodes' usage (fleet.live).
 	report := func(out int64) {
-		b, _ := json.Marshal(map[string]any{"full": true, "cpus": 4, "load": 1.0, "buckets": []proto.UsageBucket{
-			{Minute: now.Unix() / 60 * 60, Model: "claude-opus-5-5", Output: out, Requests: 1}}})
-		h.usage.apply("m", b, now)
+		st, _ := h.fleetLive()
+		reportLive(t, h, st, FleetStats{TPM: out / 2, Requests: 1, Loads: []FleetLoad{{ID: "m", Name: "m", Percent: 25}}})
 	}
 	report(25000)
 	la.update("phone", func(v *db.LiveActivity) { v.ActivityID, v.PushToken, v.StartedAt = "act1", "acttok", now })
@@ -724,32 +653,5 @@ func TestSessionsSentOnce(t *testing.T) {
 	}
 	if want := []string{"box:reading", "mini:reading", "box:writing", "box:reading"}; !slices.Equal(got, want) {
 		t.Fatalf("sent %v, want %v", got, want)
-	}
-}
-
-// A working item whose turn ended for its background work says so, and what runs (#2935).
-func TestBuildFleetBackground(t *testing.T) {
-	run := proto.Workflow{TaskID: "w1", Name: "parity-audit", Running: true, Status: proto.WorkflowRunning, Phase: "Verify",
-		AgentsStarted: 185, AgentsDone: 169}
-	agents := []fleetInput{
-		{Machine: "box", Session: proto.Session{MachineID: "m", SessionID: "wf", State: proto.StateWorking, BackgroundWorking: true,
-			Workflows: []proto.Workflow{run}}},
-		{Machine: "box", Session: proto.Session{MachineID: "m", SessionID: "sh", State: proto.StateWorking, BackgroundWorking: true,
-			Background: []proto.BackgroundTask{{ID: "b1", Kind: "shell"}, {ID: "b2", Kind: "monitor"}}}},
-		{Machine: "box", Session: proto.Session{MachineID: "m", SessionID: "busy", State: proto.StateWorking}},
-	}
-	st := buildFleetIn("zh-Hans", agents, nil)
-	got := map[string]FleetItem{}
-	for _, it := range st.Items {
-		got[it.ID] = it
-	}
-	if it := got["m/wf"]; !it.Background || it.Detail != "parity-audit · Verify · 169/185" {
-		t.Errorf("workflow: %+v", it)
-	}
-	if it := got["m/sh"]; !it.Background || it.Detail != "后台 2 个任务在跑" {
-		t.Errorf("background tasks: %+v", it)
-	}
-	if it := got["m/busy"]; it.Background || it.Detail != "" {
-		t.Errorf("a plain working one: %+v", it)
 	}
 }

@@ -1245,10 +1245,11 @@ node → hub 事件：`fs.changed {dirs?, git?}`（#2439：`fs.watch` 里的文�
 `sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）、
 `usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}`（每 10 秒，只发变了的分钟、每分钟的全量值，
 连上后第一次 `full: true` 带最近 26 小时全部；`docs/live-activity.md`「用量」）、
-`metrics {sample: MetricSample}`（每 10 秒，对齐到整 10 秒；hub 存进 `machine_metrics`，`docs/machines.md`）、
-`codex.interactions {interactions}`（这台机器上所有开着的 Codex / TRAEX 提问和审批，有变化时整份发；hub 增删卡片，旧 hub 不认就照旧是屏幕卡）。
+`metrics {sample: MetricSample}`（每 10 秒，对齐到整 10 秒；管理者存进 `machine_metrics`，`docs/machines.md`）、
+`codex.interactions {interactions}`（这台机器上所有开着的 Codex / TRAEX 提问和审批，有变化时整份发；管理者增删卡片，旧版本不认就照旧是屏幕卡）。
+（这些都先到连这台电脑的管理者，交互、状态、用量、监控是它的；App 要的它再转给 hub，见下面「电脑的事件」。）
 
-node → hub 请求：
+node → 管理者 / hub 请求（`interaction.create`、`mcp.*`、`assistant.lark` 管理者答，`notify` hub 答）：
 - `interaction.create {interaction}` → `{resolution}`（阻塞到被处理 / 过期；过期返回 `{"dismiss":true}`）
 - `mcp.tools {}` → `{tools}`；`mcp.call {name, args, session_id}` → `{content, is_error}`
 - `assistant.view.check {session_id, message}` → `{reason?}`：可信助手 Stop 的 persona-view 检查，devices 管理者透传给 hub。hub 按当前 persona_view 开关和会话身份决定是否检查；reason 非空时 node 第一次返回 decision=block，stop_hook_active=true 时不再请求。最多 1 MB 的回复、4 条各 2000 字的错误，node 等待最多 5 秒；不适用、旧 hub 或断线保留原 Stop 行为。不是公开 App／扩展动作接口，不接收客户端提供的机器身份。
@@ -1438,6 +1439,18 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 
 **发给 App 的消息**：助手发单向事件 `ws.broadcast {message}`，`message` 是一个带字符串 `type` 的 JSON 对象（`assistant_schedule`、`assistant_feed`、`task_plan`），hub 原样发给每个 App 的 WebSocket（加上每条消息都有的 `event_seq`）；没有 `type` 的丢掉。
 
+### 电脑的事件（fleet.*，2026-11-05）
+
+电脑发来的是管理者的（[machines.md](machines.md)「谁处理电脑的事件」），消息在 `server/internal/assistantwire/fleet.go`。管理者那头 `internal/assistant/fleet*.go`，hub 那头 `hub/fleet_link.go`。
+
+- 管理者 → hub（单向）：
+  - `fleet.sessions {machine_id, sessions, muted?}`：一台机器的会话列表，App 拿到的样子（统一状态、需要你的卡片数、看过、工作状态、待办、渠道……）；变了才发，每次握手后每台一次。hub 存成机器的 `sessions`，推给 App（`sessions` / `sessions_delta`），答 `GET /api/v1/sessions`。
+  - `fleet.interaction {interaction}`：新的或又显示一次的卡片；`fleet.interaction_resolved {id, answered_by?}`：结束了；`fleet.interactions {interactions}`：全部待处理的，每次握手后一次，hub 整份换掉（没了的对 App 发 `interaction_resolved`）。hub 照旧推 `interaction` / `interaction_resolved` 事件、答 `GET /api/v1/interactions`。
+  - `fleet.live {state, stats}`：实时活动的内容（`FleetState`，没填设备那几项）和灵动岛的数字，变了才发（数字每 15 秒看一次）。
+- 管理者 → hub（调用）：`notify.request {notification}`，`kind` 除了助手的 `assistant` 还有 `done`（一轮结束：`took_ms`、`long_ms`，设备按「只推长的」挑）和 `input`（一张卡：`interaction`）；`app.call phone`（`phone.tools`、`phone.call`）、`fleet.tool {machine_id, session_id, name, args, assistant}` → `{handled, result}`（连接器、Cua、ego 的工具；node 不等了，管理者的调用跟着取消（`rpc.cancel`），hub 那边等着的卡片撤掉）、`app.call hub`（`hub.tools`、`hub.assistant_summary`、`hub.assistant_lark`）、`app.call interactions` 的 `interactions.owner_action`（渠道回答卡片前 hub 收回主人动作）。
+- hub → 管理者：调用 `fleet.ask {interaction}` → `Resolution`（hub 自己的功能要问的卡片；hub 不等了就取消，卡片撤掉）；单向 `fleet.clients {elicitation}`（有没有收 MCP 表单的 App）、`fleet.seen {machine_id, session_id}`（App 的 WebSocket `seen`）、`fleet.mutes {}`（静音改了，管理者重读 settings `mutes`）。
+- App 的路由 hub 转给管理者（`http.request`，管理者不在 `503 assistant_offline`）：`POST /api/v1/interactions/{id}/resolve`、`GET /api/v1/interactions/history`（带 `X-Persona-Elicitation: 1` 才有 MCP 表单）、`POST /api/v1/sessions/{mid}/{sid}/seen`、`GET /api/v1/metrics`、`GET /api/v1/machines/{id}/metrics`、`GET /api/v1/usage`。形状和以前 hub 答的一样。
+
 ### 电脑（devices.*）
 
 2026-11-04 起电脑是带着它们的管理者连的（现在是首席管理者 `assistant`，[machines.md](machines.md)「谁连电脑」），消息在 `server/internal/devicewire`。hub 那头 `hub/devices_link.go`、`devices_relay.go`，管理者那头 `internal/devices`。
@@ -1446,9 +1459,9 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
   `mesh` 是 `{member?, center_name?, settle_until?, hubs:{hub_id:{name, reachable, rtt_ms}}, members:[{hub_id, machines:[{id, cfg, kind, avail?, rtt_ms?}]}], path_switch_ms}`；变了（管理界面加了电脑、互联组、hub 的地址和名字）hub 发 `devices.config`，参数同上（合并 200 毫秒）。
 - 管理者 → hub：
   - 事件 `devices.state {machines:[{machine, config, info, connected?, connected_at?, warm_until?, derived?, paths?}], absorbed?:{条目 id: 机器 id}, entries?:[{id, kind, avail?, rtt_ms?}]}`：
-    全部机器，按 App 列的顺序；`machine` 是 App 看到的那份（除了 hub 加的 `system`、`computer`、`browser`；它的 `online` 把管理者重启后的暖启动也算上），`connected` 是 node 现在真连着、调用能到（hub 的自更新等的、更新 node 发给的都是这个），`connected_at` 变了是 node 重连了，`warm_until` 之前是暖启动；`entries` 是 hub 记录里自己的电脑。变了才发（合并 50 毫秒，`last_seen` 单独变不算），每次握手后发一次整份。
-  - 事件 `devices.event {machine_id, event, params}`：node 的单向事件，原样、按顺序（`session.items`、`terminal.frame`、`stream.data`……）；`state.put` 管理者自己存，不转。
-  - 调用 `devices.request {machine_id, method, params, request}` → hub 的回答：node 要 hub 答的（`interaction.create`、`assistant.lark`、`mcp.tools`、`mcp.call`）；`request` 是管理者给的键。
+    全部机器，按 App 列的顺序；`machine` 是 App 看到的那份（带监控的 `system`，除了 hub 加的 `computer`、`browser`；它的 `online` 把管理者重启后的暖启动也算上），`connected` 是 node 现在真连着、调用能到（hub 的自更新等的、更新 node 发给的都是这个），`connected_at` 变了是 node 重连了，`warm_until` 之前是暖启动；`entries` 是 hub 记录里自己的电脑。变了才发（合并 50 毫秒，`last_seen` 单独变不算），每次握手后发一次整份。
+  - 事件 `devices.event {machine_id, event, params}`：node 的单向事件里 App 要的，原样、按顺序（`session.items`、`terminal.frame`、`stream.data`、`sessions.revs`、`hook.event`……）；`state.put`、`sessions.changed`、`codex.interactions`、`interaction.dismiss` / `cancel`、`usage`、`metrics` 管理者自己处理，不转（下面「电脑的事件」）。
+  - 调用 `devices.request {machine_id, method, params, request}` → hub 的回答：node 要 hub 答的（`notify`）；`request` 是管理者给的键。
   - 事件 `devices.request_end {machine_id, request}`：这条请求来的 node 连接在 hub 回答前断了，hub 不再等它（和 node 自己的连接断了一样：能续上的卡片留着，等 hook 从下一条连接来认领）。
   - 调用 `devices.connected {machine_id, connected_at}` → `{configure?:{键: 值}, calls?:[{method, params}]}`：node 刚连上（或管理者和 hub 的连接新连上，每台在线的再来一次），
     hub 要加进 `node.configure` 的（`codex`）和之后要发的（`launchers.managed`、`session.echoes`），管理者照做后才要会话列表；hub 同时开始它在连上时做的事。

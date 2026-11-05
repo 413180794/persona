@@ -311,7 +311,7 @@ func TestConnectorThreadReplyFromTheUsersDevice(t *testing.T) {
 	}
 	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
 	params, _ := json.Marshal(map[string]any{"name": "example_send", "args": map[string]any{"chat": "u1", "text": "示例回复"}, "assistant": true})
-	if out, err := m.onRequest(context.Background(), "mcp.call", params); err != nil || !out.(proto.ToolResult).IsError {
+	if out, err := nodeAsks(context.Background(), m, "mcp.call", params); err != nil || !out.(proto.ToolResult).IsError {
 		t.Fatalf("the assistant got past the gate: %v %+v", err, out)
 	}
 	if len(c.sent) != 1 {

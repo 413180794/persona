@@ -6,9 +6,12 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
+	"github.com/nwverse/persona/server/internal/devices"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // fakeDevices is the manager's own device layer: it records the node calls it got.
@@ -50,3 +53,12 @@ func TestDeviceCallsGoToTheDevicesFirst(t *testing.T) {
 		t.Fatalf("the devices got %v", d.calls)
 	}
 }
+
+func (f *fakeDevices) List() []devices.Summary                      { return nil }
+func (f *fakeDevices) Canonical(id string) string                   { return id }
+func (f *fakeDevices) Sessions(string) ([]proto.Session, bool)      { return nil, false }
+func (f *fakeDevices) Session(string, string) (proto.Session, bool) { return proto.Session{}, false }
+func (f *fakeDevices) ConnectedAt(string) time.Time                 { return time.Time{} }
+func (f *fakeDevices) Usage() assistantwire.UsageSummary            { return assistantwire.UsageSummary{} }
+
+func (f *fakeDevices) Follow(context.Context, string, string, bool) error { return nil }

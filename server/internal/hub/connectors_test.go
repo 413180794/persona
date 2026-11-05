@@ -129,7 +129,7 @@ func TestConnectorToolsForTheAssistant(t *testing.T) {
 	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
 	mcpCall := func(name string, assistant bool) proto.ToolResult {
 		params, _ := json.Marshal(map[string]any{"name": name, "args": map[string]any{}, "assistant": assistant})
-		out, err := m.onRequest(context.Background(), "mcp.call", params)
+		out, err := nodeAsks(context.Background(), m, "mcp.call", params)
 		if err != nil {
 			t.Fatal(err)
 		}

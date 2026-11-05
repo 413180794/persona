@@ -2,7 +2,7 @@
 
 ## 统一状态
 
-App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计算）。来源是宿主（目前是 herdr）的状态，加上 Persona 自己知道的两件事：
+App、手表、推送都只认这一套状态（`proto.Session.state`，连电脑的管理者计算，hub 原样给 App，`server/internal/assistant/fleet.go`）。来源是宿主（目前是 herdr）的状态，加上 Persona 自己知道的两件事：
 有没有待处理的交互、用户有没有在 App 里看过。
 
 | 状态 | 含义 | 来自 herdr | Persona 补充 | 颜色 |

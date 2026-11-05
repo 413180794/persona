@@ -88,6 +88,7 @@ func (h *Hub) pinRoutes(api *http.ServeMux) {
 		h.mutesMu.Lock()
 		h.mutes = &p
 		h.mutesMu.Unlock()
+		h.mutesChanged() // the manager decides the pushes (fleet_link.go)
 		writeJSON(w, p)
 	})
 	api.HandleFunc("GET /api/v1/pins", func(w http.ResponseWriter, r *http.Request) {
@@ -169,6 +170,7 @@ func (h *Hub) renameSpace(w http.ResponseWriter, r *http.Request, m *Machine) {
 					h.mutesMu.Lock()
 					h.mutes = &p
 					h.mutesMu.Unlock()
+					h.mutesChanged()
 				}
 			}
 		}

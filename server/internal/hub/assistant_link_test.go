@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -24,7 +23,10 @@ import (
 // shown is what the hub shows of an assistant conversation: the assistant's last snapshot.
 func shown(h *Hub, id string) assistant.SessionView {
 	settleAssistant(h) // what the hub told it so far is in
-	return h.assistantShown()[id]
+	a := &h.assistant
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.sessions[id]
 }
 
 // assistantSetting reads one of the assistant's settings as the store has it.
@@ -110,8 +112,8 @@ func userSpoke(h *Hub, machine, id string) {
 	settleAssistant(h)
 }
 
-// The hub's end of the bus: a stale snapshot is refused, a newer one replaces the old and pushes the machines whose
-// conversations changed, a Resync does not push (it is asked for while a list is being made).
+// The hub's end of the bus: a stale snapshot is refused, a newer one replaces the old; nothing is pushed for it (the
+// session lists are the manager's to tell).
 func TestAssistantSnapshotIsKeptAndShown(t *testing.T) {
 	h, n := conversationsHub(t)
 	link := assistantLink{h}
@@ -133,33 +135,17 @@ func TestAssistantSnapshotIsKeptAndShown(t *testing.T) {
 	if _, err := link.Snapshot(ctx, snap); err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes(); got == 0 || shown(h, "trip-0002").Title != "出游" {
-		t.Fatalf("kept and pushed: %d pushes, %+v", got, shown(h, "trip-0002"))
+	// The lists it decorates with it are the manager's (assistant/fleet.go): the hub keeps the snapshot alone.
+	if shown(h, "trip-0002").Title != "出游" {
+		t.Fatalf("kept: %+v", shown(h, "trip-0002"))
 	}
-	for _, s := range h.decorated(n.m) {
-		if s.SessionID == "trip-0002" && s.Title != "出游" {
-			t.Fatalf("the list the apps get: %q", s.Title)
-		}
-	}
+	_ = n
 	if _, err := link.Snapshot(ctx, assistant.Snapshot{Epoch: "e", Seq: 9}); err == nil || shown(h, "trip-0002").Title != "出游" {
 		t.Fatalf("an older one is refused: %v", err)
 	}
 	snap.Seq = 11
 	if _, err := link.Snapshot(ctx, snap); err != nil || pushes() != 0 {
 		t.Fatalf("nothing changed, nothing pushed: %v", err)
-	}
-}
-
-func TestChangedMachines(t *testing.T) {
-	v := func(m, id, title string) assistant.SessionView {
-		return assistant.SessionView{MachineID: m, SessionID: id, Title: title}
-	}
-	old := map[string]assistant.SessionView{"a": v("m1", "a", "x"), "b": v("m2", "b", "y"), "c": v("m3", "c", "z")}
-	now := map[string]assistant.SessionView{"a": v("m1", "a", "x"), "b": v("m2", "b", "y2"), "d": v("m4", "d", "w")}
-	got := changedMachines(old, now)
-	slices.Sort(got)
-	if strings.Join(got, " ") != "m2 m3 m4" {
-		t.Fatalf("%v", got)
 	}
 }
 

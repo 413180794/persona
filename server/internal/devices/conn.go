@@ -257,6 +257,9 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	for id := range m.watched {
 		rewatch[id] = m.lastSeq[id]
 	}
+	for id := range m.followed { // the manager's own follows (Follow)
+		rewatch[id] = m.lastSeq[id]
+	}
 	connectedAt := m.connectedAt
 	m.mu.Unlock()
 	if c.via == "ssh" && p.src != nil && p.src != m {
@@ -265,6 +268,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 		p.src.mu.Unlock()
 	}
 	info := c.info
+	m.d.onSystem(m.cfg.ID, info.System) // what it is, for when it is offline (metrics.go)
 	where := c.via
 	if c.via == viaHub {
 		where = "hub " + m.d.hubNameOf(p.hub)
@@ -433,6 +437,9 @@ func (m *Machine) detach(err error, planned bool) {
 		m.d.logf("[%s] disconnected: %v (shown as online for %s while it reconnects)", m.cfg.ID, err, reconnectGrace)
 		time.AfterFunc(reconnectGrace, func() { m.warmExpired(ch) })
 		m.d.changed()
+		if f := m.d.opts.Detached; f != nil {
+			go f(m.cfg.ID)
+		}
 		return
 	}
 	if !planned {
@@ -457,6 +464,9 @@ func (m *Machine) detach(err error, planned bool) {
 		}
 	}
 	m.d.changed()
+	if f := m.d.opts.Detached; f != nil {
+		go f(m.cfg.ID) // the questions waiting on it end, its sessions show unknown (the manager's fleet)
+	}
 }
 
 // markOffline: a connection could not be made; the machine shows why.

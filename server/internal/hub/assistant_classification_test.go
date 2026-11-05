@@ -16,14 +16,14 @@ import (
 // Classification must survive both HTTP and WebSocket snapshots, not just the node's terminal guard.
 func TestAssistantClassificationAcrossSessionLists(t *testing.T) {
 	h, n := conversationsHub(t)
-	n.m.sessions = []proto.Session{
+	n.m.setSessions([]proto.Session{
 		{SessionID: "pane", Cwd: convDir, PaneID: "w1:p1", Status: proto.StatusIdle, Title: "terminal title"},
 		{SessionID: "symlink-pane", Cwd: "/data/home/me/.jarvis/assistant", PaneID: "w1:p2", Status: proto.StatusIdle},
 		{SessionID: "headless", Cwd: convDir, Status: proto.StatusWorking},
 		{SessionID: "runtime", Cwd: convDir, SourceKind: "runtime", Status: proto.StatusWorking},
 		{SessionID: "offline-assistant", Cwd: convDir, Status: proto.StatusOffline},
 		{SessionID: "ordinary", Cwd: "/code/app", PaneID: "w1:p3", Status: proto.StatusIdle},
-	}
+	})
 	want := map[string]bool{"pane": false, "symlink-pane": false, "headless": true, "runtime": true, "offline-assistant": true, "ordinary": false}
 	check := func(label string, rows []proto.Session) {
 		t.Helper()

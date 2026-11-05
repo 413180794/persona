@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -539,8 +540,10 @@ func TestTaskAnsweredAndRouted(t *testing.T) {
 	h.byID["box"].setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, UpdatedAt: time.Now()}})
 
 	yes := true
-	h.taskAnswered(proto.Interaction{MachineID: "box", SessionID: "s1", Kind: proto.IxPermission, ToolName: "Bash"},
-		proto.Resolution{Allow: &yes, Always: true}, "resolved")
+	// The manager tells its own Agents business a card was answered (fleet_ix.go there), as the hub did.
+	h.asst().InteractionResolved(context.Background(), assistantwire.InteractionResolved{Interaction: proto.Interaction{MachineID: "box",
+		SessionID: "s1", Kind: proto.IxPermission, ToolName: "Bash"}, Resolution: proto.Resolution{Allow: &yes, Always: true}, Status: "resolved"})
+	settleAssistant(h)
 	items, _ := feed(h, "conv1")
 	var ab struct{ Question, Answer string }
 	_ = json.Unmarshal(items[len(items)-1].Body, &ab)
@@ -589,26 +592,6 @@ func TestTaskAnsweredAndRouted(t *testing.T) {
 
 	if line := taskLine(h, todo); !strings.HasSuffix(line, "：在做，box session_id=s1") {
 		t.Fatalf("the live context = %q", line)
-	}
-}
-
-// An interaction of a task's agent names the task when the hub sends it (the watch shows it).
-func TestInteractionNamesItsTask(t *testing.T) {
-	h, _ := newTaskHub(t)
-	if _, err := taskPlan(h, "conv1", planArgs(true)); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
-	h.mu.Lock()
-	h.interactions["ix_t"] = &pending{ix: proto.Interaction{ID: "ix_t", MachineID: "box", SessionID: "s1", Kind: proto.IxPermission}}
-	h.interactions["ix_o"] = &pending{ix: proto.Interaction{ID: "ix_o", MachineID: "box", SessionID: "other", Kind: proto.IxPermission}}
-	h.mu.Unlock()
-	got := map[string]string{}
-	for _, ix := range h.pendingInteractions() {
-		got[ix.ID] = ix.TaskTitle
-	}
-	if got["ix_t"] != "修登录崩溃" || got["ix_o"] != "" {
-		t.Fatalf("task titles = %v", got)
 	}
 }
 

@@ -41,6 +41,7 @@ func TestSelfSettingsMailNeedsPhoneInput(t *testing.T) {
 		h := newTestHub(t)
 		fm := &selfSettingsMail{}
 		h.mail = fm
+		connectAssistant(t, h) // the card is the manager's: it checks that the form is filled in
 		m := newMachine(h, MachineConfig{ID: "server", Name: "server"})
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -86,11 +87,7 @@ func TestSelfSettingsMailNeedsPhoneInput(t *testing.T) {
 }
 
 func TestSelfSettingsRedactsSecretsWithoutChangingDelivery(t *testing.T) {
-	r := proto.Resolution{Values: map[string]string{"password": "example-password", "name": "example"}}
-	kept := redacted(proto.Interaction{Fields: []proto.Field{{Key: "password", Secret: true}}}, r)
-	if kept.Values["password"] != "<redacted>" || kept.Values["name"] != "example" || r.Values["password"] != "example-password" {
-		t.Fatal("redaction changed the answer or leaked a secret")
-	}
+	// The history's redaction is the manager's (assistant TestRedacted); the push offers no quick approval.
 	payload := interactionPayload(proto.Interaction{Kind: proto.IxPermission, Fields: []proto.Field{{Key: "password", Secret: true}}}, "server")
 	if payload["aps"].(map[string]any)["category"] != "INTERACTION_INPUT" {
 		t.Fatal("notification offers quick approval")

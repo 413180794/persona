@@ -6,29 +6,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"
-	"github.com/nwverse/persona/server/internal/proto"
 )
-
-// The work line of an agent waiting on the user reads in the language asked for, Chinese when none was said.
-func TestInteractionLineLanguages(t *testing.T) {
-	plan := proto.Interaction{Kind: proto.IxPlan}
-	perm := proto.Interaction{Kind: proto.IxPermission, Summary: "Bash: go test"}
-	for _, c := range []struct {
-		l    i18n.Lang
-		ix   proto.Interaction
-		want string
-	}{
-		{"", plan, "计划等你审批"},
-		{i18n.ZhHans, perm, "等你授权：Bash: go test"},
-		{i18n.En, plan, "Plan waiting for approval"},
-		{i18n.En, perm, "Waiting for approval: Bash: go test"},
-		{i18n.Ja, proto.Interaction{}, "ターミナルが対応待ち"},
-	} {
-		if got := interactionLine(c.l, c.ix); got != c.want {
-			t.Errorf("%q %s: %q, want %q", c.l, c.ix.Kind, got, c.want)
-		}
-	}
-}
 
 func TestMorePermissionsTextLanguages(t *testing.T) {
 	one := []extension.PermissionLine{{Title: "访问更多网络", Detail: "api.example.com"}}

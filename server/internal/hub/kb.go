@@ -3,15 +3,12 @@ package hub
 import (
 	"context"
 	"errors"
-	"slices"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
-	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -30,17 +27,13 @@ type KBConfig struct {
 
 // The knowledge base is the assistant's (docs/knowledge.md「谁管什么」): its engine, its loop, its files and its
 // index rows. The hub keeps the sources (kb_sources.go: the assistant reads the connectors through it), passes on the
-// posts the connectors' programs hand it (kb_posts.go), tells it what it sees happen (kbKick, kbAgentDone), and asks
+// posts the connectors' programs hand it (kb_posts.go), tells it what it sees happen (kbKick; an agent's finished turn is the manager's own), and asks
 // it for what the hub's own features read of it through kbAsk alone.
 
-// kbLink is what the hub keeps for the knowledge base: the agents' finished turns while the assistant is away.
+// kbLink is what the hub keeps for the knowledge base.
 type kbLink struct {
-	mu      sync.Mutex
-	pending []assistantwire.KBAgentTurn // at most kbPendingMost, one per agent (its latest)
+	mu sync.Mutex
 }
-
-// kbPendingMost bounds the turns kept while the assistant is away (each is one timeline line at most).
-const kbPendingMost = 200
 
 // errKBOff is what the knowledge base's sources answer while hub.json turns it off.
 var errKBOff = i18n.Err("hub-kb.off")
@@ -112,67 +105,6 @@ func (h *Hub) kbProjectNames(ctx context.Context, machine, cwd string) []string 
 		names = append(names, p.Name)
 	}
 	return names
-}
-
-// kbAgentDone tells the knowledge base an agent finished a turn (its projects' timelines get what it came to, kb.agent_turn).
-// While the assistant is not connected the turn waits here (the latest of each agent) and goes when it is back.
-func (h *Hub) kbAgentDone(machine string, s proto.Session) {
-	if strings.TrimSpace(s.LastText) == "" || h.kbOff() {
-		return
-	}
-	t := assistantwire.KBAgentTurn{MachineID: machine, SessionID: s.SessionID, Cwd: s.Cwd, Title: s.Title, Line: workLogLine(s)}
-	k := &h.kb
-	k.mu.Lock()
-	k.pending = queueKBTurn(k.pending, t)
-	k.mu.Unlock()
-	h.kbFlush() // queued first, then sent: one the assistant's connecting flush did not see is sent here
-}
-
-// queueKBTurn adds t to list: the latest of each agent, at most kbPendingMost (the oldest go).
-func queueKBTurn(list []assistantwire.KBAgentTurn, t assistantwire.KBAgentTurn) []assistantwire.KBAgentTurn {
-	list = slices.DeleteFunc(list, func(o assistantwire.KBAgentTurn) bool {
-		return o.MachineID == t.MachineID && o.SessionID == t.SessionID
-	})
-	if len(list) >= kbPendingMost {
-		list = list[len(list)-kbPendingMost+1:]
-	}
-	return append(list, t)
-}
-
-// kbFlush sends the turns kept while the assistant was away (it just connected, or a turn was just queued). One that
-// cannot be sent goes back into the queue (behind none newer of its agent); when the assistant connected meanwhile
-// (its own flush may have run before), it is tried again.
-func (h *Hub) kbFlush() {
-	k := &h.kb
-	for try := 0; try < 3; try++ {
-		k.mu.Lock()
-		list := k.pending
-		k.pending = nil
-		k.mu.Unlock()
-		failed := -1
-		for i, t := range list {
-			if h.notifyBus(assistantwire.AssistantID, assistantwire.EventKBAgentTurn, t) != nil {
-				failed = i
-				break
-			}
-		}
-		if failed < 0 {
-			return
-		}
-		k.mu.Lock()
-		newer := k.pending
-		k.pending = nil
-		for _, t := range list[failed:] {
-			k.pending = queueKBTurn(k.pending, t)
-		}
-		for _, t := range newer {
-			k.pending = queueKBTurn(k.pending, t)
-		}
-		k.mu.Unlock()
-		if h.busConnOf(assistantwire.AssistantID) == nil {
-			return // its connecting flush sends them
-		}
-	}
 }
 
 func clipRunes(s string, n int) string {

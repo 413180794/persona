@@ -119,9 +119,7 @@ func TestWSNotifyInteractionAndAssistant(t *testing.T) {
 	default:
 		t.Fatal("missing assistant notification")
 	}
-	if h.notified["test-session"].IsZero() {
-		t.Fatal("assistant notification did not suppress the later done notification")
-	}
+	// That it holds back the conversation's own finished push is the manager's (assistant TestFinishedPush…).
 }
 
 // A phone that stopped reading is dropped without waiting for its socket to close: notifyWS sends under h.mu, and a

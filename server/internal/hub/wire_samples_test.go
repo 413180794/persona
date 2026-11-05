@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/screen"
@@ -200,10 +201,9 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 		Subagents: []proto.Subagent{{ID: "agent_example", SessionID: "s1@agent_example", Type: "Explore", Running: true, StartedAt: now}},
 		Loop:      &proto.LoopInfo{Kind: "wakeup", Prompt: "检查示例状态", NextAt: now.Add(time.Hour), Ticks: 1}},
 		{MachineID: "m1", SessionID: "s2", Title: "离线示例", Cwd: "/home/user/project", Status: proto.StatusOffline, UpdatedAt: now}}
-	for i := range sessions {
-		sessions[i].State = agentState(sessions[i], time.Time{})
-	}
-	h.markStates("m1", sessions, now)
+	// The states as the manager works them out (assistant/fleet.go).
+	sessions[0].State, sessions[1].State = proto.StateNeedsYou, proto.StateOffline
+	sessions[0].StateSince, sessions[1].StateSince = now, now
 	add("sessions", "sessions_list", "会话列表保留状态、模式和后台任务信息。", "sessions", httpJSON(map[string]any{"sessions": sessions}),
 		map[string]any{"/sessions/0/state": "needs_you", "/sessions/0/rev": 120, "/sessions/0/permission_mode": "plan", "/sessions/0/background/0/kind": "shell", "/sessions/1/state": "offline"},
 		"server/internal/proto/proto.go: Session", "server/internal/hub/http.go: Hub.listSessions", "apple/Shared/Models.swift: Session.init(from:)")
@@ -215,9 +215,10 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	m.online = true
 	m.lastSeen = now
 	m.info = proto.NodeInfo{Hostname: "example.com", OS: "linux", Arch: "arm64", Home: "/home/user", Version: "fixture-version"}
-	h.metrics.setSystem("m1", proto.System{OS: "linux", Distro: "linux", Name: "示例系统", Version: "1", Kernel: "example", Arch: "arm64", Cores: 2, Memory: 1073741824})
 	offline := newMachine(h, MachineConfig{ID: "m2", Name: "离线电脑", Kind: "ssh", SSHHost: "example.com"})
 	machines := []proto.Machine{m.snapshot(), offline.snapshot()}
+	// What the machine is comes with the manager's report (its monitoring, internal/devices metrics.go).
+	machines[0].System = &proto.System{OS: "linux", Distro: "linux", Name: "示例系统", Version: "1", Kernel: "example", Arch: "arm64", Cores: 2, Memory: 1073741824}
 	add("machines", "machines_list", "机器列表同时包含在线信息和离线机器的零时间。", "machines", httpJSON(map[string]any{"machines": machines}),
 		map[string]any{"/machines/0/online": true, "/machines/0/system/arch": "arm64", "/machines/1/online": false},
 		"server/internal/hub/machine.go: Machine.snapshot", "apple/Shared/Models.swift: Machine", "apple/Shared/MachineMetrics.swift: MachineSystem")
@@ -369,8 +370,14 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	unread.SessionID = "s_unread"
 	unread.State = proto.StateUnread
 	unread.Loop = nil
-	fleet := buildFleet([]fleetInput{{Machine: "示例电脑", Session: sessions[0]}, {Machine: "示例电脑", Session: working, TurnStart: now}, {Machine: "示例电脑", Session: unread}}, ixs[:1])
-	fleet.Details = true
+	// The fleet as the manager works it out (assistant/fleet_live.go buildFleet) from these three agents and the first card.
+	fleet := FleetState{Phase: "needsYou", NeedsYou: 1, Working: 1, Unread: 1, WorkingSince: float64(now.Unix()), Details: true, Items: []FleetItem{
+		{ID: "m1/s1", Title: sessions[0].Title, Place: "示例电脑 · 示例空间 › 示例任务", Kind: ixs[0].Kind, Detail: ixs[0].Questions[0].Question,
+			Interaction: ixs[0].ID, Since: float64(ixs[0].CreatedAt.Unix())},
+		{ID: "m1/s_working", Title: working.Title, Place: "示例电脑 · 示例空间 › 示例任务", Kind: "working", Since: float64(now.Unix())},
+		{ID: "m1/s_unread", Title: unread.Title, Place: "示例电脑 · 示例空间 › 示例任务", Kind: "unread", Since: float64(unread.UpdatedAt.Unix())},
+	}}
+	_ = unread
 	add("fleet", "fleet_snapshot", "Fleet 使用驼峰字段和 Unix 秒时间。", "fleet", httpJSON(map[string]any{"fleet": fleet}), map[string]any{"/fleet/phase": "needsYou", "/fleet/needsYou": 1, "/fleet/working": 1, "/fleet/unread": 1, "/fleet/workingSince": now.Unix()}, "server/internal/hub/liveactivity.go: buildFleet, FleetState", "apple/Shared/FleetState.swift: FleetState")
 	add("fleet", "fleet_event", "Fleet 事件沿用快照结构。", "event", ws(map[string]any{"type": "fleet", "fleet": fleet}), map[string]any{"/type": "fleet", "/fleet/items/0/kind": "question", "/fleet/items/0/interaction": "ix_question"}, "server/internal/hub/liveactivity.go: liveActivities", "apple/Shared/LiveConnection.swift: ServerEvent.decode")
 
@@ -589,7 +596,8 @@ func wireFeed(t *testing.T, add func(file, name, description, decoder string, in
 	connectAssistant(t, h)
 	taskIn(t, h, "conv_example")
 	ix.MachineID, ix.SessionID = "box", "s1"
-	h.taskAnswered(ix, r, "resolved")
+	h.asst().InteractionResolved(context.Background(), assistantwire.InteractionResolved{Interaction: ix, Resolution: r, Status: "resolved"})
+	settleAssistant(h)
 	var written []assistant.FeedItem
 	all, _ := feed(h, "conv_example")
 	for _, f := range all {

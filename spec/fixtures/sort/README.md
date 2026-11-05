@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 客户端优先解码 `state`，缺失或 null 时才按 `status` 回退，未知枚举变为 `unknown`。 | Models 的 `Session.init(from:)`、`AgentState.init(status:)` | `client_state_precedence` |
 | 客户端不根据 `seen_at` 或 `pending_interactions` 重算状态。 | Models 的 `Session.init(from:)` | `client_state_precedence` |
-| hub 遇到待处理交互或 blocked 优先产生 needs_you，其余按宿主状态派生。 | `server/internal/hub/state.go` 的 `agentState`；`docs/agent-states.md`「统一状态」 | `hub_blocked`、`hub_pending_offline`、`hub_working_seen`、`hub_idle`、`hub_offline`、`hub_unknown` |
+| hub 遇到待处理交互或 blocked 优先产生 needs_you，其余按宿主状态派生。 | `server/internal/assistant/fleet.go` 的 `agentState`；`docs/agent-states.md`「统一状态」 | `hub_blocked`、`hub_pending_offline`、`hub_working_seen`、`hub_idle`、`hub_offline`、`hub_unknown` |
 | hub 对 done 使用 `seen_at >= updated_at - 2 秒` 的已看容差，未看过则 unread。 | `agentState`；`docs/agent-states.md`「看过」 | `hub_done_unseen`、`hub_done_seen_before_tolerance`、`hub_done_seen_at_tolerance`、`hub_done_seen_equal`、`hub_done_seen_after` |
 | idle 或 unknown 才算空闲，空闲会话有循环、后台任务或运行中的子代理时算待唤醒。 | Models 的 `isQuiet`；ChatsView 的 `Session.isWaiting` | `waiting_requires_quiet_state` |
 | 行优先级是需要你、完成未看、工作中、待唤醒、已屏蔽、已看，屏蔽不降低需要你的优先级。 | ChatsView 的 `rank` | `rank_all_states_and_mutes` |

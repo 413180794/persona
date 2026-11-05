@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -69,10 +67,6 @@ type Machine struct {
 	fswSent   bool
 	fswWarned bool
 	lastSeq   map[string]int // session id -> highest item seq seen
-	hooked    map[string]bool
-	// stopSig: the signature of the reply each session's latest Stop ended its turn with; pushedSig: the one a
-	// "finished" push was already sent for, cleared when the next prompt comes (stopDuplicate).
-	stopSig, pushedSig map[string]string
 	// derived: a computer only a member hub has in hub.json; the center reaches it through that hub.
 	derived bool
 
@@ -101,7 +95,6 @@ func newMachine(h *Hub, cfg MachineConfig) *Machine {
 func (m *Machine) snapshot() proto.Machine {
 	computer := m.hub.computerOf(m) // before m.mu: it takes it
 	browser := m.hub.browserOf(m)
-	system := m.hub.metrics.system(m.cfg.ID)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	warm := m.warmLocked(time.Now())
@@ -133,7 +126,7 @@ func (m *Machine) snapshot() proto.Machine {
 	if s.Engines == nil {
 		s.Engines = []proto.Engine{}
 	}
-	s.System, s.Computer, s.Browser = system, computer, browser
+	s.Computer, s.Browser = computer, browser // the system is in the manager's report (its monitoring)
 	return s
 }
 
@@ -219,39 +212,6 @@ func (m *Machine) notify(event string, params any) error {
 		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
 	}
 	return p.Notify(event, params)
-}
-
-func (m *Machine) setSessions(list []proto.Session) {
-	for i := range list {
-		list[i].MachineID = m.cfg.ID
-	}
-	m.mu.Lock()
-	before := make(map[string]string, len(m.sessions))
-	for _, s := range m.sessions {
-		before[s.SessionID] = s.Status
-	}
-	now := time.Now()
-	for _, s := range list {
-		// Any agent (herdr or headless, started by Persona or not) finishing a turn may notify the phone (notify.go).
-		prev, key := before[s.SessionID], m.cfg.ID+"/"+s.SessionID
-		switch {
-		case s.Status == proto.StatusWorking && prev != proto.StatusWorking:
-			m.hub.turns.working(key, now)
-			go m.hub.asst().TurnStarted(context.Background(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: s.SessionID})
-		case prev == proto.StatusWorking && (s.Status == proto.StatusDone || s.Status == proto.StatusIdle):
-			go m.notifyFinished(s.SessionID, m.hub.turns.ended(key, now))
-			// A new assistant conversation is named after its first turn; a task from one may be done.
-			go m.hub.asst().TurnEnded(context.Background(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: s.SessionID})
-		}
-	}
-	m.sessions = list
-	m.lastSeen = time.Now().UTC()
-	connected := m.connectedAt
-	m.mu.Unlock()
-	m.hub.sessionsChanged(m)
-	// Messages from other conversations, for those no longer running; the todos' links and herdr marks.
-	m.hub.asst().SessionsChanged(context.Background(), assistantwire.DeviceSessions{MachineID: m.cfg.ID, Sessions: list,
-		Connected: connected})
 }
 
 func (m *Machine) sessionList() []proto.Session {
@@ -420,13 +380,6 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 	switch event {
 	case "plugin.node.state", "plugin.node.event": // plugins' programs on this computer (extension_nodes.go)
 		m.hub.extensionNodeEvent(m, event, params)
-	case "sessions.changed":
-		var p struct {
-			Sessions []proto.Session `json:"sessions"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			m.setSessions(p.Sessions)
-		}
 	case "fs.changed": // a folder or Git directory a web panel has open changed (fswatch.go)
 		var p struct {
 			Dirs []string `json:"dirs"`
@@ -451,7 +404,6 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		m.mu.Unlock()
 		// Every app, not only those watching: this is what lets them pull a session before it is opened.
 		m.hub.broadcast(map[string]any{"type": "revs", "machine_id": m.cfg.ID, "revs": p.Revs})
-		m.hub.syncPlanInteractions(m)
 	case "session.items":
 		var p struct {
 			SessionID string       `json:"session_id"`
@@ -476,7 +428,6 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		m.mu.Unlock()
 		p.Items = m.hub.withInjected(p.Items)
 		m.hub.itemsToSubscribers(m.cfg.ID, p.SessionID, p.Items, p.itemSpan)
-		m.hub.followedItems(m.cfg.ID, p.SessionID, p.Items) // the assistant's channels follow it (assistant_channels.go)
 	case "session.screen":
 		var p struct {
 			SessionID string `json:"session_id"`
@@ -527,51 +478,15 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		if json.Unmarshal(params, &p) == nil {
 			m.hub.rememberLiveText(m.cfg.ID, p.SessionID, p.Text)
-			m.hub.toSubscribers(m.cfg.ID, p.SessionID, deltaPush{Type: "delta", MachineID: m.cfg.ID, SessionID: p.SessionID, Text: p.Text})
-			m.hub.followedDelta(m.cfg.ID, p.SessionID, p.Text)
+			m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "delta", "machine_id": m.cfg.ID, "session_id": p.SessionID, "text": p.Text})
 		}
 	case "codex.inventory":
 		m.rememberCodexInventory(params)
-	case "interaction.dismiss":
-		var p struct {
-			ID string `json:"id"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			m.hub.recordEnd(p.ID, "dismissed", nil)
-			m.hub.finishInteraction(p.ID)
-		}
 	case "session.echo":
 		m.recordEcho(params)
-	case "usage":
-		m.hub.usage.apply(m.cfg.ID, params, time.Now())
-	case "metrics":
-		m.hub.onMetrics(m.cfg.ID, params)
-	case "codex.interactions": // the Codex questions and approvals open on this machine (codexcards.go)
-		m.hub.syncCodexInteractions(m, params)
-	case "interaction.cancel":
-		var p struct {
-			ID string `json:"id"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			m.hub.recordEnd(p.ID, "cancelled", nil) // or the next hub would take it for one a hook may still claim
-			m.hub.finishInteraction(p.ID)
-		}
-	case "hook.event":
+	case "hook.event": // what it says of the session's turn is the manager's (assistant/fleet.go); the apps see it
 		var p map[string]any
 		if json.Unmarshal(params, &p) == nil {
-			if sid, _ := p["session_id"].(string); sid != "" {
-				// A report-only hook (node/globalhooks.go) is not Persona's hooks running in the session: it asks for
-				// no card, so it must not hold the screen's back (hasHooks). Its Stop still counts for stopDuplicate.
-				if p["report_only"] != true {
-					m.mu.Lock()
-					if m.hooked == nil {
-						m.hooked = map[string]bool{}
-					}
-					m.hooked[sid] = true
-					m.mu.Unlock()
-				}
-				m.noteStop(sid, p)
-			}
 			p["type"] = "hook_event"
 			p["machine_id"] = m.cfg.ID
 			m.hub.broadcast(p)
@@ -579,201 +494,16 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 	}
 }
 
-func (m *Machine) onRequest(ctx context.Context, method string, params json.RawMessage) (any, error) {
+// onRequest answers what is the hub's of a node's requests (devices.request): personad notify on the machine. The
+// interactions, the MCP tools and assistant.lark are the manager's (assistant/fleet.go).
+func (m *Machine) onRequest(_ context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
-	case "interaction.create":
-		var p struct {
-			Interaction proto.Interaction `json:"interaction"`
-		}
-		if err := json.Unmarshal(params, &p); err != nil {
-			return nil, err
-		}
-		p.Interaction.MachineID = m.cfg.ID
-		// A write through a skill's gated command (node/larkgate.go): its plugin names what the ids are.
-		if s, ok := m.hub.extensions.assistantSummary(ctx, p.Interaction.ToolName, p.Interaction.Summary); ok {
-			p.Interaction.Summary = s
-		}
-		return m.hub.nodeInteraction(ctx, p.Interaction)
 	case "notify": // personad notify on this machine (node/scriptcli.go)
 		return m.scriptNotify(params)
 	case assistantwire.MethodViewCheck:
 		return m.checkAssistantView(params)
-	case "assistant.lark":
-		// The skills' gated commands' credentials go to the assistant's machine only (its process runs them); so does
-		// how to run lark-cli (its login stays on that machine, in lark-cli's own store).
-		if m.cfg.ID != m.hub.assistantProfile().MachineID {
-			return proto.AssistantLark{}, nil
-		}
-		return m.hub.assistantLark(ctx)
-	case "mcp.tools":
-		var p struct {
-			Assistant bool `json:"assistant"`
-		}
-		_ = json.Unmarshal(params, &p)
-		return map[string]any{"tools": m.hub.mcpTools(p.Assistant)}, nil
-	case "mcp.call":
-		var p struct {
-			Name      string          `json:"name"`
-			Args      json.RawMessage `json:"args"`
-			SessionID string          `json:"session_id"`
-			Assistant bool            `json:"assistant"`
-		}
-		if err := json.Unmarshal(params, &p); err != nil {
-			return nil, err
-		}
-		if m.hub.connectors.Offers(p.Name) && (p.Assistant || m.hub.connectors.ForAgents(p.Name)) {
-			return m.hub.callConnector(ctx, asker{m.cfg.ID, p.SessionID}, p.Name, p.Args), nil
-		}
-		if p.Assistant && isComputerTool(p.Name) {
-			return m.hub.callComputerTool(ctx, p.SessionID, p.Name, p.Args), nil
-		}
-		if p.Assistant && isBrowserTool(p.Name) {
-			return m.hub.callBrowserTool(ctx, p.SessionID, p.Name, p.Args), nil
-		}
-		if p.Assistant && m.hub.isAssistantTool(ctx, p.Name) {
-			return m.hub.callAssistantTool(ctx, m, p.SessionID, p.Name, p.Args), nil
-		}
-		return m.hub.callTool(ctx, m.cfg.ID, p.Name, p.Args), nil
-	case "assistant.model":
-		// Which launcher and model a message the node sends a conversation by itself runs on: the same as one from the
-		// phone (the assistant's assistant.send_params), so the next message from the phone finds it on them (#1554).
-		// One not listed yet (the node just started) that is not the main one keeps its own, not 主对话's.
-		var p struct {
-			SessionID string `json:"session_id"`
-		}
-		_ = json.Unmarshal(params, &p)
-		return m.hub.asst().SendParams(ctx, m.cfg.ID, p.SessionID, map[string]any{})
-	case "assistant.context":
-		var p struct {
-			SessionID string                           `json:"session_id"`
-			Ack       []assistantwire.ViewErrorReceipt `json:"ack"`
-		}
-		_ = json.Unmarshal(params, &p)
-		// The machine is this connection's: a node cannot read or ack another machine's view errors.
-		return m.hub.asst().Context(ctx, assistantwire.ContextParams{SessionID: p.SessionID, MachineID: m.cfg.ID, Ack: p.Ack})
 	}
 	return nil, fmt.Errorf("unknown method %s", method)
-}
-
-// noteStop keeps what a hook event says about completions for stopDuplicate: a Stop's reply signature, and that a
-// prompt starts something new.
-func (m *Machine) noteStop(sid string, p map[string]any) {
-	event, _ := p["event"].(string)
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	switch event {
-	case "UserPromptSubmit":
-		delete(m.pushedSig, sid)
-		delete(m.stopSig, sid)
-	case "Stop":
-		sig, _ := p["stop_sig"].(string)
-		if sig == "" {
-			delete(m.stopSig, sid)
-			return
-		}
-		if m.stopSig == nil {
-			m.stopSig = map[string]string{}
-		}
-		m.stopSig[sid] = sig
-	}
-}
-
-// stopDuplicate says whether the "finished" push about to go out repeats one already sent: the same reply (by the
-// signature the node hashed from the Stop hook's last_assistant_message) with no prompt in between. That is the same
-// completion seen twice, as when the status flaps working → done → working → done around one turn. A session without
-// hooks, or a Stop without a reply, has no signature and is never held back. Otherwise it records the push. In
-// memory: after a hub restart at worst one repeat gets through.
-func (m *Machine) stopDuplicate(sid string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	sig := m.stopSig[sid]
-	if sig == "" {
-		return false
-	}
-	if m.pushedSig[sid] == sig {
-		return true
-	}
-	if m.pushedSig == nil {
-		m.pushedSig = map[string]string{}
-	}
-	m.pushedSig[sid] = sig
-	return false
-}
-
-// notifyFinished decides, after the delay, whether this end of a turn is worth a push (notify.go) and to which devices.
-func (m *Machine) notifyFinished(id string, gen int) {
-	ncfg := m.hub.cfg.Notify
-	time.Sleep(ncfg.doneDelay())
-	s, ok := m.hub.decoratedSession(m, id)
-	if ok && !s.Assistant && s.Status != proto.StatusWorking {
-		m.hub.kbAgentDone(m.cfg.ID, s)
-	}
-	if ok && s.Work != nil && s.Work.Phase == proto.WorkBlocked && (s.Work.WakeAt != nil || s.Work.InteractionID != "") {
-		return // the hub goes on with it (继续, a wake), or its card already rang (assistant/agents_work.go)
-	}
-	// An inbox agent's result is the draft in the inbox; a turn asked for through the bot is answered there; a quiet
-	// task's is told in the main conversation (the assistant's taskTurnEnded, #1731).
-	if !ok || m.hub.isInboxAgent(id) || m.hub.channelAnswered(id) || m.hub.quietSession(m.cfg.ID, id) {
-		return
-	}
-	m.hub.mu.Lock()
-	pushed := time.Since(m.hub.notified[id]) < 3*time.Minute // the assistant already pushed what matters (notify_user)
-	m.hub.mu.Unlock()
-	seen := agentState(s, m.hub.seenAt(m.cfg.ID, id)) == proto.StateIdle
-	verdict, took := m.hub.turns.settle(m.cfg.ID+"/"+id, gen, s, seen, m.hub.muted(m.cfg.ID, id), pushed, time.Now(), ncfg.backgroundHold())
-	if verdict != finishPush {
-		return
-	}
-	// The own conversation of a scheduled task that pushes only what its runs send, finished normally (#2396): its
-	// news, if any, went out with notify_user. Decided after settle, not as a push: a turn held for its background
-	// work stays followed, and the wake that ends it is judged on its own (an error there is pushed).
-	if m.hub.quietTaskFinish(s) {
-		return
-	}
-	if m.stopDuplicate(id) {
-		return
-	}
-	place := m.cfg.Name
-	if s.SpaceName != "" {
-		place += " · " + s.SpaceName
-		if s.SlotName != "" && s.SlotName != fmt.Sprint(s.SlotIndex) {
-			place += " › " + s.SlotName
-		}
-	}
-	head, text := doneAlert(m.hub.userLang(), s)
-	long := ncfg.longTurn()
-	m.hub.notifyDone("done", m.cfg.ID, place, id, head, text, pushWants{Kind: "done", Took: took, Long: long})
-}
-
-// doneAlert is the title and body of the push for s's finished turn, in l.
-func doneAlert(l i18n.Lang, s proto.Session) (head, text string) {
-	if inHealth(s.Cwd) { // the lock screen hears there is news, not what it is, nor the conversation's title
-		return "✅ " + i18n.T(l, "push.health_title"), i18n.T(l, "push.health_body")
-	}
-	title := s.Title
-	if title == "" || title == "Claude Code" {
-		title = path.Base(s.Cwd)
-	}
-	head, text = "✅ "+title, s.LastText
-	if text == "" {
-		text = i18n.T(l, "hub-machine.done")
-	}
-	if w := s.Work; w != nil && w.Line != "" {
-		switch w.Phase {
-		case proto.WorkDone:
-			text = w.Line
-		case proto.WorkBlocked:
-			head, text = "⏳ "+title, w.Line
-		}
-	}
-	// The model service cut the turn off: no ✅ over the error (#1516). A Codex turn's error is no words of its
-	// answer: the session says it (#2185).
-	if e := strings.TrimSpace(s.TurnError); e != "" {
-		head, text = "⚠️ "+title, interruptedSummary+"："+e
-	} else if cutOff(text) {
-		head, text = "⚠️ "+title, interruptedSummary+"："+strings.TrimSpace(text)
-	}
-	return head, text
 }
 
 // nodeMismatch: the node's jarvisd is another build than the hub's. Builds are named <commit>[-dirty]-<time>
@@ -783,15 +513,6 @@ func nodeMismatch(hub, node string) bool {
 		return false
 	}
 	return hub != node
-}
-
-// hasHooks: Jarvis's hooks run in the session — it sent a hook event since this hub started (m.hooked), or Jarvis
-// started it (with its hooks) — so they ask for most dialogs themselves and a screen card waits for them a little
-// (createScreenInteraction).
-func (m *Machine) hasHooks(s proto.Session) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.hooked[s.SessionID] || s.StartedByJarvis
 }
 
 func (m *Machine) isOnline() bool {

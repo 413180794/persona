@@ -281,6 +281,14 @@ var Routes = []string{
 	"PUT /api/v1/machines/{mid}/claude-dirs/blocked",
 }
 
+// MetricsRoutes are the machines' monitoring's routes (internal/devices metrics.go), relayed the same way: every
+// machine's latest sample and its last hour, one machine's history, the token usage.
+var MetricsRoutes = []string{
+	"GET /api/v1/metrics",
+	"GET /api/v1/machines/{id}/metrics",
+	"GET /api/v1/usage",
+}
+
 // Error codes that cross the bus (the node's own coded errors go through as they are).
 const (
 	CodeNoDevice       = "no_device"       // the manager has no such machine

@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/http/httptest"
 	"sync"
@@ -77,7 +78,29 @@ func startTestManager(t *testing.T, h *Hub, srv *httptest.Server, nodes map[stri
 	if s, ok := h.store.(*meshStore); ok {
 		store = s
 	}
+	var svc atomic.Pointer[assistant.Service] // the manager's own business with what comes from the nodes (as main.go wires it)
 	d := devices.New(devices.Options{Hub: host, Logf: logf, Store: store,
+		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
+			s := svc.Load()
+			if s == nil {
+				return nil, false, nil
+			}
+			if out, ok, err := s.NodeAnswer(ctx, machine, method, params); ok {
+				return out, ok, err
+			}
+			return s.NodeRequest(ctx, machine, method, params)
+		},
+		Event: func(machine, event string, params json.RawMessage) bool {
+			if s := svc.Load(); s != nil {
+				return s.NodeEvent(machine, event, params)
+			}
+			return true
+		},
+		Detached: func(machine string) {
+			if s := svc.Load(); s != nil {
+				s.NodeDetached(machine)
+			}
+		},
 		DialRelay: func(ctx context.Context, query string) (devices.Relay, error) {
 			return bus.DialAt(ctx, srv.URL, tok, srv.Client(), devicewire.RelayPath, query)
 		},
@@ -92,6 +115,7 @@ func startTestManager(t *testing.T, h *Hub, srv *httptest.Server, nodes map[stri
 		o.Devices, o.HTTPClient, o.Logf = d, srv.Client(), logf
 	})
 	tok = a.token
+	svc.Store(a.svc)
 	host.bh.Store(a.bh)
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &testManager{d: d, a: a, done: make(chan struct{})}

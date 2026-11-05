@@ -85,6 +85,7 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 	go func() { _ = nodePeer.Serve(ctx, nodeIn) }()
 	m.mu.Lock()
 	m.peer, m.online = hubPeer, true
+	m.info.Home = "/home/u" // its assistant conversations are told apart by their directory (the manager decorates the lists)
 	m.mu.Unlock()
 
 	m.mu.Lock()
@@ -251,6 +252,7 @@ func TestSendDropsAModelTheLauncherNoLongerOffers(t *testing.T) {
 			go func() { _ = nodePeer.Serve(ctx, nodeIn) }()
 			m.mu.Lock()
 			m.peer, m.online = hubPeer, true
+			m.info.Home = "/home/u"
 			m.sessions = []proto.Session{{SessionID: "side", Launcher: "l", Model: c.model, Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
 			m.mu.Unlock()
 			connectAssistant(t, h) // what a message to its conversation runs on is its decision

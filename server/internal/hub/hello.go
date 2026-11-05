@@ -39,6 +39,9 @@ func (h *Hub) hello() map[string]any {
 	}
 	// The address the hub's own links use (hub.json public_url; the assistant's /s/…, /j/…, /todos links, #2194): the
 	// apps tell those links from other sites by it even when they reach the hub at another address (#2696). Only when set.
+	if h.cfg == nil {
+		return m
+	}
 	if u := strings.TrimRight(strings.TrimSpace(h.cfg.PublicURL), "/"); u != "" {
 		m["public_url"] = u
 	}

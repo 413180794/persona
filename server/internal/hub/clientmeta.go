@@ -93,6 +93,7 @@ func (h *Hub) onClientHello(c *client, data []byte) {
 	c.meta = msg.clientMeta
 	updates, done := c.meta.updates, c.meta.done
 	c.mu.Unlock()
+	go h.fleetClientsChanged() // its features (elicitation) count now (fleet_link.go)
 	if c.role == roleFull && c.hub != nil {
 		c.hub.setUserLang(i18n.Lang(msg.Locale)) // only a valid one, and only a change, is saved
 	}

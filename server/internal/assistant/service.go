@@ -26,6 +26,9 @@ type Options struct {
 	Logf  func(format string, args ...any)
 	// KB is the knowledge base it keeps (kb.go); nil: none.
 	KB *KBOptions
+	// Devices is the manager's own connections to the computers: with them, what comes from the nodes is its own
+	// (fleet.go); nil (unit tests): no fleet.
+	Devices Devices
 	// SecretKey is the path of the key the model providers' keys are sealed with (the hub's data directory's
 	// secret.key, models_launchers.go); "" makes one for this run only (tests).
 	SecretKey string
@@ -64,15 +67,21 @@ type Service struct {
 	kb         kbState           // kb.go
 	inbox      inboxBook         // inbox.go
 	viewEvents viewNotifications // views.go: only coalesced notifications; contents are stored first
-	models     modelsState       // models.go: the model configuration
-	health     healthBook        // launcher_health.go: each machine's launchers
+
+	devs  Devices   // the computers (devices.go); nil: no fleet
+	fleet fleetBook // what comes from the nodes (fleet.go)
+	// fleetEnded, when set, sees every card's end the channels are told (tests).
+	fleetEnded func(ix proto.Interaction, r *proto.Resolution)
+	models     modelsState // models.go: the model configuration
+	health     healthBook  // launcher_health.go: each machine's launchers
 }
 
 var _ Handler = (*Service)(nil)
 
 // New makes the assistant; nothing runs until the hub calls it.
 func New(o Options) *Service {
-	s := &Service{hub: o.Hub, store: o.Store, logf: o.Logf, mux: http.NewServeMux(), epoch: randomHex(8), tasks: newTasksState()}
+	s := &Service{hub: o.Hub, store: o.Store, logf: o.Logf, mux: http.NewServeMux(), epoch: randomHex(8), tasks: newTasksState(),
+		devs: o.Devices}
 	s.inbox.lang = func() i18n.Lang { return s.lang(context.Background()) }
 	if s.store == nil {
 		s.store = func() Store { return nil }
@@ -149,7 +158,11 @@ func (s *Service) call(ctx context.Context, device, method string, params, out a
 	if err != nil {
 		return err
 	}
-	res, err := s.hub.DeviceCall(ctx, DeviceCall{Device: device, Method: method, Params: raw})
+	p := DeviceCall{Device: device, Method: method, Params: raw}
+	res, ok, err := s.localFleetDeviceCall(p) // what the hub answered before the nodes' events were the manager's
+	if !ok {
+		res, err = s.hub.DeviceCall(ctx, p)
+	}
 	if err != nil || out == nil || len(res) == 0 {
 		return err
 	}
@@ -162,7 +175,11 @@ func (s *Service) appCall(ctx context.Context, app, method string, params, out a
 	if err != nil {
 		return err
 	}
-	res, err := s.hub.AppCall(ctx, AppCall{AppID: app, Method: method, Params: raw})
+	p := AppCall{AppID: app, Method: method, Params: raw}
+	res, ok, err := s.localFleetAppCall(ctx, p) // the interaction queue (fleet_routes.go)
+	if !ok {
+		res, err = s.hub.AppCall(ctx, p)
+	}
 	if err != nil || out == nil || len(res) == 0 {
 		return err
 	}
@@ -232,6 +249,9 @@ func (s *Service) kbReady(ctx context.Context) bool { return s.kbOn(ctx) }
 // push asks the hub to push n to the user (notify.request).
 func (s *Service) push(ctx context.Context, n Notification) {
 	n.ID, n.Kind = "ntf_"+randomHex(8), NotifyPush
+	if n.Asked { // the conversation pushed what matters itself: its own finished push is left out (fleet_push.go)
+		s.noteAsked(n.SessionID)
+	}
 	if err := s.hub.NotifyRequest(ctx, NotifyRequest{Notification: n}); err != nil {
 		s.logf("assistant: push: %v", err)
 	}
@@ -255,6 +275,10 @@ func (s *Service) publish(ctx context.Context) {
 	s.seq++
 	snap.Epoch, snap.Seq, snap.At = s.epoch, s.seq, time.Now().UTC()
 	s.pubMu.Unlock()
+	if s.fleetOn() {
+		s.fleetTakeSnapshot(snap) // the lists' decoration, its own cards on the phone (fleet.go)
+		snap.Interactions = nil
+	}
 	if _, err := s.hub.Snapshot(ctx, snap); err != nil && !errors.Is(err, ErrStaleSnapshot) {
 		s.logf("assistant: snapshot: %v", err)
 	}

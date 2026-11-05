@@ -1,6 +1,6 @@
 # 锁屏 / 灵动岛实时活动（Fleet）
 
-整台手机只有一个实时活动「Fleet」：把所有需要你、在工作、做完未看的 Agent 汇总到锁屏和灵动岛。hub 算内容、经 APNs 推送；
+整台手机只有一个实时活动「Fleet」：把所有需要你、在工作、做完未看的 Agent 汇总到锁屏和灵动岛。连电脑的管理者算内容（`server/internal/assistant/fleet_live.go`，经总线 `fleet.live` 给 hub），hub 给每台设备填它那几项、按节奏经 APNs 推送；
 App 负责开始活动、上报 token；Widget 扩展（源码 `apple/PersonaWidgets`、module 仍为 `JarvisWidgets`）负责画。设计依据见车道笔记（ChatGPT Codex / Sand 的活动分析），
 这里只写实现和约定。
 
@@ -268,7 +268,7 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
   超过 16 MB 的单行（图片）跳过。实测 hub 机器一天的 transcript 第一次扫 85 ms，之后每次约 1 ms。
 - node 把变了的分钟报给 hub（`usage` 事件，每个分钟报全量值，重复报只是覆盖）；连上后第一次带 `full: true` 发整份。
   不落库：node 跟 hub 连接同生共死，重启任一边都会从文件重算出同样的数。
-- hub（`hub/usage.go`）汇总所有机器：TPM = 最近 2–3 分钟（从两分钟前那一分钟的开头到现在）的输出 token ÷ 分钟数；今日 token 含缓存读写，
+- 管理者（`devices/metrics.go`）汇总所有机器：TPM = 最近 2–3 分钟（从两分钟前那一分钟的开头到现在）的输出 token ÷ 分钟数；今日 token 含缓存读写，
   「今天」按手机的时区（助手设置里报的）算；负载 = 1 分钟 load average ÷ 核数，2 分钟没报的机器不算负载。
 - 推给灵动岛前取两位有效数字（12345 → 12000，负载取整到 5%），数字小幅波动不会变成新的内容。
 

@@ -194,7 +194,7 @@ func TestGoldenAssistantContextMain(t *testing.T) {
 	h.cfg.Assistant.Owner = "示例用户"
 	helloChanged(t, h)
 	raw, _ := json.Marshal(map[string]string{"session_id": "main-session"})
-	res, err := h.byID["server"].onRequest(ctx, "assistant.context", raw)
+	res, err := nodeAsks(ctx, h.byID["server"], "assistant.context", raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestGoldenAssistantContextMain(t *testing.T) {
 	}
 	golden(t, "assistant_context.main", prefix+"\n\n"+normalSnapshot(t, rest))
 	raw, _ = json.Marshal(map[string]string{"session_id": "side-session"})
-	res, _ = h.byID["server"].onRequest(ctx, "assistant.context", raw)
+	res, _ = nodeAsks(ctx, h.byID["server"], "assistant.context", raw)
 	golden(t, "assistant_context.side", normalSnapshot(t, contextOf(t, res)))
 }
 
@@ -286,7 +286,7 @@ func TestAssistantContextViewErrorsAreTheConnectionsMachine(t *testing.T) {
 	ask := func(machine string, params map[string]any) assistantwire.ContextResult {
 		t.Helper()
 		raw, _ := json.Marshal(params)
-		res, err := h.byID[machine].onRequest(ctx, "assistant.context", raw)
+		res, err := nodeAsks(ctx, h.byID[machine], "assistant.context", raw)
 		if err != nil {
 			t.Fatal(err)
 		}

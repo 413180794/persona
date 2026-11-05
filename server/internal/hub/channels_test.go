@@ -187,9 +187,7 @@ func TestChannelMessageGoesToTheMainConversationAndTheAnswerComesBack(t *testing
 	if n := len(w.node.sends); n != 1 {
 		t.Fatalf("%d sends, want 1", n)
 	}
-	eventually(t, 5*time.Second, "a turn answered in a channel must not also push 完成 to the phone", func() bool {
-		return w.h.channelAnswered("main-1")
-	})
+	// The phone's 完成 push leaving it alone is the manager's (assistant TestFinishedPushSkipsChannelTurns).
 	w.ch.mu.Lock()
 	typing := append([]bool(nil), w.ch.typing...)
 	pieces := len(w.ch.sent)

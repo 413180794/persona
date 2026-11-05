@@ -2,10 +2,7 @@ package hub
 
 import (
 	"encoding/json"
-	"sync"
 	"time"
-
-	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // When a "finished" push is worth sending (docs/server.md 推送). Borrowed from Ovis (github.com/devswha/ovis,
@@ -170,121 +167,6 @@ func (p NotifyPrefs) wantsDone(d, long time.Duration) bool {
 		return true
 	case DoneLong:
 		return d >= long
-	}
-	return false
-}
-
-// turnTracker follows each session's turns between status snapshots: when the turn started, which end is the latest
-// (gen), and whether it is held for background work.
-type turnTracker struct {
-	mu    sync.Mutex
-	turns map[string]*turn
-}
-
-type turn struct {
-	start      time.Time
-	endedAt    time.Time
-	gen        int
-	background bool // ended once with background work still running; the next end decides
-}
-
-func newTurnTracker() *turnTracker { return &turnTracker{turns: map[string]*turn{}} }
-
-// working: the session is working (again). A turn that ended moments ago and resumes is the same turn, so its start
-// is kept; any pending end is cancelled.
-func (t *turnTracker) working(key string, now time.Time) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	tr := t.turns[key]
-	if tr == nil {
-		tr = &turn{start: now}
-		t.turns[key] = tr
-	}
-	tr.gen++
-}
-
-// startOf: when the session's current (or last held) turn started; zero when not tracked.
-func (t *turnTracker) startOf(key string) time.Time {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if tr := t.turns[key]; tr != nil {
-		return tr.start
-	}
-	return time.Time{}
-}
-
-// ended: working → done / idle. Returns the generation the delayed check must still see.
-func (t *turnTracker) ended(key string, now time.Time) int {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	tr := t.turns[key]
-	if tr == nil { // the hub came up mid-turn: count from now
-		tr = &turn{start: now}
-		t.turns[key] = tr
-	}
-	tr.gen++
-	tr.endedAt = now
-	return tr.gen
-}
-
-// finishVerdict is what the delayed check decided.
-type finishVerdict int
-
-const (
-	finishStale finishVerdict = iota // something happened since; a later check decides
-	finishDrop                       // no push for this turn
-	finishHold                       // background work still running: wait for the turn its reports start
-	finishPush                       // push, to the devices whose prefs take a turn this long
-)
-
-// settle runs after the delay. s is the session now, seen whether the user has looked at it since it finished
-// (in herdr or in the app). Everything that makes a push pointless is checked here, at the last moment.
-func (t *turnTracker) settle(key string, gen int, s proto.Session, seen, muted, assistantPushed bool, now time.Time, hold time.Duration) (finishVerdict, time.Duration) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	tr := t.turns[key]
-	if tr == nil || tr.gen != gen {
-		return finishStale, 0
-	}
-	if s.Status == proto.StatusWorking {
-		return finishStale, 0
-	}
-	took := tr.endedAt.Sub(tr.start)
-	if s.Status != proto.StatusDone || seen || muted || assistantPushed {
-		delete(t.turns, key)
-		return finishDrop, took
-	}
-	if backgroundRunning(s) {
-		if now.Sub(tr.start) > hold {
-			delete(t.turns, key)
-			return finishDrop, took
-		}
-		tr.background = true
-		return finishHold, took
-	}
-	// A turn started by a background task's report: on its own the user did not ask for anything; as the end of
-	// held work it is exactly the "all done" they want.
-	if s.WokeByTask && !tr.background {
-		delete(t.turns, key)
-		return finishDrop, took
-	}
-	delete(t.turns, key)
-	return finishPush, took
-}
-
-func backgroundRunning(s proto.Session) bool {
-	if len(s.Background) > 0 {
-		return true
-	}
-	for _, a := range s.Subagents {
-		if a.Running {
-			return true
-		}
-	}
-	for _, w := range s.Workflows { // a running one is in Background too; not from every source
-		if w.Running {
-			return true
-		}
 	}
 	return false
 }

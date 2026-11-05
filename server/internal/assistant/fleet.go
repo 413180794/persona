@@ -1,0 +1,1031 @@
+package assistant
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"path"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// What comes from the nodes is the manager's (docs/machines.md「谁处理电脑的事件」). The hub did all of this until the
+// manager connected the computers itself; it moved here as it was (fleet_*.go):
+//
+//   - the interactions (approval / question / plan / screen / Codex cards): made from the nodes' interaction.create
+//     and what their sessions show, kept, waited for, answered, expired (fleet_ix.go);
+//   - each Agent's state as the apps get it — the unified state, 需要你, 完成未看 / 已看, the work and todos it shows —
+//     and the session lists (this file);
+//   - the pushes and the Live Activity's content: when a finished turn is worth a push, a card's push, what the
+//     activity shows (fleet_push.go, fleet_live.go);
+//   - the nodes' MCP tools and assistant.lark (fleet_tools.go).
+//
+// The hub is told what the apps need (assistantwire fleet.*: the lists, the pending interactions, the fleet, the
+// pushes to deliver) and keeps the last of them while the manager is away; it relays the apps' answers here
+// (fleetRoutes) and delivers the pushes (APNs, the relay, its apps' notify events).
+
+// fleetBook is what the manager keeps of it.
+type fleetBook struct {
+	mu           sync.Mutex
+	interactions map[string]*pending
+	seen         map[[2]string]time.Time // (machine, session) -> when the user last looked at it
+	seenLoaded   bool
+	stateSince   map[[2]string]stateMark // (machine, session) -> its state and when it entered it
+	notified     map[string]time.Time    // assistant conversation -> when it last pushed with notify_user
+	// codexAnnounced: Codex card id -> when it was announced (fleet_ix.go)
+	codexAnnounced map[string]time.Time
+	// hooked: Persona's hooks run in the session (a hook event came since the manager started).
+	hooked map[[2]string]bool
+	// stopSig: the signature of the reply each session's latest Stop ended its turn with; pushedSig: the one a
+	// "finished" push was already sent for, cleared when the next prompt comes (stopDuplicate).
+	stopSig, pushedSig map[[2]string]string
+	turns              *turnTracker // "machine/session" -> the turn in progress, for the finished push
+	clients            assistantwire.Clients
+	prev               map[string][]proto.Session // each machine's list setSessions saw last
+
+	// sent: each machine's last session list told the hub (fleet.sessions), as JSON.
+	sentMu sync.Mutex
+	sent   map[string]string
+
+	// rep is the last snapshot's parts the session lists show (fleetTakeSnapshot).
+	rep fleetReport
+
+	mutesMu sync.Mutex
+	mutes   *Pins
+
+	askMu sync.Mutex
+	asked map[string]*askedOne // the assistant's own questions and cards on the phone (by interaction id)
+
+	undelivered heldActs // answers the manager's own Action did not take yet
+
+	live liveState // the Live Activity's content as last told (fleet_live.go)
+
+	started sync.Once
+
+	q        fleetQueue // what the nodes' events start for the assistant, in order (fleet_follow.go)
+	followMu sync.Mutex
+	follows  map[[2]string]bool // the conversations the channels follow (fleet_follow.go)
+}
+
+// fleetReport is what the session lists are decorated with from the assistant's snapshot.
+type fleetReport struct {
+	mu       sync.RWMutex
+	got      bool
+	sessions map[string]SessionView // by session id
+	work     map[[2]string]proto.WorkState
+	workOn   bool
+	links    map[[2]string]TodoLink
+	quiet    map[[2]string]bool
+	marks    map[[2]string][]string  // conversation → the channels its messages came from, newest first
+	turns    map[[2]string]time.Time // conversation → when a channel's turn in it was answered (zero: followed now)
+	inbox    map[string]bool         // the inbox agents' conversations
+	tasks    []TaskView              // the scheduled tasks (nil: not read yet)
+	profile  *Profile                // its settings as the hub's features need them (nil: not read yet)
+}
+
+// fleetStore is what of the store the fleet keeps (db.DB); a store without it keeps nothing.
+type fleetStore interface {
+	InsertInteraction(ctx context.Context, ix proto.Interaction) error
+	FinishInteraction(ctx context.Context, id, status string, res *proto.Resolution) error
+	InteractionOutcome(ctx context.Context, id string) (status string, res *proto.Resolution, err error)
+	Interactions(ctx context.Context, machine, session string, limit int) ([]db.InteractionRecord, error)
+	AllowAlways(ctx context.Context, session, tool string, keys []string) error
+	AlwaysAllowed(ctx context.Context, session string, keys []string) (bool, error)
+	MarkSeen(ctx context.Context, machine, session string, at time.Time) error
+	SeenTimes(ctx context.Context) (map[[2]string]time.Time, error)
+}
+
+func (s *Service) fleetStore() fleetStore {
+	st, ok := s.store().(fleetStore)
+	if !ok {
+		return nil
+	}
+	return guardedStore{st}
+}
+
+// guardedStore is a store whose fleet methods may not be there after all (a test's store that embeds the interface
+// and keeps only some tables): one that is not answers an error, as a database that failed.
+type guardedStore struct{ st fleetStore }
+
+var errNoTable = errors.New("the store does not keep this")
+
+func guard(err *error) {
+	if recover() != nil {
+		*err = errNoTable
+	}
+}
+
+func (g guardedStore) InsertInteraction(ctx context.Context, ix proto.Interaction) (err error) {
+	defer guard(&err)
+	return g.st.InsertInteraction(ctx, ix)
+}
+
+func (g guardedStore) FinishInteraction(ctx context.Context, id, status string, res *proto.Resolution) (err error) {
+	defer guard(&err)
+	return g.st.FinishInteraction(ctx, id, status, res)
+}
+
+func (g guardedStore) InteractionOutcome(ctx context.Context, id string) (status string, res *proto.Resolution, err error) {
+	defer guard(&err)
+	return g.st.InteractionOutcome(ctx, id)
+}
+
+func (g guardedStore) Interactions(ctx context.Context, machine, session string, limit int) (out []db.InteractionRecord, err error) {
+	defer guard(&err)
+	return g.st.Interactions(ctx, machine, session, limit)
+}
+
+func (g guardedStore) AllowAlways(ctx context.Context, session, tool string, keys []string) (err error) {
+	defer guard(&err)
+	return g.st.AllowAlways(ctx, session, tool, keys)
+}
+
+func (g guardedStore) AlwaysAllowed(ctx context.Context, session string, keys []string) (ok bool, err error) {
+	defer guard(&err)
+	return g.st.AlwaysAllowed(ctx, session, keys)
+}
+
+func (g guardedStore) MarkSeen(ctx context.Context, machine, session string, at time.Time) (err error) {
+	defer guard(&err)
+	return g.st.MarkSeen(ctx, machine, session, at)
+}
+
+func (g guardedStore) SeenTimes(ctx context.Context) (out map[[2]string]time.Time, err error) {
+	defer guard(&err)
+	return g.st.SeenTimes(ctx)
+}
+
+// fleetOn: the manager carries the machines (its process has the devices; unit tests without them have no fleet).
+func (s *Service) fleetOn() bool { return s.devs != nil }
+
+// fleetStart starts the fleet's loops, once.
+func (s *Service) fleetStart(ctx context.Context) {
+	if !s.fleetOn() {
+		return
+	}
+	s.fleet.started.Do(func() {
+		s.restoreInteractions(ctx)
+		s.loadSeen(ctx)
+		go s.expireLoop(ctx)
+		go s.liveLoop(ctx)
+	})
+}
+
+// ---- the machines, as the devices have them ----
+
+// fleetMachine is one machine as the moved code needs it.
+type fleetMachine struct {
+	ID, Name, Home, DataDir string
+}
+
+// assistantCwd is the assistant directory on the machine, or "" while it has not reported its home.
+func (m fleetMachine) assistantCwd() string {
+	if m.Home == "" {
+		return ""
+	}
+	if m.DataDir != "" {
+		return path.Join(m.DataDir, "assistant")
+	}
+	return path.Join(m.Home, ".jarvis/assistant")
+}
+
+// fleetMachines are the machines the devices carry.
+func (s *Service) fleetMachines() []fleetMachine {
+	if s.devs == nil {
+		return nil
+	}
+	var out []fleetMachine
+	for _, d := range s.devs.List() {
+		out = append(out, fleetMachine{ID: d.ID, Name: d.Name, Home: d.Home, DataDir: d.DataDir})
+	}
+	return out
+}
+
+// fleetMachine is the machine id names (an id another one absorbed: that one); false when there is none.
+func (s *Service) fleetMachine(id string) (fleetMachine, bool) {
+	if s.devs == nil || id == "" {
+		return fleetMachine{}, false
+	}
+	canon := s.devs.Canonical(id)
+	for _, m := range s.fleetMachines() {
+		if m.ID == canon {
+			return m, true
+		}
+	}
+	return fleetMachine{}, false
+}
+
+// machineName is the machine's name, its id when there is none.
+func (s *Service) machineName(id string) string {
+	if m, ok := s.fleetMachine(id); ok && m.Name != "" {
+		return m.Name
+	}
+	return id
+}
+
+// nodeCall calls a machine's node directly (the devices).
+func (s *Service) nodeCall(ctx context.Context, machine, method string, params, out any) error {
+	if s.devs == nil {
+		return ErrNoDevice
+	}
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	res, err := s.devs.CallNode(ctx, machine, method, raw)
+	if err != nil || out == nil || len(res) == 0 {
+		return err
+	}
+	return json.Unmarshal(res, out)
+}
+
+// nodeSession is one of a machine's sessions as its node listed it.
+func (s *Service) nodeSession(machine, id string) (proto.Session, bool) {
+	if s.devs == nil {
+		return proto.Session{}, false
+	}
+	return s.devs.Session(machine, id)
+}
+
+// nodeSessions are a machine's sessions as its node listed them.
+func (s *Service) nodeSessions(machine string) []proto.Session {
+	if s.devs == nil {
+		return nil
+	}
+	list, _ := s.devs.Sessions(machine)
+	return list
+}
+
+// isAssistantSession identifies headless conversations. A host pane is stronger evidence than a shared working
+// directory.
+func isAssistantSession(sess proto.Session, dir string) bool {
+	if sess.PaneID != "" || dir == "" || sess.Cwd == "" {
+		return false
+	}
+	// The working directory may go through a symlinked home; runtimes and offline assistants have no host pane.
+	return sess.Cwd == dir || identity.IsAssistantDir(sess.Cwd)
+}
+
+// ---- the nodes' events and requests ----
+
+// NodeEvent takes a node's event before the hub does (devices.Options.Event); false: the hub does not get it (the
+// manager tells it what follows instead).
+func (s *Service) NodeEvent(machine, event string, params json.RawMessage) bool {
+	if !s.fleetOn() {
+		return true
+	}
+	switch event {
+	case "sessions.changed":
+		var p struct {
+			Sessions []proto.Session `json:"sessions"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			s.setSessions(machine, p.Sessions)
+		}
+		return false // the hub gets the list as the apps do (fleet.sessions)
+	case "sessions.revs":
+		s.syncPlanInteractions(machine)
+	case "session.items": // the channels' (fleet_follow.go); the apps get them from the hub
+		s.followedItems(machine, params)
+	case "session.delta":
+		s.followedDelta(machine, params)
+	case "interaction.dismiss":
+		var p struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			s.recordEnd(p.ID, "dismissed", nil)
+			s.finishInteraction(p.ID)
+		}
+		return false
+	case "interaction.cancel":
+		var p struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			s.recordEnd(p.ID, "cancelled", nil) // or the next manager would take it for one a hook may still claim
+			s.finishInteraction(p.ID)
+		}
+		return false
+	case "codex.interactions": // the Codex questions and approvals open on this machine (fleet_ix.go)
+		s.syncCodexInteractions(machine, params)
+		return false
+	case "hook.event":
+		var p map[string]any
+		if json.Unmarshal(params, &p) == nil {
+			if sid, _ := p["session_id"].(string); sid != "" {
+				// A report-only hook (node/globalhooks.go) is not Persona's hooks running in the session: it asks for
+				// no card, so it must not hold the screen's back (hasHooks). Its Stop still counts for stopDuplicate.
+				if p["report_only"] != true {
+					s.fleet.mu.Lock()
+					if s.fleet.hooked == nil {
+						s.fleet.hooked = map[[2]string]bool{}
+					}
+					s.fleet.hooked[[2]string{machine, sid}] = true
+					s.fleet.mu.Unlock()
+				}
+				s.noteStop(machine, sid, p)
+			}
+		}
+		// the hub shows it to the apps (hook_event)
+	}
+	return true
+}
+
+// NodeRequest answers what of a node's requests is the manager's (devices.Options.Answer, with NodeAnswer's).
+func (s *Service) NodeRequest(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
+	if !s.fleetOn() {
+		return nil, false, nil
+	}
+	switch method {
+	case "interaction.create":
+		var p struct {
+			Interaction proto.Interaction `json:"interaction"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, true, err
+		}
+		p.Interaction.MachineID = machine
+		// A write through a skill's gated command (node/larkgate.go): its plugin names what the ids are.
+		if sum, ok := s.assistantSummary(ctx, p.Interaction.ToolName, p.Interaction.Summary); ok {
+			p.Interaction.Summary = sum
+		}
+		r, err := s.nodeInteraction(ctx, p.Interaction)
+		return r, true, err
+	case "assistant.lark":
+		out, err := s.assistantLark(ctx, machine)
+		return out, true, err
+	case "mcp.tools":
+		var p struct {
+			Assistant bool `json:"assistant"`
+		}
+		_ = json.Unmarshal(params, &p)
+		return map[string]any{"tools": s.mcpTools(ctx, p.Assistant)}, true, nil
+	case "mcp.call":
+		var p struct {
+			Name      string          `json:"name"`
+			Args      json.RawMessage `json:"args"`
+			SessionID string          `json:"session_id"`
+			Assistant bool            `json:"assistant"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, true, err
+		}
+		return s.mcpCall(ctx, machine, p.SessionID, p.Name, p.Args, p.Assistant), true, nil
+	}
+	return nil, false, nil
+}
+
+// FleetUp: the connection to the hub is (again) up: it gets every pending interaction, every session list and the
+// fleet again (it may have restarted and know nothing).
+func (s *Service) FleetUp(ctx context.Context) {
+	if !s.fleetOn() {
+		return
+	}
+	s.fleetStart(context.WithoutCancel(ctx))
+	s.fleet.sentMu.Lock()
+	s.fleet.sent = nil
+	s.fleet.sentMu.Unlock()
+	s.hub.Tell(assistantwire.EventFleetInteractions, assistantwire.FleetInteractions{Interactions: s.pendingInteractions()})
+	for _, m := range s.fleetMachines() {
+		s.publishSessions(m.ID)
+	}
+	s.liveChanged(true)
+}
+
+// FleetEvent takes the hub's fleet.* events.
+func (s *Service) FleetEvent(ctx context.Context, name string, params json.RawMessage) bool {
+	switch name {
+	case assistantwire.EventClients:
+		var c assistantwire.Clients
+		if json.Unmarshal(params, &c) == nil {
+			s.fleet.mu.Lock()
+			s.fleet.clients = c
+			s.fleet.mu.Unlock()
+		}
+	case assistantwire.EventMutes:
+		s.fleet.mutesMu.Lock()
+		s.fleet.mutes = nil
+		s.fleet.mutesMu.Unlock()
+		for _, m := range s.fleetMachines() {
+			s.publishSessions(m.ID)
+		}
+		s.liveChanged(false)
+	case assistantwire.EventSeen:
+		var p assistantwire.FleetSeen
+		if json.Unmarshal(params, &p) == nil && p.MachineID != "" && p.SessionID != "" {
+			if m, ok := s.fleetMachine(p.MachineID); ok {
+				s.markSeen(ctx, m.ID, p.SessionID)
+			}
+		}
+	default:
+		return false
+	}
+	return true
+}
+
+// ---- the snapshot's parts the lists show ----
+
+// fleetTakeSnapshot keeps what the session lists are decorated with from the snapshot the assistant just made and tells
+// the hub the lists of the machines whose sessions look different now; the assistant's own questions and cards go on
+// the phone as interactions (askOnPhone).
+func (s *Service) fleetTakeSnapshot(snap Snapshot) {
+	if !s.fleetOn() {
+		return
+	}
+	r := &s.fleet.rep
+	r.mu.Lock()
+	oldSessions, oldWork, oldOn, oldLinks, oldQuiet, oldMarks := r.sessions, r.work, r.workOn, r.links, r.quiet, r.marks
+	views := make(map[string]SessionView, len(snap.Sessions))
+	for _, v := range snap.Sessions {
+		views[v.SessionID] = v
+	}
+	r.sessions, r.got = views, true
+	if w := snap.Work; w != nil {
+		r.work = make(map[[2]string]proto.WorkState, len(w.Sessions))
+		for _, sw := range w.Sessions {
+			r.work[[2]string{sw.MachineID, sw.SessionID}] = sw.Work
+		}
+		r.workOn = w.On
+	}
+	if t := snap.Todos; t != nil {
+		r.links = map[[2]string]TodoLink{}
+		for _, l := range t.Links {
+			r.links[[2]string{l.MachineID, l.SessionID}] = l
+		}
+		r.quiet = map[[2]string]bool{}
+		for _, q := range t.Quiet {
+			r.quiet[[2]string{q.MachineID, q.SessionID}] = true
+		}
+	}
+	if c := snap.Channels; c != nil {
+		r.marks = make(map[[2]string][]string, len(c.Marks))
+		for _, m := range c.Marks {
+			r.marks[[2]string{m.MachineID, m.SessionID}] = m.Channels
+		}
+		r.turns = make(map[[2]string]time.Time, len(c.Turns))
+		for _, t := range c.Turns {
+			r.turns[[2]string{t.MachineID, t.SessionID}] = t.Answered
+		}
+	}
+	if snap.Tasks != nil {
+		r.tasks = snap.Tasks
+	}
+	if snap.Profile != nil {
+		r.profile = snap.Profile
+	}
+	if in := snap.Inbox; in != nil {
+		r.inbox = map[string]bool{}
+		for _, a := range in.Agents {
+			r.inbox[a.SessionID] = true
+		}
+	}
+	changed := changedMachines(oldSessions, r.sessions)
+	add := func(mid string) {
+		if !slices.Contains(changed, mid) {
+			changed = append(changed, mid)
+		}
+	}
+	if oldOn != r.workOn {
+		for _, m := range s.fleetMachines() {
+			add(m.ID)
+		}
+	}
+	for k, w := range r.work {
+		if o, ok := oldWork[k]; !ok || !sameJSON(o, w) {
+			add(k[0])
+		}
+	}
+	for k := range oldWork {
+		if _, ok := r.work[k]; !ok {
+			add(k[0])
+		}
+	}
+	for k, l := range r.links {
+		if o, ok := oldLinks[k]; !ok || o != l {
+			add(k[0])
+		}
+	}
+	for k := range oldLinks {
+		if _, ok := r.links[k]; !ok {
+			add(k[0])
+		}
+	}
+	for k := range r.quiet {
+		if !oldQuiet[k] {
+			add(k[0])
+		}
+	}
+	for k := range oldQuiet {
+		if !r.quiet[k] {
+			add(k[0])
+		}
+	}
+	for k, v := range r.marks {
+		if !slices.Equal(oldMarks[k], v) {
+			add(k[0])
+		}
+	}
+	for k := range oldMarks {
+		if _, ok := r.marks[k]; !ok {
+			add(k[0])
+		}
+	}
+	r.mu.Unlock()
+	s.askOnPhone(snap.Interactions)
+	for _, mid := range changed {
+		s.sessionsChanged(mid)
+	}
+	go s.deliverAnswers() // answers its Action could not take yet
+}
+
+// changedMachines are the machines of the conversations whose views differ between two snapshots.
+func changedMachines(old, now map[string]SessionView) []string {
+	var out []string
+	add := func(mid string) {
+		if !slices.Contains(out, mid) {
+			out = append(out, mid)
+		}
+	}
+	for id, v := range now {
+		o, ok := old[id]
+		if !ok || o.Title != v.Title || o.Archived != v.Archived || !slices.Equal(o.Queued, v.Queued) || o.MachineID != v.MachineID {
+			add(v.MachineID)
+			if ok {
+				add(o.MachineID)
+			}
+		}
+	}
+	for id, o := range old {
+		if _, ok := now[id]; !ok {
+			add(o.MachineID)
+		}
+	}
+	return out
+}
+
+func sameJSON(a, b any) bool {
+	x, _ := json.Marshal(a)
+	y, _ := json.Marshal(b)
+	return string(x) == string(y)
+}
+
+// quietSession: mid/sid works (or worked) for a quiet task: the main conversation hears about it, nothing else does.
+func (s *Service) quietSession(mid, sid string) bool {
+	r := &s.fleet.rep
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.quiet[[2]string{mid, sid}]
+}
+
+// withTask names, on an interaction sent to clients, the task its agent works for (the watch and the cards show it).
+func (s *Service) withTask(ix proto.Interaction) proto.Interaction {
+	r := &s.fleet.rep
+	r.mu.RLock()
+	l, ok := r.links[[2]string{ix.MachineID, ix.SessionID}]
+	r.mu.RUnlock()
+	if ok && l.Task {
+		ix.TaskTitle = l.Title
+	}
+	return ix
+}
+
+// isInboxAgent: the conversation is an inbox agent's (no "finished" push for it: the draft in the inbox is the result).
+func (s *Service) isInboxAgent(sessionID string) bool {
+	r := &s.fleet.rep
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.inbox[sessionID]
+}
+
+// channelAnsweredPush: the conversation's turn is (or just was) answered in a channel, so the phone's "finished" push
+// leaves it alone. "Just": within the finished push's delay, which is when it looks — not much longer, or the push of
+// the next turn, asked in the app, would be dropped too.
+func (s *Service) channelAnsweredPush(session string) bool {
+	window := 30*time.Second + s.notifyTimings().doneDelay()
+	r := &s.fleet.rep
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for k, at := range r.turns {
+		if k[1] == session && (at.IsZero() || time.Since(at) < window) {
+			return true
+		}
+	}
+	return false
+}
+
+// ---- mutes ----
+
+// Pins is the settings mutes: muted spaces / agents get no push notifications (finished, needs you). Spaces are
+// "machine/space name", agents "machine/session id"; Allowed are agents that keep theirs although their space is
+// muted. The hub's routes write it (GET / PUT /api/v1/mutes) and tell the manager (fleet.mutes).
+type Pins struct {
+	Spaces   []string `json:"spaces"`
+	Sessions []string `json:"sessions"`
+	Allowed  []string `json:"allowed,omitempty"`
+}
+
+func (s *Service) loadMutes(ctx context.Context) Pins {
+	f := &s.fleet
+	f.mutesMu.Lock()
+	defer f.mutesMu.Unlock()
+	if f.mutes == nil {
+		p := Pins{Spaces: []string{}, Sessions: []string{}}
+		if st := s.store(); st != nil {
+			if _, err := st.Setting(ctx, "mutes", &p); err != nil {
+				return p // try again next time
+			}
+		}
+		f.mutes = &p
+	}
+	return *f.mutes
+}
+
+// muted reports whether pushes about this session are off (the agent or its space is muted).
+func (s *Service) muted(machineID, sessionID string) bool {
+	space := ""
+	if sess, ok := s.nodeSession(machineID, sessionID); ok {
+		space = sess.SpaceName
+	}
+	return s.mutedAs(machineID, sessionID, space)
+}
+
+// mutedAs is muted for a machine under the id the apps know, its session in space (empty: none known).
+func (s *Service) mutedAs(machineID, sessionID, space string) bool {
+	p := s.loadMutes(context.Background())
+	key := machineID + "/" + sessionID
+	if slices.Contains(p.Sessions, key) {
+		return true
+	}
+	if slices.Contains(p.Allowed, key) { // turned back on inside a muted space
+		return false
+	}
+	return space != "" && slices.Contains(p.Spaces, machineID+"/"+space)
+}
+
+// mutedSessions are those of list whose pushes are off (the manager opens no card for them).
+func (s *Service) mutedSessions(mid string, list []proto.Session) []string {
+	out := []string{}
+	for _, sess := range list {
+		if s.mutedAs(mid, sess.SessionID, sess.SpaceName) {
+			out = append(out, sess.SessionID)
+		}
+	}
+	return out
+}
+
+// ---- the session lists ----
+
+// setSessions takes a node's session list: the turns it shows starting and ending (the finished push, the
+// assistant's own business), then the list the apps get.
+func (s *Service) setSessions(machine string, list []proto.Session) {
+	before := map[string]string{}
+	for _, sess := range s.fleetPrevious(machine) {
+		before[sess.SessionID] = sess.Status
+	}
+	now := time.Now()
+	for i := range list {
+		list[i].MachineID = machine
+	}
+	for _, sess := range list {
+		// Any agent (herdr or headless, started by Persona or not) finishing a turn may notify the phone.
+		prev, key := before[sess.SessionID], machine+"/"+sess.SessionID
+		switch {
+		case sess.Status == proto.StatusWorking && prev != proto.StatusWorking:
+			s.turnsBook().working(key, now)
+			ref := SessionRef{MachineID: machine, SessionID: sess.SessionID}
+			s.inOrder(func() { s.TurnStarted(context.Background(), ref) }) // after the items that came before it
+		case prev == proto.StatusWorking && (sess.Status == proto.StatusDone || sess.Status == proto.StatusIdle):
+			go s.notifyFinished(machine, sess.SessionID, s.turnsBook().ended(key, now))
+			// A new assistant conversation is named after its first turn; a task from one may be done. After the
+			// items of the turn (a channel's answer is read from them).
+			ref := SessionRef{MachineID: machine, SessionID: sess.SessionID}
+			s.inOrder(func() { go s.TurnEnded(context.Background(), ref) })
+		}
+	}
+	s.fleetKeepPrevious(machine, list)
+	s.sessionsChanged(machine)
+	// Messages from other conversations, for those no longer running; the todos' links and herdr marks.
+	var connected time.Time
+	if s.devs != nil {
+		connected = s.devs.ConnectedAt(machine)
+	}
+	d := DeviceSessions{MachineID: machine, Sessions: list, Connected: connected}
+	s.inOrder(func() { s.SessionsChanged(context.Background(), d) })
+}
+
+// fleetPrevious is the list setSessions saw last for the machine (the turns' starts and ends are against it).
+func (s *Service) fleetPrevious(machine string) []proto.Session {
+	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	return s.fleet.prev[machine]
+}
+
+func (s *Service) fleetKeepPrevious(machine string, list []proto.Session) {
+	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	if s.fleet.prev == nil {
+		s.fleet.prev = map[string][]proto.Session{}
+	}
+	s.fleet.prev[machine] = list
+}
+
+func (s *Service) turnsBook() *turnTracker {
+	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	if s.fleet.turns == nil {
+		s.fleet.turns = newTurnTracker()
+	}
+	return s.fleet.turns
+}
+
+// sessionsChanged: what the apps get of the machine's sessions may have changed: the hub is told, the screen and
+// plan cards follow.
+func (s *Service) sessionsChanged(machine string) {
+	if _, ok := s.fleetMachine(machine); !ok {
+		return
+	}
+	list := s.decorated(machine)
+	s.publishList(machine, list)
+	s.syncScreenInteractions(machine, list)
+	s.syncPlanInteractions(machine)
+}
+
+// publishSessions tells the hub the machine's session list as the apps get it now.
+func (s *Service) publishSessions(machine string) {
+	if _, ok := s.fleetMachine(machine); !ok {
+		return
+	}
+	s.publishList(machine, s.decorated(machine))
+}
+
+// publishList tells the hub list, when it is not what it was told last (fleet.sessions); the fleet follows.
+func (s *Service) publishList(machine string, list []proto.Session) {
+	msg := assistantwire.FleetSessions{MachineID: machine, Sessions: list, Muted: s.mutedSessions(machine, list)}
+	b, _ := json.Marshal(msg)
+	f := &s.fleet
+	f.sentMu.Lock()
+	if f.sent == nil {
+		f.sent = map[string]string{}
+	}
+	same := f.sent[machine] == string(b)
+	if !same {
+		f.sent[machine] = string(b)
+	}
+	f.sentMu.Unlock()
+	if same {
+		return
+	}
+	s.hub.Tell(assistantwire.EventFleetSessions, json.RawMessage(b))
+	s.liveChanged(false)
+}
+
+// decorated returns a machine's sessions as the apps get them: the unified states, the pending interaction counts,
+// what the assistant says of its conversations, the work and todos.
+func (s *Service) decorated(machine string) []proto.Session {
+	list := slices.Clone(s.nodeSessions(machine))
+	m, _ := s.fleetMachine(machine)
+	s.fleet.mu.Lock()
+	counts := map[string]int{}
+	asking := map[string]proto.Interaction{} // a session's card: its own before the manager's
+	for _, p := range s.fleet.interactions {
+		if p.ix.MachineID == machine {
+			counts[p.ix.SessionID]++
+			if cur, ok := asking[p.ix.SessionID]; !ok || cur.ToolName == assistantwire.WorkCardTool {
+				asking[p.ix.SessionID] = p.ix
+			}
+		}
+	}
+	seen := make(map[string]time.Time, len(list))
+	for _, sess := range list {
+		if t, ok := s.fleet.seen[[2]string{machine, sess.SessionID}]; ok {
+			seen[sess.SessionID] = t
+		}
+	}
+	s.fleet.mu.Unlock()
+	dir := m.assistantCwd()
+	r := &s.fleet.rep
+	r.mu.RLock()
+	shown, via := r.sessions, r.marks
+	r.mu.RUnlock()
+	lang := s.lang(context.Background())
+	for i := range list {
+		list[i].MachineID = machine
+		list[i].PendingInteractions = counts[list[i].SessionID]
+		list[i].Assistant = isAssistantSession(list[i], dir)
+		if list[i].Assistant {
+			list[i].Space = identity.SpaceOf(list[i].Cwd)
+		}
+		if t := shown[list[i].SessionID].Title; t != "" && list[i].Assistant {
+			list[i].Title = t // 「MMDD | 类型 | 主题」, the user's own, 「Persona」 for the main one (titles.go)
+		}
+		if ch := via[[2]string{machine, list[i].SessionID}]; len(ch) > 0 {
+			list[i].Channels = ch // where its messages came from (docs/channels.md「来源标记」)
+		}
+		if list[i].Assistant {
+			list[i].Archived = shown[list[i].SessionID].Archived
+			// Messages from other conversations wait in the assistant while it runs: shown like typed-ahead input.
+			if q := shown[list[i].SessionID].Queued; len(q) > 0 {
+				list[i].Queued = append(slices.Clip(list[i].Queued), q...) // the node's slice is shared: never write into it
+			}
+		}
+		list[i].SeenAt = seen[list[i].SessionID]
+		localizeSession(lang, &list[i]) // the node's Chinese activity line… (fleet_text.go)
+		list[i].State, list[i].BackgroundWorking = stateWithBackground(agentState(list[i], list[i].SeenAt), list[i])
+		list[i].TurnError, list[i].TurnErrorKind = turnError(list[i])
+		s.decorateWork(machine, &list[i], asking)
+	}
+	s.decorateTodos(machine, list)
+	for i := range list {
+		// The todos' alone, stripped before push to client (#762).
+		list[i].SpawnFrom, list[i].Chat, list[i].Topic, list[i].Dispatched = "", "", "", nil
+	}
+	s.markStates(machine, list, time.Now())
+	return list
+}
+
+// decoratedSession is one of the machine's sessions as the apps get it.
+func (s *Service) decoratedSession(machine, sid string) (proto.Session, bool) {
+	for _, sess := range s.decorated(machine) {
+		if sess.SessionID == sid {
+			return sess, true
+		}
+	}
+	return proto.Session{}, false
+}
+
+// decorateTodos puts on machine mid's sessions the todo each works for and whether it is quiet.
+func (s *Service) decorateTodos(mid string, list []proto.Session) {
+	r := &s.fleet.rep
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for i := range list {
+		key := [2]string{mid, list[i].SessionID}
+		if l, ok := r.links[key]; ok {
+			list[i].Todo = &proto.TodoRef{ID: l.TodoID, Title: l.Title}
+		}
+		list[i].Quiet = r.quiet[key]
+	}
+}
+
+// ---- seen ----
+
+func (s *Service) loadSeen(ctx context.Context) {
+	st := s.fleetStore()
+	if st == nil {
+		return
+	}
+	m, err := st.SeenTimes(ctx)
+	if err != nil {
+		if !errors.Is(err, errNoTable) {
+			s.logf("load seen times: %v", err)
+		}
+		return
+	}
+	s.fleet.mu.Lock()
+	for k, v := range s.fleet.seen { // one marked meanwhile is newer
+		m[k] = v
+	}
+	s.fleet.seen = m
+	s.fleet.mu.Unlock()
+}
+
+func (s *Service) seenAt(machine, session string) time.Time {
+	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	return s.fleet.seen[[2]string{machine, session}]
+}
+
+// markSeen records that the user looked at a session (opened it, or it finished while open) and refreshes states.
+func (s *Service) markSeen(ctx context.Context, machine, session string) {
+	now := time.Now().UTC()
+	s.fleet.mu.Lock()
+	if s.fleet.seen == nil {
+		s.fleet.seen = map[[2]string]time.Time{}
+	}
+	s.fleet.seen[[2]string{machine, session}] = now
+	s.fleet.mu.Unlock()
+	s.SessionSeen(ctx, SessionSeen{MachineID: machine, SessionID: session, At: now}) // how long a triaged turn waited
+	if st := s.fleetStore(); st != nil {
+		if err := st.MarkSeen(context.WithoutCancel(ctx), machine, session, now); err != nil {
+			s.logf("mark seen: %v", err)
+		}
+	}
+	s.publishSessions(machine)
+}
+
+// ---- the states (docs/agent-states.md) ----
+
+// agentState maps a host status plus Persona's own knowledge onto the unified states:
+//
+//	herdr blocked, or a pending question / plan / permission  → needs_you (red)
+//	herdr working                                              → working
+//	herdr done (finished, unseen in herdr) and not seen in the app since it finished → unread (green)
+//	herdr idle (seen in herdr), or done but seen in the app    → idle (gray)
+func agentState(sess proto.Session, seenAt time.Time) string {
+	if sess.PendingInteractions > 0 || sess.Status == proto.StatusBlocked {
+		return proto.StateNeedsYou
+	}
+	switch sess.Status {
+	case proto.StatusWorking:
+		return proto.StateWorking
+	case proto.StatusDone:
+		// The transcript stops changing when the turn ends, so updated_at is when it finished.
+		if !seenAt.IsZero() && !seenAt.Before(sess.UpdatedAt.Add(-2*time.Second)) {
+			return proto.StateIdle
+		}
+		return proto.StateUnread
+	case proto.StatusIdle:
+		return proto.StateIdle
+	case proto.StatusOffline:
+		return proto.StateOffline
+	}
+	return proto.StateUnknown
+}
+
+// backgroundState is an agent's state once its background work counts (#2228): a Claude whose turn ended while its
+// background commands, subagents, Monitors or workflows still run is working, not 完成未看 or 已看 — they wake it with their results, and it
+// goes on. Needs-you stays first; a stopped one (offline) has nothing running. Not the assistant's conversations:
+// their Monitors and background tasks stay on, and a conversation always 工作中 would skip every scheduled run.
+// What waits for a turn to end (the finished push, scheduled runs, the hub's own update) reads the host's status.
+func backgroundState(state string, sess proto.Session) string {
+	if sess.Assistant || !backgroundRunning(sess) {
+		return state
+	}
+	switch state {
+	case proto.StateUnread, proto.StateIdle, proto.StateUnknown:
+		return proto.StateWorking
+	}
+	return state
+}
+
+// stateWithBackground is backgroundState, and whether the background work is all that makes it working
+// (Session.BackgroundWorking: 工作中（后台）).
+func stateWithBackground(host string, sess proto.Session) (string, bool) {
+	state := backgroundState(host, sess)
+	return state, state == proto.StateWorking && host != proto.StateWorking
+}
+
+// turnError is the model API error that cut s's latest turn off, while it has stopped (unread or idle): not finished
+// (#1516), and its kind when the agent's record gives one. The node's word comes first: the agent's own record said
+// the turn failed (Codex, #2185). Otherwise its last words when they are the error, as Claude Code writes it; only an
+// answer that starts with the error counts: a reply that talks about one ("修好了 API Error: … 时的崩溃") is a reply.
+func turnError(sess proto.Session) (text, kind string) {
+	if sess.State != proto.StateUnread && sess.State != proto.StateIdle {
+		return "", ""
+	}
+	if text := strings.TrimSpace(sess.TurnError); text != "" {
+		return text, sess.TurnErrorKind
+	}
+	if text := strings.TrimSpace(sess.LastText); assistantwire.CutOff(text) {
+		return text, ""
+	}
+	return "", ""
+}
+
+type stateMark struct {
+	state string
+	at    time.Time
+}
+
+// markStates fills in StateSince: the time an agent's state last changed, kept until it changes again.
+func (s *Service) markStates(machine string, list []proto.Session, now time.Time) {
+	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	if s.fleet.stateSince == nil {
+		s.fleet.stateSince = map[[2]string]stateMark{}
+	}
+	for i := range list {
+		k := [2]string{machine, list[i].SessionID}
+		mk, ok := s.fleet.stateSince[k]
+		if !ok || mk.state != list[i].State {
+			mk = stateMark{state: list[i].State, at: now}
+			s.fleet.stateSince[k] = mk
+		}
+		list[i].StateSince = mk.at
+	}
+}
+
+func backgroundRunning(sess proto.Session) bool {
+	if len(sess.Background) > 0 {
+		return true
+	}
+	for _, a := range sess.Subagents {
+		if a.Running {
+			return true
+		}
+	}
+	for _, w := range sess.Workflows { // a running one is in Background too; not from every source
+		if w.Running {
+			return true
+		}
+	}
+	return false
+}

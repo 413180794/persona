@@ -86,7 +86,7 @@ func TestAssistantModelIsWhatThePhonesMessageRunsOn(t *testing.T) {
 	n.m.mu.Unlock()
 	connectAssistant(t, h)
 	params, _ := json.Marshal(map[string]any{"session_id": "main"})
-	got, err := n.m.onRequest(ctx, "assistant.model", params)
+	got, err := nodeAsks(ctx, n.m, "assistant.model", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestAssistantModelIsWhatThePhonesMessageRunsOn(t *testing.T) {
 	}
 	// Another conversation the hub doesn't list yet (the node just started) keeps its own: nothing to say.
 	params, _ = json.Marshal(map[string]any{"session_id": "side"})
-	if got, err := n.m.onRequest(ctx, "assistant.model", params); err != nil || len(got.(map[string]any)) != 0 {
+	if got, err := nodeAsks(ctx, n.m, "assistant.model", params); err != nil || len(got.(map[string]any)) != 0 {
 		t.Fatalf("an unlisted conversation: %v %v", got, err)
 	}
 }

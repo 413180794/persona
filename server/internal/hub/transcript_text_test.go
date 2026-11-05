@@ -2,7 +2,6 @@ package hub
 
 import (
 	"encoding/json"
-	"slices"
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -100,52 +99,5 @@ func TestLocalizedTeammateAndLinks(t *testing.T) {
 	}
 	if items[0].From != "队友" {
 		t.Fatal("the node's items were written to")
-	}
-}
-
-// transcript.Activity's lines, the node's code again, in the user's language.
-func TestLocalizedActivity(t *testing.T) {
-	act := func(name, input string) string { return transcript.Activity(name, json.RawMessage(input)) }
-	for _, c := range []struct{ zh, en, ja string }{
-		{act("Read", `{"file_path":"/x/tasks.go"}`), "Reading tasks.go", "tasks.goを読み取り中"},
-		{act("Bash", `{"command":"go test ./..."}`), "Running tests", "テスト実行中"},
-		{act("Bash", `{"command":"gh pr checks 12 --watch"}`), "Waiting for CI", "CI待ち"},
-		{act("Bash", `{"command":"echo hi","description":"Say hi"}`), "Running Say hi", "Say hiを実行中"},
-		{act("WebSearch", `{"query":"go generics"}`), "Searching the web for go generics", "Web検索中：go generics"},
-		{act("Grep", `{}`), "Searching", "検索中"},
-		{act("mcp__jarvis__mail_send", `{}`), "Calling mail_send", "mail_sendを呼び出し中"},
-		{act("AskUserQuestion", `{}`), "Asking you a question", "質問しています"},
-		{"在做别的", "在做别的", "在做别的"},
-	} {
-		if got := activityText(i18n.En, c.zh); got != c.en {
-			t.Errorf("en %q → %q, want %q", c.zh, got, c.en)
-		}
-		if got := activityText(i18n.Ja, c.zh); got != c.ja {
-			t.Errorf("ja %q → %q, want %q", c.zh, got, c.ja)
-		}
-	}
-	// A long one is cut to a task card's line again.
-	long := act("Read", `{"file_path":"/x/a_very_long_file_name_that_goes_on_and_on_and_on.go"}`)
-	if got := []rune(activityText(i18n.En, long)); len(got) > activityLen || got[len(got)-1] != '…' {
-		t.Fatalf("%q", string(got))
-	}
-}
-
-func TestLocalizeSession(t *testing.T) {
-	bg := []proto.BackgroundTask{{ID: "b1", Kind: "shell", Description: "超时转到后台的命令"}}
-	queued := []string{"【来自 另一个会话】look at this", "my own line"}
-	s := proto.Session{Activity: "在跑测试", Background: bg, Queued: queued}
-	zh := s
-	localizeSession(i18n.ZhHans, &zh)
-	if zh.Activity != "在跑测试" || zh.Background[0].Description != "超时转到后台的命令" || zh.Queued[0] != queued[0] {
-		t.Fatalf("zh-Hans changed it: %+v", zh)
-	}
-	localizeSession(i18n.En, &s)
-	if s.Activity != "Running tests" || s.Background[0].Description != "Command moved to the background after a timeout" ||
-		!slices.Equal(s.Queued, []string{"[From Another session] look at this", "my own line"}) {
-		t.Fatalf("%+v", s)
-	}
-	if bg[0].Description != "超时转到后台的命令" || queued[0] != "【来自 另一个会话】look at this" {
-		t.Fatal("the node's slices were written to")
 	}
 }

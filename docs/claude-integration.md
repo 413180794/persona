@@ -441,7 +441,7 @@ Claude Code（2.1.318 实测，见 issue）的消息被安全检查（safeguards
 
 - 对话：iOS `Views/Chat/APIErrorCard.swift`、网页 `web/src/lib/api-errors.ts`、安卓 `core/domain/.../lines/ApiErrors.kt` 认 `API Error:` 前缀，
   认不出状态码时是「模型请求失败」；`transient` 不是 false 就给「重试」，发的是「继续」（`ChatView.swift`）。上下文没变，多半再被拦一次。
-- hub：`hub/state.go` 的 `turnError` 用 `assistantwire.CutOff`（`APIErrorMarkers`）把最后一句认成 `TurnError`；推送（`hub/machine.go`）是
+- 管理者：`assistant/fleet.go` 的 `turnError` 用 `assistantwire.CutOff`（`APIErrorMarkers`）把最后一句认成 `TurnError`；推送（`hub/machine.go`）是
   「⚠️ 标题」+「模型服务出错，中断了：<原文>」。
 - 任务：回执 `state: "interrupted"`、摘要「模型服务出错，中断了」（`assistant/tasks.go`、`assistantwire.InterruptedSummary`），
   卡片上「继续」（`continueTask`，发「继续」）；主对话的提示词 `prompts/assistant/task_notice.md` 说「被模型服务出错打断了」。

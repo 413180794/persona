@@ -86,13 +86,9 @@ func (h *Hub) agentFiltersChanged(ctx context.Context) {
 				h.logf("[%s] configure agent filters: %v", m.cfg.ID, err)
 				return
 			}
-			var list struct {
-				Sessions []proto.Session `json:"sessions"`
-			}
-			if err := m.call(ctx, "sessions.list", map[string]any{}, &list); err == nil {
-				m.setSessions(list.Sessions)
-				h.sessionsChanged(m)
-			}
+			// The node lists them again with the filters: the manager takes the list (it is its own) and the apps
+			// get it from it.
+			_ = m.call(ctx, "sessions.list", map[string]any{}, nil)
 		}(m)
 	}
 }

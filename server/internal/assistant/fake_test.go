@@ -81,6 +81,7 @@ type fakeHub struct {
 	tabAsked    []string
 	muted       map[string][]string
 	hubCards    []proto.Interaction // interactions.list: what the hub has up
+	told        []told              // the manager's fleet.* events (Tell)
 	failSend    error               // session.send fails with it
 
 	// The launchers' health (launcher_health.go): launchers.check's answers by "machine/launcher" (none: it works),
@@ -305,7 +306,9 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 func (f *fakeHub) NotifyRequest(_ context.Context, p NotifyRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if p.Notification.Kind != NotifyPush {
+	switch p.Notification.Kind {
+	case NotifyPush, assistantwire.NotifyDone, assistantwire.NotifyInput:
+	default:
 		return fmt.Errorf("kind %q", p.Notification.Kind)
 	}
 	f.pushes = append(f.pushes, p.Notification)
@@ -664,6 +667,37 @@ func todoCount(s *Service) int {
 	s.todos.mu.RLock()
 	defer s.todos.mu.RUnlock()
 	return len(s.todos.todos)
+}
+
+// Call is the manager's own call to the hub (fleet.tool): the fake has none of the hub's tools.
+func (f *fakeHub) Call(_ context.Context, method string, _, out any) error {
+	if method == assistantwire.MethodFleetTool {
+		if p, ok := out.(*struct {
+			Handled bool             `json:"handled"`
+			Result  proto.ToolResult `json:"result"`
+		}); ok {
+			p.Handled = false
+		}
+		return nil
+	}
+	return fmt.Errorf("no method %s", method)
+}
+
+// Tell keeps what the manager told the hub of the nodes (fleet.*).
+func (f *fakeHub) Tell(event string, params any) error {
+	b, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.told = append(f.told, told{event, b})
+	return nil
+}
+
+type told struct {
+	event  string
+	params json.RawMessage
 }
 
 // launcherAgent is the agent a launcher starts in these tests: the one its name starts with, else claude.

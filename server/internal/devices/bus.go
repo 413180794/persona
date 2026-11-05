@@ -206,6 +206,7 @@ func (d *Devices) Handler(next http.Handler) http.Handler {
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	route("GET /api/v1/machines/{mid}/claude-dirs", d.getClaudeDirs)
+	d.metricsRoutes(mux)
 	route("PUT /api/v1/machines/{mid}/claude-dirs/blocked", d.putClaudeDirsBlocked)
 	mux.Handle("/", next)
 	return mux

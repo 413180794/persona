@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/devices"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The assistant is the chief manager, and the user's computers are its (docs/machines.md「谁连电脑」): its process
@@ -28,6 +31,16 @@ type Devices interface {
 	CallNode(ctx context.Context, id, method string, params json.RawMessage) (json.RawMessage, error)
 	// SetKeep: the sessions each machine's node lists however quiet (the snapshot's profile).
 	SetKeep(keep map[string][]string)
+	// What the fleet reads of the machines (fleet.go): every machine, one's id as the devices know it (an id another
+	// one absorbed: that one), its sessions as its node listed them, when its node's connection began, the token usage.
+	List() []devices.Summary
+	Canonical(id string) string
+	Sessions(id string) ([]proto.Session, bool)
+	Session(id, session string) (proto.Session, bool)
+	ConnectedAt(id string) time.Time
+	Usage() assistantwire.UsageSummary
+	// Follow has the node send the manager a session's items and text as they are made (on), or stop.
+	Follow(ctx context.Context, machine, session string, on bool) error
 }
 
 // localDeviceCall is a device.call the manager answers itself: a node's method on a machine it has. The hub still

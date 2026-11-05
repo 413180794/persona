@@ -75,6 +75,7 @@ type Machine struct {
 	lastSeen  time.Time
 	sessions  []proto.Session
 	watched   map[string]bool // sessions the hub watches (session.watch): watched again on a new connection
+	followed  map[string]bool // sessions the manager itself follows (Follow: a channel's turn): watched as well
 	lastSeq   map[string]int  // session id -> highest item seq seen
 	kick      chan struct{}
 	// deploying: the manager is sending this machine the hub's node build (deploy.go); deployErr: why the last try
@@ -102,7 +103,7 @@ type Machine struct {
 	// the manager started, a call waits for it instead of failing at once (firstWait).
 	first     chan struct{}
 	firstOnce sync.Once
-	// pending counts the node's questions waiting on the hub (interaction.create): no switching paths meanwhile.
+	// pending counts the node's questions waiting on the phone (interaction.create): no switching paths meanwhile.
 	pending int
 	// notes are the hub's one-way events waiting for the node (notes.go; their own lock, not m.mu).
 	notes nodeNotes
@@ -146,7 +147,7 @@ func sameConfig(a, b MachineConfig) bool {
 	return string(x) == string(y)
 }
 
-// snapshot is the machine as the apps get it, but for what the hub adds (system, computer, browser).
+// snapshot is the machine as the apps get it, but for what the hub adds (computer, browser).
 func (m *Machine) snapshot() proto.Machine {
 	d := m.d
 	engine := d.engineOf(m.cfg.ID) // before m.mu: it may read settings
@@ -181,7 +182,7 @@ func (m *Machine) snapshot() proto.Machine {
 		Deploying: m.deploying, DeployError: deployErr,
 		CanDeploy: &canDeploy, DeployReason: deployReason, DeployPhase: m.deployPhase,
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
-		Engine: engine, Engines: engines, Link: link,
+		Engine: engine, Engines: engines, Link: link, System: d.metrics.system(m.cfg.ID),
 	}
 }
 
@@ -510,6 +511,12 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		return // the manager's alone
 	case "claude.dirs":
 		m.rememberClaudeDirs(params)
+	case "metrics": // the monitoring is the manager's (metrics.go)
+		m.d.onMetrics(m.cfg.ID, params)
+		return
+	case "usage":
+		m.d.usage.apply(m.cfg.ID, params, time.Now())
+		return
 	}
 	m.d.forward(m.cfg.ID, event, params)
 }
@@ -527,11 +534,6 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		}
 		return map[string]any{"sessions": out}, nil
 	}
-	if a := m.d.opts.Answer; a != nil {
-		if out, ok, err := a(ctx, m.cfg.ID, method, params); ok {
-			return out, err
-		}
-	}
 	if method == "interaction.create" {
 		m.mu.Lock()
 		m.pending++
@@ -541,6 +543,11 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			m.pending--
 			m.mu.Unlock()
 		}()
+	}
+	if a := m.d.opts.Answer; a != nil {
+		if out, ok, err := a(ctx, m.cfg.ID, method, params); ok {
+			return out, err
+		}
 	}
 	if len(params) > maxForward {
 		return nil, errTooLarge

@@ -382,10 +382,8 @@ func TestBotMessageGoesToTheMainConversationAndTheAnswerComesBack(t *testing.T) 
 	if n := len(w.node.sends); n != 1 {
 		t.Fatalf("%d sends, want 1", n)
 	}
-	// The assistant reports the turn answered (its snapshot): the phone's 完成 push leaves it alone.
-	eventually(t, 5*time.Second, "the turn answered in Feishu must not also push 完成 to the phone", func() bool {
-		return w.h.channelAnswered("main-1")
-	})
+	// That the phone's 完成 push leaves a turn answered in Feishu alone is the manager's (assistant
+	// TestFinishedPushSkipsChannelTurns).
 }
 
 // A question Persona asks shows as a card in the chat; a button there answers it like the app would, and the card says
@@ -663,17 +661,15 @@ func TestBotMessageWaitsForTheAssistant(t *testing.T) {
 func TestChannelAnswersNeedTheOwnersAction(t *testing.T) {
 	h := newTestHub(t)
 	h.store = newBotStore()
-	ix := proto.Interaction{ID: "ix_plan", MachineID: "box", SessionID: "s1", Kind: proto.IxPlan, ExpiresAt: time.Now().Add(time.Minute)}
-	got := make(chan proto.Resolution, 1)
-	go func() {
-		r, _ := h.waitInteraction(context.Background(), ix)
-		got <- r
-	}()
-	eventually(t, 5*time.Second, "the plan waits", func() bool { return len(h.pendingInteractions()) == 1 })
+	// The manager answers the card (assistant channelResolve) once the hub took the owner action for it
+	// (interactions.owner_action).
 	resolve := func(action string) error {
-		p, _ := json.Marshal(map[string]any{"interaction_id": "ix_plan", "action": action,
-			"resolution": map[string]any{"approve": true, "mode": "bypassPermissions", "answered_by": "assistant"}})
-		_, err := h.resolveFromChannel(context.Background(), p)
+		p, _ := json.Marshal(map[string]any{"interaction_id": "ix_plan", "action": action})
+		_, ok, err := h.fleetAppCall(context.Background(), assistantwire.AppCall{AppID: assistantwire.AppInteractions,
+			Method: assistantwire.InteractionsOwnerAction, Params: p})
+		if !ok {
+			t.Fatal("owner_action is not the hub's")
+		}
 		return err
 	}
 	if err := resolve(""); !errors.Is(err, errNoOwnerAction) {
@@ -685,14 +681,6 @@ func TestChannelAnswersNeedTheOwnersAction(t *testing.T) {
 	a := h.issueOwnerAction(channel.Feishu, "ix_plan")
 	if err := resolve(a); err != nil {
 		t.Fatal(err)
-	}
-	select {
-	case r := <-got:
-		if r.Approve == nil || !*r.Approve || r.AnsweredBy != "" {
-			t.Fatalf("resolution %+v: the owner's own answer", r)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("not answered")
 	}
 	if err := resolve(a); !errors.Is(err, errNoOwnerAction) {
 		t.Fatalf("an owner action used twice: %v", err)

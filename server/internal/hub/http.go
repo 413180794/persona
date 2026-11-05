@@ -128,10 +128,6 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/info", h.proxy("session.info", func(r *http.Request) any {
 		return map[string]any{"session_id": r.PathValue("sid")}
 	}))
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/seen", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
-		h.markSeen(m.cfg.ID, r.PathValue("sid"))
-		writeJSON(w, map[string]any{"ok": true})
-	}))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/screen/before", paneAddressFullOnly(h.proxyBody("session.screen.before")))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/screen", paneAddressFullOnly(h.proxy("session.screen", func(r *http.Request) any {
 		q := r.URL.Query()
@@ -158,29 +154,7 @@ func (h *Hub) routes() http.Handler {
 		writeJSON(w, map[string]any{"interactions": visibleInteractions(h.pendingInteractions(), h.requestHasElicitation(r))})
 	})
 	api.HandleFunc("GET /api/v1/ops/{id}", h.getClientOp)
-	api.HandleFunc("POST /api/v1/interactions/{id}/resolve", h.withClientOp("resolve", func(w http.ResponseWriter, r *http.Request) {
-		var res proto.Resolution
-		if err := decodeJSONBody(w, r, &res, 1<<20); err != nil {
-			writeBodyErr(w, err, err)
-			return
-		}
-		res.AnsweredBy = "" // only the assistant's interaction_answer says it answered
-		if answerOnly(r) && (!answerMayResolve(res) || h.picksFreeText(r.PathValue("id"), res)) {
-			writeErr(w, http.StatusForbidden, errors.New("this device can only answer with a card's own choices"))
-			return
-		}
-		if err := h.resolve(r.PathValue("id"), res); err != nil {
-			if errors.Is(err, errNotPending) {
-				h.writeEnded(w, r.PathValue("id"), res, err)
-			} else if errors.Is(err, errInvalidElicitation) {
-				writeErr(w, http.StatusBadRequest, err)
-			} else {
-				callErr(w, err) // prompt_changed: 409, nothing pressed
-			}
-			return
-		}
-		writeJSON(w, map[string]any{"ok": true})
-	}))
+	h.fleetRoutesRelayed(api) // resolve, history, seen: the manager's (fleet_link.go)
 	api.HandleFunc("POST /api/v1/devices", func(w http.ResponseWriter, r *http.Request) {
 		var d Device
 		if err := decodeJSONBody(w, r, &d, 16<<10); err != nil || d.DeviceID == "" {
@@ -196,8 +170,7 @@ func (h *Hub) routes() http.Handler {
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	h.live.routes(api)
-	h.usageRoutes(api)
-	h.metricsRoutes(api)
+	h.metricsRoutesRelayed(api) // the monitoring is the manager's (devices_link.go)
 	api.HandleFunc("GET /api/v1/devices/{id}/sessions", h.serveDeviceSessions)
 	h.lockTestRoutes(api)
 	// Which pushes this device wants (notify.go NotifyPrefs); the app's 设置 › 通知.
@@ -218,32 +191,6 @@ func (h *Hub) routes() http.Handler {
 		}
 		h.live.settingsChanged()
 		writeJSON(w, h.prefsView(prefs))
-	})
-	api.HandleFunc("GET /api/v1/interactions/history", func(w http.ResponseWriter, r *http.Request) {
-		if h.store == nil {
-			writeJSON(w, map[string]any{"interactions": []any{}})
-			return
-		}
-		q := r.URL.Query()
-		mid := q.Get("machine_id")
-		if m := h.localMachine(mid); m != nil {
-			mid = m.cfg.ID
-		}
-		recs, err := h.store.Interactions(r.Context(), mid, q.Get("session_id"), atoi(q.Get("limit")))
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
-		}
-		if !h.requestHasElicitation(r) {
-			filtered := make([]db.InteractionRecord, 0, len(recs))
-			for _, rec := range recs {
-				if rec.Interaction.Kind != proto.IxElicitation {
-					filtered = append(filtered, rec)
-				}
-			}
-			recs = filtered
-		}
-		writeJSON(w, map[string]any{"interactions": recs})
 	})
 	h.assistantRoutes(api)
 	h.pinRoutes(api)
@@ -508,7 +455,9 @@ func (h *Hub) sessionItemFull(w http.ResponseWriter, r *http.Request, m *Machine
 		callErr(w, err)
 		return
 	}
-	h.followedItems(m.cfg.ID, r.PathValue("sid"), []proto.Item{it})
+	// The whole item for the channels that follow the conversation, or show its view (the manager's, fleet_follow.go).
+	h.asst().notify(assistantwire.EventSessionItems, assistantwire.SessionItems{MachineID: m.cfg.ID, SessionID: r.PathValue("sid"),
+		Items: []proto.Item{it}})
 	writeJSON(w, localizedItems(h.requestLang(r), h.withInjected([]proto.Item{it}))[0])
 }
 
@@ -682,7 +631,9 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res.Session.MachineID = m.cfg.ID
-	res.Session.State = agentState(res.Session, time.Time{})
+	if shown, ok := h.awaitListed(ctx, m, res.Session.SessionID); ok {
+		res.Session.State = shown.State // as the manager works it out (fleet_link.go)
+	}
 	if p.TodoID != "" {
 		title := res.Session.Title
 		if title == "" {
@@ -1006,6 +957,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	h.clients[c] = struct{}{}
 	h.helloLocked(c, hello, stream, after, resuming)
 	h.mu.Unlock()
+	go h.fleetClientsChanged() // an app that takes elicitations (fleet_link.go)
 
 	writerDone = make(chan struct{})
 	go func() {

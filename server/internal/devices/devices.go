@@ -65,6 +65,14 @@ type Options struct {
 	// DialNode replaces every way to a machine's node with a connection to an in-process one (tests; nil for a
 	// machine: its own ways).
 	DialNode func(machine string) func(context.Context) (net.Conn, error)
+	// Event takes a node's event (and a session list the manager passes on again) before the hub would: what is the
+	// manager's of it (the interactions, the sessions' states, the pushes: docs/machines.md「谁处理电脑的事件」); false:
+	// the hub does not get it. nil: every event goes to the hub.
+	Event func(machine, event string, params json.RawMessage) (forward bool)
+	// Detached: a machine's node connection ended (not for another one taking over): what waited on it ends.
+	Detached func(machine string)
+	// Location is the user's time zone ("today" of the token usage); nil: the machine's.
+	Location func() *time.Location
 }
 
 // Devices is every computer the manager carries.
@@ -103,6 +111,9 @@ type Devices struct {
 	reportDue chan struct{}
 	lastSent  string // the last devices.state sent (stateKey), to send only changes
 
+	metrics metricsBook // the machines' monitoring (metrics.go)
+	usage   usageBook   // their token usage (metrics.go)
+
 	// reqPrefix and reqSeq make the nodes' requests' keys for the hub (devices.request), unique across managers.
 	reqPrefix string
 	reqSeq    atomic.Uint64
@@ -136,6 +147,7 @@ func (d *Devices) Run(ctx context.Context) error {
 	go d.reportLoop(mctx)
 	go d.probeServices(mctx)
 	go d.measureLoop(mctx)
+	go d.metricsLoop(mctx)
 	select {
 	case <-d.gotCh:
 		d.startMachines(mctx)
@@ -417,11 +429,14 @@ const maxForward = 60 << 20
 
 var errTooLarge = &rpc.Error{Code: "too_large", Message: "the node's answer is too large to pass on"}
 
-// forward passes a node's event on to the hub.
+// forward passes a node's event on to the hub, after the manager took what is its own of it (Options.Event).
 func (d *Devices) forward(machine, event string, params any) {
 	raw, ok := params.(json.RawMessage)
 	if !ok {
 		raw, _ = json.Marshal(params)
+	}
+	if f := d.opts.Event; f != nil && !f(machine, event, raw) {
+		return
 	}
 	if len(raw) > maxForward {
 		d.logf("[%s] %s of %d bytes not passed on to the hub: too large", machine, event, len(raw))
@@ -450,11 +465,23 @@ func (d *Devices) Call(ctx context.Context, p devicewire.NodeCall) (json.RawMess
 		params = json.RawMessage(`{}`)
 	}
 	m.noteWatch(p.Method, params)
+	if p.Method == "session.unwatch" && m.follows(params) {
+		return json.RawMessage(`{}`), nil // the manager still follows it: the node keeps sending its items
+	}
 	var out json.RawMessage
 	err := m.call(ctx, p.Method, params, &out)
 	m.noteOpened(p.Method, params, err)
 	if err != nil {
 		return nil, wireError(err)
+	}
+	if p.Method == "sessions.list" { // the hub had the node list them again (its agent filters): the manager's list
+		var list struct {
+			Sessions []proto.Session `json:"sessions"`
+		}
+		if json.Unmarshal(out, &list) == nil && list.Sessions != nil {
+			m.setSessions(list.Sessions)
+			d.forward(m.cfg.ID, "sessions.changed", map[string]any{"sessions": m.sessionList()})
+		}
 	}
 	if out == nil {
 		out = json.RawMessage(`{}`)
@@ -558,4 +585,74 @@ func (d *Devices) Session(id, session string) (proto.Session, bool) {
 		return proto.Session{}, false
 	}
 	return m.session(session)
+}
+
+// Sessions are a machine's sessions as its node listed them; false when there is no such machine.
+func (d *Devices) Sessions(id string) ([]proto.Session, bool) {
+	m := d.machineByID(id)
+	if m == nil {
+		return nil, false
+	}
+	return m.sessionList(), true
+}
+
+// Canonical is the id of the machine id names (an entry another one absorbed: that one's); id itself when there is
+// none.
+func (d *Devices) Canonical(id string) string {
+	if m := d.machineByID(id); m != nil {
+		return m.cfg.ID
+	}
+	return id
+}
+
+// ConnectedAt is when the machine's node's current connection began (zero: none).
+func (d *Devices) ConnectedAt(id string) time.Time {
+	m := d.machineByID(id)
+	if m == nil {
+		return time.Time{}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.connectedAt
+}
+
+// follows: the session params names is one the manager follows itself.
+func (m *Machine) follows(params json.RawMessage) bool {
+	var p struct {
+		SessionID string `json:"session_id"`
+	}
+	if json.Unmarshal(params, &p) != nil {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.followed[p.SessionID]
+}
+
+// Follow has the manager follow a session itself (on: its items and the text it writes come to the manager as they
+// are made, a channel's turn) or stop: the node watches it while the hub or the manager does.
+func (d *Devices) Follow(ctx context.Context, machine, session string, on bool) error {
+	m := d.machineByID(machine)
+	if m == nil {
+		return ErrNoMachine
+	}
+	m.mu.Lock()
+	if m.followed == nil {
+		m.followed = map[string]bool{}
+	}
+	had, hub := m.followed[session], m.watched[session]
+	since := m.lastSeq[session]
+	if on {
+		m.followed[session] = true
+	} else {
+		delete(m.followed, session)
+	}
+	m.mu.Unlock()
+	switch {
+	case on && !had && !hub:
+		return m.call(ctx, "session.watch", map[string]any{"session_id": session, "since_seq": since}, nil)
+	case !on && had && !hub:
+		return m.call(ctx, "session.unwatch", map[string]any{"session_id": session}, nil)
+	}
+	return nil
 }

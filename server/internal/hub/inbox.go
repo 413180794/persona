@@ -83,8 +83,6 @@ type inboxSources struct {
 	appended    map[string]connector.InboxThing
 	appendLocks sync.Map // append id → *sync.Mutex, while it is written
 
-	agentsMu sync.RWMutex
-	agents   map[string]bool // the AI 分身's conversations (the snapshot's inbox)
 }
 
 func (b *inboxSources) init() {
@@ -562,27 +560,6 @@ func (h *Hub) tellInboxChanged() {
 		}
 		h.broadcast(map[string]any{"type": "inbox"})
 	}
-}
-
-// takeInboxReport keeps what the snapshot says of the inbox (nil: it could not be read, the last one stays).
-func (h *Hub) takeInboxReport(r *assistantwire.InboxReport) {
-	if r == nil {
-		return
-	}
-	agents := map[string]bool{}
-	for _, a := range r.Agents {
-		agents[a.SessionID] = true
-	}
-	h.inbox.agentsMu.Lock()
-	h.inbox.agents = agents
-	h.inbox.agentsMu.Unlock()
-}
-
-// isInboxAgent: the conversation is an inbox agent's (no "finished" push for it: the draft in the inbox is the result).
-func (h *Hub) isInboxAgent(sessionID string) bool {
-	h.inbox.agentsMu.RLock()
-	defer h.inbox.agentsMu.RUnlock()
-	return h.inbox.agents[sessionID]
 }
 
 // ---- what the hub asks the manager about the inbox ----

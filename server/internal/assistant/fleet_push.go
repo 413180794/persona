@@ -1,0 +1,333 @@
+package assistant
+
+import (
+	"context"
+	"fmt"
+	"path"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// When a "finished" push is worth sending (docs/server.md 推送), and the pushes of the cards. Borrowed from Ovis
+// (github.com/devswha/ovis, server/push.ts, MIT): a push is for someone away from the computer, so
+//   - wait a while after the turn ends; if the agent resumes, or the user looks at it (herdr idle, or opened in the
+//     app), nothing is sent;
+//   - only turns that took a while are worth it ("long"); a quick answer is read where it was asked;
+//   - background tasks and subagents still running mean the work is not done: hold, and push once when the turn that
+//     follows their reports ends.
+// The manager decides; the hub delivers (notify.request): each device picks what it wants (its NotifyPrefs), the
+// timings are hub.json "notify" (hello's notify).
+
+// fleetTimings are hello's notify timings with their defaults.
+type fleetTimings assistantwire.NotifyTimings
+
+func (s *Service) notifyTimings() fleetTimings {
+	return fleetTimings(s.hello(context.Background()).Notify)
+}
+
+func msOr(ms int64, def time.Duration) time.Duration {
+	if ms > 0 {
+		return time.Duration(ms) * time.Millisecond
+	}
+	return def
+}
+
+func (t fleetTimings) doneDelay() time.Duration { return msOr(t.DoneDelayMS, 60*time.Second) }
+func (t fleetTimings) longTurn() time.Duration  { return msOr(t.LongTurnMS, 60*time.Second) }
+func (t fleetTimings) backgroundHold() time.Duration {
+	return msOr(t.BackgroundHoldMS, 120*time.Minute)
+}
+func (t fleetTimings) hookTimeout() time.Duration { return msOr(t.HookTimeoutMS, 30*time.Minute) }
+
+// turnTracker follows each session's turns between status snapshots: when the turn started, which end is the latest
+// (gen), and whether it is held for background work.
+type turnTracker struct {
+	mu    sync.Mutex
+	turns map[string]*turn
+}
+
+type turn struct {
+	start      time.Time
+	endedAt    time.Time
+	gen        int
+	background bool // ended once with background work still running; the next end decides
+}
+
+func newTurnTracker() *turnTracker { return &turnTracker{turns: map[string]*turn{}} }
+
+// working: the session is working (again). A turn that ended moments ago and resumes is the same turn, so its start
+// is kept; any pending end is cancelled.
+func (t *turnTracker) working(key string, now time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	tr := t.turns[key]
+	if tr == nil {
+		tr = &turn{start: now}
+		t.turns[key] = tr
+	}
+	tr.gen++
+}
+
+// startOf: when the session's current (or last held) turn started; zero when not tracked.
+func (t *turnTracker) startOf(key string) time.Time {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if tr := t.turns[key]; tr != nil {
+		return tr.start
+	}
+	return time.Time{}
+}
+
+// ended: working → done / idle. Returns the generation the delayed check must still see.
+func (t *turnTracker) ended(key string, now time.Time) int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	tr := t.turns[key]
+	if tr == nil { // the manager came up mid-turn: count from now
+		tr = &turn{start: now}
+		t.turns[key] = tr
+	}
+	tr.gen++
+	tr.endedAt = now
+	return tr.gen
+}
+
+// finishVerdict is what the delayed check decided.
+type finishVerdict int
+
+const (
+	finishStale finishVerdict = iota // something happened since; a later check decides
+	finishDrop                       // no push for this turn
+	finishHold                       // background work still running: wait for the turn its reports start
+	finishPush                       // push, to the devices whose prefs take a turn this long
+)
+
+// settle runs after the delay. sess is the session now, seen whether the user has looked at it since it finished
+// (in herdr or in the app). Everything that makes a push pointless is checked here, at the last moment.
+func (t *turnTracker) settle(key string, gen int, sess proto.Session, seen, muted, assistantPushed bool, now time.Time, hold time.Duration) (finishVerdict, time.Duration) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	tr := t.turns[key]
+	if tr == nil || tr.gen != gen {
+		return finishStale, 0
+	}
+	if sess.Status == proto.StatusWorking {
+		return finishStale, 0
+	}
+	took := tr.endedAt.Sub(tr.start)
+	if sess.Status != proto.StatusDone || seen || muted || assistantPushed {
+		delete(t.turns, key)
+		return finishDrop, took
+	}
+	if backgroundRunning(sess) {
+		if now.Sub(tr.start) > hold {
+			delete(t.turns, key)
+			return finishDrop, took
+		}
+		tr.background = true
+		return finishHold, took
+	}
+	// A turn started by a background task's report: on its own the user did not ask for anything; as the end of
+	// held work it is exactly the "all done" they want.
+	if sess.WokeByTask && !tr.background {
+		delete(t.turns, key)
+		return finishDrop, took
+	}
+	delete(t.turns, key)
+	return finishPush, took
+}
+
+// noteStop keeps what a hook event says about completions for stopDuplicate: a Stop's reply signature, and that a
+// prompt starts something new.
+func (s *Service) noteStop(machine, sid string, p map[string]any) {
+	event, _ := p["event"].(string)
+	k := [2]string{machine, sid}
+	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	switch event {
+	case "UserPromptSubmit":
+		delete(s.fleet.pushedSig, k)
+		delete(s.fleet.stopSig, k)
+	case "Stop":
+		sig, _ := p["stop_sig"].(string)
+		if sig == "" {
+			delete(s.fleet.stopSig, k)
+			return
+		}
+		if s.fleet.stopSig == nil {
+			s.fleet.stopSig = map[[2]string]string{}
+		}
+		s.fleet.stopSig[k] = sig
+	}
+}
+
+// stopDuplicate says whether the "finished" push about to go out repeats one already sent: the same reply (by the
+// signature the node hashed from the Stop hook's last_assistant_message) with no prompt in between. That is the same
+// completion seen twice, as when the status flaps working → done → working → done around one turn. A session without
+// hooks, or a Stop without a reply, has no signature and is never held back. Otherwise it records the push. In
+// memory: after a manager restart at worst one repeat gets through.
+func (s *Service) stopDuplicate(machine, sid string) bool {
+	k := [2]string{machine, sid}
+	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	sig := s.fleet.stopSig[k]
+	if sig == "" {
+		return false
+	}
+	if s.fleet.pushedSig[k] == sig {
+		return true
+	}
+	if s.fleet.pushedSig == nil {
+		s.fleet.pushedSig = map[[2]string]string{}
+	}
+	s.fleet.pushedSig[k] = sig
+	return false
+}
+
+// notifyFinished decides, after the delay, whether this end of a turn is worth a push and to which devices.
+func (s *Service) notifyFinished(machine, id string, gen int) {
+	t := s.notifyTimings()
+	time.Sleep(t.doneDelay())
+	sess, ok := s.decoratedSession(machine, id)
+	if ok && !sess.Assistant && sess.Status != proto.StatusWorking {
+		s.kbAgentDone(machine, sess)
+	}
+	if ok && sess.Work != nil && sess.Work.Phase == proto.WorkBlocked && (sess.Work.WakeAt != nil || sess.Work.InteractionID != "") {
+		return // the Agents business goes on with it (继续, a wake), or its card already rang
+	}
+	// An inbox agent's result is the draft in the inbox; a turn asked for through the bot is answered there; a quiet
+	// task's is told in the main conversation (taskTurnEnded, #1731).
+	if !ok || s.isInboxAgent(id) || s.channelAnsweredPush(id) || s.quietSession(machine, id) {
+		return
+	}
+	s.fleet.mu.Lock()
+	pushed := time.Since(s.fleet.notified[id]) < 3*time.Minute // the assistant already pushed what matters (notify_user)
+	s.fleet.mu.Unlock()
+	seen := agentState(sess, s.seenAt(machine, id)) == proto.StateIdle
+	verdict, took := s.turnsBook().settle(machine+"/"+id, gen, sess, seen, s.muted(machine, id), pushed, time.Now(), t.backgroundHold())
+	if verdict != finishPush {
+		return
+	}
+	// The own conversation of a scheduled task that pushes only what its runs send, finished normally (#2396): its
+	// news, if any, went out with notify_user. Decided after settle, not as a push: a turn held for its background
+	// work stays followed, and the wake that ends it is judged on its own (an error there is pushed).
+	if s.quietTaskFinish(sess) {
+		return
+	}
+	if s.stopDuplicate(machine, id) {
+		return
+	}
+	place := s.machineName(machine)
+	if sess.SpaceName != "" {
+		place += " · " + sess.SpaceName
+		if sess.SlotName != "" && sess.SlotName != fmt.Sprint(sess.SlotIndex) {
+			place += " › " + sess.SlotName
+		}
+	}
+	head, text := doneAlert(s.lang(context.Background()), sess)
+	s.deliver(Notification{Kind: assistantwire.NotifyDone, DeviceID: machine, Subtitle: place, SessionID: id, Title: head,
+		Body: text, TookMS: took.Milliseconds(), LongMS: t.longTurn().Milliseconds()})
+}
+
+// doneAlert is the title and body of the push for sess's finished turn, in l.
+func doneAlert(l i18n.Lang, sess proto.Session) (head, text string) {
+	if spaceOf(sess) == SpaceHealth { // the lock screen hears there is news, not what it is, nor the conversation's title
+		return "✅ " + i18n.T(l, "push.health_title"), i18n.T(l, "push.health_body")
+	}
+	title := sess.Title
+	if title == "" || title == "Claude Code" {
+		title = path.Base(sess.Cwd)
+	}
+	head, text = "✅ "+title, sess.LastText
+	if text == "" {
+		text = i18n.T(l, "hub-machine.done")
+	}
+	if w := sess.Work; w != nil && w.Line != "" {
+		switch w.Phase {
+		case proto.WorkDone:
+			text = w.Line
+		case proto.WorkBlocked:
+			head, text = "⏳ "+title, w.Line
+		}
+	}
+	// The model service cut the turn off: no ✅ over the error (#1516). A Codex turn's error is no words of its
+	// answer: the session says it (#2185).
+	if e := strings.TrimSpace(sess.TurnError); e != "" {
+		head, text = "⚠️ "+title, interruptedSummary+"："+e
+	} else if assistantwire.CutOff(text) {
+		head, text = "⚠️ "+title, interruptedSummary+"："+strings.TrimSpace(text)
+	}
+	return head, text
+}
+
+// kbAgentDone tells the knowledge base an agent finished a turn (its projects' timelines get what it came to).
+func (s *Service) kbAgentDone(machine string, sess proto.Session) {
+	if strings.TrimSpace(sess.LastText) == "" {
+		return
+	}
+	s.kbAgentTurn(context.Background(), assistantwire.KBAgentTurn{MachineID: machine, SessionID: sess.SessionID, Cwd: sess.Cwd,
+		Title: sess.Title, Line: workLogLine(sess)})
+}
+
+// notifyInteraction pushes a new card to the devices that take "needs you" pushes.
+func (s *Service) notifyInteraction(ix proto.Interaction, machine string) {
+	s.deliver(Notification{Kind: assistantwire.NotifyInput, DeviceID: ix.MachineID, Subtitle: machine, SessionID: ix.SessionID,
+		Interaction: &ix})
+}
+
+// deliver has the hub deliver a push the manager decided on (notify.request), off the caller's way.
+func (s *Service) deliver(n Notification) {
+	if n.ID == "" {
+		n.ID = "ntf_" + randomHex(8)
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := s.hub.NotifyRequest(ctx, NotifyRequest{Notification: n}); err != nil {
+			s.logf("assistant: push: %v", err)
+		}
+	}()
+}
+
+// noteAsked: the conversation pushed what matters itself (notify_user): its own finished push is left out.
+func (s *Service) noteAsked(session string) {
+	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	if s.fleet.notified == nil {
+		s.fleet.notified = map[string]time.Time{}
+	}
+	s.fleet.notified[session] = time.Now()
+}
+
+// quietTaskConversation: session is the own conversation of a scheduled task that pushes only what its runs send
+// (TaskView.Push, #2396), as the last snapshot has the tasks. By the session alone: an assistant conversation's id is
+// unique, and a machine id from an older alias would miss it.
+func (s *Service) quietTaskConversation(session string) bool {
+	r := &s.fleet.rep
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, t := range r.tasks {
+		if t.Push == assistantwire.PushAsked && t.RunSessionID != "" && t.RunSessionID == session {
+			return true
+		}
+	}
+	return false
+}
+
+// quietTaskFinish: sess's finished turn is not pushed: a quiet task's own conversation (quietTaskConversation) that
+// may go unpushed now (assistantwire.QuietTaskFinish: Claude Code, not the main conversation, a normal finish).
+func (s *Service) quietTaskFinish(sess proto.Session) bool {
+	r := &s.fleet.rep
+	r.mu.RLock()
+	p := r.profile
+	r.mu.RUnlock()
+	if p == nil {
+		return false // the assistant's settings (its main conversation) not known yet: pushed as ever
+	}
+	return s.quietTaskConversation(sess.SessionID) && assistantwire.QuietTaskFinish(sess, p.Main)
+}

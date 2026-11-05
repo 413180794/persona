@@ -31,7 +31,7 @@ func TestMailToolsThroughItsConnector(t *testing.T) {
 	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
 	mcpCall := func(name, args string, assistant bool) proto.ToolResult {
 		params, _ := json.Marshal(map[string]any{"name": name, "args": json.RawMessage(args), "assistant": assistant})
-		out, err := m.onRequest(context.Background(), "mcp.call", params)
+		out, err := nodeAsks(context.Background(), m, "mcp.call", params)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -86,7 +86,7 @@ func TestConnectorCardsBelongToTheCallingConversation(t *testing.T) {
 	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
 	args := json.RawMessage(`{"account_id":"acc1","to":[{"email":"someone@example.com"}],"subject":"s","text":"t"}`)
 	params, _ := json.Marshal(map[string]any{"name": "mail_send", "args": args, "assistant": true, "session_id": "conv1"})
-	go func() { _, _ = m.onRequest(context.Background(), "mcp.call", params) }()
+	go func() { _, _ = nodeAsks(context.Background(), m, "mcp.call", params) }()
 	var ix []proto.Interaction
 	for i := 0; i < 500 && len(ix) == 0; i++ {
 		time.Sleep(5 * time.Millisecond)
@@ -115,7 +115,7 @@ func TestAConnectorCardEndsWithItsCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan proto.ToolResult, 1)
 	go func() {
-		out, _ := box.onRequest(ctx, "mcp.call", params)
+		out, _ := nodeAsks(ctx, box, "mcp.call", params)
 		done <- out.(proto.ToolResult)
 	}()
 	var ix []proto.Interaction
@@ -146,4 +146,33 @@ func TestAConnectorCardEndsWithItsCall(t *testing.T) {
 	if len(m.sent) != 0 {
 		t.Fatalf("sent after its caller went away: %v", m.sent)
 	}
+}
+
+// The same through the manager (the node's tools are its; a connector's still runs at the hub, fleet.tool): the
+// node cancelling the call ends it at the hub, and the card the hub asked the manager for (fleet.ask) is withdrawn.
+func TestAConnectorCardEndsWithItsCallThroughTheManager(t *testing.T) {
+	h := newTestHub(t)
+	m := &replyMail{}
+	h.mail = m
+	h.connectors = connector.NewRegistry(nil)
+	h.registerConnectors()
+	box := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
+	h.machines, h.byID["box"] = append(h.machines, box), box
+	connectAssistant(t, h)
+	args := json.RawMessage(`{"account_id":"acc1","to":[{"email":"someone@example.com"}],"subject":"s","text":"t"}`)
+	params, _ := json.Marshal(map[string]any{"name": "mail_send", "args": args, "assistant": true, "session_id": "conv1"})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan any, 1)
+	go func() {
+		out, _ := nodeAsks(ctx, box, "mcp.call", params)
+		done <- out
+	}()
+	eventually(t, 5*time.Second, "the card", func() bool { return len(h.pendingInteractions()) == 1 })
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the call did not end with its caller")
+	}
+	eventually(t, 5*time.Second, "the card withdrawn", func() bool { return len(h.pendingInteractions()) == 0 })
 }

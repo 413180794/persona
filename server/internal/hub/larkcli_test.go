@@ -20,7 +20,7 @@ func TestAssistantLarkWithLarkCLIOnly(t *testing.T) {
 	m := newMachine(h, MachineConfig{ID: "server", Name: "服务器", Kind: "local"})
 	h.machines, h.byID["server"] = []*Machine{m}, m
 
-	out, err := m.onRequest(context.Background(), "assistant.lark", nil)
+	out, err := nodeAsks(context.Background(), m, "assistant.lark", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

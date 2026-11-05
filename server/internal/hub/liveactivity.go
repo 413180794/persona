@@ -1,24 +1,18 @@
 package hub
 
 import (
-	"cmp"
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"maps"
-	"math"
 	"net/http"
-	"path"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/i18n"
-	"github.com/nwverse/persona/server/internal/proto"
-	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // The "Fleet" Live Activity (docs/live-activity.md): one activity per phone, on the lock screen and in the Dynamic
@@ -46,84 +40,9 @@ const (
 	fleetMaxAge     = 8 * time.Hour // the system ends an activity after about this long; past it, start a new one
 )
 
-// FleetState is the activity's ContentState, field for field (apple/LiveActivity/FleetActivity.swift). Times are Unix
-// seconds: ActivityKit decodes pushed JSON with a default JSONDecoder, which would read a Date as seconds since 2001.
-type FleetState struct {
-	Phase    string      `json:"phase"` // needsYou | working | done | "" (nothing to show)
-	NeedsYou int         `json:"needsYou"`
-	Working  int         `json:"working"`
-	Unread   int         `json:"unread"`
-	Items    []FleetItem `json:"items"`
-	// WorkingSince is when the longest-running working agent started its turn (the phone runs the clock).
-	WorkingSince float64 `json:"workingSince,omitempty"`
-	// Details: the lock screen may show titles (the device's lock_details setting); otherwise only counts.
-	Details bool `json:"details"`
-	// Assistant: the assistant (对话 tab) is answering. Pushed only to devices that show it.
-	Assistant bool `json:"assistant,omitempty"`
-	// Left / Right: the compact Dynamic Island's sides (the device's island setting, notify.go IslandPrefs);
-	// empty means status counts.
-	Left  string `json:"left,omitempty"`
-	Right string `json:"right,omitempty"`
-	// Stats: the numbers the device shows, rounded so that small changes do not cost a push (usage.go).
-	Stats *FleetStats `json:"stats,omitempty"`
-	// Look: the persona the device's activity draws, as the app told the hub (prefs look); nil until it did.
-	Look *FleetLook `json:"look,omitempty"`
-}
-
-// FleetLook is the persona the activity draws (apple/Shared/FleetState.swift FleetLook): the hub only passes on what
-// the device told it.
-type FleetLook struct {
-	Design  string `json:"design"` // a built-in's drawing ("visor", "circuit"); a package's while its pictures cannot be read
-	Light   uint32 `json:"light"`  // the accent, 0xRRGGBB, light and dark
-	Dark    uint32 `json:"dark"`
-	Package string `json:"package,omitempty"` // a hub package, "<id>/<rev>": its pictures are on the phone
-}
-
-// FleetStats are the island's numbers. A push carries only those the device shows; the app's own copy has them all.
-type FleetStats struct {
-	TPM      int64       `json:"tpm,omitempty"`
-	Tokens   int64       `json:"tokens,omitempty"`
-	Requests int         `json:"requests,omitempty"`
-	Loads    []FleetLoad `json:"loads,omitempty"`
-}
-
-// FleetLoad is a machine's 1-minute load average over its cores, in percent (rounded to 5).
-type FleetLoad struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Percent int    `json:"percent"`
-}
-
-// round2 keeps two significant digits: 12345 → 12000, 987 → 990. The island shows "12k", so finer changes would
-// only spend the push budget.
-func round2(n int64) int64 {
-	if n < 100 {
-		return n
-	}
-	p := int64(1)
-	for n/p >= 100 {
-		p *= 10
-	}
-	return (n + p/2) / p * p
-}
-
-// fleetStats turns the usage summary into the island's numbers.
-func (h *Hub) fleetStats() FleetStats {
-	u := h.usageSummary()
-	st := FleetStats{TPM: round2(u.TPM), Tokens: round2(u.Tokens), Requests: int(round2(int64(u.Requests)))}
-	for _, m := range u.Machines {
-		name := m.ID
-		if mm := h.localMachine(m.ID); mm != nil && mm.cfg.Name != "" {
-			name = mm.cfg.Name
-		}
-		st.Loads = append(st.Loads, FleetLoad{ID: m.ID, Name: name, Percent: int(math.Round(m.Load*20)) * 5})
-	}
-	return st
-}
-
 // forDevice is what one device gets: its settings and persona, and of the assistant and the numbers only what it
 // shows (so a change it does not show costs no push).
-func (s FleetState) forDevice(p NotifyPrefs, stats FleetStats) FleetState {
+func forDevice(s FleetState, p NotifyPrefs, stats FleetStats) FleetState {
 	d := s
 	d.Details = p.LockDetails
 	d.Look = p.Look
@@ -170,23 +89,10 @@ func pickLoad(loads []FleetLoad, machine string) []FleetLoad {
 	return []FleetLoad{*best}
 }
 
-type FleetItem struct {
-	ID          string  `json:"id"` // machine/session, also the deep link
-	Title       string  `json:"title"`
-	Place       string  `json:"place"`
-	Kind        string  `json:"kind"` // permission | plan | question | screen | working | unread
-	Detail      string  `json:"detail"`
-	// Background: a working item whose turn ended while its background work runs (#2935, Session.BackgroundWorking);
-	// Detail then says what runs ("parity-audit · Verify · 169/185"). Older apps ignore it and show it working.
-	Background bool `json:"background,omitempty"`
-	Interaction string  `json:"interaction,omitempty"` // what 允许 / 拒绝 / 批准 resolve
-	Since       float64 `json:"since,omitempty"`
-}
-
-func (s FleetState) empty() bool { return s.Phase == "" }
+func fleetEmpty(s FleetState) bool { return s.Phase == "" }
 
 // needsYouIDs: the items waiting for the user, to tell a new one (push now) from anything else (merge).
-func (s FleetState) needsYouIDs() map[string]bool {
+func needsYouIDs(s FleetState) map[string]bool {
 	out := map[string]bool{}
 	for _, it := range s.Items {
 		if it.Kind != "working" && it.Kind != "unread" {
@@ -196,7 +102,7 @@ func (s FleetState) needsYouIDs() map[string]bool {
 	return out
 }
 
-func (s FleetState) relevance() float64 {
+func fleetRelevance(s FleetState) float64 {
 	switch s.Phase {
 	case "needsYou":
 		return 1
@@ -204,146 +110,6 @@ func (s FleetState) relevance() float64 {
 		return 0.5
 	}
 	return 0.2
-}
-
-// fleetInput is one agent as the fleet sees it.
-type fleetInput struct {
-	Machine   string // display name
-	Session   proto.Session
-	Muted     bool
-	TurnStart time.Time // zero: unknown
-}
-
-// buildFleet sums agents up the way the Agents list does (docs/ios.md): needs you first (oldest request first), then
-// working (longest first), then finished unseen. Muted agents, idle / offline ones, and /loop agents waiting for
-// their next tick are left out; the assistant only counts when it asks something.
-func buildFleet(agents []fleetInput, ixs []proto.Interaction) FleetState {
-	return buildFleetIn(i18n.Default, agents, ixs)
-}
-
-// buildFleetIn is buildFleet with the texts for people in l (the user's language).
-func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) FleetState {
-	byKey := map[string]fleetInput{}
-	for _, a := range agents {
-		byKey[a.Session.MachineID+"/"+a.Session.SessionID] = a
-	}
-	var st FleetState
-	var needs, working, unread []FleetItem
-	asked := map[string]bool{}
-	for _, ix := range ixs { // already oldest first
-		// Fleet is shared with legacy clients; its existing terminal fallback stays available.
-		if ix.Kind == proto.IxElicitation {
-			continue
-		}
-		key := ix.MachineID + "/" + ix.SessionID
-		a, ok := byKey[key]
-		if !ok || a.Muted {
-			continue
-		}
-		asked[key] = true
-		needs = append(needs, FleetItem{
-			ID: key, Title: agentTitle(a.Session), Place: agentPlace(a.Machine, a.Session), Kind: ix.Kind,
-			Detail: clip(oneLine(interactionDetail(l, ix)), 60), Interaction: ix.ID, Since: unix(ix.CreatedAt),
-		})
-	}
-	for _, a := range agents {
-		s := a.Session
-		key := s.MachineID + "/" + s.SessionID
-		if a.Muted || asked[key] {
-			continue
-		}
-		switch s.State {
-		case proto.StateNeedsYou: // a TUI dialog with no interaction yet
-			if s.Assistant {
-				continue
-			}
-			needs = append(needs, FleetItem{ID: key, Title: agentTitle(s), Place: agentPlace(a.Machine, s), Kind: proto.IxScreen, Detail: i18n.T(l, "hub-liveactivity.screen")})
-		case proto.StateWorking:
-			if s.Assistant {
-				st.Assistant = true
-				continue
-			}
-			since := a.TurnStart
-			if since.IsZero() {
-				since = s.UpdatedAt
-			}
-			it := FleetItem{ID: key, Title: agentTitle(s), Place: agentPlace(a.Machine, s), Kind: "working", Since: unix(since)}
-			if s.BackgroundWorking {
-				it.Background, it.Detail = true, clip(backgroundDetail(l, s), 60)
-			}
-			working = append(working, it)
-		case proto.StateUnread:
-			if s.Assistant || s.Loop != nil {
-				continue
-			}
-			unread = append(unread, FleetItem{ID: key, Title: agentTitle(s), Place: agentPlace(a.Machine, s), Kind: "unread",
-				Detail: clip(oneLine(firstLine(s.LastText)), 60), Since: unix(s.UpdatedAt)})
-		}
-	}
-	sort.SliceStable(working, func(i, j int) bool { return working[i].Since < working[j].Since })
-	sort.SliceStable(unread, func(i, j int) bool { return unread[i].Since > unread[j].Since })
-	st.NeedsYou, st.Working, st.Unread = len(needs), len(working), len(unread)
-	switch {
-	case st.NeedsYou > 0:
-		st.Phase = "needsYou"
-	case st.Working > 0:
-		st.Phase = "working"
-	case st.Unread > 0:
-		st.Phase = "done"
-	}
-	if len(working) > 0 {
-		st.WorkingSince = working[0].Since
-	}
-	st.Items = append(append(append([]FleetItem{}, needs...), working...), unread...)
-	if len(st.Items) > fleetMaxItems {
-		st.Items = st.Items[:fleetMaxItems]
-	}
-	return st
-}
-
-func agentTitle(s proto.Session) string {
-	t := transcript.StripInjected(s.Title)
-	if t == "" || t == "Claude Code" {
-		t = path.Base(s.Cwd)
-	}
-	return clip(oneLine(t), 24)
-}
-
-// agentPlace is "机器 · 空间 › 标签", the subtitle pushes use too.
-func agentPlace(machine string, s proto.Session) string {
-	place := machine
-	if s.SpaceName != "" {
-		place += " · " + s.SpaceName
-		if s.SlotName != "" && s.SlotName != fmt.Sprint(s.SlotIndex) {
-			place += " › " + s.SlotName
-		}
-	}
-	return clip(oneLine(place), 32)
-}
-
-func interactionDetail(l i18n.Lang, ix proto.Interaction) string {
-	switch ix.Kind {
-	case proto.IxPermission:
-		if ix.Summary != "" {
-			return ix.Summary
-		}
-		return ix.ToolName
-	case proto.IxPlan:
-		return firstLine(ix.Plan)
-	case proto.IxQuestion:
-		if len(ix.Questions) > 0 {
-			return ix.Questions[0].Question
-		}
-		return ix.Summary
-	}
-	return i18n.T(l, "hub-liveactivity.screen")
-}
-
-func unix(t time.Time) float64 {
-	if t.IsZero() {
-		return 0
-	}
-	return float64(t.Unix())
 }
 
 // coalescer decides when a new fleet state goes out: a change in what needs the user (a request arriving, or answered
@@ -361,7 +127,7 @@ func (c *coalescer) offer(st FleetState) (now, schedule bool) {
 		c.pending = false
 		return false, false
 	}
-	if needs := st.needsYouIDs(); !maps.Equal(needs, c.needs) && (len(needs) > 0 || len(c.needs) > 0) {
+	if needs := needsYouIDs(st); !maps.Equal(needs, c.needs) && (len(needs) > 0 || len(c.needs) > 0) {
 		return true, false
 	}
 	if c.pending {
@@ -373,7 +139,7 @@ func (c *coalescer) offer(st FleetState) (now, schedule bool) {
 
 func (c *coalescer) sentState(st FleetState) {
 	c.sent, _ = json.Marshal(st)
-	c.needs = st.needsYouIDs()
+	c.needs = needsYouIDs(st)
 	c.pending = false
 }
 
@@ -449,22 +215,27 @@ func (la *liveActivities) settingsChanged() {
 	la.changed()
 }
 
-// snapshot computes the fleet from every machine's sessions and the pending interactions.
+// snapshot is the fleet as the manager worked it out last (fleet.live, fleet_link.go): it stays while the manager is
+// away.
 func (la *liveActivities) snapshot() FleetState {
-	h := la.h
-	var agents []fleetInput
-	for _, m := range h.machinesNow() {
-		for _, s := range h.decorated(m) {
-			if s.Quiet { // a quiet task's agent: the main conversation tells about it (#1731)
-				continue
-			}
-			agents = append(agents, fleetInput{
-				Machine: m.cfg.Name, Session: s, Muted: h.muted(m.cfg.ID, s.SessionID),
-				TurnStart: h.turns.startOf(m.cfg.ID + "/" + s.SessionID),
-			})
-		}
-	}
-	return buildFleetIn(h.userLang(), agents, h.pendingInteractions())
+	st, _ := la.h.fleetLive()
+	return st
+}
+
+// The activity's content and numbers are the manager's (assistant/fleet_live.go): the hub gives each device its part
+// and pushes it.
+type (
+	FleetState = assistantwire.FleetState
+	FleetLook  = assistantwire.FleetLook
+	FleetStats = assistantwire.FleetStats
+	FleetLoad  = assistantwire.FleetLoad
+	FleetItem  = assistantwire.FleetItem
+)
+
+// fleetStats are the island's numbers as the manager told them last.
+func (h *Hub) fleetStats() FleetStats {
+	_, stats := h.fleetLive()
+	return stats
 }
 
 func (la *liveActivities) run(ctx context.Context) {
@@ -539,7 +310,7 @@ func (la *liveActivities) tick() {
 	now := la.now()
 	la.mu.Lock()
 	over := !la.emptyAt.IsZero() && now.Sub(la.emptyAt) >= fleetEndAfter
-	stale := !la.last.empty() && now.Sub(la.lastPush) >= fleetRefresh
+	stale := !fleetEmpty(la.last) && now.Sub(la.lastPush) >= fleetRefresh
 	doneLong := la.last.Phase == "done" && !la.doneSince.IsZero() && now.Sub(la.doneSince) >= fleetDoneLinger
 	last := la.last
 	la.mu.Unlock()
@@ -548,7 +319,7 @@ func (la *liveActivities) tick() {
 		la.endAll()
 	case stale:
 		la.flush(la.snapshot(), false, true)
-	case !last.empty():
+	case !fleetEmpty(last):
 		la.metrics(last, now)
 	}
 }
@@ -574,7 +345,7 @@ func (la *liveActivities) metrics(last FleetState, now time.Time) {
 		if !ok || !devicePrefs(d.Prefs).LiveActivity || la.h.phoneOpen(r.DeviceID) {
 			continue // an open app has every number from the fleet event
 		}
-		dst := last.forDevice(devicePrefs(d.Prefs), stats)
+		dst := forDevice(last, devicePrefs(d.Prefs), stats)
 		if la.markSent(r.DeviceID, dst, now, false) {
 			la.send(d, r, liveActivityPayload("update", dst, now), false)
 		}
@@ -610,7 +381,7 @@ func (la *liveActivities) phoneLeft(device string, clean bool) {
 	now := la.now()
 	la.mu.Lock()
 	if clean && ok && !la.shownAt.IsZero() && now.Sub(la.shownAt) < fleetRefresh {
-		b, _ := json.Marshal(la.shownState.forDevice(devicePrefs(d.Prefs), la.shownStats))
+		b, _ := json.Marshal(forDevice(la.shownState, devicePrefs(d.Prefs), la.shownStats))
 		la.sent[device], la.sentAt[device] = b, la.shownAt
 	} else {
 		delete(la.sent, device)
@@ -644,8 +415,8 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 	la.coal.sentState(st)
 	now := la.now()
 	la.mu.Lock()
-	wasOver := la.last.empty() || la.last.Phase == "done"
-	if st.empty() {
+	wasOver := fleetEmpty(la.last) || la.last.Phase == "done"
+	if fleetEmpty(st) {
 		if la.emptyAt.IsZero() {
 			la.emptyAt = now
 		}
@@ -669,7 +440,7 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 		rows = append(rows, r)
 	}
 	la.mu.Unlock()
-	if st.empty() {
+	if fleetEmpty(st) {
 		return time.Time{} // ended by tick after fleetEndAfter, unless something comes back first
 	}
 	stats := la.h.fleetStats()
@@ -682,7 +453,7 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 		if !prefs.LiveActivity {
 			continue
 		}
-		dst := st.forDevice(prefs, stats)
+		dst := forDevice(st, prefs, stats)
 		switch {
 		case r.PushToken != "" && now.Sub(r.StartedAt) < fleetMaxAge:
 			if la.h.phoneOpen(r.DeviceID) {
@@ -749,7 +520,7 @@ func liveActivityPayloadIn(l i18n.Lang, event string, st FleetState, now time.Ti
 		aps["dismissal-date"] = now.Unix()
 	default:
 		aps["stale-date"] = now.Add(fleetStaleIn).Unix()
-		aps["relevance-score"] = st.relevance()
+		aps["relevance-score"] = fleetRelevance(st)
 	}
 	if event == "start" {
 		aps["attributes-type"] = "JarvisActivityAttributes"
@@ -866,27 +637,4 @@ func (la *liveActivities) routes(api *http.ServeMux) {
 		st.Stats = &stats
 		writeJSON(w, map[string]any{"fleet": st})
 	})
-}
-
-// backgroundDetail is what a background-working agent runs, in a line: its running workflow ("parity-audit · Verify ·
-// 169/185"), else how many background tasks.
-func backgroundDetail(l i18n.Lang, s proto.Session) string {
-	for _, w := range s.Workflows {
-		if !w.Running {
-			continue
-		}
-		parts := []string{cmp.Or(w.Name, w.Summary, "workflow")}
-		if w.Phase != "" {
-			parts = append(parts, w.Phase)
-		}
-		parts = append(parts, fmt.Sprintf("%d/%d", w.AgentsDone, w.AgentsStarted))
-		return strings.Join(parts, " · ")
-	}
-	n := len(s.Background)
-	for _, a := range s.Subagents {
-		if a.Running {
-			n++
-		}
-	}
-	return i18n.T(l, "hub-liveactivity.background", i18n.Args{"count": n})
 }

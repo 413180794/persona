@@ -3,7 +3,6 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,7 +16,6 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The knowledge base is the assistant's (internal/assistant kb*.go, its own tests there); these are the hub's ends:
@@ -147,38 +145,6 @@ func TestKBRoutesRelayed(t *testing.T) {
 	}
 }
 
-// An agent's finished turn goes into the timeline of the projects of its directory: once per agent and half hour,
-// only on that machine; one that ends while the assistant is away waits at the hub and goes when it is back.
-func TestKBAgentDone(t *testing.T) {
-	h := newTestHub(t)
-	e := withKB(t, h)
-	if _, err := e.Apply(kb.KindProject, "Jarvis", kb.Update{Dirs: []string{"server:/code/jarvis"}}); err != nil {
-		t.Fatal(err)
-	}
-	a := connectAssistant(t, h)
-	s := proto.Session{SessionID: "s1", Cwd: "/code/jarvis/ios", Title: "修排序", LastText: "改好了，\n测试通过"}
-	h.kbAgentDone("server", s)
-	h.kbAgentDone("server", s) // the same agent again right away: one line
-	h.kbAgentDone("laptop", proto.Session{SessionID: "s2", Cwd: "/code/jarvis", LastText: "x"})
-	h.kbAgentDone("server", proto.Session{SessionID: "s3", Cwd: "/code/jarvis"}) // nothing said
-	eventually(t, 5*time.Second, "the agent's line", func() bool { return len(e.Store.Log("jarvis", 10)) > 0 })
-	a.bh.Settle()
-	if log := e.Store.Log("jarvis", 10); len(log) != 1 || !strings.Contains(log[0], "Agent · 修排序 · server · 改好了， 测试通过") {
-		t.Fatalf("log: %v", log)
-	}
-
-	a.stop()
-	<-a.done
-	eventually(t, 5*time.Second, "the hub sees the assistant gone", func() bool { return h.busConnOf(assistantwire.AssistantID) == nil })
-	h.kbAgentDone("server", proto.Session{SessionID: "s4", Cwd: "/code/jarvis", Title: "发版", LastText: "先写一半"})
-	h.kbAgentDone("server", proto.Session{SessionID: "s4", Cwd: "/code/jarvis", Title: "发版", LastText: "发好了"})
-	connectAssistant(t, h)
-	eventually(t, 5*time.Second, "the turn that waited", func() bool { return len(e.Store.Log("jarvis", 10)) == 2 })
-	if log := e.Store.Log("jarvis", 10); !strings.Contains(log[len(log)-1], "Agent · 发版 · server · 发好了") {
-		t.Fatalf("log after the assistant came back: %v", log)
-	}
-}
-
 // archiveExample is a connector whose archive hands over one chat (two messages) the first time.
 type archiveExample struct{ calls int }
 
@@ -254,23 +220,6 @@ func TestKBOffAtTheHub(t *testing.T) {
 	}
 	if c, p, err := h.forgetArchive(ctx, "example"); c != 0 || p != 0 || err != nil {
 		t.Fatalf("forget asked: %d %d %v", c, p, err)
-	}
-}
-
-// The queue of agents' turns keeps the latest of each agent and at most kbPendingMost.
-func TestKBTurnQueue(t *testing.T) {
-	var q []assistantwire.KBAgentTurn
-	q = queueKBTurn(q, assistantwire.KBAgentTurn{MachineID: "m", SessionID: "a", Line: "1"})
-	q = queueKBTurn(q, assistantwire.KBAgentTurn{MachineID: "m", SessionID: "b", Line: "2"})
-	q = queueKBTurn(q, assistantwire.KBAgentTurn{MachineID: "m", SessionID: "a", Line: "3"})
-	if len(q) != 2 || q[0].SessionID != "b" || q[1].Line != "3" {
-		t.Fatalf("queue %+v", q)
-	}
-	for i := range kbPendingMost + 10 {
-		q = queueKBTurn(q, assistantwire.KBAgentTurn{MachineID: "m", SessionID: fmt.Sprint(i)})
-	}
-	if len(q) != kbPendingMost || q[len(q)-1].SessionID != fmt.Sprint(kbPendingMost+9) {
-		t.Fatalf("capped: %d", len(q))
 	}
 }
 

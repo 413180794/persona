@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 	"github.com/nwverse/persona/server/internal/update"
 )
 
@@ -701,6 +703,15 @@ func (h *Hub) updateBusy() []busyItem {
 		}
 	}
 	return out
+}
+
+// agentTitle is an agent's title for the update's busy list.
+func agentTitle(s proto.Session) string {
+	t := transcript.StripInjected(s.Title)
+	if t == "" || t == "Claude Code" {
+		t = path.Base(s.Cwd)
+	}
+	return clip(oneLine(t), 24)
 }
 
 func (u *updater) setState(state string) { u.set(state, "", "") }

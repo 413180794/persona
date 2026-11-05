@@ -82,8 +82,8 @@ func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 	if len(calls()) != 1 {
 		t.Fatal("named once")
 	}
-	n.m.sessions = []proto.Session{{SessionID: "new", Cwd: "/home/me/.jarvis/assistant", Title: "帮我查一下竞品的定价"},
-		{SessionID: "x", Cwd: "/code/app", Title: "帮我查一下竞品的定价"}}
+	n.m.setSessions([]proto.Session{{SessionID: "new", Cwd: "/home/me/.jarvis/assistant", Title: "帮我查一下竞品的定价"},
+		{SessionID: "x", Cwd: "/code/app", Title: "帮我查一下竞品的定价"}})
 	list := h.decorated(n.m)
 	if list[0].Title != "1101 | 研究 | 竞品定价" || list[1].Title != "帮我查一下竞品的定价" {
 		t.Fatalf("only the assistant conversation shows it: %+v", list)
@@ -116,7 +116,7 @@ func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 	}
 
 	// A Codex conversation's title is the assistant's only: the node would write Claude's line into the rollout.
-	n.m.sessions = append(n.m.sessions, proto.Session{SessionID: "cx", Cwd: "/home/me/.jarvis/assistant", Agent: "codex"})
+	n.m.setSessions(append(n.m.sessionList(), proto.Session{SessionID: "cx", Cwd: "/home/me/.jarvis/assistant", Agent: "codex"}))
 	sends := n.sent()
 	res, _ = http.Post(srv.URL+"/r/cx", "application/json", strings.NewReader(`{"title":"codex 的对话"}`))
 	if res.StatusCode != http.StatusOK || n.sent() != sends || shown(h, "cx").Title != "codex 的对话" {

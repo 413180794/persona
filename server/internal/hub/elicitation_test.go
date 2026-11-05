@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"context"
 	"encoding/json"
 	"net"
 	"net/http/httptest"
@@ -12,71 +11,54 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-func TestElicitationCapabilityAndResolution(t *testing.T) {
+// The manager's elicitation card (fleet.interaction) reaches only the apps that take one: the broadcast, the pending
+// cards a connecting app gets after its hello, the REST list; the manager is told whether such an app is there.
+func TestElicitationReachesOnlyCapableApps(t *testing.T) {
 	h := newTestHub(t)
 	legacy := &client{out: make(chan []byte, 32)}
 	h.clients[legacy] = struct{}{}
-	ix := proto.Interaction{ID: "ix_example", MachineID: "test-machine", SessionID: "test-session", Kind: proto.IxElicitation,
-		Summary: "请选择", ExpiresAt: time.Now().Add(time.Minute), Elicitation: &proto.Elicitation{Mode: "form", Message: "请选择"}}
-	if r, err := h.waitInteraction(context.Background(), ix); err != nil || !r.Dismiss || len(h.pendingInteractions()) != 0 {
-		t.Fatalf("legacy-only must return to terminal: %+v %v", r, err)
-	}
 	capable := &client{out: make(chan []byte, 32)}
 	h.clients[capable] = struct{}{}
+	if h.hasElicitationClient() {
+		t.Fatal("no app said it takes elicitations yet")
+	}
 	h.onClientHello(capable, []byte(`{"platform":"android","version":"test","features":["elicitation","ws_notify"]}`))
 	<-capable.out
-	for _, action := range []string{"accept", "decline", "cancel", "dismiss"} {
-		done := make(chan proto.Resolution, 1)
-		go func() { r, _ := h.waitInteraction(context.Background(), ix); done <- r }()
-		select {
-		case raw := <-capable.out:
-			var event struct {
-				Type        string            `json:"type"`
-				Interaction proto.Interaction `json:"interaction"`
-			}
-			if json.Unmarshal(raw, &event) != nil || event.Type != "interaction" || event.Interaction.Kind != proto.IxElicitation {
-				t.Fatalf("event: %s", raw)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatal("capable client missed interaction")
+	if !h.hasElicitationClient() {
+		t.Fatal("the manager would not be told an app takes them")
+	}
+	ix := proto.Interaction{ID: "ix_example", MachineID: "test-machine", SessionID: "test-session", Kind: proto.IxElicitation,
+		Summary: "请选择", ExpiresAt: time.Now().Add(time.Minute), Elicitation: &proto.Elicitation{Mode: "form", Message: "请选择"}}
+	reportInteraction(t, h, ix)
+	select {
+	case raw := <-capable.out:
+		var event struct {
+			Type        string            `json:"type"`
+			Interaction proto.Interaction `json:"interaction"`
 		}
-		for len(legacy.out) > 0 {
-			var event map[string]any
-			_ = json.Unmarshal(<-legacy.out, &event)
-			if event["type"] == "interaction" || event["type"] == "notify" {
-				t.Fatalf("legacy received elicitation: %v", event)
-			}
+		if json.Unmarshal(raw, &event) != nil || event.Type != "interaction" || event.Interaction.Kind != proto.IxElicitation {
+			t.Fatalf("event: %s", raw)
 		}
-		joining := &client{out: make(chan []byte, 8)}
-		h.sendPendingInteractions(joining, false)
-		if len(joining.out) != 0 {
-			t.Fatal("pre-hello snapshot leaked elicitation")
-		}
-		h.onClientHello(joining, []byte(`{"features":["elicitation"]}`))
-		<-joining.out // ack
-		if len(joining.out) != 1 {
-			t.Fatal("hello must replay pending elicitation")
-		}
-		if err := h.resolve(ix.ID, proto.Resolution{Allow: new(bool)}); err == nil {
-			t.Fatal("invalid action consumed request")
-		}
-		want := proto.Resolution{Action: action, Dismiss: action == "dismiss", Content: map[string]any{"value": true}}
-		if err := h.resolve(ix.ID, want); err != nil {
-			t.Fatal(err)
-		}
-		select {
-		case got := <-done:
-			if got.Action != want.Action || got.Dismiss != want.Dismiss {
-				t.Fatalf("resolution: %+v", got)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatal("hook did not get resolution")
-		}
-		for len(capable.out) > 0 {
-			<-capable.out
+	case <-time.After(5 * time.Second):
+		t.Fatal("capable client missed interaction")
+	}
+	for len(legacy.out) > 0 {
+		var event map[string]any
+		_ = json.Unmarshal(<-legacy.out, &event)
+		if event["type"] == "interaction" || event["type"] == "notify" {
+			t.Fatalf("legacy received elicitation: %v", event)
 		}
 	}
-	h.interactions[ix.ID] = &pending{ix: ix}
+	joining := &client{out: make(chan []byte, 8)}
+	h.sendPendingInteractions(joining, false)
+	if len(joining.out) != 0 {
+		t.Fatal("pre-hello snapshot leaked elicitation")
+	}
+	h.onClientHello(joining, []byte(`{"features":["elicitation"]}`))
+	<-joining.out // ack
+	if len(joining.out) != 1 {
+		t.Fatal("hello must replay pending elicitation")
+	}
 	for _, tc := range []struct {
 		header string
 		count  int
@@ -93,5 +75,9 @@ func TestElicitationCapabilityAndResolution(t *testing.T) {
 		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &body) != nil || len(body.Interactions) != tc.count {
 			t.Fatalf("REST %q: %d %s", tc.header, w.Code, w.Body.String())
 		}
+	}
+	reportResolved(t, h, ix.ID, "")
+	if len(h.pendingInteractions()) != 0 {
+		t.Fatal("the card the manager ended is still listed")
 	}
 }

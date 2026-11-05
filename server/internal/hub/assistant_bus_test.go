@@ -75,12 +75,15 @@ func dialAssistantWithStore(t *testing.T, h *Hub, url string, schedule bool, sto
 			t.Logf(format, args...)
 		}
 	}
-	o := assistant.BusOptions{Hub: url, Token: tok, Backoff: 50 * time.Millisecond, Version: "test", Deploy: "test", Logf: logf}
+	// The hub's test machines are its devices unless the test gives it the real ones (startTestManager): what comes
+	// from the nodes is the manager's (fleet_mirror_test.go).
+	o := assistant.BusOptions{Hub: url, Token: tok, Backoff: 50 * time.Millisecond, Version: "test", Deploy: "test", Logf: logf,
+		Devices: mirrorOf(h)}
 	for _, f := range opts {
 		f(&o)
 	}
 	bh := assistant.NewBusHub(o)
-	svc := assistant.New(assistant.Options{Hub: bh, Logf: logf, Store: func() assistant.Store {
+	svc := assistant.New(assistant.Options{Hub: bh, Logf: logf, Devices: o.Devices, Store: func() assistant.Store {
 		if store != nil {
 			return store
 		}

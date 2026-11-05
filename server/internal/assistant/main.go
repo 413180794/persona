@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/coder/websocket"
 
@@ -71,8 +72,14 @@ func Main(ctx context.Context, version string, stdin io.Reader) error {
 	var svc *Service
 	devs := devices.New(devices.Options{Store: database, Logf: log.New(os.Stderr, "devices: ", log.LstdFlags).Printf,
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
-			return svc.NodeAnswer(ctx, machine, method, params)
+			if out, ok, err := svc.NodeAnswer(ctx, machine, method, params); ok {
+				return out, ok, err
+			}
+			return svc.NodeRequest(ctx, machine, method, params) // the interactions, the MCP tools (fleet.go)
 		},
+		Event:    func(machine, event string, params json.RawMessage) bool { return svc.NodeEvent(machine, event, params) },
+		Detached: func(machine string) { svc.NodeDetached(machine) },
+		Location: func() *time.Location { return svc.location(context.Background()) },
 		// A node's new connection gets the launchers added in Persona, with their keys (models_launchers.go).
 		NodeCalls: func(ctx context.Context, machine string) []devicewire.NodeCall {
 			b, err := json.Marshal(map[string]any{"launchers": svc.managedForNodes(ctx)})
@@ -90,7 +97,7 @@ func Main(ctx context.Context, version string, stdin io.Reader) error {
 	// The knowledge base in the data directory here (the hub's own beside it), kept as the hub's hub.json says (hello).
 	home := identity.HomeDir()
 	// The model providers' keys are sealed with secret.key beside hub.json (the hub's; one elsewhere needs a copy).
-	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logger.Printf,
+	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logger.Printf, Devices: devs,
 		KB: &KBOptions{Dir: filepath.Join(home, "data"), KeyDir: home}, SecretKey: filepath.Join(home, "secret.key")})
 	logger.Printf("connecting to %s", hub)
 	done := make(chan struct{})

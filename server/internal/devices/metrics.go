@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -6,16 +6,20 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Machine monitoring (docs/machines.md): every node sends a sample every 10 s (sysmon); the hub keeps the latest in
-// memory for the live values and every sample in Postgres for the charts: raw for the latest hour, then one row a
-// minute, nothing older than a day.
+// Machine monitoring (docs/machines.md) is the manager's: every node sends a sample every 10 s (sysmon); the manager
+// keeps the latest in memory for the live values and every sample in Postgres for the charts: raw for the latest
+// hour, then one row a minute, nothing older than a day. What each machine is (node.info's system) is kept too, for
+// when it is offline, and goes into its devices.state. The token usage the nodes meter (node/usage.go) is summed up
+// here as well, for the Dynamic Island and GET /api/v1/usage. The hub relays the routes (devicewire.MetricsRoutes).
 
 const (
 	metricsRawFor   = time.Hour
@@ -69,48 +73,48 @@ func (b *metricsBook) now(machine string, at time.Time) *proto.MetricSample {
 	return &s
 }
 
-func (h *Hub) metricsStore() metricsStore {
-	if s, ok := h.store.(metricsStore); ok {
+func (d *Devices) metricsStore() metricsStore {
+	if s, ok := d.opts.Store.(metricsStore); ok {
 		return s
 	}
 	return nil
 }
 
 // onSystem keeps what a node said it is (node.info) for when it is offline.
-func (h *Hub) onSystem(machine string, s *proto.System) {
+func (d *Devices) onSystem(machine string, s *proto.System) {
 	if s == nil {
 		return
 	}
-	h.metrics.setSystem(machine, *s)
-	if st := h.metricsStore(); st != nil {
+	d.metrics.setSystem(machine, *s)
+	if st := d.metricsStore(); st != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := st.PutMachineSystem(ctx, machine, *s); err != nil {
-			h.logf("[%s] save system: %v", machine, err)
+			d.logf("[%s] save system: %v", machine, err)
 		}
 	}
 }
 
 // onMetrics takes a node's "metrics" notification.
-func (h *Hub) onMetrics(machine string, params json.RawMessage) {
+func (d *Devices) onMetrics(machine string, params json.RawMessage) {
 	var p struct {
 		Sample proto.MetricSample `json:"sample"`
 	}
 	if json.Unmarshal(params, &p) != nil || p.Sample.T == 0 {
 		return
 	}
-	h.metrics.mu.Lock()
-	if h.metrics.latest == nil {
-		h.metrics.latest = map[string]proto.MetricSample{}
+	d.metrics.mu.Lock()
+	if d.metrics.latest == nil {
+		d.metrics.latest = map[string]proto.MetricSample{}
 	}
-	h.metrics.latest[machine] = p.Sample
-	h.metrics.mu.Unlock()
-	if st := h.metricsStore(); st != nil {
+	d.metrics.latest[machine] = p.Sample
+	d.metrics.mu.Unlock()
+	if st := d.metricsStore(); st != nil {
 		go func() { // not on the node's read loop
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := st.InsertMetric(ctx, machine, p.Sample); err != nil {
-				h.logf("[%s] save metrics: %v", machine, err)
+				d.logf("[%s] save metrics: %v", machine, err)
 			}
 		}()
 	}
@@ -118,28 +122,28 @@ func (h *Hub) onMetrics(machine string, params json.RawMessage) {
 
 // metricsLoop loads the machines' systems, then each minute rolls up the raw rows past the hour and drops what is
 // older than a day.
-func (h *Hub) metricsLoop(ctx context.Context) {
-	st := h.metricsStore()
+func (d *Devices) metricsLoop(ctx context.Context) {
+	st := d.metricsStore()
 	if st == nil {
 		return
 	}
 	if systems, err := st.MachineSystems(ctx); err == nil {
 		for id, s := range systems {
-			if h.metrics.system(id) == nil { // a node that connected meanwhile is newer
-				h.metrics.setSystem(id, s)
+			if d.metrics.system(id) == nil { // a node that connected meanwhile is newer
+				d.metrics.setSystem(id, s)
 			}
 		}
-		h.broadcastMachines()
+		d.changed()
 	}
 	t := time.NewTicker(metricsTidyEach)
 	defer t.Stop()
 	for {
 		now := time.Now()
 		if _, err := st.RollupMetrics(ctx, now.Add(-metricsRawFor)); err != nil && ctx.Err() == nil {
-			h.logf("metrics rollup: %v", err)
+			d.logf("metrics rollup: %v", err)
 		}
 		if _, err := st.PruneMetrics(ctx, now.Add(-metricsKeep)); err != nil && ctx.Err() == nil {
-			h.logf("metrics prune: %v", err)
+			d.logf("metrics prune: %v", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -199,9 +203,9 @@ type MachineMetrics struct {
 	Points    []proto.MetricPoint `json:"points"`
 }
 
-func (h *Hub) machineMetrics(ctx context.Context, ids []string, span time.Duration, step int, now time.Time) ([]MachineMetrics, error) {
+func (d *Devices) machineMetrics(ctx context.Context, ids []string, span time.Duration, step int, now time.Time) ([]MachineMetrics, error) {
 	series := map[string][]proto.MetricPoint{}
-	if st := h.metricsStore(); st != nil {
+	if st := d.metricsStore(); st != nil {
 		// From a step boundary, so the first step is not a partial average.
 		from := now.Add(-span).Truncate(time.Duration(step) * time.Second)
 		var err error
@@ -211,33 +215,35 @@ func (h *Hub) machineMetrics(ctx context.Context, ids []string, span time.Durati
 	}
 	out := make([]MachineMetrics, 0, len(ids))
 	for _, id := range ids {
-		m := h.localMachine(id)
+		m := d.machineByID(id)
 		if m == nil {
 			continue
 		}
-		out = append(out, MachineMetrics{MachineID: id, Online: m.snapshot().Online, System: h.metrics.system(id),
-			Latest: h.metrics.now(id, now), Points: withGaps(series[id], step, now)})
+		id = m.cfg.ID
+		out = append(out, MachineMetrics{MachineID: id, Online: m.snapshot().Online, System: d.metrics.system(id),
+			Latest: d.metrics.now(id, now), Points: withGaps(series[id], step, now)})
 	}
 	return out, nil
 }
 
-func (h *Hub) metricsRoutes(api *http.ServeMux) {
+// metricsRoutes are the monitoring's routes (devicewire.MetricsRoutes) on mux.
+func (d *Devices) metricsRoutes(mux *http.ServeMux) {
 	// The dashboard: every machine's latest sample and its last hour by minute (the sparklines).
-	api.HandleFunc("GET /api/v1/metrics", func(w http.ResponseWriter, r *http.Request) {
-		machines := h.machinesNow()
+	mux.HandleFunc("GET /api/v1/metrics", func(w http.ResponseWriter, r *http.Request) {
+		machines := d.machinesNow()
 		ids := make([]string, 0, len(machines))
 		for _, m := range machines {
 			ids = append(ids, m.cfg.ID)
 		}
-		list, err := h.machineMetrics(r.Context(), ids, time.Hour, 60, time.Now())
+		list, err := d.machineMetrics(r.Context(), ids, time.Hour, 60, time.Now())
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
 		writeJSON(w, map[string]any{"machines": list, "step": 60})
 	})
-	api.HandleFunc("GET /api/v1/machines/{id}/metrics", func(w http.ResponseWriter, r *http.Request) {
-		m := h.localMachine(r.PathValue("id"))
+	mux.HandleFunc("GET /api/v1/machines/{id}/metrics", func(w http.ResponseWriter, r *http.Request) {
+		m := d.machineByID(r.PathValue("id"))
 		if m == nil {
 			writeErr(w, http.StatusNotFound, errors.New("no such machine"))
 			return
@@ -252,7 +258,7 @@ func (h *Hub) metricsRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, errors.New("range is 1h, 6h or 24h"))
 			return
 		}
-		list, err := h.machineMetrics(r.Context(), []string{id}, rg.span, rg.step, time.Now())
+		list, err := d.machineMetrics(r.Context(), []string{id}, rg.span, rg.step, time.Now())
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
@@ -263,4 +269,120 @@ func (h *Hub) metricsRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"metrics": list[0], "range": name, "step": rg.step})
 	})
+	mux.HandleFunc("GET /api/v1/usage", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"usage": d.Usage()})
+	})
+}
+
+// ---- token usage ----
+
+// Token usage across the machines, for the Dynamic Island (docs/live-activity.md): every node meters its
+// transcripts per minute and model (node/usage.go) and reports changed minutes; the manager keeps the last day of
+// them, in memory only (a new node connection resends its whole window), and sums them up.
+
+type usageKey struct {
+	minute int64
+	model  string
+}
+
+type machineUsage struct {
+	buckets map[usageKey]proto.UsageBucket
+	load    float64
+	cpus    int
+	at      time.Time // last report
+}
+
+type usageBook struct {
+	mu       sync.Mutex
+	machines map[string]*machineUsage
+}
+
+// apply takes a node's "usage" notification.
+func (u *usageBook) apply(machine string, params json.RawMessage, now time.Time) bool {
+	var p struct {
+		Buckets []proto.UsageBucket `json:"buckets"`
+		Full    bool                `json:"full"`
+		Load    float64             `json:"load"`
+		CPUs    int                 `json:"cpus"`
+	}
+	if json.Unmarshal(params, &p) != nil {
+		return false
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.machines == nil {
+		u.machines = map[string]*machineUsage{}
+	}
+	m := u.machines[machine]
+	if m == nil || p.Full {
+		m = &machineUsage{buckets: map[usageKey]proto.UsageBucket{}}
+		u.machines[machine] = m
+	}
+	for _, b := range p.Buckets {
+		m.buckets[usageKey{b.Minute, b.Model}] = b
+	}
+	m.load, m.cpus, m.at = p.Load, p.CPUs, now
+	cutoff := now.Add(-26*time.Hour).Unix() / 60 * 60
+	for k := range m.buckets {
+		if k.minute < cutoff {
+			delete(m.buckets, k)
+		}
+	}
+	return true
+}
+
+// UsageSummary is what the island and the app show.
+type UsageSummary = assistantwire.UsageSummary
+
+// MachineUsage is one machine's share and load.
+type MachineUsage = assistantwire.MachineUsage
+
+// tpmSpan: TPM is averaged from the start of the minute two minutes ago until now (2–3 minutes), so it neither
+// drops to 0 between replies nor lags much behind.
+const tpmSpan = 2
+
+func (u *usageBook) summary(now time.Time, loc *time.Location) UsageSummary {
+	y, mo, d := now.In(loc).Date()
+	today := time.Date(y, mo, d, 0, 0, 0, 0, loc).Unix()
+	from := now.Unix()/60*60 - tpmSpan*60
+	elapsed := float64(now.Unix()-from) / 60
+	out := UsageSummary{Machines: []MachineUsage{}}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	for id, m := range u.machines {
+		mu := MachineUsage{ID: id}
+		if now.Sub(m.at) < 2*time.Minute && m.cpus > 0 {
+			mu.Load = m.load / float64(m.cpus)
+		}
+		var recent int64
+		for k, b := range m.buckets {
+			if k.minute >= from {
+				recent += b.Output
+			}
+			if k.minute < today {
+				continue
+			}
+			tokens := b.Input + b.CacheWrite + b.CacheRead + b.Output
+			mu.Tokens += tokens
+			out.Tokens += tokens
+			out.Output += b.Output
+			out.Requests += b.Requests
+		}
+		mu.TPM = int64(float64(recent) / elapsed)
+		out.TPM += mu.TPM
+		out.Machines = append(out.Machines, mu)
+	}
+	sort.Slice(out.Machines, func(i, j int) bool { return out.Machines[i].ID < out.Machines[j].ID })
+	return out
+}
+
+// Usage is the token usage summed up now, "today" in the user's zone (Options.Location).
+func (d *Devices) Usage() UsageSummary {
+	loc := time.Local
+	if d.opts.Location != nil {
+		if l := d.opts.Location(); l != nil {
+			loc = l
+		}
+	}
+	return d.usage.summary(time.Now(), loc)
 }

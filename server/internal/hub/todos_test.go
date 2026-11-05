@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -129,72 +128,6 @@ func sessionOf(h *Hub, m *Machine, sid string) proto.Session {
 		}
 	}
 	return proto.Session{}
-}
-
-// The session lists show what the assistant reported: the todo each agent works for, the quiet ones, the task on an
-// agent's card. A report that changes them pushes the machine's list; none (the todos could not be read) keeps the last.
-func TestSessionsShowTheTodoReport(t *testing.T) {
-	h := newTestHub(t)
-	m := newMachine(h, MachineConfig{ID: "box", Name: "box"})
-	m.sessions = []proto.Session{{SessionID: "s1"}, {SessionID: "s2"}, {SessionID: "s3", SpawnFrom: "todo_1@box/s1"}}
-	h.machines, h.byID["box"] = append(h.machines, m), m
-	report := &assistantwire.TodoReport{Links: []assistantwire.TodoLink{
-		{MachineID: "box", SessionID: "s1", TodoID: "todo_1", Title: "修登录崩溃", Task: true},
-		{MachineID: "box", SessionID: "s2", TodoID: "todo_2", Title: "买牛奶"},
-	}, Quiet: []assistantwire.SessionRef{{MachineID: "box", SessionID: "s3"}}}
-	if got := h.takeTodoReport(report); len(got) != 1 || got[0] != "box" {
-		t.Fatalf("changed machines = %v", got)
-	}
-	if got := h.takeTodoReport(report); len(got) != 0 {
-		t.Fatalf("the same report changed %v", got)
-	}
-	s1, s2, s3 := sessionOf(h, m, "s1"), sessionOf(h, m, "s2"), sessionOf(h, m, "s3")
-	if s1.Todo == nil || s1.Todo.ID != "todo_1" || s1.Todo.Title != "修登录崩溃" || s1.Quiet {
-		t.Fatalf("s1 = %+v quiet %v", s1.Todo, s1.Quiet)
-	}
-	if s2.Todo == nil || s2.Todo.ID != "todo_2" || s3.Todo != nil || !s3.Quiet || s3.SpawnFrom != "" {
-		t.Fatalf("s2 %+v, s3 %+v quiet %v from %q", s2.Todo, s3.Todo, s3.Quiet, s3.SpawnFrom)
-	}
-	if !h.quietSession("box", "s3") || h.quietSession("box", "s1") {
-		t.Fatal("quiet sessions")
-	}
-	if got := h.withTask(proto.Interaction{MachineID: "box", SessionID: "s1"}).TaskTitle; got != "修登录崩溃" {
-		t.Fatalf("task title = %q", got)
-	}
-	if got := h.withTask(proto.Interaction{MachineID: "box", SessionID: "s2"}).TaskTitle; got != "" {
-		t.Fatalf("a todo by hand named on the card: %q", got)
-	}
-
-	// Over the bus: the snapshot carries it; a client sees the list again when it changes; nil keeps the last one.
-	c := &client{out: make(chan []byte, 64), have: map[string]map[string][]byte{}}
-	h.mu.Lock()
-	h.clients[c] = struct{}{}
-	h.mu.Unlock()
-	pushed := func() bool {
-		for {
-			select {
-			case raw := <-c.out:
-				if bytes.Contains(raw, []byte(`"type":"sessions"`)) {
-					return true
-				}
-			case <-time.After(100 * time.Millisecond):
-				return false
-			}
-		}
-	}
-	snap := func(seq uint64, r *assistantwire.TodoReport) {
-		if _, err := (assistantLink{h}).Snapshot(context.Background(), assistantwire.Snapshot{Epoch: "e", Seq: seq, Todos: r}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	snap(1, &assistantwire.TodoReport{Links: report.Links[:1]})
-	if !pushed() || sessionOf(h, m, "s2").Todo != nil || sessionOf(h, m, "s3").Quiet {
-		t.Fatal("the new report did not show")
-	}
-	snap(2, nil)
-	if pushed() || sessionOf(h, m, "s1").Todo == nil {
-		t.Fatal("a snapshot without the todos dropped them")
-	}
 }
 
 // The todos' routes are the assistant's: relayed while it is connected, 503 assistant_offline while not; handing an

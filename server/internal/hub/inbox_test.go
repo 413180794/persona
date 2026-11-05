@@ -625,24 +625,6 @@ func TestInboxChangedTellsTheApps(t *testing.T) {
 	}
 }
 
-// The snapshot says which conversations are the AI 分身's: their finished turn is no push. A snapshot that could not
-// read the inbox keeps the last.
-func TestInboxAgentsFromTheSnapshot(t *testing.T) {
-	h := newTestHub(t)
-	h.takeInboxReport(&assistantwire.InboxReport{Agents: []assistantwire.SessionRef{{MachineID: "server", SessionID: "s1"}}})
-	if !h.isInboxAgent("s1") || h.isInboxAgent("s2") {
-		t.Fatal("isInboxAgent")
-	}
-	h.takeInboxReport(nil)
-	if !h.isInboxAgent("s1") {
-		t.Fatal("a snapshot without the inbox forgot the agents")
-	}
-	h.takeInboxReport(&assistantwire.InboxReport{})
-	if h.isInboxAgent("s1") {
-		t.Fatal("an agent the inbox no longer has")
-	}
-}
-
 // GitHub's muted repositories are the inbox's (the manager's) mutes: the ones its options kept move there when the
 // manager connects; its settings list them from there and set them there; a repository without its owner is refused.
 func TestGitHubMutedReposAreTheInboxMutes(t *testing.T) {

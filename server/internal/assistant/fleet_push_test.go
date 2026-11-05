@@ -1,0 +1,210 @@
+package assistant
+
+import (
+	"context"
+	"github.com/nwverse/persona/server/internal/i18n"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// The session lists show what the assistant's snapshot says: the todo each agent works for, the quiet ones, the task
+// on an agent's card; SpawnFrom is not shown. A snapshot that changes them has the hub told the machine's list.
+func TestSessionsShowTheTodoReport(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	s := ft.s
+	ft.d.setSessions("mac", []proto.Session{{SessionID: "s1"}, {SessionID: "s2"}, {SessionID: "s3", SpawnFrom: "todo_1@mac/s1"}})
+	report := &TodoReport{Links: []TodoLink{
+		{MachineID: "mac", SessionID: "s1", TodoID: "todo_1", Title: "修登录崩溃", Task: true},
+		{MachineID: "mac", SessionID: "s2", TodoID: "todo_2", Title: "买牛奶"},
+	}, Quiet: []SessionRef{{MachineID: "mac", SessionID: "s3"}}}
+	n := len(ft.toldOf(assistantwire.EventFleetSessions))
+	s.fleetTakeSnapshot(Snapshot{Todos: report})
+	if got := len(ft.toldOf(assistantwire.EventFleetSessions)); got != n+1 {
+		t.Fatalf("lists told %d, want 1", got-n)
+	}
+	s.fleetTakeSnapshot(Snapshot{Todos: report})
+	if got := len(ft.toldOf(assistantwire.EventFleetSessions)); got != n+1 {
+		t.Fatal("the same report told the list again")
+	}
+	s1, s2, s3 := listed(t, s, "mac", "s1"), listed(t, s, "mac", "s2"), listed(t, s, "mac", "s3")
+	if s1.Todo == nil || s1.Todo.ID != "todo_1" || s1.Todo.Title != "修登录崩溃" || s1.Quiet {
+		t.Fatalf("s1 = %+v quiet %v", s1.Todo, s1.Quiet)
+	}
+	if s2.Todo == nil || s2.Todo.ID != "todo_2" || s3.Todo != nil || !s3.Quiet || s3.SpawnFrom != "" {
+		t.Fatalf("s2 %+v, s3 %+v quiet %v from %q", s2.Todo, s3.Todo, s3.Quiet, s3.SpawnFrom)
+	}
+	if got := s.withTask(proto.Interaction{MachineID: "mac", SessionID: "s2"}).TaskTitle; got != "" {
+		t.Fatalf("a todo by hand named on the card: %q", got)
+	}
+}
+
+// A quiet task's agent (#1731) is flagged on the list, stays off the Live Activity, and its card is no push (the main
+// conversation is told); another agent's card is pushed.
+func TestQuietAgents(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	s := ft.s
+	ft.d.setSessions("mac", []proto.Session{
+		{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p1"},
+		{SessionID: "s2", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p2"},
+	})
+	s.fleetTakeSnapshot(Snapshot{Todos: &TodoReport{Quiet: []SessionRef{{MachineID: "mac", SessionID: "s1"}}}})
+	if !listed(t, s, "mac", "s1").Quiet || listed(t, s, "mac", "s2").Quiet {
+		t.Fatal("quiet flags")
+	}
+	if st := s.fleetSnapshot(); st.Working != 1 || len(st.Items) != 1 || st.Items[0].ID != "mac/s2" {
+		t.Fatalf("fleet = %+v", st)
+	}
+	s.announce(proto.Interaction{ID: "ix_q", MachineID: "mac", SessionID: "s1", Kind: proto.IxPermission, ToolName: "Bash"})
+	s.announce(proto.Interaction{ID: "ix_s", MachineID: "mac", SessionID: "s2", Kind: proto.IxPermission, ToolName: "Bash"})
+	got := ft.pushesOf(assistantwire.NotifyInput, 2, 300*time.Millisecond)
+	if len(got) != 1 || got[0].SessionID != "s2" {
+		t.Fatalf("pushes %+v", got)
+	}
+}
+
+// fastDone shortens the finished push's delay for a test.
+func fastDone(ft *fleetTest) {
+	ft.f.mu.Lock()
+	ft.f.hello.Notify = assistantwire.NotifyTimings{DoneDelayMS: 50, LongTurnMS: 60_000}
+	ft.f.mu.Unlock()
+}
+
+// A turn that ends (working → done) and is left alone is pushed once, with how long it took; the same completion
+// seen again (its Stop's reply already pushed for) is not; one the user looked at, a muted one, one a channel
+// answers, an inbox agent's and one the conversation pushed itself (notify_user) are not either.
+func TestFinishedPushDecidedOnce(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	fastDone(ft)
+	work := proto.Session{SessionID: "s1", Title: "修登录", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p1",
+		UpdatedAt: time.Now()}
+	done := work
+	done.Status, done.LastText = proto.StatusDone, "改好了"
+	ft.event("mac", "hook.event", map[string]any{"session_id": "s1", "event": "UserPromptSubmit"})
+	ft.sessions("mac", work)
+	ft.event("mac", "hook.event", map[string]any{"session_id": "s1", "event": "Stop", "stop_sig": "sig1"})
+	ft.sessions("mac", done)
+	got := ft.pushesOf(assistantwire.NotifyDone, 1, 2*time.Second)
+	if len(got) != 1 || got[0].SessionID != "s1" || got[0].Title != "✅ 修登录" || got[0].Body != "改好了" || got[0].Subtitle != "Mac" ||
+		got[0].LongMS != 60_000 {
+		t.Fatalf("pushes %+v", got)
+	}
+	// The status flaps around the same turn: the same reply is no second push.
+	ft.sessions("mac", work)
+	ft.sessions("mac", done)
+	time.Sleep(300 * time.Millisecond)
+	if got := ft.pushesOf(assistantwire.NotifyDone, 2, 0); len(got) != 1 {
+		t.Fatalf("pushed again for the same completion: %+v", got)
+	}
+	// Seen in the app before the delay: nothing.
+	ft.event("mac", "hook.event", map[string]any{"session_id": "s1", "event": "UserPromptSubmit"})
+	ft.sessions("mac", work)
+	done.UpdatedAt = time.Now()
+	ft.sessions("mac", done)
+	ft.s.markSeen(context.Background(), "mac", "s1")
+	time.Sleep(300 * time.Millisecond)
+	if got := ft.pushesOf(assistantwire.NotifyDone, 2, 0); len(got) != 1 {
+		t.Fatalf("pushed a turn the user looked at: %+v", got)
+	}
+	// The conversation pushed what matters itself.
+	ft.s.noteAsked("s1")
+	ft.event("mac", "hook.event", map[string]any{"session_id": "s1", "event": "UserPromptSubmit"})
+	ft.sessions("mac", work)
+	done.UpdatedAt, done.LastText = time.Now().Add(time.Second), "又改了"
+	ft.sessions("mac", done)
+	time.Sleep(300 * time.Millisecond)
+	if got := ft.pushesOf(assistantwire.NotifyDone, 2, 0); len(got) != 1 {
+		t.Fatalf("pushed after notify_user: %+v", got)
+	}
+}
+
+// A turn a channel answers is no push to the phone (the channel has it), nor an inbox agent's.
+func TestFinishedPushSkipsChannelTurns(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	fastDone(ft)
+	ft.s.fleetTakeSnapshot(Snapshot{Channels: &ChannelsReport{Turns: []ChannelTurn{{MachineID: "mac", SessionID: "c1"}}},
+		Inbox: &assistantwire.InboxReport{Agents: []SessionRef{{MachineID: "mac", SessionID: "in1"}}}})
+	for _, id := range []string{"c1", "in1"} {
+		work := proto.Session{SessionID: id, Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p-" + id}
+		done := work
+		done.Status, done.LastText = proto.StatusDone, "好了"
+		ft.sessions("mac", work)
+		ft.sessions("mac", done)
+	}
+	time.Sleep(400 * time.Millisecond)
+	if got := ft.pushesOf(assistantwire.NotifyDone, 1, 0); len(got) != 0 {
+		t.Fatalf("pushed %+v", got)
+	}
+}
+
+// The own conversation of a scheduled task that pushes only what its runs send (#2396) is known by the task list the
+// snapshot has; other tasks' conversations, a task without one yet and the main conversation are not.
+func TestQuietTaskConversation(t *testing.T) {
+	s := newFleetTestNoStore(t).s
+	if s.quietTaskConversation("own-q") {
+		t.Fatal("nothing reported yet: no conversation is quiet")
+	}
+	s.fleetTakeSnapshot(Snapshot{Tasks: []TaskView{
+		{ID: "fu_q", Push: assistantwire.PushAsked, RunMachineID: "server", RunSessionID: "own-q"},
+		{ID: "fu_e", RunMachineID: "server", RunSessionID: "own-e"},
+		{ID: "fu_new", Push: assistantwire.PushAsked}, // its first run has not started its conversation yet
+	}})
+	for session, want := range map[string]bool{"own-q": true, "own-e": false, "main-1": false, "": false} {
+		if got := s.quietTaskConversation(session); got != want {
+			t.Errorf("%q: %v, want %v", session, got, want)
+		}
+	}
+}
+
+// A quiet task's normal finish on Claude Code or a headless Codex is no push, but not once that conversation is the
+// main one, nor a runtime's (its failures are not on the session), nor an error.
+func TestQuietTaskFinish(t *testing.T) {
+	s := newFleetTestNoStore(t).s
+	tasks := []TaskView{{ID: "fu_q", Push: assistantwire.PushAsked, RunSessionID: "own-q"}}
+	s.fleetTakeSnapshot(Snapshot{Tasks: tasks})
+	done := proto.Session{SessionID: "own-q", Status: proto.StatusDone, LastText: "没有新邮件。"}
+	if s.quietTaskFinish(done) {
+		t.Fatal("the assistant's settings (its main conversation) not known yet: pushed as ever")
+	}
+	s.fleetTakeSnapshot(Snapshot{Tasks: tasks, Profile: &Profile{MachineID: "server", Main: "main-1"}})
+	if !s.quietTaskFinish(done) {
+		t.Fatal("a quiet task's normal finish is not pushed")
+	}
+	codex := done
+	codex.Agent = "codex"
+	if !s.quietTaskFinish(codex) {
+		t.Fatal("a quiet task's normal finish on a headless Codex is not pushed (#2571 reports its failures)")
+	}
+	codexFailed := codex
+	codexFailed.TurnError, codexFailed.TurnErrorKind = "unexpected status 503 Service Unavailable", proto.TurnErrorTransient
+	runtime := done
+	runtime.Agent = "dsh"
+	cut := done
+	cut.LastText = "API Error: 529 overloaded"
+	other := done
+	other.SessionID = "main-1"
+	for name, sess := range map[string]proto.Session{"headless codex, failed turn": codexFailed, "a runtime": runtime, "cut off": cut,
+		"another conversation": other} {
+		if s.quietTaskFinish(sess) {
+			t.Errorf("%s is pushed as ever", name)
+		}
+	}
+	s.fleetTakeSnapshot(Snapshot{Tasks: tasks, Profile: &Profile{MachineID: "server", Main: "own-q"}})
+	if s.quietTaskFinish(done) {
+		t.Fatal("the main conversation is never quiet, even when it was the task's")
+	}
+}
+
+// A health conversation's finished turn is pushed without its words or title; another's says them as before.
+func TestHealthDonePushHidesContent(t *testing.T) {
+	head, text := doneAlert(i18n.ZhHans, proto.Session{Title: "血压", Cwd: "/home/me/.persona/health", LastText: "这周平均 150/95"})
+	if strings.Contains(head, "血压") || strings.Contains(text, "150") || !strings.Contains(head, "健康") {
+		t.Fatalf("health done: %q %q", head, text)
+	}
+	if head, text := doneAlert(i18n.ZhHans, proto.Session{Title: "周报", Cwd: "/home/me/.persona/assistant", LastText: "写好了"}); head != "✅ 周报" || text != "写好了" {
+		t.Fatalf("assistant's done: %q %q", head, text)
+	}
+}

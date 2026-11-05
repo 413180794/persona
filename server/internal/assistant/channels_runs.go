@@ -591,6 +591,11 @@ func (s *Service) readTurn(ctx context.Context, r *channel.Run) (channel.Reading
 			break
 		}
 	}
+	if named && found && !slices.ContainsFunc(kept, func(it proto.Item) bool { return it.Role == "assistant" }) {
+		// Its message is in, nothing after it yet: its turn has not answered (the session's status can come before its
+		// lines, two messages one right after the other): as one still waiting.
+		return channel.Reading{Last: after}, nil
+	}
 	answer, all := runAnswer(r, kept)
 	if !found || !all {
 		return channel.Reading{Last: after}, nil

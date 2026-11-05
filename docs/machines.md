@@ -1,12 +1,12 @@
 # 机器监控
 
-每台电脑是什么系统、现在忙不忙、过去 24 小时的曲线。node 采集，hub 落 Postgres，App 里在「机器」页和机器详情看（和 Agent 运行数放在一起）。
+每台电脑是什么系统、现在忙不忙、过去 24 小时的曲线。node 采集，管理者（连电脑的那个，见下面「谁连电脑」）落 Postgres，hub 把 App 的请求转给它，App 里在「机器」页和机器详情看（和 Agent 运行数放在一起）。
 
 | 部分 | 代码 |
 | --- | --- |
 | 采集（解析 /proc、vm_stat、iostat、sw_vers、Win32 的返回等） | `server/internal/sysmon/`（`sysmon.go`、`winparse.go` 纯解析，`linux.go` / `darwin.go` / `windows.go` 读系统） |
 | node 发送 | `server/internal/node/metrics.go` |
-| hub 存储、降采样、清理、API | `server/internal/hub/metrics.go`、`server/internal/db/metrics.go`、迁移 `0051_machine_metrics.sql` |
+| 管理者存储、降采样、清理、API（hub 转发 `devicewire.MetricsRoutes`） | `server/internal/devices/metrics.go`、`server/internal/db/metrics.go`、迁移 `0051_machine_metrics.sql` |
 | App | `apple/Persona/Views/Machines/`（`MachinesView` 机器页、`MachineDetailView` 机器详情、`MetricCharts`、`OSBadge`），模型 `apple/Shared/MachineMetrics.swift` |
 | 本机看采集结果 / 开销 | `jarvisd sysmon [n]`：打印系统信息和 n+1 个样本（每 10 秒一个），最后一行是每次采集耗时和 personad 的 CPU |
 
@@ -29,19 +29,19 @@
   node 不管多久没动都要列出的会话（助手的 profile 的 `keep`，助手的快照一出来就告诉各台 node，`SetKeep`）、node 更新（`node.deploy.<id>`）、node 的 `state.put` / `state.load`（表 `node_sessions`）。
   键和表都和以前一样，不迁数据。
 - 管理者自己回答的路由（`devicewire.Routes`，hub 照助手的路由那样作为 `http.request` 转过来）：`POST …/reconnect`、`PUT …/engine`、`GET/PUT …/herdr`、`POST …/herdr/start`、`POST …/deploy`、`GET …/claude-dirs`、`PUT …/claude-dirs/blocked`。
-- node 发来的请求：`state.load` 和助手自己的（`assistant.model`、`assistant.context`，进程内直接问助手）它答，别的（`interaction.create`、`assistant.lark`、`mcp.tools`、`mcp.call`）交给 hub（`devices.request`）。
-  请求来的那条 node 连接要是在 hub 回答前断了，管理者告诉 hub（`devices.request_end`），hub 就不再等它，和以前 node 自己的连接断了一样：要批准的卡片能续上的留着，hook 从新连接再来认领时拿到回答，不会被已经没人读的那次等待吃掉。
-  node 发来的每个单向事件都原样交给 hub（`devices.event`，顺序不变）。
+- node 发来的请求：`state.load`、助手自己的（`assistant.model`、`assistant.context`）和电脑的事件的（`interaction.create`、`assistant.lark`、`mcp.tools`、`mcp.call`，见下面「谁处理电脑的事件」）它在进程里答，剩下的（`notify`：电脑上的 `personad notify`）交给 hub（`devices.request`）。
+  请求来的那条 node 连接要是在 hub 回答前断了，管理者告诉 hub（`devices.request_end`），hub 就不再等它。
+  node 发来的单向事件先给管理者自己处理（`devices.Options.Event`），App 要的再原样交给 hub（`devices.event`，顺序不变）：items、屏幕、实时状态、终端帧、端口的字节、`sessions.revs`、`hook.event`、`fs.changed`、插件的；会话列表、交互、用量、监控样本只到管理者为止。
 - hub 发给 node 的单向事件（`devices.notify`）管理者按机器排队、各写各的，一台电脑收得慢只耽误它自己，总线和别的电脑照常；一台写一条卡住 30 秒或者排着的超过 32 MiB，就重连它。
 - hub.json 里一台的条目变了（hub 改了配置重启，管理者还在），管理者换一个新的机器对象重新连它（App 正在看的会话照样再 watch），不在跑着的连接底下改配置。
-- 助手自己对机器的调用（`device.call` 里 node 的方法）直接在进程里走，不再绕 hub；hub 自己答的（`assistantwire.HubDeviceMethods`：`devices.list` 带手机在不在线、`interactions.list`、`sessions.list`、`session.get`，渠道跟对话的 `session.follow` / `session.unfollow`、只发一次的 `session.send_once`）照旧问 hub。Agents 的分诊发「继续」、助手开 Agent、定时任务开对话这些对 node 的调用都在进程里直接走。
+- 助手自己对机器的调用（`device.call` 里 node 的方法）直接在进程里走，不再绕 hub；hub 自己答的（`devices.list` 带手机在不在线、只发一次的 `session.send_once`）照旧问 hub；`interactions.list`、`sessions.list`、`session.get`、渠道跟对话的 `session.follow` / `session.unfollow` 2026-11-05 起管理者自己答（「谁处理电脑的事件」）。Agents 的分诊发「继续」、助手开 Agent、定时任务开对话这些对 node 的调用都在进程里直接走。
 
 **hub 做的**：
 
 - 把 hub.json 的 `machines`（加上管理界面运行中加的）作为默认值交给管理者：握手回答里的 `devices`，变了（加了电脑、互联组变了、hub 的地址或名字变了）发 `devices.config`。
-- 留着管理者报的那份（`devices.state`：每台的快照、`node.info`、连没连着、这条连接从什么时候开始、warm 到什么时候、它的几条路），按它的顺序给 App 列，再加上 hub 自己的：`system`（监控，本页上文）、`computer` / `browser`（Cua、ego 插件的状态）。
+- 留着管理者报的那份（`devices.state`：每台的快照，带监控的 `system`、`node.info`、连没连着、这条连接从什么时候开始、warm 到什么时候、它的几条路），按它的顺序给 App 列，再加上 hub 自己的：`computer` / `browser`（Cua、ego 插件的状态）。
 - App 对机器的调用和流照旧经 hub：调用是 `devices.call`（带期限），发给 node 的单向事件（终端输入、转发端口的字节）是 `devices.notify`，node 的事件（items、终端帧、端口的字节……）从 `devices.event` 回来，
-  hub 用原来的代码处理（推给订阅的 App、交互、推送、收件箱、分诊……）。所以终端、端口转发、屏幕、下载都走总线这一条连接，不另开通道。
+  hub 推给订阅的 App；交互、状态、推送这些是管理者的（「谁处理电脑的事件」）。所以终端、端口转发、屏幕、下载都走总线这一条连接，不另开通道。
   调用的期限管理者那头少一点（十分之一，最多 500 毫秒），它的「超时」先回来；没期限的调用（插件的 `nodes.call`）也不加期限。发出去以后才出的事——node 的连接断了、时间到了、总线断了——都算「可能已经做了」：
   发消息的结果是 `unknown`，同一条消息不会再发一遍（和以前 hub 直连 node 时一样），只有确定没发出去的（离线、管理者不在）才算没发。
 - hub 的自更新确认「之前在线的机器都连回来了」、之后让管理者更新各台的 node，看的是报来的 `connected`（node 真连着），不是 App 看到的在线（管理者重启后的暖启动也显示在线）。
@@ -49,7 +49,7 @@
   App 正在看的会话 hub 让新连接再 watch，同时最多 8 个，一台慢的电脑不耽误别的。
 - node 一连上，管理者先问 hub 它的那部分（`devices.connected`）：要加进 `node.configure` 的（Codex 的设置）和紧接着要发的（托管的启动器、hub 记着的发送），然后才问会话列表；hub 同时开始它在连上时要做的（Cua / ego 的状态、扩展在电脑上的程序、监控的系统信息、连接器）。
   管理者和 hub 的连接每次新连上，这一步对每台在线的机器再做一遍。
-- 一台机器的连接断了（报来的 `connected` 变成 false 或者 `connected_at` 换了），hub 结束这条连接上的：终端流、正在生成的文字、还在等的不可续交互（和以前 detach 一样）。
+- 一台机器的连接断了（报来的 `connected` 变成 false 或者 `connected_at` 换了），hub 结束这条连接上的：终端流、正在生成的文字；还在等的不可续交互是管理者结束的（`devices.Options.Detached`）。
 
 **流的转发**：App ↔ hub ↔ 管理者 ↔ node，hub 和管理者之间是本机回环上的总线。实测（隔离的 hub，hub 自己那台，转发端口上 32 字节来回 300 次，2026-11-04）：master 中位数 0.3–1.2 ms、p95 约 1.5 ms；这一版中位数 0.9–1.4 ms、p95 约 1.9 ms，多了约 0.2–0.4 ms（多一跳回环加一次编解码）。
 终端帧走的是同一条路（node 的事件 → 管理者 → hub → App，输入反过来）。
@@ -67,7 +67,7 @@ hub 的记录里自己的电脑到不到得了、多远，用管理者报的（`
 
 **管理者不在的时候**（进程在重启、崩了）：
 
-- 机器全部显示离线，`error` 是「助手暂时连不上，稍后再试」，会话标成未知（hub 留着最后的列表）；终端流以同一句话结束，转发的端口关掉，不可续的交互结束。
+- 机器全部显示离线，`error` 是「助手暂时连不上，稍后再试」，会话标成未知（hub 留着最后的列表，还有卡片等着的会话仍是「需要你」）；终端流以同一句话结束，转发的端口关掉；卡片 hub 留着最后那份照常列，回答不了（`503 assistant_offline`）。
 - 要经管理者的接口（items、发消息、新建、文件、git、终端、端口、管理者自己的路由……）回 `503 {"code":"assistant_offline"}`；`GET /api/v1/machines`、`GET /api/v1/sessions` 照常回 hub 留的那份。
 - 管理者回来（hub 1 秒起退避重启它）后自己把所有电脑连回来，hub 让它把 App 正在看的会话再 watch 上，不用谁动手；Persona Link 在下一次重试时连上。
   它刚起来时对一台还在连的机器的调用（hub 替它留着的卡片回答、App 新开的 Agent）等这台第一次连完（最多 20 秒），而不是马上回「离线」。
@@ -91,10 +91,39 @@ hub 的监听比管理者先起来：这几秒里来的 App 请求、管理者�
 - `assistant.external`（管理者跑在别的机器上）时，电脑由那台去连：ssh 配置、tailcat key、`node --stdio` 的二进制、node 更新包都是那台的；
   hub 重启时它不跟着重启（电脑一直连着），hub 起来到它重新连上总线的那一两秒里，机器按 hub.json 显示为离线。
 
+## 谁处理电脑的事件（2026-11-05）
+
+电脑是管理者的，电脑发来的东西也是管理者的：hub 原来的代码原样搬进了管理者（`server/internal/assistant/fleet*.go`、监控在 `server/internal/devices/metrics.go`），hub 只剩转发和投递。
+
+| 管理者做的 | 代码 |
+| --- | --- |
+| 交互：`interaction.create` 的等待、可续的卡片（node 断了留 3 分钟等 hook 认领；管理者重启时从 `interactions` 表接回，认领时不再推一遍）、过期、本会话总是允许、屏幕卡片（读屏、按键、复查）、Codex 卡片、终端里答掉的计划、历史表、助手自己的提问和卡片、hub 自己功能要问的（`fleet.ask`：发邮件、Cua 的应用、jarvis_settings） | `fleet_ix.go` |
+| 会话列表：统一状态、后台任务、模型出错、看过（`session_seen`）、状态起点、待办 / 安静 / 工作状态 / 渠道标记 / 助手对话的标题 | `fleet.go`、`fleet_work.go`、`fleet_text.go` |
+| 推送的决定：「完成」推送的等待和取舍（看过、静音、渠道答了、收件箱分身、notify_user 推过、同一个 Stop 不推两次）、卡片的推送 | `fleet_push.go` |
+| 实时活动的内容（FleetState）和灵动岛的数字 | `fleet_live.go` |
+| node 的 MCP 工具（`mcp.tools` / `mcp.call` 的分派）和 `assistant.lark` | `fleet_tools.go` |
+| 渠道跟着的对话（`session.follow`：node 把它的 items 和正在写的字发给管理者，和一轮的开始、结束按 node 发来的顺序交给渠道） | `fleet_follow.go`、`devices.Follow` |
+| 机器监控（样本、24 小时历史、降采样、清理）和 token 用量 | `devices/metrics.go` |
+
+**hub 做的**（只转发和投递，`server/internal/hub/fleet_link.go`）：
+
+- 留着管理者告诉它的：每台的会话列表（`fleet.sessions`，就是机器的 `sessions`）、待处理的交互（`fleet.interaction` / `fleet.interaction_resolved`，每次握手后 `fleet.interactions` 全量换一遍）、实时活动的内容（`fleet.live`）。App 的 `GET /api/v1/sessions`、`GET /api/v1/interactions`、连接时的快照、推给 App 的事件都从这里来；管理者不在时就是最后那份。
+- 投递推送：管理者决定推什么（`notify.request`，`kind` 是 `assistant` / `done` / `input`），hub 按每台设备的设置挑设备、写成设备的语言、经 APNs / 中继发、给开着 `ws_notify` 的 App 发 `notify` 事件、告诉扩展（`agent.finished`、`agent.needs_you`）。实时活动的推送节奏（每台设备多久一次、开始和结束）也是 hub 的，内容是管理者算的。
+- 把 App 的回答、历史、看过、监控这几个路由转给管理者（`http.request`）：`POST /api/v1/interactions/{id}/resolve`（只能回答的设备先在 hub 这里查）、`GET /api/v1/interactions/history`（App 收不收 MCP 表单由 hub 带上 `X-Persona-Elicitation`）、`POST /api/v1/sessions/{mid}/{sid}/seen`、`GET /api/v1/metrics`、`GET /api/v1/machines/{id}/metrics`、`GET /api/v1/usage`。
+- 告诉管理者 App 那边的事：有没有收 MCP 表单的 App（`fleet.clients`）、WebSocket 的 `seen`（`fleet.seen`）、静音改了（`fleet.mutes`）。
+- 替管理者跑还在 hub 的：手机的工具（`app.call phone`：列工具、在连着的手机上跑，必要时静默推送叫醒）、连接器 / Cua / ego 的工具（`fleet.tool`，node 不等了就跟着取消）、扩展给写操作卡片起的说明、lark-cli 的设置（`app.call hub`），渠道回答卡片时的主人动作（`interactions.owner_action`）。
+
+管理者不在的时候：列表和卡片是最后那份，回答、看过、历史、监控回 `503 assistant_offline`，什么都不丢；它回来后先把全量交互和列表交给 hub，hook 再来认领可续的卡片（同一张卡，不再推）。
+
+和以前能看出来的差别：
+
+- 管理者的卡片（分诊的卡、助手的提问）以前管理者不在时 hub 替它收下回答等它回来；现在卡片在管理者那边，它不在时回答不了（503），回来以后照常回答。
+- 一个会话刚开（`POST /api/v1/sessions`）回给 App 的 `state` 是 hub 等管理者列出来以后的（最多 2 秒），等不到就不带。
+
 ## 系统信息
 
-node 启动时读一次，随 `node.info` 的 `system` 字段给 hub；hub 存进 `machine_systems`（机器离线、hub 重启后也知道它是什么系统），
-放进 `Machine.system` 下发给 App。
+node 启动时读一次，随 `node.info` 的 `system` 字段给管理者；管理者存进 `machine_systems`（机器离线、重启后也知道它是什么系统），
+放进它报给 hub 的 `Machine.system`，hub 下发给 App。
 
 | 字段 | Linux | macOS | Windows |
 | --- | --- | --- | --- |
@@ -110,7 +139,7 @@ node 启动时读一次，随 `node.info` 的 `system` 字段给 hub；hub 存�
 
 ## 采集口径
 
-node 每 10 秒（`proto.MetricEvery`，对齐到整 10 秒，所有机器的点落在同一时刻）采一个样本，发 `metrics` 事件给 hub。
+node 每 10 秒（`proto.MetricEvery`，对齐到整 10 秒，所有机器的点落在同一时刻）采一个样本，发 `metrics` 事件给管理者。
 第一个样本没有 CPU 和网络速率（要两次读数相减），字段缺省（不是 0）。
 
 | 指标 | Linux | macOS | Windows |
@@ -155,7 +184,7 @@ node 启动 5 分钟后在日志里记一次平均耗时（`metrics: a sample ta
 
 ## 存储和保留
 
-hub 收到样本：最新一个留在内存（Dashboard 的「现在」，超过 30 秒没新样本就不算现在），同时写进 `machine_metrics`（`step = 10` 的原始行）。
+管理者收到样本：最新一个留在内存（Dashboard 的「现在」，超过 30 秒没新样本就不算现在），同时写进 `machine_metrics`（`step = 10` 的原始行）。
 `metricsLoop` 每分钟：
 
 1. **降采样**：一小时前的原始行按机器、按分钟合成一行（`step = 60`）：平均值，总量（内存总量、磁盘总量等）取最大。
@@ -174,7 +203,7 @@ hub 收到样本：最新一个留在内存（Dashboard 的「现在」，超过
 
 机器没发样本的时段在图上是断开的，不连线：
 
-- hub 返回的 `points` 里，相邻两点隔了超过 3 个步长，就在中间插一个 `{"t": …, "gap": true}`；最后一个点离现在超过 4 个步长（机器现在离线）也在末尾插一个。
+- 管理者返回的 `points` 里，相邻两点隔了超过 3 个步长，就在中间插一个 `{"t": …, "gap": true}`；最后一个点离现在超过 4 个步长（机器现在离线）也在末尾插一个。
   比 3 个步长短的空档（偶尔丢一个样本）照常连上。各范围的步长：1 小时 10 秒、6 小时 1 分钟、24 小时 4 分钟（每张图约 360 个点）。
 - App 画图时每段（两个 gap 之间）是一条单独的线（详情页 Swift Charts 的 `series:` 用「指标#段号」，卡片上的迷你曲线按同样的段号分成几条），所以线不会跨过空档；按住图看数值时，落在空档里不显示值。
 - 卡片上的迷你曲线不用 Swift Charts，在 `Canvas` 上自己画（`Sparkline` / `SparklineGeometry`：单调三次曲线，和图表的 `.monotone` 同一种，一条线时下面带一层浅色）：
@@ -237,12 +266,12 @@ iOS / Mac 的机器详情（#3018，`apple/Persona/Views/Machines/NodeHealthSect
 ## API
 
 见 `docs/protocol.md`：`GET /api/v1/metrics`（机器页）、`GET /api/v1/machines/{id}/metrics?range=1h|6h|24h`（详情），
-node → hub 的 `metrics` 事件，`node.info` / `Machine` 里的 `system`。
+node → 管理者的 `metrics` 事件，`node.info` / `Machine` 里的 `system`；这几个路由 hub 原样转给管理者（`devicewire.MetricsRoutes`，管理者不在时 `503 assistant_offline`）。
 
 ## 验证
 
 - Go：`sysmon` 的夹具测试（`testdata/` 里的 /proc/stat、meminfo、net/dev、os-release、cpuinfo、vm_stat、iostat、sw_vers、system_profiler），
-  `db.TestMachineMetrics`（降采样、加权平均、空档没有点、清理），`hub.TestMetricGaps`（断开标记）；`./scripts/test/test-server.sh`。
+  `db.TestMachineMetrics`（降采样、加权平均、空档没有点、清理），`devices.TestMetricGaps`（断开标记）；`./scripts/test/test-server.sh`。
 - 真实采集：本机起一个测试 hub（假 HOME、独立数据库经 SSH 隧道，一台 `kind: local` 的 Mac 加一台 ssh 的 Linux），模拟器配对它看机器页和详情。
 - 假数据：`scripts/mock/mock_hub.py` 有 4 台机器：服务器最近 25 分钟高负载（CPU / 内存 / 负载告警），Mac Studio 早上断开过两小时（空档），
   NAS 三小时前离线。UI 测试 `MachinesPageTests`：从机器菜单打开机器页（离线的 NAS 在最前、服务器的告警、MacBook 的「需要你」）、进服务器详情

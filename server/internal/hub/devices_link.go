@@ -453,6 +453,9 @@ func markUnknownLocked(list []proto.Session) {
 	for i := range list {
 		if list[i].Status != proto.StatusOffline {
 			list[i].Status = proto.StatusUnknown
+			if list[i].PendingInteractions == 0 { // the manager's states as it would show them: a card still waits
+				list[i].State = proto.StateUnknown
+			}
 		}
 	}
 }
@@ -703,13 +706,12 @@ func (h *Hub) watchAgain(list []*Machine) {
 	wg.Wait()
 }
 
-// connectionEnded ends what ran on a node's connection that is gone: its terminals, the text being generated, the
-// questions waiting on it (hooks with resumable ones come back through the next connection).
+// connectionEnded ends what ran on a node's connection that is gone: its terminals, the text being generated.
 func (h *Hub) connectionEnded(m *Machine, why string) {
 	h.forgetLiveText(m.cfg.ID) // the node that was generating it is gone: the transcript has what was finished
 	h.terminalsEnded(m.cfg.ID, why)
 	h.fullsOffline(m.cfg.ID) // the full herdr views ran on that connection too
-	h.cancelMachineInteractions(m.cfg.ID)
+	// The questions waiting on it are the manager's (assistant/fleet_ix.go NodeDetached).
 }
 
 // devicesGone: the manager that carries the machines disconnected. The machines show offline (why: it is not
@@ -767,7 +769,6 @@ func (h *Hub) devicesGone() {
 // configuration and the calls right after it, and what it starts for the computer.
 func (h *Hub) machineConnected(ctx context.Context, m *Machine, at time.Time) devicewire.ConnectedReply {
 	m.mu.Lock()
-	info := m.info
 	m.hookedAt = at
 	m.mu.Unlock()
 	out := devicewire.ConnectedReply{Configure: map[string]json.RawMessage{}}
@@ -782,7 +783,6 @@ func (h *Hub) machineConnected(ctx context.Context, m *Machine, at time.Time) de
 			out.Calls = append(out.Calls, devicewire.NodeCall{MachineID: m.cfg.ID, Method: "session.echoes", Params: b})
 		}
 	}
-	h.onSystem(m.cfg.ID, info.System)
 	h.connectors.MachineOnline(m.cfg.ID)
 	bg := context.WithoutCancel(ctx)
 	go func() {
@@ -980,6 +980,17 @@ func (h *Hub) linkPingTimes() (time.Duration, time.Duration) {
 		return h.linkPing[0], h.linkPing[1]
 	}
 	return link.PingEvery, link.PingTimeout
+}
+
+// metricsRoutesRelayed relays the monitoring's routes (devicewire.MetricsRoutes: the machines' samples, their history,
+// the token usage) to the manager, which keeps them.
+func (h *Hub) metricsRoutesRelayed(api *http.ServeMux) {
+	for _, pattern := range devicewire.MetricsRoutes {
+		api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			_ = h.waitDevices(r.Context()) // the hub just started: the manager is on its way (bounded); else 503 at once
+			h.forwardHTTP(w, r, devicesOwner)
+		})
+	}
 }
 
 // deviceRoutesRelayed relays the apps' requests on the routes that are the manager's (devicewire.Routes: its own

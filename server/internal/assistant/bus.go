@@ -17,6 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -84,7 +85,9 @@ func NewBusHub(o BusOptions) *BusHub {
 			return map[string]any{"id": assistantwire.AssistantID, "host": host, "os": runtime.GOOS, "arch": runtime.GOARCH,
 				"deploy": o.Deploy, "version": o.Version}
 		},
-		OnHello:   b.onHello,
+		OnHello: b.onHello,
+		// A node's tool call that its caller stopped waiting for ends at the hub too (fleet_tools.go).
+		Cancels:   map[string]bool{assistantwire.MethodFleetTool: true},
 		OnRequest: b.answer,
 		OnEvent: func(event string, params json.RawMessage) {
 			if o.Devices != nil && o.Devices.Event(event, params) {
@@ -136,6 +139,9 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 		go func() { // once the connection counts as up (after this returns)
 			if b.client.Wait(ctx) == nil {
 				d.BusUp()
+				if svc != nil {
+					svc.FleetUp(ctx) // the interactions, the lists and the fleet (fleet.go)
+				}
 			}
 		}()
 	}
@@ -210,6 +216,12 @@ func (b *BusHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, error
 
 func (b *BusHub) NotifyRequest(ctx context.Context, p NotifyRequest) error {
 	return busError(b.client.Call(ctx, assistantwire.MethodNotify, p, nil))
+}
+
+func (b *BusHub) Tell(event string, params any) error { return b.client.Notify(event, params) }
+
+func (b *BusHub) Call(ctx context.Context, method string, params, out any) error {
+	return busError(b.client.Call(ctx, method, params, out))
 }
 
 func (b *BusHub) Broadcast(_ context.Context, m Broadcast) {
@@ -296,7 +308,7 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 		}
 		var h http.Handler = s
 		if d := b.opts.Devices; d != nil {
-			h = d.Handler(s) // the machines' routes that are the manager's (devices.go)
+			h = s.fleetHandler(d.Handler(s)) // the machines' and the nodes' routes that are the manager's (devices.go, fleet_routes.go)
 		}
 		return serveHTTP(ctx, h, p, s.lang)
 	case assistantwire.MethodTools:
@@ -380,6 +392,14 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 		return s.FeishuAction(ctx, p)
 	case assistantwire.MethodFeishuView:
 		return s.FeishuView(ctx), nil
+	case assistantwire.MethodFleetAsk:
+		var p struct {
+			Interaction proto.Interaction `json:"interaction"`
+		}
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		return s.askHub(ctx, p.Interaction)
 	}
 	if out, ok, err := s.kbRequest(ctx, method, params); ok { // the knowledge base's (kb_bus.go)
 		return out, err
@@ -563,12 +583,12 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 			return err
 		}
 		s.InteractionEnded(ctx, p)
-	case assistantwire.EventSessionItems:
+	case assistantwire.EventSessionItems: // an item the hub read whole for an app (the manager follows the rest itself)
 		var p SessionItems
 		if err := decode(&p); err != nil {
 			return err
 		}
-		s.SessionItems(ctx, p)
+		s.followedItems(p.MachineID, ev.params)
 	case assistantwire.EventSessionDelta:
 		var p SessionDelta
 		if err := decode(&p); err != nil {
@@ -589,6 +609,9 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 		s.ChannelNoted(ctx, p)
 	case "managers": // the bus's roster: nothing the assistant needs
 	default:
+		if s.FleetEvent(ctx, ev.name, ev.params) { // the hub's fleet.* (fleet.go)
+			return nil
+		}
 		if ok, err := s.kbEvent(ctx, ev.name, ev.params); ok { // the knowledge base's (kb_bus.go)
 			return err
 		}

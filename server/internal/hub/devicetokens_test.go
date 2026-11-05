@@ -201,7 +201,8 @@ func TestDeviceTokens(t *testing.T) {
 	}
 	watchTok := watch["token"].(string)
 
-	// The watch reads and answers, nothing else.
+	// The watch reads and answers, nothing else; an answer goes to the manager, which has no such card.
+	connectAssistant(t, h)
 	if code, _ := call(t, mux, "GET", "/api/v1/interactions", watchTok, ""); code != 200 {
 		t.Fatalf("watch read %d", code)
 	}
@@ -316,6 +317,7 @@ func TestAnswerRoleAnswersCardsWithoutTyping(t *testing.T) {
 	_, watch := call(t, mux, "POST", "/api/v1/auth/tokens", phone["token"].(string), `{"name":"Watch","kind":"watch"}`)
 	watchTok := watch["token"].(string)
 	const gone = http.StatusGone // reached the handler: there is no such card
+	connectAssistant(t, h)       // the answers that pass the device's role go to the manager, which has no such card
 	for _, c := range []struct {
 		body string
 		want int
@@ -353,7 +355,7 @@ func TestAnswerRoleAnswersCardsWithoutTyping(t *testing.T) {
 	if code, _ := call(t, mux, "POST", "/api/v1/interactions/ix_x/resolve", phone["token"].(string), `{"text":"t","keys":["ctrl+c"]}`); code != gone {
 		t.Errorf("a full device types: %d", code)
 	}
-	connectAssistant(t, h) // a reply's role check is the inbox's (the manager's), on the role the hub relays
+	// a reply's role check is the inbox's (the manager's), on the role the hub relays
 	if code, _ := call(t, mux, "POST", "/api/v1/inbox/ix_x/reply", watchTok, `{"text":"t","changes":[{"status":"x"}]}`); code != http.StatusForbidden {
 		t.Errorf("an answer-only device moves a document's status: %d", code)
 	}
@@ -385,22 +387,22 @@ func TestAnswerRoleCannotPickTheFreeTextField(t *testing.T) {
 	_, phone := call(t, mux, "POST", "/api/v1/auth/tokens", h.cfg.Token, `{"name":"iPhone","kind":"phone"}`)
 	_, watch := call(t, mux, "POST", "/api/v1/auth/tokens", phone["token"].(string), `{"name":"Watch","kind":"watch"}`)
 	watchTok := watch["token"].(string)
-	var answered []proto.Resolution
+	// The cards are the manager's (fleet.interaction); the hub holds an answer-only device to a card's own choices
+	// before it relays the answer to the manager (here none is connected: 503 assistant_offline, nothing claimed).
 	card := func(id string, multi bool) {
 		d := &screen.Dialog{Rev: "r1", Multi: multi, Options: []screen.Option{
 			{Key: "1", Label: "Yes", Keys: []string{"1"}},
 			{Key: "2", Label: "Type something.", Kind: screen.KindTypeSomething, Keys: []string{"2"}},
 			{Key: "3", Label: "Chat about this", Kind: screen.KindChat, Keys: []string{"3"}},
 		}}
-		h.mu.Lock()
-		h.interactions[id] = &pending{ix: proto.Interaction{ID: id, MachineID: "box", SessionID: "s1", Kind: proto.IxScreen, Dialog: d},
-			local: func(r proto.Resolution) error { answered = append(answered, r); return nil }}
-		h.mu.Unlock()
+		reportInteraction(t, h, proto.Interaction{ID: id, MachineID: "box", SessionID: "s1", Kind: proto.IxScreen, Dialog: d})
 	}
 	stillPending := func(id string) bool {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		return h.interactions[id] != nil
+		_, ok := h.pendingInteraction(id)
+		return ok
+	}
+	relayed := func(code int, body map[string]any) bool {
+		return code == http.StatusServiceUnavailable && body["code"] == "assistant_offline"
 	}
 	card("ix_one", false)
 	card("ix_many", true)
@@ -416,20 +418,14 @@ func TestAnswerRoleCannotPickTheFreeTextField(t *testing.T) {
 			t.Errorf("%s was claimed by a refused answer", c.id)
 		}
 	}
-	if len(answered) > 0 {
-		t.Fatalf("a refused answer reached the card: %+v", answered)
-	}
-	if code, body := call(t, mux, "POST", "/api/v1/interactions/ix_one/resolve", watchTok, `{"option":"1"}`); code != 200 {
+	if code, body := call(t, mux, "POST", "/api/v1/interactions/ix_one/resolve", watchTok, `{"option":"1"}`); !relayed(code, body) {
 		t.Fatalf("the card's own choice: %d %v", code, body)
 	}
-	if code, body := call(t, mux, "POST", "/api/v1/interactions/ix_many/resolve", watchTok, `{"option":"3"}`); code != 200 {
+	if code, body := call(t, mux, "POST", "/api/v1/interactions/ix_many/resolve", watchTok, `{"option":"3"}`); !relayed(code, body) {
 		t.Fatalf("Chat about this: %d %v", code, body)
 	}
-	if len(answered) != 2 {
-		t.Fatalf("answered %+v", answered)
-	}
 	card("ix_phone", false)
-	if code, _ := call(t, mux, "POST", "/api/v1/interactions/ix_phone/resolve", phone["token"].(string), `{"option":"2","text":"用另一种做法"}`); code != 200 {
+	if code, body := call(t, mux, "POST", "/api/v1/interactions/ix_phone/resolve", phone["token"].(string), `{"option":"2","text":"用另一种做法"}`); !relayed(code, body) {
 		t.Errorf("a full device writes its own answer: %d", code)
 	}
 }

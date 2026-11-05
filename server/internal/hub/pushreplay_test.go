@@ -192,7 +192,7 @@ func replayFleet(t *testing.T, recs []recorded, gap time.Duration) (pushes, crit
 		t.Fatal(err)
 	}
 	tailored := func(st FleetState) []byte {
-		b, _ := json.Marshal(st.forDevice(h.push.prefs("phone"), FleetStats{}))
+		b, _ := json.Marshal(forDevice(st, h.push.prefs("phone"), FleetStats{}))
 		return b
 	}
 	var truth FleetState
@@ -208,7 +208,7 @@ func replayFleet(t *testing.T, recs []recorded, gap time.Duration) (pushes, crit
 			lastPush = at
 		}
 		// An empty fleet is not pushed: the activity ends after fleetEndAfter (as before).
-		if truth.empty() || bytes.Equal(shown, tailored(truth)) {
+		if fleetEmpty(truth) || bytes.Equal(shown, tailored(truth)) {
 			if !staleSince.IsZero() {
 				worst = max(worst, clock.Sub(staleSince))
 				staleSince = time.Time{}

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -46,8 +45,6 @@ type assistantState struct {
 	lastHello string      // the hello answer it last got (manager.hello, manager.updated), as JSON
 	updating  atomic.Bool // a manager.updated check is on its way
 
-	askMu sync.Mutex
-	asked map[string]*askedOne // the questions and cards it has on the phone (by interaction id)
 }
 
 // taskSettleDelay is how long the assistant lets a task's agents stay still before the task counts as done: the
@@ -62,45 +59,11 @@ func (h *Hub) assistantRoutesRelayed(api *http.ServeMux) {
 	}
 }
 
-// assistantShown is what the assistant reported about its conversations, by session id.
-func (h *Hub) assistantShown() map[string]assistantwire.SessionView {
-	a := h.assistantReported()
-	defer a.mu.RUnlock()
-	return a.sessions
-}
-
 // assistantTasks are the assistant's scheduled tasks as it reported them; false while it could not read them.
 func (h *Hub) assistantTasks() ([]assistantwire.TaskView, bool) {
 	a := h.assistantReported()
 	defer a.mu.RUnlock()
 	return a.tasks, a.tasks != nil
-}
-
-// quietTaskConversation: session is the own conversation of a scheduled task that pushes only what its runs send
-// (TaskView.Push, #2396), as the assistant last reported its tasks. By the session alone: an assistant conversation's
-// id is unique, and a machine id the assistant had from an older alias would miss it.
-func (h *Hub) quietTaskConversation(session string) bool {
-	tasks, _ := h.assistantTasks()
-	for _, t := range tasks {
-		if t.Push == assistantwire.PushAsked && t.RunSessionID != "" && t.RunSessionID == session {
-			return true
-		}
-	}
-	return false
-}
-
-// quietTaskFinish: s's finished turn is not pushed: a quiet task's own conversation (quietTaskConversation) that may
-// go unpushed now (assistantwire.QuietTaskFinish: Claude Code or a headless Codex, not the main conversation, a normal
-// finish).
-func (h *Hub) quietTaskFinish(s proto.Session) bool {
-	a := &h.assistant
-	a.mu.RLock()
-	p := a.profile
-	a.mu.RUnlock()
-	if p == nil {
-		return false // the assistant's settings (its main conversation) not known yet: pushed as ever
-	}
-	return h.quietTaskConversation(s.SessionID) && assistantwire.QuietTaskFinish(s, p.Main)
 }
 
 // assistantReported is the last snapshot, read-locked. With none yet, or a partial one (the database did not answer
@@ -136,6 +99,10 @@ func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	out.Assistant.Machines = h.machineIDs()
 	out.PersonaView, out.HTMLViews = h.assistantCards()
 	out.DoneDelayMS = taskSettleDelay(h.cfg.Notify).Milliseconds()
+	// The finished push's timings and a card's default wait: the manager's to apply (fleet_push.go there).
+	out.Notify = assistantwire.NotifyTimings{DoneDelayMS: taskSettleDelay(h.cfg.Notify).Milliseconds(),
+		LongTurnMS: h.cfg.Notify.longTurn().Milliseconds(), BackgroundHoldMS: h.cfg.Notify.backgroundHold().Milliseconds(),
+		HookTimeoutMS: (time.Duration(h.cfg.HookTimeoutMinutes) * time.Minute).Milliseconds()}
 	out.Agents = h.cfg.Agents  // the Agents business's defaults (agents_link.go)
 	out.Models = h.hubModels() // what hub.json says about models (assistant_models.go)
 	return out, nil
@@ -156,8 +123,6 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 					ModelConfiguration: info.ModelConfiguration})
 			}
 			return json.Marshal(map[string]any{"devices": list, "phone_online": h.phoneClient() != nil})
-		case assistantwire.DeviceInteractionsList:
-			return json.Marshal(map[string]any{"interactions": h.pendingInteractions()})
 		}
 	}
 	m := h.localMachine(p.Device)
@@ -211,6 +176,9 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 	if out, ok, err := h.inboxAppCall(ctx, p); ok { // the inbox's sources (inbox.go)
 		return out, err
 	}
+	if out, ok, err := h.fleetAppCall(ctx, p); ok { // what the hub still runs for the nodes (fleet_link.go)
+		return out, err
+	}
 	switch p.AppID + " " + p.Method {
 	case assistantwire.AppConnectors + " " + assistantwire.ConnectorsSnapshots:
 		var a struct {
@@ -220,13 +188,6 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 			return nil, err
 		}
 		return json.Marshal(map[string]any{"snapshots": h.connectorSnapshots(ctx, a.TZ)})
-	case assistantwire.AppInteractions + " " + assistantwire.InteractionsGet,
-		assistantwire.AppInteractions + " " + assistantwire.InteractionsAnswer:
-		out, err := h.interactionsCall(ctx, p.Method, p.Params)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(out)
 	}
 	if p.Method == assistantwire.AppTool {
 		return h.appTool(ctx, p.AppID, p.Params)
@@ -267,23 +228,10 @@ func (h *Hub) appTool(ctx context.Context, app string, params json.RawMessage) (
 	return json.Marshal(proto.TextResult(res, false))
 }
 
-// NotifyRequest pushes what the assistant asks, like any agent's push (every device whose settings take it).
+// NotifyRequest delivers a push the manager decided on (fleet_link.go deliverPush): every device whose settings
+// take it.
 func (l assistantLink) NotifyRequest(_ context.Context, p assistantwire.NotifyRequest) error {
-	h := l.h
-	n := p.Notification
-	if n.Kind != assistantwire.NotifyPush {
-		return fmt.Errorf("unknown notification kind %q", n.Kind)
-	}
-	h.notifyDone("assistant", n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body, pushWants{})
-	if n.Asked { // the conversation pushed what matters itself (notify_user; the assistant sends it to the channels)
-		h.mu.Lock()
-		if h.notified == nil {
-			h.notified = map[string]time.Time{}
-		}
-		h.notified[n.SessionID] = time.Now()
-		h.mu.Unlock()
-	}
-	return nil
+	return l.h.deliverPush(p.Notification)
 }
 
 // Broadcast sends the assistant's live update to the apps as it is (ws.broadcast, relayBroadcast).
@@ -293,8 +241,7 @@ func (l assistantLink) Broadcast(_ context.Context, b assistantwire.Broadcast) {
 	}
 }
 
-// Snapshot keeps what the assistant reported and pushes the session lists of the machines whose conversations look
-// different now.
+// Snapshot keeps what the assistant reported for the hub's own features.
 func (l assistantLink) Snapshot(_ context.Context, s assistantwire.Snapshot) (assistantwire.SnapshotResult, error) {
 	h := l.h
 	a := &h.assistant
@@ -317,116 +264,12 @@ func (l assistantLink) Snapshot(_ context.Context, s assistantwire.Snapshot) (as
 		h.keepAssistantProfile(context.Background(), s.Profile)
 	}
 	// What the nodes keep listing (s.Profile.Keep) the manager tells them itself (internal/devices SetKeep).
-	h.takeInboxReport(s.Inbox) // inbox.go
-	h.askOnPhone(s.Interactions)
-	machines := changedMachines(old, views)
-	for _, mid := range h.takeTodoReport(s.Todos) { // the todos' (assistant_todos.go)
-		if !slices.Contains(machines, mid) {
-			machines = append(machines, mid)
-		}
-	}
-	for _, mid := range h.takeWorkReport(s.Work) { // the agents' work (agents_link.go)
-		if !slices.Contains(machines, mid) {
-			machines = append(machines, mid)
-		}
-	}
-	for _, mid := range h.takeChannelsReport(s.Channels) { // the channels' (assistant_channels.go)
-		if !slices.Contains(machines, mid) {
-			machines = append(machines, mid)
-		}
-	}
-	for _, mid := range machines {
-		if m := h.localMachine(mid); m != nil {
-			h.sessionsChanged(m)
-		}
-	}
-	go h.deliverAnswers() // answers kept for it: it is there, with its state read back (agents_link.go)
+	// The session lists' decoration (its titles, todos, work, channels, inbox agents) and its own cards on the phone
+	// are the manager's (fleet.go there).
+	_ = old
+	h.takeTodoReport(s.Todos) // the task notices on the items (injected.go)
 	return assistantwire.SnapshotResult{OK: true, Seq: s.Seq}, nil
 }
-
-// changedMachines are the machines of the conversations whose views differ between two snapshots.
-func changedMachines(old, now map[string]assistantwire.SessionView) []string {
-	var out []string
-	add := func(mid string) {
-		if !slices.Contains(out, mid) {
-			out = append(out, mid)
-		}
-	}
-	for id, v := range now {
-		o, ok := old[id]
-		if !ok || o.Title != v.Title || o.Archived != v.Archived || !slices.Equal(o.Queued, v.Queued) || o.MachineID != v.MachineID {
-			add(v.MachineID)
-			if ok {
-				add(o.MachineID)
-			}
-		}
-	}
-	for id, o := range old {
-		if _, ok := now[id]; !ok {
-			add(o.MachineID)
-		}
-	}
-	return out
-}
-
-// askOnPhone shows the questions the assistant asks and its cards about agents' turns (its snapshot's interactions)
-// like any agent's card: recorded, announced, pushed, expired by the hub (waitInteraction); the answer goes back to
-// the assistant (manager.action), or waits for it when it cannot take it (keepAnswer). A question that left the
-// snapshot is withdrawn, as a hook's that went away, and nothing is said about it. One it still reports a while after
-// its answer went, with no answer waiting for it, is shown again: the answer did not take.
-func (h *Hub) askOnPhone(list []proto.Interaction) {
-	a := &h.assistant
-	a.askMu.Lock()
-	defer a.askMu.Unlock()
-	if a.asked == nil {
-		a.asked = map[string]*askedOne{}
-	}
-	now := map[string]bool{}
-	for _, ix := range list {
-		now[ix.ID] = true
-		if q := a.asked[ix.ID]; q != nil {
-			if q.ended.IsZero() || time.Since(q.ended) < askAgainAfter || h.answerKept(ix.ID) {
-				continue
-			}
-			q.cancel()
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		q := &askedOne{cancel: cancel}
-		a.asked[ix.ID] = q
-		go func(ix proto.Interaction) {
-			r, err := h.waitInteraction(ctx, ix)
-			if err != nil || r.Dismiss && ctx.Err() != nil {
-				return // withdrawn: it knows
-			}
-			answer, _ := json.Marshal(r)
-			act := assistantwire.Action{ActionID: "act_" + randomHex(6), SessionID: ix.SessionID, Op: "answer", InteractionID: ix.ID,
-				InteractionVersion: 1, Answer: answer}
-			// Not taken (not connected, not ready): it gets the answer later (agents_link.go).
-			if _, err := h.asst().Action(context.Background(), act); err != nil && !h.keepAnswer(act, err, ix.ExpiresAt) {
-				h.logf("assistant: answer %s: %v", ix.ID, err)
-			}
-			a.askMu.Lock()
-			q.ended = time.Now()
-			a.askMu.Unlock()
-		}(ix)
-	}
-	for id, q := range a.asked {
-		if !now[id] {
-			q.cancel()
-			delete(a.asked, id)
-		}
-	}
-}
-
-// askedOne is a question or card of the assistant's on the phone: cancel withdraws it; ended is when its answer (or
-// its expiry) went to the assistant.
-type askedOne struct {
-	cancel context.CancelFunc
-	ended  time.Time
-}
-
-// askAgainAfter is how long a question the assistant still reports after its answer went may stay off the phone.
-var askAgainAfter = 30 * time.Second
 
 // ---- on the bus: what the assistant calls ----
 
@@ -521,13 +364,13 @@ func (h *Hub) assistantUpdated() {
 // goes.
 func (h *Hub) assistantConnected() {
 	go h.inboxManagerConnected() // its inbox gets a full round (inbox.go)
-	h.kbFlush()                  // the agents' turns that waited for it (kb.go)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var res struct {
 		Tools []proto.Tool `json:"tools"`
 	}
 	h.managerConnected() // agents_link.go
+	h.fleetConnected()   // what of the apps it needs (fleet_link.go)
 	generation := h.assistantToolsGeneration()
 	if err := h.callBus(ctx, assistantwire.AssistantID, assistantwire.MethodTools, nil, &res); err != nil {
 		h.logf("assistant: tools: %v", err)
@@ -659,33 +502,6 @@ func (a assistantRemote) TodoSpaceRenamed(_ context.Context, r assistantwire.Tod
 }
 
 // ---- the hub's own parts that tell the assistant, or ask it ----
-
-// isAssistantTool: name is one of the assistant's own tools (it lists them: assistant.tools).
-func (h *Hub) isAssistantTool(ctx context.Context, name string) bool {
-	for _, t := range h.asst().Tools(ctx) {
-		if t.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
-// callAssistantTool runs one of the assistant's tools for the conversation sessionID on machine m (assistant.tool).
-func (h *Hub) callAssistantTool(ctx context.Context, m *Machine, sessionID, name string, args json.RawMessage) proto.ToolResult {
-	return h.asst().Tool(ctx, assistantwire.ToolCall{Name: name, Arguments: args, MachineID: m.cfg.ID, SessionID: sessionID})
-}
-
-// taskAnswered: the user dealt with an agent's card; when it is a task's, its conversation keeps a record of it
-// (interaction.resolved).
-func (h *Hub) taskAnswered(ix proto.Interaction, r proto.Resolution, status string) {
-	h.asst().InteractionResolved(context.Background(), assistantwire.InteractionResolved{Interaction: ix, Resolution: r, Status: status})
-}
-
-// quietInteraction: an agent of a quiet task asks something; the assistant tells the main conversation
-// (interaction.raised, #1731).
-func (h *Hub) quietInteraction(ix proto.Interaction) {
-	h.asst().InteractionRaised(context.Background(), assistantwire.InteractionRaised{Interaction: h.withTask(ix)})
-}
 
 // ---- what the hub answers the assistant from its other parts ----
 
