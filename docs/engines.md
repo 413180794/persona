@@ -126,7 +126,7 @@ node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之
 - **手动启动**：`node.info` 带上 `herdr_running` / `herdr_running_known`（老 node 两个都不带，hub 据此区分「没在跑」和
   「不清楚」）。`POST /api/v1/machines/{mid}/herdr/start` 转成 node 的 `herdr.server.start`，**不受自动启动开关约束**——
   开关说的是 node 能不能自己拉，用户点「启动」是他自己要求的。起不来时原因同下（`engine_missing` 那一套）。
-  Agents 列表顶上的提示行和「启动」按钮待接（#1916）。
+  Android 的 Agents 列表已接提示行和「启动」按钮（#1916）：在线且状态已知为未运行时显示，点按显式启动；其他客户端待接。
 - **起不来**：仍然是 `engine_missing`。没装 herdr 时文案和以前一样；装了但起不来时说「自动启动也没成功」，原因（herdr 的退出码和输出的最后几行，
   输出在 `$TMPDIR/persona-herdr-server.log`）放在详情里，也写进 node 的日志。Windows 上不拉，行为和以前一样。
 

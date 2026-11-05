@@ -47,6 +47,7 @@ internal class AgentsViewModel(
     val tasks: persona.core.domain.tasks.TasksStore? = null,
     val hubUpdates: persona.core.contracts.api.HubUpdates? = null,
     val appBuild: Long = 1L,
+    machineManagement: MachineManagement? = null,
 ) : ViewModel() {
     private val operations = bindings?.operations?.let { AgentOperationsState(it, preferences.hubCache) }
     val operationState = operations?.state ?: MutableStateFlow(AgentOperationsSnapshot())
@@ -67,6 +68,7 @@ internal class AgentsViewModel(
     val refreshing = _refreshing.asStateFlow()
     private val _notice = MutableStateFlow<String?>(null)
     val notice = _notice.asStateFlow()
+    val herdr = machineManagement?.let { HerdrStarter(it, repository, connection, viewModelScope) { _notice.value = it } }
     private val _failure = MutableStateFlow<Throwable?>(null)
     val failure = _failure.asStateFlow()
     fun clearFailure() { _failure.value = null }
@@ -396,7 +398,7 @@ internal class AgentsViewModel(
         viewModelScope.launch {
             _refreshing.value = true
             try {
-                repository.refresh(); interactions.refresh()
+                repository.refresh(); interactions.refresh(); herdr?.refresh()
                 operations?.reconcile(repository.sessions.value)?.forEach { bindings?.onSessionClosed?.invoke(it) }
                 operations?.refresh()
             }

@@ -34,6 +34,12 @@ interface MachineManagement {
     /** `POST /api/v1/machines/{id}/deploy`: the hub installs its own jarvisd there; progress comes with `machines`. */
     suspend fun deploy(machineId: String)
 
+    /** `GET /api/v1/machines/{id}/herdr`: whether the node knows classic herdr is running. */
+    suspend fun herdr(machineId: String): HerdrState
+
+    /** `POST /api/v1/machines/{id}/herdr/start`: an explicit start, independent of the autostart setting. */
+    suspend fun startHerdr(machineId: String): HerdrState
+
     /** `PUT /api/v1/machines/{id}/engine`: allowed offline (applied when it connects); returns the updated machine. */
     suspend fun setEngine(machineId: String, engine: String): Machine
 
@@ -69,3 +75,13 @@ data class ClaudeSetting(
 }
 
 object ClaudeSettingSerializer : WireSerializer<ClaudeSetting>(ClaudeSetting.generatedSerializer())
+
+@KeepGeneratedSerializer
+@Serializable(with = HerdrStateSerializer::class)
+data class HerdrState(
+    val autostart: Boolean,
+    val running: Boolean,
+    val known: Boolean,
+)
+
+object HerdrStateSerializer : WireSerializer<HerdrState>(HerdrState.generatedSerializer())

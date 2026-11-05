@@ -177,3 +177,5 @@
 - 如果接口声明了带默认实现的方法（例如 `momentsPost` 默认 `error(...)`、`emojis` 默认 `null`），Kotlin 编译器不会报错要求实现，直接落到默认值；页面调用时就表现为功能不可用（如公司圈帖子打不开）。
 - 做法：门面实现时完整实现接口的所有方法，并加契约单测检查。
 
+
+- herdr 的 `herdr_running` / `herdr_running_known` 是 node.info 字段，hub 的普通 `machines` 快照没有转发它们。Android 要从 `GET /api/v1/machines/{mid}/herdr` 读 `{autostart, running, known}`；`known: false` 表示未知。显式启动后用确认的结果更新提示，并防止更早的状态查询覆盖它（#1916）。

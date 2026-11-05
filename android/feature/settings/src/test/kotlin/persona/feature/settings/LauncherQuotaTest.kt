@@ -88,6 +88,8 @@ class LauncherQuotaTest {
         override suspend fun launchers(machineId: String) = emptyList<AgentLauncher>()
         override suspend fun reconnect(machineId: String) = Unit
         override suspend fun deploy(machineId: String) = Unit
+        override suspend fun herdr(machineId: String): persona.core.contracts.api.HerdrState = error("unused")
+        override suspend fun startHerdr(machineId: String): persona.core.contracts.api.HerdrState = error("unused")
         override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId)
         override suspend fun claudeSettings(machineId: String) = emptyList<ClaudeSetting>()
         override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) = emptyList<ClaudeSetting>()

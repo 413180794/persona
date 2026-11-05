@@ -121,7 +121,7 @@ nonisolated enum OpRetry {
     /// sleep).
     static func untilDelivered<T>(limit: TimeInterval = OpRetry.limit, now: () -> Date = Date.init,
                                   keepTrying: @escaping () -> Bool = { true },
-                                  wait: (TimeInterval, _ keepTrying: @escaping () -> Bool) async -> Void = OpRetry.sleep,
+                                  wait: (TimeInterval, _ keepTrying: @escaping () -> Bool) async -> Void = { await OpRetry.sleep($0, while: $1) },
                                   _ run: () async throws -> T) async throws -> T {
         let start = now()
         for n in 1... {

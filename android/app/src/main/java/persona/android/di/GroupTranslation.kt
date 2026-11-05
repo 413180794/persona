@@ -172,6 +172,8 @@ internal fun MachineManagement.inGroup(names: GroupNames): MachineManagement {
             source.launcherQuota(names.rawMachine(machineId), name, refresh).let { a -> a.copy(machine = a.machine?.takeIf { it.isNotBlank() }?.let(names::machineId)) }
         override suspend fun reconnect(machineId: String) = source.reconnect(names.rawMachine(machineId))
         override suspend fun deploy(machineId: String) = source.deploy(names.rawMachine(machineId))
+        override suspend fun herdr(machineId: String) = source.herdr(names.rawMachine(machineId))
+        override suspend fun startHerdr(machineId: String) = source.startHerdr(names.rawMachine(machineId))
         override suspend fun setEngine(machineId: String, engine: String) = names.machine(source.setEngine(names.rawMachine(machineId), engine))
         override suspend fun claudeSettings(machineId: String) = source.claudeSettings(names.rawMachine(machineId))
         override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) =

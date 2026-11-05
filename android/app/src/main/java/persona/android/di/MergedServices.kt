@@ -105,6 +105,8 @@ internal fun mergedMachineManagement(routes: MachineRoutes): MachineManagement =
         routes.on(machineId) { it.launcherQuota(machineId, name, refresh) }
     override suspend fun reconnect(machineId: String) = routes.on(machineId) { it.reconnect(machineId) }
     override suspend fun deploy(machineId: String) = routes.on(machineId) { it.deploy(machineId) }
+    override suspend fun herdr(machineId: String) = routes.on(machineId) { it.herdr(machineId) }
+    override suspend fun startHerdr(machineId: String) = routes.on(machineId) { it.startHerdr(machineId) }
     override suspend fun setEngine(machineId: String, engine: String) = routes.on(machineId) { it.setEngine(machineId, engine) }
     override suspend fun claudeSettings(machineId: String) = routes.on(machineId) { it.claudeSettings(machineId) }
     override suspend fun setClaudeSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =

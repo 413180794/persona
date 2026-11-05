@@ -22,6 +22,14 @@ class MachineManagementContractTest {
         assertFalse(n.deploying)
     }
 
+    @Test fun herdrStatusDistinguishesStoppedRunningAndUnknownNodes() {
+        val stopped = JsonCodec.decodeFromString<HerdrState>("""{"autostart":false,"running":false,"known":true}""")
+        assertEquals(HerdrState(false, false, true), stopped)
+        assertEquals(stopped, JsonCodec.decodeFromString<HerdrState>(JsonCodec.encodeToString(stopped)))
+        assertFalse(JsonCodec.decodeFromString<HerdrState>("""{"autostart":true,"running":false,"known":false}""").known)
+        assertTrue(JsonCodec.decodeFromString<HerdrState>("""{"autostart":false,"running":true,"known":true}""").running)
+    }
+
     @Test fun keepsUnknownEnginesAndTheirFieldsAsGiven() {
         val m = JsonCodec.decodeFromString<Machine>(
             """{"id":"m1","engine":"orca","engines":[

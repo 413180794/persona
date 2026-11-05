@@ -97,6 +97,8 @@ class ClaudeSettingsModelTest {
         override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) = persona.core.contracts.api.LauncherQuotaAnswer()
         override suspend fun reconnect(machineId: String) = Unit
         override suspend fun deploy(machineId: String) = Unit
+        override suspend fun herdr(machineId: String): persona.core.contracts.api.HerdrState = error("unused")
+        override suspend fun startHerdr(machineId: String): persona.core.contracts.api.HerdrState = error("unused")
         override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId)
     }
 

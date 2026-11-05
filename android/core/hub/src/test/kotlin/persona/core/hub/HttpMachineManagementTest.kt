@@ -5,6 +5,7 @@ import persona.core.contracts.api.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -19,6 +20,42 @@ class HttpMachineManagementTest {
                 http.newCall(Request.Builder().url(server.url(path)).method(method, body).build()).execute()
             })
         }
+    }
+
+    @Test fun herdrStatusUsesTheDedicatedGet() = withHub { server, machines ->
+        server.enqueue(MockResponse().setBody("""{"autostart":true,"running":false,"known":true}"""))
+        assertEquals(HerdrState(true, false, true), machines.herdr("desk"))
+        server.takeRequest().let {
+            assertEquals("/api/v1/machines/desk/herdr", it.path)
+            assertEquals("GET", it.method)
+        }
+    }
+
+    @Test fun herdrStartUsesAnExplicitPostAndKeepsTheAutostartSetting() = withHub { server, machines ->
+        server.enqueue(MockResponse().setBody("""{"autostart":false,"running":true,"known":true}"""))
+        assertEquals(HerdrState(false, true, true), machines.startHerdr("desk/name"))
+        server.takeRequest().let {
+            assertEquals("/api/v1/machines/desk%2Fname/herdr/start", it.path)
+            assertEquals("POST", it.method)
+            assertEquals("{}", it.body.readUtf8())
+        }
+        server.enqueue(MockResponse().setResponseCode(502).setBody("""{"error":"engine_missing: herdr failed to start"}"""))
+        val failed = runCatching { machines.startHerdr("desk") }.exceptionOrNull() as HubFailure
+        assertEquals(502, failed.status)
+        assertTrue(failed.message.orEmpty().contains("herdr failed to start"))
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun herdrStartAllowsTheHubsFortySecondDeadline() = runBlocking {
+        var timeout: Long? = null
+        val machines = HttpMachineManagement { _, _, _, seconds ->
+            timeout = seconds
+            okhttp3.Response.Builder().request(Request.Builder().url("http://localhost/").build())
+                .protocol(okhttp3.Protocol.HTTP_1_1).code(200).message("OK")
+                .body("""{"autostart":true,"running":true,"known":true}""".toResponseBody()).build()
+        }
+        machines.startHerdr("desk")
+        assertTrue(requireNotNull(timeout) > 40)
     }
 
     @Test fun launchersReconnectAndDeployGoToTheMachine() = withHub { server, machines ->

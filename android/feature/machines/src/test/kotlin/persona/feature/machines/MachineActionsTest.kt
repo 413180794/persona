@@ -35,6 +35,8 @@ class MachineActionsTest {
         override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) = persona.core.contracts.api.LauncherQuotaAnswer()
         override suspend fun reconnect(machineId: String) { calls += "reconnect:$machineId"; failure?.let { throw it }; onReconnect() }
         override suspend fun deploy(machineId: String) { calls += "deploy:$machineId"; failure?.let { throw it } }
+        override suspend fun herdr(machineId: String): persona.core.contracts.api.HerdrState = error("unused")
+        override suspend fun startHerdr(machineId: String): persona.core.contracts.api.HerdrState = error("unused")
         override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId, engine = engine)
         override suspend fun claudeSettings(machineId: String) = emptyList<ClaudeSetting>()
         override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) = emptyList<ClaudeSetting>()

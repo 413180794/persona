@@ -47,6 +47,8 @@ internal fun AgentsScreen(
     val refreshing by model.refreshing.collectAsStateWithLifecycle()
     val notice by model.notice.collectAsStateWithLifecycle()
     val hubNotice by model.hubNotice.collectAsStateWithLifecycle()
+    val herdrStates by (model.herdr?.states ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, HerdrState>())).collectAsStateWithLifecycle()
+    val startingHerdr by (model.herdr?.starting ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet<String>())).collectAsStateWithLifecycle()
     val operations by model.operationState.collectAsStateWithLifecycle()
     var operationDialog by remember { mutableStateOf<AgentOperationDialog?>(null) }
     var pickingTodoForSession by remember { mutableStateOf<Session?>(null) }
@@ -75,6 +77,11 @@ internal fun AgentsScreen(
     LaunchedEffect(lifecycle) {
         lifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) { now = Instant.now(); delay(1_000) }
+        }
+    }
+    LaunchedEffect(lifecycle, model.herdr, page.machines, connection) {
+        lifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) { model.herdr?.refresh(); delay(5_000) }
         }
     }
     val failure by model.failure.collectAsStateWithLifecycle()
@@ -193,6 +200,12 @@ internal fun AgentsScreen(
                 }
             }
             if (connection != ConnectionState.Online) item("connection") { ConnectionNotice(connection, ::connectionSettings) }
+            if (model.herdr != null && connection == ConnectionState.Online && page.preferences.range != AgentRange.History) {
+                items(page.machines.filter { it.herdrStopped(herdrStates[it.id]) && (page.settings.machineFilter.isEmpty() || page.settings.machineFilter == it.id) },
+                    key = { "herdr:${it.id}" }) { machine ->
+                    HerdrNotice(names[machine.id] ?: machine.displayName, machine.id in startingHerdr) { model.herdr.start(machine.id) }
+                }
+            }
             if (page.preferences.range != AgentRange.History && requests.isNotEmpty()) {
                 item("requests-title") { JSectionHeader("等你定", count = requests.size) }
                 items(requests.take(3), key = { "request:${it.id}" }) { request ->

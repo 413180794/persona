@@ -63,6 +63,7 @@ class ShellSession(
         override fun groups() = this@ShellSession.groups
         override fun tasks() = this@ShellSession.tasks
         override fun hubUpdates() = this@ShellSession.hubUpdates
+        override fun machines() = this@ShellSession.machines
     }
 }
 

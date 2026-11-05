@@ -1036,3 +1036,11 @@ Agent 对话页 ⋯「文件」「Git · N」打开会话目录的文件和 Git�
 - 公司圈（旧 App #365）：**没有**，`InboxItem` 不解析 `moment`，收件箱里公司圈那件打不开帖子 → #819。
 - 收件箱：别处已读的 @我 / @所有人 不再显示 @ 标签（旧 App #246，#821）：**已有**，`RealInboxRepository` 把 hub 的 `read` 带进 `InboxRecord`，已读的 `mention` 在行内显示「群聊」；未读的继续显示「@我」/「@所有人」。客户端保留原来的 kind 和分层，和 `docs/inbox.md` 的已读规则一致。
 - 脚本目录调整（#505）：已经跟上，本文档统一写成 `scripts/app/android.sh`、`scripts/mock/mock_hub.py`。
+
+### Agents 的 herdr 启动提示（#1916）
+
+Agents 页可见时每 5 秒读取在线经典 herdr / herdr-both 机器的 `GET /api/v1/machines/{mid}/herdr`；
+普通机器列表不携带这个运行状态。只对 `known: true, running: false` 的机器显示提示，遵循当前 hub 组和机器筛选；
+离线机器、Herdr App、历史范围以及状态未知或接口不可用的机器不显示。提示使用设计系统 `JNotice`，三种风格共用。
+点「启动」才发 `POST /api/v1/machines/{mid}/herdr/start`，不修改自动启动设置；请求期间隐藏启动按钮，
+确认运行后移除提示，失败时说明原因并保留入口。启动确认后的状态不会被更早发起的查询覆盖；启动请求不自动重试。

@@ -5,6 +5,7 @@ import persona.core.contracts.Machine
 import persona.core.contracts.api.AgentLauncher
 import persona.core.contracts.api.ClaudeSetting
 import persona.core.contracts.api.LauncherQuotaAnswer
+import persona.core.contracts.api.HerdrState
 import persona.core.contracts.api.MachineManagement
 import kotlinx.serialization.json.*
 import okhttp3.HttpUrl
@@ -40,6 +41,12 @@ class HttpMachineManagement internal constructor(
     override suspend fun reconnect(machineId: String) { call(api("machines", machineId, "reconnect"), "POST", buildJsonObject { }) }
 
     override suspend fun deploy(machineId: String) { call(api("machines", machineId, "deploy"), "POST", buildJsonObject { }) }
+
+    override suspend fun herdr(machineId: String): HerdrState =
+        JsonCodec.decodeFromJsonElement(call(api("machines", machineId, "herdr"), "GET"))
+
+    override suspend fun startHerdr(machineId: String): HerdrState =
+        JsonCodec.decodeFromJsonElement(call(api("machines", machineId, "herdr", "start"), "POST", buildJsonObject { }, timeout = 50))
 
     override suspend fun setEngine(machineId: String, engine: String): Machine {
         require(engine.isNotBlank())

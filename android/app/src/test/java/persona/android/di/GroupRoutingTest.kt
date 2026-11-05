@@ -167,6 +167,8 @@ class GroupRoutingTest {
             persona.core.contracts.api.LauncherQuotaAnswer(machine = machineId).also { calls += "quota $machineId $name $refresh" }
         override suspend fun reconnect(machineId: String) { calls += "reconnect $machineId" }
         override suspend fun deploy(machineId: String) { calls += "deploy $machineId" }
+        override suspend fun herdr(machineId: String) = HerdrState(false, false, true).also { calls += "herdr $machineId" }
+        override suspend fun startHerdr(machineId: String) = HerdrState(false, true, true).also { calls += "start herdr $machineId" }
         override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId, "").also { calls += "engine $machineId $engine" }
         override suspend fun claudeSettings(machineId: String) = emptyList<ClaudeSetting>().also { calls += "settings $machineId" }
         override suspend fun setClaudeSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
@@ -188,10 +190,12 @@ class GroupRoutingTest {
         // the machine that read the quota is named back in the merged ids
         assertEquals("macbook~g0a1b2c3d", managed.launcherQuota("macbook~g0a1b2c3d", "cc_main", refresh = true).machine)
         managed.setClaudeSetting("macbook~g0a1b2c3d", "model", kotlinx.serialization.json.JsonPrimitive("opus"))
+        assertEquals(HerdrState(false, false, true), managed.herdr("macbook~g0a1b2c3d"))
+        assertEquals(HerdrState(false, true, true), managed.startHerdr("macbook~g0a1b2c3d"))
         val changed = managed.setEngine("macbook~g0a1b2c3d", "orca")
         assertEquals(listOf("reconnect macbook", "deploy macbook", "launchers macbook", "settings macbook",
             "quota macbook cc_main true", "set macbook model",
-            "engine macbook orca"), work.calls)
+            "herdr macbook", "start herdr macbook", "engine macbook orca"), work.calls)
         // the machine it hands back is the merged list's, so the page finds it again
         assertEquals("macbook~g0a1b2c3d", changed.id)
         // the primary group's machine with the same plain id stays on the primary hub, unchanged
