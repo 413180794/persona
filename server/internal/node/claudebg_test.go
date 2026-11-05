@@ -39,8 +39,8 @@ func bgTranscript(t *testing.T, home, cwd, id, title string) string {
 // A /fork in Claude Code 2.1.30x: the fork runs in Claude's daemon (sessions/<pid>.json kind "bg"), no pane; the
 // interactive claude in the pane parked its own session and shows the agents view, while herdr still names the pane
 // after that session and calls it working off the fork's terminal title. The fork lists live, read-only, with its
-// subagents and its status from the registry; the parked session does not take the pane (offline) until its claude
-// comes back to it. A background session whose claude exited is not live.
+// subagents and its status from the registry; the parked session keeps its tab, idle (not the fork's state), with
+// its terminal but no messages, until its claude comes back to it. A background session whose claude exited is not live.
 func TestClaudeBackgroundSessionListedLive(t *testing.T) {
 	n, f, home := herdrNode(t)
 	cwd := home
@@ -78,7 +78,7 @@ func TestClaudeBackgroundSessionListedLive(t *testing.T) {
 	if len(b.Subagents) != 1 || b.Subagents[0].SessionID != sidB+"@a1" || !b.Subagents[0].Running {
 		t.Errorf("fork subagents = %+v", b.Subagents)
 	}
-	if a := m[sidA]; a.Status != proto.StatusOffline || a.PaneID != "" {
+	if a := m[sidA]; a.Status != proto.StatusIdle || a.PaneID != "w1:p1" || a.TabID != "w1:t1" || a.ReadOnlyReason == "" {
 		t.Errorf("parked parent = %+v", a)
 	}
 	if s, ok := m[dead]; ok && s.Status != proto.StatusOffline {
@@ -95,7 +95,7 @@ func TestClaudeBackgroundSessionListedLive(t *testing.T) {
 	// The claude comes back to its own session: the pane is that session's again.
 	delete(parent, "parkedJobId")
 	writeClaudeProc(t, home, os.Getppid(), parent)
-	if a := byID(listSessions(t, n))[sidA]; a.Status != proto.StatusWorking || a.PaneID != "w1:p1" {
+	if a := byID(listSessions(t, n))[sidA]; a.Status != proto.StatusWorking || a.PaneID != "w1:p1" || a.ReadOnlyReason != "" {
 		t.Errorf("parent back in its pane = %+v", a)
 	}
 }
@@ -120,7 +120,8 @@ func TestClaudeBackgroundSessionSendRefused(t *testing.T) {
 
 // A session sent to the background with /background: the agents view opens the job it went to, so the pane shows
 // that job's conversation under its name. The pane is the background session's — listed in its herdr tab, not apart
-// and read-only — while the parked session is not in it. On the agents list (another title) the pane is nobody's.
+// and read-only — while the parked session is not in it. On the agents list (another title, or the job ended) the
+// pane is the parked session's tab again, with its terminal to pick from the list: a message is refused, nothing typed.
 func TestParkedPaneShowingItsJob(t *testing.T) {
 	n, f, home := herdrNode(t)
 	cwd := home
@@ -148,7 +149,34 @@ func TestParkedPaneShowingItsJob(t *testing.T) {
 	if b := m[sidB]; b.PaneID != "" || b.SourceKind != sourceClaudeBg {
 		t.Errorf("job, pane on the agents list = %+v", b)
 	}
-	if a := m[sidA]; a.PaneID != "" {
+	if a := m[sidA]; a.PaneID != "w1:p4" || a.TabID != "w1:t4" || a.Status != proto.StatusIdle || a.ReadOnlyReason == "" {
 		t.Errorf("parked session, pane on the agents list = %+v", a)
+	} else if c := a.Capabilities; c == nil || !c.Read || !c.Terminal || c.Send {
+		t.Errorf("parked session capabilities = %+v", c)
+	}
+
+	// The job ended: no background process, the pane on the agents list (2026-11-05: tabs 2 and 4 gone).
+	_ = os.Remove(filepath.Join(home, ".claude", "sessions", strconv.Itoa(os.Getpid())+".json"))
+	m = shown("2 awaiting input · claude agents")
+	if a := m[sidA]; a.PaneID != "w1:p4" || a.TabID != "w1:t4" || a.ReadOnlyReason == "" {
+		t.Errorf("parked session, job ended = %+v", a)
+	}
+	f.reset()
+	_, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hi", "client_msg_id": "m-1"})
+	if !isRefusal(err, openElsewhere) {
+		t.Fatalf("send to a pane on the agents list: %v", err)
+	}
+	for _, c := range f.trace() {
+		if strings.Contains(c, "send") || strings.Contains(c, "tab.create") {
+			t.Fatalf("something was typed or started: %v", f.trace())
+		}
+	}
+	// Picking from the list, as on the computer: the keys reach the pane.
+	f.reset()
+	if _, err := request(t, n, "session.keys", map[string]any{"session_id": sidA, "keys": []string{"down", "enter"}}); err != nil {
+		t.Fatalf("keys to a pane on the agents list: %v", err)
+	}
+	if tr := strings.Join(f.trace(), "\n"); !strings.Contains(tr, "w1:p4") {
+		t.Fatalf("keys did not reach the pane: %v", f.trace())
 	}
 }

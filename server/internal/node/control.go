@@ -504,6 +504,9 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	if err := n.starts.wait(ctx, id); err != nil {
 		return err
 	}
+	if r := n.agentsListRefusal(id); r != nil { // claudebg.go
+		return r
+	}
 	n.dropSuggestion(id)
 	pane, err := n.paneFor(ctx, id)
 	if err != nil && (n.codexPath(id) != "" || n.traexPath(id) != "") {

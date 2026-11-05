@@ -134,6 +134,7 @@ func (n *Node) useBotmux(on, fallback bool) {
 	for id, a := range n.agents {
 		if host.ParsePane(a.PaneID).Kind == host.Botmux {
 			delete(n.agents, id)
+			delete(n.onAgentsList, id)
 		}
 	}
 	n.mu.Unlock()

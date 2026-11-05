@@ -575,13 +575,16 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 	for k, v := range n.agents {
 		agents[k] = v
 	}
+	onList := n.onAgentsList // replaced whole with n.agents (setAgentsAt), never changed in place
 	n.mu.Unlock()
 
 	var out []proto.Session
 	seen := map[string]bool{}
 	now := time.Now()
 	for id, a := range agents {
-		a.AgentStatus = n.claudeStatus(id, a, now)
+		if !onList[id] { // a pane on Claude's agents list stays idle: the transcript is its parked session's (claudebg.go)
+			a.AgentStatus = n.claudeStatus(id, a, now)
+		}
 		s := proto.Session{
 			SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
 			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, Agent: a.Agent,
@@ -614,10 +617,15 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			s.Status = proto.StatusIdle
 		}
 		n.mu.Unlock()
+		if onList[id] { // its pane is on Claude's agents list: shown in its tab, picked from in its terminal (claudebg.go)
+			s.Capabilities, s.ReadOnlyReason = &proto.SessionCapabilities{Read: true, Terminal: true}, claudeAgentsList
+		}
 		if s.Status == proto.StatusBlocked { // only while it still waits (not once the phone drives it)
 			s.AttentionReason = a.Attention
 		}
-		s.Suggestion = n.noteStatus(id, a.Agent, a.PaneID, s.Status) // suggestion.go
+		if !onList[id] { // the list's prompt is no suggestion of its
+			s.Suggestion = n.noteStatus(id, a.Agent, a.PaneID, s.Status) // suggestion.go
+		}
 		// textAt: when the transcript last had the agent's words.
 		var textAt time.Time
 		if p := n.transcriptPath(id); p != "" {
@@ -1148,7 +1156,7 @@ func (n *Node) setAgents(agents []host.Agent) {
 
 // setAgentsAt is setAgents for a refresh of engine epoch: false (nothing set) when the engine changed since.
 func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
-	m := map[string]host.Agent{}
+	m, onList := map[string]host.Agent{}, map[string]bool{}
 	var unknown, codex, pi, botmux []host.Agent
 	procs := n.liveClaudes()
 	parked := parkedClaudeSessions(procs)    // claudebg.go
@@ -1197,8 +1205,12 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			}
 			if j, ok := parked[id]; ok {
 				// its claude sent the session to the background: the pane shows Claude's agents view, or the job
-				if bg := j.shownIn(a); bg != "" && !liveTaken(m, bg) {
-					m[bg] = a
+				if bg := j.shownIn(a); bg != "" {
+					if !liveTaken(m, bg) {
+						m[bg] = a
+					}
+				} else if !liveTaken(m, id) {
+					m[id], onList[id] = onAgentsList(a), true
 				}
 				continue
 			}
@@ -1227,8 +1239,12 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		// the directory) is the last resort — six agents in one repo got each other's tab names that way.
 		id := n.sessionFromProcess(a.PaneID)
 		if j, ok := parked[id]; ok { // the same, as the pane's own claude tells it
-			if bg := j.shownIn(a); bg != "" && !liveTaken(m, bg) {
-				m[bg] = a
+			if bg := j.shownIn(a); bg != "" {
+				if !liveTaken(m, bg) {
+					m[bg] = a
+				}
+			} else if !liveTaken(m, id) {
+				m[id], onList[id] = onAgentsList(a), true
 			}
 			continue
 		}
@@ -1300,6 +1316,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		return false
 	}
 	n.agents = m
+	n.onAgentsList = onList
 	if n.lastPanes == nil {
 		n.lastPanes = map[string]string{}
 	}

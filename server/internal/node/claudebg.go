@@ -23,10 +23,18 @@ import (
 // conversation, its prompt, its name as the terminal title. Such a pane is the background session's (the job's
 // sessions/<pid>.json has jobId = the parkedJobId, and its name is the title), so it lists in its herdr tab and takes
 // what is typed (2026-11-04: tab 4 of a herdr workspace was missing on the phone, its session listed apart, read-only).
+//
+// On the agents list (the job ended or stopped, or another one is picked) the pane is still the parked session's tab:
+// it lists there, idle (herdr's state is a background session's title), with its terminal: the phone picks a session
+// from the list as on the computer (arrows, enter), and the pane is then that one's. A message is not typed into it —
+// the list's prompt starts a new background session. Before, such a pane listed nowhere (2026-11-05: tabs 2 and 4
+// missing on the phone after their jobs ended).
 
 const sourceClaudeBg = "claude_bg"
 
 const claudeBgReadOnly = "Claude Code 的后台会话：手机上只能看，回复请在电脑上用 claude agents 打开它"
+
+const claudeAgentsList = "这个标签停在 Claude Code 的 agents 列表上：打开终端，用方向键选中一个会话、回车进去后再发消息"
 
 // claudeBgStatus maps a background session's status to the node's: waiting is a question or dialog of its own,
 // answered on the computer. Anything else is unknown.
@@ -64,6 +72,23 @@ func (j parkedJob) shownIn(a host.Agent) string {
 		return ""
 	}
 	return j.SessionID
+}
+
+// onAgentsList is a parked session's pane on the agents list, idle: the state herdr reads off the title is not its.
+func onAgentsList(a host.Agent) host.Agent {
+	a.AgentStatus = proto.StatusIdle
+	return a
+}
+
+// agentsListRefusal refuses a message to a parked session whose pane is on the agents list, nil for any other.
+func (n *Node) agentsListRefusal(id string) error {
+	n.mu.Lock()
+	listed := n.onAgentsList[id]
+	n.mu.Unlock()
+	if !listed {
+		return nil
+	}
+	return refusal(openElsewhere, claudeAgentsList+"。这次没有发送。", nil)
 }
 
 // claudeBgSessions lists the live background sessions not in seen that have a transcript.

@@ -67,10 +67,14 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
 - 把自己的会话转到后台的交互式 claude：`sessions/<pid>.json` 的 `sessionId` 不变、多一个 `parkedJobId`（原 transcript 末尾写
   `continued-in`），窗格里换成 Claude 的 agents 视图，回到会话时 `parkedJobId` 去掉。herdr 仍按 SessionStart 记下的 id 认这个窗格、
   按终端标题（agents 视图里打开的后台会话的）报状态，于是原会话显示「工作中」，手机发给它的消息会打进 agents 视图。node 和 Claude Code
-  一样认为 parked 的进程不算开着这个会话：只有 parked 的进程开着的会话不占这个窗格，列成离线，claude 回到它后恢复。
+  一样认为 parked 的进程不算开着这个会话：手机不往这个窗格打字，状态也不用 herdr 报的，claude 回到它后恢复。
 - agents 视图会打开会话转去的那个后台 job（后台会话的 `sessions/<pid>.json` 带 `jobId`，等于 `parkedJobId`），这时窗格显示的是它的
   对话、输入框，终端标题是它的 `name`。窗格标题等于这个 job 的 `name` 时，node 把窗格认成这个后台会话：列在对应的 herdr 标签里，
-  按窗格收发，而不是另列一条只读的 `claude_bg`；停在 agents 列表（标题不同）时窗格不归任何会话（2026-11-04：herdr 有 4 个标签，手机上少一个）。
+  按窗格收发，而不是另列一条只读的 `claude_bg`（2026-11-04：herdr 有 4 个标签，手机上少一个）。
+- 停在 agents 列表时（标题不是 job 的 `name`：job 已结束 / 停止，或选了别的），窗格仍列成原会话所在的标签：状态 idle，`capabilities`
+  是 `read` + `terminal`、带 `read_only_reason`。手机在终端里像电脑上一样选（方向键、回车），进去后窗格就是那个会话的；
+  消息不往列表里打，node 拒绝（`open_elsewhere`），什么都不输入——列表的输入框会新建一个后台会话。
+  之前这种窗格哪儿都不列（2026-11-05：两个 job 结束后，手机上少了 tab 2 和 4）。
 
 ## 屏蔽配置目录（#676）
 
