@@ -73,14 +73,24 @@ export interface Program {
   fetch?(req: Request): Response | Promise<Response>;
 }
 
-/** Reads a page's state, which the program wrote with encodeState. */
+const kindOf = (v: unknown) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
+
+/** Reads a page's state, which the program wrote with encodeState. An object state is merged over an object fallback
+ * (keys it lacks keep the fallback's); any other state is returned as itself when it is the fallback's kind (string,
+ * number, array, ...), or as is when the fallback is null or undefined. A state that does not parse, or is of another
+ * kind, gives the fallback. */
 export function decodeState<T>(req: { state?: string }, fallback: T): T {
   if (!req.state) return fallback;
+  let v: unknown;
   try {
-    return { ...fallback, ...JSON.parse(req.state) };
+    v = JSON.parse(req.state);
   } catch {
     return fallback;
   }
+  if (fallback === null || fallback === undefined) return v as T;
+  const kind = kindOf(fallback);
+  if (kindOf(v) !== kind) return fallback;
+  return (kind === "object" ? { ...fallback, ...(v as object) } : v) as T;
 }
 
 /** Writes a page's state (at most 16 KB). */
@@ -155,6 +165,36 @@ export class Hub {
   }
 }
 
+/** The error frame for what a handler threw. Only an ExtError's code goes out, so codes like ENOENT stay local. */
+function wireError(err: unknown): { message: string; code?: string; data?: unknown } {
+  if (err instanceof ExtError) {
+    return { message: err.message, ...(err.code ? { code: err.code } : {}), ...(err.data !== undefined ? { data: err.data } : {}) };
+  }
+  const message = (err as { message?: unknown } | null | undefined)?.message;
+  if (typeof message === "string") return { message };
+  try {
+    return { message: String(err) };
+  } catch {
+    return { message: "error" };
+  }
+}
+
+/**
+ * Encodes the answer to request id. A result JSON cannot encode (a BigInt, a cycle) is answered with an error
+ * saying why, and error data it cannot encode is left out, so every request gets an answer, as with the Go SDK.
+ */
+function answer(id: unknown, out: { result: unknown } | { error: { message: string; code?: string; data?: unknown } }): string {
+  try {
+    return JSON.stringify({ id, ...out });
+  } catch (err) {
+    if ("error" in out) {
+      const { data: _, ...error } = out.error;
+      return JSON.stringify({ id, error });
+    }
+    return JSON.stringify({ id, error: wireError(err) });
+  }
+}
+
 /** One side of the protocol: feed it lines, it writes answers with write. Returned for tests and other transports. */
 export function connect(prog: Program, write: Write) {
   const hub = new Hub(write);
@@ -171,7 +211,8 @@ export function connect(prog: Program, write: Write) {
       if (!initialized) {
         const init: Init = { ...params, info: params.extension ?? params.plugin ?? { id: "", version: "" } };
         initializing ??= Promise.resolve(prog.init?.(init, hub)).then((c) => {
-          contributes = c || undefined;
+          // An empty map says nothing, as in the Go SDK: the answer leaves contributes out (all of it).
+          contributes = c && Object.keys(c).length > 0 ? c : undefined;
           initialized = true;
         });
         try {
@@ -271,11 +312,8 @@ export function connect(prog: Program, write: Write) {
       const done = Promise.resolve()
         .then(() => request(f.method!, f.params))
         .then(
-          (result) => write(JSON.stringify({ id, result: result ?? {} })),
-          (err) => {
-            const e = err instanceof ExtError ? err : new ExtError(err instanceof Error ? err.message : String(err));
-            write(JSON.stringify({ id, error: { message: e.message, ...(e.code ? { code: e.code } : {}), ...(e.data !== undefined ? { data: e.data } : {}) } }));
-          },
+          (result) => write(answer(id, { result: result ?? {} })),
+          (err) => write(answer(id, { error: wireError(err) })),
         );
       inflight.add(done);
       done.finally(() => inflight.delete(done));
@@ -367,6 +405,9 @@ export async function main(prog: Program) {
       if (l) conn.line(l);
     }
   }
+  // A last frame without a trailing newline is still a request (Go's bufio.Scanner returns it too).
+  const last = (buf + decoder.decode()).trim();
+  if (last) conn.line(last);
   await conn.drain();
   conn.close();
   // rpc: none (only HTTP): the hub sends nothing on stdin; serve until it stops the program.
