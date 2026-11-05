@@ -26,6 +26,7 @@ import persona.core.contracts.api.*
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.lines.ChatLine
+import persona.core.domain.lines.isLiveStatus
 import persona.core.domain.sort.READ_ONLY
 import persona.core.domain.sort.canApprove
 import persona.core.domain.sort.canChangeEffortOnly
@@ -236,13 +237,13 @@ private fun ChatPage(
     val openWork = chatList.position.expanded
     var timelineVersion by remember { mutableIntStateOf(0) }
     val timeline = remember { ChatTimeline() }
-    val liveId = if (session?.status == "working") snapshot.items.lastOrNull { it.role == "user" && it.kind == "text" }?.id else null
+    val live = isLiveStatus(session?.status)
     // Which items the lines were last built from: until the first build finishes, the page is still loading, not empty.
     var projectedFrom by remember { mutableStateOf<List<Item>?>(null) }
     val projection by produceState(persona.core.domain.lines.ChatSnapshot(emptyList(), emptyList(), persona.core.domain.lines.TaskIndex()),
-        snapshot.items, liveId, openWork, timelineVersion) {
+        snapshot.items, live, openWork, timelineVersion) {
         val items = snapshot.items
-        value = withContext(Dispatchers.Default) { timeline.lines(items, liveId, openWork.toSet()) }
+        value = withContext(Dispatchers.Default) { timeline.lines(items, live, openWork.toSet()) }
         projectedFrom = items
     }
     val feeds by (tasks?.feeds ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, List<persona.core.contracts.FeedItem>>()) })
@@ -277,7 +278,6 @@ private fun ChatPage(
     // Each open work line's plan card (web #1990 draws only the latest plan of an exchange).
     val contentPlans = remember(contentWorkGroups) { contentWorkGroups.filterValues { it.open }.mapValues { latestPlan(it.value.steps) } }
     val currentItems by rememberUpdatedState(snapshot.items)
-    val currentLive by rememberUpdatedState(liveId)
     val currentLines by rememberUpdatedState(lines)
     val list = chatList.list
     var reportedSeen by remember { mutableStateOf<Item?>(null) }
@@ -521,7 +521,7 @@ private fun ChatPage(
         ready = !snapshot.loading && (snapshot.items.isEmpty() || lines.isNotEmpty()) &&
             (unreadEntry == null || markdownReadyFor == snapshot.items), entry = unreadEntry,
         hasOlder = snapshot.hasOlder, loadingOlder = snapshot.loadingOlder,
-        onFreeze = { timeline.freeze(currentItems, currentLive); timelineVersion++ },
+        onFreeze = { timeline.freeze(currentItems); timelineVersion++ },
         onFollow = { timeline.follow(); timelineVersion++ },
         loadOlder = {
             try { repository.loadOlder(key) } catch (e: CancellationException) { throw e }
@@ -592,7 +592,7 @@ private fun ChatPage(
                                 onFiles = chrome.onFiles, onGit = chrome.onGit, gitLabel = chrome.gitLabel,
                                 statusState = status, onDetails = { statusSheet = true },
                                 onOpenTodo = chrome.onOpenTodo,
-                                onSearch = { search.open(chatList) { timeline.freeze(currentItems, currentLive); timelineVersion++ } }) {
+                                onSearch = { search.open(chatList) { timeline.freeze(currentItems); timelineVersion++ } }) {
                                 // A session without a terminal (a Codex thread, an agent runtime's) has nothing to open or explain.
                                 if (!readOnly && canTerminal && renderStyle != ChatRenderStyle.Assistant) JIconButton(PhIcons.TerminalWindow, stringResource(if (terminal != null) R.string.chat_screen_open_terminal else R.string.chat_screen_terminal_help),
                                     terminal ?: { terminalHelp = true })
@@ -605,7 +605,7 @@ private fun ChatPage(
                             if (showTopBar) ChatGoalBar(session?.goal)
 
                             ChatTasks(projection.tasks, lines, chatList,
-                                onFreeze = { timeline.freeze(currentItems, currentLive); timelineVersion++ },
+                                onFreeze = { timeline.freeze(currentItems); timelineVersion++ },
                                 onVisibilityChanged = { taskPageVisible = it },
                                 onExpandFold = ::expand, foldErrors = foldErrors,
                                 // While the link card peeks, the composer needs the room more (glass laid them over each other).
@@ -777,7 +777,7 @@ private fun ChatPage(
                                 val progress = remember(anchor.plan.todos) { planProgress(anchor.plan.todos) }
                                 PlanPill(progress.step, progress.total, progress.done, onClick = {
                                     scope.launch {
-                                        timeline.freeze(currentItems, currentLive); timelineVersion++
+                                        timeline.freeze(currentItems); timelineVersion++
                                         chatList.scrollToRecord(anchor.lineId)
                                     }
                                 }, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = padding.calculateBottomPadding() + Tokens.Space.l))

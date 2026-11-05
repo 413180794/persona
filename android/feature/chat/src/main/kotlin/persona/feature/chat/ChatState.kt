@@ -47,10 +47,12 @@ internal class ChatTimeline {
         chatItemOrder,
         { it.role == "assistant" && it.kind == "text" })
     private var frozenLiveId: String? = null
+    private var shownLiveId: String? = null
     private val expanded = mutableMapOf<String, Pair<Item, List<Item>>>()
 
-    @Synchronized fun freeze(items: List<Item>, liveId: String?) {
-        if (!window.isFrozen) { window.freeze(items); frozenLiveId = liveId }
+    /** A frozen window keeps the turn that was running when it froze, even after a newer one starts. */
+    @Synchronized fun freeze(items: List<Item>) {
+        if (!window.isFrozen) { window.freeze(items); frozenLiveId = shownLiveId }
     }
     @Synchronized fun follow() { window.follow(); frozenLiveId = null }
     @Synchronized fun newMessageCount(items: List<Item>, below: Item?, lastRead: Item?) = window.newMessageCount(items, below, lastRead)
@@ -64,9 +66,12 @@ internal class ChatTimeline {
         expanded[item.id]?.takeIf { it.first.fold == item.fold }?.second ?: listOf(item)
     }.distinctBy { it.id }
 
-    @Synchronized fun lines(items: List<Item>, liveId: String?, open: Set<String>): persona.core.domain.lines.ChatSnapshot {
-        return chatLines(searchItems(items).filter { it.kind != "turn_duration" }.map(Item::asLineItem), LineOptions(
-            liveTurnId = if (window.isFrozen) frozenLiveId else liveId, openWork = open))
+    /** [live]: the agent is at work; the running turn is then the last one (`chatLines`). */
+    @Synchronized fun lines(items: List<Item>, live: Boolean, open: Set<String>): persona.core.domain.lines.ChatSnapshot {
+        val options = if (window.isFrozen) LineOptions(liveTurnId = frozenLiveId, openWork = open)
+            else LineOptions(openWork = open, live = live)
+        return chatLines(searchItems(items).filter { it.kind != "turn_duration" }.map(Item::asLineItem), options)
+            .also { if (!window.isFrozen) shownLiveId = it.liveTurnId }
     }
 }
 

@@ -33,12 +33,12 @@ class ChatTaskNavigationTest {
             items = 3, tools = 1, thoughts = 1, throughSeq = 4, throughId = "result#0", tasks = listOf(taskSnapshot)))
         val user = Item("user", seq = 1, kind = "text", role = "user", text = "检查表单")
         val timeline = ChatTimeline()
-        val projection = timeline.lines(listOf(user, folded), null, emptySet())
+        val projection = timeline.lines(listOf(user, folded), false, emptySet())
         val task = projection.tasks.progress.single()
         assertEquals(TaskProgressStatus.InProgress, task.status)
         val closed = requireNotNull(taskRecordTarget(projection.lines, task.sourceItemId, task.sourceSeq))
         val open = setOf(closed.expandGroup!!)
-        val loading = timeline.lines(listOf(user, folded), null, open)
+        val loading = timeline.lines(listOf(user, folded), false, open)
         val destination = requireNotNull(taskRecordTarget(loading.lines, task.sourceItemId, task.sourceSeq))
         assertEquals(folded, destination.expandFold)
         assertNull(destination.rowId)
@@ -46,7 +46,7 @@ class ChatTaskNavigationTest {
             toolInput = kotlinx.serialization.json.Json.parseToJsonElement("""{"todos":[{"content":"检查表单","status":"in_progress"}]}"""))
         timeline.unfold(folded, listOf(Item("thought#0", seq = 2, kind = "thinking"), use,
             Item("result#0", seq = 4, kind = "tool_result", toolUseId = "call", text = "OK")))
-        val expanded = timeline.lines(listOf(user, folded), null, open)
+        val expanded = timeline.lines(listOf(user, folded), false, open)
         assertEquals(projection.tasks.progress, expanded.tasks.progress)
         assertNotNull(taskRecordTarget(expanded.lines, task.sourceItemId, task.sourceSeq)?.rowId)
     }

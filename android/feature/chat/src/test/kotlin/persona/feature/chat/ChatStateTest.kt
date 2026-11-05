@@ -25,8 +25,8 @@ class ChatStateTest {
             turnDuration = TurnDuration(12345, "claude_turn_duration", parentUuid = "reply"))
         val next = user.copy(id = "next#0", seq = 5)
         val timeline = ChatTimeline()
-        val plain = timeline.lines(listOf(user, thought, answer, next), next.id, emptySet())
-        val withDuration = timeline.lines(listOf(user, thought, answer, marker, next), next.id, emptySet())
+        val plain = timeline.lines(listOf(user, thought, answer, next), true, emptySet())
+        val withDuration = timeline.lines(listOf(user, thought, answer, marker, next), true, emptySet())
         assertEquals(plain.lines, withDuration.lines)
         val durations = mapOf(user.id to 12L)
         val work = withDuration.lines.filterIsInstance<ChatLine.Work>()
@@ -44,13 +44,13 @@ class ChatStateTest {
         val fold = Item("fold", 11, kind = "fold", fold = Fold(items = 2, tools = 1, throughSeq = 12, throughId = "result"))
         val answer = Item("answer", 13, role = "assistant", kind = "text", text = "已完成")
         val initial = listOf(user, fold, answer)
-        val original = timeline.lines(initial, user.id, emptySet())
-        timeline.freeze(initial, user.id)
+        val original = timeline.lines(initial, true, emptySet())
+        timeline.freeze(initial)
         val newerUser = Item("new-user", 14, role = "user", kind = "text", text = "继续")
         val rewrittenAnswer = answer.copy(text = "内容已变化")
         val older = Item("older", 1, role = "user", kind = "text", text = "更早的记录")
         val updated = listOf(older, user, fold, rewrittenAnswer, newerUser)
-        val frozen = timeline.lines(updated, newerUser.id, emptySet())
+        val frozen = timeline.lines(updated, true, emptySet())
         assertTrue(frozen.lines.map { it.id }.containsAll(original.lines.map { it.id }))
         assertFalse(frozen.lines.any { it.holds(newerUser.id) })
         assertEquals("已完成", frozen.lines.filterIsInstance<ChatLine.Row>().first { it.row.id == answer.id }.row.item?.text)
@@ -59,13 +59,13 @@ class ChatStateTest {
         val result = Item("result", 12, kind = "tool_result", toolUseId = "tool", isError = true)
         timeline.unfold(fold, listOf(use, result))
         val work = frozen.lines.filterIsInstance<ChatLine.Work>().last()
-        val expanded = timeline.lines(updated, newerUser.id, setOf(work.id))
+        val expanded = timeline.lines(updated, true, setOf(work.id))
         assertEquals(1, expanded.lines.filterIsInstance<ChatLine.Work>().last().knownFailedTools)
         assertTrue(expanded.lines.filterIsInstance<ChatLine.Step>().any { it.step is WorkItem.Tool })
         assertFalse(expanded.lines.filterIsInstance<ChatLine.Step>().any { it.step is WorkItem.Folded })
         assertEquals(expanded.lines.size, expanded.lines.map { it.id }.distinct().size)
         timeline.follow()
-        assertTrue(timeline.lines(updated, newerUser.id, emptySet()).lines.any { it.holds(newerUser.id) })
+        assertTrue(timeline.lines(updated, true, emptySet()).lines.any { it.holds(newerUser.id) })
     }
 
     @Test fun aFoldOpenedWhileReadingHistoryCountsEachStepOnce() {
@@ -74,7 +74,7 @@ class ChatStateTest {
         val fold = Item("fold:plan#0", 11, role = "assistant", kind = "fold",
             fold = Fold(items = 4, tools = 2, throughSeq = 14, throughId = "asked#0"))
         val answer = Item("answer#0", 15, role = "assistant", kind = "text", text = "补好了")
-        timeline.freeze(listOf(user, fold, answer), null)
+        timeline.freeze(listOf(user, fold, answer))
         // Opening the fold: the store swaps it for its work, and the timeline is told to do the same.
         val work = listOf(
             Item("plan#0", 11, role = "assistant", kind = "tool_use", toolUseId = "p", toolName = "ExitPlanMode"),
@@ -84,10 +84,10 @@ class ChatStateTest {
         )
         timeline.unfold(fold, work)
         val store = listOf(user) + work + answer
-        val closed = timeline.lines(store, null, emptySet()).lines.filterIsInstance<ChatLine.Work>().single()
+        val closed = timeline.lines(store, false, emptySet()).lines.filterIsInstance<ChatLine.Work>().single()
         assertEquals(2, closed.steps.size)
         assertEquals("做了 2 步", workSummary(res, closed, null))
-        val open = timeline.lines(store, null, setOf(closed.id)).lines
+        val open = timeline.lines(store, false, setOf(closed.id)).lines
         assertEquals(2, open.filterIsInstance<ChatLine.Step>().size)
         assertEquals(2, open.filterIsInstance<ChatLine.End>().single().count)
         assertEquals(store.map { it.id }.toSet(), timeline.searchItems(store).map { it.id }.toSet())

@@ -56,7 +56,7 @@ class ContentPresentationTest {
             Item("second", 2, role = "user", kind = "text", text = "再补充", queued = true),
             Item("answer", 3, role = "assistant", kind = "text", text = "收到"),
         )
-        val projection = ChatTimeline().lines(items, null, emptySet())
+        val projection = ChatTimeline().lines(items, false, emptySet())
         val users = projection.lines.filterIsInstance<ChatLine.Row>().filter { it.row.type == "user" }
         assertEquals(listOf("first", "second"), users.map { it.row.id })
         assertTrue(ChatRenderStyle.Assistant.collapseThoughts)

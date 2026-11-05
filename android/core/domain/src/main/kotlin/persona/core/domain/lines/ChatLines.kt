@@ -12,17 +12,41 @@ fun chatLines(items: List<LineItem>, options: LineOptions = LineOptions()): Chat
         }
     }
     val blocks = buildBlocks(buildLineRows(foldCompactions(source)))
-    val live = if (frozen != null) frozen.liveTurnId else options.liveTurnId
+    val live = liveTurnId(blocks, options)
     val builder = LineBuilder(live, options.openWork)
     val lines = blocks.flatMap {
         when (it) {
             is Block.Row -> listOf(ChatLine.Row(it.row))
             is Block.Turn -> builder.turnLines(it.turn)
         }
+    }.let {
+        // Working with nothing of this turn yet (the last block is a recap): the work line still shows, as on the web.
+        if (live == null && options.live && frozen == null && options.liveTurnId == null)
+            it + ChatLine.Work(LiveWorkId, emptyList(), true, null, null, LiveWorkId in options.openWork)
+        else it
     }
     // As iOS does: API errors become cards and recaps in a row one line, before open work lines unfold.
     return ChatSnapshot(builder.unfold(foldRecaps(foldApiErrors(lines))), blocks.filterIsInstance<Block.Turn>().map { it.turn },
-        TaskIndex.build(source), options.pendingInteractionIds?.let(::ChatFooter))
+        TaskIndex.build(source), options.pendingInteractionIds?.let(::ChatFooter), live)
+}
+
+/** A session status in which the last turn is still running: working, or blocked on you (iOS `isActive`). */
+fun isLiveStatus(status: String?): Boolean = status == "working" || status == "blocked"
+
+/** The id of the work line drawn while the agent works and no turn of its own is in the transcript yet. */
+const val LiveWorkId = "w-live"
+
+/**
+ * The running turn. A frozen window and an explicit id keep the turn they name; otherwise, while the agent is at work,
+ * the last block is the running turn if it is one (iOS `liveTurnID`, the web's `chatLines`). Guessing it from the last
+ * user message misses a turn that took a queued message in (its id is its first message's), one a notice opened, and
+ * a recap at the end.
+ */
+private fun liveTurnId(blocks: List<Block>, options: LineOptions): String? = when {
+    options.frozen != null -> options.frozen.liveTurnId
+    options.liveTurnId != null -> options.liveTurnId
+    options.live -> (blocks.lastOrNull() as? Block.Turn)?.turn?.id
+    else -> null
 }
 
 internal fun buildLineRows(items: List<LineItem>): List<ChatRow> {

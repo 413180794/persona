@@ -199,9 +199,15 @@ data class Frozen(val seq: Int, val part: Int, val liveTurnId: String? = null)
 data class LineOptions(
     val liveTurnId: String? = null, val openWork: Set<String> = emptySet(), val frozen: Frozen? = null,
     val pendingInteractionIds: List<String>? = null,
+    /** The agent is at work (working or blocked on you): the last turn is the running one, see [chatLines]. */
+    val live: Boolean = false,
 )
 data class ChatFooter(val interactionIds: List<String>) {
     val placement get() = "above_composer"
     val partOfTranscript get() = false
 }
-data class ChatSnapshot(val lines: List<ChatLine>, val turns: List<ChatTurn>, val tasks: TaskIndex, val footer: ChatFooter? = null)
+data class ChatSnapshot(
+    val lines: List<ChatLine>, val turns: List<ChatTurn>, val tasks: TaskIndex, val footer: ChatFooter? = null,
+    /** The turn drawn as running; a frozen window keeps it (`Frozen.liveTurnId`). */
+    val liveTurnId: String? = null,
+)
