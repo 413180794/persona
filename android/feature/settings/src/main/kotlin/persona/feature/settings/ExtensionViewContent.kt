@@ -238,8 +238,15 @@ internal fun StandaloneItem(item: ExtensionViewItem, state: ExtensionViewState, 
                     enabled = !state.busy) }
             })
         "loading" -> JLoading(top, item.title?.takeIf { it.isNotBlank() })
+        "html" -> LocalViewHtml.current?.invoke(item, top)
     }
 }
+
+/**
+ * How an `html` item is drawn: only an assistant's card provides it (AssistantViewCard); elsewhere the item is not
+ * drawn at all (the hub never lets an extension's view have one).
+ */
+internal val LocalViewHtml = staticCompositionLocalOf<(@Composable (ExtensionViewItem, Modifier) -> Unit)?> { null }
 
 /**
  * A view drawn in place, not in a lazy list (an assistant's ```persona-view in a reply): the same items in the same

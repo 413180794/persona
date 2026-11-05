@@ -828,8 +828,8 @@ func (la *liveActivities) routes(api *http.ServeMux) {
 			PushToStartToken string `json:"push_to_start_token"`
 			Ended            bool   `json:"ended"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &body, 16<<10); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		la.update(r.PathValue("id"), func(v *db.LiveActivity) {

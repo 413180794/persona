@@ -23,6 +23,8 @@ dependencies {
     implementation(libs.markdown)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    // An assistant card's html page: its own WebView and the bridge's message listener (AssistantHtml.kt).
+    implementation(libs.androidx.webkit)
     implementation(libs.compose.icons)
     implementation(libs.compose.preview)
     testImplementation(libs.junit)

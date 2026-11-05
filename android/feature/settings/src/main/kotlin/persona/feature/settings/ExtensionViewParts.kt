@@ -181,7 +181,8 @@ private fun TableGrid(count: Int, ends: List<Boolean>, modifier: Modifier, conte
  * what is typed stays while the answer comes (the view's value is only where it starts).
  */
 @Composable
-internal fun ExtensionSearchBar(view: ExtensionView, state: ExtensionViewState, handle: ExtensionViewHandle, modifier: Modifier = Modifier) {
+internal fun ExtensionSearchBar(view: ExtensionView, state: ExtensionViewState, handle: ExtensionViewHandle, modifier: Modifier = Modifier,
+                                submit: SearchSubmit? = null) {
     val search = view.search
     val filter = view.filter?.takeIf { it.choices.size >= 2 && it.name.isNotEmpty() }
     var query by remember { mutableStateOf(state.query ?: search?.value.orEmpty()) }
@@ -194,6 +195,8 @@ internal fun ExtensionSearchBar(view: ExtensionView, state: ExtensionViewState, 
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         if (search != null) {
             JSearchField(query, { query = it; typed = true }, search.placeholder?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_search), Modifier.weight(1f))
+            submit?.let { JButton(it.label, { it.send(query) }, kind = JButtonKind.Secondary, size = JButtonSize.Small,
+                enabled = query.isNotBlank() && !state.busy, loading = it.sending) }
         }
         if (filter != null) {
             val current = state.values[filter.name] ?: filter.value
@@ -209,6 +212,12 @@ internal fun ExtensionSearchBar(view: ExtensionView, state: ExtensionViewState, 
         }, { choosing = false }, title = filter.title?.takeIf { it.isNotBlank() })
     }
 }
+
+/**
+ * A search box that sends only when tapped (an assistant's card, which is answered once): [label] on a button beside
+ * the box, [send] with what it holds. Without one the box searches as an extension's does, after a pause in typing.
+ */
+internal class SearchSubmit(val label: String, val sending: Boolean, val send: (String) -> Unit)
 
 /**
  * A section's 加载更多: coming on screen asks for more once (the list composes it as it nears the end), tapping asks

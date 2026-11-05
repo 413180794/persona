@@ -45,6 +45,8 @@ private val attribute = Regex("([\\w-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')")
 internal data class MessageModel(
     val parts: List<MessagePart>, val images: List<String>, val files: List<String>,
     val contexts: List<MessageContext> = emptyList(),
+    /** The user's answer from an assistant's card: the hub's trailing `<persona-action>` tag, not shown (「来自卡片」). */
+    val fromCard: Boolean = false,
 ) {
     /** What it says without its contexts: what the long-press menu copies, shares and quotes. */
     val plain: String get() = parts.mapNotNull {
@@ -55,8 +57,11 @@ internal data class MessageModel(
     }.joinToString("\n\n")
 }
 
-internal fun messageModel(raw: String, from: String? = null): MessageModel {
-    val (contexts, text) = parseContexts(raw)
+internal fun messageModel(raw: String, from: String? = null, user: Boolean = false): MessageModel {
+    val (contexts, written) = parseContexts(raw)
+    // Only the exact tag the hub ends a card's answer with, only on the user's own message.
+    val card = if (user) persona.core.domain.views.PersonaActionTag.split(written) else null
+    val text = card?.first ?: written
     val images = mutableListOf<String>()
     val files = mutableListOf<String>()
     val parts = buildList {
@@ -82,7 +87,7 @@ internal fun messageModel(raw: String, from: String? = null): MessageModel {
             listOf(MessagePart.Source(from, parts.joinToString("\n\n") { (it as MessagePart.Text).text })) else parts
     }
     val photos = images.distinct()
-    return MessageModel(parts, photos, files.distinct().filterNot { it in photos }.take(6), contexts)
+    return MessageModel(parts, photos, files.distinct().filterNot { it in photos }.take(6), contexts, fromCard = card != null)
 }
 
 internal fun messageParts(text: String, from: String? = null): List<MessagePart> = messageModel(text, from).parts

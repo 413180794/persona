@@ -18,6 +18,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import persona.core.contracts.AgentState
 import persona.core.contracts.AssistantFeedEvent
+import persona.core.contracts.AssistantViewActionEvent
+import persona.core.contracts.AssistantViewBlockEvent
+import persona.core.contracts.AssistantViewEvent
 import persona.core.contracts.FeedItem
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.Session
@@ -33,6 +36,8 @@ import persona.core.domain.lines.ApiErrorInfo
 import persona.core.domain.lines.ChatLine
 import persona.core.domain.lines.ToolCall
 import persona.core.domain.lines.WorkItem
+import persona.core.domain.views.AssistantCardActions
+import persona.core.domain.views.AssistantViewStore
 
 // Tasks dispatched from an assistant conversation (docs/unified-entry.md; iOS TasksStore / Shared/Tasks.swift, web
 // lib/feed.ts): the todos that are tasks, the plans, each conversation's feed, and where those go among the chat's lines.
@@ -250,6 +255,9 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
     /** Message cards (inbox item ids) put off with 稍后. */
     val later = MutableStateFlow<Set<String>>(emptySet())
     private val todayAsked = HashMap<String, LocalDate>()
+    /** This hub's assistant cards (docs/assistant-views.md): live cards, answers and registered reply blocks. */
+    val cards = AssistantViewStore()
+    val cardActions = AssistantCardActions(api, cards, reload = { load(it, whole = true) })
 
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -258,6 +266,9 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
                     is TodosEvent -> reloadTodos()
                     is AssistantFeedEvent -> received(listOf(e.item))
                     is TaskPlanEvent -> _plans.update { it + (e.plan.id to e.plan) }
+                    is AssistantViewEvent -> cards.view(e.conversation, e.view)
+                    is AssistantViewActionEvent -> cards.answer(e.conversation, e.action)
+                    is AssistantViewBlockEvent -> cards.block(e.conversation, e.key)
                     else -> Unit
                 }
             }
@@ -328,11 +339,16 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
         reloadTodos()
     }
 
-    fun load(conversation: String) {
+    /**
+     * Pulls [conversation]'s feed: the items after the last one held (all of them with [whole]), and every time the
+     * full set of its cards, answers and registered blocks.
+     */
+    fun load(conversation: String, whole: Boolean = false) {
         scope.launch {
-            val since = _feeds.value[conversation]?.lastOrNull()?.at
+            val since = if (whole) null else _feeds.value[conversation]?.lastOrNull()?.at
             runCatching { api.feed(conversation, since) }.onSuccess { res ->
                 if (res.plans.isNotEmpty()) _plans.update { it + res.plans }
+                cards.snapshot(conversation, res.views, res.viewActions, res.viewBlocks)
                 received(res.items, conversation)
             }
         }
@@ -356,6 +372,10 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
     }
 
     private fun received(items: List<FeedItem>, conversation: String? = null) {
+        // A live card's creation item carries the card as it was then: drawn even if its assistant_view was missed.
+        items.filter { it.kind == "view" }.forEach { item ->
+            ((item.body as? JsonObject)?.get("view"))?.let { cards.view(item.conversation, it) }
+        }
         _feeds.update { feeds ->
             var next = conversation?.let { if (it in feeds) feeds else feeds + (it to emptyList()) } ?: feeds
             for ((c, list) in items.groupBy { it.conversation }) next = next + (c to AssistantLines.merge(next[c].orEmpty(), list))

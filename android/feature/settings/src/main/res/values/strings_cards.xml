@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An assistant's cards in a conversation (#2022). -->
+<resources>
+    <string name="settings_card_changed">The card changed. Look it over and confirm again.</string>
+    <string name="settings_card_answered">This card has already been answered.</string>
+    <string name="settings_card_cannot_answer">This card can\'t be answered yet.</string>
+    <string name="settings_card_bad_link">This link can\'t be opened.</string>
+    <string name="settings_card_target_unsupported">Android can\'t open this kind of target yet.</string>
+    <string name="settings_card_busy">The last action hasn\'t finished yet.</string>
+    <string name="settings_card_not_sent">It wasn\'t sent.</string>
+    <string name="settings_card_back">Back</string>
+    <string name="settings_card_will_send">Will send: %1$s</string>
+    <string name="settings_card_will_open">Will open: %1$s</string>
+    <string name="settings_card_placeholder">[Card]</string>
+    <string name="settings_card_chosen">Chosen</string>
+    <string name="settings_card_on">On</string>
+    <string name="settings_card_off">Off</string>
+    <string name="settings_card_sent">Sent</string>
+    <string name="settings_card_failed">Couldn\'t send</string>
+    <string name="settings_card_failed_reason">Couldn\'t send: %1$s</string>
+    <string name="settings_card_sending">Chosen, sending</string>
+    <string name="settings_card_html_title">A page the assistant drew</string>
+    <string name="settings_card_html_fallback">This page doesn\'t run on Android yet. The card\'s summary:</string>
+    <string name="settings_card_html_stopped">Page stopped</string>
+    <string name="settings_card_html_too_many">Too many pages are running; this one is paused.</string>
+    <string name="settings_card_html_stop">Stop</string>
+    <string name="settings_card_html_retry">Retry</string>
+    <string name="settings_card_html_reply_title">The page wants to reply for you</string>
+    <string name="settings_card_html_reply_text">A page the assistant drew wants to send this as you:\n\n%1$s</string>
+    <string name="settings_card_html_send">Send</string>
+    <string name="settings_card_html_open_title">The page wants to open a link</string>
+    <string name="settings_card_html_open_text">A page the assistant drew wants to open this in the app:\n\n%1$s</string>
+    <string name="settings_card_html_open">Open</string>
+    <string name="settings_card_search">Search</string>
+</resources>

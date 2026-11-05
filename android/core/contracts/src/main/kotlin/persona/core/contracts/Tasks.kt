@@ -59,7 +59,7 @@ data class FeedItem(
     val id: String,
     val conversation: String = "",
     @WireTime val at: String? = null,
-    @WireEnum("plan", "task", "answered", "receipt", "routed", "today", "message", "unknown")
+    @WireEnum("plan", "task", "answered", "receipt", "routed", "today", "message", "view", "unknown")
     val kind: String = "unknown",
     val ref: String? = null,
     val body: JsonElement? = null,
@@ -225,7 +225,19 @@ data class TodosResponse(val todos: List<Todo> = emptyList())
 
 @KeepGeneratedSerializer
 @Serializable(with = FeedResponseSerializer::class)
-data class FeedResponse(val items: List<FeedItem> = emptyList(), val plans: Map<String, TaskPlan> = emptyMap())
+data class FeedResponse(
+    val items: List<FeedItem> = emptyList(),
+    val plans: Map<String, TaskPlan> = emptyMap(),
+    /**
+     * The conversation's live cards by id, each a whole AssistantView (docs/assistant-views.md「活卡片」): the full set
+     * on every read, kept raw so one card this app cannot read does not drop the others ([AssistantViewWire]).
+     */
+    val views: Map<String, JsonElement> = emptyMap(),
+    /** The persisted card answers by card key (a ViewAction each), the full set on every read. */
+    @SerialName("view_actions") val viewActions: Map<String, JsonElement> = emptyMap(),
+    /** The keys of the reply blocks the hub registered from a trusted transcript (`<item id>/<n>`). */
+    @SerialName("view_blocks") val viewBlocks: List<String> = emptyList(),
+)
 
 /** The todos changed: pull them again. */
 @KeepGeneratedSerializer
@@ -240,6 +252,21 @@ data class AssistantFeedEvent(val conversation: String = "", val item: FeedItem)
 @Serializable(with = TaskPlanEventSerializer::class)
 data class TaskPlanEvent(val plan: TaskPlan) : ServerEvent
 
+/** A live card was created or replaced (`{conversation, view: {id, version, view, updated_at}}`). */
+@KeepGeneratedSerializer
+@Serializable(with = AssistantViewEventSerializer::class)
+data class AssistantViewEvent(val conversation: String = "", val view: JsonElement) : ServerEvent
+
+/** A card's persisted answer changed (`{conversation, action: ViewAction}`); its revision orders the changes. */
+@KeepGeneratedSerializer
+@Serializable(with = AssistantViewActionEventSerializer::class)
+data class AssistantViewActionEvent(val conversation: String = "", val action: JsonElement) : ServerEvent
+
+/** The hub registered a reply block from a trusted transcript: its key may now take answers. */
+@KeepGeneratedSerializer
+@Serializable(with = AssistantViewBlockEventSerializer::class)
+data class AssistantViewBlockEvent(val conversation: String = "", val key: String = "") : ServerEvent
+
 object PlanTaskSerializer : WireSerializer<PlanTask>(PlanTask.generatedSerializer())
 object TaskPlanSerializer : WireSerializer<TaskPlan>(TaskPlan.generatedSerializer())
 object FeedItemSerializer : WireSerializer<FeedItem>(FeedItem.generatedSerializer())
@@ -251,3 +278,6 @@ object FeedResponseSerializer : WireSerializer<FeedResponse>(FeedResponse.genera
 object TodosEventSerializer : WireSerializer<TodosEvent>(TodosEvent.generatedSerializer())
 object AssistantFeedEventSerializer : WireSerializer<AssistantFeedEvent>(AssistantFeedEvent.generatedSerializer())
 object TaskPlanEventSerializer : WireSerializer<TaskPlanEvent>(TaskPlanEvent.generatedSerializer())
+object AssistantViewEventSerializer : WireSerializer<AssistantViewEvent>(AssistantViewEvent.generatedSerializer())
+object AssistantViewActionEventSerializer : WireSerializer<AssistantViewActionEvent>(AssistantViewActionEvent.generatedSerializer())
+object AssistantViewBlockEventSerializer : WireSerializer<AssistantViewBlockEvent>(AssistantViewBlockEvent.generatedSerializer())

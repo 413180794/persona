@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -299,8 +298,8 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 			Kind    string `json:"kind"`
 			Machine string `json:"machine"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &req, 4<<10); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		p := principalOf(r.Context())

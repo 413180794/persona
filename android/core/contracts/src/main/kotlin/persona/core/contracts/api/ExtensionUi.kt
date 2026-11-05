@@ -200,6 +200,10 @@ data class ExtensionViewItem(
     val caption: String? = null,
     /** empty (UI version 3): at most one button. */
     val button: ExtensionEmptyButton? = null,
+    /** html (an assistant's card only, never an extension's): a self-contained page, drawn only where it may run. */
+    val html: String? = null,
+    /** html: its height, 160 to 640 (320 when none). */
+    val height: Int? = null,
 )
 
 @Serializable

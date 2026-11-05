@@ -36,4 +36,18 @@ interface TasksApi {
      * the card ([card], the card's id: sent once per card however many taps or devices).
      */
     suspend fun inboxReply(itemId: String, text: String, card: String? = null)
+
+    /**
+     * The features the hub these requests go to said in its last hello (`assistant_views`, `assistant_html_bridge`);
+     * null when this API cannot tell, which counts as none: a card answers only on a hub that says it can.
+     */
+    val features: kotlinx.coroutines.flow.StateFlow<Set<String>>? get() = null
+
+    /** A card's action (docs/assistant-views.md「持久化提交」): [key] is the card's, sent as one escaped path segment. */
+    suspend fun viewAction(conversation: String, key: String, input: persona.core.contracts.generated.ExtensionViewActionInput): AssistantViewAnswer =
+        error("viewAction not implemented")
+
+    /** What an assistant's HTML page asked for through its bridge, after the user confirmed it. */
+    suspend fun viewHtmlAction(conversation: String, key: String, input: persona.core.contracts.generated.ExtensionAssistantHTMLActionInput): AssistantViewAnswer =
+        error("viewHtmlAction not implemented")
 }

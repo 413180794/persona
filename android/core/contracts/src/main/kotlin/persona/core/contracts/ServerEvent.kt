@@ -207,6 +207,11 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             "todos" -> input.json.decodeFromJsonElement<TodosEvent>(obj)
             "assistant_feed" -> input.json.decodeFromJsonElement<AssistantFeedEvent>(obj)
             "task_plan" -> input.json.decodeFromJsonElement<TaskPlanEvent>(obj)
+            "assistant_view" -> input.json.decodeFromJsonElement<AssistantViewEvent>(obj)
+            "assistant_view_action" -> input.json.decodeFromJsonElement<AssistantViewActionEvent>(obj)
+            "assistant_view_block" -> input.json.decodeFromJsonElement<AssistantViewBlockEvent>(obj).also {
+                require(it.conversation.isNotEmpty() && it.key.isNotEmpty()) { "A block names its conversation and key" }
+            }
             "personas" -> input.json.decodeFromJsonElement<PersonasEvent>(obj)
             "terminal" -> input.json.decodeFromJsonElement<TerminalEvent>(obj).also { event ->
                 if (!event.streamEnded && (event.epoch == null || event.seq == null || event.frameBytes == null)) {
@@ -246,6 +251,9 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             is TodosEvent -> "todos" to output.json.encodeToJsonElement(value)
             is AssistantFeedEvent -> "assistant_feed" to output.json.encodeToJsonElement(value)
             is TaskPlanEvent -> "task_plan" to output.json.encodeToJsonElement(value)
+            is AssistantViewEvent -> "assistant_view" to output.json.encodeToJsonElement(value)
+            is AssistantViewActionEvent -> "assistant_view_action" to output.json.encodeToJsonElement(value)
+            is AssistantViewBlockEvent -> "assistant_view_block" to output.json.encodeToJsonElement(value)
             is PersonasEvent -> "personas" to output.json.encodeToJsonElement(value)
             is TerminalEvent -> "terminal" to output.json.encodeToJsonElement(value)
             is TerminalControlEvent -> "terminal_control" to output.json.encodeToJsonElement(value)

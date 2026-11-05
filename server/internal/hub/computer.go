@@ -190,8 +190,8 @@ func (h *Hub) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 		// 「扩展开着时不自动锁屏」 for this Mac (the app asked first).
 		NoAutoLock *bool `json:"no_auto_lock"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeErr(w, http.StatusBadRequest, fmt.Errorf("bad body: %w", err))
+	if err := decodeJSONBody(w, r, &in, 4<<10); err != nil {
+		writeBodyErr(w, err, fmt.Errorf("bad body: %w", err))
 		return
 	}
 	if !h.operable(m) {

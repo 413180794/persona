@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An assistant's cards in a conversation (#2022). -->
+<resources>
+    <string name="settings_card_changed">カードが更新されました。内容を見て、もう一度確認してください。</string>
+    <string name="settings_card_answered">このカードはすでに回答済みです。</string>
+    <string name="settings_card_cannot_answer">このカードはまだ回答できません。</string>
+    <string name="settings_card_bad_link">このリンクは開けません。</string>
+    <string name="settings_card_target_unsupported">Android ではまだこの種類の対象を開けません。</string>
+    <string name="settings_card_busy">前の操作がまだ終わっていません。</string>
+    <string name="settings_card_not_sent">送信できませんでした。</string>
+    <string name="settings_card_back">戻る</string>
+    <string name="settings_card_will_send">送信する内容：%1$s</string>
+    <string name="settings_card_will_open">開く対象：%1$s</string>
+    <string name="settings_card_placeholder">〔カード〕</string>
+    <string name="settings_card_chosen">選択済み</string>
+    <string name="settings_card_on">オン</string>
+    <string name="settings_card_off">オフ</string>
+    <string name="settings_card_sent">送信済み</string>
+    <string name="settings_card_failed">送信に失敗しました</string>
+    <string name="settings_card_failed_reason">送信に失敗しました：%1$s</string>
+    <string name="settings_card_sending">選択済み、送信中</string>
+    <string name="settings_card_html_title">アシスタントが描いたページ</string>
+    <string name="settings_card_html_fallback">このページは Android ではまだ実行されません。カードの説明：</string>
+    <string name="settings_card_html_stopped">ページを停止しました</string>
+    <string name="settings_card_html_too_many">実行中のページが多いため、一時停止しています。</string>
+    <string name="settings_card_html_stop">停止</string>
+    <string name="settings_card_html_retry">再試行</string>
+    <string name="settings_card_html_reply_title">ページがあなたとして返信しようとしています</string>
+    <string name="settings_card_html_reply_text">アシスタントが描いたページが、次の内容をあなたとして送信しようとしています：\n\n%1$s</string>
+    <string name="settings_card_html_send">送信</string>
+    <string name="settings_card_html_open_title">ページがリンクを開こうとしています</string>
+    <string name="settings_card_html_open_text">アシスタントが描いたページがアプリ内で次を開こうとしています：\n\n%1$s</string>
+    <string name="settings_card_html_open">開く</string>
+    <string name="settings_card_search">検索</string>
+</resources>

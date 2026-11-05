@@ -39,7 +39,7 @@ internal fun MessageContent(item: Item, user: Boolean, update: ChatTextUpdate? =
     var whole by remember(item.id) { mutableStateOf<String?>(null) }
     val cut = item.fullSize != null && whole == null && update?.streaming != true
     val text = whole ?: update?.text ?: item.text.orEmpty().let { if (item.fullSize != null) cutText(it) else it }
-    val model = remember(text, item.from) { messageModel(text, item.from) }
+    val model = remember(text, item.from, user) { messageModel(text, item.from, user) }
     val uri = LocalUriHandler.current
     Column(Modifier.fillMaxWidth().messageMenu(MessageTarget(item.id, model.plain, user, model.editText()))) {
         MessageContextGroup(model.contexts, "${item.id}/contexts", uri::openUri, alignEnd = user)
@@ -63,6 +63,16 @@ private fun StreamingCursor() {
 private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, onLastLine: ((Int) -> Unit)? = null) {
     // Bubble padding below the last text line, so the reported extent reaches the bottom of the row.
     val bottomPadding = with(LocalDensity.current) { Tokens.Space.m.roundToPx() }
+    // A reply's ```persona-view blocks are numbered across the whole text item: `<item id>/<n>`, the hub's key.
+    val firstCard = remember(parts) {
+        var seen = 0
+        parts.map { part ->
+            val first = seen
+            if (part is MessagePart.Text && persona.core.domain.views.AssistantFences.mentions(part.text))
+                seen += persona.core.domain.views.AssistantFences.blocks(part.text).count { it.isView }
+            first
+        }
+    }
     parts.forEachIndexed { index, part ->
         when (part) {
             is MessagePart.Text -> if (user) Text(messageLinkAnnotations(part.text), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink,
@@ -70,7 +80,8 @@ private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, on
                     if (index == parts.lastIndex && layout.lineCount > 0)
                         onLastLine?.invoke((layout.size.height - layout.getLineTop(layout.lineCount - 1)).toInt() + bottomPadding)
                 })
-                else ChatMarkdown(part.text, "$id/$index", selectable = false)
+                else ChatMarkdown(part.text, "$id/$index", selectable = false,
+                    viewKeys = { n -> persona.core.domain.views.AssistantFences.key(id, firstCard[index] + n) })
             is MessagePart.Source -> JGroupItem(GroupPosition.Single) {
                 Column(Modifier.fillMaxWidth().padding(10.dp)) {
                     Text(stringResource(R.string.chat_content_from, part.name.ifBlank { stringResource(R.string.chat_content_other_session) }), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
@@ -90,7 +101,7 @@ private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, on
 @Composable
 internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUpdate> = emptyMap(),
     onLastLine: ((Int) -> Unit)? = null, images: (@Composable () -> Unit)? = null, menu: Boolean = true) {
-    val models = remember(items, updates) { items.map { messageModel(updates[it.id]?.text ?: it.text.orEmpty(), it.from) } }
+    val models = remember(items, updates) { items.map { messageModel(updates[it.id]?.text ?: it.text.orEmpty(), it.from, user = true) } }
     val parts = remember(models) { models.flatMap { it.parts } }
     val contexts = remember(models) { models.flatMap { it.contexts } }
     val photos = remember(models) { models.flatMap { it.images }.distinct() }
@@ -123,8 +134,11 @@ internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUp
     val own = remember(items) { items.all(::isOwnMessage) }
     // Only blocks, no words, photos or cursor: the folded row alone, no empty bubble.
     val bubble = contexts.isEmpty() || parts.isNotEmpty() || photos.isNotEmpty() || images != null || streaming
+    val fromCard = models.any { it.fromCard }
     Column(Modifier.fillMaxWidth()) {
         MessageContextGroup(contexts, "${items.firstOrNull()?.id.orEmpty()}/contexts", uri::openUri)
+        if (fromCard) Text(stringResource(R.string.chat_from_card), Modifier.align(Alignment.End).padding(bottom = Tokens.Space.xs),
+            style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1)
         if (bubble) UserBubbleFrame(Modifier.messageMenu(target.takeIf { menu }), footer = footer, own = own) {
             images?.invoke()
             if (photos.isNotEmpty()) {

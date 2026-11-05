@@ -78,13 +78,46 @@ internal val LocalChatMarkdownCache = staticCompositionLocalOf<ChatMarkdownCache
  */
 @Composable
 internal fun ChatMarkdown(text: String, id: String = text,
-    bodyStyle: TextStyle = PersonaTheme.type.body, color: Color = PersonaTheme.palette.ink, selectable: Boolean = true) {
-    if (selectable) SelectionContainer { ChatMarkdownBody(text, id, bodyStyle, color) }
-    else ChatMarkdownBody(text, id, bodyStyle, color)
+    bodyStyle: TextStyle = PersonaTheme.type.body, color: Color = PersonaTheme.palette.ink, selectable: Boolean = true,
+    viewKeys: ((Int) -> String)? = null) {
+    if (selectable) SelectionContainer { ChatMarkdownBody(text, id, bodyStyle, color, viewKeys) }
+    else ChatMarkdownBody(text, id, bodyStyle, color, viewKeys)
+}
+
+/**
+ * [text] with its card blocks (docs/assistant-views.md「卡片身份」, the hub's fence rules): the Markdown around them as
+ * Markdown, each ```persona-view as a card under its key ([viewKeys] maps its number in the text to `<item id>/<n>`;
+ * none: a local one, which only draws), each ```persona-card as it always was. A card shown inside another code block
+ * is an example and stays code.
+ */
+@Composable
+private fun ChatMarkdownCards(text: String, id: String, fences: List<persona.core.domain.views.AssistantFence>,
+    bodyStyle: TextStyle, color: Color, viewKeys: ((Int) -> String)?) {
+    val blocks = LocalViewBlocks.current
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+        var at = 0
+        fences.forEachIndexed { n, fence ->
+            text.substring(at, fence.start).takeIf { it.isNotBlank() }?.let { ChatMarkdownBody(it, "$id/m$n", bodyStyle, color, null) }
+            at = fence.end
+            when {
+                blocks == null -> CodeText(fence.raw.trimEnd('\n', '\r'), fence.language)
+                fence.isView -> key(fence.index) { blocks.block(viewKeys?.invoke(fence.index) ?: "$id/local/${fence.index}", fence.raw, fence.complete) }
+                else -> {
+                    val card = remember(blocks, fence.raw, fence.complete) { if (fence.complete) blocks.parse(fence.language, fence.raw) else null }
+                    if (card != null) blocks.draw(card) else CodeText(fence.raw.trimEnd('\n', '\r'), fence.language)
+                }
+            }
+        }
+        text.substring(at).takeIf { it.isNotBlank() }?.let { ChatMarkdownBody(it, "$id/m${fences.size}", bodyStyle, color, null) }
+    }
 }
 
 @Composable
-private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, color: Color) {
+private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, color: Color, viewKeys: ((Int) -> String)? = null) {
+    val fences = remember(text) {
+        if (persona.core.domain.views.AssistantFences.mentions(text)) persona.core.domain.views.AssistantFences.blocks(text) else emptyList()
+    }
+    if (fences.isNotEmpty()) return ChatMarkdownCards(text, id, fences, bodyStyle, color, viewKeys)
     val cache = LocalChatMarkdownCache.current ?: remember { ChatMarkdownCache() }
     // The paths there on the session's machine become links that open the files pane (PathLinks.kt).
     val actions = LocalChatRowActions.current
@@ -121,10 +154,9 @@ private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, col
                     listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
                 codeFence = { model ->
                     MarkdownFence(model.content.substring(model.node.startOffset, model.node.endOffset), color, bodyStyle) {
-                        // ```persona-view / ```persona-card: drawn as an extension's view (LocalViewBlocks).
-                        val blocks = LocalViewBlocks.current
-                        val view = remember(blocks, it.language, it.code) { blocks?.parse(it.language, it.code) }
-                        if (blocks != null && view != null) blocks.draw(view) else CodeText(it.code, it.language)
+                        // A card fence the hub's rules do not take as standalone (in a list or a quote): an example, drawn as
+                        // code. Standalone ones never get here (ChatMarkdownCards).
+                        CodeText(it.code, it.language)
                     }
                 },
                 codeBlock = { model -> CodeText(model.content.substring(model.node.startOffset, model.node.endOffset).trimIndent()) },

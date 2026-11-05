@@ -37,6 +37,20 @@ class ExtensionWireTest {
         "ExtensionNotification" to ExtensionNotification.serializer(),
         "AssistantView" to ExtensionAssistantView.serializer(),
         "ViewAction" to ExtensionViewAction.serializer(),
+        // The card action requests and the 409 a changed card answers (#2604).
+        "ViewActionInput" to ExtensionViewActionInput.serializer(),
+        "AssistantHTMLActionInput" to ExtensionAssistantHTMLActionInput.serializer(),
+        "ViewChangedError" to ExtensionViewChangedError.serializer(),
+        // The messaging extension point's examples (#2242).
+        "MessagingChanged" to ExtensionMessagingChanged.serializer(),
+        "MessagingComposeAnswer" to ExtensionMessagingComposeAnswer.serializer(),
+        "MessagingConversationPage" to ExtensionMessagingConversationPage.serializer(),
+        "MessagingConversationRef" to ExtensionMessagingConversationRef.serializer(),
+        "MessagingDocument" to ExtensionMessagingDocument.serializer(),
+        "MessagingError" to ExtensionMessagingError.serializer(),
+        "MessagingItem" to ExtensionMessagingItem.serializer(),
+        "MessagingMessagePage" to ExtensionMessagingMessagePage.serializer(),
+        "MessagingOutgoing" to ExtensionMessagingOutgoing.serializer(),
     )
 
     @Suppress("UNCHECKED_CAST")

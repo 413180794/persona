@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -101,8 +100,8 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 		var in struct {
 			AI *bool `json:"ai"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.AI == nil {
-			writeErr(w, http.StatusBadRequest, errors.New("ai: true or false"))
+		if err := decodeJSONBody(w, r, &in, 4<<10); err != nil || in.AI == nil {
+			writeBodyErr(w, err, errors.New("ai: true or false"))
 			return
 		}
 		if h.store == nil {

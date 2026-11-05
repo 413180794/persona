@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -860,7 +859,11 @@ func (u *updater) routes(api *http.ServeMux) {
 		var body struct {
 			Now bool `json:"now"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&body) // no body: an ordinary update
+		// No body (or one that does not decode) is an ordinary update; only an oversized one is refused.
+		if err := decodeJSONBody(w, r, &body, 4<<10); bodyTooLarge(err) {
+			writeBodyErr(w, err, err)
+			return
+		}
 		// The update outlives this request: it runs on the hub's own context.
 		if err := u.begin(context.WithoutCancel(r.Context()), body.Now); err != nil {
 			writeErr(w, http.StatusConflict, err)
@@ -874,8 +877,8 @@ func (u *updater) routes(api *http.ServeMux) {
 			Auto           *bool `json:"auto"`
 			AutoNoticeSeen *bool `json:"auto_notice_seen"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &body, 4<<10); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		u.mu.Lock()

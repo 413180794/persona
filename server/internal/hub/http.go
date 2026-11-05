@@ -163,8 +163,8 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/ops/{id}", h.getClientOp)
 	api.HandleFunc("POST /api/v1/interactions/{id}/resolve", h.withClientOp("resolve", func(w http.ResponseWriter, r *http.Request) {
 		var res proto.Resolution
-		if err := json.NewDecoder(r.Body).Decode(&res); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &res, 1<<20); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		res.AnsweredBy = "" // only the assistant's interaction_answer says it answered
@@ -186,8 +186,8 @@ func (h *Hub) routes() http.Handler {
 	}))
 	api.HandleFunc("POST /api/v1/devices", func(w http.ResponseWriter, r *http.Request) {
 		var d Device
-		if err := json.NewDecoder(r.Body).Decode(&d); err != nil || d.DeviceID == "" {
-			writeErr(w, http.StatusBadRequest, errors.New("device_id is required"))
+		if err := decodeJSONBody(w, r, &d, 16<<10); err != nil || d.DeviceID == "" {
+			writeBodyErr(w, err, errors.New("device_id is required"))
 			return
 		}
 		// Both name the device token that registered it: credential_id picks the phone a tool call or wake goes to,
@@ -209,8 +209,8 @@ func (h *Hub) routes() http.Handler {
 	})
 	api.HandleFunc("PUT /api/v1/devices/{id}/prefs", func(w http.ResponseWriter, r *http.Request) {
 		prefs := h.push.prefs(r.PathValue("id"))
-		if err := json.NewDecoder(r.Body).Decode(&prefs); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &prefs, 16<<10); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		raw, _ := json.Marshal(prefs)

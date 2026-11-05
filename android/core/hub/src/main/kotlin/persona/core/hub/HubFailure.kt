@@ -29,6 +29,8 @@ class HubFailure(
     /** The input the hub refused (`field` of its error body) and its reason (`message`), when it names one. */
     val field: String? = null,
     val detail: String? = null,
+    /** The hub's whole error body (at most 64 KB), for a caller that reads more of it (a card's 409 carries the card). */
+    val body: String? = null,
 ) : IOException(message, cause) {
     companion object {
         fun from(error: Throwable): HubFailure {
@@ -55,11 +57,17 @@ class HubFailure(
         private fun isPinRejection(error: Throwable) =
             error is SSLPeerUnverifiedException || error is CertificateException
 
+        /**
+         * 403 codes that refuse one request of a valid pairing: a read-only device, a role or an extension's grant, a
+         * switched-off feature. The pairing stays; any other 403 (a credential not usable from here) ends it as before.
+         */
+        private val refusedHere = setOf("forbidden", "permission_denied")
+
         internal fun from(response: Response): HubFailure {
-            val body = runCatching {
-                JsonCodec.decodeFromString<ErrorBody>(response.peekBody(64 * 1024).string())
-            }.getOrNull()
+            val raw = runCatching { response.peekBody(64 * 1024).string() }.getOrNull()
+            val body = raw?.let { runCatching { JsonCodec.decodeFromString<ErrorBody>(it) }.getOrNull() }
             val kind = when {
+                response.code == 403 && body?.code in refusedHere -> HubError.Server
                 response.code == 401 || response.code == 403 -> HubError.PairingExpired
                 body?.code == "tls_required" -> HubError.TlsRequired
                 body?.code == "incompatible" -> HubError.Incompatible
@@ -72,7 +80,7 @@ class HubFailure(
                 retryable = !terminal && (body?.retryable ?: (response.code >= 500 || response.code in setOf(408, 429))),
                 delivered = body?.delivered,
                 retryAfterSeconds = response.header("Retry-After")?.toLongOrNull()?.coerceAtLeast(0),
-                field = body?.field, detail = body?.message,
+                field = body?.field, detail = body?.message, body = raw,
             )
         }
     }

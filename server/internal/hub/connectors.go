@@ -84,8 +84,8 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 			Step   string            `json:"step"`
 			Values map[string]string `json:"values"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &body, 16<<10); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		p, err := l.LoginStep(r.Context(), body.Step, body.Values)
@@ -123,8 +123,8 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 			Archive *bool           `json:"archive"` // 进知识库
 			Inbox   *bool           `json:"inbox"`   // 进收件箱
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &body, 64<<10); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		if len(body.Options) > 0 && string(body.Options) != "null" {

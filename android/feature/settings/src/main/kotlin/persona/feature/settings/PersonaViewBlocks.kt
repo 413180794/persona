@@ -124,13 +124,14 @@ object PersonaViewBlocks {
 
     /**
      * What the app provides for chat Markdown (LocalViewBlocks): a block is read where it streams in, then drawn with
-     * a card's words in the shown language.
+     * a card's words in the shown language; an assistant's ```persona-view under its key and a live card
+     * (AssistantViewCard.kt), which answer in an assistant conversation.
      */
     val blocks = ViewBlocks(parse = { language, code -> parse(language, code)?.let { Block(language, code) } }, draw = { block ->
         val (language, code) = block as Block
         val words = cardWords()
         remember(block, words) { parse(language, code, words) }?.let { PersonaViewBlock(it) }
-    })
+    }, block = { key, raw, complete -> AssistantBlock(key, raw, complete) }, live = { id -> AssistantLiveCard(id) })
 
     private data class Block(val language: String, val code: String)
 }

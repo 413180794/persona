@@ -106,6 +106,78 @@ class HubHttpRoutingTest {
         }
     }
 
+    // The cards' API says what the hub it talks to said in its hello: a hub without assistant_views takes no answer.
+    @Test fun theCardsApiFollowsTheHubsHello() = runBlocking {
+        for (features in listOf("""["client_ops"]""", """["client_ops","assistant_views"]""")) {
+            val certificate = HeldCertificate.Builder().commonName("example.com").build()
+            val server = MockWebServer().apply {
+                useHttps(HandshakeCertificates.Builder().heldCertificate(certificate).build().sslSocketFactory(), false)
+                dispatcher = object : Dispatcher() {
+                    override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
+                        "/api/v1/health" -> MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
+                        "/api/v1/ws" -> MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                            override fun onOpen(webSocket: WebSocket, response: Response) {
+                                webSocket.send("""{"type":"hello","hub_id":"test-hub","features":$features}""")
+                            }
+                        })
+                        else -> MockResponse().setBody("{}")
+                    }
+                }
+                start(InetAddress.getLoopbackAddress(), 0)
+            }
+            server.use {
+                connection(certificate, listOf(endpoint(server))) {}.use { connection ->
+                    val api = HttpTasksApi(connection)
+                    assertFalse("Before a hello: unknown, no answers", "assistant_views" in api.features!!.value)
+                    connection.updateNetwork(HubNetwork("online"))
+                    withTimeout(5000) { connection.state.first { it == ConnectionState.Online } }
+                    assertEquals(features, "assistant_views" in features, "assistant_views" in api.features!!.value)
+                }
+            }
+        }
+    }
+
+    // A card refused for this device (403 forbidden: a read-only role, cards switched off) is that request's refusal:
+    // the pairing stays connected (#2022). The same request with a revoked token (401) still ends it.
+    @Test fun aRefusedCardDoesNotRevokeThePairing() = runBlocking {
+        val certificate = HeldCertificate.Builder().commonName("example.com").build()
+        val revoked = AtomicBoolean()
+        val server = MockWebServer().apply {
+            useHttps(HandshakeCertificates.Builder().heldCertificate(certificate).build().sslSocketFactory(), false)
+            dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    if (request.path == "/api/v1/health") return MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
+                    if (request.path == "/api/v1/ws") return MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                        override fun onOpen(webSocket: WebSocket, response: Response) {
+                            webSocket.send("""{"type":"hello","hub_id":"test-hub","features":["client_ops"]}""")
+                        }
+                    })
+                    return if (revoked.get()) MockResponse().setResponseCode(401).setBody("""{"error":"device revoked","code":"invalid_token"}""")
+                    else MockResponse().setResponseCode(403)
+                        .setBody("""{"error":"read-only role cannot reply from a card","code":"forbidden","retryable":false,"delivered":"none"}""")
+                }
+            }
+            start(InetAddress.getLoopbackAddress(), 0)
+        }
+        server.use {
+            connection(certificate, listOf(endpoint(server))) {}.use { connection ->
+                connection.updateNetwork(HubNetwork("online"))
+                withTimeout(5000) { connection.state.first { it == ConnectionState.Online } }
+                val api = HttpTasksApi(connection)
+                val input = persona.core.contracts.generated.ExtensionViewActionInput("a", null, null, "m", expectedVersion = 1)
+                val refused = runCatching { api.viewAction("c", "view_1", input) }.exceptionOrNull() as HubFailure
+                assertEquals(403, refused.status)
+                assertEquals(HubError.Server, refused.kind)
+                assertEquals(ConnectionState.Online, connection.state.value)
+                assertNotNull(connection.route.value)
+                revoked.set(true)
+                val expired = runCatching { api.viewAction("c", "view_1", input) }.exceptionOrNull() as HubFailure
+                assertEquals(HubError.PairingExpired, expired.kind)
+                assertEquals(ConnectionState.Revoked, connection.state.value)
+            }
+        }
+    }
+
     @Test fun everyHttpPathRevokesImmediatelyAndNeverRetries() = runBlocking {
         val certificate = HeldCertificate.Builder().commonName("example.com").build()
         val rejected = AtomicBoolean()

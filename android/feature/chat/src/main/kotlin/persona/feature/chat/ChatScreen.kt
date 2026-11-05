@@ -448,8 +448,13 @@ private fun ChatPage(
                 listed, opener, portPresence)
         }
     }
+    // An assistant conversation's cards answer through its hub's store (docs/assistant-views.md); elsewhere they only draw.
+    val cardsHost = remember(tasks, key.sessionId, readOnly, canSend) {
+        tasks?.let { persona.core.domain.views.AssistantCardsHost(key.sessionId, it.cards, it.cardActions, interactive = !readOnly && canSend) }
+    }
     CompositionLocalProvider(LocalChatMarkdownCache provides markdownCache, LocalChatRowActions provides rowActions,
-        LocalContentColor provides PersonaTheme.palette.ink, LocalChatPorts provides chatPorts) {
+        LocalContentColor provides PersonaTheme.palette.ink, LocalChatPorts provides chatPorts,
+        persona.core.designsystem.LocalAssistantCards provides cardsHost) {
         ChatLinkHost(Modifier.fillMaxSize().background(PersonaTheme.palette.background)
             .then(if (embedded) Modifier else Modifier.imePadding()), preloadUrls, list.isScrollInProgress,
             onContext = { if (readOnly || !canSend) notice = res.getString(R.string.chat_screen_read_only_context) else linkContexts = linkContexts + it },

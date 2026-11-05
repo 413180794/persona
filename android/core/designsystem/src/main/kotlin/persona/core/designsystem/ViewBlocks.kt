@@ -9,6 +9,24 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * not whole yet while it streams in, and it stays the code it is); [draw] draws what it read. The app provides them
  * (they are the extensions' renderer); without them every fence is code.
  */
-class ViewBlocks(val parse: (language: String, code: String) -> Any?, val draw: @Composable (Any) -> Unit)
+class ViewBlocks(
+    val parse: (language: String, code: String) -> Any?,
+    val draw: @Composable (Any) -> Unit,
+    /**
+     * An assistant's ```persona-view block under its key (`<item id>/<n>`, docs/assistant-views.md「卡片身份」), [raw]
+     * its text, [complete] whether its closing fence came: a card, or its fallback when it is not one.
+     */
+    val block: @Composable (key: String, raw: String, complete: Boolean) -> Unit = { _, raw, complete ->
+        if (complete) parse("persona-view", raw)?.let { draw(it) }
+    },
+    /** A live card of the conversation (a feed `view` item), by its id: drawn as the hub's latest version of it. */
+    val live: @Composable (id: String) -> Unit = {},
+)
 
 val LocalViewBlocks = staticCompositionLocalOf<ViewBlocks?> { null }
+
+/**
+ * The assistant conversation the cards drawn here belong to (its hub's store and actions); none outside one, where a
+ * card only draws.
+ */
+val LocalAssistantCards = staticCompositionLocalOf<persona.core.domain.views.AssistantCardsHost?> { null }

@@ -175,6 +175,8 @@ private fun FeedLine(item: FeedItem, host: AssistantTaskHost) {
         }
         "today" -> TodayCard(item, host, todos)
         "message" -> if (item.ref != null && item.ref !in later) MessageCard(item, host, todos)
+        // A live card: drawn where it was created, as the hub's latest version of it (docs/assistant-views.md「活卡片」).
+        "view" -> item.ref?.let { id -> persona.core.designsystem.LocalViewBlocks.current?.live?.invoke(id) }
     }
 }
 

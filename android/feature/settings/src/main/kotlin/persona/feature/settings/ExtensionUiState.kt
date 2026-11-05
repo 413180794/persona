@@ -90,6 +90,7 @@ internal object ExtensionViewText {
         "chart" -> chart(item) != null
         "stat_grid" -> !item.stats.isNullOrEmpty()
         "segmented" -> !item.name.isNullOrEmpty() && item.action?.id?.isNotEmpty() == true && item.choices.orEmpty().size >= 2
+        "html" -> !item.html.isNullOrBlank()
         else -> false
     }
 
@@ -128,7 +129,7 @@ internal object ExtensionViewText {
     }
 
     /** Fields aren't drawn on a card (the hub refuses them there too): it opens a page for that. */
-    fun drawableOnCard(item: ExtensionViewItem): Boolean = item.type != "field" && item.type != "table" && drawable(item)
+    fun drawableOnCard(item: ExtensionViewItem): Boolean = item.type != "field" && item.type != "table" && item.type != "html" && drawable(item)
 
     /** How deep pages pushed on each other may go (docs/extensions.md「页面跳转」). */
     const val MaxDepth = 8

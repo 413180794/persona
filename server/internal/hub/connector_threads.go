@@ -147,8 +147,8 @@ func (h *Hub) connectorThreadRoutes(api *http.ServeMux) {
 			Text    string `json:"text"`
 			ReplyTo string `json:"reply_to"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Thread == "" || strings.TrimSpace(in.Text) == "" {
-			writeErr(w, http.StatusBadRequest, errors.New("thread and text are required"))
+		if err := decodeJSONBody(w, r, &in, 1<<20); err != nil || in.Thread == "" || strings.TrimSpace(in.Text) == "" {
+			writeBodyErr(w, err, errors.New("thread and text are required"))
 			return
 		}
 		a, ok := connector.As[connector.Actions](c)

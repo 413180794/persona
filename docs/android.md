@@ -736,6 +736,45 @@ Debug 包的设置页底部另有一行「组件目录（调试版）」，自�
 - 多 hub：只有当前组（不带组后缀的机器 id）的任务能对上会话，其他组的任务卡显示「正在开」，提问不并进来；要做时在 `GroupTranslation` 里给待办的机器 id 加组后缀。
 - 截图：`MOCK_TASKS=1`（可加 `MOCK_TASKS_AT`、`MOCK_TASKS_NO_ASKS`）导出后跑 `./scripts/app/android.sh shots`，助手对话那张就是主对话。
 
+## 助手的卡片：动作、活卡片、HTML（#2022）
+
+规格在 [assistant-views.md](assistant-views.md)。画法是扩展的渲染器（`ExtensionViewColumn`），不另做组件；每种状态只是交给它的那一页不同（`AssistantCardPresentation`）。
+
+| 部分 | 在哪 |
+| --- | --- |
+| feed 的 `views` / `view_actions` / `view_blocks`（按条原样留着，一张读不了不连累别的）、`assistant_view` / `assistant_view_action` / `assistant_view_block` 事件、`view` 动态 | `core/contracts` 的 `Tasks.kt`、`ServerEvent.kt` |
+| 提交动作和 HTML bridge 的请求（生成的 `ExtensionViewActionInput` / `ExtensionAssistantHTMLActionInput`）、409 的两种结果（`view_changed` 读 `ExtensionViewChangedError` 的版本和卡片，`already_answered` 读已有的回答） | `core/contracts/api/AssistantViewActions.kt`、`core/hub/HttpTasksApi.kt` |
+| fence 和 key（照 `sdk/go/wire/assistantblocks.go`，对照 `assistant-text/fences.json`）、卡片的检查（照 `CheckAssistantView`，用生成的 `ExtensionWire`）、`open` 目标、结尾的 `<persona-action>` | `core/domain/views/` |
+| 每个 hub 一份状态（`TasksStore.cards`），里面按对话分开：活卡片按 version、回答按 revision 只往前走，快照只补不退；`AssistantCardActions` 发动作 | `core/domain/views/AssistantViewStore.kt` |
+| 卡片本身：页面栈、字段、确认、已选 / 发送中 / 失败、HTML | `feature/settings/AssistantViewCard.kt`、`AssistantCardPresentation.kt`、`AssistantHtml.kt` |
+| 挂接点：正文按 fence 切开画（`ChatMarkdownCards`，key 按整条 text item 编号），`view` 动态画活卡片，`LocalAssistantCards` 只在助手对话里给 | `feature/chat/ChatContent.kt`、`StructuredContent.kt`、`AssistantTasks.kt`、`ChatScreen.kt` |
+
+- 正文卡片的 key 是 `<item id>/<n>`，n 数整条 text item 里第几个 `persona-view`（坏块也算，`persona-card` 和其他代码块里的示例不算），version 固定 1；
+  hub 注册过（`view_blocks` 或事件）才能回答，流式中、没注册、只读设备、只读对话都只画不答。活卡片的 key 是 `view_…`，version 跟 hub 的。
+- 回答只有一次：点了 reply 带上看到的 version（`expected_version`）；有 `confirm` 的先弹原生确认，写出确认语和要发的原文，确认时卡片换了版本就关掉对话框、提示重新确认。
+  409 `view_changed`：拉一次 feed（卡片原位重画，已填的字段和所在页保留），不自动按新版本再发；409 `already_answered`：拉 feed 显示已有的回答。
+  同一个请求重试用同一个 `client_msg_id`，内容或版本变了才换。回答后选中的那项标「已选」，字段变成只读的行，下面一行写「已选，正在发送 / 已发送 / 发送失败：原因」；open、push、pop 一直能用。
+- `open`：https 在 App 内的链接卡片里开，`persona://session/…` 转成 App 自己的链接；task、kb、file 目前提示「安卓上还打不开这类目标」，绝不交给别的 App。
+- 用户消息结尾严格符合 hub 写法的 `<persona-action view=… action=…>{"values":{…}}</persona-action>` 不显示，气泡上方写「来自卡片」；别的位置、多一个属性、值不是字符串都不认。
+- 只有 hub 在 hello 里说了 `assistant_views`（`HttpTasksApi.features` 跟着同一个 hub 连接的 `serverFeatures`），卡片才能回答：reply、submit、搜索、筛选、加载更多都要它；
+  HTML 的 bridge 还要 `assistant_html_bridge`。老 hub、`persona_view` 关着、还没收到 hello（能力未知）时，卡片只画不答，一个请求都不发（`AssistantCardActions` 也会拦，返回 `Unsupported`）；
+  open、push、pop 是本地的，照常能用。hub 之后的 hello 带上了这个能力，卡片就地变成能点的。
+- 搜索、筛选、加载更多：都是这张卡的 reply。搜索框用扩展的 `ExtensionSearchBar`，打字只记下 `q`，不会停顿后自动发出；旁边的「搜索」按钮（`SearchSubmit`，扩展不传就没有，扩展的行为不变）点一下发送搜索动作和 `q`；选筛选项才发，带上 `q` 和筛选值；
+  submit 按 hub 的规则带上这一页的全部字段、`q` 和筛选值（`AssistantCard.fields`）。加载更多画成一个按钮，点了才发（扩展的加载更多一出现就自动请求，卡片里不能这样）。
+  卡片回答过就不再显示搜索框和筛选。
+- 403：hub 对一个请求的拒绝（`forbidden`：只读设备、关掉的卡片；`permission_denied`）只是这个请求失败，配对不撤销（`HubFailure.from`，`HubHttpRoutingTest.aRefusedCardDoesNotRevokeThePairing`）；
+  401 和其他 403（凭据在这里不能用，如 `master_token_local_only`）照旧撤销配对。App 里另外两处自己看状态码的地方（`ApiClient` 的拦截器、输入框的「中断」）仍把任何 403 当成配对过期，没在这次改。
+- **HTML**：`AssistantHtmlSandbox.Accepted = false`，所有 html 组件都显示「这个页面在安卓上还不运行」和卡片的 fallback。沙箱代码已写好待验收：
+  独立 WebView（支持时用单独的 Profile）、data: 文档（不透明源）、CSP 放在页面内容之前、`blockNetworkLoads`、所有请求在 `shouldInterceptRequest` 里答空、所有导航拒绝、
+  不开窗口 / 弹框 / 权限、只对这个 WebView 拒第三方 cookie（不碰全局 cookie）；bridge 只用 `addWebMessageListener`，只收当前实例主 frame 的消息、一次一个确认、拒两次就不再问；
+  最多同时跑 2 个，离开屏幕销毁，有停止 / 重试，renderer 退出只停这一页。**还没做的验收**（这台 example-machine 没有模拟器）：真实 WebView 上逐项观察 fetch、XHR、图片、CSS、iframe、
+  WebSocket、beacon、跳转、meta refresh、popup、表单、cookie / storage、伪造 bridge 消息、确认轰炸的请求次数（带不设防的对照）；`addWebMessageListener` 的 `*` 规则对不透明源是否注入；
+  死循环和大分配：页面里的死循环会占住 App 共用的 renderer（链接卡片也会卡），停止只销毁这个 WebView，不是硬性的 CPU / 内存限制。这些都过了才能把 `Accepted` 改成 true。
+- 截图：`./gradlew :feature:settings:testDebugUnitTest --tests '*AssistantCardsShotsTest*'`，三套风格 × 深浅色：待回答（决策、表单）、已回答（已发送、发送失败、活卡片更新后）、
+  fallback（HTML、流式中的块、比较表），PNG 在 `build/assistant-card-shots/`。同一个类里还有点按发出的请求、确认和换版本后重新确认、没注册的块不发的测试。
+- 单测：`AssistantFencesTest`、`AssistantCardsTest`、`AssistantViewStoreTest`、`PersonaActionTagTest`（`core:domain`），`TasksContractTest.theCardsSnapshotDecodes`，
+  `HttpTasksApiTest` 的卡片三条，`AssistantHtmlTest`（只查 App 设了什么、收什么；Robolectric 的 WebView 不跑页面，不能当验收）。
+
 ## 对话内容：照片、文件、长按菜单、工具详情、报错卡
 
 主线旧 App（d2d484ef、4588285d）对话部分的移植（2026-11-02），按新设计系统重画；行为和 iOS 对齐。看图和标注见上文「看图和标注」，文件页见下文「对话里的文件和 Git」。
@@ -964,11 +1003,9 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
   卡片、机器详情的一节、启动器页的一节没有自己的栈：push 打开一整页（`ExtensionViewText.opened`）。
 - **`ui.invalidate`**：`KeepFresh(model, events)` 除了 `refresh_after` 还跟着 `extension_ui` 的 invalidate：页面在前台就马上重画，不在就记下、回来时画（`ExtensionViewModel.invalidate` / `shown`）。
   扩展页、启动器页的节跟 `ExtensionManagement.uiEvents`，卡片和机器详情的节跟 `ExtensionSlots.invalidations`；`ExtensionSlots.badge` 不理 invalidate 事件（不会清掉角标）。
-- **助手回答里的卡片**：`core:designsystem` 的 `LocalViewBlocks`（`ViewBlocks(parse, draw)`），App 在 `Root.kt` 提供 `PersonaViewBlocks.blocks`；对话的 Markdown（`ChatContent` 的
-  `codeFence`）遇到 ```` ```persona-view ````（一个 View 或一个组件）和 ```` ```persona-card ```` 时用扩展的渲染器画（`PersonaViewBlock` → `ExtensionViewColumn`，不懒加载），
-  读不出来（还在流式输出、不是 View、画不了的卡片）就照旧是代码块。回答里的卡片不能点：按钮、字段、segmented、搜索、筛选、加载更多拿掉，行的动作去掉，链接照常。
+- **对话里的 `persona-card`**：`core:designsystem` 的 `LocalViewBlocks`（`ViewBlocks(parse, draw, block, live)`），App 在 `Root.kt` 提供 `PersonaViewBlocks.blocks`。
   `persona-card` 按 `sdk/go/wire/personacard.go` 的规则转成组件（`PersonaViewBlocks.fromCard`，数字的写法 `number` 也照它：千分位、最多一位小数、一半往远离 0 的方向取），
-  单测 `PersonaViewBlocksTest.cardsBecomeTheSameViewsAsOnEveryApp` 逐个对照 `schema/extension/examples/persona-card/` 的用例。
+  只读，单测 `PersonaViewBlocksTest.cardsBecomeTheSameViewsAsOnEveryApp` 逐个对照 `schema/extension/examples/persona-card/` 的用例。`persona-view` 见下面「助手的卡片」。
 - **截图（不用模拟器）**：`./gradlew :feature:settings:testDebugUnitTest --tests '*ExtensionComponentsShotsTest*'`，三套风格 × 深浅色，一页列表（搜索框、筛选、带图标 / 头像 / 缩略图的行、
   加载更多、markdown、表格、带按钮的空状态、加载中）和一段回答里的卡片（`stacked_bar`、`line`、一个 `persona-view`），PNG 在 `build/extension-v3-shots/`。
 - **单测**：`ExtensionUiV3Test`（push 不发给扩展、推的页的路由和层数、带初始 state 画、回答的 push / pop、搜索 / 筛选 / 加载更多不占住页面、加载更多只问一次、晚到的搜索回答丢掉、

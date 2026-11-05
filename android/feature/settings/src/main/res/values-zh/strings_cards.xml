@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An assistant's cards in a conversation (#2022). -->
+<resources>
+    <string name="settings_card_changed">卡片已更新，请看过后重新确认</string>
+    <string name="settings_card_answered">这张卡片已经回答过了</string>
+    <string name="settings_card_cannot_answer">这张卡片现在还不能回答</string>
+    <string name="settings_card_bad_link">这个链接打不开</string>
+    <string name="settings_card_target_unsupported">安卓上还打不开这类目标</string>
+    <string name="settings_card_busy">上一次操作还没完成</string>
+    <string name="settings_card_not_sent">没有发出去</string>
+    <string name="settings_card_back">返回</string>
+    <string name="settings_card_will_send">将发送：%1$s</string>
+    <string name="settings_card_will_open">将打开：%1$s</string>
+    <string name="settings_card_placeholder">〔卡片〕</string>
+    <string name="settings_card_chosen">已选</string>
+    <string name="settings_card_on">开</string>
+    <string name="settings_card_off">关</string>
+    <string name="settings_card_sent">已发送</string>
+    <string name="settings_card_failed">发送失败</string>
+    <string name="settings_card_failed_reason">发送失败：%1$s</string>
+    <string name="settings_card_sending">已选，正在发送</string>
+    <string name="settings_card_html_title">助手画的页面</string>
+    <string name="settings_card_html_fallback">这个页面在安卓上还不运行，先看卡片的说明：</string>
+    <string name="settings_card_html_stopped">页面已停止</string>
+    <string name="settings_card_html_too_many">同时运行的页面太多，先停下了</string>
+    <string name="settings_card_html_stop">停止</string>
+    <string name="settings_card_html_retry">重试</string>
+    <string name="settings_card_html_reply_title">页面想替你回复</string>
+    <string name="settings_card_html_reply_text">助手画的页面要以你的名义发送下面这段话：\n\n%1$s</string>
+    <string name="settings_card_html_send">发送</string>
+    <string name="settings_card_html_open_title">页面想打开链接</string>
+    <string name="settings_card_html_open_text">助手画的页面要在 App 里打开：\n\n%1$s</string>
+    <string name="settings_card_html_open">打开</string>
+    <string name="settings_card_search">搜索</string>
+</resources>

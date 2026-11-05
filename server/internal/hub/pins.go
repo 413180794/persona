@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -68,8 +67,8 @@ func (h *Hub) pinRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("PUT /api/v1/mutes", func(w http.ResponseWriter, r *http.Request) {
 		var p Pins
-		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &p, 1<<20); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		if h.store == nil {
@@ -103,8 +102,8 @@ func (h *Hub) pinRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("PUT /api/v1/pins", func(w http.ResponseWriter, r *http.Request) {
 		var p Pins
-		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &p, 1<<20); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		if h.store == nil {
@@ -130,8 +129,8 @@ func (h *Hub) renameSpace(w http.ResponseWriter, r *http.Request, m *Machine) {
 	var in struct {
 		Name string `json:"name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Name) == "" {
-		writeErr(w, http.StatusBadRequest, errors.New("name is required"))
+	if err := decodeJSONBody(w, r, &in, 4<<10); err != nil || strings.TrimSpace(in.Name) == "" {
+		writeBodyErr(w, err, errors.New("name is required"))
 		return
 	}
 	wid, name := r.PathValue("wid"), strings.TrimSpace(in.Name)

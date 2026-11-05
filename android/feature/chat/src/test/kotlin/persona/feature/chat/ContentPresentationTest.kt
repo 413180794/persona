@@ -7,6 +7,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ContentPresentationTest {
+    // A card's answer reads as the user's words 「来自卡片」; only the hub's exact trailing tag, only on the user's message.
+    @Test fun aCardsAnswerHidesItsTagOnlyOnTheUsersMessage() {
+        val text = "选 B：队列去重\n<persona-action view=\"i#0/0\" action=\"choose-b\">{\"values\":{}}</persona-action>"
+        val user = messageModel(text, user = true)
+        assertTrue(user.fromCard)
+        assertEquals("选 B：队列去重", user.plain)
+        val reply = messageModel(text)
+        assertFalse(reply.fromCard)
+        assertTrue(reply.plain.contains("persona-action"))
+        assertFalse(messageModel("<persona-action view=\"v\" action=\"a\">{\"values\":{}}</persona-action> 后面还有字", user = true).fromCard)
+    }
+
     @Test fun rendersEditWriteMultiEditAndTodoInputsWithoutRawJson() {
         fun tool(name: String, input: String) = Item("call", kind = "tool_use", toolName = name,
             toolInput = JsonCodec.parseToJsonElement(input))

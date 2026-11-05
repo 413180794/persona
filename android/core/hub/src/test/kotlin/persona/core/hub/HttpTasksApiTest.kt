@@ -17,10 +17,10 @@ import org.junit.Test
 class HttpTasksApiTest {
     private fun api(server: MockWebServer): HttpTasksApi {
         val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
-        return HttpTasksApi { path, method, body ->
+        return HttpTasksApi({ path, method, body ->
             val rb = body?.toString()?.toRequestBody("application/json".toMediaType())
             http.newCall(Request.Builder().url(server.url(path)).method(method, rb).build()).execute()
-        }
+        })
     }
 
     @Test fun retryPostsAndAnswersTheReopenedTodo() = runBlocking {
@@ -106,6 +106,71 @@ class HttpTasksApiTest {
             val deleteReq = server.takeRequest()
             assertEquals("DELETE", (deleteReq.method).zhAny())
             assertEquals("/api/v1/todos/todo_new", (deleteReq.path).zhAny())
+        }
+    }
+
+    // A card's action (docs/assistant-views.md「持久化提交」): the key is one escaped path segment, the version goes with it.
+    @Test fun aCardsActionEscapesItsKeyAndSendsTheVersion() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"action":{"key":"uuid#0/2","action":"choose-b","client_msg_id":"m1","status":"pending","revision":1,"at":"2026-11-05T10:00:00Z"}}"""))
+            val answer = api(server).viewAction("c 1", "uuid#0/2", persona.core.contracts.generated.ExtensionViewActionInput(
+                "choose-b", null, null, "m1", confirmed = true, expectedVersion = 1))
+            val req = server.takeRequest()
+            assertEquals("/api/v1/assistant/conversations/c%201/views/uuid%230%2F2/actions", req.path)
+            assertEquals("""{"action":"choose-b","client_msg_id":"m1","confirmed":true,"expected_version":1}""", req.body.readUtf8())
+            assertEquals("pending", (answer as persona.core.contracts.api.AssistantViewAnswer.Recorded).action.status)
+        }
+    }
+
+    @Test fun aCardsConflictsAreAnswersNotFailures() = runBlocking {
+        MockWebServer().use { server ->
+            // The shared example of schema/extension/examples/ViewChangedError.example.json, in short.
+            server.enqueue(MockResponse().setResponseCode(409).setBody("""{"error":"card changed; review it and confirm again","code":"view_changed","version":4,
+                "view":{"id":"view_example","conversation":"c","version":4,"view":{"fallback":"已更新","sections":[]}}}"""))
+            server.enqueue(MockResponse().setResponseCode(409).setBody("""{"error":"card already answered","code":"already_answered",
+                "action":{"key":"view_1","action":"b","client_msg_id":"other","status":"sent","revision":2,"at":"2026-11-05T10:00:00Z"}}"""))
+            server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"confirm","code":"bad_request"}"""))
+            val input = persona.core.contracts.generated.ExtensionViewActionInput("a", null, null, "m", expectedVersion = 2)
+            val changed = api(server).viewAction("c", "view_1", input) as persona.core.contracts.api.AssistantViewAnswer.ViewChanged
+            assertEquals(4L, changed.version)
+            assertEquals(4L, changed.view?.version)
+            val answered = api(server).viewAction("c", "view_1", input) as persona.core.contracts.api.AssistantViewAnswer.AlreadyAnswered
+            assertEquals("other", answered.action?.clientMsgId)
+            try {
+                api(server).viewAction("c", "view_1", input)
+                fail("a refusal answered")
+            } catch (e: HubFailure) {
+                assertEquals(400, e.status)
+            }
+        }
+    }
+
+    // A card refused for this device (read-only role, cards switched off) is that request's refusal, not the pairing's
+    // end; an unusable credential still ends it.
+    @Test fun aRefusedCardKeepsThePairing() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(403).setBody("""{"error":"read-only role cannot reply from a card","code":"forbidden","retryable":false,"delivered":"none"}"""))
+            server.enqueue(MockResponse().setResponseCode(403).setBody("""{"error":"not granted","code":"permission_denied"}"""))
+            server.enqueue(MockResponse().setResponseCode(403).setBody("""{"error":"the master token is restricted to local networks","code":"master_token_local_only"}"""))
+            server.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":"invalid token","code":"invalid_token"}"""))
+            val input = persona.core.contracts.generated.ExtensionViewActionInput("a", null, null, "m", expectedVersion = 1)
+            val kinds = (1..4).map { runCatching { api(server).viewAction("c", "view_1", input) }.exceptionOrNull() as HubFailure }
+            assertEquals(listOf(HubError.Server, HubError.Server, HubError.PairingExpired, HubError.PairingExpired), kinds.map { it.kind })
+            assertTrue(kinds.take(2).none { it.retryable })
+            assertEquals("read-only role cannot reply from a card", kinds[0].message)
+        }
+    }
+
+    @Test fun anHtmlPagesOpenComesBackChecked() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"open":"https://example.com/a","version":4}"""))
+            val answer = api(server).viewHtmlAction("c", "view_1", persona.core.contracts.generated.ExtensionAssistantHTMLActionInput(
+                "open", "guide", null, 4, url = "https://example.com/a", clientMsgId = "m2", confirmed = true))
+            val req = server.takeRequest()
+            assertEquals("/api/v1/assistant/conversations/c/views/view_1/html-actions", req.path)
+            assertEquals("""{"kind":"open","component_key":"guide","expected_version":4,"url":"https://example.com/a","client_msg_id":"m2","confirmed":true}""",
+                req.body.readUtf8())
+            assertEquals(persona.core.contracts.api.AssistantViewAnswer.Open("https://example.com/a", 4), answer)
         }
     }
 }

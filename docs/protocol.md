@@ -143,6 +143,8 @@ WS `hello` 同样携带候选。地址列表变化时发送 `{"type":"endpoints"
 
 表格列出公共处理器和主要业务码；node 的其他明确 RPC 错误码也会透传，通常映射为 409。客户端应以 `code` 分支，未知码保留 `error` 展示，旧 hub 只有 `error` 时按旧行为处理。
 
+收 JSON 请求体的 App 接口都有大小上限（`decodeJSONBody`，按接口在 4 KiB–4 MiB 之间：小的设置、回答、配对 4–16 KiB，置顶 / 静音 / 启动器 / 回答卡片 / 连接器回复 1 MiB），超过回 413 `too_large`，hub 读到上限就停、不读完；格式错误仍是 400。
+
 ## 操作回执（client_ops）
 
 服务端声明 `client_ops` 后，客户端可在以下写请求带 `X-Jarvis-Op-Id: <UUID>`：

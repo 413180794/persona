@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -120,8 +119,8 @@ func (h *Hub) githubAuthRoutes(api *http.ServeMux) {
 			return
 		}
 		var a githubAuth
-		if err := json.NewDecoder(r.Body).Decode(&a); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &a, 4<<10); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		switch {

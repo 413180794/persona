@@ -127,8 +127,8 @@ func (h *Hub) putBrowser(w http.ResponseWriter, r *http.Request, m *Machine) {
 	var in struct {
 		Enabled bool `json:"enabled"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeErr(w, http.StatusBadRequest, fmt.Errorf("bad body: %w", err))
+	if err := decodeJSONBody(w, r, &in, 4<<10); err != nil {
+		writeBodyErr(w, err, fmt.Errorf("bad body: %w", err))
 		return
 	}
 	if h.browserOf(m) == nil {

@@ -7,13 +7,16 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 )
+
+// clipboardBodyMost caps a POST body: the node takes at most 1 MiB of text (node.clipboardMost), with room for the
+// JSON escapes around it.
+const clipboardBodyMost = 4 << 20
 
 func (h *Hub) computerClipboard(w http.ResponseWriter, r *http.Request, m *Machine) {
 	if !h.portAllowed(m, screenPort) {
@@ -29,8 +32,8 @@ func (h *Hub) computerClipboard(w http.ResponseWriter, r *http.Request, m *Machi
 		var in struct {
 			Text string `json:"text"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, fmt.Errorf("bad body: %w", err))
+		if err := decodeJSONBody(w, r, &in, clipboardBodyMost); err != nil {
+			writeBodyErr(w, err, fmt.Errorf("bad body: %w", err))
 			return
 		}
 		params["set"] = in.Text

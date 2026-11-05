@@ -6,7 +6,6 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -446,8 +445,8 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("POST /api/v1/launchers", func(w http.ResponseWriter, r *http.Request) {
 		var in launcherInput
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &in, 1<<20); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		if err := h.presetFill(r.Context(), &in); err != nil {
@@ -469,8 +468,8 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("PUT /api/v1/launchers/{name}", func(w http.ResponseWriter, r *http.Request) {
 		var in launcherInput
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if err := decodeJSONBody(w, r, &in, 1<<20); err != nil {
+			writeBodyErr(w, err, err)
 			return
 		}
 		in.Name = r.PathValue("name")

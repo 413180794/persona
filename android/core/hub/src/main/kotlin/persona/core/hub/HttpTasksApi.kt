@@ -16,15 +16,23 @@ import persona.core.contracts.JsonCodec
 import persona.core.contracts.TaskPlan
 import persona.core.contracts.Todo
 import persona.core.contracts.TodosResponse
+import persona.core.contracts.api.AssistantViewAnswer
 import persona.core.contracts.api.TasksApi
+import persona.core.contracts.generated.ExtensionAssistantHTMLActionInput
+import persona.core.contracts.generated.ExtensionAssistantHTMLOpenResult
+import persona.core.contracts.generated.ExtensionViewAction
+import persona.core.contracts.generated.ExtensionViewActionInput
+import persona.core.contracts.generated.ExtensionViewChangedError
 
 /** The unified entry's routes on the active pairing (docs/protocol.md「任务和对话动态」). */
 class HttpTasksApi internal constructor(
     private val request: suspend (path: String, method: String, body: JsonElement?) -> Response,
+    override val features: kotlinx.coroutines.flow.StateFlow<Set<String>>? = null,
 ) : TasksApi {
+    /** On [connection], whose hello's features say what its cards may do. */
     constructor(connection: OkHttpHubConnection) : this({ path, method, body ->
         connection.request(path, method, body?.toString()?.toRequestBody("application/json".toMediaType()))
-    })
+    }, connection.serverFeatures)
 
     private suspend fun call(path: String, method: String = "GET", body: JsonElement? = null): JsonObject =
         request(path, method, body).use {
@@ -98,6 +106,39 @@ class HttpTasksApi internal constructor(
 
     override suspend fun inboxReply(itemId: String, text: String, card: String?) {
         call(path("inbox", itemId, "reply"), "POST", buildJsonObject { put("text", text); card?.let { put("card", it) } })
+    }
+
+    override suspend fun viewAction(conversation: String, key: String, input: ExtensionViewActionInput): AssistantViewAnswer =
+        cardCall(path("assistant", "conversations", conversation, "views", key, "actions"),
+            JsonCodec.encodeToJsonElement(ExtensionViewActionInput.serializer(), input))
+
+    override suspend fun viewHtmlAction(conversation: String, key: String, input: ExtensionAssistantHTMLActionInput): AssistantViewAnswer =
+        cardCall(path("assistant", "conversations", conversation, "views", key, "html-actions"),
+            JsonCodec.encodeToJsonElement(ExtensionAssistantHTMLActionInput.serializer(), input))
+
+    /**
+     * A card's action: the recorded answer, an HTML page's checked link, or one of the two 409s with what their body
+     * carries (the recorded answer; the card's current version and view, `ViewChangedError`).
+     */
+    private suspend fun cardCall(path: String, body: JsonElement): AssistantViewAnswer {
+        val o = try { call(path, "POST", body) } catch (failure: HubFailure) {
+            if (failure.status != 409) throw failure
+            val error = failure.body?.let { runCatching { JsonCodec.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+            return if (failure.code == "already_answered") AssistantViewAnswer.AlreadyAnswered(
+                error?.get("action")?.let { runCatching { JsonCodec.decodeFromJsonElement(ExtensionViewAction.serializer(), it) }.getOrNull() })
+            else {
+                // view_changed, or an older hub's plain conflict for the same version check.
+                val changed = error?.let { runCatching { JsonCodec.decodeFromJsonElement(ExtensionViewChangedError.serializer(), it) }.getOrNull() }
+                AssistantViewAnswer.ViewChanged(changed?.version?.takeIf { it > 0 }, changed?.view)
+            }
+        }
+        if (o["open"] != null) {
+            val open = JsonCodec.decodeFromJsonElement(ExtensionAssistantHTMLOpenResult.serializer(), o)
+            if (open.open.isEmpty() || open.version <= 0) error("no checked link in the answer")
+            return AssistantViewAnswer.Open(open.open, open.version)
+        }
+        return AssistantViewAnswer.Recorded(JsonCodec.decodeFromJsonElement(ExtensionViewAction.serializer(),
+            o["action"] ?: error("no action in the answer")))
     }
 
     private fun plan(o: JsonObject): TaskPlan = JsonCodec.decodeFromJsonElement(o["plan"] ?: error("no plan in the answer"))

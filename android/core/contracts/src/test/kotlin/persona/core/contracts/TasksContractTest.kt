@@ -17,6 +17,22 @@ class TasksContractTest {
         assertEquals("app", ((plan as TaskPlanEvent).plan.tasks.single().project).zhAny())
     }
 
+    // The cards' snapshot (docs/assistant-views.md): every live card, answer and registered block, each read on its own.
+    @Test fun theCardsSnapshotDecodes() {
+        val res = JsonCodec.decodeFromString<FeedResponse>("""{"items":[{"id":"f","conversation":"c","kind":"view","ref":"view_1"}],
+            "views":{"view_1":{"id":"view_1","version":2,"view":{"fallback":"f","sections":[]}},"view_2":"not a card"},
+            "view_actions":{"i/0":{"key":"i/0","action":"a","client_msg_id":"m","status":"sent","revision":3,"at":"t"}},
+            "view_blocks":["i/0","i/1"]}""")
+        assertEquals("view", res.items.single().kind)
+        assertEquals(setOf("view_1", "view_2"), res.views.keys)
+        assertEquals(setOf("i/0"), res.viewActions.keys)
+        assertEquals(listOf("i/0", "i/1"), res.viewBlocks)
+        // An older hub has none of them.
+        assertTrue(JsonCodec.decodeFromString<FeedResponse>("""{"items":[]}""").views.isEmpty())
+        assertTrue(ServerEvent.decode("""{"type":"assistant_view_block","conversation":"","key":"k"}""") == null)
+        assertTrue(ServerEvent.decode("""{"type":"assistant_view","conversation":"c","view":{"id":"v"}}""") is AssistantViewEvent)
+    }
+
     @Test fun unknownKindsAndTodosDecode() {
         val res = JsonCodec.decodeFromString<FeedResponse>("""{"items":[{"id":"f","conversation":"c","at":"2026-11-03T10:00:00Z","kind":"new_kind"}],
             "plans":{"p":{"id":"p","state":"started","tasks":[]}}}""")
