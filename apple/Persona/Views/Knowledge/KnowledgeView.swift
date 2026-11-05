@@ -24,6 +24,8 @@ struct KnowledgeView: View {
     #if DEBUG
     @State private var debugEntry: KBEntry?
     #endif
+    /// Where entries open beside the list instead of pushing (the Mac's 知识库 section).
+    @Environment(\.kbOpenEntry) private var opener
 
     private var list: KBList? { lists[kind] }
 
@@ -92,7 +94,12 @@ struct KnowledgeView: View {
             if let k = UserDefaults.standard.string(forKey: "showKnowledgeKind").flatMap(KBKind.init(rawValue:)) { kind = k }
             if let ref = UserDefaults.standard.string(forKey: "showKnowledgeEntry"), let slash = ref.firstIndex(of: "/") {
                 let id = String(ref[ref.index(after: slash)...])
-                debugEntry = KBEntry(kind: String(ref[..<slash]), id: id, name: id, relevance: 0)
+                let e = KBEntry(kind: String(ref[..<slash]), id: id, name: id, relevance: 0)
+                if let opener {
+                    opener.open = .init(entry: e, query: UserDefaults.standard.string(forKey: "showKnowledgeSearch"))
+                } else {
+                    debugEntry = e
+                }
             }
         }
         #endif
@@ -167,7 +174,7 @@ struct KnowledgeView: View {
 
     private func rows(_ items: [KBEntry]) -> some View {
         ForEach(items) { e in
-            NavigationLink { KnowledgeDetailView(entry: e) } label: { KBRow(entry: e) }
+            KBEntryLink(entry: e) { KBRow(entry: e) }
         }
     }
 
@@ -208,7 +215,7 @@ struct KnowledgeView: View {
                 let these = results.filter { $0.entry.kind == k }
                 Section {
                     ForEach(these) { r in
-                        NavigationLink { KnowledgeDetailView(entry: r.entry, query: resultsFor) } label: {
+                        KBEntryLink(entry: r.entry, query: resultsFor) {
                             KBHitRow(result: r, query: resultsFor)
                         }
                         .accessibilityIdentifier("kb.hit")
@@ -256,6 +263,53 @@ struct KnowledgeView: View {
         }
     }
 }
+/// The entry open beside 知识库's list, where entries open there rather than push: the Mac's 知识库 section puts the
+/// list and the open entry side by side (#2318) and sets one on the list. Elsewhere (the phone, 知识库 pushed in
+/// Persona's page) there is none and the rows push their entry. A reference, so opening one redraws the rows that
+/// change and the detail, not the list's page.
+@Observable final class KBOpenEntry {
+    struct Open: Hashable {
+        var entry: KBEntry
+        /// Opened from a search: the places it was found come first.
+        var query: String?
+    }
+
+    var open: Open?
+
+    func isOpen(_ e: KBEntry) -> Bool { open?.entry.kind == e.kind && open?.entry.id == e.id }
+}
+
+extension EnvironmentValues {
+    /// Entries open beside the list (`KBOpenEntry`); nil: they push.
+    @Entry var kbOpenEntry: KBOpenEntry?
+}
+
+/// A row that opens its entry: beside the list where there is a `KBOpenEntry` (the open one selected, in the shell's
+/// selected shade), pushed otherwise.
+struct KBEntryLink<Label: View>: View {
+    var entry: KBEntry
+    var query: String? = nil
+    @ViewBuilder var label: Label
+    @Environment(\.kbOpenEntry) private var opener
+
+    var body: some View {
+        if let opener {
+            // Read here, not by the list: opening another entry redraws two rows, not the whole list.
+            let selected = opener.isOpen(entry)
+            let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+            Button { opener.open = .init(entry: entry, query: query) } label: {
+                label.frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .macListRow(selected: selected, in: shape, outset: Theme.Space.s)
+            .macHoverShade(in: shape, outset: Theme.Space.s)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+        } else {
+            NavigationLink { KnowledgeDetailView(entry: entry, query: query) } label: { label }
+        }
+    }
+}
+
 /// The six kinds as chips with their icon (and how many, once loaded), all in sight: no sideways scroll view (the
 /// navigation stack can take one at the top of a page for the page's own and inset it, docs/lessons/ios.md「布局与组件」, and
 /// 日程 was off the edge). Chips that do not fit drop their icons, then go to a second row.

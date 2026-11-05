@@ -344,9 +344,7 @@ private struct MacShell: View {
         case .agents: ChatsView()
         case .todos: MacTodosPage()
         case .inbox: MacInboxPage()
-        case .knowledge:
-            NavigationStack { KnowledgeView().environment(\.macBelowTitleRow, true) } // below the title (#1243)
-                .environment(\.macSectionStack, true) // its pushed pages' ‹ and title in the title row (#2318)
+        case .knowledge: MacKnowledgePage() // the list and the open entry side by side (#2318)
         case .machines: MacMachinesPage()
         case .settings: SettingsView()
         }

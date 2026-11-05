@@ -14,6 +14,7 @@ import { ActionRow } from "./ActionRow";
 import { useChatContext } from "./chat-context";
 import { useExpanded } from "./expanded";
 import { t } from "../../i18n";
+import { ScrollFold } from "./fold-scroll";
 
 const STATUS: Record<AgentStatus, string> = {
   running: t("chat-subagentcard.status_running"),
@@ -80,7 +81,7 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
         </button>
         <Collapse open={open} lazy>
           <div className="mt-2 flex flex-col gap-1.5 border-l-2 border-tool-rail pl-3 text-[13px] leading-5 text-ink-2">
-            {prompt && <p className="line-clamp-6 whitespace-pre-wrap" data-subagent-prompt>{prompt}</p>}
+            {prompt && <ScrollFold className="max-h-[6lh] whitespace-pre-wrap" data-subagent-prompt>{prompt}</ScrollFold>}
             {summary && <p className="whitespace-pre-wrap text-ink" data-subagent-summary>{summary}</p>}
             {meta && open && <RecentSteps mid={mid} agent={meta} />}
             {nested.length > 0 && (

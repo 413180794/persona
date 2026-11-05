@@ -19,14 +19,17 @@ import { MessageActions } from "./MessageActions";
 import { QuoteBlock } from "./Quote";
 import { PathText } from "../../ui/PathLinks";
 import { Thumb } from "./Steps";
+import { useFoldScroll } from "./fold-scroll";
 import { useChatContext } from "./chat-context";
 import { WorkGroup, WorkNodes, type WorkProps } from "./WorkGroup";
 import { t } from "../../i18n";
 
-/** A message longer than this many lines folds to ten of them (line-clamp-10), with 展开 under it (cindy's UserMessage). */
+/** A message longer than this many lines folds to ten of them (FOLDED), with 展开 under it (cindy's UserMessage). */
 export const BUBBLE_MAX_LINES = 14;
 /** Before it is measured: about this many characters to a line of the 488 px bubble. */
 const CHARS_PER_LINE = 30;
+/** A folded message: ten lines high, scrolling inside (the chat scrolls on at its top and end). */
+const FOLDED = "max-h-[10lh] overflow-y-auto";
 
 /** How many lines a message takes in its bubble, by its text (the bubble measures itself once drawn). */
 export function bubbleLines(text: string, perLine = CHARS_PER_LINE): number {
@@ -59,7 +62,8 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
   );
 }
 
-/** The bubble's words, folded to ten lines past fourteen; `pending` (still being sent): dimmed, the same fold. A
+/** The bubble's words, folded to ten lines past fourteen; the fold scrolls (the wheel, a trackpad, a finger), with a
+ *  fade at its bottom while there is more (fold-scroll.ts). `pending` (still being sent): dimmed, the same fold. A
  *  leading `> ` block (引用) is a folded quote card at its top instead of `>` lines (Quote.tsx). */
 function BubbleText({ text: whole, ts, mid, sid, pending }: { text: string; ts?: string; mid: string; sid: string; pending?: boolean }) {
   const split = useMemo(() => splitQuote(whole), [whole]);
@@ -70,33 +74,32 @@ function BubbleText({ text: whole, ts, mid, sid, pending }: { text: string; ts?:
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || open) return;
-    // measured with the clamp off: its full height in lines
+    // its full height in lines (a fold's scrollHeight is all of it)
     const line = parseFloat(getComputedStyle(el).lineHeight) || 24;
-    const clamp = el.style.webkitLineClamp;
-    el.style.webkitLineClamp = "unset";
     setLong(el.scrollHeight / line > BUBBLE_MAX_LINES + 0.5);
-    el.style.webkitLineClamp = clamp;
   }, [text, open]);
   const folded = long && !open;
+  const fold = useFoldScroll(ref, folded, [text]);
+  const words = text && (
+    <div
+      ref={ref}
+      {...fold}
+      className={`text-[length:var(--chat-body)] leading-[1.6] whitespace-pre-wrap [overflow-wrap:anywhere] ${folded ? FOLDED : ""}`}
+      data-folded={folded || undefined}
+    >
+      <PathText text={text} mid={mid} cwd={getSession(mid, sid)?.cwd} />
+    </div>
+  );
   return (
     <div className="flex max-w-full flex-col items-end gap-1">
       {split ? (
         <div className={`flex max-w-full flex-col gap-1.5 rounded-[12px] bg-user-bubble px-4 py-2.5 text-ink ${pending ? "opacity-60" : ""}`} title={clock(ts)}>
           <QuoteBlock text={split.quote} />
-          {text && (
-            <div ref={ref} className={`text-[length:var(--chat-body)] leading-[1.6] whitespace-pre-wrap [overflow-wrap:anywhere] ${folded ? "line-clamp-10" : ""}`} data-folded={folded || undefined}>
-              <PathText text={text} mid={mid} cwd={getSession(mid, sid)?.cwd} />
-            </div>
-          )}
+          {words}
         </div>
       ) : (
-        <div
-          ref={ref}
-          className={`max-w-full rounded-[12px] bg-user-bubble px-4 py-2.5 text-[length:var(--chat-body)] leading-[1.6] whitespace-pre-wrap text-ink [overflow-wrap:anywhere] ${folded ? "line-clamp-10" : ""} ${pending ? "opacity-60" : ""}`}
-          title={clock(ts)}
-          data-folded={folded || undefined}
-        >
-          <PathText text={text} mid={mid} cwd={getSession(mid, sid)?.cwd} />
+        <div className={`max-w-full rounded-[12px] bg-user-bubble px-4 py-2.5 text-ink ${pending ? "opacity-60" : ""}`} title={clock(ts)}>
+          {words}
         </div>
       )}
       {long && (

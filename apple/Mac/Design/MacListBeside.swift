@@ -19,11 +19,13 @@ struct MacListBeside<ListContent: View, Page: View>: View {
     /// The whole width, list and page.
     @State private var total: CGFloat = 0
 
-    init(listShown: Bool, widthKey: String, @ViewBuilder list: () -> ListContent, @ViewBuilder page: () -> Page) {
+    /// `ideal`: the list's width until it is dragged (知识库's is narrower than Persona's history, #2318).
+    init(listShown: Bool, widthKey: String, ideal: CGFloat = Theme.Size.sidebar,
+         @ViewBuilder list: () -> ListContent, @ViewBuilder page: () -> Page) {
         self.listShown = listShown
         self.list = list()
         self.page = page()
-        _width = StoredValue(wrappedValue: Double(Theme.Size.sidebar), widthKey)
+        _width = StoredValue(wrappedValue: Double(ideal), widthKey)
     }
 
     static func clamped(_ w: CGFloat) -> CGFloat { min(max(w, Theme.Size.sidebarMin), Theme.Size.sidebarMax) }

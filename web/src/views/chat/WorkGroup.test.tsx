@@ -192,13 +192,20 @@ describe("the user's bubble and the answer", () => {
     expect(html).toContain("max-w-[488px]");
     expect(html).toContain("rounded-[12px]");
     expect(html).not.toContain("展开");
+    expect(html).not.toContain("data-fold-scroll");
   });
 
-  it("past 14 lines it folds to 10, with 展开", () => {
+  it("past 14 lines it folds to 10 that scroll inside, faded at the bottom, with 展开", () => {
     const long = Array.from({ length: 20 }, (_, i) => `第 ${i} 行`).join("\n");
     expect(bubbleLines(long)).toBe(20);
     const html = renderToStaticMarkup(<UserBubble msg={msg(long)} mid="m" sid="s" />);
-    expect(html).toContain("line-clamp-10");
+    expect(html).toContain("max-h-[10lh] overflow-y-auto");
+    expect(html).toContain("data-fold-scroll");
+    expect(html).toContain("mask-image:linear-gradient(180deg");
+    expect(html).not.toContain("line-clamp");
+    expect(html).not.toContain("overscroll");
+    // the fade is on the words, not the bubble behind them
+    expect(html).toMatch(/bg-user-bubble[^>]*>\s*<div[^>]*data-fold-scroll/);
     expect(html).toContain(">展开<");
     expect(bubbleLines("x".repeat(31))).toBe(2);
   });
@@ -206,7 +213,7 @@ describe("the user's bubble and the answer", () => {
   it("past 14 lines it folds while it is still being sent too, dimmed (#1996)", () => {
     const long = Array.from({ length: 20 }, (_, i) => `第 ${i} 行`).join("\n");
     const html = renderToStaticMarkup(<UserBubble msg={msg(long)} mid="m" sid="s" pending />);
-    expect(html).toContain("line-clamp-10");
+    expect(html).toContain("max-h-[10lh] overflow-y-auto");
     expect(html).toContain(">展开<");
     expect(html).toContain("opacity-60");
     expect(html).toContain(">发送中…<");

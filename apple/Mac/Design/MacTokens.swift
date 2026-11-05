@@ -40,6 +40,8 @@ extension Theme.Size {
     static let macInboxListIdeal: CGFloat = 340 // 380 left no room for the item's actions column at the default size (#831)
     static let macInboxListMax: CGFloat = 520
     static let macInboxFiltersWidth: CGFloat = 190
+    /// 知识库's list beside the open entry (#2318): its chips and rows, the rest for the entry.
+    static let macKnowledgeListIdeal: CGFloat = 340
     /// The todos' list column on Mac.
     static let macTodosListMin: CGFloat = 260
     static let macTodosListIdeal: CGFloat = 340

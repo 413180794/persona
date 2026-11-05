@@ -33,6 +33,7 @@ import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
 import { ContextMeter } from "./ContextMeter";
 import { NARROW, SHORT, useFinePointer, useMedia } from "../../lib/viewport";
 import { UserBubble } from "./SegmentView";
+import { scrollsAFold } from "./fold-scroll";
 import { ActivityChips, GoalChip } from "./Activity";
 import { paneRoute, tabSessions } from "../../lib/herdr-tree";
 import { useSessionLive } from "../../lib/live";
@@ -324,12 +325,13 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     const size = () => ({ scrollHeight: sc.scrollHeight, clientHeight: sc.clientHeight });
     const leave = () => follow(false);
     // (checked before sizes are read: no layout read per wheel or touch event while away from the end)
-    const wheel = (e: WheelEvent) => atEnd.current && leavesOnWheel({ deltaX: e.deltaX, deltaY: e.deltaY, ...size() }) && leave();
+    // a wheel or a finger scrolling a folded message (fold-scroll.tsx) stays in it: the chat does not move
+    const wheel = (e: WheelEvent) => atEnd.current && !scrollsAFold(e.target, sc, e.deltaY) && leavesOnWheel({ deltaX: e.deltaX, deltaY: e.deltaY, ...size() }) && leave();
     let startY: number | null = null;
     const touchStart = (e: TouchEvent) => (startY = e.touches[0]?.clientY ?? null);
     const touchMove = (e: TouchEvent) => {
       const y = e.touches[0]?.clientY;
-      if (atEnd.current && startY !== null && y !== undefined && leavesOnTouch({ startY, y, ...size() })) leave();
+      if (atEnd.current && startY !== null && y !== undefined && !scrollsAFold(e.target, sc, startY - y) && leavesOnTouch({ startY, y, ...size() })) leave();
     };
     const key = (e: KeyboardEvent) => {
       const t = e.target instanceof Element ? e.target : null;

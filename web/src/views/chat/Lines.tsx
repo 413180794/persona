@@ -13,6 +13,7 @@ import { Markdown } from "../../ui/Markdown";
 import { Answer, SegmentView } from "./SegmentView";
 import { CompactDivider, NoticeRow } from "./Steps";
 import { t } from "../../i18n";
+import { ScrollFold } from "./fold-scroll";
 
 export interface LineProps {
   line: ChatLine;
@@ -215,9 +216,9 @@ function RecapStrip({ item, onClose }: { item: Item; onClose: () => void }) {
           {t("chat-lines.recap")}
           {item.ts && <span className="font-normal text-ink-3">· {ago(item.ts)}</span>}
         </span>
-        <div className="line-clamp-6 text-[13px] leading-relaxed text-ink-2">
+        <ScrollFold className="max-h-[6lh] text-[13px] leading-relaxed text-ink-2">
           <Markdown text={item.text ?? ""} small />
-        </div>
+        </ScrollFold>
       </div>
       <button type="button" onClick={onClose} aria-label={t("chat-lines.recap_close")} title={t("chat-lines.close")} className="flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink">
         <Icon name="x" size={13} />
