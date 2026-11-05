@@ -32,19 +32,21 @@ import { AgentAvatar } from "./agents/AgentAvatar";
 import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 import { hubMenuItems, useHubs } from "./Hubs";
 import { PersonaAvatar } from "./assistant/Persona";
+import { foldedNow } from "../lib/fold";
 
-function useFolded(key: string, initial = false): [boolean, () => void] {
-  const [v, setV] = useState(() => {
-    const s = localStorage.getItem(`fold:${key}`);
-    return s === null ? initial : s === "1";
-  });
+// follow: until the user folds or opens it, the section takes its default as it is now, not as it was on the first
+// render (未归属 is folded only once the todos above it have loaded, #2249); other sections keep their first default.
+function useFolded(key: string, initial = false, follow = false): [boolean, () => void] {
+  const [stored, setStored] = useState(() => localStorage.getItem(`fold:${key}`));
+  const [first] = useState(initial);
+  const folded = foldedNow(stored, follow ? initial : first);
   return [
-    v,
-    () =>
-      setV((x) => {
-        localStorage.setItem(`fold:${key}`, x ? "0" : "1");
-        return !x;
-      }),
+    folded,
+    () => {
+      const next = folded ? "0" : "1";
+      localStorage.setItem(`fold:${key}`, next);
+      setStored(next);
+    },
   ];
 }
 
@@ -527,7 +529,7 @@ function Section({ title, children, folded, onToggle, right }: { title: React.Re
 }
 
 function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey, go, onRowMenu, onNavigate }: { group: AgentGroup; machines: Machine[]; byTodo?: boolean; showHost?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onNavigate?: () => void }) {
-  const [storedFold, toggle] = useFolded(group.key, group.folded);
+  const [storedFold, toggle] = useFolded(group.key, group.folded, true);
   // folded by default (未归属) but holding the agent open now: open, so its row shows
   const folded = storedFold && !group.sessions.some((s) => activeKey === `s:${s.machine_id}/${s.session_id}`);
   const row = (s: Session) => {

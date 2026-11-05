@@ -287,23 +287,37 @@ type Agent struct {
 	Tokens   map[string]string `json:"tokens,omitempty"`
 }
 
-// PaneProcesses returns the pids of a pane's foreground processes, claude first.
-func (c *Client) PaneProcesses(ctx context.Context, pane string) ([]int, error) {
+// Process is one of a pane's foreground processes.
+type Process struct {
+	PID  int    `json:"pid"`
+	Name string `json:"name"`
+	// Argv0 is what it was started as: Claude Code renames its process to its version ("2.1.312"), argv0 still says
+	// claude; a login shell's starts with "-".
+	Argv0 string `json:"argv0"`
+}
+
+// PaneForeground returns a pane's foreground processes.
+func (c *Client) PaneForeground(ctx context.Context, pane string) ([]Process, error) {
 	var out struct {
 		ProcessInfo struct {
-			Foreground []struct {
-				PID   int    `json:"pid"`
-				Name  string `json:"name"`
-				Argv0 string `json:"argv0"`
-			} `json:"foreground_processes"`
+			Foreground []Process `json:"foreground_processes"`
 		} `json:"process_info"`
 	}
 	// pane_id, never target: given a target herdr answers for the focused pane.
 	if err := c.call(ctx, "pane.process_info", map[string]any{"pane_id": pane}, &out, "pane", "process-info", "--pane", pane); err != nil {
 		return nil, err
 	}
+	return out.ProcessInfo.Foreground, nil
+}
+
+// PaneProcesses returns the pids of a pane's foreground processes, claude first.
+func (c *Client) PaneProcesses(ctx context.Context, pane string) ([]int, error) {
+	procs, err := c.PaneForeground(ctx, pane)
+	if err != nil {
+		return nil, err
+	}
 	var claude, other []int
-	for _, p := range out.ProcessInfo.Foreground {
+	for _, p := range procs {
 		// Claude Code renames its process to its version ("2.1.312"); argv0 still says claude.
 		if strings.Contains(p.Name, "claude") || strings.Contains(p.Argv0, "claude") {
 			claude = append(claude, p.PID)

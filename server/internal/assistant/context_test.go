@@ -2,11 +2,14 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The snapshot goes with every message now: it says the time of the message, and a slow source doesn't hold the
@@ -33,5 +36,37 @@ func TestSnapshotIsNowAndDoesNotWait(t *testing.T) {
 	}
 	if !strings.Contains(got, "发布群（2 条）") {
 		t.Fatalf("the earlier snapshot's chats are gone:\n%s", got)
+	}
+}
+
+// The snapshot links agents to the hub's web app (public_url, its trailing slash dropped), and leaves the links out
+// when the hub does not say where that is; the assistant's own conversations are not among the agents (#2194).
+func TestSnapshotLinksAgentsToTheWebApp(t *testing.T) {
+	agent := proto.Session{MachineID: "mac-a", SessionID: "b00502b8-82a3", State: proto.StateNeedsYou, Title: "修 CI", UpdatedAt: time.Now()}
+	mine := proto.Session{MachineID: "mac-a", SessionID: "c0ffee00-0001", State: proto.StateNeedsYou, Assistant: true, UpdatedAt: time.Now()}
+	snap := func(f *fakeHub) string {
+		f.setSessions("mac-a", agent, mine)
+		s := newStorelessService(t, f)
+		done := make(chan struct{})
+		s.takeSnapshot(done)
+		return prompts.RenderSnapshot(*s.live.snap)
+	}
+
+	f := newFakeHub()
+	f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
+		return FeishuStatus{PublicURL: "https://hub.example.com/"}, nil
+	})
+	got := snap(f)
+	if !strings.Contains(got, "链接 https://hub.example.com/s/mac-a/b00502b8-82a3）") {
+		t.Fatalf("no link to the agent:\n%s", got)
+	}
+	if strings.Contains(got, "c0ffee00") {
+		t.Fatalf("the assistant's own conversation is listed:\n%s", got)
+	}
+
+	f = newFakeHub()
+	f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) { return nil, errors.New("no app") })
+	if got := snap(f); strings.Contains(got, "链接") || !strings.Contains(got, "session_id=b00502b8") {
+		t.Fatalf("a link without a web address, or the agent is gone:\n%s", got)
 	}
 }

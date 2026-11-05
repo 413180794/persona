@@ -8,7 +8,7 @@
 {{end}}{{with .Done}}  - 做完的（24 小时内）：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Working}}  - 工作中：{{join (first 8 .) "；"}}{{if gt (len .) 8}} 等 {{len .}} 个{{end}}
 {{end}}{{with .Tasks}}- 从对话开的任务（task_plan；用 agent_send 对它的 Agent 说话）：
-{{range .}}{{$t := .}}  - {{.Title}}（{{.ID}}）：{{.State}}{{with .Machine}}，{{.}}{{end}}{{with .Session}} session_id={{.}}{{end}}{{with .Last}}：{{.}}{{end}}{{with .Doing}}{{if $t.Last}}；{{else}}：{{end}}现在{{.}}{{with $t.DoingFor}}（{{.}}了）{{end}}{{end}}{{with .Subagents}}；子 Agent 在跑：{{join . "、"}}{{end}}
+{{range .}}{{$t := .}}  - {{.Title}}（{{.ID}}{{with .Link}}，链接 {{.}}{{end}}）：{{.State}}{{with .Machine}}，{{.}}{{end}}{{with .Session}} session_id={{.}}{{end}}{{with .Last}}：{{.}}{{end}}{{with .Doing}}{{if $t.Last}}；{{else}}：{{end}}现在{{.}}{{with $t.DoingFor}}（{{.}}了）{{end}}{{end}}{{with .Subagents}}；子 Agent 在跑：{{join . "、"}}{{end}}
 {{end}}{{end}}{{if .PhoneOnline}}- iPhone：App 在线，phone_* 工具可用
 {{else}}- iPhone：App 不在前台，phone_* 工具会先尝试在后台唤醒 App，失败就请他打开 App
 {{end}}{{with .KB}}- 知识库（kb_get 看详情）：

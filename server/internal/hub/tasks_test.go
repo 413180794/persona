@@ -141,7 +141,7 @@ func taskLine(h *Hub, todo Todo) string {
 	res, _ := h.asst().Context(context.Background(), assistant.ContextParams{SessionID: "conv1"})
 	text := res.Text
 	for _, l := range strings.Split(text, "\n") {
-		if strings.Contains(l, todo.Title+"（"+todo.ID+"）：") {
+		if strings.Contains(l, todo.Title+"（"+todo.ID+"）：") || strings.Contains(l, todo.Title+"（"+todo.ID+"，链接 ") {
 			return strings.TrimSpace(l)
 		}
 	}

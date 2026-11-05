@@ -1034,7 +1034,7 @@ func (s *Service) feedItem(ctx context.Context, id string) (*FeedItem, error) {
 // activeTasks are the tasks going on, as the inbox's judge and AI 分身 see them.
 func (s *Service) activeTasks(ctx context.Context) []prompts.InboxTask {
 	var out []prompts.InboxTask
-	for _, t := range s.snapshotTasks(ctx) {
+	for _, t := range s.snapshotTasks(ctx, "") {
 		if t.State == taskStateLabel("done") || t.State == taskStateLabel("auto_done") || t.State == taskStateLabel("failed") {
 			continue
 		}
@@ -1046,7 +1046,7 @@ func (s *Service) activeTasks(ctx context.Context) []prompts.InboxTask {
 // ---- what the assistant sees ----
 
 // snapshotTasks are the tasks opened from assistant conversations that are going on or ended in the last day.
-func (s *Service) snapshotTasks(ctx context.Context) []prompts.SnapshotTask {
+func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.SnapshotTask {
 	var list []Todo
 	for _, t := range s.todosOf(ctx, "*") {
 		if t.Origin != "" && (t.DoneAt == nil || time.Since(*t.DoneAt) < 24*time.Hour) && time.Since(t.UpdatedAt) < 7*24*time.Hour {
@@ -1064,7 +1064,9 @@ func (s *Service) snapshotTasks(ctx context.Context) []prompts.SnapshotTask {
 		if st == "done" && t.DoneBy == db.DoneByAuto {
 			st = "auto_done"
 		}
-		out = append(out, snapshotTask(t, st, agents, time.Now()))
+		task := snapshotTask(t, st, agents, time.Now())
+		task.Link = todoLink(web, t.ID)
+		out = append(out, task)
 		if len(out) == 12 {
 			break
 		}

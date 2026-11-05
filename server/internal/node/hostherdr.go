@@ -100,6 +100,23 @@ func (h *herdrHost) PaneProcesses(ctx context.Context, pane host.PaneRef) ([]int
 	return h.c.PaneProcesses(ctx, pane.ID)
 }
 
+// PaneForeground names each foreground program by what it was started as (argv0), else its process name.
+func (h *herdrHost) PaneForeground(ctx context.Context, pane host.PaneRef) ([]string, error) {
+	procs, err := h.c.PaneForeground(ctx, pane.ID)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(procs))
+	for _, p := range procs {
+		if p.Argv0 != "" {
+			names = append(names, p.Argv0)
+		} else {
+			names = append(names, p.Name)
+		}
+	}
+	return names, nil
+}
+
 func (h *herdrHost) ReportMetadata(ctx context.Context, pane host.PaneRef, source string, tokens map[string]*string) error {
 	return h.c.PaneReportMetadata(ctx, pane.ID, source, tokens)
 }

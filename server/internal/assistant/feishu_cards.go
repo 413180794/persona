@@ -356,14 +356,40 @@ func (s *Service) openButton(ctx context.Context, machine, session string) feish
 	st, _ := s.feishuStatusKept(ctx)
 	web := strings.TrimRight(st.PublicURL, "/")
 	if session != "" {
-		// A Persona conversation has its own page (/j/<id>, web/src/lib/router.ts); an agent is /s/<machine>/<id>.
-		if s.isAssistantConversation(ctx, machine, session) {
-			web += "/j/" + url.PathEscape(session)
-		} else {
-			web += "/s/" + url.PathEscape(machine) + "/" + url.PathEscape(session)
-		}
+		web = sessionLink(web, machine, session, s.isAssistantConversation(ctx, machine, session))
 	}
 	return feishubot.LinkBtn("打开网页版", web)
+}
+
+// webBase is the hub's web app (hub.json's public_url) without the trailing slash, "" when the hub does not say.
+// It only reads feishu.status (which carries the address whether the bot is on or not): unlike feishuStatus it
+// does not reconcile the bot's chat state, so the snapshot does not touch it.
+func (s *Service) webBase(ctx context.Context) string {
+	var st FeishuStatus
+	if err := s.appCall(ctx, AppFeishu, FeishuStatusGet, map[string]any{}, &st); err != nil {
+		return ""
+	}
+	return strings.TrimRight(st.PublicURL, "/")
+}
+
+// sessionLink is a conversation's page in the web app at web (web/src/lib/router.ts): a Persona conversation is
+// /j/<id>, an agent /s/<machine>/<id>; "" when web is.
+func sessionLink(web, machine, session string, assistant bool) string {
+	if web == "" {
+		return ""
+	}
+	if assistant {
+		return web + "/j/" + url.PathEscape(session)
+	}
+	return web + "/s/" + url.PathEscape(machine) + "/" + url.PathEscape(session)
+}
+
+// todoLink is a todo's page in the web app at web, "" when web is.
+func todoLink(web, id string) string {
+	if web == "" {
+		return ""
+	}
+	return web + "/todos?id=" + url.QueryEscape(id)
 }
 
 // --- card buttons ---

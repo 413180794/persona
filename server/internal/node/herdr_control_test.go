@@ -406,6 +406,7 @@ func TestHerdrStartOfALiveSessionAndWithoutHerdr(t *testing.T) {
 // (codexReady: a pane scrolled back reads the same).
 func TestHerdrSendFallsBackToTyping(t *testing.T) {
 	n, f, _ := herdrNode(t)
+	f.reply("pane.process_info", foreground([2]string{"zsh", "-zsh"}, [2]string{"node", "traex"}))
 	seedAgents(t, n, f,
 		agentOf("codex", sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/c", ""),
 		agentOf("codex", sidB, proto.StatusIdle, "w1:p2", "w1:t2", "w1", "/tmp/c", ""),
@@ -435,11 +436,13 @@ func TestHerdrSendFallsBackToTyping(t *testing.T) {
 	assertTrace(t, f.trace(), []string{
 		readCodexEnd("w1:p1"),
 		call("agent.prompt", map[string]any{"target": "w1:p1", "text": "line one\nline two"}),
-		call("pane.send_text", map[string]any{"pane_id": "w1:p1", "text": "line one\nline two"}),
+		call("pane.process_info", map[string]any{"pane_id": "w1:p1"}),
+		call("pane.send_text", map[string]any{"pane_id": "w1:p1", "text": pasteStart + "line one\nline two" + pasteEnd}),
 		sendKeys("w1:p1", "enter"),
 		readCodexEnd("w1:p2"),
 		call("agent.prompt", map[string]any{"target": "w1:p2", "text": "x"}),
-		call("pane.send_text", map[string]any{"pane_id": "w1:p2", "text": "x"}),
+		call("pane.process_info", map[string]any{"pane_id": "w1:p2"}),
+		call("pane.send_text", map[string]any{"pane_id": "w1:p2", "text": pasteStart + "x" + pasteEnd}),
 		sendKeys("w1:p2", "enter"),
 		readCodexEnd("w1:p3"),
 		call("agent.prompt", map[string]any{"target": "w1:p3", "text": "y"}),

@@ -311,9 +311,34 @@ func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
 				SessionID: "c1", State: proto.StateWorking, UpdatedAt: now, Activity: "在读 tasks.go", ActivityAt: &started}}, now),
 			got,
 		}}))
+	linked := got
+	linked.Link = todoLink("https://hub.example.com", "todo_1")
+	golden(t, "assistant_snapshot.links", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",
+		Needs: []prompts.SnapshotAgent{{Label: "修 CI", Machine: "mac-a", Session: "b00502b8", Line: "要你批准推送",
+			Link: sessionLink("https://hub.example.com", "mac-a", "b00502b8-82a3", false)}},
+		Tasks: []prompts.SnapshotTask{linked}}))
 
 	lead.State, lead.Subagents = proto.StateUnread, nil
 	if got = snapshotTask(todo, "unread", []proto.Session{lead}, now); got.Doing != "" || got.DoingFor != "" || got.Last == "" {
 		t.Fatalf("stopped: its words, not the step it stopped on: %+v", got)
+	}
+}
+
+// The snapshot's links are the web app's own routes (web/src/lib/router.ts), on the hub's public_url; none without
+// one (#2194).
+func TestSnapshotLinks(t *testing.T) {
+	web := "https://hub.example.com"
+	for _, c := range []struct{ got, want string }{
+		{sessionLink(web, "mac-a", "b00502b8-82a3", false), web + "/s/mac-a/b00502b8-82a3"},
+		{sessionLink(web, "mac a", "x/y", false), web + "/s/mac%20a/x%2Fy"},
+		{sessionLink(web, "mac-a", "c1", true), web + "/j/c1"},
+		{todoLink(web, "todo_1"), web + "/todos?id=todo_1"},
+		{todoLink(web, "a&b"), web + "/todos?id=a%26b"},
+		{sessionLink("", "mac-a", "c1", false), ""},
+		{todoLink("", "todo_1"), ""},
+	} {
+		if c.got != c.want {
+			t.Errorf("got %q, want %q", c.got, c.want)
+		}
 	}
 }

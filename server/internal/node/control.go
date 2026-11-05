@@ -583,17 +583,50 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 }
 
 // prompt submits text to the agent in a pane. A host only prompts agents it detects (herdr); for the others (TRAEX)
-// the text is typed into the pane and enter pressed.
+// the text is pasted into the pane and enter pressed, only while a program other than a shell runs in front of it
+// (typeable).
 func (n *Node) prompt(ctx context.Context, pane, text string) error {
 	err := n.hostPrompt(ctx, pane, text)
 	if err == nil || !errors.Is(err, host.ErrNoAgent) {
 		return err
 	}
-	if err := n.sendText(ctx, pane, text); err != nil {
+	if err := n.typeable(ctx, pane); err != nil {
+		return err
+	}
+	paste := pasteStart + strings.ReplaceAll(text, "\x1b", inertEscape) + pasteEnd
+	if err := n.sendText(ctx, pane, paste); err != nil {
 		return err
 	}
 	time.Sleep(150 * time.Millisecond) // the TUI takes the pasted text before the enter that submits it
 	return n.sendKeys(ctx, pane, "enter")
+}
+
+// errShellOnly: the pane runs nothing but a shell in front (its agent exited), which would run typed text as a
+// command; nothing was typed (#1185).
+var errShellOnly = errors.New("only a shell in the pane")
+
+// typeable: a pane whose agent the host does not know takes typed text only while a program other than a shell runs
+// in front of it. The shell itself is in front once the agent exits, so "any process" is not enough, and pasting does
+// not help: the enter after it runs the whole paste. A host that cannot say, or a failed check, types nothing.
+func (n *Node) typeable(ctx context.Context, pane string) error {
+	h, ref, err := n.paneHost(pane)
+	if err != nil {
+		return err
+	}
+	f, ok := h.(host.ForegroundNamer)
+	if !ok {
+		return host.Mark(fmt.Errorf("%s cannot say what runs in %s", h.Kind(), pane), host.ErrNotDelivered)
+	}
+	names, err := f.PaneForeground(ctx, ref)
+	if err != nil {
+		return host.Mark(fmt.Errorf("cannot check what runs in %s: %w", pane, err), host.ErrNotDelivered)
+	}
+	for _, name := range names {
+		if !shellProgram(name) {
+			return nil
+		}
+	}
+	return host.Mark(host.Mark(fmt.Errorf("no agent runs in %s, only %q", pane, names), host.ErrNotDelivered), errShellOnly)
 }
 
 func (n *Node) saveImages(images []proto.Image) ([]string, error) {

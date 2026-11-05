@@ -95,8 +95,9 @@ func (s *Service) takeSnapshot(done chan struct{}) {
 	for _, m := range devices {
 		snap.Machines = append(snap.Machines, prompts.SnapshotMachine{Name: m.Name, ID: m.ID, Online: m.Online})
 	}
-	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Working = s.snapshotAgents(ctx, devices)
-	snap.Tasks = s.snapshotTasks(ctx)
+	web := s.webBase(ctx) // the agents' and tasks' links (#2194)
+	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Working = s.snapshotAgents(ctx, devices, web)
+	snap.Tasks = s.snapshotTasks(ctx, web)
 	if e, err := s.kbGet(ctx); err == nil {
 		snap.KB = e.Prompt(6, 8)
 	}
@@ -123,15 +124,16 @@ func (s *Service) ProfileChanged(context.Context) {
 }
 
 // snapshotAgents sorts the agents by what they need: the work state (agents_work.go, docs/agent-work.md) says what a stopped one
-// waits for or concluded.
-func (s *Service) snapshotAgents(ctx context.Context, devices []Device) (needs, unread, waiting, done []prompts.SnapshotAgent, working []string) {
+// waits for or concluded. Each has its page in the web app at web ("" for none).
+func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web string) (needs, unread, waiting, done []prompts.SnapshotAgent, working []string) {
 	for _, m := range devices {
 		list, _ := s.sessions(ctx, m.ID)
 		for _, c := range list {
 			if c.Assistant {
 				continue
 			}
-			a := prompts.SnapshotAgent{Label: agentLabel(c), Machine: m.ID, Session: short(c.SessionID)}
+			a := prompts.SnapshotAgent{Label: agentLabel(c), Machine: m.ID, Session: short(c.SessionID),
+				Link: sessionLink(web, m.ID, c.SessionID, false)}
 			w := c.Work
 			if w != nil && w.Phase != proto.WorkWorking {
 				a.Line = w.Line

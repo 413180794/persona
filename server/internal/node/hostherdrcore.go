@@ -372,11 +372,11 @@ var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "fish": true
 
 // isShell: the foreground program is a shell (a login shell's name starts with "-").
 func isShell(fg *herdrcore.Foreground) bool {
-	if shells[strings.TrimPrefix(fg.Name, "-")] {
-		return true
-	}
-	return len(fg.Argv) > 0 && shells[strings.TrimPrefix(filepath.Base(fg.Argv[0]), "-")]
+	return shellProgram(fg.Name) || len(fg.Argv) > 0 && shellProgram(fg.Argv[0])
 }
+
+// shellProgram: a program name or path ("-zsh", "/bin/bash") is a shell's.
+func shellProgram(name string) bool { return shells[strings.TrimPrefix(filepath.Base(name), "-")] }
 
 // nestedHerdr: the terminal's foreground program is classic herdr's client. The claude in one of herdr's panes may
 // report its OSC 7501 state through it, so this terminal would look like claude's own; it is not an agent here.

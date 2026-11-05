@@ -177,6 +177,7 @@ func normalSnapshot(t *testing.T, s string) string {
 
 func snapshotHub(t *testing.T, full bool) *Hub {
 	h := newTestHub(t)
+	h.cfg.PublicURL = "http://hub.example.com:18660" // the default names this machine, and it shows in the links
 	putAssistantSettings(t, h, assistant.Settings{Timezone: "Asia/Shanghai"})
 	goldenMachines(h)
 	h.connectors = connector.NewRegistry(nil)

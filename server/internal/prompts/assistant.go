@@ -39,6 +39,7 @@ type SnapshotMachine struct {
 type SnapshotAgent struct {
 	Label, Machine, Session string // Session: the short id
 	Line                    string // what it waits for, or what it concluded ("" when not known)
+	Link                    string // its page in the hub's web app ("" when the hub has no public_url)
 }
 
 type SnapshotChat struct {
@@ -77,6 +78,7 @@ type SnapshotTask struct {
 	// yet, and DoingFor how long that step has gone on ("3 分钟"), "" when unknown or not working.
 	Doing, DoingFor string
 	Subagents       []string // that agent's running subagents, what each is for: on top of its own step, never instead
+	Link            string   // the todo's page in the hub's web app ("" when the hub has no public_url)
 }
 
 // Snapshot is the live context a starting assistant gets in its system prompt.

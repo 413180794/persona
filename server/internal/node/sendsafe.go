@@ -160,6 +160,7 @@ func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) err
 const (
 	notDelivered        = "not_delivered"
 	notDeliveredMessage = "电脑上的终端这次没有收下这条消息，什么都没输入：稍后再发。"
+	shellOnlyMessage    = "这个会话的 Agent 已经退出，终端回到了命令行，这条消息没有发出去（什么都没输入）：在电脑上重新打开它再发。"
 	cannotType          = "cannot_type"
 	cannotTypeMessage   = "电脑上的这个终端只能整条发送（粘贴后回车），不能只输入文字，这次什么都没按：在电脑上回答，或者直接发消息。"
 )
@@ -171,6 +172,9 @@ func deliveryRefusal(err error) error {
 	}
 	if errors.Is(err, host.ErrDialogOpen) {
 		return refusal(screen.DialogOpen, dialogMessage, nil)
+	}
+	if errors.Is(err, errShellOnly) {
+		return refusal(notRunning, shellOnlyMessage, nil)
 	}
 	return refusal(notDelivered, notDeliveredMessage, nil)
 }

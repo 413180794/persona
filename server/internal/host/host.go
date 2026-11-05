@@ -83,6 +83,13 @@ type TextTyper interface {
 	CanTypeText() bool
 }
 
+// ForegroundNamer is a host that can name the programs a pane runs in front (herdr: pane.process_info), a login
+// shell's with its leading "-". The node types a message into a pane whose agent the host does not know only while
+// one of them is not a shell: once the agent exits, the shell would run it as a command (#1185).
+type ForegroundNamer interface {
+	PaneForeground(ctx context.Context, pane PaneRef) ([]string, error)
+}
+
 // SpaceLister lists spaces without requiring an agent or permission to launch one.
 type SpaceLister interface {
 	Spaces(ctx context.Context) ([]Space, error)
