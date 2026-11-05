@@ -80,6 +80,8 @@ extension Theme {
         static let gitUpstream = "cloud"
         static let gitNoUpstream = "icloud.slash"
         static let retry = "arrow.clockwise"
+        /// Loads the in-app page again (the link sheet's header).
+        static let reload = "arrow.clockwise"
         static let undo = "arrow.uturn.backward"
         static let interrupt = "stop.fill"
         static let stopLoop = "stop.circle"
@@ -340,17 +342,7 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video's thumbnail: it plays elsewhere (the chat app).
-        static let playMedia = "play.circle.fill"
-        /// Send someone a message.
-        static let message = "bubble.left.fill"
-        static let credentials = "key"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
-        /// Feishu [removed] words: encoded for the eye, not encrypted.
-        static let braveClimb = "shield"
-        static let memory = "brain"
-        /// Search (a list's, the sidebar's).
+        /// A video''s, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

@@ -4926,12 +4926,15 @@ header{padding:56px 24px 24px}h1{font-size:34px;margin:0 0 8px}p{color:var(--mut
 .big{font-size:56px;font-weight:700}</style></head><body>
 <header><h1 id="headline">明天有雨</h1><p>本地开发服务器 · 热更新已连接</p></header>
 <div class="card"><div class="big">18℃</div><p>降雨概率 70%，记得带伞</p></div>
-<div class="card"><p>这是 Agent 在电脑上起的页面，通过 hub 转发到手机。</p></div>
+<div class="card"><p>这是 Agent 在电脑上起的页面，通过 hub 转发到手机。</p><p id="loads">第 {n} 次加载</p></div>
 </body></html>"""
+    _loads = [0]  # how many times the page itself was asked for: a reopen or 刷新 loads it again (PortForwardTests)
 
     class _Dev(BaseHTTPRequestHandler):
         def do_GET(self):
-            b = _page.encode()
+            if self.path.split("?")[0] == "/":
+                _loads[0] += 1
+            b = _page.replace("{n}", str(_loads[0])).encode()
             self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
 

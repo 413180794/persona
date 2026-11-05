@@ -65,7 +65,9 @@ WKWebView ─ http://localhost:5173 ─▶ 本机 127.0.0.1:5173（App 监听）
 - 打开前先问 hub：端口在某个 Agent 的 `ports` 里就直接开；不在就 `POST …/open`（用户明确点开），没在听就提示「端口 :N 已经没有在监听」，
   Badge 变灰。
 - 网页卡片就是普通链接的那个（`LinkSheet`），标题栏下面写「机器名 :端口」；菜单里没有「在 Safari 打开」「分享」
-  （手机回环上的地址对别的 App 没意义）。dev server 的页面不走磁盘缓存（`reloadIgnoringLocalCacheData`），每次都是新的。
+  （手机回环上的地址对别的 App 没意义）。dev server 的页面不走磁盘缓存（`reloadIgnoringLocalCacheData`）。端口页的地址每次一样，`WebViewPool` 会拿到上次那个 WKWebView：
+  取出来时重新加载（正在加载的不打断），不然看到的是上次关掉时的页面（2026-11-05，#1934）。顶栏的刷新按钮（`link-reload`）用 `reloadFromOrigin`
+  再要一次，飞书原生页面没有它。
 - Mac App 用同一套代码；沙盒要 `com.apple.security.network.server`（只在回环上监听）。
 
 ### hub（`server/internal/hub/ports.go`）和流（`server/internal/streams`）

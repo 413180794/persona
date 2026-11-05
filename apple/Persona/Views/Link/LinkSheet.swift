@@ -156,6 +156,11 @@ struct LinkSheet: View {
                 Button { pick("", kind: "context") } label: { Image(systemName: Theme.Icon.addContext) }
                     .accessibilityLabel("把这篇文档作为上下文")
             }
+            if feishuRoute == nil {
+                Button { Haptics.tap(); WebViewPool.shared.reload(target.url) } label: { Image(systemName: Theme.Icon.reload) }
+                    .accessibilityLabel("刷新")
+                    .accessibilityIdentifier("link-reload")
+            }
             Menu {
                 Button { UIPasteboard.general.url = target.url; Haptics.success() } label: { Label("拷贝链接", systemImage: Theme.Icon.link) }
                 if target.forwarded == nil { browserItems } // the phone's loopback means nothing to another app
@@ -224,21 +229,23 @@ final class WebViewPool {
         return c
     }()
 
-    /// A view for this url, already loading (or loaded) if it was preloaded.
+    /// A view for this url, already loading (or loaded) if it was preloaded. A machine's dev server (the phone's
+    /// loopback) loads again when its view is taken again: its page changes as the agent works, and the old view
+    /// still showed the page as it was last closed (2026-11-05, #1934).
     func view(for url: URL) -> SelectableWebView {
         let key = url.absoluteString
-        if let v = views[key] { touch(key); return v }
+        if let v = views[key] {
+            touch(key)
+            if Self.isLoopback(url), !v.isLoading { v.load(Self.request(url)) }
+            return v
+        }
         let v = SelectableWebView(frame: .zero, configuration: config)
         #if os(iOS) || os(visionOS)
         v.scrollView.showsVerticalScrollIndicator = false
         v.scrollView.showsHorizontalScrollIndicator = false
         #endif
         v.allowsBackForwardNavigationGestures = true
-        var req = URLRequest(url: url)
-        // A page seen before paints from disk at once; a machine's dev server (the phone's loopback) is always asked:
-        // its page changes as the agent works.
-        req.cachePolicy = ["localhost", "127.0.0.1"].contains(url.host() ?? "") ? .reloadIgnoringLocalCacheData : .returnCacheDataElseLoad
-        v.load(req)
+        v.load(Self.request(url))
         views[key] = v
         touch(key)
         return v
@@ -246,6 +253,22 @@ final class WebViewPool {
 
     /// The view for this url if the pool has one (nothing is loaded).
     func existing(for url: URL) -> SelectableWebView? { views[url.absoluteString] }
+
+    /// The sheet's 刷新: the page again from the server, not from the cache. A view that never got a page (its first
+    /// load failed: `url` is nil) loads it afresh.
+    func reload(_ url: URL) {
+        guard let v = views[url.absoluteString] else { return }
+        if v.url == nil { v.load(Self.request(url)) } else { v.reloadFromOrigin() }
+    }
+
+    /// A page seen before paints from disk at once; a machine's dev server (the phone's loopback) is always asked.
+    private static func request(_ url: URL) -> URLRequest {
+        var req = URLRequest(url: url)
+        req.cachePolicy = isLoopback(url) ? .reloadIgnoringLocalCacheData : .returnCacheDataElseLoad
+        return req
+    }
+
+    private static func isLoopback(_ url: URL) -> Bool { ["localhost", "127.0.0.1"].contains(url.host() ?? "") }
 
     /// Starts loading links that may be opened soon (not the ones a native Feishu view opens).
     func preload(_ urls: [URL]) {

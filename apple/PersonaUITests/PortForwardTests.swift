@@ -59,6 +59,24 @@ final class PortForwardTests: XCTestCase {
         let connects = try json("/mock/ports")["connects"] as? [[String: Any]] ?? []
         XCTAssertTrue(connects.contains { $0["port"] as? Int == port && $0["machine_id"] as? String == "macbook" },
                       "the page did not come through …/ports/\(port)/connect: \(connects)")
+        // 刷新 asks the page again; closed and opened again, it is a new load too, not the page as it was (#1934).
+        let loads = { () -> Int in
+            let t = app.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '第 '")).firstMatch
+            return t.exists ? Int(t.label.split(separator: " ")[1]) ?? 0 : 0
+        }
+        let first = loads()
+        XCTAssertGreaterThan(first, 0, "the page has no load count:\n\(app.debugDescription)")
+        app.buttons["link-reload"].tap()
+        expectation(for: NSPredicate { _, _ in loads() > first }, evaluatedWith: NSNull())
+        waitForExpectations(timeout: 10)
+        let afterReload = loads()
+        app.buttons["关闭"].firstMatch.tap()
+        sleep(1)
+        chips.element(boundBy: chips.count - 1).tap()
+        XCTAssertTrue(headline.waitForExistence(timeout: 20), "the page did not open again")
+        expectation(for: NSPredicate { _, _ in loads() > afterReload }, evaluatedWith: NSNull())
+        waitForExpectations(timeout: 10)
+        shot(app, "reopened")
         app.buttons["关闭"].firstMatch.tap()
 
         // The stopped one says why it cannot open.
