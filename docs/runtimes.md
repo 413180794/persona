@@ -110,7 +110,10 @@ runtime 之间共用、但不属于协议的，也在 SDK 里，各 runtime 直�
   `phone` / `local` 固定一边。手机上「交回电脑」、过期都回 `{dismiss: true}`，runtime 再交给本地界面，所以不会两边都没人管。
 - **卡片是 runtime 自己的**：node 给它问的卡标上 `agent`（runtime 跑的 Agent）和 `agent_label`（它的名字），App 按「别的 Agent 的卡」画
   （和 Codex 的卡同一种：「DSH 需要你授权」、同意 / 拒绝、`reason` 放在命令上面），「总是同意」只在卡片带 `always_label`（说清楚总是同意的是什么）时出现，
-  runtime 做不到就别给。runtime 跑的是 Claude Code（`agent: "claude"`）时按 Claude 的卡画。
+  runtime 做不到就别给。`always_label` 本身只是文字，「总是」由 runtime 自己落实（opencode 的 save 规则、Paseo 的 suggestions 都比整个工具窄）。
+  runtime 自己记不住会话规则时，在 hello 里声明 `caps.keep_always: true`（SDK 的 `keepAlways`，DSH 这样做）：它的 `permission` 卡带了 `always_label`，
+  node 才写 `always_keys: ["runtime:<runtime id>:tool:<tool_name>"]`，hub 按会话 id 记住，之后同一会话同一工具的卡由 hub 直接回「允许 + 总是」（#3974）。
+  runtime 传来的 `always_keys` 一律清掉；没声明 `keep_always` 的 runtime、健康空间、带 `fields` 的卡都不写 key。runtime 跑的是 Claude Code（`agent: "claude"`）时按 Claude 的卡画。
 - **拒绝时写的话**：`Resolution.message`。runtime 的授权能带理由就带上；带不了就先拒绝、再把这句话 steer 进这一轮（DSH 这样做）。
 - **「需要你」不等于有卡**：会话在本地界面等人时报 `blocked`，手机上显示「需要你」，hub 不会去读屏幕造一张终端卡（没有终端能力的会话一律不造）。
 - 有就用 runtime 自己的「定时提问」：本地先超时的，手机上的卡可以留着，晚到的回答再交回 runtime（DSH 的 `userQuestions.answer`）。

@@ -231,3 +231,21 @@ func (c *replierConnector) Reply(_ context.Context, r connector.InboxReply) erro
 	c.got = append(c.got, r)
 	return nil
 }
+
+// An item the user filed while its AI 分身 worked (已处理, 忽略, read and filed elsewhere) needs nothing more: the
+// draft that comes in after puts no card with 发送 in the task's conversation.
+func TestMessageCardNotForAFiledItem(t *testing.T) {
+	for _, by := range []string{"user", "dismissed", "read"} {
+		h, rc, it := cardHub(t)
+		h.inbox.mu.Lock()
+		it.done(time.Now(), by)
+		h.inbox.mu.Unlock()
+		draft(t, h, "在修了")
+		if got := cards(t, h, time.Time{}); len(got) != 0 {
+			t.Fatalf("filed by %s: a card to send: %+v", by, got)
+		}
+		if len(rc.got) != 0 {
+			t.Fatalf("filed by %s: sent %+v", by, rc.got)
+		}
+	}
+}

@@ -3,6 +3,7 @@ package screen
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
@@ -38,6 +39,9 @@ type Dialog struct {
 	Rev        string `json:"rev"`
 	// Cursor is where the dialog's ❯ is: an option's key, CursorSubmit on the Submit / Next row, "" when unseen.
 	Cursor string `json:"-"`
+	// window is hashed into Rev and shown nowhere: where a scrolled list's rows sit in it (the /rewind list's
+	// "↑ 1 more"), so the same rows one step further down are another dialog.
+	window string
 }
 
 // Step is a question of a multi-question dialog: its header, and whether it has an answer.
@@ -100,7 +104,50 @@ func ParseDialog(plain string) *Dialog {
 	if d := numbered(lines); d != nil {
 		return d
 	}
+	if d := rewindList(lines); d != nil {
+		return d
+	}
 	return unnumbered(lines)
+}
+
+// rewindList reads Claude Code's /rewind list as a dialog: one option per prompt row, the row under it ("notes.txt
+// +1 -1", "No code changes") its detail (#4306). unnumbered took that row for an option of its own, so the card had
+// an extra button and every button below it moved the cursor one prompt too far. Enter on a prompt only opens the
+// confirmation screen, which numbered reads. The (current) row is no prompt to go back to and is left out; with the
+// cursor on it nothing is read, as before.
+func rewindList(lines []string) *Dialog {
+	if !Choosing(strings.Join(lines, "\n")) {
+		return nil
+	}
+	r := ParseRewind(strings.Join(lines[dialogTop(lines):], "\n")) // a panel in the conversation above picks nothing
+	if r == nil || r.Kind != RewindList {
+		return nil
+	}
+	cur := slices.IndexFunc(r.Rows, func(row RewindRow) bool { return row.Selected })
+	if cur < 0 || r.Rows[cur].Current {
+		return nil
+	}
+	// The prompts often repeat (「继续」 with no code changes): scrolled one row, the window looks the same.
+	d := &Dialog{Question: rewindListQuestion, window: fmt.Sprintf("%d/%d", r.Above, r.Below)}
+	for i, row := range r.Rows {
+		if row.Current {
+			continue
+		}
+		var keys []string
+		for k := cur; k < i; k++ {
+			keys = append(keys, "down")
+		}
+		for k := i; k < cur; k++ {
+			keys = append(keys, "up")
+		}
+		key := strconv.Itoa(len(d.Options) + 1)
+		if i == cur {
+			d.Cursor = key
+		}
+		d.Options = append(d.Options, Option{Key: key, Label: row.Text, Detail: row.Changes, Keys: append(keys, "enter")})
+	}
+	d.hash()
+	return d
 }
 
 type row struct {
@@ -378,8 +425,16 @@ func (d *Dialog) describe(lines []string, first int) {
 	default:
 		d.Question, d.Header = d.Header, ""
 	}
+	d.hash()
+}
+
+// hash sets Rev from what the dialog asks and offers.
+func (d *Dialog) hash() {
 	h := sha256.New()
 	h.Write([]byte(d.Header + "\x00" + d.Question + "\x00" + d.Detail))
+	if d.window != "" {
+		h.Write([]byte("\x00" + d.window))
+	}
 	for _, o := range d.Options {
 		label := o.Label
 		if o.Kind == KindTypeSomething { // its label is what is typed into it until it is read back as Text

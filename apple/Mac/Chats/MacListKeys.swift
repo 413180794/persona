@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// The keys of Agents' and Persona's lists, as 收件箱's (#2113): ⏎ and Tab go to the open conversation's composer, Delete
-/// asks to delete (Agents) or archives (Persona) it; ⇧Tab in a composer comes back (`MacShellState.focusList`). ↑ / ↓
+/// The keys of Agents' and Persona's lists, as 收件箱's (#2113): ⏎ and plain Tab go to the open conversation's
+/// composer, Delete asks to delete (Agents) or archives (Persona) it; ⇧Tab is left for the system's reverse focus
+/// traversal (⇧Tab in a composer comes back: `MacShellState.focusList`). ↑ / ↓
 /// are a selecting list's own (`MacSelectingList`, Persona's), or `move`'s (Agents', which does not select: #2213).
 struct MacListKeys: ViewModifier {
     /// The open conversation: what the keys act on.
@@ -16,7 +17,10 @@ struct MacListKeys: ViewModifier {
         content
             .focused($isFocused)
             .onKeyPress(.return) { toComposer() }
-            .onKeyPress(.tab) { toComposer() }
+            .onKeyPress(.tab, phases: .down) { press in
+                guard MacTabKey.movesToComposer(modifiers: press.modifiers) else { return .ignored }
+                return toComposer()
+            }
             .onKeyPress(.upArrow) { step(-1) }
             .onKeyPress(.downArrow) { step(1) }
             .onDeleteCommand { if let key = current() { delete?(key) } }
@@ -34,6 +38,13 @@ struct MacListKeys: ViewModifier {
         AppModel.shared.composerFocus = key
         return .handled
     }
+}
+
+/// Whether Tab in an Agents/Persona list moves focus to the open conversation's composer. Plain Tab does; ⇧Tab does
+/// not, so the system can use it for reverse focus traversal. Otherwise the composer's ⇧Tab (`focusListAgain`) sends
+/// focus back to the list, which forwards it to the composer again — focus ping-pongs and never leaves (#3549).
+nonisolated enum MacTabKey {
+    static func movesToComposer(modifiers: EventModifiers) -> Bool { !modifiers.contains(.shift) }
 }
 
 /// The Agents list's rows in order and a way to scroll to one (`ChatsView`); not observed: the keys read it.

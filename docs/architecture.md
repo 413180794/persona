@@ -69,6 +69,24 @@ hub 保留 `listen`（默认 HTTP `:18660`），TLS 用 `public.tls_listen` 单�
   Paseo 是例外：它没有终端、经 runtime 协议接入（node 自己运行它的桥），却是一台机器可选的引擎，新建和接着会话都交给它（`docs/paseo.md`）。
 - **hub 在一台常开的机器上**：它常在线、能连 Gmail（已验证 imap.gmail.com:993 / smtp.gmail.com:465 直连可达），所有 Mac 都经它中转。
 
+## hub 只做沟通中心
+
+hub 只管沟通：App 等客户端 ↔ 管理者、hub ↔ hub（互联）、连接（WebSocket、node / 连接器的链路）、配对和鉴权、管理界面、推送投递、各种中转。
+业务都在管理者里（`server/internal/assistant`、`devices`、`extmgr`；见 `docs/machines.md`、`docs/extensions.md`「谁管什么」、`docs/assistant.md`）：
+助手、收件箱、待办、额度、看板、扩展、设备的数据，还有调模型（分诊、标题、摘要、判断）。hub 只把这些接口原样转给管理者（`assistantwire.Routes`、`devicewire.Routes`、`extwire.Routes`）。
+
+`server/internal/hub/architecture_guard_test.go` 把 hub 现在的样子钉住，往错的方向长就失败：
+
+- **hub 自己回答的路由** = `testdata/hub_routes_allowed.txt`（在 hub 包里用字面量注册、又不在上面三张转发表里的）。新加的业务接口写在管理者里，
+  再把路由加进对应的转发表；确实是 hub 自己的（连接、配对 / 鉴权、管理、推送投递、中转）才手动在清单里加一行。删了路由也要删行（多出来的行同样失败）。
+  行尾 `# moving to the manager` 的是正在挪进管理者的（额度窗口、工作区看板），挪完连行一起删。
+- **依赖**：hub 的依赖里不能有管理者的包（`assistant`、`assistantskills`、`devices`、`extmgr`、`extension/host`、`agents`、`mail`、`office`、`feishubot`、`wechat`、`node`、`mcpserver`）
+  和 `connector/` 下的连接器实现；`connector`、`kb` 只能经 wire 包间接带进来，hub 自己不 import。
+- **不调模型**：hub 只用 `internal/ai` 的 `ai.Config`（读配置、转交），代码里也不出现模型 API 的地址。
+- **Store** 的方法 = `testdata/hub_store_methods.txt`：新的业务表放管理者自己的存储，不往 `hub.Store` 加。
+
+清单都是手改的，没有自动重写的开关：改清单的那一行会出现在 PR 的 diff 里，评审时看它是不是真的属于 hub。
+
 ## 关键流程
 
 ### 新建会话

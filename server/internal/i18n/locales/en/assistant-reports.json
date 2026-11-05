@@ -1,6 +1,7 @@
 {
   "title": "Task progress: {n}",
   "title_needs": "{n} need your call",
+  "part": " ({k}/{n})",
   "decide": "🙋 Your call",
   "progress": "📈 Progress",
   "state_needs": "🙋 Waiting for you",

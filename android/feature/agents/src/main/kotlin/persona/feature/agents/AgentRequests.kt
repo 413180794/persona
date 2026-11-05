@@ -8,6 +8,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.*
@@ -63,7 +66,8 @@ internal fun RequestCard(
                         question?.options?.forEachIndexed { index, option ->
                             val label = AnswerBuilder.display(option.label)
                             DecisionOption(label.text, { onAnswer(request, AnswerAction.PickOption, AnswerDraft(optionIndex = index), false) },
-                                detail = option.description, recommended = label.recommended, enabled = enabled)
+                                detail = option.description, recommended = label.recommended, enabled = enabled,
+                                position = index + 1 to question.options.size)
                         }
                     }
                     else -> Text(markdownPreview(cardSummary), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink,
@@ -159,7 +163,8 @@ internal fun RequestDetail(
                 onVisibilityChanged = { linkVisible = it }) { inset ->
                 Column(Modifier.fillMaxSize().padding(bottom = inset).imePadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     JRow(request.headline.text(), subtitle = request.sessionTitle, leadingIcon = request.decisionKind.icon)
-                    delivery?.let { RequestDeliveryStatus(it) }
+                    // The editor below announces 正在发送 itself; announcing it here too would say it twice.
+                    delivery?.let { RequestDeliveryStatus(it, live = false) }
                     if (!online && !readOnly) Text(stringResource(R.string.agents_request_offline), style = PersonaTheme.type.caption, color = PersonaTheme.palette.cautionText)
                     Box(Modifier.weight(1f)) {
                         persona.feature.chat.RequestEditor(request, machine, busy = delivery != null, uncertain = delivery == RequestDelivery.Unknown,
@@ -179,11 +184,14 @@ internal fun RequestDetail(
 }
 
 @Composable
-private fun RequestDeliveryStatus(delivery: RequestDelivery) {
-    when (delivery) {
-        RequestDelivery.Sending -> PendingBadge(PendingStatus.Sending)
-        RequestDelivery.Unknown -> PendingBadge(PendingStatus.Unconfirmed)
-        RequestDelivery.Sent -> JTag(stringResource(R.string.agents_request_sent), status = Status.Unread)
+private fun RequestDeliveryStatus(delivery: RequestDelivery, live: Boolean = true) {
+    // A live region, so a screen reader hears 发送中 / 已回传 after an answer without looking for it.
+    Box(if (live) Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite } else Modifier) {
+        when (delivery) {
+            RequestDelivery.Sending -> PendingBadge(PendingStatus.Sending)
+            RequestDelivery.Unknown -> PendingBadge(PendingStatus.Unconfirmed)
+            RequestDelivery.Sent -> JTag(stringResource(R.string.agents_request_sent), status = Status.Unread)
+        }
     }
 }
 

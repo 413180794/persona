@@ -84,6 +84,10 @@ type runtimeHello struct {
 		// Resume: session.start with resume takes a Claude session it does not have over, under that id (the machine's
 		// engine continuing a session not running anywhere, runtimecontrol.go).
 		Resume bool `json:"resume"`
+		// KeepAlways: the runtime keeps no session rule of its own and asks the hub to remember 本会话总是允许 for it
+		// (#3974): its permission cards that offer always get the node's key for the tool. A runtime that keeps its own
+		// rule (opencode's save rule, Paseo's suggestions) does not say it, so its grant is never widened to the tool.
+		KeepAlways bool `json:"keep_always"`
 	} `json:"caps"`
 }
 
@@ -907,6 +911,19 @@ func (n *Node) runtimeAsk(ctx context.Context, h *runtimeConn, params json.RawMe
 	}
 	now := time.Now().UTC()
 	ix.MachineID, ix.Screen, ix.Dialog, ix.Secret = "", "", nil, false
+	// 本会话总是允许 kept by the hub for a runtime's permission card (#3974): what it grants is the node's word, never
+	// the runtime's — one key for this runtime's tool, which the manager keeps under this session id, so it never
+	// reaches another session or another tool. Only for a runtime that asked for it in its hello (caps.keep_always: it
+	// keeps no rule itself; a runtime whose always is a narrower rule of its own must not get the whole tool), only
+	// when the card offers it (an always_label), and never in the health space or on a card with fields.
+	h.mu.Lock()
+	keepAlways := h.hello.Caps.KeepAlways
+	h.mu.Unlock()
+	ix.AlwaysKeys = nil
+	if keepAlways && ix.Kind == proto.IxPermission && strings.TrimSpace(ix.AlwaysLabel) != "" && strings.TrimSpace(ix.ToolName) != "" &&
+		len(ix.Fields) == 0 && !runtimeHealth(h, ix) {
+		ix.AlwaysKeys = []string{"runtime:" + rt + ":tool:" + ix.ToolName}
+	}
 	ix.CreatedAt = now
 	timeout := HookTimeout
 	if p.TimeoutSeconds > 0 && time.Duration(p.TimeoutSeconds)*time.Second < timeout {
@@ -935,6 +952,16 @@ func (n *Node) runtimeAsk(ctx context.Context, h *runtimeConn, params json.RawMe
 		return proto.Resolution{Dismiss: true}, nil
 	}
 	return res, nil
+}
+
+// runtimeHealth: the card's session is in the health space (its cwd or the row's), where every write is confirmed
+// (docs/health.md「外发」).
+func runtimeHealth(h *runtimeConn, ix proto.Interaction) bool {
+	if identity.SpaceOf(ix.Cwd) == identity.SpaceHealth {
+		return true
+	}
+	s, ok := h.row(ix.SessionID)
+	return ok && (s.Space == identity.SpaceHealth || identity.SpaceOf(s.Cwd) == identity.SpaceHealth)
 }
 
 // setResume records how the engine resumes the sessions this runtime lists (resume_argv), replacing the last list's.

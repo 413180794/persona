@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -254,5 +255,78 @@ func TestPassWordsParticles(t *testing.T) {
 		if passWords.MatchString(in) {
 			t.Errorf("%q must not count as approval", in)
 		}
+	}
+}
+
+// A 请验收 card whose task ends without the hub's auto-judge — the owner closes it in the todos, or a supervision
+// review does — can never be passed: it is neither reminded nor counted in the morning briefing, and is dropped.
+func TestAcceptanceAskEndedElsewhere(t *testing.T) {
+	cases := []struct {
+		name string
+		end  func(ctx context.Context, s *Service, id string)
+		kept bool
+	}{
+		{"closed manually", func(_ context.Context, s *Service, id string) {
+			done := time.Now()
+			s.todos.mu.Lock()
+			s.todos.todos[id].DoneAt, s.todos.todos[id].DoneBy, s.todos.todos[id].DoneReason = &done, "", ""
+			s.todos.mu.Unlock()
+		}, false},
+		{"closed by a review", func(ctx context.Context, s *Service, id string) {
+			if ok, err := s.reviewDoneTodo(ctx, id, "验收通过"); err != nil || !ok {
+				t.Fatalf("review done: %v %v", ok, err)
+			}
+		}, false},
+		{"closed by the auto judge", func(ctx context.Context, s *Service, id string) {
+			if ok, err := s.autoDoneTodo(ctx, id, "做完了", time.Now().Add(-time.Minute)); err != nil || !ok {
+				t.Fatalf("auto done: %v %v", ok, err)
+			}
+		}, true},
+		{"still open", func(context.Context, *Service, string) {}, true},
+	}
+	// setup deploys a task until its 请验收 card is out; the case then ends it.
+	setup := func(t *testing.T) (*Service, *fakeHub, func() []string, string) {
+		s, f, posts := acceptService(t)
+		todo := startedTask(t, s, f)
+		agentTurn(s, f, proto.StatusWorking, "", 0)
+		agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+		// Wait for the final ask (MessageID is set only after botPost returns): backdating AskedAt must not race the
+		// post-botPost replacement of the claimed placeholder.
+		waitFor(t, "the 请验收 card", func() bool {
+			a := askOf(s, todo.ID)
+			return acceptCardOf(posts()) != "" && a != nil && a.MessageID != ""
+		})
+		return s, f, posts, todo.ID
+	}
+	for _, c := range cases {
+		t.Run(c.name+" remind", func(t *testing.T) {
+			ctx := context.Background()
+			s, _, posts, id := setup(t)
+			c.end(ctx, s, id)
+			s.accept.mu.Lock()
+			s.accept.asks[id].AskedAt = time.Now().Add(-30 * time.Hour)
+			s.accept.mu.Unlock()
+			now := time.Now().In(s.location(ctx))
+			n := len(posts())
+			s.remindAcceptance(time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, s.location(ctx)))
+			got := posts()[n:]
+			if c.kept {
+				if len(got) != 1 || !strings.Contains(got[0], "还没验收") || askOf(s, id) == nil {
+					t.Fatalf("reminders %q, ask kept=%v", got, askOf(s, id) != nil)
+				}
+			} else if td := onlyTodo(s); td.DoneAt == nil || td.DoneBy == db.DoneByAuto ||
+				len(got) != 0 || askOf(s, id) != nil || s.accepted(ctx, id) {
+				t.Fatalf("ended task was not cleaned: task=%+v reminded=%q ask=%v", td, got, askOf(s, id) != nil)
+			}
+		})
+		t.Run(c.name+" snapshot", func(t *testing.T) {
+			ctx := context.Background()
+			s, _, _, id := setup(t)
+			c.end(ctx, s, id)
+			_, total := s.snapshotUnaccepted(ctx, s.location(ctx))
+			if (total == 1) != c.kept || (askOf(s, id) != nil) != c.kept {
+				t.Fatalf("total=%d kept=%v ask=%v", total, c.kept, askOf(s, id) != nil)
+			}
+		})
 	}
 }

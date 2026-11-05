@@ -556,7 +556,7 @@ func (s *Service) describeAgents(ctx context.Context, state, machine, query stri
 		if ix.Kind == proto.IxQuestion && len(ix.Questions) > 0 {
 			what = "提问：" + questionSummary(ix)
 		} else if ix.Kind == proto.IxPlan {
-			what = "计划待审批：" + firstLine(ix.Plan)
+			what = "计划待审批：" + planTitle(ix.Plan)
 		} else if ix.Kind == proto.IxPermission {
 			what = "要授权 " + ix.ToolName + "：" + ix.Summary
 		} else if ix.Kind == proto.IxScreen {

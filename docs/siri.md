@@ -1,6 +1,6 @@
 # Siri 深度集成（问 Persona、个人 Agent、控制中心）
 
-在 `docs/intents.md`（问 Claude / 状态 / 批准第一个）之上，加了助手和个人 Agent 的 Siri 入口。所有 intent 都在后台直连 hub：
+在 `docs/intents.md`（问 Claude / 状态 / 批准第一个 / 打开会话）之上，加了助手和个人 Agent 的 Siri 入口。所有 intent 都在后台直连 hub：
 每次现读 `Keychain.serverConfig`（配对时存的 hub 地址 + 设备 token），App 不用在前台、也不用 WebSocket。
 
 ## Intent

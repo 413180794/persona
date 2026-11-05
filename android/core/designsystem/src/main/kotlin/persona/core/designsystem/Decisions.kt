@@ -24,8 +24,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -211,7 +215,8 @@ fun DecisionDock(
             }
             Spacer(Modifier.width(8.dp))
             Text(
-                headline, style = if (style == AppStyle.Brief) type.caption else type.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                headline, style = if (style == AppStyle.Brief) type.caption else type.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).semantics { heading() },
                 color = if (style == AppStyle.Brief) palette.ink2 else palette.ink,
             )
             expires?.let { Text(it, style = type.micro, color = palette.ink3, maxLines = 1); Spacer(Modifier.width(4.dp)) }
@@ -222,7 +227,8 @@ fun DecisionDock(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 JTextButton(stringResource(R.string.designsystem_decision_previous), onPrevious ?: {}, enabled = onPrevious != null && current > 1)
                 Spacer(Modifier.weight(1f))
-                JTextButton("$current / $total", onList ?: {}, enabled = onList != null)
+                val spokenPosition = stringResource(R.string.designsystem_decision_position, current, total)
+                JTextButton("$current / $total", onList ?: {}, Modifier.semantics { contentDescription = spokenPosition }, enabled = onList != null)
                 Spacer(Modifier.weight(1f))
                 JTextButton(stringResource(R.string.designsystem_decision_next), onNext ?: {}, enabled = onNext != null && current < total)
             }
@@ -302,7 +308,8 @@ fun MarkerText(text: String, style: TextStyle, modifier: Modifier = Modifier) {
 
 /**
  * One answer to choose. The [recommended] one stands out: the primary fill in glass, the highlighter in brief,
- * an accent outline on the board.
+ * an accent outline on the board. A [multiSelect] option is read as a checkbox (ticked or not), otherwise as a
+ * radio button; [position] ("current" of "total") is read after the label so a screen reader hears how many there are.
  */
 @Composable
 fun DecisionOption(
@@ -313,11 +320,19 @@ fun DecisionOption(
     recommended: Boolean = false,
     selected: Boolean = false,
     enabled: Boolean = true,
+    multiSelect: Boolean = false,
+    position: Pair<Int, Int>? = null,
 ) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val style = PersonaTheme.style
     val shape = RoundedCornerShape(when (style) { AppStyle.Glass -> 18.dp; AppStyle.Brief -> 16.dp; AppStyle.Board -> 8.dp })
+    val recommendedLabel = stringResource(R.string.designsystem_decision_recommended)
+    val separator = stringResource(R.string.designsystem_separator)
+    val spoken = position?.let { (current, total) ->
+        listOfNotNull(label, detail, recommendedLabel.takeIf { recommended },
+            stringResource(R.string.designsystem_decision_option_position, current, total)).joinToString(separator)
+    }
     val (fill, ink, border) = when (style) {
         AppStyle.Glass -> Triple(if (recommended) palette.action else palette.surfaceStrong, if (recommended) palette.onAction else palette.ink, if (selected) palette.accent else palette.strokeBottom)
         AppStyle.Brief -> Triple(if (recommended) palette.marker else palette.background, if (recommended) palette.onMarker else palette.ink, if (selected) palette.ink else Color.Transparent)
@@ -325,7 +340,11 @@ fun DecisionOption(
     }
     Row(
         modifier.fillMaxWidth().heightIn(min = 52.dp).clip(shape).background(fill).border(if (selected) 2.dp else 1.dp, border, shape)
-            .clickable(enabled = enabled, role = Role.RadioButton, onClick = onClick).semantics { this.selected = selected }
+            .clickable(enabled = enabled, role = if (multiSelect) Role.Checkbox else Role.RadioButton, onClick = onClick)
+            .semantics {
+                if (multiSelect) toggleableState = ToggleableState(selected) else this.selected = selected
+                spoken?.let { contentDescription = it }
+            }
             .stableAlpha(if (enabled) 1f else 0.45f).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

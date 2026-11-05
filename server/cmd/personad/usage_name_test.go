@@ -47,5 +47,22 @@ func TestUsageMistakesNameTheProgram(t *testing.T) {
 		if out, _ := run(name, "release", "bogus"); !strings.Contains(out, `unknown release command "bogus"`) {
 			t.Errorf("%s release bogus: %q", name, out)
 		}
+		// The hints and usage texts beyond the usage: lines name the program as run too.
+		base, otherBase := filepath.Base(name), strings.Fields(other)[1]
+		for _, c := range []struct {
+			args []string
+			want string
+		}{
+			{[]string{"node", "tailcat"}, "（" + base + " node -h 看用法）\n  " + base + " node --stdio"},
+			{[]string{"node", "bogus"}, "（" + base + " node -h 看用法）"},
+			{[]string{"sysmon", "x"}, "usage: " + base + " sysmon [n]"},
+			{[]string{"sysmon", "99999"}, base + " sysmon: n is at most"},
+			{[]string{"bogus"}, "  " + base + " hub [run]"},
+		} {
+			out, code := run(name, c.args...)
+			if code != 2 || !strings.Contains(out, c.want) || strings.Contains(out, otherBase+" ") {
+				t.Errorf("%s %q: exit %d, want %q in %q", name, c.args, code, c.want, out)
+			}
+		}
 	}
 }

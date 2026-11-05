@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Interaction } from "../../lib/types";
-import { AWAIT_MS, awaitingTurn, cardFold, cardLine, DOCK_MAX, INPUT_MAX, PLAN_MAX, turnStart, visibleShare, showsAnswered } from "./dock";
+import { AWAIT_MS, awaitingTurn, cardFold, cardLine, DOCK_MAX, INPUT_MAX, nextWaiting, PLAN_MAX, turnStart, visibleShare, showsAnswered } from "./dock";
 
 describe("visibleShare", () => {
   it("is a share of the visible height, capped when asked", () => {
@@ -55,6 +55,21 @@ describe("cardLine", () => {
     expect(cardLine(ix({ kind: "permission", tool_name: "Bash", tool_input: { description: "跑测试" } }))).toBe("跑测试");
     expect(cardLine(ix({ kind: "plan" }))).toBe("计划等你审批");
     expect(cardLine(ix({ kind: "screen" }))).toBe("终端等你处理");
+  });
+});
+
+describe("nextWaiting (#4091)", () => {
+  const ix = (id: string, mid: string, sid: string) => ({ id, machine_id: mid, session_id: sid, kind: "question" }) as Interaction;
+  it("is the first card of another chat in the list's order, counting every card outside this chat", () => {
+    const all = [ix("a", "m", "s"), ix("b", "m", "t"), ix("c", "m", "s"), ix("d", "n", "s")];
+    expect(nextWaiting(all, "m", "s")).toEqual({ ix: all[1], count: 2 });
+  });
+  it("tells the same session id on another computer apart", () => {
+    expect(nextWaiting([ix("a", "n", "s")], "m", "s")?.ix.id).toBe("a");
+  });
+  it("is nothing when only this chat has cards, or none does", () => {
+    expect(nextWaiting([ix("a", "m", "s")], "m", "s")).toBeNull();
+    expect(nextWaiting([], "m", "s")).toBeNull();
   });
 });
 

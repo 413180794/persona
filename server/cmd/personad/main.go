@@ -130,7 +130,7 @@ const nodeUsage = `  personad node --stdio     run the node protocol on stdin/st
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, usage)
+		fmt.Fprintln(os.Stderr, named(usage))
 		os.Exit(2)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -227,7 +227,7 @@ func main() {
 		err = assistant.Main(ctx, buildInfo(), os.Stdin)
 	case "node":
 		if len(os.Args) == 3 && isHelpArg(os.Args[2]) {
-			fmt.Println(nodeUsage)
+			fmt.Println(named(nodeUsage))
 			break
 		}
 		if len(os.Args) > 2 && os.Args[2] == "--attach" {
@@ -309,7 +309,7 @@ func main() {
 		}
 		runSysmon(ctx, n)
 	default:
-		fmt.Fprintln(os.Stderr, usage)
+		fmt.Fprintln(os.Stderr, named(usage))
 		os.Exit(2)
 	}
 	var ue usageError
@@ -331,7 +331,7 @@ func checkNodeStdioArgs(args []string) error {
 	if len(args) == 0 || len(args) == 1 && args[0] == "--stdio" {
 		return nil
 	}
-	return fmt.Errorf("不认识的 node 子命令 %q：可用的有 --stdio、--attach、tailcat、doctor、reset-uid（personad node -h 看用法）", strings.Join(args, " "))
+	return fmt.Errorf("不认识的 node 子命令 %q：可用的有 --stdio、--attach、tailcat、doctor、reset-uid（%s node -h 看用法）", strings.Join(args, " "), commandName())
 }
 
 // usageError is a usage mistake: main prints it as it is (no log timestamp) and exits 2.
@@ -348,6 +348,11 @@ func commandName() string {
 	return "personad"
 }
 
+// named is a usage text (written with personad) with the program's name as it was run.
+func named(text string) string {
+	return strings.ReplaceAll(text, "personad ", commandName()+" ")
+}
+
 func isHelpArg(a string) bool { return a == "-h" || a == "--help" }
 
 // noExtraArgs refuses arguments after a node subcommand that takes none: reset-uid cannot be undone, so a mistyped
@@ -356,13 +361,13 @@ func noExtraArgs(cmd string, rest []string) error {
 	if len(rest) == 0 {
 		return nil
 	}
-	return fmt.Errorf("node %s 不带参数，多了 %q（personad node -h 看用法）", cmd, strings.Join(rest, " "))
+	return fmt.Errorf("node %s 不带参数，多了 %q（%s node -h 看用法）", cmd, strings.Join(rest, " "), commandName())
 }
 
 // exitNodeUsage is a usage mistake under `personad node`: the error, the node usage, exit 2.
 func exitNodeUsage(err error) {
 	fmt.Fprintln(os.Stderr, err)
-	fmt.Fprintln(os.Stderr, nodeUsage)
+	fmt.Fprintln(os.Stderr, named(nodeUsage))
 	os.Exit(2)
 }
 
@@ -437,7 +442,7 @@ func runResident(ctx context.Context) error {
 // runNodeTailcat is `jarvisd node tailcat init|addr`.
 func runNodeTailcat(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		exitNodeUsage(fmt.Errorf("node tailcat 要跟 init 或 addr（personad node -h 看用法）"))
+		exitNodeUsage(fmt.Errorf("node tailcat 要跟 init 或 addr（%s node -h 看用法）", commandName()))
 	}
 	switch args[0] {
 	case "addr":
@@ -458,7 +463,7 @@ func runNodeTailcat(ctx context.Context, args []string) error {
 			return err
 		}
 		if fs.NArg() > 0 {
-			exitNodeUsage(fmt.Errorf("node tailcat init 只认 --hub 和 --derp-map-url，多了 %q（personad node -h 看用法）", strings.Join(fs.Args(), " ")))
+			exitNodeUsage(fmt.Errorf("node tailcat init 只认 --hub 和 --derp-map-url，多了 %q（%s node -h 看用法）", strings.Join(fs.Args(), " "), commandName()))
 		}
 		if *hubKey == "" {
 			return fmt.Errorf("--hub is required: run `%s hub tailcat-key` on the hub's machine", commandName())
@@ -475,7 +480,7 @@ func runNodeTailcat(ctx context.Context, args []string) error {
 		fmt.Println(k.Addr())
 		return nil
 	}
-	exitNodeUsage(fmt.Errorf("不认识的 node tailcat 子命令 %q：可用的有 init、addr（personad node -h 看用法）", args[0]))
+	exitNodeUsage(fmt.Errorf("不认识的 node tailcat 子命令 %q：可用的有 init、addr（%s node -h 看用法）", args[0], commandName()))
 	return nil
 }
 
@@ -508,10 +513,10 @@ func sysmonCount(args []string) (int, error) {
 	}
 	n, err := strconv.Atoi(args[0])
 	if len(args) > 1 || err != nil || n < 0 {
-		return 0, fmt.Errorf("usage: personad sysmon [n]   (n: how many 10-second samples after the first, 0 or more)")
+		return 0, fmt.Errorf("usage: %s sysmon [n]   (n: how many 10-second samples after the first, 0 or more)", commandName())
 	}
 	if n > sysmonMaxCount {
-		return 0, fmt.Errorf("personad sysmon: n is at most %d (a day of 10-second samples), not %d", sysmonMaxCount, n)
+		return 0, fmt.Errorf("%s sysmon: n is at most %d (a day of 10-second samples), not %d", commandName(), sysmonMaxCount, n)
 	}
 	return n, nil
 }
@@ -560,8 +565,8 @@ func runSysmon(ctx context.Context, n int) {
 	}
 	cpu := osproc.CPUTime() - cpu0
 	wall := time.Since(began)
-	fmt.Printf("%d samples: %v each; jarvisd CPU %v over %v (%.3f%%), not counting iostat / vm_stat on macOS\n",
-		taken, (took / time.Duration(taken)).Round(time.Microsecond), cpu.Round(time.Millisecond), wall.Round(time.Second),
+	fmt.Printf("%d samples: %v each; %s CPU %v over %v (%.3f%%), not counting iostat / vm_stat on macOS\n",
+		taken, (took / time.Duration(taken)).Round(time.Microsecond), commandName(), cpu.Round(time.Millisecond), wall.Round(time.Second),
 		100*cpu.Seconds()/wall.Seconds())
 }
 

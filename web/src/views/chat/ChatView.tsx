@@ -963,6 +963,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         <PendingCards
           interactions={focusedFirst(interactions, focusedCard())}
           answered={answered}
+          // the agent's own page only (#4091): in a side panel the link would change the page under it, and Persona's
+          // conversations list what the tasks' agents ask in TaskQuestions
+          offerNext={inPage && !readOnly && !assistant ? { mid, sid } : undefined}
           narrow={compactDock}
           short={short}
           keyboard={keyboard}

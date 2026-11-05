@@ -572,6 +572,7 @@ export function createDshRuntime(deps, options = {}) {
     name: options.name ?? 'DSH',
     agent: runtimeID === 'dsh' ? undefined : 'dsh', // a renamed DSH still runs DSH's agent (its cards are DSH's)
     version: RUNTIME_VERSION,
+    keepAlways: true, // DSH answers allowed-once only: the hub keeps 本会话总是同意 (#3974)
     launcher: options.launcher ?? 'dsh',
     launcherModel: 'DeepSeek Harness',
     socketPath: options.socketPath,
@@ -754,6 +755,11 @@ export function createDshRuntime(deps, options = {}) {
     if (child) ix.reason = why ? `子 Agent「${child}」：${why}` : `子 Agent「${child}」`
     else if (why) ix.reason = req.reason
     if (input) ix.tool_input = input
+    // 本会话总是同意 (#3974): DSH keeps no session rule, so the hub does — the node names the grant (this session, this
+    // tool) and answers the next card for it itself. DSH still hears allowed-once each time. A subagent's card is on
+    // its parent's session: the same tool there is the same grant for the main agent and its subagents, which the
+    // label says on both.
+    ix.always_label = `本会话（主 Agent 和子 Agent）不再问 ${ix.tool_name}`
     let res
     try {
       res = await rt.ask(ix, { signal: req.signal })

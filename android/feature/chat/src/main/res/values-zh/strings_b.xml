@@ -146,6 +146,7 @@
     <string name="chat_question_previous">上一题</string>
     <string name="chat_question_submit">提交</string>
     <string name="chat_question_next">下一题</string>
+    <string name="chat_question_position">第 %1$d 题，共 %2$d 题</string>
     <string name="chat_screen_submit_password">提交密码</string>
     <string name="chat_screen_chat_instead">改在对话里说</string>
     <string name="chat_request_read_only">已处理或已撤回，仅查看历史</string>

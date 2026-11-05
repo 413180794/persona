@@ -1,5 +1,7 @@
 {
   "pair_hint": "还没配对：在 Persona App 的「设置 › 连接器 › 飞书机器人」里点「配对」，把显示的 6 位配对码发给我。",
+  "pair_wrong": "验证码不对，还可试 {n} 次。",
+  "pair_expired": "验证码已失效，回 App 重新生成。",
   "owner_only": "这个机器人只为它的主人服务。",
   "not_sent": "没能发出去：{error}",
   "owner_only_action": "只有机器人的主人能操作",

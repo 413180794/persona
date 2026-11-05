@@ -721,3 +721,71 @@ func TestFleetRefreshPerDevice(t *testing.T) {
 		}
 	}
 }
+
+// TestFleetBackgroundRefreshFromLastUpdate: an app that goes to the background may have left its activity's
+// stale-date as an earlier update set it (it does not update for a fleet that changes nothing it shows, nor for a
+// settings change), so the hub is only sure of fleetOpenFresh after the last fleet event: the refresh comes by then,
+// not fleetRefresh after the event (#4294).
+func TestFleetBackgroundRefreshFromLastUpdate(t *testing.T) {
+	h, f, clock := fleetClock(t)
+	la := h.live
+	app := &client{out: make(chan []byte, 64), subs: map[[2]string]bool{}, role: roleFull, phone: true, pushDevice: "phone"}
+	h.mu.Lock()
+	h.clients[app] = struct{}{}
+	h.mu.Unlock()
+	sentAt := func() time.Time {
+		la.mu.Lock()
+		defer la.mu.Unlock()
+		return la.sentAt["phone"]
+	}
+
+	// 0:00 the app drew a fleet that, as far as the hub knows, changed nothing: its stale-date may be as near as 5:00
+	// (an earlier update at -10:00, LiveActivityController.worthUpdating).
+	working := FleetState{Phase: "working", Working: 1, Items: []FleetItem{{ID: "m/a", Title: "api", Kind: "working"}}}
+	t0 := *clock
+	la.broadcast(working)
+	la.flush(working, false, false)
+
+	// 3:00 gone to the background: what it shows is known, nothing to send now.
+	*clock = t0.Add(3 * time.Minute)
+	app.clean = true
+	h.dropClient(app)
+	time.Sleep(50 * time.Millisecond)
+	if n := len(f.calls(t, 0)); n != 0 {
+		t.Fatalf("pushed what the app already showed: %d", n)
+	}
+
+	// The run loop's tick: the refresh comes before 5:00.
+	var refreshed time.Time
+	for *clock = clock.Add(15 * time.Second); !clock.After(t0.Add(fleetStaleIn)); *clock = clock.Add(15 * time.Second) {
+		la.tick()
+		if sentAt().Equal(*clock) {
+			refreshed = *clock
+			break
+		}
+	}
+	if refreshed.IsZero() {
+		t.Fatal("never refreshed")
+	}
+	if at := refreshed.Sub(t0); at >= 5*time.Minute {
+		t.Fatalf("refreshed %v after the last fleet event, want before 5m0s (the stale-date it may have)", at)
+	}
+	if c := f.calls(t, 1); c[0].Event != "update" || c[0].State.Working != 1 {
+		t.Fatalf("refresh %+v", c[0])
+	}
+
+	// Gone to the background fleetOpenFresh or more after the last fleet event: the state goes at once.
+	app2 := &client{out: make(chan []byte, 64), subs: map[[2]string]bool{}, role: roleFull, phone: true, pushDevice: "phone", clean: true}
+	h.mu.Lock()
+	h.clients[app2] = struct{}{}
+	h.mu.Unlock()
+	la.broadcast(working)
+	*clock = clock.Add(fleetOpenFresh)
+	h.dropClient(app2)
+	la.mu.Lock()
+	repair := la.repair
+	la.mu.Unlock()
+	if !repair {
+		t.Fatal("an activity that may be near its stale-date should be refreshed when the app leaves")
+	}
+}

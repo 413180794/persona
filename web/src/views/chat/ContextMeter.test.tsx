@@ -68,4 +68,16 @@ describe("ContextMeter", () => {
     setContextAsUsed(true);
     expect(renderToStaticMarkup(<ContextMeter session={s} />)).toContain("上下文已用 39%");
   });
+  it("is a button that opens the same words (#4054), keeping the hover tooltip; the model alone is not", () => {
+    const html = renderToStaticMarkup(<ContextMeter session={s} />);
+    expect(html).toMatch(/^<button type="button" aria-haspopup="dialog" aria-expanded="false"/);
+    expect(html).toContain('aria-label="opus 5.5 · 上下文剩 61%"'); // holds the visible words, wide or narrow
+    expect(html).toMatch(/title="opus 5.5 · 还剩 61% 上下文\n上下文是 Agent/);
+    expect(html).toContain('aria-description="上下文是 Agent 在这段对话里能记住的量'); // read out while it is open, too
+    expect(html).toContain("touch-hit");
+    expect(html).not.toContain("<div"); // a button holds phrasing content only
+    const alone = renderToStaticMarkup(<ContextMeter session={{ ...s, context_window: undefined }} />);
+    expect(alone).not.toContain("<button");
+  });
 });
+

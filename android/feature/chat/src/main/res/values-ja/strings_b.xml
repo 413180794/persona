@@ -146,6 +146,7 @@
     <string name="chat_question_previous">前の質問</string>
     <string name="chat_question_submit">送信</string>
     <string name="chat_question_next">次の質問</string>
+    <string name="chat_question_position">%2$d 問中 %1$d 問目</string>
     <string name="chat_screen_submit_password">パスワードを送信</string>
     <string name="chat_screen_chat_instead">チャットで伝える</string>
     <string name="chat_request_read_only">対応済みか取り消し済みです。履歴のみ表示しています</string>

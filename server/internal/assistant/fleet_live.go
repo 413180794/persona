@@ -266,7 +266,7 @@ func interactionDetail(l i18n.Lang, ix proto.Interaction) string {
 		}
 		return ix.ToolName
 	case proto.IxPlan:
-		return firstLine(ix.Plan)
+		return planTitle(ix.Plan)
 	case proto.IxQuestion:
 		if len(ix.Questions) > 0 {
 			return ix.Questions[0].Question

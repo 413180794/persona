@@ -120,7 +120,10 @@ node <Persona 仓库>/integrations/dsh/companion.mjs --dsh <DSH 的安装目录�
   （`typertGateway.hasLiveClient()` 为假）→ 先给手机；否则交给下一个应答方（Web GUI），手机上看不到这张卡。
 - **授权**：卡片带工具名、参数（从这一步的 `tool-call` 里取）、要跑的命令（`summary`），DSH 给的原因放 `reason`；node 给卡片标上
   `agent: "dsh"`、`agent_label: "DSH"`，App 按「别的 Agent 的卡」画（「DSH 需要你授权」、同意 / 拒绝，和 Codex 的卡一样），
-  不出 Claude 的「本会话总是允许」——DSH 只有「允许一次」，做不到。批准 → `allowed-once`，拒绝 → `rejected`；拒绝时写了话，
+  卡上有「本会话（主 Agent 和子 Agent）不再问 <工具>」（`always_label`；子 Agent 的卡挂在父会话上，两边是同一个授权）。DSH 自己只有「允许一次」，
+  所以插件在 hello 里声明 `caps.keep_always`，由 hub 记：node 给卡写 `always_keys: ["runtime:dsh:tool:<工具>"]`（不收 runtime 传来的 key），点了「总是」后 hub 按这段会话记进 `assistant_always`，
+  之后这段会话、这个工具的卡由 hub 直接放行，DSH 拿到的仍是 `allowed-once`（#3974）。范围只到这段会话 + 这个工具；健康空间、要填字段的卡不给。
+  批准 → `allowed-once`，拒绝 → `rejected`（点了「总是」的拒绝也只拒这一次，不记）；拒绝时写了话，
   先拒绝，再把这句话 steer 进正在跑的这一轮（DSH 的授权没有理由字段；Codex 也是这样做的），Agent 能读到为什么。
 - **提问**：`ask_user_question` 的问题、选项、多选原样上手机；答案按选项文字对回 DSH 的 `{id, selected, custom}`，不在选项里的字当 `custom`。
 - **计划审批**：`intent.kind = plan-review` 的问题画成计划卡片，计划正文在 `detail`；批准 = 选它的 `approve` 选项，打回 = 选另一个选项，修改意见放 `custom`。

@@ -70,11 +70,14 @@ export function defaultSocketPath() {
  *   listen?: { port?: number, host?: string, path?: string, token: string | (() => string) } | boolean,
  *   token?: string | (() => string), package?: { name: string, hash: string }, instance?: string,
  *   onUpdate?: (offer: { name: string, hash: string, version?: string }) => void,
- *   launchers?: { name: string, model?: string, agent?: string, models?: object[] }[], resume?: boolean }} options -
+ *   launchers?: { name: string, model?: string, agent?: string, models?: object[] }[], resume?: boolean,
+ *   keepAlways?: boolean }} options -
  *   launchers: more entries for the new-session form than options.launcher (a runtime running several agents: one
  *   per provider, each with the agent it starts and its models); rt.launchersChanged replaces them. resume: start
  *   takes {resume: <Claude session id>} — taking a session it does not have over, under that id (caps.resume; the
- *   machine's engine continuing a session not running anywhere).
+ *   machine's engine continuing a session not running anywhere). keepAlways: the runtime keeps no "always allow" rule
+ *   itself; a permission card with an always_label then gets the hub's 本会话总是允许 for that session and tool
+ *   (caps.keep_always, #3974). A runtime whose always is a rule of its own (narrower than the tool) leaves it off.
  *   assistant: its launcher may run the Persona assistant (caps.assistant; docs/runtimes.md「助手」). requires: node
  *   features (runtime.hello's features) this runtime cannot do without; on a node lacking one it does not stay
  *   connected, and tries again once the node restarts (its socket file is replaced) or after 10 minutes. onHub: called
@@ -209,6 +212,8 @@ export function createRuntime(driver, options) {
     // Said only when on: a runtime without them says what it always did.
     if (typeof driver.modes === 'function') caps.modes = true
     if (options.resume === true && caps.start) caps.resume = true
+    // It keeps no "always allow" rule of its own: the hub remembers one per session and tool for it (#3974).
+    if (options.keepAlways === true) caps.keep_always = true
     const h = { runtime: options.runtime, name: options.name ?? options.runtime, version: options.version ?? '', instance, caps }
     if (options.package?.name && options.package?.hash) h.package = { name: options.package.name, hash: options.package.hash }
     if (options.agent) h.agent = options.agent

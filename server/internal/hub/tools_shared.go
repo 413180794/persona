@@ -19,6 +19,9 @@ var (
 	clip      = textfmt.Clip
 	oneLine   = textfmt.OneLine
 	firstLine = textfmt.FirstLine
+	// plainMarkdown is Markdown as the text it shows, for a push or a one-line preview.
+	plainMarkdown = textfmt.PlainMarkdown
+	planTitle     = textfmt.PlanTitle
 )
 
 // mcpTool is one tool's definition from prompts/mcp.

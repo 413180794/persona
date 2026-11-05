@@ -525,6 +525,8 @@ function MenuPanel({
   const [pos, setPos] = useState<React.CSSProperties>({ visibility: "hidden" });
   const narrow = useMedia(NARROW_QUERY);
   report(els.current);
+  // only lines to read (#4054): a popover that explains something, not a menu to choose from
+  const reading = items.length > 0 && items.every((it) => it.note);
   const root = place.rect === undefined;
   const origin = root && place.point ? "top left" : root && place.side === "top" ? `bottom ${place.align}` : root ? `top ${place.align}` : "top left";
 
@@ -555,7 +557,8 @@ function MenuPanel({
   return (
     <div
       ref={ref}
-      role="menu"
+      role={reading ? "dialog" : "menu"}
+      aria-label={reading ? (header ?? items[0].label) : undefined}
       data-menu={id}
       className="fixed z-50 max-h-[min(70vh,520px)] overflow-y-auto rounded-[10px] bg-surface p-1 shadow-overlay"
       style={{ ...pos, animation: `pop-in 160ms ${EASE} both`, transformOrigin: origin }}
@@ -579,7 +582,15 @@ function MenuPanel({
         {!loading && !loadError && depth > 0 && items.length === 0 && <div className="relative z-10 flex h-8 items-center px-2 text-[12.5px] text-ink-3 pointer-coarse:min-h-11">{t("ui-atoms.menu_empty")}</div>}
         {items.map((it, i) => [
           it.divider && i > 0 && <div key={`${it.key}-sep`} role="separator" className="mx-1 my-1 h-px bg-line" />,
-          renaming === it.key && it.rename ? (
+          it.note ? (
+            <NoteRow
+              key={it.key}
+              item={it}
+              refCb={(el) => {
+                els.current[i] = el;
+              }}
+            />
+          ) : renaming === it.key && it.rename ? (
             <RenameRow
               key={it.key}
               item={it}
@@ -643,6 +654,16 @@ function MenuRow({ item: it, asking, working, refCb, onHover, onChoose }: { item
       {accel && !working && <span aria-hidden className={cx("w-3.5 shrink-0 text-center text-[11px]", it.danger ? "" : "text-ink-3")}>{accel}</span>}
       {(it.submenu || it.children) && <Icon name="chevron" size={12} className="-rotate-90 text-ink-3" />}
     </button>
+  );
+}
+
+/** A line to read (#4054): the label wraps at word breaks, the hint (a number, a unit) stays whole at its end. */
+function NoteRow({ item: it, refCb }: { item: MenuItem; refCb: (el: HTMLElement | null) => void }) {
+  return (
+    <div ref={refCb} data-menu-note className="relative z-10 flex items-baseline gap-2 px-2 py-1.5 text-[12.5px] leading-relaxed text-ink">
+      <span className="min-w-0 flex-1 break-words">{it.label}</span>
+      {it.hint && <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-3 tabular-nums">{it.hint}</span>}
+    </div>
   );
 }
 

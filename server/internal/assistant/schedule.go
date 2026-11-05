@@ -1209,13 +1209,24 @@ func (s *Service) startScheduledRun(run ScheduleRun, t Task, m *Device) {
 func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	ctx, cancel := context.WithTimeout(context.Background(), runWatchTimeout)
 	defer cancel()
-	if !s.waitTurnEnd(ctx, m.ID, run.SessionID) {
+	ended, ran := s.waitTurnEnd(ctx, m.ID, run.SessionID)
+	if !ended {
 		return
 	}
 	text := s.lastTurnAPIError(ctx, m.ID, run.SessionID)
 	if text == "" {
 		if c, ok := s.session(ctx, m.ID, run.SessionID); ok {
 			text = c.TurnError
+		}
+	}
+	if text == "" {
+		// The model service answered 200 with nothing in it: no reply, no tool call, no error. The run stayed "ok"
+		// and the push said 完成了 over an empty 早报; it fails and is retried like an error (#3752, as tasks: #2349).
+		if items, read := s.lastTurnItems(ctx, m.ID, run.SessionID); read && silentRun(items, t, ran) && s.stillEnded(ctx, m.ID, run.SessionID, items) {
+			text = silentTurnErrorIn(s.lang(ctx))
+			// Its failure is pushed below. noteAsked holds back the conversation's finished pushes for the next three
+			// minutes (notifyFinished), so the turn's own 「✅ 早报 · 完成了」 does not go out next to it.
+			s.noteAsked(run.SessionID)
 		}
 	}
 	if text == "" {
@@ -1275,48 +1286,113 @@ func (s *Service) currentTask(ctx context.Context, id string) (Task, bool, error
 	return Task{}, false, nil
 }
 
-// waitTurnEnd waits until the sent turn is over; false when ctx ended. An immediate failure (a bad model) is idle
-// before the first poll sees it working, so a changed last item also means it ended.
-func (s *Service) waitTurnEnd(ctx context.Context, machine, sid string) bool {
-	before := s.lastItemID(ctx, machine, sid)
-	ran := false
+// silentRun: the run's turn is known to have ended with no output, so failing it (and running the task again) is
+// safe. A wrong verdict runs the whole task twice (mail, messages sent again), so all of these must hold:
+//   - silentTurn: no reply, no tool call, not stopped by the user;
+//   - the turn is the run's: its prompt is the task's (the user may have sent the conversation another message
+//     since, and the node's last turn is then that one);
+//   - it is known to have ended: the watcher saw it working before it went idle (ran), or the turn has its end
+//     marker (turn_duration). A changed last item alone may be the prompt landing while the session's state still
+//     lags, and an assistant item may be thinking while the model goes on (#3777 review).
+func silentRun(items []proto.Item, t Task, ran bool) bool {
+	if !silentTurn(items) {
+		return false
+	}
+	if ask, _ := turnExchange(items); !runAsk(ask, t.Prompt) {
+		return false
+	}
+	if ran {
+		return true
+	}
+	for _, it := range items {
+		if it.TurnDuration != nil || it.Kind == "turn_duration" {
+			return true
+		}
+	}
+	return false // an assistant item proves nothing: thinking is one, and the model may still be on its turn
+}
+
+// runAsk: ask is the message a run of a task with prompt sent (taskPrompt: the header, a blank line, the prompt), not
+// a message of the user's that only mentions it (「早报呢？」 for the task 「早报」).
+func runAsk(ask, prompt string) bool {
+	ask, prompt = strings.TrimSpace(ask), strings.TrimSpace(prompt)
+	if prompt == "" {
+		return false
+	}
+	if ask == prompt {
+		return true
+	}
+	// The prompt as a paragraph of its own after the header: followed by the end or a line break (the KB hint).
+	_, rest, ok := strings.Cut(ask, "\n\n"+prompt)
+	return ok && (rest == "" || strings.HasPrefix(rest, "\n"))
+}
+
+// waitTurnEnd waits until the sent turn is over; ended is false when ctx ended, ran says the turn was seen working.
+// A poll whose read failed tells nothing and is skipped. Once the turn was seen working, it has ended after two
+// polls in a row that read it idle (one may be a status flap, a hookless Claude whose spinner was missed). Before
+// it was seen working, a changed last item also means it ended: an immediate failure (a bad model) is idle before
+// the first poll sees it working.
+func (s *Service) waitTurnEnd(ctx context.Context, machine, sid string) (ended, ran bool) {
+	before, beforeOK := s.lastItemID(ctx, machine, sid)
 	idle := 0
 	for {
 		select {
 		case <-ctx.Done():
-			return false
+			return false, ran
 		case <-time.After(2 * time.Second):
 		}
 		c, ok := s.session(ctx, machine, sid)
-		if ok && (c.Status == proto.StatusWorking || c.State == proto.StateWorking || c.State == proto.StateNeedsYou) {
+		if !ok {
+			continue // not read: no sight of idle (and the debounce does not count it)
+		}
+		if c.Status == proto.StatusWorking || c.State == proto.StateWorking || c.State == proto.StateNeedsYou {
 			ran, idle = true, 0
 			if c.State == proto.StateNeedsYou {
-				return true // waiting on the user counts as ended
+				return true, ran // waiting on the user counts as ended
 			}
 			continue
 		}
-		if s.lastItemID(ctx, machine, sid) != before {
-			return true
-		}
-		if ran {
-			if idle++; idle >= 2 {
-				return true
+		if !ran {
+			if id, ok := s.lastItemID(ctx, machine, sid); ok && beforeOK && id != before {
+				return true, false
 			}
+			continue
+		}
+		if idle++; idle >= 2 {
+			return true, true
 		}
 	}
 }
 
-// lastItemID is the newest item's id, "" when there is none.
-func (s *Service) lastItemID(ctx context.Context, machine, sid string) string {
+// lastItemID is the newest item's id ("" when there is none); ok is false when the node could not be asked.
+func (s *Service) lastItemID(ctx context.Context, machine, sid string) (string, bool) {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var res struct {
 		Items []proto.Item `json:"items"`
 	}
-	if err := s.call(cctx, machine, DeviceSessionItems, map[string]any{"session_id": sid, "limit": 1, "lazy_images": true}, &res); err != nil || len(res.Items) == 0 {
-		return ""
+	if err := s.call(cctx, machine, DeviceSessionItems, map[string]any{"session_id": sid, "limit": 1, "lazy_images": true}, &res); err != nil {
+		return "", false
 	}
-	return res.Items[len(res.Items)-1].ID
+	if len(res.Items) == 0 {
+		return "", true
+	}
+	return res.Items[len(res.Items)-1].ID, true
+}
+
+// stillEnded: the turn read as items is still where the conversation stands, idle with the same last item. Asked
+// right before a run is failed as silent: a turn that went on meanwhile (the model was slow to its first token) is
+// not failed, its task not run again over it.
+func (s *Service) stillEnded(ctx context.Context, machine, sid string, items []proto.Item) bool {
+	if len(items) == 0 {
+		return false
+	}
+	c, ok := s.session(ctx, machine, sid)
+	if !ok || c.Status == proto.StatusWorking || c.State == proto.StateWorking || c.Starting {
+		return false
+	}
+	id, ok := s.lastItemID(ctx, machine, sid)
+	return ok && id == items[len(items)-1].ID
 }
 
 // lastTurnAPIError is the text of the turn's last answer when it is a model API error; "" otherwise.

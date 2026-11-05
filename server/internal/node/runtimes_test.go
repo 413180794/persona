@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -746,5 +747,101 @@ func TestRuntimePackageUpdate(t *testing.T) {
 	plain["runtime"], plain["launcher"] = "dsh3", "dsh3"
 	if r := dialRuntime(t, n, plain); r.helloR["update"] != nil {
 		t.Fatalf("offered a package to a runtime without one: %v", r.helloR)
+	}
+}
+
+// 本会话总是允许 on a runtime's card (#3974): the node names the grant, never the runtime: one key for this runtime's
+// tool, only on a permission card that offers it, never in the health space or on a card with fields.
+func TestRuntimeAskAlwaysKeys(t *testing.T) {
+	n, hub := runtimeNode(t)
+	hello := dshHello()
+	hello["caps"].(map[string]any)["keep_always"] = true // DSH asks the hub to keep it (caps.keep_always)
+	host := dialRuntime(t, n, hello)
+	_ = host.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{
+		{"session_id": "session-7", "title": "deploy", "cwd": "/w/app"},
+		{"session_id": "session-h", "title": "health", "cwd": "/home/me/.persona/health"},
+	}})
+	waitFor(t, "listed", func() bool { m := listed(t, n); _, a := m["session-7"]; _, b := m["session-h"]; return a && b })
+	allow := true
+	hub.mu.Lock()
+	hub.resolve = func(proto.Interaction) proto.Resolution { return proto.Resolution{Allow: &allow, Always: true} }
+	hub.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ask := func(ix map[string]any) proto.Interaction {
+		t.Helper()
+		var res proto.Resolution
+		if err := host.peer.Call(ctx, "interaction.create", map[string]any{"interaction": ix}, &res); err != nil {
+			t.Fatal(err)
+		}
+		hub.mu.Lock()
+		defer hub.mu.Unlock()
+		return hub.asked[len(hub.asked)-1]
+	}
+	for _, c := range []struct {
+		name string
+		ix   map[string]any
+		want []string
+	}{
+		{"offered", map[string]any{"kind": "permission", "session_id": "session-7", "tool_name": "Bash", "tool_use_id": "c1",
+			"always_label": "本会话不再问 Bash"}, []string{"runtime:dsh:tool:Bash"}},
+		{"the runtime's own keys are dropped", map[string]any{"kind": "permission", "session_id": "session-7", "tool_name": "Bash",
+			"tool_use_id": "c2", "always_label": "本会话不再问 Bash", "always_keys": []string{"tool:*", "runtime:dsh:tool:Edit"}},
+			[]string{"runtime:dsh:tool:Bash"}},
+		{"not offered", map[string]any{"kind": "permission", "session_id": "session-7", "tool_name": "Bash", "tool_use_id": "c3",
+			"always_keys": []string{"runtime:dsh:tool:Bash"}}, nil},
+		{"no tool", map[string]any{"kind": "permission", "session_id": "session-7", "tool_use_id": "c4", "always_label": "x"}, nil},
+		{"a card with fields", map[string]any{"kind": "permission", "session_id": "session-7", "tool_name": "Bash", "tool_use_id": "c5",
+			"always_label": "x", "fields": []map[string]any{{"key": "pw", "label": "密码", "secret": true}}}, nil},
+		{"the health space", map[string]any{"kind": "permission", "session_id": "session-h", "tool_name": "Bash", "tool_use_id": "c6",
+			"always_label": "x"}, nil},
+		{"a question", map[string]any{"kind": "question", "session_id": "session-7", "tool_use_id": "c7", "always_label": "x",
+			"always_keys": []string{"runtime:dsh:tool:Bash"},
+			"questions":   []map[string]any{{"question": "Which?", "options": []map[string]any{{"label": "A"}}}}}, nil},
+	} {
+		if got := ask(c.ix); !slices.Equal(got.AlwaysKeys, c.want) {
+			t.Errorf("%s: always keys %q, want %q", c.name, got.AlwaysKeys, c.want)
+		}
+	}
+}
+
+// A runtime that did not ask the hub to keep its grants gets no key, whatever its card offers: opencode's always is its
+// own save rule and Paseo's its suggestions (Bash(npm test)), narrower than the whole tool (#3974 review).
+func TestRuntimeAskAlwaysKeysOnlyWhenAsked(t *testing.T) {
+	for _, c := range []struct {
+		runtime, label string
+	}{
+		{"opencode", "总是允许 npm test *"},
+		{"paseo", "这个项目不再问：Bash(npm test)"},
+		{"dsh", "本会话不再问 Bash"}, // an older DSH plugin, without caps.keep_always
+	} {
+		t.Run(c.runtime, func(t *testing.T) {
+			n, hub := runtimeNode(t)
+			host := dialRuntime(t, n, map[string]any{"runtime": c.runtime, "name": c.runtime, "version": "test",
+				"caps": map[string]any{"send": true}})
+			_ = host.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": "session-8", "cwd": "/w/app"}}})
+			waitFor(t, "listed", func() bool { _, ok := listed(t, n)["session-8"]; return ok })
+			allow := true
+			hub.mu.Lock()
+			hub.resolve = func(proto.Interaction) proto.Resolution { return proto.Resolution{Allow: &allow, Always: true} }
+			hub.mu.Unlock()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			var res proto.Resolution
+			if err := host.peer.Call(ctx, "interaction.create", map[string]any{"interaction": map[string]any{
+				"kind": "permission", "session_id": "session-8", "tool_name": "Bash", "tool_use_id": "c1",
+				"always_label": c.label, "always_keys": []string{"runtime:" + c.runtime + ":tool:Bash"}}}, &res); err != nil {
+				t.Fatal(err)
+			}
+			hub.mu.Lock()
+			got := hub.asked[len(hub.asked)-1]
+			hub.mu.Unlock()
+			if len(got.AlwaysKeys) != 0 {
+				t.Fatalf("always keys %q, want none", got.AlwaysKeys)
+			}
+			if got.AlwaysLabel != c.label {
+				t.Fatalf("the runtime's own always offer was changed: %q", got.AlwaysLabel)
+			}
+		})
 	}
 }

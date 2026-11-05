@@ -109,7 +109,7 @@ func interactionLine(l i18n.Lang, ix proto.Interaction) string {
 		}
 		return i18n.T(l, "hub-agents_link.question")
 	case proto.IxPlan:
-		if p := firstLine(ix.Plan); p != "" { // which plan: two agents' plans read apart
+		if p := planTitle(ix.Plan); p != "" { // which plan: two agents' plans read apart
 			return clip(oneLine(i18n.T(l, "hub-agents_link.plan_for", i18n.Args{"plan": p})), interactionLineMost)
 		}
 		return i18n.T(l, "hub-agents_link.plan")

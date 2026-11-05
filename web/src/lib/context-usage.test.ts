@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contextLabel, contextTier, contextTooltip, contextUsage, contextWarn, modelShort, rowDetail } from "./context-usage";
+import { contextLabel, contextNotes, contextTier, contextTooltip, contextUsage, contextWarn, modelShort, rowDetail } from "./context-usage";
 import type { Session } from "./types";
 
 const base: Session = { machine_id: "m", session_id: "s", title: "t", cwd: "/code/weather", status: "idle" };
@@ -66,5 +66,19 @@ describe("rowDetail", () => {
   it("marks 80–89% used as a warning but not a danger", () => {
     const s = { ...base, context_tokens: 170000, context_window: 200000 };
     expect(rowDetail(s, false, now).find((p) => p.warn)).toMatchObject({ text: "15%", warn: true, danger: false });
+  });
+});
+
+describe("the header's popover (#4054)", () => {
+  it("says the share with the tokens, then what happens when it fills; only notes, nothing to choose", () => {
+    const notes = contextNotes(contextUsage({ context_tokens: 78000, context_window: 200000 })!, false);
+    expect(notes.map((n) => [n.label, n.hint])).toEqual([
+      ["还剩 61% 上下文", "7.8 万 / 20 万 token"], // the token count as the compaction divider writes it
+      ["上下文是 Agent 在这段对话里能记住的量，用完会自动压缩：较早的内容只留摘要。", undefined],
+    ]);
+    expect(notes.every((n) => n.note)).toBe(true);
+    const near = contextNotes(contextUsage({ context_tokens: 170000, context_window: 200000 })!, true);
+    expect(near[0].label).toBe("已用 85%");
+    expect(near[1].label).toContain("/compact");
   });
 });

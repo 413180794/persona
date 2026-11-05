@@ -67,6 +67,9 @@ type RewindScreen struct {
 	Choices []RewindChoice
 }
 
+// rewindListQuestion is the line under the list's heading.
+const rewindListQuestion = "Restore the code and/or conversation to the point before…"
+
 var (
 	rewindHeadRE   = regexp.MustCompile(`^\s{2,4}Rewind\s*$`)
 	rewindMoreRE   = regexp.MustCompile(`^([↑↓]) (\d+) more$`)

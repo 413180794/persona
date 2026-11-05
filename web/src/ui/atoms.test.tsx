@@ -154,6 +154,19 @@ describe("menu with the new row kinds", () => {
     expect(html).toContain("-rotate-90");
   });
 
+  it("is a popover to read when every row is a note (#4054)", () => {
+    const html = render([
+      { key: "share", label: "还剩 61% 上下文", hint: "78K / 200K tokens", note: true, onSelect: () => {} },
+      { key: "hint", label: "用完会自动压缩", note: true, onSelect: () => {} },
+    ]);
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-label="还剩 61% 上下文"');
+    expect(html).not.toContain("menuitem");
+    expect(html.match(/data-menu-note/g)).toHaveLength(2);
+    expect(html).toContain("78K / 200K tokens");
+    expect(render([{ key: "a", label: "拷贝目录", onSelect: () => {} }])).toContain('role="menu"');
+  });
+
   it("is the same markup as before for a plain row", () => {
     const html = render([{ key: "a", label: "拷贝目录", icon: "folder", onSelect: () => {} }]);
     expect(html).not.toContain("aria-haspopup");

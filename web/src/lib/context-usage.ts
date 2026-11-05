@@ -4,6 +4,8 @@
 // (設置 › 外观): 「Agent 行显示详情」 turns the extra line and the header bar on, 「上下文显示为已用」 flips remaining → used.
 import { useSyncExternalStore } from "react";
 import { t } from "../i18n";
+import type { MenuItem } from "../ui/menu-model";
+import { formatTokens } from "./compaction";
 import { ago, baseName } from "./format";
 import type { Session } from "./types";
 
@@ -60,6 +62,16 @@ export function contextHeaderLabel(u: ContextUsage, asUsed: boolean): string {
 /** What happens when the window fills, and what to do once it is close (#3668): the header's tooltip under the share. */
 export function contextHint(u: ContextUsage): string {
   return contextWarn(u) ? t("context.hint_warn") : t("context.hint_ok");
+}
+
+/** The header's popover (#4054), the tooltip's words for a screen without hover: the share with the token count beside
+ *  it, then what happens when the window fills (and, once close, what to do). */
+export function contextNotes(u: ContextUsage, asUsed: boolean): MenuItem[] {
+  const none = () => {};
+  return [
+    { key: "share", note: true, label: contextTooltip(u, asUsed), hint: t("context.tokens", { used: formatTokens(u.tokens), window: formatTokens(u.window) }), onSelect: none },
+    { key: "hint", note: true, label: contextHint(u), onSelect: none },
+  ];
 }
 
 /** The tooltip: 「还剩 61% 上下文」 or 「已用 39%」. */

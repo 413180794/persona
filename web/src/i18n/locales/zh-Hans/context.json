@@ -8,5 +8,6 @@
   "header_left": "上下文剩 {percent}%",
   "header_used": "上下文已用 {percent}%",
   "hint_ok": "上下文是 Agent 在这段对话里能记住的量，用完会自动压缩：较早的内容只留摘要。",
-  "hint_warn": "快满了，满了会自动压缩，较早的内容只留摘要。想先收个尾，可以发 /compact 主动压缩，或者开一个新 Agent 接着做。"
+  "hint_warn": "快满了，满了会自动压缩，较早的内容只留摘要。想先收个尾，可以发 /compact 主动压缩，或者开一个新 Agent 接着做。",
+  "tokens": "{used} / {window} token"
 }

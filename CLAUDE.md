@@ -121,6 +121,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - Apple 端界面有中英日三种语言（`docs/ios.md`「界面语言」）：新的中文界面文字要走 `String(localized:)` / `Text`，编一次后 `scripts/i18n/apple_l10n.py sync <DerivedData>` 加进 catalog、补 en 和 ja，`check` 会拦；不是界面的中文（发给 Agent 的、匹配 hub 文字的）标 `// i18n-ignore`。测试按中文跑（scheme 固定 zh-Hans）。
 - 截图验证用 DEBUG 启动参数 + `simctl io screenshot`，不用 computer-use；界面改动必须真的看到截图（看不到是网关丢图，见 `testing.md`）。
 - 共用页面里一直在动的 `TimelineView(.animation)` 在 Mac 上可能每帧整窗重新布局（实测：「需要你」圆点的呼吸圈让 Agents 页空闲占一个核的 14%）：Mac 上常驻动画交给 Core Animation（`MacBreathingRing`）。（`lessons/macos.md`）
+- **hub 只做沟通中心**：新的业务（接口、表、调模型）写进管理者（`server/internal/assistant`、`devices`、`extmgr`），hub 只转发；`hub/architecture_guard_test.go` 钉住 hub 的路由、依赖和 Store，失败时照提示把业务挪进管理者，确实是 hub 自己的（连接、配对、管理、推送、中转）才往清单里加。（`architecture.md`「hub 只做沟通中心」）
 - hub 的内存状态随时会被别人重新部署清掉：跨请求的流程要自包含或落库。（`server.md`）
 - hub 的端口归 systemd 的 `jarvisd.socket`（socket activation）：换回不认识 `LISTEN_FDS` 的旧二进制前先 `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`，否则抢不到端口反复重启；`stop jarvisd` 后来一个连接又会被拉起，要停连 `jarvisd.socket` 一起停。（`hub-restart.md`）
 - Linux / macOS 上 `personad hub run` 是入口，hub 本身是它的槽位（`hub slot`）：换版本用 `hub switch` 蓝绿切换，不再 exec 或重启。入口自己只在服务重启时换；要回到 hub 自己监听，用 `PERSONA_HUB_EDGE=0`。（`hub-restart.md`「蓝绿切换」）

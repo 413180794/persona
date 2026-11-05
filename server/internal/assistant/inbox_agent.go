@@ -440,7 +440,7 @@ func (s *Service) inboxDraft(ctx context.Context, sessionID, text, note string, 
 	it.Agent.State, it.Agent.Error, it.Agent.Changes = AgentDrafted, "", changes
 	it.Agent.Draft, it.Agent.Note, it.Agent.DraftedAt = text, note, &now
 	card := messageCardOf(it)
-	if it.DoneBy == "replied" { // the user answered it while the agent worked: no 发送 for a reply already out
+	if !it.open() { // the user answered or filed it while the agent worked: nothing more to send or decide
 		card = nil
 	}
 	b.mu.Unlock()

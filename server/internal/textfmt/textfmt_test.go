@@ -48,3 +48,23 @@ func TestAgentLabel(t *testing.T) {
 		}
 	}
 }
+
+// A plan's title shows in a push, the live activity and the Agent lists as plain text: no Markdown marks (#4387).
+func TestPlanTitle(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"\n\n## 方案\n第一步", "方案"},
+		{"**把缓存挪到 Postgres**\n细节", "把缓存挪到 Postgres"},
+		{"- [ ] 第一步：改 `cache.go`", "第一步：改 cache.go"},
+		{"1. 看 [设计](https://example.com/doc) 再动手", "看 设计 再动手"},
+		{"> *先* 停掉 ~~旧的~~ 服务", "先 停掉 旧的 服务"},
+		{"---\n\n# 计划", "计划"},
+		{"直接一句话", "直接一句话"},
+		{"改 `__init__.py` 和 `a**b`", "改 __init__.py 和 a**b"},
+		{"重命名 my__var，算 2 ** 3", "重命名 my__var，算 2 ** 3"},
+		{"", ""},
+	} {
+		if got := PlanTitle(tc.in); got != tc.want {
+			t.Errorf("PlanTitle(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

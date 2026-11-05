@@ -856,11 +856,21 @@ func (d *DB) PutInboxItems(ctx context.Context, rows []InboxRow) error {
 	if len(rows) == 0 {
 		return nil
 	}
+	// A bare pgx.Batch is only a pipeline of autocommit statements, so a connection failure midway can leave some
+	// rows stored; the explicit transaction makes the all-or-nothing contract real.
+	tx, err := d.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx))
 	var b pgx.Batch
 	for _, r := range rows {
 		b.Queue(putInboxItemSQL, r.ID, r.Data, r.UpdatedAt, r.DoneAt)
 	}
-	return d.pool.SendBatch(ctx, &b).Close()
+	if err := tx.SendBatch(ctx, &b).Close(); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // DeleteInboxItems removes inbox items for good (a source the user took back).

@@ -1,6 +1,7 @@
 {
   "title": "任务进展：{n} 件",
   "title_needs": "{n} 件事等你拍板",
+  "part": "（{k}/{n}）",
   "decide": "🙋 等你拍板",
   "progress": "📈 进展",
   "state_needs": "🙋 等你",

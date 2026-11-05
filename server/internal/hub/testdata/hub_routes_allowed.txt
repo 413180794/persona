@@ -1,0 +1,155 @@
+# The routes the hub answers itself (registered here, not relayed to the manager). Kept by TestHubAnswersOnlyItsOwnRoutes
+# (hub/architecture_guard_test.go): only the hub's own belong here (connections, pairing / auth, admin, push delivery,
+# relays); business routes are the manager's, see docs/architecture.md「hub 只做沟通中心」. Edit by hand, one pattern a line.
+/
+/api/
+/api/v1/admin/
+/api/v1/admin/cli/
+DELETE /api/v1/admin/devices/{id}
+DELETE /api/v1/admin/machines/{id}
+DELETE /api/v1/admin/peers/{hub_id}
+DELETE /api/v1/admin/usage-sources/{id} # moving to the manager
+DELETE /api/v1/auth/tokens/{id}
+DELETE /api/v1/sessions/{mid}/{sid}
+GET /api/v1/admin/assistant
+GET /api/v1/admin/devices
+GET /api/v1/admin/machines
+GET /api/v1/admin/mesh
+GET /api/v1/admin/network
+GET /api/v1/admin/overview
+GET /api/v1/admin/peers
+GET /api/v1/admin/routes
+GET /api/v1/admin/state
+GET /api/v1/admin/usage-sources # moving to the manager
+GET /api/v1/app/android/apk
+GET /api/v1/app/android/latest
+GET /api/v1/auth/tokens
+GET /api/v1/devices/{id}/lock-tests/{test_id}
+GET /api/v1/devices/{id}/prefs
+GET /api/v1/devices/{id}/sessions
+GET /api/v1/endpoints
+GET /api/v1/fleet
+GET /api/v1/health
+GET /api/v1/hub/update
+GET /api/v1/hub/update/history
+GET /api/v1/interactions
+GET /api/v1/interactions/history
+GET /api/v1/looks
+GET /api/v1/machines
+GET /api/v1/machines/{mid}/claude-settings
+GET /api/v1/machines/{mid}/codex-settings
+GET /api/v1/machines/{mid}/dirs
+GET /api/v1/machines/{mid}/doctor
+GET /api/v1/machines/{mid}/file
+GET /api/v1/machines/{mid}/file/convert
+GET /api/v1/machines/{mid}/file/download
+GET /api/v1/machines/{mid}/file/thumb
+GET /api/v1/machines/{mid}/fs
+GET /api/v1/machines/{mid}/fs/find
+GET /api/v1/machines/{mid}/git/blob
+GET /api/v1/machines/{mid}/git/diff
+GET /api/v1/machines/{mid}/git/log
+GET /api/v1/machines/{mid}/git/show
+GET /api/v1/machines/{mid}/git/status
+GET /api/v1/machines/{mid}/panes
+GET /api/v1/machines/{mid}/ports/{port}
+GET /api/v1/machines/{mid}/ports/{port}/connect
+GET /api/v1/machines/{mid}/stat
+GET /api/v1/mutes
+GET /api/v1/ops/{id}
+GET /api/v1/personas
+GET /api/v1/personas/{id}/{file...}
+GET /api/v1/pins
+GET /api/v1/sessions
+GET /api/v1/sessions/{mid}/{sid}/info
+GET /api/v1/sessions/{mid}/{sid}/items
+GET /api/v1/sessions/{mid}/{sid}/items/{iid}/full
+GET /api/v1/sessions/{mid}/{sid}/items/{iid}/image
+GET /api/v1/sessions/{mid}/{sid}/screen
+GET /api/v1/skills
+GET /api/v1/usage/windows # moving to the manager
+GET /api/v1/workspace-board # moving to the manager
+GET /api/v1/workspace-board/settings # moving to the manager
+GET /api/v1/workspaces # moving to the manager
+GET /api/v1/ws
+GET {bus.Path}
+GET {devicewire.RelayPath}
+GET {link.Path}
+GET {link.StreamPath}
+GET {peerPath}
+POST /api/v1/admin/devices/pair
+POST /api/v1/admin/doctor
+POST /api/v1/admin/login
+POST /api/v1/admin/logout
+POST /api/v1/admin/machines
+POST /api/v1/admin/machines/{id}/connector
+POST /api/v1/admin/machines/{id}/link-pair
+POST /api/v1/admin/machines/{id}/reconnect
+POST /api/v1/admin/password
+POST /api/v1/admin/peers
+POST /api/v1/admin/peers/code
+POST /api/v1/admin/peers/{hub_id}/center
+POST /api/v1/admin/peers/probe
+POST /api/v1/admin/reload
+POST /api/v1/admin/restart
+POST /api/v1/admin/setup
+POST /api/v1/admin/setup-code
+POST /api/v1/admin/usage-sources # moving to the manager
+POST /api/v1/admin/usage-sources/test # moving to the manager
+POST /api/v1/auth/pair-codes
+POST /api/v1/auth/tokens
+POST /api/v1/devices
+POST /api/v1/devices/{id}/live-activity
+POST /api/v1/devices/{id}/lock-tests
+POST /api/v1/devices/{id}/lock-tests/{test_id}/receipt
+POST /api/v1/hub/update
+POST /api/v1/hub/update/check
+POST /api/v1/interactions/{id}/reanswer
+POST /api/v1/interactions/{id}/resolve
+POST /api/v1/machines/{id}/confirm
+POST /api/v1/machines/{id}/reject
+POST /api/v1/machines/{mid}/doctor/fix
+POST /api/v1/machines/{mid}/files
+POST /api/v1/machines/{mid}/git/pull
+POST /api/v1/machines/{mid}/panes
+POST /api/v1/machines/{mid}/panes/agent
+POST /api/v1/machines/{mid}/panes/close
+POST /api/v1/machines/{mid}/panes/git
+POST /api/v1/machines/{mid}/panes/split
+POST /api/v1/machines/{mid}/ports/{port}/open
+POST /api/v1/machines/{mid}/spaces/{wid}/rename
+POST /api/v1/machines/{mid}/tabs/close
+POST /api/v1/machines/{mid}/tabs/rename
+POST /api/v1/machines/{mid}/worktree/create
+POST /api/v1/machines/{mid}/worktree/prepare
+POST /api/v1/notify
+POST /api/v1/phone/runtime-cli
+POST /api/v1/sessions
+POST /api/v1/sessions/{mid}/{sid}/attach
+POST /api/v1/sessions/{mid}/{sid}/close
+POST /api/v1/sessions/{mid}/{sid}/fork
+POST /api/v1/sessions/{mid}/{sid}/interrupt
+POST /api/v1/sessions/{mid}/{sid}/keys
+POST /api/v1/sessions/{mid}/{sid}/messages
+POST /api/v1/sessions/{mid}/{sid}/modes
+POST /api/v1/sessions/{mid}/{sid}/queue
+POST /api/v1/sessions/{mid}/{sid}/rename
+POST /api/v1/sessions/{mid}/{sid}/rewind
+POST /api/v1/sessions/{mid}/{sid}/screen/before
+POST /api/v1/sessions/{mid}/{sid}/seen
+POST /api/v1/workspace-board # moving to the manager
+POST {peerPairPath}
+PUT /api/v1/admin/assistant
+PUT /api/v1/admin/hub
+PUT /api/v1/admin/network/access
+PUT /api/v1/admin/network/public
+PUT /api/v1/admin/usage-sources # moving to the manager
+PUT /api/v1/admin/usage-sources/{id} # moving to the manager
+PUT /api/v1/devices/{id}/prefs
+PUT /api/v1/hub/update/settings
+PUT /api/v1/looks/current
+PUT /api/v1/machines/{mid}/claude-settings
+PUT /api/v1/machines/{mid}/codex-settings
+PUT /api/v1/mutes
+PUT /api/v1/pins
+PUT /api/v1/workspace-board/settings # moving to the manager

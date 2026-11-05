@@ -12,7 +12,12 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
@@ -187,7 +192,8 @@ internal fun InteractionForm(
             "question" -> if (question != null) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     JTextButton(stringResource(R.string.chat_question_previous), { update(draft.copy(page = draft.page - 1)) }, enabled = draft.page > 0 && editable)
-                    Text("${draft.page + 1} / ${questions.size}", Modifier.padding(top = Tokens.Space.m))
+                    val spokenPage = stringResource(R.string.chat_question_position, draft.page + 1, questions.size)
+                    Text("${draft.page + 1} / ${questions.size}", Modifier.padding(top = Tokens.Space.m).semantics { contentDescription = spokenPage })
                     val action = if (draft.page == questions.lastIndex) AnswerAction.Submit else AnswerAction.Advance
                     JTextButton(stringResource(if (draft.page == questions.lastIndex) R.string.chat_question_submit else R.string.chat_question_next), { act(action) }, enabled = enabled(action))
                 }
@@ -196,17 +202,23 @@ internal fun InteractionForm(
             "screen" -> if (secret) {
                 JButton(stringResource(R.string.chat_screen_submit_password), onClick = { act(AnswerAction.TerminalText, AnswerDraft(text = password)) },
                     enabled = editable && password.isNotEmpty())
-            } else options.forEach { option ->
-                val value = draft.copy(option = option.key)
-                val allowed = option.kind != ScreenOptionKind.Unknown &&
-                    AnswerBuilder.build(interaction, AnswerAction.ScreenOption, value, context).allowed
-                // The terminal's "chat about this" hands the question back to the conversation (iOS 改在对话里说).
-                if (option.kind == ScreenOptionKind.Chat) JButton(stringResource(R.string.chat_screen_chat_instead), { act(AnswerAction.ScreenOption, value) },
-                    kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.ChatCircle, enabled = allowed)
-                else {
-                    val display = AnswerBuilder.display(option.label)
-                    DecisionOption(numberedOption(option.key, display.text), { act(AnswerAction.ScreenOption, value) },
-                        detail = option.detail, recommended = display.recommended, selected = draft.option == option.key, enabled = allowed)
+            } else {
+                // The options read as "n of total"; 改在对话里说 is a separate button, not one of them.
+                val plain = options.filter { it.kind != ScreenOptionKind.Chat }
+                fun positionOf(option: ParsedScreenOption) = plain.indexOfFirst { it === option } + 1 to plain.size
+                options.forEach { option ->
+                    val value = draft.copy(option = option.key)
+                    val allowed = option.kind != ScreenOptionKind.Unknown &&
+                        AnswerBuilder.build(interaction, AnswerAction.ScreenOption, value, context).allowed
+                    // The terminal's "chat about this" hands the question back to the conversation (iOS 改在对话里说).
+                    if (option.kind == ScreenOptionKind.Chat) JButton(stringResource(R.string.chat_screen_chat_instead), { act(AnswerAction.ScreenOption, value) },
+                        kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.ChatCircle, enabled = allowed)
+                    else {
+                        val display = AnswerBuilder.display(option.label)
+                        DecisionOption(numberedOption(option.key, display.text), { act(AnswerAction.ScreenOption, value) },
+                            detail = option.detail, recommended = display.recommended, selected = draft.option == option.key, enabled = allowed,
+                            position = positionOf(option))
+                    }
                 }
             }
         }
@@ -216,13 +228,17 @@ internal fun InteractionForm(
         if (full) Text(interactionSource(interaction, machine), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         interaction.requestSourceLabel()?.let { Text(it.text(), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
         blockedReason?.let { Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.cautionText) }
-        if (uncertain) PendingBadge(PendingStatus.Unconfirmed)
-        if (full || readOnly || uncertain || busy) Text(when {
-            readOnly -> stringResource(R.string.chat_request_read_only)
-            uncertain -> stringResource(R.string.chat_request_uncertain)
-            busy -> stringResource(R.string.chat_request_busy)
-            else -> RequestExpiry.label(interaction.expiresAt, now)?.text() ?: stringResource(R.string.chat_request_waiting)
-        }, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+        // Always present (empty and sizeless when idle) so a screen reader announces 正在发送 / 没确认送达 after an answer;
+        // the countdown stays outside, or it would be read out every minute.
+        Column(Modifier.testTag("request-status").semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
+            if (uncertain) PendingBadge(PendingStatus.Unconfirmed)
+            if (!readOnly && (uncertain || busy)) Text(stringResource(if (uncertain) R.string.chat_request_uncertain else R.string.chat_request_busy),
+                style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+        }
+        if (readOnly || (full && !uncertain && !busy)) Text(
+            if (readOnly) stringResource(R.string.chat_request_read_only)
+            else RequestExpiry.label(interaction.expiresAt, now)?.text() ?: stringResource(R.string.chat_request_waiting),
+            style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
         Spacer(Modifier.height(Tokens.Space.s))
         when (interaction.kind) {
             "permission" -> {
@@ -269,7 +285,8 @@ internal fun InteractionForm(
                     val display = AnswerBuilder.display(option.label)
                     DecisionOption(numberedOption("${index + 1}", display.text), { act(AnswerAction.PickOption, draft.copy(optionIndex = index)) },
                         detail = option.description, recommended = display.recommended,
-                        selected = option.label in draft.picks[question.question].orEmpty(), enabled = editable)
+                        selected = option.label in draft.picks[question.question].orEmpty(), enabled = editable,
+                        multiSelect = question.multiSelect, position = index + 1 to question.options.size)
                 }
                 var otherOpen by rememberSaveable(interaction.id, question.question) { mutableStateOf(false) }
                 if (otherOpen || question.question in draft.other) {

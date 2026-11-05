@@ -40,9 +40,12 @@ export interface MenuItem {
   inline?: boolean;
   /** The label wraps (breaking anywhere) instead of ending in …: a value that must be read in full, like a path. */
   wrap?: boolean;
+  /** A line to read, not a choice (#4054): plain text that wraps at word breaks, with the hint after it; the keys and
+   *  the pointer pass over it. A menu of notes only is a popover that explains something. */
+  note?: boolean;
 }
 
-export const enabled = (it: MenuItem | undefined): it is MenuItem => Boolean(it) && !it!.disabled;
+export const enabled = (it: MenuItem | undefined): it is MenuItem => Boolean(it) && !it!.disabled && !it!.note;
 
 /** The next row that can be chosen when moving `dir` (1 down, -1 up) from `from` (-1: none yet), wrapping round; `from`
  *  when nothing can. Moving up from nothing lands on the last row. */

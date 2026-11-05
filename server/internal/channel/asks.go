@@ -122,16 +122,18 @@ func QuestionText(l i18n.Lang, a *Ask, i int) string {
 // The words a reply answers with, in any of the three languages whatever the user's is now (the texts asking say the
 // user's language's, but someone may answer in another): compared lowercased, without trailing punctuation.
 var (
-	yes = []string{"允许", "同意", "确认", "可以", "好", "好的", "行", "y", "yes", "ok", "allow",
-		"sure", "approve", "許可", "はい", "承認", "いいよ", "いいです"}
-	no = []string{"拒绝", "不允许", "不同意", "不行", "不要", "取消", "n", "no", "deny",
+	yes = []string{"允许", "同意", "确认", "可以", "好", "好的", "好了", "好吧", "行", "行吧", "批准",
+		"y", "yes", "ok", "okay", "yeah", "yep", "approved", "allow", "sure", "approve",
+		"許可", "はい", "承認", "いいよ", "いいです"}
+	no = []string{"拒绝", "不批准", "不允许", "不同意", "不行", "不要", "取消", "n", "no", "deny",
 		"reject", "cancel", "拒否", "いいえ", "だめ", "ダメ", "キャンセル", "却下"}
-	planRun     = []string{"批准并自动执行", "自动执行", "approve and run", "run", "auto", "承認して自動実行", "自動実行"}
+	planRun     = []string{"批准并自动执行", "批准并运行", "批准运行", "自动执行", "approve and run", "run", "auto", "承認して自動実行", "自動実行"}
 	planApprove = []string{"批准", "approve", "承認"}
 )
 
-// trailing is the punctuation a reply may end with, ignored when reading it.
-const trailing = "。.!！?？"
+// trailing is the punctuation a reply may end with, ignored when reading it: sentence stops, commas, a wave; not a
+// word of the answer itself.
+const trailing = "。.．,，、!！?？~～"
 
 func is(text string, words []string) bool {
 	t := strings.ToLower(strings.TrimRight(strings.TrimSpace(text), trailing))

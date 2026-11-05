@@ -16,6 +16,7 @@ var (
 	clip       = textfmt.Clip
 	oneLine    = textfmt.OneLine
 	firstLine  = textfmt.FirstLine
+	planTitle  = textfmt.PlanTitle
 	ago        = textfmt.Ago
 	short      = textfmt.Short
 	agentLabel = textfmt.AgentLabel

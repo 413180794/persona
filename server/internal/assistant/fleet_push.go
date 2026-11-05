@@ -386,7 +386,8 @@ func (s *Service) deliver(n Notification) {
 	}()
 }
 
-// noteAsked: the conversation pushed what matters itself (notify_user): its own finished push is left out.
+// noteAsked: the conversation pushed what matters itself (notify_user), or a scheduled run in it was failed and
+// pushed as such: every finished push of the whole conversation is held back for the next three minutes.
 func (s *Service) noteAsked(session string) {
 	s.fleet.mu.Lock()
 	defer s.fleet.mu.Unlock()

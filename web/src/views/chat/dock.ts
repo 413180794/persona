@@ -51,6 +51,19 @@ export function cardLine(ix: Interaction): string {
   return interactionAsk(ix) || interactionTitle(ix);
 }
 
+export interface NextWaiting {
+  /** The first of them in 总览's 需要你处理 order (the store's). */
+  ix: Interaction;
+  /** How many cards wait on you outside this chat. */
+  count: number;
+}
+
+/** The cards other chats wait on you with (#4091): the same list 总览's 需要你处理 shows, this chat's taken out. */
+export function nextWaiting(all: Interaction[], mid: string, sid: string): NextWaiting | null {
+  const others = all.filter((ix) => ix.machine_id !== mid || ix.session_id !== sid);
+  return others.length ? { ix: others[0], count: others.length } : null;
+}
+
 /** When the turn going on started: its message, else its first item (SegmentView's 正在工作… counts from the same). */
 export function turnStart(seg: Pick<Segment, "user" | "start"> | undefined): string | undefined {
   return seg?.user?.ts ?? seg?.start;

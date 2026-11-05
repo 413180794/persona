@@ -779,7 +779,7 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 			body = ix.Questions[0].Question
 		}
 	case proto.IxPlan:
-		body = firstLine(ix.Plan)
+		body = planTitle(ix.Plan)
 	case proto.IxScreen:
 		body = screenAlertBody(l, ix)
 	}

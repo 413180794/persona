@@ -111,19 +111,42 @@ func feishuSendUUID() string {
 	return "s:" + hex.EncodeToString(b[:6])
 }
 
-// botTell sends a short note to someone, at most every 10 minutes per person (pairing hints, refusals).
+// botTell refuses a non-owner, at most every 10 minutes per person: a stranger's client must not spam the owner's
+// bot. The pairing path has its own short window (botPairTellFor), so a legitimate retry is never swallowed.
 func (h *Manager) botTell(api *feishubot.Client, openID, chatID, text string) {
 	b := &h.bots
+	h.botNoteThrottled(api, openID, chatID, text, &b.told, 10*time.Minute)
+}
+
+// botPairTellFor is the pairing path's window: it only absorbs a redelivery of the same message, not a person's
+// repeated tries.
+const botPairTellFor = 30 * time.Second
+
+// botPairTell answers the pairing welcome hint at most every botPairTellFor per person. Wrong-code and expired-code
+// notes are not throttled here: botPair marks its own per-text redelivery key, then sends them via botSendNote.
+func (h *Manager) botPairTell(api *feishubot.Client, openID, chatID, text string) {
+	b := &h.bots
+	h.botNoteThrottled(api, openID, chatID, text, &b.pairTold, botPairTellFor)
+}
+
+// botNoteThrottled sends one text note per openID per window, remembering when in the *told map (held under b.mu).
+func (h *Manager) botNoteThrottled(api *feishubot.Client, openID, chatID, text string, told *map[string]time.Time, window time.Duration) {
+	b := &h.bots
 	b.mu.Lock()
-	if b.told == nil {
-		b.told = map[string]time.Time{}
+	if *told == nil {
+		*told = map[string]time.Time{}
 	}
-	if t, ok := b.told[openID]; ok && b.clock().Sub(t) < 10*time.Minute {
+	if t, ok := (*told)[openID]; ok && b.clock().Sub(t) < window {
 		b.mu.Unlock()
 		return
 	}
-	b.told[openID] = b.clock()
+	(*told)[openID] = b.clock()
 	b.mu.Unlock()
+	h.botSendNote(api, chatID, text)
+}
+
+// botSendNote sends one text note into a chat without any throttling.
+func (h *Manager) botSendNote(api *feishubot.Client, chatID, text string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if _, err := api.Send(ctx, "chat_id", chatID, feishubot.TypeText, feishubot.TextContent(text), feishuSendUUID()); err != nil {
@@ -141,7 +164,7 @@ func (h *Manager) botWelcome(openID, chatID string) {
 	if api == nil || owner != nil || openID == "" || chatID == "" {
 		return
 	}
-	h.botTell(api, openID, chatID, i18n.T(h.userLang(), "hub-bots_chat.pair_hint"))
+	h.botPairTell(api, openID, chatID, i18n.T(h.userLang(), "hub-bots_chat.pair_hint"))
 }
 
 // botMessage handles one message to the bot: the owner's go to the assistant.
@@ -222,11 +245,29 @@ func toast(kind, text string) *feishubot.CardResponse {
 func (h *Manager) botPair(api *feishubot.Client, openID, chatID, text string) {
 	b := &h.bots
 	b.mu.Lock()
+	// Feishu can redeliver the very same message; claimBotMessage drops a repeated id, but a short per-text window
+	// also covers a duplicate that reached us under another id. It must not swallow a genuine retry: a different
+	// answer (the next code guessed) is a new try, so the key is the person plus the exact text.
+	dupKey := openID + "|" + text
+	if t, ok := b.pairTold[dupKey]; ok && b.clock().Sub(t) < botPairTellFor {
+		b.mu.Unlock()
+		return
+	}
 	p := b.set.Pairing
-	ok := p != nil && b.clock().Before(p.Expires) && text == p.Code
-	if !ok && p != nil && regexpDigits.MatchString(text) {
+	live := p != nil && b.clock().Before(p.Expires)
+	ok := live && text == p.Code
+	noteKey := "hub-bots_chat.pair_hint"
+	var noteArgs i18n.Args
+	if !ok && live && regexpDigits.MatchString(text) {
+		// A code-shaped answer while a pairing is still live is a real try: say specifically that it was wrong and
+		// how many tries remain, instead of the generic hint. At the cap the pairing is dropped, so the note says
+		// the code is gone. A time-expired pairing is not "wrong": it keeps the generic hint and no failure.
 		if p.Fails++; p.Fails >= botPairTries {
 			b.set.Pairing = nil // guessed at: the user asks for a new code in the app
+			noteKey = "hub-bots_chat.pair_expired"
+		} else {
+			noteKey = "hub-bots_chat.pair_wrong"
+			noteArgs = i18n.Args{"n": botPairTries - p.Fails}
 		}
 		h.saveBotSettingsLocked()
 	}
@@ -234,10 +275,23 @@ func (h *Manager) botPair(api *feishubot.Client, openID, chatID, text string) {
 		b.set.Owner = &BotOwner{OpenID: openID, ChatID: chatID, At: b.clock().UTC()}
 		b.set.Pairing = nil
 		h.saveBotSettingsLocked()
+	} else {
+		now := b.clock()
+		if b.pairTold == nil {
+			b.pairTold = map[string]time.Time{}
+		}
+		b.pairTold[dupKey] = now
+		if len(b.pairTold)%64 == 0 { // bound the map: keys are useless past the short window
+			for k, at := range b.pairTold {
+				if now.Sub(at) >= botPairTellFor {
+					delete(b.pairTold, k)
+				}
+			}
+		}
 	}
 	b.mu.Unlock()
 	if !ok {
-		h.botTell(api, openID, chatID, i18n.T(h.userLang(), "hub-bots_chat.pair_hint"))
+		h.botSendNote(api, chatID, i18n.T(h.userLang(), noteKey, noteArgs))
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -253,8 +307,9 @@ func (h *Manager) botPair(api *feishubot.Client, openID, chatID, text string) {
 		return
 	}
 	l := h.userLang()
-	card := feishubot.NewCard(i18n.T(l, "hub-bots_chat.paired"), feishubot.Green, i18n.T(l, "hub-bots_chat.paired")).Markdown(i18n.T(l, "hub-bots_chat.paired_body"))
-	if _, err := h.botPost(ctx, api, chatID, "", card, ""); err != nil {
+	body := i18n.T(l, "hub-bots_chat.paired_body")
+	card := feishubot.NewCard(i18n.T(l, "hub-bots_chat.paired"), feishubot.Green, i18n.T(l, "hub-bots_chat.paired")).Markdown(body)
+	if _, err := h.botPost(ctx, api, chatID, "", card, body); err != nil {
 		h.logf("bots: paired note: %v", err)
 	}
 }

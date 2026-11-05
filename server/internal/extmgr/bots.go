@@ -86,17 +86,18 @@ const (
 )
 
 type botHub struct {
-	mu     sync.Mutex
-	loaded bool
-	set    FeishuBotSettings
-	api    *feishubot.Client
-	conn   *feishubot.Conn
-	stop   context.CancelFunc
-	info   feishubot.BotInfo
-	base   context.Context
-	told   map[string]time.Time // sender -> when the bot last told them it is not theirs / not paired
-	names  map[string]string    // open id -> name
-	seen   []string             // the messages taken lately (Feishu delivers some again), memory only
+	mu       sync.Mutex
+	loaded   bool
+	set      FeishuBotSettings
+	api      *feishubot.Client
+	conn     *feishubot.Conn
+	stop     context.CancelFunc
+	info     feishubot.BotInfo
+	base     context.Context
+	told     map[string]time.Time // sender -> when the bot last refused them (10-minute window)
+	pairTold map[string]time.Time // sender -> when the pairing path last answered (short redelivery window)
+	names    map[string]string    // open id -> name
+	seen     []string             // the messages taken lately (Feishu delivers some again), memory only
 	// now is replaced in tests.
 	now func() time.Time
 }
@@ -388,8 +389,9 @@ func (h *Manager) testFeishuBot(ctx context.Context) error {
 		return errBotOff
 	}
 	l := h.botLang(ctx)
-	card := feishubot.NewCard("", "", i18n.T(l, "hub-bots.test_title")).Markdown(i18n.T(l, "hub-bots.test_body"))
-	_, err := h.botPost(ctx, api, set.Owner.ChatID, "", card, "")
+	body := i18n.T(l, "hub-bots.test_body")
+	card := feishubot.NewCard("", "", i18n.T(l, "hub-bots.test_title")).Markdown(body)
+	_, err := h.botPost(ctx, api, set.Owner.ChatID, "", card, body)
 	return err
 }
 

@@ -54,6 +54,8 @@
   "more_pending_other": "残り{count}件",
   "pending_other": "{count}件が対応待ち",
   "first_only": "最初の1件だけ表示",
+  "next_waiting_other": "ほかに{count}件が対応待ち",
+  "next_waiting_detail": "次：{title} · {ask}",
   "form_kicker": "MCPフォーム",
   "url_kicker": "MCPリンク",
   "form_title": "MCPフォームの入力待ち",

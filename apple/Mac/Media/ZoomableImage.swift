@@ -48,6 +48,10 @@ final class ZoomScrollView: NSScrollView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     func setImage(_ image: NSImage) {
+        // Paging swapped the image, so a single-tap close scheduled for the previous image is stale (#3481): without
+        // this, tapping once and then paging closed the viewer after the double-click interval elapsed.
+        pendingTap?.cancel()
+        pendingTap = nil
         imageView.image = image
         lastBounds = .zero
         needsLayout = true

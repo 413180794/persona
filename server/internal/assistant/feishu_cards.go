@@ -351,7 +351,7 @@ func (s *Service) answeredCard(ctx context.Context, ix proto.Interaction, how st
 	case proto.IxPermission:
 		c.Markdown(feishubot.EscapeMarkdown(ix.ToolName + " " + clip(oneLine(ix.Summary), 200)))
 	case proto.IxPlan:
-		c.Markdown(feishubot.EscapeMarkdown(clip(firstLine(ix.Plan), 200)))
+		c.Markdown(feishubot.EscapeMarkdown(clip(planTitle(ix.Plan), 200)))
 	}
 	return c.Note("✓ " + how)
 }

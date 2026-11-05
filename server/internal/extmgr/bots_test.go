@@ -93,6 +93,8 @@ type fakeOpenAPI struct {
 	calls []string // "METHOD path body"
 	n     int
 	read  map[string]any // message id -> what GET /messages/:id answers (its items)
+	// rejectInteractive, when set, is the business code returned for interactive message sends (card rejection).
+	rejectInteractive int
 }
 
 func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
@@ -128,7 +130,14 @@ func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
 		case r.Method == "PATCH":
 			reply(map[string]any{"code": 0})
 		case r.Method == "POST" && strings.HasPrefix(p, "/open-apis/im/v1/messages"):
-			reply(map[string]any{"code": 0, "data": map[string]any{"message_id": fmt.Sprintf("om_bot%d", n)}})
+			code := 0
+			f.mu.Lock()
+			reject := f.rejectInteractive
+			f.mu.Unlock()
+			if reject != 0 && strings.Contains(string(body), `"msg_type":"interactive"`) {
+				code = reject
+			}
+			reply(map[string]any{"code": code, "data": map[string]any{"message_id": fmt.Sprintf("om_bot%d", n)}})
 		default:
 			reply(map[string]any{"code": 404, "msg": "not faked: " + p})
 		}

@@ -328,8 +328,10 @@ func (s *Service) remindAcceptance(now time.Time) {
 		t, ok := s.todoNow(id)
 		b.mu.Lock()
 		a := b.asks[id]
-		if !ok || a == nil {
-			delete(b.asks, id) // the todo is gone
+		if !ok || a == nil || acceptAskEnded(t) {
+			// The todo is gone, or it ended without the hub's auto-judge (the owner closed it or a review did): the
+			// card can never be passed, so stop asking and drop it.
+			delete(b.asks, id)
 			s.saveAcceptLocked(ctx)
 			b.mu.Unlock()
 			continue
@@ -401,10 +403,15 @@ func (s *Service) snapshotUnaccepted(ctx context.Context, loc *time.Location) ([
 	b.mu.Unlock()
 	sort.Slice(list, func(i, j int) bool { return list[i].a.AskedAt.Before(list[j].a.AskedAt) })
 	var out []prompts.SnapshotAccept
+	var ended []string
 	total := 0
 	for _, x := range list {
 		t, ok := s.todoNow(x.id)
 		if !ok {
+			continue
+		}
+		if acceptAskEnded(t) {
+			ended = append(ended, x.id) // closed by the owner or a review: not waiting any more
 			continue
 		}
 		total++
@@ -413,5 +420,27 @@ func (s *Service) snapshotUnaccepted(ctx context.Context, loc *time.Location) ([
 				Since: x.a.AskedAt.In(loc)})
 		}
 	}
+	if len(ended) > 0 {
+		b.mu.Lock()
+		removed := false
+		for _, id := range ended {
+			if b.asks[id] != nil {
+				delete(b.asks, id)
+				removed = true
+			}
+		}
+		if removed {
+			s.saveAcceptLocked(ctx)
+		}
+		b.mu.Unlock()
+	}
 	return out, total
+}
+
+// acceptAskEnded says the todo a 请验收 card waits on has ended without the hub's auto-judge: the owner closed it in
+// the todos themselves (DoneBy "") or a review did (DoneByReview). Such a card can never be passed, so it is neither
+// reminded nor counted. An auto-closed task (DoneByAuto) is the normal state: the judge finished it, but the owner
+// still has to pass the card.
+func acceptAskEnded(t Todo) bool {
+	return t.DoneAt != nil && t.DoneBy != db.DoneByAuto
 }

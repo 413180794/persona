@@ -6,7 +6,9 @@ import { BUSY_MOTION, spinStyle } from "../../lib/busy-motion";
 import type { Interaction } from "../../lib/types";
 import { defaults, elicitationDraft, elicitationResolution, elicitationSource, fields, numberInputMode, saveElicitationDraft, urlHost, urlTarget, validate, type ElicitationAction, type Field, type Values } from "../../lib/elicitation";
 import { answerLines, endedText, type Resolution, type ResolveResult } from "../../lib/answered";
-import { sessionCan } from "../../lib/format";
+import { sessionCan, sessionTitle } from "../../lib/format";
+import { interactionAsk } from "../../lib/inbox";
+import { plainMarkdown } from "../../lib/plain-markdown";
 import { mcpServerLabel, toolDisplayName } from "../../lib/turns";
 import { optionDisplay } from "../../lib/tool-detail";
 import { RecommendedTag } from "../../ui/RecommendedTag";
@@ -16,7 +18,9 @@ import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { permissionDetail, permissionReason, summaryExtra } from "../../lib/tool-detail";
 import { DIFF_TOOLS, DiffBlocks, editDiffs } from "./ActionRow";
-import { cardFold, cardLine, PLAN_MAX, showsAnswered } from "./dock";
+import { cardFold, cardLine, nextWaiting, PLAN_MAX, showsAnswered } from "./dock";
+import { cardState } from "../../lib/card-focus";
+import { href, onLinkClick, type Route } from "../../lib/router";
 import { t } from "../../i18n";
 import { StatusMark } from "../../ui/StatusMark";
 
@@ -673,9 +677,19 @@ function ElicitationField({ field: f, value, error, onChange }: { field: Field; 
   );
 }
 
+/** What an answered card was about, in one line of plain text: what it asked (interactionAsk), a plan's first line;
+ *  empty when it says nothing of its own (never its kind's title, 计划等你审批, which would read as still waiting). */
+export function receiptAbout(ix: Interaction): string {
+  const raw = ix.kind === "plan" ? ((ix.plan ?? "").split("\n").find((l) => l.trim()) ?? "").replace(/^\s*#+\s*/, "") || ix.summary || "" : interactionAsk(ix);
+  return plainMarkdown(raw).replace(/\s+/g, " ").trim();
+}
+
 /** A card this page answered: what was asked and the picks, read-only, for a moment (lib/store.ts endInteraction). */
 export function AnsweredCard({ card }: { card: Answered }) {
   const lines = answerLines(card.ix, card.resolution);
+  // a card with one unlabeled answer (允许, 批准, a terminal option) says what it was about (#4353): which command was
+  // allowed, not only that something was
+  const about = lines.length === 1 && !lines[0].label && card.resolution.dismiss !== true ? receiptAbout(card.ix) : "";
   return (
     <div role="status" className="overflow-hidden rounded-card bg-surface px-3.5 py-2.5 shadow-card" style={{ animation: `fade-up 300ms ${EASE} both` }}>
       <div className="flex items-start justify-between gap-3">
@@ -685,6 +699,7 @@ export function AnsweredCard({ card }: { card: Answered }) {
             {card.resolution.dismiss === true ? t("chat-interactions.handed_back") : t("chat-interactions.answered")}
           </div>
           <div className="flex flex-col gap-1">
+            {about && <span data-answered-about className="block truncate text-[12px] text-ink-3" title={about}>{about}</span>}
             {lines.map((l, i) => (
               <div key={i} className="min-w-0 text-[13px] leading-snug">
                 {l.label && <span className="block truncate text-[12px] text-ink-3">{l.label}</span>}
@@ -721,9 +736,11 @@ export function InteractionCard({ ix }: { ix: Interaction }) {
  * Narrow ones (#1996) keep them in a box that scrolls on its own: the first in full and 还有 N 件 for the others until
  * that is tapped; while the keyboard is up, one line for all of them (tapping it puts the keyboard away).
  */
-export function PendingCards({ interactions, answered, narrow, short = false, keyboard, onDismissKeyboard }: {
+export function PendingCards({ interactions, answered, offerNext, narrow, short = false, keyboard, onDismissKeyboard }: {
   interactions: Interaction[];
   answered: Answered[];
+  /** This chat: offer what other chats wait on you with (#4091), one line under 已回答 once it has no card left. */
+  offerNext?: { mid: string; sid: string };
   narrow: boolean;
   /** A phone on its side: all of them in one line until tapped. */
   short?: boolean;
@@ -739,7 +756,9 @@ export function PendingCards({ interactions, answered, narrow, short = false, ke
   if (!count && !answered.length) return null;
   const done = showsAnswered({ narrow, keyboard, open, short }) ? answered.map((a) => <AnsweredCard key={a.ix.id} card={a} />) : [];
   const cards = interactions.map((ix) => <InteractionCard key={ix.id} ix={ix} />);
-  if (!narrow) return <>{done}{cards}</>;
+  // only right after answering here (the 已回答 receipt shows), never while this chat still has a card: no jump, no nag
+  const onward = !count && done.length > 0 && offerNext ? <NextWaitingRow {...offerNext} /> : null;
+  if (!narrow) return <>{done}{cards}{onward}</>;
   const more = summary?.kind === "more";
   return (
     <div className="flex min-h-0 shrink flex-col gap-2">
@@ -765,6 +784,7 @@ export function PendingCards({ interactions, answered, narrow, short = false, ke
           onClick={summary.kind === "typing" ? onDismissKeyboard : () => setOpen(true)}
         />
       )}
+      {onward}
       {open && (count > 1 || short) && !keyboard && (
         <Button tone="quiet" onClick={() => setOpen(false)} className="touch-hit -mt-1 self-center">
           {short ? t("chat-interactions.collapse") : t("chat-interactions.first_only")}
@@ -791,5 +811,32 @@ function FoldRow({ label, detail, onClick }: { label: string; detail: string; on
       <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-3">{detail}</span>
       <Icon name="chevronRight" size={14} stroke={2.2} className="shrink-0 text-ink-3" />
     </button>
+  );
+}
+
+/** 还有 N 件等你 · 下一件：<agent> · <what it asks> ›, opening that chat with that card first (lib/card-focus.ts).
+ *  Mounted only right after an answer here: the cards of other chats coming and going redraw this, not the chat. */
+function NextWaitingRow({ mid, sid }: { mid: string; sid: string }) {
+  const next = useStore((s) => nextWaiting(s.interactions, mid, sid));
+  const session = useStore((s) => (next ? (s.sessions[next.ix.machine_id] ?? []).find((x) => x.session_id === next.ix.session_id) : undefined));
+  if (!next) return null;
+  const { ix, count } = next;
+  // named as 总览's 需要你处理 row names it, worded as the folded cards' line (cardLine)
+  const title = ix.session_title?.trim() || (session ? sessionTitle(session) : ix.cwd || t("home.session"));
+  const ask = plainMarkdown(cardLine(ix)).replace(/\s+/g, " ").trim();
+  const to: Route = { name: "session", mid: ix.machine_id, sid: ix.session_id };
+  return (
+    <a
+      href={href(to)}
+      data-chat-next-waiting
+      onClick={(e) => onLinkClick(e, to, cardState(ix.id))}
+      className="flex h-11 shrink-0 items-center gap-2 rounded-card bg-surface px-3.5 shadow-card transition-colors hover:bg-hover"
+      style={{ animation: `fade-up 250ms ${EASE} both` }}
+    >
+      <span className="size-1.5 shrink-0 rounded-full bg-red" />
+      <span className="shrink-0 text-[13px] font-medium whitespace-nowrap text-ink">{t("chat-interactions.next_waiting", { count })}</span>
+      <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-3">{t("chat-interactions.next_waiting_detail", { title, ask })}</span>
+      <Icon name="chevronRight" size={14} stroke={2.2} className="shrink-0 text-ink-3" />
+    </a>
   );
 }

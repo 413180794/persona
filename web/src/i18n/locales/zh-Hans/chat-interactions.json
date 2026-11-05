@@ -54,6 +54,8 @@
   "more_pending_other": "还有 {count} 件",
   "pending_other": "{count} 件待处理",
   "first_only": "收起其余",
+  "next_waiting_other": "还有 {count} 件等你",
+  "next_waiting_detail": "下一件：{title} · {ask}",
   "form_kicker": "MCP 表单",
   "url_kicker": "MCP 链接",
   "form_title": "MCP 表单等你填写",

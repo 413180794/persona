@@ -491,3 +491,52 @@ func TestOptionNumberPhoneShapes(t *testing.T) {
 		t.Errorf("question ①？ is the answer itself: %+v", r)
 	}
 }
+
+// Other everyday ways to say it answer a permission or a plan: 批准, approved/okay/yeah/yep, 好了/好吧/行吧, and a
+// comma, enumeration comma or a wave left at the end. The match is exact: a negation never becomes an approval just
+// for holding a positive word (#4375).
+func TestAnswerApprovalWordVariants(t *testing.T) {
+	allow := []string{"批准", "Approved", "APPROVED", "okay", "OKAY", "yeah", "yep", "好了", "好吧", "行吧",
+		"批准，", "好的、", "ok~", "行～", "Yeah.", "批准．", "okay,"}
+	for _, text := range allow {
+		if r, done, _ := ReadAnswer("", &Ask{Kind: proto.IxPermission}, text); !done || r.Allow == nil || !*r.Allow {
+			t.Errorf("permission %q allowed: done=%v %+v", text, done, r)
+		}
+	}
+	deny := []string{"不批准", "不行", "不要", "不允许", "不同意", "不批准，", "不行~", "拒绝～"}
+	for _, text := range deny {
+		if r, done, _ := ReadAnswer("", &Ask{Kind: proto.IxPermission}, text); !done || r.Allow == nil || *r.Allow {
+			t.Errorf("permission %q denied: done=%v %+v", text, done, r)
+		}
+	}
+	// Neither word alone, nor a question, is taken: the user is asked again.
+	for _, text := range []string{"准", "吧", "不好", "批准吗", "批准吧？", "不批准吧？", "批准了再说", "也许批准"} {
+		if _, done, again := ReadAnswer("", &Ask{Kind: proto.IxPermission}, text); done || again == "" {
+			t.Errorf("permission %q was taken: done=%v", text, done)
+		}
+	}
+	// A plan: the run words bypass; 批准 alone still answers option 2; the negation sends it back with no note.
+	for text, mode := range map[string]string{
+		"批准并运行": "bypassPermissions", "批准运行": "bypassPermissions", "批准并运行，": "bypassPermissions",
+		"批准运行~": "bypassPermissions", "批准并自动执行": "bypassPermissions",
+		"批准": "acceptEdits", "批准。": "acceptEdits", "行吧": "acceptEdits",
+	} {
+		if r, done, _ := ReadAnswer("", &Ask{Kind: proto.IxPlan}, text); !done || r.Approve == nil || !*r.Approve || r.Mode != mode {
+			t.Errorf("plan %q: done=%v %+v", text, done, r)
+		}
+	}
+	for _, text := range []string{"不批准", "不批准。", "不行～"} {
+		if r, done, _ := ReadAnswer("", &Ask{Kind: proto.IxPlan}, text); !done || r.Approve == nil || *r.Approve || r.Feedback != "" {
+			t.Errorf("plan %q sent back without a note: %+v", text, r)
+		}
+	}
+	// A terminal dialog answers with numbers, so the new words and tails are not choices there.
+	if _, done, again := ReadAnswer("", &Ask{Kind: proto.IxScreen, Options: []string{"yes", "no"}}, "批准，"); done || again == "" {
+		t.Error("screen: a word was taken as an option")
+	}
+	// A free-answer question is untouched by the word lists: a wave or comma stays part of the answer.
+	q := []proto.Question{{Question: "备注？"}}
+	if r, done, _ := ReadAnswer("", &Ask{Kind: proto.IxQuestion, Questions: q}, "ok~"); !done || r.Answers["备注？"] != "ok~" {
+		t.Errorf("question: %+v", r)
+	}
+}

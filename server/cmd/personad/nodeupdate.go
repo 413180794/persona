@@ -13,7 +13,7 @@ func runNodeUpdateWatch(ctx context.Context, args []string) error {
 		return nodeupdate.WatchManaged(ctx, args[0], args[1])
 	}
 	if len(args) != 2 {
-		return errors.New("usage: personad node-update-watch <pending> <id>")
+		return errors.New("usage: " + commandName() + " node-update-watch <pending> <id>")
 	}
 	ready := os.NewFile(3, "node-watchdog-ready")
 	if ready != nil {

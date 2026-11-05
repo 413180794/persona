@@ -612,3 +612,23 @@ test('subagents started before the plugin are named from the parent\'s catalog; 
   assert.equal(row.subagents[0].tool_use_id, 'call_old')
   assert.deepEqual(row.background.map((b) => [b.id, b.kind, b.command]), [['workflow-old', 'agent', undefined], ['bash-old', 'shell', 'sleep 600']])
 })
+
+test('an approval card offers 本会话总是同意; always still answers DSH with allowed-once, a refusal still rejects (#3974)', async (t) => {
+  const { n, ctl, ev, rt } = await setup(t, { liveClient: false })
+  ctl.add('session-al', {})
+  rt.start()
+  await n.ready
+  await until('listed', () => n.last('runtime.sessions'))
+  const agent = { session: { id: 'session-al' } }
+  const browser = () => { throw new Error('the browser was asked') }
+
+  n.resolve = () => ({ allow: true, always: true })
+  assert.equal(await ev.waterfall('approval/request', { agent, toolName: 'bash', callId: 'call_a' }, browser), 'allowed-once')
+  const card = n.asked.at(-1)
+  assert.equal(card.always_label, '本会话（主 Agent 和子 Agent）不再问 Bash')
+  assert.equal(n.hello.caps.keep_always, true, 'DSH asks the hub to keep it')
+  assert.equal(card.always_keys, undefined, 'the node names the grant, not the runtime')
+
+  n.resolve = () => ({ allow: false, always: true })
+  assert.equal(await ev.waterfall('approval/request', { agent, toolName: 'bash', callId: 'call_b' }, browser), 'rejected')
+})

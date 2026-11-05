@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Interaction, Session } from "../../lib/types";
-import type { AnsweredCard } from "../../lib/store";
+import { getState, type AnsweredCard } from "../../lib/store";
 import { Header, spaceAgentsItem } from "./ChatView";
 import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
 import { Composer } from "./Composer";
@@ -108,10 +108,34 @@ describe("Header, the 终端 | 对话 switch (#2419)", () => {
 const ix = (id: string, kind: Interaction["kind"], extra: Partial<Interaction> = {}) =>
   ({ id, machine_id: "m", session_id: "s", kind, tool_name: "Bash", ...extra }) as Interaction;
 const three = [ix("a", "plan", { plan: "## 计划" }), ix("b", "question", { questions: [{ question: "用哪个框架？", options: [{ label: "A" }] }] as Interaction["questions"] }), ix("c", "permission")];
-const cards = (o: { narrow: boolean; keyboard?: boolean; interactions?: Interaction[]; answered?: AnsweredCard[] }) =>
-  renderToStaticMarkup(<PendingCards interactions={o.interactions ?? three} answered={o.answered ?? []} narrow={o.narrow} keyboard={Boolean(o.keyboard)} onDismissKeyboard={() => {}} />);
+const cards = (o: { narrow: boolean; keyboard?: boolean; interactions?: Interaction[]; answered?: AnsweredCard[]; offer?: boolean }) =>
+  renderToStaticMarkup(<PendingCards interactions={o.interactions ?? three} answered={o.answered ?? []} offerNext={o.offer ? { mid: "m", sid: "s" } : undefined} narrow={o.narrow} keyboard={Boolean(o.keyboard)} onDismissKeyboard={() => {}} />);
 
 describe("PendingCards", () => {
+  it("says what an answered card was about when its answer is one word (允许 / 批准)", () => {
+    const perm = ix("p", "permission", { tool_input: { command: "swift test" } });
+    const html = cards({ narrow: false, interactions: [], answered: [{ ix: perm, resolution: { allow: true } }] });
+    expect(html).toContain("data-answered-about");
+    expect(html).toContain("swift test");
+    expect(html).toContain("允许");
+    // a question's lines already carry what was asked
+    const q = ix("q", "question", { questions: [{ question: "用哪个框架？", options: [{ label: "A" }] }] as Interaction["questions"] });
+    expect(cards({ narrow: false, interactions: [], answered: [{ ix: q, resolution: { answers: { "用哪个框架？": "A" } } }] })).not.toContain("data-answered-about");
+    // a plan says its first line, not 计划等你审批; a bare one says nothing extra
+    const plan = ix("l", "plan", { plan: "\n## 改用 **vitest**\n1. 换配置" });
+    const planHtml = cards({ narrow: false, interactions: [], answered: [{ ix: plan, resolution: { approve: true } }] });
+    expect(planHtml).toContain("改用 vitest");
+    expect(planHtml).not.toContain("计划等你审批");
+    expect(cards({ narrow: false, interactions: [], answered: [{ ix: ix("l2", "plan"), resolution: { approve: true } }] })).not.toContain("data-answered-about");
+    // a terminal dialog with nothing to say: no 终端等你处理 above its Yes
+    const dialog = ix("d", "screen", { dialog: { options: [{ key: "1", label: "Yes" }] } as Interaction["dialog"] });
+    const dialogHtml = cards({ narrow: false, interactions: [], answered: [{ ix: dialog, resolution: { option: "1" } }] });
+    expect(dialogHtml).not.toContain("data-answered-about");
+    expect(dialogHtml).not.toContain("终端等你处理");
+    // handed back: nothing was decided about it
+    expect(cards({ narrow: false, interactions: [], answered: [{ ix: perm, resolution: { dismiss: true } }] })).not.toContain("data-answered-about");
+  });
+
   it("shows every card on a wide screen, in no box of their own", () => {
     const html = cards({ narrow: false });
     expect(html).not.toContain("data-chat-cards");
@@ -148,6 +172,33 @@ describe("PendingCards", () => {
 
   it("is nothing without cards", () => {
     expect(cards({ narrow: true, interactions: [] })).toBe("");
+  });
+});
+
+describe("PendingCards, the next card waiting elsewhere (#4091)", () => {
+  const answered: AnsweredCard[] = [{ ix: ix("done", "question"), resolution: { answers: { q: "A" } } }];
+  const other = ix("other", "question", { machine_id: "n", session_id: "t", session_title: "照片同步脚本支持 HEIC", questions: [{ question: "保存为哪种格式？", options: [] }] as Interaction["questions"] });
+  // the store's cards: two of other chats, one of this chat (left out of the count)
+  const seed = (list: Interaction[]) => Object.assign(getState(), { interactions: list, sessions: {} });
+  afterEach(() => seed([]));
+
+  it("says how many, which is next and what it asks under 已回答, linking to that chat", () => {
+    seed([ix("mine", "permission"), other, ix("more", "permission", { machine_id: "n", session_id: "u" })]);
+    for (const narrow of [false, true]) {
+      const html = cards({ narrow, interactions: [], answered, offer: true });
+      expect(html).toContain("已回答");
+      expect(html).toContain("还有 2 件等你");
+      expect(html).toContain("下一件：照片同步脚本支持 HEIC · 保存为哪种格式？");
+      expect(html).toMatch(/<a href="[^"]*\/s\/n\/t"[^>]*data-chat-next-waiting/);
+    }
+  });
+  it("is not there while this chat still has a card, before anything is answered here, when not offered, or with nothing elsewhere", () => {
+    seed([other]);
+    expect(cards({ narrow: true, interactions: [three[2]], answered, offer: true })).not.toContain("data-chat-next-waiting");
+    expect(cards({ narrow: true, interactions: [], answered: [], offer: true })).toBe("");
+    expect(cards({ narrow: false, interactions: [], answered })).not.toContain("data-chat-next-waiting");
+    seed([ix("mine", "permission")]);
+    expect(cards({ narrow: false, interactions: [], answered, offer: true })).not.toContain("data-chat-next-waiting");
   });
 });
 

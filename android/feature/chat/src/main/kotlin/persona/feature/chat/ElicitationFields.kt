@@ -63,7 +63,7 @@ internal fun ElicitationFields(request: Interaction, draft: AnswerDraft, update:
                             val values = (value as? JsonArray).orEmpty()
                             set(JsonArray(if (selected) values - choice else values + choice))
                         } else set(choice)
-                    }, enabled = enabled)
+                    }, enabled = enabled, multiSelect = field.type == "array", position = index + 1 to field.choices.size)
                 }
                 else -> JTextField((value as? JsonPrimitive)?.content.orEmpty(), { set(JsonPrimitive(it)) },
                     modifier = Modifier.fillMaxWidth(), enabled = enabled,

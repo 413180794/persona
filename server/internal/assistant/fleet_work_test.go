@@ -227,6 +227,8 @@ func TestInteractionLineSaysWhatIsAsked(t *testing.T) {
 		{i18n.En, proto.Interaction{Kind: proto.IxQuestion, Questions: []proto.Question{{Question: " "}, {Question: "b"}, {Question: "c"}}}, "Has a question (2 more questions)"},
 		{i18n.ZhHans, proto.Interaction{Kind: proto.IxQuestion, Questions: []proto.Question{{Question: "部署到哪？"}}}, "部署到哪？"},
 		{i18n.ZhHans, proto.Interaction{Kind: proto.IxPlan, Plan: " \n#\n"}, "计划等你审批"},
+		// The plan's first line without its Markdown marks (#4387).
+		{i18n.ZhHans, proto.Interaction{Kind: proto.IxPlan, Plan: "- [ ] **第一步**：改 `cache.go`\n- [ ] 第二步"}, "计划等你审批：第一步：改 cache.go"},
 	} {
 		if got := interactionLine(c.l, c.ix); got != c.want {
 			t.Errorf("%q %s: %q, want %q", c.l, c.ix.Kind, got, c.want)

@@ -263,6 +263,171 @@ func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
 	t.Fatal("the failed run was not recorded")
 }
 
+// A run whose turn ends with no output at all (the model service answered 200 with nothing: no reply, no tool call,
+// no error) is failed, pushed and retried once, not left "ok" behind a push that says 完成了 (#3752).
+func TestTaskSilentTurnFailsAndRetriesOnce(t *testing.T) {
+	n := newFakeHub().withMachine()
+	h := newStorelessService(t, n)
+	h.runRetry = 50 * time.Millisecond
+	n.items = []proto.Item{{ID: "u1", Role: "user", Kind: proto.KindText, Text: "⏰ 早报（定时任务）\n\n给我今天的早报"},
+		{ID: "a1", Role: "assistant", Kind: proto.KindText, Text: ""}}
+	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
+
+	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
+		Cwd: "/home/me/.jarvis/assistant"})
+	go func() {
+		time.Sleep(3 * time.Second)
+		n.mu.Lock()
+		for i := range n.sessions["server"] {
+			n.sessions["server"][i].Status, n.sessions["server"][i].State = proto.StatusOffline, proto.StateIdle
+		}
+		n.mu.Unlock()
+	}()
+
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	want := silentTurnErrorIn(h.lang(context.Background()))
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		sc := h.loadSchedule(context.Background())
+		sc.mu.Lock()
+		failed := slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Status == runFailed && r.Error == want })
+		sc.mu.Unlock()
+		if failed {
+			if p := n.pushed(); len(p) == 0 || p[0].Title != "定时任务失败：早报" || p[0].SessionID != "s1" {
+				t.Fatalf("the failure is pushed: %+v", p)
+			}
+			h.fleet.mu.Lock()
+			_, held := h.fleet.notified["s1"]
+			h.fleet.mu.Unlock()
+			if !held {
+				t.Fatal("the turn's own 「✅ 早报 · 完成了」 push is held back (the failure was pushed instead)")
+			}
+			for time.Now().Before(deadline) {
+				if n.sent() >= 2 {
+					sc.mu.Lock()
+					retried := slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Retried })
+					sc.mu.Unlock()
+					if retried {
+						return
+					}
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			t.Fatal("the silent run was not retried")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("the silent run was not recorded as failed")
+}
+
+// The session's state lags: it is never seen working, and the last item changed only because the prompt landed. The
+// turn read holds the prompt alone: that is no turn known to have ended, so the run is not failed, not pushed as a
+// failure and not run again (review of #3777: a wrong verdict ran the whole 早报 twice).
+func TestTaskPromptOnlyTurnIsNotJudgedSilent(t *testing.T) {
+	n := newFakeHub().withMachine()
+	h := newStorelessService(t, n)
+	h.runRetry = 50 * time.Millisecond
+	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
+	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusIdle, State: proto.StateIdle, Assistant: true,
+		Cwd: "/home/me/.jarvis/assistant"})
+	go func() {
+		time.Sleep(time.Second)
+		n.setItems(proto.Item{ID: "u1", Role: "user", Kind: proto.KindText, Text: "⏰ 早报（定时任务）\n\n给我今天的早报"})
+	}()
+
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(6 * time.Second) // the watcher has seen the changed item and read the turn
+	sc := h.loadSchedule(context.Background())
+	sc.mu.Lock()
+	failed := slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Status == runFailed })
+	sc.mu.Unlock()
+	if failed {
+		t.Fatal("a turn that holds only its prompt was failed as silent")
+	}
+	if p := n.pushed(); len(p) != 0 {
+		t.Fatalf("no failure is pushed: %+v", p)
+	}
+	if got := n.sent(); got != 1 {
+		t.Fatalf("the task is not run again: %d sends", got)
+	}
+}
+
+// The turn is seen working, one poll reads it idle (a status flap, a missed spinner), then it works again: with only
+// [prompt, thinking] read so far it is still going, so the run is not failed, not pushed as a failure and not run
+// again (third review of #3777).
+func TestTaskFlapMidTurnIsNotJudgedSilent(t *testing.T) {
+	n := newFakeHub().withMachine()
+	h := newStorelessService(t, n)
+	h.runRetry = 50 * time.Millisecond
+	// No items yet when the run is sent: the watcher's "before" is the empty conversation, so the prompt landing
+	// changes the last item, which is what made the old order end the wait on the first idle poll.
+	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
+	working := proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true, Cwd: "/home/me/.jarvis/assistant"}
+	idle := working
+	idle.Status, idle.State = proto.StatusIdle, proto.StateIdle
+	n.setSessions("server", working)
+	go func() {
+		time.Sleep(3 * time.Second) // after the first poll saw it working: the prompt and thinking land, and it flaps idle
+		n.setItems(proto.Item{ID: "u1", Role: "user", Kind: proto.KindText, Text: "⏰ 早报（定时任务）\n\n给我今天的早报"},
+			proto.Item{ID: "t1", Role: "assistant", Kind: proto.KindThinking, Text: "先看日历"})
+		n.setSessions("server", idle)
+		time.Sleep(2 * time.Second) // one poll reads it idle
+		n.setSessions("server", working)
+	}()
+
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Second)
+	sc := h.loadSchedule(context.Background())
+	sc.mu.Lock()
+	failed := slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Status == runFailed })
+	sc.mu.Unlock()
+	if failed {
+		t.Fatal("a turn that flapped idle once mid-turn was failed as silent")
+	}
+	if p := n.pushed(); len(p) != 0 {
+		t.Fatalf("no failure is pushed: %+v", p)
+	}
+	if got := n.sent(); got != 1 {
+		t.Fatalf("the task is not run again: %d sends", got)
+	}
+}
+
+// silentRun only fails a turn known to be the run's and to have ended.
+func TestSilentRun(t *testing.T) {
+	task := Task{Prompt: "给我今天的早报"}
+	prompt := proto.Item{ID: "u1", Role: "user", Kind: proto.KindText, Text: "⏰ 早报（定时任务）\n\n给我今天的早报"}
+	empty := proto.Item{ID: "a1", Role: "assistant", Kind: proto.KindText, Text: ""}
+	end := proto.Item{ID: "e1", Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 900}}
+	other := proto.Item{ID: "u2", Role: "user", Kind: proto.KindText, Text: "顺便看下明天的会"}
+	reply := proto.Item{ID: "a2", Role: "assistant", Kind: proto.KindText, Text: "今天三个会"}
+	for _, c := range []struct {
+		name  string
+		items []proto.Item
+		ran   bool
+		want  bool
+	}{
+		{"seen working, then no output", []proto.Item{prompt}, true, true},
+		{"an empty assistant item, not seen working", []proto.Item{prompt, empty}, false, false},
+		{"thinking, the model still going", []proto.Item{prompt, {ID: "t1", Role: "assistant", Kind: proto.KindThinking, Text: "想一想"}}, false, false},
+		{"an empty assistant item, seen working", []proto.Item{prompt, empty}, true, true},
+		{"the user mentions the task", []proto.Item{{ID: "u3", Role: "user", Kind: proto.KindText, Text: "给我今天的早报呢？"}}, true, false},
+		{"the end marker", []proto.Item{prompt, end}, false, true},
+		{"the prompt alone, state lagging", []proto.Item{prompt}, false, false},
+		{"the user's own next turn", []proto.Item{other, empty}, true, false},
+		{"it answered", []proto.Item{prompt, reply}, true, false},
+	} {
+		if got := silentRun(c.items, task, c.ran); got != c.want {
+			t.Errorf("%s: silentRun = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 // A run where the turn ends and the session carries a TurnError (e.g. a Codex turn failure on the model service)
 // is failed, pushed and retried once (#2571).
 func TestTaskTurnEndingInSessionTurnErrorFailsAndRetriesOnce(t *testing.T) {

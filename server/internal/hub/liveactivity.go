@@ -31,11 +31,16 @@ const (
 	// fleetMinGap: an ordinary change (counts, titles, the assistant, an agent done) reaches a device at most this
 	// often, so a device's activity is at most fleetMinGap + fleetCoalesce behind the hub (TestFleetPacingBound).
 	// On the user's hub (2026-11-02) the fleet changed ~180 times an hour, each one a push.
-	fleetMinGap     = 30 * time.Second
-	fleetStaleIn    = 15 * time.Minute // stale-date: buttons disappear if the hub goes quiet this long
-	fleetRefresh    = 10 * time.Minute // resend unchanged content to a device this long after its last push
-	fleetEndAfter   = time.Minute      // empty this long: end the activity
-	fleetDoneLinger = 5 * time.Minute  // only finished agents left: keep showing them this long
+	fleetMinGap  = 30 * time.Second
+	fleetStaleIn = 15 * time.Minute // stale-date: buttons disappear if the hub goes quiet this long
+	fleetRefresh = 10 * time.Minute // resend unchanged content to a device this long after its last push
+	// fleetOpenFresh: how long after the last fleet event an app that went to the background is sure its activity is
+	// not stale. An open app only updates its activity when what it shows changes or it is within 5 minutes of its
+	// stale-date (LiveActivityController.worthUpdating), so 5 minutes is all it is sure of; a minute less for the
+	// tick and the push to arrive.
+	fleetOpenFresh  = 4 * time.Minute
+	fleetEndAfter   = time.Minute     // empty this long: end the activity
+	fleetDoneLinger = 5 * time.Minute // only finished agents left: keep showing them this long
 	fleetMaxItems   = 3
 	fleetMaxAge     = 8 * time.Hour // the system ends an activity after about this long; past it, start a new one
 )
@@ -398,9 +403,12 @@ func (la *liveActivities) notYet(device string, dst FleetState, now time.Time, u
 }
 
 // phoneLeft: the app on device closed its connection. Gone to the background (a clean close), its activity shows the
-// last fleet it was sent, which is what the device has now. Otherwise (the network dropped, the app was killed or
-// suspended with the socket open) what it shows is unknown, and so is it when that fleet is old enough to have gone
-// stale: the current state goes out at once, without waiting for a change or fleetMinGap.
+// last fleet it was sent, which is what the device has now. Not with a new stale-date, though: a fleet that changed
+// nothing it shows, a settings or look change, left the one an earlier update set, and the hub cannot tell which. It
+// is only sure of fleetOpenFresh after that fleet, so the refresh is due then: its last push is put fleetRefresh
+// before that (#4294). Otherwise (the network dropped, the app was killed or suspended with the socket open) what it
+// shows is unknown, and so is it when that fleet is old enough to be near its stale-date: the current state goes out
+// at once, without waiting for a change or fleetMinGap.
 func (la *liveActivities) phoneLeft(device string, clean bool) {
 	if la == nil || device == "" {
 		return
@@ -408,9 +416,9 @@ func (la *liveActivities) phoneLeft(device string, clean bool) {
 	d, ok := la.h.push.device(device)
 	now := la.now()
 	la.mu.Lock()
-	if clean && ok && !la.shownAt.IsZero() && now.Sub(la.shownAt) < fleetRefresh {
+	if clean && ok && !la.shownAt.IsZero() && now.Sub(la.shownAt) < fleetOpenFresh {
 		b, _ := json.Marshal(forDevice(la.shownState, devicePrefs(d.Prefs), la.shownStats))
-		la.sent[device], la.sentAt[device] = b, la.shownAt
+		la.sent[device], la.sentAt[device] = b, la.shownAt.Add(fleetOpenFresh-fleetRefresh)
 	} else {
 		delete(la.sent, device)
 		delete(la.sentAt, device)

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { accelLabel, accelTarget, activation, closeTarget, edge, isContextKey, keyIntent, menuAtFromContext, renameCommit, rowLabel, step, type MenuItem } from "./menu-model";
+import { accelLabel, accelTarget, activation, closeTarget, edge, enabled, isContextKey, keyIntent, menuAtFromContext, renameCommit, rowLabel, step, type MenuItem } from "./menu-model";
 
 const item = (key: string, extra: Partial<MenuItem> = {}): MenuItem => ({ key, label: key, onSelect: () => {}, ...extra });
 
@@ -161,5 +161,17 @@ describe("a whole interaction", () => {
     press("Backspace");
     expect(ran).toHaveBeenCalledTimes(1);
     expect(confirming).toBeNull();
+  });
+});
+
+describe("note rows (#4054)", () => {
+  it("are read, not chosen: the keys and the pointer pass over them", () => {
+    const list = [item("a", { note: true }), item("b"), item("c", { note: true })];
+    expect(enabled(list[0])).toBe(false);
+    expect(step(list, -1, 1)).toBe(1);
+    expect(step(list, 1, 1)).toBe(1);
+    expect(edge(list, true)).toBe(1);
+    expect(keyIntent({ key: "Enter" }, list, 0, 0)).toEqual({ type: "none" });
+    expect(activation(list[0], null)).toBe("none");
   });
 });

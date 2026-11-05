@@ -8,5 +8,6 @@
   "header_left": "{percent}% context left",
   "header_used": "{percent}% context used",
   "hint_ok": "Context is how much of this conversation the agent can keep in mind. When it runs out, it compacts on its own: earlier parts are kept only as a summary.",
-  "hint_warn": "Almost full. When it fills up it compacts on its own and earlier parts are kept only as a summary. To wrap up first, send /compact to compact now, or start a new agent to carry on."
+  "hint_warn": "Almost full. When it fills up it compacts on its own and earlier parts are kept only as a summary. To wrap up first, send /compact to compact now, or start a new agent to carry on.",
+  "tokens": "{used} / {window} tokens"
 }

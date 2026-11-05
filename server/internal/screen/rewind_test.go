@@ -1,6 +1,8 @@
 package screen
 
 import (
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -181,5 +183,68 @@ func TestRewindDraftIs(t *testing.T) {
 		if code, _ := CheckClaude(fixture(t, rewindPrefix+name+"-119.txt")); code != DialogOpen {
 			t.Errorf("%s: code %q, want dialog_open", name, code)
 		}
+	}
+}
+
+// The row under each prompt of the /rewind list ("notes.txt +1 -1", "No code changes") is that prompt's detail, not
+// an option of its own (#4306): an extra button, and every button under it one prompt too far.
+func TestRewindListOptionsArePrompts(t *testing.T) {
+	cases := []struct {
+		name   string
+		labels []string
+		detail []string
+		keys   [][]string
+		cursor string
+	}{
+		{"list-middle", []string{`Use the Edit tool (not Bash) to replace the line "alpha" in notes.txt with "beta". Reply with only: ok2`,
+			`Use the Edit tool (not Bash) to replace the line "beta" in notes.txt with "gamma". Reply with only: ok3`},
+			[]string{"notes.txt +1 -1", "notes.txt +1 -1"}, [][]string{{"up", "enter"}, {"enter"}}, "2"},
+		{"list-top", []string{`Append the line "alpha" to notes.txt. Reply with only: done`,
+			`Use the Edit tool (not Bash) to replace the line "alpha" in notes.txt with "beta". Reply with only: ok2`},
+			[]string{"No code changes", "notes.txt +1 -1"}, [][]string{{"enter"}, {"down", "enter"}}, "1"},
+		{"list-chinese", []string{"Reply with only the word ok6, ignoring all of this padding text which only exists to make the prompt much lo…",
+			"用中文只回复：好的"}, []string{"No code changes", "No code changes"}, [][]string{{"up", "enter"}, {"enter"}}, "2"},
+	}
+	for _, c := range cases {
+		d := ParseDialog(fixture(t, rewindPrefix+c.name+"-119.txt"))
+		if d == nil {
+			t.Fatalf("%s: not read as a dialog", c.name)
+		}
+		if d.Question != rewindListQuestion || d.Cursor != c.cursor || len(d.Options) != len(c.labels) {
+			t.Fatalf("%s: %q cursor %q %+v", c.name, d.Question, d.Cursor, d.Options)
+		}
+		for i, o := range d.Options {
+			if o.Key != strconv.Itoa(i+1) || o.Label != c.labels[i] || o.Detail != c.detail[i] || !slices.Equal(o.Keys, c.keys[i]) {
+				t.Errorf("%s: option %d: %+v", c.name, i+1, o)
+			}
+		}
+	}
+	// The cursor moved on the computer, the window did not: the same dialog (a card stays answerable, its keys
+	// worked out again). The window scrolled: another one, even when the rows on screen read the same.
+	rev := func(name string) string { return ParseDialog(fixture(t, rewindPrefix+name+"-119.txt")).Rev }
+	if rev("list-top") != rev("list-second") || rev("list-long") != rev("list-chinese") {
+		t.Error("the cursor moving changed Rev")
+	}
+	scrolled := strings.Replace(fixture(t, rewindPrefix+"list-top-119.txt"), "↓ 2 more", "↓ 1 more", 1)
+	if scrolled == fixture(t, rewindPrefix+"list-top-119.txt") {
+		t.Fatal("list-top has no ↓ 2 more row")
+	}
+	scrolled = strings.Replace(scrolled, "Restore the code and/or conversation to the point before…\n", "Restore the code and/or conversation to the point before…\n\n     ↑ 1 more", 1)
+	if d := ParseDialog(scrolled); d == nil || len(d.Options) != 2 || d.Rev == rev("list-top") {
+		t.Errorf("a scrolled window kept Rev: %+v", d)
+	}
+	// With the cursor on (current) there is no prompt to pick: nothing read, as before.
+	for _, name := range []string{"list-current", "list-current-edits"} {
+		if d := ParseDialog(fixture(t, rewindPrefix+name+"-119.txt")); d != nil {
+			t.Errorf("%s: read as a dialog: %+v", name, d.Options)
+		}
+	}
+	// A /rewind list left in the conversation above a live dialog is not that dialog.
+	stale := strings.Join([]string{"   Rewind", "", "   Restore the code and/or conversation to the point before…", "",
+		"   ❯ first prompt", "     No code changes", "", "     second prompt", "     notes.txt +1 -1", "",
+		"   Enter to continue · Esc to cancel", "", "● done", "", strings.Repeat("─", 40),
+		" Do you trust the files in this folder?", "", " ❯ Yes, proceed", "   No, exit", "", " Enter to confirm · Esc to cancel"}, "\n")
+	if d := ParseDialog(stale); d == nil || d.Question == rewindListQuestion || len(d.Options) != 2 || d.Options[0].Label != "Yes, proceed" {
+		t.Errorf("stale /rewind list: %+v", d)
 	}
 }

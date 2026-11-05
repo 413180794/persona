@@ -1,6 +1,7 @@
 {
   "title": "タスクの進捗：{n} 件",
   "title_needs": "{n} 件があなたの判断待ち",
+  "part": "（{k}/{n}）",
   "decide": "🙋 判断待ち",
   "progress": "📈 進捗",
   "state_needs": "🙋 あなた待ち",
