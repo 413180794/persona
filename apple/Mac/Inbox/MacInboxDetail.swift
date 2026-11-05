@@ -8,7 +8,9 @@ struct MacInboxDetail: View {
     var state = MacInboxState.shared
 
     var body: some View {
-        let sel = state.selection
+        // Rows can expire out of the list while selected: the count, the single-row fallback and the action only
+        // cover what is still there; nothing left falls through to the 选一件事 placeholder (#3795).
+        let sel = state.liveSelection(model: model)
         if sel.count > 1 {
             VStack(spacing: Theme.Space.l) {
                 EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "已选 \(sel.count) 件"), message: String(localized: "按 E 把它们都标为已处理。"))

@@ -233,6 +233,31 @@ final class MacInboxState {
 
     func item(_ id: String) -> InboxItem? { store.items.first { $0.id == id } }
 
+    /// The selected rows still present in the list: an `.item` the store no longer returns (it expired or was handled
+    /// elsewhere) or an `.agent` interaction that vanished is dropped, so the detail's 已选 count and the multi-select
+    /// action cover what still exists (#3795).
+    func liveSelection(model: AppModel) -> Set<MacInboxSelection> {
+        liveSelection(items: store.items, interactions: model.pendingInteractions)
+    }
+
+    /// Same check against an explicit list (a store refresh pruning the selection, and tests).
+    func liveSelection(items: [InboxItem], interactions: [Interaction]) -> Set<MacInboxSelection> {
+        let itemIDs = Set(items.map(\.id))
+        let agentIDs = Set(interactions.map(\.id))
+        return selection.filter {
+            switch $0 {
+            case .item(let id): itemIDs.contains(id)
+            case .agent(let id): agentIDs.contains(id)
+            }
+        }
+    }
+
+    /// Drop selected rows that expired out of the list (the store refresh / interaction update saw them gone).
+    func pruneStale(items: [InboxItem], interactions: [Interaction]) {
+        let live = liveSelection(items: items, interactions: interactions)
+        if live != selection { selection = live }
+    }
+
     /// The selected items (agent rows are not items).
     var selectedItems: [InboxItem] {
         selection.compactMap { if case .item(let id) = $0 { return item(id) } else { return nil } }

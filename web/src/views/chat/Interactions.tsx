@@ -324,6 +324,17 @@ const CODE_BOX = "max-h-48 overflow-auto rounded-[8px] bg-inset px-2.5 py-2 font
 /** What the tool will do, field by field (Android PermissionRequestSummary): the agent's sentence, then the command,
  *  file or address under a small label, an edit's changes; a tool it does not know shows the hub's summary. The raw
  *  input stays one click away, open from the start only when nothing else says what the tool does. */
+const FROM_MAX = 48;
+
+/** 「来自子 Agent · <type>」 for a subagent's card, its type on one line and cut to FROM_MAX; empty otherwise. */
+export function permissionFrom(ix: Pick<Interaction, "agent_id" | "agent_type">): string {
+  if (!ix.agent_id?.trim()) return "";
+  const type = (ix.agent_type ?? "").replace(/\s+/g, " ").trim();
+  if (!type || type.toLowerCase() === "main") return "";
+  const agent = type.length > FROM_MAX ? `${type.slice(0, FROM_MAX - 1)}…` : type;
+  return t("lib-elicitation.from_subagent", { agent });
+}
+
 function PermissionBody({ ix }: { ix: Interaction }) {
   const input = ix.tool_input ?? {};
   const hasInput = Object.keys(input).length > 0;
@@ -334,8 +345,12 @@ function PermissionBody({ ix }: { ix: Interaction }) {
   const extraShown = extra && extra !== detail?.note && extra !== reason && !detail?.fields.some((f) => f.value === extra);
   const lead = detail ? undefined : ix.summary?.trim();
   const [showInput, setShowInput] = useState(!detail && !lead);
+  // a subagent's call (Claude Code sends its parent's session with agent_id and agent_type): say which one asks
+  // (#4376); the main session's own cards (agent_type alone, as `claude --agent x` sets it, or "main") say nothing
+  const from = permissionFrom(ix);
   return (
     <div className="flex flex-col gap-2">
+      {from && <p data-permission-from title={from} className="truncate text-[12px] leading-snug text-ink-3">{from}</p>}
       {reason && <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-ink-2">{reason}</p>}
       {detail?.note && <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-ink">{detail.note}</p>}
       {detail?.fields.map((f) => (

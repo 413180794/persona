@@ -100,6 +100,14 @@ struct MacInboxList: View {
             return .handled
         }
         .onDeleteCommand { state.toggleDone(state.selection, model: model) }
+        // A selected row can expire out of the list (the hub stops returning an item, an agent stops waiting): prune
+        // the selection on refresh so the detail's 已选 count and the multi-select action match what is still there.
+        .onChange(of: store.items) { _, items in
+            state.pruneStale(items: items, interactions: model.pendingInteractions)
+        }
+        .onChange(of: model.pendingInteractions) { _, interactions in
+            state.pruneStale(items: store.items, interactions: interactions)
+        }
         .pageSearchable(text: $state.query, placement: .toolbar, prompt: String(localized: "搜索标题、发件人、内容"))
         .pageToolbar { toolbar }
         .sheet(isPresented: $state.showAccounts, onDismiss: { Task { await state.loadAccounts(model) } }) {

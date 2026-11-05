@@ -7,7 +7,7 @@ import { getState, type AnsweredCard } from "../../lib/store";
 import { Header, spaceAgentsItem } from "./ChatView";
 import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
 import { Composer } from "./Composer";
-import { PendingCards } from "./Interactions";
+import { PendingCards, permissionFrom } from "./Interactions";
 import { QueueStrip } from "./QueueStrip";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 
@@ -134,6 +134,24 @@ describe("PendingCards", () => {
     expect(dialogHtml).not.toContain("终端等你处理");
     // handed back: nothing was decided about it
     expect(cards({ narrow: false, interactions: [], answered: [{ ix: perm, resolution: { dismiss: true } }] })).not.toContain("data-answered-about");
+  });
+
+  it("says which subagent asks for a permission", () => {
+    const html = cards({ narrow: false, interactions: [ix("p", "permission", { agent_id: "a1", agent_type: "code-reviewer", tool_input: { command: "npm test" } })] });
+    expect(html).toContain("data-permission-from");
+    expect(html).toContain("来自子 Agent · code-reviewer");
+    expect(cards({ narrow: false, interactions: [ix("p", "permission")] })).not.toContain("data-permission-from");
+    // the main session's own card: `claude --agent reviewer` sets agent_type with no agent_id
+    expect(cards({ narrow: false, interactions: [ix("p", "permission", { agent_type: "reviewer" })] })).not.toContain("data-permission-from");
+    expect(cards({ narrow: false, interactions: [ix("p", "permission", { agent_id: "a1", agent_type: "main" })] })).not.toContain("data-permission-from");
+  });
+
+  it("keeps the subagent's type to one short line", () => {
+    expect(permissionFrom({ agent_id: "a1", agent_type: "  code\n  reviewer  " })).toBe("来自子 Agent · code reviewer");
+    const long = permissionFrom({ agent_id: "a1", agent_type: "x".repeat(80) });
+    expect(long).toBe(`来自子 Agent · ${"x".repeat(47)}…`);
+    const html = cards({ narrow: false, interactions: [ix("p", "permission", { agent_id: "a1", agent_type: "code-reviewer" })] });
+    expect(html).toMatch(/data-permission-from="true" title="来自子 Agent · code-reviewer" class="truncate/);
   });
 
   it("shows every card on a wide screen, in no box of their own", () => {
