@@ -11,6 +11,11 @@ struct MacTitleRowTitle: ViewModifier {
     let subtitle: String?
     /// The page starts at the window's leading edge.
     @State private var atEdge = false
+    /// A ‹ is before the title (a page pushed in a section's own stack, `MacPushedPage`).
+    @Environment(\.macTitleRowBack) private var afterBack
+    /// Where the ‹ starts (`MacDetailBack` goes by the shell's value, so the title after it does too).
+    @Environment(\.macTitleRowLeading) private var backLeading
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     func body(content: Content) -> some View {
         content
@@ -24,7 +29,9 @@ struct MacTitleRowTitle: ViewModifier {
                     }
                 }
                 .lineLimit(1)
-                .padding(.leading, atEdge ? Theme.Size.macTitleAfterControls : Theme.Space.l)
+                .padding(.leading, afterBack
+                    ? backLeading + MacDetailBack.titleAfterBack(typeSize)
+                    : (atEdge ? Theme.Size.macTitleAfterControls : Theme.Space.l))
                 .frame(height: Theme.Size.macToolbarHeight)
                 .ignoresSafeArea(.container, edges: .top)
                 .allowsHitTesting(false)

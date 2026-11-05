@@ -154,6 +154,7 @@
   标题行的边距和分区标题（`MacTitleRowTaken`）、`tabIsActive`。新加窗口级的环境值时，这里也要补上。
 - **藏起来的页要做的事，各页自己负责，靠 `tabIsActive`（藏着时为 false）判断**：
   - 工具栏项和搜索框只由前台页提供，用 `pageToolbar`、`pageSearchable`。两个搜索框同时出现在窗口工具栏会直接崩溃。
+  - 分区自己的导航栈（Persona、知识库、机器）里推进去的页不能用系统的返回键：它是窗口工具栏里的一项，藏起来的页的也照样画着，点了退的是看不见的那页（#2318）。栈上设 `macSectionStack`；推进去的页用 `pageTitle` / `detailTitle` 给标题就自动在标题行画 ‹（`MacPushedPage`，只对推进去的页，栈的第一页不画），只有 `navigationTitle` 的页加 `sectionPushedPage()`。
   - 不跟着推送重算：
     - Agents 列表：`Hold` 加了 `.behind`；
     - 待办、机器页：读 `allSessions(inFront:)`、`machines(inFront:)`；

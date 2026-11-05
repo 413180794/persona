@@ -118,7 +118,7 @@ struct EngineSelectionView: View {
             if let machine, let selection { saveBar(selection, machine) }
         }
         #endif
-        .navigationTitle("选择引擎")
+        .detailTitle("选择引擎")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: ref) {
             guard let machine else { return }

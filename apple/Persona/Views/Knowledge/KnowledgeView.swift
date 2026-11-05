@@ -59,7 +59,7 @@ struct KnowledgeView: View {
         .modifier(MacBelowTitleRowIfAsked()) // under 知识库's title in the window: the list starts below it (#1243)
         #endif
         .themedPage()
-        .navigationTitle("知识库")
+        .detailTitle("知识库") // pushed in Persona's page: ‹ 知识库 in the title row on the Mac
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             #if os(macOS)
@@ -570,7 +570,7 @@ struct KnowledgeDetailView: View {
         }
         .listStyle(.insetGrouped)
         .themedPage()
-        .navigationTitle(KBKind(rawValue: entry.kind)?.title ?? "")
+        .detailTitle(KBKind(rawValue: entry.kind)?.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -644,21 +644,31 @@ struct KnowledgeDetailView: View {
             HStack(spacing: Theme.Space.m) {
                 Button { Task { await ask() } } label: {
                     // White on the prominent fill: the symbol took the tint and vanished into the blue.
-                    Label("问 Persona", systemImage: Theme.Icon.ai).lineLimit(1).frame(maxWidth: .infinity)
+                    Label("问 Persona", systemImage: Theme.Icon.ai).lineLimit(1).frame(maxWidth: Self.buttonsFill)
                         .foregroundStyle(.white)
                 }
                 .themedButton(prominent: true)
                 if entry.kind == KBKind.projects.rawValue {
                     Button { newAgent = true } label: {
-                        Label("开 Agent", systemImage: Theme.Icon.newConversation).lineLimit(1).frame(maxWidth: .infinity)
+                        Label("开 Agent", systemImage: Theme.Icon.newConversation).lineLimit(1).frame(maxWidth: Self.buttonsFill)
                     }
                     .themedButton()
                 }
             }
-            .controlSize(.large)
+            .controlSize(Self.buttonsSize)
             .padding(.top, Theme.Space.xxs)
         }
     }
+
+    // The phone's two buttons share the row; the Mac's are the regular size, side by side at the leading edge
+    // (docs/mac-design.md: no buttons the width of the page, #2318).
+    #if os(macOS)
+    private static let buttonsFill: CGFloat? = nil
+    private static let buttonsSize = ControlSize.regular
+    #else
+    private static let buttonsFill: CGFloat? = .infinity
+    private static let buttonsSize = ControlSize.large
+    #endif
 
     /// A project's status when it is not the usual 进行中.
     private var projectStatus: String? {
@@ -943,7 +953,7 @@ struct KBMomentView: View {
             .padding(.vertical, Theme.Space.m)
         }
         .themedPage()
-        .navigationTitle(KBMoments.feedName(feed ?? ref.feed))
+        .detailTitle(KBMoments.feedName(feed ?? ref.feed))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }

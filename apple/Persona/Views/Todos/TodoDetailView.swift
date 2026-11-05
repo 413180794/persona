@@ -31,7 +31,7 @@ struct TodoDetailView: View {
                 .themedPage()
             }
         }
-        .navigationTitle(currentTodo?.title ?? "待办详情")
+        .detailTitle(currentTodo?.title ?? "待办详情")
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             ToolbarItem(placement: .primaryAction) {

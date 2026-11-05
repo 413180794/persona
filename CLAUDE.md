@@ -275,6 +275,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.persona/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
 | `docs/multi-hub.md` | 一台设备连多组 hub：配对注册表和迁移、按 mesh 分组、每组一条连接和选路、按组的键（默认组不变）、合并显示和按组筛选、推送 / 实时活动 / 手表 / Siri 按组路由 |
 | `docs/mac.md` | macOS App：和 iOS 共用逻辑层和内容视图、Mac 壳（`apple/Mac/`）、iOS 专用 API 的隔离和兼容层、功能对齐清单 |
+| `docs/mac-design.md` | Mac 的设计语言：标题栏就是每一栏的标题行、密度、阅读宽度、一件事只说一遍；侧栏 / 列表 / 详情 / 卡片 / 按钮 / 选中 / 空状态的规定，设计稿和怎么生成 |
 | `docs/vision.md` | visionOS App（`PersonaVision`）：和 iOS 共用逻辑层和内容视图、visionOS 壳（`apple/Vision/`）、和 iOS 的对应、模拟器构建和截图 |
 | `docs/android.md` | Android App：模块职责与依赖、入口接线、常驻连接通知、多 hub（分组、组后缀的会话键、组内换线路）、构建 / 测试 / 假 hub 截图命令 |
 | `docs/android-design.md` | Android 三套界面风格（玻璃 / 晨报 / 看板）、设计 token、组件清单和写页面的规矩、玻璃的降级 |

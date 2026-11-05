@@ -118,7 +118,7 @@ struct TodosView: View {
             }
         }
         .themedPage()
-        .navigationTitle("待办")
+        .detailTitle("待办")
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             ToolbarItem(placement: .primaryAction) {

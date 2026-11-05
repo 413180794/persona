@@ -270,3 +270,5 @@
   Agents 列表因此不选中：↑↓ 按 `AgentListRows` 算出的显示顺序打开下一个，打开的那行自己画底色。
 - 懒加载 `List` 的 `ScrollViewProxy.scrollTo`：目标在很远的下面时，第一次按估计的行高滚，会停在目标前面。
   等那段行排好（约 0.1 s）再滚一次就准了（`MacRowOrder.scroll`）。
+- 页面常驻以后，系统的返回键会漏到别的分区（2026-11-05，#2318）：知识库、机器在自己的 `NavigationStack` 里推一页，系统把 ‹ 画成红绿灯旁的圆形玻璃按钮，它是窗口工具栏的一项，不归 `pageToolbar` 管。
+  切到设置以后它还在，点一下退的是藏着的知识库。这类栈（Persona、知识库、机器）设 `macSectionStack`，推进去的页用 `pageTitle` / `detailTitle` 就会自己在标题行画 ‹；判断「推进去的」用 `isPresented`，栈的第一页不画。

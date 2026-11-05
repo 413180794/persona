@@ -344,7 +344,9 @@ private struct MacShell: View {
         case .agents: ChatsView()
         case .todos: MacTodosPage()
         case .inbox: MacInboxPage()
-        case .knowledge: NavigationStack { KnowledgeView().environment(\.macBelowTitleRow, true) } // below the title (#1243)
+        case .knowledge:
+            NavigationStack { KnowledgeView().environment(\.macBelowTitleRow, true) } // below the title (#1243)
+                .environment(\.macSectionStack, true) // its pushed pages' ‹ and title in the title row (#2318)
         case .machines: MacMachinesPage()
         case .settings: SettingsView()
         }
@@ -369,6 +371,7 @@ struct MacMachinesPage: View {
                 .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(ref: r.ref) }
                 .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
         }
+        .environment(\.macSectionStack, true) // a machine's page: its ‹ and name in the title row (#2318)
         #if DEBUG
         // `-macSection machines -openMonitor <machine id>` (or `-openMachineDetail <id>`): that machine's page.
         .onAppear {

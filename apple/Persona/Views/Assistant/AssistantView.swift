@@ -212,6 +212,10 @@ struct AssistantView: View {
             }
             #endif
         }
+        #if os(macOS)
+        // Its pushed pages (知识库, 定时任务, 待办…) go back from the title row, not the system's button (#2318).
+        .environment(\.macSectionStack, true)
+        #endif
     }
 
     /// A page the shell asked for (the drawer, the home page): from the conversation's root, so back comes to it.

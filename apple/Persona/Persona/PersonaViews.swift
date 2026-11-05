@@ -148,7 +148,7 @@ struct PersonaGallery: View {
             }
             .padding()
         }
-        .navigationTitle("形象")
+        .detailTitle("形象")
         .navigationBarTitleDisplayMode(.inline)
     }
 
