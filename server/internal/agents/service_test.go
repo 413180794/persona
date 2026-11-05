@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -228,5 +229,53 @@ func TestPrefsPersist(t *testing.T) {
 	p, err := s2.Prefs(context.Background())
 	if err != nil || len(p.Pins) != 1 || p.Pins[0] != "x" || p.View.Sort != "name" {
 		t.Fatalf("%v %+v", err, p)
+	}
+}
+
+// failingKV fails its reads while down (the database restarting, a request cancelled); writes go through.
+type failingKV struct {
+	memKV
+	down bool
+}
+
+func (k *failingKV) Setting(ctx context.Context, key string, out any) (bool, error) {
+	if k.down {
+		return false, errors.New("database unavailable")
+	}
+	return k.memKV.Setting(ctx, key, out)
+}
+
+// The outbox's first read failing used to mark it read with nothing in it: the next send wrote that one row over the
+// stored outbox (up to 500 rows), and a retry of a clientId sent before went to the source again.
+func TestOutboxFailedReadKeepsWhatIsStored(t *testing.T) {
+	FollowUps = nil
+	f := &fakeBridge{sessions: []AgentSession{{SessionKey: key, CanSend: true}}}
+	kv := &failingKV{memKV: memKV{m: map[string][]byte{}}}
+	ctx := context.Background()
+	s, _ := newSvc(f, kv)
+	sent := NewClientID()
+	if _, err := s.Send(ctx, id, sent, "示例", "app"); err != nil {
+		t.Fatal(err)
+	}
+
+	s2, _ := newSvc(f, kv) // the hub started again, its first read of the outbox fails
+	kv.down = true
+	if _, err := s2.Send(ctx, id, NewClientID(), "示例二", "app"); err != nil {
+		t.Fatal(err)
+	}
+	kv.down = false
+	if _, err := s2.Send(ctx, id, NewClientID(), "示例三", "app"); err != nil {
+		t.Fatal(err)
+	}
+	var stored []OutboxEntry
+	_, _ = kv.memKV.Setting(ctx, "agents.outbox", &stored)
+	if !slices.ContainsFunc(stored, func(e OutboxEntry) bool { return e.ClientID == sent }) {
+		t.Fatalf("the row sent before the failed read is gone from the stored outbox: %+v", stored)
+	}
+	if r, err := s2.Send(ctx, id, sent, "示例", "app"); err != nil || !r.Duplicate {
+		t.Fatalf("a retry of a clientId sent before: %+v %v", r, err)
+	}
+	if len(f.sends) != 3 {
+		t.Fatalf("the source got %d sends, want 3: %v", len(f.sends), f.sends)
 	}
 }

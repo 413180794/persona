@@ -46,29 +46,37 @@ type outbox struct {
 	loaded bool
 }
 
-func (o *outbox) load(ctx context.Context) {
+// load reads the stored rows once. A failed read leaves the outbox unread, so the next look reads again and put
+// writes nothing: what it would write then (only the rows since) would replace the stored ones.
+func (o *outbox) load(ctx context.Context) error {
 	if o.loaded {
-		return
+		return nil
 	}
-	o.loaded = true
 	if o.rows == nil {
 		o.rows = map[string]*OutboxEntry{}
 	}
 	if o.kv == nil {
-		return
+		o.loaded = true
+		return nil
 	}
 	var list []*OutboxEntry
-	if ok, err := o.kv.Setting(ctx, outboxKey, &list); err == nil && ok {
+	ok, err := o.kv.Setting(ctx, outboxKey, &list)
+	if err != nil {
+		return err
+	}
+	if ok {
 		for _, e := range list {
 			o.rows[e.ClientID] = e
 		}
 	}
+	o.loaded = true
+	return nil
 }
 
 func (o *outbox) get(ctx context.Context, clientID string) (OutboxEntry, bool) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.load(ctx)
+	_ = o.load(ctx) // unread: nothing known of clientID (a retry goes to the source, which deduplicates it too)
 	e, ok := o.rows[clientID]
 	if !ok {
 		return OutboxEntry{}, false
@@ -79,7 +87,9 @@ func (o *outbox) get(ctx context.Context, clientID string) (OutboxEntry, bool) {
 func (o *outbox) put(ctx context.Context, e OutboxEntry) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.load(ctx)
+	if err := o.load(ctx); err != nil {
+		return err
+	}
 	o.rows[e.ClientID] = &e
 	list := o.listLocked()
 	if len(list) > outboxMax {
@@ -107,7 +117,7 @@ func (o *outbox) listLocked() []*OutboxEntry {
 func (o *outbox) list(ctx context.Context, sessionID string, limit int) []OutboxEntry {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.load(ctx)
+	_ = o.load(ctx)
 	out := []OutboxEntry{}
 	for _, e := range o.listLocked() {
 		if sessionID == "" || e.SessionID == sessionID {
