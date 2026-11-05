@@ -2,6 +2,7 @@
 import { useSyncExternalStore } from "react";
 import { takeOverlayEntry } from "./back-close";
 import { BASE, stripBase } from "./base";
+import { decodeURIComponentSafe } from "./uri";
 
 // Persona's main conversation is the front door (like the app, which opens on 助手): `/` and `/j` open it, `/j/<id>` is
 // one conversation, `/j/new` starts a one-off one, and 总览 lives at `/overview`. `/extension/<id>/<ui>` is an extension's page
@@ -43,7 +44,8 @@ export function parseView(search: string): SessionView | undefined {
 }
 
 export function parse(path: string, search = ""): Route {
-  const p = path.split("/").filter(Boolean).map(decodeURIComponent);
+  // a malformed escape must still route: parse runs outside every error boundary
+  const p = path.split("/").filter(Boolean).map(decodeURIComponentSafe);
   const view = parseView(search);
   if (p[0] === "s" && p[1] && p[2]) return { name: "session", mid: p[1], sid: p[2], ...(view && { view }) };
   if (p[0] === "t" && p[1] && p[2] && p[3]) return { name: "tab", mid: p[1], space: p[2], slot: p[3], sid: p[4] || undefined, ...(view && { view }) };

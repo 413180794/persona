@@ -46,3 +46,11 @@ describe("?view= of an agent's page", () => {
     expect(href({ name: "session", mid: "m", sid: "a" })).toBe("/s/m/a");
   });
 });
+
+describe("a malformed percent escape", () => {
+  it("routes instead of throwing, keeping the undecodable segment as it is", () => {
+    expect(parse("/s/m/%E0%A4%A")).toEqual({ name: "session", mid: "m", sid: "%E0%A4%A" });
+    expect(parse("/s/my%20mac/%ZZ")).toEqual({ name: "session", mid: "my mac", sid: "%ZZ" });
+    expect(parse("/j/%ZZ")).toEqual({ name: "jarvis", sid: "%ZZ" });
+  });
+});

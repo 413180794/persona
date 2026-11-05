@@ -265,8 +265,9 @@ struct VNCPage: View {
             model.toast = Toast("剪贴板里没有文字", style: .error)
             return
         }
-        if andPaste { s.paste(text) } else { await s.setMacClipboard(text) }
-        model.toast = Toast(andPaste ? "已粘贴到 \(name)" : "已放进 \(name) 的剪贴板")
+        let ok = andPaste ? await s.paste(text) : await s.setMacClipboard(text)
+        model.toast = ok ? Toast(andPaste ? "已粘贴到 \(name)" : "已放进 \(name) 的剪贴板")
+            : Toast("没能写进 \(name) 的剪贴板" + (andPaste ? "，没有粘贴" : ""), style: .error)
     }
 
     private func copyToPhone() async {

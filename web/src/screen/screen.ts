@@ -4,6 +4,7 @@
 // open). A signed-in browser uses its own.
 
 import { BASE, stripBase } from "../lib/base";
+import { decodeURIComponentSafe } from "../lib/uri";
 import { getToken } from "../lib/api";
 import { t } from "../i18n";
 
@@ -14,7 +15,7 @@ export type ScreenTarget = { mid: string; token: string; embedded: boolean; name
 /** /screen/<mid> → mid; anything else is not the live screen. */
 export function screenMachine(pathname: string): string | null {
   const p = pathname.split("/").filter(Boolean);
-  return p[0] === "screen" && p[1] ? decodeURIComponent(p[1]) : null;
+  return p[0] === "screen" && p[1] ? decodeURIComponentSafe(p[1]) : null;
 }
 
 /** The page's machine and token, the fragment's token taken out of the address bar's text (returned as rest). */

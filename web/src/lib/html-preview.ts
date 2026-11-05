@@ -2,6 +2,8 @@
 // srcdoc frame that never gets allow-same-origin (it cannot reach this page or its token), with scripts and the
 // network off until the user turns them on for this file. Pure; html-preview.test.ts.
 
+import { decodeURIComponentSafe } from "./uri";
+
 export interface PreviewPolicy {
   scripts: boolean;
   network: boolean;
@@ -56,14 +58,6 @@ export function resolveRelative(dir: string, ref: string): string {
     } else if (seg !== "." && seg !== "") parts.push(seg);
   }
   return parts.join("/") || "/";
-}
-
-function decodeURIComponentSafe(s: string): string {
-  try {
-    return decodeURIComponent(s);
-  } catch {
-    return s;
-  }
 }
 
 /** Every url(...) in a style sheet, rewritten by `to` (which returns the replacement, or null to leave it). */

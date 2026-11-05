@@ -1,6 +1,8 @@
 // Pure logic of a session's files / Git panels and the file viewer (docs/ios.md「文件查看器」, the session page's
 // 文件 / Git; iOS: FilesPane, GitPane, FileViewer, Persona/Code). No DOM here: tested in files.test.ts.
 
+import { decodeURIComponentSafe } from "./uri";
+
 // ── wire types (docs/protocol.md: /machines/{mid}/fs, /file, /git/*) ─────────
 
 export interface FsEntry {
@@ -116,12 +118,7 @@ export function below(root: string, path: string): string[] | null {
 export function resolveRef(baseDir: string, ref: string): string {
   const src = ref.trim().split(/[?#]/)[0];
   if (!src || !isMachineRef(ref)) return "";
-  let path: string;
-  try {
-    path = decodeURIComponent(src);
-  } catch {
-    path = src;
-  }
+  const path = decodeURIComponentSafe(src);
   if (path.startsWith("~") || path.startsWith("/")) return normalize(path);
   return normalize(joinPath(baseDir, path));
 }

@@ -37,8 +37,18 @@ import SwiftUI
     @ObservationIgnored private var typed: (RFBClient.Credentials, remember: Bool)?
     @ObservationIgnored private var refusedKept = false
     @ObservationIgnored private var buttons: UInt8 = 0
+    /// Keys and pastes in the order they were made (#2374): a paste waits on the hub, so what follows waits behind it.
+    @ObservationIgnored private var input: RFBInputQueue!
 
-    init(ref: MachineRef) { self.ref = ref }
+    init(ref: MachineRef) {
+        self.ref = ref
+        input = RFBInputQueue(send: { [weak self] e in self?.client?.key(e.keysym, down: e.down) },
+                              write: { [weak self] text in
+                                  // No connection: its ⌘V could not go out, so the paste counts as failed.
+                                  guard let self, self.client != nil else { return false }
+                                  return await self.setMacClipboard(text)
+                              })
+    }
 
     func start() {
         guard client == nil, let api = AppModel.shared.api(ref.group) else {
@@ -183,36 +193,20 @@ import SwiftUI
         }
     }
 
-    func key(_ keysym: UInt32, down: Bool) { client?.key(keysym, down: down) }
+    func key(_ keysym: UInt32, down: Bool) { input.keys([(keysym, down)]) }
 
     /// A key pressed and let go, with these modifiers held around it.
-    func press(_ keysym: UInt32, with modifiers: [UInt32] = []) {
-        for m in modifiers { key(m, down: true) }
-        key(keysym, down: true)
-        key(keysym, down: false)
-        for m in modifiers.reversed() { key(m, down: false) }
-    }
+    func press(_ keysym: UInt32, with modifiers: [UInt32] = []) { input.press(keysym, with: modifiers) }
 
     /// Text typed: Latin-1 a key at a time; anything else (Chinese from the input method) by the Mac's clipboard and
-    /// ⌘V, through its node (`computer/clipboard`).
+    /// ⌘V, through its node (`computer/clipboard`); in the order typed (#2374). A paste whose clipboard write fails
+    /// is left out (no ⌘V), with one toast for a run of failures.
     func type(_ text: String) {
-        var plain = ""
-        func flush() {
-            for ch in plain.unicodeScalars { press(Self.keysym(ch)) }
-            plain = ""
+        input.type(text) { [weak self] in
+            guard let self else { return }
+            let name = AppModel.shared.machine(self.ref)?.name ?? self.ref.id
+            AppModel.shared.toast = Toast("没能写进 \(name) 的剪贴板，有一段字没打上", style: .error)
         }
-        var other = ""
-        for ch in text.unicodeScalars {
-            if ch.value < 256 || ch == "\n" || ch == "\t" {
-                if !other.isEmpty { paste(other); other = "" }
-                plain.unicodeScalars.append(ch)
-            } else {
-                flush()
-                other.unicodeScalars.append(ch)
-            }
-        }
-        flush()
-        if !other.isEmpty { paste(other) }
     }
 
     nonisolated static func keysym(_ ch: Unicode.Scalar) -> UInt32 {
@@ -223,21 +217,25 @@ import SwiftUI
         }
     }
 
-    /// Text onto the Mac's clipboard, then ⌘V there.
-    func paste(_ text: String, thenPaste: Bool = true) {
-        Task {
-            await setMacClipboard(text)
-            if thenPaste { press(0x76, with: [Self.command]) }
-        }
-    }
+    /// Text onto the Mac's clipboard, then ⌘V there, after the keys and pastes before it; false (and no ⌘V) when the
+    /// clipboard did not take it.
+    @discardableResult func paste(_ text: String) async -> Bool { await input.paste(text).value }
 
-    /// Onto the Mac's clipboard: Latin-1 through RFB; anything else through its node.
-    func setMacClipboard(_ text: String) async {
+    /// Onto the Mac's clipboard: Latin-1 through RFB (sent, with no receipt: true means only that it went out in
+    /// order); anything else through its node. False when it could not be: no connection, no hub, or the node failed.
+    func setMacClipboard(_ text: String) async -> Bool {
         if text.unicodeScalars.allSatisfy({ $0.value < 256 }) {
-            client?.cutText(text)
-            return
+            guard let client else { return false }
+            client.cutText(text)
+            return true
         }
-        _ = try? await AppModel.shared.api(ref.group)?.setComputerClipboard(machine: ref.id, text)
+        guard let api = AppModel.shared.api(ref.group) else { return false }
+        do {
+            try await api.setComputerClipboard(machine: ref.id, text)
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// The Mac's clipboard now: through its node, else what it last sent.

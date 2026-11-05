@@ -5,6 +5,7 @@ describe("the live screen's page", () => {
   it("is /screen/<machine>", () => {
     expect(screenMachine("/screen/macbook")).toBe("macbook");
     expect(screenMachine("/screen/mac%20mini/")).toBe("mac mini");
+    expect(screenMachine("/screen/%ZZ")).toBe("%ZZ");
     expect(screenMachine("/screen")).toBeNull();
     expect(screenMachine("/machines/macbook")).toBeNull();
   });
