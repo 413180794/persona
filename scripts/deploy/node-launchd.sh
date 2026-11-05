@@ -25,9 +25,8 @@ done
 ROOT="${ROOT:-/}"
 BIN="$ROOT/bin/jarvisd"
 xml_escape() {
-  local value="$1"
-  value="${value//&/\&amp;}"; value="${value//</\&lt;}"; value="${value//>/\&gt;}"
-  printf '%s' "$value"
+  # Not ${value//&/...}: bash 3.2 (macOS /bin/bash) and 5.2 (patsub_replacement) read & and \ in the replacement differently.
+  printf '%s' "$1" | LC_ALL=C sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
 }
 systemd_quote() {
   local value="$1"
