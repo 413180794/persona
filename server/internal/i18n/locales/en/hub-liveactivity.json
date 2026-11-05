@@ -5,5 +5,7 @@
   "working_one": "{count} working",
   "working_other": "{count} working",
   "unread_one": "{count} done",
-  "unread_other": "{count} done"
+  "unread_other": "{count} done",
+  "background_one": "{count} background task running",
+  "background_other": "{count} background tasks running"
 }

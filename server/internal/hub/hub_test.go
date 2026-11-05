@@ -731,6 +731,16 @@ func TestBackgroundState(t *testing.T) {
 		if got := backgroundState(c.state, c.s); got != c.want {
 			t.Errorf("%s: %s, want %s", c.name, got, c.want)
 		}
+		// background_working: working only because of the background
+		if got, bg := stateWithBackground(c.state, c.s); bg != (got == proto.StateWorking && c.state != proto.StateWorking) {
+			t.Errorf("%s: background_working %v", c.name, bg)
+		}
+	}
+	if _, bg := stateWithBackground(proto.StateWorking, proto.Session{Background: shell}); bg {
+		t.Error("a turn still running with background work is plain working")
+	}
+	if st, bg := stateWithBackground(proto.StateUnread, proto.Session{Workflows: []proto.Workflow{{TaskID: "w", Running: true}}}); st != proto.StateWorking || !bg {
+		t.Errorf("a turn waiting for its workflow: %s %v", st, bg)
 	}
 }
 

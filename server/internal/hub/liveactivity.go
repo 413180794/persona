@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"cmp"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -174,6 +175,9 @@ type FleetItem struct {
 	Place       string  `json:"place"`
 	Kind        string  `json:"kind"` // permission | plan | question | screen | working | unread
 	Detail      string  `json:"detail"`
+	// Background: a working item whose turn ended while its background work runs (#2935, Session.BackgroundWorking);
+	// Detail then says what runs ("parity-audit · Verify · 169/185"). Older apps ignore it and show it working.
+	Background bool `json:"background,omitempty"`
 	Interaction string  `json:"interaction,omitempty"` // what 允许 / 拒绝 / 批准 resolve
 	Since       float64 `json:"since,omitempty"`
 }
@@ -262,7 +266,11 @@ func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) Fle
 			if since.IsZero() {
 				since = s.UpdatedAt
 			}
-			working = append(working, FleetItem{ID: key, Title: agentTitle(s), Place: agentPlace(a.Machine, s), Kind: "working", Since: unix(since)})
+			it := FleetItem{ID: key, Title: agentTitle(s), Place: agentPlace(a.Machine, s), Kind: "working", Since: unix(since)}
+			if s.BackgroundWorking {
+				it.Background, it.Detail = true, clip(backgroundDetail(l, s), 60)
+			}
+			working = append(working, it)
 		case proto.StateUnread:
 			if s.Assistant || s.Loop != nil {
 				continue
@@ -857,4 +865,27 @@ func (la *liveActivities) routes(api *http.ServeMux) {
 		st.Stats = &stats
 		writeJSON(w, map[string]any{"fleet": st})
 	})
+}
+
+// backgroundDetail is what a background-working agent runs, in a line: its running workflow ("parity-audit · Verify ·
+// 169/185"), else how many background tasks.
+func backgroundDetail(l i18n.Lang, s proto.Session) string {
+	for _, w := range s.Workflows {
+		if !w.Running {
+			continue
+		}
+		parts := []string{cmp.Or(w.Name, w.Summary, "workflow")}
+		if w.Phase != "" {
+			parts = append(parts, w.Phase)
+		}
+		parts = append(parts, fmt.Sprintf("%d/%d", w.AgentsDone, w.AgentsStarted))
+		return strings.Join(parts, " · ")
+	}
+	n := len(s.Background)
+	for _, a := range s.Subagents {
+		if a.Running {
+			n++
+		}
+	}
+	return i18n.T(l, "hub-liveactivity.background", i18n.Args{"count": n})
 }

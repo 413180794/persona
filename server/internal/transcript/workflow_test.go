@@ -44,7 +44,7 @@ func TestWorkflowAndMonitorBackground(t *testing.T) {
 	}
 	w := meta.Workflows[0]
 	if w.TaskID != "wdp5zxh37" || w.RunID != "wf_c1d9daf8-cd2" || w.Name != "parity-audit" || w.Summary != "Audit parity per domain" ||
-		!w.Running || w.Status != proto.WorkflowRunning {
+		!w.Running || w.Status != proto.WorkflowRunning || w.ToolUseID != "tu1" {
 		t.Fatalf("run: %+v", w)
 	}
 	if meta.WorkflowScripts["wf_c1d9daf8-cd2"] != "/home/u/.claude/projects/p/s1/workflows/scripts/parity-audit-wf_1fb00b8c-9e9.js" {

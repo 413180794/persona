@@ -2,5 +2,6 @@
   "screen": "ターミナルで対応待ち",
   "needs_you_other": "{count}件が要対応",
   "working_other": "{count}件が作業中",
-  "unread_other": "{count}件が完了"
+  "unread_other": "{count}件が完了",
+  "background_other": "バックグラウンドで {count} 件実行中"
 }

@@ -726,3 +726,30 @@ func TestSessionsSentOnce(t *testing.T) {
 		t.Fatalf("sent %v, want %v", got, want)
 	}
 }
+
+// A working item whose turn ended for its background work says so, and what runs (#2935).
+func TestBuildFleetBackground(t *testing.T) {
+	run := proto.Workflow{TaskID: "w1", Name: "parity-audit", Running: true, Status: proto.WorkflowRunning, Phase: "Verify",
+		AgentsStarted: 185, AgentsDone: 169}
+	agents := []fleetInput{
+		{Machine: "box", Session: proto.Session{MachineID: "m", SessionID: "wf", State: proto.StateWorking, BackgroundWorking: true,
+			Workflows: []proto.Workflow{run}}},
+		{Machine: "box", Session: proto.Session{MachineID: "m", SessionID: "sh", State: proto.StateWorking, BackgroundWorking: true,
+			Background: []proto.BackgroundTask{{ID: "b1", Kind: "shell"}, {ID: "b2", Kind: "monitor"}}}},
+		{Machine: "box", Session: proto.Session{MachineID: "m", SessionID: "busy", State: proto.StateWorking}},
+	}
+	st := buildFleetIn("zh-Hans", agents, nil)
+	got := map[string]FleetItem{}
+	for _, it := range st.Items {
+		got[it.ID] = it
+	}
+	if it := got["m/wf"]; !it.Background || it.Detail != "parity-audit · Verify · 169/185" {
+		t.Errorf("workflow: %+v", it)
+	}
+	if it := got["m/sh"]; !it.Background || it.Detail != "后台 2 个任务在跑" {
+		t.Errorf("background tasks: %+v", it)
+	}
+	if it := got["m/busy"]; it.Background || it.Detail != "" {
+		t.Errorf("a plain working one: %+v", it)
+	}
+}

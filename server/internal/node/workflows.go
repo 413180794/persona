@@ -261,6 +261,10 @@ func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, scri
 	for _, a := range agents {
 		w.AgentsStarted++
 		a.Running = w.Running && !a.done
+		a.Status = map[bool]string{true: "done", false: "stopped"}[a.done]
+		if a.Running {
+			a.Status = "running"
+		}
 		switch {
 		case a.done:
 			w.AgentsDone++
@@ -280,6 +284,7 @@ func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, scri
 			w.PhaseIndex = i + 1
 		}
 	}
+	w.PhaseCount = len(w.Phases)
 	if len(agents) > proto.WorkflowAgentsMax {
 		agents = agents[len(agents)-proto.WorkflowAgentsMax:]
 	}

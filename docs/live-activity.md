@@ -214,7 +214,9 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
 
 ```json
 {"phase":"working","needsYou":0,"working":1,"unread":0,
- "items":[{"id":"<machine>/<session>","title":"…","place":"机器 · 空间","kind":"working","detail":"","since":1761700000}],
+ "items":[{"id":"<machine>/<session>","title":"…","place":"机器 · 空间","kind":"working","detail":"","since":1761700000},
+          // 这一轮停着、后台还在跑（Session.background_working，#2935）：background=true，detail 是在跑的东西（「parity-audit · Verify · 169/185」「后台 2 个任务在跑」）；旧 App 不认 background，照常当工作中
+          {"id":"…","title":"…","place":"…","kind":"working","background":true,"detail":"parity-audit · Verify · 169/185","since":1761700000}],
  "workingSince":1761700000,"details":false}
 ```
 

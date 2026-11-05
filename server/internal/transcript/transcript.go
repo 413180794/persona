@@ -754,7 +754,7 @@ func (m *Meta) backgroundStarted(toolUseID, result string, isError bool, ts time
 			t.ExpiresAt = &at
 		}
 	case "workflow":
-		m.workflowStarted(&t, result)
+		m.workflowStarted(&t, toolUseID, result)
 	}
 	m.removeBackground(t.ID)
 	m.Background = append(m.Background, t)
@@ -763,8 +763,9 @@ func (m *Meta) backgroundStarted(toolUseID, result string, isError bool, ts time
 // workflowsKept: how many workflow runs a session's Meta remembers.
 const workflowsKept = 8
 
-func (m *Meta) workflowStarted(t *proto.BackgroundTask, result string) {
-	w := proto.Workflow{TaskID: t.ID, Name: t.Description, Status: proto.WorkflowRunning, Running: true, StartedAt: t.StartedAt}
+func (m *Meta) workflowStarted(t *proto.BackgroundTask, toolUseID, result string) {
+	w := proto.Workflow{TaskID: t.ID, Name: t.Description, Status: proto.WorkflowRunning, Running: true, StartedAt: t.StartedAt,
+		ToolUseID: toolUseID}
 	if r := wfRunRe.FindStringSubmatch(result); r != nil {
 		w.RunID = r[1]
 	} else if r := wfDirRe.FindStringSubmatch(result); r != nil {

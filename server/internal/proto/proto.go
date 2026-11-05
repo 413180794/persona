@@ -717,7 +717,10 @@ type Session struct {
 	PaneIndex *int `json:"pane_index,omitempty"`
 	// State is the unified agent state the apps render (needs_you, working, unread, idle, offline, unknown),
 	// computed by the hub from the host status, pending interactions and whether the user has seen the result.
-	State  string    `json:"state"`
+	State string `json:"state"`
+	// BackgroundWorking: State is working only because of background work (#2935): its turn ended while its
+	// background commands, subagents, Monitors or workflows still run. Clients say 工作中（后台）. Set by the hub.
+	BackgroundWorking bool `json:"background_working,omitempty"`
 	SeenAt time.Time `json:"seen_at,omitempty"`
 	// StateSince is when the agent entered its current state, as the hub saw it (the hub restarting resets it):
 	// lists sort 工作中 by it, since updated_at moves on every step.
@@ -1275,6 +1278,8 @@ type Workflow struct {
 	Phases     []string `json:"phases,omitempty"`
 	Phase      string   `json:"phase,omitempty"`
 	PhaseIndex int      `json:"phase_index,omitempty"`
+	PhaseCount int      `json:"phase_count,omitempty"` // len(Phases)
+	ToolUseID  string   `json:"tool_use_id,omitempty"` // the Workflow call that launched it
 	// AgentsStarted counts the agents it started so far (the total is not known before it ends: scripts fan out as
 	// they go), AgentsDone those that returned, AgentsRunning those still at it.
 	AgentsStarted int       `json:"agents_started"`
@@ -1308,6 +1313,7 @@ type WorkflowAgent struct {
 	Label     string    `json:"label,omitempty"`
 	Phase     string    `json:"phase,omitempty"`
 	Running   bool      `json:"running"`
+	Status    string    `json:"status"` // running | done | stopped (its run ended before it returned)
 	StartedAt time.Time `json:"started_at,omitempty"`
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	LastText  string    `json:"last_text,omitempty"`

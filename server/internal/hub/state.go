@@ -52,6 +52,13 @@ func backgroundState(state string, s proto.Session) string {
 	return state
 }
 
+// stateWithBackground is backgroundState, and whether the background work is all that makes it working
+// (Session.BackgroundWorking: 工作中（后台）).
+func stateWithBackground(host string, s proto.Session) (string, bool) {
+	state := backgroundState(host, s)
+	return state, state == proto.StateWorking && host != proto.StateWorking
+}
+
 // turnError is the model API error that cut s's latest turn off, while it has stopped (unread or idle): not finished
 // (#1516), and its kind when the agent's record gives one. The node's word comes first: the agent's own record said
 // the turn failed (Codex, #2185). Otherwise s's last words when they are the error, as Claude Code writes it; only an

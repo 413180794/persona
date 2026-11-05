@@ -81,6 +81,9 @@ func TestWorkflowProgress(t *testing.T) {
 		w.Phase != "Verify" || w.PhaseIndex != 2 || w.AgentsStarted != 3 || w.AgentsDone != 1 || w.AgentsRunning != 2 {
 		t.Fatalf("progress: %+v", w)
 	}
+	if w.PhaseCount != 2 || w.Agents[0].Status != "done" || w.Agents[1].Status != "running" {
+		t.Fatalf("phase count / agent status: %+v", w)
+	}
 	if len(w.Agents) != 3 || w.Agents[0].ID != "a1" || w.Agents[0].Running || !w.Agents[1].Running ||
 		w.Agents[0].SessionID != parent+"@a1" || w.Agents[0].LastText != "found 2 gaps" || w.Agents[2].Phase != "Verify" {
 		t.Fatalf("agents: %+v", w.Agents)
@@ -114,7 +117,7 @@ func TestWorkflowEnded(t *testing.T) {
 	}
 	w := s.Workflows[0]
 	if w.Running || w.Status != proto.WorkflowKilled || w.Error != "Error: Workflow aborted" || w.Name != "parity-audit" ||
-		w.Agents[0].Running || w.AgentsRunning != 0 || w.EndedAt == nil {
+		w.Agents[0].Running || w.Agents[0].Status != "stopped" || w.AgentsRunning != 0 || w.EndedAt == nil {
 		t.Fatalf("ended: %+v", w)
 	}
 
