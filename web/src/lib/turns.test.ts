@@ -269,3 +269,26 @@ describe("paths in answers", () => {
     expect([mediaKindOf("/a/b.MOV"), mediaKindOf("x.m4a"), mediaKindOf("p.heic"), mediaKindOf("r.pdf")]).toEqual(["video", "audio", "image", "file"]);
   });
 });
+
+describe("Persona's messages for the model (lib/injected.ts)", () => {
+  const notice = "🔔 任务「跑测试」做完了（电脑）\n（这是 Persona 的任务通知，不是用户发的消息。……）\n\nAgent 最后说的：\n全过了。\n\n你来决定要不要告诉用户、怎么说……";
+  it("shows the line, never the words for the model", () => {
+    const s = segments([u(1, notice), a(2, "测试全过了。")]);
+    expect(s[0].user?.injected?.kind).toBe("task_notice");
+    expect(s[0].user?.text).toBe("任务「跑测试」做完了");
+    expect(s[0].answer?.text).toBe("测试全过了。");
+  });
+  it("takes the hub's mark", () => {
+    const s = segments([u(1, "whatever", { injected: { kind: "followup", state: "daily", line: "定时任务「早报」开始运行" } })]);
+    expect(s[0].user?.text).toBe("定时任务「早报」开始运行");
+  });
+  it("is not merged into a finished exchange's bubble", () => {
+    const lines = chatLines([u(1, notice), u(2, "顺便看看 CI", { queued: true }), a(3, "好")]);
+    const segs = lines.filter((l) => l.kind === "segment");
+    expect(segs.map((l) => (l.kind === "segment" ? l.seg.user?.injected?.kind ?? l.seg.user?.text : ""))).toEqual(["task_notice", "顺便看看 CI"]);
+    expect(lines.some((l) => l.kind === "split")).toBe(false);
+  });
+  it("a message the app sent stays a bubble", () => {
+    expect(segments([u(1, notice, { client_msg_id: "c1" })])[0].user?.injected).toBeUndefined();
+  });
+});

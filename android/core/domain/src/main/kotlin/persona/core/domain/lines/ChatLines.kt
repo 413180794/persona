@@ -265,7 +265,8 @@ private class LineBuilder(val liveId: String?, val open: Set<String>) {
         val segments = segments(ordered)
         val groupId = "wt-" + turn.id
         val messages = segments.mapNotNull { it.user }
-        if (turn.id != liveId && messages.size > 1) {
+        // (never with one of Persona's messages for the model among them: that one is a line of its own)
+        if (turn.id != liveId && messages.size > 1 && messages.none { it.item?.injected != null }) {
             if (groupId !in open) {
                 val photos = segments.flatMap { photos(it.rows) }
                 if (photos.isNotEmpty()) add(ChatLine.UserImages(photos))

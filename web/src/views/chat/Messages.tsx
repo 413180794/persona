@@ -1,9 +1,14 @@
 // Messages that are not plain bubbles (iOS MergedUserBubble / PeerMessage / LoopTickRow): a finished exchange's several
 // messages in one bubble, a message another Claude session sent, and a /loop waking the agent again.
+import { useState } from "react";
 import { clock } from "../../lib/format";
-import { getSession } from "../../lib/store";
+import { taskOfInjected } from "../../lib/injected";
+import { openPanel } from "../../lib/panel";
+import { getSession, useStore } from "../../lib/store";
+import type { Injected } from "../../lib/types";
 import type { UserMessage } from "../../lib/turns";
-import { Icon } from "../../ui/icons";
+import { cx } from "../../ui/atoms";
+import { Icon, type IconName } from "../../ui/icons";
 import { FileCards } from "./FileCards";
 import { MessageActions } from "./MessageActions";
 import { Markdown } from "../../ui/Markdown";
@@ -67,6 +72,55 @@ export function LoopTick({ msg }: { msg: UserMessage }) {
         {msg.ts && <span className="shrink-0 tabular-nums">{clock(msg.ts)}</span>}
         {rest && <span className="min-w-0 truncate text-ink-3">{rest}</span>}
       </span>
+    </div>
+  );
+}
+
+function injectedIcon(n: Injected): { name: IconName; tone: string } {
+  if (n.kind === "task_notice") {
+    if (n.state === "needs") return { name: "hand", tone: "text-accent" };
+    if (n.state === "interrupted" || n.state === "failed") return { name: "warning", tone: "text-red" };
+    return { name: "check", tone: "text-green" };
+  }
+  if (n.kind === "followup") return n.state === "wake" ? { name: "bell", tone: "text-accent" } : { name: "clock", tone: "text-accent" };
+  return { name: "info", tone: "text-ink-3" };
+}
+
+/** A message Persona typed in for the model (a task's notice, a scheduled run…): one centered line, never its words.
+ *  A task's opens the task; a scheduled run's shows what the task asks. docs/protocol.md「Persona 注入的消息」. */
+export function InjectedHint({ msg, sid }: { msg: UserMessage; sid: string }) {
+  const n = msg.injected!;
+  const todos = useStore((s) => s.todos);
+  const [open, setOpen] = useState(false);
+  const todo = n.kind === "task_notice" ? taskOfInjected(n, todos, sid) : undefined;
+  const icon = injectedIcon(n);
+  const body = (
+    <>
+      <Icon name={icon.name} size={12} className={cx("shrink-0", icon.tone)} />
+      <span className="min-w-0 truncate">{n.line}</span>
+      {msg.ts && <span className="shrink-0 text-ink-3 tabular-nums">{clock(msg.ts)}</span>}
+      {(todo || n.detail) && <Icon name={todo ? "chevronRight" : open ? "up" : "chevron"} size={11} className="shrink-0 text-ink-3" />}
+    </>
+  );
+  const pill = "flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-inset px-3 py-1 text-[12px] text-ink-2 shadow-hairline";
+  return (
+    <div className="flex flex-col items-center gap-2" data-injected={n.kind}>
+      {todo ? (
+        <button type="button" className={cx(pill, "hover:bg-hover")} onClick={() => openPanel({ kind: "task", todo })} aria-label={`${n.line}，打开任务`}>
+          {body}
+        </button>
+      ) : n.detail ? (
+        <button type="button" className={cx(pill, "hover:bg-hover")} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {body}
+        </button>
+      ) : (
+        <span className={pill}>{body}</span>
+      )}
+      {open && n.detail && (
+        <div className="w-full max-w-[560px] rounded-card bg-inset px-3 py-2 text-[12.5px] leading-relaxed text-ink-2 shadow-hairline">
+          <Markdown text={keepLineBreaks(n.detail)} small />
+        </div>
+      )}
     </div>
   );
 }

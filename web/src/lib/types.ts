@@ -279,6 +279,22 @@ export interface Item {
   client_msg_id?: string;
   /** This notice is where the context was compacted (Claude Code's compact_boundary). */
   compact?: CompactInfo;
+  /** A message Persona typed in for the model (a task's notice, a scheduled run…), not by you (lib/injected.ts). */
+  injected?: Injected;
+}
+
+/** What a message Persona wrote for the model is (docs/protocol.md「Persona 注入的消息」). */
+export interface Injected {
+  kind: "task_notice" | "followup" | "system" | (string & {});
+  /** task_notice: done | needs | interrupted | failed; followup: once | daily | interval | wake; system: lost_tasks */
+  state?: string;
+  title?: string;
+  machine?: string;
+  todo_id?: string;
+  /** The one line to show. */
+  line: string;
+  /** followup once | daily | interval: what the task asks. */
+  detail?: string;
 }
 
 export interface ItemsPage {

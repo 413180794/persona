@@ -86,7 +86,11 @@ func TestParseInjected(t *testing.T) {
 			t.Errorf("%s: got %s, want %s", c.Name, g, w)
 		}
 	}
-	b, err := json.MarshalIndent(cases, "", "  ")
+	// The shape every spec/fixtures domain has (spec/README.md「夹具约定」).
+	b, err := json.MarshalIndent(struct {
+		Version int            `json:"version"`
+		Cases   []injectedCase `json:"cases"`
+	}{1, cases}, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}

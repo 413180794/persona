@@ -3,6 +3,7 @@ package persona.feature.chat
 import persona.core.contracts.Item
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ChatRepository
+import persona.core.domain.injectedOf
 import persona.core.domain.lines.ChatLine
 import persona.core.domain.lines.WorkItem
 import kotlinx.coroutines.currentCoroutineContext
@@ -20,6 +21,11 @@ private fun JsonElement.strings(): Sequence<String> = when (this) {
 }
 
 private fun Item.searchFields(): List<Pair<String, String>> = buildList {
+    // Persona's message for the model: what the chat shows of it (its line, a scheduled run's ask), not its words
+    injectedOf(this@searchFields)?.let { n ->
+        add("系统事件" to listOfNotNull(n.line, n.detail).joinToString("\n"))
+        return@buildList
+    }
     val category = when (kind) {
         "text" -> "正文"
         "thinking" -> "思考"

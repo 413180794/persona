@@ -4,7 +4,8 @@
 
 import { errorSignature, isRetryText, parseAPIError, type APIErrorInfo } from "./api-errors";
 import { foldCompactions, isCompaction } from "./compaction";
-import type { Item } from "./types";
+import { injectedOf } from "./injected";
+import type { Injected, Item } from "./types";
 
 export type Step =
   | { kind: "tool"; id: string; use: Item; result?: Item; images: Item[] }
@@ -29,6 +30,8 @@ export interface UserMessage {
   client_msg_id?: string;
   /** Files it carries as <jarvis-file> tags (videos sent from the phone…), drawn as cards. */
   files?: AttachedFile[];
+  /** Persona typed it in for the model (a task's notice, a scheduled run…): one line, not a bubble (lib/injected.ts). */
+  injected?: Injected;
 }
 
 /** A <jarvis-file kind="video" path="…" name="…" size="…" duration="…"/> in a message (docs/protocol.md「发送视频」). */
@@ -168,6 +171,15 @@ export function segments(items: Item[]): Segment[] {
   for (const it of items) {
     const entry = it.id.split("#")[0];
     if (isUserMessage(it)) {
+      const injected = injectedOf(it);
+      if (injected) {
+        // Persona's message for the model: its line stands for it, the words inside are not shown
+        cur = open(`seg:${it.id}`);
+        cur.user = { id: it.id, text: injected.line, images: [], ts: it.ts, contexts: [], injected };
+        cur.start = it.ts;
+        lastUserEntry = "";
+        continue;
+      }
       // blocks of one transcript line (text + its images) are one message
       if (!cur || !cur.user || entry !== lastUserEntry || cur.steps.length || cur.answer) {
         cur = open(`seg:${it.id}`);
@@ -544,7 +556,8 @@ function turnLines(t: Turn, live: boolean, split: ReadonlySet<string>): ChatLine
     for (const n of t.trailing) out.push({ kind: "notice", id: n.id, item: n });
   };
   // a finished exchange that took several messages reads as one: the messages in one bubble, one work row, the answer
-  if (!live && messages.length > 1) {
+  // (never with one of Persona's messages for the model among them: that one is a line of its own)
+  if (!live && messages.length > 1 && !messages.some((m) => m.user!.injected)) {
     if (!split.has(group)) {
       const seg = segments(ordered.filter((i) => !isUserInput(i)));
       const merged: Segment = { id: `mu-${t.id}`, steps: [], tools: 0, thoughts: 0, replies: 0, folds: [] };

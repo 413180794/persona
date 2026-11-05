@@ -130,7 +130,7 @@ private fun since(iso: String?, now: Instant = Instant.now()): String? {
     }
 }
 
-private fun openTask(host: AssistantTaskHost, todo: Todo) {
+internal fun openTask(host: AssistantTaskHost, todo: Todo) {
     val lead = host.tasks.lead(todo, host.sessions)
     val key = lead?.key ?: todo.activeAgents.firstOrNull()?.let { SessionKey(it.machineId, it.sessionId) } ?: return
     host.onOpen(key)

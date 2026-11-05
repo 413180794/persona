@@ -139,7 +139,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // (any kind, a notice too), or else a latest user message with its words; one that answered one answers no other
   const claimed = useRef(new Set<string>());
   useEffect(() => {
-    const users = [...segs.slice(-4).flatMap((seg) => seg.user ? [seg.user] : []), ...taggedSeen(tr.items)];
+    const users = [...segs.slice(-4).flatMap((seg) => (seg.user && !seg.user.injected ? [seg.user] : [])), ...taggedSeen(tr.items)];
     users.forEach((user) => acknowledgeLaunch(mid, sid, user));
     settleOutbox(mid, sid, users);
     if (!pending.length) return;

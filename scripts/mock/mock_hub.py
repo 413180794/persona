@@ -1577,6 +1577,25 @@ if MOCK_TASKS:
         + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_3 is on the user's screen as a card.", 2)
         + [it("assistant", "text", 1.9, text="这个要改代码，计划在下面，你点开始就开。")]
     )
+    # MOCK_INJECTED=1: what the hub typed in for the model (docs/protocol.md「Persona 注入的消息」): the release-notes
+    # task's notice after its receipt (unmarked, as an older hub sends it: the apps read the text) and the assistant's
+    # answer, then a daily task's run marked by the hub (injected); the apps draw each as one centered line.
+    if os.environ.get("MOCK_INJECTED") == "1":
+        _notice = ("🔔 任务「整理发布说明」做完了（MacBook）\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，"
+                   "用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\nAgent 最后说的：\n"
+                   "整理好了：这周合并了 7 个 PR，写在 docs/release-notes.md 里。\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么。")
+        _run = "⏰ 午间整理（定时任务）\n\n看看上午的邮件和飞书，挑出要我回的。"
+        ITEMS[ASK1] += [
+            it("user", "text", 19.8, text=_notice),
+            it("assistant", "text", 19.6, text="发布说明整理好了，在 docs/release-notes.md，等你过目。"),
+            it("user", "text", 15, text=_run, injected={"kind": "followup", "state": "daily", "title": "午间整理",
+                                                        "line": "定时任务「午间整理」开始运行", "detail": "看看上午的邮件和飞书，挑出要我回的。"}),
+            it("assistant", "text", 14.5, text="上午有两封邮件要你回：设计评审改期、季度预算确认。"),
+        ]
+        ITEMS[ASK1].sort(key=lambda x: x["ts"])
+        _base = min(x["seq"] for x in ITEMS[ASK1])
+        for _i, _x in enumerate(ITEMS[ASK1]):
+            _x["seq"] = _base + _i
     # MOCK_TASKS_CUT=1: the model service cut the release-notes task off (#1516): its agent's last words are the API
     # error (the hub's turn_error) and its receipt is interrupted; 继续 (POST …/retry) makes it work and then finish.
     if os.environ.get("MOCK_TASKS_CUT") == "1":
@@ -3551,71 +3570,54 @@ def _lm(pos, who, text, mine=False, mins=60):
 LARK_MESSAGES = {"f2": [
     _lm("200", "Lucy Wang", "The new icon set is in the shared folder. Could you take a look before the review this afternoon?", mins=58),
     _lm("201", "李雷", "我先看了一下，标签栏的图标偏细", mins=57),
-    _lm("202", "Lucy Wang", "Agreed. I'll make the tab bar icons one weight heavier and send an update by 3 pm.", mins=56),
-    _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
-]}
-LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {"copy": True}, "content": {"type": "doc", "content": [
-    {"type": "heading", "attrs": {"level": 1}, "content": [{"type": "text", "text": "新版图标评审"}]},
-    {"type": "paragraph", "content": [{"type": "text", "text": "这一版统一了圆角和描边，深色模式单独调了对比度。"}]},
-    {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "待确认"}]},
-    {"type": "bulletList", "content": [
-        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "主色是否再暖一点"}]}]},
-        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "小尺寸下的描边粗细"}]}]}]},
-    {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
-]}}
+    _lm("202", "Lucy Wang", "Agreed. I''s [removed] words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
+    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
+    while True:
+        n, d = divmod(n, 34)
+        out = BRAVE_CLIMB_ALPHABET[d] + out
+        if n == 0:
+            return "**字" + out + "**""MOCK_LARK_BRAVE_CLIMB"):
+    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
+    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
+    words = brave_climb("标签栏改粗一号")
+    split = _lm("211", "Lucy Wang", words, mins=39)
+    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
+    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
+    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
+    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
+    reply = _lm("214", "我", "好的", mine=True, mins=36)
+    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
+    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
+    LARK_CHATS[0]["preview"] = whole["text"]
+if os.environ.get("MOCK_LARK_TRAINER"):
+    retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
+    retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
+    missing = _lm("201", "李雷", "不能展示的占位原文", mins=54)
+    missing.update(recalled=True, retained=False)
+    edited = _lm("202", "李雷", "评审地点改为线上", mins=53)
+    edited.update(edited=True, edit_history=[
+        {"edited_at": "2026-01-01T10:00:00.123Z", "text": "原定会议室 A", "parts": [{"kind": "text", "text": "原定会议室 A"}]},
+        {"edited_at": "2026-01-01T10:05:00Z", "text": "不得缓存的旧加密正文", "olk": {
+            "version": 1, "state": "locked", "publicParts": [{"kind": "text", "text": "稍后确认"}]}}
+    ])
+    quoted = _lm("203", "我", "收到，按新的安排。", mine=True, mins=52)
+    quoted["reply_to"] = {"id": retained["id"], "sender_name": "李雷", "text": retained["text"], "recalled": True, "retained": True}
+    recalled_system = _lm("204", "系统成员", "不得展示的系统撤回原文", mins=51)
+    recalled_system.update(type="SYSTEM", recalled=True, retained=True)
+    anonymous_system = _lm("205", "", "不得展示的匿名系统原文", mins=50)
+    anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
+    LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
 
-LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
-
-# MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
-if os.environ.get("MOCK_LARK_OLK"):
-    def _olk(pos, state, body, cover, handout=False):
-        m = _lm(str(pos), "李雷", body or "加密群密钥分发消息", mins=55)
-        m["parts"] = [{"kind": "text", "text": m["text"]}]
-        m["olk"] = {"version": 1, "state": state,
-                    "publicParts": [{"kind": "text", "text": cover}] if cover else []}
-        if state == "decrypted":
-            m["olk"].update(bodyParts=[{"kind": "text", "text": body}] if body else [], keyHandout=handout)
-        return m
-    LARK_MESSAGES["f2"] = [
-        _olk(200, "decrypted", "", "稍等", True),
-        _olk(201, "decrypted", "评审文档已更新，请看第二页。", "我看看"),
-        _olk(202, "decrypted", "我把调整后的版本发到这里。", "等下", True),
-        _olk(203, "locked", "不可见的正文", "午饭后再聊"),
-        _lm("204", "李雷", "加密群密钥分发消息是一个普通文本示例", mins=55),
-    ]
-    LARK_MESSAGES["f2"][2]["reply_to"] = {
-        "id": "m201", "sender_name": "李雷", "text": "旧接口摘要",
-        "olk": LARK_MESSAGES["f2"][1]["olk"],
-    }
-    LARK_MESSAGES["f2"][4]["reply_to"] = {
-        "id": "m203", "sender_name": "李雷", "text": "不可见的正文",
-        "olk": LARK_MESSAGES["f2"][3]["olk"],
-    }
-
-LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
-# Isolated pin shelf fixtures: real list endpoints, account checks and realtime changes.
-LARK_PIN_FIXTURE = {"count": 18, "account": "pin-account-one", "offline": False, "reverse": False, "unread": 3, "newest": False, "requests": 0}
-def lark_pin_rows():
-    rows = [dict(c) for c in LARK_CHATS]
-    for i in range(1, 81):
-        rows.append({"id": f"pin-{i}", "name": f"会话 {i:02d}", "is_group": i % 2 == 0,
-                     "unread": i % 4, "at_me": False, "muted": i % 3 == 0, "is_mine": False,
-                     "preview": f"第 {i} 条会话摘要", "updated_at": ago(minutes=i)})
-    rows[0]["unread"] = LARK_PIN_FIXTURE["unread"]
-    if LARK_PIN_FIXTURE["newest"]:
-        rows.insert(0, dict(rows[0], id="incoming", name="新会话", preview="实时更新的摘要"))
-        rows = [dict(c, preview="实时更新 · " + c["preview"]) for c in rows]
-    if LARK_PIN_FIXTURE["account"] != "pin-account-one":
-        rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
-    return rows
-
-LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
-                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB""MOCK_LARK_OLD_DISPLAY"):
-    del LARK_DISPLAY["brave_climb_codec"]
-
-BRAVE_CLIMB_ALPHABET = "[removed]"
-def brave_climb(text):
-    """lark-connector''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+# The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
+# one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
+# thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
+# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose lark-connector
+# lost its Feishu session.
+LARK_LOGGED_OUT = "lark: lark-connector 未登录飞书 (AUTH_SESSION_EXPIRED)"
+_LARK_EMOJI_SET = (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"), ("HEART", "爱心"), ("SMILE", "微笑"), ("LAUGH", "大笑"),
+                   ("SURPRISED", "惊讶"), ("CRY", "流泪"), ("DONE", "完成"))
+# Keyed in lower case like the hub's catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
 # flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
 LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
 LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}

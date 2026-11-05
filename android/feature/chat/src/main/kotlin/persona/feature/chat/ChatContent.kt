@@ -212,7 +212,7 @@ internal fun ChatLineContent(
 ) {
     when (line) {
         is ChatLine.Row -> when (line.row.type) {
-            "user" -> line.row.item?.item?.let {
+            "user" -> line.row.item?.injected?.let { InjectedLine(line.row.id, it) } ?: line.row.item?.item?.let {
                 MergedUserBubble(listOf(it), textUpdates, onLastLine.takeIf { line.row.id == lastUserId },
                     images = userPictures(userImages, session, loader))
             }

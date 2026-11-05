@@ -230,6 +230,38 @@ fun ChatNoteChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modi
 }
 
 /**
+ * A line the chat shows in place of a message Persona typed in for the model (a task's notice, a scheduled run…;
+ * docs/protocol.md「Persona 注入的消息」): centered, the look of [ChatNoteChip], an icon in [tint], one line. Tappable
+ * (with a caret) only when [onClick] is set.
+ */
+@Composable
+fun ChatHint(text: String, icon: PhIcon, tint: androidx.compose.ui.graphics.Color, onClick: (() -> Unit)? = null,
+             modifier: Modifier = Modifier, onClickLabel: String? = null) {
+    val palette = PersonaTheme.palette
+    val board = PersonaTheme.style == AppStyle.Board
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(if (board) 8.dp else 50.dp)
+    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(
+            Modifier.padding(vertical = 4.dp).heightIn(min = 36.dp).clip(shape)
+                .background(if (board) palette.surface else palette.surfaceStrong)
+                .then(if (board) Modifier.border(1.dp, palette.line, shape) else Modifier)
+                .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick) else Modifier)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            JIcon(icon, null, size = 16.dp, tint = tint)
+            Spacer(Modifier.width(6.dp))
+            Text(text, style = PersonaTheme.type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false))
+            if (onClick != null) {
+                Spacer(Modifier.width(4.dp))
+                JIcon(PhIcons.CaretRight, null, size = 14.dp, tint = palette.ink3)
+            }
+        }
+    }
+}
+
+/**
  * A file named in a message or a tool card, as a chip that opens it on the session's machine: the file's icon and its
  * name, one line.
  */

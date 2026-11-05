@@ -1,6 +1,8 @@
 package persona.core.domain.lines
 
+import persona.core.contracts.Injected
 import persona.core.contracts.Item
+import persona.core.domain.injectedOf
 import java.time.Duration
 import java.time.Instant
 
@@ -16,6 +18,8 @@ data class LineItem(
     val kind get() = item.kind
     val text get() = item.text
     val time: Instant? get() = item.ts?.let(Instant::parse)
+    /** Persona typed it in for the model (a task's notice, a scheduled run…): the chat shows its line, not a bubble. */
+    val injected: Injected? by lazy { injectedOf(item) }
     internal val isWork get() = kind in setOf("thinking", "tool_use", "tool_result", "fold") ||
         (kind == "image" && item.toolUseId != null)
 

@@ -11,7 +11,7 @@ import { channelOf, useChannels } from "../../lib/channels";
 import { EASE } from "../../ui/atoms";
 import { ChannelMark } from "../../ui/ChannelMark";
 import { Markdown } from "../../ui/Markdown";
-import { LoopTick, MergedBubble, PeerMessage } from "./Messages";
+import { InjectedHint, LoopTick, MergedBubble, PeerMessage } from "./Messages";
 import { ContextGroup } from "./ContextGroup";
 import { FileCards, ReplyFiles } from "./FileCards";
 import { MessageActions } from "./MessageActions";
@@ -171,7 +171,7 @@ export const SegmentView = memo(function SegmentView({
   const imageStrip = images.length > 0 && <TurnImages images={images} mid={mid} sid={sid} cwd={getSession(mid, sid)?.cwd} />;
   return (
     <section className="flex flex-col gap-3" data-segment>
-      {seg.user && (seg.user.parts ? <MergedBubble msg={seg.user} mid={mid} sid={sid} /> : seg.user.from ? <PeerMessage msg={seg.user} /> : isLoopTick(seg.user) ? <LoopTick msg={seg.user} /> : <UserBubble msg={seg.user} mid={mid} sid={sid} />)}
+      {seg.user && (seg.user.injected ? <InjectedHint msg={seg.user} sid={sid} /> : seg.user.parts ? <MergedBubble msg={seg.user} mid={mid} sid={sid} /> : seg.user.from ? <PeerMessage msg={seg.user} /> : isLoopTick(seg.user) ? <LoopTick msg={seg.user} /> : <UserBubble msg={seg.user} mid={mid} sid={sid} />)}
       <WorkNodes nodes={nodes.slice(0, cut)} p={p} live={live} fresh={fresh} />
       {/* working with no run of steps going (its words just came, or nothing yet): the live group still shows */}
       {working && <WorkGroup g={{ kind: "group", id: `work-live-${seg.id}`, children: [], live: true, startedAt: Date.parse(turnStart ?? "") || undefined }} p={p} />}

@@ -1,188 +1,191 @@
-[
-  {
-    "name": "task_done",
-    "description": "任务做完的通知：只留标题、电脑和一句话。",
-    "source": "server/internal/prompts/assistant/task_notice.md",
-    "input": {
-      "text": "🔔 任务「README 去掉扩展列表」做完了（公司电脑）\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\nAgent 最后说的：\n改好了，PR 在这里。\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "task_done",
+      "description": "任务做完的通知：只留标题、电脑和一句话。",
+      "source": "server/internal/prompts/assistant/task_notice.md",
+      "input": {
+        "text": "🔔 任务「README 去掉扩展列表」做完了（公司电脑）\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\nAgent 最后说的：\n改好了，PR 在这里。\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
+      },
+      "expected": {
+        "kind": "task_notice",
+        "state": "done",
+        "title": "README 去掉扩展列表",
+        "machine": "公司电脑",
+        "line": "任务「README 去掉扩展列表」做完了"
+      }
     },
-    "expected": {
-      "kind": "task_notice",
-      "state": "done",
-      "title": "README 去掉扩展列表",
-      "machine": "公司电脑",
-      "line": "任务「README 去掉扩展列表」做完了"
+    {
+      "name": "task_needs",
+      "description": "任务在等用户：带着提问也只显示一句话。",
+      "source": "server/internal/prompts/assistant/task_notice.md",
+      "input": {
+        "text": "🔔 任务「升级依赖」在等用户（家里的 Mac）\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n它在问：\n- 要不要一起升级测试框架？（选项：要 / 不要）\n\n你来决定要不要告诉用户、怎么说：说清楚它在问什么、要用户怎么回（卡片就在主对话底下，用户点一下就行；用户以前交代过怎么答的，可以用 interaction_answer 代答再告诉用户）。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
+      },
+      "expected": {
+        "kind": "task_notice",
+        "state": "needs",
+        "title": "升级依赖",
+        "machine": "家里的 Mac",
+        "line": "任务「升级依赖」在等你"
+      }
+    },
+    {
+      "name": "task_interrupted_after_needs",
+      "description": "先等过用户、后被打断：以最后的状态为准。",
+      "source": "server/internal/prompts/assistant/task_notice.md",
+      "input": {
+        "text": "🔔 任务「修登录页」被模型服务出错打断了\n（这期间它还等过用户，以这条为准。）\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n模型服务回的错：\nAPI Error: overloaded\n\n你来决定要不要告诉用户、怎么说：说清楚在哪一步、什么错，可以点卡片上的「继续」。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
+      },
+      "expected": {
+        "kind": "task_notice",
+        "state": "interrupted",
+        "title": "修登录页",
+        "line": "任务「修登录页」被打断了"
+      }
+    },
+    {
+      "name": "task_failed",
+      "description": "任务没开起来，没有电脑名。",
+      "source": "server/internal/prompts/assistant/task_notice.md",
+      "input": {
+        "text": "🔔 任务「整理周报」没开起来\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n原因：\nrpc: connection closed\n\n你来决定要不要告诉用户、怎么说：说清楚为什么没开起来，可以点卡片上的「重试」或换一台电脑。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
+      },
+      "expected": {
+        "kind": "task_notice",
+        "state": "failed",
+        "title": "整理周报",
+        "line": "任务「整理周报」没开起来"
+      }
+    },
+    {
+      "name": "task_title_with_brackets",
+      "description": "标题里有括号和书名号也能取对。",
+      "source": "server/internal/prompts/assistant/task_notice.md",
+      "input": {
+        "text": "🔔 任务「改「设置（外观）」页」做完了（公司电脑）\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
+      },
+      "expected": {
+        "kind": "task_notice",
+        "state": "done",
+        "title": "改「设置（外观）」页",
+        "machine": "公司电脑",
+        "line": "任务「改「设置（外观）」页」做完了"
+      }
+    },
+    {
+      "name": "followup_once_late",
+      "description": "晚到的一次性跟进：说明行不进 detail。",
+      "source": "server/internal/prompts/assistant/task_run.md",
+      "input": {
+        "text": "⏰ 看看 CI（你之前安排的跟进）\n（本该 11-05 09:00 运行，Persona 当时没在运行，晚了 25 分钟；看看还有没有必要按原计划做。）\n\n看一下 CI 有没有过，过了就合并。"
+      },
+      "expected": {
+        "kind": "followup",
+        "state": "once",
+        "title": "看看 CI",
+        "line": "跟进「看看 CI」到时间了",
+        "detail": "看一下 CI 有没有过，过了就合并。"
+      }
+    },
+    {
+      "name": "followup_daily_kb",
+      "description": "每天的定时任务：去掉末尾的知识库提示。",
+      "source": "server/internal/prompts/assistant/task_run.md",
+      "input": {
+        "text": "⏰ 早报（定时任务）\n\n整理今天的日程。\n\n再看看邮件。\n\n（知识库 ~/.jarvis/data：先用 kb_list projects 看重点项目，按项目说进展和在等我的事，而不是按消息来源罗列；\n相关的会话档案用 kb_get 看。这次得出的新进展、新待办用 kb_update 记回对应项目的时间线。）"
+      },
+      "expected": {
+        "kind": "followup",
+        "state": "daily",
+        "title": "早报",
+        "line": "定时任务「早报」开始运行",
+        "detail": "整理今天的日程。\n\n再看看邮件。"
+      }
+    },
+    {
+      "name": "followup_interval_continued",
+      "description": "按间隔运行、接着自己的对话。",
+      "source": "server/internal/prompts/assistant/task_run.md",
+      "input": {
+        "text": "⏰ 盯部署（定时任务，每 30 分钟）\n（又到时间了，还是这个任务自己的对话：前几次的结果都在上面，接着做，和上次比有变化的地方说清楚。）\n\n看部署好了没有。"
+      },
+      "expected": {
+        "kind": "followup",
+        "state": "interval",
+        "title": "盯部署",
+        "line": "定时任务「盯部署」开始运行",
+        "detail": "看部署好了没有。"
+      }
+    },
+    {
+      "name": "followup_wake",
+      "description": "叫醒等待中的 Agent。",
+      "source": "server/internal/prompts/agents/wake.md",
+      "input": {
+        "text": "⏰（Persona 叫醒你，第 2 次）你上一轮停下时说在等「CI 跑完」，等到以后要「合并」。\n你等的 Agent「构建」刚停下了，它最后说：好了。\n现在自己查一下等的事好了没有：好了就接着往下做；还没好就简短说明还差什么、大概还要多久（Persona 会再叫你），不用一直守着等。\n接下来如果要推代码、部署 / 发布、给别人发消息或评论、合并或改别人的 MR / PR，先停下来问用户，不要自己做。"
+      },
+      "expected": {
+        "kind": "followup",
+        "state": "wake",
+        "title": "CI 跑完",
+        "line": "Persona 叫醒了它：看看「CI 跑完」好了没有"
+      }
+    },
+    {
+      "name": "system_lost_tasks",
+      "description": "node 重启丢了后台任务：数出几个。",
+      "source": "server/internal/prompts/assistant/lost_tasks.md",
+      "input": {
+        "text": "⚠️ 运行你的 node 刚重启过（换了版本，或者这台电脑没有常驻 node、hub 重启连带停了它），这段对话里还在跑的后台任务 / 监控随进程一起停了：\n- npm test\n- 监控 CI\n还需要的就重新启动（命令可能只跑了一半，重跑前先看看输出）；不需要了就简短说一句，不用推送。"
+      },
+      "expected": {
+        "kind": "system",
+        "state": "lost_tasks",
+        "line": "node 重启过，2 个后台任务停了"
+      }
+    },
+    {
+      "name": "snapshot_before",
+      "description": "前面带着实时快照块的也认。",
+      "source": "server/internal/prompts/assistant/task_notice.md",
+      "input": {
+        "text": "\u003cjarvis-context\u003e\n实时快照：……\n\u003c/jarvis-context\u003e\n🔔 任务「跑测试」做完了\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
+      },
+      "expected": {
+        "kind": "task_notice",
+        "state": "done",
+        "title": "跑测试",
+        "line": "任务「跑测试」做完了"
+      }
+    },
+    {
+      "name": "user_bell_without_marker",
+      "description": "用户自己打的「🔔 任务…」没有通知的说明行：不认。",
+      "source": "server/internal/prompts/assistant/task_notice.md",
+      "input": {
+        "text": "🔔 任务「买菜」做完了\n帮我记一下"
+      },
+      "expected": null
+    },
+    {
+      "name": "user_alarm_plain",
+      "description": "用户自己打的「⏰ 明天提醒我」：不认。",
+      "source": "server/internal/prompts/assistant/task_run.md",
+      "input": {
+        "text": "⏰ 明天八点提醒我开会"
+      },
+      "expected": null
+    },
+    {
+      "name": "plain_text",
+      "description": "普通的话不认。",
+      "source": "docs/protocol.md「Persona 注入的消息」",
+      "input": {
+        "text": "帮我看看这个 PR"
+      },
+      "expected": null
     }
-  },
-  {
-    "name": "task_needs",
-    "description": "任务在等用户：带着提问也只显示一句话。",
-    "source": "server/internal/prompts/assistant/task_notice.md",
-    "input": {
-      "text": "🔔 任务「升级依赖」在等用户（家里的 Mac）\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n它在问：\n- 要不要一起升级测试框架？（选项：要 / 不要）\n\n你来决定要不要告诉用户、怎么说：说清楚它在问什么、要用户怎么回（卡片就在主对话底下，用户点一下就行；用户以前交代过怎么答的，可以用 interaction_answer 代答再告诉用户）。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
-    },
-    "expected": {
-      "kind": "task_notice",
-      "state": "needs",
-      "title": "升级依赖",
-      "machine": "家里的 Mac",
-      "line": "任务「升级依赖」在等你"
-    }
-  },
-  {
-    "name": "task_interrupted_after_needs",
-    "description": "先等过用户、后被打断：以最后的状态为准。",
-    "source": "server/internal/prompts/assistant/task_notice.md",
-    "input": {
-      "text": "🔔 任务「修登录页」被模型服务出错打断了\n（这期间它还等过用户，以这条为准。）\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n模型服务回的错：\nAPI Error: overloaded\n\n你来决定要不要告诉用户、怎么说：说清楚在哪一步、什么错，可以点卡片上的「继续」。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
-    },
-    "expected": {
-      "kind": "task_notice",
-      "state": "interrupted",
-      "title": "修登录页",
-      "line": "任务「修登录页」被打断了"
-    }
-  },
-  {
-    "name": "task_failed",
-    "description": "任务没开起来，没有电脑名。",
-    "source": "server/internal/prompts/assistant/task_notice.md",
-    "input": {
-      "text": "🔔 任务「整理周报」没开起来\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n原因：\nrpc: connection closed\n\n你来决定要不要告诉用户、怎么说：说清楚为什么没开起来，可以点卡片上的「重试」或换一台电脑。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
-    },
-    "expected": {
-      "kind": "task_notice",
-      "state": "failed",
-      "title": "整理周报",
-      "line": "任务「整理周报」没开起来"
-    }
-  },
-  {
-    "name": "task_title_with_brackets",
-    "description": "标题里有括号和书名号也能取对。",
-    "source": "server/internal/prompts/assistant/task_notice.md",
-    "input": {
-      "text": "🔔 任务「改「设置（外观）」页」做完了（公司电脑）\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
-    },
-    "expected": {
-      "kind": "task_notice",
-      "state": "done",
-      "title": "改「设置（外观）」页",
-      "machine": "公司电脑",
-      "line": "任务「改「设置（外观）」页」做完了"
-    }
-  },
-  {
-    "name": "followup_once_late",
-    "description": "晚到的一次性跟进：说明行不进 detail。",
-    "source": "server/internal/prompts/assistant/task_run.md",
-    "input": {
-      "text": "⏰ 看看 CI（你之前安排的跟进）\n（本该 11-05 09:00 运行，Persona 当时没在运行，晚了 25 分钟；看看还有没有必要按原计划做。）\n\n看一下 CI 有没有过，过了就合并。"
-    },
-    "expected": {
-      "kind": "followup",
-      "state": "once",
-      "title": "看看 CI",
-      "line": "跟进「看看 CI」到时间了",
-      "detail": "看一下 CI 有没有过，过了就合并。"
-    }
-  },
-  {
-    "name": "followup_daily_kb",
-    "description": "每天的定时任务：去掉末尾的知识库提示。",
-    "source": "server/internal/prompts/assistant/task_run.md",
-    "input": {
-      "text": "⏰ 早报（定时任务）\n\n整理今天的日程。\n\n再看看邮件。\n\n（知识库 ~/.jarvis/data：先用 kb_list projects 看重点项目，按项目说进展和在等我的事，而不是按消息来源罗列；\n相关的会话档案用 kb_get 看。这次得出的新进展、新待办用 kb_update 记回对应项目的时间线。）"
-    },
-    "expected": {
-      "kind": "followup",
-      "state": "daily",
-      "title": "早报",
-      "line": "定时任务「早报」开始运行",
-      "detail": "整理今天的日程。\n\n再看看邮件。"
-    }
-  },
-  {
-    "name": "followup_interval_continued",
-    "description": "按间隔运行、接着自己的对话。",
-    "source": "server/internal/prompts/assistant/task_run.md",
-    "input": {
-      "text": "⏰ 盯部署（定时任务，每 30 分钟）\n（又到时间了，还是这个任务自己的对话：前几次的结果都在上面，接着做，和上次比有变化的地方说清楚。）\n\n看部署好了没有。"
-    },
-    "expected": {
-      "kind": "followup",
-      "state": "interval",
-      "title": "盯部署",
-      "line": "定时任务「盯部署」开始运行",
-      "detail": "看部署好了没有。"
-    }
-  },
-  {
-    "name": "followup_wake",
-    "description": "叫醒等待中的 Agent。",
-    "source": "server/internal/prompts/agents/wake.md",
-    "input": {
-      "text": "⏰（Persona 叫醒你，第 2 次）你上一轮停下时说在等「CI 跑完」，等到以后要「合并」。\n你等的 Agent「构建」刚停下了，它最后说：好了。\n现在自己查一下等的事好了没有：好了就接着往下做；还没好就简短说明还差什么、大概还要多久（Persona 会再叫你），不用一直守着等。\n接下来如果要推代码、部署 / 发布、给别人发消息或评论、合并或改别人的 MR / PR，先停下来问用户，不要自己做。"
-    },
-    "expected": {
-      "kind": "followup",
-      "state": "wake",
-      "title": "CI 跑完",
-      "line": "Persona 叫醒了它：看看「CI 跑完」好了没有"
-    }
-  },
-  {
-    "name": "system_lost_tasks",
-    "description": "node 重启丢了后台任务：数出几个。",
-    "source": "server/internal/prompts/assistant/lost_tasks.md",
-    "input": {
-      "text": "⚠️ 运行你的 node 刚重启过（换了版本，或者这台电脑没有常驻 node、hub 重启连带停了它），这段对话里还在跑的后台任务 / 监控随进程一起停了：\n- npm test\n- 监控 CI\n还需要的就重新启动（命令可能只跑了一半，重跑前先看看输出）；不需要了就简短说一句，不用推送。"
-    },
-    "expected": {
-      "kind": "system",
-      "state": "lost_tasks",
-      "line": "node 重启过，2 个后台任务停了"
-    }
-  },
-  {
-    "name": "snapshot_before",
-    "description": "前面带着实时快照块的也认。",
-    "source": "server/internal/prompts/assistant/task_notice.md",
-    "input": {
-      "text": "\u003cjarvis-context\u003e\n实时快照：……\n\u003c/jarvis-context\u003e\n🔔 任务「跑测试」做完了\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
-    },
-    "expected": {
-      "kind": "task_notice",
-      "state": "done",
-      "title": "跑测试",
-      "line": "任务「跑测试」做完了"
-    }
-  },
-  {
-    "name": "user_bell_without_marker",
-    "description": "用户自己打的「🔔 任务…」没有通知的说明行：不认。",
-    "source": "server/internal/prompts/assistant/task_notice.md",
-    "input": {
-      "text": "🔔 任务「买菜」做完了\n帮我记一下"
-    },
-    "expected": null
-  },
-  {
-    "name": "user_alarm_plain",
-    "description": "用户自己打的「⏰ 明天提醒我」：不认。",
-    "source": "server/internal/prompts/assistant/task_run.md",
-    "input": {
-      "text": "⏰ 明天八点提醒我开会"
-    },
-    "expected": null
-  },
-  {
-    "name": "plain_text",
-    "description": "普通的话不认。",
-    "source": "docs/protocol.md「Persona 注入的消息」",
-    "input": {
-      "text": "帮我看看这个 PR"
-    },
-    "expected": null
-  }
-]
+  ]
+}

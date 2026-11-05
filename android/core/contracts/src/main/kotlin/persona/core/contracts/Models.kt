@@ -338,7 +338,28 @@ data class Item(
     @SerialName("client_msg_id") val clientMsgId: String? = null,
     /** On a notice: the context was compacted here (Claude Code's compact_boundary); the chat draws it as a divider. */
     val compact: CompactBoundary? = null,
+    /** A message Persona typed in for the model (a task's notice, a scheduled run…), not by the user; the hub marks it
+     *  (docs/protocol.md「Persona 注入的消息」), older hubs do not (core/domain `injectedOf`). */
+    val injected: Injected? = null,
 )
+
+/** What a message Persona wrote for the model is: [line] is what the chat shows instead of it. */
+@KeepGeneratedSerializer
+@Serializable(with = InjectedSerializer::class)
+data class Injected(
+    /** task_notice | followup | system */
+    val kind: String = "",
+    /** task_notice: done | needs | interrupted | failed; followup: once | daily | interval | wake; system: lost_tasks */
+    val state: String? = null,
+    val title: String? = null,
+    val machine: String? = null,
+    @SerialName("todo_id") val todoId: String? = null,
+    val line: String = "",
+    /** followup once | daily | interval: what the task asks. */
+    val detail: String? = null,
+)
+
+object InjectedSerializer : WireSerializer<Injected>(Injected.generatedSerializer())
 
 /** How a compaction came about: [trigger] `manual` (/compact) or `auto`, and the context's size before it. */
 @KeepGeneratedSerializer
