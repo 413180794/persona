@@ -22,5 +22,7 @@
   "spawned_by": "{title}から派生",
   "spawned": "派生",
   "subtask": "サブタスク",
-  "same_chat": "同じグループ"
+  "same_chat": "同じグループ",
+  "review_done": "検収済み",
+  "review_cancelled": "取り消し"
 }

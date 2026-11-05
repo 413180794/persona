@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import type { Supervision } from "./supervision";
 import { api, ApiError, enc } from "./api";
 import { parseAPIError, retryable } from "./api-errors";
 import { stateOf } from "./format";
@@ -48,6 +49,8 @@ export interface Todo {
   quiet?: boolean;
   /** The task's agent did not start, and why: the hub ended it there (done_at is set too, #1077). */
   start_error?: string;
+  /** The main conversation supervises it (#3124): what done means and where its review stands (lib/supervision.ts). */
+  supervision?: Supervision;
 }
 
 export type TodoStatus = "done" | "needs_you" | "interrupted" | "unread" | "working" | "follow_up" | "not_started" | "failed";
@@ -86,8 +89,14 @@ export function isAutoDone(todo: Todo): boolean {
   return Boolean(todo.done_at) && todo.done_by === "auto";
 }
 
-/** The status's label for this todo: 「自动完成」 for one the hub closed. */
+/** Its supervisor closed it after reviewing the work (done_by review, #3124). */
+export function isReviewDone(todo: Todo): boolean {
+  return Boolean(todo.done_at) && todo.done_by === "review";
+}
+
+/** The status's label for this todo: 「自动完成」 for one the hub closed, 「已验收」 for one its supervisor did. */
 export function todoStatusLabel(todo: Todo, status: TodoStatus): string {
+  if (status === "done" && isReviewDone(todo)) return todo.supervision?.state === "cancelled" ? t("lib-todos.review_cancelled") : t("lib-todos.review_done");
   return status === "done" && isAutoDone(todo) ? t("lib-todos.auto_done") : TODO_STATUS_INFO[status].label;
 }
 

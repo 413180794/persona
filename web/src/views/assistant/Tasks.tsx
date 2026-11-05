@@ -42,6 +42,7 @@ import { getState, useStore } from "../../lib/store";
 import type { AgentState, Interaction, Session } from "../../lib/types";
 import { Button, Collapse, cx, Dialog, IconButton, Menu, StatusDot, toast, useNow } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { ReviewBadge, ReviewLine } from "./Supervision";
 import { AnsweredCard, InteractionCard } from "../chat/Interactions";
 import { MessageActions } from "../chat/MessageActions";
 import { clock, sessionTitle, stateOf } from "../../lib/format";
@@ -338,9 +339,15 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
           )}
         </span>
       </div>
-      {status !== "done" && (
+      {status === "done" && todo.supervision && (
         <div className="flex items-center text-[12.5px]">
+          <ReviewBadge todo={todo} />
+        </div>
+      )}
+      {status !== "done" && (
+        <div className="flex items-center gap-2 text-[12.5px]">
           <span className={cx("font-medium", TONE[info.tone])}>{info.label}</span>
+          <ReviewBadge todo={todo} />
           <span className="flex-1" />
           {status === "failed" ? (
             // Nothing to say a word to: the ways out are on the card — start it again as it was, or let it go.
@@ -446,6 +453,8 @@ export const FeedLineView = memo(function FeedLineView({ item }: { item: FeedIte
       return <AnsweredLine item={item} title={title} onOpenTask={known && item.ref ? () => openTask(item.ref!) : undefined} />;
     case "receipt":
       return <ReceiptCard item={item} />;
+    case "review":
+      return <ReviewLine item={item} title={title} onOpenTask={known && item.ref ? () => openTask(item.ref!) : undefined} />;
     case "routed":
       return (
         <div className="flex flex-col items-end gap-1 pl-10">

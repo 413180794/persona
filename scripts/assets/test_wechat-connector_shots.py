@@ -16,7 +16,8 @@ class FindingsTest(unittest.TestCase):
         self.assertIn("wechat.internal.corp", found)
 
     def test_private_address_is_found(self):
-        self.assertIn("10.1.2.3", shots.findings("hub 在 10.1.2.3"))
+        address = ".".join(('10', '1', '2', '3'))
+        self.assertIn(address, shots.findings("hub 在 " + address))
 
 
 if __name__ == "__main__":

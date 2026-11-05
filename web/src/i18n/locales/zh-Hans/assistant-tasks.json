@@ -106,5 +106,20 @@
   "board_empty_title": "还没有任务",
   "board_empty_body": "在对话里说要做的事，Persona 会把它变成任务。",
   "board_remove": "移除「{title}」",
-  "card_label": "{title}，{status}"
+  "card_label": "{title}，{status}",
+  "review_pending": "待验收",
+  "review_rework": "返工第 {round} 轮",
+  "review_needs_user": "等你决定",
+  "review_accepted": "已验收",
+  "review_cancelled": "已取消",
+  "review_ongoing": "督办中",
+  "review_line": "验收",
+  "review_title": "验收标准",
+  "review_none": "派活时没写验收标准",
+  "review_open": "还没验收",
+  "review_met": "达成",
+  "review_missing": "缺口",
+  "review_note": "督办说明：{note}",
+  "review_count": "验收 {count}",
+  "review_expect": "预计 {minutes} 分钟"
 }

@@ -116,5 +116,20 @@
   "board_empty_title": "No tasks yet",
   "board_empty_body": "Say what needs doing in the conversation and Persona turns it into a task.",
   "board_remove": "Remove “{title}”",
-  "card_label": "{title}, {status}"
+  "card_label": "{title}, {status}",
+  "review_pending": "Awaiting review",
+  "review_rework": "Rework round {round}",
+  "review_needs_user": "Needs your call",
+  "review_accepted": "Accepted",
+  "review_cancelled": "Cancelled",
+  "review_ongoing": "Supervised",
+  "review_line": "Review",
+  "review_title": "Done when",
+  "review_none": "No criteria were given",
+  "review_open": "Not reviewed yet",
+  "review_met": "Met",
+  "review_missing": "Missing",
+  "review_note": "Supervisor: {note}",
+  "review_count": "Review {count}",
+  "review_expect": "About {minutes} min"
 }

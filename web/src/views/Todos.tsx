@@ -41,6 +41,7 @@ import { t } from "../i18n";
 import { groupTodosByProject, treeStateLabel, type TodoProjectGroup, type TreeState } from "../lib/todo-tree";
 import { useFolded } from "../lib/use-folded";
 import { Empty } from "./assistant/parts";
+import { ReviewBadge, ReviewChecklist } from "./assistant/Supervision";
 
 export function TodosView({
   selectedId,
@@ -468,9 +469,9 @@ function TodoListItem({
         </div>
 
         {/* Status Line */}
-        <div className="mt-1 flex items-center gap-1.5 text-[12px]">
+        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12px]">
           {!todo.done_at && <StatusDot state={dotState} size={6} />}
-          <span className={cx("font-medium", toneClass)}>{todoStatusLabel(todo, status)}</span>
+          <span className={cx("shrink-0 whitespace-nowrap font-medium", toneClass)}>{todoStatusLabel(todo, status)}</span>
           {!todo.done_at && activeCount > 0 && (
             <>
               <span className="text-ink-3">·</span>
@@ -478,8 +479,9 @@ function TodoListItem({
             </>
           )}
           {!todo.done_at && activeCount === 0 && (
-            <span className="text-ink-3">· {t("todos.not_handed")}</span>
+            <span className="truncate text-ink-3">· {t("todos.not_handed")}</span>
           )}
+          {!todo.done_at && <ReviewBadge todo={todo} className="ml-auto" />}
         </div>
 
         {/* Why the hub closed it */}
@@ -681,6 +683,7 @@ function TodoDetail({
           {todo.done_reason ? t("todos.auto_done_reason", { reason: todo.done_reason }) : t("todos.auto_done")}
         </p>
       )}
+      <ReviewChecklist todo={todo} />
 
       {/* Notes / Description */}
       <div className="mt-4">

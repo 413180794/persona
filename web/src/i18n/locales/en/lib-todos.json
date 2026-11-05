@@ -22,5 +22,7 @@
   "spawned_by": "Spawned by {title}",
   "spawned": "Spawned",
   "subtask": "Subtask",
-  "same_chat": "Same chat"
+  "same_chat": "Same chat",
+  "review_done": "Accepted",
+  "review_cancelled": "Cancelled"
 }

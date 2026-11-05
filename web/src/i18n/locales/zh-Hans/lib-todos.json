@@ -22,5 +22,7 @@
   "spawned_by": "由 {title} 派出",
   "spawned": "派生",
   "subtask": "子任务",
-  "same_chat": "同群"
+  "same_chat": "同群",
+  "review_done": "已验收",
+  "review_cancelled": "已取消"
 }

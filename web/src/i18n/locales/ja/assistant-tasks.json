@@ -106,5 +106,20 @@
   "board_empty_title": "タスクはまだありません",
   "board_empty_body": "会話でやることを伝えると、Personaがタスクにします。",
   "board_remove": "「{title}」を削除",
-  "card_label": "{title}、{status}"
+  "card_label": "{title}、{status}",
+  "review_pending": "検収待ち",
+  "review_rework": "差し戻し {round} 回目",
+  "review_needs_user": "判断待ち",
+  "review_accepted": "検収済み",
+  "review_cancelled": "取り消し",
+  "review_ongoing": "監督中",
+  "review_line": "検収",
+  "review_title": "完了条件",
+  "review_none": "完了条件は未指定",
+  "review_open": "未検収",
+  "review_met": "達成",
+  "review_missing": "不足",
+  "review_note": "監督メモ：{note}",
+  "review_count": "検収 {count}",
+  "review_expect": "目安 {minutes} 分"
 }
