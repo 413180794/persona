@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -15,20 +15,18 @@ import (
 )
 
 // Subscription rate-limit windows across machines (#2432, docs/usage-windows.md). Every node reads its agents'
-// local files and answers usage.windows; the hub asks the machines that are online (at most every usageHubFresh),
-// remembers each machine's last answer, and merges them into one list per account: the same account on two
-// computers shows once, with the newest numbers. Nothing here is stored: a restarted hub asks again, and an offline
-// machine's last answer is only kept in memory until it is older than usageHubMaxAge.
+// local files and answers usage.windows; the manager, which connects the machines (docs/machines.md「谁连电脑」), asks
+// the ones that are online (at most every usageHubFresh), remembers each machine's last answer, and merges them into
+// one list per account: the same account on two computers shows once, with the newest numbers. Nothing here is
+// stored: a restarted manager asks again, and an offline machine's last answer is only kept in memory until it is
+// older than usageHubMaxAge. Moved from the hub as it was; the hub relays the route (devicewire.UsageRoutes).
 
 const (
-	usageHubFresh      = 30 * time.Second // the hub's own answer stands this long for every app reading it
+	usageHubFresh      = 30 * time.Second // the merged answer stands this long for every app reading it
 	usageHubAsk        = 8 * time.Second  // per machine
 	usageHubStaleAfter = 30 * time.Minute // a sample older than this is shown as stale
 	usageHubMaxAge     = 3 * 24 * time.Hour
 )
-
-// usageWindows is hub.json machines[].usage_windows: the machine's node reads the windows unless it says false.
-func (m *Machine) usageWindows() bool { return m.cfg.UsageWindows == nil || *m.cfg.UsageWindows }
 
 // usageSource is a machine as the aggregator sees it.
 type usageSource struct {
@@ -39,7 +37,7 @@ type usageSource struct {
 
 type usageAnswer struct {
 	accounts []proto.UsageAccount
-	at       time.Time // when the node answered (the hub's clock)
+	at       time.Time // when the node answered (the manager's clock)
 }
 
 type usageWindowsHub struct {
@@ -61,9 +59,9 @@ func (u *usageWindowsHub) invalidate() {
 
 // usageSources are the machines whose node may be asked: the off switch in hub.json is honoured here as well as by
 // the node, so a machine that is off is not even called.
-func (h *Hub) usageSources() []usageSource {
+func (d *Devices) usageSources() []usageSource {
 	var out []usageSource
-	for _, m := range h.machinesNow() {
+	for _, m := range d.machinesNow() {
 		if !m.usageWindows() {
 			continue
 		}
@@ -367,11 +365,10 @@ func usageAccountID(a proto.UsageAccount) string {
 // usageWindowRoutes: GET /api/v1/usage/windows, the accounts' windows for the sidebar's usage bars. Read-only, from
 // local files on the machines (docs/usage-windows.md); an empty list when no machine has any.
 // (#2432: its own block so that merges with the other route blocks stay additive.)
-func (h *Hub) usageWindowRoutes(api *http.ServeMux) {
-	h.usageWin.gateways = h.usageGW.accounts
+func (d *Devices) usageWindowRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/usage/windows", func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
-		accounts := h.usageWin.poll(r.Context(), h.usageSources(), now)
+		accounts := d.usageWin.poll(r.Context(), d.usageSources(), now)
 		if accounts == nil {
 			accounts = []proto.UsageAccount{}
 		}

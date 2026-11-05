@@ -8,7 +8,6 @@
 DELETE /api/v1/admin/devices/{id}
 DELETE /api/v1/admin/machines/{id}
 DELETE /api/v1/admin/peers/{hub_id}
-DELETE /api/v1/admin/usage-sources/{id} # moving to the manager
 DELETE /api/v1/auth/tokens/{id}
 DELETE /api/v1/sessions/{mid}/{sid}
 GET /api/v1/admin/assistant
@@ -20,7 +19,6 @@ GET /api/v1/admin/overview
 GET /api/v1/admin/peers
 GET /api/v1/admin/routes
 GET /api/v1/admin/state
-GET /api/v1/admin/usage-sources # moving to the manager
 GET /api/v1/app/android/apk
 GET /api/v1/app/android/latest
 GET /api/v1/auth/tokens
@@ -67,7 +65,6 @@ GET /api/v1/sessions/{mid}/{sid}/items/{iid}/full
 GET /api/v1/sessions/{mid}/{sid}/items/{iid}/image
 GET /api/v1/sessions/{mid}/{sid}/screen
 GET /api/v1/skills
-GET /api/v1/usage/windows # moving to the manager
 GET /api/v1/workspace-board # moving to the manager
 GET /api/v1/workspace-board/settings # moving to the manager
 GET /api/v1/workspaces # moving to the manager
@@ -94,8 +91,6 @@ POST /api/v1/admin/reload
 POST /api/v1/admin/restart
 POST /api/v1/admin/setup
 POST /api/v1/admin/setup-code
-POST /api/v1/admin/usage-sources # moving to the manager
-POST /api/v1/admin/usage-sources/test # moving to the manager
 POST /api/v1/auth/pair-codes
 POST /api/v1/auth/tokens
 POST /api/v1/devices
@@ -143,8 +138,6 @@ PUT /api/v1/admin/assistant
 PUT /api/v1/admin/hub
 PUT /api/v1/admin/network/access
 PUT /api/v1/admin/network/public
-PUT /api/v1/admin/usage-sources # moving to the manager
-PUT /api/v1/admin/usage-sources/{id} # moving to the manager
 PUT /api/v1/devices/{id}/prefs
 PUT /api/v1/hub/update/settings
 PUT /api/v1/looks/current

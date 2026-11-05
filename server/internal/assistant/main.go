@@ -76,7 +76,9 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	var bh *BusHub
 	var svc *Service
 	var ext *extmgr.Manager
-	devs := devices.New(devices.Options{Store: database, Logf: log.New(os.Stderr, "devices: ", log.LstdFlags).Printf,
+	home := identity.HomeDir()
+	// Dir: hub.json's usage section (the account-pool gateways and their keys) is the devices', read and written there.
+	devs := devices.New(devices.Options{Store: database, Dir: home, Logf: log.New(os.Stderr, "devices: ", log.LstdFlags).Printf,
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
 			if err := svc.machineTrust(ctx, machine); err != nil { // not confirmed yet: nothing of the assistant's (machine_trust.go)
 				return nil, true, err
@@ -111,7 +113,6 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 		Connected: func() bool { return bh.Client().Peer() != nil },
 		Hub:       lazyHost{func() *bus.Client { return bh.Client() }}})
 	// The extensions, connectors and bots (internal/extmgr): the hub.json and secret.key of the data directory here.
-	home := identity.HomeDir()
 	ext = extmgr.New(extmgr.Options{Dir: home, Store: database, Build: build,
 		Logf: log.New(os.Stderr, "extensions: ", log.LstdFlags).Printf,
 		Hub:  lazyHost{func() *bus.Client { return bh.Client() }}, Devices: devs,

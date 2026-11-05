@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -12,14 +12,50 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/usagesource"
 )
 
 const usageTestKey = "ag-secret-key-9f8e7d6c"
 
-func hubJSON(t *testing.T, h *Hub) map[string]any {
+// usageTestDevices is a manager's devices with hub.json in a directory of the test's, and a client of the usage
+// sources page as the hub's admin UI relays it (assistantwire.AdminHeader).
+func usageTestDevices(t *testing.T, hubJSON string) (*Devices, *usageClient) {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(h.cfg.dir, "hub.json"))
+	dir := t.TempDir()
+	if hubJSON != "" {
+		if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(hubJSON), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d := newTestDevices(t)
+	d.opts.Dir = dir
+	return d, &usageClient{t: t, h: d.Handler(http.NotFoundHandler()), admin: true}
+}
+
+type usageClient struct {
+	t     *testing.T
+	h     http.Handler
+	admin bool
+}
+
+func (c *usageClient) do(method, path, body string) (int, map[string]any, *httptest.ResponseRecorder) {
+	c.t.Helper()
+	r := httptest.NewRequest(method, path, strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	if c.admin {
+		r.Header.Set(assistantwire.AdminHeader, "1")
+	}
+	w := httptest.NewRecorder()
+	c.h.ServeHTTP(w, r)
+	out := map[string]any{}
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	return w.Code, out, w
+}
+
+func hubJSON(t *testing.T, d *Devices) map[string]any {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(d.opts.Dir, "hub.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +66,7 @@ func hubJSON(t *testing.T, h *Hub) map[string]any {
 	return out
 }
 
-func usageFile(t *testing.T, h *Hub) map[string]any {
+func usageFile(t *testing.T, h *Devices) map[string]any {
 	t.Helper()
 	u, _ := hubJSON(t, h)["usage"].(map[string]any)
 	return u
@@ -61,9 +97,7 @@ func fakerelay-history(t *testing.T) *httptest.Server {
 }
 
 func TestAdminUsageSourcesLifecycle(t *testing.T) {
-	h, _, mux := adminTestHub(t)
-	_ = os.WriteFile(filepath.Join(h.cfg.dir, "hub.json"), []byte(`{"token":"t","future_field":{"x":1}}`), 0o600)
-	c := signedIn(t, mux, ip4(192, 168, 1, 20)+":1")
+	h, c := usageTestDevices(t, `{"token":"t","future_field":{"x":1}}`)
 	var bodies []string
 	do := func(method, path, body string) (int, map[string]any) {
 		code, out, w := c.do(method, path, body)
@@ -91,7 +125,7 @@ func TestAdminUsageSourcesLifecycle(t *testing.T) {
 	if len(entries) != 1 || entries[0].(map[string]any)["key"] != usageTestKey || hubJSON(t, h)["future_field"] == nil || hubJSON(t, h)["token"] != "t" {
 		t.Fatalf("hub.json: %v", hubJSON(t, h))
 	}
-	if st, err := os.Stat(filepath.Join(h.cfg.dir, "hub.json")); err != nil || st.Mode().Perm() != 0o600 {
+	if st, err := os.Stat(filepath.Join(h.opts.Dir, "hub.json")); err != nil || st.Mode().Perm() != 0o600 {
 		t.Fatalf("mode: %v %v", st, err)
 	}
 	if got := h.usageGW.config(); len(got.Sources) != 1 || got.Sources[0].Key != usageTestKey { // applied at once
@@ -158,9 +192,7 @@ func TestAdminUsageSourcesLifecycle(t *testing.T) {
 }
 
 func TestAdminUsageSourcesValidation(t *testing.T) {
-	h, _, mux := adminTestHub(t)
-	_ = os.WriteFile(filepath.Join(h.cfg.dir, "hub.json"), []byte(`{"token":"t"}`), 0o600)
-	c := signedIn(t, mux, ip4(192, 168, 1, 20)+":1")
+	h, c := usageTestDevices(t, `{"token":"t"}`)
 	for body, code := range map[string]string{
 		`{"type":"nope","url":"https://gw.example.com","key":"k"}`:                                               "invalid_type",
 		`{"url":"https://gw.example.com","key":"k"}`:                                                             "invalid_type",
@@ -197,10 +229,8 @@ func TestAdminUsageSourcesValidation(t *testing.T) {
 }
 
 func TestAdminUsageSourceTestIsOneReadOnlyRead(t *testing.T) {
-	h, _, mux := adminTestHub(t)
-	_ = os.WriteFile(filepath.Join(h.cfg.dir, "hub.json"), []byte(`{"token":"t"}`), 0o600)
+	h, c := usageTestDevices(t, `{"token":"t"}`)
 	gate := fakerelay-history(t)
-	c := signedIn(t, mux, ip4(192, 168, 1, 20)+":1")
 
 	code, out, w := c.do("POST", "/api/v1/admin/usage-sources/test", `{"type":"relay-history","url":"`+gate.URL+`","key":"`+usageTestKey+`"}`)
 	providers, _ := out["providers"].(map[string]any)
@@ -245,53 +275,8 @@ func TestAdminUsageSourceTestIsOneReadOnlyRead(t *testing.T) {
 	}
 }
 
-func TestAdminUsageSourcesNeedAnAdminSession(t *testing.T) {
-	h, _, mux := adminTestHub(t)
-	_ = os.WriteFile(filepath.Join(h.cfg.dir, "hub.json"), []byte(`{"token":"t"}`), 0o600)
-	// not signed in; and the hub's own token, which opens the app's API, does not open these
-	anon := &adminClient{t: t, h: mux, remote: ip4(192, 168, 1, 20) + ":1"}
-	token := &adminClient{t: t, h: mux, remote: ip4(192, 168, 1, 20) + ":1", header: http.Header{"Authorization": {"Bearer " + h.cfg.Token}}}
-	for _, c := range []*adminClient{anon, token} {
-		for _, r := range [][2]string{
-			{"GET", "/api/v1/admin/usage-sources"}, {"PUT", "/api/v1/admin/usage-sources"}, {"POST", "/api/v1/admin/usage-sources"},
-			{"PUT", "/api/v1/admin/usage-sources/x"}, {"DELETE", "/api/v1/admin/usage-sources/x"}, {"POST", "/api/v1/admin/usage-sources/test"},
-		} {
-			if status, out, _ := c.do(r[0], r[1], `{}`); status != 401 || out["code"] != "login_required" {
-				t.Errorf("%s %s: %d %v", r[0], r[1], status, out)
-			}
-		}
-	}
-	// signed in but without the CSRF token: no write
-	in := signedIn(t, mux, ip4(192, 168, 1, 20)+":1")
-	in.csrf = ""
-	if status, out, _ := in.do("POST", "/api/v1/admin/usage-sources", `{"type":"generic","url":"https://gw.example.com","name":"g"}`); status != 403 || out["code"] != "csrf" {
-		t.Errorf("csrf: %d %v", status, out)
-	}
-	// from outside the admin's scope the page does not exist
-	outside := &adminClient{t: t, h: mux, remote: "203.0.113.9:1"}
-	if status, _, _ := outside.do("GET", "/api/v1/admin/usage-sources", ""); status == 200 {
-		t.Errorf("out of scope: %d", status)
-	}
-	if usageFile(t, h) != nil {
-		t.Error("something was written")
-	}
-}
-
-func TestUsageWindowsAreForFullDevicesOnly(t *testing.T) {
-	for _, role := range []string{roleAnswer, roleLink, roleLinkPair, rolePeer, rolePeerPair} {
-		if allowed(principal{Role: role}, http.MethodGet, "/api/v1/usage/windows") {
-			t.Errorf("%s may read the usage windows", role)
-		}
-	}
-	if !allowed(principal{Role: roleFull}, http.MethodGet, "/api/v1/usage/windows") {
-		t.Error("a full device may")
-	}
-}
-
 func TestAdminUsageTakesUpAHandEditOnRead(t *testing.T) {
-	h, _, mux := adminTestHub(t)
-	_ = os.WriteFile(filepath.Join(h.cfg.dir, "hub.json"), []byte(`{"token":"t","usage":{"poll_minutes":10,"sources":[{"id":"hand","name":"Hand","type":"generic","url":"https://gw.example.com/x","key":"`+usageTestKey+`"}]}}`), 0o600)
-	c := signedIn(t, mux, ip4(192, 168, 1, 20)+":1")
+	h, c := usageTestDevices(t, `{"token":"t","usage":{"poll_minutes":10,"sources":[{"id":"hand","name":"Hand","type":"generic","url":"https://gw.example.com/x","key":"`+usageTestKey+`"}]}}`)
 	_, out, w := c.do("GET", "/api/v1/admin/usage-sources", "")
 	srcs := out["sources"].([]any)
 	if len(srcs) != 1 || srcs[0].(map[string]any)["has_key"] != true || out["poll_minutes"] != float64(10) || strings.Contains(w.Body.String(), usageTestKey) {
@@ -299,5 +284,23 @@ func TestAdminUsageTakesUpAHandEditOnRead(t *testing.T) {
 	}
 	if got := h.usageGW.config(); len(got.Sources) != 1 || got.PollMinutes != 10 {
 		t.Errorf("not applied: %+v", got)
+	}
+}
+
+// The page is the admin UI's: the hub relays it from its admin routes only and says so; a request without that is
+// refused here as well, whatever role it carries.
+func TestAdminUsageSourcesOnlyFromTheAdminUI(t *testing.T) {
+	h, c := usageTestDevices(t, `{"token":"t"}`)
+	c.admin = false
+	for _, r := range [][2]string{
+		{"GET", "/api/v1/admin/usage-sources"}, {"PUT", "/api/v1/admin/usage-sources"}, {"POST", "/api/v1/admin/usage-sources"},
+		{"PUT", "/api/v1/admin/usage-sources/x"}, {"DELETE", "/api/v1/admin/usage-sources/x"}, {"POST", "/api/v1/admin/usage-sources/test"},
+	} {
+		if status, out, _ := c.do(r[0], r[1], `{"type":"generic","url":"https://gw.example.com","name":"g"}`); status != 403 || out["code"] != "login_required" {
+			t.Errorf("%s %s: %d %v", r[0], r[1], status, out)
+		}
+	}
+	if usageFile(t, h) != nil {
+		t.Error("something was written")
 	}
 }

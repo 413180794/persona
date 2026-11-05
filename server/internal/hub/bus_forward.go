@@ -35,20 +35,26 @@ var hopHeaders = map[string]bool{"Connection": true, "Keep-Alive": true, "Te": t
 
 // forwardHTTP passes r on to manager id as http.request and writes its answer.
 func (h *Hub) forwardHTTP(w http.ResponseWriter, r *http.Request, id string) {
-	h.relayHTTP(w, r, id, false)
+	h.relayHTTP(w, r, id, false, false)
+}
+
+// forwardAdminHTTP is forwardHTTP for one of the admin UI's routes, with a signed-in admin session: the manager is
+// told so (assistantwire.AdminHeader).
+func (h *Hub) forwardAdminHTTP(w http.ResponseWriter, r *http.Request, id string) {
+	h.relayHTTP(w, r, id, false, true)
 }
 
 // forwardSend is forwardHTTP for a request that sends something on (an inbox reply). When the link drops or the time
 // runs out while the request is with the manager, it may have been done: 502 assistant_in_doubt, delivered "unknown"
 // (assistant_offline says nothing went, which only a request that never reached it can say).
 func (h *Hub) forwardSend(w http.ResponseWriter, r *http.Request, id string) {
-	h.relayHTTP(w, r, id, true)
+	h.relayHTTP(w, r, id, true, false)
 }
 
 // errSendInDoubt is what forwardSend answers when it can't tell whether the request was done.
 var errSendInDoubt = i18n.Err("hub-bus_forward.send_in_doubt")
 
-func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send bool) {
+func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send, admin bool) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, busHTTPLimit))
 	if err != nil {
 		writeBodyErr(w, err, err)
@@ -63,6 +69,10 @@ func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send 
 	p := principalOf(r.Context())
 	req.Header[assistantwire.RoleHeader] = []string{p.Role}
 	delete(req.Header, assistantwire.ExtensionHeader) // only the hub says which extension asks
+	delete(req.Header, assistantwire.AdminHeader)     // and whether an admin session asks
+	if admin {
+		req.Header[assistantwire.AdminHeader] = []string{"1"}
+	}
 	if p.Role == roleExtension && p.Extension != "" {
 		req.Header[assistantwire.ExtensionHeader] = []string{p.Extension}
 	}

@@ -186,6 +186,8 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | 没有扩展底座的 hub | `extensions*` 写操作 503 `no_plugins`；更老的 hub 没有这些路由（404），页面提示先升级 hub |
 | 老路径 `plugins…` | #1844 之前的路由，hub 照样认，回老字段名（`plugins`、`plugin`、`plugin_name`，市场的个数 `plugins`）；页面先读一次列表，`extensions` 回 404 就整页改用老路由（老 hub，`web/src/admin/api.ts`） |
 
+`usage-sources…` 这几个是管理者的（`docs/usage-windows.md`「谁管这件事」）：hub 认过管理会话和 CSRF 后原样转给它，带上 `X-Persona-Admin`；管理者不在时回 `503 assistant_offline`。
+
 ## 扩展
 
 装扩展就是在 hub 机器上运行新程序。管理界面能加电脑、签发设备凭据，本来就和 hub 主人一样大，所以登录的会话也能装（[extensions.md](extensions.md)「安装、升级、回滚、卸载」），

@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -236,11 +236,10 @@ func TestUsageWindowsRouteIncludesGatewayAccounts(t *testing.T) {
 		}
 	}))
 	defer gate.Close()
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	h.usageGW.init(UsageConfig{Sources: []UsageSourceConfig{{ID: "s1", Name: "relay-history", Type: "relay-history", URL: gate.URL, Key: "k"}}}, h.usageWin.invalidate, h.logf)
 	h.usageGW.pollDue(context.Background(), now)
-	mux := http.NewServeMux()
-	h.usageWindowRoutes(mux)
+	mux := h.Handler(http.NotFoundHandler()) // the route as the hub relays it
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/usage/windows", nil))
 	body := w.Body.String()

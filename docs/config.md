@@ -266,14 +266,14 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   不会加会阻塞的 hook：用户全局配置里常有别的工具的同步 PermissionRequest hook，叠加会拖住终端对话框（`docs/claude-integration.md`「全局只报告的 hooks」）。
   node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
 - `machines[].usage_windows`（可选，默认开）：写 `false` 时那台电脑的 node 不读 Codex / Claude 的订阅额度窗口（不读 rollout 里的 `rate_limits`，
-  不读 `~/.persona/usage/claude*.json`），hub 也不问它；不写就读，只读本机文件、不碰任何登录凭据，每 5 分钟一次（`docs/usage-windows.md`）。
+  不读 `~/.persona/usage/claude*.json`），管理者也不问它；不写就读，只读本机文件、不碰任何登录凭据，每 5 分钟一次（`docs/usage-windows.md`）。
   node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
 - `machines[].launchers`（可选）：给这台电脑另加 node 列不出来的启动器（比如 shell 包装函数），或改 node 报上来的同名启动器的 `agent_type`、`base_url`、`model`（没写的字段照旧），
   比如 `[{"name":"example_wrapper","agent_type":"codex"}]`：包装函数实际跑的是 Codex（`agent_type` 是 `claude` / `codex` / `traex` 或 runtime 的 agent；`docs/protocol.md`、`docs/model-config.md`）。
 - `usage`（可选）：账号池网关（relay-history 之类）的订阅额度来源，合并进侧边栏的用量条（`docs/usage-windows.md`「账号池网关」，#2595）。
   `usage.sources[]`（最多 8 个）：`id`、`name`（侧边栏上的来源名）、`type`（`relay-history` / `generic`）、`url`、`key`（网关的管理 Key，**密钥：只存在 `hub.json`（0600）**，管理界面和接口读不回来，日志里没有）、`enabled`（写 `false` 停用这一个）。
-  `usage.enabled`（写 `false` 是总开关）、`usage.poll_minutes`（每个来源多久读一次，默认 5，1 到 1440）。hub 只读网关缓存的数字（`refresh=false`），在 hub 这一侧请求，节点不碰网关。
-  管理界面 `/admin/usage` 里改，立刻生效；手改要重启 hub，或打开管理界面的这一页（hub 会采用磁盘上的版本）。
+  `usage.enabled`（写 `false` 是总开关）、`usage.poll_minutes`（每个来源多久读一次，默认 5，1 到 1440）。这一节是**管理者**的（`personad assistant`，它自己读写同一个 `hub.json`，hub 不读）：它只读网关缓存的数字（`refresh=false`），请求从管理者发出，节点不碰网关。
+  管理界面 `/admin/usage` 里改（hub 转给管理者），立刻生效；手改要重启 hub（管理者跟着重启），或打开管理界面的这一页（管理者会采用磁盘上的版本）。
 - `microsoft`（可选）：Outlook 的「使用 Microsoft 账号登录」（`docs/mail.md`「Outlook 接入方式」）。`client_id` 是默认的 client ID
   （一般不用写：用户在 App 里填自己在 Microsoft Entra 注册的那个，加密存 hub，优先于这里）；`redirect_uri` 默认
   `jarvis-mail-oauth://outlook`，改了要和 Entra 里登记的一致。

@@ -290,6 +290,23 @@ var MetricsRoutes = []string{
 	"GET /api/v1/usage",
 }
 
+// UsageRoutes are the subscription usage windows' routes (internal/devices usagewindows.go, docs/usage-windows.md),
+// relayed the same way: the manager asks the machines it connects and the account-pool gateways, and merges them.
+var UsageRoutes = []string{
+	"GET /api/v1/usage/windows",
+}
+
+// AdminUsageRoutes are the admin UI's usage sources page (internal/devices admin_usage.go): the hub relays them from
+// its admin routes only (a signed-in admin session, assistantwire.AdminHeader), never from the apps' API.
+var AdminUsageRoutes = []string{
+	"GET /api/v1/admin/usage-sources",
+	"PUT /api/v1/admin/usage-sources",
+	"POST /api/v1/admin/usage-sources",
+	"PUT /api/v1/admin/usage-sources/{id}",
+	"DELETE /api/v1/admin/usage-sources/{id}",
+	"POST /api/v1/admin/usage-sources/test",
+}
+
 // Error codes that cross the bus (the node's own coded errors go through as they are).
 const (
 	CodeNoDevice       = "no_device"       // the manager has no such machine

@@ -68,7 +68,8 @@ type MachineConfig struct {
 	// 「全局只报告的 hooks」). Off unless set; false (or removing the key) takes them out again.
 	ClaudeGlobalHooks bool `json:"claude_global_hooks,omitempty"`
 	// UsageWindows false: the machine's node does not read the agents' subscription rate-limit windows (Codex's
-	// rollouts, a Claude Code status line drop) and the hub does not ask it (docs/usage-windows.md, #2432); unset reads them.
+	// rollouts, a Claude Code status line drop) and the manager does not ask it (docs/usage-windows.md, #2432); unset
+	// reads them. hub.json's usage section (the account-pool gateways) is the manager's: it reads and writes it itself.
 	UsageWindows *bool `json:"usage_windows,omitempty"`
 
 	// ClaudeStartDir is the CLAUDE_CONFIG_DIR the agents Persona starts with plain claude use on this machine, for a
@@ -149,9 +150,6 @@ type Config struct {
 	Link LinkConfig `json:"link,omitzero"`
 	// Personas tunes the looks: whose level a tiered look shows (persona_tiers.go, docs/persona.md).
 	Personas PersonasConfig `json:"personas,omitempty"`
-	// Usage: account-pool gateways whose accounts' subscription windows join the ones read on the machines
-	// (usagegateways.go, docs/usage-windows.md「账号池网关」, #2595).
-	Usage UsageConfig `json:"usage,omitempty"`
 
 	dir string
 }

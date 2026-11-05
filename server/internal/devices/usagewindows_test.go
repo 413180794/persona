@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"

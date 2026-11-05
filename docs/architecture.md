@@ -79,7 +79,7 @@ hub 只管沟通：App 等客户端 ↔ 管理者、hub ↔ hub（互联）、�
 
 - **hub 自己回答的路由** = `testdata/hub_routes_allowed.txt`（在 hub 包里用字面量注册、又不在上面三张转发表里的）。新加的业务接口写在管理者里，
   再把路由加进对应的转发表；确实是 hub 自己的（连接、配对 / 鉴权、管理、推送投递、中转）才手动在清单里加一行。删了路由也要删行（多出来的行同样失败）。
-  行尾 `# moving to the manager` 的是正在挪进管理者的（额度窗口、工作区看板），挪完连行一起删。
+  行尾 `# moving to the manager` 的是正在挪进管理者的（工作区看板；额度窗口已经挪完，`docs/usage-windows.md`「谁管这件事」），挪完连行一起删。
 - **依赖**：hub 的依赖里不能有管理者的包（`assistant`、`assistantskills`、`devices`、`extmgr`、`extension/host`、`agents`、`mail`、`office`、`feishubot`、`wechat`、`node`、`mcpserver`）
   和 `connector/` 下的连接器实现；`connector`、`kb` 只能经 wire 包间接带进来，hub 自己不 import。
 - **不调模型**：hub 只用 `internal/ai` 的 `ai.Config`（读配置、转交），代码里也不出现模型 API 的地址。

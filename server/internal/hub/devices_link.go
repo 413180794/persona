@@ -1014,6 +1014,30 @@ func (h *Hub) metricsRoutesRelayed(api *http.ServeMux) {
 	}
 }
 
+// usageRoutesRelayed relays the subscription usage windows' route (devicewire.UsageRoutes) to the manager, which
+// asks the machines it connects and the account-pool gateways (docs/usage-windows.md); 503 assistant_offline while
+// it is away.
+func (h *Hub) usageRoutesRelayed(api *http.ServeMux) {
+	for _, pattern := range devicewire.UsageRoutes {
+		api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			_ = h.waitDevices(r.Context()) // the hub just started: the manager is on its way (bounded); else 503 at once
+			h.forwardHTTP(w, r, devicesOwner)
+		})
+	}
+}
+
+// adminUsageRoutesRelayed relays the admin UI's usage sources page (devicewire.AdminUsageRoutes) to the manager. mux
+// is the admin's signed-in routes: the hub has checked the session (and the CSRF token of a write) before, and tells
+// the manager so (assistantwire.AdminHeader); the apps' API has no such route.
+func (h *Hub) adminUsageRoutesRelayed(mux *http.ServeMux) {
+	for _, pattern := range devicewire.AdminUsageRoutes {
+		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			_ = h.waitDevices(r.Context())
+			h.forwardAdminHTTP(w, r, devicesOwner)
+		})
+	}
+}
+
 // deviceRoutesRelayed relays the apps' requests on the routes that are the manager's (devicewire.Routes: its own
 // settings of each machine and what only it can do) to it, as the assistant's (forwardHTTP); while it is not
 // connected they are answered 503 assistant_offline.

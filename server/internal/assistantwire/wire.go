@@ -325,6 +325,11 @@ const RoleHeader = "X-Persona-Role"
 // like RoleHeader; never the client's).
 const ExtensionHeader = "X-Persona-Extension"
 
+// AdminHeader is "1" on a relayed request that came through the hub's admin UI with a signed-in admin session (the
+// hub's admin routes it relays, devicewire.AdminUsageRoutes); set by the hub like RoleHeader, never the client's.
+// Its value is the one extwire.HeaderAdmin carries on the extensions' relay.
+const AdminHeader = "X-Persona-Admin"
+
 // ToolCall is assistant.tool's params.
 type ToolCall struct {
 	Name      string          `json:"name"`

@@ -1,7 +1,8 @@
 # 订阅额度窗口（#2432）
 
 Codex、Claude Code 这类订阅有「5 小时」「每周」的用量窗口。这一页说 Persona 怎么把它们收上来、合并、画出来，以及为什么有的来源不用。
-界面在网页版的侧边栏底部（`docs/web.md`「订阅额度」）、iOS 的机器页和 Mac 的分区列底部（下面「界面（iOS / Mac）」），数据来自各台电脑的 node，以及 hub 去问的账号池网关（比如 relay-history，见下面「账号池网关」，#2595）。
+界面在网页版的侧边栏底部（`docs/web.md`「订阅额度」）、iOS 的机器页和 Mac 的分区列底部（下面「界面（iOS / Mac）」），数据来自各台电脑的 node，以及管理者去问的账号池网关（比如 relay-history，见下面「账号池网关」，#2595）。
+采集、合并和网关都是**管理者**的（连电脑的那个，助手的进程 `personad assistant`，见下面「谁管这件事」），hub 只转发接口。
 
 ## 只读本机文件，不碰凭据
 
@@ -15,7 +16,7 @@ Codex、Claude Code 这类订阅有「5 小时」「每周」的用量窗口。�
 | Claude 的账号用量接口（`/api/oauth/usage`）和响应头 `anthropic-ratelimit-*` | 需要 Claude 的 OAuth token（钥匙串 / `.credentials.json`），响应头还要自己发一次请求 | **不用**，同上 |
 | 其他（Kimi、Grok、Antigravity、GLM / MiniMax 的 API Key 套餐） | 都要账号接口或 Key | 不做 |
 
-Moshi 的做法（`moshi-hook usage`）是本地文件加这些账号接口，每台机器各查各的再上报。Persona 取它的本地文件那一半，换成 hub 汇总，接口那一半不做。
+Moshi 的做法（`moshi-hook usage`）是本地文件加这些账号接口，每台机器各查各的再上报。Persona 取它的本地文件那一半，换成管理者汇总，接口那一半不做。
 
 ### 把 Claude Code 的额度接进来（可选）
 
@@ -44,9 +45,9 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 - **node**（`server/internal/node/usagewindows.go`）：每 5 分钟读一次（第一次在连上 hub 20 秒后，等 hub 的 `node.configure` 先把开关带来），
   每个来源（一个 Codex home、一个 `claude*.json`）记最后一个样本，来源安静了也留着，超过 3 天丢掉。窗口的 `resets_at` 已过的丢掉（那是上个周期的数字），
   一个来源的窗口都过了就不列。`usage.windows` 直接回这份缓存（没有或过期了现读一次）。
-- **关**：`hub.json` 的 `machines[].usage_windows`（`docs/config.md`），写 `false` 时那台电脑的 node 一个文件也不读，hub 也不问它；不写是开。
-  节点不是这一版（没有 `usage.windows`）时 hub 当它没有数据。
-- **hub**（`server/internal/hub/usagewindows.go`）：`GET /api/v1/usage/windows` 时问在线的机器（并行，每台 8 秒；30 秒内的重复请求直接用上一次的合并结果），
+- **关**：`hub.json` 的 `machines[].usage_windows`（`docs/config.md`），写 `false` 时那台电脑的 node 一个文件也不读，管理者也不问它；不写是开。
+  节点不是这一版（没有 `usage.windows`）时管理者当它没有数据。
+- **管理者**（`server/internal/devices/usagewindows.go`）：`GET /api/v1/usage/windows` 时问在线的机器（并行，每台 8 秒；30 秒内的重复请求直接用上一次的合并结果），
   记下每台机器最后一次的回答（只在内存，超过 3 天或机器从 hub.json 去掉就忘），然后合并：
   - **同一个账号只显示一次**：同一个来源（Codex / Claude）的两个样本，只要有一个窗口「长度和重置时间（精确到秒）都一样」就是同一个账号——重置时间是账号的，在哪台电脑上读到都一样，不需要账号 id，也就不碰凭据。
   - 同一个账号的几个样本按窗口长度取**最新样本**的那个窗口，一台很久没用的电脑不会把已经翻篇的 5 小时窗口带回来。
@@ -69,22 +70,23 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 ## 账号池网关（relay-history…，#2595）
 
 账号池网关替你养着好几个 Codex / Claude / 别家的订阅账号，**自己已经知道每个账号的 5 小时、每周额度用了多少**（relay-history 把上游随普通请求回来的响应头存下来）。
-这些数字不必每台电脑再各查一遍：hub 去问网关，读它存好的数字，合并进侧边栏。电脑上读不到的账号（网关里养着的、本机没登录的）也能看到。
+这些数字不必每台电脑再各查一遍：管理者去问网关，读它存好的数字，合并进侧边栏。电脑上读不到的账号（网关里养着的、本机没登录的）也能看到。
 
-### 为什么做成 hub 的内置来源，不是扩展
+### 为什么做成内置来源，不是扩展
 
 `docs/extensions.md` 的原则是「开源仓库只放通用能力和扩展点，只对某个公司、某个服务有意义的东西做成扩展」。这件事的取舍：
 
 - **已有的 `quota` 扩展点不合适**：它回答的是「这把启动器 Key 在网关里还剩多少预算」，要用启动器的 Key，回 `quota.Report`；这里要的是网关**养着的上游账号**的订阅窗口，用网关的管理 Key，形状完全不同。
-- **新开一个扩展点要一整套**：清单字段、schema 生成的四端类型、权限、进程宿主、市场里的包。而网关要的只是「一个地址 + 一把 Key，每 5 分钟读一次，把数字映射成窗口」，hub 里几百行。
-- 所以：**来源是 hub 里一个很小的概念**（`hub.json` 的 `usage.sources[]`，一个来源一种 `type`），hub 内置两种适配：
+- **新开一个扩展点要一整套**：清单字段、schema 生成的四端类型、权限、进程宿主、市场里的包。而网关要的只是「一个地址 + 一把 Key，每 5 分钟读一次，把数字映射成窗口」，几百行。
+- 所以：**来源是一个很小的概念**（`hub.json` 的 `usage.sources[]`，一个来源一种 `type`），内置两种适配（在管理者里）：
   - `generic`：**Persona 自己定义的通用格式**，任何账号池网关实现这一个 GET 就能接进来（下面）。
   - `relay-history`：relay-history 的管理接口（它是同一个组织的开源兄弟项目，接口公开、稳定），适配器只是把它的两个只读接口映射成同一个形状。
 - 以后真有第三种、第四种形状不同的网关，再把适配器抽成扩展点（`usagesource.Fetch` 是唯一的入口，抽的时候不改别处）。**这是一个权衡，不是教条**：relay-history 的适配器写在核心里，是少数的一个具体服务的例外，换来的是装上就能用、不用装扩展。
 
 ### 配置
 
-`hub.json`（`docs/config.md`「usage」）；密钥只在这里（0600），接口和日志里都没有：
+`hub.json`（`docs/config.md`「usage」）；密钥只在这里（0600），接口、日志和总线上都没有。这一节是管理者的：它读写和 hub 同一个数据目录里的 `hub.json`（和扩展那几节一样），写的时候拿和 hub 的管理页面同一把目录锁，两边不会互相覆盖：
+
 
 ```json
 "usage": {
@@ -100,9 +102,9 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 | --- | --- |
 | `usage.enabled` | 写 `false` 是总开关：不再问任何网关（电脑自己读到的不受影响）。不写是开 |
 | `usage.poll_minutes` | 每个来源隔多久读一次，默认 5，1 到 1440 |
-| `usage.sources[]` | 最多 8 个。`id` 是 hub 起的（`src-…`，管理界面生成），`name` 是侧边栏上的来源名（最长 40 个字），`type` 是 `relay-history` / `generic`，`url` 是 http(s) 地址（不能带用户名密码），`key` 作为 `Authorization: Bearer` 发出，`enabled` 写 `false` 是这一个停用 |
+| `usage.sources[]` | 最多 8 个。`id` 是管理者起的（`src-…`，管理界面生成），`name` 是侧边栏上的来源名（最长 40 个字），`type` 是 `relay-history` / `generic`，`url` 是 http(s) 地址（不能带用户名密码），`key` 作为 `Authorization: Bearer` 发出，`enabled` 写 `false` 是这一个停用 |
 
-管理界面（`/admin/usage`，`docs/admin.md`）里增删改、开关、「测试连接」，改完立刻生效，不用重启。手改 `hub.json` 的话，下次打开这个页面时 hub 会采用磁盘上的版本。
+管理界面（`/admin/usage`，`docs/admin.md`）里增删改、开关、「测试连接」，改完立刻生效，不用重启。手改 `hub.json` 的话，下次打开这个页面时管理者会采用磁盘上的版本。
 
 ### 读什么、怎么映射
 
@@ -135,7 +137,7 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 
 ### 和电脑上读到的合并
 
-hub 把网关的账号和各台电脑的样本放在一起，按原来的规则合并（上面「采集、合并」）：**同一个来源（provider）、同样长度、重置时间精确到秒都一样**就是同一个账号，不需要账号 id。
+管理者把网关的账号和各台电脑的样本放在一起，按原来的规则合并（上面「采集、合并」）：**同一个来源（provider）、同样长度、重置时间精确到秒都一样**就是同一个账号，不需要账号 id。
 几条补充：
 
 - 同一个网关里的两个账号（`id` 不同）**绝不合并**，不管重置时间碰巧是不是一样；两个网关（或网关和电脑）各看到的同一个上游账号会合并。
@@ -145,7 +147,7 @@ hub 把网关的账号和各台电脑的样本放在一起，按原来的规则�
 
 ### 通用格式（`type: "generic"`）
 
-任何账号池网关想把额度送进侧边栏，实现一个 GET：hub 带 `Authorization: Bearer <key>`（没填 Key 就不带）读这个完整地址，回 JSON（就是 `GET /api/v1/usage/windows` 的回答，所以一个 Persona hub 也能喂另一个）：
+任何账号池网关想把额度送进侧边栏，实现一个 GET：管理者带 `Authorization: Bearer <key>`（没填 Key 就不带）读这个完整地址，回 JSON（就是 `GET /api/v1/usage/windows` 的回答，所以一个 Persona hub 也能喂另一个）：
 
 ```json
 {"accounts": [{
@@ -160,6 +162,21 @@ hub 把网关的账号和各台电脑的样本放在一起，按原来的规则�
 `id` 可选（网关里这个账号稳定的标识，用来保证两个账号不被合并）；`label`（`5h`、`7d`、`45m`）读得出长度就用，读不出用 `window_minutes`；`used_percent` 是 0–100，越界按边界算；
 `sampled_at` 不写是读取的时刻；每个来源最多 500 个账号、每个账号最多 32 个窗口，`provider` 是空的账号丢掉。
 
+
+## 谁管这件事（2026-11-05）
+
+用户拍板：hub 只做通信中心，电脑是管理者的（`docs/machines.md`「谁连电脑」），所以订阅额度也按原样挪到管理者，不改设计；App 看到的路由、字段和错误都不变。
+
+| 部分 | 代码 |
+| --- | --- |
+| 管理者：问各台 node 的 `usage.windows`、合并账号、读账号池网关（Key 在它手里）、管理界面「订阅额度来源」页的接口 | `server/internal/devices/usagewindows.go`、`usagegateways.go`、`admin_usage.go`（从 hub 原样挪来，接收者从 `Hub` 换成 `Devices`）；改 `hub.json` 用 `hubjson.go`（和 hub 的 `admin_config.go` 同一种写法、同一把目录锁） |
+| 两边共用的路由表 | `server/internal/devicewire/`（`UsageRoutes`、`AdminUsageRoutes`），管理界面的标记 `assistantwire.AdminHeader` |
+| hub：转发 | `server/internal/hub/devices_link.go`（`usageRoutesRelayed`、`adminUsageRoutesRelayed`） |
+
+- `GET /api/v1/usage/windows` hub 照管理者的其他路由那样作为 `http.request` 转过去（扩展令牌照旧不能用，`testdata/route_scopes.txt`）。
+- `/api/v1/admin/usage-sources…` 只从 hub 的管理界面那组路由转：hub 先认管理会话（写操作还要 CSRF），再带上 `X-Persona-Admin: 1`（客户端自己带的这个头一律去掉）；管理者没看到这个标记就回 403，App 的接口上没有这些路由。
+- 网关的 Key 只在 `hub.json`（0600）和发给网关的那一个请求头里：hub 不读这一节，总线上不过 Key，回答和日志里都没有。管理者跑在别的机器上（`assistant.external`）时用那台的 `hub.json`，和扩展那几节一样。
+- **管理者不在的时候**：这些路由都回 `503 assistant_offline`「助手暂时连不上，稍后再试」（侧边栏当作暂时没数据，和以前 hub 重启时一样）；回来后第一次请求重新问各台电脑，网关几秒内读完第一轮。
 
 ## 界面（网页版）
 
@@ -188,7 +205,7 @@ hub 把网关的账号和各台电脑的样本放在一起，按原来的规则�
 
 - Claude 的额度要用户自己接状态栏（上面），否则只有 Codex。
 - Codex 的数字只在用过 Codex 时才更新；整台机器都没用过它，数字就停在最后一次。界面上看采样时间就知道多旧。
-- hub 重启后，已经下线的机器的上一次回答没了，要等它上线再问；网关的上一次回答也在内存里，重启后第一轮（几秒内）读到前侧边栏没有它的账号。
+- 管理者重启后（hub 重启时它跟着重启），已经下线的机器的上一次回答没了，要等它上线再问；网关的上一次回答也在内存里，重启后第一轮（几秒内）读到前侧边栏没有它的账号。
 - **没有拿真实的 relay-history 验证过**（这台开发机上没有在跑的网关）：适配器按它的源码（`internal/application/accountusage`、`internal/domain/account` 的 JSON 标签、`accountpresentation.Compact`）和它文档的 account-read-views、admin-access 两篇写，
   测试用一个假的 relay-history HTTP 服务（账号列表、用量、错误、过期、分组 Key 的 404、旧网关的裸数组）。真正接上以后用管理界面的「测试连接」看一眼账号数和窗口数。
 - 同一个 Claude 账号在电脑上（状态栏给的 `resets_at`，秒）和网关里（响应头或用量接口的时间，可能带小数秒）的重置时间要落在同一秒才合并成一个；差一秒时会显示成两个账号，没有拿真实数据核对过。

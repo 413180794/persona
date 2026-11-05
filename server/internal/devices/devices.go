@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"slices"
 	"strconv"
 	"sync"
@@ -80,6 +81,9 @@ type Options struct {
 	Detached func(machine string)
 	// Location is the user's time zone ("today" of the token usage); nil: the machine's.
 	Location func() *time.Location
+	// Dir is the data directory with the hub.json the manager shares with the hub: its usage section (the
+	// account-pool gateways and their keys, usagegateways.go) is read and written here. "": none (tests).
+	Dir string
 }
 
 // Devices is every computer the manager carries.
@@ -121,6 +125,9 @@ type Devices struct {
 	metrics metricsBook // the machines' monitoring (metrics.go)
 	usage   usageBook   // their token usage (metrics.go)
 
+	usageWin usageWindowsHub // subscription rate-limit windows across machines (usagewindows.go, #2432)
+	usageGW  usageGateways   // the account-pool gateways that add accounts to it (usagegateways.go, #2595)
+
 	// reqPrefix and reqSeq make the nodes' requests' keys for the hub (devices.request), unique across managers.
 	reqPrefix string
 	reqSeq    atomic.Uint64
@@ -131,8 +138,20 @@ func New(o Options) *Devices {
 	if o.Logf == nil {
 		o.Logf = func(string, ...any) {}
 	}
-	return &Devices{opts: o, logf: o.Logf, gotCh: make(chan struct{}), ready: make(chan struct{}), byID: map[string]*Machine{},
+	d := &Devices{opts: o, logf: o.Logf, gotCh: make(chan struct{}), ready: make(chan struct{}), byID: map[string]*Machine{},
 		reportDue: make(chan struct{}, 1), reqPrefix: strconv.FormatInt(time.Now().UnixNano(), 36)}
+	// The account-pool gateways' usage windows (usagegateways.go, #2595): hub.json's usage section as it is now.
+	var usage UsageConfig
+	if o.Dir != "" {
+		if u, err := d.diskUsage(); err == nil {
+			usage = u
+		} else if !os.IsNotExist(err) {
+			d.logf("hub.json usage: %v", err)
+		}
+	}
+	d.usageWin.gateways = d.usageGW.accounts
+	d.usageGW.init(usage, d.usageWin.invalidate, d.logf)
+	return d
 }
 
 // requestKey names a node's request to the hub.
@@ -155,6 +174,7 @@ func (d *Devices) Run(ctx context.Context) error {
 	go d.probeServices(mctx)
 	go d.measureLoop(mctx)
 	go d.metricsLoop(mctx)
+	go d.usageGW.run(ctx) // the account-pool gateways (usagegateways.go)
 	select {
 	case <-d.gotCh:
 		d.startMachines(mctx)

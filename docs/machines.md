@@ -28,7 +28,7 @@
 - 每台的状态：在不在线、`node.info`、会话列表和 revs、哪些会话被 App 看着（node 换了连接时再 `session.watch`，从最后一条 item 续）、warm start、引擎（settings `machine_engines`）、herdr 自动启动、Claude 配置目录（及屏蔽的）、
   node 不管多久没动都要列出的会话（助手的 profile 的 `keep`，助手的快照一出来就告诉各台 node，`SetKeep`）、node 更新（`node.deploy.<id>`）、node 的 `state.put` / `state.load`（表 `node_sessions`）。
   键和表都和以前一样，不迁数据。
-- 管理者自己回答的路由（`devicewire.Routes`，hub 照助手的路由那样作为 `http.request` 转过来）：`POST …/reconnect`、`PUT …/engine`、`GET/PUT …/herdr`、`POST …/herdr/start`、`POST …/deploy`、`GET …/claude-dirs`、`PUT …/claude-dirs/blocked`。
+- 管理者自己回答的路由（`devicewire.Routes`，hub 照助手的路由那样作为 `http.request` 转过来）：`POST …/reconnect`、`PUT …/engine`、`GET/PUT …/herdr`、`POST …/herdr/start`、`POST …/deploy`、`GET …/claude-dirs`、`PUT …/claude-dirs/blocked`；订阅额度的 `GET /api/v1/usage/windows`（`devicewire.UsageRoutes`）和管理界面的额度来源页（`AdminUsageRoutes`，只从管理界面转，`docs/usage-windows.md`「谁管这件事」）也是它答。
 - node 发来的请求：`state.load`、助手自己的（`assistant.model`、`assistant.context`）和电脑的事件的（`interaction.create`、`assistant.lark`、`mcp.tools`、`mcp.call`，见下面「谁处理电脑的事件」）它在进程里答，剩下的（`notify`：电脑上的 `personad notify`）交给 hub（`devices.request`）。
   请求来的那条 node 连接要是在 hub 回答前断了，管理者告诉 hub（`devices.request_end`），hub 就不再等它。
   node 发来的单向事件先给管理者自己处理（`devices.Options.Event`），App 要的再原样交给 hub（`devices.event`，顺序不变）：items、屏幕、实时状态、终端帧、端口的字节、`sessions.revs`、`hook.event`、`fs.changed`、插件的；会话列表、交互、用量、监控样本只到管理者为止。

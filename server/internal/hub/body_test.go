@@ -252,7 +252,7 @@ func TestRelayHTTPBodyErrors(t *testing.T) {
 		req.Body = c.body
 		req.ContentLength = -1
 		w := httptest.NewRecorder()
-		h.relayHTTP(w, req, "mgr", true)
+		h.relayHTTP(w, req, "mgr", true, false)
 		var out struct {
 			Code string `json:"code"`
 		}

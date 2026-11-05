@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -16,10 +16,11 @@ import (
 // Account-pool gateways as a source of subscription usage windows (#2595, docs/usage-windows.md「账号池网关」).
 //
 // A gateway such as relay-history holds several agent accounts and already knows how much of each one's 5-hour and weekly
-// allowance is used. The hub asks it, read-only, every few minutes (usagesource) and keeps the last answer of each
+// allowance is used. The manager asks it, read-only, every few minutes (usagesource) and keeps the last answer of each
 // source in memory; the sidebar's merge (usagewindows.go) puts those accounts next to the ones the machines read and
-// shows an account both saw once. The key is only ever in hub.json (0600) and in the request's Authorization header:
-// not in a log line, an error, an API answer or the database.
+// shows an account both saw once. The key is only ever in hub.json (0600; the manager reads its usage section from
+// the data directory it shares with the hub, as the extensions' sections) and in the request's Authorization header:
+// not in a log line, an error, an API answer, the bus or the database.
 
 const (
 	usagePollDefault = 5 // minutes

@@ -110,11 +110,6 @@ type Hub struct {
 	// The looks built into personad (persona.go; nil in unit tests) and the tier each tiered look shows (persona_tiers.go).
 	builtinLooks fs.FS
 	tiers        personaTierState
-
-	// usageWin: subscription rate-limit windows across machines (usagewindows.go, #2432)
-	usageWin usageWindowsHub
-	// usageGW: the account-pool gateways that add accounts to it (usagegateways.go, #2595)
-	usageGW usageGateways
 }
 
 // Store is the hub's persistence (internal/db on Postgres).
@@ -265,8 +260,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		defer h.nodeWorkers.Done()
 		h.superviseAssistant(ctx)
 	}()
-	h.usageGW.init(cfg.Usage, h.usageWin.invalidate, h.logf) // account-pool gateways' usage windows (usagegateways.go, #2595)
-	go h.usageGW.run(ctx)
 	h.loadAssistantProfile(ctx) // the user's zone and the main conversation before the assistant reports (assistant_profile.go)
 	h.loadExtReport(ctx)        // what the apps saw of the extensions, until the manager reports (extensions_link.go)
 	go h.personaTiersLoop(ctx)
