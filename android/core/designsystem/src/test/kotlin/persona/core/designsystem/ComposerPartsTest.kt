@@ -50,6 +50,27 @@ class ComposerPartsTest {
         }
     }
 
+    @Test fun aReadyPhotoOpensTheEditorAndOneOnItsWayDoesNot() {
+        var state by mutableStateOf(AttachmentState.Ready)
+        val taps = mutableListOf<String>()
+        rule.setContent {
+            PersonaTheme(style = AppStyle.Glass, reduceMotion = true) {
+                AttachmentThumb(null, "照片 1", state = state, onRemove = { taps += "remove" }, onRetry = { taps += "retry" },
+                    onEdit = { taps += "edit" })
+            }
+        }
+        rule.onNodeWithContentDescription("照片 1").performClick()
+        rule.onNodeWithContentDescription("移除这张").performClick()
+        assertEquals(listOf("edit", "remove"), taps)
+        state = AttachmentState.Uploading
+        rule.onNodeWithContentDescription("照片 1，正在上传").assertHasNoClickAction()
+        // A failed one still retries when tapped, not edits.
+        taps.clear()
+        state = AttachmentState.Failed
+        rule.onNodeWithContentDescription("照片 1，上传失败").performClick()
+        assertEquals(listOf("retry"), taps)
+    }
+
     @Test fun suggestionsHandBackWhatWasPicked() {
         var picked: ComposerSuggestion? = null
         val clear = ComposerSuggestion("/clear", "清空上下文，开新会话", destructive = true)

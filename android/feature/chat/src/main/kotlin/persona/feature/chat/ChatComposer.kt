@@ -2,6 +2,7 @@ package persona.feature.chat
 
 import android.Manifest
 import android.content.ActivityNotFoundException
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -27,16 +28,15 @@ import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ChatComposerService
 import persona.core.contracts.api.ComposerOperationException
 import persona.core.contracts.api.DraftUploadState
-import persona.core.contracts.api.MessageTransport
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
+import persona.feature.chat.media.MediaShare
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 
 /** How long an upload waits for the hub connection to be ready again before it fails (a setting, not measured). */
 internal const val UPLOAD_READY_WAIT_MILLIS = 15_000L
@@ -84,7 +84,10 @@ fun ChatComposer(
     var confirmClear by remember { mutableStateOf(false) }
     var cameraDenied by remember { mutableStateOf(false) }
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(menu, confirmClear, cameraDenied) { onOverlay(menu || confirmClear || cameraDenied) }
+    // A photo in the draft being marked up (iOS editingIndex); [editOpening] while it is read for the editor.
+    var editing by remember { mutableStateOf<ComposerPhotoEdit?>(null) }
+    var editOpening by remember { mutableStateOf(false) }
+    LaunchedEffect(menu, confirmClear, cameraDenied, editing) { onOverlay(menu || confirmClear || cameraDenied || editing != null) }
     DisposableEffect(Unit) { onDispose { onOverlay(false) } }
     var cameraUri by rememberSaveable { mutableStateOf<String?>(null) }
     var interruptPending by rememberSaveable { mutableStateOf(false) }
@@ -153,6 +156,42 @@ fun ChatComposer(
         try { action() } catch (_: Exception) { onNotice(resources.getString(R.string.chat_composer_picker_failed)) }
     }
 
+    // A tap on a photo that is on the computer: the editor opens on it, and 完成 puts the marked-up copy in its place.
+    fun editPhoto(photo: ComposerAttachment) {
+        if (editing != null || editOpening || sending) return
+        editOpening = true
+        scope.launch {
+            try {
+                editing = ComposerPhotoEdit(photo, withContext(Dispatchers.IO) { decodePhoto(context, Uri.parse(photo.uri)) })
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { onNotice(resources.getString(R.string.chat_attach_edit_unreadable)) }
+            finally { editOpening = false }
+        }
+    }
+    // 完成: the editor spins while the new photo is written (JPEG like a picked photo) and uploaded, then closes. Only an
+    // upload that worked replaces the original; the old path leaves the message with it.
+    fun finishEdit(edit: ComposerPhotoEdit, result: Bitmap) {
+        if (result === edit.source) { editing = null; return } // nothing drawn
+        scope.launch {
+            var edited: ComposerAttachment? = null
+            var kept = false
+            try {
+                edited = MediaShare.writeEditedPhoto(context, result)
+                val outcome = state.replaceWithEdited(edit.original, edited) { photo ->
+                    uploadAttachment(context, checkNotNull(service), session, photo)
+                }
+                kept = outcome == PhotoEditOutcome.Replaced
+                if (outcome is PhotoEditOutcome.Failed) onNotice(resources.getString(R.string.chat_attach_edit_failed))
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { onNotice(resources.getString(R.string.chat_attach_edit_failed)) }
+            finally {
+                // A copy that did not make it into the draft is not left in cache/chat-captures.
+                if (!kept) edited?.let { withContext(NonCancellable + Dispatchers.IO) { deleteCapture(context, it.uri) } }
+                if (editing === edit) editing = null
+            }
+        }
+    }
+
     state.attachments.forEach { attachment ->
         key(attachment.id) {
             LaunchedEffect(attachment.id, attachment.error, service) {
@@ -171,17 +210,7 @@ fun ChatComposer(
                     state.attachments = state.attachments.map {
                         if (it.id == attachment.id) it.copy(uploadState = DraftUploadState.Uploading) else it
                     }
-                    // Back from the camera or a picker the connection is often still catching up (the app was in the
-                    // background): wait for it a little instead of failing at once with 「连接恢复后重试上传」.
-                    (service as? MessageTransport)?.readyToSend?.let { ready ->
-                        withTimeoutOrNull(UPLOAD_READY_WAIT_MILLIS) { ready.first { it } }
-                    }
-                    val path = withContext(Dispatchers.IO) {
-                        val staged = stageAttachment(context, attachment)
-                        try {
-                            service.upload(session, if (attachment.image) "${attachment.name.substringBeforeLast('.')}.jpg" else attachment.name, staged)
-                        } finally { staged.delete() }
-                    }
+                    val path = uploadAttachment(context, service, session, attachment)
                     if (state.attachments.any { it.id == attachment.id }) {
                         state.attachments = state.attachments.map {
                             if (it.id == attachment.id) it.copy(path = path, uploadState = DraftUploadState.Uploaded) else it
@@ -198,7 +227,10 @@ fun ChatComposer(
         }
     }
 
-    LaunchedEffect(visible) { if (!visible) { menu = false; confirmClear = false; cameraDenied = false } }
+    LaunchedEffect(visible) { if (!visible) { menu = false; confirmClear = false; cameraDenied = false; editing = null } }
+    editing?.let { edit ->
+        key(edit) { ImageEditor(edit.source, onCancel = { if (editing === edit) editing = null }, onDone = { finishEdit(edit, it) }) }
+    }
     // 语音输入: what the phone's recognizer heard goes at the end of the draft, to edit before sending.
     val dictation = rememberDictation(onHeard = { state.appendDictation(it) }, onError = onNotice)
     if (!visible) return
@@ -277,7 +309,7 @@ fun ChatComposer(
         accessory = {
             if (state.oldVersion) Text(stringResource(R.string.chat_composer_old_version), style = PersonaTheme.type.caption,
                 color = PersonaTheme.palette.cautionText)
-            ComposerAttachmentPreviews(state, service, sending, enabled)
+            ComposerAttachmentPreviews(state, service, sending, enabled, onEdit = ::editPhoto)
             accessory?.invoke(this)
             modeHint?.let { JChip(it, icon = PhIcons.SlidersHorizontal) }
             if (working && hasContent && enabled) Text(stringResource(R.string.chat_composer_will_queue), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)

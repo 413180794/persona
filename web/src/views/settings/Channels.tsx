@@ -13,7 +13,7 @@ import {
 import { canSendStep, fieldInput } from "../../lib/connectors";
 import { ago } from "../../lib/format";
 import { useStore } from "../../lib/store";
-import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
+import { Button, copyText, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { ChannelMark } from "../../ui/ChannelMark";
 import { Icon } from "../../ui/icons";
 import { QRStep, useStepPolling } from "./LoginSteps";
@@ -435,7 +435,7 @@ function BindSteps({ c, onDone }: { c: Channel; onDone: () => Promise<void> }) {
             <IconButton
               icon="copy"
               label={t("settings-channels.copy_code")}
-              onClick={() => void navigator.clipboard?.writeText(prompt.user_code ?? "").then(() => toast(t("settings-channels.copied"), "ok"), () => toast(t("settings-channels.copy_failed"), "error"))}
+              onClick={() => void copyText(prompt.user_code ?? "", { done: t("settings-channels.copied"), failed: t("settings-channels.copy_failed") })}
             />
           </div>
           <p className="flex items-center gap-2 text-[12.5px] text-ink-3">

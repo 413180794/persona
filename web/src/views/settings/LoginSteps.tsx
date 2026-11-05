@@ -4,7 +4,7 @@
 import { useEffect } from "react";
 import type { ConnectorPrompt } from "../../lib/connectors";
 import { t } from "../../i18n";
-import { Button, IconButton, Spinner, toast } from "../../ui/atoms";
+import { Button, copyText, IconButton, Spinner } from "../../ui/atoms";
 
 /** A QR code from the hub's modules (rows of "0" / "1"), in the page's own colors, with its quiet zone. */
 export function QRCode({ rows, size = 184, label = t("settings-loginsteps.qr_code") }: { rows: string[]; size?: number; label?: string }) {
@@ -87,7 +87,7 @@ export function QRLinkStep({ url, app, onCancel }: { url: string; app: string; o
         <IconButton
           icon="copy"
           label={t("settings-loginsteps.copy_link")}
-          onClick={() => void navigator.clipboard?.writeText(url).then(() => toast(t("settings-loginsteps.link_copied"), "ok"), () => toast(t("settings-loginsteps.copy_failed"), "error"))}
+          onClick={() => void copyText(url, { done: t("settings-loginsteps.link_copied"), failed: t("settings-loginsteps.copy_failed") })}
         />
       </div>
       <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />{t("settings-loginsteps.waiting_confirm", { app })}</p>

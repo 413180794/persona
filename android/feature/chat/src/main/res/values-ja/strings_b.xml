@@ -23,6 +23,8 @@
     <string name="chat_attach_lost_permission">添付ファイルが無効になったか、読み取り権限を保持できませんでした。削除してもう一度選んでください</string>
     <string name="chat_attach_unreadable">ファイルを読み込めません。もう一度選んでください</string>
     <string name="chat_attach_photo">写真%1$d</string>
+    <string name="chat_attach_edit_failed">編集した写真をアップロードできませんでした。元の写真はそのままです</string>
+    <string name="chat_attach_edit_unreadable">この写真を開けないため編集できません</string>
     <string name="chat_attach_uploaded">アップロード済み、送信待ち</string>
     <string name="chat_attach_no_service">添付ファイルの機能はまだ接続されていません</string>
     <string name="chat_attach_uploading">アップロード中…</string>

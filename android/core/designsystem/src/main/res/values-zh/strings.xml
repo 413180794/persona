@@ -146,6 +146,7 @@
     <string name="designsystem_attachment_failed">上传失败</string>
     <string name="designsystem_attachment_invalid">已失效</string>
     <string name="designsystem_attachment_remove">移除这张</string>
+    <string name="designsystem_attachment_edit">编辑</string>
     <string name="designsystem_brand_lark">飞书</string>
     <string name="designsystem_channel_source">来自 %1$s</string>
     <string name="designsystem_series_separator">；</string>

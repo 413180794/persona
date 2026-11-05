@@ -25,16 +25,20 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ChatComposerService
 import persona.core.contracts.api.ComposerOperationException
 import persona.core.contracts.api.DraftUploadState
+import persona.core.contracts.api.MessageTransport
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 internal const val MAX_COMPOSER_FILE_BYTES = 200L * 1024 * 1024
 
@@ -85,11 +89,7 @@ internal fun stageAttachment(context: Context, attachment: ComposerAttachment): 
     val file = File.createTempFile("upload-", if (attachment.image) ".jpg" else ".bin", directory)
     try {
         if (attachment.image) {
-            val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
-                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                val scale = minOf(1.0, PHOTO_MAX_SIDE.toDouble() / maxOf(info.size.width, info.size.height))
-                decoder.setTargetSize(maxOf(1, (info.size.width * scale).roundToInt()), maxOf(1, (info.size.height * scale).roundToInt()))
-            }
+            val bitmap = decodePhoto(context, uri)
             try { file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.JPEG, PHOTO_JPEG_QUALITY, it)) } }
             finally { bitmap.recycle() }
         } else {
@@ -109,6 +109,31 @@ internal fun stageAttachment(context: Context, attachment: ComposerAttachment): 
         }
         return file
     } catch (error: Throwable) { file.delete(); throw error }
+}
+
+/** A local photo as a software bitmap, its long side at most [PHOTO_MAX_SIDE]: what goes up, and what the editor marks up. */
+internal fun decodePhoto(context: Context, uri: Uri): Bitmap =
+    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
+        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        val scale = minOf(1.0, PHOTO_MAX_SIDE.toDouble() / maxOf(info.size.width, info.size.height))
+        decoder.setTargetSize(maxOf(1, (info.size.width * scale).roundToInt()), maxOf(1, (info.size.height * scale).roundToInt()))
+    }
+
+/**
+ * Sends [attachment] to [session]'s computer and returns its path there: staged locally (photos as JPEG), then
+ * uploaded. Back from the camera or a picker the connection is often still catching up (the app was in the
+ * background): it waits for it a little instead of failing at once with 「连接恢复后重试上传」.
+ */
+internal suspend fun uploadAttachment(context: Context, service: ChatComposerService, session: SessionKey, attachment: ComposerAttachment): String {
+    (service as? MessageTransport)?.readyToSend?.let { ready ->
+        withTimeoutOrNull(UPLOAD_READY_WAIT_MILLIS) { ready.first { it } }
+    }
+    return withContext(Dispatchers.IO) {
+        val staged = stageAttachment(context, attachment)
+        try {
+            service.upload(session, if (attachment.image) "${attachment.name.substringBeforeLast('.')}.jpg" else attachment.name, staged)
+        } finally { staged.delete() }
+    }
 }
 
 /** How much to scale a photo so its short side covers a thumbnail of [target] pixels; never enlarges. */
@@ -145,9 +170,15 @@ internal fun ComposerAttachment.thumbnailState(service: ChatComposerService?): A
     else -> AttachmentState.Uploading
 }
 
-/** Photos as a row of thumbnails (iOS); files keep one row each with their name, state, 重试 and ✕. */
+/**
+ * Photos as a row of thumbnails (iOS); files keep one row each with their name, state, 重试 and ✕. A tap on a photo
+ * that is on the computer goes to [onEdit] (marked up before sending); one still uploading or failed is not offered.
+ */
 @Composable
-internal fun ComposerAttachmentPreviews(state: ChatComposerState, service: ChatComposerService?, sending: Boolean, enabled: Boolean = true) {
+internal fun ComposerAttachmentPreviews(
+    state: ChatComposerState, service: ChatComposerService?, sending: Boolean, enabled: Boolean = true,
+    onEdit: ((ComposerAttachment) -> Unit)? = null,
+) {
     if (state.attachments.isEmpty()) return
     fun remove(id: String) { state.attachments = state.attachments.filterNot { it.id == id } }
     fun retry(id: String) {
@@ -164,7 +195,8 @@ internal fun ComposerAttachmentPreviews(state: ChatComposerState, service: ChatC
                         // The badge stays while a send is in flight (no flicker); taps are ignored until it finishes.
                         AttachmentThumb(rememberThumbnail(photo.uri), stringResource(R.string.chat_attach_photo, index + 1), state = photo.thumbnailState(service),
                             onRemove = { if (!sending) remove(photo.id) },
-                            onRetry = if (canRetry) ({ retry(photo.id) }) else null)
+                            onRetry = if (canRetry) ({ retry(photo.id) }) else null,
+                            onEdit = if (onEdit != null && enabled && !sending && photo.editable) ({ onEdit(photo) }) else null)
                     }
                 }
             }

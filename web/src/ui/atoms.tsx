@@ -855,7 +855,9 @@ export function Toasts() {
   );
 }
 
-export async function copyText(text: string) {
+/** Puts text on the clipboard and says so (`done` / `failed` replace the usual words); whether it got there. */
+export async function copyText(text: string, words: { done?: string; failed?: string } = {}): Promise<boolean> {
+  let ok = true;
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -865,9 +867,16 @@ export async function copyText(text: string) {
     ta.style.position = "fixed";
     ta.style.opacity = "0";
     document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    ta.remove();
+    try {
+      ta.select();
+      ok = document.execCommand("copy");
+    } catch {
+      ok = false;
+    } finally {
+      ta.remove();
+    }
   }
-  toast(t("ui-atoms.copied"), "ok");
+  if (ok) toast(words.done ?? t("ui-atoms.copied"), "ok");
+  else toast(words.failed ?? t("ui-atoms.copy_failed"), "error");
+  return ok;
 }

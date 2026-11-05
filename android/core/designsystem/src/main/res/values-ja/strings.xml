@@ -146,6 +146,7 @@
     <string name="designsystem_attachment_failed">アップロード失敗</string>
     <string name="designsystem_attachment_invalid">無効</string>
     <string name="designsystem_attachment_remove">これを削除</string>
+    <string name="designsystem_attachment_edit">編集</string>
     <string name="designsystem_brand_lark">Lark</string>
     <string name="designsystem_channel_source">%1$sから</string>
     <string name="designsystem_series_separator">／</string>

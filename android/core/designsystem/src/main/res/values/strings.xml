@@ -166,6 +166,7 @@
     <string name="designsystem_attachment_failed">upload failed</string>
     <string name="designsystem_attachment_invalid">no longer available</string>
     <string name="designsystem_attachment_remove">Remove this one</string>
+    <string name="designsystem_attachment_edit">Edit</string>
     <string name="designsystem_brand_lark">Lark</string>
     <string name="designsystem_channel_source">From %1$s</string>
     <string name="designsystem_series_separator">"; "</string>

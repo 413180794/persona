@@ -1,7 +1,7 @@
 // What the page says about its connection to the hub once it has dropped (App.tsx's pill and its details, the
 // sidebar's footer), after the app's ConnectionTitle / ConnectionDetails: which phase, why, since when, the next try.
 // Pure: store.ts keeps the facts (`State.link`), the tests drive these directly.
-import { t } from "../i18n";
+import { formatDate, t } from "../i18n";
 import { BUSY_MOTION } from "./busy-motion";
 import type { Conn } from "./store";
 
@@ -103,10 +103,12 @@ export function connFacts(p: ConnPhase, link: ConnLink, now: number): string[] {
   return out;
 }
 
-/** "12 秒前", "3 分钟前", then the time of day. */
+/** "12 秒前", "3 分钟前", then the time of day, with the date once it was another day (a laptop shut overnight). */
 export function ago(at: number, now: number): string {
   const s = Math.max(0, Math.floor((now - at) / 1000));
   if (s < 60) return t("lib-connection.seconds_ago", { count: s });
   if (s < 3600) return t("lib-connection.minutes_ago", { count: Math.floor(s / 60) });
-  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = formatDate(at, { hour: "2-digit", minute: "2-digit" });
+  if (new Date(at).toDateString() === new Date(now).toDateString()) return time;
+  return t("lib-format.date_time", { date: formatDate(at, { month: "short", day: "numeric" }), time });
 }

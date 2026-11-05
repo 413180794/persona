@@ -13,8 +13,12 @@ export interface Fence {
   length: number;
 }
 
-// A line that continues the block above it: indented, a list item or a quote.
-const continues = (line: string) => /^[\t ]/.test(line) || /^[-+*][\t ]+/.test(line) || /^\d{1,9}[.)][\t ]+/.test(line) || line.startsWith(">");
+// A line that continues the block above it: indented, a list item (also one with no text yet, a "2." or "-" alone on
+// its line, which is still the list's next item) or a quote.
+const continues = (line: string) => /^[\t ]/.test(line) || /^(?:[-+*]|\d{1,9}[.)])(?:[\t ]|$)/.test(line) || line.startsWith(">");
+
+// The growing last line may still become a list item (a "2" before its "."): no cut before it until it says (#1966).
+const mayContinue = (line: string) => /^(?:[-+*]|\d{1,9}[.)]?)$/.test(line);
 
 /** A code fence line (``` or ~~~, up to 3 spaces in): its character, length and what follows it. */
 export function fenceRun(line: string): { marker: string; length: number; rest: string } | null {
@@ -51,12 +55,16 @@ export function splitChunks(md: string): Chunk[] {
     const end = nl < 0 ? md.length : nl;
     const line = md.slice(start, end).replace(/\r$/, "");
     if (pending !== null && line.trim()) {
-      if (!continues(line)) cuts.push(pending);
+      if (!continues(line) && !(nl < 0 && mayContinue(line))) cuts.push(pending);
       pending = null;
     }
     const run = fenceRun(line);
     if (run) fence = !fence ? run : closes(fence, run) ? null : fence;
-    else if (!fence && /^ {0,3}\$\$[\t ]*$/.test(line)) math = !math;
+    // (one still open is \$\$ here: normalizeMath escapes a $$ until its closing one is written)
+    else if (!fence && /^ {0,3}(?:\$\$|\\\$\\\$)[\t ]*$/.test(line)) math = !math;
+    // a \[ … \] block still being written: normalizeMath makes it $$ … $$ only once its \] is there
+    else if (!fence && /^ {0,3}\\\[[\t ]*$/.test(line)) math = true;
+    else if (!fence && /^ {0,3}\\\][\t ]*$/.test(line)) math = false;
     if (!fence && !math && !line.trim() && nl >= 0) pending = nl + 1;
     if (nl < 0) break;
     start = nl + 1;

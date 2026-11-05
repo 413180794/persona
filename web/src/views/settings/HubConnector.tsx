@@ -18,7 +18,7 @@ import { useChannels } from "../../lib/channels";
 import { ago } from "../../lib/format";
 import { useLarkOn } from "../../lib/store";
 import { latestRequest } from "../../lib/visible-poll";
-import { Button, cx, Dialog, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
+import { Button, copyText, cx, Dialog, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { BrandMark } from "../../ui/BrandMark";
 import { Icon } from "../../ui/icons";
 import { t } from "../../i18n";
@@ -594,7 +594,7 @@ export function SignInStep({ name, prompt, values, busy, isChannel, onChange, on
             <IconButton
               icon="copy"
               label={t("settings-hubconnector.copy_code")}
-              onClick={() => void navigator.clipboard?.writeText(prompt.user_code ?? "").then(() => toast(t("settings-hubconnector.code_copied"), "ok"), () => toast(t("settings-hubconnector.copy_failed"), "error"))}
+              onClick={() => void copyText(prompt.user_code ?? "", { done: t("settings-hubconnector.code_copied"), failed: t("settings-hubconnector.copy_failed") })}
             />
           </div>
           <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />{t("settings-hubconnector.waiting_auth", { name })}</p>

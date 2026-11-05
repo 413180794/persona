@@ -26,6 +26,8 @@
     <string name="chat_attach_lost_permission">The attachment is gone or its read permission couldn\'t be kept. Remove it and pick it again</string>
     <string name="chat_attach_unreadable">Can\'t read the file. Pick it again</string>
     <string name="chat_attach_photo">Photo %1$d</string>
+    <string name="chat_attach_edit_failed">Couldn\'t upload the edited photo. The original is kept</string>
+    <string name="chat_attach_edit_unreadable">Couldn\'t open this photo to edit it</string>
     <string name="chat_attach_uploaded">Uploaded, waiting to send</string>
     <string name="chat_attach_no_service">Attachments not connected yet</string>
     <string name="chat_attach_uploading">Uploading…</string>

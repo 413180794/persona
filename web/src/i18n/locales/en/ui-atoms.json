@@ -2,5 +2,6 @@
   "menu_loading": "Loading…",
   "menu_empty": "Nothing to choose",
   "close": "Close",
-  "copied": "Copied"
+  "copied": "Copied",
+  "copy_failed": "Couldn't copy"
 }

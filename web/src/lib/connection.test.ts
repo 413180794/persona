@@ -39,6 +39,12 @@ describe("connFacts", () => {
     expect(ago(now - 3 * 60_000, now)).toBe("3 分钟前");
     expect(ago(now - 2 * 3600_000, now)).toMatch(/\d{1,2}:\d{2}/);
   });
+
+  it("ago: the time alone the same day, with the date once it was another day", () => {
+    const evening = new Date(2026, 10, 5, 22, 30).getTime();
+    expect(ago(new Date(2026, 10, 5, 14, 5).getTime(), evening)).toBe("14:05");
+    expect(ago(new Date(2026, 10, 4, 14, 5).getTime(), evening)).toBe("11月4日 14:05");
+  });
 });
 
 describe("the dot and the sidebar's footer follow the same phase as the pill", () => {

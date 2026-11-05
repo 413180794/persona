@@ -3,7 +3,7 @@ import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { stateColor, STATE_LABEL } from "../lib/format";
 import type { AgentState } from "../lib/types";
-import { Dialog, IconButton, Menu, useMenu } from "./atoms";
+import { copyText, Dialog, IconButton, Menu, useMenu } from "./atoms";
 
 vi.mock("react", async (importOriginal) => ({
   ...await importOriginal<typeof import("react")>(),
@@ -156,5 +156,35 @@ describe("menu with the new row kinds", () => {
 
   it("opens at a pointer with no anchor", () => {
     expect(render([{ key: "a", label: "复制", onSelect: () => {} }], { point: { x: 10, y: 20 } })).toContain("复制");
+  });
+});
+
+describe("copyText", () => {
+  /** A page without the async clipboard (plain http): the textarea way, whose execCommand says whether it worked. */
+  function insecurePage(copies: boolean) {
+    const ta = { value: "", style: {}, select: vi.fn(), remove: vi.fn() };
+    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("document", { createElement: () => ta, body: { appendChild: vi.fn() }, execCommand: vi.fn(() => copies) });
+    return ta;
+  }
+
+  it("the async clipboard when there is one", async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    expect(await copyText("ABCD-1234")).toBe(true);
+    expect(writeText).toHaveBeenCalledWith("ABCD-1234");
+  });
+
+  it("over plain http it falls back to the textarea, and removes it", async () => {
+    const ta = insecurePage(true);
+    expect(await copyText("ABCD-1234", { done: "验证码已复制" })).toBe(true);
+    expect(ta.value).toBe("ABCD-1234");
+    expect(ta.remove).toHaveBeenCalled();
+  });
+
+  it("says it did not copy when the fallback fails too", async () => {
+    const ta = insecurePage(false);
+    expect(await copyText("ABCD-1234", { failed: "复制失败" })).toBe(false);
+    expect(ta.remove).toHaveBeenCalled();
   });
 });

@@ -23,6 +23,8 @@
     <string name="chat_attach_lost_permission">附件已失效或无法保留读取权限，请移除后重新选择</string>
     <string name="chat_attach_unreadable">文件无法读取，请重新选择</string>
     <string name="chat_attach_photo">照片 %1$d</string>
+    <string name="chat_attach_edit_failed">改过的图片没能上传，原图还在</string>
+    <string name="chat_attach_edit_unreadable">这张图片打不开，没法编辑</string>
     <string name="chat_attach_uploaded">已上传，等待发送</string>
     <string name="chat_attach_no_service">附件服务尚未接入</string>
     <string name="chat_attach_uploading">正在上传…</string>

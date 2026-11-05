@@ -39,6 +39,7 @@ val AttachmentThumbSize = 64.dp
  * While it uploads it dims under a spinner; a failed upload shows a retry mark and a red rim and retries when tapped
  * ([onRetry]); an invalid one (the file is gone) shows a warning and can only be removed. A null [image] draws a
  * placeholder: still decoding, unreadable, or a photo that only exists on the computer (restored from a sent message).
+ * With [onEdit] a ready photo carries a pencil in its corner and a tap marks it up (iOS ComposerImages).
  * Glass is a tile with a light rim, brief a softer paper tile, the board a small-radius tile with a rule.
  */
 @Composable
@@ -49,6 +50,7 @@ fun AttachmentThumb(
     state: AttachmentState = AttachmentState.Ready,
     onRemove: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
+    onEdit: (() -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
     val style = PersonaTheme.style
@@ -61,6 +63,7 @@ fun AttachmentThumb(
         else -> Modifier
     }
     val retry = onRetry.takeIf { state == AttachmentState.Failed }
+    val edit = onEdit.takeIf { state == AttachmentState.Ready }
     val label = when (state) {
         AttachmentState.Ready -> null
         AttachmentState.Uploading -> R.string.designsystem_attachment_uploading
@@ -70,10 +73,15 @@ fun AttachmentThumb(
     }?.let { stringResource(R.string.designsystem_with_state, contentDescription, stringResource(it)) } ?: contentDescription
     val retryLabel = stringResource(R.string.designsystem_retry)
     val removeLabel = stringResource(R.string.designsystem_attachment_remove)
+    val editLabel = stringResource(R.string.designsystem_attachment_edit)
     Box(modifier.size(AttachmentThumbSize)) {
         Box(
             Modifier.matchParentSize().clip(shape).background(if (style == AppStyle.Glass) palette.surfaceStrong else palette.surface)
-                .then(if (retry != null) Modifier.clickable(role = Role.Button, onClickLabel = retryLabel, onClick = retry) else Modifier)
+                .then(when {
+                    retry != null -> Modifier.clickable(role = Role.Button, onClickLabel = retryLabel, onClick = retry)
+                    edit != null -> Modifier.clickable(role = Role.Button, onClickLabel = editLabel, onClick = edit)
+                    else -> Modifier
+                })
                 .semantics { this.contentDescription = label },
             contentAlignment = Alignment.Center,
         ) {
@@ -95,6 +103,10 @@ fun AttachmentThumb(
         }
         // The rim goes over the photo, so a photo's own edge never hides it.
         Box(Modifier.matchParentSize().then(rim))
+        if (edit != null) Box(
+            Modifier.align(Alignment.BottomStart).padding(4.dp).size(20.dp).clip(CircleShape).background(OnPhotoBadge),
+            contentAlignment = Alignment.Center,
+        ) { JIcon(PhIcons.PencilSimple, null, size = 12.dp, tint = OnPhoto) }
         if (onRemove != null) Box(
             Modifier.align(Alignment.TopEnd).size(32.dp).clip(CircleShape)
                 .clickable(role = Role.Button, onClick = onRemove).semantics { this.contentDescription = removeLabel },
