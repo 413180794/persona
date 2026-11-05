@@ -5,7 +5,7 @@
 // whose menu has 分支到新聊天 (#2137: a new conversation with what was said up to this reply) when the session can.
 import { useEffect, useRef, useState } from "react";
 import { clock } from "../../lib/format";
-import { sendDraft } from "../../lib/drafts";
+import { sendDraft, type QuotedTask } from "../../lib/drafts";
 import { Button, copyText, cx, Dialog, Menu, type MenuItem } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { isNoHover } from "../../ui/media-query";
@@ -27,13 +27,13 @@ export interface Action {
   onSelect: () => void;
 }
 
-function useActions(text: string, isUser: boolean, ts: string | undefined, select: () => void): Action[] {
+function useActions(text: string, isUser: boolean, ts: string | undefined, task: QuotedTask | undefined, select: () => void): Action[] {
   const chat = useChatActions();
   if (!text.trim()) return [];
   const out: Action[] = [{ key: "copy", label: "复制", icon: "copy", onSelect: () => void copyText(text) }];
   if (isNoHover()) out.push({ key: "select", label: "选择文本", icon: "read", onSelect: select });
   if (chat?.canCompose) {
-    out.push({ key: "quote", label: "引用", icon: "quote", onSelect: () => void sendDraft(chat.draftKey, { type: "quote", text, from: isUser ? "我" : chat.speaker, ts }) });
+    out.push({ key: "quote", label: "引用", icon: "quote", onSelect: () => void sendDraft(chat.draftKey, { type: "quote", text, from: isUser ? "我" : chat.speaker, ts, task }) });
     if (isUser) out.push({ key: "edit", label: "编辑", icon: "pencil", onSelect: () => void sendDraft(chat.draftKey, { type: "replace", text }) });
   }
   return out;
@@ -47,12 +47,15 @@ export function moreActions(itemId: string | undefined, fork: ((itemId: string) 
 }
 
 /** Wraps a message: right-click / long press opens its menu. The hover bar goes under it (with the time), or beside it
- *  (`side`, your own bubbles: they had no row under them, so the layout does not move; the time stays the tooltip). */
+ *  (`side`, your own bubbles: they had no row under them, so the layout does not move; the time stays the tooltip), or
+ *  over its top right corner (`corner`, a task's card: no row under it either). `task`: 引用 quotes it as that task. */
 export function MessageActions({
   text,
   isUser,
   ts,
   side,
+  corner,
+  task,
   itemId,
   children,
   className,
@@ -61,13 +64,15 @@ export function MessageActions({
   isUser?: boolean;
   ts?: string;
   side?: boolean;
+  corner?: boolean;
+  task?: QuotedTask;
   /** The reply's transcript item: where 分支到新聊天 branches off. */
   itemId?: string;
   children: React.ReactNode;
   className?: string;
 }) {
   const [selecting, setSelecting] = useState(false);
-  const actions = useActions(text, Boolean(isUser), ts, () => setSelecting(true));
+  const actions = useActions(text, Boolean(isUser), ts, task, () => setSelecting(true));
   const more = moreActions(itemId, useChatActions()?.fork);
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -98,7 +103,7 @@ export function MessageActions({
   const items: MenuItem[] = [...actions, ...more].map((a, i) => ({ key: a.key, label: a.label, icon: a.icon, onSelect: a.onSelect, divider: i === actions.length && i > 0 }));
 
   return (
-    <div className={cx("group/msg", side && "relative", className)}>
+    <div className={cx("group/msg", (side || corner) && "relative", className)}>
       <div
         className="[@media(hover:none)]:select-none [@media(hover:none)]:[-webkit-touch-callout:none]"
         onContextMenu={(e) => {
@@ -146,7 +151,7 @@ export function MessageActions({
         className={cx(
           "hidden h-6 items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/msg:opacity-100 focus-within:opacity-100 [@media(hover:hover)]:flex",
           moreAnchor && "opacity-100", // the ⋯ menu is open: its bar stays while the pointer is in the menu
-          side ? "absolute right-full bottom-0.5 mr-1.5" : "mt-1.5",
+          side ? "absolute right-full bottom-0.5 mr-1.5" : corner ? "absolute top-2 right-2 rounded-[8px] bg-surface px-0.5 shadow-hairline" : "mt-1.5",
         )}
       >
         {actions
@@ -176,7 +181,7 @@ export function MessageActions({
             <Icon name="more" size={14} />
           </button>
         )}
-        {!side && ts && <span className="ml-1 text-[11px] text-ink-3">{clock(ts)}</span>}
+        {!side && !corner && ts && <span className="ml-1 text-[11px] text-ink-3">{clock(ts)}</span>}
       </div>
       {anchor && <Menu anchor={anchor} onClose={close} items={items} width={168} />}
       {moreAnchor && <Menu anchor={moreAnchor} onClose={() => setMoreAnchor(null)} items={more.map((a) => ({ key: a.key, label: a.label, icon: a.icon, onSelect: a.onSelect }))} side="top" width={168} />}

@@ -12,7 +12,7 @@ import { enterSends, hasFinePointer } from "../../lib/viewport";
 import { INPUT_MAX } from "./dock";
 import { imagePayload, MAX_IMAGE, quotePath, releaseAttachments, sendFile } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
-import { applyDraft, onDraftEvent, replaceNeedsConfirm, splitQuote, storedQuote, storeQuote, withQuoteBlock, withUnsent, type DraftImage, type DraftQuote } from "../../lib/drafts";
+import { applyDraft, onDraftEvent, parseQuote, replaceNeedsConfirm, splitQuote, storedQuote, storeQuote, withQuoteBlock, withUnsent, type DraftImage, type DraftQuote } from "../../lib/drafts";
 import { browseTarget, mentionAt, replaceToken, sessionQuote } from "../../lib/mentions";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 import { cx, EASE, Spinner, toast } from "../../ui/atoms";
@@ -165,14 +165,14 @@ export function Composer({
         }
         if (e.type === "quote") {
           // the input keeps what is typed; the bar shows the quote, a new one in place of the last
-          setQuote({ text: e.text.trim(), from: e.from, ts: e.ts });
+          setQuote({ text: e.text.trim(), from: e.from, ts: e.ts, task: e.task });
           requestAnimationFrame(() => input.current?.focus());
           return;
         }
         if (e.type === "replace" && replaceNeedsConfirm(draftNow.current, e.text) && !confirm("输入框里有没发出去的字，换成这条消息？")) return;
         // 编辑 a message sent with a quote: the quote goes back to the bar, the words to the input
         const split = e.type === "replace" ? splitQuote(e.text) : null;
-        if (e.type === "replace") setQuote(split ? { text: split.quote } : null);
+        if (e.type === "replace") setQuote(split ? parseQuote(split.quote) : null);
         const next = split ? split.rest : applyDraft(draftNow.current, e);
         setDraft(next);
         setDismissed(false);

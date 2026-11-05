@@ -10,11 +10,33 @@ export interface DraftImage {
   data: string; // base64
 }
 
-/** What 引用 holds above the input: the quoted words, who said them, when. */
+/** What 引用 holds above the input: the quoted words, who said them, when; for a task's card, which task. */
 export interface DraftQuote {
   text: string;
   from?: string;
   ts?: string;
+  task?: QuotedTask;
+}
+
+/** The task a quoted card is about: its title and todo id, sent on the quote's first line so the assistant knows. */
+export interface QuotedTask {
+  title: string;
+  id?: string;
+}
+
+/** `任务「<title>」（todo id: <id>）`: the first line of a task's quote. */
+export function taskQuoteLine(t: QuotedTask): string {
+  return `任务「${t.title}」${t.id ? `（todo id: ${t.id}）` : ""}`;
+}
+
+const TASK_LINE = /^任务「(.*)」(?:（todo id: ([^）\s]+)）)?$/;
+
+/** A quote's words as sent (splitQuote's `quote`) back to what was quoted: a task's first line becomes its task. */
+export function parseQuote(text: string): DraftQuote {
+  const [first, ...rest] = text.split("\n");
+  const m = TASK_LINE.exec(first.trim());
+  if (!m) return { text };
+  return { text: rest.join("\n").trim(), task: { title: m[1], ...(m[2] ? { id: m[2] } : {}) } };
 }
 
 export type DraftEvent =
@@ -31,8 +53,10 @@ export function withQuote(draft: string, text: string): string {
 
 /** The message as sent with a quote: its block, a blank line, then what was typed (just the block when nothing was). */
 export function withQuoteBlock(quote: DraftQuote | null, text: string): string {
-  if (!quote?.text.trim()) return text;
-  const block = withQuote("", quote.text.trim());
+  const words = quote?.text.trim() ?? "";
+  const body = quote?.task ? [taskQuoteLine(quote.task), words].filter(Boolean).join("\n\n") : words;
+  if (!body) return text;
+  const block = withQuote("", body);
   return text.trim() ? block + text : block.trimEnd();
 }
 
@@ -53,7 +77,7 @@ const quoteKey = (key: string) => `quote:${key}`;
 export function storedQuote(key: string): DraftQuote | null {
   try {
     const q = JSON.parse(localStorage.getItem(quoteKey(key)) ?? "null") as DraftQuote | null;
-    return q && typeof q.text === "string" && q.text ? q : null;
+    return q && typeof q.text === "string" && (q.text || q.task?.title) ? q : null;
   } catch {
     return null;
   }
@@ -114,7 +138,7 @@ export function sendDraft(key: string, e: DraftEvent): boolean {
   }
   if (e.type === "image") return false;
   if (e.type === "quote") {
-    storeQuote(key, { text: e.text, from: e.from, ts: e.ts });
+    storeQuote(key, { text: e.text, from: e.from, ts: e.ts, task: e.task });
     return true;
   }
   const stored = `draft:${key}`;

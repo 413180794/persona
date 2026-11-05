@@ -9,6 +9,7 @@ vi.mock("../../lib/links", async (orig) => ({ ...(await orig<typeof import("../.
 
 afterEach(() => vi.unstubAllGlobals());
 
+const msg = (text: string) => ({ id: "u1", text, images: [], contexts: [] }) as unknown as UserMessage;
 const reply = "## 结论\n\n- **第一条**：改好了\n- 第二条 `code`\n\n> 里面的引用";
 
 describe("引用 above the composer", () => {
@@ -35,8 +36,28 @@ describe("引用 above the composer", () => {
   });
 });
 
+describe("引用 of a task's card (#2462)", () => {
+  const task = { title: "补齐网络层的单元测试", id: "todo_7f3a" };
+
+  it("names the task above the input, then the first lines of what its agent said", () => {
+    expect(quoteSource({ text: "x", task })).toBe("引用任务「补齐网络层的单元测试」");
+    const html = renderToStaticMarkup(<QuoteBar quote={{ text: "**测试补好了**，覆盖率 92%。", task }} onRemove={() => {}} />);
+    expect(html).toContain("引用任务「补齐网络层的单元测试」");
+    expect(html).toContain("测试补好了，覆盖率 92%。");
+    expect(html).not.toContain("todo_7f3a");
+  });
+
+  it("draws the sent quote's task line as the task's title, not its todo id", () => {
+    const html = renderToStaticMarkup(<UserBubble msg={msg("> 任务「补齐网络层的单元测试」（todo id: todo_7f3a）\n> \n> 测试补好了。\n\n离线的呢？")} mid="m" sid="s" />);
+    expect(html).toContain("data-quote-task");
+    expect(html).toContain("任务「补齐网络层的单元测试」");
+    expect(html).toContain("测试补好了。");
+    expect(html).not.toContain("todo id");
+    expect(html).toContain("离线的呢？");
+  });
+});
+
 describe("引用 in a sent bubble", () => {
-  const msg = (text: string) => ({ id: "u1", text, images: [], contexts: [] }) as unknown as UserMessage;
 
   it("draws a leading > block as a folded quote card over the words", () => {
     const html = renderToStaticMarkup(<UserBubble msg={msg("> 第一行\n> \n> **第二行**\n\n我的看法")} mid="m" sid="s" />);

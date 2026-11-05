@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyDraft, onDraftEvent, replaceNeedsConfirm, sendDraft, splitQuote, storedQuote, withAppended, withQuote, withQuoteBlock, withUnsent } from "./drafts";
+import { applyDraft, onDraftEvent, parseQuote, replaceNeedsConfirm, sendDraft, splitQuote, storedQuote, withAppended, withQuote, withQuoteBlock, withUnsent } from "./drafts";
 import { browseTarget, byPrefix, chatFiles, displayTitle, mentionAt, nameMatches, otherSessions, relPath, replaceToken, sessionQuote } from "./mentions";
 import { keepAllBut, sameMessage } from "./queue";
 import { boxRect, burnWidth, fitRect, keepMark, toImage, toScreen } from "./image-edit";
@@ -18,6 +18,19 @@ describe("drafts", () => {
     expect(withQuoteBlock({ text: "原话" }, "  ")).toBe("> 原话");
     expect(withQuoteBlock(null, "只有字")).toBe("只有字");
     expect(withQuoteBlock({ text: "  " }, "只有字")).toBe("只有字");
+  });
+
+  it("sends a task's quote with its title and todo id on the first line (#2462)", () => {
+    const task = { title: "补齐网络层的单元测试", id: "todo_7f3a" };
+    const sent = withQuoteBlock({ text: "测试补好了，覆盖率 92%。\n\n还差离线的用例。", task }, "离线的什么时候补？");
+    expect(sent).toBe("> 任务「补齐网络层的单元测试」（todo id: todo_7f3a）\n> \n> 测试补好了，覆盖率 92%。\n> \n> 还差离线的用例。\n\n离线的什么时候补？");
+    // and back: the bubble and 编辑 see the task again
+    expect(parseQuote(splitQuote(sent)!.quote)).toEqual({ text: "测试补好了，覆盖率 92%。\n\n还差离线的用例。", task });
+    // a card with nothing said under it, or no todo id: the title alone
+    expect(withQuoteBlock({ text: "", task: { title: "整理发布说明" } }, "")).toBe("> 任务「整理发布说明」");
+    expect(parseQuote("任务「整理发布说明」")).toEqual({ text: "", task: { title: "整理发布说明" } });
+    // an ordinary quote stays as it was
+    expect(parseQuote("任务很多\n第二行")).toEqual({ text: "任务很多\n第二行" });
   });
 
   it("splits a leading > block off a message, the way it was sent or typed", () => {
@@ -61,6 +74,8 @@ describe("drafts", () => {
     // the quote waits for the bar above the input; the typed text is left alone
     expect(store.get("draft:m/s")).toBe("typed");
     expect(storedQuote("m/s")).toEqual({ text: "q", from: "Persona", ts: "2026-11-05T08:45:00Z" });
+    sendDraft("m/s", { type: "quote", text: "", task: { title: "整理发布说明", id: "todo_1" } });
+    expect(storedQuote("m/s")?.task).toEqual({ title: "整理发布说明", id: "todo_1" });
     expect(sendDraft("m/s", { type: "image", image: { name: "a.png", mime: "image/png", data: "AA" } })).toBe(false);
 
     const got: string[] = [];

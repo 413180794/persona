@@ -39,6 +39,7 @@ import type { AgentState, Interaction, Session } from "../../lib/types";
 import { Button, Collapse, cx, Menu, StatusDot, toast, useNow } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { AnsweredCard, InteractionCard } from "../chat/Interactions";
+import { MessageActions } from "../chat/MessageActions";
 import { clock, sessionTitle, stateOf } from "../../lib/format";
 
 // ── what a task is now ──
@@ -536,27 +537,31 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
   }
   const failure = failed && todo ? startFailure(todo, plans) : undefined;
   const summary = failure ? `没开起来：${failure}` : field(item, "summary");
+  const heading = failed ? `${title}没开起来` : `${title} 完成`;
+  // 复制 / 引用 like a reply's (#2462): the quote names the task and its todo id for the assistant
   return (
-    <div className={cx("flex gap-3 rounded-card p-4", failed ? "bg-red-tint" : "bg-green-tint")}>
-      <Icon name={failed ? "info" : "check"} size={18} stroke={2.4} className={failed ? "text-red" : "text-green"} />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="text-[14.5px] font-semibold">{failed ? `${title}没开起来` : `${title} 完成`}</div>
-        {summary && <ReceiptSummary text={summary} plain={failed} />}
-        <div className="mt-1 flex gap-2">
-          {failed && todo && (
-            <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo)}>
-              重试
-            </Button>
-          )}
-          {pr && (
-            <Button icon="git" onClick={() => window.open(pr, "_blank", "noopener")}>
-              PR #{prN}
-            </Button>
-          )}
-          {!failed && item.ref && <Button onClick={() => openTask(item.ref!)}>看看</Button>}
+    <MessageActions text={summary?.trim() ? summary : heading} ts={item.at} task={{ title, ...(item.ref ? { id: item.ref } : {}) }} corner>
+      <div className={cx("flex gap-3 rounded-card p-4", failed ? "bg-red-tint" : "bg-green-tint")} data-receipt>
+        <Icon name={failed ? "info" : "check"} size={18} stroke={2.4} className={failed ? "text-red" : "text-green"} />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="text-[14.5px] font-semibold">{heading}</div>
+          {summary && <ReceiptSummary text={summary} plain={failed} />}
+          <div className="mt-1 flex gap-2">
+            {failed && todo && (
+              <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo)}>
+                重试
+              </Button>
+            )}
+            {pr && (
+              <Button icon="git" onClick={() => window.open(pr, "_blank", "noopener")}>
+                PR #{prN}
+              </Button>
+            )}
+            {!failed && item.ref && <Button onClick={() => openTask(item.ref!)}>看看</Button>}
+          </div>
         </div>
       </div>
-    </div>
+    </MessageActions>
   );
 }
 
