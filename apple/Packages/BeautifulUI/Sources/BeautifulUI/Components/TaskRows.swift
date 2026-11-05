@@ -170,6 +170,7 @@ public struct TaskRow<Leading: View, Trailing: View, Detail: View>: View {
     var leading: Leading
     var trailing: Trailing
     var detail: Detail
+    var titleLeading: AnyView?
     @Environment(\.buiTheme) private var theme
 
     /// - Parameter action: what a tap does (toggle the detail, open a page); `nil` leaves the row inert, for a
@@ -196,6 +197,20 @@ public struct TaskRow<Leading: View, Trailing: View, Detail: View>: View {
         self.leading = leading()
         self.trailing = trailing()
         self.detail = detail()
+    }
+
+    /// Views before the title, on its first line (a tag saying where the task came from). The badge's column is the
+    /// leading view's alone: anything wider there spills out of the row and over the title.
+    public func titleLeading<V: View>(@ViewBuilder _ content: () -> V) -> Self {
+        var row = self
+        row.titleLeading = AnyView(content())
+        return row
+    }
+
+    /// `titleLeading` when there is something to put there; `nil` leaves the title alone (no gap before it).
+    public func titleLeading<V: View>(_ content: (() -> V)?) -> Self {
+        guard let content else { return self }
+        return titleLeading(content)
     }
 
     private var oneLine: Bool { (task.subtitle ?? "").isEmpty && (task.footnote ?? "").isEmpty }
@@ -254,11 +269,14 @@ public struct TaskRow<Leading: View, Trailing: View, Detail: View>: View {
                 .padding(.top, oneLine ? 0 : 1)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 10) {
-                    Text(task.title)
-                        .buiFont(.label)
-                        .foregroundStyle(theme.colors.ink)
-                        .lineLimit(titleLines)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        if let titleLeading { titleLeading.fixedSize() }
+                        Text(task.title)
+                            .buiFont(.label)
+                            .foregroundStyle(theme.colors.ink)
+                            .lineLimit(titleLines)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     if let amount = task.amount {
                         Text(amount)
                             .buiFont(BUITextStyle(size: 12.5))

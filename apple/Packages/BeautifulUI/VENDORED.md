@@ -13,3 +13,10 @@ git -C <BeautifulUI 仓库> archive --format=tar <提交> BeautifulUI | tar -x -
 
 然后把上面的来源提交改掉。Jarvis 用到的宿主接口（`typeScale`、`entrances`、`ToolChipRow`、`ToolChipGroup`……）见库的 README
 「给宿主 App 的接口」。
+
+## 本地补丁（还没进 BeautifulUI 仓库）
+
+下次重新拷入前，先把这些补进 BeautifulUI 仓库，否则会丢：
+
+- `TaskRow.titleLeading { … }`（#3004）：标题第一行、标题文字前面的视图（Agents 行的「终端」/「飞书群」来源标签）。
+  leading 槽固定 24pt 宽，只放状态徽标；之前把标签也塞进去，居中后两边溢出，徽标被挤出卡片、标签压住标题。

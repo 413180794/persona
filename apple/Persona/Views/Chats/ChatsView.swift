@@ -2310,6 +2310,9 @@ nonisolated struct SlotRow: View, Equatable {
         }
     }
 
+    /// The tag before the title: where it was opened, for an agent (Persona's own conversations carry none).
+    private var rowSource: SessionSource? { session.assistant ? nil : session.source }
+
     private var indented: Bool { if case .cardRow = surface { true } else { false } }
 
     /// BeautifulUI's task row: the state's badge, the title over the latest line, where it runs under that; when, and
@@ -2325,10 +2328,8 @@ nonisolated struct SlotRow: View, Equatable {
                                  subtitle: session.listPreview, footnote: meta,
                                  status: .pending(step: 0)),
                         shape: taskShape(), accessory: surface == .none ? .none : .disclosure, titleLines: 2, subtitleLines: 1) {
-                    HStack(spacing: Theme.Space.sm) {
-                        if dot { AgentStateBadge(state: session.state).padding(.leading, indented ? Theme.Space.l : 0) }
-                        if !session.assistant, let source = session.source { SourceLabel(source: source, link: session.externalLink) }
-                    }
+                    // The badge's column is 24 pt: the source tag goes before the title (#3004), not beside the badge.
+                    if dot { AgentStateBadge(state: session.state).padding(.leading, indented ? Theme.Space.l : 0) }
                 } trailing: {
                     VStack(alignment: .trailing, spacing: Theme.Space.xs) {
                         AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
@@ -2344,12 +2345,13 @@ nonisolated struct SlotRow: View, Equatable {
                 } detail: {
                     EmptyView()
                 }
+                .titleLeading(rowSource.map { source in { SourceLabel(source: source, link: session.externalLink) } })
             } else {
                 HStack(alignment: .top, spacing: Theme.Space.m) {
                     if dot { StatusDot(state: session.state, size: 9).padding(.top, Theme.Space.sm) }
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
-                            if !session.assistant, let source = session.source { SourceLabel(source: source, link: session.externalLink) }
+                            if let source = rowSource { SourceLabel(source: source, link: session.externalLink) }
                             Text(session.displayTitle)
                                 .font(session.state == .unread ? Theme.Font.bodyHeavy : Theme.Font.bodyStrong)
                                 .lineLimit(2)
