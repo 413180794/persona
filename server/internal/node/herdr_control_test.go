@@ -297,7 +297,7 @@ func TestHerdrStartFailsWhenTheTabCannotBeMade(t *testing.T) {
 			s = l[0]
 		}
 	}
-	if s.SessionID != startID || s.Status != proto.StatusOffline || s.Starting || !strings.Contains(s.StartError, "create herdr tab") {
+	if s.SessionID != startID || s.Status != proto.StatusOffline || s.Starting || (!strings.Contains(s.StartError, "create herdr tab") && !strings.Contains(s.StartError, "创建终端标签页失败")) {
 		t.Errorf("listed %+v", s)
 	}
 	trace := slices.DeleteFunc(f.trace(), func(c string) bool { return c == call("session.snapshot", nil) })

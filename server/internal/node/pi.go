@@ -96,6 +96,9 @@ func (n *Node) piWithoutExtension(ctx context.Context, method, id string) (any, 
 // of the engine, waits for the pi it starts to list the session, and sends the phone's message there. Without an engine
 // that can start it: refused, nothing sent (it is not handed to pi-web).
 func (n *Node) resumeInEngine(ctx context.Context, h *runtimeConn, id string, argv []string, params json.RawMessage) (any, error) {
+	if n.engine() == proto.EngineOrca {
+		return nil, refusal("orca_resume", "Orca 会话请在电脑上恢复：这次没有启动，也没有发送。", nil)
+	}
 	row, _ := h.row(id)
 	cwd := row.Cwd
 	if st, err := os.Stat(cwd); cwd == "" || err != nil || !st.IsDir() {
@@ -129,7 +132,7 @@ func (n *Node) resumeInEngine(ctx context.Context, h *runtimeConn, id string, ar
 		created, err = launch.CreateSlot(ctx, ws, cwd, tabLabel("", n.tabLabels(ctx, launch, ws)))
 	}
 	if err != nil {
-		return nil, fmt.Errorf("create herdr tab: %w", err)
+		return nil, fmt.Errorf("创建终端标签页失败：%w", err)
 	}
 	pane := created.Pane.String()
 	n.bindPane(pane, id)               // the pane is this session's before herdr or the extension says so

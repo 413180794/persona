@@ -66,6 +66,9 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		if a, ok := n.agent(resume); ok {
 			return n.sessionFor(resume, a), nil // already running
 		}
+		if n.engine() == proto.EngineOrca {
+			return nil, refusal("orca_resume", "Orca 会话请在电脑上恢复：从手机只能新建，这次没有启动。", nil)
+		}
 		if r := n.openElsewhereRefusal(resume); r != nil { // open in Claude's desktop app or a terminal (openelsewhere.go)
 			return nil, r
 		}

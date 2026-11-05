@@ -109,6 +109,7 @@
   `worktree.ps` 行上的 `state` 把子 Agent 合进去了（主 Agent 这轮结束、后台子 Agent 在跑时是 working），窗格自己的状态看 `mainAgent.state`；
   `agentIdentity` 在 Agent 退出后可能还在，「是不是 Agent」以 `ORCA_PANE_KEY` 对得上的 claude / codex 进程为准。node 的测试包把 `ORCA_USER_DATA_PATH`
   指到空目录，别让测试碰到正在用的 Orca（它的 socket 能完全控制 Orca）。
+  Orca 新建终端（#924）：`terminal.create` 不传 `presentation: "background"` 避免 PTY 成为 orphan；创建后按确切 handle 查 `terminal.list` 校验身份与代次；普通创建路径显式 `cd` 进入目标目录；允许新建会话不意味着允许自动 resume 离线会话，后者通过 `orca_resume` 拦截以防止与桌面端竞争双写。
 - 启动器（`docs/launchers.md`，2026-11-01）：以前只认 `_claude_launchers` 这个辅助函数的输出，`~/.zshrc` 里全是 alias 的机器（一个用户 41 个）
   列表里只剩 `claude`。alias 交给 zsh 自己拆词（`${(@Q)${(z)value}}`），不在 Go 里解析引号。`zsh -c` 里同一段脚本定义的 alias 不会在这段
   脚本里展开（整段先解析），测试要像 node 一样 `zsh -ic` 并把定义写进临时的 `$ZDOTDIR/.zshrc`。`~/.zshrc` 里有 `alias claude=…` 时，

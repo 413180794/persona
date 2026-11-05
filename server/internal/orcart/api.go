@@ -38,6 +38,9 @@ func (t Terminal) PaneKey() string { return t.TabID + ":" + t.LeafID }
 // Local: the terminal runs on this machine.
 func (t Terminal) Local() bool { return t.ExecutionHostID == "" || t.ExecutionHostID == "local" }
 
+// IsLocal: alias for Local.
+func (t Terminal) IsLocal() bool { return t.Local() }
+
 // Target is the terminal a call acts on: its handle, fenced to the process it had when listed.
 func (t Terminal) Target() Target { return Target{Handle: t.Handle, Incarnation: t.IncarnationID} }
 
@@ -121,6 +124,7 @@ func (n *layoutNode) tabs(worktree string, out *[]Tab) {
 // Worktree is one worktree of worktree.ps.
 type Worktree struct {
 	WorktreeID  string `json:"worktreeId"`
+	HostID      string `json:"hostId"`
 	Path        string `json:"path"`
 	Branch      string `json:"branch"`
 	DisplayName string `json:"displayName"`
@@ -311,6 +315,76 @@ func (c *Client) Prompt(ctx context.Context, t Target, text string) (*Sent, erro
 // Close is terminal.close: Orca closes the terminal's pane (its tab when it was the only one).
 func (c *Client) Close(ctx context.Context, t Target) error {
 	return c.Call(ctx, CloseTimeout, "terminal.close", t.params(), nil)
+}
+
+// CreateTerminal opens a fresh shell in an existing Orca worktree. The ordinary create RPC ignores cwd, so the
+// launcher changes directory explicitly when it runs its command. It never uses the currently focused terminal.
+func (c *Client) CreateTerminal(ctx context.Context, worktree, title, mutationID string) (*Terminal, error) {
+	var res struct {
+		Terminal struct {
+			Terminal
+			PaneKey string `json:"paneKey"`
+		} `json:"terminal"`
+	}
+	err := c.Call(ctx, SendTimeout, "terminal.create", map[string]any{
+		"worktree": worktree, "title": title, "clientMutationId": mutationID,
+		// Explicit "background" skips desktop tab registration entirely. Omit it to create an inactive tab;
+		// Orca awaits the renderer's creation receipt before returning, without switching the user's active tab.
+		"focus": false, "activate": false,
+	}, &res)
+	if err != nil {
+		return nil, err
+	}
+	t := res.Terminal.Terminal
+	if t.Handle == "" || !t.IsLocal() {
+		return nil, fmt.Errorf("orca terminal.create: no local terminal handle in the answer; creation may have completed")
+	}
+	// Orca 1.4.242/243 return paneKey instead of leafId, and may omit the incarnation in the create receipt.
+	// Resolve only the exact returned handle; a newer terminal or a matching title is not proof of ownership.
+	list, err := c.Terminals(ctx, false)
+	if err != nil {
+		return nil, fmt.Errorf("orca terminal.create: created %s but could not resolve its identity: %w", t.Handle, err)
+	}
+	var found *Terminal
+	for _, current := range list.Terminals {
+		if current.Handle != t.Handle {
+			continue
+		}
+		if current.Orphaned {
+			return nil, fmt.Errorf("orca terminal.create: created %s but Orca did not register its tab; no command was sent", t.Handle)
+		}
+		if found != nil || !current.IsLocal() || current.IncarnationID == "" || current.TabID == "" || current.LeafID == "" ||
+			t.IncarnationID != "" && current.IncarnationID != t.IncarnationID ||
+			t.TabID != "" && current.TabID != t.TabID || t.LeafID != "" && current.LeafID != t.LeafID ||
+			res.Terminal.PaneKey != "" && current.PaneKey() != res.Terminal.PaneKey ||
+			t.WorktreeID != "" && current.WorktreeID != t.WorktreeID {
+			return nil, fmt.Errorf("orca terminal.create: created %s but its identity changed; no command was sent", t.Handle)
+		}
+		found = &current
+	}
+	if found == nil {
+		return nil, fmt.Errorf("orca terminal.create: created %s is absent from terminal.list; no command was sent", t.Handle)
+	}
+	return found, nil
+}
+
+// RenameTerminal sets the title of the terminal tab in Orca's layout.
+func (c *Client) RenameTerminal(ctx context.Context, t Target, title string) error {
+	p := t.params()
+	p["title"] = title
+	return c.Call(ctx, CallTimeout, "terminal.rename", p, nil)
+}
+
+// SetPaneTitle sets the pane title in Orca.
+func (c *Client) SetPaneTitle(ctx context.Context, t Target, title string) error {
+	p := t.params()
+	p["title"] = title
+	return c.Call(ctx, CallTimeout, "terminal.setPaneTitle", p, nil)
+}
+
+// RepoAdd registers a new git repository or folder workspace with Orca.
+func (c *Client) RepoAdd(ctx context.Context, path, kind string) error {
+	return c.Call(ctx, CallTimeout, "repo.add", map[string]any{"path": path, "kind": kind}, nil)
 }
 
 // Probe is status.get without the compatibility gate: the runtime's status (nil when it did not answer) and whether

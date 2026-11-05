@@ -372,8 +372,8 @@ func maybeDelivered(err error) bool {
 	return d.Delivered == deliveredUnknown
 }
 
-// Refusals of a send to a session that is not running on an engine that cannot start one (herdr-core, Orca): herdr
-// resumes it in a new pane instead.
+// Herdr resumes offline sessions in a new pane. Orca can create new sessions, but must not automatically resume an
+// existing one: it may still be open in Orca's native chat or suspended in another terminal.
 const (
 	notRunning    = "not_running"
 	notInFront    = "agent_not_in_front"
@@ -381,7 +381,7 @@ const (
 )
 
 // notRunningRefusal refuses, with nothing typed, a send to a session that is not live when the machine's engine
-// cannot start sessions (no host.Launcher), instead of trying to resume it there: when the pane it was last seen in is
+// cannot start sessions (no host.Launcher) or is Orca, instead of trying to resume it there: when the pane it was last seen in is
 // still there, its agent is not in front (suspended, in the background); otherwise it is gone. nil when the engine can
 // resume it (herdr: unchanged).
 func (n *Node) notRunningRefusal(ctx context.Context, id string) error {
@@ -389,7 +389,7 @@ func (n *Node) notRunningRefusal(ctx context.Context, id string) error {
 	if h == nil {
 		return nil
 	}
-	if _, ok := h.(host.Launcher); ok {
+	if _, ok := h.(host.Launcher); ok && h.Kind() != host.Orca {
 		return nil
 	}
 	n.mu.Lock()

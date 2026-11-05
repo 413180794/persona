@@ -30,7 +30,10 @@ func newPullFixture(t *testing.T) pullFixture {
 	t.Setenv("GIT_COMMITTER_EMAIL", "dev@example.com")
 	remote, seed, local := filepath.Join(base, "remote.git"), filepath.Join(base, "seed"), filepath.Join(base, "local")
 	runPullGit(t, base, "init", "--bare", "--initial-branch=main", remote)
-	runPullGit(t, base, "clone", remote, seed)
+	// Cloning the empty remote would put seed on the client's default branch
+	// unless protocol v2 advertises the unborn HEAD, so seed starts on main itself.
+	runPullGit(t, base, "init", "--initial-branch=main", seed)
+	runPullGit(t, seed, "remote", "add", "origin", remote)
 	f := pullFixture{node: &Node{home: base, state: newState()}, seed: seed, local: local}
 	f.commit(t, seed, "app.txt", "first\n")
 	runPullGit(t, seed, "push", "-u", "origin", "main")

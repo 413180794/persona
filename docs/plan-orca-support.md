@@ -154,7 +154,7 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
 | 关闭 | 和 herdr 一样先按两次 ctrl+c（`\x03`），再 `terminal.close`（Orca 关掉窗格，只剩它时关掉标签页）。已经不在的终端算关好了 | ✅ |
 | 改名 | 工作区和标签页的名字归 Orca 管：`RenameSpace` / `RenameSlot` 报 `unsupported`（「Orca 里的工作区和标签页暂时不能从手机改名」） | ❌ |
 | 认 hook 的窗格 | `personad hook` 在没有 `HERDR_PANE_ID`、`HC_TERMINAL_ID` 时读 `ORCA_PANE_KEY`（缺了 `ORCA_AGENT_PANE`），报 `orca:<tabId>:<leafId>`；node 只在引擎是 Orca 的机器上记下这种窗格（herdr 机器和以前一样，不认 Orca 的窗格）。Orca 里开的 claude 一般不带 Persona 的 hook（只有 Persona 自己启动时用 `--settings` 带上） | ✅ |
-| 新建会话、切模式 / 思考强度 | `terminal.create` 普通路径忽略 `cwd`；模式菜单要先确认纯文本够不够认 | 第二期 |
+| 新建会话、切模式 / 思考强度 | `host.Launcher` 实现；`terminal.create` 支持在已登记工作区或其子目录下新建，未登记的 Git 仓库尝试自动登记；模式菜单待进一步扩展 | ✅ 新建会话已支持 |
 | 实时终端、带颜色读屏、接管尺寸 | 只在配对的加密 WebSocket 上有，hub 退回读屏 | 第三期 |
 | 推送变化 | socket 上没有（所有 `*.subscribe` 都是流式方法） | — |
 

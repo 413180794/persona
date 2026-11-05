@@ -190,7 +190,7 @@ func (n *Node) newTab(ctx context.Context, launch host.Launcher, cwd, ws, tabNam
 		created, err = launch.CreateSlot(ctx, ws, cwd, tabLabel(tabName, n.tabLabels(ctx, launch, ws)))
 	}
 	if err != nil {
-		return nil, fmt.Errorf("create herdr tab: %w", err)
+		return nil, fmt.Errorf("创建终端标签页失败：%w", err)
 	}
 	return created, nil
 }

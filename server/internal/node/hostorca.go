@@ -56,12 +56,14 @@ type orcaHost struct {
 	fallback map[string]orcaFallback // pane key -> terminal.agentStatus, for agent panes without a row
 	view     *orcaView               // the last look, reused by Agents right after a Snapshot
 	viewAt   time.Time
+	launches map[string]orcaLaunch // fresh panes whose shell may receive one launch command
 }
 
 var (
 	_ host.Host        = (*orcaHost)(nil)
 	_ host.PlainScreen = (*orcaHost)(nil)
 	_ host.Organizer   = (*orcaHost)(nil)
+	_ host.Launcher    = (*orcaHost)(nil)
 )
 
 func newOrcaHost(c *orcart.Client) *orcaHost { return &orcaHost{c: c, scan: orcaScan} }
@@ -137,7 +139,7 @@ func (h *orcaHost) terminals(ctx context.Context) ([]orcart.Terminal, []orcart.T
 	var terms []orcart.Terminal
 	byPane := map[string]orcart.Terminal{}
 	for _, t := range l.Terminals {
-		if t.Local() && !t.Orphaned && t.TabID != "" && t.LeafID != "" {
+		if t.IsLocal() && !t.Orphaned && t.TabID != "" && t.LeafID != "" {
 			terms = append(terms, t)
 			byPane[t.PaneKey()] = t
 		}
@@ -666,6 +668,9 @@ func (h *orcaHost) RenameSlot(context.Context, string, string) error  { return e
 // Close is terminal.close: Orca closes the pane (its tab when it was the only one). A terminal already gone counts as
 // closed.
 func (h *orcaHost) Close(ctx context.Context, pane host.PaneRef, _, _ string) error {
+	h.mu.Lock()
+	delete(h.launches, pane.ID)
+	h.mu.Unlock()
 	t, err := h.terminal(ctx, pane.ID, false)
 	if err == nil {
 		err = h.onTerminal(ctx, t, true, func(tg orcart.Target) error { return h.c.Close(ctx, tg) })

@@ -205,6 +205,32 @@ func (f *Fake) answerLocked(method string, p map[string]any) any {
 	switch method {
 	case "status.get":
 		return f.status
+	case "repo.add":
+		path, _ := p["path"].(string)
+		return map[string]any{"repo": map[string]any{"path": path, "ok": true}}
+	case "terminal.create":
+		wtID, _ := p["worktree"].(string)
+		wtID = strings.TrimPrefix(wtID, "id:")
+		newIdx := len(f.terms) + 1
+		newHandle := fmt.Sprintf("term_fake_%d", newIdx)
+		newTab := fmt.Sprintf("tab_%d", newIdx)
+		newLeaf := fmt.Sprintf("leaf_%d", newIdx)
+		newInc := fmt.Sprintf("inc_%d", newIdx)
+		title, _ := p["title"].(string)
+		newTerm := map[string]any{
+			"handle": newHandle, "tabId": newTab, "leafId": newLeaf, "incarnationId": newInc,
+			"worktreeId": wtID, "title": title, "connected": true, "writable": true,
+			"orphaned": false, "executionHostId": "local", "agentIdentity": "",
+		}
+		f.terms = append(f.terms, newTerm)
+		return map[string]any{
+			"terminal": map[string]any{
+				"handle": newHandle, "tabId": newTab, "leafId": newLeaf, "incarnationId": newInc,
+				"worktreeId": wtID, "title": title, "connected": true, "writable": true,
+				"orphaned": false, "executionHostId": "local", "agentIdentity": "",
+				"paneKey": newTab + ":" + newLeaf,
+			},
+		}
 	case "terminal.list":
 		out := map[string]any{"terminals": slices.Clone(f.terms), "topologyRevisions": maps.Clone(f.revisions),
 			"hostScope": map[string]any{"hostIds": []string{"local"}}, "totalCount": len(f.terms), "truncated": false}
@@ -251,6 +277,15 @@ func (f *Fake) answerLocked(method string, p map[string]any) any {
 	case "terminal.close":
 		f.writes = append(f.writes, Write{Handle: h, Close: true})
 		return map[string]any{"close": map[string]any{"handle": h, "tabId": t["tabId"], "ptyKilled": true}}
+	case "terminal.rename":
+		title, _ := p["title"].(string)
+		if t != nil {
+			t["title"] = title
+		}
+		return map[string]any{"rename": map[string]any{"handle": h, "title": title}}
+	case "terminal.setPaneTitle":
+		title, _ := p["title"].(string)
+		return map[string]any{"setPaneTitle": map[string]any{"handle": h, "title": title}}
 	case "terminal.send":
 		text, _ := p["text"].(string)
 		enter := p["enter"] == true
@@ -358,6 +393,12 @@ func validate(method string, p map[string]any) string {
 		return first(handle(), literalTrue("screen"))
 	case "terminal.agentStatus", "terminal.close":
 		return handle()
+	case "terminal.rename", "terminal.setPaneTitle":
+		return first(handle(), str("title", true))
+	case "repo.add":
+		return str("path", true)
+	case "terminal.create":
+		return first(str("worktree", true), str("title", true))
 	case "terminal.send":
 		if r := first(handle(), literalTrue("agentPrompt"), literalTrue("requireWriteSettlement"),
 			literalTrue("claimViewport")); r != "" {
