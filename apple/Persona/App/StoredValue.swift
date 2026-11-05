@@ -28,21 +28,26 @@ struct StoredValue<Value: Equatable> {
     }
 }
 
+// Booleans and numbers read as `@AppStorage` reads them, with `bool(forKey:)` and the like: a launch argument's value
+// is a string in the argument domain ("-dev.compact YES"), which `as? Bool` turned into the default (#2147).
 extension StoredValue where Value == Bool {
     init(wrappedValue: Bool, _ key: String, store: UserDefaults = .standard) {
-        self.init(key: key, store: store, read: { $0.object(forKey: key) as? Bool ?? wrappedValue }, write: { $0.set($1, forKey: key) })
+        self.init(key: key, store: store, read: { $0.object(forKey: key) == nil ? wrappedValue : $0.bool(forKey: key) },
+                  write: { $0.set($1, forKey: key) })
     }
 }
 
 extension StoredValue where Value == Int {
     init(wrappedValue: Int, _ key: String, store: UserDefaults = .standard) {
-        self.init(key: key, store: store, read: { $0.object(forKey: key) as? Int ?? wrappedValue }, write: { $0.set($1, forKey: key) })
+        self.init(key: key, store: store, read: { $0.object(forKey: key) == nil ? wrappedValue : $0.integer(forKey: key) },
+                  write: { $0.set($1, forKey: key) })
     }
 }
 
 extension StoredValue where Value == Double {
     init(wrappedValue: Double, _ key: String, store: UserDefaults = .standard) {
-        self.init(key: key, store: store, read: { $0.object(forKey: key) as? Double ?? wrappedValue }, write: { $0.set($1, forKey: key) })
+        self.init(key: key, store: store, read: { $0.object(forKey: key) == nil ? wrappedValue : $0.double(forKey: key) },
+                  write: { $0.set($1, forKey: key) })
     }
 }
 
@@ -67,7 +72,8 @@ extension StoredValue where Value: RawRepresentable, Value.RawValue == String {
 
 extension StoredValue where Value: RawRepresentable, Value.RawValue == Int {
     init(wrappedValue: Value, _ key: String, store: UserDefaults = .standard) {
-        self.init(key: key, store: store, read: { ($0.object(forKey: key) as? Int).flatMap(Value.init(rawValue:)) ?? wrappedValue },
+        self.init(key: key, store: store,
+                  read: { $0.object(forKey: key) == nil ? wrappedValue : Value(rawValue: $0.integer(forKey: key)) ?? wrappedValue },
                   write: { $0.set($1.rawValue, forKey: key) })
     }
 }

@@ -457,6 +457,8 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
   （`Tab.workbench` 撞了 `-workbench`，已改名 `-openWorkbench`）。新开关用 `open…` / `show…` 这类不会是类型成员的名字，并加进 release.sh 的列表。
   存储属性名也一样（2026-10-31：`AgentsListMenu.Actions` 的 `openMonitor` 属性撞了 `-openMonitor`，TestFlight 50 停在这一步）。改了带新属性的代码，
   先本地 `xcodebuild build -configuration Release -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO`，对 `Release-iphoneos/Jarvis.app/Jarvis` 跑一遍 release.sh 里的 strings 检查。
+- 启动参数的值在参数域里是字符串（`-dev.compact YES` 是 "YES"）：自己读 UserDefaults 时布尔、数字用 `bool(forKey:)` / `integer(forKey:)` / `double(forKey:)`（和 `@AppStorage` 一样认字符串），
+  别用 `object(forKey:) as? Bool`，那样启动参数悄悄退回默认值（#1473 换成 `StoredValue` 后 `-dev.compact YES` 失效，`CompactListShots` 拍的细列表其实是卡片，#2147）。
 - 实时活动（`docs/live-activity.md`）：ActivityKit 用默认 JSONDecoder 解推送的 `content-state`，`Date` 会按 2001 年起算，时间一律传 Unix 秒数字；
   锁屏 / 展开态限高约 160pt，超出会被静默裁掉；`simctl io screenshot` 拍不到灵动岛和锁屏上的活动（用 UI 测试 `LiveActivityShots`），
   `simctl push` 不支持实时活动推送，但模拟器能收真实的 APNs sandbox 推送（`TestManualLiveActivityPush`）。
