@@ -879,8 +879,7 @@ private struct AgentsList: View {
             ForEach(hosts, id: \.self) { ref in
                 let mine = active.filter { $0.machineRef == ref }
                 let still = quiet.filter { $0.machineRef == ref }
-                hostHeading(ref, sessions: (mine + still).flatMap(\.sessions))
-                if !isFolded(Self.hostFoldID(ref)) {
+                hostGroup(ref, sessions: (mine + still).flatMap(\.sessions)) {
                     ForEach(mine) { g in spaceSection(g, namesMachine: false) }
                     quietSection(still, title: "空闲的空间", namesMachine: false)
                 }
@@ -1000,33 +999,66 @@ private struct AgentsList: View {
     /// trees in their card, as Orca's projects; repositories with nothing going on fold into the machine's 空闲的仓库.
     @ViewBuilder private func repoSections(_ tree: [RepoTree.Host], byHost: Bool) -> some View {
         ForEach(tree) { host in
-            if byHost { hostHeading(host.ref, sessions: host.sessions) }
-            if !byHost || !isFolded(Self.hostFoldID(host.ref)) {
-                ForEach(host.repos.filter { !isQuiet($0) }) { r in repoSection(r) }
-                quietSection(host.repos.filter(isQuiet).map { r in
-                    SpaceGroup(id: r.id, machineID: r.machine.id, spaceID: "-", group: r.machine.group, name: r.name, index: 0,
-                               sessions: ordered(r.sessions))
-                }, title: "空闲的仓库", namesMachine: false, repos: true)
+            if byHost {
+                hostGroup(host.ref, sessions: host.sessions) { hostRepos(host) }
+            } else {
+                hostRepos(host)
             }
         }
     }
 
-    /// A machine's heading: a plain row on the page's edge, a level above the headers under it; tap to fold the machine.
-    private func hostHeading(_ ref: MachineRef, sessions: [Session]) -> some View {
+    /// A machine's repositories: the ones with something going on, then the rest folded into its 空闲的仓库.
+    @ViewBuilder private func hostRepos(_ host: RepoTree.Host) -> some View {
+        ForEach(host.repos.filter { !isQuiet($0) }) { r in repoSection(r) }
+        quietSection(host.repos.filter(isQuiet).map { r in
+            SpaceGroup(id: r.id, machineID: r.machine.id, spaceID: "-", group: r.machine.group, name: r.name, index: 0,
+                       sessions: ordered(r.sessions))
+        }, title: "空闲的仓库", namesMachine: false, repos: true)
+    }
+
+    /// A machine's heading and, unless the machine is folded, the sections under it (its quiet ones last). iOS: the heading is a section of its own, the sections follow it.
+    /// The Mac: the heading is the header of one section that holds the machine's sections. A Mac list has no
+    /// `listSectionSpacing` and puts about 24pt over every section's header; a heading in a section of its own got that
+    /// band above and the next section's below (#2318, about 100pt a heading). Sections inside a section are drawn as
+    /// its rows (their headers too), so the machine's repositories or spaces sit right under its heading.
+    @ViewBuilder private func hostGroup<Content: View>(_ ref: MachineRef, sessions: [Session],
+                                                       @ViewBuilder content: () -> Content) -> some View {
+        let open = !isFolded(Self.hostFoldID(ref))
+        #if os(macOS)
+        Section {
+            if open { content() }
+        } header: {
+            hostHeadingRow(ref, sessions: sessions)
+        }
+        #else
+        hostHeading(ref, sessions: sessions)
+        if open { content() }
+        #endif
+    }
+
+    /// A machine's heading: its mark, name and counts; tap to fold the machine.
+    private func hostHeadingRow(_ ref: MachineRef, sessions: [Session]) -> some View {
         let id = Self.hostFoldID(ref)
         let m = machine(ref)
         let group = SpaceGroup(id: id, machineID: ref.id, spaceID: "-", group: ref.group, name: m?.title ?? ref.id, index: 0, sessions: sessions)
-        return Section {
-            FoldButton(title: group.name, folded: isFolded(id), detail: StateCounts.spoken(group)) { toggleFold(id) } label: {
-                HostHeading(symbol: m?.symbol ?? Theme.Icon.machine, title: group.name, group: group)
-            }
-            .listRowInsets(EdgeInsets(top: Theme.Space.l, leading: Theme.Space.page, bottom: Theme.Space.xs, trailing: Theme.Space.page))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            .accessibilityIdentifier("agents.host")
+        return FoldButton(title: group.name, folded: isFolded(id), detail: StateCounts.spoken(group)) { toggleFold(id) } label: {
+            HostHeading(symbol: m?.symbol ?? Theme.Icon.machine, title: group.name, group: group)
+        }
+        .accessibilityIdentifier("agents.host")
+    }
+
+    #if !os(macOS)
+    /// A machine's heading: a plain row on the page's edge, a level above the headers under it.
+    private func hostHeading(_ ref: MachineRef, sessions: [Session]) -> some View {
+        Section {
+            hostHeadingRow(ref, sessions: sessions)
+                .listRowInsets(EdgeInsets(top: Theme.Space.l, leading: Theme.Space.page, bottom: Theme.Space.xs, trailing: Theme.Space.page))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
         .listSectionSpacing(.custom(0))
     }
+    #endif
 
     /// A repository: its agents right in its card when it has only its main checkout, else its working trees, each a
     /// row with its agents a level in under it.

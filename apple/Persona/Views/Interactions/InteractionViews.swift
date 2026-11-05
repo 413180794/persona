@@ -87,6 +87,7 @@ struct InteractionPreviewCard: View {
                     .font(Theme.Font.body).lineHeight(.body)
                     .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(UnderTitle())
             }
             if let detail, !detail.isEmpty {
                 Text(detail)
@@ -96,12 +97,28 @@ struct InteractionPreviewCard: View {
                     .padding(Theme.Space.s)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                    .modifier(UnderTitle())
             }
             quickActions
         }
         .modifier(PreviewChrome(on: !inCell))
         .contentShape(.rect)
         .onTapGesture(perform: open)
+    }
+
+    /// The Mac: the summary and the command under the title, on its leading edge (after the icon's column), as a list
+    /// row's lines sit under its title (#2318). iOS: on the card's edge, as it always was.
+    private struct UnderTitle: ViewModifier {
+        func body(content: Content) -> some View {
+            #if os(macOS)
+            HStack(spacing: Theme.Space.s) { // the header row's icon column and its gap
+                Spacer(minLength: 0).scaledFrame(width: Theme.Size.icon)
+                content
+            }
+            #else
+            content
+            #endif
+        }
     }
 
     private struct PreviewChrome: ViewModifier {
