@@ -12,11 +12,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.*
 import org.junit.Assert.*
 import org.junit.Test
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 import java.io.IOException
 
 /** 新建 Agent's model picker: the list of the launcher that will run, the pick sent once, efforts it takes. */
+/** Robolectric for the strings: Simplified Chinese, the language the expected text is in. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class NewAgentModelTest {
+    private val res get() = RuntimeEnvironment.getApplication().resources
+
     private val machines = MutableStateFlow(listOf(Machine("first", online = true), Machine("second", online = true)))
     private val all = listOf("low", "medium", "high", "xhigh", "max")
     private val claude = LauncherModels("claude", listOf(
@@ -55,7 +64,7 @@ class NewAgentModelTest {
             assertTrue(state.canPickModel)
             assertEquals("", state.model)
             assertNull(state.sentModel)
-            assertEquals("claude-opus-5-5", defaultModelDetail(state))
+            assertEquals("claude-opus-5-5", defaultModelDetail(res, state))
             model.pickModel("gateway/glm-5.3")
             assertEquals("glm-5.3", model.state.value.pickedModel?.label)
             assertEquals("gateway/glm-5.3", model.state.value.sentModel)
@@ -147,7 +156,7 @@ class NewAgentModelTest {
         try {
             advanceUntilIdle()
             assertEquals("codex", model.state.value.agentType)
-            assertEquals("5.5", defaultModelDetail(model.state.value))
+            assertEquals("5.5", defaultModelDetail(res, model.state.value))
             model.pickModel("gpt-5.5-mini")
             model.prompt("修一下登录")
             model.submit()
@@ -262,7 +271,7 @@ class NewAgentModelTest {
             assertEquals("claude", state.modelLauncher)
             assertEquals(claude, state.modelList)
             // With no pick 模型配置's model runs, so its efforts are the ones offered.
-            assertEquals("模型配置：sonnet", defaultModelDetail(state))
+            assertEquals("模型配置：sonnet", defaultModelDetail(res, state))
             assertEquals(listOf("low", "medium", "high", "max"), state.modelEfforts)
             // A launcher picked for this start runs its own default.
             model.selection(state.selection.copy(launcher = "codex"))

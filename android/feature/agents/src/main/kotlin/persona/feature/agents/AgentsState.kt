@@ -1,5 +1,6 @@
 package persona.feature.agents
 
+import android.content.res.Resources
 import persona.core.designsystem.PendingStatus
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
@@ -97,11 +98,8 @@ data class AgentRowMetadata(
         if (pendingCount > 0) add("${PendingStatus.Waiting.label} · $pendingCount")
         if (sending) add(PendingStatus.Sending.label)
     }
-    val draftLabel: String? get() = when {
-        draft.isNotBlank() -> "草稿 · ${if (hasAttachments) "[附件] " else ""}${draft.replace('\n', ' ').take(20)}"
-        hasAttachments -> "草稿 · [附件]"
-        else -> null
-    }
+    /** A draft or an attachment waits in the composer; the row says which (AgentsScreen.kt). */
+    val hasDraft: Boolean get() = draft.isNotBlank() || hasAttachments
 }
 
 private val Session.readVersion: String get() = "${updatedAt.orEmpty()}|${rev ?: ""}"
@@ -154,18 +152,19 @@ internal fun Interaction.quickQuestion(): Question? = questions?.singleOrNull()?
     kind == "question" && !it.multiSelect && it.options.size in 1..4 && secret != true
 }
 
-internal fun Interaction.sourceLabel(metadata: AgentsMetadata): String? =
-    (if (kind == "screen") "终端" else requestSourceLabel()) ?: metadata.requestSources[id]?.trim()?.takeIf(String::isNotEmpty)
+internal fun Interaction.sourceLabel(res: Resources, metadata: AgentsMetadata): String? =
+    (if (kind == "screen") res.getString(R.string.agents_source_terminal) else requestSourceLabel()) ?: metadata.requestSources[id]?.trim()?.takeIf(String::isNotEmpty)
 
 internal fun countdown(expiresAt: String?, now: Instant): String? = RequestExpiry.label(expiresAt, now)
 internal fun Interaction.expired(now: Instant): Boolean = RequestExpiry.expired(expiresAt, now)
-internal fun relativeTime(time: Instant?, now: Instant): String {
+internal fun relativeTime(res: Resources, time: Instant?, now: Instant): String {
     time ?: return ""
     val elapsed = Duration.between(time, now)
+    fun count(id: Int, n: Long) = n.toInt().let { res.getQuantityString(id, it, it) }
     return when {
-        elapsed.seconds < 60 -> "刚刚"
-        elapsed.toMinutes() < 60 -> "${elapsed.toMinutes()} 分钟前"
-        elapsed.toHours() < 24 -> "${elapsed.toHours()} 小时前"
-        else -> "${elapsed.toDays()} 天前"
+        elapsed.seconds < 60 -> res.getString(R.string.agents_time_now)
+        elapsed.toMinutes() < 60 -> count(R.plurals.agents_time_minutes, elapsed.toMinutes())
+        elapsed.toHours() < 24 -> count(R.plurals.agents_time_hours, elapsed.toHours())
+        else -> count(R.plurals.agents_time_days, elapsed.toDays())
     }
 }

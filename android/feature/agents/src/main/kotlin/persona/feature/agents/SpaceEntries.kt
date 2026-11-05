@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -104,7 +105,10 @@ private fun SpacePage(route: SpaceRoute, model: AgentsViewModel, navigator: Navi
             model.clearFailure()
         }
     }
-    LaunchedEffect(notice) { notice?.let { if (feedback?.notice(it) != true) snackbar.showSnackbar(it); model.clearNotice() } }
+    val resources = agentResources()
+    LaunchedEffect(notice) {
+        notice?.let { val text = it.resolve(resources); if (feedback?.notice(text) != true) snackbar.showSnackbar(text); model.clearNotice() }
+    }
     LaunchedEffect(creation?.created) {
         creation?.created?.let { session ->
             newAgent = false
@@ -125,7 +129,7 @@ private fun SpacePage(route: SpaceRoute, model: AgentsViewModel, navigator: Navi
             onOpen = { openRow(row) }, onPin = { model.pin(row) }, onMute = { model.mute(row) },
             onRead = { model.markRead(listOf(row)) }, onRename = { operationDialog = AgentOperationDialog.Rename(row.session) },
             onStopLoop = { model.stopLoop(row.session) }, onHandoff = {
-                model.handoff(row.session, onQueued = { navigator.selectTab(AppTab.Jarvis) }, onBound = {
+                model.handoff(row.session, row.session.handoffPrompt(resources), onQueued = { navigator.selectTab(AppTab.Jarvis) }, onBound = {
                     navigator.navigate(ChatRoute(it.machineId, it.sessionId, kind = ConversationKind.Assistant))
                 })
             },
@@ -153,7 +157,7 @@ private fun SpacePage(route: SpaceRoute, model: AgentsViewModel, navigator: Navi
     }
     if (newAgent) {
         if (creationModel != null) NewAgentDialog(creationModel, page.machines, connection == ConnectionState.Online) { newAgent = false }
-        else JDialog(onDismiss = { newAgent = false }, title = "新建会话",
-            text = "新建会话服务尚未接入，请完成 App 接线后再试。", confirm = "关闭" to { newAgent = false }, dismiss = null)
+        else JDialog(onDismiss = { newAgent = false }, title = stringResource(R.string.agents_action_new_session),
+            text = stringResource(R.string.agents_new_session_unavailable), confirm = stringResource(R.string.agents_close) to { newAgent = false }, dismiss = null)
     }
 }

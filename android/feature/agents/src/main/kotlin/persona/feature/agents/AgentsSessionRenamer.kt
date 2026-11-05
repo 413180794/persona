@@ -48,13 +48,11 @@ internal class AgentsSessionRenamer(
         val edit = SessionRename.changes(session, title, tabName)
         if (!edit.changed) return@withLock false
         val bindings = wiring.state.value
-        val api = checkNotNull(bindings.operations?.operations) { "会话操作尚未接入" }
+        val api = bindings.operations?.operations ?: throw OperationsMissing()
         val operation = bindings.scope to session.key
         uncertain[operation]?.let { previous ->
             repository.refresh()
-            check(repository.sessions.value.firstOrNull { it.key == session.key }?.let(previous::matches) == true) {
-                "上次重命名结果待确认，请刷新后核对"
-            }
+            if (repository.sessions.value.firstOrNull { it.key == session.key }?.let(previous::matches) != true) throw RenameUnconfirmed()
             uncertain.remove(operation)
             if (edit == previous) return@withLock true
         }
@@ -96,3 +94,11 @@ object AgentsRenameModule {
 interface AgentsRenameDependencies {
     fun renamer(): SessionRenamer
 }
+
+/**
+ * Session actions are not wired for this hub yet; the list says so in its language (AgentsViewModel). The message is
+ * what the chat's menu shows through operationFeedback, which does not know this type.
+ */
+internal class OperationsMissing : IllegalStateException("会话操作尚未接入") // i18n-ignore: chat's operationFeedback fallback text
+/** The last rename may or may not have reached the hub; the list asks to refresh and check (AgentsViewModel). */
+internal class RenameUnconfirmed : IllegalStateException("上次重命名结果待确认，请刷新后核对") // i18n-ignore: chat's operationFeedback fallback text

@@ -7,6 +7,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.*
 import persona.core.designsystem.*
@@ -31,16 +32,16 @@ internal fun SpaceScreen(
     loaded: Boolean = true,
 ) {
     Box(Modifier.fillMaxSize()) {
-        JListPage(title = space?.name ?: title.ifBlank { "空间" }, onBack = onDismiss,
+        JListPage(title = space?.name ?: title.ifBlank { stringResource(R.string.agents_space) }, onBack = onDismiss,
             subtitle = machines.firstOrNull { it.id == space?.machineId }?.displayName,
             actions = { space?.let { spaceMenu(it) } }) {
             if (space == null) {
                 if (loaded) item("empty") {
-                    JEmptyState("空间里没有运行中的 Agent", "可以返回列表查看其他会话。", icon = PhIcons.Robot)
+                    JEmptyState(stringResource(R.string.agents_space_empty), stringResource(R.string.agents_space_empty_hint), icon = PhIcons.Robot)
                 }
             } else {
                 item("location") {
-                    JRow("目录", subtitle = space.cwd, leadingIcon = PhIcons.FolderSimple)
+                    JRow(stringResource(R.string.agents_directory), subtitle = space.cwd, leadingIcon = PhIcons.FolderSimple)
                     if (busy) JLinearProgress(null)
                 }
                 itemsIndexed(space.members, key = { _, row -> row.id }) { index, row ->
@@ -52,10 +53,10 @@ internal fun SpaceScreen(
                         slotLabel = row.session.slotName?.takeIf { it.isNotBlank() && it != row.session.displayTitle }
                             // herdr's default tab names are numbers; a bare 「1」 reads as a count, so say #1.
                             ?.let { if (it.all(Char::isDigit)) "#$it" else it }
-                            ?: "标签 ${row.session.slotIndex ?: 0}", requestCount = requests, onClose = onClose(row))
+                            ?: stringResource(R.string.agents_space_tab, row.session.slotIndex ?: 0), requestCount = requests, onClose = onClose(row))
                 }
                 if (canStart) item("new-tab") {
-                    JButton("在此开新标签", { onNewTab(space) }, Modifier.fillMaxWidth().padding(top = 16.dp), enabled = !busy, icon = PhIcons.Plus)
+                    JButton(stringResource(R.string.agents_space_new_tab), { onNewTab(space) }, Modifier.fillMaxWidth().padding(top = 16.dp), enabled = !busy, icon = PhIcons.Plus)
                 }
             }
         }

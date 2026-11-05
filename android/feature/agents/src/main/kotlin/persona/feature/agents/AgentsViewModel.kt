@@ -1,8 +1,5 @@
 package persona.feature.agents
 
-import persona.core.designsystem.PendingStatus
-import persona.core.designsystem.StatusLineState
-import persona.core.designsystem.resolveStatusLine
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import persona.core.contracts.*
@@ -30,9 +27,8 @@ internal data class AgentsPageState(
     val groupCounts: Map<String?, Int> = emptyMap(),
 )
 
-internal enum class RequestDelivery(val label: String) {
-    Sending(requireNotNull(resolveStatusLine(StatusLineState(answering = true))).text), Sent("已回传你的选择"), Unknown(PendingStatus.Unconfirmed.label),
-}
+/** Where an answer to a request stands; the screen says it (AgentRequests.kt). */
+internal enum class RequestDelivery { Sending, Sent, Unknown }
 
 internal class AgentsViewModel(
     private val repository: SessionsRepository,
@@ -66,7 +62,7 @@ internal class AgentsViewModel(
     val requestHistory = _requestHistory.asStateFlow()
     private val _refreshing = MutableStateFlow(false)
     val refreshing = _refreshing.asStateFlow()
-    private val _notice = MutableStateFlow<String?>(null)
+    private val _notice = MutableStateFlow<AgentText?>(null)
     val notice = _notice.asStateFlow()
     val herdr = machineManagement?.let { HerdrStarter(it, repository, connection, viewModelScope) { _notice.value = it } }
     private val _failure = MutableStateFlow<Throwable?>(null)
@@ -100,7 +96,7 @@ internal class AgentsViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                _notice.value = "保存失败：${persona.core.designsystem.failureReason(e)}"
+                _notice.value = AgentText(R.string.agents_notice_save_failed, persona.core.designsystem.failureReason(e))
             }
         }
     }
@@ -113,7 +109,7 @@ internal class AgentsViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                _notice.value = "保存失败：${persona.core.designsystem.failureReason(e)}"
+                _notice.value = AgentText(R.string.agents_notice_save_failed, persona.core.designsystem.failureReason(e))
             }
         }
     }
@@ -126,7 +122,7 @@ internal class AgentsViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                _notice.value = "没能开始更新：${persona.core.designsystem.failureReason(e)}"
+                _notice.value = AgentText(R.string.agents_notice_update_failed, persona.core.designsystem.failureReason(e))
             }
         }
     }
@@ -141,7 +137,7 @@ internal class AgentsViewModel(
         val rows = sessions.map { it.listSession(prefs) }
         // A partial machine snapshot must not hide sessions in machine grouping.
         val knownMachines = machines + sessions.map { it.machineId }.distinct().filter { id -> machines.none { it.id == id } }
-            .map { Machine(it, "机器信息待更新") }
+            .map { Machine(it) } // named by the list as not updated yet (AgentsScreen.kt)
         val effective = settings.copy(grouping = prefs.grouping)
         val context = listOf(prefs.range, effective.grouping, effective.quick, effective.query, effective.machineFilter, prefs.pins, todos)
         if (context != previousContext) previous = null
@@ -245,7 +241,7 @@ internal class AgentsViewModel(
     fun rename(session: Session, title: String?, tab: String?) {
         val edit = SessionRename.changes(session, title, tab)
         if (!edit.changed) return
-        change("已重命名") {
+        change(R.string.agents_notice_renamed) {
             if (renamer != null) renamer.rename(session, edit.title, edit.tabName)
             else it.session(session, AgentSessionEdit(title = edit.title, tab = edit.tabName))
         }
@@ -253,14 +249,14 @@ internal class AgentsViewModel(
     fun renameSpace(session: Session, name: String) {
         val trimmed = name.trim()
         if (trimmed.isEmpty() || trimmed == session.spaceName) return
-        change("已重命名") { it.renameSpace(session, trimmed) }
+        change(R.string.agents_notice_renamed) { it.renameSpace(session, trimmed) }
     }
     fun close(session: Session) = change {
         it.session(session, AgentSessionEdit(closed = true))
         bindings?.onSessionClosed?.invoke(session.key)
     }
     /** 删除对话: out of every app's list (the transcript stays); a chat open on it goes. */
-    fun delete(session: Session) = change("已删除对话") {
+    fun delete(session: Session) = change(R.string.agents_notice_deleted) {
         it.session(session, AgentSessionEdit(deleted = true))
         bindings?.onSessionClosed?.invoke(session.key)
     }
@@ -271,30 +267,31 @@ internal class AgentsViewModel(
     fun closable(session: Session): Boolean = page.value.sessions.firstOrNull { it.key == session.key }
         ?.let { it.isLive && it.canTerminal } ?: page.value.sessions.isEmpty()
     /** 实时接入: join a Codex app-server thread live; the list refreshes after it. */
-    fun attach(session: Session) = change("已实时接入") { it.attach(session) }
+    fun attach(session: Session) = change(R.string.agents_notice_attached) { it.attach(session) }
     fun stopLoop(session: Session) = sendOperation("loop:${session.key.path}") {
-        if (connection.state.value != ConnectionState.Online) { _notice.value = "连上 hub 后才能停止循环"; return@sendOperation }
+        if (connection.state.value != ConnectionState.Online) { _notice.value = AgentText(R.string.agents_notice_stop_loop_offline); return@sendOperation }
         sendOnce("loop:${session.key.path}", session.key, STOP_LOOP_PROMPT)
-        _notice.value = "已提交停止请求，循环状态以 hub 更新为准"
+        _notice.value = AgentText(R.string.agents_notice_stop_loop_sent)
     }
-    fun handoff(session: Session, onQueued: () -> Unit, onBound: (SessionKey) -> Unit) = sendOperation("handoff:${session.key.path}") {
-        val main = mainConversationSender ?: run { _notice.value = "会话操作尚未接入"; return@sendOperation }
+    /** [prompt] is [handoffPrompt] in the language on screen. */
+    fun handoff(session: Session, prompt: String, onQueued: () -> Unit, onBound: (SessionKey) -> Unit) = sendOperation("handoff:${session.key.path}") {
+        val main = mainConversationSender ?: run { _notice.value = AgentText(R.string.agents_notice_operations_missing); return@sendOperation }
         val operation = "handoff:${session.key.path}"
         val id = messageIds.getOrPut(operation) { UUID.randomUUID().toString() }
-        handoffToMain(main, id, session, onQueued, onBound)
+        handoffToMain(main, id, prompt, onQueued, onBound)
         messageIds.remove(operation)
     }
     private suspend fun sendOnce(operation: String, target: SessionKey, text: String) {
         val previous = messageIds[operation]?.let { id -> sender.outbox.value.firstOrNull { it.clientMessageId == id } }
         if (previous != null && previous.state !in setOf(DeliveryState.Rejected, DeliveryState.Refused)) {
-            _notice.value = "请求已提交，请先到对话里核对"
+            _notice.value = AgentText(R.string.agents_notice_already_sent)
             throw AlreadySubmitted()
         }
         val id = UUID.randomUUID().toString()
         messageIds[operation] = id
         sender.send(target, text, id)
         if (sender.outbox.value.any { it.clientMessageId == id && it.state in setOf(DeliveryState.Rejected, DeliveryState.Refused) }) {
-            _notice.value = "请求未送出，请到对话里查看原因"
+            _notice.value = AgentText(R.string.agents_notice_not_sent)
             throw AlreadySubmitted()
         }
     }
@@ -309,18 +306,20 @@ internal class AgentsViewModel(
             finally { sending.remove(key) }
         }
     }
-    private fun change(success: String = "已保存", action: suspend (AgentOperationsState) -> Unit) {
-        val operations = operations ?: run { _notice.value = "会话操作尚未接入"; return }
-        if (connection.state.value != ConnectionState.Online) { _notice.value = "连上 hub 后才能操作"; return }
-        if (changing) { _notice.value = "正在保存，请稍候"; return }
+    private fun change(@androidx.annotation.StringRes success: Int = R.string.agents_notice_saved, action: suspend (AgentOperationsState) -> Unit) {
+        val operations = operations ?: run { _notice.value = AgentText(R.string.agents_notice_operations_missing); return }
+        if (connection.state.value != ConnectionState.Online) { _notice.value = AgentText(R.string.agents_notice_offline); return }
+        if (changing) { _notice.value = AgentText(R.string.agents_notice_saving); return }
         changing = true
         viewModelScope.launch {
             var succeeded = false
             try {
                 action(operations)
                 succeeded = true
-                _notice.value = success
+                _notice.value = AgentText(success)
             } catch (e: CancellationException) { throw e }
+            catch (_: OperationsMissing) { _notice.value = AgentText(R.string.agents_notice_operations_missing) }
+            catch (_: RenameUnconfirmed) { _notice.value = AgentText(R.string.agents_notice_rename_unconfirmed) }
             catch (e: Exception) {
                 _failure.value = e
             } finally { changing = false }
@@ -330,7 +329,7 @@ internal class AgentsViewModel(
                 operations.refresh()
                 interactions.refresh()
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { if (succeeded) _notice.value = "操作已保存，暂时无法更新列表，请下拉刷新核对" }
+            catch (_: Exception) { if (succeeded) _notice.value = AgentText(R.string.agents_notice_saved_stale) }
         }
     }
     fun opened(row: AgentSession) {
@@ -373,9 +372,9 @@ internal class AgentsViewModel(
         viewModelScope.launch {
             try {
                 tasks?.linkTodoAgent(todoId, session.machineId, session.sessionId)
-                _notice.value = "已关联到待办"
+                _notice.value = AgentText(R.string.agents_notice_todo_linked)
             } catch (e: Exception) {
-                _notice.value = "关联待办失败：${e.message}"
+                _notice.value = AgentText(R.string.agents_notice_todo_link_failed, e.message.orEmpty())
             }
         }
     }
@@ -384,9 +383,9 @@ internal class AgentsViewModel(
         viewModelScope.launch {
             try {
                 tasks?.unlinkTodoAgent(todoId, session.machineId, session.sessionId)
-                _notice.value = "已解除关联"
+                _notice.value = AgentText(R.string.agents_notice_todo_unlinked)
             } catch (e: Exception) {
-                _notice.value = "解除关联失败：${e.message}"
+                _notice.value = AgentText(R.string.agents_notice_todo_unlink_failed, e.message.orEmpty())
             }
         }
     }
@@ -409,9 +408,9 @@ internal class AgentsViewModel(
         if (latest != interaction || latest.expired(Instant.now()) || interaction.id in _delivery.value) return
         // A session whose source does not approve (a Codex thread not joined live) is answered on the computer.
         if (page.value.sessions.firstOrNull { it.key == latest.sessionKey }?.canApprove == false) {
-            _notice.value = "这个会话不允许在手机上审批"; return
+            _notice.value = AgentText(R.string.agents_notice_approve_blocked); return
         }
-        if (connection.state.value != ConnectionState.Online) { _notice.value = "连上 hub 后才能回传选择"; return }
+        if (connection.state.value != ConnectionState.Online) { _notice.value = AgentText(R.string.agents_notice_answer_offline); return }
         val result = AnswerBuilder.build(latest, action, draft, AnswerContext(fullPlanRead = fullPlanRead))
         val resolution = result.resolution ?: return
         _delivery.update { it + (interaction.id to RequestDelivery.Sending) }
@@ -419,7 +418,7 @@ internal class AgentsViewModel(
             try {
                 interactions.resolve(interaction.id, resolution)
                 _delivery.update { it + (interaction.id to RequestDelivery.Sent) }
-                _notice.value = "已回传你的选择"
+                _notice.value = AgentText(R.string.agents_request_sent)
             } catch (e: CancellationException) {
                 _delivery.update { it + (interaction.id to RequestDelivery.Unknown) }
                 throw e

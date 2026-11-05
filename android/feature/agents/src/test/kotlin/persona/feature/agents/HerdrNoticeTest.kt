@@ -60,7 +60,7 @@ class HerdrNoticeTest {
     @Test fun startIsExplicitDeduplicatedAndUsesTheConfirmedResult() = runTest {
         val api = Api()
         val repository = Repository(stopped)
-        val notices = mutableListOf<String>()
+        val notices = mutableListOf<AgentText>()
         val starter = HerdrStarter(api, repository, Connection(), backgroundScope, notices::add)
         runCurrent()
         assertTrue(api.calls.isEmpty())
@@ -75,7 +75,7 @@ class HerdrNoticeTest {
         assertTrue(starter.starting.value.isEmpty())
         assertTrue(starter.states.value.getValue("desk").running)
         assertEquals("new", repository.machines.value.single().nodeVersion)
-        assertEquals(listOf("Renamed 的 herdr 已启动"), notices)
+        assertEquals(listOf(AgentText(R.string.agents_herdr_started, "Renamed")), notices)
         starter.start("desk"); runCurrent()
         assertEquals(1, api.calls.size)
     }
@@ -83,7 +83,7 @@ class HerdrNoticeTest {
     @Test fun failureKeepsTheNoticeAndDoesNotRetryOnItsOwn() = runTest {
         val api = Api()
         val repository = Repository(stopped)
-        val notices = mutableListOf<String>()
+        val notices = mutableListOf<AgentText>()
         val starter = HerdrStarter(api, repository, Connection(), backgroundScope, notices::add)
         starter.refresh()
         starter.start("desk"); runCurrent()
@@ -91,14 +91,15 @@ class HerdrNoticeTest {
         assertTrue(stopped.herdrStopped(starter.states.value["desk"]))
         assertTrue(starter.starting.value.isEmpty())
         assertEquals(1, api.calls.size)
-        assertTrue(notices.single().contains("engine_missing"))
+        assertEquals(R.string.agents_herdr_failed, notices.single().id)
+        assertTrue(notices.single().args.single().toString().contains("engine_missing"))
     }
 
     @Test fun disconnectedUnknownAndGoneMachinesCannotStart() = runTest {
         val api = Api()
         val repository = Repository(stopped)
         val connection = Connection()
-        val starter = HerdrStarter(api, repository, connection, backgroundScope) { fail(it) }
+        val starter = HerdrStarter(api, repository, connection, backgroundScope) { fail(it.toString()) }
         connection.state.value = ConnectionState.WaitingForNetwork
         starter.start("desk")
         connection.state.value = ConnectionState.Online
@@ -111,19 +112,19 @@ class HerdrNoticeTest {
     @Test fun anUnconfirmedReplyDoesNotClaimSuccess() = runTest {
         val api = Api()
         val repository = Repository(stopped)
-        val notices = mutableListOf<String>()
+        val notices = mutableListOf<AgentText>()
         val starter = HerdrStarter(api, repository, Connection(), backgroundScope, notices::add)
         starter.refresh()
         starter.start("desk"); runCurrent()
         api.answer.complete(HerdrState(true, false, true)); runCurrent()
         assertTrue(stopped.herdrStopped(starter.states.value["desk"]))
-        assertEquals(listOf("未确认 herdr 已启动，请刷新后查看"), notices)
+        assertEquals(listOf(AgentText(R.string.agents_herdr_unconfirmed)), notices)
     }
 
     @Test fun cancellationClearsPendingWithoutClaimingAResult() = runTest {
         val api = Api()
         val repository = Repository(stopped)
-        val notices = mutableListOf<String>()
+        val notices = mutableListOf<AgentText>()
         val starter = HerdrStarter(api, repository, Connection(), backgroundScope, notices::add)
         starter.refresh()
         starter.start("desk"); runCurrent()
@@ -150,7 +151,7 @@ class HerdrNoticeTest {
 
     @Test fun anUnavailableStatusIsUnknownAndCannotOfferStart() = runTest {
         val api = Api()
-        val starter = HerdrStarter(api, Repository(stopped), Connection(), backgroundScope) { fail(it) }
+        val starter = HerdrStarter(api, Repository(stopped), Connection(), backgroundScope) { fail(it.toString()) }
         starter.refresh()
         assertTrue(starter.states.value.getValue("desk").known)
         api.status = { throw IllegalStateException("old hub") }

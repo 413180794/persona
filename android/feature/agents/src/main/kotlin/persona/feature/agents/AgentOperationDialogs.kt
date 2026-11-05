@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import persona.core.designsystem.icons.PhIcons
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.Session
 import persona.core.domain.sort.SessionRename
@@ -29,7 +30,7 @@ internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsVie
             val confirmation = session.closeConfirmation(machineName)
             JDialog(
                 onDismiss = dismiss, title = confirmation.title, destructive = true, text = confirmation.message,
-                confirm = "关闭 Agent" to {
+                confirm = stringResource(R.string.agents_action_close_agent) to {
                     // It may have been closed elsewhere since the dialog opened: then there is nothing left to do.
                     if (model.closable(session)) model.close(session)
                     dismiss()
@@ -41,7 +42,7 @@ internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsVie
             val confirmation = session.deleteConfirmation(machineName)
             JDialog(
                 onDismiss = dismiss, title = confirmation.title, destructive = true, text = confirmation.message,
-                confirm = "删除" to {
+                confirm = stringResource(R.string.agents_dialog_delete) to {
                     // It may have started again since the dialog opened: then the hub would refuse it.
                     if (model.deletable(session)) model.delete(session)
                     dismiss()
@@ -56,17 +57,16 @@ internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsVie
             val newName = name.trim().takeIf { it.isNotBlank() && it != (if (space) session.spaceName else session.title) }
             val newTab = SessionRename.changes(session, name, tab).tabName
             JDialog(
-                onDismiss = dismiss, title = if (space) "重命名空间" else "重命名",
-                text = if (space) "同时改 herdr 里这个 workspace 的名字。"
-                    else "标签名同步到 herdr；会话名用 Claude 的 /rename，Mac 上 claude --resume 也看得到。",
+                onDismiss = dismiss, title = stringResource(if (space) R.string.agents_dialog_rename_space else R.string.agents_action_rename),
+                text = stringResource(if (space) R.string.agents_dialog_rename_space_text else R.string.agents_dialog_rename_text),
                 confirmEnabled = newName != null || newTab != null,
-                confirm = "保存" to {
+                confirm = stringResource(R.string.agents_dialog_save) to {
                     if (space) model.renameSpace(session, requireNotNull(newName)) else model.rename(session, newName, newTab)
                     dismiss()
                 }, content = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (hasTab) JTextField(tab, { tab = it }, singleLine = true, label = "标签名（herdr tab）")
-                        JTextField(name, { name = it }, singleLine = true, label = if (space) "空间名" else "会话名")
+                        if (hasTab) JTextField(tab, { tab = it }, singleLine = true, label = stringResource(R.string.agents_dialog_tab_name))
+                        JTextField(name, { name = it }, singleLine = true, label = stringResource(if (space) R.string.agents_dialog_space_name else R.string.agents_dialog_session_name))
                     }
                 },
             )
@@ -85,15 +85,16 @@ internal fun AgentSpaceMenu(session: Session, pinned: Boolean, muted: Boolean, b
     val named = !session.spaceName.isNullOrBlank()
     if (!named && onOpen == null && onMarkRead == null) return
     var menu by remember { mutableStateOf(false) }
-    if (compact) HeadingAction(PhIcons.DotsThree, "空间操作", onClick = { menu = true })
-    else JIconButton(PhIcons.DotsThree, "空间操作", { menu = true })
+    val actions = stringResource(R.string.agents_space_actions)
+    if (compact) HeadingAction(PhIcons.DotsThree, actions, onClick = { menu = true })
+    else JIconButton(PhIcons.DotsThree, actions, { menu = true })
     if (menu) JActionSheet(buildList {
-        if (onOpen != null) add(JAction("打开空间", PhIcons.SquaresFour, onClick = onOpen))
-        if (onMarkRead != null) add(JAction("全部标为已读", PhIcons.Check, onClick = onMarkRead))
+        if (onOpen != null) add(JAction(stringResource(R.string.agents_space_open), PhIcons.SquaresFour, onClick = onOpen))
+        if (onMarkRead != null) add(JAction(stringResource(R.string.agents_mark_all_read), PhIcons.Check, onClick = onMarkRead))
         if (named) {
-            add(JAction(if (pinned) "取消置顶空间" else "置顶空间", PhIcons.PushPin, enabled = !busy, onClick = onPin))
-            add(JAction(if (muted) "取消屏蔽空间" else "屏蔽空间", PhIcons.Prohibit, enabled = !busy, onClick = onMute))
-            add(JAction("重命名空间", PhIcons.NotePencil, enabled = !busy && session.operationWorkspaceId != null, onClick = onRename))
+            add(JAction(stringResource(if (pinned) R.string.agents_space_unpin else R.string.agents_space_pin), PhIcons.PushPin, enabled = !busy, onClick = onPin))
+            add(JAction(stringResource(if (muted) R.string.agents_space_unmute else R.string.agents_space_mute), PhIcons.Prohibit, enabled = !busy, onClick = onMute))
+            add(JAction(stringResource(R.string.agents_dialog_rename_space), PhIcons.NotePencil, enabled = !busy && session.operationWorkspaceId != null, onClick = onRename))
         }
-    }, { menu = false }, title = session.spaceName?.takeIf { it.isNotBlank() } ?: "空间操作")
+    }, { menu = false }, title = session.spaceName?.takeIf { it.isNotBlank() } ?: actions)
 }

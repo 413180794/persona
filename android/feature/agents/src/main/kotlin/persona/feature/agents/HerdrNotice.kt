@@ -1,6 +1,7 @@
 package persona.feature.agents
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.Machine
 import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.api.HerdrState
@@ -28,7 +29,7 @@ internal class HerdrStarter(
     private val repository: SessionsRepository,
     private val connection: HubConnection,
     private val scope: CoroutineScope,
-    private val notice: (String) -> Unit,
+    private val notice: (AgentText) -> Unit,
 ) {
     private val pending = MutableStateFlow<Set<String>>(emptySet())
     val starting = pending.asStateFlow()
@@ -62,11 +63,11 @@ internal class HerdrStarter(
                 val latest = repository.machines.value.firstOrNull { it.id == machineId } ?: return@launch
                 generation++
                 statuses.update { it + (machineId to result) }
-                notice(if (result.known && result.running) "${latest.displayName} 的 herdr 已启动" else "未确认 herdr 已启动，请刷新后查看")
+                notice(if (result.known && result.running) AgentText(R.string.agents_herdr_started, latest.displayName) else AgentText(R.string.agents_herdr_unconfirmed))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                notice("启动 herdr 失败：${failureReason(e)}")
+                notice(AgentText(R.string.agents_herdr_failed, failureReason(e)))
             } finally {
                 pending.update { it - machineId }
             }
@@ -77,10 +78,10 @@ internal class HerdrStarter(
 @Composable
 internal fun HerdrNotice(machineName: String, starting: Boolean, onStart: () -> Unit) {
     JNotice(
-        text = if (starting) "正在启动 herdr…" else "这台电脑的 herdr 没在运行",
+        text = stringResource(if (starting) R.string.agents_herdr_starting else R.string.agents_herdr_stopped),
         title = machineName,
         status = Status.Unknown,
-        actionLabel = if (starting) null else "启动",
+        actionLabel = if (starting) null else stringResource(R.string.agents_herdr_start),
         onAction = if (starting) null else onStart,
     )
 }

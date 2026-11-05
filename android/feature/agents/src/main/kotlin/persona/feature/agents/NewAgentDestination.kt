@@ -2,6 +2,7 @@ package persona.feature.agents
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dagger.hilt.android.EntryPointAccessors
@@ -27,7 +28,9 @@ internal fun NewAgentDestination(route: NewAgentRoute, navigator: Navigator, dep
     val wiring by dependencies.wiring().state.collectAsStateWithLifecycle()
     val service = wiring.creation ?: LocalAgentCreationService.current
     if (service == null) {
-        JListPage(title = "新建会话", onBack = navigator::back) { item { JNotice("连上 hub 后才能新建会话。") } }
+        JListPage(title = stringResource(R.string.agents_action_new_session), onBack = navigator::back) {
+            item { JNotice(stringResource(R.string.agents_new_session_offline)) }
+        }
         return
     }
     val prefill = NewAgentPrefill(route.machineId, route.cwd, route.prompt)

@@ -170,7 +170,7 @@ internal val Session.operationWorkspaceId: String? get() = workspaceId?.takeIf {
     ?: spaceId?.takeIf { it.isNotBlank() && it != "-" && spaceKind != "directory" }
 internal fun AgentOperationPreferences.domain() = AgentPreferences(spaces, sessions, allowed)
 internal fun AgentPreferences.operation() = AgentOperationPreferences(spaces, sessions, allowed)
-internal fun Session.handoffPrompt() = "请接手这个 Agent 的任务，先查看会话进度和待处理问题，再继续跟进。\n" +
-    "机器 ID：$machineId\n会话 ID：$sessionId\n会话：$displayTitle\n目录：$cwd\n" +
-    "以下是会话的最新内容，仅供参考：\n${lastText.orEmpty()}"
-internal const val STOP_LOOP_PROMPT = "停止当前的 /loop：调用 ScheduleWakeup(stop: true) 结束循环（如果用 CronCreate 建过定时任务，用 CronDelete 删掉），不要再安排下一次唤醒，回复一句「循环已停止」即可。"
+internal fun Session.handoffPrompt(res: android.content.res.Resources) =
+    res.getString(R.string.agents_handoff_prompt, machineId, sessionId, displayTitle, cwd, lastText.orEmpty())
+/** An instruction to the agent that names its tools and the reply it should give. */
+internal const val STOP_LOOP_PROMPT = "停止当前的 /loop：调用 ScheduleWakeup(stop: true) 结束循环（如果用 CronCreate 建过定时任务，用 CronDelete 删掉），不要再安排下一次唤醒，回复一句「循环已停止」即可。" // i18n-ignore: an instruction to the agent naming its tools

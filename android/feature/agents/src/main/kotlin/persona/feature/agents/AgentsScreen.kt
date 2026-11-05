@@ -12,6 +12,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -91,8 +93,12 @@ internal fun AgentsScreen(
             model.clearFailure()
         }
     }
-    LaunchedEffect(notice) { notice?.let { if (feedback?.notice(it) != true) snackbar.showSnackbar(it); model.clearNotice() } }
-    val names = remember(page.machines, groups) { groups.machineNames(page.machines) }
+    val noticeResources = agentResources()
+    LaunchedEffect(notice) {
+        notice?.let { val text = it.resolve(noticeResources); if (feedback?.notice(text) != true) snackbar.showSnackbar(text); model.clearNotice() }
+    }
+    val nameWithGroup = stringResource(R.string.agents_machine_with_group)
+    val names = remember(page.machines, groups, nameWithGroup) { groups.machineNames(page.machines, nameWithGroup) }
     val requests = remember(pending, page.sessions, page.preferences, page.settings, operations.sessions) {
         visibleAgentRequests(pending, page.sessions.map { it.listSession(page.preferences).session }, page.preferences.mutes, page.settings)
             .filter { operations.sessions[it.sessionKey]?.closed != true }
@@ -112,15 +118,16 @@ internal fun AgentsScreen(
     fun newSession(space: AgentSpacePreset? = null) { creationModel?.startIn(space); newAgent = true }
     val spaces = remember(page.sessions, page.preferences) { agentSpaces(page.sessions.map { it.listSession(page.preferences) }) }
     // The list rows and the space page share one session menu and one space menu.
+    val resources = agentResources()
     val rowMenu: @Composable (AgentSession) -> List<JAction> = { row ->
-        if (!row.session.isLive) listOfNotNull(JAction("只读打开", onClick = { openRow(row) }),
-            JAction("删除对话", destructive = true, enabled = !operations.busy) { operationDialog = AgentOperationDialog.Delete(row.session) }
+        if (!row.session.isLive) listOfNotNull(JAction(stringResource(R.string.agents_action_open_read_only), onClick = { openRow(row) }),
+            JAction(stringResource(R.string.agents_action_delete_chat), destructive = true, enabled = !operations.busy) { operationDialog = AgentOperationDialog.Delete(row.session) }
                 .takeIf { row.session.canDelete })
         else AgentSessionMenuItems(row, row.id in page.preferences.pins.sessions, page.preferences.mutes.mutes(row), operations.busy,
             onOpen = { openRow(row) }, onPin = { model.pin(row) }, onMute = { model.mute(row) },
             onRead = { model.markRead(listOf(row)) }, onRename = { operationDialog = AgentOperationDialog.Rename(row.session) },
             onStopLoop = { model.stopLoop(row.session) }, onHandoff = {
-                model.handoff(row.session, onQueued = { navigator.selectTab(AppTab.Jarvis) }, onBound = {
+                model.handoff(row.session, row.session.handoffPrompt(resources), onQueued = { navigator.selectTab(AppTab.Jarvis) }, onBound = {
                     navigator.navigate(ChatRoute(it.machineId, it.sessionId, kind = ConversationKind.Assistant))
                 })
             },
@@ -160,28 +167,34 @@ internal fun AgentsScreen(
 
     val working = page.list.counts[AgentQuickFilter.Working] ?: 0
     val unread = page.list.counts[AgentQuickFilter.Unread] ?: 0
+    val workingText = pluralStringResource(R.plurals.agents_summary_working, working, working)
     val summary = when {
-        requests.isNotEmpty() -> "有 ${requests.size} 件事等你定"
-        working > 0 -> "$working 个 Agent 在干活"
-        else -> "都安静着"
+        requests.isNotEmpty() -> pluralStringResource(R.plurals.agents_summary_requests, requests.size, requests.size)
+        working > 0 -> workingText
+        else -> stringResource(R.string.agents_summary_quiet)
     }
-    val subtitle = buildList {
-        if (requests.isNotEmpty() && working > 0) add("$working 个 Agent 在干活")
-        if (unread > 0) add("$unread 个刚做完")
-    }.takeIf { it.isNotEmpty() }?.joinToString("，", postfix = "。")
+    val parts = buildList {
+        if (requests.isNotEmpty() && working > 0) add(workingText)
+        if (unread > 0) add(pluralStringResource(R.plurals.agents_subtitle_unread, unread, unread))
+    }
+    val subtitle = when (parts.size) {
+        0 -> null
+        1 -> stringResource(R.string.agents_subtitle_one, parts[0])
+        else -> stringResource(R.string.agents_subtitle_two, parts[0], parts[1])
+    }
     Box(Modifier.fillMaxSize()) {
         JListPage(
             title = names[page.settings.machineFilter] ?: "Agents", summary = summary, subtitle = subtitle, greet = true,
             titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
             onTitleClick = ::connectionSettings, refreshing = refreshing, onRefresh = model::refresh,
             actions = {
-                JIconButton(PhIcons.ListChecks, "待办", { navigator.navigate(persona.core.navigation.TodosRoute) })
-                JIconButton(PhIcons.Plus, "新建会话", { newSession() })
-                JIconButton(PhIcons.SlidersHorizontal, "列表设置", { menu = true })
+                JIconButton(PhIcons.ListChecks, stringResource(R.string.agents_action_todos), { navigator.navigate(persona.core.navigation.TodosRoute) })
+                JIconButton(PhIcons.Plus, stringResource(R.string.agents_action_new_session), { newSession() })
+                JIconButton(PhIcons.SlidersHorizontal, stringResource(R.string.agents_action_list_settings), { menu = true })
             },
         ) {
             item("search") {
-                JSearchField(page.settings.query, model::query, "搜索空间、会话或最新消息", Modifier.padding(bottom = Tokens.Space.xs))
+                JSearchField(page.settings.query, model::query, stringResource(R.string.agents_search_placeholder), Modifier.padding(bottom = Tokens.Space.xs))
             }
             if (groups.size > 1) item("groups") {
                 GroupFilterRow(groups, page.groupCounts, group, model::group)
@@ -219,7 +232,7 @@ internal fun AgentsScreen(
                 }
             }
             if (page.preferences.range != AgentRange.History && requests.isNotEmpty()) {
-                item("requests-title") { JSectionHeader("等你定", count = requests.size) }
+                item("requests-title") { JSectionHeader(stringResource(R.string.agents_requests_title), count = requests.size) }
                 items(requests.take(3), key = { "request:${it.id}" }) { request ->
                     val owner = page.sessions.firstOrNull { it.key == request.sessionKey }
                     RequestCard(request, names[request.machineId], metadata, now, connection == ConnectionState.Online,
@@ -227,46 +240,55 @@ internal fun AgentsScreen(
                         space = owner?.spaceName?.takeIf { it.isNotBlank() }, approvable = owner?.canApprove ?: true)
                 }
                 if (requests.size > 3) item("more-requests") {
-                    JButton("还有 ${requests.size - 3} 个", { allRequests = true }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+                    JButton(pluralStringResource(R.plurals.agents_requests_more, requests.size - 3, requests.size - 3), { allRequests = true }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
                 }
             }
             if (page.preferences.range != AgentRange.History) item("request-history") {
-                JTextButton("请求列表与历史", { allRequests = true })
+                JTextButton(stringResource(R.string.agents_requests_history), { allRequests = true })
             }
             if (page.settings.quick == AgentQuickFilter.Unread && page.list.unreadShown.isNotEmpty()) item("mark-read") {
-                JTextButton("全部标为已读", { model.markRead(page.list.groups.flatMap { it.rows }.filter { it.state == AgentState.Unread }) })
+                JTextButton(stringResource(R.string.agents_mark_all_read), { model.markRead(page.list.groups.flatMap { it.rows }.filter { it.state == AgentState.Unread }) })
             }
             if (page.list.groups.isEmpty()) item("empty") {
-                JEmptyState(if (page.settings.query.isNotEmpty()) "没有匹配的会话" else "暂无会话", "可以切换筛选，或下拉刷新", icon = PhIcons.Robot,
-                    action = { JButton("新建会话", { newSession() }) })
+                JEmptyState(stringResource(if (page.settings.query.isNotEmpty()) R.string.agents_empty_no_match else R.string.agents_empty_none),
+                    stringResource(R.string.agents_empty_hint), icon = PhIcons.Robot,
+                    action = { JButton(stringResource(R.string.agents_action_new_session), { newSession() }) })
             }
             tree.forEach { entry ->
                 when (entry) {
                     is TreeMachineEntry -> item(entry.key, contentType = "machine") {
                         val machine = entry.machine
-                        AgentTreeHeader(machine.machine.displayName, machine.folded, { model.fold(machine) }, first = entry.first,
+                        // A computer only the sessions name (no machine snapshot yet) says so (AgentsViewModel.page).
+                        val machineTitle = if (page.machines.any { it.id == machine.machine.id }) machine.machine.displayName
+                            else stringResource(R.string.agents_machine_pending)
+                        AgentTreeHeader(machineTitle, machine.folded, { model.fold(machine) }, first = entry.first,
                             icon = machine.machine.deviceIcon, online = machine.machine.online,
-                            detail = machine.repoCount?.let { "$it 个仓库，${machine.sessionCount} 个会话" }
-                                ?: "${machine.spaceCount} 个空间，${machine.sessionCount} 个会话", counts = machine.headingCounts,
+                            detail = stringResource(R.string.agents_count_pair,
+                                machine.repoCount?.let { pluralStringResource(R.plurals.agents_count_repos, it, it) }
+                                    ?: pluralStringResource(R.plurals.agents_count_spaces, machine.spaceCount, machine.spaceCount),
+                                pluralStringResource(R.plurals.agents_count_sessions, machine.sessionCount, machine.sessionCount)),
+                            counts = machine.headingCounts,
                             onMonitor = { navigator.navigate(MachineDetailRoute(machine.machine.id)) }, tag = groups.tagFor(machine.machine.id))
                     }
                     is TreeGroupEntry -> item(entry.key, contentType = if (entry.space) "space" else "section") {
                         val group = entry.group
                         val space = spacesById[group.id]
-                        if (entry.space) AgentSpaceHeader(group.title, group.folded, { model.fold(group) }, depth = entry.depth, first = entry.first,
+                        // A history group of a session without a directory has no title of its own (AgentHistory.kt).
+                        val groupTitle = group.title.ifBlank { stringResource(R.string.agents_history_unknown_folder) }
+                        if (entry.space) AgentSpaceHeader(groupTitle, group.folded, { model.fold(group) }, depth = entry.depth, first = entry.first,
                             quiet = entry.quiet, sessions = group.rows.size, counts = group.headingCounts,
                             flags = buildList {
-                                if (space != null && space.preferenceKey in page.preferences.pins.spaces) add(RowFlag("空间已置顶", PhIcons.PushPin))
-                                if (space != null && space.preferenceKey in page.preferences.mutes.spaces) add(RowFlag("空间已屏蔽", PhIcons.Prohibit))
+                                if (space != null && space.preferenceKey in page.preferences.pins.spaces) add(RowFlag(stringResource(R.string.agents_flag_space_pinned), PhIcons.PushPin))
+                                if (space != null && space.preferenceKey in page.preferences.mutes.spaces) add(RowFlag(stringResource(R.string.agents_flag_space_muted), PhIcons.Prohibit))
                             }, menu = space?.let { { spaceMenu(it, true) } }, icon = group.repo?.icon,
-                            kind = group.repo?.kind ?: "空间")
+                            kind = group.repo?.kind ?: stringResource(R.string.agents_kind_space))
                         else if (group.id.startsWith("todo/") && group.id != "todo/none") {
                             val todoId = group.id.removePrefix("todo/")
-                            AgentTreeHeader(group.title, group.folded, { model.fold(group) }, first = entry.first,
+                            AgentTreeHeader(groupTitle, group.folded, { model.fold(group) }, first = entry.first,
                                 icon = PhIcons.ListChecks, counts = group.headingCounts,
                                 onAction = { navigator.navigate(persona.core.navigation.TodoDetailRoute(todoId)) },
-                                actionIcon = PhIcons.CaretRight, actionLabel = "查看待办")
-                        } else AgentTreeHeader(group.title, group.folded, { model.fold(group) }, first = entry.first,
+                                actionIcon = PhIcons.CaretRight, actionLabel = stringResource(R.string.agents_view_todo))
+                        } else AgentTreeHeader(groupTitle, group.folded, { model.fold(group) }, first = entry.first,
                             icon = PhIcons.PushPin.takeIf { group.id == "pinned" }, counts = group.headingCounts)
                     }
                     is TreeRowEntry -> item(entry.key, contentType = "session") {
@@ -292,14 +314,14 @@ internal fun AgentsScreen(
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
     }
     if (menu) JActionSheet(buildList {
-        AgentRange.entries.forEach { range -> add(JAction("范围：${range.label}", checked = page.preferences.range == range, onClick = { model.range(range) })) }
+        AgentRange.entries.forEach { range -> add(JAction(stringResource(R.string.agents_menu_range, range.label), checked = page.preferences.range == range, onClick = { model.range(range) })) }
         AgentGrouping.selectable.forEach { grouping -> add(JAction(grouping.label, checked = page.preferences.grouping == grouping, onClick = { model.grouping(grouping) })) }
-        add(JAction("细列表", checked = page.preferences.compact, onClick = { if (!page.preferences.compact) model.compact() }))
-        add(JAction("详细列表", checked = !page.preferences.compact, onClick = { if (page.preferences.compact) model.compact() }))
-        add(JAction("全部折叠", checked = page.list.groups.isNotEmpty() && page.list.groups.all { it.folded } && page.list.machines.all { it.folded }, onClick = { model.foldAll(true) }))
-        add(JAction("全部展开", checked = page.list.groups.isNotEmpty() && page.list.groups.none { it.folded } && page.list.machines.none { it.folded }, onClick = { model.foldAll(false) }))
-        add(JAction("机器监控", icon = PhIcons.Gauge, onClick = { navigator.navigate(MachinesRoute) }))
-    }, { menu = false }, title = "列表设置", note = "置顶和屏蔽同步到 hub；已读仅影响本机列表")
+        add(JAction(stringResource(R.string.agents_menu_compact), checked = page.preferences.compact, onClick = { if (!page.preferences.compact) model.compact() }))
+        add(JAction(stringResource(R.string.agents_menu_detailed), checked = !page.preferences.compact, onClick = { if (page.preferences.compact) model.compact() }))
+        add(JAction(stringResource(R.string.agents_menu_collapse_all), checked = page.list.groups.isNotEmpty() && page.list.groups.all { it.folded } && page.list.machines.all { it.folded }, onClick = { model.foldAll(true) }))
+        add(JAction(stringResource(R.string.agents_menu_expand_all), checked = page.list.groups.isNotEmpty() && page.list.groups.none { it.folded } && page.list.machines.none { it.folded }, onClick = { model.foldAll(false) }))
+        add(JAction(stringResource(R.string.agents_menu_machines), icon = PhIcons.Gauge, onClick = { navigator.navigate(MachinesRoute) }))
+    }, { menu = false }, title = stringResource(R.string.agents_action_list_settings), note = stringResource(R.string.agents_menu_note))
     if (historyMachine != null && historySession != null) {
         val target = page.sessions.firstOrNull { it.machineId == historyMachine && it.sessionId == historySession }
         JFullScreen({ historyMachine = null; historySession = null }) {
@@ -307,11 +329,11 @@ internal fun AgentsScreen(
                 historyReadOnly = true, onHistoryBack = { historyMachine = null; historySession = null },
                 historyFooter = {
                     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                        creation?.error?.let { Text(it, style = PersonaTheme.type.caption) }
+                        creation?.error?.let { Text(it.resolve(), style = PersonaTheme.type.caption) }
                         // A Codex history thread or a runtime's session is not resumed in a terminal from the phone.
                         val sourced = target?.takeIf { it.hasSource }
                         if (sourced != null) Text(sourced.readOnlyNotice, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-                        else JButton(if (creation?.pending?.request?.resumeSessionId == historySession) "核对继续结果" else "继续这个会话",
+                        else JButton(stringResource(if (creation?.pending?.request?.resumeSessionId == historySession) R.string.agents_history_check_resume else R.string.agents_history_resume),
                             loading = creation?.starting == true,
                             enabled = creationModel != null && creation?.initialized == true && creation.starting != true &&
                                 target != null && (creation.pending != null ||
@@ -331,7 +353,7 @@ internal fun AgentsScreen(
     pickingTodoForSession?.let { targetSession ->
         TodoPickerSheet(
             todos = todos,
-            title = if (targetSession.todo != null) "改挂到其他待办" else "关联到待办",
+            title = stringResource(if (targetSession.todo != null) R.string.agents_todo_move_title else R.string.agents_todo_link_title),
             currentTodoId = targetSession.todo?.id,
             sessionLookup = { k -> page.sessions.firstOrNull { it.key == k } },
             onDismiss = { pickingTodoForSession = null },
@@ -343,8 +365,8 @@ internal fun AgentsScreen(
     }
     if (newAgent) {
         if (creationModel != null) NewAgentDialog(creationModel, page.machines, connection == ConnectionState.Online) { newAgent = false }
-        else JDialog(onDismiss = { newAgent = false }, title = "新建会话",
-            text = "新建会话服务尚未接入，请完成 App 接线后再试。", confirm = "关闭" to { newAgent = false }, dismiss = null)
+        else JDialog(onDismiss = { newAgent = false }, title = stringResource(R.string.agents_action_new_session),
+            text = stringResource(R.string.agents_new_session_unavailable), confirm = stringResource(R.string.agents_close) to { newAgent = false }, dismiss = null)
     }
     if (allRequests) RequestsDialog(requests, names, metadata, now, connection == ConnectionState.Online, delivery,
         onDismiss = { allRequests = false }, onOpen = { request ->
@@ -353,6 +375,7 @@ internal fun AgentsScreen(
         }, onAnswer = model::answer,
         history = visibleAgentRequests(requestHistory, page.sessions.map { it.listSession(page.preferences).session },
             page.preferences.mutes, page.settings))
+    val approveBlocked = stringResource(R.string.agents_approve_blocked)
     requestDetail?.let { selected ->
         val current = pending.firstOrNull { it.id == selected.id && it.sessionKey == selected.sessionKey }
         val request = current ?: selected
@@ -366,7 +389,7 @@ internal fun AgentsScreen(
                 navigator.navigate(TerminalRoute(request.machineId, request.sessionId))
             }), machine = page.machines.firstOrNull { it.id == request.machineId },
             blockedReason = page.sessions.firstOrNull { it.key == request.sessionKey }?.takeIf { !it.canApprove }
-                ?.let { "这个会话不允许在手机上审批，请打开会话或到电脑上处理。" },
+                ?.let { approveBlocked },
             terminalHelp = page.sessions.firstOrNull { it.key == request.sessionKey }?.canTerminal != false)
     }
 }
@@ -374,13 +397,14 @@ internal fun AgentsScreen(
 @Composable
 private fun ConnectionNotice(state: ConnectionState, onSettings: () -> Unit) {
     if (state in listOf(ConnectionState.CertificateMismatch, ConnectionState.Revoked, ConnectionState.NeedsLocalNetworkPermission)) {
-        JNotice(title = state.title, text = when (state) {
-            ConnectionState.CertificateMismatch -> "hub 的证书和配对时不一样，不会自动重连。确认是自己换了证书后，请重新扫码配对。"
-            ConnectionState.Revoked -> "配对已失效，请重新扫码配对。"
-            else -> "需要本地网络权限，授权后再连接。"
-        }, status = Status.NeedsYou,
-            actionLabel = if (state == ConnectionState.NeedsLocalNetworkPermission) "去授权" else "连接诊断与重新扫码", onAction = onSettings)
-    } else Text("显示的是本机缓存", Modifier.padding(vertical = 8.dp), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
+        JNotice(title = state.title, text = stringResource(when (state) {
+            ConnectionState.CertificateMismatch -> R.string.agents_connection_certificate_text
+            ConnectionState.Revoked -> R.string.agents_connection_revoked_text
+            else -> R.string.agents_connection_local_network_text
+        }), status = Status.NeedsYou,
+            actionLabel = stringResource(if (state == ConnectionState.NeedsLocalNetworkPermission) R.string.agents_connection_allow else R.string.agents_connection_diagnose),
+            onAction = onSettings)
+    } else Text(stringResource(R.string.agents_connection_cached), Modifier.padding(vertical = 8.dp), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
 }
 
 @Composable
@@ -401,40 +425,43 @@ internal fun SlotRow(
     var menu by remember { mutableStateOf(false) }
     val session = row.session
     val source = session.source
-    JSwipeActions(end = onClose?.let { SwipeAction("关闭", PhIcons.X, Status.NeedsYou, it, destructive = true) }) {
+    JSwipeActions(end = onClose?.let { SwipeAction(stringResource(R.string.agents_close), PhIcons.X, Status.NeedsYou, it, destructive = true) }) {
     AgentRow(
         title = session.displayTitle, status = row.state.designStatus, depth = depth, position = position,
         onClick = onOpen, onLongClick = { menu = true }, compact = compact, muted = muted,
         selected = isSessionSelected(LocalDetailKey.current, session.key),
         // Where its work stands once the hub triaged its turn (docs/agent-work.md), else its last words.
-        preview = session.workLine(now) ?: session.lastText?.takeIf { it.isNotBlank() }, time = relativeTime(row.updatedAt, now),
+        preview = session.workLine(now) ?: session.lastText?.takeIf { it.isNotBlank() }, time = relativeTime(agentResources(), row.updatedAt, now),
         // Codex, TRAEX or what the hub calls a runtime's agent ("DSH"); a session with a source names it in its facts instead.
         agent = session.agentLabel.takeIf { !session.isClaude && source == null },
         statusText = row.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label,
         facts = buildList {
             // Where a Codex thread or a runtime's session comes from, and when the phone can only read it.
             source?.let { add(RowFact(listOfNotNull(it.label, it.agentName).joinToString(" / "))) }
-            if (source?.readOnly == true) add(RowFact("仅查看", caution = true))
+            if (source?.readOnly == true) add(RowFact(stringResource(R.string.agents_row_view_only), caution = true))
             if (located) listOfNotNull(machine, session.spaceName?.takeIf { it.isNotBlank() } ?: session.folderName.takeIf { it.isNotBlank() })
                 .joinToString(" / ").takeIf { it.isNotBlank() }?.let { add(RowFact(it)) }
-            session.todo?.let { add(RowFact("待办 · ${it.title}")) }
+            session.todo?.let { add(RowFact(stringResource(R.string.agents_row_todo, it.title))) }
             slotLabel?.let { add(RowFact(it)) }
-            if (requestCount > 0) add(RowFact("$requestCount 件事等你定", caution = true))
-            session.loop?.let { add(RowFact(it.nextRunLabel(now).replaceFirst("循环 · ", "循环，"))) }
-            session.background?.size?.takeIf { it > 0 }?.let { add(RowFact("后台 $it")) }
-            session.subagents?.count { it.running == true }?.takeIf { it > 0 }?.let { add(RowFact("子 Agent $it")) }
-            if (metadata.needsConfirmation) add(RowFact(if (metadata.verifying) PendingStatus.Verifying.label else PendingStatus.Unconfirmed.label, caution = true))
-            if (metadata.pendingCount > 0) add(RowFact("待发 ${metadata.pendingCount}", caution = true))
-            if (metadata.sending) add(RowFact(PendingStatus.Sending.label))
-            if (metadata.draftLabel != null) add(RowFact(buildString {
-                append("草稿")
-                if (metadata.hasAttachments) append("含附件")
-                if (metadata.draft.isNotBlank()) append("：${metadata.draft.replace('\n', ' ').take(20)}")
-            }, caution = true))
+            if (requestCount > 0) add(RowFact(pluralStringResource(R.plurals.agents_row_requests, requestCount, requestCount), caution = true))
+            session.loop?.let { add(RowFact(it.nextRunLabel(agentResources(), now))) }
+            session.background?.size?.takeIf { it > 0 }?.let { add(RowFact(stringResource(R.string.agents_row_background, it))) }
+            session.subagents?.count { it.running == true }?.takeIf { it > 0 }?.let { add(RowFact(stringResource(R.string.agents_row_subagents, it))) }
+            if (metadata.needsConfirmation) add(RowFact(if (metadata.verifying) PendingStatus.Verifying.localizedLabel else PendingStatus.Unconfirmed.localizedLabel, caution = true))
+            if (metadata.pendingCount > 0) add(RowFact(stringResource(R.string.agents_row_queued, metadata.pendingCount), caution = true))
+            if (metadata.sending) add(RowFact(PendingStatus.Sending.localizedLabel))
+            if (metadata.hasDraft) {
+                val draft = metadata.draft.replace('\n', ' ').take(20)
+                add(RowFact(when {
+                    draft.isBlank() -> stringResource(if (metadata.hasAttachments) R.string.agents_row_draft_attachments else R.string.agents_row_draft)
+                    metadata.hasAttachments -> stringResource(R.string.agents_row_draft_attachments_text, draft)
+                    else -> stringResource(R.string.agents_row_draft_text, draft)
+                }, caution = true))
+            }
         },
         flags = buildList {
-            if (pinned) add(RowFlag("已置顶", PhIcons.PushPin))
-            if (muted) add(RowFlag("已屏蔽", PhIcons.Prohibit))
+            if (pinned) add(RowFlag(stringResource(R.string.agents_row_pinned), PhIcons.PushPin))
+            if (muted) add(RowFlag(stringResource(R.string.agents_row_muted), PhIcons.Prohibit))
         },
     )
     }
@@ -460,57 +487,67 @@ internal fun AgentSessionMenuItems(
     val clipboard = LocalClipboardManager.current
     val session = row.session
     return buildList {
-        add(JAction(if (pinned) "取消置顶" else "置顶", PhIcons.PushPin, enabled = !busy, onClick = onPin))
-        add(JAction(if (muted) "取消屏蔽" else "屏蔽", PhIcons.Prohibit, enabled = !busy, onClick = onMute))
+        add(JAction(stringResource(if (pinned) R.string.agents_action_unpin else R.string.agents_action_pin), PhIcons.PushPin, enabled = !busy, onClick = onPin))
+        add(JAction(stringResource(if (muted) R.string.agents_action_unmute else R.string.agents_action_mute), PhIcons.Prohibit, enabled = !busy, onClick = onMute))
         if (session.todo != null && onUnlinkTodo != null) {
             // The same picker moves it to another todo: the hub releases the old link (#2348).
-            onLinkTodo?.let { add(JAction("改挂到其他待办…", PhIcons.ListChecks, enabled = !busy, onClick = it)) }
-            add(JAction("解除关联待办", PhIcons.ListChecks, enabled = !busy, onClick = onUnlinkTodo))
+            onLinkTodo?.let { add(JAction(stringResource(R.string.agents_action_move_todo), PhIcons.ListChecks, enabled = !busy, onClick = it)) }
+            add(JAction(stringResource(R.string.agents_action_unlink_todo), PhIcons.ListChecks, enabled = !busy, onClick = onUnlinkTodo))
         } else if (onLinkTodo != null) {
-            add(JAction("关联到待办…", PhIcons.ListChecks, enabled = !busy, onClick = onLinkTodo))
+            add(JAction(stringResource(R.string.agents_action_link_todo), PhIcons.ListChecks, enabled = !busy, onClick = onLinkTodo))
         }
-        onAttach?.let { add(JAction("实时接入", PhIcons.PlugsConnected, enabled = !busy, onClick = it)) }
+        onAttach?.let { add(JAction(stringResource(R.string.agents_action_attach), PhIcons.PlugsConnected, enabled = !busy, onClick = it)) }
         // Renaming changes the terminal tab and Claude's /rename; a session without a terminal has neither.
-        if (session.canTerminal) add(JAction("重命名", PhIcons.NotePencil, enabled = !busy, onClick = onRename))
-        if (session.loop != null && session.canSend) add(JAction("停止循环", enabled = !busy, onClick = onStopLoop))
-        add(JAction("交给 Persona", onClick = onHandoff))
-        if (row.state == AgentState.Unread) add(JAction("标为已读", PhIcons.Check, onClick = onRead))
+        if (session.canTerminal) add(JAction(stringResource(R.string.agents_action_rename), PhIcons.NotePencil, enabled = !busy, onClick = onRename))
+        if (session.loop != null && session.canSend) add(JAction(stringResource(R.string.agents_action_stop_loop), enabled = !busy, onClick = onStopLoop))
+        add(JAction(stringResource(R.string.agents_action_handoff), onClick = onHandoff))
+        if (row.state == AgentState.Unread) add(JAction(stringResource(R.string.agents_action_mark_read), PhIcons.Check, onClick = onRead))
         // Only a session in a terminal resumes there; a Codex thread by its own thread id.
-        session.resumeCommand()?.let { command -> add(JAction("拷贝恢复命令", onClick = { clipboard.setText(AnnotatedString(command)) })) }
-        add(JAction("拷贝目录", enabled = session.cwd.isNotBlank(), onClick = { clipboard.setText(AnnotatedString(session.cwd)) }))
-        add(JAction("打开会话", onClick = onOpen))
-        if (session.isLive && session.canTerminal) add(JAction("关闭 Agent", destructive = true, enabled = !busy, onClick = onClose))
-        if (session.canDelete && onDelete != null) add(JAction("删除对话", destructive = true, enabled = !busy, onClick = onDelete))
+        session.resumeCommand()?.let { command -> add(JAction(stringResource(R.string.agents_action_copy_resume), onClick = { clipboard.setText(AnnotatedString(command)) })) }
+        add(JAction(stringResource(R.string.agents_action_copy_directory), enabled = session.cwd.isNotBlank(), onClick = { clipboard.setText(AnnotatedString(session.cwd)) }))
+        add(JAction(stringResource(R.string.agents_action_open_session), onClick = onOpen))
+        if (session.isLive && session.canTerminal) add(JAction(stringResource(R.string.agents_action_close_agent), destructive = true, enabled = !busy, onClick = onClose))
+        if (session.canDelete && onDelete != null) add(JAction(stringResource(R.string.agents_action_delete_chat), destructive = true, enabled = !busy, onClick = onDelete))
     }
 }
 
-private val ConnectionState.title: String get() = when (this) {
-    ConnectionState.Online -> "Agents"
-    ConnectionState.Connecting -> "连接中…"
-    ConnectionState.Updating -> "更新中…"
-    ConnectionState.WaitingForNetwork -> "等待网络"
-    ConnectionState.NeedsLocalNetworkPermission -> "需要本地网络权限"
-    ConnectionState.CertificateMismatch -> "hub 的证书变了"
-    ConnectionState.Revoked -> "配对已失效"
+private val ConnectionState.title: String @Composable get() = when (this) {
+    ConnectionState.Online -> "Agents" // i18n-ignore: the tab's name is Agents in every language (docs/i18n.md)
+    ConnectionState.Connecting -> stringResource(R.string.agents_connection_connecting)
+    ConnectionState.Updating -> stringResource(R.string.agents_connection_updating)
+    ConnectionState.WaitingForNetwork -> stringResource(R.string.agents_connection_waiting)
+    ConnectionState.NeedsLocalNetworkPermission -> stringResource(R.string.agents_connection_local_network)
+    ConnectionState.CertificateMismatch -> stringResource(R.string.agents_connection_certificate)
+    ConnectionState.Revoked -> stringResource(R.string.agents_connection_revoked)
 }
 /** What TalkBack calls the level (iOS WorktreeRow: 主工作树 / 工作树). */
-internal val RepoLevel.kind get() = when (this) {
-    RepoLevel.Repository -> "仓库"
-    RepoLevel.MainCheckout -> "主工作树"
-    RepoLevel.Worktree -> "工作树"
-}
+internal val RepoLevel.kind: String @Composable get() = stringResource(when (this) {
+    RepoLevel.Repository -> R.string.agents_repo_repository
+    RepoLevel.MainCheckout -> R.string.agents_repo_main_checkout
+    RepoLevel.Worktree -> R.string.agents_repo_worktree
+})
 internal val RepoLevel.icon get() = when (this) {
     RepoLevel.Repository -> PhIcons.Folder
     RepoLevel.MainCheckout -> PhIcons.House
     RepoLevel.Worktree -> PhIcons.GitBranch
 }
-private val AgentGrouping.label: String get() = when (this) {
-    AgentGrouping.Repo -> "按仓库"
-    AgentGrouping.State -> "按状态"
-    AgentGrouping.Todo -> "按待办"
-    else -> "按电脑和空间"
-}
-private val AgentQuickFilter.label: String get() = when (this) { AgentQuickFilter.All -> "全部"; AgentQuickFilter.NeedsYou -> "需要你"; AgentQuickFilter.Unread -> "未读"; AgentQuickFilter.Working -> "工作中" }
+private val AgentGrouping.label: String @Composable get() = stringResource(when (this) {
+    AgentGrouping.Repo -> R.string.agents_grouping_repo
+    AgentGrouping.State -> R.string.agents_grouping_state
+    AgentGrouping.Todo -> R.string.agents_grouping_todo
+    else -> R.string.agents_grouping_machine_space
+})
+private val AgentQuickFilter.label: String @Composable get() = stringResource(when (this) {
+    AgentQuickFilter.All -> R.string.agents_filter_all
+    AgentQuickFilter.NeedsYou -> R.string.agents_filter_needs_you
+    AgentQuickFilter.Unread -> R.string.agents_filter_unread
+    AgentQuickFilter.Working -> R.string.agents_filter_working
+})
+internal val AgentRange.label: String @Composable get() = stringResource(when (this) {
+    AgentRange.Running -> R.string.agents_range_running
+    AgentRange.All -> R.string.agents_range_all
+    AgentRange.History -> R.string.agents_range_history
+})
 internal val AgentState.designStatus: Status get() = when (this) {
     AgentState.NeedsYou -> Status.NeedsYou
     AgentState.Unread -> Status.Unread
@@ -519,7 +556,7 @@ internal val AgentState.designStatus: Status get() = when (this) {
     AgentState.Unknown -> Status.Unknown
     AgentState.Offline -> Status.Offline
 }
-internal val AgentState.label: String get() = designStatus.label
+internal val AgentState.label: String @Composable get() = designStatus.localizedLabel
 @Composable
 internal fun StateDot(state: AgentState, breathe: Boolean = false) {
     JStatusMark(state.designStatus, animated = breathe)

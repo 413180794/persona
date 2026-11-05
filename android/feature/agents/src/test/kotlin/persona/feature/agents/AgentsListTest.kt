@@ -5,9 +5,18 @@ import persona.core.domain.answer.*
 import persona.core.domain.sort.*
 import org.junit.Assert.*
 import org.junit.Test
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 import java.time.Instant
 
+/** Robolectric for the strings: Simplified Chinese, the language the expected text is in. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class AgentsListTest {
+    private val res get() = RuntimeEnvironment.getApplication().resources
+
     @Test fun historyRangeKeepsRunningBehaviorAndSortsProjectsStably() {
         val working = Session(machineId = "machine", sessionId = "running", status = "working", cwd = "/code/project")
         val a = Session(machineId = "machine", sessionId = "a", status = "offline", cwd = "/code/project",
@@ -33,13 +42,13 @@ class AgentsListTest {
 
     @Test fun missingRequestSourceIsOmittedWhileKnownSourcesRemain() {
         val request = Interaction("request", kind = "permission")
-        assertNull(request.sourceLabel(AgentsMetadata()))
-        assertNull(request.sourceLabel(AgentsMetadata(requestSources = mapOf("request" to "  "))))
-        assertEquals("子 Agent", request.sourceLabel(AgentsMetadata(requestSources = mapOf("request" to "子 Agent"))))
-        assertEquals("终端", request.copy(kind = "screen").sourceLabel(AgentsMetadata()))
-        assertNull(request.copy(toolName = "mcp__tools__read").sourceLabel(AgentsMetadata()))
-        assertEquals("来自 MCP 服务器 example-service", request.copy(mcpServerName = "example-service").sourceLabel(AgentsMetadata()))
-        assertEquals("来自 MCP 服务器 Persona", request.copy(mcpServerName = "jarvis").sourceLabel(AgentsMetadata()))
+        assertNull(request.sourceLabel(res, AgentsMetadata()))
+        assertNull(request.sourceLabel(res, AgentsMetadata(requestSources = mapOf("request" to "  "))))
+        assertEquals("子 Agent", request.sourceLabel(res, AgentsMetadata(requestSources = mapOf("request" to "子 Agent"))))
+        assertEquals("终端", request.copy(kind = "screen").sourceLabel(res, AgentsMetadata()))
+        assertNull(request.copy(toolName = "mcp__tools__read").sourceLabel(res, AgentsMetadata()))
+        assertEquals("来自 MCP 服务器 example-service", request.copy(mcpServerName = "example-service").sourceLabel(res, AgentsMetadata()))
+        assertEquals("来自 MCP 服务器 Persona", request.copy(mcpServerName = "jarvis").sourceLabel(res, AgentsMetadata()))
     }
 
     @Test fun idleRowsStayCollapsedUntilExpandedAndRemainHiddenInFoldedGroup() {
@@ -107,6 +116,7 @@ class AgentsListTest {
         assertTrue(request.expired(Instant.parse("2026-01-01T00:01:00Z")))
         assertEquals(RequestExpiry.expiredLabel, countdown(request.expiresAt, Instant.parse("2026-01-01T00:01:01Z")))
         assertTrue(request.copy(expiresAt = "invalid").expired(Instant.parse("2026-01-01T00:00:30Z")))
-        assertEquals("草稿 · [附件]", AgentRowMetadata(hasAttachments = true).draftLabel)
+        assertTrue(AgentRowMetadata(hasAttachments = true).hasDraft)
+        assertFalse(AgentRowMetadata().hasDraft)
     }
 }

@@ -13,14 +13,14 @@ class AgentGroupsTest {
 
     @Test fun oneGroupLabelsNothing() {
         assertNull(listOf(home).tagFor("macbook"))
-        assertEquals(mapOf("macbook" to "MacBook", "macbook~g0a1b2c3d" to "MacBook"), listOf(home).machineNames(machines))
+        assertEquals(mapOf("macbook" to "MacBook", "macbook~g0a1b2c3d" to "MacBook"), listOf(home).machineNames(machines, "%1\$s（%2\$s）"))
     }
 
     @Test fun moreGroupsNameTheGroupOfEveryComputer() {
         val groups = listOf(home, work)
         assertEquals("家里", groups.tagFor("macbook"))
         assertEquals("公司", groups.tagFor("macbook~g0a1b2c3d"))
-        assertEquals(mapOf("macbook" to "MacBook（家里）", "macbook~g0a1b2c3d" to "MacBook（公司）"), groups.machineNames(machines))
+        assertEquals(mapOf("macbook" to "MacBook（家里）", "macbook~g0a1b2c3d" to "MacBook（公司）"), groups.machineNames(machines, "%1\$s（%2\$s）"))
     }
 
     @Test fun theFilterAdmitsOnlyItsGroup() {

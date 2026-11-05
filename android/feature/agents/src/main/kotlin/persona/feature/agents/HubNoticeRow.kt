@@ -5,6 +5,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,7 +59,7 @@ internal fun HubNoticeRow(
             }
 
             Text(
-                text = HubNotice.text(notice),
+                text = hubNoticeText(notice),
                 modifier = Modifier.weight(1f),
                 style = PersonaTheme.type.callout,
                 color = palette.ink,
@@ -68,18 +69,30 @@ internal fun HubNoticeRow(
 
             when (notice) {
                 HubNotice.AutoOn -> {
-                    JButton("关闭", onAutoOff, kind = JButtonKind.Quiet, size = JButtonSize.Small)
-                    JButton("知道了", onNoticeSeen, kind = JButtonKind.Quiet, size = JButtonSize.Small)
+                    JButton(stringResource(R.string.agents_hub_notice_turn_off), onAutoOff, kind = JButtonKind.Quiet, size = JButtonSize.Small)
+                    JButton(stringResource(R.string.agents_hub_notice_got_it), onNoticeSeen, kind = JButtonKind.Quiet, size = JButtonSize.Small)
                 }
                 is HubNotice.Available -> {
-                    JButton("更新", onUpdate, kind = JButtonKind.Quiet, size = JButtonSize.Small)
-                    JIconButton(PhIcons.X, "不再提示", { onDismiss(notice) }, raised = false)
+                    JButton(stringResource(R.string.agents_hub_notice_update), onUpdate, kind = JButtonKind.Quiet, size = JButtonSize.Small)
+                    JIconButton(PhIcons.X, stringResource(R.string.agents_hub_notice_dismiss), { onDismiss(notice) }, raised = false)
                 }
                 is HubNotice.RolledBack, HubNotice.HubTooOld, is HubNotice.NewImage -> {
-                    JIconButton(PhIcons.X, "不再提示", { onDismiss(notice) }, raised = false)
+                    JIconButton(PhIcons.X, stringResource(R.string.agents_hub_notice_dismiss), { onDismiss(notice) }, raised = false)
                 }
                 HubNotice.AppTooOld, is HubNotice.Updating -> Unit
             }
         }
     }
+}
+
+/** The row's line in the language on screen (core:contracts' `HubNotice.text` in Chinese); the hub's own words as they are. */
+@Composable
+internal fun hubNoticeText(notice: HubNotice): String = when (notice) {
+    HubNotice.AppTooOld -> stringResource(R.string.agents_hub_notice_app_too_old)
+    HubNotice.HubTooOld -> stringResource(R.string.agents_hub_notice_hub_too_old)
+    is HubNotice.Updating -> stringResource(R.string.agents_hub_notice_updating, notice.what)
+    is HubNotice.RolledBack -> notice.why
+    HubNotice.AutoOn -> stringResource(R.string.agents_hub_notice_auto_on)
+    is HubNotice.Available -> stringResource(R.string.agents_hub_notice_available, notice.version)
+    is HubNotice.NewImage -> stringResource(R.string.agents_hub_notice_new_image, notice.version)
 }

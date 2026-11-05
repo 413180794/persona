@@ -5,11 +5,12 @@ import persona.core.contracts.api.*
 import persona.core.domain.sort.*
 import persona.core.domain.answer.permissionSummary
 import persona.core.domain.toolDisplayName
+import android.content.res.Resources
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import persona.core.designsystem.LocalizedFormats
 import kotlinx.coroutines.flow.*
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /** Implement with the shared DraftStore for the active hub scope; never create a second draft store. */
 fun interface AgentsDraftSource {
@@ -60,25 +61,28 @@ internal fun visibleAgentRequests(
 }
 
 /** Another agent's card (Codex, TRAEX, a runtime's) says who asks; Claude's reads as before. */
-internal val Interaction.cardTitle: String get() {
-    val who = agentDisplayName?.let { "$it " }.orEmpty()
+internal fun Interaction.cardTitle(res: Resources): String {
+    val who = agentDisplayName
     return when (kind) {
-        "question" -> "${who}有问题等你回答"
-        "permission" -> "${who}请求使用 ${toolDisplayName(toolName)}"
-        "plan" -> "计划等你批准"
-        "screen" -> "终端里有对话框等你处理"
-        else -> "需要你处理"
+        "question" -> if (who != null) res.getString(R.string.agents_card_question_by, who) else res.getString(R.string.agents_card_question)
+        "permission" -> {
+            val tool = toolName?.takeIf { it.isNotEmpty() }?.let(::toolDisplayName) ?: res.getString(R.string.agents_card_tool)
+            if (who != null) res.getString(R.string.agents_card_permission_by, who, tool) else res.getString(R.string.agents_card_permission, tool)
+        }
+        "plan" -> res.getString(R.string.agents_card_plan)
+        "screen" -> res.getString(R.string.agents_card_screen)
+        else -> res.getString(R.string.agents_card_other)
     }
 }
 
 /** Preserve the full supplied summary; use type-specific content when older hubs omit it. */
-internal val Interaction.cardSummary: String get() = summary?.takeIf { it.isNotBlank() } ?: when (kind) {
+internal fun Interaction.cardSummary(res: Resources): String = summary?.takeIf { it.isNotBlank() } ?: when (kind) {
     "question" -> questions.orEmpty().joinToString("\n\n") { it.question }
     "permission" -> permissionSummary().let { listOfNotNull(it.text, it.description).joinToString("\n") }
     "plan" -> plan.orEmpty()
     "screen" -> listOfNotNull(dialog?.question?.takeIf { it.isNotBlank() }, dialog?.detail?.takeIf { it.isNotBlank() })
         .joinToString("\n").ifBlank { screen.orEmpty() }
-    else -> "打开会话查看请求"
+    else -> res.getString(R.string.agents_card_open_session)
 }
 
 /** Plain text for a short preview: drop Markdown heading, emphasis and code markers and blank lines. */
@@ -87,22 +91,24 @@ internal fun markdownPreview(text: String): String = text.lineSequence()
     .filter { it.isNotBlank() }
     .joinToString("\n")
 
-internal fun Session.spaceLocation(machine: String?): String {
-    val space = spaceName?.takeIf { it.isNotBlank() } ?: spaceIndex?.let { "空间 $it" }
-        ?: spaceId?.takeIf { it.isNotBlank() } ?: folderName.ifBlank { "未提供空间" }
-    val slot = slotName?.takeIf { it.isNotBlank() } ?: slotIndex?.let { "标签页 $it" }
+internal fun Session.spaceLocation(res: Resources, machine: String?): String {
+    val space = spaceName?.takeIf { it.isNotBlank() } ?: spaceIndex?.let { res.getString(R.string.agents_space_index, it) }
+        ?: spaceId?.takeIf { it.isNotBlank() } ?: folderName.ifBlank { res.getString(R.string.agents_space_missing) }
+    val slot = slotName?.takeIf { it.isNotBlank() } ?: slotIndex?.let { res.getString(R.string.agents_tab_index, it) }
         ?: tabId?.takeIf { it.isNotBlank() } ?: slotId?.takeIf { it.isNotBlank() }
     return listOfNotNull(listOfNotNull(space, slot).joinToString(" › "), machine ?: machineId).joinToString(" · ")
 }
 
-internal fun LoopInfo.nextRunLabel(now: Instant, zone: ZoneId = ZoneId.systemDefault()): String {
-    val next = parseTime(nextAt) ?: return "循环 · 下次时间待更新"
+/** A loop's row fact: when it runs next, as a time today, else with its date (and year when not this year). */
+internal fun LoopInfo.nextRunLabel(res: Resources, now: Instant, zone: ZoneId = ZoneId.systemDefault()): String {
+    val next = parseTime(nextAt) ?: return res.getString(R.string.agents_row_loop_pending)
     val local = next.atZone(zone)
     val today = now.atZone(zone).toLocalDate()
-    val format = when {
-        local.toLocalDate() == today -> "HH:mm"
-        local.year == today.year -> "M月d日 HH:mm"
-        else -> "yyyy年M月d日 HH:mm"
+    val skeleton = when {
+        local.toLocalDate() == today -> LocalizedFormats.TIME
+        local.year == today.year -> LocalizedFormats.MONTH_DAY_TIME
+        else -> LocalizedFormats.DATE_TIME
     }
-    return "循环 · 下次 ${local.format(DateTimeFormatter.ofPattern(format))}"
+    val locale = res.configuration.locales[0]
+    return res.getString(R.string.agents_row_loop_next, LocalizedFormats.format(next, skeleton, locale, zone))
 }

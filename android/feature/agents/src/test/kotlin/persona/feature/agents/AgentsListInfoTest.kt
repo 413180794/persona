@@ -9,11 +9,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
 import org.junit.Assert.*
 import org.junit.Test
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 import java.time.Instant
 import java.time.ZoneId
 
+/** Robolectric for the strings: Simplified Chinese, the language the expected text is in. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 @OptIn(ExperimentalCoroutinesApi::class)
 class AgentsListInfoTest {
+    private val res get() = RuntimeEnvironment.getApplication().resources
+
     @Test fun sharedDraftUpdatesAndOutboxStatesRemainDistinct() = runTest {
         val session = Session("machine", "session", spaceName = "项目", slotName = "测试")
         val sessions = MutableStateFlow(listOf(session))
@@ -33,16 +42,16 @@ class AgentsListInfoTest {
         )
         val mixed = info(DeliveryState.Unknown, DeliveryState.Queued, DeliveryState.WaitingForNetwork, DeliveryState.Sending)
         assertEquals(listOf("结果待确认", "连上后自动发送 · 2", "发送中"), mixed.deliveryLabels)
-        assertEquals("草稿 · 保留输入", mixed.draftLabel)
+        assertTrue(mixed.hasDraft)
         assertEquals(listOf("正在核对"), info(DeliveryState.Verifying).deliveryLabels)
         assertTrue(info(DeliveryState.NeedsConfirmation).needsConfirmation)
         assertTrue(info(DeliveryState.Sent, DeliveryState.Refused, DeliveryState.Rejected).deliveryLabels.isEmpty())
         assertTrue(AgentRowMetadata().withDelivery(emptyList(), true).needsConfirmation)
-        assertEquals("项目 › 测试 · 机器", session.spaceLocation("机器"))
-        assertEquals("循环 · 下次 17:20", LoopInfo(nextAt = "2026-01-01T17:20:00Z")
-            .nextRunLabel(Instant.parse("2026-01-01T08:00:00Z"), ZoneId.of("UTC")))
-        assertEquals("循环 · 下次时间待更新", LoopInfo(nextAt = "invalid")
-            .nextRunLabel(Instant.parse("2026-01-01T08:00:00Z")))
+        assertEquals("项目 › 测试 · 机器", session.spaceLocation(res, "机器"))
+        assertEquals("循环，下次 17:20", LoopInfo(nextAt = "2026-01-01T17:20:00Z")
+            .nextRunLabel(res, Instant.parse("2026-01-01T08:00:00Z"), ZoneId.of("UTC")))
+        assertEquals("循环，下次时间待更新", LoopInfo(nextAt = "invalid")
+            .nextRunLabel(res, Instant.parse("2026-01-01T08:00:00Z")))
         sessions.value = emptyList()
         assertTrue(observed.isEmpty())
     }
@@ -65,20 +74,20 @@ class AgentsListInfoTest {
             assertEquals(4, list.counts[AgentQuickFilter.NeedsYou])
             assertTrue(visibleAgentRequests(requests, sessions, mutes, settings.copy(quick = AgentQuickFilter.Working)).isEmpty())
         }
-        assertEquals(requests.first().summary, requests.first().cardSummary)
+        assertEquals(requests.first().summary, requests.first().cardSummary(res))
         val question = Interaction("question", kind = "question", questions = listOf(Question("第一个问题"), Question("第二个问题")))
-        assertEquals("第一个问题\n\n第二个问题", question.cardSummary)
-        assertEquals("完整计划", question.copy(kind = "plan", plan = "完整计划").cardSummary)
-        assertEquals("屏幕问题\n完整说明", question.copy(kind = "screen", dialog = ScreenDialog(question = "屏幕问题", detail = "完整说明")).cardSummary)
+        assertEquals("第一个问题\n\n第二个问题", question.cardSummary(res))
+        assertEquals("完整计划", question.copy(kind = "plan", plan = "完整计划").cardSummary(res))
+        assertEquals("屏幕问题\n完整说明", question.copy(kind = "screen", dialog = ScreenDialog(question = "屏幕问题", detail = "完整说明")).cardSummary(res))
     }
 
     @Test fun anotherAgentsCardSaysWhoAsks() {
         val claude = Interaction("ix", kind = "permission", toolName = "Bash")
-        assertEquals("请求使用 Bash", claude.cardTitle)
-        assertEquals("Codex 请求使用 Bash", claude.copy(agent = "codex").cardTitle)
-        assertEquals("请求使用 Persona · mail send", claude.copy(toolName = "mcp__jarvis__mail_send").cardTitle)
-        assertEquals("DSH 有问题等你回答", claude.copy(kind = "question", agent = "dsh", agentLabelHint = "DSH").cardTitle)
-        assertEquals("有问题等你回答", claude.copy(kind = "question", agent = "claude").cardTitle)
+        assertEquals("请求使用 Bash", claude.cardTitle(res))
+        assertEquals("Codex 请求使用 Bash", claude.copy(agent = "codex").cardTitle(res))
+        assertEquals("请求使用 Persona · mail send", claude.copy(toolName = "mcp__jarvis__mail_send").cardTitle(res))
+        assertEquals("DSH 有问题等你回答", claude.copy(kind = "question", agent = "dsh", agentLabelHint = "DSH").cardTitle(res))
+        assertEquals("有问题等你回答", claude.copy(kind = "question", agent = "claude").cardTitle(res))
     }
 
     @Test fun requestCardsPreviewPlansWithoutMarkdownSyntax() {

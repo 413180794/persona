@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,6 +76,7 @@ fun TodosScreen(
     var newTitle by remember { mutableStateOf("") }
     var newNotes by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    val res = agentResources()
 
     val sessionMap = remember(sessions) { sessions.associateBy { it.key } }
     val sessionLookup: (SessionKey) -> Session? = remember(sessionMap) { { key: SessionKey -> sessionMap[key] } }
@@ -102,7 +105,7 @@ fun TodosScreen(
                 newTitle = ""
                 newNotes = ""
             },
-            title = "新建待办"
+            title = stringResource(R.string.agents_todo_new)
         ) {
             Column(
                 Modifier
@@ -113,21 +116,21 @@ fun TodosScreen(
                 JTextField(
                     newTitle,
                     { newTitle = it },
-                    label = "待办标题",
-                    placeholder = "一句话描述要做的事…",
+                    label = stringResource(R.string.agents_todo_title_label),
+                    placeholder = stringResource(R.string.agents_todo_title_placeholder),
                     singleLine = true
                 )
                 JTextField(
                     newNotes,
                     { newNotes = it },
-                    label = "说明与要求（可选）",
-                    placeholder = "详细说明要求与背景，交给 Agent 时一同发出…",
+                    label = stringResource(R.string.agents_todo_notes_optional),
+                    placeholder = stringResource(R.string.agents_todo_notes_placeholder),
                     minLines = 3,
                     maxLines = 6
                 )
                 Spacer(Modifier.height(8.dp))
                 JButton(
-                    text = "创建待办",
+                    text = stringResource(R.string.agents_todo_create),
                     onClick = {
                         val title = newTitle.trim()
                         val notes = newNotes.trim()
@@ -139,7 +142,7 @@ fun TodosScreen(
                                 try {
                                     tasks?.createTodo(title, notes)
                                 } catch (e: Exception) {
-                                    onError("创建待办失败：${e.message}")
+                                    onError(res.getString(R.string.agents_todo_create_failed, e.message.orEmpty()))
                                 }
                             }
                         }
@@ -152,10 +155,10 @@ fun TodosScreen(
     }
 
     JPage(
-        title = "待办",
+        title = stringResource(R.string.agents_todos_title),
         onBack = onBack,
         actions = {
-            JIconButton(PhIcons.Plus, "新建待办", { creating = true })
+            JIconButton(PhIcons.Plus, stringResource(R.string.agents_todo_new), { creating = true })
         }
     ) { padding ->
         LazyColumn(
@@ -169,21 +172,21 @@ fun TodosScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item(key = "search") {
-                JSearchField(query, { query = it }, placeholder = "搜索待办")
+                JSearchField(query, { query = it }, placeholder = stringResource(R.string.agents_todos_search))
             }
 
             if (uncompleted.isEmpty() && completed.isEmpty()) {
                 item(key = "empty") {
                     JEmptyState(
-                        title = if (query.isBlank()) "暂无待办" else "未找到相关待办",
-                        description = if (query.isBlank()) "记下一件要做的事，把它交给 Agent 去做。" else "换个关键词搜索试试。",
+                        title = stringResource(if (query.isBlank()) R.string.agents_todos_empty else R.string.agents_todos_no_match),
+                        description = stringResource(if (query.isBlank()) R.string.agents_todos_empty_hint else R.string.agents_todos_no_match_hint),
                         icon = PhIcons.ListChecks
                     )
                 }
             } else {
                 if (uncompleted.isNotEmpty()) {
                     item(key = "uncompleted-header") {
-                        JSectionHeader("未完成", count = uncompleted.size)
+                        JSectionHeader(stringResource(R.string.agents_todos_open), count = uncompleted.size)
                     }
 
                     itemsIndexed(uncompleted, key = { _, todo -> todo.id }) { index, todo ->
@@ -197,21 +200,21 @@ fun TodosScreen(
                         }
 
                         JSwipeActions(
-                            start = SwipeAction("完成", PhIcons.Check, Status.Working, {
+                            start = SwipeAction(stringResource(R.string.agents_todo_done_action), PhIcons.Check, Status.Working, {
                                 scope.launch {
                                     try {
                                         tasks?.setTodoDone(todo, true)
                                     } catch (e: Exception) {
-                                        onError("完成待办失败：${e.message}")
+                                        onError(res.getString(R.string.agents_todo_done_failed, e.message.orEmpty()))
                                     }
                                 }
                             }),
-                            end = SwipeAction("删除", PhIcons.Trash, Status.NeedsYou, {
+                            end = SwipeAction(stringResource(R.string.agents_todo_delete_action), PhIcons.Trash, Status.NeedsYou, {
                                 scope.launch {
                                     try {
                                         tasks?.deleteTodo(todo.id)
                                     } catch (e: Exception) {
-                                        onError("删除待办失败：${e.message}")
+                                        onError(res.getString(R.string.agents_todo_delete_failed, e.message.orEmpty()))
                                     }
                                 }
                             }, destructive = true)
@@ -237,7 +240,7 @@ fun TodosScreen(
                                                         try {
                                                             tasks?.setTodoDone(todo, true)
                                                         } catch (e: Exception) {
-                                                            onError("完成待办失败：${e.message}")
+                                                            onError(res.getString(R.string.agents_todo_done_failed, e.message.orEmpty()))
                                                         }
                                                     }
                                                 },
@@ -257,7 +260,7 @@ fun TodosScreen(
                                             overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.weight(1f)
                                         )
-                                        JTag(state.title)
+                                        JTag(state.label)
                                     }
 
                                     // 最要紧 Agent 动态
@@ -270,7 +273,8 @@ fun TodosScreen(
                                         }
                                         val text = urgent.session?.lastText?.takeIf { it.isNotBlank() }
                                             ?: urgent.agent.title?.takeIf { it.isNotBlank() }
-                                            ?: if (urgent.isFailed) "启动失败：${urgent.agent.startError}" else "正在进行"
+                                            ?: if (urgent.isFailed) stringResource(R.string.agents_todo_start_failed, urgent.agent.startError.orEmpty())
+                                            else stringResource(R.string.agents_todo_in_progress)
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -294,13 +298,13 @@ fun TodosScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        val timeStr = relativeTime(todo.updated ?: todo.created, now)
+                                        val timeStr = relativeTime(res, todo.updated ?: todo.created, now)
                                         if (timeStr.isNotBlank()) {
                                             Text(timeStr, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
                                         }
                                         Spacer(Modifier.weight(1f))
                                         if (todo.currentAgents.isNotEmpty()) {
-                                            Text("${todo.currentAgents.size} 个 Agent", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+                                            Text(pluralStringResource(R.plurals.agents_todo_agents, todo.currentAgents.size, todo.currentAgents.size), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
                                         }
                                     }
                                 }
@@ -317,7 +321,7 @@ fun TodosScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             JSectionHeader(
-                                "已完成",
+                                stringResource(R.string.agents_todos_done),
                                 count = completed.size,
                                 modifier = Modifier.weight(1f)
                             )
@@ -345,7 +349,7 @@ fun TodosScreen(
                                                     try {
                                                         tasks?.setTodoDone(todo, false)
                                                     } catch (e: Exception) {
-                                                        onError("重新打开待办失败：${e.message}")
+                                                        onError(res.getString(R.string.agents_todo_reopen_failed, e.message.orEmpty()))
                                                     }
                                                 }
                                             },
@@ -362,7 +366,7 @@ fun TodosScreen(
                                         modifier = Modifier.weight(1f)
                                     )
                                     if (todo.doneBy == "auto") {
-                                        JTag("自动完成")
+                                        JTag(stringResource(R.string.agents_todo_auto_done))
                                     }
                                 }
                             }
@@ -373,3 +377,13 @@ fun TodosScreen(
         }
     }
 }
+
+/** A to-do's state in the language on screen (core:contracts' `TodoState.title` is the Chinese). */
+internal val TodoState.label: String @Composable get() = stringResource(when (this) {
+    TodoState.Done -> R.string.agents_todos_done
+    TodoState.NeedsYou -> R.string.agents_todo_state_needs_you
+    TodoState.Unread -> R.string.agents_todo_state_unread
+    TodoState.Working -> R.string.agents_todo_state_working
+    TodoState.FollowUp -> R.string.agents_todo_state_follow_up
+    TodoState.NotStarted -> R.string.agents_todo_state_not_started
+})

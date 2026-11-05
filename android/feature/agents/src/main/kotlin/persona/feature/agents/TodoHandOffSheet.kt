@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -22,8 +23,8 @@ import persona.core.contracts.todoHandOffPrompt
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
-enum class HandOffMode(val title: String) {
-    New("新开一个"), Existing("交给已有的")
+enum class HandOffMode(@androidx.annotation.StringRes val title: Int) {
+    New(R.string.agents_handoff_new), Existing(R.string.agents_handoff_existing)
 }
 
 @Composable
@@ -54,7 +55,7 @@ fun TodoHandOffSheet(
     }
     var selectedTarget by remember(runningAgents) { mutableStateOf(runningAgents.firstOrNull()?.key) }
 
-    JSheet(onDismiss = onDismiss, title = "交给 Agent") {
+    JSheet(onDismiss = onDismiss, title = stringResource(R.string.agents_todo_hand_to_agent)) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -68,7 +69,7 @@ fun TodoHandOffSheet(
             ) {
                 HandOffMode.entries.forEach { m ->
                     JChip(
-                        m.title,
+                        stringResource(m.title),
                         selected = mode == m,
                         onClick = { mode = m },
                         modifier = Modifier.weight(1f)
@@ -77,13 +78,14 @@ fun TodoHandOffSheet(
             }
 
             if (mode == HandOffMode.New) {
-                JSectionHeader("开辟新会话")
+                JSectionHeader(stringResource(R.string.agents_handoff_new_session))
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box {
                         JGroupItem(GroupPosition.of(0, 4)) {
                             JRow(
-                                "电脑",
-                                subtitle = selectedMachine?.let { it.displayName + if (it.online) "" else "（离线）" } ?: "选择电脑",
+                                stringResource(R.string.agents_handoff_computer),
+                                subtitle = selectedMachine?.let { if (it.online) it.displayName else stringResource(R.string.agents_handoff_machine_offline, it.displayName) }
+                                    ?: stringResource(R.string.agents_handoff_pick_computer),
                                 leadingIcon = PhIcons.Desktop,
                                 chevron = true,
                                 onClick = { showMachineMenu = true }
@@ -92,7 +94,7 @@ fun TodoHandOffSheet(
                         DropdownMenu(showMachineMenu, onDismissRequest = { showMachineMenu = false }) {
                             machines.forEach { m ->
                                 DropdownMenuItem(
-                                    text = { Text(m.displayName + if (m.online) "" else "（离线）") },
+                                    text = { Text(if (m.online) m.displayName else stringResource(R.string.agents_handoff_machine_offline, m.displayName)) },
                                     onClick = {
                                         selectedMachine = m
                                         showMachineMenu = false
@@ -103,13 +105,13 @@ fun TodoHandOffSheet(
                     }
 
                     JGroupItem(GroupPosition.of(1, 4)) {
-                        JTextField(cwd, { cwd = it }, label = "工作目录", singleLine = true)
+                        JTextField(cwd, { cwd = it }, label = stringResource(R.string.agents_handoff_directory), singleLine = true)
                     }
 
                     Box {
                         JGroupItem(GroupPosition.of(2, 4)) {
                             JRow(
-                                "启动器",
+                                stringResource(R.string.agents_new_launcher),
                                 subtitle = launcher,
                                 leadingIcon = PhIcons.RocketLaunch,
                                 chevron = true,
@@ -132,8 +134,8 @@ fun TodoHandOffSheet(
                     Box {
                         JGroupItem(GroupPosition.of(3, 4)) {
                             JRow(
-                                "权限模式",
-                                subtitle = if (permissionMode == "bypassPermissions") "允许一切 (bypassPermissions)" else "默认 (default)",
+                                stringResource(R.string.agents_new_permission_mode),
+                                subtitle = stringResource(if (permissionMode == "bypassPermissions") R.string.agents_handoff_mode_bypass else R.string.agents_handoff_mode_default),
                                 leadingIcon = PhIcons.ShieldCheck,
                                 chevron = true,
                                 onClick = { showModeMenu = true }
@@ -141,20 +143,20 @@ fun TodoHandOffSheet(
                         }
                         DropdownMenu(showModeMenu, onDismissRequest = { showModeMenu = false }) {
                             DropdownMenuItem(
-                                text = { Text("默认 (default)") },
+                                text = { Text(stringResource(R.string.agents_handoff_mode_default)) },
                                 onClick = { permissionMode = "default"; showModeMenu = false }
                             )
                             DropdownMenuItem(
-                                text = { Text("允许一切 (bypassPermissions)") },
+                                text = { Text(stringResource(R.string.agents_handoff_mode_bypass)) },
                                 onClick = { permissionMode = "bypassPermissions"; showModeMenu = false }
                             )
                         }
                     }
                 }
             } else {
-                JSectionHeader("选择已有 Agent", count = runningAgents.size)
+                JSectionHeader(stringResource(R.string.agents_handoff_pick_agent), count = runningAgents.size)
                 if (runningAgents.isEmpty()) {
-                    JEmptyState("没有运行中的 Agent", "当前电脑没有可直接分配任务的活跃 Agent。")
+                    JEmptyState(stringResource(R.string.agents_handoff_no_agents), stringResource(R.string.agents_handoff_no_agents_hint))
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         runningAgents.forEachIndexed { index, session ->
@@ -163,7 +165,7 @@ fun TodoHandOffSheet(
                             JGroupItem(GroupPosition.of(index, runningAgents.size)) {
                                 JRow(
                                     title = session.displayTitle,
-                                    subtitle = "$machineName · ${session.folderName}",
+                                    subtitle = stringResource(R.string.agents_todo_location, machineName, session.folderName),
                                     leading = {
                                         val status = Status.entries.firstOrNull { it.name == session.agentState.name } ?: Status.Idle
                                         JStatusDot(status)
@@ -178,17 +180,17 @@ fun TodoHandOffSheet(
                 }
             }
 
-            JSectionHeader("要它做什么")
+            JSectionHeader(stringResource(R.string.agents_handoff_what))
             JTextField(
                 instruction,
                 { instruction = it },
-                label = "任务重点或要求",
-                placeholder = "把待办内容交给他做，可以说说重点或要求…",
+                label = stringResource(R.string.agents_handoff_instruction),
+                placeholder = stringResource(R.string.agents_handoff_instruction_placeholder),
                 minLines = 3,
                 maxLines = 6
             )
 
-            JSectionHeader("会一起发过去")
+            JSectionHeader(stringResource(R.string.agents_handoff_sent_along))
             JCard(Modifier.fillMaxWidth()) {
                 Row(
                     Modifier.fillMaxWidth().padding(Tokens.Space.s),
@@ -206,7 +208,7 @@ fun TodoHandOffSheet(
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             JIcon(PhIcons.ListChecks, null, size = 16.dp, tint = PersonaTheme.palette.accent)
                             Text(
-                                "待办 · ${todo.title}",
+                                stringResource(R.string.agents_row_todo, todo.title),
                                 style = PersonaTheme.type.headline,
                                 color = PersonaTheme.palette.ink,
                                 maxLines = 1,
@@ -229,7 +231,7 @@ fun TodoHandOffSheet(
             Spacer(Modifier.height(8.dp))
 
             JButton(
-                text = if (starting) "正在启动…" else "交给 Agent",
+                text = stringResource(if (starting) R.string.agents_handoff_starting else R.string.agents_todo_hand_to_agent),
                 onClick = {
                     val prompt = todoHandOffPrompt(todo.title, todo.notes, instruction)
                     starting = true

@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,11 +42,12 @@ fun TodoDetailScreen(
 ) {
     val todo = todos.firstOrNull { it.id == todoId }
     val scope = rememberCoroutineScope()
+    val res = agentResources()
 
     if (todo == null) {
-        JPage(title = "待办详情", onBack = onBack) {
+        JPage(title = stringResource(R.string.agents_todo_detail), onBack = onBack) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                JEmptyState("待办已不存在", "该待办可能已被删除。")
+                JEmptyState(stringResource(R.string.agents_todo_gone), stringResource(R.string.agents_todo_gone_hint))
             }
         }
         return
@@ -66,16 +68,16 @@ fun TodoDetailScreen(
     if (confirmDelete) {
         JDialog(
             onDismiss = { confirmDelete = false },
-            title = "删除待办",
-            text = "确定要删除待办「${todo.title}」吗？关联的会话不会被关闭。",
-            confirm = "删除" to {
+            title = stringResource(R.string.agents_todo_delete_title),
+            text = stringResource(R.string.agents_todo_delete_text, todo.title),
+            confirm = stringResource(R.string.agents_todo_delete_action) to {
                 confirmDelete = false
                 scope.launch {
                     try {
                         tasks?.deleteTodo(todo.id)
                         onBack()
                     } catch (e: Exception) {
-                        onError("删除失败：${e.message}")
+                        onError(res.getString(R.string.agents_todo_delete_error, e.message.orEmpty()))
                     }
                 }
             },
@@ -87,22 +89,22 @@ fun TodoDetailScreen(
         JActionSheet(
             actions = listOf(
                 JAction(
-                    label = "删除待办",
+                    label = stringResource(R.string.agents_todo_delete_title),
                     icon = PhIcons.Trash,
                     destructive = true,
                     onClick = { confirmDelete = true }
                 )
             ),
             onDismiss = { menuOpen = false },
-            title = "待办操作"
+            title = stringResource(R.string.agents_todo_actions)
         )
     }
 
     JPage(
-        title = "待办详情",
+        title = stringResource(R.string.agents_todo_detail),
         onBack = onBack,
         actions = {
-            JIconButton(PhIcons.DotsThree, "更多", { menuOpen = true })
+            JIconButton(PhIcons.DotsThree, stringResource(R.string.agents_todo_more), { menuOpen = true })
         },
         bottomBar = {
             JBottomBar {
@@ -111,7 +113,7 @@ fun TodoDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     JButton(
-                        text = if (todo.isDone) "重新打开" else "完成待办",
+                        text = stringResource(if (todo.isDone) R.string.agents_todo_reopen else R.string.agents_todo_complete),
                         kind = JButtonKind.Secondary,
                         icon = if (todo.isDone) PhIcons.ArrowClockwise else PhIcons.Check,
                         onClick = {
@@ -119,14 +121,14 @@ fun TodoDetailScreen(
                                 try {
                                     tasks?.setTodoDone(todo, !todo.isDone)
                                 } catch (e: Exception) {
-                                    onError("更新状态失败：${e.message}")
+                                    onError(res.getString(R.string.agents_todo_state_failed, e.message.orEmpty()))
                                 }
                             }
                         },
                         modifier = Modifier.weight(1f)
                     )
                     JButton(
-                        text = "交给 Agent",
+                        text = stringResource(R.string.agents_todo_hand_to_agent),
                         icon = PhIcons.Robot,
                         onClick = { onHandOff(todo) },
                         modifier = Modifier.weight(1f)
@@ -163,16 +165,16 @@ fun TodoDetailScreen(
                             Spacer(Modifier.width(8.dp))
                             if (todo.isDone) {
                                 if (todo.doneBy == "auto") {
-                                    JTag("自动完成")
+                                    JTag(stringResource(R.string.agents_todo_auto_done))
                                 } else {
-                                    JTag("已完成")
+                                    JTag(stringResource(R.string.agents_todos_done))
                                 }
                             } else {
-                                JTag(state.title)
+                                JTag(state.label)
                             }
                             Spacer(Modifier.weight(1f))
                             if (!editingTitle && !editingNotes) {
-                                JIconButton(PhIcons.NotePencil, "编辑", {
+                                JIconButton(PhIcons.NotePencil, stringResource(R.string.agents_todo_edit), {
                                     editingTitle = true
                                     editingNotes = true
                                 })
@@ -183,7 +185,7 @@ fun TodoDetailScreen(
                             JTextField(
                                 titleText,
                                 { titleText = it },
-                                label = "待办标题",
+                                label = stringResource(R.string.agents_todo_title_label),
                                 singleLine = true
                             )
                         } else {
@@ -198,8 +200,8 @@ fun TodoDetailScreen(
                             JTextField(
                                 notesText,
                                 { notesText = it },
-                                label = "说明与要求",
-                                placeholder = "添加详细说明，交给 Agent 时会作为上下文一同发出…",
+                                label = stringResource(R.string.agents_todo_notes_label),
+                                placeholder = stringResource(R.string.agents_todo_notes_edit_placeholder),
                                 minLines = 3,
                                 maxLines = 8
                             )
@@ -207,21 +209,21 @@ fun TodoDetailScreen(
                                 Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.End
                             ) {
-                                JTextButton("取消", onClick = {
+                                JTextButton(stringResource(R.string.agents_todo_cancel), onClick = {
                                     titleText = todo.title
                                     notesText = todo.notes
                                     editingTitle = false
                                     editingNotes = false
                                 })
                                 Spacer(Modifier.width(8.dp))
-                                JButton("保存", onClick = {
+                                JButton(stringResource(R.string.agents_todo_save), onClick = {
                                     editingTitle = false
                                     editingNotes = false
                                     scope.launch {
                                         try {
                                             tasks?.updateTodo(todo.id, title = titleText.trim(), notes = notesText.trim())
                                         } catch (e: Exception) {
-                                            onError("保存失败：${e.message}")
+                                            onError(res.getString(R.string.agents_todo_save_failed, e.message.orEmpty()))
                                         }
                                     }
                                 })
@@ -234,7 +236,7 @@ fun TodoDetailScreen(
                             )
                         } else {
                             Text(
-                                "点击编辑添加任务说明与要求…",
+                                stringResource(R.string.agents_todo_notes_empty),
                                 style = PersonaTheme.type.caption,
                                 color = PersonaTheme.palette.ink3,
                                 modifier = Modifier.clickable {
@@ -246,7 +248,7 @@ fun TodoDetailScreen(
 
                         if (todo.isDone && todo.doneBy == "auto" && !todo.doneReason.isNullOrBlank()) {
                             Text(
-                                "自动完成理由：${todo.doneReason}",
+                                stringResource(R.string.agents_todo_auto_reason, todo.doneReason.orEmpty()),
                                 style = PersonaTheme.type.caption,
                                 color = PersonaTheme.palette.ink3
                             )
@@ -257,20 +259,20 @@ fun TodoDetailScreen(
 
             // 正在做的 Agents
             item(key = "active-header") {
-                JSectionHeader("正在做的 Agent", count = todo.currentAgents.size)
+                JSectionHeader(stringResource(R.string.agents_todo_active_agents), count = todo.currentAgents.size)
             }
 
             if (todo.currentAgents.isEmpty()) {
                 item(key = "active-empty") {
-                    JEmptyState("暂无分配的 Agent", "点击底部「交给 Agent」指派任务。")
+                    JEmptyState(stringResource(R.string.agents_todo_no_agents), stringResource(R.string.agents_todo_no_agents_hint))
                 }
             } else {
                 itemsIndexed(todo.currentAgents, key = { _, a -> a.key.path }) { index, agent ->
                     val session = sessionLookup(agent.key)
                     val machineName = machines.firstOrNull { it.id == agent.machineId }?.displayName ?: agent.machineId
-                    val title = session?.displayTitle ?: agent.title?.takeIf { it.isNotBlank() } ?: "会话 ${agent.sessionId.take(8)}"
-                    val subtitle = "$machineName · ${session?.folderName ?: agent.cwd?.substringAfterLast('/').orEmpty()}"
-                    val preview = session?.lastText ?: if (session == null) "（不在当前活跃列表）" else null
+                    val title = session?.displayTitle ?: agent.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.agents_todo_session_short, agent.sessionId.take(8))
+                    val subtitle = stringResource(R.string.agents_todo_location, machineName, session?.folderName ?: agent.cwd?.substringAfterLast('/').orEmpty())
+                    val preview = session?.lastText ?: if (session == null) stringResource(R.string.agents_todo_not_listed) else null
                     val status = session?.let {
                         Status.entries.firstOrNull { s -> s.name == it.agentState.name }
                     } ?: Status.Idle
@@ -282,12 +284,12 @@ fun TodoDetailScreen(
                                 subtitle = preview ?: subtitle,
                                 leading = { JStatusDot(status) },
                                 trailing = {
-                                    JIconButton(PhIcons.X, "移出", {
+                                    JIconButton(PhIcons.X, stringResource(R.string.agents_todo_remove_agent), {
                                         scope.launch {
                                             try {
                                                 tasks?.unlinkTodoAgent(todo.id, agent.machineId, agent.sessionId)
                                             } catch (e: Exception) {
-                                                onError("移出失败：${e.message}")
+                                                onError(res.getString(R.string.agents_todo_remove_failed, e.message.orEmpty()))
                                             }
                                         }
                                     })
@@ -301,17 +303,17 @@ fun TodoDetailScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        "启动失败：${agent.startError}",
+                                        stringResource(R.string.agents_todo_start_failed, agent.startError.orEmpty()),
                                         style = PersonaTheme.type.caption,
                                         color = PersonaTheme.palette.needsYou.text,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    JTextButton("移除", onClick = {
+                                    JTextButton(stringResource(R.string.agents_todo_remove), onClick = {
                                         scope.launch {
                                             try {
                                                 tasks?.unlinkTodoAgent(todo.id, agent.machineId, agent.sessionId)
                                             } catch (e: Exception) {
-                                                onError("移除失败：${e.message}")
+                                                onError(res.getString(R.string.agents_todo_remove_error, e.message.orEmpty()))
                                             }
                                         }
                                     })
@@ -330,7 +332,7 @@ fun TodoDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         JSectionHeader(
-                            "参与过的 Agent",
+                            stringResource(R.string.agents_todo_past_agents),
                             count = todo.releasedAgents.size,
                             modifier = Modifier.weight(1f)
                         )
@@ -341,8 +343,8 @@ fun TodoDetailScreen(
                 if (!pastFolded) {
                     itemsIndexed(todo.releasedAgents, key = { _, a -> "rel:${a.key.path}" }) { index, agent ->
                         val session = sessionLookup(agent.key)
-                        val title = session?.displayTitle ?: agent.title?.takeIf { it.isNotBlank() } ?: "会话 ${agent.sessionId.take(8)}"
-                        val subtitle = "已解除关联 · ${agent.machineId}"
+                        val title = session?.displayTitle ?: agent.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.agents_todo_session_short, agent.sessionId.take(8))
+                        val subtitle = stringResource(R.string.agents_todo_unlinked, agent.machineId)
                         JGroupItem(GroupPosition.of(index, todo.releasedAgents.size)) {
                             JRow(
                                 title = title,

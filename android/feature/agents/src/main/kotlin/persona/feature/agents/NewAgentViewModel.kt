@@ -62,7 +62,7 @@ internal data class NewAgentState(
     val starting: Boolean = false,
     val pending: AgentStartOperation? = null,
     val created: Session? = null,
-    val error: String? = null,
+    val error: AgentText? = null,
     val modelConfig: NewAgentModelConfig = NewAgentModelConfig.Unknown,
     /** The prefilled machine was not online, so another one was picked (named here for the form to say so). */
     val prefillOffline: String? = null,
@@ -141,7 +141,7 @@ internal class NewAgentViewModel(
                     val r = pending.request
                     mutable.value = NewAgentState(initialized = true, machineId = r.machineId,
                         selection = AgentDefaults(r.cwd, r.launcher, r.permissionMode.orEmpty(), r.effort.orEmpty()), model = r.model.orEmpty(),
-                        prompt = pending.firstMessage ?: r.prompt.orEmpty(), pending = pending, error = "上次启动的结果待确认，请核对结果")
+                        prompt = pending.firstMessage ?: r.prompt.orEmpty(), pending = pending, error = AgentText(R.string.agents_new_error_pending))
                 } else {
                     val last = store.lastMachine(service.scope)
                     mutable.update { it.copy(initialized = true, prompt = prefill?.prompt.orEmpty()) }
@@ -162,7 +162,7 @@ internal class NewAgentViewModel(
                     }
                 }
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { mutable.update { it.copy(error = "无法读取启动记录，请关闭后重试") } }
+            catch (_: Exception) { mutable.update { it.copy(error = AgentText(R.string.agents_new_error_record)) } }
         }
     }
     /** Opens the form for a new session, or for a new tab in [space]; an unconfirmed start keeps its own form. */
@@ -200,9 +200,9 @@ internal class NewAgentViewModel(
                 mutable.update { it.copy(loading = false, launchers = launchers, recent = dirs.recent.take(6), modelConfig = config,
                     selection = defaults.copy(cwd = it.space?.cwd ?: prefilledCwd ?: defaults.cwd.ifEmpty { dirs.recent.firstOrNull()?.path ?: dirs.path },
                         launcher = defaultLauncher(config, defaults, launchers)),
-                    error = (config as? NewAgentModelConfig.Failed)?.let { failed -> "读不到新 Agent 模型配置：${failed.reason}" }) }
+                    error = (config as? NewAgentModelConfig.Failed)?.let { failed -> AgentText(R.string.agents_new_error_model_config, failed.reason) }) }
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { mutable.update { it.copy(loading = false, error = "未能加载目录和启动器，请重试") } }
+            catch (_: Exception) { mutable.update { it.copy(loading = false, error = AgentText(R.string.agents_new_error_load)) } }
             loadModels()
         }
     }
@@ -265,7 +265,7 @@ internal class NewAgentViewModel(
                 val dirs = service.directories(machine, path)
                 mutable.update { it.copy(browser = dirs, loading = false) }
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { mutable.update { it.copy(loading = false, error = "目录没有打开，请重试或返回") } }
+            catch (_: Exception) { mutable.update { it.copy(loading = false, error = AgentText(R.string.agents_new_error_browse)) } }
         }
     }
     fun closeBrowser(use: Boolean = false) {
@@ -278,11 +278,11 @@ internal class NewAgentViewModel(
         if (!current.initialized || current.starting || current.created != null) return
         current.pending?.let {
             if (it.request.machineId == session.machineId && it.request.resumeSessionId == session.sessionId) submit()
-            else mutable.update { it.copy(error = "另一个启动结果待确认，请先到新建会话中核对") }
+            else mutable.update { it.copy(error = AgentText(R.string.agents_new_error_other_pending)) }
             return
         }
         if (session.cwd.isBlank() || machines.value.none { it.id == session.machineId && it.online }) {
-            mutable.update { it.copy(error = "机器上线且目录可用后才能继续") }
+            mutable.update { it.copy(error = AgentText(R.string.agents_new_error_resume_offline)) }
             return
         }
         machineJob?.cancel()
@@ -295,7 +295,7 @@ internal class NewAgentViewModel(
                 val launcher = session.launcher?.takeIf { name -> available.any { it.name == name && it.agentType == type } }
                     ?: available.firstOrNull { it.agentType == type && session.launcher.isNullOrBlank() }?.name
                 if (launcher == null) {
-                    mutable.update { it.copy(error = "原启动器不可用，请先在机器上检查") }
+                    mutable.update { it.copy(error = AgentText(R.string.agents_new_error_launcher_gone)) }
                     return@launch
                 }
                 execute(AgentStartOperation(UUID.randomUUID().toString(), AgentStartRequest(
@@ -303,7 +303,7 @@ internal class NewAgentViewModel(
                     agentType = type.takeIf { it != "claude" }, resumeSessionId = session.sessionId,
                 )), fresh = true)
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { mutable.update { it.copy(error = if (it.pending == null) "无法准备继续会话，请重试" else "继续结果待确认，请核对结果") } }
+            catch (_: Exception) { mutable.update { it.copy(error = if (it.pending == null) AgentText(R.string.agents_new_error_resume) else AgentText(R.string.agents_new_error_resume_pending)) } }
             finally { mutable.update { it.copy(starting = false) } }
         }
     }
@@ -321,7 +321,7 @@ internal class NewAgentViewModel(
                 val operation = previous ?: newOperation(current, agentType)
                 execute(operation, fresh = previous == null)
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { mutable.update { it.copy(error = if (it.pending == null) "启动记录未保存，请重试" else "未收到启动结果，请重试核对；不会重复创建") } }
+            catch (_: Exception) { mutable.update { it.copy(error = if (it.pending == null) AgentText(R.string.agents_new_error_save) else AgentText(R.string.agents_new_error_no_result)) } }
             finally { mutable.update { it.copy(starting = false) } }
         }
     }
@@ -365,7 +365,7 @@ internal class NewAgentViewModel(
                         catch (e: CancellationException) { throw e } catch (_: Exception) { false }
                     if (!queued) {
                         // The record stays: checking again queues the same message under the same id, never a second one.
-                        mutable.update { it.copy(error = "会话已经开好，第一条消息还没放进待发队列，请再核对一次") }
+                        mutable.update { it.copy(error = AgentText(R.string.agents_new_error_first_message)) }
                         return
                     }
                 }
@@ -377,10 +377,10 @@ internal class NewAgentViewModel(
             }
             is AgentStartResult.Rejected -> {
                 store.pending(service.scope, null)
-                mutable.update { it.copy(pending = null, error = result.message) }
+                mutable.update { it.copy(pending = null, error = AgentText.raw(result.message)) }
             }
-            AgentStartResult.Pending -> mutable.update { it.copy(error = "正在启动，可以稍后核对结果") }
-            AgentStartResult.Unknown -> mutable.update { it.copy(error = "启动结果待确认。为避免重复创建，请核对结果或到机器上查看") }
+            AgentStartResult.Pending -> mutable.update { it.copy(error = AgentText(R.string.agents_new_error_starting)) }
+            AgentStartResult.Unknown -> mutable.update { it.copy(error = AgentText(R.string.agents_new_error_unknown)) }
         }
     }
     fun opened() {
@@ -392,7 +392,7 @@ internal class NewAgentViewModel(
             store.pending(service.scope, null)
             mutable.update { it.copy(pending = null, created = null, prompt = "") }
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { mutable.update { it.copy(error = "启动记录未清理，下次会先核对结果") } }
+        catch (_: Exception) { mutable.update { it.copy(error = AgentText(R.string.agents_new_error_cleanup)) } }
     }
 }
 

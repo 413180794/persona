@@ -10,6 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import android.content.res.Resources
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import persona.core.contracts.Machine
@@ -24,7 +26,7 @@ internal fun NewAgentDialog(model: NewAgentViewModel, machines: List<Machine>, o
     // Outside the list: the model list stays open whatever the form below it scrolls away.
     var picking by remember { mutableStateOf(false) }
     val close = { if (!state.starting) { if (state.browsing) model.closeBrowser() else onDismiss() } }
-    JSheet(onDismiss = { if (!state.starting) onDismiss() }, title = "新建会话") {
+    JSheet(onDismiss = { if (!state.starting) onDismiss() }, title = stringResource(R.string.agents_action_new_session)) {
         BackHandler(onBack = close)
         Column(Modifier.fillMaxWidth().weight(1f).imePadding()) {
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -51,7 +53,7 @@ internal fun NewAgentPage(
     var picking by remember(initialModelQuery) { mutableStateOf(initialModelQuery != null) }
     val close = { if (!state.starting) { if (state.browsing) model.closeBrowser() else onBack() } }
     BackHandler(onBack = close)
-    JListPage(title = "新建会话", onBack = close, largeTitle = false, bottomBar = {
+    JListPage(title = stringResource(R.string.agents_action_new_session), onBack = close, largeTitle = false, bottomBar = {
         NewAgentFooter(state, model, machines, online, Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s))
     }) {
         newAgentItems(state, model, machines, query, { query = it }, close, onModels = { picking = true })
@@ -68,25 +70,25 @@ private fun LazyListScope.newAgentItems(
     if (state.loading) item("loading") { JLinearProgress(null) }
     if (state.browsing) {
         item("browser-title") {
-            JSectionHeader("选择目录", action = { JTextButton("返回", close, enabled = !state.starting) })
+            JSectionHeader(stringResource(R.string.agents_new_choose_directory), action = { JTextButton(stringResource(R.string.agents_new_back), close, enabled = !state.starting) })
             Text(state.browser?.path ?: state.browsePath, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         }
         state.browser?.let { directory ->
             if (directory.parent.isNotBlank() && directory.parent != directory.path) item("parent") {
-                JTextButton("上一级", { model.browse(directory.parent) }, enabled = !state.loading)
+                JTextButton(stringResource(R.string.agents_new_parent), { model.browse(directory.parent) }, enabled = !state.loading)
             }
             if (directory.entries.isEmpty()) item("empty-directory") {
-                Text("这个目录下没有子目录", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+                Text(stringResource(R.string.agents_new_no_subdirectories), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
             }
             itemsIndexed(directory.entries, key = { _, entry -> entry.path }) { index, entry ->
                 JGroupItem(GroupPosition.of(index, directory.entries.size)) {
-                    JRow(entry.name, subtitle = if (entry.isGit) "Git 仓库" else null, leadingIcon = PhIcons.FolderSimple,
+                    JRow(entry.name, subtitle = if (entry.isGit) stringResource(R.string.agents_new_git_repo) else null, leadingIcon = PhIcons.FolderSimple,
                         enabled = !state.loading, onClick = { model.browse(entry.path) })
                 }
             }
         }
         if (!state.loading && state.browser == null) item("retry-browser") {
-            JButton("重试打开", { model.browse(state.browsePath) }, kind = JButtonKind.Secondary)
+            JButton(stringResource(R.string.agents_new_retry_open), { model.browse(state.browsePath) }, kind = JButtonKind.Secondary)
         }
         return
     }
@@ -94,12 +96,12 @@ private fun LazyListScope.newAgentItems(
     // Existing spaces keep their machine and directory fixed.
     if (space != null) item("space") {
         val machine = machines.firstOrNull { it.id == space.machineId }
-        JSectionHeader("在「${space.name}」开新标签")
-        JRow(machine?.displayName ?: space.machineId, value = if (machine?.online == true) "在线" else "离线", leadingIcon = PhIcons.Laptop)
-        JRow("目录", subtitle = space.cwd, leadingIcon = PhIcons.FolderSimple)
-        if (machine?.online != true) Text("这台机器离线，连上后才能开新标签", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+        JSectionHeader(stringResource(R.string.agents_new_tab_in, space.name))
+        JRow(machine?.displayName ?: space.machineId, value = stringResource(if (machine?.online == true) R.string.agents_new_online else R.string.agents_new_offline), leadingIcon = PhIcons.Laptop)
+        JRow(stringResource(R.string.agents_directory), subtitle = space.cwd, leadingIcon = PhIcons.FolderSimple)
+        if (machine?.online != true) Text(stringResource(R.string.agents_new_space_offline), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
     } else item("machines") {
-        JSectionHeader("机器")
+        JSectionHeader(stringResource(R.string.agents_new_machine))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             machines.forEach { machine ->
                 JChip(machine.displayName, selected = machine.id == state.machineId, icon = PhIcons.Laptop,
@@ -107,19 +109,19 @@ private fun LazyListScope.newAgentItems(
                     onClick = if (editable && machine.online) ({ onQuery(""); model.selectMachine(machine.id) }) else null)
             }
         }
-        if (machines.none { it.online }) Text("暂无在线机器，请先让机器连上 hub", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+        if (machines.none { it.online }) Text(stringResource(R.string.agents_new_no_online), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         state.prefillOffline?.let {
-            Text("「$it」现在离线，先选了另一台；它连上后可以换回去", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+            Text(stringResource(R.string.agents_new_prefill_offline, it), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         }
     }
     if (state.error != null && !state.loading && state.pending == null && state.machineId.isNotBlank()) item("reload") {
-        JButton("重新加载选项", { model.selectMachine(state.machineId) }, enabled = !state.locked, kind = JButtonKind.Secondary)
+        JButton(stringResource(R.string.agents_new_reload), { model.selectMachine(state.machineId) }, enabled = !state.locked, kind = JButtonKind.Secondary)
     }
     if (space == null) {
         item("directory") {
-            JSectionHeader("目录")
+            JSectionHeader(stringResource(R.string.agents_directory))
             JGroupItem(GroupPosition.Single) {
-                JRow("选择目录", subtitle = state.selection.cwd.takeIf { it.isNotBlank() }, leadingIcon = PhIcons.FolderSimple,
+                JRow(stringResource(R.string.agents_new_choose_directory), subtitle = state.selection.cwd.takeIf { it.isNotBlank() }, leadingIcon = PhIcons.FolderSimple,
                     enabled = editable && state.machineId.isNotBlank(), onClick = { model.browse() })
             }
         }
@@ -131,7 +133,7 @@ private fun LazyListScope.newAgentItems(
             }
         }
     }
-    item("agent-types-title") { JSectionHeader("Agent 类型") }
+    item("agent-types-title") { JSectionHeader(stringResource(R.string.agents_new_agent_type)) }
     val types = state.launchers.map { it.agentType }.distinct()
     val selectedType = state.agentType.takeIf { state.following || state.selection.launcher.isNotEmpty() }
     itemsIndexed(types, key = { _, type -> "type:$type" }) { index, type ->
@@ -143,9 +145,9 @@ private fun LazyListScope.newAgentItems(
         }
     }
     item("launcher-search") {
-        JSectionHeader(if (state.follow != null) "本次启动器" else "启动器")
-        JSearchField(query, { if (editable) onQuery(it) }, "搜索启动器或模型")
-        if (!state.loading && state.launchers.isEmpty()) Text("这台机器没有可用启动器", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+        JSectionHeader(stringResource(if (state.follow != null) R.string.agents_new_launcher_this_time else R.string.agents_new_launcher))
+        JSearchField(query, { if (editable) onQuery(it) }, stringResource(R.string.agents_new_search_launcher))
+        if (!state.loading && state.launchers.isEmpty()) Text(stringResource(R.string.agents_new_no_launchers), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
     }
     val launchers = state.launchers.filter { launcher ->
         launcher.agentType == (selectedType ?: "claude") &&
@@ -156,7 +158,7 @@ private fun LazyListScope.newAgentItems(
     val rows = launchers.size + if (follow != null) 1 else 0
     if (follow != null) item("launcher:follow") {
         JGroupItem(GroupPosition.of(0, rows)) {
-            JRow("跟随模型配置", subtitle = followSummary(state), subtitleLines = 3,
+            JRow(stringResource(R.string.agents_new_follow_config), subtitle = followSummary(agentResources(), state), subtitleLines = 3,
                 leading = { JRadio(state.following, null, enabled = editable) }, enabled = editable,
                 onClick = { model.selection(state.selection.copy(launcher = "")) }, chevron = false)
         }
@@ -171,39 +173,40 @@ private fun LazyListScope.newAgentItems(
     }
     newAgentModelItems(state, editable, onModels, model::reloadModels)
     if (state.agentType == "claude") item("claude-options") {
-        ChoiceMenu("权限模式", state.selection.mode, permissionModes, editable) { model.selection(state.selection.copy(mode = it)) }
-        if (state.selection.mode == "bypassPermissions") Text("全部放行后，改文件和执行命令都不会再询问你。", color = PersonaTheme.palette.danger.text, style = PersonaTheme.type.caption)
+        ChoiceMenu(stringResource(R.string.agents_new_permission_mode), state.selection.mode, permissionModes, editable) { model.selection(state.selection.copy(mode = it)) }
+        if (state.selection.mode == "bypassPermissions") Text(stringResource(R.string.agents_new_bypass_warning), color = PersonaTheme.palette.danger.text, style = PersonaTheme.type.caption)
         // Only the levels the model that will run takes; none: it has no effort setting.
         val efforts = state.modelEfforts
-        if (efforts?.isEmpty() == true) JRow("思考强度", subtitle = "这个模型不能调思考强度", enabled = false)
-        else ChoiceMenu("思考强度", state.selection.effort, effortChoices(efforts), editable) { model.selection(state.selection.copy(effort = it)) }
+        if (efforts?.isEmpty() == true) JRow(stringResource(R.string.agents_new_effort), subtitle = stringResource(R.string.agents_new_no_effort), enabled = false)
+        else ChoiceMenu(stringResource(R.string.agents_new_effort), state.selection.effort, effortChoices(efforts), editable) { model.selection(state.selection.copy(effort = it)) }
     }
     item("prompt") {
         JTextField(state.prompt, model::prompt, enabled = !state.locked,
-            label = if (state.agentType == "codex") "第一条消息（Codex 必填）" else "第一条消息（可空）",
+            label = stringResource(if (state.agentType == "codex") R.string.agents_new_first_message_codex else R.string.agents_new_first_message),
             minLines = 3, maxLines = 8, modifier = Modifier.fillMaxWidth())
     }
 }
 
 /** What following the configuration starts: the configured provider and model, and whether this machine has that launcher. */
-private fun followSummary(state: NewAgentState): String {
+private fun followSummary(res: Resources, state: NewAgentState): String {
     val detail = state.follow ?: return ""
-    val summary = detail.purpose.summaryParts(detail.providers).joinToString("，").ifEmpty { "未配置" }
+    val summary = detail.purpose.summaryParts(detail.providers).joinToString(res.getString(R.string.agents_new_summary_separator))
+        .ifEmpty { res.getString(R.string.agents_new_not_configured) }
     val provider = detail.purpose.effective.provider.orEmpty()
     val missing = provider.startsWith("launcher.") && state.launchers.isNotEmpty() && state.configuredLauncher == null
-    return if (missing) "$summary\n这台机器上没有这个启动器，请选一个" else summary
+    return if (missing) res.getString(R.string.agents_new_launcher_missing, summary) else summary
 }
 
 @Composable
 private fun NewAgentFooter(state: NewAgentState, model: NewAgentViewModel, machines: List<Machine>, online: Boolean, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (state.pending != null) PendingBadge(if (state.starting) PendingStatus.Verifying else PendingStatus.Unconfirmed)
-        state.error?.let { Text(it, color = PersonaTheme.palette.ink2, style = PersonaTheme.type.callout) }
-        if (!online) Text("连上 hub 后才能启动或核对", color = PersonaTheme.palette.ink2, style = PersonaTheme.type.callout)
+        state.error?.let { Text(it.resolve(), color = PersonaTheme.palette.ink2, style = PersonaTheme.type.callout) }
+        if (!online) Text(stringResource(R.string.agents_new_offline_footer), color = PersonaTheme.palette.ink2, style = PersonaTheme.type.callout)
         if (state.browsing) {
-            JButton("使用此目录", { model.closeBrowser(use = true) }, enabled = state.browser != null && !state.loading, modifier = Modifier.fillMaxWidth())
+            JButton(stringResource(R.string.agents_new_use_directory), { model.closeBrowser(use = true) }, enabled = state.browser != null && !state.loading, modifier = Modifier.fillMaxWidth())
         } else {
-            JButton(if (state.pending != null) "重试核对结果" else "开始对话", model::submit, loading = state.starting,
+            JButton(stringResource(if (state.pending != null) R.string.agents_new_retry_check else R.string.agents_new_start), model::submit, loading = state.starting,
                 enabled = online && !state.starting && !state.loading && state.initialized && (state.pending != null || startable(state, machines)),
                 modifier = Modifier.fillMaxWidth())
         }
@@ -216,13 +219,16 @@ private fun startable(state: NewAgentState, machines: List<Machine>): Boolean =
         machines.any { it.id == state.machineId && it.online } && (state.agentType != "codex" || state.prompt.isNotBlank())
 
 internal fun String.agentLabel() = when (this) { "claude" -> "Claude Code"; "codex" -> "Codex"; "traex" -> "TRAEX"; else -> this }
-private val permissionModes = listOf("" to "跟随启动器", "default" to "手动确认", "acceptEdits" to "自动改文件", "plan" to "只做计划", "auto" to "自动", "bypassPermissions" to "全部放行")
-internal val effortLevels = listOf("" to "跟随启动器", "low" to "低", "medium" to "中", "high" to "高", "xhigh" to "很高", "max" to "最高")
+private val permissionModes = listOf("" to R.string.agents_mode_follow, "default" to R.string.agents_mode_default,
+    "acceptEdits" to R.string.agents_mode_accept_edits, "plan" to R.string.agents_mode_plan, "auto" to R.string.agents_mode_auto,
+    "bypassPermissions" to R.string.agents_mode_bypass)
+internal val effortLevels = listOf("" to R.string.agents_mode_follow, "low" to R.string.agents_effort_low, "medium" to R.string.agents_effort_medium,
+    "high" to R.string.agents_effort_high, "xhigh" to R.string.agents_effort_xhigh, "max" to R.string.agents_effort_max)
 
 @Composable
-private fun ChoiceMenu(title: String, value: String, options: List<Pair<String, String>>, enabled: Boolean, onSelect: (String) -> Unit) {
+private fun ChoiceMenu(title: String, value: String, options: List<Pair<String, Int>>, enabled: Boolean, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    JRow(title, value = options.firstOrNull { it.first == value }?.second ?: value, enabled = enabled, onClick = { expanded = true })
-    if (expanded) JActionSheet(options.map { (id, label) -> JAction(label, checked = id == value, onClick = { onSelect(id) }) },
+    JRow(title, value = options.firstOrNull { it.first == value }?.second?.let { stringResource(it) } ?: value, enabled = enabled, onClick = { expanded = true })
+    if (expanded) JActionSheet(options.map { (id, label) -> JAction(stringResource(label), checked = id == value, onClick = { onSelect(id) }) },
         { expanded = false }, title = title)
 }

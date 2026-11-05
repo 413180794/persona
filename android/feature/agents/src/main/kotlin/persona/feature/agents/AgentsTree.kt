@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.AgentState
 import persona.core.contracts.Machine
 import persona.core.designsystem.*
@@ -104,7 +105,7 @@ internal fun MachineFilterRow(machines: List<MachineCount>, total: Int, selected
         modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = Tokens.Space.xs),
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically,
     ) {
-        MachineChip("全部机器", total, selected.isEmpty(), onClick = { onSelect("") })
+        MachineChip(stringResource(R.string.agents_chip_all_machines), total, selected.isEmpty(), onClick = { onSelect("") })
         machines.forEach { (machine, count) ->
             val on = machine.id == selected
             MachineChip(machine.displayName, count, on, onClick = { onSelect(if (on) "" else machine.id) }, icon = machine.deviceIcon, online = machine.online)

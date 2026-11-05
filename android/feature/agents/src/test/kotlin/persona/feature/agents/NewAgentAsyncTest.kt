@@ -127,7 +127,7 @@ class NewAgentAsyncTest {
             advanceUntilIdle()
             assertTrue(unread.state.value.modelConfig is NewAgentModelConfig.Failed)
             assertEquals("", unread.state.value.selection.launcher)
-            assertTrue(unread.state.value.error!!.startsWith("读不到新 Agent 模型配置"))
+            assertEquals(R.string.agents_new_error_model_config, unread.state.value.error!!.id)
             unread.submit()
             advanceUntilIdle()
             assertEquals(0, failing.starts)

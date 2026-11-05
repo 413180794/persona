@@ -4,7 +4,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import persona.core.contracts.Machine
 import persona.core.domain.sort.*
 
-enum class AgentRange(val label: String) { Running("运行中"), All("全部"), History("历史") }
+/** Which sessions the list shows; its words are `AgentRange.label` (AgentsScreen.kt). */
+enum class AgentRange { Running, All, History }
 
 internal fun agentRangeKey(scope: String) = stringPreferencesKey("agent-range:$scope")
 
@@ -24,7 +25,7 @@ internal fun scopedAgentList(
         val id = "history/${project.first}/${project.second}"
         val ordered = members.sortedWith(compareByDescending<AgentSession> { it.updatedAt }.thenBy { it.id })
         val folded = id in settings.folded
-        AgentListGroup(id, project.second.ifBlank { "未知目录" }, ordered, if (folded) emptyList() else ordered, folded)
+        AgentListGroup(id, project.second, ordered, if (folded) emptyList() else ordered, folded)
     }.sortedWith(compareByDescending<AgentListGroup> { it.rows.first().updatedAt }.thenBy { it.id })
     val running = if (preferences.range == AgentRange.All)
         buildAgentList(rows.filter { it.session.isLive }, machines, preferences.pins, preferences.mutes, settings, todos)

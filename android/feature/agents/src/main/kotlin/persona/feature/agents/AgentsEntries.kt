@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.EntryProviderScope
@@ -74,7 +75,7 @@ fun EntryProviderScope<NavKey>.agentsEntries(
     onMachineSelected: (String) -> Unit = {},
     // Retained for source compatibility; the migrated route owns its screen now.
     agentsContent: @Composable () -> Unit = {},
-    connectionSettingsContent: @Composable () -> Unit = { PlaceholderScreen("连接设置") },
+    connectionSettingsContent: @Composable () -> Unit = { PlaceholderScreen(stringResource(R.string.agents_connection_settings)) },
 ) {
     entry<AgentsRoute> {
         val context = LocalContext.current.applicationContext
@@ -169,6 +170,7 @@ fun EntryProviderScope<NavKey>.agentsEntries(
             onHandOff = { todo -> handOffTodo = todo }
         )
         handOffTodo?.let { targetTodo ->
+            val todoNameHint = stringResource(R.string.agents_row_todo, targetTodo.title)
             TodoHandOffSheet(
                 todo = targetTodo,
                 machines = machines,
@@ -185,7 +187,7 @@ fun EntryProviderScope<NavKey>.agentsEntries(
                                     launcher = launcher,
                                     permissionMode = permissionMode,
                                     prompt = null,
-                                    nameHint = "待办 · ${targetTodo.title}",
+                                    nameHint = todoNameHint,
                                     async = true,
                                     todoId = targetTodo.id
                                 ),

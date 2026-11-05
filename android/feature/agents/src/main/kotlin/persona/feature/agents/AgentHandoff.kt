@@ -1,6 +1,5 @@
 package persona.feature.agents
 
-import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.MainConversationSender
 import persona.core.contracts.api.PendingMainConversation
@@ -12,11 +11,10 @@ import kotlinx.coroutines.flow.filterNotNull
 internal suspend fun handoffToMain(
     sender: MainConversationSender,
     operationId: String,
-    session: Session,
+    text: String,
     onQueued: () -> Unit,
     onBound: (SessionKey) -> Unit,
 ) {
-    val text = session.handoffPrompt()
     if (sender.outbox.value.none { it.clientMessageId == operationId }) sender.sendToMain(text, operationId)
     onQueued()
     val target = sender.outbox.map { messages ->

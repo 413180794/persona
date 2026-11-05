@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.api.AgentModel
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
@@ -19,17 +20,17 @@ internal fun LazyListScope.newAgentModelItems(state: NewAgentState, editable: Bo
     val list = state.modelList
     if (list == null && !models.loading && models.error == null) return
     item("model") {
-        JSectionHeader("模型")
+        JSectionHeader(stringResource(R.string.agents_model))
         JGroupItem(GroupPosition.Single) {
             when {
-                list?.locked != null -> JRow("跟随启动器", enabled = false, chevron = false,
-                    trailing = { JIcon(PhIcons.LockSimple, "不能选择", tint = PersonaTheme.palette.ink3) })
-                list != null -> JRow(state.pickedModel?.label ?: "默认",
-                    subtitle = state.pickedModel.let { picked -> if (picked != null) modelDetail(picked) else defaultModelDetail(state) },
+                list?.locked != null -> JRow(stringResource(R.string.agents_mode_follow), enabled = false, chevron = false,
+                    trailing = { JIcon(PhIcons.LockSimple, stringResource(R.string.agents_model_locked), tint = PersonaTheme.palette.ink3) })
+                list != null -> JRow(state.pickedModel?.label ?: stringResource(R.string.agents_model_default),
+                    subtitle = state.pickedModel.let { picked -> if (picked != null) modelDetail(picked) else defaultModelDetail(agentResources(), state) },
                     enabled = editable, onClick = onOpen, trailing = if (models.loading) ({ JSpinner() }) else null)
-                models.loading -> JRow("正在读取模型…", subtitle = "「${state.modelLauncher}」的模型列表", chevron = false, trailing = { JSpinner() })
-                else -> JRow("读不到模型列表", subtitle = "${models.error}\n不影响开始，会用默认模型", subtitleLines = 4, chevron = false,
-                    trailing = { JButton("重试", onRetry, enabled = editable, kind = JButtonKind.Secondary, size = JButtonSize.Small) })
+                models.loading -> JRow(stringResource(R.string.agents_model_loading), subtitle = stringResource(R.string.agents_model_loading_detail, state.modelLauncher), chevron = false, trailing = { JSpinner() })
+                else -> JRow(stringResource(R.string.agents_model_failed), subtitle = stringResource(R.string.agents_model_failed_detail, models.error.orEmpty()), subtitleLines = 4, chevron = false,
+                    trailing = { JButton(stringResource(R.string.agents_model_retry), onRetry, enabled = editable, kind = JButtonKind.Secondary, size = JButtonSize.Small) })
             }
         }
         list?.locked?.let {
@@ -54,8 +55,8 @@ internal fun NewAgentModelSheet(
         return
     }
     JModelSheet(
-        note = "「${state.modelLauncher}」里 ${list.agent.ifBlank { state.agentType }.agentLabel()} 的模型，和在终端里输入 /model 看到的一样。只用于这次启动。",
-        models = list.models, selected = state.model, defaultDetail = defaultModelDetail(state),
+        note = stringResource(R.string.agents_model_sheet_note, state.modelLauncher, list.agent.ifBlank { state.agentType }.agentLabel()),
+        models = list.models, selected = state.model, defaultDetail = defaultModelDetail(agentResources(), state),
         loading = state.models.loading, error = state.models.error,
         onPick = onPick, onRefresh = onRefresh, onDismiss = onDismiss, initialQuery = initialQuery,
     )
@@ -65,14 +66,14 @@ internal fun NewAgentModelSheet(
 internal fun modelDetail(model: AgentModel): String? = model.detailLine()
 
 /** What runs with no pick: 模型配置's model, else the one the agent defaults to. */
-internal fun defaultModelDetail(state: NewAgentState): String? {
-    if (state.configuredModel.isNotEmpty()) return "模型配置：${state.configuredModel}"
+internal fun defaultModelDetail(res: android.content.res.Resources, state: NewAgentState): String? {
+    if (state.configuredModel.isNotEmpty()) return res.getString(R.string.agents_model_configured, state.configuredModel)
     val default = state.modelList?.models?.firstOrNull { it.isDefault } ?: return null
     return default.resolved?.takeIf { it.isNotBlank() } ?: default.label
 }
 
 /** The thinking efforts offered: 跟随启动器, then the levels the model that will run takes (all when not known). */
-internal fun effortChoices(efforts: List<String>?): List<Pair<String, String>> =
+internal fun effortChoices(efforts: List<String>?): List<Pair<String, Int>> =
     effortLevels.filter { (id, _) -> id.isEmpty() || efforts == null || id in efforts }
 
 /** For captures (debug builds): steps the 新建会话 page takes once loaded, see `NewAgentPreview.steps`. */
