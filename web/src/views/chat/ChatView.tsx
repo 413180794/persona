@@ -154,8 +154,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const canCompose = sessionCan(session, "send");
   const canFork = Boolean(session?.can_fork) && !readOnly;
   const actions = useMemo<ChatActions>(
-    () => ({ draftKey, canCompose, images: () => items.current.filter((i) => i.kind === "image"), fork: canFork ? (itemId: string) => void forkAt(mid, sid, itemId, Boolean(assistant)) : undefined }),
-    [draftKey, canCompose, canFork, mid, sid, assistant],
+    () => ({ draftKey, canCompose, speaker: assistant ? persona.name : "Agent", images: () => items.current.filter((i) => i.kind === "image"), fork: canFork ? (itemId: string) => void forkAt(mid, sid, itemId, Boolean(assistant)) : undefined }),
+    [draftKey, canCompose, canFork, mid, sid, assistant, persona.name],
   );
   const mention = useMemo(() => ({ cwd: session?.cwd, self: draftKey, files: () => chatFiles(items.current) }), [session?.cwd, draftKey]);
 

@@ -12,12 +12,13 @@ import { enterSends, hasFinePointer } from "../../lib/viewport";
 import { INPUT_MAX } from "./dock";
 import { imagePayload, MAX_IMAGE, quotePath, releaseAttachments, sendFile } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
-import { applyDraft, onDraftEvent, replaceNeedsConfirm, withUnsent, type DraftImage } from "../../lib/drafts";
+import { applyDraft, onDraftEvent, replaceNeedsConfirm, splitQuote, storedQuote, storeQuote, withQuoteBlock, withUnsent, type DraftImage, type DraftQuote } from "../../lib/drafts";
 import { browseTarget, mentionAt, replaceToken, sessionQuote } from "../../lib/mentions";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 import { cx, EASE, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ContextChips } from "../link/ContextChips";
+import { QuoteBar } from "./Quote";
 import { ImageEditor } from "./ImageEditor";
 import { MentionMenu, useMentionRows, type MentionRow, type MentionSource } from "./MentionMenu";
 
@@ -94,6 +95,8 @@ export function Composer({
 }) {
   const [draft, setDraft] = useState(() => localStorage.getItem(`draft:${draftKey}`) ?? "");
   const [atts, setAtts] = useState<Attachment[]>([]);
+  // 引用: a bar above the input, sent as a `> ` block in front of the message (lib/drafts.ts)
+  const [quote, setQuoteState] = useState<DraftQuote | null>(() => storedQuote(draftKey));
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -116,6 +119,13 @@ export function Composer({
   const handle = useMemo<ComposerHandle>(() => ({ key: draftKey, send: (text) => sendNow.current(text), focus: () => input.current?.focus(), ready: () => canTake.current }), [draftKey]);
   useEffect(() => registerComposer(handle), [handle]);
 
+  const quoteNow = useRef(quote);
+  quoteNow.current = quote;
+  const setQuote = (q: DraftQuote | null) => {
+    quoteNow.current = q;
+    setQuoteState(q);
+    storeQuote(draftKey, q);
+  };
   // the pictures in the box right now and the conversation shown, read by the cleanups and by a send that finishes
   // after the box moved on: their object URLs are freed when they leave the box without being sent
   const attsNow = useRef(atts);
@@ -134,6 +144,7 @@ export function Composer({
   // a different conversation: its own draft
   useEffect(() => {
     setDraft(localStorage.getItem(`draft:${draftKey}`) ?? "");
+    setQuoteState(storedQuote(draftKey));
     releaseAttachments(attsNow.current);
     setAtts([]);
     // not on a touch screen alone: there the focus brings the keyboard up over the conversation just opened
@@ -152,8 +163,17 @@ export function Composer({
           input.current?.focus();
           return;
         }
+        if (e.type === "quote") {
+          // the input keeps what is typed; the bar shows the quote, a new one in place of the last
+          setQuote({ text: e.text.trim(), from: e.from, ts: e.ts });
+          requestAnimationFrame(() => input.current?.focus());
+          return;
+        }
         if (e.type === "replace" && replaceNeedsConfirm(draftNow.current, e.text) && !confirm("输入框里有没发出去的字，换成这条消息？")) return;
-        const next = applyDraft(draftNow.current, e);
+        // 编辑 a message sent with a quote: the quote goes back to the bar, the words to the input
+        const split = e.type === "replace" ? splitQuote(e.text) : null;
+        if (e.type === "replace") setQuote(split ? { text: split.quote } : null);
+        const next = split ? split.rest : applyDraft(draftNow.current, e);
         setDraft(next);
         setDismissed(false);
         requestAnimationFrame(() => {
@@ -310,12 +330,13 @@ export function Composer({
     }
   };
 
-  const canSend = (draft.trim().length > 0 || atts.length > 0 || contexts.length > 0) && !sending && !disabled;
-  const showStop = working && !sending && !draft.trim() && !atts.length && !contexts.length && onStop;
+  const canSend = (draft.trim().length > 0 || atts.length > 0 || contexts.length > 0 || quote !== null) && !sending && !disabled;
+  const showStop = working && !sending && !draft.trim() && !atts.length && !contexts.length && !quote && onStop;
 
   const submit = async (text = draft) => {
     const refs = getContexts(draftKey);
-    if (sending || disabled || (!text.trim() && !atts.length && !refs.length)) return;
+    const q = quoteNow.current;
+    if (sending || disabled || (!text.trim() && !atts.length && !refs.length && !q)) return;
     setSending(true);
     // The message shows in the chat at once (a sending bubble), so the box empties at once too: waiting for the hub to
     // hand it to the agent (seconds when it starts up) left the same words in both places. A failure puts them back.
@@ -325,8 +346,9 @@ export function Composer({
     localStorage.removeItem(`draft:${draftKey}`);
     setAtts([]);
     refs.forEach((r) => removeContext(draftKey, r.id));
-    // picked contexts ride in front as <jarvis-context> tags (docs/protocol.md「消息里的标签」)
-    const ok = await onSend({ text: withContexts(refs, text, sent.length > 0), images: sent.map((a) => ({ mime: a.mime, data: a.data })) });
+    setQuote(null);
+    // picked contexts ride in front as <jarvis-context> tags (docs/protocol.md「消息里的标签」), the quote as `> ` lines
+    const ok = await onSend({ text: withContexts(refs, withQuoteBlock(q, text), sent.length > 0), images: sent.map((a) => ({ mime: a.mime, data: a.data })) });
     setSending(false);
     if (ok) {
       releaseAttachments(sent);
@@ -336,6 +358,10 @@ export function Composer({
       if (mounted.current && keyNow.current === draftKey) setAtts((cur) => [...sent, ...cur]);
       else releaseAttachments(sent);
       refs.forEach((r) => addContext(draftKey, r));
+      // the quote back above this conversation's box (kept for it when the box shows another one or closed)
+      if (q && mounted.current && keyNow.current === draftKey) {
+        if (!quoteNow.current) setQuote(q);
+      } else if (q && !storedQuote(draftKey)) storeQuote(draftKey, q);
     }
     input.current?.focus();
   };
@@ -403,6 +429,17 @@ export function Composer({
         )}
       >
         <ContextChips draftKey={draftKey} />
+        {quote && (
+          <div className="px-0.5 pt-0.5">
+            <QuoteBar
+              quote={quote}
+              onRemove={() => {
+                setQuote(null);
+                input.current?.focus();
+              }}
+            />
+          </div>
+        )}
         {atts.length > 0 && (
           <div className="px-0.5 pt-0.5">
             <AttachmentTray attachments={atts} onOpen={(id) => setEditing(atts.find((a) => a.id === id) ?? null)} onRemove={(id) => {

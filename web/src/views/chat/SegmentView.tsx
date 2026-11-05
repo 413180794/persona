@@ -8,6 +8,7 @@ import { exchangeSteps, isLoopTick, type Segment, type UserMessage } from "../..
 import type { Item, SessionLive } from "../../lib/types";
 import { planSteps, thinkingDurations, workBlocks, type ToolStep } from "../../lib/work-groups";
 import { channelOf, useChannels } from "../../lib/channels";
+import { splitQuote } from "../../lib/drafts";
 import { EASE } from "../../ui/atoms";
 import { ChannelMark } from "../../ui/ChannelMark";
 import { Markdown } from "../../ui/Markdown";
@@ -15,6 +16,7 @@ import { InjectedHint, LoopTick, MergedBubble, PeerMessage } from "./Messages";
 import { ContextGroup } from "./ContextGroup";
 import { FileCards, ReplyFiles } from "./FileCards";
 import { MessageActions } from "./MessageActions";
+import { QuoteBlock } from "./Quote";
 import { PathText } from "../../ui/PathLinks";
 import { Thumb } from "./Steps";
 import { useChatContext } from "./chat-context";
@@ -56,8 +58,11 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
   );
 }
 
-/** The bubble's words, folded to ten lines past fourteen; `pending` (still being sent): dimmed, the same fold. */
-function BubbleText({ text, ts, mid, sid, pending }: { text: string; ts?: string; mid: string; sid: string; pending?: boolean }) {
+/** The bubble's words, folded to ten lines past fourteen; `pending` (still being sent): dimmed, the same fold. A
+ *  leading `> ` block (引用) is a folded quote card at its top instead of `>` lines (Quote.tsx). */
+function BubbleText({ text: whole, ts, mid, sid, pending }: { text: string; ts?: string; mid: string; sid: string; pending?: boolean }) {
+  const split = useMemo(() => splitQuote(whole), [whole]);
+  const text = split ? split.rest : whole;
   const ref = useRef<HTMLDivElement>(null);
   const [long, setLong] = useState(() => bubbleLines(text) > BUBBLE_MAX_LINES);
   const [open, setOpen] = useState(false);
@@ -74,14 +79,25 @@ function BubbleText({ text, ts, mid, sid, pending }: { text: string; ts?: string
   const folded = long && !open;
   return (
     <div className="flex max-w-full flex-col items-end gap-1">
-      <div
-        ref={ref}
-        className={`max-w-full rounded-[12px] bg-user-bubble px-4 py-2.5 text-[length:var(--chat-body)] leading-[1.6] whitespace-pre-wrap text-ink [overflow-wrap:anywhere] ${folded ? "line-clamp-10" : ""} ${pending ? "opacity-60" : ""}`}
-        title={clock(ts)}
-        data-folded={folded || undefined}
-      >
-        <PathText text={text} mid={mid} cwd={getSession(mid, sid)?.cwd} />
-      </div>
+      {split ? (
+        <div className={`flex max-w-full flex-col gap-1.5 rounded-[12px] bg-user-bubble px-4 py-2.5 text-ink ${pending ? "opacity-60" : ""}`} title={clock(ts)}>
+          <QuoteBlock text={split.quote} />
+          {text && (
+            <div ref={ref} className={`text-[length:var(--chat-body)] leading-[1.6] whitespace-pre-wrap [overflow-wrap:anywhere] ${folded ? "line-clamp-10" : ""}`} data-folded={folded || undefined}>
+              <PathText text={text} mid={mid} cwd={getSession(mid, sid)?.cwd} />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div
+          ref={ref}
+          className={`max-w-full rounded-[12px] bg-user-bubble px-4 py-2.5 text-[length:var(--chat-body)] leading-[1.6] whitespace-pre-wrap text-ink [overflow-wrap:anywhere] ${folded ? "line-clamp-10" : ""} ${pending ? "opacity-60" : ""}`}
+          title={clock(ts)}
+          data-folded={folded || undefined}
+        >
+          <PathText text={text} mid={mid} cwd={getSession(mid, sid)?.cwd} />
+        </div>
+      )}
       {long && (
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="rounded-[6px] px-1.5 py-0.5 text-[12px] font-medium whitespace-nowrap text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2">
           {open ? "收起" : "展开"}

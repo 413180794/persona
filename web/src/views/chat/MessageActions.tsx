@@ -27,13 +27,13 @@ export interface Action {
   onSelect: () => void;
 }
 
-function useActions(text: string, isUser: boolean, select: () => void): Action[] {
+function useActions(text: string, isUser: boolean, ts: string | undefined, select: () => void): Action[] {
   const chat = useChatActions();
   if (!text.trim()) return [];
   const out: Action[] = [{ key: "copy", label: "复制", icon: "copy", onSelect: () => void copyText(text) }];
   if (isNoHover()) out.push({ key: "select", label: "选择文本", icon: "read", onSelect: select });
   if (chat?.canCompose) {
-    out.push({ key: "quote", label: "引用", icon: "quote", onSelect: () => void sendDraft(chat.draftKey, { type: "quote", text }) });
+    out.push({ key: "quote", label: "引用", icon: "quote", onSelect: () => void sendDraft(chat.draftKey, { type: "quote", text, from: isUser ? "我" : chat.speaker, ts }) });
     if (isUser) out.push({ key: "edit", label: "编辑", icon: "pencil", onSelect: () => void sendDraft(chat.draftKey, { type: "replace", text }) });
   }
   return out;
@@ -67,7 +67,7 @@ export function MessageActions({
   className?: string;
 }) {
   const [selecting, setSelecting] = useState(false);
-  const actions = useActions(text, Boolean(isUser), () => setSelecting(true));
+  const actions = useActions(text, Boolean(isUser), ts, () => setSelecting(true));
   const more = moreActions(itemId, useChatActions()?.fork);
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);

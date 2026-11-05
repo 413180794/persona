@@ -1,6 +1,8 @@
 // Changes to a composer's draft from outside it: the message menu's 引用 / 编辑, a queued message pulled back, an
 // edited image put in for the next message (iOS: ChatView.bindMenu, AppModel.editQueued, ImageViewer's attach).
 // The composer for that draft key listens; with none mounted, text goes to the stored draft (it is read on mount).
+// 引用 waits as a bar above the input (not as `> ` lines in it) and goes out as the same `> ` block in front of the
+// message, so what the agent reads is unchanged; a bubble draws a leading `> ` block folded (splitQuote).
 
 export interface DraftImage {
   name: string;
@@ -8,8 +10,15 @@ export interface DraftImage {
   data: string; // base64
 }
 
+/** What 引用 holds above the input: the quoted words, who said them, when. */
+export interface DraftQuote {
+  text: string;
+  from?: string;
+  ts?: string;
+}
+
 export type DraftEvent =
-  | { type: "quote"; text: string }
+  | ({ type: "quote" } & DraftQuote)
   | { type: "replace"; text: string }
   | { type: "append"; text: string }
   | { type: "image"; image: DraftImage };
@@ -18,6 +27,41 @@ export type DraftEvent =
 export function withQuote(draft: string, text: string): string {
   const quoted = text.split("\n").map((l) => `> ${l}`).join("\n");
   return `${quoted}\n\n${draft}`;
+}
+
+/** The message as sent with a quote: its block, a blank line, then what was typed (just the block when nothing was). */
+export function withQuoteBlock(quote: DraftQuote | null, text: string): string {
+  if (!quote?.text.trim()) return text;
+  const block = withQuote("", quote.text.trim());
+  return text.trim() ? block + text : block.trimEnd();
+}
+
+/** A message that starts with a `> ` block (sent with 引用, or typed): the quoted words and what follows. */
+export function splitQuote(text: string): { quote: string; rest: string } | null {
+  const lines = text.replace(/^\s*\n/, "").split("\n");
+  let n = 0;
+  while (n < lines.length && /^ {0,3}>/.test(lines[n])) n++;
+  if (!n) return null;
+  const quote = lines.slice(0, n).map((l) => l.replace(/^ {0,3}> ?/, "")).join("\n").trim();
+  if (!quote) return null;
+  return { quote, rest: lines.slice(n).join("\n").trim() };
+}
+
+const quoteKey = (key: string) => `quote:${key}`;
+
+/** The quote kept for a composer's draft key (read on mount, like the draft). */
+export function storedQuote(key: string): DraftQuote | null {
+  try {
+    const q = JSON.parse(localStorage.getItem(quoteKey(key)) ?? "null") as DraftQuote | null;
+    return q && typeof q.text === "string" && q.text ? q : null;
+  } catch {
+    return null;
+  }
+}
+
+export function storeQuote(key: string, q: DraftQuote | null) {
+  if (q) localStorage.setItem(quoteKey(key), JSON.stringify(q));
+  else localStorage.removeItem(quoteKey(key));
 }
 
 /** A pulled-back queued message goes under what is typed, on its own line (AppModel.editQueued). */
@@ -32,11 +76,9 @@ export function withUnsent(draft: string, unsent: string): string {
   return draft ? `${unsent}\n${draft}` : unsent;
 }
 
-/** The draft after a text event (an image changes the attachments, not the text). */
+/** The draft after a text event (an image changes the attachments and a quote the bar above, not the text). */
 export function applyDraft(draft: string, e: DraftEvent): string {
   switch (e.type) {
-    case "quote":
-      return withQuote(draft, e.text);
     case "replace":
       return e.text;
     case "append":
@@ -71,6 +113,10 @@ export function sendDraft(key: string, e: DraftEvent): boolean {
     return true;
   }
   if (e.type === "image") return false;
+  if (e.type === "quote") {
+    storeQuote(key, { text: e.text, from: e.from, ts: e.ts });
+    return true;
+  }
   const stored = `draft:${key}`;
   const next = applyDraft(localStorage.getItem(stored) ?? "", e);
   if (next) localStorage.setItem(stored, next);

@@ -1432,6 +1432,14 @@ ITEMS[ASK1] = (
 - 14:00 设计评审（会议室 3）
 - 16:30 和李雷 1:1""")]
 )
+# MOCK_QUOTE=1: a message sent with 引用 earlier (#2427): the main conversation's history has one that starts with a
+# `> ` block of the answer above, and a reply to it, so the bubble's quote card shows for a message from the transcript.
+if os.environ.get("MOCK_QUOTE") == "1":
+    ITEMS[ASK1] += [
+        it("user", "text", 2.5, text="> 今天有 **3 件事**需要你：\n> \n> 1. **补齐网络层的单元测试**（MacBook）在等你选测试框架，我建议用 Swift Testing。\n"
+           "> 2. **照片同步脚本**（Mac Studio）的计划写好了，等你批准。\n> 3. 韩梅梅在飞书问你**周五的发布能不能赶上**，她下午要和客户确认。\n\n第二件先放一放，周五前提醒我。"),
+        it("assistant", "text", 2.2, text="好，周四下午提醒你看照片同步脚本的计划。"),
+    ]
 # MOCK_TASKS=1: the unified entry (docs/unified-entry.md, #930). The main conversation dispatches tasks: a started plan
 # of two (the widget fix working, the unit tests waiting for an answer — ix_tests), a read-only one that finished with a
 # receipt, an answered card, a message routed straight to a task, a reminder done on the phone, and an open plan at the

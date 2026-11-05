@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyDraft, onDraftEvent, replaceNeedsConfirm, sendDraft, withAppended, withQuote, withUnsent } from "./drafts";
+import { applyDraft, onDraftEvent, replaceNeedsConfirm, sendDraft, splitQuote, storedQuote, withAppended, withQuote, withQuoteBlock, withUnsent } from "./drafts";
 import { browseTarget, byPrefix, chatFiles, displayTitle, mentionAt, nameMatches, otherSessions, relPath, replaceToken, sessionQuote } from "./mentions";
 import { keepAllBut, sameMessage } from "./queue";
 import { boxRect, burnWidth, fitRect, keepMark, toImage, toScreen } from "./image-edit";
@@ -13,12 +13,32 @@ describe("drafts", () => {
     expect(withQuote("我的看法", "原话")).toBe("> 原话\n\n我的看法");
   });
 
+  it("sends a quote as the same > block in front of what was typed", () => {
+    expect(withQuoteBlock({ text: "第一行\n\n第二行\n", from: "Persona" }, "我的看法")).toBe("> 第一行\n> \n> 第二行\n\n我的看法");
+    expect(withQuoteBlock({ text: "原话" }, "  ")).toBe("> 原话");
+    expect(withQuoteBlock(null, "只有字")).toBe("只有字");
+    expect(withQuoteBlock({ text: "  " }, "只有字")).toBe("只有字");
+  });
+
+  it("splits a leading > block off a message, the way it was sent or typed", () => {
+    expect(splitQuote("> 第一行\n> \n> 第二行\n\n我的看法")).toEqual({ quote: "第一行\n\n第二行", rest: "我的看法" });
+    expect(splitQuote(">原话")).toEqual({ quote: "原话", rest: "" });
+    expect(splitQuote("\n  > 缩进的\n接着")).toEqual({ quote: "缩进的", rest: "接着" });
+    expect(splitQuote("我说 > 不是引用")).toBeNull();
+    expect(splitQuote("    > 代码块")).toBeNull();
+    expect(splitQuote(">\n> \n正文")).toBeNull();
+    // the sent shape comes back whole
+    const q = { text: "多行\n原文" };
+    expect(splitQuote(withQuoteBlock(q, "回复"))).toEqual({ quote: q.text, rest: "回复" });
+  });
+
   it("puts a pulled-back queued message under the draft", () => {
     expect(withAppended("", "排队的")).toBe("排队的");
     expect(withAppended("先写的", "排队的")).toBe("先写的\n排队的");
   });
 
-  it("applies text events and leaves the text alone for an image", () => {
+  it("applies text events and leaves the text alone for an image or a quote", () => {
+    expect(applyDraft("x", { type: "quote", text: "q" })).toBe("x");
     expect(applyDraft("x", { type: "replace", text: "旧消息" })).toBe("旧消息");
     expect(applyDraft("x", { type: "append", text: "y" })).toBe("x\ny");
     expect(applyDraft("x", { type: "image", image: { name: "a.png", mime: "image/png", data: "" } })).toBe("x");
@@ -37,15 +57,17 @@ describe("drafts", () => {
       setItem: (k: string, v: string) => store.set(k, v),
       removeItem: (k: string) => store.delete(k),
     });
-    expect(sendDraft("m/s", { type: "quote", text: "q" })).toBe(true);
-    expect(store.get("draft:m/s")).toBe("> q\n\ntyped");
+    expect(sendDraft("m/s", { type: "quote", text: "q", from: "Persona", ts: "2026-11-05T08:45:00Z" })).toBe(true);
+    // the quote waits for the bar above the input; the typed text is left alone
+    expect(store.get("draft:m/s")).toBe("typed");
+    expect(storedQuote("m/s")).toEqual({ text: "q", from: "Persona", ts: "2026-11-05T08:45:00Z" });
     expect(sendDraft("m/s", { type: "image", image: { name: "a.png", mime: "image/png", data: "AA" } })).toBe(false);
 
     const got: string[] = [];
     const off = onDraftEvent("m/s", (e) => got.push(e.type));
     expect(sendDraft("m/s", { type: "replace", text: "r" })).toBe(true);
     expect(got).toEqual(["replace"]);
-    expect(store.get("draft:m/s")).toBe("> q\n\ntyped"); // the composer has it, not the store
+    expect(store.get("draft:m/s")).toBe("typed"); // the composer has it, not the store
     off();
     sendDraft("m/s", { type: "replace", text: "" });
     expect(store.has("draft:m/s")).toBe(false);
