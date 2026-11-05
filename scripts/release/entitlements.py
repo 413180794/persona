@@ -33,6 +33,10 @@ PROJECT = os.path.join(ROOT, "apple", "Persona.xcodeproj")
 VAR = re.compile(r"\$[({](\w+)[)}]")
 APP_GROUPS = "com.apple.security.application-groups"
 APS = ("aps-environment", "com.apple.developer.aps-environment")  # iOS, macOS
+# Signed in only when the App ID has the capability: without a profile that allows it the export either fails or (a
+# cloud-signed export of an unsigned archive) silently drops it, and every push the hub marks time-sensitive then shows
+# as active (#1572).
+TIME_SENSITIVE = "com.apple.developer.usernotifications.time-sensitive"
 
 
 def targets():
@@ -170,6 +174,9 @@ def check(path):
             for g in ents.get(APP_GROUPS, []):
                 if g not in app_groups:
                     problems.append("%s: App Group %s missing (signed with %s)" % (name, g, app_groups or "none"))
+            if ents.get(TIME_SENSITIVE) and not have.get(TIME_SENSITIVE):
+                problems.append("%s: %s missing (time-sensitive pushes show as active; rerun asc_signing.py)"
+                                % (name, TIME_SENSITIVE))
             for k in (k for k in APS if k in ents):
                 if k not in have:
                     problems.append("%s: %s missing (no push)" % (name, k))

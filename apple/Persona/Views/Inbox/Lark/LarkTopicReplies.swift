@@ -44,7 +44,7 @@ final class LarkTopicReplies {
     /// as lark-connector's card.
     static func line(of reply: LarkMessage, display: LarkMessageDisplay) -> String {
         guard display.showsBody(of: reply) else { return "消息已撤回" }
-        let text = reply.olk.map { $0.cached.summary } ?? LarkReply.summary(of: reply)
+        let text = reply.olk.map { $0.cached.summary } ?? display.summary(LarkReply.summary(of: reply))
         return reply.recalled ? text + " · 已撤回" : text
     }
 

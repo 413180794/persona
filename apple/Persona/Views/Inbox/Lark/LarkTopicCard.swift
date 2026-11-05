@@ -235,7 +235,8 @@ private struct LarkTopicContent: View {
 
     var body: some View {
         let m = message
-        let parts = m.parts ?? []
+        let source = m.parts ?? []
+        let parts = display.shown(source)
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             if !display.showsBody(of: m) {
                 Text(m.recallNotice).font(Theme.Font.caption).foregroundStyle(.tertiary).italic()
@@ -244,10 +245,13 @@ private struct LarkTopicContent: View {
                 if let encryption = m.olk {
                     LarkEncryptedContent(encryption: encryption)
                 } else if parts.isEmpty {
-                    Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : m.text).font(Theme.Font.body)
+                    let text = display.shown(m.text)
+                    Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : text).font(Theme.Font.body)
+                    if text != m.text { LarkBraveClimbMark() }
                 } else {
                     LarkPartsView(parts: parts)
                         .environment(\.larkContext, LarkRenderContext(messageID: m.recalled ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
+                    if parts != source { LarkBraveClimbMark() }
                 }
             }
         }

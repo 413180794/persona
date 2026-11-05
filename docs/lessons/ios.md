@@ -923,3 +923,8 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - **做法**：「要不要做这件事」这种二选一用 `.alert`，「取消」「打开」都在；标题写上对象的名字（「打开「Mac Studio」？」）。名字单独存一份 `@State`，关弹窗时别清，否则消失动画里标题变成「打开「」？」。
 - **以后**：只有真的是「从几项里选一项」才用 `confirmationDialog`；需要明确取消的确认一律 `alert`，UI 测试里断言「取消」按钮存在并点一次。
 
+## 时间敏感推送一直按普通通知显示：少了 entitlement（2026-11-04，#1572）
+
+- 现象：hub 的「需要你」推送从一开始就带 `interruption-level: time-sensitive`，通知服务扩展也照样设了 `interruptionLevel`，但开着专注模式时横幅不出来（专注模式会同步到手表，所以手表上也收不到）。
+- 原因：App 的 entitlements 里没有 `com.apple.developer.usernotifications.time-sensitive`。缺了它，系统静默把时间敏感当 `active`，日志和 API 都不报错；`requestAuthorization` 里的 `.timeSensitive` 选项早已废弃，不起作用。
+- 做法：entitlements 加这一项，App ID 开 `USERNOTIFICATIONS_TIMESENSITIVE` 并重建描述文件（`scripts/release/asc_signing.py`），发版前 `scripts/release/entitlements.py check` 会查。模拟器上看不出差别，要真机开着专注模式验证。

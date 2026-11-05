@@ -39,6 +39,8 @@ struct LarkChatView: View {
     var conversation: LarkConversation
     var messageComposer = false
     @State private var encryptionDraft: LarkEncryptedDraft?
+    /// The words go as [removed] words (#882), while the account's switch is on.
+    @State private var climbing = false
     @State private var encryptionStatus: LarkNativeEncryptionStatus?
     @State private var pinsModel: LarkChatPinsModel?
     @State private var showPins = false
@@ -413,7 +415,7 @@ struct LarkChatView: View {
         } message: {
             Text("旧版草稿没有记录所属账号。确认后恢复到当前会话，待发送内容不会自动发送。")
         }
-        .onChange(of: LarkDraft(text: text, encryption: encryptionDraft, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions)) { _, _ in saveDraft() }
+        .onChange(of: draft) { _, _ in saveDraft() }
         .onChange(of: attachments) { _, _ in saveDraft(immediately: true) }
         .onChange(of: scenePhase) { _, phase in
             guard tabActive else { return }
@@ -435,8 +437,11 @@ struct LarkChatView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if messageComposer {
-                LarkEncryptionModeBar(draft: $encryptionDraft, canEncrypt: attachments.isEmpty && !isTopic && !checkingEncryption,
+                LarkEncryptionModeBar(draft: $encryptionDraft, climbing: $climbing,
+                    canEncrypt: attachments.isEmpty && !isTopic && !checkingEncryption,
+                    canClimb: attachments.isEmpty && !isTopic && chatLink?.larkDisplay.policy.climbs == true,
                     checking: checkingEncryption, selectEncrypted: {
+                        climbing = false
                         if encryptionDraft == nil { encryptionDraft = LarkEncryptedDraft() }
                         checkEncryption(openCovers: false)
                     }, pickCover: { checkEncryption(openCovers: true) })
@@ -470,9 +475,9 @@ struct LarkChatView: View {
             LarkComposer(placeholder: isTopic ? "发布话题" : "回复 \(conversation.name)", text: $text, focused: $composerFocused,
                          replyTo: replyTo, cancelReply: { replyTo = nil },
                          attachmentPicker: { pickAttachment(photo: $0) },
-                         canAddAttachments: encryptionDraft == nil && attachments.count < LarkAttachment.selectionLimit,
+                         canAddAttachments: encryptionDraft == nil && !climbing && attachments.count < LarkAttachment.selectionLimit,
                          hasAttachments: !attachments.isEmpty, preparingAttachment: preparingAttachment,
-                          mentionFeed: encryptionDraft == nil && conversation.isGroup ? conversation.id : nil,
+                          mentionFeed: encryptionDraft == nil && !climbing && conversation.isGroup ? conversation.id : nil,
                           me: pager.messages.last(where: \.isMine)?.senderID, mentions: $mentions, send: send)
                 .disabled(!messageComposer && encryptionDraft != nil)
         }
@@ -1058,6 +1063,8 @@ struct LarkChatView: View {
         replyTo = composer.draft.replyTo
         mentions = composer.draft.mentions ?? []
         encryptionDraft = composer.draft.encryption
+        // The mode is chosen on 消息's box, where its bar shows; an inbox box sends what it shows.
+        climbing = messageComposer && composer.draft.braveClimb == true && encryptionDraft == nil
         attachments = composer.attachments
         if !messageComposer, text.isEmpty, replyTo == nil, attachments.isEmpty { encryptionDraft = nil }
         draftLoaded = true
@@ -1065,8 +1072,12 @@ struct LarkChatView: View {
 
     private func saveDraft(immediately: Bool = false, leavingPage: Bool = false) {
         guard draftLoaded, !savingOutgoing, tabActive || leavingPage else { return }
-        let draft = LarkDraft(text: text, encryption: encryptionDraft, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions)
         outbox.scheduleDraft(draft, attachments: attachments, immediately: immediately)
+    }
+
+    private var draft: LarkDraft {
+        LarkDraft(text: text, encryption: encryptionDraft, braveClimb: climbing ? true : nil, replyTo: replyTo,
+                  mentions: mentions.isEmpty ? nil : mentions)
     }
 
     private func checkEncryption(openCovers: Bool) {
@@ -1116,7 +1127,19 @@ struct LarkChatView: View {
             guard !encrypted.cover.isEmpty else { checkEncryption(openCovers: true); return }
         }
         var batch: [LarkOutgoing] = []
-        if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }
+        if climbing {
+            // The words go encoded, as the web sends them; lark-connector refuses them while the switch is off.
+            guard chatLink?.larkDisplay.policy.climbs == true else {
+                model.toast = Toast("", style: .error); return
+            }
+            guard attachments.isEmpty, !isTopic else {
+                model.toast = Toast("", style: .error); return
+            }
+            guard let words = try? LarkBraveClimbCodec.encode(t) else {
+                model.toast = Toast("", style: .error); return
+            }
+            batch.append(LarkOutgoing(text: words, replyTo: replyTo, mentions: []))
+        } else if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }
         batch += attachments.map { LarkOutgoing(text: "", replyTo: replyTo, attachment: $0) }
         savingOutgoing = true
         Task {
@@ -1146,119 +1169,7 @@ struct LarkChatView: View {
             }
             if outbox === queue {
                 // Animated like the rows the outbox just added: the box shrinking back to a line (and the quote bar
-                // going) moves the list's bottom inset with them, so the list does not drop first and then rise.
-                withAnimation(Theme.Motion.standard) {
-                    text = ""
-                    replyTo = nil
-                    mentions = []
-                    attachments = []
-                }
-            }
-            savingOutgoing = false
-            Haptics.tap()
-            for item in batch { deliver(item.id, using: api, queue: queue) }
-            if pager.hasNewer { Task { await jumpToLatest() } } else { following = true }
-        }
-    }
-
-    private func resend(_ id: UUID) {
-        guard !checkingOutgoing.contains(id), let api = chatAPI, outbox.identity != nil else { return }
-        let queue = outbox
-        checkingOutgoing.insert(id)
-        Task {
-            defer { checkingOutgoing.remove(id) }
-            do {
-                try await queue.checkAccount(using: api)
-                // Check with the original account even if the user switches Hub while this request runs.
-                let latest = try await api.larkMessages(conversation.id, topic: isTopic)
-                try await queue.settle(latest.messages)
-                guard let item = queue.items.first(where: { $0.id == id }) else { return }
-                guard item.canRetry else {
-                    model.toast = Toast("尚未确认文件是否发出，请稍后再检查", style: .error)
-                    return
-                }
-                try await queue.retry(id)
-                deliver(id, using: api, queue: queue)
-            } catch { model.toast = Toast("暂时无法重试，请检查连接和本机存储空间", style: .error) }
-        }
-    }
-
-    private func discard(_ id: UUID) {
-        Task {
-            do { try await outbox.discard(id) }
-            catch { model.toast = Toast("未能删除，请检查本机存储空间", style: .error) }
-        }
-    }
-
-    private func restore(_ outgoing: LarkOutgoing) {
-        guard !savingOutgoing else { return }
-        let queue = outbox
-        if outgoing.encrypted != nil && (!text.isEmpty || !attachments.isEmpty) || outgoing.encrypted == nil && encryptionDraft != nil {
-            model.toast = Toast("请先处理输入框中的草稿，再恢复这条消息", style: .error)
-            return
-        }
-        var draft = LarkDraft(text: text, encryption: encryptionDraft, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions), files = attachments
-        if let encrypted = outgoing.encrypted { draft.encryption = LarkEncryptedDraft(cover: encrypted.cover ?? "") }
-        if let attachment = outgoing.attachment {
-            guard files.count < LarkAttachment.selectionLimit else {
-                model.toast = Toast("请先移除一个附件，再放回输入框", style: .error)
-                return
-            }
-            files.append(attachment)
-        } else {
-            draft.text = draft.text.isEmpty ? outgoing.text : draft.text + "\n" + outgoing.text
-            if draft.replyTo == nil { draft.replyTo = outgoing.replyTo }
-            draft.mentions = (draft.mentions ?? []) + outgoing.mentions
-        }
-        savingOutgoing = true
-        Task {
-            defer { savingOutgoing = false }
-            do {
-                try await queue.restore(outgoing.id, draft: draft, attachments: files)
-                if outbox === queue { applyDraft() }
-            } catch { model.toast = Toast("未能放回输入框，请检查本机存储空间", style: .error) }
-        }
-    }
-
-    private func deliver(_ id: UUID, using api: APIClient, queue: LarkChatOutbox) {
-        let link = chatLink
-        queue.deliver(id, client: {
-            guard let link, model.link(link.group) === link else { return nil }
-            return model.api(link.group)?.lark(conversation.account)
-        }, feed: conversation.id) {
-            guard let link, model.link(link.group) === link, outbox === queue else { return }
-            await refreshLatest()
-            settleOutgoing(pager.messages)
-        }
-    }
-
-    private func settleOutgoing(_ messages: [LarkMessage]) {
-        guard let api = chatAPI, !outbox.items.isEmpty else { return }
-        let queue = outbox
-        Task {
-            guard (try? await queue.checkAccount(using: api)) != nil else { return }
-            do {
-                try await queue.settle(messages)
-            }
-            catch { model.toast = Toast("发送结果尚未保存，请检查本机存储空间", style: .error) }
-        }
-    }
-
-    private func askJarvis() async {
-        guard let api = chatAPI else { return }
-        let prompt = "读取我飞书会话「\(conversation.name)」（lark-connector feedId \(conversation.id)）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。"
-        do {
-            let s = try await api.startConversation(prompt: prompt)
-            model.began(s, text: prompt)
-            model.assistantCurrent = s.key
-            model.selectedTab = .assistant
-        } catch {
-            model.show(error)
-        }
-    }
-}
-
-/// A chat's rows, laid out as they come on screen; a topic group's cards all at once. In a lazy stack with a scroll
+                // going) moves the list''s rows, laid out as they come on screen; a topic group's cards all at once. In a lazy stack with a scroll
 /// position, a topic card opened under 展开 left the app never idle again on the iPhone (#1087; likely the off-screen
 /// rows placed by estimated heights and measured again without end, docs/lessons/ios.md). A page of a topic group is
 /// 40 topics; each 加载更早的话题 adds 40 more, all laid out: accepted, a group is rarely read that far back.
@@ -1453,7 +1364,8 @@ struct LarkMessageRow: View {
 
     @ViewBuilder private var content: some View {
         let m = message
-        let parts = m.parts ?? []
+        let source = m.parts ?? []
+        let parts = display.shown(source)
         if let localAttachment {
             // A picture or file quoting a message shows the quote above it (#1035), as one block: next to the sending
             // mark the row is a horizontal stack, and two loose views went side by side.
@@ -1476,7 +1388,9 @@ struct LarkMessageRow: View {
             bubble {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
                     if let reply = m.replyTo { LarkReplyQuote(reply: reply) }
-                    Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : m.text).font(Theme.Font.body)
+                    let text = display.shown(m.text)
+                    Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : text).font(Theme.Font.body)
+                    if text != m.text { LarkBraveClimbMark() }
                 }
             }
         } else if LarkPartsView.isBare(parts) {
@@ -1494,6 +1408,7 @@ struct LarkMessageRow: View {
                     if let reply = m.replyTo { LarkReplyQuote(reply: reply) }
                     LarkPartsView(parts: parts)
                         .environment(\.larkContext, LarkRenderContext(messageID: m.recalled ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
+                    if parts != source { LarkBraveClimbMark() }
                 }
             }
         }
@@ -1677,7 +1592,7 @@ struct LarkReplyQuote: View {
     var body: some View {
         let summary = reply.recalled == true && !(display.antiRecall && reply.retained == true)
             ? "消息已撤回"
-            : "\(Fmt.plain(reply.displayText))\(reply.recalled == true ? " · 已撤回" : "")"
+            : "\(Fmt.plain(display.summary(reply.displayText)))\(reply.recalled == true ? " · 已撤回" : "")"
         QuoteCard(heading: reply.senderName, summary: summary, tint: LarkColor.blue, ink: .primary) {
             if jump?(reply.id) == true { Haptics.tap() } else { Haptics.attention() }
         }

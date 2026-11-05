@@ -13,7 +13,7 @@ App Store Connect 里的商店名 2026-11-03 起是 **Persona Side**（原「Jar
 | 项目 | 说明 |
 | --- | --- |
 | Bundle ID | iOS `<bundle_id>`、手表 `<bundle_id>.watchkitapp`、Live Activity `<bundle_id>.liveactivity`、通知服务扩展 `<bundle_id>.notify`（推送中继，`docs/push-relay.md`），用 `scripts/release/asc_signing.py` 注册 |
-| App ID 能力 | iOS：`PUSH_NOTIFICATIONS`、`HEALTHKIT`、`APP_GROUPS`；Live Activity：`APP_GROUPS`；手表：无。App Group 本身只能在网站上建、挂到 App ID 上（下面「App Group」） |
+| App ID 能力 | iOS：`PUSH_NOTIFICATIONS`、`USERNOTIFICATIONS_TIMESENSITIVE`（时间敏感通知，#1572）、`HEALTHKIT`、`APP_GROUPS`；Live Activity：`APP_GROUPS`；手表：无。App Group 本身只能在网站上建、挂到 App ID 上（下面「App Group」） |
 | 描述文件 | 「Jarvis App Store」「Jarvis Watch App Store」（`IOS_APP_STORE`）；`asc_signing.py` 会删了重建并装到 `~/Library/MobileDevice/Provisioning Profiles/` |
 | 签名身份 | 登录钥匙串里的 `Apple Distribution: …（team_id）` |
 | App Store Connect App ID | 网页建好 App 记录后填进配置的 `app_store.app_id` |
@@ -24,7 +24,7 @@ API key 的角色是 App Manager，用不了 cloud-managed signing（`-allowProv
 ## 首次准备（顺序）
 
 1. 填好 `~/.config/persona/config.json`（`app`、`app_store` 的 key 部分）。
-2. `python3 scripts/release/asc_signing.py`：注册两个 Bundle ID、给 iOS 打开推送和 HealthKit、建两个 App Store 描述文件并装到本机。幂等，能力变了随时重跑。
+2. `python3 scripts/release/asc_signing.py`：注册两个 Bundle ID、给 iOS 打开推送、时间敏感通知和 HealthKit、建两个 App Store 描述文件并装到本机。幂等，能力变了随时重跑。
 3. **网页创建 App 记录**（API 不能建）：App Store Connect › App › 新建 App：iOS、名称、主要语言、Bundle ID、SKU、完全访问权限。
    把 App ID 填进配置的 `app_store.app_id`。
 4. `python3 scripts/release/asc_testflight.py setup`：建内部群组 `Internal`（`hasAccessToAllBuilds`）并把配置里的测试员加进去。
@@ -118,6 +118,12 @@ App Group 的 ID 本身不带团队前缀，Info.plist 里直接写 `$(JARVIS_AP
 - **导出后查**：`python3 scripts/release/entitlements.py check <ipa>`，有问题逐条列出并非零退出；对 build 92 的 ipa 报 9 处。
   App Group 同样查：每个 bundle 的签名里有它 target 的组，Info.plist 的 `JarvisAppGroup` 是其中之一。
   导出的 ipa / pkg 里推送 entitlement（`aps-environment`，Mac 是 `com.apple.developer.aps-environment`）必须是 `production`。Mac 的 .pkg 同样能查。
+- **时间敏感通知**（`com.apple.developer.usernotifications.time-sensitive`，#1572）：hub 的「需要你」推送和插件的强提醒都带 `interruption-level: time-sensitive`，
+  App 签名里没有这一项时系统一律当 `active` 显示：专注模式下不突破，所以开着专注模式时手机不响、手表也收不到，而且不报错。App ID 要先开 `USERNOTIFICATIONS_TIMESENSITIVE`
+  （`asc_signing.py` 会开，开了之后旧描述文件失效，要重跑一次重建）；`entitlements.py check` 发现导出的 App 少了它会报错。
+  **合并 #1572 之后、下一次发版之前，先跑一次 `python3 scripts/release/asc_signing.py`**（签开发包的再加 `--dev` 重建 Development 描述文件）。
+  `release.sh` 开头会跑 `asc_signing.py --check`，能力没开或描述文件失效时在归档前就停下，不再等到导出时才失败。
+  Mac App 暂时没加这一项（Mac 上开着专注模式同样不突破），另见后续 issue。
 
 ## App Group（2026-11-02）
 

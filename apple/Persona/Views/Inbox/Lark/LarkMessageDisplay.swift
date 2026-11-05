@@ -5,11 +5,22 @@ nonisolated struct LarkMessageDisplay: Codable, Equatable, Sendable {
     var accountID: String
     var antiRecall: Bool
     var showEditHistory: Bool
+    /// lark-connector''s parts as the chat shows them: [removed] words decoded while the switch is on, as they came otherwise.
+    func shown(_ parts: [LarkPart]) -> [LarkPart] { climbs ? LarkBraveClimb.decode(parts) ?? parts : parts }
+    /// A message's text as the chat shows it (see `shown(_:)`).
+    func shown(_ text: String) -> String { climbs ? LarkBraveClimbCodec.decodeText(text) ?? text : text }
+    /// A one-line summary of a message (a quote, the chat list), see `LarkBraveClimb.summary`.
+    func summary(_ text: String) -> String { LarkBraveClimb.summary(text, on: climbs) }
 
-    enum CodingKeys: String, CodingKey {
-        case accountID = "account_id", antiRecall = "anti_recall", showEditHistory = "show_edit_history"
+    /// The switch behind a key of POST /api/v1/lark/message-display.
+    func value(of key: String) -> Bool? {
+        switch key {
+        case "anti_recall": antiRecall
+        case "show_edit_history": showEditHistory
+        case "brave_climb_codec": braveClimb
+        default: nil
+        }
     }
-    static let hidden = Self(accountID: "", antiRecall: false, showEditHistory: false)
 
     func showsBody(of message: LarkMessage) -> Bool {
         !message.recalled || (antiRecall && message.retained == true && !message.isSystem && !(message.parts ?? []).isEmpty)
@@ -26,7 +37,7 @@ nonisolated struct LarkMessageDisplay: Codable, Equatable, Sendable {
         if let raw = message["olk"], raw != .null {
             let encryption = (try? JSON.encoder.encode(raw)).flatMap { try? JSON.decoder.decode(LarkEncryption.self, from: $0) }
             text = encryption?.summary ?? "加密消息"
-        } else { text = message["textPreview"]?.string ?? message["text"]?.string ?? "" }
+        } else { text = summary(message["textPreview"]?.string ?? message["text"]?.string ?? "") }
         return text + (message["isRecalled"]?.bool == true ? " · 已撤回" : "")
     }
 }
@@ -108,9 +119,8 @@ extension APIClient {
     }
 
     func set(_ key: String, value: Bool, using api: APIClient) async {
-        guard let current = snapshot, !saving, !loading else { return }
+        guard let current = snapshot, !saving, !loading, let expected = current.value(of: key) else { return }
         saving = true
-        let expected = key == "anti_recall" ? current.antiRecall : current.showEditHistory
         do {
             let next = try await api.larkMessageDisplayChange(current, key: key, value: value, expected: expected)
             guard !next.accountID.isEmpty else { throw LarkOutboxIdentity.Failure.unavailable }
@@ -155,6 +165,11 @@ private struct LarkMessageDisplaySettingsContent: View {
             Section {
                 setting("编辑历史", key: "show_edit_history", value: state.policy.showEditHistory)
             } footer: { Text("点击消息下方的「已编辑」，查看已留存的旧版本。") }
+            if let climb = state.policy.braveClimb {
+                Section {
+                    setting("", key: "brave_climb_codec", value: climb)
+                } footer: { Text("") }
+            }
             Section {
                 if state.loading || state.saving { ProgressView(state.saving ? "正在保存…" : "正在读取…") }
                 if let problem = state.problem {
@@ -187,8 +202,8 @@ struct LarkEditHistoryView: View {
                                 Text(at.formatted(date: .abbreviated, time: .shortened)).font(Theme.Font.caption).foregroundStyle(.secondary)
                             }
                             if let encryption = version.olk { LarkEncryptedContent(encryption: encryption) }
-                            else if let parts = version.parts, !parts.isEmpty { LarkPartsView(parts: parts) }
-                            else { Text(version.text).font(Theme.Font.body) }
+                            else if let parts = version.parts, !parts.isEmpty { LarkPartsView(parts: display.shown(parts)) }
+                            else { Text(display.shown(version.text)).font(Theme.Font.body) }
                         }
                     }
                 } else { Text("编辑历史已隐藏").foregroundStyle(.secondary) }

@@ -44,6 +44,9 @@ private struct LarkConversationsPage: View {
                                                                           accountName: choice.selectedName)))
     }
 
+    /// The account''s summary (#882).
+    private var display: LarkMessageDisplay { model.hub?.larkDisplay.policy ?? .hidden }
+
     private var filtered: [LarkConversation] {
         LarkConversationsModel.listed(store.conversations, pinned: store.pinned, query: query, more: store.nextCursor != nil)
     }
@@ -104,6 +107,10 @@ private struct LarkConversationsPage: View {
             .onAppear {
                 store.willChange = { [weak scroll] in scroll?.reader.willChange() }
                 scroll.reader.reveal = { id, at in proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: at)) }
+            }
+            .task {
+                // Read once; a change comes as a settings event (AppModel).
+                if let link = model.hub, link.larkDisplay.snapshot == nil { await link.larkDisplay.refresh(using: link.api) }
             }
             .onScrollGeometryChange(for: Double.self) { Double($0.contentOffset.y + $0.contentInsets.top) } action: { _, offset in
                 updatePins(offset)
@@ -219,7 +226,7 @@ private struct LarkConversationsPage: View {
                     }
                 }
                 HStack(spacing: Theme.Space.s) {
-                    Text(conversation.preview).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+                    Text(display.summary(conversation.preview)).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                     Spacer(minLength: 0)
                     if conversation.badge > 0 { CountBadge(count: conversation.badge) }
                     if conversation.muted { Image(systemName: Theme.Icon.muted).font(Theme.Font.caption).foregroundStyle(.secondary) }

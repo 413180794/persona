@@ -16,6 +16,9 @@ python3 scripts/jarvis_config.py xcconfig
 echo "Building with $(xcodebuild -version | head -1) (config \"xcode\" picks another, docs/config.md)"
 # No private values in what is about to ship from this tree (CLAUDE.md).
 python3 scripts/privacy_check.py
+# The App ID must have every capability the entitlements need and the App Store profiles must be current, or the export
+# fails after a ten-minute archive (a new entitlement invalidates them, docs/release.md「entitlements」). Needs the API key.
+if [ -f "${ASC_KEY_PATH:-}" ]; then python3 scripts/release/asc_signing.py --check >/dev/null; fi
 # Export the ipa and check it like NO_UPLOAD does, then upload it with asc instead of xcodebuild.
 EXPORT_ONLY="${NO_UPLOAD:-}"
 if [ "${UPLOADER:-}" = asc ]; then

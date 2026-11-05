@@ -2,7 +2,8 @@
 """Prepares App Store signing through the App Store Connect API (idempotent).
 
 - registers the iPhone, Apple Watch, Live Activity and notification service extension bundle ids,
-- enables PUSH_NOTIFICATIONS and HEALTHKIT on the iPhone App ID, APP_GROUPS on it and the Live Activity's,
+- enables PUSH_NOTIFICATIONS, USERNOTIFICATIONS_TIMESENSITIVE and HEALTHKIT on the iPhone App ID, APP_GROUPS on it and
+  the Live Activity's,
 - creates (or rebuilds) the "Jarvis App Store" / "Jarvis Watch App Store" / "Jarvis Live Activity App Store" /
   "Jarvis Notify App Store" profiles
   with the team's distribution certificate and installs them where Xcode looks.
@@ -12,7 +13,8 @@ the "Apple Distribution" identity in the login keychain (see docs/release.md).
 
   python3 scripts/release/asc_signing.py                 # App Store profiles
   python3 scripts/release/asc_signing.py --dev           # also development profiles for registered devices
-  python3 scripts/release/asc_signing.py --check         # only report what is there, change nothing
+  python3 scripts/release/asc_signing.py --check         # only report what is there, change nothing; fails when
+                                                         # a release would (release.sh runs this first)
   python3 scripts/release/asc_signing.py --only <bundle id>  # just that target (the others' profiles stay untouched)
 
 The App Group itself (group.<bundle id>, or config.json app.app_group) can't be made or put on an App ID through the
@@ -37,7 +39,7 @@ LIVE = APP + ".liveactivity"  # the widget extension drawing the lock screen / D
 NOTIFY = APP + ".notify"  # the notification service extension opening relayed pushes (docs/push-relay.md)
 # bundle identifier -> (App ID name, profile name, capabilities)
 TARGETS = {
-    APP: ("Jarvis", "Jarvis App Store", ["PUSH_NOTIFICATIONS", "HEALTHKIT", "APP_GROUPS"]),
+    APP: ("Jarvis", "Jarvis App Store", ["PUSH_NOTIFICATIONS", "USERNOTIFICATIONS_TIMESENSITIVE", "HEALTHKIT", "APP_GROUPS"]),
     WATCH: ("Jarvis Watch", "Jarvis Watch App Store", []),
     LIVE: ("Jarvis Live Activity", "Jarvis Live Activity App Store", ["APP_GROUPS"]),
     NOTIFY: ("Jarvis Notify", "Jarvis Notify App Store", []),
@@ -67,9 +69,10 @@ def ensure_capability(bid: str, capability: str, check_only: bool):
         return
     if check_only:
         print("  missing capability", capability)
+        NOT_READY.append(f"{bid}: capability {capability}")
         return
     print("  enable", capability)
-    # PUSH_NOTIFICATIONS and HEALTHKIT take no settings; the API rejects any key we invent
+    # PUSH_NOTIFICATIONS, USERNOTIFICATIONS_TIMESENSITIVE and HEALTHKIT take no settings; the API rejects any key we invent
     # ("'PUSH_NOTIFICATIONS' is not a valid value for settings/0/key").
     try:
         create("bundleIdCapabilities", {"capabilityType": capability, "settings": []},
@@ -98,6 +101,9 @@ def groups(content: str) -> list:
 
 
 MISSING_GROUP = []  # profiles without GROUP although their App ID should have it
+# --check: what a release would trip over (a capability the entitlements need, a profile missing or made INVALID by a
+# capability change). release.sh runs --check first, so this fails the release before the archive, not at the export.
+NOT_READY = []
 
 
 def profile(bid: str, name: str, cert: str, kind: str = "IOS_APP_STORE", check_only: bool = False,
@@ -108,6 +114,8 @@ def profile(bid: str, name: str, cert: str, kind: str = "IOS_APP_STORE", check_o
     current = [p for p in existing if p["attributes"]["profileState"] == "ACTIVE"]
     if check_only:
         print("  profile", name, "ACTIVE" if current else "missing or invalid")
+        if not current:
+            NOT_READY.append(f"profile {name}: missing or invalid")
         if current and group and GROUP not in groups(current[0]["attributes"]["profileContent"]):
             print("  profile", name, "lacks the App Group", GROUP)
             MISSING_GROUP.append(name)
@@ -157,6 +165,10 @@ def main():
                 continue
             profile(ids[identifier], profile_name.replace("App Store", "Development"), dev,
                     "IOS_APP_DEVELOPMENT", check_only, group="APP_GROUPS" in capabilities)
+    if NOT_READY:
+        sys.exit(f"""
+Signing is not ready for a release: {"; ".join(NOT_READY)}.
+Run python3 scripts/release/asc_signing.py (with --dev too if you sign development builds with these profiles).""")
     if MISSING_GROUP:
         sys.exit(f"""
 {len(MISSING_GROUP)} profile(s) without the App Group {GROUP}: {", ".join(MISSING_GROUP)}.

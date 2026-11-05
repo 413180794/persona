@@ -88,11 +88,13 @@ struct LarkForwardedView: View {
                                     Text("消息已撤回").font(Theme.Font.caption).foregroundStyle(.secondary)
                                 } else if let encryption = m.olk {
                                     LarkEncryptedContent(encryption: encryption)
-                                } else if let parts = m.parts, !parts.isEmpty {
+                                } else if let source = m.parts, !source.isEmpty {
+                                    let parts = display.shown(source)
                                     LarkPartsView(parts: parts)
                                         .environment(\.larkContext, LarkRenderContext(messageID: m.isRecalled == true ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
+                                    if parts != source { LarkBraveClimbMark() }
                                 } else {
-                                    Text(m.textPreview ?? "").font(Theme.Font.body)
+                                    Text(display.shown(m.textPreview ?? "")).font(Theme.Font.body)
                                 }
                                 if m.isRecalled == true && display.antiRecall && m.hasRetainedRecallContent == true {
                                     Text("已撤回").font(Theme.Font.caption).foregroundStyle(.secondary)

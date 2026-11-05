@@ -3410,65 +3410,26 @@ def _lm(pos, who, text, mine=False, mins=60):
 LARK_MESSAGES = {"f2": [
     _lm("200", "Lucy Wang", "The new icon set is in the shared folder. Could you take a look before the review this afternoon?", mins=58),
     _lm("201", "李雷", "我先看了一下，标签栏的图标偏细", mins=57),
-    _lm("202", "Lucy Wang", "Agreed. I'll make the tab bar icons one weight heavier and send an update by 3 pm.", mins=56),
-    _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
-]}
-LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {"copy": True}, "content": {"type": "doc", "content": [
-    {"type": "heading", "attrs": {"level": 1}, "content": [{"type": "text", "text": "新版图标评审"}]},
-    {"type": "paragraph", "content": [{"type": "text", "text": "这一版统一了圆角和描边，深色模式单独调了对比度。"}]},
-    {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "待确认"}]},
-    {"type": "bulletList", "content": [
-        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "主色是否再暖一点"}]}]},
-        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "小尺寸下的描边粗细"}]}]}]},
-    {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
-]}}
-
-LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
-
-# MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
-if os.environ.get("MOCK_LARK_OLK"):
-    def _olk(pos, state, body, cover, handout=False):
-        m = _lm(str(pos), "李雷", body or "加密群密钥分发消息", mins=55)
-        m["parts"] = [{"kind": "text", "text": m["text"]}]
-        m["olk"] = {"version": 1, "state": state,
-                    "publicParts": [{"kind": "text", "text": cover}] if cover else []}
-        if state == "decrypted":
-            m["olk"].update(bodyParts=[{"kind": "text", "text": body}] if body else [], keyHandout=handout)
-        return m
-    LARK_MESSAGES["f2"] = [
-        _olk(200, "decrypted", "", "稍等", True),
-        _olk(201, "decrypted", "评审文档已更新，请看第二页。", "我看看"),
-        _olk(202, "decrypted", "我把调整后的版本发到这里。", "等下", True),
-        _olk(203, "locked", "不可见的正文", "午饭后再聊"),
-        _lm("204", "李雷", "加密群密钥分发消息是一个普通文本示例", mins=55),
-    ]
-    LARK_MESSAGES["f2"][2]["reply_to"] = {
-        "id": "m201", "sender_name": "李雷", "text": "旧接口摘要",
-        "olk": LARK_MESSAGES["f2"][1]["olk"],
-    }
-    LARK_MESSAGES["f2"][4]["reply_to"] = {
-        "id": "m203", "sender_name": "李雷", "text": "不可见的正文",
-        "olk": LARK_MESSAGES["f2"][3]["olk"],
-    }
-
-LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
-# Isolated pin shelf fixtures: real list endpoints, account checks and realtime changes.
-LARK_PIN_FIXTURE = {"count": 18, "account": "pin-account-one", "offline": False, "reverse": False, "unread": 3, "newest": False, "requests": 0}
-def lark_pin_rows():
-    rows = [dict(c) for c in LARK_CHATS]
-    for i in range(1, 81):
-        rows.append({"id": f"pin-{i}", "name": f"会话 {i:02d}", "is_group": i % 2 == 0,
-                     "unread": i % 4, "at_me": False, "muted": i % 3 == 0, "is_mine": False,
-                     "preview": f"第 {i} 条会话摘要", "updated_at": ago(minutes=i)})
-    rows[0]["unread"] = LARK_PIN_FIXTURE["unread"]
-    if LARK_PIN_FIXTURE["newest"]:
-        rows.insert(0, dict(rows[0], id="incoming", name="新会话", preview="实时更新的摘要"))
-        rows = [dict(c, preview="实时更新 · " + c["preview"]) for c in rows]
-    if LARK_PIN_FIXTURE["account"] != "pin-account-one":
-        rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
-    return rows
-
-LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False}
+    _lm("202", "Lucy Wang", "Agreed. I''s [removed] words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
+    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
+    while True:
+        n, d = divmod(n, 34)
+        out = BRAVE_CLIMB_ALPHABET[d] + out
+        if n == 0:
+            return "**字" + out + "**""MOCK_LARK_BRAVE_CLIMB"):
+    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
+    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
+    words = brave_climb("标签栏改粗一号")
+    split = _lm("211", "Lucy Wang", words, mins=39)
+    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
+    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
+    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
+    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
+    reply = _lm("214", "我", "好的", mine=True, mins=36)
+    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
+    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
+    LARK_CHATS[0]["preview"] = whole["text"]
 if os.environ.get("MOCK_LARK_TRAINER"):
     retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
     retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
@@ -8909,7 +8870,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/lark/message-display" and self.command == "POST":
             req = json.loads(self.last_body or b"{}")
             key = req.get("key")
-            if key not in ("anti_recall", "show_edit_history") or type(req.get("value")) is not bool or type(req.get("expected")) is not bool:
+            if key not in LARK_DISPLAY or key == "account_id" or type(req.get("value")) is not bool or type(req.get("expected")) is not bool:
                 return self.send_json({"error": "invalid settings"}, 400)
             if req.get("account_id") != LARK_DISPLAY["account_id"] or req["expected"] != LARK_DISPLAY[key]:
                 return self.send_json({"error": "设置已变化"}, 409)
@@ -9362,6 +9323,9 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):  # 飞书发消息: lark-connector takes a moment
             body, feed = json.loads(self.last_body or b"{}"), p.split("/")[5]
             if lark_check_mentions(body): return self.send_json({"error": lark_check_mentions(body)}, 400)
+            if body.get("text", "").startswith("**字") and not LARK_DISPLAY.get("brave_climb_codec"):  # lark-connector refuses them
+                return self.send_json({"error": "Enable the Brave Climb message codec in FLiNG Trainer before sending encoded messages",
+                                       "code": "BRAVE_CLIMB_CODEC_DISABLED"}, 403)
             time.sleep(float(os.environ.get("MOCK_LARK_SEND_SECONDS", "2")))
             if "#fail" in body.get("text", ""):
                 return self.send_json({"error": "lark-connector: send timed out"}, 502)

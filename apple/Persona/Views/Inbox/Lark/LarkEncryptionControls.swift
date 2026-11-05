@@ -2,7 +2,10 @@ import SwiftUI
 
 struct LarkEncryptionModeBar: View {
     @Binding var draft: LarkEncryptedDraft?
+    /// [removed] words (#882), offered while the account's switch is on.
+    @Binding var climbing: Bool
     var canEncrypt: Bool
+    var canClimb = false
     var checking = false
     var selectEncrypted: () -> Void
     var pickCover: () -> Void
@@ -10,14 +13,19 @@ struct LarkEncryptionModeBar: View {
     var body: some View {
         HStack(spacing: Theme.Space.m) {
             Menu {
-                Button { draft = nil } label: { Text("普通消息").lineLimit(1) }
+                Button { draft = nil; climbing = false } label: { Text("普通消息").lineLimit(1) }
                     .accessibilityIdentifier("lark.encryption.plain")
                 Button(action: selectEncrypted) { Text("加密消息").lineLimit(1) }
                     .disabled(!canEncrypt)
                     .accessibilityIdentifier("lark.encryption.encrypted")
+                if canClimb || climbing {
+                    Button { draft = nil; climbing = true } label: { Text("").lineLimit(1) }
+                        .disabled(!canClimb)
+                        .accessibilityIdentifier("lark.encryption.braveClimb")
+                }
             } label: {
                 HStack(spacing: Theme.Space.xs) {
-                    Label(draft == nil ? "普通消息" : "加密消息", systemImage: draft == nil ? Theme.Icon.message : Theme.Icon.locked)
+                    Label(mode.title, systemImage: mode.icon)
                     Image(systemName: Theme.Icon.expand)
                 }
                 .font(Theme.Font.label).lineLimit(1)
@@ -31,12 +39,22 @@ struct LarkEncryptionModeBar: View {
                 .accessibilityIdentifier("lark.encryption.cover")
                 .disabled(checking)
             }
+            if climbing && draft == nil {
+                Text(canClimb ? "可还原的编码，不是加密" : "")
+                    .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
+            }
             if checking { ProgressView().controlSize(.small).accessibilityLabel("正在检查加密服务") }
             Spacer(minLength: 0)
         }
         .foregroundStyle(.secondary)
         .padding(.horizontal, Theme.Space.page)
         .padding(.top, Theme.Space.s)
+    }
+
+    private var mode: (title: String, icon: String) {
+        if draft != nil { ("加密消息", Theme.Icon.locked) }
+        else if climbing { ("", Theme.Icon.braveClimb) }
+        else { ("普通消息", Theme.Icon.message) }
     }
 }
 

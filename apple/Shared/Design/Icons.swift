@@ -347,6 +347,8 @@ extension Theme {
         static let credentials = "key"
         /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
         static let locked = "lock"
+        /// Feishu [removed] words: encoded for the eye, not encrypted.
+        static let braveClimb = "shield"
         static let memory = "brain"
         /// Search (a list's, the sidebar's).
         static let search = "magnifyingglass"

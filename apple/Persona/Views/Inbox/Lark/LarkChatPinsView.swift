@@ -162,7 +162,7 @@ struct LarkChatPinsView: View {
         guard let m = pin.message, m.deleted != true else { return "原消息已不可用" }
         let policy = display.accountID == pins.accountID ? display : .hidden
         guard policy.showsBody(of: m) else { return "消息已撤回" }
-        let text = m.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = policy.summary(m.displayText.trimmingCharacters(in: .whitespacesAndNewlines))
         let fallback = m.type == "IMAGE" ? "[图片]" : m.type == "FILE" ? "[文件]" : "消息"
         return (text.isEmpty ? fallback : text) + (m.recalled ? " · 已撤回" : "")
     }

@@ -65,6 +65,10 @@ targets:
       path: Persona/Resources/Persona.entitlements
       properties:
         aps-environment: development
+        # Lets pushes marked interruption-level time-sensitive break through Focus (and so reach the watch while a Focus
+        # is on); without it iOS shows them as active (#1572). Needs USERNOTIFICATIONS_TIMESENSITIVE on the App ID
+        # (asc_signing.py).
+        com.apple.developer.usernotifications.time-sensitive: true
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
         # The app's own group first (stays the default, where the existing items are), then the one the notification
