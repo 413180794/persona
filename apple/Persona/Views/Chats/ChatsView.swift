@@ -85,7 +85,7 @@ extension DevGrouping {
 
 /// How 开发 groups its agents (the menu at the top left; remembered).
 enum DevGrouping: String, CaseIterable, Identifiable {
-    case repo, space, todo, state, machine
+    case repo, space, todo, state, machine, recent
     /// What an app that never chose a grouping shows (#2108): machines → repositories → working trees, after Orca.
     static let standard = DevGrouping.repo
     var id: String { rawValue }
@@ -96,6 +96,7 @@ enum DevGrouping: String, CaseIterable, Identifiable {
         case .todo: "按待办"
         case .state: "按状态"
         case .machine: "按机器"
+        case .recent: "最近使用"
         }
     }
     var symbol: String {
@@ -105,6 +106,7 @@ enum DevGrouping: String, CaseIterable, Identifiable {
         case .todo: Theme.Icon.todo
         case .state: Theme.Icon.byState
         case .machine: Theme.Icon.machine
+        case .recent: Theme.Icon.recent
         }
     }
 }
@@ -601,6 +603,7 @@ private struct AgentsList: View {
         // What the ⋯ menu's actions act on, kept current without making the open menu a function of the list. Split by
         // machine, 全部折叠 still folds the spaces and repositories, not the machines: every one of them a line, the overview.
         let sectionsForMenu: [String] = {
+            if grouping == .recent { return [] }
             if grouping == .repo { return tree.flatMap(\.repos).filter { !isQuiet($0) }.map(\.id) }
             if grouping == .space { return active.map(\.id) }
             if grouping == .todo {
@@ -727,7 +730,9 @@ private struct AgentsList: View {
                 }
             }
 
-            if grouping == .todo {
+            if grouping == .recent {
+                recentSection(unpinned)
+            } else if grouping == .todo {
                 todoSections(unpinned.filter { $0.state.isLive })
             } else if grouping == .state {
                 stateSections(unpinned.filter { $0.state.isLive })
@@ -829,6 +834,7 @@ private struct AgentsList: View {
         }
         .onChange(of: matching) { _, now in kept.formUnion(now) }
         .onChange(of: query.isEmpty, initial: true) { _, empty in feed.searching = !empty }
+        .onChange(of: grouping, initial: true) { _, mode in feed.recent = mode == .recent }
         .onChange(of: machineFilter) { _, _ in kept = [] }
         .onAppear {
             feed.follow(model)
@@ -900,6 +906,7 @@ private struct AgentsList: View {
         let live = unpinned.filter { $0.state.isLive }
         let shown: [Session]
         switch grouping {
+        case .recent: shown = AgentListOrder.recent(unpinned)
         case .todo:
             let groups = TodosLogic.buildTodoAgentGroups(sessions: live, todos: TodoStore.shared.todos, isMuted: model.isMuted)
             shown = rows.todos(groups) { g in g.todoID == nil ? isFolded(g.key, otherwise: g.folded) : isFolded(g.key) }
@@ -1303,6 +1310,18 @@ private struct AgentsList: View {
                 ForEach(TabPanes.entries(ordered(w.sessions))) { e in entryRows(e, depth: depth + 1) }
             } else {
                 agentRows(w.sessions, key: w.id, depth: depth + 1)
+            }
+        }
+    }
+
+    // MARK: Recently active
+
+    @ViewBuilder private func recentSection(_ sessions: [Session]) -> some View {
+        if !sessions.isEmpty {
+            listSection {
+                ForEach(AgentListOrder.recent(sessions)) { s in slotRow(s, context: true) }
+            } header: {
+                SectionHeader(title: "最近使用", count: sessions.count, tone: StatusPalette.idle)
             }
         }
     }
@@ -1921,6 +1940,10 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     @ObservationIgnored var searching = false {
         didSet { if searching != oldValue { restructure(force: true) } }
     }
+    /// Only the flat timeline follows activity time while an agent is working.
+    @ObservationIgnored var recent = false {
+        didSet { if recent != oldValue { restructure(force: true) } }
+    }
     init() {
         hold.land = { [weak self] in self?.land() }
     }
@@ -1993,7 +2016,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     }
 
     private func restructure(force: Bool) {
-        let shape = Self.shape(shown, searching: searching)
+        let shape = Self.shape(shown, searching: searching, recent: recent)
         guard force || shape != shaped else { return }
         shaped = shape
         if shown != sessions { reader.willChange(); sessions = shown }
@@ -2003,8 +2026,8 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     /// their times put them in.
     struct Shape: Equatable {
         var sessions: [Session] = []
-        /// The agents' ids, latest first by `sortDate`: what the time decides in the list (the order of rows and of
-        /// spaces), without the time itself, which moves on every step of a working agent and which only rows (and a
+        /// The agents' ids, latest first by the selected time: what decides the order of rows and of
+        /// spaces, without the time itself, which moves on every step of a working agent and which only rows (and a
         /// quiet space's line, from the rows') show.
         var byTime: [String] = []
     }
@@ -2013,10 +2036,15 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     /// last lines while searching), with what only rows show taken out (docs/ios-state.md「第 3 步」).
     /// - The time: only the order it puts agents in (`Shape.byTime`); a minute passing changes nothing else.
     /// - Subagents and background work: only whether any runs (a row with one stays out of the idle fold).
-    nonisolated static func shape(_ list: [Session], searching: Bool) -> Shape {
-        let byTime = list.map { (id: $0.id, at: $0.sortDate) }
-            .sorted { $0.at != $1.at ? $0.at > $1.at : $0.id < $1.id }
-            .map(\.id)
+    nonisolated static func shape(_ list: [Session], searching: Bool, recent: Bool = false) -> Shape {
+        let byTime: [String]
+        if recent {
+            byTime = AgentListOrder.recent(list).map(\.id)
+        } else {
+            byTime = list.map { (id: $0.id, at: $0.sortDate) }
+                .sorted { $0.at != $1.at ? $0.at > $1.at : $0.id < $1.id }
+                .map(\.id)
+        }
         return Shape(sessions: list.map { s in
             var x = s
             x.rev = nil

@@ -10188,6 +10188,9 @@ class H(BaseHTTPRequestHandler):
             for x in SESSIONS:
                 if x["session_id"] in ORIG_STATE:
                     x["state"], x["status"] = ORIG_STATE[x["session_id"]]
+                activity = ORIG_ACTIVITY.get((x["machine_id"], x["session_id"]))
+                if activity:
+                    x.update(activity)
             INTERACTIONS[:] = [x for x in INTERACTIONS if not x["id"].startswith(("ix_bump_", "ix_churn"))]
             BUMPED["asks"].clear()
             BUMPED.pop("blocked", None)
@@ -12951,6 +12954,9 @@ if os.environ.get("MOCK_INJECTED_WATCH") == "1":
     INTERACTIONS[:] = []
     MOCK_INTERACTIONS[:] = []
 
+# Capture after every scenario has customized the fixtures, before any requests or churn.
+# A reset must also restore activity: otherwise one timeline test changes the next test's order.
+ORIG_ACTIVITY = {(s["machine_id"], s["session_id"]): {k: s[k] for k in ("updated_at", "last_text") if k in s} for s in SESSIONS}
 
 if os.environ.get("MOCK_EXTENSION_MANAGEMENT") == "1" and EXTENSIONS_API:
     from extension_management import ExtensionManagementMock

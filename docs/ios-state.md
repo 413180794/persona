@@ -1,5 +1,10 @@
 # App 的状态和重绘（iOS）
 
+「最近使用」是 Agents 列表的独立分组选择（`dev.grouping=recent`）：跨项目平铺，含已读和离线历史。
+它用 `AgentListOrder.recent` 按 `updatedAt` 排序；其他分组仍用 `sortDate`（工作中的会话按 `stateSince`）。
+`AgentsFeed.recent` 切换结构投影的时间来源，`Shape.byTime` 只保存该顺序：一条工作进展越过别的会话时重排，时间前进但顺序不变时只更新行上的时间。
+滚动、被其他页面盖住时仍由原有 Hold / ReaderAnchor 控制何时落地。打开对话、标为已读不会把它藏进空闲折叠。
+
 hub 一直在推（真实 hub 实测：某台机器的会话每 2 秒一次），界面要做到三件事：
 - 只重画变了的那一点；
 - 用户正在操作时不被打断；

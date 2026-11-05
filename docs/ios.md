@@ -3,6 +3,15 @@
 XcodeGen 源头是 `apple/project.yml`，生成 `apple/Persona.xcodeproj`（生成内容不入库）；旧 `apple/Jarvis.xcodeproj` 软链指向它，新旧 schemes 的关系见 [兼容迁移](rename.md)。iOS 26 / watchOS 10（手表 App 要能装在停在 watchOS 10 的旧表上），Swift 6，默认 MainActor 隔离。依赖 MarkdownUI。
 Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/config.md`）。界面中文。
 
+## Agents 的最近使用视图
+
+Agents 列表的分组菜单增加「最近使用」（Mac 在「显示 › 分组方式」），仍记在本机 `dev.grouping`，原有默认和分组选项不变。
+置顶会话仍单列一次，其余会话跨项目、跨机器平铺，按最后活动时间 `updated_at` 倒序，相同时间按包含机器和 hub 的完整会话 id 排，缺少时间的排最后。
+工作中的会话也按最后活动时间，不改用开始工作的时间；已读、空闲、未运行的历史会话都直接列出，不再折入项目或「空闲的空间」。
+这里的「使用」指有消息或工作进展，不是打开页面：读完回复不会改变会话的活动时间或位置。机器 / hub 筛选、搜索、快捷状态筛选和行菜单继续可用，折叠 / 展开操作在这个视图不显示。
+列表仍使用原有 `AgentsFeed` 和滚动保护；只有活动时间改变了会话之间的先后次序才更新结构，浏览时暂停重排，保持当前阅读位置。
+Mac 的上一个 / 下一个 Agent 在此模式跟随置顶顺序和最近活动顺序；其他模式维持原顺序。
+
 ## 信息架构
 
 Agents 的「空闲的空间」展开后，普通卡片、细列表、胶囊样式均复用 `AgentListOrder.ordered`，按最新活动在前显示（#2443）。

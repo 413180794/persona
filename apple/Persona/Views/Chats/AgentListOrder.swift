@@ -49,6 +49,14 @@ struct AgentListOrder {
         .map(\.session)
     }
 
+    /// A flat activity timeline, including idle and offline history. Reading a reply does not move its row.
+    nonisolated static func recent(_ list: [Session]) -> [Session] {
+        list.sorted { a, b in
+            let lhs = a.updatedAt ?? .distantPast, rhs = b.updatedAt ?? .distantPast
+            return lhs != rhs ? lhs > rhs : a.id < b.id
+        }
+    }
+
     /// The rows of a space or a working tree (`ordered`), each tab's agents together where its first one ranks
     /// (`TabPanes.entries`, #2320): those that stay out of the idle fold (a tab when any of its agents does) and the
     /// idle ones; with `all` off (a quick filter), every row stays.

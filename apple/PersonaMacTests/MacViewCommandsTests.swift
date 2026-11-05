@@ -67,4 +67,20 @@ struct MacViewCommandsTests {
         #expect(MacViewCommands.neighbour(of: nil, by: 1, in: list, order: order) == k("n"))
         #expect(MacViewCommands.neighbour(of: nil, by: 1, in: [], order: order) == nil)
     }
+
+    @Test func recentNeighboursFollowActivityAndKeepPinnedAgentsFirst() {
+        var seen = session("seen", .idle)
+        seen.updatedAt = Date(timeIntervalSince1970: 30)
+        var working = session("work", .working)
+        working.updatedAt = Date(timeIntervalSince1970: 20)
+        var needs = session("needs", .needsYou)
+        needs.updatedAt = Date(timeIntervalSince1970: 10)
+        let list = [needs, working, seen, session("assistant", .idle, assistant: true)]
+        let order = AgentListOrder(isPinned: { _ in false }, isMuted: { _ in false })
+        #expect(MacViewCommands.neighbour(of: nil, by: 1, in: list, order: order, recent: true) == seen.key)
+        #expect(MacViewCommands.neighbour(of: seen.key, by: 1, in: list, order: order, recent: true) == working.key)
+        let pinned = AgentListOrder(isPinned: { $0 == needs.key }, isMuted: { _ in false })
+        #expect(MacViewCommands.neighbour(of: nil, by: 1, in: list, order: pinned, recent: true) == needs.key)
+        #expect(MacViewCommands.neighbour(of: needs.key, by: 1, in: list, order: pinned, recent: true) == seen.key)
+    }
 }

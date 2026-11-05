@@ -269,6 +269,8 @@
   判断是不是真重复：看 mock `/mock/sent` 里的 `client_msg_id`，同一条消息的重发 id 相同，服务端和 mock 都按它去重。
 - 新建的测试文件要先 `xcodegen` 再跑，否则 `-only-testing:` 选中的是空集，xcodebuild 照样 `** TEST SUCCEEDED **`（`Executed 0 tests`）。
   看结果要 grep `Executed N tests`，N 不能是 0（2026-11-01，端口转发的 UI 测试第一次「通过」其实一个都没跑）。
+- 排序用例之间，mock 的重置也要恢复 `updated_at` 和 `last_text`，否则前一例的实时推送会改变后一例的顺序。
+  原始活动快照要在所有场景改完 fixture 后再取，避免重置时覆盖场景特意准备的内容；读后返回的用例也要选带真实回复的 fixture，不能只开一个有列表元数据、历史为空的会话。
 - **UI 测试的 App 用模拟器签名编，不加 `CODE_SIGNING_ALLOWED=NO`**（2026-11-05，#1929）：无签名的可执行文件里没有 `__TEXT,__entitlements`
   （`keychain-access-groups`、`application-identifier`），读钥匙串一直失败，`HubStore.read()` 是 `.unreadable`。`AppModel.init` 把它当「不知道配没配对」，
   `isPaired` 为假，`restoreSnapshot()` / `restoreOutbox()` 都不跑；`protectedDataDidBecomeAvailable` 后的 `retryRegistry()` 照样读不出。
@@ -283,6 +285,10 @@
 - **Xcode、SDK、模拟器运行时分开检查**：Xcode 可以搭配兼容的旧版运行时；某份运行时的设备限制不等于 Xcode 或真机的限制。
   `xcrun simctl list runtimes -j` 的 `supportedDeviceTypes` 给出实际设备列表；运行时 `Contents/Resources/profile.plist` 的
   `restrictedToDeviceTypes` 可能限定设备，按设备配置的 `productClass` 核对，不能只凭系统版本猜。创建失败时先查支持范围，再换组合。
+- **同版本运行时装好，Xcode 仍提示系统未安装**：`simctl list runtimes` 显示可用、设备也能创建时，核对
+  `xcrun simctl runtime match list` 的 SDK → 运行时构建号映射。SDK 默认寻找的构建号可能不在已安装镜像里；
+  可用 `xcrun simctl runtime match set <SDK canonical name> <已安装的 runtime build>` 为该 SDK 指定同系统版本的运行时，
+  然后用 `xcodebuild -showdestinations` 确认专用设备真正可选。恢复自动选择用同一命令的 `--default`，不要改系统 plist 来伪装已安装。
 - **运行时显示 available，创建却报 `runtime path not found`**：先核对 `simctl runtime list -j` 和运行时实际路径，不直接删镜像或改系统 plist。
   已缓存的镜像可用 `xcodebuild -downloadPlatform iOS -buildVersion <系统版本> -architectureVariant arm64 -exportPath <新建空目录>` 导出，
   再用 `xcodebuild -importPlatform <导出的 .exportedBundle>` 重新登记。一次排查中下载命令提示已缓存、导出完成，但退出码为 70；

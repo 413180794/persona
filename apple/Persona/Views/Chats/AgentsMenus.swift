@@ -85,8 +85,8 @@ struct AgentsListMenu: View {
             Picker("分组", selection: groupingChoice) {
                 ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { g in Label(g.title, systemImage: g.symbol).tag(g) }
             }
-            if grouping != .state {
-                // 按状态 is sectioned by state, and the rows in a section are by time already.
+            if shownGrouping != .state, shownGrouping != .recent {
+                // 按状态 is sectioned by state, and the rows in a section are by time already; 最近使用 is by time only.
                 Picker("排序", selection: $sort) {
                     ForEach(AgentSort.allCases) { o in Label(o.title, systemImage: o.symbol).tag(o) }
                 }
@@ -95,13 +95,15 @@ struct AgentsListMenu: View {
                 Label("卡片", systemImage: "rectangle.grid.1x2").tag(false)
                 Label("细列表", systemImage: Theme.Icon.listView).tag(true)
             }
-            Section {
-                Button {
-                    withAnimation(Theme.Motion.standard) { actions.collapse() }
-                } label: { Label("全部折叠", systemImage: Theme.Icon.collapseAll) }
-                Button {
-                    withAnimation(Theme.Motion.standard) { actions.expand() }
-                } label: { Label("全部展开", systemImage: "rectangle.expand.vertical") }
+            if shownGrouping != .recent {
+                Section {
+                    Button {
+                        withAnimation(Theme.Motion.standard) { actions.collapse() }
+                    } label: { Label("全部折叠", systemImage: Theme.Icon.collapseAll) }
+                    Button {
+                        withAnimation(Theme.Motion.standard) { actions.expand() }
+                    } label: { Label("全部展开", systemImage: "rectangle.expand.vertical") }
+                }
             }
             if model.isMultiHub {
                 // Several groups of hubs (docs/multi-hub.md「按组筛选」): one group's agents only.

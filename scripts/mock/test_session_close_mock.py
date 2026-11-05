@@ -88,6 +88,21 @@ class SessionCloseMockTests(unittest.TestCase):
         caught.exception.close()
         self.assertEqual(self.request("/mock/session_close")["closed"], [])
 
+    def test_reset_restores_activity_after_live_updates(self):
+        before = self.sessions()
+        self.request("/mock/churn?n=2&ms=1&steps=0")
+        deadline = time.monotonic() + 5
+        while self.request("/mock/churned").get("rounds", 0) < 2:
+            self.assertLess(time.monotonic(), deadline, "live updates did not finish")
+            time.sleep(0.05)
+        widget = "a1f3c2d4-0000-4000-8000-000000000001"
+        self.assertNotEqual(self.sessions()[widget]["updated_at"], before[widget]["updated_at"])
+        self.request("/mock/reset")
+        after = self.sessions()
+        for sid, session in before.items():
+            self.assertEqual(after[sid]["updated_at"], session["updated_at"])
+            self.assertEqual(after[sid].get("last_text"), session.get("last_text"))
+
 
 if __name__ == "__main__":
     unittest.main()

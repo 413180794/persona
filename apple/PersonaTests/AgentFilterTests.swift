@@ -197,4 +197,15 @@ import Testing
         w2.updatedAt = Date(timeIntervalSince1970: 400)
         #expect(AgentsFeed.shape([w, a], searching: false) == AgentsFeed.shape([w2, a], searching: false))
     }
+
+    @Test func recentFeedReordersOnlyWhenActivityPassesAnotherRow() {
+        let a = session("a", state: "working", updated: 600, since: 100)
+        let b = session("b", state: "working", updated: 500, since: 200)
+        var newer = b
+        newer.updatedAt = Date(timeIntervalSince1970: 700)
+        #expect(AgentsFeed.shape([a, b], searching: false) == AgentsFeed.shape([a, newer], searching: false))
+        #expect(AgentsFeed.shape([a, b], searching: false, recent: true) != AgentsFeed.shape([a, newer], searching: false, recent: true))
+        newer.updatedAt = Date(timeIntervalSince1970: 550)
+        #expect(AgentsFeed.shape([a, b], searching: false, recent: true) == AgentsFeed.shape([a, newer], searching: false, recent: true))
+    }
 }

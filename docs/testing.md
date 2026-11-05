@@ -427,6 +427,9 @@ fixture 的标签顺序是 41 / 52 / 1 分钟前，展开行必须显示为 1 / 
   另有空闲多的空间和全空闲的空间；`seen`（WebSocket 或 `POST …/seen`）把完成未看改成已看，`GET /mock/seen` 列出，`/mock/reset` 复原），
   `TEST_RUNNER_JARVIS_AGENTS_HUB=http://127.0.0.1:18775 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/AgentsListTests`，深色再跑一遍。
 - `-openAgentsFresh YES` 启动时清掉列表记住的样子（机器筛选、分组、细列表、折叠）：这些值测试里要在界面上改，不能用启动参数固定（启动参数会盖过 App 写进去的值）。
+- 最近使用平铺模式（`RecentAgentsTests`）：连普通 mock（不加 `MOCK_AGENTS`），传 `TEST_RUNNER_JARVIS_RECENT_HUB=<mock 地址>`，
+  选择 `-only-testing:PersonaUITests/RecentAgentsTests`。在真实菜单里切换，检查跨项目的活动顺序、重启记住选择、已读后返回、空闲 / 离线历史、实时推送重排、机器筛选和搜索。
+  浅色 / 深色各跑，`TEST_RUNNER_JARVIS_LAYOUT=shell` 再验新外壳；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存每步截图，`TEST_RUNNER_JARVIS_STYLE=light|dark` 标记文件名。
 - 列表行（`NavigationLink`）上的 `accessibilityIdentifier` 在视图树里出现两次（cell 和里面的 button），数行数、取第 n 行用 `app.buttons.matching(identifier:)`。
 - `SearchOpenTests` 以前不带 `-dev.openChat ""`：上一次测试留下打开的对话，启动后恢复进去，右滑返回回不到列表，两个用例都挂（master 上也一样）。
 - `SearchOpenTests` 两个用例在 master 上找不到 weather 的分组头和「给天气」那一行（#1051）：mock 的待处理多到 5 条后，「需要你处理」的卡片占满第一屏，懒加载的列表还没建它们。先 `bringAboveTabBar` 滚到它们，搜索前再滚回顶上；返回后用那一行判断回到了列表（列表停在原处，顶上的筛选条不在树里）。

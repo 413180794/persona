@@ -103,6 +103,33 @@ import Testing
         #expect(Set(order().sectionIDs(list, byMachine: true)) == ["machine/x", "machine/y"], "offline agents make no section")
     }
 
+    @Test func recentActivityMixesProjectsStatesAndOfflineHistory() {
+        var seen = session("seen", "idle", updated: 30, machine: "laptop")
+        seen.spaceID = "docs"
+        var working = session("work", "working", updated: 40, machine: "server")
+        working.stateSince = Date(timeIntervalSince1970: 1)
+        let list = [session("needs", "needs_you", updated: 10), seen,
+                    session("history", "offline", updated: 50), working]
+        #expect(AgentListOrder.recent(list).map(\.sessionID) == ["history", "work", "seen", "needs"])
+    }
+
+    @Test func readingAReplyKeepsItsRecentPosition() {
+        var latest = session("latest", "unread", updated: 20)
+        let older = session("older", "working", updated: 10)
+        latest.state = .idle
+        latest.seenAt = Date(timeIntervalSince1970: 100)
+        #expect(AgentListOrder.recent([older, latest]).map(\.sessionID) == ["latest", "older"])
+    }
+
+    @Test func recentTiesUseTheWholeIdentityAndMissingTimesComeLast() {
+        let a = session("same", "idle", updated: 20, machine: "a")
+        let b = session("same", "idle", updated: 20, machine: "b")
+        var unknown = session("unknown", "idle")
+        unknown.updatedAt = nil
+        #expect(AgentListOrder.recent([unknown, b, a]).map(\.id) == ["a/same", "b/same", "m/unknown"])
+        #expect(AgentListOrder.recent([a, unknown, b]).map(\.id) == ["a/same", "b/same", "m/unknown"])
+    }
+
     // MARK: The open agent held in place (#2213)
 
     @Test func theOpenAgentSeenByOpeningKeepsItsPlaceUntilLeft() {

@@ -12,8 +12,20 @@ enum MacViewCommands {
     /// The agent above / below in the Agents list's order (AgentListOrder: needs you → unread → working → seen, or by
     /// time alone under 最近更新),
     /// wrapping around; Persona conversations are not in that list. From nothing, the first.
-    static func neighbour(of key: SessionKey?, by delta: Int, in sessions: [Session], order: AgentListOrder) -> SessionKey? {
-        let list = order.ordered(sessions.filter { !$0.assistant }).map(\.key)
+    static func neighbour(of key: SessionKey?, by delta: Int, in sessions: [Session], order: AgentListOrder,
+                          recent: Bool = false, pinOrder: (SessionKey) -> Int = { _ in 0 }) -> SessionKey? {
+        let agents = sessions.filter { !$0.assistant }
+        let sorted: [Session]
+        if recent {
+            let pinned = agents.filter { order.isPinned($0.key) }.sorted { a, b in
+                let lhs = pinOrder(a.key), rhs = pinOrder(b.key)
+                return lhs != rhs ? lhs < rhs : a.id < b.id
+            }
+            sorted = pinned + AgentListOrder.recent(agents.filter { !order.isPinned($0.key) })
+        } else {
+            sorted = order.ordered(agents)
+        }
+        let list = sorted.map(\.key)
         guard !list.isEmpty else { return nil }
         guard let key, let i = list.firstIndex(of: key) else { return list[0] }
         return list[((i + delta) % list.count + list.count) % list.count]
@@ -76,12 +88,13 @@ struct MacViewMenu: Commands {
             Picker("排序方式", selection: $sort) {
                 ForEach(AgentSort.allCases) { Text($0.title).tag($0) }
             }
-            .disabled(grouping == .state) // sectioned by state; the rows in a section are by time already
+            // sectioned by state, the rows in a section by time already; 最近使用 is by time only
+            .disabled(grouping == .state || grouping == .recent)
             // The Agents list is kept behind other sections (`MacPageStack`): only while it shows.
             Button("全部折叠") { MacShellState.shared.agentsList?.collapse() }
-                .disabled(MacShellState.shared.agentsList == nil || !agentsShown)
+                .disabled(MacShellState.shared.agentsList == nil || !agentsShown || grouping == .recent)
             Button("全部展开") { MacShellState.shared.agentsList?.expand() }
-                .disabled(MacShellState.shared.agentsList == nil || !agentsShown)
+                .disabled(MacShellState.shared.agentsList == nil || !agentsShown || grouping == .recent)
             Divider()
             // The iPhone's pull to refresh: a Mac list has no pull. The one ⌘R in the app (the toolbars' 刷新 buttons
             // have none, so two never claim it).
@@ -121,7 +134,8 @@ struct MacViewMenu: Commands {
         let order = AgentListOrder(isPinned: { model.isPinned($0) }, isMuted: { model.isMuted($0) },
                                    byRank: sort == .state || grouping == .state)
         let current = MacShellState.shared.focusedChat(model).flatMap { model.session($0)?.assistant == true ? nil : $0 }
-        if let next = MacViewCommands.neighbour(of: current, by: delta, in: model.sessionsNow, order: order) {
+        if let next = MacViewCommands.neighbour(of: current, by: delta, in: model.sessionsNow, order: order,
+                                               recent: grouping == .recent, pinOrder: model.pinOrder) {
             MacShellState.shared.open(next, model)
             // The chat shows in the main window: bring it up (a chat window may be the key one, or none open).
             MacShellState.shared.showMain()
