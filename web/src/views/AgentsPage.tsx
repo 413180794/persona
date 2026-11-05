@@ -5,13 +5,14 @@ import type { Route } from "../lib/router";
 import { IconButton } from "../ui/atoms";
 import { ShellHeaderSlots } from "./ShellSwitch";
 import { AgentsList } from "./Sidebar";
+import { t } from "../i18n";
 
 export function AgentsPage({ route, onToggleSidebar, onNewAgent }: { route: Route; onToggleSidebar: () => void; onNewAgent: () => void }) {
   return (
     <div className="flex h-full min-w-0 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-page/85 px-3 backdrop-blur-md sm:px-4">
-        <h1 className="hidden min-w-0 flex-1 truncate text-[14px] font-semibold text-ink lg:block">Agents</h1>
-        <ShellHeaderSlots page="agents" onToggleSidebar={onToggleSidebar} endWide end={<IconButton icon="plus" label="新建 Agent" onClick={onNewAgent} />} />
+        <h1 className="hidden min-w-0 flex-1 truncate text-[14px] font-semibold text-ink lg:block">{t("agentspage.title")}</h1>
+        <ShellHeaderSlots page="agents" onToggleSidebar={onToggleSidebar} endWide end={<IconButton icon="plus" label={t("agentspage.new_agent")} onClick={onNewAgent} />} />
       </header>
       <div className="min-h-0 flex-1">
         <AgentsList route={route} onNewAgent={onNewAgent} />

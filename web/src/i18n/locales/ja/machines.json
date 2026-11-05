@@ -1,0 +1,21 @@
+{
+  "reconnecting": "再接続しています",
+  "reconnect_failed": "再接続できませんでした：{error}",
+  "sidebar": "サイドバー",
+  "title": "マシン",
+  "refresh_interval": "{seconds}秒ごとに更新",
+  "online": "オンライン",
+  "offline": "オフライン",
+  "reconnect": "再接続",
+  "memory": "メモリ",
+  "disk": "ディスク",
+  "disk_free": "空き{size}",
+  "waiting_node": "ノードの再接続を待っています",
+  "unreachable": "このコンピューターに接続できません",
+  "agents_other": "エージェント{count}件",
+  "agents_working_other": "エージェント{count}件、{working}件が作業中",
+  "no_agents": "実行中のエージェントはありません",
+  "details": "詳細 ›",
+  "no_history": "履歴はまだありません",
+  "cpu_last_hour": "直近1時間のCPU"
+}

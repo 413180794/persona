@@ -3,6 +3,7 @@
 // (it comes back with the new chunks); anything else, or a second time, shows what went wrong with a way to retry.
 import { Component, type ReactNode } from "react";
 import { Button } from "../ui/atoms";
+import { t } from "../i18n";
 
 const RELOADED = "persona.chunkReload";
 
@@ -54,9 +55,9 @@ export class PageBoundary extends Component<{ children: ReactNode; page: string 
     const chunk = isChunkError(this.state.error);
     return (
       <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-[14px] font-medium text-ink">{chunk ? "这一页没能加载" : "这一页出错了"}</p>
-        <p className="max-w-[320px] text-[12.5px] text-ink-3">{chunk ? "可能是 hub 刚更新过，重新加载一次就好。" : "重新加载试试；还不行的话，换个页面再回来。"}</p>
-        <Button onClick={() => location.reload()}>重新加载</Button>
+        <p className="text-[14px] font-medium text-ink">{chunk ? t("pageboundary.chunk_title") : t("pageboundary.error_title")}</p>
+        <p className="max-w-[320px] text-[12.5px] text-ink-3">{chunk ? t("pageboundary.chunk_body") : t("pageboundary.error_body")}</p>
+        <Button onClick={() => location.reload()}>{t("pageboundary.reload")}</Button>
       </div>
     );
   }

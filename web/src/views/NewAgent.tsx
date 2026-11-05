@@ -17,6 +17,7 @@ import type { Launcher } from "../lib/types";
 import { Button, cx, Dialog, Spinner, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { ModelPicker, type ModelList } from "../ui/ModelPicker";
+import { t } from "../i18n";
 
 interface Dirs {
   path: string;
@@ -202,22 +203,22 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
     <Dialog
       open={open}
       onClose={onClose}
-      title="新建 Agent"
+      title={t("newagent.title")}
       width={520}
       footer={
         <>
-          <span className="mr-auto min-w-0 truncate text-[11.5px] text-ink-3">{cwd ? shortPath(cwd) : "选一个目录"}</span>
+          <span className="mr-auto min-w-0 truncate text-[11.5px] text-ink-3">{cwd ? shortPath(cwd) : t("newagent.pick_folder")}</span>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" disabled={loadingModels || !online.some((m) => m.id === mid) || !cwd.trim()} onClick={start}>
-            启动
+            {t("newagent.start")}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <Field label="电脑">
+        <Field label={t("newagent.computer")}>
           <div className="flex flex-wrap gap-1.5">
             {machines.map((m) => (
               <button
@@ -238,18 +239,18 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
           </div>
         </Field>
 
-        <Field label="目录">
+        <Field label={t("newagent.folder")}>
           <input
             value={cwd}
             onChange={(e) => setCwd(e.target.value)}
-            placeholder="~/code/项目"
+            placeholder={t("newagent.folder_placeholder")}
             spellCheck={false}
             className="h-9 w-full rounded-control bg-inset px-3 font-mono text-[12.5px] text-ink shadow-hairline outline-none placeholder:font-sans placeholder:text-ink-3 focus:shadow-[0_0_0_1px_var(--line-strong)]"
           />
           <div className="mt-1.5 max-h-52 overflow-y-auto rounded-control bg-surface p-1 shadow-hairline">
             {!browse && (dirs?.recent?.length ?? 0) > 0 && (
               <>
-                <div className="px-2 pt-1 pb-0.5 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">最近用过</div>
+                <div className="px-2 pt-1 pb-0.5 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{t("newagent.recent")}</div>
                 {dirs!.recent!.slice(0, 6).map((d) => (
                   <DirRow key={d.path} name={d.name || baseName(d.path)} path={d.path} sub={shortPath(d.path)} selected={cwd === d.path} onPick={() => setCwd(d.path)} />
                 ))}
@@ -257,11 +258,11 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
             )}
             <div className="flex items-center gap-1 px-2 pt-1.5 pb-0.5 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">
               {browse && dirs?.parent !== undefined && (
-                <button type="button" aria-label="上一级" onClick={() => setBrowse(dirs!.parent!)} className="-ml-1 flex size-4.5 items-center justify-center rounded-[4px] hover:bg-hover hover:text-ink">
+                <button type="button" aria-label={t("newagent.parent_folder")} onClick={() => setBrowse(dirs!.parent!)} className="-ml-1 flex size-4.5 items-center justify-center rounded-[4px] hover:bg-hover hover:text-ink">
                   <Icon name="chevronLeft" size={12} stroke={2.4} />
                 </button>
               )}
-              <span className="truncate normal-case tracking-normal">{dirs?.path ? shortPath(dirs.path) : "主目录"}</span>
+              <span className="truncate normal-case tracking-normal">{dirs?.path ? shortPath(dirs.path) : t("newagent.home_folder")}</span>
               {loadingDirs && <Spinner size={10} />}
             </div>
             {dirs?.entries?.map((d) => (
@@ -271,21 +272,21 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
         </Field>
 
         {(unified || launchers.length > 1) && (
-          <Field label={unified ? "启动器（本次覆盖）" : "启动器"}>
+          <Field label={unified ? t("newagent.launcher_override") : t("newagent.launcher")}>
             <div className="flex flex-wrap gap-1.5">
-              {unified && <Choice selected={launcher === ""} onClick={() => setLauncher("")} title={modelDefault}>跟随模型配置</Choice>}
+              {unified && <Choice selected={launcher === ""} onClick={() => setLauncher("")} title={modelDefault}>{t("newagent.follow_model_settings")}</Choice>}
               {launchers.map((l) => (
                 <Choice key={l.name} mono selected={launcher === l.name} onClick={() => setLauncher(l.name)} title={l.model}>
                   {l.name}
                 </Choice>
               ))}
             </div>
-            {unified && <p className="mt-1.5 text-[11.5px] text-ink-3">{launcher ? "只覆盖这次新会话，不改变统一默认。" : modelDefault || "使用统一模型配置中的新 Agent 默认值。"}</p>}
+            {unified && <p className="mt-1.5 text-[11.5px] text-ink-3">{launcher ? t("newagent.override_hint") : modelDefault || t("newagent.default_hint")}</p>}
           </Field>
         )}
 
         {listLauncher && models.status !== "idle" && !(models.status === "ready" && !models.list?.models.length) && (
-          <Field label="模型"><ModelPicker
+          <Field label={t("newagent.model")}><ModelPicker
             models={models}
             model={model}
             followed={followed}
@@ -301,15 +302,15 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
               setQuery("");
             }}
             onReload={reloadModels}
-            failedNote="没读到模型列表，仍可以用默认模型启动"
+            failedNote={t("newagent.models_failed")}
           /></Field>
         )}
 
         {!loadingModels && takesEffort(agent) && (
-          <Field label="思考强度">
+          <Field label={t("newagent.effort")}>
             {efforts.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                <Choice selected={effort === ""} onClick={() => setEffort("")}>{followed.effort ? "跟随模型配置" : "跟随启动器"}</Choice>
+                <Choice selected={effort === ""} onClick={() => setEffort("")}>{followed.effort ? t("newagent.follow_model_settings") : t("newagent.follow_launcher")}</Choice>
                 {efforts.map((id) => (
                   <Choice key={id} selected={effort === id} onClick={() => setEffort(id)} title={EFFORTS.find((e) => e.id === id)?.detail}>
                     {effortTitle(id)}
@@ -318,13 +319,13 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
               </div>
             ) : (
               <p className="flex h-7 items-center text-[11.5px] text-ink-3">
-                {pickedModel ? `${modelName(pickedModel)} 不支持设置思考强度。` : "默认模型不支持设置思考强度。"}
+                {pickedModel ? t("newagent.effort_unsupported", { model: modelName(pickedModel) }) : t("newagent.effort_unsupported_default")}
               </p>
             )}
           </Field>
         )}
 
-        <Field label="第一条消息（可选）">
+        <Field label={t("newagent.first_message_optional")}>
           <div className={cx("flex flex-col gap-2 rounded-control bg-inset shadow-hairline focus-within:shadow-[0_0_0_1px_var(--line-strong)]", dragging && "outline-2 outline-accent")}
             onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
             onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false); }}
@@ -342,14 +343,14 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); start(); }
               }}
               rows={3}
-              aria-label="第一条消息"
-              placeholder="要它做什么…（⌘↵ 启动）"
+              aria-label={t("newagent.first_message")}
+              placeholder={t("newagent.prompt_placeholder")}
               className="w-full resize-none bg-transparent px-3 py-2 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink-3"
             />
             <div className="flex items-center gap-2 px-2 pb-2">
               <input ref={fileInput} type="file" multiple hidden onChange={(e) => { if (e.currentTarget.files) addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
-              <button type="button" aria-label="添加图片或文件" title="添加图片或文件" onClick={() => fileInput.current?.click()} className="flex size-7 shrink-0 items-center justify-center rounded-control text-ink-3 hover:bg-hover hover:text-ink"><Icon name="plus" size={16} stroke={2} /></button>
-              <span className="min-w-0 text-[11.5px] text-ink-3">粘贴、拖入图片或文件 · 启动后在后台发送</span>
+              <button type="button" aria-label={t("newagent.add_files")} title={t("newagent.add_files")} onClick={() => fileInput.current?.click()} className="flex size-7 shrink-0 items-center justify-center rounded-control text-ink-3 hover:bg-hover hover:text-ink"><Icon name="plus" size={16} stroke={2} /></button>
+              <span className="min-w-0 text-[11.5px] text-ink-3">{t("newagent.attach_hint")}</span>
             </div>
           </div>
         </Field>
@@ -391,7 +392,7 @@ function DirRow({ name, path, sub, git, selected, onPick, onOpen }: { name: stri
         {sub && <span className="min-w-0 truncate font-mono text-[11px] text-ink-3">{sub}</span>}
       </button>
       {onOpen && (
-        <button type="button" aria-label={`打开 ${name}`} onClick={onOpen} className="flex size-5 items-center justify-center rounded-[4px] text-ink-3 opacity-0 transition-opacity group-hover/dir:opacity-100 hover:bg-hover-2 hover:text-ink focus-visible:opacity-100">
+        <button type="button" aria-label={t("newagent.open_folder", { name })} onClick={onOpen} className="flex size-5 items-center justify-center rounded-[4px] text-ink-3 opacity-0 transition-opacity group-hover/dir:opacity-100 hover:bg-hover-2 hover:text-ink focus-visible:opacity-100">
           <Icon name="chevronRight" size={12} stroke={2.4} />
         </button>
       )}

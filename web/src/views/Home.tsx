@@ -12,12 +12,13 @@ import { Button, cx, EASE, IconButton, Loading, StatusDot, useNow } from "../ui/
 import { Icon } from "../ui/icons";
 import { MarkSeenDialog } from "./AgentMenus";
 import { OverviewCards } from "./extensions/ExtensionSlots";
+import { t } from "../i18n";
 
-const KIND: Record<Interaction["kind"], string> = { question: "提问", plan: "计划待批准", permission: "需要授权", screen: "终端对话框" };
+const KIND: Record<Interaction["kind"], string> = { question: t("home.kind_question"), plan: t("home.kind_plan"), permission: t("home.kind_permission"), screen: t("home.kind_screen") };
 
 function greeting() {
   const h = new Date().getHours();
-  return h < 5 ? "夜深了" : h < 11 ? "早上好" : h < 13 ? "中午好" : h < 18 ? "下午好" : "晚上好";
+  return h < 5 ? t("home.greeting_late") : h < 11 ? t("home.greeting_morning") : h < 13 ? t("home.greeting_noon") : h < 18 ? t("home.greeting_afternoon") : t("home.greeting_evening");
 }
 
 export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; onToggleSidebar: () => void }) {
@@ -38,10 +39,10 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4 lg:border-transparent">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+        <IconButton icon="sidebar" label={t("home.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
         <span className="flex-1" />
         <Button tone="secondary" icon="plus" onClick={onNewAgent}>
-          新建 Agent
+          {t("home.new_agent")}
         </Button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -50,7 +51,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">{greeting()}</h1>
             <div className="mt-1 flex items-center gap-2">
               <p className="min-w-0 flex-1 text-[13.5px] text-ink-2">
-                {!loaded ? "正在连上 hub…" : quiet ? "没有需要你处理的，所有 Agent 都在等你。" : [counts.needs && `${counts.needs} 个需要你`, counts.working && `${counts.working} 个在工作`, counts.unread && `${counts.unread} 个做完了还没看`].filter(Boolean).join("，") + "。"}
+                {!loaded ? t("home.connecting") : quiet ? t("home.all_quiet") : t("home.summary", { list: [counts.needs && t("home.summary_needs", { count: counts.needs }), counts.working && t("home.summary_working", { count: counts.working }), counts.unread && t("home.summary_unread", { count: counts.unread })].filter(Boolean).join(t("home.summary_separator")) })}
               </p>
               {markAllAt === "summary" && markAll}
             </div>
@@ -59,10 +60,10 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
           {/* the extensions' cards (docs/extensions.md「UI 插槽」 overview_card), under the agents' summary */}
           <OverviewCards />
 
-          {!loaded && <Loading label="加载中" />}
+          {!loaded && <Loading label={t("common.loading")} />}
 
           {interactions.length > 0 && (
-            <Group title="需要你处理" count={interactions.length}>
+            <Group title={t("home.needs_you")} count={interactions.length}>
               {interactions.map((ix, i) => {
                 const s = sessions.find((x) => x.machine_id === ix.machine_id && x.session_id === ix.session_id);
                 return (
@@ -71,9 +72,9 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
                     i={i}
                     state="needs_you"
                     to={{ name: "session", mid: ix.machine_id, sid: ix.session_id }}
-                    title={ix.session_title || (s ? sessionTitle(s) : ix.cwd || "会话")}
+                    title={ix.session_title || (s ? sessionTitle(s) : ix.cwd || t("home.session"))}
                     meta={[name(ix.machine_id), s?.space_name, s && tabLabel(s)].filter(Boolean).join(" › ")}
-                    detail={ix.kind === "question" ? ix.questions?.[0]?.question : ix.kind === "permission" ? ix.summary || ix.tool_name : ix.kind === "screen" ? ix.dialog?.question : "计划写好了，等你批准"}
+                    detail={ix.kind === "question" ? ix.questions?.[0]?.question : ix.kind === "permission" ? ix.summary || ix.tool_name : ix.kind === "screen" ? ix.dialog?.question : t("home.plan_ready")}
                     pill={<Pill tone="red">{KIND[ix.kind]}</Pill>}
                   />
                 );
@@ -82,15 +83,15 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
           )}
 
           {groups.needs.length > 0 && (
-            <Group title="停在电脑上" count={groups.needs.length}>
+            <Group title={t("home.waiting_on_computer")} count={groups.needs.length}>
               {groups.needs.map((g, i) => (
-                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="red">需要你</Pill>} />
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="red">{t("home.state_needs_you")}</Pill>} />
               ))}
             </Group>
           )}
 
           {groups.working.length > 0 && (
-            <Group title="正在工作" count={groups.working.length}>
+            <Group title={t("home.working")} count={groups.working.length}>
               {groups.working.map((g, i) => (
                 <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3 tabular-nums">{g.lead.state_since ? shortDuration(now - Date.parse(g.lead.state_since)) : ""}</span>} />
               ))}
@@ -99,12 +100,12 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
 
           {groups.unread.length > 0 && (
             <Group
-              title="做完了，还没看"
+              title={t("home.unread")}
               count={groups.unread.length}
               right={markAllAt === "section" && markAll}
             >
               {groups.unread.map((g, i) => (
-                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="green">{ago(g.lead.updated_at) || "完成"}</Pill>} />
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="green">{ago(g.lead.updated_at) || t("home.done")}</Pill>} />
               ))}
             </Group>
           )}
@@ -115,17 +116,17 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
                 <Icon name="check" size={15} stroke={2.6} />
               </span>
               <div>
-                <p className="text-[13.5px] font-medium text-ink">一切就绪</p>
-                <p className="mt-0.5 text-[12.5px] text-ink-2">在左边打开一个 Agent 接着聊，或者开一个新的。⌘K 搜索全部会话。</p>
+                <p className="text-[13.5px] font-medium text-ink">{t("home.all_set")}</p>
+                <p className="mt-0.5 text-[12.5px] text-ink-2">{t("home.all_set_hint")}</p>
               </div>
               <Button tone="primary" icon="plus" onClick={onNewAgent}>
-                新建 Agent
+                {t("home.new_agent")}
               </Button>
             </div>
           )}
 
           {machines.length > 0 && (
-            <Group title="电脑" count={machines.length} right={<a href="/machines" onClick={(e) => onLinkClick(e, { name: "machines" })} className="text-[12px] text-ink-3 hover:text-ink-2">监控 ›</a>}>
+            <Group title={t("home.computers")} count={machines.length} right={<a href="/machines" onClick={(e) => onLinkClick(e, { name: "machines" })} className="text-[12px] text-ink-3 hover:text-ink-2">{t("home.monitor")}</a>}>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {machines.map((m) => {
                   const mine = m.online ? sessions.filter((s) => s.machine_id === m.id && stateOf(s) !== "offline") : [];
@@ -141,9 +142,9 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
                           <span className="truncate text-[13px] font-medium text-ink">{m.name}</span>
                           {hub && <span className="shrink-0 truncate text-[11.5px] text-ink-3">{hub}</span>}
                         </span>
-                        <span className="block truncate text-[11.5px] text-ink-3">{m.online ? `${mine.length} 个 Agent${m.system?.name ? ` · ${m.system.name}` : ""}` : m.error || "离线"}</span>
+                        <span className="block truncate text-[11.5px] text-ink-3">{m.online ? t("home.machine_agents", { count: mine.length }) + (m.system?.name ? ` · ${m.system.name}` : "") : m.error || t("home.offline")}</span>
                       </span>
-                      <span className={cx("size-2 shrink-0 rounded-full", m.online ? "bg-green" : "bg-line-strong")} title={m.online ? "在线" : "离线"} />
+                      <span className={cx("size-2 shrink-0 rounded-full", m.online ? "bg-green" : "bg-line-strong")} title={m.online ? t("home.online") : t("home.offline")} />
                     </a>
                   );
                 })}
@@ -160,9 +161,9 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
 // Marks every unread agent seen, after the dialog says how many (MarkSeenDialog).
 function MarkAllSeen({ count, onClick }: { count: number; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} title={`把 ${count} 个完成未看的会话标为已读`} className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-control px-1.5 text-[12px] text-ink-3 transition-colors hover:bg-hover hover:text-ink-2">
+    <button type="button" onClick={onClick} title={t("home.mark_all_seen_title", { count })} className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-control px-1.5 text-[12px] text-ink-3 transition-colors hover:bg-hover hover:text-ink-2">
       <Icon name="check" size={12} stroke={2.4} />
-      全部标为已读
+      {t("home.mark_all_seen")}
     </button>
   );
 }
@@ -203,14 +204,14 @@ function GroupTask({ g, i, machine, pill }: { g: TabGroup; i: number; machine: s
       to={paneRoute(s)}
       title={sessionTitle(head)}
       meta={[machine, s.space_name, tabLabel(s)].filter(Boolean).join(" › ")}
-      detail={s === head ? preview : [agentLabel(s), preview].filter(Boolean).join("：")}
+      detail={s === head ? preview : agentLabel(s) && preview ? t("home.agent_preview", { agent: agentLabel(s), preview }) : agentLabel(s) || preview}
       pill={
         <>
           <span className="flex shrink-0 items-center gap-1 text-[12px] whitespace-nowrap text-ink-3 tabular-nums" title={g.sessions.map((x) => `${agentLabel(x)} · ${sessionTitle(x)} · ${STATE_LABEL[stateOf(x)]}`).join("\n")}>
             <span aria-hidden className="flex items-center gap-0.5">
               {g.sessions.map((x) => <StatusDot key={x.session_id} state={stateOf(x)} size={6} />)}
             </span>
-            <span className="max-sm:sr-only">{g.sessions.length} 个 Agent</span>
+            <span className="max-sm:sr-only">{t("home.machine_agents", { count: g.sessions.length })}</span>
           </span>
           {pill}
         </>

@@ -1,0 +1,18 @@
+{
+  "command_unavailable": "This command isn't available here",
+  "new_agent": "New agent",
+  "new_conversation": "New chat",
+  "command_palette": "Command palette",
+  "search_sessions": "Search sessions",
+  "command_placeholder": "Type a command…",
+  "search_placeholder": "Search sessions, terminals, folders, spaces, machines…",
+  "terminal": "Terminal",
+  "no_commands": "No matching commands",
+  "no_commands_hint": "Delete “>” to search sessions and terminals",
+  "no_results": "Nothing found for “{query}”",
+  "no_results_hint": "Try another word, or start a new agent",
+  "select": "Select",
+  "run": "Run",
+  "open": "Open",
+  "commands": "Commands"
+}

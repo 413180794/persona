@@ -6,6 +6,7 @@ import { addHub, hostOf, hubTitle, loadHubs, normalizeHubURL, onHubsChange, remo
 import { Button, Dialog, IconButton, toast, type MenuItem } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { Group, Pill, Row } from "./settings/SettingsParts";
+import { t } from "../i18n";
 
 /** This page's hub. */
 export const here = () => (typeof location === "undefined" ? "" : location.origin);
@@ -35,7 +36,7 @@ export function goToHub(h: SavedHub) {
 export function hubMenuItems(list: SavedHub[]): MenuItem[] {
   return list
     .filter((h) => h.url !== here())
-    .map((h, i) => ({ key: `hub:${h.url}`, label: hubTitle(h), hint: "切换", icon: "hub" as const, divider: i === 0, onSelect: () => goToHub(h) }));
+    .map((h, i) => ({ key: `hub:${h.url}`, label: hubTitle(h), hint: t("hubs.switch"), icon: "hub" as const, divider: i === 0, onSelect: () => goToHub(h) }));
 }
 
 // ── 设置 › 通用 ─────────────────────────────────────────
@@ -50,32 +51,32 @@ export function HubList() {
   return (
     <>
       <Group
-        title="hub"
+        title={t("hubs.group_title")}
         right={
           <Button tone="quiet" icon="plus" onClick={() => setAdding(true)} className="-mb-1 h-7 px-2">
-            添加 hub
+            {t("hubs.add_hub")}
           </Button>
         }
-        footer="在这几台 hub 的网页之间切换。每台 hub 用这个浏览器里各自的登录，第一次打开某台要贴它的 token。列表只存在这个浏览器里，不含 token。"
+        footer={t("hubs.group_footer")}
       >
-        {rows.length === 0 && <Row label={hostOf(current)} hint="这台 hub" />}
+        {rows.length === 0 && <Row label={hostOf(current)} hint={t("hubs.this_hub")} />}
         {rows.map((h) => (
           <Row key={h.url} label={hubTitle(h)} hint={<span className="font-mono">{hostOf(h.url)}</span>}>
             {h.url === current ? (
-              <Pill tone="green">当前</Pill>
+              <Pill tone="green">{t("hubs.current")}</Pill>
             ) : (
               <Button tone="secondary" onClick={() => goToHub(h)} className="h-7 px-2.5">
-                切换
+                {t("hubs.switch")}
               </Button>
             )}
-            <IconButton icon="pencil" label={`改名：${hubTitle(h)}`} onClick={() => setRenaming(h)} />
+            <IconButton icon="pencil" label={t("hubs.rename_label", { name: hubTitle(h) })} onClick={() => setRenaming(h)} />
             {h.url !== current && (
               <IconButton
                 icon="trash"
-                label={`从列表删除：${hubTitle(h)}`}
+                label={t("hubs.remove_label", { name: hubTitle(h) })}
                 onClick={() => {
                   removeHub(h.url);
-                  toast(`已从列表删除 ${hubTitle(h)}`);
+                  toast(t("hubs.removed", { name: hubTitle(h) }));
                 }}
               />
             )}
@@ -121,7 +122,7 @@ function AddHub({ open, onClose }: { open: boolean; onClose: () => void }) {
   const save = () => {
     const r = addHub(url, label);
     if ("error" in r) return setError(r.error);
-    toast(`已添加 ${hubTitle(r.list[r.list.length - 1])}`);
+    toast(t("hubs.added", { name: hubTitle(r.list[r.list.length - 1]) }));
     onClose();
   };
   return (
@@ -129,14 +130,14 @@ function AddHub({ open, onClose }: { open: boolean; onClose: () => void }) {
       open={open}
       onClose={onClose}
       width={440}
-      title="添加 hub"
+      title={t("hubs.add_hub")}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" disabled={!parsed || "error" in parsed} onClick={save}>
-            添加
+            {t("hubs.add")}
           </Button>
         </>
       }
@@ -149,7 +150,7 @@ function AddHub({ open, onClose }: { open: boolean; onClose: () => void }) {
         }}
       >
         <Field
-          label="地址"
+          label={t("hubs.address")}
           autoFocus
           mono
           value={url}
@@ -157,11 +158,11 @@ function AddHub({ open, onClose }: { open: boolean; onClose: () => void }) {
             setUrl(v);
             setError("");
           }}
-          placeholder="https://<hub 地址>"
+          placeholder={t("hubs.address_placeholder")}
           error={error || (parsed && "error" in parsed ? parsed.error : "")}
-          hint={parsed && "url" in parsed ? `会打开 ${parsed.url}` : "就是在浏览器里打开那台 hub 网页的地址，不带路径；没写 http:// 按 https://。"}
+          hint={parsed && "url" in parsed ? t("hubs.will_open", { url: parsed.url }) : t("hubs.address_hint")}
         />
-        <Field label="名字（可选）" value={label} onChange={setLabel} placeholder="不填就用 hub 自己的名字" />
+        <Field label={t("hubs.name_optional")} value={label} onChange={setLabel} placeholder={t("hubs.name_placeholder")} />
         <button type="submit" hidden />
       </form>
     </Dialog>
@@ -180,14 +181,14 @@ function RenameHub({ hub, onClose }: { hub: SavedHub | null; onClose: () => void
       open={hub !== null}
       onClose={onClose}
       width={400}
-      title="改名"
+      title={t("hubs.rename")}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" onClick={save}>
-            保存
+            {t("common.save")}
           </Button>
         </>
       }
@@ -198,7 +199,7 @@ function RenameHub({ hub, onClose }: { hub: SavedHub | null; onClose: () => void
           save();
         }}
       >
-        <Field label="名字" autoFocus value={label} onChange={setLabel} placeholder={hub?.name || (hub ? hostOf(hub.url) : "")} hint="只改这个浏览器里的叫法；清空就用 hub 自己的名字。" />
+        <Field label={t("hubs.name")} autoFocus value={label} onChange={setLabel} placeholder={hub?.name || (hub ? hostOf(hub.url) : "")} hint={t("hubs.rename_hint")} />
         <button type="submit" hidden />
       </form>
     </Dialog>
@@ -213,7 +214,7 @@ export function OtherHubs() {
   if (others.length === 0) return null;
   return (
     <div className="mt-6">
-      <div className="mb-1.5 px-1 text-[11.5px] font-medium text-ink-3">其他 hub</div>
+      <div className="mb-1.5 px-1 text-[11.5px] font-medium text-ink-3">{t("hubs.other_hubs")}</div>
       <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
         {others.map((h) => (
           <button key={h.url} type="button" onClick={() => goToHub(h)} className="flex w-full items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-left transition-colors hover:bg-hover">

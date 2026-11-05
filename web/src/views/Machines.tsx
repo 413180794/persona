@@ -11,6 +11,7 @@ import type { MachineMetrics, MetricPoint } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { MachineDeploy } from "./machines/MachineDeploy";
+import { t } from "../i18n";
 
 export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const machines = useStore((s) => s.machines);
@@ -25,28 +26,28 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         .then((r) => !dead && (setMetrics(r.machines ?? []), setError("")))
         .catch((e) => !dead && setError(errorText(e)));
     void load();
-    const t = setInterval(load, 10_000);
+    const timer = setInterval(load, 10_000);
     return () => {
       dead = true;
-      clearInterval(t);
+      clearInterval(timer);
     };
   }, []);
 
   const reconnect = async (id: string) => {
     try {
       await api(`/machines/${encodeURIComponent(id)}/reconnect`, { method: "POST" });
-      toast("正在重连", "ok");
+      toast(t("machines.reconnecting"), "ok");
     } catch (e) {
-      toast(`重连失败：${errorText(e)}`, "error");
+      toast(t("machines.reconnect_failed", { error: errorText(e) }), "error");
     }
   };
 
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-        <h1 className="flex-1 text-[14px] font-semibold text-ink">机器</h1>
-        <span className="text-[11.5px] text-ink-3">每 10 秒刷新</span>
+        <IconButton icon="sidebar" label={t("machines.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
+        <h1 className="flex-1 text-[14px] font-semibold text-ink">{t("machines.title")}</h1>
+        <span className="text-[11.5px] text-ink-3">{t("machines.refresh_interval", { seconds: 10 })}</span>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto grid max-w-[1000px] grid-cols-1 gap-3 px-5 py-6 sm:px-8 md:grid-cols-2">
@@ -80,14 +81,14 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                       )}
                       <span className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[11px] font-medium", m.online ? "bg-green-tint text-green" : "bg-field text-ink-3")}>
                         <span className={cx("size-1.5 rounded-full", m.online ? "bg-green" : "bg-ink-3")} />
-                        {m.online ? "在线" : "离线"}
+                        {m.online ? t("machines.online") : t("machines.offline")}
                       </span>
                     </div>
                     <p className="truncate text-[11.5px] text-ink-3">{[m.system?.name || m.os, m.system?.model, m.system?.cpu].filter(Boolean).join(" · ") || m.hostname}</p>
                   </a>
                   {!m.online && !expectedDisconnect && (
                     <Button tone="secondary" icon="retry" onClick={() => reconnect(m.id)}>
-                      重连
+                      {t("machines.reconnect")}
                     </Button>
                   )}
                 </div>
@@ -95,17 +96,17 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                 <MachineDeploy machine={m} className="mt-2" />
                 <div className="grid grid-cols-3 gap-px px-4 pt-3">
                   <Stat label="CPU" value={l?.cpu !== undefined ? `${Math.round(l.cpu)}%` : "—"} warn={(l?.cpu ?? 0) > 85} />
-                  <Stat label="内存" value={memPct !== undefined ? `${Math.round(memPct)}%` : "—"} sub={l?.mem_used ? `${bytes(l.mem_used)} / ${bytes(l.mem_total)}` : undefined} warn={(memPct ?? 0) > 90} />
-                  <Stat label="磁盘" value={diskPct !== undefined ? `${Math.round(diskPct)}%` : "—"} sub={l?.disk_total ? `剩 ${bytes((l.disk_total ?? 0) - (l.disk_used ?? 0))}` : undefined} warn={(diskPct ?? 0) > 90} />
+                  <Stat label={t("machines.memory")} value={memPct !== undefined ? `${Math.round(memPct)}%` : "—"} sub={l?.mem_used ? `${bytes(l.mem_used)} / ${bytes(l.mem_total)}` : undefined} warn={(memPct ?? 0) > 90} />
+                  <Stat label={t("machines.disk")} value={diskPct !== undefined ? `${Math.round(diskPct)}%` : "—"} sub={l?.disk_total ? t("machines.disk_free", { size: bytes((l.disk_total ?? 0) - (l.disk_used ?? 0)) }) : undefined} warn={(diskPct ?? 0) > 90} />
                 </div>
                 <div className="px-2 pt-2">
                   <Spark points={mm?.points ?? []} />
                 </div>
                 <div className="flex items-center justify-between border-t border-line px-4 py-2 text-[11.5px] text-ink-3">
-                  <span className="whitespace-nowrap">{!m.online ? expectedDisconnect ? "等待 node 重新连接" : "连不上这台电脑" : agents.length ? `${agents.length} 个 Agent${working ? `，${working} 个在工作` : ""}` : "没有在跑的 Agent"}</span>
+                  <span className="whitespace-nowrap">{!m.online ? expectedDisconnect ? t("machines.waiting_node") : t("machines.unreachable") : agents.length ? working ? t("machines.agents_working", { count: agents.length, working }) : t("machines.agents", { count: agents.length }) : t("machines.no_agents")}</span>
                   <span className="flex min-w-0 items-center gap-3">
                     <span className="truncate font-mono max-sm:hidden">{[m.claude_version && `claude ${m.claude_version}`, m.herdr_version && `herdr ${m.herdr_version}`].filter(Boolean).join(" · ")}</span>
-                    <a href={href(detail)} onClick={(e) => onLinkClick(e, detail)} className="shrink-0 whitespace-nowrap text-ink-2 hover:text-ink">详情 ›</a>
+                    <a href={href(detail)} onClick={(e) => onLinkClick(e, detail)} className="shrink-0 whitespace-nowrap text-ink-2 hover:text-ink">{t("machines.details")}</a>
                   </span>
                 </div>
               </section>
@@ -132,7 +133,7 @@ function Spark({ points }: { points: MetricPoint[] }) {
   const W = 440,
     H = 56;
   const real = points.filter((p) => !p.gap && p.cpu !== undefined);
-  if (real.length < 2) return <div className="flex h-14 items-center justify-center text-[11.5px] text-ink-3">还没有历史</div>;
+  if (real.length < 2) return <div className="flex h-14 items-center justify-center text-[11.5px] text-ink-3">{t("machines.no_history")}</div>;
   const t0 = points[0].t,
     t1 = points[points.length - 1].t || t0 + 1;
   const x = (t: number) => ((t - t0) / Math.max(1, t1 - t0)) * W;
@@ -144,7 +145,7 @@ function Spark({ points }: { points: MetricPoint[] }) {
     } else runs[runs.length - 1].push(p);
   }
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-14 w-full" aria-label="最近一小时 CPU">
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-14 w-full" aria-label={t("machines.cpu_last_hour")}>
       <defs>
         <linearGradient id="cpu-fill" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0" stopColor="var(--accent)" stopOpacity="0.18" />

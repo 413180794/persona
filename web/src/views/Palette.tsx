@@ -9,12 +9,13 @@ import { ago, sessionTitle, shortPath, stateOf, STATE_LABEL, tabLabel } from "..
 import { appCommands, commandKeys, contextCommands, filterCommands, parseQuery, setPaletteQuery, terminalHits, usePalette, type MachinePanes, type PaletteCommand, type TerminalHit } from "../lib/palette";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions } from "../lib/sessions";
-import { handlerOf, runShortcut, useBindings } from "../lib/shortcuts";
+import { handlerOf, runShortcut, SCOPE_LABEL, useBindings } from "../lib/shortcuts";
 import { useStore } from "../lib/store";
 import { buildTerminalTree, type PanesResponse } from "../lib/terminals";
 import type { Session } from "../lib/types";
 import { EASE, Kbd, StatusDot, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
+import { t } from "../i18n";
 
 interface Hit {
   key: string;
@@ -107,11 +108,11 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
   const commands = useMemo((): Row[] => {
     if (!open || mode !== "command") return [];
     const run = (id: string, digit?: number) => {
-      if (!runShortcut(id, { digit })) toast("这里用不了这个命令");
+      if (!runShortcut(id, { digit })) toast(t("palette.command_unavailable"));
     };
     const extra: PaletteCommand[] = [
-      { id: "app:new-agent", title: "新建 Agent", section: "全局", icon: "plus", keywords: "new agent", run: onNewAgent },
-      { id: "app:new-conversation", title: "新对话", section: "全局", icon: "chat", keywords: "persona new", run: () => navigate({ name: "persona-new" }) },
+      { id: "app:new-agent", title: t("palette.new_agent"), section: SCOPE_LABEL.global, icon: "plus", keywords: "new agent", run: onNewAgent },
+      { id: "app:new-conversation", title: t("palette.new_conversation"), section: SCOPE_LABEL.global, icon: "chat", keywords: "persona new", run: () => navigate({ name: "persona-new" }) },
     ];
     const all = [...contextCommands({ route, pane }), ...appCommands({ bindings, available: (id) => Boolean(handlerOf(id)), run, machines: machines.map((m) => ({ id: m.id, name: m.name })), extra })];
     return filterCommands(all, text).map((cmd) => ({ kind: "command" as const, key: cmd.id, cmd }));
@@ -136,7 +137,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
 
   return createPortal(
     <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/20 px-4 pt-[14vh] backdrop-blur-[2px] dark:bg-black/45" style={{ animation: "fade-in 120ms ease-out both" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" data-shortcut-layer aria-label={command ? "命令面板" : "搜索会话"} className="w-full max-w-[560px] overflow-hidden rounded-[14px] bg-surface shadow-overlay" style={{ animation: `slide-up 200ms ${EASE} both` }}>
+      <div role="dialog" data-shortcut-layer aria-label={command ? t("palette.command_palette") : t("palette.search_sessions")} className="w-full max-w-[560px] overflow-hidden rounded-[14px] bg-surface shadow-overlay" style={{ animation: `slide-up 200ms ${EASE} both` }}>
         <label className="flex h-12 items-center gap-2.5 border-b border-line px-4">
           <Icon name="search" size={15} stroke={2} className="text-ink-3" />
           <input
@@ -153,7 +154,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                 if (shown[active]) pick(shown[active]);
               } else if (e.key === "Escape") onClose();
             }}
-            placeholder={command ? "输入命令…" : "搜索会话、终端、目录、空间、机器…"}
+            placeholder={command ? t("palette.command_placeholder") : t("palette.search_placeholder")}
             className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-3"
           />
           {/* the key hints are for a keyboard: a touch screen has none (#1996) */}
@@ -197,7 +198,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                     <span className="block truncate text-[13px] font-medium text-ink">{h.title}</span>
                     <span className="block truncate text-[11.5px] text-ink-3">{[h.trail, h.detail].filter(Boolean).join(" · ")}</span>
                   </span>
-                  <span className="shrink-0 text-[11px] text-ink-3">终端</span>
+                  <span className="shrink-0 text-[11px] text-ink-3">{t("palette.terminal")}</span>
                 </button>
               );
             }
@@ -217,8 +218,8 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
           })}
           {shown.length === 0 && command && (
             <div className="px-4 py-10 text-center">
-              <p className="text-[13px] font-medium text-ink">没有匹配的命令</p>
-              <p className="mt-0.5 text-[12px] text-ink-3">删掉「&gt;」可以搜索会话和终端</p>
+              <p className="text-[13px] font-medium text-ink">{t("palette.no_commands")}</p>
+              <p className="mt-0.5 text-[12px] text-ink-3">{t("palette.no_commands_hint")}</p>
             </div>
           )}
           {shown.length === 0 && !command && (
@@ -227,8 +228,8 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                 <Icon name="search" size={15} />
               </span>
               <div>
-                <p className="text-[13px] font-medium text-ink">没有找到「{q}」</p>
-                <p className="mt-0.5 text-[12px] text-ink-3">换个词，或者开一个新的 Agent</p>
+                <p className="text-[13px] font-medium text-ink">{t("palette.no_results", { query: q })}</p>
+                <p className="mt-0.5 text-[12px] text-ink-3">{t("palette.no_results_hint")}</p>
               </div>
               <button
                 type="button"
@@ -238,7 +239,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                 }}
                 className="rounded-control px-2.5 py-1 text-[12.5px] font-medium text-accent-ink hover:bg-accent-tint"
               >
-                新建 Agent
+                {t("palette.new_agent")}
               </button>
             </div>
           )}
@@ -246,14 +247,14 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
         <div className="flex items-center gap-3 border-t border-line bg-inset px-4 py-2 text-[11px] text-ink-3 [@media(pointer:coarse)]:hidden">
           <span className="flex items-center gap-1">
             <Kbd>↑</Kbd>
-            <Kbd>↓</Kbd> 选择
+            <Kbd>↓</Kbd> {t("palette.select")}
           </span>
           <span className="flex items-center gap-1">
-            <Kbd>↵</Kbd> {command ? "执行" : "打开"}
+            <Kbd>↵</Kbd> {command ? t("palette.run") : t("palette.open")}
           </span>
           {!command && (
             <span className="flex items-center gap-1">
-              <Kbd>&gt;</Kbd> 命令
+              <Kbd>&gt;</Kbd> {t("palette.commands")}
             </span>
           )}
         </div>

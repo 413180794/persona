@@ -15,6 +15,7 @@ import { SubagentPanel } from "./chat/SubagentPanel";
 import { subagentParent } from "../lib/tasks";
 import { useCloseOnBack } from "../lib/back-close";
 import { NARROW, useMedia } from "../lib/viewport";
+import { t } from "../i18n";
 
 const WIDTH_KEY = "jarvis.panelWidth";
 const MIN = 360;
@@ -67,8 +68,8 @@ export function SidePanel() {
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="拖动调整面板宽度"
-        title="拖动调整宽度"
+        aria-label={t("sidepanel.resize_label")}
+        title={t("sidepanel.resize_title")}
         onPointerDown={(e) => {
           drag.current = { x: e.clientX, w: width };
           document.body.style.cursor = "col-resize";
@@ -86,7 +87,7 @@ export function SidePanel() {
 }
 
 function panelLabel(p: Panel) {
-  return p.kind === "files" ? "文件" : p.kind === "git" ? "Git" : p.kind === "file" ? "文件" : p.kind === "task" ? "任务" : p.kind === "agent" ? "Agent" : "链接";
+  return p.kind === "files" ? t("sidepanel.files") : p.kind === "git" ? "Git" : p.kind === "file" ? t("sidepanel.files") : p.kind === "task" ? t("sidepanel.task") : p.kind === "agent" ? t("sidepanel.agent") : t("sidepanel.link");
 }
 
 function body(p: Panel) {
@@ -120,7 +121,7 @@ export function PanelHeader({ icon, title, subtitle, actions, onClose }: { icon:
         {subtitle && <div className="truncate text-[11.5px] text-ink-3">{subtitle}</div>}
       </div>
       {actions}
-      <IconButton icon="x" label="关闭面板" onClick={onClose} />
+      <IconButton icon="x" label={t("sidepanel.close")} onClick={onClose} />
     </header>
   );
 }

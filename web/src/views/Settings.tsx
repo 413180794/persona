@@ -1,6 +1,5 @@
 // 设置 (docs/web.md): appearance, where the assistant runs, 模型 (every launcher: ~/.zshrc ones synced, Persona ones
 // kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's 设置.
-import { t as tr } from "../i18n";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, enc, errorText, setToken } from "../lib/api";
 import { splitDevices } from "../lib/devices";
@@ -39,6 +38,7 @@ import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefa
 import { Segmented } from "./assistant/parts";
 import { FROM_LIST, LIST_GROUPS, openedFromList, settingsAt, settingsHref, TAB_INFO, TABS, type Tab } from "./settings/nav";
 import { SHEET_QUERY, useMedia } from "../ui/overlay";
+import { formatList, t } from "../i18n";
 
 // ── types (docs/launchers.md) ───────────────────────────
 
@@ -149,30 +149,30 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
         {phone && at.tab ? (
           <>
-            <IconButton icon="chevronLeft" label="返回设置" onClick={toList} />
+            <IconButton icon="chevronLeft" label={t("settings.back")} onClick={toList} />
             <h1 className="min-w-0 truncate text-[14px] font-semibold text-ink">{TAB_INFO[tab].label}</h1>
           </>
         ) : (
           <>
-            <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-            <h1 className="shrink-0 whitespace-nowrap text-[14px] font-semibold text-ink">设置</h1>
+            <IconButton icon="sidebar" label={t("settings.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
+            <h1 className="shrink-0 whitespace-nowrap text-[14px] font-semibold text-ink">{t("settings.title")}</h1>
           </>
         )}
         {!phone && (
-          <nav className="ml-1 flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 shadow-hairline sm:ml-3" aria-label="设置分类">
-            {tabs.map((t) => (
+          <nav className="ml-1 flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 shadow-hairline sm:ml-3" aria-label={t("settings.categories")}>
+            {tabs.map((it) => (
               <button
-                key={t.k}
+                key={it.k}
                 type="button"
-                onClick={() => pick(t.k)}
-                aria-current={tab === t.k ? "page" : undefined}
+                onClick={() => pick(it.k)}
+                aria-current={tab === it.k ? "page" : undefined}
                 className={cx(
                   "flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2.5 text-[12.5px] transition-[background-color,color] duration-150",
-                  tab === t.k ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
+                  tab === it.k ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
                 )}
               >
-                <Icon name={t.icon} size={13} />
-                {t.label}
+                <Icon name={it.icon} size={13} />
+                {it.label}
               </button>
             ))}
           </nav>
@@ -192,8 +192,8 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
             {tab === "channels" && (sub ? (
               <ChannelPage key={sub} id={sub} onBack={() => pick("channels")} onSettings={(url) => {
-                const t = settingsTarget(url);
-                if (t && TABS.includes(t.tab as Tab)) pick(t.tab as Tab, t.sub);
+                const target = settingsTarget(url);
+                if (target && TABS.includes(target.tab as Tab)) pick(target.tab as Tab, target.sub);
               }} />
             ) : (
               <ChannelList onOpen={(id) => pick("channels", id)} onMarketItem={(market, id) => pick("extensions", routeSub({ kind: "item", market, id }))} />
@@ -214,7 +214,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 /** The phone's first page of 设置: the categories in grouped cards, each opening its page (as on iOS). */
 function SettingsList({ shown, onPick }: { shown: (k: Tab) => boolean; onPick: (k: Tab) => void }) {
   return (
-    <nav aria-label="设置分类">
+    <nav aria-label={t("settings.categories")}>
       {LIST_GROUPS.map((g) => {
         const tabs = g.tabs.filter(shown);
         if (!tabs.length) return null;
@@ -261,59 +261,59 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
   }, []);
 
   const themes: { k: Theme; label: string; icon: IconName }[] = [
-    { k: "system", label: "跟随系统", icon: "monitor" },
-    { k: "light", label: "浅色", icon: "sun" },
-    { k: "dark", label: "深色", icon: "moon" },
+    { k: "system", label: t("language.system"), icon: "monitor" },
+    { k: "light", label: t("settings.theme_light"), icon: "sun" },
+    { k: "dark", label: t("settings.theme_dark"), icon: "moon" },
   ];
   const machineName = machines.find((m) => m.id === assistant?.machine_id)?.name ?? assistant?.machine_id;
 
   return (
     <>
-      <Group title="外观">
+      <Group title={t("settings.appearance")}>
         <div className="flex gap-2 p-3">
-          {themes.map((t) => (
+          {themes.map((th) => (
             <button
-              key={t.k}
+              key={th.k}
               type="button"
-              onClick={() => setTheme(t.k)}
-              aria-pressed={theme === t.k}
+              onClick={() => setTheme(th.k)}
+              aria-pressed={theme === th.k}
               className={cx(
                 "flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-control px-3 py-2 text-[12.5px] transition-[background-color,box-shadow,color] duration-150",
-                theme === t.k ? "bg-accent-tint font-medium text-accent-ink shadow-[inset_0_0_0_1px_var(--accent)]" : "text-ink-2 shadow-hairline hover:bg-hover",
+                theme === th.k ? "bg-accent-tint font-medium text-accent-ink shadow-[inset_0_0_0_1px_var(--accent)]" : "text-ink-2 shadow-hairline hover:bg-hover",
               )}
             >
-              <Icon name={t.icon} size={14} />
-              {t.label}
+              <Icon name={th.icon} size={14} />
+              {th.label}
             </button>
           ))}
         </div>
         <ExtensionThemePicker />
         <LanguageRow />
-        <Row label="回复动效" hint="新到的回复逐词淡入；系统开了「减弱动态效果」时不播。">
-          <Switch on={replyMotion} onChange={setReplyMotionEnabled} label="回复动效" />
+        <Row label={t("settings.reply_motion")} hint={t("settings.reply_motion_hint")}>
+          <Switch on={replyMotion} onChange={setReplyMotionEnabled} label={t("settings.reply_motion")} />
         </Row>
-        <Row label="提示音" hint="需要你或完成时响一声；正在看的会话不响。">
-          <Switch on={attentionSound} onChange={setAttentionSoundEnabled} label="提示音" />
+        <Row label={t("settings.sound")} hint={t("settings.sound_hint")}>
+          <Switch on={attentionSound} onChange={setAttentionSoundEnabled} label={t("settings.sound")} />
         </Row>
-        <Row label="侧边栏显示终端" hint="在 Agent 按机器分组里，每台电脑的 Agent 下面列出它终端里的普通 shell，点开就是「终端」页。默认关；只对这个浏览器生效。">
-          <Switch on={sidebarTerminals} onChange={setSidebarTerminals} label="侧边栏显示终端" />
+        <Row label={t("settings.sidebar_terminals")} hint={t("settings.sidebar_terminals_hint")}>
+          <Switch on={sidebarTerminals} onChange={setSidebarTerminals} label={t("settings.sidebar_terminals")} />
         </Row>
-        <Row label={tr("context.details")} hint={tr("context.details_hint")}>
-          <Switch on={agentDetails} onChange={setAgentDetails} label={tr("context.details")} />
+        <Row label={t("context.details")} hint={t("context.details_hint")}>
+          <Switch on={agentDetails} onChange={setAgentDetails} label={t("context.details")} />
         </Row>
-        <Row label={tr("context.as_used")} hint={tr("context.as_used_hint")}>
-          <Switch on={contextAsUsed} onChange={setContextAsUsed} label={tr("context.as_used")} />
+        <Row label={t("context.as_used")} hint={t("context.as_used_hint")}>
+          <Switch on={contextAsUsed} onChange={setContextAsUsed} label={t("context.as_used")} />
         </Row>
       </Group>
 
       <AgentGroup />
 
-      <Group title="形象" footer="Persona 的名字、头像和对话里会动的状态，只在这个浏览器里生效；网页的颜色不变。形象包放在 hub 机器上。">
+      <Group title={t("settings.avatar")} footer={t("settings.avatar_footer")}>
         <PersonaPicker builtin={<BuiltinFace size={56} />} />
       </Group>
 
-      <Group title="Persona 助手" footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的 ${assistant?.cwd ?? "~/.persona/assistant"} 里后台运行。模型与启动器统一在「模型配置」中选择，连接与凭据在「模型供应商」中管理。`}>
-        <Row label="运行在">{machineName ?? "—"}</Row>
+      <Group title={t("settings.assistant")} footer={t("settings.assistant_footer", { machine: machineName ?? t("settings.hub_machine"), cwd: assistant?.cwd ?? "~/.persona/assistant" })}>
+        <Row label={t("settings.runs_on")}>{machineName ?? "—"}</Row>
       </Group>
 
       <TriageSettings onModel={onTriageModel} />
@@ -339,13 +339,13 @@ function About() {
     location.href = "/";
   };
   return (
-    <Group title="这个浏览器" footer="断开会撤销这个浏览器的 token，下次要重新贴 hub 的 token。hub 默认是明文 HTTP，只在内网 / VPN 里用。">
-      <Row label="hub 地址" mono>
+    <Group title={t("settings.this_browser")} footer={t("settings.this_browser_footer")}>
+      <Row label={t("settings.hub_address")} mono>
         {location.host}
       </Row>
-      {hubName && <Row label="hub">{hubName}</Row>}
+      {hubName && <Row label={t("settings.hub")}>{hubName}</Row>}
       {others.length > 0 && (
-        <Row label="互联的 hub" hint="这些 hub 上的电脑也列在这里，经这台 hub 访问">
+        <Row label={t("settings.linked_hubs")} hint={t("settings.linked_hubs_hint")}>
           {others.map((h) => (
             <span key={h.hub_id} className="flex items-center gap-1.5">
               <span className={cx("size-1.5 rounded-full", h.online === false ? "bg-ink-3" : "bg-green")} />
@@ -354,11 +354,11 @@ function About() {
           ))}
         </Row>
       )}
-      <Row label="电脑">{`${machines.filter((m) => m.online).length} / ${machines.length} 在线`}</Row>
+      <Row label={t("settings.computers")}>{t("settings.computers_online", { online: machines.filter((m) => m.online).length, total: machines.length })}</Row>
       <InstallRow />
       <div className="flex justify-end px-4 py-2.5">
         <Button tone="quiet" icon="logout" onClick={() => void logout()} className="text-red enabled:hover:text-red">
-          断开这个浏览器
+          {t("settings.disconnect_browser")}
         </Button>
       </div>
     </Group>
@@ -367,22 +367,22 @@ function About() {
 
 // Installing the web client as an app (lib/pwa.ts): the browser's prompt where it has one, else where to find it.
 const INSTALL_HINT: Record<InstallState, string> = {
-  installed: "已经在独立窗口里打开",
-  prompt: "装到桌面或主屏幕，在独立窗口里打开",
-  ios: "在 Safari 的分享菜单里选「添加到主屏幕」",
-  safari: "在 Safari 的「文件」菜单里选「添加到程序坞」",
-  insecure: "用 HTTPS 地址打开 hub 才能安装",
-  menu: "在浏览器菜单里选「安装」或「添加到主屏幕」",
+  installed: t("settings.install_installed"),
+  prompt: t("settings.install_prompt"),
+  ios: t("settings.install_ios"),
+  safari: t("settings.install_safari"),
+  insecure: t("settings.install_insecure"),
+  menu: t("settings.install_menu"),
 };
 
 function InstallRow() {
   const state = useInstall();
   return (
-    <Row label="安装为 App" hint={INSTALL_HINT[state]}>
-      {state === "installed" && <Pill tone="green">已安装</Pill>}
+    <Row label={t("settings.install_app")} hint={INSTALL_HINT[state]}>
+      {state === "installed" && <Pill tone="green">{t("settings.installed")}</Pill>}
       {state === "prompt" && (
         <Button icon="download" onClick={() => void install()}>
-          安装
+          {t("settings.install")}
         </Button>
       )}
     </Row>
@@ -421,14 +421,14 @@ function Models() {
         <div className="flex items-center gap-2">
           <span className="truncate font-mono text-[13px] font-medium text-ink">{l.name}</span>
           {l.source === "jarvis" && <Pill tone="accent">Persona</Pill>}
-          {l.kind === "api" && <Pill>直接 API</Pill>}
+          {l.kind === "api" && <Pill>{t("settings.direct_api")}</Pill>}
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11.5px] text-ink-3">
           {l.model && <span className="truncate font-mono text-ink-2">{l.model}</span>}
           {host(l.base_url) && <span className="truncate">{host(l.base_url)}</span>}
         </div>
       </div>
-      {l.machines && l.machines.length > 0 && <span className="hidden max-w-[200px] shrink-0 truncate text-[11.5px] text-ink-3 sm:block">{l.machines.map(name).join("、")}</span>}
+      {l.machines && l.machines.length > 0 && <span className="hidden max-w-[200px] shrink-0 truncate text-[11.5px] text-ink-3 sm:block">{formatList(l.machines.map(name), { type: "conjunction", style: "narrow" })}</span>}
       <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
     </button>
   );
@@ -438,28 +438,28 @@ function Models() {
       <div className="mb-4 flex items-center gap-2">
         <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-control bg-surface px-3 shadow-btn focus-within:shadow-[inset_0_0_0_1px_var(--accent)]">
           <Icon name="search" size={13} stroke={2} className="text-ink-3" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="名字、模型、网关或电脑" className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3" aria-label="搜索供应商" />
-          {query && <IconButton icon="x" label="清除" size={22} iconSize={12} onClick={() => setQuery("")} />}
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("settings.search_placeholder")} className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3" aria-label={t("settings.search_providers")} />
+          {query && <IconButton icon="x" label={t("settings.clear")} size={22} iconSize={12} onClick={() => setQuery("")} />}
         </label>
         <Button tone="accent" icon="plus" onClick={() => setEditing("new")}>
-          新增供应商
+          {t("settings.add_provider")}
         </Button>
       </div>
       {!list && !error && <Loading />}
       {error && <p className="text-[13px] text-red">{error}</p>}
-      {list && query && shown.length === 0 && <p className="py-10 text-center text-[13px] text-ink-3">没有和「{query}」相关的供应商</p>}
+      {list && query && shown.length === 0 && <p className="py-10 text-center text-[13px] text-ink-3">{t("settings.no_matching_providers", { query })}</p>}
       {list && (!query || managed.length > 0) && (
-        <Group title={`Persona 管理 ${managed.length}`} footer={managed.length ? "Key 加密存在 hub；直接 API 由 hub 调用，启动器以 jarvisd launch <名字> 运行。" : undefined}>
-          {managed.length ? managed.map(row) : <p className="px-4 py-3 text-[12.5px] text-ink-3">还没有。点「新增供应商」：填协议、网关地址、Key 和默认模型；用途在「模型配置」中选择。</p>}
+        <Group title={t("settings.managed_title", { count: managed.length })} footer={managed.length ? t("settings.managed_footer") : undefined}>
+          {managed.length ? managed.map(row) : <p className="px-4 py-3 text-[12.5px] text-ink-3">{t("settings.managed_empty")}</p>}
         </Group>
       )}
       {zshrc.length > 0 && (
-        <Group title={`来自 ~/.zshrc ${zshrc.length}`} footer="各台电脑 ~/.zshrc 里调用 claude 的函数，每次打开这页时同步；新加的函数会自动出现。">
+        <Group title={t("settings.zshrc_title", { count: zshrc.length })} footer={t("settings.zshrc_footer")}>
           {zshrc.map(row)}
         </Group>
       )}
       {hidden.length > 0 && (
-        <Group title={`已隐藏 ${hidden.length}`} footer="只是在 Persona 里不显示，~/.zshrc 没有改。点进去可以恢复。">
+        <Group title={t("settings.hidden_title", { count: hidden.length })} footer={t("settings.hidden_footer")}>
           {hidden.map(row)}
         </Group>
       )}
@@ -533,7 +533,7 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
     if (!l) return;
     try {
       await api(enLauncher(l.name), { method: "DELETE" });
-      toast(l.source === "jarvis" ? `已删除 ${l.name}` : `已隐藏 ${l.name}`, "ok");
+      toast(l.source === "jarvis" ? t("settings.deleted", { name: l.name }) : t("settings.hid", { name: l.name }), "ok");
       onChanged();
       onClose();
     } catch (e) {
@@ -544,7 +544,7 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
     if (!l) return;
     try {
       await api(`${enLauncher(l.name)}/restore`, { method: "POST" });
-      toast(`已恢复 ${l.name}`, "ok");
+      toast(t("settings.restored", { name: l.name }), "ok");
       onChanged();
       onClose();
     } catch (e) {
@@ -563,18 +563,18 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
           <>
             {l.hidden ? (
               <Button tone="secondary" onClick={() => void restore()}>
-                恢复显示
+                {t("settings.restore")}
               </Button>
             ) : (
               <span className="relative">
                 <Button tone="quiet" icon={l.source === "jarvis" ? "x" : undefined} onClick={() => setConfirm((c) => !c)} className="text-red enabled:hover:text-red">
-                  {l.source === "jarvis" ? "删除供应商" : "在 Persona 里隐藏"}
+                  {l.source === "jarvis" ? t("settings.delete_provider") : t("settings.hide_in_persona")}
                 </Button>
                 {/* the confirmation comes up right at the button (like the app), not as another dialog */}
                 {confirm && (
                   <span className="absolute bottom-full left-0 mb-1.5 rounded-control bg-surface p-1 shadow-overlay" style={{ animation: `pop-in 160ms ${EASE} both` }}>
                     <Button tone="danger" onClick={() => void remove()}>
-                      {l.source === "jarvis" ? "确认删除" : "确认隐藏"}
+                      {l.source === "jarvis" ? t("settings.confirm_delete") : t("settings.confirm_hide")}
                     </Button>
                   </span>
                 )}
@@ -583,11 +583,11 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
             <span className="flex-1" />
             {l.source === "jarvis" && (
               <Button tone="secondary" onClick={() => onEdit(l)}>
-                编辑
+                {t("settings.edit")}
               </Button>
             )}
             <Button tone="primary" icon={running ? undefined : "run"} busy={running} disabled={testOn.length === 0} onClick={() => void check()}>
-              {Object.keys(checks).length ? "再测一次" : "测试可用性"}
+              {Object.keys(checks).length ? t("settings.test_again") : t("settings.test")}
             </Button>
           </>
         )
@@ -598,30 +598,30 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
       {l && (
         <div className="flex max-h-[62vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Pill tone={l.source === "jarvis" ? "accent" : undefined}>{l.source === "jarvis" ? "Persona 管理" : "~/.zshrc 里的函数"}</Pill>
+            <Pill tone={l.source === "jarvis" ? "accent" : undefined}>{l.source === "jarvis" ? t("settings.managed") : t("settings.zshrc_function")}</Pill>
             {(l.machines ?? []).map((id) => (
               <Pill key={id}>{mname(id)}</Pill>
             ))}
-            {l.hidden && <Pill tone="red">已隐藏</Pill>}
+            {l.hidden && <Pill tone="red">{t("settings.hidden")}</Pill>}
           </div>
 
           {/* how much is left comes before trying it, as in the app */}
           {l.kind !== "api" && <LauncherQuota name={l.name} />}
 
           {Object.keys(checks).length > 0 && (
-            <KV title="可用性">
+            <KV title={t("settings.availability")}>
               {Object.entries(checks).map(([id, c]) => (
                 <div key={id} className="flex items-start gap-2.5 py-1.5">
                   <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">{c === null ? <Spinner /> : <Icon name={c.ok ? "check" : "x"} size={13} stroke={2.6} className={c.ok ? "text-green" : "text-red"} />}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2 text-[12.5px]">
-                      <span className="font-medium text-ink">{id ? mname(id) : "hub 所在的机器"}</span>
-                      {c && <span className="text-ink-3 tabular-nums">{(c.millis / 1000).toFixed(c.millis >= 10_000 ? 0 : 1)} 秒</span>}
+                      <span className="font-medium text-ink">{id ? mname(id) : t("settings.hub_machine_title")}</span>
+                      {c && <span className="text-ink-3 tabular-nums">{t("settings.elapsed_seconds", { seconds: (c.millis / 1000).toFixed(c.millis >= 10_000 ? 0 : 1) })}</span>}
                     </div>
                     {c === null ? (
-                      <div className="text-[11.5px] text-ink-3">正在请求…</div>
+                      <div className="text-[11.5px] text-ink-3">{t("settings.requesting")}</div>
                     ) : c.ok ? (
-                      <div className="truncate text-[11.5px] text-ink-3">{[c.model, c.answer && `回答「${c.answer}」`].filter(Boolean).join(" · ")}</div>
+                      <div className="truncate text-[11.5px] text-ink-3">{[c.model, c.answer && t("settings.answered", { answer: c.answer })].filter(Boolean).join(" · ")}</div>
                     ) : (
                       <pre className="mt-0.5 whitespace-pre-wrap break-all font-mono text-[11px] text-red">{c.error}</pre>
                     )}
@@ -632,33 +632,33 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
           )}
 
           {l.source === "jarvis" && (
-            <KV title="设置">
-              <KVRow k="接入方式" v={l.kind === "api" ? "直接 API" : "启动器"} />
-              {l.kind === "api" && <KVRow k="协议" v={l.api === "responses" ? "Responses" : "Messages"} />}
+            <KV title={t("settings.config")}>
+              <KVRow k={t("settings.access")} v={l.kind === "api" ? t("settings.direct_api") : t("settings.launcher")} />
+              {l.kind === "api" && <KVRow k={t("settings.protocol")} v={l.api === "responses" ? "Responses" : "Messages"} />}
               <KVRow k="Base URL" v={l.base_url} mono />
-              <KVRow k="模型" v={l.model} mono />
-              {l.kind !== "api" && l.small_model && <KVRow k="小模型" v={l.small_model} mono />}
-              {l.kind !== "api" && l.subagent_model && <KVRow k="子 Agent 模型" v={l.subagent_model} mono />}
-              {l.kind !== "api" && l.custom_model && <KVRow k="自定义模型" v={l.custom_model} mono />}
-              {l.kind !== "api" && l.custom_model_name && <KVRow k="自定义模型名" v={l.custom_model_name} />}
-              <KVRow k="API Key" v={l.has_key ? "已设置（不显示）" : "未设置"} />
-              {l.api !== "responses" && <KVRow k="认证方式" v={l.auth === "bearer" ? "Bearer" : "x-api-key"} />}
-              {l.kind !== "api" && l.args?.length ? <KVRow k="额外参数" v={l.args.join(" ")} mono /> : null}
+              <KVRow k={t("settings.model")} v={l.model} mono />
+              {l.kind !== "api" && l.small_model && <KVRow k={t("settings.small_model")} v={l.small_model} mono />}
+              {l.kind !== "api" && l.subagent_model && <KVRow k={t("settings.subagent_model")} v={l.subagent_model} mono />}
+              {l.kind !== "api" && l.custom_model && <KVRow k={t("settings.custom_model")} v={l.custom_model} mono />}
+              {l.kind !== "api" && l.custom_model_name && <KVRow k={t("settings.custom_model_name")} v={l.custom_model_name} />}
+              <KVRow k="API Key" v={l.has_key ? t("settings.key_set_hidden") : t("settings.not_set")} />
+              {l.api !== "responses" && <KVRow k={t("settings.auth")} v={l.auth === "bearer" ? "Bearer" : "x-api-key"} />}
+              {l.kind !== "api" && l.args?.length ? <KVRow k={t("settings.extra_args")} v={l.args.join(" ")} mono /> : null}
             </KV>
           )}
 
           {hasExtensions && <LauncherExtensionSections launcher={l.name} machine={l.source === "jarvis" ? undefined : testOn[0] || undefined} />}
 
           {groups.map((g) => (
-            <DetailBlock key={g.ids.join()} d={g.d} place={groups.length > 1 ? g.ids.map(mname).join("、") : undefined} />
+            <DetailBlock key={g.ids.join()} d={g.d} place={groups.length > 1 ? formatList(g.ids.map(mname), { type: "conjunction", style: "narrow" }) : undefined} />
           ))}
 
           {l.definitions && Object.keys(l.definitions).length > 0 && (
             <div>
               <button type="button" onClick={() => setShowDef((x) => !x)} className="flex items-center gap-1.5 text-[12px] font-medium text-ink-2 hover:text-ink">
                 <Icon name="chevron" size={10} stroke={2.4} style={{ transform: showDef ? "none" : "rotate(-90deg)", transition: "transform 150ms" }} />
-                函数原文
-                <span className="font-normal text-ink-3">（像 Key、Token 的值已换成 •••）</span>
+                {t("settings.function_source")}
+                <span className="font-normal text-ink-3">{t("settings.function_source_note")}</span>
               </button>
               {showDef &&
                 Object.entries(l.definitions).map(([id, def]) => (
@@ -697,38 +697,38 @@ function KVRow({ k, v, mono, sub }: { k: React.ReactNode; v?: React.ReactNode; m
 }
 
 function DetailBlock({ d, place }: { d: LauncherDetail; place?: string }) {
-  const t = (s: string) => (place ? `${s} · ${place}` : s);
-  if (d.error) return <KV title={t("运行")}><p className="py-2 text-[12px] text-ink-3">{d.error}</p></KV>;
+  const titled = (s: string) => (place ? `${s} · ${place}` : s);
+  if (d.error) return <KV title={titled(t("settings.run"))}><p className="py-2 text-[12px] text-ink-3">{d.error}</p></KV>;
   const agent = d.agent === "codex" ? "Codex" : d.agent === "traex" ? "TRAEX" : "Claude Code";
   return (
     <>
-      <KV title={t("运行")}>
+      <KV title={titled(t("settings.run"))}>
         <KVRow k="Agent" v={agent} />
-        {d.base_url && <KVRow k="网关" v={d.base_url} mono />}
-        {d.auth && <KVRow k="Key" v={`已设置 · ${d.auth}`} mono />}
+        {d.base_url && <KVRow k={t("settings.gateway")} v={d.base_url} mono />}
+        {d.auth && <KVRow k="Key" v={t("settings.key_set", { auth: d.auth })} mono />}
       </KV>
       {d.models?.length ? (
-        <KV title={t("模型")}>
+        <KV title={titled(t("settings.model"))}>
           {d.models.map((m) => (
             <KVRow key={m.role + m.env} k={m.role} sub={m.env} v={m.model} mono />
           ))}
         </KV>
       ) : null}
       {(d.context_window || d.compact_window || d.effort || d.timeout_ms) && (
-        <KV title={t("上下文")}>
-          {d.context_window ? <KVRow k="上下文窗口" v={`${tokens(d.context_window)} tokens`} /> : null}
-          {d.compact_window ? <KVRow k="自动压缩窗口" v={`${tokens(d.compact_window)} tokens`} /> : null}
-          {d.effort ? <KVRow k="思考强度" v={d.effort} /> : null}
-          {d.timeout_ms ? <KVRow k="请求超时" v={d.timeout_ms >= 60_000 ? `${Math.round(d.timeout_ms / 60_000)} 分钟` : `${Math.round(d.timeout_ms / 1000)} 秒`} /> : null}
+        <KV title={titled(t("settings.context"))}>
+          {d.context_window ? <KVRow k={t("settings.context_window")} v={`${tokens(d.context_window)} tokens`} /> : null}
+          {d.compact_window ? <KVRow k={t("settings.compact_window")} v={`${tokens(d.compact_window)} tokens`} /> : null}
+          {d.effort ? <KVRow k={t("settings.effort")} v={d.effort} /> : null}
+          {d.timeout_ms ? <KVRow k={t("settings.request_timeout")} v={d.timeout_ms >= 60_000 ? t("settings.minutes", { count: Math.round(d.timeout_ms / 60_000) }) : t("settings.seconds", { count: Math.round(d.timeout_ms / 1000) })} /> : null}
         </KV>
       )}
       {d.args?.length ? (
-        <KV title={t("启动参数")}>
+        <KV title={titled(t("settings.launch_args"))}>
           <p className="py-2 font-mono text-[11.5px] break-all text-ink">{d.args.join(" ")}</p>
         </KV>
       ) : null}
       {d.env?.length ? (
-        <KV title={t(`其他设置 ${d.env.length}`)}>
+        <KV title={titled(t("settings.other_settings", { count: d.env.length }))}>
           {d.env.map((e) => (
             <KVRow key={e.key} k={<span className="font-mono text-[11px]">{e.key}</span>} v={e.value} mono />
           ))}
@@ -792,14 +792,14 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
       if (fromExtension && preset) {
         const body = presetBody(preset, pf.name, pf.api_key, pf.model);
         await api("/launchers", { method: "POST", json: body });
-        toast(`已新增 ${body.name}`, "ok");
+        toast(t("settings.added", { name: body.name }), "ok");
         onSaved();
         onClose();
         return;
       }
       const body = { name: f.name.trim(), kind: f.kind, api: f.kind === "api" ? f.api : "messages", base_url: f.base_url.trim(), model: f.model.trim(), small_model: f.kind === "api" ? "" : f.small_model.trim(), subagent_model: f.kind === "api" ? "" : f.subagent_model.trim(), custom_model: f.kind === "api" ? "" : f.custom_model.trim(), custom_model_name: f.kind === "api" ? "" : f.custom_model_name.trim(), custom_model_description: f.kind === "api" ? "" : f.custom_model_description.trim(), args: f.kind === "api" ? [] : f.args.split(/\s+/).filter(Boolean), api_key: f.api_key || undefined, auth: responses ? "api_key" : f.auth };
       await api(isNew ? "/launchers" : enLauncher(body.name), { method: isNew ? "POST" : "PUT", json: body });
-      toast(isNew ? `已新增 ${body.name}` : `已保存 ${body.name}`, "ok");
+      toast(isNew ? t("settings.added", { name: body.name }) : t("settings.saved", { name: body.name }), "ok");
       onSaved();
       onClose();
     } catch (e) {
@@ -831,14 +831,14 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
       open={existing !== null}
       onClose={onClose}
       width={480}
-      title={isNew ? "新增供应商" : `编辑 ${old?.name ?? ""}`}
+      title={isNew ? t("settings.add_provider") : t("settings.edit_named", { name: old?.name ?? "" })}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" busy={busy} disabled={!ready} onClick={() => void save()}>
-            保存
+            {t("common.save")}
           </Button>
         </>
       }
@@ -852,10 +852,10 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
       >
         {isNew && presets.length > 0 && (
           <Segmented<"manual" | "extension">
-            label="来源"
+            label={t("settings.source")}
             value={source}
             onChange={setSource}
-            options={[{ v: "manual", label: "自己填写" }, { v: "extension", label: "从扩展添加" }]}
+            options={[{ v: "manual", label: t("settings.source_manual") }, { v: "extension", label: t("settings.source_extension") }]}
           />
         )}
         {fromExtension && preset ? (
@@ -863,46 +863,46 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
         ) : (
         <>
         <label className="block">
-          <span className="mb-1 block text-[12px] font-medium text-ink-2">接入方式</span>
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.access")}</span>
           <select value={f.kind} onChange={(e) => setF((x) => ({ ...x, kind: e.target.value, api: "messages" }))} disabled={!isNew}
             className="h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none disabled:opacity-60">
-            <option value="launcher">Claude Code 启动器</option>
-            <option value="api">直接 API</option>
+            <option value="launcher">{t("settings.claude_launcher")}</option>
+            <option value="api">{t("settings.direct_api")}</option>
           </select>
         </label>
         {f.kind === "api" && <label className="block">
-          <span className="mb-1 block text-[12px] font-medium text-ink-2">API 协议</span>
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.api_protocol")}</span>
           <select value={f.api} onChange={(e) => setF((x) => ({ ...x, api: e.target.value }))}
             className="h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none">
             <option value="messages">Anthropic Messages</option>
             <option value="responses">OpenAI Responses</option>
           </select>
         </label>}
-        {field("name", "名字", { placeholder: "比如 jv_strong", hint: "字母、数字、_ 和 -；在模型配置中按这个名字选。", mono: true, disabled: !isNew })}
-        {field("base_url", "Base URL", { placeholder: "https://…", hint: f.api === "responses" ? "Responses 兼容 API 的基础地址。" : "Messages 兼容 API 的基础地址。", mono: true })}
-        {field("api_key", isNew || !old?.has_key ? "API Key" : "API Key（不改就留空）", { type: "password", hint: "加密存在 hub，接口不会再返回。" })}
+        {field("name", t("settings.name"), { placeholder: t("settings.name_placeholder", { example: "jv_strong" }), hint: t("settings.name_hint"), mono: true, disabled: !isNew })}
+        {field("base_url", "Base URL", { placeholder: "https://…", hint: f.api === "responses" ? t("settings.base_url_responses") : t("settings.base_url_messages"), mono: true })}
+        {field("api_key", isNew || !old?.has_key ? "API Key" : t("settings.api_key_keep"), { type: "password", hint: t("settings.key_stored") })}
         {!responses && <label className="block">
-          <span className="mb-1 block text-[12px] font-medium text-ink-2">认证方式</span>
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.auth")}</span>
           <select value={f.auth} onChange={(e) => setF((x) => ({ ...x, auth: e.target.value }))}
             className="h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none">
-            <option value="api_key">x-api-key（ANTHROPIC_API_KEY）</option>
-            <option value="bearer">Bearer（ANTHROPIC_AUTH_TOKEN）</option>
+            <option value="api_key">{t("settings.auth_api_key")}</option>
+            <option value="bearer">{t("settings.auth_bearer")}</option>
           </select>
-          <span className="mt-1 block text-[11px] text-ink-3">网关只认 Authorization: Bearer 时选 Bearer。</span>
+          <span className="mt-1 block text-[11px] text-ink-3">{t("settings.auth_hint")}</span>
         </label>}
         <div className={f.kind === "api" ? "" : "grid grid-cols-2 gap-3"}>
-          {field("model", "默认模型", { placeholder: "主模型", mono: true })}
-          {f.kind !== "api" && field("small_model", "小模型（可选）", { placeholder: "默认同模型", mono: true })}
-          {f.kind !== "api" && field("subagent_model", "子 Agent 模型（可选）", { placeholder: "默认同模型", mono: true, hint: "workflow 等多 Agent 运行用。" })}
+          {field("model", t("settings.default_model"), { placeholder: t("settings.main_model"), mono: true })}
+          {f.kind !== "api" && field("small_model", t("settings.small_model_optional"), { placeholder: t("settings.same_as_model"), mono: true })}
+          {f.kind !== "api" && field("subagent_model", t("settings.subagent_model_optional"), { placeholder: t("settings.same_as_model"), mono: true, hint: t("settings.subagent_model_hint") })}
         </div>
         {f.kind !== "api" && (
           <div className="grid grid-cols-2 gap-3">
-            {field("custom_model", "自定义模型（可选）", { placeholder: "网关里的模型 ID", mono: true })}
-            {field("custom_model_name", "显示名（可选）", {})}
+            {field("custom_model", t("settings.custom_model_optional"), { placeholder: t("settings.gateway_model_id"), mono: true })}
+            {field("custom_model_name", t("settings.display_name_optional"), {})}
           </div>
         )}
-        {f.kind !== "api" && field("custom_model_description", "自定义模型说明（可选）", { hint: "在 /model 里多一个可选项；说明要配一个名字。" })}
-        {f.kind !== "api" && field("args", "额外参数（可选）", { placeholder: "--dangerously-skip-permissions", hint: "加在 claude 后面，空格分隔，每个都以 - 开头。", mono: true })}
+        {f.kind !== "api" && field("custom_model_description", t("settings.custom_model_description_optional"), { hint: t("settings.custom_model_description_hint") })}
+        {f.kind !== "api" && field("args", t("settings.extra_args_optional"), { placeholder: "--dangerously-skip-permissions", hint: t("settings.extra_args_hint"), mono: true })}
         </>
         )}
         {error && <p className="text-[12px] text-red">{error}</p>}
@@ -926,8 +926,8 @@ function PresetFields({ presets, preset, onPick, pf, setPf, nameProblem }: {
   return (
     <>
       <div>
-        <span className="mb-1 block text-[12px] font-medium text-ink-2">供应商</span>
-        <div role="radiogroup" aria-label="供应商" className="overflow-hidden rounded-control bg-field shadow-inset-field">
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.provider")}</span>
+        <div role="radiogroup" aria-label={t("settings.provider")} className="overflow-hidden rounded-control bg-field shadow-inset-field">
           {presets.map((p) => (
             <button
               key={p.id}
@@ -946,20 +946,20 @@ function PresetFields({ presets, preset, onPick, pf, setPf, nameProblem }: {
             </button>
           ))}
         </div>
-        <span className="mt-1 block text-[11px] text-ink-3">地址、接入方式和模型由扩展「{preset.plugin}」提供；加好以后和自己填写的一样可以编辑。</span>
+        <span className="mt-1 block text-[11px] text-ink-3">{t("settings.preset_hint", { plugin: preset.plugin })}</span>
       </div>
       <label className="block">
-        <span className="mb-1 block text-[12px] font-medium text-ink-2">名字</span>
-        <input value={pf.name} onChange={(e) => setPf((x) => ({ ...x, name: e.target.value }))} placeholder="比如 jv_team" autoComplete="off" spellCheck={false} className={cx(input, "font-mono")} />
-        <span className={cx("mt-1 block text-[11px]", nameProblem ? "text-red" : "text-ink-3")}>{nameProblem || "字母、数字、_ 和 -；在模型配置中按这个名字选。"}</span>
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.name")}</span>
+        <input value={pf.name} onChange={(e) => setPf((x) => ({ ...x, name: e.target.value }))} placeholder={t("settings.name_placeholder", { example: "jv_team" })} autoComplete="off" spellCheck={false} className={cx(input, "font-mono")} />
+        <span className={cx("mt-1 block text-[11px]", nameProblem ? "text-red" : "text-ink-3")}>{nameProblem || t("settings.name_hint")}</span>
       </label>
       <label className="block">
         <span className="mb-1 block text-[12px] font-medium text-ink-2">API Key</span>
         <input value={pf.api_key} onChange={(e) => setPf((x) => ({ ...x, api_key: e.target.value }))} type="password" autoComplete="off" spellCheck={false} className={input} />
-        <span className="mt-1 block text-[11px] text-ink-3">{preset.key_hint ? `${preset.key_hint} ` : ""}加密存在 hub，接口不会再返回。</span>
+        <span className="mt-1 block text-[11px] text-ink-3">{preset.key_hint ? `${preset.key_hint} ` : ""}{t("settings.key_stored")}</span>
       </label>
       <label className="block">
-        <span className="mb-1 block text-[12px] font-medium text-ink-2">默认模型</span>
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.default_model")}</span>
         {choices.length ? (
           <select value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} className={cx(input, "font-mono")}>
             {choices.map((m) => (
@@ -969,10 +969,10 @@ function PresetFields({ presets, preset, onPick, pf, setPf, nameProblem }: {
             ))}
           </select>
         ) : (
-          <input value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} placeholder="主模型" autoComplete="off" spellCheck={false} className={cx(input, "font-mono")} />
+          <input value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} placeholder={t("settings.main_model")} autoComplete="off" spellCheck={false} className={cx(input, "font-mono")} />
         )}
         <span className="mt-1 block text-[11px] text-ink-3">
-          {preset.models_error ? `读不到扩展的模型列表（${preset.models_error}），这里是它声明的。` : "各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。"}
+          {preset.models_error ? t("settings.preset_models_error", { error: preset.models_error }) : t("settings.preset_models_hint")}
         </span>
       </label>
     </>
@@ -994,42 +994,42 @@ function Devices() {
   const revoke = async (id: string) => {
     try {
       await api(`/auth/tokens/${enc(id)}`, { method: "DELETE" });
-      toast("已撤销", "ok");
+      toast(t("settings.revoked_toast"), "ok");
       setConfirm(null);
       void load();
     } catch (e) {
       toast(errorText(e), "error");
     }
   };
-  const kind: Record<string, string> = { phone: "手机", watch: "手表", other: "其他（网页 / 命令行）", web: "网页" };
+  const kind: Record<string, string> = { phone: t("settings.kind_phone"), watch: t("settings.kind_watch"), other: t("settings.kind_cli"), web: t("settings.kind_web") };
   const { active, revoked } = splitDevices(data?.tokens ?? [], data?.current);
 
   // A revoked credential is shown greyed, with when it was revoked and no 撤销 (iOS DeviceCredentials.swift).
-  const row = (t: DeviceToken, gone: boolean) => (
-    <div key={t.id} className="flex items-center gap-3 px-4 py-2.5">
-      <Icon name={t.kind === "phone" ? "machine" : t.kind === "watch" ? "monitor" : "web"} size={15} className="shrink-0 text-ink-3" />
+  const row = (tok: DeviceToken, gone: boolean) => (
+    <div key={tok.id} className="flex items-center gap-3 px-4 py-2.5">
+      <Icon name={tok.kind === "phone" ? "machine" : tok.kind === "watch" ? "monitor" : "web"} size={15} className="shrink-0 text-ink-3" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={cx("truncate text-[13px]", gone ? "text-ink-3" : "text-ink")}>{t.name || t.id}</span>
-          {t.id === data?.current && <Pill tone="green">这个浏览器</Pill>}
-          {t.role !== "full" && <Pill>{t.role === "answer" ? "只能回答" : t.role}</Pill>}
+          <span className={cx("truncate text-[13px]", gone ? "text-ink-3" : "text-ink")}>{tok.name || tok.id}</span>
+          {tok.id === data?.current && <Pill tone="green">{t("settings.this_browser")}</Pill>}
+          {tok.role !== "full" && <Pill>{tok.role === "answer" ? t("settings.role_answer") : tok.role}</Pill>}
         </div>
         <div className="mt-0.5 truncate text-[11.5px] text-ink-3">
-          {kind[t.kind] ?? t.kind}
-          {gone && t.revoked_at ? ` · ${ago(t.revoked_at)}撤销` : ""}
-          {!gone && t.last_seen ? ` · ${ago(t.last_seen)}用过` : ""}
-          {t.created_at ? ` · ${ago(t.created_at)}添加` : ""}
+          {kind[tok.kind] ?? tok.kind}
+          {gone && tok.revoked_at ? ` · ${t("settings.revoked_ago", { time: ago(tok.revoked_at) })}` : ""}
+          {!gone && tok.last_seen ? ` · ${t("settings.used_ago", { time: ago(tok.last_seen) })}` : ""}
+          {tok.created_at ? ` · ${t("settings.added_ago", { time: ago(tok.created_at) })}` : ""}
         </div>
       </div>
-      {!gone && t.id !== data?.current && (
+      {!gone && tok.id !== data?.current && (
         <RowConfirm
-          open={confirm === t.id}
-          confirm="确认撤销"
+          open={confirm === tok.id}
+          confirm={t("settings.confirm_revoke")}
           onCancel={() => setConfirm(null)}
-          onConfirm={() => void revoke(t.id)}
+          onConfirm={() => void revoke(tok.id)}
           trigger={
-            <Button tone="quiet" onClick={() => setConfirm(t.id)} className="text-red enabled:hover:text-red">
-              撤销
+            <Button tone="quiet" onClick={() => setConfirm(tok.id)} className="text-red enabled:hover:text-red">
+              {t("settings.revoke")}
             </Button>
           }
         />
@@ -1042,12 +1042,12 @@ function Devices() {
       {!data && !error && <Loading />}
       {error && <p className="text-[13px] text-red">{error}</p>}
       {data && (
-        <Group title={`设备 ${active.length}`} footer="每台手机、手表、浏览器各用自己的 token；撤销立刻失效，并断开它的连接。配对用的 hub token 不在这里。">
-          {active.length === 0 && <p className="px-4 py-3 text-[12.5px] text-ink-3">还没有设备。</p>}
-          {active.map((t) => row(t, false))}
+        <Group title={t("settings.devices_title", { count: active.length })} footer={t("settings.devices_footer")}>
+          {active.length === 0 && <p className="px-4 py-3 text-[12.5px] text-ink-3">{t("settings.no_devices")}</p>}
+          {active.map((tok) => row(tok, false))}
         </Group>
       )}
-      {data && revoked.length > 0 && <Group title={`已撤销 ${revoked.length}`}>{revoked.map((t) => row(t, true))}</Group>}
+      {data && revoked.length > 0 && <Group title={t("settings.revoked_title", { count: revoked.length })}>{revoked.map((tok) => row(tok, true))}</Group>}
     </>
   );
 }

@@ -1,0 +1,23 @@
+{
+  "switch": "Switch",
+  "add_hub": "Add hub",
+  "group_title": "Hubs",
+  "group_footer": "Switch between these hubs' web pages. Each hub keeps its own sign-in in this browser; the first time you open one, paste its token. The list is stored only in this browser, without tokens.",
+  "this_hub": "This hub",
+  "current": "Current",
+  "rename_label": "Rename {name}",
+  "remove_label": "Remove {name} from list",
+  "removed": "Removed {name} from the list",
+  "added": "Added {name}",
+  "add": "Add",
+  "address": "Address",
+  "address_placeholder": "https://<hub address>",
+  "will_open": "Opens {url}",
+  "address_hint": "The address you open that hub's web page at, without a path. Without http://, https:// is used.",
+  "name_optional": "Name (optional)",
+  "name_placeholder": "Leave empty to use the hub's own name",
+  "rename": "Rename",
+  "name": "Name",
+  "rename_hint": "Changes the name in this browser only. Clear it to use the hub's own name.",
+  "other_hubs": "Other hubs"
+}

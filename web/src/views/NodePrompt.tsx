@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { answerAsk, getAsk, subscribeAsk } from "../lib/node-palette";
 import { Button, Dialog } from "../ui/atoms";
+import { t } from "../i18n";
 
 export function NodePrompt() {
   const ask = useSyncExternalStore(subscribeAsk, getAsk, getAsk);
@@ -27,10 +28,10 @@ function TextAsk({ ask }: { ask: Extract<NonNullable<ReturnType<typeof getAsk>>,
       footer={
         <>
           <Button tone="quiet" onClick={() => done(null)}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" disabled={!next || next === ask.value.trim()} onClick={() => done(next)}>
-            保存
+            {t("common.save")}
           </Button>
         </>
       }
@@ -72,7 +73,7 @@ function ConfirmAsk({ ask }: { ask: Extract<NonNullable<ReturnType<typeof getAsk
       footer={
         <>
           <Button tone="quiet" onClick={() => done(false)}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="danger" onClick={() => done(true)}>
             {ask.label}

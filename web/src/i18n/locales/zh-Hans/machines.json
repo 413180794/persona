@@ -1,0 +1,21 @@
+{
+  "reconnecting": "正在重连",
+  "reconnect_failed": "重连失败：{error}",
+  "sidebar": "侧边栏",
+  "title": "机器",
+  "refresh_interval": "每 {seconds} 秒刷新",
+  "online": "在线",
+  "offline": "离线",
+  "reconnect": "重连",
+  "memory": "内存",
+  "disk": "磁盘",
+  "disk_free": "剩 {size}",
+  "waiting_node": "等待 node 重新连接",
+  "unreachable": "连不上这台电脑",
+  "agents_other": "{count} 个 Agent",
+  "agents_working_other": "{count} 个 Agent，{working} 个在工作",
+  "no_agents": "没有在跑的 Agent",
+  "details": "详情 ›",
+  "no_history": "还没有历史",
+  "cpu_last_hour": "最近一小时 CPU"
+}

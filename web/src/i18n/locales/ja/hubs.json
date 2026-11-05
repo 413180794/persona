@@ -1,0 +1,23 @@
+{
+  "switch": "切り替え",
+  "add_hub": "ハブを追加",
+  "group_title": "ハブ",
+  "group_footer": "これらのハブのWebページを切り替えます。各ハブにはこのブラウザーでそれぞれサインインし、初めて開くときはそのハブのトークンを貼り付けます。一覧はこのブラウザーにだけ保存され、トークンは含まれません。",
+  "this_hub": "このハブ",
+  "current": "現在",
+  "rename_label": "名前を変更：{name}",
+  "remove_label": "一覧から削除：{name}",
+  "removed": "{name}を一覧から削除しました",
+  "added": "{name}を追加しました",
+  "add": "追加",
+  "address": "アドレス",
+  "address_placeholder": "https://<ハブのアドレス>",
+  "will_open": "{url}を開きます",
+  "address_hint": "そのハブのWebページをブラウザーで開くときのアドレスです（パスなし）。http://を省略するとhttps://になります。",
+  "name_optional": "名前（任意）",
+  "name_placeholder": "空欄の場合はハブ自身の名前を使用",
+  "rename": "名前を変更",
+  "name": "名前",
+  "rename_hint": "このブラウザーでの表示名だけを変更します。空にするとハブ自身の名前に戻ります。",
+  "other_hubs": "ほかのハブ"
+}

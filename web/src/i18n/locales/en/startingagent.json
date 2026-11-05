@@ -1,0 +1,18 @@
+{
+  "resend_confirm": "It's not certain the first message got through. If you've checked the session and it isn't there, send it again?",
+  "restart_confirm": "The agent may already have been created on the computer. If you've checked the list and there's no duplicate, start it again?",
+  "creating": "Starting agent",
+  "uploading": "Preparing attachments",
+  "sending": "Sending first message",
+  "sidebar": "Sidebar",
+  "title": "New agent",
+  "uncertain": "The result isn't certain yet. Check the session or the list first so nothing starts or sends twice.",
+  "kept": "Your message and attachments are kept. You can try again.",
+  "launcher_label": "Launcher (leave empty to follow model settings)",
+  "first_message": "First message",
+  "clear_and_send": "Clear and send",
+  "retry": "Retry",
+  "view_session": "View session",
+  "view_list": "View list",
+  "background": "Opened here; it finishes in the background. Feel free to look at other sessions meanwhile."
+}

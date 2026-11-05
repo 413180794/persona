@@ -1,0 +1,7 @@
+{
+  "chunk_title": "This page didn't load",
+  "error_title": "Something went wrong on this page",
+  "chunk_body": "The hub may have just been updated. Reloading should fix it.",
+  "error_body": "Try reloading. If that doesn't help, go to another page and come back.",
+  "reload": "Reload"
+}

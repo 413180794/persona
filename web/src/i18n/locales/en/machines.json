@@ -1,0 +1,23 @@
+{
+  "reconnecting": "Reconnecting",
+  "reconnect_failed": "Couldn't reconnect: {error}",
+  "sidebar": "Sidebar",
+  "title": "Machines",
+  "refresh_interval": "Refreshes every {seconds}s",
+  "online": "Online",
+  "offline": "Offline",
+  "reconnect": "Reconnect",
+  "memory": "Memory",
+  "disk": "Disk",
+  "disk_free": "{size} free",
+  "waiting_node": "Waiting for the node to reconnect",
+  "unreachable": "Can't reach this computer",
+  "agents_one": "{count} agent",
+  "agents_other": "{count} agents",
+  "agents_working_one": "{count} agent, {working} working",
+  "agents_working_other": "{count} agents, {working} working",
+  "no_agents": "No agents running",
+  "details": "Details ›",
+  "no_history": "No history yet",
+  "cpu_last_hour": "CPU over the last hour"
+}

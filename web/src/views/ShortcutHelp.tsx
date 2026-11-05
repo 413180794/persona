@@ -3,6 +3,7 @@ import { closeHelp, openShortcutSettings, useHelpOpen } from "../lib/shortcut-he
 import { chordParts, currentPlatform, LOCAL_SHORTCUTS, SCOPE_LABEL, SHORTCUTS, useBindings, type ShortcutScope } from "../lib/shortcuts";
 import { navigate } from "../lib/router";
 import { Button, Dialog, Kbd } from "../ui/atoms";
+import { t } from "../i18n";
 
 const SCOPES: ShortcutScope[] = ["global", "session", "sidebar"];
 
@@ -14,7 +15,7 @@ export function ShortcutHelp() {
     <Dialog
       open={open}
       onClose={closeHelp}
-      title="快捷键"
+      title={t("shortcuthelp.title")}
       width={460}
       footer={
         <Button
@@ -24,7 +25,7 @@ export function ShortcutHelp() {
             openShortcutSettings(navigate);
           }}
         >
-          在设置里改键
+          {t("shortcuthelp.edit_in_settings")}
         </Button>
       }
     >
@@ -46,8 +47,8 @@ export function ShortcutHelp() {
             </ul>
           </section>
         ))}
-        <section aria-label="终端里">
-          <h3 className="mb-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">终端里（固定）</h3>
+        <section aria-label={t("shortcuthelp.in_terminal")}>
+          <h3 className="mb-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{t("shortcuthelp.in_terminal_fixed")}</h3>
           <ul className="divide-y divide-line">
             {LOCAL_SHORTCUTS.map((s) => (
               <li key={s.id} className="py-1.5">

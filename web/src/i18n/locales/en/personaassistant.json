@@ -1,0 +1,13 @@
+{
+  "suggestion_meetings": "What meetings do I have today? Help me prepare",
+  "suggestion_agents": "What are the agents on my computers doing?",
+  "suggestion_lark": "Sum up the Lark messages I need to reply to",
+  "suggestion_projects": "What projects am I working on lately, and how are they going?",
+  "start_failed": "Couldn't start: {error}",
+  "profile": "Profile",
+  "sidebar": "Sidebar",
+  "empty_title": "What can I do for you?",
+  "empty_body_machines": "I can read your calendar, Lark, email and knowledge base, and get things done on {machines}.",
+  "empty_body": "I can read your calendar, Lark, email and knowledge base, and get things done on your computers.",
+  "ask_placeholder": "Ask {name}…"
+}

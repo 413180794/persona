@@ -1,0 +1,18 @@
+{
+  "command_unavailable": "这里用不了这个命令",
+  "new_agent": "新建 Agent",
+  "new_conversation": "新对话",
+  "command_palette": "命令面板",
+  "search_sessions": "搜索会话",
+  "command_placeholder": "输入命令…",
+  "search_placeholder": "搜索会话、终端、目录、空间、机器…",
+  "terminal": "终端",
+  "no_commands": "没有匹配的命令",
+  "no_commands_hint": "删掉「>」可以搜索会话和终端",
+  "no_results": "没有找到「{query}」",
+  "no_results_hint": "换个词，或者开一个新的 Agent",
+  "select": "选择",
+  "run": "执行",
+  "open": "打开",
+  "commands": "命令"
+}

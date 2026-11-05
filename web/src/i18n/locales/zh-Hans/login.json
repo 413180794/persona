@@ -1,0 +1,9 @@
+{
+  "invalid_token": "token 不对",
+  "title": "连接到 Persona",
+  "how_to_pair": "在 hub 所在的机器上运行 {command}，把打印的 {link} 链接整条贴到这里；也可以贴 {legacy} 打印的 Token，或 {jq} 的输出。",
+  "phone_hint": "手机 App 直接扫同一条命令打印的二维码。",
+  "token_placeholder": "配对链接或 token",
+  "connect": "连接",
+  "credential_note": "这个浏览器会拿到自己的凭据，可以在手机上的「设置 › 设备」里随时撤销。"
+}

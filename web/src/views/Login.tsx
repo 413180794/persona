@@ -6,6 +6,8 @@ import { Button, Spinner } from "../ui/atoms";
 import { AppMark } from "../ui/AppMark";
 import { Icon } from "../ui/icons";
 import { OtherHubs } from "./Hubs";
+import { t } from "../i18n";
+import { tRich } from "../i18n/rich";
 
 // Pair with the link `personad hub pair` prints, the hub's token or a device token (lib/auth.ts pairToken). `error` is what went
 // wrong with a token that came in the link.
@@ -17,15 +19,15 @@ export function Login({ onDone, error: linkError = "" }: { onDone: () => void; e
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const t = token.trim();
-    if (!t) return;
+    const tok = token.trim();
+    if (!tok) return;
     setBusy(true);
     setError("");
     try {
-      await pair(t);
+      await pair(tok);
       onDone();
     } catch (err) {
-      setError(errorText(err) === "invalid token" ? "token 不对" : errorText(err));
+      setError(errorText(err) === "invalid token" ? t("login.invalid_token") : errorText(err));
     } finally {
       setBusy(false);
     }
@@ -37,11 +39,16 @@ export function Login({ onDone, error: linkError = "" }: { onDone: () => void; e
         <div className="mb-7 flex flex-col items-center gap-3 text-center">
           <AppMark size={44} radius={12} className="shadow-raised" />
           <div>
-            <h1 className="text-[18px] font-semibold tracking-tight text-ink">连接到 Persona</h1>
+            <h1 className="text-[18px] font-semibold tracking-tight text-ink">{t("login.title")}</h1>
             <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
-              在 hub 所在的机器上运行 <code className="rounded-[5px] bg-field px-1 py-0.5 font-mono text-[12px] shadow-hairline">personad hub pair</code>，把打印的 <code className="font-mono text-[12px]">jarvis://pair?…</code> 链接整条贴到这里；也可以贴 <code className="font-mono text-[12px]">--legacy</code> 打印的 Token，或 <code className="font-mono text-[12px]">jq -r .token ~/.persona/hub.json</code> 的输出。
+              {tRich("login.how_to_pair", {
+                command: <code className="rounded-[5px] bg-field px-1 py-0.5 font-mono text-[12px] shadow-hairline">personad hub pair</code>,
+                link: <code className="font-mono text-[12px]">jarvis://pair?…</code>,
+                legacy: <code className="font-mono text-[12px]">--legacy</code>,
+                jq: <code className="font-mono text-[12px]">jq -r .token ~/.persona/hub.json</code>,
+              })}
             </p>
-            <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">手机 App 直接扫同一条命令打印的二维码。</p>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">{t("login.phone_hint")}</p>
           </div>
         </div>
         <div className="rounded-card bg-surface p-1.5 shadow-card">
@@ -52,20 +59,20 @@ export function Login({ onDone, error: linkError = "" }: { onDone: () => void; e
               type="password"
               value={token}
               onChange={(e) => setTok(e.target.value)}
-              placeholder="配对链接或 token"
-              aria-label="配对链接或 token"
+              placeholder={t("login.token_placeholder")}
+              aria-label={t("login.token_placeholder")}
               autoComplete="current-password"
               className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-ink outline-none placeholder:font-sans placeholder:text-ink-3"
             />
           </label>
           <Button type="submit" tone="primary" disabled={!token.trim()} className="mt-1.5 h-9 w-full">
-            {busy ? <Spinner /> : "连接"}
+            {busy ? <Spinner /> : t("login.connect")}
           </Button>
         </div>
         <p className="mt-3 h-5 text-center text-[12.5px] text-red" role="alert">
           {error}
         </p>
-        <p className="text-center text-[11.5px] leading-relaxed text-ink-3">这个浏览器会拿到自己的凭据，可以在手机上的「设置 › 设备」里随时撤销。</p>
+        <p className="text-center text-[11.5px] leading-relaxed text-ink-3">{t("login.credential_note")}</p>
         <OtherHubs />
       </form>
     </div>

@@ -1,0 +1,18 @@
+{
+  "command_unavailable": "このコマンドはここでは使えません",
+  "new_agent": "新規エージェント",
+  "new_conversation": "新しいチャット",
+  "command_palette": "コマンドパレット",
+  "search_sessions": "セッションを検索",
+  "command_placeholder": "コマンドを入力…",
+  "search_placeholder": "セッション、ターミナル、フォルダー、スペース、マシンを検索…",
+  "terminal": "ターミナル",
+  "no_commands": "一致するコマンドはありません",
+  "no_commands_hint": "「>」を消すとセッションとターミナルを検索できます",
+  "no_results": "「{query}」は見つかりませんでした",
+  "no_results_hint": "別のキーワードを試すか、新しいエージェントを起動してください",
+  "select": "選択",
+  "run": "実行",
+  "open": "開く",
+  "commands": "コマンド"
+}
