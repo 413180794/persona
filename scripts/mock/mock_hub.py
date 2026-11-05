@@ -1807,7 +1807,9 @@ if os.environ.get("MOCK_SETTINGS_INPUT"):
 
 # MOCK_CODEX=1: the Codex session's question (Plan mode, two questions) and an approval, as a node reads them off the
 # Codex TUI (docs/codex.md「提问和审批」); the first answer to the approval is refused as if the computer's input box held
-# a draft (409 input_draft), the next one goes through (GET /mock/resolved has them all).
+# a draft (409 input_draft), the next one goes through (GET /mock/resolved has them all). /mock/reset puts both back
+# unanswered (CodexCardsTests: each case starts from the two cards).
+CODEX_INTERACTIONS = []
 if os.environ.get("MOCK_CODEX"):
     INTERACTIONS.append(
         {"id": "cxa_orders_curl", "machine_id": "server", "session_id": ORDERS, "session_title": "排查 /orders 接口变慢",
@@ -1828,6 +1830,7 @@ if os.environ.get("MOCK_CODEX"):
              {"question": "改完以后怎么验证？", "header": "验证", "multi_select": False, "options": [
                  {"label": "预发环境压测", "description": "用上周的流量回放跑 10 分钟。"},
                  {"label": "灰度 10% 上线", "description": "看 30 分钟的 p95 再全量。"}]}]})
+    CODEX_INTERACTIONS = copy.deepcopy(INTERACTIONS[-2:])
 
 # MOCK_SCREEN_DIALOG=1: a terminal dialog (screen interaction) as a newer hub reads it; MOCK_PROMPT_CHANGED=1 makes
 # answering it fail as if the dialog changed on the computer (409 prompt_changed).
@@ -1926,7 +1929,9 @@ MOCK_INTERACTIONS = INTERACTIONS + [
      "tool_name": "Bash", "tool_use_id": "toolu_check",
      "tool_input": {"command": "python3 -m unittest discover", "description": "验证格式转换与元数据保留"}},
 ]
-REQUEST_LOCK = threading.Lock()
+# Reentrant: resolving an interaction (resolve_mock_interaction) reads the list (mock_interactions) under it; a plain
+# Lock deadlocked there and every later read of the interactions hung (CodexCardsTests after its first answer).
+REQUEST_LOCK = threading.RLock()
 
 
 def mock_tool_call(name, args):
@@ -8386,6 +8391,10 @@ class H(BaseHTTPRequestHandler):
             BUMPED["asks"].clear()
             BUMPED.pop("blocked", None)
             TODOS[:] = copy.deepcopy(TODOS_INIT)
+            codex = {x["id"] for x in CODEX_INTERACTIONS}
+            INTERACTIONS[:] = [x for x in INTERACTIONS if x["id"] not in codex] + copy.deepcopy(CODEX_INTERACTIONS)
+            RESOLVED[:] = [r for r in RESOLVED if r["id"] not in codex]
+            INTERACTION_HISTORY[:] = [x for x in INTERACTION_HISTORY if x["id"] not in codex]
             return self.send_json({"ok": True})
         if p == "/mock/session_close":
             if "fail" in q: SESSION_CLOSE["fail"] = q["fail"][0] == "1"

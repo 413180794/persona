@@ -137,6 +137,7 @@ final class CodexCardsTests: XCTestCase {
     /// The BeautifulUI style: the same cards as its approval card — 同意 / 总是同意 (what it allows) / 拒绝, Codex's reason.
     @MainActor func testBeautifulUIStyle() throws {
         let hub = try hub()
+        _ = try? Data(contentsOf: URL(string: hub + "/mock/reset")!) // the cards back, unanswered
         addUIInterruptionMonitor(withDescription: "system alert") { alert in
             for label in ["Allow", "允许", "OK", "好"] where alert.buttons[label].exists {
                 alert.buttons[label].tap()

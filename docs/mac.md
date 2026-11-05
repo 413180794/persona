@@ -706,6 +706,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Collapsing self-drawn header (ChromeHeader: title, subtitle state·machine·space›tab, sibling row, loop/background chips), follows finger, auto-collapse after 3s idle — ChatView.swift
   - Mac（2026-11-02 Mac mini 真窗口核对）：往上滚时顶栏展开成完整版（标题、状态 · 机器 · 空间、同空间胶囊、⋯、循环 / 后台 chip），停下 3 秒收回胶囊，点胶囊展开。
   - Mac 上不再折叠（2026-11-05 用户定，#1337）：顶栏一直是完整版，滚动、停下、落到消息上都不收（`ChatChrome.folds`）。折叠的那几帧滚动时卡（来回滚约 30 ms/s 的卡顿），Mac 窗口也够高。iPhone 照旧。
+  - 左边圆形 ‹ 只在有上一页时显示（2026-11-05 用户定，#1337）：从列表打开的对话（分栏详情栏的第一页）没有 ‹，标题照样居中；从空间页等推进来的对话有 ‹，点了回到上一页（`-openOverSpace YES` 配 `-openSession` 截图；点按的逻辑没改，这次屏幕锁着没在真窗口里点）。
+    这时标题栏那一行不再另画小 ‹（`splitDetailPage(ownsBack: true)`），只留对话自己的一个。以前第一页上也画着 ‹，点了没反应：见 `lessons/macos.md`「玻璃容器里 `opacity(0)` 藏不住按钮」。iPhone 照旧。
 - [x] Session info sheet (run / usage / location, copy id, copy resume command) — ChatView.swift (SessionInfoSheet)。Mac：对话右侧的检查器栏（⌥⌘I / 点标题），Persona 页是窗口 sheet
 - [x] ⋯ menu: 终端, 文件, Git (N), 空间里的所有 Agent, 重命名…, 屏蔽, 拷贝 session id, 拷贝恢复命令, 清空上下文 /clear, 关闭 Agent… — ChatView.swift
   - Mac（2026-11-02 Mac mini 真窗口核对）：对话 ⋯：终端、Git（N）、文件、中断（工作中才有）、重命名…、屏蔽通知、拷贝恢复命令、拷贝目录、空间里的所有 Agent、关闭 Agent…；在文件 / Git 面板里多一项「回到对话」。清单写旧了：「清空上下文 /clear」现在在输入框 + › 快捷指令里（能清的时候才有），「拷贝 session id」在会话信息里（iOS 同一份代码）。和行菜单同名的几项走同一组函数，在行菜单里逐项点过（见上面 Swipe 那条）。

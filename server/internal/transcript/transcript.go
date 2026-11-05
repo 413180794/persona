@@ -1092,12 +1092,16 @@ func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 	if _, err := fh.Seek(f.offset, io.SeekStart); err != nil {
 		return nil, Span{}, err
 	}
-	data, err := io.ReadAll(fh)
-	if err != nil {
+	// Read straight after the partial line into a buffer sized from the stat (bytes.MinRead spare so the EOF read does
+	// not grow it): one copy of the new bytes instead of io.ReadAll's doublings plus an append. A file still growing
+	// is read to EOF all the same.
+	buf := bytes.NewBuffer(make([]byte, 0, len(f.partial)+int(st.Size()-f.offset)+bytes.MinRead))
+	buf.Write(f.partial)
+	if _, err := buf.ReadFrom(fh); err != nil {
 		return nil, Span{}, err
 	}
-	f.offset += int64(len(data))
-	data = append(f.partial, data...)
+	data := buf.Bytes()
+	f.offset += int64(len(data) - len(f.partial))
 	f.seeNotifications(data)
 	pos := f.offset - int64(len(data)) // where data starts in the file
 	var fresh []proto.Item

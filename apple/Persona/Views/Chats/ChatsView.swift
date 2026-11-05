@@ -239,6 +239,20 @@ struct ChatsView: View {
                 .onChange(of: model.openChat, initial: true) { _, key in
                     guard let key else { return }
                     path = NavigationPath([key])
+                    #if DEBUG
+                    // `-openOverSpace YES` with `-openSession`: the chat on its space's page, a page under it (its ‹, #1337).
+                    if UserDefaults.standard.bool(forKey: "openOverSpace") {
+                        Task {
+                            try? await Task.sleep(for: .seconds(3)) // the session list may not be in yet
+                            guard let space = model.session(key)?.spaceKey else { return }
+                            var under = NavigationPath()
+                            under.append(SpaceRoute(id: space))
+                            under.append(key)
+                            path = under
+                            spaceAt = [0: space]
+                        }
+                    }
+                    #endif
                     model.openChat = nil
                 }
                 .onAppear {

@@ -157,7 +157,8 @@ extension View {
     /// A page the list opens: in the split's detail column its first page has no back button. `ownsBack`: the page
     /// shows or hides the system's back itself (an Agents chat); on iOS this leaves it alone, as an outer
     /// `navigationBarBackButtonHidden(false)` wins over the page's own `true` (iPhone Duo's side bars, 2026-11-04: the
-    /// system's back beside the chat's own, two backs).
+    /// system's back beside the chat's own, two backs). On the Mac the title row draws no ‹ for it: the chat's header
+    /// has its own, shown only with a page under the chat (#1337).
     func splitDetailPage(ownsBack: Bool = false) -> some View { modifier(SplitDetailPage(ownsBack: ownsBack)) }
 }
 
@@ -167,7 +168,7 @@ private struct SplitDetailPage: ViewModifier {
 
     func body(content: Content) -> some View {
         #if os(macOS)
-        content.modifier(MacDetailBack(shown: split?.isFirstPage == false))
+        content.modifier(MacDetailBack(shown: !ownsBack && split?.isFirstPage == false))
         #else
         // `ownsBack` is fixed for a page (no identity change as the path grows).
         if ownsBack { content } else { content.navigationBarBackButtonHidden(split?.isFirstPage == true) }

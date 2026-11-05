@@ -1965,14 +1965,7 @@ struct ChatView: View {
                 // One container for the row's glass (back, the terminal, ⋯): drawn together instead of as separate glasses.
                 GlassEffectContainer(spacing: 8) {
                     HStack(spacing: Theme.Space.s) {
-                        Button { back() } label: {
-                            Image(systemName: Theme.Icon.back).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
-                                .contentShape(.circle)
-                        }
-                        .buttonStyle(.plain)
-                        .surface(interactive: true, in: .circle)
-                        .accessibilityLabel("返回")
-                        .noBackWhen(hidesBack)
+                        headerBack
                         Spacer(minLength: 0)
                         titleButton
                         Spacer(minLength: 0)
@@ -2121,6 +2114,32 @@ struct ChatView: View {
 
     /// The first page of a split's detail column, on the chat: nothing to go back to (the list is beside it).
     private var hidesBack: Bool { split?.isFirstPage == true && pane == .chat }
+
+    /// The open header's ‹. Inside the row's glass container `noBackWhen` does not hide it: the container draws the
+    /// button's glass and symbol itself, so a disabled ‹ that did nothing showed on every chat on the Mac, where the
+    /// chat is usually the split's first page (#1337). There the hidden one is an empty spot of its size, which keeps the
+    /// title centered; the phone keeps its `noBackWhen`.
+    @ViewBuilder private var headerBack: some View {
+        #if os(macOS)
+        if hidesBack {
+            Color.clear.dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+        } else {
+            headerBackButton
+        }
+        #else
+        headerBackButton.noBackWhen(hidesBack)
+        #endif
+    }
+
+    private var headerBackButton: some View {
+        Button { back() } label: {
+            Image(systemName: Theme.Icon.back).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .surface(interactive: true, in: .circle)
+        .accessibilityLabel("返回")
+    }
 
     private func back() {
         if pane != .chat { withAnimation(Theme.Motion.standard) { pane = .chat } } else { dismissChat() }

@@ -466,7 +466,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 - **网页**：`web/src/screen/aes.test.ts`（AES 替身对 FIPS-197 和 WebCrypto）、`screen.test.ts`（路径、fragment 里的 token、WebSocket 地址、预填的账号）。
 - **VNC端到端**（App 的原生客户端 → hub 的 5900 转发 → mock 自己的屏幕共享，`MOCK_SCREEN=fake`，[testing.md](testing.md)）：
   - `ComputerSectionTests.testTheLiveScreenAsksForTheMacsSignIn` 点「VNC」，一直走到它要求登录（ARD）。
-  - `ScreenDrawerTests`（mock 加 `MOCK_COMPUTER_OPERATING=1`，助手和 Agent 的对话里各有一个在跑的操作）：点助手、Agent 的「正在操作」条和 ··· 菜单打开整页，点 × 关掉。
+  - `ScreenDrawerTests`（mock 加 `MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake`；不加 `MOCK_SCREEN=fake` 时屏幕是这台 Mac 自己的屏幕共享，没开就只显示「hub 不让连这台的屏幕」，用例失败，助手和 Agent 的对话里各有一个在跑的操作）：点助手、Agent 的「正在操作」条和 ··· 菜单打开整页，点 × 关掉。
   - `ScreenPasswordTests`：记住、下次自己登录（真机进小窗，模拟器进整页）、密码改了重输、忘记；一键解锁。
   - `VNCTests`：小窗（真机：菜单 → 小窗 → 回桌面还在 → 还原成整页 → 回小窗；模拟器没有画中画，只验证退回整页）；整页上两种模式各点一下、拖一下、指针居中（mock 记下的点击和指针位置）、剪贴板来回、键盘打字和 Mac 的那排键、帮助页。`TEST_RUNNER_JARVIS_VNC_PAUSE=2` 放慢，录屏用；`testMeasure`（`MOCK_SCREEN_ANIMATE=1`、`TEST_RUNNER_JARVIS_VNC_MEASURE=1`）打印帧率和延迟。
   - 连真实 Mac 的登录那一步要那台 Mac 的密码，测试不做。

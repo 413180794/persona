@@ -301,6 +301,56 @@ func TestRefreshIncrementalWithPartialLine(t *testing.T) {
 	}
 }
 
+// A file that grows in pieces cut anywhere (mid-line, mid-rune) reads to the same items as reading it whole: each
+// Refresh picks up exactly the bytes after the last one, the partial line carried over.
+func TestRefreshInChunksMatchesWholeRead(t *testing.T) {
+	var body strings.Builder
+	for i := range 40 {
+		fmt.Fprintf(&body, `{"type":"user","uuid":"u%d","message":{"role":"user","content":"第 %d 行 %s"}}`+"\n", i, i, strings.Repeat("x", i*37))
+		fmt.Fprintf(&body, `{"type":"assistant","uuid":"a%d","message":{"id":"m%d","role":"assistant","content":[{"type":"text","text":"回答 %d"}]}}`+"\n", i, i, i)
+	}
+	all := []byte(body.String())
+	dir := t.TempDir()
+	whole := writeFile(t, dir, nil, string(all))
+	want, err := NewFile(whole).Refresh()
+	if err != nil || len(want) != 80 {
+		t.Fatalf("whole read: %d items, %v", len(want), err)
+	}
+
+	path := filepath.Join(dir, "growing.jsonl")
+	f := NewFile(path)
+	var got []proto.Item
+	for at, step := 0, 1; at < len(all); at, step = at+step, step*3%251+1 {
+		end := min(at+step, len(all))
+		fh, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fh.Write(all[at:end]); err != nil {
+			t.Fatal(err)
+		}
+		if err := fh.Close(); err != nil {
+			t.Fatal(err)
+		}
+		fresh, err := f.Refresh()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, fresh...)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("chunked read: %d items, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i].Seq != want[i].Seq || got[i].Kind != want[i].Kind || got[i].Text != want[i].Text {
+			t.Fatalf("item %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+	if again, err := f.Refresh(); err != nil || len(again) != 0 {
+		t.Fatalf("idle refresh returned %+v, %v", again, err)
+	}
+}
+
 func TestRefreshRestartsWhenFileShrinks(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, []string{

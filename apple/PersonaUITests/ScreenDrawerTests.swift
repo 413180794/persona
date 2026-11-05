@@ -3,15 +3,16 @@ import XCTest
 /// The live screen as a drawer (#1343): while a chat's model operates a Mac its running work says so (「正在操作
 /// MacBook · 点 AC → 9 → × → 8」) and opens the screen like the terminal's drawer, over it the step, dragged down it
 /// closes; the ··· menus have VNC whether or not the model is at it. Against scripts/mock/mock_hub.py with
-/// MOCK_COMPUTER=ready MOCK_COMPUTER_OPERATING=1 MOCK_WEB=web/dist (`TEST_RUNNER_JARVIS_SCREEN_HUB`); JARVIS_SHOTS keeps
-/// the screenshots, named by `TEST_RUNNER_JARVIS_LOOK`.
+/// MOCK_COMPUTER=ready MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake MOCK_WEB=web/dist (`TEST_RUNNER_JARVIS_SCREEN_HUB`):
+/// without MOCK_SCREEN=fake the screen is this Mac's own Screen Sharing, and with it off the drawer only says the hub
+/// would not connect. JARVIS_SHOTS keeps the screenshots, named by `TEST_RUNNER_JARVIS_LOOK`.
 final class ScreenDrawerTests: XCTestCase {
     private let calc = "server/b2e4d6f8-0000-4000-8000-0000000000c1"
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
 
     @MainActor private func launch(_ args: [String]) throws -> XCUIApplication {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_SCREEN_HUB"] else {
-            throw XCTSkip("needs mock_hub.py with MOCK_COMPUTER=ready MOCK_COMPUTER_OPERATING=1 (JARVIS_SCREEN_HUB)")
+            throw XCTSkip("needs mock_hub.py with MOCK_COMPUTER=ready MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake (JARVIS_SCREEN_HUB)")
         }
         continueAfterFailure = false
         let app = XCUIApplication()
