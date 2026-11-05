@@ -613,6 +613,17 @@ export function extendStates(lines: string[], lang: Lang, states: LexState[], up
 
 // ── Markdown files ────────────────────────────────────────
 
+/** A fence line's run of backticks or tildes (three or more): ```` opens a block only ```` or longer ends. */
+function openingFence(t: string): string {
+  return /^(`{3,}|~{3,})/.exec(t)![1];
+}
+
+/** Whether `t` ends the block `fence` opened (CommonMark): the same character, at least as many, nothing after. */
+function closesFence(t: string, fence: string): boolean {
+  const run = /^(`+|~+)/.exec(t)?.[1];
+  return !!run && run[0] === fence[0] && run.length >= fence.length && !t.slice(run.length).trim();
+}
+
 /**
  * The HTML READMEs use (centered <p>, <img width=…>, image grids in <table>) as Markdown; other tags dropped, their
  * text kept. react-markdown shows raw HTML as text. Code fences are left alone. (iOS MarkdownHTML.simplify)
@@ -625,12 +636,12 @@ export function simplifyHTML(md: string): string {
   for (const line of md.split("\n")) {
     const t = line.trim();
     if (fence) {
-      if (t.startsWith(fence)) fence = null;
+      if (closesFence(t, fence)) fence = null;
       out.push(line);
       continue;
     }
     if (t.startsWith("```") || t.startsWith("~~~")) {
-      fence = t.slice(0, 3);
+      fence = openingFence(t);
       out.push(line);
       continue;
     }
@@ -716,10 +727,10 @@ export function markdownChunks(text: string, target = 40): string[] {
   lines.forEach((line, i) => {
     const t = line.trim();
     if (fence) {
-      if (t.startsWith(fence)) fence = null;
+      if (closesFence(t, fence)) fence = null;
     } else if (math) {
       if (t.includes(math)) math = null;
-    } else if (t.startsWith("```") || t.startsWith("~~~")) fence = t.slice(0, 3);
+    } else if (t.startsWith("```") || t.startsWith("~~~")) fence = openingFence(t);
     else if ((t.match(/(?<!\\)\$\$/g) ?? []).length % 2) math = "$$";
     else if (/(?<!\\)\\\[/.test(t) && !t.slice(t.lastIndexOf("\\[")).includes("\\]")) math = "\\]";
     cur.push(line);

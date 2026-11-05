@@ -307,6 +307,17 @@ describe("markdown", () => {
     expect(markdownChunks("short", 4)).toEqual(["short"]);
   });
 
+  it("keeps a longer fence open past a shorter one inside it", () => {
+    // a ```` block that shows a ``` one (a README about Markdown): only ```` ends it (CommonMark)
+    const md = '````md\n```html\n<p align="center">x</p>\n```\n````\n<b>after</b>';
+    expect(simplifyHTML(md).split("\n").slice(0, 5)).toEqual(["````md", "```html", '<p align="center">x</p>', "```", "````"]);
+    const para = (n: number) => Array.from({ length: n }, (_, i) => `line ${i}`).join("\n");
+    const long = `${para(5)}\n\n\`\`\`\`md\n\`\`\`js\n${para(3)}\n\n${para(3)}\n\`\`\`\n\`\`\`\`\n\n${para(5)}`;
+    const chunks = markdownChunks(long, 4);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) expect((c.match(/^````/gm) ?? []).length % 2).toBe(0);
+  });
+
   it("never cuts inside display math", () => {
     const para = (n: number) => Array.from({ length: n }, (_, i) => `line ${i}`).join("\n");
     const md = `${para(5)}\n\n$$\na\n\nb\n\nc\n$$\n\n${para(5)}\n\n\\[\nx\n\ny\n\nz\n\\]\n\n${para(5)}`;
