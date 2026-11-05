@@ -272,12 +272,12 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 		if !readAdminJSON(w, r, &in) {
 			return
 		}
-		if !h.takeDependents(w, r, p.Record.ID, in.Cascade) {
-			return
-		}
 		var members []string
 		if in.Members {
 			members = ps.packMembers(p)
+		}
+		if !h.takeDependentsOf(w, r, append([]string{p.Record.ID}, members...), in.Cascade) {
+			return
 		}
 		if err := ps.reg.Uninstall(r.Context(), p.Record.ID, in.KeepData, adminActor); err != nil {
 			writeErrCode(w, http.StatusConflict, "uninstall_failed", err)

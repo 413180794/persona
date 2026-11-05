@@ -2,6 +2,7 @@
 // `personad extension` does on the hub's machine. Installing runs a new program there, so nothing installs before the
 // page has shown what it may do (the preview) and the user agreed to exactly that (its permissions digest).
 import { useEffect, useRef, useState } from "react";
+import { dependencyText, previewBlocked } from "../../lib/extension-model";
 import { bytes } from "../../lib/format";
 import { Button, Collapse, cx, Dialog, toast, useNow } from "../../ui/atoms";
 import { Switch } from "../../views/settings/SettingsParts";
@@ -366,6 +367,7 @@ function InstallDialog({ open, upgrade, uploadMost, onClose, onDone }: { open: b
   };
 
   const title = upgrade ? `升级「${upgrade.name}」` : "安装扩展";
+  const now = useNow(1000);
   return (
     <Dialog
       open={open}
@@ -378,7 +380,7 @@ function InstallDialog({ open, upgrade, uploadMost, onClose, onDone }: { open: b
             <Button tone="quiet" onClick={() => (setPreview(null), setError(""))}>
               换一个
             </Button>
-            <Button tone={preview.more_permissions ? "danger" : "primary"} busy={busy} onClick={() => void agree()}>
+            <Button tone={preview.more_permissions ? "danger" : "primary"} busy={busy} disabled={previewBlocked(preview, now)} onClick={() => void agree()}>
               {upgrade ? (preview.more_permissions ? "同意新权限并升级" : "升级") : "同意并安装"}
             </Button>
           </>
@@ -476,6 +478,9 @@ export function PreviewBody({ pv }: { pv: ExtensionPreview }) {
           {contributes.map(([point, items]) => `${pointLabel(point)} ${items.length} 项`).join("、")}
         </p>
       )}
+      {!!pv.depends?.length && <div className="grid gap-1 text-ink-2">{pv.depends.map((d) => <p key={d.id}>{d.name || d.id}：{dependencyText(d)}</p>)}</div>}
+      {!!pv.bundle?.length && <div className="grid gap-3"><p className="font-medium text-ink">一起安装（逐项确认权限）</p>{pv.bundle.map((b) => <div key={b.preview_id} className="rounded-control bg-inset p-3"><PreviewBody pv={b} /></div>)}</div>}
+      {!!pv.unresolved?.length && <p role="alert" className="text-red">还不能安装：{pv.unresolved.join("、")}。补齐后重新预览。</p>}
       {pv.warnings?.map((w) => (
         <p key={w} className="flex items-start gap-1.5 text-[12px] leading-relaxed text-orange">
           <AdminIcon name="alert" size={13} className="mt-0.5 shrink-0" />

@@ -266,6 +266,9 @@ export interface AdminExtensions {
 }
 
 export interface ExtensionPreview {
+  bundle?: ExtensionPreview[];
+  unresolved?: string[];
+  depends?: import("../lib/extension-model").DependencyState[];
   preview_id: string;
   manifest: { id: string; name: string; version: string; description?: string; publisher?: string; homepage?: string; contributes?: Record<string, unknown[]> };
   permissions: PermissionLine[];

@@ -10,9 +10,10 @@ import {
   previewVersion, refreshMarket, removeMarket, setMarketToken, specLabel, uninstallExtension, upgradePreview,
   type Catalog, type CatalogItem, type Market, type MarketPreview,
 } from "../../lib/extension-market";
-import { extensionUpgrades, pointText, setExtensionUpgrades, type ExtensionPermission } from "../../lib/extensions";
+import { extensionDetail, extensionUpgrades, pointText, setExtensionUpgrades, type ExtensionPermission } from "../../lib/extensions";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { dependentError, dependencyText, previewBlocked, type Dependent, type PackMember } from "../../lib/extension-model";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
 
 const inputClass =
@@ -364,7 +365,7 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
   const [error, setError] = useState("");
   const now = useNow(1000);
   const left = Math.max(0, Date.parse(pv.expires_at) - now);
-  const expired = Number.isFinite(left) && left <= 0;
+  const expired = previewBlocked({ ...pv, unresolved: [] }, now);
   const agree = async () => {
     setBusy(true);
     setError("");
@@ -388,7 +389,7 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
           <Button tone="quiet" onClick={onClose} disabled={busy}>
             取消
           </Button>
-          <Button tone={pv.more_permissions ? "danger" : "primary"} busy={busy} disabled={expired} onClick={() => void agree()}>
+          <Button tone={pv.more_permissions ? "danger" : "primary"} busy={busy} disabled={previewBlocked(pv, now)} onClick={() => void agree()}>
             {agreeLabel(pv)}
           </Button>
         </>
@@ -430,6 +431,20 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
             {pv.permissions.length ? pv.permissions.map((p) => <PermissionRow key={p.key + p.title} p={p} />) : <p className="px-4 py-2.5 text-[12.5px] text-ink-2">它只有清单，不运行程序、不要任何权限。</p>}
           </div>
         </div>
+        {!!pv.depends?.length && <Group title="依赖">{pv.depends.map((d) => <Row key={d.id} label={d.name || d.id} hint={d.version}>{dependencyText(d)}</Row>)}</Group>}
+        {!!m.extension_pack?.length && <Group title="合集成员">{m.extension_pack.map((p) => <Row key={p.id} label={p.id} hint={p.market}>{p.version || ""}</Row>)}</Group>}
+        {!!pv.bundle?.length && (
+          <Group title="一起安装" footer="同意后按顺序安装这些扩展；确认包括每一个扩展的权限。已有且满足版本的成员不会重复安装。">
+            {pv.bundle.map((b) => (
+              <div key={b.preview_id}>
+                <Row label={b.manifest.name} hint={b.manifest.id} mono>{previewVersion(b)}</Row>
+                {b.permissions.length ? b.permissions.map((p) => <PermissionRow key={p.key + p.title} p={p} />) : <p className="px-4 py-2.5 text-ink-3">不运行程序、不要权限。</p>}
+                {b.warnings?.map((w) => <p key={w} className="px-4 py-2.5 text-orange">{w}</p>)}
+              </div>
+            ))}
+          </Group>
+        )}
+        {!!pv.unresolved?.length && <p role="alert" className="text-red">还不能安装：{pv.unresolved.join("、")}。补齐后重新预览。</p>}
         {pv.warnings?.map((w) => (
           <p key={w} className="flex items-start gap-1.5 text-[12px] leading-relaxed text-orange">
             <Icon name="info" size={13} className="mt-0.5 shrink-0" />
@@ -446,18 +461,25 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
 }
 
 /** Uninstalling an extension a market installed; its data can stay for a later install. */
-export function UninstallDialog({ id, name, onClose, onDone }: { id: string; name: string; onClose: () => void; onDone: () => void }) {
-  const [keep, setKeep] = useState(false);
+export function UninstallDialog({ id, name, pack, onClose, onDone }: { id: string; name: string; pack?: PackMember[]; onClose: () => void; onDone: () => void }) {
+  const [members, setMembers] = useState(false);
+  const [packMembers, setPackMembers] = useState(pack);
+  useEffect(() => { if (!pack) void extensionDetail(id).then((d) => setPackMembers(d.extension_pack), () => {}); }, [id, pack]);
+  const [dependents, setDependents] = useState<Dependent[] | null>(null);
+  const [cascade, setCascade] = useState(false);
+  const [keep, setKeep] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const go = async () => {
     setBusy(true);
     setError("");
     try {
-      await uninstallExtension(id, keep);
+      await uninstallExtension(id, keep, cascade, members);
       toast(`已卸载「${name}」`, "ok");
       onDone();
     } catch (e) {
+      const deps = dependentError(e);
+      if (deps) { setDependents(deps); setCascade(false); }
       setError(errorText(e));
     } finally {
       setBusy(false);
@@ -474,7 +496,7 @@ export function UninstallDialog({ id, name, onClose, onDone }: { id: string; nam
           <Button tone="quiet" onClick={onClose} disabled={busy}>
             取消
           </Button>
-          <Button tone="danger" busy={busy} onClick={() => void go()}>
+          <Button tone="danger" busy={busy} disabled={!!dependents && !cascade} onClick={() => void go()}>
             卸载
           </Button>
         </>
@@ -488,6 +510,8 @@ export function UninstallDialog({ id, name, onClose, onDone }: { id: string; nam
           <span className="mt-0.5 block text-[11.5px] leading-relaxed text-ink-3">以后重装能接着用。</span>
         </span>
       </label>
+      {dependents && <label className="mt-3 flex items-start gap-2.5 text-ink-2"><input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} />同时停用依赖它的扩展：{dependents.map((d) => d.name).join("、")}（不卸载）</label>}
+      {!!packMembers?.length && <label className="mt-3 flex items-start gap-2.5 text-ink-2"><input type="checkbox" checked={members} onChange={(e) => { setMembers(e.target.checked); setCascade(false); setDependents(null); }} />连合集成员一起卸载：{packMembers.map((p) => p.id).join("、")}</label>}
       {error && <p className="mt-2 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">没有卸载：{error}</p>}
     </Dialog>
   );

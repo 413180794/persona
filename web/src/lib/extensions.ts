@@ -6,6 +6,7 @@ import type { Machine } from "./types";
 import { placeOf, type UIPlace } from "./extension-ui";
 import { extRoot, listOf } from "./extension-api";
 import { refreshExtensionPlaces } from "./extension-slots";
+import type { Contribution, DependencyState, PackMember } from "./extension-model";
 
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
 export type JsonObject = { [k: string]: Json };
@@ -133,6 +134,9 @@ export interface HubExtensionDetail extends HubExtension {
   ui?: UIPlace[];
   /** The field (format machine) that picks the computers its program runs on; their rows say how it is there. */
   node_machines?: string;
+  contributions?: Contribution[];
+  depends?: DependencyState[];
+  extension_pack?: PackMember[];
 }
 
 // ── the hub ─────────────────────────────────────────────
@@ -154,8 +158,10 @@ export const detailOf = (d: HubExtensionDetail): HubExtensionDetail => (d.ui ? {
 export const extensionDetail = (id: string) => api<HubExtensionDetail>(`${base(id)}/`).then(detailOf);
 /** After a change that can start, stop or reconfigure an extension: its entries, cards and sections are asked for again. */
 export const changed = <T>(r: T): T => (refreshExtensionPlaces(), r);
-export const setExtensionEnabled = (id: string, enabled: boolean) =>
-  api<HubExtensionDetail>(`${base(id)}/enabled`, { method: "PUT", json: { enabled } }).then(detailOf).then(changed);
+export const setExtensionEnabled = (id: string, enabled: boolean, cascade = false) =>
+  api<HubExtensionDetail>(`${base(id)}/enabled`, { method: "PUT", json: { enabled, ...(cascade ? { cascade } : {}) } }).then(detailOf).then(changed);
+export const setContribution = (id: string, point: string, cid: string, enabled: boolean) =>
+  api<HubExtensionDetail>(`${base(id)}/contributions/${enc(point)}/${enc(cid)}`, { method: "PUT", json: { enabled } }).then(detailOf).then(changed);
 export const setExtensionAutoUpgrade = (id: string, auto: boolean) =>
   api<HubExtensionDetail>(`${base(id)}/auto-upgrade`, { method: "PUT", json: { auto } }).then(detailOf);
 /** The auto-upgrade switch for all market extensions; a hub from before it has no route (null). */

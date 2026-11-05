@@ -34,7 +34,9 @@ type ExtensionDetail struct {
 	UI []UIPlace `json:"ui,omitempty"`
 	// Contributions are every contribution with its switch (docs/extensions.md「贡献的开关」); contributes (the ids by
 	// point) stays as it was.
-	Contributions []ContributionView `json:"contributions,omitempty"`
+	Contributions []ContributionView          `json:"contributions,omitempty"`
+	Depends       []extension.DependencyState `json:"depends,omitempty"`
+	ExtensionPack []extension.PackMember      `json:"extension_pack,omitempty"`
 	// NodeMachines is the field of Form that picks the computers its program runs on (an extension with one,
 	// docs/extensions.md「在电脑上运行的程序」): the apps show that program's state on each (Nodes) in the field's rows.
 	NodeMachines string `json:"node_machines,omitempty"`
@@ -53,7 +55,7 @@ func (ps *extensions) detail(ctx context.Context, p *extension.Extension) Extens
 	m := p.Full
 	d := ExtensionDetail{ExtensionView: ps.view(ctx, p), Publisher: m.Publisher, Homepage: m.Homepage, Origin: p.Record.Origin,
 		PreviousVersion: p.Record.PreviousVersion, ReadOnly: p.ReadOnly(), Form: p.Schema, Permissions: extension.Explain(m),
-		Contributions: ps.contributionViews(p)}
+		Contributions: ps.contributionViews(p), Depends: ps.reg.Dependencies(m), ExtensionPack: m.ExtensionPack}
 	if d.Permissions == nil {
 		d.Permissions = []extension.PermissionLine{}
 	}
@@ -339,12 +341,12 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		id, q, who := r.PathValue("id"), r.URL.Query(), actorOr(r, "personad extension")
 		// cascade=1: the extensions that depend on it are switched off (else 409 has_dependents); members=1: a pack's
 		// members go with it.
-		if !h.takeDependents(w, r, id, q.Get("cascade") == "1") {
-			return
-		}
 		var members []string
 		if p := ps().reg.Get(id); p != nil && q.Get("members") == "1" {
 			members = ps().packMembers(p)
+		}
+		if !h.takeDependentsOf(w, r, append([]string{id}, members...), q.Get("cascade") == "1") {
+			return
 		}
 		if err := ps().reg.Uninstall(r.Context(), id, q.Get("keep_data") == "1", who); err != nil {
 			writeErrCode(w, http.StatusBadRequest, "uninstall_failed", err)
@@ -413,4 +415,3 @@ func nodeConfirmForm(s *extension.Schema, m *extension.Manifest) *extension.Sche
 	}
 	return &out
 }
-

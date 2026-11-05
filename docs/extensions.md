@@ -410,6 +410,7 @@ Finder 压缩的 `__MACOSX/`、`.DS_Store`），解包时一律跳过，不算�
   没装的、版本不够的，hub 去登记的市场里找（先找它自己来自的市场，再按 id 找别的），找到的作为**一起装**的预览放进 `bundle`（依赖的依赖也跟着，最多 4 层），找不到的写进 `unresolved`。
   安装 / 升级请求要带上 `bundle: [{preview_id, permissions_digest}]`，**每一个**都要和预览里的一致（用户在同一屏上看过它们各自能做什么），hub 先按顺序装它们、再装这一个；
   有 `unresolved`、或者还有没装又不在 `bundle` 里的依赖，就什么都不装（400）。不是从市场来的扩展（目录、文件、上传）同样会去市场找依赖。
+- 详情同样返回 `depends: [{id, name?, version?, installed?, state}]` 和 `extension_pack: [{id, market?, version?}]`。网页设置据此显示依赖和合集成员，老 hub 没有字段时不显示。
 - **运行时**：依赖没装、停用、版本不够时，这个扩展是 `needs_setup`，「还缺」写「先装扩展「X」」「先启用扩展「X」」「扩展「X」要 >=2.0.0（现在是 1.0.0）」，不启动；满足了自己起来（hub 在被依赖的扩展变了以后重新看一遍依赖它的）。
 - **停用、卸载被依赖的**：还有开着的扩展依赖它时，`PUT …/-/enabled {enabled: false}` 和 `DELETE …/-/` 回 409 `{code: "has_dependents", dependents: [{id, name}], error}`；
   带上 `cascade`（`{"enabled": false, "cascade": true}`、`?cascade=1`）就先把它们停用（只停用，不连带卸载）。管理界面的接口同样（`cascade` 在请求体里）。不支持循环依赖（装不上第二个）。
@@ -427,7 +428,7 @@ Finder 压缩的 `__MACOSX/`、`.DS_Store`），解包时一律跳过，不算�
 
 - 装它 = 一次装好一组：预览的 `bundle` 是没装的（或版本不够的）成员和它们的依赖，各自的权限都列出来，一次确认（同上，带 `bundle`）。`market` 写市场的地址（`github:owner/repo`），
   不写就是合集自己的市场、再按 id 找别的。合集本身作为一个已安装的扩展列出（`kind` 是 `extension_pack`，状态「启动」）。
-- 卸载：`DELETE …/-/?members=1`（管理界面 `{"members": true}`）连同装着的成员一起卸，回 `removed_members`；不带就只卸合集，成员留着。
+- 卸载：`DELETE …/-/?members=1`（管理界面 `{"members": true}`）连同装着的成员一起卸，回 `removed_members`；不带就只卸合集，成员留着。成员被合集外的扩展依赖时也先回 409 列出完整依赖链，确认 `cascade` 后只停用外部依赖者；任何只读依赖者会在写入前阻止操作。
 - 命令行：`personad extension install …` 打印要用的依赖、一起装的和找不到的，确认后一起装；`disable <id> --cascade`、`uninstall <id> [--cascade] [--members]`。
 
 **兼容**：这三个字段是新的，老 hub（#1854 之前）严格读清单，有它们的扩展装不上、市场里的条目被丢掉并给一条警告；用它们的扩展在 `engines.persona` 写上带 #1854 的 hub 构建号。

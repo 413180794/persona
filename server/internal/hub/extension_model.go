@@ -176,21 +176,43 @@ type DependentView struct {
 	Name string `json:"name"`
 }
 
-// enabledDependents are the extensions that are on and depend on id.
+// enabledDependents follows the complete dependent graph, deepest first.
 func (ps *extensions) enabledDependents(id string) []DependentView {
+	return ps.dependentsOf([]string{id})
+}
+
+func (ps *extensions) dependentsOf(ids []string) []DependentView {
+	seen := map[string]bool{}
+	for _, id := range ids {
+		seen[id] = true
+	}
 	var out []DependentView
-	for _, p := range ps.reg.Dependents(id) {
-		if p.Record.Enabled {
-			out = append(out, DependentView{ID: p.Record.ID, Name: p.Full.Name})
+	var visit func(string)
+	visit = func(id string) {
+		for _, p := range ps.reg.Dependents(id) {
+			if seen[p.Record.ID] {
+				continue
+			}
+			seen[p.Record.ID] = true
+			visit(p.Record.ID)
+			if p.Record.Enabled {
+				out = append(out, DependentView{ID: p.Record.ID, Name: p.Full.Name})
+			}
 		}
+	}
+	for _, id := range ids {
+		visit(id)
 	}
 	return out
 }
 
-// takeDependents answers 409 has_dependents when id is still needed by extensions that are on and the caller did not
-// ask to take them along (cascade); with cascade it switches them off first. False when the request is answered.
+// takeDependents asks before switching off dependents; no write precedes the full read-only check.
 func (h *Hub) takeDependents(w http.ResponseWriter, r *http.Request, id string, cascade bool) bool {
-	deps := h.extensions.enabledDependents(id)
+	return h.takeDependentsOf(w, r, []string{id}, cascade)
+}
+
+func (h *Hub) takeDependentsOf(w http.ResponseWriter, r *http.Request, ids []string, cascade bool) bool {
+	deps := h.extensions.dependentsOf(ids)
 	if len(deps) == 0 {
 		return true
 	}
@@ -204,6 +226,12 @@ func (h *Hub) takeDependents(w http.ResponseWriter, r *http.Request, id string, 
 		_ = json.NewEncoder(w).Encode(map[string]any{"code": "has_dependents", "dependents": deps,
 			"error": "这些扩展要用它：" + strings.Join(names, "、") + "。连它们一起停用？"})
 		return false
+	}
+	for _, d := range deps {
+		if p := h.extensions.reg.Get(d.ID); p != nil && p.ReadOnly() {
+			writeErrCode(w, http.StatusConflict, "read_only", errors.New("扩展「"+d.Name+"」写在 hub.json 里，请先在那里停用"))
+			return false
+		}
 	}
 	for _, d := range deps {
 		if err := h.extensions.reg.SetEnabled(r.Context(), d.ID, false, actorOr(r, "personad extension")); err != nil {

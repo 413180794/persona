@@ -70,6 +70,7 @@
 
 ### 浏览器里验证
 
+- 2026-11-05（#1854）安装确认的截图必须等 `role=dialog` 节点存在，再等它的动画结束；仅等「一起安装」这类文字会被背景说明提前满足。空节点集合的 `every` 也会立刻返回 true，导致拍到弹窗动画前的背景，不能当成截图验收。
 - 截图和点按用 Playwright（`playwright-core` + 本机 Chrome，`channel: "chrome"`），脚本放仓库外。`page.routeWebSocket` 能改 WS 消息：
   假 hub 没有互联字段时，把 `machines` 推送和 `/machines` 加上两个 `hub_id` 就能看互联的样子，不用改 `mock_hub.py`。
 - 多人共用一个假 hub 时，写接口（`/reply`、`/doc/status`、`/reconnect`、改 Claude 设置、打标）会改共享状态：用 `page.route` 拦下来验证请求体，或者测完改回去。

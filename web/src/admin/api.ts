@@ -1,5 +1,6 @@
 // The admin API client (docs/admin.md「接口」): a session cookie, not the web client's bearer token. Writes carry the
 // session's CSRF token, which lives in memory only (GET state hands it out again after a reload).
+import { previewConsent } from "../lib/extension-model";
 import { catalogOf, catalogQuery, marketView, type Catalog, type Market } from "../lib/extension-market";
 import type { AddedMachine, AdminExtension, AdminExtensions, ConnectorRepair, ExtensionMetrics, ExtensionPreview, LinkPair, LogLine, LogsPage, MeshView, MetricsOverview, MetricsWindow } from "./types";
 
@@ -199,10 +200,10 @@ export const uploadExtension = async (file: File, upgrade?: string) =>
   adminUpload<ExtensionPreview>(`${await extRoot()}/upload`, file, { name: file.name, upgrade: upgrade ?? "" });
 
 export const installExtension = async (pv: ExtensionPreview) =>
-  adminApi<AdminExtension>(`${await extRoot()}/install`, "POST", { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest });
+  adminApi<AdminExtension>(`${await extRoot()}/install`, "POST", previewConsent(pv));
 
 export const upgradeExtension = async (id: string, pv: ExtensionPreview) =>
-  adminApi<AdminExtension>(`${await extRoot()}/${enc(id)}/upgrade`, "POST", { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest });
+  adminApi<AdminExtension>(`${await extRoot()}/${enc(id)}/upgrade`, "POST", previewConsent(pv));
 
 export const rollbackExtension = async (id: string) => adminApi<AdminExtension>(`${await extRoot()}/${enc(id)}/rollback`, "POST");
 

@@ -82,6 +82,8 @@ func TestExtensionDependenciesAndPacks(t *testing.T) {
 	}
 	if code, out := install(pv, refs); code != 200 || out["status"] != "running" {
 		t.Fatalf("%d %v", code, out)
+	} else if ds, ok := out["depends"].([]any); !ok || len(ds) != 1 || ds[0].(map[string]any)["state"] != "ok" {
+		t.Fatalf("installed detail includes dependencies: %v", out)
 	}
 	if h.extensions.reg.Get("base") == nil || extension.FromMarket(h.extensions.reg.Get("base").Record.Origin) != mk["id"] {
 		t.Fatal("the dependency came from the market")
@@ -123,9 +125,24 @@ func TestExtensionDependenciesAndPacks(t *testing.T) {
 			t.Fatalf("%s installed and on", id)
 		}
 	}
+	outside := declarativePackage(t, `{"manifest_version":1,"id":"outside","name":"Outside","version":"1.0.0","depends":[{"id":"addon"}],"contributes":{"providers":[{"id":"outside-p","name":"Outside P","base_url":"https://outside.example.com"}]}}`)
+	op, err := h.extensions.reg.Preview(t.Context(), "dir:"+outside, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = h.extensions.reg.Install(t.Context(), op.ID, op.Digest, "test"); err != nil {
+		t.Fatal(err)
+	}
+	code, out = call(t, mux, "DELETE", "/api/v1/extensions/both/-/?members=1", phone, "")
+	if code != 409 || out["code"] != "has_dependents" || h.extensions.reg.Get("both") == nil || h.extensions.reg.Get("base") == nil {
+		t.Fatalf("pack member's external dependents require confirmation before any removal: %d %v", code, out)
+	}
 	code, out = call(t, mux, "DELETE", "/api/v1/extensions/both/-/?members=1&cascade=1", phone, "")
 	if code != 200 || len(out["removed_members"].([]any)) != 2 {
 		t.Fatalf("%d %v", code, out)
+	}
+	if h.extensions.reg.Get("outside").Record.Enabled {
+		t.Fatal("external dependent is stopped, not removed")
 	}
 	if h.extensions.reg.Get("base") != nil || h.extensions.reg.Get("addon") != nil {
 		t.Fatal("the members left with the pack")

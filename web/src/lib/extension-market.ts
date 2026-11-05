@@ -6,6 +6,7 @@
 import { api, enc } from "./api";
 import { extRoot, listOf } from "./extension-api";
 import { changed, type HubExtensionDetail, type ExtensionPermission } from "./extensions";
+import { previewConsent, type DependencyState, type PackMember } from "./extension-model";
 
 /** One market the hub reads (its token, if any, is never sent back). */
 export interface Market {
@@ -63,7 +64,10 @@ export interface Catalog {
 /** What installing (or upgrading) would do, before it does: POST …/catalog/preview. */
 export interface MarketPreview {
   preview_id: string;
-  manifest: { id: string; name: string; version: string; description?: string; publisher?: string; homepage?: string; contributes?: Record<string, unknown[]> };
+  manifest: { id: string; name: string; version: string; description?: string; publisher?: string; homepage?: string; contributes?: Record<string, unknown[]>; extension_pack?: PackMember[] };
+  depends?: DependencyState[];
+  bundle?: MarketPreview[];
+  unresolved?: string[];
   permissions: ExtensionPermission[];
   permissions_digest: string;
   warnings?: string[];
@@ -114,11 +118,17 @@ export const catalogOf = (c: Catalog & { plugins?: CatalogItem[] }): Catalog => 
 export const previewFromMarket = (market: string, extension: string) =>
   api<MarketPreview>(`${M()}/catalog/preview`, { method: "POST", json: { market, extension, plugin: extension } });
 export const installPreview = (pv: MarketPreview) =>
-  api<HubExtensionDetail>(`${M()}/install`, { method: "POST", json: { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest } }).then(changed);
+  api<HubExtensionDetail>(`${M()}/install`, { method: "POST", json: previewConsent(pv) }).then(changed);
 export const upgradePreview = (id: string, pv: MarketPreview) =>
-  api<HubExtensionDetail>(`${extRoot()}/${enc(id)}/-/upgrade`, { method: "POST", json: { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest } }).then(changed);
+  api<HubExtensionDetail>(`${extRoot()}/${enc(id)}/-/upgrade`, { method: "POST", json: previewConsent(pv) }).then(changed);
 /** Only one installed from a market (`origin` market:…); keepData leaves ~/.persona/extensions/data/<id>/. */
-export const uninstallExtension = (id: string, keepData = false) => api<{ ok: boolean }>(`${extRoot()}/${enc(id)}/-/${keepData ? "?keep_data=1" : ""}`, { method: "DELETE" }).then(changed);
+export const uninstallExtension = (id: string, keepData = false, cascade = false, members = false) => {
+  const q = new URLSearchParams();
+  if (keepData) q.set("keep_data", "1");
+  if (cascade) q.set("cascade", "1");
+  if (members) q.set("members", "1");
+  return api<{ ok: boolean }>(`${extRoot()}/${enc(id)}/-/${q.size ? `?${q}` : ""}`, { method: "DELETE" }).then(changed);
+};
 
 // ── words and rules ─────────────────────────────────────
 

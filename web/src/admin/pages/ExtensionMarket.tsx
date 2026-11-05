@@ -3,9 +3,10 @@
 // or upgrading from it previews first (POST extensions/-/catalog/preview) and goes through the page's own install /
 // upgrade with that preview's id and permissions digest: nothing installs before the user agreed to exactly that.
 import { useEffect, useRef, useState } from "react";
+import { previewBlocked } from "../../lib/extension-model";
 import { ago } from "../../lib/format";
 import { canUninstall, isGitMarket, itemState, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, specLabel, type CatalogItem, type Catalog, type Market } from "../../lib/extension-market";
-import { Button, cx, Dialog, IconButton, toast } from "../../ui/atoms";
+import { Button, cx, Dialog, IconButton, toast, useNow } from "../../ui/atoms";
 import { addMarket, AdminError, errorText, getCatalog, getMarkets, installExtension, previewFromMarket, refreshMarket, removeMarket, setMarketToken, upgradeExtension } from "../api";
 import { AdminIcon } from "../icons";
 import { devDialog } from "../router";
@@ -238,6 +239,7 @@ function MarketInstallDialog({ item, onClose, onDone }: { item: CatalogItem | nu
       .finally(() => setBusy(false));
   };
   useEffect(look, [item]);
+  const now = useNow(1000);
   const agree = async () => {
     if (!item || !pv) return;
     setBusy(true);
@@ -264,7 +266,7 @@ function MarketInstallDialog({ item, onClose, onDone }: { item: CatalogItem | nu
             取消
           </Button>
           {pv ? (
-            <Button tone={pv.more_permissions ? "danger" : "primary"} busy={busy} onClick={() => void agree()}>
+            <Button tone={pv.more_permissions ? "danger" : "primary"} busy={busy} disabled={previewBlocked(pv, now)} onClick={() => void agree()}>
               {pv.upgrade ? (pv.more_permissions ? "同意新权限并升级" : "升级") : "同意并安装"}
             </Button>
           ) : (

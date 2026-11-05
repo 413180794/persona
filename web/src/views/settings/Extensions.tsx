@@ -10,7 +10,7 @@ import { marketOf, extensionsRoute, routeSub } from "../../lib/extension-market"
 import { ago } from "../../lib/format";
 import {
   choiceLabel, clearExtensionSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listExtensionsInfo, listSummary, numberProblems,
-  placeholder, extensionDetail, extensionState, extensionTone, pointText, readNumber, runNote, same, secretState, setAt, setExtensionConfig, setExtensionEnabled,
+  placeholder, extensionDetail, extensionState, extensionTone, pointText, readNumber, runNote, same, secretState, setAt, setContribution, setExtensionConfig, setExtensionEnabled,
   machineStatus, nodeProgramStatus, saveFooter, setExtensionAutoUpgrade, setExtensionSecret, sourceText, stateLine, upgradeAction, upgradeDetail, upgradeNote, valueAt,
   type HubExtension, type HubExtensionDetail, type Json, type JsonObject, type ExtensionField, type ExtensionNodeState, type ExtensionSecret,
 } from "../../lib/extensions";
@@ -18,6 +18,7 @@ import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from ".
 import { Icon } from "../../ui/icons";
 import { MarketCatalog, MarketItem, Markets, UninstallDialog } from "./ExtensionMarket";
 import { ExtensionUI } from "./ExtensionView";
+import { dependencyText, dependentError, type Contribution, type Dependent } from "../../lib/extension-model";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
 
 /**
@@ -248,6 +249,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
   const [toggling, setToggling] = useState(false);
   const [secret, setSecret] = useState<ExtensionSecret | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const [dependents, setDependents] = useState<Dependent[] | null>(null);
 
   const apply = (d: HubExtensionDetail) => {
     setDetail(d);
@@ -316,15 +318,29 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
     }
   };
 
-  const toggle = async (on: boolean) => {
+  const toggle = async (on: boolean, cascade = false) => {
     setToggling(true);
     try {
-      const d = await setExtensionEnabled(id, on);
-      // the switch is its own call: an unsaved draft of the form stays
+      const d = await setExtensionEnabled(id, on, cascade);
+      // A switch never overwrites the unsaved configuration draft.
       setDetail(d);
+      setDependents(null);
       toast(on ? `已启用 ${d.name}` : `已停用 ${d.name}`, "ok");
     } catch (e) {
-      toast(`没有${on ? "启用" : "停用"}：${errorText(e)}`, "error");
+      const deps = dependentError(e);
+      if (!on && deps) setDependents(deps);
+      else toast(`没有${on ? "启用" : "停用"}：${errorText(e)}`, "error");
+    } finally {
+      setToggling(false);
+    }
+  };
+  const toggleContribution = async (c: Contribution, on: boolean) => {
+    setToggling(true);
+    try {
+      setDetail(await setContribution(id, c.point, c.id, on));
+      toast(on ? "已启用这一项" : "已关掉这一项", "ok");
+    } catch (e) {
+      toast(`没有改：${errorText(e)}`, "error");
     } finally {
       setToggling(false);
     }
@@ -482,7 +498,26 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
             </Group>
           )}
 
-          {p.contributes && Object.keys(p.contributes).length > 0 && (
+          {!!p.depends?.length && (
+            <Group title="依赖" footer="要先安装并启用这些扩展，才能使用它。">
+              {p.depends.map((d) => <Row key={d.id} label={d.name || d.id} hint={d.version}><span className={cx(d.state !== "ok" && "text-orange")}>{dependencyText(d)}</span></Row>)}
+            </Group>
+          )}
+          {!!p.extension_pack?.length && (
+            <Group title="合集成员" footer="卸载合集时可以只卸载合集，也可以选择一起卸载成员。">
+              {p.extension_pack.map((m) => <Row key={m.id} label={m.id} hint={m.market} mono>{m.version || ""}</Row>)}
+            </Group>
+          )}
+          {!!p.contributions?.length && (
+            <Group title="贡献开关" footer="只关这一项，其余能力和设置不变；跟着连接器的项目请在连接器设置里改。">
+              {p.contributions.map((c) => (
+                <Row key={`${c.point}/${c.id}`} label={c.title || c.id} hint={`${pointText(c.point)} · ${c.id}${c.via === "connector" ? " · 跟着连接器" : ""}`}>
+                  <Switch label={c.title || c.id} on={c.enabled} disabled={!editable || toggling || !c.can_disable} onChange={(on) => void toggleContribution(c, on)} />
+                </Row>
+              ))}
+            </Group>
+          )}
+          {!p.contributions?.length && p.contributes && Object.keys(p.contributes).length > 0 && (
             <Group title="提供">
               {Object.keys(p.contributes)
                 .sort()
@@ -517,7 +552,12 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
           )}
         </>
       )}
-      {removing && p && <UninstallDialog id={p.id} name={p.name} onClose={() => setRemoving(false)} onDone={onBack} />}
+      {removing && p && <UninstallDialog id={p.id} name={p.name} pack={p.extension_pack} onClose={() => setRemoving(false)} onDone={onBack} />}
+      {dependents && p && (
+        <Dialog open title={`停用「${p.name}」和依赖它的扩展？`} onClose={() => !toggling && setDependents(null)} footer={<><Button tone="quiet" disabled={toggling} onClick={() => setDependents(null)}>取消</Button><Button tone="danger" busy={toggling} onClick={() => void toggle(false, true)}>一起停用</Button></>}>
+          <p className="text-ink-2">这些扩展要用它：{dependents.map((d) => d.name).join("、")}。只停用，不卸载，配置和数据保留。</p>
+        </Dialog>
+      )}
 
       {dirty && (
         <div className="sticky bottom-3 z-10 mt-2 flex items-center gap-2 rounded-card bg-surface px-3 py-2 shadow-overlay" style={{ animation: `fade-up 220ms ${EASE} both` }}>
