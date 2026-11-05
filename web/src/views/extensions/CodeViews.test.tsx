@@ -2,7 +2,7 @@
 // UI version 4's code hosting components drawn from the 组件展示 pages (code-review, code-browse, code-overview), and
 // what pressing them sends: the action with the values it carries and the component's own.
 import { act as flush } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SHOWCASE } from "../../showcase/snapshots";
@@ -16,7 +16,11 @@ vi.hoisted(() => {
 });
 
 let host: HTMLDivElement | null = null;
+let root: Root | null = null;
 afterEach(() => {
+  // Unmounted inside act, so React has no work left for after the environment is torn down.
+  flush(() => root?.unmount());
+  root = null;
   host?.remove();
   host = null;
 });
@@ -24,8 +28,9 @@ afterEach(() => {
 function mount(name: string, onAct: (a: UIAction, v?: Record<string, string>) => void) {
   host = document.createElement("div");
   document.body.append(host);
-  const root = createRoot(host);
-  flush(() => root.render(<ViewSections view={SHOWCASE[name]} {...INERT} onAct={onAct} />));
+  const r = createRoot(host);
+  root = r;
+  flush(() => r.render(<ViewSections view={SHOWCASE[name]} {...INERT} onAct={onAct} />));
   return host;
 }
 
