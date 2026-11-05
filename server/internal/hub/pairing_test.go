@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/db"
 	"github.com/coder/websocket"
+	"github.com/nwverse/persona/server/internal/db"
 )
 
 type pairStore struct {
@@ -52,6 +52,25 @@ func (s *pairStore) RedeemPairToken(_ context.Context, hash string, device db.De
 	p.UsedAt, p.DeviceID = &now, device.ID
 	s.pairs[hash], s.rows[tokenHash] = p, device
 	return true, nil
+}
+
+func (s *pairStore) RevokeDeviceToken(_ context.Context, id string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, device := range s.rows {
+		if device.ID == id && !s.rev[id] {
+			s.rev[id] = true
+			now := time.Now()
+			for hash, p := range s.pairs {
+				if p.DeviceID == id {
+					p.ExpiresAt = now
+					s.pairs[hash] = p
+				}
+			}
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func newPairCode(t *testing.T, h *Hub) pairCode {
@@ -129,6 +148,39 @@ func TestPairTokenLifecycle(t *testing.T) {
 	s.mu.Unlock()
 	requireCode(t, securityRequest(mux, "GET", "/api/v1/machines", p.Token, "", "127.0.0.1:1", false), 401, "")
 	requireCode(t, securityRequest(mux, "GET", "/api/v1/machines", device["token"].(string), "", "198.51.100.1:1", true), 200, "")
+}
+
+func TestPairTokenRevocationEndsGrace(t *testing.T) {
+	h := newTestHub(t)
+	s := newPairStore()
+	h.store = s
+	p := newPairCode(t, h)
+	unrelated := newPairCode(t, h)
+	mux := h.routes()
+	code, device := call(t, mux, "POST", "/api/v1/auth/tokens", p.Token, `{"kind":"phone"}`)
+	if code != 200 {
+		t.Fatalf("exchange %d %v", code, device)
+	}
+	pt, err := s.PairTokenByHash(context.Background(), hashToken(p.Token))
+	if err != nil || pt == nil || pt.UsedAt == nil || !time.Now().Before(pt.UsedAt.Add(pairGrace)) {
+		t.Fatalf("expected redeemed token within grace: %+v %v", pt, err)
+	}
+	requireCode(t, securityRequest(mux, "GET", "/api/v1/machines", p.Token, "", "127.0.0.1:1", false), 200, "")
+	requireCode(t, securityRequest(mux, "DELETE", "/api/v1/auth/tokens/"+device["id"].(string), h.cfg.Token, "", "127.0.0.1:1", false), 200, "")
+
+	// Revocation persists across hub restarts, without waiting for the redemption grace to elapse.
+	restarted := newTestHub(t)
+	restarted.store = s
+	for _, hub := range []*Hub{h, restarted} {
+		for _, path := range []string{"/api/v1/machines", "/api/v1/ws", "/api/v1/auth/tokens", "/api/v1/auth/pair-codes"} {
+			method := "GET"
+			if strings.HasPrefix(path, "/api/v1/auth/") {
+				method = "POST"
+			}
+			requireCode(t, securityRequest(hub.routes(), method, path, p.Token, `{}`, "127.0.0.1:1", false), 401, "")
+		}
+		requireCode(t, securityRequest(hub.routes(), "GET", "/api/v1/machines", unrelated.Token, "", "127.0.0.1:1", false), 200, "")
+	}
 }
 
 func TestPairTokenExpiredAndOneUse(t *testing.T) {
@@ -262,5 +314,8 @@ func TestPairTokenDatabaseFlow(t *testing.T) {
 	requireCode(t, securityRequest(mux, "POST", "/api/v1/auth/tokens", p.Token, `{}`, "127.0.0.1:1", false), 401, "")
 	requireCode(t, securityRequest(mux, "GET", "/api/v1/machines", p.Token, "", "127.0.0.1:1", false), 200, "")
 	requireCode(t, securityRequest(mux, "GET", "/api/v1/machines", device["token"].(string), "", "198.51.100.1:1", true), 200, "")
-	_, _ = store.RevokeDeviceToken(ctx, device["id"].(string))
+	if ok, err := store.RevokeDeviceToken(ctx, device["id"].(string)); err != nil || !ok {
+		t.Fatalf("revoke %v %v", ok, err)
+	}
+	requireCode(t, securityRequest(mux, "GET", "/api/v1/machines", p.Token, "", "127.0.0.1:1", false), 401, "")
 }

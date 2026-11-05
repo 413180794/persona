@@ -893,7 +893,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		device: who.ID, role: who.Role, delta: wantsFeature(r, featureSessionsDelta), have: map[string]map[string][]byte{},
 		urlFeatures: urlFeatures(r), meta: clientMeta{updates: make(chan heartbeatConfig, 512), done: ctx.Done()}}
 	h.mu.Lock()
-	if h.wsStopping {
+	if h.wsStopping || h.isDeviceRevoked(c.device) {
 		h.mu.Unlock()
 		cancel()
 		_ = conn.CloseNow()
@@ -938,7 +938,8 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	hello := h.hello()
 	stream, after, resuming := resumeOf(r)
 	h.mu.Lock()
-	if h.wsStopping {
+	// Check under the registration lock so revocation either rejects this client or sees it to close it.
+	if h.wsStopping || h.isDeviceRevoked(c.device) {
 		h.mu.Unlock()
 		return
 	}

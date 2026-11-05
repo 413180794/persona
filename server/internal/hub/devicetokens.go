@@ -68,11 +68,12 @@ func byOwnDevice(ctx context.Context) bool {
 
 // devTokens caches token lookups so an app's burst of requests is one query.
 type devTokens struct {
-	mu       sync.Mutex
-	cache    map[string]cachedToken // token hash -> lookup
-	touched  map[string]time.Time   // device id -> last_seen written
-	failures authLimiter
-	vpnLocal func(netip.Addr) bool // nil uses the OS interface list
+	mu         sync.Mutex
+	cache      map[string]cachedToken // token hash -> lookup
+	touched    map[string]time.Time   // device id -> last_seen written
+	revokedIDs map[string]time.Time   // device id -> revocation; fences in-flight lookups and upgrades
+	failures   authLimiter
+	vpnLocal   func(netip.Addr) bool // nil uses the OS interface list
 	// onLink lists the IPv6 prefixes on this machine's interfaces (ingress.go); nil reads the OS interface list.
 	onLink     func() []netip.Prefix
 	linkCache  []netip.Prefix
@@ -86,6 +87,21 @@ type cachedToken struct {
 }
 
 const tokenCacheFor = 30 * time.Second
+
+const tokenRevokedFor = 5 * time.Minute
+
+// isRevoked requires t.mu. The database remains the authority after this window.
+func (t *devTokens) isRevoked(id string) bool {
+	at, ok := t.revokedIDs[id]
+	return id != "" && ok && time.Since(at) < tokenRevokedFor
+}
+
+func (h *Hub) isDeviceRevoked(id string) bool {
+	t := &h.devtok
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.isRevoked(id)
+}
 
 func hashToken(tok string) string {
 	sum := sha256.Sum256([]byte(tok))
@@ -112,14 +128,19 @@ func (h *Hub) authenticate(ctx context.Context, tok string) (principal, bool) {
 	hash := hashToken(tok)
 	if strings.HasPrefix(tok, "jp_") {
 		pt, err := h.store.PairTokenByHash(ctx, hash)
-		if err != nil || pt == nil || !time.Now().Before(pairExpires(pt)) {
+		if err != nil || pt == nil {
+			return principal{}, false
+		}
+		// Revoking the paired device expires this row, ending its redemption grace too.
+		until := pairExpires(pt)
+		if !time.Now().Before(until) {
 			return principal{}, false
 		}
 		role := roleFull
 		if pt.MachineID != "" {
 			role = roleLinkPair
 		}
-		return principal{ID: "pair_" + hash, Role: role, PairHash: hash, PairExpires: pairExpires(pt), Machine: pt.MachineID}, true
+		return principal{ID: "pair_" + hash, Role: role, PairHash: hash, PairExpires: until, Machine: pt.MachineID}, true
 	}
 	t := &h.devtok
 	t.mu.Lock()
@@ -139,6 +160,10 @@ func (h *Hub) authenticate(ctx context.Context, tok string) (principal, bool) {
 			c.p = &principal{ID: dt.ID, Name: dt.Name, Role: dt.Role, Machine: dt.MachineID}
 		}
 		t.mu.Lock()
+		if c.p != nil && t.isRevoked(c.p.ID) {
+			t.mu.Unlock()
+			return principal{}, false
+		}
 		if t.cache == nil {
 			t.cache, t.touched = map[string]cachedToken{}, map[string]time.Time{}
 		}
@@ -163,6 +188,11 @@ func (h *Hub) authenticate(ctx context.Context, tok string) (principal, bool) {
 		return principal{}, false
 	}
 	t.mu.Lock()
+	// A cache hit may have been copied just before revoked cleared it.
+	if t.isRevoked(c.p.ID) {
+		t.mu.Unlock()
+		return principal{}, false
+	}
 	if t.touched == nil {
 		t.touched = map[string]time.Time{}
 	}
@@ -353,11 +383,23 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 func (h *Hub) revoked(id string) {
 	t := &h.devtok
 	t.mu.Lock()
+	now := time.Now()
+	if t.revokedIDs == nil {
+		t.revokedIDs = map[string]time.Time{}
+	}
+	// Prune expired records on revocation, never evicting a recent revocation for capacity.
+	for deviceID, at := range t.revokedIDs {
+		if now.Sub(at) >= tokenRevokedFor {
+			delete(t.revokedIDs, deviceID)
+		}
+	}
+	t.revokedIDs[id] = now
 	for k, c := range t.cache {
 		if c.p != nil && c.p.ID == id {
 			delete(t.cache, k)
 		}
 	}
+	// Registration holds h.mu while checking t.mu; release t.mu before taking h.mu.
 	t.mu.Unlock()
 	h.mu.Lock()
 	for deviceID, r := range h.phoneTools {

@@ -93,6 +93,39 @@ func TestPairTokenExpiredAndFailedInsert(t *testing.T) {
 	}
 }
 
+func TestRevokeDeviceTokenExpiresAssociatedPairToken(t *testing.T) {
+	d := open(t)
+	ctx := context.Background()
+	expires := time.Now().UTC().Add(10 * time.Minute)
+	for _, hash := range []string{"revoked-pair", "other-pair", "unused-pair"} {
+		if err := d.CreatePairToken(ctx, hash, expires, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range []string{"revoked", "other"} {
+		device := DeviceToken{ID: id, Name: id, Kind: "phone", Role: "full"}
+		if ok, err := d.RedeemPairToken(ctx, id+"-pair", device, id+"-hash"); err != nil || !ok {
+			t.Fatalf("redeem %s = %v %v", id, ok, err)
+		}
+	}
+	if ok, err := d.RevokeDeviceToken(ctx, "revoked"); err != nil || !ok {
+		t.Fatalf("revoke = %v %v", ok, err)
+	}
+	p, err := d.PairTokenByHash(ctx, "revoked-pair")
+	if err != nil || p == nil || p.UsedAt == nil || p.DeviceID != "revoked" {
+		t.Fatalf("revoked pair %+v %v", p, err)
+	}
+	if p.ExpiresAt.After(time.Now()) {
+		t.Fatalf("revoked device pairing token still expires in the future: %v", p.ExpiresAt)
+	}
+	for _, hash := range []string{"other-pair", "unused-pair"} {
+		p, err := d.PairTokenByHash(ctx, hash)
+		if err != nil || p == nil || p.ExpiresAt.Sub(expires).Abs() > time.Microsecond {
+			t.Fatalf("unrelated pair %s changed: %+v %v", hash, p, err)
+		}
+	}
+}
+
 // A pairing code made for one machine's jarvis-link carries the machine, and so does the credential it becomes.
 func TestLinkPairTokenKeepsItsMachine(t *testing.T) {
 	d := open(t)

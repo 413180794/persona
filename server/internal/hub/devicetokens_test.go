@@ -63,6 +63,113 @@ func (s *tokenStore) RevokeDeviceToken(_ context.Context, id string) (bool, erro
 
 func (s *tokenStore) TouchDeviceToken(context.Context, string) error { return nil }
 
+// pausedTokenStore returns the snapshot read before revocation only after the test releases it.
+type pausedTokenStore struct {
+	*tokenStore
+	read    chan struct{}
+	release chan struct{}
+}
+
+func (s *pausedTokenStore) DeviceTokenByHash(ctx context.Context, hash string) (*db.DeviceToken, error) {
+	dt, err := s.tokenStore.DeviceTokenByHash(ctx, hash)
+	if dt != nil && err == nil {
+		close(s.read)
+		select {
+		case <-s.release:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return dt, err
+}
+
+func TestDeviceTokenLookupConcurrentRevocation(t *testing.T) {
+	for _, expired := range []bool{false, true} {
+		name := "cold cache"
+		if expired {
+			name = "expired cache"
+		}
+		t.Run(name, func(t *testing.T) {
+			h := newTestHub(t)
+			const token, id = "jd_inflight", "dev_inflight"
+			hash := hashToken(token)
+			s := &pausedTokenStore{
+				tokenStore: &tokenStore{memStore: *newMemStore(), rows: map[string]db.DeviceToken{
+					hash: {ID: id, Name: "phone", Role: roleFull},
+				}, rev: map[string]bool{}},
+				read: make(chan struct{}), release: make(chan struct{}),
+			}
+			h.store = s
+			if expired {
+				h.devtok.cache = map[string]cachedToken{
+					hash: {p: &principal{ID: id, Role: roleFull}, at: time.Now().Add(-2 * tokenCacheFor)},
+				}
+			}
+			release := sync.OnceFunc(func() { close(s.release) })
+			defer release()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			type result struct {
+				p  principal
+				ok bool
+			}
+			done := make(chan result, 1)
+			go func() {
+				p, ok := h.authenticate(ctx, token)
+				done <- result{p, ok}
+			}()
+			select {
+			case <-s.read:
+			case <-ctx.Done():
+				t.Fatal("lookup did not reach the snapshot barrier")
+			}
+			if ok, err := s.RevokeDeviceToken(ctx, id); err != nil || !ok {
+				t.Fatalf("revoke: %v, %v", ok, err)
+			}
+			h.revoked(id)
+			release()
+			select {
+			case got := <-done:
+				if got.ok || got.p.ID != "" || got.p.Role != "" {
+					t.Fatalf("stale lookup authenticated revoked device: %+v", got)
+				}
+			case <-ctx.Done():
+				t.Fatal("lookup did not finish")
+			}
+			h.devtok.mu.Lock()
+			_, cached := h.devtok.cache[hash]
+			h.devtok.mu.Unlock()
+			if cached {
+				t.Fatal("stale lookup repopulated the cache after revocation")
+			}
+			if _, ok := h.authenticate(ctx, token); ok {
+				t.Fatal("subsequent lookup authenticated revoked device")
+			}
+		})
+	}
+}
+
+func TestDeviceRevocationRetention(t *testing.T) {
+	h := newTestHub(t)
+	h.devtok.revokedIDs = map[string]time.Time{
+		"dev_old":    time.Now().Add(-2 * tokenRevokedFor),
+		"dev_recent": time.Now().Add(-time.Minute),
+	}
+	if h.isDeviceRevoked("dev_old") || h.isDeviceRevoked("dev_unknown") || h.isDeviceRevoked("") {
+		t.Fatal("expired, unknown or master credentials marked revoked")
+	}
+	h.revoked("dev_new")
+	if !h.isDeviceRevoked("dev_new") || !h.isDeviceRevoked("dev_recent") {
+		t.Fatal("recent revocations were not retained")
+	}
+	h.devtok.mu.Lock()
+	_, retained := h.devtok.revokedIDs["dev_old"]
+	h.devtok.mu.Unlock()
+	if retained {
+		t.Fatal("expired revocation was not pruned")
+	}
+}
+
 func call(t *testing.T, h http.Handler, method, path, token, body string) (int, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
