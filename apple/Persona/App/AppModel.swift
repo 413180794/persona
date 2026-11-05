@@ -698,6 +698,9 @@ final class AppModel {
     /// The archived ones (已归档), newest first.
     var archivedConversations: [Session] { assistantLists(for: hub?.group ?? "").archived }
 
+    /// The health space's open conversations the hub has pushed, newest first (健康; `HealthModel` adds the hub's list).
+    var healthConversations: [Session] { assistantLists(for: hub?.group ?? "").health }
+
     /// The two lists as of the last push, set only when they changed: a push about the agents (most of them) leaves
     /// the Persona page's conversations alone (`AssistantSidebar` was drawn again twice for each one, #390). For a group
     /// other than the one they were made for (the hub just changed), made from every session.
@@ -2481,17 +2484,21 @@ nonisolated struct TabBadges: Equatable, Sendable {
     func route(_ tab: AppTab, in model: AppModel)
 }
 
-/// The Persona conversations of one group, newest first: open and archived (`AppModel.assistantConversations`).
+/// The Persona conversations of one group, newest first: open and archived (`AppModel.assistantConversations`), and
+/// apart from them the health space's open ones (健康, docs/health.md), which the sidebar never lists.
 nonisolated struct AssistantLists: Equatable {
     let group: String
     let open: [Session]
     let archived: [Session]
+    let health: [Session]
 
     init(_ sessions: [Session], group: String) {
         self.group = group
-        let mine = sessions.filter { $0.assistant && $0.group == group }
+        let all = sessions.filter { $0.assistant && $0.group == group }
             .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+        let mine = all.filter { !$0.isHealth }
         open = mine.filter { $0.archived != true }
         archived = mine.filter { $0.archived == true }
+        health = all.filter { $0.isHealth && $0.archived != true }
     }
 }

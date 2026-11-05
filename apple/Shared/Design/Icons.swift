@@ -391,6 +391,11 @@ extension Theme {
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"
+        /// 健康: the health space (docs/health.md), its entry and its conversations' mark.
+        static let health = "heart"
+        static let healthFilled = "heart.fill"
+        /// What stays private (健康's note on where its conversations and memory are kept).
+        static let privacy = "checkmark.shield"
         /// A tool the app has no symbol for.
         static let unknownTool = "wrench.and.screwdriver"
     }

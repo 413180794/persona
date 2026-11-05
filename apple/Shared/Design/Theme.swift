@@ -487,6 +487,8 @@ nonisolated enum Theme {
         static let purple = Color(light: 0x7A5AF8, dark: 0x9D8BFF)
         /// System indigo.
         static let indigo = Color(light: 0x5856D6, dark: 0x5E5CE6)
+        /// 健康's heart (the health space, docs/health.md).
+        static let pink = Color(light: 0xD62E5C, dark: 0xFF6B8B)
         /// A quiet mark: a list row's tile that is information, not a place to go.
         static let gray = Color(light: 0x8E8E93, dark: 0x636366)
     }

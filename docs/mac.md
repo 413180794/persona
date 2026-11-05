@@ -703,6 +703,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-04，#856）：改成列表在对话左边的 `MacListBeside`（三栏分栏收不起列表那一栏）；真窗口里「历史对话」收起 / 展开，分区列开着、收着，浅色、深色都看过，展开时和原来一样。
 - [x] Persona avatar (mask face, eyes move when working) — Views/Assistant/AssistantAvatar.swift
   - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：打开工作中、还没有回复的对话（「思考中」），顶栏头像上方思考泡泡里的三个点轮流动，连拍几张各不相同；空闲的主对话上不动。工作中的眼睛（2026-11-03 离屏截图，`-showPersonaState working`，启动后第 5 / 5.4 / 5.8 / 6.3 秒各拍一张，裁出头像放大）：两只眼睛第 5 秒偏左、5.4 秒偏右、6.3 秒居中，在左右扫。
+- [x] 健康 (health space, docs/health.md「iOS 和 Mac 入口」): sidebar row → HealthView (suggestions, its conversations, 健康记忆, sources, privacy); health conversations stay off 最近 — Views/Assistant/HealthView.swift, AssistantSidebar.swift
+  - Mac（2026-11-05，#2901）：分栏左边列表顶上「定时任务」下面多一行「健康」，点开是健康页；编过 `PersonaMac`，截图见 PR。
 - [x] Profile page: identity, machine, online/working, 「接下来」 3 items, 主动做事 (tasks, run history), 了解你 (关于我, 记忆), 设置 (launcher, 管理启动器), capabilities list — Views/Assistant/AssistantProfileView.swift (AssistantProfileView, AssistantUpcomingRow, AssistantRunsView, AssistantRunRow)
   - Mac 截图看到（1280×1500 窗口）：身份、所在机器、在线 + 下一件、接下来 3 项、主动做事（定时任务、运行记录）、了解你（关于我、记忆）、设置（启动器、管理启动器），底部的能力列表 2026-11-01 核对时也看到了。
 - [x] 「交给 Persona」 from other pages sends `<jarvis-context>` into main conversation — AppModel.askJarvis

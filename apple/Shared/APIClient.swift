@@ -816,6 +816,17 @@ nonisolated struct APIClient: Sendable {
         }
     }
     func assistant() async throws -> AssistantState { try await get("/api/v1/assistant") }
+    /// The health space's conversations (docs/health.md): `GET /api/v1/assistant?space=health`, the same body with the
+    /// health directory as `cwd`. The plain list never holds them.
+    func healthConversations() async throws -> [Session] {
+        let st = try await get("/api/v1/assistant", query: ["space": Session.healthSpace], as: AssistantState.self)
+        return st.conversations.map { s in
+            var s = s
+            if s.machineID.isEmpty { s.machineID = st.machineID }
+            if s.assistantSpace == nil { s.assistantSpace = Session.healthSpace }
+            return stamp(s)
+        }
+    }
     struct AssistantConfigBody: Encodable {
         var machineID: String?
         var launcher: String?
@@ -995,11 +1006,16 @@ nonisolated struct APIClient: Sendable {
         enum CodingKeys: String, CodingKey { case name, content; case updatedAt = "updated_at" }
     }
     struct MemoryBody: Decodable { var files: [MemoryFile] }
-    func assistantMemory() async throws -> [MemoryFile] { try await get("/api/v1/assistant/memory", as: MemoryBody.self).files }
-    func saveMemory(name: String, content: String) async throws {
-        _ = try await request("PUT", "/api/v1/assistant/memory/\(name)", body: ["content": content])
+    /// `space`: nil for the assistant's own memory, `Session.healthSpace` for the health space's (docs/health.md).
+    func assistantMemory(space: String? = nil) async throws -> [MemoryFile] {
+        try await get("/api/v1/assistant/memory", query: ["space": space ?? ""], as: MemoryBody.self).files
     }
-    func deleteMemory(name: String) async throws { try await delete("/api/v1/assistant/memory/\(name)") }
+    func saveMemory(name: String, content: String, space: String? = nil) async throws {
+        _ = try await request("PUT", "/api/v1/assistant/memory/\(name)", query: ["space": space ?? ""], body: ["content": content])
+    }
+    func deleteMemory(name: String, space: String? = nil) async throws {
+        _ = try await request("DELETE", "/api/v1/assistant/memory/\(name)", query: ["space": space ?? ""])
+    }
     struct NewConversation: Encodable {
         var prompt: String
         var images: [ImagePayload]?
@@ -1007,15 +1023,19 @@ nonisolated struct APIClient: Sendable {
         var permissionMode: String?
         var effort: String?
         var main: Bool?
-        enum CodingKeys: String, CodingKey { case prompt, images, launcher, effort, main; case permissionMode = "permission_mode" }
+        /// "health": the conversation opens in the health space (docs/health.md); never with `main`.
+        var space: String?
+        enum CodingKeys: String, CodingKey { case prompt, images, launcher, effort, main, space; case permissionMode = "permission_mode" }
     }
-    /// `main`: the new conversation becomes the main one.
+    /// `main`: the new conversation becomes the main one. `space`: the space it opens in (nil: the assistant's own).
     func startConversation(prompt: String, images: [ImagePayload] = [], launcher: String? = nil, permissionMode: String? = nil,
-                           effort: String? = nil, main: Bool = false) async throws -> Session {
-        stamp(try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images,
-                                                                                    launcher: launcher, permissionMode: permissionMode, effort: effort,
-                                                                                    main: main ? true : nil),
-                             timeout: 110, as: SessionResponse.self).session)
+                           effort: String? = nil, main: Bool = false, space: String? = nil) async throws -> Session {
+        var s = try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images,
+                                                                                      launcher: launcher, permissionMode: permissionMode, effort: effort,
+                                                                                      main: main ? true : nil, space: space),
+                               timeout: 110, as: SessionResponse.self).session
+        if s.assistantSpace == nil { s.assistantSpace = space }
+        return stamp(s)
     }
 
     struct ClaudeSetting: Codable, Identifiable, Sendable {

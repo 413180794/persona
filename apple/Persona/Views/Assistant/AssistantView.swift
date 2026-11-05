@@ -27,6 +27,8 @@ struct AssistantView: View {
     @State private var showTodos = false
     /// An extension's main-navigation page opened from the sidebar (#2961).
     @State private var openedExtension: ExtensionNavRoute?
+    /// 健康: the health space's page (docs/health.md).
+    @State private var showHealth = false
     /// The sidebar (历史对话, or a drag to the right anywhere on the page): docs/ios.md「Persona 顶栏和侧边栏」.
     @State private var drawer = AssistantDrawer()
     /// Regular width (iPhone Duo open): the sidebar is a column beside the conversation; 历史对话 shows or hides it.
@@ -117,7 +119,8 @@ struct AssistantView: View {
                                 openInbox: places ? { show(.inbox) } : nil,
                                 openTodos: places ? { show(.todos) } : { drawer.close(); showTodos = true },
                                 onMachines: places ? { show(.machines) } : nil,
-                                openExtension: places ? { show(.extensionPage($0)) } : { r in drawer.close(); openedExtension = r })
+                                openExtension: places ? { show(.extensionPage($0)) } : { r in drawer.close(); openedExtension = r },
+                                openHealth: places ? { show(.health) } : { drawer.close(); showHealth = true })
     }
 
     /// 历史对话: the drawer on a phone, the sidebar column beside the conversation on a wide display.
@@ -133,7 +136,7 @@ struct AssistantView: View {
 
     /// Nothing pushed on the page: the sidebar's drag only works here (pushed pages have their own back swipe).
     private var atRoot: Bool {
-        var pushed = showProfile || showKnowledge || showRoutines || showTodos || openedExtension != nil || !path.isEmpty
+        var pushed = showProfile || showKnowledge || showRoutines || showTodos || openedExtension != nil || showHealth || !path.isEmpty
         #if DEBUG
         pushed = pushed || showAvatars
         #endif
@@ -189,6 +192,11 @@ struct AssistantView: View {
             .navigationDestination(isPresented: $showRoutines) { AssistantRoutinesView() }
             .navigationDestination(isPresented: $showTodos) { TodosView() }
             .navigationDestination(item: $openedExtension) { ExtensionNavPage(route: $0) }
+            .navigationDestination(isPresented: $showHealth) {
+                HealthView(disabled: pending != nil, launcher: $starterLauncher) { text, images in
+                    Task { await start(text, images, space: Session.healthSpace) }
+                }
+            }
             .modifier(ShellDestinations(path: $path, enabled: shell != nil || padPlaces))
             .modifier(ClassicTodoDetailDestination(enabled: shell == nil && !padPlaces))
             // On appear too (a cold launch onto 收件箱 asks before this page exists), but each request once: the root
@@ -213,6 +221,7 @@ struct AssistantView: View {
                 case "avatars": showAvatars = true
                 case "knowledge": showKnowledge = true
                 case "todos": showTodos = true
+                case "health": showHealth = true
                 case .some(let p) where p != "assistant": showProfile = true
                 default: break
                 }
@@ -232,6 +241,7 @@ struct AssistantView: View {
                 case "routines": show(.routines)
                 case "knowledge": show(.knowledge)
                 case "profile": show(.profile)
+                case "health": show(.health)
                 default: break
                 }
             }
@@ -264,6 +274,7 @@ struct AssistantView: View {
         case .todos: path.append(ShellRoute.todos)
         case .machines: path.append(ShellRoute.machines)
         case .extensionPage(let r): path.append(ShellRoute.extensionPage(r))
+        case .health: showHealth = true
         }
     }
 
@@ -274,6 +285,7 @@ struct AssistantView: View {
         showKnowledge = false
         showTodos = false
         openedExtension = nil
+        showHealth = false
         #if os(iOS)
         // A task pushed beside the sidebar (regular width, `detailPresentation`) is a page of this stack too: going
         // back to the root, or to another conversation, takes it away (else the next chat would push it again). A
@@ -292,16 +304,23 @@ struct AssistantView: View {
         }
     }
 
-    private func start(_ text: String, _ images: [ImagePayload]) async {
+    /// `space`: the space the conversation opens in (健康 passes "health"; it never becomes the main conversation).
+    private func start(_ text: String, _ images: [ImagePayload], space: String? = nil) async {
         guard let api = model.api else { return }
         startError = nil
+        // From 健康: back to the root, which shows the message coming as for any new conversation.
+        if space != nil {
+            backToRoot()
+            model.assistantCurrent = nil
+        }
         withAnimation(Theme.Motion.standard) { pending = PendingStart(text: text, imageCount: images.count) }
         do {
+            let makesMain = space == nil && model.assistantMain == nil // the first one becomes the main conversation
             let s = try await api.startConversation(prompt: text, images: images, launcher: starterLauncher,
                                                     permissionMode: starterMode.isEmpty ? nil : starterMode,
                                                     effort: starterEffort.isEmpty ? nil : starterEffort,
-                                                    main: model.assistantMain == nil) // the first one becomes the main conversation
-            if model.assistantMain == nil { await model.refreshAssistant() }
+                                                    main: makesMain, space: space)
+            if makesMain { await model.refreshAssistant() }
             Haptics.success()
             model.began(s, text: text, images: images) // the message stays on screen until claude has written it
             withAnimation(Theme.Motion.standard) {
@@ -608,6 +627,8 @@ struct StarterComposer: View {
     var disabled: Bool
     /// The shell's composer (docs/ios.md「新外壳」): the launcher, mode and effort are in its gauge menu.
     var shell: ShellModes? = nil
+    /// The field's hint; nil: 问 <Persona's name>… (健康 has its own).
+    var placeholder: String? = nil
     var send: (String, [ImagePayload]) -> Void
 
     struct ShellModes {
@@ -677,7 +698,7 @@ struct StarterComposer: View {
                 }
                 .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID)))?.filter(\.runsAssistant) ?? [] }
             } else {
-                ComposerRow(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
+                ComposerRow(placeholder: placeholder ?? "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
                             send: submit, quotes: $recordingContexts, history: "assistant.new") {
                     attachments
                 }
@@ -726,6 +747,8 @@ struct BeautifulStarterComposer: View {
     @Environment(AppModel.self) private var model
     var disabled: Bool
     @Binding var launcher: String?
+    /// The field's hint; nil: 问 <Persona's name>… (健康 has its own).
+    var placeholder: String? = nil
     var send: (String, [ImagePayload]) -> Void
     @State private var text = ""
     @State private var picks: [PhotosPickerItem] = []
@@ -757,7 +780,7 @@ struct BeautifulStarterComposer: View {
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             if !images.isEmpty { ComposerImages(images: $images) }
-            PromptComposer(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused,
+            PromptComposer(placeholder: placeholder ?? "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused,
                            hasAttachments: !images.isEmpty || !videos.items.isEmpty || !quotes.isEmpty, disabled: disabled,
                            attach: PromptItems.attachments(camera: false),
                            mentions: { PromptItems.sessions(model.sessionsNow, except: nil) },

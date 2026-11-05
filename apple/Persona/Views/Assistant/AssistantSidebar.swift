@@ -696,6 +696,8 @@ struct AssistantSidebar: View {
     /// Opens an extension's main-navigation page (nav_page, #2961): listed after the places to go, with its badge.
     /// nil where they are listed elsewhere (the Mac's sections column).
     var openExtension: ((ExtensionNavRoute) -> Void)? = nil
+    /// 健康: the health space's page (docs/health.md); nil leaves the row out.
+    var openHealth: (() -> Void)? = nil
     private var isShell: Bool { openInbox != nil }
     @State private var query = ""
     @State private var searchOpen = false
@@ -905,6 +907,7 @@ struct AssistantSidebar: View {
                 }
                 action("定时任务", Theme.Icon.schedule, run: openRoutines)
                 action("知识库", Theme.Icon.knowledge, run: openKnowledge)
+                if let openHealth { action("健康", Theme.Icon.health, id: "sidebar-health", run: openHealth) }
                 action("机器", Theme.Icon.machines, id: "sidebar-machines", run: onMachines)
                 extensionRows
             }
@@ -914,6 +917,7 @@ struct AssistantSidebar: View {
             // sections column (2026-11-05 user: not twice). Headed by nothing: a heading over one row is noise.
             if !AppStyle.current.usesBeautifulUI {
                 macPlace("定时任务", Theme.Icon.schedule, run: openRoutines)
+                if let openHealth { macPlace("健康", Theme.Icon.health, run: openHealth) }
             } else {
                 phoneActions
             }
@@ -928,6 +932,7 @@ struct AssistantSidebar: View {
             action("新对话", Theme.Icon.conversation, id: "sidebar-new", run: newConversation)
             action("定时任务", Theme.Icon.schedule, run: openRoutines)
             action("知识库", Theme.Icon.knowledge, run: openKnowledge)
+            if let openHealth { action("健康", Theme.Icon.health, id: "sidebar-health", run: openHealth) }
             extensionRows
         }
     }

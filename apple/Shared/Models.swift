@@ -539,6 +539,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var assistant: Bool
     /// An assistant conversation moved out of the sidebar (listed under 已归档; nothing is deleted).
     var archived: Bool? = nil
+    /// The assistant's space it belongs to (the hub's `space`, docs/health.md): `healthSpace` for a health conversation,
+    /// nil for the assistant's own. Not a host's space (`spaceKind` / `spaceID` are herdr's and Orca's).
+    var assistantSpace: String? = nil
     var spaceKind: String?
     var spaceID: String?
     var spaceName: String?
@@ -624,6 +627,11 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     }
     var folderName: String { (cwd as NSString).lastPathComponent }
 
+    /// The health space's name on the wire (`space: "health"`, docs/health.md).
+    static let healthSpace = "health"
+    /// A conversation of the health space: kept off the Persona page's lists, shown on 健康.
+    var isHealth: Bool { assistantSpace == Self.healthSpace }
+
     var hasSource: Bool { !(sourceKind ?? "").isEmpty }
     var canRead: Bool { !hasSource || capabilities?.read == true }
     var canSend: Bool { !hasSource || capabilities?.send == true }
@@ -700,6 +708,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case permissionMode = "permission_mode"
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
+             assistantSpace = "space",
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index", parentSpaceID = "parent_space_id",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", paneIndex = "pane_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
@@ -741,6 +750,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         startedByJarvis = try c.decodeIfPresent(Bool.self, forKey: .startedByJarvis) ?? false
         assistant = try c.decodeIfPresent(Bool.self, forKey: .assistant) ?? false
         archived = try c.decodeIfPresent(Bool.self, forKey: .archived)
+        assistantSpace = try c.decodeIfPresent(String.self, forKey: .assistantSpace).flatMap { $0.isEmpty ? nil : $0 }
         spaceKind = try c.decodeIfPresent(String.self, forKey: .spaceKind)
         spaceID = try c.decodeIfPresent(String.self, forKey: .spaceID)
         spaceName = try c.decodeIfPresent(String.self, forKey: .spaceName)

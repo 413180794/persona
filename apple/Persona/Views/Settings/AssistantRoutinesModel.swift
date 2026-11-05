@@ -106,19 +106,24 @@ struct AssistantDeps {
     }
 }
 
-/// 记忆: the assistant's memory files, newest first, and deleting one.
+/// 记忆: the assistant's memory files, newest first, and deleting one. `space` "health" is the health space's own
+/// memory (健康 › 健康记忆, docs/health.md); nil the assistant's.
 @Observable final class AssistantMemoryModel {
     private(set) var files: [APIClient.MemoryFile] = []
     private(set) var loaded = false
     private(set) var error: String?
+    let space: String?
     @ObservationIgnored private let deps: AssistantDeps
 
-    init(deps: AssistantDeps = .live) { self.deps = deps }
+    init(space: String? = nil, deps: AssistantDeps = .live) {
+        self.space = space
+        self.deps = deps
+    }
 
     func load() async {
         guard let api = deps.api() else { return }
         do {
-            files = try await api.assistantMemory()
+            files = try await api.assistantMemory(space: space)
             error = nil
         } catch {
             self.error = error.shown ?? self.error
@@ -129,7 +134,7 @@ struct AssistantDeps {
     func delete(_ name: String) async {
         guard let api = deps.api() else { return }
         do {
-            try await api.deleteMemory(name: name)
+            try await api.deleteMemory(name: name, space: space)
             Haptics.success()
             await load()
         } catch {

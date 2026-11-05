@@ -991,7 +991,11 @@ struct AssistantMemoryEntry: Identifiable, Hashable {
 }
 
 struct AssistantMemoryView: View {
-    @State private var page = AssistantMemoryModel()
+    @State private var page: AssistantMemoryModel
+    /// The health space's memory (健康 › 健康记忆, docs/health.md) instead of the assistant's.
+    private var health: Bool { page.space == Session.healthSpace }
+
+    init(space: String? = nil) { _page = State(initialValue: AssistantMemoryModel(space: space)) }
     @State private var pendingDelete: AssistantMemoryEntry?
     @State private var debugOpen: AssistantMemoryEntry?
 
@@ -1029,7 +1033,7 @@ struct AssistantMemoryView: View {
                     ForEach(entries) { e in
                         let t = titles[e.file.name]
                         NavigationLink {
-                            AssistantMemoryDetail(entry: e, title: t?.title, onSaved: { await load() })
+                            AssistantMemoryDetail(entry: e, title: t?.title, space: page.space, onSaved: { await load() })
                         } label: {
                             row(e, title: t?.title ?? e.name ?? e.file.name, detail: e.description ?? t?.hook)
                         }
@@ -1044,13 +1048,14 @@ struct AssistantMemoryView: View {
                         #endif
                     }
                 } footer: {
-                    Text("Persona 记住的事，一条一个文件，新对话开始时会读。说错的地方可以直接改，或者在对话里告诉它。")
+                    Text(health ? "健康对话里记下的事，只有健康对话会读，Persona 的其他对话看不到。说错的地方可以直接改，或者在健康对话里告诉它。"
+                                : "Persona 记住的事，一条一个文件，新对话开始时会读。说错的地方可以直接改，或者在对话里告诉它。")
                 }
             }
             if let index, !entries.isEmpty {
                 Section {
                     NavigationLink {
-                        AssistantMemoryDetail(entry: AssistantMemoryEntry(index), title: "索引", onSaved: nil)
+                        AssistantMemoryDetail(entry: AssistantMemoryEntry(index), title: "索引", space: page.space, onSaved: nil)
                     } label: {
                         Label { Text("索引").foregroundStyle(Color.primary) } icon: { Image(systemName: Theme.Icon.list) }
                     }
@@ -1067,18 +1072,19 @@ struct AssistantMemoryView: View {
                 ContentUnavailableView("读不到记忆", systemImage: Theme.Icon.error, description: Text(error))
             } else if entries.isEmpty {
                 ContentUnavailableView("还没有记忆", systemImage: Theme.Icon.memory,
-                                       description: Text("Persona 会把你的偏好、纠正过它的地方记在这里。"))
+                                       description: Text(health ? "健康对话里记下的目标、过敏、用药等会出现在这里。"
+                                                                : "Persona 会把你的偏好、纠正过它的地方记在这里。"))
             }
         }
-        .pageTitle("记忆")
+        .pageTitle(health ? "健康记忆" : "记忆")
         .confirmationDialog("删除这条记忆？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible, presenting: pendingDelete) { e in
             Button("删除", role: .destructive) { Task { await delete(e) } }
         } message: { e in
-            Text("Persona 以后不再记得「\(titles[e.file.name]?.title ?? e.name ?? e.file.name)」。")
+            Text("\(health ? "健康对话" : "Persona")以后不再记得「\(titles[e.file.name]?.title ?? e.name ?? e.file.name)」。")
         }
         .navigationDestination(item: $debugOpen) { e in
-            AssistantMemoryDetail(entry: e, title: titles[e.file.name]?.title, onSaved: { await load() })
+            AssistantMemoryDetail(entry: e, title: titles[e.file.name]?.title, space: page.space, onSaved: { await load() })
         }
         .task { await load() }
         .refreshable { await load() }
@@ -1134,6 +1140,8 @@ struct AssistantMemoryDetail: View {
     @Environment(AppModel.self) private var model
     @State var entry: AssistantMemoryEntry
     var title: String?
+    /// Whose memory it is (`AssistantMemoryModel.space`): saved back to the same one.
+    var space: String? = nil
     var onSaved: (() async -> Void)?
     @State private var editing = false
 
@@ -1178,7 +1186,7 @@ struct AssistantMemoryDetail: View {
             }
         }
         .sheet(isPresented: $editing) {
-            AssistantMemoryEditor(name: entry.file.name, text: entry.file.content) { content in
+            AssistantMemoryEditor(name: entry.file.name, text: entry.file.content, space: space) { content in
                 var f = entry.file
                 f.content = content
                 f.updatedAt = .now
@@ -1197,6 +1205,7 @@ struct AssistantMemoryEditor: View {
     @Environment(\.dismiss) private var dismiss
     var name: String
     @State var text: String
+    var space: String? = nil
     var saved: (String) async -> Void
     @State private var saving = false
     /// The text as the sheet opened: 取消 asks first once it differs (Mac).
@@ -1234,7 +1243,7 @@ struct AssistantMemoryEditor: View {
         saving = true
         defer { saving = false }
         do {
-            try await api.saveMemory(name: name, content: text)
+            try await api.saveMemory(name: name, content: text, space: space)
             await saved(text)
             Haptics.success()
             dismiss()

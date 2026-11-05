@@ -1,7 +1,7 @@
 # 健康空间（#2691）
 
 健康相关的对话从助手的主对话里分出来，放进一个单独的「健康」空间：单独的入口、单独的对话目录、单独的记忆。
-第一版照着 ChatGPT Health 仿，先做 hub 和网页；手机、Mac 的入口下一个 PR 复用同一套接口。
+第一版照着 ChatGPT Health 仿，先做 hub 和网页（#2789）；iOS 和 Mac 的入口随后复用同一套接口（#2901），Android 还没有。
 
 ## 为什么分出来
 
@@ -13,7 +13,7 @@
 
 | ChatGPT Health 怎么做 | Persona 第一版怎么做 | 以后 |
 | --- | --- | --- |
-| 侧边栏（桌面）/ 菜单（手机）里单独的 Health 入口，进去是独立空间（[1]） | 网页侧边栏单独的「健康」入口，`/health` | iOS / Android / Mac 的健康入口 |
+| 侧边栏（桌面）/ 菜单（手机）里单独的 Health 入口，进去是独立空间（[1]） | 网页侧边栏单独的「健康」入口，`/health`；iOS、Mac 助手侧边栏的「健康」 | Android 的健康入口 |
 | Health 首页：最近的数据和趋势、同步的记录、推荐提问、以往的健康对话、已连接的账号（[2]） | `/health` 页：一句隐私说明、数据来源（Apple Health / Health Connect 经手机）、推荐提问、以往的健康对话、健康记忆 | 首页显示最近的趋势卡片（接 #886 的结构化卡片） |
 | Health 的记忆单独存，不会流回普通对话；用户能查看、删除（[3]） | 健康空间有自己的目录，auto memory 只属于它；网页上能看、能删；主对话的工具看不到健康对话 | 健康空间只给健康相关的工具 |
 | 在普通对话里聊健康，会建议挪到 Health（[4]） | 不做 | 主对话聊到健康时建议「去健康里继续」 |
@@ -107,9 +107,18 @@
 
 ![网页版的健康页（深色）](screenshots/web-health-dark.png)
 
+## iOS 和 Mac 入口（#2901）
+
+- 入口：助手侧边栏「知识库」下面一行「健康」（新外壳的抽屉在「知识库」和「机器」之间；Mac 的分栏列表在「定时任务」下面），推出健康页（`apple/Persona/Views/Assistant/HealthView.swift`，iOS 和 Mac 共用）。
+- 健康页：一句说明、推荐提问（点一下就用它开一段健康对话）、健康对话（`GET /api/v1/assistant?space=health`，再叠上推送里带 `space: "health"` 的，左滑 / 右键归档）、
+  健康记忆（推进记忆页 `AssistantMemoryView(space: "health")`，看、改、删都带 `?space=health`）、数据来源、隐私；底部是输入框，发出去 `POST /api/v1/assistant/conversations` 带 `"space":"health"`，从不设成主对话。
+- 开出来、点进去的健康对话在 Persona 页的对话里打开，和别的助手对话是同一个对话页；回健康页从侧边栏的「健康」。
+- 侧边栏「最近」「已归档」和搜索不列健康对话（`AssistantLists` 按 `Session.assistantSpace` 分开，健康的在 `AppModel.healthConversations`）。
+- 截图参数：`-tab assistant -openAssistantPage health`（新外壳 `-openShellPage health`）。单测 `PersonaTests/HealthModelTests`。
+
 ## 第一版不做的
 
-- iOS / Android / Mac 的入口：下一个 PR，复用上面这套接口。
+- Android 的入口：复用上面这套接口。
 - 饮食建议扩展的打包：另一个 Agent 在做。
 - 主对话聊到健康时建议挪进健康空间。
 - 把已有的、在主对话里聊过的健康内容迁过来：不迁，旧记忆留在助手目录。
@@ -128,3 +137,4 @@
   `go test ./internal/hub -run Health`（推送不带正文）、`go test ./internal/connector -run ConfirmEach`、`go test ./internal/node -run LarkGateHealth`、`go test ./internal/identity`（健康目录、`SpaceOf`、`IsAssistantDir`）。
   改了 `health_claude_md.md` 要更新 golden 并看 diff（`docs/prompts.md`）。
 - 网页：`cd web && npm test && npm run build`。
+- iOS / Mac：`PersonaTests/HealthModelTests`（列表和记忆带 `space`、推送叠加、侧边栏不列健康对话、新对话带 `space`），编 `Persona` 和 `PersonaMac`。

@@ -186,14 +186,18 @@ final class DemoHub {
         case ["mutes"]: return mutes
         case ["assistant"]:
             var a = data["assistant"]?.object ?? [:]
-            a["conversations"] = .array(sessions.filter { $0["assistant"]?.bool == true })
+            // ?space=health lists the health space's own (docs/health.md); the plain list never holds them.
+            let space = q["space"] ?? ""
+            a["conversations"] = .array(sessions.filter { $0["assistant"]?.bool == true && ($0["space"]?.string ?? "") == space })
             return .object(a)
         case ["model-config"]: return DemoModelCatalog.configuration(tasks: tasks, overrides: modelBindings)
         case ["assistant", "tasks"]: return ["tasks": .array(tasks)]
         case ["assistant", "runs"]:
             let runs = data["runs"]?.array ?? []
             return ["runs": .array(q["ref"].map { ref in runs.filter { $0["ref_id"]?.string == ref } } ?? runs)]
-        case ["assistant", "memory"]: return ["files": .array(memory), "dir": "/home/me/.jarvis/assistant/memory"]
+        case ["assistant", "memory"]:
+            if q["space"] == "health" { return ["files": .array([]), "dir": "/home/me/.jarvis/health/memory"] }
+            return ["files": .array(memory), "dir": "/home/me/.jarvis/assistant/memory"]
         case ["inbox"]: return ["items": .array(inbox)]
         case ["todos"]: return ["todos": .array(todos)]
         case ["mail", "accounts"]: return ["accounts": data["mail_accounts"] ?? .array([])]
