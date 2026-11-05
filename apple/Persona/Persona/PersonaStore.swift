@@ -43,6 +43,17 @@ final class PersonaStore {
     /// The user's choice; kept when its package is gone from the hub, so it comes back with it.
     var chosenID: String { defaults.string(forKey: Self.chosenKey) ?? Persona.builtinID }
 
+    /// The hub's list came this launch.
+    @ObservationIgnored private var listed = false
+
+    /// The home screen icon the choice puts on (`Persona.appIcon`): a package's is known from the list before the
+    /// package is on the phone, so the icon does not go to the default's and back while it downloads. Nil while the
+    /// chosen one is not listed yet; once the hub has answered without it, the built-in's on screen.
+    var appIcon: AppIconChoice? {
+        if let chosen = offered.first(where: { $0.id == chosenID }) { return chosen.appIcon }
+        return listed ? current.appIcon : nil
+    }
+
     init(root: URL = PersonaStore.defaultRoot, defaults: UserDefaults = .standard) {
         self.root = root
         self.defaults = defaults
@@ -89,6 +100,7 @@ final class PersonaStore {
             return
         }
         self.error = nil
+        listed = true
         offered = Persona.builtins + list.map(Persona.init(info:))
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try? JSONEncoder().encode(list).write(to: indexURL, options: .atomic)

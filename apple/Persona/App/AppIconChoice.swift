@@ -3,18 +3,18 @@ import SwiftUI
 import UIKit
 #endif
 
-// 设置 › 外观 › App 图标 (docs/ios.md「App 图标」): the home screen icon. The default is the app's own `AppIcon` (纸色,
-// the hand-drawn helper on paper, #709); the others are alternate icon sets in the asset catalog
-// (`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`): 蜜桃 the same helper on peach (kept PNGs), Didot and Aura drawn by
-// scripts/assets/make_alt_icons.py. The system remembers the choice itself, so there is nothing to store: what is set
-// now is `alternateIconName`. iPhone and iPad only: the watch and the Mac keep their one icon.
+// The home screen icon is the 形象's (docs/persona.md「App 图标」, #3203): there is no setting of its own. Each built-in
+// 形象 has an icon in the asset catalog: 团子, the default, is the app's own `AppIcon` (纸色, the hand-drawn helper on
+// paper, #709); 面罩 and 汇流 are alternate icon sets (`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`) of their faces,
+// drawn by scripts/assets/make_alt_icons.py. iOS switches only to icons the app ships, so a 形象 from the hub or an
+// extension puts on the built-in one it names (`Persona.appIcon`). The system remembers the icon itself, so there is
+// nothing to store: what is set now is `alternateIconName`. iPhone and iPad only: the watch and the Mac keep their one icon.
 
-/// One icon the user can pick.
+/// One icon the app ships.
 nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
     case standard
-    case peach
-    case didot
-    case aura
+    case visor
+    case circuit
 
     var id: String { rawValue }
 
@@ -22,49 +22,43 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
     var iconName: String? {
         switch self {
         case .standard: nil
-        case .peach: "AppIcon-Peach"
-        case .didot: "AppIcon-Didot"
-        case .aura: "AppIcon-Aura"
+        case .visor: "AppIcon-Visor"
+        case .circuit: "AppIcon-Circuit"
         }
     }
 
-    /// The picture the picker shows (an image set with any / dark, read from the icon set by the script).
+    /// The picture the app draws it with (an image set with any / dark, read from the icon set by the script): the
+    /// logo beside Persona's name.
     var preview: String {
         switch self {
         case .standard: "app-icon-default"
-        case .peach: "app-icon-peach"
-        case .didot: "app-icon-didot"
-        case .aura: "app-icon-aura"
+        case .visor: "app-icon-visor"
+        case .circuit: "app-icon-circuit"
         }
     }
 
-    var title: String {
+    /// The built-in 形象 whose icon it is.
+    var lookID: String {
         switch self {
-        case .standard: "纸色"
-        case .peach: "蜜桃"
-        case .didot: "p."
-        case .aura: "气场"
+        case .standard: Persona.builtinID
+        case .visor: Persona.visor.id
+        case .circuit: Persona.circuit.id
         }
     }
 
-    var subtitle: String {
-        switch self {
-        case .standard: "默认"
-        case .peach: "手绘小助手"
-        case .didot: "刊头"
-        case .aura: "光晕"
-        }
+    /// The icon of the built-in 形象 with that id; the default's for any other (a built-in with no icon yet, a typo
+    /// in a package's `app_icon_fallback`, none given).
+    init(lookID: String?) {
+        self = Self.allCases.first { $0.lookID == lookID } ?? .standard
     }
 
-    /// 纸色 (the default) and 蜜桃 follow 设置 › 外观 › 深浅色 (#710). The system picks a set's look by the home screen's
-    /// appearance, not the app's, so each also has a set with only its light picture and one with only its dark
-    /// picture (`AppIcon-PaperLight` / `…Dark`, `AppIcon-PeachLight` / `…Dark`); the other choices are one set whatever
-    /// the app is.
+    /// 纸色 (the default) follows 设置 › 外观 › 深浅色 (#710). The system picks a set's look by the home screen's
+    /// appearance, not the app's, so it also has a set with only its light picture and one with only its dark
+    /// picture (`AppIcon-PaperLight` / `…Dark`); the others are one set whatever the app is.
     private var fixedLooks: (light: String, dark: String)? {
         switch self {
         case .standard: ("AppIcon-PaperLight", "AppIcon-PaperDark")
-        case .peach: ("AppIcon-PeachLight", "AppIcon-PeachDark")
-        case .didot, .aura: nil
+        case .visor, .circuit: nil
         }
     }
 
@@ -80,8 +74,8 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// The look the home screen shows it in: 纸色 / 蜜桃 under 浅色 / 深色 take that look; the others, and 跟随系统,
-    /// the system's (`system`).
+    /// The look the home screen shows it in: 纸色 under 浅色 / 深色 takes that look; the others, and 跟随系统, the
+    /// system's (`system`).
     func homeScreenLook(_ scheme: ColorSchemeChoice, system: ColorScheme) -> ColorScheme {
         guard followsScheme else { return system }
         switch scheme {
@@ -94,8 +88,11 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
     /// The alternate icon sets the choice can be on (all of them ship); the primary icon is not one.
     var iconNames: [String] { [iconName, fixedLooks?.light, fixedLooks?.dark].compactMap { $0 } }
 
-    /// The choice an icon name stands for; an unknown name (an icon a later build dropped: 余烬, 薄荷, 石墨 went in #709)
-    /// reads as the default.
+    /// An alternate icon set this build ships.
+    static func ships(_ name: String) -> Bool { allCases.contains { $0.iconNames.contains(name) } }
+
+    /// The choice an icon name stands for; an unknown name (an icon a later build dropped: 余烬, 薄荷, 石墨 went in
+    /// #709, 蜜桃, p., 气场 in #3203) reads as the default, which is what the home screen shows for it.
     init(iconName: String?) {
         self = iconName.flatMap { name in Self.allCases.first { $0.iconNames.contains(name) } } ?? .standard
     }
@@ -112,11 +109,12 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
 extension UIApplication: AppIconSetting {}
 #endif
 
-/// 设置 › 外观 › App 图标's state: which icon is on, and the last failure to switch.
+/// The home screen icon kept on the 形象's (`follow`): what is on now, and the last failure to switch.
 @MainActor @Observable final class AppIconModel {
     private let system: AppIconSetting?
+    /// The icon on the home screen: the system's at launch, then each switch that went through.
     private(set) var current: AppIconChoice
-    private(set) var switching: AppIconChoice?
+    private(set) var switching = false
     private(set) var failure: String?
 
     /// Off where the system cannot change the icon (the Mac, an app with alternate icons turned off).
@@ -127,52 +125,43 @@ extension UIApplication: AppIconSetting {}
         current = AppIconChoice(iconName: system?.alternateIconName)
     }
 
-    /// The app's 深浅色 the icon should match (#710): the latest `follow` or `select` gave it.
+    /// The 形象's icon the home screen should have; nil until the 形象 is known (a package the list has not named yet).
+    @ObservationIgnored private var wanted: AppIconChoice?
+    /// The app's 深浅色 the icon should match (#710).
     @ObservationIgnored private var scheme: ColorSchemeChoice = .system
 
-    /// Puts the choice on, in the set for the app's 深浅色 (`scheme`, else the last one given).
-    func select(_ choice: AppIconChoice, scheme: ColorSchemeChoice? = nil) async {
+    /// The 形象 or 深浅色 changed, or the app came to the front: the home screen moves to the 形象's icon (`look`, else
+    /// the last one given) in the set for 深浅色 (`scheme`, else the last one given). The system confirms with its
+    /// alert, as for any switch; an icon already right is left alone (no alert). This is also the migration from the
+    /// old 设置 › 外观 › App 图标: the first time the updated app is in front, the icon goes to the 形象's. A change
+    /// while a switch is in flight is not lost: that switch settles on the latest when it ends.
+    func follow(_ look: AppIconChoice?, scheme: ColorSchemeChoice? = nil) async {
+        if let look { wanted = look }
         if let scheme { self.scheme = scheme }
-        guard let system, available, choice != current, switching == nil else { return }
-        switching = choice
-        failure = nil
-        do {
-            try await system.setAlternateIconName(choice.iconName(for: self.scheme))
-            current = choice
-            switching = nil
-        } catch {
-            switching = nil
-            failure = "没换成：\(error.localizedDescription)"
-            return
-        }
-        await settle(system) // 深浅色 may have changed while the system was asking
-    }
-
-    /// 深浅色 changed, or the app came to the front: an icon that follows it moves to that look's set (the system
-    /// confirms with its alert, as for any switch); the others stay as they are, and an icon already right is left
-    /// alone (no alert). A change while a switch is in flight is not lost: that switch settles on the latest when it ends.
-    func follow(_ scheme: ColorSchemeChoice) async {
-        self.scheme = scheme
-        guard let system, available, switching == nil else { return }
+        guard let system, available, !switching else { return }
         await settle(system)
     }
 
-    /// Switches until the icon is on the set for the latest `scheme`. Not when the system has a set this build no
-    /// longer ships (余烬 / 薄荷 / 石墨): the home screen already shows the primary icon, and a switch on its own would
-    /// pop the system's alert at launch.
+    /// Switches until the icon is on the set for the latest `wanted` and `scheme`.
     private func settle(_ system: AppIconSetting) async {
-        while current.followsScheme, switching == nil {
-            if let name = system.alternateIconName, !AppIconChoice.allCases.contains(where: { $0.iconNames.contains(name) }) { return }
-            let name = current.iconName(for: scheme)
-            guard name != system.alternateIconName else { return }
-            switching = current
+        while let wanted, !switching {
+            let name = wanted.iconName(for: scheme)
+            let shown = system.alternateIconName
+            // A set this build no longer ships (蜜桃, p., 气场…) already shows as the primary icon: putting the primary
+            // on would only pop the system's alert.
+            if name == shown || (name == nil && shown.map { !AppIconChoice.ships($0) } == true) {
+                current = wanted
+                return
+            }
+            switching = true
             failure = nil
             do {
                 try await system.setAlternateIconName(name)
-                switching = nil
+                current = wanted
+                switching = false
             } catch {
-                switching = nil
-                failure = "没换成：\(error.localizedDescription)"
+                switching = false
+                failure = "桌面图标没换成：\(error.localizedDescription)"
                 return
             }
         }

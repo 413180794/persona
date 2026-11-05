@@ -1252,6 +1252,9 @@ TODOS_INIT = [
         "id": "todo_weather",
         "title": "天气 App 发 1.3 版",
         "notes": "1.3 的内容：主屏幕小组件、网络层补测试、发布说明。周五前提交审核。",
+        # The stage bar on the todo detail (#2776): how far the work got, and the PR it is in.
+        "stage": "develop",
+        "pr_url": "https://example.com/pull/128",
         "done_at": None,
         "created_at": ago(hours=2),
         "updated_at": ago(minutes=2),

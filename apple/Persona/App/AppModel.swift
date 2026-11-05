@@ -284,7 +284,10 @@ final class AppModel {
             self.pushWatchConfigs()
             WatchSync.shared.push(summary: self.watchSummary())
         }
-        personas.onChange = { [weak self] in self?.applyPersonaPalette() }
+        personas.onChange = { [weak self] in
+            self?.applyPersonaPalette()
+            self?.followAppIcon()
+        }
         applyPersonaPalette()
         connection.onCaughtUp = { [weak self] in self?.flushOutbox() }
         #if os(iOS) || os(visionOS)
@@ -2049,8 +2052,18 @@ final class AppModel {
     /// (`look`), and the rebuilt shell puts the sheet back on the same page (`settingsPath`).
     var shellSettings = false
 
-    /// 设置 › 外观 › App 图标: the home screen icon (the system keeps the choice; this mirrors it).
+    /// The home screen icon, the 形象's (the system keeps it; this mirrors it and switches it, `followAppIcon`).
     let appIcon = AppIconModel.live()
+
+    /// Puts the 形象's icon on the home screen, in the set for 深浅色: when either changes and when the app comes to
+    /// the front (a switch the system cut short, the first launch after the separate App 图标 setting went). Nothing
+    /// happens when it already is, so no alert.
+    func followAppIcon() {
+        #if os(iOS) || os(visionOS)
+        let look = isDemo ? AppIconChoice.standard : personas.appIcon // 体验模式 shows only the default 形象
+        Task { await appIcon.follow(look, scheme: colorScheme) }
+        #endif
+    }
 
     /// 小 / 标准 / 大 on top of the system's text size (设置 › 界面风格 › 字号); RootView applies it. On the Mac the
     /// fonts read it from `Theme.Font.scale` (text styles there do not follow Dynamic Type, #833).
@@ -2062,15 +2075,14 @@ final class AppModel {
     }
 
     /// 跟随系统 / 浅色 / 深色 (设置 › 外观 › 深浅色), on the app's windows; RootView puts it on a new window. Nothing is
-    /// rebuilt (`look` stays): the tokens are dynamic colors and follow the window's style. The app icons that follow it
-    /// (`AppIconChoice.followsScheme`: 纸色, the default, and 蜜桃) switch to that look too.
+    /// rebuilt (`look` stays): the tokens are dynamic colors and follow the window's style. The home screen icon, when
+    /// it follows it (`AppIconChoice.followsScheme`: 团子's 纸色), switches to that look too.
     var colorScheme: ColorSchemeChoice = ColorSchemeChoice.current {
         didSet {
             UserDefaults.standard.set(colorScheme.rawValue, forKey: ColorSchemeChoice.key)
             #if os(iOS) || os(visionOS)
             colorScheme.apply()
-            // 纸色 / 蜜桃 on the home screen take the same look.
-            Task { await appIcon.follow(colorScheme) }
+            followAppIcon() // 纸色 on the home screen takes the same look
             #endif
         }
     }

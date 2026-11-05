@@ -549,6 +549,9 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
 - 换 App 图标在 Xcode 26.0 + iOS 26.0 模拟器上验证不了（2026-11-03 实测，master 和改动后的分支都一样）：`supportsAlternateIcons` 为 false，
   设置 › 外观 里不显示「App 图标」那一行，从 `-openAppearance icon` 进去点别的图标没反应，`AppIconTests` 在第 44 行失败；
   构建出的 Info.plist 有 `CFBundleAlternateIcons`、Assets.car 里有各图标集。#313 的验证不是在这套环境做的。在 26.0 上只能验证网格和预览，切换要换新的模拟器运行时或真机。
+  2026-11-06 在 Xcode 26.3 + iOS 26.3.1 模拟器上也一样（#3203）：编出的 Info.plist 里四个备用图标都在，`supportsAlternateIcons` 仍是 false，
+  `AppIconTests` 看到 设置 › 外观 › 形象 那行小字的值是 `unavailable` 就跳过。主屏图标的切换只能真机看；模拟器上能验证的是 App 里的标志、
+  `AppIconChoiceTests` 里换形象 → 切到哪张图标、迁移的几种情形（假的 `AppIconSetting`）。
 
 
 - 可关闭的首页页签不能自己持有设置 sheet（#392）：在该 sheet 里关闭页签后，页签视图会被移除，设置也会一起消失。复用外壳持有的设置 sheet，先设置目标路径，再显示；关闭页签只调整首页选择，设置保持打开。回归必须从当前页签进入设置后关闭自身，并跨重启验证偏好。

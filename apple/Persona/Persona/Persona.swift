@@ -1,7 +1,7 @@
 import Foundation
 
-/// A look for Persona (docs/persona.md): its name, its face, the animated dot in the Persona tab's top bar and its
-/// colors. The built-in ones are the app's own drawings (JarvisAvatar: 团子 in the icon's colors, the others in the
+/// A look for Persona (docs/persona.md), the one 形象 setting: its name, its face, the animated dot in the Persona
+/// tab's top bar, its colors and the home screen icon (`appIcon`). Built-ins and packages are the same model. The built-in ones are the app's own drawings (JarvisAvatar: 团子 in the icon's colors, the others in the
 /// style's accent); every other one is a
 /// package on the hub (~/.jarvis/personas/<id>/) that the phone downloads and keeps (`PersonaStore`).
 nonisolated struct Persona: Identifiable, Sendable, Hashable {
@@ -39,6 +39,9 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     var palette: PersonaPalette? {
         manifest?.colors.flatMap { PersonaPalette(light: $0.light, dark: $0.dark) }
     }
+    /// The home screen icon (docs/persona.md「App 图标」): a built-in's own; a package's `app_icon_fallback`, the
+    /// built-in whose icon it takes, as iOS switches only to icons the app ships; else the default's.
+    var appIcon: AppIconChoice { AppIconChoice(lookID: isBuiltin ? id : manifest?.appIconFallback) }
 
     init(id: String, name: String, subtitle: String?, rev: String, manifest: PersonaManifest?, design: String? = nil,
          title: String? = nil) {
@@ -69,6 +72,13 @@ nonisolated struct PersonaManifest: Codable, Sendable, Hashable {
     var avatar: Avatar
     var dot: Dot
     var colors: Colors?
+    /// The built-in 形象 (its id) whose home screen icon this one puts on: the package's own pictures cannot be one.
+    var appIconFallback: String?
+
+    enum CodingKeys: String, CodingKey {
+        case format, id, name, subtitle, about, avatar, dot, colors
+        case appIconFallback = "app_icon_fallback"
+    }
 
     struct Avatar: Codable, Sendable, Hashable {
         /// Side in pixels ("128") → file.

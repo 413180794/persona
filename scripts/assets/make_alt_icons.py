@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""The app icons a user can switch to (设置 › 外观 › App 图标, docs/ios.md「App 图标」), and the previews the page shows.
+"""The home screen icons of the built-in 形象 (设置 › 外观 › 形象, docs/persona.md「App 图标」), and the previews the app
+draws them with in its own pages.
 
-Each alternate icon is an app icon set with any / dark / tinted (iOS 18 home screen looks); the previews are image sets
-(any + dark) of every choice, the default one included, read from its own icon set. Rerun after changing a drawing:
+The 形象 decides the icon (AppIconChoice): 团子, the default, is the app's own `AppIcon` (make_icon.py), with a set
+for each fixed look (`AppIcon-PaperLight` / `…Dark`, for 设置 › 外观 › 深浅色); 面罩 and 汇流 are their faces drawn by
+the app's own PersonaFace (rendered on this Mac by persona_face/main.swift, so the icon is the face the app shows)
+on a square ground. Each set has any / dark / tinted (iOS 18 home screen looks); the previews are image sets
+(any + dark) of every icon, the default one included, read from its own icon set. Rerun after changing a drawing:
   python3 scripts/assets/make_alt_icons.py
 """
 import json
 import os
-import random
+import subprocess
+import tempfile
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFilter
 
 from make_icon import tinted_from
 
@@ -18,91 +23,66 @@ PREVIEW = 384
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ASSETS = os.path.join(ROOT, "apple/Persona/Resources/Assets.xcassets")
 PREVIEWS = os.path.join(ASSETS, "AppIcons")
-DIDOT = "/System/Library/Fonts/Supplemental/Didot.ttc"
-DIDOT_BOLD = 2
+FACE_TOOL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "persona_face")
+FACE_SOURCE = os.path.join(ROOT, "apple/Shared/Design/PersonaFace.swift")
+# The face's share of the icon's side: the disc sits inside the home screen's squircle with room around it.
+FACE_SHARE = 0.80
 
-# p. — paper, ink, the red full stop.
-PAPER = (239, 232, 220)
-INK = (17, 17, 17)
-STOP = (215, 55, 43)
-NIGHT_PAPER = (22, 20, 18)
-NIGHT_INK = (238, 231, 219)
-NIGHT_STOP = (229, 72, 59)
-
-# 气场 — a field of colour, no object.
-AURA_GROUND = (13, 11, 20)
-AURA_BLOBS = [((360, 380), 300, (255, 107, 61)), ((690, 430), 280, (122, 92, 255)),
-              ((520, 720), 290, (33, 199, 168)), ((520, 520), 150, (255, 225, 198))]
-
-
-def grain(img, strength, seed, light=False):
-    """Paper / film grain: uniform noise as a faint ink (or light) wash, the same every run (no churn on a rerun)."""
-    noise = Image.frombytes("L", (S, S), random.Random(seed).randbytes(S * S))
-    alpha = noise.point(lambda v: int(v * strength))
-    tone = Image.new("RGB", (S, S), (255, 255, 255) if light else (0, 0, 0))
-    out = img.convert("RGB").copy()
-    out.paste(tone, (0, 0), alpha)
-    return out
-
-
-def didot(ground, ink, stop, textured=True):
-    img = Image.new("RGB", (S, S), ground)
-    if textured:
-        img = grain(img, 0.09, 7)
-    d = ImageDraw.Draw(img)
-    font = ImageFont.truetype(DIDOT, 860, index=DIDOT_BOLD)
-    d.text((470, 690), "p", font=font, fill=ink, anchor="ms")
-    d.ellipse((766 - 44, 662 - 44, 766 + 44, 662 + 44), fill=stop)
-    return img
-
-
-def aura(ground, blobs, textured=True):
-    img = Image.new("RGB", (S, S), ground)
-    layer = Image.new("RGB", (S, S), ground)
-    d = ImageDraw.Draw(layer)
-    for (cx, cy), r, col in blobs:
-        d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=col)
-    img = layer.filter(ImageFilter.GaussianBlur(110))
-    return grain(img, 0.10, 5, light=True) if textured else img
-
-
-def gray(img):
-    return img.convert("L").convert("RGB")
-
-
-ICONS = {
-    # Asset name: (any, dark, tinted). Tinted is greyscale on black; the system colours it.
-    "AppIcon-Didot": lambda: (
-        didot(PAPER, INK, STOP),
-        didot(NIGHT_PAPER, NIGHT_INK, NIGHT_STOP),
-        didot((0, 0, 0), (255, 255, 255), (150, 150, 150), textured=False),
-    ),
-    "AppIcon-Aura": lambda: (
-        aura(AURA_GROUND, AURA_BLOBS),
-        aura(AURA_GROUND, AURA_BLOBS),
-        gray(aura((0, 0, 0), AURA_BLOBS, textured=False)),
-    ),
+# 面罩 in the default style's accent (system blue), 汇流 in teal: the icon cannot follow 主题色, so each has its own.
+# Ground: the light icon's pale wash of the accent, the dark one's near-black of it.
+FACES = {
+    "AppIcon-Visor": ("visor", (0, 122, 255), (232, 241, 255), (9, 16, 30)),
+    "AppIcon-Circuit": ("circuit", (42, 160, 168), (228, 242, 240), (6, 18, 19)),
 }
 
-# Drawn elsewhere and kept as PNGs: the icon set's icon.png (light) and icon-dark.png are the art (1024, RGB, no
-# alpha); this script only derives the tinted one from the dark one (make_icon.tinted_from, as for the app icon) and
-# rewrites the set. 蜜桃 is the default icon's hand-drawn helper (#709) on peach: picked from generated art, so
-# replacing it is replacing those two PNGs and rerunning.
-KEPT = ["AppIcon-Peach"]
-# The icons that follow the app's 深浅色 (AppIconChoice.fixedLooks): set-name prefix → the set the pictures come from.
-FIXED_LOOKS = {"AppIcon-Paper": "AppIcon", "AppIcon-Peach": "AppIcon-Peach"}
+
+def build_renderer(workdir):
+    """Compiles persona_face/main.swift with the app's PersonaFace.swift into a Mac binary."""
+    binary = os.path.join(workdir, "render")
+    subprocess.run(["xcrun", "swiftc", "-O", "-o", binary, os.path.join(FACE_TOOL, "shim.swift"),
+                    os.path.join(FACE_TOOL, "main.swift"), FACE_SOURCE], check=True)
+    return binary
+
+
+def face(binary, workdir, design, accent, scheme):
+    side = round(S * FACE_SHARE)
+    out = os.path.join(workdir, f"{design}-{scheme}.png")
+    subprocess.run([binary, design, "%02X%02X%02X" % accent, scheme, str(side), out], check=True)
+    return Image.open(out).convert("RGBA")
+
+
+def on_ground(img, ground):
+    """The face centred on a square of `ground`, with a soft shadow under the disc."""
+    out = Image.new("RGBA", (S, S), ground + (255,))
+    side = img.size[0]
+    at = ((S - side) // 2, (S - side) // 2)
+    shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(shadow)
+    d.ellipse((at[0], at[1] + 18, at[0] + side, at[1] + side + 18), fill=(0, 0, 0, 70))
+    out.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(28)))
+    out.alpha_composite(img, at)
+    return out.convert("RGB")
+
+
+def face_icon(binary, workdir, design, accent, light_ground, dark_ground):
+    light = on_ground(face(binary, workdir, design, accent, "light"), light_ground)
+    dark = on_ground(face(binary, workdir, design, accent, "dark"), dark_ground)
+    return light, dark, tinted_from(dark)
 
 
 def kept(name):
+    """A set's art as it is (the default icon's, drawn by make_icon.py): light, dark and the tinted one derived."""
     folder = os.path.join(ASSETS, f"{name}.appiconset")
     light = Image.open(os.path.join(folder, "icon.png")).convert("RGB")
     dark = Image.open(os.path.join(folder, "icon-dark.png")).convert("RGB")
     return light, dark, tinted_from(dark)
 
 
+# The icons that follow the app's 深浅色 (AppIconChoice.fixedLooks): set-name prefix → the set the pictures come from.
+FIXED_LOOKS = {"AppIcon-Paper": "AppIcon"}
+
 # Preview image set: the icon set it shows. The default's is read from the app icon (scripts/assets/make_icon.py).
-PREVIEW_OF = {"app-icon-default": "AppIcon", "app-icon-peach": "AppIcon-Peach", "app-icon-didot": "AppIcon-Didot",
-              "app-icon-aura": "AppIcon-Aura"}
+PREVIEW_OF = {"app-icon-default": "AppIcon", "app-icon-visor": "AppIcon-Visor", "app-icon-circuit": "AppIcon-Circuit"}
 
 
 def write_json(path, data):
@@ -148,10 +128,10 @@ def write_preview(name, icon_set):
 
 
 def main():
-    for name, draw in ICONS.items():
-        write_icon_set(name, *draw())
-    for name in KEPT:
-        write_icon_set(name, *kept(name))
+    with tempfile.TemporaryDirectory() as workdir:
+        binary = build_renderer(workdir)
+        for name, (design, accent, light_ground, dark_ground) in FACES.items():
+            write_icon_set(name, *face_icon(binary, workdir, design, accent, light_ground, dark_ground))
     # 设置 › 外观 › 深浅色 set to 浅色 / 深色 (#710): for the icons that follow it, a set with only that look whatever the
     # home screen is (tinted as usual).
     for prefix, source in FIXED_LOOKS.items():
@@ -162,7 +142,8 @@ def main():
     write_json(os.path.join(PREVIEWS, "Contents.json"), {"info": {"author": "xcode", "version": 1}})
     for name, icon_set in PREVIEW_OF.items():
         write_preview(name, icon_set)
-    print("wrote", ", ".join(list(ICONS) + KEPT), "and", len(PREVIEW_OF), "previews")
+    print("wrote", ", ".join(list(FACES) + [p + l for p in FIXED_LOOKS for l in ("Light", "Dark")]), "and",
+          len(PREVIEW_OF), "previews")
 
 
 if __name__ == "__main__":

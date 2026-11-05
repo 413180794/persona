@@ -339,7 +339,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 | 左上角的头像 | 原来是 ☰。2026-11-01 用户要求：换成顶栏后旧布局正中的形象头像没地方放了，改成左上角的「历史对话」入口，用来展示形象。两页（和拖动时的 `ShellMovingBar`）都是同一个 `ShellPersonaButton`：当前形象的状态头像（`PersonaDot`，和旧布局正中的同一个，五个状态见 `docs/persona.md`「状态」），状态取助手页当前那条对话的（`assistantCurrent`），所以两页、拖动中都一样；点了打开抽屉。和右边的圆按钮一样大（点按区域 `Theme.Size.tapTarget`，随字号变大）。收件箱有「需要你」时右下角一个小淡红点（`InboxDot`，颜色 `Theme.inboxDot`，2026-11-04 用户要求：原来是头像外面一个红底托盘角标，太显眼）：不显示数字和图标，直径 `Theme.Size.dotXL`，叠在圆形的脸上、圆心在右下 45° 处、整个点在脸的圆以内（`dotShift`），一圈页面背景色的细描边把它和脸分开；淡红不是「需要你」的系统红，不抢眼，也避开形象包画在右上角的思考气泡和 z。VoiceOver 读「历史对话」，值是「Persona，空闲」（形象名和状态）加「收件箱有事等你」。头像和角标读的数据（会话、交互、机器、连接、收件箱）都只在按钮自己里面读，顶栏不跟着推送重建（#178；`AgentsTopBar` 是 Equatable）。`ShellAvatarTests`；截图里没有角标用 mock 加 `MOCK_INBOX=empty` |
 | 两页 | 一条横条：抽屉 \| 助手 \| Agents（`ShellPager`，2026-11-01 用户要求）。助手页左拖、Agents 页右拖跟手翻到另一页，切换按钮的选中块跟着手指走；松手和抽屉一个规则（快甩就过去，否则过半），同一个弹簧。点切换按钮也是滑过去。助手（`AssistantView`）一直在，Agents（`ChatsView`）第一次切过去或拖过去时建好，之后都留着，切换不丢位置；静止时另一页透明、不接触摸。拖动中两页自己的顶栏藏起来，壳上一条 `ShellMovingBar` 顶替（头像和切换按钮不动，右边按钮从「新对话」渐变成「新建会话」）：各页的顶栏画在自己页里，会被另一页盖住一截 |
 | 横向拖动归谁 | 一个 UIKit pan（`DrawerPan`）在手指动了几个点时按实际位移定：45° 以内算横向，更陡是列表自己的滚动。助手页：右拖是抽屉（和以前一样），左拖翻到 Agents。Agents 页：右拖翻回助手；从行的中间起拖仍是行自己的右滑（置顶 / 中断 / 标为已看），从左边缘 32pt 内起拖、或者不在行上（分组标题、筛选条、标签页的分组行、空白）就翻页；左拖：只有两页时 Agents 右边没有页，是行的「关闭」；开了「消息」页（三页）后，能关闭的行（标了 `SwipeRowMark`）从中间起拖仍是行的「关闭」，从右边缘 32pt 内起拖、不能关闭的行、不在行上就翻到消息（#2822）。Agents 页不再右拖出抽屉，点左上角的头像。能往那个方向滚的代码块、表格先滚；在正在输入的文字上拖不翻页；推出了页面（系统右滑返回）、在搜索、抽屉开着时都不翻页 |
-| 侧边栏 | 从 Persona tab 提到壳上（`ShellState.drawer`），两页都能滑出。助手页在根部时全页右滑打开；两页都可以点左上角的头像（Agents 页右拖是翻回助手）。内容：最上面是主对话（显示为「Persona」，前面是 App 图标，只改显示名、不动会话 id，#2004），一条分隔线，再是收件箱（带数）、待办、定时任务、知识库、机器，下面是对话历史（主对话不在「置顶」里重复）；底部「新对话」药丸（主题色，#1312）+ 设置 |
+| 侧边栏 | 从 Persona tab 提到壳上（`ShellState.drawer`），两页都能滑出。助手页在根部时全页右滑打开；两页都可以点左上角的头像（Agents 页右拖是翻回助手）。内容：最上面是主对话（显示为「Persona」，前面是当前形象的 App 图标（`AppGlyph`，#3203），只改显示名、不动会话 id，#2004），一条分隔线，再是收件箱（带数）、待办、定时任务、知识库、机器，下面是对话历史（主对话不在「置顶」里重复）；底部「新对话」药丸（主题色，#1312）+ 设置 |
 | 侧边栏的页面 | 都推到助手页的栈上（`ShellState.show` → `AssistantView.show`）。收件箱、机器按值推（`ShellRoute`，`ShellDestinations` 登记它们和它们再推的 InboxItem / 飞书页 / 机器详情 / 会话）：视图式推出的页面上再按值推，新页面会插到下面（docs/lessons/ios.md） |
 | 设置 | 全屏浮层（`model.shellSettings`，放在 model 里：换风格会重建整棵树，浮层要回到原来那一页），右上角 × |
 | 空对话 | 和旧布局同一个欢迎页（`AssistantWelcome`：问候、开一段新对话 / 主对话的说明、在线的机器和 iPhone、六个可以问的事；液态玻璃是两列卡片，BeautifulUI 是「可以问我」列表卡片）。2026-11-01 第一版只放输入框，没有待办时整页空白，用户 2026-11-02 要回原来的设计。输入框上面是需要你的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」（`ShellNeedsYou`），没有就不显示；这一块和输入框垫着页面底色，欢迎页滚到它们下面，在上沿渐隐（不硬切）。行数按空间定（2026-11-02，#283，iPhone Duo 外屏上 3 行 + 输入框占了半屏、把建议卡片拦腰截断）：这一块不盖住欢迎页第一行可以问的事（`NeedsRoom`：量第一行的下沿、页面高度（键盘不算）、输入框静止时的高度），放不下就少几行，至少 1 行；普通 iPhone 的液态玻璃仍是 3 行，17e 的 BeautifulUI 是 2 行，Duo 外屏和 SE 是 1 行。收起的里面有 Agent 时那一行写「还有 N 件需要你」，只剩 Agent 时点了去 Agents 页（收件箱里没有它们）。`AssistantWelcomeTests` 守着：两种布局、从侧边栏点新对话，问候、说明、第一个建议都在屏幕上、在输入框上面；「需要你」不盖住第一个建议、聚焦输入框后行数不变（在 Duo 外屏上也跑） |
@@ -549,7 +549,7 @@ herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模�
   - 检查（JarvisTests，扫源码）：`TypeScaleTests`（不写系统字号、不写死字号、强调用 `labelStrong` 这类 token 而不是在级别上 `.weight(`、
     竖向间距在网格上）、`IconVocabularyTests`、`TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；
     减少后删掉 `TokenBaseline.json` 重跑一次记下新的基线）、`StyleSpecTests`。Debug 编译对超过 150ms 的类型检查报警告（发版机器会超时）。
-- 设置 › 外观（2026-11-01 用户要求，照「连接器」的样子）：设置首页一组「形象」「主题色」「界面风格」「深浅色」「App 图标」「布局」（深浅色和 App 图标只在 iPhone / iPad，布局只在 iPhone），右边是当前值，每行点进去是自己的配置页（`AppearanceSettingsView.swift`）。
+- 设置 › 外观（2026-11-01 用户要求，照「连接器」的样子）：设置首页一组「形象」「主题色」「界面风格」「深浅色」「布局」（深浅色只在 iPhone / iPad，布局只在 iPhone；App 图标 2026-11-05 合进形象，没有单独一行，#3203），右边是当前值，每行点进去是自己的配置页（`AppearanceSettingsView.swift`）。
 - 外观是设置 › 外观里三个互不影响的选择（2026-10-31 用户要求：「形象，主题色和 UI 组件的选择」分开；以前一个界面风格同时管颜色和组件，
   形象又盖掉主色，选了黏土再选奶娃紫色就没了，想要 Claude 的珊瑚橙配 Island 的卡片也做不到）：
   - **形象**（`PersonaPicker`，`docs/persona.md`）：名字、头像、顶栏的状态圆点和动画，不改颜色。
@@ -596,18 +596,18 @@ herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模�
     自己强制深浅色的地方不受影响（图片编辑器、消息菜单是深色，分享卡片、终端按自己的设置）。
   - 系统画的东西仍跟随系统：灵动岛和锁屏的实时活动、小组件、手表、通知，以及 App 启动时的启动屏（`LaunchBackground`）。
   - App 图标跟着走（2026-11-03 用户要求：浅色用浅色那张，深色用深色那张）：主屏图标用哪一面由系统按主屏的外观选，App 改不了，
-    所以纸色（默认图标）和蜜桃各多两套备用图标集：`AppIcon-PaperLight|PeachLight` 两种外观都是浅色那张、`…Dark` 都是深色那张（着色照旧），
-    `make_alt_icons.py` 从 `AppIcon` / `AppIcon-Peach` 的图写出来，不进设置页的格子。选了浅色 / 深色时 `AppIconModel.follow` 换到那一套，
-    跟随系统换回两面都有的那套（纸色就是主图标）；选图标时也按当前的深浅色挑（`AppIconChoice.iconName(for:)`）。
-    每次换系统都会弹「已更改图标」的提示（换图标的 API 就是这样，绕不过）；p.、气场只有一套，不动。
+    所以纸色（团子的图标、主图标）多两套备用图标集：`AppIcon-PaperLight` 两种外观都是浅色那张、`AppIcon-PaperDark` 都是深色那张（着色照旧），
+    `make_alt_icons.py` 从 `AppIcon` 的图写出来。选了浅色 / 深色时 `AppIconModel.follow` 换到那一套，
+    跟随系统换回两面都有的那套（纸色就是主图标）；换形象时也按当前的深浅色挑（`AppIconChoice.iconName(for:)`）。
+    每次换系统都会弹「已更改图标」的提示（换图标的 API 就是这样，绕不过）；面罩、汇流的图标只有一套，不动。
     `AppIconModel` 记着最新的深浅色：切换还在进行时（系统的提示框还没点）又改了深浅色，这次切完会再核对一遍、接着切到最新的那套，
     不会停在错的上面（geminiwen 对 #714 的评审）；App 每次回到前台也 `follow` 一次（启动参数给的深浅色、被系统打断的切换都能对上），
-    已经对上就什么都不做、不弹提示。系统里记着这一版已经删掉的图标（余烬 / 薄荷 / 石墨）时不动它：主屏本来就显示主图标，
-    回到前台自己去切会凭空弹提示。
-    App 图标页的预览按主屏实际显示的那一面画：纸色、蜜桃在浅色 / 深色下画那一面，其他和跟随系统画系统的那一面（读屏幕的 trait，
+    已经对上就什么都不做、不弹提示。系统里记着这一版已经删掉的图标（余烬 / 薄荷 / 石墨，蜜桃 / p. / 气场）而形象要的是主图标时不动它：
+    主屏本来就显示主图标，回到前台自己去切会凭空弹提示。
+    App 里的标志（`AppGlyph`）按主屏实际显示的那一面画：纸色在浅色 / 深色下画那一面，其他和跟随系统画系统的那一面（读屏幕的 trait，
     窗口的已经被 App 的深浅色盖住了）。调试命令 `set-appearance` 也走 `AppModel.colorScheme`（会存下来）。
     UI 测试 `ColorSchemeIconTests`（体验模式）用 `probe.scheme` 查页面真的画成了那一面，失败时 tearDown 换回跟随系统；
-    iOS 26.0.1 模拟器不支持备用图标（`supportsAlternateIcons` 为 false），主屏图标的切换要真机看。
+    iOS 26.0.1、26.3.1 模拟器不支持备用图标（`supportsAlternateIcons` 为 false），主屏图标的切换要真机看。
   - 第一步先在液态玻璃下检查（列表、玻璃表面、玻璃按钮、sheet）；其他风格本来就适配系统深色，机制相同。Mac 和 Android 还没有这个选项：
     Mac 上只设 `NSApp.appearance` 时 List 的行仍是浅色的颜色（`MacSnapshot.colorScheme` 的注释），每个窗口还要 `preferredColorScheme`，另做。
   - 调试：`-ui.scheme light|dark|system`（UserDefaults 参数域，和 `-ui.style` 一样）；`-tab settings -openAppearance scheme` 打开这一页。
@@ -678,21 +678,18 @@ herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模�
   着色是黑底灰度。iPhone、手表、Mac 同一张。图是生成后挑定的，不是脚本画的：`AppIcon.appiconset` 的 `icon.png`（浅色）、`icon-dark.png`（深色）
   就是素材，`scripts/assets/make_icon.py` 从它们算出 `icon-tinted.png`（灰度、四周的底拉到纯黑）、手表的图标（浅色那张，系统裁成圆）、
   Mac 的各个尺寸和 `docs/icon-preview.png`；换图标就覆盖这两张再跑它和 `make_alt_icons.py`（设置页的预览）。
-- **App 图标可以换**（设置 › 外观 › App 图标，iPhone / iPad；手表和 Mac 只有一个图标）：
-  - 选项：纸色（默认，上面这个）、「蜜桃」（同一个小家伙放在蜜桃底上，深色是深棕红底）、「p.」（Didot 小写 p 加红色句号，米白纸底，
-    深色是墨底米白字）、「气场」（珊瑚、紫、青绿的光晕加颗粒，不画物体）。后两个是按新名字 Persona 设计的第二轮方案里挑的。
-  - 2026-11-03 去掉了「余烬」「薄荷」「石墨」（原默认图标的换色变体）和原默认图标本身（用户：太丑）。选过它们的人，系统找不到那个图标集，
-    主屏回到默认图标；`AppIconChoice(iconName:)` 把认不出的名字读成默认，设置页里也显示纸色，再选一次别的就好。
-  - 蜜桃和纸色一样是挑定的 PNG：`AppIcon-Peach.appiconset` 的 `icon.png`、`icon-dark.png` 是素材，`make_alt_icons.py` 派生着色那张和预览。
-    纸色和蜜桃还跟着 设置 › 外观 › 深浅色（只有浅色 / 只有深色的 `…Light` / `…Dark` 四套，见上面「深浅色」）。
-  - 资源：`scripts/assets/make_alt_icons.py` 画出 `AppIcon-Didot`、`AppIcon-Aura` 两个图标集（any / dark / tinted），给蜜桃派生着色那张，
-    再从每个图标集（含默认的）缩出设置页用的预览 `AppIcons/app-icon-*`（any / dark），改了画法重跑脚本。
-    这个脚本每次重画 Didot，深色那张的字节会变（图一样）：只为刷新预览跑的话，只提交自己改的文件。
+- **App 图标跟着形象**（2026-11-05 合成一个「形象」，#3203，做法和迁移见 `docs/persona.md`「App 图标」；iPhone / iPad，手表和 Mac 只有一个图标）：
+  - 每个内置形象一张：团子 = 纸色（主图标，上面这个），面罩 = `AppIcon-Visor`，汇流 = `AppIcon-Circuit`；hub / 扩展的形象用它 `app_icon_fallback` 指定的那张，没有就默认。
+  - 2026-11-03 去掉了「余烬」「薄荷」「石墨」，2026-11-05 去掉了「蜜桃」「p.」「气场」（不对应任何形象）。选过它们的人，系统找不到那个图标集，
+    主屏回到默认图标；`AppIconChoice(iconName:)` 把认不出的名字读成默认。
+  - 资源：`scripts/assets/make_alt_icons.py` 用 App 的 `PersonaFace` 画出 `AppIcon-Visor`、`AppIcon-Circuit`（any / dark / tinted），写纸色的 `…Light` / `…Dark`，
+    再从每个图标集（含默认的）缩出 App 里画标志用的预览 `AppIcons/app-icon-*`（any / dark），改了画法重跑脚本。
   - 工程：iOS 目标的 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` 列出备用图标集，构建时写进 Info.plist 的 `CFBundleAlternateIcons`；
     不在列表里的图标集不会打进包，加一个图标要同时改 `AppIconChoice`、这一行和脚本（`AppIconChoiceTests` 查三者一致、资源都在）。
-  - 选择由系统记住，App 不存：当前是哪个读 `alternateIconName`（`AppIconModel`），换的时候系统弹自己的提示框。
-  - 截图：`-tab settings -openAppearance icon`；`AppIconTests`（UI 测试，体验模式）点「气场」、接受系统提示、回主屏截图，再换回默认。
-- 设置页顶部和欢迎页名字旁边的标志就是 App 图标本身（`AppGlyph` 显示 设置 › 外观 › App 图标 选中那个的预览，浅色 / 深色和主屏上一样：`AppIconChoice.homeScreenLook`，与图标页的格子同一规则），换图标它跟着变（#709；#1312 以前一直是纸色；更早是代码画的夜色底珊瑚星）。
+  - 当前是哪个读 `alternateIconName`（`AppIconModel`），App 不存；换的时候系统弹自己的提示框。
+  - 截图：`AppIconTests`（UI 测试，mock hub）在 设置 › 外观 › 形象 选面罩、接受系统提示、回主屏截图，再用 `-openPersona persona` 启动看图标回到团子的（迁移的情形）；
+    当前的图标读那行小字（`persona-icon-note`）的无障碍值，系统换不了图标时是 `unavailable`，测试跳过（模拟器上就是这样，见 `docs/lessons/ios.md`）。
+- 设置页顶部、欢迎页名字旁边和侧边栏主对话前面的标志是当前形象的 App 图标（`AppGlyph`，浅色 / 深色和主屏上一样：`AppIconChoice.homeScreenLook`；形象包画它自己的头像），换形象它跟着变（#709；#1312 以前一直是纸色；#3203 以前跟 App 图标设置、侧边栏写死纸色）。
 - 品牌色：珊瑚色（`Theme.brand`）只给 Persona 自己的标志：对话首页的图标、实时活动锁屏的四角星。能点的东西一律用当前风格的主色 `Theme.accent`。
   两份 AccentColor 资源（手表的标题和 tint、系统弹窗这类读资源的地方）是系统蓝；iPhone / iPad 窗口的 `tintColor` 跟着主题色（`WindowTint`：UIKit 画的 List 行图标取它，#1188）；实时活动读不到风格，描边和按钮固定用系统蓝（按钮是压深的 `#0071E3`，白字 4.7:1）。
 

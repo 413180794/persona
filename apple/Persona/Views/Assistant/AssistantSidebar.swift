@@ -1005,7 +1005,7 @@ struct AssistantSidebar: View {
     }
     #endif
 
-    /// The shell's first row: the main conversation as 「Persona」 with the app's logo (#2004). Only the name shown is
+    /// The shell's first row: the main conversation as 「Persona」 with the 形象's logo (#2004, #3203). Only the name shown is
     /// Persona's: it is the same conversation, its key and its data unchanged. Its state (working, waiting, unread) on
     /// the right, as on a conversation's row.
     private func mainItem(_ all: [Session]) -> some View {
@@ -1014,7 +1014,7 @@ struct AssistantSidebar: View {
         let selected = key != nil && key == current
         return Button { if let key { open(key) } } label: {
             HStack(spacing: Theme.Space.l) {
-                BrandMark(Theme.Brand.persona, side: Theme.Size.icon)
+                AppGlyph(size: Theme.Size.icon, scaled: true)
                 Text(Self.mainTitle).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: 0)
                 if let main { mark(main) }
@@ -1231,7 +1231,7 @@ struct AssistantSidebar: View {
                 if isShell {
                     EmptyView()
                 } else if isMain {
-                    BrandMark(Theme.Brand.persona, side: Theme.Size.wellM)
+                    AppGlyph(size: Theme.Size.wellM, scaled: true)
                 } else {
                     ConversationMark(id: s.sessionID)
                 }

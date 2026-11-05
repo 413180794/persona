@@ -2,10 +2,13 @@
 
 `apple/Persona/PhoneTools/`：把 iPhone 能力包装成 MCP 工具，让 Claude 在电脑上操作手机数据。开关和授权在 设置 › 连接器 › 这台 iPhone（2026-11-01 以前叫「手机数据」）。
 
-链路：Claude 调 `phone_*` 工具 → `personad mcp` → node.sock → hub → 在线的 iPhone（WebSocket `tool_call`）→
+链路：Claude 调 `phone_*` 工具 → `personad mcp` → node.sock → hub → 在线的手机（iPhone、安卓或 Mac，WebSocket `tool_call`）→
 App 在本地查询/写入 → `tool_result` 原路返回。
 
-工具的描述和 schema 由 App 注册（iOS `apple/Persona/PhoneTools/`，Android `android/platform/phonetools/`（`PhoneToolCatalog.kt`）），不在服务端的 `server/internal/prompts/mcp/`（`docs/prompts.md`「MCP 工具」）。
+工具的描述和 schema 由 App 注册（iOS `apple/Persona/PhoneTools/`，安卓 `android/platform/phonetools/`（`PhoneToolCatalog.kt`）），不在服务端的 `server/internal/prompts/mcp/`（`docs/prompts.md`「MCP 工具」）。
+两端同名的工具描述和参数必须一字不差（hub 把各台手机的工具按名字合成一份，`PhoneToolCatalogTest` 对照 iOS 导出的清单）。
+
+邮箱工具 `mail_*` 走同一个 `personad mcp`，但在 hub 里执行、不经过手机，见下面「邮箱工具（mail_*）」。
 
 ## 注册与开关
 
@@ -24,9 +27,9 @@ App 在本地查询/写入 → `tool_result` 原路返回。
 | 工具 | 需要权限 | 需确认 | 说明 |
 | --- | --- | --- | --- |
 | `phone_contacts_search {query, limit?}` | 通讯录 | 否 | 按姓名、公司、职位、邮箱、电话号码模糊搜索（号码可带空格/横线）；返回姓名、公司、职位、带标签的电话和邮箱、生日（没有年份时返回 `--MM-DD`） |
-| `phone_calendar_events {start?, end?, query?, limit?}` | 日历（完全访问） | 否 | 默认今天 0 点到 7 天后；返回 identifier、标题、起止、全天标记、日历名、地点、备注前 300 字、参与人 |
+| `phone_calendar_events {start?, end?, query?, limit?}` | 日历（完全访问） | 否 | 默认今天 0 点到 7 天后；返回 id、标题、起止、全天标记、日历名、地点、备注前 300 字、参与人 |
 | `phone_calendar_create_event {title, start, end, location?, notes?, all_day?, calendar?}` | 日历 | **是** | 新建日程，按名字选日历，默认日历兜底 |
-| `phone_reminders_list {list?, include_completed?, limit?}` | 提醒事项 | 否 | 默认只列未完成；返回 id、标题、到期、优先级、所属列表、备注前 300 字 |
+| `phone_reminders_list {list?, include_completed?, limit?}` | 提醒事项 | 否 | 默认只列未完成；返回 id、标题、到期、是否完成、优先级、所属列表、备注前 300 字 |
 | `phone_reminders_create {title, due?, notes?, list?, priority?}` | 提醒事项 | **是** | 新建提醒，优先级 0/1–4/5/6–9 |
 | `phone_reminders_complete {id}` | 提醒事项 | **是** | 标记完成（用 `phone_reminders_list` 返回的 id） |
 | `phone_location_current {}` | 位置（使用期间） | 否 | 一次性定位，最多等 15 秒；返回经纬度、精度、海拔、时间、时区、反向地理编码地址 |
@@ -38,17 +41,42 @@ App 在本地查询/写入 → `tool_result` 原路返回。
 | `phone_clipboard_get {}` | 无（有系统粘贴提示） | 否 | 读剪贴板文本 |
 | `phone_clipboard_set {text}` | 无 | 否 | 覆盖剪贴板文本 |
 | `phone_notify {title, body, delay_seconds?}` | 通知 | 否 | 本地通知，可延迟最多 24 小时 |
+| `phone_notifications_list {limit?}` | 无 | 否 | **只有安卓**：Persona 自己正在显示的通知（id、标题、正文、时间），新的在前，默认 50、最多 100；不含确认卡的通知，看不到别的 App 的通知 |
+
+各端有哪些工具：
+
+- **iOS**：上表除 `phone_notifications_list` 外全有。
+- **Mac**（`PersonaMac`）：没有健康工具（Mac 没有健康数据，`PhoneToolRegistry.healthTools`），其余同 iOS。
+- **安卓**：没有提醒事项的三个工具和 `phone_health_write_sample`；多一个 `phone_notifications_list`。`phone_location_current` 只在 App 在前台时提供。
 
 返回统一是 pretty-printed JSON 文本（`ToolContent.text`），时间一律 ISO 8601 带本机时区偏移，日期字段用
 `yyyy-MM-dd`。`phone_photo_get` 额外带一个 `ToolContent.image`。
 
 ## 确认流程
 
-写操作（建日程、建提醒、完成提醒、写健康数据）带 `confirmation` 闭包，执行前 App 弹确认卡片，展示「新建日程『…』14:00 → 15:00」
+写操作（建日程、建提醒、完成提醒、写健康数据）带 `confirmation` 闭包，执行前 App 弹确认卡片（安卓上只有建日程要确认，它没有另外三个写工具），展示「新建日程『…』14:00 → 15:00」
 「写入健康：体重 72.5 千克」这种摘要；用户点拒绝时工具返回 `isError=true`，内容是 `The user declined on the phone.`。确认只针对单次调用，
 Claude 再调一次会再问一次。
 
 读操作不打扰用户，但每一次调用都会在会话里留下 `tool_call` / `tool_result` 记录。
+
+`phone_clipboard_set` 和 `phone_notify` 也会改手机上的东西，但不弹确认。确认在 App 里做，hub 的闸门 `connector_gate` 管不到手机工具；`mail_send` 的确认是 hub 问的，规则不一样，见下节。
+
+## 邮箱工具（mail_*）
+
+邮箱工具由 hub 的邮件连接器提供（`server/internal/hub/mail_connector.go`，描述和参数在 `server/internal/prompts/mcp/mail/`），在 hub 上连 IMAP / SMTP，不经过手机。
+助手和 Agent 都能用（连接器的 `AgentTools: mail_*`）。账号和凭据见 `docs/mail.md`。
+
+| 工具 | 需确认 | 说明 |
+| --- | --- | --- |
+| `mail_accounts {}` | 否 | 列出已配置的邮箱账号（id、名字、地址、服务商），搜索和发信前先调它拿 `account_id` |
+| `mail_search {account_id?, mailbox?, query?, limit?, before_uid?}` | 否 | 搜邮件，返回 uid、主题、发件人、时间、摘要；不填 `account_id` 就同时搜所有账号的收件箱；`mailbox` 默认 INBOX；`limit` 默认 20、最多 200；`before_uid` 往前翻页。Gmail 用 Gmail 搜索语法，其他服务商在服务端全文搜，服务端搜不到时改由 hub 在最新的一段邮件里匹配主题、发件人、收件人（不搜正文），结果里给出往前翻用的 `before_uid` |
+| `mail_read {account_id, uid, mailbox?}` | 否 | 读一封的全文：邮件头、纯文本、HTML、附件列表；不标已读 |
+| `mail_send {account_id, to, cc?, bcc?, subject, text, html?, in_reply_to?, references?}` | **是**（hub 问） | 发信；`to` / `cc` / `bcc` 是 `{name?, email}` 的数组；回复时 `in_reply_to` 填原信的 Message-ID，`references` 填原来的 References 加上它 |
+
+`mail_send` 的确认和手机写操作不是一套：它是连接器的写操作，过 hub 的闸门（`server/internal/connector/gate.go`）。
+没有规则命中时默认 confirm：hub 在手机上发一张批准卡（「Send mail to …: 主题」），用户拒绝时返回 `The user declined mail_send.`；
+hub.json 的 `connector_gate` 规则可以改成 allow（不问直接发）或 deny（直接拒绝）。健康对话里的写操作每次都问，allow 规则不放行（`docs/health.md`）。
 
 ## 权限
 
@@ -92,12 +120,13 @@ Claude 再调一次会再问一次。
 
 - **没有 API 读短信 / iMessage / 通话记录**（`MessageUI` 只能写不能读）。
 - **没有 API 读备忘录、微信、其他 App 的数据**。要读只能靠「截图 + `phone_photo_get` 看图片」或用户手动贴到剪贴板。
-- **App 必须在线**：hub 只能把 `tool_call` 发给已 `register_phone` 的 iPhone。App 在前台或刚切到后台时 WebSocket
-  还在，能收到；被系统挂起后收不到，hub 会返回「iPhone 不在线，请打开 Persona」。
+- **App 必须连着 hub**：hub 只能把 `tool_call` 发给已 `register_phone` 的手机。App 在前台或刚切到后台时 WebSocket
+  还在，能收到；iPhone 被系统挂起时，hub 先发静默推送在后台叫醒 App、最多等 20 秒让它连上（`hub.go` `wakePhone`）。只叫最近注册过的那一台；它 30 秒内叫过就这次不再叫，但仍会等这 20 秒；要 hub 配了推送；安卓不叫。
+  叫不醒就返回错误，让模型请用户打开 Persona 再试。一次调用最多等手机 2 分钟，超时也返回错误。
 - **后台定位不可用**：只有「使用期间」权限，App 不在前台时定位会失败。
 - **剪贴板会弹系统提示**：读别的 App 复制的内容时，iOS 会问「允许粘贴吗」，用户必须点允许。
 - **健康数据只能按天汇总**：没有逐条记录查询；步数/能量是累计值，心率是当天平均/最小/最大，睡眠是每天睡着时长
   （`asleep` 系列，不含「在床上」）。
 - **照片可能是 limited**：用户只授权部分照片时，`phone_photos_recent` 只返回选中的那些。
-- **通知只能在 App 有执行机会时发**：延迟通知交给系统调度，会准时；但 Claude 必须在 App 在线时先调用成功。
+- **通知只能在 App 有执行机会时发**：延迟通知交给系统调度，会准时；但这次调用本身要成功，也就是 App 连着 hub 或能被叫醒。
 - 返回内容（包括邮件/照片元数据）会进入 Claude 的上下文，等于交给模型处理。

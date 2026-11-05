@@ -2,7 +2,8 @@ import XCTest
 
 /// 设置 › 外观 › 形象 (docs/persona.md), against scripts/mock/mock_hub.py started with MOCK_PERSONAS=demo (JARVIS_MOCK_HUB): the
 /// hub's persona is offered next to the built-in Persona; choosing it downloads it, and the Persona tab's top bar takes
-/// its name and face; choosing Persona again brings the name back. The built-in 汇流 is offered too and keeps the name.
+/// its name and face; choosing Persona again brings the name back. The built-in 汇流 is offered too and keeps the name
+/// (and puts its home screen icon on: the system's alert is accepted).
 final class PersonaPickerTests: XCTestCase {
     private var hub: String!
     /// mock_hub's main conversation: its name pill shows the persona's name (a side conversation's shows its title).
@@ -24,6 +25,9 @@ final class PersonaPickerTests: XCTestCase {
             let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
             app.launchArguments = ["-pairURL", pair, "-openPersona", "persona"]
             app.launchPinned()
+            // Back on 团子's icon, if a test left another: the system's alert.
+            let ok = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons.firstMatch
+            if ok.waitForExistence(timeout: 5) { ok.tap() }
             _ = app.tabBars.firstMatch.waitForExistence(timeout: 10)
             app.terminate()
         }
@@ -99,6 +103,7 @@ final class PersonaPickerTests: XCTestCase {
         XCTAssertTrue(circuit.waitForExistence(timeout: 10), "汇流 is not offered:\n\(app.debugDescription)")
         XCTAssertTrue(app.buttons["persona-persona"].isSelected, "the default should be 团子")
         circuit.tap()
+        acceptIconAlert() // the home screen icon follows the 形象 (AppIconTests)
         waitSelected(app.buttons["persona-jarvis-circuit"], "choosing 汇流 did not take")
         shot(app, "settings-circuit")
         XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "汇流 should keep the name Persona")
@@ -109,6 +114,7 @@ final class PersonaPickerTests: XCTestCase {
         let visor = app.buttons["persona-jarvis"]
         XCTAssertTrue(visor.waitForExistence(timeout: 10), "面罩 is not offered:\n\(app.debugDescription)")
         visor.tap()
+        acceptIconAlert()
         waitSelected(app.buttons["persona-jarvis"], "choosing 面罩 did not take")
         XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "面罩 should keep the name Persona")
     }

@@ -51,6 +51,11 @@ export interface Todo {
   start_error?: string;
   /** The main conversation supervises it (#3124): what done means and where its review stands (lib/supervision.ts). */
   supervision?: Supervision;
+  /** How far the work got (`plan` / `develop` / `review` / `merge` / `deploy` / `verify`, #2776); unset on hubs that
+   * don't send it, and unknown values draw nothing (lib/todo-stage.ts). */
+  stage?: string;
+  /** The pull request the work is in, when the hub knows one (#2776). */
+  pr_url?: string;
 }
 
 export type TodoStatus = "done" | "needs_you" | "interrupted" | "unread" | "working" | "follow_up" | "not_started" | "failed";

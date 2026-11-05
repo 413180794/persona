@@ -42,6 +42,7 @@ import { groupTodosByProject, treeStateLabel, type TodoProjectGroup, type TreeSt
 import { useFolded } from "../lib/use-folded";
 import { Empty } from "./assistant/parts";
 import { ReviewBadge, ReviewChecklist } from "./assistant/Supervision";
+import { TodoStageBar } from "./TodoStageBar";
 
 export function TodosView({
   selectedId,
@@ -684,6 +685,9 @@ function TodoDetail({
         </p>
       )}
       <ReviewChecklist todo={todo} />
+
+      {/* Stage Bar (#2776): progress from plan to verified, from the hub's todo; nothing on hubs that don't send it. */}
+      <TodoStageBar stage={todo.stage} prURL={todo.pr_url} className="mt-4" />
 
       {/* Notes / Description */}
       <div className="mt-4">

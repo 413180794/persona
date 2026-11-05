@@ -2,7 +2,8 @@ import BeautifulUI
 import SwiftUI
 
 // 设置 › 外观 (2026-11-01): laid out like 连接器, one row per thing that changes how the app looks (形象, 主题色, 界面风格,
-// App 图标 on iPhone and iPad, and 布局 on an iPhone), each opening its own page; the first three are apart (docs/ios.md「设计语言」). Picking anything
+// 深浅色 on iPhone and iPad, and 布局 on an iPhone), each opening its own page; the first three are apart (docs/ios.md「设计语言」).
+// The home screen icon is the 形象's, not a row of its own (#3203). Picking anything
 // there rebuilds the whole tree (`AppModel.look`, the layout switch); the settings path lives in AppModel, so the
 // rebuilt app is back on the same page.
 
@@ -35,14 +36,6 @@ struct AppearanceSection: View {
                 }
                 .settingsListRow(SettingsPage.colorScheme)
                 .accessibilityIdentifier("settings-scheme")
-                if model.appIcon.available {
-                    NavigationLink(value: SettingsPage.appIcon) {
-                        SettingsRow(title: "App 图标", symbol: Theme.Icon.appIcon, tint: Theme.Hue.orange,
-                                    value: model.appIcon.current.title, look: .oneLine)
-                    }
-                    .settingsListRow(SettingsPage.appIcon)
-                    .accessibilityIdentifier("settings-app-icon")
-                }
                 if UIDevice.current.userInterfaceIdiom == .phone {
                     NavigationLink(value: SettingsPage.layout) {
                         SettingsRow(title: "布局", symbol: Theme.Icon.layout, tint: Theme.Hue.blue,
@@ -65,7 +58,7 @@ struct AppearanceSection: View {
     }
 }
 
-/// 设置 › 外观 › 形象: Persona' name, face and status dot (its colors are the 主题色 跟随形象).
+/// 设置 › 外观 › 形象: Persona's name, face, status dot, logo and home screen icon (its colors are the 主题色 跟随形象).
 struct PersonaSettingsPage: View {
     @Environment(AppModel.self) private var model
 
@@ -75,13 +68,22 @@ struct PersonaSettingsPage: View {
                 PersonaPicker()
                     .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
             } footer: {
-                #if os(macOS)
-                Text(model.isDemo ? "体验模式只有默认形象。" :
-                    "Persona 的名字、头像和顶栏的状态圆点跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到这台 Mac。")
-                #else
-                Text(model.isDemo ? "体验模式只有默认形象。" :
-                    "Persona 的名字、头像和顶栏的状态圆点跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到手机。")
-                #endif
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    #if os(macOS)
+                    Text(model.isDemo ? "体验模式只有默认形象。" :
+                        "Persona 的名字、头像、顶栏的状态圆点和 App 里的标志跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到这台 Mac。")
+                    #else
+                    Text(model.isDemo ? "体验模式只有默认形象。" :
+                        "Persona 的名字、头像、顶栏的状态圆点、App 里的标志和桌面图标跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到手机。")
+                    if let failure = model.appIcon.failure {
+                        Text(failure).foregroundStyle(Theme.danger)
+                    }
+                    Text("桌面图标只能用 App 自带的几张：hub 上或扩展的形象在 App 里全部生效，桌面图标用它指定的内置形象的，没指定就用默认。")
+                        // The icon on now, or that the system cannot switch it here (AppIconTests).
+                        .accessibilityValue(model.appIcon.available ? model.appIcon.current.rawValue : "unavailable")
+                        .accessibilityIdentifier("persona-icon-note")
+                    #endif
+                }
             }
         }
         .themedGroupedPage()
@@ -218,7 +220,7 @@ struct ColorSchemeSettingsPage: View {
                 .pickerStyle(.inline)
                 .labelsHidden()
             } footer: {
-                Text("跟随系统时，手机换深浅色 App 跟着换。选了浅色或深色，App 里的界面就一直是那样；App 图标是纸色（默认）或蜜桃时，主屏上的图标也换成浅色或深色那张（系统会提示一次）。灵动岛、锁屏的实时活动、小组件和手表仍跟随系统。")
+                Text("跟随系统时，手机换深浅色 App 跟着换。选了浅色或深色，App 里的界面就一直是那样；形象是团子（默认）时，主屏上的图标也换成浅色或深色那张（系统会提示一次）。灵动岛、锁屏的实时活动、小组件和手表仍跟随系统。")
             }
         }
         .themedGroupedPage()
@@ -227,87 +229,6 @@ struct ColorSchemeSettingsPage: View {
         #endif
         .navigationTitle("深浅色")
         .navigationBarTitleDisplayMode(.inline)
-    }
-}
-#endif
-
-#if os(iOS) || os(visionOS)
-/// 设置 › 外观 › App 图标: the home screen icon, each choice drawn as it looks on the home screen now (light or dark).
-/// The system confirms a switch with its own alert.
-struct AppIconSettingsPage: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    /// Three a row; two at accessibility sizes.
-    private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: Theme.Space.m, alignment: .top), count: typeSize.isAccessibilitySize ? 2 : 3)
-    }
-
-    var body: some View {
-        let icons = model.appIcon
-        List {
-            Section {
-                LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Space.l) {
-                    ForEach(AppIconChoice.allCases) { tile($0, icons: icons) }
-                }
-                .padding(.horizontal, Theme.Space.l)
-                .listRowInsets(EdgeInsets(top: Theme.Space.l, leading: 0, bottom: Theme.Space.l, trailing: 0))
-            } footer: {
-                if let failure = icons.failure {
-                    Text(failure).foregroundStyle(Theme.danger)
-                } else {
-                    Text("只换主屏上的图标，App 里的颜色和形象不变。深色模式和「着色」主屏的图标跟着系统换；纸色和蜜桃还跟着 设置 › 外观 › 深浅色：选了浅色或深色，就一直是那一张。")
-                }
-            }
-        }
-        .themedGroupedPage()
-        .navigationTitle("App 图标")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func tile(_ c: AppIconChoice, icons: AppIconModel) -> some View {
-        let selected = c == icons.current
-        let side = Theme.Size.box80
-        let shape = RoundedRectangle(cornerRadius: Theme.Radius.appIcon(side), style: .continuous)
-        return Button {
-            guard !selected else { return }
-            Haptics.tap()
-            Task { await icons.select(c, scheme: model.colorScheme) }
-        } label: {
-            VStack(spacing: Theme.Space.s) {
-                Image(c.preview)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: side, height: side)
-                    .environment(\.colorScheme, c.homeScreenLook(model.colorScheme, system: AppIconChoice.systemLook))
-                    .clipShape(shape)
-                    .overlay(shape.stroke(Theme.cardStroke, lineWidth: Theme.Size.line))
-                    .overlay {
-                        if icons.switching == c { ProgressView().tint(.white) }
-                    }
-                    .padding(Theme.Space.xs)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.appIcon(side) + Theme.Space.xs, style: .continuous)
-                            .stroke(selected ? Theme.accent : .clear, lineWidth: Theme.Size.ruleWide)
-                    )
-                VStack(spacing: Theme.Space.xxs) {
-                    // The tick at the label's size, so the selected tile's labels line up with the others'.
-                    HStack(spacing: Theme.Space.xs) {
-                        if selected { Image(systemName: Theme.Icon.successFilled).foregroundStyle(Theme.accent) }
-                        Text(c.title).font(selected ? Theme.Font.labelStrong : Theme.Font.label).lineLimit(1)
-                    }
-                    .font(Theme.Font.label)
-                    Text(c.subtitle).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .disabled(icons.switching != nil)
-        .accessibilityLabel("\(c.title)，\(c.subtitle)")
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("app-icon-\(c.rawValue)")
     }
 }
 #endif

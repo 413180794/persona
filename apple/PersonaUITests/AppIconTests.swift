@@ -1,30 +1,28 @@
 import XCTest
 
-/// 设置 › 外观 › App 图标 (docs/ios.md「App 图标」): picking an icon really changes the home screen one, through the
-/// system's alert, and the page says which is on. Runs in the demo mode (no hub). Screenshots go to JARVIS_ICON_SHOTS
-/// when set: the page after the switch and the home screen with the new icon.
+/// The home screen icon is the 形象's (docs/persona.md「App 图标」, #3203): choosing 面罩 in 设置 › 外观 › 形象 really
+/// changes the home screen icon, through the system's alert; a launch on another 形象 (the old App 图标 setting left
+/// the icon apart from it) brings the icon back to that 形象's. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB).
+/// The icon on now is the value of the page's note (`persona-icon-note`). Screenshots go to JARVIS_ICON_SHOTS when set:
+/// the page and the home screen after each switch.
 final class AppIconTests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
+    private var hub: String!
 
-    @MainActor private func launch() -> XCUIApplication {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        }
+        self.hub = hub
+    }
+
+    /// On 设置 › 外观 › 形象 with `persona` chosen as the app starts.
+    @MainActor private func launch(_ persona: String) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-demo.on", "YES", "-tab", "settings", "-openAppearance", "icon"]
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openAppearance", "persona", "-openPersona", persona]
         app.launchPinned()
         return app
-    }
-
-    /// The system's 「你已更改“…”的图标」 alert, from SpringBoard.
-    @MainActor private func acceptSystemAlert() {
-        let board = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let ok = board.alerts.buttons.firstMatch
-        if ok.waitForExistence(timeout: 5) { ok.tap() }
-    }
-
-    /// A notification permission prompt left over from launch, out of the way.
-    @MainActor private func dismissPermissionPrompt() {
-        let board = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let alert = board.alerts.firstMatch
-        if alert.waitForExistence(timeout: 3) { alert.buttons.element(boundBy: 1).tap() }
     }
 
     @MainActor private func shot(_ name: String, _ image: XCUIScreenshot) throws {
@@ -32,31 +30,65 @@ final class AppIconTests: XCTestCase {
         try image.pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "\(name).png"))
     }
 
-    @MainActor func testSwitchesTheHomeScreenIconAndBack() throws {
-        let app = launch()
-        dismissPermissionPrompt()
-        let aura = app.buttons["app-icon-aura"]
-        XCTAssertTrue(aura.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["app-icon-standard"].isSelected)
+    @MainActor private func waitIcon(_ app: XCUIApplication, _ icon: String, _ why: String) {
+        let note = app.descendants(matching: .any)["persona-icon-note"]
+        XCTAssertTrue(note.waitForExistence(timeout: 15), "no icon note:\n\(app.debugDescription)")
+        let on = expectation(for: NSPredicate(format: "value == %@", icon), evaluatedWith: note)
+        XCTAssertEqual(XCTWaiter.wait(for: [on], timeout: 15), .completed, "\(why): the icon is \(note.value ?? "?")")
+    }
 
-        aura.tap()
-        acceptSystemAlert()
-        XCTAssertTrue(aura.wait(for: \.isSelected, toEqual: true, timeout: 5))
-        XCTAssertFalse(app.buttons["app-icon-standard"].isSelected)
-        try shot("icon-page", app.screenshot())
+    /// The notification permission prompt left over from launch, declined; any other alert is left alone.
+    @MainActor private func dismissPermissionPrompt() {
+        let board = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for label in ["不允许", "Don’t Allow", "Don't Allow"] where board.alerts.buttons[label].waitForExistence(timeout: 1) {
+            board.alerts.buttons[label].tap()
+            return
+        }
+    }
 
+    @MainActor private func home(_ name: String) throws {
         XCUIDevice.shared.press(.home)
         sleep(2)
-        try shot("icon-home", XCUIScreen.main.screenshot())
+        try shot(name, XCUIScreen.main.screenshot())
+    }
 
-        // The choice is the system's: a fresh launch reads it back.
+    @MainActor func testTheLookDecidesTheHomeScreenIcon() throws {
+        let app = launch("persona")
+        dismissPermissionPrompt()
+        // The line under 形象 says which icon is on, or "unavailable" where the system cannot switch icons
+        // (`supportsAlternateIcons`): iOS 26.0.1 and 26.3.1 simulators cannot (docs/lessons/ios.md), a device can.
+        XCTAssertTrue(app.buttons["persona-jarvis"].waitForExistence(timeout: 20), "no 形象 page:\n\(app.debugDescription)")
+        let note = app.descendants(matching: .any)["persona-icon-note"]
+        XCTAssertTrue(note.waitForExistence(timeout: 10), "no line on the icon under 形象:\n\(app.debugDescription)")
+        if note.value as? String == "unavailable" {
+            throw XCTSkip("this simulator cannot switch app icons (supportsAlternateIcons is false)")
+        }
+        acceptIconAlert() // a simulator left on another icon goes back to 团子's first
+        waitIcon(app, "standard", "团子 should be on the default icon")
+
+        let visor = app.buttons["persona-jarvis"]
+        XCTAssertTrue(visor.waitForExistence(timeout: 10), "面罩 is not offered:\n\(app.debugDescription)")
+        visor.tap()
+        acceptIconAlert()
+        waitIcon(app, "visor", "choosing 面罩 did not change the icon")
+        try shot("look-visor-page", app.screenshot())
+        try home("look-visor-home")
+
+        // The old setting's case: the icon is apart from the 形象 (here 面罩's icon with 团子 chosen). The first time
+        // the app is in front the 形象 wins.
         app.terminate()
-        let again = launch()
-        XCTAssertTrue(again.buttons["app-icon-aura"].wait(for: \.isSelected, toEqual: true, timeout: 10))
+        let again = launch("persona")
+        acceptIconAlert()
+        waitIcon(again, "standard", "the launch on 团子 did not bring its icon back")
+        try home("look-standard-home")
+    }
+}
 
-        // Back to the default, for the tests after.
-        again.buttons["app-icon-standard"].tap()
-        acceptSystemAlert()
-        XCTAssertTrue(again.buttons["app-icon-standard"].wait(for: \.isSelected, toEqual: true, timeout: 5))
+extension XCTestCase {
+    /// The system's 「你已更改“…”的图标」 alert, from SpringBoard; none within the wait is fine.
+    @MainActor func acceptIconAlert(timeout: TimeInterval = 5) {
+        let board = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let ok = board.alerts.buttons.firstMatch
+        if ok.waitForExistence(timeout: timeout) { ok.tap() }
     }
 }

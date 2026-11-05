@@ -237,7 +237,9 @@ describe("conversation links", () => {
       const html = renderToStaticMarkup(createElement(Answer, { ...props, mid: "desktop", sid: "session" }));
       expect(html).toContain("/api/v1/machines/desktop/file/download?path=%2Fworkspace%2Freport.md");
     }
-  });
+    // The first import of SegmentView pulls in the whole chat view graph; under the full suite's parallel load
+    // that alone can pass the default 5 s, so this case gets room for the import, not for the rendering.
+  }, 30_000);
 
   it("renders malformed conversation URLs without crashing the transcript", async () => {
     const { renderToStaticMarkup } = await import("react-dom/server");

@@ -123,9 +123,20 @@ async function rewindTo(mid: string, sid: string, draftKey: string, items: Item[
   else toast(tr("rewind.input_kept"), "info");
 }
 
+/** In a side panel (TaskPanel, AgentPanel; #3333, iOS #3255): the chat's header is the panel's only one. It closes the
+ *  panel, may stand for the task (its title and subtitle), carries the panel's own rows at the top of ⋯ and, for a task
+ *  with several agents, a ⌄ beside the title to switch; the same space's other agents and the pane tabs are left out. */
+export interface PanelChrome {
+  onClose: () => void;
+  title?: string;
+  sub?: string;
+  items?: MenuItem[];
+  agents?: MenuItem[];
+}
+
 /** `readOnly`: a subagent's conversation (`<parent>@<agent>`) in the side panel (SubagentPanel): the transcript only,
  *  no header, no composer. */
-export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly, topCenter, inPage }: {
+export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly, topCenter, inPage, panel }: {
   mid: string;
   sid: string;
   assistant?: boolean;
@@ -137,6 +148,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   /** The agent's own page (`/s/…`, `/t/…`): its terminal is a view of the middle, switched in place with the header's
    *  终端 | 对话 and ⌘J (docs/web.md「终端 ⇄ 对话」). Elsewhere (a task's panel) the chat is all there is. */
   inPage?: boolean;
+  panel?: PanelChrome;
 }) {
   const session = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === sid) ?? s.assistant?.conversations.find((c) => c.session_id === sid));
   // a subagent's own launches are listed on the session that launched it
@@ -749,9 +761,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           view={switchable ? view : undefined}
           onView={switchable ? setView : undefined}
           viewDot={view === "term" && (interactions.length > 0 || state === "needs_you")}
+          panel={panel}
         />
       )}
-      {session && panes.length > 1 && <PaneTabs sessions={panes} current={sid} onSelect={(s) => navigate(paneRoute(s), true)} />}
+      {session && !panel && panes.length > 1 && <PaneTabs sessions={panes} current={sid} onSelect={(s) => navigate(paneRoute(s), true)} />}
 
       {/* the page's middle: the chat and (once shown) the terminal stacked in one box; without a terminal to show it adds no box */}
       <div className={switchable ? "relative min-h-0 flex-1" : "contents"}>
@@ -1069,6 +1082,7 @@ export function Header({
   view,
   onView,
   viewDot,
+  panel: chrome,
 }: {
   session?: Session;
   title: string;
@@ -1089,9 +1103,11 @@ export function Header({
   onView?: (view: SessionView) => void;
   /** The conversation has something that wants an answer while the terminal is shown. */
   viewDot?: boolean;
+  panel?: PanelChrome;
 }) {
   const menu = useMenu();
   const tabs = useMenu();
+  const pick = useMenu();
   const panel = usePanel();
   const mutes = useStore((s) => s.mutes);
   const [closing, setClosing] = useState(false);
@@ -1114,7 +1130,9 @@ export function Header({
   };
   const [linkTodoOpen, setLinkTodoOpen] = useState(false);
   const state = session ? stateOf(session) : "unknown";
-  const sub = main
+  const sub = chrome?.sub
+    ? chrome.sub
+    : main
     ? ""
     : assistant
     ? [sourceSubtitle(session), session?.launcher, session?.updated_at ? ago(session.updated_at) : ""].filter(Boolean).join(" · ")
@@ -1128,7 +1146,9 @@ export function Header({
       toast(t("chat-chatview.attached"), "ok");
     } catch (e) { toast(t("chat-chatview.attach_failed", { error: errorText(e) }), "error"); }
   };
-  const others = siblings.filter((s) => s.session_id !== session?.session_id);
+  const others = chrome ? [] : siblings.filter((s) => s.session_id !== session?.session_id);
+  // a task's panel stands for the task: its title above, and the agent's own todo line would only repeat it
+  const todoLine = Boolean(session?.todo && !assistant && !chrome?.title);
   // the session's files and Git open in the side panel (docs/web.md「侧边面板」); the assistant has none. Its terminal is
   // the page's other view, switched in place (view / onView)
   const here = (p: typeof panel, kind: string) => Boolean(p && p.kind === kind && "sid" in p && session && p.mid === session.machine_id && p.sid === session.session_id);
@@ -1141,7 +1161,7 @@ export function Header({
   const { items: assistantItems, dialogs: assistantDialogs } = useAssistantMenu(assistant ? session : undefined);
   const feishu = externalLink(session);
 
-  const items: MenuItem[] = session
+  const own: MenuItem[] = session
     ? [
         ...assistantItems,
         ...(session.todo
@@ -1202,6 +1222,8 @@ export function Header({
         ...(sessionDeletable(session) ? [{ key: "delete", label: t("chat-chatview.delete_chat"), icon: "trash" as const, danger: true, onSelect: () => setDialog("delete") }] : []),
       ]
     : [];
+  const panelItems = chrome?.items ?? [];
+  const items: MenuItem[] = panelItems.length > 0 && own.length > 0 ? [...panelItems, { ...own[0], divider: true }, ...own.slice(1)] : [...panelItems, ...own];
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-page/85 px-3 backdrop-blur-md sm:px-4">
@@ -1214,13 +1236,17 @@ export function Header({
           {session && !assistant && <SessionMark s={session} size={16} />}
           {assistant && <AssistantFace session={session} last={last} />}
           {/* narrow: the dot before the title says the state; the pill would leave the title a word or two */}
-          <h1 className="truncate text-[14px] font-semibold text-ink">{title}</h1>
-          {session && !assistant && state !== "idle" && <span className="hidden sm:contents"><StatePill state={state} /></span>}
+          <h1 className="truncate text-[14px] font-semibold text-ink">{chrome?.title || title}</h1>
+          {chrome?.agents && chrome.agents.length > 1 && (
+            <IconButton icon="chevron" label={t("chat-chatview.switch_agent")} onClick={pick.open} active={Boolean(pick.anchor)} className="-ml-1.5 shrink-0" />
+          )}
+          {/* a panel is a phone's width: the dot says the state there too */}
+          {session && !assistant && !chrome && state !== "idle" && <span className="hidden sm:contents"><StatePill state={state} /></span>}
           {session && !assistant && <ContextMeter session={session} />}
         </div>
-        {sub && !(session?.todo && !assistant) && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
+        {sub && !todoLine && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
         {/* the todo it works for, up top (#1836): opens the todo, 改挂 picks another */}
-        {session?.todo && !assistant && (
+        {todoLine && session?.todo && (
           <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-3">
             <button type="button" onClick={() => navigate(`/todos?id=${encodeURIComponent(session.todo!.id)}`)} title={t("chat-chatview.todo_label", { title: session.todo.title })}
               className="flex min-w-0 items-center gap-1 whitespace-nowrap rounded px-1 text-ink-2 hover:bg-hover hover:text-ink">
@@ -1282,7 +1308,9 @@ export function Header({
         />
       )}
       {items.length > 0 && <IconButton icon="more" label={t("chat-chatview.more")} onClick={menu.open} active={Boolean(menu.anchor)} />}
+      {chrome && <IconButton icon="x" label={t("sidepanel.close")} onClick={chrome.onClose} />}
       </div>
+      {pick.anchor && chrome?.agents && <Menu anchor={pick.anchor} onClose={pick.close} items={chrome.agents} width={320} />}
       {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" items={items} />}
       {session && <CloseAgent open={closing} onClose={() => setClosing(false)} session={session} machineName={machineName} />}
       {session && <SessionInfoDialog open={dialog === "info"} onClose={() => setDialog(null)} session={session} machineName={machineName} />}

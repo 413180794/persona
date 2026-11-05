@@ -346,9 +346,9 @@ struct SettingsView: View {
         else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
         else if d.bool(forKey: "openTriageSettings") { p.append(SettingsPage.triage) }
-        else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | color | style | icon | layout | scheme
+        else if let a = d.string(forKey: "openAppearance") { // persona (or YES, or icon: the icon is the 形象's) | color | style | layout | scheme
             p.append(a == "color" ? SettingsPage.themeColor : a == "style" ? SettingsPage.style
-                     : a == "icon" ? SettingsPage.appIcon : a == "layout" ? SettingsPage.layout
+                     : a == "layout" ? SettingsPage.layout
                      : a == "scheme" ? SettingsPage.colorScheme : SettingsPage.persona)
         }
         else if d.bool(forKey: "openModelConfiguration") {
@@ -408,7 +408,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case persona, themeColor, style, appIcon, layout, colorScheme, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
+    case persona, themeColor, style, layout, colorScheme, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
     /// 设置 › 会话分诊 (docs/agent-work.md「开关」).
     case triage
     /// 设置 › hub: the hubs paired, by group (docs/multi-hub.md).
@@ -455,11 +455,6 @@ private struct SettingsDestinations: ViewModifier {
         case .persona: PersonaSettingsPage()
         case .themeColor: ThemeColorSettingsPage()
         case .style: StyleSettingsPage()
-        #if os(iOS) || os(visionOS)
-        case .appIcon: AppIconSettingsPage()
-        #else
-        case .appIcon: EmptyView()
-        #endif
         #if os(iOS) || os(visionOS)
         case .layout: LayoutSettingsPage()
         case .colorScheme: ColorSchemeSettingsPage()
@@ -646,22 +641,34 @@ private struct SourceIcon: View {
     }
 }
 
+/// Persona's logo beside its name (设置's header, the welcome page, the sidebar's Persona row): the 形象's home screen
+/// icon, in the look the home screen shows it in (#1312). A package's own face stands in for it here, in the icon's
+/// shape: in the app it is the logo, on the home screen iOS allows only the icons the app ships (#3203).
 struct AppGlyph: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var pageLook
+    @Environment(\.displayScale) private var displayScale
     var size: CGFloat
+    /// Scaled with the text size, as a mark in a row (`BrandMark`); the headers' are a fixed size.
+    var scaled = false
+
     var body: some View {
-        // Persona's mark beside its name (设置's header, the welcome page) is the app icon itself: the one picked in
-        // 设置 › 外观 › App 图标, in the look the home screen shows it in (#1312).
-        let icon = model.appIcon.current
-        let shape = RoundedRectangle(cornerRadius: Theme.Radius.appIcon(size), style: .continuous)
-        Image(icon.preview)
-            .resizable()
-            .interpolation(.high)
-            .frame(width: size, height: size)
-            .environment(\.colorScheme, icon.homeScreenLook(model.colorScheme, system: systemLook))
-            .clipShape(shape)
-            .overlay(shape.stroke(Theme.cardStroke, lineWidth: Theme.Size.line))
+        let p = model.persona
+        Group {
+            if !p.isBuiltin, let face = model.personas.avatar(p, points: size, scale: displayScale) {
+                Image(uiImage: face).resizable().interpolation(.high).scaledToFill()
+            } else {
+                let icon = p.appIcon
+                Image(icon.preview)
+                    .resizable()
+                    .interpolation(.high)
+                    .environment(\.colorScheme, icon.homeScreenLook(model.colorScheme, system: systemLook))
+            }
+        }
+        .modifier(GlyphFrame(side: size, scaled: scaled))
+        .clipShape(AppIconShape())
+        .overlay(AppIconShape().stroke(Theme.cardStroke, lineWidth: scaled ? Theme.Size.hairline : Theme.Size.line))
+        .accessibilityHidden(true) // decoration: Persona's name is beside it
     }
 
     /// Under 跟随系统 the page's look (read here so the glyph redraws when the system's changes); else the screen's.
@@ -671,6 +678,15 @@ struct AppGlyph: View {
         #else
         pageLook
         #endif
+    }
+
+    private struct GlyphFrame: ViewModifier {
+        var side: CGFloat
+        var scaled: Bool
+
+        func body(content: Content) -> some View {
+            if scaled { content.scaledFrame(width: side, height: side) } else { content.frame(width: side, height: side) }
+        }
     }
 }
 

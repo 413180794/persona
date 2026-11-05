@@ -105,12 +105,13 @@ struct IconVocabularyTests {
         #expect(found.isEmpty, "use Theme.Icon.error / errorFilled:\n\(found.joined(separator: "\n"))")
     }
 
-    /// Every brand mark is in the app's asset catalog, an OS mark for each distribution included.
+    /// Every brand mark is in the app's asset catalog, an OS mark for each distribution included, and Persona's own logo
+    /// for each 形象's icon (`AppGlyph`).
     @Test @MainActor func everyBrandIsAnImage() {
         let families: [OSFamily] = [.ubuntu, .debian, .fedora, .redhat, .centos, .rocky, .alma, .arch, .alpine, .opensuse, .nixos, .linux]
-        let names = [Theme.Brand.claude, Theme.Brand.openAI, Theme.Brand.lark, Theme.Brand.google, Theme.Brand.gmail, Theme.Brand.persona]
-            + families.compactMap(Theme.Brand.os)
-        #expect(names.count == 18)
+        let names = [Theme.Brand.claude, Theme.Brand.openAI, Theme.Brand.lark, Theme.Brand.google, Theme.Brand.gmail]
+            + families.compactMap(Theme.Brand.os) + AppIconChoice.allCases.map(\.preview)
+        #expect(names.count == 20)
         let missing = names.filter { UIImage(named: $0) == nil }
         #expect(missing.isEmpty, "not in Assets.xcassets: \(missing)")
     }

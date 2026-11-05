@@ -73,5 +73,6 @@
   "close_agent_detail": "This quits Claude in “{where}” on {machine} and closes the tab. The transcript stays, and you can resume it later from Recent.",
   "route_no_images": "Images can't be sent straight to a task yet. Remove the image and try again.",
   "not_live": "Not live",
-  "not_live_reload": "Reload"
+  "not_live_reload": "Reload",
+  "switch_agent": "Switch agent"
 }

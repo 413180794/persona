@@ -94,8 +94,8 @@ targets:
         # (SplitNavigation), as on an open iPhone Duo.
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # 设置 › 外观 › App 图标 (AppIconChoice, scripts/assets/make_alt_icons.py); the Mac target shares the catalog but not these.
-        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Peach AppIcon-Didot AppIcon-Aura AppIcon-PaperLight AppIcon-PaperDark AppIcon-PeachLight AppIcon-PeachDark"
+        # The 形象's home screen icon (AppIconChoice, scripts/assets/make_alt_icons.py); the Mac target shares the catalog but not these.
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Visor AppIcon-Circuit AppIcon-PaperLight AppIcon-PaperDark"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES

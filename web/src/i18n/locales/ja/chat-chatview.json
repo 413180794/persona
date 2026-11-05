@@ -73,5 +73,6 @@
   "close_agent_detail": "{machine}の「{where}」で動いているClaudeを終了し、このタブを閉じます。会話記録は残り、あとで「最近」から再開できます。",
   "route_no_images": "タスクへの直接送信では画像はまだ使えません。画像を外してもう一度お試しください。",
   "not_live": "リアルタイムではありません",
-  "not_live_reload": "再読み込み"
+  "not_live_reload": "再読み込み",
+  "switch_agent": "Agent を切り替え"
 }
