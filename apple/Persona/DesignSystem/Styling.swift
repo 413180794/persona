@@ -195,6 +195,12 @@ extension Theme {
     /// The user's bubble: the style's, or the shell's neutral gray in its Persona conversation (docs/ios.md「新外壳」).
     static func userBubbleFill(shell: Bool) -> AnyShapeStyle { shell ? AnyShapeStyle(Shell.userBubble) : userBubbleFill }
     static func userBubbleText(shell: Bool) -> Color { shell ? .primary : userBubbleText }
+    /// A path linked in the user's bubble (underlined): the accent, as links in replies, on a pale bubble and the shell's
+    /// gray; on a colored one (white words) its words' color, where the accent would not show.
+    static func userBubbleLink(shell: Bool) -> Color { Quote.tint(shell: shell) }
+
+    /// The line a file was opened at (`path:12`), marked across the code view.
+    static var lineFocus: Color { accent.opacity(Quote.flashOpacity) }
 
     /// The color `themedGroupedPage()` paints: what floats over such a page (a composer) is backed with it, so text
     /// that scrolls under it at large sizes does not show through.

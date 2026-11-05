@@ -54,14 +54,26 @@ func encodeSessions(list []proto.Session) []sentSession {
 	return out
 }
 
-// sessionsMessage is the whole-list message (the same bytes as marshalling the sessions themselves).
+// sessionsMessage is the whole-list message (the same bytes as marshalling the sessions themselves). Put together
+// from the encoded sessions rather than marshalled: json.Marshal checks and copies every json.RawMessage again,
+// half of what a list push cost, for sessions it has just encoded.
 func sessionsMessage(machine string, list []sentSession) []byte {
-	raws := make([]json.RawMessage, len(list))
-	for i, s := range list {
-		raws[i] = s.raw
+	id, _ := json.Marshal(machine)
+	size := len(`{"machine_id":,"sessions":[],"type":"sessions"}`) + len(id) + len(list)
+	for _, s := range list {
+		size += len(s.raw)
 	}
-	b, _ := json.Marshal(map[string]any{"type": "sessions", "machine_id": machine, "sessions": raws})
-	return b
+	b := make([]byte, 0, size)
+	b = append(b, `{"machine_id":`...)
+	b = append(b, id...)
+	b = append(b, `,"sessions":[`...)
+	for i, s := range list {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = append(b, s.raw...)
+	}
+	return append(b, `],"type":"sessions"}`...)
 }
 
 // forDelta is what a delta app gets of list, given what it has.

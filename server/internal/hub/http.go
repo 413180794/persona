@@ -157,6 +157,7 @@ func (h *Hub) routes() http.Handler {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
+		res.AnsweredBy = "" // only the assistant's interaction_answer says it answered
 		if answerOnly(r) && !answerMayResolve(res) {
 			writeErr(w, http.StatusForbidden, errors.New("this device can only answer with a card's own choices"))
 			return

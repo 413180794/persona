@@ -3,8 +3,10 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -186,5 +188,49 @@ func TestSessionsDeltaOverTheSocket(t *testing.T) {
 	}
 	if p := next(older, "sessions"); len(p.Sessions) != 2 || p.Sessions[0].LastText != "b" {
 		t.Fatalf("whole list %+v", p)
+	}
+}
+
+// The whole-list message is the sessions' own bytes in a list: what marshalling them would give, and nothing
+// spent on checking and copying again what was just encoded.
+func TestSessionsMessage(t *testing.T) {
+	list := encodeSessions([]proto.Session{
+		{SessionID: "s1", Title: "<b>&</b> 标题  ", LastText: strings.Repeat("x", 4<<10)},
+		{SessionID: "s2", Status: proto.StatusWorking, Queued: []string{"next"}},
+	})
+	for _, tc := range []struct {
+		machine string
+		list    []sentSession
+	}{{"box", list}, {"<m&\"x\">", list}, {"box", nil}} {
+		raws := make([]json.RawMessage, len(tc.list))
+		for i, s := range tc.list {
+			raws[i] = s.raw
+		}
+		want, _ := json.Marshal(map[string]any{"type": "sessions", "machine_id": tc.machine, "sessions": raws})
+		if got := sessionsMessage(tc.machine, tc.list); string(got) != string(want) {
+			t.Fatalf("sessionsMessage(%q):\n got %s\nwant %s", tc.machine, got, want)
+		}
+	}
+
+	var many []proto.Session
+	for i := range 150 { // a busy machine's list (docs/server.md「推送给 App 的量」)
+		many = append(many, proto.Session{SessionID: fmt.Sprintf("s%03d", i), LastText: strings.Repeat("x", 1<<10)})
+	}
+	list = encodeSessions(many)
+	size := len(sessionsMessage("box", list))
+	// Pushes are seconds apart, collections in between: whatever the encoder keeps pooled is gone by the next one.
+	const runs = 20
+	var total uint64
+	for range runs {
+		runtime.GC()
+		runtime.GC()
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		sessionsMessage("box", list)
+		runtime.ReadMemStats(&after)
+		total += after.TotalAlloc - before.TotalAlloc
+	}
+	if per := int(total / runs); per > size+size/4 {
+		t.Fatalf("a %d-byte list message allocates %d bytes", size, per)
 	}
 }

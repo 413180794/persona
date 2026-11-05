@@ -46,55 +46,36 @@ struct FileRef: Identifiable, Hashable {
     var machineID: String
     var path: String
     var cwd: String?
+    /// The line to show (1-based), from a message's `path:12`: the viewer scrolls to it and marks it.
+    var line: Int? = nil
     var id: String { MachineRef(group: group, id: machineID).path + ":" + path }
     var machineRef: MachineRef { MachineRef(group: group, id: machineID) }
 }
 
 nonisolated enum FilePaths {
-    // Home-relative (~/x), absolute (/x/y) or relative with a directory and an extension (ios/Persona/Foo.swift).
-    // The "~" must stay part of the match: dropping it turned ~/.config/… into /.config/….
-    // Relative paths need a letter-led extension so model names like deepseek/v4.1-flash are not files.
-    // ASCII only, like links (`Links`): CJK text or full-width punctuation right after a path ends it ("Foo.swift里的").
-    private static let pattern = try! NSRegularExpression(
-        pattern: #"(?<![A-Za-z0-9_/:.\-~])(~(?:/[A-Za-z0-9_.@+\-]+)+/?|/[A-Za-z0-9_.@+\-]+(?:/[A-Za-z0-9_.@+\-]+)+/?|[A-Za-z0-9_.@\-]+(?:/[A-Za-z0-9_.@+\-]+)+\.[A-Za-z][A-Za-z0-9]{0,7})(?![A-Za-z0-9_/\-])"#)
-
-    /// A path in backticks is whole, whatever it is written in: `~/报告/第四季度.docx` (an agent names the files it made
-    /// that way; outside them a path ends at the first character that is not ASCII, and a Chinese file name was lost).
-    private static let codeSpan = try! NSRegularExpression(pattern: #"`(~?/[^`\n]+)`"#)
-
     private static let memo = TextMemo<[String]>()
 
-    /// File-looking paths in text, in order, without duplicates or URL fragments (memoized: rows ask on every redraw).
-    /// More than a row of chips shows: the ones not there on the machine are left out (`FileChips`).
+    /// File-looking paths in text (`PathRefs`: without their lines), in order, without duplicates or URL fragments
+    /// (memoized: rows ask on every redraw). The ones not there on the machine are left out where they are shown.
     static func find(in text: String, limit: Int = 12) -> [String] {
         limit == 12 ? memo(text) { scan($0, limit: 12) } : scan(text, limit: limit)
     }
 
+    /// A path in backticks is whole here: the paths inside a span that is one are not chips of their own (its folder,
+    /// the words before a space), they would only repeat it.
     private static func scan(_ text: String, limit: Int) -> [String] {
-        let ns = text as NSString
-        let all = NSRange(location: 0, length: ns.length)
-        var found: [(at: Int, path: String)] = []
-        var spans: [NSRange] = [] // backticks holding a path: the ASCII pattern takes nothing in them
-        for m in codeSpan.matches(in: text, range: all) {
-            let p = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespaces)
-            guard !p.hasPrefix("//"), !p.contains("://"), p.split(separator: "/").count >= 2 else { continue }
-            spans.append(m.range)
-            found.append((m.range.location, p))
-        }
-        for m in pattern.matches(in: text, range: all) where !spans.contains(where: { NSIntersectionRange($0, m.range).length > 0 }) {
-            var p = ns.substring(with: m.range(at: 1))
-            while let last = p.last, ".,;:)".contains(last) { p.removeLast() }
-            let before = m.range.location >= 3 ? ns.substring(with: NSRange(location: m.range.location - 3, length: 3)) : ""
-            if before.hasSuffix("://") || p.hasPrefix("//") || p.count < 4 { continue }
-            if p.hasPrefix("/") && p.split(separator: "/").count < 2 { continue }
-            found.append((m.range.location, p))
-        }
-        var out: [String] = []
-        for f in found.sorted(by: { $0.at < $1.at }) where !out.contains(f.path) {
-            out.append(f.path)
-            if out.count >= limit { break }
-        }
-        return out
+        let refs = PathRefs.find(in: text, limit: 80)
+        let spans = refs.filter(\.whole).map(\.range)
+        let kept = refs.filter { r in r.whole || !spans.contains { NSIntersectionRange($0, r.range).length > 0 } }
+        return PathRefs.unique(kept, limit: limit)
+    }
+
+    /// A picture, a video or a sound: keeps its chip under the message even when its words link it (#1706).
+    static func isMedia(_ path: String) -> Bool {
+        let name = (path as NSString).lastPathComponent
+        let ext = (name as NSString).pathExtension.lowercased()
+        return ["png", "jpg", "jpeg", "gif", "webp", "heic"].contains(ext)
+            || VideoFileType.matches(name: name, mime: nil) || AudioFileType.matches(name: name, mime: nil)
     }
 }
 
@@ -264,7 +245,7 @@ struct FileViewer: View {
                     meta(page).padding(.horizontal, Theme.Space.l)
                     if let source = page.shownSource {
                         CodeLines(source: source, version: page.version, onNearEnd: { Task { await page.loadMore() } },
-                                  onFirstLines: page.shown)
+                                  onFirstLines: page.shown, focus: page.focusLine)
                             .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                             .padding(.horizontal, Theme.Space.m)
                             .accessibilityIdentifier("file-code")
@@ -482,6 +463,8 @@ final class FileViewerModel {
     private(set) var outline: JSONOutlineSource?
     private(set) var chunks: [MarkdownChunk]?
     var showSource = false
+    /// The line asked for (0-based), scrolled to and marked in the source.
+    private(set) var focusLine: Int?
     /// Where the next page starts; 0: none.
     private(set) var next: Int64 = 0
     private(set) var loadingMore = false
@@ -588,6 +571,7 @@ final class FileViewerModel {
         if ext == "html" || ext == "htm" { kind = .html }
         let doc = await Task.detached(priority: .userInitiated) { CodeDocument(text: text, language: lang) }.value
         setCode(CodeFileSource(doc))
+        if let line = ref.line, line > 0 { await goTo(line) }
         switch kind {
         case .markdown: await renderMarkdown()
         case .json: await buildOutline()
@@ -595,6 +579,20 @@ final class FileViewerModel {
         default: break
         }
         if f.truncated, f.next == nil { note = "文件太大，只显示了前 \(ByteCountFormatter.string(fromByteCount: Int64(text.utf8.count), countStyle: .file))" }
+    }
+
+    /// Opened at a line (a message's `path:12`): the source, read up to that line, with the line marked. Rendered
+    /// Markdown, a JSON outline, a table have no lines to go to.
+    private func goTo(_ line: Int) async {
+        showSource = true
+        var pages = 0
+        while next > 0, (code?.lineCount ?? 0) < line, pages < 8 {
+            let before = next
+            await loadMore()
+            pages += 1
+            if next == before { break }
+        }
+        if let n = code?.lineCount, n > 0 { focusLine = min(line, n) - 1 }
     }
 
     /// A streamed image or PDF: its bytes from `/file/download`, whole (the old answer stopped at 2 MB).

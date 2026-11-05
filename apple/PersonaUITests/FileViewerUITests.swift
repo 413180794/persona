@@ -27,23 +27,44 @@ final class FileViewerUITests: XCTestCase {
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-files-\(name).png"))
     }
 
-    /// The last message names first one path on another machine and one deleted, then six files that are there: six
-    /// chips (paths not there do not take a chip's place).
-    @MainActor func testOnlyPathsThatAreThereAreChips() throws {
+    /// The last message names first one path on another machine and one deleted, then six files that are there, each
+    /// in backticks: the six are links in the text (#1706, no chips for them), the other two plain.
+    @MainActor func testOnlyPathsThatAreThereAreLinks() throws {
         let app = launch()
-        let chip = app.buttons["file-chip-Sources/App.swift"]
-        XCTAssertTrue(chip.waitForExistence(timeout: 20), "no chip for a file that is there:\n\(app.debugDescription)")
+        let link = app.links["Sources/App.swift"]
+        XCTAssertTrue(link.waitForExistence(timeout: 20), "no link for a file that is there:\n\(app.debugDescription)")
         for p in ["server/handlers.go", "data/forecast.json", "/Users/me/code/weather/README.md", "config/app.yaml", "/Users/me/code/weather/logs/api.log"] {
-            XCTAssertTrue(app.buttons["file-chip-" + p].exists, "no chip for \(p)")
+            XCTAssertTrue(app.links[p].exists, "no link for \(p)")
+            XCTAssertFalse(app.buttons["file-chip-" + p].exists, "a linked path is a chip too: \(p)")
         }
-        XCTAssertFalse(app.buttons["file-chip-~/.jarvis/personas/doudou"].exists, "another machine's path is linked")
-        XCTAssertFalse(app.buttons["file-chip-/Users/me/code/weather/old/Removed.swift"].exists, "a deleted file is linked")
-        shot(app, "chips")
+        XCTAssertFalse(app.links["~/.jarvis/personas/doudou"].exists, "another machine's path is linked")
+        XCTAssertFalse(app.links["/Users/me/code/weather/old/Removed.swift"].exists, "a deleted file is linked")
+        shot(app, "links")
 
-        app.buttons["file-chip-server/handlers.go"].tap()
+        app.links["server/handlers.go"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["file-code"].waitForExistence(timeout: 15), "the code view did not open")
         XCTAssertTrue(app.staticTexts["package server"].waitForExistence(timeout: 5), "the first lines are not there")
         shot(app, "go")
+    }
+
+    /// MOCK_PATH_LINKS=1: a question and a reply naming paths in their words, with lines (#1706). A path with a line
+    /// opens the file there: line 126's text is on screen (only the lines near what is shown are made).
+    @MainActor func testAPathWithALineOpensAtIt() throws {
+        guard ProcessInfo.processInfo.environment["JARVIS_MOCK_PATH_LINKS"] == "1" else {
+            throw XCTSkip("needs the mock hub with MOCK_PATH_LINKS=1 (and TEST_RUNNER_JARVIS_MOCK_PATH_LINKS=1)")
+        }
+        let app = launch()
+        let reply = app.links["server/handlers.go:126"].firstMatch
+        XCTAssertTrue(reply.waitForExistence(timeout: 20), "no link for a path with a line:\n\(app.debugDescription)")
+        XCTAssertTrue(app.links["/Users/me/code/weather/README.md:12"].exists, "a path in the reply's words is not linked")
+        XCTAssertFalse(app.links["/tmp/nope/notes.md"].exists, "a path not there is linked")
+        shot(app, "path-links")
+        reply.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["file-code"].waitForExistence(timeout: 15), "the code view did not open")
+        let line = app.staticTexts["// handleForecast7 answers GET /v1/forecast/7 with the next hours for a city."]
+        XCTAssertTrue(line.waitForExistence(timeout: 10), "not at line 126:\n\(app.debugDescription)")
+        XCTAssertFalse(app.staticTexts["package server"].exists, "still at the top")
+        shot(app, "path-line")
     }
 
     @MainActor func testJSONOpensAsAnOutline() throws {

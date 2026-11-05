@@ -52,9 +52,9 @@ final class FilePreviewLinkTests: XCTestCase {
 
     @MainActor func testConversationFileLinkOpensAbovePreview() throws {
         let app = launch(["-ui.oldLayout", "YES", "-tab", "dev"])
-        let chip = app.buttons["file-chip-/Users/me/code/weather/README.md"]
-        XCTAssertTrue(chip.waitForExistence(timeout: 20), app.debugDescription)
-        chip.tap()
+        let path = app.links["/Users/me/code/weather/README.md"].firstMatch // linked in the message's text (#1706)
+        XCTAssertTrue(path.waitForExistence(timeout: 20), app.debugDescription)
+        path.tap()
         XCTAssertTrue(app.buttons["file-close"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.scrollViews["file-markdown"].waitForExistence(timeout: 15))
         app.scrollViews["file-markdown"].swipeUp()

@@ -751,11 +751,24 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 - **现在的做法**：
   1. 消息行出现时，把它的路径交给 `FilePresence`；
   2. 一瞬间之后，按「机器 + 会话目录」批量问一次 `GET /api/v1/machines/{mid}/stat`，相对路径在会话的 cwd 里解析；
-  3. 只给 file / dir / denied 的路径做文件块。
+  3. 只把 file / dir / denied 的路径做成链接。
 - **缓存**：结果按（机器, 目录, 路径）记住，在的记 30 分钟，不在的记 2 分钟（Agent 可能马上就写出来），问不到的 1 分钟后再问。
 - **问不到时**：答案没回来、旧 node 不认这个接口、没网时，路径都是普通文字，不确定就不链接。
-- **数量**：每条消息最多认 12 个候选路径，显示其中在的前 6 个。
+- **数量**：正文里最多认 40 个候选路径（`PathMarkdown` / `PathRefs`）；文件块最多认 12 个，显示其中在的前 6 个。
 - **工具行**（Read / Edit 的文件）不查：工具刚用过它。
+
+**正文里的路径就是链接**（#1706，和网页 #1669 同一套规则，`Code/PathRefs.swift`）：
+- **认哪些**：`~/…`、至少两段的绝对路径（`/tmp` 不算）、带目录和字母开头扩展名的相对路径（`src/a.ts`；`deepseek/v4.1` 不算）。
+  后面可以带行号：`:12`、`:12:5`、`:12-20`（取起始行）、`#L12`；问 `stat` 的是去掉行号的路径。
+  反引号外只认 ASCII，紧跟中文或全角标点就结束（`/tmp/a.md里`），句末的 `.` 不算；反引号里的整段算一个路径（可含中文和空格），整段不在时再看段内的路径，按存在挑不重叠的，同一位置长的优先。
+  URL 里的片段、`and/or`、版本号不算；回复里的代码块、缩进代码、已有链接、公式不动。
+- **怎么画**：回复（`LinkedMarkdown`）里在的路径改写成 Markdown 链接（`persona-path:<路径>?line=N`，`PathLinkURL`），和别的链接同色（`.jarvis` 的 link 色）；反引号包着的整段路径整个行内代码可点。
+  用户气泡（`PathText`）里是带下划线的链接，颜色 `Theme.userBubbleLink`：浅色气泡和新外壳的灰气泡用强调色，彩色气泡用气泡文字色（强调色在上面看不见）。
+  答案回来之前、问不到时是普通文字；换成链接只改颜色，字号不变、行不重排。
+- **流式**：正在写的那一段不认（最后一个词可能是写到一半的路径），写完的段落（`StreamChunk`）照常问、照常链接。
+- **点开**：会话页的 `openURL` 认出 `persona-path:`，在 `FileViewer` 里打开（`FileRef.line`）。有行号时直接看源码（渲染后的 Markdown、JSON 层级、表格没有行），读到那一行为止（最多再读 8 页），滚到那一行（屏幕上方三分之一处）并标出来（iPhone 是一条 `Theme.lineFocus` 的底色，Mac 是选中那一行）。目录打开目录。
+- **文件块**：内联了的路径不再在消息下面重复显示胶囊；没内联的（只在代码块里、超出数量的）照旧是胶囊；文档卡片、图片 / 视频 / 音频的胶囊照旧。
+- **还没做**：长按单个路径的菜单（拷贝路径 / 在文件页打开）和 Mac 悬停显示「路径 · 第 N 行」：SwiftUI 的 `Text` 里的链接没有单独的长按和悬停，消息的长按是整条消息的操作条；拷贝路径在文件查看器的 ⋯ 菜单里。
 
 **公式和图**（#1295，`Code/MathMarkdown.swift`、`Views/Chat/RenderedMarkdown.swift`）：对话、计划、文件页的 Markdown、知识库的人物页都画公式（KaTeX 0.16.22）和 Mermaid 图（12.3.0），两个都是 MIT，随 App 打包在 `Resources/Render/`（连同各自的 LICENSE），不联网。
 - **认哪些**：```math（也认 latex / tex / katex）和 ```mermaid 代码块；`$$…$$`、`\[…\]` 独占几行或一行只有一个公式时当独立公式；行内的 `$…$`、`\(…\)` 是行内公式。`$` 后面紧跟空格不算开始、前面是空格或后面紧跟数字不算结束（pandoc 的规矩），中间有中文、日文的不算（`\text{…}` 除外），`\$` 是美元符号，所以「$5 到 $10」照旧是文字。代码块、行内代码、缩进代码不动。
@@ -880,7 +893,7 @@ Markdown 的情况再说两点：
 `-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES|0.5`（Persona tab 的侧边栏开着 / 停在一半）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-showScrollState YES|visible`（对话列表在哪、跟不跟随，给 UI 测试读，`visible` 画出来）、`-openTerminalPane YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开公司圈帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openHubUpdate YES`（设置 › hub，`docs/hub-update.md`）、`-tab settings -openSkills YES`（设置 › 助手 › Skills）、`-tab settings -openAssistantPage assistant|routines|routine|intervalTask|followup|bypassTask|newRoutine|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`intervalTask` / `followup` 第一个按间隔的 / 一次性的，`bypassTask` 在编辑页弹出「全部放行？」确认，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/app/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-showFromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
-`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-openFilePath <路径>`（打开会话后打开这个文件）、`-showFilePerf YES`（把打开文件的耗时和每秒帧数写进 Caches/file-perf.log，`-showFileAutoScroll YES` 让文件自己匀速滚，`-showFileAutoScrollSpeed 1500` 换速度）；`-showMenu YES` 在最后一条回复（配合 `-showFromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。
+`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-openFilePath <路径>`（打开会话后打开这个文件，`-openFileLine <行>` 跳到那一行）、`-showFilePerf YES`（把打开文件的耗时和每秒帧数写进 Caches/file-perf.log，`-showFileAutoScroll YES` 让文件自己匀速滚，`-showFileAutoScrollSpeed 1500` 换速度）；`-showMenu YES` 在最后一条回复（配合 `-showFromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。
 
 实时更新不打断操作的测试（`LiveUpdateTests`）用到两个：`-openChatsFresh YES` 启动时清掉磁盘上的对话缓存（上一次运行推进去的步骤不留下）；
 `-perfCounts YES` 计数：各视图 body 被算了几次、每次 hub 推送到主线程空闲用了多久，写在隐藏文字 `perf.counts` 里（JSON）给 UI 测试读

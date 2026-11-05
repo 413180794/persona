@@ -111,7 +111,7 @@ struct FileViewerTests {
 
     @Test func pathsAreLinkedOnlyWhenThereAndAskedInOneBatch() async throws {
         let hub = FakeHub()
-        hub.on("GET", "/api/v1/machines/mac/stat") { req in
+        hub.on("GET", "/api/v1/machines/mac/stat") { @Sendable req in // called off the main actor (APIClient.stat is nonisolated)
             let paths = (req.query["paths"] ?? "").split(separator: "\n").map(String.init)
             #expect(req.query["cwd"] == "/w")
             let stats = paths.map { p in #"{"path": "\#(p)", "kind": "\#(p.hasSuffix("gone.go") ? "missing" : "file")"}"# }

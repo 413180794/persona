@@ -38,6 +38,16 @@ final class CodeLinesView: UIScrollView, UIScrollViewDelegate, UIContextMenuInte
     var onNearEnd: (() -> Void)?
     /// Once, when the first lines are on screen.
     var onFirstLines: (() -> Void)?
+    /// A line (0-based) to mark and, once, bring into view: a message's `path:12`.
+    var focus: Int? {
+        didSet {
+            guard focus != oldValue else { return }
+            focusPending = focus != nil
+            setNeedsLayout()
+        }
+    }
+    private var focusPending = false
+    private let focusBand = UIView()
 
     let font = CodeMetrics.font
     private(set) lazy var lineHeight: CGFloat = ceil(font.lineHeight * 1.25)
@@ -60,6 +70,10 @@ final class CodeLinesView: UIScrollView, UIScrollViewDelegate, UIContextMenuInte
         delegate = self
         gutterBack.backgroundColor = UIColor(Theme.codeBackground)
         gutterRule.backgroundColor = UIColor.separator
+        focusBand.backgroundColor = UIColor(Theme.lineFocus)
+        focusBand.isHidden = true
+        focusBand.isUserInteractionEnabled = false
+        addSubview(focusBand) // under the lines
         addSubview(gutterBack)
         addSubview(gutterRule)
         addInteraction(UIContextMenuInteraction(delegate: self))
@@ -155,6 +169,7 @@ final class CodeLinesView: UIScrollView, UIScrollViewDelegate, UIContextMenuInte
             // Pinned: the gutter moves with the vertical scroll only.
             g.frame = CGRect(x: contentOffset.x + pad.left, y: pad.top + CGFloat(i) * lineHeight, width: gutterWidth - 8, height: lineHeight)
         }
+        placeFocus(source)
         gutterBack.frame = CGRect(x: contentOffset.x, y: contentOffset.y - bounds.height, width: pad.left + gutterWidth, height: bounds.height * 3)
         gutterRule.frame = CGRect(x: contentOffset.x + pad.left + gutterWidth, y: gutterBack.frame.minY, width: 1 / traitCollection.displayScale,
                                   height: gutterBack.frame.height)
@@ -172,6 +187,21 @@ final class CodeLinesView: UIScrollView, UIScrollViewDelegate, UIContextMenuInte
                 s.start()
             }
         }
+    }
+
+    /// The marked line's band across the code, and the first time it is there, the scroll to it (a third down).
+    private func placeFocus(_ source: CodeLineSource) {
+        guard let f = focus, f < source.lineCount else {
+            focusBand.isHidden = true
+            return
+        }
+        focusBand.isHidden = false
+        focusBand.frame = CGRect(x: 0, y: pad.top + CGFloat(f) * lineHeight, width: max(contentSize.width, bounds.width), height: lineHeight)
+        guard focusPending, bounds.height > 0 else { return }
+        focusPending = false
+        let top = -adjustedContentInset.top
+        let bottom = max(top, contentSize.height - bounds.height + adjustedContentInset.bottom)
+        contentOffset.y = min(bottom, max(top, focusBand.frame.minY - bounds.height / 3))
     }
 
     func line(at p: CGPoint) -> Int? {
@@ -204,6 +234,7 @@ struct CodeLines: UIViewRepresentable {
     var version: Int = 0
     var onNearEnd: (() -> Void)? = nil
     var onFirstLines: (() -> Void)? = nil
+    var focus: Int? = nil
 
     final class Coordinator {
         var version = -1
@@ -221,6 +252,7 @@ struct CodeLines: UIViewRepresentable {
 
     func updateUIView(_ v: CodeLinesView, context: Context) {
         v.onNearEnd = onNearEnd
+        defer { v.focus = focus }
         let c = context.coordinator
         let id = ObjectIdentifier(source)
         guard c.source != id || c.version != version else { return }

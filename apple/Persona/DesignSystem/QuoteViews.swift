@@ -272,6 +272,8 @@ struct UserBubbleBody: View {
     var quotes: [ContextRef]
     var text: String
     var shell: Bool
+    /// The paths in `text`: linked where they are there on the machine (`PathText`).
+    var paths: [PathRef] = []
 
     var body: some View {
         if quotes.isEmpty {
@@ -283,7 +285,8 @@ struct UserBubbleBody: View {
     }
 
     private var words: some View {
-        Text(text).font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText(shell: shell))
+        PathText(text: text, refs: paths, link: Theme.userBubbleLink(shell: shell))
+            .font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText(shell: shell))
     }
 
     private var quoted: some View {
@@ -311,4 +314,49 @@ struct UserBubbleBody: View {
 struct QuoteFlashMark: Equatable {
     var line: String
     var id = UUID()
+}
+
+/// Plain text (a message you sent) with the paths that are there on the conversation's machine as underlined links
+/// (docs/ios.md「文件查看器」); a tap opens the file viewer at the path's line (`PathLinkURL`, the chat's `openURL`). Until
+/// the machine answers, and outside a chat, the text as it is: the same words in the same place.
+struct PathText: View {
+    @Environment(AppModel.self) private var model: AppModel?
+    @Environment(\.fileScope) private var scope
+    var text: String
+    var refs: [PathRef]
+    var link: Color
+
+    var body: some View {
+        if let linked {
+            Text(linked).tint(link)
+        } else {
+            Text(text)
+        }
+    }
+
+    private var linked: AttributedString? {
+        // Only a message with paths reads the presence (and is drawn again when an answer comes).
+        guard !refs.isEmpty, let model, let scope else { return nil }
+        let picked = PathRefs.pick(refs) { model.filePresence.linkable($0, in: scope) }
+        return picked.isEmpty ? nil : Self.attributed(text, picked, link: link)
+    }
+
+    /// `text` with `refs` (in order, none overlapping) as links.
+    static func attributed(_ text: String, _ refs: [PathRef], link: Color) -> AttributedString {
+        let ns = text as NSString
+        var out = AttributedString()
+        var at = 0
+        for r in refs where r.range.location >= at {
+            guard let url = PathLinkURL.make(r.path, line: r.line) else { continue }
+            out += AttributedString(ns.substring(with: NSRange(location: at, length: r.range.location - at)))
+            var a = AttributedString(ns.substring(with: r.range))
+            a.link = url
+            a.foregroundColor = link
+            a.underlineStyle = .single
+            out += a
+            at = NSMaxRange(r.range)
+        }
+        out += AttributedString(ns.substring(from: at))
+        return out
+    }
 }

@@ -5547,6 +5547,16 @@ if os.environ.get("MOCK_FILES"):
         "hub 上的 `~/.jarvis/personas/doudou` 不在这台电脑上，`/Users/me/code/weather/old/Removed.swift` 也已经删掉了。"
         "其余的都在：`Sources/App.swift`、`server/handlers.go`、`data/forecast.json`、`/Users/me/code/weather/README.md`、"
         "`config/app.yaml` 和 `/Users/me/code/weather/logs/api.log`。"))]
+    # MOCK_PATH_LINKS=1 (with MOCK_FILES): a question and a reply that name paths in their words, with lines, in code
+    # spans and in a code block, one not there (#1706: the ones there are links in the text, not chips).
+    if os.environ.get("MOCK_PATH_LINKS"):
+        ITEMS[WIDGET] += [
+            it("user", "text", 0, text="看一下 server/handlers.go:126 为什么慢，顺便对照 /Users/me/code/weather/README.md"),
+            it("assistant", "text", 0, text=(
+                "慢在 `server/handlers.go:126` 的 handleForecast7：每次请求都重新读 config/app.yaml。"
+                "改法见 /Users/me/code/weather/README.md:12，日志在 `/Users/me/code/weather/logs/api.log`。"
+                "/tmp/nope/notes.md 不在这台电脑上。\n\n```\ngo test ./server/...\n```")),
+        ]
     # MOCK_SHEETS=1 (with MOCK_FILES): a CSV and a workbook for the table viewer (#1310), named in one more message
     if os.environ.get("MOCK_SHEETS"):
         FILES[ROOT + "/data/stations.csv"] = stations_csv()

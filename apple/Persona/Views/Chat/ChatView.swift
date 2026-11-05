@@ -567,6 +567,9 @@ struct ChatView: View {
     private var handlers: ChatActions.Handlers {
         ChatActions.Handlers(
             openFile: { [key, session] path in file = FileRef(group: key.group, machineID: key.machineID, path: path, cwd: session?.cwd) },
+            openFileAt: { [key, session] path, line in
+                file = FileRef(group: key.group, machineID: key.machineID, path: path, cwd: session?.cwd, line: line)
+            },
             // A link to this machine's localhost is one of its ports, opened through the hub (docs/ports.md).
             openLink: { [model, key] url in
                 if let l = PortLinks.link(url, hostnames: model.hostnames(of: key.machineRef)) { openPort(l) } else { link = LinkTarget(url: url) }
@@ -2365,7 +2368,9 @@ struct ChatView: View {
                 Task {
                     for _ in 0..<40 where session == nil { try? await Task.sleep(for: .milliseconds(250)) }
                     try? await Task.sleep(for: .seconds(1))
-                    file = FileRef(group: key.group, machineID: key.machineID, path: f, cwd: session?.cwd)
+                    // `-openFileLine <n>`: at that line, as a message's `path:n` opens it.
+                    let line = UserDefaults.standard.object(forKey: "openFileLine") != nil ? UserDefaults.standard.integer(forKey: "openFileLine") : nil
+                    file = FileRef(group: key.group, machineID: key.machineID, path: f, cwd: session?.cwd, line: line)
                 }
             }
             if let id = UserDefaults.standard.string(forKey: "openAgent") { // `-openAgent <agent id>`: that subagent
@@ -3636,6 +3641,8 @@ struct WorkStepView: View, Equatable {
 @MainActor final class ChatActions {
     struct Handlers {
         var openFile: (String) -> Void = { _ in }
+        /// A path linked in a message (`PathLinkURL`), at its line.
+        var openFileAt: (String, Int?) -> Void = { _, _ in }
         var openLink: (URL) -> Void = { _ in }
         var openPort: (PortLink) -> Void = { _ in }
         var viewImages: (ImageViewing) -> Void = { _ in }
@@ -3675,6 +3682,10 @@ struct WorkStepView: View, Equatable {
     private(set) lazy var openQuote: (ContextRef) -> Bool = { [weak self] in self?.handlers.openQuote($0) ?? false }
     /// Web links open in the in-app sheet (Feishu docs in the native reader); anything else as before.
     private(set) lazy var openURL = OpenURLAction { [weak self] url in
+        if let ref = PathLinkURL.parse(url) { // a path in a message: the file viewer, at its line
+            self?.handlers.openFileAt(ref.path, ref.line)
+            return .handled
+        }
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""), let self else {
             // Mac: NSWorkspace would run any scheme it names (LinkPolicy).
             #if os(macOS)

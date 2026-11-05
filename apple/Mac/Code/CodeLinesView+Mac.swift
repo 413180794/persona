@@ -19,6 +19,15 @@ final class CodeLinesView: NSView, MacFindable {
     var onNearEnd: (() -> Void)?
     /// Once, when the first lines are on screen.
     var onFirstLines: (() -> Void)?
+    /// A line (0-based) to select and, once, scroll to: a message's `path:12`.
+    var focus: Int? {
+        didSet {
+            guard focus != oldValue else { return }
+            focusPending = focus != nil
+            applyFocus()
+        }
+    }
+    private var focusPending = false
 
     let font = CodeMetrics.font
     /// NSFont has no `lineHeight`: ascender + descender + leading is what UIFont's is.
@@ -67,6 +76,22 @@ final class CodeLinesView: NSView, MacFindable {
         resize()
         needsDisplay = true
         find?.sourceChanged()
+        applyFocus()
+    }
+
+    /// The focused line selected and brought into view (a third down), once it is there.
+    private func applyFocus() {
+        guard focusPending, let f = focus, let source, f < source.lineCount else { return }
+        focusPending = false
+        anchor = f
+        select(f...f)
+        DispatchQueue.main.async { [weak self] in // after the scroll view has sized the document
+            guard let self, let clip = self.enclosingScrollView?.contentView else { return }
+            let y = max(0, self.pad.top + CGFloat(f) * self.lineHeight - clip.bounds.height / 3)
+            clip.scroll(to: CGPoint(x: 0, y: min(y, max(0, self.bounds.height - clip.bounds.height))))
+            self.enclosingScrollView?.reflectScrolledClipView(clip)
+            self.scrolled()
+        }
     }
 
     // MARK: Find
@@ -322,6 +347,7 @@ struct CodeLines: View {
     var version: Int = 0
     var onNearEnd: (() -> Void)? = nil
     var onFirstLines: (() -> Void)? = nil
+    var focus: Int? = nil
     @State private var find = CodeFindModel()
 
     var body: some View {
@@ -330,7 +356,7 @@ struct CodeLines: View {
                 CodeFindBar(find: find)
                 Divider()
             }
-            CodeLinesHost(source: source, version: version, find: find, onNearEnd: onNearEnd, onFirstLines: onFirstLines)
+            CodeLinesHost(source: source, version: version, find: find, onNearEnd: onNearEnd, onFirstLines: onFirstLines, focus: focus)
         }
         // The scroll view has no size of its own: a sheet sized to its content (the file viewer) left the code a
         // sliver. Only the ideal size: inside a bigger container it fills what it is given, as before.
@@ -355,6 +381,7 @@ private struct CodeLinesHost: NSViewRepresentable {
     var find: CodeFindModel
     var onNearEnd: (() -> Void)?
     var onFirstLines: (() -> Void)?
+    var focus: Int?
 
     final class Coordinator {
         var version = -1
@@ -373,6 +400,7 @@ private struct CodeLinesHost: NSViewRepresentable {
 
     func updateNSView(_ v: CodeLinesScrollView, context: Context) {
         v.lines.onNearEnd = onNearEnd
+        defer { v.lines.focus = focus }
         let c = context.coordinator
         let id = ObjectIdentifier(source)
         guard c.source != id || c.version != version else { return }

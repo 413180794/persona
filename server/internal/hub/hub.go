@@ -235,6 +235,9 @@ type pending struct {
 	answeredBy string
 	// codex: a card a node listed for a Codex TUI (codexcards.go); it lasts as long as the node lists it.
 	codex bool
+	// claimed: an answer was taken for this hook-waited card (resolve). It stays in the map until await or
+	// finishInteraction ends it, but a second answer finds it no longer pending.
+	claimed bool
 }
 
 // resumeGrace is how long a resumable interaction outlives its node: a little longer than hooks keep reconnecting
@@ -926,8 +929,13 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 			}
 		}
 	}
+	if p != nil && p.claimed {
+		p = nil // answered a moment ago: the first answer is the one the hook and the history get
+	}
 	if p != nil && p.local != nil {
 		delete(h.interactions, id) // claimed: a second answer to the same card is not pending any more
+	} else if p != nil {
+		p.claimed = true
 	}
 	if p != nil {
 		p.answeredBy = r.AnsweredBy // read by finished(), under this lock

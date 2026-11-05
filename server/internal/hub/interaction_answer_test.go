@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -140,6 +142,60 @@ func answerTool(h *Hub, ctx context.Context, m *Machine, sessionID, name string,
 		return "", errors.New(textOf(r))
 	}
 	return textOf(r), nil
+}
+
+// The phone and the assistant answering the same hook-waited card at once: one answer wins, and the hook and the
+// history get that same one.
+func TestResolveTakesOneAnswerUnderRace(t *testing.T) {
+	for range 50 {
+		h, _, ix := interactionAnswerHub(t)
+		p := h.interactions[ix.ID]
+		errs := make(chan error, 2)
+		for _, l := range []string{"发", "不发"} {
+			go func() { errs <- h.resolve(ix.ID, proto.Resolution{Answers: map[string]string{"发吗？": l}}) }()
+		}
+		e1, e2 := <-errs, <-errs
+		if (e1 == nil) == (e2 == nil) {
+			t.Fatalf("want exactly one answer to win: %v / %v", e1, e2)
+		}
+		var got proto.Resolution
+		select {
+		case got = <-p.done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("the hook got no answer")
+		}
+		_, res, _ := h.store.InteractionOutcome(context.Background(), ix.ID)
+		if res == nil || res.Answers["发吗？"] != got.Answers["发吗？"] {
+			t.Fatalf("hook got %v, history %+v", got.Answers, res)
+		}
+	}
+}
+
+// An app's answer cannot say the assistant gave it: only interaction_answer sets answered_by.
+func TestClientAnswerCannotClaimTheAssistant(t *testing.T) {
+	h, _, ix := interactionAnswerHub(t)
+	p := h.interactions[ix.ID]
+	srv := httptest.NewServer(h.routes())
+	defer srv.Close()
+	req, _ := http.NewRequest("POST", srv.URL+"/api/v1/interactions/"+ix.ID+"/resolve",
+		strings.NewReader(`{"answers":{"发吗？":"发"},"answered_by":"assistant"}`))
+	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	select {
+	case got := <-p.done:
+		if got.AnsweredBy != "" || got.Answers["发吗？"] != "发" {
+			t.Fatalf("hook got %+v", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the hook got no answer")
+	}
 }
 
 // interactionsCallFor is app.call interactions.<method> as the assistant makes it.

@@ -172,15 +172,15 @@ struct UserBubble: View, Equatable {
             if !shown.isEmpty || !quotes.isEmpty {
                 HStack {
                     Spacer(minLength: 48)
-                    UserBubbleBody(quotes: quotes, text: shown, shell: shellChat)
+                    UserBubbleBody(quotes: quotes, text: shown, shell: shellChat, paths: d.pathRefs)
                         .messageLongPress(id: item.id)
                 }
             }
-            if let openFile { FileChips(paths: d.files, open: openFile) }
+            if let openFile { FileChips(paths: d.chips, open: openFile) }
             // Came in from a channel (WeChat, the Feishu bot…): 「来自 微信」 under it.
             if ChannelSource.possible(item.clientMsgID) { ChannelSourceLine(clientMsgID: item.clientMsgID) }
         }
-        .lookUpFiles(d.files)
+        .lookUpFiles(d.asked)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .messageActionBar(id: item.id, text: shown, isUser: true, date: item.ts)
     }
@@ -483,7 +483,7 @@ struct AssistantText: View, Equatable {
         #endif
         let d = RowMemo.assistant(RowMemo.key(memoScope, item.id)) { _ in AssistantRowText(item.text ?? "") } // once per message
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            Markdown(d.markdown)
+            LinkedMarkdown(plain: d.markdown, paths: d.paths, key: RowMemo.key(memoScope, item.id))
                 .task(id: item.id) { await Self.preloadLinks(item) }
                 // Inside the theme (applied first), or the theme's text style wins (docs/lessons/ios.md).
                 .modifier(QuietMarkdown(on: quiet))
@@ -493,12 +493,12 @@ struct AssistantText: View, Equatable {
                 .messageLongPress(id: item.id)
             if let openFile {
                 // Documents as cards with their first page (#1543), the rest as chips.
-                FileChips(paths: d.files.filter { !DocumentCards.isDocument($0) }, open: openFile)
+                FileChips(paths: d.chips, open: openFile)
                 DocumentCards(paths: d.files.filter(DocumentCards.isDocument), open: openFile)
             }
             PortChips(text: item.text ?? "")
         }
-        .lookUpFiles(d.files)
+        .lookUpFiles(d.asked)
         .messageActionBar(id: item.id, text: item.text ?? "", isUser: false, date: item.ts)
     }
 
@@ -1001,7 +1001,12 @@ private struct StreamChunk: View, Equatable {
     var text: String
 
     var body: some View {
-        Markdown(MarkdownMemo.content(text)).markdownTheme(.jarvis)
+        // A finished block: its paths are written whole, so they are asked about and linked (the block still being
+        // written is not: its last word may be half a path).
+        let paths = MarkdownMemo.paths(text)
+        LinkedMarkdown(plain: MarkdownMemo.content(text), paths: paths, key: text)
+            .markdownTheme(.jarvis)
+            .lookUpFiles(paths.paths)
     }
 }
 
@@ -1065,6 +1070,38 @@ nonisolated enum WebLinks {
 nonisolated enum MarkdownMemo {
     private static let memo = TextMemo<MarkdownContent>(limit: 128)
     static func content(_ text: String) -> MarkdownContent { memo(text) { MarkdownContent(Links.markdown(MathMarkdown.rewrite($0))) } }
+
+    private static let pathsMemo = TextMemo<PathMarkdown>(limit: 128)
+    /// Where the paths are in the same Markdown (`content`).
+    static func paths(_ text: String) -> PathMarkdown { pathsMemo(text) { PathMarkdown(Links.markdown(MathMarkdown.rewrite($0))) } }
+}
+
+/// Markdown with the paths that are there on the conversation's machine as links (docs/ios.md「文件查看器」), the code
+/// spans that are a whole path too; tapping one opens it in the file viewer at its line (`PathLinkURL`, the chat's
+/// `openURL`). Until the machine answers, and outside a chat, the plain Markdown: the same words in the same place, only
+/// their color changes when the answer comes (a link is the text's size, so the row does not grow).
+struct LinkedMarkdown: View {
+    @Environment(AppModel.self) private var model: AppModel?
+    @Environment(\.fileScope) private var scope
+    var plain: MarkdownContent
+    var paths: PathMarkdown
+    /// The message's memo key: with the paths linked, the key of the linked Markdown.
+    var key: String
+
+    private static let memo = TextMemo<MarkdownContent>(limit: 512)
+
+    var body: some View { Markdown(content) }
+
+    private var content: MarkdownContent {
+        // Only a message with paths reads the presence (and is drawn again when an answer comes).
+        guard !paths.paths.isEmpty, let model, let scope else { return plain }
+        let there = paths.paths.filter { model.filePresence.linkable($0, in: scope) }
+        guard !there.isEmpty else { return plain }
+        let paths = paths
+        return Self.memo(key + "\u{0}" + there.joined(separator: "\n")) { _ in
+            MarkdownContent(paths.linked { there.contains($0) }.markdown)
+        }
+    }
 }
 
 /// What a chat row derives from its message (parsed Markdown, paths, links, the shown text), computed once per
@@ -1105,14 +1142,30 @@ extension EnvironmentValues {
 
 nonisolated struct AssistantRowText {
     let markdown: MarkdownContent
+    /// Where its paths are, to link the ones that are there (`LinkedMarkdown`).
+    let paths: PathMarkdown
     let files: [String]
+    /// What to ask the machine about: the paths in the text and in its code blocks (those stay chips).
+    let asked: [String]
+    /// The chips under the answer: the files it names that are not linked in its words (in code blocks, past the
+    /// limit) and its pictures, videos and sounds; documents aside (their cards).
+    let chips: [String]
     init(_ text: String) {
-        markdown = MarkdownContent(Links.markdown(MathMarkdown.rewrite(text))) // links end where `Links` says, not at the next space; formulas as pictures
-        files = FilePaths.find(in: text)
+        let source = Links.markdown(MathMarkdown.rewrite(text)) // links end where `Links` says, not at the next space; formulas as pictures
+        markdown = MarkdownContent(source)
+        let paths = PathMarkdown(source)
+        self.paths = paths
+        let files = FilePaths.find(in: text)
+        self.files = files
+        asked = PathRefs.unique(paths.paths + files, limit: 40)
+        let inline = Set(paths.paths)
+        chips = files.filter { !FileThumbnails.isDocument($0) && (!inline.contains($0) || FilePaths.isMedia($0)) }
     }
 }
 
 nonisolated struct UserRowText {
+    /// The paths in `shown`, linked where they are there (`PathText`).
+    let pathRefs: [PathRef]
     let refs: [ContextRef]
     let text: String   // without the context tags
     let shown: String  // without the image notes and the files' tags
@@ -1120,15 +1173,26 @@ nonisolated struct UserRowText {
     /// The files sent with it (videos), drawn as cards.
     let attached: [AttachedFile]
     let files: [String]
+    /// The chips under the bubble: the files it names that are not linked in it, and its pictures, videos and sounds.
+    let chips: [String]
+    let asked: [String]
     init(_ raw: String) {
         let parsed = ContextRef.parse(raw)
         refs = parsed.refs
         text = parsed.rest
-        shown = UserBubble.display(parsed.rest)
+        let shown = UserBubble.display(parsed.rest)
+        self.shown = shown
         let images = UserBubble.imagePaths(parsed.rest)
         self.images = images
         let sent = AttachedFile.parse(parsed.rest)
         attached = sent.files
-        files = FilePaths.find(in: sent.rest).filter { !images.contains($0) }
+        let files = FilePaths.find(in: sent.rest).filter { !images.contains($0) }
+        self.files = files
+        let found = PathRefs.find(in: shown)
+        pathRefs = found
+        let inline = PathRefs.unique(found, limit: 40)
+        let linked = Set(inline)
+        chips = files.filter { !linked.contains($0) || FilePaths.isMedia($0) }
+        asked = PathRefs.unique(inline + files, limit: 40)
     }
 }
