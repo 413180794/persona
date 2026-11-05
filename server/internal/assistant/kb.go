@@ -250,12 +250,7 @@ func (s *Service) kbZone(ctx context.Context) (*time.Location, bool) {
 	if !ok {
 		return nil, false
 	}
-	if v.Timezone != "" {
-		if loc, err := time.LoadLocation(v.Timezone); err == nil {
-			return loc, true
-		}
-	}
-	return time.Local, true
+	return zoneOf(v.Timezone), true
 }
 
 // kbRezone keeps the archive in the user's time zone (kb/zone.go): the days and times written in another (the hub's
