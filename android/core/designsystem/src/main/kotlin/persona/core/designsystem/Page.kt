@@ -83,7 +83,10 @@ fun JPage(
     ambience: Ambience? = null,
     topBar: (@Composable () -> Unit)? = null,
     bottomBar: (@Composable () -> Unit)? = null,
-    /** False when the content is a page of its own that softens its edges itself (an embedded conversation). */
+    /**
+     * False when the content is a page of its own that softens its edges itself (an embedded conversation); that page
+     * is then the glass source this page's bars blur, not this page's content.
+     */
     edges: Boolean = true,
     content: @Composable (PaddingValues) -> Unit,
 ) {
@@ -143,7 +146,9 @@ private fun PageFrame(
                 val bodyHeight = if (tabletop) hingeTop else constraints.maxHeight
                 val body = subcompose(PageSlot.Content) {
                     // A tap on the page's blank space puts the keyboard away (the bars and the dock are not in here).
-                    Box(Modifier.fillMaxSize().glassSource().dismissKeyboardOnBlankTap()) {
+                    // A page of its own in here (!edges) is the glass source itself: Haze does not let an effect draw
+                    // an ancestor source, so with this one as well the inner page's edges and dock blurred nothing (#3040).
+                    Box(Modifier.fillMaxSize().then(if (edges) Modifier.glassSource() else Modifier).dismissKeyboardOnBlankTap()) {
                         // The window's one light, not a block of this page's own: panes, nested pages and the
                         // shell around them paint the same pixels, so nothing shows where one ends.
                         PageBackdrop(ambience = light)
