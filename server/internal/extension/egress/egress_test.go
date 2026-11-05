@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -219,7 +221,16 @@ func TestProxyUnixSocketIsTheExtension(t *testing.T) {
 	defer srv.Close()
 	p := newProxy(t, strings.TrimPrefix(srv.URL, "http://"), nil)
 	p.Register("notes", Rule{Hosts: []string{"api.example.com"}})
-	sock := filepath.Join(t.TempDir(), "proxy.sock")
+	// sun_path holds 104 bytes on macOS; t.TempDir() under /var/folders/…/T/ with this test's name does not fit.
+	dir := t.TempDir()
+	if runtime.GOOS != "windows" {
+		var err error
+		if dir, err = os.MkdirTemp("/tmp", "egress"); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.RemoveAll(dir) })
+	}
+	sock := filepath.Join(dir, "proxy.sock")
 	if err := p.ListenUnix("notes", sock); err != nil {
 		t.Fatal(err)
 	}

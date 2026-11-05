@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -269,7 +270,7 @@ func newTestHub(t *testing.T) *Hub {
 	t.Helper()
 	cfg := defaultConfig()
 	cfg.Machines = nil
-	cfg.dir = t.TempDir()
+	cfg.dir = shortTempDir(t)
 	h := &Hub{
 		cfg: cfg, version: "test", logger: log.New(io.Discard, "", 0),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{},
@@ -283,6 +284,22 @@ func newTestHub(t *testing.T) *Hub {
 	h.upd.exec = func(string) error { return errors.New("exec is not run in tests") }
 	h.upd.startWatch = func(string, string) error { return nil }
 	return h
+}
+
+// shortTempDir is a temporary directory short enough for the Unix sockets the hub makes under it
+// (<dir>/extensions/<id>.sock, <dir>/extensions/run/<id>/http.sock). sun_path holds 104 bytes on macOS, and t.TempDir()
+// under its /var/folders/…/T/ plus the test's name already takes most of them.
+func shortTempDir(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return t.TempDir()
+	}
+	dir, err := os.MkdirTemp("/tmp", "ph")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	return dir
 }
 
 func TestWaitInteractionResolved(t *testing.T) {
