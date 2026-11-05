@@ -236,3 +236,13 @@ func renderAnswer(items []agentAnswerItem) string {
 	}
 	return prompts.RenderAgentAnswer(a)
 }
+
+// renderDelegatedAnswer is renderAnswer for answers the assistant gave for the user, and why (delegate.go): the agent
+// hears that they are the assistant's, and that the user may change them.
+func renderDelegatedAnswer(items []agentAnswerItem, reason string) string {
+	a := prompts.AgentAnswer{ByAssistant: true, Reason: oneLine(reason)}
+	for _, it := range items {
+		a.Items = append(a.Items, prompts.AgentAnswerItem{Question: oneLine(it.question), Answer: it.answer})
+	}
+	return prompts.RenderAgentAnswer(a)
+}

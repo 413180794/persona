@@ -1184,6 +1184,23 @@ type Interaction struct {
 	// answers a later card whose keys are all kept by itself: the agent's own session rule dies with its process
 	// (docs/assistant.md「本会话总是允许」). Absent on Agents sessions' cards.
 	AlwaysKeys []string `json:"always_keys,omitempty"`
+	// Delegating: the assistant is deciding whether it may answer this question for the user (agents.delegate,
+	// docs/assistant.md「提问先由助手代答」); nothing was pushed yet. The card shows in the apps meanwhile, and an answer
+	// given there wins.
+	Delegating bool `json:"delegating,omitempty"`
+	// Delegate is what the assistant found when it left the question to the user: the context it filled in.
+	Delegate *Delegate `json:"delegate,omitempty"`
+}
+
+// Delegate is the assistant's context on a question it left to the user (Interaction.Delegate): it is a red line or
+// about the goal itself, or the assistant could not tell.
+type Delegate struct {
+	What      string     `json:"what,omitempty"`      // what this is about, in a line
+	WhyNow    string     `json:"why_now,omitempty"`   // why the agent asks now
+	Recommend string     `json:"recommend,omitempty"` // the answer it recommends (an option's label when there is one)
+	Cost      string     `json:"cost,omitempty"`      // what not taking the recommendation costs
+	Reason    string     `json:"reason,omitempty"`    // why it is the user's to answer
+	Deadline  *time.Time `json:"deadline,omitempty"`  // by when: 24 hours, or the card's expiry when that is sooner
 }
 
 // Field is one input of a card (Interaction.Fields).
@@ -1219,6 +1236,8 @@ type Resolution struct {
 	// AnsweredBy is who answered when it was not the user in the app: AnsweredByAssistant for a question the
 	// assistant answered on their behalf (docs/assistant.md). Absent when the app answered.
 	AnsweredBy string `json:"answered_by,omitempty"`
+	// Reason is why the assistant answered so (AnsweredByAssistant): 「助手代答：X，因为 Y」's Y.
+	Reason string `json:"reason,omitempty"`
 	// PreKeys go in before Text (Keys after it): pick "Type something." by its number, type the answer, enter.
 	PreKeys []string `json:"pre_keys,omitempty"`
 	Dismiss bool     `json:"dismiss,omitempty"`

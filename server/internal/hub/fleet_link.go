@@ -77,6 +77,12 @@ func init() {
 		event := map[string]any{"type": "interaction_resolved", "id": p.ID}
 		if p.AnsweredBy != "" {
 			event["answered_by"] = p.AnsweredBy // the app marks a question the assistant answered (docs/assistant.md)
+			if p.Reason != "" {
+				event["reason"] = p.Reason // 助手代答：X，因为 Y
+			}
+			if len(p.Answers) > 0 {
+				event["answers"] = p.Answers // what 改答 (POST …/reanswer) starts from
+			}
 		}
 		h.broadcast(event)
 	})
@@ -316,6 +322,15 @@ func (h *Hub) fleetRoutesRelayed(api *http.ServeMux) {
 		r.Body = io.NopCloser(bytes.NewReader(body))
 		h.forwardHTTP(w, r, assistantwire.AssistantID)
 	}))
+	// 改答: a question the assistant answered gets the user's answer (assistant/fleet_delegate.go); a device that may
+	// only answer cards does not send agents messages.
+	api.HandleFunc("POST /api/v1/interactions/{id}/reanswer", func(w http.ResponseWriter, r *http.Request) {
+		if answerOnly(r) {
+			writeErr(w, http.StatusForbidden, errors.New("this device can only answer with a card's own choices"))
+			return
+		}
+		h.forwardHTTP(w, r, assistantwire.AssistantID)
+	})
 	api.HandleFunc("GET /api/v1/interactions/history", func(w http.ResponseWriter, r *http.Request) {
 		if h.requestHasElicitation(r) {
 			r.Header.Set(assistantwire.ElicitationHeader, "1")

@@ -615,7 +615,8 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 // A workflow answers "Workflow launched in background. Task ID: w5k2nd1ap\nSummary: …\nTranscript dir: …\nScript file:
 // …\nRun ID: wf_…"; a Monitor "Monitor started (task bqke1prjm, expires in 30m unless …)".
 var (
-	bgIDRe     = regexp.MustCompile(`(?:running in background with ID|agentId|in background\. Task ID|Monitor started \(task):?\s*([A-Za-z0-9_-]+)`)
+	// agentId needs its colon: newer results first warn about "the agentId below", whose next word is not the id.
+	bgIDRe     = regexp.MustCompile(`(?:running in background with ID:?|agentId:|in background\. Task ID:?|Monitor started \(task:?)\s*([A-Za-z0-9_-]+)`)
 	wfRunRe    = regexp.MustCompile(`(?m)^Run ID:\s*(wf_[A-Za-z0-9_-]+)`)
 	wfSumRe    = regexp.MustCompile(`(?m)^Summary:\s*(.+)$`)
 	wfScriptRe = regexp.MustCompile(`(?m)^Script file:\s*(\S+\.js)\s*$`)

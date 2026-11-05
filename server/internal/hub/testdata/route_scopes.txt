@@ -263,6 +263,7 @@ inbox.write          POST /api/v1/inbox/{id}/doc/status
 inbox.write          POST /api/v1/inbox/{id}/done
 inbox.write          POST /api/v1/inbox/{id}/draft
 inbox.write          POST /api/v1/inbox/{id}/reply
+agents.control       POST /api/v1/interactions/{id}/reanswer
 agents.control       POST /api/v1/interactions/{id}/resolve
 -                    POST /api/v1/launchers
 -                    POST /api/v1/launchers/discover

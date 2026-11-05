@@ -75,7 +75,7 @@ type ModelPurpose struct {
 	Runtimes      []string     `json:"runtimes,omitempty"` // assistant only: the runtimes it can run on
 }
 
-var modelCategoryIDs = []string{"assistant", "agent.new", "kb", "inbox.triage"}
+var modelCategoryIDs = []string{"assistant", "agent.new", "kb", "inbox.triage", "agent.delegate"}
 
 // modelPurposes are the uses; Name, Group and Uses hold catalog names (assistant-models), read in a language by
 // localized.
@@ -84,6 +84,8 @@ var modelPurposes = []ModelPurpose{
 	{ID: "agent.new", Group: "group_default", Kind: "launcher", Uses: []ModelUse{{Name: "use_new_agent"}, {Name: "use_inbox_agent"}, {Name: "use_lark_agent"}}},
 	{ID: "kb", Group: "group_default", Kind: "api", Uses: []ModelUse{{Name: "use_translate"}, {Name: "use_draft"}, {Name: "use_knowledge"}, {Name: "use_projects"}, {Name: "use_titles"}}},
 	{ID: "inbox.triage", Group: "group_default", Kind: "api", Uses: []ModelUse{{Name: "use_triage"}, {Name: "use_importance"}, {Name: "use_reply_or_agent"}}},
+	// 提问代答 (delegate.go) is a category of its own, so it can run on a stronger model than the triage's (#3029).
+	{ID: "agent.delegate", Group: "group_default", Kind: "api", Uses: []ModelUse{{Name: "use_delegate"}}},
 	{ID: "inbox.agent", Group: "group_agents", Kind: "launcher", Parent: "agent.new"},
 	{ID: "lark.agent", Group: "group_agents", Kind: "launcher", Parent: "agent.new"},
 	{ID: "inbox.judge", Group: "group_triage", Kind: "api", Parent: "inbox.triage"},
@@ -326,6 +328,13 @@ func (s *Service) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBindi
 		b, err := s.resolveModel(ctx, p.Parent)
 		return b, p.Parent, err
 	}
+	if p.ID == "agent.delegate" { // 信息筛选's connection, with a stronger model on it (delegateModel)
+		b, err := s.resolveModel(ctx, "inbox.triage")
+		if err == nil {
+			b = s.delegateBaseline(ctx, b)
+		}
+		return b, mc(l, "source_delegate_default"), err
+	}
 	if p.Kind == "api" {
 		provider := "legacy.ai"
 		if p.ID == "inbox.triage" {
@@ -352,6 +361,25 @@ func (s *Service) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBindi
 		return ModelBinding{Provider: "launcher.claude"}, mc(l, "source_default"), nil
 	}
 	return ModelBinding{Provider: p.ID}, mc(l, "source_extension_default"), nil
+}
+
+// delegateModel is what 提问代答 runs on unless the user picks another (2026-11-05, the user's call): it decides for the
+// user whether an agent's question is theirs, a cheap triage model is not up to that.
+const delegateModel = "claude-opus-5-5"
+
+// delegateBaseline is 信息筛选's binding b with delegateModel on it when its connection serves Claude models (its
+// model is one); b as it is otherwise: a connection to another vendor's models, or one that cannot be called, keeps
+// its own model.
+func (s *Service) delegateBaseline(ctx context.Context, b ModelBinding) ModelBinding {
+	if b.Provider == "" {
+		return b
+	}
+	c, err := s.apiConfig(ctx, b)
+	if err != nil || (c.API != "" && c.API != "messages") || !strings.HasPrefix(c.Model, "claude-") {
+		return b
+	}
+	b.Model, b.Effort = delegateModel, ""
+	return b
 }
 
 // modelAutoSource is (the catalog name of) what 继承来源 says for an API use that runs on fallbackAPIProvider's pick.

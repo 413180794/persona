@@ -26,5 +26,7 @@
   "mode_accept_edits": "Accept edits automatically",
   "mode_default": "Ask at every step",
   "mode_bypass": "Allow everything",
-  "mode_plan": "Keep planning"
+  "mode_plan": "Keep planning",
+  "by_assistant": "Answered by the assistant: {answer}",
+  "by_assistant_because": "Answered by the assistant: {answer}, because {reason}"
 }

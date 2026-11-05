@@ -64,6 +64,9 @@ type fleetBook struct {
 	askMu sync.Mutex
 	asked map[string]*askedOne // the assistant's own questions and cards on the phone (by interaction id)
 
+	// reanswered: the 改答 messages sent to agents, by interaction and answers (fleet_delegate.go): each goes once.
+	reanswered map[string]bool
+
 	undelivered heldActs // answers the manager's own Action did not take yet
 
 	live liveState // the Live Activity's content as last told (fleet_live.go)

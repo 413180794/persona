@@ -12,5 +12,6 @@
   "fill_in_suffix": "（Personaを開いて入力）",
   "done_body": "完了しました",
   "health_title": "ヘルスケア",
-  "health_body": "ヘルスケアスペースに新着があります。Personaを開いて確認してください"
+  "health_body": "ヘルスケアスペースに新着があります。Personaを開いて確認してください",
+  "delegate_recommend_suffix": "\nアシスタントのおすすめ：{answer}"
 }

@@ -7,6 +7,7 @@
   "name_lark_agent": "Lark /agent",
   "name_inbox_judge": "AI分身の判定",
   "name_agent_triage": "セッションの振り分け",
+  "name_agent_delegate": "質問の代理回答",
   "name_inbox_draft": "返信の下書き",
   "name_translate": "テキストとメールの翻訳",
   "name_kb_compress": "チャットの圧縮とタグ付け",
@@ -83,5 +84,7 @@
   "list_separator": "、",
   "err_api_as_launcher": "この用途はResponsesプロトコルの直接API接続を参照しているため、ランチャーとして実行できません",
   "err_runtime_invalid": "実行方式はcliまたはagentsdkにしてください",
-  "err_runtime_assistant_only": "実行方式を選べるのはメインチャットだけです"
+  "err_runtime_assistant_only": "実行方式を選べるのはメインチャットだけです",
+  "use_delegate": "エージェントの質問に代わりに答えるかの判断",
+  "source_delegate_default": "振り分けと同じ接続、モデルは Opus 5.5"
 }

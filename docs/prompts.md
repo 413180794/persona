@@ -28,7 +28,9 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/runtime_instructions.md` | 助手跑在 Agent 运行时（DSH）上时，新对话第一条消息前面的 `<persona-context>`：共用的记忆（目录、格式、当前索引），插件的命令闸门带运行时工具时，说明技能里的命令改用那个工具跑（`{{range .Gates}}`） | `node/assistant_runtime.go` |
 | `agents/triage.md`、`triage_input.md` | Agent 一轮停下后的分诊：做完了 / 卡在什么上（等你决定、等另一个 Agent、等外部事件），抽出问题和选项、授权链接、等的事和过多久再看、产物（[agent-work.md](agent-work.md)）；用途 `agent.triage` | `assistant/agents_triage.go` |
 | `agents/wake.md` | 到点叫醒在等的 Agent：上一轮说在等什么、好了接着做、推代码 / 部署 / 发消息前先问用户 | `assistant/agents_triage.go` |
-| `agents/answer.md` | 用户在分诊开的卡片上的回答，发回给那个 Agent | `assistant/agents_triage.go` |
+| `agents/answer.md` | 用户在分诊开的卡片上的回答，发回给那个 Agent；助手代答的写明是助手按用户的规则答的、为什么、用户可能改答 | `assistant/agents_triage.go` |
+| `agents/delegate.md`、`delegate_input.md` | Agent 的提问先由助手判断：内部选项代答（选项和理由），红线（不可逆、社交可见）和目标要变的交给用户，补齐这件事是什么、为什么现在问、推荐、不选的代价（[assistant.md](assistant.md)「提问先由助手代答」）；用途 `agent.delegate` | `assistant/delegate.go` |
+| `agents/reanswer.md` | 用户改答助手代答过的提问，新答案发给那个 Agent（带上助手原来答的） | `assistant/fleet_delegate.go` |
 | `bot/message.md` | 在飞书里私聊机器人发的一条消息进对话的样子：发给 Persona 时加「回答会发回飞书」的说明，引用的消息、转发的聊天记录、附件路径 | `hub/bots_chat.go` `botSend`（`docs/bots.md`） |
 | `inbox/triage.md` | 收件箱分拣（需要你 / 知悉即可 / 噪音）的 system | `assistant/inbox_triage.go` |
 | `inbox/tiers.md` | 三档的判断标准，分拣和事件合成共用 | 同上 |

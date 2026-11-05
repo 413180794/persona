@@ -77,8 +77,11 @@ type fakeHub struct {
 	// were asked; the sessions whose pushes are off, by machine.
 	triage      string
 	triageAsked []modelCall
-	tabReply    string
-	tabAsked    []string
+	// The delegate's model (delegate.go): its answer ("": it fails), and what it was asked.
+	delegate      string
+	delegateAsked []modelCall
+	tabReply      string
+	tabAsked      []string
 	// The todo titles' model (todo.title): its answer, an error instead, and what it was asked.
 	todoTitleReply string
 	todoTitleErr   error
@@ -751,6 +754,9 @@ func (f *fakeHub) fakeModel(t *testing.T) {
 		case strings.Contains(in.System, "盯着用户电脑上的编程 Agent"): // the Agents triage (agents_triage.go)
 			f.triageAsked = append(f.triageAsked, modelCall{strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(in.System), jsonOnly)), user})
 			reply, fail = f.triage, f.triage == ""
+		case strings.Contains(in.System, "先替用户判断 Agent 的提问"): // the delegate (delegate.go)
+			f.delegateAsked = append(f.delegateAsked, modelCall{strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(in.System), jsonOnly)), user})
+			reply, fail = f.delegate, f.delegate == ""
 		case strings.HasSuffix(strings.TrimSpace(in.System), jsonOnly):
 			f.judged++
 			reply, fail = f.judge, f.judge == ""

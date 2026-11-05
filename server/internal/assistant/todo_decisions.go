@@ -151,6 +151,9 @@ func (s *Service) cardDecisions(ctx context.Context, ix proto.Interaction, r pro
 	if st == nil || status != "resolved" || r.Dismiss || ix.Kind != proto.IxQuestion || len(r.Answers) == 0 {
 		return
 	}
+	if r.AnsweredBy == proto.AnsweredByAssistant {
+		return // the assistant's call for the user (delegate.go), not one the user made; 改答 is
+	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := s.ensureTodosLoaded(ctx); err != nil {

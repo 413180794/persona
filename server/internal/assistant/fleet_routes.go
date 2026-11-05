@@ -24,6 +24,7 @@ import (
 // FleetRoutes are those routes.
 var FleetRoutes = []string{
 	"POST /api/v1/interactions/{id}/resolve",
+	"POST /api/v1/interactions/{id}/reanswer",
 	"GET /api/v1/interactions/history",
 	"POST /api/v1/sessions/{mid}/{sid}/seen",
 }
@@ -37,7 +38,7 @@ func (s *Service) fleetHandler(next http.Handler) http.Handler {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
-		res.AnsweredBy = "" // only the assistant's interaction_answer says it answered
+		res.AnsweredBy, res.Reason = "", "" // only the assistant's interaction_answer says it answered
 		id := r.PathValue("id")
 		if err := s.resolve(id, res); err != nil {
 			switch {
@@ -52,6 +53,7 @@ func (s *Service) fleetHandler(next http.Handler) http.Handler {
 		}
 		apierr.WriteJSON(w, map[string]any{"ok": true})
 	})
+	mux.HandleFunc("POST /api/v1/interactions/{id}/reanswer", s.serveReanswer) // 改答 (fleet_delegate.go)
 	mux.HandleFunc("GET /api/v1/interactions/history", func(w http.ResponseWriter, r *http.Request) {
 		st := s.fleetStore()
 		if st == nil {
@@ -203,7 +205,7 @@ func (s *Service) localFleetAppCall(ctx context.Context, p AppCall) (json.RawMes
 			out = map[string]any{"ok": false, "status": s.interactionOutcome(ctx, a.InteractionID)}
 		}
 	case assistantwire.InteractionsAnswer:
-		ok, err := s.answerQuestion(a.MachineID, a.SessionID, a.InteractionID, a.Answers)
+		ok, err := s.answerQuestion(a.MachineID, a.SessionID, a.InteractionID, a.Answers, "")
 		if err != nil {
 			return nil, true, err
 		}

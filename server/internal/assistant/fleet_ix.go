@@ -39,8 +39,10 @@ type pending struct {
 	// checkedAt / checking bound transcript reads for a plan answered outside Persona.
 	checkedAt time.Time
 	checking  bool
-	// answeredBy is who resolved it (Resolution.AnsweredBy), so the hub can say the assistant answered.
-	answeredBy string
+	// answeredBy is who resolved it (Resolution.AnsweredBy), so the hub can say the assistant answered, with why
+	// (Resolution.Reason) and its answers then (a question's: never a secret).
+	answeredBy, answeredReason string
+	answeredWith               map[string]string
 	// codex: a card a node listed for a Codex TUI; it lasts as long as the node lists it.
 	codex bool
 	// claimed: an answer was taken for this hook-waited card (resolve). It stays in the map until await or
@@ -349,8 +351,19 @@ func cleanTitle(ix proto.Interaction) proto.Interaction {
 
 // ---- telling ----
 
-// announce puts a new card on the apps (through the hub), pushes it, and gives it to the channels.
+// announce puts a new card on the apps (through the hub), pushes it, and gives it to the channels. A question the
+// assistant may answer for the user goes to it first (fleet_delegate.go).
 func (s *Service) announce(ix proto.Interaction) {
+	if s.delegable(ix) {
+		s.delegate(ix)
+		return
+	}
+	s.tell(ix)
+}
+
+// tell is announce once nothing is in the way: the card on the apps, the push, the channels, or the main conversation
+// for a quiet task.
+func (s *Service) tell(ix proto.Interaction) {
 	ix = s.withTask(ix)
 	s.hub.Tell(assistantwire.EventFleetInteraction, assistantwire.FleetInteraction{Interaction: ix})
 	s.publishSessions(ix.MachineID)
@@ -568,7 +581,10 @@ func (s *Service) resolve(id string, r proto.Resolution) error {
 		p.claimed = true
 	}
 	if p != nil {
-		p.answeredBy = r.AnsweredBy // read by finished(), under this lock
+		p.answeredBy, p.answeredReason = r.AnsweredBy, r.Reason // read by finished(), under this lock
+		if r.AnsweredBy != "" {
+			p.answeredWith = r.Answers
+		}
 	}
 	s.fleet.mu.Unlock()
 	if p == nil {
@@ -660,11 +676,14 @@ func (s *Service) finishInteraction(id string) {
 // finished tells everyone an interaction, already out of the pending set, is over.
 func (s *Service) finished(p *pending) {
 	s.fleet.mu.Lock()
-	answeredBy := p.answeredBy
+	done := assistantwire.FleetResolved{ID: p.ix.ID, AnsweredBy: p.answeredBy}
+	if done.AnsweredBy != "" {
+		done.Reason, done.Answers = p.answeredReason, p.answeredWith
+	}
 	s.fleet.mu.Unlock()
 	s.channelsEnded(p.ix, nil)
-	// the app marks a question the assistant answered (docs/assistant.md)
-	s.hub.Tell(assistantwire.EventFleetResolved, assistantwire.FleetResolved{ID: p.ix.ID, AnsweredBy: answeredBy})
+	// the app marks a question the assistant answered, and why (docs/assistant.md)
+	s.hub.Tell(assistantwire.EventFleetResolved, done)
 	s.publishSessions(p.ix.MachineID)
 }
 
@@ -1032,9 +1051,9 @@ func (s *Service) finishExternalPlan(p *pending) {
 
 // ---- the interaction queue as the assistant's own (its interaction_answer tool, the channels) ----
 
-// answerQuestion resolves the pending question id of machine's session with answers, as the assistant answered it;
-// false when it is no longer pending.
-func (s *Service) answerQuestion(machine, session, id string, answers map[string]string) (bool, error) {
+// answerQuestion resolves the pending question id of machine's session with answers, as the assistant answered it
+// (and why, "" when it did not say); false when it is no longer pending.
+func (s *Service) answerQuestion(machine, session, id string, answers map[string]string, reason string) (bool, error) {
 	ix, ok := s.pendingIx(id)
 	if !ok {
 		return false, nil
@@ -1045,7 +1064,7 @@ func (s *Service) answerQuestion(machine, session, id string, answers map[string
 	if ix.MachineID != machine || ix.SessionID != session {
 		return false, fmt.Errorf("interaction %s is not machine=%s session_id=%s's", id, machine, session)
 	}
-	if err := s.resolve(id, proto.Resolution{Answers: answers, AnsweredBy: proto.AnsweredByAssistant}); err != nil {
+	if err := s.resolve(id, proto.Resolution{Answers: answers, AnsweredBy: proto.AnsweredByAssistant, Reason: reason}); err != nil {
 		if errors.Is(err, errNotPending) {
 			return false, nil
 		}

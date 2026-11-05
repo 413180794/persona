@@ -356,6 +356,16 @@ func TestInteractions(t *testing.T) {
 	if st, res, err := d.InteractionOutcome(ctx, "nope"); err != nil || st != "" || res != nil {
 		t.Fatalf("outcome of a missing one %q %+v %v", st, res, err)
 	}
+	if rec, err := d.InteractionRecord(ctx, "ix1"); err != nil || rec == nil || rec.Interaction.ID != "ix1" || rec.Status != "resolved" ||
+		rec.Resolution == nil || rec.ResolvedAt == nil {
+		t.Fatalf("record ix1 %+v %v", rec, err)
+	}
+	if rec, err := d.InteractionRecord(ctx, "ix3"); err != nil || rec == nil || rec.Status != "pending" || rec.Resolution != nil {
+		t.Fatalf("record ix3 %+v %v", rec, err)
+	}
+	if rec, err := d.InteractionRecord(ctx, "nope"); err != nil || rec != nil {
+		t.Fatalf("record of a missing one %+v %v", rec, err)
+	}
 }
 
 // The startup lookup of pending interactions can use the partial index instead of scanning every past interaction.

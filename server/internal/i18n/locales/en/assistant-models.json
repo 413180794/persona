@@ -7,6 +7,7 @@
   "name_lark_agent": "Lark /agent",
   "name_inbox_judge": "AI twin judge",
   "name_agent_triage": "Session triage",
+  "name_agent_delegate": "Answering agents' questions",
   "name_inbox_draft": "Draft replies",
   "name_translate": "Text and mail translation",
   "name_kb_compress": "Chat compression and tagging",
@@ -83,5 +84,7 @@
   "list_separator": ", ",
   "err_api_as_launcher": "This use points to a direct API connection that speaks Responses and can’t run as a launcher",
   "err_runtime_invalid": "Runtime must be cli or agentsdk",
-  "err_runtime_assistant_only": "Only the main chat can choose a runtime"
+  "err_runtime_assistant_only": "Only the main chat can choose a runtime",
+  "use_delegate": "Deciding whether to answer an agent's question for you",
+  "source_delegate_default": "Same connection as triage, on Opus 5.5"
 }

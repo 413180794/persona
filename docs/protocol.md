@@ -726,6 +726,7 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 | PUT | `/api/v1/machines/{mid}/claude-dirs/blocked` | 整份替换屏蔽规则 `{"blocked":["~/.automation/*", …]}`（路径或通配，以 `/` 或 `~/` 开头，否则 400）；回同 GET 的状态 |
 | GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |
 | GET | `/api/v1/interactions` | `{"interactions":[Interaction]}`（待处理） |
+| POST | `/api/v1/interactions/{id}/reanswer` | `{answers: {问题原文: 答案}}`（#3029）：助手代答过的提问改成用户的答案。Agent 已经按助手的答案往下走了，新答案作为一条消息发给它（`prompts/agents/reanswer.md`，带上助手原来答的），同样的答案只发一次；回 `{"ok":true}`。hub 转给管理者（不在时 503 `assistant_offline`），只能答卡片的设备 403；不是助手代答的回 409，没有答案 400，发不出去 502 |
 | POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution；回 `{"ok":true}`。已经结束的（#1673）：已回答的（或交回电脑后再交回）幂等回 200 `{"ok":true,"already":true,"status","resolution"}`，`resolution` 是当时生效的答案（按历史记录脱敏），可能和这次发的不同，App 据此把卡片显示成已回答；过期、撤回、交回电脑的回 410 `{"error","code":"gone","status"}`，查不到结局的 410 不带 `status` |
 | POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?,"locale"?}`；`locale` 是这台设备的界面语言（`zh-Hans` / `en` / `ja`），推给它的通知用这种语言，没带用用户语言；后三个是推送中继（手机公钥、中继地址、中继给的凭据，`docs/push-relay.md`），hub 没有 APNs key 时据此推送。互联组里只有中心推送：连成员时这条也被转给中心；推送的 payload（直推的和经中继密封的）顶层带 `hub_id`：中心的（[mesh.md](mesh.md)「凭据和推送」）。`mac` 是 Mac App（同一个 bundle id，同一个 topic）：不收静默唤醒，它连着 hub 时不收「需要你处理」「Agent 做完」（App 自己发本地通知）。hub 记下是哪个设备凭据登记的，吊销那个凭据时连这台设备一起删掉，不再推送 |
 | POST | `/api/v1/devices/{id}/live-activity` | 实时活动的 token：`{"push_to_start_token"}`、`{"activity_id","push_token"}`（会轮换，重复发）、`{"activity_id","ended":true}`（`docs/live-activity.md`） |
@@ -795,8 +796,9 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 | `terminal` | `machine_id`, `session_id`，以及一帧 `epoch`, `seq`, `full`, `cols`, `rows`, `data`（base64 的 VT 字节），或者 `error`（流停了：电脑离线、会话不在跑……）+ `unsupported`（旧 node / herdr 不能推流，改用 `/screen` 轮询）。见下「终端流」 |
 | `herdr_state` / `herdr_data` / `herdr_end` | `id` 加 `state: "open"`, `cols`, `rows` / `data`（base64，≤ 32 KB 一条）/ `error?`, `code?`（`forbidden` `too_many` `bad_request` `offline`）, `unsupported?`：完整 herdr 界面的视图（`herdr_open` 的回应）。没 ack 的字节超过 1 MiB hub 就结束视图 |
 | `herdr_focus` | `id`（视图）, `machine_id`, `workspace_id`, `tab_id`, `pane_id`, `session_id?`（那个窗格里的 Agent 会话）, `source`（`client` 这台电脑上某个完整客户端刚被敲过 / `persona` 一次 `herdr_focus` 要求的 / `other` 其他）, `mine`（这个视图自己干的）：herdr 的焦点变了，推给这台电脑上的每个视图。网页只跟 `mine` 且 `client` 的，`persona` + `mine` 是回声，其余只出提示。feature `herdr_focus`。`docs/terminal.md` 第二十八节 |
-| `interaction` | `interaction`（新的待处理，推给所有客户端） |
-| `interaction_resolved` | `id`；助手代答时另带 `answered_by: "assistant"`（#1602） |
+| `interaction` | `interaction`（新的待处理，推给所有客户端）。提问先由助手代答（#3029）时同一张卡会来两次：先带 `delegating: true`（助手在看，还没推送），助手交给用户时再来一次，`delegating` 没了、可能带 `delegate`（`what` / `why_now` / `recommend` / `cost` / `reason` / `deadline`，助手补齐的上下文）；按 `id` 覆盖 |
+| `interaction_resolved` | `id`；助手代答时另带 `answered_by: "assistant"`（#1602），以及 `reason`（为什么这么答）和 `answers`（答了什么，改答从这里开始，#3029） |
+| `interaction_reanswered` | `id`, `resolution`（`{answers}`）：用户把助手代答的改了，新答案已经发给那个 Agent（#3029） |
 | `fleet` | `fleet`（实时活动汇总，与 HTTP `/api/v1/fleet` 的内容对应） |
 | `hook_event` | node hook 事件的原字段，hub 补 `machine_id` 并置 `type: hook_event`；用于刷新会话运行状态；`Stop` 带 `stop_sig`（回复签名，hub 用来给「完成」推送去重，见 `agent-states.md`「hook 的轮次信号」）；全局只报告的 hooks（`claude-integration.md`「全局只报告的 hooks」）带 `report_only: true`，hub 不据此认为会话有 Persona 的 hooks，其余照旧 |
 | `tool_call` | `call_id`, `name`, `args`（只发给已 `register_phone` 且提供该工具的手机） |

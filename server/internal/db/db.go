@@ -523,6 +523,30 @@ func (d *DB) Interactions(ctx context.Context, machine, session string, limit in
 	})
 }
 
+// InteractionRecord is one interaction with its outcome; nil when there is no such row.
+func (d *DB) InteractionRecord(ctx context.Context, id string) (*InteractionRecord, error) {
+	var rec InteractionRecord
+	var payload, res []byte
+	err := d.pool.QueryRow(ctx, `SELECT payload, status, resolution, resolved_at FROM interactions WHERE id = $1`, id).
+		Scan(&payload, &rec.Status, &res, &rec.ResolvedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(payload, &rec.Interaction); err != nil {
+		return nil, err
+	}
+	if len(res) > 0 {
+		rec.Resolution = &proto.Resolution{}
+		if err := json.Unmarshal(res, rec.Resolution); err != nil {
+			return nil, err
+		}
+	}
+	return &rec, nil
+}
+
 // The startup statements of ExpireStaleInteractions. Both must stay answerable from the interactions_pending
 // partial index (migration 0393); TestPendingInteractionsIndexed checks the plans of these exact constants.
 const (

@@ -74,6 +74,8 @@ type Service struct {
 
 	devs  Devices   // the computers (devices.go); nil: no fleet
 	fleet fleetBook // what comes from the nodes (fleet.go)
+	// delegateHook stands in for Delegate in tests (fleet_delegate.go).
+	delegateHook func(context.Context, DelegateParams) (DelegateResult, error)
 	// fleetEnded, when set, sees every card's end the channels are told (tests).
 	fleetEnded func(ix proto.Interaction, r *proto.Resolution)
 	models     modelsState // models.go: the model configuration

@@ -927,3 +927,25 @@ func TestQueuedPromptKeepsItsImages(t *testing.T) {
 		t.Fatalf("items = %+v", items)
 	}
 }
+
+// Newer Claude Code opens an async agent's result with a warning that mentions "the agentId below" before the real
+// "agentId: <id>" line: the task must take the real id, so its notification ends it (#3419).
+func TestAsyncAgentIDAfterWarning(t *testing.T) {
+	meta := &Meta{}
+	lines := []string{
+		`{"type":"assistant","uuid":"a1","timestamp":"2026-11-06T08:00:00Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Agent","input":{"description":"Survey code","prompt":"x","run_in_background":true}}]}}`,
+		`{"type":"user","uuid":"u1","timestamp":"2026-11-06T08:00:01Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nagentId: a0123456789abcdef (internal ID - do not mention to user. Use SendMessage with to: 'a0123456789abcdef' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes."}]}}`,
+	}
+	for i, l := range lines {
+		ParseLine(i+1, []byte(l), meta)
+	}
+	if len(meta.Background) != 1 || meta.Background[0].ID != "a0123456789abcdef" || meta.Background[0].Kind != "agent" {
+		t.Fatalf("background = %+v", meta.Background)
+	}
+	note := "<task-notification>\n<task-id>a0123456789abcdef</task-id>\n<status>completed</status>\n<summary>Agent \"Survey code\" completed</summary>\n</task-notification>"
+	q, _ := json.Marshal(map[string]any{"type": "queue-operation", "operation": "enqueue", "content": note})
+	ParseLine(3, q, meta)
+	if len(meta.Background) != 0 {
+		t.Fatalf("finished agent still running: %+v", meta.Background)
+	}
+}

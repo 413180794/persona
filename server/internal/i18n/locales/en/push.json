@@ -12,5 +12,6 @@
   "fill_in_suffix": " (open Persona to fill in)",
   "done_body": "Done",
   "health_title": "Health",
-  "health_body": "New in your health space. Open Persona to see it."
+  "health_body": "New in your health space. Open Persona to see it.",
+  "delegate_recommend_suffix": "\nThe assistant suggests: {answer}"
 }

@@ -724,6 +724,9 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 	case proto.IxScreen:
 		body = i18n.T(l, "push.screen_body")
 	}
+	if d := ix.Delegate; d != nil && d.Recommend != "" { // the assistant left it to the user (assistant/fleet_delegate.go)
+		body += i18n.T(l, "push.delegate_recommend_suffix", i18n.Args{"answer": d.Recommend})
+	}
 	subtitle := transcript.Title(ix.SessionTitle)
 	if inHealth(ix.Cwd) { // a health conversation's card: the lock screen does not say what it is about (assistant.go)
 		subtitle, body = i18n.T(l, "push.health_title"), i18n.T(l, "push.health_body")

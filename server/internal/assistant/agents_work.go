@@ -934,6 +934,9 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 		for _, it := range items {
 			out = append(out, agentAnswerItem{it.question, it.answer})
 		}
+		if r.AnsweredBy == proto.AnsweredByAssistant {
+			return renderDelegatedAnswer(out, r.Reason)
+		}
 		return renderAnswer(out)
 	}
 	var text string

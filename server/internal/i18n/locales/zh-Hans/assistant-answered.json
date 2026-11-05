@@ -26,5 +26,7 @@
   "mode_accept_edits": "自动接受修改",
   "mode_default": "每步都问",
   "mode_bypass": "全部放行",
-  "mode_plan": "继续出方案"
+  "mode_plan": "继续出方案",
+  "by_assistant": "助手代答：{answer}",
+  "by_assistant_because": "助手代答：{answer}，因为{reason}"
 }

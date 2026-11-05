@@ -20,6 +20,10 @@ type answeredBody struct {
 	Question string         `json:"question"`
 	Answer   string         `json:"answer"`
 	Items    []answeredItem `json:"items,omitempty"`
+	// By is "assistant" when the assistant answered for the user (delegate.go), with Reason; Answer says so too, for
+	// the apps that draw only it.
+	By     string `json:"by,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // answeredItem is one question of a card and what the user answered, newlines kept. Answer is empty when there is
@@ -52,6 +56,14 @@ func (s *Service) taskAnswered(ctx context.Context, ix proto.Interaction, r prot
 	}
 	l := s.lang(ctx) // the record stays in the language the user had when they answered
 	body := answeredBody{Question: interactionQuestion(l, ix), Answer: resolutionAnswer(l, ix, r), Items: answeredItems(l, ix, r)}
+	if r.AnsweredBy == proto.AnsweredByAssistant {
+		body.By, body.Reason = r.AnsweredBy, r.Reason
+		if r.Reason != "" {
+			body.Answer = clip(answeredT(l, "by_assistant_because", i18n.Args{"answer": body.Answer, "reason": oneLine(r.Reason)}), answeredLineMax)
+		} else {
+			body.Answer = clip(answeredT(l, "by_assistant", i18n.Args{"answer": body.Answer}), answeredLineMax)
+		}
+	}
 	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	if _, err := s.appendFeed(cctx, t.Origin, feedAnswered, t.ID, body); err != nil {

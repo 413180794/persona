@@ -26,5 +26,7 @@
   "mode_accept_edits": "編集を自動で承認",
   "mode_default": "毎回確認",
   "mode_bypass": "すべて許可",
-  "mode_plan": "プランを続ける"
+  "mode_plan": "プランを続ける",
+  "by_assistant": "アシスタントが代理回答：{answer}",
+  "by_assistant_because": "アシスタントが代理回答：{answer}（理由：{reason}）"
 }

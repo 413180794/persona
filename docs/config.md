@@ -335,6 +335,22 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `enabled` / `auto_continue` / `wake` / `decide` 只是 App 里从没保存过时的初始值（不写就是关）。分诊是管理者（助手进程）做的，这一节经握手交给它，改了重启 hub 后生效。
 - `agents.launcher_health`：启动器健康检查和自动修复（[launcher-health.md](launcher-health.md)）：`enabled`（默认关，写 `true` 才定期检查和自动修）、`interval_minutes`（默认 30）、
   `repair`（修复 Agent：`skill` 不写就没有修复 Agent，只做升级 CLI；`machine` 默认助手所在的电脑、`cwd` 默认 home、`launcher` 默认一个能用的、`permission` 权限模式，默认 `bypassPermissions`）。
+- `agents.delegate`（#3029）：Agent 的提问先由助手代答（[assistant.md](assistant.md)「提问先由助手代答」）。**默认关**，`enabled: true` 才打开；
+  `timeout_seconds` 是 hub 等助手多久（默认 180），到点没结果就照原样推给用户；`rules` 是用户自己的代答规则（一段话，和内置规则一起给模型看；红线上的事规则也放不开）。
+  改了重启 hub 生效。打开的例子（`~/.persona/hub.json` 里和别的键并列）：
+
+  ```json
+  "agents": {
+    "delegate": {
+      "enabled": true,
+      "timeout_seconds": 180,
+      "rules": "缺测试就补上，不用问我"
+    }
+  }
+  ```
+
+  用哪个模型不在这里：「设置 › 模型配置 › 提问代答」（用途 `agent.delegate`）。没选过时用「信息筛选」的接入、模型是 Opus 5.5（`claude-opus-5-5`）；
+  在那一页换供应商或模型，或者 `PATCH /api/v1/model-config/purposes/agent.delegate`（`{"revision": <当前>, "model": "claude-sonnet-5-5"}`），「恢复默认」回到 Opus。
 - `notify`：「做完了」推送的时机（`hub/notify.go`，不写就用默认值）：`done_delay_seconds`（做完后等多久没人看才推，默认 60）、
   `long_turn_seconds`（多长的一轮算「长任务」，默认 60）、`background_hold_minutes`（等后台任务结束最多等多久，默认 120）、
   `live_metrics_seconds`（实时活动只有数字变了时，给一台设备推送的最短间隔，默认 60；`docs/live-activity.md`「推送预算」）。

@@ -7,6 +7,7 @@
   "name_lark_agent": "飞书 /agent",
   "name_inbox_judge": "AI 分身判断器",
   "name_agent_triage": "会话分诊",
+  "name_agent_delegate": "提问代答",
   "name_inbox_draft": "草拟回复",
   "name_translate": "文本与邮件翻译",
   "name_kb_compress": "会话压缩与打标",
@@ -83,5 +84,7 @@
   "list_separator": "、",
   "err_api_as_launcher": "这个用途引用了 Responses 协议的直接 API 接入，不能作为启动器运行",
   "err_runtime_invalid": "运行方式只能是 cli 或 agentsdk",
-  "err_runtime_assistant_only": "只有主对话可以选择运行方式"
+  "err_runtime_assistant_only": "只有主对话可以选择运行方式",
+  "use_delegate": "Agent 的提问先判断要不要替你答",
+  "source_delegate_default": "跟「信息筛选」同一个接入，模型用 Opus 5.5"
 }

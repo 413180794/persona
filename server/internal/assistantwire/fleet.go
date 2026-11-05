@@ -78,10 +78,13 @@ type FleetInteraction struct {
 	Interaction proto.Interaction `json:"interaction"`
 }
 
-// FleetResolved is EventFleetResolved's params; AnsweredBy says the assistant answered it.
+// FleetResolved is EventFleetResolved's params; AnsweredBy says the assistant answered it, Reason why and Answers
+// with what (docs/assistant.md「提问先由助手代答」).
 type FleetResolved struct {
-	ID         string `json:"id"`
-	AnsweredBy string `json:"answered_by,omitempty"`
+	ID         string            `json:"id"`
+	AnsweredBy string            `json:"answered_by,omitempty"`
+	Reason     string            `json:"reason,omitempty"`
+	Answers    map[string]string `json:"answers,omitempty"`
 }
 
 // FleetInteractions is EventFleetInteractions' params, oldest first.

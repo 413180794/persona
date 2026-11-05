@@ -41,6 +41,9 @@ func RenderAgentWake(w AgentWake) string { return render("agents/wake", w) }
 // AgentAnswer is the user's answers to the hub's decision card, sent on to the agent (agents/answer).
 type AgentAnswer struct {
 	Items []AgentAnswerItem
+	// ByAssistant: the assistant answered for the user (docs/assistant.md「提问先由助手代答」), Reason says why.
+	ByAssistant bool
+	Reason      string
 }
 
 type AgentAnswerItem struct {
@@ -68,3 +71,53 @@ type LauncherRepairItem struct {
 }
 
 func RenderLauncherRepair(r LauncherRepair) string { return render("agents/launcher_repair", r) }
+
+// AgentReanswer is the user's answers to questions the assistant answered for them, sent on to the agent, which went
+// on with the assistant's (agents/reanswer, docs/assistant.md「提问先由助手代答」).
+type AgentReanswer struct {
+	Items []AgentReanswerItem
+}
+
+type AgentReanswerItem struct {
+	Question, Before, Answer string
+}
+
+func RenderAgentReanswer(a AgentReanswer) string { return render("agents/reanswer", a) }
+
+// AgentDelegate is the system prompt that decides whether the assistant answers an agent's question for the user
+// (agents/delegate, docs/assistant.md「提问先由助手代答」).
+type AgentDelegate struct {
+	Owner string // "" is 用户
+	Rules string // the user's own rules, trimmed: hub.json agents.delegate.rules
+}
+
+func RenderAgentDelegate(d AgentDelegate) string { return render("agents/delegate", d) }
+
+// AgentDelegateInput is the question to decide on and what is known around it (agents/delegate_input).
+type AgentDelegateInput struct {
+	Now       string // the user's local time, "2006-01-02 15:04 Mon"
+	Agent     string
+	Machine   string
+	Cwd       string
+	Project   string   // the knowledge base's projects for its directory, "" when none
+	Task      string   // the task (todo) it works for: its title and notes, "" when none
+	Decisions string   // the calls the user made on that task (todo decisions), "" when none
+	Asks      []string // the user's recent messages to the agent, clipped, oldest first
+	Reply     string   // what the agent said last, clipped
+	Questions []DelegateQuestion
+}
+
+// DelegateQuestion is one question of the card, as asked.
+type DelegateQuestion struct {
+	Question    string
+	MultiSelect bool
+	Options     []DelegateOption
+}
+
+type DelegateOption struct {
+	Label, Description string
+}
+
+func RenderAgentDelegateInput(in AgentDelegateInput) string {
+	return render("agents/delegate_input", in)
+}

@@ -17,7 +17,8 @@ import (
 
 // AgentsConfig is hub.json "agents" (Hello.Agents): what the manager does about agents' turns by default.
 type AgentsConfig struct {
-	Triage TriageConfig `json:"triage,omitzero"`
+	Triage   TriageConfig   `json:"triage,omitzero"`
+	Delegate DelegateConfig `json:"delegate,omitzero"`
 	// LauncherHealth is hub.json agents.launcher_health: checking each machine's launchers (docs/launcher-health.md).
 	LauncherHealth LauncherHealthConfig `json:"launcher_health,omitzero"`
 }
@@ -42,6 +43,29 @@ type LauncherRepairConfig struct {
 	Cwd        string `json:"cwd,omitempty"`
 	Launcher   string `json:"launcher,omitempty"`
 	Permission string `json:"permission,omitempty"`
+}
+
+// DelegateConfig is hub.json agents.delegate: an agent's question goes to the assistant before the user
+// (docs/assistant.md「提问先由助手代答」).
+type DelegateConfig struct {
+	// Enabled: off unless true.
+	Enabled *bool `json:"enabled,omitempty"`
+	// TimeoutSeconds: how long the hub waits for the assistant before it asks the user as it would have. Default 180.
+	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
+	// Rules are the user's own, read with the built-in ones ("缺测试就补上，不用问我" …). They cannot take a red line off
+	// the user: an answer that would set one off is left to them all the same.
+	Rules string `json:"rules,omitempty"`
+}
+
+// On: the switch, off unless set true.
+func (c DelegateConfig) On() bool { return c.Enabled != nil && *c.Enabled }
+
+// Timeout is TimeoutSeconds, 3 minutes when unset.
+func (c DelegateConfig) Timeout() time.Duration {
+	if c.TimeoutSeconds <= 0 {
+		return 3 * time.Minute
+	}
+	return time.Duration(c.TimeoutSeconds) * time.Second
 }
 
 // TriageConfig is hub.json agents.triage: the limits, and the switches a hub whose user never saved them starts with
