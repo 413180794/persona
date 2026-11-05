@@ -11,6 +11,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/kb"
 )
 
@@ -21,7 +22,7 @@ import (
 // is the knowledge base's to keep: the index, pruning past the text retention, and finding each project's posts
 // (kb.LinkMoments) stay here whoever writes the posts.
 
-var errKBNone = errors.New("这台 hub 没开知识库")
+var errKBNone = i18n.Err("assistant-kb_posts.none")
 
 // kbPostsEngine is the knowledge base, for a connector's posts (kb_unavailable while it is not open: the program
 // reads the same again next round).

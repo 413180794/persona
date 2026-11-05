@@ -1,0 +1,5 @@
+{
+  "rename_main": "The main chat has no title to change",
+  "main_changed": "The main chat has already changed. Refresh and try again.",
+  "main_busy": "The main chat is answering or compacting. Start a new one once it stops."
+}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -96,12 +97,16 @@ func (t Task) kind() string {
 	return "routine"
 }
 
-func (t Task) label() string {
+// label is how the task is called in what the assistant reads, titles and the snapshot (Chinese, as the prompts).
+func (t Task) label() string { return t.labelIn(i18n.Default) }
+
+// labelIn is label for people in l (a push): only an untitled follow-up's name is the hub's own text.
+func (t Task) labelIn(l i18n.Lang) string {
 	if t.Title != "" {
 		return t.Title
 	}
 	if t.Repeat == repeatOnce {
-		return "定时跟进"
+		return i18n.T(l, "assistant-schedule.followup")
 	}
 	return clip(oneLine(t.Prompt), 30)
 }
@@ -193,11 +198,12 @@ type schedule struct {
 	inflight sync.WaitGroup
 }
 
-func defaultRoutines() []Routine {
+// defaultRoutines are the tasks a new hub starts with, titled in l (the user edits them as their own afterwards).
+func defaultRoutines(l i18n.Lang) []Routine {
 	weekdays := []int{1, 2, 3, 4, 5}
 	return []Routine{
-		{ID: "morning", Title: "早报", Time: "09:00", Weekdays: weekdays, Enabled: true, Prompt: prompts.RenderMorningRoutine()},
-		{ID: "evening", Title: "晚间回顾", Time: "21:30", Weekdays: weekdays, Enabled: false, Prompt: prompts.RenderEveningRoutine()},
+		{ID: "morning", Title: i18n.T(l, "assistant-schedule.morning"), Time: "09:00", Weekdays: weekdays, Enabled: true, Prompt: prompts.RenderMorningRoutine()},
+		{ID: "evening", Title: i18n.T(l, "assistant-schedule.evening"), Time: "21:30", Weekdays: weekdays, Enabled: false, Prompt: prompts.RenderEveningRoutine()},
 	}
 }
 
@@ -217,7 +223,7 @@ func tasksFrom(routines []Routine, followups []Followup) []Task {
 }
 
 // errScheduleUnavailable: the scheduled tasks could not be read from the database yet.
-var errScheduleUnavailable = errors.New("暂时读不到定时任务（数据库没有响应），过一会儿再试")
+var errScheduleUnavailable = i18n.Err("assistant-schedule.unavailable")
 
 // loadSchedule reads the task list and the run history once. A failed read leaves the schedule unloaded, so the next
 // call reads again and saveLocked writes nothing: saving the defaults then would overwrite the stored tasks.
@@ -231,7 +237,7 @@ func (s *Service) loadSchedule(ctx context.Context) *schedule {
 	st := s.store()
 	if st == nil {
 		sc.loaded = true
-		sc.tasks = tasksFrom(defaultRoutines(), nil)
+		sc.tasks = tasksFrom(defaultRoutines(s.lang(ctx)), nil)
 		return sc
 	}
 	var tasks []Task
@@ -243,7 +249,7 @@ func (s *Service) loadSchedule(ctx context.Context) *schedule {
 	if !ok || tasks == nil {
 		// First start with one list: move the routines and follow-ups over, then empty the old follow-ups so an
 		// older hub started again can't run them a second time.
-		routines := defaultRoutines()
+		routines := defaultRoutines(s.lang(ctx))
 		var rs []Routine
 		ok, err := st.Setting(ctx, routinesKey, &rs)
 		if err != nil {
@@ -683,15 +689,15 @@ var launcherName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 func checkTask(t *Task, now time.Time) error {
 	t.Title, t.Prompt = strings.TrimSpace(t.Title), strings.TrimSpace(t.Prompt)
 	if t.Prompt == "" {
-		return errors.New("提示词不能为空")
+		return i18n.Err("assistant-schedule.prompt_empty")
 	}
 	switch t.Repeat {
 	case repeatDaily:
 		if !hhmm.MatchString(t.Time) {
-			return fmt.Errorf("时间 %q 要写成 HH:MM", t.Time)
+			return i18n.Err("assistant-schedule.time_format", i18n.Args{"time": strconv.Quote(t.Time)})
 		}
 		if t.Title == "" {
-			return errors.New("每天运行的任务要有标题")
+			return i18n.Err("assistant-schedule.daily_title")
 		}
 		var days []int
 		for _, d := range t.Weekdays {
@@ -709,7 +715,7 @@ func checkTask(t *Task, now time.Time) error {
 		t.Weekdays, t.At, t.EveryMinutes = days, time.Time{}, 0
 	case repeatInterval:
 		if t.EveryMinutes < minEvery || t.EveryMinutes > 7*24*60 {
-			return fmt.Errorf("间隔要在 %d 分钟到 7 天之间", minEvery)
+			return i18n.Err("assistant-schedule.interval_range", i18n.Args{"min": minEvery})
 		}
 		if t.At.IsZero() {
 			t.At = now.Add(time.Duration(t.EveryMinutes) * time.Minute)
@@ -717,23 +723,23 @@ func checkTask(t *Task, now time.Time) error {
 		t.Time, t.Weekdays = "", nil
 	case repeatOnce:
 		if t.At.IsZero() {
-			return errors.New("要选一个运行时间")
+			return i18n.Err("assistant-schedule.pick_time")
 		}
 		if t.Enabled && t.At.Before(now.Add(-time.Minute)) {
-			return errors.New("这个时间已经过了，选一个以后的时间")
+			return i18n.Err("assistant-schedule.time_passed")
 		}
 		t.Time, t.Weekdays, t.EveryMinutes = "", nil, 0
 	default:
 		return fmt.Errorf("unknown repeat %q (once / daily / interval)", t.Repeat)
 	}
 	if t.Launcher != "" && !launcherName.MatchString(t.Launcher) {
-		return fmt.Errorf("启动器 %q 的名字不对", t.Launcher)
+		return i18n.Err("assistant-schedule.bad_launcher", i18n.Args{"launcher": strconv.Quote(t.Launcher)})
 	}
 	if t.PermissionMode != "" && !slices.Contains(proto.PermissionModes, t.PermissionMode) {
-		return fmt.Errorf("不认识的权限模式 %q", t.PermissionMode)
+		return i18n.Err("assistant-schedule.bad_permission_mode", i18n.Args{"mode": strconv.Quote(t.PermissionMode)})
 	}
 	if t.Effort != "" && !slices.Contains(proto.EffortLevels, t.Effort) {
-		return fmt.Errorf("不认识的思考强度 %q", t.Effort)
+		return i18n.Err("assistant-schedule.bad_effort", i18n.Args{"effort": strconv.Quote(t.Effort)})
 	}
 	return nil
 }
@@ -854,7 +860,7 @@ func (s *Service) runDue(ctx context.Context, now time.Time) {
 			if now.Sub(next) < 30*time.Minute {
 				due = append(due, dueTask{*t, next})
 			} else { // missed by a long hub outage: skip rather than send a stale 早报 at noon
-				t.LastStatus, t.LastError = runSkipped, "Persona 停机，错过了时间"
+				t.LastStatus, t.LastError = runSkipped, i18n.T(s.lang(ctx), "assistant-schedule.missed")
 				skipped = append(skipped, ScheduleRun{Kind: t.kind(), RefID: t.ID, Title: t.label(), Due: next.UTC(), At: now.UTC(),
 					Status: runSkipped, Error: t.LastError, of: now.UTC()})
 			}
@@ -964,7 +970,7 @@ func (s *Service) updateRun(r ScheduleRun, status, errText string) {
 }
 
 // errTaskBusy: the task's last run is still going; this one is skipped (and recorded) rather than queued behind it.
-var errTaskBusy = errors.New("上一轮还在运行，这次跳过")
+var errTaskBusy = i18n.Err("assistant-schedule.busy_skipped")
 
 // runTask sends the task's message into the conversation it came from (on that conversation's launcher, as the phone's
 // messages are), else into its own conversation, else (none yet, or that one is gone, busy elsewhere, or on another
@@ -1065,7 +1071,7 @@ func (s *Service) sessionBusy(ctx context.Context, machine, id string) bool {
 }
 
 func (s *Service) skipRun(run ScheduleRun, why error) error {
-	run.Status, run.Error = runSkipped, why.Error()
+	run.Status, run.Error = runSkipped, i18n.Localize(why, s.lang(context.Background())) // the history keeps it in the user's language
 	s.recordRun(run)
 	return why
 }
@@ -1100,7 +1106,7 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	text = clip(oneLine(text), 300)
 	s.logf("task %s run %s failed: %s", t.ID, run.ID, text)
 	s.updateRun(run, runFailed, text)
-	s.push(ctx, Notification{Subtitle: m.Name, DeviceID: m.ID, SessionID: run.SessionID, Title: "定时任务失败：" + t.label(), Body: text})
+	s.push(ctx, Notification{Subtitle: m.Name, DeviceID: m.ID, SessionID: run.SessionID, Title: i18n.T(s.lang(ctx), "assistant-schedule.run_failed", i18n.Args{"name": t.labelIn(s.lang(ctx))}), Body: text})
 	if run.Retried {
 		return
 	}
@@ -1455,7 +1461,7 @@ func (s *Service) scheduleRoutes() {
 		i := sc.indexLocked(r.PathValue("id"))
 		if i < 0 {
 			sc.mu.Unlock()
-			apierr.Write(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
+			apierr.Write(w, http.StatusNotFound, i18n.Err("assistant-schedule.gone"))
 			return
 		}
 		var in Task
@@ -1487,7 +1493,7 @@ func (s *Service) scheduleRoutes() {
 			return
 		}
 		if !ok {
-			apierr.Write(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
+			apierr.Write(w, http.StatusNotFound, i18n.Err("assistant-schedule.gone"))
 			return
 		}
 		apierr.WriteJSON(w, map[string]any{"task": t})
@@ -1584,7 +1590,7 @@ func (s *Service) deleteTaskRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		apierr.Write(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
+		apierr.Write(w, http.StatusNotFound, i18n.Err("assistant-schedule.gone"))
 		return
 	}
 	apierr.WriteJSON(w, map[string]any{"ok": true})
@@ -1609,13 +1615,13 @@ func (s *Service) runTaskRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	sc.mu.Unlock()
 	if i < 0 {
-		apierr.Write(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
+		apierr.Write(w, http.StatusNotFound, i18n.Err("assistant-schedule.gone"))
 		return
 	}
 	s.broadcastSchedule()
 	sess, err := s.runTask(t, now, now, true, false)
 	if errors.Is(err, errTaskBusy) {
-		apierr.Write(w, http.StatusConflict, errors.New("上一轮还在运行，等它跑完再试"))
+		apierr.Write(w, http.StatusConflict, i18n.Err("assistant-schedule.busy_wait"))
 		return
 	}
 	if err != nil {

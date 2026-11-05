@@ -85,7 +85,7 @@ func TestGoldenTaskPrompt(t *testing.T) {
 }
 
 func TestGoldenDefaultRoutines(t *testing.T) {
-	for _, r := range defaultRoutines() {
+	for _, r := range defaultRoutines("") {
 		golden(t, "routine."+r.ID, r.Prompt)
 	}
 }

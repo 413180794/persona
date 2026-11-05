@@ -1,0 +1,7 @@
+{
+  "by_rules": "按规则",
+  "muted": "已静音：{name}",
+  "source_lark": "飞书",
+  "source_mail": "邮件",
+  "mail_target_changed": "邮件回复对象已变化，请查看最新邮件后确认发送"
+}

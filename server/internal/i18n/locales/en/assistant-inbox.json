@@ -1,0 +1,7 @@
+{
+  "by_rules": "By rules",
+  "muted": "Muted: {name}",
+  "source_lark": "Lark",
+  "source_mail": "Mail",
+  "mail_target_changed": "The email you’re replying to has changed. Check the latest message, then confirm sending."
+}

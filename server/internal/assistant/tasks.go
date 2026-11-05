@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -282,16 +284,17 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 		for _, t := range p.Tasks {
 			titles = append(titles, t.Title)
 		}
-		title := fmt.Sprintf("有 %d 件事等你开始", len(p.Tasks))
+		l := s.lang(ctx)
+		title := i18n.T(l, "assistant-tasks.plan_waiting", i18n.Args{"n": len(p.Tasks)})
 		if len(titles) == 1 {
-			title = "有一件事等你开始"
+			title = i18n.T(l, "assistant-tasks.plan_waiting_single")
 		}
 		here := s.settings(ctx).MachineID
 		machineName := "Persona"
 		if m, ok := s.device(ctx, here); ok {
 			machineName = m.Name
 		}
-		s.push(ctx, Notification{Subtitle: machineName, DeviceID: here, SessionID: sessionID, Title: title, Body: strings.Join(titles, "、")})
+		s.push(ctx, Notification{Subtitle: machineName, DeviceID: here, SessionID: sessionID, Title: title, Body: strings.Join(titles, i18n.T(l, "assistant-tasks.list_sep"))})
 		return fmt.Sprintf("Plan %s is on the user's screen as a card and pushed to their phone; nothing has started. "+
 			"Don't wait for it: carry on. When they start it, the tasks show up in the context snapshot.", p.ID), nil
 	}
@@ -399,7 +402,7 @@ func (s *Service) startPlan(ctx context.Context, id string, edits []PlanTask, re
 			applyPlanEdit(&p.Tasks[i], edits[i])
 		}
 		if !s.placeTask(ctx, &p.Tasks[i]) {
-			return nil, fmt.Errorf("「%s」：没有这台电脑 %q", p.Tasks[i].Title, p.Tasks[i].Machine)
+			return nil, i18n.Err("assistant-tasks.task_no_machine", i18n.Args{"task": p.Tasks[i].Title, "machine": strconv.Quote(p.Tasks[i].Machine)})
 		}
 	}
 	p.State = planStarted
@@ -506,17 +509,28 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 		return
 	}
 	_, _ = s.appendFeed(ctx, conversation, feedReceipt, t.TodoID, receiptBody{Title: t.Title, State: "failed",
-		Summary: "没开起来：" + reason})
+		Summary: i18n.T(s.lang(ctx), "assistant-tasks.failed_start", i18n.Args{"reason": reason})})
 	if todo, ok, err := s.todo(ctx, t.TodoID); err == nil && ok {
 		s.quietNotify(ctx, todo, t.Machine, "failed", "", reason)
 	}
 }
 
 var (
-	errTaskNotRetryable = errors.New("只有没开起来、或被模型服务出错打断的任务能重试")
-	errTaskNotInPlan    = errors.New("找不到这个任务的计划，没法照原样再开一次")
-	errMachineOffline   = errors.New("现在离线，等它连上再重试")
+	errTaskNotRetryable = i18n.Err("assistant-tasks.not_retryable")
+	errTaskNotInPlan    = i18n.Err("assistant-tasks.not_in_plan")
+	errMachineOffline   = errors.New("machine offline") // matched with errors.Is; the text is machineOffline's
 )
+
+// machineOffline is errMachineOffline for machine name, said in the request's language.
+func machineOffline(name string) error {
+	return offlineError{i18n.Err("assistant-tasks.machine_offline", i18n.Args{"name": name})}
+}
+
+type offlineError struct{ msg error }
+
+func (e offlineError) Error() string        { return e.msg.Error() }
+func (e offlineError) Unwrap() error        { return e.msg }
+func (e offlineError) Is(target error) bool { return target == errMachineOffline }
 
 // retryTask starts again the agent of a task that did not start (#1396): the same task as its plan has it (machine,
 // directory, prompt, launcher, model, permission, title), in the same todo — reopened, its error and the plan's
@@ -573,10 +587,10 @@ func (s *Service) retryTask(ctx context.Context, todoID string) (json.RawMessage
 	t := p.Tasks[i]
 	m, ok := s.machineByName(ctx, t.Machine)
 	if !ok {
-		return nil, fmt.Errorf("没有这台电脑 %q", t.Machine)
+		return nil, i18n.Err("assistant-tasks.no_machine", i18n.Args{"machine": strconv.Quote(t.Machine)})
 	}
 	if !m.Reachable {
-		return nil, fmt.Errorf("「%s」%w", m.Name, errMachineOffline)
+		return nil, machineOffline(m.Name)
 	}
 	reopened, ok, err := s.reopenFailedTodo(ctx, todoID)
 	if err != nil {
@@ -633,7 +647,7 @@ func (s *Service) continueTask(ctx context.Context, cur Todo) (json.RawMessage, 
 		if ok {
 			name = m.Name
 		}
-		return nil, fmt.Errorf("「%s」%w", name, errMachineOffline)
+		return nil, machineOffline(name)
 	}
 	s.tasks.mu.Lock()
 	busy := s.tasks.retrying[cur.ID]
@@ -771,8 +785,11 @@ type receiptBody struct {
 // interruptedSummary is an interrupted task's receipt: the error itself is no conclusion (#1516).
 const interruptedSummary = assistantwire.InterruptedSummary
 
-// silentTurnError is the interrupted receipt's detail for a turn with no output at all (silentTurn, #2349).
-const silentTurnError = "这一轮没有任何输出：Agent 没有回复，也没有调用工具（模型服务可能返回了空内容）"
+// silentTurnError is the interrupted receipt's detail for a turn with no output at all (silentTurn, #2349), in the
+// default language (silentTurnErrorIn: the user's).
+var silentTurnError = silentTurnErrorIn(i18n.Default)
+
+func silentTurnErrorIn(l i18n.Lang) string { return i18n.T(l, "assistant-tasks.silent_turn") }
 
 var prLink = regexp.MustCompile(`https://github\.com/[\w.-]+/[\w.-]+/pull/\d+`)
 
@@ -822,7 +839,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		// A turn cut off by the model service is no end of the work: an interrupted receipt (with 继续 on the card),
 		// and nothing to judge or close (#1516).
 		s.logf("task %s: interrupted: %s", t.ID, clip(oneLine(cut.TurnError), 200))
-		body := receiptBody{Title: t.Title, State: "interrupted", Summary: interruptedSummary, Machine: name,
+		body := receiptBody{Title: t.Title, State: "interrupted", Summary: i18n.T(s.lang(cctx), "assistant-tasks.interrupted"), Machine: name,
 			Error: clip(strings.TrimSpace(cut.TurnError), 300)}
 		if _, err := s.appendFeed(cctx, t.Origin, feedReceipt, t.ID, body); err != nil {
 			s.logf("task %s: receipt: %v", t.ID, err)
@@ -835,7 +852,9 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		// No reply and no tool call, yet no error either (the model service answered 200 with nothing in it): no end
 		// of the work. Interrupted, as a cut-off turn is, with nothing to judge or close (#2349).
 		s.logf("task %s: interrupted: the turn had no output", t.ID)
-		body := receiptBody{Title: t.Title, State: "interrupted", Summary: interruptedSummary, Machine: name, Error: silentTurnError}
+		l := s.lang(cctx)
+		body := receiptBody{Title: t.Title, State: "interrupted", Summary: i18n.T(l, "assistant-tasks.interrupted"), Machine: name,
+			Error: silentTurnErrorIn(l)}
 		if _, err := s.appendFeed(cctx, t.Origin, feedReceipt, t.ID, body); err != nil {
 			s.logf("task %s: receipt: %v", t.ID, err)
 		}
@@ -849,7 +868,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 	}
 	body := receiptBody{Title: t.Title, State: "done", Summary: clipMarkdown(text, 600), Machine: name}
 	if body.Summary == "" {
-		body.Summary = "完成了"
+		body.Summary = i18n.T(s.lang(cctx), "assistant-tasks.done")
 	}
 	if pr := prLink.FindAllString(text, -1); len(pr) > 0 {
 		body.PR = pr[len(pr)-1]
@@ -871,11 +890,11 @@ func (s *Service) routeToTask(ctx context.Context, conversation, todoID, text st
 		return FeedItem{}, err
 	}
 	if !ok || t.Origin != conversation {
-		return FeedItem{}, errors.New("这段对话里没有这个任务")
+		return FeedItem{}, i18n.Err("assistant-tasks.route_no_task")
 	}
 	agents := s.taskAgents(ctx, t)
 	if len(agents) == 0 {
-		return FeedItem{}, errors.New("这个任务没有在跑的 Agent")
+		return FeedItem{}, i18n.Err("assistant-tasks.route_no_agent")
 	}
 	rank := map[string]int{proto.StateNeedsYou: 0, proto.StateWorking: 1, proto.StateUnread: 2}
 	sort.SliceStable(agents, func(i, j int) bool {
@@ -894,7 +913,7 @@ func (s *Service) routeToTask(ctx context.Context, conversation, todoID, text st
 	})
 	c := agents[0]
 	if _, ok := s.device(ctx, c.MachineID); !ok {
-		return FeedItem{}, errors.New("那台电脑不在线")
+		return FeedItem{}, i18n.Err("assistant-tasks.route_offline")
 	}
 	// An agent closed after its task was done (tasks_close.go) is resumed first: that can take minutes, and goes
 	// on when the phone stops waiting, as a send from the chat does.

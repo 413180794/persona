@@ -1,0 +1,11 @@
+{
+  "title_notes": "About me",
+  "title_main_tasks_quiet": "Notify tasks from the main chat only in the main chat",
+  "title_launcher": "Persona’s launcher",
+  "none": "(none)",
+  "on": "On",
+  "off": "Off",
+  "change_notes": "Change “About me”: {before} → {after}",
+  "change_main_tasks_quiet": "“Notify tasks from the main chat only in the main chat”: {before} → {after}",
+  "change_launcher": "Persona’s default launcher: {before} → {after}"
+}

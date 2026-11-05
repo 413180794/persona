@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -27,8 +28,17 @@ type ownSetting struct {
 
 // ownChange is a change waiting for the phone: what the card says and how it is made (none: nothing to change).
 type ownChange struct {
-	summary string
-	apply   func(ctx context.Context) (string, error)
+	summary  string                   // for the assistant: the change made nothing to do
+	cardText func(l i18n.Lang) string // what the card says, in the user's language
+	apply    func(ctx context.Context) (string, error)
+}
+
+// card is what the approval card says in l.
+func (c *ownChange) card(l i18n.Lang) string {
+	if c.cardText != nil {
+		return c.cardText(l)
+	}
+	return c.summary
 }
 
 func (s *Service) ownSettings() []ownSetting {
@@ -126,10 +136,15 @@ func (s *Service) ownSettingAction(ctx context.Context, call ToolCall, o ownSett
 	if change.apply == nil {
 		return change.summary, nil // nothing to change
 	}
-	shown, _ := json.Marshal(map[string]string{"setting": o.Title, "action": action})
+	l := s.lang(ctx)
+	title := o.Title
+	if k, ok := settingTitles[o.Key]; ok {
+		title = i18n.T(l, "assistant-settings_tool."+k)
+	}
+	shown, _ := json.Marshal(map[string]string{"setting": title, "action": action})
 	now := time.Now().UTC()
 	r, err := s.ask(ctx, proto.Interaction{ID: "ix_" + randomHex(6), MachineID: call.MachineID, SessionID: call.SessionID,
-		Kind: proto.IxPermission, ToolName: "jarvis_settings", Summary: change.summary, ToolInput: shown, SessionTitle: "Persona",
+		Kind: proto.IxPermission, ToolName: "jarvis_settings", Summary: change.card(l), ToolInput: shown, SessionTitle: "Persona",
 		CreatedAt: now, ExpiresAt: now.Add(15 * time.Minute)})
 	if err != nil {
 		return "", err
@@ -147,8 +162,18 @@ func orNone(s string) string {
 	return s
 }
 
-// clipped is a value as the card shows it.
-func clipped(s string) string { return clip(oneLine(orNone(s)), 120) }
+// settingTitles are the settings' titles for the card the user approves on, in this file's namespace (Title stays
+// what the assistant reads).
+var settingTitles = map[string]string{"assistant.notes": "title_notes", "assistant.main_tasks_quiet": "title_main_tasks_quiet",
+	"assistant.launcher": "title_launcher"}
+
+// clipped is a value as the card shows it, in l.
+func clipped(l i18n.Lang, s string) string {
+	if strings.TrimSpace(s) == "" {
+		s = i18n.T(l, "assistant-settings_tool.none")
+	}
+	return clip(oneLine(s), 120)
+}
 
 func (s *Service) setNotes(ctx context.Context, v json.RawMessage) (*ownChange, error) {
 	var text string
@@ -163,7 +188,9 @@ func (s *Service) setNotes(ctx context.Context, v json.RawMessage) (*ownChange, 
 	if s.store() == nil {
 		return nil, errors.New("no database on this hub")
 	}
-	return &ownChange{summary: fmt.Sprintf("改「关于我」：%s → %s", clipped(before), clipped(text)),
+	return &ownChange{cardText: func(l i18n.Lang) string {
+		return i18n.T(l, "assistant-settings_tool.change_notes", i18n.Args{"before": clipped(l, before), "after": clipped(l, text)})
+	},
 		apply: func(ctx context.Context) (string, error) {
 			if _, err := s.updateSettings(ctx, func(v *Settings) error { v.Notes = &text; return nil }); err != nil {
 				return "", err
@@ -185,8 +212,10 @@ func (s *Service) setMainTasksQuiet(ctx context.Context, v json.RawMessage) (*ow
 	if s.store() == nil {
 		return nil, errors.New("no database on this hub")
 	}
-	word := map[bool]string{true: "开", false: "关"}
-	return &ownChange{summary: fmt.Sprintf("「主对话派的任务只在主对话里通知」：%s → %s", word[before], word[on]),
+	word := map[bool]string{true: "assistant-settings_tool.on", false: "assistant-settings_tool.off"}
+	return &ownChange{cardText: func(l i18n.Lang) string {
+		return i18n.T(l, "assistant-settings_tool.change_main_tasks_quiet", i18n.Args{"before": i18n.T(l, word[before]), "after": i18n.T(l, word[on])})
+	},
 		apply: func(ctx context.Context) (string, error) {
 			if _, err := s.updateSettings(ctx, func(v *Settings) error { v.MainTasksQuiet = &on; return nil }); err != nil {
 				return "", err
@@ -255,7 +284,9 @@ func (s *Service) setLauncher(ctx context.Context, v json.RawMessage) (*ownChang
 		return nil, err
 	}
 	rec.Binding.Provider = "launcher." + name
-	return &ownChange{summary: fmt.Sprintf("Persona 的默认启动器：%s → %s", before, name),
+	return &ownChange{cardText: func(l i18n.Lang) string {
+		return i18n.T(l, "assistant-settings_tool.change_launcher", i18n.Args{"before": before, "after": name})
+	},
 		apply: func(ctx context.Context) (string, error) {
 			if err := s.saveModelRecord(ctx, "assistant", rec); err != nil {
 				return "", err

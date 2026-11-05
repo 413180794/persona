@@ -33,7 +33,7 @@ var errNoAssistantMachine = errors.New("assistant machine is not configured")
 // a transcript without one) nor a model's name nor a rename shows up as one (#1313).
 const mainTitle = "Persona"
 
-var errRenameMain = errors.New("主对话没有标题可以改")
+var errRenameMain = i18n.Err("assistant-start.rename_main")
 
 // claudeMD is the assistant directory's CLAUDE.md (prompts/assistant/claude_md.md) for its machine here. Its machine
 // list is written from where the assistant actually runs: the ssh_host names are the hub machine's ssh aliases, which
@@ -253,14 +253,14 @@ func (s *Service) newMain(ctx context.Context, carry bool, expect string) (strin
 	cfg := s.settings(ctx)
 	old := cfg.Main
 	if expect != "" && expect != old {
-		return "", false, &rpc.Error{Code: "main_changed", Message: "主对话已经换过了，刷新后再试"}
+		return "", false, &rpc.Error{Code: "main_changed", Message: i18n.T(s.lang(ctx), "assistant-start.main_changed")}
 	}
 	if old == "" {
 		return "", false, nil
 	}
 	machine, c, found := s.findSession(ctx, old, cfg.MachineID)
 	if found && (c.Status == proto.StatusWorking || (c.Compaction != nil && c.Compaction.State == proto.CompactionRunning)) {
-		return "", false, &rpc.Error{Code: "busy", Message: "主对话正在回答或压缩，等它停下再新建"}
+		return "", false, &rpc.Error{Code: "busy", Message: i18n.T(s.lang(ctx), "assistant-start.main_busy")}
 	}
 	if !found {
 		machine = cfg.MachineID
@@ -440,8 +440,13 @@ func (s *Service) startRoutes() {
 // ---- what the hub asks about a message or a rename ----
 
 // badRequest is err as the refusal of a request that is wrong as it is (the hub answers it 400).
-func badRequest(err error) error {
-	return &rpc.Error{Code: CodeBadRequest, Message: err.Error()}
+// badRequest is err as a bus error, said in l when it is an i18n.Message (no l: the default language).
+func badRequest(err error, l ...i18n.Lang) error {
+	msg := err.Error()
+	if len(l) > 0 {
+		msg = i18n.Localize(err, l[0])
+	}
+	return &rpc.Error{Code: CodeBadRequest, Message: msg}
 }
 
 // SendParams is assistant.send_params: a message for conversation p.SessionID on p.MachineID, with what it runs on
@@ -543,7 +548,7 @@ func (s *Service) Rename(ctx context.Context, p RenameParams) (json.RawMessage, 
 	params["session_id"] = p.SessionID
 	title, _ := params["title"].(string)
 	if strings.TrimSpace(title) != "" && s.isMain(ctx, p.SessionID) {
-		return nil, badRequest(errRenameMain) // the apps show the persona there (#1313)
+		return nil, badRequest(errRenameMain, s.lang(ctx)) // the apps show the persona there (#1313)
 	}
 	if c, _ := s.session(ctx, p.MachineID, p.SessionID); c.Agent == "codex" {
 		delete(params, "title") // only the assistant's title for Codex (its conversation_rename does the same)

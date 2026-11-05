@@ -180,11 +180,11 @@ func TestResolutionAnswer(t *testing.T) {
 		{proto.Interaction{Kind: proto.IxPlan}, proto.Resolution{Approve: &yes}, "批准了"},
 		{proto.Interaction{Kind: proto.IxPermission}, proto.Resolution{Allow: &no, Message: "先别跑"}, "拒绝了：先别跑"},
 	} {
-		if got := resolutionAnswer(c.ix, c.r); got != c.want {
+		if got := resolutionAnswer("", c.ix, c.r); got != c.want {
 			t.Errorf("resolutionAnswer(%+v) = %q, want %q", c.r, got, c.want)
 		}
 	}
-	if got := interactionQuestion(proto.Interaction{Kind: proto.IxPlan}); got != "批准计划" {
+	if got := interactionQuestion("", proto.Interaction{Kind: proto.IxPlan}); got != "批准计划" {
 		t.Errorf("plan question = %q", got)
 	}
 }

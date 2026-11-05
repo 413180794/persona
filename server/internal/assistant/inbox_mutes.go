@@ -98,7 +98,7 @@ func (b *inboxBook) applyMutes(now time.Time) []*InboxItem {
 		}
 		if m := mutedBy(b.mutes, it); m != nil {
 			it.done(now, "read")
-			it.Reason = "已静音：" + m.Name
+			it.Reason = b.mutedReason(m.Name)
 			changed = append(changed, it)
 		}
 	}

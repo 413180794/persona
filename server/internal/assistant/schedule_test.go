@@ -704,7 +704,7 @@ func TestScheduleDefaultsWhenNothingStored(t *testing.T) {
 	if err := h.scheduleReadable(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if tasks := h.tasksView(ctx, nil); len(tasks) != len(defaultRoutines()) {
+	if tasks := h.tasksView(ctx, nil); len(tasks) != len(defaultRoutines("")) {
 		t.Fatalf("defaults: %+v", tasks)
 	}
 }

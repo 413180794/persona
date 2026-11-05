@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -77,7 +78,7 @@ func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
 		// The model's connection is held (quota used up, busy): not triaged, so a pass after it is back asks again.
 		// Meanwhile an untriaged item sits in its rule tier rather than in 需要你.
 		if it.Tier == "" && fallback != "" {
-			it.Tier, it.Reason = fallback, "按规则"
+			it.Tier, it.Reason = fallback, b.byRules()
 			return true
 		}
 		return false
@@ -89,7 +90,7 @@ func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
 		if v.err != nil {
 			s.logf("inbox: triage %s: %v", it.ID, v.err)
 		}
-		it.Tier, it.Reason = fallback, "按规则"
+		it.Tier, it.Reason = fallback, b.byRules()
 	}
 	it.TriagedAt = last
 	// Triage can settle an item read elsewhere while it was still untriaged (not one filed while the model thought).
@@ -139,20 +140,21 @@ func (s *Service) askTriage(ctx context.Context, it *InboxItem, timeout time.Dur
 	slow := errors.Is(cctx.Err(), context.DeadlineExceeded) && ctx.Err() == nil
 	cancel()
 	paused, quota := modelPaused(err)
+	l := s.lang(ctx)
 	switch {
 	case paused:
-		v.state, v.why = triagePaused, "模型并发已满"
+		v.state, v.why = triagePaused, i18n.T(l, "assistant-inbox_triage.busy")
 		if quota {
-			v.why = "模型没有额度"
+			v.why = i18n.T(l, "assistant-inbox_triage.no_quota")
 		}
 	case out.Tier == TierAction || out.Tier == TierFYI || out.Tier == TierNoise:
 		v.tier, v.summary, v.reason = out.Tier, clip(oneLine(out.Summary), 80), clip(oneLine(out.Reason), 30)
 	case modelUnconfigured(err):
-		v.state, v.why = triageUnconfigured, "没有配置分拣模型"
+		v.state, v.why = triageUnconfigured, i18n.T(l, "assistant-inbox_triage.unconfigured")
 	case slow:
-		v.state, v.why = triageTimeout, "模型太慢"
+		v.state, v.why = triageTimeout, i18n.T(l, "assistant-inbox_triage.slow")
 	default:
-		v.state, v.why = triageFailed, "模型出错"
+		v.state, v.why = triageFailed, i18n.T(l, "assistant-inbox_triage.failed")
 	}
 	v.err = err
 	return last, v

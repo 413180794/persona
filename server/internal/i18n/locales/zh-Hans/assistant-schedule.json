@@ -1,0 +1,20 @@
+{
+  "followup": "定时跟进",
+  "morning": "早报",
+  "evening": "晚间回顾",
+  "unavailable": "暂时读不到定时任务（数据库没有响应），过一会儿再试",
+  "prompt_empty": "提示词不能为空",
+  "time_format": "时间 {time} 要写成 HH:MM",
+  "daily_title": "每天运行的任务要有标题",
+  "interval_range": "间隔要在 {min} 分钟到 7 天之间",
+  "pick_time": "要选一个运行时间",
+  "time_passed": "这个时间已经过了，选一个以后的时间",
+  "bad_launcher": "启动器 {launcher} 的名字不对",
+  "bad_permission_mode": "不认识的权限模式 {mode}",
+  "bad_effort": "不认识的思考强度 {effort}",
+  "missed": "Persona 停机，错过了时间",
+  "busy_skipped": "上一轮还在运行，这次跳过",
+  "busy_wait": "上一轮还在运行，等它跑完再试",
+  "run_failed": "定时任务失败：{name}",
+  "gone": "这个定时任务已经不在了"
+}

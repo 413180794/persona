@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"path"
 	"slices"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -416,7 +416,7 @@ func (s *Service) checkLauncher(ctx context.Context, machine, launcher string) e
 	err := s.call(pctx, machine, DeviceLaunchersProbe, map[string]any{"name": launcher}, &res)
 	cancel()
 	if err == nil && res.Detail.Agent != "" && res.Detail.Agent != "claude" && res.Detail.Agent != "codex" {
-		return fmt.Errorf("%s 跑的是 %s，助手只能用启动 Claude Code、Codex 或能当助手的 runtime 的启动器", launcher, res.Detail.Agent)
+		return i18n.Err("assistant-profile.launcher_agent", i18n.Args{"launcher": launcher, "agent": res.Detail.Agent})
 	}
 	return nil
 }

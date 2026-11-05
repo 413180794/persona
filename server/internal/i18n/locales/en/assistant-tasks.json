@@ -1,0 +1,17 @@
+{
+  "plan_waiting": "{n} things are waiting for you to start",
+  "plan_waiting_single": "Something is waiting for you to start",
+  "list_sep": ", ",
+  "task_no_machine": "“{task}”: there’s no computer {machine}",
+  "no_machine": "There’s no computer {machine}",
+  "failed_start": "Didn’t start: {reason}",
+  "not_retryable": "Only a task that didn’t start, or was interrupted by a model service error, can be retried",
+  "not_in_plan": "Can’t find this task’s plan, so it can’t be started again as it was",
+  "machine_offline": "“{name}” is offline. Try again once it’s connected.",
+  "silent_turn": "This turn had no output: the agent didn’t reply or call any tools (the model service may have returned nothing)",
+  "interrupted": "Interrupted by a model service error",
+  "done": "Done",
+  "route_no_task": "This chat doesn’t have that task",
+  "route_no_agent": "This task has no running agent",
+  "route_offline": "That computer is offline"
+}

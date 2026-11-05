@@ -22,6 +22,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -196,7 +197,8 @@ func (it InboxItem) Listed() InboxItem { return it.listed() }
 
 // inboxBook is the inbox's state.
 type inboxBook struct {
-	larkAccount int // lark.account (InboxConfig.LarkAccount); zero is primary account 1
+	lang        func() i18n.Lang // the user's language, for the reasons it writes on items (nil: the default)
+	larkAccount int              // lark.account (InboxConfig.LarkAccount); zero is primary account 1
 	mu          sync.Mutex
 	items       map[string]*InboxItem
 	once        sync.Once
@@ -275,13 +277,29 @@ func (b *inboxBook) kindWords(source, kind string) string {
 	return b.kinds[source+"/"+kind]
 }
 
+// userLang is the user's language for what b writes for people.
+func (b *inboxBook) userLang() i18n.Lang {
+	if b.lang == nil {
+		return i18n.Default
+	}
+	return b.lang()
+}
+
+// byRules is an item's reason when its rules, not the model, filed it.
+func (b *inboxBook) byRules() string { return i18n.T(b.userLang(), "assistant-inbox.by_rules") }
+
+// mutedReason is an item's reason when mute name closed it.
+func (b *inboxBook) mutedReason(name string) string {
+	return i18n.T(b.userLang(), "assistant-inbox.muted", i18n.Args{"name": name})
+}
+
 // sourceName is an inbox source for people: 飞书, 邮件, a connector's name as the hub last said it.
 func (b *inboxBook) sourceName(source string) string {
 	switch source {
 	case "lark":
-		return "飞书"
+		return i18n.T(b.userLang(), "assistant-inbox.source_lark")
 	case "mail":
-		return "邮件"
+		return i18n.T(b.userLang(), "assistant-inbox.source_mail")
 	}
 	b.srcMu.RLock()
 	defer b.srcMu.RUnlock()
@@ -926,7 +944,7 @@ func (s *Service) inboxRoutes() {
 		}
 		switch {
 		case errors.Is(err, errMailReplyTargetChanged):
-			apierr.WriteBody(w, http.StatusConflict, map[string]any{"code": "mail_reply_target_changed", "error": "邮件回复对象已变化，请查看最新邮件后确认发送", "retryable": false, "delivered": "none"})
+			apierr.WriteBody(w, http.StatusConflict, map[string]any{"code": "mail_reply_target_changed", "error": i18n.T(i18n.OfWriter(w), "assistant-inbox.mail_target_changed"), "retryable": false, "delivered": "none"})
 		case errors.Is(err, errNoInboxItem):
 			apierr.Write(w, http.StatusNotFound, err)
 		case replyInDoubt(err):

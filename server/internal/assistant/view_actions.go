@@ -17,6 +17,7 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 type viewActionStore interface {
@@ -263,7 +264,7 @@ func (s *Service) deliverViewAction(parent context.Context, conversation, key st
 	}
 	status, reason := "sent", ""
 	if session, known := s.session(ctx, a.MachineID, a.Conversation); !known || !session.Assistant {
-		status, reason = "pending", "等待助手所在机器重新上线"
+		status, reason = "pending", i18n.T(s.lang(ctx), "assistant-view_actions.waiting_machine")
 	} else {
 		params := map[string]any{"session_id": a.Conversation, "client_msg_id": a.MessageID, "text": a.Text, "resume_only": true}
 		err = s.sendModel(ctx, a.MachineID, a.Conversation, params)

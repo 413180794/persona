@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -256,10 +257,10 @@ func (s *Service) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, no
 		b.mu.Unlock()
 		reason := ""
 		if a.StartedAt != nil && now.Sub(*a.StartedAt) > agentTimeout(cfg) {
-			reason = "超时，没有给出草稿"
+			reason = i18n.T(s.lang(ctx), "assistant-inbox_agent.timeout")
 		} else if a.StartedAt != nil && now.Sub(*a.StartedAt) > time.Minute {
 			if sess, ok := s.session(ctx, a.MachineID, a.SessionID); ok && sess.Status != proto.StatusWorking {
-				reason = "做完了但没有给出草稿"
+				reason = i18n.T(s.lang(ctx), "assistant-inbox_agent.no_draft")
 			}
 		}
 		if reason == "" {

@@ -1,0 +1,3 @@
+{
+  "launcher_agent": "{launcher} runs {agent}. The assistant can only use a launcher that starts Claude Code, Codex, or a runtime that can act as the assistant."
+}

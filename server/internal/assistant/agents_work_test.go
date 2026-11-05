@@ -138,26 +138,26 @@ func TestTransientErrors(t *testing.T) {
 
 func TestTriageRules(t *testing.T) {
 	ask := proto.Session{Status: proto.StatusDone, PendingInteractions: 1}
-	if _, _, skip := triageRules(ask, time.UTC); !skip {
+	if _, _, skip := triageRules(ask, time.UTC, ""); !skip {
 		t.Fatal("a session asking on its own card is not triaged")
 	}
-	w, by, _ := triageRules(proto.Session{Status: proto.StatusDone, TurnError: "API Error: 503 upstream"}, time.UTC)
+	w, by, _ := triageRules(proto.Session{Status: proto.StatusDone, TurnError: "API Error: 503 upstream"}, time.UTC, "")
 	if w == nil || w.On != proto.WaitTransient || by != "rule" {
 		t.Fatalf("transient: %+v %s", w, by)
 	}
-	w, _, _ = triageRules(proto.Session{Status: proto.StatusDone, TurnError: "OAuth token has expired"}, time.UTC)
+	w, _, _ = triageRules(proto.Session{Status: proto.StatusDone, TurnError: "OAuth token has expired"}, time.UTC, "")
 	if w == nil || w.On != proto.WaitUser || len(w.Questions) != 1 {
 		t.Fatalf("sign-in: %+v", w)
 	}
-	w, _, _ = triageRules(proto.Session{Status: proto.StatusDone, Background: []proto.BackgroundTask{{}}}, time.UTC)
+	w, _, _ = triageRules(proto.Session{Status: proto.StatusDone, Background: []proto.BackgroundTask{{}}}, time.UTC, "")
 	if w == nil || w.On != proto.WaitExternal || w.Wait != "" {
 		t.Fatalf("background: %+v", w)
 	}
-	w, _, _ = triageRules(proto.Session{Status: proto.StatusDone, Loop: &proto.LoopInfo{Kind: "wakeup"}}, time.UTC)
+	w, _, _ = triageRules(proto.Session{Status: proto.StatusDone, Loop: &proto.LoopInfo{Kind: "wakeup"}}, time.UTC, "")
 	if w == nil || w.On != proto.WaitExternal {
 		t.Fatalf("loop: %+v", w)
 	}
-	if w, _, skip := triageRules(proto.Session{Status: proto.StatusDone, LastText: "改好了"}, time.UTC); w != nil || skip {
+	if w, _, skip := triageRules(proto.Session{Status: proto.StatusDone, LastText: "改好了"}, time.UTC, ""); w != nil || skip {
 		t.Fatalf("plain answer goes to the model: %+v", w)
 	}
 }
@@ -182,7 +182,7 @@ func TestTriageRulesCodexTurnError(t *testing.T) {
 		{"unexpected status 503 Service Unavailable", "", proto.WaitTransient}, // no kind: the words
 		{"unexpected status 401 Unauthorized", "", proto.WaitUser},
 	} {
-		w, by, skip := triageRules(codexFailedTurn("s1", tc.text, tc.kind), time.UTC)
+		w, by, skip := triageRules(codexFailedTurn("s1", tc.text, tc.kind), time.UTC, "")
 		if skip || w == nil || w.Phase != proto.WorkBlocked || w.On != tc.on || by != "rule" {
 			t.Errorf("%q (%s): %+v %s", tc.text, tc.kind, w, by)
 		}
@@ -455,29 +455,29 @@ func TestAgentWaitWakesWhenTheOtherStops(t *testing.T) {
 func TestTriageWorkSanitizes(t *testing.T) {
 	others := map[string]proto.WorkAgent{"abcd1234": {MachineID: "box", SessionID: "abcd1234-x"}}
 	now := time.Now()
-	if w := triageWork(triageOut{Phase: "maybe"}, others, now); w.Phase != "" {
+	if w := triageWork(triageOut{Phase: "maybe"}, others, now, ""); w.Phase != "" {
 		t.Fatalf("made-up phase: %+v", w)
 	}
-	if w := triageWork(triageOut{Phase: "blocked", On: "whoever", Line: "x"}, others, now); w.On != proto.WaitUser {
+	if w := triageWork(triageOut{Phase: "blocked", On: "whoever", Line: "x"}, others, now, ""); w.On != proto.WaitUser {
 		t.Fatalf("unknown on: %+v", w)
 	}
 	var out triageOut
 	_ = json.Unmarshal([]byte(`{"phase":"blocked","on":"agent","wait":{"what":"它","agent":"abcd1234"}}`), &out)
-	if w := triageWork(out, others, now); w.On != proto.WaitAgent || w.Agent == nil {
+	if w := triageWork(out, others, now, ""); w.On != proto.WaitAgent || w.Agent == nil {
 		t.Fatalf("known agent: %+v", w)
 	}
 	_ = json.Unmarshal([]byte(`{"phase":"blocked","on":"agent","wait":{"what":"它","agent":"zzz"}}`), &out)
-	if w := triageWork(out, others, now); w.On != proto.WaitExternal || w.Agent != nil {
+	if w := triageWork(out, others, now, ""); w.On != proto.WaitExternal || w.Agent != nil {
 		t.Fatalf("unknown agent: %+v", w)
 	}
 	out = triageOut{}
 	_ = json.Unmarshal([]byte(`{"phase":"blocked","on":"user","line":"点链接","link":{"url":"javascript:alert(1)"}}`), &out)
-	if w := triageWork(out, others, now); w.Link != nil {
+	if w := triageWork(out, others, now, ""); w.Link != nil {
 		t.Fatalf("bad link kept: %+v", w.Link)
 	}
 	out = triageOut{}
 	_ = json.Unmarshal([]byte(`{"phase":"blocked","on":"user","line":"点链接","link":{"url":"https://example.com/device","minutes":10}}`), &out)
-	if w := triageWork(out, others, now); w.Link == nil || w.Link.ExpiresAt == nil || w.Link.ExpiresAt.Sub(now) < 9*time.Minute {
+	if w := triageWork(out, others, now, ""); w.Link == nil || w.Link.ExpiresAt == nil || w.Link.ExpiresAt.Sub(now) < 9*time.Minute {
 		t.Fatalf("link: %+v", w.Link)
 	}
 	var qs []proto.Question
@@ -485,7 +485,7 @@ func TestTriageWorkSanitizes(t *testing.T) {
 		qs = append(qs, proto.Question{Question: strings.Repeat("问", i+1), Options: []proto.QuestionOption{{Label: "a"}, {Label: "b"}, {Label: "c"}, {Label: "d"}, {Label: "e"}}})
 	}
 	qs[0].Options = qs[0].Options[:1]
-	got := cardQuestions(qs)
+	got := cardQuestions(qs, "")
 	if len(got) != 4 || len(got[1].Options) != 4 || len(got[0].Options) != 2 || got[0].Options[1].Label != answerSkip {
 		t.Fatalf("cardQuestions %+v", got)
 	}

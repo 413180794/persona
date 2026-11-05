@@ -1,0 +1,11 @@
+{
+  "title_notes": "关于我",
+  "title_main_tasks_quiet": "主对话派的任务只在主对话里通知",
+  "title_launcher": "Persona 的启动器",
+  "none": "（无）",
+  "on": "开",
+  "off": "关",
+  "change_notes": "改「关于我」：{before} → {after}",
+  "change_main_tasks_quiet": "「主对话派的任务只在主对话里通知」：{before} → {after}",
+  "change_launcher": "Persona 的默认启动器：{before} → {after}"
+}

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -218,7 +219,7 @@ func noticeAsk(ix proto.Interaction) string {
 	case ix.Kind == proto.IxPlan:
 		b.WriteString("批准它的计划：\n" + clipMarkdown(ix.Plan, 1200))
 	default:
-		b.WriteString(interactionQuestion(ix))
+		b.WriteString(interactionQuestion(i18n.Default, ix)) // for the model: Chinese as the rest of the notice
 		if ix.Reason != "" {
 			b.WriteString("（" + clip(oneLine(ix.Reason), 200) + "）")
 		}

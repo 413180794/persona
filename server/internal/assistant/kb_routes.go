@@ -8,6 +8,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -17,7 +18,7 @@ import (
 
 var (
 	errKBRouteOff     = errors.New("the knowledge base is off")
-	errKBRouteNotOpen = errors.New("知识库还没准备好，稍后再试")
+	errKBRouteNotOpen = i18n.Err("assistant-kb_routes.not_open")
 )
 
 func (s *Service) kbRoutes() {

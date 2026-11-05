@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -59,7 +60,7 @@ func (s *Service) triageTurnModel(ctx context.Context, v *workView, machine stri
 		"system": prompts.RenderAgentTriage(prompts.AgentTriage{Owner: s.owner(ctx)}), "input": prompts.RenderAgentTriageInput(in)}, &out); err != nil {
 		return nil, err
 	}
-	return triageWork(out, byShort, time.Now()), nil
+	return triageWork(out, byShort, time.Now(), s.lang(ctx)), nil
 }
 
 // projectsFor are the names of the knowledge base's projects whose directories hold cwd on machine (none when it
@@ -77,7 +78,8 @@ func (s *Service) projectsFor(ctx context.Context, machine, cwd string) []string
 }
 
 // triageWork turns the model's answer into a work state, keeping only what it may say.
-func triageWork(out triageOut, others map[string]proto.WorkAgent, now time.Time) *proto.WorkState {
+// The texts the hub fills in itself are in lang (the user's).
+func triageWork(out triageOut, others map[string]proto.WorkAgent, now time.Time, lang i18n.Lang) *proto.WorkState {
 	w := &proto.WorkState{Line: clip(oneLine(out.Line), 60)}
 	for _, a := range first(out.Artifacts, 5) {
 		if k := strings.ToLower(strings.TrimSpace(a.Kind)); slices.Contains([]string{"pr", "commit", "doc", "build", "url"}, k) && strings.TrimSpace(a.Ref) != "" {
@@ -88,7 +90,7 @@ func triageWork(out triageOut, others map[string]proto.WorkAgent, now time.Time)
 	case proto.WorkDone:
 		w.Phase = proto.WorkDone
 		if w.Line == "" {
-			w.Line = "做完了"
+			w.Line = i18n.T(lang, "assistant-agents_triage.done")
 		}
 		return w
 	case proto.WorkBlocked:
@@ -119,7 +121,7 @@ func triageWork(out triageOut, others map[string]proto.WorkAgent, now time.Time)
 		w.Wait = w.Line
 	}
 	if w.On == proto.WaitUser {
-		w.Questions = cardQuestions(out.Questions)
+		w.Questions = cardQuestions(out.Questions, lang)
 		if l := out.Link; l != nil && httpsLink(l.URL) {
 			w.Link = &proto.WorkLink{URL: strings.TrimSpace(l.URL)}
 			if l.Minutes > 0 && l.Minutes <= 24*60 {
@@ -129,13 +131,13 @@ func triageWork(out triageOut, others map[string]proto.WorkAgent, now time.Time)
 		}
 	}
 	if w.Line == "" {
-		w.Line = "在等你"
+		w.Line = i18n.T(lang, "assistant-agents_triage.waiting_for_you")
 	}
 	return w
 }
 
 // cardQuestions are the model's questions as a card can ask them: at most 4, each with 2–4 options.
-func cardQuestions(qs []proto.Question) []proto.Question {
+func cardQuestions(qs []proto.Question, lang i18n.Lang) []proto.Question {
 	var out []proto.Question
 	seen := map[string]bool{}
 	for _, q := range qs {
@@ -155,7 +157,7 @@ func cardQuestions(qs []proto.Question) []proto.Question {
 			c.Options = append(c.Options, proto.QuestionOption{Label: l, Description: clip(oneLine(o.Description), 120)})
 		}
 		if len(c.Options) < 2 {
-			c.Options = append(c.Options, proto.QuestionOption{Label: answerSkip})
+			c.Options = append(c.Options, proto.QuestionOption{Label: answerLabel(lang, answerSkip)})
 		}
 		out = append(out, c)
 	}

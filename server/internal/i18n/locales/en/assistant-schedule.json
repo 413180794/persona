@@ -1,0 +1,20 @@
+{
+  "followup": "Follow-up",
+  "morning": "Morning brief",
+  "evening": "Evening review",
+  "unavailable": "Can’t read scheduled tasks right now (the database isn’t responding). Try again in a bit.",
+  "prompt_empty": "The prompt can’t be empty",
+  "time_format": "Write the time {time} as HH:MM",
+  "daily_title": "A daily task needs a title",
+  "interval_range": "The interval must be between {min} minutes and 7 days",
+  "pick_time": "Pick a time to run",
+  "time_passed": "That time has passed. Pick a later one.",
+  "bad_launcher": "The launcher name {launcher} isn’t valid",
+  "bad_permission_mode": "Unknown permission mode {mode}",
+  "bad_effort": "Unknown thinking effort {effort}",
+  "missed": "Persona was down and missed the time",
+  "busy_skipped": "The last run is still going, so this one was skipped",
+  "busy_wait": "The last run is still going. Try again when it’s done.",
+  "run_failed": "Scheduled task failed: {name}",
+  "gone": "This scheduled task no longer exists"
+}

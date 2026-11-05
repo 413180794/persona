@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -90,7 +91,7 @@ func (s *Service) isArchived(id string) bool {
 	return ok
 }
 
-var errArchiveMain = errors.New("主对话不能归档")
+var errArchiveMain = i18n.Err("assistant-conversations.archive_main")
 
 // setArchived archives (on) or brings back a conversation; by is who did it. It reports whether anything changed.
 func (s *Service) setArchived(ctx context.Context, machine, id string, on bool, by string) (bool, error) {

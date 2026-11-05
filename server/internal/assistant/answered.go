@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -36,7 +37,12 @@ const (
 )
 
 // answeredSecret is what stands for a value typed into a password field: the hub keeps those nowhere.
-const answeredSecret = "（已填写，不保存）"
+func answeredSecret(l i18n.Lang) string { return i18n.T(l, "assistant-answered.secret") }
+
+// answeredT is one of this file's texts in l.
+func answeredT(l i18n.Lang, name string, args ...i18n.Args) string {
+	return i18n.T(l, "assistant-answered."+name, args...)
+}
 
 // taskAnswered: the user dealt with a card of one of the task's agents; the conversation keeps a record of it.
 func (s *Service) taskAnswered(ctx context.Context, ix proto.Interaction, r proto.Resolution, status string) {
@@ -44,7 +50,8 @@ func (s *Service) taskAnswered(ctx context.Context, ix proto.Interaction, r prot
 	if !ok || status == "failed" {
 		return
 	}
-	body := answeredBody{Question: interactionQuestion(ix), Answer: resolutionAnswer(ix, r), Items: answeredItems(ix, r)}
+	l := s.lang(ctx) // the record stays in the language the user had when they answered
+	body := answeredBody{Question: interactionQuestion(l, ix), Answer: resolutionAnswer(l, ix, r), Items: answeredItems(l, ix, r)}
 	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	if _, err := s.appendFeed(cctx, t.Origin, feedAnswered, t.ID, body); err != nil {
@@ -53,52 +60,52 @@ func (s *Service) taskAnswered(ctx context.Context, ix proto.Interaction, r prot
 }
 
 // interactionQuestion is what a card asked, in a line.
-func interactionQuestion(ix proto.Interaction) string {
+func interactionQuestion(l i18n.Lang, ix proto.Interaction) string {
 	switch {
 	case len(ix.Questions) > 0:
 		return clip(oneLine(ix.Questions[0].Question), answeredLineMax)
 	case ix.Kind == proto.IxPlan:
-		return "批准计划"
+		return answeredT(l, "approve_plan")
 	case ix.Summary != "":
 		return clip(oneLine(ix.Summary), answeredLineMax)
 	case ix.Kind == proto.IxElicitation && ix.Elicitation != nil && ix.Elicitation.Message != "":
 		return clip(oneLine(ix.Elicitation.Message), answeredLineMax)
 	case ix.ToolName != "":
-		return "使用 " + ix.ToolName
+		return answeredT(l, "use_tool", i18n.Args{"tool": ix.ToolName})
 	}
-	return "需要你处理"
+	return answeredT(l, "needs_you")
 }
 
 // resolutionAnswer is the user's answer, in a line (never a typed secret: the hub keeps those nowhere).
-func resolutionAnswer(ix proto.Interaction, r proto.Resolution) string {
+func resolutionAnswer(l i18n.Lang, ix proto.Interaction, r proto.Resolution) string {
 	switch {
 	case r.Dismiss:
-		return "忽略了"
+		return answeredT(l, "dismissed")
 	case len(r.Answers) > 0:
 		var parts []string
 		for _, it := range questionAnswers(ix, r) {
 			parts = append(parts, it.Answer)
 		}
-		return clip(oneLine(strings.Join(parts, "；")), answeredLineMax)
+		return clip(oneLine(strings.Join(parts, answeredT(l, "answer_sep"))), answeredLineMax)
 	case r.Approve != nil && *r.Approve, r.Allow != nil && *r.Allow:
 		if r.Always {
-			return "批准了 · 以后同类不再问"
+			return answeredT(l, "approved_always")
 		}
-		return "批准了"
+		return answeredT(l, "approved")
 	case r.Approve != nil, r.Allow != nil:
 		if r.Feedback != "" || r.Message != "" {
-			return clip(oneLine("拒绝了："+r.Feedback+r.Message), answeredLineMax)
+			return clip(oneLine(answeredT(l, "denied_because", i18n.Args{"reason": r.Feedback + r.Message})), answeredLineMax)
 		}
-		return "拒绝了"
+		return answeredT(l, "denied")
 	case r.Option != "" || len(r.Options) > 0:
-		if a := screenAnswerText(ix, r); a != "选了" {
-			return clip(oneLine("选了 "+a), answeredLineMax)
+		if a := screenAnswerText(l, ix, r); a != answeredT(l, "picked") {
+			return clip(oneLine(answeredT(l, "picked_option", i18n.Args{"option": a})), answeredLineMax)
 		}
-		return "选了"
+		return answeredT(l, "picked")
 	case r.Action != "":
-		return elicitationAction(r.Action)
+		return elicitationAction(l, r.Action)
 	}
-	return "回答了"
+	return answeredT(l, "answered")
 }
 
 // questionAnswers pairs a question card's questions with the answers, in the card's order (proto.QuestionAnswers).
@@ -111,7 +118,7 @@ func questionAnswers(ix proto.Interaction, r proto.Resolution) []answeredItem {
 }
 
 // answeredItems is the record in full: each question with its answer, newlines kept, within the length limits.
-func answeredItems(ix proto.Interaction, r proto.Resolution) []answeredItem {
+func answeredItems(l i18n.Lang, ix proto.Interaction, r proto.Resolution) []answeredItem {
 	var items []answeredItem
 	switch {
 	case len(ix.Questions) > 0 || len(r.Answers) > 0:
@@ -124,9 +131,9 @@ func answeredItems(ix proto.Interaction, r proto.Resolution) []answeredItem {
 			a, ok := got[q.Question]
 			switch {
 			case r.Dismiss:
-				a = "忽略了"
+				a = answeredT(l, "dismissed")
 			case !ok:
-				a = "没回答"
+				a = answeredT(l, "not_answered")
 			}
 			items = append(items, answeredItem{Question: q.Question, Answer: a})
 		}
@@ -134,17 +141,17 @@ func answeredItems(ix proto.Interaction, r proto.Resolution) []answeredItem {
 			items = append(items, a) // answers to questions the card does not list
 		}
 	case ix.Kind == proto.IxPlan:
-		q := "批准计划"
+		q := answeredT(l, "approve_plan")
 		if p := strings.TrimSpace(ix.Plan); p != "" {
-			q = "批准这份计划？\n\n" + p
+			q = answeredT(l, "approve_this_plan", i18n.Args{"plan": p})
 		}
-		items = append(items, answeredItem{Question: q, Answer: decisionAnswer(ix, r)})
+		items = append(items, answeredItem{Question: q, Answer: decisionAnswer(l, ix, r)})
 	case ix.Kind == proto.IxScreen:
-		items = append(items, answeredItem{Question: screenQuestion(ix), Answer: screenAnswerText(ix, r)})
+		items = append(items, answeredItem{Question: screenQuestion(l, ix), Answer: screenAnswerText(l, ix, r)})
 	case ix.Kind == proto.IxElicitation:
-		items = append(items, answeredItem{Question: elicitationQuestion(ix), Answer: elicitationAnswer(ix, r)})
+		items = append(items, answeredItem{Question: elicitationQuestion(l, ix), Answer: elicitationAnswer(l, ix, r)})
 	default: // a permission, or anything else a card asks
-		items = append(items, answeredItem{Question: permissionQuestion(ix), Answer: decisionAnswer(ix, r)})
+		items = append(items, answeredItem{Question: permissionQuestion(l, ix), Answer: decisionAnswer(l, ix, r)})
 	}
 	return fitAnswered(items)
 }
@@ -161,52 +168,53 @@ func countAnswered(ix proto.Interaction, got map[string]string) int {
 }
 
 // decisionAnswer is an approve / deny in full: the reason given, the plan's mode, the card's fields.
-func decisionAnswer(ix proto.Interaction, r proto.Resolution) string {
+func decisionAnswer(l i18n.Lang, ix proto.Interaction, r proto.Resolution) string {
 	if r.Dismiss {
-		return "忽略了"
+		return answeredT(l, "dismissed")
 	}
 	var lines []string
 	approved := r.Approve != nil && *r.Approve || r.Allow != nil && *r.Allow
 	denied := !approved && (r.Approve != nil || r.Allow != nil)
 	switch {
 	case approved:
-		head := "批准了"
-		if label := planModes[r.Mode]; ix.Kind == proto.IxPlan && label != "" {
-			head += " · " + label
+		head := answeredT(l, "approved")
+		if mode, ok := planModes[r.Mode]; ix.Kind == proto.IxPlan && ok {
+			head += " · " + answeredT(l, mode)
 		}
 		if r.Always {
-			head += " · 以后同类不再问"
+			head = answeredT(l, "always", i18n.Args{"answer": head})
 		}
 		lines = append(lines, head)
 	case denied:
-		lines = append(lines, "拒绝了")
+		lines = append(lines, answeredT(l, "denied"))
 	default:
-		lines = append(lines, resolutionAnswer(ix, r))
+		lines = append(lines, resolutionAnswer(l, ix, r))
 	}
 	if why := strings.TrimSpace(strings.TrimSpace(r.Feedback) + "\n" + strings.TrimSpace(r.Message)); why != "" {
 		if denied {
-			lines[0] = "拒绝了："
+			lines[0] = answeredT(l, "denied_with_reason")
 			lines = append(lines, why)
 		} else {
-			lines = append(lines, "附言："+why)
+			lines = append(lines, answeredT(l, "note", i18n.Args{"note": why}))
 		}
 	}
 	if len(r.Values) > 0 {
-		lines = append(lines, fieldValues(ix, r)...)
+		lines = append(lines, fieldValues(l, ix, r)...)
 	}
 	return strings.Join(lines, "\n")
 }
 
-// planModes names how an approved plan goes on (Claude Code's permission modes).
+// planModes names how an approved plan goes on (Claude Code's permission modes): the text's name in this file's
+// namespace.
 var planModes = map[string]string{
-	"acceptEdits":       "自动接受修改",
-	"default":           "每步都问",
-	"bypassPermissions": "全部放行",
-	"plan":              "继续出方案",
+	"acceptEdits":       "mode_accept_edits",
+	"default":           "mode_default",
+	"bypassPermissions": "mode_bypass",
+	"plan":              "mode_plan",
 }
 
 // fieldValues are a card's filled-in fields, label：value, a password field only said to be filled in.
-func fieldValues(ix proto.Interaction, r proto.Resolution) []string {
+func fieldValues(l i18n.Lang, ix proto.Interaction, r proto.Resolution) []string {
 	var lines []string
 	known := map[string]bool{}
 	for _, f := range ix.Fields {
@@ -220,9 +228,9 @@ func fieldValues(ix proto.Interaction, r proto.Resolution) []string {
 			label = f.Key
 		}
 		if f.Secret || secretName.MatchString(f.Key) {
-			v = answeredSecret
+			v = answeredSecret(l)
 		}
-		lines = append(lines, label+"："+v)
+		lines = append(lines, answeredT(l, "field", i18n.Args{"label": label, "value": v}))
 	}
 	var rest []string
 	for k := range r.Values {
@@ -232,7 +240,7 @@ func fieldValues(ix proto.Interaction, r proto.Resolution) []string {
 	}
 	sort.Strings(rest)
 	for _, k := range rest { // a field the card does not describe: kept only by name
-		lines = append(lines, k+"："+answeredSecret)
+		lines = append(lines, answeredT(l, "field", i18n.Args{"label": k, "value": answeredSecret(l)}))
 	}
 	return lines
 }
@@ -264,25 +272,25 @@ func toolDisplayName(name string) string {
 }
 
 // permissionQuestion is what a permission card asked in full: the tool, what it would do, why the agent asks.
-func permissionQuestion(ix proto.Interaction) string {
+func permissionQuestion(l i18n.Lang, ix proto.Interaction) string {
 	var lines []string
 	if ix.ToolName != "" {
-		lines = append(lines, "使用 "+toolDisplayName(ix.ToolName))
+		lines = append(lines, answeredT(l, "use_tool", i18n.Args{"tool": toolDisplayName(ix.ToolName)}))
 	}
 	if s := strings.TrimSpace(ix.Summary); s != "" {
 		lines = append(lines, s)
 	}
 	if s := strings.TrimSpace(ix.Reason); s != "" {
-		lines = append(lines, "原因："+s)
+		lines = append(lines, answeredT(l, "reason", i18n.Args{"reason": s}))
 	}
 	if len(lines) == 0 {
-		return interactionQuestion(ix)
+		return interactionQuestion(l, ix)
 	}
 	return strings.Join(lines, "\n")
 }
 
 // screenQuestion is a terminal dialog's question with the lines that belong to it (the command asked about).
-func screenQuestion(ix proto.Interaction) string {
+func screenQuestion(l i18n.Lang, ix proto.Interaction) string {
 	if d := ix.Dialog; d != nil && strings.TrimSpace(d.Question) != "" {
 		var lines []string
 		for _, s := range []string{d.Warning, d.Detail, d.Question} {
@@ -295,35 +303,35 @@ func screenQuestion(ix proto.Interaction) string {
 	if s := strings.TrimSpace(ix.Summary); s != "" {
 		return s
 	}
-	return interactionQuestion(ix)
+	return interactionQuestion(l, ix)
 }
 
 // screenAnswerText is the options picked on a terminal dialog, with the text typed into one — never what was typed at a
 // password prompt, nor keys sent straight to the terminal.
-func screenAnswerText(ix proto.Interaction, r proto.Resolution) string {
+func screenAnswerText(l i18n.Lang, ix proto.Interaction, r proto.Resolution) string {
 	switch {
 	case r.Dismiss:
-		return "忽略了"
+		return answeredT(l, "dismissed")
 	case r.Option != "" || len(r.Options) > 0:
 		lines := []string{}
-		if a := pickedOptions(ix, r); a != "" {
+		if a := pickedOptions(l, ix, r); a != "" {
 			lines = append(lines, a)
 		}
 		if t := strings.TrimSpace(r.Text); t != "" && !ix.Secret {
 			lines = append(lines, t)
 		}
 		if len(lines) == 0 {
-			return "选了"
+			return answeredT(l, "picked")
 		}
 		return strings.Join(lines, "\n")
 	case ix.Secret && (r.Text != "" || len(r.Keys) > 0):
-		return "输入了密码（不保存）"
+		return answeredT(l, "typed_password")
 	}
-	return resolutionAnswer(ix, r)
+	return resolutionAnswer(l, ix, r)
 }
 
 // pickedOptions names the options a terminal dialog's answer picked, by their labels.
-func pickedOptions(ix proto.Interaction, r proto.Resolution) string {
+func pickedOptions(l i18n.Lang, ix proto.Interaction, r proto.Resolution) string {
 	keys := r.Options
 	if r.Option != "" {
 		keys = []string{r.Option}
@@ -345,10 +353,10 @@ func pickedOptions(ix proto.Interaction, r proto.Resolution) string {
 			labels = append(labels, label)
 		}
 	}
-	return strings.Join(labels, "、")
+	return strings.Join(labels, answeredT(l, "list_sep"))
 }
 
-func elicitationQuestion(ix proto.Interaction) string {
+func elicitationQuestion(l i18n.Lang, ix proto.Interaction) string {
 	if e := ix.Elicitation; e != nil {
 		var lines []string
 		for _, s := range []string{e.Message, e.URL} {
@@ -360,28 +368,28 @@ func elicitationQuestion(ix proto.Interaction) string {
 			return strings.Join(lines, "\n")
 		}
 	}
-	return interactionQuestion(ix)
+	return interactionQuestion(l, ix)
 }
 
-func elicitationAction(action string) string {
+func elicitationAction(l i18n.Lang, action string) string {
 	switch action {
 	case "accept":
-		return "提交了"
+		return answeredT(l, "submitted")
 	case "decline":
-		return "拒绝了"
+		return answeredT(l, "denied")
 	case "cancel":
-		return "取消了"
+		return answeredT(l, "cancelled")
 	}
-	return "回答了"
+	return answeredT(l, "answered")
 }
 
 // elicitationAnswer is what was submitted to an MCP server's form: its fields by their titles, a password-like one
 // only said to be filled in.
-func elicitationAnswer(ix proto.Interaction, r proto.Resolution) string {
+func elicitationAnswer(l i18n.Lang, ix proto.Interaction, r proto.Resolution) string {
 	if r.Dismiss {
-		return "忽略了"
+		return answeredT(l, "dismissed")
 	}
-	lines := []string{elicitationAction(r.Action)}
+	lines := []string{elicitationAction(l, r.Action)}
 	if r.Action != "accept" || len(r.Content) == 0 {
 		return lines[0]
 	}
@@ -417,9 +425,9 @@ func elicitationAnswer(ix proto.Interaction, r proto.Resolution) string {
 			v = string(b)
 		}
 		if p.Format == "password" || p.WriteOnly || secretName.MatchString(k) {
-			v = answeredSecret
+			v = answeredSecret(l)
 		}
-		lines = append(lines, label+"："+v)
+		lines = append(lines, answeredT(l, "field", i18n.Args{"label": label, "value": v}))
 	}
 	return strings.Join(lines, "\n")
 }

@@ -1,0 +1,7 @@
+{
+  "by_rules": "ルールによる",
+  "muted": "ミュート中：{name}",
+  "source_lark": "Lark",
+  "source_mail": "メール",
+  "mail_target_changed": "返信先のメールが変わりました。最新のメールを確認してから送信してください。"
+}

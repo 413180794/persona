@@ -1,0 +1,3 @@
+{
+  "launcher_agent": "{launcher}は{agent}を起動します。アシスタントに使えるのは、Claude Code、Codex、またはアシスタントとして動作できるランタイムを起動するランチャーだけです。"
+}

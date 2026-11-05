@@ -624,7 +624,7 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 		if t := strings.TrimSpace(e.title); t != "" {
 			it.Title = t
 		}
-		it.Summary, it.Tier, it.Reason, it.TriagedBy = "", tier, "按规则", "rules"
+		it.Summary, it.Tier, it.Reason, it.TriagedBy = "", tier, b.byRules(), "rules"
 	}
 	it.TriagedAt = it.Last
 	if e.continues != "" && e.continues != it.ID {
@@ -633,7 +633,7 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 	b.offerParent(it, thingParent(thing))
 	if m := mutedBy(b.mutes, it); m != nil && it.open() {
 		it.done(time.Now(), "read")
-		it.Reason = "已静音：" + m.Name
+		it.Reason = b.mutedReason(m.Name)
 	}
 	b.items[it.ID] = it
 	return it

@@ -6,6 +6,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // New items of a plugin's connector enter the inbox triaged (#1644): a collection keeps the items it starts aside
@@ -49,7 +51,7 @@ func (b *inboxBook) sortBatch(batch *inboxBatch, changed []*InboxItem, now time.
 	for _, it := range batch.items {
 		if m := mutedBy(b.mutes, it); m != nil {
 			it.done(now, "read")
-			it.Reason = "已静音：" + m.Name
+			it.Reason = b.mutedReason(m.Name)
 		} else if it.TriagedAt != it.Last && it.Context != "" {
 			todo = append(todo, it)
 			continue
@@ -102,7 +104,7 @@ func (s *Service) admit(ctx context.Context, batch *inboxBatch, todo []*InboxIte
 		}
 		if window.Err() != nil {
 			for j := i; j < len(todo); j++ {
-				verdicts[j] = triageVerdict{state: triageBehind, why: "这一轮没分完"}
+				verdicts[j] = triageVerdict{state: triageBehind, why: i18n.T(s.lang(ctx), "assistant-inbox_admit.behind")}
 			}
 			break
 		}
@@ -126,7 +128,7 @@ func (s *Service) admit(ctx context.Context, batch *inboxBatch, todo []*InboxIte
 		case v.state == "":
 			it.Tier, it.Summary, it.Reason = v.tier, v.summary, v.reason
 		case v.state != triageBehind && fallback != "":
-			it.Tier, it.Reason = fallback, "按规则"
+			it.Tier, it.Reason = fallback, b.byRules()
 		default:
 			src := batch.from[it.ID]
 			x := held[src]

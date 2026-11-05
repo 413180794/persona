@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -64,6 +65,7 @@ var _ Handler = (*Service)(nil)
 // New makes the assistant; nothing runs until the hub calls it.
 func New(o Options) *Service {
 	s := &Service{hub: o.Hub, store: o.Store, logf: o.Logf, mux: http.NewServeMux(), epoch: randomHex(8), tasks: newTasksState()}
+	s.inbox.lang = func() i18n.Lang { return s.lang(context.Background()) }
 	if s.store == nil {
 		s.store = func() Store { return nil }
 	}
@@ -117,6 +119,12 @@ func (s *Service) hello(ctx context.Context) Hello {
 		s.logf("assistant: hello: %v", err)
 	}
 	return h
+}
+
+// lang is the user's language (the hub's hello, docs/i18n.md「协议」): what the assistant's own texts for people are
+// written in when no request is in front of them (task notices, cards, records in a conversation).
+func (s *Service) lang(ctx context.Context) i18n.Lang {
+	return i18n.Lang(s.hello(ctx).Locale).Or(i18n.Default)
 }
 
 // call is a DeviceCall whose answer is read into out (nil: not read).

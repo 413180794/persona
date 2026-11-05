@@ -1,0 +1,20 @@
+{
+  "followup": "フォローアップ",
+  "morning": "朝のまとめ",
+  "evening": "夜の振り返り",
+  "unavailable": "定期タスクを読み込めません（データベースが応答していません）。しばらくしてからもう一度お試しください。",
+  "prompt_empty": "プロンプトを入力してください",
+  "time_format": "時刻{time}はHH:MMの形式で入力してください",
+  "daily_title": "毎日実行するタスクにはタイトルが必要です",
+  "interval_range": "間隔は{min}分から7日の間で指定してください",
+  "pick_time": "実行する時刻を選んでください",
+  "time_passed": "その時刻はすでに過ぎています。これより後の時刻を選んでください。",
+  "bad_launcher": "ランチャー名{launcher}が正しくありません",
+  "bad_permission_mode": "不明な権限モード{mode}",
+  "bad_effort": "不明な思考レベル{effort}",
+  "missed": "Personaが停止していたため、時刻を過ぎました",
+  "busy_skipped": "前回の実行がまだ続いているため、今回はスキップしました",
+  "busy_wait": "前回の実行がまだ続いています。終わってからもう一度お試しください。",
+  "run_failed": "定期タスクが失敗しました：{name}",
+  "gone": "この定期タスクはもうありません"
+}

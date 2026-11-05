@@ -3,7 +3,6 @@ package assistant
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"net/url"
 	"sort"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -82,7 +82,8 @@ const (
 
 // continueText (tasks.go) is what goes on a turn the model service cut off, as the chat's 重试 on an API error card.
 
-// Card answers the manager acts on itself instead of handing them to the agent.
+// Card answers the manager acts on itself instead of handing them to the agent: each one's default-language label,
+// which names it here. A card shows answerLabel's (the user's language); canonicalAnswer reads any language's back.
 const (
 	answerSkip    = "先不管"
 	answerRetry   = "再试一次"
@@ -92,7 +93,40 @@ const (
 	answerStop    = "不等了"
 	answerGo      = "等好了就去做"
 	answerHold    = "先别做"
+	answerNotNow  = "先不"
+	answerOK      = "好，按你说的做"
 )
+
+// answerKeys are the answers' texts in this file's namespace.
+var answerKeys = map[string]string{answerSkip: "answer_skip", answerRetry: "answer_retry", answerHandled: "answer_handled",
+	answerAuthed: "answer_authed", answerWait: "answer_wait", answerStop: "answer_stop", answerGo: "answer_go",
+	answerHold: "answer_hold", answerNotNow: "answer_not_now", answerOK: "answer_ok"}
+
+// answerLabel is answer a's label in l.
+func answerLabel(l i18n.Lang, a string) string {
+	if k, ok := answerKeys[a]; ok {
+		return workT(l, k)
+	}
+	return a
+}
+
+// canonicalAnswer is the answer a card's label a stands for, whatever language the card was shown in (a card stays
+// up across a change of language); any other text as it is.
+func canonicalAnswer(a string) string {
+	for name, k := range answerKeys {
+		for _, l := range i18n.Langs {
+			if workT(l, k) == a {
+				return name
+			}
+		}
+	}
+	return a
+}
+
+// workT is one of this file's texts in l.
+func workT(l i18n.Lang, name string, args ...i18n.Args) string {
+	return i18n.T(l, "assistant-agents_work."+name, args...)
+}
 
 // workStore is the database's session_work and session_work_events (db/session_work.go): only the manager reads and
 // writes them.
@@ -577,7 +611,7 @@ func (s *Service) triageTurn(ctx context.Context, v *workView, machine string, c
 	}()
 
 	start := time.Now()
-	w, by, skip := triageRules(c, s.location(ctx))
+	w, by, skip := triageRules(c, s.location(ctx), s.lang(ctx))
 	if skip {
 		return // the agent asks itself (or its terminal does): the list shows that
 	}
@@ -618,27 +652,28 @@ func orEmpty(sep, s string) string {
 }
 
 // triageRules settles what needs no model. skip: the agent waits for the user on its own card or dialog.
-func triageRules(c proto.Session, loc *time.Location) (w *proto.WorkState, by string, skip bool) {
+// What it says is in l (the user's language).
+func triageRules(c proto.Session, loc *time.Location, l i18n.Lang) (w *proto.WorkState, by string, skip bool) {
 	if c.PendingInteractions > 0 || c.Status == proto.StatusBlocked {
 		return nil, "", true
 	}
 	if e := c.TurnError; e != "" {
 		if turnErrorTransient(c) {
-			return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitTransient, Line: "模型服务暂时出错，自动重试",
+			return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitTransient, Line: workT(l, "transient_retrying"),
 				Wait: clip(oneLine(e), 200)}, "rule", false
 		}
-		return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, Line: clip(oneLine("模型服务出错："+e), 60),
-			Questions: []proto.Question{{Question: "模型服务出错，需要你处理：" + clip(oneLine(e), 300), Header: "模型服务",
-				Options: []proto.QuestionOption{{Label: answerHandled}, {Label: answerSkip}}}}}, "rule", false
+		return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, Line: clip(oneLine(workT(l, "model_error", i18n.Args{"error": e})), 60),
+			Questions: []proto.Question{{Question: workT(l, "model_error_ask", i18n.Args{"error": clip(oneLine(e), 300)}), Header: workT(l, "header_model"),
+				Options: []proto.QuestionOption{{Label: answerLabel(l, answerHandled)}, {Label: answerLabel(l, answerSkip)}}}}}, "rule", false
 	}
 	if n := runningInBackground(c); n > 0 {
-		return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitExternal, Line: fmt.Sprintf("后台 %d 个任务在跑，跑完会自己接着做", n)},
+		return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitExternal, Line: workT(l, "background_running", i18n.Args{"n": n})},
 			"rule", false
 	}
 	if c.Loop != nil {
-		line := "定时循环在跑"
+		line := workT(l, "loop_running")
 		if !c.Loop.NextAt.IsZero() {
-			line += "，下次 " + c.Loop.NextAt.In(loc).Format("15:04")
+			line = workT(l, "loop_running_next", i18n.Args{"time": c.Loop.NextAt.In(loc).Format("15:04")})
 		}
 		return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitExternal, Line: line}, "rule", false
 	}
@@ -710,6 +745,7 @@ func risky(texts ...string) bool {
 // the tick does, after checking again.
 func (s *Service) actOn(ctx context.Context, v *workView, machine string, c proto.Session, e *db.SessionWork) {
 	cfg, sw := s.triageCfg(ctx), s.triageSwitches(ctx)
+	l := s.lang(ctx)
 	w := &e.Work
 	now := time.Now()
 	k := [2]string{e.MachineID, e.SessionID}
@@ -719,14 +755,14 @@ func (s *Service) actOn(ctx context.Context, v *workView, machine string, c prot
 	switch w.On {
 	case proto.WaitTransient:
 		if !sw.AutoContinue {
-			w.Line = clip(oneLine("模型服务出错："+w.Wait), 60)
+			w.Line = clip(oneLine(workT(l, "model_error", i18n.Args{"error": w.Wait})), 60)
 			return
 		}
 		if e.Retries >= maxRetries(cfg) {
 			*w = proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, TurnAt: w.TurnAt, At: w.At, By: w.By,
-				Line: fmt.Sprintf("模型服务一直出错，自动重试了 %d 次", e.Retries),
-				Questions: []proto.Question{{Question: fmt.Sprintf("模型服务一直出错，已经自动重试了 %d 次：%s", e.Retries, clip(w.Wait, 300)),
-					Header: "模型服务", Options: []proto.QuestionOption{{Label: answerRetry}, {Label: answerSkip}}}}}
+				Line: workT(l, "retries_line", i18n.Args{"n": e.Retries}),
+				Questions: []proto.Question{{Question: workT(l, "retries_ask", i18n.Args{"n": e.Retries, "error": clip(w.Wait, 300)}),
+					Header: workT(l, "header_model"), Options: []proto.QuestionOption{{Label: answerLabel(l, answerRetry)}, {Label: answerLabel(l, answerSkip)}}}}}
 			break
 		}
 		at := now.Add(retryBackoff[min(e.Retries, len(retryBackoff)-1)]).UTC()
@@ -741,9 +777,9 @@ func (s *Service) actOn(ctx context.Context, v *workView, machine string, c prot
 		s.work.mu.Unlock()
 		if risky(w.Then) && (approved == "" || approved != w.Then) {
 			*w = proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, TurnAt: w.TurnAt, At: w.At, By: w.By, Wait: w.Wait, Then: w.Then,
-				Line: clip(oneLine("等「"+w.Wait+"」以后要「"+w.Then+"」，等你同意"), 60),
-				Questions: []proto.Question{{Question: "它在等「" + w.Wait + "」，等到以后要「" + w.Then + "」。要它去做吗？", Header: "要不要做",
-					Options: []proto.QuestionOption{{Label: answerGo, Description: "它会自己查，好了再做"}, {Label: answerHold}}}}}
+				Line: clip(oneLine(workT(l, "risky_line", i18n.Args{"wait": w.Wait, "then": w.Then})), 60),
+				Questions: []proto.Question{{Question: workT(l, "risky_ask", i18n.Args{"wait": w.Wait, "then": w.Then}), Header: workT(l, "header_risky"),
+					Options: []proto.QuestionOption{{Label: answerLabel(l, answerGo), Description: workT(l, "answer_go_about")}, {Label: answerLabel(l, answerHold)}}}}}
 			break
 		}
 		if !sw.Wake {
@@ -751,9 +787,9 @@ func (s *Service) actOn(ctx context.Context, v *workView, machine string, c prot
 		}
 		if e.Wakes >= maxWakes(cfg) {
 			*w = proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, TurnAt: w.TurnAt, At: w.At, By: w.By, Wait: w.Wait, Then: w.Then,
-				Line: clip(oneLine(fmt.Sprintf("等「%s」叫了 %d 次还没好", w.Wait, e.Wakes)), 60),
-				Questions: []proto.Question{{Question: fmt.Sprintf("等「%s」已经叫醒它 %d 次了还没好。", w.Wait, e.Wakes), Header: "还等吗",
-					Options: []proto.QuestionOption{{Label: answerWait}, {Label: answerStop}}}}}
+				Line: clip(oneLine(workT(l, "wakes_line", i18n.Args{"wait": w.Wait, "n": e.Wakes})), 60),
+				Questions: []proto.Question{{Question: workT(l, "wakes_ask", i18n.Args{"wait": w.Wait, "n": e.Wakes}), Header: workT(l, "header_wakes"),
+					Options: []proto.QuestionOption{{Label: answerLabel(l, answerWait)}, {Label: answerLabel(l, answerStop)}}}}}
 			break
 		}
 		at := now.Add(wakeAfter(w.Every, e.Wakes)).UTC()
@@ -765,11 +801,11 @@ func (s *Service) actOn(ctx context.Context, v *workView, machine string, c prot
 		return
 	}
 	if len(w.Questions) == 0 {
-		w.Questions = []proto.Question{{Question: w.Line, Options: []proto.QuestionOption{{Label: "好，按你说的做"}, {Label: answerSkip}}}}
+		w.Questions = []proto.Question{{Question: w.Line, Options: []proto.QuestionOption{{Label: answerLabel(l, answerOK)}, {Label: answerLabel(l, answerSkip)}}}}
 	}
 	if w.Link != nil {
-		w.Questions = append([]proto.Question{{Question: linkQuestion(w, s.location(ctx)), Header: "授权",
-			Options: []proto.QuestionOption{{Label: answerAuthed}, {Label: "先不"}}}}, w.Questions...)
+		w.Questions = append([]proto.Question{{Question: linkQuestion(w, s.location(ctx), l), Header: workT(l, "header_auth"),
+			Options: []proto.QuestionOption{{Label: answerLabel(l, answerAuthed)}, {Label: answerLabel(l, answerNotNow)}}}}, w.Questions...)
 		if len(w.Questions) > 4 {
 			w.Questions = w.Questions[:4]
 		}
@@ -792,12 +828,11 @@ func wakeAfter(checkMinutes, wakes int) time.Duration {
 	return d
 }
 
-func linkQuestion(w *proto.WorkState, loc *time.Location) string {
-	q := "请打开授权链接：" + w.Link.URL
+func linkQuestion(w *proto.WorkState, loc *time.Location, l i18n.Lang) string {
 	if w.Link.ExpiresAt != nil {
-		q += fmt.Sprintf("（%s 前有效）", w.Link.ExpiresAt.In(loc).Format("15:04"))
+		return workT(l, "auth_link_until", i18n.Args{"url": w.Link.URL, "time": w.Link.ExpiresAt.In(loc).Format("15:04")})
 	}
-	return q
+	return workT(l, "auth_link", i18n.Args{"url": w.Link.URL})
 }
 
 // workCard is the card asking w's questions about c (shown and pushed like any question, answered with
@@ -891,7 +926,7 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 			continue
 		}
 		items = append(items, item{q.Question, a})
-		only[a] = true
+		only[canonicalAnswer(a)] = true
 	}
 	s.workEvent(ix.MachineID, ix.SessionID, "answered", map[string]any{"after": after, "answers": len(items)})
 	render := func() string {
@@ -907,15 +942,17 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 	case len(items) == 0:
 		done(nil)
 		return true, nil
-	case len(only) == 1 && (only[answerSkip] || only["先不"] || only[answerStop] || only[answerHold]):
-		done(func(e *db.SessionWork) { e.Work.Line = "你说先不管" })
+	case len(only) == 1 && (only[answerSkip] || only[answerNotNow] || only[answerStop] || only[answerHold]):
+		line := workT(s.lang(ctx), "you_skipped")
+		done(func(e *db.SessionWork) { e.Work.Line = line })
 		return true, nil
 	case len(only) == 1 && only[answerWait]:
+		l := s.lang(ctx)
 		done(func(e *db.SessionWork) {
 			at := time.Now().Add(wakeAfter(e.Work.Every, 0)).UTC()
 			e.Wakes, e.WakeAt = 0, &at
 			e.Work.On, e.Work.WakeAt, e.Work.Attempts, e.Work.Questions = proto.WaitExternal, &at, 0, nil
-			e.Work.Line = clip(oneLine("等「"+e.Work.Wait+"」"), 60)
+			e.Work.Line = clip(oneLine(workT(l, "waiting_on", i18n.Args{"wait": e.Work.Wait})), 60)
 		})
 		return true, nil
 	case len(only) == 1 && (only[answerRetry] || only[answerHandled] || only[answerAuthed]):

@@ -1,0 +1,11 @@
+{
+  "title_notes": "自分について",
+  "title_main_tasks_quiet": "メインチャットのタスクはメインチャットだけで通知",
+  "title_launcher": "Personaのランチャー",
+  "none": "（なし）",
+  "on": "オン",
+  "off": "オフ",
+  "change_notes": "「自分について」を変更：{before} → {after}",
+  "change_main_tasks_quiet": "「メインチャットのタスクはメインチャットだけで通知」：{before} → {after}",
+  "change_launcher": "Personaのデフォルトランチャー：{before} → {after}"
+}

@@ -1,0 +1,3 @@
+{
+  "launcher_agent": "{launcher} 跑的是 {agent}，助手只能用启动 Claude Code、Codex 或能当助手的 runtime 的启动器"
+}

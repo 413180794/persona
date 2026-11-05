@@ -17,6 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -302,7 +303,7 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 		if d := b.opts.Devices; d != nil {
 			h = d.Handler(s) // the machines' routes that are the manager's (devices.go)
 		}
-		return serveHTTP(ctx, h, p)
+		return serveHTTP(ctx, h, p, s.lang)
 	case assistantwire.MethodTools:
 		return map[string]any{"tools": s.Tools(ctx)}, nil
 	case assistantwire.MethodTool:
@@ -399,8 +400,9 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 	return nil, &rpc.Error{Code: bus.CodeUnknownMethod, Message: "unknown method " + method}
 }
 
-// serveHTTP answers an app's request the hub relayed (http.request) with s's routes.
-func serveHTTP(ctx context.Context, s http.Handler, p assistantwire.HTTPRequest) (assistantwire.HTTPResponse, error) {
+// serveHTTP answers an app's request the hub relayed (http.request) with s's routes. An error that is an i18n.Message
+// reads in the request's language (its Accept-Language, relayed as it came), else in fallback's (the user's).
+func serveHTTP(ctx context.Context, s http.Handler, p assistantwire.HTTPRequest, fallback func(context.Context) i18n.Lang) (assistantwire.HTTPResponse, error) {
 	target := p.Path
 	if p.Query != "" {
 		target += "?" + p.Query
@@ -414,7 +416,15 @@ func serveHTTP(ctx context.Context, s http.Handler, p assistantwire.HTTPRequest)
 		r.Header = http.Header{}
 	}
 	r.ContentLength = int64(len(p.Body))
-	w := &recorder{header: http.Header{}}
+	w := &recorder{header: http.Header{}, lang: func() i18n.Lang {
+		if l := i18n.FromRequest(r); l != "" {
+			return l
+		}
+		if fallback != nil {
+			return fallback(ctx)
+		}
+		return ""
+	}}
 	s.ServeHTTP(w, r)
 	if w.status == 0 {
 		w.status = http.StatusOK
@@ -427,6 +437,15 @@ type recorder struct {
 	header http.Header
 	status int
 	body   bytes.Buffer
+	lang   func() i18n.Lang // the request's language, read only when an error is written (i18n.Carrier)
+}
+
+// Lang is the language apierr writes an i18n.Message in.
+func (w *recorder) Lang() i18n.Lang {
+	if w.lang == nil {
+		return ""
+	}
+	return w.lang()
 }
 
 func (w *recorder) Header() http.Header { return w.header }
