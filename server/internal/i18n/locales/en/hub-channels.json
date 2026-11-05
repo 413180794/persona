@@ -18,6 +18,8 @@
   "feature_sync": "Sync main chat",
   "feature_sync_description": "When a main chat turn not started from Lark ends, its answer goes to Lark",
   "feature_agents": "Drive agents",
+  "feature_reports": "Task progress to Lark",
+  "feature_reports_description": "When tasks from the main chat finish, wait for you or get cut off, a card sums them up here",
   "feature_agents_description": "/agents lists the agents on your computers; after you pick one, messages go to it",
   "voice_name": "Voice",
   "voice_description": "Talk with Persona by voice in the app; tasks go to the main chat",

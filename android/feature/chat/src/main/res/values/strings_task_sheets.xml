@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 任务详情、全部、改一下（#3034，iOS TaskSheets / PlanEditSheet） -->
+    <string name="chat_task_detail_gone">This task is gone</string>
+    <string name="chat_task_detail_gone_body">It may have been deleted.</string>
+    <string name="chat_task_detail_more">More</string>
+    <string name="chat_task_detail_close">Close</string>
+    <string name="chat_task_detail_failed">The agent didn\'t start</string>
+    <string name="chat_task_detail_remove">Remove task</string>
+    <string name="chat_task_detail_starting">Starting the agent</string>
+    <string name="chat_task_detail_starting_body">Once it\'s up, its chat shows here.</string>
+    <string name="chat_task_detail_agent">Agent</string>
+    <string name="chat_task_detail_own_agent">Agent · not opened from a chat</string>
+    <string name="chat_task_detail_agent_gone">This agent is gone</string>
+    <string name="chat_task_detail_agent_gone_body">It may have been closed.</string>
+    <string name="chat_task_detail_open_chat">Open chat</string>
+    <string name="chat_task_board_title">Tasks</string>
+    <string name="chat_task_board_empty">No tasks yet</string>
+    <string name="chat_task_board_empty_body">Say what needs doing in the chat and Persona turns it into a task.</string>
+    <string name="chat_task_board_waiting">Waiting for you</string>
+    <string name="chat_task_board_working">Working</string>
+    <string name="chat_task_board_unread">Finished</string>
+    <string name="chat_task_board_followup">Paused</string>
+    <string name="chat_task_board_done">Done</string>
+    <string name="chat_task_board_failed">Didn\'t start</string>
+    <string name="chat_plan_edit">Edit</string>
+    <string name="chat_plan_edit_title">Edit plan</string>
+    <string name="chat_plan_edit_task_n">Task %1$d</string>
+    <string name="chat_plan_edit_name">Title</string>
+    <string name="chat_plan_edit_machine">Computer</string>
+    <string name="chat_plan_edit_folder">Folder</string>
+    <string name="chat_plan_edit_model">Model (blank for default)</string>
+    <string name="chat_plan_edit_permission">Permission</string>
+    <string name="chat_plan_edit_prompt">First message</string>
+    <string name="chat_plan_edit_discard_title">Discard your changes?</string>
+    <string name="chat_plan_edit_discard_body">The plan keeps what it had.</string>
+    <string name="chat_plan_edit_discard">Discard</string>
+    <string name="chat_plan_edit_keep_editing">Keep editing</string>
+    <string name="chat_tasks_dock_all">All %1$d</string>
+</resources>

@@ -682,6 +682,7 @@ func (s *Service) InteractionAnnounced(_ context.Context, p InteractionAnnounced
 	c.mu.Unlock()
 	go s.feishuInteraction(p.Interaction)
 	go s.channelInteraction(p.Interaction)
+	go s.taskAsks(p.Interaction)
 }
 
 // InteractionEnded is interaction.ended: a card is over: the Feishu card says how, the text ask stops waiting.

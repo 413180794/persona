@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 待办对齐 iOS（#3034）：列表动态、项目、新建并挂上、来源 -->
+    <string name="agents_todo_not_handed">まだAgentに渡していません</string>
+    <string name="agents_todo_created_at">%1$sに作成</string>
+    <string name="agents_todo_spaces">プロジェクト</string>
+    <string name="agents_todo_space_no_agent">今はAgentがいません</string>
+    <string name="agents_todo_space_remove">外す</string>
+    <string name="agents_todo_source_space">プロジェクトごと</string>
+    <string name="agents_todo_source_space_named">プロジェクト %1$s ごと</string>
+    <string name="agents_todo_source_spawned_by">%1$s から派生</string>
+    <string name="agents_todo_source_spawned">派生</string>
+    <string name="agents_todo_source_chat">同じチャット</string>
+    <string name="agents_picker_new_todo">新しいToDo…</string>
+    <string name="agents_picker_new_title">新しいToDoのタイトル…</string>
+    <string name="agents_picker_create_and_link">作成して関連付け</string>
+    <string name="agents_notice_todo_create_failed">ToDoを作成できませんでした：%1$s</string>
+    <string name="agents_notice_todo_created_not_linked">ToDoは作成しましたが、関連付けに失敗しました：%1$s</string>
+    <string name="agents_notice_space_linked">プロジェクトをToDoに関連付けました</string>
+    <string name="agents_notice_space_unlinked">プロジェクトをToDoから外しました</string>
+    <string name="agents_space_todo_link">ToDoに関連付け…</string>
+    <string name="agents_space_todo_move">別のToDoに移す…</string>
+    <string name="agents_space_todo_unlink">ToDoから外す</string>
+    <string name="agents_flag_space_todo">ToDo：%1$s</string>
+</resources>

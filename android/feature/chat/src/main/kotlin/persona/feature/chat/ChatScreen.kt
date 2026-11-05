@@ -160,7 +160,7 @@ private fun ChatPage(
     var requestCollapsed by rememberSaveable { mutableStateOf(false) }
     val machine = machines.firstOrNull { it.id == key.machineId }
     var resolved by remember { mutableStateOf(emptySet<String>()) }
-    var interactionFeedback by remember { mutableStateOf<InteractionSubmission?>(null) }
+    var interactionFeedback by remember { mutableStateOf<String?>(null) }
     var uncertain by remember { mutableStateOf(emptySet<String>()) }
     var busyId by remember { mutableStateOf<String?>(null) }
     // The assistant's tasks (docs/unified-entry.md): their agents' questions are answered here too, oldest first.
@@ -478,11 +478,16 @@ private fun ChatPage(
                 ({ path -> "${key.machineId}\n$cwd\n$path" to { pixels: Int -> files.thumbnail(key.machineId, cwd, path, pixels) } })
             })
     }
+    // A task's detail or the dock's 全部, open over the conversation; kept across the host being made again.
+    val taskSheet = remember(key) { mutableStateOf<TaskSheet?>(null) }
     val taskHost = tasks?.let { store ->
         AssistantTaskHost(store, key.sessionId, sessionList, { id -> machines.firstOrNull { it.id == id }?.name?.takeIf(String::isNotBlank) ?: id },
             onOpen = { k -> chrome.onOpenSession?.invoke(k) }, onError = { notice = operationFeedback(it).message },
-            say = { text -> scope.launch { runCatching { sender.send(key, text, UUID.randomUUID().toString()) } } })
+            say = { text -> scope.launch { runCatching { sender.send(key, text, UUID.randomUUID().toString()) } } },
+            sheet = taskSheet, machines = machines)
     }
+    // Drawn whatever the composer area shows: a read-only assistant conversation's task cards open their sheet too.
+    taskHost?.let { AssistantTaskSheets(it) }
     LaunchedEffect(allMessages, submittedDraft) {
         submittedDraft?.let { (id, draft) ->
             if (allMessages.any { it.clientMessageId == id }) {
@@ -609,7 +614,7 @@ private fun ChatPage(
                                 onDetails = { statusSheet = true }, terminal = terminal, draftSaveError = statusBindings.draftSaveError)
                             AnimatedVisibility(interactionFeedback != null, exit = fadeOut()) {
                                 // Inset like the status line and the composer around it, not edge to edge.
-                                JNotice(interactionFeedback?.let { stringResource(it.notice) }.orEmpty(), Modifier.padding(horizontal = Tokens.Space.m))
+                                JNotice(interactionFeedback.orEmpty(), Modifier.padding(horizontal = Tokens.Space.m))
                             }
                             if (!readOnly) InteractionPanel(requests, machine, panelMax, busyId, uncertain, { interaction, resolution ->
                                 if (busyId == null && interaction.id !in uncertain && interaction.id !in resolved &&
@@ -618,15 +623,15 @@ private fun ChatPage(
                                     busyId = interaction.id
                                     scope.launch {
                                         try {
-                                            val result = submitInteraction { interactions.resolve(interaction.id, resolution) }
-                                            result.haptic?.let(haptics)
+                                            val result = submitInteraction { interactions.resolveOutcome(interaction.id, resolution) }
+                                            result.submission.haptic?.let(haptics)
                                             if (result.withdraw) {
                                                 resolved = resolved + interaction.id
                                                 uncertain = uncertain - interaction.id
-                                                interactionFeedback = result
+                                                interactionFeedback = result.notice(res, interaction)
                                             } else uncertain = uncertain + interaction.id
-                                            notice = if (result == InteractionSubmission.Unknown) res.getString(result.notice) else null
-                                            if (result == InteractionSubmission.PromptChanged || result == InteractionSubmission.Unknown) {
+                                            notice = if (result.submission == InteractionSubmission.Unknown) res.getString(result.submission.notice) else null
+                                            if (result.submission == InteractionSubmission.PromptChanged || result.submission == InteractionSubmission.Unknown) {
                                                 try { interactions.refresh() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
                                             }
                                         } finally { busyId = null }

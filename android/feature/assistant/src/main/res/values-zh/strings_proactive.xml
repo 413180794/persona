@@ -16,15 +16,9 @@
     <string name="assistant_proactive_edit">编辑</string>
     <string name="assistant_proactive_delete">删除</string>
     <string name="assistant_proactive_cancel">取消</string>
-    <string name="assistant_proactive_followup_due">到点：%1$s，%2$s</string>
     <string name="assistant_proactive_open_chat">打开原对话</string>
-    <string name="assistant_proactive_cancel_followup_action">取消这个跟进</string>
     <string name="assistant_proactive_delete_title">删除「%1$s」？</string>
     <string name="assistant_proactive_delete_body">删除后不再定时运行，已经跑过的对话还在。</string>
-    <string name="assistant_proactive_cancel_followup_title">取消这个跟进？</string>
-    <string name="assistant_proactive_cancel_followup_body">「%1$s」到点就不会再做了。</string>
-    <string name="assistant_proactive_cancel_followup_confirm">取消跟进</string>
-    <string name="assistant_proactive_keep">保留</string>
 
     <!-- Overview, follow-ups and runs -->
     <string name="assistant_proactive_loading">正在读取安排…</string>
@@ -33,12 +27,9 @@
     <string name="assistant_proactive_empty_body">点右上角的 ＋ 新建定时任务，或者在对话里对 Persona 说「每天 9 点给我早报」「一小时后提醒我」。</string>
     <string name="assistant_proactive_upcoming">接下来</string>
     <string name="assistant_proactive_routines">定时任务</string>
-    <string name="assistant_proactive_no_routines">还没有定时任务</string>
-    <string name="assistant_proactive_no_routines_body">让 Persona 每天或每周固定的时间做一件事。</string>
-    <string name="assistant_proactive_routines_note">到点 Persona 会开一段新对话做这件事，做完推送到手机。时间按助手设置里的时区。</string>
+    <string name="assistant_proactive_routines_note">到点时 Persona 按提示词去做，跑完推送到手机。时间按助手设置里的时区。</string>
     <string name="assistant_proactive_followups">已安排的跟进</string>
     <string name="assistant_proactive_no_followups">没有安排的跟进</string>
-    <string name="assistant_proactive_no_followups_body">在对话里说「一小时后提醒我」，Persona 会安排在这里。</string>
     <plurals name="assistant_proactive_all_followups">
         <item quantity="other">全部 %1$d 个跟进</item>
     </plurals>
@@ -47,7 +38,7 @@
     <string name="assistant_proactive_all_runs">全部运行记录</string>
     <string name="assistant_proactive_followups_read_failed">读不到跟进</string>
     <string name="assistant_proactive_followups_empty_body">在对话里说「一小时后提醒我……」「明早会前帮我准备」，Persona 会安排在这里。</string>
-    <string name="assistant_proactive_followups_page_note">到点 Persona 自己回来接着做。点 ⋯ 可以立即运行或取消；接着原来对话的，点一下打开那段对话。</string>
+    <string name="assistant_proactive_followups_page_note">到点 Persona 自己回来接着做。点一下可以修改，点 ⋯ 可以立即运行或删除。</string>
     <string name="assistant_proactive_unknown_time">时间不详</string>
     <string name="assistant_proactive_routine_runs">%1$s的运行记录</string>
     <string name="assistant_proactive_runs">运行记录</string>
@@ -85,10 +76,10 @@
     <string name="assistant_proactive_rule_note">%1$s，按助手设置里的时区。</string>
     <string name="assistant_proactive_what">要 Persona 做什么</string>
     <string name="assistant_proactive_prompt_placeholder">像在对话里一样写：看哪些数据、怎么汇报。</string>
-    <string name="assistant_proactive_prompt_note">到点 Persona 开一段新对话照着做，做完推送到手机。它还可以再安排一次性的跟进，比如会前 10 分钟提醒你。</string>
+    <string name="assistant_proactive_prompt_note">像在对话里一样写：看哪些数据、怎么汇报。它可以再安排一次性的跟进，比如会前 10 分钟。</string>
     <string name="assistant_proactive_run">运行</string>
-    <string name="assistant_proactive_run_now_dirty">先保存修改，再开一段新对话</string>
-    <string name="assistant_proactive_run_now_body">开一段新对话，跑完在 Persona 里看结果</string>
+    <string name="assistant_proactive_run_now_dirty">先保存修改，再运行一次</string>
+    <string name="assistant_proactive_run_now_body">不改它的时间，跑完在对话里看结果</string>
     <string name="assistant_proactive_last_result">查看上次结果</string>
     <string name="assistant_proactive_last_run_title">上次运行</string>
     <string name="assistant_proactive_history">历史记录</string>
@@ -177,9 +168,6 @@
     <string name="assistant_proactive_continues">接着原来的对话</string>
     <string name="assistant_proactive_starts_new">开一段新对话</string>
     <string name="assistant_proactive_continues_on">在 %1$s 上接着原来的对话</string>
-    <string name="assistant_proactive_starts_new_on">在 %1$s 上开一段新对话</string>
-    <string name="assistant_proactive_followup_continues">跟进，接着原来的对话</string>
-    <string name="assistant_proactive_followup_starts_new">跟进，开一段新对话</string>
     <string name="assistant_proactive_summary_nothing">还没有安排，Persona 只在你开口时做事。</string>
     <plurals name="assistant_proactive_summary_on_next">
         <item quantity="other">%1$d 个定时任务开着，下一件在%2$s。</item>
@@ -192,8 +180,6 @@
     <string name="assistant_proactive_not_saved">没保存上：%1$s</string>
     <string name="assistant_proactive_not_deleted">没删掉：%1$s</string>
     <string name="assistant_proactive_run_failed">没跑起来：%1$s</string>
-    <string name="assistant_proactive_followup_start_failed">没能开始这个跟进：%1$s</string>
-    <string name="assistant_proactive_followup_cancel_failed">没能取消这个跟进：%1$s</string>
     <string name="assistant_proactive_template_meeting_prep_prompt">看看今天飞书日历和手机日历里的会。对每个需要准备的会，用 schedule_followup 在会前 10 分钟安排一次会前准备：相关文档、上次的会议纪要、还没定的事、我该说的要点。今天没有要准备的会就简单说一声。</string>
     <string name="assistant_proactive_template_weekly_report_prompt">帮我起草这周的周报：从飞书日历、会议纪要、文档和消息里整理这周做了什么、进展和结果、遇到的问题、下周计划；各台电脑上的 Agent 这周完成的主要改动也算进去。先给我草稿，问我要不要改，不要直接发出去。</string>
     <string name="assistant_proactive_template_end_of_day_prompt">下班前盘点：今天还有哪些消息没回、答应别人的事还没做、各台电脑上还在跑或在等我的 Agent，明天上午有哪些会要准备。按紧急程度列出来，最后问我哪些要设提醒。</string>

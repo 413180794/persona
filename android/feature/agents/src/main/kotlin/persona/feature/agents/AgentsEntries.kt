@@ -30,6 +30,7 @@ import persona.core.navigation.Navigator
 import persona.core.navigation.NewAgentRoute
 import persona.core.navigation.TodoDetailRoute
 import persona.core.navigation.TodosRoute
+import persona.core.navigation.NewTodoRoute
 import persona.core.domain.answer.requestSourceLabel
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -129,7 +130,8 @@ fun EntryProviderScope<NavKey>.agentsEntries(
     }
     entry<ConnectionSettingsRoute> { connectionSettingsContent() }
     entry<NewAgentRoute> { NewAgentDestination(it, navigator, dependenciesOverride) }
-    entry<TodosRoute> {
+    // 新建待办 from the launcher shortcut is the same page with its sheet open.
+    val todosPage: @Composable (Boolean) -> Unit = { creating ->
         val context = LocalContext.current.applicationContext
         val dependencies = remember(context, dependenciesOverride) {
             dependenciesOverride ?: EntryPointAccessors.fromApplication(context, AgentsDependencies::class.java)
@@ -143,9 +145,12 @@ fun EntryProviderScope<NavKey>.agentsEntries(
             sessions = sessions,
             tasks = tasksStore,
             onBack = { navigator.back() },
-            onOpenTodo = { todoId -> navigator.navigate(TodoDetailRoute(todoId)) }
+            onOpenTodo = { todoId -> navigator.navigate(TodoDetailRoute(todoId)) },
+            startCreating = creating,
         )
     }
+    entry<TodosRoute> { todosPage(false) }
+    entry<NewTodoRoute> { todosPage(true) }
     entry<TodoDetailRoute> { route ->
         val context = LocalContext.current.applicationContext
         val dependencies = remember(context, dependenciesOverride) {

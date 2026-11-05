@@ -265,19 +265,22 @@ fun buildAgentList(
                 }
             }
             val unlinked = live.filter { it.session.key !in claimed }
-            if (unlinked.isNotEmpty()) {
-                val rows = ordered(unlinked)
-                val folded = "todo/none" in settings.folded
-                val visible = if (folded) emptyList() else rows
-                val stateCounts = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
+            fun section(id: String, title: CoreText, rows: List<AgentSession>, folded: Boolean) {
                 result += AgentListGroup(
-                    id = "todo/none",
-                    title = CoreText.of(Key.AgentsNoTodo),
-                    rows = rows,
-                    visibleRows = visible,
-                    folded = folded,
-                    stateCounts = stateCounts
+                    id = id, title = title, rows = rows, visibleRows = if (folded) emptyList() else rows, folded = folded,
+                    stateCounts = AgentState.entries.associateWith { state -> rows.count { it.state == state } },
                 )
+            }
+            // Opened by hand in herdr and on no to-do: a section of its own before 没有待办, open (web todos.ts, #2608).
+            val manual = unlinked.filter { it.session.isManualHerdr }
+            if (manual.isNotEmpty()) section(TodoManualGroup, CoreText.of(Key.AgentsManual), ordered(manual), TodoManualGroup in settings.folded)
+            val rest = unlinked.filterNot { it.session.isManualHerdr }
+            if (rest.isNotEmpty()) {
+                // Folded under the to-dos unless something in it needs you; with no to-do above it is the whole list, so open.
+                // The user's own fold wins either way ([TodoNoneOpened] once they opened it).
+                val byDefault = result.any { it.id.startsWith("todo/") && it.id != TodoManualGroup } && rest.none { it.state == AgentState.NeedsYou }
+                val folded = TodoNoneGroup in settings.folded || (byDefault && TodoNoneOpened !in settings.expandedIdle)
+                section(TodoNoneGroup, CoreText.of(Key.AgentsNoTodo), ordered(rest), folded)
             }
         }
         AgentGrouping.Machine -> (if (latest) machines.sortedByDescending { m ->
@@ -329,3 +332,12 @@ fun buildAgentList(
 
 /** A repository's or working tree's heading: its name, 「其他」 for sessions without a cwd ([UnnamedRepo]). */
 private fun repoTitle(name: String): CoreText = if (name == UnnamedRepo) CoreText.of(Key.RepoOther) else CoreText.plain(name)
+
+/** 按待办's sections that are not a to-do: agents opened by hand, then those on none. */
+const val TodoManualGroup = "todo/manual"
+const val TodoNoneGroup = "todo/none"
+/** In `expandedIdle` once the user opened 没有待办, which is folded by default under to-dos. */
+const val TodoNoneOpened = "todo-none"
+
+/** Opened by hand in herdr: not started by Persona (nor spawned through it), web `isManualHerdr`. */
+val persona.core.contracts.Session.isManualHerdr: Boolean get() = spaceKind == "herdr" && !startedByPersona

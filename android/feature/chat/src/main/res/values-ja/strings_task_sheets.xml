@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 任务详情、全部、改一下（#3034，iOS TaskSheets / PlanEditSheet） -->
+    <string name="chat_task_detail_gone">このタスクはもうありません</string>
+    <string name="chat_task_detail_gone_body">削除された可能性があります。</string>
+    <string name="chat_task_detail_more">その他</string>
+    <string name="chat_task_detail_close">閉じる</string>
+    <string name="chat_task_detail_failed">Agentを起動できませんでした</string>
+    <string name="chat_task_detail_remove">タスクを削除</string>
+    <string name="chat_task_detail_starting">Agentを起動中</string>
+    <string name="chat_task_detail_starting_body">起動するとここにそのチャットが表示されます。</string>
+    <string name="chat_task_detail_agent">Agent</string>
+    <string name="chat_task_detail_own_agent">Agent・チャットから開いたものではありません</string>
+    <string name="chat_task_detail_agent_gone">このAgentはもうありません</string>
+    <string name="chat_task_detail_agent_gone_body">閉じられた可能性があります。</string>
+    <string name="chat_task_detail_open_chat">チャットを開く</string>
+    <string name="chat_task_board_title">タスク</string>
+    <string name="chat_task_board_empty">タスクはまだありません</string>
+    <string name="chat_task_board_empty_body">やることをチャットで伝えると、Personaがタスクにします。</string>
+    <string name="chat_task_board_waiting">あなた待ち</string>
+    <string name="chat_task_board_working">作業中</string>
+    <string name="chat_task_board_unread">完了（未確認）</string>
+    <string name="chat_task_board_followup">停止中</string>
+    <string name="chat_task_board_done">完了</string>
+    <string name="chat_task_board_failed">起動できず</string>
+    <string name="chat_plan_edit">編集</string>
+    <string name="chat_plan_edit_title">プランを編集</string>
+    <string name="chat_plan_edit_task_n">タスク %1$d</string>
+    <string name="chat_plan_edit_name">タイトル</string>
+    <string name="chat_plan_edit_machine">コンピューター</string>
+    <string name="chat_plan_edit_folder">フォルダ</string>
+    <string name="chat_plan_edit_model">モデル（空欄で既定）</string>
+    <string name="chat_plan_edit_permission">権限</string>
+    <string name="chat_plan_edit_prompt">最初のメッセージ</string>
+    <string name="chat_plan_edit_discard_title">変更を破棄しますか？</string>
+    <string name="chat_plan_edit_discard_body">プランは元のままになります。</string>
+    <string name="chat_plan_edit_discard">破棄</string>
+    <string name="chat_plan_edit_keep_editing">編集を続ける</string>
+    <string name="chat_tasks_dock_all">すべて %1$d</string>
+</resources>

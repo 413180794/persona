@@ -51,6 +51,8 @@ internal fun AssistantSettingsScreen(
     inPlace: Boolean = false,
     /** Opens an assistant conversation (one a run of 主动做事 started, or a follow-up continues). */
     onOpenConversation: (SessionKey) -> Unit = {},
+    /** Opens 设置 › 模型 for a purpose (a task's model); null leaves those rows out. */
+    onModelConfiguration: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val moved by rememberUpdatedState(onMoved)
@@ -130,7 +132,7 @@ internal fun AssistantSettingsScreen(
             onRefresh = { scope.launch { controller.loadSkills() } })
         // Keeps its own sub-pages and back; back on its first page returns here (the handler above).
         SettingsPart.Proactive -> AssistantProactiveScreen(onBack = { part = SettingsPart.Home }, onOpenConversation = onOpenConversation,
-            management = management, machines = machines)
+            onModelConfiguration = onModelConfiguration, management = management, machines = machines)
     }
     when (sheet) {
         SettingsSheet.Machine -> MachineSheet(machines, state.config?.machineId, onDismiss = { sheet = null }) {

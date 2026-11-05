@@ -105,6 +105,7 @@ func (s *Service) takeSnapshot(done chan struct{}) {
 	web := s.webBase(ctx) // the agents' and tasks' links (#2194)
 	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Working, snap.Workflows = s.snapshotAgents(ctx, devices, web)
 	snap.Tasks = s.snapshotTasks(ctx, web)
+	snap.Unaccepted, snap.UnacceptedTotal = s.snapshotUnaccepted(ctx, loc)
 	if e, err := s.kbGet(ctx); err == nil {
 		snap.KB = e.Prompt(6, 8)
 	}

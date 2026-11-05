@@ -1,0 +1,116 @@
+package persona.feature.agents
+
+import android.graphics.Bitmap
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import persona.core.contracts.Machine
+import persona.core.contracts.Session
+import persona.core.contracts.Todo
+import persona.core.contracts.TodoAgent
+import persona.core.contracts.TodoSpace
+import persona.core.designsystem.AppStyle
+import persona.core.designsystem.PersonaTheme
+import java.io.File
+import java.time.Instant
+
+/**
+ * 待办 as iOS shows it (#3034): the list's line under each open to-do (red while an agent waits, the notes, 还没交给 Agent),
+ * finished ones with the auto-done reason, the empty list's 新建待办, the detail's 「N 个 Agent · X 创建」, projects and
+ * where each agent came from, and 新建待办… / 创建并挂上 when picking a to-do. Every style, light and dark.
+ */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], qualifiers = "zh-w400dp-h1400dp-xhdpi")
+class TodosParityShotsTest {
+    @get:Rule val rule = createComposeRule()
+
+    private fun out(): File = File(System.getProperty("persona.shots") ?: "build/i18n-shots").also { it.mkdirs() }
+
+    private val now = Instant.parse("2026-11-05T09:30:00Z")
+    private fun ago(minutes: Long) = now.minusSeconds(minutes * 60).toString()
+    private val machines = listOf(Machine("mac", "工作笔记本", online = true), Machine("box", "构建服务器", online = true))
+    private val sessions = listOf(
+        Session("mac", "s1", title = "修登录页", cwd = "/code/app", state = "needs_you", spaceId = "w1", spaceName = "app", slotName = "1",
+            lastText = "要跑一下测试吗？", updatedAt = ago(2)),
+        Session("mac", "s2", title = "补测试", cwd = "/code/app", state = "working", spaceId = "w1", spaceName = "app", slotName = "2",
+            lastText = "在写 AuthService 的测试", updatedAt = ago(1)),
+    )
+    private val todos = listOf(
+        Todo("t1", title = "发登录修复", notes = "先跑测试再提 PR。", createdAt = ago(90), updatedAt = ago(3),
+            spaces = listOf(TodoSpace("mac", "app"), TodoSpace("box", "ci")),
+            agents = listOf(TodoAgent("mac", "s1", title = "修登录页", cwd = "/code/app"),
+                TodoAgent("mac", "s2", title = "补测试", cwd = "/code/app", source = "spawned", via = "mac/s1"))),
+        Todo("t2", title = "写发布说明", notes = "这周合并的 PR 都要提到", createdAt = ago(300), spaces = emptyList()),
+        Todo("t3", title = "轮换 API Key", createdAt = ago(400), spaces = emptyList()),
+        Todo("t4", title = "整理崩溃报告", createdAt = ago(600), doneAt = ago(120), doneBy = "auto", doneReason = "Agent 已经把报告整理好并发到群里",
+            spaces = emptyList()),
+    )
+
+    private fun shot(scene: String, style: AppStyle, dark: Boolean, expected: String) {
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
+                Box(Modifier.testTag("shot").width(400.dp).height(1400.dp).background(PersonaTheme.palette.background)) {
+                    when (scene) {
+                        "list" -> TodosScreen(todos, sessions, null, onBack = {}, onOpenTodo = {}, now = now)
+                        "empty" -> TodosScreen(emptyList(), emptyList(), null, onBack = {}, onOpenTodo = {}, now = now)
+                        "detail" -> TodoDetailScreen("t1", todos, machines, sessions, null, onBack = {}, onOpenSession = {}, onHandOff = {}, now = now)
+                        "picker" -> TodoPickerSheet(todos, { k -> sessions.firstOrNull { it.key == k } }, onDismiss = {}, onPick = {},
+                            onCreate = {}, unlink = "移出待办" to {})
+                    }
+                }
+            }
+        }
+        rule.waitForIdle()
+        if (scene == "list") { rule.onNodeWithText("已完成").performClick(); rule.waitForIdle() }
+        if (scene == "picker") { rule.onNodeWithText("新建待办…").performClick(); rule.waitForIdle() }
+        assertTrue("$scene: no 「$expected」", rule.onAllNodesWithText(expected, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+        val node = if (scene == "picker") rule.onNode(isDialog()) else rule.onNodeWithTag("shot")
+        val bitmap = node.captureToImage().asAndroidBitmap()
+        File(out(), "todos-$scene-${style.name.lowercase()}-${if (dark) "dark" else "light"}.png").outputStream()
+            .use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test fun listGlass() = shot("list", AppStyle.Glass, false, "还没交给 Agent")
+    @Test fun listGlassDark() = shot("list", AppStyle.Glass, true, "还没交给 Agent")
+    @Test fun listBrief() = shot("list", AppStyle.Brief, false, "还没交给 Agent")
+    @Test fun listBriefDark() = shot("list", AppStyle.Brief, true, "还没交给 Agent")
+    @Test fun listBoard() = shot("list", AppStyle.Board, false, "还没交给 Agent")
+    @Test fun listBoardDark() = shot("list", AppStyle.Board, true, "还没交给 Agent")
+
+    @Test fun emptyGlass() = shot("empty", AppStyle.Glass, false, "新建待办")
+    @Test fun emptyGlassDark() = shot("empty", AppStyle.Glass, true, "新建待办")
+    @Test fun emptyBrief() = shot("empty", AppStyle.Brief, false, "新建待办")
+    @Test fun emptyBoard() = shot("empty", AppStyle.Board, false, "新建待办")
+
+    @Test fun detailGlass() = shot("detail", AppStyle.Glass, false, "由 修登录页 派出")
+    @Test fun detailGlassDark() = shot("detail", AppStyle.Glass, true, "由 修登录页 派出")
+    @Test fun detailBrief() = shot("detail", AppStyle.Brief, false, "由 修登录页 派出")
+    @Test fun detailBriefDark() = shot("detail", AppStyle.Brief, true, "由 修登录页 派出")
+    @Test fun detailBoard() = shot("detail", AppStyle.Board, false, "由 修登录页 派出")
+    @Test fun detailBoardDark() = shot("detail", AppStyle.Board, true, "由 修登录页 派出")
+
+    @Test fun pickerGlass() = shot("picker", AppStyle.Glass, false, "创建并挂上")
+    @Test fun pickerGlassDark() = shot("picker", AppStyle.Glass, true, "创建并挂上")
+    @Test fun pickerBrief() = shot("picker", AppStyle.Brief, false, "创建并挂上")
+    @Test fun pickerBoard() = shot("picker", AppStyle.Board, false, "创建并挂上")
+}

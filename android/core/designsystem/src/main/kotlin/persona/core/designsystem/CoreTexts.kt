@@ -121,6 +121,7 @@ private fun resourceOf(key: CoreText.Key): Int = when (key) {
     CoreText.Key.StateMuted -> R.string.designsystem_core_state_muted
     CoreText.Key.StateIdle -> R.string.designsystem_core_state_idle
     CoreText.Key.AgentsNoTodo -> R.string.designsystem_core_agents_no_todo
+    CoreText.Key.AgentsManual -> R.string.designsystem_core_agents_manual
     CoreText.Key.AgentsQuietSpaces -> R.string.designsystem_core_agents_quiet_spaces
     CoreText.Key.CountNeedsYou -> -R.plurals.designsystem_core_count_needs_you
     CoreText.Key.CountWorking -> -R.plurals.designsystem_core_count_working
@@ -253,6 +254,9 @@ private fun resourceOf(key: CoreText.Key): Int = when (key) {
     CoreText.Key.ChannelsUnsupported -> R.string.designsystem_core_channels_unsupported
     CoreText.Key.ChannelNotFound -> R.string.designsystem_core_channel_not_found
     CoreText.Key.InteractionGone -> R.string.designsystem_core_interaction_gone
+    CoreText.Key.InteractionExpired -> R.string.designsystem_core_interaction_expired
+    CoreText.Key.InteractionCancelled -> R.string.designsystem_core_interaction_cancelled
+    CoreText.Key.InteractionDismissed -> R.string.designsystem_core_interaction_dismissed
     CoreText.Key.PersonaPacksUnsupported -> R.string.designsystem_core_persona_packs_unsupported
     CoreText.Key.ModelConfigurationUnsupported -> R.string.designsystem_core_model_configuration_unsupported
     CoreText.Key.HubUpdatesUnsupported -> R.string.designsystem_core_hub_updates_unsupported

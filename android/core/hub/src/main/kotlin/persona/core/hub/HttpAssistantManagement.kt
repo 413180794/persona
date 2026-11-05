@@ -87,26 +87,26 @@ class HttpAssistantManagement(
         if (failure.status == 409 && !code.isNullOrBlank()) throw AssistantRefused(code, failure.message)
         throw failure
     }
-    override suspend fun routines(): List<Routine> = assistant("GET", "routines").list("routines")
-    override suspend fun setRoutines(list: List<Routine>): List<Routine> {
-        val editable = list.map { it.copy(createdBy = null, lastRun = null, lastSessionId = null,
-            lastStatus = null, lastError = null, nextRun = null) }
-        return assistant("PUT", "routines", body = buildJsonObject {
-            put("routines", JsonCodec.encodeToJsonElement(editable))
-        }).list("routines")
+    override suspend fun tasks(): List<ScheduledTask> = assistant("GET", "tasks").list("tasks")
+    private fun JsonObject.task(): ScheduledTask = JsonCodec.decodeFromJsonElement(getValue("task"))
+    override suspend fun saveTask(task: ScheduledTask): ScheduledTask =
+        if (task.id.isBlank()) assistant("POST", "tasks", body = task.editable()).task()
+        else assistant("PUT", "tasks", taskId(task.id), body = task.editable()).task()
+    private fun taskId(id: String): String {
+        require(id.isNotBlank() && '/' !in id && '\\' !in id && id != "." && id != "..")
+        return id
     }
+    override suspend fun deleteTask(id: String) { assistant("DELETE", "tasks", taskId(id)) }
     private fun JsonObject.session(): SessionKey {
         val machine = getValue("machine_id").jsonPrimitive.content
         val session = getValue("session_id").jsonPrimitive.content
         require(machine.isNotBlank() && session.isNotBlank())
         return SessionKey(machine, session)
     }
-    override suspend fun runRoutine(id: String) =
-        request("POST", listOf("api", "v1", "assistant", "routines", id, "run"), buildJsonObject { }, runHttp).session()
-    override suspend fun followups(): List<Followup> = assistant("GET", "followups").list("followups")
-    override suspend fun cancelFollowup(id: String) { assistant("DELETE", "followups", id) }
-    override suspend fun runFollowup(id: String) =
-        request("POST", listOf("api", "v1", "assistant", "followups", id, "run"), buildJsonObject { }, runHttp).session()
+    override suspend fun runTask(id: String) =
+        request("POST", listOf("api", "v1", "assistant", "tasks", taskId(id), "run"), buildJsonObject { }, runHttp).session()
+    override suspend fun freshTask(id: String): ScheduledTask =
+        assistant("POST", "tasks", taskId(id), "fresh", body = buildJsonObject { }).task()
     override suspend fun runs(): List<Run> = assistant("GET", "runs").list("runs")
     override suspend fun notes(): AssistantNotes = JsonCodec.decodeFromJsonElement(assistant())
     override suspend fun setNotes(text: String) { assistant("PUT", body = buildJsonObject { put("notes", text) }) }

@@ -141,6 +141,32 @@ class TodoDataTest {
     }
 
     @Test
+    fun agentsOpenedByHandHaveTheirOwnSectionAndNoTodoFoldsUnderTodos() {
+        val todo = Todo(id = "t1", title = "Todo 1", agents = listOf(todoAgent("a1")))
+        val onTodo = AgentSession(s("a1", "working", todoId = "t1"))
+        val manual = AgentSession(s("manual", "idle").copy(spaceKind = "herdr"))
+        val started = AgentSession(s("started", "idle").copy(spaceKind = "herdr", startedByPersona = true))
+        val elsewhere = AgentSession(s("orca", "unread"))
+        fun groups(settings: AgentListSettings = AgentListSettings(grouping = AgentGrouping.Todo), sessions: List<AgentSession> = listOf(onTodo, manual, started, elsewhere)) =
+            buildAgentList(sessions = sessions, pins = AgentPreferences(), mutes = AgentPreferences(), settings = settings, todos = listOf(todo)).groups
+        val list = groups()
+        assertEquals(listOf("todo/t1", TodoManualGroup, TodoNoneGroup), list.map { it.id })
+        assertEquals(listOf("manual"), list[1].rows.map { it.session.sessionId })
+        assertFalse(list[1].folded)
+        // 没有待办 is folded under to-dos while nothing in it needs you…
+        assertEquals(true, list[2].folded)
+        assertEquals(listOf("orca", "started"), list[2].rows.map { it.session.sessionId })
+        // …open once the user opened it, or when something in it waits, or with no to-do above it.
+        assertFalse(groups(AgentListSettings(grouping = AgentGrouping.Todo, expandedIdle = setOf(TodoNoneOpened)))[2].folded)
+        assertFalse(groups(sessions = listOf(onTodo, AgentSession(s("waits", "needs_you"))))[1].folded)
+        assertFalse(groups(sessions = listOf(elsewhere)).single().folded)
+        // 手动开的 is not a to-do: with only it above, 没有待办 stays open (web: groups with a todoId).
+        val manualOnly = groups(sessions = listOf(manual, elsewhere))
+        assertEquals(listOf(TodoManualGroup, TodoNoneGroup), manualOnly.map { it.id })
+        assertFalse(manualOnly[1].folded)
+    }
+
+    @Test
     fun todoJsonDecodeFromHubResponse() {
         val createOrPatchResp = """
             {

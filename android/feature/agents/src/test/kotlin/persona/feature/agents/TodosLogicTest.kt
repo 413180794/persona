@@ -76,4 +76,20 @@ class TodosLogicTest {
         val promptEmptyInstruction = todoHandOffPrompt("优化冷启动", "说明内容", "   ")
         assertEquals(xml, promptEmptyInstruction)
     }
+
+    @Test
+    fun mostUrgentSummaryFollowsIosOrder() {
+        val agent = TodoAgent("mac", "s1")
+        fun summary(session: Session?, failed: Boolean = false, error: String? = null, title: String? = null) =
+            mostUrgentSummary(TodoMostUrgent(agent.copy(startError = error, title = title), session, AgentState.Working, failed))
+        assertNull(mostUrgentSummary(null))
+        assertEquals(TodoUrgentSummary.StartFailed("no claude"), summary(null, failed = true, error = " no claude "))
+        // A failed start with no error falls through, to nothing at all: the notes show instead.
+        assertNull(summary(null, failed = true, error = ""))
+        assertEquals(TodoUrgentSummary.Words("Fix the build now"), summary(session("mac", "s1", "working", lastText = "## Fix **the** `build` [now](https://example.com)")))
+        val quiet = Session(machineId = "mac", sessionId = "s1", state = "working", title = "修登录页", lastText = "  ")
+        assertEquals(TodoUrgentSummary.Words(quiet.displayTitle), summary(quiet, title = "agent title"))
+        assertEquals(TodoUrgentSummary.Words("agent title"), summary(null, title = "agent title"))
+        assertNull(summary(null, title = " "))
+    }
 }

@@ -8,6 +8,7 @@ import persona.core.contracts.SessionKey
 import persona.core.domain.fleet.FleetSummary
 import persona.core.navigation.AppTab
 import persona.core.navigation.AskPersonaLink
+import persona.core.navigation.NewTodoLink
 import persona.core.navigation.NotificationRoute
 
 /**
@@ -30,6 +31,9 @@ internal object SurfaceLinks {
 
     /** The Persona tab with the cursor in its composer (「问 Persona」). */
     fun ask(context: Context): Intent = view(context, Uri.parse(AskPersonaLink))
+
+    /** Agents › 待办 with 新建待办 open (「新建待办」). */
+    fun newTodo(context: Context): Intent = view(context, Uri.parse(NewTodoLink))
 
     /** The app as the launcher opens it (the pairing page when not paired). */
     fun app(context: Context): Intent = context.packageManager.getLaunchIntentForPackage(context.packageName)

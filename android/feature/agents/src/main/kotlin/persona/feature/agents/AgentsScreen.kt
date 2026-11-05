@@ -60,6 +60,8 @@ internal fun AgentsScreen(
     val operations by model.operationState.collectAsStateWithLifecycle()
     var operationDialog by remember { mutableStateOf<AgentOperationDialog?>(null) }
     var pickingTodoForSession by remember { mutableStateOf<Session?>(null) }
+    /** A project being put on a to-do (挂到待办…): its machine and its name as the hub keys it. */
+    var pickingTodoForSpace by remember { mutableStateOf<Pair<String, String>?>(null) }
     val todos by (model.tasks?.todos ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val feedback = persona.core.designsystem.LocalAppFeedback.current
@@ -152,11 +154,18 @@ internal fun AgentsScreen(
     val spaceMenu: @Composable (AgentSpace, Boolean) -> Unit = { space, inList ->
         val session = space.members.first().session
         val unread = space.members.filter { it.state == AgentState.Unread }
+        // A whole project on a to-do (#1616, iOS SpaceTodoMenu): only a herdr space the hub can name, on a hub that knows projects.
+        val todoSpace = session.todoSpaceName?.takeIf { model.tasks?.spacesSupported == true }
+        val linked = todoSpace?.let { todos.forSpace(session.machineId, it) }
         AgentSpaceMenu(session, space.preferenceKey in page.preferences.pins.spaces, space.preferenceKey in page.preferences.mutes.spaces,
             operations.busy, onPin = { model.spacePin(session) }, onMute = { model.spaceMute(session) },
             onRename = { operationDialog = AgentOperationDialog.RenameSpace(session) },
             onMarkRead = unread.takeIf { it.isNotEmpty() }?.let { rows -> { model.markRead(rows) } },
-            onOpen = if (inList) ({ navigator.navigate(SpaceRoute(space.id, space.name)) }) else null, compact = inList)
+            onOpen = if (inList) ({ navigator.navigate(SpaceRoute(space.id, space.name)) }) else null, compact = inList,
+            todo = todoSpace?.let { name ->
+                SpaceTodoActions(linked != null, onLink = { pickingTodoForSpace = session.machineId to name },
+                    onUnlink = linked?.let { todo -> { model.unlinkSpace(todo.id, session.machineId, name) } })
+            })
     }
     // 按机器 shows a herdr tab's agents as a group (#2320), as the web's sidebar; the other groupings list one agent a row
     val tabs = page.preferences.grouping == AgentGrouping.MachineSpace
@@ -319,9 +328,12 @@ internal fun AgentsScreen(
                             flags = buildList {
                                 if (space != null && space.preferenceKey in page.preferences.pins.spaces) add(RowFlag(stringResource(R.string.agents_flag_space_pinned), PhIcons.PushPin))
                                 if (space != null && space.preferenceKey in page.preferences.mutes.spaces) add(RowFlag(stringResource(R.string.agents_flag_space_muted), PhIcons.Prohibit))
+                                // iOS TodoSpaceTag: the project is on a to-do.
+                                space?.members?.first()?.session?.let { s -> s.todoSpaceName?.let { name -> todos.forSpace(s.machineId, name) } }
+                                    ?.let { todo -> add(RowFlag(stringResource(R.string.agents_flag_space_todo, todo.title), PhIcons.ListChecks)) }
                             }, menu = space?.let { { spaceMenu(it, true) } }, icon = group.repo?.icon,
                             kind = group.repo?.kind ?: stringResource(R.string.agents_kind_space))
-                        else if (group.id.startsWith("todo/") && group.id != "todo/none") {
+                        else if (group.id.startsWith("todo/") && group.id != TodoNoneGroup && group.id != TodoManualGroup) {
                             val todoId = group.id.removePrefix("todo/")
                             AgentTreeHeader(groupTitle, group.folded, { model.fold(group) }, first = entry.first,
                                 icon = PhIcons.ListChecks, counts = group.headingCounts,
@@ -407,7 +419,35 @@ internal fun AgentsScreen(
             onPick = { todo ->
                 model.linkTodo(todo.id, targetSession)
                 pickingTodoForSession = null
-            }
+            },
+            onCreate = { title ->
+                model.createAndLinkTodo(title, targetSession)
+                pickingTodoForSession = null
+            },
+        )
+    }
+    pickingTodoForSpace?.let { (machineId, space) ->
+        val current = todos.forSpace(machineId, space)
+        TodoPickerSheet(
+            todos = todos,
+            title = stringResource(if (current != null) R.string.agents_space_todo_move else R.string.agents_space_todo_link),
+            currentTodoId = current?.id,
+            sessionLookup = { k -> page.sessions.firstOrNull { it.key == k } },
+            onDismiss = { pickingTodoForSpace = null },
+            onPick = { todo ->
+                model.linkSpace(todo.id, machineId, space)
+                pickingTodoForSpace = null
+            },
+            onCreate = { title ->
+                model.linkSpace(null, machineId, space, newTitle = title)
+                pickingTodoForSpace = null
+            },
+            unlink = current?.let { todo ->
+                stringResource(R.string.agents_space_todo_unlink) to {
+                    model.unlinkSpace(todo.id, machineId, space)
+                    pickingTodoForSpace = null
+                }
+            },
         )
     }
     if (newAgent) {

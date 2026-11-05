@@ -34,6 +34,19 @@ func (s *Service) feishuInteraction(ix proto.Interaction) {
 	if drives := s.botDrives(ctx, ix.MachineID, ix.SessionID); !drives && (!f.AllCards || s.ixInHealth(ctx, ix)) {
 		return
 	}
+	s.postInteractionCard(ctx, ix)
+}
+
+// feishuInteractionAlways posts ix's card whatever the cards switches say: a task's decision the report put on top
+// (reports.go). Answering it goes as any card's (the hub checks the owner pressed it).
+func (s *Service) feishuInteractionAlways(ix proto.Interaction) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	s.postInteractionCard(ctx, ix)
+}
+
+// postInteractionCard posts ix's card once, unless it ended meanwhile.
+func (s *Service) postInteractionCard(ctx context.Context, ix proto.Interaction) {
 	if s.interactionEnded(ix.ID) { // ended while this looked at the bot: not asked (s.chans before s.fbot, never in it)
 		return
 	}
@@ -413,6 +426,12 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 	switch a.Str("a") {
 	case "ix":
 		return s.answerFromCard(ctx, a, action)
+	case "accept":
+		// The hub checked the owner pressed it; marking a task verified approves nothing.
+		if s.accepted(ctx, a.Str("id")) {
+			return toast("success", i18n.T(l, "assistant-reports.accepted"))
+		}
+		return toast("info", i18n.T(l, "assistant-feishu_cards.already_handled"))
 	case "switch":
 		f, _ := s.feishuFeatures(ctx)
 		kind, m, sess, title := a.Str("k"), a.Str("m"), a.Str("s"), a.Str("t")

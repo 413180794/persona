@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 定时任务：一次 / 每天 / 每隔、运行方式、对话（iOS AssistantTaskEditor） -->
+    <string name="assistant_proactive_repeat_once">一次</string>
+    <string name="assistant_proactive_repeat_interval">每隔</string>
+    <plurals name="assistant_proactive_every_minutes">
+        <item quantity="other">每 %1$d 分钟</item>
+    </plurals>
+    <plurals name="assistant_proactive_every_hours">
+        <item quantity="other">每 %1$d 小时</item>
+    </plurals>
+    <string name="assistant_proactive_every_hours_minutes">每 %1$d 小时 %2$d 分钟</string>
+    <plurals name="assistant_proactive_interval_minutes">
+        <item quantity="other">%1$d 分钟</item>
+    </plurals>
+    <plurals name="assistant_proactive_interval_hours">
+        <item quantity="other">%1$d 小时</item>
+    </plurals>
+    <string name="assistant_proactive_interval_hours_minutes">%1$d 小时 %2$d 分钟</string>
+    <string name="assistant_proactive_once_note">到点运行一次，跑完就从列表里拿掉（运行记录里还在）。</string>
+    <string name="assistant_proactive_interval_note">%1$s运行一次，从保存时算起。</string>
+    <string name="assistant_proactive_pick_time">选一个还没过去的时间</string>
+    <string name="assistant_proactive_fill_in_prompt">要做的事填好才能保存</string>
+    <string name="assistant_proactive_name_optional">标题（可不填）</string>
+    <string name="assistant_proactive_runs_with">运行方式</string>
+    <string name="assistant_proactive_default_model">任务默认模型</string>
+    <string name="assistant_proactive_task_model">任务模型</string>
+    <string name="assistant_proactive_permission_mode">权限模式</string>
+    <string name="assistant_proactive_mode_default">默认</string>
+    <string name="assistant_proactive_mode_default_detail">和平时一样：改文件、跑命令前先问你</string>
+    <string name="assistant_proactive_mode_accept_edits">自动改文件</string>
+    <string name="assistant_proactive_mode_accept_edits_detail">改文件不问，跑命令还会问</string>
+    <string name="assistant_proactive_mode_plan">只做计划</string>
+    <string name="assistant_proactive_mode_plan_detail">只读代码、写计划，批准后才动手</string>
+    <string name="assistant_proactive_mode_auto">自动</string>
+    <string name="assistant_proactive_mode_auto_detail">自己判断风险，安全的直接做</string>
+    <string name="assistant_proactive_mode_bypass">全部放行</string>
+    <string name="assistant_proactive_mode_bypass_detail">什么都不问，有风险</string>
+    <string name="assistant_proactive_runs_with_note">定时任务在后台跑，要你批准时会推送到手机，没人点就一直等着。要它跑命令也不问你，可以选「自动」（自己判断风险）。</string>
+    <string name="assistant_proactive_runs_with_note_continues">接着原来的对话运行时，那段对话也会换成这里的设置。</string>
+    <string name="assistant_proactive_bypass_note">全部放行：运行时跑命令、改文件都不再问你。</string>
+    <string name="assistant_proactive_bypass_title">全部放行？</string>
+    <string name="assistant_proactive_bypass_body">这个任务运行时，跑任何命令、改任何文件、用任何工具都不再问你，也没有人能中途拦下。只给你信得过、出了错也能接受的提示词用。</string>
+    <string name="assistant_proactive_conversation">对话</string>
+    <string name="assistant_proactive_same_conversation">在同一个对话里运行</string>
+    <string name="assistant_proactive_fresh">下次开新对话</string>
+    <string name="assistant_proactive_fresh_done">下次运行会开一段新对话</string>
+    <string name="assistant_proactive_conversation_continues_note">每次运行都发进安排它的那段对话，带着那里的上下文接着做。</string>
+    <string name="assistant_proactive_conversation_own_note">每次运行都发进这个任务自己的对话，能看到前几次的结果。对话太长或想重来时，点「下次开新对话」，原来的对话还在。</string>
+    <string name="assistant_proactive_conversation_first_note">第一次运行时开一段新对话，之后每次都在这段对话里接着跑，能看到前几次的结果。</string>
+    <string name="assistant_proactive_run_now_new">先添加，再运行一次</string>
+</resources>

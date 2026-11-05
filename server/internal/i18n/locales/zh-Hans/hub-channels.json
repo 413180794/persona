@@ -18,6 +18,8 @@
   "feature_sync": "同步主对话",
   "feature_sync_description": "主对话里不是从飞书发起的一轮结束时，把回答发到飞书",
   "feature_agents": "驱动 Agent",
+  "feature_reports": "任务进展发到飞书",
+  "feature_reports_description": "主对话派出的任务做完、在等你、被打断时，几条合成一张卡片发到这里",
   "feature_agents_description": "/agents 列出各台电脑上的 Agent，选一个之后的消息发给它",
   "voice_name": "语音",
   "voice_description": "在 App 里和 Persona 语音对话；要做的事交给主对话",

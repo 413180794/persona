@@ -371,6 +371,11 @@ internal class AgentsViewModel(
                 expandedQuiet = if (group.folded) current.expandedQuiet + group.id else current.expandedQuiet - group.id,
                 folded = if (group.folded) current.folded - group.id else current.folded + group.id,
             )
+            // 没有待办 is folded by default under to-dos: opening it is remembered, folding it again forgets that.
+            else if (group.id == TodoNoneGroup) current.copy(
+                folded = current.folded - group.id + if (group.folded) emptySet() else setOf(group.id),
+                expandedIdle = if (group.folded) current.expandedIdle + TodoNoneOpened else current.expandedIdle - TodoNoneOpened,
+            )
             else current.copy(folded = if (group.folded) current.folded - group.id else current.folded + group.id)
         }
     }
@@ -402,6 +407,50 @@ internal class AgentsViewModel(
                 _notice.value = AgentText(R.string.agents_notice_todo_linked)
             } catch (e: Exception) {
                 _notice.value = AgentText(R.string.agents_notice_todo_link_failed, e.message.orEmpty())
+            }
+        }
+    }
+
+    /** 创建并挂上 (iOS TodoLinkAgentSheet): a new to-do named [title], then this agent on it. */
+    fun createAndLinkTodo(title: String, session: Session) {
+        viewModelScope.launch {
+            val store = tasks ?: return@launch
+            val todo = try { store.createTodo(title.trim()) } catch (e: Exception) {
+                _notice.value = AgentText(R.string.agents_notice_todo_create_failed, e.message.orEmpty()); return@launch
+            }
+            try {
+                store.linkTodoAgent(todo.id, session.machineId, session.sessionId)
+                _notice.value = AgentText(R.string.agents_notice_todo_linked)
+            } catch (e: Exception) {
+                _notice.value = AgentText(R.string.agents_notice_todo_created_not_linked, e.message.orEmpty())
+            }
+        }
+    }
+
+    /** 挂到待办 a whole project (#1616): its agents, now and later, are on [todoId]; null [todoId] makes one named [newTitle]. */
+    fun linkSpace(todoId: String?, machineId: String, space: String, newTitle: String? = null) {
+        viewModelScope.launch {
+            val store = tasks ?: return@launch
+            val id = todoId ?: try { store.createTodo(newTitle.orEmpty().trim()).id } catch (e: Exception) {
+                _notice.value = AgentText(R.string.agents_notice_todo_create_failed, e.message.orEmpty()); return@launch
+            }
+            try {
+                store.setTodoSpace(id, machineId, space, linked = true)
+                _notice.value = AgentText(R.string.agents_notice_space_linked)
+            } catch (e: Exception) {
+                _notice.value = AgentText(if (todoId == null) R.string.agents_notice_todo_created_not_linked else R.string.agents_notice_todo_link_failed,
+                    e.message.orEmpty())
+            }
+        }
+    }
+
+    fun unlinkSpace(todoId: String, machineId: String, space: String) {
+        viewModelScope.launch {
+            try {
+                tasks?.setTodoSpace(todoId, machineId, space, linked = false)
+                _notice.value = AgentText(R.string.agents_notice_space_unlinked)
+            } catch (e: Exception) {
+                _notice.value = AgentText(R.string.agents_notice_todo_unlink_failed, e.message.orEmpty())
             }
         }
     }

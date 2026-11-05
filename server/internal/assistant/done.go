@@ -271,6 +271,7 @@ func (s *Service) autoFinishTask(t Todo, work time.Time, worked bool) {
 		s.logf("task %s: auto done: %v", t.ID, err)
 	case ok:
 		s.logf("task %s: done (auto): %s", t.ID, reason)
+		s.taskClosedReport(t, reason)
 	default:
 		s.logf("task %s: changed while judged: left as it is", t.ID)
 	}

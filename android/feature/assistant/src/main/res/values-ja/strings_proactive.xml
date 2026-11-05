@@ -16,15 +16,9 @@
     <string name="assistant_proactive_edit">編集</string>
     <string name="assistant_proactive_delete">削除</string>
     <string name="assistant_proactive_cancel">キャンセル</string>
-    <string name="assistant_proactive_followup_due">予定：%1$s（%2$s）</string>
     <string name="assistant_proactive_open_chat">元のチャットを開く</string>
-    <string name="assistant_proactive_cancel_followup_action">このフォローアップを取り消す</string>
     <string name="assistant_proactive_delete_title">「%1$s」を削除しますか？</string>
     <string name="assistant_proactive_delete_body">削除すると定期実行されなくなります。実行済みのチャットは残ります。</string>
-    <string name="assistant_proactive_cancel_followup_title">このフォローアップを取り消しますか？</string>
-    <string name="assistant_proactive_cancel_followup_body">「%1$s」は予定の時刻になっても実行されなくなります。</string>
-    <string name="assistant_proactive_cancel_followup_confirm">取り消す</string>
-    <string name="assistant_proactive_keep">残す</string>
 
     <!-- Overview, follow-ups and runs -->
     <string name="assistant_proactive_loading">予定を読み込み中…</string>
@@ -33,12 +27,9 @@
     <string name="assistant_proactive_empty_body">右上の＋で定期タスクを作成するか、チャットでPersonaに「毎日9時に朝のまとめを送って」「1時間後に知らせて」のように伝えてください。</string>
     <string name="assistant_proactive_upcoming">この後</string>
     <string name="assistant_proactive_routines">定期タスク</string>
-    <string name="assistant_proactive_no_routines">定期タスクはまだありません</string>
-    <string name="assistant_proactive_no_routines_body">毎日や毎週の決まった時刻にPersonaに作業してもらいます。</string>
-    <string name="assistant_proactive_routines_note">時刻になるとPersonaが新しいチャットを始めて作業し、終わったらスマートフォンに通知します。時刻はアシスタント設定のタイムゾーンに従います。</string>
+    <string name="assistant_proactive_routines_note">時刻になるとPersonaがプロンプトどおりに作業し、終わったらスマートフォンに通知します。時刻はアシスタント設定のタイムゾーンに従います。</string>
     <string name="assistant_proactive_followups">予定済みのフォローアップ</string>
     <string name="assistant_proactive_no_followups">予定済みのフォローアップはありません</string>
-    <string name="assistant_proactive_no_followups_body">チャットで「1時間後に知らせて」と言うと、Personaがここに予定を入れます。</string>
     <plurals name="assistant_proactive_all_followups">
         <item quantity="other">フォローアップ%1$d件をすべて表示</item>
     </plurals>
@@ -47,7 +38,7 @@
     <string name="assistant_proactive_all_runs">すべての実行履歴</string>
     <string name="assistant_proactive_followups_read_failed">フォローアップを読み込めません</string>
     <string name="assistant_proactive_followups_empty_body">チャットで「1時間後に知らせて…」「明日の会議の前に準備を手伝って」と言うと、Personaがここに予定を入れます。</string>
-    <string name="assistant_proactive_followups_page_note">時刻になるとPersonaが戻ってきて続きを行います。⋯から今すぐ実行や取り消しができます。元のチャットを続けるものはタップするとそのチャットを開きます。</string>
+    <string name="assistant_proactive_followups_page_note">時刻になるとPersonaが戻ってきて続きを行います。タップで編集、⋯から今すぐ実行や削除ができます。</string>
     <string name="assistant_proactive_unknown_time">時刻不明</string>
     <string name="assistant_proactive_routine_runs">%1$sの実行履歴</string>
     <string name="assistant_proactive_runs">実行履歴</string>
@@ -85,10 +76,10 @@
     <string name="assistant_proactive_rule_note">%1$s。アシスタント設定のタイムゾーンに従います。</string>
     <string name="assistant_proactive_what">Personaにしてほしいこと</string>
     <string name="assistant_proactive_prompt_placeholder">チャットと同じように、見るデータや報告の仕方を書いてください。</string>
-    <string name="assistant_proactive_prompt_note">時刻になるとPersonaが新しいチャットを始めて作業し、終わったらスマートフォンに通知します。会議の10分前に知らせるなど、1回限りのフォローアップを入れることもできます。</string>
+    <string name="assistant_proactive_prompt_note">チャットと同じように書いてください：どのデータを見て、どう報告するか。会議の10分前など、1回限りのフォローアップを入れることもできます。</string>
     <string name="assistant_proactive_run">実行</string>
-    <string name="assistant_proactive_run_now_dirty">変更を保存してから新しいチャットを始めます</string>
-    <string name="assistant_proactive_run_now_body">新しいチャットを始め、結果はPersonaで確認できます</string>
+    <string name="assistant_proactive_run_now_dirty">変更を保存してから1回実行します</string>
+    <string name="assistant_proactive_run_now_body">スケジュールは変えず、結果はチャットで確認できます</string>
     <string name="assistant_proactive_last_result">前回の結果を見る</string>
     <string name="assistant_proactive_last_run_title">前回の実行</string>
     <string name="assistant_proactive_history">履歴</string>
@@ -177,9 +168,6 @@
     <string name="assistant_proactive_continues">元のチャットを続けます</string>
     <string name="assistant_proactive_starts_new">新しいチャットを始めます</string>
     <string name="assistant_proactive_continues_on">%1$sで元のチャットを続けます</string>
-    <string name="assistant_proactive_starts_new_on">%1$sで新しいチャットを始めます</string>
-    <string name="assistant_proactive_followup_continues">フォローアップ、元のチャットを続けます</string>
-    <string name="assistant_proactive_followup_starts_new">フォローアップ、新しいチャットを始めます</string>
     <string name="assistant_proactive_summary_nothing">予定はまだありません。Personaは話しかけたときだけ動きます。</string>
     <plurals name="assistant_proactive_summary_on_next">
         <item quantity="other">%1$d件の定期タスクがオンです。次は%2$sです。</item>
@@ -192,8 +180,6 @@
     <string name="assistant_proactive_not_saved">保存できませんでした：%1$s</string>
     <string name="assistant_proactive_not_deleted">削除できませんでした：%1$s</string>
     <string name="assistant_proactive_run_failed">実行できませんでした：%1$s</string>
-    <string name="assistant_proactive_followup_start_failed">このフォローアップを開始できませんでした：%1$s</string>
-    <string name="assistant_proactive_followup_cancel_failed">このフォローアップを取り消せませんでした：%1$s</string>
     <string name="assistant_proactive_template_meeting_prep_prompt">今日のLarkカレンダーとスマホのカレンダーにある会議を確認してください。準備が必要な会議ごとに、schedule_followupで会議の10分前に事前準備を入れてください：関連ドキュメント、前回の議事録、未決事項、私が話すべきポイント。準備が必要な会議がなければ、簡単にそう伝えてください。</string>
     <string name="assistant_proactive_template_weekly_report_prompt">今週の週報の下書きを作成してください：Larkカレンダー、議事録、ドキュメント、メッセージから、今週やったこと、進捗と成果、課題、来週の予定をまとめてください。各コンピューターのエージェントが今週終えた主な変更も含めてください。まず下書きを見せて、修正するか聞いてください。そのまま送信はしないでください。</string>
     <string name="assistant_proactive_template_end_of_day_prompt">終業前の棚卸し：今日まだ返信していないメッセージ、約束したのにまだやっていないこと、各コンピューターでまだ実行中か私を待っているエージェント、明日の午前に準備が必要な会議を挙げてください。緊急度順に並べ、最後にどれにリマインダーを設定するか聞いてください。</string>

@@ -66,6 +66,10 @@ type Todo struct {
 	// docs/unified-entry.md「安静的任务」): no pushes, Live Activity or task badges for its agents; the main
 	// conversation is told instead (quiet.go). Set when it is made, never changed.
 	Quiet bool `json:"quiet"`
+	// Stage is how far its work got (plan, develop, review, merge, deploy, verify; "" not known) and PRURL the PR it
+	// named, read off its agents' replies (reports.go, #2768); the apps draw the stage bar from them.
+	Stage string `json:"stage,omitempty"`
+	PRURL string `json:"pr_url,omitempty"`
 }
 
 // todoStore is what the todos keep in the database (internal/db). A Store without it (the unit tests' memStore) keeps
@@ -244,6 +248,12 @@ func (s *Service) loadTodosLocked(ctx context.Context) error {
 		})
 		if ar.ReleasedAt == nil && ar.DismissedAt == nil && t.DoneAt == nil {
 			active[[2]string{ar.MachineID, ar.SessionID}] = t.ID
+		}
+	}
+
+	for id, st := range s.todoStages(ctx) {
+		if t, ok := tmap[id]; ok {
+			t.Stage, t.PRURL = st.Stage, st.PR
 		}
 	}
 

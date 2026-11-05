@@ -58,9 +58,12 @@ type BotFeatures struct {
 	Pushes   bool `json:"pushes"`    // notify_user and scheduled tasks' results go there too
 	Sync     bool `json:"sync"`      // the main conversation's turns from elsewhere (the app, a task) are mirrored there
 	Agents   bool `json:"agents"`    // coding agents on every computer can be driven from the chat
+	// Reports: how the main conversation's tasks go (done, waiting for the user, cut off) is told in the chat, a few
+	// at a time (#2768). On by default, and for settings saved before it: they have no such key.
+	Reports bool `json:"reports"`
 }
 
-var defaultBotFeatures = BotFeatures{Main: true, Cards: true}
+var defaultBotFeatures = BotFeatures{Main: true, Cards: true, Reports: true}
 
 // BotOwner is the paired user: the only one the bot answers, and where pushes go.
 type BotOwner struct {
@@ -296,17 +299,28 @@ func (h *Hub) botRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("PUT /api/v1/bots/feishu", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Enabled   *bool        `json:"enabled"`
-			AppID     *string      `json:"app_id"`
-			AppSecret *string      `json:"app_secret"`
-			Domain    *string      `json:"domain"`
-			Features  *BotFeatures `json:"features"`
+			Enabled   *bool           `json:"enabled"`
+			AppID     *string         `json:"app_id"`
+			AppSecret *string         `json:"app_secret"`
+			Domain    *string         `json:"domain"`
+			Features  json.RawMessage `json:"features"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		if err := h.updateBot(r.Context(), in.Enabled, in.AppID, in.AppSecret, in.Domain, in.Features); err != nil {
+		var fs *BotFeatures
+		if len(in.Features) > 0 && string(in.Features) != "null" {
+			// Over the switches as they are: an app from before a switch (reports) sends the others only, and leaves
+			// that one as it was.
+			f := h.botFeatures()
+			if err := json.Unmarshal(in.Features, &f); err != nil {
+				writeErr(w, http.StatusBadRequest, err)
+				return
+			}
+			fs = &f
+		}
+		if err := h.updateBot(r.Context(), in.Enabled, in.AppID, in.AppSecret, in.Domain, fs); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}

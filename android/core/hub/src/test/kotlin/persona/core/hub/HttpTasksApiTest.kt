@@ -60,6 +60,34 @@ class HttpTasksApiTest {
         }
     }
 
+    @Test fun aProjectGoesOnAndOffATodoByItsEscapedName() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"ok":true,"linked":2}"""))
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            api(server).linkTodoSpace("todo_1", "mac", "web/app")
+            val put = server.takeRequest()
+            assertEquals("PUT", (put.method).zhAny())
+            assertEquals("/api/v1/todos/todo_1/spaces/mac/web%2Fapp", (put.path).zhAny())
+            api(server).unlinkTodoSpace("todo_1", "mac", "web/app")
+            val delete = server.takeRequest()
+            assertEquals("DELETE", (delete.method).zhAny())
+            assertEquals("/api/v1/todos/todo_1/spaces/mac/web%2Fapp", (delete.path).zhAny())
+        }
+    }
+
+    @Test fun startingAnEditedPlanSendsItsTasks() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"plan":{"id":"p","state":"started","tasks":[]}}"""))
+            server.enqueue(MockResponse().setBody("""{"plan":{"id":"p","state":"started","tasks":[]}}"""))
+            api(server).startPlan("p", false)
+            assertEquals("""{"remember":false}""", (server.takeRequest().body.readUtf8()).zhAny())
+            api(server).startPlan("p", true, listOf(persona.core.contracts.PlanTask(title = "改标题", prompt = "先看看", machine = "mac", cwd = "/w/app")))
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body, body.contains("\"tasks\":[{\"title\":\"改标题\",\"prompt\":\"先看看\",\"machine\":\"mac\",\"cwd\":\"/w/app\"}]"))
+            assertTrue(body, body.contains("\"remember\":true"))
+        }
+    }
+
     @Test fun removeDeletesTheTodo() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"ok":true}"""))

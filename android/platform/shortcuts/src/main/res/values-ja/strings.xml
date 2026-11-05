@@ -38,5 +38,7 @@
     <string name="shortcuts_widget_nobody">対応が必要なエージェントはありません</string>
     <string name="shortcuts_ask_label">Personaに質問</string>
     <string name="shortcuts_approve_label">保留中を承認</string>
+    <string name="shortcuts_new_todo_label">新しいToDo</string>
+    <string name="shortcuts_new_todo_title">PersonaでToDoを作成</string>
     <string name="shortcuts_open_session">%1$sを開く</string>
 </resources>

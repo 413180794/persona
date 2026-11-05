@@ -38,5 +38,7 @@
     <string name="shortcuts_widget_nobody">没有 Agent 需要你</string>
     <string name="shortcuts_ask_label">问 Persona</string>
     <string name="shortcuts_approve_label">批准待处理</string>
+    <string name="shortcuts_new_todo_label">新建待办</string>
+    <string name="shortcuts_new_todo_title">用 Persona 新建待办</string>
     <string name="shortcuts_open_session">打开 %1$s</string>
 </resources>

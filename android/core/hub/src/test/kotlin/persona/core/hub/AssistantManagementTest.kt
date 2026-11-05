@@ -6,7 +6,7 @@ import persona.core.contracts.api.AgentSkill
 import persona.core.contracts.api.AssistantRefused
 import persona.core.contracts.api.AssistantSkills
 import persona.core.contracts.api.NewMainResult
-import persona.core.contracts.api.Routine
+import persona.core.contracts.api.ScheduledTask
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
@@ -21,22 +21,38 @@ class AssistantManagementTest {
         MockWebServer().use { server ->
             var current = true
             val api = HttpAssistantManagement(server.url("/").toString(), "test-token", OkHttpClient()) { current }
-            server.enqueue(MockResponse().setBody("""{"routines":[{"id":"routine","time":"09:00","enabled":true,"next_run":"2026-11-02T09:00:00+08:00"}]}"""))
-            val saved = api.setRoutines(listOf(Routine(id = "routine", title = "早报", prompt = "整理安排", nextRun = "server-owned")))
+            server.enqueue(MockResponse().setBody("""{"task":{"id":"task_1","repeat":"daily","time":"09:00","enabled":true,"next_run":"2026-11-02T09:00:00+08:00"}}"""))
+            val created = api.saveTask(ScheduledTask(title = "早报", prompt = "整理安排", repeats = ScheduledTask.DAILY, time = "09:00",
+                enabled = true, nextRun = "server-owned", runSessionId = "server-owned"))
+            val post = server.takeRequest()
+            assertEquals("POST", (post.method).zhAny())
+            assertEquals("/api/v1/assistant/tasks", (post.path).zhAny())
+            assertEquals("Bearer test-token", (post.getHeader("Authorization")).zhAny())
+            val body = JsonCodec.parseToJsonElement(post.body.readUtf8()).jsonObject
+            assertEquals("09:00", (body.getValue("time").jsonPrimitive.content).zhAny())
+            assertEquals("daily", (body.getValue("repeat").jsonPrimitive.content).zhAny())
+            assertTrue(body.getValue("enabled").jsonPrimitive.boolean)
+            assertEquals(JsonArray(emptyList()), body["weekdays"])
+            assertEquals("", (body.getValue("permission_mode").jsonPrimitive.content).zhAny())
+            assertFalse(body.containsKey("id"))
+            assertFalse(body.containsKey("next_run"))
+            assertFalse(body.containsKey("run_session_id"))
+            assertFalse(body.containsKey("push"))
+            assertEquals("task_1", (created.id).zhAny())
+            assertNotNull(created.nextRun)
+
+            server.enqueue(MockResponse().setBody("""{"task":{"id":"task_1","repeat":"interval","every_minutes":30,"enabled":false}}"""))
+            api.saveTask(created.copy(repeats = ScheduledTask.INTERVAL, everyMinutes = 30, enabled = false, permissionMode = "auto"))
             val put = server.takeRequest()
             assertEquals("PUT", (put.method).zhAny())
-            assertEquals("/api/v1/assistant/routines", (put.path).zhAny())
-            assertEquals("Bearer test-token", (put.getHeader("Authorization")).zhAny())
-            val routine = JsonCodec.parseToJsonElement(put.body.readUtf8()).jsonObject.getValue("routines").jsonArray.single().jsonObject
-            assertEquals("09:00", (routine.getValue("time").jsonPrimitive.content).zhAny())
-            assertTrue(routine.getValue("enabled").jsonPrimitive.boolean)
-            assertEquals(JsonArray(emptyList()), routine["weekdays"])
-            assertFalse(routine.containsKey("next_run"))
-            assertNotNull(saved.single().nextRun)
+            assertEquals("/api/v1/assistant/tasks/task_1", (put.path).zhAny())
+            val edited = JsonCodec.parseToJsonElement(put.body.readUtf8()).jsonObject
+            assertEquals(30, edited.getValue("every_minutes").jsonPrimitive.int)
+            assertEquals("auto", (edited.getValue("permission_mode").jsonPrimitive.content).zhAny())
 
-            server.enqueue(MockResponse().setBody("{\"routines\":[]}"))
-            api.setRoutines(emptyList())
-            assertEquals("{\"routines\":[]}", (server.takeRequest().body.readUtf8()).zhAny())
+            server.enqueue(MockResponse().setBody("""{"task":{"id":"task_1","repeat":"daily"}}"""))
+            assertNull(api.freshTask("task_1").runSessionId)
+            assertEquals("/api/v1/assistant/tasks/task_1/fresh", (server.takeRequest().path).zhAny())
             server.enqueue(MockResponse().setBody("{}"))
             api.endConversation(SessionKey("demo", "branch/one"))
             val close = server.takeRequest()
@@ -44,8 +60,8 @@ class AssistantManagementTest {
             assertEquals("/api/v1/sessions/demo/branch%2Fone/close", (close.path).zhAny())
 
             server.enqueue(MockResponse().setBody("""{"machine_id":"demo","session_id":"started"}"""))
-            assertEquals(SessionKey("demo", "started"), api.runRoutine("routine"))
-            assertEquals("/api/v1/assistant/routines/routine/run", (server.takeRequest().path).zhAny())
+            assertEquals(SessionKey("demo", "started"), api.runTask("task_1"))
+            assertEquals("/api/v1/assistant/tasks/task_1/run", (server.takeRequest().path).zhAny())
             server.enqueue(MockResponse().setBody("{}"))
             api.setNotes("")
             assertEquals("{\"notes\":\"\"}", (server.takeRequest().body.readUtf8()).zhAny())
@@ -58,7 +74,7 @@ class AssistantManagementTest {
             current = false
             try { api.warm(); fail("Stale pairings must not send requests") }
             catch (_: CancellationException) { }
-            assertEquals(6, server.requestCount)
+            assertEquals(7, server.requestCount)
         }
     }
 

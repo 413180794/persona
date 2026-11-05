@@ -11,9 +11,8 @@ import androidx.compose.ui.platform.LocalContext
 import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
 import persona.core.contracts.parseTime
-import persona.core.contracts.api.Followup
-import persona.core.contracts.api.Routine
 import persona.core.contracts.api.Run
+import persona.core.contracts.api.ScheduledTask
 import persona.core.designsystem.LocalizedFormats
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
@@ -73,6 +72,27 @@ internal class ProactiveText(private val res: Resources, val locale: Locale) {
             else -> dayList(d)
         }
         return string(R.string.assistant_proactive_rule, when_, clock(time))
+    }
+
+    /** "每 30 分钟" / "每 2 小时" / "每 1 小时 30 分钟". */
+    fun every(minutes: Int): String = when {
+        minutes < 60 -> plural(R.plurals.assistant_proactive_every_minutes, minutes.toLong(), minutes)
+        minutes % 60 == 0 -> plural(R.plurals.assistant_proactive_every_hours, (minutes / 60).toLong(), minutes / 60)
+        else -> string(R.string.assistant_proactive_every_hours_minutes, minutes / 60, minutes % 60)
+    }
+
+    /** An interval on its own, for its chip: "30 分钟" / "2 小时" / "1 小时 30 分钟". */
+    fun interval(minutes: Int): String = when {
+        minutes < 60 -> plural(R.plurals.assistant_proactive_interval_minutes, minutes.toLong(), minutes)
+        minutes % 60 == 0 -> plural(R.plurals.assistant_proactive_interval_hours, (minutes / 60).toLong(), minutes / 60)
+        else -> string(R.string.assistant_proactive_interval_hours_minutes, minutes / 60, minutes % 60)
+    }
+
+    /** A task's rule in words: "每个工作日 上午 9:00", "每 30 分钟", or for a one-off when it runs ("明天 09:00"). */
+    fun rule(task: ScheduledTask, now: Instant, zone: ZoneId): String = when (task.repeat) {
+        TaskRepeat.Daily -> sentence(task.time.orEmpty().ifBlank { "09:00" }, task.weekdays)
+        TaskRepeat.Interval -> every(task.everyMinutes.takeIf { it > 0 } ?: DefaultInterval)
+        TaskRepeat.Once -> parseTime(task.at)?.let { moment(it, now, zone) } ?: string(R.string.assistant_proactive_repeat_once)
     }
 
     /** "09:00" → "上午 9:00" / "9:00 AM", "21:30" → "晚上 9:30", "00:15" → "凌晨 12:15". */
@@ -197,7 +217,7 @@ internal fun hubErrorText(say: ProactiveText, message: String?): String? {
         text.isEmpty() -> null
         text == "assistant machine is offline" -> say.string(R.string.assistant_proactive_error_assistant_offline)
         text == "machine is offline" -> say.string(R.string.assistant_proactive_error_machine_offline)
-        text == "no such routine" -> say.string(R.string.assistant_proactive_error_no_routine)
+        text == "no such routine" || text == "no such task" -> say.string(R.string.assistant_proactive_error_no_routine)
         text == "no such follow-up" -> say.string(R.string.assistant_proactive_error_no_followup)
         else -> text
     }
@@ -216,7 +236,7 @@ internal fun loadFailure(say: ProactiveText, error: Throwable): String {
 
 /** Why an action failed, short enough to follow "没保存上：". */
 internal fun failureReason(say: ProactiveText, error: Throwable): String {
-    if (error is RoutineGoneException) return say.string(R.string.assistant_proactive_routine_gone)
+    if (error is TaskGoneException) return say.string(R.string.assistant_proactive_routine_gone)
     // The transport gives up on a request when the pairing or the route to the hub changed under it.
     if (error is kotlinx.coroutines.CancellationException) return say.string(R.string.assistant_proactive_connection_changed)
     val feedback = operationFeedback(error)
@@ -241,88 +261,102 @@ internal fun LastRun.line(say: ProactiveText, now: Instant, zone: ZoneId): Strin
 }
 
 internal val LastRun.failed: Boolean get() = outcome == RunOutcome.Failed
-internal val Routine.byAssistant: Boolean get() = createdBy == "assistant"
+internal val ScheduledTask.byAssistant: Boolean get() = createdBy == "assistant"
 
 /** "下次 明天 09:00，15 小时后" / "已关闭"; null when the hub has not worked out the next run. */
-internal fun Routine.nextLine(say: ProactiveText, now: Instant, zone: ZoneId): String? {
+internal fun ScheduledTask.nextLine(say: ProactiveText, now: Instant, zone: ZoneId): String? {
     if (!enabled) return say.string(R.string.assistant_proactive_off_line)
     val next = parseTime(nextRun) ?: return null
     return say.string(R.string.assistant_proactive_next_line, say.moment(next, now, zone), say.until(next, now, zone))
 }
 
-/** A picture for a routine, from its title (iOS picks the same way). */
-internal fun routineIcon(title: String): PhIcon = when {
+/** A picture for a task, from its title, else from how it repeats (iOS picks the same way). */
+internal fun taskIcon(title: String, repeat: TaskRepeat = TaskRepeat.Daily): PhIcon = when {
     "早" in title -> PhIcons.Sun // i18n-ignore: matches words in the user's own title
     "晚" in title || "回顾" in title -> PhIcons.MoonStars // i18n-ignore: matches words in the user's own title
     "周报" in title || "报告" in title -> PhIcons.FileText // i18n-ignore: matches words in the user's own title
     "会" in title -> PhIcons.Chats // i18n-ignore: matches words in the user's own title
     "盘点" in title || "待办" in title -> PhIcons.ListChecks // i18n-ignore: matches words in the user's own title
     "巡检" in title || "检查" in title -> PhIcons.MagnifyingGlass // i18n-ignore: matches words in the user's own title
+    repeat == TaskRepeat.Once -> PhIcons.ArrowBendUpLeft
+    repeat == TaskRepeat.Interval -> PhIcons.ArrowsClockwise
     else -> PhIcons.Clock
 }
 
-internal fun Followup.displayTitle(say: ProactiveText): String =
-    title?.takeIf { it.isNotBlank() } ?: prompt.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
-        ?: say.string(R.string.assistant_proactive_followup)
-
-/** The conversation a follow-up continues; null when it will start a new one. */
-internal fun Followup.conversation(): SessionKey? {
-    val session = sessionId?.takeIf { it.isNotBlank() } ?: return null
-    val machine = machineId?.takeIf { it.isNotBlank() } ?: return null
-    return SessionKey(machine, session)
-}
+/** Its title, or the first line of the prompt for a one-off without one. */
+internal fun ScheduledTask.displayTitle(say: ProactiveText): String =
+    title.takeIf { it.isNotBlank() } ?: prompt.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+        ?: say.string(if (repeat == TaskRepeat.Once) R.string.assistant_proactive_followup else R.string.assistant_proactive_routine)
 
 internal fun machineName(id: String?, machines: List<Machine>): String? =
     id?.takeIf { it.isNotBlank() }?.let { machine -> machines.firstOrNull { it.id == machine }?.displayName ?: machine }
 
-/** "在 服务器 上接着原来的对话" / "在 服务器 上开一段新对话". */
-internal fun Followup.whereLine(say: ProactiveText, machines: List<Machine>): String {
-    val machine = machineName(machineId, machines)
-    val continues = conversation() != null
+/** "在 服务器 上接着原来的对话" / "在同一个对话里运行" / "开一段新对话". */
+internal fun ScheduledTask.whereLine(say: ProactiveText, machines: List<Machine>): String {
+    val origin = origin
     return when {
-        machine == null -> say.string(if (continues) R.string.assistant_proactive_continues else R.string.assistant_proactive_starts_new)
-        else -> say.string(if (continues) R.string.assistant_proactive_continues_on else R.string.assistant_proactive_starts_new_on, machine)
+        origin != null -> machineName(origin.machineId, machines)?.let { say.string(R.string.assistant_proactive_continues_on, it) }
+            ?: say.string(R.string.assistant_proactive_continues)
+        ownConversation != null -> say.string(R.string.assistant_proactive_same_conversation)
+        else -> say.string(R.string.assistant_proactive_starts_new)
     }
 }
 
-/** One thing Persona will do on its own: a routine's next run or a follow-up. */
+/** What runs with when it is not the default: "自动", "全部放行"; null for the default. */
+internal fun ScheduledTask.runsWith(say: ProactiveText): String? =
+    permissionMode?.takeIf { it.isNotBlank() && it != "default" }?.let { say.string(permissionModeTitle(it)) }
+
+/** One thing Persona will do on its own: a task's next run. */
 internal data class Upcoming(
     val id: String,
     val at: Instant,
     val title: String,
-    val routine: Boolean,
+    val repeat: TaskRepeat,
     val detail: String,
-    val conversation: SessionKey?,
 )
 
-/** Soonest first: enabled routines' next runs and every follow-up. */
-internal fun upcoming(say: ProactiveText, routines: List<Routine>, followups: List<Followup>): List<Upcoming> {
-    val next = routines.filter { it.enabled }.mapNotNull { r ->
-        parseTime(r.nextRun)?.let { Upcoming("r-${r.id}", it, r.title, true, say.sentence(r.time, r.weekdays), null) }
-    }
-    val later = followups.mapNotNull { f ->
-        parseTime(f.at)?.let {
-            Upcoming("f-${f.id}", it, f.displayTitle(say), false,
-                say.string(if (f.conversation() != null) R.string.assistant_proactive_followup_continues else R.string.assistant_proactive_followup_starts_new),
-                f.conversation())
+/** Soonest first: every enabled task's next run (a one-off's is its time). */
+internal fun upcoming(
+    say: ProactiveText, tasks: List<ScheduledTask>, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault(),
+    machines: List<Machine> = emptyList(),
+): List<Upcoming> =
+    tasks.filter { it.enabled }.mapNotNull { t ->
+        (parseTime(t.nextRun) ?: parseTime(t.at).takeIf { t.repeat == TaskRepeat.Once })?.let {
+            Upcoming(t.id, it, t.displayTitle(say), t.repeat,
+                if (t.repeat == TaskRepeat.Once) t.whereLine(say, machines) else say.rule(t, now, zone))
         }
-    }
-    return (next + later).sortedWith(compareBy<Upcoming> { it.at }.thenBy { it.id })
-}
+    }.sortedWith(compareBy<Upcoming> { it.at }.thenBy { it.id })
 
 /** Persona's one line about the page; null until something is read. */
-internal fun summaryLine(say: ProactiveText, routines: List<Routine>?, followups: List<Followup>?, now: Instant, zone: ZoneId): String? {
-    if (routines == null && followups == null) return null
-    val on = routines.orEmpty().count { it.enabled }
-    val next = upcoming(say, routines.orEmpty(), followups.orEmpty()).firstOrNull { !it.at.isBefore(now) }
+internal fun summaryLine(say: ProactiveText, tasks: List<ScheduledTask>?, now: Instant, zone: ZoneId): String? {
+    if (tasks == null) return null
+    val on = tasks.count { it.enabled && it.repeat != TaskRepeat.Once }
+    val next = upcoming(say, tasks, now, zone).firstOrNull { !it.at.isBefore(now) }
     val nextText = next?.let { say.moment(it.at, now, zone) }
     return when {
-        routines.orEmpty().isEmpty() && followups.orEmpty().isEmpty() -> say.string(R.string.assistant_proactive_summary_nothing)
+        tasks.isEmpty() -> say.string(R.string.assistant_proactive_summary_nothing)
         on > 0 && nextText != null -> say.count(R.plurals.assistant_proactive_summary_on_next, on, on, nextText)
         on > 0 -> say.count(R.plurals.assistant_proactive_summary_on, on, on)
         nextText != null -> say.string(R.string.assistant_proactive_summary_off_next, nextText)
         else -> say.string(R.string.assistant_proactive_summary_off)
     }
+}
+
+/** A permission mode's name ("" is 默认). */
+@StringRes internal fun permissionModeTitle(mode: String): Int = when (mode) {
+    "acceptEdits" -> R.string.assistant_proactive_mode_accept_edits
+    "plan" -> R.string.assistant_proactive_mode_plan
+    "auto" -> R.string.assistant_proactive_mode_auto
+    BypassMode -> R.string.assistant_proactive_mode_bypass
+    else -> R.string.assistant_proactive_mode_default
+}
+
+@StringRes internal fun permissionModeDetail(mode: String): Int = when (mode) {
+    "acceptEdits" -> R.string.assistant_proactive_mode_accept_edits_detail
+    "plan" -> R.string.assistant_proactive_mode_plan_detail
+    "auto" -> R.string.assistant_proactive_mode_auto_detail
+    BypassMode -> R.string.assistant_proactive_mode_bypass_detail
+    else -> R.string.assistant_proactive_mode_default_detail
 }
 
 /**
@@ -332,8 +366,8 @@ internal fun summaryLine(say: ProactiveText, routines: List<Routine>?, followups
 internal data class RoutineTemplate(
     @StringRes val name: Int, val icon: PhIcon, @StringRes val prompt: Int, val time: String, val weekdays: List<Int>,
 ) {
-    /** The prompt is the routine's own text, which the user reads and edits, so it is in the user's language. */
-    fun draft(say: ProactiveText) = RoutineDraft(say.string(name), say.string(prompt), time, weekdays)
+    /** The prompt is the task's own text, which the user reads and edits, so it is in the user's language. */
+    fun draft(say: ProactiveText) = TaskDraft(say.string(name), say.string(prompt), TaskRepeat.Daily, time = time, weekdays = weekdays)
 }
 
 internal val RoutineTemplates = listOf(
@@ -345,5 +379,5 @@ internal val RoutineTemplates = listOf(
         R.string.assistant_proactive_template_end_of_day_prompt, "18:30", Workdays),
 )
 
-/** A blank routine: weekdays at 09:00, on. */
-internal val BlankRoutine = RoutineDraft()
+/** A blank task: weekdays at 09:00, on. */
+internal val BlankTask = TaskDraft()

@@ -18,6 +18,8 @@
   "feature_sync": "メインチャットを同期",
   "feature_sync_description": "Lark以外から始めたメインチャットのやり取りが終わったら、その回答をLarkに送ります",
   "feature_agents": "エージェントを操作",
+  "feature_reports": "タスクの進捗をLarkに送る",
+  "feature_reports_description": "メインチャットのタスクが完了・あなた待ち・中断になると、まとめてカードで送ります",
   "feature_agents_description": "/agents でお使いのコンピューター上のエージェントを一覧表示し、選ぶと以降のメッセージがそのエージェントに送られます",
   "voice_name": "音声",
   "voice_description": "AppでPersonaと音声で会話します。やることはメインチャットに引き継ぎます",

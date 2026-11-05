@@ -208,12 +208,14 @@ internal fun AssistantManagement.inGroup(names: GroupNames): AssistantManagement
         override suspend fun archiveConversation(session: SessionKey) = source.archiveConversation(names.raw(session))
         override suspend fun newMainConversation(carrySummary: Boolean, expect: String?) =
             source.newMainConversation(carrySummary, expect)
-        override suspend fun routines() = source.routines()
-        override suspend fun setRoutines(list: List<Routine>) = source.setRoutines(list)
-        override suspend fun runRoutine(id: String) = names.key(source.runRoutine(id))
-        override suspend fun followups() = source.followups().map { it.copy(machineId = it.machineId?.let(names::machineId)) }
-        override suspend fun cancelFollowup(id: String) = source.cancelFollowup(id)
-        override suspend fun runFollowup(id: String) = names.key(source.runFollowup(id))
+        private fun ScheduledTask.local() =
+            copy(machineId = machineId?.takeIf { it.isNotBlank() }?.let(names::machineId),
+                runMachineId = runMachineId?.takeIf { it.isNotBlank() }?.let(names::machineId))
+        override suspend fun tasks() = source.tasks().map { it.local() }
+        override suspend fun saveTask(task: ScheduledTask) = source.saveTask(task).local()
+        override suspend fun deleteTask(id: String) = source.deleteTask(id)
+        override suspend fun runTask(id: String) = names.key(source.runTask(id))
+        override suspend fun freshTask(id: String) = source.freshTask(id).local()
         override suspend fun runs() = source.runs().map { it.copy(machineId = it.machineId?.let(names::machineId)) }
         override suspend fun notes() = source.notes().let { it.copy(machineId = names.machineId(it.machineId)) }
         override suspend fun setNotes(text: String) = source.setNotes(text)

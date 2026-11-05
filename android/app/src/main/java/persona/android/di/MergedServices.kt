@@ -55,6 +55,8 @@ internal fun mergedInteractions(stacks: GroupStacks): InteractionCenter = object
         // Merged interaction ids carry their group's suffix like machine ids (GroupNames.interactionId).
         stacks.use(GroupKeys.namespaceOf(id)) { it.repositories.interactions.resolve(GroupKeys.raw(id), resolution) }
     }
+    override suspend fun resolveOutcome(id: String, resolution: Resolution) =
+        stacks.use(GroupKeys.namespaceOf(id)) { it.repositories.interactions.resolveOutcome(GroupKeys.raw(id), resolution) }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)

@@ -46,16 +46,21 @@ fun JSheet(
     skipPartiallyExpanded: Boolean = true,
     /** False while an operation must finish (the sheet ignores drags, the scrim and back). */
     dismissible: Boolean = true,
+    /** Called when a drag, the scrim or back tries to close a sheet that is not [dismissible] (to ask about unsaved edits). */
+    onBlockedDismiss: (() -> Unit)? = null,
     /** Scroll the whole content; leave false when the content has its own lazy list. */
     scrollable: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = PersonaTheme.palette
     val canDismiss by androidx.compose.runtime.rememberUpdatedState(dismissible)
+    val blocked by androidx.compose.runtime.rememberUpdatedState(onBlockedDismiss)
     // Brief's surface is its card grey, the fill of its text fields and chips: on a grey sheet they vanish (no border
     // either), so its sheets are paper like its pages.
     val container = if (PersonaTheme.style == AppStyle.Brief) palette.background else palette.surfaceOpaque
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = skipPartiallyExpanded, confirmValueChange = { it != SheetValue.Hidden || canDismiss })
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = skipPartiallyExpanded, confirmValueChange = {
+        (it != SheetValue.Hidden || canDismiss).also { ok -> if (!ok) blocked?.invoke() }
+    })
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     ModalBottomSheet(
         onDismissRequest = { if (canDismiss) onDismiss() }, modifier = modifier,

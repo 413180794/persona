@@ -132,6 +132,16 @@ type Snapshot struct {
 	Calendar      *SnapshotCalendar // nil: the calendar did not answer in time
 	Followups     []SnapshotFollowup
 	Tasks         []SnapshotTask // tasks opened from assistant conversations (task_plan), newest first
+	// Unaccepted: deployed tasks whose 请验收 card the user has not passed yet (#2768), oldest first; the morning
+	// briefing brings them up again.
+	Unaccepted      []SnapshotAccept
+	UnacceptedTotal int // all of them (Unaccepted is the oldest eight)
+}
+
+// SnapshotAccept is a deployed task waiting for the user to check it: what changed, where to look, since when.
+type SnapshotAccept struct {
+	Title, Changed, Link string
+	Since                time.Time // in the user's zone
 }
 
 func (s Snapshot) Up() []SnapshotMachine   { return s.machines(true) }
@@ -321,3 +331,13 @@ type HandoffTurn struct {
 
 // RenderMainHandoff is assistant/main_handoff.
 func RenderMainHandoff(h MainHandoff) string { return render("assistant/main_handoff", h) }
+
+// Acceptance is a deployed task, for the three lines of its 「请验收」 card (assistant/acceptance_input; the system
+// prompt is assistant/acceptance; docs/bots.md「请验收」).
+type Acceptance struct {
+	Title, Prompt, Reply string
+	Links                []string // the only links it may pick
+}
+
+func RenderAcceptance() string                  { return render("assistant/acceptance", nil) }
+func RenderAcceptanceInput(a Acceptance) string { return render("assistant/acceptance_input", a) }

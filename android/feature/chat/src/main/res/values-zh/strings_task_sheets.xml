@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 任务详情、全部、改一下（#3034，iOS TaskSheets / PlanEditSheet） -->
+    <string name="chat_task_detail_gone">没有这个任务了</string>
+    <string name="chat_task_detail_gone_body">它可能被删了。</string>
+    <string name="chat_task_detail_more">更多</string>
+    <string name="chat_task_detail_close">关闭</string>
+    <string name="chat_task_detail_failed">Agent 没开起来</string>
+    <string name="chat_task_detail_remove">移除任务</string>
+    <string name="chat_task_detail_starting">正在开 Agent</string>
+    <string name="chat_task_detail_starting_body">开好以后这里就是它的对话。</string>
+    <string name="chat_task_detail_agent">Agent</string>
+    <string name="chat_task_detail_own_agent">Agent · 不是从对话开的</string>
+    <string name="chat_task_detail_agent_gone">没有这个 Agent 了</string>
+    <string name="chat_task_detail_agent_gone_body">它可能已经关掉了。</string>
+    <string name="chat_task_detail_open_chat">打开对话</string>
+    <string name="chat_task_board_title">任务</string>
+    <string name="chat_task_board_empty">还没有任务</string>
+    <string name="chat_task_board_empty_body">在对话里说要做的事，Persona 会把它变成任务。</string>
+    <string name="chat_task_board_waiting">等你</string>
+    <string name="chat_task_board_working">在做</string>
+    <string name="chat_task_board_unread">做完了</string>
+    <string name="chat_task_board_followup">停着</string>
+    <string name="chat_task_board_done">已完成</string>
+    <string name="chat_task_board_failed">没开起来</string>
+    <string name="chat_plan_edit">改一下</string>
+    <string name="chat_plan_edit_title">改一下</string>
+    <string name="chat_plan_edit_task_n">任务 %1$d</string>
+    <string name="chat_plan_edit_name">标题</string>
+    <string name="chat_plan_edit_machine">电脑</string>
+    <string name="chat_plan_edit_folder">目录</string>
+    <string name="chat_plan_edit_model">模型（空着用默认）</string>
+    <string name="chat_plan_edit_permission">权限</string>
+    <string name="chat_plan_edit_prompt">第一条消息</string>
+    <string name="chat_plan_edit_discard_title">放弃这些修改？</string>
+    <string name="chat_plan_edit_discard_body">计划保持原样。</string>
+    <string name="chat_plan_edit_discard">放弃</string>
+    <string name="chat_plan_edit_keep_editing">继续修改</string>
+    <string name="chat_tasks_dock_all">全部 %1$d</string>
+</resources>

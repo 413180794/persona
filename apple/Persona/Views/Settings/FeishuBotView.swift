@@ -177,6 +177,7 @@ struct FeishuBotView: View {
                 .disabled(!features.cards)
             feature(\.pushes, Theme.Icon.unmute, "推送也发到飞书", "Persona 的通知、定时任务的结果也发一份到飞书")
             feature(\.sync, Theme.Icon.inProgress, "同步主对话", "在 App 里、定时任务在主对话里的回答，也发到飞书")
+            feature(\.reports, Theme.Icon.inProgress, "任务进展发到飞书", "主对话派出的任务做完、在等你、被打断时，几条合成一张卡片发到飞书，带阶段和链接")
             feature(\.agents, Theme.Icon.agents, "驱动 Agent", "/agents 选各台电脑上的 Claude Code / Codex，在飞书里和它聊；/start 开新的")
         } header: {
             Text("能做什么")

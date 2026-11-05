@@ -24,6 +24,9 @@ class ResolvedRoute(val tab: AppTab, val key: NavKey, val pairingLink: String? =
 /** The launcher's 「问 Persona」: the Persona tab with the cursor in its composer, cold start or not. */
 const val AskPersonaLink = "jarvis://open?target=tab&tab=jarvis&focus=composer"
 
+/** Agents › 待办 with a new to-do being written ([NewTodoRoute]). */
+const val NewTodoLink = "jarvis://open?target=new-todo"
+
 class Router(
     private val conversationKind: (machineId: String, sessionId: String) -> ConversationKind? = { _, _ -> null },
 ) {
@@ -42,6 +45,7 @@ class Router(
         AgentsRoute -> ResolvedRoute(AppTab.Agents, key)
         InboxRoute -> ResolvedRoute(AppTab.Inbox, key)
         SettingsRoute -> ResolvedRoute(AppTab.Settings, key)
+        NewTodoRoute -> ResolvedRoute(AppTab.Agents, key)
         ConnectionSettingsRoute -> resolve(SettingsPageRoute(SettingsPage.Diagnostics))
         PairingRoute, is SettingsPageRoute -> ResolvedRoute(AppTab.Settings, key)
         is ExtensionUiRoute -> key.takeIf { it.extensionId.isNotBlank() && it.uiId.isNotBlank() }?.let { ResolvedRoute(AppTab.Settings, it) }
@@ -98,6 +102,7 @@ class Router(
             "extension" -> ExtensionUiRoute(parameters["extension"] ?: return null, parameters["ui"] ?: return null,
                 parameters["title"].orEmpty(), parameters["state"])
             "inbox" -> InboxItemRoute(parameters["item"] ?: return null)
+            "new-todo" -> NewTodoRoute
             "lark" -> LarkChatRoute(parameters["chat"] ?: return null)
             "settings" -> SettingsPageRoute(SettingsPage.entries.firstOrNull {
                 it.name.equals(parameters["page"], ignoreCase = true)

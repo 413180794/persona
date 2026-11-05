@@ -3,7 +3,9 @@ package persona.feature.assistant.proactive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
@@ -24,9 +26,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
 import persona.core.contracts.parseTime
-import persona.core.contracts.api.Followup
-import persona.core.contracts.api.Routine
 import persona.core.contracts.api.Run
+import persona.core.contracts.api.ScheduledTask
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.feature.assistant.R
@@ -69,38 +70,40 @@ internal fun UpcomingRow(item: Upcoming, now: Instant, zone: ZoneId, position: G
 }
 
 /**
- * A routine: its rule in words, the next and last run, who set it up, and its switch. The picture carries a mark
- * when the last run failed (danger) or when Persona made it in a conversation.
+ * A repeating task: its rule in words, the next and last run, what it runs with when that is not the default, who set
+ * it up, and its switch. The picture carries a mark when the last run failed (danger) or when Persona made it.
  */
 @Composable
-internal fun RoutineRow(
-    routine: Routine, lastRun: LastRun?, say: ProactiveText, now: Instant, zone: ZoneId, position: GroupPosition, busy: Boolean,
+internal fun TaskRow(
+    task: ScheduledTask, lastRun: LastRun?, say: ProactiveText, now: Instant, zone: ZoneId, position: GroupPosition, busy: Boolean,
     onToggle: (Boolean) -> Unit, onOpen: () -> Unit, onMore: () -> Unit,
 ) {
     val palette = PersonaTheme.palette
     val failed = lastRun?.failed == true
+    val title = task.displayTitle(say)
     val lines = listOfNotNull(
-        say.sentence(routine.time, routine.weekdays),
-        routine.nextLine(say, now, zone),
+        say.rule(task, now, zone),
+        task.nextLine(say, now, zone),
         lastRun?.line(say, now, zone),
-        stringResource(R.string.assistant_proactive_made_by_assistant).takeIf { routine.byAssistant },
+        task.runsWith(say),
+        stringResource(R.string.assistant_proactive_made_by_assistant).takeIf { task.byAssistant },
     )
     JGroupItem(position) {
         JRow(
             // Lines may wrap (a long reason), so leave room for them.
-            routine.title.ifBlank { stringResource(R.string.assistant_proactive_routine) }, subtitle = lines.joinToString("\n"), subtitleLines = lines.size + 2,
+            title, subtitle = lines.joinToString("\n"), subtitleLines = lines.size + 2,
             leading = {
-                Box(Modifier.stableAlpha(if (routine.enabled) 1f else 0.55f)) {
-                    JAvatar(routine.title, icon = routineIcon(routine.title),
-                        badge = when { failed -> PhIcons.Warning; routine.byAssistant -> PhIcons.Sparkle; else -> null },
+                Box(Modifier.stableAlpha(if (task.enabled) 1f else 0.55f)) {
+                    JAvatar(task.title, icon = taskIcon(task.title, task.repeat),
+                        badge = when { failed -> PhIcons.Warning; task.byAssistant -> PhIcons.Sparkle; else -> null },
                         badgeColor = if (failed) palette.danger.dot else null)
                 }
             },
             trailing = {
                 if (busy) JSpinner(Modifier.size(Tokens.Space.xxl))
                 else {
-                    val description = stringResource(R.string.assistant_proactive_auto_run, routine.title)
-                    JSwitch(routine.enabled, onToggle, Modifier.semantics { contentDescription = description })
+                    val description = stringResource(R.string.assistant_proactive_auto_run, title)
+                    JSwitch(task.enabled, onToggle, Modifier.semantics { contentDescription = description })
                 }
             },
             onClick = onOpen, onLongClick = onMore,
@@ -108,28 +111,33 @@ internal fun RoutineRow(
     }
 }
 
-/** A follow-up Persona scheduled for itself: when, where it goes, what it will do. ⋯ holds 立即运行 and 取消. */
+/** A one-off Persona scheduled (or the user did): when, where it goes, what it will do. ⋯ holds 立即运行 and 删除. */
 @Composable
-internal fun FollowupRow(
-    followup: Followup, machines: List<Machine>, say: ProactiveText, now: Instant, zone: ZoneId, position: GroupPosition, busy: Boolean,
-    onOpen: (() -> Unit)?, onMore: () -> Unit,
+internal fun OneOffRow(
+    task: ScheduledTask, machines: List<Machine>, say: ProactiveText, now: Instant, zone: ZoneId, position: GroupPosition, busy: Boolean,
+    onOpen: () -> Unit, onMore: () -> Unit,
 ) {
-    val title = followup.displayTitle(say)
-    val at = parseTime(followup.at)
+    val title = task.displayTitle(say)
+    val at = parseTime(task.at)
     val lines = listOfNotNull(
         at?.let { stringResource(R.string.assistant_proactive_moment_until, say.moment(it, now, zone), say.until(it, now, zone)) },
-        followup.whereLine(say, machines),
-        followup.prompt.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.takeIf { it != title },
+        task.whereLine(say, machines),
+        task.prompt.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.takeIf { it != title },
+        task.runsWith(say),
     )
     JGroupItem(position) {
         JRow(
             title, subtitle = lines.joinToString("\n"), subtitleLines = lines.size + 1,
-            leading = { JAvatar(title, icon = if (followup.conversation() != null) PhIcons.ArrowBendUpLeft else PhIcons.BellRinging) },
+            leading = {
+                Box(Modifier.stableAlpha(if (task.enabled) 1f else 0.55f)) {
+                    JAvatar(title, icon = if (task.origin != null) PhIcons.ArrowBendUpLeft else PhIcons.BellRinging)
+                }
+            },
             trailing = {
                 if (busy) JSpinner(Modifier.size(Tokens.Space.xxl))
                 else JIconButton(PhIcons.DotsThree, stringResource(R.string.assistant_proactive_actions_for, title), onMore)
             },
-            onClick = onOpen ?: onMore, onLongClick = onMore, chevron = false,
+            onClick = onOpen, onLongClick = onMore, chevron = false,
         )
     }
 }
@@ -260,5 +268,44 @@ internal fun WeekdayPicker(days: List<Int>, onDaysChange: (List<Int>) -> Unit, m
             JChip(stringResource(R.string.assistant_proactive_weekdays), selected = chosen == Workdays.toSet(), onClick = { onDaysChange(Workdays) })
             JChip(stringResource(R.string.assistant_proactive_weekends), selected = chosen == setOf(6, 7), onClick = { onDaysChange(listOf(6, 7)) })
         }
+    }
+}
+
+/** The intervals as chips, wrapping; one the hub has that is not in the list is offered too. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun IntervalPicker(minutes: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val say = rememberProactiveText()
+    val options = (TaskIntervals + minutes.takeIf { it in IntervalRange }.let(::listOfNotNull)).distinct().sorted()
+    FlowRow(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
+        verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+        options.forEach { option -> JChip(say.interval(option), selected = option == minutes, onClick = { onChange(option) }) }
+    }
+}
+
+/** How many days ahead a one-off can be put on its chips; further ones the hub made stay as they are. */
+private const val OnceDays = 14
+
+/** The day of a one-off as chips (今天、明天、周三…) over the clock wheel; a past time is not offered. */
+@Composable
+internal fun OncePicker(at: Instant?, now: Instant, zone: ZoneId, onChange: (Instant) -> Unit, modifier: Modifier = Modifier) {
+    val say = rememberProactiveText()
+    val chosen = (at ?: nextHour(now, zone)).atZone(zone)
+    val today = now.atZone(zone).toLocalDate()
+    val days = remember(today, chosen.toLocalDate()) {
+        ((0 until OnceDays).map { today.plusDays(it.toLong()) } + chosen.toLocalDate()).distinct().sorted()
+    }
+    val latest by rememberUpdatedState(chosen)
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.l)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+            days.forEach { day ->
+                val instant = day.atTime(chosen.toLocalTime()).atZone(zone).toInstant()
+                JChip(say.day(instant, now, zone), selected = day == chosen.toLocalDate(), onClick = { onChange(instant) })
+            }
+        }
+        TimeWheel(String.format(Locale.ROOT, "%02d:%02d", chosen.hour, chosen.minute), { time ->
+            val parts = time.split(":").mapNotNull { it.toIntOrNull() }
+            if (parts.size == 2) onChange(latest.toLocalDate().atTime(parts[0], parts[1]).atZone(zone).toInstant())
+        })
     }
 }

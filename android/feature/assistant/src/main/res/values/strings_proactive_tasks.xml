@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Scheduled tasks: once / daily / every, how it runs, which chat (iOS AssistantTaskEditor) -->
+    <string name="assistant_proactive_repeat_once">Once</string>
+    <string name="assistant_proactive_repeat_interval">Every</string>
+    <plurals name="assistant_proactive_every_minutes">
+        <item quantity="one">Every minute</item>
+        <item quantity="other">Every %1$d minutes</item>
+    </plurals>
+    <plurals name="assistant_proactive_every_hours">
+        <item quantity="one">Every hour</item>
+        <item quantity="other">Every %1$d hours</item>
+    </plurals>
+    <string name="assistant_proactive_every_hours_minutes">Every %1$d h %2$d min</string>
+    <plurals name="assistant_proactive_interval_minutes">
+        <item quantity="one">%1$d min</item>
+        <item quantity="other">%1$d min</item>
+    </plurals>
+    <plurals name="assistant_proactive_interval_hours">
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
+    <string name="assistant_proactive_interval_hours_minutes">%1$d h %2$d min</string>
+    <string name="assistant_proactive_once_note">Runs once at that time, then leaves the list (it stays in the run history).</string>
+    <string name="assistant_proactive_interval_note">Runs %1$s, counting from when you save.</string>
+    <string name="assistant_proactive_pick_time">Pick a time that hasn\'t passed yet</string>
+    <string name="assistant_proactive_fill_in_prompt">Fill in what to do to save</string>
+    <string name="assistant_proactive_name_optional">Title (optional)</string>
+    <string name="assistant_proactive_runs_with">How it runs</string>
+    <string name="assistant_proactive_default_model">Default task model</string>
+    <string name="assistant_proactive_task_model">Task model</string>
+    <string name="assistant_proactive_permission_mode">Permission mode</string>
+    <string name="assistant_proactive_mode_default">Default</string>
+    <string name="assistant_proactive_mode_default_detail">As usual: asks before editing files or running commands</string>
+    <string name="assistant_proactive_mode_accept_edits">Auto-edit files</string>
+    <string name="assistant_proactive_mode_accept_edits_detail">Edits files without asking; still asks before commands</string>
+    <string name="assistant_proactive_mode_plan">Plan only</string>
+    <string name="assistant_proactive_mode_plan_detail">Reads code and writes a plan; acts only once you approve</string>
+    <string name="assistant_proactive_mode_auto">Auto</string>
+    <string name="assistant_proactive_mode_auto_detail">Judges the risk itself and just does the safe things</string>
+    <string name="assistant_proactive_mode_bypass">Allow everything</string>
+    <string name="assistant_proactive_mode_bypass_detail">Never asks; risky</string>
+    <string name="assistant_proactive_runs_with_note">Scheduled tasks run in the background. When one needs your approval, your phone is notified, and it waits until someone taps. To let it run commands without asking, pick Auto (it judges the risk itself).</string>
+    <string name="assistant_proactive_runs_with_note_continues"> When it continues the original chat, that chat switches to these settings too.</string>
+    <string name="assistant_proactive_bypass_note">Allow everything: it runs commands and edits files without asking you.</string>
+    <string name="assistant_proactive_bypass_title">Allow everything?</string>
+    <string name="assistant_proactive_bypass_body">While this task runs, it won\'t ask before running any command, editing any file or using any tool, and nobody can stop it halfway. Only use it for prompts you trust and whose mistakes you can live with.</string>
+    <string name="assistant_proactive_conversation">Chat</string>
+    <string name="assistant_proactive_same_conversation">Run in the same chat</string>
+    <string name="assistant_proactive_fresh">New chat next time</string>
+    <string name="assistant_proactive_fresh_done">The next run will start a new chat</string>
+    <string name="assistant_proactive_conversation_continues_note">Every run goes into the chat that scheduled it and carries on with what\'s there.</string>
+    <string name="assistant_proactive_conversation_own_note">Every run goes into this task\'s own chat, so it can see earlier results. When the chat gets long or you want a fresh start, tap New chat next time; the old chat stays.</string>
+    <string name="assistant_proactive_conversation_first_note">The first run starts a new chat, and every run after that carries on in it, so it can see earlier results.</string>
+    <string name="assistant_proactive_run_now_new">Adds it first, then runs it once</string>
+</resources>

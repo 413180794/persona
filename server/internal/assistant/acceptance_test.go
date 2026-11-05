@@ -1,0 +1,178 @@
+package assistant
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+const deployedReply = "已合入 https://github.com/o/r/pull/9 并已部署到 n37。打开 https://hub.example.com/settings?tab=feishu 能看到新开关"
+
+// acceptService is reportService with the small model answering the 请验收 lines, the cards' updates and notes kept.
+func acceptService(t *testing.T) (*Service, *fakeHub, func() []string) {
+	t.Helper()
+	s, f, posts := reportService(t, true)
+	f.judge = `{"changed":"飞书机器人多了任务进展开关","link":"https://hub.example.com/settings?tab=feishu","how":"打开设置 › 飞书机器人，应看到「任务进展发到飞书」"}`
+	f.answerApp(AppFeishu, FeishuUpdateCard, func(json.RawMessage) (any, error) { return map[string]any{}, nil })
+	f.answerApp(AppFeishu, FeishuText, func(json.RawMessage) (any, error) { return map[string]any{}, nil })
+	return s, f, posts
+}
+
+// askOf is task id's 请验收 ask as it is now (nil: none), read under the lock the hub's goroutines write it under.
+func askOf(s *Service, id string) *acceptAsk {
+	s.accept.mu.Lock()
+	defer s.accept.mu.Unlock()
+	a, ok := s.accept.asks[id]
+	if !ok {
+		return nil
+	}
+	cp := *a
+	return &cp
+}
+
+func acceptCardOf(posts []string) string {
+	for _, p := range posts {
+		if strings.Contains(p, "请验收") {
+			return p
+		}
+	}
+	return ""
+}
+
+// A turn that says the work is deployed gets a 请验收 card: what changed, a link straight to the page (one from the
+// reply, never made up), how to check, and 通过. 通过 marks the task verified.
+func TestDeployedTaskAsksForAcceptance(t *testing.T) {
+	s, f, posts := acceptService(t)
+	todo := startedTask(t, s, f)
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+	waitFor(t, "the 请验收 card", func() bool { return acceptCardOf(posts()) != "" })
+	card := acceptCardOf(posts())
+	for _, want := range []string{"改了什么", "飞书机器人多了任务进展开关", "去哪看", "https://hub.example.com/settings?tab=feishu", "怎么验", "通过", `"a":"accept"`} {
+		if !strings.Contains(card, want) {
+			t.Errorf("card lacks %q:\n%s", want, card)
+		}
+	}
+	mid := askOf(s, todo.ID).MessageID
+	if !s.acceptReply(context.Background(), "om_reply", "通过", mid, "") {
+		t.Fatal("a reply to the card was not taken as one")
+	}
+	if got := onlyTodo(s); got.Stage != "verify" {
+		t.Fatalf("stage %q", got.Stage)
+	}
+	// Another turn that says deployed again does not ask twice.
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+	time.Sleep(6 * testReportDelay)
+	n := 0
+	for _, p := range posts() {
+		if strings.Contains(p, "请验收") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d 请验收 cards", n)
+	}
+}
+
+// Anything else said to the card goes to the task's agent (and the todo's decisions with a store); the next deploy
+// asks again. A model that makes up a link is not believed.
+func TestAcceptanceFeedbackGoesToTheAgent(t *testing.T) {
+	s, f, posts := acceptService(t)
+	f.judge = `{"changed":"改了","link":"https://evil.example.com/x","how":"看看"}`
+	todo := startedTask(t, s, f)
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+	waitFor(t, "the 请验收 card", func() bool { return acceptCardOf(posts()) != "" })
+	if card := acceptCardOf(posts()); strings.Contains(card, "evil.example.com") || !strings.Contains(card, "/todos?id="+todo.ID) {
+		t.Fatalf("link:\n%s", card)
+	}
+	mid := askOf(s, todo.ID).MessageID
+	before := len(f.agentSent)
+	if !s.acceptReply(context.Background(), "om_r2", "开关名字改成「任务进展」", "", mid) {
+		t.Fatal("not taken")
+	}
+	f.mu.Lock()
+	sent := f.agentSent[before:]
+	f.mu.Unlock()
+	if len(sent) != 1 || !strings.Contains(sent[0]["text"].(string), "开关名字改成「任务进展」") {
+		t.Fatalf("to the agent: %v", sent)
+	}
+	if askOf(s, todo.ID) != nil {
+		t.Fatal("a change asked for leaves the ask in place: the next deploy would not ask again")
+	}
+	if s.acceptReply(context.Background(), "om_r3", "随便聊聊", "om_other", "") {
+		t.Fatal("a message about something else was taken")
+	}
+}
+
+// One not accepted by the next morning is asked again, once.
+func TestAcceptanceReminderNextMorning(t *testing.T) {
+	s, f, posts := acceptService(t)
+	todo := startedTask(t, s, f)
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+	waitFor(t, "the 请验收 card", func() bool { return acceptCardOf(posts()) != "" })
+	loc := s.location(context.Background())
+	s.accept.mu.Lock()
+	s.accept.asks[todo.ID].AskedAt = time.Now().Add(-30 * time.Hour)
+	s.accept.mu.Unlock()
+	now := time.Now().In(loc)
+	morning := time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, loc)
+	n := len(posts())
+	s.remindAcceptance(morning)
+	s.remindAcceptance(morning.Add(time.Hour))
+	if got := posts()[n:]; len(got) != 1 || !strings.Contains(got[0], "还没验收") {
+		t.Fatalf("reminders %q", got)
+	}
+}
+
+// A card not passed yet is in the snapshot the morning briefing reads, with what changed and where to look; the
+// reminder waits for the briefing's own time (08:30 here), not a fixed 9:00.
+func TestUnacceptedInTheMorningBriefing(t *testing.T) {
+	s, f, posts := acceptService(t)
+	todo := startedTask(t, s, f)
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+	waitFor(t, "the 请验收 card", func() bool { return acceptCardOf(posts()) != "" })
+	ctx := context.Background()
+	loc := s.location(ctx)
+	got, total := s.snapshotUnaccepted(ctx, loc)
+	if len(got) != 1 || total != 1 || got[0].Changed != "飞书机器人多了任务进展开关" || got[0].Link != "https://hub.example.com/settings?tab=feishu" {
+		t.Fatalf("unaccepted %+v", got)
+	}
+	sc, err := s.lockedSchedule(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range sc.tasks {
+		if sc.tasks[i].ID == "morning" {
+			sc.tasks[i].Time, sc.tasks[i].Enabled = "08:30", true
+		}
+	}
+	sc.mu.Unlock()
+	if hh, mm := s.briefingClock(ctx); hh != 8 || mm != 30 {
+		t.Fatalf("briefing at %d:%02d", hh, mm)
+	}
+	s.accept.mu.Lock()
+	s.accept.asks[todo.ID].AskedAt = time.Now().Add(-30 * time.Hour)
+	s.accept.mu.Unlock()
+	now := time.Now().In(loc)
+	n := len(posts())
+	s.remindAcceptance(time.Date(now.Year(), now.Month(), now.Day(), 8, 20, 0, 0, loc))
+	if len(posts()) != n {
+		t.Fatalf("reminded before the briefing")
+	}
+	s.remindAcceptance(time.Date(now.Year(), now.Month(), now.Day(), 8, 40, 0, 0, loc))
+	if got := posts()[n:]; len(got) != 1 || !strings.Contains(got[0], "还没验收") {
+		t.Fatalf("reminders %q", got)
+	}
+	s.accepted(ctx, todo.ID)
+	if got, _ := s.snapshotUnaccepted(ctx, loc); len(got) != 0 {
+		t.Fatalf("still listed after 通过: %+v", got)
+	}
+}

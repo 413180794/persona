@@ -22,8 +22,7 @@ import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
 import persona.core.contracts.parseTime
 import persona.core.contracts.api.AssistantManagement
-import persona.core.contracts.api.Followup
-import persona.core.contracts.api.Routine
+import persona.core.contracts.api.ScheduledTask
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.feature.assistant.LocalAssistantHost
@@ -35,11 +34,12 @@ import java.time.Instant
 import java.time.ZoneId
 
 /**
- * 设置 › 助手 › 主动做事: the assistant's routines, the follow-ups it scheduled for itself, and the history of runs
- * (docs/assistant.md). The screen keeps its own sub-pages (a routine, a new one, all follow-ups, all runs) and back.
+ * 设置 › 助手 › 主动做事: the assistant's 定时任务 (once, daily, every N minutes, docs/assistant.md「定时任务」) and the
+ * history of runs. The screen keeps its own sub-pages (a task, a new one, all one-offs, all runs) and back.
  *
  * [onOpenConversation] opens an assistant conversation: the one a run started, the one a follow-up continues, or the
- * new one 立即运行 started. [management] and [machines] default to the paired hub's (the Persona tab's host).
+ * new one 立即运行 started. [onModelConfiguration] opens 设置 › 模型 for a purpose (`schedule`, `task.<id>`); without
+ * it the editor leaves the row out. [management] and [machines] default to the paired hub's (the Persona tab's host).
  * [initialPage] opens a sub-page directly, for debug captures: `routine:<id>`, `new`, `new:<template>`, `followups`,
  * `runs`, `runs:<routine id>`.
  */
@@ -48,6 +48,7 @@ fun AssistantProactiveScreen(
     onBack: () -> Unit,
     onOpenConversation: (SessionKey) -> Unit,
     modifier: Modifier = Modifier,
+    onModelConfiguration: ((String) -> Unit)? = null,
     management: AssistantManagement? = LocalAssistantHost.current?.management,
     machines: List<Machine> = LocalAssistantHost.current?.machines.orEmpty(),
     initialPage: String? = null,
@@ -66,7 +67,7 @@ fun AssistantProactiveScreen(
     val pageScope = rememberCoroutineScope()
     val say = rememberProactiveText()
     val store = remember(management, hostScope, say) { ProactiveStore(management.proactive(), hostScope ?: pageScope, say) }
-    ProactiveScreen(store, onBack, onOpenConversation, modifier, machines, initialPage)
+    ProactiveScreen(store, onBack, onOpenConversation, modifier, machines, initialPage, onModelConfiguration)
 }
 
 /** One page of the screen; the key is what survives rotation and process death. */
@@ -110,6 +111,7 @@ internal fun ProactiveScreen(
     modifier: Modifier = Modifier,
     machines: List<Machine> = emptyList(),
     initialPage: String? = null,
+    onModelConfiguration: ((String) -> Unit)? = null,
 ) {
     val state by store.state.collectAsStateWithLifecycle()
     val say = rememberProactiveText()
@@ -124,8 +126,8 @@ internal fun ProactiveScreen(
     val zone = remember { ZoneId.systemDefault() }
     // Once the soonest thing is due, read again: it moves into the history and the routine's next run moves on.
     // Counted from the last read, not the ticking clock, so a tick cannot cancel the wait.
-    val nextDue = remember(state.routines.value, state.followups.value, state.readAt) {
-        state.readAt?.let { read -> upcoming(say, state.routines.value.orEmpty(), state.followups.value.orEmpty()).firstOrNull { it.at.isAfter(read) }?.at }
+    val nextDue = remember(state.tasks.value, state.readAt) {
+        state.readAt?.let { read -> upcoming(say, state.tasks.value.orEmpty()).firstOrNull { it.at.isAfter(read) }?.at }
     }
     LaunchedEffect(nextDue) {
         val due = nextDue ?: return@LaunchedEffect
@@ -143,19 +145,16 @@ internal fun ProactiveScreen(
     }
     BackHandler(enabled = pages.size > 1) { pop() }
 
-    val runRoutine: (String) -> Unit = { id -> store.launch { runRoutine(id).onSuccess(onOpenConversation) } }
+    val runTask: (String) -> Unit = { id -> store.launch { run(id).onSuccess(onOpenConversation) } }
     var templates by remember { mutableStateOf(false) }
-    var routineMenu by remember { mutableStateOf<Routine?>(null) }
-    var followupMenu by remember { mutableStateOf<Followup?>(null) }
-    var deleting by remember { mutableStateOf<Routine?>(null) }
-    var cancelling by remember { mutableStateOf<Followup?>(null) }
+    var taskMenu by remember { mutableStateOf<ScheduledTask?>(null) }
+    var deleting by remember { mutableStateOf<ScheduledTask?>(null) }
     val actions = ProactiveActions(
         refresh = { scope.launch { store.refresh() } },
-        newRoutine = { templates = true },
-        openRoutine = { push(ProactivePage.EditRoutine(it)) },
+        newTask = { templates = true },
+        openTask = { push(ProactivePage.EditRoutine(it)) },
         toggle = store::toggle,
-        routineMenu = { routineMenu = it },
-        followupMenu = { followupMenu = it },
+        taskMenu = { taskMenu = it },
         openConversation = onOpenConversation,
         allFollowups = { push(ProactivePage.FollowupList) },
         allRuns = { push(ProactivePage.RunList(it)) },
@@ -183,10 +182,11 @@ internal fun ProactiveScreen(
             holder.SaveableStateProvider(page.key) {
                 when (page) {
                     ProactivePage.Overview -> OverviewPage(state, machines, now, zone, ::pop, actions)
-                    is ProactivePage.EditRoutine -> RoutineEditorPage(page.id, null, state, store, now, zone, ::pop, onOpenConversation,
-                        onAllRuns = { push(ProactivePage.RunList(it)) }, onRunNow = runRoutine)
-                    is ProactivePage.AddRoutine -> RoutineEditorPage(null, RoutineTemplates.getOrNull(page.template)?.draft(say) ?: BlankRoutine,
-                        state, store, now, zone, ::pop, onOpenConversation, onAllRuns = { push(ProactivePage.RunList(it)) }, onRunNow = runRoutine)
+                    is ProactivePage.EditRoutine -> TaskEditorPage(page.id, null, state, store, now, zone, ::pop, onOpenConversation,
+                        onAllRuns = { push(ProactivePage.RunList(it)) }, onRunNow = runTask, onModelConfiguration = onModelConfiguration)
+                    is ProactivePage.AddRoutine -> TaskEditorPage(null, RoutineTemplates.getOrNull(page.template)?.draft(say) ?: BlankTask,
+                        state, store, now, zone, ::pop, onOpenConversation, onAllRuns = { push(ProactivePage.RunList(it)) }, onRunNow = runTask,
+                        onModelConfiguration = onModelConfiguration)
                     ProactivePage.FollowupList -> FollowupsPage(state, machines, now, zone, ::pop, actions)
                     is ProactivePage.RunList -> RunsPage(state, page.ref, now, zone, ::pop, actions)
                 }
@@ -205,44 +205,23 @@ internal fun ProactiveScreen(
             JAction(stringResource(template.name), template.icon) { push(ProactivePage.AddRoutine(index)) }
         } + JAction(stringResource(R.string.assistant_proactive_template_blank), PhIcons.NotePencil) { push(ProactivePage.AddRoutine(-1)) },
     )
-    routineMenu?.let { routine ->
+    taskMenu?.let { task ->
         JActionSheet(
-            title = routine.title, note = say.sentence(routine.time, routine.weekdays), onDismiss = { routineMenu = null },
-            actions = listOf(
-                JAction(stringResource(R.string.assistant_proactive_run_now), PhIcons.Play, enabled = !state.routineBusy(routine.id)) { runRoutine(routine.id) },
-                JAction(stringResource(R.string.assistant_proactive_edit), PhIcons.PencilSimple) { push(ProactivePage.EditRoutine(routine.id)) },
-                JAction(stringResource(R.string.assistant_proactive_delete), PhIcons.Trash, destructive = true) { deleting = routine },
-            ),
-        )
-    }
-    followupMenu?.let { followup ->
-        JActionSheet(
-            title = followup.displayTitle(say), onDismiss = { followupMenu = null },
-            note = parseTime(followup.at)?.let { stringResource(R.string.assistant_proactive_followup_due, say.moment(it, now, zone), say.until(it, now, zone)) },
+            title = task.displayTitle(say), note = say.rule(task, now, zone), onDismiss = { taskMenu = null },
             actions = listOfNotNull(
-                JAction(stringResource(R.string.assistant_proactive_run_now), PhIcons.Play, enabled = !state.followupBusy(followup.id)) {
-                    store.launch { runFollowup(followup.id).onSuccess(onOpenConversation) }
-                },
-                followup.conversation()?.let { key -> JAction(stringResource(R.string.assistant_proactive_open_chat), PhIcons.ChatCircle) { onOpenConversation(key) } },
-                JAction(stringResource(R.string.assistant_proactive_cancel_followup_action), PhIcons.XCircle, destructive = true,
-                    enabled = !state.followupBusy(followup.id)) { cancelling = followup },
+                JAction(stringResource(R.string.assistant_proactive_run_now), PhIcons.Play, enabled = !state.busy(task.id)) { runTask(task.id) },
+                JAction(stringResource(R.string.assistant_proactive_edit), PhIcons.PencilSimple) { push(ProactivePage.EditRoutine(task.id)) },
+                (task.origin ?: task.ownConversation)?.let { key -> JAction(stringResource(R.string.assistant_proactive_open_chat), PhIcons.ChatCircle) { onOpenConversation(key) } },
+                JAction(stringResource(R.string.assistant_proactive_delete), PhIcons.Trash, destructive = true, enabled = !state.busy(task.id)) { deleting = task },
             ),
         )
     }
-    deleting?.let { routine ->
+    deleting?.let { task ->
         JDialog(
-            onDismiss = { deleting = null }, title = stringResource(R.string.assistant_proactive_delete_title, routine.title),
+            onDismiss = { deleting = null }, title = stringResource(R.string.assistant_proactive_delete_title, task.displayTitle(say)),
             text = stringResource(R.string.assistant_proactive_delete_body), destructive = true,
-            confirm = stringResource(R.string.assistant_proactive_delete) to { deleting = null; store.launch { save(RoutineChange.Delete(routine.id)) } },
+            confirm = stringResource(R.string.assistant_proactive_delete) to { deleting = null; store.launch { save(TaskChange.Delete(task.id)) } },
             dismiss = stringResource(R.string.assistant_proactive_cancel) to { deleting = null },
-        )
-    }
-    cancelling?.let { followup ->
-        JDialog(
-            onDismiss = { cancelling = null }, title = stringResource(R.string.assistant_proactive_cancel_followup_title),
-            text = stringResource(R.string.assistant_proactive_cancel_followup_body, followup.displayTitle(say)), destructive = true,
-            confirm = stringResource(R.string.assistant_proactive_cancel_followup_confirm) to { cancelling = null; store.launch { cancelFollowup(followup.id) } },
-            dismiss = stringResource(R.string.assistant_proactive_keep) to { cancelling = null },
         )
     }
 }

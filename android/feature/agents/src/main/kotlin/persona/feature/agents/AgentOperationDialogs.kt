@@ -75,6 +75,13 @@ internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsVie
     }
 }
 
+/** 挂到待办… / 改挂到其他待办… / 移出待办 of a project (iOS SpaceTodoMenu); [linked] when it is on a to-do. */
+internal class SpaceTodoActions(val linked: Boolean, val onLink: () -> Unit, val onUnlink: (() -> Unit)?)
+
+/** The name a project goes by on a to-do: its herdr name, else its id; null outside a herdr space (iOS SpaceGroup.todoSpace). */
+internal val Session.todoSpaceName: String?
+    get() = spaceId?.takeIf { it.isNotBlank() }?.let { id -> spaceName?.takeIf { it.isNotBlank() } ?: id }
+
 /**
  * The actions of a space. [onOpen] adds 打开空间 (the list offers it here instead of a separate button);
  * [compact] is the smaller trigger of list headings. A space without a herdr name can only be opened and read.
@@ -82,9 +89,9 @@ internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsVie
 @Composable
 internal fun AgentSpaceMenu(session: Session, pinned: Boolean, muted: Boolean, busy: Boolean,
     onPin: () -> Unit, onMute: () -> Unit, onRename: () -> Unit, onMarkRead: (() -> Unit)? = null,
-    onOpen: (() -> Unit)? = null, compact: Boolean = false) {
+    onOpen: (() -> Unit)? = null, compact: Boolean = false, todo: SpaceTodoActions? = null) {
     val named = !session.spaceName.isNullOrBlank()
-    if (!named && onOpen == null && onMarkRead == null) return
+    if (!named && onOpen == null && onMarkRead == null && todo == null) return
     var menu by remember { mutableStateOf(false) }
     val actions = stringResource(R.string.agents_space_actions)
     if (compact) HeadingAction(PhIcons.DotsThree, actions, onClick = { menu = true })
@@ -96,6 +103,11 @@ internal fun AgentSpaceMenu(session: Session, pinned: Boolean, muted: Boolean, b
             add(JAction(stringResource(if (pinned) R.string.agents_space_unpin else R.string.agents_space_pin), PhIcons.PushPin, enabled = !busy, onClick = onPin))
             add(JAction(stringResource(if (muted) R.string.agents_space_unmute else R.string.agents_space_mute), PhIcons.Prohibit, enabled = !busy, onClick = onMute))
             add(JAction(stringResource(R.string.agents_dialog_rename_space), PhIcons.NotePencil, enabled = !busy && session.operationWorkspaceId != null, onClick = onRename))
+        }
+        if (todo != null) {
+            add(JAction(stringResource(if (todo.linked) R.string.agents_space_todo_move else R.string.agents_space_todo_link), PhIcons.ListChecks,
+                separatorBefore = isNotEmpty(), onClick = todo.onLink))
+            todo.onUnlink?.let { add(JAction(stringResource(R.string.agents_space_todo_unlink), PhIcons.LinkSimple, destructive = true, onClick = it)) }
         }
     }, { menu = false }, title = session.spaceName?.takeIf { it.isNotBlank() } ?: actions)
 }

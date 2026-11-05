@@ -13,6 +13,8 @@ import okhttp3.Response
 import persona.core.contracts.FeedItem
 import persona.core.contracts.FeedResponse
 import persona.core.contracts.JsonCodec
+import persona.core.contracts.PlanTask
+import kotlinx.serialization.builtins.ListSerializer
 import persona.core.contracts.TaskPlan
 import persona.core.contracts.Todo
 import persona.core.contracts.TodosResponse
@@ -77,12 +79,25 @@ class HttpTasksApi internal constructor(
         call(path("todos", todoId, "agents", machineId, sessionId), "DELETE")
     }
 
+    override suspend fun linkTodoSpace(todoId: String, machineId: String, space: String) {
+        call(path("todos", todoId, "spaces", machineId, space), "PUT", JsonObject(emptyMap()))
+    }
+
+    override suspend fun unlinkTodoSpace(todoId: String, machineId: String, space: String) {
+        call(path("todos", todoId, "spaces", machineId, space), "DELETE")
+    }
+
     override suspend fun feed(conversation: String, since: String?): FeedResponse =
         JsonCodec.decodeFromJsonElement(call(path("assistant", "conversations", conversation, "feed",
             query = since?.let { mapOf("since" to it) } ?: emptyMap())))
 
-    override suspend fun startPlan(id: String, remember: Boolean): TaskPlan =
-        plan(call(path("task-plans", id, "start"), "POST", buildJsonObject { put("remember", remember) }))
+    override suspend fun startPlan(id: String, remember: Boolean): TaskPlan = startPlan(id, remember, null)
+
+    override suspend fun startPlan(id: String, remember: Boolean, tasks: List<PlanTask>?): TaskPlan =
+        plan(call(path("task-plans", id, "start"), "POST", buildJsonObject {
+            tasks?.let { put("tasks", JsonCodec.encodeToJsonElement(ListSerializer(PlanTask.serializer()), it)) }
+            put("remember", remember)
+        }))
 
     override suspend fun dismissPlan(id: String): TaskPlan = plan(call(path("task-plans", id, "dismiss"), "POST", JsonObject(emptyMap())))
 

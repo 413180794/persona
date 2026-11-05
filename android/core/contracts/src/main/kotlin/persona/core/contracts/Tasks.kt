@@ -204,6 +204,12 @@ fun List<Todo>.ordered(sessionLookup: (SessionKey) -> Session?): List<Todo> {
     return sortedUncompleted + sortedCompleted
 }
 
+/** The open todo [space] on [machineId] is on (a project is on one at a time), as iOS TodosLogic.findTodoForSpace. */
+fun List<Todo>.forSpace(machineId: String, space: String): Todo? {
+    if (machineId.isBlank() || space.isBlank()) return null
+    return firstOrNull { todo -> !todo.isDone && todo.spaces.orEmpty().any { it.machineId == machineId && it.space == space } }
+}
+
 /**
  * Formats the todo context tag as in protocol.md and docs/todos.md.
  */

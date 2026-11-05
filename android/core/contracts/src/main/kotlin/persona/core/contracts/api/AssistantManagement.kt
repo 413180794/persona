@@ -1,10 +1,13 @@
 package persona.core.contracts.api
 
 import persona.core.contracts.SessionKey
-import kotlinx.serialization.EncodeDefault
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** Pairing-scoped assistant actions; the composition root supplies the active transport. */
 interface AssistantManagement {
@@ -34,12 +37,15 @@ interface AssistantManagement {
      */
     suspend fun newMainConversation(carrySummary: Boolean, expect: String?): NewMainResult =
         throw UnsupportedOperationException("New main chat unavailable")
-    suspend fun routines(): List<Routine>
-    suspend fun setRoutines(list: List<Routine>): List<Routine>
-    suspend fun runRoutine(id: String): SessionKey
-    suspend fun followups(): List<Followup>
-    suspend fun cancelFollowup(id: String)
-    suspend fun runFollowup(id: String): SessionKey
+    /** 定时任务 (GET /api/v1/assistant/tasks): one table of once / daily / interval tasks, docs/assistant.md「定时任务」. */
+    suspend fun tasks(): List<ScheduledTask>
+    /** Creates [task] (no id yet, POST) or saves what the user edits on it (PUT); returns it as the hub has it. */
+    suspend fun saveTask(task: ScheduledTask): ScheduledTask
+    suspend fun deleteTask(id: String)
+    /** 立即运行: the conversation the run went to. */
+    suspend fun runTask(id: String): SessionKey
+    /** 下次开新对话: the next run starts a conversation of its own (POST tasks/{id}/fresh). */
+    suspend fun freshTask(id: String): ScheduledTask
     suspend fun runs(): List<Run>
     suspend fun notes(): AssistantNotes
     suspend fun setNotes(text: String)
@@ -53,36 +59,63 @@ interface AssistantManagement {
     suspend fun skills(): AssistantSkills = throw UnsupportedOperationException("Skills unavailable")
 }
 
-@OptIn(ExperimentalSerializationApi::class)
+/**
+ * One 定时任务 (docs/protocol.md `Task`). Read in full from the hub; [editable] is what the app writes back, so the
+ * hub's own fields (last / next run, its own conversation, who made it) are never sent.
+ */
 @Serializable
-data class Routine(
-    // Everything the app edits is always on the wire: JsonCodec leaves out values equal to their default, and
-    // the hub reads what's missing as empty or false — a 09:00 routine lost its time (400 "needs a time"), an
-    // enabled one would turn off. The hub's own fields below stay optional.
-    @EncodeDefault val id: String = "",
-    @EncodeDefault val title: String = "",
-    @EncodeDefault val prompt: String = "",
-    @EncodeDefault val time: String = "09:00",
-    /** 1 = Monday … 7 = Sunday; empty = every day. */
-    @EncodeDefault val weekdays: List<Int> = emptyList(),
-    @EncodeDefault val enabled: Boolean = true,
+data class ScheduledTask(
+    val id: String = "",
+    val title: String = "",
+    val prompt: String = "",
+    /** [ONCE] / [DAILY] / [INTERVAL]. */
+    @SerialName("repeat") val repeats: String = ONCE,
+    /** once: when; interval: the next run. */
+    val at: String? = null,
+    /** daily: "HH:MM" in the user's time zone. */
+    val time: String? = null,
+    /** daily: 1 = Monday … 7 = Sunday; empty = every day. */
+    val weekdays: List<Int> = emptyList(),
+    @SerialName("every_minutes") val everyMinutes: Int = 0,
+    val enabled: Boolean = false,
+    /** The conversation it came from (on [machineId]): runs go into it. Empty = the task's own conversation. */
+    @SerialName("machine_id") val machineId: String? = null,
+    @SerialName("session_id") val sessionId: String? = null,
+    @SerialName("permission_mode") val permissionMode: String? = null,
+    val launcher: String? = null,
+    val effort: String? = null,
     @SerialName("created_by") val createdBy: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
     @SerialName("last_run") val lastRun: String? = null,
     @SerialName("last_session_id") val lastSessionId: String? = null,
     @SerialName("last_status") val lastStatus: String? = null,
     @SerialName("last_error") val lastError: String? = null,
     @SerialName("next_run") val nextRun: String? = null,
-)
+    /** The task's own conversation, kept by the hub; empty = the next run starts one. */
+    @SerialName("run_machine_id") val runMachineId: String? = null,
+    @SerialName("run_session_id") val runSessionId: String? = null,
+) {
+    /** The fields `PUT /api/v1/assistant/tasks/{id}` saves; "" = the default. `push` is left out, so the hub keeps it. */
+    fun editable(): JsonObject = buildJsonObject {
+        if (id.isNotBlank()) put("id", id)
+        put("title", title)
+        put("prompt", prompt)
+        put("repeat", repeats)
+        at?.takeIf { it.isNotBlank() }?.let { put("at", it) }
+        put("time", time.orEmpty())
+        put("weekdays", JsonArray(weekdays.map(::JsonPrimitive)))
+        put("every_minutes", everyMinutes)
+        put("enabled", enabled)
+        put("session_id", sessionId.orEmpty())
+        put("permission_mode", permissionMode.orEmpty())
+    }
 
-@Serializable
-data class Followup(
-    val id: String = "",
-    val at: String? = null,
-    val title: String? = null,
-    val prompt: String = "",
-    @SerialName("session_id") val sessionId: String? = null,
-    @SerialName("machine_id") val machineId: String? = null,
-)
+    companion object {
+        const val ONCE = "once"
+        const val DAILY = "daily"
+        const val INTERVAL = "interval"
+    }
+}
 
 @Serializable
 data class Run(

@@ -81,6 +81,7 @@ import persona.core.domain.tasks.TaskState
 import persona.core.domain.tasks.receiptState
 import persona.core.domain.lines.ApiErrorInfo
 import persona.core.domain.tasks.TasksStore
+import persona.core.domain.tasks.isRemovable
 
 // The unified entry in the assistant's conversation (docs/unified-entry.md; iOS Views/Assistant/Tasks, web
 // views/assistant/Tasks.tsx): the lines the assistant's host adds — plan cards, task cards, receipts, answered lines,
@@ -92,12 +93,17 @@ internal class AssistantTaskHost(
     val conversation: String,
     val sessions: List<Session>,
     val machineName: (String) -> String,
+    /** Opens an agent's whole page (leaves the conversation). */
     val onOpen: (SessionKey) -> Unit,
     val onError: (Throwable) -> Unit,
     val say: (String) -> Unit,
+    /** What is open over the conversation (a task's detail, 全部); kept by the chat page. */
+    val sheet: androidx.compose.runtime.MutableState<TaskSheet?> = mutableStateOf(null),
+    /** The hub's computers, for 改一下's computer. */
+    val machines: List<persona.core.contracts.Machine> = emptyList(),
 )
 
-private fun TaskState.status(): Status = when (this) {
+internal fun TaskState.status(): Status = when (this) {
     TaskState.NeedsYou, TaskState.Interrupted -> Status.NeedsYou
     TaskState.Working, TaskState.NotStarted -> Status.Working
     TaskState.Unread -> Status.Unread
@@ -107,7 +113,7 @@ private fun TaskState.status(): Status = when (this) {
 }
 
 @Composable
-private fun TaskMark(state: TaskState) {
+internal fun TaskMark(state: TaskState) {
     if (state == TaskState.Failed || state == TaskState.Interrupted) {
         JIcon(PhIcons.WarningCircle, decorative = true, size = Tokens.Space.l, tint = PersonaTheme.palette.danger.dot)
     } else if (state == TaskState.Done || state == TaskState.Unread) {
@@ -116,7 +122,7 @@ private fun TaskMark(state: TaskState) {
     } else JStatusDot(state.status())
 }
 
-private fun Todo.place(host: AssistantTaskHost, lead: Session?): String = buildList {
+internal fun Todo.place(host: AssistantTaskHost, lead: Session?): String = buildList {
     val a = activeAgents.firstOrNull() ?: agents.firstOrNull()
     if (a != null) {
         add(host.machineName(a.machineId))
@@ -137,10 +143,9 @@ private fun since(iso: String?, now: Instant = Instant.now()): String? {
     }
 }
 
+/** A tap on a task anywhere in the conversation: its detail rises over it (iOS TaskDetailSheet), even before it has an agent. */
 internal fun openTask(host: AssistantTaskHost, todo: Todo) {
-    val lead = host.tasks.lead(todo, host.sessions)
-    val key = lead?.key ?: todo.activeAgents.firstOrNull()?.let { SessionKey(it.machineId, it.sessionId) } ?: return
-    host.onOpen(key)
+    host.sheet.value = TaskSheet.Task(todo.id)
 }
 
 /** One of the host's lines in the conversation. */
@@ -228,7 +233,7 @@ internal fun AnsweredLine(item: FeedItem, title: String, onOpenTask: (() -> Unit
 
 /** How a planned task's agent asks before it acts, by its permission mode. */
 @Composable
-private fun permissionLabel(mode: String?): String = when (mode ?: "default") {
+internal fun permissionLabel(mode: String?): String = when (mode ?: "default") {
     "acceptEdits" -> stringResource(R.string.chat_tasks_permission_accept_edits)
     "plan" -> stringResource(R.string.chat_tasks_permission_plan)
     "bypassPermissions" -> stringResource(R.string.chat_tasks_permission_bypass)
@@ -240,6 +245,7 @@ private fun permissionLabel(mode: String?): String = when (mode ?: "default") {
 private fun PlanCard(plan: TaskPlan, host: AssistantTaskHost) {
     val busy by host.tasks.busy.collectAsStateWithLifecycle()
     var remember by remember(plan.id) { mutableStateOf(false) }
+    var editing by remember(plan.id) { mutableStateOf(false) }
     if (plan.state != "open") {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
             Text(pluralStringResource(if (plan.state == "started") R.plurals.chat_tasks_plan_started else R.plurals.chat_tasks_plan_dismissed,
@@ -276,10 +282,16 @@ private fun PlanCard(plan: TaskPlan, host: AssistantTaskHost) {
                 JButton(if (plan.tasks.size > 1) pluralStringResource(R.plurals.chat_tasks_plan_start_count, plan.tasks.size, plan.tasks.size)
                     else stringResource(R.string.chat_tasks_plan_start), { host.tasks.startPlan(plan, remember, host.onError) },
                     Modifier.weight(1f), size = JButtonSize.Medium, loading = plan.id in busy)
+                JButton(stringResource(R.string.chat_plan_edit), { editing = true }, kind = JButtonKind.Secondary, size = JButtonSize.Medium,
+                    enabled = plan.id !in busy)
                 JButton(stringResource(R.string.chat_tasks_plan_dismiss), { host.tasks.dismissPlan(plan, host.onError) }, kind = JButtonKind.Secondary, size = JButtonSize.Medium,
                     enabled = plan.id !in busy)
             }
         }
+    }
+    if (editing) PlanEditSheet(plan, host, onDismiss = { editing = false }) { edits ->
+        editing = false
+        host.tasks.startPlan(plan, remember, host.onError, edits)
     }
 }
 
@@ -592,27 +604,47 @@ private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
 
 // ── above the composer ──
 
-/** The dock (a pill for each task going on, waiting first) and the route chip. */
+/**
+ * The dock (iOS TaskDock): 全部 N for the board, held at the leading edge so it never scrolls away, then a pill for each
+ * task going on (waiting first) and, in the main conversation, each agent going on that no task stands for (#1113),
+ * scrolling beside it; a long press on a task's pill removes it while nothing of it runs. Then the route chip.
+ */
 @Composable
 internal fun AssistantTaskBar(host: AssistantTaskHost) {
     val todos by host.tasks.todos.collectAsStateWithLifecycle()
     val routes by host.tasks.routes.collectAsStateWithLifecycle()
+    val main by host.tasks.mainConversation.collectAsStateWithLifecycle()
     val mine = todos.filter { it.origin == host.conversation }
     val going = mine.map { it to host.tasks.stateOf(it, host.sessions) }
         .filter { (_, s) -> s == TaskState.NeedsYou || s == TaskState.Interrupted || s == TaskState.Working || s == TaskState.NotStarted || s == TaskState.Unread }
         .sortedWith(compareBy({ it.second.rank }, { it.first.createdAt?.let { c -> -(AssistantLines.time(c)?.toEpochMilli() ?: 0) } ?: 0 }))
+    val agents = remember(host.conversation, main, host.sessions, todos) { persona.core.domain.tasks.dockAgents(host.conversation, main, host.sessions, todos) }
+    var removing by remember { mutableStateOf<Todo?>(null) }
     Column(Modifier.padding(horizontal = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-        if (going.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            going.forEach { (todo, state) ->
-                JChip(when (state) {
-                    TaskState.NeedsYou -> stringResource(R.string.chat_tasks_dock_waiting, todo.title)
-                    TaskState.Interrupted -> stringResource(R.string.chat_tasks_dock_interrupted, todo.title)
-                    else -> todo.title
-                }, onClick = { openTask(host, todo) }, status = state.status())
+        if (mine.isNotEmpty() || agents.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+            JChip(stringResource(R.string.chat_tasks_dock_all, mine.size + agents.size), onClick = { host.sheet.value = TaskSheet.Board })
+            if (going.isNotEmpty() || agents.isNotEmpty()) Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                going.forEach { (todo, state) ->
+                    JChip(when (state) {
+                        TaskState.NeedsYou -> stringResource(R.string.chat_tasks_dock_waiting, todo.title)
+                        TaskState.Interrupted -> stringResource(R.string.chat_tasks_dock_interrupted, todo.title)
+                        else -> todo.title
+                    }, onClick = { openTask(host, todo) }, status = state.status(),
+                        onLongClick = if (state.isRemovable) ({ removing = todo }) else null)
+                }
+                agents.forEach { session ->
+                    JChip(if (session.agentState == AgentState.NeedsYou) stringResource(R.string.chat_tasks_dock_waiting, session.displayTitle) else session.displayTitle,
+                        onClick = { host.sheet.value = TaskSheet.Agent(session.key) }, status = session.agentState.designStatus, icon = PhIcons.Robot)
+                }
             }
         }
         val routed = routes[host.conversation]?.let { id -> mine.firstOrNull { it.id == id } }
         if (routed != null) JChip(stringResource(R.string.chat_tasks_route_chip, routed.title), selected = true, onClick = { host.tasks.setRoute(host.conversation, null) }, icon = PhIcons.PaperPlaneTilt)
+    }
+    removing?.let { todo ->
+        persona.core.designsystem.JActionSheet(listOf(persona.core.designsystem.JAction(stringResource(R.string.chat_task_detail_remove), PhIcons.Trash,
+            destructive = true) { host.tasks.removeTask(todo, host.onError) }), { removing = null }, title = todo.title)
     }
 }
 

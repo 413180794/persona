@@ -92,6 +92,14 @@ class ShortcutTextTest {
         assertEquals("x".repeat(24), ShortcutPublisher.shortLabel(session("long", 1).copy(title = "x".repeat(40))))
     }
 
+    @Test fun newTodoShortcutOpensTheTodoListWithItsSheet() {
+        ShortcutPublisher.publishFixed(context)
+        val shortcut = androidx.core.content.pm.ShortcutManagerCompat.getDynamicShortcuts(context).first { it.id == "new-todo" }
+        assertEquals("新建待办", shortcut.shortLabel.toString())
+        assertEquals("用 Persona 新建待办", shortcut.longLabel.toString())
+        assertEquals(persona.core.navigation.NewTodoLink, shortcut.intent.dataString)
+    }
+
     @Test fun widgetRowsFollowItsHeight() {
         // One launcher row, then two and three on a phone (2026-11-02, a 3 × 2 widget was 234dp tall).
         assertEquals(0, WidgetLayout.rows(117f))

@@ -119,6 +119,7 @@ Android 使用 `:platform:notify` 的前台服务共用 hub WebSocket，不依�
 - 删除对话（#1749，对齐网页 #801）：没在运行的会话（`Session.canDelete`：未运行 / 完成 / 未知，不在启动中，不是助手的）在长按菜单（未运行的行是「只读打开」旁边）和对话页 ⋯ 里有「删除对话」，确认文案同一份（core:domain `deleteConfirmation`：只从各端列表移除，电脑上的记录不删，再用到会重新出现）。确认后 `DELETE /api/v1/sessions/{mid}/{sid}`（列表走 `AgentOperations.deleteSession`，对话页走 `ChatAction.Delete`，结果不明时按会话列表里没有它核对），列表立即隐藏，打开着的对话页随之退出；hub 拒绝（又跑起来了 409）时提示、不重试。
 - 对话页标题位的连接状态：连不上 hub 时，顶栏标题下那一行换成「等待网络 / 连接中… / 更新中…」（连接中和更新中标题旁转圈），恢复后立刻换回会话状态；1.5 秒的延迟和 8 秒的补拉上限在 `OkHttpHubConnection` / `ConnectionRuntime` 里，和其他页的标题一致。
 - 交互面板细节：提问的选项带编号，问题的 header 和「可多选」显示成标签；终端对话框的 header 显示在问题上方、选项带终端的键，转回对话的那个选项（hub 标成 `kind: chat`，比如「Chat about this」）变成「改在对话里说」按钮（选它就是把这个选项发给终端）。
+- 回答已经结束的请求（#2906，同 iOS #1688）：hub 回 200 `already` 时面板下提示「已经回答过了：<当时生效的答案>」（`feature/chat/AnsweredText`，和网页 `lib/answered.ts` 同一套说法）；410 按 `status` 说「已经过期 / 电脑上已经撤回 / 已经交回电脑处理，回答没有送到」，不带 `status` 的仍是「已在电脑上处理」。`HubInteractionCenter` 记下本机已结束的请求 id（最多 512 个），之后的快照还列着它也不放回来，只有 hub 再推一次这张卡（`interaction` 事件）才算数。
 - 假 hub：`MOCK_SOURCES=1` 多三个会话：「整理部署脚本」（Codex 实时，能发送、能实时接入，没接入前不能审批，带一张有 `always_label` 的 Codex 授权卡）、「迁移日志采集」（Codex 历史，只读，带 `read_only_reason`）、「生成季度报表」（DSH runtime，`agent_label: DSH`，没有终端，带一张没有 `always_label` 的授权卡）；`POST …/attach` 把 `attached` 置真并放开审批，对不能接入的回 403 `codex_read_only`。`/info` 对 Codex 会话回 Codex 的模型和版本。`MOCK_SCREEN_CHAT=1` 多一个带 header（「计划模式」）和转回对话选项的终端对话框（「照片同步脚本支持 HEIC」），看交互面板的标签、编号和「改在对话里说」。想看「全部放行」时的模式按钮，可以直接 `POST /api/v1/sessions/{mid}/{sid}/modes {"permission_mode":"bypassPermissions"}` 给假 hub。
 - 单测：`core:domain` 的 `SessionSourceTest`（旧 `SessionSourcesTest` 的用例 + runtime、恢复命令）、`AgentCloseTest`、`AlwaysOfferTest` 和 answer / approval 夹具；`core:contracts` 的 `ModelsTest`（新字段、`agentLabel`、`SessionInfo`）；`core:hub` 的 `HttpChatActionsTest`（attach、queue、info）、`HttpAgentOperationsTest`（attach）；`feature:chat` 的 `SessionModesTest`（旧 `SessionModesTest`、`ModelPickerTest`）、`ChatSessionInfoTest`（旧 `SessionInfoTest`）、`InteractionOptionsTest`；`feature:agents` 的 `AgentsListInfoTest`；`platform:notify` 的 `NotificationExecutionTest`（不能审批的会话不回传）。
 
@@ -624,7 +625,7 @@ Claude 调 `phone_*` 时 hub 把同名工具合并成一份定义（说明更长
 - herdr server 继承启动它的 shell 的环境：在带代理变量的 shell 里起 herdr，里面的 claude 也会走那个代理。联调时用干净的登录 shell 起 herdr。
 - Claude Code 设置里放开了的工具（allow 规则、bypass 模式）不会触发 PermissionRequest，测授权卡片要在没放开的会话里。
 - `JsonCodec` 的 `encodeDefaults = false` 会把等于默认值的字段省掉不发，而 hub 把缺的字段当成空 / false：定时任务的 `enabled = true`、
-  `time = "09:00"` 被省掉，保存时被关掉或者 400。发给 hub、hub 又按「缺了就是空」处理的字段，要加 `@EncodeDefault`（`SetRoutinesTest` 逐字检查请求）。
+  `time = "09:00"` 被省掉，保存时被关掉或者 400。发给 hub、hub 又按「缺了就是空」处理的字段，要加 `@EncodeDefault`，或者像定时任务那样手写请求体（`ScheduledTask.editable()`，`AssistantManagementTest` 逐字检查请求）。
 - OkHttp 不会在一条死掉的连接上重试 WebSocket 升级：hub 前面的转发（adb reverse、ssh -L）断过一次后，每次重连都报 `unexpected end of stream`，直到重启 App。
   WebSocket 失败时要清空连接池（`connectionPool.evictAll()`）。
 - 倒置的聊天列表（`reverseLayout`）在前面插入新行时保持第一个可见项不动：回复变长、新回复进来时人在最新处也会被留在原地。人在最新处（或刚发了消息）时要主动滚回 0。
@@ -755,6 +756,17 @@ adb -s emulator-5600 exec-out screencap -p > /tmp/jarvis-state-offline-dark.png
 
 Debug 包的设置页底部另有一行「组件目录（调试版）」，自动化启动（`debug.automation`）时隐藏。组件目录的路由和页面只在 `src/debug/` 编译，Release 包里没有。兼容 `--es openSession machine/session`。通知、公开深链和 debug 参数最终汇入同一个路由器；旧通知需要等待会话元数据加载后再分流。
 
+## 待办和 iOS 对齐（#3034）
+
+代码在 `feature/agents/`（`TodosScreen`、`TodoDetailScreen`、`TodoPickerSheet`）和 `core/domain` 的 `TasksStore`、`sort/AgentList.kt`。
+
+- 列表：没完成的行标题下面一行动态，顺序同 iOS `TodoRow`：自动完成的原因、最要紧 Agent 的最新一句（等你时红色）、说明（一行）、都没有时「还没交给 Agent」。已完成的行右滑重新打开、左滑删除，自动完成的写原因。列表为空、没在搜索时，空状态带「新建待办」按钮。 最要紧 Agent 的那句同 iOS `mostUrgentSummary`：启动失败且有原因时「启动失败：原因」，否则会话最新一句（去掉 Markdown 记号）、会话标题、Agent 自己的标题，都没有就往下落到说明。
+- 详情：状态标签后面「N 个 Agent · X 创建」；「项目」一段列整组挂上的工作区（项目 · 电脑，那个项目当前没有活着的 Agent 时写「当前没有 Agent」，「移出」调 `DELETE /api/v1/todos/{id}/spaces/{mid}/{space}`）；每个 Agent 写「电脑 · 空间 · tab」、来源（随项目 / 由 X 派出 / 派生 / 同群，同 iOS `TodosLogic.agentSource`）和最新一句。hub 的待办都不带 `spaces` 时（旧 hub）不显示项目，也不给空间菜单的入口。
+- 挂待办：Agents 页空间的 ⋯ 里「挂到待办… / 改挂到其他待办… / 移出待办」（`PUT` / `DELETE …/spaces/…`，项目名按 hub 的 `space_name`，没有时用空间 id），挂上的空间栏头带「待办：标题」标记；选待办的面板（会话和空间共用）下面有「新建待办…」→ 输入标题 →「创建并挂上」，空间挂着时还有「移出待办」。`TasksStore.setTodoSpace` 先在本地把项目挪过去（一个项目只在一个待办上，原来那个待办下随项目来的 Agent 一起去掉），失败退回，之后重读。 这三项只在 hub 读回过待办、并且认识项目（带 `spaces` 字段）时出现；挂的时候 hub 回路由层的 404（没有 code，或 `not_found` +「Not Found」，同 iOS `TodosLogic.isLegacySpacesRoute`）就当旧 hub，之后不再显示。
+- 按待办分组：在 herdr 里手动开的、没挂待办的（`space_kind == "herdr"` 且不是 Persona 开的）单独一段「手动开的」，在「没有待办」前面、展开；「没有待办」上面有待办段、里面没有等你的时默认折叠（同网页 `buildTodoAgentGroups`），用户展开过记在 `expandedIdle` 的 `todo-none`。
+- 桌面快捷方式：长按图标多一个「新建待办」（`ShortcutPublisher`，`jarvis://open?target=new-todo` → `NewTodoRoute`，待办列表打开时新建面板已经弹出），对齐 iOS `AddTodoIntent`。
+- 截图：`TodosParityShotsTest`（列表、空状态、详情、新建并挂上，三套风格 × 深浅色，写到 `feature/agents/build/i18n-shots/todos-*.png`）；单测 `TodoDataTest`（手动开的一段和默认折叠）、`TaskDockTest`（挂项目）、`HttpTasksApiTest`、`RouterTest`、`ShortcutTextTest`。
+
 ## 主对话统一入口（#930）
 
 和 iOS、网页同一套（[unified-entry.md](unified-entry.md)），代码尽量在新文件里，对话页只留几个挂接点：
@@ -768,7 +780,10 @@ Debug 包的设置页底部另有一行「组件目录（调试版）」，自�
 | 卡片：计划卡、任务卡（不是今天的折成一行）、回执、答过的问题、路由气泡、「今天」、消息卡、秒办结果、日期；输入框上方的任务坞和路由标签 | `feature/chat/AssistantTasks.kt` |
 | 挂接点：`ChatChromeBindings.tasks`（`ChatDestination` 只给助手对话）、`ChatPage` 里行的合并、任务 Agent 的提问并进原来的提问面板（`requests`）、发送前看路由、底部栏的任务坞 | `feature/chat/ChatScreen.kt`、`ChatEntries.kt`、`app/di/ChatWiringModule.kt` |
 
-- 点任务卡、任务坞、回执的「看看」打开那个任务最要紧的 Agent 的对话（`ChatRoute`），不另做详情页。
+- 任务详情（#3034，对齐 iOS `TaskDetailSheet` / 网页 `TaskPanel`）：点任务卡、任务行、任务坞、回执的「看看」、「今天」和消息卡里的任务，都从底部升起这个任务的详情（`feature/chat/AssistantTaskSheets.kt`），不再直接离开主对话：标题、状态、没在跑时 ⋯ 里「移除任务」、关闭；几个 Agent 时上面一排 chip 切换；Agent 那一块是电脑 · 目录 · 类型、它现在在做什么、子 Agent，下面「打开对话」（进那个 Agent 的整页对话）和「说一句」（路由到它）。还没有 Agent 时写「正在开 Agent」，没开起来时写原因并给「重试」「移除任务」。和 iOS 的差别：iOS 在面板里直接嵌 Agent 的整页对话、拉到 0.6 时后面的对话还能用；Android 用设计系统的 `JSheet`（模态），对话在「打开对话」后看。 详情面板画在对话页上（`ChatScreen` 里，和输入框区域无关），只读的助手对话里点任务也能打开；「没开起来」时的「移除任务」先弹确认。
+- 任务坞（对齐 iOS `TaskDock`）：最左边不滚动的「全部 N」打开「任务」面板（等你 / 在做 / 做完了 / 停着 / 已完成 / 没开起来分段，长按可以移除）；后面横滑的任务胶囊，长按没在跑的任务可以移除（`JChip` 加了 `onLongClick`）；主对话里再接手动开的、在做或等你的 Agent 胶囊（`core/domain` 的 `dockAgents`，同 iOS `DockAgent.shown`：不是任何未完成任务的 Agent，hub 标了待办的只认手动建的待办），点开是这个 Agent 的面板（「Agent · 不是从对话开的」）。主对话的 id 由 `TasksStore.mainConversation` 记下。 「任务」面板的任务行写「电脑 · 目录 · Agent · 正在做什么」（没开起来写原因），Agent 行写「电脑 · 目录 · Agent · 最新一句」，同 iOS `TaskBoardSheet`。
+- 计划卡「改一下」（对齐 iOS `PlanEditSheet`）：开始前每个任务可以改标题、电脑（hub 的电脑 chip）、目录、模型（空着用默认）、权限（每步都问 / 可以改文件 / 先出方案 / 全部放行）和第一条消息，点「开始」经 `POST /api/v1/task-plans/{id}/start` 的 `tasks` 发出（`TasksApi.startPlan(id, remember, tasks)`）。 改过之后下拉、点外面或返回先问「放弃这些修改？」（`JSheet` 的 `onBlockedDismiss`），同 iOS `.sheetCancel(unsaved:)`。
+- 截图：`TaskSheetsShotsTest`（任务坞、两个 Agent 的详情、正在开、全部、Agent 面板、改一下，三套风格 × 深浅色，写到 `feature/chat/build/i18n-shots/tasks-*.png`）；单测 `core/domain` 的 `TaskDockTest`。
 - 秒办结果在 Android 上没有撤销（提醒和日程在 iPhone 上），写「在 iPhone 上」。
 - 多 hub：只有当前组（不带组后缀的机器 id）的任务能对上会话，其他组的任务卡显示「正在开」，提问不并进来；要做时在 `GroupTranslation` 里给待办的机器 id 加组后缀。
 - 截图：`MOCK_TASKS=1`（可加 `MOCK_TASKS_AT`、`MOCK_TASKS_NO_ASKS`）导出后跑 `./scripts/app/android.sh shots`，助手对话那张就是主对话。
@@ -893,11 +908,11 @@ python3 scripts/app/android_shots_diff.py /tmp/shots-before-glass /tmp/shots-aft
 用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。「设置 › 助手」拆成两块，这一块管 Persona 自己主动做的事：定时任务、它替自己安排的跟进、运行记录（iOS 的同名页面在 `apple/Persona/Views/Settings/AssistantProactiveViews.swift`）。代码在 `feature/assistant/…/proactive/`，对外只有 `AssistantProactiveScreen(onBack, onOpenConversation)`：`onOpenConversation` 打开一段助手对话（运行开出来的、跟进接着的、立即运行新开的）；接口和协程作用域默认取 Persona tab 宿主（`LocalAssistantHost`）里当前配对的。子页面（某个定时任务、新建、全部跟进、运行记录）和返回在页面里自己管，转场和 App 的页面一样从右边推入。
 
 - 入口：设置 › 助手的「主动做事」一节（在助手设置页里原地打开，打开的对话经 `ChatRoute(kind = Assistant)` 落到 Persona tab）；Persona 抽屉的「定时任务」在 Persona tab 里原地打开同一页，打开的对话直接显示在 Persona 首页。
-- 首页：Persona 的一句话（几个定时任务开着、下一件在什么时候）；「接下来」时间线（左边大号时刻，定时任务的下次运行和跟进混排，最多 4 件）；定时任务（规则的人话「每个工作日 上午 9:00」、下次、上次结果和开关；`created_by: "assistant"` 的头像角上有火花并写明「Persona 在对话里建的」，上次没跑起来的角上是红色警告）；已安排的跟进（时间、在哪台机器、接着原对话还是开新对话，⋯ 里立即运行 / 打开原对话 / 取消，取消要确认）；最近 3 次运行。右上角 ＋ 从模板新建（会前准备、周报、下班前盘点，和 iOS 同一套）或空白。长按定时任务：立即运行、编辑、删除。
-- 定时任务页：名称、开关、时间（时和分两个滚轮，24 小时，TalkBack 可以像滑块一样调）、周几（一 … 日，快捷「每天 / 工作日 / 周末」，最后一天关不掉）、提示词；已有的还有立即运行（有改动先保存）、查看上次结果、历史记录（最近 5 次，更多进运行记录）、删除（要确认）。改了没保存就返回会先问。
+- 首页：Persona 的一句话（几个定时任务开着、下一件在什么时候）；「接下来」时间线（左边大号时刻，所有开着的任务按下次运行混排，最多 4 件）；定时任务（每天和每隔 N 分钟的：规则的人话「每个工作日 上午 9:00」「每 30 分钟」、下次、上次结果、不是默认时的权限模式和开关；`created_by: "assistant"` 的头像角上有火花并写明「Persona 在对话里建的」，上次没跑起来的角上是红色警告）；已安排的跟进（一次性的：时间、接着原对话 / 在同一个对话里 / 开新对话，点一下进编辑页，⋯ 里立即运行 / 编辑 / 打开对话 / 删除，删除要确认）；最近 3 次运行。右上角 ＋ 从模板新建（会前准备、周报、下班前盘点，和 iOS 同一套）或空白。长按定时任务：立即运行、编辑、打开对话、删除。
+- 定时任务页（iOS `AssistantTaskEditor`，#3034 对齐）：名称（一次性的可不填）、开关；什么时候（分段「一次 / 每天 / 每隔」：一次是今天起 14 天的日期 chip 加时分滚轮，过去的时间存不了；每天是时分两个滚轮，24 小时，TalkBack 可以像滑块一样调，加周几（一 … 日，快捷「每天 / 工作日 / 周末」，最后一天关不掉）；每隔是 5 分钟到 24 小时的 chip；切到一次默认一小时后的整点，切到每隔默认 30 分钟）、提示词；运行方式（任务模型：打开「设置 › 模型」的 `task.<id>`，新建时是 `schedule`，宿主没给入口时不显示；权限模式：默认 / 自动改文件 / 只做计划 / 自动 / 全部放行，选全部放行先确认，选了以后整行红色）；对话（从对话里安排的有「接着原来的对话」开关，只能关；否则是「在同一个对话里运行」，已经有自己的对话时点开它，下面「下次开新对话」调 `POST …/tasks/{id}/fresh`）；已有的还有立即运行（有改动先保存）、查看上次结果、历史记录（最近 5 次，更多进运行记录）、删除（要确认）。改了没保存就返回会先问。
 - 运行记录：新的在前，按天分组；已运行 / 没跑起来 / 已跳过，准时或晚了多久、手动运行、原因（hub 常见的英文错误译成中文，其余原样显示）；开出过对话的点开就是那段对话。一个定时任务的历史按 `ref_id` 过滤：`Run` 加了 `ref_id`、`due` 两个字段（hub 本来就返回）。「上次」以运行记录里最新的一次为准：hub 的立即运行不更新 `last_run`，只看定时任务自己的字段会把上一次定时运行的时间和这次手动运行的结果拼在一起。
-- 写入：`PUT /api/v1/assistant/routines` 是整表替换。每次改动（开关、编辑、新建、删除）在写之前重读整表，只改这一个定时任务，其余定时任务（包括 Persona 在这期间新建的）和 hub 自己的字段原样带回；编辑只写用户改过的字段，Persona 在这期间从对话里改的（比如时间）留着。新建的 id 在 App 里生成（`rt_` + 8 位十六进制，hub 只给空 id 分配），回包丢了再点「添加」不会建出第二个。读和写排队、一次一个，开始了的写不会因为离开页面被打断；开关先在界面上动，写失败按 hub 上的值恢复。写入或取消跟进失败先重读核对，hub 上已经是想要的样子就不算失败；正在编辑的定时任务在这期间被删了，提示「已经不在了」，不会把它写回去。
-- 立即运行：定时任务 `POST …/routines/{id}/run`、跟进 `POST …/followups/{id}/run`，hub 要等对话开起来才回（它自己最多等 2 分钟），所以这两个请求的读超时是 130 秒（`HttpAssistantManagement`，和新建 Agent 一样；其他请求仍是 15 秒）。成功后打开新对话；跟进跑了就从列表里拿掉（hub 是先拿掉再跑，所以失败后也重读）。运行和取消挂在配对的作用域上，离开页面不会中断。
+- 写入：统一的 `/api/v1/assistant/tasks`（#3034 起不再调旧的 `routines` / `followups`）：新建 `POST`，改一个 `PUT …/tasks/{id}`，删 `DELETE`。请求体只带用户能改的字段（`ScheduledTask.editable()`：标题、提示词、`repeat`、`at`、`time`、`weekdays`、`every_minutes`、`enabled`、`session_id`、`permission_mode`），不带 `push`，hub 保留原值；`launcher` / `effort` hub 已经不从这里读（模型走模型配置）。编辑只写用户改过的字段，Persona 在这期间从对话里改的（比如时间）留着；切换重复方式时写新规则的字段。写排队、一次一个，开始了的写不会因为离开页面被打断；开关先在界面上动，写失败按 hub 上的值恢复。写入或删除失败先重读核对，hub 上已经是想要的样子就不算失败；正在编辑的任务在这期间被删了，提示没保存上，不会把它写回去。新建的 id 由 hub 分配，回包丢了无法分辨，按失败提示。
+- 立即运行：`POST …/tasks/{id}/run`，hub 要等对话开起来才回（它自己最多等 2 分钟），所以这个请求的读超时是 130 秒（`HttpAssistantManagement`，和新建 Agent 一样；其他请求仍是 15 秒）。成功后打开那段对话；一次性的跑了就从列表里拿掉（之后重读）。运行挂在配对的作用域上，离开页面不会中断。 新建时也有「立即运行」：先添加，再运行并打开那段对话（同 iOS `runNow`）。
 - 失败提示：用户操作的失败交给 App 的统一出口（`LocalAppFeedback.notice`），没有时（调试入口）显示在页面底部；传输层在配对或线路变了时抛的取消算这次请求失败（「连接刚换过，请再试一次」），页面不会卡在「正在保存」。读取失败显示在对应的区块里，可以重试，已经读到的内容留着。相对时间每 30 秒刷新，最近的一件到点 5 秒后自动重读（按上次读取的时刻算，时钟跳动不会把这次重读取消）。
 - 时间：hub 的 `next_run` 按用户时区写、带偏移（`+08:00`）；Android 12 / 13 的 `Instant.parse` 只认 `Z`，这一页统一用 `instantOf`（先 `Instant`，再 `OffsetDateTime`）。`core:contracts` 的 `parseTime` 还是只用 `Instant.parse`，别的页面遇到带偏移的时间在这两个版本上会读不出来。hub 也接受 `9:00` 这样的一位小时，编辑页按 `09:00` 显示和写回。数字一律按 `Locale.ROOT` 格式化。
 - 调试入口（只在 debug 包里，`app/src/debug/…/ProactiveDebugActivity.kt`）：直接连假 hub，不读 App 自己的配对，只接受本机回环地址：
@@ -911,7 +926,7 @@ python3 scripts/app/android_shots_diff.py /tmp/shots-before-glass /tmp/shots-aft
 
   `debug.page` 可选 `routine:<id>`、`new`、`new:<模板序号>`、`followups`、`runs`、`runs:<定时任务 id>`，不传是首页；`debug.theme`、`debug.style` 和 App 的调试参数一样。点到要打开对话的地方，调试入口只弹框说明会打开哪段对话。接进设置以后，也可以在真实外壳里直达：配对假 hub 后 `--es debug.openLink 'jarvis://open?target=settings&page=assistant' --es debug.assistantSettings proactive`。
 - 假 hub：示例数据按 UTC+8 的规则排（上次运行就是规则的上一次，截图用的模拟器设成这个时区），`next_run` 和 hub 一样带 `+08:00`；`MOCK_SCHEDULE=empty` 什么都没有（空状态）；`PUT` 和 hub 一样校验名称、提示词和 HH:MM，按 id 保留 hub 的字段、算下次运行；立即运行和取消对不存在的 id 回 404，每次立即运行记一条手动运行、更新定时任务的上次状态（不动 `last_run`）；`GET /mock/schedule` 看立即运行了哪些，`GET /mock/schedule/reset` 恢复初始数据。
-- 验证（2026-11-02）：单测 `ProactiveStoreTest`（整表 PUT 带回其他定时任务和 hub 字段、开关立即生效和失败恢复、回包丢失不算失败、编辑只写改过的字段、新建重试不重复、被删的不写回、删除、取消跟进和失败、立即运行跟进和定时任务、读取失败保留旧数据、传输层的取消算失败）、`ProactiveTextTest`（规则、时刻和偏移、倒计时、晚了多久、错误、上次运行、跟进去向、时间线和那句话、页面键）。模拟器上连假 hub 把开关、编辑保存、长按立即运行、取消跟进、立即运行跟进、模板新建、删除、未保存返回都点了一遍，hub 收到的内容都对；真实外壳里点过设置 › 助手 › 主动做事、返回、运行记录打开对话（落到 Persona tab）、Persona 抽屉「定时任务」打开和返回；三套风格 × 深浅色、手机和平板都截图看过。真机和真实 hub 没有测；页面性能未实测。
+- 验证（2026-11-02，#3034 换到 tasks 后重写）：单测 `ProactiveStoreTest`（两段的划分、开关只写这一个任务、开关失败恢复、回包丢失不算失败、编辑只写改过的字段、切换重复方式、关掉接着原对话、被删的不写回、删除和回包丢失、立即运行（一次性的跑完拿掉）、下次开新对话、读取失败保留旧数据、传输层的取消算失败）、`ProactiveTextTest`（规则、每隔、时刻和偏移、倒计时、晚了多久、错误、上次运行、去向、运行方式、时间线和那句话、页面键、草稿比较）、`AssistantManagementTest`（POST / PUT / fresh / run 的路径和请求体）；`ProactiveShotsTest` 拍首页、每天 / 每隔 / 一次的编辑页、新建、跟进和运行记录（三种语言，玻璃深浅色，首页三套风格）。2026-11-02 那一轮在模拟器上连假 hub 点过旧版的每个操作；#3034 这一轮 example-machine 没有模拟器，只看了 Robolectric 截图，真机和真实 hub 没有测。
 - 设计系统里没有时间选择和周几选择的组件：这两个件写在 `proactive/ProactiveComponents.kt` 里，只用 token（色板、字体、`shapes.chipShape` / `controlShape`、`Tokens.Space`），不按风格分支；以后设计系统有了对应组件再换过去。
 
 ## 终端与链接（主线旧 App 移植，2026-11-02）

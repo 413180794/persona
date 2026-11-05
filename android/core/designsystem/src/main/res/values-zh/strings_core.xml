@@ -95,6 +95,7 @@
     <string name="designsystem_core_state_muted">已屏蔽</string>
     <string name="designsystem_core_state_idle">已看</string>
     <string name="designsystem_core_agents_no_todo">没有待办</string>
+    <string name="designsystem_core_agents_manual">手动开的</string>
     <string name="designsystem_core_agents_quiet_spaces">空闲的空间</string>
     <plurals name="designsystem_core_count_needs_you">
         <item quantity="other">%1$d 个需要你</item>
@@ -257,6 +258,9 @@
     <string name="designsystem_core_channels_unsupported">这台 hub 还不支持渠道，请先更新 hub</string>
     <string name="designsystem_core_channel_not_found">这台 hub 上没有这个渠道了</string>
     <string name="designsystem_core_interaction_gone">请求已在别处处理</string>
+    <string name="designsystem_core_interaction_expired">这个请求已经过期，回答没有送到</string>
+    <string name="designsystem_core_interaction_cancelled">电脑上已经撤回了这个请求，回答没有送到</string>
+    <string name="designsystem_core_interaction_dismissed">这个请求已经交回电脑处理，回答没有送到</string>
     <string name="designsystem_core_persona_packs_unsupported">这个 hub 还不能放形象：更新 hub 后再看</string>
     <string name="designsystem_core_model_configuration_unsupported">这个 hub 还不支持统一模型配置，请先更新服务器。</string>
     <string name="designsystem_core_hub_updates_unsupported">这个 hub 的版本太旧，不支持在 App 里查看和更新版本</string>

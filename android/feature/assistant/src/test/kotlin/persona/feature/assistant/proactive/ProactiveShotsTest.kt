@@ -29,9 +29,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
-import persona.core.contracts.api.Followup
-import persona.core.contracts.api.Routine
 import persona.core.contracts.api.Run
+import persona.core.contracts.api.ScheduledTask
 import persona.core.designsystem.*
 import java.io.File
 import java.time.Instant
@@ -50,28 +49,27 @@ class ProactiveShotsTest {
     private fun out(): File = File(System.getProperty("persona.shots") ?: "build/i18n-shots").also { it.mkdirs() }
 
     @Config(sdk = [35], qualifiers = "zh-w400dp-h1500dp-xhdpi")
-    @Test fun simplifiedChinese() = shots("zh", Words("主动做事", "定时任务", "早报", "周报", "晚间回顾", "看看 CI 跑完没有", "会前准备", "服务器"))
+    @Test fun simplifiedChinese() = shots("zh", Words("主动做事", "定时任务", "早报", "周报", "晚间回顾", "看看 CI 跑完没有", "会前准备", "服务器", "服务巡检"))
 
     @Config(sdk = [35], qualifiers = "en-w400dp-h1500dp-xhdpi")
     @Test fun english() = shots("en", Words("Proactive", "Scheduled task", "Morning briefing", "Weekly report", "Evening review",
-        "Check whether CI finished", "Meeting prep", "Server"))
+        "Check whether CI finished", "Meeting prep", "Server", "Service check"))
 
     @Config(sdk = [35], qualifiers = "ja-w400dp-h1500dp-xhdpi")
-    @Test fun japanese() = shots("ja", Words("自動実行", "定期タスク", "朝のまとめ", "週報", "夜の振り返り", "CIが終わったか確認", "会議の準備", "サーバー"))
+    @Test fun japanese() = shots("ja", Words("自動実行", "定期タスク", "朝のまとめ", "週報", "夜の振り返り", "CIが終わったか確認", "会議の準備", "サーバー", "サービス巡回"))
 
     /** The page title and the routine editor's title in the shot's language, then the user's own data. */
     private class Words(
         val title: String, val routine: String, val morning: String, val weekly: String, val evening: String,
-        val ci: String, val prep: String, val server: String,
+        val ci: String, val prep: String, val server: String, val patrol: String,
     )
 
-    private class FakeApi(var table: List<Routine>, val followups: List<Followup>, val runs: List<Run>) : ProactiveApi {
-        override suspend fun routines() = table
-        override suspend fun setRoutines(list: List<Routine>) = list.also { table = it }
-        override suspend fun runRoutine(id: String) = SessionKey("server", "run-$id")
-        override suspend fun followups() = followups
-        override suspend fun cancelFollowup(id: String) {}
-        override suspend fun runFollowup(id: String) = SessionKey("server", "run-$id")
+    private class FakeApi(var table: List<ScheduledTask>, val runs: List<Run>) : ProactiveApi {
+        override suspend fun tasks() = table
+        override suspend fun saveTask(task: ScheduledTask) = task.also { saved -> table = table.map { if (it.id == saved.id) saved else it } }
+        override suspend fun deleteTask(id: String) { table = table.filterNot { it.id == id } }
+        override suspend fun runTask(id: String) = SessionKey("server", "run-$id")
+        override suspend fun freshTask(id: String) = table.first { it.id == id }.copy(runSessionId = null)
         override suspend fun runs() = runs
         override suspend fun assistantMachine() = "server"
     }
@@ -79,17 +77,20 @@ class ProactiveShotsTest {
     private fun shots(language: String, words: Words) {
         val now = Instant.now()
         fun at(minutes: Long) = now.plusSeconds(minutes * 60).toString()
-        val routines = listOf(
-            Routine(id = "morning", title = words.morning, prompt = words.morning, time = "09:00", weekdays = listOf(1, 2, 3, 4, 5),
-                enabled = true, lastRun = at(-60 * 20), lastSessionId = "s1", lastStatus = "ok", nextRun = at(150)),
-            Routine(id = "weekly", title = words.weekly, prompt = words.weekly, time = "17:00", weekdays = listOf(5), enabled = true,
-                createdBy = "assistant", lastRun = at(-60 * 24 * 3), lastStatus = "failed", lastError = "assistant machine is offline",
-                nextRun = at(60 * 24 * 3)),
-            Routine(id = "evening", title = words.evening, prompt = words.evening, time = "21:30", weekdays = listOf(1, 3, 5), enabled = false),
-        )
-        val followups = listOf(
-            Followup(id = "f1", at = at(40), title = words.prep, prompt = words.prep, machineId = "server", sessionId = "s2"),
-            Followup(id = "f2", at = at(60 * 5), prompt = words.ci, machineId = "server"),
+        val tasks = listOf(
+            ScheduledTask(id = "morning", title = words.morning, prompt = words.morning, repeats = ScheduledTask.DAILY, time = "09:00",
+                weekdays = listOf(1, 2, 3, 4, 5), enabled = true, lastRun = at(-60 * 20), lastSessionId = "s1", lastStatus = "ok", nextRun = at(150),
+                runMachineId = "server", runSessionId = "own-1"),
+            ScheduledTask(id = "weekly", title = words.weekly, prompt = words.weekly, repeats = ScheduledTask.DAILY, time = "17:00", weekdays = listOf(5),
+                enabled = true, createdBy = "assistant", lastRun = at(-60 * 24 * 3), lastStatus = "failed", lastError = "assistant machine is offline",
+                nextRun = at(60 * 24 * 3), permissionMode = BypassMode),
+            ScheduledTask(id = "patrol", title = words.patrol, prompt = words.patrol, repeats = ScheduledTask.INTERVAL, everyMinutes = 30,
+                at = at(12), nextRun = at(12), enabled = true, permissionMode = "auto"),
+            ScheduledTask(id = "evening", title = words.evening, prompt = words.evening, repeats = ScheduledTask.DAILY, time = "21:30",
+                weekdays = listOf(1, 3, 5), enabled = false),
+            ScheduledTask(id = "f1", repeats = ScheduledTask.ONCE, at = at(40), nextRun = at(40), title = words.prep, prompt = words.prep, enabled = true,
+                machineId = "server", sessionId = "s2"),
+            ScheduledTask(id = "f2", repeats = ScheduledTask.ONCE, at = at(60 * 5), nextRun = at(60 * 5), prompt = words.ci, enabled = true),
         )
         val runs = listOf(
             Run(id = "r1", kind = "routine", refId = "morning", title = words.morning, at = at(-60 * 20), due = at(-60 * 20), status = "ok",
@@ -109,7 +110,7 @@ class ProactiveShotsTest {
                     key(page) {
                         val scope = rememberCoroutineScope()
                         val say = rememberProactiveText()
-                        val store = remember { ProactiveStore(FakeApi(routines, followups, runs), scope, say) }
+                        val store = remember { ProactiveStore(FakeApi(tasks, runs), scope, say) }
                         ProactiveScreen(store, onBack = {}, onOpenConversation = {}, machines = machines, initialPage = page)
                     }
                 }
@@ -128,7 +129,7 @@ class ProactiveShotsTest {
             capture("overview-${s.name.lowercase()}-${if (d) "dark" else "light"}")
         }
         style = AppStyle.Glass
-        for (target in listOf("routine:morning", "routine:weekly", "new:0", "followups", "runs")) {
+        for (target in listOf("routine:morning", "routine:weekly", "routine:patrol", "routine:f1", "new:0", "followups", "runs")) {
             page = target
             for (d in listOf(false, true)) {
                 dark = d

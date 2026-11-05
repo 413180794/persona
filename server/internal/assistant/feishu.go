@@ -569,6 +569,9 @@ func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus) {
 		}
 		content.Text = rest
 	}
+	if !content.Forward && s.acceptReply(ctx, msg.MessageID, content.Text, msg.ParentID, msg.RootID) {
+		return // about a 请验收 card (acceptance.go)
+	}
 	target := s.botTargetFor(msg.RootID, msg.ParentID)
 	if err := botAllowed(s.botLang(ctx), st.Features, target); err != nil {
 		s.botNote(ctx, msg.MessageID, err.Error())

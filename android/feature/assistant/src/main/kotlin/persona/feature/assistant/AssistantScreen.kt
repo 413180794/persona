@@ -44,6 +44,7 @@ import persona.feature.chat.ChatDraftEditor
 import persona.feature.chat.rememberChatComposerState
 import persona.core.navigation.AppTab
 import persona.core.navigation.ChatRoute
+import persona.core.navigation.ModelPurposeRoute
 import persona.core.navigation.Navigator
 import persona.feature.assistant.proactive.AssistantProactiveScreen
 import persona.feature.assistant.settings.AssistantSettingsScreen
@@ -548,6 +549,8 @@ fun AssistantScreen(
         proactiveOpen = false; settingsOpen = false; openedMain = true; openConversation(it)
         scope.launch { assistantAttempt { repository.refresh() } }
     }
+    // A task's model is set on 设置 › 模型 (iOS ModelConfigurationLink); back from it returns here.
+    val openModelConfiguration: (String) -> Unit = { purpose -> navigator.navigate(ModelPurposeRoute(purpose)) }
     if (settingsOpen && management != null) {
         AssistantSettingsScreen(management, machines, onBack = { settingsOpen = false }, inPlace = true, onMoved = {
             // The conversations and the upload target now belong to the other machine.
@@ -555,14 +558,14 @@ fun AssistantScreen(
             assistantAttempt { assistantMachine = management.notes().machineId }
             // The old main conversation is an ordinary one on the old machine now: back here, start the new one.
             newConversation()
-        }, onOpenConversation = openFromSchedule)
+        }, onOpenConversation = openFromSchedule, onModelConfiguration = openModelConfiguration)
         return@PersonaTheme
     }
     if (proactiveOpen && management != null) {
         // Shown in place of the conversation: back on its first page closes it here (its own pages come first).
         BackHandler { proactiveOpen = false }
         AssistantProactiveScreen(onBack = { proactiveOpen = false }, onOpenConversation = openFromSchedule,
-            management = management, machines = machines)
+            onModelConfiguration = openModelConfiguration, management = management, machines = machines)
         return@PersonaTheme
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {

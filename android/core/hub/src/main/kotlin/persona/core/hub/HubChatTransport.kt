@@ -3,6 +3,10 @@ package persona.core.hub
 import persona.core.contracts.*
 import persona.core.contracts.api.*
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -70,20 +74,27 @@ class HubChatTransport internal constructor(
      * the same answer goes again with the same id once the connection is back, for up to [resolveRetryMillis]; the
      * hub runs it at most once and answers a repeat with the stored outcome.
      */
-    override suspend fun resolve(id: String, resolution: Resolution) {
+    override suspend fun resolve(id: String, resolution: Resolution) { resolveOutcome(id, resolution) }
+
+    /**
+     * A card that is over answers 200 `already` with the answer that took effect, or 410 with how it ended
+     * (docs/protocol.md, #1673): the first is an outcome, the second an [InteractionGoneException] carrying `status`.
+     */
+    override suspend fun resolveOutcome(id: String, resolution: Resolution): ResolveOutcome {
         val path = api("interactions", id, "resolve")
         val body = JsonCodec.encodeToString(resolution)
         val headers = mapOf(OP_ID_HEADER to newOpId())
         val deadline = clockMillis() + resolveRetryMillis
         while (true) {
             try {
-                send(path, "POST", body.toRequestBody("application/json; charset=utf-8".toMediaType()), headers).close()
-                return
+                val text = send(path, "POST", body.toRequestBody("application/json; charset=utf-8".toMediaType()), headers)
+                    .use { response -> runCatching { response.body?.string() }.getOrNull() }
+                return resolveOutcome(text)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
                 val failure = HubFailure.from(error)
-                if (failure.status == 410) throw InteractionGoneException()
+                if (failure.status == 410) throw InteractionGoneException(field(failure.body, "status"))
                 if (failure.code == "prompt_changed") throw InteractionPromptChangedException()
                 val remaining = deadline - clockMillis()
                 if (!cutOff(failure) || remaining <= 0) throw error
@@ -105,6 +116,21 @@ class HubChatTransport internal constructor(
         const val RESOLVE_RETRY_MILLIS = 60_000L
         /** Between tries: a hub that answers 503 while it stops would otherwise be asked again at once. */
         const val RESOLVE_RETRY_PAUSE_MILLIS = 500L
+
+        /** The hub's 200 body; anything unreadable (an older hub's `{"ok":true}`, none at all) is a plain answer. */
+        internal fun resolveOutcome(text: String?): ResolveOutcome {
+            val body = text?.let { runCatching { JsonCodec.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+                ?: return ResolveOutcome()
+            val already = (body["already"] as? JsonPrimitive)?.booleanOrNull == true
+            val resolution = body["resolution"]?.takeIf { it is JsonObject }
+                ?.let { runCatching { JsonCodec.decodeFromJsonElement<Resolution>(it) }.getOrNull() }
+            return ResolveOutcome(already, field(text, "status"), resolution)
+        }
+
+        /** A string field of a JSON object body, when there is one. */
+        internal fun field(text: String?, name: String): String? = text
+            ?.let { runCatching { JsonCodec.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+            ?.get(name)?.let { it as? JsonPrimitive }?.takeIf { it.isString }?.content?.takeIf { it.isNotEmpty() }
 
         /** The connection lost the request (refused, reset, timed out, or a proxy said the hub is not there). */
         internal fun cutOff(failure: HubFailure) = when (failure.status) {

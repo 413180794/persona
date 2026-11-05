@@ -71,12 +71,11 @@ class AssistantSettingsShotsTest {
             return config
         }
         override suspend fun endConversation(session: SessionKey) {}
-        override suspend fun routines(): List<Routine> = emptyList()
-        override suspend fun setRoutines(list: List<Routine>) = list
-        override suspend fun runRoutine(id: String) = SessionKey("workstation", id)
-        override suspend fun followups(): List<Followup> = emptyList()
-        override suspend fun cancelFollowup(id: String) {}
-        override suspend fun runFollowup(id: String) = SessionKey("workstation", id)
+        override suspend fun tasks(): List<ScheduledTask> = emptyList()
+        override suspend fun saveTask(task: ScheduledTask) = task
+        override suspend fun deleteTask(id: String) {}
+        override suspend fun runTask(id: String) = SessionKey("workstation", id)
+        override suspend fun freshTask(id: String) = ScheduledTask(id = id)
         override suspend fun runs(): List<Run> = emptyList()
         override suspend fun notes() = AssistantNotes()
         override suspend fun setNotes(text: String) {}

@@ -25,10 +25,27 @@ nonisolated struct FeishuBotStatus: Codable, Hashable, Sendable {
         var pushes: Bool
         var sync: Bool
         var agents: Bool
+        /// The main conversation's tasks are told in the chat (#2768); a hub from before leaves it out: on.
+        var reports: Bool = true
 
         enum CodingKeys: String, CodingKey {
-            case main, cards, pushes, sync, agents
+            case main, cards, pushes, sync, agents, reports
             case allCards = "all_cards"
+        }
+
+        init(main: Bool, cards: Bool, allCards: Bool, pushes: Bool, sync: Bool, agents: Bool, reports: Bool = true) {
+            (self.main, self.cards, self.allCards, self.pushes, self.sync, self.agents, self.reports) = (main, cards, allCards, pushes, sync, agents, reports)
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            main = try c.decode(Bool.self, forKey: .main)
+            cards = try c.decode(Bool.self, forKey: .cards)
+            allCards = try c.decode(Bool.self, forKey: .allCards)
+            pushes = try c.decode(Bool.self, forKey: .pushes)
+            sync = try c.decode(Bool.self, forKey: .sync)
+            agents = try c.decode(Bool.self, forKey: .agents)
+            reports = try c.decodeIfPresent(Bool.self, forKey: .reports) ?? true
         }
     }
 

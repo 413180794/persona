@@ -106,6 +106,7 @@
     <string name="designsystem_core_state_muted">Muted</string>
     <string name="designsystem_core_state_idle">Seen</string>
     <string name="designsystem_core_agents_no_todo">No to-do</string>
+    <string name="designsystem_core_agents_manual">Opened by hand</string>
     <string name="designsystem_core_agents_quiet_spaces">Idle spaces</string>
     <plurals name="designsystem_core_count_needs_you">
         <item quantity="one">%1$d needs you</item>
@@ -283,6 +284,9 @@
     <string name="designsystem_core_channels_unsupported">This hub doesn’t support channels yet. Update the hub first</string>
     <string name="designsystem_core_channel_not_found">This channel is no longer on this hub</string>
     <string name="designsystem_core_interaction_gone">The request was already handled elsewhere</string>
+    <string name="designsystem_core_interaction_expired">This request expired, so the answer wasn\'t delivered</string>
+    <string name="designsystem_core_interaction_cancelled">The computer withdrew this request, so the answer wasn\'t delivered</string>
+    <string name="designsystem_core_interaction_dismissed">This request was handed back to the computer, so the answer wasn\'t delivered</string>
     <string name="designsystem_core_persona_packs_unsupported">This hub can’t hold avatars yet. Update the hub and check again</string>
     <string name="designsystem_core_model_configuration_unsupported">This hub doesn’t support model settings yet. Update the server first.</string>
     <string name="designsystem_core_hub_updates_unsupported">This hub is too old to check for and install updates from the app</string>

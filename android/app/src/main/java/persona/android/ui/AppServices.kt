@@ -143,11 +143,11 @@ class AppServices @Inject constructor(
                 }
                 socket.phoneMessageHandler = phoneTransport?.let { it::accept }
                 val boundInteractions = object : InteractionCenter by interactions {
-                    override suspend fun resolve(id: String, resolution: Resolution) {
-                        try { interactions.resolve(id, resolution) }
+                    override suspend fun resolve(id: String, resolution: Resolution) { resolveOutcome(id, resolution) }
+                    override suspend fun resolveOutcome(id: String, resolution: Resolution) =
+                        try { interactions.resolveOutcome(id, resolution) }
                         catch (cancelled: CancellationException) { throw cancelled }
                         catch (error: Exception) { feedback.failure(error, true); throw error }
-                    }
                 }
                 val tasksStore = persona.core.domain.tasks.TasksStore(persona.core.hub.HttpTasksApi(socket), runtime, data.coroutineScope)
                 // Files, chat actions and machine metrics go to the group of the machine they name (one group: this hub).

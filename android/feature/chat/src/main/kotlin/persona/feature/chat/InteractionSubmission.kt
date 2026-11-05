@@ -1,6 +1,9 @@
 package persona.feature.chat
 
+import android.content.res.Resources
 import persona.core.contracts.Interaction
+import persona.core.contracts.Resolution
+import persona.core.contracts.api.ResolveOutcome
 import persona.core.contracts.api.InteractionGoneException
 import persona.core.contracts.api.InteractionPromptChangedException
 import persona.core.domain.answer.AnswerDraft
@@ -14,6 +17,8 @@ internal fun AnswerDraft.forStorage(interaction: Interaction): AnswerDraft =
 
 internal enum class InteractionSubmission(@androidx.annotation.StringRes val notice: Int, val withdraw: Boolean) {
     Answered(R.string.chat_interaction_answered, true),
+    /** The hub had this card answered already (here, its event missed, or elsewhere): nothing new was sent. */
+    AlreadyAnswered(R.string.chat_interaction_already, true),
     ResolvedElsewhere(R.string.chat_interaction_resolved_elsewhere, true),
     PromptChanged(R.string.chat_interaction_prompt_changed, true),
     Unknown(R.string.chat_interaction_unknown, false),
@@ -21,22 +26,47 @@ internal enum class InteractionSubmission(@androidx.annotation.StringRes val not
 
     /** As iOS AppModel.resolve: answered buzzes success, a changed dialog a nudge, an unconfirmed answer an error. */
     val haptic: persona.core.designsystem.Haptic? get() = when (this) {
-        Answered -> persona.core.designsystem.Haptic.Success
+        Answered, AlreadyAnswered -> persona.core.designsystem.Haptic.Success
         PromptChanged -> persona.core.designsystem.Haptic.Attention
         Unknown -> persona.core.designsystem.Haptic.Error
         ResolvedElsewhere -> null
     }
 }
 
-internal suspend fun submitInteraction(submit: suspend () -> Unit): InteractionSubmission = try {
-    submit()
-    InteractionSubmission.Answered
+/** How one answer went, with what the hub said about a card that was over (docs/protocol.md, #1673). */
+internal data class InteractionReply(
+    val submission: InteractionSubmission,
+    /** The answer that took effect, for [InteractionSubmission.AlreadyAnswered]. */
+    val effective: Resolution? = null,
+    /** How the card ended (`expired`, `cancelled`, `dismissed`), for [InteractionSubmission.ResolvedElsewhere]. */
+    val endedStatus: String? = null,
+) {
+    val withdraw: Boolean get() = submission.withdraw
+
+    /** The words the chat shows for it: the answer that took effect, or why this one was not delivered. */
+    fun notice(res: Resources, interaction: Interaction): String = when {
+        effective != null -> res.getString(R.string.chat_interaction_already_with, AnsweredText.summary(res, interaction, effective))
+        submission == InteractionSubmission.ResolvedElsewhere -> res.getString(when (endedStatus) {
+            "expired" -> R.string.chat_interaction_ended_expired
+            "cancelled" -> R.string.chat_interaction_ended_cancelled
+            "dismissed" -> R.string.chat_interaction_ended_dismissed
+            // An older hub, or one that could not tell how it ended: as before.
+            else -> submission.notice
+        })
+        else -> res.getString(submission.notice)
+    }
+}
+
+internal suspend fun submitInteraction(submit: suspend () -> ResolveOutcome): InteractionReply = try {
+    val outcome = submit()
+    if (outcome.already) InteractionReply(InteractionSubmission.AlreadyAnswered, effective = outcome.resolution)
+    else InteractionReply(InteractionSubmission.Answered)
 } catch (error: CancellationException) {
     throw error
-} catch (_: InteractionGoneException) {
-    InteractionSubmission.ResolvedElsewhere
+} catch (gone: InteractionGoneException) {
+    InteractionReply(InteractionSubmission.ResolvedElsewhere, endedStatus = gone.status)
 } catch (_: InteractionPromptChangedException) {
-    InteractionSubmission.PromptChanged
+    InteractionReply(InteractionSubmission.PromptChanged)
 } catch (_: Exception) {
-    InteractionSubmission.Unknown
+    InteractionReply(InteractionSubmission.Unknown)
 }

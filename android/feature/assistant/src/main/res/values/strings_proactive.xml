@@ -17,15 +17,9 @@
     <string name="assistant_proactive_edit">Edit</string>
     <string name="assistant_proactive_delete">Delete</string>
     <string name="assistant_proactive_cancel">Cancel</string>
-    <string name="assistant_proactive_followup_due">Due %1$s (%2$s)</string>
     <string name="assistant_proactive_open_chat">Open original chat</string>
-    <string name="assistant_proactive_cancel_followup_action">Cancel this follow-up</string>
     <string name="assistant_proactive_delete_title">Delete “%1$s”?</string>
     <string name="assistant_proactive_delete_body">It won\'t run on a schedule anymore. Chats it already ran stay.</string>
-    <string name="assistant_proactive_cancel_followup_title">Cancel this follow-up?</string>
-    <string name="assistant_proactive_cancel_followup_body">“%1$s” won\'t happen when it\'s due.</string>
-    <string name="assistant_proactive_cancel_followup_confirm">Cancel follow-up</string>
-    <string name="assistant_proactive_keep">Keep</string>
 
     <!-- Overview, follow-ups and runs -->
     <string name="assistant_proactive_loading">Loading schedule…</string>
@@ -34,12 +28,9 @@
     <string name="assistant_proactive_empty_body">Tap + at the top to add a scheduled task, or tell Persona in a chat, like “Give me a briefing every day at 9” or “Remind me in an hour”.</string>
     <string name="assistant_proactive_upcoming">Coming up</string>
     <string name="assistant_proactive_routines">Scheduled tasks</string>
-    <string name="assistant_proactive_no_routines">No scheduled tasks yet</string>
-    <string name="assistant_proactive_no_routines_body">Have Persona do something at a set time every day or week.</string>
-    <string name="assistant_proactive_routines_note">When it\'s time, Persona starts a new chat to do it and notifies your phone when done. Times use the time zone in assistant settings.</string>
+    <string name="assistant_proactive_routines_note">When it\'s time, Persona follows the prompt and notifies your phone when done. Times use the time zone in assistant settings.</string>
     <string name="assistant_proactive_followups">Scheduled follow-ups</string>
     <string name="assistant_proactive_no_followups">No follow-ups scheduled</string>
-    <string name="assistant_proactive_no_followups_body">Say “Remind me in an hour” in a chat and Persona schedules it here.</string>
     <plurals name="assistant_proactive_all_followups">
         <item quantity="one">All %1$d follow-up</item>
         <item quantity="other">All %1$d follow-ups</item>
@@ -49,7 +40,7 @@
     <string name="assistant_proactive_all_runs">All runs</string>
     <string name="assistant_proactive_followups_read_failed">Couldn\'t load follow-ups</string>
     <string name="assistant_proactive_followups_empty_body">Say “Remind me in an hour…” or “Help me prepare before tomorrow\'s meeting” in a chat and Persona schedules it here.</string>
-    <string name="assistant_proactive_followups_page_note">Persona comes back and carries on when they\'re due. Tap ⋯ to run now or cancel; tap one that continues a chat to open it.</string>
+    <string name="assistant_proactive_followups_page_note">Persona comes back and carries on when they\'re due. Tap one to edit it; tap ⋯ to run now or delete.</string>
     <string name="assistant_proactive_unknown_time">Unknown time</string>
     <string name="assistant_proactive_routine_runs">Runs of %1$s</string>
     <string name="assistant_proactive_runs">Runs</string>
@@ -87,10 +78,10 @@
     <string name="assistant_proactive_rule_note">%1$s, in the time zone from assistant settings.</string>
     <string name="assistant_proactive_what">What should Persona do</string>
     <string name="assistant_proactive_prompt_placeholder">Write it like in a chat: what to look at and how to report.</string>
-    <string name="assistant_proactive_prompt_note">When it\'s time, Persona starts a new chat to do it and notifies your phone when done. It can also schedule one-off follow-ups, like a reminder 10 minutes before a meeting.</string>
+    <string name="assistant_proactive_prompt_note">Write it as you would in a chat: what to look at and how to report. It can also schedule one-off follow-ups, like 10 minutes before a meeting.</string>
     <string name="assistant_proactive_run">Run</string>
-    <string name="assistant_proactive_run_now_dirty">Saves your changes first, then starts a new chat</string>
-    <string name="assistant_proactive_run_now_body">Starts a new chat; see the result in Persona</string>
+    <string name="assistant_proactive_run_now_dirty">Saves your changes first, then runs it once</string>
+    <string name="assistant_proactive_run_now_body">Doesn\'t change its schedule; see the result in its chat</string>
     <string name="assistant_proactive_last_result">See last result</string>
     <string name="assistant_proactive_last_run_title">Last run</string>
     <string name="assistant_proactive_history">History</string>
@@ -186,9 +177,6 @@
     <string name="assistant_proactive_continues">Continues the original chat</string>
     <string name="assistant_proactive_starts_new">Starts a new chat</string>
     <string name="assistant_proactive_continues_on">Continues the original chat on %1$s</string>
-    <string name="assistant_proactive_starts_new_on">Starts a new chat on %1$s</string>
-    <string name="assistant_proactive_followup_continues">Follow-up, continues the original chat</string>
-    <string name="assistant_proactive_followup_starts_new">Follow-up, starts a new chat</string>
     <string name="assistant_proactive_summary_nothing">Nothing scheduled. Persona only acts when you ask.</string>
     <plurals name="assistant_proactive_summary_on_next">
         <item quantity="one">%1$d scheduled task is on. Next: %2$s.</item>
@@ -203,8 +191,6 @@
     <string name="assistant_proactive_not_saved">Couldn\'t save: %1$s</string>
     <string name="assistant_proactive_not_deleted">Couldn\'t delete: %1$s</string>
     <string name="assistant_proactive_run_failed">Couldn\'t run: %1$s</string>
-    <string name="assistant_proactive_followup_start_failed">Couldn\'t start this follow-up: %1$s</string>
-    <string name="assistant_proactive_followup_cancel_failed">Couldn\'t cancel this follow-up: %1$s</string>
     <string name="assistant_proactive_template_meeting_prep_prompt">Check today\'s meetings in my Lark calendar and phone calendar. For each meeting that needs preparing, use schedule_followup to set up a prep 10 minutes before it: related docs, notes from the last meeting, open questions, and the points I should make. If no meeting needs preparing today, just say so briefly.</string>
     <string name="assistant_proactive_template_weekly_report_prompt">Draft this week\'s report for me: from my Lark calendar, meeting notes, docs and messages, sum up what got done this week, progress and results, problems, and next week\'s plan. Include the main changes the agents on my computers finished this week. Give me a draft first and ask whether to change anything. Don\'t send it.</string>
     <string name="assistant_proactive_template_end_of_day_prompt">End-of-day review: which messages I haven\'t answered today, what I promised others and haven\'t done, which agents on my computers are still running or waiting on me, and which meetings tomorrow morning need preparing. List them by urgency, then ask me which ones need a reminder.</string>

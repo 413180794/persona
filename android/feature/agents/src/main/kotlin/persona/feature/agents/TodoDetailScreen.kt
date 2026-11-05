@@ -12,11 +12,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import persona.core.contracts.AgentState
 import persona.core.contracts.Machine
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
@@ -26,8 +28,22 @@ import persona.core.contracts.TodoState
 import persona.core.contracts.state
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
+import persona.core.domain.sort.slotLabel
 import persona.core.domain.tasks.TasksStore
 import java.time.Instant
+
+/** Where an agent on a to-do came from (iOS TodosLogic.agentSource): with a project, sent by another agent, the same chat. */
+@Composable
+internal fun agentSource(agent: TodoAgent, lookup: (SessionKey) -> Session?): String? = when (agent.source) {
+    "space" -> agent.via.orEmpty().substringAfter('/').let { name ->
+        if (name.isBlank()) stringResource(R.string.agents_todo_source_space) else stringResource(R.string.agents_todo_source_space_named, name)
+    }
+    "spawned" -> agent.via?.takeIf { '/' in it }?.let { via -> lookup(SessionKey(via.substringBefore('/'), via.substringAfter('/'))) }
+        ?.displayTitle?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.agents_todo_source_spawned_by, it) }
+        ?: stringResource(R.string.agents_todo_source_spawned)
+    "chat" -> stringResource(R.string.agents_todo_source_chat)
+    else -> null
+}
 
 @Composable
 fun TodoDetailScreen(
@@ -40,6 +56,7 @@ fun TodoDetailScreen(
     onOpenSession: (SessionKey) -> Unit,
     onHandOff: (Todo) -> Unit,
     onError: (String) -> Unit = {},
+    now: Instant = Instant.now(),
 ) {
     val todo = todos.firstOrNull { it.id == todoId }
     val scope = rememberCoroutineScope()
@@ -173,7 +190,18 @@ fun TodoDetailScreen(
                             } else {
                                 JTag(state.label)
                             }
-                            Spacer(Modifier.weight(1f))
+                            // iOS: 「状态 · N 个 Agent · X 创建」.
+                            Text(
+                                listOfNotNull(
+                                    pluralStringResource(R.plurals.agents_todo_agents, todo.currentAgents.size, todo.currentAgents.size),
+                                    relativeTime(res, todo.created, now).takeIf { it.isNotBlank() }?.let { stringResource(R.string.agents_todo_created_at, it) },
+                                ).joinToString(" · ", prefix = " · "),
+                                style = PersonaTheme.type.caption,
+                                color = PersonaTheme.palette.ink2,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(start = Tokens.Space.xs),
+                            )
                             if (!editingTitle && !editingNotes) {
                                 JIconButton(PhIcons.NotePencil, stringResource(R.string.agents_todo_edit), {
                                     editingTitle = true
@@ -258,6 +286,40 @@ fun TodoDetailScreen(
                 }
             }
 
+            // 项目（整组挂上的工作区，iOS TodoSpacesSection）
+            val spaces = todo.spaces.orEmpty().takeIf { tasks?.spacesSupported != false }.orEmpty()
+            if (spaces.isNotEmpty()) {
+                item(key = "spaces-header") {
+                    JSectionHeader(stringResource(R.string.agents_todo_spaces), count = spaces.size)
+                }
+                itemsIndexed(spaces, key = { _, sp -> "space:${sp.machineId}/${sp.space}" }) { index, sp ->
+                    val machineName = machines.firstOrNull { it.id == sp.machineId }?.displayName ?: sp.machineId
+                    val live = machines.firstOrNull { it.id == sp.machineId }?.online != false && sessions.any { session ->
+                        session.machineId == sp.machineId && session.agentState != AgentState.Offline &&
+                            (session.spaceName?.takeIf { it.isNotBlank() } ?: session.spaceId) == sp.space
+                    }
+                    JGroupItem(GroupPosition.of(index, spaces.size)) {
+                        JRow(
+                            title = stringResource(R.string.agents_todo_location, sp.space, machineName),
+                            subtitle = if (live) null else stringResource(R.string.agents_todo_space_no_agent),
+                            leadingIcon = PhIcons.SquaresFour,
+                            trailing = {
+                                JTextButton(stringResource(R.string.agents_todo_space_remove), onClick = {
+                                    scope.launch {
+                                        try {
+                                            tasks?.setTodoSpace(todo.id, sp.machineId, sp.space, linked = false)
+                                        } catch (e: Exception) {
+                                            onError(res.getString(R.string.agents_todo_remove_failed, e.message.orEmpty()))
+                                        }
+                                    }
+                                })
+                            },
+                            chevron = false,
+                        )
+                    }
+                }
+            }
+
             // 正在做的 Agents
             item(key = "active-header") {
                 JSectionHeader(stringResource(R.string.agents_todo_active_agents), count = todo.currentAgents.size)
@@ -272,8 +334,12 @@ fun TodoDetailScreen(
                     val session = sessionLookup(agent.key)
                     val machineName = machines.firstOrNull { it.id == agent.machineId }?.displayName ?: agent.machineId
                     val title = session?.displayTitle ?: agent.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.agents_todo_session_short, agent.sessionId.take(8))
-                    val subtitle = stringResource(R.string.agents_todo_location, machineName, session?.folderName ?: agent.cwd?.substringAfterLast('/').orEmpty())
-                    val preview = session?.lastText ?: if (session == null) stringResource(R.string.agents_todo_not_listed) else null
+                    // iOS: 电脑 · 空间 · tab, where it came from, then what it says now.
+                    val place = listOf(machineName, session?.spaceName, session?.slotLabel).filterNot { it.isNullOrBlank() }.joinToString(" · ")
+                        .ifBlank { stringResource(R.string.agents_todo_location, machineName, session?.folderName ?: agent.cwd?.substringAfterLast('/').orEmpty()) }
+                    val source = agentSource(agent, sessionLookup)
+                    val preview = session?.lastText?.takeIf { it.isNotBlank() } ?: if (session == null) stringResource(R.string.agents_todo_not_listed) else null
+                    val subtitle = listOfNotNull(place, source, preview).joinToString("\n")
                     val status = session?.let {
                         Status.entries.firstOrNull { s -> s.name == it.agentState.name }
                     } ?: Status.Idle
@@ -282,7 +348,8 @@ fun TodoDetailScreen(
                         Column {
                             JRow(
                                 title = title,
-                                subtitle = preview ?: subtitle,
+                                subtitle = subtitle,
+                                subtitleLines = 4,
                                 leading = { JStatusDot(status) },
                                 trailing = {
                                     JIconButton(PhIcons.X, stringResource(R.string.agents_todo_remove_agent), {

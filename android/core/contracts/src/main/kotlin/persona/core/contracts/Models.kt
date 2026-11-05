@@ -639,6 +639,10 @@ data class Resolution(
     @SerialName("dismiss") val dismiss: Boolean? = null,
     @SerialName("pre_keys") val preKeys: List<String>? = null,
     @SerialName("option") val option: String? = null,
+    /** A multi-select dialog's checked option keys. */
+    @SerialName("options") val options: List<String>? = null,
+    /** Who answered when it was not the user in the app (`assistant`); only in a resolution the hub hands back. */
+    @SerialName("answered_by") val answeredBy: String? = null,
     val action: String? = null,
     val content: kotlinx.serialization.json.JsonObject? = null,
 )

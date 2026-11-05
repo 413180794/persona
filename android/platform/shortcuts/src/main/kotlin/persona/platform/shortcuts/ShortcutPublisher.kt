@@ -9,17 +9,18 @@ import androidx.core.graphics.drawable.IconCompat
 import persona.core.contracts.Session
 
 /**
- * The launcher shortcuts (long-press the Persona icon; iOS App Intents `PersonaShortcuts`): 「问 Persona」, 「批准待处理」 and
- * the two most recently active agents. Published at runtime: a static shortcut's intent would have to spell out the
+ * The launcher shortcuts (long-press the Persona icon; iOS App Intents `PersonaShortcuts`): 「问 Persona」, 「批准待处理」,
+ * 「新建待办」 (iOS AddTodoIntent) and the two most recently active agents. Published at runtime: a static shortcut's intent would have to spell out the
  * application id, which is personal configuration (docs/config.md).
  */
 internal object ShortcutPublisher {
     private const val TAG = "JarvisShortcuts"
     private const val ASK = "ask"
     private const val APPROVE = "approve"
+    private const val NEW_TODO = "new-todo"
     private const val SESSION = "session:"
 
-    /** The two fixed shortcuts; pushDynamicShortcut keeps the recent agents' ones. */
+    /** The fixed shortcuts; pushDynamicShortcut keeps the recent agents' ones. */
     fun publishFixed(context: Context) {
         val approve = Intent(context, ApproveFirstActivity::class.java).setAction(ApproveFirstActivity.ACTION_APPROVE)
         runCatching {
@@ -27,6 +28,8 @@ internal object ShortcutPublisher {
                 SurfaceLinks.ask(context), R.drawable.ic_shortcut_ask, 0))
             ShortcutManagerCompat.pushDynamicShortcut(context, shortcut(context, APPROVE, context.getString(R.string.shortcuts_approve_label), context.getString(R.string.shortcuts_approve_title),
                 approve, R.drawable.ic_shortcut_approve, 1))
+            ShortcutManagerCompat.pushDynamicShortcut(context, shortcut(context, NEW_TODO, context.getString(R.string.shortcuts_new_todo_label),
+                context.getString(R.string.shortcuts_new_todo_title), SurfaceLinks.newTodo(context), R.drawable.ic_shortcut_new_todo, 2))
         }.onFailure { Log.w(TAG, "Fixed shortcuts not published: ${it.javaClass.simpleName}") }
     }
 

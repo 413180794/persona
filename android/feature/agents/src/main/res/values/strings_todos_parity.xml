@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 待办对齐 iOS（#3034）：列表动态、项目、新建并挂上、来源 -->
+    <string name="agents_todo_not_handed">Not handed to an agent yet</string>
+    <string name="agents_todo_created_at">created %1$s</string>
+    <string name="agents_todo_spaces">Projects</string>
+    <string name="agents_todo_space_no_agent">No agent right now</string>
+    <string name="agents_todo_space_remove">Remove</string>
+    <string name="agents_todo_source_space">With its project</string>
+    <string name="agents_todo_source_space_named">With project %1$s</string>
+    <string name="agents_todo_source_spawned_by">Sent by %1$s</string>
+    <string name="agents_todo_source_spawned">Spawned</string>
+    <string name="agents_todo_source_chat">Same chat</string>
+    <string name="agents_picker_new_todo">New to-do…</string>
+    <string name="agents_picker_new_title">Title of the new to-do…</string>
+    <string name="agents_picker_create_and_link">Create and link</string>
+    <string name="agents_notice_todo_create_failed">Couldn\'t create the to-do: %1$s</string>
+    <string name="agents_notice_todo_created_not_linked">The to-do was created, but linking failed: %1$s</string>
+    <string name="agents_notice_space_linked">Project linked to the to-do</string>
+    <string name="agents_notice_space_unlinked">Project removed from the to-do</string>
+    <string name="agents_space_todo_link">Link to a to-do…</string>
+    <string name="agents_space_todo_move">Move to another to-do…</string>
+    <string name="agents_space_todo_unlink">Remove from to-do</string>
+    <string name="agents_flag_space_todo">To-do: %1$s</string>
+</resources>

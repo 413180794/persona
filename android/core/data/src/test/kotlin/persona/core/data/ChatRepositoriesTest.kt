@@ -201,6 +201,36 @@ class ChatRepositoriesTest {
         assertEquals(2, queries.count { it == ItemsQuery() })
     }
 
+    @Test fun cardsThatEndedHereStayGoneFromLaterSnapshotsUntilAnEventBringsThemBack() = runTest {
+        val connection = Connection()
+        val transport = Transport()
+        val center = HubInteractionCenter(transport, connection, backgroundScope)
+        val answered = Interaction("answered", kind = "permission")
+        val gone = Interaction("gone", kind = "question")
+        val other = Interaction("other", kind = "plan")
+        transport.pending = listOf(answered, gone, other)
+        center.refresh()
+        assertEquals(3, center.pending.value.size)
+
+        transport.outcome = ResolveOutcome(already = true, status = "resolved", resolution = Resolution(allow = false))
+        assertEquals(Resolution(allow = false), center.resolveOutcome(answered.id, Resolution(allow = true)).resolution)
+        transport.goneStatus = "expired"
+        val error = runCatching { center.resolveOutcome(gone.id, Resolution(answers = mapOf())) }.exceptionOrNull()
+        assertEquals("expired", (error as InteractionGoneException).status)
+        assertEquals(listOf(other), center.pending.value)
+
+        // A snapshot the hub served before it caught up still lists both: they do not come back.
+        center.refresh()
+        assertEquals(listOf(other), center.pending.value)
+
+        // The hub asking again (a live event for the id) is authoritative.
+        connection.events.emit(InteractionEvent(answered))
+        runCurrent()
+        assertEquals(setOf("other", "answered"), center.pending.value.map { it.id }.toSet())
+        center.refresh()
+        assertEquals(setOf("other", "answered"), center.pending.value.map { it.id }.toSet())
+    }
+
     @Test fun listUsesBroadcastRevsAndInteractionsReconcileWithoutResurrectingResolvedCards() = runTest {
         val connection = Connection()
         val transport = Transport()
@@ -425,12 +455,19 @@ class ChatRepositoriesTest {
         var pendingFetch: (suspend () -> List<Interaction>)? = null
         var fetch: suspend (ItemsQuery) -> ItemsResponse = { error("Unexpected items request") }
         var resolved: String? = null
+        var outcome = ResolveOutcome()
+        var goneStatus: String? = null
         var fullItemId: String? = null
         override suspend fun machines() = machineList
         override suspend fun sessions() = listFetch?.invoke() ?: list
         override suspend fun items(session: SessionKey, query: ItemsQuery) = fetch(query)
         override suspend fun interactions() = pendingFetch?.invoke() ?: pending
         override suspend fun resolve(id: String, resolution: Resolution) { resolved = id }
+        override suspend fun resolveOutcome(id: String, resolution: Resolution): ResolveOutcome {
+            resolved = id
+            goneStatus?.let { goneStatus = null; throw InteractionGoneException(it) }
+            return outcome
+        }
         override suspend fun image(session: SessionKey, itemId: String) = byteArrayOf()
         override suspend fun fullItem(session: SessionKey, itemId: String): Item {
             fullItemId = itemId

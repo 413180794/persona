@@ -13,10 +13,16 @@ interface TasksApi {
     suspend fun deleteTodo(id: String) = Unit
     suspend fun linkTodoAgent(todoId: String, machineId: String, sessionId: String) = Unit
     suspend fun unlinkTodoAgent(todoId: String, machineId: String, sessionId: String) = Unit
+    /** 挂到待办 a whole project (PUT /api/v1/todos/{id}/spaces/{mid}/{space}): its agents follow the todo. */
+    suspend fun linkTodoSpace(todoId: String, machineId: String, space: String): Unit = error("linkTodoSpace not implemented")
+    /** 移出待办: the project and the agents it brought leave the todo. */
+    suspend fun unlinkTodoSpace(todoId: String, machineId: String, space: String): Unit = error("unlinkTodoSpace not implemented")
 
     /** A conversation's feed after [since] (an ISO time; null: all of it), with the plans its `plan` items name. */
     suspend fun feed(conversation: String, since: String?): FeedResponse
     suspend fun startPlan(id: String, remember: Boolean): TaskPlan
+    /** 开始 after 改一下: [tasks] replaces the plan's tasks by index with what the user changed (null: as planned). */
+    suspend fun startPlan(id: String, remember: Boolean, tasks: List<persona.core.contracts.PlanTask>?): TaskPlan = startPlan(id, remember)
     suspend fun dismissPlan(id: String): TaskPlan
     /**
      * 重试 on a task whose agent did not start (#1396): the hub starts the same task again in the same todo and answers

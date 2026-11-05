@@ -9,6 +9,8 @@
   "feature_pushes_detail": "Persona 的通知、定时任务的结果也发一份到飞书",
   "feature_sync_title": "同步主对话",
   "feature_sync_detail": "在 App 里、定时任务在主对话里的回答，也发到飞书",
+  "feature_reports_title": "任务进展发到飞书",
+  "feature_reports_detail": "主对话派出的任务做完、在等你、被打断时，几条合成一张卡片发到飞书，带阶段和链接",
   "feature_agents_title": "驱动 Agent",
   "feature_agents_detail": "/agents 选各台电脑上的 Claude Code / Codex，在飞书里和它聊；/start 开新的",
   "step_create_app": "在飞书开放平台建一个企业自建应用，开启「机器人」能力",

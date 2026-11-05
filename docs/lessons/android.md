@@ -234,3 +234,9 @@ WindowInsets 回给浮层 View 的 IME bottom 可能只是该窗口与键盘的�
   用 `JAVA_TOOL_OPTIONS=-Drobolectric.dependency.repo.url=<镜像>` 传给测试进程。
 - **单测读仓库根目录下的文件**（`jarvis.repo.root`）：`spec/fixtures`、`apple/PersonaTests/Fixtures/terminal-control-scroll.jsonl`。
   只拷 `android/` 过去跑，会多出几条 `FileNotFoundException`，看着像测试坏了。
+
+## 回答已结束的请求：200 already、410 status 和快照复活（2026-11-05，#2906）
+
+- `POST /api/v1/interactions/{id}/resolve` 对已结束的卡不是统一的错误：已回答的回 200 `{already: true, resolution}`（当时生效的答案，可能和这次发的不同），过期、撤回、交回电脑的回 410 带 `status`。只看 HTTP 状态码会把前者当成刚刚答好、把后者一律说成「已在电脑上处理」。
+- 410 的 `status` 在错误体里，`HubFailure.body` 留着原文，按需再解析；`ErrorBody` 不加这个字段。
+- 刷新时只合并「拉取开始之后」的变化，挡不住一份比本机作答还晚、但 hub 还没来得及去掉这张卡的快照：本机结束的 id 要单独记下，快照里的跳过，实时的 `interaction` 事件才放回。

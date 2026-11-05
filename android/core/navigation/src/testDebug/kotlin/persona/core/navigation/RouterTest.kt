@@ -98,6 +98,9 @@ class RouterTest {
         assertFalse(agents!!.focusComposer)
         assertFalse(router.parse(RouteInput.DeepLink("jarvis://open?target=tab&tab=jarvis&focus=search"))!!.focusComposer)
         assertNull(router.parse(RouteInput.DeepLink("$AskPersonaLink&focus=composer")))
+        val newTodo = router.parse(RouteInput.DeepLink(NewTodoLink))
+        assertEquals(AppTab.Agents, newTodo!!.tab)
+        assertEquals(NewTodoRoute, newTodo.key)
     }
 
     @Test fun restoredIdentityReusesExistingEntriesAndKeepsSourcesSerializable() {

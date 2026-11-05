@@ -70,9 +70,11 @@ fun TodosScreen(
     onOpenTodo: (String) -> Unit,
     now: Instant = Instant.now(),
     onError: (String) -> Unit = {},
+    /** Opens with 新建待办 up (the launcher's shortcut). */
+    startCreating: Boolean = false,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    var creating by remember { mutableStateOf(false) }
+    var creating by rememberSaveable { mutableStateOf(startCreating) }
     var completedFolded by rememberSaveable { mutableStateOf(true) }
     var newTitle by remember { mutableStateOf("") }
     var newNotes by remember { mutableStateOf("") }
@@ -181,7 +183,10 @@ fun TodosScreen(
                     JEmptyState(
                         title = stringResource(if (query.isBlank()) R.string.agents_todos_empty else R.string.agents_todos_no_match),
                         description = stringResource(if (query.isBlank()) R.string.agents_todos_empty_hint else R.string.agents_todos_no_match_hint),
-                        icon = PhIcons.ListChecks
+                        icon = PhIcons.ListChecks,
+                        action = if (query.isBlank()) ({
+                            JButton(stringResource(R.string.agents_todo_new), { creating = true }, icon = PhIcons.Plus)
+                        }) else null,
                     )
                 }
             } else {
@@ -264,34 +269,9 @@ fun TodosScreen(
                                         JTag(state.label)
                                     }
 
-                                    // 最要紧 Agent 动态
-                                    if (urgent != null) {
-                                        val agentStatus = when (urgent.status) {
-                                            AgentState.NeedsYou -> Status.NeedsYou
-                                            AgentState.Unread -> Status.Unread
-                                            AgentState.Working -> Status.Working
-                                            else -> Status.Idle
-                                        }
-                                        val text = urgent.session?.lastText?.takeIf { it.isNotBlank() }
-                                            ?: urgent.agent.title?.takeIf { it.isNotBlank() }
-                                            ?: if (urgent.isFailed) stringResource(R.string.agents_todo_start_failed, urgent.agent.startError.orEmpty())
-                                            else stringResource(R.string.agents_todo_in_progress)
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                            modifier = Modifier.padding(start = 32.dp)
-                                        ) {
-                                            JStatusDot(agentStatus)
-                                            Text(
-                                                text,
-                                                style = PersonaTheme.type.caption,
-                                                color = PersonaTheme.palette.ink2,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                        }
-                                    }
+                                    // One line of what is going on (iOS TodoRow): why it finished on its own, the most urgent
+                                    // agent's latest (red while it waits for you), the notes, or that no agent has it yet.
+                                    TodoActivityLine(todo, urgent)
 
                                     // 底部相对时间与挂靠 Agent 数量
                                     Row(
@@ -332,42 +312,68 @@ fun TodosScreen(
 
                     if (!completedFolded) {
                         itemsIndexed(completed, key = { _, todo -> "done:${todo.id}" }) { _, todo ->
-                            JCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                onClick = { onOpenTodo(todo.id) }
-                            ) {
-                                Row(
-                                    Modifier.padding(Tokens.Space.m),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)
-                                ) {
-                                    Box(
-                                        Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .clickable {
-                                                scope.launch {
-                                                    try {
-                                                        tasks?.setTodoDone(todo, false)
-                                                    } catch (e: Exception) {
-                                                        onError(res.getString(R.string.agents_todo_reopen_failed, e.message.orEmpty()))
-                                                    }
-                                                }
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        JIcon(PhIcons.CheckCircle, null, size = 18.dp, selected = true, tint = PersonaTheme.palette.done.dot)
+                            val reopen: () -> Unit = {
+                                scope.launch {
+                                    try {
+                                        tasks?.setTodoDone(todo, false)
+                                    } catch (e: Exception) {
+                                        onError(res.getString(R.string.agents_todo_reopen_failed, e.message.orEmpty()))
                                     }
-                                    Text(
-                                        todo.title,
-                                        style = PersonaTheme.type.body.copy(textDecoration = TextDecoration.LineThrough),
-                                        color = PersonaTheme.palette.ink3,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    if (todo.doneBy == "auto") {
-                                        JTag(stringResource(R.string.agents_todo_auto_done))
+                                }
+                            }
+                            // iOS: swipe right to reopen, left to delete.
+                            JSwipeActions(
+                                start = SwipeAction(stringResource(R.string.agents_todo_reopen), PhIcons.ArrowUUpLeft, Status.Working, reopen),
+                                end = SwipeAction(stringResource(R.string.agents_todo_delete_action), PhIcons.Trash, Status.NeedsYou, {
+                                    scope.launch {
+                                        try {
+                                            tasks?.deleteTodo(todo.id)
+                                        } catch (e: Exception) {
+                                            onError(res.getString(R.string.agents_todo_delete_failed, e.message.orEmpty()))
+                                        }
+                                    }
+                                }, destructive = true),
+                            ) {
+                                JCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = { onOpenTodo(todo.id) }
+                                ) {
+                                    Column(Modifier.padding(Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)
+                                        ) {
+                                            Box(
+                                                Modifier
+                                                    .size(24.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable(onClick = reopen),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                JIcon(PhIcons.CheckCircle, null, size = 18.dp, selected = true, tint = PersonaTheme.palette.done.dot)
+                                            }
+                                            Text(
+                                                todo.title,
+                                                style = PersonaTheme.type.body.copy(textDecoration = TextDecoration.LineThrough),
+                                                color = PersonaTheme.palette.ink3,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            if (todo.doneBy == "auto") {
+                                                JTag(stringResource(R.string.agents_todo_auto_done))
+                                            }
+                                        }
+                                        todo.autoDoneReason?.let { reason ->
+                                            Text(
+                                                reason,
+                                                style = PersonaTheme.type.caption,
+                                                color = PersonaTheme.palette.ink2,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(start = Tokens.Space.xxxl)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -376,6 +382,80 @@ fun TodosScreen(
                 }
             }
         }
+    }
+}
+
+/** Why the to-do finished on its own, when the hub said; null otherwise (iOS `Todo.autoDoneReason`). */
+internal val Todo.autoDoneReason: String?
+    get() = doneReason?.trim()?.takeIf { doneBy == "auto" && it.isNotEmpty() }
+
+/** What the most urgent agent of a to-do says on its row (iOS TodosView.mostUrgentSummary). */
+internal sealed interface TodoUrgentSummary {
+    data class StartFailed(val error: String) : TodoUrgentSummary
+    data class Words(val text: String) : TodoUrgentSummary
+}
+
+/**
+ * iOS mostUrgentSummary: a failed start with its error; else the session's last words as plain text, or its title;
+ * else the agent's own title. Nothing when none of them says anything, so the notes or 还没交给 Agent show instead.
+ */
+internal fun mostUrgentSummary(urgent: TodoMostUrgent?): TodoUrgentSummary? {
+    urgent ?: return null
+    val error = urgent.agent.startError?.trim().orEmpty()
+    if (urgent.isFailed && error.isNotEmpty()) return TodoUrgentSummary.StartFailed(error)
+    urgent.session?.let { session ->
+        val last = session.lastText?.let(::plainMarkdown)?.takeIf(String::isNotBlank)
+        return TodoUrgentSummary.Words(last ?: session.displayTitle)
+    }
+    return urgent.agent.title?.takeIf(String::isNotBlank)?.let(TodoUrgentSummary::Words)
+}
+
+/** Markdown marks off a line so it reads as prose (iOS Fmt.plain): headings, quotes, bullets, emphasis, code, links. */
+internal fun plainMarkdown(text: String): String = text.lineSequence()
+    .map { it.trim().replace(MarkdownLead, "") }
+    .filter(String::isNotEmpty)
+    .joinToString(" ")
+    .replace(MarkdownLink, "$1")
+    .replace(MarkdownMarks, "")
+
+private val MarkdownLead = Regex("^(#{1,6}\\s+|>\\s?|[-*+]\\s+|\\d+[.)]\\s+)+")
+private val MarkdownLink = Regex("!?\\[([^\\]]*)]\\([^)]*\\)")
+private val MarkdownMarks = Regex("\\*\\*|__|~~|`")
+
+/** The open row's line under the title: the auto-done reason, the most urgent agent, the notes, or 还没交给 Agent. */
+@Composable
+private fun TodoActivityLine(todo: Todo, urgent: TodoMostUrgent?) {
+    val palette = PersonaTheme.palette
+    val reason = todo.autoDoneReason
+    val summary = when (val line = mostUrgentSummary(urgent)) {
+        is TodoUrgentSummary.StartFailed -> stringResource(R.string.agents_todo_start_failed, line.error)
+        is TodoUrgentSummary.Words -> line.text
+        null -> null
+    }
+    val notes = todo.notes.trim().takeIf { it.isNotEmpty() }
+    val text = reason ?: summary ?: notes ?: stringResource(R.string.agents_todo_not_handed)
+    val waiting = reason == null && summary != null && urgent?.status == AgentState.NeedsYou
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
+        modifier = Modifier.padding(start = Tokens.Space.xxxl)
+    ) {
+        if (reason == null && urgent != null) {
+            JStatusDot(when (urgent.status) {
+                AgentState.NeedsYou -> Status.NeedsYou
+                AgentState.Unread -> Status.Unread
+                AgentState.Working -> Status.Working
+                else -> Status.Idle
+            })
+        }
+        Text(
+            text,
+            style = PersonaTheme.type.caption,
+            color = if (waiting) palette.danger.text else palette.ink2,
+            maxLines = if (notes != null && text == notes) 1 else 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 

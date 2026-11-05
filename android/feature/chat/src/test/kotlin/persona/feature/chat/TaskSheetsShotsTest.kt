@@ -1,0 +1,184 @@
+package persona.feature.chat
+
+import android.graphics.Bitmap
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.json.JsonObject
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import persona.core.contracts.FeedItem
+import persona.core.contracts.FeedResponse
+import persona.core.contracts.Machine
+import persona.core.contracts.PlanTask
+import persona.core.contracts.ServerEvent
+import persona.core.contracts.Session
+import persona.core.contracts.SessionKey
+import persona.core.contracts.TaskPlan
+import persona.core.contracts.Todo
+import persona.core.contracts.TodoAgent
+import persona.core.contracts.api.ConnectionState
+import persona.core.contracts.api.HubConnection
+import persona.core.contracts.api.TasksApi
+import persona.core.designsystem.AppStyle
+import persona.core.designsystem.PersonaTheme
+import persona.core.designsystem.Tokens
+import persona.core.domain.tasks.AssistantExtra
+import persona.core.domain.tasks.TasksStore
+import java.io.File
+import java.time.Instant
+
+/**
+ * The assistant chat's dock with 全部 and an agent of its own, a task's detail (with two agents; still starting), 全部,
+ * an agent's detail and 改一下 (#3034, iOS TaskSheets / PlanEditSheet): every style, light and dark. A sheet keeps its
+ * first frame after a theme change, so each look of a sheet is a test of its own. PNGs in `build/i18n-shots/`.
+ */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], qualifiers = "zh-w400dp-h1400dp-xhdpi")
+class TaskSheetsShotsTest {
+    @get:Rule val rule = createComposeRule()
+
+    private fun out(): File = File(System.getProperty("persona.shots") ?: "build/i18n-shots").also { it.mkdirs() }
+
+    private val now = Instant.now()
+    private val lead = Session(machineId = "mac", sessionId = "lead", title = "修登录页的崩溃", cwd = "/w/shop", state = "needs_you", agent = "claude",
+        lastText = "要跑一下集成测试吗？")
+    private val helper = Session(machineId = "mac", sessionId = "helper", title = "补单元测试", cwd = "/w/shop", state = "working", agent = "codex",
+        lastText = "在写 AuthService 的测试")
+    private val own = Session(machineId = "box", sessionId = "own", title = "夜间构建", cwd = "/srv/ci", state = "working", agent = "claude",
+        lastText = "第 3 步，共 5 步")
+    private val todos = listOf(
+        Todo("t1", "修登录页的崩溃", createdAt = now.minusSeconds(1500).toString(), origin = "main",
+            agents = listOf(TodoAgent("mac", "lead", cwd = "/w/shop"), TodoAgent("mac", "helper", cwd = "/w/shop"))),
+        Todo("t2", "更新发布说明", createdAt = now.minusSeconds(400).toString(), origin = "main"),
+        Todo("t3", "整理崩溃报告", createdAt = now.minusSeconds(9000).toString(), origin = "main", doneAt = now.minusSeconds(600).toString()),
+    )
+    private val plan = TaskPlan("plan1", "main", listOf(
+        PlanTask("写发布说明", prompt = "按这周合并的 PR 起草发布说明", machine = "mac", cwd = "/w/shop", permission = "acceptEdits"),
+        PlanTask("看崩溃报告", prompt = "读一下昨晚的崩溃报告，找出原因", machine = "box", cwd = "/srv/app", readonly = true),
+    ), state = "open")
+
+    private class Api(val todos: List<Todo>) : TasksApi {
+        override suspend fun todos() = todos
+        override suspend fun feed(conversation: String, since: String?) = FeedResponse(emptyList())
+        override suspend fun startPlan(id: String, remember: Boolean): TaskPlan = error("unused")
+        override suspend fun dismissPlan(id: String): TaskPlan = error("unused")
+        override suspend fun retryTask(todoId: String): Todo = error("unused")
+        override suspend fun removeTask(todoId: String) = Unit
+        override suspend fun route(conversation: String, todoId: String, text: String): FeedItem = error("unused")
+        override suspend fun today(conversation: String): FeedItem = error("unused")
+        override suspend fun mainConversation(): String? = "main"
+        override suspend fun inboxReply(itemId: String, text: String, card: String?) = Unit
+    }
+
+    private class Connection : HubConnection {
+        override val state = MutableStateFlow(ConnectionState.WaitingForNetwork)
+        override val events = MutableSharedFlow<ServerEvent>()
+        override fun reconnect() = Unit
+        override fun send(message: JsonObject): Boolean = true
+    }
+
+    private fun shot(scene: String, style: AppStyle, dark: Boolean, expected: String) {
+        val store = TasksStore(Api(todos), Connection(), CoroutineScope(Dispatchers.Unconfined))
+        store.reloadTodos()
+        store.loadTodayIfMain("other") // reads the main conversation's id
+        val machines = listOf(Machine("mac", "工作笔记本", online = true), Machine("box", "构建服务器", online = true))
+        rule.mainClock.autoAdvance = false
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
+                val sheet = remember {
+                    mutableStateOf<TaskSheet?>(when (scene) {
+                        "detail" -> TaskSheet.Task("t1")
+                        "starting" -> TaskSheet.Task("t2")
+                        "board" -> TaskSheet.Board
+                        "agent" -> TaskSheet.Agent(SessionKey("box", "own"))
+                        else -> null
+                    })
+                }
+                val host = AssistantTaskHost(store, "main", listOf(lead, helper, own), { id -> machines.first { it.id == id }.name }, {}, {}, {},
+                    sheet = sheet, machines = machines)
+                if (scene == "plan") PlanEditSheet(plan, host, onDismiss = {}) {}
+                else Column(Modifier.testTag("shot").width(400.dp).background(PersonaTheme.palette.background).padding(vertical = Tokens.Space.l)) {
+                    AssistantTaskBar(host)
+                }
+                AssistantTaskSheets(host)
+            }
+        }
+        rule.mainClock.advanceTimeBy(1_500)
+        assertTrue("$scene: no 「$expected」", rule.onAllNodesWithText(expected, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+        val node = if (scene == "dock") rule.onNodeWithTag("shot") else rule.onNode(isDialog())
+        val bitmap = node.captureToImage().asAndroidBitmap()
+        File(out(), "tasks-$scene-${style.name.lowercase()}-${if (dark) "dark" else "light"}.png").outputStream()
+            .use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    /** A task card opens its sheet with no dock drawn: a read-only assistant conversation has no composer area (#3034). */
+    @Test fun cardOpensSheetWithoutDock() {
+        val store = TasksStore(Api(todos), Connection(), CoroutineScope(Dispatchers.Unconfined))
+        store.reloadTodos()
+        rule.setContent {
+            PersonaTheme(darkTheme = false, reduceMotion = true, style = AppStyle.Glass) {
+                val sheet = remember { mutableStateOf<TaskSheet?>(null) }
+                val host = AssistantTaskHost(store, "main", listOf(lead, helper, own), { it }, {}, {}, {}, sheet = sheet)
+                Column { AssistantExtraLine(AssistantExtra.Feed(FeedItem("f1", "main", at = now.toString(), kind = "task", ref = "t2")), host) }
+                AssistantTaskSheets(host)
+            }
+        }
+        rule.onAllNodesWithText("更新发布说明", useUnmergedTree = true)[0].performClick()
+        rule.waitForIdle()
+        assertTrue("no task sheet", rule.onAllNodesWithText("正在开 Agent", substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test fun dockGlass() = shot("dock", AppStyle.Glass, false, "全部 4")
+    @Test fun dockGlassDark() = shot("dock", AppStyle.Glass, true, "全部 4")
+    @Test fun dockBrief() = shot("dock", AppStyle.Brief, false, "全部 4")
+    @Test fun dockBriefDark() = shot("dock", AppStyle.Brief, true, "全部 4")
+    @Test fun dockBoard() = shot("dock", AppStyle.Board, false, "全部 4")
+    @Test fun dockBoardDark() = shot("dock", AppStyle.Board, true, "全部 4")
+
+    @Test fun detailGlass() = shot("detail", AppStyle.Glass, false, "打开对话")
+    @Test fun detailGlassDark() = shot("detail", AppStyle.Glass, true, "打开对话")
+    @Test fun detailBrief() = shot("detail", AppStyle.Brief, false, "打开对话")
+    @Test fun detailBriefDark() = shot("detail", AppStyle.Brief, true, "打开对话")
+    @Test fun detailBoard() = shot("detail", AppStyle.Board, false, "打开对话")
+    @Test fun detailBoardDark() = shot("detail", AppStyle.Board, true, "打开对话")
+
+    @Test fun startingGlass() = shot("starting", AppStyle.Glass, false, "正在开 Agent")
+    @Test fun startingGlassDark() = shot("starting", AppStyle.Glass, true, "正在开 Agent")
+
+    @Test fun boardGlass() = shot("board", AppStyle.Glass, false, "已完成")
+    @Test fun boardGlassDark() = shot("board", AppStyle.Glass, true, "已完成")
+    @Test fun boardBrief() = shot("board", AppStyle.Brief, false, "已完成")
+    @Test fun boardBoard() = shot("board", AppStyle.Board, false, "已完成")
+
+    @Test fun agentGlass() = shot("agent", AppStyle.Glass, false, "不是从对话开的")
+    @Test fun agentGlassDark() = shot("agent", AppStyle.Glass, true, "不是从对话开的")
+
+    @Test fun planGlass() = shot("plan", AppStyle.Glass, false, "第一条消息")
+    @Test fun planGlassDark() = shot("plan", AppStyle.Glass, true, "第一条消息")
+    @Test fun planBrief() = shot("plan", AppStyle.Brief, false, "第一条消息")
+    @Test fun planBoard() = shot("plan", AppStyle.Board, false, "第一条消息")
+}

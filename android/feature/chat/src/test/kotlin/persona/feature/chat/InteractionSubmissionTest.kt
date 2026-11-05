@@ -3,6 +3,8 @@ package persona.feature.chat
 import persona.core.contracts.Interaction
 import persona.core.contracts.api.InteractionGoneException
 import persona.core.contracts.api.InteractionPromptChangedException
+import persona.core.contracts.Resolution
+import persona.core.contracts.api.ResolveOutcome
 import persona.core.domain.answer.AnswerAction
 import persona.core.domain.answer.AnswerBuilder
 import persona.core.domain.answer.AnswerDraft
@@ -13,12 +15,17 @@ import org.junit.Test
 
 class InteractionSubmissionTest {
     @Test fun terminalOutcomesWithdrawStaleCardsAndOnlyLostReceiptsStayUncertain() = runTest {
-        assertEquals(InteractionSubmission.Answered, submitInteraction { })
+        assertEquals(InteractionSubmission.Answered, submitInteraction { ResolveOutcome() }.submission)
         val gone = submitInteraction { throw InteractionGoneException() }
-        assertEquals(R.string.chat_interaction_resolved_elsewhere, gone.notice)
+        assertEquals(R.string.chat_interaction_resolved_elsewhere, gone.submission.notice)
         assertTrue(gone.withdraw)
+        val expired = submitInteraction { throw InteractionGoneException("expired") }
+        assertEquals(InteractionReply(InteractionSubmission.ResolvedElsewhere, endedStatus = "expired"), expired)
+        val already = submitInteraction { ResolveOutcome(already = true, resolution = Resolution(allow = false)) }
+        assertEquals(InteractionReply(InteractionSubmission.AlreadyAnswered, effective = Resolution(allow = false)), already)
+        assertTrue(already.withdraw)
         val changed = submitInteraction { throw InteractionPromptChangedException() }
-        assertEquals(InteractionSubmission.PromptChanged, changed)
+        assertEquals(InteractionSubmission.PromptChanged, changed.submission)
         assertTrue(changed.withdraw)
         assertFalse(submitInteraction { throw IllegalStateException() }.withdraw)
         try {
@@ -31,6 +38,8 @@ class InteractionSubmissionTest {
     @Test fun eachOutcomePlaysWhatIosPlays() {
         assertEquals(mapOf(
             InteractionSubmission.Answered to persona.core.designsystem.Haptic.Success,
+            // iOS plays success for a card the hub says was answered already, too.
+            InteractionSubmission.AlreadyAnswered to persona.core.designsystem.Haptic.Success,
             InteractionSubmission.ResolvedElsewhere to null,
             InteractionSubmission.PromptChanged to persona.core.designsystem.Haptic.Attention,
             InteractionSubmission.Unknown to persona.core.designsystem.Haptic.Error,

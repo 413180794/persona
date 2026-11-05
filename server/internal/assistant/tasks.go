@@ -540,6 +540,7 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 		Summary: i18n.T(s.lang(ctx), "assistant-tasks.failed_start", i18n.Args{"reason": reason})})
 	if todo, ok, err := s.todo(ctx, t.TodoID); err == nil && ok {
 		s.quietNotify(ctx, todo, t.Machine, "failed", "", reason)
+		s.taskReport(todo, reportFailed, t.Machine, [2]string{}, reason, nil)
 	}
 }
 
@@ -834,6 +835,7 @@ func (s *Service) taskWorking(ctx context.Context, mid, sid string) {
 	s.tasks.mu.Lock()
 	s.tasks.working[t.ID] = time.Now()
 	s.tasks.mu.Unlock()
+	s.setTaskStage(ctx, t.ID, "develop", "")
 }
 
 type receiptBody struct {
@@ -903,12 +905,14 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		// A turn cut off by the model service is no end of the work: an interrupted receipt (with 继续 on the card),
 		// and nothing to judge or close (#1516).
 		s.logf("task %s: interrupted: %s", t.ID, clip(oneLine(cut.TurnError), 200))
+		where := [2]string{cut.MachineID, cut.SessionID}
 		body := receiptBody{Title: t.Title, State: "interrupted", Summary: i18n.T(s.lang(cctx), "assistant-tasks.interrupted"), Machine: name,
 			Error: clip(strings.TrimSpace(cut.TurnError), 300)}
 		if _, err := s.appendFeed(cctx, t.Origin, feedReceipt, t.ID, body); err != nil {
 			s.logf("task %s: receipt: %v", t.ID, err)
 		}
 		s.quietNotify(cctx, t, name, "interrupted", "", body.Error)
+		s.taskReport(t, reportInterrupted, name, where, body.Error, nil)
 		return
 	}
 	items, read := s.lastTurnItems(cctx, last.MachineID, last.SessionID)
@@ -916,6 +920,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		// No reply and no tool call, yet no error either (the model service answered 200 with nothing in it): no end
 		// of the work. Interrupted, as a cut-off turn is, with nothing to judge or close (#2349).
 		s.logf("task %s: interrupted: the turn had no output", t.ID)
+		where := [2]string{last.MachineID, last.SessionID}
 		l := s.lang(cctx)
 		body := receiptBody{Title: t.Title, State: "interrupted", Summary: i18n.T(l, "assistant-tasks.interrupted"), Machine: name,
 			Error: silentTurnErrorIn(l)}
@@ -923,6 +928,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 			s.logf("task %s: receipt: %v", t.ID, err)
 		}
 		s.quietNotify(cctx, t, name, "interrupted", "", body.Error)
+		s.taskReport(t, reportInterrupted, name, where, body.Error, nil)
 		return
 	}
 	// The whole last reply, as Markdown: the session list's last_text is one line cut at 200 characters.
@@ -941,6 +947,12 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		s.logf("task %s: receipt: %v", t.ID, err)
 	}
 	s.quietNotify(cctx, t, name, "done", "", clipMarkdown(text, 1500))
+	stage, pr := stageOf(text)
+	s.setTaskStage(cctx, t.ID, stage, pr)
+	if stageIndex(stage) >= stageIndex("deploy") {
+		go s.askAcceptance(t, last.MachineID, last.SessionID, text) // the user tries it (acceptance.go)
+	}
+	s.taskReport(t, reportDone, name, [2]string{last.MachineID, last.SessionID}, text, nil)
 	s.autoFinishTask(t, since, worked) // the work may be finished: then the todo is done (done.go)
 }
 

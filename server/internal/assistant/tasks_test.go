@@ -358,7 +358,10 @@ func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
 	golden(t, "assistant_snapshot.links", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",
 		Needs: []prompts.SnapshotAgent{{Label: "修 CI", Machine: "mac-a", Session: "b00502b8", Line: "要你批准推送",
 			Link: sessionLink("https://hub.example.com", "mac-a", "b00502b8-82a3", false)}},
-		Tasks: []prompts.SnapshotTask{linked}}))
+		Tasks: []prompts.SnapshotTask{linked},
+		Unaccepted: []prompts.SnapshotAccept{{Title: "飞书机器人任务进展", Changed: "多了任务进展开关", Link: "https://hub.example.com/settings?tab=feishu",
+			Since: now.Add(-24 * time.Hour)}, {Title: "另一件事", Changed: "改了 A", Since: now}},
+		UnacceptedTotal: 3}))
 
 	lead.State, lead.Subagents = proto.StateUnread, nil
 	if got = snapshotTask(todo, "unread", []proto.Session{lead}, now); got.Doing != "" || got.DoingFor != "" || got.Last == "" {

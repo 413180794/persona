@@ -209,6 +209,7 @@ func (s *Service) InteractionRaised(ctx context.Context, r InteractionRaised) {
 		name = m.Name
 	}
 	s.quietNotify(ctx, t, name, "needs", noticeAsk(ix), "")
+	s.taskReport(t, reportNeeds, name, [2]string{ix.MachineID, ix.SessionID}, noticeAsk(ix), &ix)
 }
 
 // noticeAsk is what the card asks, for the notice: the questions with their options, the plan, the tool.

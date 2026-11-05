@@ -8,4 +8,9 @@ interface InteractionCenter {
     val pending: StateFlow<List<Interaction>>
     suspend fun refresh()
     suspend fun resolve(id: String, resolution: Resolution)
+    /** [resolve], with what the hub said about it ([ResolveOutcome]). */
+    suspend fun resolveOutcome(id: String, resolution: Resolution): ResolveOutcome {
+        resolve(id, resolution)
+        return ResolveOutcome()
+    }
 }

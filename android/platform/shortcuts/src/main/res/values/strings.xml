@@ -41,5 +41,7 @@
     <string name="shortcuts_widget_nobody">No agents need you</string>
     <string name="shortcuts_ask_label">Ask Persona</string>
     <string name="shortcuts_approve_label">Approve pending</string>
+    <string name="shortcuts_new_todo_label">New to-do</string>
+    <string name="shortcuts_new_todo_title">New to-do in Persona</string>
     <string name="shortcuts_open_session">Open %1$s</string>
 </resources>

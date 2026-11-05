@@ -2,6 +2,7 @@ package persona.core.hub
 
 import persona.core.contracts.Resolution
 import persona.core.contracts.api.InteractionGoneException
+import persona.core.contracts.api.ResolveOutcome
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -73,5 +74,31 @@ class ResolveOpIdTest {
         val gone = HubChatTransport({ _, _, _, _ -> throw HubFailure(HubError.Server, "HTTP 410", status = 410) },
             awaitOnline = { true }, clockMillis = { testScheduler.currentTime })
         assertTrue(runCatching { gone.resolve("ix", Resolution(allow = true)) }.exceptionOrNull() is InteractionGoneException)
+    }
+
+    @Test fun aCardThatWasOverSaysHowItEnded() = runTest {
+        fun respond(body: String) = HubChatTransport({ path, _, _, _ ->
+            Response.Builder().request(Request.Builder().url("https://hub.example$path").build())
+                .protocol(Protocol.HTTP_1_1).code(200).message("OK").body(body.toResponseBody()).build()
+        }, awaitOnline = { true }, clockMillis = { testScheduler.currentTime })
+
+        assertEquals(ResolveOutcome(), respond("""{"ok":true}""").resolveOutcome("ix", Resolution(allow = true)))
+        assertEquals(ResolveOutcome(), respond("").resolveOutcome("ix", Resolution(allow = true)))
+        val already = respond("""{"ok":true,"already":true,"status":"resolved","resolution":{"allow":false,"answered_by":"assistant"}}""")
+            .resolveOutcome("ix", Resolution(allow = true))
+        assertEquals(ResolveOutcome(true, "resolved", Resolution(allow = false, answeredBy = "assistant")), already)
+
+        for (status in listOf("expired", "cancelled", "dismissed")) {
+            val gone = HubChatTransport({ _, _, _, _ ->
+                throw HubFailure(HubError.Server, "HTTP 410", status = 410, code = "gone",
+                    body = """{"error":"interaction is no longer pending","code":"gone","status":"$status"}""")
+            }, awaitOnline = { true }, clockMillis = { testScheduler.currentTime })
+            val error = runCatching { gone.resolve("ix", Resolution(allow = true)) }.exceptionOrNull()
+            assertEquals(status, (error as InteractionGoneException).status)
+        }
+        // A 410 that does not say (an older hub, or no record of how it ended).
+        val unknown = HubChatTransport({ _, _, _, _ -> throw HubFailure(HubError.Server, "HTTP 410", status = 410, body = """{"error":"x","code":"gone"}""") },
+            awaitOnline = { true }, clockMillis = { testScheduler.currentTime })
+        assertNull((runCatching { unknown.resolve("ix", Resolution(allow = true)) }.exceptionOrNull() as InteractionGoneException).status)
     }
 }

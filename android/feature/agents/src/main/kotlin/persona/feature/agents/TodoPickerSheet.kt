@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -15,6 +19,7 @@ import persona.core.contracts.TodoState
 import persona.core.contracts.ordered
 import persona.core.contracts.state
 import persona.core.designsystem.*
+import persona.core.designsystem.icons.PhIcons
 
 @Composable
 fun TodoPickerSheet(
@@ -25,8 +30,14 @@ fun TodoPickerSheet(
     title: String = stringResource(R.string.agents_todo_link_title),
     // The todo the agent is on: marked and not picked again (linking it again would only rewrite its source, #2348).
     currentTodoId: String? = null,
+    /** 新建待办… / 创建并挂上 (iOS TodoLinkAgentSheet): a new to-do with this title, linked at once. */
+    onCreate: ((String) -> Unit)? = null,
+    /** 移出待办 / 解除关联 when it is on one: the label and what it does. */
+    unlink: Pair<String, () -> Unit>? = null,
 ) {
     val uncompleted = todos.filter { !it.isDone }.ordered(sessionLookup)
+    var creating by rememberSaveable { mutableStateOf(false) }
+    var newTitle by rememberSaveable { mutableStateOf("") }
     JSheet(onDismiss = onDismiss, title = title) {
         Column(
             Modifier
@@ -37,7 +48,8 @@ fun TodoPickerSheet(
         ) {
             if (uncompleted.isEmpty()) {
                 JEmptyState(stringResource(R.string.agents_picker_empty), stringResource(R.string.agents_picker_empty_hint))
-            } else {
+            }
+            run {
                 uncompleted.forEachIndexed { index, todo ->
                     val state = todo.state(sessionLookup)
                     val status = when (state) {
@@ -56,6 +68,24 @@ fun TodoPickerSheet(
                             onClick = { if (todo.id != currentTodoId) onPick(todo) }
                         )
                     }
+                }
+            }
+            if (onCreate != null) {
+                Spacer(Modifier.height(Tokens.Space.s))
+                if (creating) {
+                    JTextField(newTitle, { newTitle = it }, Modifier.fillMaxWidth(), placeholder = stringResource(R.string.agents_picker_new_title),
+                        singleLine = true)
+                    JButton(stringResource(R.string.agents_picker_create_and_link), { onCreate(newTitle.trim()) }, Modifier.fillMaxWidth(),
+                        enabled = newTitle.isNotBlank(), icon = PhIcons.Plus)
+                } else {
+                    JGroupItem(GroupPosition.Single) {
+                        JRow(stringResource(R.string.agents_picker_new_todo), leadingIcon = PhIcons.Plus, chevron = false, onClick = { creating = true })
+                    }
+                }
+            }
+            unlink?.let { (label, action) ->
+                JGroupItem(GroupPosition.Single) {
+                    JRow(label, leadingIcon = PhIcons.LinkSimple, destructive = true, chevron = false, onClick = action)
                 }
             }
         }

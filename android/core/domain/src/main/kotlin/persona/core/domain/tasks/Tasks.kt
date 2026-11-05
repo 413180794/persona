@@ -24,9 +24,11 @@ import persona.core.contracts.AssistantViewEvent
 import persona.core.contracts.FeedItem
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.Session
+import persona.core.contracts.PlanTask
 import persona.core.contracts.TaskPlan
 import persona.core.contracts.TaskPlanEvent
 import persona.core.contracts.Todo
+import persona.core.contracts.TodoSpace
 import persona.core.contracts.TodosEvent
 import persona.core.contracts.draftPlaceholder
 import persona.core.contracts.api.ConnectionState
@@ -240,6 +242,23 @@ object AssistantLines {
  * The conversation's tasks, plans and feed for one hub, kept up to date by its `todos`, `assistant_feed` and
  * `task_plan` events and pulled again on (re)connect.
  */
+/**
+ * The agents going on that no task stands for, in the main conversation's dock (#1113; iOS `DockAgent.shown`): working
+ * or waiting for the user, not Persona's own, not an agent of a task not done; one the hub tags with a to-do only when
+ * that to-do was made by hand. Waiting first, then the newest. Elsewhere none.
+ */
+fun dockAgents(conversation: String, main: String?, sessions: List<Session>, todos: List<Todo>): List<Session> {
+    if (main.isNullOrBlank() || conversation != main) return emptyList()
+    val taskAgents = todos.filter { !it.origin.isNullOrBlank() && !it.isDone }.flatMap { t -> t.activeAgents.map { it.key } }.toSet()
+    val manual = todos.filter { it.origin.isNullOrBlank() }.map { it.id }.toSet()
+    return sessions.filter { !it.assistant && (it.agentState == AgentState.NeedsYou || it.agentState == AgentState.Working) }
+        .filter { it.key !in taskAgents && (it.todo?.id?.takeIf(String::isNotBlank)?.let { id -> id in manual } ?: true) }
+        .sortedWith(compareBy<Session> { it.agentState.priority }.thenByDescending { it.stateSince.orEmpty() }.thenBy { it.key.path })
+}
+
+/** Whether a task may be removed from the dock or its detail: not while anything of it runs (iOS `isRemovable`). */
+val TaskState.isRemovable: Boolean get() = this != TaskState.Working && this != TaskState.NeedsYou
+
 class TasksStore(private val api: TasksApi, connection: HubConnection, private val scope: CoroutineScope) {
     private val _todos = MutableStateFlow<List<Todo>>(emptyList())
     val todos: StateFlow<List<Todo>> = _todos.asStateFlow()
@@ -283,6 +302,7 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
             runCatching { api.todos() }
                 .onSuccess { list ->
                     _todosSupported.value = true
+                    todosLoaded = true
                     if (list != _todos.value) _todos.value = list
                 }
                 .onFailure { error ->
@@ -339,6 +359,45 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
         reloadTodos()
     }
 
+    /** A read of the to-dos has answered: until then nothing tells whether the hub knows projects. */
+    @Volatile private var todosLoaded = false
+    /** The hub answered 挂到待办 with its router's 404: it has no such route (iOS TodosLogic.isLegacySpacesRoute). */
+    @Volatile private var legacySpaces = false
+
+    /**
+     * Whether this hub knows projects on todos (#1616): an older one leaves `spaces` out altogether (iOS supportsSpaces).
+     * False until the first read answers, and for good once the hub has no route for it.
+     */
+    val spacesSupported: Boolean
+        get() = todosLoaded && !legacySpaces && _todos.value.let { list -> list.isEmpty() || list.any { it.spaces != null } }
+
+    /**
+     * 挂到待办 / 移出待办 a whole project. A project is on one todo at a time: linking it takes it, and the agents it
+     * brought, off any other first. The change shows at once; the hub then supplies the agents it attached.
+     */
+    suspend fun setTodoSpace(todoId: String, machineId: String, space: String, linked: Boolean) {
+        val before = _todos.value
+        val via = "$machineId/$space"
+        _todos.update { list ->
+            list.map { todo ->
+                if (!linked && todo.id != todoId) return@map todo
+                val others = todo.spaces?.filterNot { it.machineId == machineId && it.space == space }
+                val spaces = if (linked && todo.id == todoId) others.orEmpty() + TodoSpace(machineId, space) else others
+                val agents = if (!linked || todo.id != todoId) todo.agents.filterNot { it.source == "space" && it.via == via } else todo.agents
+                todo.copy(spaces = spaces, agents = agents)
+            }
+        }
+        try {
+            if (linked) api.linkTodoSpace(todoId, machineId, space) else api.unlinkTodoSpace(todoId, machineId, space)
+        } catch (t: Throwable) {
+            _todos.value = before
+            if (isLegacySpacesRoute(t)) legacySpaces = true
+            throw t
+        } finally {
+            reloadTodos()
+        }
+    }
+
     /**
      * Pulls [conversation]'s feed: the items after the last one held (all of them with [whole]), and every time the
      * full set of its cards, answers and registered blocks.
@@ -355,14 +414,20 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
     }
 
     private var main: String? = null
+    /** The main assistant conversation's id once read: its dock also shows the agents no task stands for (#1113). */
+    val mainConversation = MutableStateFlow<String?>(null)
 
     /** The 今天 card, for the main conversation only (as iOS). */
     fun loadTodayIfMain(conversation: String) {
         scope.launch {
-            val id = main ?: runCatching { api.mainConversation() }.getOrNull()?.also { main = it }
+            val id = main ?: runCatching { api.mainConversation() }.getOrNull()?.also { main = it; mainConversation.value = it }
             if (id == conversation) loadToday(conversation)
         }
     }
+
+    /** What [conversation]'s dock shows after its tasks (iOS `DockAgent.shown`); see [dockAgents]. */
+    fun agentsOf(conversation: String, sessions: List<Session>): List<Session> =
+        dockAgents(conversation, mainConversation.value, sessions, _todos.value)
 
     fun loadToday(conversation: String) {
         val today = LocalDate.now()
@@ -398,8 +463,10 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
         agentsOf(todo, sessions).minWithOrNull(compareBy<Session>({ it.agentState != AgentState.NeedsYou }, { !it.interrupted },
             { it.agentState.priority }).thenByDescending { it.updatedAt.orEmpty() })
 
-    fun startPlan(plan: TaskPlan, remember: Boolean, onError: (Throwable) -> Unit) = act(plan.id, onError) {
-        val p = api.startPlan(plan.id, remember); _plans.update { it + (p.id to p) }; reloadTodos()
+    /** [edits] is 改一下: the plan's tasks as the user changed them, by index (null: as planned). */
+    fun startPlan(plan: TaskPlan, remember: Boolean, onError: (Throwable) -> Unit, edits: List<PlanTask>? = null) = act(plan.id, onError) {
+        val p = if (edits == null) api.startPlan(plan.id, remember) else api.startPlan(plan.id, remember, edits)
+        _plans.update { it + (p.id to p) }; reloadTodos()
     }
 
     fun dismissPlan(plan: TaskPlan, onError: (Throwable) -> Unit) = act(plan.id, onError) {
@@ -474,4 +541,15 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
         /** The [busy] key of a task's 重试. */
         fun retryKey(todoId: String) = "retry:$todoId"
     }
+}
+
+/**
+ * A 404 from the hub's router rather than its handler (iOS TodosLogic.isLegacySpacesRoute): no code at all, or the
+ * generic `not_found` with「Not Found」. A missing to-do is a 404 with its own message, and keeps the action.
+ */
+internal fun isLegacySpacesRoute(error: Throwable): Boolean {
+    fun read(name: String): Any? = runCatching { error::class.java.methods.firstOrNull { it.name == name && it.parameterCount == 0 }?.invoke(error) }.getOrNull()
+    if (read("getStatus") as? Int != 404) return false
+    val code = (read("getCode") as? String).orEmpty()
+    return code.isEmpty() || (code == "not_found" && error.message == "Not Found")
 }

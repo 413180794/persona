@@ -898,6 +898,7 @@ type FeishuFeatures struct {
 	Pushes   bool `json:"pushes"`
 	Sync     bool `json:"sync"`
 	Agents   bool `json:"agents"`
+	Reports  bool `json:"reports"` // the main conversation's tasks are told in the chat (#2768)
 }
 
 // FeishuStatus is feishu.status's answer.

@@ -3,10 +3,11 @@ package persona.feature.assistant.proactive
 import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
 import persona.core.contracts.parseTime
-import persona.core.contracts.api.Followup
-import persona.core.contracts.api.Routine
 import persona.core.contracts.api.Run
+import persona.core.contracts.api.ScheduledTask
 import java.io.IOException
+import java.time.Instant
+import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -21,79 +22,83 @@ import org.robolectric.annotation.Config
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 
-/** A hub that behaves like the real one for the schedule: PUT keeps its own fields by id and hands out ids. */
+/** A hub that behaves like the real one for the schedule: it keeps its own fields by id and hands out ids. */
 private class FakeHub(
-    var table: List<Routine>,
-    var followups: List<Followup> = emptyList(),
+    var table: List<ScheduledTask>,
     var runs: List<Run> = emptyList(),
 ) : ProactiveApi {
-    val puts = mutableListOf<List<Routine>>()
+    val writes = mutableListOf<ScheduledTask>()
+    val deleted = mutableListOf<String>()
     val started = mutableListOf<String>()
     var failWrite: Exception? = null
     /** The write lands but the answer never comes back. */
     var loseAnswer = false
     var failRun: Exception? = null
-    var failCancel: Exception? = null
-    var cancelLandsAnyway = false
-    var routineReads = 0
+    var failDelete: Exception? = null
+    var deleteLandsAnyway = false
+    var reads = 0
+    private var ids = 0
 
-    override suspend fun routines(): List<Routine> { routineReads++; return table }
+    override suspend fun tasks(): List<ScheduledTask> { reads++; return table }
 
-    override suspend fun setRoutines(list: List<Routine>): List<Routine> {
-        puts += list
+    override suspend fun saveTask(task: ScheduledTask): ScheduledTask {
+        writes += task
         failWrite?.let { throw it }
-        val before = table.associateBy { it.id }
-        table = list.mapIndexed { index, routine ->
-            val id = routine.id.ifEmpty { "rt_new$index" }
-            val hub = before[id]
-            routine.copy(id = id, createdBy = hub?.createdBy, lastRun = hub?.lastRun, lastSessionId = hub?.lastSessionId,
-                lastStatus = hub?.lastStatus, lastError = hub?.lastError,
-                nextRun = if (routine.enabled) "2026-11-03T01:00:00Z" else null)
-        }
+        val hub = table.firstOrNull { it.id == task.id }
+        if (task.id.isNotBlank() && hub == null) throw IOException("404 no such task")
+        val saved = task.copy(id = task.id.ifBlank { "task_new${ids++}" }, createdBy = hub?.createdBy, lastRun = hub?.lastRun,
+            lastSessionId = hub?.lastSessionId, lastStatus = hub?.lastStatus, lastError = hub?.lastError,
+            runMachineId = hub?.runMachineId, runSessionId = hub?.runSessionId, machineId = hub?.machineId,
+            sessionId = task.sessionId?.takeIf { it.isNotBlank() && hub?.sessionId == it },
+            nextRun = if (task.enabled) "2026-11-03T01:00:00Z" else null)
+        table = if (hub == null) table + saved else table.map { if (it.id == saved.id) saved else it }
         if (loseAnswer) throw IOException("connection reset")
-        return table
+        return saved
     }
 
-    override suspend fun runRoutine(id: String): SessionKey {
-        failRun?.let { throw it }
-        started += id
-        return SessionKey("server", "run-$id")
-    }
-
-    override suspend fun followups() = followups
-
-    override suspend fun cancelFollowup(id: String) {
-        failCancel?.let {
-            if (cancelLandsAnyway) followups = followups.filterNot { f -> f.id == id }
+    override suspend fun deleteTask(id: String) {
+        failDelete?.let {
+            if (deleteLandsAnyway) table = table.filterNot { t -> t.id == id }
             throw it
         }
-        followups = followups.filterNot { it.id == id }
+        deleted += id
+        table = table.filterNot { it.id == id }
     }
 
-    override suspend fun runFollowup(id: String): SessionKey {
+    override suspend fun runTask(id: String): SessionKey {
         failRun?.let { throw it }
-        val followup = followups.first { it.id == id }
-        followups = followups - followup
         started += id
-        return SessionKey(followup.machineId.orEmpty(), followup.sessionId ?: "new-$id")
+        val task = table.first { it.id == id }
+        if (task.repeat == TaskRepeat.Once) table = table - task
+        return task.origin ?: SessionKey("server", "run-$id")
+    }
+
+    override suspend fun freshTask(id: String): ScheduledTask {
+        val task = table.first { it.id == id }.copy(runMachineId = null, runSessionId = null)
+        table = table.map { if (it.id == id) task else it }
+        return task
     }
 
     override suspend fun runs() = runs
     override suspend fun assistantMachine() = "server"
 }
 
-private val byPersona = Routine(
-    id = "rt_weekly", title = "周报", prompt = "起草周报", time = "17:00", weekdays = listOf(5), enabled = true,
+private val byPersona = ScheduledTask(
+    id = "task_weekly", title = "周报", prompt = "起草周报", repeats = ScheduledTask.DAILY, time = "17:00", weekdays = listOf(5), enabled = true,
     createdBy = "assistant", lastRun = "2026-10-30T09:00:00Z", lastSessionId = "conversation-1", lastStatus = "failed",
     lastError = "assistant machine is offline", nextRun = "2026-11-06T09:00:00Z",
 )
-private val morning = Routine(
-    id = "morning", title = "早报", prompt = "给我今天的早报", time = "09:00", weekdays = listOf(1, 2, 3, 4, 5), enabled = true,
-    lastRun = "2026-11-02T01:00:00Z", lastSessionId = "conversation-2", lastStatus = "ok", nextRun = "2026-11-03T01:00:00Z",
+private val morning = ScheduledTask(
+    id = "morning", title = "早报", prompt = "给我今天的早报", repeats = ScheduledTask.DAILY, time = "09:00", weekdays = listOf(1, 2, 3, 4, 5),
+    enabled = true, lastRun = "2026-11-02T01:00:00Z", lastSessionId = "conversation-2", lastStatus = "ok", nextRun = "2026-11-03T01:00:00Z",
+    runMachineId = "server", runSessionId = "own-morning",
 )
-private val review = Followup(id = "fu_review", at = "2026-11-02T03:00:00Z", title = "会前准备", prompt = "整理纪要",
-    machineId = "server", sessionId = "conversation-3")
-private val ci = Followup(id = "fu_ci", at = "2026-11-02T05:00:00Z", prompt = "看看 CI 跑完没有\n跑完告诉我", machineId = "server")
+private val patrol = ScheduledTask(id = "patrol", title = "巡检", prompt = "看看服务", repeats = ScheduledTask.INTERVAL, everyMinutes = 30,
+    at = "2026-11-02T02:30:00Z", enabled = true, nextRun = "2026-11-02T02:30:00Z", permissionMode = "auto")
+private val review = ScheduledTask(id = "fu_review", repeats = ScheduledTask.ONCE, at = "2026-11-02T03:00:00Z", title = "会前准备", prompt = "整理纪要",
+    enabled = true, machineId = "server", sessionId = "conversation-3")
+private val ci = ScheduledTask(id = "fu_ci", repeats = ScheduledTask.ONCE, at = "2026-11-02T05:00:00Z", prompt = "看看 CI 跑完没有\n跑完告诉我",
+    enabled = true)
 
 /** The page's words in the tests' language (Simplified Chinese, robolectric.properties). */
 private fun pageText() = ProactiveText(ApplicationProvider.getApplicationContext())
@@ -110,20 +115,24 @@ class ProactiveStoreTest {
         return messages
     }
 
-    @Test fun wholeTablePutCarriesEveryRoutineAndChangesOnlyTheSwitch() = runTest {
+    @Test fun repeatingAndOneOffTasksAreTheirOwnSections() = runTest {
+        val store = ProactiveStore(FakeHub(listOf(ci, byPersona, review, morning, patrol)), this, say)
+        store.refresh()
+        assertEquals(listOf("task_weekly", "morning", "patrol"), store.state.value.repeating!!.map { it.id })
+        assertEquals(listOf("fu_review", "fu_ci"), store.state.value.oneOff!!.map { it.id })
+    }
+
+    @Test fun aSwitchWritesOnlyThatTaskAndOnlyItsSwitch() = runTest {
         val hub = FakeHub(listOf(byPersona, morning))
         val store = ProactiveStore(hub, this, say)
         store.refresh()
-        // Persona sets up another routine while the page is open; the write must not wipe it.
-        val added = Routine(id = "rt_added", title = "巡检", prompt = "看看服务", time = "22:00", createdBy = "assistant")
-        hub.table = hub.table + added
         store.toggle("morning", false)
         advanceUntilIdle()
-        assertEquals(listOf(byPersona, morning.copy(enabled = false), added), hub.puts.single())
-        val shown = store.state.value.shownRoutines.orEmpty()
-        assertEquals(listOf("rt_weekly", "morning", "rt_added"), shown.map { it.id })
-        assertEquals("assistant", shown.first().createdBy)
-        assertFalse(shown[1].enabled)
+        val written = hub.writes.single()
+        assertEquals(morning.copy(enabled = false), written)
+        assertEquals(listOf("morning", "task_weekly"), listOf(written.id) + hub.table.filter { it.enabled }.map { it.id })
+        assertFalse(store.state.value.task("morning")!!.enabled)
+        assertEquals("assistant", store.state.value.task("task_weekly")!!.createdBy)
     }
 
     @Test fun switchMovesAtOnceAndAFailedWriteShowsTheHubsValue() = runTest {
@@ -133,10 +142,10 @@ class ProactiveStoreTest {
         store.refresh()
         hub.failWrite = IOException("no route")
         store.toggle("morning", false)
-        assertFalse(store.state.value.shownRoutines!!.single().enabled)
+        assertFalse(store.state.value.shownTasks!!.single().enabled)
         advanceUntilIdle()
         assertTrue(store.state.value.pending.isEmpty())
-        assertTrue(store.state.value.shownRoutines!!.single().enabled)
+        assertTrue(store.state.value.shownTasks!!.single().enabled)
         assertEquals(listOf("没保存上：连不上 hub"), messages)
     }
 
@@ -148,7 +157,7 @@ class ProactiveStoreTest {
         hub.loseAnswer = true
         store.toggle("morning", false)
         advanceUntilIdle()
-        assertFalse(store.state.value.shownRoutines!!.single().enabled)
+        assertFalse(store.state.value.shownTasks!!.single().enabled)
         assertTrue(messages.isEmpty())
     }
 
@@ -156,42 +165,53 @@ class ProactiveStoreTest {
         val hub = FakeHub(listOf(byPersona, morning))
         val store = ProactiveStore(hub, this, say)
         store.refresh()
-        val draft = RoutineDraft("  周报（草稿）  ", " 先给我草稿 ", "16:30", (1..7).toList(), enabled = false)
-        assertTrue(store.save(RoutineChange.Edit("rt_weekly", byPersona.draft(), draft)).isSuccess)
-        val written = hub.puts.single()
-        assertEquals(byPersona.copy(title = "周报（草稿）", prompt = "先给我草稿", time = "16:30", weekdays = emptyList(), enabled = false), written[0])
-        assertEquals(morning, written[1])
+        val draft = byPersona.draft().copy(title = "  周报（草稿）  ", prompt = " 先给我草稿 ", time = "16:30", weekdays = (1..7).toList(),
+            enabled = false, permissionMode = "plan")
+        assertTrue(store.save(TaskChange.Edit("task_weekly", byPersona.draft(), draft)).isSuccess)
+        assertEquals(byPersona.copy(title = "周报（草稿）", prompt = "先给我草稿", time = "16:30", weekdays = emptyList(), enabled = false,
+            permissionMode = "plan"), hub.writes.single())
         // The hub kept its own fields; the page shows what it answered.
-        val shown = store.state.value.shownRoutines!!.first()
+        val shown = store.state.value.task("task_weekly")!!
         assertEquals("assistant", shown.createdBy)
         assertEquals("failed", shown.lastStatus)
         assertNull(shown.nextRun)
     }
 
-    @Test fun addAppendsTheNewRoutineAndARetryAfterALostAnswerDoesNotAddItTwice() = runTest {
+    @Test fun switchingTheRuleWritesTheNewRulesFields() = runTest {
         val hub = FakeHub(listOf(morning))
         val store = ProactiveStore(hub, this, say)
-        val messages = messagesOf(store)
         store.refresh()
-        val id = newRoutineId()
-        assertTrue(id.matches(Regex("rt_[0-9a-f]{8}")))
-        val saved = store.save(RoutineChange.Add(id, RoutineTemplates.first().draft(say))).getOrThrow()
-        val written = hub.puts.single().last()
-        assertEquals(id, written.id)
+        val zone = ZoneId.of("Asia/Shanghai")
+        val now = Instant.parse("2026-11-02T02:10:00Z")
+        val interval = morning.draft().repeating(TaskRepeat.Interval, now, zone)
+        assertEquals(DefaultInterval, interval.everyMinutes)
+        assertTrue(store.save(TaskChange.Edit("morning", morning.draft(), interval.copy(everyMinutes = 120))).isSuccess)
+        val written = hub.writes.last()
+        assertEquals(ScheduledTask.INTERVAL, written.repeats)
+        assertEquals(120, written.everyMinutes)
+        assertNull(written.time)
+        assertTrue(written.weekdays.isEmpty())
+        // 一次 picks the next full hour an hour away.
+        val once = morning.draft().repeating(TaskRepeat.Once, now, zone)
+        assertEquals(Instant.parse("2026-11-02T03:00:00Z"), once.at)
+        assertTrue(store.save(TaskChange.Edit("morning", store.state.value.task("morning")!!.draft(), once)).isSuccess)
+        assertEquals("2026-11-02T03:00:00Z", hub.writes.last().at)
+        assertEquals(ScheduledTask.ONCE, hub.writes.last().repeats)
+    }
+
+    @Test fun addPostsANewTaskWithoutAnId() = runTest {
+        val hub = FakeHub(listOf(morning))
+        val store = ProactiveStore(hub, this, say)
+        store.refresh()
+        val saved = store.save(TaskChange.Add(RoutineTemplates.first().draft(say))).getOrThrow()!!
+        val written = hub.writes.single()
+        assertEquals("", written.id)
         assertEquals("会前准备", written.title)
         assertEquals("08:45", written.time)
         assertEquals(listOf(1, 2, 3, 4, 5), written.weekdays)
+        assertEquals(ScheduledTask.DAILY, written.repeats)
         assertNull(written.createdBy)
-        assertEquals(listOf("morning", id), saved.map { it.id })
-
-        // The next one lands but its answer is lost: that is still a success, and pressing 添加 again adds nothing.
-        hub.loseAnswer = true
-        val other = newRoutineId()
-        assertTrue(store.save(RoutineChange.Add(other, BlankRoutine.copy(title = "提醒", prompt = "提醒我喝水"))).isSuccess)
-        hub.loseAnswer = false
-        assertTrue(store.save(RoutineChange.Add(other, BlankRoutine.copy(title = "提醒", prompt = "提醒我喝水"))).isSuccess)
-        assertEquals(listOf("morning", id, other), hub.table.map { it.id })
-        assertTrue(messages.isEmpty())
+        assertEquals(listOf("morning", saved.id), store.state.value.shownTasks!!.map { it.id })
     }
 
     @Test fun anEditWritesOnlyWhatThePersonChanged() = runTest {
@@ -199,122 +219,117 @@ class ProactiveStoreTest {
         val store = ProactiveStore(hub, this, say)
         store.refresh()
         val opened = morning.draft()
-        // While the page is open Persona moves the routine to 08:00 from a conversation; the person edits the prompt.
+        // While the page is open Persona moves the task to 08:00 from a conversation; the person edits the prompt.
         hub.table = listOf(byPersona, morning.copy(time = "8:00"))
-        assertTrue(store.save(RoutineChange.Edit("morning", opened, opened.copy(prompt = "早报，三条以内"))).isSuccess)
-        val written = hub.puts.single()[1]
-        assertEquals("8:00", written.time)
+        store.loadTasks()
+        assertTrue(store.save(TaskChange.Edit("morning", opened, opened.copy(prompt = "早报，三条以内"))).isSuccess)
+        val written = hub.writes.single()
+        assertEquals("08:00", written.time)
         assertEquals("早报，三条以内", written.prompt)
         assertEquals("09:00", morning.copy(time = "9:00").draft().time)
-        // Nothing changed: nothing is written.
-        assertTrue(store.save(RoutineChange.Edit("morning", opened, opened)).isSuccess)
-        assertEquals(1, hub.puts.size)
     }
 
-    @Test fun editingARoutineDeletedMeanwhileDoesNotBringItBack() = runTest {
+    @Test fun turningContinueOffClearsTheConversationAndOnlyThat() = runTest {
+        val hub = FakeHub(listOf(review))
+        val store = ProactiveStore(hub, this, say)
+        store.refresh()
+        val opened = review.draft()
+        assertTrue(opened.continues)
+        assertTrue(store.save(TaskChange.Edit("fu_review", opened, opened.copy(continues = false))).isSuccess)
+        assertNull(hub.writes.single().sessionId)
+        assertEquals("", hub.writes.single().editable()["session_id"].toString().trim('"'))
+    }
+
+    @Test fun editingATaskDeletedMeanwhileDoesNotBringItBack() = runTest {
         val hub = FakeHub(listOf(byPersona, morning))
         val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
         hub.table = listOf(morning)
-        val result = store.save(RoutineChange.Edit("rt_weekly", byPersona.draft(), byPersona.draft().copy(title = "改个名")))
-        assertTrue(result.exceptionOrNull() is RoutineGoneException)
-        assertTrue(hub.puts.isEmpty())
-        assertEquals(listOf("morning"), store.state.value.shownRoutines!!.map { it.id })
-        assertEquals(listOf("没保存上：这个定时任务已经不在了，可能刚被删掉"), messages)
+        val result = store.save(TaskChange.Edit("task_weekly", byPersona.draft(), byPersona.draft().copy(title = "改个名")))
+        assertTrue(result.isFailure)
+        assertEquals(listOf("morning"), hub.table.map { it.id })
+        assertEquals(listOf("morning"), store.state.value.shownTasks!!.map { it.id })
+        assertEquals(1, messages.size)
     }
 
-    @Test fun deleteTakesOutOnlyThatRoutine() = runTest {
-        val hub = FakeHub(listOf(byPersona, morning))
-        val store = ProactiveStore(hub, this, say)
-        store.refresh()
-        assertTrue(store.save(RoutineChange.Delete("rt_weekly")).isSuccess)
-        assertEquals(listOf(morning), hub.puts.single())
-        assertTrue(store.state.value.busy.isEmpty())
-        // Already gone: nothing to write.
-        assertTrue(store.save(RoutineChange.Delete("rt_weekly")).isSuccess)
-        assertEquals(1, hub.puts.size)
-    }
-
-    @Test fun cancellingAFollowupRemovesItAndAFailureKeepsIt() = runTest {
-        val hub = FakeHub(listOf(morning), listOf(review, ci))
+    @Test fun deleteTakesOutOnlyThatTaskAndALostAnswerStillCounts() = runTest {
+        val hub = FakeHub(listOf(byPersona, morning, ci))
         val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
-        assertTrue(store.cancelFollowup("fu_ci").isSuccess)
-        assertEquals(listOf("fu_review"), store.state.value.followupList!!.map { it.id })
-
-        hub.failCancel = IOException("timeout")
-        assertTrue(store.cancelFollowup("fu_review").isFailure)
-        assertEquals(listOf("fu_review"), store.state.value.followupList!!.map { it.id })
-        assertEquals(listOf("没能取消这个跟进：连不上 hub"), messages)
-
-        // The answer was lost but the hub did cancel it: that is what the user asked for.
-        hub.cancelLandsAnyway = true
-        assertTrue(store.cancelFollowup("fu_review").isSuccess)
-        assertTrue(store.state.value.followupList!!.isEmpty())
-        assertEquals(1, messages.size)
+        assertTrue(store.save(TaskChange.Delete("task_weekly")).isSuccess)
+        assertEquals(listOf("task_weekly"), hub.deleted)
+        assertEquals(listOf("morning", "fu_ci"), store.state.value.shownTasks!!.map { it.id })
         assertTrue(store.state.value.busy.isEmpty())
+
+        hub.failDelete = IOException("timeout")
+        assertTrue(store.save(TaskChange.Delete("fu_ci")).isFailure)
+        assertEquals(listOf("没删掉：连不上 hub"), messages)
+        hub.deleteLandsAnyway = true
+        assertTrue(store.save(TaskChange.Delete("fu_ci")).isSuccess)
+        assertEquals(listOf("morning"), store.state.value.shownTasks!!.map { it.id })
+        assertEquals(1, messages.size)
     }
 
-    @Test fun runningAFollowupNowOpensItsConversationAndTakesItOffTheList() = runTest {
-        val hub = FakeHub(listOf(morning), listOf(review, ci))
+    @Test fun runningNowReturnsTheConversationOrSaysWhy() = runTest {
+        val hub = FakeHub(listOf(morning, review))
         val store = ProactiveStore(hub, this, say)
+        val messages = messagesOf(store)
         store.refresh()
-        assertEquals(SessionKey("server", "conversation-3"), store.runFollowup("fu_review").getOrThrow())
-        assertEquals(listOf("fu_review"), hub.started)
-        assertEquals(listOf("fu_ci"), store.state.value.followupList!!.map { it.id })
+        assertEquals(SessionKey("server", "run-morning"), store.run("morning").getOrThrow())
+        assertFalse(store.state.value.busy("morning"))
+        assertEquals(SessionKey("server", "conversation-3"), store.run("fu_review").getOrThrow())
         advanceUntilIdle()
-        assertEquals(listOf("fu_ci"), store.state.value.followupList!!.map { it.id })
-        assertFalse(store.state.value.followupBusy("fu_review"))
+        // A one-off that ran is done.
+        assertEquals(listOf("morning"), store.state.value.shownTasks!!.map { it.id })
+        hub.failRun = IOException("refused")
+        assertTrue(store.run("morning").isFailure)
+        assertEquals(listOf("没跑起来：连不上 hub"), messages)
     }
 
-    @Test fun runningARoutineNowReturnsTheNewConversationOrSaysWhy() = runTest {
+    @Test fun freshForgetsTheTasksOwnConversation() = runTest {
         val hub = FakeHub(listOf(morning))
         val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
-        assertEquals(SessionKey("server", "run-morning"), store.runRoutine("morning").getOrThrow())
-        assertFalse(store.state.value.routineBusy("morning"))
-        hub.failRun = IOException("refused")
-        assertTrue(store.runRoutine("morning").isFailure)
-        assertEquals(listOf("没跑起来：连不上 hub"), messages)
-        advanceUntilIdle()
-        assertTrue(hub.routineReads >= 3)
+        assertEquals(SessionKey("server", "own-morning"), store.state.value.task("morning")!!.ownConversation)
+        assertTrue(store.fresh("morning").isSuccess)
+        assertNull(store.state.value.task("morning")!!.ownConversation)
+        assertFalse(store.state.value.freshening("morning"))
+        assertEquals(listOf("下次运行会开一段新对话"), messages)
     }
 
     @Test fun refreshKeepsWhatWasReadWhenAListFails() = runTest {
-        val hub = object : ProactiveApi by FakeHub(listOf(morning), listOf(review)) {
+        val hub = object : ProactiveApi by FakeHub(listOf(morning)) {
             var fail = false
-            override suspend fun followups(): List<Followup> = if (fail) throw IOException("down") else listOf(review)
+            override suspend fun tasks(): List<ScheduledTask> = if (fail) throw IOException("down") else listOf(morning)
         }
         val store = ProactiveStore(hub, this, say)
         store.refresh()
         hub.fail = true
         store.refresh()
         val state = store.state.value
-        assertEquals(listOf(review), state.followups.value)
-        assertEquals("连不上 hub，连上后下拉刷新。", state.followups.error)
-        assertNull(state.routines.error)
+        assertEquals(listOf(morning), state.tasks.value)
+        assertEquals("连不上 hub，连上后下拉刷新。", state.tasks.error)
         assertFalse(state.refreshing)
         assertEquals("server", state.assistantMachine)
     }
 
     @Test fun theTransportsOwnCancellationIsAFailureNotAStuckPage() = runTest {
         val hub = object : ProactiveApi by FakeHub(listOf(morning)) {
-            override suspend fun setRoutines(list: List<Routine>): List<Routine> =
-                throw kotlinx.coroutines.CancellationException("Pairing changed")
+            override suspend fun deleteTask(id: String) = throw kotlinx.coroutines.CancellationException("Pairing changed")
         }
         val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
-        val result = store.save(RoutineChange.Delete("morning"))
+        val result = store.save(TaskChange.Delete("morning"))
         assertTrue(result.isFailure)
         assertTrue(store.state.value.busy.isEmpty())
         assertEquals(listOf("没删掉：连接刚换过，请再试一次"), messages)
     }
 
-    @Test fun runsAreNewestFirstAndOneRoutinesHistoryIsItsOwn() = runTest {
+    @Test fun runsAreNewestFirstAndOneTasksHistoryIsItsOwn() = runTest {
         val runs = listOf(
             Run(id = "1", kind = "routine", refId = "morning", at = "2026-11-01T01:00:00Z", status = "ok"),
             Run(id = "2", kind = "followup", refId = "fu_lunch", at = "2026-11-02T04:00:00Z", status = "ok"),
@@ -358,7 +373,7 @@ class ProactiveTextTest {
         assertNull(parseTime(null))
         assertEquals("09:05", normalizeTime("9:05"))
         assertEquals("21:30", normalizeTime("21:30"))
-        assertTrue(RoutineDraft("早报", "做", "9:00").valid)
+        assertTrue(TaskDraft("早报", "做", time = "9:00").valid)
     }
 
     @Test fun momentsAndCountdowns() {
@@ -393,7 +408,7 @@ class ProactiveTextTest {
         assertEquals("上次 周五 17:00 没跑起来：助手所在的机器离线", noHistory.lastRunOf(byPersona)!!.line(say, now, zone))
         assertEquals("上次 今天 09:00 已运行", noHistory.lastRunOf(morning)!!.line(say, now, zone))
         assertEquals(SessionKey("server", "conversation-2"), noHistory.lastRunOf(morning)!!.conversation)
-        assertNull(noHistory.lastRunOf(Routine()))
+        assertNull(noHistory.lastRunOf(ScheduledTask()))
         // 立即运行 does not move the hub's last_run: the history knows better.
         val manual = Run(id = "m", kind = "routine", refId = "morning", at = "2026-11-02T01:30:00Z", status = "failed",
             error = "assistant machine is offline", manual = true, machineId = "laptop", sessionId = "")
@@ -410,27 +425,39 @@ class ProactiveTextTest {
         assertEquals("routine \"x\" needs a title", hubErrorText(say, "routine \"x\" needs a title"))
     }
 
-    @Test fun followupsSayWhereTheyGo() {
+    @Test fun oneOffsSayWhereTheyGo() {
         val machines = listOf(Machine("server", name = "服务器"))
         assertEquals("会前准备", review.displayTitle(say))
         assertEquals("看看 CI 跑完没有", ci.displayTitle(say))
         assertEquals("在 服务器 上接着原来的对话", review.whereLine(say, machines))
-        assertEquals("在 服务器 上开一段新对话", ci.whereLine(say, machines))
-        assertEquals("在 laptop 上开一段新对话", ci.copy(machineId = "laptop").whereLine(say, machines))
-        assertEquals(SessionKey("server", "conversation-3"), review.conversation())
-        assertNull(ci.conversation())
+        assertEquals("开一段新对话", ci.whereLine(say, machines))
+        assertEquals("在同一个对话里运行", morning.whereLine(say, machines))
+        assertEquals(SessionKey("server", "conversation-3"), review.origin)
+        assertNull(ci.origin)
+    }
+
+    @Test fun rulesForEveryKindOfTask() {
+        assertEquals("每个工作日 上午 9:00", say.rule(morning, now, zone))
+        assertEquals("每 30 分钟", say.rule(patrol, now, zone))
+        assertEquals("每 2 小时", say.every(120))
+        assertEquals("每 1 小时 30 分钟", say.every(90))
+        assertEquals("1 小时 30 分钟", say.interval(90))
+        assertEquals("今天 11:00", say.rule(review, now, zone))
+        assertEquals("自动", patrol.runsWith(say))
+        assertNull(morning.runsWith(say))
+        assertEquals("全部放行", morning.copy(permissionMode = BypassMode).runsWith(say))
     }
 
     @Test fun timelineAndSummary() {
         val off = morning.copy(id = "evening", title = "晚间回顾", enabled = false, nextRun = "2026-11-02T13:30:00Z")
-        val list = upcoming(say, listOf(byPersona, morning, off), listOf(ci, review))
-        assertEquals(listOf("f-fu_review", "f-fu_ci", "r-morning", "r-rt_weekly"), list.map { it.id })
-        assertEquals("跟进，接着原来的对话", list.first().detail)
-        assertEquals("每个工作日 上午 9:00", list[2].detail)
-        assertEquals("2 个定时任务开着，下一件在今天 11:00。", summaryLine(say, listOf(byPersona, morning, off), listOf(review, ci), now, zone))
-        assertEquals("定时任务都关着，下一件在今天 11:00。", summaryLine(say, listOf(off), listOf(review), now, zone))
-        assertEquals("还没有安排，Persona 只在你开口时做事。", summaryLine(say, emptyList(), emptyList(), now, zone))
-        assertNull(summaryLine(say, null, null, now, zone))
+        val list = upcoming(say, listOf(byPersona, morning, off, ci, review, patrol), now, zone)
+        assertEquals(listOf("patrol", "fu_review", "fu_ci", "morning", "task_weekly"), list.map { it.id })
+        assertEquals("在 server 上接着原来的对话", list[1].detail)
+        assertEquals("每个工作日 上午 9:00", list[3].detail)
+        assertEquals("2 个定时任务开着，下一件在今天 11:00。", summaryLine(say, listOf(byPersona, morning, off, review, ci), now, zone))
+        assertEquals("定时任务都关着，下一件在今天 11:00。", summaryLine(say, listOf(off, review), now, zone))
+        assertEquals("还没有安排，Persona 只在你开口时做事。", summaryLine(say, emptyList(), now, zone))
+        assertNull(summaryLine(say, null, now, zone))
     }
 
     @Test fun pagesSurviveAsKeys() {
@@ -444,10 +471,17 @@ class ProactiveTextTest {
     }
 
     @Test fun draftsCompareByWhatTheHubStores() {
-        assertTrue(RoutineDraft(" 早报 ", "做", "09:00", (1..7).toList()).sameAs(RoutineDraft("早报", "做 ", "09:00", emptyList())))
-        assertFalse(RoutineDraft("早报", "做", "09:00").sameAs(RoutineDraft("早报", "做", "09:30")))
-        assertFalse(RoutineDraft(" ", "做").valid)
-        assertTrue(RoutineDraft("早报", "做").valid)
-        assertEquals(RoutineDraft("周报", "起草周报", "17:00", listOf(5), true), byPersona.draft())
+        assertTrue(TaskDraft(" 早报 ", "做", time = "09:00", weekdays = (1..7).toList()).sameAs(TaskDraft("早报", "做 ", time = "09:00", weekdays = emptyList())))
+        assertFalse(TaskDraft("早报", "做", time = "09:00").sameAs(TaskDraft("早报", "做", time = "09:30")))
+        // Another rule's leftovers do not count.
+        assertTrue(TaskDraft("巡检", "看", TaskRepeat.Interval, time = "09:00").sameAs(TaskDraft("巡检", "看", TaskRepeat.Interval, time = "10:00")))
+        assertFalse(TaskDraft(" ", "做").valid)
+        assertTrue(TaskDraft("早报", "做").valid)
+        // A one-off may go without a title but needs a time; an interval needs one the hub takes.
+        assertTrue(TaskDraft("", "做", TaskRepeat.Once, at = now).valid)
+        assertFalse(TaskDraft("", "做", TaskRepeat.Once).valid)
+        assertFalse(TaskDraft("巡检", "看", TaskRepeat.Interval, everyMinutes = 2).valid)
+        assertEquals(TaskDraft("周报", "起草周报", TaskRepeat.Daily, null, "17:00", listOf(5), DefaultInterval, true), byPersona.draft())
+        assertEquals(TaskDraft("巡检", "看看服务", TaskRepeat.Interval, parseTime(patrol.at), "09:00", emptyList(), 30, true, permissionMode = "auto"), patrol.draft())
     }
 }

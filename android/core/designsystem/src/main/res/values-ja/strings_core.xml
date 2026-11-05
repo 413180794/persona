@@ -95,6 +95,7 @@
     <string name="designsystem_core_state_muted">ミュート中</string>
     <string name="designsystem_core_state_idle">確認済み</string>
     <string name="designsystem_core_agents_no_todo">ToDoなし</string>
+    <string name="designsystem_core_agents_manual">手動で開いた</string>
     <string name="designsystem_core_agents_quiet_spaces">アイドル中のスペース</string>
     <plurals name="designsystem_core_count_needs_you">
         <item quantity="other">%1$d件が要対応</item>
@@ -257,6 +258,9 @@
     <string name="designsystem_core_channels_unsupported">このハブはまだチャネルに対応していません。先にハブを更新してください</string>
     <string name="designsystem_core_channel_not_found">このチャネルはもうこのハブにありません</string>
     <string name="designsystem_core_interaction_gone">このリクエストはすでに別の場所で処理されました</string>
+    <string name="designsystem_core_interaction_expired">このリクエストは期限切れのため、回答は届きませんでした</string>
+    <string name="designsystem_core_interaction_cancelled">コンピューター側でこのリクエストが取り消されたため、回答は届きませんでした</string>
+    <string name="designsystem_core_interaction_dismissed">このリクエストはコンピューターに戻されたため、回答は届きませんでした</string>
     <string name="designsystem_core_persona_packs_unsupported">このハブにはまだアバターを置けません。ハブを更新してからもう一度確認してください</string>
     <string name="designsystem_core_model_configuration_unsupported">このハブはまだモデル設定に対応していません。先にサーバーを更新してください。</string>
     <string name="designsystem_core_hub_updates_unsupported">このハブは古いため、アプリからバージョンの確認や更新ができません</string>
