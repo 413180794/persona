@@ -33,6 +33,8 @@ data class OutboxRow(
     val error: String?,
     val created_at: Long,
     @ColumnInfo(defaultValue = "0") val main_target: Boolean = false,
+    /** Null: the next attempt goes under client_msg_id. */
+    val op_id: String? = null,
 )
 
 @Entity(tableName = "drafts", primaryKeys = ["scope", "machine", "session"])
@@ -62,6 +64,9 @@ interface PersistentDao {
 
     @Query("UPDATE outbox SET state = :state, error = :error WHERE scope = :scope AND client_msg_id = :id AND state IN (:from)")
     suspend fun transition(scope: String, id: String, from: List<String>, state: String, error: String?): Int
+
+    @Query("UPDATE outbox SET state = :state, error = :error, op_id = :opId WHERE scope = :scope AND client_msg_id = :id AND state IN (:from)")
+    suspend fun transition(scope: String, id: String, from: List<String>, state: String, error: String?, opId: String): Int
 
     @Query("UPDATE outbox SET state = 'unknown' WHERE scope = :scope AND state = 'sending'")
     suspend fun recoverInterrupted(scope: String)
@@ -102,8 +107,9 @@ interface PersistentDao {
     suspend fun adoptMessage(row: OutboxRow): Long
 }
 
-@Database(entities = [OutboxRow::class, DraftRow::class, MainConversationRow::class], version = 3,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)], exportSchema = true)
+@Database(entities = [OutboxRow::class, DraftRow::class, MainConversationRow::class], version = 4,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
+    exportSchema = true)
 abstract class PersistentDatabase : RoomDatabase() {
     abstract fun records(): PersistentDao
 }
@@ -112,7 +118,7 @@ class RoomOutboxStore(private val database: PersistentDatabase, private val scop
     private val dao = database.records()
     override val entries = dao.observeOutbox(scope.path).map { rows -> rows.map { row ->
         OutboxEntry(row.client_msg_id, SessionKey(row.machine, row.session), row.text, row.clear_draft,
-            OutboxState.entries.single { it.wire == row.state }, row.error, row.created_at, row.main_target)
+            OutboxState.entries.single { it.wire == row.state }, row.error, row.created_at, row.main_target, row.op_id)
     } }
 
     override suspend fun enqueue(entry: OutboxEntry) = enqueueDraft(entry, null)
@@ -158,6 +164,9 @@ class RoomOutboxStore(private val database: PersistentDatabase, private val scop
 
     override suspend fun transition(id: String, from: Set<OutboxState>, to: OutboxState, error: String?): Boolean =
         dao.transition(scope.path, id, from.map { it.wire }, to.wire, error) != 0
+
+    override suspend fun transition(id: String, from: Set<OutboxState>, to: OutboxState, error: String?, opId: String): Boolean =
+        dao.transition(scope.path, id, from.map { it.wire }, to.wire, error, opId) != 0
 
     override suspend fun recoverInterrupted() = dao.recoverInterrupted(scope.path)
 }

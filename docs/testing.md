@@ -586,8 +586,8 @@ xcodebuild test … -only-testing:PersonaUITests/SSHTunnelPairingTests
 
 改 hub 的配对、鉴权、WebSocket 时，用当前的 iOS App 原样连一个本机测试 hub 验一遍（2026-10-31 P0 这样验过，`docs/archive/ios-p0-verification.md`）：
 
-- 构建按模拟器 id 来（`-destination id=<udid>`，和 `scripts/sim.sh` 一样）。别加 `-sdk iphonesimulator`：它会把手表 target 也按 iPhone 模拟器编，
-  两个产物都叫 `Jarvis.app`，报「Multiple commands produce」。没有签名团队时加 `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`。
+- 构建按模拟器 id 来（`-destination id=<udid>`，和 `scripts/app/sim.sh` 一样）。别加 `-sdk iphonesimulator`：它会把手表 target 也按 iPhone 模拟器编，
+  两个产物都叫 `Persona.app`，报「Multiple commands produce」。没有签名团队时加 `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`。
 - DEBUG 版带 `-pairURL` 启动会跳过「用配对 token 换设备 token」（`DeviceCredentials.swift`）。要验换凭据：先带 `-pairURL` 启动一次
   （配置写进 Keychain），再不带参数冷启动，App 就走真实的 `upgradeCredentials()`；查 hub 库里 `device_tokens` 有没有新行、`pair_tokens.used_at` 有没有填。
 - iOS 27 上 `simctl openurl jarvis://pair?...` 会弹「在 Persona 中打开？」确认框，脚本点不了，别用这条路配对。

@@ -8,6 +8,7 @@ import { stateOf } from "./format";
 import type { HerdrMachine, HerdrSpace } from "./herdr-tree";
 import type { TodoTree, TreeAgent } from "./todo-tree";
 import type { Session } from "./types";
+import { byTime, timeMs } from "./times";
 
 export type AgentSort = "state" | "updated";
 
@@ -33,20 +34,20 @@ export function latestOf(sessions: readonly Session[]): string {
   let out = "";
   for (const s of sessions) {
     const d = sortDate(s);
-    if (d > out) out = d;
+    if (timeMs(d) > timeMs(out)) out = d;
   }
   return out;
 }
 
 /** The most recently updated first, then by id so equal times never swap between renders. */
 export function byUpdated(a: Session, b: Session): number {
-  return sortDate(b).localeCompare(sortDate(a)) || a.session_id.localeCompare(b.session_id) || a.machine_id.localeCompare(b.machine_id);
+  return byTime(sortDate(b), sortDate(a)) || a.session_id.localeCompare(b.session_id) || a.machine_id.localeCompare(b.machine_id);
 }
 
 /** `list` with the most recent first (`date`), ties by `id`; a new array. */
 export function latestFirst<T>(list: readonly T[], date: (x: T) => string, id: (x: T) => string): T[] {
   return list.map((x) => ({ x, d: date(x), k: id(x) }))
-    .sort((a, b) => b.d.localeCompare(a.d) || a.k.localeCompare(b.k))
+    .sort((a, b) => byTime(b.d, a.d) || a.k.localeCompare(b.k))
     .map(({ x }) => x);
 }
 

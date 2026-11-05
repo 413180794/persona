@@ -1,6 +1,8 @@
 // 设置 › 设备's two lists, as on iOS (DeviceCredentials.swift): GET /auth/tokens returns the revoked credentials too,
 // with revoked_at. The ones in use come first (this browser, then by last use); the revoked ones go under 已撤销, the
 // latest first, and are not counted as devices or offered 撤销 again (#1764).
+import { byTime } from "./times";
+
 export interface DeviceTimes {
   id: string;
   last_seen?: string;
@@ -10,7 +12,7 @@ export interface DeviceTimes {
 export function splitDevices<T extends DeviceTimes>(tokens: T[], current?: string): { active: T[]; revoked: T[] } {
   const active = tokens
     .filter((t) => !t.revoked_at)
-    .sort((a, b) => (a.id === current ? -1 : b.id === current ? 1 : (b.last_seen ?? "").localeCompare(a.last_seen ?? "")));
-  const revoked = tokens.filter((t) => t.revoked_at).sort((a, b) => (b.revoked_at ?? "").localeCompare(a.revoked_at ?? ""));
+    .sort((a, b) => (a.id === current ? -1 : b.id === current ? 1 : byTime(b.last_seen, a.last_seen)));
+  const revoked = tokens.filter((t) => t.revoked_at).sort((a, b) => byTime(b.revoked_at, a.revoked_at));
   return { active, revoked };
 }

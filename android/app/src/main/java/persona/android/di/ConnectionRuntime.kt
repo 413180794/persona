@@ -451,12 +451,38 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
     /** The latest fleet of each group, merged for the ongoing notification. */
     private val fleets = ConcurrentHashMap<String, FleetState>()
 
+    /**
+     * GET /api/v1/fleet of every connected group (the hub pushes `fleet` only when it changes), translated and merged
+     * like the pushed ones; a group whose fetch fails keeps its last fleet. The groups are fetched at once so one
+     * stalled hub can't use up the caller's timeout before the others are in.
+     */
+    suspend fun fetchFleet(): FleetState {
+        val open = groups.value.ifEmpty { throw CancellationException("Not paired") }
+        val store = Mutex()
+        var merged: FleetState? = null
+        coroutineScope {
+            open.mapNotNull { group ->
+                val connection = group.connectionOrNull?.takeIf { group.state.value == ConnectionState.Online } ?: return@mapNotNull null
+                async {
+                    try {
+                        val fleet = connection.request("/api/v1/fleet").use { response ->
+                            JsonCodec.decodeFromString(FleetResponse.serializer(), response.body!!.string()).fleet
+                        }
+                        // One at a time, so the last merge has every fetched group.
+                        store.withLock {
+                            merged = fleets.putFleet(group.id, GroupNames(group.namespace), fleet, groups.value.map { it.id }, selected.value?.id)
+                        }
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (failure: Exception) { Log.w("ConnectionRuntime", "Fleet fetch failed: ${failure.javaClass.simpleName}") }
+                }
+            }.awaitAll()
+        }
+        return merged ?: throw IllegalStateException("No group's fleet")
+    }
+
     override suspend fun onEvent(group: GroupRuntime, event: ServerEvent) {
         if (event is FleetEvent) {
-            fleets[group.id] = GroupNames(group.namespace).fleet(event.fleet)
-            val ids = (groups.value.map { it.id } + group.id).distinct()
-            fleets.keys.retainAll(ids.toSet())
-            val merged = mergeFleets(ids.mapNotNull { fleets[it] }, selected.value?.let { fleets[it.id] })
+            val merged = fleets.putFleet(group.id, GroupNames(group.namespace), event.fleet, groups.value.map { it.id }, selected.value?.id)
             mutableEvents.emit(FleetEvent(merged))
             return
         }

@@ -6,6 +6,7 @@ import { stateOf } from "./format";
 import { splitAgentSessions, type AgentGroup, type AgentMutes } from "./agent-groups";
 import type { AgentState, Machine, Session } from "./types";
 import type { Route } from "./router";
+import { byTime } from "./times";
 
 export type TodoAgentSource = "manual" | "space" | "spawned" | "chat";
 
@@ -650,7 +651,7 @@ export function dockAgents(sessions: Session[], todos: Todo[], conversation: str
   return out.sort(
     (a, b) =>
       (a.state === "needs_you" ? 0 : 1) - (b.state === "needs_you" ? 0 : 1) ||
-      (b.session.state_since ?? "").localeCompare(a.session.state_since ?? "") ||
+      byTime(b.session.state_since, a.session.state_since) ||
       `${a.session.machine_id}/${a.session.session_id}`.localeCompare(`${b.session.machine_id}/${b.session.session_id}`),
   );
 }

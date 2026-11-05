@@ -61,11 +61,12 @@ internal class ChatRealtimeState(private val key: SessionKey) {
                     (draft.after == null || order.compare(item, draft.after) > 0)
             }
             val final = draft.finalId?.let { id -> transcript.firstOrNull { it.id == id } } ?: transcript.firstOrNull { item ->
-                val text = item.text
+                // A reply the hub cut is matched by its start.
+                val text = MessageEcho.uncut(item)
                 item.id !in claimed && item.role == "assistant" && item.kind == "text" &&
                     (draft.after == null || order.compare(item, draft.after) > 0) &&
                     (nextUser == null || order.compare(item, nextUser) < 0) &&
-                    !text.isNullOrEmpty() && (text == draft.item.text ||
+                    text.isNotEmpty() && (text == draft.item.text ||
                     text.startsWith(draft.item.text.orEmpty()) || draft.item.text.orEmpty().startsWith(text))
             }
             if (final != null) {

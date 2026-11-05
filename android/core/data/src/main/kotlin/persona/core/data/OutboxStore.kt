@@ -27,7 +27,11 @@ data class OutboxEntry(
     val error: String? = null,
     val createdAt: Long,
     val mainTarget: Boolean = false,
-)
+    /** The operation id of the next attempt when it is no longer [clientMessageId] (the hub said none was delivered). */
+    val opId: String? = null,
+) {
+    val operationId: String get() = opId ?: clientMessageId
+}
 
 /** All methods operate on exactly one pairing scope. */
 interface OutboxStore {
@@ -45,5 +49,8 @@ interface OutboxStore {
     /** Unbinds [session] if it is the bound main conversation (it was put away); messages already bound to it stay. */
     suspend fun forgetMainConversation(session: SessionKey) = Unit
     suspend fun transition(id: String, from: Set<OutboxState>, to: OutboxState, error: String? = null): Boolean
+    /** [transition], and the message's next attempt goes under [opId]. */
+    suspend fun transition(id: String, from: Set<OutboxState>, to: OutboxState, error: String?, opId: String): Boolean =
+        throw UnsupportedOperationException("Operation ids are not supported by this store")
     suspend fun recoverInterrupted()
 }

@@ -25,6 +25,9 @@ object MessageEcho {
     /** Comparable form: the phone's image note, pasted wrappers and Claude's "[Image #21]" placeholders removed, no whitespace. */
     fun normalize(text: String): String = dropped.fold(text) { t, pattern -> pattern.replace(t, "") }
 
+    /** [item]'s words without the hub's cut mark when the page cut it ([Item.fullSize]); its whole text otherwise. */
+    fun uncut(item: Item): String = item.text.orEmpty().let { if (item.fullSize == null) it else it.substringBeforeLast(CUT_MARK) }
+
     /**
      * The transcript's copy of a message sent from here: equal once normalized, or one containing the other (Claude
      * adds placeholders, the phone adds notes). Containing only counts for longer texts, or a pending "好" would be
@@ -62,7 +65,7 @@ object MessageEcho {
         if (at != null && at < createdAt - CLOCK_SLACK_MILLIS) return false
         val words = item.text.orEmpty()
         if (item.fullSize == null) return same(words, text)
-        val start = normalize(words.substringBeforeLast(CUT_MARK))
+        val start = normalize(uncut(item))
         return start.length >= 8 && normalize(text).startsWith(start)
     }
 }

@@ -30,6 +30,16 @@ describe("Agent 排序偏好", () => {
     const list = [session("b", "idle", 3), session("a", "idle", 3), session("c", "needs_you", 1)];
     expect(ids([...list].sort(byUpdated))).toEqual(["a", "b", "c"]);
   });
+
+  it("compares the times as times: a fraction of another length or an offset does not reorder them (#3638)", () => {
+    const at = (id: string, updated_at: string) => session(id, "idle", 0, { updated_at });
+    const list = [at("ms", "2026-11-06T10:00:05.12Z"), at("ns", "2026-11-06T10:00:05.123456789Z"), at("whole", "2026-11-06T10:00:05Z")];
+    expect(ids([...list].sort(byUpdated))).toEqual(["ns", "ms", "whole"]);
+    expect(latestOf(list)).toBe("2026-11-06T10:00:05.123456789Z");
+    const zoned = [at("east", "2026-11-06T18:00:00+08:00"), at("utc", "2026-11-06T10:30:00Z")];
+    expect(ids([...zoned].sort(byUpdated))).toEqual(["utc", "east"]);
+    expect(latestOf(zoned)).toBe("2026-11-06T10:30:00Z");
+  });
 });
 
 describe("最近更新", () => {

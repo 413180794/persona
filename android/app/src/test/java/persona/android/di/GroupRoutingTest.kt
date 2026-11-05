@@ -270,4 +270,31 @@ class GroupRoutingTest {
         assertEquals(3, merged.unread)
         assertEquals(listOf("a", "b"), merged.items.map { it.id })
     }
+
+    @Test fun anotherGroupsFleetItemsCarryTheSuffixInTheirSessionAndInteraction() {
+        val fleet = FleetState(phase = "needsYou", needsYou = 1,
+            items = listOf(FleetItem("macbook/s1", kind = "permission", interaction = "i1")))
+        assertSame(fleet, primary.fleet(fleet))
+        val item = other.fleet(fleet).items.single()
+        // The notification opens and answers by these: the plain ids would reach the primary group's hub (Gone).
+        assertEquals(SessionKey("macbook~g0a1b2c3d", "s1"), persona.core.domain.fleet.FleetSummary.key(item))
+        assertEquals("i1~g0a1b2c3d", item.interaction)
+    }
+
+    @Test fun aFetchedFleetIsTranslatedAndMergedWithTheOtherGroupsPushedOne() {
+        val fleets = mutableMapOf<String, FleetState>()
+        // The primary group's pushed fleet, then the other group's fetched one in its own plain ids.
+        fleets.putFleet("home", primary, FleetState(phase = "working", working = 2, items = listOf(FleetItem("mini/a", kind = "working"))),
+            listOf("home", "work"), "home")
+        val merged = fleets.putFleet("work", other, FleetState(phase = "needsYou", needsYou = 1,
+            items = listOf(FleetItem("macbook/s1", kind = "permission", interaction = "i1"))), listOf("home", "work"), "home")
+        assertEquals("needsYou", merged.phase)
+        assertEquals(1, merged.needsYou)
+        assertEquals(2, merged.working)
+        assertEquals(listOf("mini/a", "macbook~g0a1b2c3d/s1"), merged.items.map { it.id })
+        assertEquals("i1~g0a1b2c3d", merged.items.last().interaction)
+        // A group that went away drops out of the merge.
+        assertEquals(listOf("macbook~g0a1b2c3d/s1"), fleets.putFleet("work", other, FleetState(needsYou = 1,
+            items = listOf(FleetItem("macbook/s1"))), listOf("work"), "work").items.map { it.id })
+    }
 }

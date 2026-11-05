@@ -107,7 +107,8 @@ const usage = `usage:
   personad extension …      extensions on the hub's machine: list, install, upgrade, rollback, enable, disable, config,
                            secret, uninstall, markets (docs/extensions.md「命令行」; personad extension for the details;
                            also personad ext …, and personad plugin … as before)
-  personad sysmon [n]       print this machine's system info and n metric samples, with what they cost
+  personad sysmon [n]       print this machine's system info and 1 + n metric samples (n default 3, every 10 s),
+                           with what they cost
   personad release manifest|check-next …
                            the publisher's release manifest and checks (scripts/release/publish.sh, docs/hub-update.md「发布」)
   personad update-watch <pending>
@@ -264,9 +265,10 @@ func main() {
 	case "extension", "ext", "plugin": // plugin: its name before #1844
 		err = extmgr.ExtensionCommand(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr)
 	case "sysmon":
-		n := 3
-		if len(os.Args) > 2 {
-			n, _ = strconv.Atoi(os.Args[2])
+		n, perr := sysmonCount(os.Args[2:])
+		if perr != nil {
+			fmt.Fprintln(os.Stderr, perr)
+			os.Exit(2)
 		}
 		runSysmon(ctx, n)
 	default:
@@ -400,6 +402,18 @@ func runHook(ctx context.Context) {
 	}
 	os.Stdout.Write(out)
 	os.Stdout.Write([]byte("\n"))
+}
+
+// sysmonCount reads `sysmon [n]`: how many samples after the first, 3 when not given.
+func sysmonCount(args []string) (int, error) {
+	if len(args) == 0 {
+		return 3, nil
+	}
+	n, err := strconv.Atoi(args[0])
+	if len(args) > 1 || err != nil || n < 0 {
+		return 0, fmt.Errorf("usage: personad sysmon [n]   (n: how many 10-second samples after the first, 0 or more)")
+	}
+	return n, nil
 }
 
 // runSysmon shows what a node would report (docs/machines.md), and the CPU time it took: how the collection cost

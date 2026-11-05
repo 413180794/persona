@@ -1,6 +1,7 @@
 # App Intents（Siri / 快捷指令）
 
-`apple/Persona/Intents/` 里是 4 个 AppIntent，用来在不解锁、不打开 App 的情况下驱动 hub：问 Claude、看状态、批准第一个待处理。
+`apple/Persona/Intents/` 里有 9 个 intent，用来在不解锁、不打开 App 的情况下驱动 hub。本文写下面这 4 个：问 Claude、看状态、批准第一个待处理、打开会话；
+另外 5 个（问 Persona、让 Agent 去做、个人 Agent 未读、打开个人 Agent、新建待办）见 `docs/siri.md`；控制中心控件背后的两个 intent 在 `apple/LiveActivity/`，也见 `docs/siri.md`。
 它们不依赖 App 在前台，也不用 WebSocket：每次调用都现读 `Keychain.serverConfig`，用 `APIClient` 直连 hub 的 REST 接口。
 
 | Intent | 标题 | 作用 | 运行模式 |
@@ -20,6 +21,8 @@
 | `MachineEntity.swift` | `MachineEntity` + `MachineEntityQuery`（`/api/v1/machines`，在线优先，支持按名字模糊匹配） |
 | `OpenSessionIntent.swift` | `SessionEntity` + `SessionEntityQuery`、`OpenSessionIntent` |
 | `AskClaudeIntent.swift` / `PersonaStatusIntent.swift` / `ApproveFirstIntent.swift` | 三个业务 intent |
+| `AskPersonaIntent.swift` / `PersonalAgentIntents.swift` / `AddTodoIntent.swift` | 问 Persona、个人 Agent、新建待办（`docs/siri.md`） |
+| `IntentAnswerSnippet.swift` | 问 Persona 的回答卡片（问题 + 全文） |
 | `PersonaShortcuts.swift` | `AppShortcutsProvider`，中文短语和图标 |
 
 ## 选择规则

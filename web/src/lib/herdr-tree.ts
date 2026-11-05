@@ -9,6 +9,7 @@ import { stateOf, tabLabel } from "./format";
 import { isSpacePinned, type AgentPins } from "./pins";
 import type { Route, SessionView } from "./router";
 import type { AgentState, Machine, Session } from "./types";
+import { byTime } from "./times";
 
 // docs/agent-states.md「排序优先级」: what a folded row shows for everything under it, and which pane a tab opens on.
 const URGENCY: AgentState[] = ["needs_you", "working", "unread", "idle", "unknown", "offline"];
@@ -88,9 +89,9 @@ type HomeBucket = "needs" | "working" | "unread";
 // working first, by when it started; the others the latest first, by when they last changed. A negative `before`
 // puts `a` first.
 const BUCKET_ORDER: Record<HomeBucket, (a: Session, b: Session) => number> = {
-  working: (a, b) => (a.state_since ?? "").localeCompare(b.state_since ?? ""),
-  needs: (a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
-  unread: (a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
+  working: (a, b) => byTime(a.state_since, b.state_since),
+  needs: (a, b) => byTime(b.updated_at, a.updated_at),
+  unread: (a, b) => byTime(b.updated_at, a.updated_at),
 };
 
 /** The overview's task rows (#2320): the live agents (`sessions` without the offline ones) folded by tab, filed under

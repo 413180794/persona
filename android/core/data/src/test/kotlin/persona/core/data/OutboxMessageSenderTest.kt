@@ -539,6 +539,65 @@ class OutboxMessageSenderTest {
         sender.close()
     }
 
+    @Test fun messageTheHubDidNotDeliverGoesAgainUnderANewOperationId() = runTest {
+        val store = FakeStore()
+        val hub = ReplayingHub()
+        val sender = OutboxMessageSender(scope, store, hub, backgroundScope)
+        // The computer is offline for the first try (503, delivered none), back for the next.
+        hub.answers += MessageTransportResult.HubError("assistant_offline", "none", retryable = true)
+        hub.answers += MessageTransportResult.Accepted
+        sender.send(session, "电脑离线时写的", "offline")
+        runCurrent()
+        hub.readyToSend.value = false
+        runCurrent()
+        hub.readyToSend.value = true
+        runCurrent()
+        val ops = hub.requests.map { it.headers.getValue("X-Jarvis-Op-Id") }
+        assertEquals(2, ops.size)
+        assertEquals("offline", ops[0])
+        assertTrue(ops[1] != ops[0])
+        assertEquals(OutboxState.Sent, store.state("offline"))
+        sender.observeTranscript(session, listOf(Item("echo", 1, role = "user", kind = "text", text = "电脑离线时写的",
+            clientMsgId = ops[1])))
+        assertEquals(OutboxState.Shown, store.state("offline"))
+        sender.close()
+    }
+
+    @Test fun refusedMessageRetriedByHandGoesUnderANewOperationId() = runTest {
+        val store = FakeStore()
+        val hub = ReplayingHub()
+        val sender = OutboxMessageSender(scope, store, hub, backgroundScope)
+        hub.answers += MessageTransportResult.HubError("input_draft", "none")
+        sender.send(session, "电脑上有草稿", "draft")
+        runCurrent()
+        assertEquals(OutboxState.Refused, store.state("draft"))
+        hub.answers += MessageTransportResult.Accepted
+        assertTrue(sender.retry("draft"))
+        runCurrent()
+        val ops = hub.requests.map { it.headers.getValue("X-Jarvis-Op-Id") }
+        assertEquals(2, ops.size)
+        assertTrue(ops[1] != ops[0])
+        assertEquals(OutboxState.Sent, store.state("draft"))
+        // Still the same message under its first id for the pages.
+        assertEquals("draft", sender.outbox.value.single().clientMessageId)
+        sender.close()
+    }
+
+    /** Like the hub's client ops: a repeated operation id gets the first answer again (a 503 replays as unknown). */
+    private class ReplayingHub : MessageTransport {
+        override val readyToSend = MutableStateFlow(true)
+        override val supportsClientOps = true
+        val answers = ArrayDeque<MessageTransportResult>()
+        val requests = mutableListOf<MessageRequest>()
+        private val first = mutableMapOf<String, MessageTransportResult>()
+        override suspend fun send(request: MessageRequest): MessageTransportResult {
+            requests += request
+            val op = request.headers.getValue("X-Jarvis-Op-Id")
+            val stored = first[op] ?: return answers.removeFirst().also { first[op] = it }
+            return if (stored is MessageTransportResult.HubError && stored.retryable) MessageTransportResult.NoReceipt else stored
+        }
+    }
+
     private class FakeTransport(online: Boolean, override val supportsClientOps: Boolean = false) : MessageTransport {
         override val readyToSend = MutableStateFlow(online)
         val answers = ArrayDeque<MessageTransportResult>()
@@ -588,6 +647,10 @@ class OutboxMessageSenderTest {
             entries.value = entries.value.map { if (it == old) it.copy(state = to, error = error) else it }
             return true
         }
+        override suspend fun transition(id: String, from: Set<OutboxState>, to: OutboxState, error: String?, opId: String): Boolean =
+            transition(id, from, to, error).also { moved ->
+                if (moved) entries.value = entries.value.map { if (it.clientMessageId == id) it.copy(opId = opId) else it }
+            }
         override suspend fun recoverInterrupted() {
             entries.value = entries.value.map { if (it.state == OutboxState.Sending) it.copy(state = OutboxState.Unknown) else it }
         }

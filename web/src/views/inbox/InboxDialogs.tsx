@@ -17,6 +17,7 @@ import { Button, cx, Dialog, Loading, toast } from "../../ui/atoms";
 import { StatusMark } from "../../ui/StatusMark";
 import { Icon } from "../../ui/icons";
 import { Spark } from "./InboxParts";
+import { byTime } from "../../lib/times";
 
 const changeKey = (c: DocChange) => `${c.ref}|${c.field}`;
 
@@ -185,7 +186,7 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
     const online = new Set(machines.filter((m) => m.online).map((m) => m.id));
     return Object.values(sessions).flat()
       .filter((s) => !s.assistant && online.has(s.machine_id) && stateOf(s) !== "offline")
-      .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
+      .sort((a, b) => byTime(b.updated_at, a.updated_at))
       .slice(0, 8);
   }, [sessions, machines]);
 

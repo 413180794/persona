@@ -5,6 +5,7 @@ import { isAutoConversation } from "./conversation-origins";
 import { firstAndCurrent } from "./persona-nav";
 import { toggled } from "./pins";
 import type { Session } from "./types";
+import { byTime } from "./times";
 
 const KEY = "assistant.pinned";
 const listeners = new Set<() => void>();
@@ -74,6 +75,6 @@ export function sidebarConversations(conversations: readonly Session[], main: st
   const others = conversations.filter((c) => c.session_id !== main);
   const order = new Map(pins.map((id, i) => [id, i]));
   const pinned = others.filter((c) => order.has(c.session_id)).sort((a, b) => order.get(a.session_id)! - order.get(b.session_id)!);
-  const rest = others.filter((c) => !order.has(c.session_id) && !isAutoConversation(c)).sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
+  const rest = others.filter((c) => !order.has(c.session_id) && !isAutoConversation(c)).sort((a, b) => byTime(b.updated_at, a.updated_at));
   return { pinned, recent: firstAndCurrent(rest, limit, (c) => c.session_id === current) };
 }

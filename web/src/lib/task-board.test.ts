@@ -25,6 +25,14 @@ describe("the task board (iOS TaskBoardSheet)", () => {
     expect(sections[1].agents.map((a) => a.session.session_id)).toEqual(["b"]);
   });
 
+  it("puts the newest task first when the times are written differently (#3638)", () => {
+    const rows = [
+      { todo: todo("loaded", "2026-11-06T18:00:00.123456+08:00"), status: "working" as const },
+      { todo: todo("created", "2026-11-06T10:30:00.1Z"), status: "working" as const },
+    ];
+    expect(boardSections(rows, [])[0].rows.map((r) => r.todo.id)).toEqual(["created", "loaded"]);
+  });
+
   it("has no sections when the conversation has nothing", () => {
     expect(boardSections([], [])).toEqual([]);
   });

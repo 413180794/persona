@@ -21,6 +21,7 @@ import { StatusMark } from "../ui/StatusMark";
 import { Icon } from "../ui/icons";
 import { copyFileMention, FilesHeading, FilesNotice, FileResultRow, openFileHit, usePaletteFiles, type FileRow } from "./palette/FilesSection";
 import { t } from "../i18n";
+import { byTime } from "../lib/times";
 
 interface Hit {
   key: string;
@@ -168,7 +169,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
       ...out.map((h) => ({ kind: "session" as const, key: h.key, hit: h, score: h.score, at: h.s.updated_at ?? "" })),
       ...terminalHits(machinePanes, text).map((h) => ({ kind: "pane" as const, key: h.key, hit: h, score: h.score, at: "" })),
     ];
-    all.sort((a, b) => b.score - a.score || b.at.localeCompare(a.at));
+    all.sort((a, b) => b.score - a.score || byTime(b.at, a.at));
     const mail = inboxHits(inboxItems.filter((it) => !isDone(it)), text).map((h) => ({ kind: "inbox" as const, key: h.key, hit: h, score: h.score }));
     const go = placeHits(places, text).map((h) => ({ kind: "place" as const, key: h.key, hit: h, score: h.score }));
     return orderGroups<Row & { score: number }>([all.slice(0, 40), mail, go]).flat();

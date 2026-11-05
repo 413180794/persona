@@ -7,6 +7,7 @@ import { stateOf } from "./format";
 import { agentKey, isSpacePinned, type AgentPins } from "./pins";
 import { isMuted } from "./session-actions";
 import type { AgentState, Session } from "./types";
+import { byTime, timeMs } from "./times";
 
 export type AgentFilter = "all" | "needs" | "unread" | "working" | "feishu" | "terminal";
 
@@ -99,7 +100,7 @@ const when = (s: Session) => (stateOf(s) === "working" ? s.state_since || s.upda
 
 /** The latest of its agents' times: a working agent's every line does not move the space. */
 export function spaceDate(sp: SpaceLike): string {
-  return sp.sessions.reduce((m, s) => (when(s) > m ? when(s) : m), "");
+  return sp.sessions.reduce((m, s) => (timeMs(when(s)) > timeMs(m) ? when(s) : m), "");
 }
 
 export function isSpaceMuted(sp: SpaceLike, mutes: AgentMutes): boolean {
@@ -114,7 +115,7 @@ export function arrangeSpaces<T extends SpaceLike>(spaces: T[], o: { pins: Agent
   const pinned = spaces.filter(lead);
   const rest = spaces.filter((sp) => !lead(sp));
   if (o.filtered) {
-    return { active: [...pinned, ...rest.slice().sort((a, b) => spaceDate(b).localeCompare(spaceDate(a)) || a.key.localeCompare(b.key))], idle: [] };
+    return { active: [...pinned, ...rest.slice().sort((a, b) => byTime(spaceDate(b), spaceDate(a)) || a.key.localeCompare(b.key))], idle: [] };
   }
   const busy = rest.filter(o.busy);
   return {

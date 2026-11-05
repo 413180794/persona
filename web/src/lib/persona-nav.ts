@@ -2,6 +2,7 @@
 // and which row a route lights up. Pure, so the order and the selection are tested without a DOM.
 import type { Route } from "./router";
 import type { Session } from "./types";
+import { byTime } from "./times";
 
 /** The sidebar row a route selects. Persona's main conversation is one row, under `/`, `/j` and `/j/<main>` alike. */
 export function sidebarActiveKey(route: Route, main?: string): string {
@@ -33,7 +34,7 @@ export const extensionNavKey = (extension: string, ui: string) => `p:${extension
 /** The conversations listed under「Persona 对话」: the most recent ones, without the main one (it has its own row), and
  *  the open one (`current`) after them when it is older, so the sidebar always has its row (#2283). */
 export function otherConversations(conversations: readonly Session[], main: string | undefined, limit = 5, current?: string): Session[] {
-  const sorted = conversations.filter((c) => c.session_id !== main).sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
+  const sorted = conversations.filter((c) => c.session_id !== main).sort((a, b) => byTime(b.updated_at, a.updated_at));
   return firstAndCurrent(sorted, limit, (c) => c.session_id === current);
 }
 

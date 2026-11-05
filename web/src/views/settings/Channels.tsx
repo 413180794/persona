@@ -18,6 +18,7 @@ import { ChannelMark } from "../../ui/ChannelMark";
 import { Icon } from "../../ui/icons";
 import { QRStep, useStepPolling } from "./LoginSteps";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
+import { byTime } from "../../lib/times";
 
 const DOT: Record<ChannelTone, string> = { green: "bg-green", red: "bg-red", idle: "bg-line-strong" };
 const fieldClass = "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
@@ -334,7 +335,7 @@ function TargetPicker({ open, current, onClose, onPick }: { open: boolean; curre
       Object.values(sessions)
         .flat()
         .filter((s) => s.assistant && !s.archived)
-        .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
+        .sort((a, b) => byTime(b.updated_at, a.updated_at))
         .slice(0, 12),
     [sessions],
   );

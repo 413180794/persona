@@ -183,12 +183,22 @@ class OutboxMessageSender(
         composer
     }
 
-    /** Manual refusal retries must update the durable outbox as well as the composer overlay. */
-    suspend fun recordComposerDelivery(id: String, delivery: ComposerDelivery) = lifecycle.withLock {
+    /**
+     * Manual refusal retries must update the durable outbox as well as the composer overlay. [opId] is the operation
+     * id the retry goes under (a new one: the refused one would be answered from its first try).
+     */
+    suspend fun recordComposerDelivery(id: String, delivery: ComposerDelivery, opId: String? = null) = lifecycle.withLock {
         check(job.isActive) { "Pairing scope is closed" }
         val state = OutboxState.entries.first { it.delivery == delivery.state }
         val from = if (delivery.state == DeliveryState.Sending) setOf(OutboxState.Refused) else setOf(OutboxState.Sending)
-        check(store.transition(id, from, state, delivery.refusal?.code)) { "Message state changed" }
+        // Refused again: nothing was delivered under that id either, so a later retry takes another.
+        val next = when (state) {
+            OutboxState.Refused -> newOperationId()
+            OutboxState.Sending -> opId
+            else -> null
+        }
+        check(if (next != null) store.transition(id, from, state, delivery.refusal?.code, next)
+            else store.transition(id, from, state, delivery.refusal?.code)) { "Message state changed" }
     }
 
     /** Attachments need the same durably bound target before uploading machine-local files. */
@@ -269,7 +279,8 @@ class OutboxMessageSender(
             for (item in items) {
                 if (pending.isEmpty()) break
                 if (!MessageEcho.candidate(item) || (session to item.id) in claimed) continue
-                val entry = pending.firstOrNull { MessageEcho.carries(item, it.clientMessageId) }
+                val entry = pending.firstOrNull { MessageEcho.carries(item, it.clientMessageId) ||
+                    it.opId?.let { op -> MessageEcho.carries(item, op) } == true }
                     ?: pending.firstOrNull { MessageEcho.arrived(it.text, it.createdAt, item) } ?: continue
                 pending.remove(entry)
                 if (store.transition(entry.clientMessageId, reconcilable, OutboxState.Shown)) {
@@ -295,11 +306,7 @@ class OutboxMessageSender(
                 catch (_: Exception) { null }
                 when (evidence) {
                     MessageEvidence.Shown -> store.transition(entry.clientMessageId, reconcilable, OutboxState.Shown)
-                    is MessageEvidence.Receipt -> {
-                        val state = classify(evidence.result)
-                        store.transition(entry.clientMessageId, uncertain, state,
-                            (evidence.result as? MessageTransportResult.HubError)?.let { it.code ?: it.error })
-                    }
+                    is MessageEvidence.Receipt -> settle(entry.clientMessageId, uncertain, evidence.result)
                     null -> store.transition(entry.clientMessageId, setOf(OutboxState.Verifying), OutboxState.Unknown)
                 }
             }
@@ -340,14 +347,26 @@ class OutboxMessageSender(
                 if (!store.transition(entry.clientMessageId, setOf(OutboxState.Unknown), OutboxState.Sending)) continue
                 result = attempt(entry)
             }
-            val state = classify(result)
-            val error = (result as? MessageTransportResult.HubError)?.let { it.code ?: it.error }
-            store.transition(entry.clientMessageId, setOf(OutboxState.Sending), state, error)
-            if (state == OutboxState.WaitingForNetwork) return
+            if (settle(entry.clientMessageId, setOf(OutboxState.Sending), result) == OutboxState.WaitingForNetwork) return
         }
     }
 
-    private fun request(entry: OutboxEntry) = MessageRequest(hubScope, entry.session, entry.text, entry.clientMessageId, entry.clearDraft)
+    /**
+     * Records [result] for the message's current operation id. When the hub said nothing was delivered, that id is
+     * spent (the hub answers it again from this try: 202 unknown, the stored 409), so the next attempt takes a new one,
+     * as on iOS. Without an answer the id stays: the hub sends a repeated id once.
+     */
+    private suspend fun settle(id: String, from: Set<OutboxState>, result: MessageTransportResult): OutboxState {
+        val state = classify(result)
+        val error = (result as? MessageTransportResult.HubError)?.let { it.code ?: it.error }
+        if ((result as? MessageTransportResult.HubError)?.delivered == "none") {
+            store.transition(id, from, state, error, newOperationId())
+        } else store.transition(id, from, state, error)
+        return state
+    }
+
+    private fun request(entry: OutboxEntry) =
+        MessageRequest(hubScope, entry.session, entry.text, entry.clientMessageId, entry.clearDraft, opId = entry.operationId)
 
     private suspend fun resolveMain(): SessionKey? {
         store.mainConversation()?.let { return it }
@@ -387,6 +406,9 @@ class OutboxMessageSender(
         private val dispatchable = setOf(OutboxState.Queued, OutboxState.WaitingForNetwork)
         private val hidden = setOf(OutboxState.Cancelled, OutboxState.Shown)
         private val refusals = setOf("input_draft", "dialog_open", "op_id_reused", "invalid", "stale_session")
+
+        /** The hub takes UUIDs only as operation ids. */
+        fun newOperationId(): String = java.util.UUID.randomUUID().toString()
 
         fun classify(result: MessageTransportResult): OutboxState = when (result) {
             MessageTransportResult.Accepted -> OutboxState.Sent

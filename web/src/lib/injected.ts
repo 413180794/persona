@@ -1,6 +1,7 @@
 import { t } from "../i18n";
 import type { Todo } from "./todos";
 import type { Injected, Item } from "./types";
+import { timeMs } from "./times";
 
 // Messages Persona types into a conversation for the model (a task's notice, a scheduled run, a wake-up, the
 // background tasks a node restart stopped): one line instead of a user bubble, never the instructions inside
@@ -81,7 +82,7 @@ export function taskOfInjected(n: Injected, todos: readonly Todo[], conversation
   let best: Todo | undefined;
   for (const t of todos) {
     if (t.title !== n.title || t.origin !== conversation) continue;
-    if (!best || t.created_at > best.created_at) best = t;
+    if (!best || timeMs(t.created_at) > timeMs(best.created_at)) best = t;
   }
   return best?.id;
 }

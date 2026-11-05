@@ -61,7 +61,7 @@ class HttpMessageTransport(
         require(request.scope == hubScope) { "Message belongs to another pairing" }
         if (supportsClientOps) {
             val path = HttpUrl.Builder().scheme("https").host("example.com")
-                .addPathSegments("api/v1/ops").addPathSegment(request.clientMessageId).build().encodedPath
+                .addPathSegments("api/v1/ops").addPathSegment(request.opId).build().encodedPath
             val receipt = try {
                 connection.request(path).use { JsonCodec.parseToJsonElement(it.body!!.string()).jsonObject }
             } catch (failure: HubFailure) {
@@ -87,7 +87,7 @@ class HttpMessageTransport(
     private suspend fun transcriptEvidence(request: MessageRequest, createdAt: Long, allowTextMatch: Boolean): MessageEvidence? {
         val items = HubChatTransport(connection).items(request.session, ItemsQuery()).items
         val shown = items.any { item ->
-            MessageEcho.carries(item, request.clientMessageId) ||
+            MessageEcho.carries(item, request.clientMessageId) || MessageEcho.carries(item, request.opId) ||
                 allowTextMatch && MessageEcho.arrived(request.text, createdAt, item)
         }
         return MessageEvidence.Shown.takeIf { shown }
@@ -117,7 +117,7 @@ class HttpMessageTransport(
             .addPathSegment("messages").build()
         val body = buildJsonObject {
             put("text", request.text)
-            put("client_msg_id", request.clientMessageId)
+            put("client_msg_id", request.opId)
             request.clearDraft?.let { put("clear_draft", it) }
             request.todoId?.let { put("todo_id", it) }
         }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())

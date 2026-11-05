@@ -4,6 +4,7 @@
 
 import { t } from "../i18n";
 import type { Item, Session } from "./types";
+import { byTime } from "./times";
 
 export interface MentionToken {
   /** Offset of the `@`. */
@@ -108,7 +109,7 @@ export function otherSessions(all: Session[], except: string | undefined, query:
   return all
     .filter((s) => !s.assistant && `${s.machine_id}/${s.session_id}` !== except)
     .filter((s) => !q || displayTitle(s).toLowerCase().includes(q) || sessionDetail(s).toLowerCase().includes(q))
-    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
+    .sort((a, b) => byTime(b.updated_at, a.updated_at))
     .slice(0, limit);
 }
 

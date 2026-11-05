@@ -2,6 +2,7 @@ import { t } from "../i18n";
 import { byAttention, stateOf } from "./format";
 import { hubWaits } from "./work";
 import type { AgentState, Machine, Session } from "./types";
+import { byTime } from "./times";
 
 export type AgentGrouping = "repo" | "space" | "state" | "machine" | "todo";
 // 按机器 is herdr's own layout (machine → workspace → tab, lib/herdr-tree.ts) and the default for a browser that never
@@ -69,7 +70,7 @@ export function splitAgentSessions(all: Session[], machines: Machine[]) {
   const live = agents.filter((s) => stateOf(s) !== "offline" && online.has(s.machine_id));
   const recent = agents
     .filter((s) => stateOf(s) === "offline" || !online.has(s.machine_id))
-    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? "") || a.machine_id.localeCompare(b.machine_id) || a.session_id.localeCompare(b.session_id))
+    .sort((a, b) => byTime(b.updated_at, a.updated_at) || a.machine_id.localeCompare(b.machine_id) || a.session_id.localeCompare(b.session_id))
     .slice(0, 40);
   return { live, recent };
 }
@@ -119,7 +120,7 @@ function isMuted(s: Session, mutes: AgentMutes): boolean {
 
 function byDate(a: Session, b: Session): number {
   const date = (s: Session) => (stateOf(s) === "working" ? s.state_since || s.updated_at : s.updated_at) ?? "";
-  return date(b).localeCompare(date(a)) || a.session_id.localeCompare(b.session_id) || a.machine_id.localeCompare(b.machine_id);
+  return byTime(date(b), date(a)) || a.session_id.localeCompare(b.session_id) || a.machine_id.localeCompare(b.machine_id);
 }
 
 // iOS AgentListOrder: needs you always wins, even when a session or its project is muted. 按状态 is the only grouping

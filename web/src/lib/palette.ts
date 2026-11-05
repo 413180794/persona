@@ -7,6 +7,7 @@ import { chordParts, SCOPE_LABEL, SHORTCUTS, DIGITS, type Bindings, type Platfor
 import type { Route } from "./router";
 import type { PaneState, TermSpace } from "./terminals";
 import type { IconName } from "../ui/icons";
+import { byTime } from "./times";
 
 // ── state ────────────────────────────────────────────────
 
@@ -301,7 +302,7 @@ export function inboxHits<T extends InboxLike>(items: readonly T[], text: string
       const score = textScore(item.title, [item.sender, item.preview, item.account_name], text);
       return score ? [{ key: `i:${item.id}`, item, score }] : [];
     })
-    .sort((a, b) => b.score - a.score || (b.item.updated_at ?? "").localeCompare(a.item.updated_at ?? ""))
+    .sort((a, b) => b.score - a.score || byTime(b.item.updated_at, a.item.updated_at))
     .slice(0, limit);
 }
 

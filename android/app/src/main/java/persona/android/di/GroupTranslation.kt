@@ -34,7 +34,8 @@ internal class GroupNames(val namespace: String?) {
     fun interactionId(raw: String) = GroupKeys.machine(raw, namespace)
     fun interaction(value: Interaction) = if (plain) value else value.copy(id = interactionId(value.id), machineId = machineId(value.machineId))
     fun fleet(value: FleetState) = if (plain) value else value.copy(items = value.items.map { item ->
-        item.copy(interaction = item.interaction?.let(::interactionId))
+        // The id is "machine/session": FleetSummary.key opens and answers by its machine part.
+        item.copy(id = path(item.id), interaction = item.interaction?.let(::interactionId))
     })
     fun outbox(value: OutboxMessage) = if (plain) value else value.copy(session = key(value.session))
     fun draftKey(value: DraftKey) = if (plain || value !is DraftKey.Chat) value else DraftKey.Chat(key(value.session))
@@ -347,6 +348,18 @@ internal fun InboxSnapshot.inGroup(names: GroupNames) = if (names.plain) this el
         record.copy(agent = agent.copy(machineId = agent.machineId?.let(names::machineId)))
     } ?: record },
 )
+
+/**
+ * Keeps [group]'s latest fleet (in its own plain ids, pushed or fetched) translated by [names], forgets groups no
+ * longer in [open], and returns the merged fleet of every open group.
+ */
+internal fun MutableMap<String, FleetState>.putFleet(group: String, names: GroupNames, fleet: FleetState,
+    open: List<String>, selected: String?): FleetState {
+    this[group] = names.fleet(fleet)
+    val ids = (open + group).distinct()
+    keys.retainAll(ids.toSet())
+    return mergeFleets(ids.mapNotNull { this[it] }, selected?.let { this[it] })
+}
 
 /**
  * The fleet the ongoing notification shows, over every group: counts add up, the most urgent phase wins, items

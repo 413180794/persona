@@ -14,8 +14,8 @@
   `/kb`、`/kb/<类型>/<条目>`、`/workspace-board`（工作流看板）、`/machines`、`/machines/<机器>`、`/terminal`、`/terminal/<机器>/<终端 id>`、`/assistant`（助手资料页）、`/settings`、`/extension/<扩展>/<页面>`（扩展的整页））；
   `/assets/` 下是带内容哈希的文件，永久缓存，`index.html` 不缓存（`server/internal/hub/web.go`）。
 - 部署：`./scripts/deploy/deploy.sh web`（只构建、传网页，不重启 hub）；部署 hub 时也会顺带部署网页：网页和 Go 二进制一起先编好，编不过就打出编译输出（含隐私扫描的命中行）、什么都不装；hub 重启之后再上传。
-- 本地开发：`cd web && npm ci && npm run dev`，Vite 把 `/api` 代理到 `JARVIS_HUB_URL`（`eval "$(python3 ../scripts/persona_config.py env)"`）。
-  测试 `npm test`（vitest，`src/lib/*.test.ts`），类型检查 `npm run typecheck`。
+- 本地开发：`cd web && npm ci && npm run dev`，Vite 把 `/api` 代理到 `PERSONA_HUB_URL`（没有就用 `JARVIS_HUB_URL`，都没有就是 `http://127.0.0.1:18660`；`eval "$(python3 ../scripts/persona_config.py env)"` 两个都会设）。
+  测试 `npm test`（vitest，跑 `src/` 下所有的 `*.test.ts(x)`），类型检查 `npm run typecheck`。
   侧边栏入口的端到端检查（Persona 进主对话、两个「+」、老链接、窄屏抽屉；Python Playwright 驱动本机 Chrome）：起假 hub 和 `npx vite` 后跑
   `python3 scripts/test/web_sidebar_e2e.py <网页地址> [--shots <目录>]`，用法见脚本开头，`--shots` 顺带拍浅色 / 深色 / 窄屏截图。
   设置入口的端到端检查（#2196：渠道在连接器前、旧扩展链接兼容、渠道与连接器互相跳转、窄屏返回设置）：假 hub 带 `MOCK_CHANNELS=1 MOCK_PLUGINS=1` 起，

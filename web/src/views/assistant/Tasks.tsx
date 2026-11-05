@@ -51,6 +51,7 @@ import { formatDate, t } from "../../i18n";
 import { interactionAsk } from "../../lib/inbox";
 import { Empty } from "./parts";
 import { PlanEditDialog } from "./PlanEdit";
+import { byTime } from "../../lib/times";
 
 // ── what a task is now ──
 
@@ -808,7 +809,7 @@ export function TaskQuestions({ conversation }: { conversation: string }) {
     }
     // just answered here: shown answered for a moment above the next one
     const done = Object.values(answeredAll).filter((a) => keys.has(`${a.ix.machine_id}/${a.ix.session_id}`));
-    return { asks: out.sort((a, b) => (a.ix.created_at ?? "").localeCompare(b.ix.created_at ?? "")), answered: done };
+    return { asks: out.sort((a, b) => byTime(a.ix.created_at, b.ix.created_at)), answered: done };
   }, [todos, interactions, answeredAll, conversation]);
   const first = asks[0];
   if (!first && !answered.length) return null;
@@ -850,7 +851,7 @@ export function TaskDock({ conversation }: { conversation: string }) {
   const going = mine
     .map((t) => ({ t, st: statusOf(t, lookup, plans) }))
     .filter((x) => rank[x.st] !== undefined)
-    .sort((a, b) => rank[a.st]! - rank[b.st]! || b.t.created_at.localeCompare(a.t.created_at));
+    .sort((a, b) => rank[a.st]! - rank[b.st]! || byTime(b.t.created_at, a.t.created_at));
   // 全部 and the pills share one capsule (height, radius, padding, size), like iOS DockPillLabel.
   const capsule = "inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[12.5px]";
   const pill = cx(capsule, "max-w-[240px] gap-2 font-semibold");

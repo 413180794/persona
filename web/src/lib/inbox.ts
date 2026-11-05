@@ -19,6 +19,7 @@ import { isResumed } from "./reconnect";
 import { onHubEvent } from "./store";
 import type { AssistantInfo, Interaction, Session } from "./types";
 import { toast } from "../ui/atoms";
+import { byTime } from "./times";
 
 // ── wire types (docs/protocol.md「收件箱 API」) ─────────
 
@@ -398,8 +399,8 @@ export function matches(it: InboxItem, f: InboxFilter): boolean {
   return hasText([it.title, it.sender, it.preview, it.summary], f.query);
 }
 
-const byUpdated = (a: InboxItem, b: InboxItem) => (b.updated_at ?? "").localeCompare(a.updated_at ?? "") || a.id.localeCompare(b.id);
-const byDoneAt = (a: InboxItem, b: InboxItem) => (b.done_at ?? "").localeCompare(a.done_at ?? "") || a.id.localeCompare(b.id);
+const byUpdated = (a: InboxItem, b: InboxItem) => byTime(b.updated_at, a.updated_at) || a.id.localeCompare(b.id);
+const byDoneAt = (a: InboxItem, b: InboxItem) => byTime(b.done_at, a.done_at) || a.id.localeCompare(b.id);
 
 export interface InboxSections {
   tiers: Record<Tier, InboxItem[]>;
@@ -486,7 +487,7 @@ export function waitingAgents(interactions: Interaction[], sessions: Record<stri
   if (f.source || (f.kind && f.kind !== "agent")) return [];
   return interactions
     .filter((ix) => !interactionMuted(ix, sessions, mutes) && hasText([ix.session_title, ix.summary, interactionTitle(ix), interactionAsk(ix)], f.query))
-    .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.id.localeCompare(b.id));
+    .sort((a, b) => byTime(a.created_at, b.created_at) || a.id.localeCompare(b.id));
 }
 
 /** A conversation's page: the assistant's are in Persona (/j/<sid>), an agent's is /s/<machine>/<sid>. */

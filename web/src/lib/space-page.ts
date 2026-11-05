@@ -4,6 +4,7 @@
 import { byAttention, stateOf } from "./format";
 import { findTodoForSpace, type Todo } from "./todos";
 import type { Session } from "./types";
+import { byTime } from "./times";
 
 /** What a space's name is, as the sidebar and the pins call it. */
 export function spaceNameOf(s: Session): string {
@@ -28,7 +29,7 @@ export function spaceView(sessions: readonly Session[], mid: string, space: stri
   const live = mine.filter((s) => stateOf(s) !== "offline").sort(byAttention);
   const recent = mine
     .filter((s) => stateOf(s) === "offline")
-    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? "") || a.session_id.localeCompare(b.session_id))
+    .sort((a, b) => byTime(b.updated_at, a.updated_at) || a.session_id.localeCompare(b.session_id))
     .slice(0, RECENT_LIMIT);
   const counts = { needs: 0, working: 0, unread: 0 };
   for (const s of live) {

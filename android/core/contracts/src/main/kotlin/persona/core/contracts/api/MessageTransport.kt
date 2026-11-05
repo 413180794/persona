@@ -11,8 +11,13 @@ data class MessageRequest(
     val clientMessageId: String,
     val clearDraft: String? = null,
     val todoId: String? = null,
+    /**
+     * The operation id this attempt goes under (X-Jarvis-Op-Id, and the body's client_msg_id): the message's own id
+     * until the hub answered an attempt as not delivered, then a new one (the hub replays the first answer for an id).
+     */
+    val opId: String = clientMessageId,
 ) {
-    val headers: Map<String, String> get() = mapOf("X-Jarvis-Op-Id" to clientMessageId)
+    val headers: Map<String, String> get() = mapOf("X-Jarvis-Op-Id" to opId)
 }
 
 sealed interface MessageTransportResult {
