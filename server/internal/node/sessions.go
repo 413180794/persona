@@ -767,8 +767,9 @@ func (n *Node) scanOffline() []proto.Session {
 		path string
 		st   os.FileInfo
 	}
-	var cands, kept []cand
+	var cands, assistant, kept []cand
 	keep := n.keptSessions()
+	own := n.assistantProject()
 	for _, p := range files {
 		id := strings.TrimSuffix(filepath.Base(p), ".jsonl")
 		if !validID(id) {
@@ -785,12 +786,22 @@ func (n *Node) scanOffline() []proto.Session {
 		if time.Since(st.ModTime()) > offlineWindow || st.Size() < 2048 {
 			continue
 		}
+		if isAssistantProject(filepath.Base(filepath.Dir(p)), own) {
+			assistant = append(assistant, cand{p, st})
+			continue
+		}
 		cands = append(cands, cand{p, st})
 	}
-	sort.Slice(cands, func(i, j int) bool { return cands[i].st.ModTime().After(cands[j].st.ModTime()) })
-	if len(cands) > 80 {
-		cands = cands[:80]
+	newest := func(list []cand, limit int) []cand {
+		sort.Slice(list, func(i, j int) bool { return list[i].st.ModTime().After(list[j].st.ModTime()) })
+		if len(list) > limit {
+			list = list[:limit]
+		}
+		return list
 	}
+	// The assistant's conversations are counted on their own: a script running `claude -p` hundreds of times a day
+	// filled the 80 newest with its sessions, and the 对话 tab lost every conversation quieter than a couple of hours (#2105).
+	cands = append(newest(cands, 80), newest(assistant, maxAssistantOffline)...)
 	cands = append(cands, kept...)
 	sort.SliceStable(cands, func(i, j int) bool { return cands[i].st.ModTime().After(cands[j].st.ModTime()) })
 	listed := map[string]bool{}
@@ -1415,6 +1426,22 @@ func (n *Node) bindPane(pane, id string) {
 }
 
 var nonAlnum = regexp.MustCompile(`[^A-Za-z0-9]`)
+
+// maxAssistantOffline is how many of the assistant directory's quiet transcripts the list keeps, apart from the 80
+// newest of every other directory.
+const maxAssistantOffline = 100
+
+// assistantProject is the projects directory name Claude Code keeps for this node's assistant directory.
+func (n *Node) assistantProject() string {
+	return nonAlnum.ReplaceAllString(identity.AssistantDir(n.home), "-")
+}
+
+// isAssistantProject: base is the name of the projects directory Claude Code keeps for the assistant's directory
+// (own: this node's, assistantProject). The assistant may have run under ~/.persona or ~/.jarvis, through a symlinked
+// home, so the name is matched by its end as well.
+func isAssistantProject(base, own string) bool {
+	return base == own || strings.HasSuffix(base, "--persona-assistant") || strings.HasSuffix(base, "--jarvis-assistant")
+}
 
 // guessSession picks a transcript for an agent herdr could not identify. Claude sets the terminal title to the
 // session's AI title, so a title match wins; otherwise the newest unclaimed transcript in the project directory.

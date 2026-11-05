@@ -86,3 +86,71 @@ func TestTailWithoutWordsKeepsBigTranscriptsListed(t *testing.T) {
 		t.Fatal("a small transcript that never said anything is still left out")
 	}
 }
+
+// The assistant's conversations are counted apart from every other directory's: 85 newer sessions a script started
+// elsewhere do not push the assistant's quieter ones out of the list (#2105: the 对话 tab kept only the main one and
+// the scheduled tasks').
+func TestAssistantConversationsOutlastOtherDirectories(t *testing.T) {
+	n, _ := claudeHome(t)
+	n.metas, n.bgScans = map[string]quickMeta{}, map[string]*bgScan{}
+	projects := filepath.Join(n.home, ".claude", "projects")
+	write := func(project, id string, age time.Duration) {
+		dir := filepath.Join(projects, project)
+		_ = os.MkdirAll(dir, 0o700)
+		p := filepath.Join(dir, id+".jsonl")
+		body := `{"type":"user","uuid":"u1","timestamp":"2026-10-20T10:00:00Z","cwd":"/src/app","message":{"role":"user","content":"hi"}}` + "\n" +
+			`{"type":"assistant","uuid":"a1","timestamp":"2026-10-20T10:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}` + "\n"
+		_ = os.WriteFile(p, []byte(body+strings.Repeat(" ", 4096)+"\n"), 0o600)
+		at := time.Now().Add(-age)
+		_ = os.Chtimes(p, at, at)
+	}
+	const mine = "dddddddd-0000-0000-0000-000000000005"
+	const legacy = "dddddddd-0000-0000-0000-000000000006"
+	const stale = "dddddddd-0000-0000-0000-000000000007"
+	write("-home-me--persona-assistant", mine, 3*time.Hour)
+	write("-data-home-me--jarvis-assistant", legacy, 2*24*time.Hour)
+	write("-home-me--persona-assistant", stale, 10*24*time.Hour) // still out: older than the offline window
+	for i := 0; i < 85; i++ {
+		write("-tmp", fmt.Sprintf("eeeeeeee-0000-0000-0000-%012d", i), time.Duration(i+1)*time.Minute)
+	}
+	listed := map[string]bool{}
+	others := 0
+	for _, s := range n.scanOffline() {
+		listed[s.SessionID] = true
+		if strings.HasPrefix(s.SessionID, "eeeeeeee") {
+			others++
+		}
+	}
+	if !listed[mine] || !listed[legacy] {
+		t.Fatalf("the assistant's conversations are listed however many newer sessions other directories have: %v", listed)
+	}
+	if listed[stale] {
+		t.Fatal("an assistant conversation older than the offline window is still left out")
+	}
+	if others != 80 {
+		t.Fatalf("other directories keep their newest 80, got %d", others)
+	}
+}
+
+// The assistant's projects directory is told by its name: under ~/.persona or ~/.jarvis through any home, or this
+// node's own assistant directory however PERSONA_HOME puts it; a directory under the assistant's is not it.
+func TestIsAssistantProject(t *testing.T) {
+	n, _ := claudeHome(t)
+	t.Setenv("PERSONA_HOME", "/opt/persona-state")
+	own := n.assistantProject()
+	if own != "-opt-persona-state-assistant" {
+		t.Fatalf("own assistant project %q", own)
+	}
+	for base, want := range map[string]bool{
+		"-home-me--persona-assistant":              true,
+		"-data-home-me--jarvis-assistant":          true,
+		"-opt-persona-state-assistant":             true,
+		"-home-me--persona-assistant-worklog-data": false,
+		"-tmp":           false,
+		"-src-assistant": false,
+	} {
+		if got := isAssistantProject(base, own); got != want {
+			t.Errorf("isAssistantProject(%q) = %v, want %v", base, got, want)
+		}
+	}
+}
