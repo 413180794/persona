@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { startFakeNode, until } from '../../runtime-sdk/testing/fake-node.js'
 import { createPaseoBridge, uuidOf } from '../lib/bridge.js'
@@ -65,7 +65,9 @@ test("Paseo's agents are the engine's sessions: Claude Code's by its session and
   assert.deepEqual(node.hello.launchers[0].models, [{ id: 'fable[1m]', name: 'Fable', default: true, efforts: ['low', 'high', 'max'], default_effort: 'max' }])
   const byId = Object.fromEntries(rows().map((r) => [r.session_id, r]))
   assert.deepEqual(Object.keys(byId).sort(), [SID, 'paseo-e1', `paseo-${a.codex.id}`, `paseo-${a.grok.id}`].sort(), 'a Claude agent without a session yet is not listed')
-  assert.deepEqual([byId[SID].agent, byId[SID].transcript, byId[SID].status, byId[SID].space_name, byId[SID].launcher], ['claude', SID, 'done', '主线', 'my-claude'])
+  assert.deepEqual([byId[SID].agent, byId[SID].transcript, byId[SID].status, byId[SID].launcher], ['claude', SID, 'done', 'my-claude'])
+  assert.deepEqual([byId[SID].space_id, byId[SID].space_name, byId[SID].slot_id, byId[SID].slot_name], ['prj_1', 'proj', 'wks_1', '主线'],
+    "the project is the space, Paseo's workspace the slot")
   assert.deepEqual([byId['paseo-e1'].transcript, byId['paseo-e1'].title], [SID2, 'E'])
   assert.deepEqual([byId[`paseo-${a.codex.id}`].agent, byId[`paseo-${a.codex.id}`].status, byId[`paseo-${a.codex.id}`].transcript], ['codex', 'working', undefined])
   assert.deepEqual([byId[`paseo-${a.grok.id}`].agent_label, byId[`paseo-${a.grok.id}`].status], ['Grok', 'offline'])
@@ -199,6 +201,51 @@ test('continuing a Claude session: the agent Paseo has, else Paseo imports it un
   assert.equal(res.session.transcript, other)
   const err = await call(node, 'session.start', { cwd: '/tmp', resume: 'dddddddd-0000-4000-8000-000000000004', open_elsewhere: true }).catch((e) => e)
   assert.equal(err.code, 'open_elsewhere', 'a claude Paseo does not run has it: no second writer')
+})
+
+test("a project's worktrees are one space; a new session at a worktree goes into Paseo's workspace there", async (t) => {
+  const dir = mkdtempSync('/tmp/ppaseo-wt-')
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const app = join(dir, 'app')
+  const wt = join(dir, 'brave-fox')
+  mkdirSync(app)
+  mkdirSync(wt)
+  const key = 'remote:example.com/me/app'
+  const checkout = (cwd, o = {}) => ({ cwd, isGit: true, currentBranch: null, remoteUrl: null, worktreeRoot: cwd,
+    isPaseoOwnedWorktree: o.paseo ?? false, mainRepoRoot: o.main ?? null })
+  const placed = [
+    { agent: agentSnapshot({ provider: 'my-codex', cwd: app, workspaceId: 'wks_main', title: 'M', updatedAt: '2026-11-01T00:00:00Z' }),
+      project: { projectKey: key, projectName: 'app', workspaceName: '主线', checkout: checkout(app) } },
+    { agent: agentSnapshot({ provider: 'my-codex', cwd: wt, workspaceId: 'wks_wt', title: 'W', updatedAt: '2026-11-02T00:00:00Z' }),
+      project: { projectKey: key, projectName: 'app', workspaceName: '修登录', checkout: checkout(wt, { paseo: true, main: app }) } },
+    // A later record Paseo made when handed the worktree's directory alone (#2784): the same key, named after the folder.
+    { agent: agentSnapshot({ provider: 'my-codex', cwd: wt, workspaceId: 'wks_stray', title: 'S', updatedAt: '2026-11-03T00:00:00Z' }),
+      project: { projectKey: key, projectName: 'brave-fox', workspaceName: null, checkout: checkout(wt, { paseo: true, main: app }) } },
+  ]
+  const base = Object.values(agents()).map((agent) => ({ agent, project: PROJECT }))
+  const { fake, node, rows } = await setup(t, { agents: [...base, ...placed] })
+  await until('the worktree agents', () => ['M', 'W', 'S'].every((title) => rows().some((r) => r.title === title)))
+  const byTitle = Object.fromEntries(rows().filter((r) => r.space_id === key).map((r) => [r.title, r]))
+  assert.deepEqual(['M', 'W', 'S'].map((x) => [byTitle[x].space_name, byTitle[x].slot_id, byTitle[x].slot_name]),
+    [['app', 'wks_main', '主线'], ['app', 'wks_wt', '修登录'], ['app', 'wks_stray', 'brave-fox']],
+    "one space named after the repository's project; each workspace a slot")
+
+  const started = (params) => call(node, 'session.start', { prompt: 'x', launcher: 'my-codex', ...params })
+    .then(() => fake.requestsOf('agent.create.request').at(-1))
+  assert.equal((await started({ cwd: wt, workspace_id: key })).workspaceId, 'wks_wt', "the project's space and a worktree: its workspace")
+  assert.equal((await started({ cwd: wt })).workspaceId, 'wks_wt', 'a worktree alone: its workspace under the repository, not the stray record')
+  assert.equal((await started({ cwd: app, workspace_id: key })).workspaceId, undefined, 'the checkout: a new workspace of the project')
+  assert.equal((await started({ cwd: app, workspace_id: 'wks_main' })).workspaceId, 'wks_main', 'a workspace named (older apps): that one')
+  const other = 'cccccccc-0000-4000-8000-00000000000a'
+  await call(node, 'session.start', { cwd: wt, resume: other })
+  assert.equal(fake.requestsOf('import_agent_request').at(-1).workspaceId, 'wks_wt', 'continuing a session at a worktree: its workspace')
+  // Paseo slow to answer (its provider starting): the row it will have is in its project already.
+  fake.handlers['agent.create.request'] = () => null
+  const slow = (params) => call(node, 'session.start', { prompt: 'x', launcher: 'my-codex', ...params }).then((r) => r.session)
+  const inWt = await slow({ cwd: wt })
+  assert.deepEqual([inWt.space_id, inWt.space_name, inWt.slot_id, inWt.slot_name], [key, 'app', 'wks_wt', '修登录'])
+  const inApp = await slow({ cwd: app, workspace_id: key })
+  assert.deepEqual([inApp.space_id, inApp.space_name, inApp.slot_id], [key, 'app', undefined], 'a new workspace of the project: no slot yet')
 })
 
 test("cards: Paseo's requests go to the phone and its answers back; one answered in Paseo leaves the phone", async (t) => {

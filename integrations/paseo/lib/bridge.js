@@ -6,12 +6,13 @@
 // Everything Paseo-specific comes in through deps.paseo, so the tests drive it with a fake daemon.
 
 import { createHash, randomUUID } from 'node:crypto'
-import { statSync } from 'node:fs'
-import { basename } from 'node:path'
+import { realpathSync, statSync } from 'node:fs'
+import { basename, resolve } from 'node:path'
 import { createRuntime, light, page, RpcError, snippet } from '../../runtime-sdk/index.js'
 import {
   EFFORTS, MODES, RUNTIME, SESSION_LABEL, agentRoot, agentRow, appAgent, claudeId, defaultProvider, interactionOf,
-  launchersOf, providerRoots, responseOf, sessionIdOf, timelineItems, transcriptOf,
+  launchersOf, linkedWorktree, providerRoots, responseOf, sessionIdOf, slotNameOf, spaceIdOf, spaceNames, strayRecord,
+  timelineItems, transcriptOf,
 } from './map.js'
 import { PaseoClient } from './paseo.js'
 
@@ -355,9 +356,11 @@ export function createPaseoBridge(deps = {}, options = {}) {
 
   async function listSessions() {
     const rows = []
+    const names = spaceNames(agents.values())
     for (const [sid, agentId] of bySession) {
       const a = agents.get(agentId)
-      const row = a && agentRow(a.agent, { project: a.project, roots, labels, lastText: lastTexts.get(agentId) })
+      const row = a && agentRow(a.agent,
+        { project: a.project, roots, labels, lastText: lastTexts.get(agentId), spaceName: names.get(spaceIdOf(a.project)) })
       if (row && row.session_id === sid) rows.push(row)
     }
     return rt.recent(rows, { days: 3650, max: LIST_MAX, pinned: (r) => r.status === 'working' || r.status === 'blocked' })
@@ -519,7 +522,53 @@ export function createPaseoBridge(deps = {}, options = {}) {
 
   function rowOf(agent) {
     const a = agents.get(agent.id)
-    return agentRow(agent, { project: a?.project, roots, labels, lastText: lastTexts.get(agent.id) })
+    const spaceName = spaceNames(agents.values()).get(spaceIdOf(a?.project))
+    return agentRow(agent, { project: a?.project, roots, labels, lastText: lastTexts.get(agent.id), spaceName })
+  }
+
+  function samePath(a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false
+    if (resolve(a) === resolve(b)) return true
+    try {
+      return realpathSync(a) === realpathSync(b)
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * The Paseo workspace a new or continued agent goes into: the one the form names when Paseo has it (a session's
+   * space was its workspace before #2784). Else the worktree workspace at its directory: handed a worktree's
+   * directory alone, Paseo files it under a project record of its own (#2784), while Paseo's own lookup by path takes
+   * the worktree workspace there. A checkout or a plain folder gets a new workspace of its project, as in Paseo.
+   * Several workspaces at that worktree: the one under its repository's project record, then the latest.
+   */
+  function workspaceFor(named, cwd) {
+    if (typeof named === 'string' && named && [...agents.values()].some(({ agent }) => agent.workspaceId === named)) return named
+    let best
+    for (const { agent, project } of agents.values()) {
+      const ws = agent.workspaceId
+      if (typeof ws !== 'string' || !ws || agent.archivedAt || !linkedWorktree(project)) continue
+      const c = project.checkout
+      if (!samePath(c.worktreeRoot ?? c.cwd, cwd) && !samePath(agent.cwd, cwd)) continue
+      const rank = [strayRecord(project) ? 0 : 1, Date.parse(agent.updatedAt) || 0]
+      if (!best || rank[0] > best.rank[0] || (rank[0] === best.rank[0] && rank[1] > best.rank[1])) best = { ws, rank }
+    }
+    return best?.ws
+  }
+
+  /**
+   * Where a session still being created is listed: its workspace's project and slot; a new workspace, the project of
+   * an agent at the same directory; else the folder's own space.
+   */
+  function placeOf(workspaceId, cwd) {
+    const known = [...agents.values()]
+    const a = (workspaceId && known.find(({ agent }) => agent.workspaceId === workspaceId)) ||
+      known.find(({ agent, project }) => spaceIdOf(project) && (samePath(agent.cwd, cwd) || samePath(project.checkout?.cwd, cwd)))
+    const space = spaceIdOf(a?.project)
+    if (!space) return { space_id: cwd, space_name: basename(cwd) }
+    const place = { space_id: space, space_name: spaceNames(known).get(space) ?? a.project.projectName }
+    return workspaceId ? { ...place, slot_id: workspaceId, slot_name: slotNameOf(a.project, cwd) } : place
   }
 
   /**
@@ -551,9 +600,8 @@ export function createPaseoBridge(deps = {}, options = {}) {
     const req = { agentId, config, labels: { [SESSION_LABEL]: sessionId } }
     const prompt = typeof params.prompt === 'string' ? params.prompt : ''
     if (prompt.trim()) req.initialPrompt = prompt
-    if (typeof params.workspace_id === 'string' && [...agents.values()].some((a) => a.agent.workspaceId === params.workspace_id)) {
-      req.workspaceId = params.workspace_id
-    }
+    const workspaceId = workspaceFor(params.workspace_id, cwd)
+    if (workspaceId) req.workspaceId = workspaceId
     const created = paseo.request('agent.create.request', req, { timeoutMs: 0 })
     created.then((res) => res?.agent && upsert(res.agent), () => {})
     const res = await within(created, callWait, `start ${agentId}`)
@@ -568,7 +616,7 @@ export function createPaseoBridge(deps = {}, options = {}) {
       session: {
         session_id: sessionId, cwd, title: prompt.trim() ? snippet(prompt) : basename(cwd),
         status: prompt.trim() ? 'working' : 'idle', updated_at: new Date().toISOString(), rev: Date.now(),
-        space_id: cwd, space_name: basename(cwd), agent: appAgent(root), launcher: provider,
+        ...placeOf(workspaceId, cwd), agent: appAgent(root), launcher: provider,
         ...(config.model ? { model: config.model } : {}),
       },
     }
@@ -606,7 +654,10 @@ export function createPaseoBridge(deps = {}, options = {}) {
       provider = latest?.provider ?? defaultProvider(entries.filter((e) => roots[e.provider] === 'claude'), roots)
     }
     if (!provider) throw new RpcError('Paseo 里没有跑 Claude Code 的 provider，接不了这个会话', 'unavailable')
-    const res = await paseo.request('import_agent_request', { provider, sessionId: id, cwd, labels: { [SESSION_LABEL]: id } },
+    const imp = { provider, sessionId: id, cwd, labels: { [SESSION_LABEL]: id } }
+    const workspaceId = workspaceFor(undefined, cwd)
+    if (workspaceId) imp.workspaceId = workspaceId
+    const res = await paseo.request('import_agent_request', imp,
       { expect: 'status:agent_resumed', timeoutMs: callWait })
     if (!res?.agent) throw new RpcError('Paseo 没有接上这个会话', 'start_failed')
     upsert(res.agent)

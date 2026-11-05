@@ -146,11 +146,76 @@ export function rowStatus(agent) {
   }
 }
 
+// ---- spaces ----
+
+/**
+ * The space an agent's row is in: its Paseo project (docs/paseo.md「显示哪些会话」), so a repository's checkout and
+ * all its worktrees are one group, as in Paseo's sidebar. By the project's key rather than Paseo's project record:
+ * handed a worktree's directory alone, Paseo files it under a record of its own with the same key (#2784).
+ * Undefined without a placement.
+ */
+export function spaceIdOf(project) {
+  const key = project?.projectKey
+  return typeof key === 'string' && key ? key : undefined
+}
+
+/** Whether a placement is a worktree of a repository checked out elsewhere (Paseo's own worktree, or one git made). */
+export function linkedWorktree(project) {
+  const c = project?.checkout
+  if (!c?.isGit) return false
+  const root = c.worktreeRoot ?? c.cwd
+  return c.isPaseoOwnedWorktree === true || (typeof c.mainRepoRoot === 'string' && c.mainRepoRoot !== '' && c.mainRepoRoot !== root)
+}
+
+/** Whether a placement's project record is one Paseo made for a single worktree: named after the worktree's folder. */
+export function strayRecord(project) {
+  if (!linkedWorktree(project)) return false
+  const c = project.checkout
+  return project.projectName === basename(c.worktreeRoot ?? c.cwd ?? '')
+}
+
+/** The name of an agent's slot: its Paseo workspace's title, else the branch, else the folder. */
+export function slotNameOf(project, cwd) {
+  const title = typeof project?.workspaceName === 'string' ? project.workspaceName.trim() : ''
+  const branch = project?.checkout?.currentBranch
+  return title || (typeof branch === 'string' && branch) || basename(cwd ?? '')
+}
+
+/**
+ * The name of each project space: the project's name most of its agents' placements give, leaving out the records
+ * Paseo made for a single worktree (strayRecord) unless there is nothing else; then the repository's folder.
+ * @param {Iterable<{ project?: object }>} placed - what the bridge keeps per agent
+ * @returns {Map<string, string>} space id → name
+ */
+export function spaceNames(placed) {
+  const votes = new Map() // space id → Map(name → count)
+  const out = new Map()
+  for (const { project } of placed) {
+    const id = spaceIdOf(project)
+    const name = typeof project?.projectName === 'string' ? project.projectName.trim() : ''
+    if (!id || !name) continue
+    if (strayRecord(project)) {
+      const main = project.checkout.mainRepoRoot
+      if (!out.has(id)) out.set(id, (typeof main === 'string' && main && basename(main)) || name)
+      continue
+    }
+    const v = votes.get(id) ?? new Map()
+    v.set(name, (v.get(name) ?? 0) + 1)
+    votes.set(id, v)
+  }
+  for (const [id, v] of votes) {
+    out.set(id, [...v].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0][0])
+  }
+  return out
+}
+
 /**
  * The runtime.sessions row of an agent (docs/runtimes.md「列表」), undefined for one not listed.
  * @param {object} agent - an AgentSnapshotPayload
- * @param {{ project?: object, roots?: Record<string, string>, labels?: Record<string, string>, lastText?: string }} [o]
- *   project: its ProjectPlacement; labels: provider id → its label (the name of a provider the apps do not know).
+ * @param {{ project?: object, roots?: Record<string, string>, labels?: Record<string, string>, lastText?: string,
+ *   spaceName?: string }} [o]
+ *   project: its ProjectPlacement; labels: provider id → its label (the name of a provider the apps do not know);
+ *   spaceName: its project space's name (spaceNames).
  */
 export function agentRow(agent, o = {}) {
   const roots = o.roots ?? {}
@@ -159,6 +224,7 @@ export function agentRow(agent, o = {}) {
   const root = agentRoot(agent, roots)
   const cwd = typeof agent.cwd === 'string' ? agent.cwd : ''
   const p = o.project
+  const space = spaceIdOf(p)
   const row = {
     session_id: id,
     title: (typeof agent.title === 'string' && agent.title.trim()) || basename(cwd),
@@ -166,10 +232,15 @@ export function agentRow(agent, o = {}) {
     status: rowStatus(agent),
     updated_at: new Date(Date.parse(agent.updatedAt) || Date.now()).toISOString(),
     rev: Date.parse(agent.updatedAt) || 0,
-    space_id: agent.workspaceId || p?.projectKey || cwd,
-    space_name: p?.workspaceName || p?.projectName || basename(cwd),
+    space_id: space ?? (agent.workspaceId || cwd),
+    space_name: (space && o.spaceName) || p?.projectName || basename(cwd),
     agent: appAgent(root),
     launcher: agent.provider,
+  }
+  // Its Paseo workspace (a worktree, or one of the tasks in a folder) is its slot in the project.
+  if (space && typeof agent.workspaceId === 'string' && agent.workspaceId) {
+    row.slot_id = agent.workspaceId
+    row.slot_name = slotNameOf(p, cwd)
   }
   if (row.agent === RUNTIME && o.labels?.[agent.provider]) row.agent_label = o.labels[agent.provider]
   const model = agent.model ?? agent.runtimeInfo?.model
