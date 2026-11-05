@@ -693,3 +693,35 @@ func TestEmptyAnswerSaysWhyItStopped(t *testing.T) {
 		t.Fatalf("en: %q", got)
 	}
 }
+
+// A notify_user push goes to Feishu laid out like the bot's answers and whole: its title heads the first card, the
+// open button is under the last only, and a long body is more cards instead of one Feishu refuses.
+func TestFeishuPushIsLaidOutAndWhole(t *testing.T) {
+	f, posts := feishuHub("ou_a", time.Unix(100, 0))
+	f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
+		return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_a", PairedAt: time.Unix(100, 0), PublicURL: "https://hub.example.com", Features: FeishuFeatures{Main: true, Pushes: true}}, nil
+	})
+	f.setSessions("server", proto.Session{SessionID: "m1", Assistant: true})
+	s := newTestService(t, f)
+	body := strings.Repeat("巡检一切正常。\n\n", 900) + "| 机器 | 状态 |\n| --- | --- |\n| a | 好 |\n\n最后一句"
+	s.feishuPush("server", "m1", "巡检结果", body)
+	if len(*posts) < 2 {
+		t.Fatalf("one card for a long push: %d", len(*posts))
+	}
+	first, _ := (*posts)[0]["card"].(string)
+	last, _ := (*posts)[len(*posts)-1]["card"].(string)
+	if !strings.Contains(first, "🔔 巡检结果") || strings.Contains(first, `"button"`) {
+		t.Fatalf("first %s", first)
+	}
+	if !strings.Contains(last, `"button"`) || !strings.Contains(last, `"tag":"table"`) || !strings.Contains(last, "最后一句") {
+		t.Fatalf("last %s", last)
+	}
+	for _, p := range *posts {
+		if c, _ := p["card"].(string); len(c) > 30000 {
+			t.Fatalf("card of %d bytes", len(c))
+		}
+	}
+	if got := s.botTargetFor("om_card", ""); got.Kind != targetJarvis || got.SessionID != "m1" {
+		t.Fatalf("thread %+v", got)
+	}
+}

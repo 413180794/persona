@@ -283,7 +283,7 @@ func (p *Pusher) sendLiveActivity(d Device, token string, payload map[string]any
 	}
 	body, _ := json.Marshal(payload)
 	go func() {
-		res, err := p.direct.Send(context.Background(), apns.Request{Token: token, Env: d.APNSEnv, Topic: d.Topic, PushType: "liveactivity", Priority: priority, Body: body})
+		res, err := p.sendDirect(d, apns.Request{Token: token, Env: d.APNSEnv, Topic: d.Topic, PushType: "liveactivity", Priority: priority, Body: body})
 		if err != nil {
 			p.logf("apns live activity %s: %v", d.Name, err)
 			return
@@ -295,6 +295,36 @@ func (p *Pusher) sendLiveActivity(d Device, token string, payload map[string]any
 			}
 		}
 	}()
+}
+
+// sendDirect posts one push straight to APNs, tried again after each of p.retryWaits while the failure may pass: a
+// network error (the dead connection is dropped by apns.Send, so the next try dials a new one) or APNs' 429 / 5xx. Its
+// other answers (400, 403, 410…) stand. As for the relay (#2150): one blip used to lose the push (#3989). The same
+// apns-collapse-id makes a push that did land twice show once. Callers run it in their own goroutine.
+func (p *Pusher) sendDirect(d Device, r apns.Request) (apns.Result, error) {
+	res, err := p.direct.Send(context.Background(), r)
+	tries := 1
+	for _, wait := range p.retryWaits {
+		if err == nil && !directRetryable(res.Status) {
+			break
+		}
+		time.Sleep(wait)
+		res, err = p.direct.Send(context.Background(), r)
+		tries++
+	}
+	if tries > 1 {
+		if err == nil && res.Status == 200 {
+			p.logf("apns %s: %s push went through on try %d", d.Name, r.PushType, tries)
+		} else if err != nil {
+			err = fmt.Errorf("%w (%d tries)", err, tries)
+		}
+	}
+	return res, err
+}
+
+// directRetryable: APNs' answer is one that may pass (too many requests, its own trouble).
+func directRetryable(status int) bool {
+	return status == http.StatusTooManyRequests || status >= 500
 }
 
 type relayResult struct{ gone bool }
@@ -679,7 +709,7 @@ func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority strin
 		}
 		go func(d Device) {
 			sent := time.Now()
-			res, err := p.direct.Send(context.Background(), apns.Request{Token: d.APNSToken, Env: d.APNSEnv, Topic: d.Topic,
+			res, err := p.sendDirect(d, apns.Request{Token: d.APNSToken, Env: d.APNSEnv, Topic: d.Topic,
 				PushType: pushType, Priority: priority, CollapseID: collapseID, Body: body})
 			if err != nil {
 				p.logf("apns %s: %v", d.Name, err)

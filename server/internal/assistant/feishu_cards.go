@@ -654,17 +654,28 @@ func (s *Service) feishuPush(machine, session, title, body string) {
 	if f, ready := s.feishuFeatures(ctx); !ready || !f.Pushes {
 		return
 	}
-	c := feishubot.NewCard("🔔 "+clip(oneLine(title), 60), feishubot.Wathet, title).Markdown(feishubot.CardMarkdown(body))
-	if session != "" {
-		c.Buttons(s.openButton(ctx, machine, session))
-	}
-	mid, err := s.botPost(ctx, "", c, body)
-	if err != nil {
-		s.logf("bots: push: %v", err)
-		return
-	}
-	if session != "" {
-		s.rememberBotThread(mid, botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}, title)
+	// The body laid out like the bot's answers (answerCards: sections, tables, link buttons, more cards when long, at
+	// most botAnswerCards); the push's title heads the first card, the open button goes under the last.
+	cards := answerCards(s.botLang(ctx), body, false, nil, "")
+	head := feishubot.NewCard("🔔 "+clip(oneLine(title), 60), feishubot.Wathet, title)
+	for i, ac := range cards {
+		if i == 0 {
+			ac.card.Header, ac.card.Config = head.Header, head.Config // the push's own title over the body's heading
+		}
+		if i == len(cards)-1 && session != "" {
+			ac.card.Buttons(s.openButton(ctx, machine, session))
+		}
+		mid, err := s.botPost(ctx, "", ac.card, ac.fallback)
+		if err != nil {
+			s.logf("bots: push: %v", err)
+			if i == 0 {
+				return // nothing went out: the rest would read as a push without its beginning
+			}
+			continue
+		}
+		if session != "" {
+			s.rememberBotThread(mid, botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}, title)
+		}
 	}
 }
 

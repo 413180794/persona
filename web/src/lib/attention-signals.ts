@@ -1,12 +1,12 @@
 // The DOM side of the attention signals (#2332, logic in lib/attention.ts): the tab title, the favicon's badge, and the
 // optional sounds, and the system notifications (#2971, lib/notify.ts). `<AttentionSignals>` is what App renders for them.
 import { useEffect, useRef } from "react";
-import { stateOf } from "./format";
+import { attentionReason, stateOf } from "./format";
 import { agentKey } from "./pins";
 import { useCounts, useAgentSessions } from "./sessions";
 import { getState, useStore } from "./store";
 import { attentionSoundEnabled, badgeText, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, settledTags, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
-import { claimNotification, closeNotification, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
+import { claimNotification, closeNotification, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, waitingCard, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
 import { isMuted } from "./session-actions";
 import { href, navigate } from "./router";
 import { t } from "../i18n";
@@ -154,18 +154,34 @@ function inFront(): boolean {
   return document.visibilityState === "visible" && document.hasFocus();
 }
 
+const ASK_TITLE = {
+  question: "notify.question_title",
+  plan: "notify.plan_title",
+  permission: "notify.permission_title",
+  screen: "notify.screen_title",
+  elicitation: "notify.elicitation_title",
+} as const;
+
 /** A system notification for the event (设置 › 通知): only while no tab of the app is in front (that one's title, badge
  *  and sounds cover it), and once for all the open tabs. Clicking it opens the agent's conversation. */
 function notify(s: Session, kind: "needs" | "finished"): void {
   if (inFront() || otherTabInFront() || !systemNotifyActive()) return;
   const tag = `${agentKey(s)}#${kind}`;
   if (!claimNotification(tag)) return;
-  const { title, body } = notificationText(s, kind, {
-    needs: (name) => t("notify.needs_title", { name }),
-    finished: (name) => t("notify.finished_title", { name }),
-    needsBody: t("notify.needs_body"),
-    finishedBody: t("notify.finished_body"),
-  });
+  // 需要你: what the card asks, not the agent's last words (#4056); the hub tells the card before the session's state
+  const waiting = kind === "needs" ? { ix: waitingCard(getState().interactions, s), reason: attentionReason(s) } : {};
+  const { title, body } = notificationText(
+    s,
+    kind,
+    {
+      needs: (name) => t("notify.needs_title", { name }),
+      finished: (name) => t("notify.finished_title", { name }),
+      needsBody: t("notify.needs_body"),
+      finishedBody: t("notify.finished_body"),
+      asks: (ask, name) => t(ASK_TITLE[ask], { name }),
+    },
+    waiting,
+  );
   const route = { name: "session", mid: s.machine_id, sid: s.session_id } as const;
   const icon = document.querySelector<HTMLLinkElement>(ICONS)?.dataset.original ?? document.querySelector<HTMLLinkElement>(ICONS)?.href;
   postNotification({ title, body, tag, url: href(route), icon }, () => navigate(route));

@@ -495,3 +495,31 @@ func TestTaskFinishedWhileItsAgentStarts(t *testing.T) {
 		t.Fatalf("the agent that started is not retired: %v", got)
 	}
 }
+
+// A task that ended several stretches of work overnight has several receipts: the 今天 card lists it once, by its
+// latest receipt, and not as done when that one says it was cut off afterwards.
+func TestTodayCardListsEachTaskOnce(t *testing.T) {
+	s, _ := newTaskService(t)
+	ctx := context.Background()
+	for _, r := range []struct {
+		ref   string
+		state string
+	}{{"todo_a", "done"}, {"todo_a", "done"}, {"todo_b", "done"}, {"todo_b", "interrupted"}, {"todo_c", "done"}} {
+		if _, err := s.appendFeed(ctx, "conv1", feedReceipt, r.ref, receiptBody{Title: r.ref, State: r.state}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	it, _, err := s.ensureToday(ctx, "conv1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body todayBody
+	_ = json.Unmarshal(it.Body, &body)
+	var ids []string
+	for _, d := range body.Done {
+		ids = append(ids, d.ID)
+	}
+	if strings.Join(ids, ",") != "todo_a,todo_c" {
+		t.Fatalf("done = %v, want each finished task once (todo_b was cut off after)", ids)
+	}
+}

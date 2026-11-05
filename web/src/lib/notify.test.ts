@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_PREFS, durationText, normalize, notificationText, wants } from "./notify";
+import { DEFAULT_PREFS, durationText, normalize, notificationText, waitingCard, wants } from "./notify";
+import type { Interaction } from "./types";
 
 const units = { s: (n: number) => `${n} 秒`, m: (n: number) => `${n} 分钟` };
 const words = { needs: (n: string) => `${n} 需要你`, finished: (n: string) => `${n} 做完了`, needsBody: "等你", finishedBody: "做完" };
@@ -95,5 +96,33 @@ describe("收回后同一件事马上能再弹（#3458 review）", () => {
     expect(claimNotification("m/a#needs", now + 2000)).toBe(true); // B
     expect(claimNotification("m/b#needs", now + 2000)).toBe(false); // the other tag's claim is kept
     vi.unstubAllGlobals();
+  });
+});
+
+describe("需要你的通知写清楚问什么（#4056）", () => {
+  const asks = { ...words, asks: (k: Interaction["kind"], n: string) => `${n} ${k}` };
+  const s = { machine_id: "m", session_id: "a", title: "修登录", cwd: "/p", last_text: "我先看一下" };
+  const ix = (over: Partial<Interaction>): Interaction => ({ id: "i", machine_id: "m", session_id: "a", kind: "question", ...over });
+  it("提问：标题说在问，正文是问题，不是最后一句", () => {
+    expect(notificationText(s, "needs", asks, { ix: ix({ questions: [{ question: "用哪个\n框架？" } as never] }) })).toEqual({ title: "修登录 question", body: "用哪个 框架？" });
+  });
+  it("授权：正文是说明，没有说明时是命令", () => {
+    expect(notificationText(s, "needs", asks, { ix: ix({ kind: "permission", tool_name: "Bash", tool_input: { command: "go test ./..." } }) }).body).toBe("go test ./...");
+  });
+  it("计划：正文是计划的第一行", () => {
+    expect(notificationText(s, "needs", asks, { ix: ix({ kind: "plan", plan: "\n# 改同步脚本\n1. 先…" }) }).body).toBe("改同步脚本");
+  });
+  it("没有卡片时用宿主说的原因，再退回最后一句", () => {
+    expect(notificationText(s, "needs", asks, { reason: "等你确认" })).toEqual({ title: "修登录 需要你", body: "等你确认" });
+    expect(notificationText(s, "needs", asks, {}).body).toBe("我先看一下");
+  });
+  it("卡片什么都没写时退回最后一句；做完的通知不看卡片", () => {
+    expect(notificationText(s, "needs", asks, { ix: ix({}) }).body).toBe("我先看一下");
+    expect(notificationText(s, "finished", asks, { ix: ix({ questions: [{ question: "q" } as never] }) })).toEqual({ title: "修登录 做完了", body: "我先看一下" });
+  });
+  it("一个会话有几张卡时取最早的那张", () => {
+    const cards = [ix({ id: "b", created_at: "2026-01-02" }), ix({ id: "x", session_id: "other", created_at: "2026-01-01" }), ix({ id: "a", created_at: "2026-01-01" })];
+    expect(waitingCard(cards, s)?.id).toBe("a");
+    expect(waitingCard(cards, { machine_id: "m", session_id: "none" })).toBeUndefined();
   });
 });

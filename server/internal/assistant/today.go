@@ -66,13 +66,25 @@ func (s *Service) ensureToday(ctx context.Context, conversation string) (FeedIte
 	body := todayBody{Date: date}
 	since := day.Add(-6 * time.Hour) // yesterday from 18:00: what finished overnight
 	if done, _, err := s.feed(ctx, conversation, since); err == nil {
+		// A task gets a receipt per stretch of work: it is listed once, by its latest one (done, not cut off after).
+		var order []string
+		latest := map[string]receiptBody{}
 		for _, it := range done {
 			if it.Kind != feedReceipt {
 				continue
 			}
 			var rb receiptBody
-			if json.Unmarshal(it.Body, &rb) == nil && rb.State == "done" {
-				body.Done = append(body.Done, todayTask{ID: it.Ref, Title: rb.Title})
+			if json.Unmarshal(it.Body, &rb) != nil {
+				continue
+			}
+			if _, seen := latest[it.Ref]; !seen {
+				order = append(order, it.Ref)
+			}
+			latest[it.Ref] = rb
+		}
+		for _, id := range order {
+			if rb := latest[id]; rb.State == "done" {
+				body.Done = append(body.Done, todayTask{ID: id, Title: rb.Title})
 			}
 		}
 	}

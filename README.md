@@ -15,7 +15,7 @@
 [![hub: Go 1.27](docs/assets/readme/badge-hub.svg)](docs/server.md)
 [![agents: Claude Code · Codex](docs/assets/readme/badge-agents.svg)](docs/runtimes.md)
 
-[能做什么](#能做什么) · [怎么工作](#怎么工作) · [快速开始](#快速开始) · [平台和连接器](#平台和连接器) · [文档](#文档)
+[我想用](#我想用) · [我想开发](#我想开发) · [能做什么](#能做什么) · [怎么工作](#怎么工作) · [快速开始](#快速开始) · [平台和连接器](#平台和连接器) · [文档](#文档)
 
 </div>
 
@@ -30,6 +30,17 @@
 
 Claude Code 始终跑在你自己的电脑上（[herdr](https://herdr.dev) 里的一个普通会话），手机只是另一块屏幕。
 出门时在手机上回答它的提问、批准计划；回到电脑前打开 herdr，接着用的还是同一个会话。
+
+## 我想用
+
+不写代码也能装起来：在一台常开的电脑上粘贴一行命令装好 hub，用手机扫码连上，再在网页里添加电脑、选一家模型粘贴 Key。
+一步步怎么做、卡片上的提示是什么意思、哪些还要用终端或者暂时做不到，都在 **[开始使用](docs/getting-started.md)**。
+
+只想先看看：iPhone 装 [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)，在配对页点「没有 hub？先体验一下」，用演示数据把每个功能走一遍。
+
+## 我想开发
+
+从源码编译、部署 hub 和各端 App，看下面的[快速开始](#快速开始)；约定和协作流程在[参与开发](#参与开发)和 [CLAUDE.md](CLAUDE.md)。
 
 ## 能做什么
 
@@ -89,6 +100,8 @@ Claude 还能用 `phone_*` 工具读写 iPhone 上的通讯录、日历、提醒
 
 ## 快速开始
 
+这一节给开发者：从源码编译、用仓库里的脚本部署。不写代码的看[开始使用](docs/getting-started.md)。
+
 要准备的（完整清单和每个配置字段见 [docs/config.md](docs/config.md)）：
 
 - **hub**：一台常开的 Linux 机器，或者能跑 Docker 的 NAS
@@ -108,7 +121,7 @@ cp config.example.json ~/.config/persona/config.json
 ```
 
 hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑和手机访问用的地址（[网络配置](docs/network.md)）。hub 放在 NAS 上时改用 [Docker](docs/docker.md)。
-别的电脑也可以不经 SSH：在 hub 上运行 `personad hub pair --machine <id>`，在那台电脑上用它给的链接一条命令装好 node 服务（Linux：`curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<链接>'`），Mac 用菜单栏 App「Persona Link」（[docs/link.md](docs/link.md)）。
+别的电脑也可以不经 SSH：在网页的「机器 › 添加电脑」拿配对链接（这样加的电脑要在网页里点「是我的电脑」确认），或者在 hub 上运行 `personad hub pair --machine <id> --add`，在那台电脑上用它给的链接一条命令装好 node 服务（Linux：`curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<链接>'`），Mac 用菜单栏 App「Persona Link」（[docs/link.md](docs/link.md)）。
 
 **3. 装 App，配对**
 
@@ -187,6 +200,7 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 
 | 想做什么 | 看这里 |
 | --- | --- |
+| 第一次装、不用终端的说明 | [docs/getting-started.md](docs/getting-started.md) |
 | 配置、接入多台电脑 | [docs/config.md](docs/config.md) |
 | 用 Docker 跑 hub | [docs/docker.md](docs/docker.md) |
 | 公网直连、TLS 和配对 | [docs/network.md](docs/network.md) |

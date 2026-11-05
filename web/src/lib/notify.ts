@@ -5,7 +5,10 @@
 import { useSyncExternalStore } from "react";
 import { api, enc } from "./api";
 import { sessionTitle } from "./format";
-import type { Session } from "./types";
+import { interactionAsk } from "./inbox";
+import { plainMarkdown } from "./plain-markdown";
+import { byTime } from "./times";
+import type { Interaction, Session } from "./types";
 
 export type DonePref = "off" | "long" | "always";
 
@@ -300,12 +303,48 @@ function releaseClaim(tag: string): void {
   }
 }
 
-/** What a notification says (MacAttention.text): the agent and what happened, its last words as the body. */
-export function notificationText(s: Pick<Session, "title" | "cwd" | "last_text">, kind: "needs" | "finished", words: { needs: (title: string) => string; finished: (title: string) => string; needsBody: string; finishedBody: string }): { title: string; body: string } {
+/** The words a notification is written in; `asks` names what a waiting card wants (the hub's push titles). */
+export interface NotificationWords {
+  needs: (title: string) => string;
+  finished: (title: string) => string;
+  needsBody: string;
+  finishedBody: string;
+  asks?: (kind: Interaction["kind"], title: string) => string;
+}
+
+/** What a session waits for you on, for its 需要你 notification: its oldest pending card, else its host's reason. */
+export interface Waiting {
+  ix?: Interaction;
+  reason?: string;
+}
+
+/** The session's card the notification is about: the oldest one pending for it (the one the overview lists first). */
+export function waitingCard(interactions: readonly Interaction[], s: Pick<Session, "machine_id" | "session_id">): Interaction | undefined {
+  return interactions
+    .filter((ix) => ix.machine_id === s.machine_id && ix.session_id === s.session_id)
+    .sort((a, b) => byTime(a.created_at, b.created_at) || a.id.localeCompare(b.id))[0];
+}
+
+/** What a card asks, as one line: the question, the permission's description or command, the plan's first line
+ *  (hub interactionPayloadIn); empty when it says nothing. */
+function cardLine(ix: Interaction): string {
+  if (ix.kind === "plan") return plainMarkdown((ix.plan ?? "").split("\n").find((l) => l.trim()) ?? ix.summary ?? "");
+  return plainMarkdown(interactionAsk(ix));
+}
+
+const oneLine = (text: string | undefined) => text?.replace(/\s+/g, " ").trim() ?? "";
+
+/**
+ * What a notification says (MacAttention.text): the agent and what happened. A 需要你 one about a card says what kind
+ * of card it is and what it asks (as the phone's push does), else why the host says it waits; otherwise, and for a
+ * finished turn, its last words are the body.
+ */
+export function notificationText(s: Pick<Session, "title" | "cwd" | "last_text">, kind: "needs" | "finished", words: NotificationWords, waiting: Waiting = {}): { title: string; body: string } {
   const name = sessionTitle(s);
-  const title = kind === "needs" ? words.needs(name) : words.finished(name);
-  const last = s.last_text?.replace(/\s+/g, " ").trim();
-  return { title, body: (last || (kind === "needs" ? words.needsBody : words.finishedBody)).slice(0, 200) };
+  const ix = kind === "needs" ? waiting.ix : undefined;
+  const title = ix && words.asks ? words.asks(ix.kind, name) : kind === "needs" ? words.needs(name) : words.finished(name);
+  const said = (ix && oneLine(cardLine(ix))) || (kind === "needs" ? oneLine(waiting.reason) : "") || oneLine(s.last_text);
+  return { title, body: (said || (kind === "needs" ? words.needsBody : words.finishedBody)).slice(0, 200) };
 }
 
 /**

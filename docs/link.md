@@ -25,10 +25,13 @@
 
 ## 装 node 服务
 
+配对链接从哪来：推荐在已登录的网页「机器 › 添加电脑」里拿（iOS、Android 的入口在做），它按所选系统给出整条可以拷贝的命令或链接，
+电脑连上后在同一屏点「是我的电脑」确认（下面「[接入一台电脑](#接入一台电脑以-mac-为例)」）。管理界面和 hub 机器上的命令行做法放在那一节的「高级」里。
+
 **Linux**（一条命令，`scripts/deploy/install.sh` 的「node」角色）：
 
 ```sh
-curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<personad hub pair --machine <id> 给的链接>'   # 主动
+curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<配对链接>'   # 主动
 curl -fsSL <站点>/install.sh | sh -s -- --node --listen [:18663] [--addr <hub 连这台用的地址>]         # 被动
 ```
 
@@ -308,23 +311,35 @@ location /<前缀>/ {
 
 ## 接入一台电脑（以 Mac 为例）
 
-推荐的做法见上面「装 node 服务」；下面是 Mac 的主动模式一步步来（被动模式第 4、5 步换成配对窗口里的「让 hub 来连」，链接粘贴到 hub 管理界面）。
+推荐在 App 里添加：不用进管理界面，也不用登录 hub 机器。下面是 Mac 的主动模式；Linux 第 2、3 步换成在那台电脑的终端里粘贴网页给的一行命令，
+Windows 见 [windows.md](windows.md)。给不用终端的人的写法在 [getting-started.md](getting-started.md)「接上一台电脑」。
 
-1. hub 上加这台电脑：第 4 步的 `--add` 会顺手加上；也可以在管理界面 › 电脑 › 添加电脑 › 电脑来连里加，或者 hub.json 的 `machines` 加一条
-   （或把原来的 ssh 那条改成）`{"id":"macbook","name":"MacBook","kind":"link","icon":"laptop"}` 再重启 hub。
-2. claude 是 shell 包装函数时，要在 hub.json 的 `machines[].launchers` 里配启动器。
-3. 装 App：`./scripts/app/mac-link.sh install`。它会编译（连同 personad）、放进 `/Applications`，然后打开；第一次打开就装好常驻 node（`com.jarvis.node`），
-   已经装了的不动。
-4. 在 hub 机器上生成配对链接：
-   - 普通部署：`personad hub pair --machine macbook --add --name MacBook`（已经有这台时 `--add` 不做什么，照样给链接）；
-   - NAS 的 docker 部署：`sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub pair --machine macbook --add`。
-
-   把链接粘贴进 菜单栏 › 配对 / 修改连接…。也可以走命令行：
-   ```sh
-   … | "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" pair -
-   ```
+1. 在 Mac 上装 Persona Link：`./scripts/app/mac-link.sh install`（[persona-link-install.md](persona-link-install.md)）。它会编译（连同 personad）、放进 `/Applications`，然后打开；
+   第一次打开就装好常驻 node（`com.jarvis.node`），已经装了的不动。
+2. 在已登录的网页打开「机器 › 添加电脑」，系统选 Mac，填名字（可以中文，id 由 hub 从名字生成）。hub 加一条 `kind: link`、状态**待确认**，给出这台的配对链接
+   （`POST /api/v1/auth/pair-codes` 带 `add`，[protocol.md](protocol.md)「电脑的配对码」）。iOS、Android 的入口在做。
+3. 把链接发到这台 Mac（「拷贝配对链接」或「分享…」），粘贴进 菜单栏 › 配对 / 修改连接…。
+4. 这台连上后，网页同一屏问「有一台电脑想加入：<名字>，是你的吗？」，点「是我的电脑」（`POST /api/v1/machines/{id}/confirm`）。
+   确认之前它收不到 Persona 管理的 Key、不参与助手机器的选择、不出现在新建 Agent 的电脑列表里；24 小时不确认自动删掉（[protocol.md](protocol.md)「电脑的信任」）。
+   关掉了那一屏的话，机器列表里这台的卡片上也能确认或删掉。
 5. 确认：菜单栏图标变成已连接，菜单里写「本机 node 在线」，App 的「设置 › 机器」里这台在线。
 6. 想开机就连上：在菜单里勾「登录时启动」（`SMAppService`）。
+
+链接 10 分钟内有效、只能用一次；过期了在网页那一屏点「重新生成」（`{"machine": <id>}` 重出码，旧的 Persona Link 凭据一起吊销）。
+hub 没开 TLS 时网页报「hub 还没打开安全连接」（409 `tls_required`），见下面「高级」。
+
+### 高级
+
+- **不经 App 添加**（加的直接是已确认）：管理界面 › 电脑 › 添加电脑 › 电脑来连；或者在 hub 机器上生成配对链接：
+  - 普通部署：`personad hub pair --machine macbook --add --name MacBook`（已经有这台时 `--add` 不做什么，照样给链接）；
+  - NAS 的 docker 部署：`sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub pair --machine macbook --add`。
+- **手写 hub.json**：`machines` 加一条（或把原来的 ssh 那条改成）`{"id":"macbook","name":"MacBook","kind":"link","icon":"laptop"}` 再重启 hub，然后用上面的命令出链接。
+- claude 是 shell 包装函数时，要在 hub.json 的 `machines[].launchers` 里配启动器。
+- **命令行配对**：
+  ```sh
+  … | "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" pair -
+  ```
+- **被动模式**：第 2、3 步换成配对窗口里的「让 hub 来连」，链接粘贴到 hub 管理界面 › 电脑 › 添加电脑 › hub 来连（上面「被动模式」）。
 
 Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-link install --pair -` 一条命令配对、装好、等它连上。
 
@@ -422,6 +437,8 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 - 常驻 node 用同一个提交编的 `jarvisd`（`~/.persona/bin/jarvisd`，安装脚本另建别名 `personad`）；`scripts/deploy/node-launchd.sh install` 在 Linux 上把它装成 systemd 用户服务 `jarvisd-node`。
 
 **一条命令装好**
+
+链接从已登录网页的「机器 › 添加电脑」拿（这样加的要在网页里确认），或者在 hub 机器上用命令行出（加的直接是已确认）：
 
 ```sh
 personad hub pair --machine nas --add             # 在 hub 机器上；没有这台时先添加；标准输出只有链接

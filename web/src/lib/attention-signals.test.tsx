@@ -10,7 +10,7 @@ let sessions: Session[] = [];
 let mutes: { spaces: string[]; sessions: string[]; allowed: string[] } = { spaces: [], sessions: [], allowed: [] };
 vi.mock("./store", () => ({
   useStore: (select: (s: { loaded: boolean }) => unknown) => select({ loaded: true }),
-  getState: () => ({ mutes }),
+  getState: () => ({ mutes, interactions: [] }),
 }));
 vi.mock("./sessions", () => ({ useCounts: () => ({ badge: 0 }), useAgentSessions: () => sessions }));
 vi.mock("./api", () => ({

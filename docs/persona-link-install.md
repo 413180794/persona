@@ -12,7 +12,7 @@ Persona Link 是 Mac 菜单栏里的一个小 App：把这台 Mac 接到你的 P
 | macOS 15 或更新 | App 的最低系统版本 |
 | Xcode（完整版，不是只有命令行工具） | 用 `xcodebuild` 编 Swift package；装好后 `sudo xcode-select -s /Applications/Xcode.app` 并打开一次 Xcode 同意许可 |
 | Go | 编 jarvis-link 和 personad。版本按 `server/go.mod`；本机的 Go 旧一点也行，没设 `GOTOOLCHAIN=local` 时 Go 会自己下载需要的版本 |
-| 一台在跑的 hub | 并且开着 TLS 端口（hub.json 的 `public.tls_listen`）；你能打开它的管理界面，或者能登录 hub 机器跑命令 |
+| 一台在跑的 hub | 和一台已经连上它的浏览器（网页版），用来添加这台 Mac。用安装命令新装的 hub 已经开好了电脑接入要的安全连接，老 hub 见下面「配对」的「高级」 |
 
 不需要 Apple 开发者账号：App 用本机的 ad-hoc 签名，只在构建它的这台 Mac 上运行。
 
@@ -38,26 +38,32 @@ git clone <仓库地址> persona && cd persona
 
 ## 配对
 
-推荐「我去连 hub（主动）」：这台 Mac 去连 hub，不用开端口，换网络也会自己重连。
+在已经连上 hub 的网页里添加这台 Mac，拿到配对链接，粘贴进 Persona Link，再回网页确认是你的电脑。
 
-1. 在 hub 上给这台电脑生成配对链接，几种做法任选：
-   - hub 管理界面 › 电脑 › 添加电脑 › **电脑来连**：填这台的 id（如 `macbook`）和名字，生成链接；
-   - 或者在 hub 机器上：`personad hub pair --machine macbook --add --name MacBook`（hub 上还没有这台时先添加；hub 是 Docker 部署的话在容器里跑这条，见 [docker.md](docker.md)）；
-   - 新版 hub 也接受已登录的 App / 网页直接「添加电脑」拿链接（网页：机器 › 添加电脑；其他客户端陆续上线）；这样加的电脑要在 App 或网页里点「是我的电脑」确认之后才算数。
-2. 点菜单栏图标 › **配对…**，把链接粘贴进去，点配对。
-3. 好了的样子：图标变成已连接，菜单里写着「本机 node 在线」「这台是 hub 上的「macbook」」；手机 App 的机器列表里这台在线。
-4. 想开机就连上：菜单里勾「登录时启动」。
+1. 打开网页版的「机器」，点「添加电脑」，系统选 Mac，起个名字（可以用中文，比如「我的 MacBook」），点下一步。iPhone 和 Android 上的「添加电脑」还在做，现在先用网页。
+2. 屏幕上出现配对链接：点「拷贝配对链接」或「分享…」，把它发到这台 Mac 上（备忘录、AirDrop、邮件都行）。
+3. 在这台 Mac 上点菜单栏的 Persona Link 图标 › **配对…**，保持默认的「我去连 hub（主动）」，把链接粘贴进去，点配对。
+4. 回到网页那一屏，它会问「有一台电脑想加入：<名字>，是你的吗？」，点「是我的电脑」。
+   确认之前，这台 Mac 拿不到 Persona 管理的模型 Key，Persona 也不会在上面干活；24 小时不确认会被自动删掉。关掉了那一屏的话，机器列表里这台的卡片上也能确认。
+5. 好了的样子：图标变成已连接，菜单里写着「本机 node 在线」「这台是 hub 上的「<名字>」」；网页和手机 App 的机器列表里这台在线。
+6. 想开机就连上：菜单里勾「登录时启动」。
 
-链接 10 分钟内有效、只能用一次，过期了重新生成。它在用掉之前等于配对权限，别贴到群里。
+链接 10 分钟内有效、只能用一次，过期了在网页那一屏点「重新生成」。它在用掉之前等于配对权限，只发给自己的电脑，别贴到群里。
 
-这台 hub 连得到、但它连不到 hub 的电脑（比如 hub 在别人的网络里，只能经代理进来），用「让 hub 来连（被动）」：配对窗口里选这一项，
-点「生成配对链接」，把链接粘贴到 hub 管理界面 › 电脑 › 添加电脑 › **hub 来连**。防火墙只对 hub 放行它监听的端口（默认 18663）。细节见 [link.md](link.md)「被动模式」。
+网页报「hub 还没打开安全连接」时，是老 hub 没开电脑接入要的安全连接：到 hub 的管理界面 › 网络里打开，或者看下面「高级」。
 
-也可以不用界面，在终端里配对：
+### 高级
 
-```bash
-echo '<配对链接>' | "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" pair -
-```
+- **不经网页拿链接**：hub 管理界面 › 电脑 › 添加电脑 › **电脑来连**，填这台的 id（如 `macbook`）和名字；或者在 hub 机器上运行
+  `personad hub pair --machine macbook --add --name MacBook`（hub 是 Docker 部署的话在容器里跑，见 [docker.md](docker.md)）。这两种加的电脑直接算已确认，不用再点「是我的电脑」。
+- **hub 要开着 TLS**：主动模式只走 TLS（hub.json 的 `public.tls_listen`），或者 hub 在 HTTPS 反向代理后面（[link.md](link.md)「hub 在反向代理后面」）。`personad hub setup` 新装的 hub 默认只在局域网 IPv4 上开。
+- **让 hub 来连（被动）**：这台连不到 hub、hub 连得到它的（比如 hub 在别人的网络里，只能经代理进来），配对窗口里选这一项，
+  点「生成配对链接」，把链接粘贴到 hub 管理界面 › 电脑 › 添加电脑 › **hub 来连**。防火墙只对 hub 放行它监听的端口（默认 18663）。细节见 [link.md](link.md)「被动模式」。
+- **在终端里配对**：
+
+  ```bash
+  echo '<配对链接>' | "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" pair -
+  ```
 
 ## 菜单里的东西
 

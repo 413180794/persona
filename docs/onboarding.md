@@ -534,6 +534,11 @@ pending 的电脑：`pushManaged` 跳过；`defaultAssistantMachine` 和助手�
 - 文档和官网：本文；给普通用户的「开始使用」一页（官网 + App 内打开，截图用体验模式）；README 顶部分「我想用」「我想开发」；`persona-link-install.md`、`link.md` 的配对步骤按「App 里添加电脑」改写；官网首屏放真实的获取方式，curl 收进「命令行安装」。
 - iOS / macOS / Persona Link：开 issue（第 7.3 节），协议见第 5 节。
 
+文档的实现（#4046）：「开始使用」是仓库里的 `docs/getting-started.md`，README 顶部分「我想用」「我想开发」，`persona-link-install.md`、`link.md` 的配对步骤以网页「机器 › 添加电脑」为主、管理界面和命令行收进「高级」。
+和上面不同的地方：没有改官网（官网首屏和 FAQ 等拍板 15），App 里也还没有打开这一页的入口；文中没有放截图，体验模式的截图等官网那一版一起做；
+iOS、Android 的添加电脑、预设向导和就绪卡片没合进来之前，文中如实写「现在先用网页」，那几项合进来后同步改这一页。
+`hub setup` 只在第一次写 hub.json 时看本机有没有 claude / herdr，所以文中要求「想让 hub 这台干活，先装 Claude Code 再装 hub」，补装的在「高级」里手动加 `kind: local`；让重跑 setup 补上本机见 #4083。
+
 ### 6.2 暂不做
 
 | 项 | 原因 |
