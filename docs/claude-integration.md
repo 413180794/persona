@@ -402,3 +402,138 @@ hub 的 `notifyFinished` 看到就跳过；会话照样变成「完成未看」�
 - node（`node/suggestion.go`）：Claude 会话从 working / blocked 变成 idle / done 时，在 0 / 2 / 5 / 10 秒读可见屏（2.1.312 实测一般几秒内出现），
   读到就停、记在会话上（`proto.Session.Suggestion`）；有草稿就停；再 working、或者从 Persona 发消息 / 按键时清掉。不额外高频读屏。
 - 一条简短的回答（「ok」）后不一定有建议；给出几个下一步的回答后基本都有（实测「add all three to the README」）。
+
+## 安全拦截与自动降级（方案，#2282，待拍板）
+
+用户问「触发了 Claude 的安全拦截，App 里看得到吗？模型降级了我们知道吗？」：现在两种都看不到或说错了。这一节是方案，**还没实现**；
+标「待拍板」的由用户定，拍板后按文末的拆分做。
+
+**原则**：只把发生了什么如实告诉用户，由用户决定怎么办。不绕过、不减少拦截：不改写用户的消息，不自动换说法重试，不自动「继续」被拦下的一轮，
+也不让管家的判断模型替用户决定（被拦下的一轮只走规则，不进模型分诊）。
+
+### 现状
+
+Claude Code（2.1.318 实测，见 issue）的消息被安全检查（safeguards）拦下时有两种结果：
+
+| 结果 | transcript 里 | Persona 现在 |
+| --- | --- | --- |
+| 自动降级（默认） | 一行 `system/model_refusal_fallback`：原模型、新模型、类别、范围；`scope: "session"` 时之后整个会话都用新模型 | `transcript.go` 的 `system` 分支只认几种 subtype，其余 `default: return nil`，这行被丢掉；之后的 assistant 行带新模型，`Meta.Model` → `Session.model` 悄悄变了，输入框的模型按钮（`SessionModes.modelName`、网页 `launcher-models.ts` 的 `modelName`，#2200 / #2201）跟着显示新模型，没有任何说明 |
+| 拦下未降级 | 一行 `system/model_refusal_no_fallback`，加一条 `stop_reason: "refusal"`、模型 `<synthetic>` 的合成回复「API Error: …safeguards flagged this message…」 | system 行同样被丢；合成回复是普通 assistant 文本，`entry.Message` 不读 `stop_reason`。它以 `API Error:` 开头，于是按 #1516 当成模型服务出错（下表） |
+
+拦下未降级现在在各处的说法（全是「模型服务出错」那一套）：
+
+- 对话：iOS `Views/Chat/APIErrorCard.swift`、网页 `web/src/lib/api-errors.ts`、安卓 `core/domain/.../lines/ApiErrors.kt` 认 `API Error:` 前缀，
+  认不出状态码时是「模型请求失败」；`transient` 不是 false 就给「重试」，发的是「继续」（`ChatView.swift`）。上下文没变，多半再被拦一次。
+- hub：`hub/state.go` 的 `turnError` 用 `assistantwire.CutOff`（`APIErrorMarkers`）把最后一句认成 `TurnError`；推送（`hub/machine.go`）是
+  「⚠️ 标题」+「模型服务出错，中断了：<原文>」。
+- 任务：回执 `state: "interrupted"`、摘要「模型服务出错，中断了」（`assistant/tasks.go`、`assistantwire.InterruptedSummary`），
+  卡片上「继续」（`continueTask`，发「继续」）；主对话的提示词 `prompts/assistant/task_notice.md` 说「被模型服务出错打断了」。
+- 管家分诊（`assistant/agents_work.go` 的 `triageRules`）：`transientError` 判成临时的走 `WaitTransient`，开着「自动继续」就**自动发「继续」**
+  （最多 `maxRetries` 次）；否则是「模型服务出错，需要你处理」的卡片。拦截原文里有没有 `transientError` 的关键词（`upstream`、`network`、`api_error`……）
+  没有核对过：**如果有，现在就在自动重试被拦下的消息**，第一个 PR 就要堵上（见下「待验证」）。
+- 定时任务、跟进（`assistant/schedule.go` 的 `watchScheduledRun`）：这一轮结束后 `lastTurnAPIError` 按 `APIErrorMarkers` 前缀认最后一句，
+  合成回复以 `API Error:` 开头就**一定**命中，和关键词无关：运行记成失败，推送「定时任务失败：<原文>」，**3 分钟后用同样的提示词再跑一次**
+  （`docs/assistant.md`「失败和重试」）。这是现在确定存在的自动重发，第一个 PR 一起堵上。
+- 任务（待办）卡片：网页 `web/src/lib/todos.ts` 的 `interruptedAgent` / `interruption()`（`views/assistant/Tasks.tsx`）、安卓 `Tasks.kt` 的
+  `Interruption.of` 和 `Models.kt` 的 `Session.interrupted` 从 `session.turn_error` 推出「中断了」，`parseAPIError` 认不出时原因是「模型请求失败」、
+  `canContinue` 为真，给「继续」。客户端现在都不读 `turn_error_kind`。
+
+本机（Claude Code 2.1.310）的二进制里没有 `model_refusal_*` 和 `CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK` 这些字符串，本机和 `CLAUDE_CONFIG_DIR`
+目录里的 transcript 也没有这两种 system 行，下面的字段表来自 issue 的描述，**字段名要用脱敏的真实片段核对**后再写解析。
+
+### 解析（node：`server/internal/transcript`）
+
+- `entry` 加 `model_refusal_*` 行的字段（原模型、新模型、类别、范围，按核对出的真实键名），`Message` 加 `stop_reason`。
+- `system/model_refusal_fallback` → 一条 `KindNotice`，带新的 `refusal` 结构：
+  `{"outcome": "fallback", "from": "<原模型>", "to": "<新模型>", "category": "<类别原文>", "scope": "session" | <其他原文>, "raw": "<行的 content 原文，可空>"}`。
+  `text` 照样填一句中文（下面「各端怎么说」），旧 App 不认 `refusal` 也能显示成一条普通提示。
+- `system/model_refusal_no_fallback` → 同样一条 notice，`outcome: "blocked"`。紧跟的 `stop_reason: "refusal"` 合成回复：文本 item 带
+  `refusal: {"outcome": "blocked", …}`（和前一行合并成一张卡，不再是 API 错误卡），**不再进 `Meta.LastText` 当成回答**，改记
+  `Meta.TurnError` = 原文、`Meta.TurnErrorKind = "refusal"`（新值，和 `transient` / `user` 并列，`proto.Session.TurnErrorKind`）。
+  判断靠 `stop_reason` 和 system 行，不靠匹配「safeguards」之类的英文（措辞会变）。
+- 合成回复 item 的 `text` **去掉开头的 `API Error:` 前缀**（原文完整留在 `refusal.raw`）：各端的 API 错误卡（iOS `APIErrorCard`、网页 `api-errors.ts`、
+  安卓 `ApiErrors.kt`）只认这个前缀，text 由 node 的解析器产出，去掉后**旧客户端也只画一段普通文字、不给「重试」**（不用等它们更新）；
+  hub 的 `CutOff` / `lastTurnAPIError` 也不会再按前缀把它当 API 错误。代价是旧客户端看不出这是一张拦截卡，只是一句英文说明，比给一个会再被拦的「重试」好。
+- `TurnError` 什么时候清掉：Claude 这条路现在不设 `Meta.TurnError`（hub 从 `LastText` 推，后面的回答一来就自然没了），新加的 `TurnErrorKind = "refusal"`
+  必须照 Codex 在 `task_started` 清空的做法，**在下一条真实的用户消息或下一条非合成的 assistant 回复时把 `TurnError` / `TurnErrorKind` 清空**；
+  否则拦截行还在 node 快速 meta 的尾部时，换了说法、答得好好的一轮照样被 hub 推「被拦下」、分诊留着卡片、任务一直是「中断了」。
+- 认不出的：subtype 以 `model_refusal` 开头但不是这两种、或者缺了模型 / 类别字段，一律出一条 notice，`text` 是行里的 `content` 原文
+  （没有就是「Claude 的安全检查对这条消息做了处理（Persona 认不出具体情况）」），`refusal.outcome` 留空。类别不在已知表里就显示原文（`cyber` → 「网络安全」，其余先原文）。
+- 会话级：`proto.Session` 加 `model_fallback`（`{from, to, category, scope, at}`）：最近一次降级是 `scope: "session"`，且最新的 assistant 行还是 `to` 时才有；
+  用户 `/model` 换走了就没了。只在 node 的增量扫描里记（和 `bgScan` 一起），不另读文件。
+- 改了 item 结构：iOS `ChatCache` 目录版本号加一（现在 `chats-v8`，做的时候以 master 上最新的为准），`docs/lessons/transcript.md` 那条规矩。
+  hub 的 golden / `protocol.md` 的 Item、Session 字段表一起改。
+
+### 各端怎么说
+
+文案先定这些，iOS / 网页 / 安卓用同一套（文案不放 hub 的 Go 代码里：notice 的 `text` 是给旧客户端的兜底，新客户端按 `refusal` 自己画）：
+
+| 地方 | 自动降级 | 拦下未降级 |
+| --- | --- | --- |
+| 对话里 | 一行提示（不是错误红色，用 `caution`）：「Claude 的安全检查拦下了这条消息，改用 <新模型> 回答（类别：<类别>）」；`scope: "session"` 时加「之后这个会话都用 <新模型>」 | 一张卡（`caution`，不用 `danger`、不叫「错误」）：标题「被 Claude 的安全检查拦下了，没有回答」，副标题「类别：<类别>」；折叠里是原文和时间。**不给「重试」**；说明一行「同样的内容再发多半还会被拦，可以改一下再发」 |
+| 输入框模型按钮 | 显示实际在用的新模型（沿用 #2200 / #2201 的友好名），旁边一个小标「已降级」（新的设计系统 token / 组件，不写死）；菜单里多一项「切回 <原模型>」 | 不变 |
+| 切回原模型 | herdr 里的 Claude：发 `/model <原模型的别名>`（`SessionModes.swift` 现有的换模型路径，`PromptItems.claudeModelID`）；只读会话（`claude_bg`）、无头助手不给这一项（助手的模型来自 hub 的模型配置，下一轮按配置起，#1562，要核对降级会不会跟着 `--resume` 留下） | — |
+| 推送 | 不单独推（回答照常出来，「完成了」推送照常） | 「⛔ <标题>」+「被 Claude 的安全检查拦下了，没有回答（<类别>）」；不带原文里的消息内容 |
+| 任务回执 | 回执照常（做完 / 没做完按原规则判）；摘要后加一句「其中 N 轮被安全检查拦下，改用 <新模型> 回答」 | `state: "interrupted"` + 新字段 `cause: "refusal"`，摘要「被 Claude 的安全检查拦下了」；新客户端不画「继续」，画「去对话」。不另起 `state`：旧网页的 `receiptState` 把认不出的 state 当成「done」 |
+| 主对话的任务提示（`task_notice.md`） | 不变 | 「被 Claude 的安全检查拦下了（等用户决定）」；提示词里写明不要替用户换说法重发 |
+| 任务（待办）卡片 | 不变 | 网页 `todos.ts` 的 `interruption` / `todoStatus`、安卓 `Tasks.kt` 的 `Interruption` / `Session.interrupted` 先看 `turn_error_kind == "refusal"`：显示「被 Claude 的安全检查拦下了」，**不给「继续」**，给「去对话」 |
+| 定时任务、跟进 | 不变 | `watchScheduledRun` 看这一轮是不是以拦截结束（`Item.refusal` / 会话的 `TurnErrorKind == "refusal"`，不看文字前缀）：记成被拦下，**不重试**；推送「定时任务被拦下：<标题>」+「被 Claude 的安全检查拦下了，没有回答（<类别>）」，不带原文 |
+| 管家分诊 | 不影响 | `triageRules` 在 `transientError` **之前**看 `TurnErrorKind == "refusal"`：`WaitUser` 卡片「被 Claude 的安全检查拦下了：<类别>」，选项「我来处理」（打开对话）/「先不管」；不进 `WaitTransient`、不自动继续、不调判断模型 |
+
+旧客户端：notice 的中文 `text` 能看；合成回复的 text 去掉了 `API Error:` 前缀（见「解析」），旧 App 画成普通文字，不给「重试」。
+旧网页 / 旧安卓的任务卡片不读 `turn_error_kind`，仍会把它当「中断了」并给「继续」，这一处只能等更新。
+hub 的 `continueTask` 对 `cause: "refusal"` 不拒绝（用户自己点的「继续」是用户的决定），但新客户端不给这个按钮。
+
+### 默认策略（待拍板）
+
+`CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK` 只认进程环境，不能写进 `--settings` 的 `env`（issue 实测）。三个选项：
+
+- **A. 保持 Claude Code 的默认（自动降级），只是显示出来。** 什么都不用改启动方式；回答不断，但用户可能不知道之后都在用较弱的模型（上面的「已降级」标就是为这个）。
+- **B. Persona 起的 Claude 一律关掉自动降级。** 被拦就停下，用户自己决定换说法、换模型还是放弃；最近拦截变多，停下的次数会明显增加，任务会更常卡住。
+- **C. 设置项（推荐，待拍板）**：设置 › Claude Code「被安全检查拦下时」：「换个模型接着答」（默认，= A）/「停下等我」（= B）。存 hub 的 `settings`，经 `node.configure` 下发；
+  主对话、herdr 里的 Agent 共用一项（以后要分再分）。
+
+关掉时变量怎么进去（实现时的注意点）：
+
+- herdr 窗格：`pane run` 的命令和 herdr 的 `resume_argv`（`node/herdrresume.go` 的 `claudeCommandLine`）前面加 `CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK=1 `。
+  启动器多是 shell 函数，不能用 `env` 包（`env` 跑不了函数）；zsh / bash 里「赋值 + 函数」会把变量带给函数里起的 claude，fish 行为不同（「全局只报告的 hooks」那节也碰到过），要分别验证。
+- Persona 管理的启动器：和 `CLAUDE_CODE_DISABLE_ARTIFACT` 一样放进 `managedEnv`（`node/managed.go`），`jarvisd launch` 带上。
+- 无头助手：`node/assistant.go` 的 `cmd.Env`。
+- 用户自己在电脑上起的会话不管（那是他自己的终端），只显示。改了设置只对之后起 / 恢复的进程生效，界面上要说。
+
+### 多 Agent 协作时
+
+- 一个 Agent 被拦下（未降级）：它停在那里，任务显示「被安全检查拦下了」，**不算做完、不算模型服务出错**；同一任务里的其他 Agent 照常跑，
+  在等它的（`WaitAgent`）继续等；管家不给它发「继续」，也不把它的活改派给别的 Agent 或换个说法交给另一个 Agent。主对话收到任务提示，由用户决定。
+- 自动降级：不打断流程，只在对话和回执里记下来；`scope: "session"` 的会话在 Agents 列表的模型名上带「已降级」。
+- 主对话自己被拦：主对话里出同样的卡；定时任务、跟进（`docs/assistant.md`）的这一轮记为被拦下，不重试，下一次到点照常跑。
+
+### 兼容和待验证
+
+- 这些 system 行是新加的、部分字段是内部的，可能改名：解析只在拿得到时用字段，认不出就显示原文，不报错、不丢行。
+- **待验证**（实现前用脱敏的真实片段，放进 `server/internal/transcript/testdata`，文字换成占位符）：
+  1. 两种 system 行的真实键名、`scope` 和类别的取值；合成回复的完整形状（是否总有 `stop_reason: "refusal"`、模型是否总是 `<synthetic>`）。
+  2. 拦截原文会不会命中 `transientError`（现在会不会被管家自动「继续」）。
+  3. 降级后 `--resume` 会不会留在新模型上；`/model` 切回后下一条会不会马上又被拦、又降级。
+  4. 自定义网关（`ANTHROPIC_BASE_URL`）、API Key、Bedrock / Vertex 的启动器下会不会降级、降级到的模型网关有没有（没有就是一条普通 API 错误）。
+  5. `CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK` 从哪个版本起有、在 zsh / bash / fish 的「赋值 + 函数」下是否生效。
+  6. 无头助手的 stream-json 里有没有对应的事件（现在结构化内容仍从 transcript 读，有的话可以更早显示）。
+- Codex、TRAEX、DSH、pi 不涉及；它们自己的拒答以后有了再按同一个 `refusal` 结构接。
+
+### 实现的 PR 拆分（拍板后）
+
+1. 服务端：transcript 解析和夹具、`proto` 的 `Item.refusal`、`Session.model_fallback`、`TurnErrorKind: "refusal"`；hub 的推送、任务回执 `cause`、
+   `triageRules`（先堵上自动继续）、`watchScheduledRun` 不重试被拦下的运行和它的推送文案、`TurnError` 的清空、`task_notice.md` 和 golden；
+   `protocol.md`、本节改成现状。
+2. iOS / Mac：降级提示、拦截卡、模型按钮的「已降级」和「切回」，`ChatCache` 版本号加一；深浅色截图。
+3. 网页：同上（`api-errors.ts` 之外单独的拦截卡，`feed.ts` 的回执，`todos.ts` 的任务卡片读 `turn_error_kind`）。
+4. 安卓：同上（含 `Tasks.kt` / `Models.kt` 的任务卡片），三套界面风格 × 深浅色截图。
+5. 默认策略（按拍板结果）：设置项、`node.configure`、三处注入变量。
+
+### 验收
+
+- 两种情况的脱敏 transcript 片段都有解析测试；认不出的 subtype 显示原文；拦截之后跟一轮正常回答时没有 `TurnError`（有测试）。
+- 被拦下的定时任务、跟进记为被拦下、不重试（有测试）；任务卡片显示「被安全检查拦下」，没有「继续」。
+- 拦下未降级：对话里是拦截卡，没有「重试」；推送、回执、主对话提示、分诊卡片都说「被安全检查拦下」，不说「模型服务出错」；管家不自动发任何消息（有测试）。
+- 自动降级：对话里有提示；`scope: "session"` 时模型按钮带「已降级」，「切回」发出 `/model`。
+- iOS、网页、安卓深浅色都截图看过；改了 item 结构的 `ChatCache` 版本号加了一。
