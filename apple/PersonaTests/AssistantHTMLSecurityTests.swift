@@ -297,6 +297,29 @@ struct AssistantHTMLSecurityTests {
         #expect(card.requests == [.reply("after-restart")])
     }
 
+    @Test func inactiveAndRepeatedTerminationCallbacksDoNotNotifyAgain() async throws {
+        let card = Page()
+        defer { card.close() }
+        let coordinator = try #require(card.coordinator)
+        var unavailableCount = 0
+        coordinator.onUnavailable = { unavailableCount += 1 }
+        let delegate: any WKNavigationDelegate = coordinator
+        delegate.webViewWebContentProcessDidTerminate?(card.web)
+        #expect(unavailableCount == 0, "an unloaded page has no execution to invalidate")
+        card.load("<p id='marker'>one-exit</p>")
+        try await loaded(card.web, marker: "one-exit")
+        delegate.webViewWebContentProcessDidTerminate?(card.web)
+        delegate.webViewWebContentProcessDidTerminate?(card.web)
+        #expect(unavailableCount == 1, "repeated public callbacks must not invalidate twice")
+        coordinator.load("<p id='marker'>after-exit</p>", in: card.web)
+        try await loaded(card.web, marker: "after-exit")
+        coordinator.dismantle(card.web)
+        delegate.webViewWebContentProcessDidTerminate?(card.web)
+        #expect(unavailableCount == 1, "a callback arriving after dismantle must be ignored")
+        #expect(coordinator.instance == nil)
+        #expect(card.web.configuration.userContentController.userScripts.isEmpty)
+    }
+
     @Test func leavingClearsLiveTimersBoundedWorkAndRetainedBridgeClosures() async throws {
         let card = Page()
         defer { card.close() }

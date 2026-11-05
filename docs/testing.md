@@ -563,6 +563,14 @@ fixture 读取 `schema/extension/examples/assistant/progress.json` 和 `progress
 `document.cookie` 是空的，`window.persona` 改不掉，只认当前页面实例的主 frame 发给 `persona` 的 `reply` / `open`；另有不进沙箱的对照（同一个页面能打到端口），证明这项检查是真的。
 规则表加载用可控暂停点验证：旧编译晚于新编译完成也不能覆盖新页面；销毁后即使编译返回也不加载。没有规则表时不加载助手 HTML。卡片随可见性、tab 活跃状态和前后台状态释放 WebView，不把 `onAppear` 当成仍可见的依据。
 
+### Mac HTML 沙箱正常矩阵（#2025）
+
+先 `eval "$(python3 scripts/persona_config.py env)"`，再执行 `python3 scripts/test/mac_html_security.py --output /tmp/<新的验收目录>`。目录必须不存在，失败／成功证据都不覆盖。驱动从当前 `AssistantHTMLCard.swift` 原样抽取请求类型与 Coordinator，记录整文件、抽取区间和测试 hash；复用当前安全测试，只把 UIKit 窗口换成禁止激活的隐藏 AppKit 窗口，加入独立空闲监听器、五轮资源探针和有界的 Mac 网络正对照。
+
+构建和测试均经 `~/.local/bin/xcode-slot`，使用临时 `HOME`／缓存目录；排队最多 3600 秒，与实际编译／测试预算分开（退出码 125 是排队超时，124 是实际运行超时）。测试 worker 一次性脱离 Agent 进程树，防端口发现误触；不筛 User-Agent，不停真实 node。listener 和 JS callback 有期限，外层记录并清理实际测试 PID／PGID，成功、失败和超时分别打印终态。任务完成后只移除本次 `.build`、临时 HOME 和缓存，源码、manifest、日志和 XML 结果保留。
+
+正常矩阵只证明本次精确 Coordinator 的网络／导航／bridge 和公开终止回调恢复；不覆盖 SwiftUI 卡片／`NSViewRepresentable` 整体接线，不证明真实 OS 杀进程、CPU／物理内存立即回收或硬配额。共享登录会话明确不运行 literal loop；该项必须在可从外部销毁的一次性 Mac VM／专用测试登录会话完成。正常矩阵通过也不自动开启 Mac execution gate，更不改变生产开关或触发 TestFlight。
+
 ### 多 hub（`MultiHubTests`，[multi-hub.md](multi-hub.md)）
 
 三台假 hub 模拟「两组、其中一组两台」：A 单独一组（家里）；B、C 互联成一组（公司），C 拥有 MacBook。两组都有同 id 的机器、会话和交互，
