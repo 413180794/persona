@@ -1,11 +1,20 @@
 package persona.feature.settings
 
 import android.content.res.Resources
+import persona.core.contracts.api.AssignPurposes
+import persona.core.contracts.api.AssistantReadiness
 import persona.core.contracts.api.NewProvider
+import persona.core.contracts.api.ProviderAdded
+import persona.core.contracts.api.ProviderDiscovery
 import persona.core.contracts.api.ProviderPreset
+import persona.core.contracts.api.ProviderProbe
 import persona.core.contracts.api.ProviderSetup
+import persona.core.contracts.api.ProviderTest
+import persona.core.contracts.api.ReadinessStep
+import persona.core.designsystem.UiText
 import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -23,6 +32,8 @@ internal data class NewProviderDraft(
     /** messages | responses, for an API. */
     val api: String = "messages",
     val baseUrl: String = "",
+    /** api_key (x-api-key, the hub's default) | bearer, for a gateway typed in. */
+    val auth: String = "api_key",
     val model: String = "",
     val smallModel: String = "",
     val subagentModel: String = "",
@@ -32,13 +43,65 @@ internal data class NewProviderDraft(
     val presetModel: String = "",
 )
 
+/**
+ * Where 新增模型供应商 is on a hub with built-in presets (docs/onboarding.md 4.3「三条路」B): [Pick] a provider, paste its
+ * [Key] (tested by itself) and see what now runs on it ([Done]); a gateway typed in is the [Form]. An older hub opens on the
+ * [Form] with its 自己填写 / 从扩展添加 switch.
+ */
+internal enum class WizardStep { Pick, Key, Done, Form }
+
+/** A preset key's test: running, or what the hub answered. */
+internal data class KeyTest(val running: Boolean, val result: ProviderTest? = null, val failure: UiText? = null)
+
+/** What saving from a preset gave: the hub's answer, whether assign was asked, and whether the computer lacked Claude Code before. */
+internal data class WizardAdded(val result: ProviderAdded, val asked: Boolean, val noClaudeBefore: Boolean)
+
 internal data class NewProviderState(
     val presets: List<ProviderPreset> = emptyList(),
     val loaded: Boolean = false,
     val draft: NewProviderDraft = NewProviderDraft(),
     val busy: Boolean = false,
     val error: ResText? = null,
+    /** The hub names a provider from a preset and takes assign ([persona.core.contracts.api.BuiltinPresetsFeature]). */
+    val hubNames: Boolean = false,
+    val step: WizardStep = WizardStep.Form,
+    /** Why the presets could not be read (the pick list still offers the gateway typed in). */
+    val presetsError: ResText? = null,
+    val keyTest: KeyTest? = null,
+    /** 主对话和新开的 Agent 都用它; null: not touched, so it follows the readiness (off while Claude Code already answers). */
+    val assignSet: Boolean? = null,
+    /** The main conversation's readiness, asked when the page opens and again after saving; null without it. */
+    val readiness: AssistantReadiness? = null,
+    /** The first readiness answer has not come: the switch and 保存 wait for it. */
+    val readinessPending: Boolean = false,
+    val added: WizardAdded? = null,
+    /** 测试连接 / 获取模型列表 of the form. */
+    val probing: Boolean = false,
+    val probe: ProviderTest? = null,
+    /** The hub could not be asked (not the gateway's answer, which is in [probe] / [found]). */
+    val probeFailure: UiText? = null,
+    val discovering: Boolean = false,
+    val found: ProviderDiscovery? = null,
+    val foundFailure: UiText? = null,
 ) {
+    /** The main conversation already answers on a computer's Claude Code: a new key does not take it over by default. */
+    val works: Boolean get() = claudeWorks(readiness)
+    val assign: Boolean get() = assignSet ?: !works
+
+    /** The key step can be saved: a key, a fine name if any, not while its test runs or the readiness is still asked. */
+    val canSaveKey: Boolean get() {
+        if (busy || selected == null || draft.apiKey.isBlank() || keyTest?.running == true) return false
+        if (!hubNames && draft.name.isBlank()) return false
+        return nameProblem == null
+    }
+
+    /** What 测试连接 / 获取模型列表 send for the form: the gateway, the key and the auth typed in. */
+    val formProbe: ProviderProbe? get() {
+        val d = draft
+        if (d.baseUrl.isBlank() || d.apiKey.isBlank()) return null
+        return ProviderProbe(baseUrl = d.baseUrl.trim(), apiKey = d.apiKey.trim(), auth = d.auth, model = d.model.trim().takeIf { it.isNotEmpty() })
+    }
+
     val usesPreset: Boolean get() = draft.fromPreset && selected != null
     val selected: ProviderPreset? get() = presets.firstOrNull { it.id == draft.preset }
     val nameProblem: ResText? get() = providerNameProblem(draft.name)
@@ -57,6 +120,7 @@ internal data class NewProviderState(
         if (d.baseUrl.isBlank() || d.model.isBlank()) return null
         return NewProvider(
             name, key, kind = d.kind, api = if (api) d.api else "messages", baseUrl = d.baseUrl.trim(), model = d.model.trim(),
+            auth = d.auth.takeIf { !api && it == "bearer" },
             smallModel = d.smallModel.trim().takeIf { !api && it.isNotEmpty() },
             subagentModel = d.subagentModel.trim().takeIf { !api && it.isNotEmpty() },
             args = d.args.split(Regex("\\s+")).filter { it.isNotEmpty() }.takeIf { !api && it.isNotEmpty() },
@@ -86,23 +150,162 @@ internal fun presetSubtitle(res: Resources, preset: ProviderPreset): String {
 /** 模型配置's id of a provider added under [name]. */
 internal fun providerId(name: String) = "launcher.${name.trim()}"
 
-internal class NewProviderModel(private val api: ProviderSetup) {
+/** The main conversation answers on a computer's Claude Code: its computer, Claude Code and model steps are all ok. */
+internal fun claudeWorks(r: AssistantReadiness?): Boolean {
+    if (r == null) return false
+    fun ok(id: String) = r.steps.firstOrNull { it.id == id }?.state == ReadinessStep.OK
+    return ok(ReadinessStep.COMPUTER) && ok(ReadinessStep.CLAUDE) && ok(ReadinessStep.MODEL)
+}
+
+/** The main conversation's computer has no Claude Code (4.3 B.4): a key alone does not make it answer. */
+internal fun claudeMissing(r: AssistantReadiness?): Boolean = r?.steps.orEmpty().any {
+    it.id == ReadinessStep.CLAUDE && it.code == "claude_missing" && (it.state == ReadinessStep.PROBLEM || it.state == ReadinessStep.TODO)
+}
+
+/**
+ * Still no Claude Code after saving: now, or before saving and not found since (after it the step may read `unknown`:
+ * the hub does not say a provider of its own misses claude).
+ */
+internal fun stillNoClaude(added: WizardAdded, now: AssistantReadiness?): Boolean =
+    claudeMissing(now) || (added.noClaudeBefore && now?.steps?.firstOrNull { it.id == ReadinessStep.CLAUDE }?.state != ReadinessStep.OK)
+
+/** A pasted key long enough to test by itself: a test costs a request, so not on every keystroke of a typed one. */
+internal fun testableKey(key: String) = key.trim().length >= 8
+
+internal class NewProviderModel(
+    private val api: ProviderSetup,
+    /** The main conversation's readiness (null: the hub has none, or 体验模式). */
+    private val readiness: (suspend () -> AssistantReadiness?)? = null,
+) {
     private val mutable = MutableStateFlow(NewProviderState())
     val state = mutable.asStateFlow()
+    private var readinessAnswer: CompletableDeferred<Unit>? = null
+    private var testSeq = 0
 
-    /** The presets; the first is picked, and [preferPreset] opens on 从扩展添加 when there are any. */
-    suspend fun load(preferPreset: Boolean = false) {
+    /**
+     * The presets; the first is picked, and [preferPreset] opens on 从扩展添加 when there are any. [hubNames]: the hub has
+     * built-in presets, so the page opens on the list to pick from (the readiness is asked meanwhile).
+     */
+    suspend fun load(preferPreset: Boolean = false, hubNames: Boolean = false) {
+        if (hubNames) mutable.update { it.copy(hubNames = true, step = WizardStep.Pick) }
         try {
             val presets = api.presets()
             mutable.update { s ->
                 val first = presets.firstOrNull()
                 val keep = presets.any { it.id == s.draft.preset }
-                s.copy(presets = presets, loaded = true, draft = if (keep || first == null) s.draft
+                s.copy(presets = presets, loaded = true, draft = if (keep || first == null || hubNames) s.draft
                     else s.draft.copy(preset = first.id, presetModel = first.defaultModel, fromPreset = preferPreset || s.draft.fromPreset))
             }
         } catch (cancelled: CancellationException) { throw cancelled }
         // 自己填写 still works without them.
-        catch (_: Exception) { mutable.update { it.copy(loaded = true) } }
+        catch (error: Exception) {
+            mutable.update { it.copy(loaded = true, presetsError = if (hubNames) ResText.of(R.string.settings_onb_presets_failed, failureReasonText(error)) else null) }
+        }
+    }
+
+    /** Asks the readiness once (the wizard's switch follows it); saving waits for this answer. */
+    suspend fun loadReadiness() {
+        val source = readiness ?: return
+        val answer = CompletableDeferred<Unit>().also { readinessAnswer = it }
+        mutable.update { it.copy(readinessPending = true) }
+        try { mutable.update { it.copy(readiness = source()) } }
+        catch (cancelled: CancellationException) { throw cancelled }
+        // A hub without it, or a moment offline: decide as if nothing answers yet (a new key takes over).
+        catch (_: Exception) {}
+        finally { mutable.update { it.copy(readinessPending = false) }; answer.complete(Unit) }
+    }
+
+    /** ①: a preset goes on to its key; null is the gateway typed in. */
+    fun choose(id: String?) = mutable.update { s ->
+        if (s.busy) return@update s
+        val preset = id?.let { p -> s.presets.firstOrNull { it.id == p } }
+        if (preset == null) s.copy(step = WizardStep.Form, error = null, draft = s.draft.copy(fromPreset = false))
+        else s.copy(step = WizardStep.Key, error = null, keyTest = null,
+            draft = if (preset.id == s.draft.preset) s.draft.copy(fromPreset = true)
+                else s.draft.copy(fromPreset = true, preset = preset.id, presetModel = preset.defaultModel, name = ""))
+    }
+
+    /** Back from ② or the form to ①. */
+    fun backToPick() = mutable.update { if (it.busy || !it.hubNames) it else it.copy(step = WizardStep.Pick, error = null, keyTest = null, probe = null, found = null) }
+
+    fun setAssign(on: Boolean) = mutable.update { it.copy(assignSet = on) }
+
+    /**
+     * ②'s test of the key as it is now: the hub fills in the preset's address and its default model. A test overtaken by
+     * another edit lands nowhere. Nothing for a key too short, or a preset the hub cannot test (a Responses API).
+     */
+    suspend fun testKey() {
+        val s = state.value
+        val preset = s.selected ?: return
+        if (s.step != WizardStep.Key || !preset.testable || !testableKey(s.draft.apiKey) || !s.hubNames) return
+        val seq = ++testSeq
+        val key = s.draft.apiKey
+        val model = s.draft.presetModel.trim().takeIf { it.isNotEmpty() && it != preset.defaultModel }
+        mutable.update { it.copy(keyTest = KeyTest(true)) }
+        val answer = try { KeyTest(false, api.test(ProviderProbe(preset = preset.id, apiKey = key.trim(), auth = preset.auth ?: "api_key", model = model))) }
+        catch (cancelled: CancellationException) { if (seq == testSeq) mutable.update { it.copy(keyTest = null) }; throw cancelled }
+        catch (error: Exception) { KeyTest(false, failure = failureReasonText(error)) }
+        if (seq == testSeq && state.value.draft.apiKey == key) mutable.update { it.copy(keyTest = answer) }
+    }
+
+    /** ②: a new key throws away the last test (the page tests it again once it stops changing). */
+    fun editKey(draft: NewProviderDraft) = mutable.update {
+        if (it.busy) it else it.copy(draft = draft, error = null, keyTest = if (draft.apiKey != it.draft.apiKey || draft.presetModel != it.draft.presetModel) null else it.keyTest)
+    }
+
+    /**
+     * ② saved: the provider from the preset, with `assign` unless the switch is off (never decided on "not known yet":
+     * the readiness is awaited first). Then the readiness again, for ③'s Claude Code note.
+     */
+    suspend fun saveKey(): Boolean {
+        val current = state.value
+        val preset = current.selected ?: return false
+        if (!current.canSaveKey) return false
+        mutable.update { it.copy(busy = true, error = null) }
+        return try {
+            readinessAnswer?.await()
+            val before = state.value.readiness
+            val give = current.hubNames && (state.value.assignSet ?: !claudeWorks(before))
+            val d = state.value.draft
+            val model = d.presetModel.trim().takeIf { it.isNotEmpty() && it != preset.defaultModel }
+            val result = api.create(NewProvider(d.name.trim(), d.apiKey.trim(), preset = preset.id, model = model,
+                assign = AssignPurposes.takeIf { give }))
+            mutable.update { it.copy(step = WizardStep.Done, added = WizardAdded(result, give, claudeMissing(before))) }
+            readiness?.let { source ->
+                try { mutable.update { it.copy(readiness = source()) } }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) {}
+            }
+            true
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_not_saved, failureReasonText(error))) }; false }
+        finally { mutable.update { it.copy(busy = false) } }
+    }
+
+    /** The form's 测试连接: one request to the gateway typed in. */
+    suspend fun probeForm() {
+        val probe = state.value.formProbe ?: return
+        if (state.value.probing) return
+        mutable.update { it.copy(probing = true, probe = null, probeFailure = null) }
+        try {
+            val result = api.test(probe.copy(model = probe.model ?: state.value.found?.models?.firstOrNull()?.id))
+            mutable.update { it.copy(probing = false, probe = result) }
+        } catch (cancelled: CancellationException) { mutable.update { it.copy(probing = false) }; throw cancelled }
+        catch (error: Exception) { mutable.update { it.copy(probing = false, probeFailure = failureReasonText(error)) } }
+    }
+
+    /** The form's 获取模型列表: the gateway's models; the first fills an empty default model. */
+    suspend fun discoverForm() {
+        val probe = state.value.formProbe ?: return
+        if (state.value.discovering) return
+        mutable.update { it.copy(discovering = true, found = null, foundFailure = null) }
+        val result = try { api.discover(probe) }
+        catch (cancelled: CancellationException) { mutable.update { it.copy(discovering = false) }; throw cancelled }
+        catch (error: Exception) { mutable.update { it.copy(discovering = false, foundFailure = failureReasonText(error)) }; return }
+        mutable.update { s ->
+            val first = result.models.firstOrNull()?.id
+            s.copy(discovering = false, found = result, draft = if (s.draft.model.isBlank() && first != null) s.draft.copy(model = first) else s.draft)
+        }
     }
 
     fun edit(draft: NewProviderDraft) = mutable.update { if (it.busy) it else it.copy(draft = draft, error = null) }

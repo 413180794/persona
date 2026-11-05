@@ -89,10 +89,14 @@ var (
 	answerSectionRe = regexp.MustCompile(`^[一二三四五六七八九十]{1,3}[、.．]\s*\S`)
 	answerNoteRe    = regexp.MustCompile(`^(?:>\s*)?(?:备注|注|附注|PS|P\.S\.)\s*[:：]`)
 	answerStatusRe  = regexp.MustCompile(`^(?:当前状态|状态|结论)\s*[:：]\s*`)
-	answerLinkRe    = regexp.MustCompile(`\[([^\]\n]+)\]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)`)
-	answerURLRe     = regexp.MustCompile(`https?://[^\s<>\[\]（）【】，。；：、！？「」《》"'` + "`" + `]+`)
-	answerListRe    = regexp.MustCompile(`^(?:[-*+]|\d+[.)])\s`)
-	answerCellRe    = regexp.MustCompile(`^:?-{2,}:?$`)
+	// answerStatusLabelRe: what is left of a heading that was a status after its label (「状态：请验收」).
+	answerStatusLabelRe = regexp.MustCompile(`^(?:当前状态|状态|结论)\s*[:：]?$`)
+	// answerEmptyBracketsRe: brackets a status was taken out of.
+	answerEmptyBracketsRe = regexp.MustCompile(`[【（(\[]\s*[】）)\]]`)
+	answerLinkRe          = regexp.MustCompile(`\[([^\]\n]+)\]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)`)
+	answerURLRe           = regexp.MustCompile(`https?://[^\s<>\[\]（）【】，。；：、！？「」《》"'` + "`" + `]+`)
+	answerListRe          = regexp.MustCompile(`^(?:[-*+]|\d+[.)])\s`)
+	answerCellRe          = regexp.MustCompile(`^:?-{2,}:?$`)
 )
 
 // RenderAnswer lays out answer (GitHub Markdown) as cards of about budget runes each, at most maxParts of them.
@@ -616,7 +620,11 @@ func withoutStatus(title string, st answerStatus) string {
 	for _, w := range st.words {
 		if i := strings.Index(title, w); i >= 0 {
 			t := strings.TrimSpace(title[:i]) + " " + strings.TrimSpace(title[i+len(w):])
-			t = strings.Trim(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(t, "（）", ""), "()", ""), "【】", ""), " -—·|:：，,")
+			t = answerEmptyBracketsRe.ReplaceAllString(t, "") // 「【请验收】」 leaves 【 】
+			t = strings.Trim(t, " -—·|:：，,")
+			if answerStatusLabelRe.MatchString(t) {
+				t = "" // 「状态：请验收」 leaves only its label
+			}
 			if t = strings.TrimSpace(t); t != "" {
 				return t
 			}
@@ -624,4 +632,55 @@ func withoutStatus(title string, st answerStatus) string {
 		}
 	}
 	return title
+}
+
+// Retitle puts icon+title (in template's color, cut to 60 runes) over a card laid out by RenderAnswer, keeping what its
+// own header said: a status (请验收 / 无变动 / 有变动) stays as its tag and color, and its own title, when it is
+// neither title nor only the status, becomes the card's first line instead of being lost.
+func (c *Card) Retitle(icon, title, template string) *Card {
+	title = strings.TrimSpace(title)
+	old := c.Header
+	h := &cardHeader{Title: text(icon + clipRunes(oneLine(title), 60)), Template: template}
+	c.Header = h
+	if old == nil {
+		return c
+	}
+	own := strings.TrimSpace(old.Title.Content)
+	if st, only := statusOnly(own); only {
+		// the heading was the status alone (with or without its tag): it becomes the tag, nothing else to keep
+		h.Template, h.TextTagList = st.template, []any{map[string]any{"tag": "text_tag", "text": text(st.tag), "color": st.color}}
+		return c
+	}
+	if len(old.TextTagList) > 0 {
+		h.Template, h.TextTagList = old.Template, old.TextTagList
+	}
+	if own != "" && !sameTitle(own, title) {
+		line := map[string]any{"tag": "markdown", "content": "**" + EscapeMarkdown(own) + "**"}
+		c.Body.Elements = append([]any{line}, c.Body.Elements...)
+	}
+	return c
+}
+
+// statusOnly: a heading that says nothing but one of the statuses (「请验收」, 「状态：无变动」…).
+func statusOnly(heading string) (answerStatus, bool) {
+	for _, st := range answerStatuses {
+		for _, w := range st.words {
+			if i := strings.Index(heading, w); i >= 0 {
+				rest := answerStatusRe.ReplaceAllString(heading[:i]+heading[i+len(w):], "")
+				if strings.Trim(rest, " -—·|:：，,()（）【】*") == "" {
+					return st, true
+				}
+			}
+		}
+	}
+	return answerStatus{}, false
+}
+
+// sameTitle: own (a header's title, maybe cut to answerMaxTitle with "…") is title.
+func sameTitle(own, title string) bool {
+	if own == title {
+		return true
+	}
+	cut, ok := strings.CutSuffix(own, "…")
+	return ok && len([]rune(own)) >= answerMaxTitle && strings.HasPrefix(title, cut)
 }

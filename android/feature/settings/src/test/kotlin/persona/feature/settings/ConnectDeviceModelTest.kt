@@ -1,0 +1,69 @@
+package persona.feature.settings
+
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import persona.core.contracts.api.*
+
+/** 设置 › 设备 › 连接新设备: the code, its countdown, and the device that took it. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
+class ConnectDeviceModelTest {
+    private class Hub : DeviceSettings {
+        var list = listOf(PairedDevice("me", "这台手机", "phone", "full"))
+        var codes = 0
+        var fail: Exception? = null
+        override suspend fun devices() = PairedDevices(list, "me")
+        override suspend fun revoke(credentialId: String) {}
+        override suspend fun preferences() = DeviceNotificationPreferences()
+        override suspend fun savePreferences(preferences: DeviceNotificationPreferences) = preferences
+        override suspend fun pairCode(): AppPairCode {
+            fail?.let { throw it }
+            codes++
+            return AppPairCode("jp_$codes", 600_000, "jarvis://pair?token=jp_$codes", QrImage(1, listOf("1")))
+        }
+    }
+
+    @Test fun theCodeCountsDownAndTheNewDeviceIsNamed() = runBlocking {
+        val hub = Hub()
+        var now = 0L
+        val model = ConnectDeviceModel(hub) { now }
+        model.make()
+        assertEquals("jarvis://pair?token=jp_1", model.state.value.code?.pairUrl)
+        assertEquals(600, model.state.value.secondsLeft)
+        assertEquals("10:00", clock(model.state.value.secondsLeft))
+        assertFalse(model.poll())
+        hub.list = hub.list + PairedDevice("new", "", "phone", "full")
+        assertTrue(model.poll())
+        assertEquals(ConnectPhase.Paired("new"), model.state.value.phase)
+
+        // Another one: a new code; it expires.
+        model.make()
+        assertEquals(2, hub.codes)
+        now = 600_000
+        model.tick()
+        assertTrue(model.state.value.expired)
+        hub.list = hub.list + PairedDevice("late", "迟到的", "phone", "full")
+        assertFalse("an expired code waits for nothing", model.poll())
+    }
+
+    @Test fun aRefusalIsShownWithItsReason() = runBlocking {
+        val hub = Hub().apply { fail = IllegalStateException("x") }
+        val model = ConnectDeviceModel(hub) { 0 }
+        model.make()
+        assertTrue(model.state.value.phase is ConnectPhase.Failed)
+        assertEquals(0, secondsLeft(0, 5))
+        assertEquals("0:59", clock(59))
+    }
+
+    @Test fun anUnreadableExpiryStillShowsTheCode() {
+        assertEquals(1_000 + PairCodeLifeMs, localExpiry(0, 1_000))
+        assertEquals(1_000 + PairCodeLifeMs, localExpiry(500, 1_000))
+        val state = ConnectDeviceState(ConnectPhase.Showing(AppPairCode("jp", localExpiry(0, 1_000), "jarvis://pair")), now = 1_000)
+        assertFalse(state.expired)
+        assertEquals(600, state.secondsLeft)
+    }
+}

@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import persona.core.designsystem.*
@@ -21,14 +22,27 @@ internal fun DevicesPage(
     available: Boolean,
     onBack: () -> Unit,
     footer: @Composable () -> Unit = {},
+    /** 连接新设备's hub calls (a code for another device); null where it cannot be made (体验模式). */
+    connect: DeviceSettings? = null,
 ) {
     val state by controller.state.collectAsState()
     val scope = rememberCoroutineScope()
     var pending by remember { mutableStateOf<PairedDevice?>(null) }
+    var connecting by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(controller) { if (available) controller.loadDevices() }
+    if (connecting && connect != null && available) {
+        ConnectDevicePage(connect, onBack = { connecting = false }, onPaired = { scope.launch { controller.loadDevices() } })
+        return
+    }
     JListPage(title = stringResource(R.string.settings_devices_title), onBack = onBack) {
         if (!available) item { JEmptyState(stringResource(R.string.settings_devices_unavailable), stringResource(R.string.settings_check_pairing_and_hub)) }
         else {
+            if (connect != null) item("connect") {
+                JGroupItem(GroupPosition.Single, Modifier.padding(bottom = Tokens.Space.m)) {
+                    JRow(stringResource(R.string.settings_onb_connect_title), leadingIcon = PhIcons.QrCode,
+                        subtitle = stringResource(R.string.settings_onb_connect_row), onClick = { connecting = true })
+                }
+            }
             if (state.devices == null && state.busy) item { JLoading(text = stringResource(R.string.settings_devices_loading)) }
             if (state.devices?.devices?.isEmpty() == true) item { JEmptyState(stringResource(R.string.settings_devices_empty), stringResource(R.string.settings_devices_empty_detail)) }
             items(state.devices?.devices.orEmpty(), key = { it.id }) { device ->

@@ -30,6 +30,7 @@ import persona.core.contracts.api.AssistantRefused
 import persona.core.contracts.api.AssistantRepository
 import persona.core.contracts.api.AssistantReadinessFeature
 import persona.core.contracts.api.ReadinessSuggestion
+import persona.core.contracts.api.ReadinessStep
 import persona.core.contracts.api.ChannelSources
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcon
@@ -196,7 +197,8 @@ fun AssistantScreen(
     fun runReadinessAction(action: ReadinessActionId, launcher: String? = blocking?.launcher ?: readiness?.launcher) {
         action.help?.let { readinessHelp = it; return }
         if (action == ReadinessActionId.TestAssistant) { scope.launch { mainReadiness.refresh(probe = true) }; return }
-        action.destination(launcher)?.let(navigator::navigate)
+        val machine = readiness?.steps?.firstOrNull { it.id == ReadinessStep.COMPUTER }?.machine
+        action.destination(launcher, machine)?.let(navigator::navigate)
     }
     val onMain = active != null && active == snapshot.mainSession
     val shownCompaction = if (onMain) snapshot.conversations.firstOrNull { it.key == active }?.compaction else null

@@ -7,13 +7,17 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import android.content.res.Resources
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import persona.core.contracts.api.AssistantReadinessSource
 import persona.core.contracts.api.ProviderSetup
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** Debug builds open 新增模型供应商 directly for captures (`debug.newProvider`: manual | preset); release never sets it. */
@@ -25,45 +29,107 @@ object NewProviderPreview {
 }
 
 /**
- * 新增模型供应商 (docs/launchers.md「从扩展添加」): 自己填写 — the name, the kind (Claude Code 启动器 / 直接 API), the
- * gateway and key, the models and flags — or, when the hub's extensions offer presets, 从扩展添加: a preset, then only the
- * name, the key and maybe another of its models. [onSaved] gets the new provider's 模型配置 id.
+ * 新增模型供应商. On a hub with built-in presets (docs/onboarding.md 4.3「三条路」B) it is a wizard: ① 选择供应商 (the
+ * hub's providers, then 自定义兼容网关), ② 粘贴 Key (tested by itself; 主对话和新开的 Agent 都用它 follows the main
+ * conversation's readiness; the name and another model under 更多选项) and ③ what now runs on it. A gateway typed in is
+ * the form, with 测试连接 and 获取模型列表. An older hub opens on the form: 自己填写 — the name, the kind, the gateway and
+ * key, the models and flags — or 从扩展添加: a preset, then the name, the key and maybe another of its models.
+ * [onSaved] gets the new provider's 模型配置 id.
  */
 @Composable
-internal fun NewProviderPage(providers: ProviderSetup, onBack: () -> Unit, onSaved: (String) -> Unit, preferPreset: Boolean = false) {
-    val model = remember(providers) { NewProviderModel(providers) }
+internal fun NewProviderPage(
+    providers: ProviderSetup, onBack: () -> Unit, onSaved: (String) -> Unit, preferPreset: Boolean = false,
+    readiness: AssistantReadinessSource? = null,
+) {
+    val model = remember(providers, readiness) {
+        NewProviderModel(providers, readiness?.let { source -> suspend { if (source.available.first()) source.readiness(false) else null } })
+    }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
     val res = LocalResources.current
     var choosingModel by remember { mutableStateOf(false) }
-    LaunchedEffect(model) { model.load(preferPreset) }
-    BackHandler(onBack = onBack)
+    var more by remember { mutableStateOf(false) }
+    LaunchedEffect(model) {
+        val hubNames = providers.builtinPresets.first()
+        if (hubNames) launch { model.loadReadiness() }
+        model.load(preferPreset, hubNames)
+    }
     val draft = state.draft
+    // ②'s key is tested once it stops changing.
+    LaunchedEffect(model, state.step, draft.apiKey, draft.presetModel, draft.preset) {
+        if (state.step == WizardStep.Key && testableKey(draft.apiKey)) { delay(AutoTestMillis); model.testKey() }
+    }
+    val finish = { state.added?.let { onSaved(providerId(it.result.name)) } ?: onBack() }
+    BackHandler {
+        when {
+            state.step == WizardStep.Done -> finish()
+            state.hubNames && state.step != WizardStep.Pick -> model.backToPick()
+            else -> onBack()
+        }
+    }
     val editable = !state.busy
-    JListPage(title = stringResource(R.string.settings_src_provider_new), onBack = onBack, largeTitle = false, bottomBar = {
-        Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s)) {
-            JButton(stringResource(R.string.settings_src_save), { scope.launch { model.save()?.let { id -> feedback?.notice(res.getString(R.string.settings_src_provider_added, draft.name.trim())); onSaved(id) } } },
-                Modifier.fillMaxWidth(), loading = state.busy, enabled = state.canSave)
+    val preset = state.selected
+    val title = when (state.step) {
+        WizardStep.Key -> preset?.title ?: stringResource(R.string.settings_src_provider_new)
+        WizardStep.Done -> stringResource(R.string.settings_onb_step_done)
+        else -> stringResource(R.string.settings_src_provider_new)
+    }
+    val pageBack: () -> Unit = when {
+        state.step == WizardStep.Done -> ({ finish() })
+        state.hubNames && state.step != WizardStep.Pick -> model::backToPick
+        else -> onBack
+    }
+    JListPage(title = title, onBack = pageBack, largeTitle = false, bottomBar = {
+        when (state.step) {
+            WizardStep.Pick -> {}
+            WizardStep.Done -> Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s)) {
+                JButton(stringResource(R.string.settings_onb_finish), { finish() }, Modifier.fillMaxWidth())
+            }
+            WizardStep.Key -> Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s)) {
+                JButton(stringResource(R.string.settings_src_save), { scope.launch { model.saveKey() } },
+                    Modifier.fillMaxWidth(), loading = state.busy, enabled = state.canSaveKey)
+            }
+            WizardStep.Form -> Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s)) {
+                JButton(stringResource(R.string.settings_src_save), { scope.launch { model.save()?.let { id -> feedback?.notice(res.getString(R.string.settings_src_provider_added, draft.name.trim())); onSaved(id) } } },
+                    Modifier.fillMaxWidth(), loading = state.busy, enabled = state.canSave)
+            }
         }
     }) {
         if (!state.loaded) item("loading") { JLoading() }
-        if (state.presets.isNotEmpty()) item("source") {
-            JSegmented(listOf(JSegment(stringResource(R.string.settings_src_provider_manual)), JSegment(stringResource(R.string.settings_src_provider_from_extension))), if (draft.fromPreset) 1 else 0,
-                { model.edit(draft.copy(fromPreset = it == 1)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.s))
-        }
-        if (state.loaded) {
-            if (state.usesPreset) presetForm(res, state, editable, model::edit, model::pick, onModel = { choosingModel = true })
-            else manualForm(state, editable, model::edit)
+        when (state.step) {
+            WizardStep.Pick -> if (state.loaded) pickStep(res, state, model::choose)
+            WizardStep.Key -> if (preset != null) keyStep(state, preset, editable, model::editKey, model::setAssign,
+                onRetest = { scope.launch { model.testKey() } }, onModel = { choosingModel = true }, more = more, onMore = { more = !more })
+            WizardStep.Done -> state.added?.let { added -> doneStep(state, added) }
+            WizardStep.Form -> {
+                if (!state.hubNames && state.presets.isNotEmpty()) item("source") {
+                    JSegmented(listOf(JSegment(stringResource(R.string.settings_src_provider_manual)), JSegment(stringResource(R.string.settings_src_provider_from_extension))), if (draft.fromPreset) 1 else 0,
+                        { model.edit(draft.copy(fromPreset = it == 1)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.s))
+                }
+                if (state.loaded) {
+                    if (state.usesPreset) presetForm(res, state, editable, model::edit, model::pick, onModel = { choosingModel = true })
+                    else manualForm(state, editable, model::edit, onProbe = { scope.launch { model.probeForm() } },
+                        onDiscover = { scope.launch { model.discoverForm() } }, onPickFound = { choosingModel = true })
+                }
+            }
         }
         state.error?.let { error -> item("error") { JInlineStatus(error.text(), Modifier.padding(top = Tokens.Space.m), tone = InlineTone.Failed) } }
     }
-    val preset = state.selected
-    if (choosingModel && preset != null) JActionSheet(preset.choices.map { choice ->
-        JAction(choice.label, checked = choice.id == draft.presetModel, onClick = { model.edit(draft.copy(presetModel = choice.id)) })
+    val found = state.found?.models.orEmpty()
+    if (choosingModel && state.step == WizardStep.Form && !state.usesPreset && found.isNotEmpty()) JActionSheet(found.map { choice ->
+        JAction(choice.label, checked = choice.id == draft.model, onClick = { model.edit(draft.copy(model = choice.id)) })
+    }, { choosingModel = false }, title = stringResource(R.string.settings_src_provider_default_model))
+    else if (choosingModel && preset != null) JActionSheet(preset.choices.map { choice ->
+        JAction(choice.label, checked = choice.id == draft.presetModel, onClick = {
+            if (state.step == WizardStep.Key) model.editKey(draft.copy(presetModel = choice.id)) else model.edit(draft.copy(presetModel = choice.id))
+        })
     }, { choosingModel = false }, title = stringResource(R.string.settings_src_provider_default_model),
         note = preset.modelsError?.let { stringResource(R.string.settings_src_provider_models_error, it) })
 }
+
+/** How long a pasted or typed key has to stay the same before it is tested by itself. */
+private const val AutoTestMillis = 700L
 
 private fun androidx.compose.foundation.lazy.LazyListScope.nameField(state: NewProviderState, editable: Boolean, onEdit: (NewProviderDraft) -> Unit, example: String) {
     item("name") {
@@ -119,8 +185,11 @@ private fun androidx.compose.foundation.lazy.LazyListScope.presetForm(
     }
 }
 
-/** 自己填写: the name, the kind, the gateway and key, the models, the flags. */
-private fun androidx.compose.foundation.lazy.LazyListScope.manualForm(state: NewProviderState, editable: Boolean, onEdit: (NewProviderDraft) -> Unit) {
+/** 自己填写: the name, the kind, the gateway, its auth and key (测试连接, 获取模型列表), the models, the flags. */
+private fun androidx.compose.foundation.lazy.LazyListScope.manualForm(
+    state: NewProviderState, editable: Boolean, onEdit: (NewProviderDraft) -> Unit,
+    onProbe: () -> Unit, onDiscover: () -> Unit, onPickFound: () -> Unit,
+) {
     val draft = state.draft
     val api = draft.kind == "api"
     nameField(state, editable, onEdit, "jv_strong")
@@ -139,7 +208,18 @@ private fun androidx.compose.foundation.lazy.LazyListScope.manualForm(state: New
             placeholder = "https://…", singleLine = true, enabled = editable, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             supportingText = stringResource(R.string.settings_src_provider_base_url_hint))
     }
+    // The labels are the header names a gateway's docs use, so they are not translated.
+    if (!api) item("auth") {
+        Column(Modifier.padding(top = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+            JSegmented(listOf(JSegment("x-api-key"), JSegment("Bearer")), if (draft.auth == "bearer") 1 else 0,
+                { if (editable) onEdit(draft.copy(auth = if (it == 1) "bearer" else "api_key")) }, Modifier.fillMaxWidth())
+            SettingsCaption(stringResource(if (draft.auth == "bearer") R.string.settings_onb_auth_bearer_hint else R.string.settings_onb_auth_key_hint),
+                Modifier.padding(horizontal = rowPadding))
+        }
+    }
     keyField(state, editable, onEdit, null)
+    // The hub's test speaks Messages: a Responses API has none (its models are typed in).
+    if (!(api && draft.api == "responses")) item("probe") { FormProbe(state, onProbe, onDiscover, onPickFound) }
     item("model") {
         JTextField(draft.model, { onEdit(draft.copy(model = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = stringResource(R.string.settings_src_provider_default_model),
             singleLine = true, enabled = editable, supportingText = stringResource(R.string.settings_src_provider_model_note))
@@ -158,6 +238,36 @@ private fun androidx.compose.foundation.lazy.LazyListScope.manualForm(state: New
             JTextField(draft.args, { onEdit(draft.copy(args = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = stringResource(R.string.settings_src_provider_args),
                 placeholder = stringResource(R.string.settings_src_provider_args_example), singleLine = true, enabled = editable,
                 supportingText = stringResource(R.string.settings_src_provider_args_hint))
+        }
+    }
+}
+
+/** 测试连接 and 获取模型列表 of a gateway typed in, with what each answered. */
+@OptIn(ExperimentalLayoutApi::class)
+@androidx.compose.runtime.Composable
+private fun FormProbe(state: NewProviderState, onProbe: () -> Unit, onDiscover: () -> Unit, onPickFound: () -> Unit) {
+    val ready = state.formProbe != null && !state.busy
+    Column(Modifier.padding(top = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+            JButton(stringResource(R.string.settings_onb_test), onProbe, kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.Play,
+                loading = state.probing, enabled = ready)
+            JButton(stringResource(R.string.settings_onb_discover), onDiscover, kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.ArrowDown,
+                loading = state.discovering, enabled = ready)
+        }
+        SettingsCaption(stringResource(R.string.settings_onb_test_cost), Modifier.padding(horizontal = rowPadding))
+        val probe = state.probe
+        when {
+            state.probeFailure != null -> JInlineStatus(state.probeFailure.text(), tone = InlineTone.Failed)
+            probe?.ok == true -> JInlineStatus(stringResource(R.string.settings_onb_key_test_ok, probe.model.orEmpty(), probe.ms), tone = InlineTone.Done)
+            probe != null -> JInlineStatus(probe.error?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_onb_key_test_failed), tone = InlineTone.Failed)
+        }
+        val found = state.found
+        when {
+            state.foundFailure != null -> JInlineStatus(stringResource(R.string.settings_onb_discover_failed, state.foundFailure.text()), tone = InlineTone.Caution)
+            !found?.error.isNullOrBlank() -> JInlineStatus(stringResource(R.string.settings_onb_discover_failed, found?.error.orEmpty()), tone = InlineTone.Caution)
+            found != null && found.models.isEmpty() -> JInlineStatus(stringResource(R.string.settings_onb_discover_none), tone = InlineTone.Caution)
+            found != null -> JInlineStatus(pluralStringResource(R.plurals.settings_onb_discover_found, found.models.size, found.models.size), tone = InlineTone.Done,
+                action = { JTextButton(stringResource(R.string.settings_onb_discover_pick), onPickFound) })
         }
     }
 }

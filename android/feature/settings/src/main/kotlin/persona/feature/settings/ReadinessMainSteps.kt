@@ -23,7 +23,7 @@ import persona.core.designsystem.StatusLabel
 import persona.core.designsystem.Tokens
 import persona.core.designsystem.primaryAction
 import androidx.navigation3.runtime.NavKey
-import persona.core.navigation.MachinesRoute
+import persona.core.navigation.AddComputerRoute
 import persona.core.navigation.ModelProviderRoute
 import persona.core.navigation.SettingsPage
 import persona.core.navigation.SettingsPageRoute
@@ -57,8 +57,9 @@ internal fun mainStepStateLabel(state: String): Int = when (state) {
 }
 
 /** Where a step's button goes from Settings; null for help shown in place or 试一句, which runs here. */
-internal fun ReadinessActionId.settingsDestination(launcher: String?): NavKey? = when (this) {
-    ReadinessActionId.ConfirmComputer -> MachinesRoute
+internal fun ReadinessActionId.settingsDestination(launcher: String?, machine: String? = null): NavKey? = when (this) {
+    ReadinessActionId.AddComputer -> AddComputerRoute()
+    ReadinessActionId.ConfirmComputer -> AddComputerRoute(confirm = machine.orEmpty())
     ReadinessActionId.ConnectModel -> SettingsPageRoute(SettingsPage.Providers)
     ReadinessActionId.EditProvider -> launcher?.takeIf(String::isNotBlank)?.let(::ModelProviderRoute) ?: SettingsPageRoute(SettingsPage.Providers)
     else -> null

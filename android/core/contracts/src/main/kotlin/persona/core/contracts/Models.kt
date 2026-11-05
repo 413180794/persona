@@ -67,8 +67,13 @@ data class Machine(
     @SerialName("browser") val browser: MachineBrowser? = null,
     /** How Cua Driver is on this Mac (docs/computer-use.md), while the cua extension is on; null elsewhere. */
     @SerialName("computer") val computer: MachineComputer? = null,
+    /** `pending` while it waits for the user to say it is theirs (feature machine_trust); absent: confirmed. */
+    @SerialName("trust") val trust: String? = null,
+    /** What kind of trouble [error] is: node_service_down | link_offline | never_connected | node_outdated. */
+    @SerialName("error_code") val errorCode: String? = null,
 ) {
     val displayName: String get() = name.ifEmpty { id }
+    val pending: Boolean get() = trust == "pending"
 }
 
 /** `GET /api/v1/machines/{id}/browser` (and the machine's `browser`): ego lite there and how far its setup is. */

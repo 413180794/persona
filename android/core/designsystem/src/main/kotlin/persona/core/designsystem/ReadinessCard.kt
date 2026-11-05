@@ -26,9 +26,8 @@ enum class ReadinessActionId(val wire: String, @StringRes val label: Int) {
     EditProvider("edit_provider", R.string.designsystem_readiness_action_edit_provider),
     TestAssistant("test_assistant", R.string.designsystem_readiness_action_test_assistant);
 
-    /** The help this button opens in place, when it has no page of its own on the phone. */
+    /** The help this button opens in place, when it has no page of its own on the phone (添加电脑 has one: 机器 › 添加电脑). */
     val help: ReadinessHelp? get() = when (this) {
-        AddComputer -> ReadinessHelp.AddComputer
         WakeComputer -> ReadinessHelp.WakeComputer
         InstallClaude -> ReadinessHelp.InstallClaude
         LoginClaude -> ReadinessHelp.LoginClaude

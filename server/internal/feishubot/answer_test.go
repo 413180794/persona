@@ -761,3 +761,79 @@ func TestAnswerWideTableBullets(t *testing.T) {
 		}
 	}
 }
+
+// Retitle puts a push's title over an answer's card and keeps what the answer's own header said.
+func TestRetitleKeepsTheBodysHeadingAndStatus(t *testing.T) {
+	first := func(md string) *Card {
+		a := RenderAnswer(md, 6000, 5)
+		c := a.Parts[0].Card(md)
+		a.Parts[0].Fill(c)
+		return c.Retitle("🔔 ", "巡检结果", Wathet)
+	}
+	// A title with a status: the push's title heads it, the status stays as its tag and color, the body's title is
+	// the first line.
+	b, _ := json.Marshal(first("# 巡检日报 · 无变动\n\n一切正常"))
+	s := string(b)
+	if !strings.Contains(s, `"content":"🔔 巡检结果"`) || !strings.Contains(s, `"text_tag"`) || !strings.Contains(s, "无变动") ||
+		!strings.Contains(s, `"template":"grey"`) || !strings.Contains(s, "**巡检日报**") {
+		t.Fatalf("status title: %s", s)
+	}
+	// A status alone was the header: it becomes the tag, no extra line.
+	b, _ = json.Marshal(first("状态：请验收\n\n改好了"))
+	s = string(b)
+	if !strings.Contains(s, `"text_tag"`) || !strings.Contains(s, "请验收") || !strings.Contains(s, `"template":"orange"`) || strings.Contains(s, "**请验收**") {
+		t.Fatalf("status only: %s", s)
+	}
+	// A heading that is only the status (with or without the 「#」): the tag, not a bold line repeating it.
+	for _, md := range []string{"# 请验收\n\n改好了", "# 待验收\n\n改好了", "# 有变动\n\n见下",
+		"# 状态：请验收\n\n改好了", "# 结论：无变动\n\n一切正常", "# 【请验收】\n\n改好了"} {
+		b, _ = json.Marshal(first(md))
+		s = string(b)
+		if !strings.Contains(s, `"text_tag"`) || strings.Contains(s, `"content":"**`) {
+			t.Fatalf("%q: %s", md, s)
+		}
+	}
+	// A different title that is a suffix of the push's is still kept.
+	b, _ = json.Marshal(first("# 结果\n\n正文"))
+	if s = string(b); !strings.Contains(s, "**结果**") {
+		t.Fatalf("suffix title: %s", s)
+	}
+	// A long title equal to the push's (the body's is cut at 50 runes) is not said twice.
+	long := strings.Repeat("长", 70)
+	a := RenderAnswer("# "+long+"\n\n正文", 6000, 5)
+	c := a.Parts[0].Card("")
+	a.Parts[0].Fill(c)
+	b, _ = json.Marshal(c.Retitle("🔔 ", long, Wathet))
+	if s = string(b); strings.Contains(s, "**长") {
+		t.Fatalf("long equal title: %s", s)
+	}
+	// The body's title is the push's: not said twice. No title at all: just the push's.
+	for _, md := range []string{"# 巡检结果\n\n正文", "只有正文"} {
+		b, _ = json.Marshal(first(md))
+		s = string(b)
+		if strings.Contains(s, "**巡检结果**") || strings.Contains(s, "text_tag") || !strings.Contains(s, `"template":"wathet"`) {
+			t.Fatalf("%q: %s", md, s)
+		}
+	}
+}
+
+// A heading that is a status with its label or in brackets leaves no stray label or brackets in the header.
+func TestWithoutStatusDropsLabelsAndBrackets(t *testing.T) {
+	for _, title := range []string{"状态：请验收", "结论：无变动", "【请验收】", "当前状态: 有变动", "(无变动)"} {
+		for _, st := range answerStatuses {
+			if got := withoutStatus(title, st); got != title && got != "" && !strings.Contains(title, got) {
+				t.Fatalf("%q: %q", title, got)
+			}
+		}
+		for _, md := range []string{"# " + title + "\n\n正文"} {
+			b, _ := json.Marshal(RenderAnswer(md, 6000, 5).Parts[0].Card(md))
+			s := string(b)
+			if strings.Contains(s, `"content":"状态"`) || strings.Contains(s, `"content":"结论"`) || strings.Contains(s, "【 】") || strings.Contains(s, `"content":"()"`) {
+				t.Fatalf("%q: %s", title, s)
+			}
+		}
+	}
+	if got := withoutStatus("巡检日报 · 无变动", answerStatuses[1]); got != "巡检日报" {
+		t.Fatalf("title with status: %q", got)
+	}
+}

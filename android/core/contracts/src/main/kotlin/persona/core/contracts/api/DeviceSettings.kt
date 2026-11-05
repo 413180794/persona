@@ -43,4 +43,32 @@ interface DeviceSettings {
     suspend fun revoke(credentialId: String)
     suspend fun preferences(): DeviceNotificationPreferences
     suspend fun savePreferences(preferences: DeviceNotificationPreferences): DeviceNotificationPreferences
+
+    /**
+     * 设置 › 设备 › 连接新设备: `POST /api/v1/auth/pair-codes` with the page address of this hub (docs/protocol.md「临时配对」),
+     * a one-time code for another app (its QR rows) and the browser sign-in link.
+     */
+    suspend fun pairCode(): AppPairCode = throw UnsupportedOperationException("pair-codes")
 }
+
+/** A QR code the hub drew: [rows] of `0` / `1`, no quiet zone. */
+data class QrImage(val size: Int, val rows: List<String>) {
+    /** Whether it can be drawn: square, only 0 and 1. */
+    val valid: Boolean get() = size > 0 && rows.size == size && rows.all { r -> r.length == size && r.all { it == '0' || it == '1' } }
+}
+
+/**
+ * A one-time pairing code (ten minutes, traded once): [pairUrl] and its [qr] for an app, [webUrl] and [webQr] for a
+ * browser (an older hub leaves the QR codes and the web link out). [loopbackOnly]: the hub's address this phone uses is
+ * one only it can open (an SSH tunnel's 127.0.0.1), so the browser link does nothing elsewhere.
+ */
+data class AppPairCode(
+    val token: String,
+    /** Epoch milliseconds; 0 when the hub's time could not be read. */
+    val expiresAt: Long,
+    val pairUrl: String,
+    val qr: QrImage? = null,
+    val webUrl: String? = null,
+    val webQr: QrImage? = null,
+    val loopbackOnly: Boolean = false,
+)

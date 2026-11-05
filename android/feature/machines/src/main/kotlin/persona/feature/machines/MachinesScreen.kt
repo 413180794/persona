@@ -25,6 +25,10 @@ internal fun MachinesScreen(
     extensionSections: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
     /** 这台电脑能做什么, 浏览器 and 订阅额度; null in 体验模式. */
     health: MachineHealthViewModel? = null,
+    /** The phone adds and confirms computers (添加电脑); false in 体验模式. */
+    adds: Boolean = false,
+    /** The hub adds computers from the phone (machines_add): the + and 添加电脑 open its page, else the help dialog. */
+    canAdd: Boolean = false,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val machines by model.sessions.machines.collectAsStateWithLifecycle()
@@ -61,11 +65,16 @@ internal fun MachinesScreen(
     if (confirmFix && health != null && machineId != null) FixDialog(healthState, { confirmFix = false }) { health.fix(machineId) }
     var addComputerHelp by rememberSaveable { mutableStateOf(false) }
     if (addComputerHelp) ReadinessHelpDialog(ReadinessHelp.AddComputer, null, onDismiss = { addComputerHelp = false }, onAction = {})
+    val addComputer = { if (adds && canAdd) navigator.navigate(AddComputerRoute()) else addComputerHelp = true }
+    val confirmComputer: (String) -> Unit = { id -> navigator.navigate(AddComputerRoute(confirm = id)) }
     JListPage(
         title = if (machineId == null) stringResource(R.string.machines_title) else machine?.displayName ?: stringResource(R.string.machines_title_detail),
         summary = if (machineId == null) stringResource(R.string.machines_summary, online, ids.size, attention) else null,
         onBack = navigator::back, largeTitle = machineId == null,
-        actions = { JIconButton(PhIcons.ArrowClockwise, stringResource(R.string.machines_refresh), model::refresh) },
+        actions = {
+            if (machineId == null && adds && canAdd) JIconButton(PhIcons.Plus, stringResource(ReadinessActionId.AddComputer.label), addComputer)
+            JIconButton(PhIcons.ArrowClockwise, stringResource(R.string.machines_refresh), model::refresh)
+        },
     ) {
         if (state.loading) item("loading") { JLinearProgress(null, Modifier.fillMaxWidth()) }
         state.failure?.let { failure -> item("failure") { JNotice(stringResource(failure.text)) } }
@@ -77,13 +86,14 @@ internal fun MachinesScreen(
                     stringResource(R.string.machines_empty_body), icon = PhIcons.Desktop,
                     // How to add one (docs/onboarding.md 4.5), until the phone adds computers itself.
                     action = if (state.failure == null) ({
-                        JButton(stringResource(ReadinessActionId.AddComputer.label), { addComputerHelp = true }, kind = JButtonKind.Secondary)
+                        JButton(stringResource(ReadinessActionId.AddComputer.label), addComputer, kind = JButtonKind.Secondary)
                     }) else null)
             }
             items(ids, key = { it }, contentType = { "machine" }) { id ->
                 val info = machines.firstOrNull { it.id == id }
                 val metric = metrics[id] ?: MachineMetrics(id, info?.online ?: false, info?.system)
-                MachineCard(info, metric, machineSessions(sessions, id), state.now, state.dashboard?.step ?: 60, deploy = deployLine) {
+                MachineCard(info, metric, machineSessions(sessions, id), state.now, state.dashboard?.step ?: 60, deploy = deployLine,
+                    onConfirm = if (adds) confirmComputer else null) {
                     navigator.navigate(MachineDetailRoute(id))
                 }
             }
@@ -92,7 +102,10 @@ internal fun MachinesScreen(
             val system = metric.system ?: machine?.system
             val current = metric.current(state.now)
             val agents = machineSessions(sessions, machineId)
-            item("machine") { MachineCard(machine, metric, agents, state.now, state.history?.step ?: state.range.step, deploy = deployLine) }
+            item("machine") {
+                MachineCard(machine, metric, agents, state.now, state.history?.step ?: state.range.step, deploy = deployLine,
+                    onConfirm = if (adds) confirmComputer else null)
+            }
             if (machine == null && machines.isNotEmpty()) item("gone") { JNotice(stringResource(R.string.machines_gone)) }
             if (machine != null && actions != null) machineControls(machine, acting.reconnecting,
                 onEngine = { navigator.navigate(EngineRoute(machine.id)) }, onReconnect = { actions.reconnect(machine.id) },
@@ -198,13 +211,20 @@ internal fun MachinesScreen(
 @Composable
 private fun MachineCard(
     machine: Machine?, metrics: MachineMetrics, sessions: List<Session>, now: Long, step: Int,
-    deploy: (@Composable (Machine?) -> Unit)? = null, onClick: (() -> Unit)? = null,
+    deploy: (@Composable (Machine?) -> Unit)? = null,
+    /** 确认电脑 for a computer that waits to be confirmed; null where the phone cannot (体验模式). */
+    onConfirm: ((String) -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
 ) {
     val current = metrics.current(now)
     val system = metrics.system ?: machine?.system
     val alerts = alerts(current, system?.cores)
     val locale = currentLocale
-    val status = when { !metrics.online -> Status.Offline; alerts.isNotEmpty() || machine?.nodeMismatch == true -> Status.NeedsYou; else -> Status.Unread }
+    val pending = machine?.pending == true
+    val status = when {
+        pending -> Status.NeedsYou
+        !metrics.online -> Status.Offline; alerts.isNotEmpty() || machine?.nodeMismatch == true -> Status.NeedsYou; else -> Status.Unread
+    }
     JCard(Modifier.padding(bottom = 12.dp), onClick = onClick, status = status) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OsBadge(system)
@@ -213,14 +233,24 @@ private fun MachineCard(
                 Text(listOfNotNull(system?.name?.takeIf { it.isNotBlank() }, system?.cores?.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.machines_cores, it, it) },
                     system?.memory?.takeIf { it > 0 }?.let { MetricFormat.bytes(it, locale) }).joinToString("  "), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             }
-            JTag(stringResource(when (status) {
-                Status.Offline -> R.string.machines_status_offline; Status.NeedsYou -> R.string.machines_status_attention; else -> R.string.machines_status_online
+            JTag(stringResource(when {
+                pending -> R.string.machines_onb_status_pending
+                status == Status.Offline -> R.string.machines_status_offline; status == Status.NeedsYou -> R.string.machines_status_attention
+                else -> R.string.machines_status_online
             }), status = status)
         }
         machine?.hostname?.takeIf { it.isNotBlank() }?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3) }
-        if (!metrics.online) {
+        if (pending) {
+            // The hub's error says "confirm it in a newer app"; this is that app.
+            Text(stringResource(if (metrics.online) R.string.machines_onb_pending_online else R.string.machines_onb_pending_offline),
+                style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+            if (onConfirm != null && machine != null) JButton(stringResource(R.string.machines_onb_confirm_action), { onConfirm(machine.id) },
+                Modifier.padding(top = Tokens.Space.s), kind = JButtonKind.Secondary, size = JButtonSize.Small)
+        } else if (!metrics.online) {
             Text(stringResource(R.string.machines_last_seen, MetricFormat.lastSeen(machine?.lastSeen, locale) ?: stringResource(R.string.machines_unknown)), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-            machine?.error?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
+            // A known error_code in plain words, the hub's own error for any other.
+            val reason = machineErrorText(machine?.errorCode)?.let { stringResource(it) } ?: machine?.error
+            reason?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
         } else {
             Text(stringResource(R.string.machines_card_sessions, sessions.size, sessions.count { it.agentState == AgentState.Working },
                 sessions.count { it.agentState == AgentState.NeedsYou }),

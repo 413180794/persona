@@ -56,6 +56,8 @@ class ShellSession(
     val hubUpdates: persona.core.contracts.api.HubUpdates? = null,
     /** The addresses the selected group's hubs go by (their links open in the app, ShellLinks.kt); none in 体验模式. */
     val hubAddresses: () -> List<String> = { emptyList() },
+    /** 添加电脑 and 确认电脑 (docs/onboarding.md 4.2); null in 体验模式. */
+    val computers: ComputerPairing? = null,
 ) {
     val agents = object : AgentsDependencies {
         override fun sessions() = this@ShellSession.sessions
@@ -88,6 +90,7 @@ class AppServices @Inject constructor(
     private val stacks: persona.android.di.GroupStacks,
     private val hubGroups: HubGroups,
     private val hubUpdates: persona.core.contracts.api.HubUpdates,
+    private val computers: ComputerPairing,
 ) {
     private val app = application as PersonaApp
     /** Terminal, files, chat actions and machine metrics of every hub group (docs/android.md「多 hub」). */
@@ -159,7 +162,8 @@ class AppServices @Inject constructor(
                     assistant, inbox, preferences, HubTerminalTransport(socket), shell.files, mergedMetrics,
                     knowledgeConnection, shell.actions, phone, agentsWiring = agentsWiring, machines = machineManagement,
                     voice = voice, groups = hubGroups, tasks = tasksStore, hubUpdates = hubUpdates,
-                    hubAddresses = { listOf(data.credentials.hubAddress) + data.credentials.candidateAddresses + socket.knownAddresses() })
+                    hubAddresses = { listOf(data.credentials.hubAddress) + data.credentials.candidateAddresses + socket.knownAddresses() },
+                    computers = computers)
                 try {
                     coroutineScope {
                         launch {

@@ -139,12 +139,18 @@ nonisolated enum UIContentSizeCategory: Sendable {
 
 /// macOS has no Dynamic Type; the app's own 小 / 标准 / 大 still moves the size category, and this scales by the Mac's
 /// body at it (`macBody`: a point a step around 13), not iOS's table, which made a step 6–12 % on the Mac (#833).
+/// The variant without traits takes the category from the app's text size setting (`TextSize.current` applied to
+/// `.large`), so the fonts made with it — the code/file viewer's — follow 小 / 标准 / 大 (#3612).
 nonisolated struct UIFontMetrics {
     init(forTextStyle: NSFont.TextStyle) {}
     func scaledValue(for value: CGFloat, compatibleWith traits: UITraitCollection?) -> CGFloat {
         value * (traits?.preferredContentSizeCategory.macBody ?? 13) / 13
     }
-    func scaledValue(for value: CGFloat) -> CGFloat { value }
+    @MainActor func scaledValue(for value: CGFloat) -> CGFloat {
+        let size = TextSize.current.applied(to: .large)
+        let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
+        return scaledValue(for: value, compatibleWith: traits)
+    }
 }
 
 extension NSFontDescriptor.SymbolicTraits {

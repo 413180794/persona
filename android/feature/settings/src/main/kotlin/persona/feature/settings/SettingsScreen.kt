@@ -226,7 +226,8 @@ private fun SettingsContent(
         "providers" -> {
             val providerService = services.providers.takeUnless { services.demo }
             when {
-                providerStep == "add" && providerService != null -> NewProviderPage(providerService, onBack = { providerStep = null }, onSaved = { providerStep = null })
+                providerStep == "add" && providerService != null -> NewProviderPage(providerService, onBack = { providerStep = null }, onSaved = { providerStep = null },
+                    readiness = services.readiness)
                 providerStep == "import" && providerService != null -> ProviderImportPage(providerService, machines, onBack = { providerStep = null }, onDone = { providerStep = null })
                 provider != null -> ProviderDetailPage(providerService, provider!!, machines, onBack = { provider = null })
                 else -> ProvidersPage(providerService, machines, back,
@@ -235,7 +236,8 @@ private fun SettingsContent(
                     selected = { name -> detailKey == persona.core.navigation.ModelProviderRoute(name) })
             }
         }
-        "devices" -> DevicesPage(deviceController, paired && services.deviceSettings != null, back, deviceFeedback)
+        "devices" -> DevicesPage(deviceController, paired && services.deviceSettings != null, back, deviceFeedback,
+            connect = services.deviceSettings.takeUnless { services.demo })
         "hub-update" -> HubUpdatePage(hubUpdates, machines, back, online = connection == ConnectionState.Online, onMachine = onNavigate)
         "hubs" -> HubsScreen(services.hubs ?: HubGroups.None, services.addHub?.let { { page = "hubs-add" } }, back, deviceFeedback)
         // Adding a hub is the pairing page with an adding service; it returns to the hub list.
@@ -503,8 +505,10 @@ fun ReadinessScreen(
     fun mainAction(action: ReadinessActionId, step: ReadinessStep) {
         action.help?.let { mainHelp = it; return }
         if (action == ReadinessActionId.TestAssistant) { scope.launch { loadMain(probe = true) }; return }
-        val destination = action.settingsDestination(step.launcher ?: main?.launcher)
-        if (destination != null && onNavigate != null) onNavigate(destination) else mainHelp = ReadinessHelp.HowToConnectModel
+        val destination = action.settingsDestination(step.launcher ?: main?.launcher, step.machine)
+        // The first checklist has no navigation: 添加电脑 says how instead.
+        if (destination != null && onNavigate != null) onNavigate(destination)
+        else mainHelp = if (action == ReadinessActionId.AddComputer) ReadinessHelp.AddComputer else ReadinessHelp.HowToConnectModel
     }
     val records = remember(context) { ReadinessRecords(context) }
     var system by remember { mutableStateOf<SystemKind?>(null) }

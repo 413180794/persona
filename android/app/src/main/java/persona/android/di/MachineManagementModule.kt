@@ -13,6 +13,7 @@ import persona.core.contracts.ExtensionOperationEvent
 import persona.core.contracts.Hello
 import persona.core.contracts.api.*
 import persona.core.hub.HttpConnectorsManagement
+import persona.core.hub.HttpComputerPairing
 import persona.core.hub.HttpHubUpdates
 import persona.core.hub.HttpMachineManagement
 import persona.core.hub.HttpAgentTriage
@@ -90,10 +91,17 @@ object MachineManagementModule {
     }
 
     // 新增模型供应商 from 模型配置: the selected group's hub keeps the provider.
-    @Provides @Singleton fun providers(runtime: ConnectionRuntime): ProviderSetup = object : ProviderSetup {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Provides @Singleton fun providers(runtime: ConnectionRuntime, application: Application): ProviderSetup = object : ProviderSetup {
         private fun api() = HttpProviderSetup(runtime.connection())
+        override val builtinPresets: Flow<Boolean> = (application as PersonaApp).hub
+            .flatMapLatest { hub -> hub?.connection?.serverFeatures ?: flowOf(emptySet()) }
+            .map { BuiltinPresetsFeature in it }.distinctUntilChanged()
         override suspend fun presets() = api().presets()
         override suspend fun add(provider: NewProvider) = api().add(provider)
+        override suspend fun create(provider: NewProvider) = api().create(provider)
+        override suspend fun test(probe: ProviderProbe) = api().test(probe)
+        override suspend fun discover(probe: ProviderProbe) = api().discover(probe)
         override suspend fun launchers() = api().launchers()
         override suspend fun launcher(name: String) = api().launcher(name)
         override suspend fun remove(name: String) = api().remove(name)
@@ -101,6 +109,32 @@ object MachineManagementModule {
         override suspend fun check(name: String, machine: String?) = api().check(name, machine)
         override suspend fun importPreview(machine: String) = api().importPreview(machine)
         override suspend fun import(machine: String, providers: List<String>) = api().import(machine, providers)
+    }
+
+    // 机器 › 添加电脑 (docs/onboarding.md 4.2): a new computer on the selected group's hub; a code again, the machine list
+    // and confirm / reject on the hub the machine's id names, with its plain id (the answers carry the merged one).
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Provides @Singleton fun computers(stacks: GroupStacks): ComputerPairing = object : ComputerPairing {
+        override val canAdd: Flow<Boolean> = stacks.selected
+            .flatMapLatest { stack -> stack?.connection?.serverFeatures ?: flowOf(emptySet()) }
+            .map { MachinesAddFeature in it }.distinctUntilChanged()
+        private fun merged(code: ComputerCode, namespace: String?) = code.copy(machine = GroupKeys.machine(code.machine, namespace))
+        override suspend fun add(name: String, os: ComputerOs): ComputerCode {
+            val stack = stacks.selected.value ?: throw HubFailure(HubError.NoNetwork, AppText.get(R.string.app_error_pair_first), retryable = false)
+            return stacks.use(stack.namespace) { merged(HttpComputerPairing(it.connection).add(name, os), it.namespace) }
+        }
+        override suspend fun again(machineId: String) = stacks.use(GroupKeys.namespaceOf(machineId)) {
+            merged(HttpComputerPairing(it.connection).again(GroupKeys.raw(machineId)), it.namespace)
+        }
+        override suspend fun machines(machineId: String) = stacks.use(GroupKeys.namespaceOf(machineId)) { stack ->
+            HttpComputerPairing(stack.connection).machines().map { it.copy(id = GroupKeys.machine(it.id, stack.namespace)) }
+        }
+        override suspend fun confirm(machineId: String) = stacks.use(GroupKeys.namespaceOf(machineId)) {
+            HttpComputerPairing(it.connection).confirm(GroupKeys.raw(machineId))
+        }
+        override suspend fun reject(machineId: String) = stacks.use(GroupKeys.namespaceOf(machineId)) {
+            HttpComputerPairing(it.connection).reject(GroupKeys.raw(machineId))
+        }
     }
 
     // A hub-level page too: the selected group's extensions.

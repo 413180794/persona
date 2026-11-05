@@ -9,6 +9,12 @@ import persona.core.contracts.api.ImportedProvider
 import persona.core.contracts.api.LauncherCheck
 import persona.core.contracts.api.LauncherCheckAnswer
 import persona.core.contracts.api.LauncherImportResult
+import persona.core.contracts.api.KeptPurpose
+import persona.core.contracts.api.ProviderAdded
+import persona.core.contracts.api.ProviderDiscovery
+import persona.core.contracts.api.ProviderProbe
+import persona.core.contracts.api.ProviderTest
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -25,8 +31,12 @@ import okhttp3.Response
 /** 新增模型供应商 over the pairing's connection (docs/launchers.md「接口」). */
 class HttpProviderSetup internal constructor(
     private val request: suspend (String, String, RequestBody?) -> Response,
+    /** For 测试连接 / 获取模型列表: the hub gives the gateway 30 s, longer than the client's 15. */
+    private val slow: suspend (String, String, RequestBody?) -> Response,
 ) : ProviderSetup {
-    constructor(connection: OkHttpHubConnection) : this({ path, method, body -> connection.request(path, method, body) })
+    internal constructor(request: suspend (String, String, RequestBody?) -> Response) : this(request, request)
+    constructor(connection: OkHttpHubConnection) : this({ path, method, body -> connection.request(path, method, body) },
+        { path, method, body -> connection.request(path, method, body, readTimeoutSeconds = PROBE_READ_TIMEOUT_SECONDS) })
 
     // A hub from before the extension base has no such route (its GET /launchers/{name} answers 404 for "presets").
     override suspend fun presets(): List<ProviderPreset> = try {
@@ -36,8 +46,33 @@ class HttpProviderSetup internal constructor(
         if (failure.status == 404) emptyList() else throw failure
     }
 
-    override suspend fun add(provider: NewProvider) {
-        call("/api/v1/launchers", "POST", JsonCodec.encodeToString(NewProvider.serializer(), provider).toRequestBody(json))
+    override suspend fun add(provider: NewProvider) { create(provider) }
+
+    override suspend fun create(provider: NewProvider): ProviderAdded {
+        val answer = JsonCodec.parseToJsonElement(
+            call("/api/v1/launchers", "POST", JsonCodec.encodeToString(NewProvider.serializer(), provider).toRequestBody(json)))
+            as? JsonObject ?: JsonObject(emptyMap())
+        val launcher = answer["launcher"] as? JsonObject
+        fun text(o: JsonObject?, key: String) = (o?.get(key) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        return ProviderAdded(
+            name = text(launcher, "name") ?: provider.name,
+            displayName = text(launcher, "display_name"),
+            // An older hub, or none asked: no assigned at all (not an empty list, which says nothing was changed).
+            assigned = (answer["assigned"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
+            kept = (answer["kept"] as? JsonArray)?.let { JsonCodec.decodeFromJsonElement(ListSerializer(KeptPurpose.serializer()), it) }.orEmpty(),
+        )
+    }
+
+    override suspend fun test(probe: ProviderProbe): ProviderTest =
+        JsonCodec.decodeFromString(ProviderTest.serializer(), call("/api/v1/launchers/test", "POST", probe.body(), slow))
+
+    override suspend fun discover(probe: ProviderProbe): ProviderDiscovery =
+        JsonCodec.decodeFromString(ProviderDiscovery.serializer(), call("/api/v1/launchers/discover", "POST", probe.copy(model = null).body(), slow))
+
+    private fun ProviderProbe.body(): RequestBody {
+        fun String?.kept() = this?.trim()?.takeIf { it.isNotEmpty() }
+        val trimmed = ProviderProbe(preset.kept(), apiKey.kept(), baseUrl.kept(), auth.kept(), model.kept())
+        return JsonCodec.encodeToString(ProviderProbe.serializer(), trimmed).toRequestBody(json)
     }
 
     override suspend fun launchers(): List<HubLauncher> {
@@ -85,13 +120,17 @@ class HttpProviderSetup internal constructor(
             .apply { more.forEach(::addPathSegment) }.build().encodedPath
     }
 
-    private suspend fun call(path: String, method: String, body: RequestBody? = null): String =
-        request(path, method, body).use {
+    private suspend fun call(
+        path: String, method: String, body: RequestBody? = null,
+        via: suspend (String, String, RequestBody?) -> Response = request,
+    ): String =
+        via(path, method, body).use {
             if (!it.isSuccessful) throw HubFailure.from(it)
             it.body?.string().orEmpty()
         }
 
     private companion object {
+        const val PROBE_READ_TIMEOUT_SECONDS = 40L
         val json = "application/json; charset=utf-8".toMediaType()
     }
 }

@@ -71,8 +71,6 @@ internal fun AgentsScreen(
     val feedback = persona.core.designsystem.LocalAppFeedback.current
     var menu by remember { mutableStateOf(false) }
     var newAgent by rememberSaveable { mutableStateOf(false) }
-    var addComputerHelp by rememberSaveable { mutableStateOf(false) }
-    if (addComputerHelp) ReadinessHelpDialog(ReadinessHelp.AddComputer, null, onDismiss = { addComputerHelp = false }, onAction = {})
     var historyMachine by rememberSaveable { mutableStateOf<String?>(null) }
     var historySession by rememberSaveable { mutableStateOf<String?>(null) }
     val creation = creationModel?.state?.collectAsStateWithLifecycle()?.value
@@ -312,7 +310,7 @@ internal fun AgentsScreen(
                     page.allCount == 0 && page.machines.isEmpty() && page.settings.machineFilter.isEmpty() -> JEmptyState(
                         stringResource(R.string.agents_empty_no_computer_title), stringResource(R.string.agents_empty_no_computer_hint),
                         icon = PhIcons.Desktop,
-                        action = { JButton(stringResource(ReadinessActionId.AddComputer.label), { addComputerHelp = true }) })
+                        action = { JButton(stringResource(ReadinessActionId.AddComputer.label), { navigator.navigate(persona.core.navigation.AddComputerRoute()) }) })
                     page.allCount == 0 -> JEmptyState(
                         stringResource(if (page.settings.machineFilter.isEmpty()) R.string.agents_empty_first_title else R.string.agents_empty_machine_title),
                         stringResource(R.string.agents_empty_first_hint), icon = PhIcons.Robot,

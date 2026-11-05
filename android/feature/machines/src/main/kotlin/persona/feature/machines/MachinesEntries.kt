@@ -9,6 +9,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
+import persona.core.contracts.api.ComputerPairing
 import persona.core.contracts.api.MachineManagement
 import persona.core.contracts.api.MachineMetricsApi
 import persona.core.contracts.api.SessionsRepository
@@ -33,17 +34,22 @@ fun EntryProviderScope<NavKey>.machinesEntries(
      * list items after the machine's own; built by the settings module, which draws extensions' views.
      */
     extensionSections: (@Composable (String) -> (LazyListScope.() -> Unit))? = null,
+    /** 添加电脑 and 确认电脑 (docs/onboarding.md 4.2); null in 体验模式. */
+    computers: ComputerPairing? = null,
 ) {
-    entry<MachinesRoute> { MachinesRouteContent(null, navigator, metrics, sessions, management, launcherPages, null) }
-    entry<MachineDetailRoute> { MachinesRouteContent(it.machineId, navigator, metrics, sessions, management, launcherPages, extensionSections) }
+    entry<MachinesRoute> { MachinesRouteContent(null, navigator, metrics, sessions, management, launcherPages, null, computers) }
+    entry<MachineDetailRoute> { MachinesRouteContent(it.machineId, navigator, metrics, sessions, management, launcherPages, extensionSections, computers) }
+    entry<AddComputerRoute> { AddComputerPage(computers, sessions.machines, it.confirm, navigator::back) }
 }
 
 @Composable
 private fun MachinesRouteContent(
     id: String?, navigator: Navigator, api: MachineMetricsApi, sessions: SessionsRepository, management: MachineManagement?,
-    launcherPages: Flow<Boolean>, extensionSections: (@Composable (String) -> (LazyListScope.() -> Unit))?,
+    launcherPages: Flow<Boolean>, extensionSections: (@Composable (String) -> (LazyListScope.() -> Unit))?, computers: ComputerPairing?,
 ) {
     val launchers by launcherPages.collectAsState(false)
+    // 添加电脑 opens its page only on a hub with machines_add; an older one keeps the help dialog.
+    val canAdd by remember(computers) { computers?.canAdd ?: flowOf(false) }.collectAsState(false)
     key(api, sessions, management) {
         val model = viewModel(key = "machines:${System.identityHashCode(api)}:${id.orEmpty()}") {
             MachinesViewModel(api, sessions, id)
@@ -63,6 +69,6 @@ private fun MachinesRouteContent(
         // 订阅额度 on the overview, once a minute while it is in front.
         if (id == null && health != null) LaunchedEffect(health, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { health.pollUsage() } }
         val extensions = if (id != null && extensionSections != null) extensionSections(id) else null
-        MachinesScreen(id, model, navigator, actions, launcherPages = launchers, extensionSections = extensions, health = health)
+        MachinesScreen(id, model, navigator, actions, launcherPages = launchers, extensionSections = extensions, health = health, adds = computers != null, canAdd = canAdd)
     }
 }

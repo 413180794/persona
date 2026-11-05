@@ -1,7 +1,15 @@
 package persona.core.contracts.api
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+
+/** The hub's hello feature for built-in presets, a name it makes up and `assign` (docs/launchers.md「内置预设」). */
+const val BuiltinPresetsFeature = "builtin_presets"
+
+/** The categories a provider added from the wizard takes over while they are still at their default (docs/onboarding.md 5.4). */
+val AssignPurposes = listOf("assistant", "agent.new")
 
 /**
  * 新增模型供应商 (docs/launchers.md「接口」「从扩展添加」): a provider kept by the hub (gateway, key sealed there, models),
@@ -13,6 +21,24 @@ interface ProviderSetup {
 
     /** `POST /api/v1/launchers`; the hub's refusal (a taken name, a bad address) comes back as its message. */
     suspend fun add(provider: NewProvider)
+
+    /**
+     * Whether the selected hub has built-in presets ([BuiltinPresetsFeature]): it names a provider added from one itself
+     * and takes `assign`. False from older hubs, which need the name and know no assign.
+     */
+    val builtinPresets: Flow<Boolean> get() = flowOf(false)
+
+    /** `POST /api/v1/launchers` with the hub's answer: the name it gave and, with `assign`, what now runs on it. */
+    suspend fun create(provider: NewProvider): ProviderAdded {
+        add(provider)
+        return ProviderAdded(name = provider.name)
+    }
+
+    /** `POST /api/v1/launchers/test`: one 1-token request to the gateway; always an answer, [ProviderTest.error] says why not. */
+    suspend fun test(probe: ProviderProbe): ProviderTest = throw UnsupportedOperationException()
+
+    /** `POST /api/v1/launchers/discover`: the models the gateway lists; [ProviderDiscovery.error] when it could not be asked. */
+    suspend fun discover(probe: ProviderProbe): ProviderDiscovery = throw UnsupportedOperationException()
 
     /** `GET /api/v1/launchers`: every provider, kept by Persona or found in a machine's ~/.zshrc (hidden ones too). */
     suspend fun launchers(): List<HubLauncher> = throw UnsupportedOperationException()
@@ -121,7 +147,25 @@ data class ProviderPreset(
     @SerialName("key_hint") val keyHint: String? = null,
     /** Why the extension's own list of models could not be had (the declared ones are still there). */
     @SerialName("models_error") val modelsError: String? = null,
+    /** How the gateway takes the key: api_key (x-api-key) | bearer; built-in presets only. */
+    @SerialName("auth") val auth: String? = null,
+    /** Where to open an account or get a key (built-in presets); opened in the app. */
+    @SerialName("signup_url") val signupUrl: String? = null,
+    /** The name in the request's language (「智谱 GLM」); [name] stays the plain one. */
+    @SerialName("display_name") val displayName: String? = null,
 ) {
+    /** What it is called in the list. */
+    val title: String get() = displayName?.takeIf { it.isNotBlank() } ?: name.ifBlank { id }
+
+    /** One of the hub's own (`plugin: "builtin"`), not an extension's. */
+    val builtin: Boolean get() = extension == BUILTIN
+
+    /** The hub's test speaks Messages only: a Responses API cannot be tested. */
+    val testable: Boolean get() = !(kind == "api" && api == "responses")
+
+    /** 「Key 从哪拿」: the signup page when it is a web address. */
+    val signupLink: String? get() = signupUrl?.trim()?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+
     /** The model a launcher gets when none is picked: the declared default, else the first listed. */
     val defaultModel: String get() = model?.takeIf { it.isNotBlank() } ?: models.firstOrNull()?.id.orEmpty()
 
@@ -129,6 +173,11 @@ data class ProviderPreset(
     val choices: List<PresetModel> get() {
         val default = defaultModel
         return if (default.isEmpty() || models.any { it.id == default }) models else listOf(PresetModel(default)) + models
+    }
+
+    companion object {
+        /** The hub's built-in presets' plugin. */
+        const val BUILTIN = "builtin"
     }
 }
 
@@ -155,4 +204,53 @@ data class NewProvider(
     @SerialName("small_model") val smallModel: String? = null,
     @SerialName("subagent_model") val subagentModel: String? = null,
     @SerialName("args") val args: List<String>? = null,
+    /** What the apps call it (any language); blank with a preset: the preset's. */
+    @SerialName("display_name") val displayName: String? = null,
+    /** x-api-key (`api_key`) or `bearer`, typed in by hand. */
+    @SerialName("auth") val auth: String? = null,
+    /** The categories to put on it while they are still at their default ([AssignPurposes]); only for hubs with [BuiltinPresetsFeature]. */
+    @SerialName("assign") val assign: List<String>? = null,
+)
+
+/** `POST /api/v1/launchers`' answer: [assigned] / [kept] only when `assign` was sent (an older hub leaves them out). */
+data class ProviderAdded(
+    val name: String,
+    val displayName: String? = null,
+    /** Null: the hub did not answer about assign (none was asked, or an older hub). */
+    val assigned: List<String>? = null,
+    val kept: List<KeptPurpose> = emptyList(),
+) {
+    val title: String get() = displayName?.takeIf { it.isNotBlank() } ?: name
+}
+
+/** A category left as it was: customized (someone picked another) | incompatible | failed. */
+@Serializable
+data class KeptPurpose(@SerialName("purpose") val purpose: String, @SerialName("reason") val reason: String = "")
+
+/**
+ * What 测试连接 / 获取模型列表 send: a [preset] with the key (the hub fills in its address and default model), or a
+ * gateway typed in. Blank fields are left out.
+ */
+@Serializable
+data class ProviderProbe(
+    @SerialName("preset") val preset: String? = null,
+    @SerialName("api_key") val apiKey: String? = null,
+    @SerialName("base_url") val baseUrl: String? = null,
+    /** api_key | bearer */
+    @SerialName("auth") val auth: String? = null,
+    @SerialName("model") val model: String? = null,
+)
+
+@Serializable
+data class ProviderTest(
+    @SerialName("ok") val ok: Boolean = false,
+    @SerialName("ms") val ms: Int = 0,
+    @SerialName("model") val model: String? = null,
+    @SerialName("error") val error: String? = null,
+)
+
+@Serializable
+data class ProviderDiscovery(
+    @SerialName("models") val models: List<PresetModel> = emptyList(),
+    @SerialName("error") val error: String? = null,
 )

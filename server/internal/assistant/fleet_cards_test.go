@@ -917,3 +917,106 @@ func TestCodexEndedPrunedOnItsOwn(t *testing.T) {
 		t.Fatalf("pruned wrong: old kept %v, new kept %v", old, fresh)
 	}
 }
+
+// shortScreenQuiet makes screenAnsweredQuiet short for a test, and waits its look after the quiet time out before the
+// test ends, so it does not run into the next one.
+func shortScreenQuiet(t *testing.T, d time.Duration) {
+	old := screenAnsweredQuiet
+	screenAnsweredQuiet = d
+	t.Cleanup(func() {
+		time.Sleep(d + 200*time.Millisecond)
+		screenAnsweredQuiet = old
+	})
+}
+
+// onlyCard is the one pending card's id.
+func onlyCard(t *testing.T, s *Service) string {
+	t.Helper()
+	got, _ := waitCards(s, 1, 2*time.Second)
+	if len(got) != 1 {
+		t.Fatalf("cards %v", got)
+	}
+	for id := range got {
+		return id
+	}
+	return ""
+}
+
+// A screen card answered from a notification while the node's next list still calls the agent blocked and the
+// answered dialog is still on screen (the keys not landed yet): no second card for it, no second push. The phone
+// would ring again for what was just answered, and answering that card again presses the keys twice (#4391).
+func TestScreenCardJustAnsweredIsNotAskedAgain(t *testing.T) {
+	for _, c := range []struct{ name, screen string }{
+		{"a dialog", pickModel},
+		{"no dialog read", "  Waiting for something\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			shortScreenQuiet(t, time.Second)
+			ft, n := newCardFleet(t, false)
+			s := ft.s
+			n.setScreen(c.screen)
+			blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+			id := onlyCard(t, s)
+			if pushes := ft.pushesOf(assistantwire.NotifyInput, 1, time.Second); len(pushes) != 1 {
+				t.Fatalf("first: pushed %d times", len(pushes))
+			}
+			if err := s.resolve(id, proto.Resolution{Keys: []string{"enter"}, Option: map[bool]string{true: "1"}[c.screen == pickModel]}); err != nil {
+				t.Fatal(err)
+			}
+			time.Sleep(400 * time.Millisecond)                                // past the first looks again (recheckScreen)
+			blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"}) // still blocked, the same screen
+			if got, _ := waitCards(s, 1, 300*time.Millisecond); len(got) != 0 {
+				t.Fatalf("the answered dialog got a card again: %v", got)
+			}
+			if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, 100*time.Millisecond); len(pushes) != 1 {
+				t.Fatalf("the answered dialog was pushed again: %d pushes", len(pushes))
+			}
+			n.setScreen("  ⏺ Thinking…\n") // the answer took
+			ft.sessions("mac", proto.Session{SessionID: "s1", Agent: "claude", Status: proto.StatusWorking})
+		})
+	}
+}
+
+// The answer did not take: the same dialog still there once the quiet time is over is asked again, once.
+func TestScreenCardAnswerThatDidNotTakeIsAskedAgain(t *testing.T) {
+	shortScreenQuiet(t, 600*time.Millisecond)
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	n.setScreen(pickModel)
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	id := onlyCard(t, s)
+	if err := s.resolve(id, proto.Resolution{Option: "1"}); err != nil {
+		t.Fatal(err)
+	}
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	if got, _ := waitCards(s, 1, 200*time.Millisecond); len(got) != 0 {
+		t.Fatalf("a card before the quiet time is over: %v", got)
+	}
+	if got, _ := waitCards(s, 1, 2*time.Second); got[id] == "" {
+		t.Fatalf("the dialog still on screen got no card: %v", got)
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 3, 300*time.Millisecond); len(pushes) != 2 {
+		t.Fatalf("pushed %d times, want 2", len(pushes))
+	}
+}
+
+// The agent worked between two prompts that read the same: the second one is a new question, asked at once.
+func TestScreenCardSameDialogAfterWorkingIsAsked(t *testing.T) {
+	shortScreenQuiet(t, time.Second)
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	n.setScreen(pickModel)
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	id := onlyCard(t, s)
+	if err := s.resolve(id, proto.Resolution{Option: "1"}); err != nil {
+		t.Fatal(err)
+	}
+	ft.sessions("mac", proto.Session{SessionID: "s1", Agent: "claude", Status: proto.StatusWorking})
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	if got, took := waitCards(s, 1, 2*time.Second); got[id] == "" || took > 500*time.Millisecond {
+		t.Fatalf("the prompt asked again: %v after %v", got, took)
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, time.Second); len(pushes) != 2 {
+		t.Fatalf("pushed %d times, want 2", len(pushes))
+	}
+}

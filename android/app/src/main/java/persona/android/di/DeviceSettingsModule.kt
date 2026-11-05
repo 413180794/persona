@@ -68,6 +68,7 @@ class WiredDeviceSettings @Inject constructor(
                             override suspend fun savePreferences(preferences: DeviceNotificationPreferences) =
                                 checked { http.savePreferences(preferences) }.also { mutablePreferences.value = it }
                             override suspend fun saveTranslation(prefs: HubTranslatePrefs) = checked { http.saveTranslatePrefs(prefs) }
+                            override suspend fun pairCode() = checked { http.pairCode() }
                         }
                     }
                     mutableBinding.value = SettingsBinding(data.scope.path, adapter, address)

@@ -211,6 +211,8 @@ P1：**电脑发起、手机允许**。Persona Link 首屏显示一个二维码�
 
 **C. 什么都没有**：一屏「去哪弄一个模型」，内置预设按请求语言排序（中文先列国内能直接开通的，其他语言先列 Anthropic），每家一句说明和「去开通」（App 内浏览器打开 `signup_url`），回来进 B。旁边是「先体验一下」。不放推广链接，推荐谁和顺序是拍板 11。
 
+Android 的实现（#4297，细节见 `docs/android.md`「新手：模型、设备、电脑」）：hub 有 `builtin_presets` 时同网页的三步；和网页不同的地方：「Key 从哪拿」用系统浏览器打开 `signup_url`（设置页里没有 App 内浏览器）；就绪度没回来时开关处显示「正在看…」，保存会等它回来；旧 hub 照旧是「自己填写 / 从扩展添加」，测试连接和获取模型列表只在自定义网关的表单里。
+
 #### 内置预设
 
 - 在 `server/internal/assistant/` 里新放一个嵌入的 presets_builtin.json，结构就是 `assistantwire.LauncherPreset`（`assistantwire/models.go:61-75`），`plugin` 写 `"builtin"`，id 是 `builtin/<厂商>`。加两个可选字段：`signup_url`、`name_zh`（或按 i18n 键）。
@@ -249,7 +251,7 @@ P1：**电脑发起、手机允许**。Persona Link 首屏显示一个二维码�
 
 网页的实现（#3847，细节见 `docs/web.md`「主对话还缺什么」）和上面不同的地方：发送失败的卡片不带「重试」，没发出去的话回到输入框里，再点发送就是重试；`add_computer` 在 hub 有 `machines_add` 时就地打开机器页的添加流程，老 hub 是一个说明弹窗加「打开管理界面」（hub 的 `/admin/machines`）；`confirm_computer` 就地打开那台待确认电脑的确认界面（#4037）；总览零电脑的空状态由 #3729 单独做。
 
-Android 的实现（#4032，细节见 `docs/android.md`「主对话还缺什么」）和上面不同的地方：发送失败只在开主对话被拒（409 `no_machine` / `machine_pending` / `claude_missing` / `launcher_missing` / `not_logged_in` / `auth_failed`）时出卡片：那条消息停在「没有发出」、卡片钉在它下面，带那一步的按钮和「重试」（重试前先重拉就绪度，还缺就打开那一步，不再发）；以前这种消息会一直排着等，hub 拒绝后也不再重试创建。`add_computer` 在 7.2 第 16 项合进来之前是说明弹窗，指到网页版的「机器 › 添加电脑」；「试一句」和网页一样跑 `?probe=1`，不真开一轮主对话；首次配对后的整页清单没有导航，`connect_model` / `edit_provider` 打开「怎么接模型」的说明（说明里不再给「接上模型」「改用 API Key」，只有「知道了」），`confirm_computer` 不画按钮；只有「跳过未完成项」才 `dismiss`，「完成」不发。
+Android 的实现（#4032，细节见 `docs/android.md`「主对话还缺什么」）和上面不同的地方：发送失败只在开主对话被拒（409 `no_machine` / `machine_pending` / `claude_missing` / `launcher_missing` / `not_logged_in` / `auth_failed`）时出卡片：那条消息停在「没有发出」、卡片钉在它下面，带那一步的按钮和「重试」（重试前先重拉就绪度，还缺就打开那一步，不再发）；以前这种消息会一直排着等，hub 拒绝后也不再重试创建。`add_computer` 在 7.2 第 16 项合进来之前是说明弹窗，指到网页版的「机器 › 添加电脑」（#4297 起打开 App 里的添加电脑页，`confirm_computer` 打开那台电脑的确认，见下面 5.3 后的「Android 的实现」）；「试一句」和网页一样跑 `?probe=1`，不真开一轮主对话；首次配对后的整页清单没有导航，`connect_model` / `edit_provider` 打开「怎么接模型」的说明（说明里不再给「接上模型」「改用 API Key」，只有「知道了」），`confirm_computer` 不画按钮；只有「跳过未完成项」才 `dismiss`，「完成」不发。
 
 #### 「只聊天」模式（P1，单独一个 issue，拍板 9）
 
@@ -492,6 +494,8 @@ POST /api/v1/auth/pair-codes      full 设备（不是由配对码临时身份�
   `POST /api/v1/auth/tokens`（`kind: link`）直接给任何 link 电脑签凭据，要收紧得另做。设备给待确认的电脑重新出码时，先吊销它已有的 Persona Link 凭据（上一个码换到的不能跟着被确认）；`add` 可带 `id`（给 `hub pair --machine <id> --add` 用）；响应的 `trust` 总是给出
   （`pending` / `confirmed`），另有 `name`、`added`；hub 不知道自己的发布站点时（本地构建、Docker 镜像）不给 `install`；主 token 带不存在的 `machine` 回 400 `unknown_machine`；
   回执推送的文字带上电脑的名字：「<设备> 给电脑「<名字>」出了一个配对码」。通知上的「不是你？撤销」按钮还没做（要各端的通知分类）。
+
+- Android 的实现（#4297）：照网页的添加电脑，确认在「等它连上来」那一屏；加电脑走选中的那组 hub，重出码、确认、拒绝按机器 id 去它那组；hub 没有 `machines_add` 时添加电脑页只说去网页或管理界面加（不再是弹窗）。设置 › 设备 › 连接新设备的网页登录地址取这台手机连 hub 用的地址。「重新出链接」只给 `error_code` 是 `never_connected` 的电脑（重出会作废那台电脑现有的配对，睡着的电脑只要叫醒）；从「确认电脑」进来却没有等确认的电脑时显示「没有等待确认的电脑」，不落到添加表单；机器页的「+」和空状态的「添加电脑」只在有 `machines_add` 时打开添加页，旧 hub 仍是说明弹窗。码的 `expires_at` 读不出、或和手机时钟差到已过期 / 超过 10 分钟时，按手机时间从现在起算 10 分钟。
 
 机器列表（`GET /api/v1/machines` 和 hello 里的机器）每台加两个可选字段：
 

@@ -653,7 +653,7 @@ func (s *Service) botStartAgent(machine, cwd, prompt string) {
 
 // feishuPush sends what notify_user pushed to the phone to Feishu too (the pushes switch).
 func (s *Service) feishuPush(machine, session, title, body string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // as feishuMirror: a push may be several cards
 	defer cancel()
 	if f, ready := s.feishuFeatures(ctx); !ready || !f.Pushes {
 		return
@@ -661,10 +661,12 @@ func (s *Service) feishuPush(machine, session, title, body string) {
 	// The body laid out like the bot's answers (answerCards: sections, tables, link buttons, more cards when long, at
 	// most botAnswerCards); the push's title heads the first card, the open button goes under the last.
 	cards := answerCards(s.botLang(ctx), body, false, nil, "")
-	head := feishubot.NewCard("🔔 "+clip(oneLine(title), 60), feishubot.Wathet, title)
+	head := feishubot.NewCard("", "", title)
 	for i, ac := range cards {
 		if i == 0 {
-			ac.card.Header, ac.card.Config = head.Header, head.Config // the push's own title over the body's heading
+			// The push's title heads the card; the body's own heading and status (请验收 / 无变动) are kept (Retitle).
+			ac.card.Retitle("🔔 ", title, feishubot.Wathet)
+			ac.card.Config = head.Config
 		}
 		if i == len(cards)-1 && session != "" {
 			ac.card.Buttons(s.openButton(ctx, machine, session))
@@ -767,14 +769,16 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 	l := s.botLang(ctx)
 	cmd, rest, _ := strings.Cut(strings.TrimSpace(text), " ")
 	rest = strings.TrimSpace(rest)
-	reply := func(c *feishubot.Card) {
-		if _, err := s.botPost(ctx, messageID, c, ""); err != nil {
+	// fallback goes as a rich-text list when Feishu refuses the card (the list cards carry their own; other command
+	// replies have none).
+	reply := func(c *feishubot.Card, fallback string) {
+		if _, err := s.botPost(ctx, messageID, c, fallback); err != nil {
 			s.logf("bots: command reply: %v", err)
 		}
 	}
 	switch strings.ToLower(cmd) {
 	case "/help", "/帮助":
-		reply(feishubot.NewCard(i18n.T(l, "assistant-feishu_cards.help_title"), feishubot.Blue, i18n.T(l, "assistant-feishu_cards.help_title")).Markdown(botHelp(l, f)))
+		reply(feishubot.NewCard(i18n.T(l, "assistant-feishu_cards.help_title"), feishubot.Blue, i18n.T(l, "assistant-feishu_cards.help_title")).Markdown(botHelp(l, f)), "")
 	case "/main", "/jarvis", "/主对话":
 		if !f.Main {
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.main_off"))
@@ -810,7 +814,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.agents_off"))
 			return true, ""
 		}
-		reply(s.startAgentCard(ctx, rest))
+		reply(s.startAgentCard(ctx, rest), "")
 	case "/stop", "/停":
 		t := s.botTargetFor(root, parent)
 		// Commands run before the normal message's botAllowed gate, so check it here: with the Agents feature off
@@ -840,27 +844,38 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		if running := len(s.channelRuns(channel.Feishu)); running > 0 {
 			b.WriteString(i18n.T(l, "assistant-feishu_cards.status_waiting", i18n.Args{"count": running}))
 		}
-		reply(feishubot.NewCard("", "", i18n.T(l, "assistant-feishu_cards.status_title")).Markdown(strings.TrimSpace(b.String())))
+		reply(feishubot.NewCard("", "", i18n.T(l, "assistant-feishu_cards.status_title")).Markdown(strings.TrimSpace(b.String())), "")
 	default:
 		return false, text
 	}
 	return true, ""
 }
 
-// conversationsCard lists recent Persona conversations with a button to switch to each.
-func (s *Service) conversationsCard(ctx context.Context) *feishubot.Card {
+// botListNameMost bounds a conversation / agent / device name in a list card: the title is often a whole command
+// line and the switch button carries the name again, so an unclipped name could make Feishu refuse the whole card.
+const botListNameMost = 60
+
+var fallbackText = strings.NewReplacer("`", "", "*", "", "_", "", "[", "", "]", "", "~", "", "\\", "") // strips Markdown metacharacters for the post fallback
+
+// conversationsCard lists recent Persona conversations with a button to switch to each. It also returns the same
+// list as plain text: the card goes with it as fallback, so a refused card still shows every conversation.
+func (s *Service) conversationsCard(ctx context.Context) (*feishubot.Card, string) {
 	list, main := s.conversations(ctx, false, "")
 	sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt.After(list[j].UpdatedAt) })
 	l := s.botLang(ctx)
-	c := feishubot.NewCard(i18n.T(l, "assistant-feishu_cards.recent_chats"), feishubot.Blue, i18n.T(l, "assistant-feishu_cards.recent_chats"))
+	title := i18n.T(l, "assistant-feishu_cards.recent_chats")
+	c := feishubot.NewCard(title, feishubot.Blue, title)
 	if len(list) == 0 {
-		return c.Markdown(i18n.T(l, "assistant-feishu_cards.no_chats"))
+		empty := i18n.T(l, "assistant-feishu_cards.no_chats")
+		return c.Markdown(empty), title + "\n\n" + empty
 	}
+	var b strings.Builder
+	b.WriteString(title + "\n")
 	for i, sess := range list {
 		if i == 8 {
 			break
 		}
-		name := conversationName(sess, main)
+		name := clip(oneLine(conversationName(sess, main)), botListNameMost)
 		line := "**" + feishubot.EscapeMarkdown(name) + "**"
 		if !sess.UpdatedAt.IsZero() {
 			line += " · " + botAgo(l, sess.UpdatedAt)
@@ -873,8 +888,9 @@ func (s *Service) conversationsCard(ctx context.Context) *feishubot.Card {
 			kind = targetMain
 		}
 		c.Markdown(line).Buttons(feishubot.Btn(i18n.T(l, "assistant-feishu_cards.chat_here"), feishubot.Default, map[string]any{"a": "switch", "k": kind, "m": sess.MachineID, "s": sess.SessionID, "t": name}))
+		fmt.Fprintf(&b, "- %s\n", fallbackText.Replace(name))
 	}
-	return c.Note(i18n.T(l, "assistant-feishu_cards.new_hint"))
+	return c.Note(i18n.T(l, "assistant-feishu_cards.new_hint")), strings.TrimSpace(b.String())
 }
 
 // botAgo is how long ago t was, in l (textfmt.Ago's wording in Chinese).
@@ -892,7 +908,8 @@ func botAgo(l i18n.Lang, t time.Time) string {
 }
 
 // agentsCard lists the agents worth talking to: needing you, working, finished unseen, then the ones idle lately.
-func (s *Service) agentsCard(ctx context.Context, query string) *feishubot.Card {
+// It also returns the same list as plain text, used as the card's fallback when Feishu refuses the card.
+func (s *Service) agentsCard(ctx context.Context, query string) (*feishubot.Card, string) {
 	type row struct {
 		d    Device
 		sess proto.Session
@@ -923,25 +940,33 @@ func (s *Service) agentsCard(ctx context.Context, query string) *feishubot.Card 
 		return rows[i].sess.UpdatedAt.After(rows[j].sess.UpdatedAt)
 	})
 	l := s.botLang(ctx)
-	c := feishubot.NewCard(i18n.T(l, "assistant-feishu_cards.agents_title"), feishubot.Purple, i18n.T(l, "assistant-feishu_cards.agents_summary"))
+	title := i18n.T(l, "assistant-feishu_cards.agents_title")
+	c := feishubot.NewCard(title, feishubot.Purple, i18n.T(l, "assistant-feishu_cards.agents_summary"))
 	if len(rows) == 0 {
-		return c.Markdown(i18n.T(l, "assistant-feishu_cards.no_agents"))
+		empty := i18n.T(l, "assistant-feishu_cards.no_agents")
+		return c.Markdown(empty), title + "\n\n" + empty
 	}
+	var b strings.Builder
+	b.WriteString(title + "\n")
 	icons := map[string]string{proto.StateNeedsYou: "🔴", proto.StateWorking: "🟢", proto.StateUnread: "🔵", proto.StateIdle: "⚪️"}
 	for i, r := range rows {
 		if i == 10 {
-			c.Note(i18n.T(l, "assistant-feishu_cards.more_agents", i18n.Args{"count": len(rows) - 10}))
+			more := i18n.T(l, "assistant-feishu_cards.more_agents", i18n.Args{"count": len(rows) - 10})
+			c.Note(more)
+			b.WriteString(more + "\n")
 			break
 		}
-		label := agentLabel(r.sess)
-		line := icons[r.sess.State] + " **" + feishubot.EscapeMarkdown(label) + "** · " + feishubot.EscapeMarkdown(r.d.Name) + " · " + i18n.T(l, "assistant-feishu_cards.state_"+r.sess.State)
+		label := clip(oneLine(agentLabel(r.sess)), botListNameMost)
+		name := clip(oneLine(r.d.Name), botListNameMost)
+		line := icons[r.sess.State] + " **" + feishubot.EscapeMarkdown(label) + "** · " + feishubot.EscapeMarkdown(name) + " · " + i18n.T(l, "assistant-feishu_cards.state_"+r.sess.State)
 		if r.sess.LastText != "" {
 			line += "\n" + feishubot.EscapeMarkdown(clip(oneLine(r.sess.LastText), 90))
 		}
 		c.Markdown(line).Buttons(feishubot.Btn(i18n.T(l, "assistant-feishu_cards.chat_here"), feishubot.Default,
-			map[string]any{"a": "switch", "k": targetAgent, "m": r.d.ID, "s": r.sess.SessionID, "t": label + " · " + r.d.Name}))
+			map[string]any{"a": "switch", "k": targetAgent, "m": r.d.ID, "s": r.sess.SessionID, "t": label + " · " + name}))
+		fmt.Fprintf(&b, "- %s %s · %s\n", icons[r.sess.State], fallbackText.Replace(label), fallbackText.Replace(name))
 	}
-	return c
+	return c, strings.TrimSpace(b.String())
 }
 
 // startAgentCard is a form to start a coding agent on a machine.

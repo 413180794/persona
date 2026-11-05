@@ -92,6 +92,11 @@ func (s *Service) syncScreenInteractions(machine string, list []proto.Session) {
 		}
 	}
 	s.fleet.mu.Lock()
+	for k, a := range s.fleet.screenAnswered {
+		if _, still := blocked[a.session]; a.machine == machine && !still || time.Now().After(a.until) {
+			delete(s.fleet.screenAnswered, k)
+		}
+	}
 	var stale []string
 	hasHook := map[string]bool{}
 	for id, p := range s.fleet.interactions {
@@ -149,6 +154,21 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 		Secret: screen.SecretPrompt(scr.Text),
 	}
 	s.fleet.mu.Lock()
+	s.screenMovedOnLocked(machine, sess.SessionID, id)
+	if left, first := s.screenJustAnsweredLocked(id, time.Now()); left > 0 {
+		// The dialog just answered, still on screen: no second card, no second push. Still there after the quiet
+		// time, the answer did not take, and it is asked again.
+		s.fleet.mu.Unlock()
+		if first {
+			go func() {
+				time.Sleep(left)
+				if cur, ok := s.nodeSession(machine, sess.SessionID); ok && cur.Status == proto.StatusBlocked {
+					s.createScreenInteraction(machine, cur)
+				}
+			}()
+		}
+		return
+	}
 	asking := false
 	for _, p := range s.fleet.interactions {
 		if p.ix.MachineID == machine && p.ix.SessionID == sess.SessionID {
@@ -169,6 +189,7 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 		}
 		params, err := screenAnswer(sess.SessionID, d, r)
 		if err != nil {
+			s.forgetScreenAnswer(id) // nothing pressed: the dialog is the same question still
 			return err
 		}
 		kctx, kcancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -176,6 +197,7 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 		err = s.nodeCall(kctx, machine, "session.keys", params, nil)
 		var re *rpc.Error
 		if errors.As(err, &re) && re.Code == screen.PromptChanged {
+			s.forgetScreenAnswer(id)                    // nothing pressed
 			go s.createScreenInteraction(machine, sess) // the card for what is on screen now
 		} else if err == nil {
 			go s.recheckScreen(machine, sess.SessionID, ix.ID)
@@ -231,6 +253,55 @@ func (s *Service) upgradeScreenCard(machine, session, id string) {
 // screenRecheck: how often, and screenRecheckFor how long, the screen is looked at again after a screen card's
 // answer (recheckScreen).
 var screenRecheck, screenRecheckFor = 250 * time.Millisecond, 2 * time.Second
+
+// screenAnsweredQuiet: how long after a screen card's answer the same dialog read off the screen is taken for the
+// answered one (its keys not landed yet, herdr still calling the agent blocked), not a new question (#4391).
+var screenAnsweredQuiet = 5 * time.Second
+
+// answeredScreen is a screen card answered lately: until when, and whether a look after the quiet time is scheduled.
+// A new question that reads exactly like the answered one (the same prompt asked twice, herdr never reporting the
+// agent working in between) waits out the quiet time too: shown late, never lost.
+type answeredScreen struct {
+	machine, session string
+	until            time.Time // the end of its quiet time (screenAnsweredQuiet, taken when it was answered)
+	retry            bool
+}
+
+// screenMovedOnLocked: machine's session shows something other than screen card keep (another dialog, none, or it
+// is no longer blocked): a dialog answered there and read again later is a new question. Callers hold s.fleet.mu.
+func (s *Service) screenMovedOnLocked(machine, session, keep string) {
+	for k, a := range s.fleet.screenAnswered {
+		if a.machine == machine && a.session == session && k != keep {
+			delete(s.fleet.screenAnswered, k)
+		}
+	}
+}
+
+// forgetScreenAnswer: screen card id's answer pressed nothing (refused before any key): no quiet time for it. Any
+// other error keeps it: the keys may have gone, and the look after the quiet time asks again if they did not.
+func (s *Service) forgetScreenAnswer(id string) {
+	s.fleet.mu.Lock()
+	delete(s.fleet.screenAnswered, id)
+	s.fleet.mu.Unlock()
+}
+
+// screenJustAnsweredLocked: card id was answered within screenAnsweredQuiet; left is how much of it remains, and
+// first whether this call is the one to look again after it. Callers hold s.fleet.mu.
+func (s *Service) screenJustAnsweredLocked(id string, now time.Time) (left time.Duration, first bool) {
+	for k, a := range s.fleet.screenAnswered {
+		if !now.Before(a.until) {
+			delete(s.fleet.screenAnswered, k)
+		}
+	}
+	a, ok := s.fleet.screenAnswered[id]
+	if !ok {
+		return 0, false
+	}
+	first = !a.retry
+	a.retry = true
+	s.fleet.screenAnswered[id] = a
+	return a.until.Sub(now), first
+}
 
 // recheckScreen: after a screen card's answer the agent may ask again at once (the next question of an
 // AskUserQuestion, the next permission) while herdr keeps calling it blocked, so no status change makes that card.
@@ -577,6 +648,14 @@ func (s *Service) resolve(id string, r proto.Resolution) error {
 	}
 	if p != nil && p.local != nil {
 		delete(s.fleet.interactions, id) // claimed: a second answer to the same card is not pending any more
+		if p.ix.Kind == proto.IxScreen && !r.Dismiss {
+			// Marked before the keys go: the node's next list may come while they are on the way (#4391).
+			if s.fleet.screenAnswered == nil {
+				s.fleet.screenAnswered = map[string]answeredScreen{}
+			}
+			s.fleet.screenAnswered[id] = answeredScreen{machine: p.ix.MachineID, session: p.ix.SessionID,
+				until: time.Now().Add(screenAnsweredQuiet)}
+		}
 	} else if p != nil {
 		p.claimed = true
 	}

@@ -83,6 +83,14 @@ class HttpDeviceSettings(
         }))
     }
 
+    override suspend fun pairCode(): AppPairCode {
+        val data = request("auth", "pair-codes", method = "POST", body = buildJsonObject { put("web", webBase(base)) })
+        val token = data.text("token")?.takeIf(String::isNotBlank) ?: throw HubFailure(HubError.Protocol)
+        val pairUrl = data.text("pair_url")?.takeIf(String::isNotBlank) ?: throw HubFailure(HubError.Protocol)
+        return AppPairCode(token, wireMillis(data.text("expires_at")), pairUrl, qr(data["qr"]),
+            data.text("web_url")?.takeIf(String::isNotBlank), qr(data["web_qr"]), loopbackOnly(base.host))
+    }
+
     /** Tells the hub this device's 设置 › 翻译 (only that field: the rest of its prefs stay as they are). */
     suspend fun saveTranslatePrefs(prefs: HubTranslatePrefs): HubTranslatePrefs? {
         require(preferenceDeviceId.isNotBlank())
@@ -109,5 +117,33 @@ class HttpDeviceSettings(
         },
     )
 
-    private fun JsonObject.text(key: String) = this[key]?.jsonPrimitive?.contentOrNull
+    private fun JsonObject.text(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull
+
+    companion object {
+        /**
+         * The page the browser sign-in link opens: the hub serves the web at its own address (docs/web.md), under the
+         * sub-path a reverse proxy puts it at; no query, fragment or account.
+         */
+        fun webBase(hub: okhttp3.HttpUrl): String {
+            val path = hub.encodedPath.let { if (it.endsWith("/")) it else "$it/" }
+            return hub.newBuilder().query(null).fragment(null).username("").password("").encodedPath(path).build().toString()
+        }
+
+        /** Whether only this device can open [host]: a link to it does nothing on another one. */
+        fun loopbackOnly(host: String): Boolean {
+            val h = host.lowercase().removePrefix("[").removeSuffix("]")
+            return h == "localhost" || h.endsWith(".localhost") || h == "::1" || h.startsWith("127.")
+        }
+
+        internal fun qr(value: JsonElement?): QrImage? {
+            val o = value as? JsonObject ?: return null
+            val size = (o["size"] as? JsonPrimitive)?.intOrNull ?: return null
+            val rows = (o["rows"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: return null
+            return QrImage(size, rows).takeIf { it.valid }
+        }
+
+        /** RFC3339 (Z or an offset) to epoch milliseconds; 0 when unreadable. */
+        fun wireMillis(text: String?): Long =
+            text?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() } ?: 0L
+    }
 }
