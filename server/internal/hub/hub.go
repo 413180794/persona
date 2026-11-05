@@ -396,14 +396,40 @@ func (h *Hub) callPhone(ctx context.Context, name string, args json.RawMessage) 
 		h.mu.Unlock()
 	}()
 	c.sendJSON(map[string]any{"type": "tool_call", "call_id": id, "name": name, "args": args})
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	wait, confirmed := phoneCallWait, phoneConfirmedTools[name]
+	if confirmed {
+		wait = phoneConfirmWait
+	}
+	ctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	select {
 	case r := <-ch:
 		return r
 	case <-ctx.Done():
+		if confirmed {
+			return proto.TextResult("Timed out waiting for the user to approve this on the phone. The approval may still be "+
+				"open there, or the change may already be saved: check first (list the events / reminders) and do not just "+
+				"call it again.", true)
+		}
 		return proto.TextResult("Timed out waiting for the iPhone (is the Persona app still open?).", true)
 	}
+}
+
+// phoneCallWait is how long the hub waits for the phone to answer a call; phoneConfirmWait the same for a write the
+// user approves on the phone first (as long as an ask_user question): the phone may be in a pocket, and an approval
+// that comes after the hub stopped waiting is still carried out on iOS, so a short wait made the agent ask again
+// and save the same thing twice (#4427).
+var (
+	phoneCallWait    = 2 * time.Minute
+	phoneConfirmWait = 30 * time.Minute
+)
+
+// phoneConfirmedTools are the phone's tools that ask the user before they run (docs/phone-tools.md「确认流程」).
+var phoneConfirmedTools = map[string]bool{
+	"phone_calendar_create_event": true,
+	"phone_reminders_create":      true,
+	"phone_reminders_complete":    true,
+	"phone_health_write_sample":   true,
 }
 
 // wakePhone asks iOS to wake the app in the background (silent push) and waits briefly for it to connect.

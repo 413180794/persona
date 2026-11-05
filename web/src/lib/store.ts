@@ -28,6 +28,9 @@ export interface AnsweredCard {
   resolution: Resolution;
   /** The hub said it was answered already: the resolution is the answer that took effect, not what was just sent. */
   already?: boolean;
+  /** When this page answered it (Date.now(), set by endInteraction): views/assistant/answered-lookup.ts compares it
+   *  with the agent's state_since. */
+  at?: number;
 }
 
 export interface State {
@@ -571,8 +574,9 @@ const ANSWERED_MS = 20_000;
 export function endInteraction(id: string, answer?: AnsweredCard) {
   changeInteraction(id, null);
   if (!answer) return;
-  set({ answered: { ...state.answered, [id]: answer } });
-  setTimeout(() => dropAnswered(id, answer), ANSWERED_MS);
+  const card = { ...answer, at: answer.at ?? Date.now() };
+  set({ answered: { ...state.answered, [id]: card } });
+  setTimeout(() => dropAnswered(id, card), ANSWERED_MS);
 }
 
 /** Takes an answered card away (its time is up, or closed); `only` keeps a newer one for the same id. */

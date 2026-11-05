@@ -188,6 +188,8 @@ type relayMsg struct {
 	Text      string    `json:"text"`
 	Hop       int       `json:"hop"`
 	At        time.Time `json:"at"`
+	// State is a task notice's state (quiet.go: done | needs | interrupted | failed); "" for other relays.
+	State string `json:"state,omitempty"`
 }
 
 type relayHop struct {
@@ -419,14 +421,33 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 			msg := q[0]
 			b.mu.Unlock()
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-			err := s.deliverRelay(ctx, machine, id, msg)
+			// A needs notice may have been answered on the phone after it queued while the agent's node still
+			// reported blocked (#4332): ask the task once more right before it would interrupt. A node that cannot
+			// be reached is not an answer, so its notice stays queued for a later drain.
+			stale, keep := false, false
+			if msg.Tool == noticeTool && msg.State == "needs" {
+				// The loading read covers a hub restart whose first drain runs before the todos were read in:
+				// an unreadable todo is unknown, so the notice is delivered as without the recheck.
+				if t, ok, _ := s.todo(ctx, msg.From); ok && t.Quiet {
+					if waits, known := s.taskNeedsRecheck(ctx, t); !known {
+						keep = true
+					} else if !waits {
+						stale = true
+					}
+				}
+			}
+			var err error
+			if !stale && !keep {
+				err = s.deliverRelay(ctx, machine, id, msg)
+			}
 			cancel()
 			b.mu.Lock()
 			delete(b.draining, id)
-			// Delivered, or the conversation is gone for good: off the queue. Another failure (offline) keeps it.
+			// Delivered, answered just in time, or the conversation is gone for good: off the queue. An unreachable
+			// node or another delivery failure keeps it.
 			taken := false
-			if err == nil || strings.Contains(err.Error(), "is gone") {
-				if q := b.st.Queue[id]; len(q) > 0 {
+			if stale || !keep && (err == nil || strings.Contains(err.Error(), "is gone")) {
+				if q := b.st.Queue[id]; len(q) > 0 && (!stale || q[0] == msg) {
 					b.st.Queue[id] = q[1:]
 				}
 				if len(b.st.Queue[id]) == 0 {
@@ -439,7 +460,11 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 			if taken {
 				s.publish(context.Background()) // it no longer shows waiting
 			}
-			if err != nil {
+			if stale {
+				if list, err := s.sessions(context.Background(), machine); err == nil {
+					s.drainRelays(machine, list) // a message queued behind the stale one is due as well
+				}
+			} else if !keep && err != nil {
 				s.logf("relay to %s: %v", short(id), err)
 			}
 		}(id)

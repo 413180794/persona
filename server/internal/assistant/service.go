@@ -402,6 +402,16 @@ func (s *Service) TurnEnded(ctx context.Context, r SessionRef) {
 func (s *Service) InteractionResolved(ctx context.Context, r InteractionResolved) {
 	s.taskAnswered(ctx, r.Interaction, r.Resolution, r.Status)
 	s.cardDecisions(ctx, r.Interaction, r.Resolution, r.Status)
+	// A quiet task's waiting notice may still be in its delay window or queued behind a turn: drop it now unless the
+	// task still waits on another card. An agent machine the recheck cannot reach is not an answer, so the notice
+	// is left for the drain-time recheck.
+	if t, ok := s.taskOf(ctx, r.Interaction.MachineID, r.Interaction.SessionID); r.Status != "failed" && ok && t.Quiet {
+		if waits, known := s.taskNeedsRecheck(ctx, t); known && !waits {
+			if s.dropQueuedNeeds(t.ID) {
+				s.publish(ctx)
+			}
+		}
+	}
 }
 
 // SessionsChanged: messages from other conversations go to those no longer running; the todos follow the list

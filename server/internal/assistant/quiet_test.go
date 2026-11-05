@@ -344,6 +344,170 @@ func TestGoldenTaskNoticeReporting(t *testing.T) {
 	golden(t, "task_notice.reporting_needs", renderNotice(&quietNotice{todo: Todo{Title: "提 MR"}, machine: "box", state: "needs", ask: "- 合到哪个分支？"}, true))
 }
 
+// A needs notice already queued behind its conversation's turn is dropped when the user deals with the card
+// elsewhere (phone, watch): an answered question never pings. Another card of the same task still waiting keeps
+// the notice; an answer inside the delay window takes the waiting notice with it.
+func TestQuietNeedsNoticeDroppedWhenAnswered(t *testing.T) {
+	ix := proto.Interaction{ID: "ix1", MachineID: "box", SessionID: "s1", Kind: proto.IxQuestion,
+		Questions: []proto.Question{{Question: "用哪个分支？", Options: []proto.QuestionOption{{Label: "main"}, {Label: "dev"}}}}}
+	resolution := proto.Resolution{Answers: map[string]string{"用哪个分支？": "main"}}
+	for _, tc := range []struct {
+		name       string
+		queued     bool // let the notice enter the relay queue first (otherwise the answer comes inside the delay window)
+		stillWaits bool // another card of the same task still waits when the answer arrives
+		wantSent   int
+	}{
+		{"queued notice answered", true, false, 0},
+		{"queued notice, another card still waits", true, true, 1},
+		{"answered inside the delay window", false, false, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, f := newQuietService(t)
+			ctx := context.Background()
+			f.known["lark1"] = true
+			idle1 := proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusIdle}
+			busy1 := proto.Session{SessionID: "lark1", MachineID: "server", Assistant: true, Status: proto.StatusWorking}
+			f.setSessions("server", idle1, busy1)
+			s.markReporter(ctx, "server", "lark1")
+			if _, err := s.runTool(ctx, "server", "lark1", "agent_start",
+				json.RawMessage(`{"machine":"box","cwd":"/code/app","prompt":"看看 CI"}`)); err != nil {
+				t.Fatal(err)
+			}
+			todo := onlyTodo(s)
+			agentTurn(s, f, proto.StatusBlocked, "", 1)
+			s.InteractionRaised(ctx, InteractionRaised{Interaction: ix})
+			if tc.queued {
+				waitFor(t, "the notice to queue", func() bool { return s.queuedFor("lark1") == 1 })
+			}
+			pending, status := 0, proto.StatusWorking
+			if tc.stillWaits {
+				pending, status = 1, proto.StatusBlocked
+			}
+			agentTurn(s, f, status, "", pending) // the card is dealt with, or another one still waits
+			s.InteractionResolved(ctx, InteractionResolved{Interaction: ix, Resolution: resolution, Status: "resolved"})
+			if !tc.queued {
+				s.quiet.mu.Lock()
+				_, waiting := s.quiet.pending[todo.ID]
+				s.quiet.mu.Unlock()
+				if waiting {
+					t.Fatal("the waiting notice stayed in its delay window after the answer")
+				}
+			}
+			if q := s.queuedFor("lark1"); q != tc.wantSent {
+				t.Fatalf("%d queued, want %d", q, tc.wantSent)
+			}
+			idleLark := busy1
+			idleLark.Status = proto.StatusIdle
+			f.setSessions("server", idle1, idleLark)
+			s.drainRelays("server", []proto.Session{idleLark})
+			time.Sleep(4 * quietNoticeDelay)
+			if got := f.sentTo("lark1"); got != tc.wantSent {
+				t.Fatalf("%d notice(s) sent, want %d", got, tc.wantSent)
+			}
+		})
+	}
+}
+
+// The answer arrives while the node still reports blocked (the production order: the resolve goroutine runs before
+// the node flips its session): the hook cannot confirm the answer, so the stale notice lives on until the drain
+// asks once more right before delivery. A node unreachable then is not an answer — the notice waits for the next
+// drain, which drops it once the node is back and no card waits.
+func TestQueuedNeedsNoticeRecheckedAtDrain(t *testing.T) {
+	ix := proto.Interaction{ID: "ix1", MachineID: "box", SessionID: "s1", Kind: proto.IxQuestion,
+		Questions: []proto.Question{{Question: "用哪个分支？"}}}
+	resolution := proto.Resolution{Answers: map[string]string{"用哪个分支？": "main"}}
+	for _, tc := range []struct {
+		name        string
+		unreachable bool
+	}{
+		{"node caught up before the drain", false},
+		{"node unreachable at the drain, back and answered later", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, f := newQuietService(t)
+			ctx := context.Background()
+			f.known["lark1"] = true
+			idle1 := proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusIdle}
+			busy1 := proto.Session{SessionID: "lark1", MachineID: "server", Assistant: true, Status: proto.StatusWorking}
+			f.setSessions("server", idle1, busy1)
+			s.markReporter(ctx, "server", "lark1")
+			if _, err := s.runTool(ctx, "server", "lark1", "agent_start",
+				json.RawMessage(`{"machine":"box","cwd":"/code/app","prompt":"看看 CI"}`)); err != nil {
+				t.Fatal(err)
+			}
+			agentTurn(s, f, proto.StatusBlocked, "", 1)
+			s.InteractionRaised(ctx, InteractionRaised{Interaction: ix})
+			waitFor(t, "the notice to queue", func() bool { return s.queuedFor("lark1") == 1 })
+			s.InteractionResolved(ctx, InteractionResolved{Interaction: ix, Resolution: resolution, Status: "resolved"})
+			if q := s.queuedFor("lark1"); q != 1 {
+				t.Fatalf("a still-blocked node was read as answered: %d queued", q)
+			}
+			idleLark := busy1
+			idleLark.Status = proto.StatusIdle
+			if tc.unreachable {
+				f.mu.Lock()
+				delete(f.sessions, "box")
+				f.mu.Unlock()
+				s.drainRelays("server", []proto.Session{idleLark})
+				time.Sleep(quietNoticeDelay)
+				if q, sent := s.queuedFor("lark1"), f.sentTo("lark1"); q != 1 || sent != 0 {
+					t.Fatalf("an unreachable node was read as answered: %d queued, %d sent", q, sent)
+				}
+				agentTurn(s, f, proto.StatusWorking, "", 0) // the node is back and the agent continues
+			} else {
+				agentTurn(s, f, proto.StatusWorking, "", 0) // the node caught up with the answer
+			}
+			s.drainRelays("server", []proto.Session{idleLark})
+			waitFor(t, "the stale notice to leave the queue", func() bool { return s.queuedFor("lark1") == 0 })
+			time.Sleep(2 * quietNoticeDelay)
+			if got := f.sentTo("lark1"); got != 0 {
+				t.Fatalf("%d stale notice(s) sent", got)
+			}
+		})
+	}
+}
+
+// A done notice that replaced the task's earlier needs notice in the queue is no stale question: answering the
+// card after the agent finished must not take that done receipt with it.
+func TestQueuedDoneNoticeSurvivesAnsweredCard(t *testing.T) {
+	s, f := newQuietService(t)
+	ctx := context.Background()
+	f.known["lark1"] = true
+	idle1 := proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusIdle}
+	busy1 := proto.Session{SessionID: "lark1", MachineID: "server", Assistant: true, Status: proto.StatusWorking}
+	f.setSessions("server", idle1, busy1)
+	s.markReporter(ctx, "server", "lark1")
+	if _, err := s.runTool(ctx, "server", "lark1", "agent_start",
+		json.RawMessage(`{"machine":"box","cwd":"/code/app","prompt":"看看 CI"}`)); err != nil {
+		t.Fatal(err)
+	}
+	ix := proto.Interaction{ID: "ix1", MachineID: "box", SessionID: "s1", Kind: proto.IxQuestion,
+		Questions: []proto.Question{{Question: "用哪个分支？"}}}
+	agentTurn(s, f, proto.StatusBlocked, "", 1)
+	s.InteractionRaised(ctx, InteractionRaised{Interaction: ix})
+	waitFor(t, "the needs notice to queue", func() bool { return s.queuedFor("lark1") == 1 })
+	agentTurn(s, f, proto.StatusDone, "做完了", 0)
+	waitFor(t, "the done notice to take its place", func() bool {
+		s.relays.mu.Lock()
+		defer s.relays.mu.Unlock()
+		q := s.relays.st.Queue["lark1"]
+		return len(q) == 1 && q[0].State == "done"
+	})
+	s.InteractionResolved(ctx, InteractionResolved{Interaction: ix,
+		Resolution: proto.Resolution{Answers: map[string]string{"用哪个分支？": "main"}}, Status: "resolved"})
+	if q := s.queuedFor("lark1"); q != 1 {
+		t.Fatalf("the done notice was dropped as a stale question: %d queued", q)
+	}
+	idleLark := busy1
+	idleLark.Status = proto.StatusIdle
+	f.setSessions("server", idle1, idleLark)
+	s.drainRelays("server", []proto.Session{idleLark})
+	waitFor(t, "the done notice to go out", func() bool { return f.sentTo("lark1") == 1 })
+	if q := s.queuedFor("lark1"); q != 0 {
+		t.Fatalf("%d notice(s) still queued", q)
+	}
+}
+
 // An agent a reporting conversation opens with agent_start is its task as one from task_plan is (#4101): not
 // supervised by the main conversation, so when it is done the reporting conversation gets the notice and the main
 // conversation hears nothing of it.

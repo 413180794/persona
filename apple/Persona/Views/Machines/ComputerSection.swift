@@ -73,7 +73,7 @@ struct ComputerSection: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("这台 Mac 锁屏时，点「一键解锁」并验证面容（或设备密码），就把记住的登录密码输入它的锁屏。解开后它不会自己再锁上，用完点「锁上」。")
+            Text("这台 Mac 锁屏时，点「一键解锁」并验证\(Self.oneTapAuthName)（或设备密码），就把记住的登录密码输入它的锁屏。解开后它不会自己再锁上，用完点「锁上」。")
         }
     }
 
@@ -259,6 +259,13 @@ struct ComputerSection: View {
     static let oneTapTitle = String(localized: "在这台 Mac 上一键解锁")
     #else
     static let oneTapTitle = String(localized: "在这台手机上一键解锁")
+    #endif
+
+    /// deviceOwnerAuthentication is Touch ID (or the password) on macOS, Face ID (or the password) on iOS.
+    #if os(macOS)
+    static let oneTapAuthName = "触控 ID"
+    #else
+    static let oneTapAuthName = "面容"
     #endif
 
     /// 一键解锁 on this device (it needs the sign-in kept), and 锁上 while it is on (#1507 a-2).

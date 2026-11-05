@@ -43,6 +43,7 @@ import { Icon } from "../ui/icons";
 import { t } from "../i18n";
 import { groupTodosByProject, treeStateLabel, type TodoProjectGroup, type TreeState } from "../lib/todo-tree";
 import { useFolded } from "../lib/use-folded";
+import { answeredLookup } from "./assistant/answered-lookup";
 import { Empty } from "./assistant/parts";
 import { ReviewBadge, ReviewChecklist } from "./assistant/Supervision";
 import { TodoStageBar } from "./TodoStageBar";
@@ -59,7 +60,9 @@ export function TodosView({
   const machines = useStore((s) => s.machines);
   const interactions = useStore((s) => s.interactions);
   const allSessions = useAgentSessions();
-  const lookup = useMemo(() => makeSessionLookup(allSessions), [allSessions]);
+  const answered = useStore((s) => s.answered);
+  // a card answered here stops its agent's 等你 at once, not at the hub's next push (#4186)
+  const lookup = useMemo(() => answeredLookup(allSessions, interactions, answered), [allSessions, interactions, answered]);
 
   const [activeId, setActiveId] = useState<string | undefined>(selectedId);
   const [search, setSearch] = useState("");

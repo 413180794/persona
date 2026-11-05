@@ -28,7 +28,7 @@ class ScriptLayoutTests(unittest.TestCase):
         files = {p.name for p in SCRIPTS.iterdir() if p.is_file()}
         self.assertEqual(files, {"README.md", "persona_config.py", "persona_identity.py", "jarvis_config.py", "privacy_check.py", *ALIASES})
         directories = {p.name for p in SCRIPTS.iterdir() if p.is_dir() and p.name != "__pycache__"}
-        self.assertEqual(directories, {"app", "assets", "deploy", "diag", "gen", "hooks", "mock", "release", "test"})
+        self.assertEqual(directories, {"app", "assets", "deploy", "diag", "gen", "hooks", "i18n", "mock", "release", "test"})
 
     def test_compatibility_entries_preserve_arguments_environment_stdin_and_exit(self):
         for alias, target in ALIASES.items():

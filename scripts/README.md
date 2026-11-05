@@ -13,6 +13,7 @@
 | `test/` | 服务端、真实运行时联调、GitHub 流程及目录结构回归 | `test/check-fast.sh`（提交前按改动跑相关快速检查）、`test/test-server.sh`、`test/test-herdr.sh`、`test/test-codex.sh` |
 | `hooks/` | Git 提交 / 推送前的隐私检查（`pre-commit`、`commit-msg`、`pre-push`），合并 PR 的 `merge-pr.sh` | `git config core.hooksPath scripts/hooks`；合并：`scripts/hooks/merge-pr.sh <PR 号>` |
 | `gen/` | 从 schema 生成代码：扩展协议和 View 的四端类型（`schema/extension/`）；扩展 SDK 的打包（`personad extension new` 用）和拷进扩展仓库 | `gen/extension_schema.py`（`--check` 只比对）、`gen/sdk_bundle.py`、`gen/sync-sdk.sh` |
+| `i18n/` | Apple 端界面多语言：catalog 的 en / ja 齐全和占位符检查、编译后把新词条加进 catalog、catalog 冲突按 key 合并（[docs/ios.md「界面语言」](../docs/ios.md)） | `i18n/apple_l10n.py check`（`test/test_apple_l10n.py` 跑它）、`i18n/apple_l10n.py sync <DerivedData>`、`i18n/apple_l10n.py merge` |
 
 ## 顶层公共脚本
 

@@ -448,3 +448,52 @@ func TestPhoneToolsDeviceRouting(t *testing.T) {
 		t.Fatal("revoked credential retained tools")
 	}
 }
+
+// A write the user approves on the phone outlasts the plain call's wait: an approval that comes late still reaches the
+// agent, and a read still times out as before (#4427).
+func TestCallPhoneWaitsForApproval(t *testing.T) {
+	h := newTestHub(t)
+	saved := phoneCallWait
+	phoneCallWait = 50 * time.Millisecond
+	t.Cleanup(func() { phoneCallWait = saved })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	phone := &client{hub: h, device: "credential-ios", role: roleFull, out: make(chan []byte, 8)}
+	h.clients[phone] = struct{}{}
+	h.onClientMessage(ctx, phone, []byte(`{"type":"register_phone","tools":[{"name":"phone_reminders_create"},{"name":"phone_device_info"}]}`))
+
+	if r := h.callPhone(ctx, "phone_device_info", json.RawMessage(`{}`)); !r.IsError || !strings.Contains(textOf(r), "Timed out waiting for the iPhone") {
+		t.Fatalf("read past the wait = %+v", r)
+	}
+	<-phone.out
+
+	done := make(chan proto.ToolResult, 1)
+	go func() { done <- h.callPhone(ctx, "phone_reminders_create", json.RawMessage(`{"title":"x"}`)) }()
+	var call struct {
+		CallID string `json:"call_id"`
+	}
+	select {
+	case data := <-phone.out:
+		if err := json.Unmarshal(data, &call); err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal("tool call was not sent")
+	}
+	time.Sleep(4 * phoneCallWait) // the user is still deciding
+	select {
+	case r := <-done:
+		t.Fatalf("the write gave up while the user was deciding: %+v", r)
+	default:
+	}
+	reply, _ := json.Marshal(map[string]any{"type": "tool_result", "call_id": call.CallID, "content": []proto.Content{{Type: "text", Text: "saved"}}})
+	h.onClientMessage(ctx, phone, reply)
+	select {
+	case r := <-done:
+		if r.IsError || textOf(r) != "saved" {
+			t.Fatalf("result = %+v", r)
+		}
+	case <-ctx.Done():
+		t.Fatal("the late approval did not reach the agent")
+	}
+}

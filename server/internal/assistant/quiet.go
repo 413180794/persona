@@ -94,8 +94,10 @@ func (s *Service) sendQuietNotice(id string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	if n.state == "needs" && !s.taskWaits(ctx, n.todo) {
-		return // answered meanwhile (on the phone, the watch, another conversation)
+	if n.state == "needs" {
+		if waits, known := s.taskNeedsRecheck(ctx, n.todo); known && !waits {
+			return // answered meanwhile (on the phone, the watch, another conversation); an unreachable node keeps it
+		}
 	}
 	// A reporting conversation's task is told there (reporters.go); the main conversation's in the main conversation
 	// of now.
@@ -112,7 +114,7 @@ func (s *Service) sendQuietNotice(id string) {
 		s.logf("task %s: quiet notice: no main conversation", id)
 		return
 	}
-	msg := relayMsg{From: id, FromTitle: "任务「" + n.todo.Title + "」", Tool: noticeTool, Text: renderNotice(n, reporting), At: time.Now().UTC()}
+	msg := relayMsg{From: id, FromTitle: "任务「" + n.todo.Title + "」", Tool: noticeTool, Text: renderNotice(n, reporting), At: time.Now().UTC(), State: n.state}
 	if s.replaceQueuedNotice(to, msg) {
 		s.publish(ctx)
 		return
@@ -157,6 +159,72 @@ func (s *Service) replaceQueuedNotice(to string, msg relayMsg) bool {
 		}
 	}
 	return false
+}
+
+// dropQueuedNeeds forgets a task's waiting notice once its card was dealt with: the notice still in its
+// quietNoticeDelay window and needs notices queued behind a busy turn go away. A notice of another state
+// (done, interrupted, failed) stays, and a queue head going out right now is left alone. It reports whether a
+// notice was actually dropped.
+func (s *Service) dropQueuedNeeds(todoID string) bool {
+	removed := false
+	book := &s.quiet
+	book.mu.Lock()
+	if n := book.pending[todoID]; n != nil && n.state == "needs" {
+		delete(book.pending, todoID)
+		removed = true
+	}
+	book.mu.Unlock()
+
+	r := &s.relays
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !s.relayLocked(context.Background()) {
+		return removed
+	}
+	changed := false
+	for to, q := range r.st.Queue {
+		kept := make([]relayMsg, 0, len(q))
+		for i, m := range q {
+			if m.Tool == noticeTool && m.State == "needs" && m.From == todoID && !(i == 0 && r.draining[to]) {
+				continue
+			}
+			kept = append(kept, m)
+		}
+		if len(kept) == len(q) {
+			continue
+		}
+		changed = true
+		if len(kept) == 0 {
+			delete(r.st.Queue, to)
+		} else {
+			r.st.Queue[to] = kept
+		}
+	}
+	if changed {
+		s.saveRelayLocked()
+	}
+	return removed || changed
+}
+
+// taskNeedsRecheck freshly asks t's agents' machines whether one still waits for the user. Unlike taskWaits it
+// keeps "no agent waits" and "a machine could not be asked" apart: known is false on an RPC failure, so a caller
+// can keep the notice instead of taking an unreachable node for an answer.
+func (s *Service) taskNeedsRecheck(ctx context.Context, t Todo) (waits, known bool) {
+	for _, a := range t.Agents {
+		if a.ReleasedAt != nil || a.DismissedAt != nil {
+			continue
+		}
+		list, err := s.sessions(ctx, a.MachineID)
+		if err != nil {
+			return false, false
+		}
+		for _, c := range list {
+			if c.SessionID == a.SessionID && (c.State == proto.StateNeedsYou || c.PendingInteractions > 0) {
+				return true, true
+			}
+		}
+	}
+	return false, true
 }
 
 // taskWaits: one of t's agents still waits for the user.

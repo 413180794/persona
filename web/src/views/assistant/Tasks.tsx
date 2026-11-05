@@ -30,7 +30,7 @@ import {
   type TodayBody,
 } from "../../lib/feed";
 import { runningWorkflows, workflowLine } from "../../lib/workflows";
-import { dockAgents, type DockAgent, interruption, isRemovable, makeSessionLookup, mostUrgentAgent, runningSubagents, taskNow, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
+import { dockAgents, type DockAgent, interruption, isRemovable, mostUrgentAgent, runningSubagents, taskNow, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
 import { parseAPIError } from "../../lib/api-errors";
 import { boardSections, type BoardSectionKey } from "../../lib/task-board";
 import { openPanel } from "../../lib/panel";
@@ -49,6 +49,7 @@ import { MessageActions } from "../chat/MessageActions";
 import { clock, sessionTitle, stateOf } from "../../lib/format";
 import { formatDate, t } from "../../i18n";
 import { interactionAsk } from "../../lib/inbox";
+import { answeredLookup, answeredSessions } from "./answered-lookup";
 import { Empty } from "./parts";
 import { PlanEditDialog } from "./PlanEdit";
 import { byTime } from "../../lib/times";
@@ -57,7 +58,9 @@ import { byTime } from "../../lib/times";
 
 function useTaskLookup() {
   const sessions = useStore((s) => s.sessions);
-  return useMemo(() => makeSessionLookup(sessions), [sessions]);
+  const interactions = useStore((s) => s.interactions);
+  const answered = useStore((s) => s.answered);
+  return useMemo(() => answeredLookup(sessions, interactions, answered), [sessions, interactions, answered]);
 }
 
 // The cards in the conversation do not take the whole session list, the pending cards or the machines: their store
@@ -67,14 +70,14 @@ function useTaskLookup() {
 
 /** What a task is now, from the store: its status and its lead agent. */
 function taskNowIn(s: State, todo: Todo, plans: Record<string, TaskPlan>): { status: TodoStatus; lead?: Session } {
-  const lookup = makeSessionLookup(s.sessions);
+  const lookup = answeredLookup(s.sessions, s.interactions, s.answered);
   return { status: statusOf(todo, lookup, plans), lead: mostUrgentAgent(todo, lookup)?.session };
 }
 
 /** A task's status (undefined without the task). */
 function useTaskStatus(todo: Todo | undefined): TodoStatus | undefined {
   const plans = useFeed((s) => s.plans);
-  return useStore((s) => (todo ? statusOf(todo, makeSessionLookup(s.sessions), plans) : undefined));
+  return useStore((s) => (todo ? statusOf(todo, answeredLookup(s.sessions, s.interactions, s.answered), plans) : undefined));
 }
 
 /** A task's status and lead agent (undefined without the task). */
@@ -916,7 +919,7 @@ const DOCK_RANK: Partial<Record<TodoStatus, number>> = { needs_you: 0, interrupt
 
 /** The dock's task pills, waiting first: each task going on, its status and what it waits on (#3463). */
 function dockTasksIn(s: State, conversation: string, plans: Record<string, TaskPlan>): { t: Todo; st: TodoStatus; ask?: string }[] {
-  const lookup = makeSessionLookup(s.sessions);
+  const lookup = answeredLookup(s.sessions, s.interactions, s.answered);
   return s.todos
     .filter((t) => t.origin === conversation)
     .map((t) => ({ t, st: statusOf(t, lookup, plans) }))
@@ -930,7 +933,7 @@ export function TaskDock({ conversation }: { conversation: string }) {
   const [menuFor, setMenuFor] = useState<{ todo: Todo; el: HTMLElement } | null>(null);
   const [board, setBoard] = useState(false);
   // rows of strings and the store's own objects: a push about an agent or a card none of them shows draws nothing
-  const agents = useStoreRows<DockAgent>((s) => dockAgents(Object.values(s.sessions).flat(), s.todos, conversation, s.assistant?.main));
+  const agents = useStoreRows<DockAgent>((s) => dockAgents(answeredSessions(Object.values(s.sessions).flat(), s.interactions, s.answered), s.todos, conversation, s.assistant?.main));
   const going = useStoreRows((s) => dockTasksIn(s, conversation, plans));
   const mine = useStore((s) => s.todos.filter((t) => t.origin === conversation).length);
   if (mine === 0 && agents.length === 0) return null;
@@ -1068,12 +1071,13 @@ export function TaskBoard({ open, conversation, onClose }: { open: boolean; conv
   const lookup = useTaskLookup();
   const plans = useFeed((s) => s.plans);
   const interactions = useStore((s) => s.interactions);
+  const answered = useStore((s) => s.answered);
   const [menuFor, setMenuFor] = useState<{ todo: Todo; el: HTMLElement } | null>(null);
   const sections = useMemo(() => {
     if (!open) return [];
     const rows = todos.filter((td) => td.origin === conversation).map((todo) => ({ todo, status: statusOf(todo, lookup, plans) }));
-    return boardSections(rows, dockAgents(Object.values(sessions).flat(), todos, conversation, main));
-  }, [open, todos, sessions, conversation, main, lookup, plans]);
+    return boardSections(rows, dockAgents(answeredSessions(Object.values(sessions).flat(), interactions, answered), todos, conversation, main));
+  }, [open, todos, sessions, conversation, main, lookup, plans, interactions, answered]);
   const subtitle = (todo: Todo, status: TodoStatus) => {
     const lead = mostUrgentAgent(todo, lookup)?.session;
     const where = place(todo, lead);

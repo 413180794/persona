@@ -359,6 +359,22 @@ struct TodoDetailView: View {
                 Label(isFailed ? "移除" : "解除关联", systemImage: isFailed ? Theme.Icon.delete : Theme.Icon.link)
             }
         }
+        #if os(macOS)
+        // A Mac list only swipes with a two-finger trackpad gesture: the row's menu unlinks too (#3891).
+        .contextMenu {
+            Button(role: .destructive) {
+                Task {
+                    do {
+                        try await store.unlinkAgent(todoID: todo.id, machineID: a.machineID, sessionID: a.sessionID)
+                    } catch {
+                        model.show(error)
+                    }
+                }
+            } label: {
+                Label(isFailed ? "移除" : "解除关联", systemImage: isFailed ? Theme.Icon.delete : Theme.Icon.link)
+            }
+        }
+        #endif
     }
 
     private func bottomBar(_ todo: TodoItem) -> some View {
