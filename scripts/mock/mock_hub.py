@@ -8279,6 +8279,8 @@ if os.environ.get("MOCK_CHURN") == "1":
 # MOCK_COMPUTER=ready|permissions|locked: the hub's plugin cua is on (docs/computer-use.md) and macbook is turned on
 # in that state; Mac Studio is a Mac it is not on for yet. =off: on, but for no machine yet. Unset: the plugin is off.
 MOCK_COMPUTER = os.environ.get("MOCK_COMPUTER", "")
+MOCK_METRICS_FAIL = os.environ.get("MOCK_METRICS_FAIL", "")  # the 机器 page's failed refresh (G219): 1 | after
+METRICS_ASKED = 0.0  # when /metrics was first asked (MOCK_METRICS_FAIL=after)
 MOCK_WEB = os.environ.get("MOCK_WEB", "")  # web/dist: serve the built client's live screen page (#1184)
 COMPUTER_STATES = {
     "ready": {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "granted",
@@ -9727,6 +9729,12 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/usage/windows":  # subscription rate-limit windows (#2432); MOCK_USAGE=none answers no accounts
             return self.send_json(mock_usage_windows())
         if p == "/api/v1/metrics":
+            # MOCK_METRICS_FAIL=1: every /metrics fails; =after: it answers for 5 s after the first ask, then fails (the
+            # page's 10 s refreshes)
+            global METRICS_ASKED
+            METRICS_ASKED = METRICS_ASKED or time.time()
+            if MOCK_METRICS_FAIL == "1" or (MOCK_METRICS_FAIL == "after" and time.time() - METRICS_ASKED > 5):
+                return self.send_json({"error": "hub 暂时取不到监控数据"}, 503)
             return self.send_json({"machines": [machine_metrics(m["id"], 3600, 60) for m in MACHINES if kept(m["id"])], "step": 60})
         if p.startswith("/api/v1/machines/") and p.endswith("/metrics"):
             r = q.get("range", ["1h"])[0]

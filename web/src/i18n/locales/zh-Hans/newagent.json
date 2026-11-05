@@ -24,5 +24,7 @@
   "prompt_placeholder": "要它做什么…（⌘↵ 启动）",
   "add_files": "添加图片或文件",
   "attach_hint": "粘贴、拖入图片或文件 · 启动后在后台发送",
-  "open_folder": "打开 {name}"
+  "open_folder": "打开 {name}",
+  "permission_mode": "权限模式",
+  "permission_mode_hint": "权限模式在对话里也能随时改，全部放行只能在新开时选。"
 }

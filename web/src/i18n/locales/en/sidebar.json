@@ -16,6 +16,7 @@
   "all_chats": "All chats",
   "pages": "Pages",
   "grouping_label": "Group agents: {grouping}",
+  "grouping_sort_label": "Group agents: {grouping}, {sort}",
   "grouping_header": "Group agents by",
   "new_agent": "New agent",
   "mark_all_read": "Mark all as read",

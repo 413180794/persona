@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n";
 import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, BOTMUX_HIDDEN_KEY, botmuxAndFilter, filterCounts, isBotmux, isSpaceMuted, matchingKeys, shownFilters, unreadOf, withoutBotmux, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
+import { AGENT_SORT_KEY, AGENT_SORTS, agentSort, machineTreeByUpdate, projectsByUpdate, repoMachinesByUpdate, todoTreeByUpdate, type AgentSort } from "../lib/agent-sort";
 import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, sessionSource, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { keyedRefs } from "../lib/keyed-refs";
@@ -391,6 +392,9 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   // a hub without todos shows by machine, a by-todo choice kept for when it has them
   const shownGrouping = todosSupported === false && grouping === "todo" ? "machine" : grouping;
   const groupingLabel = (availableGroupings.find((g) => g.key === shownGrouping) ?? availableGroupings[0]).label;
+  // 状态优先 / 最近更新 (iOS AgentSort, G099): not under 按状态, whose sections are the states already
+  const [sortChoice, setSortChoice] = useState<AgentSort>(() => agentSort(localStorage.getItem(AGENT_SORT_KEY)));
+  const byUpdate = sortChoice === "updated" && shownGrouping !== "state";
   // the quick filter (全部 / 需要你 / 未读 / 工作中), stacked on any grouping; what it showed when chosen stays (`kept`)
   const [filter, setFilter] = useState(() => agentFilter(localStorage.getItem("jarvis.agentFilter")));
   const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
@@ -426,15 +430,30 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
     return keys.size ? shown.filter((s) => !keys.has(agentKey(s))) : shown;
   }, [shown, pinnedAgents]);
   const recent = useMemo(() => (filtered ? [] : offline.filter((s) => !pinnedAgents.some((p) => agentKey(p) === agentKey(s)))), [filtered, offline, pinnedAgents]);
-  const { spaces, loose } = useMemo(() => buildSpaces(unpinned, machines), [unpinned, machines]);
+  const { spaces, loose } = useMemo(() => {
+    const built = buildSpaces(unpinned, machines);
+    return byUpdate ? projectsByUpdate(built) : built;
+  }, [unpinned, machines, byUpdate]);
   const groups = useMemo(() => {
     if (shownGrouping === "space" || shownGrouping === "repo" || shownGrouping === "machine") return [];
     if (shownGrouping === "todo") return [];
     return buildAgentGroups(unpinned, machines, "state", mutes);
   }, [unpinned, machines, shownGrouping, mutes, todos]);
-  const todoTree = useMemo(() => (shownGrouping === "todo" ? buildTodoTree(unpinned, machines, todos, mutes) : undefined), [unpinned, machines, shownGrouping, mutes, todos]);
-  const repoMachines = useMemo(() => (shownGrouping === "repo" ? buildRepoMachineTree(unpinned, machines) : []), [unpinned, machines, shownGrouping]);
-  const machineTree = useMemo(() => (shownGrouping === "machine" ? buildMachineTree(machines, unpinned, { pins, hideEmpty: filtered }) : []), [shownGrouping, machines, unpinned, pins, filtered]);
+  const todoTree = useMemo(() => {
+    if (shownGrouping !== "todo") return undefined;
+    const built = buildTodoTree(unpinned, machines, todos, mutes);
+    return byUpdate ? todoTreeByUpdate(built) : built;
+  }, [unpinned, machines, shownGrouping, mutes, todos, byUpdate]);
+  const repoMachines = useMemo(() => {
+    if (shownGrouping !== "repo") return [];
+    const built = buildRepoMachineTree(unpinned, machines);
+    return byUpdate ? repoMachinesByUpdate(built) : built;
+  }, [unpinned, machines, shownGrouping, byUpdate]);
+  const machineTree = useMemo(() => {
+    if (shownGrouping !== "machine") return [];
+    const built = buildMachineTree(machines, unpinned, { pins, hideEmpty: filtered });
+    return byUpdate ? machineTreeByUpdate(built) : built;
+  }, [shownGrouping, machines, unpinned, pins, filtered, byUpdate]);
   // by todo a group mixes hosts (herdr, botmux…): when the list has more than one, rows outside herdr name theirs (#1836)
   const mixedHosts = useMemo(() => shownGrouping === "todo" && hostsOf(live).size > 1, [shownGrouping, live]);
   const unreadShown = filter === "unread" ? unreadOf(shown) : [];
@@ -493,7 +512,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
           <span className="min-w-0 flex-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">Agents</span>
         )}
         {folded && <SessionTally sessions={live} folded />}
-        <button type="button" aria-label={t("sidebar.grouping_label", { grouping: groupingLabel })} aria-haspopup="menu" aria-expanded={Boolean(groupingMenu.anchor)} onClick={groupingMenu.open} className="touch-hit relative z-10 flex items-center gap-1 whitespace-nowrap rounded-control px-2 py-1 text-[11px] text-ink-3 hover:bg-hover hover:text-ink-2">
+        <button type="button" aria-label={byUpdate ? t("sidebar.grouping_sort_label", { grouping: groupingLabel, sort: AGENT_SORTS[1].label }) : t("sidebar.grouping_label", { grouping: groupingLabel })} aria-haspopup="menu" aria-expanded={Boolean(groupingMenu.anchor)} onClick={groupingMenu.open} className="touch-hit relative z-10 flex items-center gap-1 whitespace-nowrap rounded-control px-2 py-1 text-[11px] text-ink-3 hover:bg-hover hover:text-ink-2">
+          {byUpdate && <Icon name="clock" size={10} stroke={2} />}
           {groupingLabel}
           <Icon name="chevron" size={10} stroke={2} />
         </button>
@@ -503,7 +523,10 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
         <Menu anchor={groupingMenu.anchor} onClose={groupingMenu.close} align="right" header={t("sidebar.grouping_header")} items={[...availableGroupings.map((g): MenuItem => ({
           key: g.key, label: g.label, icon: g.key === "space" ? "folder" : g.key === "machine" ? "machine" : g.key === "todo" ? "todo" : "layers", checked: shownGrouping === g.key,
           onSelect: () => { localStorage.setItem("jarvis.agentGrouping", g.key); setGrouping(g.key); hover(null); },
-        })),
+        })), ...(shownGrouping === "state" ? [] : AGENT_SORTS.map((o, i): MenuItem => ({
+          key: `sort:${o.key}`, label: o.label, icon: o.key === "updated" ? "clock" : "layers", checked: sortChoice === o.key, divider: i === 0,
+          onSelect: () => { localStorage.setItem(AGENT_SORT_KEY, o.key); setSortChoice(o.key); hover(null); },
+        }))),
           // every group of the list, like the app's list settings (#3027); 全部展开 also opens the spaces and tab groups
           // folded by hand that are not drawn now
           { key: "fold-all", label: t("sidebar.fold_all"), icon: "up", checked: false, divider: true, onSelect: () => { setAgentsFolded(true); hover(null); } },

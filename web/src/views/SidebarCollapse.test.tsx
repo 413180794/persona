@@ -150,6 +150,31 @@ describe("folding a block of the sidebar", () => {
   });
 });
 
+describe("ordering the Agents list (G099)", () => {
+  const item = (label: string) => [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find((el) => el.textContent?.includes(label));
+
+  it("offers 状态优先 / 最近更新 under the grouping and keeps the choice", async () => {
+    act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+    await flush();
+    act(() => button("Agent 分组：按机器")!.click());
+    expect(item("状态优先")).toBeDefined();
+    act(() => item("最近更新")!.click());
+    await flush();
+    expect(localStorage.getItem("jarvis.agentSort")).toBe("updated");
+    expect(button("Agent 分组：按机器，最近更新")).toBeDefined();
+  });
+
+  it("is not offered under 按状态, whose sections are the states", async () => {
+    localStorage.setItem("jarvis.agentGrouping", "state");
+    localStorage.setItem("jarvis.agentSort", "updated");
+    act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+    await flush();
+    act(() => button("Agent 分组：按状态")!.click());
+    expect(item("按机器")).toBeDefined();
+    expect(item("最近更新")).toBeUndefined();
+  });
+});
+
 describe("the Agents list menu (#3027)", () => {
   it("has 全部折叠 and 全部展开, which open the spaces folded by hand and leave the other blocks", async () => {
     localStorage.setItem("fold:space:mac/a", "1");

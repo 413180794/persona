@@ -1,0 +1,15 @@
+{
+  "title": "ブラウザ",
+  "allow": "アシスタントにこの Mac のブラウザを使わせる",
+  "allow_detail": "ego lite でページを開く、クリック、フォーム入力、スクリーンショット",
+  "offline": "マシンはオフラインです。つながると使えます",
+  "install_detail": "ego の公式サイトからインストーラを取得し、Citro Labs の署名と Apple の公証を確認して「アプリケーション」に入れます。",
+  "install": "ego lite をインストール",
+  "reinstall": "再インストール",
+  "open": "ego lite を開く",
+  "recheck": "もう一度確認",
+  "turn_on_failed": "オンにできませんでした：{error}",
+  "turn_off_failed": "オフにできませんでした：{error}",
+  "step_done": "完了",
+  "step_todo": "未完了"
+}

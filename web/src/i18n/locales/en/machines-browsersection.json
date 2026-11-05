@@ -1,0 +1,15 @@
+{
+  "title": "Browser",
+  "allow": "Let the assistant use this Mac's browser",
+  "allow_detail": "Opens pages, clicks, fills forms and takes screenshots through ego lite",
+  "offline": "The machine is offline; it can be used once it's back",
+  "install_detail": "Downloads the installer from ego's website, checks Citro Labs' signature and Apple's notarization, and installs it in Applications.",
+  "install": "Install ego lite",
+  "reinstall": "Reinstall",
+  "open": "Open ego lite",
+  "recheck": "Check again",
+  "turn_on_failed": "Couldn't turn on: {error}",
+  "turn_off_failed": "Couldn't turn off: {error}",
+  "step_done": "Done",
+  "step_todo": "To do"
+}

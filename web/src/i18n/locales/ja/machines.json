@@ -17,5 +17,10 @@
   "no_agents": "実行中のエージェントはありません",
   "details": "詳細 ›",
   "no_history": "履歴はまだありません",
-  "cpu_last_hour": "直近1時間のCPU"
+  "cpu_last_hour": "直近1時間のCPU",
+  "refresh_failed_stale": "いまは更新できません：{error}。前回のデータを表示中、{seconds} 秒ごとに再試行します。",
+  "load_failed": "マシンの監視を読み込めません：{error}",
+  "empty_title": "マシンはまだありません",
+  "empty_unavailable": "いまマシンを表示できません",
+  "empty_body": "hub がつながると、hub のマシンと接続しているコンピュータがここに表示されます。"
 }

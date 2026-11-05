@@ -19,5 +19,10 @@
   "no_agents": "No agents running",
   "details": "Details ›",
   "no_history": "No history yet",
-  "cpu_last_hour": "CPU over the last hour"
+  "cpu_last_hour": "CPU over the last hour",
+  "refresh_failed_stale": "Can't update right now: {error}. Showing the last numbers; retrying every {seconds} s.",
+  "load_failed": "Couldn't load machine monitoring: {error}",
+  "empty_title": "No machines yet",
+  "empty_unavailable": "Can't see machines right now",
+  "empty_body": "Once the hub connects, the machine it runs on and the computers it reaches show here."
 }

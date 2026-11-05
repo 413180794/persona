@@ -17,5 +17,10 @@
   "no_agents": "没有在跑的 Agent",
   "details": "详情 ›",
   "no_history": "还没有历史",
-  "cpu_last_hour": "最近一小时 CPU"
+  "cpu_last_hour": "最近一小时 CPU",
+  "refresh_failed_stale": "暂时更新不了：{error}。显示的是上次的数据，每 {seconds} 秒重试。",
+  "load_failed": "读取不到机器的监控：{error}",
+  "empty_title": "还没有机器",
+  "empty_unavailable": "现在看不到机器",
+  "empty_body": "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。"
 }

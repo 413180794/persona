@@ -149,6 +149,20 @@ describe("本地优先启动", () => {
     expect(body).not.toHaveProperty("effort");
   });
 
+  it("sends the picked permission mode with the start, and none when following the launcher", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({}));
+    vi.stubGlobal("fetch", fetcher);
+    launchAgent({ ...input, launcher: "claude", permissionMode: "plan" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ launcher: "claude", permission_mode: "plan" });
+
+    const plain = vi.fn().mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({}));
+    vi.stubGlobal("fetch", plain);
+    launchAgent({ ...input, launcher: "claude" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(JSON.parse(plain.mock.calls[0][1].body)).not.toHaveProperty("permission_mode");
+  });
+
   it("does not replace a Codex multimodal first message with a fake initialization prompt", async () => {
     const fetcher = vi.fn().mockResolvedValue(response({ error: "needs prompt", code: "codex_needs_prompt" }, 409));
     vi.stubGlobal("fetch", fetcher);

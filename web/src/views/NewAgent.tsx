@@ -11,7 +11,7 @@ import {
   defaultLabel, effortChoices, fitEffort, followedBinding, launcherAgent, launcherModels, machineLaunchers, modelName, oneOff, pickerLauncher, startPicks,
   takesEffort, type LauncherDefault,
 } from "../lib/launcher-models";
-import { EFFORTS, effortTitle } from "../lib/session-actions";
+import { BYPASS_MODE, BYPASS_WARNING, EFFORTS, effortTitle, PERMISSION_MODES } from "../lib/session-actions";
 import { baseName, shortPath } from "../lib/format";
 import { useStore } from "../lib/store";
 import type { Launcher } from "../lib/types";
@@ -47,6 +47,8 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
   const [models, setModels] = useState<ModelList>({ status: "idle" });
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
+  // Claude Code's permission mode for this start ("": the launcher's), remembered per computer like iOS's mode.<machine>
+  const [mode, setMode] = useState("");
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
   const [reload, setReload] = useState(0);
@@ -137,6 +139,7 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
     const p = presetCwd.current;
     if (p?.mid === mid) presetCwd.current = null;
     setCwd(p?.mid === mid ? p.cwd : (localStorage.getItem(`new.cwd.${mid}`) ?? ""));
+    setMode(localStorage.getItem(`new.mode.${mid}`) ?? "");
     setBrowse("");
     return () => {
       controller.abort();
@@ -198,7 +201,13 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
     localStorage.setItem(`new.cwd.${mid}`, cwd.trim());
     if (launcher && !unified) localStorage.setItem(`new.launcher.${mid}`, launcher);
     const picks = startPicks({ agent, list: models.list, model, effort, followed });
-    launchAgent({ machineId: mid, cwd: cwd.trim(), launcher, ...picks, text: prompt.trim(), attachments });
+    // a Codex keeps its own modes; the choice stays for this computer's next Claude Code
+    const permissionMode = takesEffort(agent) ? mode : "";
+    if (takesEffort(agent)) {
+      if (mode) localStorage.setItem(`new.mode.${mid}`, mode);
+      else localStorage.removeItem(`new.mode.${mid}`);
+    }
+    launchAgent({ machineId: mid, cwd: cwd.trim(), launcher, ...picks, permissionMode: permissionMode || undefined, text: prompt.trim(), attachments });
     attachmentsRef.current = [];
     setAttachments([]);
     setPrompt("");
@@ -317,6 +326,22 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
           /></Field>
         )}
 
+        {takesEffort(agent) && (
+          <Field label={t("newagent.permission_mode")}>
+            <div role="radiogroup" aria-label={t("newagent.permission_mode")} className="flex flex-wrap gap-1.5">
+              <Choice radio selected={mode === ""} onClick={() => setMode("")}>{t("newagent.follow_launcher")}</Choice>
+              {PERMISSION_MODES.map((m) => (
+                <Choice key={m.id} radio selected={mode === m.id} onClick={() => setMode(m.id)} title={m.detail}>
+                  {m.title}
+                </Choice>
+              ))}
+            </div>
+            <p className={cx("mt-1.5 text-[11.5px]", mode === BYPASS_MODE ? "text-red" : "text-ink-3")}>
+              {mode === BYPASS_MODE ? BYPASS_WARNING : PERMISSION_MODES.find((m) => m.id === mode)?.detail ?? t("newagent.permission_mode_hint")}
+            </p>
+          </Field>
+        )}
+
         {!loadingModels && takesEffort(agent) && (
           <Field label={t("newagent.effort")}>
             {efforts.length > 0 ? (
@@ -379,11 +404,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Choice({ selected, onClick, title, mono, children }: { selected: boolean; onClick: () => void; title?: string; mono?: boolean; children: React.ReactNode }) {
+function Choice({ selected, onClick, title, mono, radio, children }: { selected: boolean; onClick: () => void; title?: string; mono?: boolean; /** One of a radiogroup. */ radio?: boolean; children: React.ReactNode }) {
   return (
     <button
       type="button"
-      aria-pressed={selected}
+      role={radio ? "radio" : undefined}
+      aria-checked={radio ? selected : undefined}
+      aria-pressed={radio ? undefined : selected}
       onClick={onClick}
       title={title}
       className={cx("h-7 rounded-control px-2.5 text-[12px] whitespace-nowrap transition-colors", mono && "font-mono", selected ? "bg-ink text-surface" : "bg-surface text-ink-2 shadow-btn hover:bg-hover hover:text-ink")}

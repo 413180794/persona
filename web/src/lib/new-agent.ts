@@ -16,6 +16,8 @@ export interface AgentLaunch {
   /** Picked in 新建 Agent for this start only (launcher-models.ts startPicks); none: the launcher's own. */
   model?: string;
   effort?: string;
+  /** Claude Code's permission mode for this start (新建 Agent's 权限模式); none: the launcher's own. */
+  permissionMode?: string;
   text: string;
   attachments: LocalAttachment[];
   todoId?: string;
@@ -31,7 +33,7 @@ export interface AgentLaunch {
   draft?: string;
 }
 
-export function launchAgent(input: Pick<AgentLaunch, "machineId" | "cwd" | "launcher" | "model" | "effort" | "text" | "attachments" | "todoId">) {
+export function launchAgent(input: Pick<AgentLaunch, "machineId" | "cwd" | "launcher" | "model" | "effort" | "permissionMode" | "text" | "attachments" | "todoId">) {
   const launch: AgentLaunch = { ...input, id: `local-${uuid()}`, phase: "creating", uploaded: {} };
   putLaunch(launch);
   navigate({ name: "session", mid: launch.machineId, sid: launch.id });
@@ -73,7 +75,7 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
     if (!launch.session) {
       let session: Session;
       try {
-        const r = await api<{ session: Session }>("/sessions", { method: "POST", signal: controller.signal, json: { machine_id: launch.machineId, cwd: launch.cwd, launcher: launch.launcher || undefined, model: launch.model || undefined, effort: launch.effort || undefined, async: true, name_hint: launch.text || undefined, todo_id: launch.todoId || undefined } });
+        const r = await api<{ session: Session }>("/sessions", { method: "POST", signal: controller.signal, json: { machine_id: launch.machineId, cwd: launch.cwd, launcher: launch.launcher || undefined, model: launch.model || undefined, effort: launch.effort || undefined, permission_mode: launch.permissionMode || undefined, async: true, name_hint: launch.text || undefined, todo_id: launch.todoId || undefined } });
         session = r.session;
       } catch (e) {
         if (!(e instanceof ApiError) || e.code !== "codex_needs_prompt") throw e;

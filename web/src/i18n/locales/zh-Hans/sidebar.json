@@ -16,6 +16,7 @@
   "all_chats": "全部对话",
   "pages": "页面",
   "grouping_label": "Agent 分组：{grouping}",
+  "grouping_sort_label": "Agent 分组：{grouping}，{sort}",
   "grouping_header": "Agent 分组",
   "new_agent": "新建 Agent",
   "mark_all_read": "全部标为已读",

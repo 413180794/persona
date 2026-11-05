@@ -12,11 +12,13 @@ import { useStore } from "../lib/store";
 import type { MachineMetrics, MetricPoint } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
+import { Empty } from "./assistant/parts";
 import { MachineDeploy } from "./machines/MachineDeploy";
 import { t } from "../i18n";
 
 export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const machines = useStore((s) => s.machines);
+  const loaded = useStore((s) => s.loaded);
   const sessions = useAgentSessions();
   const [metrics, setMetrics] = useState<MachineMetrics[] | null>(null);
   const [error, setError] = useState("");
@@ -54,7 +56,18 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto grid max-w-[1000px] grid-cols-1 gap-3 px-5 py-6 sm:px-8 md:grid-cols-2">
           {!metrics && !error && <Loading />}
-          {error && !metrics && <p className="text-[13px] text-red">{error}</p>}
+          {/* a failed refresh says so even with the last numbers on screen (iOS / Android keep their notice up) */}
+          {error && (
+            <p role="alert" className="flex items-start gap-2 rounded-[8px] bg-red-tint px-3 py-2 text-[12.5px] text-red md:col-span-2">
+              <Icon name="warning" size={14} className="mt-px shrink-0" />
+              <span className="min-w-0 break-words">{metrics ? t("machines.refresh_failed_stale", { error, seconds: 10 }) : t("machines.load_failed", { error })}</span>
+            </p>
+          )}
+          {loaded && machines.length === 0 && (metrics || error) && (
+            <div className="md:col-span-2">
+              <Empty icon="machine" title={error && !metrics ? t("machines.empty_unavailable") : t("machines.empty_title")}>{t("machines.empty_body")}</Empty>
+            </div>
+          )}
           {machines.map((m, i) => {
             const mm = metrics?.find((x) => x.machine_id === m.id);
             const l = mm?.latest;

@@ -24,5 +24,7 @@
   "prompt_placeholder": "何をさせますか…（⌘↵で起動）",
   "add_files": "画像またはファイルを追加",
   "attach_hint": "画像やファイルを貼り付け・ドロップ・起動後にバックグラウンドで送信",
-  "open_folder": "{name}を開く"
+  "open_folder": "{name}を開く",
+  "permission_mode": "権限モード",
+  "permission_mode_hint": "モードは会話の中でも変えられます。すべて許可は新規作成時だけ選べます。"
 }

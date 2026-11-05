@@ -1,0 +1,20 @@
+{
+  "step_open": "「ego lite を開く」を押すとその Mac で開きます（画面共有がオンなら「VNC」でここから操作できます）",
+  "step_import": "初回設定で Chrome（または別のブラウザ）からデータを読み込みます：サイトのログイン状態も一緒に移ります。macOS がキーチェーンのパスワードを何度か求めるので、毎回その Mac のログインパスワードを入力してください。読み込まずに進めても構いません",
+  "step_finish": "初回設定を終えると ego-browser コマンドが入ります",
+  "step_recheck": "ここに戻って「もう一度確認」を押します",
+  "ready_setup": "初回設定は完了しています",
+  "ready_imported": "別のブラウザのデータを読み込み済み：アシスタントはそのサイトのログインを使えます",
+  "ready_not_imported": "別のブラウザのデータは読み込んでいません：使うサイトには ego lite で一度ログインしてください",
+  "ready_analytics_on": "ego の使用統計をオフに：その Mac の ego lite で「設定 › 同期とサービス」を開き、「Automatically sends usage statistics and crash reports to Citro Labs」をオフにします",
+  "ready_analytics_off": "ego の使用統計はオフです",
+  "installing": "インストール中",
+  "install_failed": "インストールできませんでした：{error}",
+  "installer_error": "インストールでエラーが起きました",
+  "not_installed": "この Mac にはまだ ego lite が入っていません",
+  "setup_opened": "その Mac で ego lite が開きました。下の手順で初回設定を終えてください",
+  "setup_needed": "ego lite は入っています。初回設定がまだです",
+  "not_ready": "ego-browser はまだ動いていません",
+  "ready": "準備完了 · アシスタントはこの Mac のブラウザを使えます",
+  "ready_version": "準備完了 · アシスタントはこの Mac のブラウザを使えます · ego lite {version}"
+}

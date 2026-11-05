@@ -1,0 +1,20 @@
+{
+  "step_open": "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以用「VNC」在这里操作）",
+  "step_import": "首次设置里选从 Chrome（或别的浏览器）导入数据：网站的登录状态会一起带过来。macOS 会多次要钥匙串密码，每次都输那台 Mac 的登录密码。不想导入可以跳过",
+  "step_finish": "做完首次设置，它会装上 ego-browser 命令",
+  "step_recheck": "回到这里点「再检查一次」",
+  "ready_setup": "首次设置做完了",
+  "ready_imported": "已导入另一个浏览器的数据，助手能用那些网站的登录",
+  "ready_not_imported": "没有导入别的浏览器的数据：要用的网站先在 ego lite 里登录一次",
+  "ready_analytics_on": "关掉 ego 的使用统计：在那台 Mac 的 ego lite 里打开「设置 › 同步和服务」，关掉「Automatically sends usage statistics and crash reports to Citro Labs」",
+  "ready_analytics_off": "ego 的使用统计已关",
+  "installing": "正在安装",
+  "install_failed": "没装上：{error}",
+  "installer_error": "安装出错了",
+  "not_installed": "这台 Mac 上还没有装 ego lite",
+  "setup_opened": "那台 Mac 上打开了 ego lite，按下面的步骤做完首次设置",
+  "setup_needed": "ego lite 已经装好，还要做完首次设置",
+  "not_ready": "ego-browser 还没跑通",
+  "ready": "就绪 · 助手能用这台的浏览器",
+  "ready_version": "就绪 · 助手能用这台的浏览器 · ego lite {version}"
+}

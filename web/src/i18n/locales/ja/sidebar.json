@@ -16,6 +16,7 @@
   "all_chats": "すべてのチャット",
   "pages": "ページ",
   "grouping_label": "エージェントのグループ：{grouping}",
+  "grouping_sort_label": "エージェントのグループ：{grouping}、{sort}",
   "grouping_header": "エージェントのグループ分け",
   "new_agent": "新規エージェント",
   "mark_all_read": "すべて既読にする",

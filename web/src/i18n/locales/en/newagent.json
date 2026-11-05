@@ -24,5 +24,7 @@
   "prompt_placeholder": "What should it do… (⌘↵ to start)",
   "add_files": "Add images or files",
   "attach_hint": "Paste or drop images and files · sent in the background after start",
-  "open_folder": "Open {name}"
+  "open_folder": "Open {name}",
+  "permission_mode": "Permission mode",
+  "permission_mode_hint": "You can change the mode in the conversation later; Allow everything can only be picked when starting."
 }
