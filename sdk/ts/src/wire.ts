@@ -773,6 +773,13 @@ export interface View {
   refresh_after?: number;
   search?: Search;
   filter?: Filter;
+  /** Plain text for an assistant card: required by CheckAssistantView; not required for extension views. */
+  fallback?: string;
+  /**
+   * Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page refers
+   * to this root map.
+   */
+  pages?: Record<string, View>;
 }
 
 export interface Section {
@@ -800,9 +807,10 @@ export type Component =
   | MarkdownComponent
   | TableComponent
   | EmptyComponent
-  | LoadingComponent;
-export const COMPONENT_TYPES = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading"] as const;
-export const COMPONENT_SINCE: Record<string, number> = { text: 1, metric: 1, progress: 1, row: 1, button: 1, link: 1, field: 1, divider: 1, chart: 2, stat_grid: 2, segmented: 2, markdown: 3, table: 3, empty: 3, loading: 3 };
+  | LoadingComponent
+  | HtmlComponent;
+export const COMPONENT_TYPES = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html"] as const;
+export const COMPONENT_SINCE: Record<string, number> = { text: 1, metric: 1, progress: 1, row: 1, button: 1, link: 1, field: 1, divider: 1, chart: 2, stat_grid: 2, segmented: 2, markdown: 3, table: 3, empty: 3, loading: 3, html: 4 };
 
 /**
  * A paragraph.
@@ -979,6 +987,40 @@ export interface LoadingComponent {
 }
 
 /**
+ * Assistant only: self-contained HTML. Execution requires an isolated, network-denying renderer; unsupported clients
+ * show the root fallback. Extensions never execute it.
+ */
+export interface HtmlComponent {
+  type: "html";
+  key?: string;
+  html: string;
+  height?: number;
+  title?: string;
+}
+
+export interface AssistantView {
+  id: string;
+  conversation: string;
+  version: number;
+  view: View;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ViewAction {
+  key: string;
+  action: string;
+  page?: string;
+  values?: Record<string, string>;
+  client_msg_id: string;
+  status: ViewActionStatus;
+  at: string;
+}
+
+export type ViewActionStatus = "pending" | "sent" | "failed" | (string & {});
+export const VIEW_ACTION_STATUSES = ["pending", "sent", "failed"] as const;
+
+/**
  * What a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push or pop a
  * page) are fields added here.
  */
@@ -988,6 +1030,18 @@ export interface Action {
   confirm?: string;
   /** Send the page's fields as values. */
   submit?: boolean;
+  /**
+   * Assistant only: send this text back to the same conversation. The hub reads it from the saved view, not from the
+   * client.
+   */
+  reply?: string;
+  /**
+   * Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the
+   * app.
+   */
+  open?: string;
+  /** Assistant only: return one page within the card. */
+  pop?: boolean;
   /**
    * Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action
    * with id).
@@ -1001,6 +1055,8 @@ export interface Action {
  */
 export interface Push {
   ui?: string;
+  /** Assistant only: a page in the root View.pages. Never combined with ui or state. */
+  page?: string;
   state?: string;
   title?: string;
 }

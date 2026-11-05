@@ -164,8 +164,9 @@ class ExtensionSchemaTests(unittest.TestCase):
                 self.assertEqual(self.v.validate("View", v), [])
                 seen |= {i["type"] for s in v["sections"] for i in s["items"]}
         view = self.v.files["view.schema.json"]["$defs"]
-        tags = {view[o["$ref"].split("/")[-1]]["properties"]["type"]["const"] for o in view["Component"]["oneOf"]}
-        self.assertEqual(tags - seen, set(), "the showcase shows every component")
+        components = [view[o["$ref"].split("/")[-1]] for o in view["Component"]["oneOf"]]
+        tags = {c["properties"]["type"]["const"] for c in components if not c.get("x-assistant-only")}
+        self.assertEqual(tags - seen, set(), "the showcase shows every extension component")
 
     def test_every_component_has_an_example(self):
         view = self.v.files["view.schema.json"]["$defs"]
@@ -173,6 +174,11 @@ class ExtensionSchemaTests(unittest.TestCase):
         seen = set()
         for f in (SCHEMA_DIR / "examples").glob("View.*.json"):
             for s in json.loads(f.read_text())["sections"]:
+                seen |= {i["type"] for i in s["items"]}
+        for f in (SCHEMA_DIR / "examples" / "assistant").glob("*.json"):
+            v = json.loads(f.read_text())
+            self.assertEqual(self.v.validate("View", v), [])
+            for s in v["sections"]:
                 seen |= {i["type"] for i in s["items"]}
         self.assertEqual(tags - seen, set())
 

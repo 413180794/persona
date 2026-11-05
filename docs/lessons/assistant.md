@@ -2,6 +2,8 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- 助手卡片的边界校验不能只看常见写法（2026-11-05，#2018）：重复 key 的错误曾被后续 chart／markdown 检查的 nil 覆盖；Markdown 引用图片和引用链接也能绕过只查内联语法的正则。共同检查应先拒绝重复 key，再检查组件；安全子集明确拒绝引用链接定义，补图片、autolink、缺 hostname 的 URL 回归。剥离 HTML 后清理空 section，否则 compact 限制会把已经清空的卡片判成过大。活卡片 version 要限制到 JavaScript 安全整数范围，不能只看 Go 的 int64。
+
 - 无头 `claude -p` 里 AskUserQuestion 不可用（不是 hook 没接上，是工具本身被禁用）：要在手机上问用户，给它一个会阻塞等答案的 MCP 工具
   （`ask_user`，`docs/assistant.md`）。模型会把它和别的工具并行调用，有副作用的工具要自己在 hub 里批准。
 - 无头助手（`claude -p`）默认权限模式下，连 Persona 自己的 MCP 工具（notify_user、schedule_followup）都要在手机上批准：夜里到点的跟进、

@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -257,13 +255,13 @@ func InboxSourceURL(itemID string) string {
 
 // Limits of a View.
 const (
-	ItemsMost  = 300
-	StringMost = 2000
-	StateMost  = 16 << 10
+	ItemsMost  = wire.ItemsMost
+	StringMost = wire.StringMost
+	StateMost  = wire.StateMost
 	// A chart has at most SeriesMost series of PointsMost points; a stat_grid at most StatsMost stats.
-	SeriesMost = 4
-	PointsMost = 120
-	StatsMost  = 6
+	SeriesMost = wire.SeriesMost
+	PointsMost = wire.PointsMost
+	StatsMost  = wire.StatsMost
 	// A segmented has at most SegmentsMost choices.
 	SegmentsMost = 5
 	// A compact view (an overview_card) has at most CompactSections sections and CompactItems items, and no fields.
@@ -286,226 +284,9 @@ var elemSince = wire.ComponentSince
 // tones are the tones a component may have; empty is the app's own.
 var tones = append([]string{""}, wire.Tones...)
 
-// CheckView holds a View to what the apps draw: first to the schema (known component types with what they need, short
-// strings, https links, tones and styles from the fixed lists), then to what the schema cannot say (a page's size, a
-// field's name once, a chart's series alike). A View that does not fit is refused, not half drawn.
-func CheckView(v *View) error {
-	if v == nil {
-		return errors.New("no view")
-	}
-	if err := wire.Validate("View", v); err != nil {
-		var ve *wire.ValidationError
-		if errors.As(err, &ve) {
-			return errors.New(where(v, ve.Errors[0]))
-		}
-		return err
-	}
-	if len(v.State) > StateMost {
-		return fmt.Errorf("state: more than %d bytes", StateMost)
-	}
-	for _, a := range Actions(v) {
-		if a.Push != nil && len(a.Push.State) > StateMost {
-			return fmt.Errorf("action %s: the state it pushes is more than %d bytes", a.ID, StateMost)
-		}
-	}
-	n := 0
-	names := map[string]bool{}
-	keys := map[string]bool{}
-	if v.Search != nil {
-		names["q"] = true
-	}
-	if f := v.Filter; f != nil {
-		if names[f.Name] {
-			return fmt.Errorf("filter: field %q twice (q is the search's)", f.Name)
-		}
-		names[f.Name] = true
-		if !slices.ContainsFunc(f.Choices, func(c UIChoice) bool { return c.Value == f.Value }) {
-			return errors.New("filter: value is one of its choices")
-		}
-	}
-	for i, s := range v.Sections {
-		for j, e := range s.Items {
-			if n++; n > ItemsMost {
-				return fmt.Errorf("more than %d items", ItemsMost)
-			}
-			var err error
-			if e.Key != "" {
-				if keys[e.Key] {
-					err = fmt.Errorf("key %q twice", e.Key)
-				}
-				keys[e.Key] = true
-			}
-			switch e.Type {
-			case "link":
-				if u, perr := url.Parse(e.URL); perr != nil || u.Scheme != "https" || u.Host == "" {
-					err = errors.New("link needs an https url")
-				}
-			case "field":
-				switch {
-				case names[e.Name]:
-					err = fmt.Errorf("field %q twice", e.Name)
-				case e.Kind == "choice" && len(e.Choices) == 0:
-					err = errors.New("a choice field needs choices")
-				case e.Kind == "secret" && e.Value != "":
-					err = errors.New("a secret field is never filled in")
-				}
-				names[e.Name] = true
-			case "segmented":
-				switch {
-				case names[e.Name]:
-					err = fmt.Errorf("field %q twice", e.Name)
-				case !slices.ContainsFunc(e.Choices, func(c UIChoice) bool { return c.Value == e.Value }):
-					err = errors.New("segmented: value is one of its choices")
-				case slices.ContainsFunc(e.Choices, func(c UIChoice) bool { return utf8.RuneCountInString(cmp.Or(c.Title, c.Value)) > 12 }):
-					err = errors.New("segmented: a choice has at most 12 characters")
-				}
-				names[e.Name] = true
-			case "chart":
-				err = checkChart(e)
-			case "stat_grid":
-				err = checkStats(e.Stats)
-			case "row":
-				if (e.Icon != "") && (e.Avatar != nil || e.Thumbnail != nil) || e.Avatar != nil && e.Thumbnail != nil {
-					err = errors.New("a row has at most one of icon, avatar and thumbnail")
-				} else if a := e.Avatar; a != nil && a.URL == "" && a.Text == "" {
-					err = errors.New("an avatar has a url or a text")
-				}
-			case "table":
-				for k, r := range e.Rows {
-					if len(r) != len(e.Columns) {
-						err = fmt.Errorf("row %d has %d cells for %d columns", k, len(r), len(e.Columns))
-						break
-					}
-				}
-			case "markdown":
-				err = checkMarkdown(e.Text)
-			}
-			if err != nil {
-				return fmt.Errorf("section %d item %d (%s): %v", i, j, e.Type, err)
-			}
-		}
-	}
-	return nil
-}
+func CheckView(v *View) error { return wire.CheckView(v) }
 
-// where turns the schema's "$.sections[1].items[2].tone: …" into "section 1 item 2 (metric): tone: …".
-func where(v *View, msg string) string {
-	var i, j int
-	if k, err := fmt.Sscanf(msg, "$.sections[%d].items[%d]", &i, &j); err == nil && k == 2 && i < len(v.Sections) && j < len(v.Sections[i].Items) {
-		rest := msg[len(fmt.Sprintf("$.sections[%d].items[%d]", i, j)):]
-		rest = strings.TrimPrefix(strings.TrimPrefix(rest, "."), ": ")
-		return fmt.Sprintf("section %d item %d (%s): %s", i, j, v.Sections[i].Items[j].Type, rest)
-	}
-	return strings.TrimPrefix(strings.TrimPrefix(msg, "$."), "$: ")
-}
-
-func checkChart(e UIElem) error {
-	if !slices.Contains(wire.ChartKinds, e.Kind) {
-		return errors.New("chart kind is bar or line")
-	}
-	if len(e.Series) == 0 || len(e.Series) > SeriesMost {
-		return fmt.Errorf("a chart has 1 to %d series", SeriesMost)
-	}
-	first := e.Series[0].Points
-	if len(first) == 0 || len(first) > PointsMost {
-		return fmt.Errorf("a series has 1 to %d points", PointsMost)
-	}
-	for k, s := range e.Series {
-		if utf8.RuneCountInString(s.Name) > 40 || !slices.Contains(tones, s.Tone) {
-			return fmt.Errorf("series %d: a name of at most 40 characters; tone is neutral, positive, caution or danger", k)
-		}
-		if len(e.Series) > 1 && s.Name == "" {
-			return fmt.Errorf("series %d: series of a chart with more than one are named", k)
-		}
-		if len(s.Points) != len(first) {
-			return fmt.Errorf("series %d: every series has the same labels", k)
-		}
-		for n, pt := range s.Points {
-			if pt.Label != first[n].Label {
-				return fmt.Errorf("series %d point %d: every series has the same labels, in the same order", k, n)
-			}
-			if utf8.RuneCountInString(pt.Label) > 40 || utf8.RuneCountInString(pt.Display) > 40 {
-				return fmt.Errorf("series %d point %d: label and display have at most 40 characters", k, n)
-			}
-			if math.IsNaN(pt.Value) || math.IsInf(pt.Value, 0) {
-				return fmt.Errorf("series %d point %d: a number", k, n)
-			}
-		}
-	}
-	return nil
-}
-
-func checkStats(stats []Stat) error {
-	if len(stats) == 0 || len(stats) > StatsMost {
-		return fmt.Errorf("a stat_grid has 1 to %d stats", StatsMost)
-	}
-	for k, st := range stats {
-		if st.Label == "" || st.Value == "" {
-			return fmt.Errorf("stat %d: label and value", k)
-		}
-		if utf8.RuneCountInString(st.Label)+utf8.RuneCountInString(st.Value)+utf8.RuneCountInString(st.Detail) > StringMost {
-			return fmt.Errorf("stat %d: too long", k)
-		}
-		if !slices.Contains(tones, st.Tone) {
-			return fmt.Errorf("stat %d: tone is neutral, positive, caution or danger", k)
-		}
-	}
-	return nil
-}
-
-// mdImage is a Markdown image: ![text](target.
-var mdImage = regexp.MustCompile(`!\[[^\]]*\]\(`)
-
-// mdLink is a Markdown link's or image's target: [text](target "title").
-var mdLink = regexp.MustCompile(`\]\(\s*<?([^)\s>]*)`)
-
-// mdCode is Markdown's code, a block or a span: what looks like a link in it is text.
-var mdCode = regexp.MustCompile("(?s)```.*?(```|$)|`[^`\n]*`")
-
-// checkMarkdown holds a markdown to its subset where it matters: links are https (the apps open nothing else), no
-// images. HTML is drawn as the text it is.
-func checkMarkdown(text string) error {
-	text = mdCode.ReplaceAllString(text, "")
-	if mdImage.MatchString(text) {
-		return errors.New("markdown has no images")
-	}
-	for _, m := range mdLink.FindAllStringSubmatch(text, -1) {
-		if u, err := url.Parse(m[1]); err != nil || u.Scheme != "https" || u.Host == "" {
-			return fmt.Errorf("markdown links are https: %q", m[1])
-		}
-	}
-	return nil
-}
-
-// Actions are a view's actions (its components', its search's, filter's and sections' more) and where each is.
-func Actions(v *View) []*UIAction {
-	var out []*UIAction
-	if v == nil {
-		return nil
-	}
-	if v.Search != nil {
-		out = append(out, &v.Search.Action)
-	}
-	if v.Filter != nil {
-		out = append(out, &v.Filter.Action)
-	}
-	for i := range v.Sections {
-		s := &v.Sections[i]
-		for j := range s.Items {
-			e := &s.Items[j]
-			if e.Action != nil {
-				out = append(out, e.Action)
-			}
-			if e.Button != nil {
-				out = append(out, &e.Button.Action)
-			}
-		}
-		if s.More != nil {
-			out = append(out, &s.More.Action)
-		}
-	}
-	return out
-}
+func Actions(v *View) []*UIAction { return wire.Actions(v) }
 
 // ParseView reads and checks a View a plugin answered with.
 func ParseView(raw json.RawMessage) (*View, error) {
@@ -534,6 +315,7 @@ func Fit(v *View, slot UISlot, uiVersion int) (dropped []string, err error) {
 	if v == nil {
 		return nil, errors.New("no view")
 	}
+	dropped = wire.StripAssistantFields(v)
 	if v.Sections == nil {
 		v.Sections = []Section{}
 	}

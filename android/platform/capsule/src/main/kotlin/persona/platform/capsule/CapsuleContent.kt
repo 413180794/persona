@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 interface CapsuleContentSource {
     val content: StateFlow<CapsuleContent>
     fun shown(expanded: Boolean) {}
+    fun selectSection(id: String)
     fun select(id: String?)
     suspend fun send(id: String?, text: String)
     suspend fun perform(id: String?, actionId: String)
@@ -13,6 +14,7 @@ interface CapsuleContentSource {
 }
 
 enum class CapsuleState { NeedsYou, Working, Done, Idle }
+data class CapsuleSection(val id: String, val title: String, val count: Int = 0, val list: Boolean = true)
 data class CapsuleAction(val id: String, val label: String)
 data class CapsuleMessage(val id: String, val text: String, val fromUser: Boolean)
 data class CapsuleEntry(
@@ -30,12 +32,19 @@ data class CapsuleContent(
     val busy: Boolean = false,
     val error: String? = null,
     val available: Boolean = false,
+    val sections: List<CapsuleSection> = emptyList(),
+    val sectionId: String? = null,
+    val badgeCount: Int = 0,
+    val hasActivity: Boolean = false,
+    val headline: CapsuleEntry? = null,
 ) {
     val selected: CapsuleEntry? get() = entries.firstOrNull { it.id == selectedId }
-    val urgent: CapsuleEntry? get() = entries.minByOrNull { it.state.ordinal }
+    val section: CapsuleSection? get() = sections.firstOrNull { it.id == sectionId }
+    val listing: Boolean get() = sections.isNotEmpty() && section?.list == true && selectedId == null
+    val urgent: CapsuleEntry? get() = headline ?: entries.minByOrNull { it.state.ordinal }
     val activeCount: Int get() = entries.count { it.state != CapsuleState.Idle }
     val urgentCount: Int get() = urgent?.state?.takeIf { it != CapsuleState.Idle }?.let { state -> entries.count { it.state == state } } ?: 0
-    val active: Boolean get() = activeCount > 0
+    val active: Boolean get() = if (sections.isEmpty()) activeCount > 0 else hasActivity
 }
 
 enum class CapsuleMode(val key: String, val label: String) {

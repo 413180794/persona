@@ -865,7 +865,7 @@ App 画一个插槽时在 `context` 里说清楚是给谁画、画在哪，hub �
 ]}
 ```
 
-胶囊展开时查询 `GET /api/v1/extensions/-/ui?placement=capsule_card`，按卡片请求 `ui.render`，扩展收到
+胶囊展开到主对话 / 会话详情时查询 `GET /api/v1/extensions/-/ui?placement=capsule_card`，按卡片请求 `ui.render`，未读和收件箱列表不加载扩展卡片。扩展收到
 `placement: "capsule_card"`、`size: "compact"`、`platform: "android"`。沿用卡片上限（最多 2 节、12 项，不带 field / search / filter / more），
 按钮、行和分段选择走原来的 `ui.action`。需要确认的按钮在胶囊内部先显示确认行，确认后才发动作，错误和回执也留在卡片内。
 `opens`、动作的 `push` 打开 App 内完整扩展页，链接只允许 https。`refresh_after` 和 `ui.invalidate` 只在卡片展开、窗口可见时刷新；

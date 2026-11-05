@@ -4,6 +4,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CapsulePolicyTest {
+    @Test fun sectionModeUsesGlobalActivityEvenWhenTheSelectedListIsEmpty() {
+        val sections = listOf(CapsuleSection("unread", "未读", 3), CapsuleSection("main", "主对话", list = false), CapsuleSection("inbox", "收件箱", 6))
+        val global = CapsuleEntry("urgent", "Waiting", "", CapsuleState.NeedsYou)
+        val content = CapsuleContent(sections = sections, sectionId = "unread", hasActivity = true, headline = global)
+        assertTrue(content.active)
+        assertTrue(content.listing)
+        assertEquals(global, content.urgent)
+        assertFalse(content.copy(sectionId = "main").listing)
+        assertFalse(content.copy(selectedId = "chat").listing)
+        assertFalse(content.copy(hasActivity = false, entries = listOf(global)).active)
+    }
     @Test fun imeTopUsesDisplayCoordinatesInsteadOfSubtractingAClippedViewInsetFromTheScreen() {
         // Captured emulator geometry: display bottom 2400, IME top 1517, overlay y 940 + height 1365.
         assertEquals(1517, CapsuleIme.top(2400, 883, 940, 1365, 788, true, null))

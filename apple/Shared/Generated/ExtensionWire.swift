@@ -2404,14 +2404,21 @@ nonisolated struct ExtensionView: Codable, Equatable, Sendable {
     var refreshAfter: Int?
     var search: ExtensionSearch?
     var filter: ExtensionFilter?
+    /// Plain text for an assistant card: required by CheckAssistantView; not required for extension views.
+    var fallback: String?
+    /// Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page
+    /// refers to this root map.
+    var pages: [String: ExtensionView]?
 
-    init(title: String? = nil, sections: [ExtensionSection] = [], state: String? = nil, refreshAfter: Int? = nil, search: ExtensionSearch? = nil, filter: ExtensionFilter? = nil) {
+    init(title: String? = nil, sections: [ExtensionSection] = [], state: String? = nil, refreshAfter: Int? = nil, search: ExtensionSearch? = nil, filter: ExtensionFilter? = nil, fallback: String? = nil, pages: [String: ExtensionView]? = nil) {
         self.title = title
         self.sections = sections
         self.state = state
         self.refreshAfter = refreshAfter
         self.search = search
         self.filter = filter
+        self.fallback = fallback
+        self.pages = pages
     }
 
     enum CodingKeys: String, CodingKey {
@@ -2421,6 +2428,8 @@ nonisolated struct ExtensionView: Codable, Equatable, Sendable {
         case refreshAfter = "refresh_after"
         case search
         case filter
+        case fallback
+        case pages
     }
 
     init(from decoder: Decoder) throws {
@@ -2431,6 +2440,8 @@ nonisolated struct ExtensionView: Codable, Equatable, Sendable {
         self.refreshAfter = try? c.decodeIfPresent(Int.self, forKey: .refreshAfter)
         self.search = try? c.decodeIfPresent(ExtensionSearch.self, forKey: .search)
         self.filter = try? c.decodeIfPresent(ExtensionFilter.self, forKey: .filter)
+        self.fallback = try? c.decodeIfPresent(String.self, forKey: .fallback)
+        self.pages = try? c.decodeIfPresent([String: ExtensionView].self, forKey: .pages)
     }
 }
 
@@ -2480,13 +2491,14 @@ nonisolated enum ExtensionComponent: Codable, Equatable, Sendable {
     case table(ExtensionTableComponent)
     case empty(ExtensionEmptyComponent)
     case loading(ExtensionLoadingComponent)
+    case html(ExtensionHtmlComponent)
     /// A type this app does not know, or a variant it could not read: skipped when drawn.
     case unknown(type: String)
 
-    static let types = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading"]
+    static let types = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html"]
 
     /// The UI version that brought each type.
-    static let since: [String: Int] = ["text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3]
+    static let since: [String: Int] = ["text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4]
 
     private enum TagKey: String, CodingKey {
         case tag = "type"
@@ -2509,6 +2521,7 @@ nonisolated enum ExtensionComponent: Codable, Equatable, Sendable {
         case .table: "table"
         case .empty: "empty"
         case .loading: "loading"
+        case .html: "html"
         case .unknown(let t): t
         }
     }
@@ -2531,6 +2544,7 @@ nonisolated enum ExtensionComponent: Codable, Equatable, Sendable {
         case "table": self = (try? ExtensionTableComponent(from: decoder)).map { .table($0) } ?? .unknown(type: t)
         case "empty": self = (try? ExtensionEmptyComponent(from: decoder)).map { .empty($0) } ?? .unknown(type: t)
         case "loading": self = (try? ExtensionLoadingComponent(from: decoder)).map { .loading($0) } ?? .unknown(type: t)
+        case "html": self = (try? ExtensionHtmlComponent(from: decoder)).map { .html($0) } ?? .unknown(type: t)
         default: self = .unknown(type: t)
         }
     }
@@ -2552,6 +2566,7 @@ nonisolated enum ExtensionComponent: Codable, Equatable, Sendable {
         case .table(let v): try v.encode(to: encoder)
         case .empty(let v): try v.encode(to: encoder)
         case .loading(let v): try v.encode(to: encoder)
+        case .html(let v): try v.encode(to: encoder)
         case .unknown: break
         }
         var c = encoder.container(keyedBy: TagKey.self)
@@ -3030,6 +3045,123 @@ nonisolated struct ExtensionLoadingComponent: Codable, Equatable, Sendable {
     }
 }
 
+/// Assistant only: self-contained HTML. Execution requires an isolated, network-denying renderer; unsupported clients
+/// show the root fallback. Extensions never execute it.
+nonisolated struct ExtensionHtmlComponent: Codable, Equatable, Sendable {
+    var key: String?
+    var html: String
+    var height: Int?
+    var title: String?
+
+    init(key: String? = nil, html: String = "", height: Int? = nil, title: String? = nil) {
+        self.key = key
+        self.html = html
+        self.height = height
+        self.title = title
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case html
+        case height
+        case title
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.html = (try? c.decodeIfPresent(String.self, forKey: .html)) ?? ""
+        self.height = try? c.decodeIfPresent(Int.self, forKey: .height)
+        self.title = try? c.decodeIfPresent(String.self, forKey: .title)
+    }
+}
+
+nonisolated struct ExtensionAssistantView: Codable, Equatable, Sendable {
+    var id: String
+    var conversation: String
+    var version: Int64
+    var view: ExtensionView
+    var createdAt: String
+    var updatedAt: String
+
+    init(id: String = "", conversation: String = "", version: Int64 = 0, view: ExtensionView = ExtensionView(), createdAt: String = "", updatedAt: String = "") {
+        self.id = id
+        self.conversation = conversation
+        self.version = version
+        self.view = view
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case conversation
+        case version
+        case view
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.conversation = (try? c.decodeIfPresent(String.self, forKey: .conversation)) ?? ""
+        self.version = (try? c.decodeIfPresent(Int64.self, forKey: .version)) ?? 0
+        self.view = (try? c.decodeIfPresent(ExtensionView.self, forKey: .view)) ?? ExtensionView()
+        self.createdAt = (try? c.decodeIfPresent(String.self, forKey: .createdAt)) ?? ""
+        self.updatedAt = (try? c.decodeIfPresent(String.self, forKey: .updatedAt)) ?? ""
+    }
+}
+
+nonisolated struct ExtensionViewAction: Codable, Equatable, Sendable {
+    var key: String
+    var action: String
+    var page: String?
+    var values: [String: String]?
+    var clientMsgId: String
+    var status: String
+    var at: String
+
+    init(key: String = "", action: String = "", page: String? = nil, values: [String: String]? = nil, clientMsgId: String = "", status: String = "", at: String = "") {
+        self.key = key
+        self.action = action
+        self.page = page
+        self.values = values
+        self.clientMsgId = clientMsgId
+        self.status = status
+        self.at = at
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case action
+        case page
+        case values
+        case clientMsgId = "client_msg_id"
+        case status
+        case at
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = (try? c.decodeIfPresent(String.self, forKey: .key)) ?? ""
+        self.action = (try? c.decodeIfPresent(String.self, forKey: .action)) ?? ""
+        self.page = try? c.decodeIfPresent(String.self, forKey: .page)
+        self.values = try? c.decodeIfPresent([String: String].self, forKey: .values)
+        self.clientMsgId = (try? c.decodeIfPresent(String.self, forKey: .clientMsgId)) ?? ""
+        self.status = (try? c.decodeIfPresent(String.self, forKey: .status)) ?? ""
+        self.at = (try? c.decodeIfPresent(String.self, forKey: .at)) ?? ""
+    }
+}
+
+/// Values of ViewActionStatus.
+nonisolated enum ExtensionViewActionStatus {
+    static let pending = "pending"
+    static let sent = "sent"
+    static let failed = "failed"
+    static let all = ["pending", "sent", "failed"]
+}
+
 /// What a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push or pop
 /// a page) are fields added here.
 nonisolated struct ExtensionAction: Codable, Equatable, Sendable {
@@ -3038,14 +3170,25 @@ nonisolated struct ExtensionAction: Codable, Equatable, Sendable {
     var confirm: String?
     /// Send the page's fields as values.
     var submit: Bool?
+    /// Assistant only: send this text back to the same conversation. The hub reads it from the saved view, not from
+    /// the client.
+    var reply: String?
+    /// Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the
+    /// app.
+    var open: String?
+    /// Assistant only: return one page within the card.
+    var pop: Bool?
     /// Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls
     /// ui.action with id).
     var push: ExtensionPush?
 
-    init(id: String = "", confirm: String? = nil, submit: Bool? = nil, push: ExtensionPush? = nil) {
+    init(id: String = "", confirm: String? = nil, submit: Bool? = nil, reply: String? = nil, open: String? = nil, pop: Bool? = nil, push: ExtensionPush? = nil) {
         self.id = id
         self.confirm = confirm
         self.submit = submit
+        self.reply = reply
+        self.open = open
+        self.pop = pop
         self.push = push
     }
 
@@ -3053,6 +3196,9 @@ nonisolated struct ExtensionAction: Codable, Equatable, Sendable {
         case id
         case confirm
         case submit
+        case reply
+        case open
+        case pop
         case push
     }
 
@@ -3061,6 +3207,9 @@ nonisolated struct ExtensionAction: Codable, Equatable, Sendable {
         self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
         self.confirm = try? c.decodeIfPresent(String.self, forKey: .confirm)
         self.submit = try? c.decodeIfPresent(Bool.self, forKey: .submit)
+        self.reply = try? c.decodeIfPresent(String.self, forKey: .reply)
+        self.open = try? c.decodeIfPresent(String.self, forKey: .open)
+        self.pop = try? c.decodeIfPresent(Bool.self, forKey: .pop)
         self.push = try? c.decodeIfPresent(ExtensionPush.self, forKey: .push)
     }
 }
@@ -3069,17 +3218,21 @@ nonisolated struct ExtensionAction: Codable, Equatable, Sendable {
 /// extension_page, plugin_page or nav_page) with state. title is shown until the view comes.
 nonisolated struct ExtensionPush: Codable, Equatable, Sendable {
     var ui: String?
+    /// Assistant only: a page in the root View.pages. Never combined with ui or state.
+    var page: String?
     var state: String?
     var title: String?
 
-    init(ui: String? = nil, state: String? = nil, title: String? = nil) {
+    init(ui: String? = nil, page: String? = nil, state: String? = nil, title: String? = nil) {
         self.ui = ui
+        self.page = page
         self.state = state
         self.title = title
     }
 
     enum CodingKeys: String, CodingKey {
         case ui
+        case page
         case state
         case title
     }
@@ -3087,6 +3240,7 @@ nonisolated struct ExtensionPush: Codable, Equatable, Sendable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.ui = try? c.decodeIfPresent(String.self, forKey: .ui)
+        self.page = try? c.decodeIfPresent(String.self, forKey: .page)
         self.state = try? c.decodeIfPresent(String.self, forKey: .state)
         self.title = try? c.decodeIfPresent(String.self, forKey: .title)
     }

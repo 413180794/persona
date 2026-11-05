@@ -840,6 +840,11 @@ type View struct {
 	RefreshAfter int     `json:"refresh_after,omitempty"`
 	Search       *Search `json:"search,omitempty"`
 	Filter       *Filter `json:"filter,omitempty"`
+	// Plain text for an assistant card: required by CheckAssistantView; not required for extension views.
+	Fallback string `json:"fallback,omitempty"`
+	// Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page refers
+	// to this root map.
+	Pages map[string]View `json:"pages,omitempty"`
 }
 
 type Section struct {
@@ -883,6 +888,8 @@ type Component struct {
 	Rows        [][]string    `json:"rows,omitempty"`
 	Caption     string        `json:"caption,omitempty"`
 	Button      *EmptyButton  `json:"button,omitempty"`
+	Html        string        `json:"html,omitempty"`
+	Height      int           `json:"height,omitempty"`
 }
 
 // Component types.
@@ -902,13 +909,43 @@ const (
 	ComponentTable     = "table"
 	ComponentEmpty     = "empty"
 	ComponentLoading   = "loading"
+	ComponentHtml      = "html"
 )
 
 // ComponentTypes are the types of Component, in order.
-var ComponentTypes = []string{"text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading"}
+var ComponentTypes = []string{"text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html"}
 
 // ComponentSince is the UI version that brought each type.
-var ComponentSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3}
+var ComponentSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4}
+
+type AssistantView struct {
+	ID           string    `json:"id"`
+	Conversation string    `json:"conversation"`
+	Version      int64     `json:"version"`
+	View         View      `json:"view"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type ViewAction struct {
+	Key         string            `json:"key"`
+	Action      string            `json:"action"`
+	Page        string            `json:"page,omitempty"`
+	Values      map[string]string `json:"values,omitempty"`
+	ClientMsgID string            `json:"client_msg_id"`
+	Status      string            `json:"status"`
+	At          time.Time         `json:"at"`
+}
+
+// Values of ViewActionStatus.
+const (
+	ViewActionStatusPending = "pending"
+	ViewActionStatusSent    = "sent"
+	ViewActionStatusFailed  = "failed"
+)
+
+// ViewActionStatuses are the values of ViewActionStatus, in order.
+var ViewActionStatuses = []string{"pending", "sent", "failed"}
 
 // Action: what a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push
 // or pop a page) are fields added here.
@@ -918,6 +955,14 @@ type Action struct {
 	Confirm string `json:"confirm,omitempty"`
 	// Send the page's fields as values.
 	Submit bool `json:"submit,omitempty"`
+	// Assistant only: send this text back to the same conversation. The hub reads it from the saved view, not from the
+	// client.
+	Reply string `json:"reply,omitempty"`
+	// Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the
+	// app.
+	Open string `json:"open,omitempty"`
+	// Assistant only: return one page within the card.
+	Pop bool `json:"pop,omitempty"`
 	// Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action
 	// with id).
 	Push *Push `json:"push,omitempty"`
@@ -926,7 +971,9 @@ type Action struct {
 // Push: A page pushed on the navigation stack: ui.render of the extension's ui (this one when empty; a full page:
 // extension_page, plugin_page or nav_page) with state. title is shown until the view comes.
 type Push struct {
-	UI    string `json:"ui,omitempty"`
+	UI string `json:"ui,omitempty"`
+	// Assistant only: a page in the root View.pages. Never combined with ui or state.
+	Page  string `json:"page,omitempty"`
 	State string `json:"state,omitempty"`
 	Title string `json:"title,omitempty"`
 }
@@ -1149,6 +1196,8 @@ var newDef = map[string]func() any{
 	"View":                  func() any { return new(View) },
 	"Section":               func() any { return new(Section) },
 	"Component":             func() any { return new(Component) },
+	"AssistantView":         func() any { return new(AssistantView) },
+	"ViewAction":            func() any { return new(ViewAction) },
 	"Action":                func() any { return new(Action) },
 	"Push":                  func() any { return new(Push) },
 	"Search":                func() any { return new(Search) },

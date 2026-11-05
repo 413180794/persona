@@ -2,7 +2,10 @@ plugins {
     id("jarvis.android.library")
     id("jarvis.compose")
 }
-android { namespace = "persona.platform.capsule" }
+android {
+    namespace = "persona.platform.capsule"
+    testOptions { unitTests { isIncludeAndroidResources = true } }
+}
 dependencies {
     implementation(project(":core:contracts"))
     implementation(project(":core:designsystem"))
@@ -15,4 +18,9 @@ dependencies {
     implementation(libs.coroutines.android)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.test.ext:junit:1.3.0")
 }

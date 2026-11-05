@@ -56,8 +56,13 @@ class CapsuleRuntime @Inject constructor(
                 .distinctUntilChanged().collectLatest { session ->
                 if (session == null) return@collectLatest
                 coroutineScope {
-                    val source = CapsuleSessions(session, wiring, this) { key, assistant ->
-                        val uri = if (key == null) Uri.parse(AskPersonaLink) else NotificationRoute.conversation(key.machineId, key.sessionId, assistant).uri()
+                    val source = CapsuleSessions(session, wiring, this, openInbox = { item ->
+                        launchApp(Uri.Builder().scheme("persona").authority("open")
+                            .appendQueryParameter("target", if (item == null) "tab" else "inbox")
+                            .apply { if (item == null) appendQueryParameter("tab", "inbox") else appendQueryParameter("item", item) }.build())
+                    }) { key, assistant ->
+                        val uri = if (key == null) Uri.parse(if (assistant) AskPersonaLink else "persona://open?target=tab&tab=agents")
+                            else NotificationRoute.conversation(key.machineId, key.sessionId, assistant).uri()
                         launchApp(uri)
                     }
                     val window = CapsuleHost(app, preferences, source,

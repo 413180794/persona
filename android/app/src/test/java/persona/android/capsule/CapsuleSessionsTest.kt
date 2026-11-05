@@ -31,59 +31,86 @@ class CapsuleSessionsTest {
     private fun agent(machine: String, id: String, state: String = "working", quiet: Boolean = false) =
         Session(machine, id, title = "$machine $id", state = state, quiet = quiet)
 
-    @Test fun attentionWinsOverWorkAndCompletionAndIdleMainStaysReachable() {
-        val main = agent("home", "main", "idle").copy(assistant = true)
+    @Test fun unreadMeansTheSameUnseenCompletionAsAgents() {
+        val unseen = agent("home", "unseen", "unread").copy(updatedAt = "2026-11-05T08:00:00Z", rev = 3)
+        val seen = unseen.copy(sessionId = "seen")
+        val muted = unseen.copy(sessionId = "muted")
+        val quiet = unseen.copy(sessionId = "quiet", quiet = true)
+        val assistant = unseen.copy(sessionId = "assistant", assistant = true)
+        val preferences = persona.feature.agents.AgentsPreferencesSnapshot(
+            mutes = AgentPreferences(sessions = listOf(muted.key.path)), seen = mapOf(seen.key.path to "${seen.updatedAt}|${seen.rev}"))
+        val rows = capsuleUnreadSessions(listOf(unseen, seen, muted, quiet, assistant,
+            agent("home", "working"), agent("home", "waiting", "needs_you"), agent("home", "read", "idle")), preferences)
+        assertEquals(listOf(unseen), rows)
+        assertEquals(listOf(seen.copy(rev = 4)), capsuleUnreadSessions(listOf(seen.copy(rev = 4)), preferences))
+    }
+
+    @Test fun theThreeEntrancesHaveIndependentCountsAndUnreadInitiallyShowsAList() = runTest {
         val done = agent("home", "done", "unread")
-        val working = agent("home", "working")
-        val waiting = agent("home", "waiting", "needs_you")
-        val entries = capsuleEntries(listOf(done, main, working, waiting), main.key, emptyList())
-        assertEquals(listOf(CapsuleState.NeedsYou, CapsuleState.Working, CapsuleState.Done, CapsuleState.Idle), entries.map { it.state })
-        assertEquals(capsuleId(main.key), entries.last().id)
-        assertFalse(entries.any { it.id == MainEntry })
-    }
-
-    @Test fun quietWorkIsHiddenButAPendingRequestOnAnIdleTaskRemainsVisible() {
-        val quietWork = agent("home", "quiet", quiet = true)
-        val request = agent("home", "request", "idle")
-        val plainIdle = agent("home", "idle", "idle")
-        val waiting = Interaction("ask", request.machineId, request.sessionId, kind = "question", summary = "Which option?")
-        val entries = capsuleEntries(listOf(quietWork, request, plainIdle), null, listOf(waiting))
-        assertEquals(listOf(capsuleId(request.key), MainEntry), entries.map { it.id })
-        assertEquals(CapsuleState.NeedsYou, entries.first().state)
-        assertEquals("Which option?", entries.first().summary)
-        assertEquals("open", entries.first().actions.single().id)
-    }
-
-    @Test fun mutedAndQuietTasksStayOutOfTheGlobalCapsuleEvenWithPendingRequests() {
-        val muted = agent("home", "muted", "needs_you")
-        val quiet = agent("home", "quiet", "needs_you", quiet = true)
-        val visible = agent("home", "visible")
-        val requests = listOf(Interaction("mute-ask", "home", "muted"), Interaction("quiet-ask", "home", "quiet"))
-        val entries = capsuleEntries(listOf(muted, quiet, visible), null, requests,
-            AgentPreferences(sessions = listOf("home/muted")))
-        assertEquals(listOf(capsuleId(visible.key), MainEntry), entries.map { it.id })
-    }
-
-    @Test fun sameSessionIdOnDifferentHubsHasDifferentIdentityAndEachEntryAppearsOnce() {
-        val primary = agent("machine", "same")
-        val secondary = agent("machine~g0a1b2c3d", "same")
-        assertNotEquals(capsuleId(primary.key), capsuleId(secondary.key))
-        // The separator also keeps machine/session concatenations unambiguous.
-        assertNotEquals(capsuleId(SessionKey("ab", "c")), capsuleId(SessionKey("a", "bc")))
-        val ids = capsuleEntries(listOf(primary, secondary, primary), null, emptyList()).map { it.id }
-        assertEquals(listOf(capsuleId(primary.key), capsuleId(secondary.key), MainEntry), ids)
-    }
-
-    @Test fun selectingAnotherHubsEntryObservesAndSendsOnlyItsQualifiedSessionKey() = runTest {
-        val primary = agent("machine", "same")
-        val secondary = agent("machine~g0a1b2c3d", "same")
-        val fixture = Fixture(backgroundScope, listOf(primary, secondary))
+        val fixture = Fixture(backgroundScope, listOf(done, agent("home", "working")))
+        fixture.inbox.value = persona.feature.inbox.InboxSnapshot(records = listOf(inboxRecord("mail:1")))
         runCurrent()
-        fixture.source.select(capsuleId(secondary.key))
+        val content = fixture.source.content.value
+        assertEquals(listOf("未读", "主对话", "收件箱"), content.sections.map { it.title })
+        assertEquals(listOf(1, 0, 1), content.sections.map { it.count })
+        assertEquals(UnreadSection, content.sectionId)
+        assertTrue(content.listing)
+        assertNull(content.selectedId)
+        assertEquals(listOf(capsuleId(done.key)), content.entries.map { it.id })
+        assertTrue(fixture.observed.isEmpty())
+        assertTrue(content.hasActivity)
+        assertEquals(2, content.badgeCount)
+    }
+
+    @Test fun withoutUnreadTheInitialEntranceIsMainAndWorkIsNotAnUnreadCount() = runTest {
+        val fixture = Fixture(backgroundScope, listOf(agent("home", "working"), agent("home", "waiting", "needs_you")))
+        runCurrent()
+        assertEquals(MainSection, fixture.source.content.value.sectionId)
+        assertEquals(0, fixture.source.content.value.sections.first().count)
+        assertEquals(0, fixture.source.content.value.badgeCount)
+        assertTrue(fixture.source.content.value.hasActivity)
+        fixture.source.selectSection(InboxSection)
+        fixture.sessions.value += agent("home", "later", "unread")
+        runCurrent()
         fixture.source.shown(true)
         runCurrent()
+        assertEquals(InboxSection, fixture.source.content.value.sectionId)
+    }
+
+    @Test fun quietAndMutedWorkDoesNotMakeTheGlobalCapsuleActive() = runTest {
+        val quiet = agent("home", "quiet", quiet = true)
+        val muted = agent("home", "muted")
+        val fixture = Fixture(backgroundScope, listOf(quiet, muted))
+        fixture.hubPreferences.value = HubPreferencesSnapshot(mutes = HubPreferenceSet(sessions = listOf(muted.key.path)))
+        runCurrent()
+        assertFalse(fixture.source.content.value.hasActivity)
+        assertEquals(0, fixture.source.content.value.badgeCount)
+    }
+
+    @Test fun aSeenVersionDoesNotKeepTheGlobalCapsuleActive() = runTest {
+        val done = agent("home", "done", "unread").copy(updatedAt = "2026-11-05T08:00:00Z", rev = 3)
+        val fixture = Fixture(backgroundScope, listOf(done))
+        fixture.hubPreferences.value = HubPreferencesSnapshot(seen = mapOf(done.key.path to "${done.updatedAt}|${done.rev}"))
+        runCurrent()
+        assertFalse(fixture.source.content.value.hasActivity)
+        assertEquals(0, fixture.source.content.value.badgeCount)
+        assertEquals(0, fixture.source.content.value.sections.first().count)
+        fixture.sessions.value = listOf(done.copy(rev = 4))
+        runCurrent()
+        assertTrue(fixture.source.content.value.hasActivity)
+        assertEquals(1, fixture.source.content.value.badgeCount)
+    }
+
+    @Test fun selectingAnotherHubsUnreadObservesAndSendsOnlyItsQualifiedKey() = runTest {
+        val primary = agent("machine", "same", "unread")
+        val secondary = agent("machine~g0a1b2c3d", "same", "unread")
+        assertNotEquals(capsuleId(primary.key), capsuleId(secondary.key))
+        val fixture = Fixture(backgroundScope, listOf(primary, secondary))
+        runCurrent()
+        fixture.source.shown(true)
+        fixture.source.select(capsuleId(secondary.key))
+        runCurrent()
         assertEquals(secondary.key, fixture.observed.last())
-        assertEquals(capsuleId(secondary.key), fixture.source.content.value.selectedId)
         fixture.source.send(fixture.source.content.value.selectedId, "Continue the selected task")
         assertEquals(listOf(secondary.key to "Continue the selected task"), fixture.sent)
         assertTrue(fixture.mainSent.isEmpty())
@@ -91,53 +118,113 @@ class CapsuleSessionsTest {
         assertEquals(secondary.key to false, fixture.opened.single())
     }
 
-    @Test fun personaShortcutSelectsTheExistingMainInsteadOfSendingToTheMostUrgentAgent() = runTest {
+    @Test fun mainDoesNotFollowAnUrgentTaskAndUsesTheExistingMainSession() = runTest {
         val urgent = agent("home", "urgent", "needs_you")
         val main = agent("home", "main", "idle").copy(assistant = true)
         val fixture = Fixture(backgroundScope, listOf(urgent), AssistantSnapshot(main.key, listOf(main)))
         runCurrent()
-        fixture.source.select(null)
+        fixture.source.selectSection(MainSection)
         runCurrent()
-        assertEquals(capsuleId(main.key), fixture.source.content.value.selectedId)
-        fixture.source.send(fixture.source.content.value.selectedId, "Talk to Persona")
+        assertEquals(MainEntry, fixture.source.content.value.selectedId)
+        fixture.source.send(MainEntry, "Talk to Persona")
         assertEquals(listOf(main.key to "Talk to Persona"), fixture.sent)
-        fixture.source.open(fixture.source.content.value.selectedId)
+        fixture.source.open(MainEntry)
         assertEquals(main.key to true, fixture.opened.single())
     }
 
-    @Test fun anEmptyPersonaEntryUsesTheOriginalMainConversationSender() = runTest {
-        val fixture = Fixture(backgroundScope)
+    @Test fun anEmptyMainUsesTheOriginalMainSenderAndKeepsItsDraftIdentityWhenCreated() = runTest {
+        val fixture = Fixture(backgroundScope, listOf(agent("home", "urgent", "needs_you")))
         fixture.bindings.value = fixture.binding()
-        runCurrent()
-        fixture.source.select(null)
-        runCurrent()
-        assertEquals(MainEntry, fixture.source.content.value.selectedId)
-        assertTrue(fixture.source.content.value.canSend)
-        fixture.source.send(fixture.source.content.value.selectedId, "Start a conversation")
-        assertEquals(listOf("Start a conversation"), fixture.mainSent)
-        assertTrue(fixture.sent.isEmpty())
-    }
-
-    @Test fun thePersonaSelectionFollowsANewMainWhileAnotherAgentNeedsAttention() = runTest {
-        val urgent = agent("home", "urgent", "needs_you")
-        val fixture = Fixture(backgroundScope, listOf(urgent))
-        fixture.bindings.value = fixture.binding()
-        runCurrent()
-        fixture.source.select(null)
         runCurrent()
         assertEquals(MainEntry, fixture.source.content.value.selectedId)
         fixture.source.send(MainEntry, "Start Persona")
-        val created = agent("home", "created-main", "working").copy(assistant = true)
+        assertEquals(listOf("Start Persona"), fixture.mainSent)
+        val created = agent("home", "created-main").copy(assistant = true)
         fixture.assistant.value = AssistantSnapshot(created.key, listOf(created))
         runCurrent()
-        assertEquals(capsuleId(created.key), fixture.source.content.value.selectedId)
-        fixture.source.send(fixture.source.content.value.selectedId, "Continue Persona")
+        assertEquals(MainEntry, fixture.source.content.value.selectedId)
+        fixture.source.send(MainEntry, "Continue Persona")
         assertEquals(listOf(created.key to "Continue Persona"), fixture.sent)
     }
 
+    @Test fun selectedConversationSurvivesReadStateChangesUntilReturningToTheList() = runTest {
+        val done = agent("home", "done", "unread")
+        val fixture = Fixture(backgroundScope, listOf(done))
+        runCurrent()
+        fixture.source.shown(true)
+        fixture.source.select(capsuleId(done.key))
+        runCurrent()
+        fixture.sessions.value = listOf(done.copy(state = "idle"), agent("home", "urgent", "needs_you"))
+        runCurrent()
+        assertEquals(capsuleId(done.key), fixture.source.content.value.selectedId)
+        assertEquals(0, fixture.source.content.value.sections.first().count)
+        fixture.source.send(capsuleId(done.key), "The draft still belongs here")
+        assertEquals(listOf(done.key to "The draft still belongs here"), fixture.sent)
+        fixture.source.select(null)
+        runCurrent()
+        assertTrue(fixture.source.content.value.listing)
+        assertTrue(fixture.source.content.value.entries.isEmpty())
+    }
+
+    @Test fun inboxUsesTheActualActionRowsIncludingMergedRequestsInsteadOfActionCount() {
+        val primary = agent("home", "waiting", "needs_you")
+        val other = agent("home~g0a1b2c3d", "waiting", "needs_you")
+        val snapshot = persona.feature.inbox.InboxSnapshot(
+            records = listOf(inboxRecord("mail:action"), inboxRecord("mail:fyi", "fyi"), inboxRecord("mail:done", done = true)),
+            interactions = listOf(inboxRequest("ask-a", primary), inboxRequest("ask-b~g0a1b2c3d", other)),
+            sessions = listOf(primary, other).map(::personaAgent),
+        )
+        val inbox = capsuleInbox(snapshot)
+        assertEquals(3, inbox.entries.size)
+        assertEquals(setOf("inbox:item:mail:action", "inbox:request:ask-a", "inbox:request:ask-b~g0a1b2c3d"), inbox.targets.keys)
+        assertEquals(CapsuleInboxTarget.Request(other.key), inbox.targets["inbox:request:ask-b~g0a1b2c3d"])
+    }
+
+    @Test fun requestsFromTheSameConversationKeepTheirDistinctHeadlines() {
+        val session = agent("home", "waiting", "needs_you")
+        val question = inboxRequest("question", session).copy(title = "采用哪个实现方案？", summary = null)
+        val plan = inboxRequest("plan", session).copy(title = "计划等你批准", summary = "")
+        val permission = inboxRequest("permission", session).copy(title = "请求使用 Bash", summary = "运行测试")
+        val rows = capsuleInbox(persona.feature.inbox.InboxSnapshot(interactions = listOf(question, plan, permission),
+            sessions = listOf(personaAgent(session)))).entries.associateBy { it.id }
+        assertEquals(1, rows.values.map { it.title }.distinct().size)
+        assertEquals("采用哪个实现方案？", rows.getValue("inbox:request:question").summary)
+        assertEquals("计划等你批准", rows.getValue("inbox:request:plan").summary)
+        assertEquals("请求使用 Bash · 运行测试", rows.getValue("inbox:request:permission").summary)
+        assertEquals(3, rows.values.map { it.summary }.distinct().size)
+    }
+
+    @Test fun inboxItemsOpenTheExistingRawItemRouteAndRequestsOpenTheirQualifiedSession() = runTest {
+        val other = agent("home~g0a1b2c3d", "waiting", "needs_you")
+        val fixture = Fixture(backgroundScope, listOf(other))
+        fixture.bindings.value = fixture.binding()
+        fixture.inbox.value = persona.feature.inbox.InboxSnapshot(records = listOf(inboxRecord("lark:a:b")),
+            interactions = listOf(inboxRequest("ask~g0a1b2c3d", other)), sessions = listOf(personaAgent(other)))
+        runCurrent()
+        fixture.source.selectSection(InboxSection)
+        runCurrent()
+        fixture.source.select("inbox:item:lark:a:b")
+        assertEquals(listOf("lark:a:b"), fixture.openedInbox)
+        fixture.source.select("inbox:request:ask~g0a1b2c3d")
+        assertEquals(listOf(other.key to false), fixture.opened)
+        assertNull(fixture.source.content.value.selectedId)
+    }
+
+    @Test fun anOldInboxCannotOpenTheSameRawIdInANewPairing() = runTest {
+        val fixture = Fixture(backgroundScope)
+        fixture.bindings.value = fixture.binding()
+        fixture.inbox.value = persona.feature.inbox.InboxSnapshot(records = listOf(inboxRecord("mail:1")))
+        runCurrent()
+        fixture.source.selectSection(InboxSection)
+        runCurrent()
+        fixture.bindings.value = fixture.binding(HubScope("other", "pairing"))
+        assertTrue(runCatching { fixture.source.select("inbox:item:mail:1") }.isFailure)
+        assertTrue(fixture.openedInbox.isEmpty())
+    }
+
     @Test fun changingTasksNeverShowsThePreviousTasksReplyUnderTheNewTitle() = runTest {
-        val first = agent("home", "first")
-        val second = agent("home~g0a1b2c3d", "second")
+        val first = agent("home", "first", "unread")
+        val second = agent("home~g0a1b2c3d", "second", "unread")
         val fixture = Fixture(backgroundScope, listOf(first, second))
         runCurrent()
         fixture.source.shown(true)
@@ -146,7 +233,6 @@ class CapsuleSessionsTest {
         fixture.messages.getValue(first.key).value = ChatSnapshot(loading = false,
             items = listOf(Item("private-first", role = "assistant", kind = "text", text = "First task reply")))
         runCurrent()
-        assertEquals("private-first", fixture.source.content.value.messages.single().id)
         val wrongReplies = mutableListOf<String>()
         val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             fixture.source.content.collect { content ->
@@ -156,12 +242,11 @@ class CapsuleSessionsTest {
         fixture.source.select(capsuleId(second.key))
         runCurrent()
         assertFalse(wrongReplies.contains("private-first"))
-        assertEquals(capsuleId(second.key), fixture.source.content.value.selectedId)
         assertTrue(fixture.source.content.value.messages.isEmpty())
         collector.cancel()
     }
 
-    @Test fun aLateMainBindingEnablesSendingWithoutNeedingAnUnrelatedSessionPush() = runTest {
+    @Test fun aLateMainBindingEnablesSendingWithoutAnUnrelatedPush() = runTest {
         val fixture = Fixture(backgroundScope)
         runCurrent()
         assertFalse(fixture.source.content.value.canSend)
@@ -176,7 +261,7 @@ class CapsuleSessionsTest {
     }
 
     @Test fun readOnlyAndRemovedSessionsRejectSendsWithoutTouchingTheOutbox() = runTest {
-        val readOnly = agent("home", "history").copy(sourceKind = "codex_history", capabilities = SessionCapabilities(read = true))
+        val readOnly = agent("home", "history", "unread").copy(sourceKind = "codex_history", capabilities = SessionCapabilities(read = true))
         val fixture = Fixture(backgroundScope, listOf(readOnly))
         runCurrent()
         fixture.source.select(capsuleId(readOnly.key))
@@ -191,8 +276,10 @@ class CapsuleSessionsTest {
 
     @Test fun cancellingThePairingScopePreventsOldCapsuleActionsFromSending() = runTest {
         val scope = CoroutineScope(backgroundScope.coroutineContext + SupervisorJob())
-        val task = agent("home", "task")
+        val task = agent("home", "task", "unread")
         val fixture = Fixture(scope, listOf(task))
+        runCurrent()
+        fixture.source.select(capsuleId(task.key))
         runCurrent()
         scope.cancel()
         runCurrent()
@@ -200,8 +287,8 @@ class CapsuleSessionsTest {
         assertTrue(fixture.sent.isEmpty())
     }
 
-    @Test fun replyHistoryUsesOnlyTextAndDoesNotDuplicateAnAcknowledgedOutboxMessage() = runTest {
-        val task = agent("home", "task")
+    @Test fun replyHistoryUsesOnlyTextAndDoesNotDuplicateAcknowledgedOutboxMessages() = runTest {
+        val task = agent("home", "task", "unread")
         val fixture = Fixture(backgroundScope, listOf(task))
         runCurrent()
         fixture.source.select(capsuleId(task.key))
@@ -222,6 +309,13 @@ class CapsuleSessionsTest {
         assertTrue(fixture.source.content.value.messages.last().text.contains("等待网络"))
     }
 
+    private fun personaAgent(session: Session) = persona.core.domain.sort.AgentSession(session)
+    private fun inboxRecord(id: String, tier: String = "action", done: Boolean = false) = persona.feature.inbox.InboxRecord(
+        persona.core.domain.inbox.InboxItem(id, title = "Item $id", preview = "Needs an answer", tier = tier,
+            doneAt = if (done) "2026-11-05T08:00:00Z" else null))
+    private fun inboxRequest(id: String, session: Session) = persona.core.domain.inbox.InboxInteraction(id, session.machineId, session.sessionId,
+        sessionTitle = session.displayTitle, summary = "Waiting for an answer")
+
     private class Fixture(
         val scope: CoroutineScope,
         initial: List<Session> = emptyList(),
@@ -234,6 +328,9 @@ class CapsuleSessionsTest {
         val mainSent = mutableListOf<String>()
         val observed = mutableListOf<SessionKey>()
         val opened = mutableListOf<Pair<SessionKey?, Boolean>>()
+        val openedInbox = mutableListOf<String?>()
+        val inbox = MutableStateFlow(persona.feature.inbox.InboxSnapshot())
+        val hubPreferences = MutableStateFlow(HubPreferencesSnapshot())
         val messages = mutableMapOf<SessionKey, MutableStateFlow<ChatSnapshot>>()
         private val hubScope = HubScope("hub", "pairing")
         val bindings = MutableStateFlow<ChatAppBindings?>(null)
@@ -281,20 +378,22 @@ class CapsuleSessionsTest {
                 override suspend fun refresh() = Unit
                 override suspend fun startConversation() = error("Use the original main sender")
             },
-            inbox = unused(),
+            inbox = object : persona.feature.inbox.InboxRepository by unused() {
+                override val snapshot = this@Fixture.inbox
+            },
             preferences = AgentsPreferences(object : DataStore<Preferences> {
                 override val data = MutableStateFlow(emptyPreferences())
                 override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
                     transform(data.value).also { data.value = it }
             }, object : HubPreferences {
-                override val preferences = MutableStateFlow(HubPreferencesSnapshot())
+                override val preferences = this@Fixture.hubPreferences
                 override suspend fun refresh() = Unit
                 override suspend fun togglePin(path: String, space: Boolean) = Unit
                 override suspend fun toggleMute(path: String, space: Boolean) = Unit
                 override suspend fun markSeen(session: SessionKey, version: String) = Unit
             }),
         )
-        val source = CapsuleSessions(shell, wiring, scope) { key, assistant -> opened += key to assistant }
+        val source = CapsuleSessions(shell, wiring, scope, openInbox = { openedInbox += it }) { key, assistant -> opened += key to assistant }
         fun binding(key: HubScope = hubScope) = ChatAppBindings(
             key, scope, unused(), unused(), unused(), unused(), unused(), unused(), mainSender,
         )

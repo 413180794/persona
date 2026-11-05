@@ -1057,6 +1057,15 @@ data class ExtensionView(
     @SerialName("refresh_after") val refreshAfter: Int? = null,
     val search: ExtensionSearch? = null,
     val filter: ExtensionFilter? = null,
+    /**
+     * Plain text for an assistant card: required by CheckAssistantView; not required for extension views.
+     */
+    val fallback: String? = null,
+    /**
+     * Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page
+     * refers to this root map.
+     */
+    val pages: Map<String, ExtensionView>? = null,
 )
 
 @Serializable
@@ -1078,8 +1087,8 @@ sealed interface ExtensionComponent {
     data class Unknown(override val type: String, val raw: JsonObject = JsonObject(emptyMap())) : ExtensionComponent
 
     companion object {
-        val TYPES = listOf("text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading")
-        val SINCE = mapOf("text" to 1, "metric" to 1, "progress" to 1, "row" to 1, "button" to 1, "link" to 1, "field" to 1, "divider" to 1, "chart" to 2, "stat_grid" to 2, "segmented" to 2, "markdown" to 3, "table" to 3, "empty" to 3, "loading" to 3)
+        val TYPES = listOf("text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html")
+        val SINCE = mapOf("text" to 1, "metric" to 1, "progress" to 1, "row" to 1, "button" to 1, "link" to 1, "field" to 1, "divider" to 1, "chart" to 2, "stat_grid" to 2, "segmented" to 2, "markdown" to 3, "table" to 3, "empty" to 3, "loading" to 3, "html" to 4)
     }
 }
 
@@ -1108,6 +1117,7 @@ object ExtensionComponentSerializer : KSerializer<ExtensionComponent> {
                 "table" -> input.json.decodeFromJsonElement(ExtensionTableComponent.serializer(), obj)
                 "empty" -> input.json.decodeFromJsonElement(ExtensionEmptyComponent.serializer(), obj)
                 "loading" -> input.json.decodeFromJsonElement(ExtensionLoadingComponent.serializer(), obj)
+                "html" -> input.json.decodeFromJsonElement(ExtensionHtmlComponent.serializer(), obj)
                 else -> ExtensionComponent.Unknown(tag, obj)
             }
         } catch (_: SerializationException) {
@@ -1135,6 +1145,7 @@ object ExtensionComponentSerializer : KSerializer<ExtensionComponent> {
             is ExtensionTableComponent -> output.json.encodeToJsonElement(ExtensionTableComponent.serializer(), value) as JsonObject
             is ExtensionEmptyComponent -> output.json.encodeToJsonElement(ExtensionEmptyComponent.serializer(), value) as JsonObject
             is ExtensionLoadingComponent -> output.json.encodeToJsonElement(ExtensionLoadingComponent.serializer(), value) as JsonObject
+            is ExtensionHtmlComponent -> output.json.encodeToJsonElement(ExtensionHtmlComponent.serializer(), value) as JsonObject
             is ExtensionComponent.Unknown -> value.raw
         }
         output.encodeJsonElement(JsonObject(obj + ("type" to JsonPrimitive(value.type))))
@@ -1333,6 +1344,50 @@ data class ExtensionLoadingComponent(
 ) : ExtensionComponent
 
 /**
+ * Assistant only: self-contained HTML. Execution requires an isolated, network-denying renderer; unsupported clients
+ * show the root fallback. Extensions never execute it.
+ */
+@Serializable
+data class ExtensionHtmlComponent(
+    override val type: String = "html",
+    val key: String? = null,
+    val html: String = "",
+    val height: Int? = null,
+    val title: String? = null,
+) : ExtensionComponent
+
+@Serializable
+data class ExtensionAssistantView(
+    val id: String = "",
+    val conversation: String = "",
+    val version: Long = 0L,
+    val view: ExtensionView = ExtensionView(),
+    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("updated_at") val updatedAt: String = "",
+)
+
+@Serializable
+data class ExtensionViewAction(
+    val key: String = "",
+    val action: String = "",
+    val page: String? = null,
+    val values: Map<String, String>? = null,
+    @SerialName("client_msg_id") val clientMsgId: String = "",
+    val status: String = "",
+    val at: String = "",
+)
+
+/**
+ * Values of ViewActionStatus.
+ */
+object ExtensionViewActionStatus {
+    const val PENDING = "pending"
+    const val SENT = "sent"
+    const val FAILED = "failed"
+    val ALL = listOf("pending", "sent", "failed")
+}
+
+/**
  * What a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push or pop a
  * page) are fields added here.
  */
@@ -1348,6 +1403,20 @@ data class ExtensionAction(
      */
     val submit: Boolean? = null,
     /**
+     * Assistant only: send this text back to the same conversation. The hub reads it from the saved view, not from
+     * the client.
+     */
+    val reply: String? = null,
+    /**
+     * Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the
+     * app.
+     */
+    val open: String? = null,
+    /**
+     * Assistant only: return one page within the card.
+     */
+    val pop: Boolean? = null,
+    /**
      * Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls
      * ui.action with id).
      */
@@ -1361,6 +1430,10 @@ data class ExtensionAction(
 @Serializable
 data class ExtensionPush(
     val ui: String? = null,
+    /**
+     * Assistant only: a page in the root View.pages. Never combined with ui or state.
+     */
+    val page: String? = null,
     val state: String? = null,
     val title: String? = null,
 )

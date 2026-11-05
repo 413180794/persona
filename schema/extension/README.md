@@ -28,6 +28,18 @@ python3 scripts/test/test_extension_schema.py     # --check + 例子合不合 sc
 
 生成器还把三份 schema 原样拷到 `sdk/go/wire/schema/`（`go:embed` 读不到 module 外面的文件）：`wire.Validate(<定义名>, 值)` 按它们查，
 hub 查扩展画的 View（`extension.CheckView`）、一致性测试查 `initialize` 的回答都用它，和 `scripts/test/test_extension_schema.py` 的校验器认同一个子集。
+共同的 View 语义检查在 `sdk/go/wire/viewcheck.go`，扩展和助手均调用，避免复制图表、表格和字段检查。
+
+## 助手卡片（#2018）
+
+仍用 View 和 Component，新增 `View.fallback`／`pages`、`Action.reply`／`open`／`pop`、`Push.page` 和 `html` 组件。
+`AssistantView` 是有归属和版本的活卡片，`ViewAction` 是持久化提交记录（pending／sent／failed）；详细规格见 [助手富 UI](../../docs/assistant-views.md)。
+
+- `wire.ParseAssistantView` 校验原始 JSON，支持带 fallback 的单组件简写，限制 64 KB 和 JSON 深度；`wire.CheckAssistantView` 再检查共同组件语义及助手的动作／页面规则。
+- 根 fallback 必填；最多 8 个命名页，详情页不能嵌套 pages。所有动作 id 在卡片内唯一，push.page 引用根 pages；助手表单禁止 secret。
+- `wire.StripAssistantFields` 供扩展的 Fit 调用：拿掉助手字段、动作和 html，扩展的既有 id／push.ui／state 行为不变。
+- html 的 `x-since: 4` 用于老渲染器识别，本阶段**不提升扩展的 ui_version（仍为 3）**，也不启用执行；各端后续按能力和安全验收接入。
+- `examples/assistant/*.json` 是四端截图和往返测试共用的合成数据，含决策、比较、多页、进度更新、表单、图表与 HTML。schema 的合法性不代表 HTML 已经通过执行安全验收。
 
 生成的文件头写着「do not edit」，别手改：改 schema，再生成。Go 的输出过一遍 `gofmt`（生成器要求 PATH 上有它）。
 

@@ -33,6 +33,8 @@ class ExtensionWireTest {
         "ShortcutPlaces" to ExtensionShortcutPlaces.serializer(),
         "ShortcutResult" to ExtensionShortcutResult.serializer(),
         "ExtensionNotification" to ExtensionNotification.serializer(),
+        "AssistantView" to ExtensionAssistantView.serializer(),
+        "ViewAction" to ExtensionViewAction.serializer(),
     )
 
     @Suppress("UNCHECKED_CAST")
@@ -43,6 +45,18 @@ class ExtensionWireTest {
             val serializer = types[f.name.substringBefore(".")] as KSerializer<Any?>? ?: fail("no type for ${f.name}") as Nothing
             val raw = json.parseToJsonElement(f.readText())
             val back = json.encodeToJsonElement(serializer, json.decodeFromJsonElement(serializer, raw))
+            assertTrue("${f.name} round trip differs:\n$raw\n$back", same(raw, back))
+        }
+    }
+
+    @Test fun assistantExamplesRoundTrip() {
+        val files = File(examples, "assistant").listFiles { f -> f.name.endsWith(".json") }.orEmpty()
+        assertTrue("assistant examples missing", files.size >= 7)
+        for (f in files) {
+            val raw = json.parseToJsonElement(f.readText())
+            val view = json.decodeFromJsonElement(ExtensionView.serializer(), raw)
+            assertFalse("${f.name} has no fallback", view.fallback.isNullOrBlank())
+            val back = json.encodeToJsonElement(ExtensionView.serializer(), view)
             assertTrue("${f.name} round trip differs:\n$raw\n$back", same(raw, back))
         }
     }

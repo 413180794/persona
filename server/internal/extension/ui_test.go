@@ -32,6 +32,19 @@ func TestCheckViewAgreesWithTheSchema(t *testing.T) {
 
 // Fit leaves out what the asking app cannot draw (and a section left with nothing), raises refresh_after to its least,
 // and holds a card to its size.
+func TestFitAssistantOnlySections(t *testing.T) {
+	v := &View{Sections: []Section{
+		{Items: []UIElem{{Type: "html", Html: "<p>a</p>"}}},
+		{Items: []UIElem{{Type: "html", Html: "<p>b</p>"}}},
+		{Items: []UIElem{{Type: "html", Html: "<p>c</p>"}}},
+	}}
+	card, _ := Slot("overview_card")
+	dropped, err := Fit(v, card, UIVersion)
+	if err != nil || len(v.Sections) != 0 || !slices.Contains(dropped, "html") {
+		t.Fatalf("sections=%+v dropped=%v err=%v", v.Sections, dropped, err)
+	}
+}
+
 func TestFit(t *testing.T) {
 	chart := UIElem{Type: "chart", Kind: "line", Series: []ChartSeries{{Points: []ChartPoint{{Label: "a", Value: 1}}}}}
 	view := func() *View {

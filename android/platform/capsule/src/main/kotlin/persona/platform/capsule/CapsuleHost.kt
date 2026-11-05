@@ -135,12 +135,10 @@ class CapsuleHost(
                     androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier
                         .then(androidx.compose.ui.Modifier.heightIn(max = maxHeight))) {
                         CapsuleSurface(latest, expanded,
-                            onExpand = {
-                                latest.urgent?.let { source.select(it.id) }
-                                changeExpanded(true)
-                            },
+                            onExpand = { changeExpanded(true) },
                             onCollapse = { changeExpanded(false) },
                             onSelect = source::select,
+                            onSelectSection = source::selectSection,
                             onOpen = { id -> source.open(id); changeExpanded(false) },
                             onSend = { id, text -> source.send(id, text) },
                             onAction = { id, action -> source.perform(id, action) },
@@ -182,11 +180,8 @@ class CapsuleHost(
         }
     }
 
-    private fun width(): Int = px(when {
-        expanded -> CapsuleTokens.cardWidth
-        latest.urgent?.state != null && latest.urgent?.state != CapsuleState.Idle -> CapsuleTokens.summaryWidth
-        else -> CapsuleTokens.orb
-    }).coerceAtMost(area().right - area().left)
+    private fun width(): Int = px(if (expanded) CapsuleTokens.cardWidth else CapsuleTokens.compactWidth)
+        .coerceAtMost(area().right - area().left)
 
     private fun changeExpanded(value: Boolean) {
         if (expanded == value) return

@@ -105,7 +105,7 @@ data class AgentRowMetadata(
 }
 
 private val Session.readVersion: String get() = "${updatedAt.orEmpty()}|${rev ?: ""}"
-internal fun Session.listSession(preferences: AgentsPreferencesSnapshot): AgentSession {
+fun Session.listSession(preferences: AgentsPreferencesSnapshot): AgentSession {
     val visible = if (agentState == AgentState.Unread && preferences.seen[key.path] == readVersion) copy(state = "idle") else this
     return AgentSession(visible, stateSince, subagents.orEmpty().any { it.running == true })
 }
