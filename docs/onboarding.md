@@ -469,6 +469,11 @@ POST /api/v1/auth/pair-codes      full 设备（不是由配对码临时身份�
 - `<站点>` 来自配置，不写死。
 - 错误：403（不是 full 设备，或是配对码换来、还没确认的设备）；409 `tls_required`（`action: "enable_tls"`）；409 `mesh_member`；429 `too_many_pending`（同时最多 3 台未兑换或待确认的电脑）。
 - 去掉 `pairing.go:132-135` 对设备的限制，但只放开 `add` / 已存在的 link 电脑这两种。
+- 实现（#3735）和上面的出入，以 `docs/protocol.md`「电脑的配对码」为准：设备只能给**待确认**的电脑出码（`machine` 或同名复用），已确认的回 409 `not_pending`，
+  这样设备出的码都走「待确认 → 确认」，重新配对已确认的电脑在管理界面或 hub 机器上做（客户端 M3 不能在 App 里给已确认的电脑重新出码）。这不是安全边界：full 设备本来就能用
+  `POST /api/v1/auth/tokens`（`kind: link`）直接给任何 link 电脑签凭据，要收紧得另做。设备给待确认的电脑重新出码时，先吊销它已有的 Persona Link 凭据（上一个码换到的不能跟着被确认）；`add` 可带 `id`（给 `hub pair --machine <id> --add` 用）；响应的 `trust` 总是给出
+  （`pending` / `confirmed`），另有 `name`、`added`；hub 不知道自己的发布站点时（本地构建、Docker 镜像）不给 `install`；主 token 带不存在的 `machine` 回 400 `unknown_machine`；
+  回执推送的文字带上电脑的名字：「<设备> 给电脑「<名字>」出了一个配对码」。通知上的「不是你？撤销」按钮还没做（要各端的通知分类）。
 
 机器列表（`GET /api/v1/machines` 和 hello 里的机器）每台加两个可选字段：
 

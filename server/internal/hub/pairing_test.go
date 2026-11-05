@@ -302,9 +302,10 @@ func TestPairCodesFromADevice(t *testing.T) {
 	}
 
 	pairs := len(s.pairs)
-	// A code for Persona Link is still made on the hub machine only; web must be a page address for the token's #.
+	// A device makes no code for a computer already confirmed (machines_add_test.go has the ones it may make); web
+	// must be a page address for the token's #.
 	h.cfg.Machines = append(h.cfg.Machines, MachineConfig{ID: "laptop", Kind: kindLink})
-	requireCode(t, securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", tok, `{"machine":"laptop"}`, "198.51.100.1:1", true), 403, "")
+	requireCode(t, securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", tok, `{"machine":"laptop"}`, "198.51.100.1:1", true), 409, "not_pending")
 	for _, web := range []string{"javascript:alert(1)", "/settings", "https://hub.example.com/#x", "https://me:pw@hub.example.com/"} {
 		body, _ := json.Marshal(map[string]string{"web": web})
 		requireCode(t, securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", tok, string(body), "198.51.100.1:1", true), 400, "")

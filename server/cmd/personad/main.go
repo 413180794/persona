@@ -67,7 +67,9 @@ const usage = `usage:
   personad hub setup [--yes] [--listen :18660] [--tls :18662] [--outside] [--no-service] [--json]
                                            set this machine up as the hub: hub.json, database, service, pairing (docs/onboarding.md)
   personad hub pair [--legacy] [--android] print a pairing QR code and optional Android download link
-  personad hub pair --machine <id>          print a pairing link for that link machine's jarvis-link (docs/link.md)
+  personad hub pair --machine <id> [--add [--name <name>]]
+                                           print a pairing link for that link machine's jarvis-link (docs/link.md);
+                                           --add adds it to hub.json first when it is not there
   personad hub pair --peer  print a code another hub pairs with this one by (hub mesh, docs/mesh.md)
   personad hub peer add <code>|-   pair this hub with the hub whose code it is
   personad hub peer list           the paired hubs and the ones found on the LAN
@@ -173,6 +175,8 @@ func main() {
 			legacy := flags.Bool("legacy", false, "使用主 token 打印旧格式二维码")
 			android := flags.Bool("android", false, "同时打印 Android 安装包的临时下载链接")
 			machine := flags.String("machine", "", "给 hub.json 里这台 kind 为 link 的电脑的 jarvis-link 配对")
+			add := flags.Bool("add", false, "和 --machine 一起用：hub.json 里没有这台时先添加（电脑来连，直接是已确认的）")
+			name := flags.String("name", "", "和 --add 一起用：新电脑的名字（可以是中文，默认同 id）")
 			peer := flags.Bool("peer", false, "生成和另一台 hub 互联的互联码（docs/mesh.md）")
 			if err = flags.Parse(os.Args[3:]); err == nil {
 				switch {
@@ -184,8 +188,12 @@ func main() {
 					err = hub.PairPeer()
 				case *machine != "" && (*legacy || *android):
 					err = fmt.Errorf("--machine 不能和 --legacy、--android 一起用")
+				case (*add || *name != "") && *machine == "":
+					err = fmt.Errorf("--add、--name 要和 --machine 一起用")
+				case *name != "" && !*add:
+					err = fmt.Errorf("--name 要和 --add 一起用")
 				case *machine != "":
-					err = hub.PairMachine(*machine)
+					err = hub.PairMachine(*machine, *add, *name)
 				default:
 					err = hub.Pair(*legacy, *android)
 				}

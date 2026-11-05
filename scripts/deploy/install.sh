@@ -335,7 +335,7 @@ install_node() {
 	if [ -z "$PAIR" ] && [ -z "$LISTEN_SET" ] && (: </dev/tty) 2>/dev/null; then
 		cat >/dev/tty <<'ASK'
 这台电脑怎么和 hub 连？
-  1) 我去连 hub：在 hub 机器上运行 jarvisd hub pair --machine <这台的 id>，把它打印的链接粘贴过来（笔记本、在 NAT 后面的电脑）
+  1) 我去连 hub：在 hub 机器上运行 jarvisd hub pair --machine <这台的 id> --add，把拿到的链接粘贴过来（笔记本、在 NAT 后面的电脑）
   2) 让 hub 来连：这台监听一个端口，打印一条链接粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」（服务器、地址固定的电脑）
 ASK
 		printf '选哪个？[1-2，回车 = 1] ' >/dev/tty

@@ -229,7 +229,7 @@ func pair(e *env, raw, machine string) (*link.Config, error) {
 		raw = strings.TrimSpace(raw)
 	}
 	if strings.TrimSpace(raw) == "" {
-		return nil, errors.New("没有配对链接：在 hub 机器上运行 jarvisd hub pair --machine <这台的 id>，把它打印的链接给我")
+		return nil, errors.New("没有配对链接：在 hub 机器上运行 jarvisd hub pair --machine <这台的 id> --add，把拿到的链接给我")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

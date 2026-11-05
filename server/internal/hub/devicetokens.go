@@ -382,7 +382,14 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 				h.logf("device token %s replaces %s", dt.ID, old)
 			}
 		}
-		h.notifyPairing(name) // also when it replaced one: a credential was still made
+		if kind == "link" {
+			h.machineAudit(r.Context(), machine, "redeem", dt.ID, nil)
+		}
+		if kind == "link" && h.machinePending(machine) {
+			h.notifyComputerJoining(machine) // the one to confirm (machines_add.go)
+		} else {
+			h.notifyPairing(name) // also when it replaced one: a credential was still made
+		}
 		resp := map[string]any{"id": dt.ID, "token": tok, "role": role, "name": name, "machine": machine}
 		if replaced != "" {
 			resp["replaced"] = replaced

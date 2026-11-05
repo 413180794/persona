@@ -288,6 +288,9 @@ location /<前缀>/ {
 - 两种配对码都能换成它：
   - `personad hub pair --machine <id>`：专给这台的配对码（`pair_tokens.machine_id`）。链接是 `jarvis://link?…&machine=<id>`，
     只能换成这台的链路凭据，别的什么都做不了。标准输出只有链接，说明打在标准错误，方便用管道。
+    hub.json 里还没有这台时加 `--add [--name <名字>]`：先加一条 `kind: link`（运行中生效，不用重启），加的直接是已确认的；不带 `--add` 时提示加上。
+  - 已登录的 App / 网页「添加电脑」（`POST /api/v1/auth/pair-codes` 带 `add`，[protocol.md](protocol.md)「临时配对」）：hub 照管理界面的「添加电脑」加一条 `kind: link`，
+    给这台的配对码。这样加的电脑是**待确认**的，用户在 App 里点「是我的电脑」之前收不到 Persona 管理的 Key（[protocol.md](protocol.md)「电脑的信任」）。
   - App 用的普通配对码（`personad hub pair`），再指定机器 id：命令行 `jarvis-link pair --machine <id>`，App 里填「机器 id」。
 - hub 要开着 TLS（`public.tls_listen`），或者 `public_url` 是 `https://` 的反向代理地址；都没有时 `--machine` 返回 409。
 - 鉴权失败按 hub 原有的规矩限流（公网来源计数）。公网只收 TLS；内网也不收明文，只有回环可以，
@@ -298,13 +301,14 @@ location /<前缀>/ {
 
 推荐的做法见上面「装 node 服务」；下面是 Mac 的主动模式一步步来（被动模式第 4、5 步换成配对窗口里的「让 hub 来连」，链接粘贴到 hub 管理界面）。
 
-1. hub.json 的 `machines` 加一条（或把原来的 ssh 那条改成）`{"id":"macbook","name":"MacBook","kind":"link","icon":"laptop"}`，重启 hub。
+1. hub 上加这台电脑：第 4 步的 `--add` 会顺手加上；也可以在管理界面 › 电脑 › 添加电脑 › 电脑来连里加，或者 hub.json 的 `machines` 加一条
+   （或把原来的 ssh 那条改成）`{"id":"macbook","name":"MacBook","kind":"link","icon":"laptop"}` 再重启 hub。
 2. claude 是 shell 包装函数时，要在 hub.json 的 `machines[].launchers` 里配启动器。
 3. 装 App：`./scripts/app/mac-link.sh install`。它会编译（连同 personad）、放进 `/Applications`，然后打开；第一次打开就装好常驻 node（`com.jarvis.node`），
    已经装了的不动。
 4. 在 hub 机器上生成配对链接：
-   - 普通部署：`personad hub pair --machine macbook`；
-   - NAS 的 docker 部署：`sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub pair --machine macbook`。
+   - 普通部署：`personad hub pair --machine macbook --add --name MacBook`（已经有这台时 `--add` 不做什么，照样给链接）；
+   - NAS 的 docker 部署：`sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub pair --machine macbook --add`。
 
    把链接粘贴进 菜单栏 › 配对 / 修改连接…。也可以走命令行：
    ```sh
@@ -410,7 +414,7 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 **一条命令装好**
 
 ```sh
-personad hub pair --machine nas                   # 在 hub 机器上；标准输出只有链接
+personad hub pair --machine nas --add             # 在 hub 机器上；没有这台时先添加；标准输出只有链接
 ./jarvis-link install --pair - <<< '<链接>'       # 在这台电脑上；链接从标准输入读
 ```
 

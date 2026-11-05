@@ -659,6 +659,13 @@ herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模�
   打开「减少动态效果」时圆点也停（`accessibilityReduceMotion`，加载占位和「正在准备」同样停）；工作中的圆点是一圈静止的外环。
   不再有图标摆动、齿轮旋转、头像脉冲、待办转圈。计数用 `.numericText` 过渡。`.surface` 外面不再加 `.shadow`（玻璃自己有，
   黏土 / Island 风格的实心面也有，叠上去成了双层阴影）；相邻的玻璃（终端键栏的每个键、顶栏的返回和 ⋯）放进一个 `GlassEffectContainer`。
+- 语音光球（`DesignSystem/VoiceOrb.swift`，#3506；语音模式的设计见总 issue #3489）：语音通话条正中的那颗球，页面只传相位（`VoiceOrb.Phase`：还没开始、连接中、在听、听到你说话、正在说、在听且 Agent 在做、已暂停、已静音、已结束）和音量（0…1），不自己判断风格。
+  - 怎么动：在听时慢慢呼吸（`Theme.Motion.voiceBreath`，单程 1.6 s），正在说时跟着声音跳（`voiceBeat`，单程 0.42 s），两个时长和安卓 `Voice.kt` 一样（`VoiceOrbTests` 读那个文件对一遍）；听到你说话时随音量变大；连接中、Agent 在做时外面绕一圈弧线（`voiceSpin` / `voiceLap`）。由时钟（`TimelineView`）驱动，每秒最多 30 帧（`voiceFrame`，和「需要你」圆点、头像的光晕一样），不动的相位暂停；打开「减少动态效果」或低电量模式时每个相位只画一帧静止的（和顶栏的形象圆点一样），减少动态效果时换相位也不缩放，直接换成下一帧。和「需要你」圆点一样是少数一直在动的东西，只在通话中出现。
+  - 怎么画：液态玻璃和实心的几种风格是一颗有高光的球，在听时是形象主色（`Theme.persona`）的浅色，正在说时是主色本身；BeautifulUI 是平的圆片加五根音量条（和它输入框的听写一个样子），正在说时圆片填主色，条是白色，主色太浅（黄色形象）时换成近黑。连接中的弧线是主色，Agent 在做时是工作中的琥珀（`Theme.busy`）；已暂停、已静音、已结束是灰色，已暂停、已静音在球上画 `pause` / `voiceMute`，这两个相位的球是不加高光的灰，白色图标对灰色不低于 3:1（`VoiceOrbTests` 深浅色都查）。
+  - 尺寸：`Theme.Size.voiceOrb`（52，含光晕和放大的余地，球本身占 0.7）随字号缩放；画的东西都不出这个框：光晕不跟着球放大，渐变从球的边缘开始、到框的边缘为止，不会盖到通话条上旁边的字和按钮；音量条 `voiceLevelBar` / `voiceLevelGap` / `voiceLevelHeight` 按球的大小等比缩放。token 在 `Shared/Design/VoiceTokens.swift`（手表也编译，不画语音界面）。
+  - 正在说并且传了 `interrupt` 时它是一个按钮，无障碍标签「打断语音」：只让语音停下，不停 Agent（「停止 Claude」是通话条上另一个按钮，文案分开写）；其余时候是装饰，点不了、键盘也按不了（`disabled`），VoiceOver 跳过，状态由旁边的字说。
+  - 语音条上的图标：`voiceMute` / `voiceUnmute`（静音 / 取消静音，同一个划掉的麦克风，取消静音是实心的，像电话 App 的开关）、`voiceEnd`（结束，`Theme.danger`）、`voiceCaptions`（字幕全文）、`voiceTimbre`（音色）；入口沿用 `voiceChannel`。
+  - Mac 上一直走的时钟会让整个窗口每帧重新布局（`docs/lessons/macos.md`），Mac 还没有语音模式；以后加时把动画交给 Core Animation。
 - 标签和计数各只有一种画法（`Components.swift`）：`Chip` 是不能点的小标签，三种样子——中性（次要灰字 + 浅灰底：模型、版本、tab 名、私聊）、
   着色（某个含义的字 + 它的浅底：状态用 `.tone`、@我 红、「推荐」用 AI 的紫色）、描边（Claude / Codex 这类种类）；`CountBadge` 是计数（白字压在
   `Theme.countBadge` 灰或主色上，或者状态的字压在状态浅底上，过 99 写 99+）。能点的东西（筛选、选项卡、模式选择、子 Agent 条）是控件，不用它们。
@@ -1013,6 +1020,8 @@ Markdown 的情况再说两点：
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-showFromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
 `-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-openFilePath <路径>`（打开会话后打开这个文件，`-openFileLine <行>` 跳到那一行）、`-showFilePerf YES`（把打开文件的耗时和每秒帧数写进 Caches/file-perf.log，`-showFileAutoScroll YES` 让文件自己匀速滚，`-showFileAutoScrollSpeed 1500` 换速度）；`-showMenu YES` 在最后一条回复（配合 `-showFromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。
+
+`-showVoiceOrbs YES`：不连 hub、不开麦克风，弹一张表列出语音光球的每个相位（音量是编造的起伏）和两颗大的，配 `-ui.style`、`-ui.scheme` 截图（#3506）。
 
 实时更新不打断操作的测试（`LiveUpdateTests`）用到两个：`-openChatsFresh YES` 启动时清掉磁盘上的对话缓存（上一次运行推进去的步骤不留下）；
 `-perfCounts YES` 计数：各视图 body 被算了几次、每次 hub 推送到主线程空闲用了多久，写在隐藏文字 `perf.counts` 里（JSON）给 UI 测试读

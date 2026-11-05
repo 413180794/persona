@@ -50,6 +50,8 @@ type Hub struct {
 
 	devices devicesState // the manager's machines as it reports them (devices_link.go)
 	trust   machineTrust // the computers waiting to be confirmed (machine_trust.go)
+	// machineAdd: one computer is added for a pairing code at a time (machines_add.go), so two get different ids.
+	machineAdd sync.Mutex
 
 	mutesMu sync.Mutex
 	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use

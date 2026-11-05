@@ -282,6 +282,7 @@ var Features = []string{
 	"git_blob",               // GET /api/v1/machines/{mid}/git/blob: a file at a version, for comparing
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
 	"machine_trust",          // machines' trust and error_code, POST /api/v1/machines/{id}/confirm|reject (docs/onboarding.md 5.3)
+	"machines_add",           // POST /api/v1/auth/pair-codes with add / machine from a signed-in device: it adds a computer and pairs it (docs/onboarding.md 5.3)
 	"tls",                    // optional TLS listener and SPKI pin (hub-changes.md 1.1)
 	"endpoints",              // authenticated address discovery and capability-gated updates
 	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/extensions.md)

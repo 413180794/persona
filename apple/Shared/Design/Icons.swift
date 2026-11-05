@@ -336,8 +336,19 @@ extension Theme {
         static let chatBot = "message.badge.waveform"
         /// 设置 › 渠道: the ways of talking to Persona (docs/channels.md).
         static let channels = "ellipsis.bubble"
-        /// A voice channel (talking to Persona out loud).
+        /// A voice channel (talking to Persona out loud), and a chat's way into a voice conversation (语音对话).
         static let voiceChannel = "waveform.and.mic"
+        /// The voice conversation's bar (docs/voice.md「界面」). 静音: turns the call's microphone off; muted, the button
+        /// shows `voiceUnmute` (取消静音), the same mic filled like a toggle that is on, as iOS 电话's 静音. The muted
+        /// orb wears `voiceMute`.
+        static let voiceMute = "mic.slash"
+        static let voiceUnmute = "mic.slash.fill"
+        /// 结束: hangs the voice conversation up (in `Theme.danger`).
+        static let voiceEnd = "phone.down.fill"
+        /// 字幕: what was said in the voice conversation, in full.
+        static let voiceCaptions = "captions.bubble"
+        /// 音色: the voice Persona speaks in.
+        static let voiceTimbre = "person.wave.2"
         /// Pairing a device or a bot with a one-time code.
         static let pairing = "link.badge.plus"
         /// 设置 › 连接器: the data sources Persona reads and acts in (this device, mail, 飞书).

@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -66,6 +65,14 @@ type pairCodeReply struct {
 	QR     *qrImage `json:"qr,omitempty"`
 	WebURL string   `json:"web_url,omitempty"`
 	WebQR  *qrImage `json:"web_qr,omitempty"`
+	// A computer's code (docs/onboarding.md 5.3): its name, whether it waits to be confirmed (pending / confirmed),
+	// whether it was added now, the command that pairs its Persona Link and the line that installs and pairs a node
+	// by system (only linux, when the hub knows the site it was published on).
+	Name    string            `json:"name,omitempty"`
+	Trust   string            `json:"trust,omitempty"`
+	Added   bool              `json:"added,omitempty"`
+	Command string            `json:"command,omitempty"`
+	Install map[string]string `json:"install,omitempty"`
 }
 
 type qrImage struct {
@@ -93,6 +100,8 @@ func webSignInBase(raw string) (string, error) {
 
 // pairRoutes are the pairing endpoints: short-lived pairing tokens for `jarvisd hub pair`
 // (docs/redesign/hub-changes.md 1.3), and for a signed-in device pairing another one (#2731).
+// Also a computer's code (machines_add.go): for a link computer there is, or one added now, from the master token over
+// loopback or a signed-in full device.
 func (h *Hub) pairRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/v1/auth/pair-codes", func(w http.ResponseWriter, r *http.Request) {
 		who := principalOf(r.Context())
@@ -101,7 +110,7 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 			// A device with full access can already add devices (POST /api/v1/auth/tokens); this code is safer to
 			// hand over: it expires in ten minutes and is traded once. Not from a pairing code itself (no chain of
 			// codes), the watch, a link, a peer or an extension.
-			if who.Role != roleFull || who.PairHash != "" {
+			if !mayTrust(who) {
 				writeErr(w, http.StatusForbidden, errors.New("this device may not pair other devices"))
 				return
 			}
@@ -113,10 +122,12 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusServiceUnavailable, errors.New("no database"))
 			return
 		}
-		// {"machine": id} makes a code for that link machine's jarvis-link (link.go); no body, one for an app.
+		// {"machine": id} makes a code for that link machine's jarvis-link (link.go), {"add": {…}} adds the computer
+		// first (machines_add.go); no body, one for an app.
 		var req struct {
-			Machine string `json:"machine"`
-			Web     string `json:"web"`
+			Machine string             `json:"machine"`
+			Add     *machineAddRequest `json:"add"`
+			Web     string             `json:"web"`
 		}
 		b, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<10))
 		if readErr != nil {
@@ -129,52 +140,43 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 				return
 			}
 		}
-		if fromDevice && req.Machine != "" {
-			writeErr(w, http.StatusForbidden, errors.New("codes for Persona Link are made on the hub machine"))
+		if req.Machine != "" || req.Add != nil {
+			if req.Web != "" {
+				writeErr(w, http.StatusBadRequest, errors.New("web is for a code that pairs an app or a browser"))
+				return
+			}
+			if req.Machine != "" && req.Add != nil {
+				writeErr(w, http.StatusBadRequest, errors.New("machine or add, not both (add.id names the computer to add)"))
+				return
+			}
+			h.serveComputerCode(w, r, who, fromDevice, req.Machine, req.Add)
 			return
 		}
 		web := ""
 		if req.Web != "" {
-			if req.Machine != "" {
-				writeErr(w, http.StatusBadRequest, errors.New("web is for a code that pairs an app or a browser"))
-				return
-			}
 			var err error
 			if web, err = webSignInBase(req.Web); err != nil {
 				writeErr(w, http.StatusBadRequest, err)
 				return
 			}
 		}
-		if req.Machine != "" {
-			if mc := h.cfgEntry(req.Machine); mc == nil || mc.Kind != kindLink {
-				writeErr(w, http.StatusBadRequest, fmt.Errorf("hub.json has no machine %q of kind link", req.Machine))
-				return
-			}
-			if !h.linkPairable() {
-				writeErr(w, http.StatusConflict, errors.New("Persona Link only uses TLS: set public.tls_listen in hub.json, "+
-					"or public_url to the https address of the reverse proxy in front of the hub"))
-				return
-			}
-		}
 		var p *pairCode
 		var err error
-		if req.Machine == "" && h.isMember() {
+		if h.isMember() {
 			// An app pairs with the center: devices are the center's (plan-hub-center.md 3).
 			p = &pairCode{}
 			err = h.meshCall(r.Context(), h.centerID(), "pair.code", map[string]any{}, p)
 		} else {
-			p, err = h.newPairCode(r.Context(), req.Machine)
+			p, err = h.newPairCode(r.Context(), "")
 		}
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
 		reply := pairCodeReply{pairCode: p}
-		if p.Machine == "" {
-			if reply.QR, err = newQRImage(p.PairURL); err != nil {
-				writeErr(w, http.StatusInternalServerError, err)
-				return
-			}
+		if reply.QR, err = newQRImage(p.PairURL); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
 		}
 		if web != "" {
 			reply.WebURL = web + "#token=" + url.QueryEscape(p.Token)
@@ -269,4 +271,46 @@ func (h *Hub) notifyPairing(name string) {
 			"sound": "default",
 		}}
 	}, "", nil)
+}
+
+// serveComputerCode answers pair-codes for a computer: machine (one there is) or add (one to add, or to use again).
+func (h *Hub) serveComputerCode(w http.ResponseWriter, r *http.Request, who principal, fromDevice bool, machine string, add *machineAddRequest) {
+	if fromDevice && h.isMember() {
+		// The center's devices and computers: what a member does with a computer a device adds is not settled.
+		writeErrCode(w, http.StatusConflict, "mesh_member", i18n.Err("hub-pairing.mesh_member"))
+		return
+	}
+	if !h.linkPairable() {
+		writeAddMachineErr(w, &addMachineError{status: http.StatusConflict, code: "tls_required",
+			err: i18n.Err("hub-pairing.tls_required"), extra: map[string]any{"action": "enable_tls"}})
+		return
+	}
+	actor := trustActor(who)
+	h.machineAdd.Lock()
+	id, added, err := h.computerFor(r.Context(), machine, add, fromDevice, actor)
+	h.machineAdd.Unlock()
+	if err != nil {
+		writeAddMachineErr(w, err)
+		return
+	}
+	p, err := h.newPairCode(r.Context(), id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	reply := pairCodeReply{pairCode: p, Trust: db.TrustConfirmed, Added: added,
+		Command: "jarvis-link pair '" + p.PairURL + "'", Install: h.computerInstall(p.PairURL)}
+	if h.machinePending(id) {
+		reply.Trust = trustPending
+	}
+	if mc := h.cfgEntry(id); mc != nil {
+		reply.Name = mc.Name
+	}
+	h.machineAudit(r.Context(), id, "code", actor, nil)
+	if fromDevice {
+		h.logf("[%s] pairing code for its Persona Link made by device %q (%s)", id, who.Name, who.ID)
+		h.notifyComputerCode(who, id)
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, reply)
 }

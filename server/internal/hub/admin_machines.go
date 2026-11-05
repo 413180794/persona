@@ -2,8 +2,6 @@ package hub
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -165,48 +163,10 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			writeErrCode(w, http.StatusBadRequest, "invalid_kind", errors.New("kind: link or service"))
 			return
 		}
-		if mc.Name == "" {
-			mc.Name = mc.ID
-		}
-		if len([]rune(mc.Name)) > 40 || strings.ContainsAny(mc.Name, "\n\r\t") {
-			writeErrCode(w, http.StatusBadRequest, "invalid_name", i18n.Err("hub-admin_machines.invalid_name"))
+		if err := h.addMachine(&mc, "admin"); err != nil {
+			writeAddMachineErr(w, err)
 			return
 		}
-		switch mc.Icon {
-		case "server", "laptop", "desktop":
-		default:
-			mc.Icon = "laptop"
-		}
-		exists := h.cfgEntry(mc.ID) != nil
-		err := editHubJSON(h.cfg.dir, func(o *jsonObject) error {
-			list, err := machineEntries(o)
-			if err != nil {
-				return err
-			}
-			for _, raw := range list {
-				if machineEntryID(raw) == mc.ID {
-					exists = true
-				}
-			}
-			if exists {
-				return nil
-			}
-			entry, err := marshalNoEscape(mc)
-			if err != nil {
-				return err
-			}
-			return o.set("machines", append(list, entry))
-		})
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
-		}
-		if exists {
-			writeErrCode(w, http.StatusConflict, "exists", i18n.Err("hub-admin_machines.exists"))
-			return
-		}
-		h.logf("admin: machine %q (%s) added to hub.json", mc.ID, mc.Kind)
-		h.addMachineLive(mc) // the manager connects it now, no restart (devices_link.go)
 		var added adminMachine
 		for _, m := range h.adminMachines() {
 			if m.ID == mc.ID {
@@ -297,6 +257,7 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			return
 		}
 		h.logf("admin: jarvis-link pairing link for %q", id)
+		h.machineAudit(r.Context(), id, "code", "admin", nil)
 		writeJSON(w, map[string]any{"pair_url": p.PairURL, "expires_at": p.ExpiresAt, "command": "jarvis-link pair '" + p.PairURL + "'"})
 	})
 }
@@ -326,27 +287,7 @@ func machineEntryID(raw json.RawMessage) string {
 // adminPairCode makes a one-time pairing code like `jarvisd hub pair` (pairing.go): for the app with machine "",
 // else for that link machine's jarvis-link.
 func (h *Hub) adminPairCode(r *http.Request, machine string) (*pairCode, error) {
-	if h.store == nil {
-		return nil, errors.New("no database")
-	}
-	var secret [32]byte
-	if _, err := rand.Read(secret[:]); err != nil {
-		return nil, errors.New("could not generate pairing token")
-	}
-	p := pairCode{Token: "jp_" + hex.EncodeToString(secret[:]), ExpiresAt: time.Now().UTC().Add(pairLifetime),
-		URL: h.cfg.PublicURL, HubID: h.hubID(), Alt: []string{}, Machine: machine}
-	p.TLSPort, p.FP = h.tlsPin()
-	for _, alt := range h.pairCandidates() {
-		if len(p.Alt) == 2 {
-			break
-		}
-		p.Alt = append(p.Alt, alt)
-	}
-	if err := h.store.CreatePairToken(r.Context(), hashToken(p.Token), p.ExpiresAt, machine); err != nil {
-		return nil, err
-	}
-	p.PairURL = p.pairURL()
-	return &p, nil
+	return h.newPairCode(r.Context(), machine)
 }
 
 // redactProxy is a proxy URL without its password.

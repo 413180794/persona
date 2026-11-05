@@ -95,6 +95,7 @@ struct RootView: View {
         }
         .screenProbe("connection", ConnectionShown(shown: "\(model.connection.shown)", network: model.connection.networkUp))
         .htmlCardSample()
+        .voiceOrbSample()
         #endif
         .alert("Claude 想在 iPhone 上执行", isPresented: Binding(
             get: { model.pendingConfirmation != nil },

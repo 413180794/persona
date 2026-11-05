@@ -40,9 +40,10 @@ git clone <仓库地址> persona && cd persona
 
 推荐「我去连 hub（主动）」：这台 Mac 去连 hub，不用开端口，换网络也会自己重连。
 
-1. 在 hub 上给这台电脑生成配对链接，两种做法任选：
+1. 在 hub 上给这台电脑生成配对链接，几种做法任选：
    - hub 管理界面 › 电脑 › 添加电脑 › **电脑来连**：填这台的 id（如 `macbook`）和名字，生成链接；
-   - 或者在 hub 机器上：`personad hub pair --machine macbook`（hub 是 Docker 部署的话在容器里跑这条，见 [docker.md](docker.md)）。
+   - 或者在 hub 机器上：`personad hub pair --machine macbook --add --name MacBook`（hub 上还没有这台时先添加；hub 是 Docker 部署的话在容器里跑这条，见 [docker.md](docker.md)）；
+   - 新版 hub 也接受已登录的 App / 网页直接「添加电脑」拿链接（客户端陆续上线）；这样加的电脑要在 App 里点「是我的电脑」确认之后才算数。
 2. 点菜单栏图标 › **配对…**，把链接粘贴进去，点配对。
 3. 好了的样子：图标变成已连接，菜单里写着「本机 node 在线」「这台是 hub 上的「macbook」」；手机 App 的机器列表里这台在线。
 4. 想开机就连上：菜单里勾「登录时启动」。

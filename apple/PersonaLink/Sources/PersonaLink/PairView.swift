@@ -176,7 +176,7 @@ struct PairView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(model.pairedMachine == nil ? "配对这台电脑" : "重新配对").font(.title3.weight(.semibold))
             switchBack(to: "active", paired: model.pairedMachine != nil, what: "现在是「让 hub 来连」。主动模式的配对还在，不用重新配对。")
-            Text("在 hub 所在的机器上运行 `jarvisd hub pair --machine <这台的 id>`，把它打出的链接粘贴到下面。链接 10 分钟内有效，只能用一次。")
+            Text("在 hub 所在的机器上运行 `jarvisd hub pair --machine <这台的 id> --add`，把拿到的链接粘贴到下面。链接 10 分钟内有效，只能用一次。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

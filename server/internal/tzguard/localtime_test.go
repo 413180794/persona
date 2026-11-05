@@ -16,6 +16,7 @@ import (
 var allowed = map[string]string{
 	"internal/node/":              "a node runs on the user's own computer, in their zone (uploads by day)",
 	"internal/hub/usertz.go":      "userLocation / userTZName: the hub's zone only while the user's is unknown",
+	"internal/extmgr/usertz.go":   "userLocation: the hub's zone only while the user's is unknown (as hub/usertz.go)",
 	"internal/assistant/zone.go":  "location: the hub's zone only while the user's is unknown (as userLocation)",
 	"internal/kb/zone.go":         "the archive's zone before it is set, and files written before zones were recorded",
 	"internal/quota/quota.go":     "a gateway's report while the user's zone is unknown",

@@ -165,7 +165,7 @@ func (r report) text(now time.Time, user string) string {
 	case r.Error != "":
 		line("凭据：读不了（%s）", r.Error)
 	case !r.Paired:
-		line("链路：还没配对。在 hub 机器上运行 jarvisd hub pair --machine <这台的 id>，再在这里 jarvis-link pair '<链接>'")
+		line("链路：还没配对。在 hub 机器上运行 jarvisd hub pair --machine <这台的 id> --add，再在这里 jarvis-link pair '<链接>'")
 	case !r.Running && st != nil && st.State != "stopped":
 		// How long ago, not a clock time: this computer's zone may well be UTC (a server) and not the user's.
 		line("链路：没在运行（%s前最后一次报告：%s）", duration(now.Sub(st.Updated)), stateText(&st.Status, now))

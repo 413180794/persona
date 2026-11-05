@@ -1,3 +1,13 @@
 {
-  "new_device": "有新设备配对：{name}"
+  "computer_code": "{device} 给电脑「{name}」出了一个配对码",
+  "computer_joining": "新电脑「{name}」想加入：打开 App 确认是不是你的",
+  "confirmed_computer": "这台电脑已经确认过。要重新配对，在 hub 的管理页或 hub 所在的机器上出码",
+  "invalid_os": "os 只能是 mac、linux 或 windows",
+  "mesh_member": "这台 hub 是互联组里的成员，在中心 hub 上添加电脑",
+  "name_required": "给这台电脑起个名字",
+  "new_device": "有新设备配对：{name}",
+  "no_computer": "没有这台电脑",
+  "tls_required": "hub 还没打开安全连接，电脑接不进来",
+  "too_many_pending": "已经有 {count} 台电脑在等你确认。先确认或移除它们，再添加新的",
+  "unknown_machine": "没有要「电脑来连」的电脑「{id}」"
 }

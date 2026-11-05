@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -294,40 +295,77 @@ func (c *Config) printPair(ctx context.Context, legacy bool, out io.Writer, andr
 }
 
 // PairMachine prints a pairing link for one link machine's jarvis-link (docs/link.md): the link alone on stdout,
-// so it can be piped (`… | jarvis-link pair -`), what to do with it on stderr.
-func PairMachine(machine string) error {
+// so it can be piped (`… | jarvis-link pair -`), what to do with it on stderr. add: hub.json gets the machine first
+// when it has none of that id (named name; confirmed: the master token over loopback added it).
+func PairMachine(machine string, add bool, name string) error {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return err
 	}
-	return cfg.printLinkPair(context.Background(), machine, os.Stdout, os.Stderr)
+	return cfg.printLinkPair(context.Background(), machine, add, name, os.Stdout, os.Stderr)
 }
 
-func (c *Config) printLinkPair(ctx context.Context, machine string, out, help io.Writer) error {
-	p, err := c.requestPairCodeFor(ctx, machine)
+func (c *Config) printLinkPair(ctx context.Context, machine string, add bool, name string, out, help io.Writer) error {
+	body := map[string]any{"machine": machine}
+	if add {
+		body = map[string]any{"add": map[string]string{"id": machine, "name": name}}
+	}
+	p, err := c.requestPairCodeWith(ctx, body)
 	if err != nil {
+		var e *pairRefusal
+		if !add && errors.As(err, &e) && e.code == "unknown_machine" {
+			return fmt.Errorf("hub.json 里没有要「电脑来连」的电脑「%s」；加 --add 自动添加：personad hub pair --machine %s --add [--name <名字>]", machine, machine)
+		}
 		return err
 	}
+	// A hub that does not know "add" (an older binary still running) ignores it and makes an app's code, which trades
+	// for a full device credential: never hand that out as a computer's link.
+	if p.Machine != machine {
+		return fmt.Errorf("本机 hub 没有生成电脑「%s」的配对链接：hub 可能还没升级或没重启；升级并重启 hub 后再试", machine)
+	}
 	fmt.Fprintln(out, p.PairURL)
+	shown := machine
+	if p.Name != "" {
+		shown = p.Name
+	}
+	if p.Added {
+		fmt.Fprintf(help, "\n已添加：%s\n", shown)
+	}
 	fmt.Fprintf(help, "\n这是给「%s」的 Persona Link 用的配对链接，%d 分钟内有效，只能用一次。\n"+
 		"在那台电脑上：菜单栏的 Persona Link › 配对 / 修改连接… 里粘贴；或者运行 jarvis-link pair '<链接>'（新装的也可以用 persona-link）。\n",
-		machine, max(1, int(time.Until(p.ExpiresAt).Round(time.Minute).Minutes())))
+		shown, max(1, int(time.Until(p.ExpiresAt).Round(time.Minute).Minutes())))
 	return nil
 }
 
-func (c *Config) requestPairCode(ctx context.Context) (*pairCode, error) {
-	return c.requestPairCodeFor(ctx, "")
+// pairRefusal is the hub not making a computer's code: its status, code and words.
+type pairRefusal struct {
+	status    int
+	code, msg string
 }
 
-func (c *Config) requestPairCodeFor(ctx context.Context, machine string) (*pairCode, error) {
+func (e *pairRefusal) Error() string {
+	return fmt.Sprintf("本机 hub 没有生成配对链接（HTTP %d）：%s", e.status, e.msg)
+}
+
+func (c *Config) requestPairCode(ctx context.Context) (*pairCode, error) {
+	p, err := c.requestPairCodeWith(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return p.pairCode, nil
+}
+
+// requestPairCodeWith asks the running hub for a pairing code over loopback with the master token: body nil for an
+// app's, {"machine"} or {"add"} for a computer's.
+func (c *Config) requestPairCodeWith(ctx context.Context, reqBody map[string]any) (*pairCodeReply, error) {
 	_, port, err := net.SplitHostPort(c.Listen)
 	if n, parseErr := strconv.Atoi(port); err != nil || parseErr != nil || n <= 0 || n > 65535 {
 		return nil, fmt.Errorf("hub listen 配置没有有效端口；请检查配置，或用 --legacy 打印旧格式二维码")
 	}
 	endpoint := "http://" + net.JoinHostPort("127.0.0.1", port) + "/api/v1/auth/pair-codes"
 	var body io.Reader
-	if machine != "" {
-		b, _ := json.Marshal(map[string]string{"machine": machine})
+	if reqBody != nil {
+		b, _ := json.Marshal(reqBody)
 		body = bytes.NewReader(b)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
@@ -345,16 +383,17 @@ func (c *Config) requestPairCodeFor(ctx context.Context, machine string) (*pairC
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		if machine != "" {
+		if reqBody != nil {
 			var e struct {
 				Error string `json:"error"`
+				Code  string `json:"code"`
 			}
 			_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&e)
-			return nil, fmt.Errorf("本机 hub 没有生成配对链接（HTTP %d）：%s", resp.StatusCode, e.Error)
+			return nil, &pairRefusal{status: resp.StatusCode, code: e.Code, msg: e.Error}
 		}
 		return nil, fmt.Errorf("本机 hub 生成临时 token 失败（HTTP %d）；请确认 hub 已升级且配置一致，或用 --legacy 打印旧格式二维码", resp.StatusCode)
 	}
-	var p pairCode
+	p := pairCodeReply{pairCode: &pairCode{}}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&p); err != nil || p.Token == "" || p.URL == "" || !time.Now().Before(p.ExpiresAt) {
 		return nil, fmt.Errorf("本机 hub 返回了无效的配对信息；请升级 hub，或用 --legacy 打印旧格式二维码")
 	}

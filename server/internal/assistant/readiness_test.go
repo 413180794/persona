@@ -34,7 +34,7 @@ func getReadiness(t *testing.T, s *Service, query, lang string) Readiness {
 	return out
 }
 
-func step(t *testing.T, r Readiness, id string) ReadinessStep {
+func readinessStep(t *testing.T, r Readiness, id string) ReadinessStep {
 	t.Helper()
 	for _, st := range r.Steps {
 		if st.ID == id {
@@ -70,7 +70,7 @@ func readyMachine(t *testing.T, main ...proto.Session) (*fakeHub, *Service, *mem
 func TestReadinessWithoutComputer(t *testing.T) {
 	s := newStorelessService(t, newFakeHub())
 	r := getReadiness(t, s, "", "")
-	c := step(t, r, StepComputer)
+	c := readinessStep(t, r, StepComputer)
 	if r.Version != 1 || r.Mode != ReadinessSetup || r.Ready || nextOf(r) != StepComputer || r.Machine != nil || r.Launcher != "claude" ||
 		c.State != StepTodo || c.Code != proto.CodeNoMachine || c.Action == nil || c.Action.ID != "add_computer" ||
 		c.Title != "添加你的电脑" || c.Detail != "Persona 要在你的一台电脑上干活，现在还没接上电脑。" {
@@ -93,7 +93,7 @@ func TestReadinessWithoutComputer(t *testing.T) {
 		t.Fatalf("readiness = %+v", r)
 	}
 	// In English when the request says so.
-	if c := step(t, getReadiness(t, s, "", "en"), StepComputer); c.Title != "Add your computer" {
+	if c := readinessStep(t, getReadiness(t, s, "", "en"), StepComputer); c.Title != "Add your computer" {
 		t.Fatalf("en: %+v", c)
 	}
 	// warm carries the same.
@@ -109,7 +109,7 @@ func TestReadinessComputerOffline(t *testing.T) {
 	f := newFakeHub().withMachine()
 	f.devices = []Device{{ID: "server", Name: "小林的 MacBook"}}
 	r := getReadiness(t, newStorelessService(t, f), "", "")
-	c := step(t, r, StepComputer)
+	c := readinessStep(t, r, StepComputer)
 	if r.Mode != ReadinessSetup || c.State != StepProblem || c.Code != "node_unreachable" || c.Action.ID != "wake_computer" ||
 		c.Title != "小林的 MacBook 不在线" || r.Machine == nil || r.Machine.Name != "小林的 MacBook" || c.Machine != "server" {
 		t.Fatalf("readiness = %+v", r)
@@ -121,7 +121,7 @@ func TestReadinessComputerOffline(t *testing.T) {
 func TestReadinessFullButUnverified(t *testing.T) {
 	f, s, _ := readyMachine(t)
 	r := getReadiness(t, s, "", "")
-	cl, m, first := step(t, r, StepClaude), step(t, r, StepModel), step(t, r, StepFirstMessage)
+	cl, m, first := readinessStep(t, r, StepClaude), readinessStep(t, r, StepModel), readinessStep(t, r, StepFirstMessage)
 	if r.Mode != ReadinessFull || !r.Ready || nextOf(r) != StepModel || r.Machine == nil || r.Machine.ID != "server" ||
 		cl.State != StepOK || cl.Version != "2.1.308" ||
 		m.State != StepUnknown || m.Code != "model_unverified" || m.Action.ID != "test_assistant" ||
@@ -141,7 +141,7 @@ func TestReadinessClaudeMissing(t *testing.T) {
 	f, s, _ := readyMachine(t)
 	f.doctor["server"] = "读不到 claude 的版本"
 	r := getReadiness(t, s, "", "")
-	cl := step(t, r, StepClaude)
+	cl := readinessStep(t, r, StepClaude)
 	if r.Mode != ReadinessSetup || nextOf(r) != StepClaude || cl.State != StepProblem || cl.Code != proto.CodeClaudeMissing ||
 		cl.Action.ID != "install_claude" || len(cl.AltActions) != 1 || cl.AltActions[0].ID != "connect_model" ||
 		cl.Detail != "server 上还没装 Claude Code。装好它，或者改用 API Key。" {
@@ -154,7 +154,7 @@ func TestReadinessOldNodeUnknown(t *testing.T) {
 	f, s, _ := readyMachine(t)
 	f.doctor = nil
 	r := getReadiness(t, s, "", "")
-	if cl := step(t, r, StepClaude); cl.State != StepUnknown || r.Mode != ReadinessFull {
+	if cl := readinessStep(t, r, StepClaude); cl.State != StepUnknown || r.Mode != ReadinessFull {
 		t.Fatalf("readiness = %+v", r)
 	}
 }
@@ -178,7 +178,7 @@ func TestReadinessStartRefusal(t *testing.T) {
 		f.mu.Unlock()
 	}
 	refuse()
-	if cl := step(t, getReadiness(t, s, "", ""), StepClaude); cl.Code != proto.CodeClaudeMissing || cl.Action.ID != "install_claude" {
+	if cl := readinessStep(t, getReadiness(t, s, "", ""), StepClaude); cl.Code != proto.CodeClaudeMissing || cl.Action.ID != "install_claude" {
 		t.Fatalf("claude = %+v", cl)
 	}
 	// Claude Code installed: the next self-check reads a version and the refusal is forgotten.
@@ -188,7 +188,7 @@ func TestReadinessStartRefusal(t *testing.T) {
 	f.mu.Lock()
 	f.doctor["server"] = "2.1.308，支持 --plugin-dir"
 	f.mu.Unlock()
-	if cl := step(t, getReadiness(t, s, "", ""), StepClaude); cl.State != StepOK || cl.Version != "2.1.308" {
+	if cl := readinessStep(t, getReadiness(t, s, "", ""), StepClaude); cl.State != StepOK || cl.Version != "2.1.308" {
 		t.Fatalf("after installing: %+v", cl)
 	}
 	var rec readinessRecord
@@ -202,7 +202,7 @@ func TestReadinessStartRefusal(t *testing.T) {
 	f.doctor["server"] = "读不到 claude 的版本"
 	f.mu.Unlock()
 	refuse()
-	if cl := step(t, getReadiness(t, s, "", ""), StepClaude); cl.Code != proto.CodeClaudeMissing {
+	if cl := readinessStep(t, getReadiness(t, s, "", ""), StepClaude); cl.Code != proto.CodeClaudeMissing {
 		t.Fatalf("refused again: %+v", cl)
 	}
 	if status, body := serveJSON(t, s, "POST", "/api/v1/assistant/conversations", "", `{"prompt":"你好","main":true}`); status != 200 {
@@ -219,7 +219,7 @@ func TestReadinessNotLoggedIn(t *testing.T) {
 	_, s, _ := readyMachine(t, proto.Session{SessionID: "m1", State: proto.StateIdle, LastText: "Not logged in · Please run /login",
 		UpdatedAt: time.Now()})
 	r := getReadiness(t, s, "", "")
-	m, first := step(t, r, StepModel), step(t, r, StepFirstMessage)
+	m, first := readinessStep(t, r, StepModel), readinessStep(t, r, StepFirstMessage)
 	if r.Mode != ReadinessSetup || nextOf(r) != StepModel || m.State != StepProblem || m.Code != proto.TurnErrorNotLoggedIn ||
 		m.Action.ID != "connect_model" || len(m.AltActions) != 1 || m.AltActions[0].ID != "login_claude" ||
 		m.Title != "Claude Code 还没登录" || m.Detail != "在 server 上登录一次，或者改用 API Key。" || m.Launcher != "claude" ||
@@ -233,15 +233,15 @@ func TestReadinessAnswered(t *testing.T) {
 	f, s, _ := readyMachine(t, proto.Session{SessionID: "m1", State: proto.StateIdle, LastText: "你好，我是 Persona。",
 		UpdatedAt: time.Now()})
 	r := getReadiness(t, s, "", "")
-	if r.Mode != ReadinessFull || r.Next != nil || step(t, r, StepModel).State != StepOK || step(t, r, StepFirstMessage).State != StepOK {
+	if r.Mode != ReadinessFull || r.Next != nil || readinessStep(t, r, StepModel).State != StepOK || readinessStep(t, r, StepFirstMessage).State != StepOK {
 		t.Fatalf("readiness = %+v", r)
 	}
 	f.setSessions("server", proto.Session{SessionID: "m1", State: proto.StateIdle, LastText: "API Error: 429 rate limit",
 		UpdatedAt: time.Now().Add(time.Second)})
 	r = getReadiness(t, s, "", "")
-	m := step(t, r, StepModel)
+	m := readinessStep(t, r, StepModel)
 	if m.State != StepProblem || m.Code != proto.TurnErrorRateLimited || r.Mode != ReadinessFull || // a rate limit passes by itself
-		step(t, r, StepFirstMessage).State != StepOK {
+		readinessStep(t, r, StepFirstMessage).State != StepOK {
 		t.Fatalf("after a rate limit: %+v", r)
 	}
 }
@@ -252,7 +252,7 @@ func TestReadinessProbe(t *testing.T) {
 	f, s, _ := readyMachine(t)
 	f.checks = map[string]proto.LauncherCheck{"server/claude": {Error: "Invalid API key · Please run /login", Millis: 900}}
 	r := getReadiness(t, s, "probe=1", "")
-	m := step(t, r, StepModel)
+	m := readinessStep(t, r, StepModel)
 	if r.Probe == nil || r.Probe.OK || r.Probe.Error == "" || m.Code != proto.TurnErrorAuthFailed || m.Action.ID != "edit_provider" ||
 		r.Mode != ReadinessSetup {
 		t.Fatalf("readiness = %+v probe %+v", r, r.Probe)
@@ -260,7 +260,7 @@ func TestReadinessProbe(t *testing.T) {
 	if r2 := getReadiness(t, s, "probe=1", ""); r2.Probe == nil || r2.Probe.Millis != 900 || len(f.checked) != 1 {
 		t.Fatalf("again: %+v, checked %v", r2.Probe, f.checked)
 	}
-	if r3 := getReadiness(t, s, "", ""); r3.Probe != nil || step(t, r3, StepModel).Code != proto.TurnErrorAuthFailed {
+	if r3 := getReadiness(t, s, "", ""); r3.Probe != nil || readinessStep(t, r3, StepModel).Code != proto.TurnErrorAuthFailed {
 		t.Fatalf("without probe: %+v", r3)
 	}
 	// Past the reuse window it runs again; this time it answers.
@@ -270,7 +270,7 @@ func TestReadinessProbe(t *testing.T) {
 	f.mu.Lock()
 	f.checks = nil
 	f.mu.Unlock()
-	if r4 := getReadiness(t, s, "probe=1", ""); r4.Probe == nil || !r4.Probe.OK || step(t, r4, StepModel).State != StepOK ||
+	if r4 := getReadiness(t, s, "probe=1", ""); r4.Probe == nil || !r4.Probe.OK || readinessStep(t, r4, StepModel).State != StepOK ||
 		len(f.checked) != 2 || r4.Mode != ReadinessFull {
 		t.Fatalf("again later: %+v, checked %v", r4, f.checked)
 	}
@@ -314,14 +314,14 @@ func TestReadinessLauncher(t *testing.T) {
 	f.hello.Assistant.Launcher = "cc_gone"
 	f.zshrc = map[string][]proto.Launcher{"server": {{Name: "cx", Agent: "codex"}}}
 	r := getReadiness(t, s, "", "")
-	if cl := step(t, r, StepClaude); r.Launcher != "cc_gone" || cl.Code != proto.CodeLauncherMissing || cl.Action.ID != "connect_model" ||
+	if cl := readinessStep(t, r, StepClaude); r.Launcher != "cc_gone" || cl.Code != proto.CodeLauncherMissing || cl.Action.ID != "connect_model" ||
 		cl.Detail != "在 server 上找不到「cc_gone」这个模型入口，可能被删了。" || r.Mode != ReadinessSetup {
 		t.Fatalf("readiness = %+v", r)
 	}
 	f.mu.Lock()
 	f.hello.Assistant.Launcher = "cx"
 	f.mu.Unlock()
-	if cl := step(t, getReadiness(t, s, "", ""), StepClaude); cl.State != StepSkipped {
+	if cl := readinessStep(t, getReadiness(t, s, "", ""), StepClaude); cl.State != StepSkipped {
 		t.Fatalf("codex: %+v", cl)
 	}
 }
@@ -342,7 +342,7 @@ func TestReadinessManagedAPILauncher(t *testing.T) {
 	f.hello.Assistant.Launcher = "direct"
 	f.mu.Unlock()
 	r := getReadiness(t, s, "", "")
-	if cl := step(t, r, StepClaude); r.Launcher != "direct" || cl.State == StepProblem || r.Mode != ReadinessFull {
+	if cl := readinessStep(t, r, StepClaude); r.Launcher != "direct" || cl.State == StepProblem || r.Mode != ReadinessFull {
 		t.Fatalf("readiness = %+v", r)
 	}
 }

@@ -1,3 +1,13 @@
 {
-  "new_device": "New device paired: {name}"
+  "computer_code": "{device} made a pairing code for the computer “{name}”",
+  "computer_joining": "A new computer, “{name}”, wants to join. Open the app to confirm it’s yours",
+  "confirmed_computer": "This computer is already confirmed. To pair it again, make the code on the hub’s admin page or on the hub’s machine",
+  "invalid_os": "os must be mac, linux or windows",
+  "mesh_member": "This hub is a member of a hub group. Add the computer on the center hub",
+  "name_required": "Give this computer a name",
+  "new_device": "New device paired: {name}",
+  "no_computer": "There’s no such computer",
+  "tls_required": "The hub hasn’t turned on secure connections yet, so computers can’t connect",
+  "too_many_pending": "{count} computers are already waiting for your confirmation. Confirm or remove them before adding another",
+  "unknown_machine": "There’s no computer “{id}” that connects to the hub"
 }

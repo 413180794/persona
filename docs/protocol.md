@@ -45,7 +45,7 @@
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`terminal_mouse`、`herdr_client`（网页的完整 herdr 界面：`herdr_open` 等，见下「完整 herdr 界面」）、`herdr_focus`（完整界面的焦点联动：`herdr_focus` 等，见下「焦点联动」）、`file_upload`。
 - 按 hub.json 出现：`assistant_views`（`assistant.persona_view` 打开：声明式动作带 `expected_version`、活卡片、正文卡片注册的接口可用）、`assistant_html_bridge`（另外 `assistant.html_views` 未关：`…/html-actions` 可用；客户端是否运行 HTML 仍看自己的安全验收，不据此跑 JS），见下面「助手」的卡片接口和 [assistant-views.md](assistant-views.md)。
-- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`assistant_readiness`（主对话就绪度，见下「主对话就绪度」）；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`extension_operations`（安装、升级、卸载分步骤带进度，见下「扩展的安装、升级、卸载进度」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）、`machine_trust`（机器的 `trust` / `error_code` 和 `POST /machines/{id}/confirm`、`…/reject`，见下面「电脑的信任」）。
+- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`assistant_readiness`（主对话就绪度，见下「主对话就绪度」）；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`extension_operations`（安装、升级、卸载分步骤带进度，见下「扩展的安装、升级、卸载进度」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）、`machine_trust`（机器的 `trust` / `error_code` 和 `POST /machines/{id}/confirm`、`…/reject`，见下面「电脑的信任」）、`machines_add`（已登录设备经 `POST /api/v1/auth/pair-codes` 的 `add` 添加电脑、拿电脑的配对码，见下面「临时配对」里的「电脑的配对码」）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 
@@ -56,9 +56,8 @@ Persona Link 的主动 `link` / 被动 `service` 机器，以及经成员 hub �
 ### 临时配对
 
 `POST /api/v1/auth/pair-codes` 接受两种调用方：**回环来源 + 主 token**（`personad hub pair`），或**已登录的 `full` 设备 token**（任何来源，#2731：网页「设置 › 设备 › 连接新设备」）。
-无须请求体；请求体 `{"machine":"<id>"}` 生成给这台 link 机器的
-jarvis-link 用的配对码（只有主 token 可以，设备 token 带 `machine` 返回 403；返回多一个 `machine`，`pair_url` 是 `jarvis://link?…&machine=<id>`，只能兑换成这台的链路凭据，别的请求都 403；
-机器不存在或不是 link 返回 400，hub 没开 TLS 返回 409）。手表（`answer`）、链路、互联、扩展的凭据，临时配对 token 本身（不能用一个码生成下一个码），以及非回环来源的主 token 均返回 403。
+无须请求体；请求体带 `machine` 或 `add` 时生成给一台电脑的 Persona Link 用的配对码（下面「电脑的配对码」）。
+手表（`answer`）、链路、互联、扩展的凭据，临时配对 token 本身（不能用一个码生成下一个码），以及非回环来源的主 token 均返回 403。
 `full` 设备本来就能 `POST /api/v1/auth/tokens` 建长期凭据，这里给的是 10 分钟、只能兑换一次的码，不扩大权限；设备申请时 hub 记一行日志（设备名和 id）。
 App 用的码（不带 `machine`）多返回 `qr: {size, rows}`（配对链接的二维码，每行一串 `0` / `1`，不含静区，和 `/admin` 的一样）。
 请求体再带 `"web": "<网页地址>"`（绝对的 http(s) 地址，不带 `#` 片段和账号密码，否则 400）时多返回 `web_url`（`<网页地址>#token=<临时 token>`，网页打开即登录，`#` 后的部分不发到服务器）和它的二维码 `web_qr`。成功为 HTTP 200，返回：
@@ -100,6 +99,51 @@ jarvis://pair?url=<兼容地址>&token=<临时 token>&hub=<hub_id>&fp=<指纹>&t
 | `alt` | 完整 HTTPS URL，可重复；当前最多两个，按候选顺序选取并排除 `lan` |
 
 未启用 TLS 时二维码省略 `fp` / `tls`；无合适候选时省略 `alt`。API 响应仍有对应字段（空字符串、0 或空数组）。换证书保留同一把密钥不改变 `fp`；换密钥需要重启 hub 并让设备重新可信配对，当前没有 `fp_next`。
+
+#### 电脑的配对码（feature `machines_add`，#3735）
+
+新用户上手方案（#287）4.2、5.3。请求体：
+
+```
+{"add": {"name": "小林的 MacBook", "os": "mac", "icon": "laptop"}}   新加一台「电脑来连」（kind link）的电脑，给它的码
+{"add": {"id": "macbook", "name": "…"}}                              同上，指定 id（`personad hub pair --machine <id> --add`）
+{"machine": "macbook"}                                               已有的 link 电脑再出一个码
+```
+
+- `add.name` 可以是中文（最多 40 个字）；不给 `add.id` 时 id 由名字生成：取名字里的 ASCII 字母和数字（小写，其余的变成 `-`），一个都没有时用 `add.os`（`mac` / `linux` / `windows`），再没有是 `computer`；
+  和已有的重了加 `-2`、`-3`。`add.os` 只决定客户端显示哪种安装说明，hub 不存；`add.icon` 是 `laptop`（默认）/ `desktop` / `server`。
+- hub 照管理界面「添加电脑 › 电脑来连」的同一个函数写 hub.json 并交给管理者（运行中生效，不用重启）。
+  **设备**加的电脑是待确认的（下面「电脑的信任」），**回环 + 主 token** 加的是已确认的。
+- 设备用同一个名字再加一次、那台还在待确认又从没连上过时，复用它、重出码（`added: false`）。主 token 带 `add.id` 遇到已有的 link 电脑也是重出码。
+- 设备只能给**待确认**的电脑出码（`machine` 或复用），已确认的回 409 `not_pending`：设备出的码都走「待确认 → 确认」，重新配对一台已确认的电脑在管理界面或 hub 机器上做。
+  这不是安全边界（full 设备本来就能用 `POST /api/v1/auth/tokens` 的 `kind: link` 给任何 link 电脑签凭据）。
+- 设备给一台待确认的电脑重新出码（`machine` 或复用）时，先吊销它已有的 Persona Link 凭据：上一个码不管被哪台电脑换走，都不能跟着新码的那台一起被确认。
+- 成功为 200，`Cache-Control: no-store`，在上面的字段（`token`、`expires_at`、`url`、`hub_id`、`fp`、`tls_port`、`alt`、`machine`、`pair_url`，没有 `qr`）之外多给：
+
+```json
+{"machine": "macbook", "name": "小林的 MacBook", "trust": "pending", "added": true,
+ "pair_url": "jarvis://link?url=…&token=…&machine=macbook&hub=…&fp=…&tls=…",
+ "command": "jarvis-link pair '<pair_url>'",
+ "install": {"linux": "curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<pair_url>'"}}
+```
+
+  `trust` 是 `pending` 或 `confirmed`（这里总是给出）；`added` 说这次是不是新加的（不是时省略）；`install` 只在 hub 知道自己是从哪个站点发布的时候有
+  （构建时的 `publish.site_url`，[config.md](config.md)；本地构建、Docker 镜像没有），目前只有 `linux`。
+- 错误（`error` 按 `Accept-Language` 本地化）：
+
+| HTTP | code | 什么时候 |
+| --- | --- | --- |
+| 403 | `forbidden` | 不是 full 设备：手表、链路、配对码换来的临时身份、扩展；非回环的主 token |
+| 409 | `tls_required` | hub 没开 TLS、也不在 HTTPS 反向代理后面，Persona Link 连不进来；带 `"action": "enable_tls"` |
+| 409 | `mesh_member` | 设备连的是互联组里的成员 hub：在中心 hub 上添加 |
+| 429 | `too_many_pending` | 设备新加电脑时已经有 3 台在等确认（复用、重出码不算） |
+| 409 | `exists` / `not_pending` | 指定的 id 已经有了（不是能复用的 link 电脑）/ 设备给已确认的电脑出码 |
+| 404 | `not_found` | 设备带的 `machine` 不是 hub.json 里的 link 电脑 |
+| 400 | `unknown_machine` | 主 token 带的 `machine` 不是 hub.json 里的 link 电脑（`hub pair --machine` 据此提示加 `--add`） |
+| 400 | `invalid_name` / `invalid_id` / `invalid_os` / `bad_request` | 没名字或名字太长 / id 不合规则 / os 不认识 / `machine` 和 `add` 一起给、或带了 `web` |
+
+- 回执：设备出了电脑的码，给**其他**已配对设备推一条「<设备> 给电脑「<名字>」出了一个配对码」；待确认的电脑的 Persona Link 兑换了码，给所有设备推「新电脑「<名字>」想加入：打开 App 确认是不是你的」
+  （代替平常的「有新设备配对」）。出码的回执是安全回执，故意不看设备的通知偏好、静音和「电脑上开着就不推」。推送不可用时记日志。出码（`code`）、兑换（`redeem`）都写 `machine_audit`。
 
 ### 候选地址
 
@@ -823,7 +867,7 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 
 ### 电脑的信任（feature `machine_trust`，#3347）
 
-新用户上手方案（#287）4.2、5.3：已登录的设备以后能自己添加电脑，添加的电脑先是**待确认**（`trust: "pending"`），用户点「是我的电脑」才确认。
+新用户上手方案（#287）4.2、5.3：已登录的设备能自己添加电脑（feature `machines_add`），添加的电脑先是**待确认**（`trust: "pending"`），用户点「是我的电脑」才确认。
 信任存 Postgres 的 `machine_trust` 表，**没有记录 = 已确认**：升级前的机器、`/admin` 加的、`hub pair --machine` 加的都直接是已确认，行为不变。待确认的电脑：
 
 - 不收 Persona 管理的 Key（助手的 `pushManaged` 和新连接的 `launchers.managed` 都跳过）；它向管理者发的请求（`assistant.context`、MCP 工具）一律拒绝；
@@ -836,7 +880,8 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 hub 读不到待确认的电脑（数据库不通）时，每台电脑都按待确认挡在外面（机器列表不标 `trust`），每 5 秒重读一次，读到为止；这期间不做超时删除。管理者那边读不到时，电脑发来的请求会拒绝，错误是「hub 的数据库没回应」，不说电脑在等确认。
 `confirm` / `reject` 的 `error` 按 `Accept-Language` 本地化（403 `forbidden`、404 `not_found`、409 `not_pending`）。
 
-确认后 hello 的机器列表多了它，助手随即给它推送 Key。确认、拒绝、超时删除（以后还有出码、兑换）都写 `machine_audit` 表（谁、什么时候、做了什么，不含凭据）。
+确认后 hello 的机器列表多了它，助手随即给它推送 Key。出码、兑换、确认、拒绝、超时删除都写 `machine_audit` 表（谁、什么时候、做了什么，不含凭据）。
+设备怎么加出待确认的电脑见上面「临时配对」里的「电脑的配对码」。
 
 ## WebSocket `/api/v1/ws`
 
