@@ -17,7 +17,7 @@ import (
 )
 
 // What the hub's plugins ask of the model configuration (assistantwire.MethodModels*): whether 信息筛选 can be called
-// (a plugin whose inbox needs it is switched on only then), and requests to a launcher's gateway sent with its key
+// (a plugin whose inbox needs it is switched on only then), which launchers have a gateway, and requests to a launcher's gateway sent with its key
 // (the quota plugins, the plugins' launcher sections). The hub never gets a key or a model call.
 
 // modelsRequest answers the hub's models.* calls (bus.go's request); false for any other method.
@@ -30,6 +30,8 @@ func (s *Service) modelsRequest(ctx context.Context, method string, params json.
 	}
 	switch method {
 	case assistantwire.MethodModelsUsable, assistantwire.MethodModelsLauncherHTTP:
+	case assistantwire.MethodModelsLaunchers:
+		return map[string]any{"launchers": s.gatewayLaunchers(ctx)}, true, nil
 	default:
 		return nil, false, nil
 	}
@@ -44,6 +46,17 @@ func (s *Service) modelsRequest(ctx context.Context, method string, params json.
 	}
 	out, err := s.launcherHTTP(ctx, p.Name, p.Machine, p.HTTP)
 	return out, true, err
+}
+
+// gatewayLaunchers is models.launchers: every launcher with a gateway address, names and addresses only (no key).
+func (s *Service) gatewayLaunchers(ctx context.Context) []assistantwire.GatewayLauncher {
+	out := []assistantwire.GatewayLauncher{}
+	for _, v := range s.launcherViews(ctx) {
+		if v.BaseURL != "" {
+			out = append(out, assistantwire.GatewayLauncher{Name: v.Name, BaseURL: v.BaseURL})
+		}
+	}
+	return out
 }
 
 // launcherHTTP is models.launcher_http: without r, where launcher name's gateway is ({base_url, machine}); with r,

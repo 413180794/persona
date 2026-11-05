@@ -99,7 +99,18 @@ const (
 	// the machine's node for a ~/.zshrc one), for the quota plugins and the plugins' launcher sections. Errors:
 	// CodeNoLauncher, or the machine's (offline…).
 	MethodModelsLauncherHTTP = "models.launcher_http"
+	// MethodModelsLaunchers: {} → {launchers: [GatewayLauncher]}: every launcher that has a gateway address of its own
+	// (a provider added in Persona, a ~/.zshrc one), for the plugins' gateway.launchers; the ones without base_url
+	// (the official API) are left out. Names and addresses only — never a key.
+	MethodModelsLaunchers = "models.launchers"
 )
+
+// GatewayLauncher is one of models.launchers' launchers: its name and its gateway's address as configured (the hub
+// trims it to the root and keeps the ones the plugin may reach).
+type GatewayLauncher struct {
+	Name    string `json:"name"`
+	BaseURL string `json:"base_url"`
+}
 
 // CodeNoLauncher: models.launcher_http has no launcher by that name.
 const CodeNoLauncher = "no_launcher"

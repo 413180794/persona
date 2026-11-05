@@ -190,8 +190,12 @@ func (h *Hub) gatewayCall(ctx context.Context, id, method string, raw json.RawMe
 		return root.String(), anyHost || hostMatches(root.Hostname(), hosts)
 	}
 	if method == "gateway.launchers" {
+		list, err := h.gatewayLaunchers(ctx)
+		if err != nil {
+			return nil, err
+		}
 		out := []gatewayLauncher{}
-		for _, v := range h.launcherViews(ctx) {
+		for _, v := range list {
 			if v.BaseURL == "" {
 				continue
 			}

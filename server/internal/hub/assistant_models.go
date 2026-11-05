@@ -6,6 +6,8 @@ import (
 	"errors"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/bus"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -14,7 +16,8 @@ import (
 // model call, the routes of 设置 › 模型供应商 / 模型配置 and 新建 Agent's pickers (assistantwire.Routes, relayed). The
 // hub hands over what hub.json says about models (the hello) and what its plugins have (their providers, their voice
 // models, which of them need 信息筛选), and asks the assistant only what its plugins need: whether 信息筛选 can be
-// called, and requests to a launcher's gateway sent with its key (models.usable, models.launcher_http).
+// called, which launchers have a gateway, and requests to a launcher's gateway sent with its key (models.usable,
+// models.launchers, models.launcher_http).
 
 // hubModels is what hub.json says about models, for the hello.
 func (h *Hub) hubModels() assistantwire.HubModels {
@@ -116,6 +119,21 @@ func (h *Hub) launcherCall(ctx context.Context, params map[string]any, out any) 
 		}
 	}
 	return err
+}
+
+// gatewayLaunchers is models.launchers: the launchers with a gateway address, as the assistant has them (names and
+// addresses, no key), for the plugins' gateway.launchers. While the assistant is not connected the error is
+// assistant_offline; a manager too old to list them is unsupported, not the plugin's unknown method.
+func (h *Hub) gatewayLaunchers(ctx context.Context) ([]assistantwire.GatewayLauncher, error) {
+	var res struct {
+		Launchers []assistantwire.GatewayLauncher `json:"launchers"`
+	}
+	err := h.asst().call(ctx, assistantwire.MethodModelsLaunchers, map[string]any{}, &res)
+	var re *rpc.Error
+	if errors.As(err, &re) && re.Code == bus.CodeUnknownMethod {
+		return nil, &rpc.Error{Code: extension.CodeUnsupported, Message: "the manager is too old to list the launchers; update it"}
+	}
+	return res.Launchers, err
 }
 
 // isAssistantOffline: err is the assistant not connected (assistantRemote.call's assistant_offline).

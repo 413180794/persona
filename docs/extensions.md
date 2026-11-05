@@ -768,7 +768,7 @@ hub 按扩展记它跑得怎么样，管理界面的扩展页看（[admin.md](ad
 
 **启动器页以外**（#2846）：侧边栏页（`nav_page`）、卡片、小组件没有启动器的上下文，接受了 `launcher_keys` 的扩展可以自己找启动器：
 
-- `gateway.launchers {}` → `{launchers: [{name, base_url}]}`：有网关地址的启动器（`base_url` 是网关的根，不带 Key）。
+- `gateway.launchers {}` → `{launchers: [{name, base_url}]}`：有网关地址的启动器（`base_url` 是网关的根，不带 Key）。启动器列表由管理者给（hub 经 `models.launchers` 去要），管理者不在线时回 `assistant_offline`，管理者太旧不认识时回 `unsupported`。
 - `gateway.open {launcher, machine?}` → `{query_id, base_url, machine}`：在这个启动器上开一次会话，`query_id` 和启动器页那一节的一样交给 `gateway.http`
   （`${launcher_key}` 由手里有 Key 的一方换上，一次会话最多 16 个请求），**1 分钟后失效**，要再读就再开一次。没有这个启动器回错误，
   网关不归这个扩展回 `unsupported`。

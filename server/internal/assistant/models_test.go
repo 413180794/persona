@@ -648,6 +648,23 @@ func TestLauncherHTTPSendsWithTheKey(t *testing.T) {
 	}
 }
 
+// The hub's plugins list the launchers that have a gateway (models.launchers, for gateway.launchers): names and
+// addresses, never a key; one without an address of its own is left out.
+func TestModelsLaunchersListsTheGatewaysWithoutKeys(t *testing.T) {
+	s, _, _ := modelService(t)
+	key, _ := s.sealKey("sk-listed")
+	putLaunchers(t, s, storedLauncher{ManagedLauncher: proto.ManagedLauncher{Name: "gw", BaseURL: "https://gw.example.com/v1", Model: "m"}, KeySealed: key},
+		storedLauncher{ManagedLauncher: proto.ManagedLauncher{Name: "official", Model: "m"}, KeySealed: key})
+	out, ok, err := s.modelsRequest(context.Background(), assistantwire.MethodModelsLaunchers, json.RawMessage(`{}`))
+	if !ok || err != nil {
+		t.Fatalf("models.launchers: %v %v", ok, err)
+	}
+	b, _ := json.Marshal(out)
+	if string(b) != `{"launchers":[{"name":"gw","base_url":"https://gw.example.com/v1"}]}` || strings.Contains(string(b), "sk-listed") {
+		t.Fatalf("%s", b)
+	}
+}
+
 // The keys are sealed with the hub's secret.key, so the keys of the providers added before they were the assistant's
 // still open; a missing file is made (once, whoever comes first).
 func TestProviderKeysUseTheHubsSecretKey(t *testing.T) {

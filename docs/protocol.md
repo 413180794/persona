@@ -1375,7 +1375,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
   握手的回答多 `models`（hub.json 的 `ai`、`kb_ai`、`triage_ai`、`judge_ai`、`inbox_agent_machine`，和各台电脑的 `machines[].launchers`）；
   去掉 `app.call` 的 `models.complete`、`models.json`、`models.apply`、`models.resolve`、`models.record`、`models.save`、`models.apply_picked`、`models.launchers`、`models.launcher_check`、`inbox.translate_fingerprint`
   和错误码 `model_paused`、`model_unconfigured`（模型都是它自己调的）；加上 `app.call plugins.presets`、`plugins.voice`、`plugins.quota {name, machine, base_url, tz}` → `{report}`、`plugins.need_triage`（插件的事，插件系统挪进管理者后去掉）、
-  `device.call launchers.managed`（Persona 里加的启动器交给 node，node 的新连接也由管理者给）；hub → 管理者的调用 `models.usable {purpose}` → `{usable}`、
+  `device.call launchers.managed`（Persona 里加的启动器交给 node，node 的新连接也由管理者给）；hub → 管理者的调用 `models.usable {purpose}` → `{usable}`、`models.launchers {}` → `{launchers: [{name, base_url}]}`（有网关地址的启动器，不带 Key）、
   `models.launcher_http {name, machine?, http?}`（错误码 `no_launcher`、`no_gateway`、`machine_offline`）。
 - 助手没连着时：转发的接口回 `503 {"code":"assistant_offline","error":"助手暂时连不上，稍后再试"}`，助手的工具同样失败（`is_error`，同一句话），`assistant.context` 也失败（node 那条消息不带实时快照）；
   给它的事件不发（它连上后报整份快照，要的东西现问），只有 `kb.agent_turn` hub 排着（每个 Agent 最新的一条），连上就发。hub 留着它最后报的快照，会话列表照常显示标题和归档。
