@@ -78,6 +78,30 @@ describe("the todos page", () => {
     expect(html.match(/aria-label="解除「/g)).toHaveLength(1);
     expect(html).toContain(">移除</button>");
   });
+
+  it("on a narrow screen an agent row's source tag leads the title and cannot push the title or the time out (#3577)", () => {
+    seed({
+      todos: [todo({ agents: [{ machine_id: "m1", session_id: "s2", linked_at: iso(hour), source: "spawned", via: "m1/s1" }] })],
+      todosLoaded: true,
+      sessions: { m1: [session({ title: "给天气 App 加主屏幕小组件" }), session({ session_id: "s2", title: "整理发布说明" })] },
+    });
+    const doc = new DOMParser().parseFromString(renderToStaticMarkup(<TodosView selectedId="t1" />), "text/html");
+    const tag = doc.querySelector('[data-testid="todo-agent-source"]')!;
+    const title = doc.querySelector('[data-testid="todo-agent-title"]')!;
+    const time = doc.querySelector('[data-testid="todo-agent-time"]')!;
+    const cls = (el: Element) => el.className.split(/\s+/);
+
+    // the tag comes first on the title line, keeps its size but stops at 45% of the line, and shows its whole text on hover
+    expect(tag.parentElement).toBe(title.parentElement);
+    expect(tag.parentElement!.firstElementChild).toBe(tag);
+    expect(cls(tag)).toEqual(expect.arrayContaining(["shrink-0", "max-w-[45%]", "truncate"]));
+    expect(tag.getAttribute("title")).toBe("由 给天气 App 加主屏幕小组件 派出");
+    // the title takes what is left and truncates instead of collapsing to nothing
+    expect(title.textContent).toBe("整理发布说明");
+    expect(cls(title)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "truncate"]));
+    // the time stays on one line
+    expect(cls(time)).toContain("whitespace-nowrap");
+  });
 });
 
 describe("the task board", () => {

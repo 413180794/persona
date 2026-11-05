@@ -793,15 +793,23 @@ function TodoDetail({
                     <StatusMark state={agent.start_error ? "offline" : isExpired ? "offline" : st} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-[13.5px] font-semibold text-ink">{displayTitle}</span>
+                    {/* The source tag leads the title line (as on iOS, #3150) and is never squeezed; a long one
+                        (「由 … 派出」) stops at 45% of the line, so the title keeps the rest and truncates (#3577). */}
+                    <div className="flex min-w-0 items-center gap-2">
                       {sourceLabel && (
-                        <span className="shrink-0 rounded bg-hover px-1.5 py-0.5 text-[10.5px] text-ink-3">
+                        <span
+                          data-testid="todo-agent-source"
+                          title={sourceLabel}
+                          className="max-w-[45%] shrink-0 truncate rounded bg-hover px-1.5 py-0.5 text-[10.5px] text-ink-3"
+                        >
                           {sourceLabel}
                         </span>
                       )}
+                      <span data-testid="todo-agent-title" title={displayTitle} className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">
+                        {displayTitle}
+                      </span>
                       {isExpired && (
-                        <span className="rounded bg-hover px-1.5 py-0.5 text-[10.5px] text-ink-3">{t("todos.ended")}</span>
+                        <span className="shrink-0 whitespace-nowrap rounded bg-hover px-1.5 py-0.5 text-[10.5px] text-ink-3">{t("todos.ended")}</span>
                       )}
                     </div>
                     <div className="mt-0.5 truncate text-[12px] text-ink-3">{displaySub}</div>
@@ -831,7 +839,9 @@ function TodoDetail({
                     ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <span className="text-[11px] text-ink-3">{ago(session?.updated_at || agent.linked_at)}</span>
+                    <span data-testid="todo-agent-time" className="whitespace-nowrap text-[11px] text-ink-3">
+                      {ago(session?.updated_at || agent.linked_at)}
+                    </span>
                     {!agent.start_error && (
                       <IconButton
                         icon="x"
