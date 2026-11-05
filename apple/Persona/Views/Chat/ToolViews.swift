@@ -41,6 +41,7 @@ enum ToolPresentation {
 
     static func verb(_ name: String) -> String {
         let n = baseName(name)
+        if let own = PersonaToolNames.verb(name) { return own }
         if n.hasPrefix("phone_") { return "iPhone" }
         if n.hasPrefix("mail_") { return "邮件" }
         switch n {

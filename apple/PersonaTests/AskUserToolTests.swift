@@ -26,7 +26,8 @@ struct AskUserToolTests {
 
     @Test func namedLikeAQuestionWithItsFirstQuestion() {
         let c = call([question("先处理哪项？", ["看日程", "回邮件", "看未读消息", "都不用"])], result: nil)
-        #expect(ToolPresentation.verb(c.name) == "提问")
+        #expect(ToolPresentation.verb(c.name) == "问你") // Persona's own ask_user; AskUserQuestion stays "提问"
+        #expect(ToolPresentation.verb("AskUserQuestion") == "提问")
         #expect(ToolPresentation.subject(c) == "先处理哪项？") // was "": an empty chip beside "ask_user"
         #expect(ToolPresentation.symbol(c.name) == ToolPresentation.symbol("AskUserQuestion"))
     }
