@@ -33,7 +33,7 @@ func testEngine(t *testing.T, m Model) *Engine {
 // Two projects for the same work from two groups (people in common, no word in common) are merged into the one the
 // model keeps; everything that named the other names it; the pair is not asked again.
 func TestDedupeMergesTheSameWork(t *testing.T) {
-	m := &scriptModel{replies: []string{`{"same":true,"keep":"B","reason":"同一个需求"}`}}
+	m := &scriptModel{replies: []string{`{"same":true,"sure":true,"keep":"B","reason":"同一个需求"}`}}
 	e := testEngine(t, m)
 	st := e.Store
 	people := []string{"lark-u1", "lark-u2", "lark-u3", "lark-u4"}
@@ -241,7 +241,7 @@ func TestManualMergeRetargetsLockedRelationshipsAndKeepsCorrections(t *testing.T
 func TestAutoMergeDoesNotHideProtectedProjects(t *testing.T) {
 	for _, field := range []string{"pinned", "locked_fields", "locked"} {
 		t.Run(field, func(t *testing.T) {
-			m := &scriptModel{replies: []string{`{"same":true,"keep":"A"}`}}
+			m := &scriptModel{replies: []string{`{"same":true,"sure":true,"keep":"A"}`}}
 			e := testEngine(t, m)
 			_ = e.Store.PutProject(&Project{Slug: "keep", Name: "Shared target", People: []string{"a", "b", "c"}})
 			tag := Tagging{}

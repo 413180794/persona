@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -265,24 +266,33 @@ func Slug(name string) string {
 func normName(s string) string { return strings.ReplaceAll(Slug(s), "-", "") }
 
 // FindProject matches a name against project names and aliases; a merged project's name leads to the one it went into.
+// When several live projects match, a name (or slug) beats an alias, and among equals the most recently updated wins
+// (then the smaller slug), so the answer does not depend on directory order.
 func (e *Engine) FindProject(name string) *Project {
 	n := normName(name)
 	if n == "" {
 		return nil
 	}
-	var merged *Project
+	var byName, byAlias, merged *Project
 	for _, p := range e.Store.Projects() {
-		hit := normName(p.Name) == n || p.Slug == Slug(name)
-		for _, a := range p.Aliases {
-			hit = hit || normName(a) == n
-		}
-		if !hit {
+		exact := normName(p.Name) == n || p.Slug == Slug(name)
+		if !exact && !hasAlias(p, n) {
 			continue
 		}
-		if p.Live() {
-			return p
+		switch {
+		case !p.Live():
+			merged = preferProject(merged, p)
+		case exact:
+			byName = preferProject(byName, p)
+		default:
+			byAlias = preferProject(byAlias, p)
 		}
-		merged = p
+	}
+	if byName != nil {
+		return byName
+	}
+	if byAlias != nil {
+		return byAlias
 	}
 	if merged != nil && merged.MergedInto != "" {
 		if p, ok := e.Store.Project(merged.MergedInto); ok && p.Live() {
@@ -290,6 +300,72 @@ func (e *Engine) FindProject(name string) *Project {
 		}
 	}
 	return nil
+}
+
+func hasAlias(p *Project, n string) bool {
+	for _, a := range p.Aliases {
+		if normName(a) == n {
+			return true
+		}
+	}
+	return false
+}
+
+// preferProject is the one of two matches to keep: the more recently updated, then the smaller slug.
+func preferProject(cur, p *Project) *Project {
+	if cur == nil || p.Updated.After(cur.Updated) || (p.Updated.Equal(cur.Updated) && p.Slug < cur.Slug) {
+		return p
+	}
+	return cur
+}
+
+// maxProjectAliases bounds the aliases a project collects on its own (compression, dedupe): past it new ones are
+// dropped. Aliases added by hand (kb_update) are not bounded. Before the bound a week of compression left active
+// projects with 90-145 aliases each, among them the names of other active projects (#2546).
+const maxProjectAliases = 12
+
+// takenProjectNames are the normalized names, slugs and aliases of the live projects other than skip: an alias that
+// is one of them belongs to another project and would make mentions of it land here.
+func (e *Engine) takenProjectNames(skip ...string) map[string]bool {
+	taken := map[string]bool{}
+	for _, p := range e.Store.Projects() {
+		if !p.Live() || slices.Contains(skip, p.Slug) {
+			continue
+		}
+		for _, n := range append([]string{p.Name, p.Slug}, p.Aliases...) {
+			if n = normName(n); n != "" {
+				taken[n] = true
+			}
+		}
+	}
+	return taken
+}
+
+// tooGenericAlias: too short to tell projects apart (a one-character name, a two-letter abbreviation) or a word
+// every project has.
+func tooGenericAlias(n string) bool {
+	r := []rune(n)
+	if len(r) < 2 || genericWord[n] {
+		return true
+	}
+	return len(r) <= 2 && len(n) == len(r) // ASCII only: "ss", "ai"
+}
+
+// addProjectAliases adds the aliases worth keeping to p: not p's own name, not too generic, not taken by another
+// live project, and while p has fewer than maxProjectAliases.
+func addProjectAliases(p *Project, aliases []string, taken map[string]bool) {
+	own := normName(p.Name)
+	for _, a := range aliases {
+		a = strings.TrimSpace(a)
+		n := normName(a)
+		if n == "" || n == own || tooGenericAlias(n) || taken[n] || hasAlias(p, n) {
+			continue
+		}
+		if len(p.Aliases) >= maxProjectAliases {
+			return
+		}
+		p.Aliases = append(p.Aliases, a)
+	}
 }
 
 // knownProjects are the projects the models may name: not done or ignored.
@@ -335,11 +411,7 @@ func (e *Engine) evolveProject(name, kind string, aliases []string, myRole strin
 			p.Kind = kind // long wins: a mission does not become a feature
 		}
 	}
-	for _, a := range aliases {
-		if normName(a) != normName(p.Name) {
-			p.Aliases = addUnique(p.Aliases, strings.TrimSpace(a))
-		}
-	}
+	addProjectAliases(p, aliases, e.takenProjectNames(p.Slug))
 	if myRole != "" {
 		p.MyRole = oneLine(myRole)
 	}

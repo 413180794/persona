@@ -6,5 +6,6 @@
 
 JSON 字段：
 - same：true / false。
+- sure：same 为 true 时是否确定：只有明确是同一件事才写 true；方向是否一致、共同的人够不够这类有任何存疑就写 false（不会合并）。
 - keep：same 时保留哪个名字更好（"A" 或 "B"：更通用、更能概括整件事的那个）。
 - reason：一句话（30 字内）说为什么。

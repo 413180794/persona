@@ -200,6 +200,7 @@ func (e *Engine) judgeDuplicate(ctx context.Context, c dedupeCandidate) (same, k
 	in := prompts.RenderKBDedupeInput(prompts.KBDedupeInput{A: side("A", c.a), B: side("B", c.b), Shared: c.shared})
 	var d struct {
 		Same   bool   `json:"same"`
+		Sure   bool   `json:"sure"`
 		Keep   string `json:"keep"`
 		Reason string `json:"reason"`
 	}
@@ -208,7 +209,25 @@ func (e *Engine) judgeDuplicate(ctx context.Context, c dedupeCandidate) (same, k
 	if err := e.modelFor("kb.dedupe").JSONMax(cctx, prompts.RenderKBDedupe(prompts.KBOwner{Owner: e.Owner}), in, 600, &d); err != nil {
 		return false, false, "", err
 	}
-	return d.Same, !strings.EqualFold(strings.TrimSpace(d.Keep), "B"), oneLine(d.Reason), nil
+	reason = oneLine(d.Reason)
+	if d.Same && (!d.Sure || hedged(reason)) {
+		// Merging is hard to undo: a "same" the model is not sure of is kept as different (asked again later).
+		return false, false, "存疑，不合并：" + reason, nil
+	}
+	return d.Same, !strings.EqualFold(strings.TrimSpace(d.Keep), "B"), reason, nil
+}
+
+// hedgeWords in a "same" verdict's reason mean the model doubts it (merges whose reasons read 「方向是否一致存疑」,
+// #2546).
+var hedgeWords = []string{"存疑", "不确定", "拿不准", "不一定", "待确认", "或许", "也许", "似乎", "不太像", "可能不是"}
+
+func hedged(reason string) bool {
+	for _, w := range hedgeWords {
+		if strings.Contains(reason, w) {
+			return true
+		}
+	}
+	return false
 }
 
 // MergeProjects folds drop into keep: drop's name and aliases become keep's aliases; people, chats, documents,
@@ -259,11 +278,13 @@ func (e *Engine) mergeProjects(keepSlug, dropSlug, why string, manual bool) erro
 			}
 		}
 	}
-	for _, a := range append([]string{drop.Name}, drop.Aliases...) {
-		if a = strings.TrimSpace(a); a != "" && normName(a) != normName(keep.Name) {
-			keep.Aliases = addUnique(keep.Aliases, a)
-		}
+	// drop's name always becomes an alias (its mentions should find keep) unless a third project goes by it; its
+	// aliases join within the bound and without names of other projects.
+	taken := e.takenProjectNames(keep.Slug, drop.Slug)
+	if a := strings.TrimSpace(drop.Name); a != "" && normName(a) != normName(keep.Name) && !taken[normName(a)] && !hasAlias(keep, normName(a)) {
+		keep.Aliases = append(keep.Aliases, a)
 	}
+	addProjectAliases(keep, drop.Aliases, taken)
 	keep.People = addUnique(keep.People, drop.People...)
 	keep.Chats = addUnique(keep.Chats, drop.Chats...)
 	keep.Items = addUnique(keep.Items, drop.Items...)
