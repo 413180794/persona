@@ -1,6 +1,7 @@
 // The admin shell: navigation (left on wide screens, a strip on top on narrow ones), the restart banner, the page.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../i18n";
+import { glideStyle } from "../lib/glide";
 import { Button, cx, Dialog, EASE, toast } from "../ui/atoms";
 import { BUSY_MOTION } from "../lib/busy-motion";
 import { setTheme, useTheme, type Theme } from "../views/theme";
@@ -149,7 +150,7 @@ function SideNav({ page }: { page: Page }) {
       <span
         aria-hidden
         className="pointer-events-none absolute inset-x-2.5 rounded-[7px] bg-hover"
-        style={{ top: pos?.top ?? 0, height: pos?.height ?? 0, opacity: pos ? 1 : 0, transition: `top 220ms ${EASE}, height 220ms ${EASE}, opacity 150ms ease` }}
+        style={glideStyle(pos, Boolean(pos), EASE)}
       />
       {NAV.map((n, i) => [
         n.advanced && !NAV[i - 1]?.advanced && (

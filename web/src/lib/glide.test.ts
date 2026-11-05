@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipsOverflow, glideBox, sameBox } from "./glide";
+import { clipsOverflow, glideBox, glideStyle, sameBox } from "./glide";
 
 const list = { top: 100, bottom: 700 };
 
@@ -41,6 +41,21 @@ describe("sameBox", () => {
     expect(sameBox({ top: 1, height: 2 }, { top: 1, height: 2 })).toBe(true);
     expect(sameBox({ top: 1, height: 2 }, { top: 1, height: 3 })).toBe(false);
     expect(sameBox({ top: 1, height: 2 }, null)).toBe(false);
+  });
+});
+
+describe("glideStyle", () => {
+  it("moves by transform and never transitions a layout property", () => {
+    const s = glideStyle({ top: 120, height: 30 }, true, "ease");
+    expect(s).toMatchObject({ top: 0, height: 30, transform: "translateY(120px)", opacity: 1 });
+    // top / height in the transition lay the list out every frame of the glide
+    expect(String(s.transition)).not.toMatch(/\b(top|height)\b/);
+    expect(String(s.transition)).toContain("transform");
+  });
+
+  it("fades out where it last was", () => {
+    expect(glideStyle({ top: 40, height: 46 }, false, "ease")).toMatchObject({ transform: "translateY(40px)", height: 46, opacity: 0 });
+    expect(glideStyle(null, false, "ease")).toMatchObject({ transform: "translateY(0px)", height: 0, opacity: 0 });
   });
 });
 

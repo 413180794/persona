@@ -64,13 +64,15 @@ import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 import { hubMenuItems, useHubs } from "./Hubs";
 import { PersonaAvatar } from "./assistant/Persona";
 import { FoldScope, useFolded } from "../lib/use-folded";
-import { clipsOverflow, glideBox, sameBox, type GlideBox, type Span } from "../lib/glide";
+import { clipsOverflow, glideBox, glideStyle, sameBox, type GlideBox, type Span } from "../lib/glide";
 import { AGENTS_FOLD, onGrouping, setAgentsFolded } from "../lib/sidebar-api";
 import { formatChord, jumpHint, useBindings } from "../lib/shortcuts";
 import { toggleSidebarColumn } from "../lib/layout";
 
 /** The open row's own fill (#2283): it stays while the pointer is elsewhere in the list, a step darker than hover. */
 const CURRENT_ROW = "bg-hover-2";
+/** The least an agent row's title gets behind a prefix (styles.css `--row-title-min`, about 4.5 characters). */
+const ROW_TITLE_MIN = "min-w-(--row-title-min)";
 
 /** Brings `el` to the middle of its nearest scrolling ancestor when it is not fully in view (rows loading above it
  *  later still leave it on screen). Not `scrollIntoView`: that also scrolls the clipped (overflow-hidden) box of a
@@ -187,7 +189,7 @@ function useGlide(activeKey: string) {
     <span
       aria-hidden
       className="pointer-events-none absolute inset-x-2.5 rounded-[7px] bg-hover"
-      style={{ top: box.at?.top ?? 0, height: box.at?.height ?? 0, opacity: box.on ? 1 : 0, transition: `top 220ms ${EASE}, height 220ms ${EASE}, opacity 150ms ease` }}
+      style={glideStyle(box.at, box.on, EASE)}
     />
   );
   return { nav, reg, hover: setHovered, highlight };
@@ -1362,9 +1364,10 @@ function TabRow({ t: tab, ...p }: { t: HerdrTab } & TreeProps) {
       active={Boolean(open) && shut}
       to={to}
       go={go}
-      // a long tab name gives way: it would run under the 「N 个 Agent」 button (endRoom) and hide the agent's title
+      // a long tab name gives way: it would run under the 「N 个 Agent」 button (endRoom) and hide the agent's title;
+      // squeezed, it shrinks (truncated) before the title goes under its minimum (SessionRow)
       prefix={tab.label}
-      prefixClass="min-w-0 max-w-[50%] shrink-0 truncate text-[11.5px] text-ink-3 tabular-nums"
+      prefixClass="min-w-0 max-w-[50%] shrink truncate text-[11.5px] text-ink-3 tabular-nums"
       showTodoTag={single}
       // a tab with several panes has a menu of its own: rename, split, git, close it
       onMenu={single ? onRowMenu : (_s, anchor, at) => onNodeMenu(tabNode(tab, machines), at ?? { anchor }, t("sidebar.tab_named", { label: tab.label || "" }).trim(), !at)}
@@ -1407,7 +1410,7 @@ function TabRow({ t: tab, ...p }: { t: HerdrTab } & TreeProps) {
                 to={paneRoute(s)}
                 go={go}
                 prefix={agentLabel(s)}
-                prefixClass="shrink-0 text-[11px] text-ink-3"
+                prefixClass="min-w-0 shrink truncate text-[11px] text-ink-3"
                 host={s === tab.launcher ? t("sidebar.launcher") : undefined}
                 showTodoTag
                 onMenu={onRowMenu}
@@ -1713,6 +1716,8 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
   const workflowTitle = workflow ? workflowLine(s, now) : "";
   // what sits at the row's end steps aside for the hover ⋯; the open row leaves room for its ⋯ instead
   const aside = active ? undefined : "group-hover/row:invisible";
+  // behind a prefix (a tab's name, a pane's agent) the title keeps room for a few characters: the prefix shrinks first
+  const titleMin = prefix ? ROW_TITLE_MIN : "min-w-0";
   // one ref per key, so letting go takes out only this row's entry (keyedRefs)
   const regRow = useMemo(() => reg(k), [reg, k]);
   // what it asks you, or what it did, under its title (#3195): no hover or click needed to see why it is red or green
@@ -1742,7 +1747,7 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
       {showState && !s.assistant && <SessionMark s={s} size={14} />}
       {prefix && <span className={prefixClass}>{prefix}</span>}
       {detail.length > 0 || workflow || line ? (
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className={cx("flex flex-1 flex-col", titleMin)}>
           <span className={cx("truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
             {label ?? sessionTitle(s)}
           </span>
@@ -1769,7 +1774,7 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
           </span>}
         </span>
       ) : (
-        <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
+        <span className={cx("flex-1 truncate text-[13px]", titleMin, active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
           {label ?? sessionTitle(s)}
         </span>
       )}
@@ -1783,7 +1788,9 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
           <Icon name="todo" size={10} stroke={2} />
         </span>
       )}
-      {showState && !s.assistant && <SourceTag s={s} className={aside} />}
+      {/* not on a tab with several panes (endRoom): a herdr tab is 终端 by definition, each pane's row under it says so,
+          and the tag's room is the title's */}
+      {showState && !s.assistant && !endRoom && <SourceTag s={s} className={aside} />}
       {/* the row's ⋯ takes the end on hover: what is there steps aside instead of showing half under it */}
       {tail && <span className={cx("max-w-[72px] shrink-0 truncate text-[11px] text-ink-3", aside)}>{tail}</span>}
       {!tail && (st === "offline" || !showState) && <span className={cx("shrink-0 text-[11px] text-ink-3", aside)}>{ago(s.updated_at)}</span>}

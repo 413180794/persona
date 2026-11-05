@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -531,7 +532,7 @@ func (s *passive) stream(w http.ResponseWriter, r *http.Request) {
 	s.seen(r)
 	node, err := net.DialTimeout("unix", s.o.Target, 2*time.Second)
 	if err != nil {
-		msg := fmt.Sprintf("本机的%s（%s 连不上）：让 jarvisd node --attach 一直跑", NodeDownMarker, s.o.Target)
+		msg := nodeMissing(runtime.GOOS, s.o.Target).Error() // how this OS runs it, as in active mode (#3723)
 		s.mu.Lock()
 		s.node, s.nodeErr = "offline", msg
 		s.reportLocked()

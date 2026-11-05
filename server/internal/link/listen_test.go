@@ -14,6 +14,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -399,7 +400,8 @@ func TestPassivePairingAgainEndsTheOldCredential(t *testing.T) {
 }
 
 func TestPassiveWithoutTheNode(t *testing.T) {
-	c := startConnector(t, filepath.Join(t.TempDir(), "no-node.sock"), Options{})
+	target := filepath.Join(t.TempDir(), "no-node.sock")
+	c := startConnector(t, target, Options{})
 	fp, code := c.invite(t)
 	h := hubFor(t, c.addr, fp)
 	h.pair(code, tokenA)
@@ -407,9 +409,16 @@ func TestPassiveWithoutTheNode(t *testing.T) {
 	if err == nil || resp == nil || resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("%v %v", err, resp)
 	}
+	// The same advice as active mode: how this OS runs the node, not the bare command (#3723). The hub shows the
+	// answer's message on the machine's page; the menu bar shows node_error.
+	want := nodeMissing(runtime.GOOS, target).Error()
+	var body struct{ Error, Message string }
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil || body.Error != "node_unavailable" || body.Message != want {
+		t.Fatalf("answer %+v (%v), want message %q", body, err, want)
+	}
 	s := c.waitFor(t, func(s Status) bool { return s.Node == "offline" })
-	if s.State != "listening" || !strings.Contains(s.NodeError, "常驻 node 没在运行") {
-		t.Fatalf("status %+v", s)
+	if s.State != "listening" || s.NodeError != want {
+		t.Fatalf("status %+v, want node_error %q", s, want)
 	}
 }
 
