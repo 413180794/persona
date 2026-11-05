@@ -31,7 +31,7 @@ import { Palette } from "./views/Palette";
 import { ShortcutHelp } from "./views/ShortcutHelp";
 import { closePalette, openPalette, usePalette } from "./lib/palette";
 import { sidebarShown, useLayout } from "./lib/layout";
-import { useShortcuts } from "./lib/use-shortcuts";
+import { SIDEBAR_LABEL, useShortcuts } from "./lib/use-shortcuts";
 import { Sidebar } from "./views/Sidebar";
 import { SidePanel } from "./views/SidePanel";
 import { ExtensionNavPage } from "./views/extensions/ExtensionSlots";
@@ -319,7 +319,7 @@ function Shell() {
         ref={drawerBox}
         role={a11y.modal ? "dialog" : undefined}
         aria-modal={a11y.modal || undefined}
-        aria-label={a11y.modal ? t("app.sidebar") : undefined}
+        aria-label={a11y.modal ? SIDEBAR_LABEL : undefined}
         inert={a11y.inert || undefined}
         className={cx(
           "fixed inset-y-0 left-0 z-30 w-[284px] border-r border-line transition-transform duration-300 max-lg:w-[calc(284px+env(safe-area-inset-left))] max-lg:bg-canvas max-lg:pb-[env(safe-area-inset-bottom)] max-lg:pl-[env(safe-area-inset-left)] lg:static lg:z-auto lg:translate-x-0 lg:shadow-none",
