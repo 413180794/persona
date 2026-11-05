@@ -1,12 +1,14 @@
 import Foundation
 
-/// ⌘K 快速打开 (docs/mac.md「搜索」): one field over the agents, the Persona conversations, the inbox, the window's
-/// sections and the two "new" actions, like Xcode's Open Quickly. ↑↓ choose, ⏎ opens, Esc closes.
+/// ⌘K 快速打开 (docs/mac.md「搜索」): one field over the agents, the Persona conversations, the open conversation's
+/// files (`MacFileFind`), the inbox, the window's sections and the two "new" actions, like Xcode's Open Quickly. ↑↓ choose, ⏎ opens, Esc closes.
 enum MacQuickOpen {
     enum Target: Hashable {
         case agent(SessionKey)
         case conversation(SessionKey)
         case inbox(String)
+        /// A file under the open conversation's directory, relative to it.
+        case file(String)
         case section(MacSection)
         case newAgent
         case newConversation
@@ -23,6 +25,8 @@ enum MacQuickOpen {
         var date: Date?
         /// Waiting on you: listed before the rest of the same score.
         var urgent = false
+        /// A file: UTF-16 offsets into its relative path of the characters the query matched.
+        var marks: [Int] = []
     }
 
     struct Group: Identifiable, Hashable {
@@ -46,10 +50,15 @@ enum MacQuickOpen {
         return !words.isEmpty && words.allSatisfy { h.contains($0) } ? 40 : 0
     }
 
-    /// The groups to list, empty ones dropped: Agent, Persona 对话, 收件箱, 前往, 动作 — unless a later group has a
-    /// better kind of match (typing 设置 puts the section above an agent that merely mentions it).
+    /// What a file hit counts as against the other groups: above an agent that only has the words somewhere, below
+    /// one whose title has them.
+    static let fileScore = 60
+
+    /// The groups to list, empty ones dropped: Agent, Persona 对话, 文件, 收件箱, 前往, 动作 — unless a later group has
+    /// a better kind of match (typing 设置 puts the section above an agent that merely mentions it). `files`: what
+    /// `MacFileFind` matched in the open conversation's directory, best first.
     static func sections(_ query: String, sessions: [Session], machines: [Machine], inbox: [InboxItem],
-                         supportsTodos: Bool = true) -> [Group] {
+                         files: [MacFileFind.Hit] = [], supportsTodos: Bool = true) -> [Group] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let names = Dictionary(machines.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         var agents: [Hit] = [], conversations: [Hit] = []
@@ -74,9 +83,17 @@ enum MacQuickOpen {
             return Hit(id: "i:\(it.id)", title: it.title, subtitle: [it.sender, it.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "："),
                        icon: Theme.Icon.inbox, target: .inbox(it.id), score: sc, date: it.updatedAt)
         }
+        let fileHits = q.isEmpty ? [] : files.map { f -> Hit in
+            let cut = f.path.lastIndex(of: "/")
+            let name = cut.map { String(f.path[f.path.index(after: $0)...]) } ?? f.path
+            let folder = cut.map { String(f.path[..<$0]) } ?? ""
+            return Hit(id: "f:\(f.path)", title: name, subtitle: folder, icon: Theme.Icon.file, target: .file(f.path),
+                       score: fileScore, marks: f.matched)
+        }
         let groups = [
             Group(title: "Agent", hits: Array(ranked(agents).prefix(agentLimit))),
             Group(title: "Persona 对话", hits: Array(ranked(conversations).prefix(otherLimit))),
+            Group(title: "文件", hits: fileHits),
             Group(title: "收件箱", hits: Array(ranked(mail).prefix(otherLimit))),
             Group(title: "前往", hits: places(q, supportsTodos: supportsTodos)),
             Group(title: "动作", hits: actions(q)),

@@ -120,6 +120,14 @@ struct MacRootView: View {
         }
         .sendRefusalAlert(model)
         .overlay { if model.isPaired { MacQuickOpenLayer() } }
+        .background {
+            // ⌘K's 文件: the viewer a file in the conversation opens. On a view of its own: a second sheet on the
+            // root next to 新建 Agent's crashed the window's layout when a chat opened.
+            Color.clear.sheet(item: Binding(get: { MacShellState.shared.file }, set: { MacShellState.shared.file = $0 })) { ref in
+                FileViewer(ref: ref, key: MacShellState.shared.fileKey)
+                    .environment(model)
+            }
+        }
         .sheet(isPresented: Binding(get: { MacShellState.shared.newAgent }, set: { MacShellState.shared.newAgent = $0 })) {
             // 新建 Agent (⌘N, the menu bar, ⌘K): the iOS form in a window sheet; the new agent opens in Agents.
             NavigationStack {

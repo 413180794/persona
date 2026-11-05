@@ -219,6 +219,11 @@ final class DemoHub {
             #endif
             default: throw notFound()
             }
+        #if os(macOS)
+        case ("machines", 4) where p[2] == "fs" && p[3] == "find": // ⌘K's 文件: a made-up checkout
+            return ["cwd": .string(q["cwd"] ?? ""), "truncated": false, "source": "git",
+                    "files": .array(Self.demoFiles.map { .string($0) })]
+        #endif
         case ("machines", 4) where p[2] == "git" && p[3] == "status": // no repositories in the demo: the chat shows no git card
             return ["is_repo": false, "ahead": 0, "behind": 0, "files": .array([]), "stashes": 0, "commits": .array([])]
         case ("devices", 3) where p[2] == "prefs": return prefs
@@ -671,6 +676,12 @@ final class DemoHub {
     }
 
     #if os(macOS)
+    /// ⌘K's 文件 in the demo (Mac): the files of a small app, whatever directory is asked for.
+    static let demoFiles = [
+        "README.md", "Package.swift", "Sources/Forecast.swift", "Sources/App/WeatherApp.swift",
+        "Sources/App/Views/ForecastView.swift", "Sources/App/Views/SettingsView.swift", "Sources/App/Models/Forecast.swift",
+        "Sources/App/Models/Location.swift", "Tests/ForecastTests.swift", "docs/design.md",
+    ]
     /// The one file the Mac's demo file viewer shows (made up, like the rest of the demo).
     private static let demoFile = """
         import Foundation

@@ -19,6 +19,9 @@ import SwiftUI
     var terminalWindow: SessionKey?
     /// What ⌘K opens with typed in (DEBUG `-openQuickOpen <query>`).
     var seed = ""
+    /// A file ⌘K's 文件 picked: the window shows it in the file viewer, for the conversation `fileKey`.
+    var file: FileRef?
+    var fileKey: SessionKey?
     /// What the Agent menu asks of the chat showing `key` (a new value each time): toggle the inspector
     /// (显示会话信息 ⌥⌘I), or bring up its own 重命名 / 清空上下文 / 关闭 Agent dialogs.
     var chatRequest: ChatRequest?
@@ -52,17 +55,24 @@ struct MacQuickOpenPanel: View {
     @State private var query = ""
     @State private var selected = 0
     @FocusState private var focused: Bool
+    /// The directory 文件 searches: the open conversation's, when it has one (read anew as the window's chat and its
+    /// session arrive).
+    private var place: FilePlace? { Self.filePlace(model) }
+    @State private var files: MacFileIndex.State?
+    @State private var fileHits: [MacFileFind.Hit] = []
+
+    struct FilePlace: Equatable { var key: SessionKey; var cwd: String }
 
     var body: some View {
         let groups = MacQuickOpen.sections(query, sessions: model.allSessions, machines: model.machines, inbox: InboxStore.shared.items,
-                                                 supportsTodos: TodoStore.shared.isSupported)
+                                           files: fileHits, supportsTodos: TodoStore.shared.isSupported)
         let hits = groups.flatMap(\.hits)
         VStack(spacing: 0) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: Theme.Icon.search)
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                TextField("快速打开：Agent、Persona 对话、收件箱…", text: $query)
+                TextField(place == nil ? "快速打开：Agent、Persona 对话、收件箱…" : "快速打开：Agent、文件、收件箱…", text: $query)
                     .textFieldStyle(.plain)
                     .font(Theme.Font.title)
                     .focused($focused)
@@ -95,7 +105,10 @@ struct MacQuickOpenPanel: View {
                                 }
                             }
                         }
-                        .padding(.bottom, Theme.Space.s)
+                        fileStatus
+                            .padding(.horizontal, Theme.Space.m)
+                            .padding(.top, Theme.Space.xs)
+                        Color.clear.frame(height: Theme.Space.s)
                     }
                     .frame(maxHeight: Theme.Size.macQuickOpenListMax)
                     .fixedSize(horizontal: false, vertical: true)
@@ -105,9 +118,13 @@ struct MacQuickOpenPanel: View {
                 }
             } else if !query.isEmpty {
                 Divider()
-                Text("没有找到「\(query)」")
-                    .foregroundStyle(.secondary)
-                    .padding(Theme.Space.l)
+                if case .loading = files {
+                    fileStatus.padding(Theme.Space.l)
+                } else {
+                    Text("没有找到「\(query)」")
+                        .foregroundStyle(.secondary)
+                        .padding(Theme.Space.l)
+                }
             }
         }
         .frame(width: Theme.Size.macQuickOpenWidth)
@@ -119,7 +136,52 @@ struct MacQuickOpenPanel: View {
             MacShellState.shared.seed = ""
             focused = true
         }
-        .onChange(of: query) { selected = 0 }
+        .task(id: place) { await loadFiles() }
+        .onChange(of: query) {
+            selected = 0
+            searchFiles()
+        }
+    }
+
+    /// 文件's line under the list while it has something to say: the index on its way, a directory it cannot read.
+    @ViewBuilder private var fileStatus: some View {
+        if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+            switch files {
+            case .loading:
+                Text("正在建立文件索引…").font(Theme.Font.caption).foregroundStyle(.secondary)
+            case .failed:
+                Text("读不到这个目录的文件").font(Theme.Font.caption).foregroundStyle(.secondary)
+            default: EmptyView()
+            }
+        }
+    }
+
+    /// The conversation the window shows, with a directory to search; nil elsewhere (no 文件 then).
+    static func filePlace(_ model: AppModel) -> FilePlace? {
+        guard let key = MacShellState.shared.focusedChat(model),
+              let cwd = model.session(key)?.cwd.trimmingCharacters(in: .whitespaces), !cwd.isEmpty else { return nil }
+        return FilePlace(key: key, cwd: cwd)
+    }
+
+    private func loadFiles() async {
+        guard let place, let api = model.api(place.key.group) else { files = nil; return }
+        files = .loading
+        let state = await MacFileIndex.shared.load(api, machine: place.key.machineID, cwd: place.cwd)
+        guard !Task.isCancelled else { return }
+        files = state
+        searchFiles()
+        #if DEBUG
+        // `-openQuickOpenPick YES` (with `-openQuickOpen <query>`): ⏎ on the first file once the list is in, for
+        // offscreen screenshots of what it opens.
+        if UserDefaults.standard.bool(forKey: "openQuickOpenPick"), let f = fileHits.first {
+            open(MacQuickOpen.Hit(id: f.path, title: f.path, subtitle: "", icon: "", target: .file(f.path), score: 0))
+        }
+        #endif
+    }
+
+    private func searchFiles() {
+        guard case .ready(let search, _) = files else { fileHits = []; return }
+        fileHits = search.search(query)
     }
 
     private func open(_ hit: MacQuickOpen.Hit) {
@@ -130,6 +192,11 @@ struct MacQuickOpenPanel: View {
             MacShellState.shared.willOpen()
             model.selectedTab = .mail
             MacInboxState.shared.selection = [.item(id)]
+        case .file(let rel):
+            guard let place else { return }
+            MacShellState.shared.fileKey = place.key
+            MacShellState.shared.file = FileRef(group: place.key.group, machineID: place.key.machineID,
+                                                path: MacFileFind.join(place.cwd, rel), cwd: place.cwd)
         case .section(let s): MacShellState.shared.go(s, model)
         case .newAgent: MacShellState.shared.newAgent = true
         case .newConversation:
@@ -146,6 +213,24 @@ private struct QuickOpenRow: View {
     var hit: MacQuickOpen.Hit
     var selected: Bool
 
+    /// A file's name starts after its folder and the slash.
+    private var titleOffset: Int { hit.subtitle.isEmpty ? 0 : hit.subtitle.utf16.count + 1 }
+
+    /// The text with the characters a file search matched drawn strong (and in the accent colour when not selected).
+    private func marked(_ text: String, at offset: Int) -> AttributedString {
+        guard !hit.marks.isEmpty else { return AttributedString(text) }
+        var out = AttributedString()
+        for run in MacFileFind.runs(text, offset: offset, matched: hit.marks) {
+            var a = AttributedString(run.text)
+            if run.hit {
+                a.inlinePresentationIntent = .stronglyEmphasized
+                if !selected { a.foregroundColor = Theme.accent }
+            }
+            out += a
+        }
+        return out
+    }
+
     var body: some View {
         HStack(spacing: Theme.Space.s) {
             Group {
@@ -157,9 +242,9 @@ private struct QuickOpenRow: View {
             }
             .frame(width: Theme.Size.iconXS)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(hit.title).lineLimit(1)
+                Text(marked(hit.title, at: titleOffset)).lineLimit(1)
                 if !hit.subtitle.isEmpty {
-                    Text(hit.subtitle)
+                    Text(marked(hit.subtitle, at: 0))
                         .font(Theme.Font.caption)
                         .foregroundStyle(selected ? .white : .secondary)
                         .lineLimit(1)
