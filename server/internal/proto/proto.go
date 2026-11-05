@@ -633,6 +633,10 @@ type Session struct {
 	SlotID        string `json:"slot_id,omitempty"`
 	SlotName      string `json:"slot_name,omitempty"`
 	SlotIndex     int    `json:"slot_index,omitempty"`
+	// PaneIndex is the pane's 0-based place in its slot by layout, top left first: 0 is the pane the others were split
+	// from (the group's 发起者 when an agent runs there). Absent (nil) when the host does not say where its panes sit
+	// (older nodes, hosts without layouts, a pane missing from the layout). A pointer so that 0 is sent.
+	PaneIndex *int `json:"pane_index,omitempty"`
 	// State is the unified agent state the apps render (needs_you, working, unread, idle, offline, unknown),
 	// computed by the hub from the host status, pending interactions and whether the user has seen the result.
 	State  string    `json:"state"`

@@ -44,6 +44,9 @@ func (h *herdrHost) Snapshot(ctx context.Context) (*host.Layout, error) {
 		return nil, err
 	}
 	l := &host.Layout{Agents: fromHerdrAgents(snap.Agents), Panes: fromHerdrAgents(snap.Panes)}
+	if len(snap.Layouts) > 0 {
+		l.PaneIndex = herdr.PaneIndexes(snap.Layouts)
+	}
 	for _, w := range snap.Workspaces {
 		l.Spaces = append(l.Spaces, fromHerdrWorkspace(w))
 	}

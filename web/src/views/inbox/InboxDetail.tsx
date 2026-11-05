@@ -6,6 +6,7 @@ import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, o
 import { useInboxItemPlace } from "../../lib/extension-slots";
 import { navigate } from "../../lib/router";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
+import { t } from "../../i18n";
 import { Button, cx, IconButton, Loading } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ConnectorBody, openSystem } from "./ConnectorThread";
@@ -26,7 +27,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
   if (!item) {
     return (
       <div className="flex h-full items-center justify-center p-6">
-        {loaded ? <p className="text-[13px] text-ink-3">这件事已经不在收件箱里了</p> : <Loading />}
+        {loaded ? <p className="text-[13px] text-ink-3">{t("inbox-inboxdetail.gone")}</p> : <Loading />}
       </div>
     );
   }
@@ -55,9 +56,9 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
               </h2>
               <p className="mt-0.5 truncate text-[12px] text-ink-3">{[sourceLine(item), shortTime(item.updated_at)].filter(Boolean).join(" · ")}</p>
             </div>
-            {item.lark && (!place || ownShown) && <IconButton icon="pin" label="Pin 消息" onClick={() => setPins(true)} size={32} />}
+            {item.lark && (!place || ownShown) && <IconButton icon="pin" label={t("inbox-inboxdetail.pin_messages")} onClick={() => setPins(true)} size={32} />}
             {done ? (
-              <Button tone="secondary" icon="inbox" onClick={() => void setDone(item, false)}>移回</Button>
+              <Button tone="secondary" icon="inbox" onClick={() => void setDone(item, false)}>{t("inbox-inboxdetail.move_back")}</Button>
             ) : (
               <Button
                 tone="secondary"
@@ -67,7 +68,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
                   navigate({ name: "inbox" });
                 }}
               >
-                已处理
+                {t("inbox-inboxdetail.done")}
               </Button>
             )}
           </div>
@@ -81,12 +82,12 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
           {!done && agentWorking(item) && <div className="mt-2"><AgentWorking it={item} /></div>}
           <div className="mt-3 flex flex-wrap gap-2">
             {canDraft(item) ? (
-              <Button tone="accent" icon="write" onClick={() => setDialog("draft")}>{draft && !done ? "查看草稿" : "AI 草拟回复"}</Button>
+              <Button tone="accent" icon="write" onClick={() => setDialog("draft")}>{draft && !done ? t("inbox-inboxdetail.view_draft") : t("inbox-inboxdetail.ai_draft")}</Button>
             ) : (
               // Answered in the source's own app (a CI run has nothing to answer: only 交给 AI).
               openURL(item) && <Button tone="accent" icon="external" onClick={() => openSystem(openURL(item)!)}>{openTitle(item)}</Button>
             )}
-            <Button tone="secondary" icon="spark" onClick={() => setDialog("handoff")}>交给 AI</Button>
+            <Button tone="secondary" icon="spark" onClick={() => setDialog("handoff")}>{t("inbox-inboxdetail.hand_to_ai")}</Button>
           </div>
         </div>
       </div>
@@ -103,8 +104,8 @@ export function DetailPlaceholder() {
       <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3">
         <Icon name="inbox" size={18} />
       </span>
-      <p className="text-[13.5px] font-medium text-ink">选一件事</p>
-      <p className="text-[12.5px] text-ink-3">左边列表里点一件事，详情会在这里打开。</p>
+      <p className="text-[13.5px] font-medium text-ink">{t("inbox-inboxdetail.placeholder_title")}</p>
+      <p className="text-[12.5px] text-ink-3">{t("inbox-inboxdetail.placeholder_hint")}</p>
     </div>
   );
 }

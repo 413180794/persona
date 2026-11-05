@@ -11,6 +11,7 @@ import {
 } from "../../lib/connectors";
 import { connectorReference, itemPath, shortTime, withToken, type InboxItem } from "../../lib/inbox";
 import { openLink } from "../../lib/links";
+import { t } from "../../i18n";
 import { Button, cx, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
@@ -55,7 +56,7 @@ export function ConnectorBody({ item }: { item: InboxItem }) {
       const p = await loadThread(id, thread, page.before);
       setPage((have) => (have ? mergeOlder(have, p) : p));
     } catch (e) {
-      toast(`读不到更早的：${errorText(e)}`, "error");
+      toast(t("inbox-connectorthread.older_failed", { error: errorText(e) }), "error");
     } finally {
       setOlder(false);
     }
@@ -68,12 +69,12 @@ export function ConnectorBody({ item }: { item: InboxItem }) {
       await load();
       return true;
     } catch (e) {
-      toast(`没发出去：${errorText(e)}`, "error");
+      toast(t("inbox-connectorthread.send_failed", { error: errorText(e) }), "error");
       return false;
     }
   };
 
-  if (!page && failure === null) return <div className="p-5"><Loading label={`正在读 ${item.account_name || id}`} /></div>;
+  if (!page && failure === null) return <div className="p-5"><Loading label={t("inbox-connectorthread.loading", { name: item.account_name || id })} /></div>;
   if (!page || (!isChatThread(page.chat) && !isGitHubThread(page.chat))) return <ConnectorText item={item} problem={page ? undefined : failure || undefined} />;
   return isGitHubThread(page.chat)
     ? <GitHubThread id={id} item={item} page={page} older={older} onOlder={() => void loadOlder()} onSend={send} />
@@ -102,21 +103,21 @@ function ConnectorText({ item, problem }: { item: InboxItem; problem?: string })
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             {c?.url && (
               <Button tone="secondary" icon="external" onClick={() => openLink(c.url!, item.title)}>
-                在 {item.account_name || item.source} 打开
+                {t("inbox-connectorthread.open_in", { name: item.account_name || item.source })}
               </Button>
             )}
-            {c?.reply_to && c.can_reply && <p className="min-w-0 text-[12px] text-ink-3">回复会{c.reply_to}。</p>}
+            {c?.reply_to && c.can_reply && <p className="min-w-0 text-[12px] text-ink-3">{t("inbox-connectorthread.reply_goes", { how: c.reply_to })}</p>}
           </div>
         )}
         {problem && (
           <p className="flex items-start gap-2 rounded-[10px] bg-inset px-3 py-2 text-[12px] text-ink-2 shadow-hairline">
             <Icon name="info" size={13} className="mt-0.5 shrink-0 text-ink-3" />
-            <span className="min-w-0 break-words">读不到会话页：{problem}</span>
+            <span className="min-w-0 break-words">{t("inbox-connectorthread.thread_failed", { error: problem })}</span>
           </p>
         )}
-        <p className="text-[12px] font-medium text-ink-3">内容</p>
+        <p className="text-[12px] font-medium text-ink-3">{t("inbox-connectorthread.content")}</p>
         {context === null && !failure ? <Loading /> : failure ? (
-          <p className="text-[12.5px] text-red">读不到内容：{failure}</p>
+          <p className="text-[12.5px] text-red">{t("inbox-connectorthread.content_failed", { error: failure })}</p>
         ) : (
           <div className="text-[13px] leading-relaxed break-words whitespace-pre-wrap text-ink select-text">{context || item.preview}</div>
         )}
@@ -141,10 +142,10 @@ function ThreadComposer({ placeholder, replyTo, onClearReply, onSend, note }: {
     if (replyTo) ref.current?.focus();
   }, [replyTo]);
   const submit = async () => {
-    const t = text.trim();
-    if (!t || sending) return;
+    const body = text.trim();
+    if (!body || sending) return;
     setSending(true);
-    const ok = await onSend(t, replyTo ?? undefined);
+    const ok = await onSend(body, replyTo ?? undefined);
     setSending(false);
     if (ok) {
       setText("");
@@ -158,9 +159,9 @@ function ThreadComposer({ placeholder, replyTo, onClearReply, onSend, note }: {
         {replyTo && (
           <div className="mb-2 flex items-center gap-1.5 rounded-[8px] bg-inset px-3 py-1.5 text-[12px] text-ink-2">
             <Icon name="quote" size={12} className="shrink-0 text-accent-ink" />
-            <span className="shrink-0 font-medium text-ink">{replyTo.mine ? "我" : replyTo.sender.name}：</span>
+            <span className="shrink-0 font-medium text-ink">{t("inbox-connectorthread.quoted_sender", { name: replyTo.mine ? t("inbox-connectorthread.me") : replyTo.sender.name })}</span>
             <span className="min-w-0 flex-1 truncate text-ink-3">{replyTo.text || (replyTo.media?.length ? mediaLine(replyTo.media[0]) : "")}</span>
-            <button type="button" onClick={onClearReply} title="取消引用" aria-label="取消引用" className="shrink-0 rounded p-0.5 text-ink-3 hover:bg-hover hover:text-ink">
+            <button type="button" onClick={onClearReply} title={t("inbox-connectorthread.cancel_quote")} aria-label={t("inbox-connectorthread.cancel_quote")} className="shrink-0 rounded p-0.5 text-ink-3 hover:bg-hover hover:text-ink">
               <Icon name="x" size={12} />
             </button>
           </div>
@@ -187,7 +188,7 @@ function ThreadComposer({ placeholder, replyTo, onClearReply, onSend, note }: {
             className="max-h-[140px] min-h-[36px] flex-1 resize-none rounded-[10px] bg-field px-3 py-1.5 text-[13px] leading-relaxed text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]"
           />
           <Button tone="accent" icon="send" busy={sending} disabled={!text.trim()} onClick={() => void submit()} className="h-9">
-            发送
+            {t("inbox-connectorthread.send")}
           </Button>
         </div>
         {note && <p className="mt-1 truncate text-[11px] text-ink-3">{note}</p>}
@@ -199,7 +200,7 @@ function ThreadComposer({ placeholder, replyTo, onClearReply, onSend, note }: {
 function OlderButton({ busy, onClick }: { busy: boolean; onClick: () => void }) {
   return (
     <div className="flex justify-center pb-2">
-      <Button tone="quiet" busy={busy} onClick={onClick}>更早的消息</Button>
+      <Button tone="quiet" busy={busy} onClick={onClick}>{t("inbox-connectorthread.older")}</Button>
     </div>
   );
 }
@@ -227,14 +228,14 @@ function ChatThread({ id, page, older, onOlder, onSend }: {
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[760px] px-3 py-3 sm:px-5">
           {page.before && <OlderButton busy={older} onClick={onOlder} />}
-          {!page.messages.length && <p className="py-10 text-center text-[12.5px] text-ink-3">没有消息</p>}
+          {!page.messages.length && <p className="py-10 text-center text-[12.5px] text-ink-3">{t("inbox-connectorthread.empty")}</p>}
           {page.messages.map((m, i) => (
             <Bubble key={m.id} id={id} m={m} head={startsGroup(m, page.messages[i - 1])} group={group} onReply={page.chat.reply ? () => setReplyTo(m) : undefined} />
           ))}
         </div>
       </div>
       {page.chat.reply ? (
-        <ThreadComposer placeholder={`发给 ${page.chat.name}`} replyTo={replyTo} onClearReply={() => setReplyTo(null)} onSend={onSend} />
+        <ThreadComposer placeholder={t("inbox-connectorthread.send_to", { name: page.chat.name })} replyTo={replyTo} onClearReply={() => setReplyTo(null)} onSend={onSend} />
       ) : null}
     </div>
   );
@@ -256,7 +257,7 @@ function Bubble({ id, m, head, group, onReply }: { id: string; m: ThreadMessage;
           <div className={cx("rounded-[16px] px-3 py-1.5 text-[13px] leading-relaxed break-words", mine ? "bg-accent text-white" : "bg-surface text-ink shadow-card", pictures.length > 0 && "mt-1")}>
             {m.reply_to && (
               <p className={cx("mb-1 truncate border-l-2 pl-2 text-[12px]", mine ? "border-white/60 text-white/80" : "border-line-strong text-ink-3")}>
-                {m.reply_to.from ? `${m.reply_to.from}：` : ""}{m.reply_to.text || "一条消息"}
+                {m.reply_to.from ? t("inbox-connectorthread.quoted_sender", { name: m.reply_to.from }) : ""}{m.reply_to.text || t("inbox-connectorthread.a_message")}
               </p>
             )}
             {others.map((x, i) => (
@@ -270,11 +271,11 @@ function Bubble({ id, m, head, group, onReply }: { id: string; m: ThreadMessage;
         )}
         <span className="mt-0.5 flex items-center gap-1.5 px-1 text-[10.5px] text-ink-3 tabular-nums">
           {clock(m.at)}
-          {m.edited && <span>已编辑</span>}
+          {m.edited && <span>{t("inbox-connectorthread.edited")}</span>}
           {onReply && (
             <button type="button" onClick={onReply} className="hidden items-center gap-0.5 whitespace-nowrap text-ink-3 hover:text-ink group-hover/msg:flex">
               <Icon name="quote" size={10} />
-              回复
+              {t("inbox-connectorthread.reply")}
             </button>
           )}
         </span>
@@ -295,7 +296,7 @@ function Picture({ id, media }: { id: string; media: ThreadMedia }) {
       {media.kind === "video" && (
         <span className="absolute inset-0 flex items-center justify-center">
           <span className="flex size-10 items-center justify-center rounded-full bg-black/50 text-white"><Icon name="play" size={16} /></span>
-          {media.duration ? <span className="absolute right-1.5 bottom-1.5 rounded-[5px] bg-black/55 px-1 text-[10.5px] text-white tabular-nums">{mediaLine(media).replace(/^视频 /, "")}</span> : null}
+          {media.duration ? <span className="absolute right-1.5 bottom-1.5 rounded-[5px] bg-black/55 px-1 text-[10.5px] text-white tabular-nums">{/* i18n-ignore: strips the prefix lib/connectors mediaLine writes */ mediaLine(media).replace(/^视频 /, "")}</span> : null}
         </span>
       )}
     </span>
@@ -327,7 +328,7 @@ function GitHubThread({ id, item, page, older, onOlder, onSend }: {
         <div className="mx-auto max-w-[760px] px-4 py-4 sm:px-6">
           <GitHubHeader chat={chat} reference={ref} />
           {chat.body && (
-            <Card id={id} who={chat.author} at={undefined} title={`${chat.author?.name ?? ""} 的描述`}>
+            <Card id={id} who={chat.author} at={undefined} title={t("inbox-connectorthread.description_by", { name: chat.author?.name ?? "" })}>
               <Markdown text={chat.body} small />
             </Card>
           )}
@@ -337,7 +338,7 @@ function GitHubThread({ id, item, page, older, onOlder, onSend }: {
           </div>
         </div>
       </div>
-      {chat.reply && <ThreadComposer placeholder={`评论到 ${ref}`} onSend={(t) => onSend(t)} note={item.connector?.reply_to ? `回复会${item.connector.reply_to}。` : undefined} />}
+      {chat.reply && <ThreadComposer placeholder={t("inbox-connectorthread.comment_on", { ref })} onSend={(body) => onSend(body)} note={item.connector?.reply_to ? t("inbox-connectorthread.reply_goes", { how: item.connector.reply_to }) : undefined} />}
     </div>
   );
 }
@@ -352,11 +353,11 @@ function GitHubHeader({ chat, reference }: { chat: ThreadChat; reference: string
           </span>
         )}
         <span className="truncate font-mono text-[12px] text-ink-2">{reference}</span>
-        {chat.author && <span className="shrink-0 text-ink-3">{chat.author.name} 开的</span>}
+        {chat.author && <span className="shrink-0 text-ink-3">{t("inbox-connectorthread.opened_by", { name: chat.author.name })}</span>}
         <span className="flex-1" />
         {chat.url && (
           <Button tone="quiet" icon="external" onClick={() => openLink(chat.url!, chat.name)} className="h-7 px-2">
-            在 GitHub 打开
+            {t("inbox-connectorthread.open_github")}
           </Button>
         )}
       </div>
@@ -404,7 +405,7 @@ function Card({ id, who, at, title, tone, url, children }: {
           <span className="flex-1" />
           {at && <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{shortTime(at)}</span>}
           {url && (
-            <button type="button" onClick={() => openLink(url)} title="在 GitHub 打开" aria-label="在 GitHub 打开" className="shrink-0 text-ink-3 hover:text-ink">
+            <button type="button" onClick={() => openLink(url)} title={t("inbox-connectorthread.open_github")} aria-label={t("inbox-connectorthread.open_github")} className="shrink-0 text-ink-3 hover:text-ink">
               <Icon name="external" size={12} />
             </button>
           )}
@@ -440,14 +441,14 @@ function TimelineEntry({ id, m }: { id: string; m: ThreadMessage }) {
     return (
       <Card id={id} who={m.sender} at={m.at} url={m.url} title={<span className="font-mono">{m.code.path}{m.code.line ? `:${m.code.line}` : ""}</span>}>
         {m.code.hunk && <Hunk hunk={m.code.hunk} />}
-        {m.reply_to && <p className="mb-1 truncate border-l-2 border-line-strong pl-2 text-[12px] text-ink-3">{m.reply_to.from ? `${m.reply_to.from}：` : ""}{m.reply_to.text}</p>}
-        <p className="mb-0.5 text-[11.5px] font-medium text-ink-2">{m.mine ? "我" : m.sender.name}</p>
+        {m.reply_to && <p className="mb-1 truncate border-l-2 border-line-strong pl-2 text-[12px] text-ink-3">{m.reply_to.from ? t("inbox-connectorthread.quoted_sender", { name: m.reply_to.from }) : ""}{m.reply_to.text}</p>}
+        <p className="mb-0.5 text-[11.5px] font-medium text-ink-2">{m.mine ? t("inbox-connectorthread.me") : m.sender.name}</p>
         {text}
       </Card>
     );
   }
   return (
-    <Card id={id} who={m.sender} at={m.at} url={m.url} title={m.mine ? "我" : m.sender.name}>
+    <Card id={id} who={m.sender} at={m.at} url={m.url} title={m.mine ? t("inbox-connectorthread.me") : m.sender.name}>
       {text}
     </Card>
   );
@@ -479,13 +480,13 @@ function CheckRow({ check, at }: { check: NonNullable<ThreadMessage["check"]>; a
         <span className={cx("shrink-0", tone)}>{checkLabel(check.state)}</span>
         {check.log && (
           <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="shrink-0 whitespace-nowrap text-[11.5px] text-accent-ink hover:underline">
-            {open ? "收起日志" : "看日志"}
+            {open ? t("inbox-connectorthread.hide_log") : t("inbox-connectorthread.show_log")}
           </button>
         )}
         <span className="flex-1" />
         <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{shortTime(at)}</span>
         {check.url && (
-          <button type="button" onClick={() => openLink(check.url!)} title="在 GitHub 打开" aria-label="在 GitHub 打开" className="shrink-0 text-ink-3 hover:text-ink">
+          <button type="button" onClick={() => openLink(check.url!)} title={t("inbox-connectorthread.open_github")} aria-label={t("inbox-connectorthread.open_github")} className="shrink-0 text-ink-3 hover:text-ink">
             <Icon name="external" size={12} />
           </button>
         )}

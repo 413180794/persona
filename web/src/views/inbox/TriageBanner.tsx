@@ -4,6 +4,7 @@
 // ok again (the list's next pull). The same words, place and tone as iOS and Android.
 import { navigate } from "../../lib/router";
 import { triageBanner, TRIAGE_SETTINGS, type InboxTriage } from "../../lib/inbox";
+import { t } from "../../i18n";
 import { Button } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
@@ -17,7 +18,7 @@ export function TriageBanner({ triage, canConfigure = true }: { triage: InboxTri
       <p className="min-w-0 flex-1 text-[12.5px] leading-[1.5] font-medium text-pretty break-words">{b.text}</p>
       {b.configure && canConfigure && (
         <Button tone="secondary" className="h-7 px-2.5 text-[12px]" onClick={() => navigate(TRIAGE_SETTINGS)}>
-          去配置
+          {t("inbox-triagebanner.configure")}
         </Button>
       )}
     </div>

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { uiIcon, type UIIcon, type UIPlace, type UITone } from "../../lib/extension-ui";
 import { useExtensionPlace, useExtensionSlot } from "../../lib/extension-slots";
 import { href, navigate, onLinkClick, type Route } from "../../lib/router";
+import { t } from "../../i18n";
 import { cx, EASE, IconButton } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { ExtensionUI } from "../settings/ExtensionView";
@@ -29,14 +30,14 @@ export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+        <IconButton icon="sidebar" label={t("extensions-extensionslots.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
         <span className="flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-field text-ink-2">
           <Icon name={navIcon(place?.icon)} size={14} />
         </span>
         <h1 className="min-w-0 truncate text-[14px] font-semibold text-ink">{title}</h1>
         {place?.extension_name && <span className="hidden min-w-0 truncate text-[12px] text-ink-3 sm:inline">{place.extension_name}</span>}
         <span className="flex-1" />
-        <IconButton icon="retry" label="重新画" onClick={() => setN((x) => x + 1)} />
+        <IconButton icon="retry" label={t("extensions-extensionslots.redraw")} onClick={() => setN((x) => x + 1)} />
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[880px] flex-col px-4 py-6 sm:px-8">
@@ -52,7 +53,7 @@ export function OverviewCards() {
   const cards = useExtensionSlot("overview_card");
   if (!cards.length) return null;
   return (
-    <section aria-label="扩展" className={cx("grid grid-cols-1 gap-3", cards.length > 1 && "md:grid-cols-2")}>
+    <section aria-label={t("extensions-extensionslots.extensions")} className={cx("grid grid-cols-1 gap-3", cards.length > 1 && "md:grid-cols-2")}>
       {cards.map((c, i) => (
         <OverviewCard key={`${c.extension}/${c.id}`} place={c} i={i} />
       ))}

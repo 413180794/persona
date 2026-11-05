@@ -224,6 +224,7 @@ hub 重启保留未来预约；发送记录与 WS 写入无法原子完成，所
 外部 Codex 会话继续使用 `(machine_id, session_id)`。固定 legacy home 保持既有 raw thread ID，其他 canonical home 的 thread 使用 `c0de-` 加确定性摘要的 opaque ID；PID、endpoint 或连接代际变化不换会话 ID。`source_thread_id` 是原 thread ID，不可将 opaque ID 放进 `claude --resume`。
 
 Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server` / `identity_conflict`；Agent 运行时的会话是 `runtime`，见「Runtime ↔ node」；Claude Code 的后台会话是 `claude_bg`，只读，见 `docs/claude-integration.md`「后台会话」）、`source_thread_id`、`source_instance_id`、`parent_thread_id`、`read_only_reason`、`attached`、`capabilities`（read/send/interrupt/approve/terminal/attach 六个布尔值）。旧来源缺这些字段维持兼容，新来源缺能力默认拒写。没有终端能力就不显示终端/按键/关闭窗格。
+Session 还有可选字段 `pane_index`（#2320）：这个 pane 在它的 tab 里按位置的序号（从 0 起，左上为 0）。herdr 的 node 按快照 `layouts` 的分屏树（`splits`，旧版 herdr 没有时按 rect）算，宿主不给布局、旧 node 或窗格不在布局里时不带；`0` 照样发，不带才是不知道；只有它变了也推 `sessions.changed`。客户端把同一个 tab（`slot_id`）的几个 Agent 按它排成一组，0 号是发起者；旧客户端忽略它（`docs/agent-states.md`「一个 tab 里的几个 pane」）。
 Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间在宿主里挂在哪个空间下面，同机器、同 `space_kind`，顶层空间不带。Orca 宿主按 `worktree.ps` 的 `parentWorktreeId` 填（指向自己的当没有），hub 原样转发；旧客户端忽略它照旧平铺，网页的「按机器」把子空间折叠在父空间下（`docs/web.md`）。
 
 思考强度（`docs/codex.md`「思考强度」）：手机经 app-server 驱动的 Codex 会话（`codex_app_server` 里能发送的，和接上共享守护进程的 herdr 窗格，后者没有 `source_kind`）带 `efforts`：`POST …/modes` 的 `effort` 能取的档位，从弱到强（这个 thread 的模型在 `model/list` 报的，拿不到时是 Codex 的 minimal … ultra）；`effort` 是它现在的值，`permission_mode` 不带。这类会话的 `/modes` 只收 `effort`，带 `permission_mode` 报错，档位不在 `efforts` 里也报错；没改成（app-server 断开、没有及时回应、Codex 拒绝）也报错，不会先回成功。其他会话都不带 `efforts`：Claude Code 和助手照旧用客户端自己的那套档位，别的不能改。客户端按 `efforts` 非空且能发送决定只显示思考强度，不按 Agent 种类猜；旧客户端忽略这个字段。
@@ -299,6 +300,8 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
  "workspace_cwd":"<node 验证的物理目录>",   // 可选；用于工作区关联，缺失时兼容回退 cwd，不替换原始 cwd
  "status":"idle|working|blocked|done|unknown|offline",   // offline = 不在 herdr 里运行，只有 transcript，可恢复
  "pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","agent_name":"j-3f2a",
+ "pane_index":0,   // 可选（#2320）：这个窗格在它的 tab 里按位置的序号，从 0 起，左上为 0（别的窗格都是从它切出来的，有 Agent 时就是这组的发起者）；
+                   // herdr 的 node 从快照的 layouts 算，宿主不给布局、旧 node、窗格不在布局里时不带（0 照样发，不带才是不知道）。见 docs/agent-states.md「一个 tab 里的几个 pane」
  "agent":"claude","agent_label":"",   // agent_label 只在 App 不认识的 Agent 上有：runtime 的叫法（「DSH」，见「Runtime ↔ node」）
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
  "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字",

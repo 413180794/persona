@@ -98,6 +98,7 @@ Agents 列表另有「待唤醒」：状态是已看，但 `/loop` 还没到点�
 | `space_kind` | `herdr` | 工具名 |
 | `space_id` / `space_name` / `space_index` | workspace id / label / number | 项目、房间、会话组 |
 | `slot_id` / `slot_name` / `slot_index` | tab id / label / number | 角色、窗口、频道 |
+| `pane_index`（可选，#2320） | 窗格在 tab 里按位置的序号（从 0 起，左上为 0） | 槽位里的第几个位置 |
 | `parent_space_id`（可选，#2073） | 不填 | 这个空间挂在哪个空间下面（同机器、同 `space_kind`）：Orca 的子工作区填父工作区的 `worktreeId`（`worktree.ps` 的 `parentWorktreeId`） |
 
 DSH（`docs/dsh.md`）：`space_kind` 是 `dsh`，空间是会话的目录（`space_id` = 目录、`space_name` = 目录名），没有槽位；
@@ -106,6 +107,24 @@ DSH（`docs/dsh.md`）：`space_kind` 是 `dsh`，空间是会话的目录（`sp
 node 用 herdr 的 `session.snapshot`（一次拿到 workspace、tab、agent）填这些字段：herdr 经 `events.subscribe` 推来变化时取一次
 （列表最多每秒重建一次，进入 / 离开 blocked 的不等，见 `docs/server.md`「卡片的快车道」），
 平时 10 秒兜底一次（事件流断开、或有 TRAEX 窗格时每秒一次，见 `docs/server.md`「和 herdr 的连接」）。tab 名是默认数字时 App 显示 `#2`。
+
+### 一个 tab 里的几个 pane
+
+常见的用法是一个 Agent 在自己的 tab 里 `herdr pane split`，再在新 pane 里起 Claude / Codex 分头做同一件事。同一个 tab（`slot_id`）里的几个 Agent 是**一组**，不要求 Agent 额外写什么：
+
+- herdr 不记 pane 是谁起的，只有位置：快照的 `layouts` 里每个 tab 有每个 pane 的 `rect` 和分屏树 `splits`。node 按分屏树排
+  （`server/internal/herdr/layout.go`），给每个 Agent 会话填 `pane_index`（从 0 起）：
+  `splits` 每项是树上的一个节点 `{id, direction, ratio, rect}`，不列子节点；`direction` 是 `right`（左右切）或 `down`（上下切），`rect` 是它切的那块。
+  node 从整个 tab 开始，找 `rect` 正好是这块的节点、按它的方向切成两半（左 / 上那半在前；同方向有几条能切的线时取两半各自正好是一个 pane 或一个节点的那条），两半各自再这样排。
+  这样先上下再各自左右切出来的 2×2（A、B 在上，C、D 在下）排成 A、B、C、D；只看 rect 的话两条线都能切，分不出先后。
+  没有 `splits`（旧版 herdr）或某块找不到节点时退回只看 rect：找一条不穿过任何 pane 的直线，先试左右、再试上下。
+  zoom 时 herdr 照样给每个 pane 原来的 rect；rect 互相重叠、切不开时按 herdr 自己列的顺序。宿主不给布局（herdr-core、Orca 等）或 pane 不在布局里就不带 `pane_index`。
+  只有 `pane_index` 变了（`herdr pane swap`、关掉左上的 shell）node 也推 `sessions.changed`：列表的变化判断里有它（有没有、是几）。
+- 组里按 `pane_index` 排，0 号（左上，分屏都是从它切出来的）是**发起者**，其余是它起的分支；没有 `pane_index` 时退回原来的顺序（会话 id）。
+  左上是 shell 不是 Agent 时，组里没有 0 号，几个 Agent 平级（网页不标发起者）。
+- 不推断跨 tab 的父子关系（Agent 把子任务开在别的 tab / workspace）；以后需要时再约定显式标记（类似待办的 `persona_from`）。
+
+网页的表现见 `docs/web.md`；iOS / Android 还按空间列每个会话（网页验收后再跟上）。
 
 App 里的表现：
 

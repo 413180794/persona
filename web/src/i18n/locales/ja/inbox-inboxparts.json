@@ -1,0 +1,14 @@
+{
+  "source_lark": "Lark",
+  "source_mail": "メール",
+  "draft_title": "AI 分身が下書きした返信",
+  "edit": "編集",
+  "send_draft": "AI 分身が下書きした返信を送信",
+  "send": "送信",
+  "agent_queued": "AI 分身が待機中",
+  "agent_working": "AI 分身が対応中",
+  "agent_working_task": "AI 分身が対応中：{task}",
+  "status_unset": "未設定",
+  "status_value": "{name}：{value}",
+  "status_change": "{name}：{value}。クリックして変更"
+}

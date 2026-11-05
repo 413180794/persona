@@ -267,3 +267,11 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
   在第一条消息后紧跟的 `attachment.type: environment` 里有 `additionalWorkingDirectories`（平台给的技能目录）。首条消息的前缀只能兜底：用户自己讨论这个平台的会话也会提到它的名字。
 - Claude 的离线会话只列最新 80 个：过滤要在截断前做，否则一天几百个平台会话把用户自己的挤出去（`scanOffline`）。
 - 实测（example-machine，7 天）：Codex 约 1300 个是平台的 originator、自己的约 30 个；Claude 约 210 个带平台目录，另有 1 个只有前缀。冷读约 2300 个文件的开头 2.8 秒，之后按文件缓存。
+
+## herdr 的 pane id 和布局（#2320）
+
+- pane id 不是「`p` + 十进制序号」：形如 `w4R:pW`、`w4R:p2E`、`w4R:p3A`，`p` 后面是 36 进制的计数（按开 pane 的先后增长），按 `/:p(\d+)$/` 解析大多对不上。
+- `api snapshot` 的 `layouts` 每个 tab 一项：`panes[]` 带 `rect {x, y, width, height}`（字段是 width / height，不是 w / h），`splits[]` 是分屏树的节点，形如 `{"id":"split_1_1","direction":"down","ratio":0.5,"rect":{…}}`：
+  不列子节点，也不引用 pane，节点和 pane 的对应只能按 rect 找（节点的 rect 是它切的那块）；`panes` 的顺序实测就是分屏树的先序，但没有文档保证，node 按 `splits` + rect 自己排。
+- 只看 rect 排不出分屏的先后：2×2 的格子横竖两条线都能切通，先上下切还是先左右切只有 `splits` 知道。
+- zoom 一个 pane 时 `zoomed: true`，每个 pane 的 `rect` 仍是分屏里原来的位置，不变成整屏（实测 herdr 0.9.5）。

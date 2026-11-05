@@ -4,23 +4,24 @@
 import { useEffect, useState } from "react";
 import { fetchInboxTree, parentRoute, type InboxItem, type InboxParent, type InboxTree } from "../../lib/inbox";
 import { navigate, type Route } from "../../lib/router";
+import { t } from "../../i18n";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
 export type LineRow = { key: string; label: string; title: string; route?: Route; up: boolean };
 
-const kindLabel: Record<InboxParent["kind"], string> = { inbox: "事件", todo: "待办", session: "Agent 会话" };
+const kindLabel: Record<InboxParent["kind"], string> = { inbox: t("inbox-inboxline.kind_inbox"), todo: t("inbox-inboxline.kind_todo"), session: t("inbox-inboxline.kind_session") };
 
 /** The rows of a line: the ancestors farthest first (the chain reads top down), then the children oldest first. */
 export function lineRows(tree: InboxTree): LineRow[] {
   const ups = [...tree.ancestors].reverse().map((a): LineRow => ({
     key: `up:${a.kind}:${a.id}`,
     label: kindLabel[a.kind],
-    title: a.item?.title || (a.kind === "inbox" ? "已不在收件箱里" : a.id),
+    title: a.item?.title || (a.kind === "inbox" ? t("inbox-inboxline.gone") : a.id),
     route: a.kind === "inbox" && !a.item ? undefined : parentRoute(a),
     up: true,
   }));
-  const downs = tree.children.map((c): LineRow => ({ key: `down:${c.id}`, label: "下一步", title: c.title, route: { name: "inbox", id: c.id }, up: false }));
+  const downs = tree.children.map((c): LineRow => ({ key: `down:${c.id}`, label: t("inbox-inboxline.next"), title: c.title, route: { name: "inbox", id: c.id }, up: false }));
   return [...ups, ...downs];
 }
 
@@ -28,7 +29,7 @@ export function LineList({ rows }: { rows: LineRow[] }) {
   if (!rows.length) return null;
   return (
     <section className="mt-3" data-inbox-line>
-      <p className="mb-1 text-[11.5px] font-medium text-ink-3">线索</p>
+      <p className="mb-1 text-[11.5px] font-medium text-ink-3">{t("inbox-inboxline.title")}</p>
       <ul className="flex flex-col gap-0.5">
         {rows.map((r) => (
           <li key={r.key}>
@@ -59,7 +60,7 @@ export function InboxLine({ item }: { item: InboxItem }) {
     let live = true;
     setRows([]);
     fetchInboxTree("inbox", item.id)
-      .then((t) => live && setRows(lineRows(t)))
+      .then((tree) => live && setRows(lineRows(tree)))
       .catch(() => {}); // an older hub without the route: no line
     return () => {
       live = false;

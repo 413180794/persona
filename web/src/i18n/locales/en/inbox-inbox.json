@@ -1,0 +1,10 @@
+{
+  "sidebar": "Sidebar",
+  "back_to_inbox": "Back to Inbox",
+  "title": "Inbox",
+  "compose": "New email",
+  "compose_no_account": "New email (add a mail account in Settings › Connectors first)",
+  "refresh": "Refresh (fetch Lark and mail now)",
+  "list": "Inbox list",
+  "detail": "Details"
+}

@@ -7,6 +7,7 @@ import { docTypeName, isDone, momentText, withToken, type InboxItem, type Moment
 import { openLink } from "../../lib/links";
 import { addressText, markMailSeen, replyDraft, useMailAccounts, type MailMessage } from "../../lib/mail";
 import { hubTranslation, isForeignCached, languageName, strippedHTML, translateMail, translatesMail, useTranslatePrefs, type MailTranslation } from "../../lib/translate";
+import { t } from "../../i18n";
 import { Button, cx, Loading, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ComposeDialog } from "./ComposeDialog";
@@ -62,7 +63,7 @@ export function MailBody({ item }: { item: InboxItem }) {
     let live = true;
     setTranslating(true);
     translateMail(m.account_id, uid, mailbox, prefs.target)
-      .then((t) => live && setTranslation(t))
+      .then((tr) => live && setTranslation(tr))
       .catch((e) => live && setTranslateError(errorText(e)))
       .finally(() => live && setTranslating(false));
     return () => {
@@ -71,22 +72,22 @@ export function MailBody({ item }: { item: InboxItem }) {
     };
   }, [msg, wants, prefs.target, m.account_id, uid, mailbox]);
 
-  if (!msg) return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label="正在读邮件" />}</div>;
+  if (!msg) return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label={t("inbox-inboxbodies.reading_mail")} />}</div>;
   const shown = showOriginal ? null : translation;
   const lang = languageName(prefs.target);
   return (
     <div className="mx-auto max-w-[760px] px-4 py-4 sm:px-6">
       <div className="flex items-start gap-3">
         <dl className="grid min-w-0 flex-1 grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]">
-          <dt className="text-ink-3">发件人</dt>
+          <dt className="text-ink-3">{t("inbox-inboxbodies.from")}</dt>
           <dd className="min-w-0 truncate text-ink">{addressText(msg.from)}</dd>
-          {!!msg.to?.length && (<><dt className="text-ink-3">收件人</dt><dd className="min-w-0 truncate text-ink-2">{msg.to.map(addressText).join("，")}</dd></>)}
-          {!!msg.cc?.length && (<><dt className="text-ink-3">抄送</dt><dd className="min-w-0 truncate text-ink-2">{msg.cc.map(addressText).join("，")}</dd></>)}
-          {msg.date && (<><dt className="text-ink-3">时间</dt><dd className="text-ink-2">{clock(msg.date)}</dd></>)}
+          {!!msg.to?.length && (<><dt className="text-ink-3">{t("inbox-inboxbodies.to")}</dt><dd className="min-w-0 truncate text-ink-2">{msg.to.map(addressText).join(t("inbox-inboxbodies.address_sep"))}</dd></>)}
+          {!!msg.cc?.length && (<><dt className="text-ink-3">{t("inbox-inboxbodies.cc")}</dt><dd className="min-w-0 truncate text-ink-2">{msg.cc.map(addressText).join(t("inbox-inboxbodies.address_sep"))}</dd></>)}
+          {msg.date && (<><dt className="text-ink-3">{t("inbox-inboxbodies.date")}</dt><dd className="text-ink-2">{clock(msg.date)}</dd></>)}
         </dl>
-        <Button tone="secondary" onClick={() => setReplying(true)} title="自己写回复（AI 草拟回复在上面）">
+        <Button tone="secondary" onClick={() => setReplying(true)} title={t("inbox-inboxbodies.reply_title")}>
           <Glyph name="reply" size={14} stroke={2.1} />
-          回复
+          {t("inbox-inboxbodies.reply")}
         </Button>
       </div>
       {(translating || translation || translateError) && (
@@ -94,20 +95,20 @@ export function MailBody({ item }: { item: InboxItem }) {
           {translating ? (
             <>
               <Spinner />
-              <span className="truncate">正在翻译成{lang}…</span>
+              <span className="truncate">{t("inbox-inboxbodies.translating", { language: lang })}</span>
             </>
           ) : translation ? (
             <>
               <Icon name="translate" size={13} className="shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{showOriginal ? "原文" : `已翻译成${lang}`}</span>
+              <span className="min-w-0 flex-1 truncate">{showOriginal ? t("inbox-inboxbodies.original") : t("inbox-inboxbodies.translated_to", { language: lang })}</span>
               <button type="button" onClick={() => setShowOriginal((v) => !v)} className="shrink-0 rounded-[6px] px-1.5 py-0.5 font-medium whitespace-nowrap text-accent-ink hover:bg-hover">
-                {showOriginal ? "显示译文" : "显示原文"}
+                {showOriginal ? t("inbox-inboxbodies.show_translation") : t("inbox-inboxbodies.show_original")}
               </button>
             </>
           ) : (
             <>
               <Icon name="info" size={13} className="shrink-0" />
-              <span className="min-w-0 flex-1 truncate" title={translateError}>没能翻译：{translateError}</span>
+              <span className="min-w-0 flex-1 truncate" title={translateError}>{t("inbox-inboxbodies.translate_failed", { error: translateError })}</span>
             </>
           )}
         </div>
@@ -117,20 +118,20 @@ export function MailBody({ item }: { item: InboxItem }) {
           <div className="rounded-card bg-surface px-[18px] py-4 shadow-card">
             {shown.subject && shown.subject !== (hubTranslation(item, prefs)?.subject || item.title) && <p className="mb-2 text-[14px] font-semibold text-ink">{shown.subject}</p>}
             <div className="text-[13.5px] leading-relaxed break-words whitespace-pre-wrap text-ink">{shown.text}</div>
-            {shown.clipped && <p className="mt-3 text-[12px] text-ink-3">邮件很长，只翻译了前面一部分；全文看原文。</p>}
+            {shown.clipped && <p className="mt-3 text-[12px] text-ink-3">{t("inbox-inboxbodies.clipped")}</p>}
           </div>
-        ) : msg.html ? <MailFrame html={msg.html} /> : <div className="text-[13.5px] leading-relaxed break-words whitespace-pre-wrap text-ink">{msg.text || "（没有正文）"}</div>}
+        ) : msg.html ? <MailFrame html={msg.html} /> : <div className="text-[13.5px] leading-relaxed break-words whitespace-pre-wrap text-ink">{msg.text || t("inbox-inboxbodies.no_body")}</div>}
       </div>
       {!!msg.attachments?.length && (
         <div className="mt-5">
-          <p className="mb-1.5 text-[12px] font-medium text-ink-3">附件 {msg.attachments.length}</p>
+          <p className="mb-1.5 text-[12px] font-medium text-ink-3">{t("inbox-inboxbodies.attachments", { count: msg.attachments.length })}</p>
           <div className="flex flex-wrap gap-2">
             {msg.attachments.map((a, i) => {
               const url = a.id ? withToken(`/api/v1${path}/attachments/${enc(a.id)}?mailbox=${enc(mailbox)}`) : undefined;
               const body = (
                 <>
                   <Icon name="clip" size={13} className="shrink-0 text-ink-3" />
-                  <span className="truncate">{a.filename || "附件"}</span>
+                  <span className="truncate">{a.filename || t("inbox-inboxbodies.attachment")}</span>
                   {a.size !== undefined && <span className="shrink-0 text-ink-3">{bytes(a.size)}</span>}
                 </>
               );
@@ -174,7 +175,7 @@ function MailFrame({ html }: { html: string }) {
   return (
     <iframe
       ref={ref}
-      title="邮件正文"
+      title={t("inbox-inboxbodies.mail_frame")}
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       srcDoc={FRAME_HEAD + html + "</body></html>"}
       onLoad={onLoad}
@@ -194,18 +195,18 @@ export function DocBody({ item }: { item: InboxItem }) {
   return (
     <div className="mx-auto max-w-[760px] px-4 py-4 sm:px-6">
       <div className="flex flex-wrap items-center gap-2">
-        <Button tone="secondary" icon="external" onClick={() => openLink(doc.url, item.title)}>打开{kind}</Button>
+        <Button tone="secondary" icon="external" onClick={() => openLink(doc.url, item.title)}>{t("inbox-inboxbodies.open_doc", { kind })}</Button>
         {doc.reply && (
           <span className="flex items-center gap-1.5 text-[12px] text-ink-3">
             <Glyph name="reply" size={12} />
-            回复会{doc.reply.label}
+            {t("inbox-inboxbodies.reply_goes", { how: doc.reply.label })}
           </span>
         )}
       </div>
-      {doc.error && <p className="mt-3 text-[12.5px] text-red">读不到文档内容：{doc.error}</p>}
+      {doc.error && <p className="mt-3 text-[12.5px] text-red">{t("inbox-inboxbodies.doc_error", { error: doc.error })}</p>}
       {rows.length > 0 && (
         <section className="mt-5">
-          <h3 className="mb-1.5 px-1 text-[12px] font-medium text-ink-3">提到你的行</h3>
+          <h3 className="mb-1.5 px-1 text-[12px] font-medium text-ink-3">{t("inbox-inboxbodies.rows_mentioning_you")}</h3>
           <div className="flex flex-col gap-2">
             {rows.map((row) => (
               <div key={row.ref} className="rounded-card bg-surface px-4 py-3 shadow-card">
@@ -231,7 +232,7 @@ export function DocBody({ item }: { item: InboxItem }) {
               </div>
             ))}
           </div>
-          <p className="mt-1.5 px-1 text-[11.5px] text-ink-3">{isDone(item) ? "已处理的不能再改状态。" : `改状态会直接写进${kind}。`}</p>
+          <p className="mt-1.5 px-1 text-[11.5px] text-ink-3">{isDone(item) ? t("inbox-inboxbodies.done_no_status") : t("inbox-inboxbodies.status_writes", { kind })}</p>
         </section>
       )}
       {!rows.length && !doc.error && <p className="mt-5 text-[12.5px] text-ink-3">{item.summary || item.preview}</p>}
@@ -260,7 +261,7 @@ export function MomentBody({ item }: { item: InboxItem }) {
     };
   }, [id]);
 
-  if (!post) return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label="正在读帖子" />}</div>;
+  if (!post) return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label={t("inbox-inboxbodies.reading_post")} />}</div>;
   const images = (post.images ?? []).map((i) => withToken(i.url)).filter(Boolean) as string[];
   return (
     <div className="mx-auto max-w-[760px] px-4 py-4 sm:px-6">
@@ -278,17 +279,17 @@ export function MomentBody({ item }: { item: InboxItem }) {
         )}
         <p className="mt-3 flex flex-wrap gap-x-3 text-[11.5px] text-ink-3">
           {!!post.categoryNames?.length && <span>{post.categoryNames.join(" · ")}</span>}
-          {(post.reactionCount ?? 0) > 0 && <span>{post.reactionCount} 个表态</span>}
-          <span>评论全公司可见</span>
+          {(post.reactionCount ?? 0) > 0 && <span>{t("inbox-inboxbodies.reactions", { count: post.reactionCount ?? 0 })}</span>}
+          <span>{t("inbox-inboxbodies.comments_public")}</span>
         </p>
       </article>
-      <h3 className="mt-5 mb-1.5 px-1 text-[12px] font-medium text-ink-3">{post.commentCount ?? comments.length} 条评论</h3>
+      <h3 className="mt-5 mb-1.5 px-1 text-[12px] font-medium text-ink-3">{t("inbox-inboxbodies.comments", { count: post.commentCount ?? comments.length })}</h3>
       <div className="flex flex-col gap-1">
         {comments.map((c) => (
           <div key={c.id} className={cx("rounded-[10px] px-3 py-2.5", c.id === replyTo ? "bg-accent-tint" : "bg-surface shadow-card")}>
-            <Author name={c.userName ?? ""} avatar={c.userAvatarUrl} time={c.createTime} small extra={c.id === replyTo ? "发送会回复这条" : undefined} />
+            <Author name={c.userName ?? ""} avatar={c.userAvatarUrl} time={c.createTime} small extra={c.id === replyTo ? t("inbox-inboxbodies.send_replies_here") : undefined} />
             <p className="mt-1 pl-[38px] text-[13px] leading-relaxed break-words whitespace-pre-wrap text-ink">
-              {c.replyUserName && <span className="text-ink-3">回复 {c.replyUserName}：</span>}
+              {c.replyUserName && <span className="text-ink-3">{t("inbox-inboxbodies.reply_to_user", { name: c.replyUserName })}</span>}
               {momentText(c.content)}
             </p>
           </div>

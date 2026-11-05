@@ -18,6 +18,7 @@ import { navigate } from "../../lib/router";
 import { onHubEvent } from "../../lib/store";
 import { isForeignCached, requestTranslation, translatesChat, translationOf, useTranslatePrefs, useTranslations } from "../../lib/translate";
 import type { Session } from "../../lib/types";
+import { t } from "../../i18n";
 import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Monogram } from "./InboxParts";
@@ -167,7 +168,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   const handleReply = useCallback((m: LarkMessage) => {
     setReplyTo({
       id: m.id,
-      sender_name: m.is_mine ? "我" : (m.sender_name || "未知"),
+      sender_name: m.is_mine ? t("inbox-larkthread.me") : (m.sender_name || t("inbox-larkthread.unknown")),
       text: m.text || (m.parts ?? []).map((p) => p.text).join(""),
     });
     inputRef.current?.focus();
@@ -192,7 +193,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     setChangingPin(true);
     try {
       await changeChatPin(feed, m.id, undefined, await larkAccount(ol), ol);
-      toast("已添加 Pin", "ok");
+      toast(t("inbox-larkthread.pin_added"), "ok");
     } catch (e) {
       const recheck = needsRecheck(e);
       setPinRecheck(recheck);
@@ -210,10 +211,11 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   }, [onPinsOpen]);
 
   const handleAskPersona = useCallback(async () => {
-    const chatTitle = chat.title || "飞书会话";
-    const where = ol ? `，在飞书账号 ${ol}：lark_messages 传 account=${ol}` : "";
-    const prompt = `读取我飞书会话「${chatTitle}」（lark-connector feedId ${feed}${where}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`;
-    toast("正在交给 Persona 总结…", "ok");
+    // i18n-ignore: the request to the assistant is a prompt, written in one language (docs/i18n.md「提示词」)
+    const chatTitle = chat.title || "飞书会话"; // i18n-ignore
+    const where = ol ? `，在飞书账号 ${ol}：lark_messages 传 account=${ol}` : ""; // i18n-ignore: prompt
+    const prompt = `读取我飞书会话「${chatTitle}」（lark-connector feedId ${feed}${where}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`; // i18n-ignore: prompt
+    toast(t("inbox-larkthread.summarizing"), "ok");
     try {
       const r = await api<{ session: Session }>("/assistant/conversations", {
         method: "POST",
@@ -221,7 +223,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       });
       navigate({ name: "jarvis", sid: r.session.session_id });
     } catch (e) {
-      toast(`总结失败：${errorText(e)}`, "error");
+      toast(t("inbox-larkthread.summary_failed", { error: errorText(e) }), "error");
     }
   }, [chat.title, feed, ol]);
 
@@ -229,9 +231,9 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     const text = m.text || (m.parts ?? []).map((p) => p.text ?? "").join("");
     if (text) {
       navigator.clipboard?.writeText(text).then(() => {
-        toast("已拷贝", "ok");
+        toast(t("inbox-larkthread.copied"), "ok");
       }).catch(() => {
-        toast("拷贝失败", "error");
+        toast(t("inbox-larkthread.copy_failed"), "error");
       });
     }
   }, []);
@@ -245,7 +247,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       client_id: clientID,
       position: nextLarkPosition(currentMessages),
       is_mine: true,
-      sender_name: "我",
+      sender_name: t("inbox-larkthread.me"),
       created_at: new Date().toISOString(),
       text: content,
       parts: [{ kind: "text", text: content }],
@@ -282,7 +284,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
         );
         return { ...cur, messages: updated };
       });
-      toast(`发送失败：${errorText(e)}`, "error");
+      toast(t("inbox-larkthread.send_failed", { error: errorText(e) }), "error");
     }
   }, [feed, ol]);
 
@@ -317,12 +319,12 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
         );
         return { ...cur, messages: updated };
       });
-      toast(`重试失败：${errorText(e)}`, "error");
+      toast(t("inbox-larkthread.retry_failed", { error: errorText(e) }), "error");
     }
   }, [feed, ol]);
 
   if (!page) {
-    return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label="正在读飞书消息" />}</div>;
+    return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label={t("inbox-larkthread.loading")} />}</div>;
   }
   const firstNew = focus ? page.messages.find((m) => comparePosition(m.position, focus) >= 0)?.id : undefined;
   return (
@@ -331,16 +333,16 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
         <div className="mx-auto max-w-[760px] px-2 py-3 sm:px-4">
           {page.has_older && (
             <div className="flex justify-center pb-2">
-              <Button tone="quiet" busy={more === "older"} onClick={() => void loadMore("older")}>更早的消息</Button>
+              <Button tone="quiet" busy={more === "older"} onClick={() => void loadMore("older")}>{t("inbox-larkthread.older")}</Button>
             </div>
           )}
-          {!page.messages.length && <p className="py-10 text-center text-[12.5px] text-ink-3">没有消息</p>}
+          {!page.messages.length && <p className="py-10 text-center text-[12.5px] text-ink-3">{t("inbox-larkthread.empty")}</p>}
           {page.messages.map((m, i) => (
             <div key={m.id}>
               {m.id === firstNew && (
                 <div className="my-2 flex items-center gap-2 px-2 text-[11px] font-medium text-accent-ink">
                   <span className="h-px flex-1 bg-accent/40" />
-                  以下是新消息
+                  {t("inbox-larkthread.new_below")}
                   <span className="h-px flex-1 bg-accent/40" />
                 </div>
               )}
@@ -359,7 +361,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
           ))}
           {page.has_newer && (
             <div className="flex justify-center pt-2">
-              <Button tone="quiet" busy={more === "newer"} onClick={() => void loadMore("newer")}>更新的消息</Button>
+              <Button tone="quiet" busy={more === "newer"} onClick={() => void loadMore("newer")}>{t("inbox-larkthread.newer")}</Button>
             </div>
           )}
           {error && <p className="px-2 pt-2 text-[12px] text-red">{error}</p>}
@@ -376,16 +378,16 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       <Dialog
         open={adding !== null}
         onClose={() => setAdding(null)}
-        title="添加到 Pin 消息？"
+        title={t("inbox-larkthread.pin_confirm")}
         footer={(
           <>
-            <Button tone="quiet" onClick={() => setAdding(null)}>取消</Button>
-            <Button tone="accent" icon="pin" onClick={() => adding && void addPin(adding)}>添加 Pin</Button>
+            <Button tone="quiet" onClick={() => setAdding(null)}>{t("common.cancel")}</Button>
+            <Button tone="accent" icon="pin" onClick={() => adding && void addPin(adding)}>{t("inbox-larkthread.add_pin")}</Button>
           </>
         )}
       >
-        <p className="text-[12.5px] leading-relaxed text-ink-2">会话成员可以在 Pin 列表中找到这条消息。</p>
-        {adding && <p className="mt-2 line-clamp-3 rounded-[8px] bg-inset px-3 py-2 text-[12.5px] text-ink shadow-hairline">{adding.text || (adding.parts ?? []).map((p) => p.text ?? "").join("") || "消息"}</p>}
+        <p className="text-[12.5px] leading-relaxed text-ink-2">{t("inbox-larkthread.pin_hint")}</p>
+        {adding && <p className="mt-2 line-clamp-3 rounded-[8px] bg-inset px-3 py-2 text-[12.5px] text-ink shadow-hairline">{adding.text || (adding.parts ?? []).map((p) => p.text ?? "").join("") || t("inbox-larkthread.message")}</p>}
       </Dialog>
     </div>
   );
@@ -401,10 +403,10 @@ function PinThreadDialog({ target, translateTo, onClose }: { target: ChatPinTarg
     box.current?.querySelector<HTMLElement>(`[data-mid="${CSS.escape(target.message.id)}"]`)?.scrollIntoView({ block: "center" });
   }, [target]);
   return (
-    <Dialog open onClose={onClose} title="话题" width={620}>
+    <Dialog open onClose={onClose} title={t("inbox-larkthread.thread")} width={620}>
       <div ref={box} className="-mx-2 max-h-[60vh] overflow-y-auto">
         <Message m={root} nested translateTo={translateTo} flash={root.id === target.message.id ? 1 : undefined} />
-        <p className="mx-2 my-2 border-t border-line pt-2 text-[11.5px] font-medium text-ink-3">{replies.length} 条回复</p>
+        <p className="mx-2 my-2 border-t border-line pt-2 text-[11.5px] font-medium text-ink-3">{t("inbox-larkthread.replies", { count: replies.length })}</p>
         {replies.map((m) => <Message key={m.id} m={m} nested translateTo={translateTo} flash={m.id === target.message.id ? 1 : undefined} />)}
       </div>
     </Dialog>
@@ -501,12 +503,12 @@ function TranslationLine({ m, target }: { m: LarkMessage; target: string }) {
   useEffect(() => {
     if (applies) requestTranslation(text, target);
   }, [applies, text, target]);
-  const t = applies ? translationOf(text, target) : undefined;
-  if (!t) return null;
+  const tr = applies ? translationOf(text, target) : undefined;
+  if (!tr) return null;
   return (
-    <p className="mt-1 flex items-start gap-1.5 text-[12.5px] leading-relaxed text-ink-2" aria-label={`译文：${t}`}>
+    <p className="mt-1 flex items-start gap-1.5 text-[12.5px] leading-relaxed text-ink-2" aria-label={t("inbox-larkthread.translation_label", { text: tr })}>
       <Icon name="translate" size={12} className="mt-[3px] shrink-0 text-ink-3" />
-      <span className="min-w-0 break-words whitespace-pre-wrap">{t}</span>
+      <span className="min-w-0 break-words whitespace-pre-wrap">{tr}</span>
     </p>
   );
 }
@@ -543,7 +545,7 @@ function Message({
   if (isSystem(m)) {
     return <p data-pos={m.position} data-seen-pos={nested ? undefined : m.position} className="px-2 py-1.5 text-center text-[11.5px] text-ink-3">{m.text || (m.parts ?? []).map((p) => p.text).join("")}</p>;
   }
-  const name = m.is_mine ? "我" : m.sender_name || "未知";
+  const name = m.is_mine ? t("inbox-larkthread.me") : m.sender_name || t("inbox-larkthread.unknown");
   const compact = !nested && prev && !isSystem(prev) && prev.sender_id === m.sender_id && !m.reply_to
     && Date.parse(m.created_at ?? "") - Date.parse(prev.created_at ?? "") < 5 * 60_000;
   const replies = m.thread_reply_count || m.reply_count || 0;
@@ -577,13 +579,13 @@ function Message({
         {!compact && (
           <p className="flex items-baseline gap-2">
             <span className={cx("truncate text-[12.5px] font-medium", m.is_mine ? "text-accent-ink" : "text-ink")}>{name}</span>
-            {m.sender_type === "bot" && <span className="shrink-0 rounded-[4px] bg-field px-1 text-[10px] text-ink-3">机器人</span>}
+            {m.sender_type === "bot" && <span className="shrink-0 rounded-[4px] bg-field px-1 text-[10px] text-ink-3">{t("inbox-larkthread.bot")}</span>}
             <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{clock(m.created_at)}</span>
-            {m.edited && <span className="shrink-0 text-[11px] text-ink-3">已编辑</span>}
+            {m.edited && <span className="shrink-0 text-[11px] text-ink-3">{t("inbox-larkthread.edited")}</span>}
             {m.sending && (
               <span className="flex items-center gap-1 text-[11px] text-ink-3">
                 <Spinner size={10} />
-                <span>发送中…</span>
+                <span>{t("inbox-larkthread.sending")}</span>
               </span>
             )}
             {m.failed && (
@@ -591,30 +593,30 @@ function Message({
                 type="button"
                 onClick={() => onRetry?.(m)}
                 className="flex items-center gap-1 text-[11px] font-medium text-red hover:underline"
-                title="点击重试"
+                title={t("inbox-larkthread.click_retry")}
               >
                 <Icon name="retry" size={11} />
-                <span>发送失败，点击重试</span>
+                <span>{t("inbox-larkthread.failed_retry")}</span>
               </button>
             )}
           </p>
         )}
         {m.reply_to && (
           <p className="mt-0.5 truncate border-l-2 border-line-strong pl-2 text-[12px] text-ink-3">
-            {m.reply_to.sender_name ? `${m.reply_to.sender_name}：` : ""}{m.reply_to.recalled ? "此消息已撤回" : m.reply_to.text}
+            {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{m.reply_to.recalled ? t("inbox-larkthread.recalled") : m.reply_to.text}
           </p>
         )}
-        {m.recalled ? <p className="text-[13px] text-ink-3 italic">此消息已撤回</p> : <Parts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} />}
+        {m.recalled ? <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p> : <Parts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} />}
         {translateTo && <TranslationLine m={m} target={translateTo} />}
         {replies > 0 && !nested && (
           <button type="button" onClick={() => void openThread()} className="mt-1 flex items-center gap-1 text-[11.5px] font-medium whitespace-nowrap text-accent-ink hover:underline">
             {opening ? <Spinner size={10} /> : <Icon name="chat" size={11} stroke={2.2} />}
-            {thread ? "收起回复" : `${replies} 条回复`}
+            {thread ? t("inbox-larkthread.hide_replies") : t("inbox-larkthread.replies", { count: replies })}
           </button>
         )}
         {thread && (
           <div className="mt-1 border-l-2 border-line pl-1">
-            {thread.length ? thread.map((t) => <Message key={t.id} m={t} nested translateTo={translateTo} />) : <p className="px-2 py-1 text-[11.5px] text-ink-3">读不到回复</p>}
+            {thread.length ? thread.map((r) => <Message key={r.id} m={r} nested translateTo={translateTo} />) : <p className="px-2 py-1 text-[11.5px] text-ink-3">{t("inbox-larkthread.replies_unavailable")}</p>}
           </div>
         )}
       </div>
@@ -627,10 +629,10 @@ function Message({
               type="button"
               onClick={() => onReply(m)}
               className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-ink-2 hover:bg-surface-hover hover:text-ink"
-              title="回复"
+              title={t("inbox-larkthread.reply")}
             >
               <Icon name="quote" size={11} />
-              <span>回复</span>
+              <span>{t("inbox-larkthread.reply")}</span>
             </button>
           )}
           {onAskPersona && !nested && (
@@ -638,10 +640,10 @@ function Message({
               type="button"
               onClick={onAskPersona}
               className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-accent-ink hover:bg-accent-tint/40"
-              title="让 Persona 总结"
+              title={t("inbox-larkthread.ask_persona")}
             >
               <Icon name="spark" size={11} />
-              <span>总结</span>
+              <span>{t("inbox-larkthread.summarize")}</span>
             </button>
           )}
           {onPin && !nested && canAddPin(m) && (
@@ -649,7 +651,7 @@ function Message({
               type="button"
               onClick={() => onPin(m)}
               className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] whitespace-nowrap text-ink-2 hover:bg-surface-hover hover:text-ink"
-              title="添加 Pin"
+              title={t("inbox-larkthread.add_pin")}
             >
               <Icon name="pin" size={11} />
               <span>Pin</span>
@@ -660,7 +662,7 @@ function Message({
               type="button"
               onClick={() => onCopy(m)}
               className="flex items-center rounded p-1 text-ink-3 hover:bg-surface-hover hover:text-ink"
-              title="拷贝"
+              title={t("inbox-larkthread.copy")}
             >
               <Icon name="copy" size={11} />
             </button>
@@ -722,14 +724,14 @@ function LarkComposer({
           <div className="mb-2 flex items-center justify-between rounded-[8px] bg-field/60 px-3 py-1.5 text-[12px] text-ink-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <Icon name="quote" size={12} className="shrink-0 text-accent-ink" />
-              <span className="shrink-0 font-medium text-ink">{replyTo.sender_name}：</span>
-              <span className="truncate text-ink-3">{replyTo.text || "引用消息"}</span>
+              <span className="shrink-0 font-medium text-ink">{t("inbox-larkthread.quoted_sender", { name: replyTo.sender_name ?? "" })}</span>
+              <span className="truncate text-ink-3">{replyTo.text || t("inbox-larkthread.quoted_message")}</span>
             </div>
             <button
               type="button"
               onClick={onClearReply}
               className="ml-2 shrink-0 rounded p-0.5 text-ink-3 hover:bg-surface hover:text-ink"
-              title="取消引用"
+              title={t("inbox-larkthread.cancel_quote")}
             >
               <Icon name="x" size={12} />
             </button>
@@ -741,7 +743,7 @@ function LarkComposer({
             value={text}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
-            placeholder={replyTo ? `回复 ${replyTo.sender_name}…` : "回复飞书消息…"}
+            placeholder={replyTo ? t("inbox-larkthread.reply_to_placeholder", { name: replyTo.sender_name ?? "" }) : t("inbox-larkthread.reply_placeholder")}
             rows={1}
             className="min-h-[36px] max-h-[120px] flex-1 resize-none rounded-[10px] border border-line bg-field px-3 py-1.5 text-[13px] leading-relaxed text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
           />
@@ -752,7 +754,7 @@ function LarkComposer({
             onClick={() => void submit()}
             className="h-[36px] shrink-0"
           >
-            发送
+            {t("inbox-larkthread.send")}
           </Button>
         </div>
       </div>
@@ -814,7 +816,7 @@ function Inline({ p }: { p: LarkPart }) {
       return (
         <LinkText url={p.url}>
           <Icon name="read" size={12} className="mr-0.5 inline-block align-[-1px]" />
-          {p.text || "文档"}
+          {p.text || t("inbox-larkthread.doc")}
         </LinkText>
       );
     case "emotion":
@@ -831,18 +833,18 @@ function Block({ p }: { p: LarkPart }) {
       const src = safeURL(p.url);
       return src ? (
         <button type="button" onClick={() => openMedia(src)} className="w-fit">
-          <img src={src} alt="图片" loading="lazy" className="max-h-64 max-w-[min(280px,100%)] rounded-[8px] object-contain shadow-hairline" />
+          <img src={src} alt={t("inbox-larkthread.image")} loading="lazy" className="max-h-64 max-w-[min(280px,100%)] rounded-[8px] object-contain shadow-hairline" />
         </button>
-      ) : <span className="text-ink-3">[图片]</span>;
+      ) : <span className="text-ink-3">{t("inbox-larkthread.image_placeholder")}</span>;
     }
     case "emotion": {
       const src = safeURL(p.url);
-      return src ? <img src={src} alt={p.text || "表情"} loading="lazy" className="size-20 object-contain" /> : <span>{emojiLabel(p.refId ?? "", p.text)}</span>;
+      return src ? <img src={src} alt={p.text || t("inbox-larkthread.sticker")} loading="lazy" className="size-20 object-contain" /> : <span>{emojiLabel(p.refId ?? "", p.text)}</span>;
     }
     case "file":
     case "media": {
-      const media = p.kind === "media" ? (String(meta.mime ?? "").startsWith("audio/") ? "语音" : "视频") : "";
-      const name = p.text || (typeof meta.name === "string" ? meta.name : "") || (media || "文件");
+      const media = p.kind === "media" ? (String(meta.mime ?? "").startsWith("audio/") ? t("inbox-larkthread.voice") : t("inbox-larkthread.video")) : "";
+      const name = p.text || (typeof meta.name === "string" ? meta.name : "") || (media || t("inbox-larkthread.file"));
       return (
         <span className="flex w-fit max-w-full items-center gap-2 rounded-[8px] bg-inset px-2.5 py-1.5 text-[12.5px] shadow-hairline">
           <Icon name={p.kind === "media" ? "play" : "clip"} size={13} className="shrink-0 text-ink-3" />
@@ -858,7 +860,7 @@ function Block({ p }: { p: LarkPart }) {
         <div className="max-w-[460px] rounded-[10px] bg-surface px-3 py-2.5 shadow-card">
           {c.title && <p className="text-[13px] font-semibold text-ink">{c.title}</p>}
           {c.lines.map((l, i) => <p key={i} className="text-[12.5px] whitespace-pre-wrap text-ink-2">{l}</p>)}
-          {!c.title && !c.lines.length && <p className="text-[12.5px] text-ink-3">{p.text || "[卡片]"}</p>}
+          {!c.title && !c.lines.length && <p className="text-[12.5px] text-ink-3">{p.text || t("inbox-larkthread.card_placeholder")}</p>}
         </div>
       );
     }

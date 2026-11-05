@@ -12,6 +12,7 @@ import { machineWithHub } from "../../lib/mesh";
 import { navigate } from "../../lib/router";
 import { refreshAssistant, useStore } from "../../lib/store";
 import type { Session } from "../../lib/types";
+import { t } from "../../i18n";
 import { Button, cx, Dialog, Loading, StatusDot, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Spark } from "./InboxParts";
@@ -19,14 +20,14 @@ import { Spark } from "./InboxParts";
 const changeKey = (c: DocChange) => `${c.ref}|${c.field}`;
 
 export function draftTitle(it: InboxItem): string {
-  if (it.moment) return "评论公司圈";
-  if (it.doc) return `评论 ${it.title}`;
+  if (it.moment) return t("inbox-inboxdialogs.title_moment");
+  if (it.doc) return t("inbox-inboxdialogs.title_comment", { title: it.title });
   if (it.connector) {
     // A pull request / issue is commented on (评论 #12); a chat is answered.
     const ref = connectorReference(it);
-    return ref ? `评论 ${ref.split("/").pop()}` : `回复 ${it.title}`;
+    return ref ? t("inbox-inboxdialogs.title_comment", { title: ref.split("/").pop() ?? "" }) : t("inbox-inboxdialogs.title_reply_to", { title: it.title });
   }
-  return isLark(it) ? `回复 ${it.title}` : "回复邮件";
+  return isLark(it) ? t("inbox-inboxdialogs.title_reply_to", { title: it.title }) : t("inbox-inboxdialogs.title_reply_mail");
 }
 
 /** The drafted reply, editable; 重写 asks again with an instruction; 发送 replies and files the item as done. */
@@ -82,8 +83,8 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
       width={580}
       footer={
         <>
-          <Button tone="quiet" onClick={onClose}>取消</Button>
-          <Button tone="accent" icon="send" disabled={!canSend} onClick={send}>发送</Button>
+          <Button tone="quiet" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button tone="accent" icon="send" disabled={!canSend} onClick={send}>{t("inbox-inboxdialogs.send")}</Button>
         </>
       }
     >
@@ -101,14 +102,14 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
               className="mt-1.5 flex items-center gap-1 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline"
             >
               <Icon name="list" size={12} stroke={2.2} />
-              查看 AI 分身的处理过程
+              {t("inbox-inboxdialogs.view_process")}
             </button>
           )}
         </div>
       )}
       {proposed.length > 0 && (
         <div className="mb-3">
-          <p className="mb-1 text-[11.5px] font-medium text-ink-3">发送时一起改</p>
+          <p className="mb-1 text-[11.5px] font-medium text-ink-3">{t("inbox-inboxdialogs.changes_on_send")}</p>
           {proposed.map((c) => {
             const on = !dropped.has(changeKey(c));
             return (
@@ -130,20 +131,20 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
           })}
         </div>
       )}
-      {item.connector?.reply_to && <p className="mb-2 text-[11.5px] leading-relaxed text-ink-3">回复会{item.connector.reply_to}。</p>}
+      {item.connector?.reply_to && <p className="mb-2 text-[11.5px] leading-relaxed text-ink-3">{t("inbox-inboxdialogs.reply_goes", { how: item.connector.reply_to })}</p>}
       <div className="relative">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           disabled={loading}
           rows={8}
-          aria-label="回复内容"
-          placeholder={loading ? "" : "写点什么…"}
+          aria-label={t("inbox-inboxdialogs.reply_label")}
+          placeholder={loading ? "" : t("inbox-inboxdialogs.reply_placeholder")}
           className="block w-full resize-y rounded-control bg-field px-3 py-2.5 text-[13.5px] leading-relaxed text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-50"
         />
         {loading && (
           <div className="pointer-events-none absolute top-3 left-3">
-            <Loading label="AI 正在起草…" />
+            <Loading label={t("inbox-inboxdialogs.drafting")} />
           </div>
         )}
       </div>
@@ -158,11 +159,11 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
         <input
           value={instruction}
           onChange={(e) => setInstruction(e.target.value)}
-          placeholder="让 AI 改：语气、要点…"
-          aria-label="让 AI 改"
+          placeholder={t("inbox-inboxdialogs.instruction_placeholder")}
+          aria-label={t("inbox-inboxdialogs.instruction_label")}
           className="h-8 min-w-0 flex-1 rounded-control bg-field px-3 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]"
         />
-        <Button type="submit" tone="secondary" icon="retry" busy={loading}>重写</Button>
+        <Button type="submit" tone="secondary" icon="retry" busy={loading}>{t("inbox-inboxdialogs.rewrite")}</Button>
       </form>
     </Dialog>
   );
@@ -206,7 +207,7 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
       noteSent(r.session.machine_id, r.session.session_id, { text });
       void refreshAssistant().catch(() => {});
       if (markDone) void setDone(item, true);
-      toast("已交给 Persona", "ok");
+      toast(t("inbox-inboxdialogs.handed_to_persona"), "ok");
       onClose();
       navigate({ name: "jarvis", sid: r.session.session_id });
     } catch (e) {
@@ -220,20 +221,20 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
     <Dialog
       open
       onClose={onClose}
-      title="交给 AI"
+      title={t("inbox-inboxdialogs.handoff_title")}
       width={520}
       footer={
         <>
           <label className="mr-auto flex cursor-pointer items-center gap-2 text-[12.5px] whitespace-nowrap text-ink-2">
             <input type="checkbox" checked={markDone} onChange={(e) => setMarkDone(e.target.checked)} className="size-3.5 accent-[var(--accent)]" />
-            同时标为已处理
+            {t("inbox-inboxdialogs.also_done")}
           </label>
-          <Button tone="quiet" onClick={onClose}>取消</Button>
-          <Button tone="accent" icon="send" busy={busy} onClick={() => void send()}>发送</Button>
+          <Button tone="quiet" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button tone="accent" icon="send" busy={busy} onClick={() => void send()}>{t("inbox-inboxdialogs.send")}</Button>
         </>
       }
     >
-      <p className="mb-1.5 text-[12px] font-medium text-ink-2">要它做什么</p>
+      <p className="mb-1.5 text-[12px] font-medium text-ink-2">{t("inbox-inboxdialogs.ask_label")}</p>
       <textarea
         value={ask}
         onChange={(e) => setAsk(e.target.value)}
@@ -246,7 +247,7 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
         }}
         rows={3}
         placeholder={HANDOFF_PRESETS[0]}
-        aria-label="要它做什么"
+        aria-label={t("inbox-inboxdialogs.ask_label")}
         className="block w-full resize-none rounded-control bg-field px-3 py-2 text-[13px] leading-relaxed text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]"
       />
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -257,9 +258,9 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
         ))}
       </div>
 
-      <p className="mt-4 mb-1.5 text-[12px] font-medium text-ink-2">交给谁</p>
-      <div role="radiogroup" aria-label="交给谁" className="max-h-[300px] divide-y divide-line overflow-y-auto rounded-card bg-surface shadow-card">
-        <Target on={target === null} onPick={() => setTarget(null)} title="Persona（新对话）" sub="开一段新的 Persona 对话" icon={<span className="flex size-6 items-center justify-center rounded-[7px] bg-accent-tint text-accent-ink"><Icon name="spark" size={12} /></span>} />
+      <p className="mt-4 mb-1.5 text-[12px] font-medium text-ink-2">{t("inbox-inboxdialogs.target_label")}</p>
+      <div role="radiogroup" aria-label={t("inbox-inboxdialogs.target_label")} className="max-h-[300px] divide-y divide-line overflow-y-auto rounded-card bg-surface shadow-card">
+        <Target on={target === null} onPick={() => setTarget(null)} title={t("inbox-inboxdialogs.target_persona")} sub={t("inbox-inboxdialogs.target_persona_sub")} icon={<span className="flex size-6 items-center justify-center rounded-[7px] bg-accent-tint text-accent-ink"><Icon name="spark" size={12} /></span>} />
         {agents.map((s) => (
           <Target
             key={`${s.machine_id}/${s.session_id}`}

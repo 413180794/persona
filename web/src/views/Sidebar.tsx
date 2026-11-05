@@ -5,12 +5,14 @@ import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
 import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
-import { buildMachineTree, resolveTab, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
+import { keyedRefs } from "../lib/keyed-refs";
+import { buildMachineTree, paneRoute, resolveTab, tabRowKeys, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
 import { api, setToken } from "../lib/api";
 import { useInboxBadge } from "../lib/inbox";
 import { useLarkHome } from "../lib/lark-chats";
 import { machineWithHub } from "../lib/mesh";
+import { agentLabel } from "../lib/mentions";
 import { ago, baseName, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { NAV_PAGES, firstAndCurrent, otherConversations, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
@@ -104,10 +106,7 @@ function useGlide(activeKey: string) {
     // runs after every render (rows fold, lists change): only a real move updates
     setBox((b) => (b?.top === next?.top && b?.height === next?.height ? b : next));
   });
-  const reg: RegFn = (k) => (el) => {
-    if (el) rows.current.set(k, el);
-    else rows.current.delete(k);
-  };
+  const [reg] = useState<RegFn>(() => keyedRefs(rows.current));
   const highlight = (
     <span
       aria-hidden
@@ -865,7 +864,10 @@ function WorkspaceBlock({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
         <span className="flex shrink-0 items-center gap-1">
           <SpaceTodoTag sp={sp} onNavigate={p.onNavigate} />
           {sp.children.length > 0 && <ChildSummary counts={sp.childStates} />}
-          {folded ? <SessionTally sessions={sp.tree} folded /> : tabs > 0 && !sp.children.length && <span title={`${tabs} 个标签页`} className="text-[10.5px] text-ink-3 tabular-nums">{tabs}<span className="sr-only"> 个标签页</span></span>}
+          {folded ? <SessionTally sessions={sp.tree} folded /> : tabs > 0 && !sp.children.length && (
+            // agents, as the machine and the quick filter count them: a tab with several agents is one row (#2320)
+            <span title={`${sp.sessions.length} 个 Agent · ${tabs} 个标签页`} className="text-[10.5px] text-ink-3 tabular-nums">{sp.sessions.length}<span className="sr-only"> 个 Agent</span></span>
+          )}
           <SpaceMenuButton sp={sp} onMenu={p.onSpaceMenu} />
         </span>
       )}
@@ -938,29 +940,86 @@ function tabNode(t: HerdrTab, machines: Machine[]): MenuNode {
 }
 
 // One herdr tab: `#N` (or its name) and what its most urgent pane is doing; it opens on that pane, the others are the
-// chat's pane tabs (PaneTabs). A tab with one pane has that agent's ⋯.
-function TabRow({ t, reg, hover, activeKey, go, onRowMenu, onNodeMenu, machines }: { t: HerdrTab } & TreeProps) {
-  const open = t.sessions.find((x) => rowKey(x) === activeKey);
-  const k = open ? activeKey : `t:${t.key}`;
+// chat's pane tabs (PaneTabs). A tab with one pane has that agent's ⋯, one with several the tab's own. A tab with several
+// agents (#2320) opens up to them, in pane order: the 发起者 (the first pane, the others split from it) on top, its
+// branches under it; the choice is kept per tab like the sidebar's other folds, and folded it is the one row it always was.
+function TabRow({ t, ...p }: { t: HerdrTab } & TreeProps) {
+  const { reg, hover, activeKey, go, onRowMenu, onNodeMenu, machines } = p;
   const n = t.sessions.length;
   const single = n === 1;
+  // open at first: the point is to see which agents belong together (#2320); a tab folded by hand stays folded
+  const [folded, toggle] = useFolded(t.foldKey, false);
+  const shut = single || folded;
+  const open = t.sessions.find((x) => rowKey(x) === activeKey);
+  // opened up, the open agent's own row is the one lit; folded, the tab's row is, and the hidden pane rows (still
+  // mounted in the collapse) register under no key, so the highlight and the scroll to the open row find the tab's
+  const keys = tabRowKeys(`t:${t.key}`, t.sessions.map(rowKey), activeKey, shut);
+  const k = keys.row;
   const to: Route = { name: "tab", mid: t.lead.machine_id, space: t.spaceId, slot: t.slotId };
-  return (
+  const row = (
     <SessionRow
       s={t.lead}
       k={k}
       reg={reg}
       hover={hover}
-      active={Boolean(open)}
+      active={Boolean(open) && shut}
       to={to}
       go={go}
-      prefix={t.label && <span className="shrink-0 text-[11.5px] text-ink-3 tabular-nums">{t.label}</span>}
-      hint={single ? undefined : `${n} 个 Agent`}
+      // a long tab name gives way: it would run under the 「N 个 Agent」 button (endRoom) and hide the agent's title
+      prefix={t.label && <span className="min-w-0 max-w-[50%] shrink-0 truncate text-[11.5px] text-ink-3 tabular-nums">{t.label}</span>}
       showTodoTag={single}
       // a tab with several panes has a menu of its own: rename, split, git, close it
       onMenu={single ? onRowMenu : (_s, anchor, at) => onNodeMenu(tabNode(t, machines), at ?? { anchor }, `标签页 ${t.label || ""}`.trim(), !at)}
       menuLabel={single ? undefined : "标签页的操作"}
+      endRoom={!single}
     />
+  );
+  if (single) return row;
+  return (
+    <div>
+      <div className="relative">
+        {row}
+        <button
+          type="button"
+          aria-expanded={!folded}
+          aria-label={`${t.label ? `${t.label} 的` : ""}${n} 个 Agent`}
+          title={folded ? "展开这个标签页的 Agent" : "收起"}
+          onClick={toggle}
+          // left of the tab's own ⋯ (24 px, 44 on touch), which sits at the row's end
+          className="touch-hit absolute top-1/2 right-8 z-20 flex h-6 -translate-y-1/2 items-center gap-0.5 whitespace-nowrap rounded-[6px] pr-0.5 pl-1 text-[11px] text-ink-3 tabular-nums hover:bg-hover hover:text-ink-2 [@media(hover:none)]:right-11"
+        >
+          {n} 个 Agent
+          <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 transition-transform duration-200" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+        </button>
+      </div>
+      <Collapse open={!folded}>
+        <div className="flex flex-col gap-px pl-3" inert={folded || undefined}>
+          {t.sessions.map((s, i) => {
+            const key = rowKey(s);
+            const branch = Boolean(t.launcher) && s !== t.launcher;
+            const paneKey = keys.panes[i];
+            const pane = (
+              <SessionRow
+                key={s.session_id}
+                s={s}
+                k={paneKey ?? key}
+                reg={paneKey ? reg : unregistered}
+                hover={hover}
+                active={activeKey === key}
+                to={paneRoute(s)}
+                go={go}
+                prefix={<span className="shrink-0 text-[11px] text-ink-3">{agentLabel(s)}</span>}
+                host={s === t.launcher ? "发起者" : undefined}
+                showTodoTag
+                onMenu={onRowMenu}
+              />
+            );
+            // the branches hang off the 发起者 on a thin line
+            return branch ? <div key={s.session_id} className="ml-[13px] border-l border-line pl-1">{pane}</div> : pane;
+          })}
+        </div>
+      </Collapse>
+    </div>
   );
 }
 
@@ -1040,6 +1099,8 @@ function SessionTally({ sessions, folded }: { sessions: Session[]; folded: boole
 }
 
 type RegFn = (k: string) => (el: HTMLElement | null) => void;
+/** For a row that is there but hidden (a folded tab's panes): it registers nowhere. */
+const unregistered: RegFn = () => () => {};
 /** An agent row's key in the sidebar (highlight, active): sidebarActiveKey's for a session. */
 const rowKey = (s: Pick<Session, "machine_id" | "session_id">) => `s:${agentKey(s)}`;
 /** Whether the open row (`activeKey`) is one of these agents': its group opens for it (useFolded). */
@@ -1146,7 +1207,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
   );
 }
 
-export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu, menuLabel = "Agent 的操作" }: { menuLabel?: string; s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn }) {
+export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu, menuLabel = "Agent 的操作", endRoom }: { menuLabel?: string; s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; endRoom?: boolean }) {
   const st = stateOf(s);
   const t = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
@@ -1157,11 +1218,13 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
   const detail = details && showState && !s.assistant ? rowDetail(s, contextUsed) : [];
   // what sits at the row's end steps aside for the hover ⋯; the open row leaves room for its ⋯ instead
   const aside = active ? undefined : "group-hover/row:invisible";
+  // one ref per key, so letting go takes out only this row's entry (keyedRefs)
+  const regRow = useMemo(() => reg(k), [reg, k]);
   const link = (
     <a
       ref={(el) => {
         row.current = el;
-        reg(k)(el);
+        regRow(el);
       }}
       href={href(to)}
       onClick={go(to)}
@@ -1174,7 +1237,8 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
       title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${hint ? `\n${hint}` : ""}${s.todo ? `\n待办：${s.todo.title}` : ""}${preview ? `\n${preview}` : ""}`}
       // a touch screen: rows a finger can hit (44), and room at the end for the ⋯ that is always there; the open row
       // keeps its ⋯ too, so it has room for it
-      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11")}
+      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, // room for 「N 个 Agent」 and the ⋯ beside it (instead of the ⋯'s own)
+        endRoom ? "pr-[108px] [@media(hover:none)]:pr-[120px]" : cx(onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11"))}
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>
       {prefix}

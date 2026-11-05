@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import type { MailAccount } from "../../lib/inbox";
 import { badAddresses, parseAddresses, sendMail, type ComposeDraft } from "../../lib/mail";
+import { t } from "../../i18n";
 import { Button, Dialog, toast } from "../../ui/atoms";
 
 const kept = new Map<string, ComposeDraft>();
@@ -48,16 +49,16 @@ export function ComposeDialog({ draftKey, initial, accounts, onClose }: { draftK
   };
   const send = async () => {
     const bad = [...badAddresses(d.to), ...badAddresses(d.cc)];
-    if (!parseAddresses(d.to).length) return setError("写上收件人");
-    if (bad.length) return setError(`这些不像邮箱地址：${bad.join("、")}`);
+    if (!parseAddresses(d.to).length) return setError(t("inbox-composedialog.need_recipient"));
+    if (bad.length) return setError(t("inbox-composedialog.bad_addresses", { addresses: bad.join(t("inbox-composedialog.list_sep")) }));
     setSending(true);
     try {
       await sendMail(d);
       kept.delete(draftKey);
-      toast("已发送", "ok");
+      toast(t("inbox-composedialog.sent"), "ok");
       onClose();
     } catch (e) {
-      setError(`没发出去：${errorText(e)}`);
+      setError(t("inbox-composedialog.send_failed", { error: errorText(e) }));
     } finally {
       setSending(false);
     }
@@ -67,12 +68,12 @@ export function ComposeDialog({ draftKey, initial, accounts, onClose }: { draftK
     <Dialog
       open
       onClose={keepOrDrop}
-      title={initial.inReplyTo || /^re:/i.test(initial.subject) ? "回复邮件" : "写邮件"}
+      title={initial.inReplyTo || /^re:/i.test(initial.subject) ? t("inbox-composedialog.title_reply") : t("inbox-composedialog.title_new")}
       width={620}
       footer={
         <>
-          <Button tone="quiet" onClick={cancel}>取消</Button>
-          <Button tone="accent" icon="send" busy={sending} disabled={!d.to.trim() || !d.accountID} onClick={() => void send()}>发送</Button>
+          <Button tone="quiet" onClick={cancel}>{t("common.cancel")}</Button>
+          <Button tone="accent" icon="send" busy={sending} disabled={!d.to.trim() || !d.accountID} onClick={() => void send()}>{t("inbox-composedialog.send")}</Button>
         </>
       }
     >
@@ -90,28 +91,28 @@ export function ComposeDialog({ draftKey, initial, accounts, onClose }: { draftK
           }
         }}
       >
-        <Field label="发件人">
-          <select value={d.accountID} onChange={(e) => set({ accountID: e.target.value })} className={fieldClass} aria-label="发件人">
-            {!accounts.some((a) => a.id === d.accountID) && <option value={d.accountID}>{d.accountID || "（没有邮箱）"}</option>}
+        <Field label={t("inbox-composedialog.from")}>
+          <select value={d.accountID} onChange={(e) => set({ accountID: e.target.value })} className={fieldClass} aria-label={t("inbox-composedialog.from")}>
+            {!accounts.some((a) => a.id === d.accountID) && <option value={d.accountID}>{d.accountID || t("inbox-composedialog.no_account")}</option>}
             {accounts.map((a) => <option key={a.id} value={a.id}>{a.name && a.name !== a.email ? `${a.name} · ${a.email}` : a.email}</option>)}
           </select>
         </Field>
-        <Field label="收件人">
-          <input ref={to} value={d.to} onChange={(e) => set({ to: e.target.value })} placeholder="逗号分隔" aria-label="收件人" type="text" inputMode="email" autoComplete="off" spellCheck={false} className={fieldClass} />
+        <Field label={t("inbox-composedialog.to")}>
+          <input ref={to} value={d.to} onChange={(e) => set({ to: e.target.value })} placeholder={t("inbox-composedialog.to_placeholder")} aria-label={t("inbox-composedialog.to")} type="text" inputMode="email" autoComplete="off" spellCheck={false} className={fieldClass} />
         </Field>
-        <Field label="抄送">
-          <input value={d.cc} onChange={(e) => set({ cc: e.target.value })} aria-label="抄送" type="text" inputMode="email" autoComplete="off" spellCheck={false} className={fieldClass} />
+        <Field label={t("inbox-composedialog.cc")}>
+          <input value={d.cc} onChange={(e) => set({ cc: e.target.value })} aria-label={t("inbox-composedialog.cc")} type="text" inputMode="email" autoComplete="off" spellCheck={false} className={fieldClass} />
         </Field>
-        <Field label="主题">
-          <input value={d.subject} onChange={(e) => set({ subject: e.target.value })} aria-label="主题" className={fieldClass} />
+        <Field label={t("inbox-composedialog.subject")}>
+          <input value={d.subject} onChange={(e) => set({ subject: e.target.value })} aria-label={t("inbox-composedialog.subject")} className={fieldClass} />
         </Field>
         <textarea
           ref={body}
           value={d.body}
           onChange={(e) => set({ body: e.target.value })}
           rows={12}
-          aria-label="正文"
-          placeholder="正文"
+          aria-label={t("inbox-composedialog.body")}
+          placeholder={t("inbox-composedialog.body")}
           className="mt-1 block w-full resize-y rounded-control bg-field px-3 py-2.5 text-[13.5px] leading-relaxed text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]"
         />
         {error && <p role="alert" className="text-[12px] text-red">{error}</p>}

@@ -1,0 +1,6 @@
+{
+  "error": "出错了",
+  "draw_failed": "{name}的详情没画出来：{error}",
+  "retry": "重试",
+  "back_to": "回到{title}"
+}

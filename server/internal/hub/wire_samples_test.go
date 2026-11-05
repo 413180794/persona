@@ -191,10 +191,11 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	files["connection"][2].Derived = false
 	files["connection"][2].FromTest = "SyncEventTests.decodesRevs"
 
+	firstPane := 0
 	sessions := []proto.Session{{MachineID: "m1", SessionID: "s1", Title: "示例任务", Cwd: "/home/user/project", Status: proto.StatusBlocked,
 		PaneID: "w1:p1", TabID: "w1:t1", WorkspaceID: "w1", Agent: "claude", Launcher: "example", Model: "example-model",
 		PermissionMode: "plan", Effort: "high", StartedByJarvis: true, SpaceKind: "herdr", SpaceID: "w1", SpaceName: "示例空间", SpaceIndex: 1,
-		SlotID: "t1", SlotName: "示例任务", SlotIndex: 1, UpdatedAt: now, Rev: 120, PendingInteractions: 1,
+		SlotID: "t1", SlotName: "示例任务", SlotIndex: 1, PaneIndex: &firstPane, UpdatedAt: now, Rev: 120, PendingInteractions: 1,
 		Queued: []string{"请补充示例。"}, Suggestion: "继续检查示例", Background: []proto.BackgroundTask{{ID: "task_example", Kind: "shell", Description: "检查示例", Command: "pwd", StartedAt: now}},
 		Subagents: []proto.Subagent{{ID: "agent_example", SessionID: "s1@agent_example", Type: "Explore", Running: true, StartedAt: now}},
 		Loop:      &proto.LoopInfo{Kind: "wakeup", Prompt: "检查示例状态", NextAt: now.Add(time.Hour), Ticks: 1}},

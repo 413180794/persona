@@ -1,0 +1,23 @@
+{
+  "title_moment": "Comment on Moments post",
+  "title_comment": "Comment on {title}",
+  "title_reply_to": "Reply to {title}",
+  "title_reply_mail": "Reply",
+  "send": "Send",
+  "view_process": "See how your AI twin handled it",
+  "changes_on_send": "Also change when sending",
+  "reply_goes": "Reply: {how}.",
+  "reply_label": "Reply",
+  "reply_placeholder": "Write something…",
+  "drafting": "AI is drafting…",
+  "instruction_placeholder": "Ask AI to change the tone, key points…",
+  "instruction_label": "Ask AI to revise",
+  "rewrite": "Rewrite",
+  "handed_to_persona": "Handed to Persona",
+  "handoff_title": "Hand to AI",
+  "also_done": "Also mark as done",
+  "ask_label": "What should it do",
+  "target_label": "Hand to",
+  "target_persona": "Persona (new chat)",
+  "target_persona_sub": "Start a new chat with Persona"
+}

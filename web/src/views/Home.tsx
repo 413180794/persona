@@ -1,8 +1,10 @@
 // 总览: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
 import { useMemo, useState } from "react";
 import { ago, sessionPreview, shortDuration, sourceSubtitle, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
+import { homeOverview, paneRoute, type TabGroup } from "../lib/herdr-tree";
+import { agentLabel } from "../lib/mentions";
 import { hubLabel, machineWithHub } from "../lib/mesh";
-import { href, onLinkClick } from "../lib/router";
+import { href, onLinkClick, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { useStore } from "../lib/store";
 import type { AgentState, Interaction, Session } from "../lib/types";
@@ -26,13 +28,12 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
   const counts = useCounts();
   const now = useNow(5000, counts.working > 0);
 
-  const groups = useMemo(() => {
-    const pick = (st: AgentState) => sessions.filter((s) => stateOf(s) === st).sort((a, b) => ((st === "working" ? a.state_since : b.updated_at) ?? "").localeCompare((st === "working" ? b.state_since : a.updated_at) ?? ""));
-    return { needs: pick("needs_you"), working: pick("working"), unread: pick("unread") };
-  }, [sessions]);
+  // the agents of one herdr tab are one row (#2320), filed under the most urgent of them; a card waiting counts as
+  // something to do, and 「全部标为已读」 marks every unread agent, wherever its tab is filed
+  const { groups, unread, markAllAt, quiet } = useMemo(() => homeOverview(sessions, interactions), [sessions, interactions]);
   const name = (mid: string) => machineWithHub(mid, machines);
-  const quiet = !groups.needs.length && !groups.working.length && !groups.unread.length;
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
+  const markAll = <MarkAllSeen count={unread.length} onClick={() => setConfirmSeen(unread)} />;
 
   return (
     <div className="flex h-full flex-col">
@@ -47,9 +48,12 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
         <div className="mx-auto flex max-w-[760px] flex-col gap-9 px-5 pt-6 pb-16 sm:px-8 sm:pt-10">
           <div style={{ animation: `fade-up 420ms ${EASE} both` }}>
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">{greeting()}</h1>
-            <p className="mt-1 text-[13.5px] text-ink-2">
-              {!loaded ? "正在连上 hub…" : quiet ? "没有需要你处理的，所有 Agent 都在等你。" : [counts.needs && `${counts.needs} 个需要你`, counts.working && `${counts.working} 个在工作`, counts.unread && `${counts.unread} 个做完了还没看`].filter(Boolean).join("，") + "。"}
-            </p>
+            <div className="mt-1 flex items-center gap-2">
+              <p className="min-w-0 flex-1 text-[13.5px] text-ink-2">
+                {!loaded ? "正在连上 hub…" : quiet ? "没有需要你处理的，所有 Agent 都在等你。" : [counts.needs && `${counts.needs} 个需要你`, counts.working && `${counts.working} 个在工作`, counts.unread && `${counts.unread} 个做完了还没看`].filter(Boolean).join("，") + "。"}
+              </p>
+              {markAllAt === "summary" && markAll}
+            </div>
           </div>
 
           {/* the extensions' cards (docs/extensions.md「UI 插槽」 overview_card), under the agents' summary */}
@@ -77,20 +81,18 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             </Group>
           )}
 
-          {groups.needs.filter((s) => !interactions.some((i) => i.session_id === s.session_id)).length > 0 && (
+          {groups.needs.length > 0 && (
             <Group title="停在电脑上" count={groups.needs.length}>
-              {groups.needs
-                .filter((s) => !interactions.some((i) => i.session_id === s.session_id))
-                .map((s, i) => (
-                  <SessionTask key={s.session_id} s={s} i={i} machine={name(s.machine_id)} pill={<Pill tone="red">需要你</Pill>} />
-                ))}
+              {groups.needs.map((g, i) => (
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="red">需要你</Pill>} />
+              ))}
             </Group>
           )}
 
           {groups.working.length > 0 && (
             <Group title="正在工作" count={groups.working.length}>
-              {groups.working.map((s, i) => (
-                <SessionTask key={s.session_id} s={s} i={i} machine={name(s.machine_id)} pill={<span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3 tabular-nums">{s.state_since ? shortDuration(now - Date.parse(s.state_since)) : ""}</span>} />
+              {groups.working.map((g, i) => (
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3 tabular-nums">{g.lead.state_since ? shortDuration(now - Date.parse(g.lead.state_since)) : ""}</span>} />
               ))}
             </Group>
           )}
@@ -99,15 +101,10 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             <Group
               title="做完了，还没看"
               count={groups.unread.length}
-              right={
-                <button type="button" onClick={() => setConfirmSeen(groups.unread)} className="flex h-6 items-center gap-1 whitespace-nowrap rounded-control px-1.5 text-[12px] text-ink-3 transition-colors hover:bg-hover hover:text-ink-2">
-                  <Icon name="check" size={12} stroke={2.4} />
-                  全部标为已读
-                </button>
-              }
+              right={markAllAt === "section" && markAll}
             >
-              {groups.unread.map((s, i) => (
-                <SessionTask key={s.session_id} s={s} i={i} machine={name(s.machine_id)} pill={<Pill tone="green">{ago(s.updated_at) || "完成"}</Pill>} />
+              {groups.unread.map((g, i) => (
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="green">{ago(g.lead.updated_at) || "完成"}</Pill>} />
               ))}
             </Group>
           )}
@@ -160,6 +157,16 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
   );
 }
 
+// Marks every unread agent seen, after the dialog says how many (MarkSeenDialog).
+function MarkAllSeen({ count, onClick }: { count: number; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} title={`把 ${count} 个完成未看的会话标为已读`} className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-control px-1.5 text-[12px] text-ink-3 transition-colors hover:bg-hover hover:text-ink-2">
+      <Icon name="check" size={12} stroke={2.4} />
+      全部标为已读
+    </button>
+  );
+}
+
 function Group({ title, count, children, right }: { title: string; count: number; children: React.ReactNode; right?: React.ReactNode }) {
   return (
     <section>
@@ -182,8 +189,38 @@ function SessionTask({ s, i, machine, pill }: { s: Session; i: number; machine: 
   return <TaskRow i={i} state={stateOf(s)} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} title={sessionTitle(s)} meta={[sourceSubtitle(s), machine, s.space_name, tabLabel(s)].filter(Boolean).join(" › ")} detail={s.source_kind ? [sourceSubtitle(s), sessionPreview(s)].filter(Boolean).join(" · ") : sessionPreview(s)} pill={pill} />;
 }
 
+// One tab's agents as one row (#2320): the 发起者's title (the first pane's when the panes are peers), the most urgent
+// one's latest words and state, and how many there are; it opens the tab on that most urgent pane.
+function GroupTask({ g, i, machine, pill }: { g: TabGroup; i: number; machine: string; pill: React.ReactNode }) {
+  if (g.sessions.length === 1) return <SessionTask s={g.lead} i={i} machine={machine} pill={pill} />;
+  const head = g.launcher ?? g.sessions[0]!;
+  const s = g.lead;
+  const preview = sessionPreview(s);
+  return (
+    <TaskRow
+      i={i}
+      state={g.state}
+      to={paneRoute(s)}
+      title={sessionTitle(head)}
+      meta={[machine, s.space_name, tabLabel(s)].filter(Boolean).join(" › ")}
+      detail={s === head ? preview : [agentLabel(s), preview].filter(Boolean).join("：")}
+      pill={
+        <>
+          <span className="flex shrink-0 items-center gap-1 text-[12px] whitespace-nowrap text-ink-3 tabular-nums" title={g.sessions.map((x) => `${agentLabel(x)} · ${sessionTitle(x)} · ${STATE_LABEL[stateOf(x)]}`).join("\n")}>
+            <span aria-hidden className="flex items-center gap-0.5">
+              {g.sessions.map((x) => <StatusDot key={x.session_id} state={stateOf(x)} size={6} />)}
+            </span>
+            <span className="max-sm:sr-only">{g.sessions.length} 个 Agent</span>
+          </span>
+          {pill}
+        </>
+      }
+    />
+  );
+}
+
 // One Task Rows capsule: status badge, title, the latest words, a pill.
-function TaskRow({ i, state, to, title, meta, detail, pill }: { i: number; state: AgentState; to: { name: "session"; mid: string; sid: string }; title: string; meta: string; detail?: string; pill: React.ReactNode }) {
+function TaskRow({ i, state, to, title, meta, detail, pill }: { i: number; state: AgentState; to: Route; title: string; meta: string; detail?: string; pill: React.ReactNode }) {
   return (
     <a
       href={href(to)}

@@ -1,0 +1,12 @@
+{
+  "titled": "{title}: {text}",
+  "kind_bar": "Bar chart",
+  "kind_line": "Line chart",
+  "summary_one": "{kind}, {count} point",
+  "summary_other": "{kind}, {count} points",
+  "summary_series_one": "{kind}, {count} point, {series}",
+  "summary_series_other": "{kind}, {count} points, {series}",
+  "series_sep": ", ",
+  "label": "Label",
+  "value": "Value"
+}

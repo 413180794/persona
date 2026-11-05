@@ -6,6 +6,7 @@ import {
   type DocRow, type DocStatus, type InboxItem,
 } from "../../lib/inbox";
 import { connectorBrand } from "../../lib/connectors";
+import { t } from "../../i18n";
 import { Button, cx, Menu, Spinner, useMenu } from "../../ui/atoms";
 import { BrandMark } from "../../ui/BrandMark";
 import { Icon } from "../../ui/icons";
@@ -118,7 +119,7 @@ export function ItemAvatar({ it, size = 40 }: { it: InboxItem; size?: number }) 
       <span
         className={cx("absolute flex items-center justify-center rounded-full shadow-[0_0_0_2px_var(--surface)]", isLark(it) ? "bg-surface" : "bg-ink-3 text-surface")}
         style={{ width: badge, height: badge, right: -3, bottom: -3 }}
-        title={isLark(it) ? "飞书" : "邮件"}
+        title={isLark(it) ? t("inbox-inboxparts.source_lark") : t("inbox-inboxparts.source_mail")}
       >
         {isLark(it) ? <img src={larkMark} alt="" className="size-[68%]" /> : <Icon name="mail" size={Math.round(badge * 0.62)} stroke={2.4} />}
       </span>
@@ -166,7 +167,7 @@ export function DraftCard({ it, onEdit, onSend }: { it: InboxItem; onEdit: () =>
     <div className="rounded-[10px] bg-inset p-3 shadow-hairline">
       <p className="flex items-center text-[11.5px] font-medium text-accent-ink">
         <Spark />
-        AI 分身草拟的回复
+        {t("inbox-inboxparts.draft_title")}
       </p>
       <p className="mt-1.5 line-clamp-4 text-[12.5px] leading-relaxed whitespace-pre-wrap text-ink">{draft}</p>
       {(it.agent?.changes ?? []).map((c) => (
@@ -176,8 +177,8 @@ export function DraftCard({ it, onEdit, onSend }: { it: InboxItem; onEdit: () =>
         </p>
       ))}
       <div className="mt-2.5 flex justify-end gap-2">
-        <Button tone="secondary" onClick={onEdit}>修改</Button>
-        <Button tone="accent" icon="send" busy={sending} onClick={onSend} title="发送 AI 分身草拟的回复">发送</Button>
+        <Button tone="secondary" onClick={onEdit}>{t("inbox-inboxparts.edit")}</Button>
+        <Button tone="accent" icon="send" busy={sending} onClick={onSend} title={t("inbox-inboxparts.send_draft")}>{t("inbox-inboxparts.send")}</Button>
       </div>
     </div>
   );
@@ -188,7 +189,7 @@ export function AgentWorking({ it }: { it: InboxItem }) {
   return (
     <p className="flex min-w-0 items-center gap-2 text-[11.5px] text-ink-2">
       <Spinner size={11} />
-      <span className="truncate">{queued ? "AI 分身排队中" : `AI 分身正在处理${it.agent?.task ? `：${it.agent.task}` : ""}`}</span>
+      <span className="truncate">{queued ? t("inbox-inboxparts.agent_queued") : it.agent?.task ? t("inbox-inboxparts.agent_working_task", { task: it.agent.task }) : t("inbox-inboxparts.agent_working")}</span>
     </p>
   );
 }
@@ -204,7 +205,7 @@ export function StatusMenu({ it, row, status, showName }: { it: InboxItem; row: 
   const menu = useMenu();
   const moving = useInbox((s) => s.moving.includes(movingKey(it, row, status)));
   const color = optionColor(status, status.value);
-  const value = status.value || "未设置";
+  const value = status.value || t("inbox-inboxparts.status_unset");
   return (
     <>
       <button
@@ -215,12 +216,12 @@ export function StatusMenu({ it, row, status, showName }: { it: InboxItem; row: 
           menu.open(e);
         }}
         disabled={moving || isDone(it)}
-        aria-label={`${status.name}：${value}，点按修改`}
+        aria-label={t("inbox-inboxparts.status_change", { name: status.name, value })}
         className="inline-flex h-6 max-w-full shrink-0 items-center gap-1.5 rounded-full px-2 text-[11.5px] font-medium whitespace-nowrap text-ink transition-[filter] enabled:hover:brightness-95 disabled:opacity-60 dark:enabled:hover:brightness-110"
         style={{ background: color ? tint(color, 30) : "var(--field)" }}
       >
         {moving ? <Spinner size={9} /> : <span className="size-1.5 shrink-0 rounded-full" style={{ background: color ? `color-mix(in srgb, ${color} 75%, var(--ink))` : "var(--ink-3)" }} />}
-        <span className="truncate">{showName ? `${status.name}：${value}` : value}</span>
+        <span className="truncate">{showName ? t("inbox-inboxparts.status_value", { name: status.name, value }) : value}</span>
         <Icon name="chevron" size={11} stroke={2.4} className="shrink-0 text-ink-3" />
       </button>
       {menu.anchor && (

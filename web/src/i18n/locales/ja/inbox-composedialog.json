@@ -1,0 +1,17 @@
+{
+  "need_recipient": "宛先を入力してください",
+  "bad_addresses": "メールアドレスではないようです：{addresses}",
+  "list_sep": "、",
+  "sent": "送信しました",
+  "send_failed": "送信できませんでした：{error}",
+  "title_reply": "メールに返信",
+  "title_new": "メールを作成",
+  "send": "送信",
+  "from": "差出人",
+  "no_account": "（メールアカウントなし）",
+  "to": "宛先",
+  "to_placeholder": "カンマ区切り",
+  "cc": "Cc",
+  "subject": "件名",
+  "body": "本文"
+}

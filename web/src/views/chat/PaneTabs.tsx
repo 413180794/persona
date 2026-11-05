@@ -1,7 +1,9 @@
 // The agent panes of one herdr tab, as tabs over the chat (lib/herdr-tree.ts tabSessions): which agent, what it is
-// doing, its state. Arrow keys move between them like any tab list; a tab with one pane has none.
+// doing, its state, in the order they sit in the tab; the 发起者 (the first pane, the others split from it, #2320) wears
+// a small mark. Arrow keys move between them like any tab list; a tab with one pane has none.
 import { useEffect, useRef } from "react";
 import { sessionTitle, stateOf, STATE_LABEL } from "../../lib/format";
+import { launcherOf } from "../../lib/herdr-tree";
 import { agentLabel } from "../../lib/mentions";
 import type { Session } from "../../lib/types";
 import { NARROW, useMedia } from "../../lib/viewport";
@@ -27,6 +29,7 @@ export function PaneTabs({ sessions, current, onSelect }: { sessions: Session[];
   const at = Math.max(0, sessions.findIndex((s) => s.session_id === current));
   const fit = paneTabsFit(sessions.length);
   const centre = useMedia(NARROW) && fit === "scroll";
+  const launcher = launcherOf(sessions);
   useEffect(() => {
     // the open pane stays in sight when the row scrolls (narrow screens, long titles); a phone centres it
     tabs.current[at]?.scrollIntoView?.({ block: "nearest", inline: centre ? "center" : "nearest" });
@@ -48,6 +51,7 @@ export function PaneTabs({ sessions, current, onSelect }: { sessions: Session[];
       {sessions.map((s, i) => {
         const on = i === at;
         const st = stateOf(s);
+        const first = s === launcher;
         return (
           <button
             key={s.session_id}
@@ -58,7 +62,7 @@ export function PaneTabs({ sessions, current, onSelect }: { sessions: Session[];
             role="tab"
             aria-selected={on}
             tabIndex={on ? 0 : -1}
-            title={`${agentLabel(s)} · ${sessionTitle(s)} · ${STATE_LABEL[st]}`}
+            title={`${agentLabel(s)}${first ? "（发起者）" : ""} · ${sessionTitle(s)} · ${STATE_LABEL[st]}`}
             onClick={() => !on && onSelect(s)}
             onKeyDown={(e) => {
               const to = nextTab(i, e.key, sessions.length);
@@ -74,7 +78,13 @@ export function PaneTabs({ sessions, current, onSelect }: { sessions: Session[];
             )}
           >
             <StatusDot state={st} size={6} />
-            <span className={cx("shrink-0", on ? "text-ink-2" : "text-ink-3")}>{agentLabel(s)}</span>
+            {/* a phone's three tabs share its width: the 发起者's mark stands in for its agent's name (the title says it) */}
+            <span className={cx("shrink-0", on ? "text-ink-2" : "text-ink-3", first && fit === "fill" && "max-sm:hidden")}>{agentLabel(s)}</span>
+            {first && (
+              <span className={cx("shrink-0 rounded px-1 text-[10px] leading-4 text-ink-3", on ? "bg-hover" : "bg-hover-2")}>
+                发起<span className="sr-only">者</span>
+              </span>
+            )}
             <span className="min-w-0 truncate">{sessionTitle(s)}</span>
           </button>
         );

@@ -1,0 +1,6 @@
+{
+  "error": "Something went wrong",
+  "draw_failed": "{name} couldn't show the details: {error}",
+  "retry": "Retry",
+  "back_to": "Back to {title}"
+}

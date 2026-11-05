@@ -1,0 +1,17 @@
+{
+  "need_recipient": "Add a recipient",
+  "bad_addresses": "These don't look like email addresses: {addresses}",
+  "list_sep": ", ",
+  "sent": "Sent",
+  "send_failed": "Couldn't send: {error}",
+  "title_reply": "Reply",
+  "title_new": "New email",
+  "send": "Send",
+  "from": "From",
+  "no_account": "(No mail account)",
+  "to": "To",
+  "to_placeholder": "Separate with commas",
+  "cc": "Cc",
+  "subject": "Subject",
+  "body": "Message"
+}

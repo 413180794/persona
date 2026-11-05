@@ -666,6 +666,51 @@ def split_tabs_items():
 if os.environ.get("MOCK_SPLIT_TABS"):
     MACHINES[:] = [m for m in MACHINES if m["id"] in ("server", "nas")]
     SESSIONS[:] = split_tabs_sessions()
+
+# MOCK_TAB_PANES=1: one herdr tab holding three agents (#2320): the 发起者 in the tab's first pane (pane_index 0) and two
+# panes it split off (a Codex that stopped on a dialog on the computer, a Claude that is done), with herdr's real-looking
+# pane ids; beside it ordinary one-agent tabs and a tab whose top left pane is a shell (two peers, no 发起者). No cards,
+# so the overview files the three-agent tab under「停在电脑上」.
+PANES_LEAD = "7ab5e000-0000-4000-8000-000000000001"
+PANES_REVIEW = "7ab5e000-0000-4000-8000-000000000002"
+PANES_TESTS = "7ab5e000-0000-4000-8000-000000000003"
+PANES_DEPS = "7ab5e000-0000-4000-8000-000000000004"
+PANES_PEER_A = "7ab5e000-0000-4000-8000-000000000005"
+PANES_PEER_B = "7ab5e000-0000-4000-8000-000000000006"
+PANES_DOCS = "7ab5e000-0000-4000-8000-000000000007"
+
+
+def tab_panes_sessions():
+    return [
+        sess("server", PANES_REVIEW, "审一下登录重构的改动", "/home/me/code/app", "blocked", "needs_you", "app", 1, "1", 1, 1,
+             "有两处会吞掉错误，要我直接改吗？", agent="codex", pane_id="w1:p2E", pane_index=1),
+        sess("server", PANES_LEAD, "重构登录流程，把 token 刷新挪到中间件里", "/home/me/code/app", "working", "working", "app", 1, "1", 1, 0,
+             "开了两个窗格分头审改动、补测试，我在合中间件。", pane_id="w1:pW", pane_index=0, state_since=ago(minutes=12)),
+        sess("server", PANES_TESTS, "补刷新失败的测试", "/home/me/code/app", "done", "unread", "app", 1, "1", 1, 3,
+             "补了 6 个用例，都过了。", pane_id="w1:p31", pane_index=2),
+        sess("server", PANES_DEPS, "升级依赖", "/home/me/code/app", "working", "working", "app", 1, "deps", 2, 0,
+             "在跑全量测试。", pane_id="w1:p3A", pane_index=0, state_since=ago(minutes=4)),
+        sess("server", PANES_PEER_A, "对比两种缓存方案", "/home/me/code/app", "done", "unread", "app", 1, "cache", 3, 8,
+             "方案 A 写好了基准。", pane_id="w1:p40", pane_index=1),
+        sess("server", PANES_PEER_B, "缓存方案 B 的基准", "/home/me/code/app", "idle", "idle", "app", 1, "cache", 3, 30,
+             "方案 B 慢 12%。", pane_id="w1:p41", pane_index=2, seen_at=ago(minutes=20)),
+        sess("server", PANES_DOCS, "整理接口文档", "/home/me/code/docs", "idle", "idle", "docs", 2, "1", 1, 30,
+             "文档目录理好了。", seen_at=ago(minutes=20), pane_id="w2:pW", pane_index=0),
+        sess("nas", SPLIT_NAS, "备份脚本", "/home/me/code/backup", "idle", "idle", "backup", 1, "1", 1, 200,
+             "备份改成增量了。", seen_at=ago(minutes=190)),
+    ]
+
+
+def tab_panes_items():
+    return {PANES_LEAD: [it("user", "text", 15, text="把 token 刷新挪到中间件里，开两个窗格分别审改动和补测试"),
+                         it("assistant", "text", 0, text="开了两个窗格分头审改动、补测试，我在合中间件。")],
+            PANES_REVIEW: [it("user", "text", 10, text="审一下登录重构的改动"), it("assistant", "text", 1, text="有两处会吞掉错误，要我直接改吗？")],
+            PANES_TESTS: [it("user", "text", 10, text="补刷新失败的测试"), it("assistant", "text", 3, text="补了 6 个用例，都过了。")]}
+
+
+if os.environ.get("MOCK_TAB_PANES"):
+    MACHINES[:] = [m for m in MACHINES if m["id"] in ("server", "nas")]
+    SESSIONS[:] = tab_panes_sessions()
 ORIG_STATE = {s["session_id"]: (s["state"], s["status"]) for s in SESSIONS}
 SEEN = []  # session ids marked seen (GET /mock/seen)
 SESSION_CLOSE = {"fail": False, "attempts": [], "closed": [], "interactions": []}
@@ -5010,6 +5055,10 @@ if os.environ.get("MOCK_EXTENSION_CARDS") == "1":
 
 if os.environ.get("MOCK_SPLIT_TABS"):
     ITEMS.update(split_tabs_items())
+if os.environ.get("MOCK_TAB_PANES"):
+    ITEMS.update(tab_panes_items())
+    INTERACTIONS[:] = []
+    MOCK_INTERACTIONS[:] = []
 if os.environ.get("MOCK_BOTMUX"):
     ITEMS[BOTMUX_BLOCKED] = [it("user", "text", 5, text="把周报导出改成按部门分 sheet")] + [
         it("assistant", "text", 3, text="导出脚本改好了，正在跑全量。")]
@@ -11292,6 +11341,7 @@ def chat_cards_mock():
 
 if os.environ.get("MOCK_CHAT_CARDS") == "1":
     chat_cards_mock()
+MOCK_HELP.append("MOCK_TAB_PANES=1  一个 herdr 标签页里三个 Agent（#2320）：发起者（pane_index 0，工作中）和它分出的两个窗格（Codex 停在电脑上的对话框、Claude 做完未看），旁边是一个 Agent 的普通标签页和左上是 shell 的两个平级 Agent；没有卡片")
 MOCK_HELP.append("MOCK_CHAT_CARDS=1  （配合 MOCK_SPLIT_TABS=1）server 上 w1:t1 那个工作中的 Claude 同时有计划、提问、授权三张卡，两条排队消息，/loop 和一个后台任务：手机上输入区最挤的样子（#1996）")
 
 # ---------- MOCK_PLUGINS: a hub from #1844 on (docs/extensions.md「命名和兼容」) ----------

@@ -322,6 +322,9 @@ type Layout struct {
 	Agents []Agent
 	// Panes is every pane, agent or not (Agent ""): where agents the host does not detect (TRAEX) are found.
 	Panes []Agent
+	// PaneIndex is each pane's 0-based place in its slot by layout, top left first (herdr: its split tree), keyed by
+	// PaneID; nil when the host does not say where its panes sit (docs/agent-states.md「一个 tab 里的几个 pane」).
+	PaneIndex map[string]int
 }
 
 // Created is what a Launcher opened.

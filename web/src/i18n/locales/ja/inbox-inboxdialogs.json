@@ -1,0 +1,23 @@
+{
+  "title_moment": "Moments にコメント",
+  "title_comment": "{title}にコメント",
+  "title_reply_to": "{title}に返信",
+  "title_reply_mail": "メールに返信",
+  "send": "送信",
+  "view_process": "AI 分身の対応内容を表示",
+  "changes_on_send": "送信時に一緒に変更",
+  "reply_goes": "返信：{how}。",
+  "reply_label": "返信内容",
+  "reply_placeholder": "返信を入力…",
+  "drafting": "AI が下書き中…",
+  "instruction_placeholder": "AI に修正を依頼：トーン、要点…",
+  "instruction_label": "AI に修正を依頼",
+  "rewrite": "書き直す",
+  "handed_to_persona": "Persona に任せました",
+  "handoff_title": "AI に任せる",
+  "also_done": "対応済みにする",
+  "ask_label": "依頼内容",
+  "target_label": "任せる相手",
+  "target_persona": "Persona（新しいチャット）",
+  "target_persona_sub": "Persona と新しいチャットを始める"
+}

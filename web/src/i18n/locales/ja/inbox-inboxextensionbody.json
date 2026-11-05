@@ -1,0 +1,6 @@
+{
+  "error": "エラーが発生しました",
+  "draw_failed": "{name}で詳細を表示できませんでした：{error}",
+  "retry": "再試行",
+  "back_to": "{title}に戻る"
+}

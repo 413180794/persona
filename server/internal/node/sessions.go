@@ -962,7 +962,9 @@ type layout struct {
 	slots  map[string]host.Slot
 	// panes is every pane of the snapshot, agent or not: the terminal browser lists shells from it (panes.go).
 	panes []host.Agent
-	at    time.Time
+	// paneIndex is each pane's place in its slot (host.Layout.PaneIndex), nil when the host does not say.
+	paneIndex map[string]int
+	at        time.Time
 }
 
 // refreshHosts takes one snapshot of every host, or of only the hosts given: agents plus the space / slot names shown
@@ -1053,7 +1055,7 @@ func (n *Node) lookAt(ctx context.Context, h host.Host, epoch uint64) (agents []
 		}
 		return agents, false, nil
 	}
-	l := layout{spaces: map[string]host.Space{}, slots: map[string]host.Slot{}, panes: snap.Panes, at: time.Now()}
+	l := layout{spaces: map[string]host.Space{}, slots: map[string]host.Slot{}, panes: snap.Panes, paneIndex: snap.PaneIndex, at: time.Now()}
 	for _, w := range snap.Spaces {
 		l.spaces[w.ID] = w
 	}
@@ -1163,6 +1165,7 @@ func (n *Node) placeIn(s *proto.Session, a host.Agent) {
 	l := n.layouts[kind]
 	w, wok := l.spaces[a.WorkspaceID]
 	t, tok := l.slots[a.TabID]
+	pi, piok := l.paneIndex[a.PaneID]
 	n.mu.Unlock()
 	s.SpaceKind, s.SpaceID, s.SlotID = kind, a.WorkspaceID, a.TabID
 	if wok {
@@ -1170,6 +1173,10 @@ func (n *Node) placeIn(s *proto.Session, a host.Agent) {
 	}
 	if tok {
 		s.SlotName, s.SlotIndex = t.Label, t.Number
+	}
+	s.PaneIndex = nil
+	if piok {
+		s.PaneIndex = &pi
 	}
 	if a.Tokens != nil && a.Tokens["persona_from"] != "" {
 		s.SpawnFrom = a.Tokens["persona_from"]
@@ -1707,6 +1714,12 @@ func listKey(list []proto.Session) string {
 			fmt.Fprintf(&b, "activity:%s/%d\n", s.Activity, unixOf(s.ActivityAt))
 		}
 		fmt.Fprintf(&b, "attention:%q/%q/%s\n", s.AttentionReason, s.FailureReason, s.ExternalURL) // a new reason or link alone is a change
+		// The pane's place in its tab, present or not: a swap or a closed shell pane changes only this (and 0 is not none).
+		pane := "none"
+		if s.PaneIndex != nil {
+			pane = fmt.Sprint(*s.PaneIndex)
+		}
+		fmt.Fprintf(&b, "pane:%s/%d/%s\n", s.SlotID, s.SlotIndex, pane)
 		if c := s.Compaction; c != nil {
 			fmt.Fprintf(&b, "compaction:%s/%d\n", c.State, c.StartedAt.Unix())
 		}

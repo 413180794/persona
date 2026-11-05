@@ -1,0 +1,10 @@
+{
+  "titled": "{title}：{text}",
+  "kind_bar": "棒グラフ",
+  "kind_line": "折れ線グラフ",
+  "summary_other": "{kind}、{count}点",
+  "summary_series_other": "{kind}、{count}点、{series}",
+  "series_sep": "、",
+  "label": "ラベル",
+  "value": "値"
+}

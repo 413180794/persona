@@ -1,0 +1,18 @@
+{
+  "title": "ピン留めメッセージ",
+  "recheck": "最新の一覧を表示",
+  "reload": "再読み込み",
+  "loading": "ピン留めメッセージを読み込み中",
+  "empty_title": "ピン留めメッセージはまだありません",
+  "empty_hint": "チャットのメッセージにポインターを合わせて「Pin」をクリックしてください。",
+  "total_other": "ピン{count}件",
+  "retry": "再試行",
+  "me": "自分",
+  "unknown": "不明",
+  "remove_confirm": "このピンを外しますか？",
+  "remove_hint": "元のメッセージはチャットに残ります。",
+  "remove": "ピンを外す",
+  "view_in_chat": "チャットで表示",
+  "encrypted": "暗号化メッセージ",
+  "added_by": "{name}が追加"
+}

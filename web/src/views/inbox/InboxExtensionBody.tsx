@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError, errorText } from "../../lib/api";
 import type { InboxItem } from "../../lib/inbox";
 import type { UIPlace } from "../../lib/extension-ui";
+import { t } from "../../i18n";
 import { Button, cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ExtensionUI } from "../settings/ExtensionView";
@@ -20,7 +21,7 @@ type Fallback = "" | { quiet: true } | { error: string };
 /** How a failed first draw falls back: refused or nothing to draw (403 / 404) quietly, anything else (the extension failed) with why. */
 export function fallbackOf(e: unknown): Exclude<Fallback, ""> {
   if (e instanceof ApiError && (e.status === 403 || e.status === 404)) return { quiet: true };
-  return { error: errorText(e) || "出错了" };
+  return { error: errorText(e) || t("inbox-inboxextensionbody.error") };
 }
 
 /** `onOwn`: whether the item's own body is drawn now (the header's Pin button works on the chat it draws). */
@@ -38,7 +39,7 @@ export function InboxExtensionBody({ item, place, own, onOwn }: { item: InboxIte
         <div role="status" className="flex shrink-0 items-center gap-2 border-b border-line bg-inset px-4 py-1.5 sm:px-6">
           <Icon name="extension" size={12} className="shrink-0 text-ink-3" />
           <p className="min-w-0 flex-1 truncate text-[12px] text-ink-3" title={fallback.error}>
-            {place.extension_name || place.title}的详情没画出来：{fallback.error}
+            {t("inbox-inboxextensionbody.draw_failed", { name: place.extension_name || place.title, error: fallback.error })}
           </p>
           <Button
             tone="quiet"
@@ -48,7 +49,7 @@ export function InboxExtensionBody({ item, place, own, onOwn }: { item: InboxIte
               setN((x) => x + 1);
             }}
           >
-            重试
+            {t("inbox-inboxextensionbody.retry")}
           </Button>
         </div>
         {own()}
@@ -61,7 +62,7 @@ export function InboxExtensionBody({ item, place, own, onOwn }: { item: InboxIte
         <div className="flex min-h-0 flex-1 flex-col" data-inbox-source>
           <div className="flex shrink-0 items-center border-b border-line bg-inset px-2 py-1 sm:px-4">
             <Button tone="quiet" icon="chevronLeft" onClick={() => setSource(false)}>
-              回到{place.title}
+              {t("inbox-inboxextensionbody.back_to", { title: place.title })}
             </Button>
           </div>
           {own()}

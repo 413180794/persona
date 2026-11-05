@@ -28,6 +28,16 @@ describe("PaneTabs", () => {
     expect(tabs[1]).toContain('aria-label="需要你"');
   });
 
+  it("marks the 发起者, the agent in the tab's first pane (#2320)", () => {
+    const html = renderToStaticMarkup(<PaneTabs sessions={[{ ...pane("a", "claude", "x"), pane_index: 0 }, { ...pane("b", "codex", "y"), pane_index: 1 }]} current="b" onSelect={noop} />);
+    const tabs = html.split('role="tab"').slice(1);
+    expect(tabs[0]).toContain("发起");
+    expect(tabs[0]).toContain("（发起者）");
+    expect(tabs[1]).not.toContain("发起");
+    // peers (no pane 0 among them): no mark
+    expect(renderToStaticMarkup(<PaneTabs sessions={[pane("a", "claude", "x"), pane("b", "codex", "y")]} current="a" onSelect={noop} />)).not.toContain("发起");
+  });
+
   it("names an agent the app does not know by its label", () => {
     const html = renderToStaticMarkup(<PaneTabs sessions={[pane("a", "claude", "x"), { ...pane("b", "dsh", "y"), agent_label: "DSH" }]} current="a" onSelect={noop} />);
     expect(html).toContain("DSH");

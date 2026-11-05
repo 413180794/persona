@@ -1,0 +1,19 @@
+{
+  "title": "Pinned messages",
+  "recheck": "See latest list",
+  "reload": "Reload",
+  "loading": "Loading pinned messages",
+  "empty_title": "No pinned messages yet",
+  "empty_hint": "Hover over a message in the chat and click Pin.",
+  "total_one": "{count} pin",
+  "total_other": "{count} pins",
+  "retry": "Retry",
+  "me": "Me",
+  "unknown": "Unknown",
+  "remove_confirm": "Remove this pin?",
+  "remove_hint": "The message stays in the chat.",
+  "remove": "Unpin",
+  "view_in_chat": "View in chat",
+  "encrypted": "Encrypted",
+  "added_by": "Pinned by {name}"
+}

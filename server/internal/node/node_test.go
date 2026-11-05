@@ -349,6 +349,26 @@ func TestListKeyIgnoresSmallTimeChurn(t *testing.T) {
 	}
 }
 
+// A layout change alone (panes swapped, a shell pane before an agent closed) moves only pane_index: it is pushed, and
+// an index of 0 is not the same as none.
+func TestListKeySeesPaneIndex(t *testing.T) {
+	at := func(i int) *int { return &i }
+	base := proto.Session{SessionID: "s1", Status: proto.StatusIdle, Title: "t", SlotID: "w1:t1",
+		UpdatedAt: time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)}
+	none, zero, one, zeroAgain := base, base, base, base
+	zero.PaneIndex, one.PaneIndex, zeroAgain.PaneIndex = at(0), at(1), at(0)
+	key := func(s proto.Session) string { return listKey([]proto.Session{s}) }
+	if key(none) == key(zero) {
+		t.Fatal("absent and 0 must differ (a shell pane before the agent closed)")
+	}
+	if key(zero) == key(one) {
+		t.Fatal("an index-only change must be pushed (panes swapped)")
+	}
+	if key(zero) != key(zeroAgain) {
+		t.Fatal("the same index is no change")
+	}
+}
+
 func TestLastLines(t *testing.T) {
 	if got := lastLines("a\nb\nc\nd\n", 2); got != "c\nd" {
 		t.Fatalf("got %q", got)

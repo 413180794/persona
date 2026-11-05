@@ -25,15 +25,51 @@ export function summaryState(list: readonly Session[]): AgentState | undefined {
   return s && stateOf(s);
 }
 
-// herdr numbers a tab's panes ("w9:p1", "w9:p2"); other hosts' ids ("botmux:<uuid>") carry no order and go last.
+// herdr counts its panes up in base 36 ("w4R:pW", "w4R:p2E", "w4R:p3A"): the order they were opened in. Herdr App's
+// terminals are numbered in decimal ("herdr-core:t1", "herdr-core:t2"). Other hosts' ids ("botmux:<uuid>") carry no
+// order and go last.
 function paneNumber(s: Session): number {
-  const m = s.pane_id?.match(/:p(\d+)$/) ?? s.pane_id?.match(/(\d+)$/);
-  return m ? Number(m[1]) : Number.MAX_SAFE_INTEGER;
+  const herdr = s.pane_id?.match(/:p([0-9A-Za-z]+)$/);
+  if (herdr) {
+    const n = parseInt(herdr[1]!, 36);
+    if (Number.isFinite(n)) return n;
+  }
+  const numbered = s.pane_id?.match(/(\d+)$/);
+  return numbered ? Number(numbered[1]) : Number.MAX_SAFE_INTEGER;
 }
 
-/** A tab's panes in their order: the pane's number in its id, then the session id. */
+const placeOf = (s: Session) => s.pane_index ?? Number.MAX_SAFE_INTEGER;
+
+/** A tab's panes in their order: their place in the tab's layout (`pane_index`, #2320; panes without one after), then
+ *  the order herdr opened them in (the number in the pane id), then the session id. */
 export function paneOrder(a: Session, b: Session): number {
-  return paneNumber(a) - paneNumber(b) || a.session_id.localeCompare(b.session_id);
+  return placeOf(a) - placeOf(b) || paneNumber(a) - paneNumber(b) || a.session_id.localeCompare(b.session_id);
+}
+
+/** The tab's 发起者 (#2320): the agent in the tab's first pane (`pane_index` 0, top left, the one the others were split
+ *  from). None when the tab has one agent, or that pane is a shell or not placed: the agents are then peers. */
+export function launcherOf(panes: readonly Session[]): Session | undefined {
+  return panes.length > 1 ? panes.find((s) => s.pane_index === 0) : undefined;
+}
+
+/** A tab's agents as one entry (the overview's task list): the panes in order, the 发起者 if any, the most urgent. */
+export interface TabGroup {
+  key: string;
+  sessions: Session[];
+  launcher?: Session;
+  lead: Session;
+  state: AgentState;
+}
+
+/** `sessions` folded by tab (same machine, space and slot), each tab's panes in pane order; a session without a slot is
+ *  an entry of its own. Entries keep the order of their first session in `sessions`. */
+export function tabGroups(sessions: readonly Session[]): TabGroup[] {
+  const byTab = groupBy([...sessions], (s) => (s.slot_id && s.space_id ? `${s.machine_id}/${s.space_kind ?? ""}:${s.space_id}/${s.slot_id}` : `s:${s.machine_id}/${s.session_id}`));
+  return [...byTab].map(([key, panes]) => {
+    panes.sort(paneOrder);
+    const lead = mostUrgent(panes)!;
+    return { key, sessions: panes, launcher: launcherOf(panes), lead, state: stateOf(lead) };
+  });
 }
 
 const sameSpace = (a: Session, b: Session) => a.machine_id === b.machine_id && (a.space_kind ?? "") === (b.space_kind ?? "") && a.space_id === b.space_id;
@@ -44,6 +80,61 @@ export function tabSessions(all: Session[], s: Session): Session[] {
   const tab = all.filter((x) => !x.assistant && sameSpace(x, s) && x.slot_id === s.slot_id && (x.session_id === s.session_id || stateOf(x) !== "offline"));
   if (!tab.some((x) => x.session_id === s.session_id)) tab.push(s);
   return tab.sort(paneOrder);
+}
+
+type HomeBucket = "needs" | "working" | "unread";
+
+// How the overview orders a bucket's rows (and so which of a tab's equally urgent panes speaks for it): the longest
+// working first, by when it started; the others the latest first, by when they last changed. A negative `before`
+// puts `a` first.
+const BUCKET_ORDER: Record<HomeBucket, (a: Session, b: Session) => number> = {
+  working: (a, b) => (a.state_since ?? "").localeCompare(b.state_since ?? ""),
+  needs: (a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
+  unread: (a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
+};
+
+/** The overview's task rows (#2320): the live agents (`sessions` without the offline ones) folded by tab, filed under
+ *  the most urgent state among them — needs you, working, done and not seen; a tab where all is seen is not listed.
+ *  An agent waiting on one of `interactions` is that card's (listed above them), so it does not count towards its tab's
+ *  state, though the tab still lists it. Each tab's `lead` is, of its panes in that state, the one the bucket orders
+ *  first (the longest working, the latest to ask or finish): its time and words are the row's, and the rows are
+ *  ordered by it the way single agents are — working tabs the longest working first, the others the latest first. */
+export function homeTaskGroups(sessions: readonly Session[], interactions: readonly { machine_id: string; session_id: string }[]): Record<HomeBucket, TabGroup[]> {
+  const asked = new Set(interactions.map((i) => `${i.machine_id}/${i.session_id}`));
+  const carded = (s: Session) => stateOf(s) === "needs_you" && asked.has(`${s.machine_id}/${s.session_id}`);
+  const out: Record<HomeBucket, TabGroup[]> = { needs: [], working: [], unread: [] };
+  for (const g of tabGroups(sessions.filter((s) => !s.assistant && stateOf(s) !== "offline"))) {
+    const eligible = g.sessions.filter((s) => !carded(s));
+    const state = summaryState(eligible);
+    const bucket: HomeBucket | undefined = state === "needs_you" ? "needs" : state === "working" || state === "unread" ? state : undefined;
+    if (!bucket) continue;
+    // stable: among panes with the same time, the first in pane order
+    const lead = eligible.filter((s) => stateOf(s) === state).sort(BUCKET_ORDER[bucket])[0]!;
+    out[bucket].push({ ...g, lead, state: state! });
+  }
+  for (const b of Object.keys(out) as HomeBucket[]) out[b].sort((x, y) => BUCKET_ORDER[b](x.lead, y.lead));
+  return out;
+}
+
+/** What the overview shows (Home): the task rows (homeTaskGroups); every unread agent, which 「全部标为已读」 marks —
+ *  all of them, as before tabs were rows, though some sit in tabs filed under needs-you or working — and where that
+ *  action goes: 做完了，还没看's header, beside the summary when that section is empty, nowhere when none is unread;
+ *  and whether there is nothing to do (no card waiting either). */
+export function homeOverview(sessions: readonly Session[], interactions: readonly { machine_id: string; session_id: string }[]) {
+  const groups = homeTaskGroups(sessions, interactions);
+  const unread = sessions.filter((s) => !s.assistant && stateOf(s) === "unread");
+  const markAllAt: "section" | "summary" | undefined = !unread.length ? undefined : groups.unread.length ? "section" : "summary";
+  const quiet = !interactions.length && !groups.needs.length && !groups.working.length && !groups.unread.length;
+  return { groups, unread, markAllAt, quiet };
+}
+
+/** The sidebar keys a multi-agent tab's rows register under (the gliding highlight and keeping the open row in view):
+ *  opened up, the tab's row is its own (`tabKey`) and each pane's row its agent's (`paneKeys`); folded (`shut`), the
+ *  tab's row stands for its open pane (`activeKey`, when one of them is) and the pane rows, still mounted in the
+ *  closed collapse, register under none (undefined) so no hidden row takes the visible one's place. */
+export function tabRowKeys(tabKey: string, paneKeys: readonly string[], activeKey: string, shut: boolean): { row: string; panes: (string | undefined)[] } {
+  const holds = paneKeys.includes(activeKey);
+  return { row: shut && holds ? activeKey : tabKey, panes: paneKeys.map((k) => (shut ? undefined : k)) };
 }
 
 /** Where a pane opens: its tab (`/t/…`) when it has one, else the session itself (`/s/…`). */
@@ -84,7 +175,12 @@ export interface HerdrTab {
   slotId: string;
   /** `#N` or the tab's name (format.ts tabLabel); empty when the host gives neither. */
   label: string;
+  /** Whether the tab's row is opened up to its agents, kept by 机器/空间名/tab 的编号/tab 名 like the space's fold. */
+  foldKey: string;
+  /** In pane order (paneOrder). */
   sessions: Session[];
+  /** The agent the others were split from (launcherOf), when the tab says. */
+  launcher?: Session;
   /** The pane the row speaks for and opens on: the most urgent. */
   lead: Session;
   state: AgentState;
@@ -228,7 +324,13 @@ function buildSpace(key: string, machineId: string, list: Session[], pins?: Agen
   const tabs: HerdrTab[] = [...slots].map(([slotId, panes]) => {
     panes.sort(paneOrder);
     const lead = mostUrgent(panes)!;
-    return { key: `${key}/${slotId}`, spaceId: first.space_id!, slotId, label: tabLabel(panes[0]!), sessions: panes, lead, state: stateOf(lead) };
+    const label = tabLabel(panes[0]!);
+    // by the tab's number, not its name: two tabs may share a name, a tab is renamed (the hub names a `#2` after its
+    // task, people rename them), and herdr keeps the numbers across a restart (its ids it does not); a host without
+    // numbers, by the tab's id
+    const place = panes[0]!.slot_index ?? slotId;
+    const foldKey = `tree:${machineId}/${name}/${place}`;
+    return { key: `${key}/${slotId}`, spaceId: first.space_id!, slotId, label, foldKey, sessions: panes, launcher: launcherOf(panes), lead, state: stateOf(lead) };
   });
   const slotIndex = (t: HerdrTab) => t.sessions[0]!.slot_index ?? Number.MAX_SAFE_INTEGER;
   tabs.sort((a, b) => slotIndex(a) - slotIndex(b) || a.slotId.localeCompare(b.slotId));

@@ -12,6 +12,7 @@ import { machineWithHub } from "../../lib/mesh";
 import { href, onLinkClick } from "../../lib/router";
 import { useStore } from "../../lib/store";
 import type { Interaction } from "../../lib/types";
+import { t } from "../../i18n";
 import { Collapse, cx, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { DraftDialog } from "./InboxDialogs";
@@ -59,7 +60,7 @@ export function InboxList({ selected }: { selected?: string }) {
   // 全部标为已处理: the open items the list shows (its filters and search); the agents waiting are not items.
   const openInView = kind === "agent" ? [] : [...s.tiers.action, ...s.tiers.fyi, ...s.tiers.noise];
   const filterNames = [
-    source === "feishu" ? "飞书" : connectors.find((c) => c.id === source)?.name ?? mailShort(chips.find((a) => a.id === source)?.email ?? ""),
+    source === "feishu" ? t("inbox-inboxlist.source_lark") : connectors.find((c) => c.id === source)?.name ?? mailShort(chips.find((a) => a.id === source)?.email ?? ""),
     KIND_FILTERS.find((k) => k.key === kind)?.label ?? "",
   ];
   const scope = bulkScope(filterNames, query, openInView.length);
@@ -84,14 +85,14 @@ export function InboxList({ selected }: { selected?: string }) {
       <div className="mx-auto max-w-[760px] px-3 pt-3 pb-16 sm:px-4">
         <label className="flex h-8 items-center gap-2 rounded-control bg-surface px-2.5 shadow-btn focus-within:shadow-[inset_0_0_0_1px_var(--accent)]">
           <Icon name="search" size={13} stroke={2} className="shrink-0 text-ink-3" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索标题、发件人、内容" aria-label="搜索收件箱" className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3" />
-          {query && <IconButton icon="x" label="清除" size={20} iconSize={11} onClick={() => setQuery("")} />}
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("inbox-inboxlist.search_placeholder")} aria-label={t("inbox-inboxlist.search_label")} className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3" />
+          {query && <IconButton icon="x" label={t("inbox-inboxlist.clear")} size={20} iconSize={11} onClick={() => setQuery("")} />}
         </label>
         {/* A phone: the chips in one row that scrolls sideways, 全部标为已处理 in the ⋯ menu at its end. */}
         <div className="mt-2.5 flex items-center gap-1.5">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 max-sm:-my-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:py-1 max-sm:scrollbar-none max-sm:[&>*]:shrink-0" role="toolbar" aria-label="筛选">
-          <Chip on={!source && !kind} onClick={() => { setSource(""); setKind(""); }}>全部</Chip>
-          <Chip on={source === "feishu"} onClick={() => pickSource("feishu")}>飞书</Chip>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 max-sm:-my-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:py-1 max-sm:scrollbar-none max-sm:[&>*]:shrink-0" role="toolbar" aria-label={t("inbox-inboxlist.filters")}>
+          <Chip on={!source && !kind} onClick={() => { setSource(""); setKind(""); }}>{t("inbox-inboxlist.all")}</Chip>
+          <Chip on={source === "feishu"} onClick={() => pickSource("feishu")}>{t("inbox-inboxlist.source_lark")}</Chip>
           {chips.map((a) => (
             <Chip key={a.id} on={source === a.id} onClick={() => pickSource(a.id)} title={a.email}>{mailShort(a.email)}</Chip>
           ))}
@@ -105,20 +106,20 @@ export function InboxList({ selected }: { selected?: string }) {
           <button
             type="button"
             disabled={!openInView.length}
-            title={`全部标为已处理：${scope}`}
+            title={t("inbox-inboxlist.mark_all_done_scope", { scope })}
             onClick={() => void setAllDone(openInView, true)}
             className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-control bg-surface px-2.5 text-[12px] whitespace-nowrap text-ink-2 shadow-btn transition-colors duration-150 hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-45 max-sm:hidden"
           >
             <Icon name="check" size={12} stroke={2.6} />
-            全部标为已处理
+            {t("inbox-inboxlist.mark_all_done")}
             <span className="text-ink-3">{scope}</span>
           </button>
         </div>
-        <IconButton icon="more" label="更多操作" onClick={more.open} active={Boolean(more.anchor)} className="sm:hidden" />
+        <IconButton icon="more" label={t("inbox-inboxlist.more")} onClick={more.open} active={Boolean(more.anchor)} className="sm:hidden" />
         </div>
         {more.anchor && (
           <Menu anchor={more.anchor} onClose={more.close} align="right" width={240}
-            items={[{ key: "all-done", label: "全部标为已处理", hint: scope, icon: "check", disabled: !openInView.length, onSelect: () => void setAllDone(openInView, true) }]} />
+            items={[{ key: "all-done", label: t("inbox-inboxlist.mark_all_done"), hint: scope, icon: "check", disabled: !openInView.length, onSelect: () => void setAllDone(openInView, true) }]} />
         )}
 
         <TriageBanner triage={triage} />
@@ -129,18 +130,18 @@ export function InboxList({ selected }: { selected?: string }) {
             <span className="flex size-10 items-center justify-center rounded-full bg-green-tint text-green">
               <Icon name="check" size={17} stroke={2.6} />
             </span>
-            <p className="text-[13.5px] font-medium text-ink">{query ? "没有匹配的" : "都处理完了"}</p>
-            <p className="text-[12.5px] text-ink-3">{query ? "换个关键词试试。" : "新的飞书消息和邮件会出现在这里。"}</p>
+            <p className="text-[13.5px] font-medium text-ink">{query ? t("inbox-inboxlist.empty_no_match") : t("inbox-inboxlist.empty_all_done")}</p>
+            <p className="text-[12.5px] text-ink-3">{query ? t("inbox-inboxlist.empty_no_match_hint") : t("inbox-inboxlist.empty_all_done_hint")}</p>
           </div>
         )}
 
-        {TIERS.map((t) => {
-          const list = s.tiers[t.key];
-          const waiting = t.key === "action" ? agents : [];
+        {TIERS.map((tier) => {
+          const list = s.tiers[tier.key];
+          const waiting = tier.key === "action" ? agents : [];
           if (!list.length && !waiting.length) return null;
-          const clear = t.key === "fyi" ? "全部看过" : t.key === "noise" ? "全部清除" : undefined;
+          const clear = tier.key === "fyi" ? t("inbox-inboxlist.clear_fyi") : tier.key === "noise" ? t("inbox-inboxlist.clear_noise") : undefined;
           return (
-            <Section key={t.key} k={t.key} title={t.title} count={list.length + waiting.length} open={open.has(t.key)} onToggle={() => toggle(t.key)}
+            <Section key={tier.key} k={tier.key} title={tier.title} count={list.length + waiting.length} open={open.has(tier.key)} onToggle={() => toggle(tier.key)}
               action={clear && list.length ? { label: clear, run: () => setAllDone(list, true) } : undefined}>
               {waiting.map((ix) => <AgentRow key={ix.id} ix={ix} />)}
               {list.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={() => setEditing(it)} />)}
@@ -148,11 +149,11 @@ export function InboxList({ selected }: { selected?: string }) {
           );
         })}
         {s.done.length > 0 && (
-          <Section k="done" title="已处理" count={s.done.length} open={open.has("done")} onToggle={() => toggle("done")}>
+          <Section k="done" title={t("inbox-inboxlist.done")} count={s.done.length} open={open.has("done")} onToggle={() => toggle("done")}>
             {s.done.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={() => setEditing(it)} />)}
           </Section>
         )}
-        {loading && loaded && <span className="sr-only">正在刷新</span>}
+        {loading && loaded && <span className="sr-only">{t("inbox-inboxlist.refreshing")}</span>}
       </div>
       {editing && <DraftDialog item={editing} onClose={() => setEditing(null)} />}
     </div>
@@ -198,7 +199,7 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1.5">
             <span className={cx("truncate text-[13.5px]", done ? "text-ink-2" : "font-semibold text-ink")}>{translated?.subject || it.title}</span>
-            {translated && <span role="img" aria-label="已翻译" title="已翻译" className="shrink-0 text-ink-3"><Icon name="translate" size={12} /></span>}
+            {translated && <span role="img" aria-label={t("inbox-inboxlist.translated")} title={t("inbox-inboxlist.translated")} className="shrink-0 text-ink-3"><Icon name="translate" size={12} /></span>}
             {label && <Tag urgent={labelIsUrgent(it)}>{label}</Tag>}
             <span className="flex-1" />
             <span className="shrink-0 text-[11.5px] text-ink-3 tabular-nums group-focus-within:invisible group-hover:invisible">{shortTime(it.updated_at)}</span>
@@ -226,7 +227,7 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
               <Glyph name="reply" size={12} className="shrink-0 -scale-y-100 text-ink-3" />
               <span className="min-w-0 truncate">{first.title}</span>
               {first.status?.[0] && <StatusMenu it={it} row={first} status={first.status[0]} />}
-              {rows.length > 1 && <span className="shrink-0 text-ink-3">+{rows.length - 1} 行</span>}
+              {rows.length > 1 && <span className="shrink-0 text-ink-3">{t("inbox-inboxlist.more_rows", { count: rows.length - 1 })}</span>}
             </div>
           )}
           {draft && <DraftCard it={it} onEdit={onEdit} onSend={() => void sendReply(it, draft, it.agent?.changes ?? [])} />}
@@ -237,10 +238,10 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
         type="button"
         onClick={() => void setDone(it, !done)}
         className="absolute top-2.5 right-2.5 flex h-6 items-center gap-1 rounded-[7px] bg-surface px-2 text-[11.5px] font-medium whitespace-nowrap text-ink-2 opacity-0 shadow-btn transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100"
-        title={done ? "移回收件箱" : "标为已处理"}
+        title={done ? t("inbox-inboxlist.move_back_title") : t("inbox-inboxlist.mark_done_title")}
       >
         {done ? <Glyph name="undo" size={12} stroke={2.2} /> : <Icon name="check" size={12} stroke={2.6} />}
-        {done ? "移回" : "已处理"}
+        {done ? t("inbox-inboxlist.move_back") : t("inbox-inboxlist.done")}
       </button>
     </div>
   );

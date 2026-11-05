@@ -155,6 +155,9 @@ export interface Session {
   slot_id?: string;
   slot_name?: string;
   slot_index?: number;
+  /** The pane's 0-based place in its tab by layout, top left first (#2320): 0 is the pane the others were split from,
+   *  the tab's 发起者 when an agent runs there. Absent when the host does not say (older nodes, hosts without layouts). */
+  pane_index?: number;
   /** The host's pane, tab and workspace ids (herdr: bare "w9:p1"; other hosts "<kind>:<id>"). Workspace ids change
    *  across a herdr restart: never key anything stored by them (pins and folds go by 机器/空间名). */
   pane_id?: string;

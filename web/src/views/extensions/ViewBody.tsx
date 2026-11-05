@@ -12,6 +12,7 @@ import {
   type RowIcon, type UIAction, type UIItem, type UIMore, type UISection, type UITone, type UIView,
 } from "../../lib/extension-ui";
 import { ExtensionChart } from "./ExtensionChart";
+import { t } from "../../i18n";
 import { Button, cx, EASE, Spinner } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Pill, Switch } from "../settings/SettingsParts";
@@ -120,7 +121,7 @@ function MoreLine({ more, busy, onMore, divided }: { more: UIMore; busy: string;
       className={cx("flex w-full items-center justify-center gap-2 px-4 py-2.5 text-[12.5px] whitespace-nowrap text-accent-ink transition-colors enabled:hover:bg-hover disabled:text-ink-3", divided && "border-t border-line")}
     >
       {pending && <Spinner />}
-      <span className="truncate">{pending ? "正在加载…" : more.title || "加载更多"}</span>
+      <span className="truncate">{pending ? t("extensions-viewbody.loading") : more.title || t("extensions-viewbody.load_more")}</span>
     </button>
   );
 }
@@ -171,7 +172,7 @@ function Item({ item: it, compact, values, setValue, busy, onPress, onChoose }: 
       return (
         <div className={cx("flex items-center justify-center gap-2 px-4 text-[12.5px] text-ink-3", compact ? "py-3" : "py-6")}>
           <Spinner />
-          <span className="truncate">{it.title || "正在加载…"}</span>
+          <span className="truncate">{it.title || t("extensions-viewbody.loading")}</span>
         </div>
       );
     case "stat_grid":

@@ -2,6 +2,7 @@ package node
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -134,6 +135,49 @@ func TestHerdrListPlacesAgentsInSpacesAndSlots(t *testing.T) {
 	f.reset()
 	check(cachedSessions(n))
 	assertTrace(t, f.trace(), nil)
+}
+
+// The snapshot's layouts place each agent's pane in its tab: pane_index is its place, top left first; a pane the
+// layouts leave out has none.
+func TestHerdrListGivesPaneIndexFromLayouts(t *testing.T) {
+	n, f, _ := herdrNode(t)
+	snap := snapshot(
+		[]any{map[string]any{"workspace_id": "w1", "label": "repo", "number": 1}},
+		[]any{
+			map[string]any{"tab_id": "w1:t1", "workspace_id": "w1", "label": "split", "number": 1},
+			map[string]any{"tab_id": "w1:t2", "workspace_id": "w1", "label": "solo", "number": 2},
+		},
+		[]any{
+			claudeAgent(sidB, proto.StatusWorking, "w1:p2E", "w1:t1", "w1", "/tmp/repo", "branch"),
+			claudeAgent(sidA, proto.StatusIdle, "w1:pW", "w1:t1", "w1", "/tmp/repo", "launcher"),
+			claudeAgent(sidC, proto.StatusIdle, "w1:pX", "w1:t2", "w1", "/tmp/repo", "missing from layouts"),
+		},
+		nil)
+	rect := func(x, y, w, h int) map[string]any { return map[string]any{"x": x, "y": y, "width": w, "height": h} }
+	snap["snapshot"].(map[string]any)["layouts"] = []any{map[string]any{
+		"tab_id": "w1:t1", "workspace_id": "w1", "focused_pane_id": "w1:p2E", "zoomed": false, "splits": []any{},
+		"panes": []any{
+			map[string]any{"pane_id": "w1:p2E", "focused": true, "rect": rect(93, 0, 92, 55)},
+			map[string]any{"pane_id": "w1:pW", "focused": false, "rect": rect(0, 0, 93, 55)},
+		}}}
+	f.reply("session.snapshot", snap)
+	m := byID(listSessions(t, n))
+	idx := func(s proto.Session) string {
+		if s.PaneIndex == nil {
+			return "none"
+		}
+		return fmt.Sprint(*s.PaneIndex)
+	}
+	if got := idx(m[sidA]) + "," + idx(m[sidB]) + "," + idx(m[sidC]); got != "0,1,none" {
+		t.Fatalf("pane indexes %s", got)
+	}
+	b, _ := json.Marshal(m[sidA])
+	if !strings.Contains(string(b), `"pane_index":0`) {
+		t.Fatalf("the first pane's index is sent: %s", b)
+	}
+	if b, _ := json.Marshal(m[sidC]); strings.Contains(string(b), "pane_index") {
+		t.Fatalf("no index when unknown: %s", b)
+	}
 }
 
 // An older herdr without session.snapshot: the agent list is used instead. Space / slot names stay what the last
@@ -422,6 +466,79 @@ func TestHerdrPollPushesChangedThenRevs(t *testing.T) {
 	}
 	assertTrace(t, f.trace(), []string{call("session.snapshot", nil), call("session.snapshot", nil)})
 	stop()
+}
+
+// Panes swapped in herdr and nothing else: the next poll pushes sessions.changed with the new pane indexes (#2320).
+func TestHerdrPollPushesALayoutOnlyChange(t *testing.T) {
+	n, f, home := herdrNode(t)
+	// Transcripts a minute apart keep the list in one order, so only the indexes differ between the pushes.
+	for i, sid := range []string{sidA, sidB} {
+		writeTranscript(t, home, "/tmp/repo", sid, time.Now().Add(-time.Duration(i+1)*time.Minute),
+			`{"type":"user","timestamp":"2026-11-05T10:00:00Z","cwd":"/tmp/repo","message":{"role":"user","content":"hi"}}`)
+	}
+	rect := func(x, y, w, h int) map[string]any { return map[string]any{"x": x, "y": y, "width": w, "height": h} }
+	// The rects swap; herdr's pane list and focus stay as they were.
+	snap := func(left string) map[string]any {
+		at := func(id string) map[string]any {
+			if id == left {
+				return rect(0, 0, 93, 55)
+			}
+			return rect(93, 0, 92, 55)
+		}
+		s := snapshot(
+			[]any{map[string]any{"workspace_id": "w1", "label": "repo", "number": 1}},
+			[]any{map[string]any{"tab_id": "w1:t1", "workspace_id": "w1", "label": "split", "number": 1}},
+			[]any{
+				claudeAgent(sidA, proto.StatusIdle, "w1:pA", "w1:t1", "w1", "/tmp/repo", "a"),
+				claudeAgent(sidB, proto.StatusIdle, "w1:pB", "w1:t1", "w1", "/tmp/repo", "b"),
+			}, nil)
+		s["snapshot"].(map[string]any)["layouts"] = []any{map[string]any{
+			"tab_id": "w1:t1", "workspace_id": "w1", "focused_pane_id": "w1:pA", "zoomed": false, "splits": []any{},
+			"panes": []any{
+				map[string]any{"pane_id": "w1:pA", "focused": true, "rect": at("w1:pA")},
+				map[string]any{"pane_id": "w1:pB", "focused": false, "rect": at("w1:pB")},
+			}}}
+		return s
+	}
+	f.reply("session.snapshot", snap("w1:pA"))
+	pushes, stop := pollNode(t, n)
+	defer stop()
+	indexes := func() string {
+		t.Helper()
+		deadline := time.After(10 * time.Second)
+		for {
+			select {
+			case m := <-pushes:
+				if m.Event != "sessions.changed" {
+					continue
+				}
+				var changed struct {
+					Sessions []proto.Session `json:"sessions"`
+				}
+				if err := json.Unmarshal(m.Params, &changed); err != nil {
+					t.Fatal(err)
+				}
+				got := map[string]string{}
+				for _, s := range changed.Sessions {
+					got[s.SessionID] = "none"
+					if s.PaneIndex != nil {
+						got[s.SessionID] = fmt.Sprint(*s.PaneIndex)
+					}
+				}
+				return got[sidA] + "," + got[sidB]
+			case <-deadline:
+				t.Fatal("no sessions.changed")
+				return ""
+			}
+		}
+	}
+	if got := indexes(); got != "0,1" {
+		t.Fatalf("first push: pane indexes %s", got)
+	}
+	f.reply("session.snapshot", snap("w1:pB"))
+	if got := indexes(); got != "1,0" {
+		t.Fatalf("after the swap: pane indexes %s", got)
+	}
 }
 
 // Active Claude sessions in Herdr panes are retained when Herdr's foreground process detection

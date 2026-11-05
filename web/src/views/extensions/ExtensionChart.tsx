@@ -5,6 +5,7 @@
 // axis text: only the marks and the first / last label. The geometry is in lib/extension-ui.ts.
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { barSpans, chartExtent, compactNumber, edgeLabels, labelWidth, linear, niceTicks, pointText, seriesColors, thinLabels, type UIItem } from "../../lib/extension-ui";
+import { t } from "../../i18n";
 import { cx } from "../../ui/atoms";
 
 const FONT = 10.5; // axis text, px
@@ -90,7 +91,11 @@ export function ExtensionChart({ item, compact }: { item: UIItem; compact?: bool
   };
 
   const title = item.title;
-  const summary = `${title ? title + "：" : ""}${kind === "bar" ? "柱状图" : "折线图"}，${n} 个点${series.length > 1 ? `，${series.map((s) => s.name).filter(Boolean).join("、")}` : ""}`;
+  const kindName = kind === "bar" ? t("extensions-extensionchart.kind_bar") : t("extensions-extensionchart.kind_line");
+  const body = series.length > 1
+    ? t("extensions-extensionchart.summary_series", { kind: kindName, count: n, series: series.map((s) => s.name).filter(Boolean).join(t("extensions-extensionchart.series_sep")) })
+    : t("extensions-extensionchart.summary", { kind: kindName, count: n });
+  const summary = title ? t("extensions-extensionchart.titled", { title, text: body }) : body;
 
   return (
     <div className={cx(compact ? "px-4 py-2" : "px-4 pt-3 pb-2.5")}>
@@ -208,10 +213,10 @@ export function ExtensionChart({ item, compact }: { item: UIItem; compact?: bool
           <table>
             <thead>
               <tr>
-                <th scope="col">{title || "标签"}</th>
+                <th scope="col">{title || t("extensions-extensionchart.label")}</th>
                 {series.map((s, k) => (
                   <th key={k} scope="col">
-                    {s.name || item.unit || "值"}
+                    {s.name || item.unit || t("extensions-extensionchart.value")}
                   </th>
                 ))}
               </tr>

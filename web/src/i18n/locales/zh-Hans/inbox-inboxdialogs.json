@@ -1,0 +1,23 @@
+{
+  "title_moment": "评论公司圈",
+  "title_comment": "评论 {title}",
+  "title_reply_to": "回复 {title}",
+  "title_reply_mail": "回复邮件",
+  "send": "发送",
+  "view_process": "查看 AI 分身的处理过程",
+  "changes_on_send": "发送时一起改",
+  "reply_goes": "回复会{how}。",
+  "reply_label": "回复内容",
+  "reply_placeholder": "写点什么…",
+  "drafting": "AI 正在起草…",
+  "instruction_placeholder": "让 AI 改：语气、要点…",
+  "instruction_label": "让 AI 改",
+  "rewrite": "重写",
+  "handed_to_persona": "已交给 Persona",
+  "handoff_title": "交给 AI",
+  "also_done": "同时标为已处理",
+  "ask_label": "要它做什么",
+  "target_label": "交给谁",
+  "target_persona": "Persona（新对话）",
+  "target_persona_sub": "开一段新的 Persona 对话"
+}

@@ -1,0 +1,11 @@
+{
+  "gone": "この項目は受信トレイにありません",
+  "pin_messages": "ピン留めメッセージ",
+  "move_back": "戻す",
+  "done": "対応済み",
+  "view_draft": "下書きを表示",
+  "ai_draft": "AI で返信を下書き",
+  "hand_to_ai": "AI に任せる",
+  "placeholder_title": "項目を選択",
+  "placeholder_hint": "左の一覧で項目をクリックすると、ここに詳細が表示されます。"
+}

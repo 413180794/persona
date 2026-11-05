@@ -11,6 +11,7 @@ import {
 } from "../../lib/lark-chats";
 import { href, navigate, onLinkClick } from "../../lib/router";
 import { onHubEvent, useLarkOn } from "../../lib/store";
+import { t } from "../../i18n";
 import { Button, cx, IconButton, Loading, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Chip, Count, Monogram } from "../inbox/InboxParts";
@@ -66,21 +67,21 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
     return (
       <div className="flex h-full flex-col">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
-          <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-          <h1 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">消息</h1>
+          <IconButton icon="sidebar" label={t("messages-messages.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
+          <h1 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">{t("messages-messages.title")}</h1>
         </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
           <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3"><Icon name="chat" size={18} /></span>
           {lark ? (
             <>
-              <p className="text-[13.5px] font-medium text-ink">消息页没有打开</p>
-              <p className="max-w-[340px] text-[12.5px] text-ink-3">在设置 › 连接器 › 飞书里打开「首页显示消息」，这个浏览器的侧边栏会多一个「消息」。</p>
-              <Button tone="secondary" icon="gear" className="mt-2" onClick={() => navigate(SETTINGS)}>打开飞书设置</Button>
+              <p className="text-[13.5px] font-medium text-ink">{t("messages-messages.off_title")}</p>
+              <p className="max-w-[340px] text-[12.5px] text-ink-3">{t("messages-messages.off_hint")}</p>
+              <Button tone="secondary" icon="gear" className="mt-2" onClick={() => navigate(SETTINGS)}>{t("messages-messages.lark-connector_settings")}</Button>
             </>
           ) : (
             <>
-              <p className="text-[13.5px] font-medium text-ink">hub 没有接入飞书消息</p>
-              <p className="max-w-[340px] text-[12.5px] text-ink-3">hub 装好提供飞书的扩展后，这里会列出全部私聊和群聊。</p>
+              <p className="text-[13.5px] font-medium text-ink">{t("messages-messages.no_lark_title")}</p>
+              <p className="max-w-[340px] text-[12.5px] text-ink-3">{t("messages-messages.no_lark_hint")}</p>
             </>
           )}
         </div>
@@ -91,34 +92,34 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
   return (
     <div className="@container flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-        {id && <IconButton icon="chevronLeft" label="返回消息" onClick={() => navigate({ name: "messages" })} className="@4xl:hidden" />}
+        <IconButton icon="sidebar" label={t("messages-messages.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
+        {id && <IconButton icon="chevronLeft" label={t("messages-messages.back")} onClick={() => navigate({ name: "messages" })} className="@4xl:hidden" />}
         <h1 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">
-          {id ? <><span className="@4xl:hidden">{chat?.name || "飞书会话"}</span><span className="hidden @4xl:inline">消息</span></> : "消息"}
+          {id ? <><span className="@4xl:hidden">{chat?.name || t("messages-messages.lark_chat")}</span><span className="hidden @4xl:inline">{t("messages-messages.title")}</span></> : t("messages-messages.title")}
         </h1>
         {s.loading && s.loaded && <Spinner />}
-        {id && <IconButton icon="pin" label="Pin 消息" onClick={() => setPins(true)} />}
-        <IconButton icon="retry" label="刷新" onClick={() => void larkChats.refresh()} disabled={s.loading} />
-        <IconButton icon="gear" label="飞书设置" onClick={() => navigate(SETTINGS)} />
+        {id && <IconButton icon="pin" label={t("messages-messages.pin_messages")} onClick={() => setPins(true)} />}
+        <IconButton icon="retry" label={t("messages-messages.refresh")} onClick={() => void larkChats.refresh()} disabled={s.loading} />
+        <IconButton icon="gear" label={t("messages-messages.lark_settings")} onClick={() => navigate(SETTINGS)} />
       </header>
       <div className="flex min-h-0 flex-1">
-        <section aria-label="会话列表" className={cx("min-h-0 w-full flex-col @4xl:flex @4xl:w-[380px] @4xl:shrink-0 @4xl:border-r @4xl:border-line", id ? "hidden" : "flex")}>
+        <section aria-label={t("messages-messages.chat_list")} className={cx("min-h-0 w-full flex-col @4xl:flex @4xl:w-[380px] @4xl:shrink-0 @4xl:border-r @4xl:border-line", id ? "hidden" : "flex")}>
           <ChatList selected={id} store={larkChats} accounts={accounts} />
         </section>
-        <section aria-label="聊天" className={cx("min-h-0 min-w-0 flex-1 flex-col @4xl:flex", id ? "flex" : "hidden")}>
+        <section aria-label={t("messages-messages.chat")} className={cx("min-h-0 min-w-0 flex-1 flex-col @4xl:flex", id ? "flex" : "hidden")}>
           {id ? (
             <div className="flex h-full min-h-0 flex-col">
               <ChatHeader chat={chat} account={accounts.selectedName} />
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <LarkThread key={`${accounts.request ?? ""}:${id}`} chat={{ feed: id, title: chat?.name || "飞书会话", topic: chat?.is_topic, account: accounts.request }}
+                <LarkThread key={`${accounts.request ?? ""}:${id}`} chat={{ feed: id, title: chat?.name || t("messages-messages.lark_chat"), topic: chat?.is_topic, account: accounts.request }}
                   pinsOpen={pins} onPinsOpen={setPins} />
               </div>
             </div>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
               <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3"><Icon name="chat" size={18} /></span>
-              <p className="text-[13.5px] font-medium text-ink">选一个会话</p>
-              <p className="text-[12.5px] text-ink-3">左边列表里点一个私聊或群聊，聊天会在这里打开。</p>
+              <p className="text-[13.5px] font-medium text-ink">{t("messages-messages.pick_title")}</p>
+              <p className="text-[12.5px] text-ink-3">{t("messages-messages.pick_hint")}</p>
             </div>
           )}
         </section>
@@ -136,7 +137,7 @@ function ChatHeader({ chat, account }: { chat?: LarkConversation; account?: stri
       <Monogram name={chat.name} size={28} src={chat.avatar} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13.5px] font-semibold text-ink">{chat.name}</p>
-        <p className="truncate text-[11.5px] text-ink-3">{[chat.is_topic ? "话题群" : chat.is_group ? "群聊" : "私聊", account].filter(Boolean).join(" · ")}</p>
+        <p className="truncate text-[11.5px] text-ink-3">{[chat.is_topic ? t("messages-messages.kind_topic") : chat.is_group ? t("messages-messages.kind_group") : t("messages-messages.kind_dm"), account].filter(Boolean).join(" · ")}</p>
       </div>
     </div>
   );
@@ -168,12 +169,12 @@ function ChatList({ selected, store: larkChats, accounts }: { selected?: string;
       <div className="mx-auto max-w-[760px] px-3 pt-3 pb-16 sm:px-4">
         <label className="flex h-8 items-center gap-2 rounded-control bg-surface px-2.5 shadow-btn focus-within:shadow-[inset_0_0_0_1px_var(--accent)]">
           <Icon name="search" size={13} stroke={2} className="shrink-0 text-ink-3" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索已加载的会话" aria-label="搜索会话" className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3" />
-          {query && <IconButton icon="x" label="清除" size={20} iconSize={11} onClick={() => setQuery("")} />}
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("messages-messages.search_placeholder")} aria-label={t("messages-messages.search_label")} className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3" />
+          {query && <IconButton icon="x" label={t("messages-messages.clear")} size={20} iconSize={11} onClick={() => setQuery("")} />}
         </label>
 
         {accounts.accounts.length > 1 && (
-          <div role="group" aria-label="飞书账号" className="mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
+          <div role="group" aria-label={t("messages-messages.accounts")} className="mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
             {accounts.accounts.map((a) => (
               <Chip key={a.id} on={a.id === accounts.selected} onClick={() => larkAccounts.select(a.id)} title={a.tenant}>
                 <span className="inline-flex items-center gap-1.5">
@@ -190,21 +191,21 @@ function ChatList({ selected, store: larkChats, accounts }: { selected?: string;
             <Icon name="info" size={14} className="mt-0.5 shrink-0 text-orange" />
             <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-ink-2">{s.problem.text}</p>
             {s.problem.kind === "other" ? (
-              <Button tone="secondary" icon="retry" busy={s.loading} onClick={() => void larkChats.refresh()}>重试</Button>
+              <Button tone="secondary" icon="retry" busy={s.loading} onClick={() => void larkChats.refresh()}>{t("messages-messages.retry")}</Button>
             ) : (
-              <Button tone="secondary" icon="gear" onClick={() => navigate(SETTINGS)}>飞书设置</Button>
+              <Button tone="secondary" icon="gear" onClick={() => navigate(SETTINGS)}>{t("messages-messages.lark_settings")}</Button>
             )}
           </div>
         )}
-        {!s.loaded && !s.rows.length && <div className="mt-6 px-1"><Loading label="正在读飞书会话" /></div>}
+        {!s.loaded && !s.rows.length && <div className="mt-6 px-1"><Loading label={t("messages-messages.loading")} /></div>}
 
         {!query && pinned.length > 0 && <PinnedShelf chats={pinned} selected={selected} />}
 
         {s.loaded && !shown.length && !s.problem && (
           <div className="mt-10 flex flex-col items-center gap-2 text-center">
             <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3"><Icon name={query ? "search" : "chat"} size={17} /></span>
-            <p className="text-[13.5px] font-medium text-ink">{query ? "没有匹配的会话" : "还没有会话"}</p>
-            <p className="text-[12.5px] text-ink-3">{query ? "搜索只看已加载的会话，往下滚动会加载更多。" : "飞书里的私聊和群聊会出现在这里。"}</p>
+            <p className="text-[13.5px] font-medium text-ink">{query ? t("messages-messages.empty_no_match") : t("messages-messages.empty_none")}</p>
+            <p className="text-[12.5px] text-ink-3">{query ? t("messages-messages.empty_no_match_hint") : t("messages-messages.empty_none_hint")}</p>
           </div>
         )}
 
@@ -216,7 +217,7 @@ function ChatList({ selected, store: larkChats, accounts }: { selected?: string;
         {!query && s.moreProblem && (
           <div className="mt-3 flex items-center gap-3 px-1">
             <p className="min-w-0 flex-1 truncate text-[12px] text-red">{s.moreProblem}</p>
-            <Button tone="secondary" icon="retry" onClick={() => void larkChats.more()}>重试</Button>
+            <Button tone="secondary" icon="retry" onClick={() => void larkChats.more()}>{t("messages-messages.retry")}</Button>
           </div>
         )}
         {!query && s.cursor && !s.moreProblem && <div ref={end} className="flex justify-center py-4"><Spinner /></div>}
@@ -228,8 +229,8 @@ function ChatList({ selected, store: larkChats, accounts }: { selected?: string;
 /** 置顶: the pinned chats, a row of faces with their names and unread counts (lark-connector's order). */
 function PinnedShelf({ chats, selected }: { chats: LarkConversation[]; selected?: string }) {
   return (
-    <section aria-label="置顶会话" className="mt-3">
-      <p className="px-1 pb-1.5 text-[12px] font-medium text-ink-3">置顶 <span className="text-[11.5px] tabular-nums">{chats.length}</span></p>
+    <section aria-label={t("messages-messages.pinned_label")} className="mt-3">
+      <p className="px-1 pb-1.5 text-[12px] font-medium text-ink-3">{t("messages-messages.pinned")} <span className="text-[11.5px] tabular-nums">{chats.length}</span></p>
       <div className="flex gap-1 overflow-x-auto pb-1">
         {chats.map((c) => {
           const to = { name: "messages", id: c.id } as const;
@@ -284,7 +285,7 @@ function ChatRow({ c, selected }: { c: LarkConversation; selected: boolean }) {
         </span>
         <span className="mt-0.5 flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">
-            {c.at_me && <span className="mr-1 font-medium text-red">{c.at_all ? "[@所有人]" : "[有人@我]"}</span>}
+            {c.at_me && <span className="mr-1 font-medium text-red">{c.at_all ? t("messages-messages.at_all") : t("messages-messages.at_me")}</span>}
             {preview}
           </span>
           {b.count ? <Count n={b.count} accent={!b.muted} /> : b.dot ? <span className={cx("size-2 shrink-0 rounded-full", b.muted ? "bg-ink-3" : "bg-accent")} /> : null}
