@@ -520,6 +520,7 @@ final class AppModel {
         pairingEngineMachine = nil
         if isDemo { leaveDemo() }
         for link in links { link.live.disconnect() }
+        SSHTunnels.shared.closeAll() // no hub left to route through a tunnel (also drops HubTransport's routes)
         LiveActivityController.shared.endAll() // its buttons would talk to a hub we no longer know
         links = []
         registry = HubRegistry()

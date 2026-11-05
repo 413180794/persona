@@ -98,10 +98,11 @@ final class SSHTunnels {
         let tunnel = SSHTunnel(config: route.tunnelConfig, identity: try SSHKeys.identity(), pinnedHostKey: route.hostKey)
         tunnel.onPhase = { [weak self, weak tunnel] phase in
             Task { @MainActor in
-                guard let self, let tunnel, self.tunnels[id]?.tunnel === tunnel else { return }
+                // Looked up by the tunnel, not `id`: `adopt` moves it under the paired hub's id after pairing.
+                guard let self, let tunnel, let key = Self.key(of: tunnel, in: self.tunnels, \.tunnel) else { return }
                 switch phase {
-                case .connected: self.states[id] = .up
-                case .failed(let e): self.states[id] = .down(e.localizedDescription)
+                case .connected: self.states[key] = .up
+                case .failed(let e): self.states[key] = .down(e.localizedDescription)
                 case .connecting, .idle: break // dialling again on the next request: still the way the hub is reached
                 }
             }
@@ -150,6 +151,12 @@ final class SSHTunnels {
     func closeAll() {
         for id in Array(tunnels.keys) + Array(routed) { close(id, forget: false) }
         HubTransport.clearAll()
+    }
+
+    /// The id a tunnel is kept under now: the one it was started with, or the paired hub's once `adopt` moved it (#2379:
+    /// its phase was written under the old id after the move, so the reason it went down never showed).
+    nonisolated static func key<V, T: AnyObject>(of tunnel: T, in table: [String: V], _ get: (V) -> T) -> String? {
+        table.first { get($0.value) === tunnel }?.key
     }
 
     /// The hub just paired keeps the tunnel it was paired through, under its own id.

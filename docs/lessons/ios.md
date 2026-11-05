@@ -981,3 +981,9 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   - 测试里用 App 的 `JSON.decoder` 时，先看它做了什么：它只加了日期策略，没有日期的类型在包里用 `JSONDecoder()`，解出来一样。
   - `swift test` 把编译产物写在包目录下的 `.build/`，仓库根的 `.gitignore` 要盖住它（`/apple/Packages/*/.build/`）。第一次提交时 `git add -A` 把 1,500 多个产物带了进去，里面有本机的路径；推到远端后发现，删了分支。提交前看一眼 `git diff --stat` 的文件数。
 
+## 回调里捕获的 key，对象改名后就作废了（2026-11-05，#2379）
+
+- **现象**：配对时经 SSH 隧道连上的 hub，之后隧道断了，连接详情里看不到「上次失败」原因。
+- **原因**：隧道的 `onPhase` 回调捕获的是拨号时的 id（`pairing`），配对成功后 `adopt` 把隧道挪到 hub 的 id 下，回调里 `tunnels[id]` 再也对不上，状态全被丢掉。
+- **做法**：回调按对象本身去表里找它现在的 key（`SSHTunnels.key(of:in:)`），不捕获 key。另外，移除一组 hub 时要在改 registry **之前**取它的成员：改完之后成员已经不在 registry 里，id 就拿不到了（`AppModel.tunnelIDs(removing:from:)`）。
+

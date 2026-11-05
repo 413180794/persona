@@ -126,7 +126,9 @@ func (n *Node) checkoutPath(root, typed string) (string, error) {
 		return "", errors.New("检出路径要写完整路径")
 	}
 	p = filepath.Clean(p)
-	if gitDir := filepath.Join(root, ".git"); p == gitDir || strings.HasPrefix(p, gitDir+string(filepath.Separator)) {
+	// Compared as real paths: git gives the root with its symlinks resolved (macOS's /var is /private/var), so a
+	// path typed through a link would pass a check of the spelling alone (#2650).
+	if within(realPath(p), realPath(filepath.Join(root, ".git"))) {
 		return "", errors.New("检出路径不能放在 .git 里面")
 	}
 	switch fi, err := os.Stat(p); {
@@ -140,6 +142,11 @@ func (n *Node) checkoutPath(root, typed string) (string, error) {
 		return "", fmt.Errorf("读不了检出路径：%w", err)
 	}
 	return p, nil
+}
+
+// within: p is dir or lies under it (both clean).
+func within(p, dir string) bool {
+	return p == dir || strings.HasPrefix(p, dir+string(filepath.Separator))
 }
 
 // worktreeCreate makes the checkout and opens it as a workspace of the host.

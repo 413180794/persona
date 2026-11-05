@@ -1011,16 +1011,22 @@ func allUnder(paths []string, cwd, dir string) bool {
 	return true
 }
 
-// realPath is p with its symlinks resolved as far as it exists (a file about to be written has a parent that does), so a
-// path written through a link (~/.claude/...) and the resolved memory directory compare.
+// realPath is p with its symlinks resolved as far as it exists: its longest existing ancestor (a file about to be
+// written, a checkout to be made, need not exist yet), so two spellings of one place compare — a path written through a
+// link (~/.claude/..., macOS's /var for /private/var) and a resolved one. p as it is when nothing of it resolves.
 func realPath(p string) string {
-	if real, err := filepath.EvalSymlinks(p); err == nil {
-		return real
+	rest := ""
+	for q := p; ; {
+		if real, err := filepath.EvalSymlinks(q); err == nil {
+			return filepath.Join(real, rest)
+		}
+		parent := filepath.Dir(q)
+		if parent == q {
+			return p
+		}
+		rest = filepath.Join(filepath.Base(q), rest)
+		q = parent
 	}
-	if real, err := filepath.EvalSymlinks(filepath.Dir(p)); err == nil {
-		return filepath.Join(real, filepath.Base(p))
-	}
-	return p
 }
 
 // codexMemoryPrompt tells Codex about the assistant's memory: the same directory and format as Claude Code's

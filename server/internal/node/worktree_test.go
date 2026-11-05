@@ -85,13 +85,24 @@ func worktreeNode(t *testing.T) worktreeFixture {
 
 func branchOf(t *testing.T, dir string) string { return runPullGit(t, dir, "branch", "--show-current") }
 
+// resolved is dir as git names it: its symlinks resolved (on macOS the temporary directories are under /var, a link
+// to /private/var, #2650).
+func resolved(t *testing.T, dir string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
 func TestWorktreePrepareReadsTheRepository(t *testing.T) {
 	w := worktreeNode(t)
 	res, err := request(t, w.n, "worktree.prepare", map[string]any{"workspace_id": "w1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res["root"] != w.repo || res["repoName"] != "proj" || res["branch"] != "main" || res["path"] != filepath.Join(w.home, ".herdr", "worktrees", "proj") {
+	if res["root"] != resolved(t, w.repo) || res["repoName"] != "proj" || res["branch"] != "main" || res["path"] != filepath.Join(w.home, ".herdr", "worktrees", "proj") {
 		t.Errorf("prepare = %v", res)
 	}
 
@@ -127,7 +138,7 @@ func TestWorktreePrepareNamesTheRepositoryOfALinkedCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res["repoName"] != "proj" || res["branch"] != "feature" || res["root"] != linked {
+	if res["repoName"] != "proj" || res["branch"] != "feature" || res["root"] != resolved(t, linked) {
 		t.Errorf("prepare in a linked checkout = %v", res)
 	}
 }
@@ -189,18 +200,25 @@ func TestWorktreeCreateRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	ok := filepath.Join(w.home, "ok")
+	// The repository through a link of the user's: .git is the same .git however the path reaches it (#2650).
+	link := filepath.Join(w.home, "repo-link")
+	if err := os.Symlink(w.repo, link); err != nil {
+		t.Fatal(err)
+	}
 	for name, p := range map[string]map[string]any{
-		"a path holding something": {"branch": "b1", "path": full},
-		"a path that is a file":    {"branch": "b2", "path": file},
-		"a relative path":          {"branch": "b3", "path": "trees/b3"},
-		"no path":                  {"branch": "b4", "path": "  "},
-		"inside .git":              {"branch": "b5", "path": filepath.Join(w.repo, ".git", "wt")},
-		"no branch":                {"branch": " ", "path": ok},
-		"an option as a branch":    {"branch": "--detach", "path": ok},
-		"a bad ref name":           {"branch": "a..b", "path": ok},
-		"a space in the name":      {"branch": "my branch", "path": ok},
-		"a revision expression":    {"branch": "@{-1}", "path": ok},
-		"a trailing slash":         {"branch": "feat/", "path": ok},
+		"a path holding something":    {"branch": "b1", "path": full},
+		"a path that is a file":       {"branch": "b2", "path": file},
+		"a relative path":             {"branch": "b3", "path": "trees/b3"},
+		"no path":                     {"branch": "b4", "path": "  "},
+		"inside .git":                 {"branch": "b5", "path": filepath.Join(w.repo, ".git", "wt")},
+		"inside .git through a link":  {"branch": "b6", "path": filepath.Join(link, ".git", "wt")},
+		"deep in .git through a link": {"branch": "b7", "path": filepath.Join(link, ".git", "new", "wt")},
+		"no branch":                   {"branch": " ", "path": ok},
+		"an option as a branch":       {"branch": "--detach", "path": ok},
+		"a bad ref name":              {"branch": "a..b", "path": ok},
+		"a space in the name":         {"branch": "my branch", "path": ok},
+		"a revision expression":       {"branch": "@{-1}", "path": ok},
+		"a trailing slash":            {"branch": "feat/", "path": ok},
 	} {
 		p["workspace_id"] = "w1"
 		if _, err := request(t, w.n, "worktree.create", p); err == nil {

@@ -242,9 +242,16 @@ extension AppModel {
         return !candidates.contains { $0.center && $0.config == on }
     }
 
+    /// The SSH tunnels that go with group (#2379): each of its hubs may have one, kept under the hub's id.
+    nonisolated static func tunnelIDs(removing group: String, from registry: HubRegistry) -> [String] {
+        registry.members(group).map(\.id)
+    }
+
     /// 设置 › hub › 断开: a whole group (every hub of it) goes; the others keep everything. The last group: `unpair`.
     func removeGroup(_ group: String) {
         guard links.count > 1 else { unpair(); return }
+        // Before the registry changes: afterwards the group's hubs (and their tunnels' ids) are gone from it.
+        for id in Self.tunnelIDs(removing: group, from: registry) { SSHTunnels.shared.close(id) }
         var r = registry
         r.hubs.removeAll { $0.group == group }
         r.groupNames[group] = nil
@@ -260,6 +267,7 @@ extension AppModel {
     func removeHub(_ id: String) {
         guard let hub = registry.hubs.first(where: { $0.id == id }) else { return }
         guard registry.members(hub.group).count > 1 else { removeGroup(hub.group); return }
+        SSHTunnels.shared.close(id)
         var r = registry
         r.hubs.removeAll { $0.id == id }
         registry = r
