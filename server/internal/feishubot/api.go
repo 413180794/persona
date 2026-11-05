@@ -10,6 +10,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -385,6 +386,48 @@ func (c *Client) Resource(ctx context.Context, messageID, key, kind string, limi
 		}
 		return b, ct, nil
 	}
+}
+
+// RateLimited: Feishu refused the call for coming too often (230020: a message updated too often; 99991400: the
+// app's rate limit; HTTP 429).
+func RateLimited(err error) bool {
+	switch errorCode(err) {
+	case 230020, 99991400, http.StatusTooManyRequests:
+		return true
+	}
+	return err != nil && strings.Contains(err.Error(), "HTTP 429")
+}
+
+// MessageGone: the message to update was withdrawn (230011) or deleted (230110).
+func MessageGone(err error) bool {
+	c := errorCode(err)
+	return c == 230011 || c == 230110
+}
+
+// errorCode is an APIError's code, also when it came over the bus as text ("feishu <op>: <code> <msg>"); 0 if none.
+func errorCode(err error) int {
+	var e *APIError
+	if errors.As(err, &e) {
+		return e.Code
+	}
+	if err == nil {
+		return 0
+	}
+	msg := err.Error()
+	i := strings.Index(msg, "feishu ")
+	if i < 0 {
+		return 0
+	}
+	j := strings.Index(msg[i:], ": ")
+	if j < 0 {
+		return 0
+	}
+	f := strings.Fields(msg[i+j+2:])
+	if len(f) == 0 {
+		return 0
+	}
+	n, _ := strconv.Atoi(f[0])
+	return n
 }
 
 // CardRejected: Feishu refused a card's content (a field it does not take, Markdown it cannot read, too large); the

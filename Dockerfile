@@ -80,7 +80,8 @@ COPY deploy/docker/entrypoint.sh /usr/local/bin/jarvis-entrypoint
 ENV HOME=/home/jarvis \
     JARVIS_LOCAL_NODE=0 \
     JARVIS_NODE_BINARIES=/opt/jarvis/nodes
-EXPOSE 18660
+# 18660 the hub (HTTP), 18662 its TLS port (public.tls_listen: on for a first start, deploy/docker/entrypoint.sh).
+EXPOSE 18660 18662
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
   CMD wget -qO- http://127.0.0.1:18660/api/v1/health >/dev/null || exit 1
 ENTRYPOINT ["jarvis-entrypoint"]

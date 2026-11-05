@@ -2,7 +2,7 @@
 // start, the first message.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { hubLabel } from "../lib/mesh";
-import { api, ApiError, enc, errorText } from "../lib/api";
+import { api, ApiError, enc, errorText, isAbort } from "../lib/api";
 import { pickAttachment, releaseAttachments, type LocalAttachment } from "../lib/attachments";
 import { browserStartKeys, launchAgent, presetPrompt, type NewAgentPreset } from "../lib/new-agent";
 import { AttachmentTray } from "../ui/AttachmentTray";
@@ -151,11 +151,13 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
 
   useEffect(() => {
     if (!open || !mid) return;
+    const controller = new AbortController();
     setLoadingDirs(true);
-    api<Dirs>(`/machines/${enc(mid)}/dirs?path=${enc(browse)}`)
-      .then(setDirs)
-      .catch(() => setDirs(null))
-      .finally(() => setLoadingDirs(false));
+    api<Dirs>(`/machines/${enc(mid)}/dirs?path=${enc(browse)}`, { signal: controller.signal })
+      .then((dirs) => { if (!controller.signal.aborted) setDirs(dirs); })
+      .catch((error) => { if (!controller.signal.aborted && !isAbort(error)) setDirs(null); })
+      .finally(() => { if (!controller.signal.aborted) setLoadingDirs(false); });
+    return () => controller.abort();
   }, [open, mid, browse]);
 
   // The model list of the launcher that will run (the chosen one, or 模型配置's); a new machine or launcher starts over

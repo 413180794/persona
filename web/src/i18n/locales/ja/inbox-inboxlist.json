@@ -42,6 +42,7 @@
   "failed_hint": "接続を確認して、もう一度お試しください。",
   "retrying": "再試行中…",
   "count_items": "メッセージ{count}件",
+  "count_items_short": "メッセージ{count}件",
   "count_agents": "エージェント{count}件",
   "count_separator": "、"
 }

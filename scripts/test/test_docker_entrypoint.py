@@ -1,56 +1,262 @@
 from pathlib import Path
+import json
+import os
+import shutil
 import subprocess
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-ENTRYPOINT = ROOT / "deploy/docker/entrypoint.sh"
+DOCKER = ROOT / "deploy/docker"
+ENTRYPOINT = DOCKER / "entrypoint.sh"
+WRAPPER = DOCKER / "jarvisd.sh"
+COMPOSE = DOCKER / "compose.yaml"
+# Real tools the scripts use besides the stubs (the image's busybox has them all).
+TOOLS = ("mkdir", "mv", "grep", "cat")
+
+
+def link_tools(root):
+    for name in TOOLS:
+        os.symlink(shutil.which(name), root / name)
+
+
+def write_stubs(root, commands):
+    for name, content in commands.items():
+        path = root / name
+        path.write_text(content)
+        path.chmod(0o755)
 
 
 class DockerEntrypointTests(unittest.TestCase):
-    def run_entrypoint(self, desktop, access="", cidrs="", exit_code=0):
+    def run_entrypoint(self, desktop, access="", cidrs="", exit_code=0, hub_json=None, public_url=""):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            home = root / "home"
+            home.mkdir()
             commands = {
                 "id": '#!/bin/sh\ncase "$1" in -u) echo 1000 ;; -un) echo jarvis ;; *) exit 1 ;; esac\n',
                 "getent": '#!/bin/sh\n[ "$1 $2" = "hosts host.docker.internal" ] || exit 2\nexit ' + ("0" if desktop else "1") + '\n',
                 "jarvisd": '#!/bin/sh\nprintf "%s\\n" "$@"\nexit ' + str(exit_code) + '\n',
             }
-            for name, content in commands.items():
-                path = root / name
-                path.write_text(content)
-                path.chmod(0o755)
+            write_stubs(bin_dir, commands)
+            link_tools(bin_dir)
+            if hub_json is not None:
+                (home / ".jarvis").mkdir()
+                (home / ".jarvis/hub.json").write_text(hub_json)
             result = subprocess.run(
                 ["/bin/sh", str(ENTRYPOINT), "hub", "run", "one argument"],
-                env={"PATH": str(root), "HOME": str(root), "JARVIS_ADMIN_ACCESS": access,
-                     "JARVIS_ADMIN_CIDRS": cidrs},
+                env={"PATH": str(bin_dir), "HOME": str(home), "JARVIS_ADMIN_ACCESS": access,
+                     "JARVIS_ADMIN_CIDRS": cidrs, "JARVIS_PUBLIC_URL": public_url},
                 capture_output=True, text=True, timeout=5,
             )
             self.assertEqual(result.returncode, exit_code, result.stderr)
             self.assertEqual(result.stdout.splitlines(), ["hub", "run", "one argument"])
-            self.assertEqual(len(list(root.iterdir())), len(commands))
-            return result.stderr
+            self.assertEqual(sorted(p.name for p in bin_dir.iterdir()), sorted([*commands, *TOOLS]))
+            files = {str(p.relative_to(home)): p for p in home.rglob("*") if p.is_file()}
+            self.assertEqual(list(files), [".jarvis/hub.json"])
+            written = files[".jarvis/hub.json"]
+            return result.stderr, written.read_text(), written.stat().st_mode & 0o777
 
     def test_desktop_api_guidance_is_independent_of_admin_access(self):
         for access in ("", "lan", "loopback", "cidrs", "any"):
             with self.subTest(access=access):
-                logs = self.run_entrypoint(True, access, "192.0.2.1/32")
+                logs, _, _ = self.run_entrypoint(True, access, "192.0.2.1/32")
                 for expected in ("gvisor", "tls_required", "security.trusted_cidrs", "netstat -tn",
                                  "docs/docker.md", "127.0.0.1"):
                     self.assertIn(expected, logs)
                 self.assertNotIn("every browser reaches the hub from the bridge's gateway", logs)
 
     def test_linux_does_not_get_desktop_guidance(self):
-        self.assertNotIn("Docker Desktop", self.run_entrypoint(False))
+        self.assertNotIn("Docker Desktop", self.run_entrypoint(False)[0])
 
     def test_admin_reminders_are_preserved(self):
-        self.assertIn("JARVIS_ADMIN_ACCESS is not set", self.run_entrypoint(False))
-        self.assertIn("without JARVIS_ADMIN_CIDRS", self.run_entrypoint(True, "cidrs"))
-        self.assertIn("is not loopback, lan, cidrs or any", self.run_entrypoint(False, "invalid"))
+        self.assertIn("JARVIS_ADMIN_ACCESS is not set", self.run_entrypoint(False)[0])
+        self.assertIn("without JARVIS_ADMIN_CIDRS", self.run_entrypoint(True, "cidrs")[0])
+        self.assertIn("is not loopback, lan, cidrs or any", self.run_entrypoint(False, "invalid")[0])
 
     def test_hub_exit_status_is_preserved(self):
         self.run_entrypoint(True, "any", exit_code=23)
+
+    def test_first_start_writes_container_defaults(self):
+        logs, text, mode = self.run_entrypoint(False, "lan")
+        self.assertEqual(json.loads(text), {
+            "public_url": "",
+            "public": {"tls_listen": ":18662"},
+            "admin": {"first_setup": "code"},
+            "machines": [],
+        })
+        # No token: the hub makes one when it first reads the file, as with db.sh's.
+        self.assertNotIn("token", text)
+        self.assertEqual(mode, 0o600)
+        self.assertIn("first start: wrote hub.json", logs)
+        self.assertIn("JARVIS_PUBLIC_URL is not set", logs)
+
+    def test_first_start_with_public_url_does_not_nag(self):
+        logs, text, _ = self.run_entrypoint(False, "lan", public_url="http://nas.example.com:18660")
+        self.assertEqual(json.loads(text)["public_url"], "")
+        self.assertNotIn("JARVIS_PUBLIC_URL is not set", logs)
+
+    def test_existing_hub_json_is_never_touched(self):
+        for existing in ('{"token": "t", "public_url": "http://nas.example.com:18660"}\n',
+                         '{"token": "t", "public_url": "", "machines": [{"id": "laptop"}]}\n',
+                         'not json at all'):
+            with self.subTest(existing=existing):
+                logs, text, _ = self.run_entrypoint(False, "lan", hub_json=existing)
+                self.assertEqual(text, existing)
+                self.assertNotIn("first start", logs)
+
+    def test_root_path_defaults_puid_from_the_data_folder(self):
+        text = ENTRYPOINT.read_text()
+        # Set in .env: as before. Unset: the data folder's owner, never root (1000 then).
+        self.assertIn('if [ -z "${PUID:-}" ] || [ -z "${PGID:-}" ]; then', text)
+        self.assertIn('PUID="${PUID:-$owner}"', text)
+        self.assertIn('if [ "$owner" = 0 ]; then owner=1000; fi', text)
+        self.assertIn('if [ "$PUID" -eq 0 ]; then', text)
+
+
+class JarvisdWrapperTests(unittest.TestCase):
+    """deploy/docker/jarvisd.sh: the database password from .env, or the generated one from the data folder."""
+
+    def run_wrapper(self, url, password_file=None, uid="1000", readable=True):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            binary = root / "jarvisd-real"
+            binary.write_text('#!/bin/sh\nprintf "%s\\n" "${JARVIS_DATABASE_URL:-<unset>}" "$@"\n')
+            binary.chmod(0o755)
+            write_stubs(bin_dir, {
+                "id": '#!/bin/sh\necho ' + uid + '\n',
+                "su-exec": '#!/bin/sh\n[ "$1" = jarvis ] || exit 9\nshift\nexec "$@"\n',
+            })
+            link_tools(bin_dir)
+            wrapper = root / "jarvisd.sh"
+            wrapper.write_text(WRAPPER.read_text().replace("/opt/jarvis/jarvisd", str(binary)))
+            home = root / "home"
+            (home / ".jarvis/docker").mkdir(parents=True)
+            if password_file is not None:
+                (home / ".jarvis/docker/db-password").write_text(password_file)
+                if not readable:
+                    (home / ".jarvis/docker/db-password").chmod(0)
+            env = {"PATH": str(bin_dir), "HOME": str(home)}
+            if url is not None:
+                env["JARVIS_DATABASE_URL"] = url
+            result = subprocess.run(["/bin/sh", str(wrapper), "hub", "pair"], env=env,
+                                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            lines = result.stdout.splitlines()
+            self.assertEqual(lines[1:], ["hub", "pair"])
+            return lines[0], result.stderr
+
+    def test_env_password_wins(self):
+        url = "postgres://jarvis:fromenv1@postgres:5432/jarvis?sslmode=disable"
+        for uid in ("0", "1000"):
+            with self.subTest(uid=uid):
+                self.assertEqual(self.run_wrapper(url, "generated2", uid), (url, ""))
+
+    def test_generated_password_fills_an_empty_one(self):
+        for url in ("postgres://jarvis:@postgres:5432/jarvis?sslmode=disable",
+                    "postgres://jarvis@postgres:5432/jarvis?sslmode=disable"):
+            with self.subTest(url=url):
+                got, logs = self.run_wrapper(url, "abc123\n", "0")
+                self.assertEqual(got, "postgres://jarvis:abc123@postgres:5432/jarvis?sslmode=disable")
+                self.assertEqual(logs, "")
+
+    def test_missing_or_bad_password_file_warns(self):
+        url = "postgres://jarvis:@postgres:5432/jarvis?sslmode=disable"
+        got, logs = self.run_wrapper(url)
+        self.assertEqual(got, url)
+        self.assertIn("no database password", logs)
+        got, logs = self.run_wrapper(url, "not ok!")
+        self.assertEqual(got, url)
+        self.assertIn("not a password of letters and digits", logs)
+        if os.geteuid() != 0:  # root reads a 0000 file anyway
+            got, logs = self.run_wrapper(url, "abc123", readable=False)
+            self.assertEqual(got, url)
+            self.assertIn("cannot be read by uid 1000", logs)
+
+    def test_other_urls_are_left_alone(self):
+        for url in (None, "", "postgres://postgres:5432/jarvis", "postgres://db/x@y"):
+            with self.subTest(url=url):
+                got, logs = self.run_wrapper(url, "abc123")
+                self.assertEqual(got, url or "<unset>")
+                self.assertEqual(logs, "")
+
+
+class ComposeTests(unittest.TestCase):
+    def postgres_script(self):
+        lines = COMPOSE.read_text().splitlines()
+        start = lines.index("      - |") + 1
+        end = lines.index("      - postgres-entrypoint")
+        return "\n".join(line[8:] for line in lines[start:end]).replace("$$", "$") + "\n"
+
+    def run_postgres_wrapper(self, password, existing=None, database=False):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pgdata = root / "pgdata"
+            if database:
+                pgdata.mkdir()
+                (pgdata / "PG_VERSION").write_text("18\n")
+            secrets = root / "secrets"
+            secrets.mkdir()
+            if existing is not None:
+                (secrets / "db-password").write_text(existing)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            write_stubs(bin_dir, {"docker-entrypoint.sh": '#!/bin/sh\nprintf "%s\\n" "$POSTGRES_PASSWORD" "$@"\n'})
+            for name in ("tr", "head", "mv", "cat"):
+                os.symlink(shutil.which(name), bin_dir / name)
+            script = self.postgres_script().replace("/run/persona", str(secrets))
+            result = subprocess.run(["/bin/sh", "-c", script, "postgres-entrypoint", "postgres"],
+                                    env={"PATH": str(bin_dir), "POSTGRES_PASSWORD": password, "PGDATA": str(pgdata)},
+                                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            got, *args = result.stdout.splitlines()
+            self.assertEqual(args, ["postgres"])
+            stored = secrets / "db-password"
+            return got, (stored.read_text() if stored.exists() else None), \
+                (stored.stat().st_mode & 0o777 if stored.exists() else None), result.stderr
+
+    def test_env_password_is_used_and_nothing_is_written(self):
+        self.assertEqual(self.run_postgres_wrapper("fromenv1"), ("fromenv1", None, None, ""))
+
+    def test_first_start_makes_up_a_password_once(self):
+        got, stored, mode, logs = self.run_postgres_wrapper("")
+        self.assertEqual(len(got), 48)
+        self.assertTrue(all(c in "0123456789abcdef" for c in got))
+        self.assertEqual(stored, got)
+        self.assertEqual(mode, 0o600)
+        self.assertIn("first start", logs)
+        again, stored, _, logs = self.run_postgres_wrapper("", existing=got)
+        self.assertEqual((again, stored, logs), (got, got, ""))
+
+    def test_an_existing_database_gets_no_made_up_password(self):
+        got, stored, _, logs = self.run_postgres_wrapper("", database=True)
+        self.assertEqual((got, stored), ("", None))
+        self.assertIn("the database already exists", logs)
+        # The kept password still goes in (postgres ignores it once the database exists).
+        got, stored, _, logs = self.run_postgres_wrapper("", existing="abc123", database=True)
+        self.assertEqual((got, stored, logs), ("abc123", "abc123", ""))
+
+    def test_compose_needs_only_the_image(self):
+        text = COMPOSE.read_text()
+        self.assertIn("${JARVIS_IMAGE:?", text)
+        for name in ("JARVIS_DB_PASSWORD", "JARVIS_PUBLIC_URL", "PUID", "PGID"):
+            self.assertNotIn("${" + name + ":?", text)
+            self.assertNotIn("${" + name + ":-1000}", text)
+        # The hub and postgres agree on where the generated password lives.
+        self.assertIn("- ./data/docker:/run/persona", text)
+        self.assertIn("JARVIS_DATABASE_URL: postgres://jarvis:${JARVIS_DB_PASSWORD:-}@postgres:5432/", text)
+        self.assertIn('$HOME/.jarvis/docker/db-password', WRAPPER.read_text())
+
+    def test_tls_port_is_published_and_exposed(self):
+        self.assertIn('- "${JARVIS_TLS_PORT:-18662}:18662"', COMPOSE.read_text())
+        self.assertIn('"tls_listen": ":%s"', ENTRYPOINT.read_text())
+        self.assertIn("TLS_PORT=18662", ENTRYPOINT.read_text())
+        self.assertIn("EXPOSE 18660 18662", (ROOT / "Dockerfile").read_text())
 
 
 if __name__ == "__main__":

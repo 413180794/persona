@@ -81,9 +81,11 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
 
   const loadMore = async () => {
     if (!status) return;
+    const requestedHead = head.current;
     setLoadingMore(true);
     try {
       const r = await api<{ commits: GitCommit[]; has_more?: boolean }>(`${base}/log?cwd=${enc(cwd)}&skip=${status.commits.length + older.length}&limit=${PAGE}`);
+      if (head.current !== requestedHead) return;
       setOlder((o) => [...o, ...r.commits]);
       setNoMore(r.has_more === false || r.commits.length < PAGE);
     } catch (e) {

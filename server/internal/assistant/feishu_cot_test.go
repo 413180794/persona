@@ -299,3 +299,54 @@ func TestFeishuEmptyTurnSaysWhyItStopped(t *testing.T) {
 		t.Fatalf("answer card %s", card)
 	}
 }
+
+// The progress card is not sent again when it is the same; after Feishu's rate limit updates wait (5 s, then
+// longer) and the next due one sends the latest; a withdrawn card is forgotten and the next tick posts a new one.
+func TestFeishuProgressCardThrottled(t *testing.T) {
+	s, posts, _ := cotHub(t, false)
+	r, _ := cotRun(s)
+	now := time.Unix(1000, 0)
+	s.chans.now = func() time.Time { return now }
+	sink := feishuSink{s}
+	ctx := context.Background()
+	steps := []string{"运行 `ls`"}
+	sink.progress(ctx, r, 4*time.Second, steps, "")
+	sink.progress(ctx, r, 4*time.Second, steps, "")
+	if len(*posts) != 1 {
+		t.Fatalf("same card sent again: %v", *posts)
+	}
+	f := s.hub.(*fakeHub)
+	var reply error
+	f.answerApp(AppFeishu, FeishuUpdateCard, func(p json.RawMessage) (any, error) {
+		var m map[string]any
+		_ = json.Unmarshal(p, &m)
+		m["update"] = true
+		*posts = append(*posts, m)
+		return map[string]any{}, reply
+	})
+	reply = &feishubot.APIError{Op: "update card", Code: 230020, Msg: "This operation triggers the frequency limit."}
+	sink.progress(ctx, r, 5*time.Second, steps, "")
+	if len(*posts) != 2 {
+		t.Fatalf("limited update not tried: %v", *posts)
+	}
+	reply = nil
+	now = now.Add(4 * time.Second)
+	sink.progress(ctx, r, 9*time.Second, steps, "")
+	if len(*posts) != 2 {
+		t.Fatalf("sent while backing off: %v", *posts)
+	}
+	now = now.Add(time.Second)
+	sink.progress(ctx, r, 10*time.Second, steps, "")
+	if len(*posts) != 3 || !strings.Contains((*posts)[2]["card"].(string), "10 秒") {
+		t.Fatalf("latest after the backoff: %v", *posts)
+	}
+	reply = &feishubot.APIError{Op: "update card", Code: 230011, Msg: "The message is recalled."}
+	sink.progress(ctx, r, 11*time.Second, steps, "")
+	if r.Ext["card"] != "" {
+		t.Fatalf("withdrawn card kept: %v", r.Ext)
+	}
+	sink.progress(ctx, r, 11*time.Second, steps, "")
+	if len(*posts) != 5 || (*posts)[4]["update"] == true || r.Ext["card"] != "om_card" {
+		t.Fatalf("no new card: %v", *posts)
+	}
+}

@@ -42,6 +42,7 @@
   "failed_hint": "检查连接后再试一次。",
   "retrying": "正在重试…",
   "count_items": "{count} 条消息",
+  "count_items_short": "{count} 条",
   "count_agents": "{count} 个 Agent",
   "count_separator": "，"
 }

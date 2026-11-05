@@ -199,12 +199,13 @@ export function InboxList({ selected }: { selected?: string }) {
 
 /**
  * A section title's count, saying what it counts (#3288): the sidebar's 收件箱 badge counts messages only, while 需要你
- * also lists the agents waiting on you (those are 总览's count), so the two are written apart: 「4 条 · 7 个 Agent」.
+ * also lists the agents waiting on you (those are 总览's count), so the two are written apart: 「4 条 · 7 个 Agent」, each
+ * with its unit, which a phone has no hover to show (#4146).
  */
 export function sectionCount(items: number, agents: number): { text: string; label: string } {
   const parts = [items > 0 && t("inbox-inboxlist.count_items", { count: items }), agents > 0 && t("inbox-inboxlist.count_agents", { count: agents })].filter((x): x is string => Boolean(x));
   return {
-    text: items > 0 && agents > 0 ? `${items} · ${t("inbox-inboxlist.count_agents", { count: agents })}` : agents > 0 ? t("inbox-inboxlist.count_agents", { count: agents }) : String(items),
+    text: items > 0 && agents > 0 ? `${t("inbox-inboxlist.count_items_short", { count: items })} · ${t("inbox-inboxlist.count_agents", { count: agents })}` : agents > 0 ? t("inbox-inboxlist.count_agents", { count: agents }) : String(items),
     label: parts.join(t("inbox-inboxlist.count_separator")),
   };
 }

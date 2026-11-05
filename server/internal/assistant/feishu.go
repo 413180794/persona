@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -868,14 +869,50 @@ const (
 
 func (feishuSink) progressIdle() time.Duration { return feishuProgressIdle }
 
+// When Feishu says the card is updated too often, updates stop for 5 s, then 10, 20, at most 30; the answer is not held.
+const (
+	cardBackoffFirst = 5 * time.Second
+	cardBackoffMost  = 30 * time.Second
+)
+
+// chansNow is the channels' clock.
+func (s *Service) chansNow() time.Time {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.clock()
+}
+
 func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Duration, steps []string, live string) {
 	s := f.s
 	if f.cotProgressNow(ctx, r) {
 		return
 	}
 	c := progressCard(s.botLang(ctx), r.Label, took, steps, live, s.runWaiting(r))
+	_, prog := s.channelRunByID(r.ID)
+	if prog == nil {
+		prog = &chanLive{} // a run not followed any more: nothing to remember
+	}
+	sum := sha256.Sum256([]byte(c.JSON()))
 	if card := s.runExt(r, "card"); card != "" {
-		if err := s.botUpdateCard(ctx, card, c); err != nil {
+		now := s.chansNow()
+		if sum == prog.sentCard || now.Before(prog.quietUntil) {
+			return // nothing new, or Feishu asked us to slow down: a later tick sends the latest
+		}
+		err := s.botUpdateCard(ctx, card, c)
+		switch {
+		case err == nil:
+			prog.sentCard, prog.backoff = sum, 0
+		case feishubot.RateLimited(err):
+			prog.backoff = min(max(2*prog.backoff, cardBackoffFirst), cardBackoffMost)
+			prog.quietUntil = now.Add(prog.backoff)
+			s.logf("bots: progress update: %v; quiet for %s", err, prog.backoff)
+		case feishubot.MessageGone(err):
+			// Withdrawn or deleted: the next tick posts a new card, and the answer does not go into this one.
+			s.setRunExt(r, "card", "")
+			prog.sentCard = [32]byte{}
+			s.logf("bots: progress card gone: %v", err)
+		default:
 			s.logf("bots: progress update: %v", err)
 		}
 		return
@@ -885,6 +922,7 @@ func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Dura
 		s.logf("bots: progress card: %v", err)
 		return
 	}
+	prog.sentCard, prog.backoff, prog.quietUntil = sum, 0, time.Time{}
 	s.setRunExt(r, "card", mid)
 	s.rememberBotThread(mid, botTargetOf(r), r.Label)
 }

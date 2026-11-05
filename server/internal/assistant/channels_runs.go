@@ -61,6 +61,11 @@ type chanLive struct {
 	// upTo the last item noted; looked when locateRun last read the conversation.
 	from, upTo int
 	looked     time.Time
+	// sentCard is the progress card last sent (its hash), not sent again; backoff and quietUntil hold updates back
+	// after Feishu's rate limit. All under mu.
+	sentCard   [32]byte
+	backoff    time.Duration
+	quietUntil time.Time
 }
 
 // chanMutex is a mutex the watch loop can try without blocking.

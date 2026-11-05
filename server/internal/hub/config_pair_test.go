@@ -98,3 +98,17 @@ func TestPairCLIRejectsRedirectAndInvalidResponse(t *testing.T) {
 		srv.Close()
 	}
 }
+
+// A first Docker start leaves public_url empty: `hub pair` says what to set instead of "invalid pairing info".
+func TestPairCLISaysWhenTheHubHasNoAddress(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(pairCode{Token: "jp_temporary", ExpiresAt: time.Now().Add(pairLifetime)})
+	}))
+	defer srv.Close()
+	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	cfg := &Config{Listen: ":" + port, Token: "master"}
+	_, err := cfg.requestPairCode(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "JARVIS_PUBLIC_URL") || !strings.Contains(err.Error(), "public_url") {
+		t.Fatalf("empty address: %v", err)
+	}
+}

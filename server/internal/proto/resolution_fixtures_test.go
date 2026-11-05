@@ -553,10 +553,10 @@ func TestResolutionFixtureSourceEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, snippet := range []string{
-		`identifier: allow, title: "允许", options: [.authenticationRequired]`,
-		`identifier: deny, title: "拒绝", options: [.destructive]`,
-		`identifier: approvePlan, title: "批准", options: [.authenticationRequired]`,
-		`identifier: rejectPlan, title: "打回修改", options: [.authenticationRequired]`,
+		`identifier: allow, title: String(localized: "允许"), options: [.authenticationRequired]`,
+		`identifier: deny, title: String(localized: "拒绝"), options: [.destructive]`,
+		`identifier: approvePlan, title: String(localized: "批准"), options: [.authenticationRequired]`,
+		`identifier: rejectPlan, title: String(localized: "打回修改"), options: [.authenticationRequired]`,
 	} {
 		if !strings.Contains(string(notifications), snippet) {
 			t.Errorf("notification authentication changed: %s", snippet)

@@ -47,6 +47,8 @@
   "retrying": "Retrying…",
   "count_items_one": "{count} message",
   "count_items_other": "{count} messages",
+  "count_items_short_one": "{count} message",
+  "count_items_short_other": "{count} messages",
   "count_agents_one": "{count} agent",
   "count_agents_other": "{count} agents",
   "count_separator": ", "

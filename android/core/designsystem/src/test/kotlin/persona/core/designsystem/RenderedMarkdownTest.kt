@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.luminance
@@ -53,13 +57,17 @@ class RenderedMarkdownTest {
         val density = LocalDensity.current
         val body = PersonaTheme.type.body
         val caption = PersonaTheme.type.caption
-        remember {
+        // Seed the renderer's cache in an effect, not during composition, and draw the fences once it is seeded.
+        var seeded by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
             val points = with(density) { body.fontSize.toPx() / this.density }
             val small = with(density) { caption.fontSize.toPx() / this.density }
             MarkdownRenderer.put(Kind.DisplayMath, "x^2 + y^2 = r^2", dark, points, density.density, formula())
             MarkdownRenderer.put(Kind.DisplayMath, "\\frac{1}{", dark, points, density.density, null, "Expected '}', got 'EOF' at end of input")
             MarkdownRenderer.put(Kind.Mermaid, "flowchart TD\n  A -->", dark, small, density.density, null, "Parse error on line 2")
+            seeded = true
         }
+        if (!seeded) return
         Column(Modifier.testTag("fences dark=$dark").width(360.dp).background(PersonaTheme.palette.background).padding(Tokens.Space.l),
             verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
             MarkdownFence("```math\nx^2 + y^2 = r^2\n```") { JCodeBlock(it.code, small = true) }

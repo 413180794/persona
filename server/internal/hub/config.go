@@ -252,6 +252,11 @@ func LoadConfig() (*Config, error) {
 	return cfg, nil
 }
 
+// noPublicURLHint is what `hub pair` says when hub.json's public_url is empty.
+const noPublicURLHint = "hub 还不知道手机从哪个地址连它（public_url 是空的）：Docker 里在 .env 写上 " +
+	"JARVIS_PUBLIC_URL=http://<这台机器的局域网地址>:18660，再运行 docker compose up -d；" +
+	"不用 Docker 的，在 hub.json 里填 public_url 后重启 hub。也可以在管理界面的「网络」里填地址"
+
 func randomHex(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)
@@ -396,7 +401,13 @@ func (c *Config) requestPairCodeWith(ctx context.Context, reqBody map[string]any
 		return nil, fmt.Errorf("本机 hub 生成临时 token 失败（HTTP %d）；请确认 hub 已升级且配置一致，或用 --legacy 打印旧格式二维码", resp.StatusCode)
 	}
 	p := pairCodeReply{pairCode: &pairCode{}}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&p); err != nil || p.Token == "" || p.URL == "" || !time.Now().Before(p.ExpiresAt) {
+	err = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&p)
+	if err == nil && p.Token != "" && p.URL == "" && time.Now().Before(p.ExpiresAt) {
+		// A hub that does not know its own address (a first Docker start leaves public_url empty: the container cannot
+		// see the NAS's LAN address, docs/docker.md): the code is fine, the address a phone would dial is missing.
+		return nil, errors.New(noPublicURLHint)
+	}
+	if err != nil || p.Token == "" || p.URL == "" || !time.Now().Before(p.ExpiresAt) {
 		return nil, fmt.Errorf("本机 hub 返回了无效的配对信息；请升级 hub，或用 --legacy 打印旧格式二维码")
 	}
 	p.PairURL = p.pairURL()

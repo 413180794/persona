@@ -53,28 +53,49 @@ compose 传进来的 `JARVIS_IMAGE` 优先。
 
 ## 装
 
-在 NAS 上找一个目录（例如 `/volume1/docker/jarvis`），放进 `deploy/docker/compose.yaml` 和 `deploy/docker/.env.example`：
+先说清楚：**NAS 只当 hub，AI 不在 NAS 上干活**。镜像里没有 Claude Code，助手和 Agent 都跑在你的另一台电脑上，所以装完 hub 还要加一台电脑（下面第 5 步），在那之前 App 能配对、能看，主对话还开不了。
 
-```sh
-cp .env.example .env    # 填 JARVIS_PUBLIC_URL、JARVIS_DB_PASSWORD（openssl rand -hex 24）、PUID / PGID
-docker compose up -d
-docker compose logs -f hub
-docker compose exec hub personad hub pair    # App 扫码配对
-```
+1. NAS 上建一个目录（例如 `/volume1/docker/persona`），里面再建一个 `data` 子目录，都用 NAS 的文件管理器建：`data/` 归你，hub 的文件就归你（`data/` 让 Docker 自己建的话归 root，文件就都归 1000，见下表）。目录里放进 `deploy/docker/compose.yaml` 和 `deploy/docker/.env.example`，把后者改名成 `.env`，填两行：
+   - `JARVIS_IMAGE`：镜像，`ghcr.io/<owner>/persona:latest`（见上「镜像」；私有镜像先 `docker login ghcr.io`）。
+   - `JARVIS_PUBLIC_URL`：手机怎么访问这台 NAS，一般是 `http://<NAS 的局域网地址>:18660`。
+2. 在这个目录里运行 `docker compose up -d`。
+3. 配对手机：`docker compose exec hub personad hub pair`，用 App 扫终端里的二维码。
+4. 设管理员密码（可选，加电脑、管设备用得到）：浏览器打开 `<JARVIS_PUBLIC_URL>/admin`，填 `docker compose logs hub` 里那行 `first-run setup code`（过期了用 `docker compose exec hub personad hub admin setup-code` 再要一个）。
+5. 加一台干活的电脑：网页版（浏览器打开 `JARVIS_PUBLIC_URL`）的「机器」页点「添加电脑」，或管理界面的「电脑 › 添加电脑」，照着在那台电脑上装 Persona Link（`docs/link.md`），它连上来后确认是你的电脑。
 
-- `JARVIS_PUBLIC_URL`：手机怎么访问这台 NAS 的 18660 端口（局域网地址、VPN 地址，或 NAS 自带的反向代理给的 HTTPS 地址）。
-  反向代理要转发 WebSocket 的 Upgrade / Connection、关闭响应缓冲、加长读取超时（`docs/server.md`「轻量 hub 与部署前检查」）。
-- `PUID` / `PGID`：数据目录归谁（NAS 上 `id -u` / `id -g`）。容器以 root 启动，把 `jarvis` 用户改成这个 uid / gid（镜像里别的同 uid
-  用户先删掉，否则 ssh 找到的是它的家目录）、把 `data/` 里不归它的文件都交给它（例如用 sudo 拷进来的旧 `~/.jarvis`），再降权运行；
-  `docker compose exec hub jarvisd …` 也以这个用户运行，建出来的文件不会归 root。不能是 0。不要用 compose 的 `user:` 指定用户：
+第一次启动自动补上的（`.env` 里不用写，写了以写的为准）：
+
+| 什么 | 没写时 | 存在哪 |
+| --- | --- | --- |
+| 数据库密码（`JARVIS_DB_PASSWORD`） | postgres 第一次启动（还没有数据库）时随机生成 48 位十六进制；数据库已经在了而密码文件没了（只恢复了 `postgres/`、删了 `data/`、照新模板重写了 `.env`）时不生成，日志里提醒把原来的密码写进 `JARVIS_DB_PASSWORD`。不写密码要用这个版本以后构建的镜像，`JARVIS_IMAGE` 钉在更早的版本时照旧写上 | `data/docker/db-password`（0600）；postgres 容器只挂这一个子目录，看不到 hub 的密钥。镜像里的 `personad` 每次运行（含 `docker compose exec`）从这里读，拼进数据库地址 |
+| `PUID` / `PGID` | `data/` 目录的属主；Docker 自己建的目录归 root，这时用 1000 | 日志里打一行用的是哪个 |
+| `hub.json` | 写一份容器用的新安装默认值（见下） | `data/hub.json` |
+
+`.env` 是 compose 在宿主机上读的，容器启动时已经读完了，改不了它，所以生成的值放在 `data/` 里，不回写 `.env`。备份 `data/` 就带上了密码。
+
+第一次启动（`data/` 里还没有 `hub.json`）时入口脚本写的 `hub.json`，hub 读到后补上 token 和其余默认值（和 `personad hub setup` 的新安装默认值同一个思路，`docs/onboarding.md` 4.1；已经有 `hub.json` 的一个字都不改）：
+
+| 字段 | 值 | 为什么 |
+| --- | --- | --- |
+| `public_url` | `""` | 容器在桥接网络里看不到 NAS 的局域网地址，猜出来的（容器的主机名）手机连不上。以 `.env` 的 `JARVIS_PUBLIC_URL` 为准；没设时日志里提醒，`hub pair` 也直说要设它，或者在管理界面的「网络」里填 |
+| `public.tls_listen` | `":18662"` | Persona Link 和局域网发现只走 TLS。容器里绑所有地址，NAS 上开在哪些地址由 compose 的端口映射决定（`JARVIS_TLS_PORT`） |
+| `admin.first_setup` | `"code"` | 容器里任何私网地址都算局域网（见下「管理界面」），不要设置码的话，同一网络里谁都能抢先设管理员密码 |
+| `machines` | `[]` | 镜像里没有 herdr 和 Claude Code，电脑都从外面加 |
+
+其他说明：
+- `JARVIS_PUBLIC_URL` 也可以是 VPN 地址，或 NAS 自带的反向代理给的 HTTPS 地址。反向代理要转发 WebSocket 的 Upgrade / Connection、关闭响应缓冲、加长读取超时（`docs/server.md`「轻量 hub 与部署前检查」）。
+- 端口：18660 是 HTTP，18662 是 TLS，compose 默认都映射到 NAS 的所有地址。TLS 端口的宿主端口要保持 18662（hub 告诉 App 的就是这个）；只想开在一个地址上就写 `JARVIS_TLS_PORT=<NAS 局域网地址>:18662`。NAS 上 18662 已被占用时 `docker compose up` 会报端口冲突：给 hub 换一个 `public.tls_listen` 端口并同样映射。
+- `PUID` / `PGID`：容器以 root 启动，把 `jarvis` 用户改成这个 uid / gid（镜像里别的同 uid 用户先删掉，否则 ssh 找到的是它的家目录）、把 `data/` 里不归它的文件都交给它（例如用 sudo 拷进来的旧 `~/.jarvis`），再降权运行；
+  `docker compose exec hub personad …` 也以这个用户运行，建出来的文件不会归 root。不能是 0。不要用 compose 的 `user:` 指定用户：
   那样入口脚本改不了用户，PUID / PGID 不生效，ssh 也跑不起来（日志里会有一行警告）。
-- `JARVIS_DB_PASSWORD`：只用字母和数字（它原样拼进数据库地址），`openssl rand -hex 24` 即可。Postgres 只在第一次建数据目录时用它，
-  之后改 `.env` 会连不上库，要改得同时在库里 `ALTER USER jarvis PASSWORD '…'`。
+- 数据库密码自己设时只用字母和数字（它原样拼进数据库地址），`openssl rand -hex 24` 即可。Postgres 只在第一次建数据目录时用它，
+  之后改 `.env`（或删掉 `data/docker/db-password`）会连不上库，要改得同时在库里 `ALTER USER jarvis PASSWORD '…'`。
 - hub 容器带 `init: true`：personad 起的 ssh 被杀掉后，它的 ProxyCommand / ProxyJump 子进程由 init 回收，不留僵尸进程。
-- 目录：`data/` 是 hub 的 `~/.persona`（`hub.json`、密钥、tailcat key、知识库 `data/data`），`postgres/` 是数据库；都在 compose 旁边，
+- 目录：`data/` 是 hub 的 `~/.persona`（`hub.json`、密钥、tailcat key、知识库 `data/data`、生成的库密码 `data/docker/`），`postgres/` 是数据库；都在 compose 旁边，
   NAS 的文件管理器里看得到，备份这两个目录即可。`hub.json` 和密钥文件是 0600。
+- 已有的部署（`.env` 里有 `JARVIS_DB_PASSWORD`、`PUID` / `PGID`，`data/` 里有 `hub.json`）换上新的 `compose.yaml` 后行为不变：用 `.env` 的密码，不生成、不改 `hub.json`；多出来的只有一个空的 `data/docker/` 目录和 18662 的端口映射（`hub.json` 没开 TLS 时那个端口没人听）。
 
-接一台电脑（tailcat）：
+接一台电脑也可以不用 App，走 tailcat（电脑在别的内网、NAS 连不过去时）：
 
 ```sh
 docker compose exec hub personad hub tailcat-key          # NAS 上：hub 的公钥
@@ -89,14 +110,15 @@ docker compose exec hub personad hub tailcat-key          # NAS 上：hub 的公
 
 | 变量 | 作用 |
 | --- | --- |
-| `JARVIS_DATABASE_URL` | 数据库地址（compose 里拼好了，指向 `postgres` 服务） |
-| `JARVIS_PUBLIC_URL` | 手机访问 hub 的地址，配对二维码里的就是它 |
+| `JARVIS_DATABASE_URL` | 数据库地址（compose 里拼好了，指向 `postgres` 服务；`.env` 没设密码时镜像里的 `personad` 从 `data/docker/db-password` 补上） |
+| `JARVIS_PUBLIC_URL` | 手机访问 hub 的地址，配对二维码里的就是它；没设时用 `hub.json` 的 `public_url`（第一次启动写的是空的） |
+| `JARVIS_DB_PASSWORD` | compose 用：数据库密码；不设时第一次启动生成，见上「装」 |
 | `JARVIS_LISTEN` | hub 监听的地址（默认 `:18660`；改它要同时改 compose 的端口映射和镜像的健康检查） |
 | `JARVIS_LOCAL_NODE=0` | 第一次启动不写「本机」那台机器（镜像里已设） |
 | `JARVIS_ADMIN_ACCESS`、`JARVIS_ADMIN_CIDRS` | 管理界面（`/admin`）谁能打开：`loopback` / `lan` / `cidrs`（网段逗号分隔）/ `any`，见下面「管理界面」。没设时入口脚本打印一行提醒，按 hub.json 的 `admin.access`（没写就是 `lan`） |
 | `JARVIS_NODE_BINARIES` | 「重新部署」用的 node 构建在哪（镜像里是 `/opt/jarvis/nodes`；原生方式是 `~/.persona/bin/nodes`） |
-| `PUID` / `PGID`、`TZ` | 见上 |
-| `JARVIS_IMAGE`、`JARVIS_POSTGRES_IMAGE`、`JARVIS_PORT` | compose 用：两个镜像从哪拉、hub 映射到宿主的哪个端口。`JARVIS_IMAGE` 也传进 hub 容器：hub 查它的标签，看有没有新镜像（见下「升级」） |
+| `PUID` / `PGID`、`TZ` | 见上（`PUID` / `PGID` 不设时取 `data/` 的属主） |
+| `JARVIS_IMAGE`、`JARVIS_POSTGRES_IMAGE`、`JARVIS_PORT`、`JARVIS_TLS_PORT` | compose 用：两个镜像从哪拉、hub 的 HTTP / TLS 端口映射到宿主的哪个端口。`JARVIS_IMAGE` 也传进 hub 容器：hub 查它的标签，看有没有新镜像（见下「升级」） |
 | `JARVIS_REGISTRY_TOKEN` | 镜像是私有的时候，一个能读它的 token（GitHub：`read:packages` 的 Personal Access Token），hub 拿它查新镜像；公开的镜像不用 |
 
 原生方式也认这些变量（例如 systemd 的 `Environment=`），只是平时用不着。
@@ -178,7 +200,7 @@ docker compose logs hub
 
 在 `netstat` 的本地地址列找 18660 端口，读取对应的 **Foreign Address**（去掉端口）。短连接可反复请求并重复查看；`docker network inspect` 的 `Gateway` 不足以确定转发来源，认证日志的 `source` 又是脱敏后的网段，不能直接拿来放行整个网段。
 
-优先给 hub 配置 TLS，并映射 TLS 监听端口（[network.md](network.md)）。仅本机 HTTP 试用时：
+优先走 TLS：新装的 hub 已开 TLS、compose 已映射 18662；更早装的在 `data/hub.json` 加 `public.tls_listen`（[network.md](network.md)）。仅本机 HTTP 试用时：
 
 - 先在 `.env` 里设置 `JARVIS_PORT=127.0.0.1:18660`，运行 `docker compose up -d` 重新创建端口映射。
 - 把观察到的远端地址写进 `data/hub.json` 的 `security.trusted_cidrs`（IPv4 用单地址 `/32`，IPv6 用 `/128`，保留已有配置），再 `docker compose restart hub`。
@@ -198,7 +220,7 @@ docker compose logs hub
   见 [network.md](network.md)「来源判断与反向代理」。
 - **Docker Desktop / OrbStack**：转发来源可能是网关，也可能是 gvisor 提供的公网形态地址。按上面的「Docker Desktop / OrbStack 的明文连接」查实际对端；仅本机试用时，端口绑定 `127.0.0.1`，再把实际来源填入 `JARVIS_ADMIN_CIDRS`。API 的白名单需另设 `security.trusted_cidrs`。
 - **`loopback`** 在容器里是容器自己：`docker compose exec hub wget -qO- http://127.0.0.1:18660/admin` 这类用法，平时基本用不上。
-- **`any`** 要 hub 开 TLS（`data/hub.json` 的 `public.tls_listen`），并在 compose 里把 TLS 端口也映射出来。
+- **`any`** 要 hub 开 TLS（`data/hub.json` 的 `public.tls_listen`；第一次启动写的 `hub.json` 已经开了，compose 也映射了 18662；更早装的要自己加上）。
 - 忘了密码：`docker compose exec hub personad hub admin reset-password`。
 - 「重启 hub」按钮在容器里可用：hub 退出后由 `restart: unless-stopped` 拉起来。
 
@@ -219,6 +241,6 @@ tailcat key、网页版、`hub.json` 的属主。PR 上只构建 linux/amd64 那
 
 ```sh
 docker build --build-arg VERSION=dev-local -t jarvis-hub .
-cd deploy/docker && cp .env.example .env    # 填好，JARVIS_IMAGE=jarvis-hub
+cd deploy/docker && cp .env.example .env    # JARVIS_IMAGE=jarvis-hub，JARVIS_PUBLIC_URL 填本机地址
 docker compose up -d
 ```

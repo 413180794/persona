@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import persona.core.contracts.api.AppUpdate
@@ -42,7 +43,10 @@ internal object AppInstaller {
             val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
                 setAppPackageName(context.packageName)
                 setSize(apk.length())
-                setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+                // API 30 always asks the user to confirm an update; from 31 the session must ask for it explicitly.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+                }
             }
             val sessionId = installer.createSession(params)
             try {

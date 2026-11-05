@@ -90,14 +90,17 @@ jobs:
           echo "COMPOSE_PROJECT_NAME=persona-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
           echo "PERSONA_CI_PORT=$port" >> "$GITHUB_ENV"
+          tls_port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
+          echo "PERSONA_CI_TLS_PORT=$tls_port" >> "$GITHUB_ENV"
 
       - name: Smoke test with compose
         run: |
           docker run --rm jarvis-hub:ci version | grep -qx '${{ steps.version.outputs.version }}'
           cd "$PERSONA_CI_COMPOSE_DIR"
           smoke_url="http://127.0.0.1:${PERSONA_CI_PORT}"
-          printf 'JARVIS_IMAGE=jarvis-hub:ci\nJARVIS_PORT=127.0.0.1:%s\nJARVIS_PUBLIC_URL=http://127.0.0.1:%s\nJARVIS_DB_PASSWORD=%s\nPUID=%s\nPGID=%s\n' \
-            "$PERSONA_CI_PORT" "$PERSONA_CI_PORT" "$(openssl rand -hex 24)" "$(id -u)" "$(id -g)" > .env
+          # No JARVIS_DB_PASSWORD: the first start makes one up (deploy/docker/compose.yaml, docs/docker.md).
+          printf 'JARVIS_IMAGE=jarvis-hub:ci\nJARVIS_PORT=127.0.0.1:%s\nJARVIS_TLS_PORT=127.0.0.1:%s\nJARVIS_PUBLIC_URL=http://127.0.0.1:%s\nPUID=%s\nPGID=%s\n' \
+            "$PERSONA_CI_PORT" "$PERSONA_CI_TLS_PORT" "$PERSONA_CI_PORT" "$(id -u)" "$(id -g)" > .env
           docker compose up -d
           ok=
           for _ in $(seq 1 60); do
@@ -111,6 +114,10 @@ jobs:
           key_output="$(docker compose exec -T hub jarvisd hub tailcat-key)"
           printf '%s\n' "$key_output" | grep -q '^nodekey:'
           curl -fsS "${smoke_url}/" | grep -qi '<html'
+          # A first start's hub.json turns TLS on, and compose publishes it.
+          curl -fsSk "https://127.0.0.1:${PERSONA_CI_TLS_PORT}/api/v1/health" >/dev/null
+          docker compose exec -T --user 0 hub test -s /home/jarvis/.jarvis/docker/db-password
+          docker compose exec -T --user 0 hub grep -q '"first_setup": "code"' /home/jarvis/.jarvis/hub.json
           # The admin UI (docs/admin.md): there inside the container (loopback); from the runner through the port
           # mapping the container sees the bridge's gateway, which is never LAN, so it is not there.
           docker compose exec -T hub wget -qO- http://127.0.0.1:18660/admin | grep -q 'Persona 管理'

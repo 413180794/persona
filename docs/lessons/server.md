@@ -575,6 +575,14 @@ hub 到一台电脑只有约 30 KB/s 时，那台的链路反复以「no pong wi
   要根治得把大消息拆成小帧写（`Writer` 分段），或者只在连接闲着时 ping。
 - hub 转发 Persona Link 的消息时一条最多写 1 分钟（`spliceWS`），比约 17 KB/s 还慢的链路上 1 MiB 一块照样超时；要么分块更小，要么按链路速度定这个时限。
 
+## Docker：容器写不了 `.env`，postgres 自己的回环不验密码（2026-11-06，#4045）
+
+- `.env` 是 compose 在宿主机上插值用的，容器起来之前就读完了；`${X:?}` 也是那时候报错。想「首次启动补上缺的值」只能把值存进挂载的目录（库密码放 `data/docker/db-password`），再让镜像里的脚本读，不能指望回写 `.env`。
+- 先起的是 postgres（hub `depends_on` 它），所以随机密码要在 postgres 的入口里生成：compose 里把它的 `entrypoint` 包一层 `sh -c`（`$` 写成 `$$`），覆盖 `entrypoint` 后镜像的 `CMD` 也没了，要再写 `command: ["postgres"]`。
+- 验证密码别在 postgres 容器里 `psql -h 127.0.0.1`：官方镜像的 `pg_hba.conf` 对本机回环是 `trust`，错的密码也能连上；从同一网络的另一个容器连 `postgres` 才验密码。
+- 拼数据库地址的地方用 `postgres://jarvis:${JARVIS_DB_PASSWORD:-}@…`，不用 `${X:+…}`：老的 docker-compose（v1）不认 `:+`。
+- 随机密码只在还没有数据库时生成：postgres 只在初始化数据目录时读 `POSTGRES_PASSWORD`，数据库已经在了（只恢复了 `postgres/`、删了 `data/`）时生成一个新的只会和库里的对不上。
+
 ## 别让 `http.Server` 直接读 `websocket.NetConn`（2026-11-06，#3498）
 
 #3630 把扩展挪到管理者后，hub 经转发流把请求交给管理者，管理者在流上跑 `http.Server`，流本身是 `websocket.NetConn`。普通请求和 SSE 都好，扩展的
