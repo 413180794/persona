@@ -80,37 +80,73 @@ final class InboxStore {
         WatchSync.shared.push(summary: AppModel.shared.watchSummary())
     }
 
-    /// 全部标为已处理 (the view's open items), 全部看过 / 全部清除 (a section), and their 撤销: one request for them
-    /// all (docs/inbox.md「全部标为已处理」). Shown at once; the hub files each as the list showed it, so one that took
-    /// new messages since stays open (it goes back here too), and a failure puts them all back. Filing ends with a
-    /// toast and its 撤销, which brings back what was filed.
+    /// 全部看过 / 全部清除 (a section), Mac's multi-select, and every 撤销: one request for them all on the 已处理 request
+    /// (docs/inbox.md「全部标为已处理」). Shown at once; the hub files each as the list showed it, so one that took new
+    /// messages since stays open (it goes back here too), and a failure puts them all back. Filing ends with a toast and
+    /// its 撤销, which brings back what was filed.
     func setDone(_ list: [InboxItem], _ done: Bool, undoable: Bool = true) {
         guard let api = AppModel.shared.api else { return }
+        run(list, done: done, action: .done) { targets in
+            let r = try await self.fileDone(targets, done, api: api)
+            return (r, undoable && !r.changed.isEmpty ? .legacy(r.changed) : nil)
+        }
+    }
+
+    /// 全部标为已处理 / 全部忽略 (the view's open items, its filters and search): the hub's bulk request
+    /// (`POST /api/v1/inbox/bulk`, docs/inbox.md「一键清理」); on a hub without it 已处理 goes the old way and 忽略 says
+    /// it is not supported. Same as above: shown at once, put back on a failure, a toast whose 撤销 sends the hub's `undo`.
+    func clean(_ list: [InboxItem], _ action: InboxBulk.Action) {
+        guard let api = AppModel.shared.api else { return }
+        run(list, done: true, action: action) { targets in
+            try await InboxBulk.perform(action, targets,
+                                        bulk: { try await api.bulkInbox($0.rawValue, $1) },
+                                        legacy: { try await self.fileDone($0, true, api: api) })
+        }
+    }
+
+    private func run(_ list: [InboxItem], done: Bool, action: InboxBulk.Action,
+                     send: @escaping ([InboxItem]) async throws -> (result: InboxBulkResult, undo: InboxBulk.Undo?)) {
         let targets = InboxBulk.targets(list.compactMap { it in items.first { $0.id == it.id } }, done: done)
         guard !targets.isEmpty else { return }
         let before = Dictionary(targets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        items = InboxBulk.marking(items, ids: Set(before.keys), done: done, now: .now)
+        items = InboxBulk.marking(items, ids: Set(before.keys), done: done, now: .now, by: action)
         done ? Haptics.success() : Haptics.tap()
         Task {
             do {
-                let result: InboxBulkResult
-                do {
-                    result = try await api.setInboxDone(targets, done)
-                } catch let e as APIError where e.status == 404 || e.status == 405 {
-                    result = try await setEach(targets, done, api: api) // a hub from before the bulk request
-                }
+                let (result, undo) = try await send(targets)
                 items = InboxBulk.settle(items, before: before, result: result)
                 let snapshot = items
                 saver.run { StateCache.save(Self.stateName, snapshot) }
                 if InboxBulk.changedSince(result) > 0 { reload() }
-                let moved = result.changed
-                let undo = undoable && !moved.isEmpty
-                    ? Toast.Action(title: "撤销") { [weak self] in self?.setDone(moved, !done, undoable: false) } : nil
-                AppModel.shared.toast = Toast(InboxBulk.message(done: done, result: result), style: .success, action: undo)
+                let button = undo.map { u in Toast.Action(title: String(localized: "撤销")) { [weak self] in self?.undo(u, done: done) } }
+                AppModel.shared.toast = Toast(InboxBulk.message(done: done, result: result, action: action), style: .success, action: button)
             } catch {
-                items = items.map { before[$0.id] ?? $0 }
+                items = InboxBulk.rollback(items, before: before)
                 AppModel.shared.show(error)
             }
+        }
+    }
+
+    /// The toast's 撤销: the hub's `undo` as it came (only what that request changed), or the 已处理 request back.
+    private func undo(_ undo: InboxBulk.Undo, done: Bool) {
+        switch undo {
+        case .legacy(let moved):
+            setDone(moved, !done, undoable: false)
+        case .bulk(let u):
+            guard let api = AppModel.shared.api else { return }
+            let ids = Set(u.ids)
+            run(items.filter { ids.contains($0.id) }, done: false, action: .done) { _ in
+                (InboxBulk.result(try await api.undoInboxBulk(u)), nil)
+            }
+        }
+    }
+
+    /// The 已处理 request for many, one at a time on a hub from before it.
+    private func fileDone(_ targets: [InboxItem], _ done: Bool, api: APIClient) async throws -> InboxBulkResult {
+        do {
+            return try await api.setInboxDone(targets, done)
+        } catch let e as APIError where e.status == 404 || e.status == 405 {
+            return try await setEach(targets, done, api: api) // a hub from before the bulk request
         }
     }
 

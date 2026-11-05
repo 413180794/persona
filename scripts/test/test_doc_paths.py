@@ -2,8 +2,9 @@
 
 Files move often (the Persona rename, scripts split by purpose, Persona Link moving under apple/); a doc that still points
 at the old place sends the next reader, or Agent, looking for a file that is gone. This checks every `backticked` path that
-starts with a top-level directory of the repository. Dated records under docs/archive/ and the redesign drafts keep the
-paths of their own time and are not checked; neither are the rename docs, which name the retired paths on purpose.
+starts with a top-level directory of the repository, and Go paths written relative to server/ (internal/hub/...). Dated
+records under docs/archive/ and the redesign drafts keep the paths of their own time and are not checked; neither are the
+rename docs, which name the retired paths on purpose.
 """
 from pathlib import Path
 import re
@@ -16,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # Top-level directories whose paths docs quote. Paths under scripts/ are often written relative to it (deploy/deploy.sh).
 TOP = ("android", "apple", "deploy", "docs", "integrations", "scripts", "server", "site", "spec", "web", "prototypes")
+
+# Go paths docs write relative to server/, the module root (go test ./internal/hub, internal/hub/hub.go).
+SERVER_RELATIVE = ("internal",)
 
 SKIP_FILES = {
     "docs/rename.md",
@@ -54,6 +58,12 @@ ELSEWHERE = {
     "scripts/ol.sh",  # inside skills/lark-connector/ (docs/assistant.md)
     # The Go check's overlay maps this absent path to a test source in /tmp (spec/fixtures/sort/README.md).
     "server/internal/hub/spec_sort_fixture_test.go",
+    "internal/authflow/flow.go",  # in the cli/cli source (docs/connectors.md)
+    "internal/middleware/auth.go",  # in the relay-history source (docs/lessons/agents.md)
+    "internal/application/accountusage",  # in the relay-history source (docs/usage-windows.md)
+    "internal/domain/account",  # in the relay-history source (docs/usage-windows.md)
+    "internal/plugin",  # the retired package name in the extension rename table (docs/extensions.md)
+    "internal/larkcli",  # the planned adapter package (docs/plan-lark-cli.md)
 }
 
 QUOTED = re.compile(r"`([^`\s]+)`")
@@ -70,7 +80,7 @@ def quoted_paths(line):
     for token in QUOTED.findall(line):
         # The spec READMEs name a symbol after a full-width colon: `apple/Shared/Models.swift：Interaction`.
         path = re.split(r"[:：]", token.split("#", 1)[0], maxsplit=1)[0].rstrip(".,;/")
-        if "/" not in path or path.split("/", 1)[0] not in TOP:
+        if "/" not in path or path.split("/", 1)[0] not in TOP + SERVER_RELATIVE:
             continue
         # Placeholders, globs, prefixes of a family of files and elided paths are not literal paths.
         if any(mark in path for mark in ("<", ">", "*", "{", "$", "…", "...")) or path.endswith(("-", "_")):
@@ -95,7 +105,11 @@ def generated_screenshot(path):
 def exists(path):
     if path in GENERATED_SCREENSHOTS:
         return generated_screenshot(path)
-    return path in GENERATED or path in ELSEWHERE or (ROOT / path).exists() or (ROOT / "scripts" / path).exists()
+    if path in GENERATED or path in ELSEWHERE:
+        return True
+    if path.split("/", 1)[0] in SERVER_RELATIVE:
+        return (ROOT / "server" / path).exists()
+    return (ROOT / path).exists() or (ROOT / "scripts" / path).exists()
 
 
 class DocPathTests(unittest.TestCase):
@@ -133,6 +147,20 @@ class DocPathTests(unittest.TestCase):
         checked = {doc.relative_to(ROOT).as_posix() for doc in doc_files()}
         self.assertIn("spec/README.md", checked)
         self.assertIn("spec/fixtures/wire/README.md", checked)
+
+    def test_server_relative_go_paths_resolve_under_server(self):
+        self.assertEqual(["internal/hub/hub.go"], list(quoted_paths("see `internal/hub/hub.go` and `internal` and `go`")))
+        with tempfile.TemporaryDirectory(prefix="doc-server-paths-") as directory:
+            root = Path(directory)
+            with patch(__name__ + ".ROOT", root):
+                (root / "server/internal/devices").mkdir(parents=True)
+                (root / "server/internal/devices/tailcat_e2e_test.go").write_text("package devices\n")
+                (root / "internal/hub").mkdir(parents=True)
+                (root / "internal/hub/tailcat_e2e_test.go").write_text("package hub\n")
+                self.assertTrue(exists("internal/devices/tailcat_e2e_test.go"))
+                # Only server/ counts: a file at the repository root or a moved file does not satisfy the doc.
+                self.assertFalse(exists("internal/hub/tailcat_e2e_test.go"))
+                self.assertFalse(exists("internal/node/missing_test.go"))
 
     def test_quoted_repository_paths_exist(self):
         missing = []

@@ -198,7 +198,7 @@ hub 的「完成」推送等这些跑完、父会话被叫醒的那一轮结束�
 
 ## 验证
 
-- `go test ./internal/node -run 'TestBridge|TestPollAgentsPublishesWithoutHerdr'`、`./internal/hub -run TestBridgeLauncher`。
+- `go test ./internal/node -run 'TestRuntime|TestPollAgentsPublishesWithoutHerdr'`、`./internal/hub -run TestRuntimeLauncher`。
 - `cd integrations/dsh && npm test`：映射、分页、发送、watch 的连续性、逐字、授权 / 提问 / 计划 / 迟到的回答、重连；归档和关闭、改名后的 hello / 卡片 id、
   手机工具的注册和调用（`dsh.test.js`）；伴随进程的离线列表、翻页、唤醒和交回、旧 node 上不连（`files.test.js`）。
 - node：`go test ./internal/node -run 'TestRuntime'`（含 runtime id 冲突、同一进程重连、启动器只有一个主人、交回的三种结果：`runtimes_identity_test.go`；

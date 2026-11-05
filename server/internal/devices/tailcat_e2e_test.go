@@ -24,7 +24,7 @@ import (
 //
 //	go build -ldflags "-X main.version=v1" -o /tmp/jarvisd-v1 ./cmd/jarvisd
 //	go build -ldflags "-X main.version=v2" -o /tmp/jarvisd-v2 ./cmd/jarvisd
-//	JARVIS_TEST_TAILCAT=1 JARVIS_TEST_V1=/tmp/jarvisd-v1 JARVIS_TEST_V2=/tmp/jarvisd-v2 go test ./internal/hub -run TailcatEndToEnd
+//	JARVIS_TEST_TAILCAT=1 JARVIS_TEST_V1=/tmp/jarvisd-v1 JARVIS_TEST_V2=/tmp/jarvisd-v2 go test ./internal/devices -run TailcatEndToEnd
 func TestTailcatEndToEnd(t *testing.T) {
 	v1, v2 := os.Getenv("JARVIS_TEST_V1"), os.Getenv("JARVIS_TEST_V2")
 	if os.Getenv("JARVIS_TEST_TAILCAT") != "1" || v1 == "" || v2 == "" {

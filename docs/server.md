@@ -409,7 +409,7 @@ hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）�
   6. 验证：机器列表的 `tailcat_path` 还是 `direct`；node 的日志是 `DERP region 9xx`；两边的 personad 只连到 derper 的端口，没有到公共中继的连接（`ss -tnp` / `lsof -i`）。
 - **只管 hub ↔ node**：手机 / 网页到 hub 仍然需要一个能访问到的入口（`public_url`）。
 - 联调（要外网）：`JARVIS_TEST_TAILCAT=1 go test ./internal/tunnel -run EndToEnd`（真实中继上的拨号、鉴权、上传），以及
-  `internal/hub/tailcat_e2e_test.go` 顶部注释里的命令（两版真实 personad：ssh 不通 → 走 tailcat 上线 → 经 tailcat 部署新版本并重连）。
+  `internal/devices/tailcat_e2e_test.go` 顶部注释里的命令（两版真实 personad：ssh 不通 → 走 tailcat 上线 → 经 tailcat 部署新版本并重连）。
   `JARVIS_TAILCAT_DEBUG=1` 打开 tailscale 的日志（默认静音，打洞期间每秒好几行）。
 
 ## 数据库（Postgres）

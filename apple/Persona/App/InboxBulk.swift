@@ -1,8 +1,62 @@
 import Foundation
 
-/// The arithmetic of filing many inbox items at once (全部标为已处理, 全部看过 / 全部清除, and 撤销), kept apart from
+/// The arithmetic of filing many inbox items at once (全部标为已处理, 全部忽略, 全部看过 / 全部清除, and 撤销), kept apart from
 /// `InboxStore` so it can be tested without a hub (docs/inbox.md「全部标为已处理」).
 nonisolated enum InboxBulk {
+    /// The view-wide clean-up (`POST /api/v1/inbox/bulk`'s `action`): 全部标为已处理, or 全部忽略 — filed the same way,
+    /// recorded as dismissed (looked at, nothing to do) rather than handled.
+    enum Action: String, Sendable, CaseIterable {
+        case done
+        case dismiss
+
+        /// The `done_by` the item shows before the hub answers.
+        var doneBy: String { self == .done ? "user" : "dismissed" }
+    }
+
+    /// From this many items on, the clean-up asks first (fewer are done at once, with 撤销 after); the web's and
+    /// Android's threshold too (docs/inbox.md「一键清理」).
+    static let confirmFrom = 10
+
+    static func needsConfirm(_ count: Int) -> Bool { count >= confirmFrom }
+
+    /// What 撤销 sends after a clean-up: the hub's `undo` (only what that request changed), or — on a hub from before
+    /// `/bulk` — the 已处理 request bringing back what moved.
+    enum Undo: Sendable, Equatable {
+        case bulk(InboxBulkReply.Undo)
+        case legacy([InboxItem])
+    }
+
+    /// The bulk request's answer as the arithmetic below reads it.
+    static func result(_ reply: InboxBulkReply) -> InboxBulkResult {
+        InboxBulkResult(changed: reply.changed, unchanged: reply.unchanged, skipped: reply.skipped)
+    }
+
+    /// 全部忽略 on a hub from before `/bulk`: the 已处理 request cannot say 忽略, so it is refused, not filed as handled.
+    static var dismissUnsupported: APIError {
+        APIError(status: 405, message: String(localized: "这台 hub 的版本不支持忽略，更新 hub 后再试"))
+    }
+
+    /// Sends a clean-up: the bulk request, or on a hub from before it (404 / 405) the 已处理 one for 全部标为已处理
+    /// (全部忽略 says it is not supported). The requests come in so it can be tested without a hub.
+    static func perform(_ action: Action, _ targets: [InboxItem],
+                        bulk: (Action, [InboxItem]) async throws -> InboxBulkReply,
+                        legacy: ([InboxItem]) async throws -> InboxBulkResult) async throws -> (result: InboxBulkResult, undo: Undo?) {
+        do {
+            let reply = try await bulk(action, targets)
+            let r = result(reply)
+            return (r, reply.undo.map(Undo.bulk) ?? (r.changed.isEmpty ? nil : .legacy(r.changed)))
+        } catch let e as APIError where e.status == 404 || e.status == 405 {
+            guard action == .done else { throw dismissUnsupported }
+            let r = try await legacy(targets)
+            return (r, r.changed.isEmpty ? nil : .legacy(r.changed))
+        }
+    }
+
+    /// The list with what a failed request had moved put back as it was.
+    static func rollback(_ items: [InboxItem], before: [String: InboxItem]) -> [InboxItem] {
+        items.map { before[$0.id] ?? $0 }
+    }
+
     /// What a bulk request moves: the items not in that state yet.
     static func targets(_ list: [InboxItem], done: Bool) -> [InboxItem] {
         var seen = Set<String>()
@@ -10,12 +64,12 @@ nonisolated enum InboxBulk {
     }
 
     /// The list with `ids` filed (or brought back) at `now`, as it shows before the hub answers.
-    static func marking(_ items: [InboxItem], ids: Set<String>, done: Bool, now: Date) -> [InboxItem] {
+    static func marking(_ items: [InboxItem], ids: Set<String>, done: Bool, now: Date, by action: Action = .done) -> [InboxItem] {
         items.map { it in
             guard ids.contains(it.id) else { return it }
             var it = it
             it.doneAt = done ? now : nil
-            it.doneBy = done ? "user" : nil
+            it.doneBy = done ? action.doneBy : nil
             return it
         }
     }
@@ -36,23 +90,37 @@ nonisolated enum InboxBulk {
     static func changedSince(_ result: InboxBulkResult) -> Int { result.skipped.filter { $0.reason == "changed" }.count }
 
     /// The toast after the hub answered.
-    static func message(done: Bool, result: InboxBulkResult) -> String {
+    static func message(done: Bool, result: InboxBulkResult, action: Action = .done) -> String {
         let moved = result.changed.count
         let fresh = changedSince(result)
-        let head = done ? (moved > 0 ? "已将 \(moved) 件标为已处理" : "没有要标的") : (moved > 0 ? "已移回 \(moved) 件" : "没有要移回的")
-        return fresh > 0 ? head + "，\(fresh) 件有新消息，留在收件箱" : head
+        let head: String
+        switch (done, action) {
+        case (true, .done): head = moved > 0 ? String(localized: "已将 \(moved) 件标为已处理") : String(localized: "没有要标的")
+        case (true, .dismiss): head = moved > 0 ? String(localized: "已忽略 \(moved) 件") : String(localized: "没有要忽略的")
+        case (false, _): head = moved > 0 ? String(localized: "已移回 \(moved) 件") : String(localized: "没有要移回的")
+        }
+        return fresh > 0 ? head + String(localized: "，\(fresh) 件有新消息，留在收件箱") : head
+    }
+
+    /// The question before a large clean-up (the web's and Android's words).
+    static func confirmTitle(_ action: Action) -> String {
+        action == .done ? String(localized: "全部标为已处理？") : String(localized: "全部忽略？")
+    }
+
+    static func confirmMessage(count: Int, filters: [String], query: String) -> String {
+        String(localized: "将处理 \(count) 件（\(scope(filters: filters, query: query))）。之后进来的新消息不受影响，完成后可以撤销。")
     }
 
     /// What 全部标为已处理 covers, for the menu: the filters' names and the search, or 全部.
     static func scope(filters: [String], query: String) -> String {
         var parts = filters.filter { !$0.isEmpty }
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !q.isEmpty { parts.append("搜索「\(q)」") }
-        return parts.isEmpty ? "全部" : parts.joined(separator: " · ")
+        if !q.isEmpty { parts.append(String(localized: "搜索「\(q)」")) }
+        return parts.isEmpty ? String(localized: "全部") : parts.joined(separator: " · ")
     }
 
     /// The menu's line under 全部标为已处理: what it covers and how many.
     static func scopeLine(filters: [String], query: String, count: Int) -> String {
-        count == 0 ? "没有未处理的" : "\(scope(filters: filters, query: query)) · \(count) 件"
+        count == 0 ? String(localized: "没有未处理的") : String(localized: "\(scope(filters: filters, query: query)) · \(count) 件")
     }
 }

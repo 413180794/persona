@@ -53,6 +53,7 @@ struct InboxPage: View {
     @State private var composing: ComposeDraft?
     @State private var editingDraft: InboxItem? // 修改 on the AI 分身's draft
     @State private var showingMutes = false     // 已静音
+    @State private var confirming: InboxBulk.Action? // 全部标为已处理 / 全部忽略 over many items asks first
     private var store: InboxStore { .shared }
 
     /// The kind filters, by key.
@@ -110,7 +111,9 @@ struct InboxPage: View {
 
                         // Mail accounts are managed in 设置 › 连接器 › 邮箱 (2026-11-01, with this device's data and 飞书).
                         Menu {
-                            markAllButton
+                            cleanButton(.done)
+                            cleanButton(.dismiss)
+                            Divider()
                             Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: Theme.Icon.compose) }
                                 .disabled(accounts.isEmpty)
                             Button { showingMutes = true } label: { Label("已静音", systemImage: Theme.Icon.mute) }
@@ -122,6 +125,15 @@ struct InboxPage: View {
                 .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
                 .sheet(item: $editingDraft) { InboxDraftSheet(item: $0, accounts: accounts) }
                 .sheet(isPresented: $showingMutes) { InboxMutesView() }
+                .confirmationDialog(confirming.map(InboxBulk.confirmTitle) ?? "",
+                                    isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
+                                    titleVisibility: .visible, presenting: confirming) { action in
+                    Button(action == .done ? "全部标为已处理" : "全部忽略") { clean(action, confirmed: true) }
+                        .accessibilityIdentifier("inbox.cleanConfirm")
+                    Button("取消", role: .cancel) {}
+                } message: { _ in
+                    Text(InboxBulk.confirmMessage(count: cleanScope.count, filters: filterNames, query: query))
+                }
                 // A plugin enabled or set up since: its sources' items open as it draws them.
                 .task { await InboxItemSlots.shared.reload() }
                 .task {
@@ -160,18 +172,29 @@ struct InboxPage: View {
         return names
     }
 
-    /// 全部标为已处理: the open items the list shows now (its filters and search), in one request, with 撤销 after.
-    /// The Agents waiting at the top are not inbox items: they wait for an answer, not to be filed.
-    private var markAllButton: some View {
-        let scope = kind == "agent" ? [] : openItems
-        return Button {
-            withAnimation(Theme.Motion.standard) { store.setDone(scope, true) }
-        } label: {
-            Label("全部标为已处理", systemImage: Theme.Icon.doneAll)
+    /// What 全部标为已处理 / 全部忽略 cover: the open items the list shows now (its filters and search). The Agents
+    /// waiting at the top are not inbox items: they wait for an answer, not to be filed.
+    private var cleanScope: [InboxItem] { kind == "agent" ? [] : openItems }
+
+    /// 全部标为已处理 / 全部忽略, with what they cover and how many under the name; from `InboxBulk.confirmFrom`
+    /// items on they ask first. One request, 撤销 after (docs/inbox.md「一键清理」).
+    private func cleanButton(_ action: InboxBulk.Action) -> some View {
+        let scope = cleanScope
+        return Button { clean(action, confirmed: false) } label: {
+            Label(action == .done ? "全部标为已处理" : "全部忽略", systemImage: action == .done ? Theme.Icon.doneAll : Theme.Icon.dismissAll)
             Text(InboxBulk.scopeLine(filters: filterNames, query: query, count: scope.count))
         }
         .disabled(scope.isEmpty)
-        .accessibilityIdentifier("inbox.markAllDone")
+        .accessibilityIdentifier(action == .done ? "inbox.markAllDone" : "inbox.dismissAll")
+    }
+
+    private func clean(_ action: InboxBulk.Action, confirmed: Bool) {
+        let scope = cleanScope
+        if !confirmed && InboxBulk.needsConfirm(scope.count) {
+            confirming = action
+            return
+        }
+        withAnimation(Theme.Motion.standard) { store.clean(scope, action) }
     }
 
     private var list: some View {

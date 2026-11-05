@@ -316,10 +316,13 @@ hub 在转给管理者之前就拦下（403，管理者那边也查）；连接�
 - **撤销**：回答里的 `ids` 是这次改了的，`undo` 是 `{action:"reopen", ids}`，原样发回去就只移回这次改的。toast 上 5 秒的「撤销」就发它。
 - **确认**：10 件及以上先确认（「将处理 N 件（范围）。之后进来的新消息不受影响，完成后可以撤销。」），少的直接做、靠撤销。范围和件数是点的那一刻列表上的。
 - **入口**：网页筛选那一行右边的「全部标为已处理」按钮照旧，旁边的「⋯」里是「全部标为已处理」「全部忽略」（手机宽度只有「⋯」）；
-  Android 顶栏「更多」的动作表里两项。iOS / Mac / 手表另做（同一个接口）。手表（只能作答的设备）调不了 `/bulk`，扩展要 `inbox.write`。
-- **旧 hub**：没有 `/bulk`（404 / 405）时，已处理和移回退回 `/done`，忽略报错。
+  Android 顶栏「更多」的动作表里两项。iOS「更多」里「全部标为已处理」「全部忽略」两项（下面一行写范围和件数）；Mac 工具栏两个按钮，
+  菜单栏「收件箱」菜单 ⇧⌘E / ⌥⇧⌘E（收件箱在前时）。Apple 端带当前筛选和搜索下未处理条目的 `items`（id + version），不用 `filter`；
+  分段的「全部看过」「全部清除」照旧走 `/done`。手表上收件箱只有单件已处理，不放这个入口。手表（只能作答的设备）调不了 `/bulk`，扩展要 `inbox.write`。
+- **旧 hub**：没有 `/bulk`（404 / 405）时，已处理和移回退回 `/done`，忽略报错（Apple 端提示「这台 hub 的版本不支持忽略」，列表恢复）。
 - 测试：`inbox_bulk_test.go`（`TestInboxBulkFilterAsOf`：截止之后的新条目和新消息不动、忽略、撤销只移回这次的；ids、单件忽略、坏请求），
-  `hub/inbox_test.go` `TestInboxBulkPermissions`（手表、只有 `inbox.read` 的扩展不行）；网页 `inbox.test.ts`；Android `InboxBulkTest`、`InboxRepositoryTest`、`InboxAssistantTransportTest`。
+  `hub/inbox_test.go` `TestInboxBulkPermissions`（手表、只有 `inbox.read` 的扩展不行）；网页 `inbox.test.ts`；Android `InboxBulkTest`、`InboxRepositoryTest`、`InboxAssistantTransportTest`；
+  Apple `InboxBulkTests`（回包和 `undo`、旧 hub 退回、失败回滚、确认门槛）、UI 测试 `InboxMarkAllTests`（全部已处理 / 全部忽略 + 撤销发回 `undo`，`MOCK_INBOX_EXTRA` 时看确认框）。
 
 ## App
 

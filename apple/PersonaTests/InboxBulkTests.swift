@@ -54,4 +54,103 @@ final class InboxBulkTests: XCTestCase {
         XCTAssertEqual(InboxBulk.scopeLine(filters: [], query: " 周报 ", count: 2), "搜索「周报」 · 2 件")
         XCTAssertEqual(InboxBulk.scopeLine(filters: ["飞书"], query: "", count: 0), "没有未处理的")
     }
+
+    // MARK: 一键清理 (POST /api/v1/inbox/bulk)
+
+    func testDismissShowsAsDismissed() throws {
+        let a = try item("a"), b = try item("b")
+        let shown = InboxBulk.marking([a, b], ids: ["a"], done: true, now: .now, by: .dismiss)
+        XCTAssertTrue(shown[0].isDone)
+        XCTAssertEqual(shown[0].doneBy, "dismissed")
+        XCTAssertFalse(shown[1].isDone)
+        XCTAssertNil(InboxBulk.marking(shown, ids: ["a"], done: false, now: .now)[0].doneBy, "brought back has no done_by")
+    }
+
+    func testReplyDecodes() throws {
+        let reply = try JSON.decoder.decode(InboxBulkReply.self, from: Data("""
+        {"action":"dismiss","changed":[{"id":"a","source":"lark","kind":"dm","account":"feishu","account_name":"飞书","title":"a",
+          "preview":"","count":1,"done_at":"2026-11-05T08:00:00Z","done_by":"dismissed"}],"ids":["a"],"unchanged":["c"],
+         "skipped":[{"id":"b","reason":"changed"}],"undo":{"action":"reopen","ids":["a"]}}
+        """.utf8))
+        XCTAssertEqual(reply.ids, ["a"])
+        XCTAssertEqual(reply.changed.first?.doneBy, "dismissed", "done_by=dismissed reads")
+        XCTAssertTrue(reply.changed.first?.isDone == true)
+        XCTAssertEqual(reply.undo, .init(action: "reopen", ids: ["a"]))
+        let result = InboxBulk.result(reply)
+        XCTAssertEqual(result.unchanged, ["c"])
+        XCTAssertEqual(InboxBulk.message(done: true, result: result, action: .dismiss), "已忽略 1 件，1 件有新消息，留在收件箱")
+        XCTAssertEqual(InboxBulk.message(done: true, result: InboxBulkResult(changed: [], unchanged: [], skipped: []), action: .dismiss), "没有要忽略的")
+
+        let reopen = try JSON.decoder.decode(InboxBulkReply.self, from: Data(#"{"action":"reopen","changed":[],"ids":[],"unchanged":[],"skipped":[]}"#.utf8))
+        XCTAssertNil(reopen.undo, "a reopen has no undo")
+        // The body the undo is sent back as: the reply's own, unchanged.
+        let sent = try JSONSerialization.jsonObject(with: JSONEncoder().encode(reply.undo!)) as? [String: Any]
+        XCTAssertEqual(sent?["action"] as? String, "reopen")
+        XCTAssertEqual(sent?["ids"] as? [String], ["a"])
+    }
+
+    func testPerformSendsTheBulkRequestAndKeepsItsUndo() async throws {
+        let a = try item("a"), b = try item("b")
+        var sent: [(InboxBulk.Action, [String])] = []
+        var legacyCalls = 0
+        var filed = a
+        filed.doneAt = .now
+        filed.doneBy = "dismissed"
+        let (result, undo) = try await InboxBulk.perform(.dismiss, [a, b],
+            bulk: { sent.append(($0, $1.map(\.id))); return InboxBulkReply(action: "dismiss", changed: [filed], unchanged: ["b"], undo: .init(action: "reopen", ids: ["a"])) },
+            legacy: { _ in legacyCalls += 1; return InboxBulkResult(changed: [], unchanged: [], skipped: []) })
+        XCTAssertEqual(sent.count, 1)
+        XCTAssertEqual(sent.first?.0, .dismiss)
+        XCTAssertEqual(sent.first?.1, ["a", "b"])
+        XCTAssertEqual(legacyCalls, 0)
+        XCTAssertEqual(result.changed.map(\.id), ["a"])
+        XCTAssertEqual(undo, .bulk(.init(action: "reopen", ids: ["a"])), "撤销 sends the hub's undo")
+    }
+
+    func testOlderHub() async throws {
+        let a = try item("a")
+        for status in [404, 405] {
+            var legacy: [String] = []
+            let (result, undo) = try await InboxBulk.perform(.done, [a],
+                bulk: { _, _ in throw APIError(status: status, message: "not found") },
+                legacy: { legacy = $0.map(\.id); return InboxBulkResult(changed: $0, unchanged: [], skipped: []) })
+            XCTAssertEqual(legacy, ["a"], "\(status): 已处理 goes to the old request")
+            XCTAssertEqual(result.changed.map(\.id), ["a"])
+            XCTAssertEqual(undo, .legacy([a]), "and 撤销 the old way")
+
+            legacy = []
+            do {
+                _ = try await InboxBulk.perform(.dismiss, [a],
+                    bulk: { _, _ in throw APIError(status: status, message: "not found") },
+                    legacy: { legacy = $0.map(\.id); return InboxBulkResult(changed: $0, unchanged: [], skipped: []) })
+                XCTFail("\(status): 忽略 went through")
+            } catch let e as APIError {
+                XCTAssertEqual(e.message, InboxBulk.dismissUnsupported.message)
+            }
+            XCTAssertEqual(legacy, [], "\(status): 忽略 was filed as handled on an old hub")
+        }
+    }
+
+    func testPerformFailureRollsBack() async throws {
+        let a = try item("a"), b = try item("b")
+        let before = ["a": a]
+        let shown = InboxBulk.marking([a, b], ids: ["a"], done: true, now: .now, by: .dismiss)
+        do {
+            _ = try await InboxBulk.perform(.dismiss, [a],
+                bulk: { _, _ in throw APIError(status: 500, message: "boom") },
+                legacy: { _ in XCTFail("a server error is no older hub"); return InboxBulkResult(changed: [], unchanged: [], skipped: []) })
+            XCTFail("the error went missing")
+        } catch let e as APIError {
+            XCTAssertEqual(e.status, 500)
+        }
+        XCTAssertEqual(InboxBulk.rollback(shown, before: before), [a, b], "the failure puts the list back as it was")
+    }
+
+    func testConfirmsFromTen() {
+        XCTAssertFalse(InboxBulk.needsConfirm(9))
+        XCTAssertTrue(InboxBulk.needsConfirm(10))
+        XCTAssertEqual(InboxBulk.confirmTitle(.done), "全部标为已处理？")
+        XCTAssertEqual(InboxBulk.confirmTitle(.dismiss), "全部忽略？")
+        XCTAssertEqual(InboxBulk.confirmMessage(count: 12, filters: ["飞书"], query: ""), "将处理 12 件（飞书）。之后进来的新消息不受影响，完成后可以撤销。")
+    }
 }

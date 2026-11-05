@@ -27,6 +27,7 @@ struct PersonaMacApp: App {
         .commands {
             MacCommands(model: model)
             MacAgentMenu(model: model)
+            MacInboxMenu(model: model)
             MacViewMenu(model: model)
         }
         .onChange(of: phase) { _, new in

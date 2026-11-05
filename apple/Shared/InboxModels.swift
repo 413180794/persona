@@ -338,6 +338,19 @@ extension APIClient {
                        as: InboxBulkResult.self)
     }
 
+    /// 全部标为已处理 / 全部忽略 (`POST /api/v1/inbox/bulk`, docs/inbox.md「一键清理」): `action` is `done` or `dismiss`,
+    /// each item with the version it was listed at (the hub leaves one that took new messages since: `skipped`, changed).
+    func bulkInbox(_ action: String, _ items: [InboxItem]) async throws -> InboxBulkReply {
+        try await post("/api/v1/inbox/bulk",
+                       body: InboxBulkActionBody(action: action, items: items.map { .init(id: $0.id, version: $0.version) }),
+                       as: InboxBulkReply.self)
+    }
+
+    /// The reply's `undo` sent back as it came (`{action: "reopen", ids}`): brings back only what that request changed.
+    func undoInboxBulk(_ undo: InboxBulkReply.Undo) async throws -> InboxBulkReply {
+        try await post("/api/v1/inbox/bulk", body: undo, as: InboxBulkReply.self)
+    }
+
     private nonisolated struct InboxMutes: Decodable, Sendable { var mutes: [InboxMute] }
     private nonisolated struct MuteBody: Encodable, Sendable { var itemID: String; var tag: String
         enum CodingKeys: String, CodingKey { case tag, itemID = "item_id" }
@@ -401,10 +414,48 @@ nonisolated struct InboxMute: Codable, Identifiable, Hashable, Sendable {
 }
 
 
-private nonisolated struct InboxBulkBody: Encodable, Sendable {
+nonisolated struct InboxBulkBody: Encodable, Sendable {
     struct Target: Encodable, Sendable { var id: String; var version: String? }
     var done: Bool
     var items: [Target]
+}
+
+private nonisolated struct InboxBulkActionBody: Encodable, Sendable {
+    var action: String
+    var items: [InboxBulkBody.Target]
+}
+
+/// What `POST /api/v1/inbox/bulk` answers: the items it changed (as the hub has them now) and their ids, the ones
+/// already so, the ones it left, and the `undo` to send back for 撤销 (none for a reopen).
+nonisolated struct InboxBulkReply: Decodable, Sendable, Equatable {
+    nonisolated struct Undo: Codable, Sendable, Equatable {
+        var action: String
+        var ids: [String]
+    }
+    var action: String?
+    var changed: [InboxItem]
+    var ids: [String]
+    var unchanged: [String]
+    var skipped: [InboxBulkResult.Skip]
+    var undo: Undo?
+
+    init(action: String? = nil, changed: [InboxItem] = [], ids: [String]? = nil, unchanged: [String] = [],
+         skipped: [InboxBulkResult.Skip] = [], undo: Undo? = nil) {
+        self.action = action; self.changed = changed; self.ids = ids ?? changed.map(\.id)
+        self.unchanged = unchanged; self.skipped = skipped; self.undo = undo
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        action = try c.decodeIfPresent(String.self, forKey: .action)
+        changed = try c.decodeIfPresent([InboxItem].self, forKey: .changed) ?? []
+        ids = try c.decodeIfPresent([String].self, forKey: .ids) ?? changed.map(\.id)
+        unchanged = try c.decodeIfPresent([String].self, forKey: .unchanged) ?? []
+        skipped = try c.decodeIfPresent([InboxBulkResult.Skip].self, forKey: .skipped) ?? []
+        undo = try c.decodeIfPresent(Undo.self, forKey: .undo)
+    }
+
+    private enum CodingKeys: String, CodingKey { case action, changed, ids, unchanged, skipped, undo }
 }
 
 /// What a bulk 已处理 / 撤销 did: the items it moved (as the hub has them now), the ones already so, and the ones it
