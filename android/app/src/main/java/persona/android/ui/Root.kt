@@ -478,11 +478,18 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                         style == AppStyle.Glass -> Box(Modifier.fillMaxSize()) {
                             // Without the dock the page keeps no room for it (a conversation over the card would float
                             // a dock's height above it).
-                            CompositionLocalProvider(LocalChromeInsets provides if (web) ChromeInsets() else dockInsets) { entry.Content() }
+                            // The keyboard rises over the dock, so the dock's room counts as consumed: a page's imePadding()
+                            // then pads only the part of the keyboard above it, not the dock's height on top of it (#867).
+                            val insets = if (web) ChromeInsets() else dockInsets
+                            CompositionLocalProvider(LocalChromeInsets provides insets) {
+                                Box(Modifier.consumeWindowInsets(PaddingValues(bottom = insets.bottom))) { entry.Content() }
+                            }
                             if (!web) dock.value(Modifier.align(Alignment.BottomCenter))
                         }
                         else -> Column(Modifier.fillMaxSize().background(PersonaTheme.palette.background)) {
-                            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalChromeInsets provides dockInsets) { entry.Content() } }
+                            // The page ends at the dock's top: its insets leave out what lies below it (the dock, which the
+                            // keyboard covers), so its imePadding() does not pad for the dock again (#867).
+                            Box(Modifier.weight(1f).fillMaxWidth().recalculateWindowInsets()) { CompositionLocalProvider(LocalChromeInsets provides dockInsets) { entry.Content() } }
                             dock.value(Modifier)
                         }
                     }
