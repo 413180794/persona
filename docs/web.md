@@ -448,7 +448,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   动作的 `push` 不问扩展，直接在这个视图自己的页面栈上推一页（画那个 `ui`，带 `state`），回答里的 `push` / `pop` 同理；栈最多 8 层，整页时浏览器的后退会退回上一页，顶上一行「‹ 上一页的标题」；
   卡片和别的页面里的一节（总览、机器页、启动器页）没有栈：push 打开扩展的整页 `/extension/<扩展>/<页面>?state=…`。`extension_ui {invalidate}` 让正在显示的页重画（一秒最多一次），不在屏幕上的等回来再画。
   助手回答里的 ```` ```persona-view ```` 和 ```` ```persona-card ```` 用同一套组件画（`ui/AssistantCard.tsx`、`lib/assistant-view.ts`）：前者是一个 View 或一个组件，后者按 `sdk/go/wire/personacard.go` 的规则换成 View，
-  `schema/extension/examples/persona-card/` 的每个用例都在单元测试里逐个比对；按钮、字段这类会动的不画，读不出来（还没写完、写错了）的照旧是代码块。截图：`MOCK_PLUGINS=1` 的 `example-gateway` 的「笔记（组件 v3）」页、`MOCK_CARDS=1` 的主对话。
+  `schema/extension/examples/persona-card/` 的每个用例都在单元测试里逐个比对；按钮、字段这类会动的不画，读不出来（还没写完、写错了）的照旧是代码块。截图：`MOCK_PLUGINS=1` 的 `example-gateway` 的「笔记（组件 v3）」页、`MOCK_CARDS=1` 的主对话、默认假 hub 的健康对话（`docs/health.md`「图表」）。
   `inbox_item`（#1681，`docs/extensions.md`「收件箱条目」）：同一个缓存的列表里带 `connector` 的那几项，打开一件事时按条目的 `source` 找（`useInboxItemPlace`），不另外问 hub；
   找到了就由 `views/inbox/InboxExtensionBody.tsx` 在详情的头部下面画扩展的 View（`context.item` 是条目 id），条目的 `version` 变了（来了新消息）就重画、正在填的字段留着；
   hub 回 403 / 404（只读设备、条目没了、连接器不归它）直接画原来的正文，扩展出错时也画原来的正文，上面一行「…的详情没画出来」和「重试」。

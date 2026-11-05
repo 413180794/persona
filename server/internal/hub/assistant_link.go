@@ -465,6 +465,10 @@ func (a assistantRemote) UserSpoke(_ context.Context, r assistantwire.SessionRef
 	a.notify(assistantwire.EventUserSpoke, r)
 }
 
+func (a assistantRemote) UserStopped(_ context.Context, r assistantwire.SessionRef) {
+	a.notify(assistantwire.EventUserStopped, r)
+}
+
 func (a assistantRemote) TurnStarted(_ context.Context, r assistantwire.SessionRef) {
 	a.notify(assistantwire.EventTurnStarted, r)
 }

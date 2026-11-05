@@ -518,6 +518,12 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 			return err
 		}
 		s.UserSpoke(ctx, p)
+	case assistantwire.EventUserStopped:
+		var p SessionRef
+		if err := decode(&p); err != nil {
+			return err
+		}
+		go s.UserStopped(context.WithoutCancel(ctx), p)
 	case assistantwire.EventTurnStarted:
 		var p SessionRef
 		if err := decode(&p); err != nil {

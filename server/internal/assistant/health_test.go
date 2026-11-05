@@ -3,10 +3,12 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -248,5 +250,34 @@ func TestHealthSpaceOutbound(t *testing.T) {
 	}
 	if _, isErr := spaceTool(t, s, "sleep-000-0000", "delete_routine", `{"id":"`+healthID+`"}`); isErr {
 		t.Fatal("health could not delete its own routine")
+	}
+}
+
+// The health space's CLAUDE.md says which chart goes with which numbers (#3140): line for the last days' steps and
+// sleep, bar for each meal's calories, stacked_bar for how the day's calories are split, stat for one number, a table
+// for the details, the conclusion in the text. Each example it gives is a card every app draws.
+func TestHealthClaudeMDTeachesCharts(t *testing.T) {
+	md := newTestService(t, healthHub()).healthClaudeMD(context.Background(), "server")
+	examples := regexp.MustCompile("`(\\{\"type\":[^`]*\\})`").FindAllStringSubmatch(md, -1)
+	kinds := map[string]bool{}
+	for _, m := range examples {
+		var c wire.PersonaCard
+		if err := json.Unmarshal([]byte(m[1]), &c); err != nil {
+			t.Fatalf("example %s: %v", m[1], err)
+		}
+		if c.View() == nil {
+			t.Errorf("an example the apps cannot draw: %s", m[1])
+		}
+		kinds[c.Type] = true
+	}
+	for _, k := range []string{"line", "bar", "stacked_bar", "stat"} {
+		if !kinds[k] {
+			t.Errorf("no %s example", k)
+		}
+	}
+	for _, want := range []string{"近 7 天", "每餐", "全天", "单个", "表格", "正文", "飞书"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("CLAUDE.md does not say %q", want)
+		}
 	}
 }

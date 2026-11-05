@@ -63,8 +63,8 @@ const usage = `usage:
   personad hub peer add <code>|-   pair this hub with the hub whose code it is
   personad hub peer list           the paired hubs and the ones found on the LAN
   personad hub peer remove <hub_id>
-  personad hub peer center [<hub_id>] [--confirm]   make that hub (this one by default) the group's center
                            unpair a hub (its credential is revoked on both sides)
+  personad hub peer center [<hub_id>] [--confirm]   make that hub (this one by default) the group's center
   personad hub doctor       只读检查 hub 配置、网络和证书
   personad hub admin …      the admin UI on this machine: access <scope>, reset-password (docs/admin.md)
   personad hub tailcat-key  print the hub's tailcat key (created the first time), for "node tailcat init --hub"
@@ -440,6 +440,6 @@ func resetMachineUID() error {
 		return err
 	}
 	fmt.Println(uid)
-	fmt.Fprintln(os.Stderr, "已换成新的机器 uid。重启这台电脑上的常驻 node（scripts/node-launchd.sh install 会重启它），hub 下次连上时就用新的。")
+	fmt.Fprintln(os.Stderr, "已换成新的机器 uid。重启这台电脑上的常驻 node（scripts/deploy/node-launchd.sh install 会重启它），hub 下次连上时就用新的。")
 	return nil
 }

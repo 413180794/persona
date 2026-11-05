@@ -95,6 +95,7 @@ func New(o Options) *Service {
 	}
 	s.models.secret = secretkey.New(o.SecretKey)
 	s.archiveRoutes()
+	s.reporterRoutes()
 	s.originRoutes()
 	s.profileRoutes()
 	s.startRoutes()
@@ -367,6 +368,9 @@ func (s *Service) UserSpoke(ctx context.Context, r SessionRef) {
 	s.releasePushes(ctx, r.SessionID) // the user speaks: its turns are pushed as ever (supervise.go)
 	s.unarchiveOnSend(r.MachineID, r.SessionID)
 	s.userSpoke(r.SessionID)
+	if s.reporterStopped(ctx, r.SessionID) { // talked to again: its tasks are told to it again (#3308)
+		s.setReporterStopped(ctx, r.SessionID, "")
+	}
 }
 
 // TurnStarted: one of a task's agents is working; what was going to be done about an agent's last turn is off.

@@ -40,5 +40,8 @@
   "muted_note": "解除すると今後のものだけが入ります。処理済みにしたものは戻りません。",
   "failed_title": "受信トレイを読み込めませんでした",
   "failed_hint": "接続を確認して、もう一度お試しください。",
-  "retrying": "再試行中…"
+  "retrying": "再試行中…",
+  "count_items": "メッセージ{count}件",
+  "count_agents": "エージェント{count}件",
+  "count_separator": "、"
 }

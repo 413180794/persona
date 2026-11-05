@@ -123,5 +123,6 @@
   "folded_needs_you": "要対応{count}件",
   "folded_unread": "未確認{count}件",
   "folded_working": "作業中{count}件",
-  "unread_messages_count": "未読メッセージ{count}件"
+  "unread_messages_count": "未読メッセージ{count}件",
+  "inbox_badge_title": "受信トレイ：要対応のメッセージ{count}件のみ。待機中のエージェントは「概要」へ"
 }

@@ -128,6 +128,8 @@ var routeScopes = map[string]string{
 	"GET /api/v1/assistant":                              extension.ScopeAssistantAsk,
 	"POST /api/v1/assistant/conversations":               extension.ScopeAssistantAsk,
 	"GET /api/v1/assistant/conversations/{id}/feed":      extension.ScopeAssistantAsk,
+	"POST /api/v1/assistant/conversations/{id}/stop":     extension.ScopeAssistantAsk, // /agent's /stop (#3308)
+	"GET /api/v1/assistant/reporters":                    extension.ScopeAssistantAsk,
 	// The todos (the assistant's, relayed): reading them, and adding, editing and attaching agents and spaces. Deleting
 	// a todo, its decisions, the done check and a retry stay with full credentials.
 	"GET /api/v1/todos":                                 extension.ScopeTodosRead,

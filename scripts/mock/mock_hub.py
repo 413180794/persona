@@ -976,6 +976,7 @@ ASSISTANT += [
     health_sess("hlth0001-0000-4000-8000-000000000001", "这周的睡眠", 40, "这周平均每晚睡 6 小时 42 分，比上周少 18 分钟。"),
     health_sess("hlth0002-0000-4000-8000-000000000002", "体检报告：血脂", 60 * 26, "LDL 3.6 mmol/L，略高于参考范围，建议三个月后复查。"),
     health_sess("hlth0003-0000-4000-8000-000000000003", "步数目标", 60 * 70, "最近 7 天平均 7,860 步，离每天 8,000 步差一点。"),
+    health_sess("hlth0004-0000-4000-8000-000000000004", "今天吃了什么", 15, "今天吃了 1,830 kcal，还能吃 420 kcal。"),
 ]
 HEALTH_MEMORY = [
     {"name": "MEMORY.md", "content": "- [步数目标](step-goal.md) — 每天 8000 步", "updated_at": ago(days=2)},
@@ -5798,6 +5799,44 @@ if os.environ.get("MOCK_CARDS") == "1":
             _card({"type": "pie", "segments": [{"label": "a", "value": 1}]}),
         ])),
     ]
+# The health space's conversations (docs/health.md「图表」, #3140): the numbers in each answer come with the charts its
+# CLAUDE.md asks for: sleep and steps by day as lines, a stat for today's steps, each meal's calories as bars, how the
+# day's calories split as a stacked bar, the details as a table. Made-up numbers.
+_hcard = lambda d: "```persona-card\n" + json.dumps(d, ensure_ascii=False) + "\n```"
+_hdays = ["10/30", "10/31", "11/1", "11/2", "11/3", "11/4", "11/5"]
+ITEMS["hlth0001-0000-4000-8000-000000000001"] = (
+    [it("user", "text", 41, text="这周我睡得怎么样？")]
+    + tool("mcp__jarvis__phone_health_summary", {"metrics": ["sleep"], "days": 7}, "7 天的睡眠：6.9、6.4、7.1、6.2、6.8、6.5、7.0 小时", 41)
+    + [it("assistant", "text", 40, text="\n\n".join([
+        "这周平均每晚睡 **6 小时 42 分**，比上周少 18 分钟；10/31 最少，只睡了 6 小时 12 分。",
+        _hcard({"type": "line", "title": "近 7 天睡眠", "unit": "小时", "note": "平均 6.7 小时 · 上周 7.0 小时",
+                "points": [{"label": d, "value": v} for d, v in zip(_hdays, [6.9, 6.4, 7.1, 6.2, 6.8, 6.5, 7.0])]}),
+        "差得不多，但连着几天少于 7 小时白天容易犯困。可以先试两件事：每天同一时间起床（周末也是），睡前一小时把手机放远一点。"]))]
+)
+ITEMS["hlth0003-0000-4000-8000-000000000003"] = (
+    [it("user", "text", 71, text="最近 7 天步数和上周比怎么样")]
+    + tool("mcp__jarvis__phone_health_summary", {"metrics": ["steps"], "days": 14}, "14 天的步数（按天）", 71)
+    + [it("assistant", "text", 70, text="\n\n".join([
+        "最近 7 天平均每天 **7,860 步**，比上周多 410 步，离每天 8,000 步的目标差一点；7 天里有 4 天达标。",
+        _hcard({"type": "line", "title": "近 7 天步数", "unit": "步", "note": "平均 7,860 步 · 上周 7,450 步",
+                "points": [{"label": d, "value": v} for d, v in zip(_hdays, [6420, 9105, 8230, 7310, 8890, 5980, 9085])]}),
+        "今天已经比昨天多走了一半：",
+        _hcard({"type": "stat", "title": "今天步数", "value": 9085, "unit": "步", "note": "比昨天 +52%"}),
+        "少的两天（10/30、11/4）都是工作日，午饭后散步 20 分钟（约 2,000 步）就能补上。"]))]
+)
+ITEMS["hlth0004-0000-4000-8000-000000000004"] = (
+    [it("user", "text", 16, text="帮我算算今天吃了多少热量，晚上还能吃多少")]
+    + [it("assistant", "text", 15, text="\n\n".join([
+        "今天一共吃了 **1,830 kcal**，按推荐的全天 2,250 kcal 算，**还能吃 420 kcal**；午餐最多，将近一半。",
+        _hcard({"type": "bar", "title": "今天每餐热量", "unit": "kcal",
+                "points": [{"label": "早餐", "value": 480}, {"label": "午餐", "value": 870}, {"label": "晚餐", "value": 480}]}),
+        _hcard({"type": "stacked_bar", "title": "今天的热量分配", "subtitle": "推荐全天摄入", "total": {"value": 2250, "unit": "kcal"},
+                "segments": [{"label": "早餐", "value": 480}, {"label": "午餐", "value": 870}, {"label": "晚餐", "value": 480, "note": "到现在"}],
+                "rest": {"label": "还能吃", "value": 420}}),
+        "| 餐 | 吃了什么 | 热量 |\n| --- | --- | --- |\n| 早餐 | 燕麦牛奶一碗、水煮蛋两个、苹果半个 | 480 kcal |\n"
+        "| 午餐 | 米饭一碗、宫保鸡丁一份、清炒西兰花 | 870 kcal |\n| 晚餐 | 荞麦面一碗、无糖酸奶一杯 | 480 kcal |",
+        "剩下的 420 kcal 够一份水果加一杯牛奶；宫保鸡丁油多，下次可以换成清蒸鱼，能少 200 kcal 左右。"]))]
+)
 # 统一渲染器的助手截图：一个只读 persona-view 和一个旧 persona-card，不影响其他 mock 模式。
 if os.environ.get("MOCK_EXTENSION_CARDS") == "1":
     _view = {"sections": [{"title": "本周概览", "items": [

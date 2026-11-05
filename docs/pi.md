@@ -69,7 +69,7 @@
 
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
-| `approve` | `[]` | 要在手机上（或 pi 自己的对话框里）批准才执行的工具，比如 `["bash", "write"]`。pi 本身没有权限确认，默认什么都不拦 |
+| `approve` | `[]` | 要在手机上（或 pi 自己的对话框里）批准才执行的工具，比如 `["bash", "write"]`。pi 本身没有权限确认，默认什么都不拦。手机上的卡有「总是同意」（「本会话不再问 Bash」）：点了之后这个会话里这个工具不再问，记在会话文件里（自定义条目 `jarvis-allow`，不进模型上下文），换一个 pi 进程接着这个会话也算；只允许一次、拒绝都不记 |
 | `askUser` | `true` | 给模型一个 `ask_user` 工具：问用户一个问题（可带选项），手机或 pi 的对话框作答 |
 | `answerFirst` | `auto` | 授权和提问先给谁：`auto` = 手机最近 6 小时驱动过这个会话就先给手机，否则先给本地（pi 终端 / pi-web 网页）；`phone` / `local` 固定一边 |
 | `socket` | `~/.persona/runtime.sock` | node 的 runtime socket；环境变量 `JARVIS_RUNTIME_SOCKET` 也行 |

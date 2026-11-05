@@ -37,6 +37,8 @@ type Handler interface {
 	Rename(ctx context.Context, p RenameParams) (json.RawMessage, error)
 	// UserSpoke is session.user_spoke: the user sent a message to a conversation.
 	UserSpoke(ctx context.Context, s SessionRef)
+	// UserStopped is session.user_stopped: the user stopped a conversation's turn in an app (its stop button).
+	UserStopped(ctx context.Context, s SessionRef)
 	// TurnStarted is session.turn_started: a session on a machine started a turn.
 	TurnStarted(ctx context.Context, s SessionRef)
 	// TurnEnded is session.turn_ended: a session on a machine finished a turn.

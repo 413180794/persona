@@ -123,5 +123,6 @@
   "folded_needs_you": "{count} 个需要你",
   "folded_unread": "{count} 个完成未看",
   "folded_working": "{count} 个工作中",
-  "unread_messages_count": "{count} 条未读消息"
+  "unread_messages_count": "{count} 条未读消息",
+  "inbox_badge_title": "收件箱：只数需要你处理的 {count} 条消息，在等你的 Agent 看「总览」"
 }

@@ -531,6 +531,7 @@ const (
 
 	// The hub tells the assistant (one way).
 	EventUserSpoke           = "session.user_spoke"
+	EventUserStopped         = "session.user_stopped" // the user stopped an assistant conversation's turn in an app
 	EventTurnStarted         = "session.turn_started"
 	EventTurnEnded           = "session.turn_ended"
 	EventSessionsChanged     = "sessions.changed"
@@ -571,6 +572,8 @@ type HTTPResponse struct {
 var Routes = []string{
 	"POST /api/v1/assistant/conversations/{id}/archive",
 	"POST /api/v1/assistant/conversations/{id}/unarchive",
+	"POST /api/v1/assistant/conversations/{id}/stop",
+	"GET /api/v1/assistant/reporters",
 	"GET /api/v1/assistant/conversations/{id}/feed",
 	"POST /api/v1/assistant/conversations/{id}/route",
 	"POST /api/v1/assistant/conversations/{id}/today",

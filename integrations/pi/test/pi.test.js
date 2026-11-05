@@ -242,6 +242,37 @@ test('approvals of configured tools go to the phone when it drives the session; 
   assert.equal(a.ui.confirms.length, 1)
 })
 
+test('总是同意 on a pi card is kept in the session: later calls of that tool run unasked, others still ask', async (t) => {
+  const { n, host } = await setup(t, { approve: ['bash', 'write'], answerFirst: 'phone' })
+  const a = piSession('s-al')
+  host.register(a.pi)
+  await a.fire('session_start')
+  await n.ready
+  await until('listed', () => n.last('runtime.sessions'))
+  n.resolve = () => ({ allow: true })
+  assert.equal(await a.fire('tool_call', { toolName: 'bash', toolCallId: 'c1', input: { command: 'ls' } }), undefined)
+  assert.equal(n.asked[0].always_label, '本会话不再问 Bash', 'the card says what 总是同意 allows')
+  assert.equal(await a.fire('tool_call', { toolName: 'bash', toolCallId: 'c2', input: { command: 'ls' } }), undefined)
+  assert.equal(n.asked.length, 2, 'allowing once is not kept')
+  n.resolve = () => ({ allow: true, always: true })
+  assert.equal(await a.fire('tool_call', { toolName: 'bash', toolCallId: 'c3', input: { command: 'make' } }), undefined)
+  assert.equal(n.asked.length, 3)
+  n.resolve = () => { throw new Error('asked again') }
+  assert.equal(await a.fire('tool_call', { toolName: 'bash', toolCallId: 'c4', input: { command: 'rm -rf build' } }), undefined)
+  assert.equal(n.asked.length, 3, 'the kept tool runs unasked')
+  n.resolve = () => ({ allow: false })
+  assert.deepEqual(await a.fire('tool_call', { toolName: 'write', toolCallId: 'c5', input: { path: 'x', content: '' } }), { block: true, reason: '用户在手机上拒绝了' })
+  assert.equal(n.asked.length, 4, 'another tool still asks')
+  // A new process on the same session file (pi resumed elsewhere) reads the grant from the session.
+  const kept = a.sm.entries.filter((e) => e.customType === 'jarvis-allow')
+  assert.deepEqual(kept.map((e) => e.data), [{ tool: 'bash' }])
+  const b = piSession('s-al2', '/w/app', a.sm.entries)
+  host.register(b.pi)
+  await b.fire('session_start')
+  assert.equal(await b.fire('tool_call', { toolName: 'bash', toolCallId: 'c6', input: { command: 'ls' } }), undefined)
+  assert.equal(n.asked.length, 4, 'the resumed session does not ask either')
+})
+
 test('ask_user: the phone answers when it drives the session; otherwise pi\'s own dialog', async (t) => {
   const { Type } = await import('./typebox-stub.js')
   const { n, host } = await setup(t, { answerFirst: 'phone' })

@@ -36,7 +36,7 @@
   所以健康对话和助手对话一样是「助手的对话」（`assistant: true`），用同一套工具、授权和提问。
 - **CLAUDE.md**：健康空间有自己的一份 `server/internal/prompts/assistant/health_claude_md.md`（golden：`server/internal/assistant/testdata/prompts/health_claude_md.golden`）：
   只聊健康；用 `phone_health_summary` 读数据、`phone_health_write_sample` 记数据（手机上确认）；不写知识库、不把健康内容发到别的对话；用户要分享给别人（医生、教练、家人）就帮他发，发送在手机上确认；
-  不诊断、不开药，危险信号先让用户就医；讲一组数字时附图表卡片。连接器和插件的 skill 和助手目录一样装进去，但插件给助手的说明（`plugins.Instructions`）不拼进健康的 CLAUDE.md：那些说明是给主对话的工作场景写的，第一版有意不带。
+  不诊断、不开药，危险信号先让用户就医；讲数字默认配图表卡片（下面「图表」）。连接器和插件的 skill 和助手目录一样装进去，但插件给助手的说明（`plugins.Instructions`）不拼进健康的 CLAUDE.md：那些说明是给主对话的工作场景写的，第一版有意不带。
 - **记忆**：Claude Code 的 auto memory 按工作目录分（`~/.claude/projects/<编码后的目录>/memory/`），健康目录的记忆只有健康对话读写，主对话的上下文里没有它，反过来也一样。
 - **文件**（#3282）：主对话的 Claude 能用 Read / Bash 读电脑上的文件，目录分开不等于读不到。所以主对话（不是健康空间的助手对话）启动时带上拒绝规则：
   Read、Edit 不许碰健康目录和它的 Claude 项目目录（记忆、对话记录），`server/internal/node/healthdeny.go`，CLI 经 `--disallowedTools`、Agent SDK 经 settings 的 `permissions.deny`。
@@ -116,6 +116,25 @@
 - 侧边栏「最近」「已归档」和搜索不列健康对话（`AssistantLists` 按 `Session.assistantSpace` 分开，健康的在 `AppModel.healthConversations`）。
 - 截图参数：`-tab assistant -openAssistantPage health`（新外壳 `-openShellPage health`）。单测 `PersonaTests/HealthModelTests`。
 
+## 图表（#3140）
+
+健康的回答多半是一组数字，看图比读文字快。第二版让健康空间讲数字时**默认**带 `persona-card`（#886 的图表卡片，格式和画法在 `sdk/go/wire/personacard.go`），各端按自己的能力画：
+
+| 内容 | 卡片 | 例子 |
+| --- | --- | --- |
+| 近 7 天（或更长）的步数、睡眠，体重、静息心率这类按天的趋势 | `line` | 近 7 天步数 |
+| 每餐热量（几样东西比多少，每次运动消耗） | `bar` | 今天每餐热量 |
+| 全天热量分配（一个总数里各部分各占多少） | `stacked_bar` | 今天的热量分配：早 / 午 / 晚 / 还能吃 |
+| 单个关键指标 | `stat` | 今天步数 |
+| 明细（每样食物、化验单逐项） | Markdown 表格 | |
+
+- **说明**：写在健康空间的 CLAUDE.md（`server/internal/prompts/assistant/health_claude_md.md`「讲数字默认配图表」）：按上表选，结论和关键数字写在正文、卡片放后面，一次最多三张，没有数据的那天不补 0。
+  `TestHealthClaudeMDTeachesCharts` 查四种卡片都有例子、每个例子都是各端画得出来的卡片。
+- **网页**：健康对话就是助手的对话页（`ChatView`），代码块照旧经 `ui/AssistantCard.tsx` 画成图，没有另写一套；各端画成什么样由 `schema/extension/examples/persona-card/` 的用例管着（网页是 `lib/assistant-view.test.ts`）。
+- **飞书**：卡片画不了图，代码块里的 JSON 也不是答案，机器人发出去前把每张 `persona-card` 写成一两行数字（`stat` 一行粗体数字，`line` / `bar` 一条 ▁▃█ 小图加逐个数字，`stacked_bar` 一张两列的小表），见 `docs/bots.md`「卡片」。
+
+要看效果：默认的假 hub（`python3 scripts/mock/mock_hub.py`，数字是编的）里健康空间的「这周的睡眠」「步数目标」「今天吃了什么」三个对话都带图表（截图待补）。
+
 ## 第一版不做的
 
 - Android 的入口：复用上面这套接口。
@@ -135,6 +154,6 @@
 
 - 服务端（在 `server/` 里）：`go test ./internal/assistant -run Health`（`server/internal/assistant/health_test.go`：开健康对话、列表分开、`main` 和不认识的 `space` 被拒、工具不跨空间、外发、golden）、
   `go test ./internal/hub -run Health`（推送不带正文）、`go test ./internal/connector -run ConfirmEach`、`go test ./internal/node -run LarkGateHealth`、`go test ./internal/identity`（健康目录、`SpaceOf`、`IsAssistantDir`）。
-  改了 `health_claude_md.md` 要更新 golden 并看 diff（`docs/prompts.md`）。
+  改了 `health_claude_md.md` 要更新 golden 并看 diff（`docs/prompts.md`）。图表：`go test ./internal/assistant -run HealthClaudeMDTeachesCharts`、`go test ./internal/feishubot -run PersonaCards`。
 - 网页：`cd web && npm test && npm run build`。
 - iOS / Mac：`PersonaTests/HealthModelTests`（列表和记忆带 `space`、推送叠加、侧边栏不列健康对话、新对话带 `space`），编 `Persona` 和 `PersonaMac`。

@@ -186,6 +186,7 @@ const (
 	MethodRename             = assistantwire.MethodRename
 	CodeBadRequest           = assistantwire.CodeBadRequest
 	EventUserSpoke           = assistantwire.EventUserSpoke
+	EventUserStopped         = assistantwire.EventUserStopped
 	EventTurnStarted         = assistantwire.EventTurnStarted
 	EventTurnEnded           = assistantwire.EventTurnEnded
 	EventSessionsChanged     = assistantwire.EventSessionsChanged

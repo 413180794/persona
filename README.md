@@ -11,7 +11,7 @@
 [![watchOS 10+](docs/assets/readme/badge-watchos.svg)](docs/ios.md)
 [![macOS 26+](docs/assets/readme/badge-macos.svg)](docs/mac.md)
 [![visionOS 26+](docs/assets/readme/badge-visionos.svg)](docs/vision.md)
-[![Android 12+](docs/assets/readme/badge-android.svg)](docs/android.md)
+[![Android 11+](docs/assets/readme/badge-android.svg)](docs/android.md)
 [![hub: Go 1.27](docs/assets/readme/badge-hub.svg)](docs/server.md)
 [![agents: Claude Code · Codex](docs/assets/readme/badge-agents.svg)](docs/runtimes.md)
 
@@ -38,7 +38,7 @@ Claude Code 始终跑在你自己的电脑上（[herdr](https://herdr.dev) 里�
     <td width="33%" valign="top">
       <img src="docs/assets/readme/icon-agents.svg" width="44" alt=""><br>
       <b>Agents 随身</b><br>
-      各台电脑 herdr 里的 Claude Code、Codex 一个列表。点进去实时看它读文件、跑命令、改代码。
+      各台电脑 herdr 等引擎里的 Claude Code、Codex 一个列表。点进去实时看它读文件、跑命令、改代码。
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/readme/icon-approve.svg" width="44" alt=""><br>
@@ -92,7 +92,7 @@ Claude 还能用 `phone_*` 工具读写 iPhone 上的通讯录、日历、提醒
 要准备的（完整清单和每个配置字段见 [docs/config.md](docs/config.md)）：
 
 - **hub**：一台常开的 Linux 机器，或者能跑 Docker 的 NAS
-- **电脑**：装好 Claude Code 或 Codex 的 Mac / Linux
+- **电脑**：装好 Claude Code 或 Codex 的 Mac / Linux，Windows 也能接（[docs/windows.md](docs/windows.md)）
 - **编译**：Go 1.27.1+；iOS 要装了 Xcode 和 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 的 Mac，Android 要 JDK 21 和 Android SDK
 
 **1. 写配置**：填上 bundle id、开发者团队、hub 在哪台机器、要接入哪些电脑。
@@ -108,6 +108,7 @@ cp config.example.json ~/.config/persona/config.json
 ```
 
 hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑和手机访问用的地址（[网络配置](docs/network.md)）。hub 放在 NAS 上时改用 [Docker](docs/docker.md)。
+别的电脑也可以不经 SSH：在 hub 上运行 `personad hub pair --machine <id>`，在那台电脑上用它给的链接一条命令装好 node 服务（Linux：`curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<链接>'`），Mac 用菜单栏 App「Persona Link」（[docs/link.md](docs/link.md)）。
 
 **3. 装 App，配对**
 
@@ -117,7 +118,7 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 ~/.persona/bin/personad hub pair     # 在 hub 机器上运行，用 App 扫它打印的二维码
 ```
 
-配好以后，「设置 › 机器」里每台电脑都显示在线，「Agents」里能看到它们 herdr 里的会话。
+配好以后，「设置 › 机器」里每台电脑都显示在线，「Agents」里能看到它们引擎（默认 herdr）里的会话。
 
 > [!TIP]
 > 还没有 hub？在 App 的配对页点「没有 hub？先体验一下」，用内置的演示数据把每个功能走一遍，不连任何服务器。
@@ -134,18 +135,18 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 | Apple Watch | watchOS 10 | 抬腕看谁在等你，直接批准或回答 | 随 iPhone App 安装 |
 | Mac | macOS 26 | 和 iOS 同一套逻辑层的原生 App；菜单栏 App「Persona Link」把这台 Mac 接进 hub | Xcode 编 `PersonaMac`；`./scripts/app/mac-link.sh install`（[指南](docs/persona-link-install.md)） |
 | Apple Vision Pro | visionOS 26 | 和 iOS 同一套逻辑层的原生 App：tab 在窗口侧边的装饰条里，对话可以单独开窗口，主窗口下方的「需要你」装饰条显示等你处理的事；没有灵动岛、拍照和画中画 | Xcode 编 `PersonaVision`（[docs/vision.md](docs/vision.md)） |
-| Android | Android 12 | 助手、Agents、收件箱、知识库、文件、语音入口和部分手机工具，后台通知不依赖推送服务 | `./scripts/app/android.sh install` |
-| 网页 | 现代浏览器 | 由 hub 托管：Agents（连同终端、文件、Git）、助手、收件箱、机器监控 | 打开 hub 的地址 |
+| Android | Android 11 | 助手、Agents、收件箱、知识库、文件、语音入口和部分手机工具，后台通知不依赖推送服务 | `./scripts/app/android.sh install` |
+| 网页 | 现代浏览器 | 由 hub 托管：Agents（连同终端、文件、Git）、助手、收件箱、知识库、待办、健康、机器监控；可以装成 App（PWA） | 打开 hub 的地址 |
 
 | 接入 | 支持 |
 | --- | --- |
-| Agent | Claude Code、Codex；pi、DSH 等运行时经 [runtime SDK](docs/runtimes.md) 接入 |
-| 终端引擎 | herdr（默认）、Herdr App、Orca，每台电脑选一个（[docs/engines.md](docs/engines.md)） |
-| 飞书 | 私聊机器人就是和 Persona 主对话说话；助手可以用官方 lark-cli。消息进收件箱和知识库、群里或文档评论里发 `/agent …` 起 Agent、App 里的飞书聊天，由接飞书的插件提供（`docs/extensions.md`） |
+| Agent | Claude Code、Codex；pi、opencode、DSH 等运行时经 [runtime SDK](docs/runtimes.md) 接入 |
+| 引擎 | herdr（默认）、Herdr App、Orca、Paseo，每台电脑选一个；装了 botmux 的电脑，botmux 里的会话也一起显示（[docs/engines.md](docs/engines.md)） |
+| 飞书 | 私聊机器人就是和 Persona 主对话说话；助手可以用官方 lark-cli。消息进收件箱和知识库、群里或文档评论里发 `/agent …` 起 Agent、App 里的飞书聊天，由接飞书的扩展提供（[docs/extensions.md](docs/extensions.md)） |
 | 邮件 | 任意 IMAP / SMTP；Gmail 和 Outlook 用账号登录授权（[docs/mail.md](docs/mail.md)） |
 | GitHub | 收件箱、搜索和读取；评论、review 过确认闸门 |
 | iMessage | 读 Mac 上的「信息」，要给那台 Mac 上的 personad 完全磁盘访问权限 |
-| Telegram | 你自己的账号，只读 |
+| Telegram | 你自己的账号，只读；从扩展市场装 |
 | 微信 | 经 wechat-connector 的公开 API 接入（另行部署的服务，填地址和应用密钥），私聊和群里 @ 你的进收件箱；发送过三道锁（[docs/wechat-connector.md](docs/wechat-connector.md)） |
 
 连接器怎么接、怎么加新的，见 [docs/connectors.md](docs/connectors.md)。
@@ -177,10 +178,10 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 
 ## 目前的限制
 
-- 界面只有中文。
+- iPhone、Apple Watch、Mac 和 Vision Pro 的界面只有中文；网页和 Android 可以选简体中文、English、日本語（[docs/i18n.md](docs/i18n.md)）。
 - Apple 平台没有上架 App Store：iPhone 用 [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)安装（不限人数），或自己编译；Vision Pro 版目前只能自己编译。
 - hub 的原生装法只支持 Linux（systemd + Docker 里的 Postgres）；别的系统用 Docker 跑 hub，那台机器不能同时跑 Agent。
-- Android 还没和 iOS 完全对齐：健康工具没做，后台通知要在系统设置里放开后台运行（[docs/android.md](docs/android.md)）。
+- Android 还没和 iOS 完全对齐：健康数据只能读、不能写，后台通知要在系统设置里放开后台运行（[docs/android.md](docs/android.md)）。
 
 ## 文档
 
@@ -190,6 +191,8 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 | 用 Docker 跑 hub | [docs/docker.md](docs/docker.md) |
 | 公网直连、TLS 和配对 | [docs/network.md](docs/network.md) |
 | 服务端的几种模式和运维 | [docs/server.md](docs/server.md) |
+| 不经 SSH 接入电脑（Persona Link）、Windows 电脑 | [docs/link.md](docs/link.md) · [docs/windows.md](docs/windows.md) |
+| 引擎、接入别的 Agent 运行时 | [docs/engines.md](docs/engines.md) · [docs/runtimes.md](docs/runtimes.md) |
 | hub 的 API 和协议 | [docs/protocol.md](docs/protocol.md) |
 | 助手、收件箱、知识库 | [docs/assistant.md](docs/assistant.md) · [docs/inbox.md](docs/inbox.md) · [docs/knowledge.md](docs/knowledge.md) |
 | 各端 App | [iOS](docs/ios.md) · [Mac](docs/mac.md) · [Vision Pro](docs/vision.md) · [Android](docs/android.md) · [网页](docs/web.md) |

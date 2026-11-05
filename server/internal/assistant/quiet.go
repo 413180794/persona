@@ -101,6 +101,10 @@ func (s *Service) sendQuietNotice(id string) {
 	// of now.
 	machine, to, reporting := "", "", false
 	if m, ok := s.reporterOf(ctx, n.todo.Origin); ok {
+		if s.reporterStopped(ctx, n.todo.Origin) { // the user stopped it and what it handed out (#3308)
+			s.logf("task %s: quiet notice dropped: %s was stopped", id, short(n.todo.Origin))
+			return
+		}
 		machine, to, reporting = m, n.todo.Origin, true
 	} else if here := s.settings(ctx); here.Main != "" && here.MachineID != "" {
 		machine, to = here.MachineID, here.Main

@@ -40,5 +40,8 @@
   "muted_note": "取消后以后的才会进来，已经收掉的不回来。",
   "failed_title": "收件箱没能加载",
   "failed_hint": "检查连接后再试一次。",
-  "retrying": "正在重试…"
+  "retrying": "正在重试…",
+  "count_items": "{count} 条消息",
+  "count_agents": "{count} 个 Agent",
+  "count_separator": "，"
 }

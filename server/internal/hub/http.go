@@ -113,7 +113,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items/{iid}/full", h.withMachine(h.sessionItemFull))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/messages", h.withClientOp("message", h.withMachine(h.sendMessage)))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/attach", h.proxyBody("session.attach"))
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/interrupt", h.withClientOp("interrupt", h.proxyBody("session.interrupt")))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/interrupt", h.withClientOp("interrupt", h.withMachine(h.interruptSession)))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/keys", h.proxyBody("session.keys"))
 	// #2436: rewind a Claude session to before one of its messages (rewind.go); a full device only, it restores files
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rewind", h.withClientOp("rewind", h.withMachine(h.rewindSession)))
@@ -508,6 +508,36 @@ func (h *Hub) proxyBody(method string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = w.Write(out)
 	})
+}
+
+// interruptSession stops a session's turn (session.interrupt). One of the assistant's conversations stopped here is
+// the user's stop button in an app: the assistant is told, so a Feishu /agent request it works on is stopped as well
+// (#3308; the plugin's own /stop goes through the assistant, not here).
+func (h *Hub) interruptSession(w http.ResponseWriter, r *http.Request, m *Machine) {
+	p := map[string]any{}
+	if r.ContentLength != 0 {
+		if err := decodeJSONBody(w, r, &p, 32<<20); err != nil && !errors.Is(err, io.EOF) {
+			writeBodyErr(w, err, err)
+			return
+		}
+	}
+	if p == nil {
+		p = map[string]any{}
+	}
+	sid := r.PathValue("sid")
+	p["session_id"] = sid
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+	var out json.RawMessage
+	if err := m.call(ctx, "session.interrupt", p, &out); err != nil {
+		callErr(w, err)
+		return
+	}
+	if s, ok := m.session(sid); ok && (s.Assistant || isAssistant(s, m.assistantCwd())) {
+		h.asst().UserStopped(r.Context(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: sid})
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_, _ = w.Write(out)
 }
 
 func (h *Hub) listSessions(w http.ResponseWriter, r *http.Request) {

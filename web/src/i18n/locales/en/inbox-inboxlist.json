@@ -44,5 +44,10 @@
   "muted_note": "Unmuting lets new ones in; what was already filed stays filed.",
   "failed_title": "Couldn't load the inbox",
   "failed_hint": "Check the connection and try again.",
-  "retrying": "Retrying…"
+  "retrying": "Retrying…",
+  "count_items_one": "{count} message",
+  "count_items_other": "{count} messages",
+  "count_agents_one": "{count} agent",
+  "count_agents_other": "{count} agents",
+  "count_separator": ", "
 }

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/channel"
 )
 
@@ -47,10 +48,11 @@ const (
 	Wathet = "wathet"
 )
 
-// NewCard starts a card; an empty title leaves the header out. summary is what the chat list shows for it.
+// NewCard starts a card; an empty title leaves the header out. summary is what the chat list shows for it (an
+// assistant card in it as its title or fallback, never its JSON).
 func NewCard(title, template, summary string) *Card {
 	cfg := map[string]any{"update_multi": true}
-	if s := strings.TrimSpace(summary); s != "" {
+	if s := strings.TrimSpace(wire.AssistantCardText(summary)); s != "" {
 		cfg["summary"] = map[string]any{"content": clipRunes(oneLine(s), 60)}
 	}
 	c := &Card{Schema: "2.0", Config: cfg, Body: cardBody{Elements: []any{}}}
@@ -202,8 +204,10 @@ var (
 )
 
 // CardMarkdown turns GitHub Markdown (a model's answer) into what a card shows as written: outside code, "<" is
-// escaped, since cards read <at>, <font>, <link>… as their own tags (and drop what they do not know).
+// escaped, since cards read <at>, <font>, <link>… as their own tags (and drop what they do not know). The assistant's
+// persona-card charts are written as numbers first (PersonaCards).
 func CardMarkdown(s string) string {
+	s = PersonaCards(s)
 	var b strings.Builder
 	last := 0
 	for _, loc := range fenceRe.FindAllStringIndex(s, -1) {

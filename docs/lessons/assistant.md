@@ -84,3 +84,5 @@
   node 只在进程还活着时拒绝换类型，进程一退就 `claude --resume <Codex 线程 id>`，回 `No conversation found`，消息停在「没能确认是否送达」，界面是「会话已结束」，从 19:39 坏到深夜。
   更糟的是失败的那次启动已把会话状态的 `launcher` 改成了 Claude 的，原来的 Codex 启动器名丢了。现在续聊前先看对话记录是哪一种（`assistantResumeLauncher`），
   类型不合就用它自己的、或同类的 `claude` / `codex`；查这类问题先 `rg <id> ~/.persona/node-attach.log`，看是哪个启动器、什么时候开始退的。
+- 助手对话（`claude -p`）被停时 transcript 里没有「已中断」（2026-11-06，#3308）：`assistantInterrupt` 直接杀进程，不会写 `[Request interrupted by user]`，
+  所以插件从 `items` 看不出这一轮是被 App 的停止按钮停的，只会把半截的最后一段当答案发出去。要知道「被停了」只能靠 hub：interrupt 路由停的是助手对话时发 `session.user_stopped`，助手记下来，插件读 `GET /api/v1/assistant/reporters`。

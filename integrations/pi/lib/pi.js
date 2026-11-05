@@ -12,7 +12,7 @@
 import { basename } from 'node:path'
 import { readFileSync, statSync } from 'node:fs'
 import { createRuntime, installCurrent, interactionId, page, RpcError, snippet, summaryOf, verifyPackage } from '../../runtime-sdk/index.js'
-import { branchItems, branchKey, entryItems, firstText, HOST_ENTRY, imageOf, lastHost, lastText, partialText, toolInput, toolName } from './map.js'
+import { ALLOW_ENTRY, alwaysAllowed, branchItems, branchKey, entryItems, firstText, HOST_ENTRY, imageOf, lastHost, lastText, partialText, toolInput, toolName } from './map.js'
 
 export const RUNTIME_VERSION = '0.3.0'
 const DISK_EVERY = 30_000 // ms: list the sessions on disk at most this often (pi-web)
@@ -393,14 +393,23 @@ export function createPiHost(deps, options = {}) {
   async function approval(s, e, ctx) {
     const name = e.toolName ?? e.name
     if (!approve.has(name)) return undefined
+    const entries = ctx.sessionManager.getEntries()
+    if (alwaysAllowed(entries, name)) return undefined // 总是同意 on an earlier card of this session
     const input = e.input ?? e.args ?? {}
     const summary = summaryOf(name, input)
     if (rt.phoneFirst(s.id)) {
       const res = await rt.ask({
         id: interactionId('pi', s.id, 'permission', e.toolCallId), kind: 'permission', session_id: s.id,
         tool_name: toolName(name), tool_use_id: e.toolCallId, tool_input: toolInput(name, input), summary,
+        // Offered only where it can be kept: the grant is written into the session (ALLOW_ENTRY).
+        ...(typeof s.pi.appendEntry === 'function' ? { always_label: `本会话不再问 ${toolName(name)}` } : {}),
       }, { signal: ctx.signal })
-      if (res?.allow === true) return undefined
+      if (res?.allow === true) {
+        if (res.always === true && typeof s.pi.appendEntry === 'function' && !alwaysAllowed(ctx.sessionManager.getEntries(), name)) {
+          s.pi.appendEntry(ALLOW_ENTRY, { tool: name })
+        }
+        return undefined
+      }
       if (res?.allow === false) return { block: true, reason: res.message?.trim() || '用户在手机上拒绝了' }
     }
     if (ctx.hasUI) {

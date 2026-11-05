@@ -175,7 +175,7 @@ export function InboxList({ selected }: { selected?: string }) {
           if (!list.length && !waiting.length) return null;
           const clear = tier.key === "fyi" ? t("inbox-inboxlist.clear_fyi") : tier.key === "noise" ? t("inbox-inboxlist.clear_noise") : undefined;
           return (
-            <Section key={tier.key} k={tier.key} title={tier.title} count={list.length + waiting.length} open={open.has(tier.key)} onToggle={() => toggle(tier.key)}
+            <Section key={tier.key} k={tier.key} title={tier.title} count={sectionCount(list.length, waiting.length)} open={open.has(tier.key)} onToggle={() => toggle(tier.key)}
               action={clear && list.length ? { label: clear, run: () => setAllDone(list, true) } : undefined}>
               {waiting.map((ix) => <AgentRow key={ix.id} ix={ix} />)}
               {list.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={() => setEditing(it)} />)}
@@ -183,7 +183,7 @@ export function InboxList({ selected }: { selected?: string }) {
           );
         })}
         {s.done.length > 0 && (
-          <Section k="done" title={t("inbox-inboxlist.done")} count={s.done.length} open={open.has("done")} onToggle={() => toggle("done")}>
+          <Section k="done" title={t("inbox-inboxlist.done")} count={sectionCount(s.done.length, 0)} open={open.has("done")} onToggle={() => toggle("done")}>
             {s.done.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={() => setEditing(it)} />)}
           </Section>
         )}
@@ -194,13 +194,25 @@ export function InboxList({ selected }: { selected?: string }) {
   );
 }
 
-function Section({ k, title, count, open, onToggle, action, children }: { k: Tier | "done"; title: string; count: number; open: boolean; onToggle: () => void; action?: { label: string; run: () => void }; children: React.ReactNode }) {
+/**
+ * A section title's count, saying what it counts (#3288): the sidebar's 收件箱 badge counts messages only, while 需要你
+ * also lists the agents waiting on you (those are 总览's count), so the two are written apart: 「4 条 · 7 个 Agent」.
+ */
+export function sectionCount(items: number, agents: number): { text: string; label: string } {
+  const parts = [items > 0 && t("inbox-inboxlist.count_items", { count: items }), agents > 0 && t("inbox-inboxlist.count_agents", { count: agents })].filter((x): x is string => Boolean(x));
+  return {
+    text: items > 0 && agents > 0 ? `${items} · ${t("inbox-inboxlist.count_agents", { count: agents })}` : agents > 0 ? t("inbox-inboxlist.count_agents", { count: agents }) : String(items),
+    label: parts.join(t("inbox-inboxlist.count_separator")),
+  };
+}
+
+function Section({ k, title, count, open, onToggle, action, children }: { k: Tier | "done"; title: string; count: { text: string; label: string }; open: boolean; onToggle: () => void; action?: { label: string; run: () => void }; children: React.ReactNode }) {
   return (
     <section className="mt-4">
       <div className="flex items-center gap-2 px-1 pb-1.5">
         <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
           <span className={cx("text-[12px] font-medium whitespace-nowrap", k === "action" ? "text-ink" : "text-ink-3")}>{title}</span>
-          <span className="text-[11.5px] text-ink-3 tabular-nums">{count}</span>
+          <span title={count.label} className="text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums"><span aria-hidden>{count.text}</span><span className="sr-only">{count.label}</span></span>
           <Icon name="chevronRight" size={11} stroke={2.4} className="text-ink-3 transition-transform duration-200" style={{ transform: open ? "rotate(90deg)" : undefined }} />
         </button>
         {action && (

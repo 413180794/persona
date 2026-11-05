@@ -18,6 +18,15 @@ export const toolName = (name) => appToolName(name, OWN_TOOLS)
 // machine's terminal engine (herdr), one from pi-web in pi-web (docs/pi.md「谁管理会话」).
 export const HOST_ENTRY = 'jarvis-host'
 
+// A tool the user allowed for the rest of a session on the phone (总是同意 on an approval card): a custom entry too, so a
+// session resumed in another pi process does not ask about it again.
+export const ALLOW_ENTRY = 'jarvis-allow'
+
+/** Whether a session's entries hold 总是同意 for tool (pi's own name). */
+export function alwaysAllowed(entries, tool) {
+  return entries.some((e) => e?.type === 'custom' && e.customType === ALLOW_ENTRY && e.data?.tool === tool)
+}
+
 /** The host a session's entries last recorded, undefined when none did. */
 export function lastHost(entries) {
   for (let i = entries.length - 1; i >= 0; i--) {
