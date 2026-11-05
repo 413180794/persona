@@ -17,15 +17,17 @@ import (
 // The errors seen on broken machines (placeholders for the machines; the texts as the CLIs and gateways wrote them).
 func TestClassifyLauncherError(t *testing.T) {
 	for text, want := range map[string]string{
-		`API Error: 400 {"error":{"message":"Bare Claude model name cannot be routed"}}`: errKindModelRoute,
-		`API Error: 400 no account match for model speech_o50`:                           errKindModelRoute,
-		`session.start: context deadline exceeded`:                                       errKindTimeout,
-		`90 秒内没有回答`:                                                                      errKindTimeout,
-		`API Error: 401 {"error":"invalid or missing API key"}`:                          errKindAuth,
-		`Not logged in · Please run /login`:                                              errKindAuth,
-		`error: unknown option '--plugin-dir'`:                                           errKindCLIOutdated,
-		`Claude Code version 2.0.1 is no longer supported, please update`:                errKindCLIOutdated,
-		`zsh: command not found: work`:                                                   errKindOther,
+		`API Error: 400 {"error":{"message":"Bare Claude model name cannot be routed"}}`:        errKindModelRoute,
+		`API Error: 400 no account match for model speech_o50`:                                  errKindModelRoute,
+		`session.start: context deadline exceeded`:                                              errKindTimeout,
+		`90 秒内没有回答`:                                                                             errKindTimeout,
+		`API Error: 401 {"error":"invalid or missing API key"}`:                                 errKindAuth,
+		`Not logged in · Please run /login`:                                                     errKindAuth,
+		"`model_provider = \"trae\"` requires Trae auth. Please run `traecli auth login --sso`": errKindAuth,
+		`ERROR codex_models_manager: No Trae auth token available for Trae model fetch`:         errKindAuth,
+		`error: unknown option '--plugin-dir'`:                                                  errKindCLIOutdated,
+		`Claude Code version 2.0.1 is no longer supported, please update`:                       errKindCLIOutdated,
+		`zsh: command not found: work`:                                                          errKindOther,
 	} {
 		if got := classifyLauncherError(text); got != want {
 			t.Errorf("%q: %s, want %s", text, got, want)

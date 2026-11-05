@@ -108,7 +108,7 @@ stdin 是 /dev/null。单测：`launcherprobe_test.go` 用 `testdata/launchers.z
 ## 测试可用性（`node/launchercheck.go`）
 
 详情页「测试可用性」：在有这个启动器的每台在线电脑上（Persona 管理的在 hub 所在的机器上，管理者挑）真的发一个只回答一个词的请求
-（`claude -p … --output-format json --max-turns 1`，Codex 是 `codex exec`），在空目录里跑，90 秒超时；显示 ✓ / ✗、用时、哪个模型答的、
+（`claude -p … --output-format json --max-turns 1`，Codex 是 `codex exec`），在空目录里跑，90 秒超时；不带 hooks（`--settings` 里 `disableAllHooks`，托管启动器的 env、alias 自己的 `--settings` 照样合并进去：Persona 的 hooks 在有的电脑上会把它卡到超时，#3412）；显示 ✓ / ✗、用时、哪个模型答的、
 失败的原因（打码）。会花几个 token。`POST /api/v1/launchers/{name}/check?machine=`。
 hub 也拿它定期检查每台电脑上的每个启动器，坏了派活时绕开、能修的自动修，见 `docs/launcher-health.md`。
 

@@ -2,6 +2,8 @@ package node
 
 import (
 	"context"
+	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -191,6 +193,15 @@ func TestClaudeResultOfACheck(t *testing.T) {
 	if _, found := claudeResult("zsh: command not found: cc_nope"); found {
 		t.Fatal("not a result")
 	}
+	// iTerm's shell integration prints its escape codes (with a "{"-free payload) right before the JSON, no newline.
+	marked := "GITSTATUS_LOG_LEVEL=DEBUG\n\x1b]1337;RemoteHost=me@box\x07\x1b]1337;CurrentDir=/Users/me\x07" +
+		`{"type":"result","subtype":"success","is_error":false,"duration_ms":3696,"result":"ok","modelUsage":{"m":{}}}`
+	if r, found := claudeResult(marked); !found || r.isError || r.result != "ok" {
+		t.Fatalf("behind escape codes: %+v %v", r, found)
+	}
+	if _, found := claudeResult(`progress {"step":1}`); found {
+		t.Fatal("a JSON object that is no result")
+	}
 }
 
 // A launcher whose gateway and key are in the env of its --settings file (Claude Code reads it after it starts):
@@ -307,5 +318,24 @@ func TestProbeInBashAndZsh(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// 测试可用性 runs claude without hooks (Persona's could hold it past the timeout, #3412), and reads the answer behind a
+// shell integration's escape codes on the same line.
+func TestLauncherCheckRunsWithoutHooks(t *testing.T) {
+	seen := filepath.Join(t.TempDir(), "settings.json")
+	fakeClaudeHome(t, `last=""; while [ $# -gt 0 ]; do [ "$1" = --settings ] && last=$2; shift; done
+cat "$last" > `+shellQuote(seen)+`
+printf '\033]1337;ShellIntegrationVersion=14;shell=zsh\007{"type":"result","subtype":"success","is_error":false,"duration_ms":900,"result":"ok","modelUsage":{"m":{}}}\n'
+`)
+	home := os.Getenv("HOME")
+	n := &Node{home: home, dir: filepath.Join(home, ".jarvis"), logger: log.New(io.Discard, "", 0)}
+	r := n.launcherCheck(context.Background(), "claude")
+	if !r.OK || r.Answer != "ok" || r.Model != "m" {
+		t.Fatalf("check: %+v", r)
+	}
+	if b, _ := os.ReadFile(seen); !strings.Contains(string(b), `"disableAllHooks":true`) {
+		t.Fatalf("settings it ran with: %s", b)
 	}
 }

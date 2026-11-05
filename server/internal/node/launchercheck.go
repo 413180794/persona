@@ -36,13 +36,16 @@ func (n *Node) launcherCheck(ctx context.Context, name string) proto.LauncherChe
 	if agent != "claude" { // Codex / TRAEX: one non-interactive turn
 		args = ` exec --skip-git-repo-check ` + shellQuote(prompt)
 	}
-	if m, managed := n.managedLauncher(name); managed {
-		// Without --settings the check reads the user's global settings, whose env (another gateway) would win over
-		// the launcher's. Real starts always pass a settings file; this one carries the launcher's env too.
-		_ = m
-		if settings := n.claudeSettings(ctx, name, filepath.Join(n.dir, "claude-settings.json"), dir); settings != "" {
-			args += ` --settings ` + shellQuote(settings)
+	if agent == "claude" {
+		// No hooks: the check is no session of the user's, and Persona's own hooks can hold it past the timeout (#3412;
+		// the model list does the same, launcher_models.go). claudeSettings merges this with what the launcher needs from
+		// --settings: a managed launcher's env (else the user's global settings env, another gateway, would win), an
+		// alias's own --settings (Claude Code reads only the last one).
+		ours := filepath.Join(dir, "check-settings.json")
+		if err := os.WriteFile(ours, []byte(`{"disableAllHooks":true}`), 0o600); err != nil {
+			return proto.LauncherCheck{Error: err.Error()}
 		}
+		args += ` --settings ` + shellQuote(n.claudeSettings(ctx, name, ours, dir))
 	}
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
@@ -88,15 +91,28 @@ type claudeOut struct {
 	millis  int
 }
 
-// claudeResult reads `claude -p --output-format json`'s last JSON object (an interactive zsh may print banners first).
+// claudeResult reads `claude -p --output-format json`'s answer: the last line that holds a JSON object, from its first
+// "{" that starts one (an interactive zsh may print banners first, and a shell integration's escape codes on the same
+// line, #3412).
 func claudeResult(out string) (claudeOut, bool) {
-	i := strings.LastIndex(out, "\n{")
-	body := out
-	if i >= 0 {
-		body = out[i+1:]
-	} else if !strings.HasPrefix(out, "{") {
-		return claudeOut{}, false
+	lines := strings.Split(out, "\n")
+	for l := len(lines) - 1; l >= 0; l-- {
+		line := lines[l]
+		for i := strings.IndexByte(line, '{'); i >= 0; {
+			if r, ok := claudeResultJSON(line[i:]); ok {
+				return r, true
+			}
+			next := strings.IndexByte(line[i+1:], '{')
+			if next < 0 {
+				break
+			}
+			i += 1 + next
+		}
 	}
+	return claudeOut{}, false
+}
+
+func claudeResultJSON(body string) (claudeOut, bool) {
 	var r struct {
 		Result     string                     `json:"result"`
 		IsError    bool                       `json:"is_error"`
@@ -104,7 +120,7 @@ func claudeResult(out string) (claudeOut, bool) {
 		DurationMS int                        `json:"duration_ms"`
 		ModelUsage map[string]json.RawMessage `json:"modelUsage"`
 	}
-	if json.Unmarshal([]byte(body), &r) != nil {
+	if json.Unmarshal([]byte(strings.TrimSpace(body)), &r) != nil || (r.Result == "" && r.Subtype == "" && r.ModelUsage == nil) {
 		return claudeOut{}, false
 	}
 	c := claudeOut{result: r.Result, isError: r.IsError || (r.Subtype != "" && r.Subtype != "success"), millis: r.DurationMS}
