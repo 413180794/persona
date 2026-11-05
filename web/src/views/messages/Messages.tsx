@@ -112,7 +112,7 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
             <div className="flex h-full min-h-0 flex-col">
               <ChatHeader chat={chat} account={accounts.selectedName} />
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <LarkThread key={`${accounts.request ?? ""}:${id}`} chat={{ feed: id, title: chat?.name || t("messages-messages.lark_chat"), topic: chat?.is_topic, account: accounts.request }}
+                <LarkThread key={`${accounts.request ?? ""}:${id}`} chat={{ feed: id, title: chat?.name || t("messages-messages.lark_chat"), topic: chat?.is_topic, account: accounts.request, group: chat?.is_group }}
                   pinsOpen={pins} onPinsOpen={setPins} />
               </div>
             </div>

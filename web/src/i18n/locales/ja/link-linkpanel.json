@@ -41,5 +41,9 @@
   "send_to": "送信先：{target}",
   "send": "送信",
   "edit_placeholder": "どう修正しますか？（空欄なら選択内容に沿って修正）",
-  "edit_label": "修正内容"
+  "edit_label": "修正内容",
+  "outline": "目次",
+  "ai_summary": "AI 要約",
+  "expand": "展開",
+  "collapse": "折りたたむ"
 }

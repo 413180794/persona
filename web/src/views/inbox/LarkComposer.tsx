@@ -1,11 +1,17 @@
 // The Feishu chat's composer: text, the quoted message, and pictures / files picked, pasted or dropped
 // (docs/lark-attachments.md, iOS LarkComposer). Text and each attachment go as messages of their own.
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+// In a group, typing @ looks the members up (lib/lark-people.ts, ui/LarkPeoplePicker.tsx) and the message @s whom it
+// still names. With a `draft` key, what is typed and who is @-ed stay as the chat's draft until sent (lib/lark-chat.ts;
+// the quote is the page's and is kept with it; the box is drawn again for each chat).
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { fitPick, releaseLarkAttachments, stageLarkAttachment, type LarkAttachment } from "../../lib/lark-attachments";
+import { chatMembers, loadDraft, saveDraft, withEveryone } from "../../lib/lark-chat";
+import { mentionsIn, type LarkPerson } from "../../lib/lark-people";
 import { t } from "../../i18n";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 import { Button, cx, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { LarkPeopleMenu, useLarkPeoplePicker } from "../../ui/LarkPeoplePicker";
 import { useBraveClimbMode } from "./LarkBraveClimb";
 
 export interface LarkReplyTarget {
@@ -22,8 +28,14 @@ export interface LarkComposerHandle {
 export interface LarkComposerProps {
   replyTo?: LarkReplyTarget | null;
   onClearReply?: () => void;
-  /** Sends what is in the box; resolves false to keep it all there (nothing was sent). */
-  onSend: (text: string, attachments: LarkAttachment[], replyTo?: LarkReplyTarget) => Promise<boolean | void>;
+  /** Sends what is in the box (with whom its text still @s); resolves false to keep it all there (nothing was sent). */
+  onSend: (text: string, attachments: LarkAttachment[], replyTo?: LarkReplyTarget, mentions?: LarkPerson[]) => Promise<boolean | void>;
+  /** The chat's draft key (lib/lark-chat.ts draftKey): the text, the quote and the @-ed are kept under it. */
+  draft?: string;
+  /** A group's chat: typing @ offers its members (所有人 first). */
+  group?: boolean;
+  feed?: string;
+  account?: number;
   /** Pictures and files can be added (the hub's extension sends them, and can route them where this box sends). */
   attachments?: boolean;
   placeholder?: string;
@@ -34,9 +46,14 @@ export interface LarkComposerProps {
 }
 
 export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(function LarkComposer(
-  { replyTo = null, onClearReply, onSend, attachments: canAttach = false, placeholder, compact = false, canClimb = false }, ref,
+  { replyTo = null, onClearReply, onSend, attachments: canAttach = false, placeholder, compact = false, canClimb = false, draft, group = false, feed, account }, ref,
 ) {
-  const [text, setText] = useState("");
+  const [stored] = useState(() => (draft ? loadDraft(draft) : { text: "", mentions: undefined }));
+  const [text, setText] = useState(stored.text);
+  const [picked, setPicked] = useState<LarkPerson[]>(stored.mentions ?? []);
+  const [caret, setCaret] = useState(stored.text.length);
+  const [focused, setFocused] = useState(false);
+  const place = useRef<number | null>(null);
   const [sending, setSending] = useState(false);
   const [files, setFiles] = useState<LarkAttachment[]>([]);
   const [staging, setStaging] = useState(0);
@@ -75,6 +92,61 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
 
   useImperativeHandle(ref, () => ({ addFiles, focus: () => input.current?.focus() }));
 
+  // The draft: kept a moment after the last change, and right away when the box goes (another chat, the page closing).
+  const latest = useRef({ text, replyTo, picked });
+  latest.current = { text, replyTo, picked };
+  const save = useCallback(() => {
+    if (!draft) return;
+    const d = latest.current;
+    saveDraft(draft, { text: d.text, replyTo: d.replyTo ?? undefined, mentions: mentionsIn(d.text, d.picked) });
+  }, [draft]);
+  useEffect(() => {
+    const id = setTimeout(save, 300);
+    return () => clearTimeout(id);
+  }, [text, replyTo, picked, save]);
+  useEffect(() => {
+    addEventListener("pagehide", save);
+    return () => {
+      removeEventListener("pagehide", save);
+      save();
+    };
+  }, [save]);
+
+  // A drawn-back draft or a picked name: as tall as its text.
+  useLayoutEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = "auto";
+    if (el.value) el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [text]);
+
+  // The caret after a picked name, set before the next key.
+  useLayoutEffect(() => {
+    const at = place.current;
+    if (at === null || !input.current) return;
+    place.current = null;
+    input.current.focus();
+    input.current.setSelectionRange(at, at);
+  });
+
+  const everyone = t("inbox-larkthread.everyone");
+  const find = useCallback(
+    (q: string, signal: AbortSignal) => chatMembers(feed ?? "", q, account, signal).then((people) => withEveryone(people, q, everyone)),
+    [feed, account, everyone],
+  );
+  const people = useLarkPeoplePicker({
+    text,
+    caret,
+    open: focused && group && Boolean(feed),
+    find,
+    onPicked: (p) => setPicked((cur) => [...cur, p]),
+    apply: (next, at) => {
+      place.current = at;
+      setText(next);
+      setCaret(at);
+    },
+  });
+
   const remove = (id: string) => {
     setFiles((cur) => {
       releaseLarkAttachments(cur.filter((a) => a.id === id));
@@ -85,8 +157,8 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
   const ready = (text.trim() !== "" || files.length > 0) && staging === 0;
   const submit = async () => {
     if (!ready || sending) return;
-    const picked = files;
-    if (climb.on && picked.length) {
+    const chosen = files;
+    if (climb.on && chosen.length) {
       toast(t("inbox-larkbraveclimb.text_only"), "error");
       return;
     }
@@ -95,10 +167,12 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
     if (trimmed === undefined) return;
     setSending(true);
     try {
-      const sent = await onSend(trimmed, picked, replyTo ?? undefined);
+      const sent = await onSend(trimmed, chosen, replyTo ?? undefined, mentionsIn(text.trim(), picked));
       if (sent === false) return;
       // the attachments' previews now belong to the messages drawn for them
       setText("");
+      setPicked([]);
+      setCaret(0);
       setFiles([]);
       if (input.current) input.current.style.height = "auto";
     } finally {
@@ -107,8 +181,9 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (people.onKeyDown(e)) return;
     if (e.key === "Enter" && !e.shiftKey) {
-      if (e.nativeEvent.isComposing) return;
+      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
       e.preventDefault();
       void submit();
     }
@@ -116,9 +191,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
-    const el = e.target;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    setCaret(e.target.selectionStart);
   };
 
   return (
@@ -171,7 +244,8 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
             {staging > 0 && <Spinner size={14} />}
           </div>
         )}
-        <div className="flex items-end gap-2">
+        <div className="relative flex items-end gap-2">
+          {group && <LarkPeopleMenu picker={people} label={t("inbox-larkthread.mention_label")} />}
           {canAttach && !climb.on && (
             <>
               <input
@@ -201,6 +275,9 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
             ref={input}
             value={text}
             onChange={handleChange}
+            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             onKeyDown={handleKeyDown}
             onPaste={(e) => {
               const pasted = Array.from(e.clipboardData.files);
@@ -209,7 +286,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
                 addFiles(pasted);
               }
             }}
-            placeholder={climb.on ? t("inbox-larkthread.climb_placeholder") : placeholder ?? (replyTo ? t("inbox-larkthread.reply_to_placeholder", { name: replyTo.sender_name ?? "" }) : t("inbox-larkthread.reply_placeholder"))}
+            placeholder={climb.on ? t("inbox-larkthread.climb_placeholder") : placeholder ?? (replyTo ? t("inbox-larkthread.reply_to_placeholder", { name: replyTo.sender_name ?? "" }) : group ? t("inbox-larkthread.group_placeholder") : t("inbox-larkthread.reply_placeholder"))}
             aria-label={t("inbox-larkcomposer.message")}
             rows={1}
             className={cx(

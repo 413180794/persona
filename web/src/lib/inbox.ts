@@ -572,6 +572,8 @@ export interface LarkMessage {
   thread_kind?: string;
   /** An encrypted message's public face is in text / parts already; its presence marks it encrypted. */
   olk?: unknown;
+  /** Reactions under it (lib/lark-chat.ts): the key, how many, whether one is mine, who. */
+  reactions?: { key: string; count: number; mine?: boolean; users?: string[] }[];
 }
 
 export interface LarkPage {
@@ -1050,11 +1052,19 @@ export function resetInboxForTests() {
   unsentReplies.clear();
 }
 
+/** Someone a sent message @s: Feishu notifies them; the text holds their `@name` (所有人 is `user_id` "all"). */
+export interface LarkMention {
+  user_id: string;
+  name: string;
+}
+
+const mentionList = (mentions?: LarkMention[]) => (mentions?.length ? mentions.map((m) => ({ user_id: m.user_id, name: m.name })) : undefined);
+
 /** Sends a message to a Feishu conversation via the native hub API, as account `ol` (undefined: the hub's own). */
-export async function sendLarkMessage(feed: string, text: string, clientID?: string, ol?: number): Promise<{ message_id?: string }> {
+export async function sendLarkMessage(feed: string, text: string, clientID?: string, ol?: number, mentions?: LarkMention[]): Promise<{ message_id?: string }> {
   return api<{ message_id?: string }>(larkPath(`/lark/conversations/${enc(feed)}/messages`, ol), {
     method: "POST",
-    json: { text, client_id: clientID },
+    json: { text, client_id: clientID, mentions: mentionList(mentions) },
     token: getToken(),
   });
 }
@@ -1066,10 +1076,11 @@ export async function replyLarkMessage(
   thread = false,
   clientID?: string,
   ol?: number,
+  mentions?: LarkMention[],
 ): Promise<{ message_id?: string }> {
   return api<{ message_id?: string }>(larkPath(`/lark/messages/${enc(messageID)}/replies`, ol), {
     method: "POST",
-    json: { text, thread, client_id: clientID },
+    json: { text, thread, client_id: clientID, mentions: mentionList(mentions) },
     token: getToken(),
   });
 }

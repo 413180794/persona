@@ -29,6 +29,8 @@ const calls: { method: string; path: string; body: unknown }[] = [];
 beforeEach(() => {
   calls.length = 0;
   toasts.length = 0;
+  // the box keeps a chat's draft (lib/lark-chat.ts): one test's text is not the next one's
+  localStorage.clear();
   URL.createObjectURL = vi.fn(() => "blob:test/1");
   URL.revokeObjectURL = vi.fn();
   vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });

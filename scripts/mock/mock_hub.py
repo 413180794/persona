@@ -4282,7 +4282,13 @@ LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {
         {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "主色是否再暖一点"}]}]},
         {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "小尺寸下的描边粗细"}]}]}]},
     {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
+    # a second section, so the reader's outline (目录) has levels to show
+    {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "下一步"}]},
+    {"type": "heading", "attrs": {"level": 3}, "content": [{"type": "text", "text": "导出尺寸"}]},
+    {"type": "paragraph", "content": [{"type": "text", "text": "16、20、24、32 四档，每档单独微调。"}]},
 ]}}
+# GET /api/v1/lark/raw/documents/ai-summary: Feishu's cached AI summary of a document (the reader's summary card).
+LARK_DOC_SUMMARY = {"state": "ready", "summary": "这篇评审确定了新版图标的方向：统一圆角和描边，深色模式单独调对比度。\n\n- 还要确认：主色是否再暖一点、小尺寸下的描边粗细\n- 导出四档尺寸，每档单独微调\n- 下周一前出第二版"}
 
 LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
 
@@ -4584,6 +4590,7 @@ FS_CARD = {"kind": "card", "text": "发布检查", "metadata": {
         {"tag": "action", "children": [
             {"tag": "button", "style": {"type": "primary"}, "actionId": "approve", "actionMethod": 2, "children": [{"tag": "plain_text", "text": "批准发布"}]},
             {"tag": "button", "style": {"type": "default"}, "url": "https://example.com/builds/1842", "children": [{"tag": "plain_text", "text": "查看详情"}]},
+            {"tag": "button", "style": {"type": "text"}, "actionId": "refresh", "actionMethod": 2, "tooltip": "刷新", "children": [{"tag": "standard_icon", "token": "refresh_outlined"}]},
             {"tag": "overflow", "options": [{"text": "重新构建", "actionId": "rebuild", "actionMethod": 2}, {"text": "打开流水线", "url": "https://example.com/pipeline"}]}]},
         {"tag": "note", "children": [{"tag": "standard_icon", "token": "time_outlined"}, {"tag": "plain_text", "text": "由构建机器人发送"}]}]}}}
 
@@ -4944,6 +4951,21 @@ def fs_post(h, p, q, body):
             elif not r.get("mine"):
                 r["count"] += 1; r["mine"] = True; r.setdefault("users", []).append("我")
         h.send_json({"ok": True}); return True
+    if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read-states"):
+        # Read receipts of my messages in the chat page's chats: a one-to-one chat read, a group partly read.
+        feed = p.split("/")[5]
+        members = {"f1": 2, "f2": 6, "f3": 4}.get(feed, 2)
+        out = []
+        for i, m in enumerate(m for m in FS_MESSAGES.get(feed, []) if m.get("is_mine") and m["id"] in (b.get("message_ids") or [])):
+            read = members - 1 if feed == "f1" or i % 2 else 2
+            out.append({"message_id": m["id"], "read_count": read, "unread_count": members - 1 - read})
+        h.send_json({"states": out}); return True
+    if p.startswith("/api/v1/lark/users/") and p.endswith("/chat"):
+        # 发消息 on a profile card: the one-to-one chat with them (韩梅梅's is f1; anyone else gets an empty one).
+        uid = p.split("/")[5]
+        feed = "f1" if uid == "u_hmm" else "dm-" + uid
+        FS_MESSAGES.setdefault(feed, [])
+        h.send_json({"feed_id": feed}); return True
     if "/card-actions/" in p:
         FS_LOG["actions"].append({"message": p.split("/")[5], "action": p.split("/")[-1]})
         h.send_json({"ok": True}); return True
@@ -10118,6 +10140,7 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
             return
         if p == "/api/v1/lark/raw/documents/read": return self.send_json(LARK_DOCUMENT)
+        if p == "/api/v1/lark/raw/documents/ai-summary": return self.send_json(LARK_DOC_SUMMARY)
         if p.startswith("/api/v1/lark/media/") and p.split("/")[5] in LARK_MEDIA:
             key = p.split("/")[5]
             body = fs_media(key) if key.startswith("emoji-") else base64.b64decode(mock_png(*LARK_MEDIA[key]))

@@ -2,7 +2,10 @@
 // Supports native Feishu messaging interactions: direct replies, quoting messages, copying, asking Persona for summary,
 // and reporting seen messages to Feishu (docs/inbox.md「看过的飞书消息按可见即读上报」, lark-read.ts). The chat's Pins
 // (lark-pins.ts) open over it; a Pin found in the chat replaces the window around it, a reply opens its thread.
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+// Like the phone's chat (lib/lark-chat.ts, LarkExtras.tsx): pictures open in the viewer, files download, voice and video
+// play here, a card's buttons press, my messages show who read them, reactions can be put on, an avatar opens the
+// person's card, a group's box can @ people, and what is typed stays as the chat's draft.
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText, getToken } from "../../lib/api";
 import { clock } from "../../lib/format";
 import {
@@ -12,7 +15,12 @@ import {
 import { LARK_ATTACHMENT_REPLY_FEATURE, LARK_ATTACHMENTS_FEATURE, routeAllowed, type LarkAttachment } from "../../lib/lark-attachments";
 import { larkPath, olAccount } from "../../lib/lark-accounts";
 import { larkAccount } from "../../lib/lark-chats";
+import {
+  cardButtons, chatImages, draftKey, isVoice, loadDraft, mergeAround, reactionsOf, readMark, ReadReceipts, readStates, react,
+  statusOf, toggledReactions, type ReadState,
+} from "../../lib/lark-chat";
 import { climbs, HIDDEN_DISPLAY, quoteSummary, showsBody, showsHistory, useLarkDisplay, useLarkDisplayState } from "../../lib/lark-display";
+import type { LarkPerson } from "../../lib/lark-people";
 import { canAddPin, changeChatPin, needsRecheck, pinProblemText, type ChatPinTarget } from "../../lib/lark-pins";
 import { historyProblem, type HistoryProblem, latestOf, nearTop, OlderPaging, screensFromEnd, showsJumpToLatest } from "../../lib/lark-history";
 import { initialCursor, LarkReadTracker } from "../../lib/lark-read";
@@ -25,10 +33,12 @@ import { t } from "../../i18n";
 import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { scrollBehavior } from "../../ui/stream/motion";
+import { ImageViewer } from "../chat/ImageViewer";
 import { Monogram } from "./InboxParts";
 import { ClimbedParts } from "./LarkBraveClimb";
 import { LarkEditHistoryDialog } from "./LarkEditHistory";
 import { LarkComposer, type LarkComposerHandle, type LarkReplyTarget } from "./LarkComposer";
+import { CardButtons, FilePart, ProfileDialog, ReactionPicker, Reactions, ReadMarkView, VideoPart, VoicePart } from "./LarkExtras";
 import { newClientID, useLarkOutbox, type LarkOutgoing } from "./LarkOutbox";
 import { LarkPinsDialog } from "./LarkPins";
 import { isSummaryCard, LarkSummaryCard } from "./LarkSummaryCard";
@@ -48,10 +58,10 @@ function useAttachmentSupport() {
 /** Text, then each attachment, as the messages to send. False when the extension cannot route the attachments as
  * asked (a quote): nothing goes and it all stays in the box (docs/lark-attachments.md, #1035). */
 export function outgoingOf(text: string, attachments: LarkAttachment[], route: LarkOutgoing["route"], quote?: LarkOutgoing["quote"],
-  features: string[] = getState().features): LarkOutgoing[] | false {
+  features: string[] = getState().features, mentions?: LarkOutgoing["mentions"]): LarkOutgoing[] | false {
   if (attachments.length && !routeAllowed(route, features)) return false;
   const out: LarkOutgoing[] = [];
-  if (text) out.push({ clientID: newClientID(), text, route: { replyTo: route.replyTo, thread: route.thread }, quote });
+  if (text) out.push({ clientID: newClientID(), text, route: { replyTo: route.replyTo, thread: route.thread }, quote, ...(mentions?.length ? { mentions } : {}) });
   for (const a of attachments) out.push({ clientID: newClientID(), attachment: a, route, quote });
   return out;
 }
@@ -70,25 +80,150 @@ export interface LarkChatRef {
   focus?: string;
   /** The Feishu account the chat is in (`ol_account`, docs/feishu.md「多账号」); undefined: the hub's own. */
   account?: number;
+  /** A group: its box can @ people, my messages show how many read them. */
+  group?: boolean;
 }
 
 export function chatOfItem(item: InboxItem): LarkChatRef {
   return { feed: item.lark!.feed_id, title: item.title, topic: item.lark?.is_topic, focus: !isDone(item) ? item.lark?.start_position : undefined,
-    account: olAccount(item.lark?.ol_account) };
+    account: olAccount(item.lark?.ol_account), group: item.lark?.is_group };
 }
 
 /** The account of the chat a message is drawn in: its thread is read as that account. */
 const ChatAccount = createContext<number | undefined>(undefined);
-/** …and its feed, where a thread''s `lark` push names the chats): read the newest page again when we show it.
+/** …and its feed, where a thread's pictures and files are sent. */
+const ChatFeed = createContext("");
+
+/** What a message drawn in the chat can reach: its pictures, the people, read receipts, a fresh read of the chat. */
+interface ChatTools {
+  feed: string;
+  group: boolean;
+  openImage: (src: string) => void;
+  openProfile: (who: { id: string; name: string; avatar?: string; bot?: boolean }) => void;
+  receipts: Map<string, ReadState>;
+  /** Reads the window around a message again (a card button was pressed on it). */
+  refresh: (messageID: string) => Promise<void>;
+}
+const Tools = createContext<ChatTools | null>(null);
+
+type LarkThreadProps = { chat: LarkChatRef; pinsOpen?: boolean; onPinsOpen?: (open: boolean) => void };
+
+export function LarkThread(props: LarkThreadProps) {
+  return (
+    <ChatAccount.Provider value={props.chat.account}>
+      <ChatFeed.Provider value={props.chat.feed}><LarkThreadBody {...props} /></ChatFeed.Provider>
+    </ChatAccount.Provider>
+  );
+}
+
+function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps) {
+  const feed = chat.feed;
+  const ol = chat.account;
+  const focus = chat.focus;
+  const [page, setPage] = useState<LarkPage | null>(null);
+  const [error, setError] = useState("");
+  const [newerBusy, setNewerBusy] = useState(false);
+  // The draft's quote comes back with the chat (lib/lark-chat.ts drafts); set while drawing, so the box never keeps
+  // another chat's quote for a frame.
+  const dk = draftKey(feed, ol);
+  const [replyTo, setReplyTo] = useState<LarkReplyTarget | null>(() => loadDraft(dk).replyTo ?? null);
+  const [replyFor, setReplyFor] = useState(dk);
+  if (replyFor !== dk) {
+    setReplyFor(dk);
+    setReplyTo(loadDraft(dk).replyTo ?? null);
+  }
+  const [viewing, setViewing] = useState<string | null>(null);
+  const [reacting, setReacting] = useState<LarkMessage | null>(null);
+  const [person, setPerson] = useState<{ id: string; name: string; avatar?: string; bot?: boolean } | null>(null);
+  const [direct, setDirect] = useState<{ feed: string; name: string } | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const composer = useRef<LarkComposerHandle>(null);
+  const support = useAttachmentSupport();
+  const anchor = useRef<{ height: number; top: number; id?: string; offset?: number } | null>(null);
+  const placed = useRef(false);
+  const base = `/lark/conversations/${enc(feed)}/messages`;
+  const topic = Boolean(chat.topic);
+  const tracker = useRef<LarkReadTracker | null>(null);
+  const [flash, setFlash] = useState<{ id: string; n: number } | null>(null);
+  const jumpTo = useRef<string | null>(null);
+  const [pinThread, setPinThread] = useState<ChatPinTarget | null>(null);
+  const [adding, setAdding] = useState<LarkMessage | null>(null);
+  const [changingPin, setChangingPin] = useState(false);
+  const [pinRecheck, setPinRecheck] = useState(false);
+  // Older pages as the list nears its top (lark-history.ts); 回到最新 from the newest messages this window kept.
+  const paging = useRef(new OlderPaging());
+  const [, setPagingTick] = useState(0);
+  const latest = useRef<LarkPage | null>(null);
+  const toEnd = useRef(false);
+  const windowGen = useRef(0);
+  const [jumpShown, setJumpShown] = useState(false);
+  const [jumping, setJumping] = useState(false);
+  const prefs = useTranslatePrefs();
+  const translateTo = translatesChat(prefs, feed) ? prefs.target : undefined;
+  // A topic group: a card per topic, its newest replies on it, its thread in a dialog (LarkTopicCard.tsx).
+  const topicReplies = useTopicReplies(feed, ol);
+  const [openTopic, setOpenTopic] = useState<LarkMessage | null>(null);
+  // 防撤回 / 编辑历史 / [removed] (lark-display.ts): read while the chat shows
+  const display = useLarkDisplayState(ol).snapshot ?? HIDDEN_DISPLAY;
+
+  useEffect(() => {
+    let live = true;
+    placed.current = false;
+    tracker.current = null;
+    setPage(null);
+    setError("");
+    setFlash(null);
+    setPinThread(null);
+    setOpenTopic(null);
+    paging.current.reset();
+    latest.current = null;
+    toEnd.current = false;
+    windowGen.current++;
+    setJumpShown(false);
+    setJumping(false);
+    api<LarkPage>(larkPath(`${base}?limit=${PAGE}${focus ? `&around=${enc(focus)}` : ""}`, ol))
+      .then((r) => {
+        if (!live) return;
+        const messages = mergeMessages([], r.messages ?? []);
+        tracker.current = new LarkReadTracker(initialCursor(focus, messages, topic || Boolean(r.topic)));
+        setPage({ ...r, messages });
+      })
+      .catch((e) => live && setError(errorText(e)));
+    return () => {
+      live = false;
+    };
+  }, [base, focus, topic, ol]);
+
+  // New messages in this chat (the hub's `lark` push names the chats): read the newest page again when we show it.
   const pageRef = useRef(page);
   pageRef.current = page;
+  // After a card button: the window around the pressed message, so its new state shows wherever the reader is (the
+  // newest page merged into an older window would drop everything between with no gap shown).
+  // `around` takes a position (docs/protocol.md); a card in an opened thread is not in the window and is not read again.
+  const refreshAround = useCallback(async (mid: string) => {
+    const gen = windowGen.current;
+    const at = pageRef.current?.messages.find((m) => m.id === mid)?.position;
+    if (!at) return;
+    try {
+      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&around=${enc(at)}`, ol));
+      if (gen === windowGen.current) setPage((cur) => cur && mergeAround(cur, r));
+    } catch {
+      // the card keeps what it showed; the next push reads the chat again
+    }
+  }, [base, ol]);
+  useReadReports(feed, ol, scroller, tracker, pageRef, placed, page);
+  const { states: receipts, changed: receiptsChanged } = useReadReceipts(feed, ol, scroller, pageRef, page);
+
   useEffect(
     () =>
       onHubEvent("lark", (msg) => {
         const ids = Array.isArray(msg.feed_ids) ? (msg.feed_ids as string[]) : [];
         const p = pageRef.current;
         // another account's push names its own chats (the same group can be in two accounts)
-        if (!ids.includes(feed) || olAccount(msg.ol_account) !== ol || !p || p.has_newer) return;
+        if (!ids.includes(feed) || olAccount(msg.ol_account) !== ol || !p) return;
+        // something happened in the chat: the receipts of mine on screen may have moved too
+        receiptsChanged();
+        if (p.has_newer) return;
         const gen = windowGen.current;
         api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol))
           .then((r) => {
@@ -100,10 +235,8 @@ const ChatAccount = createContext<number | undefined>(undefined);
           })
           .catch(() => {});
       }),
-    [base, feed, ol],
+    [feed, ol, base, receiptsChanged],
   );
-
-  useReadReports(feed, ol, scroller, tracker, pageRef, placed, page);
 
   // First paint: at the first new message (a little of what came before shows above it), else at the bottom.
   useLayoutEffect(() => {
@@ -316,9 +449,9 @@ const ChatAccount = createContext<number | undefined>(undefined);
     () => api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol)).then((r) => r.messages ?? []),
   );
 
-  const handleSend = useCallback(async (content: string, attachments: LarkAttachment[], replyTarget?: LarkReplyTarget) => {
+  const handleSend = useCallback(async (content: string, attachments: LarkAttachment[], replyTarget?: LarkReplyTarget, mentions?: LarkPerson[]) => {
     const quote = replyTarget ? { id: replyTarget.id, sender_name: replyTarget.sender_name, text: replyTarget.text } : undefined;
-    const outs = outgoingOf(content, attachments, { replyTo: replyTarget?.id }, quote);
+    const outs = outgoingOf(content, attachments, { replyTo: replyTarget?.id }, quote, undefined, mentions);
     if (!outs) {
       refuseAttachments();
       return false;
@@ -333,12 +466,38 @@ const ChatAccount = createContext<number | undefined>(undefined);
     return true;
   }, [outbox]);
 
+  // My reaction on or off: shown at once, put back when the hub says no.
+  const toggleReaction = useCallback(async (m: LarkMessage, key: string) => {
+    const before = reactionsOf(m);
+    const { reactions, remove } = toggledReactions(before, key, t("inbox-larkthread.me"));
+    const set = (rs: typeof reactions) => setPage((cur) => cur && { ...cur, messages: cur.messages.map((x) => (x.id === m.id ? { ...x, reactions: rs } : x)) });
+    set(reactions);
+    try {
+      await react(m.id, key, remove, ol);
+    } catch (e) {
+      set(before);
+      toast(t("inbox-larkthread.react_failed", { error: errorText(e) }), "error");
+    }
+  }, [ol]);
+
+  const images = useMemo(() => chatImages(page?.messages ?? [], safeURL), [page]);
+  const tools = useMemo<ChatTools>(() => ({
+    feed,
+    group: Boolean(chat.group),
+    openImage: setViewing,
+    openProfile: setPerson,
+    receipts,
+    refresh: refreshAround,
+  }), [feed, chat.group, receipts, refreshAround]);
+
   if (!page) {
     return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label={t("inbox-larkthread.loading")} />}</div>;
   }
   const firstNew = focus ? page.messages.find((m) => comparePosition(m.position, focus) >= 0)?.id : undefined;
+  const shown = viewing ? images.findIndex((i) => i.src === viewing) : -1;
   const topicGroup = topic || Boolean(page.topic);
   return (
+    <Tools.Provider value={tools}>
     <div
       className="flex h-full min-h-0 flex-col"
       onDragOver={(e) => {
@@ -390,6 +549,8 @@ const ChatAccount = createContext<number | undefined>(undefined);
                 onDiscard={outbox.discard}
                 threadAttachments={support.files && support.routed}
                 onPin={onPinsOpen && !changingPin && !pinRecheck ? setAdding : undefined}
+                onReact={setReacting}
+                onToggleReaction={toggleReaction}
                 flash={flash?.id === m.id ? flash.n : undefined}
               />}
             </div>
@@ -418,13 +579,54 @@ const ChatAccount = createContext<number | undefined>(undefined);
       )}
       </div>
       <LarkComposer
+        key={dk}
         ref={composer}
+        draft={dk}
+        feed={feed}
+        account={ol}
+        group={Boolean(chat.group) && !topicGroup}
         canClimb={climbs(display) && !topic && !page.topic}
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
         onSend={handleSend}
         attachments={support.files}
       />
+      {viewing && (
+        <ImageViewer
+          images={(shown >= 0 ? images : [{ id: viewing, src: viewing }]).map((i) => ({ id: i.id, src: i.src, label: t("inbox-larkthread.image_name") }))}
+          start={Math.max(0, shown)}
+          onClose={() => setViewing(null)}
+        />
+      )}
+      {reacting && (
+        <ReactionPicker
+          mine={new Set(reactionsOf(reacting).filter((r) => r.mine).map((r) => r.key.toLowerCase()))}
+          onPick={(key) => {
+            const cur = pageRef.current?.messages.find((x) => x.id === reacting.id) ?? reacting;
+            void toggleReaction(cur, key);
+          }}
+          onClose={() => setReacting(null)}
+        />
+      )}
+      {person && (
+        <ProfileDialog
+          who={person}
+          feed={feed}
+          account={ol}
+          onClose={() => setPerson(null)}
+          onChat={(f, name) => {
+            setPerson(null);
+            setDirect({ feed: f, name });
+          }}
+        />
+      )}
+      {direct && (
+        <Dialog open onClose={() => setDirect(null)} title={direct.name} width={680}>
+          <div className="-mx-4 -mb-4 h-[min(70vh,640px)] max-sm:h-[70vh]">
+            <LarkThread chat={{ feed: direct.feed, title: direct.name, account: ol }} />
+          </div>
+        </Dialog>
+      )}
       {pinsOpen && <LarkPinsDialog feed={feed} topic={topic} account={ol} onClose={closePins} onOpen={openPin} />}
       {openTopic && <LarkTopicDialog topic={openTopic} account={ol} onClose={() => setOpenTopic(null)} renderMessage={(m) => <Message m={m} nested translateTo={translateTo} />} />}
       {pinThread && <PinThreadDialog target={pinThread} translateTo={translateTo} onClose={() => setPinThread(null)} />}
@@ -443,6 +645,7 @@ const ChatAccount = createContext<number | undefined>(undefined);
         {adding && <p className="mt-2 line-clamp-3 rounded-[8px] bg-inset px-3 py-2 text-[12.5px] text-ink shadow-hairline">{adding.text || (adding.parts ?? []).map((p) => p.text ?? "").join("") || t("inbox-larkthread.message")}</p>}
       </Dialog>
     </div>
+    </Tools.Provider>
   );
 }
 
@@ -594,6 +797,103 @@ function useReadReports(
   }, [page, scroller]);
 }
 
+/** Read receipts of my messages on screen (lib/lark-chat.ts ReadReceipts, iOS LarkReadReceipts): the list's rows are
+ * watched as they come into view and leave it; asked in batches, at most every 3 s, again when messages come or go or a
+ * push names the chat (not when a reaction or a send state flips), not at all on a hub without the route. */
+function useReadReceipts(
+  feed: string,
+  ol: number | undefined,
+  scroller: React.RefObject<HTMLDivElement | null>,
+  pageRef: React.RefObject<LarkPage | null>,
+  page: LarkPage | null,
+): { states: Map<string, ReadState>; changed: () => void } {
+  const rr = useRef<ReadReceipts | null>(null);
+  const [states, setStates] = useState<Map<string, ReadState>>(() => new Map());
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const busy = useRef(false);
+  const live = useRef({ feed, ol });
+  live.current = { feed, ol };
+  const observer = useRef<IntersectionObserver | null>(null);
+  const ids = useRef("");
+
+  const schedule = useCallback(() => {
+    const r = rr.current;
+    if (!r || busy.current) return;
+    const wait = r.wait(Date.now());
+    if (wait === null) return;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      if (rr.current !== r) return;
+      const ids = r.take(Date.now());
+      if (!ids.length) return;
+      busy.current = true;
+      const at = live.current;
+      try {
+        r.record(await readStates(at.feed, ids, at.ol));
+      } catch (e) {
+        r.failed(statusOf(e));
+      } finally {
+        busy.current = false;
+      }
+      if (rr.current !== r) return;
+      setStates(new Map(r.states));
+      schedule();
+    }, wait);
+  }, []);
+
+  const changed = useCallback(() => {
+    rr.current?.changed();
+    schedule();
+  }, [schedule]);
+
+  const ready = page !== null;
+  useEffect(() => {
+    const r = new ReadReceipts();
+    rr.current = r;
+    ids.current = "";
+    setStates(new Map());
+    const root = scroller.current;
+    if (ready && root && typeof IntersectionObserver !== "undefined") {
+      observer.current = new IntersectionObserver(
+        (entries) => {
+          if (rr.current !== r) return;
+          const byId = new Map((pageRef.current?.messages ?? []).map((m) => [m.id, m]));
+          for (const e of entries) {
+            const id = (e.target as HTMLElement).dataset.mid;
+            if (!id) continue;
+            const m = byId.get(id);
+            if (e.isIntersecting && m) r.appeared(m);
+            else r.disappeared(id);
+          }
+          schedule();
+        },
+        { root },
+      );
+    }
+    return () => {
+      observer.current?.disconnect();
+      observer.current = null;
+      clearTimeout(timer.current);
+      rr.current = null;
+      busy.current = false;
+    };
+  }, [feed, ol, ready, scroller, pageRef, schedule]);
+
+  // Rows drawn later (older / newer pages, pushes, a sent message getting its id) are watched too; observing a row
+  // twice is a no-op. Only a change in which messages there are asks again.
+  useEffect(() => {
+    const r = rr.current;
+    if (!r || !page) return;
+    scroller.current?.querySelectorAll<HTMLElement>("[data-seen-pos][data-mid]").forEach((el) => observer.current?.observe(el));
+    const now = page.messages.filter(ReadReceipts.tracks).map((m) => m.id).join(",");
+    if (now === ids.current) return;
+    ids.current = now;
+    changed();
+  }, [page, scroller, changed]);
+
+  return { states, changed };
+}
+
 function isSystem(m: LarkMessage) {
   return m.type === "SYSTEM" || (m.parts ?? []).some((p) => p.kind === "text" && p.metadata?.system);
 }
@@ -647,6 +947,8 @@ function Message({
   onCheck,
   onDiscard,
   onPin,
+  onReact,
+  onToggleReaction,
   flash,
   threadAttachments,
 }: {
@@ -665,10 +967,15 @@ function Message({
   threadAttachments?: boolean;
   /** 添加 Pin, offered when the hub says the message may be pinned. */
   onPin?: (m: LarkMessage) => void;
+  /** 表情回复: the picker for this message. */
+  onReact?: (m: LarkMessage) => void;
+  /** A reaction under it clicked: mine on or off. */
+  onToggleReaction?: (m: LarkMessage, key: string) => void;
   /** Lit for a moment (a Pin jumped here); a new number lights it again. */
   flash?: number;
 }) {
   const ol = useContext(ChatAccount);
+  const tools = useContext(Tools);
   const [thread, setThread] = useState<LarkMessage[] | null>(null);
   const [opening, setOpening] = useState(false);
   const display = useLarkDisplay(ol);
@@ -684,6 +991,8 @@ function Message({
   const compact = !nested && prev && !isSystem(prev) && prev.sender_id === m.sender_id && !m.reply_to
     && Date.parse(m.created_at ?? "") - Date.parse(prev.created_at ?? "") < 5 * 60_000;
   const replies = m.thread_reply_count || m.reply_count || 0;
+  const mark = m.is_mine && !m.sending && !m.failed && tools ? readMark(tools.receipts.get(m.id), tools.group) : null;
+  const reactions = m.recalled ? [] : reactionsOf(m);
   const openThread = async () => {
     if (thread) return setThread(null);
     setOpening(true);
@@ -709,7 +1018,19 @@ function Message({
       )}
     >
       {flash !== undefined && <span key={flash} aria-hidden className="pointer-events-none absolute inset-0 -z-10 rounded-[10px] bg-accent-tint" style={{ animation: "pin-flash 1.8s ease-out both" }} />}
-      <span className="w-8 shrink-0">{!compact && <Monogram name={name} size={nested ? 24 : 32} src={m.sender_avatar} />}</span>
+      <span className="w-8 shrink-0">
+        {!compact && (tools && m.sender_id && !m.is_mine ? (
+          <button
+            type="button"
+            onClick={() => tools.openProfile({ id: m.sender_id!, name, avatar: m.sender_avatar, bot: m.sender_type === "bot" })}
+            aria-label={t("inbox-larkthread.open_profile", { name })}
+            title={t("inbox-larkthread.open_profile", { name })}
+            className="block rounded-full transition-opacity hover:opacity-85"
+          >
+            <Monogram name={name} size={nested ? 24 : 32} src={m.sender_avatar} />
+          </button>
+        ) : <Monogram name={name} size={nested ? 24 : 32} src={m.sender_avatar} />)}
+      </span>
       <div className="min-w-0 flex-1">
         {!compact && (
           <p className="flex items-baseline gap-2">
@@ -717,6 +1038,7 @@ function Message({
             {m.sender_type === "bot" && <span className="shrink-0 rounded-[4px] bg-field px-1 text-[10px] text-ink-3">{t("inbox-larkthread.bot")}</span>}
             <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{clock(m.created_at)}</span>
             {m.edited && edited}
+            {mark && <ReadMarkView mark={mark} />}
             {m.sending && (
               <span className="flex items-center gap-1 text-[11px] text-ink-3">
                 <Spinner size={10} />
@@ -748,15 +1070,17 @@ function Message({
             {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{quoteSummary(display, m.reply_to)}
           </p>
         )}
-        {shown ? <ClimbedParts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} display={display} render={(parts) => <Parts parts={parts} />} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
+        {shown ? <ClimbedParts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} display={display} render={(parts) => <Parts mid={m.id} parts={parts} />} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
         {((shown && m.recalled) || (compact && m.edited)) && (
           <p className="mt-0.5 flex items-center gap-2 text-[11px] text-ink-3">
             {shown && m.recalled && <span>{t("inbox-larkthread.recalled_mark")}</span>}
             {compact && m.edited && edited}
           </p>
         )}
-        {history && <LarkEditHistoryDialog message={m} display={display} renderParts={(parts) => <Parts parts={parts} />} onClose={() => setHistory(false)} />}
+        {history && <LarkEditHistoryDialog message={m} display={display} renderParts={(parts) => <Parts mid={m.id} parts={parts} />} onClose={() => setHistory(false)} />}
         {translateTo && <TranslationLine m={m} target={translateTo} />}
+        <Reactions reactions={reactions} onToggle={onToggleReaction && !m.sending ? (key) => onToggleReaction(m, key) : undefined} />
+
         {replies > 0 && !nested && (
           <button type="button" onClick={() => void openThread()} className="mt-1 flex items-center gap-1 text-[11.5px] font-medium whitespace-nowrap text-accent-ink hover:underline">
             {opening ? <Spinner size={10} /> : <Icon name="chat" size={11} stroke={2.2} />}
@@ -765,6 +1089,7 @@ function Message({
         )}
         {thread && <ThreadPanel root={m} thread={thread} setThread={setThread} translateTo={translateTo} attachments={threadAttachments} />}
       </div>
+      {compact && mark && <span className="flex shrink-0 self-end pb-1"><ReadMarkView mark={mark} /></span>}
 
       {/* Hover action bar */}
       {/* nested replies have no actions: no empty bar when the message they sit under is hovered */}
@@ -790,6 +1115,17 @@ function Message({
             >
               <Icon name="spark" size={11} />
               <span>{t("inbox-larkthread.summarize")}</span>
+            </button>
+          )}
+          {onReact && !nested && !m.failed && (
+            <button
+              type="button"
+              onClick={() => onReact(m)}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] whitespace-nowrap text-ink-2 hover:bg-hover hover:text-ink"
+              title={t("inbox-larkthread.react")}
+            >
+              <Icon name="smile" size={11} />
+              <span>{t("inbox-larkthread.react")}</span>
             </button>
           )}
           {onPin && !nested && canAddPin(m) && (
@@ -888,7 +1224,7 @@ function LinkText({ url, children }: { url?: string; children: React.ReactNode }
   );
 }
 
-function Parts({ parts }: { parts: LarkPart[] }) {
+function Parts({ parts, mid }: { parts: LarkPart[]; mid?: string }) {
   return (
     <div className="flex flex-col gap-1.5 text-[13.5px] leading-relaxed text-ink">
       {partRuns(parts).map((run, i) =>
@@ -897,7 +1233,7 @@ function Parts({ parts }: { parts: LarkPart[] }) {
             {run.parts.map((p, j) => <Inline key={j} p={p} />)}
           </p>
         ) : (
-          <Block key={i} p={run.parts[0]} />
+          <Block key={i} p={run.parts[0]} mid={mid} />
         ),
       )}
     </div>
@@ -924,14 +1260,16 @@ function Inline({ p }: { p: LarkPart }) {
   }
 }
 
-function Block({ p }: { p: LarkPart }) {
+function Block({ p, mid }: { p: LarkPart; mid?: string }) {
   const meta = p.metadata ?? {};
+  const tools = useContext(Tools);
+  const ol = useContext(ChatAccount);
   switch (p.kind) {
     case "image": {
       // a picture this page is sending shows its own preview
       const src = p.url?.startsWith("blob:") ? p.url : safeURL(p.url);
       return src ? (
-        <button type="button" onClick={() => openMedia(src)} className="w-fit">
+        <button type="button" onClick={() => (tools ? tools.openImage(src) : openMedia(src))} aria-label={t("inbox-larkthread.open_image")} className="w-fit">
           <img src={src} alt={t("inbox-larkthread.image")} loading="lazy" className="max-h-64 max-w-[min(280px,100%)] rounded-[8px] object-contain shadow-hairline" />
         </button>
       ) : <span className="text-ink-3">{t("inbox-larkthread.image_placeholder")}</span>;
@@ -941,16 +1279,9 @@ function Block({ p }: { p: LarkPart }) {
       return src ? <img src={src} alt={p.text || t("inbox-larkthread.sticker")} loading="lazy" className="size-20 object-contain" /> : <span>{emojiLabel(p.refId ?? "", p.text)}</span>;
     }
     case "file":
-    case "media": {
-      const media = p.kind === "media" ? (String(meta.mime ?? "").startsWith("audio/") ? t("inbox-larkthread.voice") : t("inbox-larkthread.video")) : "";
-      const name = p.text || (typeof meta.name === "string" ? meta.name : "") || (media || t("inbox-larkthread.file"));
-      return (
-        <span className="flex w-fit max-w-full items-center gap-2 rounded-[8px] bg-inset px-2.5 py-1.5 text-[12.5px] shadow-hairline">
-          <Icon name={p.kind === "media" ? "play" : "clip"} size={13} className="shrink-0 text-ink-3" />
-          <span className="truncate">{media && name !== media ? `${media} · ${name}` : name}</span>
-        </span>
-      );
-    }
+      return <FilePart p={p} />;
+    case "media":
+      return isVoice(p) ? <VoicePart p={p} /> : <VideoPart p={p} />;
     case "code":
       return <pre className="overflow-x-auto rounded-[8px] bg-inset px-3 py-2 font-mono text-[12px] leading-relaxed shadow-hairline">{p.text}</pre>;
     case "card": {
@@ -962,6 +1293,7 @@ function Block({ p }: { p: LarkPart }) {
           {c.title && <p className="text-[13px] font-semibold text-ink">{c.title}</p>}
           {c.lines.map((l, i) => <p key={i} className="text-[12.5px] whitespace-pre-wrap text-ink-2">{l}</p>)}
           {!c.title && !c.lines.length && <p className="text-[12.5px] text-ink-3">{p.text || t("inbox-larkthread.card_placeholder")}</p>}
+          <CardButtons buttons={cardButtons(meta)} messageID={mid && !mid.startsWith("temp-") ? mid : undefined} account={ol} onDone={tools?.refresh} />
         </div>
       );
     }

@@ -3,8 +3,9 @@
 // why), so one that lands here says so and opens the tab. Text selected in the reader can go to the agent:
 // 「作为上下文」 rides along with the next message, 「AI 修改」 asks for a change at once (<jarvis-context>). A document's
 // comments open over it (DocComments.tsx, #1290); with the plugin's `lark_doc_comments` the selection bar's 「评论」
-// comments on the passage.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// comments on the passage. Like the phone's reader, a document shows Feishu's cached AI summary (folded to a few lines)
+// and an outline of its headings (目录 in the header) that scrolls to the one picked.
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, enc, getToken } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { DOC_LABEL, docKind, linkRoute, newContext, type ContextRef } from "../../lib/links";
@@ -14,7 +15,7 @@ import { Icon } from "../../ui/icons";
 import { PanelHeader } from "../SidePanel";
 import { DocCommentsView, useDocComments } from "./DocComments";
 import { DocMarkdown, DocTree } from "./DocContent";
-import { loadDoc, mediaURL, prepareMarkdown, readInfo, type DocContent, type DocInfo } from "./feishu-doc";
+import { docOutline, loadDoc, mediaURL, prepareMarkdown, readInfo, readSummary, type DocContent, type DocInfo, type OutlineItem } from "./feishu-doc";
 import { giveContext, giveEdit, handoffLabel } from "./handoff";
 import { QuoteIcon } from "./QuoteIcon";
 import { t } from "../../i18n";
@@ -104,6 +105,10 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
   const [content, setContent] = useState<DocContent | null>(null);
   const [error, setError] = useState("");
   const [info, setInfo] = useState<DocInfo | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [outline, setOutline] = useState<OutlineItem[]>([]);
+  const [showOutline, setShowOutline] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const [round, setRound] = useState(0);
   const [editing, setEditing] = useState<ContextRef | null>(null);
   const writes = useDocCommentsOn();
@@ -117,6 +122,9 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
     setOf(url);
     setShowComments(false);
     setResolvedTab(false);
+    setSummary(null);
+    setOutline([]);
+    setShowOutline(false);
   }
 
   useEffect(() => {
@@ -131,6 +139,9 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
       });
     readInfo(url)
       .then((i) => live && setInfo(i))
+      .catch(() => {});
+    readSummary(url)
+      .then((s) => live && setSummary(s))
       .catch(() => {});
     return () => {
       live = false;
@@ -161,6 +172,21 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
     [setTarget, writes],
   );
   const openCount = comments.threads?.filter((t) => !t.resolved).length ?? 0;
+
+  // The outline is read off the drawn document (both the Markdown and the tree draw <h1>–<h6>).
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!el || !content || content.kind === "unsupported") {
+      setOutline([]);
+      return;
+    }
+    setOutline(docOutline(headingsIn(el).map((h) => ({ level: Number(h.tagName.slice(1)), text: h.textContent ?? "" }))));
+  }, [content]);
+  const jump = useCallback((item: OutlineItem) => {
+    setShowOutline(false);
+    const el = bodyRef.current && headingsIn(bodyRef.current)[item.index];
+    el?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, []);
   const hasComments = comments.threads !== null || writes;
 
   return (
@@ -173,6 +199,7 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
         actions={
           <>
             {/* the agent reads the document itself: the whole of it can go along even before (or without) it reading here */}
+            {outline.length > 0 && <IconButton icon="list" label={t("link-linkpanel.outline")} active={showOutline} onClick={() => setShowOutline(true)} />}
             {content && content.kind !== "unsupported" && hasComments && <CommentsButton count={openCount} active={showComments} onClick={() => (showComments ? setShowComments(false) : openComments())} />}
             {content?.kind !== "unsupported" && <ContextButton onClick={() => pick("", "context")} />}
             <IconButton icon="external" label={t("link-linkpanel.open_tab")} onClick={() => openTab(url)} />
@@ -193,7 +220,7 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
             {content?.kind === "unsupported" ? (
               <Unsupported content={content} url={url} />
             ) : content ? (
-              <DocBody content={content} info={info} onPick={pick} onComment={writes ? (quote, blockId) => openComments({ quote, blockId }) : undefined} comments={hasComments ? { open: openCount, onOpen: () => openComments(), writes } : undefined} url={url} />
+              <DocBody bodyRef={bodyRef} summary={summary} content={content} info={info} onPick={pick} onComment={writes ? (quote, blockId) => openComments({ quote, blockId }) : undefined} comments={hasComments ? { open: openCount, onOpen: () => openComments(), writes } : undefined} url={url} />
             ) : error ? (
               <Failed message={error} onRetry={() => setRound((n) => n + 1)} url={url} />
             ) : (
@@ -208,7 +235,58 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
         )}
       </div>
       <EditDialog editing={editing} onClose={() => setEditing(null)} />
+      <Dialog open={showOutline} onClose={() => setShowOutline(false)} title={t("link-linkpanel.outline")} width={380}>
+        <nav aria-label={t("link-linkpanel.outline")} className="-mx-2 max-h-[min(60vh,480px)] overflow-y-auto">
+          {outline.map((o) => (
+            <button
+              key={o.index}
+              type="button"
+              onClick={() => jump(o)}
+              className={cx("block w-full truncate rounded-control py-1.5 pr-2 text-left text-[13px] transition-colors hover:bg-hover", o.depth === 0 ? "font-medium text-ink" : "text-ink-2")}
+              style={{ paddingLeft: 8 + o.depth * 16 }}
+            >
+              {o.text}
+            </button>
+          ))}
+        </nav>
+      </Dialog>
     </>
+  );
+}
+
+/** The document's headings, the panel's own title left out. */
+function headingsIn(el: HTMLElement): HTMLElement[] {
+  return [...el.querySelectorAll<HTMLElement>("[data-doc-body] :is(h1, h2, h3, h4, h5, h6)")];
+}
+
+/** Feishu's AI summary over the document: a few lines, 展开 for the rest (FeishuDocReader.summaryCard). */
+function SummaryCard({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const [long, setLong] = useState(true);
+  const box = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (el) setLong(el.scrollHeight > 104);
+  }, [text]);
+  return (
+    <section aria-label={t("link-linkpanel.ai_summary")} className="mt-4 rounded-card bg-accent-tint/50 px-3.5 py-3 shadow-hairline">
+      <div className="flex items-center gap-1.5">
+        <Icon name="sparkles" size={13} className="shrink-0 text-accent-ink" />
+        <span className="flex-1 text-[12.5px] font-semibold text-ink">{t("link-linkpanel.ai_summary")}</span>
+        {long && (
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="rounded px-1.5 py-0.5 text-[12px] whitespace-nowrap text-accent-ink hover:bg-accent-tint">
+            {open ? t("link-linkpanel.collapse") : t("link-linkpanel.expand")}
+          </button>
+        )}
+      </div>
+      <div
+        ref={box}
+        onClick={() => long && !open && setOpen(true)}
+        className={cx("mt-1.5 overflow-hidden text-[12.5px] text-ink-2 [&_p]:my-1", !open && long && "max-h-24 cursor-pointer [mask-image:linear-gradient(to_bottom,black_70%,transparent)]")}
+      >
+        <DocMarkdown markdown={text} />
+      </div>
+    </section>
   );
 }
 
@@ -224,6 +302,8 @@ function metaLine(info: DocInfo | null) {
 }
 
 function DocBody({
+  bodyRef,
+  summary,
   content,
   info,
   onPick,
@@ -231,6 +311,8 @@ function DocBody({
   comments,
   url,
 }: {
+  bodyRef: React.RefObject<HTMLDivElement | null>;
+  summary: string | null;
   content: Extract<DocContent, { kind: "markdown" | "tree" }>;
   info: DocInfo | null;
   onPick: (text: string, kind: ContextRef["kind"]) => void;
@@ -241,11 +323,12 @@ function DocBody({
   const markdown = useMemo(() => (content.kind === "markdown" ? prepareMarkdown(content.markdown, content.title, getToken()) : ""), [content]);
   const meta = metaLine(info);
   return (
-    <div style={{ animation: `fade-in 200ms ease-out both` }}>
+    <div ref={bodyRef} style={{ animation: `fade-in 200ms ease-out both` }}>
       <Pickable enabled={content.copy} onPick={onPick} onComment={onComment}>
         <h1 className="text-[22px] leading-[1.3] font-semibold tracking-tight text-ink">{content.title}</h1>
         {meta && <div className="mt-2 text-[12px] text-ink-3">{meta}</div>}
-        <div className="mt-5">{content.kind === "markdown" ? <DocMarkdown markdown={markdown} /> : <DocTree doc={content.doc} />}</div>
+        {summary && <SummaryCard text={summary} />}
+        <div className="mt-5" data-doc-body>{content.kind === "markdown" ? <DocMarkdown markdown={markdown} /> : <DocTree doc={content.doc} />}</div>
       </Pickable>
       {content.partial && <p className="mt-4 text-[12px] text-ink-3">{t("link-linkpanel.partial")}</p>}
       {!content.copy && <p className="mt-4 text-[12px] text-ink-3">{t("link-linkpanel.copy_forbidden")}</p>}

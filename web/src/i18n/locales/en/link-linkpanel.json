@@ -41,5 +41,9 @@
   "send_to": "To {target}",
   "send": "Send",
   "edit_placeholder": "What should change? (Leave empty to work from the selection)",
-  "edit_label": "What to change"
+  "edit_label": "What to change",
+  "outline": "Outline",
+  "ai_summary": "AI summary",
+  "expand": "Show more",
+  "collapse": "Show less"
 }

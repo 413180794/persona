@@ -279,3 +279,27 @@ export function loadDoc(url: string, title?: string, fresh = false): Promise<Doc
 setLinkPrefetcher((url) => {
   if (!docs.has(url)) void loadDoc(url).catch(() => {});
 });
+
+// ── AI summary and outline (FeishuDocReader's summaryCard and outline) ──
+
+/** Feishu's cached AI summary of a document, when it has one ready; null otherwise (none, still writing, not allowed). */
+export async function readSummary(url: string, get: Get = hubGet): Promise<string | null> {
+  const r = await get(`documents/ai-summary?url=${enc(url)}`);
+  const text = typeof r.summary === "string" ? r.summary.trim() : "";
+  return r.state === "ready" && text ? text : null;
+}
+
+export interface OutlineItem {
+  /** Index among the document's headings, in order (what the reader scrolls to). */
+  index: number;
+  text: string;
+  /** 0 for the document's top level of headings, 1 under it… */
+  depth: number;
+}
+
+/** The outline from the document's headings in order: blank ones left out, levels counted from the highest one used. */
+export function docOutline(headings: { level: number; text: string }[]): OutlineItem[] {
+  const shown = headings.map((h, index) => ({ index, text: h.text.replace(/\s+/g, " ").trim(), level: h.level })).filter((h) => h.text);
+  const top = Math.min(...shown.map((h) => h.level));
+  return shown.map((h) => ({ index: h.index, text: h.text, depth: Math.min(3, h.level - top) }));
+}

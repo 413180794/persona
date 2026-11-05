@@ -4,7 +4,7 @@
 // sent again on its own: it is checked against the newest page, or its local copy removed.
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { errorText } from "../../lib/api";
-import { nextLarkPosition, replyLarkMessage, sendLarkMessage, type LarkMessage } from "../../lib/inbox";
+import { nextLarkPosition, replyLarkMessage, sendLarkMessage, type LarkMention, type LarkMessage } from "../../lib/inbox";
 import { fileOutcomeUnknown, releaseLarkAttachments, sendLarkAttachment, type LarkAttachment, type LarkAttachmentRoute } from "../../lib/lark-attachments";
 import { t } from "../../i18n";
 import { toast } from "../../ui/atoms";
@@ -14,6 +14,8 @@ export interface LarkOutgoing {
   text?: string;
   attachment?: LarkAttachment;
   route: LarkAttachmentRoute;
+  /** Whom the text @s (a group's message); kept with it, so sending it again @s them too. */
+  mentions?: LarkMention[];
   /** For the local message: what it quotes. */
   quote?: { id: string; sender_name?: string; text?: string };
 }
@@ -47,8 +49,8 @@ export function localMessage(o: LarkOutgoing, position: string): LarkMessage {
 /** Sends `o` the way it is routed. */
 export function deliver(feed: string, o: LarkOutgoing, ol?: number): Promise<{ message_id?: string }> {
   if (o.attachment) return sendLarkAttachment(feed, o.attachment, o.clientID, o.route, ol);
-  if (o.route.replyTo) return replyLarkMessage(o.route.replyTo, o.text ?? "", Boolean(o.route.thread), o.clientID, ol);
-  return sendLarkMessage(feed, o.text ?? "", o.clientID, ol);
+  if (o.route.replyTo) return replyLarkMessage(o.route.replyTo, o.text ?? "", Boolean(o.route.thread), o.clientID, ol, o.mentions);
+  return sendLarkMessage(feed, o.text ?? "", o.clientID, ol, o.mentions);
 }
 
 type Update = (fn: (messages: LarkMessage[]) => LarkMessage[]) => void;

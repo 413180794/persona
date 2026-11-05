@@ -41,5 +41,9 @@
   "send_to": "发给{target}",
   "send": "发送",
   "edit_placeholder": "怎么改？（不填就按选中的内容改）",
-  "edit_label": "怎么改"
+  "edit_label": "怎么改",
+  "outline": "目录",
+  "ai_summary": "AI 摘要",
+  "expand": "展开",
+  "collapse": "收起"
 }

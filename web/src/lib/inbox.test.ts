@@ -568,6 +568,14 @@ describe("列表状态", () => {
     fetcher.mockResolvedValueOnce(ok({ message_id: "m_other_reply" }));
     await replyLarkMessage("root-msg", "收到", true, "client-4", 2);
     expect(fetcher.mock.calls[4][0]).toBe("/api/v1/lark/messages/root-msg/replies?ol_account=2");
+
+    // @ in a group: who Feishu notifies goes along (the text holds each @name).
+    fetcher.mockResolvedValueOnce(ok({ message_id: "m_at" }));
+    await sendLarkMessage("feed-xyz", "@Tom 看下", "client-5", undefined, [{ user_id: "u1", name: "Tom" }]);
+    expect(JSON.parse(fetcher.mock.calls[5][1].body)).toEqual({ text: "@Tom 看下", client_id: "client-5", mentions: [{ user_id: "u1", name: "Tom" }] });
+    fetcher.mockResolvedValueOnce(ok({ message_id: "m_at_reply" }));
+    await replyLarkMessage("root-msg", "@所有人 收到", false, "client-6", undefined, [{ user_id: "all", name: "所有人" }]);
+    expect(JSON.parse(fetcher.mock.calls[6][1].body).mentions).toEqual([{ user_id: "all", name: "所有人" }]);
   });
 
   it("nextLarkPosition 能够基于现有消息计算下一个位置", () => {

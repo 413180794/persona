@@ -97,6 +97,8 @@ const P: Record<string, React.ReactNode> = {
   tag: <g><path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.41l8.71 8.71a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z" /><path d="M7.5 7.5h.01" /></g>,
   // 健康 (docs/health.md)
   heart: <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z" />,
+  // 飞书表情回复 (LarkThread)
+  smile: <g><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" /><path d="M9 9.5h.01M15 9.5h.01" /></g>,
   // 代码托管 (extensions' UI version 4, #2951)
   branch: <g><path d="M6 3v12" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></g>,
   commit: <g><circle cx="12" cy="12" r="3" /><path d="M3 12h6M15 12h6" /></g>,
