@@ -1,0 +1,9 @@
+{
+  "summary_named": "{name} 現在{now}、最大{peak}",
+  "summary": "現在{now}、最大{peak}",
+  "summary_sep": "；",
+  "now": "現在",
+  "no_data_at": "この時点のデータはありません",
+  "chart_label": "{title}：{summary}",
+  "no_data": "この期間のデータはありません"
+}

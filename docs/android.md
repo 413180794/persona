@@ -963,6 +963,7 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 
 - **贡献开关**：详情的 `contributions` 有值时按项显示，能关的经 `setContribution` 发 `PUT …/-/contributions/{point}/{id}`，返回详情后更新开关；未保存的设置仍留着，失败保留原状态并显示错误。`can_disable: false` 的项只显示状态；`via: connector` 明确写跟随连接器，在连接器设置里改，hub.json 来的仍只读。旧 hub 没有这个字段时，继续按 `contributes` 显示原来的「提供」列表。
 - **依赖和合集安装**：`ExtensionPreview` 读 `depends`、`bundle`、`unresolved`，清单预览读 `extension_pack`。确认页的 `BundlePreview` 列依赖状态、合集成员和这次要一起装 / 升级的每个扩展、各自权限、新增权限及警告。不满足的依赖（含停用、未知状态）、找不到的成员不能确认；hub 的扁平 `bundle` 里，成员之间的依赖按同一整组判断。确认后原顺序回传全部 `{preview_id, permissions_digest}`，不会悄悄只装主扩展。没有新字段的旧预览仍按原流程走。
+- **依赖未就绪（#2469）**：`state: not_ready` 明确显示「依赖未就绪」，确认页要求先完成依赖扩展的设置，再重新预览；同组成员的依赖也按此提示。`ok` 才显示「已满足」，未知状态仍保守回退并禁止确认，不改旧 hub 的字段格式。
 - **声明贡献的装配**：`Root.kt` 的 `ExtensionDeclarationsHost` 按当前 hub 身份提供快捷提示、主题和分拣模板（`ExtensionDeclarationsModel`）。只有 App resumed 时才读，回来立即刷新，前台每 30 秒再读；在本机安装 / 升级 / 卸载、停用扩展或改变贡献后立即重读。新 API 的 404 是旧 hub，表示没有该类贡献；其他错误保留上次数据，不把网络失败当成扩展已停用。体验模式没有这些贡献。
 - **快捷提示**：`GET …/-/prompts` → `LocalExtensionPrompts`。`ChatComposer` 的斜杠候选和加号菜单列出它们，标题单行截断，以 `<扩展>/<id>` 区分同标题。选中只替换输入框文字、移光标到末尾并请求焦点；附件留着，不调用发送或命令回调。原有内置命令的行为不改，助手主对话和 Agent 对话共用这个输入框。
 - **主题色**：`GET …/-/themes` → 设置 › 外观的「主题色」。hub 有 `problems` 的不列；`ExtensionThemeColors` 再校验两种深浅色 × 三套风格的页面、半透明卡片合成后、实心面板、抬起 / 下沉底色以及提示底色上的对比度（accent 至少 3，其他给出的文字角色至少 4.5）。只收 `accent`、`positive`、`caution`、`danger`、`ai`；其他角色和全部布局 token 不变。用户不选时原配色完全不变；选择按 hub 身份保存，另一个 hub 同名主题不冒用；停用后刷新不到该项时清掉本机选择、回默认。主题只覆盖声明的角色色，不改 Agent 状态色；自定义角色的按钮 / 勾选标记从设计系统取可读的前景色。

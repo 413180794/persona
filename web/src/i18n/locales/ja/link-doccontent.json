@@ -1,0 +1,18 @@
+{
+  "mermaid": "Mermaid図",
+  "plantuml": "PlantUML図",
+  "image_missing": "画像を表示できません",
+  "link": "リンク",
+  "sheet": "スプレッドシート",
+  "bitable": "Base",
+  "mindnote": "マインドノート",
+  "chat": "グループチャット",
+  "event": "予定",
+  "embed": "埋め込みコンテンツ",
+  "file": "ファイル",
+  "slide": "{n}ページ",
+  "isv": "サードパーティのウィジェットです。Larkで表示してください",
+  "block_unsupported": "このブロックはまだ対応していません。Larkで表示してください",
+  "image": "画像",
+  "open": "開く"
+}

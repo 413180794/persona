@@ -9,6 +9,7 @@ import { computerView, computerWatching, GRANT_HINT, NO_SCREEN_SHARING, screenPa
 import { Button, cx, Dialog, EASE, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Switch } from "../settings/SettingsParts";
+import { t } from "../../i18n";
 
 export function ComputerSection({ mid, computer, online }: { mid: string; computer: MachineComputer; online: boolean }) {
   // What the hub said since the page opened (newer than the machine list's).
@@ -47,7 +48,7 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
     try {
       setFresh(await api<MachineComputer>(`/machines/${enc(mid)}/computer`, { method: "PUT", json: { enabled: on } }));
     } catch (e) {
-      toast(`${on ? "打开" : "关掉"}失败：${errorText(e)}`, "error");
+      toast(on ? t("machines-computersection.turn_on_failed", { error: errorText(e) }) : t("machines-computersection.turn_off_failed", { error: errorText(e) }), "error");
     } finally {
       setSaving(false);
     }
@@ -79,20 +80,20 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
   return (
     <section data-testid="computer-section">
       <div className="mb-2.5 flex min-h-7 items-center gap-2 px-1">
-        <h2 className="text-[13px] font-medium text-ink">操控电脑</h2>
+        <h2 className="text-[13px] font-medium text-ink">{t("machines-computersection.title")}</h2>
       </div>
       <div className="overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} both` }}>
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] text-ink">允许助手操控这台电脑</div>
-            <div className="mt-0.5 truncate text-[11.5px] text-ink-3">经 Cua Driver 看屏幕、点按、输入、截图</div>
+            <div className="truncate text-[13px] text-ink">{t("machines-computersection.allow")}</div>
+            <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{t("machines-computersection.allow_detail")}</div>
           </div>
           {saving && <Spinner />}
-          <Switch on={enabled} onChange={(on) => void set(on)} disabled={saving || !online} label="允许助手操控这台电脑" />
+          <Switch on={enabled} onChange={(on) => void set(on)} disabled={saving || !online} label={t("machines-computersection.allow")} />
         </div>
         {v.kind !== "off" && (
           <div className="flex flex-col items-start gap-2.5 border-t border-line px-4 py-3">
-            {v.kind === "offline" && <Line text="机器离线，连上后才能操控" />}
+            {v.kind === "offline" && <Line text={t("machines-computersection.offline")} />}
             {v.kind === "running" && (
               <>
                 <p className="flex items-center gap-2 text-[12.5px] text-ink-2" role="status">
@@ -101,7 +102,7 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
                 </p>
                 {(v.cancel || v.screen) && (
                   <div className="flex flex-wrap gap-2">
-                    {v.cancel && action("取消", "cancel")}
+                    {v.cancel && action(t("common.cancel"), "cancel")}
                     {v.screen && look(true)}
                   </div>
                 )}
@@ -110,8 +111,8 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
             {v.kind === "install" && (
               <>
                 <Line text={v.text} />
-                <p className="text-[11.5px] leading-relaxed text-ink-3">从 Cua 官网下载安装器，校验后装进「应用程序」，并关掉它的使用统计。</p>
-                {action(v.retry ? "重新安装" : "安装 Cua Driver", "install", true)}
+                <p className="text-[11.5px] leading-relaxed text-ink-3">{t("machines-computersection.install_detail")}</p>
+                {action(v.retry ? t("machines-computersection.reinstall") : t("machines-computersection.install_title"), "install", true)}
               </>
             )}
             {v.kind === "granted" && (
@@ -119,7 +120,7 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
                 <Line text={GRANT_HINT} />
                 <div className="flex flex-wrap gap-2">
                   {v.screen && look(true)}
-                  {action("再请求一次", "grant")}
+                  {action(t("machines-computersection.ask_again"), "grant")}
                 </div>
                 {!v.screen && <p className="text-[11.5px] leading-relaxed text-ink-3">{NO_SCREEN_SHARING}</p>}
               </>
@@ -127,7 +128,7 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
             {v.kind === "grant" && (
               <>
                 <Line text={v.text} />
-                {action("去授权", "grant", true)}
+                {action(t("machines-computersection.grant"), "grant", true)}
               </>
             )}
             {v.kind === "ready" && (
@@ -143,11 +144,11 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
       <Dialog
         open={confirmInstall}
         onClose={() => setConfirmInstall(false)}
-        title="安装 Cua Driver"
+        title={t("machines-computersection.install_title")}
         footer={
           <>
             <Button tone="quiet" onClick={() => setConfirmInstall(false)}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button
               tone="primary"
@@ -156,12 +157,12 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
                 void run("install");
               }}
             >
-              安装
+              {t("machines-computersection.install")}
             </Button>
           </>
         }
       >
-        <p className="text-[12.5px] leading-relaxed text-ink-2">在这台 Mac 上从 Cua 官网下载安装器，校验后装进「应用程序」，并关掉它的使用统计。装好后会请求辅助功能和屏幕录制权限，要在那台 Mac 的屏幕上点「允许」。</p>
+        <p className="text-[12.5px] leading-relaxed text-ink-2">{t("machines-computersection.install_confirm")}</p>
       </Dialog>
     </section>
   );

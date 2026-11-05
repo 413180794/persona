@@ -5,6 +5,7 @@ import { cachedMermaid, mermaidProblem, renderMermaid } from "../lib/mermaid";
 import { useCloseOnBack } from "../lib/back-close";
 import { isNoHover, NARROW, useMedia } from "./media-query";
 import { copyText, cx } from "./atoms";
+import { t } from "../i18n";
 import { Icon } from "./icons";
 
 const SETTLE_MS = 350;
@@ -79,16 +80,16 @@ export function MermaidBlock({ code }: { code: string }) {
       )}
       <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity duration-150 group-hover/code:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
         {svg && (
-          <button type="button" aria-label={showSource ? "看图" : "看源码"} title={showSource ? "看图" : "看源码"} onClick={() => setSource(!source)} className={tool}>
+          <button type="button" aria-label={showSource ? t("ui-mermaid.show_diagram") : t("ui-mermaid.show_source")} title={showSource ? t("ui-mermaid.show_diagram") : t("ui-mermaid.show_source")} onClick={() => setSource(!source)} className={tool}>
             <Icon name={showSource ? "image" : "terminal"} size={13} />
           </button>
         )}
         {svg && !showSource && (
-          <button type="button" aria-label="放大" title="放大" onClick={() => setBig(true)} className={tool}>
+          <button type="button" aria-label={t("ui-mermaid.zoom")} title={t("ui-mermaid.zoom")} onClick={() => setBig(true)} className={tool}>
             <Icon name="external" size={13} />
           </button>
         )}
-        <button type="button" aria-label="拷贝代码" title="拷贝" onClick={() => copyText(code)} className={tool}>
+        <button type="button" aria-label={t("ui-mermaid.copy_code")} title={t("ui-mermaid.copy")} onClick={() => copyText(code)} className={tool}>
           <Icon name="copy" size={13} />
         </button>
       </div>
@@ -106,7 +107,7 @@ function Zoomed({ svg, onClose }: { svg: string; onClose: () => void }) {
     return () => window.removeEventListener("keydown", key);
   }, [onClose]);
   return (
-    <div role="dialog" aria-label="图" className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-8" onClick={onClose} style={{ animation: "fade-in 150ms ease-out both" }}>
+    <div role="dialog" aria-label={t("ui-mermaid.diagram")} className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-8" onClick={onClose} style={{ animation: "fade-in 150ms ease-out both" }}>
       <div
         className="max-h-full max-w-full overflow-auto rounded-[12px] bg-surface p-6 shadow-lg [&_svg]:h-auto [&_svg]:max-w-none"
         onClick={(e) => e.stopPropagation()}

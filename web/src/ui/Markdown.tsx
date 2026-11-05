@@ -9,6 +9,7 @@ import { isMachineRef, resolveRef } from "../lib/files";
 import { openPanel } from "../lib/panel";
 import remarkMath from "remark-math";
 import { copyText } from "./atoms";
+import { t } from "../i18n";
 import { Icon } from "./icons";
 import { MermaidBlock } from "./Mermaid";
 import { AssistantCard, CARD_LANGUAGES } from "./AssistantCard";
@@ -407,8 +408,8 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
       <pre>{children}</pre>
       <button
         type="button"
-        aria-label="拷贝代码"
-        title="拷贝"
+        aria-label={t("ui-markdown.copy_code")}
+        title={t("ui-markdown.copy")}
         onClick={() => copyText(textOf(children).replace(/\n$/, ""))}
         className="absolute top-1.5 right-1.5 flex size-6 touch-hit items-center justify-center rounded-[6px] bg-surface text-ink-3 opacity-0 shadow-btn transition-opacity duration-150 group-hover/code:opacity-100 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
       >

@@ -17,6 +17,8 @@ import { DocMarkdown, DocTree } from "./DocContent";
 import { loadDoc, mediaURL, prepareMarkdown, readInfo, type DocContent, type DocInfo } from "./feishu-doc";
 import { giveContext, giveEdit, handoffLabel } from "./handoff";
 import { QuoteIcon } from "./QuoteIcon";
+import { t } from "../../i18n";
+import { tRich } from "../../i18n/rich";
 
 export function LinkPanel({ url, title, onClose }: { url: string; title?: string; onClose: () => void }) {
   // a panel opened before the hub said what it has turns into the ordinary page once it says it has no Feishu
@@ -43,7 +45,7 @@ function MoreMenu({ url, onReload }: { url: string; onReload?: () => void }) {
   const menu = useMenu();
   return (
     <>
-      <IconButton icon="more" label="更多" onClick={menu.open} active={Boolean(menu.anchor)} />
+      <IconButton icon="more" label={t("link-linkpanel.more")} onClick={menu.open} active={Boolean(menu.anchor)} />
       {menu.anchor && (
         <Menu
           anchor={menu.anchor}
@@ -51,8 +53,8 @@ function MoreMenu({ url, onReload }: { url: string; onReload?: () => void }) {
           align="right"
           width={180}
           items={[
-            { key: "copy", label: "拷贝链接", icon: "link", onSelect: () => void copyText(url) },
-            ...(onReload ? [{ key: "reload", label: "重新载入", icon: "retry" as const, onSelect: onReload }] : []),
+            { key: "copy", label: t("link-linkpanel.copy_link"), icon: "link", onSelect: () => void copyText(url) },
+            ...(onReload ? [{ key: "reload", label: t("link-linkpanel.reload"), icon: "retry" as const, onSelect: onReload }] : []),
           ]}
         />
       )}
@@ -60,7 +62,7 @@ function MoreMenu({ url, onReload }: { url: string; onReload?: () => void }) {
   );
 }
 
-function ContextButton({ onClick, label = "作为上下文（整篇）" }: { onClick: () => void; label?: string }) {
+function ContextButton({ onClick, label = t("link-linkpanel.context_whole") }: { onClick: () => void; label?: string }) {
   return (
     <button
       type="button"
@@ -76,7 +78,7 @@ function ContextButton({ onClick, label = "作为上下文（整篇）" }: { onC
 
 /** 评论 in the header, with how many threads are open. */
 function CommentsButton({ count, active, onClick }: { count: number; active: boolean; onClick: () => void }) {
-  const label = count ? `评论（${count} 条未解决）` : "评论";
+  const label = count ? t("link-linkpanel.comments_open", { count }) : t("link-linkpanel.comments");
   return (
     <button
       type="button"
@@ -173,7 +175,7 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
             {/* the agent reads the document itself: the whole of it can go along even before (or without) it reading here */}
             {content && content.kind !== "unsupported" && hasComments && <CommentsButton count={openCount} active={showComments} onClick={() => (showComments ? setShowComments(false) : openComments())} />}
             {content?.kind !== "unsupported" && <ContextButton onClick={() => pick("", "context")} />}
-            <IconButton icon="external" label="在新标签页打开" onClick={() => openTab(url)} />
+            <IconButton icon="external" label={t("link-linkpanel.open_tab")} onClick={() => openTab(url)} />
             <MoreMenu
               url={url}
               onReload={() => {
@@ -214,10 +216,10 @@ function metaLine(info: DocInfo | null) {
   if (!info) return "";
   const parts: string[] = [];
   if (info.owner) parts.push(info.owner);
-  const t = ago(info.updatedAt);
-  if (t) parts.push(`更新于 ${t}`);
-  if (info.views) parts.push(`${info.views} 次阅读`);
-  if (info.comments) parts.push(`${info.comments} 条评论`);
+  const updated = ago(info.updatedAt);
+  if (updated) parts.push(t("link-linkpanel.updated", { when: updated }));
+  if (info.views) parts.push(t("link-linkpanel.views", { count: info.views }));
+  if (info.comments) parts.push(t("link-linkpanel.comment_count", { count: info.comments }));
   return parts.join(" · ");
 }
 
@@ -245,16 +247,16 @@ function DocBody({
         {meta && <div className="mt-2 text-[12px] text-ink-3">{meta}</div>}
         <div className="mt-5">{content.kind === "markdown" ? <DocMarkdown markdown={markdown} /> : <DocTree doc={content.doc} />}</div>
       </Pickable>
-      {content.partial && <p className="mt-4 text-[12px] text-ink-3">文档较长，只显示了前面的部分。</p>}
-      {!content.copy && <p className="mt-4 text-[12px] text-ink-3">作者禁止复制这篇文档，不能选中文字；可以用右上角的「作为上下文」带上整篇。</p>}
+      {content.partial && <p className="mt-4 text-[12px] text-ink-3">{t("link-linkpanel.partial")}</p>}
+      {!content.copy && <p className="mt-4 text-[12px] text-ink-3">{t("link-linkpanel.copy_forbidden")}</p>}
       <div className="mt-10 flex flex-wrap justify-center gap-2 border-t border-line pt-5">
         {comments && (comments.open > 0 || comments.writes) && (
           <Button icon="chat" onClick={comments.onOpen}>
-            {comments.open > 0 ? `${comments.open} 条评论` : "写评论"}
+            {comments.open > 0 ? t("link-linkpanel.comment_count", { count: comments.open }) : t("link-linkpanel.write_comment")}
           </Button>
         )}
         <Button icon="external" onClick={() => openTab(url)}>
-          在新标签页打开
+          {t("link-linkpanel.open_tab")}
         </Button>
       </div>
     </div>
@@ -284,11 +286,11 @@ function Unsupported({ content, url }: { content: Extract<DocContent, { kind: "u
             download
             className="inline-flex h-8 items-center gap-1.5 rounded-control bg-ink px-3 text-[12.5px] font-medium whitespace-nowrap text-surface"
           >
-            <Icon name="arrowDown" size={14} stroke={2.1} /> 下载文件
+            <Icon name="arrowDown" size={14} stroke={2.1} /> {t("link-linkpanel.download")}
           </a>
         )}
         <Button tone={content.file ? "secondary" : "primary"} icon="external" onClick={() => openTab(url)}>
-          在新标签页打开
+          {t("link-linkpanel.open_tab")}
         </Button>
       </div>
     </div>
@@ -302,15 +304,15 @@ function Failed({ message, onRetry, url }: { message: string; onRetry: () => voi
         <Icon name="info" size={20} />
       </span>
       <div>
-        <div className="text-[14.5px] font-semibold text-ink">打不开这篇文档</div>
+        <div className="text-[14.5px] font-semibold text-ink">{t("link-linkpanel.open_failed")}</div>
         <div className="mt-1 max-w-[340px] text-[12.5px] text-ink-2">{message}</div>
       </div>
       <div className="mt-1 flex flex-wrap justify-center gap-2">
         <Button icon="retry" onClick={onRetry}>
-          重试
+          {t("link-linkpanel.retry")}
         </Button>
         <Button tone="primary" icon="external" onClick={() => openTab(url)}>
-          在新标签页打开
+          {t("link-linkpanel.open_tab")}
         </Button>
       </div>
     </div>
@@ -321,7 +323,7 @@ const BARS = [92, 86, 58, 95, 80, 44, 90, 84, 52];
 
 function Skeleton({ title }: { title?: string }) {
   return (
-    <div aria-busy="true" aria-label="正在读取文档" className="flex flex-col gap-3">
+    <div aria-busy="true" aria-label={t("link-linkpanel.loading")} className="flex flex-col gap-3">
       {title ? <h1 className="text-[22px] leading-[1.3] font-semibold tracking-tight text-ink">{title}</h1> : <div className="h-6 w-2/3 animate-pulse rounded-[6px] bg-field" />}
       <div className="h-3 w-1/3 animate-pulse rounded-[4px] bg-field" />
       <div className="mt-3 flex flex-col gap-2.5">
@@ -380,7 +382,7 @@ function MomentsPanel({ id, url, onClose }: { id: string; url: string; onClose: 
     };
   }, [id, round]);
 
-  const name = post?.userName ? `公司圈 · ${post.userName}` : "公司圈";
+  const name = post?.userName ? t("link-linkpanel.moments_by", { name: post.userName }) : t("link-linkpanel.moments");
   const pick = (text: string, k: ContextRef["kind"]) => {
     const ref = newContext(k, name, url, text);
     if (k === "edit") setEditing(ref);
@@ -396,8 +398,8 @@ function MomentsPanel({ id, url, onClose }: { id: string; url: string; onClose: 
         onClose={onClose}
         actions={
           <>
-            {post && <ContextButton label="这条帖子作为上下文" onClick={() => pick(post.content?.text ?? "", "context")} />}
-            <IconButton icon="external" label="在新标签页打开" onClick={() => openTab(url)} />
+            {post && <ContextButton label={t("link-linkpanel.post_as_context")} onClick={() => pick(post.content?.text ?? "", "context")} />}
+            <IconButton icon="external" label={t("link-linkpanel.open_tab")} onClick={() => openTab(url)} />
             <MoreMenu url={url} onReload={() => setRound((n) => n + 1)} />
           </>
         }
@@ -420,18 +422,18 @@ function MomentsPanel({ id, url, onClose }: { id: string; url: string; onClose: 
                     {c}
                   </span>
                 ))}
-                {Boolean(post.reactionCount) && <span>{post.reactionCount} 个赞</span>}
-                {Boolean(post.commentCount) && <span>· {post.commentCount} 条评论</span>}
+                {Boolean(post.reactionCount) && <span>{t("link-linkpanel.likes", { count: post.reactionCount ?? 0 })}</span>}
+                {Boolean(post.commentCount) && <span>· {t("link-linkpanel.comment_count", { count: post.commentCount ?? 0 })}</span>}
               </div>
               {comments.length > 0 && (
                 <div className="mt-6 border-t border-line pt-4">
-                  <div className="mb-2 text-[12px] font-medium text-ink-3">评论 {comments.length}</div>
+                  <div className="mb-2 text-[12px] font-medium text-ink-3">{t("link-linkpanel.comments_header", { count: comments.length })}</div>
                   <div className="flex flex-col gap-3">
                     {comments.map((c) => (
                       <div key={c.id} className="text-[13px] leading-[1.6]">
                         <div className="text-[12px] text-ink-3">
                           <span className="font-medium text-ink-2">{c.userName}</span>
-                          {c.replyUserName && <> 回复 <span className="font-medium text-ink-2">{c.replyUserName}</span></>}
+                          {c.replyUserName && <> {tRich("link-linkpanel.replied_to", { name: <span className="font-medium text-ink-2">{c.replyUserName}</span> })}</>}
                           {when(c.createTime) && <> · {when(c.createTime)}</>}
                         </div>
                         <div className="whitespace-pre-wrap text-ink [overflow-wrap:anywhere]">{c.content?.text}</div>
@@ -465,17 +467,17 @@ function WebPanel({ url, title, onClose }: { url: string; title?: string; onClos
           <Icon name="web" size={22} />
         </span>
         <div className="max-w-[360px]">
-          <div className="text-[14.5px] font-semibold text-ink">{web ? "网页在浏览器的新标签页里打开" : "这个链接在网页里打不开"}</div>
-          <div className="mt-1 text-[12.5px] text-ink-2">{web ? "多数网站不允许被嵌进别的页面，嵌进来只会是一片空白。" : "它要交给别的 App 处理，可以拷贝下来。"}</div>
+          <div className="text-[14.5px] font-semibold text-ink">{web ? t("link-linkpanel.web_title") : t("link-linkpanel.other_title")}</div>
+          <div className="mt-1 text-[12.5px] text-ink-2">{web ? t("link-linkpanel.web_detail") : t("link-linkpanel.other_detail")}</div>
           <div className="mt-2 text-[12px] break-all text-ink-3">{url}</div>
         </div>
         <div className="mt-1 flex flex-wrap justify-center gap-2">
           <Button icon="link" onClick={() => void copyText(url)}>
-            拷贝链接
+            {t("link-linkpanel.copy_link")}
           </Button>
           {web && (
             <Button tone="primary" icon="external" onClick={() => openTab(url)}>
-              在新标签页打开
+              {t("link-linkpanel.open_tab")}
             </Button>
           )}
         </div>
@@ -574,19 +576,19 @@ function Pickable({ enabled, onPick, onComment, children }: { enabled: boolean; 
         <div
           data-pickbar
           role="toolbar"
-          aria-label="选中的文字"
+          aria-label={t("link-linkpanel.selection")}
           onMouseDown={(e) => e.preventDefault()}
           className="absolute z-20 flex items-center gap-0.5 rounded-[10px] border border-tooltip-border bg-tooltip-bg p-1 text-tooltip-fg shadow-overlay"
           style={{ left: tip.x, top: tip.y, translate: `-50% ${tip.below ? "0" : "-100%"}`, animation: `pop-in 140ms ${EASE} both`, transformOrigin: tip.below ? "top center" : "bottom center" }}
         >
-          <PickButton onClick={() => choose("context")} label="作为上下文" title={`随下一条消息发给${handoffLabel()}`}>
+          <PickButton onClick={() => choose("context")} label={t("link-linkpanel.as_context")} title={t("link-linkpanel.as_context_hint", { target: handoffLabel() })}>
             <QuoteIcon size={13} />
           </PickButton>
-          <PickButton onClick={() => choose("edit")} label="AI 修改" title={`写下要怎么改，立即发给${handoffLabel()}`}>
+          <PickButton onClick={() => choose("edit")} label={t("link-linkpanel.ai_edit")} title={t("link-linkpanel.ai_edit_hint", { target: handoffLabel() })}>
             <Icon name="spark" size={12} />
           </PickButton>
           {onComment && (
-            <PickButton onClick={() => choose("comment")} label="评论" title="在飞书文档里评论这段">
+            <PickButton onClick={() => choose("comment")} label={t("link-linkpanel.comment")} title={t("link-linkpanel.comment_hint")}>
               <Icon name="chat" size={12} />
             </PickButton>
           )}
@@ -623,15 +625,15 @@ function EditDialog({ editing, onClose }: { editing: ContextRef | null; onClose:
     <Dialog
       open={Boolean(editing)}
       onClose={onClose}
-      title="让 Agent 改这段"
+      title={t("link-linkpanel.edit_title")}
       footer={
         <>
-          <span className="mr-auto truncate text-[11.5px] text-ink-3">发给{handoffLabel()}</span>
+          <span className="mr-auto truncate text-[11.5px] text-ink-3">{t("link-linkpanel.send_to", { target: handoffLabel() })}</span>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" icon="send" onClick={send}>
-            发送
+            {t("link-linkpanel.send")}
           </Button>
         </>
       }
@@ -649,8 +651,8 @@ function EditDialog({ editing, onClose }: { editing: ContextRef | null; onClose:
             send();
           }
         }}
-        placeholder="怎么改？（不填就按选中的内容改）"
-        aria-label="怎么改"
+        placeholder={t("link-linkpanel.edit_placeholder")}
+        aria-label={t("link-linkpanel.edit_label")}
         className="mt-3 w-full resize-none rounded-[10px] bg-field px-3 py-2 text-[13.5px] leading-[1.55] text-ink outline-none placeholder:text-ink-3 focus:shadow-hairline"
       />
     </Dialog>

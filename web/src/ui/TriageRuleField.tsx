@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useDeclaredList } from "../lib/extension-declared";
 import { Button, cx, Dialog, Menu } from "./atoms";
+import { t } from "../i18n";
 
 interface TriageTemplate {
   extension: string;
@@ -26,10 +27,10 @@ export function TriageRuleField({ id, value, placeholder, maxLength, invalid, on
   return <>
     <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={4} maxLength={maxLength} placeholder={placeholder} spellCheck={false}
       className={cx("w-full resize-y rounded-control bg-field px-2.5 py-2 text-[12.5px] text-ink outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]", invalid ? "shadow-[inset_0_0_0_1px_var(--red)]" : "shadow-inset-field")} />
-    {!!templates.length && <span className="inline-block" ref={trigger}><Button tone="quiet" icon="sparkles" onClick={() => setAnchor((a) => a ? null : trigger.current)}>从扩展选模板</Button></span>}
-    {anchor && <Menu anchor={anchor} onClose={() => setAnchor(null)} header="规则模板" items={templates.map((t) => ({ key: `${t.extension}/${t.id}`, label: t.title, hint: t.extension_name, onSelect: () => setPicked(t) }))} />}
-    {picked && <Dialog open title={`用「${picked.title}」替换规则草稿？`} onClose={() => setPicked(null)} footer={<><Button tone="quiet" onClick={() => setPicked(null)}>取消</Button><Button tone="accent" onClick={() => { onChange(picked.text); setPicked(null); }}>替换草稿</Button></>}>
-      <p className="text-ink-2">来自「{picked.extension_name}」。只替换输入框里的草稿，不自动保存；确认保存后才在 hub 生效。</p>
+    {!!templates.length && <span className="inline-block" ref={trigger}><Button tone="quiet" icon="sparkles" onClick={() => setAnchor((a) => a ? null : trigger.current)}>{t("ui-triagerulefield.pick_template")}</Button></span>}
+    {anchor && <Menu anchor={anchor} onClose={() => setAnchor(null)} header={t("ui-triagerulefield.templates")} items={templates.map((tpl) => ({ key: `${tpl.extension}/${tpl.id}`, label: tpl.title, hint: tpl.extension_name, onSelect: () => setPicked(tpl) }))} />}
+    {picked && <Dialog open title={t("ui-triagerulefield.replace_title", { title: picked.title })} onClose={() => setPicked(null)} footer={<><Button tone="quiet" onClick={() => setPicked(null)}>{t("common.cancel")}</Button><Button tone="accent" onClick={() => { onChange(picked.text); setPicked(null); }}>{t("ui-triagerulefield.replace")}</Button></>}>
+      <p className="text-ink-2">{t("ui-triagerulefield.replace_body", { extension: picked.extension_name })}</p>
       <p className="mt-3 whitespace-pre-wrap text-ink-2">{picked.text}</p>
     </Dialog>}
   </>;

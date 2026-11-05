@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { insertPerson, personAt, type LarkPerson, type PersonToken } from "../lib/lark-people";
 import { EASE, Spinner } from "./atoms";
+import { t } from "../i18n";
 
 export type FindPeople = (query: string, signal: AbortSignal) => Promise<LarkPerson[]>;
 
@@ -108,7 +109,7 @@ export function useLarkPeoplePicker({ text, caret, open, find, apply, onPicked }
 }
 
 /** The menu over the box (place it in a `relative` wrapper around the box). Nothing while no `@` is being typed. */
-export function LarkPeopleMenu({ picker, label = "@ 飞书里的人" }: { picker: PeoplePicker; label?: string }) {
+export function LarkPeopleMenu({ picker, label = t("ui-larkpeoplepicker.label") }: { picker: PeoplePicker; label?: string }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const [box, setBox] = useState<{ top: number; height: number } | null>(null);
   const { token, rows, active, loading } = picker;
@@ -146,17 +147,17 @@ export function LarkPeopleMenu({ picker, label = "@ 飞书里的人" }: { picker
           <div className="flex h-9 items-center gap-2 px-2 text-[12px] text-ink-3">
             {loading ? (
               <>
-                <Spinner /> 正在找…
+                <Spinner /> {t("ui-larkpeoplepicker.searching")}
               </>
             ) : token.query ? (
-              `没有找到「${token.query}」`
+              t("ui-larkpeoplepicker.not_found", { query: token.query })
             ) : (
-              "输入名字找人"
+              t("ui-larkpeoplepicker.prompt")
             )}
           </div>
         )}
       </div>
-      <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-[11px] text-ink-3">↑↓ 选择 · Enter 填入 · Esc 关闭</div>
+      <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-[11px] text-ink-3">{t("ui-larkpeoplepicker.keys")}</div>
     </div>
   );
 }

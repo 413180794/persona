@@ -1,0 +1,22 @@
+{
+  "export_forbidden": "作成者がこのドキュメントのエクスポートを禁止しています",
+  "format_unsupported": "この種類のドキュメントはPersonaではまだ読めません",
+  "doc_not_found": "ドキュメントが存在しないか、削除されています",
+  "doc_forbidden": "このドキュメントへのアクセス権がありません",
+  "timeout": "Larkの応答がタイムアウトしました。しばらくしてからもう一度お試しください",
+  "invalid_url": "認識できないドキュメントリンクです",
+  "lark_signed_out": "ハブのlark-connectorがLarkにサインインしていません。サインインしてからもう一度お試しください",
+  "not_configured": "ハブがまだLark（lark-connector）に接続されていないため、ドキュメントを読めません",
+  "hub_unreachable": "ハブに接続できません",
+  "session_expired": "Larkのサインインが期限切れです",
+  "forbidden": "アクセス権がありません",
+  "not_found": "コンテンツが存在しないか、削除されています",
+  "lark_unreachable": "Lark（lark-connector）に接続できません。しばらくしてからもう一度お試しください",
+  "lark_unavailable": "Larkは現在利用できません。しばらくしてからもう一度お試しください",
+  "bitable_unsupported": "BaseはPersonaではまだ表示できません",
+  "drive_file": "ドライブのファイルです。ダウンロードして表示してください",
+  "whiteboard_empty": "空のホワイトボードです",
+  "whiteboard": "ホワイトボード",
+  "content_unsupported": "この種類のコンテンツはPersonaではまだ表示できません",
+  "sheet_forbidden": "作成者がこのシートのエクスポートを禁止しています。Larkで表示してください"
+}

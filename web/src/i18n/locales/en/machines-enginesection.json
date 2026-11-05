@@ -1,0 +1,7 @@
+{
+  "saved": "Engine changed to {engine}",
+  "label": "Engine",
+  "current": "Current",
+  "change_to": "Change to {engine}",
+  "revert": "Revert"
+}

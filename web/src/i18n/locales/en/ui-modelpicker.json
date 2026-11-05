@@ -1,0 +1,19 @@
+{
+  "not_in_list": "Not in the list",
+  "default": "Default",
+  "loading": "Loading models…",
+  "load_failed": "Couldn't load models",
+  "retry": "Retry",
+  "search_label": "Search models",
+  "search_custom": "Search, or enter a model ID",
+  "search": "Search name, ID, or description",
+  "count_one": "{count} model",
+  "count_other": "{count} models",
+  "reload": "Reload models",
+  "list_label": "Models",
+  "current_unlisted": "Current setting, not in the list",
+  "use_custom": "Use “{id}”",
+  "use_custom_note": "Not in the list; saves this ID as is",
+  "loading_slow": "Asking the launcher for its models; the first time takes a few seconds…",
+  "no_match": "No models match “{query}”"
+}

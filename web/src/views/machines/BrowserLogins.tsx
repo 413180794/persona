@@ -7,6 +7,7 @@ import { api, enc, errorText } from "../../lib/api";
 import { parseCookies, picked, sitesOf, type CookieSite, type CookieSiteNow } from "../../lib/cookies";
 import { Button, cx, Dialog, Loading, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { formatDate, t } from "../../i18n";
 
 interface Answer {
   sites: CookieSiteNow[];
@@ -15,7 +16,7 @@ interface Answer {
   removed?: number;
 }
 
-const day = (t: string | number) => new Date(typeof t === "number" ? t * 1000 : t).toLocaleDateString("zh-CN", { year: "numeric", month: "numeric", day: "numeric" });
+const day = (at: string | number) => formatDate(typeof at === "number" ? at * 1000 : at, { year: "numeric", month: "numeric", day: "numeric" });
 
 export function BrowserLogins({ mid, online }: { mid: string; online: boolean }) {
   const [sites, setSites] = useState<CookieSiteNow[] | null>(null);
@@ -61,9 +62,9 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
       const a = await api<Answer>(path, { method: "POST", json: { cookies } });
       setSites(a.sites);
       setFile(null); // the file's contents are gone from the page once sent
-      toast(`已导入 ${a.imported ?? 0} 条${a.skipped ? `，跳过 ${a.skipped} 条过期或格式不对的` : ""}`, "ok");
+      toast(a.skipped ? t("machines-browserlogins.imported_skipped", { count: a.imported ?? 0, skipped: a.skipped }) : t("machines-browserlogins.imported", { count: a.imported ?? 0 }), "ok");
     } catch (e) {
-      toast(`导入失败：${errorText(e)}`, "error");
+      toast(t("machines-browserlogins.import_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
     }
@@ -74,9 +75,9 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
     try {
       const a = await api<Answer>(`${path}?${what === "all" ? "all=1" : `site=${enc(what)}`}`, { method: "DELETE" });
       setSites(a.sites);
-      toast(`已清除 ${a.removed ?? 0} 条`, "ok");
+      toast(t("machines-browserlogins.cleared", { count: a.removed ?? 0 }), "ok");
     } catch (e) {
-      toast(`清除失败：${errorText(e)}`, "error");
+      toast(t("machines-browserlogins.clear_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
       setClearing(null);
@@ -87,33 +88,33 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
   return (
     <section data-browser-logins="">
       <div className="mb-2.5 flex min-h-7 items-center gap-2 px-1">
-        <h2 className="text-[13px] font-medium text-ink">浏览器登录</h2>
+        <h2 className="text-[13px] font-medium text-ink">{t("machines-browserlogins.title")}</h2>
         {sites && <span className="text-[12px] text-ink-3 tabular-nums">{sites.length}</span>}
         <span className="flex-1" />
         {sites && sites.length > 0 && (
           <Button tone="quiet" onClick={() => setClearing("all")} disabled={busy || !online}>
-            全部清除
+            {t("machines-browserlogins.clear_all")}
           </Button>
         )}
         <Button icon="arrowDown" onClick={() => input.current?.click()} disabled={busy || !online}>
-          导入 cookie 文件
+          {t("machines-browserlogins.import_file")}
         </Button>
         <input ref={input} type="file" accept=".txt,.json,text/plain,application/json" className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
       </div>
       <div className="overflow-hidden rounded-card bg-surface shadow-card">
         {!online ? (
-          <p className="px-4 py-5 text-[12.5px] text-ink-3">这台 Mac 在线时才能查看和导入。</p>
+          <p className="px-4 py-5 text-[12.5px] text-ink-3">{t("machines-browserlogins.offline")}</p>
         ) : error ? (
           <div className="flex items-center gap-3 px-4 py-4">
             <p className="min-w-0 flex-1 text-[12.5px] text-red">{error}</p>
-            <Button onClick={() => setTries((n) => n + 1)}>再试一次</Button>
+            <Button onClick={() => setTries((n) => n + 1)}>{t("machines-browserlogins.try_again")}</Button>
           </div>
         ) : !sites ? (
           <div className="flex h-20 items-center justify-center">
-            <Loading label="正在读取" />
+            <Loading label={t("machines-browserlogins.loading")} />
           </div>
         ) : sites.length === 0 ? (
-          <p className="px-4 py-5 text-[12.5px] text-ink-3">ego lite 里还没有登录过的网站。导入另一台电脑或浏览器导出的 cookie 文件，助手就能用你的登录打开那些网站。</p>
+          <p className="px-4 py-5 text-[12.5px] text-ink-3">{t("machines-browserlogins.empty")}</p>
         ) : (
           <ul>
             {sites.map((s) => (
@@ -122,31 +123,31 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-medium text-ink">{s.domain}</span>
                   <span className="block text-[11.5px] text-ink-3 tabular-nums">
-                    {s.count} 条{s.expires ? ` · 最晚 ${day(s.expires)} 过期` : " · 关掉浏览器就失效"}
+                    {[t("machines-browserlogins.count", { count: s.count }), s.expires ? t("machines-browserlogins.expires", { date: day(s.expires) }) : t("machines-browserlogins.session_only")].join(" · ")}
                   </span>
                 </span>
                 <Button tone="quiet" onClick={() => setClearing(s.domain)} disabled={busy}>
-                  清除
+                  {t("machines-browserlogins.clear")}
                 </Button>
               </li>
             ))}
           </ul>
         )}
       </div>
-      <p className="mt-2 px-1 text-[11.5px] leading-relaxed text-ink-3">只列网站和条数，不显示 cookie 的内容。导入的文件在这个页面里解析，只把你勾选的网站经 hub 直接发给这台 Mac，hub 不保存；助手看不到也导不了。</p>
+      <p className="mt-2 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("machines-browserlogins.privacy")}</p>
 
       <Dialog
         open={!!file}
         onClose={() => !busy && setFile(null)}
-        title="选择要导入的网站"
+        title={t("machines-browserlogins.pick_title")}
         width={480}
         footer={
           <div className="flex items-center justify-end gap-2">
             <Button tone="quiet" onClick={() => setFile(null)} disabled={busy}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button tone="primary" onClick={() => void importTicked()} disabled={busy || count === 0} busy={busy}>
-              {count ? `导入 ${count} 条` : "导入"}
+              {count ? t("machines-browserlogins.import_count", { count }) : t("machines-browserlogins.import")}
             </Button>
           </div>
         }
@@ -154,15 +155,14 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
         {file && (
           <div className="flex flex-col gap-3">
             <p className="text-[12.5px] text-ink-3">
-              {file.name} · {file.sites.length} 个网站
-              {file.bad ? ` · ${file.bad} 行读不懂，已略过` : ""}。默认一个都不勾，只导你勾选的。
+              {file.bad ? t("machines-browserlogins.file_summary_bad", { name: file.name, count: file.sites.length, bad: file.bad }) : t("machines-browserlogins.file_summary", { name: file.name, count: file.sites.length })}
             </p>
             <div className="flex items-center gap-3 text-[12px]">
               <button type="button" className="font-medium text-accent-ink" onClick={() => setTicked(new Set(file.sites.filter((s) => s.cookies.length).map((s) => s.site)))}>
-                全选
+                {t("machines-browserlogins.select_all")}
               </button>
               <button type="button" className="text-ink-3 hover:text-ink" onClick={() => setTicked(new Set())}>
-                全不选
+                {t("machines-browserlogins.select_none")}
               </button>
             </div>
             <ul className="max-h-[46vh] overflow-y-auto rounded-[10px] shadow-hairline">
@@ -187,8 +187,7 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] text-ink">{s.site}</span>
                         <span className="block text-[11.5px] text-ink-3 tabular-nums">
-                          {s.cookies.length} 条{s.expires ? ` · 最晚 ${day(s.expires)} 过期` : ""}
-                          {s.expired ? ` · ${s.expired} 条已过期，不导入` : ""}
+                          {[t("machines-browserlogins.count", { count: s.cookies.length }), s.expires && t("machines-browserlogins.expires", { date: day(s.expires) }), s.expired && t("machines-browserlogins.expired_skip", { count: s.expired })].filter(Boolean).join(" · ")}
                         </span>
                       </span>
                     </label>
@@ -196,7 +195,7 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
                 );
               })}
             </ul>
-            <p className="text-[11.5px] leading-relaxed text-ink-3">导进这台 Mac 的 ego lite 默认配置：你自己在 ego 里浏览时也会用这些登录。不需要时在这里清除。</p>
+            <p className="text-[11.5px] leading-relaxed text-ink-3">{t("machines-browserlogins.import_note")}</p>
           </div>
         )}
       </Dialog>
@@ -204,20 +203,20 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
       <Dialog
         open={clearing !== null}
         onClose={() => !busy && setClearing(null)}
-        title={clearing === "all" ? "清除 ego lite 里所有网站的登录？" : `清除 ${clearing} 的登录？`}
+        title={clearing === "all" ? t("machines-browserlogins.clear_all_title") : t("machines-browserlogins.clear_site_title", { site: clearing ?? "" })}
         footer={
           <div className="flex items-center justify-end gap-2">
             <Button tone="quiet" onClick={() => setClearing(null)} disabled={busy}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button tone="danger" onClick={() => clearing && void clear(clearing)} disabled={busy} busy={busy}>
-              清除
+              {t("machines-browserlogins.clear")}
             </Button>
           </div>
         }
       >
         <p className="text-[13px] leading-relaxed text-ink-2">
-          {clearing === "all" ? "这台 Mac 上 ego lite 的所有 cookie 都会删掉，所有网站都要重新登录。" : "这个网站在这台 Mac 的 ego lite 里会退出登录。"}你自己在 ego 里的登录也一样。
+          {clearing === "all" ? t("machines-browserlogins.clear_all_body") : t("machines-browserlogins.clear_site_body")}
         </p>
       </Dialog>
     </section>

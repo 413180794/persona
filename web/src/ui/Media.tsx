@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { fileDownloadURL } from "../lib/api";
 import { cx } from "./atoms";
+import { t } from "../i18n";
 import { Icon } from "./icons";
 
 export type MediaKind = "video" | "audio";
@@ -35,11 +36,11 @@ export function MediaPlayer({
     return (
       <div className={cx("flex flex-col items-center justify-center gap-2 rounded-[10px] bg-inset px-4 py-6 text-center", className)}>
         <Icon name="info" size={18} className="text-ink-3" />
-        <div className="text-[13px] text-ink">这个浏览器放不了这个{kind === "video" ? "视频" : "音频"}</div>
-        <div className="max-w-72 text-[12px] leading-relaxed text-ink-3">{kind === "video" ? "可能是 HEVC 或 MKV 这类编码，Safari 或下载到本机再看。" : "这种编码浏览器不支持，下载到本机再听。"}</div>
+        <div className="text-[13px] text-ink">{kind === "video" ? t("ui-media.video_unplayable") : t("ui-media.audio_unplayable")}</div>
+        <div className="max-w-72 text-[12px] leading-relaxed text-ink-3">{kind === "video" ? t("ui-media.video_hint") : t("ui-media.audio_hint")}</div>
         <a href={fileDownloadURL(mid, path, cwd)} download className="mt-1 inline-flex h-7 items-center gap-1 rounded-[8px] bg-surface px-2.5 text-[12px] font-medium whitespace-nowrap text-ink shadow-btn hover:bg-hover">
           <Icon name="arrowDown" size={13} />
-          下载
+          {t("ui-media.download")}
         </a>
       </div>
     );

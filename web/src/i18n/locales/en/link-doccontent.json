@@ -1,0 +1,18 @@
+{
+  "mermaid": "Mermaid diagram",
+  "plantuml": "PlantUML diagram",
+  "image_missing": "Image can't be shown",
+  "link": "Link",
+  "sheet": "Sheet",
+  "bitable": "Base",
+  "mindnote": "Mindnote",
+  "chat": "Group chat",
+  "event": "Event",
+  "embed": "Embedded content",
+  "file": "File",
+  "slide": "Slide {n}",
+  "isv": "Third-party widget. View it in Lark",
+  "block_unsupported": "This block isn't supported yet. View it in Lark",
+  "image": "Image",
+  "open": "Open"
+}

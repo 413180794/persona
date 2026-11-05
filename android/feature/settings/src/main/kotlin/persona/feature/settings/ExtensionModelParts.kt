@@ -20,10 +20,16 @@ internal object ExtensionModelText {
             "ok" -> "已满足"
             "missing" -> "未安装"
             "disabled" -> "需要先启用"
+            "not_ready" -> "依赖未就绪"
             "old" -> "版本不足（现在是 ${d.installed.orEmpty()}）"
             else -> "状态未知，重新预览"
         },
     ).joinToString(" · ")
+
+    fun blockedPreview(preview: ExtensionPreview): String = if (
+        preview.depends.any { it.state == "not_ready" } || preview.bundle.any { member -> member.depends.any { it.state == "not_ready" } }
+    ) "还有依赖未就绪，暂时不能安装；先完成依赖扩展的设置，确认其依赖也已就绪，再重新预览。"
+    else "还有依赖没有满足，暂时不能安装；先启用所需扩展，或补齐市场后重新预览。"
 
     fun sandbox(s: ExtensionSandbox): String = when {
         s.active -> "沙箱正在生效"
@@ -78,6 +84,6 @@ internal fun BundlePreview(preview: ExtensionPreview) {
             }
         }
         preview.unresolved.forEach { JInlineStatus("找不到：$it", tone = InlineTone.Failed) }
-        if (!preview.canConfirm) JInlineStatus("还有依赖没有满足，暂时不能安装；先启用所需扩展，或补齐市场后重新预览。", tone = InlineTone.Caution)
+        if (!preview.canConfirm) JInlineStatus(ExtensionModelText.blockedPreview(preview), tone = InlineTone.Caution)
     }
 }

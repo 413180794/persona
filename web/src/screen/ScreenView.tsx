@@ -5,6 +5,7 @@ import RFB from "@novnc/novnc";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, errorText } from "../lib/api";
 import { cx, Spinner } from "../ui/atoms";
+import { t } from "../i18n";
 import "../views/theme"; // follows the system's light / dark while open (index.html picked the first one)
 import { ensureSubtleAES } from "./aes";
 import { accountOf, keepLabel, keysymsOf, screenSocket, toApp, type ScreenTarget } from "./screen";
@@ -49,7 +50,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
   useEffect(() => {
     let gone = false;
     (async () => {
-      if (!target.token) return setPhase({ kind: "blocked", why: "先在网页上登录 hub，再打开这一页。" });
+      if (!target.token) return setPhase({ kind: "blocked", why: t("screen-screenview.sign_in_first") });
       try {
         const { machines } = await api<{ machines: MachineRow[] }>("/machines", { token: target.token });
         const m = machines.find((x) => x.id === target.mid);
@@ -57,7 +58,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
           setName(m.name);
           setAccount((a) => a || accountOf(m.home));
         }
-        if (m && !m.online) throw new Error(`${m.name} 离线，连上后再看。`);
+        if (m && !m.online) throw new Error(t("screen-screenview.offline", { name: m.name }));
         // The extension cua or ego, on for this Mac, lets its screen through (#1507); each asked fresh, 404 while off.
         const fresh = async (what: "computer" | "browser") => {
           try {
@@ -70,16 +71,16 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
         const c = await fresh("computer");
         const b = c?.enabled ? null : await fresh("browser");
         const on = c?.enabled ? c : b?.enabled ? b : null;
-        if (!c && !b) throw new Error("操控电脑和浏览器（ego lite）的扩展都没打开，或这台不是 Mac。");
-        if (!on) throw new Error("这台 Mac 还没有打开「操控电脑」或「浏览器」：在它的机器页打开。");
-        if (!on.screen_sharing) throw new Error("这台 Mac 的屏幕共享没开：在它的「系统设置 › 通用 › 共享」里打开「屏幕共享」。");
+        if (!c && !b) throw new Error(t("screen-screenview.no_extension"));
+        if (!on) throw new Error(t("screen-screenview.extension_off"));
+        if (!on.screen_sharing) throw new Error(t("screen-screenview.sharing_off"));
         if (!gone) {
           setPhase({ kind: "connecting" });
           setGo(true);
         }
       } catch (e) {
-        const why = e instanceof ApiError && e.status === 404 ? "这台机器不在 hub 上，或不是 Mac。"
-          : e instanceof ApiError && e.status === 401 ? (target.embedded ? "hub 没认这台设备的凭据：在 App 的「设置 › hub」里重新配对。" : "hub 没认这个凭据：在网页上重新登录 hub。")
+        const why = e instanceof ApiError && e.status === 404 ? t("screen-screenview.not_found")
+          : e instanceof ApiError && e.status === 401 ? (target.embedded ? t("screen-screenview.unauthorized_app") : t("screen-screenview.unauthorized_web"))
           : errorText(e);
         if (!gone) setPhase({ kind: "blocked", why });
       }
@@ -145,12 +146,12 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
       if (kept) setAccount(kept.account);
       setPhase({
         kind: "signin",
-        failed: kept ? "记住的密码不对了（那台 Mac 可能改过密码）：重新输入，连上后替换记住的那个" : reason ? `没登录上：${reason}` : "账号或密码不对",
+        failed: kept ? t("screen-screenview.kept_password_wrong") : reason ? t("screen-screenview.sign_in_failed", { reason }) : t("screen-screenview.wrong_credentials"),
       });
     });
     r.addEventListener("disconnect", (e) => {
       const clean = (e as CustomEvent<{ clean: boolean }>).detail?.clean;
-      setPhase((p) => (p.kind === "signin" && p.failed ? p : { kind: "closed", why: clean ? "已断开。" : "连接断了：那台 Mac 的屏幕共享没有回应，或网络断了。" }));
+      setPhase((p) => (p.kind === "signin" && p.failed ? p : { kind: "closed", why: clean ? t("screen-screenview.disconnected") : t("screen-screenview.connection_lost") }));
     });
     rfb.current = r;
     return () => {
@@ -232,15 +233,15 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
         {!target.embedded && (
           <a href={`/machines/${encodeURIComponent(target.mid)}`} className="whitespace-nowrap rounded-control px-2 py-1 text-[12.5px] text-ink-2 hover:bg-hover hover:text-ink">
-            返回
+            {t("screen-screenview.back")}
           </a>
         )}
         <p className="min-w-0 flex-1 truncate text-[13px] font-medium">
-          {name} 的屏幕
-          <span className="ml-2 text-[11.5px] font-normal text-ink-3">{live ? (control ? "你在操作" : "只看") : phaseLabel(phase)}</span>
+          {t("screen-screenview.title", { name })}
+          <span className="ml-2 text-[11.5px] font-normal text-ink-3">{live ? (control ? t("screen-screenview.in_control") : t("screen-screenview.view_only")) : phaseLabel(phase)}</span>
         </p>
         {live && (
-          <div role="group" aria-label="只看或接管" className="flex shrink-0 rounded-control bg-field p-0.5">
+          <div role="group" aria-label={t("screen-screenview.mode_label")} className="flex shrink-0 rounded-control bg-field p-0.5">
             {[false, true].map((on) => (
               <button
                 key={String(on)}
@@ -252,7 +253,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
                   control === on ? "bg-surface text-ink shadow-btn" : "text-ink-2 hover:text-ink",
                 )}
               >
-                {on ? "接管" : "只看"}
+                {on ? t("screen-screenview.take_control") : t("screen-screenview.view_only")}
               </button>
             ))}
           </div>
@@ -266,16 +267,16 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
             {phase.kind === "signin" ? (
               <form onSubmit={signIn} className="flex w-full max-w-[340px] flex-col gap-3 rounded-card bg-surface p-5 shadow-card">
                 <div>
-                  <p className="text-[14px] font-medium">登录这台 Mac 的屏幕共享</p>
+                  <p className="text-[14px] font-medium">{t("screen-screenview.signin_title")}</p>
                   <p className="mt-1 text-[12.5px] text-ink-2">
-                    用 {name} 上的 macOS 账号和密码。只发给那台 Mac{canKeep && remember ? "；记住的话存在这台设备的钥匙串里，不上传。" : "，不保存。"}
+                    {canKeep && remember ? t("screen-screenview.signin_hint_kept", { name }) : t("screen-screenview.signin_hint", { name })}
                   </p>
                 </div>
                 {phase.failed && <p className="text-[12.5px] text-red">{phase.failed}</p>}
                 <input
                   value={account}
                   onChange={(e) => setAccount(e.target.value)}
-                  placeholder="账号"
+                  placeholder={t("screen-screenview.account")}
                   autoComplete="username"
                   autoCapitalize="none"
                   className="h-9 rounded-control bg-field px-3 text-[13px] outline-none focus:ring-2 focus:ring-accent/40"
@@ -283,7 +284,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
                 <input
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="密码"
+                  placeholder={t("screen-screenview.password")}
                   type="password"
                   autoComplete="current-password"
                   className="h-9 rounded-control bg-field px-3 text-[13px] outline-none focus:ring-2 focus:ring-accent/40"
@@ -299,7 +300,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
                   disabled={!account.trim() || !password}
                   className="h-9 whitespace-nowrap rounded-control bg-accent text-[13px] font-medium text-white disabled:opacity-45"
                 >
-                  连接
+                  {t("screen-screenview.connect")}
                 </button>
               </form>
             ) : (
@@ -308,7 +309,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
                 <p className="text-[13px] text-ink-2">{phaseText(phase, name)}</p>
                 {phase.kind === "closed" && (
                   <button type="button" onClick={reconnect} className="h-8 whitespace-nowrap rounded-control bg-surface px-3 text-[12.5px] font-medium shadow-btn hover:bg-hover">
-                    重新连接
+                    {t("screen-screenview.reconnect")}
                   </button>
                 )}
               </div>
@@ -323,21 +324,21 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
 function phaseLabel(p: Phase): string {
   switch (p.kind) {
     case "signin":
-      return "要登录";
+      return t("screen-screenview.phase_signin");
     case "closed":
     case "blocked":
-      return "没连上";
+      return t("screen-screenview.phase_failed");
     default:
-      return "连接中";
+      return t("screen-screenview.phase_connecting");
   }
 }
 
 function phaseText(p: Phase, name: string): string {
   switch (p.kind) {
     case "checking":
-      return `正在找 ${name}…`;
+      return t("screen-screenview.finding", { name });
     case "connecting":
-      return `正在连接 ${name} 的屏幕…`;
+      return t("screen-screenview.connecting", { name });
     case "blocked":
     case "closed":
       return p.why;

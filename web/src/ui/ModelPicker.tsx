@@ -4,6 +4,7 @@ import type { ModelBinding } from "../lib/model-config";
 import { customModel, defaultDetail, defaultModel, modelDetail, modelName, modelRows, type LauncherModels } from "../lib/launcher-models";
 import { Collapse, cx, IconButton, Spinner } from "./atoms";
 import { Icon } from "./icons";
+import { t } from "../i18n";
 
 /** The list for the launcher that runs: idle (no launcher to ask), loading, the answer (null: an older hub), failed. */
 export interface ModelList {
@@ -44,7 +45,7 @@ export function ModelPicker({ models, model, followed = {}, ownModel, open, onTo
     else if (rows[0]) onPick(rows[0].id);
     else if (typed) onPick(typed);
   };
-  const detail = picked ? modelDetail(picked) : unlisted ? "列表里没有" : locked ? (ownModel ?? "") : defaultDetail(all, followed);
+  const detail = picked ? modelDetail(picked) : unlisted ? t("ui-modelpicker.not_in_list") : locked ? (ownModel ?? "") : defaultDetail(all, followed);
   return (
     <>
       <button
@@ -55,11 +56,11 @@ export function ModelPicker({ models, model, followed = {}, ownModel, open, onTo
         title={picked?.description ?? (picked || unlisted ? undefined : defaultModel(all)?.description)}
         className="flex h-9 w-full items-center gap-2 rounded-control bg-inset px-3 text-left shadow-hairline outline-none transition-colors enabled:hover:bg-hover focus-visible:shadow-[0_0_0_1px_var(--line-strong)] disabled:cursor-not-allowed"
       >
-        <span className={cx("max-w-[60%] shrink-0 truncate text-[12.5px]", locked ? "text-ink-3" : "text-ink", unlisted && "font-mono")}>{picked ? modelName(picked) : unlisted ? modelName({ id: unlisted }) : "默认"}</span>
+        <span className={cx("max-w-[60%] shrink-0 truncate text-[12.5px]", locked ? "text-ink-3" : "text-ink", unlisted && "font-mono")}>{picked ? modelName(picked) : unlisted ? modelName({ id: unlisted }) : t("ui-modelpicker.default")}</span>
         {loading && !all.length ? (
-          <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[11.5px] text-ink-3"><Spinner size={10} /><span className="truncate">正在读取模型列表…</span></span>
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[11.5px] text-ink-3"><Spinner size={10} /><span className="truncate">{t("ui-modelpicker.loading")}</span></span>
         ) : models.status === "error" && !unlisted ? (
-          <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-3">没读到模型列表</span>
+          <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-3">{t("ui-modelpicker.load_failed")}</span>
         ) : detail ? (
           <span className={cx("min-w-0 flex-1 truncate text-ink-3", unlisted ? "text-[11.5px]" : "font-mono text-[11px]")}>{detail}</span>
         ) : (
@@ -71,7 +72,7 @@ export function ModelPicker({ models, model, followed = {}, ownModel, open, onTo
       {models.status === "error" && (
         <p className="mt-1.5 flex items-center gap-2 text-[11.5px] text-ink-3">
           <span className="min-w-0 truncate" title={models.error}>{models.error}</span>
-          <button type="button" onClick={onReload} className="shrink-0 font-medium whitespace-nowrap text-accent-ink hover:underline">重试</button>
+          <button type="button" onClick={onReload} className="shrink-0 font-medium whitespace-nowrap text-accent-ink hover:underline">{t("ui-modelpicker.retry")}</button>
         </p>
       )}
       {/* -mx-px / px-px pb-px: room for the box's hairline inside Collapse's clip */}
@@ -88,34 +89,34 @@ export function ModelPicker({ models, model, followed = {}, ownModel, open, onTo
                 if (e.key === "Enter") { e.preventDefault(); pickFirst(); }
                 if (e.key === "Escape") { e.stopPropagation(); onToggle(); }
               }}
-              aria-label="搜索模型"
-              placeholder={custom ? "搜索，或输入模型 ID" : "搜索名称、ID 或描述"}
+              aria-label={t("ui-modelpicker.search_label")}
+              placeholder={custom ? t("ui-modelpicker.search_custom") : t("ui-modelpicker.search")}
               spellCheck={false}
               autoComplete="off"
               className="h-8 min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3"
             />
             {all.length > 0 && (
               <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">
-                {query.trim() ? `${rows.length + (showDefault ? 1 : 0)} / ${all.length}` : `${all.length} 个`}
+                {query.trim() ? `${rows.length + (showDefault ? 1 : 0)} / ${all.length}` : t("ui-modelpicker.count", { count: all.length })}
               </span>
             )}
-            <IconButton icon="retry" label="重新读取模型列表" size={24} iconSize={12} disabled={loading} onClick={onReload} />
+            <IconButton icon="retry" label={t("ui-modelpicker.reload")} size={24} iconSize={12} disabled={loading} onClick={onReload} />
           </div>
-          <div role="listbox" aria-label="模型" className="max-h-60 overflow-y-auto p-1">
-            {showDefault && <ModelRow name="默认" detail={defaultDetail(all, followed)} note={defaultModel(all)?.description} selected={!picked && !unlisted} onPick={() => onPick("")} />}
-            {unlisted && !query.trim() && <ModelRow name={modelName({ id: unlisted })} note="当前配置，列表里没有" selected onPick={() => onPick(unlisted)} mono />}
+          <div role="listbox" aria-label={t("ui-modelpicker.list_label")} className="max-h-60 overflow-y-auto p-1">
+            {showDefault && <ModelRow name={t("ui-modelpicker.default")} detail={defaultDetail(all, followed)} note={defaultModel(all)?.description} selected={!picked && !unlisted} onPick={() => onPick("")} />}
+            {unlisted && !query.trim() && <ModelRow name={modelName({ id: unlisted })} note={t("ui-modelpicker.current_unlisted")} selected onPick={() => onPick(unlisted)} mono />}
             {rows.map((m) => (
               <ModelRow key={m.id} name={modelName(m)} detail={modelDetail(m)} note={m.description} selected={m.id === model} onPick={() => onPick(m.id)} />
             ))}
-            {typed && <ModelRow name={`使用「${typed}」`} note="列表里没有，按这个 ID 保存" selected={typed === unlisted} onPick={() => onPick(typed)} />}
+            {typed && <ModelRow name={t("ui-modelpicker.use_custom", { id: typed })} note={t("ui-modelpicker.use_custom_note")} selected={typed === unlisted} onPick={() => onPick(typed)} />}
             {loading && (
-              <div className="flex h-8 items-center gap-2 px-2 text-[12px] text-ink-3"><Spinner size={10} />正在向启动器读取模型列表，第一次要几秒…</div>
+              <div className="flex h-8 items-center gap-2 px-2 text-[12px] text-ink-3"><Spinner size={10} />{t("ui-modelpicker.loading_slow")}</div>
             )}
             {models.status === "error" && (
               <div className="flex h-8 items-center px-2 text-[12px] text-ink-3"><span className="truncate">{failedNote}</span></div>
             )}
             {models.status === "ready" && !showDefault && rows.length === 0 && !typed && (
-              <div className="flex h-8 items-center px-2 text-[12px] text-ink-3"><span className="truncate">没有和「{query.trim()}」匹配的模型</span></div>
+              <div className="flex h-8 items-center px-2 text-[12px] text-ink-3"><span className="truncate">{t("ui-modelpicker.no_match", { query: query.trim() })}</span></div>
             )}
           </div>
         </div></div>

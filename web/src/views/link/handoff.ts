@@ -6,6 +6,7 @@ import { addContext, editMessage, usableComposer, whenComposer, type ContextRef 
 import { navigate } from "../../lib/router";
 import { getState } from "../../lib/store";
 import { toast } from "../../ui/atoms";
+import { t } from "../../i18n";
 
 /** Persona's main conversation (its composer's draft key and route), else a new conversation. */
 function jarvisTarget(): { key: string; go: () => void } {
@@ -16,20 +17,20 @@ function jarvisTarget(): { key: string; go: () => void } {
 
 /** Who gets it: "当前对话" when a composer is on the page, else Persona. */
 export function handoffLabel(): string {
-  return usableComposer() ? "当前对话" : "Persona";
+  return usableComposer() ? t("link-handoff.current_chat") : "Persona";
 }
 
 export function giveContext(ref: ContextRef) {
   const c = usableComposer();
   if (c) {
     addContext(c.key, ref);
-    toast("已作为上下文，会随下一条消息发送", "ok");
+    toast(t("link-handoff.added"), "ok");
     return;
   }
-  const t = jarvisTarget();
-  addContext(t.key, ref);
-  t.go();
-  toast("已作为上下文，会随下一条发给 Persona 的消息发送", "ok");
+  const target = jarvisTarget();
+  addContext(target.key, ref);
+  target.go();
+  toast(t("link-handoff.added_persona"), "ok");
 }
 
 /** 「AI 修改」: sent at once. If it can't go (the conversation can't take messages now), it waits as a context instead. */
@@ -37,15 +38,15 @@ export function giveEdit(ref: ContextRef, ask: string) {
   const text = editMessage(ref, ask);
   const keep = (key: string) => {
     addContext(key, { ...ref, kind: "edit" });
-    toast("没发出去：这段已放在输入框上方，可以写上要求再发", "error");
+    toast(t("link-handoff.send_failed"), "error");
   };
-  const send = (c: { key: string; send: (t: string) => Promise<boolean> }) =>
+  const send = (c: { key: string; send: (text: string) => Promise<boolean> }) =>
     void c.send(text).then((ok) => {
       if (!ok) keep(c.key);
     });
   const c = usableComposer();
   if (c) return send(c);
-  const t = jarvisTarget();
-  t.go();
-  whenComposer(t.key, send, () => keep(t.key));
+  const target = jarvisTarget();
+  target.go();
+  whenComposer(target.key, send, () => keep(target.key));
 }

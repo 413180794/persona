@@ -1,0 +1,9 @@
+{
+  "label": "メッセージと一緒に送るコンテキスト",
+  "edit_title": "修正する内容",
+  "context": "コンテキスト",
+  "edit": "修正",
+  "quoted": "「{text}」",
+  "remove_label": "このコンテキストを削除",
+  "remove": "削除"
+}

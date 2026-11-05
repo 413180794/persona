@@ -4,6 +4,7 @@
 // (a pointer resting on the link), so the panel usually opens on a finished page.
 import { ApiError, api, enc, getToken } from "../../lib/api";
 import { docKind, DOC_LABEL, setLinkPrefetcher, type DocKind } from "../../lib/links";
+import { t } from "../../i18n";
 
 export interface DocNode {
   type: string;
@@ -44,35 +45,36 @@ export class DocError extends Error {
 export function docErrorText(status: number, code?: string, raw?: string): string {
   switch (code) {
     case "DOCUMENT_EXPORT_FORBIDDEN":
-      return "作者禁止导出这篇文档";
+      return t("link-feishu-doc.export_forbidden");
     case "DOCUMENT_FORMAT_UNSUPPORTED":
-      return "这种文档暂不支持在 Persona 中阅读";
+      return t("link-feishu-doc.format_unsupported");
     case "DOCUMENT_NOT_FOUND":
-      return "文档不存在或已被删除";
+      return t("link-feishu-doc.doc_not_found");
     case "DOCUMENT_FORBIDDEN":
     case "DOCUMENT_PERMISSION_DENIED":
-      return "没有这篇文档的访问权限";
+      return t("link-feishu-doc.doc_forbidden");
     case "DOCUMENT_TIMEOUT":
-      return "飞书响应超时，请稍后重试";
+      return t("link-feishu-doc.timeout");
     case "DOCUMENT_INVALID_URL":
-      return "无法识别的文档链接";
+      return t("link-feishu-doc.invalid_url");
   }
-  if (code?.startsWith("AUTH_")) return "hub 上的 lark-connector 没有登录飞书，登录后再试";
+  if (code?.startsWith("AUTH_")) return t("link-feishu-doc.lark_signed_out");
   const text = raw ?? "";
-  if (/not configured|not enabled/i.test(text)) return "hub 还没有接入飞书（lark-connector），读不了文档";
+  if (/not configured|not enabled/i.test(text)) return t("link-feishu-doc.not_configured");
   switch (status) {
     case 0:
-      return "连不上 hub";
+      return t("link-feishu-doc.hub_unreachable");
     case 401:
-      return "飞书登录已失效";
+      return t("link-feishu-doc.session_expired");
     case 403:
-      return "没有访问权限";
+      return t("link-feishu-doc.forbidden");
     case 404:
-      return "内容不存在或已被删除";
+      return t("link-feishu-doc.not_found");
     case 502:
     case 503:
     case 504:
-      return /lark|lark-connector|飞书/i.test(text) ? "连不上飞书（lark-connector），请稍后重试" : "飞书服务暂时不可用，请稍后重试";
+      // i18n-ignore: matches the hub / lark-connector error text
+      return /lark|lark-connector|飞书/i.test(text) ? t("link-feishu-doc.lark_unreachable") : t("link-feishu-doc.lark_unavailable");
   }
   return code || text || `HTTP ${status}`;
 }
@@ -107,13 +109,13 @@ function fromTree(r: Record<string, unknown>, url: string, title?: string): DocC
   const kind = docKind(url);
   const name = (typeof r.title === "string" && r.title) || title || DOC_LABEL[kind];
   const copy = bool((r.authority as Authority | undefined)?.copy, true);
-  if ("base" in r) return { kind: "unsupported", title: name, doc: "bitable", message: "多维表格暂不支持在 Persona 中查看" };
+  if ("base" in r) return { kind: "unsupported", title: name, doc: "bitable", message: t("link-feishu-doc.bitable_unsupported") };
   const o = r.object as { kind?: string; token?: string; image?: string; empty?: boolean } | undefined;
-  if (o?.kind === "file") return { kind: "unsupported", title: name, doc: "file", message: "云空间文件，可以下载后查看", file: o.token };
-  if (o?.kind === "whiteboard") return { kind: "unsupported", title: name, doc: "whiteboard", message: o.empty ? "这是一个空白画板" : "画板", image: o.image };
-  if (o) return { kind: "unsupported", title: name, doc: kind, message: "这种内容暂不支持在 Persona 中查看" };
+  if (o?.kind === "file") return { kind: "unsupported", title: name, doc: "file", message: t("link-feishu-doc.drive_file"), file: o.token };
+  if (o?.kind === "whiteboard") return { kind: "unsupported", title: name, doc: "whiteboard", message: o.empty ? t("link-feishu-doc.whiteboard_empty") : t("link-feishu-doc.whiteboard"), image: o.image };
+  if (o) return { kind: "unsupported", title: name, doc: kind, message: t("link-feishu-doc.content_unsupported") };
   const doc = (r.content as DocNode | undefined) ?? { type: "doc" };
-  if ("spreadsheet" in r && !(doc.content ?? []).length) return { kind: "unsupported", title: name, doc: "sheet", message: "作者禁止导出这个表格，请在飞书中查看" };
+  if ("spreadsheet" in r && !(doc.content ?? []).length) return { kind: "unsupported", title: name, doc: "sheet", message: t("link-feishu-doc.sheet_forbidden") };
   // the panel draws the title itself: a first heading that repeats it goes
   const blocks = doc.content ?? [];
   const first = blocks[0];
@@ -124,7 +126,7 @@ function fromTree(r: Record<string, unknown>, url: string, title?: string): DocC
 /** Markdown when the owner allows export, else the JSON tree; what neither can show becomes `unsupported`. */
 export async function readDoc(url: string, title: string | undefined, get: Get = hubGet): Promise<DocContent> {
   const kind = docKind(url);
-  if (kind === "bitable") return { kind: "unsupported", title: title || DOC_LABEL.bitable, doc: "bitable", message: "多维表格暂不支持在 Persona 中查看" };
+  if (kind === "bitable") return { kind: "unsupported", title: title || DOC_LABEL.bitable, doc: "bitable", message: t("link-feishu-doc.bitable_unsupported") };
   if (kind !== "file" && kind !== "whiteboard") {
     try {
       const r = await get(`documents/read?url=${enc(url)}&format=markdown`);
@@ -142,7 +144,7 @@ export async function readDoc(url: string, title: string | undefined, get: Get =
     return fromTree(await get(`documents/read?url=${enc(url)}&format=json`), url, title);
   } catch (e) {
     if (e instanceof DocError && (e.code === "DOCUMENT_FORMAT_UNSUPPORTED" || e.status === 422)) {
-      return { kind: "unsupported", title: title || DOC_LABEL[kind], doc: kind, message: "这种内容暂不支持在 Persona 中查看" };
+      return { kind: "unsupported", title: title || DOC_LABEL[kind], doc: kind, message: t("link-feishu-doc.content_unsupported") };
     }
     throw e;
   }

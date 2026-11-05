@@ -44,6 +44,7 @@ import { BrowserLogins } from "./BrowserLogins";
 import { ComputerSection } from "./ComputerSection";
 import { EngineSection } from "./EngineSection";
 import { MachineExtensionSections } from "../extensions/ExtensionSlots";
+import { t } from "../../i18n";
 
 interface MachineLauncher {
   name: string;
@@ -99,17 +100,17 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
         setFailure("");
       } catch (e) {
         if (dead || isAbort(e)) return;
-        setFailure(e instanceof ApiError && e.status === 404 ? "这个 hub 还没有监控数据：部署新版本的 hub 和这台电脑上的 node 后再看。" : errorText(e));
+        setFailure(e instanceof ApiError && e.status === 404 ? t("machines-machinedetail.no_metrics_hub") : errorText(e));
       }
     };
     void load();
-    const t = setInterval(load, RANGES[range].poll);
+    const timer = setInterval(load, RANGES[range].poll);
     const vis = () => void load();
     document.addEventListener("visibilitychange", vis);
     return () => {
       dead = true;
       ctrl?.abort();
-      clearInterval(t);
+      clearInterval(timer);
       document.removeEventListener("visibilitychange", vis);
     };
   }, [mid, range]);
@@ -135,7 +136,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
     try {
       await api(`/machines/${enc(mid)}/reconnect`, { method: "POST" });
     } catch (e) {
-      toast(`重新连接失败：${errorText(e)}`, "error");
+      toast(t("machines-machinedetail.reconnect_failed", { error: errorText(e) }), "error");
       setReconnecting(false);
       return;
     }
@@ -144,14 +145,14 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
       await refresh().catch(() => {});
       if (getState().machines.find((x) => x.id === mid)?.online) {
         if (alive.current) setReconnecting(false);
-        toast("已连上", "ok");
+        toast(t("machines-machinedetail.connected"), "ok");
         return;
       }
     }
     if (!alive.current) return;
     setReconnecting(false);
     const err = getState().machines.find((x) => x.id === mid)?.error;
-    toast(`还没连上${err ? `：${err}` : ""}`, "error");
+    toast(err ? t("machines-machinedetail.not_connected_error", { error: err }) : t("machines-machinedetail.not_connected"), "error");
   };
 
   const groups = useMemo(() => (online ? agentsBySpace(sessions) : []), [online, sessions]);
@@ -168,10 +169,10 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
           <Loading />
         ) : (
           <div className="flex flex-col items-start gap-3 rounded-card bg-surface p-4 shadow-card">
-            <p className="text-[13.5px] font-medium text-ink">找不到这台机器</p>
-            <p className="text-[12.5px] text-ink-2">hub 的配置里没有「{mid}」，可能已经删掉或改了名字。</p>
+            <p className="text-[13.5px] font-medium text-ink">{t("machines-machinedetail.not_found")}</p>
+            <p className="text-[12.5px] text-ink-2">{t("machines-machinedetail.not_found_detail", { id: mid })}</p>
             <a href="/machines" onClick={(e) => onLinkClick(e, { name: "machines" })} className="text-[12.5px] font-medium text-accent-ink hover:underline">
-              回到机器列表
+              {t("machines-machinedetail.back_to_list")}
             </a>
           </div>
         )}
@@ -180,7 +181,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
   }
 
   return (
-    <Page mid={mid} title={m.name} onToggleSidebar={onToggleSidebar} right={<span className="hidden whitespace-nowrap text-[11.5px] text-ink-3 sm:inline">{range === "1h" ? "每 10 秒刷新" : "每分钟刷新"}</span>}>
+    <Page mid={mid} title={m.name} onToggleSidebar={onToggleSidebar} right={<span className="hidden whitespace-nowrap text-[11.5px] text-ink-3 sm:inline">{range === "1h" ? t("machines-machinedetail.refresh_10s") : t("machines-machinedetail.refresh_1m")}</span>}>
       {/* the computer */}
       <section className="overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} both` }}>
         <div className="flex items-start gap-3 px-4 py-3.5">
@@ -192,10 +193,10 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
               <h2 className="truncate text-[15px] font-semibold text-ink">{m.name}</h2>
               <span className={cx("inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-1.5 text-[11px] font-medium", online ? "bg-green-tint text-green" : "bg-field text-ink-3")}>
                 <span className={cx("size-1.5 rounded-full", online ? "bg-green" : "bg-ink-3")} />
-                {online ? "在线" : "离线"}
+                {online ? t("machines-machinedetail.online") : t("machines-machinedetail.offline")}
               </span>
               {hub && (
-                <span className="inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full bg-inset px-1.5 text-[11px] font-medium text-ink-2 shadow-hairline" title={`属于 hub「${hub}」`}>
+                <span className="inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full bg-inset px-1.5 text-[11px] font-medium text-ink-2 shadow-hairline" title={t("machines-machinedetail.belongs_to_hub", { hub })}>
                   <Icon name="hub" size={11} />
                   {hub}
                 </span>
@@ -204,18 +205,18 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
             <p className="mt-0.5 truncate text-[12px] text-ink-3" title={systemLine(system, m)}>
               {systemLine(system, m)}
             </p>
-            {route && <p className="mt-0.5 truncate text-[11.5px] text-ink-3" title="hub 怎么连到这台电脑">线路：{route}</p>}
+            {route && <p className="mt-0.5 truncate text-[11.5px] text-ink-3" title={t("machines-machinedetail.route_hint")}>{t("machines-machinedetail.route", { route })}</p>}
           </div>
           {!online && !expectedDisconnect && (
             <Button tone="secondary" icon="retry" busy={reconnecting} onClick={() => void reconnect()}>
-              {reconnecting ? "正在连接" : "重新连接"}
+              {reconnecting ? t("machines-machinedetail.connecting") : t("machines-machinedetail.reconnect")}
             </Button>
           )}
         </div>
         {!online && !expectedDisconnect && (
           <div className="mx-4 mb-3.5 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">
-            <p className="break-words">{m.error || "hub 连不上这台电脑"}</p>
-            <p className="mt-0.5 text-red/80">{[m.last_seen && ago(m.last_seen) && `最后在线：${ago(m.last_seen)}`, connectionText(m)].filter(Boolean).join(" · ")}</p>
+            <p className="break-words">{m.error || t("machines-machinedetail.unreachable")}</p>
+            <p className="mt-0.5 text-red/80">{[m.last_seen && ago(m.last_seen) && t("machines-machinedetail.last_seen", { when: ago(m.last_seen) }), connectionText(m)].filter(Boolean).join(" · ")}</p>
           </div>
         )}
         {online && m.error && <p className="mx-4 mb-3.5 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">{m.error}</p>}
@@ -226,7 +227,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
       <section>
         <Heading title="Agent" count={online ? agentCount : undefined} />
         {groups.length === 0 ? (
-          <p className="rounded-card bg-surface px-4 py-3 text-[12.5px] text-ink-3 shadow-card">{online ? "没有运行中的 Agent" : "机器离线，连上后显示它的 Agent"}</p>
+          <p className="rounded-card bg-surface px-4 py-3 text-[12.5px] text-ink-3 shadow-card">{online ? t("machines-machinedetail.no_agents") : t("machines-machinedetail.agents_offline")}</p>
         ) : (
           <div className="flex flex-col gap-2.5">
             {groups.map((g, gi) => (
@@ -249,7 +250,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
       </section>
 
       {/* which engine the sessions above come from (iOS engineRow) */}
-      <EngineSection machine={m} heading={<Heading title="引擎" />} />
+      <EngineSection machine={m} heading={<Heading title={t("machines-machinedetail.engine")} />} />
 
       {m.computer && <ComputerSection mid={mid} computer={m.computer} online={online} />}
       {m.browser?.set_up && <BrowserLogins mid={mid} online={online} />}
@@ -257,9 +258,9 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
       {/* monitoring */}
       <section>
         <Heading
-          title="监控"
+          title={t("machines-machinedetail.monitoring")}
           right={
-            <div className="flex items-center gap-0.5 rounded-control bg-inset p-0.5 shadow-hairline" role="radiogroup" aria-label="时间范围">
+            <div className="flex items-center gap-0.5 rounded-control bg-inset p-0.5 shadow-hairline" role="radiogroup" aria-label={t("machines-machinedetail.range")}>
               {RANGE_KEYS.map((k) => (
                 <button
                   key={k}
@@ -281,7 +282,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
         {!data ? (
           failure ? (
             <div className="rounded-card bg-surface px-4 py-6 text-center shadow-card">
-              <p className="text-[13px] font-medium text-ink">看不到监控数据</p>
+              <p className="text-[13px] font-medium text-ink">{t("machines-machinedetail.no_metrics")}</p>
               <p className="mt-1 text-[12px] text-ink-3">{failure}</p>
             </div>
           ) : (
@@ -292,13 +293,13 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
         ) : (
           <Monitor data={data} range={range} online={online} system={system} hover={hover} onHover={setHover} tz={tz} onRange={setRange} />
         )}
-        {data && failure && <p className="mt-2 px-1 text-[11.5px] text-red">刷新失败：{failure}</p>}
-        <p className="mt-2 px-1 text-[11.5px] leading-relaxed text-ink-3">监控历史保留 24 小时。最近 1 小时每 10 秒一个点，更早的每分钟一个点；中间断开的时段不连线。</p>
+        {data && failure && <p className="mt-2 px-1 text-[11.5px] text-red">{t("machines-machinedetail.refresh_failed", { error: failure })}</p>}
+        <p className="mt-2 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("machines-machinedetail.metrics_note")}</p>
       </section>
 
       {/* system */}
       <section>
-        <Heading title="系统" />
+        <Heading title={t("machines-machinedetail.system")} />
         <div className="overflow-hidden rounded-card bg-surface shadow-card">
           <dl className="-mb-px grid grid-cols-1 md:grid-cols-2">
             {systemFacts(system, m, Date.now() / 1000, tz).map(([k, v, mono]) => (
@@ -313,18 +314,18 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
 
       {/* launchers */}
       <section>
-        <Heading title="启动器" count={online && launchers?.length ? launchers.length : undefined} />
+        <Heading title={t("machines-machinedetail.launchers")} count={online && launchers?.length ? launchers.length : undefined} />
         <div className="overflow-hidden rounded-card bg-surface shadow-card">
           {!online ? (
-            <p className="px-4 py-3 text-[12.5px] text-ink-3">机器离线，连上后显示</p>
+            <p className="px-4 py-3 text-[12.5px] text-ink-3">{t("machines-machinedetail.launchers_offline")}</p>
           ) : launcherError && !launchers ? (
-            <p className="px-4 py-3 text-[12.5px] text-red">读不到启动器：{launcherError}</p>
+            <p className="px-4 py-3 text-[12.5px] text-red">{t("machines-machinedetail.launchers_failed", { error: launcherError })}</p>
           ) : !launchers ? (
             <div className="px-4 py-3">
               <Loading />
             </div>
           ) : launchers.length === 0 ? (
-            <p className="px-4 py-3 text-[12.5px] text-ink-3">这台电脑上没有启动器</p>
+            <p className="px-4 py-3 text-[12.5px] text-ink-3">{t("machines-machinedetail.no_launchers")}</p>
           ) : (
             <div className="divide-y divide-line">
               {launchers.map((l) => {
@@ -353,15 +354,15 @@ function Page({ mid, title, right, onToggleSidebar, children }: { mid: string; t
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+        <IconButton icon="sidebar" label={t("machines-machinedetail.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
         <a
           href="/machines"
           onClick={(e) => onLinkClick(e, { name: "machines" })}
           className="flex h-7 shrink-0 items-center gap-0.5 whitespace-nowrap rounded-[7px] pr-2 pl-1 text-[12.5px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
-          title="回到机器列表"
+          title={t("machines-machinedetail.back_to_list")}
         >
           <Icon name="chevronLeft" size={14} stroke={2.2} />
-          机器
+          {t("machines-machinedetail.machines")}
         </a>
         <h1 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink" title={mid}>
           {title}
@@ -444,15 +445,15 @@ function Monitor({
   const memPct = memPercent(live?.mem_used, live?.mem_total);
 
   const cpu = useMemo<ChartSeries[]>(() => [{ name: "CPU", color: "var(--accent)", read: (p) => p.cpu, now: live?.cpu }], [live?.cpu]);
-  const mem = useMemo<ChartSeries[]>(() => [{ name: "内存", color: "var(--green)", read: (p) => (p.mem !== undefined && memTotal ? (100 * p.mem) / memTotal : undefined), now: memPct }], [memTotal, memPct]);
+  const mem = useMemo<ChartSeries[]>(() => [{ name: t("machines-machinedetail.memory"), color: "var(--green)", read: (p) => (p.mem !== undefined && memTotal ? (100 * p.mem) / memTotal : undefined), now: memPct }], [memTotal, memPct]);
   const net = useMemo<ChartSeries[]>(
     () => [
-      { name: "下行", color: "var(--orange)", read: (p) => p.rx, now: live?.net_rx },
-      { name: "上行", color: "var(--accent)", read: (p) => p.tx, now: live?.net_tx },
+      { name: t("machines-machinedetail.download"), color: "var(--orange)", read: (p) => p.rx, now: live?.net_rx },
+      { name: t("machines-machinedetail.upload"), color: "var(--accent)", read: (p) => p.tx, now: live?.net_tx },
     ],
     [live?.net_rx, live?.net_tx],
   );
-  const load = useMemo<ChartSeries[]>(() => [{ name: "负载", color: "var(--chart-load)", read: (p) => p.load, now: live?.load }], [live?.load]);
+  const load = useMemo<ChartSeries[]>(() => [{ name: t("machines-machinedetail.load"), color: "var(--chart-load)", read: (p) => p.load, now: live?.load }], [live?.load]);
   const cores = system?.cores ?? 0;
   const perCore = coresNow(metrics.latest, online);
   const common = { points: metrics.points, t0, t1, step: r.step, hover, onHover, tz };
@@ -465,11 +466,11 @@ function Monitor({
         {coresNow(metrics.latest, online) && <CoreBars cores={coresNow(metrics.latest, online)!} />}
         <div className={cx("flex flex-col items-center gap-2.5 rounded-card bg-surface px-4 py-7 text-center shadow-card transition-opacity duration-200", data.range !== range && "opacity-60")}>
           <p className="text-[12.5px] text-ink-2">
-            {online ? "刚开始记录：过一会儿这里就有曲线了。" : `最近 ${RANGES[data.range].label}这台机器没有连上，没有数据。`}
+            {online ? t("machines-machinedetail.just_started") : t("machines-machinedetail.offline_range", { range: RANGES[data.range].label })}
           </p>
           {!online && data.range !== "24h" && (
             <Button tone="secondary" onClick={() => onRange("24h")}>
-              看最近 24 小时
+              {t("machines-machinedetail.show_24h")}
             </Button>
           )}
         </div>
@@ -481,9 +482,9 @@ function Monitor({
       {live && <NowTiles s={live} cores={system?.cores} />}
       <div className={cx("grid grid-cols-1 gap-3 transition-opacity duration-200 md:grid-cols-2", data.range !== range && "opacity-60")}>
         <MetricChart title="CPU" series={cpu} percent format={percent} axisFormat={(v) => `${v}%`} {...common} />
-        <MetricChart title={memTotal ? `内存（共 ${bytesBin(memTotal).replace(/\.00 /, " ")}）` : "内存"} series={mem} percent format={percent} axisFormat={(v) => `${v}%`} {...common} />
-        <MetricChart title="网络" series={net} binary format={rate} axisFormat={bytesAxis} {...common} />
-        <MetricChart title="负载（1 分钟）" series={load} format={loadText} axisFormat={loadAxis} reference={cores > 0 ? { value: cores, label: `${cores} 核` } : undefined} {...common} />
+        <MetricChart title={memTotal ? t("machines-machinedetail.memory_total", { total: bytesBin(memTotal).replace(/\.00 /, " ") }) : t("machines-machinedetail.memory")} series={mem} percent format={percent} axisFormat={(v) => `${v}%`} {...common} />
+        <MetricChart title={t("machines-machinedetail.network")} series={net} binary format={rate} axisFormat={bytesAxis} {...common} />
+        <MetricChart title={t("machines-machinedetail.load_1m")} series={load} format={loadText} axisFormat={loadAxis} reference={cores > 0 ? { value: cores, label: t("machines-machinedetail.cores", { count: cores }) } : undefined} {...common} />
       </div>
       {perCore && <CoreBars cores={perCore} />}
     </>
@@ -496,33 +497,33 @@ function NowTiles({ s, cores }: { s: NonNullable<DetailMetrics["latest"]>; cores
   const swapPct = s.swap_total ? memPercent(s.swap_used, s.swap_total) : undefined;
   const perCore = s.load !== undefined && cores ? s.load / cores : undefined;
   const tiles: { label: string; value: string; sub?: string; frac?: number; lv: Level }[] = [
-    { label: "CPU", value: percent(s.cpu), sub: cores ? `${cores} 核` : undefined, frac: s.cpu, lv: level(s.cpu, 75, 90) },
-    { label: "内存", value: percent(memPct), sub: s.mem_used !== undefined ? `${bytesBin(s.mem_used)} / ${bytesBin(s.mem_total)}` : undefined, frac: memPct, lv: level(memPct, 80, 90) },
-    { label: "网络", value: `↓ ${rate(s.net_rx)}`, sub: `↑ ${rate(s.net_tx)}`, lv: "normal" },
-    { label: "负载", value: loadText(s.load), sub: cores ? `${cores} 核` : undefined, lv: level(perCore, 1, 2) },
-    { label: "磁盘", value: percent(diskPct), sub: s.disk_used !== undefined ? `${bytesBin(s.disk_used)} / ${bytesBin(s.disk_total)}` : undefined, frac: diskPct, lv: level(diskPct, 80, 90) },
-    { label: "交换", value: s.swap_total ? bytesBin(s.swap_used) : "未启用", sub: s.swap_total ? `共 ${bytesBin(s.swap_total)}` : undefined, frac: swapPct, lv: "normal" },
+    { label: "CPU", value: percent(s.cpu), sub: cores ? t("machines-machinedetail.cores", { count: cores }) : undefined, frac: s.cpu, lv: level(s.cpu, 75, 90) },
+    { label: t("machines-machinedetail.memory"), value: percent(memPct), sub: s.mem_used !== undefined ? `${bytesBin(s.mem_used)} / ${bytesBin(s.mem_total)}` : undefined, frac: memPct, lv: level(memPct, 80, 90) },
+    { label: t("machines-machinedetail.network"), value: `↓ ${rate(s.net_rx)}`, sub: `↑ ${rate(s.net_tx)}`, lv: "normal" },
+    { label: t("machines-machinedetail.load"), value: loadText(s.load), sub: cores ? t("machines-machinedetail.cores", { count: cores }) : undefined, lv: level(perCore, 1, 2) },
+    { label: t("machines-machinedetail.disk"), value: percent(diskPct), sub: s.disk_used !== undefined ? `${bytesBin(s.disk_used)} / ${bytesBin(s.disk_total)}` : undefined, frac: diskPct, lv: level(diskPct, 80, 90) },
+    { label: t("machines-machinedetail.swap"), value: s.swap_total ? bytesBin(s.swap_used) : t("machines-machinedetail.swap_off"), sub: s.swap_total ? t("machines-machinedetail.swap_total", { total: bytesBin(s.swap_total) }) : undefined, frac: swapPct, lv: "normal" },
   ];
   return (
     <div className="mb-3 grid grid-cols-3 gap-2 lg:grid-cols-6">
-      {tiles.map((t) => (
-        <div key={t.label} className="min-w-0 rounded-card bg-surface px-2.5 py-2.5 shadow-card sm:px-3">
+      {tiles.map((tile) => (
+        <div key={tile.label} className="min-w-0 rounded-card bg-surface px-2.5 py-2.5 shadow-card sm:px-3">
           <div className="flex items-center gap-1.5 text-[11px] text-ink-3">
-            <span className="truncate">{t.label}</span>
-            {t.lv !== "normal" && (
+            <span className="truncate">{tile.label}</span>
+            {tile.lv !== "normal" && (
               <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-ink-2">
-                <span className={cx("size-1.5 rounded-full", t.lv === "critical" ? "bg-red" : "bg-orange")} />
-                {t.lv === "critical" ? "过高" : "偏高"}
+                <span className={cx("size-1.5 rounded-full", tile.lv === "critical" ? "bg-red" : "bg-orange")} />
+                {tile.lv === "critical" ? t("machines-machinedetail.critical") : t("machines-machinedetail.high")}
               </span>
             )}
           </div>
-          <div className="mt-0.5 truncate text-[15px] leading-6 font-medium text-ink tabular-nums sm:text-[17px]" title={t.value}>{t.value}</div>
-          <div className="truncate text-[10.5px] text-ink-3 tabular-nums">{t.sub ?? " "}</div>
+          <div className="mt-0.5 truncate text-[15px] leading-6 font-medium text-ink tabular-nums sm:text-[17px]" title={tile.value}>{tile.value}</div>
+          <div className="truncate text-[10.5px] text-ink-3 tabular-nums">{tile.sub ?? " "}</div>
           <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-field">
-            {t.frac !== undefined && (
+            {tile.frac !== undefined && (
               <div
-                className={cx("h-full rounded-full transition-[width] duration-500", t.lv === "critical" ? "bg-red" : t.lv === "warning" ? "bg-orange" : "bg-accent")}
-                style={{ width: `${Math.max(3, Math.min(100, t.frac))}%` }}
+                className={cx("h-full rounded-full transition-[width] duration-500", tile.lv === "critical" ? "bg-red" : tile.lv === "warning" ? "bg-orange" : "bg-accent")}
+                style={{ width: `${Math.max(3, Math.min(100, tile.frac))}%` }}
               />
             )}
           </div>
@@ -536,15 +537,15 @@ function NowTiles({ s, cores }: { s: NonNullable<DetailMetrics["latest"]>; cores
 function CoreBars({ cores }: { cores: number[] }) {
   const busiest = Math.max(...cores);
   return (
-    <section className="mt-3 rounded-card bg-surface px-4 pt-3 pb-3.5 shadow-card" role="img" aria-label={`每个核心的使用率：${cores.length} 个核心，最忙 ${percent(busiest)}`}>
+    <section className="mt-3 rounded-card bg-surface px-4 pt-3 pb-3.5 shadow-card" role="img" aria-label={t("machines-machinedetail.cores_label", { count: cores.length, busiest: percent(busiest) })}>
       <div className="flex items-baseline gap-2">
-        <h3 className="truncate text-[12.5px] font-medium text-ink-2">每个核心</h3>
+        <h3 className="truncate text-[12.5px] font-medium text-ink-2">{t("machines-machinedetail.per_core")}</h3>
         <span className="flex-1" />
-        <span className="shrink-0 text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums">最忙 {percent(busiest)}</span>
+        <span className="shrink-0 text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums">{t("machines-machinedetail.busiest", { value: percent(busiest) })}</span>
       </div>
       <div className={cx("mt-2.5 flex h-11 items-end", cores.length > 32 ? "gap-px" : "gap-0.5")}>
         {cores.map((c, i) => (
-          <div key={i} title={`核心 ${i + 1}：${percent(c)}`} className="relative h-full min-w-px flex-1 overflow-hidden rounded-[2px] bg-field">
+          <div key={i} title={t("machines-machinedetail.core_title", { n: i + 1, value: percent(c) })} className="relative h-full min-w-px flex-1 overflow-hidden rounded-[2px] bg-field">
             <div className="absolute inset-x-0 bottom-0 rounded-[2px] bg-accent transition-[height] duration-500" style={{ height: `${Math.max(4, c)}%` }} />
           </div>
         ))}

@@ -1,5 +1,6 @@
 import { cx, EASE } from "./atoms";
 import { Icon } from "./icons";
+import { t } from "../i18n";
 
 export function AttachmentTray({ attachments, onRemove, onOpen }: {
   attachments: { id: string; name: string; url?: string }[];
@@ -14,7 +15,7 @@ export function AttachmentTray({ attachments, onRemove, onOpen }: {
         <span key={a.id} title={a.name} className={cx("group/att relative rounded-[8px] bg-field shadow-hairline", a.url ? "size-14" : "flex h-14 max-w-full items-center gap-2 px-3 pr-7")} style={{ animation: `pop-in 200ms ${EASE} both` }}>
           {a.url ? (
             onOpen ? (
-              <button type="button" aria-label={`编辑 ${a.name}`} title="点一下标注后再发" onClick={() => onOpen(a.id)} className="block size-full cursor-pointer overflow-hidden rounded-[8px]">
+              <button type="button" aria-label={t("ui-attachmenttray.edit", { name: a.name })} title={t("ui-attachmenttray.edit_hint")} onClick={() => onOpen(a.id)} className="block size-full cursor-pointer overflow-hidden rounded-[8px]">
                 <img src={a.url} alt={a.name} className="size-full object-cover" />
               </button>
             ) : (
@@ -24,7 +25,7 @@ export function AttachmentTray({ attachments, onRemove, onOpen }: {
           {/* in a box of its own: touch-hit makes the button relative; the tile is not overflow-hidden, so its tap area
               reaches past the corner */}
           {onRemove && <span className="absolute top-0.5 right-0.5 flex">
-            <button type="button" aria-label={`移除 ${a.name}`} onClick={() => onRemove(a.id)} className="touch-hit flex size-4.5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover/att:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100">
+            <button type="button" aria-label={t("ui-attachmenttray.remove", { name: a.name })} onClick={() => onRemove(a.id)} className="touch-hit flex size-4.5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover/att:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100">
               <Icon name="x" size={10} stroke={2.6} />
             </button>
           </span>}

@@ -1,0 +1,7 @@
+{
+  "pick_template": "テンプレートを選択",
+  "templates": "ルールテンプレート",
+  "replace_title": "ルールの下書きを「{title}」に置き換えますか？",
+  "replace": "下書きを置換",
+  "replace_body": "「{extension}」から。入力欄の下書きを置き換えるだけで、自動では保存しません。保存するとハブに反映されます。"
+}

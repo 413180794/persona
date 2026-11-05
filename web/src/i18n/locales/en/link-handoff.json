@@ -1,0 +1,6 @@
+{
+  "current_chat": "the current chat",
+  "added": "Added as context; it goes with your next message",
+  "added_persona": "Added as context; it goes with your next message to Persona",
+  "send_failed": "Couldn't send. It's above the input box; add what you want and send again"
+}

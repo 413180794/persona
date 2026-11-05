@@ -1,0 +1,9 @@
+{
+  "label": "随消息发送的上下文",
+  "edit_title": "要改的内容",
+  "context": "上下文",
+  "edit": "要改",
+  "quoted": "「{text}」",
+  "remove_label": "移除这个上下文",
+  "remove": "移除"
+}

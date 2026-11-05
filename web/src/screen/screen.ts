@@ -4,6 +4,7 @@
 // open). A signed-in browser uses its own.
 
 import { getToken } from "../lib/api";
+import { t } from "../i18n";
 
 /** `name`: the machine as the app calls it (Mac Studio), shown until the hub says; else its id. `keep`: the app that
  * opened it remembers the Mac's sign-in (#1322: "phone" | "mac"), "" in a browser. */
@@ -50,7 +51,7 @@ export function accountOf(home: string | undefined): string {
 
 /** The sign-in's 记住 box: where the app keeps the account and password. */
 export function keepLabel(keep: ScreenTarget["keep"]): string {
-  return keep === "mac" ? "在这台 Mac 上记住" : "在这台手机上记住";
+  return keep === "mac" ? t("screen-screen.keep_mac") : t("screen-screen.keep_phone");
 }
 
 /** What the page tells the app that opened it (its WKScriptMessageHandler "screen"); nothing in a browser. */

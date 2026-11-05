@@ -27,8 +27,22 @@ class ExtensionModelTest {
         assertFalse(main.copy(bundle = listOf(child)).canConfirm)
         assertFalse(main.copy(unresolved = listOf("base")).canConfirm)
         assertFalse(main.copy(depends = listOf(ExtensionDependency("child", state = "disabled"))).canConfirm)
+        assertFalse(main.copy(depends = listOf(ExtensionDependency("child", state = "not_ready"))).canConfirm)
         assertFalse(main.copy(depends = listOf(ExtensionDependency("child", state = "new-state"))).canConfirm)
         assertTrue(ExtensionPreview().canConfirm)
+    }
+
+    @Test fun notReadyAndUnknownDependenciesNeverReadAsSatisfied() {
+        val d = ExtensionDependency("base", name = "基础扩展", version = ">=1.0.0", state = "not_ready")
+        assertEquals("基础扩展 · >=1.0.0 · 依赖未就绪", ExtensionModelText.dependency(d))
+        assertEquals("基础扩展 · >=1.0.0 · 状态未知，重新预览", ExtensionModelText.dependency(d.copy(state = "new-state")))
+        assertEquals("基础扩展 · >=1.0.0 · 已满足", ExtensionModelText.dependency(d.copy(state = "ok")))
+        val preview = ExtensionPreview(depends = listOf(d))
+        val guidance = "还有依赖未就绪，暂时不能安装；先完成依赖扩展的设置，确认其依赖也已就绪，再重新预览。"
+        assertEquals(guidance, ExtensionModelText.blockedPreview(preview))
+        assertEquals(guidance, ExtensionModelText.blockedPreview(ExtensionPreview(bundle = listOf(preview))))
+        assertEquals("还有依赖没有满足，暂时不能安装；先启用所需扩展，或补齐市场后重新预览。",
+            ExtensionModelText.blockedPreview(preview.copy(depends = listOf(d.copy(state = "disabled")))))
     }
 
     @Test fun switchingOneContributionPreservesUnsavedSettingsAndFailureKeepsItsState() = runTest {

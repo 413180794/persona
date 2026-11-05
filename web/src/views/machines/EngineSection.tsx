@@ -19,6 +19,7 @@ import { applyMachine } from "../../lib/store";
 import type { Machine } from "../../lib/types";
 import { Button, cx, EASE, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { t } from "../../i18n";
 
 export function EngineSection({ machine, heading }: { machine: Machine; heading: React.ReactNode }) {
   const current = currentEngine(machine);
@@ -52,7 +53,7 @@ export function EngineSection({ machine, heading }: { machine: Machine; heading:
       applyMachine(saved);
       setSelected(currentEngine(saved));
       setEdited(false);
-      toast(`引擎已改为 ${engineName(currentEngine(saved), saved.engines?.length ? saved : machine)}`, "ok");
+      toast(t("machines-enginesection.saved", { engine: engineName(currentEngine(saved), saved.engines?.length ? saved : machine) }), "ok");
     } catch (e) {
       setError(engineSaveError(errorText(e)));
     } finally {
@@ -66,7 +67,7 @@ export function EngineSection({ machine, heading }: { machine: Machine; heading:
     <section data-testid="engine-section">
       {heading}
       <div className="overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} both` }}>
-        <div role="radiogroup" aria-label="引擎" className="divide-y divide-line">
+        <div role="radiogroup" aria-label={t("machines-enginesection.label")} className="divide-y divide-line">
           {options.map((o) => {
             const on = selected === o.id;
             const selectable = canSelectEngine(o.id, machine);
@@ -87,7 +88,7 @@ export function EngineSection({ machine, heading }: { machine: Machine; heading:
                   <span className="flex min-w-0 items-baseline gap-2">
                     <span className="truncate text-[13px] font-medium text-ink">{o.name}</span>
                     {detail && <span className="hidden min-w-0 truncate text-[11.5px] text-ink-3 sm:inline">{detail}</span>}
-                    {o.id === current && <span className="inline-flex h-[18px] shrink-0 items-center whitespace-nowrap rounded-full bg-inset px-1.5 text-[10.5px] font-medium text-ink-2 shadow-hairline">当前</span>}
+                    {o.id === current && <span className="inline-flex h-[18px] shrink-0 items-center whitespace-nowrap rounded-full bg-inset px-1.5 text-[10.5px] font-medium text-ink-2 shadow-hairline">{t("machines-enginesection.current")}</span>}
                   </span>
                   <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-3">
                     <span className={cx("size-1.5 shrink-0 rounded-full", found && found.available ? "bg-green" : "bg-line-strong")} />
@@ -111,13 +112,13 @@ export function EngineSection({ machine, heading }: { machine: Machine; heading:
         {(dirty || error) && (
           <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5">
             <p className={cx("min-w-0 flex-1 text-[12px]", error ? "text-red" : "text-ink-2")} role={error ? "alert" : undefined}>
-              {error || `改为 ${engineName(selected, machine)}`}
+              {error || t("machines-enginesection.change_to", { engine: engineName(selected, machine) })}
             </p>
             <Button tone="quiet" disabled={saving} onClick={() => choose(current)}>
-              还原
+              {t("machines-enginesection.revert")}
             </Button>
             <Button tone="primary" busy={saving} disabled={!canSelectEngine(selected, machine)} onClick={() => void save()}>
-              保存
+              {t("common.save")}
             </Button>
           </div>
         )}

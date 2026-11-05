@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { stateColor, STATE_LABEL } from "../lib/format";
+import { t } from "../i18n";
 import type { AgentState } from "../lib/types";
 import { Icon, type IconName } from "./icons";
 import { collapseMounted } from "../lib/disclosure";
@@ -58,7 +59,7 @@ export function useNow(every = 1000, on = true) {
   return now;
 }
 
-export function Loading({ label = "加载中" }: { label?: string }) {
+export function Loading({ label = t("common.loading") }: { label?: string }) {
   return (
     <div className="flex items-center gap-2.5">
       <PixelGrid />
@@ -564,11 +565,11 @@ function MenuPanel({
         {loading && (
           <div className="relative z-10 flex h-8 items-center gap-2 px-2 text-[12.5px] text-ink-3 pointer-coarse:min-h-11">
             <Spinner size={12} />
-            读取中…
+            {t("ui-atoms.menu_loading")}
           </div>
         )}
         {loadError && <div role="alert" className="relative z-10 px-2 py-1.5 text-[12px] break-words whitespace-pre-wrap text-red">{loadError}</div>}
-        {!loading && !loadError && depth > 0 && items.length === 0 && <div className="relative z-10 flex h-8 items-center px-2 text-[12.5px] text-ink-3 pointer-coarse:min-h-11">没有可选的</div>}
+        {!loading && !loadError && depth > 0 && items.length === 0 && <div className="relative z-10 flex h-8 items-center px-2 text-[12.5px] text-ink-3 pointer-coarse:min-h-11">{t("ui-atoms.menu_empty")}</div>}
         {items.map((it, i) => [
           it.divider && i > 0 && <div key={`${it.key}-sep`} role="separator" className="mx-1 my-1 h-px bg-line" />,
           renaming === it.key && it.rename ? (
@@ -753,7 +754,7 @@ export function Dialog({
         {title && (
           <div className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-1 max-sm:shrink-0">
             <h2 id={titleId} className="text-[14px] font-semibold text-ink">{title}</h2>
-            <IconButton icon="x" label="关闭" onClick={onClose} size={26} iconSize={14} />
+            <IconButton icon="x" label={t("ui-atoms.close")} onClick={onClose} size={26} iconSize={14} />
           </div>
         )}
         <div className={cx("px-4 pt-2 pb-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-contain", !footer && "max-sm:pb-[calc(16px+env(safe-area-inset-bottom))]")}>{children}</div>
@@ -829,5 +830,5 @@ export async function copyText(text: string) {
     document.execCommand("copy");
     ta.remove();
   }
-  toast("已拷贝", "ok");
+  toast(t("ui-atoms.copied"), "ok");
 }

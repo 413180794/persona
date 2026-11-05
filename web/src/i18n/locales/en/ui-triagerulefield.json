@@ -1,0 +1,7 @@
+{
+  "pick_template": "Use a template",
+  "templates": "Rule templates",
+  "replace_title": "Replace the rule draft with “{title}”?",
+  "replace": "Replace draft",
+  "replace_body": "From “{extension}”. This only replaces the draft in the box and doesn't save it; it takes effect on the hub once you save."
+}

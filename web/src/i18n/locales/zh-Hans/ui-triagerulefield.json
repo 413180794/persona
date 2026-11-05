@@ -1,0 +1,7 @@
+{
+  "pick_template": "从扩展选模板",
+  "templates": "规则模板",
+  "replace_title": "用「{title}」替换规则草稿？",
+  "replace": "替换草稿",
+  "replace_body": "来自「{extension}」。只替换输入框里的草稿，不自动保存；确认保存后才在 hub 生效。"
+}

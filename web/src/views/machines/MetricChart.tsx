@@ -5,6 +5,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { hm, isEmpty, nearest, runs, scale, timeAt, timeTicks, yAxis, type DetailPoint, type Reader } from "../../lib/machine-detail";
 import { cx } from "../../ui/atoms";
+import { t } from "../../i18n";
 
 export interface ChartSeries {
   name: string;
@@ -86,7 +87,7 @@ export function MetricChart({
     const vals = lines[i].flat().map((p) => p.v);
     return vals.length ? Math.max(...vals) : undefined;
   };
-  const summary = series.map((s, i) => `${series.length > 1 ? s.name + " " : ""}现在 ${format(s.now)}，最高 ${format(peak(i))}`).join("；");
+  const summary = series.map((s, i) => series.length > 1 ? t("machines-metricchart.summary_named", { name: s.name, now: format(s.now), peak: format(peak(i)) }) : t("machines-metricchart.summary", { now: format(s.now), peak: format(peak(i)) })).join(t("machines-metricchart.summary_sep"));
 
   const move = (e: React.PointerEvent<SVGRectElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -108,7 +109,7 @@ export function MetricChart({
       <div className="flex items-baseline gap-2">
         <h3 className="truncate text-[12.5px] font-medium text-ink-2">{title}</h3>
         <span className="flex-1" />
-        <span className="shrink-0 font-mono text-[11px] text-ink-3 tabular-nums">{hover !== null ? hm(picked?.t ?? hover, tz) : "现在"}</span>
+        <span className="shrink-0 font-mono text-[11px] text-ink-3 tabular-nums">{hover !== null ? hm(picked?.t ?? hover, tz) : t("machines-metricchart.now")}</span>
       </div>
       <div className="mt-0.5 flex min-h-7 flex-wrap items-baseline gap-x-4 gap-y-0.5">
         {series.map((s, i) => (
@@ -122,7 +123,7 @@ export function MetricChart({
             <span className={cx("font-medium text-ink tabular-nums", series.length > 1 ? "text-[15px]" : "text-[20px] leading-7")}>{shown[i] === undefined && hover !== null ? "—" : format(shown[i])}</span>
           </span>
         ))}
-        {hover !== null && !picked && <span className="text-[11.5px] text-ink-3">这时没有数据</span>}
+        {hover !== null && !picked && <span className="text-[11.5px] text-ink-3">{t("machines-metricchart.no_data_at")}</span>}
       </div>
       <div ref={box} className="relative mt-1.5">
         {width > 0 && (
@@ -130,7 +131,7 @@ export function MetricChart({
             width={width}
             height={H + AXIS_H}
             role="img"
-            aria-label={`${title}：${summary}`}
+            aria-label={t("machines-metricchart.chart_label", { title, summary })}
             tabIndex={0}
             onKeyDown={key}
             onBlur={() => onHover(null)}
@@ -211,7 +212,7 @@ export function MetricChart({
         {width === 0 && <div style={{ height: H + AXIS_H }} />}
         {isEmpty(points) && width > 0 && (
           <p className="pointer-events-none absolute inset-x-0 top-[44%] -translate-y-1/2 text-center text-[12px] text-ink-3" style={{ paddingRight: AXIS_W }}>
-            这段时间没有数据
+            {t("machines-metricchart.no_data")}
           </p>
         )}
       </div>

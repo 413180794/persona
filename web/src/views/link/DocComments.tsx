@@ -13,6 +13,7 @@ import { Icon } from "../../ui/icons";
 import { LarkPeopleMenu, useLarkPeoplePicker } from "../../ui/LarkPeoplePicker";
 import { Empty, Segmented } from "../session/files/parts";
 import { docErrorFromBody, docErrorText } from "./feishu-doc";
+import { t } from "../../i18n";
 
 export interface DocComments {
   threads: DocThread[] | null;
@@ -89,14 +90,14 @@ export function useDocComments(url: string, on: boolean): DocComments {
     pending.current = clientIdFor(pending.current, sendKey(url, target, text));
     setSending(true);
     try {
-      const t = await sendComment(url, target, text, mentionsIn(text, picked), pending.current.id);
+      const sent = await sendComment(url, target, text, mentionsIn(text, picked), pending.current.id);
       pending.current = null;
       setDraft("");
       setPicked([]);
       setTarget(ON_DOCUMENT);
-      await settle(t);
+      await settle(sent);
     } catch (e) {
-      toast(`没发出去：${writeErrorText(e)}`, "error");
+      toast(t("link-doccomments.send_failed", { error: writeErrorText(e) }), "error");
     } finally {
       setSending(false);
     }
@@ -109,7 +110,7 @@ export function useDocComments(url: string, on: boolean): DocComments {
       await settle(await setResolved(url, th.id, resolved));
       if (target.kind === "thread" && target.id === th.id && resolved) setTarget(ON_DOCUMENT);
     } catch (e) {
-      toast(`${resolved ? "没能标为已解决：" : "没能重新打开："}${writeErrorText(e)}`, "error");
+      toast(resolved ? t("link-doccomments.resolve_failed", { error: writeErrorText(e) }) : t("link-doccomments.reopen_failed", { error: writeErrorText(e) }), "error");
     } finally {
       setResolving((s) => {
         const n = new Set(s);
@@ -125,9 +126,9 @@ export function useDocComments(url: string, on: boolean): DocComments {
 }
 
 /** What to answer in a thread: its last reply (FeishuDocsCommentsModel.reply(to:)). */
-export function replyTarget(t: DocThread): CommentTarget {
-  const last = t.replies[t.replies.length - 1];
-  return { kind: "thread", id: t.id, name: last?.author.name ?? "评论", text: last ? replyText(last) : t.quote };
+export function replyTarget(th: DocThread): CommentTarget {
+  const last = th.replies[th.replies.length - 1];
+  return { kind: "thread", id: th.id, name: last?.author.name ?? t("link-doccomments.comment"), text: last ? replyText(last) : th.quote };
 }
 
 export function DocCommentsView({ url, model, writes, resolved, onResolved, onBack, focus }: { url: string; model: DocComments; writes: boolean; resolved: boolean; onResolved: (v: boolean) => void; onBack: () => void; focus: number }) {
@@ -157,16 +158,16 @@ export function DocCommentsView({ url, model, writes, resolved, onResolved, onBa
     >
       <div className="flex min-h-0 flex-1 flex-col" style={{ animation: `fade-in 160ms ease-out both` }}>
         <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-          <IconButton icon="arrowLeft" label="回到文档" onClick={onBack} />
-          <span className="text-[13px] font-semibold text-ink">评论</span>
+          <IconButton icon="arrowLeft" label={t("link-doccomments.back")} onClick={onBack} />
+          <span className="text-[13px] font-semibold text-ink">{t("link-doccomments.title")}</span>
           <span className="flex-1" />
           <Segmented
-            label="评论状态"
+            label={t("link-doccomments.status")}
             value={resolved ? "done" : "open"}
             onChange={(v) => onResolved(v === "done")}
             options={[
-              ["open", `未解决 ${open.length}`],
-              ["done", `已解决 ${done.length}`],
+              ["open", t("link-doccomments.open_count", { count: open.length })],
+              ["done", t("link-doccomments.done_count", { count: done.length })],
             ]}
           />
         </div>
@@ -174,17 +175,17 @@ export function DocCommentsView({ url, model, writes, resolved, onResolved, onBa
           <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3 px-4 pt-4 pb-6 sm:px-5">
             {threads === null ? (
               loadError ? (
-                <Empty icon="info" title="读不到评论" detail={loadError} action={<Button icon="retry" onClick={model.reload}>重试</Button>} />
+                <Empty icon="info" title={t("link-doccomments.load_failed")} detail={loadError} action={<Button icon="retry" onClick={model.reload}>{t("link-doccomments.retry")}</Button>} />
               ) : (
                 <div className="py-10">
-                  <Loading label="正在读取评论" />
+                  <Loading label={t("link-doccomments.loading")} />
                 </div>
               )
             ) : shown.length === 0 ? (
               <Empty
                 icon="chat"
-                title={resolved ? "没有已解决的评论" : "没有未解决的评论"}
-                detail={resolved ? "解决后的评论会收在这里" : writes ? "在下面写一条，或者在文档里选中一段评论" : "在飞书里对文档发表的评论会出现在这里"}
+                title={resolved ? t("link-doccomments.empty_done") : t("link-doccomments.empty_open")}
+                detail={resolved ? t("link-doccomments.empty_done_detail") : writes ? t("link-doccomments.empty_open_detail_write") : t("link-doccomments.empty_open_detail")}
               />
             ) : (
               shown.map((t) => <ThreadCard key={t.id} thread={t} writes={writes} replying={replyingTo === t.id} resolving={model.resolving.has(t.id)} onReply={() => answer(t)} onResolve={(v) => void model.resolve(t, v)} />)
@@ -200,12 +201,12 @@ export function DocCommentsView({ url, model, writes, resolved, onResolved, onBa
 function ThreadCard({ thread, writes, replying, resolving, onReply, onResolve }: { thread: DocThread; writes: boolean; replying: boolean; resolving: boolean; onReply: () => void; onResolve: (resolved: boolean) => void }) {
   return (
     <article
-      aria-label={thread.whole ? "全文评论" : `评论：${thread.quote}`}
+      aria-label={thread.whole ? t("link-doccomments.whole") : t("link-doccomments.thread_label", { quote: thread.quote })}
       className={cx("rounded-card bg-surface p-3 shadow-raised transition-shadow duration-200", replying && "ring-2 ring-accent")}
     >
       {thread.whole || !thread.quote ? (
         <div className="mb-2 inline-flex items-center gap-1 rounded-chip bg-field px-1.5 py-0.5 text-[11px] font-medium text-ink-3">
-          <Icon name="read" size={11} /> 全文评论
+          <Icon name="read" size={11} /> {t("link-doccomments.whole")}
         </div>
       ) : (
         <blockquote className="mb-2 line-clamp-2 border-l-2 border-line-strong pl-2 text-[12px] leading-[1.55] text-ink-3">{thread.quote}</blockquote>
@@ -219,11 +220,11 @@ function ThreadCard({ thread, writes, replying, resolving, onReply, onResolve }:
         <div className="mt-2.5 flex items-center gap-1 border-t border-line pt-2">
           {!thread.resolved && (
             <Button tone="quiet" icon="chat" onClick={onReply} className="h-7 px-2">
-              回复
+              {t("link-doccomments.reply")}
             </Button>
           )}
           <Button tone="quiet" icon={thread.resolved ? "undo" : "check"} busy={resolving} onClick={() => onResolve(!thread.resolved)} className="h-7 px-2">
-            {thread.resolved ? "重新打开" : "解决"}
+            {thread.resolved ? t("link-doccomments.reopen") : t("link-doccomments.resolve")}
           </Button>
         </div>
       )}
@@ -232,7 +233,7 @@ function ThreadCard({ thread, writes, replying, resolving, onReply, onResolve }:
 }
 
 function Reply({ reply }: { reply: DocReply }) {
-  const t = ago(reply.createdAt);
+  const when = ago(reply.createdAt);
   return (
     <div className="flex gap-2">
       <span aria-hidden className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-field text-[11px] font-semibold text-ink-2">
@@ -241,8 +242,8 @@ function Reply({ reply }: { reply: DocReply }) {
       <div className="min-w-0 flex-1">
         <div className="text-[12px] text-ink-3">
           <span className="font-medium text-ink-2">{reply.author.name}</span>
-          {t && <> · {t}</>}
-          {reply.edited && <> · 已编辑</>}
+          {when && <> · {when}</>}
+          {reply.edited && <> · {t("link-doccomments.edited")}</>}
         </div>
         <div className="text-[13px] leading-[1.6] whitespace-pre-wrap text-ink [overflow-wrap:anywhere]">
           {reply.content.map((s, i) =>
@@ -258,16 +259,16 @@ function Reply({ reply }: { reply: DocReply }) {
               <span key={i}>{s.text}</span>
             ),
           )}
-          {Boolean(reply.imageCount) && <span className="text-ink-3"> [图片 ×{reply.imageCount}]</span>}
+          {Boolean(reply.imageCount) && <span className="text-ink-3"> {t("link-doccomments.images", { count: reply.imageCount ?? 0 })}</span>}
         </div>
       </div>
     </div>
   );
 }
 
-function targetLine(t: CommentTarget): { label: string; text: string } | null {
-  if (t.kind === "thread") return { label: `回复 ${t.name}`, text: t.text };
-  if (t.kind === "passage") return { label: "评论这段", text: t.quote };
+function targetLine(tg: CommentTarget): { label: string; text: string } | null {
+  if (tg.kind === "thread") return { label: t("link-doccomments.reply_to", { name: tg.name }), text: tg.text };
+  if (tg.kind === "passage") return { label: t("link-doccomments.comment_passage"), text: tg.quote };
   return null;
 }
 
@@ -315,7 +316,7 @@ function CommentBox({ url, model, box, focus }: { url: string; model: DocComment
 
   const line = targetLine(target);
   const can = draft.trim().length > 0 && !model.sending;
-  const placeholder = target.kind === "thread" ? `回复 ${target.name}，输入 @ 提到人` : target.kind === "passage" ? "评论这段，输入 @ 提到人" : "评论全文，输入 @ 提到人";
+  const placeholder = target.kind === "thread" ? t("link-doccomments.placeholder_reply", { name: target.name }) : target.kind === "passage" ? t("link-doccomments.placeholder_passage") : t("link-doccomments.placeholder_whole");
 
   return (
     <div className="shrink-0 border-t border-line bg-surface px-3 pt-2 pb-3">
@@ -324,9 +325,9 @@ function CommentBox({ url, model, box, focus }: { url: string; model: DocComment
           <Icon name={target.kind === "thread" ? "chat" : "quote"} size={13} className="shrink-0 text-ink-3" />
           <div className="min-w-0 flex-1 truncate text-[12px] text-ink-2">
             <span className="font-medium text-ink">{line.label}</span>
-            {line.text && <span className="text-ink-3">：{line.text}</span>}
+            {line.text && <span className="text-ink-3">{t("link-doccomments.target_text", { text: line.text })}</span>}
           </div>
-          <IconButton icon="x" label="改成评论全文" size={24} iconSize={13} onClick={() => model.setTarget(ON_DOCUMENT)} />
+          <IconButton icon="x" label={t("link-doccomments.comment_whole_instead")} size={24} iconSize={13} onClick={() => model.setTarget(ON_DOCUMENT)} />
         </div>
       )}
       <div className="relative flex items-end gap-2">
@@ -335,7 +336,7 @@ function CommentBox({ url, model, box, focus }: { url: string; model: DocComment
           ref={box}
           rows={1}
           value={draft}
-          aria-label="写评论"
+          aria-label={t("link-doccomments.write")}
           placeholder={placeholder}
           onChange={(e) => {
             setDraft(e.target.value);
@@ -359,7 +360,7 @@ function CommentBox({ url, model, box, focus }: { url: string; model: DocComment
           className="max-h-[140px] min-h-9 flex-1 resize-none rounded-[10px] bg-field px-3 py-2 text-[13.5px] leading-[1.45] text-ink outline-none placeholder:text-ink-3 focus:shadow-hairline"
         />
         <Button tone="primary" icon="send" busy={model.sending} disabled={!can} onClick={() => void model.send()} className="h-9">
-          发送
+          {t("link-doccomments.send")}
         </Button>
       </div>
     </div>

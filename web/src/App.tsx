@@ -15,6 +15,7 @@ import type { Session } from "./lib/types";
 import { unreachable } from "./lib/shell";
 import { NARROW, useKeyboardFrame, useMedia } from "./lib/viewport";
 import { connect, disconnect, reset, useStore } from "./lib/store";
+import { t } from "./i18n";
 import { Button, cx, EASE, IconButton, Loading, Spinner, Toasts } from "./ui/atoms";
 import { focusables, trapTab } from "./ui/overlay";
 import { Empty } from "./views/session/files/parts";
@@ -81,8 +82,8 @@ export function App() {
       .then(() => live && setAuthed(true))
       .catch((err) => {
         if (!live) return;
-        const t = errorText(err);
-        setLinkError(t === "invalid token" ? "链接里的 token 不对，贴一个新的" : t);
+        const msg = errorText(err);
+        setLinkError(msg === "invalid token" ? t("app.link_token_invalid") : msg);
         setAuthed(Boolean(getToken())); // still signed in from before: stay in
       })
       .finally(() => live && setJoining(false));
@@ -236,9 +237,9 @@ function Shell() {
 
   const extensionTitle = useExtensionPlace(route.name === "extension" ? route.extension : "", route.name === "extension" ? route.ui : "")?.title;
   const title =
-    pane ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱" : route.name === "messages" ? "消息"
-      : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "workspace-board" ? "工作流看板" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "terminal" ? "终端" : route.name === "settings" ? "设置"
-      : route.name === "agents" ? "个人 Agent" : route.name === "agent-list" ? "Agents" : route.name === "extension" ? extensionTitle || "扩展" : "总览";
+    pane ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? t("app.title_new_chat") : route.name === "history" ? t("app.title_history") : route.name === "profile" ? t("app.title_profile") : route.name === "inbox" ? t("app.title_inbox") : route.name === "messages" ? t("app.title_messages")
+      : route.name === "routines" ? t("app.title_routines") : route.name === "kb" ? t("app.title_kb") : route.name === "workspace-board" ? t("app.title_workspace_board") : route.name === "todos" ? t("app.title_todos") : route.name === "machines" || route.name === "machine" ? t("app.title_machines") : route.name === "terminal" ? t("app.title_terminal") : route.name === "settings" ? t("app.title_settings")
+      : route.name === "agents" ? t("app.title_agents") : route.name === "agent-list" ? "Agents" : route.name === "extension" ? extensionTitle || t("app.title_extension") : t("app.title_home");
   useAttentionSignals(title, pane); // tab title with the 需要你 count, favicon badge, optional sounds (#2332)
 
   // never reached the hub: say so with a way to try again, instead of pages loading forever (kept through a retry)
@@ -318,7 +319,7 @@ function Shell() {
         ref={drawerBox}
         role={a11y.modal ? "dialog" : undefined}
         aria-modal={a11y.modal || undefined}
-        aria-label={a11y.modal ? "侧边栏" : undefined}
+        aria-label={a11y.modal ? t("app.sidebar") : undefined}
         inert={a11y.inert || undefined}
         className={cx(
           "fixed inset-y-0 left-0 z-30 w-[284px] border-r border-line transition-transform duration-300 max-lg:w-[calc(284px+env(safe-area-inset-left))] max-lg:bg-canvas max-lg:pb-[env(safe-area-inset-bottom)] max-lg:pl-[env(safe-area-inset-left)] lg:static lg:z-auto lg:translate-x-0 lg:shadow-none",
@@ -342,7 +343,7 @@ function Shell() {
           <div className="absolute inset-x-0 top-14 z-10 flex justify-center px-4 pt-2" style={{ animation: `slide-up 220ms ${EASE} both` }}>
             <div className="flex items-center gap-2 rounded-full bg-tooltip-bg px-3 py-1.5 text-[12px] text-tooltip-fg shadow-overlay">
               <span className="size-1.5 rounded-full bg-red" />
-              连不上 hub，正在重试…
+              {t("app.reconnecting")}
             </div>
           </div>
         )}
@@ -365,14 +366,14 @@ function Offline({ onToggleSidebar, trying }: { onToggleSidebar: () => void; try
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center px-3 sm:px-4">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+        <IconButton icon="sidebar" label={t("app.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
       </header>
       <div className="flex min-h-0 flex-1 flex-col pb-[10vh]" role="status">
         <Empty
           icon="hub"
-          title="离线"
-          detail="连不上 hub。检查网络，或者确认 hub 所在的机器开着。"
-          action={<Button tone="secondary" icon="retry" busy={trying} onClick={connect}>{trying ? "正在连接…" : "重试"}</Button>}
+          title={t("app.offline_title")}
+          detail={t("app.offline_detail")}
+          action={<Button tone="secondary" icon="retry" busy={trying} onClick={connect}>{trying ? t("app.connecting") : t("app.retry")}</Button>}
         />
       </div>
     </div>
@@ -383,8 +384,8 @@ function Offline({ onToggleSidebar, trying }: { onToggleSidebar: () => void; try
 function TabGone({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <p className="text-[13px] text-ink-2">这个标签页已经不在了</p>
-      <button type="button" onClick={onToggleSidebar} className="whitespace-nowrap rounded-control px-2.5 py-1.5 text-[12.5px] font-medium text-accent-ink hover:bg-hover lg:hidden">打开侧边栏</button>
+      <p className="text-[13px] text-ink-2">{t("app.tab_gone")}</p>
+      <button type="button" onClick={onToggleSidebar} className="whitespace-nowrap rounded-control px-2.5 py-1.5 text-[12.5px] font-medium text-accent-ink hover:bg-hover lg:hidden">{t("app.open_sidebar")}</button>
     </div>
   );
 }
@@ -393,7 +394,7 @@ function TabGone({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 function SessionChoices({ sid, candidates, all, onToggleSidebar }: { sid: string; candidates: Session[]; all: Session[]; onToggleSidebar: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <p className="text-[13px] text-ink-2">有 {candidates.length} 个会话的 id 以 {sid} 开头，选一个打开</p>
+      <p className="text-[13px] text-ink-2">{t("app.session_choices", { count: candidates.length, sid })}</p>
       <ul className="flex w-full max-w-96 flex-col gap-1">
         {candidates.map((s) => {
           const to = sessionLinkRoute(all, s);
@@ -410,7 +411,7 @@ function SessionChoices({ sid, candidates, all, onToggleSidebar }: { sid: string
           );
         })}
       </ul>
-      <button type="button" onClick={onToggleSidebar} className="whitespace-nowrap rounded-control px-2.5 py-1.5 text-[12.5px] font-medium text-accent-ink hover:bg-hover lg:hidden">打开侧边栏</button>
+      <button type="button" onClick={onToggleSidebar} className="whitespace-nowrap rounded-control px-2.5 py-1.5 text-[12.5px] font-medium text-accent-ink hover:bg-hover lg:hidden">{t("app.open_sidebar")}</button>
     </div>
   );
 }
@@ -421,7 +422,7 @@ function Joining() {
     <div className="flex min-h-full items-center justify-center bg-page" role="status" aria-live="polite">
       <span className="flex items-center gap-2 text-[13px] text-ink-2">
         <Spinner />
-        正在连接 Persona…
+        {t("app.joining")}
       </span>
     </div>
   );

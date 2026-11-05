@@ -7,6 +7,7 @@ import { bytes } from "../../lib/format";
 import { clickLink, linkHref, prefetchLink } from "../../lib/links";
 import { linkify, markdownComponents, markdownUrl } from "../../ui/Markdown";
 import { Icon } from "../../ui/icons";
+import { formatDate, t } from "../../i18n";
 import { attr, BR, mediaURL, num, orderedNumbers, plainText, type DocNode } from "./feishu-doc";
 
 // ── Markdown ──
@@ -183,7 +184,7 @@ function Block({ node, number }: { node: DocNode; number?: number }) {
     case "codeBlock":
     case "mermaid":
     case "plantuml": {
-      const lang = node.type === "mermaid" ? "Mermaid 图" : node.type === "plantuml" ? "PlantUML 图" : attr(node, "language");
+      const lang = node.type === "mermaid" ? t("link-doccontent.mermaid") : node.type === "plantuml" ? t("link-doccontent.plantuml") : attr(node, "language");
       return (
         <div>
           {lang && lang.toLowerCase() !== "plaintext" && lang.toLowerCase() !== "text" && <div className="mt-3 -mb-1 text-[11.5px] text-ink-3">{lang}</div>}
@@ -198,12 +199,12 @@ function Block({ node, number }: { node: DocNode; number?: number }) {
     case "image":
       return <Image node={node} />;
     case "missingImage":
-      return <Placeholder text={attr(node, "caption") || "图片无法显示"} />;
+      return <Placeholder text={attr(node, "caption") || t("link-doccontent.image_missing")} />;
     case "bookmark":
-      return <LinkCard href={attr(node, "href")} title={attr(node, "title") || attr(node, "href") || "链接"} subtitle={attr(node, "summary")} />;
+      return <LinkCard href={attr(node, "href")} title={attr(node, "title") || attr(node, "href") || t("link-doccontent.link")} subtitle={attr(node, "summary")} />;
     case "embedLink": {
       const kind = attr(node, "kind") ?? "";
-      const label = { sheet: "电子表格", bitable: "多维表格", base: "多维表格", mindnote: "思维笔记", chat: "群聊", calendarEvent: "日程" }[kind] ?? "内嵌内容";
+      const label = ({ sheet: t("link-doccontent.sheet"), bitable: t("link-doccontent.bitable"), base: t("link-doccontent.bitable"), mindnote: t("link-doccontent.mindnote"), chat: t("link-doccontent.chat"), calendarEvent: t("link-doccontent.event") } as Record<string, string>)[kind] ?? t("link-doccontent.embed");
       const href = attr(node, "href");
       return <LinkCard href={href?.startsWith("http") ? href : undefined} title={attr(node, "title") || label} subtitle={label} />;
     }
@@ -213,8 +214,8 @@ function Block({ node, number }: { node: DocNode; number?: number }) {
       return (
         <LinkCard
           href={token ? mediaURL(`/api/v1/lark/raw/documents/drive/files/${encodeURIComponent(token)}/download`) : attr(node, "sourceUrl")}
-          title={attr(node, "name") || "文件"}
-          subtitle={size ? bytes(size) : "文件"}
+          title={attr(node, "name") || t("link-doccontent.file")}
+          subtitle={size ? bytes(size) : t("link-doccontent.file")}
           icon="clip"
           download={Boolean(token)}
         />
@@ -238,7 +239,7 @@ function Block({ node, number }: { node: DocNode; number?: number }) {
     case "slide":
       return (
         <div className="my-3 rounded-card bg-inset px-3.5 py-3 shadow-hairline [&>:last-child]:mb-0">
-          <div className="text-[11.5px] font-medium text-ink-3">第 {num(node, "index") ?? 0} 页</div>
+          <div className="text-[11.5px] font-medium text-ink-3">{t("link-doccontent.slide", { n: num(node, "index") ?? 0 })}</div>
           <Blocks nodes={kids} />
         </div>
       );
@@ -247,9 +248,9 @@ function Block({ node, number }: { node: DocNode; number?: number }) {
     case "widgetEmpty":
       return null;
     case "unsupported":
-      return <Placeholder text={attr(node, "kind") === "isv" ? "第三方小组件，在飞书中查看" : "这个内容块暂不支持，在飞书中查看"} href={attr(node, "sourceUrl")} />;
+      return <Placeholder text={attr(node, "kind") === "isv" ? t("link-doccontent.isv") : t("link-doccontent.block_unsupported")} href={attr(node, "sourceUrl")} />;
     default:
-      if (!kids.length) return <Placeholder text="这个内容块暂不支持，在飞书中查看" href={attr(node, "sourceUrl") ?? attr(node, "href")} />;
+      if (!kids.length) return <Placeholder text={t("link-doccontent.block_unsupported")} href={attr(node, "sourceUrl") ?? attr(node, "href")} />;
       if (kids.every((k) => INLINE.has(k.type)))
         return (
           <p>
@@ -307,7 +308,7 @@ function Table({ node }: { node: DocNode }) {
 
 function Image({ node }: { node: DocNode }) {
   const src = attr(node, "src");
-  if (!src) return <Placeholder text="图片无法显示" />;
+  if (!src) return <Placeholder text={t("link-doccontent.image_missing")} />;
   const w = num(node, "width") ?? num(node, "displayWidth");
   const h = num(node, "height");
   const caption = attr(node, "caption");
@@ -316,7 +317,7 @@ function Image({ node }: { node: DocNode }) {
       <a href={mediaURL(src)} target="_blank" rel="noreferrer noopener">
         <img
           src={mediaURL(src)}
-          alt={attr(node, "alt") || caption || "图片"}
+          alt={attr(node, "alt") || caption || t("link-doccontent.image")}
           loading="lazy"
           width={w}
           height={h}
@@ -365,7 +366,7 @@ function Placeholder({ text, href }: { text: string; href?: string }) {
       <span className="min-w-0 flex-1">{text}</span>
       {href?.startsWith("http") && (
         <a href={href} target="_blank" rel="noreferrer noopener" className="shrink-0 whitespace-nowrap">
-          打开
+          {t("link-doccontent.open")}
         </a>
       )}
     </div>
@@ -395,8 +396,8 @@ function Run({ node }: { node: DocNode }) {
       const label = attr(node, "label") ?? "";
       if (kind === "user") return <span className="text-accent-ink">@{label}</span>;
       if (kind === "reminder") {
-        const t = Date.parse(label);
-        return <span className="text-orange">⏰ {Number.isFinite(t) ? new Date(t).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : label}</span>;
+        const at = Date.parse(label);
+        return <span className="text-orange">⏰ {Number.isFinite(at) ? formatDate(at, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : label}</span>;
       }
       const href = attr(node, "href");
       const text = `${kind === "doc" ? "📄 " : ""}${label}`;

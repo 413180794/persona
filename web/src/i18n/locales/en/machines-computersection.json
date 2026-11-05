@@ -1,0 +1,15 @@
+{
+  "turn_on_failed": "Couldn't turn on: {error}",
+  "turn_off_failed": "Couldn't turn off: {error}",
+  "title": "Computer control",
+  "allow": "Let the assistant control this computer",
+  "allow_detail": "Sees the screen, clicks, types, and takes screenshots through Cua Driver",
+  "offline": "The machine is offline. It can be controlled once it's back",
+  "install_detail": "Downloads the installer from the Cua website, verifies it, installs it in Applications, and turns off its usage stats.",
+  "reinstall": "Reinstall",
+  "install_title": "Install Cua Driver",
+  "ask_again": "Ask again",
+  "grant": "Grant access",
+  "install": "Install",
+  "install_confirm": "Downloads the installer from the Cua website on this Mac, verifies it, installs it in Applications, and turns off its usage stats. Once installed it asks for Accessibility and Screen Recording access; click Allow on that Mac's screen."
+}

@@ -3,10 +3,12 @@
 // with state <page> answers that page's view; a press answers the same view again (nothing is stored).
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { initI18n } from "../i18n";
 import "../styles.css";
-import { ExtensionUI } from "../views/settings/ExtensionView";
-import { SHOWCASE, showcaseKind } from "./snapshots";
-import { Toasts } from "../ui/atoms";
+
+// The catalog loads before the modules that call t() as they load (docs/web.md「国际化」), as in main.tsx.
+await initI18n();
+const [{ ExtensionUI }, { SHOWCASE, showcaseKind }, { Toasts }] = await Promise.all([import("../views/settings/ExtensionView"), import("./snapshots"), import("../ui/atoms")]);
 
 const realFetch = window.fetch.bind(window);
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -32,7 +34,7 @@ function Page({ name }: { name: string }) {
     <section data-page={name} className="flex flex-col gap-2">
       {!only && <p className="px-1 font-mono text-[11px] text-ink-3">{name}</p>}
       <div className={kind === "page" ? "" : "rounded-card bg-surface py-2 shadow-card"}>
-        <ExtensionUI extension="showcase" ui={ui} state={name} compact={kind !== "page"} history={false} title="组件展示" />
+        <ExtensionUI extension="showcase" ui={ui} state={name} compact={kind !== "page"} history={false} title="组件展示" /* i18n-ignore: dev-only page; the showcase extension's own name, as its snapshots spell it */ />
       </div>
     </section>
   );

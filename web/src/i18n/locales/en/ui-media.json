@@ -1,0 +1,7 @@
+{
+  "video_unplayable": "This browser can't play this video",
+  "audio_unplayable": "This browser can't play this audio",
+  "video_hint": "It may be HEVC or MKV. Try Safari, or download it and watch it locally.",
+  "audio_hint": "The browser doesn't support this format. Download it to listen.",
+  "download": "Download"
+}

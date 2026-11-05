@@ -4,6 +4,7 @@ import { machineDeployment } from "../../lib/machine-deploy";
 import { refresh } from "../../lib/store";
 import type { Machine } from "../../lib/types";
 import { Button, cx, toast } from "../../ui/atoms";
+import { t } from "../../i18n";
 
 /** The list and detail keep the same capability checks, stages and confirmation wording. */
 export function MachineDeploy({ machine, className }: { machine: Machine; className?: string }) {
@@ -18,7 +19,7 @@ export function MachineDeploy({ machine, className }: { machine: Machine; classN
       await api(`/machines/${enc(machine.id)}/deploy`, { method: "POST" });
       await refresh().catch(() => {});
     } catch (e) {
-      toast(`部署失败：${errorText(e)}`, "error");
+      toast(t("machines-machinedeploy.failed", { error: errorText(e) }), "error");
     } finally {
       setPending(false);
     }
@@ -33,7 +34,7 @@ export function MachineDeploy({ machine, className }: { machine: Machine; classN
       </div>
       {(deployment.supported || deployment.busy) && (
         <Button tone="secondary" icon="retry" busy={deployment.busy || pending} disabled={!deployment.canDeploy || pending} title={deployment.reason || undefined} onClick={() => void deploy()}>
-          {pending && !deployment.busy ? "请求中" : deployment.label}
+          {pending && !deployment.busy ? t("machines-machinedeploy.requesting") : deployment.label}
         </Button>
       )}
     </div>

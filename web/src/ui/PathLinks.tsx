@@ -7,6 +7,7 @@ import { resolveRef } from "../lib/files";
 import { openPanel } from "../lib/panel";
 import { codePathRef, findPathRefs, splitAtRefs, uniquePaths, type PathRef } from "../lib/path-refs";
 import { usePathLinks } from "../lib/path-presence";
+import { t } from "../i18n";
 
 /** Opens a path a message names in the file panel; ⌘ / Ctrl / middle click is the browser's (the raw file). */
 export function openPathRef(e: React.MouseEvent, mid: string, cwd: string | undefined, path: string, line?: number) {
@@ -60,7 +61,7 @@ export const PathText = memo(function PathText({ text, mid, cwd }: { text: strin
 });
 
 function refTitle(r: PathRef) {
-  return r.line ? `${r.path} · 第 ${r.line} 行` : r.path;
+  return r.line ? t("ui-pathlinks.path_line", { path: r.path, line: r.line }) : r.path;
 }
 
 // ── Markdown ──────────────────────────────────────────────

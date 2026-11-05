@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { useDeclaredResult } from "../lib/extension-declared";
+import { t } from "../i18n";
 import { allowedTheme, extensionThemeTokens, themeKey, type ExtensionTheme } from "./extension-theme";
 
 const KEY = "persona.extension-theme";
@@ -44,10 +45,10 @@ export function ExtensionThemePicker() {
   const { available, selected, select } = useContext(PaletteContext);
   if (!available.length) return null;
   return <div className="flex items-center gap-3 px-4 py-2.5">
-    <span className="min-w-0 flex-1 text-[13px] text-ink">主题色</span>
-    <select aria-label="主题色" value={selected} onChange={(e) => select(e.target.value)} className="h-8 max-w-[60%] rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]">
-      <option value="">默认</option>
-      {available.map((t) => <option key={themeKey(t)} value={themeKey(t)}>{t.name} · {t.extension_name}</option>)}
+    <span className="min-w-0 flex-1 text-[13px] text-ink">{t("ui-extensionthemepicker.label")}</span>
+    <select aria-label={t("ui-extensionthemepicker.label")} value={selected} onChange={(e) => select(e.target.value)} className="h-8 max-w-[60%] rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]">
+      <option value="">{t("ui-extensionthemepicker.default")}</option>
+      {available.map((th) => <option key={themeKey(th)} value={themeKey(th)}>{th.name} · {th.extension_name}</option>)}
     </select>
   </div>;
 }

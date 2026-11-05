@@ -152,6 +152,26 @@ class ExtensionModelShotsTest {
         assertEquals(1, confirms)
     }
 
+    @Test fun notReadyDependencyIsVisibleAndCannotBeConfirmedInEveryStyle() {
+        var style by mutableStateOf(AppStyle.Glass)
+        var dark by mutableStateOf(false)
+        var confirms = 0
+        val waiting = preview.copy(depends = listOf(ExtensionDependency("notes", name = "笔记扩展", state = "not_ready")))
+        rule.setContent {
+            PersonaTheme(style = style, darkTheme = dark, reduceMotion = true) {
+                PreviewSheet(null, waiting, false, {}, { confirms++ }, Modifier.testTag("shot"))
+            }
+        }
+        for (s in AppStyle.entries) for (d in listOf(false, true)) {
+            style = s; dark = d
+            rule.onNodeWithText("笔记扩展 · 依赖未就绪").assertExists()
+            rule.onNodeWithText("先完成依赖扩展的设置", substring = true).assertExists()
+            rule.onNodeWithText("同意并安装").assertIsNotEnabled()
+            capture("not-ready-${s.key}-${if (d) "dark" else "light"}")
+        }
+        assertEquals(0, confirms)
+    }
+
     @Test fun themePickerOnlyChangesAfterSelection() {
         var style by mutableStateOf(AppStyle.Glass)
         var dark by mutableStateOf(false)
