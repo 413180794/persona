@@ -169,6 +169,9 @@ func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, 
 	// Known from now on: its chat loads empty (startingSession) and its watch waits for the transcript.
 	n.state.put(id, sessionState{Launcher: launcher, Cwd: cwd, StartedAt: now})
 	n.noteModes(id, mode, effort)
+	// The answer is the session as it starts, copied before the start runs: a start that fails at once has finish
+	// rewrite r.session (under the log's lock) before this goroutine would get to it.
+	s := r.session
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), startWait())
 		defer cancel()
@@ -179,7 +182,6 @@ func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, 
 		n.starts.finish(id, err)
 		n.notifySessions()
 	}()
-	s := r.session
 	n.decorate(&s)
 	go n.notifySessions()
 	return &s, nil

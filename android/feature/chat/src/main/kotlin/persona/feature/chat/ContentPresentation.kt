@@ -10,6 +10,8 @@ import persona.core.domain.decodeXmlEntities
 import persona.core.domain.lines.WorkItem
 import persona.core.domain.messageText
 import persona.core.domain.parseContexts
+import persona.core.domain.AttachedFile
+import persona.core.domain.parseAttachedFiles
 import java.time.Instant
 import kotlinx.serialization.json.*
 
@@ -47,6 +49,8 @@ internal data class MessageModel(
     val contexts: List<MessageContext> = emptyList(),
     /** The user's answer from an assistant's card: the hub's trailing `<persona-action>` tag, not shown (「来自卡片」). */
     val fromCard: Boolean = false,
+    /** Files sent with it as `<jarvis-file>` tags (a video, a recording…): cards above the bubble, not tag text. */
+    val attached: List<AttachedFile> = emptyList(),
 ) {
     /** What it says without its contexts: what the long-press menu copies, shares and quotes. */
     val plain: String get() = parts.mapNotNull {
@@ -61,7 +65,7 @@ internal fun messageModel(raw: String, from: String? = null, user: Boolean = fal
     val (contexts, written) = parseContexts(raw)
     // Only the exact tag the hub ends a card's answer with, only on the user's own message.
     val card = if (user) persona.core.domain.views.PersonaActionTag.split(written) else null
-    val text = card?.first ?: written
+    val (attached, text) = parseAttachedFiles(card?.first ?: written)
     val images = mutableListOf<String>()
     val files = mutableListOf<String>()
     val parts = buildList {
@@ -87,7 +91,8 @@ internal fun messageModel(raw: String, from: String? = null, user: Boolean = fal
             listOf(MessagePart.Source(from, parts.joinToString("\n\n") { (it as MessagePart.Text).text })) else parts
     }
     val photos = images.distinct()
-    return MessageModel(parts, photos, files.distinct().filterNot { it in photos }.take(6), contexts, fromCard = card != null)
+    val sent = attached.map { it.path }.toSet()
+    return MessageModel(parts, photos, files.distinct().filterNot { it in photos || it in sent }.take(6), contexts, fromCard = card != null, attached = attached)
 }
 
 internal fun messageParts(text: String, from: String? = null): List<MessagePart> = messageModel(text, from).parts
@@ -122,7 +127,9 @@ internal fun markdownPrewarm(items: List<Item>, limit: Int = 80): Pair<List<Mark
  * composer turns back into (already uploaded) attachments.
  */
 internal fun MessageModel.editText(): String =
-    if (images.isEmpty()) plain else plain + "\n\n<attached_images>\n" + images.joinToString("\n") + "\n</attached_images>"
+    (if (images.isEmpty()) plain else plain + "\n\n<attached_images>\n" + images.joinToString("\n") + "\n</attached_images>") +
+        // Its files go along again: the tags were taken out of the text for the cards.
+        if (attached.isEmpty()) "" else attached.joinToString("\n", prefix = "\n\n") { it.toXml() }
 
 internal data class DiffLine(val text: String, val sign: Char, val old: Int?, val new: Int?)
 internal data class ToolDiff(val lines: List<DiffLine>) {

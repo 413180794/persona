@@ -51,6 +51,81 @@ class HubSessionFilesTest {
         catch (failure: HubFailure) { assertEquals(404, failure.status) }
     }
 
+    @Test fun thumbnailsReturnThePictureAndNullWhenTheMachineCannotDrawIt(): Unit = runBlocking {
+        val requests = mutableListOf<Pair<String, Long>>()
+        var status = 200
+        var type = "image/jpeg"
+        var errorCode = "no_thumbnail"
+        val respond: suspend (String, Long) -> Response = { path, seconds ->
+            requests += path to seconds
+            val response = Response.Builder().request(Request.Builder().url("https://example.com$path").build()).protocol(Protocol.HTTP_1_1)
+                .code(status).message("response").header("Content-Type", type)
+                .body(if (status == 200) byteArrayOf(1, 2, 3).toResponseBody() else """{"error":"x","code":"$errorCode"}""".toResponseBody()).build()
+            // As OkHttpHubConnection.request: any status but 2xx arrives as a HubFailure, not as a response.
+            if (status !in 200..299) response.use { throw HubFailure.from(it) }
+            response
+        }
+        val api = HubSessionFiles({ error("thumbnails wait longer than the shared read timeout") }, slow = respond)
+        assertArrayEquals(byteArrayOf(1, 2, 3), api.thumbnail("m", "/w", "docs/a b.pdf", 2000))
+        val url = ("https://example.com" + requests.last().first).toHttpUrl()
+        assertEquals("/api/v1/machines/m/file/thumb", url.encodedPath)
+        assertEquals("docs/a b.pdf", url.queryParameter("path"))
+        assertEquals("1024", url.queryParameter("size"))
+        assertEquals(HubSessionFiles.THUMB_TIMEOUT_SECONDS, requests.last().second)
+        status = 404
+        assertNull(api.thumbnail("m", "/w", "a.docx", 128))
+        status = 200; type = "text/html"
+        try { api.thumbnail("m", "/w", "a.docx", 128); fail("Expected a protocol failure") }
+        catch (failure: HubFailure) { assertEquals(HubError.Protocol, failure.kind) }
+        status = 409; type = "application/json"; errorCode = "node_outdated"
+        try { api.thumbnail("m", "/w", "a.docx", 128); fail("Expected HTTP failure") }
+        catch (failure: HubFailure) { assertEquals(409, failure.status) }
+        // A timeout is not the machine saying it has no picture: it stays an error.
+        val timedOut = HubSessionFiles({ error("unused") }, slow = { _, _ -> throw HubFailure(HubError.Timeout) })
+        try { timedOut.thumbnail("m", "/w", "a.docx", 128); fail("Expected a timeout") }
+        catch (failure: HubFailure) { assertEquals(HubError.Timeout, failure.kind) }
+    }
+
+    @Test fun convertAsksForAPdfAndWaitsForLibreOffice(): Unit = runBlocking {
+        val requests = mutableListOf<Pair<String, Long>>()
+        val api = HubSessionFiles({ error("conversions wait longer than the shared read timeout") }, slow = { path, seconds ->
+            requests += path to seconds
+            Response.Builder().request(Request.Builder().url("https://example.com$path").build()).protocol(Protocol.HTTP_1_1)
+                .code(200).message("response").body("""{"path":"/cache/a.pdf","size":42,"mime":"application/pdf"}""".toResponseBody()).build()
+        })
+        val got = api.convertToPdf("m", "/w", "a.docx")
+        assertEquals("/cache/a.pdf", got.path)
+        assertEquals(42L, got.size)
+        val url = ("https://example.com" + requests.last().first).toHttpUrl()
+        assertEquals("/api/v1/machines/m/file/convert", url.encodedPath)
+        assertEquals("pdf", url.queryParameter("to"))
+        assertEquals("a.docx", url.queryParameter("path"))
+        assertEquals(HubSessionFiles.CONVERT_TIMEOUT_SECONDS, requests.last().second)
+        assertTrue(HubSessionFiles.CONVERT_TIMEOUT_SECONDS > 120)
+    }
+
+    @Test fun previewAsksForAStreamAndReadsAnOlderHubsBase64(): Unit = runBlocking {
+        val requests = mutableListOf<String>()
+        var body = """{"path":"/w/clip.mp4","name":"clip.mp4","size":9000000,"mime":"video/mp4","stream":true,"revision":"r1"}"""
+        val api = HubSessionFiles({ path ->
+            requests += path
+            Response.Builder().request(Request.Builder().url("https://example.com$path").build()).protocol(Protocol.HTTP_1_1)
+                .code(200).message("response").body(body.toResponseBody()).build()
+        })
+        val streamed = api.filePreview("m", "/w", "clip.mp4")
+        assertTrue(streamed.stream)
+        assertNull(streamed.data)
+        assertEquals("1", ("https://example.com" + requests.last()).toHttpUrl().queryParameter("stream"))
+        // An older hub ignores the flag: the base64 comes as before.
+        body = """{"path":"/w/a.png","name":"a.png","size":3,"mime":"image/png","data":"AQID"}"""
+        val old = api.filePreview("m", "/w", "a.png")
+        assertFalse(old.stream)
+        assertEquals("AQID", old.data)
+        // Plain file() (pictures in Markdown, the chat's photos) still asks for the bytes.
+        api.file("m", "/w", "a.png")
+        assertNull(("https://example.com" + requests.last()).toHttpUrl().queryParameter("stream"))
+    }
+
     @Test fun pullPostsTheFolderAndDecodesTheNewStatus(): Unit = runBlocking {
         val posts = mutableListOf<Pair<String, String>>()
         var status = 200

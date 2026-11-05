@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.semantics.Role
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
@@ -107,6 +108,8 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     var reactionPickerMessage by remember { mutableStateOf<LarkMessage?>(null) }
     var forwardedDetail by remember { mutableStateOf<LarkPart.MergeForward?>(null) }
     var videoPlayerUrl by remember { mutableStateOf<String?>(null) }
+    // A picture tapped in the conversation: the viewer over all of its pictures (iOS LarkImageGallery).
+    var viewer by remember { mutableStateOf<Pair<List<LarkPart.Image>, Int>?>(null) }
     val customEmojis by produceState<JsonObject?>(null, repository) {
         value = runCatching { repository.emojis() }.getOrNull()
     }
@@ -126,7 +129,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     val focused = LocalWindowInfo.current.isWindowFocused
     val occluded = LocalLarkReadOccluded.current || thread != null || more || editingDraft || drafting || handingOff ||
         profilePerson != null || reactionPickerMessage != null || forwardedDetail != null || videoPlayerUrl != null ||
-        chatList.programmaticScroll
+        viewer != null || chatList.programmaticScroll
     val dragged by scroll.interactionSource.collectIsDraggedAsState()
     var interacted by remember(route) { mutableStateOf(false) }
     var viewport by remember { mutableStateOf(Rect.Zero) }
@@ -206,7 +209,9 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
             finally { retrying.remove(clientId) }
         }
     }
-    thread?.let { root -> LarkThreadSheet(root, repository, onDismiss = { thread = null }) }
+    // Pictures in a thread or a forwarded bundle open in the same viewer (alone when they are not the conversation's).
+    val openImage: (LarkPart.Image) -> Unit = remember { { image -> viewer = larkGallery(larkImages(messages), image) } }
+    thread?.let { root -> CompositionLocalProvider(LocalLarkImageOpener provides openImage) { LarkThreadSheet(root, repository, onDismiss = { thread = null }) } }
     profilePerson?.let { person ->
         LarkProfileSheet(person, repository, onDismiss = { profilePerson = null })
     }
@@ -228,10 +233,16 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         )
     }
     forwardedDetail?.let { fwd ->
-        LarkForwardedSheet(part = fwd, onDismiss = { forwardedDetail = null })
+        CompositionLocalProvider(LocalLarkImageOpener provides openImage) { LarkForwardedSheet(part = fwd, onDismiss = { forwardedDetail = null }) }
     }
     videoPlayerUrl?.let { url ->
         LarkVideoPlayerDialog(url = url, onDismiss = { videoPlayerUrl = null })
+    }
+    viewer?.let { (images, index) ->
+        val context = LocalContext.current
+        val description = stringResource(R.string.inbox_image)
+        val pictures = remember(images, description) { images.mapIndexed { i, image -> larkViewerImage(context, image, i, description) } }
+        ImageViewer(pictures, index, onDismiss = { viewer = null })
     }
     // AI 草拟 writes the reply to the item (sent with POST …/reply, confirmed first); the composer below stays the
     // user's own words for the chat, sent as typed.
@@ -295,7 +306,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         val density = LocalDensity.current
         val topInset = with(density) { padding.calculateTopPadding().toPx() }
         val bottomInset = with(density) { padding.calculateBottomPadding().toPx() }
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize()) { CompositionLocalProvider(LocalLarkImageOpener provides openImage) {
             ChatList(state = chatList, modifier = Modifier.fillMaxSize().onGloballyPositioned {
                 val box = it.boundsInWindow()
                 // Floating bars occlude messages even when the list extends underneath them.
@@ -346,7 +357,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
                         }
                     })
                 }
-            }
+            } }
             val newestVisible by remember(chatList) { derivedStateOf {
                 messages.lastOrNull { message ->
                     bounds[message.listKey()]?.let { box -> box.width > 0 && box.height > 0 && viewport.overlaps(box) } == true
@@ -521,8 +532,10 @@ internal fun LarkPartContent(
             val model = if (authenticated == null) part.model else bytes?.let {
                 ImageRequest.Builder(context).data(it).memoryCacheKey(authenticated.cacheKey).build()
             }
+            val open = LocalLarkImageOpener.current
             AsyncImage(model = model, contentDescription = part.description.ifBlank { stringResource(R.string.inbox_image) },
-                modifier = Modifier.fillMaxWidth().aspectRatio((part.width.toFloat() / part.height.coerceAtLeast(1)).coerceIn(.2f, 5f)),
+                modifier = Modifier.fillMaxWidth().aspectRatio((part.width.toFloat() / part.height.coerceAtLeast(1)).coerceIn(.2f, 5f))
+                    .then(if (open != null) Modifier.clickable(role = Role.Image, onClickLabel = stringResource(R.string.inbox_lark_view_image)) { open(part) } else Modifier),
                 onError = { failed = true }, onSuccess = { failed = false })
             if (failed) Text(stringResource(R.string.inbox_lark_image_failed), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink3)
         }

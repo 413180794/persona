@@ -72,12 +72,24 @@ class GroupRoutingTest {
             override suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File): Long {
                 calls += "download $machineId $path"; return 3
             }
+            override suspend fun thumbnail(machineId: String, cwd: String, path: String, size: Int): ByteArray? {
+                calls += "thumbnail $machineId $path $size"; return byteArrayOf(1)
+            }
+            override suspend fun convertToPdf(machineId: String, cwd: String, path: String): SessionConvertedFile {
+                calls += "convert $machineId $path"; return SessionConvertedFile("/cache/a.pdf")
+            }
+            override suspend fun filePreview(machineId: String, cwd: String, path: String): SessionFileContent {
+                calls += "preview $machineId $path"; return SessionFileContent(path, path, stream = true)
+            }
         }
         // The methods with a default implementation are the ones a hand-written forwarder can silently drop.
         val wrapped = files.inGroup(other)
         assertEquals(3L, wrapped.download("macbook~g0a1b2c3d", "/w", "a.mp3", java.io.File("unused")))
         wrapped.stat("macbook~g0a1b2c3d", "/w", listOf("a"))
-        assertEquals(listOf("download macbook a.mp3", "stat macbook"), calls)
+        wrapped.thumbnail("macbook~g0a1b2c3d", "/w", "a.pdf", 256)
+        assertEquals("/cache/a.pdf", wrapped.convertToPdf("macbook~g0a1b2c3d", "/w", "a.docx").path)
+        assertTrue(wrapped.filePreview("macbook~g0a1b2c3d", "/w", "a.mp4").stream)
+        assertEquals(listOf("download macbook a.mp3", "stat macbook", "thumbnail macbook a.pdf 256", "convert macbook a.docx", "preview macbook a.mp4"), calls)
     }
 
     @Test fun aGroupsDraftsAreStoredWithItsPlainKeys() = runBlocking<Unit> {

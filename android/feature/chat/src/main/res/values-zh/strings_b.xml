@@ -393,4 +393,19 @@
     <string name="chat_web_pick_edit">AI 修改</string>
     <string name="chat_web_pick_context">作为上下文</string>
     <string name="chat_web_pick_hand">交给 Persona</string>
+    <string name="chat_file_video">视频</string>
+    <string name="chat_file_audio">录音</string>
+    <string name="chat_file_file">文件</string>
+    <string name="chat_file_open">打开</string>
+    <string name="chat_file_copy_path">拷贝路径</string>
+    <string name="chat_file_path_copied">已拷贝路径</string>
+    <string name="chat_doc_word">Word 文档</string>
+    <string name="chat_doc_excel">Excel 表格</string>
+    <string name="chat_doc_powerpoint">PowerPoint 演示文稿</string>
+    <string name="chat_doc_pages">Pages 文稿</string>
+    <string name="chat_doc_numbers">Numbers 表格</string>
+    <string name="chat_doc_keynote">Keynote 演示文稿</string>
+    <string name="chat_doc_rtf">RTF 文档</string>
+    <string name="chat_doc_pdf">PDF 文档</string>
+    <string name="chat_doc_other">文档</string>
 </resources>

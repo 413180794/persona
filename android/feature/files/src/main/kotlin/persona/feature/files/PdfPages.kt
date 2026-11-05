@@ -31,13 +31,19 @@ private sealed interface PdfLoad {
 
 /**
  * A PDF from the machine, page by page down the screen (PdfRenderer reads from a file: the bytes go to this module's
- * cache while it is open). Pages render at the width they are shown, in the background, as they scroll in.
+ * cache while it is open). Pages render at the width they are shown, in the background, as they scroll in. [whole]:
+ * the file fetched whole ([rememberWholeFile]: a PDF over 2 MB, an Office document's PDF), else the preview's bytes.
  */
 @Composable
-internal fun PdfPages(file: SessionFileContent, contentPadding: PaddingValues, header: LazyListScope.() -> Unit) {
+internal fun PdfPages(file: SessionFileContent, contentPadding: PaddingValues, header: LazyListScope.() -> Unit, whole: WholeLoad? = null,
+    fetching: String? = null, failedTitle: String? = null) {
     val context = LocalContext.current
-    val load by produceState<PdfLoad>(PdfLoad.Opening, file.path, file.data) {
-        val document = withContext(Dispatchers.IO) { PdfDocument.open(File(context.cacheDir, "files-pdf"), file.data.orEmpty()) }
+    val ready = (whole as? WholeLoad.Ready)?.file
+    val load by produceState<PdfLoad>(PdfLoad.Opening, file.path, file.data, whole) {
+        if (whole != null && ready == null) return@produceState
+        val document = withContext(Dispatchers.IO) {
+            if (ready != null) PdfDocument.open(ready) else PdfDocument.open(File(context.cacheDir, "files-pdf"), file.data.orEmpty())
+        }
         value = document?.let(PdfLoad::Ready) ?: PdfLoad.Failed
         awaitDispose { document?.close() }
     }
@@ -49,9 +55,12 @@ internal fun PdfPages(file: SessionFileContent, contentPadding: PaddingValues, h
     ) {
         header()
         when (val state = load) {
-            PdfLoad.Opening -> item { JLoading() }
+            PdfLoad.Opening -> item {
+                if (whole is WholeLoad.Failed) JEmptyState(failedTitle ?: stringResource(R.string.files_pdf_failed), whole.reason)
+                else JLoading(text = fetching.takeIf { whole is WholeLoad.Fetching })
+            }
             PdfLoad.Failed -> item {
-                JEmptyState(stringResource(R.string.files_pdf_failed), if (file.truncated) stringResource(R.string.files_pdf_truncated) else stringResource(R.string.files_pdf_damaged))
+                JEmptyState(failedTitle ?: stringResource(R.string.files_pdf_failed), if (file.truncated && ready == null) stringResource(R.string.files_pdf_truncated) else stringResource(R.string.files_pdf_damaged))
             }
             is PdfLoad.Ready -> items(state.document.pages.size, key = { "page:$it" }, contentType = { "page" }) { index ->
                 PdfPage(state.document, index, Modifier.padding(horizontal = side))
@@ -79,6 +88,8 @@ internal class PdfDocument private constructor(
     private val file: File,
     private val descriptor: ParcelFileDescriptor,
     private val renderer: PdfRenderer,
+    /** A temporary copy, deleted on close; a cached whole file stays. */
+    private val owned: Boolean = true,
 ) : Closeable {
     val pages: List<IntSize> = (0 until renderer.pageCount).map { index -> renderer.openPage(index).use { IntSize(it.width, it.height) } }
     private var closed = false
@@ -104,12 +115,19 @@ internal class PdfDocument private constructor(
         closed = true
         runCatching { renderer.close() }
         runCatching { descriptor.close() }
-        file.delete()
+        if (owned) file.delete()
     }
 
     companion object {
         /** Pixels across a rendered page at most (a tablet's width): enough to read, bounded in memory. */
         const val MAX_WIDTH = 1800
+
+        /** A PDF already on the phone (kept after close). */
+        fun open(file: File): PdfDocument? = runCatching {
+            val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            try { PdfDocument(file, descriptor, PdfRenderer(descriptor), owned = false) }
+            catch (failure: Exception) { descriptor.close(); throw failure }
+        }.getOrNull()
 
         fun open(folder: File, data: String): PdfDocument? = runCatching {
             val bytes = Base64.getMimeDecoder().decode(data)

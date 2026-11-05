@@ -7,6 +7,12 @@ import kotlinx.serialization.Serializable
 interface SessionFiles {
     suspend fun directory(machineId: String, cwd: String, path: String): SessionDirectory
     suspend fun file(machineId: String, cwd: String, path: String): SessionFileContent
+    /**
+     * [file] for the viewer, asked with `stream=1` (hub feature `file_stream`, web `fileURL`, iOS `fetchBytes`): a
+     * picture, PDF, video, audio or Office file comes described ([SessionFileContent.stream], no `data`) and its bytes
+     * from [download]. An older hub ignores the flag and sends the base64 as before; transports without it read [file].
+     */
+    suspend fun filePreview(machineId: String, cwd: String, path: String): SessionFileContent = file(machineId, cwd, path)
     suspend fun status(machineId: String, cwd: String): SessionGitStatus
     suspend fun diff(machineId: String, cwd: String, path: String, staged: Boolean): SessionGitDiff
     suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int = 50): SessionGitLog
@@ -24,11 +30,26 @@ interface SessionFiles {
     suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File): Long =
         throw UnsupportedOperationException("download")
     /**
+     * A picture of the file at most [size] px on its long side (`GET …/file/thumb`, the first page of a document, a
+     * frame of a video); null when the machine cannot draw it (404 `no_thumbnail`). Older transports throw.
+     */
+    suspend fun thumbnail(machineId: String, cwd: String, path: String, size: Int): ByteArray? =
+        throw UnsupportedOperationException("thumbnail")
+    /**
+     * The file as a PDF the machine's LibreOffice writes (`GET …/file/convert?to=pdf`): where it is on the machine, read
+     * then like any file. A machine without LibreOffice answers 404 `no_converter`.
+     */
+    suspend fun convertToPdf(machineId: String, cwd: String, path: String): SessionConvertedFile =
+        throw UnsupportedOperationException("convert")
+    /**
      * `POST …/git/pull`: a fast-forward pull of the working tree's branch from its upstream (docs/protocol.md); the
      * hub refuses a diverged branch, local changes, no upstream or a failed sign-in, with its reason.
      */
     suspend fun pull(machineId: String, cwd: String): SessionGitPull = throw UnsupportedOperationException("pull")
 }
+
+/** `GET /api/v1/machines/{id}/file/convert`: the converted file, an absolute path on the machine. */
+@Serializable data class SessionConvertedFile(val path: String, val size: Long = 0, val mime: String = "")
 
 /** What a pull did: the repository's status after it, and whether it brought anything. */
 @Serializable data class SessionGitPull(val status: SessionGitStatus, val updated: Boolean = false)
@@ -62,6 +83,8 @@ interface SessionFiles {
     val truncated: Boolean = false,
     @SerialName("is_dir") val isDir: Boolean = false,
     val entries: List<String> = emptyList(),
+    /** Asked with stream=1 and binary: no [data], the bytes come from file/download. */
+    val stream: Boolean = false,
 )
 
 @Serializable data class SessionGitFile(

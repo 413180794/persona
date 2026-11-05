@@ -3,7 +3,9 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/transcript"
 	"strings"
 	"testing"
@@ -27,5 +29,30 @@ func TestItemsOfStartingSession(t *testing.T) {
 	_, err = n.handle(context.Background(), "session.items", json.RawMessage(`{"session_id":"99999999-2222-3333-4444-555555555555"}`))
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("an unknown session should still fail, got %v", err)
+	}
+}
+
+// A start that fails at once (here: no terminal host) can finish before startAsync answers. The answer is the session
+// as it was when the start began, never one the start goroutine is updating (go test -race caught the read of the
+// record racing finish).
+func TestStartAsyncAnswersBeforeAFastFailure(t *testing.T) {
+	n, _ := testNode(t)
+	n.modes = map[string]sessionModes{}
+	for i := 0; i < 50; i++ {
+		id := fmt.Sprintf("11111111-2222-3333-4444-%012d", i)
+		s, err := n.startAsync(id, "", "", "", "", "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.SessionID != id || !s.Starting || s.Status != proto.StatusIdle || s.StartError != "" {
+			t.Fatalf("answered %+v, want the starting session", s)
+		}
+		// Wait on the record's channel, not through the log: taking the log's lock here would order this read before
+		// finish for the race detector and hide the race this test is for. Only this goroutine writes the map.
+		r := n.starts.m[id]
+		<-r.done
+		if r.err == nil {
+			t.Fatalf("start %s should fail without a terminal host", id)
+		}
 	}
 }

@@ -393,4 +393,19 @@
     <string name="chat_web_pick_edit">AIで修正</string>
     <string name="chat_web_pick_context">コンテキストにする</string>
     <string name="chat_web_pick_hand">Personaに任せる</string>
+    <string name="chat_file_video">動画</string>
+    <string name="chat_file_audio">録音</string>
+    <string name="chat_file_file">ファイル</string>
+    <string name="chat_file_open">開く</string>
+    <string name="chat_file_copy_path">パスをコピー</string>
+    <string name="chat_file_path_copied">パスをコピーしました</string>
+    <string name="chat_doc_word">Word 文書</string>
+    <string name="chat_doc_excel">Excel スプレッドシート</string>
+    <string name="chat_doc_powerpoint">PowerPoint プレゼンテーション</string>
+    <string name="chat_doc_pages">Pages 書類</string>
+    <string name="chat_doc_numbers">Numbers スプレッドシート</string>
+    <string name="chat_doc_keynote">Keynote プレゼンテーション</string>
+    <string name="chat_doc_rtf">RTF 書類</string>
+    <string name="chat_doc_pdf">PDF 書類</string>
+    <string name="chat_doc_other">書類</string>
 </resources>

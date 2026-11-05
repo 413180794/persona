@@ -50,16 +50,22 @@ internal sealed interface SheetLoad {
     class Ready(val sheets: List<TableSheet>) : SheetLoad
 }
 
-/** Reads a CSV / TSV (the file's text) or an xlsx (its bytes) into sheets; off the main thread. */
-internal fun readSheets(file: SessionFileContent): SheetLoad = try {
+/**
+ * Reads a CSV / TSV (the file's text) or an xlsx (its bytes: the preview's, or [whole], the file fetched whole when
+ * the hub streams it) into sheets; off the main thread.
+ */
+internal fun readSheets(file: SessionFileContent, whole: java.io.File? = null): SheetLoad = try {
     val text = file.text
     when {
+        whole != null -> SheetLoad.Ready(Xlsx.read(whole.readBytes()))
         TableFiles.isDelimited(file.name) && text != null -> SheetLoad.Ready(listOf(Delimited.sheet(file.name, text)))
         TableFiles.isDelimited(file.name) && file.data != null ->
             SheetLoad.Ready(listOf(Delimited.sheet(file.name, String(Base64.getMimeDecoder().decode(file.data), Charsets.UTF_8))))
         file.data != null -> SheetLoad.Ready(Xlsx.read(Base64.getMimeDecoder().decode(file.data)))
         else -> SheetLoad.Failed(R.string.files_sheet_no_content)
     }
+} catch (e: java.io.IOException) {
+    SheetLoad.Failed(R.string.files_sheet_incomplete)
 } catch (e: SheetFailure) {
     SheetLoad.Failed(e.reason)
 } catch (e: IllegalArgumentException) {
@@ -72,9 +78,18 @@ internal fun readSheets(file: SessionFileContent): SheetLoad = try {
  * Tap a cell to see all of it in the bar below (with a copy button); long-press to copy the cell or its row.
  */
 @Composable
-internal fun SheetFile(file: SessionFileContent, contentPadding: PaddingValues, header: LazyListScope.() -> Unit) {
-    val load by produceState<SheetLoad>(SheetLoad.Reading, file.path, file.data, file.text) {
-        value = withContext(Dispatchers.Default) { readSheets(file) }
+internal fun SheetFile(file: SessionFileContent, contentPadding: PaddingValues, header: LazyListScope.() -> Unit,
+    download: suspend (path: String, into: java.io.File) -> Long = { _, _ -> throw UnsupportedOperationException("download") }) {
+    // A streamed workbook (stream=1) has no bytes in the preview: they come whole from file/download first.
+    val whole = if (file.stream) rememberWholeFile(file, "files-sheet", { into -> download(file.path, into) }, keep = 1).value else null
+    val ready = (whole as? WholeLoad.Ready)?.file
+    val load by produceState<SheetLoad>(SheetLoad.Reading, file.path, file.data, file.text, whole) {
+        if (whole != null && ready == null) return@produceState
+        value = withContext(Dispatchers.Default) { readSheets(file, ready) }
+    }
+    if (whole is WholeLoad.Failed) {
+        LazyColumn(contentPadding = contentPadding) { header(); item { JEmptyState(stringResource(R.string.files_sheet_failed), whole.reason) } }
+        return
     }
     when (val state = load) {
         SheetLoad.Reading -> LazyColumn(contentPadding = contentPadding) { header(); item { JLoading() } }

@@ -35,6 +35,8 @@ internal class ChatRowActions(
     val onRetry: () -> Unit,
     /** What a picture of the conversation is called to accessibility services, in the page's language. */
     val imageDescription: String = "",
+    /** A file's thumbnail from the session's machine (`file/thumb`): its cache key and loader; null: icons only. */
+    val thumbnails: ((path: String) -> Pair<String, suspend (Int) -> ByteArray?>)? = null,
 ) {
     /** Opens the viewer on the conversation's pictures at [item]; a picture not among them opens alone. */
     fun openPicture(item: Item) {

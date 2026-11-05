@@ -231,6 +231,21 @@ class FilesController(
     suspend fun download(path: String, into: java.io.File): Long = api.download(machineId, cwd, path, into)
 
     /**
+     * A file's thumbnail (`file/thumb`): the cache key (machine, path and the listing's size and time, so a changed file
+     * is asked again) and the loader at a pixel size.
+     */
+    fun thumbnail(path: String, size: Long, modified: String?): Pair<String, suspend (Int) -> ByteArray?> {
+        val key = listOf(machineId, path, size.toString(), modified.orEmpty()).joinToString("\n")
+        return key to { pixels -> api.thumbnail(machineId, cwd, path, pixels) }
+    }
+
+    /** The PDF the machine's LibreOffice makes of an Office document (`file/convert`), fetched whole into [into]. */
+    suspend fun convertToPdf(path: String, into: java.io.File): Long {
+        val converted = api.convertToPdf(machineId, cwd, path)
+        return api.download(machineId, cwd, converted.path, into)
+    }
+
+    /**
      * Back: closes the page on top (to the conversation when it was opened from there), then goes up to the
      * breadcrumb's top. False when there is nothing left to go back to here: the caller returns to the conversation.
      */
@@ -257,7 +272,7 @@ class FilesController(
             try {
                 when (top) {
                     is FileSelection.File -> {
-                        val file = api.file(machineId, cwd, top.path)
+                        val file = api.filePreview(machineId, cwd, top.path)
                         if (generation != previewGeneration) return@launch
                         // A folder opens in the browser: opened from the conversation, as the breadcrumb's top (back
                         // returns to the conversation from there); from a page here, where the browser can reach it.

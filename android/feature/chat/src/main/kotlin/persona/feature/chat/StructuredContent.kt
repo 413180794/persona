@@ -43,10 +43,16 @@ internal fun MessageContent(item: Item, user: Boolean, update: ChatTextUpdate? =
     val uri = LocalUriHandler.current
     Column(Modifier.fillMaxWidth().messageMenu(MessageTarget(item.id, model.plain, user, model.editText()))) {
         MessageContextGroup(model.contexts, "${item.id}/contexts", uri::openUri, alignEnd = user)
+        AttachedFileCards(model.attached, alignEnd = user)
         MessageParts(model.parts, user, item.id)
         if (cut) FullTextButton(item) { whole = it } else ReaderEntry(text)
         if (update?.streaming == true) StreamingCursor()
-        FileChips(model.files, alignEnd = user)
+        // An answer's documents as cards with their first page (iOS #1543), the rest as chips.
+        if (user) FileChips(model.files, alignEnd = true)
+        else {
+            FileChips(model.files.filterNot(FileThumbnails::isDocument), alignEnd = false)
+            DocumentCards(model.files.filter(FileThumbnails::isDocument))
+        }
         if (!user) PortBadges(text)
     }
 }
@@ -106,6 +112,7 @@ internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUp
     val contexts = remember(models) { models.flatMap { it.contexts } }
     val photos = remember(models) { models.flatMap { it.images }.distinct() }
     val files = remember(models) { models.flatMap { it.files }.distinct().take(6) }
+    val attached = remember(models) { models.flatMap { it.attached }.distinctBy { it.path } }
     val target = remember(models, items) {
         MessageTarget(items.firstOrNull()?.id.orEmpty(), models.joinToString("\n\n") { it.plain }.trim(), true,
             models.joinToString("\n\n") { it.editText() }.trim())
@@ -133,10 +140,11 @@ internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUp
     // Typed by the user: the pale blue; another session's or conversation's keeps the style's tint (#2643).
     val own = remember(items) { items.all(::isOwnMessage) }
     // Only blocks, no words, photos or cursor: the folded row alone, no empty bubble.
-    val bubble = contexts.isEmpty() || parts.isNotEmpty() || photos.isNotEmpty() || images != null || streaming
+    val bubble = (contexts.isEmpty() && attached.isEmpty()) || parts.isNotEmpty() || photos.isNotEmpty() || images != null || streaming
     val fromCard = models.any { it.fromCard }
     Column(Modifier.fillMaxWidth()) {
         MessageContextGroup(contexts, "${items.firstOrNull()?.id.orEmpty()}/contexts", uri::openUri)
+        AttachedFileCards(attached)
         if (fromCard) Text(stringResource(R.string.chat_from_card), Modifier.align(Alignment.End).padding(bottom = Tokens.Space.xs),
             style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1)
         if (bubble) UserBubbleFrame(Modifier.messageMenu(target.takeIf { menu }), footer = footer, own = own) {

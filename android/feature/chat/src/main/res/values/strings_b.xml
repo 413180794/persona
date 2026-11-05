@@ -406,4 +406,19 @@
     <string name="chat_web_pick_edit">AI edit</string>
     <string name="chat_web_pick_context">Use as context</string>
     <string name="chat_web_pick_hand">Hand to Persona</string>
+    <string name="chat_file_video">Video</string>
+    <string name="chat_file_audio">Recording</string>
+    <string name="chat_file_file">File</string>
+    <string name="chat_file_open">Open</string>
+    <string name="chat_file_copy_path">Copy path</string>
+    <string name="chat_file_path_copied">Path copied</string>
+    <string name="chat_doc_word">Word document</string>
+    <string name="chat_doc_excel">Excel spreadsheet</string>
+    <string name="chat_doc_powerpoint">PowerPoint presentation</string>
+    <string name="chat_doc_pages">Pages document</string>
+    <string name="chat_doc_numbers">Numbers spreadsheet</string>
+    <string name="chat_doc_keynote">Keynote presentation</string>
+    <string name="chat_doc_rtf">RTF document</string>
+    <string name="chat_doc_pdf">PDF document</string>
+    <string name="chat_doc_other">Document</string>
 </resources>

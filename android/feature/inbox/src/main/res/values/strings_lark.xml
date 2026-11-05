@@ -125,6 +125,7 @@
     <string name="inbox_lark_part_separator">", "</string>
     <string name="inbox_lark_emoji_ok">OK</string>
     <string name="inbox_lark_emoji_jiayi">+1</string>
+    <string name="inbox_lark_view_image">View full screen</string>
     <string name="inbox_lark_doc_outline">Contents</string>
     <string name="inbox_lark_doc_summary">AI summary</string>
     <string name="inbox_lark_doc_updated">Updated %1$s</string>

@@ -318,6 +318,7 @@ internal fun SessionFiles.inGroup(names: GroupNames): SessionFiles {
     return object : SessionFiles {
         override suspend fun directory(machineId: String, cwd: String, path: String) = source.directory(names.rawMachine(machineId), cwd, path)
         override suspend fun file(machineId: String, cwd: String, path: String) = source.file(names.rawMachine(machineId), cwd, path)
+        override suspend fun filePreview(machineId: String, cwd: String, path: String) = source.filePreview(names.rawMachine(machineId), cwd, path)
         override suspend fun status(machineId: String, cwd: String) = source.status(names.rawMachine(machineId), cwd)
         override suspend fun diff(machineId: String, cwd: String, path: String, staged: Boolean) =
             source.diff(names.rawMachine(machineId), cwd, path, staged)
@@ -327,6 +328,9 @@ internal fun SessionFiles.inGroup(names: GroupNames): SessionFiles {
         override suspend fun stat(machineId: String, cwd: String, paths: List<String>) = source.stat(names.rawMachine(machineId), cwd, paths)
         override suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File) =
             source.download(names.rawMachine(machineId), cwd, path, into)
+        override suspend fun thumbnail(machineId: String, cwd: String, path: String, size: Int) =
+            source.thumbnail(names.rawMachine(machineId), cwd, path, size)
+        override suspend fun convertToPdf(machineId: String, cwd: String, path: String) = source.convertToPdf(names.rawMachine(machineId), cwd, path)
     }
 }
 

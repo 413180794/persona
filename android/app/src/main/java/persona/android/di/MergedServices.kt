@@ -148,6 +148,7 @@ internal class MergedShellServices(private val stacks: GroupStacks) {
         private fun of(machineId: String) = stacks.of(machineId)?.files ?: throw HubFailure(HubError.NoNetwork)
         override suspend fun directory(machineId: String, cwd: String, path: String) = of(machineId).directory(machineId, cwd, path)
         override suspend fun file(machineId: String, cwd: String, path: String) = of(machineId).file(machineId, cwd, path)
+        override suspend fun filePreview(machineId: String, cwd: String, path: String) = of(machineId).filePreview(machineId, cwd, path)
         override suspend fun status(machineId: String, cwd: String) = of(machineId).status(machineId, cwd)
         override suspend fun diff(machineId: String, cwd: String, path: String, staged: Boolean) = of(machineId).diff(machineId, cwd, path, staged)
         override suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int) = of(machineId).log(machineId, cwd, skip, limit)
@@ -156,6 +157,8 @@ internal class MergedShellServices(private val stacks: GroupStacks) {
         override suspend fun stat(machineId: String, cwd: String, paths: List<String>) = of(machineId).stat(machineId, cwd, paths)
         override suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File) =
             of(machineId).download(machineId, cwd, path, into)
+        override suspend fun thumbnail(machineId: String, cwd: String, path: String, size: Int) = of(machineId).thumbnail(machineId, cwd, path, size)
+        override suspend fun convertToPdf(machineId: String, cwd: String, path: String) = of(machineId).convertToPdf(machineId, cwd, path)
     }
 
     val actions: ChatActions = object : ChatActions {

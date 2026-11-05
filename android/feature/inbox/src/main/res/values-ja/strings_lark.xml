@@ -122,6 +122,7 @@
     <string name="inbox_lark_part_separator">、</string>
     <string name="inbox_lark_emoji_ok">OK</string>
     <string name="inbox_lark_emoji_jiayi">+1</string>
+    <string name="inbox_lark_view_image">全画面で表示</string>
     <string name="inbox_lark_doc_outline">目次</string>
     <string name="inbox_lark_doc_summary">AI 要約</string>
     <string name="inbox_lark_doc_updated">%1$s に更新</string>

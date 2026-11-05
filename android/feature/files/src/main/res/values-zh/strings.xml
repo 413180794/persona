@@ -173,4 +173,13 @@
     <plurals name="files_sheet_columns">
         <item quantity="other">%1$s 列</item>
     </plurals>
+    <string name="files_image_loading">正在读取整张图片…</string>
+    <string name="files_pdf_loading">正在读取整个 PDF…</string>
+    <string name="files_video_loading">正在读取视频…</string>
+    <string name="files_video_failed">放不了这个视频</string>
+    <string name="files_video_codec">手机放不了这种编码。可以分享到别的 App 里看。</string>
+    <string name="files_office_converting">正在机器上转成 PDF…</string>
+    <string name="files_office_no_converter">这台机器没有 LibreOffice，转不成 PDF。装上后再试，或者分享到别的 App 里看。</string>
+    <string name="files_office_node_outdated">这台机器的 node 太旧，不能转换文档；更新后再试。</string>
+    <string name="files_office_failed">无法预览这个文档</string>
 </resources>

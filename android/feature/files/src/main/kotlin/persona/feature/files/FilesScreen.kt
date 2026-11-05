@@ -167,7 +167,9 @@ private fun LazyListScope.filesBrowser(state: FilesState, controller: FilesContr
                 val feedback = LocalAppFeedback.current
                 val path = joinRemotePath(listing.path.ifEmpty { state.here }, entry.name)
                 JGroupItem(GroupPosition.of(index, entries.size)) {
-                    FileRow(entry, gitChange(state.git, path, entry.dir), now,
+                    // Pictures, documents and videos show the machine's thumbnail in place of the icon (iOS FilesPane, #1370).
+                    val thumbnail = if (!entry.dir && FileThumbnails.wanted(entry.name, entry.size)) controller.thumbnail(path, entry.size, entry.mtime) else null
+                    FileRow(entry, gitChange(state.git, path, entry.dir), now, thumbnail = thumbnail,
                         open = { if (entry.dir) controller.directory(path) else controller.push(FileSelection.File(path)) },
                         copy = { copyText(context, path, feedback, resources.getString(R.string.files_path_copied)) }, insert = { insert(path) })
                 }
@@ -179,7 +181,8 @@ private fun LazyListScope.filesBrowser(state: FilesState, controller: FilesContr
 
 /** One entry: its kind, the name (a hidden one quieter), size and when it changed, the Git change, ⋯. */
 @Composable
-private fun FileRow(entry: SessionFileEntry, change: SessionGitFile?, now: Instant, open: () -> Unit, copy: () -> Unit, insert: () -> Unit) {
+private fun FileRow(entry: SessionFileEntry, change: SessionGitFile?, now: Instant, open: () -> Unit, copy: () -> Unit, insert: () -> Unit,
+    thumbnail: Pair<String, suspend (Int) -> ByteArray?>? = null) {
     var menu by remember { mutableStateOf(false) }
     val palette = PersonaTheme.palette
     val resources = LocalResources.current
@@ -193,7 +196,8 @@ private fun FileRow(entry: SessionFileEntry, change: SessionGitFile?, now: Insta
             JIconButton(PhIcons.DotsThree, stringResource(R.string.files_entry_actions, entry.name), { menu = true })
         }
     }) {
-        JIcon(if (entry.dir) PhIcons.FolderSimple else fileIcon(entry.name), null, tint = palette.ink2, decorative = true)
+        if (thumbnail != null) FileThumbnailIcon(thumbnail.first, fileIcon(entry.name), thumbnail.second)
+        else JIcon(if (entry.dir) PhIcons.FolderSimple else fileIcon(entry.name), null, tint = palette.ink2, decorative = true)
         Spacer(Modifier.width(Tokens.Space.l))
         Column(Modifier.weight(1f)) {
             Text(entry.name, style = PersonaTheme.type.body, color = if (entry.name.startsWith('.')) palette.ink2 else palette.ink,

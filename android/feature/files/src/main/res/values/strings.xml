@@ -185,4 +185,13 @@
         <item quantity="one">%1$s column</item>
         <item quantity="other">%1$s columns</item>
     </plurals>
+    <string name="files_image_loading">Loading the whole image…</string>
+    <string name="files_pdf_loading">Loading the whole PDF…</string>
+    <string name="files_video_loading">Loading video…</string>
+    <string name="files_video_failed">Can\'t play this video</string>
+    <string name="files_video_codec">The phone can\'t play this encoding. You can share it to another app to watch.</string>
+    <string name="files_office_converting">Converting to PDF on the machine…</string>
+    <string name="files_office_no_converter">This machine has no LibreOffice to convert the document. Install it, or share the file to another app.</string>
+    <string name="files_office_node_outdated">This machine\'s node is too old to convert documents. Update it and try again.</string>
+    <string name="files_office_failed">Can\'t preview this document</string>
 </resources>
