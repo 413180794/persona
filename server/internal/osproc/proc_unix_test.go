@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // Alive counts another user's process (init), AliveMine does not: a pid this user wrote down that init now has is a
@@ -77,7 +79,8 @@ func TestSessionGroupAttrHasItsOwnSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	pid := cmd.Process.Pid
-	if sid, err := syscall.Getsid(pid); err != nil || sid != pid {
+	// golang.org/x/sys/unix: Linux's syscall package has no Getsid.
+	if sid, err := unix.Getsid(pid); err != nil || sid != pid {
 		t.Fatalf("session %d (%v), want the child's own %d", sid, err, pid)
 	}
 	if pgid, err := syscall.Getpgid(pid); err != nil || pgid != pid {
