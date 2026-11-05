@@ -17,6 +17,8 @@ final class AppModel {
     /// The keychain could not be read at launch (before the first unlock after boot): `registry` is empty because it is
     /// unknown, not because nothing is paired. Nothing is written until it reads (`retryRegistry`).
     @ObservationIgnored private(set) var registryUnreadable = false
+    /// The credentials upgrade in flight (upgradeCredentials).
+    @ObservationIgnored var credentialsUpgrade: Task<Void, Never>?
     /// One per group, in the registry's order; the demo's alone in 体验模式.
     private(set) var links: [HubLink] = []
     /// The group hub-level pages show (`selectHub`); the first group when it is not one of them.
@@ -233,10 +235,14 @@ final class AppModel {
         }
         // Last known machines, agents and pending interactions: the lists are there offline and on a cold start.
         if isPaired { restoreSnapshot(); restoreOutbox() }
-        WatchSync.shared.configProvider = { [weak self] in self.flatMap { $0.watchConfigs()[""] ?? $0.watchConfigs().values.first } }
+        WatchSync.shared.configProvider = { [weak self] in self.flatMap { $0.watchConfigs().configs[""] ?? $0.watchConfigs().configs.values.first } }
         WatchSync.shared.configsProvider = { [weak self] in
-            guard let self, !self.registry.hubs.isEmpty else { return nil }
-            return WatchConfigs(configs: self.watchConfigs(), names: Dictionary(uniqueKeysWithValues: self.registry.groups.map { ($0, self.groupName($0)) }))
+            guard let self, !self.isDemo, !self.registry.hubs.isEmpty else { return nil }
+            let all = self.watchConfigs()
+            // The watch asked and a group has no credential for it (the hub was not reachable then): try again now,
+            // the result goes to the watch when it is there.
+            if all.missing?.isEmpty == false { Task { await self.upgradeCredentials() } }
+            return all
         }
 
         WatchSync.shared.onActivated = { [weak self] in

@@ -25,6 +25,9 @@ final class WatchModel {
     var configs: [String: ServerConfig] = [:]
     /// What the groups are called (labels, when there are several).
     var names: [String: String] = [:]
+    /// The phone's groups it could not get the watch a credential for yet (#1185); the watch says so and offers to
+    /// sync again instead of using the phone's own.
+    var missing: [String] = []
     /// The default (or first) group's: the watch is paired while there is one.
     var config: ServerConfig? { configs[""] ?? groups.first.flatMap { configs[$0] } }
     /// The groups, the default one first.
@@ -44,16 +47,23 @@ final class WatchModel {
 
     init() {
         if let data = UserDefaults.standard.data(forKey: "configs"), let all = try? JSONDecoder().decode(WatchConfigs.self, from: data) {
-            (configs, names) = (all.configs, all.names)
+            (configs, names, missing) = (all.configs, all.names, all.missing ?? [])
         } else if let data = UserDefaults.standard.data(forKey: "config"), let c = try? JSONDecoder().decode(ServerConfig.self, from: data) {
             configs = ["": c]
         }
         #if DEBUG
         if let s = UserDefaults.standard.string(forKey: "pairURL"), let c = ServerConfig(pairURL: s) { configs = ["": c] }
+        // `-showWatchMissing 公司,家里`: those groups have no credential for the watch (#1185); `""`: the default group,
+        // none at all without -pairURL.
+        if let s = UserDefaults.standard.string(forKey: "showWatchMissing") {
+            missing = s.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+            missing.forEach { names[$0] = $0 }
+        }
         #endif
         WatchSync.shared.onConfig = { [weak self] c in
             self?.configs = ["": c]
             self?.names = [:]
+            self?.missing = []
             UserDefaults.standard.set(try? JSONEncoder().encode(c), forKey: "config")
             UserDefaults.standard.removeObject(forKey: "configs")
             Task { await self?.refresh() }
@@ -61,6 +71,7 @@ final class WatchModel {
         WatchSync.shared.onConfigs = { [weak self] all in
             self?.configs = all.configs
             self?.names = all.names
+            self?.missing = all.missing ?? []
             UserDefaults.standard.set(try? JSONEncoder().encode(all), forKey: "configs")
             Task { await self?.refresh() }
         }
@@ -208,17 +219,21 @@ struct WatchRootView: View {
     var body: some View {
         NavigationStack {
             if model.config == nil {
-                VStack(spacing: Theme.Space.s) {
-                    WatchPairView()
-                    NavigationLink { WatchRecordingView() } label: {
-                        Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1)
-                    }
-                }
+                WatchPairView()
             } else {
                 List {
                     NavigationLink { WatchRecordingView() } label: {
                         Label("录音上下文", systemImage: Theme.Icon.recording).font(Theme.Font.secondaryMedium).lineLimit(1)
                     }.watchCard()
+                    // A group the phone could not get the watch a credential for: none of its agents is below (#1185).
+                    if !model.missing.isEmpty {
+                        Section {
+                            Text("「\(model.missing.map { model.names[$0] ?? $0 }.joined(separator: "、"))」还没有手表的凭据")
+                                .font(.footnote).foregroundStyle(.secondary).lineLimit(3)
+                                .watchCard()
+                            WatchSyncButton().watchCard()
+                        }
+                    }
                     if !model.interactions.isEmpty || !model.inbox.isEmpty, !Self.runningFirst {
                         Section("需要你") {
                             ForEach(Self.inboxFirst ? [] : model.interactions, id: \.uid) { ix in
@@ -568,40 +583,65 @@ struct WatchSessionView: View {
     }
 }
 
-/// Shown until the watch has the phone's pairing: pull it from the phone (when nearby) instead of only waiting.
+/// Shown until the watch has the phone's pairing: pull it from the phone (when nearby) instead of only waiting. A phone
+/// that is paired but could not get the watch a credential of its own says so (#1185): the watch never gets the
+/// phone's.
 struct WatchPairView: View {
-    @State private var syncing = false
-    @State private var failed = false
+    @Environment(WatchModel.self) private var model
 
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
                 Image(systemName: Theme.Icon.handoff).font(.title2).foregroundStyle(Theme.accent)
-                Text("还没有配对").font(.headline)
-                Text("iPhone 上的 Persona 配对好之后，点下面从 iPhone 同步。").font(.footnote).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                Button {
-                    syncing = true
-                    failed = false
-                    WatchSync.shared.requestConfig { ok in
-                        syncing = false
-                        failed = !ok
-                        WKInterfaceDevice.current().play(ok ? .success : .failure)
-                    }
-                } label: {
-                    HStack {
-                        if syncing { ProgressView() }
-                        Text("从 iPhone 同步").lineLimit(1)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(syncing)
-                if failed {
-                    Text("连不上 iPhone：打开 iPhone 上的 Persona，或在 设置 › 同步到 Apple Watch。").font(.caption2).foregroundStyle(Theme.cautionText)
+                if model.missing.isEmpty {
+                    Text("还没有配对").font(.headline)
+                    Text("iPhone 上的 Persona 配对好之后，点下面从 iPhone 同步。").font(.footnote).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                } else {
+                    Text("还没有手表的凭据").font(.headline)
+                    Text("iPhone 联网后，点下面重新同步。")
+                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
+                WatchSyncButton()
+                // In the scroll view: beside it, it squeezed the page until the sync button was out of sight.
+                NavigationLink { WatchRecordingView() } label: {
+                    Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1)
+                }
+                .padding(.top, Theme.Space.s)
             }
             .padding()
+        }
+    }
+}
+
+/// 从 iPhone 同步: asks the phone for the watch's credentials (it tries the hub again for the ones it has not got).
+struct WatchSyncButton: View {
+    @Environment(WatchModel.self) private var model
+    @State private var syncing = false
+    @State private var failed = false
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Button {
+                syncing = true
+                failed = false
+                WatchSync.shared.requestConfig { ok in
+                    syncing = false
+                    failed = !ok
+                    WKInterfaceDevice.current().play(ok && model.missing.isEmpty ? .success : .failure)
+                }
+            } label: {
+                HStack {
+                    if syncing { ProgressView() }
+                    Text("从 iPhone 同步").lineLimit(1)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(syncing)
+            if failed {
+                Text("连不上 iPhone：打开 iPhone 上的 Persona，或在 设置 › 同步到 Apple Watch。").font(.caption2).foregroundStyle(Theme.cautionText)
+                    .multilineTextAlignment(.center)
+            }
         }
     }
 }

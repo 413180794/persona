@@ -344,16 +344,30 @@ struct SettingsView: View {
     }
     #endif
 
+    /// The watch's own credentials (got now where there are none yet), never this phone's (#1185).
+    private func syncWatch() async {
+        guard model.isPaired else { return }
+        guard WatchSync.shared.watchAppInstalled else {
+            Haptics.error()
+            model.toast = Toast("没找到装了 Persona 的 Apple Watch：先在 iPhone 的「Watch」App 里安装", style: .error)
+            return
+        }
+        await model.upgradeCredentials()
+        WatchSync.shared.push(summary: model.watchSummary())
+        if model.watchConfigs().missing?.isEmpty == false {
+            Haptics.error()
+            model.toast = Toast("没能给手表拿到凭据：检查网络后再试；hub 版本太旧时先更新 hub", style: .error)
+        } else {
+            Haptics.success()
+            model.toast = Toast("已发送到 Apple Watch，打开手表上的 Persona 即可", style: .success)
+        }
+    }
+
     private var watchSection: some View {
         Section {
             Group {
                 Button {
-                    if let cfg = model.config {
-                        WatchSync.shared.push(config: cfg)
-                        WatchSync.shared.push(summary: model.watchSummary())
-                        Haptics.success()
-                        model.toast = Toast("已发送到 Apple Watch，打开手表上的 Persona 即可", style: .success)
-                    }
+                    Task { await syncWatch() }
                 } label: {
                     if AppStyle.current.usesBeautifulUI {
                         SettingsRow(title: "同步到 Apple Watch", symbol: Theme.Icon.watch, tint: Theme.accent)

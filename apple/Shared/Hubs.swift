@@ -128,6 +128,16 @@ nonisolated struct HubRegistry: Codable, Hashable, Sendable {
     /// The hub of a group whose credential the app uses first: the first one paired.
     func primary(_ group: String) -> PairedHub? { hubs.first { $0.group == group } }
 
+    /// What the watch may use (#1185): each group's answer-only watch credential at its first hub, and the groups that
+    /// have none yet. Never this device's own credential in its place: that one opens everything.
+    func watchCredentials() -> (configs: [String: ServerConfig], missing: [String]) {
+        var configs: [String: ServerConfig] = [:], missing: [String] = []
+        for g in groups {
+            if let w = primary(g)?.watch { configs[g] = w } else { missing.append(g) }
+        }
+        return (configs, missing)
+    }
+
     /// What the group is called: the user's name for it, else its first hub's name.
     func name(_ group: String) -> String {
         if let n = groupNames[group]?.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty { return n }

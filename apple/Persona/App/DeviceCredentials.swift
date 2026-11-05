@@ -28,8 +28,17 @@ extension AppModel {
     }
 
     /// Every paired hub trades its pairing token for this device's own (each hub separately), and every group gets
-    /// the watch an answer-only one at its first hub.
+    /// the watch an answer-only one at its first hub. A call while one runs waits for it (launch, the watch asking and
+    /// 同步到 Apple Watch can come together; each would get the watch a token of its own).
     func upgradeCredentials() async {
+        if let running = credentialsUpgrade { return await running.value }
+        let run = Task { await upgradeCredentialsOnce() }
+        credentialsUpgrade = run
+        await run.value
+        credentialsUpgrade = nil
+    }
+
+    private func upgradeCredentialsOnce() async {
         guard isPaired, !isDemo else { return }
         #if DEBUG
         if UserDefaults.standard.string(forKey: "pairURL") != nil { return } // simulator runs paired from the command line
@@ -48,7 +57,7 @@ extension AppModel {
             }
         }
         #if canImport(WatchConnectivity)
-        if WCSession.isSupported(), WCSession.default.isPaired, WCSession.default.isWatchAppInstalled {
+        if WatchSync.shared.watchAppInstalled {
             for g in registry.groups {
                 guard let primary = registry.primary(g), primary.watch?.url != primary.config.url,
                       let t = try? await APIClient(config: primary.config).createToken(name: "Apple Watch", kind: "watch") else { continue }

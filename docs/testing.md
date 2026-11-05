@@ -25,7 +25,7 @@ transcript 解析用真实样本做 golden 测试（`server/internal/transcript/
 | 计划审批 | ExitPlanMode → deny + 意见 → 改计划 → allow + setMode | 两种分支都对（`docs/claude-integration.md`） |
 | 手机工具 | hub 机器上的 claude 调 `mcp__jarvis__phone_device_info` | 经 node → hub → 模拟器 App 返回 iPhone 17 Pro / iOS 26.5 |
 | 实时流 | App 打开另一台 Mac 上正在工作的会话 | 工具步骤实时追加，状态条显示 spinner 行 |
-| 手表 | 手表模拟器 `-pairURL` | 「需要你」（等你的 Agent + 收件箱里需要你的事）、运行中会话；`-openInboxFirst YES` 打开第一件，`-openWatchItem question\|plan\|permission\|screen\|session` 打开第一个这类请求 / 第一个运行中的会话（`running`：列表不显示「需要你」，截运行中的会话行；`inbox`：「需要你」里只留收件箱的行） |
+| 手表 | 手表模拟器 `-pairURL` | 「需要你」（等你的 Agent + 收件箱里需要你的事）、运行中会话；`-openInboxFirst YES` 打开第一件，`-openWatchItem question\|plan\|permission\|screen\|session` 打开第一个这类请求 / 第一个运行中的会话（`running`：列表不显示「需要你」，截运行中的会话行；`inbox`：「需要你」里只留收件箱的行）；`-showWatchMissing 公司,家里` 显示这些组还没有手表凭据（`""` 是默认组；不带 `-pairURL` 是「还没有手表的凭据」页，#1185） |
 
 ## 界面检查清单（每次改界面都要截图看）
 

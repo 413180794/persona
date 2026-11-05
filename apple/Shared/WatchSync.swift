@@ -7,6 +7,9 @@ import WatchConnectivity
 nonisolated struct WatchConfigs: Codable, Sendable, Equatable {
     var configs: [String: ServerConfig]
     var names: [String: String] = [:]
+    /// The groups the phone has but could not get the watch a credential for yet (#1185: an older hub, or the hub
+    /// not reachable when it asked); the watch asks the user to sync again. nil from an older phone.
+    var missing: [String]? = nil
 }
 
 /// What the watch needs to render without its own WebSocket: live sessions and pending interactions.
@@ -48,31 +51,26 @@ final class WatchSync: NSObject, WCSessionDelegate {
         WCSession.default.activate()
     }
 
-    /// Every group's credential for the watch (docs/multi-hub.md「手表」), and what the groups are called; `config`
-    /// (the first group's) stays for a watch app from before several hubs.
-    func push(configs: [String: ServerConfig], names: [String: String]) {
-        guard let first = configs[""] ?? configs.values.first else { return }
-        let all = (try? JSONEncoder().encode(WatchConfigs(configs: configs, names: names))) ?? Data()
-        let data = (try? JSONEncoder().encode(first)) ?? Data()
-        update(["config": data, "configs": all])
-        #if os(iOS) || os(visionOS)
-        if WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isWatchAppInstalled {
-            WCSession.default.transferUserInfo(["config": data, "configs": all])
-        }
-        #endif
-    }
-
-    func push(config: ServerConfig) {
-        let data = (try? JSONEncoder().encode(config)) ?? Data()
-        update(["config": data])
+    /// Every group's credential for the watch (docs/multi-hub.md「手表」), what the groups are called and which have none
+    /// yet; `config` (the first group's) stays for a watch app from before several hubs. Sent with no credentials too
+    /// (#1185): a watch still holding one the phone no longer gives it drops it.
+    func push(_ all: WatchConfigs) {
+        var values: [String: Any] = ["configs": (try? JSONEncoder().encode(all)) ?? Data()]
+        if let first = all.configs[""] ?? all.configs.values.first { values["config"] = (try? JSONEncoder().encode(first)) ?? Data() }
+        update(values, removing: values["config"] == nil ? ["config"] : [])
         #if os(iOS) || os(visionOS)
         // Application context only keeps the latest state; user info is queued and delivered even if the watch app
         // was never opened, so a fresh install still gets paired.
         if WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isWatchAppInstalled {
-            WCSession.default.transferUserInfo(["config": data])
+            WCSession.default.transferUserInfo(values)
         }
         #endif
     }
+
+    #if os(iOS) || os(visionOS)
+    /// A paired watch with the app on it: the phone gets it credentials only then.
+    var watchAppInstalled: Bool { WCSession.isSupported() && WCSession.default.isPaired && WCSession.default.isWatchAppInstalled }
+    #endif
 
     #if os(watchOS)
     /// Watch side: ask the phone for its pairing right now (needs the phone nearby).
@@ -86,7 +84,7 @@ final class WatchSync: NSObject, WCSessionDelegate {
             nonisolated(unsafe) let r = reply
             Task { @MainActor in
                 self.apply(r)
-                done(r["config"] != nil)
+                done(r["configs"] != nil || r["config"] != nil) // the phone answered with its pairing
             }
         }, errorHandler: { @Sendable _ in Task { @MainActor in done(false) } })
     }
@@ -114,10 +112,11 @@ final class WatchSync: NSObject, WCSessionDelegate {
         update(["summary": data])
     }
 
-    private func update(_ values: [String: Any]) {
+    private func update(_ values: [String: Any], removing gone: [String] = []) {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
         var ctx = WCSession.default.applicationContext
         values.forEach { ctx[$0.key] = $0.value }
+        gone.forEach { ctx[$0] = nil }
         try? WCSession.default.updateApplicationContext(ctx)
     }
 

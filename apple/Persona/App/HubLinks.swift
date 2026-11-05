@@ -314,21 +314,17 @@ extension AppModel {
 
     // MARK: Watch
 
-    /// Each group's credential for the watch: the watch's own answer-only one where there is one, else the phone's.
-    func watchConfigs() -> [String: ServerConfig] {
-        var out: [String: ServerConfig] = [:]
-        for g in registry.groups {
-            guard let primary = registry.primary(g) else { continue }
-            out[g] = primary.watch ?? primary.config
-        }
-        return out
+    /// What the watch gets (#1185): each group's answer-only credential for the watch, and the groups without one yet,
+    /// never the phone's own (it opens everything); a group the watch has no credential for is left off it.
+    func watchConfigs() -> WatchConfigs {
+        let (configs, missing) = registry.watchCredentials()
+        return WatchConfigs(configs: configs, names: Dictionary(uniqueKeysWithValues: registry.groups.map { ($0, groupName($0)) }),
+                            missing: missing)
     }
 
     func pushWatchConfigs() {
         guard !isDemo else { return }
-        let configs = watchConfigs()
-        guard !configs.isEmpty else { return }
-        WatchSync.shared.push(configs: configs, names: Dictionary(uniqueKeysWithValues: registry.groups.map { ($0, groupName($0)) }))
+        WatchSync.shared.push(watchConfigs())
     }
 }
 
