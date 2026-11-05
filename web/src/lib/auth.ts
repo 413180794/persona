@@ -7,11 +7,30 @@ function browserName() {
   return [b, os].filter(Boolean).join(" · ");
 }
 
-// Pair with the hub's token (`jarvisd hub pair` prints it) or a device token. The pairing token is checked, then traded
-// for this browser's own one right away (docs/protocol.md「鉴权」), so it can be revoked on its own and the hub's
-// token is not kept here. Throws what the hub said (ApiError) when the token is wrong.
-export async function pair(token: string): Promise<void> {
-  const t = token.trim();
+// pairToken turns what was pasted on the login page into the token to try: a bare token (the hub's, `jp_…`, `jd_…`)
+// as it is; the token in a `persona://pair?…` / `jarvis://pair?…` link (what `personad hub pair` prints for the app);
+// or the token in any link carrying `?token=…` or `#token=…`. Anything else comes back trimmed, so the hub turns it
+// down as before.
+export function pairToken(input: string): string {
+  const t = input.trim();
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(t)) return t;
+  let u: URL;
+  try {
+    u = new URL(t);
+  } catch {
+    return t;
+  }
+  // URLSearchParams undoes the percent-encoding
+  const token = u.searchParams.get("token")?.trim() || new URLSearchParams(u.hash.replace(/^#/, "")).get("token")?.trim();
+  return token || t;
+}
+
+// Pair with the hub's token (`personad hub pair --legacy` prints it), the app's pairing link, or a device token
+// (pairToken). The pairing token is checked, then traded for this browser's own one right away (docs/protocol.md
+// 「鉴权」), so it can be revoked on its own and the hub's token is not kept here. Throws what the hub said (ApiError)
+// when the token is wrong.
+export async function pair(input: string): Promise<void> {
+  const t = pairToken(input);
   await api("/machines", { token: t });
   let use = t;
   if (!t.startsWith("jd_")) {

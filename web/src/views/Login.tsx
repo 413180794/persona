@@ -7,7 +7,7 @@ import { AppMark } from "../ui/AppMark";
 import { Icon } from "../ui/icons";
 import { OtherHubs } from "./Hubs";
 
-// Pair with the hub's token (`jarvisd hub pair` prints it) or a device token (lib/auth.ts). `error` is what went
+// Pair with the link `personad hub pair` prints, the hub's token or a device token (lib/auth.ts pairToken). `error` is what went
 // wrong with a token that came in the link.
 export function Login({ onDone, error: linkError = "" }: { onDone: () => void; error?: string }) {
   const [token, setTok] = useState("");
@@ -38,7 +38,10 @@ export function Login({ onDone, error: linkError = "" }: { onDone: () => void; e
           <AppMark size={44} radius={12} className="shadow-raised" />
           <div>
             <h1 className="text-[18px] font-semibold tracking-tight text-ink">连接到 Persona</h1>
-            <p className="mt-1 text-[13px] leading-relaxed text-ink-2">在 hub 所在的机器上运行 <code className="rounded-[5px] bg-field px-1 py-0.5 font-mono text-[12px] shadow-hairline">personad hub pair</code>（旧命令 <code className="font-mono text-[12px]">jarvisd</code> 仍可用），把打印出来的 token 贴到这里。</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
+              在 hub 所在的机器上运行 <code className="rounded-[5px] bg-field px-1 py-0.5 font-mono text-[12px] shadow-hairline">personad hub pair</code>，把打印的 <code className="font-mono text-[12px]">jarvis://pair?…</code> 链接整条贴到这里；也可以贴 <code className="font-mono text-[12px]">--legacy</code> 打印的 Token，或 <code className="font-mono text-[12px]">jq -r .token ~/.persona/hub.json</code> 的输出。
+            </p>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">手机 App 直接扫同一条命令打印的二维码。</p>
           </div>
         </div>
         <div className="rounded-card bg-surface p-1.5 shadow-card">
@@ -49,8 +52,8 @@ export function Login({ onDone, error: linkError = "" }: { onDone: () => void; e
               type="password"
               value={token}
               onChange={(e) => setTok(e.target.value)}
-              placeholder="hub token"
-              aria-label="hub token"
+              placeholder="配对链接或 token"
+              aria-label="配对链接或 token"
               autoComplete="current-password"
               className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-ink outline-none placeholder:font-sans placeholder:text-ink-3"
             />
