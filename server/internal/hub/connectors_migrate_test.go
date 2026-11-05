@@ -46,8 +46,31 @@ func TestExtensionTakesOverLark(t *testing.T) {
 	if h.connectors.Get("lark") != nil {
 		t.Fatal("still there after the plugin went")
 	}
-	h.yieldOwnConnector("github") // not migratable: stays
-	if h.connectors.Get("github") == nil {
-		t.Fatal("github is not a plugin's to take")
+	h.yieldOwnConnector("mail") // not migratable: would stay (and this hub has none)
+	if h.hasOwnConnector("lark") {
+		t.Fatal("no Feishu connector of the hub's own")
+	}
+}
+
+// GitHub moves out of the hub (#2830): an extension's connector github takes the hub's place while it is there, the
+// hub's own is kept aside (it still checks the computers' gh logins for 设置 › 连接器 › GitHub) and comes back after.
+func TestExtensionTakesOverGitHub(t *testing.T) {
+	h := newTestHub(t)
+	h.connectors = connector.NewRegistry(nil)
+	h.registerConnectors()
+	own := h.githubConnector()
+	if own == nil {
+		t.Fatal("the hub has its own GitHub connector")
+	}
+	h.yieldOwnConnector("github")
+	if h.connectors.Get("github") != nil || h.githubConnector() != nil {
+		t.Fatal("set aside for the extension's")
+	}
+	if h.ownGitHub() != own || !h.hasOwnConnector("github") {
+		t.Fatal("the hub's own is kept: its sign-in and settings stay when the extension goes")
+	}
+	h.restoreOwnConnector("github")
+	if h.githubConnector() != own {
+		t.Fatal("back to the hub's own")
 	}
 }

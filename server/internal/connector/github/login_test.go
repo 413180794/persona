@@ -212,3 +212,23 @@ func TestDeviceLoginRefused(t *testing.T) {
 		t.Fatalf("refused: %+v %v", p, err)
 	}
 }
+
+// Given back by an extension that held the id (#2830), the connector reads the sign-in again: the extension may have
+// signed in under the same id meanwhile.
+func TestReloadReadsTheSignInAgain(t *testing.T) {
+	ctx := context.Background()
+	sec := &memSecrets{}
+	c := New(Config{}, "", nil)
+	c.UseSecrets(sec)
+	if d := c.deviceState(ctx); d.Token != "" {
+		t.Fatal("nothing stored yet")
+	}
+	sec.data = []byte(`{"token":"gho_new"}`) // the extension signed in
+	if d := c.deviceState(ctx); d.Token != "" {
+		t.Fatal("read once: the old state until reloaded")
+	}
+	c.Reload()
+	if d := c.deviceState(ctx); d.Token != "gho_new" {
+		t.Fatalf("after Reload: %+v", d)
+	}
+}

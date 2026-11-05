@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/connector"
 	"io"
 	"net/http"
 	"strings"
@@ -113,11 +114,11 @@ func (h *Hub) personaLogin(ctx context.Context) (login string, known bool) {
 	if h.connectors == nil {
 		return "", true
 	}
-	c := h.githubConnector()
+	c := h.connectors.Get("github") // the hub's own, or an extension's that took its place
 	if c == nil {
 		return "", true
 	}
-	st := c.Status(ctx)
+	st := connector.StatusOf(ctx, c)
 	// The account stays when the token is out of reach for a while (its computer offline): it is still the user.
 	if st.Account != "" {
 		return st.Account, true

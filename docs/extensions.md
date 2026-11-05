@@ -218,6 +218,7 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `hub` | 范围的列表，见下面「hub 的接口：范围」 | 用 hub 的哪几部分接口（读知识库、驱动 Agent……） | 扩展拿到的 token 只开这些范围的路由，别的回 403 `permission_denied` |
 | `hub_api`（旧写法） | `true` | 拿到 hub 的地址和完整 token（`PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`），能做 hub 主人能做的一切 | 没接受就不给这两个变量；安装页写成「完整权限（旧写法）」并给警告。同时写了 `hub` 的以 `hub` 为准 |
 | `launcher_keys` | `true` | 用启动器的 Key 访问它的网关（贡献 `quota`、`launcher_section` 的 `ui` 必须有） | 扩展看不到 Key：hub 或那台电脑替它发请求，只发到启动器自己的网关；没接受就不问它 |
+| `gh_login` | `true` | 读你选的那台电脑上 gh 登录的 GitHub token（#2830，GitHub 连接器迁出 hub 用） | hub 只给要了它、装的时候同意了的扩展（`connector.credentials.gh_token`）；token 只在扩展的内存里 |
 | 显示在 App 里（有 `nav_page` / `overview_card` / `machine_section` / `inbox_item` 的 `ui` 就有） | — | 在主导航、总览、机器详情页、收件箱条目的详情里显示自己的界面（列出每处的标题） | 和事件一样不用写在 `permissions` 里，按贡献算进安装前给人看的「它可以」和权限摘要；升级时多了一处要重新同意，见「UI 插槽」「权限」 |
 | 密钥（有 `secrets` 就有） | — | 用你填的密钥 | 每个扩展只拿到自己的 |
 | 在你选的电脑上运行程序（有 `node` 就有） | — | 在列出的系统（Mac、Linux 电脑）上以 node 的系统用户运行；每台打开时再问一次 | 只展示：**没有沙箱** |
@@ -1687,6 +1688,20 @@ Telegram 连接器原来是内置扩展 `telegram`（`jarvisd-telegram`，在 pe
 连接器 id 还是 `telegram`，所以 `connector_secrets` 里的登录、收件箱、知识库、连接器的开关和选项都按同一个 id 接着用，装上不用重新登录。
 交接时注册表让内置的给同 id 的已装扩展让位（`Registry.Yields`）：先停掉内置的进程再起扩展的，同一个 Telegram 会话不会两边同时连。
 内置的删掉以后，没装扩展的 hub 上就没有 Telegram 连接器（App 按 hub 列出的连接器显示，不出现）；那一行登录留在库里，装上扩展接着用。
+
+## GitHub：从 hub 迁到扩展（#2830）
+
+GitHub 连接器在搬进官方扩展仓库 `nwverse/persona-extensions` 的扩展 `github`，做法同飞书（`docs/plan-extensions.md`「第 3 步」）：`github` 在 `connector.MigratableConnectors` 里，
+扩展装上、开着时它的连接器顶替 hub 自己的，停用、卸载、起不来时 hub 自己的回来；不装扩展的 hub 和以前一样。id 不变，所以登录（`connector_secrets` 里设备码登录的 token）、
+收件箱、知识库的 `github-*` 会话、开关、选项、静音都接着用；卸载扩展时**不删**这些（hub 自己的还要用，`hasOwnConnector`）。
+
+- **登录从哪里来**：用户的选择照旧存在 hub 的设置 `github_auth`（没选时用 hub.json 的 `github.auth.from_machine`），hub 每次扩展启动后经 `connector.auth.set` 交给它；
+  要电脑上的 gh 登录时扩展调 `connector.credentials.gh_token`（权限 `gh_login`）。`GET/PUT /api/v1/connectors/github/auth` 照旧：电脑列表和每台的 gh 登录由 hub 自己的连接器去查（放在一边时也能查），
+  选择和 token 的权限由扩展答（`connector.auth.get`），App 不用改。
+- **设置**：用户在 App 里改过的收件箱设置（`options.*`）照旧按 id 存在 hub，扩展每次启动后交回；没改过的，第一次用 hub 自己的那份（含 hub.json 的 `github.inbox`）。
+  hub.json 的 `github.proxy`、`github.auth.host` 第一次接管时搬进扩展的设置 `proxy`、`host`（只搬一次、不覆盖用户填的，`github.migrated_to_extension`）。
+- hub 里读 GitHub 账号的地方（形象的分级）按连接器的状态读，不认具体类型。
+- 还没做：删掉 hub 自己的 GitHub 连接器（在真实 hub 上验证一段时间后另开 issue）。
 
 ## 内置扩展：微信（`wechat`）
 

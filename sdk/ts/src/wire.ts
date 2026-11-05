@@ -155,6 +155,11 @@ export interface Permissions {
   /** The scopes of the hub's API it calls: its token opens their routes only. */
   hub?: string[];
   launcher_keys?: boolean;
+  /**
+   * It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector),
+   * held in its memory only.
+   */
+  gh_login?: boolean;
 }
 
 /**
@@ -1497,16 +1502,7 @@ export interface MessagingReaction {
 }
 
 /**
- * A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
- */
-export interface MessagingDecoration {
-  text: string;
-  icon?: string;
-  tone?: Tone;
-}
-
-/**
- * An action of the extension's on a message, in its long-press menu: POST messages/{id}/actions/{id}.
+ * A small line under a message''s on a message, in its long-press menu: POST messages/{id}/actions/{id}.
  */
 export interface MessagingAction {
   id: string;

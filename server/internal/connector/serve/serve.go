@@ -60,6 +60,17 @@ const (
 	MGroupTool     = "group.tool"
 	MGroupAppend   = "group.append"
 	MGroupFallback = "group.fallback"
+	// The user's own settings of the connector (connector.Options): {} → OptionsResult, OptionsParams → {}.
+	MOptionsGet = "options.get"
+	MOptionsSet = "options.set"
+	// Closing inbox items the hub still has open (connector.InboxSettler): SettleParams → SettleResult.
+	MSettle = "inbox.settle"
+	// One of the user's computers connected (connector.Machines): MachineParams → {}.
+	MMachineOnline = "machines.online"
+	// Where the connector's sign-in comes from, the hub keeping the user's choice (GitHub's 授权来自哪里,
+	// docs/connector-protocol.md): {} → AuthView, AuthSource → AuthView.
+	MAuthGet = "auth.get"
+	MAuthSet = "auth.set"
 )
 
 // Methods the program calls on the hub, and its event.
@@ -74,6 +85,9 @@ const (
 	MPostsPending  = "posts.pending"
 	MArchiveChats  = "archive.chats"
 	EChanged       = "changed" // ChangedEvent
+	// A computer's gh login (GitHub's token there), for a program the hub granted gh_login: GhTokenParams →
+	// GhTokenResult. Errors carry the Code* below.
+	MGhToken = "credentials.gh_token"
 )
 
 // The knowledge base's calls on the wire.
@@ -212,6 +226,13 @@ type (
 
 // Error codes a program answers with (rpc.Error.Code), for callers that act on the kind of failure.
 const (
+	// Why credentials.gh_token has no token (the GitHub connector's errors of the same names).
+	CodeNoMachine      = "no_machine"
+	CodeOffline        = "offline"
+	CodeNodeTooOld     = "node_too_old"
+	CodeNoGh           = "no_gh"
+	CodeNotSignedIn    = "not_signed_in"
+	CodeNotPermitted   = "permission_denied"
 	CodeNotInitialized = "not_initialized"
 	CodeNoCapability   = "no_capability"
 	CodeUnknownMethod  = "unknown_method"
@@ -603,6 +624,59 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 			return nil, noCapability(c, "group")
 		}
 		return groupCall(ctx, g, method, params)
+	case MAuthGet:
+		a, ok := c.(Auther)
+		if !ok {
+			return nil, noCapability(c, "auth")
+		}
+		return a.Auth(ctx), nil
+	case MAuthSet:
+		a, ok := c.(Auther)
+		if !ok {
+			return nil, noCapability(c, "auth")
+		}
+		var p AuthSource
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return a.SetAuth(ctx, p)
+	case MOptionsGet:
+		o, ok := connector.As[connector.Options](c)
+		if !ok {
+			return nil, noCapability(c, "options")
+		}
+		return OptionsResult{Options: o.Options()}, nil
+	case MOptionsSet:
+		o, ok := connector.As[connector.Options](c)
+		if !ok {
+			return nil, noCapability(c, "options")
+		}
+		var p OptionsParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return struct{}{}, o.SetOptions(p.Options)
+	case MSettle:
+		st, ok := connector.As[connector.InboxSettler](c)
+		if !ok {
+			return nil, noCapability(c, "settle")
+		}
+		var p SettleParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return SettleResult{Settled: st.Settle(ctx, p.Threads)}, nil
+	case MMachineOnline:
+		m, ok := connector.As[connector.Machines](c)
+		if !ok {
+			return nil, noCapability(c, "machines")
+		}
+		var p MachineParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		m.MachineOnline(p.Machine)
+		return struct{}{}, nil
 	case MSnapshot:
 		sn, ok := connector.As[connector.Snapshot](c)
 		if !ok {
@@ -903,4 +977,61 @@ func (x *secrets) Save(ctx context.Context, data []byte) error {
 
 func (x *secrets) Delete(ctx context.Context) error {
 	return x.call(ctx, MSecretsDelete, struct{}{}, nil)
+}
+
+// Auther is a connector whose sign-in comes from where the user picks, the hub keeping the choice (auth.get /
+// auth.set): GitHub's computer or device flow.
+type Auther interface {
+	Auth(ctx context.Context) AuthView
+	SetAuth(ctx context.Context, a AuthSource) (AuthView, error)
+}
+
+// OptionsResult is options.get's answer; OptionsParams is options.set's.
+type OptionsResult struct {
+	Options json.RawMessage `json:"options,omitempty"`
+}
+
+type OptionsParams struct {
+	Options json.RawMessage `json:"options"`
+}
+
+// SettleParams and SettleResult are inbox.settle's: the open items' threads, and why each that is over is.
+type SettleParams struct {
+	Threads []string `json:"threads"`
+}
+
+type SettleResult struct {
+	Settled map[string]string `json:"settled,omitempty"`
+}
+
+// MachineParams is machines.online's: the machine that connected.
+type MachineParams struct {
+	Machine string `json:"machine"`
+}
+
+// AuthSource is the user's choice of where the sign-in comes from: Source "machine" (a computer's gh login,
+// Machine its id and MachineName what people call it) or "device" (the device flow).
+type AuthSource struct {
+	Source      string `json:"source"`
+	Machine     string `json:"machine,omitempty"`
+	MachineName string `json:"machine_name,omitempty"`
+}
+
+// AuthView is auth.get's and auth.set's answer: the choice in effect, and what the token in use may do (Scopes,
+// once ScopesKnown).
+type AuthView struct {
+	Source      string   `json:"source"`
+	Machine     string   `json:"machine,omitempty"`
+	Scopes      []string `json:"scopes,omitempty"`
+	ScopesKnown bool     `json:"scopes_known"`
+}
+
+// GhTokenParams and GhTokenResult are credentials.gh_token's.
+type GhTokenParams struct {
+	Machine string `json:"machine"`
+	Host    string `json:"host,omitempty"`
+}
+
+type GhTokenResult struct {
+	Token string `json:"token"`
 }

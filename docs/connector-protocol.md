@@ -40,7 +40,7 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 
 | 字段 | 意思 |
 | --- | --- |
-| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`items`（知识库的条目：文档、会议、日程）、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）、`snapshot`（助手快照里的未读会话和今天的会）、`group`（收件箱的事件合成，要有 `inbox`，见下面「事件合成」）、`meta`（事件合成时自己记每件事的 meta：hub 合成一件事后调 `group.append`，要有 `group` 和 `meta_description`）、`fallback`（承诺每个收件箱条目都带兜底分级 `extra.rule_tier`，没有方法；要有 `inbox`，见 `docs/extensions.md`「收件箱的通用规则」）；hub 只调声明了的 |
+| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`items`（知识库的条目：文档、会议、日程）、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）、`snapshot`（助手快照里的未读会话和今天的会）、`group`（收件箱的事件合成，要有 `inbox`，见下面「事件合成」）、`meta`（事件合成时自己记每件事的 meta：hub 合成一件事后调 `group.append`，要有 `group` 和 `meta_description`）、`fallback`（承诺每个收件箱条目都带兜底分级 `extra.rule_tier`，没有方法；要有 `inbox`，见 `docs/extensions.md`「收件箱的通用规则」）、`machines`（依赖用户的某台电脑：电脑连上时 hub 调 `machines.online`，#2830）；hub 只调声明了的 |
 | `hosts` | 链接所在的主机名（App 认链接） |
 | `agent_tools` | 哪些工具也给编程 Agent，按名字的通配（不写就只给助手） |
 | `unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行）。不是权限：按名字调照常能调，写的照常过闸门，Agent 能不能调照旧看 `agent_tools` |
@@ -75,6 +75,11 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 | `group.fallback` | `{thread, batch, events: [{id, meta, done}]}` → `{assign: [{message, event}], new: [{key, messages, rule_tier, title}]}` | 可以没有（回 `unknown_method`：模型分不了时这一批等着，下一轮再交，和没有兜底的收件箱条目一样）。模型分不了或给的结果不合格时，程序自己按结构分组（回复和引用链、话题、同一人连发、时间断档）：`assign` 放进已有的事（只能是给的、没处理完的），`new` 新开的事；每条新消息恰好出现一次 |
 | `login.step` | `{step, values}` → `Prompt` | 分步登录；`step` 为 `""` 从头开始 |
 | `logout` | `{}` → `{}` | |
+| `options.get` | `{}` → `{options}` | 声明了 `options` 才调（#2830）：用户在 App 里改的这个连接器自己的设置（GitHub 的「哪些 CI 失败」、静音的仓库），原样一段 JSON。hub 在 `GET /api/v1/connectors` 里给 App |
+| `options.set` | `{options}` → `{}` | 声明了 `options` 才调：用户改了设置；回错误就是不收（hub 不存）。hub 存着收下的那份，**程序每次启动后**先把它交回来再问 `options.get` |
+| `inbox.settle` | `{threads}` → `{settled: {thread: 为什么}}` | 声明了 `settle` 才调：hub 那边还开着的条目里，哪些按现在的规则已经结束了（用旧规则做的、连接器不再收的那个 thread），hub 把它们记成已处理 |
+| `machines.online` | `{machine}` → `{}` | 声明了 `machines` 才调：用户的一台电脑刚连上（token 在那台电脑上的连接器据此重试），hub 不等回答 |
+| `auth.get` / `auth.set` | `{}` / `{source, machine?, machine_name?}` → `{source, machine?, scopes?, scopes_known}` | 登录从哪里来由用户选、hub 存（现在只有 GitHub：`machine` 某台电脑的 gh 登录，`device` 设备码登录）。hub 在**每次启动后**和用户改了时调 `auth.set`，程序不自己存；`scopes` 是现在用的 token 能做的事，GitHub 说了才有 |
 
 `InboxThing`：`thread`（必填，这件事的稳定键）、`kind`、`label`、`title`、`sender`、`preview`、`context`、`at`、`last`（最新一步的标记，变了就算新动静）、
 `url`、`open_url`、`reply_to`、`can_reply`、`tier`（`action` / `fyi` / `noise`，空的交给模型）、`why`、`done`（`read` / `replied`：这件事结束了）、
@@ -91,7 +96,7 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 
 **迁出 hub 的连接器**（`connector.MigratableConnectors`，现在是 `lark`，`docs/extensions.md`「App 接口」）：它的 thing 可以带 `extra`
 （`source`、`account`、`account_name`、`legacy_id`、`avatar`、`count`、`started_at`、`rule_tier`，以及原来条目的块之一 `lark` / `doc` / `moment`）。
-hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（那个块，没有通用的 `connector` 块），App 照旧打开飞书聊天、文档的行、帖子；thread 由块算出
+hub 只对这些连接器读它，而且只有 `extra` 里带了上面那几个块之一的才保持 hub 原来自己做的样子（只带 `rule_tier` 的，比如接管 GitHub 的扩展，照旧是通用的连接器条目，#2830）：条目保持 hub 原来自己做的样子（那个块，没有通用的 `connector` 块），App 照旧打开飞书聊天、文档的行、帖子；thread 由块算出
 （`chat:<feed>`，非主账号 `chat:<账号>:<feed>`；`doc:<notice>`；`moment:<post>`），所以迁出之前 hub 自己做的条目接着用、不重复出一条；新条目的 id
 用 `legacy_id`。同一步（`last` 没变）块变了（读到的位置、文档重读后的行）也更新条目。这些条目的回复和改状态经 `inbox.reply` 交给连接器，
 `client_id` 和 hub 原来自己发时用的一样（管理者的 `assistant/inbox_migrate.go`）。
@@ -141,6 +146,7 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 | `secrets.load` | `{}` → `{data}` | 这个连接器自己的密钥（会话、token），hub 加密存在数据库；没有时 `data` 为空 |
 | `secrets.save` | `{data}` → `{}` | |
 | `secrets.delete` | `{}` → `{}` | |
+| `credentials.gh_token` | `{machine, host?}` → `{token}` | 那台电脑上 gh 登录的 token（#2830），只给 hub 允许了 `gh_login` 的扩展（`docs/extensions.md`「权限」），其余回 `permission_denied`。没有 token 时的错误码：`no_machine`、`offline`、`node_too_old`、`no_gh`、`not_signed_in`。token 只放在程序的内存里，不落盘、不进日志、不回给任何人 |
 | `posts.put` | `{posts: [{post, comments?}]}` → `{statuses}` | 把一个动态 feed 的公开帖子写进知识库的帖子存档（见下面「知识库」）。`statuses` 和 `posts` 一一对应：`new`、`changed`（评论数变了）、`""`（见过、没变）、`refused`（没有 id，或是别的连接器的帖子） |
 | `posts.comments` | `{id, comment_count, comments}` → `{}` | 换掉存档里一个帖子（这个连接器的）的评论，记下读的时候的评论数；帖子本身不动。重读 `posts.pending` 列出的帖子的评论用 |
 | `posts.pending` | `{limit?}` → `{posts: [{id, comment_count, at}]}` | 评论数变了、该重读评论的帖子（文字保留期内，新的在前，最多 500） |

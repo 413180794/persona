@@ -169,9 +169,9 @@ type GroupNew struct {
 }
 
 // MigratableConnectors are the hub's own connectors a plugin may take over while they move out of the hub (Feishu
-// through lark-connector, docs/plan-extensions.md「第 3 步」): a plugin's connector with the same id replaces the hub's while
-// the plugin is on, and its inbox things may carry the items' own blocks (ThingExtra).
-var MigratableConnectors = []string{"lark"}
+// through lark-connector, docs/plan-extensions.md「第 3 步」; GitHub, #2830): a plugin's connector with the same id replaces
+// the hub's while the plugin is on, and its inbox things may carry the items' own blocks (ThingExtra).
+var MigratableConnectors = []string{"lark", "github"}
 
 // ThingExtra is an inbox item's own fields that the generic thing has no place for: the item keeps the shape the
 // apps know (the Feishu item's lark / doc / moment block, its avatar and count) instead of the generic connector block.
@@ -188,6 +188,12 @@ type ThingExtra struct {
 	Lark   json.RawMessage `json:"lark,omitempty"`
 	Doc    json.RawMessage `json:"doc,omitempty"`
 	Moment json.RawMessage `json:"moment,omitempty"`
+}
+
+// HasBlock says whether the extra carries one of the items' own blocks (lark, doc, moment): only those keep the
+// shape the hub's own items had. Extra with a rule tier alone (a connector taking over GitHub) is a generic item's.
+func (e *ThingExtra) HasBlock() bool {
+	return e != nil && (len(e.Lark) > 0 || len(e.Doc) > 0 || len(e.Moment) > 0)
 }
 
 // Tag is one thing an inbox thing is about: Key (TagRepo…), the Value it matches by (an id), the Name people read.

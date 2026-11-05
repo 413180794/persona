@@ -156,7 +156,8 @@ func (c *Connector) Name() string { return "GitHub" }
 func (c *Connector) Manifest() connector.Manifest {
 	return connector.Manifest{
 		Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions, connector.CapEvents,
-			connector.CapInbox, connector.CapSettle, connector.CapArchive, connector.CapLogin, connector.CapOptions, connector.CapThreads},
+			connector.CapInbox, connector.CapSettle, connector.CapArchive, connector.CapLogin, connector.CapOptions, connector.CapThreads,
+			connector.CapMachines},
 		Hosts: []string{c.cfg.host()},
 		Kinds: []string{"review_requested", "mention", "team_mention", "assign", "author", "ci_failed"},
 	}

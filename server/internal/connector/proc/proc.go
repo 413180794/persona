@@ -76,6 +76,9 @@ type Config struct {
 	// Link, when set, is the plugin process the connector runs in: Path, Args, Env, Version and Settings are then the
 	// plugin host's business, and the hub passes the program's calls and events on (Handle, Event).
 	Link *Link
+	// GhToken, when set, answers the program's credentials.gh_token: a computer's gh login. The hub sets it only for
+	// an extension it granted gh_login (docs/extensions.md「权限」); nil refuses.
+	GhToken func(ctx context.Context, machine, host string) (string, error)
 }
 
 // Restarts of the program after it exits: doubling from the first to the last, back to the first once it ran a while.
@@ -98,6 +101,13 @@ type Conn struct {
 	tools   []proto.Tool
 	actions []proto.Tool
 	status  connector.Status
+	// options are the connector's own settings (connector.Options) as the program last gave them; sent (true) once
+	// the running program has the ones the hub set, which go again each time it starts.
+	options json.RawMessage
+	sent    bool
+	// auth is the user's choice of where the sign-in comes from (SetAuth), given again at each start: the program
+	// does not keep it.
+	auth *serve.AuthSource
 }
 
 // New is the connector of the program cfg describes; nothing runs until Run.
@@ -172,7 +182,7 @@ func (c *Conn) Run(ctx context.Context) {
 		ch, err := c.spawn(ctx)
 		if err == nil {
 			c.mu.Lock()
-			c.peer = ch.peer
+			c.peer, c.sent = ch.peer, false
 			c.mu.Unlock()
 			c.refresh(ctx)
 			c.keepUp(ctx, ch)
@@ -214,6 +224,9 @@ func (c *Conn) runLinked(ctx context.Context) {
 		switch ready := p.Ready(); {
 		case ready && !up:
 			up = true
+			c.mu.Lock()
+			c.sent = false
+			c.mu.Unlock()
 			c.refresh(ctx)
 		case !ready:
 			up = false
@@ -272,6 +285,7 @@ func (c *Conn) refresh(ctx context.Context) {
 		if !l.Proc.Ready() {
 			return
 		}
+		c.syncOptions(ctx, func(method string, params, out any) error { return l.call(ctx, method, params, out) })
 		var st connector.Status
 		if err := l.call(ctx, serve.MStatus, struct{}{}, &st); err != nil {
 			return
@@ -292,6 +306,7 @@ func (c *Conn) refresh(ctx context.Context) {
 	if peer == nil {
 		return
 	}
+	c.syncOptions(ctx, func(method string, params, out any) error { return peer.Call(ctx, method, params, out) })
 	var st connector.Status
 	if err := peer.Call(ctx, serve.MStatus, struct{}{}, &st); err != nil {
 		return
@@ -418,6 +433,8 @@ func (c *Conn) logLines(r io.Reader) {
 // nothing the program sends picks another), and the knowledge base's (KB, bound the same way).
 func (c *Conn) fromProgram(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
+	case serve.MGhToken:
+		return c.ghToken(ctx, params)
 	case serve.MPostsPut, serve.MPostsComments, serve.MPostsPending, serve.MArchiveChats:
 		return c.fromProgramKB(ctx, method, params)
 	}

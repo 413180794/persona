@@ -205,6 +205,11 @@ data class ExtensionPermissions(
      */
     val hub: List<String>? = null,
     @SerialName("launcher_keys") val launcherKeys: Boolean? = null,
+    /**
+     * It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub
+     * connector), held in its memory only.
+     */
+    @SerialName("gh_login") val ghLogin: Boolean? = null,
 )
 
 /**
@@ -2109,7 +2114,17 @@ data class ExtensionMessagingReaction(
 )
 
 /**
- * A small line under a message''s on a message, in its long-press menu: POST messages/{id}/actions/{id}.
+ * A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
+ */
+@Serializable
+data class ExtensionMessagingDecoration(
+    val text: String = "",
+    val icon: String? = null,
+    val tone: String? = null,
+)
+
+/**
+ * An action of the extension's on a message, in its long-press menu: POST messages/{id}/actions/{id}.
  */
 @Serializable
 data class ExtensionMessagingAction(

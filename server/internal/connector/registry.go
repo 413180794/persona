@@ -366,7 +366,7 @@ type Info struct {
 // MachineOnline tells every connector that depends on a computer that machine id just connected.
 func (r *Registry) MachineOnline(id string) {
 	for _, c := range r.All() {
-		if m, ok := c.(Machines); ok {
+		if m, ok := As[Machines](c); ok {
 			m.MachineOnline(id)
 		}
 	}

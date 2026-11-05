@@ -35,6 +35,7 @@ const (
 	CapGroup    Capability = "group"    // Grouper
 	CapMeta     Capability = "meta"     // EventWriter (with CapGroup and MetaDescription)
 	CapFallback Capability = "fallback" // (none: every inbox thing carries extra.rule_tier)
+	CapMachines Capability = "machines" // Machines
 )
 
 type capability struct {
@@ -62,6 +63,7 @@ var capabilities = []capability{
 	{CapGroup, reflect.TypeFor[Grouper](), false},
 	{CapMeta, reflect.TypeFor[EventWriter](), false},
 	{CapFallback, nil, false},
+	{CapMachines, reflect.TypeFor[Machines](), false},
 }
 
 // Manifest is what a connector says it is and does, in one place (docs/connectors.md「二 · 1」): read whenever the

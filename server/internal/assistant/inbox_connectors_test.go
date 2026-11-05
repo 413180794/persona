@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
@@ -213,4 +214,22 @@ func TestConnectorRulesSettleAndTier(t *testing.T) {
 		t.Fatalf("re-tiered: %+v", fresh)
 	}
 
+}
+
+// A connector that took the hub's GitHub over (#2830) hands its things with extra carrying only the rule tier: they
+// are generic connector items like the hub's own made, not the items' own blocks a Feishu thing keeps.
+func TestMigratedThingsWithoutABlockAreGeneric(t *testing.T) {
+	h := newInboxHub(t)
+	gh := thing("a", time.Now().Add(-time.Hour))
+	gh.Tier = ""
+	gh.Extra = &connector.ThingExtra{RuleTier: string(TierAction)}
+	h.collectSource(context.Background(), assistantwire.InboxSource{ID: "github", Name: "GitHub", Migrated: true, Extension: true,
+		Things: []connector.InboxThing{gh}})
+	items := openItems(h)
+	if len(items) != 1 || items[0].Source != "github" || items[0].Connector == nil || items[0].Connector.Label != "请你 review" {
+		t.Fatalf("%d items: %+v", len(items), items)
+	}
+	if h.inbox.ruleTier(items[0]) != TierAction {
+		t.Fatalf("rule tier %s", h.inbox.ruleTier(items[0]))
+	}
 }

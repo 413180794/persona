@@ -401,6 +401,9 @@ func (ps *extensions) changed(c extension.Change) {
 			if now != nil && slices.Contains(now.Manifest.Items("connectors"), id) {
 				continue
 			}
+			if ps.h.hasOwnConnector(id) { // the hub's own is back (a migratable id): its sign-in and settings stay
+				continue
+			}
 			ps.h.forgetConnector(ctx, id)
 		}
 	}
@@ -518,6 +521,9 @@ func (ps *extensions) apply(ctx context.Context, id string) {
 		for _, c := range hp.conns {
 			if err := ps.h.addExtensionConnector(ctx, c, p.Record.Source == extension.SourceBuiltin); err != nil {
 				ps.logf("plugin %s: %v", id, err)
+			} else if c.ID() == "github" {
+				// after this start: the move changes its settings, which restarts it
+				go ps.h.migrateGitHubConfig(context.WithoutCancel(ctx), id)
 			}
 		}
 	}
@@ -848,8 +854,12 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		} else {
 			extensionConnectors.Store(c.ID, p.Record.Source)
 		}
-		conn := proc.New(proc.Config{ID: c.ID, Name: c.Name, Manifest: ps.knownOnly(id, connectorManifest(c)), Secrets: secrets, KB: kbase,
-			Logf: ps.logf, Link: link})
+		cfg := proc.Config{ID: c.ID, Name: c.Name, Manifest: ps.knownOnly(id, connectorManifest(c)), Secrets: secrets, KB: kbase,
+			Logf: ps.logf, Link: link}
+		if p.Record.Granted.GhLogin && ps.h != nil {
+			cfg.GhToken = ps.h.ghTokenFor
+		}
+		conn := proc.New(cfg)
 		byID[c.ID] = conn
 		hp.conns = append(hp.conns, conn)
 	}
@@ -989,6 +999,9 @@ func (h *Hub) addExtensionConnector(ctx context.Context, c *proc.Conn, off bool)
 		return err
 	}
 	h.restoreSwitchesOf(c, cs)
+	if c.ID() == "github" {
+		h.githubExtensionTaken(ctx, c, cs)
+	}
 	return nil
 }
 

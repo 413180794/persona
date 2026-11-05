@@ -32,6 +32,9 @@ func TestMain(m *testing.M) {
 			os.Exit(0)
 		}
 		err := serve.Main(context.Background(), os.Stdin, os.Stdout, func(cfg json.RawMessage, s connector.Secrets) (connector.Connector, error) {
+			if os.Getenv("JARVIS_PROC_KIND") == "settings" {
+				return &settingsProgram{}, nil
+			}
 			return &exampleProgram{secrets: s, exitSoon: os.Getenv("JARVIS_PROC_EXIT") == "1"}, nil
 		})
 		if err != nil && !strings.Contains(err.Error(), "EOF") {

@@ -855,7 +855,7 @@ func (s *Service) collectSource(ctx context.Context, src assistantwire.InboxSour
 	if src.Migrated {
 		generic := things[:0:0]
 		for _, t := range things {
-			if t.Extra != nil {
+			if t.Extra.HasBlock() { // only rule_tier (GitHub's, #2830): a generic item like any connector's
 				own = append(own, t)
 			} else {
 				generic = append(generic, t)

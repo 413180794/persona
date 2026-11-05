@@ -47,7 +47,16 @@ func (c *Connector) UseSecrets(s connector.Secrets) {
 	c.mu.Unlock()
 }
 
-// deviceState is what the secrets keep, read once.
+// Reload forgets the sign-in read from the secrets, to read it again: the hub gives the connector back after an
+// extension's held its id (#2830), which may have signed in, out or again meanwhile under the same id.
+func (c *Connector) Reload() {
+	c.mu.Lock()
+	c.dev, c.devLoaded = deviceLogin{}, false
+	c.mu.Unlock()
+	c.kickCheck()
+}
+
+// deviceState is what the secrets keep, read once (again after Reload).
 func (c *Connector) deviceState(ctx context.Context) deviceLogin {
 	c.mu.Lock()
 	s, loaded, d := c.secrets, c.devLoaded, c.dev

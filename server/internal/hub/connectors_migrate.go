@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"slices"
 
 	"github.com/nwverse/persona/server/internal/connector"
@@ -36,9 +37,18 @@ func (h *Hub) restoreOwnConnector(id string) {
 	if !ok || h.connectors.Get(id) != nil {
 		return
 	}
-	if err := h.addConnector(v.(connector.Connector)); err != nil {
+	own := v.(connector.Connector)
+	if r, ok := own.(interface{ Reload() }); ok {
+		r.Reload() // the plugin's may have signed in or out under the same id
+	}
+	if err := h.addConnector(own); err != nil {
 		h.logf("connector %s: back to the hub's own: %v", id, err)
 		return
+	}
+	// The user's switches and settings as they are now (changed while the plugin's held the id), and GitHub's source.
+	h.restoreSwitchesOf(own, h.connectorSettings(context.Background()))
+	if id == "github" {
+		h.restoreGitHubSource(context.Background())
 	}
 	h.logf("connector %s: back to the hub's own", id)
 }
@@ -47,4 +57,17 @@ func (h *Hub) restoreOwnConnector(id string) {
 func (h *Hub) removeExtensionConnector(id string) {
 	h.connectors.Remove(id)
 	h.restoreOwnConnector(id)
+}
+
+// hasOwnConnector says whether the hub has a connector of its own with id (running, or set aside for a plugin's).
+func (h *Hub) hasOwnConnector(id string) bool {
+	if _, ok := h.migrated.Load(id); ok {
+		return true
+	}
+	c := h.connectors.Get(id)
+	if c == nil {
+		return false
+	}
+	_, isExtension := c.(*proc.Conn)
+	return !isExtension
 }

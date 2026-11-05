@@ -2,13 +2,18 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/github"
+	"github.com/nwverse/persona/server/internal/connector/proc"
+	"github.com/nwverse/persona/server/internal/connector/serve"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // Where GitHub's token comes from, as the user picks it in 设置 › 连接器 › GitHub (docs/connectors.md「二 · 7」): a
@@ -41,22 +46,54 @@ type githubAuthView struct {
 	Missing     []github.RequiredScope `json:"missing,omitempty"`
 }
 
+// githubConnector is the hub's own GitHub connector while it runs (not while an extension took its place).
 func (h *Hub) githubConnector() *github.Connector {
 	c, _ := h.connectors.Get("github").(*github.Connector)
 	return c
 }
 
+// ownGitHub is the hub's own GitHub connector, running or set aside for an extension's (connectors_migrate.go): it
+// still checks each computer's gh login for the page.
+func (h *Hub) ownGitHub() *github.Connector {
+	if c := h.githubConnector(); c != nil {
+		return c
+	}
+	if v, ok := h.migrated.Load("github"); ok {
+		c, _ := v.(*github.Connector)
+		return c
+	}
+	return nil
+}
+
+// githubExtension is an extension's GitHub connector when one took the hub's place (#2830).
+func (h *Hub) githubExtension() *proc.Conn {
+	c, _ := h.connectors.Get("github").(*proc.Conn)
+	return c
+}
+
+// githubChoice is the user's choice, kept from before; hub.json's github.auth.from_machine until they chose.
+func (h *Hub) githubChoice(ctx context.Context) (githubAuth, bool) {
+	var a githubAuth
+	if h.store != nil {
+		if ok, err := h.store.Setting(ctx, githubAuthKey, &a); err == nil && ok {
+			return a, true
+		}
+	}
+	if h.cfg.GitHub != nil && h.cfg.GitHub.Configured() {
+		return githubAuth{Source: github.SourceMachine, Machine: h.cfg.GitHub.Auth.FromMachine}, false
+	}
+	return githubAuth{Source: github.SourceDevice}, false
+}
+
 // restoreGitHubSource applies the user's choice, kept from before, at start.
 func (h *Hub) restoreGitHubSource(ctx context.Context) {
 	c := h.githubConnector()
-	if c == nil || h.store == nil {
+	if c == nil {
 		return
 	}
-	var a githubAuth
-	if ok, err := h.store.Setting(ctx, githubAuthKey, &a); err != nil || !ok {
-		return
+	if a, chosen := h.githubChoice(ctx); chosen {
+		h.applyGitHubSource(ctx, c, a)
 	}
-	h.applyGitHubSource(ctx, c, a)
 }
 
 func (h *Hub) applyGitHubSource(ctx context.Context, c *github.Connector, a githubAuth) {
@@ -67,10 +104,48 @@ func (h *Hub) applyGitHubSource(ctx context.Context, c *github.Connector, a gith
 	c.UseDevice()
 }
 
-// githubAuthNow is what the page shows: every machine's gh login, asked at once (a few seconds at most).
-func (h *Hub) githubAuthNow(ctx context.Context, c *github.Connector) githubAuthView {
+// applyGitHubExtensionSource gives an extension's GitHub connector the user's choice (or hub.json's default); the
+// connector asks for a computer's token itself (credentials.gh_token).
+func (h *Hub) applyGitHubExtensionSource(ctx context.Context, c *proc.Conn, a githubAuth) (serve.AuthView, error) {
+	src := serve.AuthSource{Source: a.Source}
+	if a.Source == github.SourceMachine && a.Machine != "" {
+		src.Machine, src.MachineName = a.Machine, h.machineName(a.Machine)
+	} else {
+		src.Source = github.SourceDevice
+	}
+	return c.SetAuth(ctx, src)
+}
+
+// githubExtensionTaken sets an extension's GitHub connector up as the hub's own was: the user's sign-in choice, and
+// the inbox settings the hub's own had (hub.json's github.inbox) when the user never changed them.
+func (h *Hub) githubExtensionTaken(ctx context.Context, c *proc.Conn, cs connectorSettings) {
+	a, _ := h.githubChoice(ctx)
+	if _, err := h.applyGitHubExtensionSource(ctx, c, a); err != nil {
+		h.logf("github: the extension's sign-in source: %v", err)
+	}
+	if _, chosen := cs.Options["github"]; chosen || !c.Manifest().Has(connector.CapOptions) {
+		return
+	}
+	if own := h.ownGitHub(); own != nil {
+		if err := c.SetOptions(own.Options()); err != nil {
+			h.logf("github: the extension's inbox settings: %v", err)
+		}
+	}
+}
+
+// githubAuthNow is what the page shows: every machine's gh login, asked at once (a few seconds at most). c checks the
+// logins (the hub's own connector, also while an extension's runs); ext, when set, says the choice and the scopes.
+func (h *Hub) githubAuthNow(ctx context.Context, c *github.Connector, ext *proc.Conn) githubAuthView {
 	v := githubAuthView{Source: c.Source(), Machine: c.MachineID(), Machines: []githubMachine{}}
 	v.Scopes, v.ScopesKnown = c.Scopes()
+	if ext != nil {
+		av, err := ext.Auth(ctx)
+		if err != nil {
+			a, _ := h.githubChoice(ctx)
+			av = serve.AuthView{Source: a.Source, Machine: a.Machine}
+		}
+		v.Source, v.Machine, v.Scopes, v.ScopesKnown = av.Source, av.Machine, av.Scopes, av.ScopesKnown
+	}
 	if v.ScopesKnown {
 		v.Missing = github.MissingScopes(v.Scopes)
 	}
@@ -103,17 +178,17 @@ var errNoGitHub = errors.New("no GitHub connector")
 
 func (h *Hub) githubAuthRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/connectors/github/auth", func(w http.ResponseWriter, r *http.Request) {
-		c := h.githubConnector()
+		c := h.ownGitHub()
 		if c == nil {
 			writeErr(w, http.StatusNotFound, errNoGitHub)
 			return
 		}
-		writeJSON(w, h.githubAuthNow(r.Context(), c))
+		writeJSON(w, h.githubAuthNow(r.Context(), c, h.githubExtension()))
 	})
 	// Choose where the token comes from: {"source": "machine", "machine": "<id>"} or {"source": "device"}. Choosing
 	// one leaves the other (the device flow's token is forgotten when a computer is chosen).
 	api.HandleFunc("PUT /api/v1/connectors/github/auth", func(w http.ResponseWriter, r *http.Request) {
-		c := h.githubConnector()
+		c := h.ownGitHub()
 		if c == nil {
 			writeErr(w, http.StatusNotFound, errNoGitHub)
 			return
@@ -137,7 +212,90 @@ func (h *Hub) githubAuthRoutes(api *http.ServeMux) {
 				return
 			}
 		}
+		if ext := h.githubExtension(); ext != nil {
+			if _, err := h.applyGitHubExtensionSource(r.Context(), ext, a); err != nil {
+				writeErr(w, http.StatusBadGateway, err)
+				return
+			}
+			writeJSON(w, h.githubAuthNow(r.Context(), c, ext))
+			return
+		}
 		h.applyGitHubSource(r.Context(), c, a)
-		writeJSON(w, h.githubAuthNow(r.Context(), c))
+		writeJSON(w, h.githubAuthNow(r.Context(), c, nil))
 	})
+}
+
+// ghTokenFor answers an extension's credentials.gh_token (one granted gh_login, the GitHub connector that took the
+// hub's place): the token of machine's gh login, as the hub's own connector reads it. The token goes to that program
+// only, never to a log; why there is none goes as the connector protocol's codes.
+func (h *Hub) ghTokenFor(ctx context.Context, machine, host string) (string, error) {
+	if host == "" {
+		host = "github.com"
+	}
+	tok, err := h.ghToken(machine)(ctx, host)
+	if err == nil {
+		return tok, nil
+	}
+	for _, c := range []struct {
+		err  error
+		code string
+	}{{github.ErrNoMachine, serve.CodeNoMachine}, {github.ErrOffline, serve.CodeOffline}, {github.ErrNodeTooOld, serve.CodeNodeTooOld},
+		{github.ErrNoGh, serve.CodeNoGh}, {github.ErrNotSignedIn, serve.CodeNotSignedIn}} {
+		if errors.Is(err, c.err) {
+			return "", &rpc.Error{Code: c.code, Message: err.Error()}
+		}
+	}
+	return "", err
+}
+
+// githubMigratedKey marks hub.json's github.proxy / github.auth.host moved into the GitHub extension's settings.
+const githubMigratedKey = "github.migrated_to_extension"
+
+// migrateGitHubConfig moves hub.json's github.proxy and github.auth.host into the settings of the extension whose
+// connector took the hub's place, once, for keys the user has not set there: its GitHub traffic goes the way the hub's
+// own did. The extension restarts with them (a config change). A failure is logged and tried at the next start.
+func (h *Hub) migrateGitHubConfig(ctx context.Context, extensionID string) {
+	gh := h.cfg.GitHub
+	if gh == nil || (gh.Proxy == "" && gh.Auth.Host == "") || h.store == nil || h.extensions == nil || h.extensions.reg == nil {
+		return
+	}
+	var done bool
+	if ok, err := h.store.Setting(ctx, githubMigratedKey, &done); err == nil && ok && done {
+		return
+	}
+	reg := h.extensions.reg
+	p := reg.Get(extensionID)
+	if p == nil {
+		return
+	}
+	cfg := map[string]any{}
+	_ = json.Unmarshal(p.Record.Config, &cfg)
+	props := map[string]json.RawMessage{}
+	var schema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if json.Unmarshal(p.Full.Configuration, &schema) == nil {
+		props = schema.Properties
+	}
+	moved := false
+	for key, v := range map[string]string{"proxy": gh.Proxy, "host": gh.Auth.Host} {
+		if _, has := props[key]; !has || v == "" {
+			continue
+		}
+		if cur, set := cfg[key].(string); set && cur != "" {
+			continue
+		}
+		cfg[key], moved = v, true
+	}
+	if moved {
+		raw, _ := json.Marshal(cfg)
+		if err := reg.SetConfig(ctx, extensionID, raw, "hub"); err != nil {
+			h.logf("github: moving hub.json's github.proxy / auth.host into the extension's settings: %v", err)
+			return
+		}
+		h.logf("github: hub.json's github.proxy / auth.host moved into 设置 › 扩展 › %s", p.Full.Name)
+	}
+	if err := h.store.PutSetting(ctx, githubMigratedKey, true); err != nil {
+		h.logf("github: marking the move done: %v", err)
+	}
 }

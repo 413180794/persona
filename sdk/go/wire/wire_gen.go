@@ -143,6 +143,9 @@ type Permissions struct {
 	// The scopes of the hub's API it calls: its token opens their routes only.
 	Hub          []string `json:"hub,omitempty"`
 	LauncherKeys bool     `json:"launcher_keys,omitempty"`
+	// It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector),
+	// held in its memory only.
+	GhLogin bool `json:"gh_login,omitempty"`
 }
 
 // Contributes: contributions by extension point. A point this hub does not know installs with a warning, not taking
@@ -1460,10 +1463,12 @@ type MessagingReaction struct {
 	Key   string   `json:"key"`
 	Count int      `json:"count"`
 	Mine  bool     `json:"mine,omitempty"`
-	Users []string `json:"users,omitempty"`
+	Users []string `json:"users,omitempty"``json:"text"`
+	Icon string `json:"icon,omitempty"`
+	Tone string `json:"tone,omitempty"`
 }
 
-// MessagingDecoration: A small line under a message''s on a message, in its long-press menu: POST
+// MessagingAction: an action of the extension's on a message, in its long-press menu: POST
 // messages/{id}/actions/{id}.
 type MessagingAction struct {
 	ID          string `json:"id"`
