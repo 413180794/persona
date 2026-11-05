@@ -34,6 +34,8 @@ import { navigate } from "../../lib/router";
 import { openPanel } from "../../lib/panel";
 import { plainMarkdown } from "../../lib/plain-markdown";
 import { Markdown } from "../../ui/Markdown";
+import { LiveCard } from "../../ui/AssistantCard";
+import type { AssistantView } from "../../lib/extension-wire";
 import { getState, useStore } from "../../lib/store";
 import type { AgentState, Interaction, Session } from "../../lib/types";
 import { Button, Collapse, cx, Menu, StatusDot, toast, useNow } from "../../ui/atoms";
@@ -422,6 +424,9 @@ export function FeedLineView({ item }: { item: FeedItem }) {
       return <TodayCard body={item.body as unknown as TodayBody} conversation={item.conversation} />;
     case "message":
       return item.ref && !isLater ? <MessageCard item={item} /> : null;
+    case "view":
+      // a live card: drawn where it was first shown, again at each version (ui/AssistantCard.tsx)
+      return item.ref ? <LiveCard conversation={item.conversation} id={item.ref} first={(item.body as { view?: AssistantView } | undefined)?.view} /> : null;
     default:
       return null;
   }

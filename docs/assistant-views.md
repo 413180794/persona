@@ -142,7 +142,7 @@ Claude 的助手 Stop hook 用 `last_assistant_message` 校验，首次失败返
 | schema | #2018 | 基础协议／生成类型／校验已合并；新共享组件仍待小 PR |
 | hub | #2019 | 存储、工具、声明式 reply、正文注册和摘要已实现；HTML bridge、最终 feature 与端到端验收未完成 |
 | 提示词 | #2020 | 专用 Stop、主动组件选择／动作／活卡片提示词和 golden 已实现；下一轮错误反馈与 Codex 验收未完成 |
-| 网页 | #2021 | 复用 ViewBody，动作、活卡片、通过安全验收的 HTML 路径 |
+| 网页 | #2021 | 复用 ViewBody 接好正文／活卡片的 reply、open、push／pop、确认、expected_version、409 处理和多设备同步（`web/src/lib/assistant-views.ts`、`web/src/ui/AssistantCard.tsx`），实际提交等 hub 发出 `assistant_views`；HTML 只显示文字 fallback：网页还没有通过网络／导航／死循环验收的隔离运行时，不运行 allow-scripts iframe |
 | 安卓 | #2022 | 复用 #1851 组件，动作、活卡片、HTML、三风格深浅色截图 |
 | 管理界面 | #2023 | 开关、预览、深浅色截图 |
 | Apple | #2024、#2025 | 接入现有基础代码，动作、活卡片、HTML 自动运行；四端和手表验证 |

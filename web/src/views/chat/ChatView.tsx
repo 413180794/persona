@@ -59,6 +59,7 @@ import { ViewLayer } from "../session/ViewLayer";
 import { MAIN_TITLE } from "../assistant/conversations";
 import { usePersona } from "../assistant/Persona";
 import { displayLines, loadFeed, loadToday, sendRouted, useFeed, type FeedItem } from "../../lib/feed";
+import { CardConversation } from "../../ui/AssistantCard";
 import { DayLine, FeedLineView, QuickResultCard, RouteChip, TaskDock, TaskQuestions } from "../assistant/Tasks";
 import { t } from "../../i18n";
 
@@ -613,6 +614,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
               </div>
             )}
             <ChatContext.Provider value={ctx}>
+              <CardConversation.Provider value={assistant ? sid : ""}>
               {assistant
                 ? displayLines(lines, feed).map((d) =>
                     d.kind === "feed" ? (
@@ -648,6 +650,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                   onRetry={canRetry && i === lines.length - 1 ? retry : undefined}
                 />
               ))}
+              </CardConversation.Provider>
             </ChatContext.Provider>
             {!readOnly && shownPending.map((p) => (
               <div key={p.id} className="flex flex-col gap-3">

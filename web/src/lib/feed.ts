@@ -6,6 +6,9 @@ import { api, enc } from "./api";
 import { formatDate, t } from "../i18n";
 import { parseAPIError } from "./api-errors";
 import { onHubEvent, putTodo, refreshTodos } from "./store";
+import { applySnapshot } from "./assistant-views";
+import type { AssistantView, ViewAction } from "./extension-wire";
+import { isResumed } from "./reconnect";
 import { deleteTodo, type Todo } from "./todos";
 import { itemPath } from "./inbox";
 import { closePanel, getPanel } from "./panel";
@@ -34,7 +37,7 @@ export interface TaskPlan {
   created_at?: string;
 }
 
-export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message";
+export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view";
 
 export interface FeedItem {
   id: string;
@@ -173,12 +176,14 @@ export async function loadFeed(conversation: string) {
   try {
     let last = st.feeds[conversation]?.at(-1)?.at;
     for (let n = 0; n < FEED_PAGES; n++) {
-      const res = await api<{ items: FeedItem[]; plans?: Record<string, TaskPlan> }>(
+      const res = await api<{ items: FeedItem[]; plans?: Record<string, TaskPlan>; views?: Record<string, AssistantView>; view_actions?: ViewAction[]; view_blocks?: string[] }>(
         `/assistant/conversations/${enc(conversation)}/feed${last ? `?since=${encodeURIComponent(last)}` : ""}`,
       );
       if (!st.feeds[conversation]) set({ feeds: { ...st.feeds, [conversation]: [] } });
       const items = res.items ?? [];
       received(items, res.plans ?? undefined);
+      // the cards' snapshot comes whole with every page: what an event missed comes back here
+      applySnapshot(conversation, res);
       const newest = items.at(-1)?.at;
       // the next page starts after this one's newest; one that did not move on would come back the same
       if (items.length < FEED_PAGE || !newest || (last && Date.parse(newest) <= Date.parse(last))) break;
@@ -207,6 +212,11 @@ export async function loadToday(conversation: string) {
 onHubEvent("assistant_feed", (m) => {
   const it = m.item as FeedItem | undefined;
   if (it) received([it]);
+});
+// A connection that did not resume missed events: the conversations open here read their feed (and cards) again.
+onHubEvent("hello", (m) => {
+  if (isResumed(m)) return;
+  for (const c of Object.keys(st.feeds)) void loadFeed(c);
 });
 onHubEvent("task_plan", (m) => {
   const p = m.plan as TaskPlan | undefined;

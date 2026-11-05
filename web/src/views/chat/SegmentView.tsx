@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clock } from "../../lib/format";
 import { getSession, getState } from "../../lib/store";
 import { agentStatus, subagentFor } from "../../lib/tasks";
@@ -12,6 +12,8 @@ import { splitQuote } from "../../lib/drafts";
 import { EASE } from "../../ui/atoms";
 import { ChannelMark } from "../../ui/ChannelMark";
 import { Markdown } from "../../ui/Markdown";
+import { CardConversation, CardItem } from "../../ui/AssistantCard";
+import { cardReply } from "../../lib/assistant-blocks";
 import { InjectedHint, LoopTick, MergedBubble, PeerMessage } from "./Messages";
 import { ContextGroup } from "./ContextGroup";
 import { FileCards, ReplyFiles } from "./FileCards";
@@ -21,6 +23,7 @@ import { PathText } from "../../ui/PathLinks";
 import { Thumb } from "./Steps";
 import { useFoldScroll } from "./fold-scroll";
 import { useChatContext } from "./chat-context";
+import { Icon } from "../../ui/icons";
 import { WorkGroup, WorkNodes, type WorkProps } from "./WorkGroup";
 import { t } from "../../i18n";
 
@@ -66,8 +69,11 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
 /** The bubble's words, folded to ten lines past fourteen; the fold scrolls (the wheel, a trackpad, a finger), with a
  *  fade at its bottom while there is more (fold-scroll.ts). `pending` (still being sent): dimmed, the same fold. A
  *  leading `> ` block (引用) is a folded quote card at its top instead of `>` lines (Quote.tsx). */
-function BubbleText({ text: whole, ts, mid, sid, own, pending }: { text: string; ts?: string; mid: string; sid: string; own: boolean; pending?: boolean }) {
+function BubbleText({ text: full, ts, mid, sid, own, pending }: { text: string; ts?: string; mid: string; sid: string; own: boolean; pending?: boolean }) {
   const fill = own ? "bg-user-bubble" : "bg-neutral-bubble";
+  // a reply sent from a card (in an assistant conversation): its words, without the hub's tag, marked 来自卡片
+  const fromCard = useContext(CardConversation) ? cardReply(full) : undefined;
+  const whole = fromCard ? fromCard.text : full;
   const split = useMemo(() => splitQuote(whole), [whole]);
   const text = split ? split.rest : whole;
   const ref = useRef<HTMLDivElement>(null);
@@ -93,7 +99,13 @@ function BubbleText({ text: whole, ts, mid, sid, own, pending }: { text: string;
     </div>
   );
   return (
-    <div className="flex max-w-full flex-col items-end gap-1">
+    <div className="flex max-w-full flex-col items-end gap-1" data-from-card={fromCard ? fromCard.view : undefined}>
+      {fromCard && (
+        <span className="flex items-center gap-1 text-[11px] font-medium whitespace-nowrap text-accent">
+          <Icon name="check" size={11} />
+          {t("ui-assistantcard.from_card")}
+        </span>
+      )}
       {split ? (
         <div className={`flex max-w-full flex-col gap-1.5 rounded-[12px] ${fill} px-4 py-2.5 text-ink ${pending ? "opacity-60" : ""}`} title={clock(ts)}>
           <QuoteBlock text={split.quote} />
@@ -147,7 +159,10 @@ export function Answer({ item, streaming, mid, sid, fade }: { item?: Item; strea
   return (
     <MessageActions text={text} ts={item?.ts} itemId={item?.id}>
       <div className={ANSWER} data-answer>
-        <Markdown text={text} mid={mid} cwd={cwd} fade={fade || undefined} />
+        {/* the cards in it are this item's blocks (ui/AssistantCard.tsx): `<item id>/<n>` */}
+        <CardItem.Provider value={item?.id ? { id: item.id, text } : null}>
+          <Markdown text={text} mid={mid} cwd={cwd} fade={fade || undefined} />
+        </CardItem.Provider>
       </div>
       {mid && sid && <ReplyFiles text={text} mid={mid} cwd={cwd} />}
     </MessageActions>

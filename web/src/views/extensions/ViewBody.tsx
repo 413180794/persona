@@ -2,7 +2,8 @@
 // item — text, metric, progress, row (with an icon, a picture or a thumbnail), button, link, field, divider, chart,
 // stat_grid, segmented, and UI version 3's markdown, table, empty and loading — and a section's 加载更多. An unknown
 // item is left out. Shared by an extension's pages (settings/ExtensionView.tsx, which loads them and carries out what a
-// press answers) and the assistant's cards (AssistantView.tsx, where nothing acts). A tone becomes a role color.
+// press answers) and the assistant's cards (ui/AssistantCard.tsx, which says which actions may be pressed now, which
+// one was answered, and when the fields are locked). A tone becomes a role color.
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -34,6 +35,12 @@ export interface ViewHandlers {
   onChoose: (item: UIItem, value: string) => void;
   /** A section's 加载更多 (by scrolling to it or pressing it). */
   onMore?: (more: UIMore) => void;
+  /** Whether an action may be pressed now (all of them when absent). */
+  canPress?: (a: UIAction) => boolean;
+  /** The id of the action answered: marked, the others stay as they are. */
+  chosen?: string;
+  /** The fields cannot be changed (an answered card: what was sent shows). */
+  locked?: boolean;
 }
 
 /** Nothing acts (an assistant's card): what a press would do is never asked for. */
@@ -74,7 +81,7 @@ function Section({ section, embedded, compact, ...rest }: SectionProps) {
             return (
               <div key={key} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
                 {b.items.map((it, j) => (
-                  <ItemButton key={it.key ?? j} item={it} busy={rest.busy} onPress={rest.onPress} />
+                  <ItemButton key={it.key ?? j} item={it} busy={rest.busy} onPress={rest.onPress} canPress={rest.canPress} chosen={rest.chosen} />
                 ))}
               </div>
             );
@@ -140,14 +147,16 @@ function Metrics({ items }: { items: UIItem[] }) {
   );
 }
 
-function ItemButton({ item, busy, onPress }: { item: UIItem; busy: string; onPress: SectionProps["onPress"] }) {
+function ItemButton({ item, busy, onPress, canPress, chosen }: { item: UIItem; busy: string; onPress: SectionProps["onPress"]; canPress?: ViewHandlers["canPress"]; chosen?: string }) {
   if (!item.action) return null;
   const destructive = item.role === "destructive";
+  const picked = !!chosen && chosen === item.action.id;
   return (
     <Button
       tone={item.action.submit ? "primary" : "secondary"}
       busy={busy === item.action.id}
-      disabled={!!busy && busy !== item.action.id}
+      icon={picked ? "check" : undefined}
+      disabled={(!!busy && busy !== item.action.id) || (canPress ? !canPress(item.action) : false)}
       onClick={() => onPress(item.action!, destructive)}
       title={item.title}
       className={cx("max-w-full min-w-0", destructive && "text-red")}
@@ -158,7 +167,8 @@ function ItemButton({ item, busy, onPress }: { item: UIItem; busy: string; onPre
   );
 }
 
-function Item({ item: it, compact, values, setValue, busy, onPress, onChoose }: Omit<SectionProps, "section" | "embedded" | "onMore"> & { item: UIItem }) {
+function Item({ item: it, compact, values, setValue, busy, onPress, onChoose, canPress, chosen, locked }: Omit<SectionProps, "section" | "embedded" | "onMore"> & { item: UIItem }) {
+  const pressable = (a: UIAction) => (canPress ? canPress(a) : true);
   switch (it.type) {
     case "chart":
       return <ExtensionChart item={it} compact={compact} />;
@@ -178,7 +188,7 @@ function Item({ item: it, compact, values, setValue, busy, onPress, onChoose }: 
     case "stat_grid":
       return <StatGrid item={it} compact={compact} />;
     case "segmented":
-      return <Segmented item={it} value={values[it.name ?? ""] ?? it.value ?? ""} busy={!!busy} pending={busy === it.action?.id} onChoose={(v) => onChoose(it, v)} />;
+      return <Segmented item={it} value={values[it.name ?? ""] ?? it.value ?? ""} busy={!!busy || locked || (it.action ? !pressable(it.action) : false)} pending={busy === it.action?.id} onChoose={(v) => onChoose(it, v)} />;
     case "text": {
       const style = it.style ?? "body";
       if (style === "code")
@@ -220,11 +230,17 @@ function Item({ item: it, compact, values, setValue, busy, onPress, onChoose }: 
           </div>
           {it.value && <span className="shrink-0 truncate text-[12.5px] text-ink-2 tabular-nums">{it.value}</span>}
           {it.badge?.text && <Pill tone={BADGE[toneOf(it.badge.tone)]}>{it.badge.text}</Pill>}
-          {it.action && (busy === it.action.id ? <Spinner /> : <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />)}
+          {it.action && (busy === it.action.id ? <Spinner /> : <Icon name={chosen === it.action.id ? "check" : "chevronRight"} size={12} stroke={2} className={cx("shrink-0", chosen === it.action.id ? "text-accent" : "text-ink-3")} />)}
         </>
       );
       return it.action ? (
-        <button type="button" disabled={!!busy} onClick={() => onPress(it.action!)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left whitespace-nowrap transition-colors enabled:hover:bg-hover">
+        <button
+          type="button"
+          disabled={!!busy || !pressable(it.action)}
+          aria-pressed={chosen ? chosen === it.action.id : undefined}
+          onClick={() => onPress(it.action!)}
+          className={cx("flex w-full items-center gap-3 px-4 py-2.5 text-left whitespace-nowrap transition-colors enabled:hover:bg-hover", chosen === it.action.id && "bg-accent-tint")}
+        >
           {body}
         </button>
       ) : (
@@ -234,7 +250,7 @@ function Item({ item: it, compact, values, setValue, busy, onPress, onChoose }: 
     case "button":
       return (
         <div className="px-4 py-2.5">
-          <ItemButton item={it} busy={busy} onPress={onPress} />
+          <ItemButton item={it} busy={busy} onPress={onPress} canPress={canPress} chosen={chosen} />
         </div>
       );
     case "link": {
@@ -259,7 +275,7 @@ function Item({ item: it, compact, values, setValue, busy, onPress, onChoose }: 
       );
     }
     case "field":
-      return <Field item={it} value={values[it.name ?? ""] ?? ""} onChange={(v) => it.name && setValue(it.name, v)} />;
+      return <Field item={it} value={values[it.name ?? ""] ?? ""} locked={locked} onChange={(v) => it.name && setValue(it.name, v)} />;
     case "divider":
       return <div role="separator" className="mx-4 my-1 border-t border-line" />;
     default:
@@ -331,13 +347,13 @@ function Segmented({ item, value, busy, pending, onChoose }: { item: UIItem; val
   );
 }
 
-function Field({ item: it, value, onChange }: { item: UIItem; value: string; onChange: (v: string) => void }) {
+function Field({ item: it, value, locked, onChange }: { item: UIItem; value: string; locked?: boolean; onChange: (v: string) => void }) {
   const id = `extension-ui-${it.name}`;
   if (it.kind === "toggle")
     return (
       <div className="flex items-center gap-3 px-4 py-2.5">
         <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{it.label}</span>
-        <Switch on={value === "true"} onChange={(on) => onChange(on ? "true" : "false")} label={it.label || it.name || ""} />
+        <Switch on={value === "true"} disabled={locked} onChange={(on) => onChange(on ? "true" : "false")} label={it.label || it.name || ""} />
       </div>
     );
   const problem = it.kind === "number" ? numberProblem(value) : "";
@@ -355,9 +371,10 @@ function Field({ item: it, value, onChange }: { item: UIItem; value: string; onC
                 type="button"
                 role="radio"
                 aria-checked={on}
+                disabled={locked}
                 onClick={() => onChange(c.value)}
                 className={cx(
-                  "flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] transition-[background-color,box-shadow,color] duration-150",
+                  "flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] transition-[background-color,box-shadow,color] duration-150 disabled:opacity-60",
                   on ? "bg-accent-tint font-medium text-accent-ink shadow-[inset_0_0_0_1px_var(--accent)]" : "text-ink-2 shadow-hairline hover:bg-hover",
                 )}
               >
@@ -368,7 +385,7 @@ function Field({ item: it, value, onChange }: { item: UIItem; value: string; onC
           })}
         </div>
       ) : (
-        <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={cx(inputClass, "max-w-[320px]")}>
+        <select id={id} value={value} disabled={locked} onChange={(e) => onChange(e.target.value)} className={cx(inputClass, "max-w-[320px]")}>
           {choices.map((c) => (
             <option key={c.value} value={c.value}>
               {c.title || c.value}
@@ -383,6 +400,7 @@ function Field({ item: it, value, onChange }: { item: UIItem; value: string; onC
         type={it.kind === "secret" ? "password" : "text"}
         inputMode={it.kind === "number" ? "decimal" : undefined}
         value={value}
+        disabled={locked}
         onChange={(e) => onChange(e.target.value)}
         placeholder={it.placeholder}
         spellCheck={false}
