@@ -1,0 +1,11 @@
+{
+  "truncated": "The sheet is too large. Showing the first {count} rows.",
+  "sheets": "Sheets",
+  "sheet_n": "Sheet {n}",
+  "empty": "Empty sheet",
+  "size": "{rows} rows × {cols} columns",
+  "count": "Count {n}",
+  "sum": "Sum {n}",
+  "average": "Average {n}",
+  "freeze": "Freeze top row"
+}

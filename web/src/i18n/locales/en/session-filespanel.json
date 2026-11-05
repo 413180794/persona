@@ -1,0 +1,18 @@
+{
+  "title": "Files",
+  "git_changes_one": "Git, {count} change",
+  "git_changes_other": "Git, {count} changes",
+  "more": "More",
+  "show_hidden": "Show hidden files",
+  "copy_path": "Copy path",
+  "reload": "Refresh",
+  "only_hidden": "Only hidden files",
+  "empty_folder": "Empty folder",
+  "truncated": "Too many files. Showing the first 2000.",
+  "open_failed": "Couldn't open this folder",
+  "retry": "Retry",
+  "no_dir": "This session's folder is unknown",
+  "reading": "Loading",
+  "up": "Up one level",
+  "location": "Location"
+}

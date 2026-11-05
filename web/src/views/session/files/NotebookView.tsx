@@ -8,6 +8,7 @@ import { languageFile, withAttachmentRefs, type Cell, type Notebook, type Output
 import { cx } from "../../../ui/atoms";
 import { Markdown } from "../../../ui/Markdown";
 import { TOKEN_CLASS } from "./FileView";
+import { t } from "../../../i18n";
 
 export function NotebookView({ nb }: { nb: Notebook }) {
   const file = languageFile(nb.language);
@@ -18,7 +19,7 @@ export function NotebookView({ nb }: { nb: Notebook }) {
         <span>{nb.kernel ?? nb.language}</span>
         <span>·</span>
         <span>
-          {nb.cells.length} 个单元（代码 {code}）
+          {t("session-files-notebookview.cells", { count: nb.cells.length, code })}
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -182,7 +183,7 @@ a{color:${c.link}}table{border-collapse:collapse;font-variant-numeric:tabular-nu
 tbody tr:nth-child(odd){background:${c.stripe}}thead th{text-align:center}</style></head><body>${html}</body></html>`;
   return (
     <div className="resize-y overflow-hidden rounded-[8px] border border-line bg-surface" style={{ height }}>
-      <iframe title="输出" sandbox="" srcDoc={srcDoc} className="h-full w-full border-0" />
+      <iframe title={t("session-files-notebookview.output")} sandbox="" srcDoc={srcDoc} className="h-full w-full border-0" />
     </div>
   );
 }

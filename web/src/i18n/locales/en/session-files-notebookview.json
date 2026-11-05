@@ -1,0 +1,5 @@
+{
+  "cells_one": "{count} cell ({code} code)",
+  "cells_other": "{count} cells ({code} code)",
+  "output": "Output"
+}

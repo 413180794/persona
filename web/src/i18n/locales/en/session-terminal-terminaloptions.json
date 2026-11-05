@@ -1,0 +1,21 @@
+{
+  "title": "Terminal settings",
+  "wrap": "Wrap long lines",
+  "wrap_hint": "While watching, fold lines to the panel's width; off scrolls sideways at the computer's width",
+  "wrap_driving": "While in control, the terminal fits the panel",
+  "wrap_on": "Folds at the panel's width",
+  "wrap_off": "Scrolls sideways at the computer's width",
+  "key_bar": "Key bar",
+  "key_bar_hint": "Esc, Ctrl, arrow keys and shortcuts",
+  "font_size": "Font size",
+  "font_smaller": "Smaller text",
+  "font_default": "Reset font size",
+  "font_larger": "Larger text",
+  "cursor_style": "Cursor style",
+  "cursor_blink": "Blinking cursor",
+  "cursor_blink_hint": "Blinks while the terminal has focus",
+  "webgl": "WebGL rendering",
+  "webgl_hint_long": "Draws the terminal on the GPU, smoother with lots of output or small text; off uses the default renderer",
+  "webgl_hint": "Smoother with lots of output; off uses the default",
+  "edit_shortcuts": "Edit shortcuts…"
+}

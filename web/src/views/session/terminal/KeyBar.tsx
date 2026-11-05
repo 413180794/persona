@@ -8,6 +8,7 @@ import { cx } from "../../../ui/atoms";
 import { Icon, type IconName } from "../../../ui/icons";
 import type { FeedView, TerminalFeed } from "./feed";
 import { ShortcutsPopover } from "./Shortcuts";
+import { t } from "../../../i18n";
 
 const HOLD_MS = 350;
 const DOUBLE_TAP_MS = 350;
@@ -95,7 +96,7 @@ function ModifierKeyCap({ k, label, name, feed, state, disabled }: { k: Modifier
   return (
     <button
       type="button"
-      title={`${name}：点一下作用于下一个键，双击锁定，按住不放`}
+      title={t("session-terminal-keybar.modifier_hint", { name })}
       aria-label={name}
       aria-pressed={state !== "off"}
       disabled={disabled}
@@ -121,7 +122,7 @@ export function KeyBar({ feed, v, onEditShortcuts }: { feed: TerminalFeed; v: Fe
   }, [off]);
 
   return (
-    <div className="relative shrink-0 border-t border-line bg-canvas px-1.5 py-1.5" title={off ? "接管终端后才能按键" : undefined}>
+    <div className="relative shrink-0 border-t border-line bg-canvas px-1.5 py-1.5" title={off ? t("session-terminal-keybar.take_control_first") : undefined}>
       {shortcuts && (
         <ShortcutsPopover
           onPick={(text, run) => {
@@ -135,15 +136,15 @@ export function KeyBar({ feed, v, onEditShortcuts }: { feed: TerminalFeed; v: Fe
           onClose={() => setShortcuts(false)}
         />
       )}
-      <div role="toolbar" aria-label="按键栏" className="flex items-center gap-1">
+      <div role="toolbar" aria-label={t("session-terminal-keybar.title")} className="flex items-center gap-1">
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-none">
           <ModifierKeyCap k="ctrl" label="Ctrl" name="Control" feed={feed} state={v.mods.ctrl} disabled={off} />
           <Key label="Esc" title="Esc" disabled={off} onPress={k("esc")} />
           <Key label="Tab" title="Tab" disabled={off} onPress={k("tab")} />
-          <Key label="⌃C" title="发送 Ctrl+C" disabled={off} onPress={() => feed.pressBare("ctrl+c")} />
-          <Key icon="bolt" title="快捷命令" disabled={off} active={shortcuts} onPress={() => setShortcuts((s) => !s)} />
-          <Key icon="copy" title="复制选中的文字" disabled={off || !v.selection} onPress={() => feed.copySelection()} />
-          <Key icon="paste" title="粘贴剪贴板" disabled={off} onPress={() => void feed.pasteClipboard()} />
+          <Key label="⌃C" title={t("session-terminal-keybar.send_ctrl_c")} disabled={off} onPress={() => feed.pressBare("ctrl+c")} />
+          <Key icon="bolt" title={t("session-terminal-keybar.shortcuts")} disabled={off} active={shortcuts} onPress={() => setShortcuts((s) => !s)} />
+          <Key icon="copy" title={t("session-terminal-keybar.copy_selection")} disabled={off || !v.selection} onPress={() => feed.copySelection()} />
+          <Key icon="paste" title={t("session-terminal-keybar.paste")} disabled={off} onPress={() => void feed.pasteClipboard()} />
           <ModifierKeyCap k="alt" label="Alt" name="Option" feed={feed} state={v.mods.alt} disabled={off} />
           <ModifierKeyCap k="shift" label="⇧" name="Shift" feed={feed} state={v.mods.shift} disabled={off} />
         </div>
@@ -152,7 +153,7 @@ export function KeyBar({ feed, v, onEditShortcuts }: { feed: TerminalFeed; v: Fe
           <Key icon="up" title="↑" disabled={off} onPress={k("up")} />
           <Key icon="arrowDown" title="↓" disabled={off} onPress={k("down")} />
           <Key icon="arrowRight" title="→" disabled={off} onPress={k("right")} />
-          <Key icon="enter" title="回车" disabled={off} onPress={k("enter")} />
+          <Key icon="enter" title={t("session-terminal-keybar.enter")} disabled={off} onPress={k("enter")} />
         </div>
       </div>
     </div>

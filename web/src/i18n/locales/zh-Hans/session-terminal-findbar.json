@@ -1,0 +1,8 @@
+{
+  "search_region": "在终端里搜索",
+  "placeholder": "搜索终端",
+  "previous": "上一个（Shift+Enter）",
+  "next": "下一个（Enter）",
+  "match_case": "区分大小写",
+  "close": "关闭搜索（Esc）"
+}

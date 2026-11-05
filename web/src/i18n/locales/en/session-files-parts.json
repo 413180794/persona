@@ -1,0 +1,18 @@
+{
+  "back": "Back",
+  "close_panel": "Close panel",
+  "tone_added": "Added",
+  "tone_deleted": "Deleted",
+  "tone_moved": "Moved",
+  "tone_changed": "Modified",
+  "modified": "Modified",
+  "added": "Added",
+  "deleted": "Deleted",
+  "renamed": "Renamed",
+  "copied": "Copied",
+  "untracked": "Untracked",
+  "conflict": "Conflict",
+  "type_changed": "Type changed",
+  "contains": "Contains: {change}",
+  "changes": "Changes"
+}

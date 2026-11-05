@@ -1,0 +1,18 @@
+{
+  "title": "文件",
+  "git_changes_one": "Git，{count} 处改动",
+  "git_changes_other": "Git，{count} 处改动",
+  "more": "更多",
+  "show_hidden": "显示隐藏文件",
+  "copy_path": "拷贝路径",
+  "reload": "刷新",
+  "only_hidden": "只有隐藏文件",
+  "empty_folder": "空文件夹",
+  "truncated": "文件太多，只列出了前 2000 个",
+  "open_failed": "打不开这个文件夹",
+  "retry": "重试",
+  "no_dir": "不知道这个会话的目录",
+  "reading": "正在读取",
+  "up": "上一级",
+  "location": "位置"
+}

@@ -1,0 +1,10 @@
+{
+  "modifier_hint": "{name}: tap for the next key, double-tap to lock, or hold",
+  "take_control_first": "Take control of the terminal to use keys",
+  "title": "Key bar",
+  "send_ctrl_c": "Send Ctrl+C",
+  "shortcuts": "Shortcuts",
+  "copy_selection": "Copy selected text",
+  "paste": "Paste from clipboard",
+  "enter": "Return"
+}

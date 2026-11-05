@@ -12,6 +12,7 @@ import { Icon } from "../../ui/icons";
 import { PanelHeader } from "../SidePanel";
 import { FileView } from "./files/FileView";
 import { Empty, FileGlyph, GitDot, GitBadge, useStoredFlag } from "./files/parts";
+import { t } from "../../i18n";
 
 type Listed = { at: string; listing?: FsListing; error?: string };
 
@@ -74,7 +75,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
       <div className={cx("flex min-h-0 flex-1 flex-col", viewing && "hidden")}>
         <PanelHeader
           icon="folder"
-          title="文件"
+          title={t("session-filespanel.title")}
           subtitle={shortPath(dir)}
           onClose={onClose}
           actions={
@@ -82,7 +83,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
               <button
                 type="button"
                 title="Git"
-                aria-label={changes ? `Git，${changes} 处改动` : "Git"}
+                aria-label={changes ? t("session-filespanel.git_changes", { count: changes }) : "Git"}
                 onClick={() => openPanel({ kind: "git", mid, sid, cwd })}
                 className="flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 transition-colors hover:bg-hover hover:text-ink"
               >
@@ -90,7 +91,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
                 Git
                 {changes > 0 && <span className="rounded-full bg-field px-1.5 text-[11px] text-ink-2 tabular-nums">{changes}</span>}
               </button>
-              <IconButton icon="more" label="更多" onClick={menu.open} active={Boolean(menu.anchor)} />
+              <IconButton icon="more" label={t("session-filespanel.more")} onClick={menu.open} active={Boolean(menu.anchor)} />
             </>
           }
         />
@@ -100,9 +101,9 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
             onClose={menu.close}
             align="right"
             items={[
-              { key: "hidden", label: "显示隐藏文件", checked: showHidden, onSelect: () => setShowHidden(!showHidden) },
-              { key: "copy", label: "拷贝路径", icon: "copy", onSelect: () => copyText(dir) },
-              { key: "reload", label: "刷新", icon: "retry", onSelect: () => setReloads((n) => n + 1) },
+              { key: "hidden", label: t("session-filespanel.show_hidden"), checked: showHidden, onSelect: () => setShowHidden(!showHidden) },
+              { key: "copy", label: t("session-filespanel.copy_path"), icon: "copy", onSelect: () => copyText(dir) },
+              { key: "reload", label: t("session-filespanel.reload"), icon: "retry", onSelect: () => setReloads((n) => n + 1) },
             ]}
           />
         )}
@@ -113,22 +114,22 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
               {entries.length === 0 && (
                 <Empty
                   icon="folder"
-                  title={here.listing.entries.length ? "只有隐藏文件" : "空文件夹"}
-                  action={here.listing.entries.length ? <Button onClick={() => setShowHidden(true)}>显示隐藏文件</Button> : undefined}
+                  title={here.listing.entries.length ? t("session-filespanel.only_hidden") : t("session-filespanel.empty_folder")}
+                  action={here.listing.entries.length ? <Button onClick={() => setShowHidden(true)}>{t("session-filespanel.show_hidden")}</Button> : undefined}
                 />
               )}
               {entries.map((e) => (
                 <EntryRow key={e.name} mid={mid} e={e} full={joinPath(dir, e.name)} mark={gitMark(git, joinPath(dir, e.name), e.dir)} onOpen={() => enter(e)} />
               ))}
-              {here.listing.truncated && <p className="px-4 py-2 text-[11.5px] text-ink-3">文件太多，只列出了前 2000 个</p>}
+              {here.listing.truncated && <p className="px-4 py-2 text-[11.5px] text-ink-3">{t("session-filespanel.truncated")}</p>}
             </div>
           ) : here?.error ? (
-            <Empty icon="folder" title="打不开这个文件夹" detail={here.error} action={<Button icon="retry" onClick={() => setReloads((n) => n + 1)}>重试</Button>} />
+            <Empty icon="folder" title={t("session-filespanel.open_failed")} detail={here.error} action={<Button icon="retry" onClick={() => setReloads((n) => n + 1)}>{t("session-filespanel.retry")}</Button>} />
           ) : !dir ? (
-            <Empty icon="folder" title="不知道这个会话的目录" />
+            <Empty icon="folder" title={t("session-filespanel.no_dir")} />
           ) : (
             <div className="flex h-40 items-center justify-center">
-              <Loading label="正在读取" />
+              <Loading label={t("session-filespanel.reading")} />
             </div>
           )}
         </div>
@@ -156,8 +157,8 @@ function Crumbs({ root, stack, go }: { root: string; stack: string[]; go: (level
   const names = [baseName(root) || "/", ...stack];
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-2">
-      <IconButton icon="chevronLeft" label="上一级" onClick={() => go(stack.length - 1)} disabled={!stack.length} iconSize={16} />
-      <div ref={bar} className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-none" aria-label="位置">
+      <IconButton icon="chevronLeft" label={t("session-filespanel.up")} onClick={() => go(stack.length - 1)} disabled={!stack.length} iconSize={16} />
+      <div ref={bar} className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-none" aria-label={t("session-filespanel.location")}>
         {names.map((n, i) => {
           const current = i === stack.length;
           return (
@@ -212,7 +213,7 @@ function EntryRow({ mid, e, full, mark, onOpen }: { mid: string; e: FsEntry; ful
       </button>
       {/* hover devices only: on a touch screen it would be an invisible target at the row's end */}
       <span className="hidden pr-2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 [@media(hover:hover)]:block">
-        <IconButton icon="copy" label="拷贝路径" onClick={() => copyText(full)} size={26} iconSize={13} />
+        <IconButton icon="copy" label={t("session-filespanel.copy_path")} onClick={() => copyText(full)} size={26} iconSize={13} />
       </span>
     </div>
   );

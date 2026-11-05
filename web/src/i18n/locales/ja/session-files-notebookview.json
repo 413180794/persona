@@ -1,0 +1,5 @@
+{
+  "cells_one": "{count}セル（コード{code}）",
+  "cells_other": "{count}セル（コード{code}）",
+  "output": "出力"
+}

@@ -8,6 +8,8 @@ import { extOf } from "../../../lib/files";
 import { openPanel } from "../../../lib/panel";
 import { Button, cx, Loading } from "../../../ui/atoms";
 import { Empty, Segmented } from "./parts";
+import { t } from "../../../i18n";
+import { tRich } from "../../../i18n/rich";
 
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif", "svg", "ico", "heic"];
 const DOC_EXTS = ["pdf", "docx", "pptx", "xlsx", "xlsm", "xls", "ods"];
@@ -27,9 +29,9 @@ interface Side {
 }
 
 async function resolve(mid: string, cwd: string, root: string, path: string, rev: Rev, signal: AbortSignal): Promise<Side> {
-  if (rev === "WORKTREE") return { label: "工作区", path: `${root.replace(/\/$/, "")}/${path}` };
+  if (rev === "WORKTREE") return { label: t("session-files-compareview.worktree"), path: `${root.replace(/\/$/, "")}/${path}` };
   const b = await api<{ path?: string; missing?: boolean }>(`/machines/${enc(mid)}/git/blob?cwd=${enc(cwd)}&path=${enc(path)}&rev=${enc(rev)}`, { signal });
-  const label = rev === "HEAD" ? "HEAD" : rev === "INDEX" ? "暂存区" : rev.endsWith("^") ? `${rev.slice(0, 7)} 之前` : rev.slice(0, 7);
+  const label = rev === "HEAD" ? "HEAD" : rev === "INDEX" ? t("session-files-compareview.index") : rev.endsWith("^") ? t("session-files-compareview.before_commit", { hash: rev.slice(0, 7) }) : rev.slice(0, 7);
   return { label, path: b.missing ? undefined : b.path };
 }
 
@@ -40,16 +42,16 @@ export function CompareView({ mid, cwd, root, path, before, after, deleted }: { 
     const ac = new AbortController();
     setSides(null);
     setError("");
-    Promise.all([resolve(mid, cwd, root, path, before, ac.signal), deleted && after === "WORKTREE" ? Promise.resolve({ label: "工作区" }) : resolve(mid, cwd, root, path, after, ac.signal)])
+    Promise.all([resolve(mid, cwd, root, path, before, ac.signal), deleted && after === "WORKTREE" ? Promise.resolve({ label: t("session-files-compareview.worktree") }) : resolve(mid, cwd, root, path, after, ac.signal)])
       .then((s) => !ac.signal.aborted && setSides(s))
       .catch((e) => !isAbort(e) && setError(errorText(e)));
     return () => ac.abort();
   }, [mid, cwd, root, path, before, after, deleted]);
-  if (error) return <Empty icon="info" title="取不到这两个版本" detail={error} />;
+  if (error) return <Empty icon="info" title={t("session-files-compareview.versions_failed")} detail={error} />;
   if (!sides)
     return (
       <div className="flex flex-1 items-center justify-center">
-        <Loading label="正在取两个版本" />
+        <Loading label={t("session-files-compareview.loading_versions")} />
       </div>
     );
   return compareKind(path) === "image" ? <ImageCompare mid={mid} sides={sides} /> : <DocCompare mid={mid} sides={sides} ext={extOf(path)} />;
@@ -61,7 +63,7 @@ function OpenButtons({ mid, sides }: { mid: string; sides: [Side, Side] }) {
       {sides.map((s, i) =>
         s.path ? (
           <Button key={i} tone="quiet" onClick={() => openPanel({ kind: "file", mid, path: s.path! })}>
-            打开{i === 0 ? "旧版" : "新版"}
+            {i === 0 ? t("session-files-compareview.open_old") : t("session-files-compareview.open_new")}
           </Button>
         ) : null,
       )}
@@ -80,7 +82,7 @@ function ImageCompare({ mid, sides }: { mid: string; sides: [Side, Side] }) {
   return (
     <>
       <div className="flex min-h-10 shrink-0 items-center gap-2 border-b border-line px-3 py-1.5">
-        {both && <Segmented label="对比方式" value={mode} onChange={setMode} options={[["side", "并排"], ["slide", "滑动"]]} />}
+        {both && <Segmented label={t("session-files-compareview.mode")} value={mode} onChange={setMode} options={[["side", t("session-files-compareview.side_by_side")], ["slide", t("session-files-compareview.slider")]]} />}
         <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-3">
           {sides[0].label} → {sides[1].label}
         </span>
@@ -91,10 +93,10 @@ function ImageCompare({ mid, sides }: { mid: string; sides: [Side, Side] }) {
           {sides.map((s, i) => (
             <div key={i} className="flex min-h-0 flex-col bg-surface">
               <div className={cx("shrink-0 px-3 py-1.5 text-[11.5px] font-medium", i === 0 ? "text-red" : "text-green")}>
-                {i === 0 ? "旧版" : "新版"} · {s.label}
+                {i === 0 ? t("session-files-compareview.old") : t("session-files-compareview.new")} · {s.label}
               </div>
               <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4" style={checker}>
-                {s.path ? <img src={src(s)} alt="" className="max-h-full max-w-full shadow-hairline" /> : <span className="text-[12.5px] text-ink-3">这个版本里没有这个文件</span>}
+                {s.path ? <img src={src(s)} alt="" className="max-h-full max-w-full shadow-hairline" /> : <span className="text-[12.5px] text-ink-3">{t("session-files-compareview.not_in_version")}</span>}
               </div>
             </div>
           ))}
@@ -103,15 +105,15 @@ function ImageCompare({ mid, sides }: { mid: string; sides: [Side, Side] }) {
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4" style={checker}>
             <div className="relative max-h-full max-w-full">
-              <img src={src(sides[1])} alt="新版" className="block max-h-[70vh] max-w-full" />
-              <img src={src(sides[0])} alt="旧版" className="absolute inset-0 block h-full w-full object-contain" style={{ clipPath: `inset(0 ${100 - at}% 0 0)` }} />
+              <img src={src(sides[1])} alt={t("session-files-compareview.new")} className="block max-h-[70vh] max-w-full" />
+              <img src={src(sides[0])} alt={t("session-files-compareview.old")} className="absolute inset-0 block h-full w-full object-contain" style={{ clipPath: `inset(0 ${100 - at}% 0 0)` }} />
               <div className="pointer-events-none absolute top-0 bottom-0 w-[2px] bg-accent" style={{ left: `${at}%` }} />
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-3 border-t border-line px-4 py-2 text-[11.5px] whitespace-nowrap">
-            <span className="text-red">旧版</span>
-            <input type="range" min={0} max={100} value={at} onChange={(e) => setAt(Number(e.target.value))} aria-label="旧版和新版的分界" className="flex-1 accent-[var(--accent)]" />
-            <span className="text-green">新版</span>
+            <span className="text-red">{t("session-files-compareview.old")}</span>
+            <input type="range" min={0} max={100} value={at} onChange={(e) => setAt(Number(e.target.value))} aria-label={t("session-files-compareview.divider")} className="flex-1 accent-[var(--accent)]" />
+            <span className="text-green">{t("session-files-compareview.new")}</span>
           </div>
         </div>
       )}
@@ -124,7 +126,7 @@ function ImageCompare({ mid, sides }: { mid: string; sides: [Side, Side] }) {
 async function unitsOf(mid: string, side: Side, ext: string, signal: AbortSignal): Promise<Unit[]> {
   if (!side.path) return [];
   const res = await fetch(fileDownloadURL(mid, side.path, ""), { signal });
-  if (!res.ok) throw new Error(`读不到 ${side.label} 的版本（HTTP ${res.status}）`);
+  if (!res.ok) throw new Error(t("session-files-compareview.read_failed", { label: side.label, status: res.status }));
   const data = await res.arrayBuffer();
   if (ext === "pdf") return pdfUnits(data);
   const parse = (s: string) => new DOMParser().parseFromString(s, "application/xml");
@@ -159,7 +161,11 @@ function DocCompare({ mid, sides, ext }: { mid: string; sides: [Side, Side]; ext
         {state.hunks && (
           <>
             {" · "}
-            <span className="text-green">+{state.added}</span> <span className="text-red">−{state.removed}</span> 行 · {state.hunks.length} 处改动（按文字比较）
+            {tRich("session-files-compareview.summary", {
+              added: <span className="text-green">+{state.added}</span>,
+              removed: <span className="text-red">−{state.removed}</span>,
+              count: state.hunks.length,
+            })}
           </>
         )}
       </span>
@@ -170,14 +176,14 @@ function DocCompare({ mid, sides, ext }: { mid: string; sides: [Side, Side]; ext
     return (
       <>
         {bar}
-        <Empty icon="info" title="比较不了" detail={state.error} />
+        <Empty icon="info" title={t("session-files-compareview.compare_failed")} detail={state.error} />
       </>
     );
   if (state.tooBig)
     return (
       <>
         {bar}
-        <Empty icon="info" title="改动太多，没法逐行比较" detail="分别打开旧版和新版看。" />
+        <Empty icon="info" title={t("session-files-compareview.too_big")} detail={t("session-files-compareview.open_both")} />
       </>
     );
   if (!state.hunks)
@@ -185,7 +191,7 @@ function DocCompare({ mid, sides, ext }: { mid: string; sides: [Side, Side]; ext
       <>
         {bar}
         <div className="flex flex-1 items-center justify-center">
-          <Loading label="正在读取两个版本的文字" />
+          <Loading label={t("session-files-compareview.loading_text")} />
         </div>
       </>
     );
@@ -193,12 +199,12 @@ function DocCompare({ mid, sides, ext }: { mid: string; sides: [Side, Side]; ext
     <>
       {bar}
       {state.hunks.length === 0 ? (
-        <Empty icon="check" title="文字没有变化" detail="改的可能是格式、图片或排版：分别打开旧版和新版看。" />
+        <Empty icon="check" title={t("session-files-compareview.no_text_change")} detail={t("session-files-compareview.no_text_change_detail")} />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto py-2">
           {state.hunks.map((h, i) => (
             <section key={i} className="mb-2">
-              {h.skippedBefore > 0 && <div className="px-4 py-1 text-[11.5px] text-ink-3">… 未改动 {h.skippedBefore} 行</div>}
+              {h.skippedBefore > 0 && <div className="px-4 py-1 text-[11.5px] text-ink-3">{t("session-files-compareview.skipped", { count: h.skippedBefore })}</div>}
               <div className="sticky top-0 z-10 bg-surface/95 px-4 py-1 text-[12px] font-semibold text-ink-2 backdrop-blur">{h.unit}</div>
               {pairRows(h.ops).map((o, j) =>
                 o.kind === "row" ? (

@@ -1,0 +1,21 @@
+{
+  "title": "终端设置",
+  "wrap": "长行换行",
+  "wrap_hint": "只看时按面板宽度折行；关掉按电脑上的宽度左右滚动",
+  "wrap_driving": "接管时终端就是面板的宽度",
+  "wrap_on": "按面板宽度折行",
+  "wrap_off": "按电脑上的宽度左右滚动",
+  "key_bar": "按键栏",
+  "key_bar_hint": "Esc、Ctrl、方向键和快捷命令",
+  "font_size": "字号",
+  "font_smaller": "缩小字号",
+  "font_default": "恢复默认字号",
+  "font_larger": "放大字号",
+  "cursor_style": "光标样式",
+  "cursor_blink": "光标闪烁",
+  "cursor_blink_hint": "获得焦点时一明一暗",
+  "webgl": "WebGL 渲染",
+  "webgl_hint_long": "用显卡画终端，输出多、字号小时更顺；关掉用默认渲染",
+  "webgl_hint": "输出多时更顺，关闭为默认渲染",
+  "edit_shortcuts": "编辑快捷命令…"
+}

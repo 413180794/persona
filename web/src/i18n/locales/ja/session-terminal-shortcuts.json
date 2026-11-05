@@ -1,0 +1,16 @@
+{
+  "title": "ショートカット",
+  "popover_header": "ショートカット・クリックで入力、↵で実行",
+  "edit": "編集",
+  "popover_empty": "ショートカットはまだありません。「編集」から追加できます",
+  "type": "入力：{command}",
+  "run": "実行：{command}",
+  "done": "完了",
+  "editor_hint": "キーバーの稲妻アイコンから使えます。クリックでターミナルに入力し、↵でReturn付きで実行します。このブラウザにのみ保存されます。",
+  "editor_empty": "ショートカットはありません",
+  "move_up": "上へ移動",
+  "move_down": "下へ移動",
+  "delete": "削除",
+  "new_placeholder": "新しいショートカット",
+  "add": "追加"
+}

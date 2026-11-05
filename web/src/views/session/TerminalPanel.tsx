@@ -21,6 +21,7 @@ import { KeyBar } from "./terminal/KeyBar";
 import { LinkStatus } from "./terminal/LinkStatus";
 import { ShortcutsEditor } from "./terminal/Shortcuts";
 import { TerminalOptions } from "./terminal/TerminalOptions";
+import { t } from "../../i18n";
 
 const KEYBAR_KEY = "jarvis.terminal.keyBar";
 
@@ -209,7 +210,7 @@ export function TerminalPanel({
     >
       <PanelHeader
         icon="terminal"
-        title="终端"
+        title={t("session-terminalpanel.title")}
         subtitle={subtitle}
         onClose={onClose}
         actions={
@@ -219,15 +220,15 @@ export function TerminalPanel({
             {feed && v && !driving && (
               <IconButton
                 icon="wrap"
-                label={v.wrap ? "长行换行：开（按面板宽度折行）" : "长行换行：关（按电脑上的宽度左右滚动）"}
+                label={v.wrap ? t("session-terminalpanel.wrap_on") : t("session-terminalpanel.wrap_off")}
                 active={v.wrap}
                 onClick={() => feed.setWrap(!v.wrap)}
               />
             )}
-            {onFiles && dir && <IconButton icon="folder" label="文件" onClick={onFiles} className="max-lg:hidden" />}
+            {onFiles && dir && <IconButton icon="folder" label={t("session-terminalpanel.files")} onClick={onFiles} className="max-lg:hidden" />}
             <IconButton
               icon="gear"
-              label="终端设置"
+              label={t("session-terminalpanel.settings")}
               active={Boolean(options)}
               disabled={!feed}
               onClick={(e) => {
@@ -235,7 +236,7 @@ export function TerminalPanel({
                 setOptions((o) => (o ? null : target));
               }}
             />
-            <IconButton icon="retry" label="重新连接" onClick={() => feed?.retry()} disabled={!feed} />
+            <IconButton icon="retry" label={t("session-terminalpanel.reconnect")} onClick={() => feed?.retry()} disabled={!feed} />
           </>
         }
       />
@@ -295,13 +296,13 @@ export function TerminalPanel({
             {takeBack && (
               <div className="pointer-events-auto flex items-center gap-2 rounded-control bg-surface py-1.5 pr-1.5 pl-2.5 text-[12px] text-ink-2 shadow-raised" style={{ animation: "fade-in 160ms ease-out both" }}>
                 <Icon name="info" size={13} className="shrink-0 text-ink-3" />
-                <span className="min-w-0 flex-1 truncate">{v.why === "taken" ? "被别处接管，现在只能看" : v.note}</span>
+                <span className="min-w-0 flex-1 truncate">{v.why === "taken" ? t("session-terminalpanel.taken_elsewhere") : v.note}</span>
                 <button
                   type="button"
                   onClick={() => feed.takeOver()}
                   className="h-6 shrink-0 whitespace-nowrap rounded-chip bg-ink px-2.5 text-[12px] font-medium text-surface transition-transform duration-150 active:scale-[0.96]"
                 >
-                  接管
+                  {t("session-terminalpanel.take_control")}
                 </button>
               </div>
             )}
@@ -316,13 +317,13 @@ export function TerminalPanel({
               style={{ animation: "fade-up 180ms ease-out both" }}
             >
               <Icon name="arrowDown" size={13} />
-              回到最新
+              {t("session-terminalpanel.back_to_latest")}
             </button>
           </div>
         )}
         {(!v || !v.loaded) && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <Loading label="正在连接终端" />
+            <Loading label={t("session-terminalpanel.connecting")} />
           </div>
         )}
       </div>
@@ -361,37 +362,37 @@ export function TerminalPanel({
       <Dialog
         open={v?.control === "busy"}
         onClose={() => feed?.watchOnly()}
-        title="电脑上另一个程序正在使用这个终端"
+        title={t("session-terminalpanel.busy_title")}
         footer={
           <>
             <Button tone="quiet" onClick={() => feed?.watchOnly()}>
-              只看
+              {t("session-terminalpanel.watch_only")}
             </Button>
             <Button tone="primary" onClick={() => feed?.takeOver()}>
-              接管
+              {t("session-terminalpanel.take_control")}
             </Button>
           </>
         }
       >
-        <p className="text-[13px] leading-relaxed text-ink-2">比如另一个 herdr 客户端。接管后它会断开，终端改成这个面板的尺寸；关掉面板时窗格回到电脑上的尺寸。</p>
+        <p className="text-[13px] leading-relaxed text-ink-2">{t("session-terminalpanel.busy_detail")}</p>
       </Dialog>
 
       <Dialog
         open={Boolean(v?.pasting)}
         onClose={() => feed?.confirmPaste(false)}
-        title={`粘贴 ${v?.pasting ? lineCount(v.pasting) : 0} 行到终端？`}
+        title={t("session-terminalpanel.paste_title", { count: v?.pasting ? lineCount(v.pasting) : 0 })}
         footer={
           <>
             <Button tone="quiet" onClick={() => feed?.confirmPaste(false)}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button tone="primary" onClick={() => feed?.confirmPaste(true)}>
-              粘贴
+              {t("session-terminalpanel.paste")}
             </Button>
           </>
         }
       >
-        <p className="text-[13px] leading-relaxed text-ink-2">多行文字在 shell 里可能被逐行执行。</p>
+        <p className="text-[13px] leading-relaxed text-ink-2">{t("session-terminalpanel.paste_detail")}</p>
       </Dialog>
     </div>
   );
@@ -407,16 +408,16 @@ function HistoryStatus({ v, onLoad }: { v: FeedView; onLoad: () => void }) {
     return (
       <div className={cls}>
         <Spinner size={11} />
-        加载更早的输出…
+        {t("session-terminalpanel.loading_older")}
       </div>
     );
-  if (v.atLimit) return <div className={cls}>— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —</div>;
-  if (!v.hasOlder) return <div className={cls}>— 已到最前面 —</div>;
+  if (v.atLimit) return <div className={cls}>{t("session-terminalpanel.history_limit")}</div>;
+  if (!v.hasOlder) return <div className={cls}>{t("session-terminalpanel.history_start")}</div>;
   return (
     <div className={cls}>
       <button type="button" onClick={onLoad} className="inline-flex h-6 items-center gap-1 rounded-chip px-2 hover:bg-hover hover:text-ink-2">
         <Icon name="up" size={12} />
-        往上滚动加载更早的输出
+        {t("session-terminalpanel.load_older")}
       </button>
     </div>
   );
@@ -427,13 +428,13 @@ function SizeLabel({ v }: { v: FeedView }) {
   if (!v.ready || !v.loaded) return null;
   const size = v.cols && v.rows ? `${v.cols}×${v.rows}` : "";
   const text =
-    v.mode === "poll" ? "只看" : v.control === "active" ? `接管 ${size}` : v.control === "starting" ? "接管中…" : `只看 ${size}`.trim();
+    v.mode === "poll" ? t("session-terminalpanel.size_watch_only") : v.control === "active" ? t("session-terminalpanel.size_control", { size }).trim() : v.control === "starting" ? t("session-terminalpanel.size_starting") : t("session-terminalpanel.size_watch", { size }).trim();
   const title =
     v.mode === "poll"
-      ? "这台电脑不能推送终端，每秒读一次屏幕"
+      ? t("session-terminalpanel.size_poll_hint")
       : v.control === "active"
-        ? "电脑上的窗格现在是这个面板的行列数"
-        : "电脑上窗格本身的行列数";
+        ? t("session-terminalpanel.size_control_hint")
+        : t("session-terminalpanel.size_watch_hint");
   return (
     <span title={title} className="hidden shrink-0 whitespace-nowrap font-mono text-[11.5px] text-ink-3 tabular-nums @md:inline">
       {text}
@@ -444,11 +445,11 @@ function SizeLabel({ v }: { v: FeedView }) {
 /** 接管 (the pane takes the panel's size, keys go in) or 只看 (the pane as the computer has it). */
 function ModeSwitch({ drive, onChange }: { drive: boolean; onChange: (drive: boolean) => void }) {
   const options: [string, boolean, string][] = [
-    ["接管", true, "按这个面板的大小接管终端，键盘直接输入"],
-    ["只看", false, "不改电脑上的窗格，只看"],
+    [t("session-terminalpanel.mode_control"), true, t("session-terminalpanel.mode_control_hint")],
+    [t("session-terminalpanel.mode_watch"), false, t("session-terminalpanel.mode_watch_hint")],
   ];
   return (
-    <div role="radiogroup" aria-label="接管或只看" className="flex h-7 shrink-0 items-center rounded-control bg-field p-0.5">
+    <div role="radiogroup" aria-label={t("session-terminalpanel.mode_label")} className="flex h-7 shrink-0 items-center rounded-control bg-field p-0.5">
       {options.map(([label, value, title]) => (
         <button
           key={label}

@@ -1,0 +1,18 @@
+{
+  "title": "ファイル",
+  "git_changes_one": "Git、{count}件の変更",
+  "git_changes_other": "Git、{count}件の変更",
+  "more": "その他",
+  "show_hidden": "隠しファイルを表示",
+  "copy_path": "パスをコピー",
+  "reload": "更新",
+  "only_hidden": "隠しファイルのみです",
+  "empty_folder": "空のフォルダ",
+  "truncated": "ファイルが多すぎるため、最初の2000件のみ表示しています",
+  "open_failed": "このフォルダを開けません",
+  "retry": "再試行",
+  "no_dir": "このセッションのフォルダがわかりません",
+  "reading": "読み込み中",
+  "up": "1つ上へ",
+  "location": "場所"
+}

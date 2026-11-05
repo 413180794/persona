@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { gitTone, glyphOf } from "../../../lib/files";
 import { cx, IconButton } from "../../../ui/atoms";
 import { Icon, type IconName } from "../../../ui/icons";
+import { t } from "../../../i18n";
 
 /** A panel header whose leading square is a back button (sub-views); PanelHeader's look otherwise. */
 export function BackHeader({
@@ -21,25 +22,34 @@ export function BackHeader({
 }) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3">
-      <IconButton icon="chevronLeft" label="返回" onClick={onBack} iconSize={16} />
+      <IconButton icon="chevronLeft" label={t("session-files-parts.back")} onClick={onBack} iconSize={16} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13.5px] font-semibold text-ink">{title}</div>
         {subtitle && <div className="truncate text-[11.5px] text-ink-3">{subtitle}</div>}
       </div>
       {actions}
-      <IconButton icon="x" label="关闭面板" onClick={onClose} />
+      <IconButton icon="x" label={t("session-files-parts.close_panel")} onClick={onClose} />
     </header>
   );
 }
 
 const TONE: Record<ReturnType<typeof gitTone>, { badge: string; dot: string; label: string }> = {
-  add: { badge: "bg-green-tint text-green", dot: "bg-green", label: "新增" },
-  del: { badge: "bg-red-tint text-red", dot: "bg-red", label: "删除" },
-  moved: { badge: "bg-field text-ink-2", dot: "bg-ink-3", label: "移动" },
-  changed: { badge: "bg-orange-tint text-orange", dot: "bg-orange", label: "修改" },
+  add: { badge: "bg-green-tint text-green", dot: "bg-green", label: t("session-files-parts.tone_added") },
+  del: { badge: "bg-red-tint text-red", dot: "bg-red", label: t("session-files-parts.tone_deleted") },
+  moved: { badge: "bg-field text-ink-2", dot: "bg-ink-3", label: t("session-files-parts.tone_moved") },
+  changed: { badge: "bg-orange-tint text-orange", dot: "bg-orange", label: t("session-files-parts.tone_changed") },
 };
 
-const LETTER: Record<string, string> = { M: "修改", A: "新增", D: "删除", R: "重命名", C: "复制", U: "未跟踪", "!": "冲突", T: "类型改变" };
+const LETTER: Record<string, string> = {
+  M: t("session-files-parts.modified"),
+  A: t("session-files-parts.added"),
+  D: t("session-files-parts.deleted"),
+  R: t("session-files-parts.renamed"),
+  C: t("session-files-parts.copied"),
+  U: t("session-files-parts.untracked"),
+  "!": t("session-files-parts.conflict"),
+  T: t("session-files-parts.type_changed"),
+};
 
 /** A change's letter, colored like editors do. */
 export function GitBadge({ letter }: { letter: string }) {
@@ -55,7 +65,7 @@ export function GitBadge({ letter }: { letter: string }) {
 
 /** A folder that holds a change: a dot in the change's color. */
 export function GitDot({ letter }: { letter: string }) {
-  return <span role="img" aria-label={`里面有${LETTER[letter] ?? "改动"}`} className={cx("size-1.5 shrink-0 rounded-full", TONE[gitTone(letter)].dot)} />;
+  return <span role="img" aria-label={t("session-files-parts.contains", { change: LETTER[letter] ?? t("session-files-parts.changes") })} className={cx("size-1.5 shrink-0 rounded-full", TONE[gitTone(letter)].dot)} />;
 }
 
 /** Two (or a few) ways to show the same thing; single-line labels. */

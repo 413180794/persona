@@ -1,0 +1,10 @@
+{
+  "modifier_hint": "{name}：タップで次のキーに適用、ダブルタップでロック、長押しで押したまま",
+  "take_control_first": "キーを使うにはターミナルを操作してください",
+  "title": "キーバー",
+  "send_ctrl_c": "Ctrl+Cを送信",
+  "shortcuts": "ショートカット",
+  "copy_selection": "選択したテキストをコピー",
+  "paste": "クリップボードから貼り付け",
+  "enter": "Return"
+}

@@ -46,6 +46,7 @@ import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 import { hubMenuItems, useHubs } from "./Hubs";
 import { PersonaAvatar } from "./assistant/Persona";
 import { useFolded } from "../lib/use-folded";
+import { clipsOverflow, glideBox, sameBox, type GlideBox, type Span } from "../lib/glide";
 import { onGrouping } from "../lib/sidebar-api";
 import { jumpHint, useBindings } from "../lib/shortcuts";
 
@@ -71,21 +72,70 @@ function reveal(el: HTMLElement): boolean {
 /** The gliding highlight under a list of rows (Beautiful UI's Sidebar Nav): rows register under their keys, and the
  *  one under the pointer gets the box; the open row has its own fill (CURRENT_ROW), so the box doesn't take it away.
  *  The list is the box's scroll container (`nav`). The open row is kept in view from when it opens until the list is
- *  touched (wheel, pointer, keys): it may come later, and rows loading above it push it down. */
+ *  touched (wheel, pointer, keys): it may come later, and rows loading above it push it down.
+ *  The box is measured after each render and again whenever the list's layout moves without one (#2476): a group
+ *  folding or opening (its Collapse animates, then ends), rows arriving or changing height, scrolling. It covers only
+ *  the part of its row on show and goes away when the row is folded away or gone (lib/glide.ts). */
 function useGlide(activeKey: string) {
   const nav = useRef<HTMLDivElement>(null);
   const rows = useRef(new Map<string, HTMLElement>());
   const lastKey = useRef<string | null>(null);
   const following = useRef(false);
   const [hovered, setHovered] = useState<string | null>(null);
-  const [box, setBox] = useState<{ top: number; height: number } | null>(null);
+  // `at`: the last place it was on show; a box that goes away (`on` false) fades out there, and glides from there back
+  const [box, setBox] = useState<{ at: GlideBox | null; on: boolean }>({ at: null, on: false });
+  const target = useRef<string>(activeKey);
+  target.current = hovered ?? activeKey;
+  const sizes = useRef<ResizeObserver | null>(null);
+  const measure = useRef(() => {});
+  measure.current = () => {
+    const n = nav.current;
+    // the box rests under the open row when the pointer is away, so it glides from there; that row's fill covers it
+    const el = rows.current.get(target.current);
+    let next: GlideBox | null = null;
+    if (n && el?.isConnected) {
+      const clips: Span[] = [];
+      for (let p = el.parentElement; p && p !== n; p = p.parentElement) if (clipsOverflow(getComputedStyle(p).overflowY)) clips.push(p.getBoundingClientRect());
+      next = glideBox(el.getBoundingClientRect(), clips, n.getBoundingClientRect(), n.scrollTop);
+    }
+    // only a real move updates
+    setBox((b) => (next ? (b.on && sameBox(b.at, next) ? b : { at: next, on: true }) : b.on ? { at: b.at, on: false } : b));
+  };
   useEffect(() => {
     const n = nav.current;
     if (!n) return;
     const stop = () => (following.current = false);
     const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
     for (const e of events) n.addEventListener(e, stop, { passive: true });
-    return () => events.forEach((e) => n.removeEventListener(e, stop));
+    // layout moves the list doesn't re-render for, measured once per frame however many come in it
+    let frame = 0;
+    const soon = () => {
+      if (!frame) frame = requestAnimationFrame(() => ((frame = 0), measure.current()));
+    };
+    const ro = new ResizeObserver(soon);
+    sizes.current = ro;
+    // the list and its blocks (sections) change height as a group inside folds or opens, and as rows come and go;
+    // the rows themselves are observed as they register (one growing moves the rest)
+    const watch = () => {
+      ro.observe(n);
+      for (const c of n.children) ro.observe(c);
+      for (const el of rows.current.values()) ro.observe(el);
+    };
+    watch();
+    const mo = new MutationObserver(() => (ro.disconnect(), watch(), soon()));
+    mo.observe(n, { childList: true });
+    // a Collapse's transition ending (it may end without a size change, e.g. its opacity) and scrolling inside the list
+    n.addEventListener("transitionend", soon);
+    n.addEventListener("scroll", soon, { passive: true, capture: true });
+    return () => {
+      events.forEach((e) => n.removeEventListener(e, stop));
+      n.removeEventListener("transitionend", soon);
+      n.removeEventListener("scroll", soon, { capture: true });
+      mo.disconnect();
+      ro.disconnect();
+      sizes.current = null;
+      cancelAnimationFrame(frame);
+    };
   }, []);
   useLayoutEffect(() => {
     if (lastKey.current !== activeKey) {
@@ -95,23 +145,30 @@ function useGlide(activeKey: string) {
     const open = following.current ? rows.current.get(activeKey) : undefined;
     // a group that opened for it is still growing, and the list can't scroll past its end yet: again once it has
     if (open?.offsetHeight && reveal(open)) setTimeout(() => following.current && open.isConnected && reveal(open), 350);
-    // the box rests under the open row when the pointer is away, so it glides from there; that row's fill covers it
-    const el = rows.current.get(hovered ?? activeKey);
-    let next: { top: number; height: number } | null = null;
-    if (el && nav.current) {
-      const n = nav.current.getBoundingClientRect(),
-        r = el.getBoundingClientRect();
-      if (r.height) next = { top: r.top - n.top + nav.current.scrollTop, height: r.height };
-    }
-    // runs after every render (rows fold, lists change): only a real move updates
-    setBox((b) => (b?.top === next?.top && b?.height === next?.height ? b : next));
+    // runs after every render (rows fold, lists change)
+    measure.current();
   });
-  const [reg] = useState<RegFn>(() => keyedRefs(rows.current));
+  // keyedRefs keeps a key's entry for the element that holds it (a folded tab's row and its hidden pane row may share a
+  // key, #2320); on top, each row's size is watched while it is registered, so a row growing or folding away moves the
+  // glide (#2476)
+  const [reg] = useState<RegFn>(() => {
+    const keyed = keyedRefs(rows.current);
+    return (k: string) => {
+      const set = keyed(k);
+      let mine: HTMLElement | null = null;
+      return (el: HTMLElement | null) => {
+        if (mine && mine !== el) sizes.current?.unobserve(mine);
+        set(el);
+        mine = el;
+        if (el) sizes.current?.observe(el);
+      };
+    };
+  });
   const highlight = (
     <span
       aria-hidden
       className="pointer-events-none absolute inset-x-2.5 rounded-[7px] bg-hover"
-      style={{ top: box?.top ?? 0, height: box?.height ?? 0, opacity: box ? 1 : 0, transition: `top 220ms ${EASE}, height 220ms ${EASE}, opacity 150ms ease` }}
+      style={{ top: box.at?.top ?? 0, height: box.at?.height ?? 0, opacity: box.on ? 1 : 0, transition: `top 220ms ${EASE}, height 220ms ${EASE}, opacity 150ms ease` }}
     />
   );
   return { nav, reg, hover: setHovered, highlight };

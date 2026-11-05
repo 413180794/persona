@@ -1,0 +1,22 @@
+{
+  "hub_unreachable": "连不上 hub",
+  "load_failed": "终端组件没有加载出来，刷新页面再试",
+  "not_in_herdr": "会话没有在 herdr 里运行",
+  "watch_only_computer": "这台电脑只能看，不能接管",
+  "taken": "另一台设备接管了这个终端",
+  "lost": "终端已回到电脑上的尺寸",
+  "clipboard_denied": "浏览器没有允许读取剪贴板，用 ⌘V / Ctrl+V 粘贴",
+  "clipboard_insecure": "这个页面不能读取剪贴板（需要 HTTPS），用 ⌘V / Ctrl+V 粘贴",
+  "clipboard_empty": "剪贴板里没有文字",
+  "select_first": "先用鼠标选中要复制的文字",
+  "program_copied": "终端里的程序已复制到剪贴板",
+  "program_wants_copy": "终端里的程序要复制一段文字",
+  "copy": "复制",
+  "take_control_to_paste": "接管终端后才能粘贴文件",
+  "switched_during_upload": "上传期间终端已切换，没有粘贴",
+  "released_during_upload": "上传期间不再接管终端，没有粘贴",
+  "watch_only_chosen": "只看：电脑上另一个程序在用这个终端",
+  "webgl_lost": "显卡渲染被中断，已改回默认渲染",
+  "webgl_unavailable": "这个浏览器用不了 WebGL，仍用默认渲染",
+  "older_failed": "没有读到更早的输出：{error}"
+}

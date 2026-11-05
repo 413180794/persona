@@ -1,0 +1,18 @@
+{
+  "back": "戻る",
+  "close_panel": "パネルを閉じる",
+  "tone_added": "追加",
+  "tone_deleted": "削除",
+  "tone_moved": "移動",
+  "tone_changed": "変更",
+  "modified": "変更",
+  "added": "追加",
+  "deleted": "削除",
+  "renamed": "名前変更",
+  "copied": "コピー",
+  "untracked": "未追跡",
+  "conflict": "競合",
+  "type_changed": "種類の変更",
+  "contains": "含まれる変更：{change}",
+  "changes": "変更"
+}

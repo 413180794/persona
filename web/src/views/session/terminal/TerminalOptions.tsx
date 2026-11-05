@@ -8,6 +8,7 @@ import { Icon } from "../../../ui/icons";
 import { Switch } from "../../assistant/parts";
 import { CURSOR_STYLES } from "../../../lib/terminal-details";
 import { FONT_SIZES, type FeedView, type TerminalFeed } from "./feed";
+import { t } from "../../../i18n";
 
 export function TerminalOptions({
   anchor,
@@ -57,52 +58,52 @@ export function TerminalOptions({
     <div
       ref={ref}
       role="dialog"
-      aria-label="终端设置"
+      aria-label={t("session-terminal-terminaloptions.title")}
       className="fixed z-50 overflow-hidden rounded-[10px] bg-surface py-1 shadow-overlay"
       style={{ ...pos, animation: `pop-in 160ms ${EASE} both`, transformOrigin: "top right" }}
     >
       <div className={row}>
         <Icon name="wrap" size={15} className="shrink-0 text-ink-3" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[12.5px] text-ink">长行换行</div>
-          <div className="truncate text-[11px] text-ink-3" title="只看时按面板宽度折行；关掉按电脑上的宽度左右滚动">
-            {driving ? "接管时终端就是面板的宽度" : v.wrap ? "按面板宽度折行" : "按电脑上的宽度左右滚动"}
+          <div className="truncate text-[12.5px] text-ink">{t("session-terminal-terminaloptions.wrap")}</div>
+          <div className="truncate text-[11px] text-ink-3" title={t("session-terminal-terminaloptions.wrap_hint")}>
+            {driving ? t("session-terminal-terminaloptions.wrap_driving") : v.wrap ? t("session-terminal-terminaloptions.wrap_on") : t("session-terminal-terminaloptions.wrap_off")}
           </div>
         </div>
-        <Switch checked={v.wrap} onChange={(on) => feed.setWrap(on)} label="长行换行" />
+        <Switch checked={v.wrap} onChange={(on) => feed.setWrap(on)} label={t("session-terminal-terminaloptions.wrap")} />
       </div>
       <div className={row}>
         <Icon name="keyboard" size={15} className="shrink-0 text-ink-3" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[12.5px] text-ink">按键栏</div>
-          <div className="truncate text-[11px] text-ink-3">Esc、Ctrl、方向键和快捷命令</div>
+          <div className="truncate text-[12.5px] text-ink">{t("session-terminal-terminaloptions.key_bar")}</div>
+          <div className="truncate text-[11px] text-ink-3">{t("session-terminal-terminaloptions.key_bar_hint")}</div>
         </div>
-        <Switch checked={keyBar} onChange={onKeyBar} label="按键栏" />
+        <Switch checked={keyBar} onChange={onKeyBar} label={t("session-terminal-terminaloptions.key_bar")} />
       </div>
       <div className={row}>
         <Icon name="textSize" size={15} className="shrink-0 text-ink-3" />
-        <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">字号</span>
+        <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{t("session-terminal-terminaloptions.font_size")}</span>
         <div className="flex h-7 shrink-0 items-center rounded-control bg-field p-0.5">
-          <StepButton label="缩小字号" disabled={v.fontSize <= FONT_SIZES.min} onClick={() => feed.setFontSize(v.fontSize - 1)}>
+          <StepButton label={t("session-terminal-terminaloptions.font_smaller")} disabled={v.fontSize <= FONT_SIZES.min} onClick={() => feed.setFontSize(v.fontSize - 1)}>
             −
           </StepButton>
           <button
             type="button"
-            title="恢复默认字号"
+            title={t("session-terminal-terminaloptions.font_default")}
             onClick={() => feed.setFontSize(FONT_SIZES.default)}
             className="h-6 min-w-8 whitespace-nowrap rounded-chip px-1 font-mono text-[12px] text-ink tabular-nums hover:bg-surface"
           >
             {v.fontSize}
           </button>
-          <StepButton label="放大字号" disabled={v.fontSize >= FONT_SIZES.max} onClick={() => feed.setFontSize(v.fontSize + 1)}>
+          <StepButton label={t("session-terminal-terminaloptions.font_larger")} disabled={v.fontSize >= FONT_SIZES.max} onClick={() => feed.setFontSize(v.fontSize + 1)}>
             +
           </StepButton>
         </div>
       </div>
       <div className={row}>
         <Icon name="square" size={15} className="shrink-0 text-ink-3" />
-        <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">光标样式</span>
-        <div role="radiogroup" aria-label="光标样式" className="flex h-7 shrink-0 items-center rounded-control bg-field p-0.5">
+        <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{t("session-terminal-terminaloptions.cursor_style")}</span>
+        <div role="radiogroup" aria-label={t("session-terminal-terminaloptions.cursor_style")} className="flex h-7 shrink-0 items-center rounded-control bg-field p-0.5">
           {CURSOR_STYLES.map((c) => (
             <button
               key={c.value}
@@ -123,20 +124,20 @@ export function TerminalOptions({
       <div className={row}>
         <Icon name="spark" size={15} className="shrink-0 text-ink-3" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[12.5px] text-ink">光标闪烁</div>
-          <div className="truncate text-[11px] text-ink-3">获得焦点时一明一暗</div>
+          <div className="truncate text-[12.5px] text-ink">{t("session-terminal-terminaloptions.cursor_blink")}</div>
+          <div className="truncate text-[11px] text-ink-3">{t("session-terminal-terminaloptions.cursor_blink_hint")}</div>
         </div>
-        <Switch checked={v.cursorBlink} onChange={(on) => feed.setCursorBlink(on)} label="光标闪烁" />
+        <Switch checked={v.cursorBlink} onChange={(on) => feed.setCursorBlink(on)} label={t("session-terminal-terminaloptions.cursor_blink")} />
       </div>
       <div className={row}>
         <Icon name="gauge" size={15} className="shrink-0 text-ink-3" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[12.5px] text-ink">WebGL 渲染</div>
-          <div className="truncate text-[11px] text-ink-3" title="用显卡画终端，输出多、字号小时更顺；关掉用默认渲染">
-            输出多时更顺，关闭为默认渲染
+          <div className="truncate text-[12.5px] text-ink">{t("session-terminal-terminaloptions.webgl")}</div>
+          <div className="truncate text-[11px] text-ink-3" title={t("session-terminal-terminaloptions.webgl_hint_long")}>
+            {t("session-terminal-terminaloptions.webgl_hint")}
           </div>
         </div>
-        <Switch checked={v.webgl} onChange={(on) => feed.setWebgl(on)} label="WebGL 渲染" />
+        <Switch checked={v.webgl} onChange={(on) => feed.setWebgl(on)} label={t("session-terminal-terminaloptions.webgl")} />
       </div>
       <div className="mx-3 my-1 border-t border-line" />
       <button
@@ -148,7 +149,7 @@ export function TerminalOptions({
         className={cx(row, "w-full text-left hover:bg-hover")}
       >
         <Icon name="bolt" size={15} className="shrink-0 text-ink-3" />
-        <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">编辑快捷命令…</span>
+        <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{t("session-terminal-terminaloptions.edit_shortcuts")}</span>
       </button>
     </div>,
     document.body,

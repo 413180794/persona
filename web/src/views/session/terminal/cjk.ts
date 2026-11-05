@@ -53,6 +53,7 @@ async function load(stack: string): Promise<string | null> {
   await probe.load(); // rejects when none of them is installed
   document.fonts.add(probe);
   const cell = measure(stack, "W".repeat(20)) / 20;
+  // i18n-ignore: a CJK glyph to measure, not text
   const glyph = measure(`"${probeName}"`, "中".repeat(10)) / 10;
   document.fonts.delete(probe);
   if (!(cell > 0 && glyph > 0)) return null;

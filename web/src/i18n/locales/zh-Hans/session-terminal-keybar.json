@@ -1,0 +1,10 @@
+{
+  "modifier_hint": "{name}：点一下作用于下一个键，双击锁定，按住不放",
+  "take_control_first": "接管终端后才能按键",
+  "title": "按键栏",
+  "send_ctrl_c": "发送 Ctrl+C",
+  "shortcuts": "快捷命令",
+  "copy_selection": "复制选中的文字",
+  "paste": "粘贴剪贴板",
+  "enter": "回车"
+}

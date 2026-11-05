@@ -11,11 +11,13 @@ import { IWORK_PREVIEWS, readZipEntry, type ReadRange } from "../../../lib/zip-r
 import { Button, Loading } from "../../../ui/atoms";
 import { fileBytes } from "./FileView";
 import { Empty } from "./parts";
+import { t } from "../../../i18n";
+import { tRich } from "../../../i18n/rich";
 
 const MAX_OFFICE_BYTES = 100 << 20; // bigger documents go to LibreOffice or download
 const PAD = 24; // the frame's margin around the pages
 
-type Rendered = { html: string; css: string; width: number; count: number; unit: "页" | "张幻灯片" };
+type Rendered = { html: string; css: string; width: number; count: number; unit: "pages" | "slides" };
 const IWORK = ["pages", "key", "numbers"];
 
 /** Byte ranges of a machine file: by HTTP Range from file/download, or out of the base64 an older hub sent. */
@@ -43,7 +45,7 @@ export function OfficeView({ mid, cwd, file, onDownload }: { mid: string; cwd?: 
   const ext = extOf(file.name);
   const renderable = OFFICE_RENDERED.includes(ext) && typeof file.text !== "string";
   const iwork = IWORK.includes(ext) && typeof file.text !== "string";
-  const [state, setState] = useState<State>({ kind: "loading", label: "正在打开" });
+  const [state, setState] = useState<State>({ kind: "loading", label: t("session-files-officeview.opening") });
   const [want, setWant] = useState<"render" | "preview" | "pdf">(renderable ? "render" : iwork ? "preview" : "pdf");
 
   useEffect(() => {
@@ -53,7 +55,7 @@ export function OfficeView({ mid, cwd, file, onDownload }: { mid: string; cwd?: 
     if (want === "preview") {
       // iWork documents carry a preview Apple's apps wrote: a PDF of every page, or a picture of the first
       let url = "";
-      setState({ kind: "loading", label: "正在读取文件自带的预览" });
+      setState({ kind: "loading", label: t("session-files-officeview.reading_preview") });
       readZipEntry(rangeReader(mid, file, cwd, ac.signal), file.size, IWORK_PREVIEWS)
         .then((got) => {
           if (ac.signal.aborted) return;
@@ -69,18 +71,18 @@ export function OfficeView({ mid, cwd, file, onDownload }: { mid: string; cwd?: 
       };
     }
     if (want === "render") {
-      setState({ kind: "loading", label: `正在打开 · ${bytes(file.size)}` });
+      setState({ kind: "loading", label: t("session-files-officeview.opening_size", { size: bytes(file.size) }) });
       (async () => {
-        if (file.size > MAX_OFFICE_BYTES) throw new Error(`文件有 ${bytes(file.size)}，太大了，在浏览器里打不开`);
+        if (file.size > MAX_OFFICE_BYTES) throw new Error(t("session-files-officeview.too_large", { size: bytes(file.size) }));
         const data = await fileBytes(mid, file, cwd, ac.signal);
         const doc = ext.startsWith("ppt") || ext === "potx" ? await renderPptx(data) : await renderDocx(data);
         if (!ac.signal.aborted) setState({ kind: "rendered", doc });
-      })().catch((e) => fail("这个文档在浏览器里显示不了", e, true));
+      })().catch((e) => fail(t("session-files-officeview.render_failed"), e, true));
     } else {
-      setState({ kind: "loading", label: "正在用那台电脑上的 LibreOffice 转成 PDF" });
+      setState({ kind: "loading", label: t("session-files-officeview.converting") });
       api<{ path: string }>(`/machines/${enc(mid)}/file/convert?path=${enc(file.path)}&cwd=${enc(cwd ?? "")}&to=pdf`, { signal: ac.signal })
         .then((r) => !ac.signal.aborted && setState({ kind: "pdf", url: fileDownloadURL(mid, r.path, "", { inline: true }) }))
-        .catch((e) => fail("转换失败", e, false));
+        .catch((e) => fail(t("session-files-officeview.convert_failed"), e, false));
     }
     return () => ac.abort();
   }, [mid, cwd, file, ext, want]);
@@ -101,11 +103,11 @@ export function OfficeView({ mid, cwd, file, onDownload }: { mid: string; cwd?: 
   if (state.kind === "error") {
     const detail = state.missing ? (
       <>
-        这台电脑没有装 LibreOffice。装好后再试，或者下载下来用本机的软件打开。
+        {t("session-files-officeview.no_libreoffice")}
         <br />
-        macOS：<code className="whitespace-nowrap">brew install --cask libreoffice</code>
+        {tRich("session-files-officeview.install_macos", { command: <code className="whitespace-nowrap">brew install --cask libreoffice</code> })}
         <br />
-        Linux：<code className="whitespace-nowrap">apt install libreoffice</code>
+        {tRich("session-files-officeview.install_linux", { command: <code className="whitespace-nowrap">apt install libreoffice</code> })}
       </>
     ) : (
       state.detail
@@ -113,17 +115,17 @@ export function OfficeView({ mid, cwd, file, onDownload }: { mid: string; cwd?: 
     return (
       <Empty
         icon="info"
-        title={state.missing ? "这种文档要 LibreOffice 才能预览" : state.title}
+        title={state.missing ? t("session-files-officeview.needs_libreoffice") : state.title}
         detail={detail}
         action={
           <div className="flex gap-2">
             {state.convertible && (
               <Button icon="retry" onClick={() => setWant("pdf")}>
-                转成 PDF
+                {t("session-files-officeview.to_pdf")}
               </Button>
             )}
             <Button icon="arrowDown" onClick={onDownload}>
-              下载
+              {t("session-files-officeview.download")}
             </Button>
           </div>
         }
@@ -134,9 +136,9 @@ export function OfficeView({ mid, cwd, file, onDownload }: { mid: string; cwd?: 
     return (
       <>
         {bar(
-          state.pdf ? "文件自带的预览" : "文件自带的预览图（只有第一页）",
+          state.pdf ? t("session-files-officeview.own_preview") : t("session-files-officeview.own_preview_image"),
           <Button tone="quiet" onClick={() => setWant("pdf")}>
-            转成 PDF
+            {t("session-files-officeview.to_pdf")}
           </Button>,
         )}
         {state.pdf ? (
@@ -152,10 +154,10 @@ export function OfficeView({ mid, cwd, file, onDownload }: { mid: string; cwd?: 
     return (
       <>
         {bar(
-          "LibreOffice 转换的 PDF",
+          t("session-files-officeview.libreoffice_pdf"),
           (renderable || iwork) && (
             <Button tone="quiet" onClick={() => setWant(renderable ? "render" : "preview")}>
-              {renderable ? "原样预览" : "自带预览"}
+              {renderable ? t("session-files-officeview.render_preview") : t("session-files-officeview.builtin_preview")}
             </Button>
           ),
         )}
@@ -165,9 +167,9 @@ export function OfficeView({ mid, cwd, file, onDownload }: { mid: string; cwd?: 
   return (
     <>
       {bar(
-        `${state.doc.count} ${state.doc.unit} · ${bytes(file.size)}`,
+        `${t(state.doc.unit === "slides" ? "session-files-officeview.slides" : "session-files-officeview.pages", { count: state.doc.count })} · ${bytes(file.size)}`,
         <Button tone="quiet" onClick={() => setWant("pdf")}>
-          转成 PDF
+          {t("session-files-officeview.to_pdf")}
         </Button>,
       )}
       <DocFrame doc={state.doc} title={file.name} />
@@ -264,13 +266,13 @@ async function renderDocx(data: ArrayBuffer): Promise<Rendered> {
   const css = fontFallbacks([...styles.querySelectorAll("style")].map((st) => st.textContent ?? "").join("\n"), body).replace(/</g, "\\3c ");
   const pages = [...body.querySelectorAll("section.docx")] as HTMLElement[];
   const width = Math.max(600, ...pages.map((p) => lengthPx(p.style.width)));
-  return { html: body.innerHTML, css: css + DOCX_CSS, width: Math.round(width), count: pages.length, unit: "页" };
+  return { html: body.innerHTML, css: css + DOCX_CSS, width: Math.round(width), count: pages.length, unit: "pages" };
 }
 
 async function renderPptx(data: ArrayBuffer): Promise<Rendered> {
   const [{ default: JSZip }, { readPptx, deckHTML, DECK_CSS }] = await Promise.all([import("jszip"), import("../../../lib/pptx")]);
   const zip = await JSZip.loadAsync(data);
   const deck = await readPptx(zip, (s) => new DOMParser().parseFromString(s, "application/xml"));
-  if (!deck.slides.length) throw new Error("演示文稿里没有幻灯片");
-  return { html: deckHTML(deck), css: DECK_CSS, width: deck.width, count: deck.slides.length, unit: "张幻灯片" };
+  if (!deck.slides.length) throw new Error(t("session-files-officeview.no_slides"));
+  return { html: deckHTML(deck), css: DECK_CSS, width: deck.width, count: deck.slides.length, unit: "slides" };
 }

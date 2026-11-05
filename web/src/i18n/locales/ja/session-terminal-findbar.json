@@ -1,0 +1,8 @@
+{
+  "search_region": "ターミナル内を検索",
+  "placeholder": "ターミナルを検索",
+  "previous": "前へ（Shift+Enter）",
+  "next": "次へ（Enter）",
+  "match_case": "大文字と小文字を区別",
+  "close": "検索を閉じる（Esc）"
+}

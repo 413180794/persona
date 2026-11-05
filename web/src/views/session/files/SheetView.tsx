@@ -21,6 +21,7 @@ import {
 } from "../../../lib/sheets";
 import { copyText, cx } from "../../../ui/atoms";
 import { useStoredFlag } from "./parts";
+import { formatNumber, t } from "../../../i18n";
 
 const RH = 26; // px per row
 const HEAD = 24; // the column letters' row
@@ -38,11 +39,11 @@ export function SheetView({ sheets, note }: { sheets: Sheet[]; note?: string }) 
       <Grid key={active} sheet={sheet} />
       {(sheet.cut || note) && (
         <div className="shrink-0 border-t border-line px-3 py-1.5 text-[11.5px] text-ink-3">
-          {[note, sheet.cut ? `表格太大，只显示了前 ${sheet.rows.length.toLocaleString()} 行` : ""].filter(Boolean).join(" · ")}
+          {[note, sheet.cut ? t("session-files-sheetview.truncated", { count: formatNumber(sheet.rows.length) }) : ""].filter(Boolean).join(" · ")}
         </div>
       )}
       {sheets.length > 1 && (
-        <div role="tablist" aria-label="工作表" className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-t border-line bg-inset px-2">
+        <div role="tablist" aria-label={t("session-files-sheetview.sheets")} className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-t border-line bg-inset px-2">
           {sheets.map((s, i) => (
             <button
               key={i}
@@ -55,7 +56,7 @@ export function SheetView({ sheets, note }: { sheets: Sheet[]; note?: string }) 
                 i === active ? "bg-surface text-ink shadow-btn" : "text-ink-3 hover:bg-hover hover:text-ink",
               )}
             >
-              {s.name || `工作表 ${i + 1}`}
+              {s.name || t("session-files-sheetview.sheet_n", { n: i + 1 })}
             </button>
           ))}
         </div>
@@ -340,7 +341,7 @@ function Grid({ sheet }: { sheet: Sheet }) {
     );
   }
 
-  if (rows.length === 0) return <div className="flex flex-1 items-center justify-center text-[13px] text-ink-3">空表格</div>;
+  if (rows.length === 0) return <div className="flex flex-1 items-center justify-center text-[13px] text-ink-3">{t("session-files-sheetview.empty")}</div>;
 
   return (
     <>
@@ -353,8 +354,8 @@ function Grid({ sheet }: { sheet: Sheet }) {
         </span>
         <span className="shrink-0 text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums">
           {single
-            ? `${rows.length.toLocaleString()} 行 × ${cols} 列`
-            : [`计数 ${summary.count.toLocaleString()}`, summary.sum !== undefined && `求和 ${fmt(summary.sum)}`, summary.avg !== undefined && `平均 ${fmt(summary.avg)}`].filter(Boolean).join(" · ")}
+            ? t("session-files-sheetview.size", { rows: formatNumber(rows.length), cols })
+            : [t("session-files-sheetview.count", { n: formatNumber(summary.count) }), summary.sum !== undefined && t("session-files-sheetview.sum", { n: fmt(summary.sum) }), summary.avg !== undefined && t("session-files-sheetview.average", { n: fmt(summary.avg) })].filter(Boolean).join(" · ")}
         </span>
         <button
           type="button"
@@ -365,7 +366,7 @@ function Grid({ sheet }: { sheet: Sheet }) {
             freeze ? "bg-accent/12 text-accent-ink" : "text-ink-3 hover:bg-hover hover:text-ink",
           )}
         >
-          冻结首行
+          {t("session-files-sheetview.freeze")}
         </button>
       </div>
       <div

@@ -1,0 +1,6 @@
+{
+  "no_path": "The computer didn't return a file path",
+  "upload_timeout": "Uploading \"{name}\" timed out",
+  "too_large": "\"{name}\" is too large (max {max} MB)",
+  "upload_failed": "Couldn't upload \"{name}\": {error}"
+}

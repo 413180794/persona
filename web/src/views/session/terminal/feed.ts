@@ -68,6 +68,7 @@ import {
 } from "../../../lib/terminal-clipboard";
 import { cjkFontStack, terminalFontReady } from "./cjk";
 import { browserClipboard, clipboardFiles, uploadFailure, uploadToMachine } from "./clipboard";
+import { t } from "../../../i18n";
 
 /** Driving: not asked (off), asked (starting), granted (active), another program holds it and the user is to say
  * whether to take it (busy), or watching although it wanted to drive (declined, `why`). */
@@ -140,7 +141,7 @@ const TICK_MS = 250;
 const RESIZE_MS = 250;
 const POLL_MS = 1000;
 const WHEEL_MS = 50;
-const LINK_DOWN = "连不上 hub";
+const LINK_DOWN = t("session-terminal-feed.hub_unreachable");
 const WATCH_KEY = "jarvis.terminal.watch";
 const WRAP_KEY = "jarvis.terminal.wrap";
 const FONT_KEY = "jarvis.terminal.fontSize";
@@ -288,7 +289,7 @@ export class TerminalFeed {
     try {
       mod = await import("./xterm");
     } catch {
-      if (!this.disposed) this.patch({ loaded: true, failure: "终端组件没有加载出来，刷新页面再试", stale: true });
+      if (!this.disposed) this.patch({ loaded: true, failure: t("session-terminal-feed.load_failed"), stale: true });
       return;
     }
     if (this.disposed) return;
@@ -534,7 +535,7 @@ export class TerminalFeed {
     } else {
       const offline = error.includes("not running");
       this.patch({ offline, loaded: true, control });
-      this.failed(offline ? "会话没有在 herdr 里运行" : error);
+      this.failed(offline ? t("session-terminal-feed.not_in_herdr") : error);
     }
     this.inputMode();
   }
@@ -556,14 +557,14 @@ export class TerminalFeed {
         this.patch({ control: "busy" });
         break;
       case "unsupported":
-        this.patch({ control: "declined", why: "unsupported", note: why || "这台电脑只能看，不能接管" });
+        this.patch({ control: "declined", why: "unsupported", note: why || t("session-terminal-feed.watch_only_computer") });
         toast(this.view.note);
         break;
       case "taken":
-        this.patch({ control: "declined", why: "taken", note: why || "另一台设备接管了这个终端" });
+        this.patch({ control: "declined", why: "taken", note: why || t("session-terminal-feed.taken") });
         break;
       default: // lost: the node let go on its own
-        this.patch({ control: "declined", why: "lost", note: why || "终端已回到电脑上的尺寸" });
+        this.patch({ control: "declined", why: "lost", note: why || t("session-terminal-feed.lost") });
     }
     this.inputMode();
   };
@@ -698,10 +699,10 @@ export class TerminalFeed {
     try {
       text = (await navigator.clipboard?.readText?.()) ?? "";
     } catch {
-      return void toast("浏览器没有允许读取剪贴板，用 ⌘V / Ctrl+V 粘贴");
+      return void toast(t("session-terminal-feed.clipboard_denied"));
     }
-    if (!navigator.clipboard?.readText) return void toast("这个页面不能读取剪贴板（需要 HTTPS），用 ⌘V / Ctrl+V 粘贴");
-    if (!text) return void toast("剪贴板里没有文字");
+    if (!navigator.clipboard?.readText) return void toast(t("session-terminal-feed.clipboard_insecure"));
+    if (!text) return void toast(t("session-terminal-feed.clipboard_empty"));
     if (lineCount(text) > 1) {
       this.term?.blur();
       this.patch({ pasting: text });
@@ -747,7 +748,7 @@ export class TerminalFeed {
   /** Copies what is selected in xterm (the key bar's copy, ⌃C / ⌘C); the selection goes once it is on the clipboard. */
   copySelection() {
     const text = this.term?.getSelection() ?? "";
-    if (!text) return void toast("先用鼠标选中要复制的文字");
+    if (!text) return void toast(t("session-terminal-feed.select_first"));
     void copyWith(text, browserClipboard()).then((outcome) => {
       const n = copyNotice(outcome, window.isSecureContext);
       toast(n.text, n.tone);
@@ -774,7 +775,7 @@ export class TerminalFeed {
 
   /** Copies text the page selected itself (the rows it draws), with the same notices as the xterm selection. */
   copyText(text: string) {
-    if (!text) return void toast("先用鼠标选中要复制的文字");
+    if (!text) return void toast(t("session-terminal-feed.select_first"));
     void copyWith(text, browserClipboard()).then((outcome) => {
       const n = copyNotice(outcome, window.isSecureContext);
       toast(n.text, n.tone);
@@ -783,14 +784,14 @@ export class TerminalFeed {
 
   /** A program asked for the clipboard (OSC 52): written at once where the browser allows it, else the user taps 复制 (it wants a gesture). */
   private programCopied(text: string) {
-    const t = osc52Text(text);
-    if (!t) return;
-    void copyWith(t, browserClipboard()).then((outcome) => {
-      if (outcome !== "failed") return toast("终端里的程序已复制到剪贴板", "ok");
-      toast("终端里的程序要复制一段文字", "info", {
-        label: "复制",
+    const copied = osc52Text(text);
+    if (!copied) return;
+    void copyWith(copied, browserClipboard()).then((outcome) => {
+      if (outcome !== "failed") return toast(t("session-terminal-feed.program_copied"), "ok");
+      toast(t("session-terminal-feed.program_wants_copy"), "info", {
+        label: t("session-terminal-feed.copy"),
         run: () =>
-          void copyWith(t, browserClipboard()).then((o) => {
+          void copyWith(copied, browserClipboard()).then((o) => {
             const n = copyNotice(o, window.isSecureContext);
             toast(n.text, n.tone);
           }),
@@ -823,7 +824,7 @@ export class TerminalFeed {
    * the uploads end (taken over, 只看 or another terminal meanwhile: nothing is pasted).
    */
   async uploadFiles(files: File[]) {
-    if (!this.driving) return void toast("接管终端后才能粘贴文件");
+    if (!this.driving) return void toast(t("session-terminal-feed.take_control_to_paste"));
     const sending = files.filter((f) => {
       const why = refuseUpload(f);
       if (why) toast(why, "error");
@@ -843,8 +844,8 @@ export class TerminalFeed {
     });
     if (!paths.length) return;
     const verdict = pasteVerdict({ disposed: this.disposed, driving: this.driving });
-    if (verdict === "changed") return void toast("上传期间终端已切换，没有粘贴", "error");
-    if (verdict === "watching") return void toast("上传期间不再接管终端，没有粘贴", "error");
+    if (verdict === "changed") return void toast(t("session-terminal-feed.switched_during_upload"), "error");
+    if (verdict === "watching") return void toast(t("session-terminal-feed.released_during_upload"), "error");
     this.term?.paste(pastedPaths(paths)); // bracketed when the program asked for it; the keys go through type()
     this.term?.focus();
   }
@@ -988,7 +989,7 @@ export class TerminalFeed {
 
   /** Only watch what another program on the computer drives (the hub already mirrors it). */
   watchOnly() {
-    this.patch({ control: "declined", why: "chosen", note: "只看：电脑上另一个程序在用这个终端" });
+    this.patch({ control: "declined", why: "chosen", note: t("session-terminal-feed.watch_only_chosen") });
     this.inputMode();
     this.term?.focus();
   }
@@ -1040,13 +1041,13 @@ export class TerminalFeed {
       const gl = new WebglAddon();
       gl.onContextLoss(() => {
         this.dropWebgl();
-        this.turnOffWebgl("显卡渲染被中断，已改回默认渲染");
+        this.turnOffWebgl(t("session-terminal-feed.webgl_lost"));
       });
       this.term.loadAddon(gl);
       this.webglAddon = gl;
     } catch {
       this.webglAddon = null;
-      if (!this.disposed) this.turnOffWebgl("这个浏览器用不了 WebGL，仍用默认渲染");
+      if (!this.disposed) this.turnOffWebgl(t("session-terminal-feed.webgl_unavailable"));
     }
   }
 
@@ -1246,7 +1247,7 @@ export class TerminalFeed {
       if (rows.length) this.olderPlain = [...rows.map(plainRow), ...this.olderPlain];
       this.patch({ older: rows.length ? [...rows, ...this.view.older] : this.view.older, hasOlder: Boolean(r.has_more), atLimit: Boolean(r.at_limit) });
     } catch (e) {
-      if (!this.disposed && !isAbort(e)) toast(`没有读到更早的输出：${errorText(e)}`, "error");
+      if (!this.disposed && !isAbort(e)) toast(t("session-terminal-feed.older_failed", { error: errorText(e) }), "error");
     } finally {
       if (!this.disposed) {
         this.patch({ loadingOlder: false });

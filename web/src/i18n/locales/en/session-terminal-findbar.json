@@ -1,0 +1,8 @@
+{
+  "search_region": "Search in terminal",
+  "placeholder": "Search terminal",
+  "previous": "Previous (Shift+Enter)",
+  "next": "Next (Enter)",
+  "match_case": "Match case",
+  "close": "Close search (Esc)"
+}

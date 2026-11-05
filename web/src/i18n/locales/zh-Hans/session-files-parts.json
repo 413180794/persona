@@ -1,0 +1,18 @@
+{
+  "back": "返回",
+  "close_panel": "关闭面板",
+  "tone_added": "新增",
+  "tone_deleted": "删除",
+  "tone_moved": "移动",
+  "tone_changed": "修改",
+  "modified": "修改",
+  "added": "新增",
+  "deleted": "删除",
+  "renamed": "重命名",
+  "copied": "复制",
+  "untracked": "未跟踪",
+  "conflict": "冲突",
+  "type_changed": "类型改变",
+  "contains": "里面有{change}",
+  "changes": "改动"
+}

@@ -5,6 +5,7 @@ import { fileDownloadURL } from "../../../lib/api";
 import { inlineSiblings } from "../../../lib/html-inline";
 import { previewDocument, relativeRefs, sandboxFor } from "../../../lib/html-preview";
 import { cx, IconButton, Loading } from "../../../ui/atoms";
+import { t } from "../../../i18n";
 
 export function HtmlPreview({ html, title, mid, path }: { html: string; title: string; mid: string; path: string }) {
   const [scripts, setScripts] = useState(false);
@@ -32,27 +33,27 @@ export function HtmlPreview({ html, title, mid, path }: { html: string; title: s
     };
   }, [html, path, mid, local, reloads]);
   const srcDoc = useMemo(() => (inlined ? previewDocument(inlined.html, { scripts, network }) : ""), [inlined, scripts, network]);
-  const state = scripts && network ? "脚本和联网已打开" : scripts ? "已打开脚本，联网仍禁用" : network ? "已打开联网，脚本仍禁用" : "已禁用脚本和联网";
+  const state = scripts && network ? t("session-files-htmlpreview.state_both") : scripts ? t("session-files-htmlpreview.state_scripts") : network ? t("session-files-htmlpreview.state_network") : t("session-files-htmlpreview.state_none");
   const chip = (on: boolean) => cx("h-6 shrink-0 rounded-[6px] px-2 text-[12px] font-medium whitespace-nowrap transition-colors", on ? "bg-orange-tint text-orange" : "text-ink-3 hover:bg-hover hover:text-ink");
   return (
     <>
       <div className="flex min-h-9 shrink-0 items-center gap-2 border-b border-line px-3 py-1 text-[11.5px] whitespace-nowrap text-ink-3">
-        <span className="min-w-0 flex-1 truncate" title={local ? "页面引用的同目录文件（图片、样式、字体、脚本）经 hub 读出来放进页面；隔离框本身仍不联网" : undefined}>
+        <span className="min-w-0 flex-1 truncate" title={local ? t("session-files-htmlpreview.local_hint") : undefined}>
           {state}
-          {inlined && inlined.loaded > 0 && ` · 从那台电脑读入了 ${inlined.loaded} 个同目录的文件`}
-          {inlined && inlined.missing > 0 && ` · ${inlined.missing} 个读不到`}
+          {inlined && inlined.loaded > 0 && ` · ${t("session-files-htmlpreview.loaded", { count: inlined.loaded })}`}
+          {inlined && inlined.missing > 0 && ` · ${t("session-files-htmlpreview.missing", { count: inlined.missing })}`}
         </span>
         <button type="button" aria-pressed={scripts} onClick={() => setScripts(!scripts)} className={chip(scripts)}>
-          脚本
+          {t("session-files-htmlpreview.scripts")}
         </button>
         <button type="button" aria-pressed={network} onClick={() => setNetwork(!network)} className={chip(network)}>
-          联网
+          {t("session-files-htmlpreview.network")}
         </button>
-        <IconButton icon="retry" label="重新加载" onClick={() => setReloads((n) => n + 1)} />
+        <IconButton icon="retry" label={t("session-files-htmlpreview.reload")} onClick={() => setReloads((n) => n + 1)} />
       </div>
       {!inlined ? (
         <div className="flex flex-1 items-center justify-center bg-inset">
-          <Loading label={`正在读入同目录的文件 · ${local} 个`} />
+          <Loading label={t("session-files-htmlpreview.loading_local", { count: local })} />
         </div>
       ) : (
       <iframe

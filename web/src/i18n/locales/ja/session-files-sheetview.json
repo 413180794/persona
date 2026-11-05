@@ -1,0 +1,11 @@
+{
+  "truncated": "表が大きすぎるため、最初の{count}行のみ表示しています",
+  "sheets": "シート",
+  "sheet_n": "シート{n}",
+  "empty": "空の表",
+  "size": "{rows}行 × {cols}列",
+  "count": "個数{n}",
+  "sum": "合計{n}",
+  "average": "平均{n}",
+  "freeze": "先頭行を固定"
+}

@@ -26,6 +26,7 @@ import { PanelHeader } from "../SidePanel";
 import { CompareView, compareKind } from "./files/CompareView";
 import { DiffLines } from "./files/DiffLines";
 import { BackHeader, Empty, GitBadge, Segmented } from "./files/parts";
+import { formatDate, t } from "../../i18n";
 
 type View = { kind: "diff"; file: GitFile; staged: boolean } | { kind: "commit"; commit: GitCommit } | { kind: "commitFile"; commit: GitCommit; file: GitFile; diff: string; truncated: boolean };
 
@@ -85,20 +86,20 @@ export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string;
         <PanelHeader
           icon="git"
           title="Git"
-          subtitle={status?.is_repo ? status.branch || "分离的 HEAD" : shortPath(cwd)}
+          subtitle={status?.is_repo ? status.branch || t("session-gitpanel.detached_head") : shortPath(cwd)}
           onClose={onClose}
           actions={
             <>
               <button
                 type="button"
-                title="文件"
+                title={t("session-gitpanel.files")}
                 onClick={() => openPanel({ kind: "files", mid, sid, cwd })}
                 className="flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 transition-colors hover:bg-hover hover:text-ink"
               >
                 <Icon name="folder" size={14} />
-                文件
+                {t("session-gitpanel.files")}
               </button>
-              <IconButton icon="retry" label="刷新" onClick={reload} disabled={loading && Boolean(status)} />
+              <IconButton icon="retry" label={t("session-gitpanel.reload")} onClick={reload} disabled={loading && Boolean(status)} />
             </>
           }
         />
@@ -107,25 +108,25 @@ export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string;
             <div className="px-3 pt-3 pb-6 sm:px-4" style={{ animation: "fade-in 160ms ease-out both" }}>
               <Summary s={status} />
               <Changes s={status} onOpen={(f) => push({ kind: "diff", file: f, staged: isStaged(f) && !hasUnstaged(f) })} />
-              <Section title="提交">
+              <Section title={t("session-gitpanel.commits")}>
                 {[...status.commits, ...older].map((c) => (
                   <CommitRow key={c.hash} c={c} onOpen={() => push({ kind: "commit", commit: c })} />
                 ))}
                 {!noMore && status.commits.length >= 30 && (
                   <button type="button" onClick={loadMore} disabled={loadingMore} className="flex h-10 w-full items-center justify-center gap-2 text-[12.5px] font-medium whitespace-nowrap text-accent-ink transition-colors hover:bg-hover disabled:text-ink-3">
                     {loadingMore && <Spinner />}
-                    加载更早的提交
+                    {t("session-gitpanel.load_older_commits")}
                   </button>
                 )}
               </Section>
             </div>
           ) : error && !status ? (
-            <Empty icon="info" title="读不到 Git 状态" detail={error} action={<Button icon="retry" onClick={reload}>重试</Button>} />
+            <Empty icon="info" title={t("session-gitpanel.status_failed")} detail={error} action={<Button icon="retry" onClick={reload}>{t("session-gitpanel.retry")}</Button>} />
           ) : status && !status.is_repo ? (
-            <Empty icon="git" title="不是 Git 仓库" detail={shortPath(cwd)} />
+            <Empty icon="git" title={t("session-gitpanel.not_repo")} detail={shortPath(cwd)} />
           ) : (
             <div className="flex h-40 items-center justify-center">
-              <Loading label="正在读取" />
+              <Loading label={t("session-gitpanel.reading")} />
             </div>
           )}
         </div>
@@ -136,7 +137,7 @@ export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string;
       {top?.kind === "commit" && <CommitView key={top.commit.hash} base={base} cwd={cwd} commit={top.commit} onOpen={push} onBack={back} onClose={onClose} />}
       {top?.kind === "commitFile" && (
         <>
-          <BackHeader title={fileName(top.file.path)} subtitle={`${top.commit.short} · ${dirName(top.file.path) || "仓库根目录"}`} onBack={back} onClose={onClose} actions={<IconButton icon="copy" label="拷贝 diff" onClick={() => copyText(top.diff)} />} />
+          <BackHeader title={fileName(top.file.path)} subtitle={`${top.commit.short} · ${dirName(top.file.path) || t("session-gitpanel.repo_root")}`} onBack={back} onClose={onClose} actions={<IconButton icon="copy" label={t("session-gitpanel.copy_diff")} onClick={() => copyText(top.diff)} />} />
           {compareKind(top.file.path) ? (
             <CompareView mid={mid} cwd={cwd} root={status?.root ?? cwd} path={top.file.path} before={`${top.commit.hash}^`} after={top.commit.hash} />
           ) : (
@@ -163,7 +164,7 @@ function Section({ title, right, children }: { title: React.ReactNode; right?: R
 function SyncChip({ dir, n }: { dir: "up" | "down"; n: number }) {
   return (
     <span
-      title={dir === "up" ? `领先上游 ${n} 个提交` : `落后上游 ${n} 个提交`}
+      title={dir === "up" ? t("session-gitpanel.ahead", { count: n }) : t("session-gitpanel.behind", { count: n })}
       className={cx("inline-flex h-5 shrink-0 items-center gap-0.5 rounded-full px-1.5 text-[11px] font-medium tabular-nums", dir === "up" ? "bg-field text-ink-2" : "bg-orange-tint text-orange")}
     >
       <Icon name="up" size={11} stroke={2.4} style={dir === "down" ? { transform: "rotate(180deg)" } : undefined} />
@@ -179,14 +180,14 @@ function Summary({ s }: { s: GitStatus }) {
     <div className="rounded-card bg-surface px-4 py-3 shadow-card">
       <div className="flex items-center gap-2">
         <Icon name="git" size={15} className="shrink-0 text-accent" />
-        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">{s.branch || "分离的 HEAD"}</span>
+        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">{s.branch || t("session-gitpanel.detached_head")}</span>
         {ahead > 0 && <SyncChip dir="up" n={ahead} />}
         {behind > 0 && <SyncChip dir="down" n={behind} />}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12px] text-ink-3">
-        <span className="truncate">{s.upstream ? s.upstream : "没有上游分支"}</span>
-        {s.upstream && !ahead && !behind && <span>· 已同步</span>}
-        {(s.stashes ?? 0) > 0 && <span title="git stash 的条数">· 暂存 {s.stashes}</span>}
+        <span className="truncate">{s.upstream ? s.upstream : t("session-gitpanel.no_upstream")}</span>
+        {s.upstream && !ahead && !behind && <span>· {t("session-gitpanel.in_sync")}</span>}
+        {(s.stashes ?? 0) > 0 && <span title={t("session-gitpanel.stashes_hint")}>· {t("session-gitpanel.stashes", { count: s.stashes ?? 0 })}</span>}
       </div>
       {s.root && <div className="mt-1 truncate font-mono text-[11px] text-ink-3" title={s.root}>{shortPath(s.root)}</div>}
     </div>
@@ -194,14 +195,14 @@ function Summary({ s }: { s: GitStatus }) {
 }
 
 function Changes({ s, onOpen }: { s: GitStatus; onOpen: (f: GitFile) => void }) {
-  const t = diffTotals(s.files);
+  const totals = diffTotals(s.files);
   return (
     <Section
-      title={s.files.length ? `改动 ${s.files.length}` : "改动"}
+      title={s.files.length ? t("session-gitpanel.changes_count", { count: s.files.length }) : t("session-gitpanel.changes")}
       right={
         s.files.length > 0 && (
           <span className="font-mono text-[11.5px] tabular-nums">
-            <span className="text-green">+{t.added}</span> <span className="text-red">−{t.deleted}</span>
+            <span className="text-green">+{totals.added}</span> <span className="text-red">−{totals.deleted}</span>
           </span>
         )
       }
@@ -209,7 +210,7 @@ function Changes({ s, onOpen }: { s: GitStatus; onOpen: (f: GitFile) => void }) 
       {s.files.length === 0 ? (
         <div className="flex h-11 items-center gap-2 px-4 text-[13px] text-ink-3">
           <Icon name="check" size={14} stroke={2.4} className="text-green" />
-          工作区是干净的
+          {t("session-gitpanel.clean")}
         </div>
       ) : (
         s.files.map((f) => <FileRow key={f.path} f={f} stage onOpen={() => onOpen(f)} />)
@@ -228,13 +229,13 @@ function FileRow({ f, stage, onOpen }: { f: GitFile; stage?: boolean; onOpen: ()
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-medium text-ink">{fileName(f.path)}</span>
         <span className="flex min-w-0 gap-1.5 text-[11.5px] whitespace-nowrap text-ink-3">
-          {staged && <span className="shrink-0 text-ink-2">{hasUnstaged(f) ? "部分已暂存" : "已暂存"}</span>}
+          {staged && <span className="shrink-0 text-ink-2">{hasUnstaged(f) ? t("session-gitpanel.partly_staged") : t("session-gitpanel.staged")}</span>}
           {f.orig_path && <span className="shrink-0">← {fileName(f.orig_path)}</span>}
           {folder && <span className="min-w-0 truncate">{folder}</span>}
         </span>
       </span>
       {f.binary ? (
-        <span className="shrink-0 text-[11.5px] text-ink-3">二进制</span>
+        <span className="shrink-0 text-[11.5px] text-ink-3">{t("session-gitpanel.binary")}</span>
       ) : f.added + f.deleted > 0 ? (
         <span className="shrink-0 font-mono text-[11.5px] tabular-nums">
           <span className="text-green">+{f.added}</span> <span className="text-red">−{f.deleted}</span>
@@ -313,14 +314,14 @@ function DiffView({
     <>
       <BackHeader
         title={fileName(file.path)}
-        subtitle={dirName(file.path) || "仓库根目录"}
+        subtitle={dirName(file.path) || t("session-gitpanel.repo_root")}
         onBack={onBack}
         onClose={onClose}
-        actions={<IconButton icon="copy" label="拷贝 diff" onClick={() => diff && copyText(diff.diff)} disabled={!diff} />}
+        actions={<IconButton icon="copy" label={t("session-gitpanel.copy_diff")} onClick={() => diff && copyText(diff.diff)} disabled={!diff} />}
       />
       {both && (
         <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
-          <Segmented<"0" | "1"> label="哪部分改动" value={staged ? "1" : "0"} onChange={(v) => onStaged(v === "1")} options={[["0", "未暂存"], ["1", "已暂存"]]} />
+          <Segmented<"0" | "1"> label={t("session-gitpanel.which_changes")} value={staged ? "1" : "0"} onChange={(v) => onStaged(v === "1")} options={[["0", t("session-gitpanel.unstaged")], ["1", t("session-gitpanel.staged")]]} />
         </div>
       )}
       {compareKind(file.path) ? (
@@ -329,10 +330,10 @@ function DiffView({
       ) : diff ? (
         <DiffLines diff={diff.diff} truncated={diff.truncated} />
       ) : error ? (
-        <Empty icon="info" title="读不到改动" detail={error} action={<Button icon="retry" onClick={() => load()}>重试</Button>} />
+        <Empty icon="info" title={t("session-gitpanel.diff_failed")} detail={error} action={<Button icon="retry" onClick={() => load()}>{t("session-gitpanel.retry")}</Button>} />
       ) : (
         <div className="flex flex-1 items-center justify-center">
-          <Loading label="正在读取" />
+          <Loading label={t("session-gitpanel.reading")} />
         </div>
       )}
     </>
@@ -361,15 +362,15 @@ function CommitView({ base, cwd, commit, onOpen, onBack, onClose }: { base: stri
           {body && <p className="mt-1.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-ink-2 select-text">{body}</p>}
           <div className="mt-2 text-[11.5px] text-ink-3">
             {commit.author}
-            {when && !Number.isNaN(when.getTime()) && ` · ${when.toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" })}`}
+            {when && !Number.isNaN(when.getTime()) && ` · ${formatDate(when, { dateStyle: "medium", timeStyle: "short" })}`}
           </div>
-          <button type="button" onClick={() => copyText(commit.hash)} title="拷贝提交哈希" className="mt-1.5 -ml-1 flex max-w-full items-center gap-1.5 rounded-[6px] px-1 py-0.5 font-mono text-[11px] text-accent-ink hover:bg-hover">
+          <button type="button" onClick={() => copyText(commit.hash)} title={t("session-gitpanel.copy_hash")} className="mt-1.5 -ml-1 flex max-w-full items-center gap-1.5 rounded-[6px] px-1 py-0.5 font-mono text-[11px] text-accent-ink hover:bg-hover">
             <Icon name="copy" size={12} className="shrink-0" />
             <span className="truncate">{commit.hash}</span>
           </button>
         </div>
         {show ? (
-          <Section title={`${show.files.length} 个文件`}>
+          <Section title={t("session-gitpanel.file_count", { count: show.files.length })}>
             {show.files.map((f) => {
               const d = chunks[f.path];
               return <FileRow key={f.path} f={f} onOpen={() => onOpen({ kind: "commitFile", commit, file: f, diff: d ?? "", truncated: show.truncated && d === undefined })} />;
@@ -379,7 +380,7 @@ function CommitView({ base, cwd, commit, onOpen, onBack, onClose }: { base: stri
           <p className="mt-4 px-1 text-[12.5px] text-red">{error}</p>
         ) : (
           <div className="flex h-24 items-center justify-center">
-            <Loading label="正在读取" />
+            <Loading label={t("session-gitpanel.reading")} />
           </div>
         )}
       </div>

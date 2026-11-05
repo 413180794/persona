@@ -6,6 +6,7 @@ import { findLabel, type FindState } from "../../../lib/terminal-search";
 import { cx, EASE, IconButton } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
 import type { FeedView, TerminalFeed } from "./feed";
+import { t } from "../../../i18n";
 
 export function FindBar({
   feed,
@@ -42,7 +43,7 @@ export function FindBar({
   return (
     <div
       role="search"
-      aria-label="在终端里搜索"
+      aria-label={t("session-terminal-findbar.search_region")}
       className="pointer-events-auto absolute top-2 right-2 z-20 flex h-9 max-w-[calc(100%-1rem)] items-center gap-0.5 rounded-control bg-surface py-1 pr-1 pl-2.5 shadow-overlay"
       style={{ animation: `pop-in 160ms ${EASE} both`, transformOrigin: "top right" }}
     >
@@ -62,8 +63,8 @@ export function FindBar({
             onClose();
           }
         }}
-        placeholder="搜索终端"
-        aria-label="搜索终端"
+        placeholder={t("session-terminal-findbar.placeholder")}
+        aria-label={t("session-terminal-findbar.placeholder")}
         spellCheck={false}
         autoComplete="off"
         autoCapitalize="off"
@@ -75,14 +76,14 @@ export function FindBar({
       >
         {label}
       </span>
-      <IconButton icon="up" label="上一个（Shift+Enter）" size={26} disabled={!state.query} onClick={() => step(-1)} />
-      <IconButton icon="arrowDown" label="下一个（Enter）" size={26} disabled={!state.query} onClick={() => step(1)} />
+      <IconButton icon="up" label={t("session-terminal-findbar.previous")} size={26} disabled={!state.query} onClick={() => step(-1)} />
+      <IconButton icon="arrowDown" label={t("session-terminal-findbar.next")} size={26} disabled={!state.query} onClick={() => step(1)} />
       <button
         type="button"
         role="switch"
         aria-checked={state.caseSensitive}
-        aria-label="区分大小写"
-        title="区分大小写"
+        aria-label={t("session-terminal-findbar.match_case")}
+        title={t("session-terminal-findbar.match_case")}
         onClick={onToggleCase}
         className={cx(
           "flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px] font-mono text-[11.5px] font-medium whitespace-nowrap transition-colors duration-150",
@@ -91,7 +92,7 @@ export function FindBar({
       >
         Aa
       </button>
-      <IconButton icon="x" label="关闭搜索（Esc）" size={26} onClick={onClose} />
+      <IconButton icon="x" label={t("session-terminal-findbar.close")} size={26} onClick={onClose} />
     </div>
   );
 }

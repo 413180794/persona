@@ -1,0 +1,16 @@
+{
+  "state_both": "Scripts and network on",
+  "state_scripts": "Scripts on, network still off",
+  "state_network": "Network on, scripts still off",
+  "state_none": "Scripts and network off",
+  "local_hint": "Files in the same folder that the page uses (images, styles, fonts, scripts) are read through the hub and put into the page. The sandbox itself stays offline.",
+  "loaded_one": "Read {count} file from the same folder on that computer",
+  "loaded_other": "Read {count} files from the same folder on that computer",
+  "missing_one": "{count} couldn't be read",
+  "missing_other": "{count} couldn't be read",
+  "scripts": "Scripts",
+  "network": "Network",
+  "reload": "Reload",
+  "loading_local_one": "Reading files from the same folder · {count}",
+  "loading_local_other": "Reading files from the same folder · {count}"
+}

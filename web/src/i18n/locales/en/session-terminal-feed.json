@@ -1,0 +1,22 @@
+{
+  "hub_unreachable": "Can't reach the hub",
+  "load_failed": "The terminal didn't load. Refresh the page and try again.",
+  "not_in_herdr": "The session isn't running in herdr",
+  "watch_only_computer": "This computer only allows watching, not control",
+  "taken": "Another device took control of this terminal",
+  "lost": "The terminal is back to the computer's size",
+  "clipboard_denied": "The browser didn't allow reading the clipboard. Paste with ⌘V / Ctrl+V.",
+  "clipboard_insecure": "This page can't read the clipboard (needs HTTPS). Paste with ⌘V / Ctrl+V.",
+  "clipboard_empty": "No text on the clipboard",
+  "select_first": "Select the text to copy first",
+  "program_copied": "A program in the terminal copied to the clipboard",
+  "program_wants_copy": "A program in the terminal wants to copy some text",
+  "copy": "Copy",
+  "take_control_to_paste": "Take control of the terminal to paste files",
+  "switched_during_upload": "The terminal changed during the upload, so nothing was pasted",
+  "released_during_upload": "Control of the terminal ended during the upload, so nothing was pasted",
+  "watch_only_chosen": "Watching only: another program on the computer is using this terminal",
+  "webgl_lost": "GPU rendering was interrupted. Switched back to the default renderer.",
+  "webgl_unavailable": "WebGL isn't available in this browser. Using the default renderer.",
+  "older_failed": "Couldn't load earlier output: {error}"
+}

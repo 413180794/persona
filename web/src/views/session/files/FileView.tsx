@@ -41,6 +41,7 @@ import { MediaPlayer } from "../../../ui/Media";
 import { NotebookView } from "./NotebookView";
 import { OfficeView } from "./OfficeView";
 import { SheetView } from "./SheetView";
+import { formatNumber, t } from "../../../i18n";
 
 const LH = 20; // px per code line
 const PAD = 8; // px above the first line
@@ -63,7 +64,7 @@ export function fileURL(mid: string, path: string, cwd?: string, offset = 0) {
 /** A binary file's whole bytes: from file/download when the hub streams it, else the base64 an older hub sent. */
 export async function fileBytes(mid: string, f: FileContent, cwd?: string, signal?: AbortSignal): Promise<ArrayBuffer> {
   if (!f.stream && typeof f.data === "string") {
-    if (f.truncated) throw new Error("文件超过 2 MB，hub 版本太旧，更新后才能预览");
+    if (f.truncated) throw new Error(t("session-files-fileview.hub_too_old_preview"));
     return base64Bytes(f.data).buffer;
   }
   const res = await fetch(fileDownloadURL(mid, f.path, cwd), { signal });
@@ -97,7 +98,7 @@ function parseSheets(req: SheetRequest, signal: AbortSignal): Promise<Sheet[]> {
     };
     w.onerror = (e) => {
       done();
-      reject(new Error(e.message || "表格解析失败"));
+      reject(new Error(e.message || t("session-files-fileview.sheet_parse_failed")));
     };
     w.postMessage(req, "bytes" in req ? [req.bytes] : []);
   });
@@ -156,7 +157,7 @@ export function useFileDoc(mid: string, path: string, cwd?: string): FileDoc {
       s.next = (f.next ?? 0) > s.next ? (f.next ?? 0) : 0; // a page that does not move on ends it
       return true;
     } catch (e) {
-      if (gen === s.gen) toast(`没读到后面的内容：${errorText(e)}`, "error");
+      if (gen === s.gen) toast(t("session-files-fileview.more_failed", { error: errorText(e) }), "error");
       return false;
     } finally {
       if (gen === s.gen) {
@@ -279,14 +280,14 @@ export function FileView({
   const where = kind === "directory" ? shortPath(full) : shortPath(dirName(full)) || full; // the name is the title
   const actions = (
     <>
-      {kind === "markdown" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "预览"], ["source", "源码"]]} />}
-      {kind === "json" && json?.pretty != null && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "格式化"], ["source", "原文"]]} />}
-      {kind === "image" && typeof f?.text === "string" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "图片"], ["source", "源码"]]} />}
-      {kind === "html" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "预览"], ["source", "源码"]]} />}
-      {kind === "notebook" && notebook?.nb && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "笔记本"], ["source", "源文件"]]} />}
-      {kind === "sheet" && typeof f?.text === "string" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "表格"], ["source", "源文件"]]} />}
-      <IconButton icon="copy" label="拷贝路径" onClick={() => copyText(f?.path || path)} />
-      {kind !== "directory" && <IconButton icon="arrowDown" label={saving ? "正在下载" : "下载"} onClick={download} disabled={!f || saving} />}
+      {kind === "markdown" && <Segmented label={t("session-files-fileview.view_mode")} value={mode} onChange={setMode} options={[["rendered", t("session-files-fileview.mode_preview")], ["source", t("session-files-fileview.mode_source")]]} />}
+      {kind === "json" && json?.pretty != null && <Segmented label={t("session-files-fileview.view_mode")} value={mode} onChange={setMode} options={[["rendered", t("session-files-fileview.mode_formatted")], ["source", t("session-files-fileview.mode_raw")]]} />}
+      {kind === "image" && typeof f?.text === "string" && <Segmented label={t("session-files-fileview.view_mode")} value={mode} onChange={setMode} options={[["rendered", t("session-files-fileview.mode_image")], ["source", t("session-files-fileview.mode_source")]]} />}
+      {kind === "html" && <Segmented label={t("session-files-fileview.view_mode")} value={mode} onChange={setMode} options={[["rendered", t("session-files-fileview.mode_preview")], ["source", t("session-files-fileview.mode_source")]]} />}
+      {kind === "notebook" && notebook?.nb && <Segmented label={t("session-files-fileview.view_mode")} value={mode} onChange={setMode} options={[["rendered", t("session-files-fileview.mode_notebook")], ["source", t("session-files-fileview.mode_source_file")]]} />}
+      {kind === "sheet" && typeof f?.text === "string" && <Segmented label={t("session-files-fileview.view_mode")} value={mode} onChange={setMode} options={[["rendered", t("session-files-fileview.mode_sheet")], ["source", t("session-files-fileview.mode_source_file")]]} />}
+      <IconButton icon="copy" label={t("session-files-fileview.copy_path")} onClick={() => copyText(f?.path || path)} />
+      {kind !== "directory" && <IconButton icon="arrowDown" label={saving ? t("session-files-fileview.downloading") : t("session-files-fileview.download")} onClick={download} disabled={!f || saving} />}
     </>
   );
 
@@ -295,11 +296,11 @@ export function FileView({
     body = (
       <Empty
         icon="info"
-        title="打不开这个文件"
+        title={t("session-files-fileview.open_failed")}
         detail={doc.error}
         action={
           <Button icon="retry" onClick={doc.reload}>
-            重试
+            {t("session-files-fileview.retry")}
           </Button>
         }
       />
@@ -307,7 +308,7 @@ export function FileView({
   } else if (!f || !kind) {
     body = (
       <div className="flex flex-1 items-center justify-center">
-        <Loading label="正在读取" />
+        <Loading label={t("session-files-fileview.reading")} />
       </div>
     );
   } else if (kind === "directory") {
@@ -322,7 +323,7 @@ export function FileView({
     body =
       doc.next > 0 ? (
         <div className="flex flex-1 items-center justify-center">
-          <Loading label={`正在读取 · ${bytes(f.size)}`} />
+          <Loading label={t("session-files-fileview.reading_size", { size: bytes(f.size) })} />
         </div>
       ) : (
         <HtmlPreview html={doc.text} title={f.name} mid={mid} path={f.path} />
@@ -332,7 +333,7 @@ export function FileView({
       <NotebookView nb={notebook.nb} />
     ) : (
       <div className="flex flex-1 items-center justify-center">
-        <Loading label={`正在读取笔记本 · ${bytes(f.size)}`} />
+        <Loading label={t("session-files-fileview.reading_notebook", { size: bytes(f.size) })} />
       </div>
     );
   } else if (kind === "office") {
@@ -343,11 +344,11 @@ export function FileView({
     body = (
       <Empty
         icon="read"
-        title="无法预览"
-        detail={`${f.mime || "二进制文件"} · ${bytes(f.size)}`}
+        title={t("session-files-fileview.no_preview")}
+        detail={`${f.mime || t("session-files-fileview.binary_file")} · ${bytes(f.size)}`}
         action={
           <Button icon="arrowDown" onClick={download} busy={saving}>
-            下载
+            {t("session-files-fileview.download")}
           </Button>
         }
       />
@@ -358,19 +359,19 @@ export function FileView({
     const shown = kind === "json" && mode === "rendered" && json?.pretty != null ? json.pretty : doc.text;
     const note =
       kind === "html" && doc.next > 0 && !wantAll
-        ? "页面太大，按源码显示"
+        ? t("session-files-fileview.page_too_big")
         : kind === "notebook" && notebook?.error
-        ? `${notebook.error}，按文本显示`
+        ? t("session-files-fileview.notebook_error", { error: notebook.error })
         : kind === "notebook" && doc.next > 0 && !wantAll
-          ? "笔记本太大，按文本显示"
+          ? t("session-files-fileview.notebook_too_big")
           : kind === "json" && wantAll
-        ? `已读 ${bytes(doc.next)} / ${bytes(f.size)}，正在读完整个文件…`
+        ? t("session-files-fileview.reading_whole", { read: bytes(doc.next), size: bytes(f.size) })
         : kind === "json" && doc.next > 0
-          ? "文件太大，按文本显示"
+          ? t("session-files-fileview.too_big_text")
           : json && "big" in json
-            ? "文件太大，没有格式化"
+            ? t("session-files-fileview.too_big_unformatted")
             : json?.error
-              ? `不是有效的 JSON，按文本显示：${json.error}`
+              ? t("session-files-fileview.invalid_json", { error: json.error })
               : "";
     body = <CodeView doc={doc} file={f} text={shown} line={line} note={note} />;
   }
@@ -429,7 +430,7 @@ function CodeView({ doc, file, text, line, note }: { doc: FileDoc; file: FileCon
     el.scrollTop = Math.max(0, PAD + (line - 1) * LH - el.clientHeight / 3);
   }, [line, lines.length]);
 
-  const notes = [note, file.truncated && !file.next ? "文件太大，只显示了开头的部分" : "", plainBecauseBig ? "文件太大，没有上色" : ""].filter(Boolean);
+  const notes = [note, file.truncated && !file.next ? t("session-files-fileview.truncated_start") : "", plainBecauseBig ? t("session-files-fileview.too_big_uncolored") : ""].filter(Boolean);
   const rows: React.ReactNode[] = [];
   for (let i = start; i < end; i++) {
     const raw = lines[i];
@@ -442,7 +443,7 @@ function CodeView({ doc, file, text, line, note }: { doc: FileDoc; file: FileCon
   return (
     <>
       <div className="flex min-h-8 shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-line px-3 py-1.5 text-[11.5px] text-ink-3">
-        <span className="whitespace-nowrap tabular-nums">{lines.length.toLocaleString()} 行</span>
+        <span className="whitespace-nowrap tabular-nums">{t("session-files-fileview.lines", { count: lines.length, n: formatNumber(lines.length) })}</span>
         <span>·</span>
         <span className="whitespace-nowrap">{bytes(file.size)}</span>
         {lang?.id && (
@@ -458,7 +459,7 @@ function CodeView({ doc, file, text, line, note }: { doc: FileDoc; file: FileCon
         ))}
       </div>
       {lines.length === 0 ? (
-        <Empty icon="read" title="空文件" />
+        <Empty icon="read" title={t("session-files-fileview.empty_file")} />
       ) : (
         <div ref={scroller} className="min-h-0 flex-1 overflow-auto bg-inset font-mono text-[12px]" style={{ lineHeight: `${LH}px` }} data-testid="file-code">
           <div style={{ minWidth: `calc(${digits}ch + ${width}ch + 25px + 36px)`, paddingTop: PAD, paddingBottom: PAD }}>
@@ -496,7 +497,7 @@ function CodeRow({ n, digits, text, tokens, cut, mark }: { n: number; digits: nu
       </span>
       <span className="pr-6 pl-3 whitespace-pre text-ink">
         {parts}
-        {cut && <span className="text-ink-3 select-none">… （这一行太长，只显示前 {MAX_LINE} 个字符）</span>}
+        {cut && <span className="text-ink-3 select-none">{t("session-files-fileview.line_cut", { max: MAX_LINE })}</span>}
       </span>
     </div>
   );
@@ -506,10 +507,10 @@ function MoreButton({ doc, file }: { doc: FileDoc; file: FileContent }) {
   return (
     <div className="sticky left-0 flex w-full max-w-[100vw] items-center gap-3 px-3 pt-3 pb-2 font-sans">
       <Button icon="arrowDown" onClick={() => void doc.more()} busy={doc.loadingMore}>
-        继续加载
+        {t("session-files-fileview.load_more")}
       </Button>
       <span className="text-[11.5px] whitespace-nowrap text-ink-3">
-        已读 {bytes(doc.next)} / {bytes(file.size)}
+        {t("session-files-fileview.read_progress", { read: bytes(doc.next), size: bytes(file.size) })}
       </span>
     </div>
   );
@@ -577,10 +578,10 @@ function MarkdownView({ doc, file, mid, onOpenPath }: { doc: FileDoc; file: File
         {doc.next > 0 && (
           <div className="flex items-center gap-3 pt-2">
             <Button icon="arrowDown" onClick={() => void doc.more()} busy={doc.loadingMore}>
-              继续加载
+              {t("session-files-fileview.load_more")}
             </Button>
             <span className="text-[11.5px] whitespace-nowrap text-ink-3">
-              已读 {bytes(doc.next)} / {bytes(file.size)}
+              {t("session-files-fileview.read_progress", { read: bytes(doc.next), size: bytes(file.size) })}
             </span>
           </div>
         )}
@@ -604,10 +605,10 @@ function SheetLoader({ mid, cwd, doc, file, onDownload }: { mid: string; cwd?: s
       if (typeof file.text === "string") {
         const text = await all(MAX_TABLE_TEXT);
         if (ac.signal.aborted) return;
-        if (text.length < file.size && file.size > MAX_TABLE_TEXT) note = `文件太大，只读了前 ${bytes(text.length)}`;
+        if (text.length < file.size && file.size > MAX_TABLE_TEXT) note = t("session-files-fileview.sheet_partial", { size: bytes(text.length) });
         req = { name: file.name, text };
       } else {
-        if (file.size > MAX_TABLE_BYTES) throw new Error(`文件有 ${bytes(file.size)}，太大了，下载后用表格软件打开`);
+        if (file.size > MAX_TABLE_BYTES) throw new Error(t("session-files-fileview.sheet_too_large", { size: bytes(file.size) }));
         req = { name: file.name, bytes: await fileBytes(mid, file, cwd, ac.signal) };
       }
       const sheets = await parseSheets(req, ac.signal);
@@ -619,14 +620,14 @@ function SheetLoader({ mid, cwd, doc, file, onDownload }: { mid: string; cwd?: s
   }, [mid, cwd, file, all]);
   // a Numbers file SheetJS cannot read still has the preview Numbers wrote into it
   if (state.error && extOf(file.name) === "numbers") return <OfficeView mid={mid} cwd={cwd} file={file} onDownload={onDownload} />;
-  if (state.error) return <Empty icon="info" title="表格打不开" detail={state.error} />;
+  if (state.error) return <Empty icon="info" title={t("session-files-fileview.sheet_open_failed")} detail={state.error} />;
   if (!state.sheets)
     return (
       <div className="flex flex-1 items-center justify-center">
-        <Loading label={typeof file.text === "string" ? "正在读取表格" : `正在读取表格 · ${bytes(file.size)}`} />
+        <Loading label={typeof file.text === "string" ? t("session-files-fileview.reading_sheet") : t("session-files-fileview.reading_sheet_size", { size: bytes(file.size) })} />
       </div>
     );
-  if (!state.sheets.length) return <Empty icon="info" title="表格里没有工作表" />;
+  if (!state.sheets.length) return <Empty icon="info" title={t("session-files-fileview.no_sheets")} />;
   return <SheetView sheets={state.sheets} note={state.note} />;
 }
 
@@ -643,7 +644,7 @@ function ImageView({ file, src: original, fallback }: { file: FileContent; src: 
   const src = stage === "fallback" && fallback ? fallback : original;
   const failed = () => setStage((s) => (s === "original" && fallback ? "fallback" : "failed"));
   if (stage === "failed")
-    return <Empty icon="image" title="这个浏览器显示不了这张图" detail={`${file.mime || "图片"} · ${bytes(file.size)}。Safari 能直接显示 HEIC；也可以下载到本机看。`} />;
+    return <Empty icon="image" title={t("session-files-fileview.image_failed")} detail={t("session-files-fileview.image_failed_detail", { type: file.mime || t("session-files-fileview.image"), size: bytes(file.size) })} />;
   // A tiny image (an icon) is drawn bigger, pixel for pixel, so it can be seen.
   const scale = dims ? Math.max(1, Math.min(8, Math.floor(160 / Math.max(dims[0], dims[1])))) : 1;
   return (
@@ -660,14 +661,14 @@ function ImageView({ file, src: original, fallback }: { file: FileContent; src: 
         <span>{bytes(file.size)}</span>
         <span>·</span>
         <span>{file.mime}</span>
-        {stage === "fallback" && <span className="truncate">· 浏览器不支持这种格式，显示的是那台电脑生成的预览（最长边 1024 像素）</span>}
-        {scale > 1 && <span className="ml-auto">放大 {scale}×</span>}
+        {stage === "fallback" && <span className="truncate">· {t("session-files-fileview.image_fallback")}</span>}
+        {scale > 1 && <span className="ml-auto">{t("session-files-fileview.zoomed", { scale })}</span>}
       </div>
       <div
         className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-6"
         style={{ backgroundImage: "conic-gradient(var(--field) 25%, var(--inset) 0 50%, var(--field) 0 75%, var(--inset) 0)", backgroundSize: "20px 20px" }}
       >
-        <button type="button" onClick={() => setBig(true)} aria-label="查看大图" className="max-h-full max-w-full cursor-zoom-in">
+        <button type="button" onClick={() => setBig(true)} aria-label={t("session-files-fileview.view_large")} className="max-h-full max-w-full cursor-zoom-in">
           <img
             src={src}
             alt={file.name}
@@ -686,7 +687,7 @@ function ImageView({ file, src: original, fallback }: { file: FileContent; src: 
 /** A video or an audio file, playing from file/download by Range (or the old base64 when it is all there). */
 function MediaView({ mid, cwd, file, kind }: { mid: string; cwd?: string; file: FileContent; kind: "video" | "audio" }) {
   if (!file.stream && file.truncated)
-    return <Empty icon="info" title="hub 版本太旧，放不了大文件" detail={`${bytes(file.size)} · 更新 hub 后可以直接播放，或者先下载。`} />;
+    return <Empty icon="info" title={t("session-files-fileview.hub_too_old_media")} detail={t("session-files-fileview.hub_too_old_media_detail", { size: bytes(file.size) })} />;
   return (
     <>
       <div className="flex min-h-8 shrink-0 items-center gap-2 border-b border-line px-3 py-1.5 text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums">
@@ -726,7 +727,7 @@ function PdfView({ file, src }: { file: FileContent; src: string }) {
 
 function FolderList({ file, onOpen }: { file: FileContent; onOpen: (p: string) => void }) {
   const entries = file.entries ?? [];
-  if (!entries.length) return <Empty icon="folder" title="空文件夹" />;
+  if (!entries.length) return <Empty icon="folder" title={t("session-files-fileview.empty_folder")} />;
   return (
     <div className="min-h-0 flex-1 overflow-y-auto py-1">
       {entries.map((e) => {
@@ -744,7 +745,7 @@ function FolderList({ file, onOpen }: { file: FileContent; onOpen: (p: string) =
           </button>
         );
       })}
-      {entries.length >= 500 && <p className="px-4 py-2 text-[11.5px] text-ink-3">只列出了前 500 项</p>}
+      {entries.length >= 500 && <p className="px-4 py-2 text-[11.5px] text-ink-3">{t("session-files-fileview.folder_truncated")}</p>}
     </div>
   );
 }

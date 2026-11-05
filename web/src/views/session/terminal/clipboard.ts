@@ -6,6 +6,7 @@
 import { ApiError, errorText, isAbort } from "../../../lib/api";
 import { sendFile } from "../../../lib/attachments";
 import { MAX_TERMINAL_UPLOAD, uploadName, uploadTimeoutMs, type ClipboardEnv } from "../../../lib/terminal-clipboard";
+import { t } from "../../../i18n";
 
 /** Sends a file to the machine `mid` is (dest=terminal: kept in Persona's own directory there for a week); resolves to its path. */
 export async function uploadToMachine(mid: string, file: File): Promise<string> {
@@ -13,7 +14,7 @@ export async function uploadToMachine(mid: string, file: File): Promise<string> 
   const timer = setTimeout(() => ctl.abort(), uploadTimeoutMs(file.size));
   try {
     const path = await sendFile(mid, file, { name: uploadName(file), dest: "terminal", signal: ctl.signal });
-    if (typeof path !== "string" || (!path.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(path))) throw new Error("电脑没有返回文件路径");
+    if (typeof path !== "string" || (!path.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(path))) throw new Error(t("session-terminal-clipboard.no_path"));
     return path;
   } finally {
     clearTimeout(timer);
@@ -22,9 +23,9 @@ export async function uploadToMachine(mid: string, file: File): Promise<string> 
 
 /** Why an upload failed, in words for the toast. */
 export function uploadFailure(name: string, e: unknown): string {
-  if (isAbort(e)) return `上传「${name}」超时`;
-  if (e instanceof ApiError && e.code === "too_large") return `「${name}」太大了（最多 ${MAX_TERMINAL_UPLOAD >> 20} MB）`;
-  return `上传「${name}」失败：${errorText(e)}`;
+  if (isAbort(e)) return t("session-terminal-clipboard.upload_timeout", { name });
+  if (e instanceof ApiError && e.code === "too_large") return t("session-terminal-clipboard.too_large", { name, max: MAX_TERMINAL_UPLOAD >> 20 });
+  return t("session-terminal-clipboard.upload_failed", { name, error: errorText(e) });
 }
 
 /**

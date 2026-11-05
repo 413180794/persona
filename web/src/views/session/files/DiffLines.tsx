@@ -4,6 +4,7 @@ import { useMemo, useRef } from "react";
 import { columns, parseDiff, type DiffLine } from "../../../lib/files";
 import { cx } from "../../../ui/atoms";
 import { Empty, useWindow } from "./parts";
+import { t } from "../../../i18n";
 
 const LH = 20;
 const PAD = 6;
@@ -23,7 +24,7 @@ export function DiffLines({ diff, truncated }: { diff: string; truncated?: boole
   const scroller = useRef<HTMLDivElement>(null);
   const [start, end] = useWindow(scroller, lines.length, LH, PAD);
 
-  if (!lines.length) return <Empty icon="git" title="没有文本改动" detail="可能是二进制文件、只改了权限，或者改动已被撤销。" />;
+  if (!lines.length) return <Empty icon="git" title={t("session-files-difflines.empty_title")} detail={t("session-files-difflines.empty_detail")} />;
   const num = `calc(${digits}ch + 12px)`;
   return (
     <div ref={scroller} className="min-h-0 flex-1 overflow-auto bg-inset font-mono text-[12px]" style={{ lineHeight: `${LH}px` }} data-testid="diff">
@@ -50,7 +51,7 @@ export function DiffLines({ diff, truncated }: { diff: string; truncated?: boole
           </div>
         ))}
         <div style={{ height: (lines.length - end) * LH }} />
-        {truncated && <p className="sticky left-0 px-3 pt-2 font-sans text-[11.5px] text-ink-3">改动太大，只显示了前 512 KB</p>}
+        {truncated && <p className="sticky left-0 px-3 pt-2 font-sans text-[11.5px] text-ink-3">{t("session-files-difflines.truncated")}</p>}
       </div>
     </div>
   );

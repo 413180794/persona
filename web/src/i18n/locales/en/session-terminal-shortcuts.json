@@ -1,0 +1,16 @@
+{
+  "title": "Shortcuts",
+  "popover_header": "Shortcuts · Click to type, ↵ to run",
+  "edit": "Edit",
+  "popover_empty": "No shortcuts yet. Click Edit to add one.",
+  "type": "Type: {command}",
+  "run": "Run: {command}",
+  "done": "Done",
+  "editor_hint": "They live under the lightning bolt in the key bar: click to type into the terminal, ↵ to run with Return. Saved in this browser only.",
+  "editor_empty": "No shortcuts",
+  "move_up": "Move up",
+  "move_down": "Move down",
+  "delete": "Delete",
+  "new_placeholder": "New shortcut",
+  "add": "Add"
+}

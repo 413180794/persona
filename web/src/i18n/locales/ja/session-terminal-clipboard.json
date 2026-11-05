@@ -1,0 +1,6 @@
+{
+  "no_path": "コンピューターからファイルパスが返ってきませんでした",
+  "upload_timeout": "「{name}」のアップロードがタイムアウトしました",
+  "too_large": "「{name}」は大きすぎます（最大{max}MB）",
+  "upload_failed": "「{name}」をアップロードできませんでした：{error}"
+}

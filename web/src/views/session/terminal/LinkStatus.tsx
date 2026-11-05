@@ -4,6 +4,7 @@ import { cx, useNow } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
 import { linkDetail, linkHeadline } from "../../../lib/terminal";
 import type { TerminalFeed } from "./feed";
+import { t } from "../../../i18n";
 
 export function LinkStatus({ feed }: { feed: TerminalFeed }) {
   const now = useNow(1000);
@@ -22,7 +23,7 @@ export function LinkStatus({ feed }: { feed: TerminalFeed }) {
           onClick={() => feed.retry()}
           className="h-6 shrink-0 whitespace-nowrap rounded-chip bg-surface px-2.5 text-[12px] font-medium text-ink shadow-btn transition-transform duration-150 active:scale-[0.96]"
         >
-          重试
+          {t("session-terminal-linkstatus.retry")}
         </button>
       </div>
     </div>

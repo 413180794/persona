@@ -1,0 +1,6 @@
+{
+  "no_path": "电脑没有返回文件路径",
+  "upload_timeout": "上传「{name}」超时",
+  "too_large": "「{name}」太大了（最多 {max} MB）",
+  "upload_failed": "上传「{name}」失败：{error}"
+}
