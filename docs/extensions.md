@@ -1422,6 +1422,12 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
   安装页的权限行按 key 配图标（`node_runs_code`、`node_network`、`node_files`、`node_macos_privacy`、`node_secrets`）。
 - **状态**：扩展列表里每个有 `node` 段的扩展带 `nodes: [{machine_id, version, state, error?}]`，`state` 是 `running` / `starting` / `error` /
   `missing`（那台没有这个版本的包）/ `lease_expired` / `offline` / `outdated`（那台的 personad 太旧，不认 `plugin.node.*`）。
+- **内置的 node 程序（cua、ego，#1830 第 5 步）**：操控电脑和浏览器的 node 侧代码就在 personad 里，不是包，不起子进程（`node/builtin.go`）。
+  node 在 `node.info` 的 `builtin_programs` 里报 `["cua", "ego"]`；hub 看到了就经 `plugin.node.call {id, method, params}` 问它们（`status`、`call`、`install`、`grant`、`cancel`、
+  `clipboard`、`cursor`、`nolock`、`lock`；ego 的 `status`、`install`、`open`、`cancel`、`call`、`cookies.list/import/clear`），没报的旧 node 照旧用 `computer.*`、`browser.*`
+  （`hub/builtin_programs.go` 的 `callBuiltin`：按 node 自己说的选，不靠出错重试）。新 node 两种名字都答，走同一份代码，旧 hub 不受影响。
+  内置程序不进对账：hub 不给它们发包、不 `plugin.node.start`（node 也拒绝），`node-plugins/` 里没有它们的目录；界面上还是机器页、设置页原来的 Cua / ego 状态，
+  `node_machines`、打开前的确认、权限页的 node 那几行都不出现。重连时的 `refreshComputer`、`refreshBrowser`、`tellNoLock` 先照旧，等两条路在真机上稳了再收进 `plugin.node.sync`。
 
 ## schema 和四端的类型
 

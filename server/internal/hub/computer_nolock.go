@@ -30,7 +30,7 @@ func (h *Hub) tellNoLock(ctx context.Context, m *Machine) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	if err := m.call(ctx, "computer.nolock", map[string]any{"on": h.noLockOn(m)}, nil); err != nil && !strings.Contains(err.Error(), "unknown method") {
+	if err := m.callBuiltin(ctx, "computer.nolock", map[string]any{"on": h.noLockOn(m)}, nil); err != nil && !strings.Contains(err.Error(), "unknown method") {
 		h.logf("[%s] computer.nolock: %v", m.cfg.ID, err)
 	}
 }

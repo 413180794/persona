@@ -43,6 +43,7 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 	var job *proto.ComputerJob // the node's install or grant, as computer.status says it
 	board := ""                // its clipboard
 	nodeSide.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
+		method, params = fakeBuiltinRoute(t, method, params) // either way the hub asks, the same answers (#1830 step 5)
 		mu.Lock()
 		defer mu.Unlock()
 		switch method {
@@ -109,7 +110,7 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 	go func() { _ = nodeSide.Serve(ctx, h2nR) }()
 	t.Cleanup(func() { cancel(); _ = h2nW.Close(); _ = n2hW.Close() })
 	m := newMachine(h, MachineConfig{ID: id, Name: id})
-	m.peer, m.online, m.info = hubSide, true, proto.NodeInfo{OS: "darwin"}
+	m.peer, m.online, m.info = hubSide, true, proto.NodeInfo{OS: "darwin", BuiltinPrograms: fakeBuiltinPrograms()}
 	h.mu.Lock()
 	h.machines, h.byID[id] = append(h.machines, m), m
 	h.mu.Unlock()

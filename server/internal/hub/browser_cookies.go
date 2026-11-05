@@ -74,7 +74,7 @@ func (h *Hub) browserCookies(w http.ResponseWriter, r *http.Request, m *Machine)
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute+15*time.Second)
 	defer cancel()
 	var out proto.BrowserCookies
-	if err := m.call(ctx, method, params, &out); err != nil {
+	if err := m.callBuiltin(ctx, method, params, &out); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
 			err = errors.New("这台电脑上的 personad 太旧，还不会导入 cookie：重新部署它")
 		}

@@ -1006,6 +1006,8 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
   `version` 是各自报的版本，没有就不带。旧 node 只报前两个。
 - `node.info` 的 `herdr_running` / `herdr_running_known`：经典 herdr 的 server 现在答不答话，以及 node 能不能判断（用 herdr-core
   的机器没有那个 socket，两个都不带）。老 node 两个都不带，hub 据此区分「没在跑」和「不清楚」（`docs/engines.md`）。
+- `node.info` 的 `builtin_programs`：personad 里内置的扩展程序（`["cua", "ego"]`，#1830 第 5 步）。报了的 node，hub 经 `plugin.node.call {id, method, params}` 问它们；
+  老 node 不带，hub 照旧用 `computer.*`、`browser.*`（新 node 也照答）。见 `docs/extensions.md`「内置的 node 程序」。
 - `herdr.server.start`（hub → node，无参数，回 `{running}`）：用户点了 Agents 列表的「启动」。不受 `herdr_autostart` 约束，
   起不来时按 `engine_missing` 那一套回原因。老 node 没有这个方法，hub 回 502 而不是说 herdr 起不来。
 - 并列时没有窗格的操作（新建、继续会话、改名）固定走经典 herdr（node 的 `defaultHost` / `defaultHostKind`）；

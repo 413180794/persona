@@ -31,7 +31,7 @@ func (h *Hub) tellCursor(ctx context.Context, m *Machine) {
 		Restarted bool `json:"restarted"`
 	}
 	on := h.cursorOn(m)
-	if err := m.call(ctx, "computer.cursor", map[string]any{"on": on}, &out); err != nil {
+	if err := m.callBuiltin(ctx, "computer.cursor", map[string]any{"on": on}, &out); err != nil {
 		if !strings.Contains(err.Error(), "unknown method") {
 			h.logf("[%s] computer.cursor: %v", m.cfg.ID, err)
 		}

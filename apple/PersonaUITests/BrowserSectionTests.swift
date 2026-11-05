@@ -72,7 +72,8 @@ final class BrowserSectionTests: XCTestCase {
         shot(app, "browser-ready")
     }
 
-    /// 设置 › 扩展 › 浏览器: a switch per Mac, how ego lite is on each.
+    /// 设置 › 扩展 › 浏览器: a switch per Mac, how ego lite is on each. The mock serves extensions only with MOCK_PLUGINS=1
+    /// as well (else the page says not found).
     @MainActor func testTheExtensionListsTheMacs() throws {
         guard state == "ready" else { throw XCTSkip("MOCK_BROWSER=ready") }
         let (app, _) = try open(["-tab", "settings", "-openExtension", "ego"])

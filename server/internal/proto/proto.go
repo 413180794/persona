@@ -344,6 +344,9 @@ type NodeInfo struct {
 	// the hub then tells "it does not run" apart from "nobody said".
 	HerdrRunning      bool `json:"herdr_running,omitempty"`
 	HerdrRunningKnown bool `json:"herdr_running_known,omitempty"`
+	// BuiltinPrograms are the extensions' programs built into this node (cua, ego): the hub asks them over
+	// plugin.node.call (node/builtin.go). An older node leaves it out, and the hub asks it by the old method names.
+	BuiltinPrograms []string `json:"builtin_programs,omitempty"`
 }
 
 // System is what a machine is: OS, hardware, since when it runs (sysmon; docs/machines.md). Read once when the node

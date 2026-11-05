@@ -121,7 +121,7 @@ func (h *Hub) refreshComputer(ctx context.Context, m *Machine) *proto.Computer {
 	defer cancel()
 	asked := time.Now()
 	var c proto.Computer
-	if err := m.call(ctx, "computer.status", map[string]any{}, &c); err != nil {
+	if err := m.callBuiltin(ctx, "computer.status", map[string]any{}, &c); err != nil {
 		if !strings.Contains(err.Error(), "unknown method") {
 			return h.computerOf(m)
 		}
@@ -272,7 +272,7 @@ func (h *Hub) postComputerJob(w http.ResponseWriter, r *http.Request, m *Machine
 	defer cancel()
 	asked := time.Now()
 	var c proto.Computer
-	if err := m.call(ctx, "computer."+action, map[string]any{}, &c); err != nil {
+	if err := m.callBuiltin(ctx, "computer."+action, map[string]any{}, &c); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
 			err = errors.New("这台电脑上的 personad 太旧，还不会" + map[bool]string{true: "锁屏", false: "安装 Cua Driver"}[action == "lock"] + "：重新部署它")
 		}
@@ -446,7 +446,7 @@ func (h *Hub) computerState(ctx context.Context, m *Machine, session, app, query
 func (h *Hub) computerCall(ctx context.Context, m *Machine, session, tool string, args map[string]any) (*proto.ComputerResult, error) {
 	var res proto.ComputerResult
 	s := h.cua()
-	if err := m.call(ctx, "computer.call", map[string]any{"session": session, "tool": tool, "args": args, "keep_awake": s.awake(), "click_sound": s.ClickSound}, &res); err != nil {
+	if err := m.callBuiltin(ctx, "computer.call", map[string]any{"session": session, "tool": tool, "args": args, "keep_awake": s.awake(), "click_sound": s.ClickSound}, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil

@@ -355,6 +355,9 @@ func (ph *pluginHost) start(ctx context.Context, s proto.PluginNodeStart) (proto
 	if err := checkProgram(proto.PluginNodeProgram{ID: s.ID, Version: s.Version}); err != nil {
 		return state, err
 	}
+	if _, ok := builtinPrograms[s.ID]; ok { // never a package: it is this process (builtin.go)
+		return state, fmt.Errorf("plugin %s is built into personad", s.ID)
+	}
 	if s.Keep != extension.KeepLease && s.Keep != extension.KeepAlways {
 		return state, fmt.Errorf("plugin %s: keep %q", s.ID, s.Keep)
 	}
@@ -578,6 +581,9 @@ func (ph *pluginHost) status() proto.PluginNodeStates {
 }
 
 func (ph *pluginHost) call(ctx context.Context, p proto.PluginNodeCall) (json.RawMessage, error) {
+	if _, ok := builtinPrograms[p.ID]; ok { // cua, ego: in this process, always there (builtin.go)
+		return callBuiltin(ctx, p.ID, p.Method, p.Params)
+	}
 	ph.mu.Lock()
 	r := ph.running[p.ID]
 	ph.mu.Unlock()

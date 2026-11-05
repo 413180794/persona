@@ -397,3 +397,6 @@
 - 用例开头带上对应的 `-open…Fresh YES` 清掉前面留下的（飞书是 `-lark-connectorSendFresh`，`LarkSendTests`、`LarkAttachmentFlowTests` 都用）；
   用例里要验证「重启后还在」的那次重新打开**要去掉这个参数**，否则把要验证的东西也清了。
 - 加新的 UI 测试类后整套连跑一遍，不只跑新加的那一条。
+- `./scripts/test/test-server.sh … -run 'A|B'` 在 hub 机器上变成 `bash: B: command not found`、什么都没跑（2026-11-05，#1830）：参数经 ssh 又被远端的 shell 解析一次，`|` 成了管道。
+  模式要多套一层引号：`-run "'A|B'"`。只看退出码会以为是测试挂了，先看日志最后几行。
+

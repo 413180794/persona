@@ -884,56 +884,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.portDial(ctx, params)
 	case "port.probe":
 		return n.portProbeRPC(ctx, params)
-	case "computer.status": // Cua Driver on this Mac, asked only while the user has it on (computer.go)
-		return computerStatus(ctx), nil
-	case "computer.call":
-		return computerCall(ctx, params)
-	case "computer.install", "computer.grant": // background jobs; their state comes back with computer.status
-		run := installCua
-		if method == "computer.grant" {
-			run = grantCua
-		}
-		if err := startJob(strings.TrimPrefix(method, "computer."), run); err != nil {
-			return nil, err
-		}
-		return computerStatus(ctx), nil
-	case "computer.cancel":
-		cancelJob()
-		return computerStatus(ctx), nil
-	case "computer.clipboard": // the live screen's 剪贴板: text RFB cannot carry (Chinese), and reading it (clipboard.go)
-		return macClipboard(ctx, params)
-	case "computer.cursor": // 「显示 Agent 的光标」: Cua Driver's daemon with or without its cursor overlay (cua_extras.go)
-		return setCursor(ctx, params)
-	case "computer.nolock": // 「扩展开着时不自动锁屏」, said again by the hub every few minutes (awake.go)
-		var p struct {
-			On bool `json:"on"`
-		}
-		_ = json.Unmarshal(params, &p)
-		noLock.set(p.On)
-		return map[string]any{"held": noLock.held()}, nil
-	case "computer.lock": // 锁上 from the app, after a one-tap unlock (awake.go)
-		if err := lockScreen(ctx); err != nil {
-			return nil, err
-		}
-		return computerStatus(ctx), nil
-	case "browser.status": // ego lite on this Mac, asked only while the user has the plugin on (browser.go)
-		return browserStatus(ctx), nil
-	case "browser.install", "browser.open": // background jobs; their state comes back with browser.status
-		run := installEgo
-		if method == "browser.open" {
-			run = openEgo
-		}
-		if err := egoJob.start(strings.TrimPrefix(method, "browser."), run, nil); err != nil {
-			return nil, err
-		}
-		return browserStatus(ctx), nil
-	case "browser.cancel":
-		egoJob.cancelInstall()
-		return browserStatus(ctx), nil
-	case "browser.call":
-		return browserCall(ctx, params)
-	case "browser.cookies.list", "browser.cookies.import", "browser.cookies.clear": // sign-ins in ego's profile (browser_cookies.go)
-		return browserCookies(ctx, method, params)
+	// The built-in programs cua and ego by their old names, for a hub from before builtin_programs (builtin.go).
+	case "computer.status", "computer.call", "computer.install", "computer.grant", "computer.cancel", "computer.clipboard",
+		"computer.cursor", "computer.nolock", "computer.lock",
+		"browser.status", "browser.install", "browser.open", "browser.cancel", "browser.call",
+		"browser.cookies.list", "browser.cookies.import", "browser.cookies.clear":
+		return legacyBuiltinCall(ctx, method, params)
 	case "fs.stat":
 		return map[string]any{"stats": n.statPaths(p.Paths, p.Cwd)}, nil
 	case "space.rename":
@@ -1113,6 +1069,7 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 		Engine:             n.engine(),
 		Engines:            n.engines(ctx, hv),
 		MachineUID:         n.uid,
+		BuiltinPrograms:    builtinProgramIDs,
 	}
 }
 

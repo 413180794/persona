@@ -41,7 +41,7 @@ func (h *Hub) computerClipboard(w http.ResponseWriter, r *http.Request, m *Machi
 	var out struct {
 		Text string `json:"text"`
 	}
-	if err := m.call(ctx, "computer.clipboard", params, &out); err != nil {
+	if err := m.callBuiltin(ctx, "computer.clipboard", params, &out); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
 			err = errors.New("这台电脑上的 personad 太旧，还不会读写剪贴板：重新部署它")
 		}

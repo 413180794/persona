@@ -65,7 +65,7 @@ func (h *Hub) refreshBrowser(ctx context.Context, m *Machine) *proto.Browser {
 	defer cancel()
 	asked := time.Now()
 	var b proto.Browser
-	if err := m.call(ctx, "browser.status", map[string]any{}, &b); err != nil {
+	if err := m.callBuiltin(ctx, "browser.status", map[string]any{}, &b); err != nil {
 		if !strings.Contains(err.Error(), "unknown method") {
 			return h.browserOf(m)
 		}
@@ -161,7 +161,7 @@ func (h *Hub) postBrowserJob(w http.ResponseWriter, r *http.Request, m *Machine)
 	defer cancel()
 	asked := time.Now()
 	var b proto.Browser
-	if err := m.call(ctx, "browser."+action, map[string]any{}, &b); err != nil {
+	if err := m.callBuiltin(ctx, "browser."+action, map[string]any{}, &b); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
 			err = errors.New("这台电脑上的 personad 太旧，还不会装 ego lite：重新部署它")
 		}
@@ -218,7 +218,7 @@ func (h *Hub) callBrowserTool(ctx context.Context, sessionID, name string, args 
 	}
 	start := time.Now()
 	var res proto.ComputerResult
-	callErr := m.call(ctx, "browser.call", in, &res)
+	callErr := m.callBuiltin(ctx, "browser.call", in, &res)
 	h.logf("[%s] %s for %s: %d bytes, %v, %s", m.cfg.ID, name, convID(sessionID), len(a.Script), time.Since(start).Round(time.Millisecond),
 		map[bool]string{true: "failed", false: "ok"}[callErr != nil])
 	if callErr != nil {
