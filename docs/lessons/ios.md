@@ -249,6 +249,12 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
 
 ## 布局与组件
 
+- 横向滚动里给 chip 限宽，别在背景外面套 `frame(maxWidth:)` / `scaledFrame(maxWidth:)`（2026-11-05，#3010）：`ScrollView(.horizontal)`
+  不给宽度建议，可变 frame 把这个「不限」原样传给里面，chip 按完整标题量出宽度、背景也按这个画，frame 只把自己的占位夹到上限；
+  于是背景和占位对不上：短一点时 chip 之间的空隙变大，系统字号调大后标题不截断，capsule 溢出占位、压到相邻 chip 上。
+  限宽用 `scaledWidthCap(_:)`（`WidthCap` 布局：先给里面上限宽度的建议，自己的大小就是里面报的大小），放在背景外面。
+  `DockPillLayoutTests` 用 `ImageRenderer` 在 chip 两边留透明的槽、按像素查背景没画进槽里，几档字号都跑。
+
 - 品牌标志大小不一（2026-11-03，#1003）：同一列里 `Image(…).resizable().scaledToFit()` 撑满一样的方框，看起来却差一圈。
   原因在资源：飞书的 SVG 画布 88×88 里鸟只占 70% × 56%、还偏右，Telegram、Microsoft 是满版的；`scaledToFit` 只对齐画布不对齐图形。
   做法：裁掉资源的留白（viewBox），统一经 `BrandMark` 画，满版正方形再按光学大小缩一点；量法是 `rsvg-convert` 渲染后找不透明像素的范围，

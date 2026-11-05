@@ -72,6 +72,8 @@ type Machine struct {
 	warmUntil time.Time
 	warmed    chan struct{}
 	err       string
+	// dialErrAt: when err last said why connecting failed (markOffline, noPath), not why a connection ended.
+	dialErrAt time.Time
 	lastSeen  time.Time
 	sessions  []proto.Session
 	watched   map[string]bool // sessions the hub watches (session.watch): watched again on a new connection

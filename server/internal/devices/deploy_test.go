@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/rand"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -173,5 +174,61 @@ func TestDeployOverFailedSSHDoesNotLeakTheWriter(t *testing.T) {
 			t.Fatalf("the gzip writer is still running after deploy returned:\n%s", stacks.String())
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// A deploy whose machine does not come back must not say what it "still runs": the hub is not connected to it, and
+// the version it knows is the node from before the deploy (#3393). The last connection error says what went wrong.
+func TestDeployThatDoesNotComeBackSaysSo(t *testing.T) {
+	wait, poll := deployWait, deployPoll
+	deployWait, deployPoll = 50*time.Millisecond, 10*time.Millisecond
+	t.Cleanup(func() { deployWait, deployPoll = wait, poll })
+	d := newTestDevices(t)
+
+	m := newMachine(d, MachineConfig{ID: "away", Name: "away", Kind: "ssh"})
+	m.info.Version = "old-build"
+	m.err = "reconnect requested" // how the old connection ended: no reason why the new one is not there
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		m.markOffline(errors.New("ssh: connect to host away port 22: Connection refused"))
+	}()
+	err := m.waitDeployed(context.Background())
+	if err == nil {
+		t.Fatal("waitDeployed: no error for a machine that never came back")
+	}
+	if strings.Contains(err.Error(), "old-build") || strings.Contains(err.Error(), "跑的还是") {
+		t.Errorf("says what an unconnected machine runs: %v", err)
+	}
+	if !strings.Contains(err.Error(), "没有重新连上") || !strings.Contains(err.Error(), "Connection refused") {
+		t.Errorf("does not say it did not come back, and why: %v", err)
+	}
+
+	// Back, but on another build: that is what it still runs.
+	m2 := newMachine(d, MachineConfig{ID: "back", Name: "back", Kind: "ssh"})
+	m2.online, m2.info.Version = true, "old-build"
+	if err := m2.waitDeployed(context.Background()); err == nil || !strings.Contains(err.Error(), "跑的还是 old-build") {
+		t.Errorf("online on another build: %v", err)
+	}
+}
+
+// Our own reconnect's "reconnect requested" is not why a redeployed machine is not back.
+func TestDeployThatDoesNotComeBackHidesItsOwnReconnect(t *testing.T) {
+	wait, poll := deployWait, deployPoll
+	deployWait, deployPoll = 30*time.Millisecond, 10*time.Millisecond
+	t.Cleanup(func() { deployWait, deployPoll = wait, poll })
+	d := newTestDevices(t)
+	m := newMachine(d, MachineConfig{ID: "away", Name: "away", Kind: "ssh"})
+	m.info.Version, m.err = "old-build", "reconnect requested"
+	err := m.waitDeployed(context.Background())
+	if err == nil || strings.Contains(err.Error(), "reconnect requested") || !strings.Contains(err.Error(), "没有重新连上") {
+		t.Errorf("waitDeployed: %v", err)
+	}
+}
+
+func TestWaitText(t *testing.T) {
+	for d, want := range map[time.Duration]string{2 * time.Minute: "2 分钟", 90 * time.Second: "90 秒", 50 * time.Millisecond: "0 秒"} {
+		if got := waitText(d); got != want {
+			t.Errorf("waitText(%v) = %q, want %q", d, got, want)
+		}
 	}
 }

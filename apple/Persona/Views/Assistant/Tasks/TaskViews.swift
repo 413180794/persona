@@ -893,7 +893,9 @@ struct DockPillLabel<Marks: View>: View {
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.sm)
         .background(waiting ? state.tone.tint : Theme.Fill.chip, in: .capsule)
-        .scaledFrame(maxWidth: maxWidth)
+        // Not `scaledFrame(maxWidth:)`: the dock's ScrollView offers no width, so a long title took its full width
+        // and its capsule spilled over the pills beside it (#3010).
+        .scaledWidthCap(maxWidth)
     }
 }
 

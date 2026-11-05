@@ -111,6 +111,40 @@ extension View {
     }
 }
 
+extension View {
+    /// At most `width` wide (scaled like `scaledFrame`), sized to what the view takes inside it: unlike
+    /// `scaledFrame(maxWidth:)` it offers the view that width even where the parent offers none, as a horizontal
+    /// `ScrollView` or `fixedSize()` does. There a flexible frame passes the open offer on, the view takes its full
+    /// width, the frame clamps only its own size, and whatever is drawn inside (a pill's capsule) spills over its
+    /// neighbours (#3010). Put it outside the background, so the background is drawn at the capped size.
+    func scaledWidthCap(_ width: CGFloat) -> some View { modifier(ScaledWidthCap(width: width)) }
+}
+
+private struct ScaledWidthCap: ViewModifier {
+    let width: CGFloat
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View { WidthCap(width: width * Theme.sizeScale(typeSize)) { content } }
+}
+
+/// The layout under `scaledWidthCap(_:)`: offers its one subview the narrower of the parent's width and the cap, and is
+/// exactly as large as the subview says it is.
+struct WidthCap: Layout {
+    var width: CGFloat
+
+    func offer(_ proposal: ProposedViewSize) -> ProposedViewSize {
+        ProposedViewSize(width: min(proposal.width ?? width, width), height: proposal.height)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        subviews.first?.sizeThatFits(offer(proposal)) ?? .zero
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+    }
+}
+
 private struct ScaledFrame: ViewModifier {
     let width: CGFloat?, height: CGFloat?, alignment: Alignment
     @Environment(\.dynamicTypeSize) private var typeSize

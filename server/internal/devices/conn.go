@@ -161,7 +161,7 @@ func (m *Machine) noPath() {
 	m.mu.Lock()
 	changed := !m.online && m.err != why
 	if changed {
-		m.err = why
+		m.err, m.dialErrAt = why, time.Now()
 	}
 	m.mu.Unlock()
 	if changed {
@@ -478,7 +478,7 @@ func (m *Machine) markOffline(err error) {
 	m.mu.Lock()
 	m.online = false
 	if err != nil {
-		m.err = err.Error()
+		m.err, m.dialErrAt = err.Error(), time.Now()
 	}
 	m.mu.Unlock()
 	m.d.logf("[%s] offline: %v", m.cfg.ID, err)

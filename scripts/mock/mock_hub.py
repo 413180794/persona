@@ -1791,7 +1791,8 @@ if MOCK_TASKS:
     # MOCK_TASKS_DOCK=2: only the two tasks going on (the widget fix and the unit tests), for the dock with few pills;
     # =pair: one task (the widget fix) and one agent opened by hand that waits for the user (the photo sync; the
     # /orders agent and the unit tests' go idle), the main conversation's dock with a task pill and an agent pill (#1113);
-    # =many: four more tasks going on (working, needing you, two still opening), for a dock wider than the screen.
+    # =many: four more tasks going on (working, needing you, two still opening), for a dock wider than the screen;
+    # =long: only two tasks whose titles are wider than a pill.
     # Without it the dock has the four tasks not done and, after them, the two agents opened by hand (photo sync, /orders).
     _dock = os.environ.get("MOCK_TASKS_DOCK", "")
     if _dock == "2":
@@ -1806,6 +1807,13 @@ if MOCK_TASKS:
             _task_todo("todo_task_photos", "照片同步支持 HEIC", "", "studio", PHOTOS, "/Users/me/code/photo-sync", 18, "plan_mock_2"),
             dict(_task_todo("todo_task_pay", "接入支付回调", "", "macbook", "", "/Users/me/code/shop-api", 1, "plan_mock_2"), agents=[]),
             dict(_task_todo("todo_task_skeleton", "首页加骨架屏", "", "macbook", "", "/Users/me/code/weather", 1, "plan_mock_2"), agents=[]),
+        ]
+    elif _dock == "long":  # only two tasks whose titles are wider than a pill, side by side (#3010: their capsules overlapped)
+        TODOS_INIT[:] = [t for t in TODOS_INIT if t.get("origin") != ASK1] + [
+            dict(_task_todo("todo_task_long1", "Apple 端支持后台工作流：任务卡、通知、实时活动和手表", "", "macbook", "",
+                            "/Users/me/code/weather", 1, "plan_mock_2"), agents=[]),
+            _task_todo("todo_task_long2", "Workflow 支持：hub / 网页 / 安卓 / Apple 端都能看到后台状态", "", "macbook", WIDGET,
+                       "/Users/me/code/weather", 18, "plan_mock_2"),
         ]
     TODOS = copy.deepcopy(TODOS_INIT)
 

@@ -166,16 +166,29 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 	return m.waitDeployed(ctx)
 }
 
+// deployWait bounds how long waitDeployed waits for the machine to come back (a variable for tests): the new node
+// answers within a few seconds, a resident one waits for launchd's restart (ThrottleInterval 10 s), and over tailcat
+// the new node first brings its endpoint up again.
+var deployWait, deployPoll = 2 * time.Minute, 2 * time.Second
+
+// waitText is how long a wait was, in the owner's words.
+func waitText(d time.Duration) string {
+	if d >= time.Minute && d%time.Minute == 0 {
+		return fmt.Sprintf("%d 分钟", int(d/time.Minute))
+	}
+	return fmt.Sprintf("%d 秒", int(d.Round(time.Second)/time.Second))
+}
+
 // waitDeployed reconnects and waits for the machine to come back on the hub's build.
 func (m *Machine) waitDeployed(ctx context.Context) error {
+	start := time.Now()
 	m.reconnect()
-	// The new node answers within a few seconds; a resident one waits for launchd's restart (ThrottleInterval 10 s).
-	deadline := time.Now().Add(2 * time.Minute) // over tailcat the new node first brings its endpoint up again
+	deadline := start.Add(deployWait)
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(2 * time.Second):
+		case <-time.After(deployPoll):
 		}
 		m.mu.Lock()
 		online, version := m.online, m.info.Version
@@ -185,8 +198,23 @@ func (m *Machine) waitDeployed(ctx context.Context) error {
 		}
 	}
 	m.mu.Lock()
-	version := m.info.Version
+	online, version, why := m.online, m.info.Version, m.err
+	if m.dialErrAt.Before(start) {
+		why = "" // how the old connection ended (our own reconnect), not why the new node is not reached
+	}
 	m.mu.Unlock()
+	if online && !nodeMismatch(m.d.hubVersion(), version) {
+		return nil // came back just now
+	}
+	if !online {
+		// Not connected: what it runs is not known (m.info is still the node from before the deploy), so saying it
+		// "still runs" that build sent the owner to restart a node that may not start at all (#3393).
+		msg := fmt.Sprintf("装好了，但这台电脑 %s内没有重新连上 hub", waitText(deployWait))
+		if why != "" {
+			msg += "：" + why
+		}
+		return errors.New(msg)
+	}
 	return fmt.Errorf("装好了，但这台电脑上跑的还是 %s：在那台电脑上重启一下 jarvisd", version)
 }
 
