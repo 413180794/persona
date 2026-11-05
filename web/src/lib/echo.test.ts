@@ -24,6 +24,8 @@ describe("finding a sent message in the transcript", () => {
     expect(isEcho({ text: "", images: [{}], at }, user("", 1, [{}]))).toBe(true);
     expect(isEcho({ text: "", images: [{}], at }, user("别的话", 1, [{}]))).toBe(false);
     expect(isEcho({ text: "看图", images: [{}], at }, user("看图", 1))).toBe(false);
+    // a picture sent from here comes back as a path the node saved it to (<attached_images>), not an image item
+    expect(isEcho({ text: "看图", images: [{}], at }, { ...user("看图", 1), photos: ["/tmp/persona/a.jpg"] })).toBe(true);
   });
 
   it("answers one sent message per copy", () => {

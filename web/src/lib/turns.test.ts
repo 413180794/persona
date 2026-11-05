@@ -70,6 +70,29 @@ describe("parseUserText", () => {
     expect(parseUserText("像这样合并。\n<attached_images>\n</attached_images>").text).toBe("像这样合并。");
   });
 
+  it("keeps the attached photos' paths for the bubble's thumbnails (G026)", () => {
+    const p = parseUserText("看这两张\n\n<attached_images>\n/tmp/persona/a.jpg\n /tmp/persona/b.png \n这不是路径\n/tmp/persona/a.jpg\n~/Pictures/c.heic\n</attached_images>");
+    expect(p.text).toBe("看这两张");
+    expect(p.photos).toEqual(["/tmp/persona/a.jpg", "/tmp/persona/b.png", "~/Pictures/c.heic"]);
+    expect(parseUserText("没有图").photos).toEqual([]);
+  });
+
+  it("puts a message's photos on its user message", () => {
+    const items: Item[] = [{ id: "u1#0", seq: 1, role: "user", kind: "text", text: "<attached_images>\n/tmp/persona/a.jpg\n</attached_images>" }];
+    const [seg] = segments(items);
+    expect(seg.user?.text).toBe("");
+    expect(seg.user?.photos).toEqual(["/tmp/persona/a.jpg"]);
+  });
+
+  it("does not repeat a photo across the merged parts of one message", () => {
+    const items: Item[] = [
+      { id: "u1#0", seq: 1, role: "user", kind: "text", text: "<attached_images>\n/tmp/persona/a.jpg\n</attached_images>" },
+      { id: "u1#1", seq: 2, role: "user", kind: "text", text: "再看\n<attached_images>\n/tmp/persona/a.jpg\n/tmp/persona/b.png\n</attached_images>" },
+    ];
+    const [seg] = segments(items);
+    expect(seg.user?.photos).toEqual(["/tmp/persona/a.jpg", "/tmp/persona/b.png"]);
+  });
+
   it("pulls out jarvis-context tags", () => {
     const p = parseUserText('<jarvis-context kind="edit" title="Doc &amp; co" url="https://x">sel</jarvis-context>fix it');
     expect(p.text).toBe("fix it");

@@ -962,6 +962,10 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 「交给 Persona」（Agents 长按菜单） | 有 | #433 | 行菜单，经跨页的待发消息发进主对话 |
 | 对话展示（工作行、折叠、轨迹、diff、图片、待办） | 有 | — | |
 | 展示逻辑对齐 `ChatLines`：合并的交换、工作中插入、已中断、来自 X、循环唤醒 | 有 | #433 | `chatLines()` / `buildBlocks()` |
+| Codex 的文件改动（Edit 带 unified diff）：+N −N、点开看 diff | 有 | #2990 | 一个 hunk 一块；没有 hunk 的新建 / 删除文件整段算新增 / 删除（`lib/tool-detail.ts` `patchDiffs`） |
+| hub 截断的工具输出、长回复「看全文」（`full_size`） | 有 | #2990 | `GET …/items/{id}/full` 取全文原地替换（同 Android），加载中 / 失败重试；去掉截断说明那一行（`chat/FullText.tsx`） |
+| 打开计划 / 提问 / 助手的 ask_user 步骤 | 有 | #2990 | 计划按 Markdown 画，问题列出选项，ask_user 勾上选的（自己写的也列出来），没回答写「没有回答」（`chat/StepDetail.tsx`） |
+| 随消息发的照片（`<attached_images>` 路径，手机发的、Codex local_image） | 有 | #2990 | 气泡上方的缩略图（file/thumb，画不出缩略图用原图），点开进图片查看器（`chat/AttachedPhotos.tsx`） |
 | 交互卡片（提问 / 计划 / 授权 / 终端对话框、Codex） | 有 | — | |
 | MCP elicitation（表单、链接授权） | 网页先有（Android 也有） | #2985 | 对齐 Android 的 `ElicitationFields` / `AnswerBuilder`：`client_hello` 声明 `elicitation`、请求带 `X-Jarvis-Client: web/1`；表单只认同一个 schema 子集，超出的提示到终端处理；链接要先从卡片打开（新标签页）才能「已打开，继续」。iOS / Mac / 手表还没有，hub 只把它推给声明过的连接 |
 | 输入框（/ 命令、附件、建议、中断、草稿、被拒时清空并发送） | 有 | — | |
@@ -1027,7 +1031,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 云文档提到我的行和改状态 | 有 | #297 | |
 | 飞书文档的评论：看、回复、解决 / 重新打开、评论全文或选中的一段、@ 人 | 有 | #1290 | 插件声明 `lark_doc_comments` 才能写；只做评论，不改正文；App 是长按段落，网页是选中文字 |
 | 公司圈帖子和评论 | 有 | #297 | 只读 |
-| 连接器的条目（GitHub、Telegram、信息、扩展）：来源筛选、会话页、回复或「在 X 里打开」、交给 AI | 有 | #1324 | GitHub 时间线和 Telegram 气泡只读加回复；表情回应、转发、下载附件不做 |
+| 连接器的条目（GitHub、Telegram、信息、扩展）：来源筛选、会话页、回复或「在 X 里打开」、交给 AI | 有 | #1324、#2990 | GitHub 时间线和 Telegram 气泡只读加回复，会话里的图片点开进图片查看器（#2990）；表情回应、转发、下载附件不做 |
 | 静音这个仓库 / 会话 / 发件人、「已静音」列表和取消静音 | 有 | #2968 | App 是长按一行；网页是右键一行，或条目页标题旁的静音按钮（触屏用它）；「已静音」在列表 ⋯ 菜单里，是弹窗 |
 
 ### 机器和设置

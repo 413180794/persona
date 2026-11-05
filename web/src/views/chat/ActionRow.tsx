@@ -15,7 +15,10 @@ import type { ToolStep } from "../../lib/work-groups";
 import { cx, Dialog, EASE, IconButton, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { NARROW, useMedia } from "../../ui/media-query";
+import { patchDiffs } from "../../lib/tool-detail";
 import { useChatContext } from "./chat-context";
+import { useFullText } from "./FullText";
+import { hasStepDetail, showsResult, StepDetail } from "./StepDetail";
 import { useReveal } from "./search-reveal";
 import { edgeMask, useEdgeFade } from "./edge-fade";
 import { Thumb } from "./Steps";
@@ -115,6 +118,12 @@ export function editDiffs(use: Item): Op[][] | null {
   const inp = (use.tool_input ?? {}) as Record<string, unknown>;
   switch (use.tool_name) {
     case "Edit":
+      // Codex: the patch as a unified diff (the hub maps a file change to an Edit with `diff`); Claude: old / new
+      if (typeof inp.diff === "string") {
+        // the hub sends an empty diff for a change with no text (an empty new file, a pure move): open the file instead
+        const d = patchDiffs(inp.diff, str(inp.change));
+        return d.length ? d : null;
+      }
       return typeof inp.old_string === "string" || typeof inp.new_string === "string" ? [lineDiff(String(inp.old_string ?? ""), String(inp.new_string ?? ""))] : null;
     case "Write":
       return typeof inp.content === "string" ? [lineDiff("", inp.content)] : null;
@@ -173,7 +182,10 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
     return () => setOpen(false);
   });
   const label = [p.verb, p.param?.text].filter(Boolean).join(" ");
-  const input = open ? inlineInput(use) : "";
+  const detail = open && hasStepDetail(use);
+  const input = open && !detail ? inlineInput(use) : "";
+  const full = useFullText(result, mid, sid);
+  const output = result && showsResult(name, result) ? full.text : "";
   return (
     <div className="flex min-w-0 flex-col" data-action-row={name} data-items={ids.join(" ")}>
       <button type="button" onClick={activate} aria-expanded={inPlace ? open : undefined} aria-label={label || name} title={p.param?.title} className={ROW}>
@@ -216,14 +228,20 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
       )}
       {open && (
         <div className="mx-2 mt-1 mb-1 cursor-text rounded-[6px] border border-line bg-neutral-bubble px-[10px] py-2 font-mono text-[12px] leading-[17px] text-ink select-text" data-inline-detail>
+          {detail && (
+            <div className="font-sans">
+              <StepDetail use={use} result={result} />
+            </div>
+          )}
           {input && <pre className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{input}</pre>}
-          {result?.text && (
+          {output && (
             <>
-              {input && <div className="my-2 h-px bg-line" />}
-              <pre className={cx("m-0 whitespace-pre-wrap [overflow-wrap:anywhere]", error ? "text-red" : "text-tool-ink")}>{result.text}</pre>
+              {(input || detail) && <div className="my-2 h-px bg-line" />}
+              <pre className={cx("m-0 whitespace-pre-wrap [overflow-wrap:anywhere]", error ? "text-red" : "text-tool-ink")}>{output}</pre>
+              {full.more}
             </>
           )}
-          {!input && !result?.text && <span className="text-tool-ink">{t("chat-actionrow.no_content")}</span>}
+          {!input && !detail && !output && <span className="text-tool-ink">{t("chat-actionrow.no_content")}</span>}
         </div>
       )}
       {diffs && diffOpen && <DiffDialog onClose={() => setDiffOpen(false)} path={p.file ?? ""} diffs={diffs} mid={mid} sid={sid} />}

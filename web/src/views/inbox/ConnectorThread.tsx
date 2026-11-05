@@ -15,6 +15,7 @@ import { t } from "../../i18n";
 import { Button, cx, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
+import { ImageViewer } from "../chat/ImageViewer";
 import { scrollBehavior } from "../../ui/stream/motion";
 import { Monogram } from "./InboxParts";
 
@@ -340,11 +341,32 @@ function Picture({ id, media }: { id: string; media: ThreadMedia }) {
   const ref = media.ref || media.thumb!;
   const src = withToken(mediaURL(id, ref));
   const sticker = media.kind === "sticker";
+  const [viewing, setViewing] = useState(false);
   const w = media.width && media.height ? Math.min(sticker ? 140 : 260, media.width) : sticker ? 140 : 260;
   const ratio = media.width && media.height ? media.height / media.width : 0.75;
+  const size = { width: w, height: Math.round(w * ratio) };
+  const img = <img src={src} alt={media.emoji || media.name || ""} loading="lazy" className={cx("size-full", sticker ? "object-contain" : "object-cover")} />;
+  // a picture opens full screen (iOS: tap → LarkImageGallery); a sticker or a video stays as it is
+  if (media.kind === "image") {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setViewing(true)}
+          aria-label={t("inbox-connectorthread.view_image")}
+          className="relative block overflow-hidden rounded-[14px] outline-none transition-transform duration-150 focus-visible:ring-2 focus-visible:ring-accent active:scale-[0.98] motion-reduce:transition-none"
+          style={size}
+          data-thread-picture
+        >
+          {img}
+        </button>
+        {viewing && src && <ImageViewer images={[{ id: src, src, mime: media.mime }]} start={0} onClose={() => setViewing(false)} />}
+      </>
+    );
+  }
   return (
-    <span className="relative block overflow-hidden rounded-[14px]" style={{ width: w, height: Math.round(w * ratio) }}>
-      <img src={src} alt={media.emoji || media.name || ""} loading="lazy" className={cx("size-full", sticker ? "object-contain" : "object-cover")} />
+    <span className="relative block overflow-hidden rounded-[14px]" style={size}>
+      {img}
       {media.kind === "video" && (
         <span className="absolute inset-0 flex items-center justify-center">
           <span className="flex size-10 items-center justify-center rounded-full bg-black/50 text-white"><Icon name="play" size={16} /></span>

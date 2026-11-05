@@ -24,5 +24,6 @@
   "hide_log": "Hide log",
   "show_log": "View log",
   "quote_jump": "Go to the original message: {text}",
-  "quote_not_found": "The original message is further back; scroll up a few pages to find it"
+  "quote_not_found": "The original message is further back; scroll up a few pages to find it",
+  "view_image": "View image"
 }

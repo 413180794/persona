@@ -31,6 +31,8 @@ export interface UserMessage {
   client_msg_id?: string;
   /** Files it carries as <jarvis-file> tags (videos sent from the phone…), drawn as cards. */
   files?: AttachedFile[];
+  /** Paths of photos sent with it (`<attached_images>`), on the session's machine: thumbnails above the bubble. */
+  photos?: string[];
   /** Persona typed it in for the model (a task's notice, a scheduled run…): one line, not a bubble (lib/injected.ts). */
   injected?: Injected;
 }
@@ -128,9 +130,10 @@ export function formatDuration(seconds: number): string {
   return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
 }
 
-export function parseUserText(raw: string): { text: string; contexts: Context[]; files: AttachedFile[] } {
+export function parseUserText(raw: string): { text: string; contexts: Context[]; files: AttachedFile[]; photos: string[] } {
   const contexts: Context[] = [];
   const files: AttachedFile[] = [];
+  const photos: string[] = [];
   let text = raw.replace(CONTEXT_RE, (_, attrs: string, body: string) => {
     const a: Record<string, string> = {};
     for (const m of attrs.matchAll(ATTR_RE)) a[m[1]] = unescapeAttr(m[2]);
@@ -147,11 +150,19 @@ export function parseUserText(raw: string): { text: string; contexts: Context[];
   });
   text = text
     .replace(/<pasted_content\b[^>]*>([\s\S]*?)<\/pasted_content>/g, "$1")
-    // the paths of images sent from the phone (the images themselves show as images), like the app
-    .replace(/<attached_images>[\s\S]*?<\/attached_images>/g, "")
+    // photos sent with the message (from the phone, the composer, a Codex local_image): the node saved them on the
+    // machine and wrote their paths here; they show as thumbnails above the bubble (iOS AttachedImages)
+    .replace(/<attached_images>([\s\S]*?)<\/attached_images>/g, (_, body: string) => {
+      for (const line of body.split("\n")) {
+        const path = line.trim();
+        // only absolute / home paths, as iOS UserBubble does: stray text in the block is not a photo
+        if ((path.startsWith("/") || path.startsWith("~")) && !photos.includes(path)) photos.push(path);
+      }
+      return "";
+    })
     .replace(/\[Image #\d+\]\s?/g, "")
     .trim();
-  return { text, contexts, files };
+  return { text, contexts, files, photos };
 }
 
 function isUserMessage(i: Item) {
@@ -196,6 +207,7 @@ export function segments(items: Item[]): Segment[] {
         cur.user!.text = cur.user!.text ? `${cur.user!.text}\n${p.text}` : p.text;
         cur.user!.contexts.push(...p.contexts);
         if (p.files.length) cur.user!.files = [...(cur.user!.files ?? []), ...p.files];
+        if (p.photos.length) cur.user!.photos = [...new Set([...(cur.user!.photos ?? []), ...p.photos])];
       }
       continue;
     }

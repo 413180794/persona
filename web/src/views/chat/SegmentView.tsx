@@ -16,6 +16,8 @@ import { CardConversation, CardItem } from "../../ui/AssistantCard";
 import { cardReply } from "../../lib/assistant-blocks";
 import { InjectedHint, LoopTick, MergedBubble, PeerMessage } from "./Messages";
 import { ContextGroup } from "./ContextGroup";
+import { AttachedPhotos } from "./AttachedPhotos";
+import { useFullText } from "./FullText";
 import { FileCards, ReplyFiles } from "./FileCards";
 import { MessageActions } from "./MessageActions";
 import { QuoteBlock } from "./Quote";
@@ -50,6 +52,7 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
           ))}
         </div>
       )}
+      {msg.photos && <AttachedPhotos paths={msg.photos} mid={mid} sid={sid} />}
       {msg.contexts.length > 0 && <ContextGroup contexts={msg.contexts} />}
       {msg.files && <FileCards files={msg.files} mid={mid} />}
       {msg.text &&
@@ -144,7 +147,9 @@ const ANSWER = "[&_.prose-j]:text-[length:var(--chat-body)]! [&_.prose-j]:leadin
 /** What the agent said, without a bubble, the chat's body size (15, 16 on a phone) / 1.6. `fade`: it just came in, its
  *  words fade in once. Still streaming, it has the same menu (copy what is there so far, quote it). */
 export function Answer({ item, streaming, mid, sid, fade }: { item?: Item; streaming?: string; mid?: string; sid?: string; fade?: boolean }) {
-  const text = streaming ?? item?.text ?? "";
+  // a long answer the hub cut for the page: its start, and 看全文 under it
+  const full = useFullText(streaming === undefined ? item : undefined, mid, sid);
+  const text = streaming ?? full.text;
   if (!text) return null;
   const cwd = mid && sid ? getSession(mid, sid)?.cwd : undefined;
   if (streaming !== undefined) {
@@ -164,6 +169,7 @@ export function Answer({ item, streaming, mid, sid, fade }: { item?: Item; strea
           <Markdown text={text} mid={mid} cwd={cwd} fade={fade || undefined} />
         </CardItem.Provider>
       </div>
+      {full.more}
       {mid && sid && <ReplyFiles text={text} mid={mid} cwd={cwd} />}
     </MessageActions>
   );

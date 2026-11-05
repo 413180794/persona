@@ -24,5 +24,6 @@
   "hide_log": "收起日志",
   "show_log": "看日志",
   "quote_jump": "跳到原消息：{text}",
-  "quote_not_found": "原消息太早了，往上翻几页再找"
+  "quote_not_found": "原消息太早了，往上翻几页再找",
+  "view_image": "查看图片"
 }

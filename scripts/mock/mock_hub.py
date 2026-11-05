@@ -31,7 +31,7 @@ def features():
             "screen_dialog", "resumable_interactions", "secret_prompts", "request_id", "file_upload",
             "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb", "git_blob", "task_push"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
                 ["terminal_control", "terminal_scroll", "terminal_click", "terminal_mouse"] if TERMINAL_CONTROL else []) + (
-                ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (["herdr_client"] + ([] if os.environ.get("MOCK_TERMINAL_FULL_NOFOCUS") else ["herdr_focus"]) if FULL else []) + (
+                ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (["herdr_client"] + ([] if os.environ.get("MOCK_TERMINAL_FULL_NOFOCUS") else ["herdr_focus"]) if TERMINAL_FULL else []) + (
                 ["assistant_compact", "assistant_main_new"] if os.environ.get("MOCK_MAIN_ACTIONS") == "1" else []) + (
                 ["messaging"] if os.environ.get("MOCK_MESSAGING") == "1" else [])
 
@@ -2799,7 +2799,7 @@ def phone_screen(cols, rows, typed="", tick=0):
 # answered with the focus coming back as the page's own, and GET /mock/herdr_focus?pane=w1:p2[&session=<id>&source=client|persona|other
 # &mine=1|0&view=<id>] makes herdr's focus move as the node would tell the views (docs/terminal.md「焦点联动」);
 # MOCK_TERMINAL_FULL_NOFOCUS=1 leaves herdr_focus out (an older hub).
-FULL = bool(os.environ.get("MOCK_TERMINAL_FULL"))
+TERMINAL_FULL = bool(os.environ.get("MOCK_TERMINAL_FULL"))
 FULL_EXEC = os.environ.get("MOCK_TERMINAL_FULL_EXEC", "")
 FULL_LOG = []
 FULL_VIEWS = {}  # view id -> its fake client, whatever connection it is on (GET /mock/herdr_focus tells them all)
@@ -11728,7 +11728,7 @@ class H(BaseHTTPRequestHandler):
                 if msg.get("type") == "seen":
                     mark_seen(msg.get("session_id"))
                     continue
-                if FULL and herdr_message(msg, send, full_views):
+                if TERMINAL_FULL and herdr_message(msg, send, full_views):
                     continue
                 if msg.get("type") == "terminal_input" and drive:
                     TERMINAL_INPUT.append(msg)

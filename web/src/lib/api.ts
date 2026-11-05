@@ -2,6 +2,7 @@
 
 import { BASE } from "./base";
 import { currentLanguage, t } from "../i18n";
+import type { Item } from "./types";
 
 const TOKEN_KEY = "jarvis.token";
 
@@ -90,6 +91,11 @@ export function attachSession(mid: string, sid: string): Promise<unknown> {
 // An <img> can't send a header: the hub also takes the token as a query parameter (it never logs queries).
 export function imageURL(mid: string, sid: string, itemID: string) {
   return `${BASE}/api/v1${sessionPath(mid, sid)}/items/${enc(itemID)}/image?token=${enc(getToken())}`;
+}
+
+/** An item whole, when the page carries it cut (Item.full_size): `GET …/items/{id}/full`. */
+export function fullItem(mid: string, sid: string, itemID: string): Promise<Item> {
+  return api<Item>(`${sessionPath(mid, sid)}/items/${enc(itemID)}/full`);
 }
 
 /** A machine file's bytes by Range (docs/protocol.md「文件预览」): `<video>` / `<audio>` seek through it, a viewer

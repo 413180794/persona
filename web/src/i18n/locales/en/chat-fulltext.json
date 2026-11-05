@@ -1,0 +1,5 @@
+{
+  "loading": "Loading…",
+  "failed": "Couldn’t load, click to retry",
+  "show_all": "Cut short, show all ({size})"
+}

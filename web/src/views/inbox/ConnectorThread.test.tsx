@@ -25,6 +25,11 @@ import { toast } from "../../ui/atoms";
 import { ConnectorBody } from "./ConnectorThread";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
 
 const msg = (id: string, extra: Partial<ThreadMessage> = {}): ThreadMessage => ({
   id, at: "2026-11-01T09:00:00Z", sender: { id: "wxid_example_a", name: "示例用户" }, text: `消息 ${id}`, ...extra,
@@ -113,5 +118,31 @@ describe("连接器会话页", () => {
     act(() => box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     await flush();
     expect(calls.reply).toEqual([{ thread: "primary.example-group", action: "examplechat_send", text: "好的", reply_to: "1" }]);
+  });
+
+  it("opens a picture full screen in the image viewer (G039)", async () => {
+    pages.newest = {
+      chat: { id: "g", name: "示例群", kind: "group" },
+      messages: [msg("1", { text: "", media: [{ kind: "image", ref: "img-1", width: 800, height: 600 }] })],
+    } satisfies ThreadPage;
+    act(() => root.render(<ConnectorBody item={item} />));
+    await flush();
+    const picture = host.querySelector<HTMLButtonElement>("button[data-thread-picture]")!;
+    expect(picture.getAttribute("aria-label")).toBe("查看图片");
+    act(() => picture.click());
+    const viewer = document.querySelector<HTMLElement>('[aria-label="图片"]');
+    expect(viewer).not.toBeNull();
+    expect(viewer!.querySelector("img")?.getAttribute("src")).toContain("img-1");
+  });
+
+  it("keeps a sticker as it is, as iOS does (G039)", async () => {
+    pages.newest = {
+      chat: { id: "g", name: "示例群", kind: "group" },
+      messages: [msg("1", { text: "", media: [{ kind: "sticker", ref: "stk-1", emoji: "👍" }] })],
+    } satisfies ThreadPage;
+    act(() => root.render(<ConnectorBody item={item} />));
+    await flush();
+    expect(host.querySelector("img[src*='stk-1']")).not.toBeNull();
+    expect(host.querySelector("button[data-thread-picture]")).toBeNull();
   });
 });
