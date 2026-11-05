@@ -2,7 +2,7 @@
 
 总 issue #2017。本文是实现规格，**不代表四端已经完成**。schema 与共用校验（#2251）、扩展的网页／安卓／Apple 共用渲染器（#1850、#1851、#2299）、活卡片工具（#2286）和一次 reply／outbox（#2328）已合并。助手各端的动作、活卡片和 HTML 对话接线仍待完成；Apple 已合并的手表／Siri fallback 和 HTML 沙箱基础继续复用。
 
-已确认的产品决定：HTML 卡片默认启用，进入可见区域自动运行；线上 `assistant.persona_view` 等 Apple 的对应 TestFlight 发出后再开。恢复工作不改变这个发布边界，不使用用户的真实主对话测试。
+已确认的产品决定：HTML 卡片默认启用，进入可见区域自动运行；安全执行未通过验收时显示 fallback。2026-11-05 冲刺的发布边界更新为：全部合并部署后使用临时测试对话完成端到端验收，先向用户汇报，只有用户明确确认后才打开线上 `assistant.persona_view`。本轮不发 TestFlight，不使用用户的真实主对话测试，也不能根据构建或验收通过自行开启。
 
 ## 卡片复用扩展的 View
 
@@ -116,11 +116,13 @@ HTML 可以伪造登录框和文字，离线也不等于不可能经 reply 泄�
 
 工具输入不合规直接返回字段路径、原因和修复办法，旧版本仍有效。正文完整块在可信 transcript 接收路径校验，客户端同样校验并显示 fallback；不能因为只加了 Stop hook 就宣称 hub 已经校验全部正文。
 
-Claude 的助手 Stop hook 用 `last_assistant_message` 校验，首次失败返回 `decision: block` 和原因，`stop_hook_active` 为真时不再阻止，避免死循环。其他运行时把错误持久化到对应会话，下一轮附 `<persona-view-errors>`。只影响助手，不改变普通 Agent 的 hook 行为。
+Claude 的助手 Stop hook 用 `last_assistant_message` 校验，首次失败返回 `decision: block` 和原因，`stop_hook_active` 为真时不再阻止，避免死循环。node 只检查可信助手的主 Agent，report-only／子 Agent／普通 Agent 不进入此分支；通过 `assistant.view.check` 请求 hub，hub 再确认会话身份并读取当前 persona_view 开关。最多检查 1 MB 的回复，返回最多 4 条、每条 2000 字的错误；调用最多等 5 秒，旧 hub 或断线时保留原 Stop 行为，卡片仍由正文注册／客户端校验兜底。
+
+校验通过或不适用后才记录 Stop 和报告完成；被阻止的第一次尝试不能先广播「完成」。修正说明来自 `server/internal/prompts/assistant/view_repair.md`，不能在 Go 里拼模型提示词。其他运行时的下一轮 `<persona-view-errors>` 反馈仍待接入。
 
 摘要、通知、任务回执和标题中的 persona-view 替换成 fallback，替换在裁剪之前完成；半截或坏 JSON 不打印原始代码。缺 fallback 的历史块可以保留旧只读渲染兼容，新工具和新协议必须校验精确的 `fallback` 字段名。
 
-正文诊断按机器／对话／item 持久化，同一错误重放不重复报告，修正后不再等待反馈。当前只交付诊断存储；Stop hook 和下一轮 `<persona-view-errors>` 注入仍在 #2020，不能把落库写成助手已经收到反馈。
+正文诊断按机器／对话／item 持久化，同一错误重放不重复报告，修正后不再等待反馈。诊断存储和助手专用 Stop 已实现；下一轮 `<persona-view-errors>` 注入仍在 #2020，不能把落库写成助手已经收到下一轮反馈。
 
 ## 提示词与开关
 
@@ -139,10 +141,10 @@ Claude 的助手 Stop hook 用 `last_assistant_message` 校验，首次失败返
 | 设计 | #2017 | 规格已合并；阶段进展与验收继续写回总 issue |
 | schema | #2018 | 基础协议／生成类型／校验已合并；新共享组件仍待小 PR |
 | hub | #2019 | 存储、工具、声明式 reply、正文注册和摘要已实现；HTML bridge、最终 feature 与端到端验收未完成 |
-| 提示词 | #2020 | 校验反馈、自修复、生成逻辑和 golden |
+| 提示词 | #2020 | 专用 Stop、主动组件选择／动作／活卡片提示词和 golden 已实现；下一轮错误反馈与 Codex 验收未完成 |
 | 网页 | #2021 | 复用 ViewBody，动作、活卡片、通过安全验收的 HTML 路径 |
 | 安卓 | #2022 | 复用 #1851 组件，动作、活卡片、HTML、三风格深浅色截图 |
 | 管理界面 | #2023 | 开关、预览、深浅色截图 |
 | Apple | #2024、#2025 | 接入现有基础代码，动作、活卡片、HTML 自动运行；四端和手表验证 |
 
-每阶段合并后部署前核对当前生产版本与备份，确保能回滚；端到端测试使用独立测试 hub 或授权的临时对话。测试不能发送到真实主对话，不能压缩、替换、删除用户对话。CI 环境异常按 CLAUDE.md 用本地验证合并，PR 如实列出未运行项。线上 persona_view 的开关仍等 Apple TestFlight 发布后再处理。
+每阶段合并后部署前核对当前生产版本与备份，确保能回滚；端到端测试使用独立测试 hub 或授权的临时对话。测试不能发送到真实主对话，不能压缩、替换、删除用户对话。CI 环境异常按 CLAUDE.md 用本地验证合并，PR 如实列出未运行项。线上 persona_view 的开关保持关闭；临时对话端到端验收后先汇报，只有用户明确确认才可打开，本轮不发 TestFlight。

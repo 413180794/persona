@@ -469,6 +469,8 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		return m.hub.nodeInteraction(ctx, p.Interaction)
 	case "notify": // personad notify on this machine (node/scriptcli.go)
 		return m.scriptNotify(params)
+	case assistantwire.MethodViewCheck:
+		return m.checkAssistantView(params)
 	case "assistant.lark":
 		// The skills' gated commands' credentials go to the assistant's machine only (its process runs them); so does
 		// how to run lark-cli (its login stays on that machine, in lark-cli's own store).

@@ -32,6 +32,14 @@ type AssistantClaudeMD struct {
 
 func RenderAssistantClaudeMD(d AssistantClaudeMD) string { return render("assistant/claude_md", d) }
 
+type AssistantViewRepair struct {
+	Errors []string
+}
+
+func RenderAssistantViewRepair(d AssistantViewRepair) string {
+	return render("assistant/view_repair", d)
+}
+
 // SnapshotMachine, SnapshotAgent… are the parts of the live snapshot (assistant/snapshot).
 type SnapshotMachine struct {
 	Name, ID string

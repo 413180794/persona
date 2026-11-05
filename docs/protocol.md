@@ -1184,6 +1184,7 @@ node → hub 事件：`fs.changed {dirs?, git?}`（#2439：`fs.watch` 里的文�
 node → hub 请求：
 - `interaction.create {interaction}` → `{resolution}`（阻塞到被处理 / 过期；过期返回 `{"dismiss":true}`）
 - `mcp.tools {}` → `{tools}`；`mcp.call {name, args, session_id}` → `{content, is_error}`
+- `assistant.view.check {session_id, message}` → `{reason?}`：可信助手 Stop 的 persona-view 检查，devices 管理者透传给 hub。hub 按当前 persona_view 开关和会话身份决定是否检查；reason 非空时 node 第一次返回 decision=block，stop_hook_active=true 时不再请求。最多 1 MB 的回复、4 条各 2000 字的错误，node 等待最多 5 秒；不适用、旧 hub 或断线保留原 Stop 行为。不是公开 App／扩展动作接口，不接收客户端提供的机器身份。
 - `notify {title, body?, level?, silent?, id?, session_id?}` → `{sent, reason?}`（`personad notify`：`machine_id` 是这条连接的机器，不接受扩展的 `actions` / `ui` / `state`；其余同 `POST /api/v1/notify`，静音和「需要你」偏好一样生效；旧 hub 报 unknown method）
 
 ### 电脑链路（jarvis-link，kind link）

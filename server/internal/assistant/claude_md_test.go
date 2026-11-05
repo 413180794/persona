@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
@@ -52,6 +53,31 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 	}
 	if got := bare.prepared[0]["claude_md"]; got != s.claudeMD(ctx, "server", true) || bare.prepared[0]["dir"] != ".jarvis/assistant" {
 		t.Fatalf("assistant.prepare: %v", bare.prepared[0])
+	}
+}
+
+func TestGoldenAssistantViewRepair(t *testing.T) {
+	golden(t, "assistant_view_repair", prompts.RenderAssistantViewRepair(prompts.AssistantViewRepair{Errors: []string{"persona-view block 0: fallback: include a plain text summary"}}))
+}
+
+func TestAssistantRichViewPromptExamplesAreValid(t *testing.T) {
+	text := prompts.RenderAssistantClaudeMD(prompts.AssistantClaudeMD{PersonaView: true})
+	blocks := wire.AssistantViewBlocks(text)
+	if len(blocks) != 2 {
+		t.Fatalf("prompt has %d examples, want 2", len(blocks))
+	}
+	for _, block := range blocks {
+		if _, err := block.Parse(); err != nil {
+			t.Fatalf("prompt teaches an invalid view: %v", err)
+		}
+	}
+	for _, want := range []string{"view_show", "view_update", "view_get", "submit=true", "ask_user", "fallback", "自动运行"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing rich view guidance: %s", want)
+		}
+	}
+	if strings.Contains(text, "助手的卡片点不了") {
+		t.Fatal("interactive guidance still teaches read-only cards")
 	}
 }
 

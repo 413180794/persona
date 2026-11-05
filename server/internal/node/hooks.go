@@ -212,6 +212,7 @@ type hookInput struct {
 	ToolUseID            string          `json:"tool_use_id"`
 	Message              string          `json:"message"`
 	LastAssistantMessage string          `json:"last_assistant_message"`
+	StopHookActive       bool            `json:"stop_hook_active"`
 	Prompt               string          `json:"prompt"`
 	AgentID              string          `json:"agent_id"`
 	AgentType            string          `json:"agent_type"`
@@ -261,6 +262,9 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	}
 	if req.ReportOnly && !n.takesReport(in) {
 		return nil, nil // before the counters: a session the plugin reports for would count each prompt twice
+	}
+	if repair := n.assistantViewStop(ctx, req, in); repair != nil {
+		return repair, nil
 	}
 	stopSig := n.recordHookTurn(req, in, time.Now())
 	if n.peer == nil {
