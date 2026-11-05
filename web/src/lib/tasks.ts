@@ -169,10 +169,10 @@ function hhmm(ms: number): string {
   return formatDate(ms, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-/** The loop beside its arrows, short: the next time, or that it is running. */
+/** The loop beside its arrows, short: "下次 11:57", or that it is running. */
 export function loopShortLabel(loop: LoopInfo, now: number): string {
   const next = Date.parse(loop.next_at ?? "");
-  if (Number.isFinite(next) && next > now) return hhmm(next);
+  if (Number.isFinite(next) && next > now) return t("lib-tasks.loop_next", { time: hhmm(next) });
   return loop.next_at ? t("lib-tasks.loop_running_short") : t("lib-tasks.loop_short");
 }
 

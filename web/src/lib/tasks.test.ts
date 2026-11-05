@@ -42,7 +42,8 @@ describe("loops", () => {
     expect(loopTask(loop)).toBe("check CI");
     expect(loopCadence(loop)).toBe("每 30 分钟");
     expect(loopLabel(loop, now)).toMatch(/^下次 \d\d:\d\d$/);
-    expect(loopShortLabel(loop, now)).toMatch(/^\d\d:\d\d$/);
+    expect(loopShortLabel(loop, now)).toMatch(/^下次 \d\d:\d\d$/);
+    expect(loopShortLabel({ ...loop, next_at: "2026-11-02T09:00:00Z" }, now)).toBe("执行中");
     expect(loopNext(loop, now)).toContain("还有 4 分钟");
     expect(loopLabel({ ...loop, next_at: "2026-11-02T09:00:00Z" }, now)).toBe("循环执行中");
     expect(loopCadence({ kind: "cron", cron: "33 17 * * *" })).toBe("按计划 33 17 * * *");

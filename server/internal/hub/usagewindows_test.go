@@ -153,3 +153,26 @@ func TestMachineUsageWindowsSwitch(t *testing.T) {
 		t.Error("usage_windows: unset is on, false is off")
 	}
 }
+
+// #3794: a model's own allowance running out does not make the account the fullest; the plan windows decide the order.
+func TestMergeUsageAccountsOrdersByThePlanWindows(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	fable := uw("7d", 10080, 100, now.Add(3*24*time.Hour))
+	fable.Model = "fable"
+	modelOnly := uw("7d", 10080, 70, now.Add(6*24*time.Hour))
+	modelOnly.Model = "argon"
+	in := []proto.UsageAccount{
+		{Provider: "claude", Name: "A", SampledAt: now, Ref: "gw:a", Windows: []proto.UsageWindow{uw("5h", 300, 10, now.Add(time.Hour)), fable}},
+		{Provider: "claude", Name: "B", SampledAt: now, Ref: "gw:b", Windows: []proto.UsageWindow{uw("5h", 300, 60, now.Add(2*time.Hour))}},
+		// no plan window at all: its model window is what there is
+		{Provider: "gemini", Name: "C", SampledAt: now, Ref: "gw:c", Windows: []proto.UsageWindow{modelOnly}},
+	}
+	got := mergeUsageAccounts(in, now)
+	var names []string
+	for _, a := range got {
+		names = append(names, a.Name)
+	}
+	if len(names) != 3 || names[0] != "C" || names[1] != "B" || names[2] != "A" {
+		t.Fatalf("order = %v, want [C B A]", names)
+	}
+}

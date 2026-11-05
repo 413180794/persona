@@ -328,12 +328,22 @@ func sameSourceOtherAccount(a, b string) bool {
 	return okA && okB && sa == sb && a != b
 }
 
+// mostUsed is the used percentage of the account's fullest plan window: a per-model allowance that ran out is not the
+// account running out, so model windows only count when the account has no plan window (as the clients' fullest).
 func mostUsed(a proto.UsageAccount) float64 {
-	var m float64
+	var plan, model float64
+	hasPlan := false
 	for _, w := range a.Windows {
-		m = max(m, w.UsedPercent)
+		if w.Model == "" {
+			plan, hasPlan = max(plan, w.UsedPercent), true
+		} else {
+			model = max(model, w.UsedPercent)
+		}
 	}
-	return m
+	if hasPlan {
+		return plan
+	}
+	return model
 }
 
 // usageAccountID is stable while the account's longest window is: it names the window by length and reset time, which
