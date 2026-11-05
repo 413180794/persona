@@ -951,6 +951,13 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 		err := p.local(r)
 		if err != nil {
 			status = "failed"
+			h.mu.Lock()
+			back := h.interactions[id] == p
+			h.mu.Unlock()
+			if back { // a Codex card the node could not answer is open again (codexPending): it is not over
+				go h.taskAnswered(p.ix, r, status)
+				return err
+			}
 		} else {
 			h.channelsEnded(p.ix, &r)
 		}

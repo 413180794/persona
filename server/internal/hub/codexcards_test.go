@@ -156,6 +156,54 @@ func TestCodexCardAnswerRefused(t *testing.T) {
 	}
 }
 
+// A refused answer leaves the card on the apps: the last thing they hear of it is the card again, not that it is over,
+// and the bot's card for it stays open.
+func TestCodexCardRefusedStaysOnTheApps(t *testing.T) {
+	h := newTestHub(t)
+	m, f := newCodexMachine(t, h)
+	ended := endedCards(h)
+	q := proto.Interaction{ID: "cxq_1", SessionID: "s1", Kind: proto.IxQuestion, Agent: "codex", ExpiresAt: time.Now().Add(time.Hour)}
+	listCodex(h, m, q)
+	app := &client{out: make(chan []byte, 256)}
+	h.mu.Lock()
+	h.clients[app] = struct{}{}
+	h.mu.Unlock()
+	f.mu.Lock()
+	f.err = &rpc.Error{Code: screen.InputDraft, Message: "draft"}
+	f.mu.Unlock()
+	if err := h.resolve("cxq_1", proto.Resolution{Answers: map[string]string{"Which color?": "Red"}}); err == nil {
+		t.Fatal("a refused answer reported no error")
+	}
+	if pendingIDs(h)["cxq_1"] == "" {
+		t.Fatal("the card did not come back after a refused answer")
+	}
+	last := ""
+	for drained := false; !drained; {
+		select {
+		case raw := <-app.out:
+			var ev struct {
+				Type        string            `json:"type"`
+				ID          string            `json:"id"`
+				Interaction proto.Interaction `json:"interaction"`
+			}
+			if json.Unmarshal(raw, &ev) != nil {
+				continue
+			}
+			if (ev.Type == "interaction" && ev.Interaction.ID == "cxq_1") || (ev.Type == "interaction_resolved" && ev.ID == "cxq_1") {
+				last = ev.Type
+			}
+		default:
+			drained = true
+		}
+	}
+	if last != "interaction" {
+		t.Fatalf("the apps last heard %q of a card that is still open", last)
+	}
+	if ended("cxq_1") {
+		t.Fatal("the bot was told a card that is still open is over")
+	}
+}
+
 // A node that reconnects lists its open cards again: they come back without ringing the phone a second time.
 func TestCodexCardsRelistedQuietly(t *testing.T) {
 	h := newTestHub(t)
