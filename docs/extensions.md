@@ -161,7 +161,8 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 **机器（`format: machine`）**：值是这台 hub 上某台机器的 id。
 - 一列这种值（`{"type": "array", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}}`）在 App 和网页的设置页画成**每台机器一个开关**：机器名、在线与否，操控电脑一类的扩展（贡献 `computer`）再加 Cua 的状态。`x-os` 只列这些系统的机器。
 - 开关**即时生效**，只改这一项，不等「保存」，表单里别的草稿留着。对不上任何机器的值照样列出来，可以关掉。
-- 这一列带 `x-confirm`（一句话）时，打开某台的开关前先问这句话，确认了才存；关掉不问（App 是确认框，网页是 `window.confirm`）。扩展 `cua` 的「扩展开着时不自动锁屏」用它（#1507）。
+- 这一列带 `x-confirm`（一句话）时，打开某台的开关前先问这句话，确认了才存；关掉不问。App 和网页都是一个弹窗：标题「打开「<机器名>」？」，正文是这句话，按钮「取消」「打开」（App 用 `alert`，网页用 `Dialog`，#1830）。
+- 表单里只有这种开关时，表单下面不再写「…即时生效，不用保存」（字段自己的说明里有，没有要保存的）；还有别的项时照旧说哪些即时生效、其余点「保存」。扩展 `cua` 的「扩展开着时不自动锁屏」用它（#1507）。
 - hub 加载扩展时，把这类值里写成机器名、主机名的（大小写、空格、`-`、`_` 不计，只对上一台时）换成那台的 id，存回去（`extension_machines.go`）。
 
 **约定的设置项**：hub 认得的名字，扩展声明了就有额外的用处。
@@ -1347,6 +1348,10 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
   只给完整权限的设备，只到扩展开着的机器上；没这个扩展或这台没开 404，机器离线 409，程序没在跑 / 不应答 502。
 - **调用和事件**：hub 上的程序调 `nodes.call {machine, method, params}`，转给那台电脑上程序的扩展协议方法（只能调开着的机器上的）；
   电脑上的程序发的事件，hub 以 `node.event {machine_id, event, params}` 转给 hub 上的程序。电脑上的程序调 hub 的方法一律 `unknown_method`。
+- **App 里**：扩展详情带 `node_machines`（选电脑的字段名），这个字段的每一行在开着时写程序在那台的状态（「程序在运行 · 版本」「程序出错：原因」「离线：连上后会启动」「这台电脑上的 personad 太旧…」），
+  程序出错时的原因里，Go 的 `exit status N` 写成「退出码 N」、`signal: X` 写成「被信号结束（X）」（App 和网页显示时换，旧 node 报上来的也一样）；
+  关着的照旧只写在线 / 离线；打开一台之前先问（hub 给这个字段补上 `confirm`：「将在这台电脑上运行「…」的程序…」，清单自己写了就用清单的）。
+  安装页的权限行按 key 配图标（`node_runs_code`、`node_network`、`node_files`、`node_macos_privacy`、`node_secrets`）。
 - **状态**：扩展列表里每个有 `node` 段的扩展带 `nodes: [{machine_id, version, state, error?}]`，`state` 是 `running` / `starting` / `error` /
   `missing`（那台没有这个版本的包）/ `lease_expired` / `offline` / `outdated`（那台的 personad 太旧，不认 `plugin.node.*`）。
 

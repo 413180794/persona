@@ -120,10 +120,10 @@ struct ExtensionsModelTests {
             ExtensionField(name: name, type: type, title: name == "machines" ? "能操控的电脑" : nil,
                         items: machines ? ExtensionItems(type: "string", format: "machine") : nil)
         }
-        #expect(ExtensionText.saveFooter([field("url", "string")]).hasPrefix("改完点右上角「保存」"))
-        #expect(ExtensionText.saveFooter([field("machines", "array", machines: true)]) == "「能操控的电脑」的开关即时生效，不用保存。")
-        #expect(ExtensionText.saveFooter([field("machines", "array", machines: true), field("confirm", "boolean")])
-            .hasPrefix("「能操控的电脑」的开关即时生效；其他项改完点右上角「保存」"))
+        #expect(ExtensionText.saveFooter([field("url", "string")])?.hasPrefix("改完点右上角「保存」") == true)
+        #expect(ExtensionText.saveFooter([field("machines", "array", machines: true)]) == nil)
+        #expect(ExtensionText.saveFooter([field("machines", "array", machines: true), field("confirm", "boolean")])?
+            .hasPrefix("「能操控的电脑」的开关即时生效；其他项改完点右上角「保存」") == true)
     }
 
     @Test func aRefusedFieldComesBackBesideIt() async {
@@ -156,4 +156,24 @@ struct ExtensionsModelTests {
         #expect(body == #"{"value":"k3y"}"#)
         #expect(page.detail?.secrets.first?.set == true)
     }
+
+    /// A plugin with a program on computers: the field picking them, and how the program is on each (#1830).
+    @Test func nodeProgramsDecodeAndSayHowTheyAre() throws {
+        let json = #"""
+        {"id": "example-helper", "name": "Example 助手", "kind": "providers", "status": "running", "node_machines": "computers",
+         "nodes": [{"machine_id": "macbook", "version": "1.0.0", "state": "running"},
+                   {"machine_id": "studio", "state": "error", "error": "exit status 3"}],
+         "form": {"fields": []}, "permissions": []}
+        """#
+        let d = try JSONDecoder().decode(HubExtensionDetail.self, from: Data(json.utf8))
+        #expect(d.nodeMachines == "computers")
+        #expect(d.plugin.nodes?.map(\.machineID) == ["macbook", "studio"])
+        #expect(ExtensionNodeState.status(d.plugin.nodes?[0]) == "程序在运行 · 1.0.0")
+        #expect(ExtensionNodeState.status(d.plugin.nodes?[1]) == "程序出错：退出码 3")
+        #expect(ExtensionNodeState.exitText("1.0.0 没有起来：exit status 3") == "1.0.0 没有起来：退出码 3")
+        #expect(ExtensionNodeState.exitText("signal: killed") == "被信号结束（killed）")
+        #expect(ExtensionNodeState.status(nil) == "等 hub 把程序发过去")
+        #expect(ExtensionNodeState.status(ExtensionNodeState(machineID: "x", state: "outdated")).contains("personad 太旧"))
+    }
+
 }

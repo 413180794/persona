@@ -7392,6 +7392,24 @@ PLUGINS["example-gateway"] = {
             "icon": "chart", "badge": {"text": "3", "tone": "danger"}},
            # UI version 3's components and pages (docs/extensions.md「UI 版本 3」): -openPlugin example-gateway -openPluginPage notes
            {"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "notes", "title": "笔记（组件 v3）", "placement": "plugin_page", "size": "full"}]}
+# A plugin whose program runs on computers (docs/extensions.md「在电脑上运行的程序」, #1830): its field picking them asks
+# before one is switched on (the hub's x-confirm), each machine's row says how the program is there (nodes).
+PLUGINS["example-helper"] = {
+    "id": "example-helper", "name": "Example 助手", "kind": "providers", "status": "running", "version": "1.0.0", "source": "installed",
+    "enabled": True, "description": "在你选的电脑上跑一个小程序，帮助手读那台电脑上的笔记。", "contributes": {"providers": ["example-ai"]},
+    "publisher": "example", "origin": "market:3f2a9c1d0b/example-helper", "node_machines": "computers",
+    "form": {"fields": [{"name": "computers", "type": "array", "title": "在哪些电脑上运行", "unique_items": True,
+                         "description": "打开的电脑上会运行这个扩展的程序；开关即时生效",
+                         "confirm": "将在这台电脑上运行「Example 助手」的程序：以 node 的系统用户运行，不在沙箱里。",
+                         "items": {"name": "items", "type": "string", "format": "machine", "os": ["darwin", "linux"]}}]},
+    "config": {"computers": ["macbook", "studio"]}, "secrets": [{"name": "api_key", "title": "API Key", "set": True}],
+    "nodes": [{"machine_id": "macbook", "version": "1.0.0", "state": "running"},
+              {"machine_id": "studio", "version": "1.0.0", "state": "error", "error": "1.0.0 没有起来：exit status 3"}],
+    "permissions": [{"key": "secrets", "title": "使用你填的密钥", "detail": "API Key"},
+                    {"key": "node_runs_code", "title": "在你选的电脑上运行程序", "detail": "Mac、Linux 电脑；每台打开时会再问一次。以 node 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"},
+                    {"key": "node_network", "title": "在这些电脑上访问网络", "detail": "api.example.com"},
+                    {"key": "node_files", "title": "读写这些电脑上的文件", "detail": "不只是它自己的数据目录"},
+                    {"key": "node_secrets", "title": "把密钥发给这些电脑", "detail": "API Key"}]}
 # The UI slots (docs/extensions.md「UI 插槽」): example-gateway's nav_page, overview_card and machine_section.
 _SLOT_UI = [{"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "today", "title": "今天的用量", "placement": "overview_card",
              "size": "compact", "opens": "usage"},
@@ -7445,7 +7463,7 @@ def cua_config(pl):
 
 
 _PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "enabled", "description", "contributes", "needs_setup", "warnings",
-                "auto_upgrade", "upgrade", "upgrade_note"]
+                "auto_upgrade", "upgrade", "upgrade_note", "nodes"]
 
 # ---------- MOCK_PLUGINS: declarative UI (docs/extensions.md「声明式 UI」) ----------
 # example-gateway draws a page (plugin_page "home") and a section on every launcher's page (launcher_section "panel"),

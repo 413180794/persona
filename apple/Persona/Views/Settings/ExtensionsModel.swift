@@ -30,10 +30,48 @@ nonisolated struct HubExtension: Codable, Hashable, Sendable, Identifiable {
     var autoUpgrade: Bool?
     var upgrade: ExtensionUpgrade?
     var upgradeNote: ExtensionUpgradeNote?
+    /// An extension with a program on computers: how that program is on each machine it is switched on for.
+    var nodes: [ExtensionNodeState]?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, status, error, version, source, enabled, description, contributes, warnings, upgrade
+        case id, name, kind, status, error, version, source, enabled, description, contributes, warnings, upgrade, nodes
         case needsSetup = "needs_setup", autoUpgrade = "auto_upgrade", upgradeNote = "upgrade_note"
+    }
+}
+
+/// An extension's program on one machine (docs/extensions.md「在电脑上运行的程序」).
+nonisolated struct ExtensionNodeState: Codable, Hashable, Sendable {
+    var machineID: String
+    var version: String?
+    /// running | starting | stopped | error | missing | lease_expired | offline | outdated
+    var state: String
+    var error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case version, state, error
+        case machineID = "machine_id"
+    }
+
+    /// How it is, for the machine's row: what the user can make of it (nil: switched on, nothing heard yet).
+    static func status(_ s: ExtensionNodeState?) -> String {
+        guard let s else { return "等 hub 把程序发过去" }
+        let error = s.error.map(exitText)
+        switch s.state {
+        case "running": return "程序在运行" + (s.version.map { " · \($0)" } ?? "")
+        case "starting": return "程序正在启动"
+        case "missing": return "正在把程序发过去"
+        case "offline": return "离线：连上后会启动"
+        case "lease_expired": return "和 hub 断开太久，程序已停，连上后会再启动"
+        case "outdated": return "这台电脑上的 personad 太旧，更新后才能运行"
+        case "error": return error.map { "程序出错：\($0)" } ?? "程序出错"
+        default: return error.map { "\(s.state)：\($0)" } ?? s.state
+        }
+    }
+
+    /// Go's words for how a program ended (exec.ExitError), in the apps' words: exit status 3 → 退出码 3.
+    static func exitText(_ error: String) -> String {
+        error.replacing(#/\bexit status (-?\d+)/#) { "退出码 \($0.1)" }
+            .replacing(#/\bsignal: ([a-z ]+)/#) { "被信号结束（\($0.1)）" }
     }
 }
 
@@ -158,11 +196,13 @@ nonisolated struct HubExtensionDetail: Decodable, Hashable, Sendable {
     var permissions: [ExtensionPermission]
     /// The pages it draws (placement plugin_page), a row each.
     var ui: [PluginUIPlace]
+    /// The field (format machine) that picks the computers its program runs on; their rows say how it is there.
+    var nodeMachines: String?
 
     private struct Form: Decodable { var fields: [ExtensionField]? }
     private enum CodingKeys: String, CodingKey {
         case publisher, homepage, origin, form, config, secrets, permissions, ui
-        case previousVersion = "previous_version", readOnly = "read_only"
+        case previousVersion = "previous_version", readOnly = "read_only", nodeMachines = "node_machines"
     }
 
     init(from decoder: Decoder) throws {
@@ -178,6 +218,7 @@ nonisolated struct HubExtensionDetail: Decodable, Hashable, Sendable {
         secrets = try c.decodeIfPresent([ExtensionSecret].self, forKey: .secrets) ?? []
         permissions = try c.decodeIfPresent([ExtensionPermission].self, forKey: .permissions) ?? []
         ui = (try c.decodeIfPresent([PluginUIPlace].self, forKey: .ui) ?? []).filter { ($0.placement ?? "plugin_page") == "plugin_page" }
+        nodeMachines = try c.decodeIfPresent(String.self, forKey: .nodeMachines)
     }
 }
 
@@ -289,12 +330,12 @@ enum ExtensionText {
     }
 
     /// Under the form: which switches take effect at once (lists of machines, `ExtensionModel.saveNow`) and that the rest
-    /// waits for 保存.
-    static func saveFooter(_ fields: [ExtensionField]) -> String {
+    /// waits for 保存. Nil when there is only such switches: the fields say so themselves, nothing waits for 保存.
+    static func saveFooter(_ fields: [ExtensionField]) -> String? {
         let all = fields.flatMap { $0.type == "object" ? ($0.fields ?? []) : [$0] }
         let now = all.filter { $0.items?.format == "machine" }.map { "「\($0.label)」" }
         if now.isEmpty { return "改完点右上角「保存」；保存后扩展会重新启动。留空的项用扩展的默认值。" }
-        if now.count == all.count { return now.joined(separator: "、") + "的开关即时生效，不用保存。" }
+        if now.count == all.count { return nil }
         return now.joined(separator: "、") + "的开关即时生效；其他项改完点右上角「保存」，保存后扩展会重新启动。留空的项用扩展的默认值。"
     }
 

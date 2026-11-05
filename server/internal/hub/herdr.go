@@ -59,8 +59,46 @@ func (h *Hub) herdrAutostartState(ctx context.Context, m *Machine) herdrAutostar
 	return out
 }
 
+// herdrStatusFresh is how long an answer from the node stands for the apps reading the row (each Agents list polls).
+var herdrStatusFresh = 3 * time.Second
+
+// noteHerdrRunning keeps what the node said about herdr's server, for the next read of the row.
+func (m *Machine) noteHerdrRunning(running, known bool) {
+	m.mu.Lock()
+	m.info.HerdrRunning, m.info.HerdrRunningKnown = running, known
+	m.herdrAsked = time.Now()
+	m.mu.Unlock()
+}
+
+// refreshHerdrRunning asks the node whether herdr's server answers now. node.info only said so when the node
+// connected: a node that starts herdr itself a moment later (it waits for node.configure, which comes after
+// node.info), a 启动 from another app, or a `herdr server stop` since, all kept the Agents list's notice wrong until
+// the node reconnected (#1916). An older node has no herdr.server.status: what node.info said stays.
+func (h *Hub) refreshHerdrRunning(ctx context.Context, m *Machine) {
+	m.mu.Lock()
+	online, fresh := m.online, time.Since(m.herdrAsked) < herdrStatusFresh
+	m.mu.Unlock()
+	if !online || fresh {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	var out struct {
+		Running bool `json:"running"`
+		Known   bool `json:"known"`
+	}
+	if err := m.call(ctx, "herdr.server.status", map[string]any{}, &out); err != nil {
+		m.mu.Lock()
+		m.herdrAsked = time.Now() // an older node: not again on every read
+		m.mu.Unlock()
+		return
+	}
+	m.noteHerdrRunning(out.Running, out.Known)
+}
+
 // getHerdr: GET /api/v1/machines/{mid}/herdr, the machine's engine row: 需要时自动启动 herdr, and whether it runs now.
 func (h *Hub) getHerdr(w http.ResponseWriter, r *http.Request, m *Machine) {
+	h.refreshHerdrRunning(r.Context(), m)
 	writeJSON(w, h.herdrAutostartState(r.Context(), m))
 }
 
@@ -99,6 +137,7 @@ func (h *Hub) postHerdrStart(w http.ResponseWriter, r *http.Request, m *Machine)
 		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
+	m.noteHerdrRunning(out.Running, true) // the next read of the row says so too, not what node.info said
 	h.broadcastMachines()
 	writeJSON(w, herdrAutostartState{Autostart: m.herdrAutostart(ctx), Running: out.Running, Known: true})
 }

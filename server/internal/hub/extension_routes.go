@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/extension"
@@ -34,6 +35,9 @@ type ExtensionDetail struct {
 	// Contributions are every contribution with its switch (docs/extensions.md「贡献的开关」); contributes (the ids by
 	// point) stays as it was.
 	Contributions []ContributionView `json:"contributions,omitempty"`
+	// NodeMachines is the field of Form that picks the computers its program runs on (an extension with one,
+	// docs/extensions.md「在电脑上运行的程序」): the apps show that program's state on each (Nodes) in the field's rows.
+	NodeMachines string `json:"node_machines,omitempty"`
 }
 
 // PluginSecretView is a declared secret and whether it has a value (never the value).
@@ -52,6 +56,10 @@ func (ps *extensions) detail(ctx context.Context, p *extension.Extension) Extens
 		Contributions: ps.contributionViews(p)}
 	if d.Permissions == nil {
 		d.Permissions = []extension.PermissionLine{}
+	}
+	if m.Node != nil {
+		d.NodeMachines = m.Node.Machines
+		d.Form = nodeConfirmForm(p.Schema, m)
 	}
 	for _, u := range ps.uiPlaces("", "") {
 		if u.Extension == p.Record.ID && extension.FullPage(u.Placement) {
@@ -379,3 +387,21 @@ func (ps *extensions) listCtx(ctx context.Context) []ExtensionView {
 	}
 	return out
 }
+
+// nodeConfirmForm is the form with the computers' field asking before a machine is switched on (x-confirm), unless the
+// manifest asks something of its own: switching one on starts a program there (plan「七」「权限展示」). A copy: the
+// plugin's own schema is shared.
+func nodeConfirmForm(s *extension.Schema, m *extension.Manifest) *extension.Schema {
+	if s == nil {
+		return nil
+	}
+	out := *s
+	out.Fields = slices.Clone(s.Fields)
+	for i := range out.Fields {
+		if out.Fields[i].Name == m.Node.Machines && out.Fields[i].Confirm == "" {
+			out.Fields[i].Confirm = "将在这台电脑上运行「" + m.Name + "」的程序：以 node 的系统用户运行，不在沙箱里。"
+		}
+	}
+	return &out
+}
+

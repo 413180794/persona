@@ -28,6 +28,7 @@ type Manifest struct {
 	Homepage         string       `json:"homepage,omitempty"`
 	Engines          *Engines     `json:"engines,omitempty"`
 	Runtime          *Runtime     `json:"runtime,omitempty"`
+	Node             *NodeRuntime `json:"node,omitempty"`
 	ActivationEvents []string     `json:"activation_events,omitempty"`
 	Contributes      *Contributes `json:"contributes,omitempty"`
 	// Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
@@ -96,6 +97,29 @@ type Resources struct {
 
 // A path in the package, or one per platform ({"linux-amd64": "bin/x"}).
 type Command = json.RawMessage
+
+// NodeRuntime: the extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* /
+// linux-*), on the machines picked in the configuration field `machines` (an array of format machine, x-os the
+// programs' systems).
+type NodeRuntime struct {
+	Command     json.RawMessage   `json:"command"`
+	Args        []string          `json:"args,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
+	Machines    string            `json:"machines"`
+	RPC         string            `json:"rpc,omitempty"`
+	HTTP        bool              `json:"http,omitempty"`
+	KeepRunning string            `json:"keep_running,omitempty"`
+	Secrets     []string          `json:"secrets,omitempty"`
+	Permissions *NodePermissions  `json:"permissions,omitempty"`
+}
+
+// NodePermissions: what the program on computers asks for there: hosts it reaches, files outside its data directory,
+// macOS's privacy permissions.
+type NodePermissions struct {
+	Network      []string `json:"network,omitempty"`
+	Files        bool     `json:"files,omitempty"`
+	MacosPrivacy bool     `json:"macos_privacy,omitempty"`
+}
 
 type SecretSpec struct {
 	Name        string `json:"name"`
@@ -1064,6 +1088,8 @@ var newDef = map[string]func() any{
 	"Engines":               func() any { return new(Engines) },
 	"Runtime":               func() any { return new(Runtime) },
 	"Resources":             func() any { return new(Resources) },
+	"NodeRuntime":           func() any { return new(NodeRuntime) },
+	"NodePermissions":       func() any { return new(NodePermissions) },
 	"SecretSpec":            func() any { return new(SecretSpec) },
 	"Permissions":           func() any { return new(Permissions) },
 	"Contributes":           func() any { return new(Contributes) },

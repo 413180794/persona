@@ -250,6 +250,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	m.mu.Lock()
 	m.peer, m.info, m.online, m.err, m.lastSeen = c.peer, c.info, true, "", time.Now().UTC()
 	m.connectedAt = m.lastSeen
+	m.herdrAsked = time.Time{} // node.info just said; this node may answer herdr.server.status where the last did not
 	m.endWarmLocked()
 	m.streams = c.mux
 	m.via, m.path = c.via, ""

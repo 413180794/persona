@@ -44,7 +44,9 @@ type Machine struct {
 	// browser, browserAt: the same for ego lite (browser.status, the plugin ego; browser.go).
 	browser   *proto.Browser
 	browserAt time.Time
-	online    bool
+	// herdrAsked: when the node was last asked whether herdr's server answers (herdr.server.status, herdr.go).
+	herdrAsked time.Time
+	online     bool
 	// connectedAt: when the node's current connection began (sessions.changed carries it to the assistant).
 	connectedAt time.Time
 	// warmUntil, warmed: shown as before a hub restart until then, while its node reconnects (warm.go); warmed is

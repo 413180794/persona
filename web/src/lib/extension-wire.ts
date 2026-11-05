@@ -14,6 +14,7 @@ export interface Manifest {
   homepage?: string;
   engines?: Engines;
   runtime?: Runtime;
+  node?: NodeRuntime;
   activation_events?: ActivationEvent[];
   contributes?: Contributes;
   /**
@@ -99,6 +100,32 @@ export interface Resources {
  * A path in the package, or one per platform ({"linux-amd64": "bin/x"}).
  */
 export type Command = unknown;
+
+/**
+ * The extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* / linux-*), on the
+ * machines picked in the configuration field `machines` (an array of format machine, x-os the programs' systems).
+ */
+export interface NodeRuntime {
+  command: unknown;
+  args?: string[];
+  env?: Record<string, string>;
+  machines: string;
+  rpc?: string;
+  http?: boolean;
+  keep_running?: string;
+  secrets?: string[];
+  permissions?: NodePermissions;
+}
+
+/**
+ * What the program on computers asks for there: hosts it reaches, files outside its data directory, macOS's privacy
+ * permissions.
+ */
+export interface NodePermissions {
+  network?: string[];
+  files?: boolean;
+  macos_privacy?: boolean;
+}
 
 export interface SecretSpec {
   name: string;

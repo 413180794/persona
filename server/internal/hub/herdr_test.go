@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,6 +16,13 @@ import (
 // herdrMac is a machine whose node answers node.configure and herdr.server.start the way the node does, and says
 // which it was asked (herdrstart.go in the node).
 func herdrMac(t *testing.T, h *Hub, id string, starts bool) (*Machine, func() []map[string]any) {
+	t.Helper()
+	return herdrMacStatus(t, h, id, starts, nil)
+}
+
+// herdrMacStatus is herdrMac whose node also answers herdr.server.status with running (nil: an older node, which
+// has no such method).
+func herdrMacStatus(t *testing.T, h *Hub, id string, starts bool, running *atomic.Bool) (*Machine, func() []map[string]any) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	h2nR, h2nW := io.Pipe()
@@ -34,6 +42,10 @@ func herdrMac(t *testing.T, h *Hub, id string, starts bool) (*Machine, func() []
 			return map[string]any{}, nil
 		case "herdr.server.start":
 			return map[string]any{"running": starts}, nil
+		case "herdr.server.status":
+			if running != nil {
+				return map[string]any{"running": running.Load(), "known": true}, nil
+			}
 		}
 		return nil, &rpc.Error{Message: "unknown method " + method}
 	}
@@ -135,6 +147,78 @@ func TestHerdrStartButton(t *testing.T) {
 	}
 	if !asked {
 		t.Fatalf("the node was not asked to start it: %v", seen())
+	}
+}
+
+// The row says whether herdr answers now, not what node.info said when the node connected: after a reboot the node
+// starts herdr itself once the hub's node.configure came, which is after node.info (#1916).
+func TestHerdrRowAsksTheNode(t *testing.T) {
+	h, _ := extensionTestHub(t)
+	var running atomic.Bool
+	running.Store(true) // node.info said down (herdrMac); it came up since
+	_, seen := herdrMacStatus(t, h, "mac", true, &running)
+	mux := h.routes()
+	asked := func() int {
+		n := 0
+		for _, c := range seen() {
+			if c["method"] == "herdr.server.status" {
+				n++
+			}
+		}
+		return n
+	}
+
+	code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, "")
+	if code != 200 || out["running"] != true || out["known"] != true {
+		t.Fatalf("the node's answer: %d %v", code, out)
+	}
+	// Every Agents list polls: a read right after is answered from what the node just said.
+	running.Store(false)
+	if _, out = call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, ""); out["running"] != true || asked() != 1 {
+		t.Fatalf("within herdrStatusFresh: %v, asked %d times", out, asked())
+	}
+	prev := herdrStatusFresh
+	herdrStatusFresh = 0
+	t.Cleanup(func() { herdrStatusFresh = prev })
+	if _, out = call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, ""); out["running"] != false || asked() != 2 {
+		t.Fatalf("stopped since: %v, asked %d times", out, asked())
+	}
+}
+
+// An older node has no herdr.server.status: the row says what node.info said, and the node is not asked on every read.
+func TestHerdrRowOlderNode(t *testing.T) {
+	h, _ := extensionTestHub(t)
+	_, seen := herdrMac(t, h, "mac", true)
+	mux := h.routes()
+	for range 3 {
+		if code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, ""); code != 200 || out["running"] != false || out["known"] != true {
+			t.Fatalf("node.info's answer: %d %v", code, out)
+		}
+	}
+	n := 0
+	for _, c := range seen() {
+		if c["method"] == "herdr.server.status" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("asked %d times in a row", n)
+	}
+}
+
+// After 启动 the row says it runs, even from an older node that cannot be asked again: it said so starting it.
+func TestHerdrRowAfterStart(t *testing.T) {
+	h, _ := extensionTestHub(t)
+	herdrMac(t, h, "mac", true)
+	mux := h.routes()
+	if code, out := call(t, mux, "POST", "/api/v1/machines/mac/herdr/start", h.cfg.Token, ""); code != 200 || out["running"] != true {
+		t.Fatalf("start: %d %v", code, out)
+	}
+	prev := herdrStatusFresh
+	herdrStatusFresh = 0 // asked (and refused) on this read: the start's answer stays
+	t.Cleanup(func() { herdrStatusFresh = prev })
+	if code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, ""); code != 200 || out["running"] != true || out["known"] != true {
+		t.Fatalf("after the start: %d %v", code, out)
 	}
 }
 

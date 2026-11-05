@@ -11,8 +11,8 @@ import { ago } from "../../lib/format";
 import {
   choiceLabel, clearExtensionSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listExtensionsInfo, listSummary, numberProblems,
   placeholder, extensionDetail, extensionState, extensionTone, pointText, readNumber, runNote, same, secretState, setAt, setExtensionConfig, setExtensionEnabled,
-  machineStatus, saveFooter, setExtensionAutoUpgrade, setExtensionSecret, sourceText, stateLine, upgradeAction, upgradeDetail, upgradeNote, valueAt,
-  type HubExtension, type HubExtensionDetail, type Json, type JsonObject, type ExtensionField, type ExtensionSecret,
+  machineStatus, nodeProgramStatus, saveFooter, setExtensionAutoUpgrade, setExtensionSecret, sourceText, stateLine, upgradeAction, upgradeDetail, upgradeNote, valueAt,
+  type HubExtension, type HubExtensionDetail, type Json, type JsonObject, type ExtensionField, type ExtensionNodeState, type ExtensionSecret,
 } from "../../lib/extensions";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -364,6 +364,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
     }
   };
   const computers = !!detail?.contributes?.computer;
+  const nodes = detail?.node_machines ? { field: detail.node_machines, states: detail.nodes ?? [] } : undefined;
 
   // A secret's answer is a whole detail too; keep the form's draft as it is.
   const secretDone = (d: HubExtensionDetail) => setDetail(d);
@@ -464,7 +465,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
                   {fields
                     .filter((f) => f.type !== "object")
                     .map((f) => (
-                      <FieldRow key={f.name} field={f} path={[f.name]} draft={draft} typed={typed} errors={fieldErrors} problems={problems} onEdit={edit} onType={type} onSaveNow={saveNow} computers={computers} />
+                      <FieldRow key={f.name} field={f} path={[f.name]} draft={draft} typed={typed} errors={fieldErrors} problems={problems} onEdit={edit} onType={type} onSaveNow={saveNow} computers={computers} nodes={nodes} />
                     ))}
                 </Group>
               )}
@@ -473,7 +474,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
                 .map((g) => (
                   <Group key={g.name} title={fieldLabel(g)} footer={g.description}>
                     {(g.fields ?? []).map((f) => (
-                      <FieldRow key={f.name} field={f} path={[g.name, f.name]} draft={draft} typed={typed} errors={fieldErrors} problems={problems} onEdit={edit} onType={type} onSaveNow={saveNow} computers={computers} />
+                      <FieldRow key={f.name} field={f} path={[g.name, f.name]} draft={draft} typed={typed} errors={fieldErrors} problems={problems} onEdit={edit} onType={type} onSaveNow={saveNow} computers={computers} nodes={nodes} />
                     ))}
                   </Group>
                 ))}
@@ -611,6 +612,8 @@ interface FieldProps {
   onSaveNow: (path: string[], value: Json | undefined) => void;
   /** The extension operates computers: machine rows say how Cua Driver is there. */
   computers: boolean;
+  /** The plugin's program on computers: the field that picks them, and how it is on each (their rows say). */
+  nodes?: { field: string; states: ExtensionNodeState[] };
 }
 
 /** One field of the form, by its type; its title above (or beside a switch), its description and error below. */
@@ -656,12 +659,12 @@ function FieldRow(props: FieldProps) {
   );
 }
 
-function Control({ field: f, path, draft, typed, onEdit, onType, onSaveNow, computers, id, invalid }: FieldProps & { id: string; invalid: boolean }) {
+function Control({ field: f, path, draft, typed, onEdit, onType, onSaveNow, computers, nodes, id, invalid }: FieldProps & { id: string; invalid: boolean }) {
   const ring = invalid ? "shadow-[inset_0_0_0_1px_var(--red)]" : "shadow-inset-field";
   const v = valueAt(draft, path);
 
   if (f.type === "array" && f.items?.format === "machine") {
-    return <MachineSwitches field={f} path={path} draft={draft} onSaveNow={onSaveNow} computers={computers} id={id} />;
+    return <MachineSwitches field={f} path={path} draft={draft} onSaveNow={onSaveNow} computers={computers} nodes={nodes?.field === f.name ? nodes.states : undefined} id={id} />;
   }
   if (f.type === "array") return <ListControl field={f} path={path} draft={draft} onEdit={onEdit} id={id} ring={ring} />;
 
@@ -719,19 +722,24 @@ function Control({ field: f, path, draft, typed, onEdit, onType, onSaveNow, comp
 /** A list of texts (each removable, more added), or of choices (each one pressed in or out). */
 /** A list of the hub's machines (format machine): a switch per machine of the systems the field names, by name and how
  *  it is, in effect at once; a value naming no machine still shows, to be turned off. */
-function MachineSwitches({ field: f, path, draft, onSaveNow, computers, id }: Pick<FieldProps, "field" | "path" | "draft" | "onSaveNow" | "computers"> & { id: string }) {
+function MachineSwitches({ field: f, path, draft, onSaveNow, computers, nodes, id }: Pick<FieldProps, "field" | "path" | "draft" | "onSaveNow" | "computers"> & { nodes?: ExtensionNodeState[]; id: string }) {
   const all = useStore((s) => s.machines);
   const items = listItems(draft, path, f);
   const os = f.items?.os ?? [];
   const machines = all.filter((m) => !os.length || os.includes(m.os ?? ""));
   const unknown = items.filter((x) => !all.some((m) => m.id === x));
-  const flip = (mid: string, on: boolean) => {
-    if (on && f.confirm && !window.confirm(f.confirm)) return; // x-confirm: asked before it is turned on
+  // x-confirm: a machine waiting on it before it is turned on (turning one off is not asked).
+  const [asking, setAsking] = useState<{ id: string; name: string } | null>(null);
+  const save = (mid: string, on: boolean) => {
     const next = items.filter((x) => x !== mid);
     if (on) next.push(mid);
     onSaveNow(path, next.length ? next : undefined);
   };
-  const rows = [...machines.map((m) => ({ id: m.id, name: m.name, status: machineStatus(m, computers) })), ...unknown.map((x) => ({ id: x, name: x, status: "找不到这台机器" }))];
+  const flip = (mid: string, name: string, on: boolean) => (on && f.confirm ? setAsking({ id: mid, name }) : save(mid, on));
+  // The field picking where the plugin's program runs: a machine switched on says how the program is there.
+  const status = (m: (typeof machines)[number]) =>
+    nodes && items.includes(m.id) ? `${m.online ? "在线" : "离线"} · ${nodeProgramStatus(nodes.find((n) => n.machine_id === m.id))}` : machineStatus(m, computers);
+  const rows = [...machines.map((m) => ({ id: m.id, name: m.name, status: status(m) })), ...unknown.map((x) => ({ id: x, name: x, status: "找不到这台机器" }))];
   if (!rows.length) return <p className="text-[12.5px] text-ink-3">{os.join() === "darwin" ? "这个 hub 上还没有 Mac。" : "这个 hub 上还没有机器。"}</p>;
   return (
     <div id={id} role="group" className="flex flex-col divide-y divide-line rounded-control shadow-hairline">
@@ -741,9 +749,22 @@ function MachineSwitches({ field: f, path, draft, onSaveNow, computers, id }: Pi
             <p className="truncate text-[13px] text-ink">{r.name}</p>
             <p className="truncate text-[11.5px] text-ink-3">{r.status}</p>
           </div>
-          <Switch on={items.includes(r.id)} onChange={(on) => flip(r.id, on)} label={r.name} />
+          <Switch on={items.includes(r.id)} onChange={(on) => flip(r.id, r.name, on)} label={r.name} />
         </div>
       ))}
+      <Dialog
+        open={!!asking}
+        onClose={() => setAsking(null)}
+        title={asking ? `打开「${asking.name}」？` : undefined}
+        footer={
+          <>
+            <Button tone="quiet" onClick={() => setAsking(null)}>取消</Button>
+            <Button tone="primary" onClick={() => { if (asking) save(asking.id, true); setAsking(null); }}>打开</Button>
+          </>
+        }
+      >
+        <p className="text-[13px] leading-relaxed text-ink-2">{f.confirm}</p>
+      </Dialog>
     </div>
   );
 }

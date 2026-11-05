@@ -132,4 +132,50 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
         while Date.now < deadline { if ok() { return true }; usleep(200_000) }
         return false
     }
+
+    /// A plugin whose program runs on computers (#1830): the field picking them says, for each machine switched on, how
+    /// the program is there; switching one on asks first (a program will run there). `MOCK_PLUGINS=1` has it on for
+    /// MacBook (running) and Mac Studio (failed to start).
+    @MainActor func testWhereAPluginsProgramRuns() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let hub = env["JARVIS_PLUGINS_HUB"] else {
+            throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)")
+        }
+        continueAfterFailure = false
+        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let app = XCUIApplication()
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openPlugin", "example-helper"]
+        app.launchPinned()
+        func row(_ name: String) -> XCUIElement { app.switches.matching(NSPredicate(format: "label BEGINSWITH %@", name + "、")).firstMatch }
+        let macbook = row("MacBook"), studio = row("Mac Studio"), server = row("服务器")
+        XCTAssertTrue(macbook.waitForExistence(timeout: 30), "no switch per computer:\n\(app.debugDescription)")
+        XCTAssertTrue(macbook.label.contains("程序在运行 · 1.0.0"), macbook.label)
+        XCTAssertTrue(studio.label.contains("程序出错") && studio.label.contains("退出码 3"), studio.label)
+        XCTAssertFalse(studio.label.contains("exit status"), studio.label)
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '不用保存'")).firstMatch.exists,
+                       "a footer repeating that the switches take effect at once")
+        XCTAssertTrue(server.exists, "a Linux machine is offered: the program has a Linux build")
+        XCTAssertFalse(server.label.contains("程序"), "said for a machine it is not on for: \(server.label)")
+        if let dir = env["JARVIS_SHOTS"] {
+            try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "plugins-node-\(look).png"))
+        }
+        server.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        let open = app.buttons["打开"], cancel = app.buttons["取消"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5), "switching a machine on did not ask")
+        XCTAssertTrue(cancel.exists, "the question has no 取消")
+        XCTAssertTrue(app.staticTexts["打开「服务器」？"].exists, "the question does not name the machine:\n\(app.debugDescription)")
+        cancel.tap()
+        XCTAssertTrue(waitFor(server, value: "0"), "取消 still turned it on")
+        server.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertTrue(open.waitForExistence(timeout: 5), "switching a machine on did not ask the second time")
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '将在这台电脑上运行'")).firstMatch.exists)
+        if let dir = env["JARVIS_SHOTS"] {
+            try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "plugins-node-ask-\(look).png"))
+        }
+        open.tap()
+        XCTAssertTrue(waitFor(server, value: "1"), "turned on")
+        XCTAssertTrue(waitUntil { server.label.contains("等 hub 把程序发过去") }, server.label)
+    }
+
 }

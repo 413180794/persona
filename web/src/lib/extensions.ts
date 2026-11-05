@@ -33,6 +33,17 @@ export interface HubExtension {
   auto_upgrade?: boolean;
   upgrade?: ExtensionUpgrade;
   upgrade_note?: ExtensionUpgradeNote;
+  /** An extension with a program on computers: how that program is on each machine it is switched on for. */
+  nodes?: ExtensionNodeState[];
+}
+
+/** An extension's program on one machine (docs/extensions.md「在电脑上运行的程序」). */
+export interface ExtensionNodeState {
+  machine_id: string;
+  version?: string;
+  /** running | starting | stopped | error | missing | lease_expired | offline | outdated */
+  state: string;
+  error?: string;
 }
 
 /** A market extension's newer version and where it stands. */
@@ -120,6 +131,8 @@ export interface HubExtensionDetail extends HubExtension {
   permissions?: ExtensionPermission[];
   /** The pages it draws in its settings (placement plugin_page, docs/extensions.md「声明式 UI」). */
   ui?: UIPlace[];
+  /** The field (format machine) that picks the computers its program runs on; their rows say how it is there. */
+  node_machines?: string;
 }
 
 // ── the hub ─────────────────────────────────────────────
@@ -362,11 +375,41 @@ export function machineStatus(m: Machine, computers: boolean): string {
   return parts.join(" · ");
 }
 
-/** Under the form: which switches take effect at once (lists of machines) and that the rest waits for 保存. */
-export function saveFooter(fields: ExtensionField[]): string {
+/** How a plugin's program is on a machine switched on for it, for the machine's row: what the user can make of it. */
+export function nodeProgramStatus(s: ExtensionNodeState | undefined): string {
+  if (!s) return "等 hub 把程序发过去";
+  const error = s.error && exitText(s.error);
+  switch (s.state) {
+    case "running":
+      return `程序在运行${s.version ? ` · ${s.version}` : ""}`;
+    case "starting":
+      return "程序正在启动";
+    case "missing":
+      return "正在把程序发过去";
+    case "offline":
+      return "离线：连上后会启动";
+    case "lease_expired":
+      return "和 hub 断开太久，程序已停，连上后会再启动";
+    case "outdated":
+      return "这台电脑上的 personad 太旧，更新后才能运行";
+    case "error":
+      return error ? `程序出错：${error}` : "程序出错";
+    default:
+      return error ? `${s.state}：${error}` : s.state;
+  }
+}
+
+/** Go's words for how a program ended (exec.ExitError), in the apps' words: exit status 3 → 退出码 3. */
+export function exitText(error: string): string {
+  return error.replace(/\bexit status (-?\d+)/g, "退出码 $1").replace(/\bsignal: ([a-z ]+)/g, "被信号结束（$1）");
+}
+
+/** Under the form: which switches take effect at once (lists of machines) and that the rest waits for 保存. Nothing
+ *  when there is only such switches: the fields say so themselves, nothing waits for 保存. */
+export function saveFooter(fields: ExtensionField[]): string | undefined {
   const all = fields.flatMap((f) => (f.type === "object" ? (f.fields ?? []) : [f]));
   const now = all.filter((f) => f.items?.format === "machine").map((f) => `「${f.title || f.name}」`);
   if (!now.length) return "改完点「保存」；保存后扩展会重新启动。留空的项用扩展的默认值。";
-  if (now.length === all.length) return `${now.join("、")}的开关即时生效，不用保存。`;
+  if (now.length === all.length) return undefined;
   return `${now.join("、")}的开关即时生效；其他项改完点「保存」，保存后扩展会重新启动。留空的项用扩展的默认值。`;
 }

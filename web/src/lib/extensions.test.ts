@@ -4,7 +4,7 @@ import {
   clearExtensionSecret, compact, configError, fieldTitle, isDirty, listItems, listExtensions, listSummary, numberProblems, placeholder, extensionDetail,
   machineStatus, extensionState, extensionTone, readNumber, runNote, same, secretState, setAt, setExtensionConfig, setExtensionEnabled, setExtensionSecret, sourceText,
   stateLine, valueAt, morePermissions, extensionUpgrades, setExtensionAutoUpgrade, setExtensionUpgrades, upgradeAction, upgradeDetail, upgradeNote,
-  type HubExtension, type ExtensionField, type ExtensionUpgrade,
+  type HubExtension, type ExtensionField, type ExtensionUpgrade, nodeProgramStatus, exitText, saveFooter,
 } from "./extensions";
 
 const extension = (status: string, extra: Partial<HubExtension> = {}): HubExtension => ({ id: `p-${status}`, name: status, kind: "connectors", status, ...extra });
@@ -198,3 +198,25 @@ describe("auto-upgrade (docs/extensions.md「自动升级」)", () => {
     expect(JSON.parse(String(last.init?.body))).toEqual({ auto: false });
   });
 });
+
+describe("saveFooter", () => {
+  it("says nothing when every field is a list of machines (they say so themselves)", () => {
+    const machines = { name: "computers", type: "array", items: { name: "items", type: "string", format: "machine" } } as ExtensionField;
+    expect(saveFooter([machines])).toBeUndefined();
+    expect(saveFooter([machines, { name: "url", type: "string" } as ExtensionField])).toContain("即时生效；其他项改完点「保存」");
+    expect(saveFooter([{ name: "url", type: "string" } as ExtensionField])).toMatch(/^改完点「保存」/);
+  });
+});
+
+describe("nodeProgramStatus", () => {
+  it("says how a plugin's program is on a machine switched on for it, in words the user can act on", () => {
+    expect(nodeProgramStatus(undefined)).toBe("等 hub 把程序发过去");
+    expect(nodeProgramStatus({ machine_id: "m", state: "running", version: "1.2.0" })).toBe("程序在运行 · 1.2.0");
+    expect(nodeProgramStatus({ machine_id: "m", state: "error", error: "exit status 3" })).toBe("程序出错：退出码 3");
+    expect(exitText("1.0.0 没有起来：exit status 3")).toBe("1.0.0 没有起来：退出码 3");
+    expect(exitText("signal: killed")).toBe("被信号结束（killed）");
+    expect(nodeProgramStatus({ machine_id: "m", state: "outdated" })).toContain("personad 太旧");
+    expect(nodeProgramStatus({ machine_id: "m", state: "lease_expired" })).toContain("连上后会再启动");
+  });
+});
+

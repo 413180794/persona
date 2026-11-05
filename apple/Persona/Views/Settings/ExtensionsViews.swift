@@ -291,7 +291,7 @@ struct ExtensionDetailView: View {
             } header: {
                 SettingsHeading("设置")
             } footer: {
-                Text(ExtensionText.saveFooter(d.form))
+                if let footer = ExtensionText.saveFooter(d.form) { Text(footer) }
             }
             ForEach(d.form.filter { $0.type == "object" }) { group in
                 Section {
@@ -486,8 +486,9 @@ private struct ExtensionMachineSwitches: View {
     @Bindable var page: ExtensionModel
 
     private var items: [String] { page.value(path)?.array?.compactMap(\.string) ?? [] }
-    /// A machine waiting on the field's x-confirm before it is turned on.
+    /// A machine waiting on the field's x-confirm before it is turned on, and its name (kept while the alert goes away).
     @State private var asking: String?
+    @State private var askingName = ""
     /// The page's hub's machines (the app's first group), of the systems asked for.
     private var machines: [Machine] {
         let os = field.items?.os ?? []
@@ -507,22 +508,29 @@ private struct ExtensionMachineSwitches: View {
                     .font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
             ForEach(machines) { m in
-                row(m.id, name: m.name, status: browsers ? Self.browserStatus(m) : Self.status(m, computers: computers))
+                row(m.id, name: m.name, status: nodeStatus(m) ?? (browsers ? Self.browserStatus(m) : Self.status(m, computers: computers)))
             }
             ForEach(unknown, id: \.self) { id in
                 row(id, name: id, status: "找不到这台机器")
             }
         }
-        .confirmationDialog("打开「\(title)」？", isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } }),
-                            titleVisibility: .visible) {
+        // An alert, not a confirmation dialog: anchored to the row as a popover, that one drops its 取消.
+        .alert("打开「\(askingName)」？", isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) {
+            Button("取消", role: .cancel) { asking = nil }
             Button("打开") {
                 if let id = asking { save(id, on: true) }
                 asking = nil
             }
-            Button("取消", role: .cancel) { asking = nil }
         } message: {
             Text(field.confirm ?? "")
         }
+    }
+
+    /// The field picking where the plugin's program runs: a machine switched on says how the program is there.
+    private func nodeStatus(_ m: Machine) -> String? {
+        guard let detail = page.detail, detail.nodeMachines == path.last, items.contains(m.id) else { return nil }
+        let state = detail.plugin.nodes?.first { $0.machineID == m.id }
+        return (m.online ? "在线" : "离线") + " · " + ExtensionNodeState.status(state)
     }
 
     private func save(_ id: String, on: Bool) {
@@ -533,7 +541,7 @@ private struct ExtensionMachineSwitches: View {
 
     private func row(_ id: String, name: String, status: String) -> some View {
         Toggle(isOn: Binding(get: { items.contains(id) }, set: { on in
-            if on, let ask = field.confirm, !ask.isEmpty { asking = id } else { save(id, on: on) }
+            if on, let ask = field.confirm, !ask.isEmpty { (asking, askingName) = (id, name) } else { save(id, on: on) }
         })) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(name).lineLimit(1)

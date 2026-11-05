@@ -349,7 +349,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
 export function PermissionRow({ p, tone }: { p: ExtensionPermission; tone?: "orange" }) {
   return (
     <div className="flex items-start gap-2.5 px-4 py-2.5">
-      <Icon name={p.key === "network" ? "web" : p.key === "secrets" || p.key === "launcher_keys" ? "key" : p.key === "hub_api" ? "hub" : p.key === "runs_code" ? "terminal" : "info"} size={14} className={cx("mt-0.5 shrink-0", tone === "orange" ? "text-orange" : "text-ink-3")} />
+      <Icon name={permissionIcon(p.key)} size={14} className={cx("mt-0.5 shrink-0", tone === "orange" ? "text-orange" : "text-ink-3")} />
       <div className="min-w-0">
         <div className="text-[13px] text-ink">{p.title}</div>
         {p.detail && <div className="mt-0.5 text-[11.5px] leading-snug break-words text-ink-3">{p.detail}</div>}
@@ -820,3 +820,26 @@ function TokenDialog({ market, onClose, onDone }: { market: Market; onClose: () 
     </Dialog>
   );
 }
+
+/** A permission line's icon: what it is about (its program on computers' lines like the hub's). */
+function permissionIcon(key: string) {
+  switch (key) {
+    case "network":
+    case "node_network":
+      return "web";
+    case "secrets":
+    case "launcher_keys":
+    case "node_secrets":
+      return "key";
+    case "hub_api":
+      return "hub";
+    case "runs_code":
+    case "node_runs_code":
+      return "terminal";
+    case "node_files":
+      return "folder";
+    default:
+      return "info";
+  }
+}
+

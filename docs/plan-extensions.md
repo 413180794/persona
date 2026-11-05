@@ -327,6 +327,7 @@ hub.json 的旧配置迁到扩展：装上扩展后在 设置 › 扩展（或 `
 3. HTTP / WebSocket 转发：流能拨 unix socket。（做完：`/api/v1/extensions/{id}/-/machines/{mid}/…` 经 `plugin.node.dial`；
    路径放在 hub 自己的 `/-/` 下，不占扩展自己的路径。）
 4. App（iOS、Mac、网页）：每台机器的状态、加机器时的确认、权限页的新行；截图给用户看。
+   （做完：状态写在选电脑那个字段的每一行里；确认由 hub 补进字段的 `confirm`，App 照旧画；清单的 JSON Schema 和四端生成的类型加上 `node`。Android 的插件设置没跟。）
 5. cua / ego 换成内置的 node 程序，不改界面。
 6. iMessage 迁成扩展，迁移 hub.json 里的配置。
 

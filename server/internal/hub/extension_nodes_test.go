@@ -321,3 +321,37 @@ func TestAppsRequestsReachTheProgramOnAComputer(t *testing.T) {
 		t.Fatalf("no such plugin: %d", code)
 	}
 }
+
+// The apps learn which field picks the computers, and switching one on asks first (a program will run there), unless
+// the manifest asks something of its own; the plugin's own form stays as it is.
+func TestNodeProgramsFieldAsksBeforeAMachine(t *testing.T) {
+	ctx := context.Background()
+	h, _ := extensionTestHub(t)
+	reg := h.extensions.reg
+	pv, err := reg.Preview(ctx, "dir:"+helperPackage(t), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reg.Install(ctx, pv.ID, pv.Digest, "test"); err != nil {
+		t.Fatal(err)
+	}
+	p := reg.Get("example-helper")
+	d := h.extensions.detail(ctx, p)
+	if d.NodeMachines != "computers" {
+		t.Fatalf("node_machines %q", d.NodeMachines)
+	}
+	ask := func(s *extension.Schema) string {
+		for _, f := range s.Fields {
+			if f.Name == "computers" {
+				return f.Confirm
+			}
+		}
+		return "no field"
+	}
+	if got := ask(d.Form); !strings.Contains(got, "将在这台电脑上运行「Example Helper」的程序") {
+		t.Fatalf("confirm %q", got)
+	}
+	if got := ask(p.Schema); got != "" {
+		t.Fatalf("the plugin's own form changed: %q", got)
+	}
+}

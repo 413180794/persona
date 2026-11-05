@@ -25,6 +25,7 @@
         "homepage": {"type": "string", "pattern": "^https://[^/?#]+"},
         "engines": {"$ref": "#/$defs/Engines"},
         "runtime": {"$ref": "#/$defs/Runtime"},
+        "node": {"$ref": "#/$defs/NodeRuntime"},
         "activation_events": {"type": "array", "items": {"$ref": "#/$defs/ActivationEvent"}},
         "contributes": {"$ref": "#/$defs/Contributes"},
         "depends": {
@@ -120,6 +121,33 @@
         {"type": "string", "minLength": 1},
         {"type": "object", "additionalProperties": {"type": "string"}}
       ]
+    },
+    "NodeRuntime": {
+      "description": "The extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format machine, x-os the programs' systems).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": {"$ref": "#/$defs/Command"},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "env": {"type": "object", "additionalProperties": {"type": "string"}},
+        "machines": {"type": "string", "minLength": 1},
+        "rpc": {"type": "string", "enum": ["stdio", "none"]},
+        "http": {"type": "boolean"},
+        "keep_running": {"type": "string", "enum": ["lease", "always"]},
+        "secrets": {"type": "array", "items": {"type": "string"}},
+        "permissions": {"$ref": "#/$defs/NodePermissions"}
+      },
+      "required": ["command", "machines"]
+    },
+    "NodePermissions": {
+      "description": "What the program on computers asks for there: hosts it reaches, files outside its data directory, macOS's privacy permissions.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "network": {"type": "array", "items": {"$ref": "#/$defs/Host"}},
+        "files": {"type": "boolean"},
+        "macos_privacy": {"type": "boolean"}
+      }
     },
     "SecretSpec": {
       "type": "object",

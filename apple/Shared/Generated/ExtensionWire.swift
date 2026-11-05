@@ -21,6 +21,7 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
     var homepage: String?
     var engines: ExtensionEngines?
     var runtime: ExtensionRuntime?
+    var node: ExtensionNodeRuntime?
     var activationEvents: [String]?
     var contributes: ExtensionContributes?
     /// Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
@@ -34,7 +35,7 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
     var secrets: [ExtensionSecretSpec]?
     var permissions: ExtensionPermissions?
 
-    init(manifestVersion: Int = 0, id: String = "", name: String = "", version: String = "", description: String? = nil, publisher: String? = nil, homepage: String? = nil, engines: ExtensionEngines? = nil, runtime: ExtensionRuntime? = nil, activationEvents: [String]? = nil, contributes: ExtensionContributes? = nil, depends: [ExtensionDependency]? = nil, exports: ExtensionExports? = nil, extensionPack: [ExtensionPackMember]? = nil, configuration: JSONValue? = nil, secrets: [ExtensionSecretSpec]? = nil, permissions: ExtensionPermissions? = nil) {
+    init(manifestVersion: Int = 0, id: String = "", name: String = "", version: String = "", description: String? = nil, publisher: String? = nil, homepage: String? = nil, engines: ExtensionEngines? = nil, runtime: ExtensionRuntime? = nil, node: ExtensionNodeRuntime? = nil, activationEvents: [String]? = nil, contributes: ExtensionContributes? = nil, depends: [ExtensionDependency]? = nil, exports: ExtensionExports? = nil, extensionPack: [ExtensionPackMember]? = nil, configuration: JSONValue? = nil, secrets: [ExtensionSecretSpec]? = nil, permissions: ExtensionPermissions? = nil) {
         self.manifestVersion = manifestVersion
         self.id = id
         self.name = name
@@ -44,6 +45,7 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
         self.homepage = homepage
         self.engines = engines
         self.runtime = runtime
+        self.node = node
         self.activationEvents = activationEvents
         self.contributes = contributes
         self.depends = depends
@@ -64,6 +66,7 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
         case homepage
         case engines
         case runtime
+        case node
         case activationEvents = "activation_events"
         case contributes
         case depends
@@ -85,6 +88,7 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
         self.homepage = try? c.decodeIfPresent(String.self, forKey: .homepage)
         self.engines = try? c.decodeIfPresent(ExtensionEngines.self, forKey: .engines)
         self.runtime = try? c.decodeIfPresent(ExtensionRuntime.self, forKey: .runtime)
+        self.node = try? c.decodeIfPresent(ExtensionNodeRuntime.self, forKey: .node)
         self.activationEvents = try? c.decodeIfPresent([String].self, forKey: .activationEvents)
         self.contributes = try? c.decodeIfPresent(ExtensionContributes.self, forKey: .contributes)
         self.depends = try? c.decodeIfPresent([ExtensionDependency].self, forKey: .depends)
@@ -285,6 +289,85 @@ nonisolated struct ExtensionResources: Codable, Equatable, Sendable {
 
 /// A path in the package, or one per platform ({"linux-amd64": "bin/x"}).
 typealias ExtensionCommand = JSONValue
+
+/// The extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* / linux-*), on
+/// the machines picked in the configuration field `machines` (an array of format machine, x-os the programs'
+/// systems).
+nonisolated struct ExtensionNodeRuntime: Codable, Equatable, Sendable {
+    var command: JSONValue
+    var args: [String]?
+    var env: [String: String]?
+    var machines: String
+    var rpc: String?
+    var http: Bool?
+    var keepRunning: String?
+    var secrets: [String]?
+    var permissions: ExtensionNodePermissions?
+
+    init(command: JSONValue = .null, args: [String]? = nil, env: [String: String]? = nil, machines: String = "", rpc: String? = nil, http: Bool? = nil, keepRunning: String? = nil, secrets: [String]? = nil, permissions: ExtensionNodePermissions? = nil) {
+        self.command = command
+        self.args = args
+        self.env = env
+        self.machines = machines
+        self.rpc = rpc
+        self.http = http
+        self.keepRunning = keepRunning
+        self.secrets = secrets
+        self.permissions = permissions
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case command
+        case args
+        case env
+        case machines
+        case rpc
+        case http
+        case keepRunning = "keep_running"
+        case secrets
+        case permissions
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.command = (try? c.decodeIfPresent(JSONValue.self, forKey: .command)) ?? .null
+        self.args = try? c.decodeIfPresent([String].self, forKey: .args)
+        self.env = try? c.decodeIfPresent([String: String].self, forKey: .env)
+        self.machines = (try? c.decodeIfPresent(String.self, forKey: .machines)) ?? ""
+        self.rpc = try? c.decodeIfPresent(String.self, forKey: .rpc)
+        self.http = try? c.decodeIfPresent(Bool.self, forKey: .http)
+        self.keepRunning = try? c.decodeIfPresent(String.self, forKey: .keepRunning)
+        self.secrets = try? c.decodeIfPresent([String].self, forKey: .secrets)
+        self.permissions = try? c.decodeIfPresent(ExtensionNodePermissions.self, forKey: .permissions)
+    }
+}
+
+/// What the program on computers asks for there: hosts it reaches, files outside its data directory, macOS's privacy
+/// permissions.
+nonisolated struct ExtensionNodePermissions: Codable, Equatable, Sendable {
+    var network: [String]?
+    var files: Bool?
+    var macosPrivacy: Bool?
+
+    init(network: [String]? = nil, files: Bool? = nil, macosPrivacy: Bool? = nil) {
+        self.network = network
+        self.files = files
+        self.macosPrivacy = macosPrivacy
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case network
+        case files
+        case macosPrivacy = "macos_privacy"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.network = try? c.decodeIfPresent([String].self, forKey: .network)
+        self.files = try? c.decodeIfPresent(Bool.self, forKey: .files)
+        self.macosPrivacy = try? c.decodeIfPresent(Bool.self, forKey: .macosPrivacy)
+    }
+}
 
 nonisolated struct ExtensionSecretSpec: Codable, Equatable, Sendable {
     var name: String

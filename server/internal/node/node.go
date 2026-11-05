@@ -452,6 +452,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.info(ctx), nil
 	case "herdr.server.start": // the 启动 button beside 「herdr 没在运行」 (herdrstart.go)
 		return n.startHerdrServer(ctx)
+	case "herdr.server.status": // whether it answers now: the hub asks when an app reads the row (herdrstart.go)
+		running, known := n.herdrRunning(ctx)
+		return map[string]any{"running": running, "known": known}, nil
 	case "connector.list", "connector.chats", "connector.older", "connector.changes", "connector.search": // this Mac's own data (connectors.go)
 		return localConnector(ctx, method, params)
 	case "credential.gh_token": // the GitHub connector's token from this machine's gh login (credential.go)

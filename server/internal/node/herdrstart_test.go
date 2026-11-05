@@ -174,6 +174,32 @@ func TestEnsureHerdrLeavesItAlone(t *testing.T) {
 	})
 }
 
+// herdr.server.status is what the hub asks when an app reads the Agents list's herdr row (#1916): it follows the
+// socket, not what node.info said when the node connected.
+func TestHerdrServerStatus(t *testing.T) {
+	n, sock := downHerdrNode(t)
+	status := func() map[string]any {
+		t.Helper()
+		out, err := request(t, n, "herdr.server.status", map[string]any{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	if got := status(); got["running"] != false || got["known"] != true {
+		t.Fatalf("down: %v", got)
+	}
+	_ = os.MkdirAll(filepath.Dir(sock), 0o700)
+	serveSocket(t, sock)
+	if got := status(); got["running"] != true || got["known"] != true {
+		t.Fatalf("up: %v", got)
+	}
+	n.hosts = herdrHosts(nil) // Herdr App's herdr-core: no classic socket, nothing claimed
+	if got := status(); got["known"] != false {
+		t.Fatalf("no classic herdr: %v", got)
+	}
+}
+
 // herdr + Herdr App: the classic herdr half is started like herdr alone.
 func TestEnsureHerdrStartsTheCombinedEnginesHerdr(t *testing.T) {
 	n, _ := downHerdrNode(t)
