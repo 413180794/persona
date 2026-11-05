@@ -2496,8 +2496,8 @@ nonisolated enum ExtensionPlatform {
 }
 
 /// The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons
-/// after money). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin
-/// is its old name).
+/// after money; 4 for those after settings). Each app draws its own icon for the meaning; an unknown one draws as the
+/// default (extension; plugin is its old name).
 nonisolated enum ExtensionNavIcon {
     static let plugin = "plugin"
     static let chart = "chart"
@@ -2520,7 +2520,13 @@ nonisolated enum ExtensionNavIcon {
     static let tag = "tag"
     static let search = "search"
     static let settings = "settings"
-    static let all = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings"]
+    static let branch = "branch"
+    static let commit = "commit"
+    static let code = "code"
+    static let pullRequest = "pull_request"
+    static let merge = "merge"
+    static let file = "file"
+    static let all = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file"]
 }
 
 nonisolated struct ExtensionView: Codable, Hashable, Sendable {
@@ -2532,19 +2538,23 @@ nonisolated struct ExtensionView: Codable, Hashable, Sendable {
     var refreshAfter: Int?
     var search: ExtensionSearch?
     var filter: ExtensionFilter?
+    var tabs: ExtensionTabs?
+    var layout: String?
     /// Plain text for an assistant card: required by CheckAssistantView; not required for extension views.
     var fallback: String?
     /// Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page
     /// refers to this root map.
     var pages: [String: ExtensionView]?
 
-    init(title: String? = nil, sections: [ExtensionSection] = [], state: String? = nil, refreshAfter: Int? = nil, search: ExtensionSearch? = nil, filter: ExtensionFilter? = nil, fallback: String? = nil, pages: [String: ExtensionView]? = nil) {
+    init(title: String? = nil, sections: [ExtensionSection] = [], state: String? = nil, refreshAfter: Int? = nil, search: ExtensionSearch? = nil, filter: ExtensionFilter? = nil, tabs: ExtensionTabs? = nil, layout: String? = nil, fallback: String? = nil, pages: [String: ExtensionView]? = nil) {
         self.title = title
         self.sections = sections
         self.state = state
         self.refreshAfter = refreshAfter
         self.search = search
         self.filter = filter
+        self.tabs = tabs
+        self.layout = layout
         self.fallback = fallback
         self.pages = pages
     }
@@ -2556,6 +2566,8 @@ nonisolated struct ExtensionView: Codable, Hashable, Sendable {
         case refreshAfter = "refresh_after"
         case search
         case filter
+        case tabs
+        case layout
         case fallback
         case pages
     }
@@ -2568,6 +2580,8 @@ nonisolated struct ExtensionView: Codable, Hashable, Sendable {
         self.refreshAfter = try? c.decodeIfPresent(Int.self, forKey: .refreshAfter)
         self.search = try? c.decodeIfPresent(ExtensionSearch.self, forKey: .search)
         self.filter = try? c.decodeIfPresent(ExtensionFilter.self, forKey: .filter)
+        self.tabs = try? c.decodeIfPresent(ExtensionTabs.self, forKey: .tabs)
+        self.layout = try? c.decodeIfPresent(String.self, forKey: .layout)
         self.fallback = try? c.decodeIfPresent(String.self, forKey: .fallback)
         self.pages = try? c.decodeIfPresent([String: ExtensionView].self, forKey: .pages)
     }
@@ -2578,12 +2592,14 @@ nonisolated struct ExtensionSection: Codable, Hashable, Sendable {
     var footer: String?
     var items: [ExtensionComponent]
     var more: ExtensionMore?
+    var pane: String?
 
-    init(title: String? = nil, footer: String? = nil, items: [ExtensionComponent] = [], more: ExtensionMore? = nil) {
+    init(title: String? = nil, footer: String? = nil, items: [ExtensionComponent] = [], more: ExtensionMore? = nil, pane: String? = nil) {
         self.title = title
         self.footer = footer
         self.items = items
         self.more = more
+        self.pane = pane
     }
 
     enum CodingKeys: String, CodingKey {
@@ -2591,6 +2607,7 @@ nonisolated struct ExtensionSection: Codable, Hashable, Sendable {
         case footer
         case items
         case more
+        case pane
     }
 
     init(from decoder: Decoder) throws {
@@ -2599,6 +2616,7 @@ nonisolated struct ExtensionSection: Codable, Hashable, Sendable {
         self.footer = try? c.decodeIfPresent(String.self, forKey: .footer)
         self.items = (try? c.decodeIfPresent([ExtensionComponent].self, forKey: .items)) ?? []
         self.more = try? c.decodeIfPresent(ExtensionMore.self, forKey: .more)
+        self.pane = try? c.decodeIfPresent(String.self, forKey: .pane)
     }
 }
 
@@ -2620,13 +2638,20 @@ nonisolated enum ExtensionComponent: Codable, Hashable, Sendable {
     case empty(ExtensionEmptyComponent)
     case loading(ExtensionLoadingComponent)
     case html(ExtensionHtmlComponent)
+    case header(ExtensionHeaderComponent)
+    case breadcrumb(ExtensionBreadcrumbComponent)
+    case fileTree(ExtensionFileTreeComponent)
+    case code(ExtensionCodeComponent)
+    case diff(ExtensionDiffComponent)
+    case commentThread(ExtensionCommentThreadComponent)
+    case composer(ExtensionComposerComponent)
     /// A type this app does not know, or a variant it could not read: skipped when drawn.
     case unknown(type: String)
 
-    static let types = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html"]
+    static let types = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer"]
 
     /// The UI version that brought each type.
-    static let since: [String: Int] = ["text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4]
+    static let since: [String: Int] = ["text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4, "header": 4, "breadcrumb": 4, "file_tree": 4, "code": 4, "diff": 4, "comment_thread": 4, "composer": 4]
 
     private enum TagKey: String, CodingKey {
         case tag = "type"
@@ -2650,6 +2675,13 @@ nonisolated enum ExtensionComponent: Codable, Hashable, Sendable {
         case .empty: "empty"
         case .loading: "loading"
         case .html: "html"
+        case .header: "header"
+        case .breadcrumb: "breadcrumb"
+        case .fileTree: "file_tree"
+        case .code: "code"
+        case .diff: "diff"
+        case .commentThread: "comment_thread"
+        case .composer: "composer"
         case .unknown(let t): t
         }
     }
@@ -2673,6 +2705,13 @@ nonisolated enum ExtensionComponent: Codable, Hashable, Sendable {
         case "empty": self = (try? ExtensionEmptyComponent(from: decoder)).map { .empty($0) } ?? .unknown(type: t)
         case "loading": self = (try? ExtensionLoadingComponent(from: decoder)).map { .loading($0) } ?? .unknown(type: t)
         case "html": self = (try? ExtensionHtmlComponent(from: decoder)).map { .html($0) } ?? .unknown(type: t)
+        case "header": self = (try? ExtensionHeaderComponent(from: decoder)).map { .header($0) } ?? .unknown(type: t)
+        case "breadcrumb": self = (try? ExtensionBreadcrumbComponent(from: decoder)).map { .breadcrumb($0) } ?? .unknown(type: t)
+        case "file_tree": self = (try? ExtensionFileTreeComponent(from: decoder)).map { .fileTree($0) } ?? .unknown(type: t)
+        case "code": self = (try? ExtensionCodeComponent(from: decoder)).map { .code($0) } ?? .unknown(type: t)
+        case "diff": self = (try? ExtensionDiffComponent(from: decoder)).map { .diff($0) } ?? .unknown(type: t)
+        case "comment_thread": self = (try? ExtensionCommentThreadComponent(from: decoder)).map { .commentThread($0) } ?? .unknown(type: t)
+        case "composer": self = (try? ExtensionComposerComponent(from: decoder)).map { .composer($0) } ?? .unknown(type: t)
         default: self = .unknown(type: t)
         }
     }
@@ -2695,6 +2734,13 @@ nonisolated enum ExtensionComponent: Codable, Hashable, Sendable {
         case .empty(let v): try v.encode(to: encoder)
         case .loading(let v): try v.encode(to: encoder)
         case .html(let v): try v.encode(to: encoder)
+        case .header(let v): try v.encode(to: encoder)
+        case .breadcrumb(let v): try v.encode(to: encoder)
+        case .fileTree(let v): try v.encode(to: encoder)
+        case .code(let v): try v.encode(to: encoder)
+        case .diff(let v): try v.encode(to: encoder)
+        case .commentThread(let v): try v.encode(to: encoder)
+        case .composer(let v): try v.encode(to: encoder)
         case .unknown: break
         }
         var c = encoder.container(keyedBy: TagKey.self)
@@ -3204,6 +3250,644 @@ nonisolated struct ExtensionHtmlComponent: Codable, Hashable, Sendable {
     }
 }
 
+/// A detail page's head: a big title, state badges, a line of facts (author, branches, time, size). An older app gets
+/// a text and a row per fact.
+nonisolated struct ExtensionHeaderComponent: Codable, Hashable, Sendable {
+    var key: String?
+    var title: String
+    var subtitle: String?
+    var badges: [ExtensionBadge]?
+    var facts: [ExtensionFact]?
+    var avatar: ExtensionAvatar?
+
+    init(key: String? = nil, title: String = "", subtitle: String? = nil, badges: [ExtensionBadge]? = nil, facts: [ExtensionFact]? = nil, avatar: ExtensionAvatar? = nil) {
+        self.key = key
+        self.title = title
+        self.subtitle = subtitle
+        self.badges = badges
+        self.facts = facts
+        self.avatar = avatar
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case title
+        case subtitle
+        case badges
+        case facts
+        case avatar
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.subtitle = try? c.decodeIfPresent(String.self, forKey: .subtitle)
+        self.badges = try? c.decodeIfPresent([ExtensionBadge].self, forKey: .badges)
+        self.facts = try? c.decodeIfPresent([ExtensionFact].self, forKey: .facts)
+        self.avatar = try? c.decodeIfPresent(ExtensionAvatar.self, forKey: .avatar)
+    }
+}
+
+/// A path (repo / src / main.go): every crumb but the last may be tapped. An older app gets one text.
+nonisolated struct ExtensionBreadcrumbComponent: Codable, Hashable, Sendable {
+    var key: String?
+    var crumbs: [ExtensionCrumb]
+
+    init(key: String? = nil, crumbs: [ExtensionCrumb] = []) {
+        self.key = key
+        self.crumbs = crumbs
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case crumbs
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.crumbs = (try? c.decodeIfPresent([ExtensionCrumb].self, forKey: .crumbs)) ?? []
+    }
+}
+
+/// Files as a tree the app builds from their paths (a directory with one child folds into a/b/c). action opens a file
+/// (values {path}); expand loads a directory given with no entries under it (values {path}). An older app gets a row
+/// per entry.
+nonisolated struct ExtensionFileTreeComponent: Codable, Hashable, Sendable {
+    var key: String?
+    var entries: [ExtensionTreeEntry]
+    var selected: String?
+    var action: ExtensionAction?
+    var expand: ExtensionAction?
+
+    init(key: String? = nil, entries: [ExtensionTreeEntry] = [], selected: String? = nil, action: ExtensionAction? = nil, expand: ExtensionAction? = nil) {
+        self.key = key
+        self.entries = entries
+        self.selected = selected
+        self.action = action
+        self.expand = expand
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case entries
+        case selected
+        case action
+        case expand
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.entries = (try? c.decodeIfPresent([ExtensionTreeEntry].self, forKey: .entries)) ?? []
+        self.selected = try? c.decodeIfPresent(String.self, forKey: .selected)
+        self.action = try? c.decodeIfPresent(ExtensionAction.self, forKey: .action)
+        self.expand = try? c.decodeIfPresent(ExtensionAction.self, forKey: .expand)
+    }
+}
+
+/// A file's content: line numbers, the app's own syntax highlighting (language, else guessed from path), no wrapping.
+/// truncated with load: the rest comes from load (values {path, from: the next line}). An older app gets a code
+/// block.
+nonisolated struct ExtensionCodeComponent: Codable, Hashable, Sendable {
+    var key: String?
+    var path: String?
+    var language: String?
+    var text: String
+    var startLine: Int?
+    var highlight: ExtensionLineRange?
+    var truncated: Bool?
+    var load: ExtensionAction?
+
+    init(key: String? = nil, path: String? = nil, language: String? = nil, text: String = "", startLine: Int? = nil, highlight: ExtensionLineRange? = nil, truncated: Bool? = nil, load: ExtensionAction? = nil) {
+        self.key = key
+        self.path = path
+        self.language = language
+        self.text = text
+        self.startLine = startLine
+        self.highlight = highlight
+        self.truncated = truncated
+        self.load = load
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case path
+        case language
+        case text
+        case startLine = "start_line"
+        case highlight
+        case truncated
+        case load
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.path = try? c.decodeIfPresent(String.self, forKey: .path)
+        self.language = try? c.decodeIfPresent(String.self, forKey: .language)
+        self.text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
+        self.startLine = try? c.decodeIfPresent(Int.self, forKey: .startLine)
+        self.highlight = try? c.decodeIfPresent(ExtensionLineRange.self, forKey: .highlight)
+        self.truncated = try? c.decodeIfPresent(Bool.self, forKey: .truncated)
+        self.load = try? c.decodeIfPresent(ExtensionAction.self, forKey: .load)
+    }
+}
+
+/// One file's diff: hunks of lines each starting with ' ', '+', '-' or '\'; unified or side by side is the app's
+/// choice. threads are inline comments at their lines; comment adds one (values {path, side, line, start_line?,
+/// body}); expand shows hidden lines between hunks (values {path, hunk, direction: up, down or all}); collapsed, or
+/// without hunks, it shows a button calling load (values {path}). An older app gets a code block.
+nonisolated struct ExtensionDiffComponent: Codable, Hashable, Sendable {
+    var key: String?
+    var path: String
+    var oldPath: String?
+    var status: String?
+    var language: String?
+    var additions: Int?
+    var deletions: Int?
+    var binary: Bool?
+    var collapsed: Bool?
+    var hunks: [ExtensionHunk]?
+    var threads: [ExtensionThread]?
+    var load: ExtensionAction?
+    var expand: ExtensionAction?
+    var comment: ExtensionAction?
+
+    init(key: String? = nil, path: String = "", oldPath: String? = nil, status: String? = nil, language: String? = nil, additions: Int? = nil, deletions: Int? = nil, binary: Bool? = nil, collapsed: Bool? = nil, hunks: [ExtensionHunk]? = nil, threads: [ExtensionThread]? = nil, load: ExtensionAction? = nil, expand: ExtensionAction? = nil, comment: ExtensionAction? = nil) {
+        self.key = key
+        self.path = path
+        self.oldPath = oldPath
+        self.status = status
+        self.language = language
+        self.additions = additions
+        self.deletions = deletions
+        self.binary = binary
+        self.collapsed = collapsed
+        self.hunks = hunks
+        self.threads = threads
+        self.load = load
+        self.expand = expand
+        self.comment = comment
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case path
+        case oldPath = "old_path"
+        case status
+        case language
+        case additions
+        case deletions
+        case binary
+        case collapsed
+        case hunks
+        case threads
+        case load
+        case expand
+        case comment
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.path = (try? c.decodeIfPresent(String.self, forKey: .path)) ?? ""
+        self.oldPath = try? c.decodeIfPresent(String.self, forKey: .oldPath)
+        self.status = try? c.decodeIfPresent(String.self, forKey: .status)
+        self.language = try? c.decodeIfPresent(String.self, forKey: .language)
+        self.additions = try? c.decodeIfPresent(Int.self, forKey: .additions)
+        self.deletions = try? c.decodeIfPresent(Int.self, forKey: .deletions)
+        self.binary = try? c.decodeIfPresent(Bool.self, forKey: .binary)
+        self.collapsed = try? c.decodeIfPresent(Bool.self, forKey: .collapsed)
+        self.hunks = try? c.decodeIfPresent([ExtensionHunk].self, forKey: .hunks)
+        self.threads = try? c.decodeIfPresent([ExtensionThread].self, forKey: .threads)
+        self.load = try? c.decodeIfPresent(ExtensionAction.self, forKey: .load)
+        self.expand = try? c.decodeIfPresent(ExtensionAction.self, forKey: .expand)
+        self.comment = try? c.decodeIfPresent(ExtensionAction.self, forKey: .comment)
+    }
+}
+
+/// A discussion: comments in order (an event is drawn as a quiet line), and a reply box when reply is set (values
+/// {body}). An older app gets a row and a text per comment.
+nonisolated struct ExtensionCommentThreadComponent: Codable, Hashable, Sendable {
+    var key: String?
+    var title: String?
+    var comments: [ExtensionComment]
+    var resolved: Bool?
+    var reply: ExtensionAction?
+
+    init(key: String? = nil, title: String? = nil, comments: [ExtensionComment] = [], resolved: Bool? = nil, reply: ExtensionAction? = nil) {
+        self.key = key
+        self.title = title
+        self.comments = comments
+        self.resolved = resolved
+        self.reply = reply
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case title
+        case comments
+        case resolved
+        case reply
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.title = try? c.decodeIfPresent(String.self, forKey: .title)
+        self.comments = (try? c.decodeIfPresent([ExtensionComment].self, forKey: .comments)) ?? []
+        self.resolved = try? c.decodeIfPresent(Bool.self, forKey: .resolved)
+        self.reply = try? c.decodeIfPresent(ExtensionAction.self, forKey: .reply)
+    }
+}
+
+/// A multi-line input (Markdown) with a few buttons (comment, approve, request changes, merge): the one tapped sends
+/// the text as name, with the page's fields. An older app gets a field and a button each.
+nonisolated struct ExtensionComposerComponent: Codable, Hashable, Sendable {
+    var key: String?
+    var name: String
+    var placeholder: String?
+    var value: String?
+    var buttons: [ExtensionComposerButton]
+
+    init(key: String? = nil, name: String = "", placeholder: String? = nil, value: String? = nil, buttons: [ExtensionComposerButton] = []) {
+        self.key = key
+        self.name = name
+        self.placeholder = placeholder
+        self.value = value
+        self.buttons = buttons
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case name
+        case placeholder
+        case value
+        case buttons
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        self.placeholder = try? c.decodeIfPresent(String.self, forKey: .placeholder)
+        self.value = try? c.decodeIfPresent(String.self, forKey: .value)
+        self.buttons = (try? c.decodeIfPresent([ExtensionComposerButton].self, forKey: .buttons)) ?? []
+    }
+}
+
+/// stack: sections one under another. split: on a wide screen the side pane's sections in a column at the start, the
+/// rest beside it, each scrolling on its own; on a narrow one the side pane folds into a bar on top that opens as a
+/// sheet.
+nonisolated enum ExtensionLayout {
+    static let stack = "stack"
+    static let split = "split"
+    static let all = ["stack", "split"]
+}
+
+/// Where a section of a split view goes.
+nonisolated enum ExtensionPane {
+    static let main = "main"
+    static let side = "side"
+    static let all = ["main", "side"]
+}
+
+/// Values of FileStatus.
+nonisolated enum ExtensionFileStatus {
+    static let added = "added"
+    static let modified = "modified"
+    static let deleted = "deleted"
+    static let renamed = "renamed"
+    static let all = ["added", "modified", "deleted", "renamed"]
+}
+
+/// Values of DiffSide.
+nonisolated enum ExtensionDiffSide {
+    static let old = "old"
+    static let new = "new"
+    static let all = ["old", "new"]
+}
+
+/// Tabs on top of the page (UI version 4): choosing calls ui.action with action and values {name: the value} (and the
+/// search's q). An older app gets a segmented, or buttons.
+nonisolated struct ExtensionTabs: Codable, Hashable, Sendable {
+    var name: String
+    var value: String
+    var items: [ExtensionTab]
+    var action: ExtensionAction
+
+    init(name: String = "", value: String = "", items: [ExtensionTab] = [], action: ExtensionAction = ExtensionAction()) {
+        self.name = name
+        self.value = value
+        self.items = items
+        self.action = action
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case value
+        case items
+        case action
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        self.value = (try? c.decodeIfPresent(String.self, forKey: .value)) ?? ""
+        self.items = (try? c.decodeIfPresent([ExtensionTab].self, forKey: .items)) ?? []
+        self.action = (try? c.decodeIfPresent(ExtensionAction.self, forKey: .action)) ?? ExtensionAction()
+    }
+}
+
+nonisolated struct ExtensionTab: Codable, Hashable, Sendable {
+    var value: String
+    var title: String?
+    var badge: String?
+
+    init(value: String = "", title: String? = nil, badge: String? = nil) {
+        self.value = value
+        self.title = title
+        self.badge = badge
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case value
+        case title
+        case badge
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.value = (try? c.decodeIfPresent(String.self, forKey: .value)) ?? ""
+        self.title = try? c.decodeIfPresent(String.self, forKey: .title)
+        self.badge = try? c.decodeIfPresent(String.self, forKey: .badge)
+    }
+}
+
+/// A label and its value in a header (作者 · someone).
+nonisolated struct ExtensionFact: Codable, Hashable, Sendable {
+    var label: String?
+    var value: String
+    var icon: String?
+
+    init(label: String? = nil, value: String = "", icon: String? = nil) {
+        self.label = label
+        self.value = value
+        self.icon = icon
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case label
+        case value
+        case icon
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.label = try? c.decodeIfPresent(String.self, forKey: .label)
+        self.value = (try? c.decodeIfPresent(String.self, forKey: .value)) ?? ""
+        self.icon = try? c.decodeIfPresent(String.self, forKey: .icon)
+    }
+}
+
+nonisolated struct ExtensionCrumb: Codable, Hashable, Sendable {
+    var title: String
+    var action: ExtensionAction?
+
+    init(title: String = "", action: ExtensionAction? = nil) {
+        self.title = title
+        self.action = action
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case action
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.action = try? c.decodeIfPresent(ExtensionAction.self, forKey: .action)
+    }
+}
+
+/// A file (or a directory, kind dir) by its whole path from the root, / between names.
+nonisolated struct ExtensionTreeEntry: Codable, Hashable, Sendable {
+    var path: String
+    var kind: String?
+    var status: String?
+    var additions: Int?
+    var deletions: Int?
+    var comments: Int?
+    var badge: ExtensionBadge?
+
+    init(path: String = "", kind: String? = nil, status: String? = nil, additions: Int? = nil, deletions: Int? = nil, comments: Int? = nil, badge: ExtensionBadge? = nil) {
+        self.path = path
+        self.kind = kind
+        self.status = status
+        self.additions = additions
+        self.deletions = deletions
+        self.comments = comments
+        self.badge = badge
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case path
+        case kind
+        case status
+        case additions
+        case deletions
+        case comments
+        case badge
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.path = (try? c.decodeIfPresent(String.self, forKey: .path)) ?? ""
+        self.kind = try? c.decodeIfPresent(String.self, forKey: .kind)
+        self.status = try? c.decodeIfPresent(String.self, forKey: .status)
+        self.additions = try? c.decodeIfPresent(Int.self, forKey: .additions)
+        self.deletions = try? c.decodeIfPresent(Int.self, forKey: .deletions)
+        self.comments = try? c.decodeIfPresent(Int.self, forKey: .comments)
+        self.badge = try? c.decodeIfPresent(ExtensionBadge.self, forKey: .badge)
+    }
+}
+
+/// Values of TreeEntryKind.
+nonisolated enum ExtensionTreeEntryKind {
+    static let file = "file"
+    static let dir = "dir"
+    static let all = ["file", "dir"]
+}
+
+nonisolated struct ExtensionLineRange: Codable, Hashable, Sendable {
+    var start: Int
+    var end: Int
+
+    init(start: Int = 0, end: Int = 0) {
+        self.start = start
+        self.end = end
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case start
+        case end
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.start = (try? c.decodeIfPresent(Int.self, forKey: .start)) ?? 0
+        self.end = (try? c.decodeIfPresent(Int.self, forKey: .end)) ?? 0
+    }
+}
+
+/// A run of a diff: where it starts in the old and the new file, and its lines (' ' both, '+' new, '-' old, '\' a
+/// note such as no newline at end of file).
+nonisolated struct ExtensionHunk: Codable, Hashable, Sendable {
+    var header: String?
+    var oldStart: Int
+    var newStart: Int
+    var lines: [String]
+
+    init(header: String? = nil, oldStart: Int = 0, newStart: Int = 0, lines: [String] = []) {
+        self.header = header
+        self.oldStart = oldStart
+        self.newStart = newStart
+        self.lines = lines
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case header
+        case oldStart = "old_start"
+        case newStart = "new_start"
+        case lines
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.header = try? c.decodeIfPresent(String.self, forKey: .header)
+        self.oldStart = (try? c.decodeIfPresent(Int.self, forKey: .oldStart)) ?? 0
+        self.newStart = (try? c.decodeIfPresent(Int.self, forKey: .newStart)) ?? 0
+        self.lines = (try? c.decodeIfPresent([String].self, forKey: .lines)) ?? []
+    }
+}
+
+/// Inline comments at a line of a diff: line (and start_line for a range) on the side's numbering.
+nonisolated struct ExtensionThread: Codable, Hashable, Sendable {
+    var id: String?
+    var side: String
+    var line: Int
+    var startLine: Int?
+    var resolved: Bool?
+    var outdated: Bool?
+    var comments: [ExtensionComment]
+    var reply: ExtensionAction?
+
+    init(id: String? = nil, side: String = "", line: Int = 0, startLine: Int? = nil, resolved: Bool? = nil, outdated: Bool? = nil, comments: [ExtensionComment] = [], reply: ExtensionAction? = nil) {
+        self.id = id
+        self.side = side
+        self.line = line
+        self.startLine = startLine
+        self.resolved = resolved
+        self.outdated = outdated
+        self.comments = comments
+        self.reply = reply
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case side
+        case line
+        case startLine = "start_line"
+        case resolved
+        case outdated
+        case comments
+        case reply
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try? c.decodeIfPresent(String.self, forKey: .id)
+        self.side = (try? c.decodeIfPresent(String.self, forKey: .side)) ?? ""
+        self.line = (try? c.decodeIfPresent(Int.self, forKey: .line)) ?? 0
+        self.startLine = try? c.decodeIfPresent(Int.self, forKey: .startLine)
+        self.resolved = try? c.decodeIfPresent(Bool.self, forKey: .resolved)
+        self.outdated = try? c.decodeIfPresent(Bool.self, forKey: .outdated)
+        self.comments = (try? c.decodeIfPresent([ExtensionComment].self, forKey: .comments)) ?? []
+        self.reply = try? c.decodeIfPresent(ExtensionAction.self, forKey: .reply)
+    }
+}
+
+/// A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An event is
+/// a quiet line (merged, pushed two commits).
+nonisolated struct ExtensionComment: Codable, Hashable, Sendable {
+    var id: String?
+    var author: String
+    var avatar: ExtensionAvatar?
+    var at: String?
+    var body: String?
+    var badge: ExtensionBadge?
+    var event: Bool?
+
+    init(id: String? = nil, author: String = "", avatar: ExtensionAvatar? = nil, at: String? = nil, body: String? = nil, badge: ExtensionBadge? = nil, event: Bool? = nil) {
+        self.id = id
+        self.author = author
+        self.avatar = avatar
+        self.at = at
+        self.body = body
+        self.badge = badge
+        self.event = event
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case author
+        case avatar
+        case at
+        case body
+        case badge
+        case event
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try? c.decodeIfPresent(String.self, forKey: .id)
+        self.author = (try? c.decodeIfPresent(String.self, forKey: .author)) ?? ""
+        self.avatar = try? c.decodeIfPresent(ExtensionAvatar.self, forKey: .avatar)
+        self.at = try? c.decodeIfPresent(String.self, forKey: .at)
+        self.body = try? c.decodeIfPresent(String.self, forKey: .body)
+        self.badge = try? c.decodeIfPresent(ExtensionBadge.self, forKey: .badge)
+        self.event = try? c.decodeIfPresent(Bool.self, forKey: .event)
+    }
+}
+
+nonisolated struct ExtensionComposerButton: Codable, Hashable, Sendable {
+    var title: String
+    var action: ExtensionAction
+    var tone: String?
+
+    init(title: String = "", action: ExtensionAction = ExtensionAction(), tone: String? = nil) {
+        self.title = title
+        self.action = action
+        self.tone = tone
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case action
+        case tone
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.action = (try? c.decodeIfPresent(ExtensionAction.self, forKey: .action)) ?? ExtensionAction()
+        self.tone = try? c.decodeIfPresent(String.self, forKey: .tone)
+    }
+}
+
 nonisolated struct ExtensionAssistantView: Codable, Hashable, Sendable {
     var id: String
     var conversation: String
@@ -3505,8 +4189,11 @@ nonisolated struct ExtensionAction: Codable, Hashable, Sendable {
     /// Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls
     /// ui.action with id).
     var push: ExtensionPush?
+    /// Values the action carries (UI version 4): sent with the page's and the component's values, these winning on a
+    /// name they share. An older app sends none.
+    var values: [String: String]?
 
-    init(id: String = "", confirm: String? = nil, submit: Bool? = nil, reply: String? = nil, open: String? = nil, pop: Bool? = nil, push: ExtensionPush? = nil) {
+    init(id: String = "", confirm: String? = nil, submit: Bool? = nil, reply: String? = nil, open: String? = nil, pop: Bool? = nil, push: ExtensionPush? = nil, values: [String: String]? = nil) {
         self.id = id
         self.confirm = confirm
         self.submit = submit
@@ -3514,6 +4201,7 @@ nonisolated struct ExtensionAction: Codable, Hashable, Sendable {
         self.open = open
         self.pop = pop
         self.push = push
+        self.values = values
     }
 
     enum CodingKeys: String, CodingKey {
@@ -3524,6 +4212,7 @@ nonisolated struct ExtensionAction: Codable, Hashable, Sendable {
         case open
         case pop
         case push
+        case values
     }
 
     init(from decoder: Decoder) throws {
@@ -3535,6 +4224,7 @@ nonisolated struct ExtensionAction: Codable, Hashable, Sendable {
         self.open = try? c.decodeIfPresent(String.self, forKey: .open)
         self.pop = try? c.decodeIfPresent(Bool.self, forKey: .pop)
         self.push = try? c.decodeIfPresent(ExtensionPush.self, forKey: .push)
+        self.values = try? c.decodeIfPresent([String: String].self, forKey: .values)
     }
 }
 

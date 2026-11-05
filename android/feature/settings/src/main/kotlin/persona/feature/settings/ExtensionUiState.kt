@@ -66,7 +66,8 @@ internal object ExtensionViewText {
 
     /** Every field (and segmented choice) of the view by name, as the extension first sent it. */
     fun fields(view: ExtensionView?): Map<String, String> = view?.sections.orEmpty().flatMap { it.items }
-        .filter { (it.type == "field" || it.type == "segmented") && !it.name.isNullOrEmpty() }.associate { it.name!! to initial(it) }
+        .filter { (it.type == "field" || it.type == "segmented" || it.type == "composer") && !it.name.isNullOrEmpty() }.associate { it.name!! to initial(it) } +
+        listOfNotNull(view?.tabs?.takeIf { it.name.isNotEmpty() }?.let { it.name to it.value })
 
     /** A progress ratio, clamped to 0…1 (an extension's 1.2 is full). */
     fun ratio(item: ExtensionViewItem): Float = (item.ratio ?: 0.0).toFloat().coerceIn(0f, 1f)
@@ -91,7 +92,21 @@ internal object ExtensionViewText {
         "stat_grid" -> !item.stats.isNullOrEmpty()
         "segmented" -> !item.name.isNullOrEmpty() && item.action?.id?.isNotEmpty() == true && item.choices.orEmpty().size >= 2
         "html" -> !item.html.isNullOrBlank()
+        // UI version 4 (#2951)
+        "header" -> !item.title.isNullOrBlank()
+        "breadcrumb" -> !item.crumbs.isNullOrEmpty()
+        "file_tree" -> item.entries != null
+        "code" -> item.text != null
+        "diff" -> !item.path.isNullOrBlank()
+        "comment_thread" -> item.comments != null
+        "composer" -> !item.name.isNullOrEmpty() && item.buttons.orEmpty().any { it.action.id.isNotEmpty() }
         else -> false
+    }
+
+    /** The values an action sends: the fields' when it submits, then the component's own, then those it carries. */
+    fun sent(action: ExtensionViewAction, fields: Map<String, String>, own: Map<String, String>?): Map<String, String>? {
+        val out = (if (action.submit) fields else emptyMap()) + own.orEmpty() + action.values.orEmpty()
+        return out.takeIf { action.submit || own != null || !action.values.isNullOrEmpty() }
     }
 
     /**
@@ -331,7 +346,7 @@ internal class ExtensionViewModel(
         val before = state.value.values[name]
         if (before == value || state.value.busy) return ExtensionActionOutcome()
         edit(name, value)
-        val outcome = press(action, if (action.submit) state.value.values else mapOf(name to value))
+        val outcome = press(action, mapOf(name to value))
         if (outcome.error != null) mutable.update { s -> s.copy(values = s.values + (name to (before ?: ExtensionViewText.initial(item)))) }
         return outcome
     }
@@ -374,7 +389,7 @@ internal class ExtensionViewModel(
         return try {
             val current = state.value
             val result = api.uiAction(extension, ui, action.id, context, current.view?.state ?: initialState,
-                values ?: current.values.takeIf { action.submit })
+                ExtensionViewText.sent(action, current.values, values))
             when {
                 result.view != null -> mutable.update { it.copy(view = result.view, values = ExtensionViewText.fields(result.view), error = null, drawnAt = now()) }
                 result.toast == null && result.openUrl == null && result.push == null && !result.pop -> { mutable.update { it.copy(acting = null) }; load() }
@@ -457,3 +472,24 @@ data class ExtensionFailure(@param:StringRes val sentence: Int, val reason: Stri
 
 @Composable
 internal fun ExtensionFailure.text(): String = stringResource(sentence, reason)
+
+/** A tab was chosen (UI version 4): its action with `{name: value}` and the search's `q`; shown at once. */
+internal suspend fun ExtensionViewModel.tab(value: String): ExtensionActionOutcome {
+    val view = state.value.view ?: return ExtensionActionOutcome()
+    val tabs = view.tabs?.takeIf { it.name.isNotEmpty() && it.action.id.isNotEmpty() } ?: return ExtensionActionOutcome()
+    if ((state.value.values[tabs.name] ?: tabs.value) == value) return ExtensionActionOutcome()
+    val q = state.value.query ?: view.search?.value
+    val values = buildMap {
+        put(tabs.name, value)
+        q?.let { put("q", it) }
+        view.filter?.takeIf { it.name.isNotEmpty() }?.let { f -> (state.value.values[f.name] ?: f.value)?.let { put(f.name, it) } }
+    }
+    edit(tabs.name, value)
+    return quietly(tabs.action.id, values) { it }
+}
+
+/**
+ * A code hosting component's action (UI version 4) with its own values (a path, a line, the text typed): sent like a
+ * press, the action's own values on top.
+ */
+internal suspend fun ExtensionViewModel.act(action: ExtensionViewAction, values: Map<String, String>): ExtensionActionOutcome = press(action, values)

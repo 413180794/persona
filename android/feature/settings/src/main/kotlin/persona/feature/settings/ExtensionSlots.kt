@@ -69,6 +69,9 @@ internal object ExtensionSlotText {
         "doc" -> PhIcons.FileText
         "calendar" -> PhIcons.CalendarBlank
         "money" -> PhIcons.Coins
+        "branch", "merge" -> PhIcons.GitBranch
+        "code" -> PhIcons.Code
+        "pull_request" -> PhIcons.GitDiff
         else -> PhIcons.PuzzlePiece
     }
 
@@ -88,6 +91,9 @@ internal object ExtensionSlotText {
             ?: ExtensionUiPlace(extension = card.extension, id = id, title = card.title, placement = NavPage)
     }
 }
+
+/** A nav page's icon, for the app's rail (#2951). */
+fun extensionNavIcon(name: String?): PhIcon = ExtensionSlotText.icon(name)
 
 /** A badge for the settings tab: a count, or a dot when the extensions' badges are words. */
 data class SlotBadge(val count: Int = 0, val dot: Boolean = false)

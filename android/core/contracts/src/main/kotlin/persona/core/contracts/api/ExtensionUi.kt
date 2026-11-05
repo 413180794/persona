@@ -96,7 +96,26 @@ data class ExtensionView(
     val search: ExtensionViewSearch? = null,
     /** UI version 3: one of a few beside the search box; choosing sends its action with `{name: value}` (and `q`). */
     val filter: ExtensionViewFilter? = null,
+    /** UI version 4: tabs on top; choosing one sends its action with `{name: value}` (and `q`). */
+    val tabs: ExtensionViewTabs? = null,
+    /** UI version 4: `split` puts the sections of the `side` pane beside the rest where there is room, above them folded where not. */
+    val layout: String? = null,
 )
+
+/** A view's tabs (UI version 4): 2 to 8 [items], the chosen [value], sent under [name]. */
+@Serializable
+data class ExtensionViewTabs(
+    val name: String = "",
+    val value: String = "",
+    val items: List<ExtensionViewTab> = emptyList(),
+    val action: ExtensionViewAction = ExtensionViewAction(),
+)
+
+/** One tab: its [value], its [title] (the value when none) and a short [badge] (a count). */
+@Serializable
+data class ExtensionViewTab(val value: String = "", val title: String? = null, val badge: String? = null) {
+    val label: String get() = title?.takeIf { it.isNotBlank() } ?: value
+}
 
 /** A view's search box (UI version 3): [value] is what it holds now (the extension keeps it in its state). */
 @Serializable
@@ -123,6 +142,8 @@ data class ExtensionViewSection(
     val footer: String? = null,
     /** UI version 3: more items to load at the section's end. */
     val more: ExtensionViewMore? = null,
+    /** UI version 4: `side` in a split view (the file tree); else the main pane. */
+    val pane: String? = null,
     @Serializable(with = LenientItemsSerializer::class) val items: List<ExtensionViewItem> = emptyList(),
 )
 
@@ -204,7 +225,103 @@ data class ExtensionViewItem(
     val html: String? = null,
     /** html: its height, 160 to 640 (320 when none). */
     val height: Int? = null,
+    // UI version 4's code hosting components (#2951): header, breadcrumb, file_tree, code, diff, comment_thread, composer.
+    /** header: its state badges and a line of facts. */
+    val badges: List<ExtensionViewBadge>? = null,
+    val facts: List<ExtensionViewFact>? = null,
+    /** breadcrumb: the path's parts, every one but the last may be tapped. */
+    val crumbs: List<ExtensionViewCrumb>? = null,
+    /** file_tree: files (and directories) by their whole paths; [selected] is the one open. */
+    val entries: List<ExtensionTreeEntry>? = null,
+    val selected: String? = null,
+    /** file_tree: loads a directory given with nothing under it (`{path}`); diff: shows hidden lines (`{path, hunk, direction}`). */
+    val expand: ExtensionViewAction? = null,
+    /** code, diff: the file. */
+    val path: String? = null,
+    val language: String? = null,
+    /** code: the first line's number (1 when none), the lines to mark, and the rest to load (`{path, from}`) when [truncated]. */
+    @SerialName("start_line") val startLine: Int? = null,
+    val highlight: ExtensionLineRange? = null,
+    val truncated: Boolean? = null,
+    val load: ExtensionViewAction? = null,
+    /** diff */
+    @SerialName("old_path") val oldPath: String? = null,
+    /** diff: `added | modified | deleted | renamed`. */
+    val status: String? = null,
+    val additions: Int? = null,
+    val deletions: Int? = null,
+    val binary: Boolean? = null,
+    val collapsed: Boolean? = null,
+    val hunks: List<ExtensionDiffHunk>? = null,
+    val threads: List<ExtensionDiffThread>? = null,
+    /** diff: a new comment at a line (`{path, side, line, body}`). */
+    val comment: ExtensionViewAction? = null,
+    /** comment_thread */
+    val comments: List<ExtensionViewComment>? = null,
+    val resolved: Boolean? = null,
+    /** comment_thread: a reply (`{body}`). */
+    val reply: ExtensionViewAction? = null,
+    /** composer: 1 to 4 buttons, each sending the text typed under [name]. */
+    val buttons: List<ExtensionComposerButton>? = null,
 )
+
+@Serializable
+data class ExtensionViewFact(val label: String? = null, val value: String = "", val icon: String? = null)
+
+@Serializable
+data class ExtensionViewCrumb(val title: String = "", val action: ExtensionViewAction? = null)
+
+/** A file of a tree (a directory with [kind] `dir`): its whole path, its [status] in a change, its lines added and removed. */
+@Serializable
+data class ExtensionTreeEntry(
+    val path: String = "",
+    val kind: String? = null,
+    val status: String? = null,
+    val additions: Int? = null,
+    val deletions: Int? = null,
+    val comments: Int? = null,
+    val badge: ExtensionViewBadge? = null,
+)
+
+@Serializable
+data class ExtensionLineRange(val start: Int = 1, val end: Int = 1)
+
+/** A run of a diff: where it starts on each side, its lines each starting with ' ', '+', '-' or '\\'. */
+@Serializable
+data class ExtensionDiffHunk(
+    val header: String? = null,
+    @SerialName("old_start") val oldStart: Int = 0,
+    @SerialName("new_start") val newStart: Int = 0,
+    val lines: List<String> = emptyList(),
+)
+
+/** Comments at a line of a diff ([side] `old` or `new`). */
+@Serializable
+data class ExtensionDiffThread(
+    val id: String? = null,
+    val side: String = "new",
+    val line: Int = 0,
+    @SerialName("start_line") val startLine: Int? = null,
+    val resolved: Boolean = false,
+    val outdated: Boolean = false,
+    val comments: List<ExtensionViewComment> = emptyList(),
+    val reply: ExtensionViewAction? = null,
+)
+
+/** A comment: [at] is RFC 3339 (drawn relative), [body] the markdown subset; an [event] is a quiet line. */
+@Serializable
+data class ExtensionViewComment(
+    val id: String? = null,
+    val author: String = "",
+    val avatar: ExtensionViewAvatar? = null,
+    val at: String? = null,
+    val body: String? = null,
+    val badge: ExtensionViewBadge? = null,
+    val event: Boolean = false,
+)
+
+@Serializable
+data class ExtensionComposerButton(val title: String = "", val action: ExtensionViewAction = ExtensionViewAction(), val tone: String? = null)
 
 @Serializable
 data class ExtensionEmptyButton(val title: String = "", val action: ExtensionViewAction = ExtensionViewAction())
@@ -249,6 +366,8 @@ data class ExtensionViewAction(
     val confirm: String? = null,
     val submit: Boolean = false,
     val push: ExtensionViewPush? = null,
+    /** UI version 4: values it carries, sent with the fields' and the component's (these win on a name they share). */
+    val values: Map<String, String>? = null,
 )
 
 /**

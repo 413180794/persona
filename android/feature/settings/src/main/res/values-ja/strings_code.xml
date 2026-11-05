@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_ext_code_files">ファイル</string>
+    <string name="settings_ext_code_file">ファイル</string>
+    <string name="settings_ext_code_filter_files">ファイルを絞り込む</string>
+    <string name="settings_ext_code_no_files">ファイルなし</string>
+    <string name="settings_ext_code_no_match">一致するファイルなし</string>
+    <string name="settings_ext_code_show_all">全 %1$d 行を表示</string>
+    <string name="settings_ext_code_show_all_diff">差分をすべて表示</string>
+    <string name="settings_ext_code_load_rest">残りを読み込む</string>
+    <string name="settings_ext_code_load_diff">差分を読み込む</string>
+    <string name="settings_ext_code_no_changes">変更なし</string>
+    <string name="settings_ext_code_binary">バイナリファイルは表示されません</string>
+    <string name="settings_ext_code_renamed_from">%1$s から名前を変更</string>
+    <string name="settings_ext_code_expand_down">下の行を表示</string>
+    <string name="settings_ext_code_elsewhere">この差分にない行へのコメント</string>
+    <string name="settings_ext_code_comment">コメント</string>
+    <string name="settings_ext_code_comment_on">%1$d 行目にコメント</string>
+    <string name="settings_ext_code_cancel">キャンセル</string>
+    <string name="settings_ext_code_reply">返信…</string>
+    <string name="settings_ext_code_leave_comment">コメントを書く</string>
+    <string name="settings_ext_code_resolved">解決済み</string>
+    <string name="settings_ext_code_outdated">古い</string>
+    <string name="settings_ext_code_no_comments">まだコメントはありません</string>
+    <plurals name="settings_ext_code_lines">
+        <item quantity="other">%1$d 行</item>
+    </plurals>
+    <plurals name="settings_ext_code_hidden_lines">
+        <item quantity="other">%1$d 行が非表示</item>
+    </plurals>
+    <plurals name="settings_ext_code_comments">
+        <item quantity="other">%1$d 件のコメント</item>
+    </plurals>
+</resources>

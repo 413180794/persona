@@ -269,9 +269,11 @@ class HttpExtensionManagement internal constructor(
     companion object {
         /**
          * The UI version this app draws: 2 has charts, stat grids, segmented controls and `refresh_after`; 3 markdown,
-         * tables, empty and loading states, a row's picture, search, filter, 加载更多, push / pop and `ui.invalidate`.
+         * tables, empty and loading states, a row's picture, search, filter, 加载更多, push / pop and `ui.invalidate`; 4 the
+         * code hosting components (header, breadcrumb, file tree, code, diff, comments, composer), tabs, split views and
+         * an action's values.
          */
-        const val UI_VERSION = 3
+        const val UI_VERSION = 4
 
         /** This phone's time zone (IANA) and language (a BCP 47 tag), the platform and the UI version it draws. */
         fun deviceContext() = ExtensionUiContext(tz = java.util.TimeZone.getDefault().id, locale = java.util.Locale.getDefault().toLanguageTag(),

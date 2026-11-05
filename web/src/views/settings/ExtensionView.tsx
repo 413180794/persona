@@ -12,10 +12,11 @@ import { extIdOf } from "../../lib/extension-api";
 import { openLink } from "../../lib/links";
 import {
   actUI, fieldValues, isUnsupported, numberProblem, outcome, pushPage, refreshDelay, renderUI, submitValues, uiPlaces,
-  type UIAction, type UIContext, type UIItem, type UIMore, type UIPage, type UIPlace, type UIPush, type UIView,
+  type UIAction, type UIContext, type UIItem, type UIMore, type UIPage, type UIPlace, type UIPush, type UITabs, type UIView,
 } from "../../lib/extension-ui";
 import { navigate } from "../../lib/router";
 import { onHubEvent } from "../../lib/store";
+import { wideView } from "../../lib/code-view";
 import { ViewSections } from "../extensions/ViewBody";
 import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -111,11 +112,13 @@ export function pageHref(extension: string, ui: string, state?: string): string 
  * (`open`, the default for a card and a section inside another page). `state`: the first page's state (a full page opened by a push).
  */
 export function ExtensionUI({
-  extension, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource, pages, history: withHistory, state: firstState,
+  extension, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource, pages, history: withHistory, state: firstState, onWide,
 }: {
   extension: string; ui: string; context?: UIContext; embedded?: boolean; compact?: boolean; bare?: boolean; title?: string;
   onUnsupported?: () => void; onMissing?: () => void; onFailed?: (e: unknown) => void; revision?: string; onOpenSource?: () => void;
   pages?: "stack" | "open"; history?: boolean; state?: string;
+  /** The view drawn needs a wide page (UI version 4: split, code, diffs) or not. */
+  onWide?: (wide: boolean) => void;
 }) {
   const [stack, setStack] = useState<UIPage[]>(() => [{ ui, ...(firstState ? { state: firstState } : {}) }]);
   const top = stack[stack.length - 1];
@@ -125,7 +128,7 @@ export function ExtensionUI({
   const [loading, setLoading] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
-  const [confirming, setConfirming] = useState<{ action: UIAction; destructive: boolean } | null>(null);
+  const [confirming, setConfirming] = useState<{ action: UIAction; destructive: boolean; values?: Record<string, string> } | null>(null);
   const [drawnAt, setDrawnAt] = useState(0);
   const [query, setQuery] = useState(""); // the search box as typed
   const stateRef = useRef<string | undefined>(top.state);
@@ -176,6 +179,10 @@ export function ExtensionUI({
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
+  const wide = wideView(view);
+  useEffect(() => {
+    if (view) onWide?.(wide);
+  }, [wide, view, onWide]);
   useRefresh(refreshDelay(view), drawnAt, () => {
     if (!busy) load(true);
   });
@@ -221,7 +228,9 @@ export function ExtensionUI({
       push(action.push);
       return;
     }
-    const sent = action.submit ? { ...submitValues(view, values), ...extra } : extra;
+    // the fields' values (when it submits), what the component sends, then what the action carries (UI version 4)
+    const merged = { ...(action.submit ? submitValues(view, values) : {}), ...extra, ...action.values };
+    const sent = action.submit || extra || action.values ? merged : undefined;
     if (sent && view) {
       const bad = view.sections.flatMap((s) => s.items).find((it) => it.type === "field" && it.kind === "number" && it.name && numberProblem(sent[it.name] ?? ""));
       if (bad) {
@@ -251,6 +260,13 @@ export function ExtensionUI({
     if (action.confirm?.trim()) setConfirming({ action, destructive });
     else void run(action);
   };
+  // a code hosting component's action (UI version 4): with its own values (a path, a line, a comment), confirmed first
+  // when it says so
+  const act = (action: UIAction, extra?: Record<string, string>) => {
+    if (busy) return;
+    if (action.confirm?.trim()) setConfirming({ action, destructive: false, values: extra });
+    else void run(action, extra);
+  };
   // a segmented acts as soon as another choice is made: its own value goes along (the rest only when it submits)
   const choose = (item: UIItem, value: string) => {
     if (busy || !item.name || !item.action) return;
@@ -260,6 +276,7 @@ export function ExtensionUI({
   // the search box, the filter and 加载更多 send what the list is narrowed to: the text typed and the filter's choice
   const listValues = (): Record<string, string> => ({
     ...(view?.search ? { q: query } : {}),
+    ...(view?.tabs ? { [view.tabs.name]: values[view.tabs.name] ?? view.tabs.value } : {}),
     ...(view?.filter ? { [view.filter.name]: values[view.filter.name] ?? view.filter.value ?? view.filter.choices[0]?.value ?? "" } : {}),
   });
   const more = useCallback((m: UIMore) => {
@@ -305,6 +322,19 @@ export function ExtensionUI({
           <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">{heading}</h2>
           {loading && view && <Spinner />}
         </div>
+      )}
+      {view?.tabs && (
+        <Tabs
+          tabs={view.tabs}
+          value={values[view.tabs.name] ?? view.tabs.value}
+          busy={busy}
+          onChoose={(v) => {
+            const tb = view.tabs!;
+            if (busy || v === (values[tb.name] ?? tb.value)) return;
+            setValues((x) => ({ ...x, [tb.name]: v }));
+            void run(tb.action, { ...listValues(), [tb.name]: v });
+          }}
+        />
       )}
       {view && (view.search || view.filter) && (
         <div className={cx("flex items-center gap-2", compact ? "px-4" : "px-0")}>
@@ -383,6 +413,7 @@ export function ExtensionUI({
           onPress={press}
           onChoose={choose}
           onMore={more}
+          onAct={act}
         />
       )}
       {confirming && (
@@ -399,9 +430,9 @@ export function ExtensionUI({
               <Button
                 tone={confirming.destructive ? "danger" : "primary"}
                 onClick={() => {
-                  const a = confirming.action;
+                  const { action: a, values: v } = confirming;
                   setConfirming(null);
-                  void run(a);
+                  void run(a, v);
                 }}
               >
                 {t("settings-extensionview.ok")}
@@ -412,6 +443,36 @@ export function ExtensionUI({
           <p className="text-[13px] leading-relaxed break-words text-ink-2">{confirming.action.confirm}</p>
         </Dialog>
       )}
+    </div>
+  );
+}
+
+/** A view's tabs (UI version 4): a row of them under the title, the chosen one underlined; scrolls sideways when narrow. */
+function Tabs({ tabs, value, busy, onChoose }: { tabs: UITabs; value: string; busy: string; onChoose: (v: string) => void }) {
+  return (
+    <div role="tablist" aria-label={tabs.name} className="-mb-2 flex items-end gap-1 overflow-x-auto border-b border-line px-1">
+      {tabs.items.map((it) => {
+        const on = it.value === value;
+        return (
+          <button
+            key={it.value}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            disabled={!!busy && !on}
+            onClick={() => onChoose(it.value)}
+            className={cx(
+              "relative flex h-9 shrink-0 items-center gap-1.5 px-3 text-[13px] whitespace-nowrap transition-colors",
+              on ? "font-semibold text-ink" : "text-ink-3 enabled:hover:text-ink",
+            )}
+          >
+            {it.title || it.value}
+            {it.badge && <span className="rounded-full bg-field px-1.5 text-[11px] leading-[18px] font-medium text-ink-2 tabular-nums">{it.badge}</span>}
+            {busy === tabs.action.id && on && <Spinner size={10} />}
+            {on && <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-accent" />}
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -1,0 +1,18 @@
+/* Syntax colors of an extension's code and diffs (CodeViews.tsx): highlight.js classes in the page's tokens, the same
+   as a reply's code blocks (ui/stream/stream.css), so light and dark each have their own and a theme can override one
+   with --hl-*. */
+.code-hl .hljs-comment, .code-hl .hljs-quote { color: var(--hl-comment, var(--ink-3)); font-style: italic; }
+.code-hl :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag) { color: var(--hl-keyword, var(--term-magenta)); }
+.code-hl :is(.hljs-string, .hljs-regexp, .hljs-selector-attr, .hljs-template-variable) { color: var(--hl-string, var(--green)); }
+.code-hl :is(.hljs-number, .hljs-symbol, .hljs-bullet) { color: var(--hl-number, var(--orange)); }
+.code-hl :is(.hljs-title, .hljs-section) { color: var(--hl-title, var(--accent-ink)); }
+.code-hl :is(.hljs-type, .hljs-built_in, .hljs-selector-class, .hljs-selector-id) { color: var(--hl-type, var(--term-cyan)); }
+.code-hl :is(.hljs-attr, .hljs-attribute, .hljs-property, .hljs-params, .hljs-name, .hljs-tag) { color: var(--hl-attr, var(--ink-2)); }
+.code-hl :is(.hljs-meta, .hljs-link) { color: var(--hl-meta, var(--ink-3)); }
+.code-hl .hljs-emphasis { font-style: italic; }
+.code-hl .hljs-strong { font-weight: 600; }
+/* a long file or diff off screen costs no layout */
+.code-lazy { content-visibility: auto; contain-intrinsic-size: auto 600px; }
+/* a task list item (UI version 4's markdown): its checkbox is the marker */
+.prose-j li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.1em; }
+.prose-j li > input[type="checkbox"] { margin-right: .45em; vertical-align: -1px; }

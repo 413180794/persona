@@ -840,10 +840,17 @@ hub 先按 schema 查（`wire.Validate`，`sdk/go/wire`），再查 schema 说�
 | `table`（UI 版本 3） | `columns: [{title, align?}]`（1–8 列）、`rows: [[文字]]`（最多 100 行）、`caption?` | 表格 |
 | `empty`（UI 版本 3） | `title`、`detail?`、`icon?`、`button?: {title, action}` | 空状态 |
 | `loading`（UI 版本 3） | `title?` | 加载中 |
+| `header`（UI 版本 4） | `title`、`subtitle?`、`badges?`、`facts?: [{label?, value, icon?}]`、`avatar?` | 详情页的头，见下面「UI 版本 4」 |
+| `breadcrumb`（UI 版本 4） | `crumbs: [{title, action?}]` | 路径条 |
+| `file_tree`（UI 版本 4） | `entries: [{path, kind?, status?, additions?, deletions?, comments?, badge?}]`、`selected?`、`action?`、`expand?` | 文件树 |
+| `code`（UI 版本 4） | `text`、`path?`、`language?`、`start_line?`、`highlight?`、`truncated?`、`load?` | 一个文件的代码 |
+| `diff`（UI 版本 4） | `path`、`hunks`、`threads?`、`status?`、`additions?`、`deletions?`、`collapsed?`、`load?`、`expand?`、`comment?` | 一个文件的改动 |
+| `comment_thread`（UI 版本 4） | `comments: [{author, body?, at?, avatar?, badge?, event?}]`、`title?`、`resolved?`、`reply?` | 讨论 |
+| `composer`（UI 版本 4） | `name`、`buttons: [{title, action, tone?}]`、`placeholder?`、`value?` | 评论框 + 一排按钮 |
 
 每个条目都可以带 `key`（UI 版本 3，同一页里不重复）：重画时各端用它保持滚动位置、展开状态和动画。`row` 在 UI 版本 3 还可以带 `icon` / `avatar: {url?, text?}` / `thumbnail: {url, aspect?}` 之一。
 
-`tone` 只有 `neutral` / `positive` / `caution` / `danger`，App 换成自己的角色色；扩展不能给颜色、字号，图标只能从固定的图标集里挑。`action` 是 `{id, confirm?, submit?, push?}`：
+`tone` 只有 `neutral` / `positive` / `caution` / `danger`，App 换成自己的角色色；扩展不能给颜色、字号，图标只能从固定的图标集里挑。`action` 是 `{id, confirm?, submit?, push?, values?}`（`values` 是 UI 版本 4）：
 `confirm` 有字就先让用户确认，`submit` 时把这一页所有 `field` 的值作为 `values`（名字 → 字符串，开关是 `"true"` / `"false"`）带上。
 限制：一页最多 300 个条目，每个字符串最多 2000 个字符；`tone` 不在上面四个里、不是 https 的链接、认识的条目缺字段，整页拒绝（不画一半）。
 hub 不认识的 `type`（给更新的 hub 写的扩展）从 View 里拿掉、照常画其余的；App 画不了的（老 App）换成它画得了的或拿掉，见「UI 插槽」「兼容」和「UI 版本 3」「兼容」。
@@ -908,7 +915,7 @@ App 画一个插槽时在 `context` 里说清楚是给谁画、画在哪，hub �
 | --- | --- | --- |
 | `placement` | — | 这个贡献的插槽 |
 | `size` | 可选：`compact` / `full` | 不发就是插槽表里的尺寸；`compact` 是卡片，要紧凑（见「新条目」下面的限制） |
-| `ui_version` | App 画得了的 UI 版本：现在是 `2`；**老 App 不发，算 1** | `min(App 的, hub 的)`；扩展可以给老 App 画一个它画得了的版本（比如用 `progress` 代替 `chart`） |
+| `ui_version` | App 画得了的 UI 版本：现在是 `4`（网页、安卓；iOS 跟进中）；**老 App 不发，算 1** | `min(App 的, hub 的)`；扩展可以给老 App 画一个它画得了的版本（比如用 `progress` 代替 `chart`） |
 | `tz` | 用户的时区（IANA 名字，`Asia/Shanghai`） | 能加载的才转；没发或不对时是 hub 知道的用户时区（App 上报的、助手设置里的），都没有就空。「今天」按它算 |
 | `locale` | App 的语言（`zh-Hans-CN`） | 像个语言标签的才转，不然空 |
 | `platform` | `ios` / `mac` / `android` / `web` | 别的值丢掉 |
@@ -1050,7 +1057,7 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 
 ### 兼容
 
-**UI 版本**：1 是最早的八种条目、两个插槽；2 加了三个插槽、`chart` / `stat_grid` / `segmented`、`refresh_after`、上下文；3 见上面「UI 版本 3」。扩展点 `ui` 的版本跟着变（`initialize` 的 `hub.extension_points.ui`，现在是 3）。
+**UI 版本**：1 是最早的八种条目、两个插槽；2 加了三个插槽、`chart` / `stat_grid` / `segmented`、`refresh_after`、上下文；3 见上面「UI 版本 3」；4 见「UI 版本 4：代码托管」。扩展点 `ui` 的版本跟着变（`initialize` 的 `hub.extension_points.ui`，现在是 4）。
 
 - **老 App 遇到新插槽**：它只按 `placement` 问自己认识的插槽，看不到新插槽，不出错。`nav_page` 同时出现在扩展详情的 `ui` 里，老 App（网页）在设置 › 扩展 › 这个扩展 里照样能点进去；
   所以重要的内容放 `nav_page` 就行，`plugin_page` 可以不要。
@@ -1171,6 +1178,73 @@ Apple 的 35 页汇总（按文件名排序，裁去重复导航栏，完整原�
 各端共用内容和动作语义，不要求逐像素相同：Apple 用原生 Form 卡片和系统选择控件，搜索框在导航栏，筛选用 chip，宽表横向滚动；
 图表系列色和折线画法沿用各端设计系统。Android 的 Robolectric 网络图片占位不是线上图片加载失败。小组件尺寸的快照在这里仍是普通页面，
 不代表 #1862 的 WidgetKit 或表盘位置已完成。
+
+## UI 版本 4：代码托管（#2951）
+
+给 Codebase、GitHub 这类代码托管扩展用：两边底层 API 不同，但用同一套组件画**一样的页面、一样的流程**（仓库 → 代码 / 合并请求 → 详情 → 改动 → 评审）。
+App 在 `context.ui_version` 里发 `4`；`initialize` 的 `hub.extension_points.ui` 是 `4`。没有新的 feature：老 hub 把 App 的版本截到它自己的，扩展看得到。字段以 `schema/extension/view.schema.json` 为准。
+
+### 页面
+
+- **`View.tabs: {name, value, items: [{value, title?, badge?}]（2–8 个）, action}`**：标题下一排标签页（概览 / 改动 3 / 提交 / 检查）。选了马上调 `ui.action`，`values: {name: 值}`（带上搜索的 `q`、筛选的值）。
+  `name` 和字段、搜索、筛选的名字都不能重。
+- **`View.layout: "split"` + `Section.pane: "side"`**：宽屏（网页 ≥ 1024px、iPad、Mac）左边一栏放 `side` 的节（约 300pt，跟着页面停在视野里，自己滚动），其余在右边；
+  窄屏（手机）`side` 的节收成页面顶上一条「文件 · 12」，点开在原地展开，选了文件就收起。老 App 按顺序画全部节。
+- **`Action.values`**（最多 8 个）：动作自带的值。点了以后发给 `ui.action` 的 `values` 依次合并：页面字段（`submit` 时）→ 组件自己的值（下面每个组件写了发什么）→ 动作自带的（同名以它为准）。
+  一排提交、一串路径不用再把参数塞进 `id`。
+- **`Filter.choices`** 最多 100 个（原来 20；分支下拉）。老 App 收到的截到 20 个，选中的那个一定在。
+- 新图标：`branch`、`commit`、`code`、`pull_request`、`merge`、`file`（`nav_page` 能用前四个里的 `branch` / `code` / `pull_request` / `merge`）。
+
+### 组件
+
+- **`header`**：大标题、状态徽标（≤4，「开放」「已合并」「草稿」）、一行事实（≤8：作者、`源 → 目标`、改动量、时间；有 `icon` 时画图标、不画 `label`）。
+- **`breadcrumb`**：`repo / src / main.go`，除了最后一段都能点（各自的 `action`，一般带 `values: {path}`）。
+- **`file_tree`**：`entries` 是完整路径（≤3000），App 自己建树、单子目录链压成 `a/b/c`、目录可折叠，文件行带状态字母（A / M / D / R）、`+a −d`、评论数，`selected` 高亮；超过 12 个文件有筛选框。
+  点文件调 `action`，`values: {path}`；**没有 `action` 时**滚到页面上 `path` 相同的 `diff`（PR 的改动页用这种，纯客户端）。仓库浏览只给展开了的目录，没展开的写 `kind: dir`、不给子项，点了调 `expand`，`values: {path}`。
+- **`code`**：文件内容（≤ 20 万字）：行号、语法高亮（各端自己高亮；`language` 写 linguist 名或扩展名，不写按 `path` 猜）、不折行横向滚动、可复制，`highlight: {start, end}` 标出几行并滚到那里。
+  太长的扩展截断：`truncated: true` + `load`，点「加载其余部分」调 `load`，`values: {path, from: 下一行的行号}`，扩展回更长的 View。
+- **`diff`**：一个文件的改动。`hunks: [{header?, old_start, new_start, lines}]`，每行带前缀：` ` 两边都有、`+` 新增、`-` 删除、`\` 说明（`\ No newline at end of file`）；
+  一个 diff ≤ 2 万行，一个 View 里的代码（`code` 的文字加 `diff` 的行）≤ 4 MB。
+  - 看法（统一 / 并排）是 App 的偏好：宽屏能切并排，窄屏只有统一。行号两栏、增删底色、语法高亮（新旧两边各自高亮，跨行的注释不断）。
+  - `threads: [{id?, side: old | new, line, start_line?, resolved?, outdated?, comments, reply?}]`：行内评论串插在 `side` 那边第 `line` 行下面；`outdated` 或那行不在 diff 里的放在文件末尾。
+    回复调 `reply`，`values: {thread: id, body}`。
+  - 有 `comment` 时点行号（安卓点那一行）开评论框，提交调 `comment`，`values: {path, side, line, body}`（删除的行是 `old` 和旧行号，其余是 `new`）。
+  - 有 `expand` 时 hunk 之间、文件头尾有「展开」：调 `expand`，`values: {path, hunk: 第几个 hunk, direction: up | down}`，扩展回把那几行并进 hunk 的 View。
+  - `collapsed: true` 先收着（点文件头展开）；没有 `hunks` 又有 `load` 时显示「加载改动」，调 `load`，`values: {path}`：PR 的文件多时只给前几个文件的 `hunks`，其余按需加载。`binary: true` 只写「二进制文件」。
+- **`comment_thread`**：讨论 / 时间线：头像、作者、相对时间（`at` 是 RFC 3339）、Markdown 正文、徽标（「已批准」「请求修改」）；`event: true` 画成一行小字（「推送了 2 个提交」「合并了」）。
+  有 `reply` 时底下一个回复框，调 `reply`，`values: {body}`。≤200 条。
+- **`composer`**：多行输入（Markdown）加 1–4 个按钮（评论 / 批准 / 请求修改 / 合并），按哪个就把输入框的文字作为 `name` 发出（和页面的字段一起，按钮的 `submit` 照旧）；
+  按钮的 `tone`：`positive` 是主要动作的颜色、`danger` 是红色。卡片里不能有（同 `field`）。
+- Markdown（`markdown` 组件、评论的 `body`）从 UI 版本 4 起可以有 GFM 表格和任务列表（老 App 当文字）；图片、HTML 照旧不行。
+
+### 写操作
+
+评论、行内评论、批准 / 打回、合并都是扩展的 `ui.action`：扩展照旧走 hub 的确认（手机上点批准），按钮也可以带 `confirm` 先在本机问一句。组件只负责把输入和锚点交给扩展。
+
+### 推荐的页面骨架
+
+两个扩展照这个画（演示快照见下）：
+
+- **仓库列表**（`nav_page`）：搜索 + 筛选，`row`（仓库名、描述、语言），点进 push 仓库页。
+- **仓库页**：`tabs`（代码 / 合并请求 / 提交）。代码：`filter` 选分支、`layout: split`，左 `file_tree`（懒加载），右 `breadcrumb` + `code`（选中的文件，没选时 README 的 `markdown`）。
+- **合并请求详情**：`header` + `tabs`（概览 / 改动 N / 提交 / 检查）。概览：描述 `markdown`、详情 `row`（审阅人、标签、检查，点检查切到检查页）、`comment_thread`、`composer`；
+  改动：`layout: split`，左 `file_tree`（改动的文件，不带 `action`），右逐个文件的 `diff`；检查：`row`（状态徽标 + 耗时，点开日志链接）。
+
+演示快照（各端截图对照用，和组件展示的其余页一起）：`schema/extension/examples/showcase/code-overview.json`（合并请求概览）、`code-review.json`（改动，split）、
+`code-browse.json`（仓库浏览：split、分支筛选、懒加载目录）。网页在 `web/showcase.html`（`?only=code-review&width=1408&theme=dark`）看；安卓的 `ExtensionShowcaseShotsTest` 一起出图。
+
+### 入口
+
+`nav_page` 就是侧边栏的直接入口：网页侧边栏的扩展页（代码页自动用整页宽度），Mac / iPad 的侧边栏，安卓宽屏的导航栏（rail，排在四个标签下面，打开在设置的详情栏里）；手机上在「设置」首页顶上。
+
+### 兼容
+
+- **老 App（`ui_version` 3 及以下）**：hub 换成它画得了的（`extension.Fit`）：`tabs` → 开头一个 `segmented`（最多 5 个，选中的一定在，`badge` 接在标题后）；`layout`、`pane` 拿掉（按顺序画）；
+  `header` → 一段文字（标题、徽标、副标题）加每个事实一行 `row`；`breadcrumb` → 一行用「 / 」连起来的文字；`file_tree` → 每个文件一行 `row`（最多 60 行，其余写「还有 N 个文件」）；
+  `code` → 路径一行加最多 8 段 `code` 样式的文字（每段 ≤2000 字，按行切）；`diff` → 文件一行 `row`（状态徽标、`+a −d`）加 unified diff 的 `code` 文字和每串评论的第一条；
+  `comment_thread` → 每条一行 `row`（作者、时间、徽标）加 `markdown` 正文（版本 1、2 再变成文字；最多 30 条）；`composer` → 一个 `text` 字段加每个按钮一个 `submit` 的 `button`；
+  动作的 `values` 和新图标拿掉。换完超过 300 个条目的，截掉并在末尾写一句。老 App 点那些行、按钮时不带 `values`：要照顾老 App 的扩展看 `ui_version` 自己画（比如用 push + `state`）。
+- **扩展比 hub 新**：照旧（不认识的组件拿掉、记一行日志）。
 
 ## 系统级位置（#1858）
 

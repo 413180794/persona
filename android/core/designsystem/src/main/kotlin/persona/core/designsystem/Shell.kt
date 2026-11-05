@@ -8,6 +8,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -307,11 +309,19 @@ fun AppNavigation(items: List<NavItem>, selected: String?, onSelect: (String) ->
  * Labels stay visible.
  */
 @Composable
-fun AppNavigationRail(items: List<NavItem>, selected: String?, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+fun AppNavigationRail(items: List<NavItem>, selected: String?, onSelect: (String) -> Unit, modifier: Modifier = Modifier,
+                      extra: List<NavItem> = emptyList()) {
     val style = PersonaTheme.style
+    // [extra]: the extensions' own pages (nav_page, #2951) under the app's four, after a short rule; they scroll when
+    // there are more than the rail has room for
     val column: @Composable (Modifier) -> Unit = { inner ->
-        Column(inner, verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(inner.then(if (extra.isEmpty()) Modifier else Modifier.verticalScroll(rememberScrollState())),
+            verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             items.forEach { RailItem(it, it.key == selected, onSelect) }
+            if (extra.isNotEmpty()) {
+                Box(Modifier.padding(vertical = Tokens.Space.xs).width(Tokens.Space.xxl).height(Tokens.Space.xxs / 2).background(PersonaTheme.palette.line))
+                extra.forEach { RailItem(it, it.key == selected, onSelect) }
+            }
         }
     }
     // No panel of its own: the items sit on the window's one background, like everything beside them.

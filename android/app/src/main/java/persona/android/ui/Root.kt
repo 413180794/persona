@@ -571,7 +571,27 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             // The strips beside a cutout or a side navigation bar show it too.
             if (wide || sideRoom) PageBackdrop()
             Row(Modifier.fillMaxSize().windowInsetsPadding(sides)) {
-              if (expanded) AppNavigationRail(items, selected.name, onSelect = { key -> navigator.selectTab(AppTab.valueOf(key)) })
+              if (expanded) {
+                  // The extensions' own pages (nav_page) sit in the rail under the four tabs: one tap opens one beside
+                  // the settings list (#2951); on a phone they are at the top of 设置.
+                  val pages = slotsState?.navPages.orEmpty()
+                  val top = settingsStack.lastOrNull() as? ExtensionUiRoute
+                  val railKey = if (selected == AppTab.Settings && top != null && pages.any { it.extension == top.extensionId && it.id == top.uiId })
+                      extensionRailKey(top.extensionId, top.uiId) else selected.name
+                  AppNavigationRail(items, railKey, extra = pages.map { page ->
+                      NavItem(extensionRailKey(page.extension, page.id), page.title.ifBlank { page.id }, persona.feature.settings.extensionNavIcon(page.icon),
+                          badge = page.badge?.text?.trim()?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                          dot = page.badge?.text?.trim()?.let { it.isNotEmpty() && it.toIntOrNull() == null } == true)
+                  }, onSelect = { key ->
+                      val page = pages.firstOrNull { extensionRailKey(it.extension, it.id) == key }
+                      if (page == null) navigator.selectTab(AppTab.valueOf(key))
+                      else {
+                          navigator.selectTab(AppTab.Settings)
+                          while (settingsStack.size > 1) settingsStack.removeAt(settingsStack.lastIndex)
+                          settingsStack.add(ExtensionUiRoute(page.extension, page.id, page.title.ifBlank { page.id }))
+                      }
+                  })
+              }
               BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().onGloballyPositioned { paneAreaLeft = it.positionInWindow().x }) {
                 AppTab.entries.forEach { tab ->
                     if (tab == selected || tab in visited) key(tab) {
@@ -635,6 +655,9 @@ private fun paneMetadata(key: NavKey): Map<String, Any> = when (key) {
     })
     else -> if (isDetailDestination(key)) ListDetailSceneStrategy.detailPane() else emptyMap()
 }
+
+/** The rail's key for an extension's page: never one of the tabs' names. */
+private fun extensionRailKey(extension: String, ui: String) = "extension:$extension/$ui"
 
 /** Placed nowhere: measured and kept composed, never drawn and never hit. */
 private fun Modifier.unplaced(): Modifier = layout { measurable, constraints ->

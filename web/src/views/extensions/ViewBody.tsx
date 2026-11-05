@@ -1,7 +1,8 @@
 // How a View's sections look (docs/extensions.md「声明式 UI」「UI 插槽」), with the web's design system: every kind of
 // item — text, metric, progress, row (with an icon, a picture or a thumbnail), button, link, field, divider, chart,
-// stat_grid, segmented, and UI version 3's markdown, table, empty and loading — and a section's 加载更多. An unknown
-// item is left out. Shared by an extension's pages (settings/ExtensionView.tsx, which loads them and carries out what a
+// stat_grid, segmented, UI version 3's markdown, table, empty and loading, and UI version 4's code hosting components
+// (CodeViews.tsx: header, breadcrumb, file_tree, code, diff, comment_thread, composer) and split layout — and a
+// section's 加载更多. An unknown item is left out. Shared by an extension's pages (settings/ExtensionView.tsx, which loads them and carries out what a
 // press answers) and the assistant's cards (ui/AssistantCard.tsx, which says which actions may be pressed now, which
 // one was answered, and when the fields are locked). A tone becomes a role color.
 import { useEffect, useRef, useState } from "react";
@@ -17,6 +18,7 @@ import { t } from "../../i18n";
 import { Button, cx, EASE, Spinner } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Pill, Switch } from "../settings/SettingsParts";
+import { Breadcrumb, CodeView, CommentThread, Composer, DiffView, FileTree, Header } from "./CodeViews";
 
 const TEXT: Record<UITone, string> = { neutral: "text-ink", positive: "text-green", caution: "text-orange", danger: "text-red" };
 const BAR: Record<UITone, string> = { neutral: "bg-accent", positive: "bg-green", caution: "bg-orange", danger: "bg-red" };
@@ -41,6 +43,8 @@ export interface ViewHandlers {
   chosen?: string;
   /** The fields cannot be changed (an answered card: what was sent shows). */
   locked?: boolean;
+  /** UI version 4: an action sent with values of the component's own (a file's path, a line, a comment typed). */
+  onAct?: (a: UIAction, values?: Record<string, string>) => void;
 }
 
 /** Nothing acts (an assistant's card): what a press would do is never asked for. */
@@ -48,6 +52,7 @@ export const INERT: ViewHandlers = { values: {}, setValue: () => {}, busy: "", o
 
 /** A view's sections. `embedded`: inside another page (lighter); `compact`: a card (no chrome, small charts). */
 export function ViewSections({ view, embedded, compact, ...handlers }: ViewHandlers & { view: UIView; embedded?: boolean; compact?: boolean }) {
+  if (view.layout === "split" && !compact && !embedded) return <SplitSections view={view} {...handlers} />;
   return (
     <>
       {view.sections.map((s, i) => (
@@ -57,19 +62,106 @@ export function ViewSections({ view, embedded, compact, ...handlers }: ViewHandl
   );
 }
 
+/** Scrolls the page to a file's diff (a file tree without an action, on a page of diffs). */
+function revealDiff(path: string) {
+  const el = [...document.querySelectorAll<HTMLElement>("[data-diff-path]")].find((e) => e.dataset.diffPath === path);
+  el?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/** The side pane's title on a narrow screen: its first section's, with how many files its tree has. */
+function sideLabel(sections: UISection[]): string {
+  const title = sections.find((s) => s.title)?.title || t("extensions-viewbody.side_pane");
+  const files = sections.flatMap((s) => s.items).filter((it) => it.type === "file_tree").reduce((n, it) => n + (it.entries ?? []).filter((e) => e.kind !== "dir").length, 0);
+  return files ? `${title} · ${files}` : title;
+}
+
+/**
+ * A split view (UI version 4): wide, the side pane's sections in a column at the start that stays in view, the rest
+ * beside it; narrow, the side pane folds into a bar on top that opens in place (and closes once a file is picked).
+ */
+function SplitSections({ view, ...handlers }: ViewHandlers & { view: UIView }) {
+  const side = view.sections.filter((s) => s.pane === "side");
+  const main = view.sections.filter((s) => s.pane !== "side");
+  const [open, setOpen] = useState(false);
+  const label = sideLabel(side);
+  const picked = () => setOpen(false);
+  return (
+    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)] lg:items-start lg:gap-5">
+      {side.length > 0 && (
+        <aside aria-label={label} className="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:rounded-card lg:bg-surface lg:shadow-card">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className="flex h-10 w-full items-center gap-2 rounded-card bg-surface px-4 text-left text-[13px] font-medium whitespace-nowrap text-ink shadow-card transition-colors hover:bg-hover lg:hidden"
+          >
+            <Icon name="list" size={14} className="shrink-0 text-ink-3" />
+            <span className="min-w-0 flex-1 truncate">{label}</span>
+            <Icon name="chevronRight" size={12} stroke={2.2} className={cx("shrink-0 text-ink-3 transition-transform duration-150", open && "rotate-90")} />
+          </button>
+          <div className={cx(open ? "mt-2 block overflow-hidden rounded-card bg-surface shadow-card" : "hidden", "lg:mt-0 lg:block lg:rounded-none lg:bg-transparent lg:shadow-none")}>
+            {side.map((s, i) => (
+              <Section key={s.key ?? `side${i}`} section={s} bare onPicked={picked} {...handlers} />
+            ))}
+          </div>
+        </aside>
+      )}
+      <div className="flex min-w-0 flex-col gap-6">
+        {main.map((s, i) => (
+          <Section key={s.key ?? `main${i}`} section={s} {...handlers} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface SectionProps extends ViewHandlers {
   section: UISection;
   embedded?: boolean;
   compact?: boolean;
+  /** In a split view's side pane: no card of its own (the pane is one). */
+  bare?: boolean;
+  /** A file was picked in the side pane. */
+  onPicked?: () => void;
 }
 
-function Section({ section, embedded, compact, ...rest }: SectionProps) {
-  const bs = blocks(section.items ?? []);
+/** The components drawn as cards of their own, one under another, not inside the section's card. */
+const STANDALONE = new Set(["code", "diff", "comment_thread"]);
+
+function Section({ section, embedded, compact, bare, onPicked, ...rest }: SectionProps) {
+  const items = section.items ?? [];
   const more = section.more && rest.onMore ? section.more : undefined;
+  // runs of ordinary items share the section's card; a code, a diff or a thread is a card of its own
+  const runs: { standalone: boolean; items: UIItem[] }[] = [];
+  for (const it of items) {
+    const standalone = STANDALONE.has(it.type) && !compact && !bare;
+    const last = runs[runs.length - 1];
+    if (last && !standalone && !last.standalone) last.items.push(it);
+    else runs.push({ standalone, items: [it] });
+  }
+  if (!runs.length) runs.push({ standalone: false, items: [] });
   return (
-    <section style={{ animation: `fade-up 280ms ${EASE} both` }}>
-      {section.title && <h3 className={cx("font-medium text-ink-3", compact ? "px-4 pt-1 text-[11.5px]" : embedded ? "mb-1.5 px-1 text-[11.5px]" : "mb-1.5 px-1 text-[12px]")}>{section.title}</h3>}
-      <div className={cx("overflow-hidden", compact ? "" : embedded ? "rounded-control bg-inset shadow-hairline" : "rounded-card bg-surface shadow-card")}>
+    <section style={{ animation: `fade-up 280ms ${EASE} both` }} className={cx(runs.length > 1 && "flex flex-col gap-3", bare && "py-0.5")}>
+      {section.title && <h3 className={cx("font-medium text-ink-3", compact ? "px-4 pt-1 text-[11.5px]" : embedded ? "mb-1.5 px-1 text-[11.5px]" : bare ? "px-3 pt-2 pb-0.5 text-[11.5px]" : "mb-1.5 px-1 text-[12px]", runs.length > 1 && "-mb-1.5")}>{section.title}</h3>}
+      {runs.map((run, ri) =>
+        run.standalone ? (
+          <div key={run.items[0].key ?? `s${ri}`}>
+            <Item item={run.items[0]} compact={compact} onPicked={onPicked} {...rest} />
+          </div>
+        ) : (
+          <Run key={run.items[0]?.key ?? `r${ri}`} items={run.items} embedded={embedded} compact={compact} bare={bare} onPicked={onPicked} more={ri === runs.length - 1 ? more : undefined} {...rest} />
+        ),
+      )}
+      {more && runs[runs.length - 1].standalone && <MoreLine more={more} busy={rest.busy} onMore={rest.onMore!} divided={false} />}
+      {section.footer && <p className={cx("leading-relaxed text-ink-3", compact ? "px-4 pb-1 text-[11px]" : "mt-1.5 px-1 text-[11.5px]")}>{section.footer}</p>}
+    </section>
+  );
+}
+
+function Run({ items, embedded, compact, bare, onPicked, more, ...rest }: Omit<SectionProps, "section"> & { items: UIItem[]; more?: UIMore }) {
+  const bs = blocks(items);
+  return (
+      <div className={cx("overflow-hidden", compact || bare ? "" : embedded ? "rounded-control bg-inset shadow-hairline" : "rounded-card bg-surface shadow-card")}>
         {bs.map((b, i) => {
           // rows that follow each other read as a list, and charts one under another as separate charts: a hairline between them
           const prev = i > 0 && bs[i - 1].kind === "item" ? (bs[i - 1] as { item: UIItem }).item.type : "";
@@ -85,16 +177,15 @@ function Section({ section, embedded, compact, ...rest }: SectionProps) {
                 ))}
               </div>
             );
+          const divided = afterRow || (b.kind === "item" && i > 0 && b.item.type === "composer");
           return (
-            <div key={key} className={cx(afterRow && "border-t border-line")}>
-              <Item item={b.item} compact={compact} {...rest} />
+            <div key={key} className={cx(divided && "border-t border-line")}>
+              <Item item={b.item} compact={compact} onPicked={onPicked} {...rest} />
             </div>
           );
         })}
         {more && <MoreLine more={more} busy={rest.busy} onMore={rest.onMore!} divided={bs.length > 0} />}
       </div>
-      {section.footer && <p className={cx("leading-relaxed text-ink-3", compact ? "px-4 pb-1 text-[11px]" : "mt-1.5 px-1 text-[11.5px]")}>{section.footer}</p>}
-    </section>
   );
 }
 
@@ -167,9 +258,24 @@ function ItemButton({ item, busy, onPress, canPress, chosen }: { item: UIItem; b
   );
 }
 
-function Item({ item: it, compact, values, setValue, busy, onPress, onChoose, canPress, chosen, locked }: Omit<SectionProps, "section" | "embedded" | "onMore"> & { item: UIItem }) {
+function Item({ item: it, compact, values, setValue, busy, onPress, onChoose, canPress, chosen, locked, onAct, onPicked }: Omit<SectionProps, "section" | "embedded" | "onMore" | "bare"> & { item: UIItem }) {
   const pressable = (a: UIAction) => (canPress ? canPress(a) : true);
+  const code = { act: onAct ?? ((a: UIAction) => onPress(a)), busy, reveal: revealDiff };
   switch (it.type) {
+    case "header":
+      return <Header item={it} />;
+    case "breadcrumb":
+      return <Breadcrumb item={it} {...code} />;
+    case "file_tree":
+      return <FileTree item={it} onPicked={onPicked} {...code} />;
+    case "code":
+      return <CodeView item={it} {...code} />;
+    case "diff":
+      return <DiffView item={it} {...code} />;
+    case "comment_thread":
+      return <CommentThread item={it} {...code} />;
+    case "composer":
+      return locked ? null : <Composer item={it} {...code} />;
     case "chart":
       return <ExtensionChart item={it} compact={compact} />;
     case "markdown":
@@ -429,10 +535,11 @@ function Field({ item: it, value, locked, onChange }: { item: UIItem; value: str
 // ── UI version 3 ─────────────────────────────────────────
 
 /** A row's icon from the fixed vocabulary, as one of the web's icons. */
-const ROW_ICON: Record<RowIcon, IconName> = {
+export const ROW_ICON: Record<RowIcon, IconName> = {
   extension: "extension", plugin: "extension", chart: "chart", gauge: "gauge", list: "list", bell: "bell", doc: "read", calendar: "calendar",
   money: "money", person: "person", chat: "chat", mail: "mail", link: "link", folder: "folder", star: "star", check: "check",
-  warning: "warning", clock: "clock", tag: "tag", search: "search", settings: "gear",
+  warning: "warning", clock: "clock", tag: "tag", search: "search", settings: "gear", branch: "branch", commit: "commit", code: "code",
+  pull_request: "pullRequest", merge: "merge", file: "read",
 };
 
 /** What leads a row: its icon, a picture (its initials until it loads, or when it does not), or a thumbnail. */
@@ -465,10 +572,11 @@ function RowLead({ item }: { item: UIItem }) {
 }
 
 // markdown: only the safe part — headings, paragraphs, lists, emphasis, code, quotes and https links. No HTML, no
-// pictures, no tables (a table is its own item); anything else shows as its text.
-const MD_ALLOWED = ["p", "h1", "h2", "h3", "ul", "ol", "li", "strong", "em", "del", "code", "pre", "blockquote", "a", "br", "hr"];
+// pictures; anything else shows as its text.
+// UI version 4 adds GFM's tables and task lists (a pull request's description has them).
+const MD_ALLOWED = ["p", "h1", "h2", "h3", "ul", "ol", "li", "strong", "em", "del", "code", "pre", "blockquote", "a", "br", "hr", "table", "thead", "tbody", "tr", "th", "td", "input"];
 
-function ViewMarkdown({ text, compact }: { text: string; compact?: boolean }) {
+export function ViewMarkdown({ text, compact }: { text: string; compact?: boolean }) {
   return (
     <div className={cx("prose-j prose-sm px-4 py-2.5 select-text", compact && "prose-compact")}>
       <ReactMarkdown

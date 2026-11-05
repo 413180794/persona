@@ -11,7 +11,8 @@ import { Icon, type IconName } from "../../ui/icons";
 import { ExtensionUI } from "../settings/ExtensionView";
 
 /** A nav_page's icon from the fixed vocabulary, as one of the web's icons (unknown: the extension's). */
-const NAV_ICON: Record<UIIcon, IconName> = { extension: "extension", plugin: "extension", chart: "chart", gauge: "gauge", list: "list", bell: "bell", doc: "read", calendar: "calendar", money: "money" };
+const NAV_ICON: Record<UIIcon, IconName> = { extension: "extension", plugin: "extension", chart: "chart", gauge: "gauge", list: "list", bell: "bell", doc: "read", calendar: "calendar", money: "money",
+  branch: "branch", code: "code", pull_request: "pullRequest", merge: "merge" };
 export const navIcon = (icon?: string): IconName => NAV_ICON[uiIcon(icon)];
 
 /** A badge's tone as the sidebar's badge colors. */
@@ -27,6 +28,8 @@ export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension
   // a page a card or a section pushed opens here with the state it was pushed with (?state=)
   const state = useMemo(() => new URLSearchParams(location.search).get("state") ?? undefined, [extension, ui]);
   const title = place?.title || ui;
+  // a code review or a file browser (UI version 4) takes the page's whole width; everything else stays a column
+  const [wide, setWide] = useState(false);
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
@@ -40,8 +43,8 @@ export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension
         <IconButton icon="retry" label={t("extensions-extensionslots.redraw")} onClick={() => setN((x) => x + 1)} />
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-[880px] flex-col px-4 py-6 sm:px-8">
-          <ExtensionUI key={`${extension}/${ui}/${n}`} extension={extension} ui={ui} title={title} bare state={state} />
+        <div className={cx("mx-auto flex flex-col px-4 py-6 sm:px-8", wide ? "max-w-[1680px]" : "max-w-[880px]")}>
+          <ExtensionUI key={`${extension}/${ui}/${n}`} extension={extension} ui={ui} title={title} bare state={state} onWide={setWide} />
         </div>
       </div>
     </div>

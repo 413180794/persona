@@ -1161,8 +1161,8 @@ object ExtensionPlatform {
 
 /**
  * The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after
- * money). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its
- * old name).
+ * money; 4 for those after settings). Each app draws its own icon for the meaning; an unknown one draws as the
+ * default (extension; plugin is its old name).
  */
 object ExtensionNavIcon {
     const val PLUGIN = "plugin"
@@ -1186,7 +1186,13 @@ object ExtensionNavIcon {
     const val TAG = "tag"
     const val SEARCH = "search"
     const val SETTINGS = "settings"
-    val ALL = listOf("plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings")
+    const val BRANCH = "branch"
+    const val COMMIT = "commit"
+    const val CODE = "code"
+    const val PULL_REQUEST = "pull_request"
+    const val MERGE = "merge"
+    const val FILE = "file"
+    val ALL = listOf("plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file")
 }
 
 @Serializable
@@ -1203,6 +1209,8 @@ data class ExtensionView(
     @SerialName("refresh_after") val refreshAfter: Int? = null,
     val search: ExtensionSearch? = null,
     val filter: ExtensionFilter? = null,
+    val tabs: ExtensionTabs? = null,
+    val layout: String? = null,
     /**
      * Plain text for an assistant card: required by CheckAssistantView; not required for extension views.
      */
@@ -1220,6 +1228,7 @@ data class ExtensionSection(
     val footer: String? = null,
     val items: List<ExtensionComponent> = emptyList(),
     val more: ExtensionMore? = null,
+    val pane: String? = null,
 )
 
 /**
@@ -1233,8 +1242,8 @@ sealed interface ExtensionComponent {
     data class Unknown(override val type: String, val raw: JsonObject = JsonObject(emptyMap())) : ExtensionComponent
 
     companion object {
-        val TYPES = listOf("text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html")
-        val SINCE = mapOf("text" to 1, "metric" to 1, "progress" to 1, "row" to 1, "button" to 1, "link" to 1, "field" to 1, "divider" to 1, "chart" to 2, "stat_grid" to 2, "segmented" to 2, "markdown" to 3, "table" to 3, "empty" to 3, "loading" to 3, "html" to 4)
+        val TYPES = listOf("text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer")
+        val SINCE = mapOf("text" to 1, "metric" to 1, "progress" to 1, "row" to 1, "button" to 1, "link" to 1, "field" to 1, "divider" to 1, "chart" to 2, "stat_grid" to 2, "segmented" to 2, "markdown" to 3, "table" to 3, "empty" to 3, "loading" to 3, "html" to 4, "header" to 4, "breadcrumb" to 4, "file_tree" to 4, "code" to 4, "diff" to 4, "comment_thread" to 4, "composer" to 4)
     }
 }
 
@@ -1264,6 +1273,13 @@ object ExtensionComponentSerializer : KSerializer<ExtensionComponent> {
                 "empty" -> input.json.decodeFromJsonElement(ExtensionEmptyComponent.serializer(), obj)
                 "loading" -> input.json.decodeFromJsonElement(ExtensionLoadingComponent.serializer(), obj)
                 "html" -> input.json.decodeFromJsonElement(ExtensionHtmlComponent.serializer(), obj)
+                "header" -> input.json.decodeFromJsonElement(ExtensionHeaderComponent.serializer(), obj)
+                "breadcrumb" -> input.json.decodeFromJsonElement(ExtensionBreadcrumbComponent.serializer(), obj)
+                "file_tree" -> input.json.decodeFromJsonElement(ExtensionFileTreeComponent.serializer(), obj)
+                "code" -> input.json.decodeFromJsonElement(ExtensionCodeComponent.serializer(), obj)
+                "diff" -> input.json.decodeFromJsonElement(ExtensionDiffComponent.serializer(), obj)
+                "comment_thread" -> input.json.decodeFromJsonElement(ExtensionCommentThreadComponent.serializer(), obj)
+                "composer" -> input.json.decodeFromJsonElement(ExtensionComposerComponent.serializer(), obj)
                 else -> ExtensionComponent.Unknown(tag, obj)
             }
         } catch (_: SerializationException) {
@@ -1292,6 +1308,13 @@ object ExtensionComponentSerializer : KSerializer<ExtensionComponent> {
             is ExtensionEmptyComponent -> output.json.encodeToJsonElement(ExtensionEmptyComponent.serializer(), value) as JsonObject
             is ExtensionLoadingComponent -> output.json.encodeToJsonElement(ExtensionLoadingComponent.serializer(), value) as JsonObject
             is ExtensionHtmlComponent -> output.json.encodeToJsonElement(ExtensionHtmlComponent.serializer(), value) as JsonObject
+            is ExtensionHeaderComponent -> output.json.encodeToJsonElement(ExtensionHeaderComponent.serializer(), value) as JsonObject
+            is ExtensionBreadcrumbComponent -> output.json.encodeToJsonElement(ExtensionBreadcrumbComponent.serializer(), value) as JsonObject
+            is ExtensionFileTreeComponent -> output.json.encodeToJsonElement(ExtensionFileTreeComponent.serializer(), value) as JsonObject
+            is ExtensionCodeComponent -> output.json.encodeToJsonElement(ExtensionCodeComponent.serializer(), value) as JsonObject
+            is ExtensionDiffComponent -> output.json.encodeToJsonElement(ExtensionDiffComponent.serializer(), value) as JsonObject
+            is ExtensionCommentThreadComponent -> output.json.encodeToJsonElement(ExtensionCommentThreadComponent.serializer(), value) as JsonObject
+            is ExtensionComposerComponent -> output.json.encodeToJsonElement(ExtensionComposerComponent.serializer(), value) as JsonObject
             is ExtensionComponent.Unknown -> value.raw
         }
         output.encodeJsonElement(JsonObject(obj + ("type" to JsonPrimitive(value.type))))
@@ -1502,6 +1525,269 @@ data class ExtensionHtmlComponent(
     val title: String? = null,
 ) : ExtensionComponent
 
+/**
+ * A detail page's head: a big title, state badges, a line of facts (author, branches, time, size). An older app gets
+ * a text and a row per fact.
+ */
+@Serializable
+data class ExtensionHeaderComponent(
+    override val type: String = "header",
+    val key: String? = null,
+    val title: String = "",
+    val subtitle: String? = null,
+    val badges: List<ExtensionBadge>? = null,
+    val facts: List<ExtensionFact>? = null,
+    val avatar: ExtensionAvatar? = null,
+) : ExtensionComponent
+
+/**
+ * A path (repo / src / main.go): every crumb but the last may be tapped. An older app gets one text.
+ */
+@Serializable
+data class ExtensionBreadcrumbComponent(
+    override val type: String = "breadcrumb",
+    val key: String? = null,
+    val crumbs: List<ExtensionCrumb> = emptyList(),
+) : ExtensionComponent
+
+/**
+ * Files as a tree the app builds from their paths (a directory with one child folds into a/b/c). action opens a file
+ * (values {path}); expand loads a directory given with no entries under it (values {path}). An older app gets a row
+ * per entry.
+ */
+@Serializable
+data class ExtensionFileTreeComponent(
+    override val type: String = "file_tree",
+    val key: String? = null,
+    val entries: List<ExtensionTreeEntry> = emptyList(),
+    val selected: String? = null,
+    val action: ExtensionAction? = null,
+    val expand: ExtensionAction? = null,
+) : ExtensionComponent
+
+/**
+ * A file's content: line numbers, the app's own syntax highlighting (language, else guessed from path), no wrapping.
+ * truncated with load: the rest comes from load (values {path, from: the next line}). An older app gets a code block.
+ */
+@Serializable
+data class ExtensionCodeComponent(
+    override val type: String = "code",
+    val key: String? = null,
+    val path: String? = null,
+    val language: String? = null,
+    val text: String = "",
+    @SerialName("start_line") val startLine: Int? = null,
+    val highlight: ExtensionLineRange? = null,
+    val truncated: Boolean? = null,
+    val load: ExtensionAction? = null,
+) : ExtensionComponent
+
+/**
+ * One file's diff: hunks of lines each starting with ' ', '+', '-' or '\'; unified or side by side is the app's
+ * choice. threads are inline comments at their lines; comment adds one (values {path, side, line, start_line?,
+ * body}); expand shows hidden lines between hunks (values {path, hunk, direction: up, down or all}); collapsed, or
+ * without hunks, it shows a button calling load (values {path}). An older app gets a code block.
+ */
+@Serializable
+data class ExtensionDiffComponent(
+    override val type: String = "diff",
+    val key: String? = null,
+    val path: String = "",
+    @SerialName("old_path") val oldPath: String? = null,
+    val status: String? = null,
+    val language: String? = null,
+    val additions: Int? = null,
+    val deletions: Int? = null,
+    val binary: Boolean? = null,
+    val collapsed: Boolean? = null,
+    val hunks: List<ExtensionHunk>? = null,
+    val threads: List<ExtensionThread>? = null,
+    val load: ExtensionAction? = null,
+    val expand: ExtensionAction? = null,
+    val comment: ExtensionAction? = null,
+) : ExtensionComponent
+
+/**
+ * A discussion: comments in order (an event is drawn as a quiet line), and a reply box when reply is set (values
+ * {body}). An older app gets a row and a text per comment.
+ */
+@Serializable
+data class ExtensionCommentThreadComponent(
+    override val type: String = "comment_thread",
+    val key: String? = null,
+    val title: String? = null,
+    val comments: List<ExtensionComment> = emptyList(),
+    val resolved: Boolean? = null,
+    val reply: ExtensionAction? = null,
+) : ExtensionComponent
+
+/**
+ * A multi-line input (Markdown) with a few buttons (comment, approve, request changes, merge): the one tapped sends
+ * the text as name, with the page's fields. An older app gets a field and a button each.
+ */
+@Serializable
+data class ExtensionComposerComponent(
+    override val type: String = "composer",
+    val key: String? = null,
+    val name: String = "",
+    val placeholder: String? = null,
+    val value: String? = null,
+    val buttons: List<ExtensionComposerButton> = emptyList(),
+) : ExtensionComponent
+
+/**
+ * stack: sections one under another. split: on a wide screen the side pane's sections in a column at the start, the
+ * rest beside it, each scrolling on its own; on a narrow one the side pane folds into a bar on top that opens as a
+ * sheet.
+ */
+object ExtensionLayout {
+    const val STACK = "stack"
+    const val SPLIT = "split"
+    val ALL = listOf("stack", "split")
+}
+
+/**
+ * Where a section of a split view goes.
+ */
+object ExtensionPane {
+    const val MAIN = "main"
+    const val SIDE = "side"
+    val ALL = listOf("main", "side")
+}
+
+/**
+ * Values of FileStatus.
+ */
+object ExtensionFileStatus {
+    const val ADDED = "added"
+    const val MODIFIED = "modified"
+    const val DELETED = "deleted"
+    const val RENAMED = "renamed"
+    val ALL = listOf("added", "modified", "deleted", "renamed")
+}
+
+/**
+ * Values of DiffSide.
+ */
+object ExtensionDiffSide {
+    const val OLD = "old"
+    const val NEW = "new"
+    val ALL = listOf("old", "new")
+}
+
+/**
+ * Tabs on top of the page (UI version 4): choosing calls ui.action with action and values {name: the value} (and the
+ * search's q). An older app gets a segmented, or buttons.
+ */
+@Serializable
+data class ExtensionTabs(
+    val name: String = "",
+    val value: String = "",
+    val items: List<ExtensionTab> = emptyList(),
+    val action: ExtensionAction = ExtensionAction(),
+)
+
+@Serializable
+data class ExtensionTab(
+    val value: String = "",
+    val title: String? = null,
+    val badge: String? = null,
+)
+
+/**
+ * A label and its value in a header (作者 · someone).
+ */
+@Serializable
+data class ExtensionFact(
+    val label: String? = null,
+    val value: String = "",
+    val icon: String? = null,
+)
+
+@Serializable
+data class ExtensionCrumb(
+    val title: String = "",
+    val action: ExtensionAction? = null,
+)
+
+/**
+ * A file (or a directory, kind dir) by its whole path from the root, / between names.
+ */
+@Serializable
+data class ExtensionTreeEntry(
+    val path: String = "",
+    val kind: String? = null,
+    val status: String? = null,
+    val additions: Int? = null,
+    val deletions: Int? = null,
+    val comments: Int? = null,
+    val badge: ExtensionBadge? = null,
+)
+
+/**
+ * Values of TreeEntryKind.
+ */
+object ExtensionTreeEntryKind {
+    const val FILE = "file"
+    const val DIR = "dir"
+    val ALL = listOf("file", "dir")
+}
+
+@Serializable
+data class ExtensionLineRange(
+    val start: Int = 0,
+    val end: Int = 0,
+)
+
+/**
+ * A run of a diff: where it starts in the old and the new file, and its lines (' ' both, '+' new, '-' old, '\' a note
+ * such as no newline at end of file).
+ */
+@Serializable
+data class ExtensionHunk(
+    val header: String? = null,
+    @SerialName("old_start") val oldStart: Int = 0,
+    @SerialName("new_start") val newStart: Int = 0,
+    val lines: List<String> = emptyList(),
+)
+
+/**
+ * Inline comments at a line of a diff: line (and start_line for a range) on the side's numbering.
+ */
+@Serializable
+data class ExtensionThread(
+    val id: String? = null,
+    val side: String = "",
+    val line: Int = 0,
+    @SerialName("start_line") val startLine: Int? = null,
+    val resolved: Boolean? = null,
+    val outdated: Boolean? = null,
+    val comments: List<ExtensionComment> = emptyList(),
+    val reply: ExtensionAction? = null,
+)
+
+/**
+ * A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An event is
+ * a quiet line (merged, pushed two commits).
+ */
+@Serializable
+data class ExtensionComment(
+    val id: String? = null,
+    val author: String = "",
+    val avatar: ExtensionAvatar? = null,
+    val at: String? = null,
+    val body: String? = null,
+    val badge: ExtensionBadge? = null,
+    val event: Boolean? = null,
+)
+
+@Serializable
+data class ExtensionComposerButton(
+    val title: String = "",
+    val action: ExtensionAction = ExtensionAction(),
+    val tone: String? = null,
+)
+
 @Serializable
 data class ExtensionAssistantView(
     val id: String = "",
@@ -1693,6 +1979,11 @@ data class ExtensionAction(
      * ui.action with id).
      */
     val push: ExtensionPush? = null,
+    /**
+     * Values the action carries (UI version 4): sent with the page's and the component's values, these winning on a
+     * name they share. An older app sends none.
+     */
+    val values: Map<String, String>? = null,
 )
 
 /**
@@ -2118,7 +2409,17 @@ data class ExtensionMessagingReaction(
 )
 
 /**
- * A small line under a message''s on a message, in its long-press menu: POST messages/{id}/actions/{id}.
+ * A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
+ */
+@Serializable
+data class ExtensionMessagingDecoration(
+    val text: String = "",
+    val icon: String? = null,
+    val tone: String? = null,
+)
+
+/**
+ * An action of the extension's on a message, in its long-press menu: POST messages/{id}/actions/{id}.
  */
 @Serializable
 data class ExtensionMessagingAction(

@@ -50,6 +50,12 @@ internal class ExtensionViewHandle(
     val search: (String) -> Unit = {},
     val filter: (String) -> Unit = {},
     val more: (Int, ExtensionViewSection) -> Unit = { _, _ -> },
+    /** UI version 4: a code hosting component's action, with its own values (a path, a line, the text typed). */
+    val act: (ExtensionViewAction, Map<String, String>) -> Unit = { _, _ -> },
+    /** UI version 4: a tab was chosen. */
+    val tab: (String) -> Unit = {},
+    /** UI version 4: a file tree without an action shows that file's diff on the page. */
+    val reveal: (String) -> Unit = {},
 )
 
 /**
@@ -67,6 +73,7 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
     val res = LocalResources.current
     val state by model.state.collectAsState()
     var confirming by remember(model) { mutableStateOf<Pair<ExtensionViewItem, ExtensionViewAction>?>(null) }
+    var confirmingValues by remember(model) { mutableStateOf<Map<String, String>?>(null) }
     var choosing by remember(model) { mutableStateOf<ExtensionViewItem?>(null) }
     val routes by rememberUpdatedState(appLink)
     val push by rememberUpdatedState(onPush)
@@ -79,7 +86,7 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
         outcome.push?.let(push)
         if (outcome.pop) pop()
     }
-    fun run(action: ExtensionViewAction) = scope.launch { show(model.press(action)) }
+    fun run(action: ExtensionViewAction, values: Map<String, String>? = null) = scope.launch { show(model.press(action, values)) }
     val handle = remember(model) {
         ExtensionViewHandle(
             press = { item, action -> if (!action.confirm.isNullOrBlank()) confirming = item to action else run(action) },
@@ -90,11 +97,15 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
             search = { query -> scope.launch { show(model.search(query)) } },
             filter = { value -> scope.launch { show(model.filter(value)) } },
             more = { index, section -> scope.launch { show(model.more(index, section)) } },
+            act = { action, values ->
+                if (!action.confirm.isNullOrBlank()) { confirmingValues = values; confirming = ExtensionViewItem(type = "button") to action } else run(action, values)
+            },
+            tab = { value -> scope.launch { show(model.tab(value)) } },
         )
     }
     confirming?.let { (item, action) ->
         JDialog({ confirming = null }, title = ExtensionViewText.confirmTitle(res, item), text = action.confirm,
-            confirm = ExtensionViewText.confirmLabel(res, item) to { confirming = null; run(action) },
+            confirm = ExtensionViewText.confirmLabel(res, item) to { confirming = null; run(action, confirmingValues); confirmingValues = null },
             destructive = item.role == "destructive")
     }
     choosing?.let { item ->
@@ -113,10 +124,19 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
  */
 internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewState, handle: ExtensionViewHandle, showTitles: Boolean = true) {
     val view = state.view ?: return
+    view.tabs?.takeIf { it.items.size >= 2 && it.name.isNotEmpty() }?.let { tabs ->
+        item("$key-tabs") { ExtensionTabs(tabs, state.values[tabs.name] ?: tabs.value, state, handle, Modifier.padding(bottom = Tokens.Space.s)) }
+    }
     if (view.search != null || view.filter != null) item("$key-search") {
         ExtensionSearchBar(view, state, handle, Modifier.padding(bottom = Tokens.Space.s))
     }
+    // a split view (UI version 4): a phone has no room beside the code, so the side pane (the file tree) folds into a
+    // bar on top that opens in place, and closes once a file is picked
+    val split = view.layout == "split"
+    val side = if (split) view.sections.filter { it.pane == "side" } else emptyList()
+    if (side.isNotEmpty()) item("$key-side") { SidePane(side, state, handle) }
     view.sections.forEachIndexed { s, section ->
+        if (section in side) return@forEachIndexed
         val title = section.title?.takeIf { it.isNotBlank() }
         if (title != null && showTitles) item("$key-s$s-title") { JSectionHeader(title) }
         else if (s > 0) item("$key-s$s-gap") { Spacer(Modifier.padding(top = Tokens.Space.l)) }
@@ -252,6 +272,13 @@ internal fun StandaloneItem(item: ExtensionViewItem, state: ExtensionViewState, 
             })
         "loading" -> JLoading(top, item.title?.takeIf { it.isNotBlank() })
         "html" -> LocalViewHtml.current?.invoke(item, top)
+        "header" -> CodeHeader(item, top)
+        "breadcrumb" -> CodeBreadcrumb(item, state, handle, top)
+        "file_tree" -> CodeFileTree(item, state, handle, top)
+        "code" -> CodeFile(item, state, handle, top)
+        "diff" -> CodeDiff(item, state, handle, top)
+        "comment_thread" -> CodeCommentThread(item, state, handle, top)
+        "composer" -> CodeComposer(item, state, handle, top)
     }
 }
 

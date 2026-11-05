@@ -30,7 +30,7 @@ func TestShowcaseIsDrawable(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, version := range []int{2, 3} {
+		for _, version := range []int{2, 3, 4} {
 			var v View
 			if err := json.Unmarshal(raw, &v); err != nil {
 				t.Fatalf("%s: %v", name, err)
@@ -56,7 +56,7 @@ func TestShowcaseIsDrawable(t *testing.T) {
 			if err != nil {
 				t.Errorf("%s for UI version %d: %v", name, version, err)
 			}
-			if version == 3 && len(dropped) > 0 {
+			if version >= 3 && len(dropped) > 0 {
 				t.Errorf("%s: the hub drops %v for an app of UI version 3", name, dropped)
 			}
 		}

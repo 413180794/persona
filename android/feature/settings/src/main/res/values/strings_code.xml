@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UI version 4's code hosting components (ExtensionCodeViews.kt, #2951). -->
+<resources>
+    <string name="settings_ext_code_files">Files</string>
+    <string name="settings_ext_code_file">File</string>
+    <string name="settings_ext_code_filter_files">Filter files</string>
+    <string name="settings_ext_code_no_files">No files</string>
+    <string name="settings_ext_code_no_match">No matching files</string>
+    <string name="settings_ext_code_show_all">Show all %1$d lines</string>
+    <string name="settings_ext_code_show_all_diff">Show the whole diff</string>
+    <string name="settings_ext_code_load_rest">Load the rest</string>
+    <string name="settings_ext_code_load_diff">Load diff</string>
+    <string name="settings_ext_code_no_changes">No changes</string>
+    <string name="settings_ext_code_binary">Binary file not shown</string>
+    <string name="settings_ext_code_renamed_from">Renamed from %1$s</string>
+    <string name="settings_ext_code_expand_down">Show lines below</string>
+    <string name="settings_ext_code_elsewhere">Comments on lines not in this diff</string>
+    <string name="settings_ext_code_comment">Comment</string>
+    <string name="settings_ext_code_comment_on">Comment on line %1$d</string>
+    <string name="settings_ext_code_cancel">Cancel</string>
+    <string name="settings_ext_code_reply">Reply…</string>
+    <string name="settings_ext_code_leave_comment">Leave a comment</string>
+    <string name="settings_ext_code_resolved">Resolved</string>
+    <string name="settings_ext_code_outdated">Outdated</string>
+    <string name="settings_ext_code_no_comments">No comments yet</string>
+    <plurals name="settings_ext_code_lines">
+        <item quantity="one">%1$d line</item>
+        <item quantity="other">%1$d lines</item>
+    </plurals>
+    <plurals name="settings_ext_code_hidden_lines">
+        <item quantity="one">%1$d hidden line</item>
+        <item quantity="other">%1$d hidden lines</item>
+    </plurals>
+    <plurals name="settings_ext_code_comments">
+        <item quantity="one">%1$d comment</item>
+        <item quantity="other">%1$d comments</item>
+    </plurals>
+</resources>

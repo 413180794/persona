@@ -2,6 +2,15 @@ package persona.feature.settings
 
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,6 +74,12 @@ internal object ExtensionIcons {
         "tag" -> PhIcons.Hash
         "search" -> PhIcons.MagnifyingGlass
         "settings" -> PhIcons.Gear
+        // UI version 4
+        "branch", "merge" -> PhIcons.GitBranch
+        "commit" -> PhIcons.GitDiff
+        "code" -> PhIcons.Code
+        "pull_request" -> PhIcons.GitDiff
+        "file" -> PhIcons.File
         else -> PhIcons.PuzzlePiece
     }
 }
@@ -231,4 +246,54 @@ internal fun ExtensionMore(index: Int, section: ExtensionViewSection, state: Ext
 
         trailing = if (state.loadingMore == index) ({ JSpinner() }) else null, chevron = false,
         enabled = state.loadingMore == null, onClick = { handle.more(index, section) })
+}
+
+/**
+ * A view's tabs (UI version 4): a row of them on top, the chosen one bold and underlined, a short count beside a
+ * title; sideways when they do not fit.
+ */
+@Composable
+internal fun ExtensionTabs(tabs: persona.core.contracts.api.ExtensionViewTabs, value: String, state: ExtensionViewState, handle: ExtensionViewHandle, modifier: Modifier = Modifier) {
+    val palette = PersonaTheme.palette
+    val type = PersonaTheme.type
+    Column(modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+            tabs.items.filter { it.value.isNotEmpty() }.forEach { tab ->
+                val on = tab.value == value
+                Column(Modifier.clickable(enabled = !state.busy || on, role = androidx.compose.ui.semantics.Role.Tab) { handle.tab(tab.value) }
+                    .semantics { selected = on }.padding(horizontal = Tokens.Space.m), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(Modifier.padding(vertical = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
+                        Text(tab.label, style = if (on) type.callout.copy(fontWeight = FontWeight.SemiBold) else type.callout, color = if (on) palette.ink else palette.ink3, maxLines = 1)
+                        tab.badge?.takeIf { it.isNotBlank() }?.let { Spacer(Modifier.width(Tokens.Space.xs)); JTag(it) }
+                        if (on && state.acting == tabs.action.id) { Spacer(Modifier.width(Tokens.Space.xs)); JSpinner() }
+                    }
+                    Box(Modifier.width(Tokens.Space.xxl).height(Tokens.Space.xxs).clip(RoundedCornerShape(Tokens.Space.xxs)).then(if (on) Modifier.background(palette.accent) else Modifier))
+                }
+            }
+        }
+        JDivider()
+    }
+}
+
+/**
+ * A split view's side pane on a phone (UI version 4): a bar on top (「文件 · 12」) that opens in place, the pane's
+ * sections in it; picking a file closes it.
+ */
+@Composable
+internal fun SidePane(sections: List<persona.core.contracts.api.ExtensionViewSection>, state: ExtensionViewState, handle: ExtensionViewHandle) {
+    val palette = PersonaTheme.palette
+    var open by rememberSaveable { mutableStateOf(false) }
+    val title = sections.firstNotNullOfOrNull { it.title?.takeIf(String::isNotBlank) } ?: stringResource(R.string.settings_ext_code_files)
+    val files = sections.flatMap { it.items }.filter { it.type == "file_tree" }.sumOf { ExtensionCodeText.files(it.entries.orEmpty()) }
+    Column(Modifier.fillMaxWidth().padding(bottom = Tokens.Space.s)) {
+        JGroupItem(GroupPosition.Single) {
+            JRow(if (files > 0) "$title · $files" else title, leadingIcon = PhIcons.TreeStructure, chevron = false,
+                trailing = { JIcon(if (open) PhIcons.CaretUp else PhIcons.CaretDown, null, size = Tokens.Space.l, tint = palette.ink3) },
+                onClick = { open = !open })
+        }
+        if (open) sections.flatMap { it.items }.filter(ExtensionViewText::drawable).forEach { item ->
+            if (item.type == "file_tree") CodeFileTree(item, state, handle, Modifier.padding(top = Tokens.Space.s), onPicked = { open = false })
+            else StandaloneItem(item, state, handle, first = false)
+        }
+    }
 }

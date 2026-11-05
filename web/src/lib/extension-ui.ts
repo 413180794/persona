@@ -8,9 +8,10 @@
 import { api, ApiError, enc } from "./api";
 import { extRoot } from "./extension-api";
 import { t } from "../i18n";
+import type { Comment, Hunk, Thread, TreeEntry } from "./code-view";
 
 /** The UI version the web draws (context.ui_version). */
-export const UI_VERSION = 3;
+export const UI_VERSION = 4;
 
 export type UITone = "neutral" | "positive" | "caution" | "danger";
 
@@ -22,6 +23,8 @@ export interface UIAction {
   submit?: boolean;
   /** UI version 3: open another page of the extension on top of this one, without asking the extension first. */
   push?: UIPush;
+  /** UI version 4: values the action carries, sent with the fields' and the component's (these win on a name). */
+  values?: Record<string, string>;
 }
 
 /** A page pushed on the navigation stack (docs/extensions.md「页面跳转」): drawn with this state, by this ui (the same one
@@ -79,6 +82,45 @@ export interface UIItem {
   caption?: string;
   /** empty: a button to do something about it */
   button?: { title: string; action: UIAction };
+  /** UI version 4 (#2951): header */
+  badges?: { text: string; tone?: UITone }[];
+  facts?: { label?: string; value: string; icon?: string }[];
+  /** breadcrumb */
+  crumbs?: { title: string; action?: UIAction }[];
+  /** file_tree: its entries, the one selected; expand loads a directory given with nothing under it */
+  entries?: TreeEntry[];
+  selected?: string;
+  expand?: UIAction;
+  /** code, diff */
+  path?: string;
+  language?: string;
+  start_line?: number;
+  highlight?: { start: number; end: number };
+  truncated?: boolean;
+  load?: UIAction;
+  old_path?: string;
+  status?: string;
+  additions?: number;
+  deletions?: number;
+  binary?: boolean;
+  collapsed?: boolean;
+  hunks?: Hunk[];
+  threads?: Thread[];
+  comment?: UIAction;
+  /** comment_thread */
+  comments?: Comment[];
+  resolved?: boolean;
+  reply?: UIAction;
+  /** composer */
+  buttons?: { title: string; action: UIAction; tone?: UITone }[];
+}
+
+/** A view's tabs on top (UI version 4): choosing one sends {name: value} (with the search's q) at once. */
+export interface UITabs {
+  name: string;
+  value: string;
+  items: { value: string; title?: string; badge?: string }[];
+  action: UIAction;
 }
 
 /** A view's search box (UI version 3): what the user types goes to the extension as `q`, 0.3 s after they stop. */
@@ -131,6 +173,8 @@ export interface UISection {
   items: UIItem[];
   key?: string;
   more?: UIMore;
+  /** UI version 4: in a split view, side is the column at the start (the file tree) */
+  pane?: "main" | "side" | string;
 }
 
 export interface UIView {
@@ -142,6 +186,9 @@ export interface UIView {
   refresh_after?: number;
   search?: UISearch;
   filter?: UIFilter;
+  /** UI version 4 */
+  tabs?: UITabs;
+  layout?: "stack" | "split" | string;
 }
 
 /** Where an extension draws (GET /api/v1/extensions/-/ui, and an extension detail's `ui`). */
@@ -366,7 +413,7 @@ export function pushPage(stack: readonly UIPage[], push: UIPush, ui: string): UI
 /** The fixed icons a row may have (docs/extensions.md「声明式 UI」): each app draws its own; unknown ones are left out. */
 export const ROW_ICONS = [
   "extension", "plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "person", "chat", "mail", "link", "folder",
-  "star", "check", "warning", "clock", "tag", "search", "settings",
+  "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file",
 ] as const;
 export type RowIcon = (typeof ROW_ICONS)[number];
 
@@ -410,6 +457,7 @@ export function inboxSourceItem(url: string): string | undefined {
 export const KNOWN_ITEMS: readonly string[] = [
   "text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented",
   "markdown", "table", "empty", "loading", // UI version 3
+  "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer", // UI version 4
 ];
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -431,7 +479,20 @@ function drawable(it: unknown): it is UIItem {
     case "table":
       return Array.isArray(it.columns) && it.columns.length > 0 && it.columns.every((c) => isObject(c) && typeof c.title === "string") && Array.isArray(it.rows) && it.rows.every(Array.isArray);
     case "empty":
+    case "header":
       return typeof it.title === "string" && !!it.title;
+    case "breadcrumb":
+      return Array.isArray(it.crumbs) && it.crumbs.length > 0 && it.crumbs.every((c) => isObject(c) && typeof c.title === "string");
+    case "file_tree":
+      return Array.isArray(it.entries) && it.entries.every((e) => isObject(e) && typeof e.path === "string");
+    case "code":
+      return typeof it.text === "string";
+    case "diff":
+      return typeof it.path === "string" && (it.hunks === undefined || (Array.isArray(it.hunks) && it.hunks.every((h) => isObject(h) && Array.isArray(h.lines) && h.lines.every((l) => typeof l === "string"))));
+    case "comment_thread":
+      return Array.isArray(it.comments) && it.comments.every((c) => isObject(c) && typeof c.author === "string");
+    case "composer":
+      return typeof it.name === "string" && !!it.name && Array.isArray(it.buttons) && it.buttons.some((b) => isObject(b) && readAction(b.action));
     default:
       return true;
   }
@@ -457,6 +518,7 @@ export function readView(raw: unknown): UIView {
       items: kept,
       ...(typeof s.key === "string" && s.key ? { key: s.key } : {}),
       ...(more ? { more } : {}),
+      ...(s.pane === "side" ? { pane: "side" } : {}),
     });
   }
   const view: UIView = { sections };
@@ -469,6 +531,16 @@ export function readView(raw: unknown): UIView {
       ...(typeof raw.search.placeholder === "string" ? { placeholder: raw.search.placeholder } : {}),
       ...(typeof raw.search.value === "string" ? { value: raw.search.value } : {}),
     };
+  }
+  if (raw.layout === "split") view.layout = "split";
+  const tb = raw.tabs;
+  if (isObject(tb) && typeof tb.name === "string" && tb.name && readAction(tb.action) && Array.isArray(tb.items)) {
+    const items = tb.items.flatMap((i) =>
+      isObject(i) && typeof i.value === "string" && i.value
+        ? [{ value: i.value, ...(typeof i.title === "string" ? { title: i.title } : {}), ...(typeof i.badge === "string" && i.badge ? { badge: i.badge } : {}) }]
+        : [],
+    );
+    if (items.length > 1) view.tabs = { name: tb.name, value: typeof tb.value === "string" ? tb.value : items[0].value, items, action: readAction(tb.action)! };
   }
   const f = raw.filter;
   if (isObject(f) && typeof f.name === "string" && f.name && readAction(f.action) && Array.isArray(f.choices)) {
@@ -494,6 +566,10 @@ export function readAction(raw: unknown): UIAction | undefined {
   if (raw.submit === true) a.submit = true;
   const p = readPush(raw.push);
   if (p) a.push = p;
+  if (isObject(raw.values)) {
+    const values = Object.fromEntries(Object.entries(raw.values).filter((e): e is [string, string] => typeof e[1] === "string"));
+    if (Object.keys(values).length) a.values = values;
+  }
   return a;
 }
 
@@ -518,11 +594,16 @@ function readItem(it: UIItem): UIItem {
     if (isObject(b) && typeof b.title === "string" && readAction(b.action)) out.button = { title: b.title, action: readAction(b.action)! };
     return out;
   }
-  if (isObject(raw.action)) {
-    const a = readAction(raw.action);
-    return a ? { ...it, action: a } : { ...it, action: undefined };
-  }
-  return it;
+  const out: UIItem = { ...it };
+  if (isObject(raw.action)) out.action = readAction(raw.action);
+  // UI version 4: the other places an action sits, each read the same way
+  for (const k of ["expand", "load", "comment", "reply"] as const) if (k in raw) out[k] = readAction(raw[k]);
+  if (Array.isArray(raw.crumbs)) out.crumbs = (raw.crumbs as Record<string, unknown>[]).map((c) => ({ title: String(c.title), ...(readAction(c.action) ? { action: readAction(c.action) } : {}) }));
+  if (Array.isArray(raw.buttons))
+    out.buttons = (raw.buttons as unknown[]).flatMap((b) => (isObject(b) && typeof b.title === "string" && readAction(b.action) ? [{ title: b.title, action: readAction(b.action)!, ...(typeof b.tone === "string" ? { tone: b.tone as UITone } : {}) }] : []));
+  if (Array.isArray(raw.threads))
+    out.threads = (raw.threads as unknown[]).flatMap((th) => (isObject(th) && Array.isArray(th.comments) && typeof th.line === "number" ? [{ ...(th as unknown as Thread), reply: readAction(th.reply) }] : []));
+  return out;
 }
 
 /** How long until a view is drawn again, in ms: refresh_after held to 30 s … a day; 0 never. */
@@ -536,7 +617,7 @@ export function refreshDelay(view: UIView | null | undefined): number {
 
 /** A nav_page's icons (docs/extensions.md「UI 插槽」); each app draws its own. `plugin` is `extension` under its name
  *  before #1844 (the hub still sends it). */
-export const UI_ICONS = ["extension", "plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money"] as const;
+export const UI_ICONS = ["extension", "plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "branch", "code", "pull_request", "merge"] as const;
 export type UIIcon = (typeof UI_ICONS)[number];
 
 /** An icon the web knows, else extension. */

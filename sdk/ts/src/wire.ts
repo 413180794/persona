@@ -809,11 +809,11 @@ export const PLATFORMS = ["ios", "mac", "android", "web"] as const;
 
 /**
  * The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after
- * money). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its
- * old name).
+ * money; 4 for those after settings). Each app draws its own icon for the meaning; an unknown one draws as the
+ * default (extension; plugin is its old name).
  */
-export type NavIcon = "plugin" | "chart" | "gauge" | "list" | "bell" | "doc" | "calendar" | "money" | "extension" | "person" | "chat" | "mail" | "link" | "folder" | "star" | "check" | "warning" | "clock" | "tag" | "search" | "settings" | (string & {});
-export const NAV_ICONS = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings"] as const;
+export type NavIcon = "plugin" | "chart" | "gauge" | "list" | "bell" | "doc" | "calendar" | "money" | "extension" | "person" | "chat" | "mail" | "link" | "folder" | "star" | "check" | "warning" | "clock" | "tag" | "search" | "settings" | "branch" | "commit" | "code" | "pull_request" | "merge" | "file" | (string & {});
+export const NAV_ICONS = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file"] as const;
 
 export interface View {
   title?: string;
@@ -824,6 +824,8 @@ export interface View {
   refresh_after?: number;
   search?: Search;
   filter?: Filter;
+  tabs?: Tabs;
+  layout?: Layout;
   /** Plain text for an assistant card: required by CheckAssistantView; not required for extension views. */
   fallback?: string;
   /**
@@ -838,6 +840,7 @@ export interface Section {
   footer?: string;
   items: Component[];
   more?: More;
+  pane?: Pane;
 }
 
 /**
@@ -859,9 +862,16 @@ export type Component =
   | TableComponent
   | EmptyComponent
   | LoadingComponent
-  | HtmlComponent;
-export const COMPONENT_TYPES = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html"] as const;
-export const COMPONENT_SINCE: Record<string, number> = { text: 1, metric: 1, progress: 1, row: 1, button: 1, link: 1, field: 1, divider: 1, chart: 2, stat_grid: 2, segmented: 2, markdown: 3, table: 3, empty: 3, loading: 3, html: 4 };
+  | HtmlComponent
+  | HeaderComponent
+  | BreadcrumbComponent
+  | FileTreeComponent
+  | CodeComponent
+  | DiffComponent
+  | CommentThreadComponent
+  | ComposerComponent;
+export const COMPONENT_TYPES = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer"] as const;
+export const COMPONENT_SINCE: Record<string, number> = { text: 1, metric: 1, progress: 1, row: 1, button: 1, link: 1, field: 1, divider: 1, chart: 2, stat_grid: 2, segmented: 2, markdown: 3, table: 3, empty: 3, loading: 3, html: 4, header: 4, breadcrumb: 4, file_tree: 4, code: 4, diff: 4, comment_thread: 4, composer: 4 };
 
 /**
  * A paragraph.
@@ -1049,6 +1059,226 @@ export interface HtmlComponent {
   title?: string;
 }
 
+/**
+ * A detail page's head: a big title, state badges, a line of facts (author, branches, time, size). An older app gets
+ * a text and a row per fact.
+ */
+export interface HeaderComponent {
+  type: "header";
+  key?: string;
+  title: string;
+  subtitle?: string;
+  badges?: Badge[];
+  facts?: Fact[];
+  avatar?: Avatar;
+}
+
+/**
+ * A path (repo / src / main.go): every crumb but the last may be tapped. An older app gets one text.
+ */
+export interface BreadcrumbComponent {
+  type: "breadcrumb";
+  key?: string;
+  crumbs: Crumb[];
+}
+
+/**
+ * Files as a tree the app builds from their paths (a directory with one child folds into a/b/c). action opens a file
+ * (values {path}); expand loads a directory given with no entries under it (values {path}). An older app gets a row
+ * per entry.
+ */
+export interface FileTreeComponent {
+  type: "file_tree";
+  key?: string;
+  entries: TreeEntry[];
+  selected?: string;
+  action?: Action;
+  expand?: Action;
+}
+
+/**
+ * A file's content: line numbers, the app's own syntax highlighting (language, else guessed from path), no wrapping.
+ * truncated with load: the rest comes from load (values {path, from: the next line}). An older app gets a code block.
+ */
+export interface CodeComponent {
+  type: "code";
+  key?: string;
+  path?: string;
+  language?: string;
+  text: string;
+  start_line?: number;
+  highlight?: LineRange;
+  truncated?: boolean;
+  load?: Action;
+}
+
+/**
+ * One file's diff: hunks of lines each starting with ' ', '+', '-' or '\'; unified or side by side is the app's
+ * choice. threads are inline comments at their lines; comment adds one (values {path, side, line, start_line?,
+ * body}); expand shows hidden lines between hunks (values {path, hunk, direction: up, down or all}); collapsed, or
+ * without hunks, it shows a button calling load (values {path}). An older app gets a code block.
+ */
+export interface DiffComponent {
+  type: "diff";
+  key?: string;
+  path: string;
+  old_path?: string;
+  status?: FileStatus;
+  language?: string;
+  additions?: number;
+  deletions?: number;
+  binary?: boolean;
+  collapsed?: boolean;
+  hunks?: Hunk[];
+  threads?: Thread[];
+  load?: Action;
+  expand?: Action;
+  comment?: Action;
+}
+
+/**
+ * A discussion: comments in order (an event is drawn as a quiet line), and a reply box when reply is set (values
+ * {body}). An older app gets a row and a text per comment.
+ */
+export interface CommentThreadComponent {
+  type: "comment_thread";
+  key?: string;
+  title?: string;
+  comments: Comment[];
+  resolved?: boolean;
+  reply?: Action;
+}
+
+/**
+ * A multi-line input (Markdown) with a few buttons (comment, approve, request changes, merge): the one tapped sends
+ * the text as name, with the page's fields. An older app gets a field and a button each.
+ */
+export interface ComposerComponent {
+  type: "composer";
+  key?: string;
+  name: string;
+  placeholder?: string;
+  value?: string;
+  buttons: ComposerButton[];
+}
+
+/**
+ * stack: sections one under another. split: on a wide screen the side pane's sections in a column at the start, the
+ * rest beside it, each scrolling on its own; on a narrow one the side pane folds into a bar on top that opens as a
+ * sheet.
+ */
+export type Layout = "stack" | "split" | (string & {});
+export const LAYOUTS = ["stack", "split"] as const;
+
+/**
+ * Where a section of a split view goes.
+ */
+export type Pane = "main" | "side" | (string & {});
+export const PANES = ["main", "side"] as const;
+
+export type FileStatus = "added" | "modified" | "deleted" | "renamed" | (string & {});
+export const FILE_STATUSES = ["added", "modified", "deleted", "renamed"] as const;
+
+export type DiffSide = "old" | "new" | (string & {});
+export const DIFF_SIDES = ["old", "new"] as const;
+
+/**
+ * Tabs on top of the page (UI version 4): choosing calls ui.action with action and values {name: the value} (and the
+ * search's q). An older app gets a segmented, or buttons.
+ */
+export interface Tabs {
+  name: string;
+  value: string;
+  items: Tab[];
+  action: Action;
+}
+
+export interface Tab {
+  value: string;
+  title?: string;
+  badge?: string;
+}
+
+/**
+ * A label and its value in a header (作者 · someone).
+ */
+export interface Fact {
+  label?: string;
+  value: string;
+  icon?: NavIcon;
+}
+
+export interface Crumb {
+  title: string;
+  action?: Action;
+}
+
+/**
+ * A file (or a directory, kind dir) by its whole path from the root, / between names.
+ */
+export interface TreeEntry {
+  path: string;
+  kind?: TreeEntryKind;
+  status?: FileStatus;
+  additions?: number;
+  deletions?: number;
+  comments?: number;
+  badge?: Badge;
+}
+
+export type TreeEntryKind = "file" | "dir" | (string & {});
+export const TREE_ENTRY_KINDS = ["file", "dir"] as const;
+
+export interface LineRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * A run of a diff: where it starts in the old and the new file, and its lines (' ' both, '+' new, '-' old, '\' a note
+ * such as no newline at end of file).
+ */
+export interface Hunk {
+  header?: string;
+  old_start: number;
+  new_start: number;
+  lines: string[];
+}
+
+/**
+ * Inline comments at a line of a diff: line (and start_line for a range) on the side's numbering.
+ */
+export interface Thread {
+  id?: string;
+  side: DiffSide;
+  line: number;
+  start_line?: number;
+  resolved?: boolean;
+  outdated?: boolean;
+  comments: Comment[];
+  reply?: Action;
+}
+
+/**
+ * A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An event is
+ * a quiet line (merged, pushed two commits).
+ */
+export interface Comment {
+  id?: string;
+  author: string;
+  avatar?: Avatar;
+  at?: string;
+  body?: string;
+  badge?: Badge;
+  event?: boolean;
+}
+
+export interface ComposerButton {
+  title: string;
+  action: Action;
+  tone?: Tone;
+}
+
 export interface AssistantView {
   id: string;
   conversation: string;
@@ -1182,6 +1412,11 @@ export interface Action {
    * with id).
    */
   push?: Push;
+  /**
+   * Values the action carries (UI version 4): sent with the page's and the component's values, these winning on a
+   * name they share. An older app sends none.
+   */
+  values?: Record<string, string>;
 }
 
 /**

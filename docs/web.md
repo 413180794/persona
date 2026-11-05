@@ -403,11 +403,15 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   hub 的 features 有 `extension_ui_slots`（老 hub 是 `plugin_ui_slots`）才问。`GET /extensions/-/ui`（不带 placement）一次拿齐，重连（hello）、在这里启用 / 停用 / 改设置 / 装 / 升级 / 卸载扩展后、标签页隔一分钟以上回到前台时再拿；
   `nav_page` 是侧边栏「机器」和「设置」之间一页一行（固定的八个图标换成网页的，不认识的画成扩展图标；角标按 tone 上色，收到 `extension_ui` 事件（老 hub 是 `plugin_ui`）就地改，不重拉），点进 `/extension/<扩展>/<页面>`；
   `overview_card` 是总览问候语下面一排卡片（一张占满，多张两列），紧凑画法（`context.size: compact`），点卡片空白处或标题打开 `opens`，卡片里的按钮、行、图照常能点；
-  `machine_section` 是机器页最后（启动器后面）每个扩展一节，带 `context.machine`。每次画、每个动作都带 `context: {tz, locale, platform: "web", ui_version: 3, …}`；
+  `machine_section` 是机器页最后（启动器后面）每个扩展一节，带 `context.machine`。每次画、每个动作都带 `context: {tz, locale, platform: "web", ui_version: 4, …}`；
   不认识的条目跳过、被它们清空的一节拿掉（有 footer 的留着），只有整个 View 读不出来才显示出错。`chart` 是 SVG 柱状图（并排 / 堆叠，柱宽不超过 24px、圆角在自由端、堆叠段之间 2px 间隙）和折线图，
   悬停或方向键看这个标签下每个系列的值，横轴标签隔几个写一个、不重叠，紧凑时只画首尾标签；没 tone 的系列按 `--series-1…4`（第一个是主色，避开 green / orange / red 三个角色色，深浅色两套）取色。
   `stat_grid` 窄时一行 2 个、够宽 3 个、很宽一行放全；`segmented` 选了马上发 `ui.action`（`values: {name: 选的值}`）。`refresh_after` 只在页面可见、组件还在时按时重画，回到前台已经过点就马上画。
   截图用 `MOCK_PLUGINS=1` 的假 hub（`example-gateway` 的用量页、今天的用量卡片、机器页的「网关调用」）。
+  **UI 版本 4：代码托管**（#2951，`docs/extensions.md`「UI 版本 4：代码托管」；画法 `views/extensions/CodeViews.tsx`，逻辑 `lib/code-view.ts`）：`diff` 统一 / 并排（并排只在 ≥1024px，
+  偏好存在这个浏览器）、行内评论串、点行号开评论框、hunk 之间「展开」；`code` 和 `diff` 用 lowlight（highlight.js 的常用语法，第一次画代码时才加载）高亮、颜色是页面的 token；
+  `layout: split` 宽屏左栏（停在视野里）、窄屏顶上一条可展开的「文件 · N」；`tabs` 是标题下的一排标签。View 里有 `split`、`code` 或 `diff` 时侧边栏打开的扩展页用整页宽度（`max-w-[1680px]`，其余仍是 880）。
+  不在屏幕上的长文件、长 diff 用 `content-visibility: auto`，不占排版。
   **UI 版本 3**（#1850，`docs/extensions.md`「声明式 UI」；画法 `views/extensions/ViewBody.tsx`，加载和跳转 `settings/ExtensionView.tsx`，读法 `lib/extension-ui.ts`）：
   `markdown` 只画安全的一部分（标题、段落、列表、强调、代码、引用、https 链接；不认 HTML 和图片，链接在网页里打开），`table` 窄时横向滚动、单元格不换行，`empty` 是空状态加一个按钮，`loading` 是一行转圈；
   行可以带固定图标（`icon`，换成网页的图标）、头像（https 图片，加载不了画首字母）或缩略图（https，不带任何凭据）；组件的 `key` 用作 React 的 key，重画时列表停在原处。
