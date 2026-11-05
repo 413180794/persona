@@ -154,6 +154,9 @@ struct AssistantHTMLCard: View {
     /// Sends the reply (the view action endpoint); false when it did not go.
     var onReply: (String) async -> Bool
     var onOpen: (URL) -> Void
+    var version: Int64 = 1
+    var bridgeEnabled = true
+    var onConfirmedRequest: ((HTMLCardRequest, Int64) async -> Bool)? = nil
 
     @Environment(\.scenePhase) private var phase
     @Environment(\.tabIsActive) private var tabActive
@@ -161,8 +164,11 @@ struct AssistantHTMLCard: View {
     @State private var stopped = false
     @State private var running = false
     @State private var actions = HTMLCardActions()
+    @State private var pendingVersion: Int64?
+    @State private var executionOwner = UUID()
 
-    private var executing: Bool { enabled && onScreen && tabActive && phase == .active && (running || (autoRun && !stopped)) }
+    private var eligible: Bool { enabled && onScreen && tabActive && phase == .active && (running || (autoRun && !stopped)) }
+    private var executing: Bool { eligible && HTMLExecutionBudget.shared.owners.contains(executionOwner) }
 
     static let minHeight = 160
     static let maxHeight = 640
@@ -189,9 +195,11 @@ struct AssistantHTMLCard: View {
             if executing {
                 Text("助手画的页面 · 隔离运行").font(Theme.Font.caption).foregroundStyle(.secondary)
                 SandboxedHTMLView(html: html, onRequest: { request in
-                    guard executing else { return }
+                    guard executing, bridgeEnabled else { return }
                     actions.receive(request, answered: answered)
+                    if actions.pending == request, pendingVersion == nil { pendingVersion = version }
                 }, onUnavailable: { stop() })
+                .id(version)
                 .frame(height: Self.clampedHeight(height))
                 .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 .accessibilityIdentifier("html-card-page")
@@ -203,15 +211,27 @@ struct AssistantHTMLCard: View {
         .card(padding: Theme.Space.m)
         .onScrollVisibilityChange(threshold: Theme.Visibility.richCardThreshold) { onScreen = $0 }
         // Scrolling away, inactive tabs and background scenes release the WebView even in retained shells.
-        .onChange(of: executing) { _, executing in if !executing { actions.dismiss() } }
-        .onDisappear { onScreen = false; running = false; actions.dismiss() }
+        .onChange(of: eligible) { _, eligible in
+            if eligible { _ = HTMLExecutionBudget.shared.acquire(executionOwner) } else { HTMLExecutionBudget.shared.release(executionOwner) }
+        }
+        .onChange(of: HTMLExecutionBudget.shared.owners) { _, _ in
+            if eligible { _ = HTMLExecutionBudget.shared.acquire(executionOwner) }
+        }
+        .onChange(of: executing) { _, executing in if !executing { actions.dismiss(); pendingVersion = nil } }
+        .onDisappear {
+            onScreen = false; running = false; actions.dismiss(); pendingVersion = nil
+            HTMLExecutionBudget.shared.release(executionOwner)
+        }
         .onChange(of: answered) { _, answered in if answered { actions.dismiss() } }
-        .onChange(of: html) { _, _ in actions.dismiss() }
+        .onChange(of: html) { _, _ in actions.dismiss(); pendingVersion = nil }
+        .onChange(of: version) { _, _ in actions.dismiss(); pendingVersion = nil }
         .alert(alertTitle, isPresented: Binding(get: { actions.pending != nil }, set: { if !$0 { actions.decline() } }), presenting: actions.pending) { request in
             Button(confirmTitle(request)) {
                 // Claim the confirmation before yielding: a second tap or an automatic dismissal cannot race it.
-                guard actions.approve(request, answered: answered) else { return }
-                Task { await accept(request) }
+                guard let expectedVersion = pendingVersion, expectedVersion == version,
+                      actions.approve(request, answered: answered) else { return }
+                pendingVersion = nil
+                Task { await accept(request, version: expectedVersion) }
             }
             Button("取消", role: .cancel) { actions.decline() }
         } message: { request in
@@ -225,7 +245,7 @@ struct AssistantHTMLCard: View {
     private var idle: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if let fallback, !fallback.isEmpty {
-                Text(fallback).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(4)
+                Text(fallback).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(enabled ? 4 : nil)
             }
             if enabled {
                 Button { running = true; stopped = false; actions.restart() } label: {
@@ -257,7 +277,11 @@ struct AssistantHTMLCard: View {
         actions.dismiss()
     }
 
-    private func accept(_ r: HTMLCardRequest) async {
+    private func accept(_ r: HTMLCardRequest, version: Int64) async {
+        if let onConfirmedRequest {
+            actions.complete(r, success: await onConfirmedRequest(r, version))
+            return
+        }
         switch r {
         case .open(let url):
             onOpen(url)
@@ -420,12 +444,9 @@ final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelega
         web.loadHTMLString("", baseURL: nil)
     }
 
-    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        guard let navigation, navigation === self.navigation else { return }
-        acceptsMessages = true
-    }
-
+    /// A terminated content process has no valid bridge. Retry must load even the same HTML into a fresh instance.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        guard loaded != nil else { return }
         generation &+= 1
         loadTask?.cancel()
         loadTask = nil
@@ -436,6 +457,11 @@ final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelega
         started = false
         webView.configuration.userContentController.removeAllUserScripts()
         onUnavailable()
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        guard let navigation, navigation === self.navigation else { return }
+        acceptsMessages = true
     }
 
     // MARK: Navigation: the page itself, nothing else

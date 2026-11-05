@@ -16,6 +16,48 @@ final class AssistantViewsStore {
     private(set) var snapshots: [AssistantViewScope: [String: ExtensionAssistantView]] = [:]
     /// Reply records survive a card update. Keys are opaque: neither slashes nor prefixes are interpreted here.
     private(set) var actions: [AssistantViewScope: [String: ExtensionViewAction]] = [:]
+    private(set) var attempts: [AssistantViewScope: [String: AssistantViewAttempt]] = [:]
+    private(set) var epoch: UInt = 0
+    private(set) var registeredBlocks: [AssistantViewScope: Set<String>] = [:]
+    @ObservationIgnored private var presentations: [AssistantViewScope: [String: AssistantViewModel]] = [:]
+
+    /// Drafts and card navigation outlive a lazy row, but stay in memory and belong to this hub/conversation.
+    func presentation(key: String, scope: AssistantViewScope, view: ExtensionView, version: Int64,
+                      complete: Bool, registered: Bool, deps: AssistantViewModel.Deps) -> AssistantViewModel {
+        if let model = presentations[scope]?[key] { return model }
+        let model = AssistantViewModel(key: key, scope: scope, view: view, version: version, complete: complete,
+                                       registered: registered, store: self, deps: deps)
+        presentations[scope, default: [:]][key] = model
+        return model
+    }
+
+    func isRegistered(_ key: String, scope: AssistantViewScope) -> Bool { registeredBlocks[scope]?.contains(key) == true }
+    func receiveBlocks(_ keys: [String], conversation: String, group: String) {
+        guard !conversation.isEmpty else { return }
+        let scope = AssistantViewScope(group: group, conversation: conversation)
+        registeredBlocks[scope, default: []].formUnion(keys.filter { !$0.isEmpty })
+    }
+
+    func attempt(_ key: String, scope: AssistantViewScope) -> AssistantViewAttempt? { attempts[scope]?[key] }
+
+    /// The lock belongs to the card, not to a row SwiftUI may drop while scrolling.
+    func begin(_ submission: AssistantViewSubmission, scope: AssistantViewScope) -> Bool {
+        guard action(submission.key, conversation: scope.conversation, group: scope.group) == nil else { return false }
+        if let current = attempts[scope]?[submission.key] {
+            guard !current.sending, current.submission == submission else { return false }
+        }
+        attempts[scope, default: [:]][submission.key] = AssistantViewAttempt(submission: submission)
+        return true
+    }
+
+    func finish(_ submission: AssistantViewSubmission, scope: AssistantViewScope, error: String?, uncertain: Bool) {
+        guard attempts[scope]?[submission.key]?.submission == submission else { return }
+        if uncertain, action(submission.key, conversation: scope.conversation, group: scope.group) == nil {
+            attempts[scope, default: [:]][submission.key] = AssistantViewAttempt(submission: submission, sending: false, error: error)
+        } else {
+            attempts[scope]?[submission.key] = nil
+        }
+    }
 
     func action(_ key: String, conversation: String, group: String) -> ExtensionViewAction? {
         actions[AssistantViewScope(group: group, conversation: conversation)]?[key]
@@ -57,9 +99,12 @@ final class AssistantViewsStore {
         if let current = actions[scope]?[action.key] {
             guard current.clientMsgId == action.clientMsgId, current.action == action.action,
                   (current.page ?? "") == (action.page ?? ""), (current.values ?? [:]) == (action.values ?? [:]),
+                  (current.kind ?? "action") == (action.kind ?? "action"), current.version == action.version,
+                  (current.text ?? "") == (action.text ?? ""),
                   (current.revision ?? 0) < (action.revision ?? 0) else { return false }
         }
         actions[scope, default: [:]][action.key] = action
+        attempts[scope]?[action.key] = nil
         return true
     }
 
@@ -67,5 +112,5 @@ final class AssistantViewsStore {
         for (key, record) in records where key == record.key { receive(record, conversation: conversation, group: group) }
     }
 
-    func forget() { snapshots = [:]; actions = [:] }
+    func forget() { epoch &+= 1; snapshots = [:]; actions = [:]; attempts = [:]; registeredBlocks = [:]; presentations = [:] }
 }

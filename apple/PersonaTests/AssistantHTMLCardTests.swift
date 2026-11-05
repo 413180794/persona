@@ -6,6 +6,7 @@ import WebKit
 @testable import Jarvis
 
 /// The assistant's free drawing (#2025): what a card's page may ask for, and that its sandbox reaches nothing.
+@Suite(.serialized)
 @MainActor
 struct AssistantHTMLCardTests {
     @Test func aReplyIsUsedOnceButOpensRemainUsable() {

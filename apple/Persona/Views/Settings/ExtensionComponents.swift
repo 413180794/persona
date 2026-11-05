@@ -7,7 +7,7 @@ import SwiftUI
 /// chevron when it can be used (a spinner while it runs).
 struct ExtensionComponentRowLabel: View {
     var row: ExtensionRowComponent
-    var model: ExtensionViewModel?
+    var model: (any ExtensionViewControlling)?
     var chevron: Bool
 
     var body: some View {
@@ -20,7 +20,10 @@ struct ExtensionComponentRowLabel: View {
             Spacer(minLength: Theme.Space.s)
             if let v = row.value, !v.isEmpty { Text(v).font(Theme.Font.body.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1) }
             if let b = row.badge { Chip(text: b.text, look: b.tone == nil || b.tone == "neutral" ? .neutral : .tint(ExtensionUIStyle.tone(b.tone))) }
-            if chevron {
+            if let action = row.action, model?.selected(action.id) == true {
+                Image(systemName: Theme.Icon.success).font(Theme.Font.labelStrong).foregroundStyle(Theme.positive)
+                    .accessibilityLabel("已选")
+            } else if chevron {
                 if let a = row.action, model?.running == a.id {
                     ProgressView().controlSize(.small)
                 } else {
@@ -173,7 +176,7 @@ struct ExtensionTable: View {
 struct ExtensionEmpty: View {
     @Environment(AppModel.self) private var app
     var empty: ExtensionEmptyComponent
-    var model: ExtensionViewModel?
+    var model: (any ExtensionViewControlling)?
     @Binding var link: LinkTarget?
 
     @State private var asking = false
@@ -184,6 +187,7 @@ struct ExtensionEmpty: View {
             .frame(maxWidth: .infinity)
             .listRowBackground(Color.clear)
             .accessibilityIdentifier("plugin-ui-empty")
+            .disabled(model?.managesConfirmation == true && empty.button.map { model?.isEnabled($0.action) != true } == true)
             .confirmationDialog(empty.button?.action.confirm ?? "", isPresented: $asking, titleVisibility: .visible) {
                 Button { run() } label: { Text(empty.button?.title ?? "确定").lineLimit(1) }
                     .accessibilityIdentifier("plugin-ui-confirm")
@@ -192,14 +196,14 @@ struct ExtensionEmpty: View {
     }
 
     private var button: (title: String, run: () -> Void)? {
-        guard let b = empty.button, model != nil else { return nil }
+        guard let b = empty.button, let model else { return nil }
         return (b.title, {
-            if b.action.confirm?.isEmpty == false { asking = true } else { run() }
+            if b.action.confirm?.isEmpty == false, !model.managesConfirmation { asking = true } else { run() }
         })
     }
 
     private func run() {
-        guard let b = empty.button, let model else { return }
+        guard let b = empty.button, let model, model.isEnabled(b.action) else { return }
         Task { ExtensionOutcome.show(await model.perform(b.action), app: app, link: $link) }
     }
 }
@@ -209,7 +213,7 @@ struct ExtensionEmpty: View {
 struct ExtensionMoreRow: View {
     @Environment(AppModel.self) private var app
     var more: ExtensionMore
-    var model: ExtensionViewModel
+    var model: any ExtensionViewControlling
     @Binding var link: LinkTarget?
 
     var body: some View {
@@ -220,8 +224,8 @@ struct ExtensionMoreRow: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .disabled(model.loadingMore != nil)
-        .onAppear { load() }
+        .disabled(model.loadingMore != nil || (model.managesConfirmation && !model.isEnabled(more.action)))
+        .onAppear { if !model.managesConfirmation { load() } }
         .accessibilityIdentifier("plugin-ui-more")
     }
 
@@ -236,7 +240,7 @@ struct ExtensionMoreRow: View {
 struct ExtensionFilterChips: View {
     @Environment(AppModel.self) private var app
     var filter: ExtensionFilter
-    var model: ExtensionViewModel
+    var model: any ExtensionViewControlling
     @Binding var link: LinkTarget?
 
     var body: some View {
@@ -253,9 +257,32 @@ struct ExtensionFilterChips: View {
             .padding(.horizontal, Theme.Space.page)
             .padding(.vertical, Theme.Space.xs)
         }
-        .disabled(model.running != nil)
+        .disabled(model.running != nil || (model.managesConfirmation && !model.isEnabled(filter.action)))
         .accessibilityLabel(filter.title ?? "筛选")
     }
+}
+
+/// A card's explicit search control. Unlike extension-page debounce, typing cannot send an assistant reply.
+struct ExtensionSearchRow: View {
+    var search: ExtensionSearch
+    var model: any ExtensionViewControlling
+    @Binding var link: LinkTarget?
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        HStack(spacing: Theme.Space.s) {
+            TextField(search.placeholder ?? "搜索", text: Binding(get: { model.query }, set: { model.query = $0 }))
+                .font(Theme.Font.body).textInputAutocapitalization(.never).autocorrectionDisabled()
+                .onSubmit { run() }
+            Button { run() } label: { Image(systemName: Theme.Icon.search) }
+                .themedButton().accessibilityLabel("搜索")
+        }
+        .padding(Theme.Space.s)
+        .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.control))
+        .disabled(!model.isEnabled(search.action))
+        .accessibilityIdentifier("assistant-view-search")
+    }
+    private func run() { Task { ExtensionOutcome.show(await model.search(), app: app, link: $link) } }
 }
 
 /// What using a control came to, on screen: an error or the extension's word as a toast, its link in the app.
@@ -361,7 +388,7 @@ struct ExtensionStatGrid: View {
 struct ExtensionSegmented: View {
     @Environment(AppModel.self) private var app
     var item: ExtensionSegmentedComponent
-    var model: ExtensionViewModel
+    var model: any ExtensionViewControlling
     @Binding var link: LinkTarget?
 
     var body: some View {
@@ -374,7 +401,7 @@ struct ExtensionSegmented: View {
                 }))
             // It has no label of its own (the name is the extension's key): a Mac picker would write the key beside it.
             .labelsHidden()
-            .disabled(model.running != nil)
+            .disabled(!model.isEnabled(item.action))
             .accessibilityIdentifier("plugin-ui-segmented-\(item.name)")
             .padding(.vertical, Theme.Space.xxs)
         }
@@ -388,20 +415,20 @@ struct ExtensionActionButton<Content: View>: View {
     var action: ExtensionAction
     var title: String
     var destructive = false
-    var model: ExtensionViewModel
+    var model: any ExtensionViewControlling
     @Binding var link: LinkTarget?
     @ViewBuilder var label: Content
     @State private var asking = false
 
     var body: some View {
         Button(role: destructive ? .destructive : nil) {
-            if action.confirm?.isEmpty == false { asking = true } else { run() }
+            if action.confirm?.isEmpty == false, !model.managesConfirmation { asking = true } else { run() }
         } label: {
             label
         }
         // A Mac form draws a button in the accent whatever its role: red as on the phone (#1512).
         .tint(destructive ? Theme.danger : nil)
-        .disabled(model.running != nil)
+        .disabled(!model.isEnabled(action))
         .accessibilityIdentifier("plugin-ui-action-\(action.id)")
         .confirmationDialog(action.confirm ?? "", isPresented: $asking, titleVisibility: .visible) {
             Button(role: destructive ? .destructive : nil) { run() } label: { Text(title.isEmpty ? "确定" : title).lineLimit(1) }
@@ -411,7 +438,12 @@ struct ExtensionActionButton<Content: View>: View {
     }
 
     private func run() {
-        Task { ExtensionOutcome.show(await model.perform(action), app: app, link: $link) }
+        if model.managesConfirmation { Keyboard.dismiss() }
+        Task {
+            // Let the conversation's simultaneous focus-dismiss gesture settle before presenting a native alert.
+            if model.managesConfirmation { await Task.yield() }
+            ExtensionOutcome.show(await model.perform(action), app: app, link: $link)
+        }
     }
 }
 
@@ -419,7 +451,7 @@ struct ExtensionActionButton<Content: View>: View {
 /// choice.
 struct ExtensionFieldItem: View {
     var field: ExtensionFieldComponent
-    @Bindable var model: ExtensionViewModel
+    var model: any ExtensionViewControlling
 
     private var name: String { field.name }
     private var label: String { field.label.isEmpty ? name : field.label }
@@ -457,6 +489,7 @@ struct ExtensionFieldItem: View {
                 }
             }
         }
+        .disabled(!model.fieldsEnabled)
         .accessibilityIdentifier("plugin-ui-field-\(name)")
     }
 

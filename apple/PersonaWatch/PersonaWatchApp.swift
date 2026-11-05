@@ -526,6 +526,8 @@ struct WatchSessionView: View {
     var session: Session
     @State private var reply = ""
     @State private var items: [Item] = []
+    @State private var liveCards = WatchAssistantFeed()
+    @State private var loadingCards = false
     /// The hub's channels, to say which a message came in from (asked once; nothing from a hub without them).
     @State private var channels: [HubChannel]?
 
@@ -542,7 +544,9 @@ struct WatchSessionView: View {
                     Text(session.stateLabel).font(.caption2.weight(.semibold)).foregroundStyle(session.state.tone.text)
                 }
                 if let run = session.leadWorkflow { WatchWorkflowChip(run: run) }
-                ForEach(items.suffix(6)) { it in
+                ForEach(liveCards.lines(items).suffix(6)) { line in
+                    switch line {
+                    case .message(let it):
                     if let n = Injected.of(it) {
                         // Persona's message for the model (a task's notice, a scheduled run…): its line, centered, never
                         // its words (docs/protocol.md「Persona 注入的消息」).
@@ -566,10 +570,20 @@ struct WatchSessionView: View {
                             .padding(it.role == "user" ? .leading : .trailing, 14)
                             .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
                         // Came in from a channel (WeChat, the Feishu bot…), as under the phone's bubble.
+                        if it.role == "user", AssistantActionSource.parse(it.text ?? "") != nil {
+                            Text("来自卡片").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
                         if it.role == "user", let c = ChannelSource.of(it.clientMsgID, in: channels ?? []) {
                             Text("来自 \(c.name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                         }
+                    }
+                    case .view(let item):
+                        Text(liveCards.fallback(item)).font(Theme.Font.body)
+                            .padding(Theme.Watch.bubblePadding)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("watch-assistant-view-fallback")
                     }
                 }
                 if let source = session.sourceSubtitle {
@@ -600,6 +614,21 @@ struct WatchSessionView: View {
         .task(id: session.rev) { await load() }
         // The model refreshes every 8 s while the app is active; a session without a rev (older hub) still reloads.
         .task(id: session.rev == nil ? model.lastUpdate : nil) { if session.rev == nil { await load() } }
+        .task(id: model.lastUpdate) { if session.assistant { await loadCards() } }
+    }
+
+    private func loadCards() async {
+        guard !loadingCards, current.assistant, let api = model.api(session.group) else { return }
+        loadingCards = true
+        defer { loadingCards = false }
+        // Full view snapshots refresh even when no feed item or transcript revision was added.
+        for _ in 0..<20 {
+            let before = liveCards.cursor
+            guard let response = try? await api.feed(conversation: session.sessionID, since: before),
+                  !Task.isCancelled, model.api(session.group)?.config == api.config else { return }
+            liveCards.receive(response, conversation: session.sessionID)
+            guard response.items.count == 500, liveCards.cursor != before else { return }
+        }
     }
 
     private func load() async {

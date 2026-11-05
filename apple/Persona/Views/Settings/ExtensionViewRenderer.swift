@@ -10,20 +10,25 @@ import SwiftUI
 /// Without a model (the assistant's cards, docs/extensions.md「助手的卡片」) nothing can be used: rows and buttons do
 /// nothing, fields, search, filter and more are not drawn; links open as usual.
 struct ExtensionViewRenderer: View {
+    @Environment(\.assistantHTMLRendering) private var htmlContext
     var view: ExtensionView
-    var model: ExtensionViewModel?
+    var model: (any ExtensionViewControlling)?
     /// The first section's title when it has none of its own (a launcher's section: what the extension calls it).
     var heading: String? = nil
     /// Where links and `open_url` open: the page's link card.
     @Binding var link: LinkTarget?
 
     var body: some View {
+        if let search = view.search, let model, model.managesConfirmation {
+            Section { ExtensionSearchRow(search: search, model: model, link: $link) }
+                .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+        }
         if let f = view.filter, let model {
             Section { ExtensionFilterChips(filter: f, model: model, link: $link) }
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
         }
-        ForEach(ExtensionParts.of(view, heading: heading)) { g in
+        ForEach(ExtensionParts.of(view, heading: heading, includeHTML: htmlContext != nil)) { g in
             Section {
                 ForEach(g.items) { item in
                     ExtensionItemRow(item: item.component, model: model, link: $link)
@@ -53,14 +58,14 @@ struct ExtensionParts: Identifiable {
     var more: ExtensionMore?
     var items: [Item]
 
-    static func of(_ view: ExtensionView, heading: String? = nil) -> [ExtensionParts] {
+    static func of(_ view: ExtensionView, heading: String? = nil, includeHTML: Bool = false) -> [ExtensionParts] {
         var out: [ExtensionParts] = []
         for (i, s) in view.sections.enumerated() {
             var parts: [[Item]] = [[]]
             for (j, c) in s.items.enumerated() {
                 if case .divider = c { parts.append([]); continue }
                 if case .unknown = c { continue }
-                if case .html = c { continue } // 助手专用 HTML 由独立沙箱处理，扩展渲染器不执行它。
+                if case .html = c, !includeHTML { continue } // Extensions never receive the assistant sandbox context.
                 parts[parts.count - 1].append(Item(id: c.key.map { "k:" + $0 } ?? "\(i).\(j)", component: c))
             }
             parts = parts.filter { !$0.isEmpty }
@@ -150,7 +155,8 @@ enum ExtensionUIStyle {
 /// One component of an extension's View.
 struct ExtensionItemRow: View {
     var item: ExtensionComponent
-    var model: ExtensionViewModel?
+    @Environment(\.assistantHTMLRendering) private var htmlContext
+    var model: (any ExtensionViewControlling)?
     @Binding var link: LinkTarget?
 
     var body: some View {
@@ -174,6 +180,9 @@ struct ExtensionItemRow: View {
             if let model {
                 ExtensionActionButton(action: b.action, title: b.title, destructive: b.role == "destructive", model: model, link: $link) {
                     HStack(spacing: Theme.Space.s) {
+                        if model.selected(b.action.id) {
+                            Image(systemName: Theme.Icon.success).foregroundStyle(Theme.positive).accessibilityLabel("已选")
+                        }
                         Text(b.title).lineLimit(1).minimumScaleFactor(0.8)
                         if model.running == b.action.id { ProgressView().controlSize(.small) }
                     }
@@ -199,7 +208,17 @@ struct ExtensionItemRow: View {
             }
             .accessibilityIdentifier("plugin-ui-loading")
         // A divider splits sections before this; a component this app does not know (a newer extension's) is left out.
-        case .divider, .unknown, .html: EmptyView()
+        case .html(let html):
+            if let context = htmlContext {
+                AssistantHTMLCard(title: html.title, html: html.html, height: html.height, fallback: context.fallback,
+                    answered: context.answered, enabled: context.enabled, onReply: { _ in false }, onOpen: { _ in },
+                    version: context.version, bridgeEnabled: context.bridgeAvailable && html.key?.isEmpty == false,
+                    onConfirmedRequest: { request, version in
+                        guard let key = html.key else { return false }
+                        return await context.onRequest(request, key, version)
+                    })
+            }
+        case .divider, .unknown: EmptyView()
         // UI version 4's code-hosting components (#2951): the app still says ui_version 3, so the hub sends it the
         // older components instead; the code page that draws these comes with #2961.
         case .header, .breadcrumb, .fileTree, .code, .diff, .commentThread, .composer: EmptyView()
@@ -243,8 +262,9 @@ extension EnvironmentValues {
 /// heading and a card of its components, a divider a line between them. The same components as
 /// `ExtensionViewRenderer`, drawn by `ExtensionItemRow`.
 struct ExtensionViewStack: View {
+    @Environment(\.assistantHTMLRendering) private var htmlContext
     var view: ExtensionView
-    var model: ExtensionViewModel?
+    var model: (any ExtensionViewControlling)?
     /// The first section's heading when it has none of its own.
     var heading: String? = nil
     /// Draw the sections' cards (a page); false: the caller's card holds them (an overview card).
@@ -255,6 +275,9 @@ struct ExtensionViewStack: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: cards ? Theme.Space.l : Theme.Space.m) {
+            if let search = view.search, let model, model.managesConfirmation {
+                ExtensionSearchRow(search: search, model: model, link: $link)
+            }
             if let f = view.filter, let model { ExtensionFilterChips(filter: f, model: model, link: $link) }
             ForEach(Array(view.sections.enumerated()), id: \.offset) { i, s in
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -264,7 +287,7 @@ struct ExtensionViewStack: View {
                     }
                     let items = s.items.enumerated().compactMap { j, item -> ExtensionParts.Item? in
                         if case .unknown = item { return nil }
-                        if case .html = item { return nil }
+                        if case .html = item, htmlContext == nil { return nil }
                         return ExtensionParts.Item(id: item.key.map { "k:" + $0 } ?? "\(i).\(j)", component: item)
                     }
                     if !items.isEmpty || (s.more != nil && model != nil) {

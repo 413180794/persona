@@ -461,8 +461,13 @@ nonisolated extension APIClient {
         var plans: [String: TaskPlan]?
         var views: [String: ExtensionAssistantView]?
         var viewActions: [String: ExtensionViewAction]?
+        var viewBlocks: [String]?
 
-        enum CodingKeys: String, CodingKey { case items, plans, views; case viewActions = "view_actions" }
+        enum CodingKeys: String, CodingKey {
+            case items, plans, views
+            case viewActions = "view_actions"
+            case viewBlocks = "view_blocks"
+        }
     }
 
     private struct PlanResponse: Decodable { var plan: TaskPlan }

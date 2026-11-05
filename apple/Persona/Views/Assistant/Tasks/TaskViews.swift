@@ -492,12 +492,10 @@ struct FeedLine: View {
             if let id = item.ref,
                let view = AssistantViewsStore.shared.view(id, conversation: item.conversation, group: group) ?? item.assistantView,
                view.id == id, view.conversation == item.conversation {
-                Text(WatchText.shown(view.view.fallback ?? AssistantCardText.mark))
-                    .font(Theme.Font.body)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .card(padding: Theme.Space.m)
-                    .accessibilityIdentifier("assistant-live-view-fallback")
+                let location = AssistantCardLocation(key: id, scope: AssistantViewScope(group: group, conversation: item.conversation))
+                InteractiveAssistantViewCard(view: view.view, version: view.version,
+                    registered: AppModel.shared.features(group).contains("assistant_views"),
+                    location: location, deps: .live(location))
             }
         case .unknown: EmptyView()
         }

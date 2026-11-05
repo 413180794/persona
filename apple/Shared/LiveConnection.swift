@@ -57,6 +57,7 @@ nonisolated enum ServerEvent: Sendable {
     case assistantFeed(FeedItem)
     case assistantView(ExtensionAssistantView)
     case assistantViewAction(conversation: String, action: ExtensionViewAction)
+    case assistantViewBlock(conversation: String, key: String)
     case taskPlan(TaskPlan)
     case terminal(SessionKey, TerminalEvent)
     /// Folders a Files / Git pane watches (`fs_watch`) changed on the computer, or the Git status of `cwd` did (#2439,
@@ -124,6 +125,7 @@ nonisolated enum ServerEvent: Sendable {
         var view: ExtensionAssistantView?
         /// Keep this raw so another event's optional action string cannot break its envelope decoding.
         var action: JSONValue?
+        var key: String?
         var conversation: String?
         var plan: TaskPlan?
         var plugin: String?
@@ -137,7 +139,7 @@ nonisolated enum ServerEvent: Sendable {
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
-            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, action, conversation, plan
+            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, action, key, conversation, plan
             case plugin, badge, invalidate, cwd, dirs, git
             case extensionID = "extension"
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build", publicURL = "public_url"
@@ -206,6 +208,9 @@ nonisolated enum ServerEvent: Sendable {
             guard let view = e.view, !view.id.isEmpty, view.version > 0,
                   !view.conversation.isEmpty, view.conversation == e.conversation else { return nil }
             return .assistantView(view)
+        case "assistant_view_block":
+            guard let conversation = e.conversation, !conversation.isEmpty, let key = e.key, !key.isEmpty else { return nil }
+            return .assistantViewBlock(conversation: conversation, key: key)
         case "assistant_view_action":
             guard let conversation = e.conversation, !conversation.isEmpty,
                   let raw = e.action, let data = try? JSON.encoder.encode(raw),
@@ -259,7 +264,7 @@ nonisolated extension ServerEvent {
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
         case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
-             .personas, .assistantFeed, .assistantView, .assistantViewAction, .taskPlan, .pluginBadge, .extensionInvalidate, .fsChanged: return self
+             .personas, .assistantFeed, .assistantView, .assistantViewAction, .assistantViewBlock, .taskPlan, .pluginBadge, .extensionInvalidate, .fsChanged: return self
         }
     }
 }

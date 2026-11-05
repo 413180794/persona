@@ -183,6 +183,10 @@ struct UserBubble: View, Equatable {
             if let openFile { FileChips(paths: d.chips, open: openFile) }
             // Came in from a channel (WeChat, the Feishu bot…): 「来自 微信」 under it.
             if ChannelSource.possible(item.clientMsgID) { ChannelSourceLine(clientMsgID: item.clientMsgID) }
+            if d.cardSource != nil {
+                Text("来自卡片").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .accessibilityIdentifier("assistant-card-source")
+            }
         }
         .lookUpFiles(d.asked)
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -451,7 +455,7 @@ struct AssistantText: View, Equatable {
         #endif
         let d = RowMemo.assistant(RowMemo.key(memoScope, item.id)) { _ in AssistantRowText(item.text ?? "") } // once per message
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            LinkedMarkdown(plain: d.markdown, paths: d.paths, key: RowMemo.key(memoScope, item.id))
+            AssistantRichMarkdown(text: item.text ?? "", itemID: item.id, memo: d, memoKey: RowMemo.key(memoScope, item.id))
                 .task(id: item.id) { await Self.preloadLinks(item) }
                 // Inside the theme (applied first), or the theme's text style wins (docs/lessons/ios.md).
                 .modifier(QuietMarkdown(on: quiet))
@@ -981,7 +985,7 @@ struct StreamingText: View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("StreamingText")
         #endif
-        let parts = StreamChunks.split(text)
+        let parts = StreamChunks.split(AssistantCardText.replacingCards(text))
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(parts.done.enumerated()), id: \.offset) { i, chunk in
                 StreamChunk(text: chunk).equatable()
@@ -1120,6 +1124,7 @@ nonisolated struct UserRowText {
     let pathRefs: [PathRef]
     let refs: [ContextRef]
     let text: String   // without the context tags
+    let cardSource: AssistantActionSource.Parsed?
     let shown: String  // without the image notes and the files' tags
     let images: [String]
     /// The files sent with it (videos), drawn as cards.
@@ -1129,7 +1134,9 @@ nonisolated struct UserRowText {
     let chips: [String]
     let asked: [String]
     init(_ raw: String) {
-        let parsed = ContextRef.parse(raw)
+        let source = AssistantActionSource.parse(raw)
+        cardSource = source
+        let parsed = ContextRef.parse(source?.text ?? raw)
         refs = parsed.refs
         text = parsed.rest
         let shown = UserBubble.display(parsed.rest)

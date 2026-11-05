@@ -543,7 +543,16 @@ fixture 读取 `schema/extension/examples/assistant/progress.json` 和 `progress
 
 状态层单元测试 `AssistantViewsStoreTests` 检查 hub 组／对话隔离、版本单调、创建事件与快照乱序、无效归属、重连恢复、切换后旧请求不能回填，以及旧 hub 无 views 字段的兼容。
 `AssistantViewActionStateTests` 检查 `view_actions` 快照和 `assistant_view_action` 的 revision 顺序、已选内容不能被替换、View 更新不清除已答、旧格式和其他事件的 action 字段兼容，以及重连后恢复发送状态。
-当前没有接统一组件时只显示 fallback；这组通过不代表交互动作、HTML 或完整共享组件已验收。
+统一组件中的交互由 `AssistantViewModelTests` 和 `AssistantViewAPITests` 检查：固定确认版本、同一选择只发送一次、未知结果重试原 CID、另一设备的记录优先、409 `view_changed` 不自动改版本重发，以及普通动作不能带 reply 覆盖。`AssistantActionSourceTests` 严格解析末尾来源标签，代码示例、坏标签和额外字段原样保留；`WatchAssistantFeedTests` 检查新 fallback 仍在创建位置、旧版本不覆盖和 HTML 不执行。
+
+### 主对话富 UI 交互和共享示例（`AssistantRichCardTests`，#2024）
+
+`python3 scripts/mock/assistant_rich_ui_hub.py --port 0 --port-file /tmp/rich-ui-hub.port` 启动单独的 loopback 夹具，不读写真实主对话或账号。端口仍通过 `TEST_RUNNER_JARVIS_MOCK_HUB` 传给 UI 测试。手表截图使用另一实例加 `--watch`，只保留合成助手会话；给手表传该实例的 `-pairURL` 和 `-openWatchItem session`，不要改变正在跑 iOS UI 测试的夹具。
+
+- 表单：填写后原生确认、提交一次、显示已选和来源、重启后从 feed 恢复提交值。
+- 正文卡片：共享 fence 解析产生 item id／ordinal key；另一设备的选择事件到来后不能再提交。
+- 确认竞态：夹具只更新服务端版本、不发事件，旧确认回 `view_changed`，没有发送回复；草稿保留，重新确认才按新版本提交。
+- `testAllSharedSamplesAreVisibleAndCaptured` 逐个读取决策、比较表、进度、表单、图表和 HTML 共享示例。每种 `AppStyle` 用 `TEST_RUNNER_JARVIS_UI_STYLE` 固定，深浅色分别跑并看截图。HTML 未通过执行安全验收时必须是 fallback，不把接口 feature 当成执行许可。
 
 ### 助手的 HTML 卡片（`HTMLCardTests`、`AssistantHTMLCardTests`，#2025）
 

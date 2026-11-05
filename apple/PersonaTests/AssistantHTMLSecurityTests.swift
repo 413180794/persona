@@ -55,7 +55,7 @@ struct AssistantHTMLSecurityTests {
         let control = Page(sandboxed: false)
         defer { control.close() }
         control.web.load(URLRequest(url: try #require(URL(string: url))))
-        try await loaded(control.web, marker: "redirected")
+        try await loaded(control.web, marker: "redirected", phase: "redirect control load")
         #expect(server.requests.contains { $0.path == "/redirect/start" })
         #expect(server.requests.contains { $0.path == "/redirect/final" })
         control.close()
@@ -68,9 +68,11 @@ struct AssistantHTMLSecurityTests {
             let card = Page()
             defer { card.close() }
             card.load("<p id='marker'>redirect</p>" + redirect)
-            try await loaded(card.web, marker: "redirect")
+            let variant = redirect.hasPrefix("<meta") ? "meta" : "location"
+            try await loaded(card.web, marker: "redirect", phase: "\(variant) redirect load")
             try await Task.sleep(for: .milliseconds(600))
-            let result = try await script(card.web, "return { marker: document.querySelector('#marker')?.textContent, href: location.href };")
+            let result = try await script(card.web, "return { marker: document.querySelector('#marker')?.textContent, href: location.href };",
+                                          phase: "\(variant) redirect snapshot")
             #expect(server.connections == before, "a redirect's first hop escaped the sandbox")
             #expect(result["marker"] as? String == "redirect")
             #expect(result["href"] as? String == "about:blank")
@@ -312,9 +314,9 @@ struct AssistantHTMLSecurityTests {
             }, 50);
             </script>
             """)
-        try await loaded(card.web, marker: "bounded-work")
+        try await loaded(card.web, marker: "bounded-work", phase: "work initial load")
         try await waitUntil("at least two live timer messages were delivered") { card.requests.count >= 2 }
-        let before = try await script(card.web, "return { ...window.workProbe, activeBuffers: window.workBuffers.length };")
+        let before = try await script(card.web, "return { ...window.workProbe, activeBuffers: window.workBuffers.length };", phase: "live work snapshot")
         #expect(before["bytes"] as? Int == 4 * 1024 * 1024)
         #expect(before["activeBuffers"] as? Int == 8, "the allocation must still be live at teardown")
         #expect((before["iterations"] as? Int ?? 0) <= 200000)
@@ -323,13 +325,13 @@ struct AssistantHTMLSecurityTests {
         weak var releasedCoordinator = card.coordinator
         card.coordinator?.dismantle(card.web)
         card.coordinator = nil
-        try await loaded(card.web, marker: nil)
+        try await loaded(card.web, marker: nil, phase: "work cleared-page load")
         let requestsAfterLeaving = card.requests.count
         try await Task.sleep(for: .milliseconds(500))
         let after = try await script(card.web, """
             return { workGone: typeof window.workProbe === 'undefined' && typeof window.workBuffers === 'undefined',
                      handlerGone: typeof window.webkit?.messageHandlers?.persona === 'undefined' };
-            """)
+            """, phase: "work cleared-page snapshot")
         #expect(card.requests.count == requestsAfterLeaving)
         #expect(after["workGone"] as? Bool == true)
         #expect(after["handlerGone"] as? Bool == true)
@@ -460,8 +462,8 @@ struct AssistantHTMLSecurityTests {
         }
     }
 
-    private func script(_ web: WKWebView, _ body: String) async throws -> [String: Any] {
-        let text = try await completeWithin("JavaScript probe", web: web) { done in
+    private func script(_ web: WKWebView, _ body: String, phase: String = "JavaScript probe") async throws -> [String: Any] {
+        let text = try await completeWithin(phase, web: web) { done in
             web.evaluateJavaScript("JSON.stringify((() => {\(body)})())") { value, error in
                 if let error { done(.failure(error)) }
                 else if let text = value as? String { done(.success(text)) }
@@ -491,20 +493,27 @@ struct AssistantHTMLSecurityTests {
         return try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String] ?? []
     }
 
-    private func loaded(_ web: WKWebView, marker: String?) async throws {
+    private func loaded(_ web: WKWebView, marker: String?, phase: String? = nil) async throws {
+        let label = phase ?? "load \(marker ?? "empty page")"
         let deadline = ContinuousClock.now.advanced(by: .seconds(8))
         repeat {
+            // A new/transitioning document must finish its native load before starting a five-second JS callback.
+            // A nil URL also covers the coordinator's asynchronous rule compilation before the first navigation.
+            if web.url == nil || web.isLoading {
+                try await Task.sleep(for: .milliseconds(50))
+                continue
+            }
             let result = try await script(web, """
                 return { complete: document.readyState === 'complete', marker: document.querySelector('#marker')?.textContent ?? '',
                          empty: document.body?.textContent.trim() === '' };
-                """)
+                """, phase: "\(label): DOM ready")
             if !web.isLoading, result["complete"] as? Bool == true {
                 if let marker, result["marker"] as? String == marker { return }
                 if marker == nil, result["empty"] as? Bool == true { return }
             }
             try await Task.sleep(for: .milliseconds(50))
         } while ContinuousClock.now < deadline
-        throw ProbeError.timeout("load \(marker ?? "empty page")")
+        throw ProbeError.timeout(label)
     }
 
     private func waitUntil(_ label: String, condition: () -> Bool) async throws {

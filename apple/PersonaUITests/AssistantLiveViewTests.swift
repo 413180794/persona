@@ -1,7 +1,7 @@
 import XCTest
 
-/// Live-view data wiring before the unified component renderer is connected. A local mock serves the shared progress
-/// snapshots; the real app replaces its fallback in place and ignores a stale WebSocket update.
+/// Live-card updates through the shared component renderer. A local mock serves the shared progress snapshots;
+/// the real app updates the same feed row and ignores a stale WebSocket version.
 /// TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/AssistantLiveViewTests
 final class AssistantLiveViewTests: XCTestCase {
     @MainActor private var app: XCUIApplication!
@@ -51,20 +51,21 @@ final class AssistantLiveViewTests: XCTestCase {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let allow = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "允许"])).firstMatch
         if allow.waitForExistence(timeout: 3) { allow.tap() }
-        let fallback = app.staticTexts["assistant-live-view-fallback"]
-        XCTAssertTrue(fallback.waitForExistence(timeout: 30), "the live card fallback was not shown")
-        XCTAssertTrue(fallback.label.contains("发布进行中"))
+        let card = app.otherElements["assistant-view-card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 30), "the live card was not shown")
+        let initial = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "完成 1／3 步")).firstMatch
+        XCTAssertTrue(initial.exists)
         try await waitForSocket(at: hub)
         shot("initial")
         try await post("mock/views/update", at: hub)
-        let completed = app.staticTexts.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "assistant-live-view-fallback", "发布完成")).firstMatch
+        let completed = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "完成 3／3 步")).firstMatch
         XCTAssertTrue(completed.waitForExistence(timeout: 10), "the live snapshot did not update")
-        XCTAssertEqual(app.staticTexts.matching(identifier: "assistant-live-view-fallback").count, 1, "an update inserted another feed line")
+        XCTAssertEqual(app.otherElements.matching(identifier: "assistant-view-card").count, 1, "an update inserted another feed line")
         shot("updated")
         try await post("mock/views/stale", at: hub)
         // Give the old update a chance to arrive; the latest version must remain visible.
         try await Task.sleep(for: .seconds(1))
         XCTAssertTrue(completed.exists)
-        XCTAssertTrue(fallback.label.contains("发布完成"))
+        XCTAssertFalse(initial.exists)
     }
 }

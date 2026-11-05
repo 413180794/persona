@@ -55,6 +55,26 @@ nonisolated enum AssistantViewBlocks {
         return blocks
     }
 
+    /// Used by trailing source-tag recognition: a marker inside an unfinished example is ordinary user text.
+    static func isInsideFence(_ text: String) -> Bool {
+        let scalars = text.unicodeScalars
+        var opening: Fence?, position = text.startIndex
+        while position < text.endIndex {
+            var end = text.endIndex
+            if let newline = scalars[position...].firstIndex(where: { $0 == "\r" || $0 == "\n" }) {
+                end = scalars.index(after: newline)
+                if scalars[newline] == "\r", end < text.endIndex, scalars[end] == "\n" { end = scalars.index(after: end) }
+            }
+            if let fence = markdownFence(text[position..<end]) {
+                if let current = opening {
+                    if fence.character == current.character, fence.length >= current.length, !fence.hasInfo { opening = nil }
+                } else { opening = fence }
+            }
+            position = end
+        }
+        return opening != nil
+    }
+
     private nonisolated struct Fence {
         let character: Unicode.Scalar
         let length: Int

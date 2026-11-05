@@ -206,6 +206,7 @@ struct ChatView: View {
         // Every row's memo below (RowMemo) is this chat's: item ids repeat across chats (#372). Outermost, so the
         // sheets this page presents (a tool's detail) are inside it too.
         chatPage.environment(\.rowMemoScope, RowMemo.scope(shownKey))
+            .environment(\.assistantCardConversation, style == .assistant ? shownKey : nil)
     }
 
     @ViewBuilder private var chatPage: some View {
