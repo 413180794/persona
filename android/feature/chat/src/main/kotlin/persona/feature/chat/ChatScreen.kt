@@ -237,7 +237,22 @@ private fun ChatPage(
     val openWork = chatList.position.expanded
     var timelineVersion by remember { mutableIntStateOf(0) }
     val timeline = remember { ChatTimeline() }
-    val live = isLiveStatus(session?.status)
+    // Sent, the hub not saying working yet (#3909): the turn counts as started for a minute after the message.
+    var awaitNow by remember { mutableStateOf(java.time.Instant.now()) }
+    val awaited = remember(snapshot.items) { awaitedMessage(snapshot.items) }
+    val startFailed = !session?.startError.isNullOrBlank()
+    val awaiting = !readOnly && awaitingTurn(awaited, session?.status, startFailed, awaitNow)
+    val awaitingStatus = awaiting || (!readOnly && awaitingDelivered(messages, session?.status, startFailed))
+    LaunchedEffect(awaited?.id, awaited?.ts, session?.status) {
+        // Draw again when the wait runs out, so a message nobody picks up stops looking worked on.
+        awaitNow = java.time.Instant.now()
+        val at = parseTime(awaited?.ts) ?: return@LaunchedEffect
+        val left = AWAIT_TURN_MILLIS - java.time.Duration.between(at, awaitNow).toMillis()
+        if (left <= 0) return@LaunchedEffect
+        delay(left + 10)
+        awaitNow = java.time.Instant.now()
+    }
+    val live = isLiveStatus(session?.status) || awaiting
     // Which items the lines were last built from: until the first build finishes, the page is still loading, not empty.
     var projectedFrom by remember { mutableStateOf<List<Item>?>(null) }
     val projection by produceState(persona.core.domain.lines.ChatSnapshot(emptyList(), emptyList(), persona.core.domain.lines.TaskIndex()),
@@ -544,7 +559,7 @@ private fun ChatPage(
         }
     }
     val status = chatStatusState(res, snapshot, session, machine, messages, requests, busyId != null || controls.busy,
-        operationUnknown = uncertain.isNotEmpty() || controls.pending != null)
+        operationUnknown = uncertain.isNotEmpty() || controls.pending != null, awaiting = awaitingStatus)
     val replacement = if (snapshot.replaced) sessionList.firstOrNull { candidate ->
         session != null && candidate.key != key && SessionRuntimeState.map(session, listOf(candidate), true).replaced
     } else null

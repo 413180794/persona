@@ -1219,17 +1219,12 @@ func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.Snaps
 	return out
 }
 
-// snapshotTask is one task in the snapshot, in state st: its latest agent's last words, the step it is on while it
-// works (or has said nothing yet: an agent that only runs tools, #1583) and its running subagents, as the task cards
-// show them (docs/unified-entry.md「任务卡片的进度」).
+// snapshotTask is one task in the snapshot, in state st: its lead agent's (taskLead) last words, the step it is on
+// while it works (or has said nothing yet: an agent that only runs tools, #1583) and its running subagents, as the
+// task cards show them (docs/unified-entry.md「任务卡片的进度」).
 func snapshotTask(t Todo, st string, agents []proto.Session, now time.Time) prompts.SnapshotTask {
 	task := prompts.SnapshotTask{ID: t.ID, Title: t.Title, State: taskStateLabel(st)}
-	var last proto.Session
-	for _, s := range agents {
-		if s.UpdatedAt.After(last.UpdatedAt) {
-			last = s
-		}
-	}
+	last := taskLead(st, agents)
 	if last.SessionID == "" {
 		return task
 	}
@@ -1249,6 +1244,36 @@ func snapshotTask(t Todo, st string, agents []proto.Session, now time.Time) prom
 	}
 	task.Workflows = runningWorkflows(last, now)
 	return task
+}
+
+// taskLead is the agent a task in state st is shown with: the latest of those that put it in that state (the one
+// waiting for the user, cut off, finished unseen, working), so its session id and words are the ones the state is
+// about (#4192); the latest of all when none does (a task that stopped, or is done).
+func taskLead(st string, agents []proto.Session) proto.Session {
+	var lead, latest proto.Session
+	for _, c := range agents {
+		if latest.SessionID == "" || c.UpdatedAt.After(latest.UpdatedAt) {
+			latest = c
+		}
+		var makes bool
+		switch st {
+		case "needs_you":
+			makes = c.State == proto.StateNeedsYou || c.PendingInteractions > 0
+		case "interrupted":
+			makes = c.TurnError != ""
+		case "unread":
+			makes = c.State == proto.StateUnread
+		case "working":
+			makes = c.State == proto.StateWorking
+		}
+		if makes && (lead.SessionID == "" || c.UpdatedAt.After(lead.UpdatedAt)) {
+			lead = c
+		}
+	}
+	if lead.SessionID != "" {
+		return lead
+	}
+	return latest
 }
 
 // taskState follows docs/todos.md「状态计算规则」(clients compute the same).

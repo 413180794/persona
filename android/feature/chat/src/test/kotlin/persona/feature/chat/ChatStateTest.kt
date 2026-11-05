@@ -10,6 +10,8 @@ import persona.core.contracts.api.*
 import persona.core.domain.answer.*
 import persona.core.domain.lines.ChatLine
 import persona.core.domain.lines.WorkItem
+import persona.core.designsystem.resolveStatusLine
+import persona.core.domain.lines.isLiveStatus
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -92,6 +94,42 @@ class ChatStateTest {
         assertEquals(2, open.filterIsInstance<ChatLine.End>().single().count)
         assertEquals(store.map { it.id }.toSet(), timeline.searchItems(store).map { it.id }.toSet())
         assertEquals(store.size, timeline.searchItems(store).size)
+    }
+
+    @Test fun aMessageTheHubHasNotPickedUpYetShowsTheTurnRunning() {
+        val at = java.time.Instant.parse("2026-11-05T10:00:00Z")
+        val earlier = Item("old#0", 1, ts = "2026-11-05T09:59:00Z", role = "user", kind = "text", text = "先看看")
+        val answer = Item("answer#0", 2, ts = "2026-11-05T09:59:30Z", role = "assistant", kind = "text", text = "看过了")
+        val user = Item("user#0", 3, ts = "2026-11-05T10:00:00Z", role = "user", kind = "text", text = "继续")
+        val items = listOf(earlier, answer, user)
+        val soon = at.plusSeconds(2)
+        // The transcript has your message, the session list still says idle (or done): the turn has started.
+        val awaited = awaitedMessage(items)
+        assertEquals(user, awaited)
+        for (status in listOf("idle", "done", "unknown", null)) assertTrue(status.toString(), awaitingTurn(awaited, status, false, soon))
+        assertFalse(awaitingTurn(awaited, "idle", false, at.plusMillis(AWAIT_TURN_MILLIS)))
+        assertNull(awaitedMessage(listOf(earlier, answer)))
+        assertNull(awaitedMessage(items + Item("reply#0", 4, role = "assistant", kind = "thinking")))
+        // Out of list order, the newest by seq still decides.
+        assertEquals(user, awaitedMessage(listOf(user, earlier, answer)))
+        for (status in listOf("working", "blocked", "offline")) assertFalse(awaitingTurn(awaited, status, false, soon))
+        // A failed start says so; it does not look worked on.
+        assertFalse(awaitingTurn(awaited, "idle", true, soon))
+        // Its work line is live, and the status line says 正在工作, before the hub's push.
+        val session = Session(sessionId = "session", status = "idle")
+        val work = ChatTimeline().lines(items, isLiveStatus(session.status) || awaitingTurn(awaited, session.status, false, soon), emptySet())
+            .lines.filterIsInstance<ChatLine.Work>()
+        assertTrue(work.last().live)
+        val snapshot = ChatSnapshot(loading = false)
+        assertNull(chatStatus(res, snapshot, session, null, emptyList(), emptyList(), false))
+        assertEquals(StatusKind.Working, resolveStatusLine(chatStatusState(res, snapshot, session, null, emptyList(), emptyList(), false,
+            awaiting = true))?.kind)
+        // Delivered, its copy not in the transcript yet: the same.
+        val sent = OutboxMessage("m", SessionKey("machine", "session"), "继续", DeliveryState.Sent)
+        assertTrue(awaitingDelivered(listOf(sent), "idle", false))
+        assertFalse(awaitingDelivered(listOf(sent), "blocked", false))
+        assertFalse(awaitingDelivered(listOf(sent), "idle", true))
+        assertFalse(awaitingDelivered(listOf(sent.copy(state = DeliveryState.Sending)), "idle", false))
     }
 
     @Test fun statusPriorityAndApprovalRulesUseDomainPolicy() {

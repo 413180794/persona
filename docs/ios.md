@@ -205,6 +205,10 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
     `<jarvis-context>` 引用附在消息前，显示成输入框上方的引用胶囊）。只列已载入的步骤里的文件：长会话里收起的工作卡没展开过就没有。
   - 「/」：`SlashCommand.all`，快捷消息用短词（/继续、/提交、/汇报），选中后把要发的话填进输入框，点发送才发出（以前点菜单就直接发）；
     /compact、/context 原样；能清空时有 /clear，点了先弹确认。
+  - /loop（#2601，照网页 #1600）：只给 Claude Agent（Codex、TRAEX、助手没有，`LoopCommand.offered`），在「/」菜单和 + 菜单的快捷指令里，
+    选中把 `/loop ` 加在输入框已有文字前面（已有的字成为要做的事，光标停在命令词后面补间隔），不直接发送（+ 菜单其余快捷指令照旧点了就发）。草稿是 `/loop` 命令时输入框上方一行 `LoopDraftNote`
+    说它会做什么（「每 10 分钟重复：看下 CI」「由 Claude 自己定节奏重复：…」，没写要做的事时是灰的用法提示），三种输入框共用；
+    解析规则在 PersonaKit 的 `LoopCommand`，和 `web/src/lib/loop-command.ts` 一致。截图：`-showLoopDraft "/loop 10m 看下 CI"`。
   - 模型：Agent 对话里是 Claude Code 的 `/model` 别名（默认 / Opus / Sonnet / Haiku），选中就发 `/model <别名>`；Codex、TRAEX、无头助手没有这个按钮。
     助手首页是启动器列表（原来输入框上方的模型标签挪进来了）。
   - 听写：`Dictation`（`SFSpeechRecognizer` 中文 + `AVAudioEngine`），听到的字实时接在草稿后面，再点一下停；发送时自动停。

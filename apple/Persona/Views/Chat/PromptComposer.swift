@@ -189,8 +189,8 @@ enum PromptItems {
 
     /// Persona' quick messages under short "/" words (picking one types its message, sent with send), then Claude
     /// Code's own commands.
-    static func commands(clear: Bool) -> [PromptCommand] {
-        var out = SlashCommand.all.map { PromptCommand($0.word, detail: $0.detail, insert: $0.text) }
+    static func commands(clear: Bool, loop: Bool = false) -> [PromptCommand] {
+        var out = SlashCommand.commands(loop: loop).map { PromptCommand($0.word, detail: $0.detail, insert: $0.text) }
         if clear { out.append(PromptCommand("/clear", detail: String(localized: "清空上下文，开新会话"))) }
         return out
     }

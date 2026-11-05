@@ -38360,6 +38360,50 @@
         }
       }
     },
+    "定时重复 /loop": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeat on a schedule /loop"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "定期的に繰り返す /loop"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "定时重复 /loop"
+          }
+        }
+      }
+    },
+    "定时重复做一件事": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeat a task on a schedule"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "決まった間隔で同じことを繰り返す"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "定时重复做一件事"
+          }
+        }
+      }
+    },
     "实时接入": {
       "localizations": {
         "en": {

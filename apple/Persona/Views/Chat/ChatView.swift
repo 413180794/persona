@@ -3447,6 +3447,22 @@ struct Composer: View, Equatable {
 
     private var allowsSend: Bool { model.session(key)?.canSend == true }
 
+    /// /loop for Claude agents (`LoopCommand.offered`, as on the web): in the quick commands, with a line saying what
+    /// a /loop draft will do.
+    private var canLoop: Bool {
+        guard let s = model.session(key), s.canSend else { return false }
+        return LoopCommand.offered(agent: s.agent, sourceKind: s.sourceKind, assistant: s.assistant)
+    }
+
+    /// Puts the command word before what is in the box, which becomes its task, and the caret right after the word for
+    /// an interval (/loop needs a task before it goes). A draft that already is the command stays as it is.
+    private func startDraft(_ word: String) {
+        let rest = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !LoopCommand.isDraft(rest) { text = word + rest }
+        selection = TextSelection(insertionPoint: text.index(text.startIndex, offsetBy: min(word.count, text.count)))
+        focused = true
+    }
+
     private var canSend: Bool {
         allowsSend && !videos.busy && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !videos.ready.isEmpty
             || !(model.composerContexts[key] ?? []).isEmpty)
@@ -3479,7 +3495,7 @@ struct Composer: View, Equatable {
     }
 
     private var promptCommands: [PromptCommand] {
-        PromptItems.commands(clear: canClear && !status.isActive && !clearing) + declarations.prompts.map {
+        PromptItems.commands(clear: canClear && !status.isActive && !clearing, loop: canLoop) + declarations.prompts.map {
             PromptCommand(String(localized: "/扩展/\($0.title)", comment: "Menu name of a prompt an extension adds"), detail: $0.ownerName, insert: $0.text)
         }
     }
@@ -3487,8 +3503,10 @@ struct Composer: View, Equatable {
     /// Quick messages and /clear in the + menu (`ComposerRow`, and an agent's in the shell).
     @ViewBuilder private var quickCommands: some View {
         Section("快捷指令") {
-            ForEach(SlashCommand.all) { cmd in
-                Button { Task { await sendText(cmd.text) } } label: { Label(cmd.title, systemImage: cmd.symbol) }
+            ForEach(SlashCommand.commands(loop: canLoop)) { cmd in
+                Button {
+                    if cmd.drafts { startDraft(cmd.text) } else { Task { await sendText(cmd.text) } }
+                } label: { Label(cmd.title, systemImage: cmd.symbol) }
             }
             if canClear {
                 Button(role: .destructive) { confirmClear = true } label: {
@@ -3503,7 +3521,7 @@ struct Composer: View, Equatable {
     private var slashRows: [SlashMenuRow] {
         guard !shellChat, model.session(key)?.assistant != true, usesShellComposer || !AppStyle.current.usesBeautifulUI,
               text.hasPrefix("/"), text != slashPicked else { return [] }
-        return SlashMenuRow.matching(text, in: SlashMenuRow.rows(model: canPickModel, clear: canClear && !status.isActive && !clearing))
+        return SlashMenuRow.matching(text, in: SlashMenuRow.rows(model: canPickModel, loop: canLoop, clear: canClear && !status.isActive && !clearing))
     }
 
     /// A "/" row picked: its text in the box to send or edit, as on the web; /clear asks first, as the + menu's.
@@ -3570,6 +3588,10 @@ struct Composer: View, Equatable {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             CompactionSlot(key: key) // an assistant conversation's 压缩上下文 (#1762)
+            if canLoop, let hint = LoopCommand.hint(text) {
+                LoopDraftNote(hint: hint)
+                    .transition(.opacity)
+            }
             if let suggestion {
                 SuggestionPill(text: suggestion) {
                     text = suggestion
@@ -3641,6 +3663,13 @@ struct Composer: View, Equatable {
                                    return true
                                },
                                onCommand: { command in
+                                   if command.name == SlashCommand.loop.word {
+                                       // The bar puts its text in without moving the caret off the "/": what is typed
+                                       // next went in the middle ("/10m 看下 CIloop "). Ours, after the bar has
+                                       // cleared the "/" it took.
+                                       Task { @MainActor in startDraft(SlashCommand.loop.text) }
+                                       return true
+                                   }
                                    guard command.name == "/clear" else { return false }
                                    confirmClear = true
                                    return true
@@ -3692,6 +3721,12 @@ struct Composer: View, Equatable {
             guard UserDefaults.standard.bool(forKey: "openSlashMenu") else { return }
             try? await Task.sleep(for: .seconds(4))
             text = "/"
+        }
+        .task { // `-showLoopDraft "/loop 10m 看下 CI"`: that draft in the box, with its line (#2601, screenshots)
+            guard let draft = UserDefaults.standard.string(forKey: "showLoopDraft") else { return }
+            try? await Task.sleep(for: .seconds(4))
+            for _ in 0..<20 where !canLoop { try? await Task.sleep(for: .seconds(1)) } // the session list loads
+            if canLoop { text = draft }
         }
         .task { // `-focusComposer YES`: the keyboard up, for screenshots of the chat while typing
             if UserDefaults.standard.bool(forKey: "focusComposer") {
@@ -3907,6 +3942,9 @@ struct SlashCommand: Identifiable {
     var word: String
     var detail: String
     var text: String
+    /// Picking it only types `text` into the box, to be finished before sending (/loop); the others send at once from
+    /// the + menu.
+    var drafts = false
     var id: String { word }
 
     static let all: [SlashCommand] = [
@@ -3916,6 +3954,33 @@ struct SlashCommand: Identifiable {
         SlashCommand(title: String(localized: "提交并推送"), symbol: "arrow.up.doc", word: String(localized: "/提交", comment: "Slash command word the user can type"), detail: String(localized: "按规范提交并推送"), text: String(localized: "把当前改动按规范提交并推送", comment: "Message sent to the agent when the command is picked")),
         SlashCommand(title: String(localized: "汇报进展"), symbol: Theme.Icon.list, word: String(localized: "/汇报", comment: "Slash command word the user can type"), detail: String(localized: "汇报进展、还剩什么"), text: String(localized: "简要汇报一下目前的进展、还剩什么", comment: "Message sent to the agent when the command is picked")),
     ]
+
+    /// Claude Code's /loop (#2601): `/loop [interval] <what to do>` re-runs the prompt on a schedule.
+    static let loop = SlashCommand(title: String(localized: "定时重复 /loop"), symbol: Theme.Icon.inProgress, word: "/loop", detail: String(localized: "定时重复做一件事"),
+                                   text: LoopCommand.text, drafts: true)
+
+    /// What a session's composer offers: /loop only to Claude agents (`LoopCommand.offered`).
+    static func commands(loop: Bool) -> [SlashCommand] { loop ? all + [Self.loop] : all }
+}
+
+/// Over the composer while the draft is a /loop command: what it will repeat and how often, or what it still lacks
+/// (the web's line under its box, #1586).
+struct LoopDraftNote: View {
+    var hint: LoopHint
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+            Image(systemName: Theme.Icon.inProgress).font(Theme.Font.labelStrong)
+                .foregroundStyle(hint.missing ? AnyShapeStyle(.tertiary) : AnyShapeStyle(Theme.loop))
+            Text(hint.text).font(Theme.Font.secondary)
+                .foregroundStyle(hint.missing ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+                .lineLimit(2)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Theme.Space.m)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("chat.loopHint")
+    }
 }
 
 /// A row of the list typing "/" opens over the composer, as the web's (`AGENT_COMMANDS` in web/src/views/chat/Composer.tsx):
@@ -3931,6 +3996,8 @@ struct SlashMenuRow: Identifiable, Equatable {
 
     static let model = SlashMenuRow(word: "/model", detail: String(localized: "切换模型"), text: "/model ")
     static let clear = SlashMenuRow(word: "/clear", detail: String(localized: "清空对话，从头开始"), text: "/clear")
+    /// Picked from this list the draft is only the "/word" typed so far, so the row's text replaces it as any row's does.
+    static let loop = SlashMenuRow(word: SlashCommand.loop.word, detail: SlashCommand.loop.detail, text: SlashCommand.loop.text)
 
     /// The web's order: its quick messages, then Claude Code's commands. A quick command added later goes after these.
     /// The words as `SlashCommand.all` has them (localized), so the order holds in every language.
@@ -3938,11 +4005,13 @@ struct SlashMenuRow: Identifiable, Equatable {
                                 String(localized: "/提交", comment: "Slash command word the user can type"),
                                 String(localized: "/汇报", comment: "Slash command word the user can type"), "/compact", "/context"]
 
-    /// The rows an agent's chat offers: /model where the phone can pick one, /clear where the pane takes it.
-    static func rows(model: Bool, clear: Bool) -> [SlashMenuRow] {
+    /// The rows an agent's chat offers: /model where the phone can pick one, /loop for a Claude agent
+    /// (`LoopCommand.offered`), /clear where the pane takes it.
+    static func rows(model: Bool, loop: Bool = false, clear: Bool) -> [SlashMenuRow] {
         let quick = SlashCommand.all.sorted { (order.firstIndex(of: $0.word) ?? order.count) < (order.firstIndex(of: $1.word) ?? order.count) }
         var out = quick.map { SlashMenuRow(word: $0.word, detail: $0.detail, text: $0.text) }
         if model { out.append(.model) }
+        if loop { out.append(.loop) }
         if clear { out.append(.clear) }
         return out
     }

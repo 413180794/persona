@@ -8,6 +8,10 @@ struct SlashMenuTests {
         let words = SlashMenuRow.rows(model: true, clear: true).map(\.word)
         #expect(words == ["/继续", "/提交", "/汇报", "/compact", "/context", "/model", "/clear"])
         #expect(SlashMenuRow.rows(model: false, clear: false).map(\.word) == ["/继续", "/提交", "/汇报", "/compact", "/context"])
+        // /loop between /model and /clear, as on the web, only where it is offered (a Claude agent)
+        #expect(SlashMenuRow.rows(model: true, loop: true, clear: true).map(\.word)
+            == ["/继续", "/提交", "/汇报", "/compact", "/context", "/model", "/loop", "/clear"])
+        #expect(SlashMenuRow.matching("/lo", in: SlashMenuRow.rows(model: true, loop: true, clear: true)).map(\.text) == ["/loop "])
     }
 
     @Test func onlyALoneSlashWordOpensTheList() {

@@ -369,6 +369,52 @@ func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
 	}
 }
 
+// A task with several agents is shown with the one its state is about (#4192): 等用户 names the agent that waits for
+// the user and what it said, not another one that moved later; so do 中断了, 做完了 and 在做. Stopped: the latest.
+func TestSnapshotTaskShowsTheAgentItsStateIsAbout(t *testing.T) {
+	now := time.Date(2026, 11, 6, 21, 0, 0, 0, time.UTC)
+	todo := Todo{ID: "todo_1", Title: "两台电脑一起改"}
+	asking := proto.Session{MachineID: "mac-a", SessionID: "aaaa1111-0001", State: proto.StateNeedsYou, PendingInteractions: 1,
+		UpdatedAt: now.Add(-10 * time.Minute), LastText: "要不要把旧接口一起删掉？"}
+	cut := proto.Session{MachineID: "mac-a", SessionID: "cccc3333-0003", State: proto.StateIdle, TurnError: "API Error: 529 overloaded",
+		UpdatedAt: now.Add(-8 * time.Minute), LastText: "API Error: 529 overloaded"}
+	finished := proto.Session{MachineID: "mac-b", SessionID: "dddd4444-0004", State: proto.StateUnread,
+		UpdatedAt: now.Add(-6 * time.Minute), LastText: "PR 开好了"}
+	busy := proto.Session{MachineID: "mac-b", SessionID: "eeee5555-0005", State: proto.StateWorking,
+		UpdatedAt: now.Add(-4 * time.Minute), LastText: "在跑测试"}
+	seen := proto.Session{MachineID: "mac-b", SessionID: "bbbb2222-0002", State: proto.StateIdle,
+		UpdatedAt: now.Add(-time.Minute), LastText: "已经提交了"}
+	// Waits for the user too, longer: the newer of the two stands for the task.
+	older := proto.Session{MachineID: "mac-a", SessionID: "ffff6666-0006", State: proto.StateNeedsYou, PendingInteractions: 1,
+		UpdatedAt: now.Add(-20 * time.Minute), LastText: "先确认一下分支"}
+
+	for _, c := range []struct {
+		name   string
+		agents []proto.Session
+		state  string
+		want   proto.Session
+	}{
+		{"needs you", []proto.Session{asking, cut, finished, busy, seen}, "needs_you", asking},
+		{"needs you, two waiting", []proto.Session{older, asking, seen}, "needs_you", asking},
+		{"interrupted", []proto.Session{cut, finished, busy, seen}, "interrupted", cut},
+		{"unread", []proto.Session{finished, busy, seen}, "unread", finished},
+		{"working", []proto.Session{busy, seen}, "working", busy},
+		{"stopped", []proto.Session{asking, seen}, "followup", seen},
+	} {
+		if c.state == "followup" { // the agents as they were, all stopped now
+			c.agents[0].State, c.agents[0].PendingInteractions = proto.StateIdle, 0
+		}
+		if st := taskState(todo, c.agents); st != c.state {
+			t.Fatalf("%s: state %s, want %s", c.name, st, c.state)
+		}
+		got := snapshotTask(todo, c.state, c.agents, now)
+		if got.Session != short(c.want.SessionID) || got.Machine != c.want.MachineID || got.Last != c.want.LastText {
+			t.Fatalf("%s: shown with %s/%s %q, want %s/%s %q", c.name, got.Machine, got.Session, got.Last,
+				c.want.MachineID, short(c.want.SessionID), c.want.LastText)
+		}
+	}
+}
+
 // The snapshot's links are the web app's own routes (web/src/lib/router.ts), on the hub's public_url; none without
 // one (#2194).
 func TestSnapshotLinks(t *testing.T) {

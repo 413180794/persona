@@ -85,12 +85,51 @@ internal fun recordedDurationLabel(res: android.content.res.Resources, seconds: 
 
 internal typealias StatusKind = StatusLineKind
 
+/** How long a message of yours, the newest thing in the chat, counts as the start of a turn the hub has not reported. */
+internal const val AWAIT_TURN_MILLIS = 60_000L
+
+/**
+ * The session's status says it is not at work, nor offline or waiting on you, and it did not fail to start: the hub may
+ * just not have caught up.
+ */
+private fun mayBeCatchingUp(status: String?, startFailed: Boolean) =
+    !startFailed && (status == null || status == "idle" || status == "done" || status == "unknown")
+
+/** Your message, when it is the newest thing in the transcript (nothing has answered it yet); one pass, no copy. */
+internal fun awaitedMessage(items: List<Item>): Item? =
+    items.asSequence().filter { it.kind != "turn_duration" }.maxWithOrNull(chatItemOrder)
+        ?.takeIf { it.role == "user" && it.kind == "text" }
+
+/**
+ * [message] ([awaitedMessage]) is unanswered while the session's status still says it is not at work (#3909, web #3654):
+ * the transcript has the message before the node's next sessions push says working, and in between the chat showed
+ * neither the work line nor 正在工作. True for [AWAIT_TURN_MILLIS] after the message's time, which a phone clock behind
+ * the hub's can stretch by up to as much again; never while the hub says working, waiting on you or offline, nor
+ * after a failed start. Like the web, any message counts (typed in the terminal too): it starts a turn all the same.
+ */
+internal fun awaitingTurn(message: Item?, status: String?, startFailed: Boolean, now: java.time.Instant): Boolean {
+    if (message == null || !mayBeCatchingUp(status, startFailed)) return false
+    val at = parseTime(message.ts) ?: return false
+    val age = java.time.Duration.between(at, now).toMillis()
+    return age > -AWAIT_TURN_MILLIS && age < AWAIT_TURN_MILLIS
+}
+
+/**
+ * Delivered but not in the transcript yet, while the session's status may still say idle: the status line says 正在工作
+ * for it too. No clock of its own: OutboxMessageSender drops a sent bubble after its grace (a minute, longer only
+ * while the session is at work), and this goes with it.
+ */
+internal fun awaitingDelivered(messages: List<OutboxMessage>, status: String?, startFailed: Boolean): Boolean =
+    mayBeCatchingUp(status, startFailed) && messages.any { it.state == DeliveryState.Sent }
+
 internal fun chatStatusState(
     res: android.content.res.Resources,
     snapshot: persona.core.contracts.api.ChatSnapshot,
     session: Session?, machine: Machine?, messages: List<OutboxMessage>,
     requests: List<Interaction>, answering: Boolean,
     operationUnknown: Boolean = false,
+    /** A turn of yours the hub has not reported yet ([awaitingTurn], [awaitingDelivered]). */
+    awaiting: Boolean = false,
 ): StatusLineState = StatusLineState(
     ended = snapshot.ended,
     replaced = snapshot.replaced,
@@ -102,7 +141,7 @@ internal fun chatStatusState(
     blocked = session?.status == "blocked",
     requestSummary = requests.singleOrNull()?.headline?.shown,
     stopping = snapshot.stopping,
-    working = session?.status == "working",
+    working = session?.status == "working" || awaiting,
     waiting = session?.loop != null || !session?.background.isNullOrEmpty() || session?.runningWorkflows?.isNotEmpty() == true,
     waitingDetail = when {
         session?.loop != null -> res.getString(R.string.chat_state_looping)
