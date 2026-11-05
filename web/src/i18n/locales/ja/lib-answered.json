@@ -18,5 +18,12 @@
   "ended_expired": "このリクエストは期限切れのため、回答は届きませんでした",
   "ended_cancelled": "コンピューター側でこのリクエストが取り消されたため、回答は届きませんでした",
   "ended_dismissed": "このリクエストはコンピューターに戻されたため、回答は届きませんでした",
-  "ended_generic": "このリクエストは終了したため、回答は届きませんでした"
+  "ended_generic": "このリクエストは終了したため、回答は届きませんでした",
+  "elicitation_submitted": "送信済み",
+  "elicitation_opened": "リンクを開いて続行",
+  "elicitation_declined": "拒否済み",
+  "elicitation_cancelled": "キャンセル済み",
+  "elicitation_yes": "はい",
+  "elicitation_no": "いいえ",
+  "elicitation_hidden": "（入力済み）"
 }

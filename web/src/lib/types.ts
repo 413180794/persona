@@ -411,13 +411,22 @@ export interface ScreenDialog {
   incomplete?: boolean;
 }
 
+/** What an MCP server asks for: a form (`requested_schema`, a JSON Schema subset) or a link to open (`url`). */
+export interface Elicitation {
+  mode: "form" | "url" | (string & {});
+  message?: string;
+  requested_schema?: Record<string, unknown>;
+  url?: string;
+  elicitation_id?: string;
+}
+
 export interface Interaction {
   id: string;
   machine_id: string;
   session_id: string;
   session_title?: string;
   cwd?: string;
-  kind: "question" | "plan" | "permission" | "screen";
+  kind: "question" | "plan" | "permission" | "screen" | "elicitation";
   created_at?: string;
   tool_name?: string;
   questions?: Question[];
@@ -431,6 +440,13 @@ export interface Interaction {
   agent?: string;
   /** What "always allow" allows here; another agent's card offers it only with this. */
   always_label?: string;
+  /** An MCP form or link (kind elicitation, docs/protocol.md「MCP elicitation」): the server, where it is configured, and
+   *  the subagent that asks, when the hook says. */
+  mcp_server_name?: string;
+  mcp_config_source?: string;
+  agent_id?: string;
+  agent_type?: string;
+  elicitation?: Elicitation;
 }
 
 export interface Launcher {

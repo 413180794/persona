@@ -18,5 +18,12 @@
   "ended_expired": "This request expired, so the answer wasn't delivered",
   "ended_cancelled": "The computer withdrew this request, so the answer wasn't delivered",
   "ended_dismissed": "This request was handed back to the computer, so the answer wasn't delivered",
-  "ended_generic": "This request is over, so the answer wasn't delivered"
+  "ended_generic": "This request is over, so the answer wasn't delivered",
+  "elicitation_submitted": "Submitted",
+  "elicitation_opened": "Opened the link, continued",
+  "elicitation_declined": "Declined",
+  "elicitation_cancelled": "Cancelled",
+  "elicitation_yes": "Yes",
+  "elicitation_no": "No",
+  "elicitation_hidden": "(Entered)"
 }

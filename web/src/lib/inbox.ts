@@ -412,6 +412,7 @@ export function interactionTitle(ix: Interaction): string {
   const name = ix.agent === "codex" ? "Codex" : ix.agent === "traex" ? "TRAEX" : ix.agent && ix.agent !== "claude" ? ix.agent : "";
   if (name && ix.kind === "question") return t("lib-inbox.ix_named_asks", { name });
   if (name && ix.kind === "permission") return t("lib-inbox.ix_named_permission", { name });
+  if (ix.kind === "elicitation") return ix.elicitation?.mode === "url" ? t("lib-inbox.ix_elicitation_url") : t("lib-inbox.ix_elicitation_form");
   return { question: t("lib-inbox.ix_claude_asks"), plan: t("lib-inbox.ix_plan"), permission: t("lib-inbox.ix_permission"), screen: t("lib-inbox.ix_screen") }[ix.kind];
 }
 
@@ -426,6 +427,8 @@ export function interactionAsk(ix: Interaction): string {
       return ix.summary || str(input?.description) || str(input?.command) || ix.tool_name || "";
     case "screen":
       return ix.dialog?.question || ix.summary || "";
+    case "elicitation":
+      return ix.elicitation?.message?.trim() || ix.summary || "";
     default:
       return ix.summary || "";
   }

@@ -422,7 +422,7 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
 
 ### MCP elicitation
 
-`hello.features` 新增 `elicitation`。客户端需在 `client_hello.features` 明确声明，Android 默认声明。现有 `interaction` 事件的 `interaction` 对象新增以下可选字段，信封顶层不增加键：
+`hello.features` 新增 `elicitation`。客户端需在 `client_hello.features` 明确声明，Android 和网页默认声明（网页的 `X-Jarvis-Client` 写平台 web、版本 1，和它 `client_hello` 的 `platform` / `version` 一致）。现有 `interaction` 事件的 `interaction` 对象新增以下可选字段，信封顶层不增加键：
 
 ```json
 {

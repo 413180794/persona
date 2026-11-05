@@ -39,5 +39,6 @@
   "online": "Online",
   "mark_all_seen_title_one": "Mark {count} unread session as seen",
   "mark_all_seen_title_other": "Mark {count} unread sessions as seen",
-  "agent_preview": "{agent}: {preview}"
+  "agent_preview": "{agent}: {preview}",
+  "kind_elicitation": "MCP request"
 }

@@ -37,11 +37,22 @@ export function handleUnauthorized(fn: () => void) {
   onUnauthorized = fn;
 }
 
+/**
+ * Who this page is to the hub: the platform and version its socket's client_hello names, and every request's
+ * X-Jarvis-Client. The hub answers a request with what this page's socket declared (MCP forms and links: only to a
+ * request whose platform and version match a connection that declared them, docs/protocol.md「MCP elicitation」).
+ */
+export const CLIENT_PLATFORM = "web";
+export const CLIENT_VERSION = "1";
+/** What this page can render beyond the basics (client_hello `features`). */
+export const CLIENT_FEATURES = ["elicitation"];
+
 export async function api<T>(path: string, init: RequestInit & { json?: unknown; token?: string } = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${init.token ?? getToken()}`);
   // the hub writes its error and status text in the interface language (docs/i18n.md「协议」)
   if (!headers.has("Accept-Language")) headers.set("Accept-Language", currentLanguage());
+  headers.set("X-Jarvis-Client", `${CLIENT_PLATFORM}/${CLIENT_VERSION}`);
   let body = init.body;
   if (init.json !== undefined) {
     headers.set("Content-Type", "application/json");

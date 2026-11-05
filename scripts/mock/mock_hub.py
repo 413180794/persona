@@ -2137,6 +2137,31 @@ if os.environ.get("MOCK_SETTINGS_INPUT"):
         "fields": [{"key": "password", "label": "密码 / 授权码", "placeholder": "填写邮箱授权码", "secret": True}],
     })
 
+# MOCK_ELICITATION=1: two MCP elicitation requests on the PR review session (docs/protocol.md「MCP elicitation」), a
+# form in the schema subset the clients render and a link to open first; =unsupported makes the form one they don't.
+if os.environ.get("MOCK_ELICITATION"):
+    _props = {
+        "env": {"type": "string", "title": "部署环境", "enum": ["staging", "prod"], "enumNames": ["预发", "生产"]},
+        "replicas": {"type": "integer", "title": "副本数", "minimum": 1, "maximum": 10, "default": 2},
+        "notify": {"type": "boolean", "title": "完成后通知群里"},
+        "regions": {"type": "array", "title": "区域", "items": {"type": "string", "enum": ["east", "west", "north"]}},
+        "owner": {"type": "string", "title": "负责人邮箱", "format": "email", "description": "出问题时找谁"},
+        "token": {"type": "string", "title": "部署口令", "format": "password"},
+    }
+    if os.environ["MOCK_ELICITATION"] == "unsupported":
+        _props["owner"]["pattern"] = "^.+@example\\.com$"
+    INTERACTIONS.extend([
+        {"id": "ix_elicit_form", "machine_id": "macbook", "session_id": REVIEW, "session_title": "检查 PR #42 的改动",
+         "kind": "elicitation", "created_at": ago(minutes=1), "expires_at": later(minutes=20),
+         "mcp_server_name": "deploy-mcp", "mcp_config_source": "project", "agent_type": "worker",
+         "elicitation": {"mode": "form", "message": "确认这次部署的参数",
+                         "requested_schema": {"type": "object", "required": ["env", "replicas"], "properties": _props}}},
+        {"id": "ix_elicit_url", "machine_id": "macbook", "session_id": REVIEW, "session_title": "检查 PR #42 的改动",
+         "kind": "elicitation", "created_at": ago(minutes=1), "expires_at": later(minutes=20), "mcp_server_name": "github-mcp",
+         "elicitation": {"mode": "url", "message": "请打开链接完成 GitHub 授权", "url": "https://example.com/oauth/authorize?state=demo",
+                         "elicitation_id": "request_example"}},
+    ])
+
 # MOCK_CODEX=1: the Codex session's question (Plan mode, two questions) and an approval, as a node reads them off the
 # Codex TUI (docs/codex.md「提问和审批」); the first answer to the approval is refused as if the computer's input box held
 # a draft (409 input_draft), the next one goes through (GET /mock/resolved has them all). /mock/reset puts both back
@@ -4187,13 +4212,84 @@ def _lm(pos, who, text, mine=False, mins=60):
 LARK_MESSAGES = {"f2": [
     _lm("200", "Lucy Wang", "The new icon set is in the shared folder. Could you take a look before the review this afternoon?", mins=58),
     _lm("201", "李雷", "我先看了一下，标签栏的图标偏细", mins=57),
-    _lm("202", "Lucy Wang", "Agreed. I''s [removed] words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
+    _lm("202", "Lucy Wang", "Agreed. I'll make the tab bar icons one weight heavier and send an update by 3 pm.", mins=56),
+    _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
+]}
+LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {"copy": True}, "content": {"type": "doc", "content": [
+    {"type": "heading", "attrs": {"level": 1}, "content": [{"type": "text", "text": "新版图标评审"}]},
+    {"type": "paragraph", "content": [{"type": "text", "text": "这一版统一了圆角和描边，深色模式单独调了对比度。"}]},
+    {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "待确认"}]},
+    {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "主色是否再暖一点"}]}]},
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "小尺寸下的描边粗细"}]}]}]},
+    {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
+]}}
+
+LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
+
+# MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
+if os.environ.get("MOCK_LARK_OLK"):
+    def _olk(pos, state, body, cover, handout=False):
+        m = _lm(str(pos), "李雷", body or "加密群密钥分发消息", mins=55)
+        m["parts"] = [{"kind": "text", "text": m["text"]}]
+        m["olk"] = {"version": 1, "state": state,
+                    "publicParts": [{"kind": "text", "text": cover}] if cover else []}
+        if state == "decrypted":
+            m["olk"].update(bodyParts=[{"kind": "text", "text": body}] if body else [], keyHandout=handout)
+        return m
+    LARK_MESSAGES["f2"] = [
+        _olk(200, "decrypted", "", "稍等", True),
+        _olk(201, "decrypted", "评审文档已更新，请看第二页。", "我看看"),
+        _olk(202, "decrypted", "我把调整后的版本发到这里。", "等下", True),
+        _olk(203, "locked", "不可见的正文", "午饭后再聊"),
+        _lm("204", "李雷", "加密群密钥分发消息是一个普通文本示例", mins=55),
+    ]
+    LARK_MESSAGES["f2"][2]["reply_to"] = {
+        "id": "m201", "sender_name": "李雷", "text": "旧接口摘要",
+        "olk": LARK_MESSAGES["f2"][1]["olk"],
+    }
+    LARK_MESSAGES["f2"][4]["reply_to"] = {
+        "id": "m203", "sender_name": "李雷", "text": "不可见的正文",
+        "olk": LARK_MESSAGES["f2"][3]["olk"],
+    }
+
+LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
+# Isolated pin shelf fixtures: real list endpoints, account checks and realtime changes.
+LARK_PIN_FIXTURE = {"count": 18, "account": "pin-account-one", "offline": False, "reverse": False, "unread": 3, "newest": False, "requests": 0}
+def lark_pin_rows():
+    rows = [dict(c) for c in LARK_CHATS]
+    for i in range(1, 81):
+        rows.append({"id": f"pin-{i}", "name": f"会话 {i:02d}", "is_group": i % 2 == 0,
+                     "unread": i % 4, "at_me": False, "muted": i % 3 == 0, "is_mine": False,
+                     "preview": f"第 {i} 条会话摘要", "updated_at": ago(minutes=i)})
+    rows[0]["unread"] = LARK_PIN_FIXTURE["unread"]
+    if LARK_PIN_FIXTURE["newest"]:
+        rows.insert(0, dict(rows[0], id="incoming", name="新会话", preview="实时更新的摘要"))
+        rows = [dict(c, preview="实时更新 · " + c["preview"]) for c in rows]
+    if LARK_PIN_FIXTURE["account"] != "pin-account-one":
+        rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
+    return rows
+
+LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
+                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB"))}
+# MOCK_LARK_OLD_DISPLAY=1: a Feishu extension older than 0.10.0, whose settings have no [removed] switch.
+if os.environ.get("MOCK_LARK_OLD_DISPLAY"):
+    del LARK_DISPLAY["brave_climb_codec"]
+
+BRAVE_CLIMB_ALPHABET = "[removed]"
+def brave_climb(text):
+    """"""
     n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
     while True:
         n, d = divmod(n, 34)
         out = BRAVE_CLIMB_ALPHABET[d] + out
         if n == 0:
-            return "**字" + out + "**""MOCK_LARK_BRAVE_CLIMB"):
+            return "**字" + out + "**"
+
+# MOCK_LARK_BRAVE_CLIMB=1 (#882): the switch is on and 设计评审 (f2) has [removed] words: a whole message, one split over
+# two runs of rich text, words inside a sentence, a quote of one, and the older four-character encoding; its summary in
+# the list is words too.
+if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
     whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
     whole["parts"] = [{"kind": "text", "text": whole["text"]}]
     words = brave_climb("标签栏改粗一号")
@@ -4201,7 +4297,7 @@ LARK_MESSAGES = {"f2": [
     split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
     inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
     inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy = _lm("213", "Lucy Wang", "**" + "".join(""[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
     legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
     reply = _lm("214", "我", "好的", mine=True, mins=36)
     reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}

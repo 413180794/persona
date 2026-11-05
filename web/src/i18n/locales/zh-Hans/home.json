@@ -36,5 +36,6 @@
   "offline": "离线",
   "online": "在线",
   "mark_all_seen_title_other": "把 {count} 个完成未看的会话标为已读",
-  "agent_preview": "{agent}：{preview}"
+  "agent_preview": "{agent}：{preview}",
+  "kind_elicitation": "MCP 请求"
 }

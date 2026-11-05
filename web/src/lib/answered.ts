@@ -2,6 +2,7 @@
 // permission or terminal dialog was answered. The resolution is what was sent, or — when the hub says the card was
 // answered already (POST …/resolve → {already, resolution}) — the answer that took effect, as its history keeps it.
 import { t } from "../i18n";
+import { fields, type Field } from "./elicitation";
 import type { Interaction } from "./types";
 
 export type Resolution = Record<string, unknown>;
@@ -41,6 +42,8 @@ export function answerLines(ix: Interaction, r: Resolution): AnswerLine[] {
       if (r.allow === true) return [{ label: "", answer: r.always === true ? t("lib-answered.always_allowed") : t("lib-answered.allowed") }];
       if (r.allow === false) return [{ label: "", answer: t("lib-answered.denied") }];
       return [{ label: "", answer: t("lib-answered.handled") }];
+    case "elicitation":
+      return elicitationLines(ix, r);
     default: {
       const options = ix.dialog?.options ?? [];
       const labelOf = (key: string) => options.find((o) => o.key === key)?.label ?? key;
@@ -50,6 +53,23 @@ export function answerLines(ix: Interaction, r: Resolution): AnswerLine[] {
       return [{ label: "", answer: answer || t("lib-answered.handled") }];
     }
   }
+}
+
+/** An MCP form or link: how it was answered, and for a form what was filled in (a secret only says it was). */
+function elicitationLines(ix: Interaction, r: Resolution): AnswerLine[] {
+  if (r.action === "decline") return [{ label: "", answer: t("lib-answered.elicitation_declined") }];
+  if (r.action === "cancel") return [{ label: "", answer: t("lib-answered.elicitation_cancelled") }];
+  if (r.action !== "accept") return [{ label: "", answer: t("lib-answered.handled") }];
+  if (ix.elicitation?.mode === "url") return [{ label: "", answer: t("lib-answered.elicitation_opened") }];
+  const content = (r.content ?? {}) as Record<string, unknown>;
+  const shown = (f: Field, v: unknown): string => {
+    if (f.secret) return t("lib-answered.elicitation_hidden");
+    if (typeof v === "boolean") return v ? t("lib-answered.elicitation_yes") : t("lib-answered.elicitation_no");
+    const label = (x: unknown) => f.choiceLabels[f.choices.indexOf(x as string)] ?? String(x);
+    return Array.isArray(v) ? v.map(label).join(t("lib-answered.separator")) : label(v);
+  };
+  const lines = fields(ix.elicitation?.requested_schema).filter((f) => content[f.key] !== undefined).map((f) => ({ label: f.title, answer: shown(f, content[f.key]) }));
+  return lines.length ? lines : [{ label: "", answer: t("lib-answered.elicitation_submitted") }];
 }
 
 /** Why a card could not be answered any more (410, its `status`). */

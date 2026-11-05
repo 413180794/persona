@@ -71,5 +71,7 @@
   "sent_done": "Sent and marked as done",
   "reply_failed": "Reply wasn't sent: {error}",
   "status_changed": "Changed \"{name}\" to {value}",
-  "status_failed": "Couldn't change it: {error}"
+  "status_failed": "Couldn't change it: {error}",
+  "ix_elicitation_form": "An MCP form needs you",
+  "ix_elicitation_url": "An MCP link needs you"
 }

@@ -1,0 +1,7 @@
+{
+  "required": "Fill this in",
+  "invalid": "Check what you entered and its format",
+  "from_subagent": "From subagent · {agent}",
+  "from_server": "From MCP server {server}",
+  "from_server_source": "From MCP server {server} (configured in {source})"
+}

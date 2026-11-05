@@ -106,5 +106,6 @@
   "preview": "送信内容のプレビュー",
   "preview_todo": "ToDo · {title}",
   "launch_and_hand": "起動して任せる",
-  "send_and_hand": "送信して任せる"
+  "send_and_hand": "送信して任せる",
+  "kicker_elicitation": "MCPリクエスト"
 }

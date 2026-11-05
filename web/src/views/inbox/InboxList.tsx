@@ -274,7 +274,7 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
   );
 }
 
-const IX_GLYPH: Record<Interaction["kind"], GlyphName | "list" | "terminal"> = { question: "question", plan: "list", permission: "hand", screen: "terminal" };
+const IX_GLYPH: Record<Interaction["kind"], GlyphName | "list" | "terminal"> = { question: "question", plan: "list", permission: "hand", screen: "terminal", elicitation: "sheet" };
 
 /** An agent waiting on you: which agent, what it asks, then what it waits for (red) and where. */
 function AgentRow({ ix }: { ix: Interaction }) {

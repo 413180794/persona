@@ -1,0 +1,7 @@
+{
+  "required": "入力してください",
+  "invalid": "入力内容と形式を確認してください",
+  "from_subagent": "サブエージェント・{agent}から",
+  "from_server": "MCPサーバー{server}から",
+  "from_server_source": "MCPサーバー{server}から（設定元：{source}）"
+}

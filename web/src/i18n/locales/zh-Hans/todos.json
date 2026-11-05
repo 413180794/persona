@@ -106,5 +106,6 @@
   "preview": "发送内容预览",
   "preview_todo": "待办 · {title}",
   "launch_and_hand": "启动并交给 Agent",
-  "send_and_hand": "发送并交给 Agent"
+  "send_and_hand": "发送并交给 Agent",
+  "kicker_elicitation": "MCP 请求"
 }

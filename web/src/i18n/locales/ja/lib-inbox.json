@@ -64,5 +64,7 @@
   "sent_done": "送信して対応済みにしました",
   "reply_failed": "返信を送信できませんでした：{error}",
   "status_changed": "「{name}」を{value}に変更しました",
-  "status_failed": "変更できませんでした：{error}"
+  "status_failed": "変更できませんでした：{error}",
+  "ix_elicitation_form": "MCPフォームの入力待ち",
+  "ix_elicitation_url": "MCPリンクの確認待ち"
 }

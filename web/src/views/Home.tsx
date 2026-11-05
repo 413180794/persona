@@ -14,7 +14,7 @@ import { MarkSeenDialog } from "./AgentMenus";
 import { OverviewCards } from "./extensions/ExtensionSlots";
 import { t } from "../i18n";
 
-const KIND: Record<Interaction["kind"], string> = { question: t("home.kind_question"), plan: t("home.kind_plan"), permission: t("home.kind_permission"), screen: t("home.kind_screen") };
+const KIND: Record<Interaction["kind"], string> = { question: t("home.kind_question"), plan: t("home.kind_plan"), permission: t("home.kind_permission"), screen: t("home.kind_screen"), elicitation: t("home.kind_elicitation") };
 
 function greeting() {
   const h = new Date().getHours();
@@ -75,7 +75,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
                     to={{ name: "session", mid: ix.machine_id, sid: ix.session_id }}
                     title={ix.session_title || (s ? sessionTitle(s) : ix.cwd || t("home.session"))}
                     meta={[name(ix.machine_id), s?.space_name, s && tabLabel(s)].filter(Boolean).join(" › ")}
-                    detail={ix.kind === "question" ? ix.questions?.[0]?.question : ix.kind === "permission" ? ix.summary || ix.tool_name : ix.kind === "screen" ? ix.dialog?.question : t("home.plan_ready")}
+                    detail={ix.kind === "question" ? ix.questions?.[0]?.question : ix.kind === "permission" ? ix.summary || ix.tool_name : ix.kind === "screen" ? ix.dialog?.question : ix.kind === "elicitation" ? ix.elicitation?.message : t("home.plan_ready")}
                     pill={<Pill tone="red">{KIND[ix.kind]}</Pill>}
                   />
                 );

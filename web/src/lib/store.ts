@@ -5,7 +5,7 @@ import { BASE } from "./base";
 import { useRef, useSyncExternalStore } from "react";
 import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents } from "./agents";
 import { applySessionDelta, SESSIONS_DELTA_FEATURE, sessionRefreshed, sessionSnapshot } from "./sessions-delta";
-import { api, ApiError, getToken } from "./api";
+import { api, ApiError, CLIENT_FEATURES, CLIENT_PLATFORM, CLIENT_VERSION, getToken } from "./api";
 import { currentLanguage } from "../i18n";
 import type { AgentMutes } from "./agent-groups";
 import { stateOf } from "./format";
@@ -15,6 +15,7 @@ import type { Resolution } from "./answered";
 import type { AgentLaunch } from "./new-agent";
 import { isSpacesSupported, type Todo } from "./todos";
 import { releaseAttachments } from "./attachments";
+import { dropElicitationDraft } from "./elicitation";
 import type { OutboxEntry } from "./outbox";
 import { NO_LINK, RESTARTING_MS, type ConnLink } from "./connection";
 import { setOfflineProbe } from "./feedback";
@@ -257,7 +258,8 @@ export function connect() {
   // flipping at every backoff tick (the app's ConnectionTitle); shownConn decides it when the attempt fails
   sock.onopen = () => {
     // the interface language: this connection's text, and the user's language for pushes and the assistant (docs/i18n.md)
-    sock.send(JSON.stringify({ type: "client_hello", platform: "web", locale: currentLanguage() }));
+    // and what it can render: MCP forms and links come only to a socket that says so
+    sock.send(JSON.stringify({ type: "client_hello", platform: CLIENT_PLATFORM, version: CLIENT_VERSION, features: CLIENT_FEATURES, locale: currentLanguage() }));
     retry = 0;
     fastTries = 0;
     lastMessage = Date.now();
@@ -522,7 +524,8 @@ function changeInteraction(id: string, ix: Interaction | null) {
   if (ixChanges.size > IX_CHANGES_KEPT) ixChanges.delete(ixChanges.keys().next().value!);
   const interactions = state.interactions.filter((i) => i.id !== id);
   if (ix) interactions.push(ix);
-  else if (interactions.length === state.interactions.length) return;
+  else dropElicitationDraft(id); // over here or elsewhere: what was typed into it goes with it
+  if (!ix && interactions.length === state.interactions.length) return;
   set({ interactions });
 }
 

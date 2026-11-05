@@ -64,5 +64,7 @@
   "sent_done": "已发送，标为已处理",
   "reply_failed": "回复没发出去：{error}",
   "status_changed": "「{name}」改成了{value}",
-  "status_failed": "没改成：{error}"
+  "status_failed": "没改成：{error}",
+  "ix_elicitation_form": "MCP 表单等你填写",
+  "ix_elicitation_url": "MCP 链接等你确认"
 }

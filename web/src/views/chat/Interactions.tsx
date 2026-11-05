@@ -1,11 +1,12 @@
-// What the agent is waiting on (questions, plans, permissions, terminal dialogs), as Beautiful UI's Approval Card.
-import { useEffect, useState } from "react";
+// What the agent is waiting on (questions, plans, permissions, terminal dialogs, MCP forms and links), as Beautiful UI's Approval Card.
+import { useEffect, useId, useState } from "react";
 import { ApiError, enc, errorText } from "../../lib/api";
 import { apiOp } from "../../lib/ops";
 import type { Interaction } from "../../lib/types";
+import { defaults, elicitationDraft, elicitationResolution, elicitationSource, fields, numberInputMode, saveElicitationDraft, urlHost, urlTarget, validate, type ElicitationAction, type Field, type Values } from "../../lib/elicitation";
 import { answerLines, endedText, type Resolution, type ResolveResult } from "../../lib/answered";
 import { sessionCan } from "../../lib/format";
-import { toolDisplayName } from "../../lib/turns";
+import { mcpServerLabel, toolDisplayName } from "../../lib/turns";
 import { dropAnswered, endInteraction, getSession, useStore, type AnsweredCard as Answered } from "../../lib/store";
 import { Button, Collapse, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -453,6 +454,159 @@ function MultiScreenCard({ ix }: { ix: Interaction }) {
   );
 }
 
+/**
+ * An MCP server's form or link (docs/protocol.md「MCP elicitation」), as Android's ElicitationFields: a form in the
+ * schema subset lib/elicitation.ts checks (anything else goes to the terminal), or a link that has to be opened from
+ * here before 已打开，继续. 提交 accepts, 拒绝 declines, 取消 cancels; × hands it back to the computer as on every card.
+ */
+function ElicitationCard({ ix }: { ix: Interaction }) {
+  const form = ix.elicitation;
+  const url = form?.mode === "url";
+  // a card that moves on the page (the one above it answered) is drawn anew: it picks up what was typed and opened
+  const [values, setValues] = useState<Values>(() => elicitationDraft(ix.id)?.values ?? defaults(form?.requested_schema));
+  const [opened, setOpened] = useState<string | undefined>(() => elicitationDraft(ix.id)?.opened);
+  const canApprove = useStore(() => sessionCan(getSession(ix.machine_id, ix.session_id), "approve"));
+  useEffect(() => saveElicitationDraft(ix.id, form?.requested_schema, { values, opened }), [ix.id, form?.requested_schema, values, opened]);
+  const [busy, setBusy] = useState<ElicitationAction | "dismiss" | null>(null);
+  const go = async (body: Record<string, unknown>, key: ElicitationAction | "dismiss") => {
+    setBusy(key);
+    await resolve(ix, body);
+    setBusy(null);
+  };
+  const act = (action: ElicitationAction) => {
+    const body = elicitationResolution(ix, action, values, opened);
+    if (body) void go(body, action);
+  };
+  const set = (key: string, value: unknown) => {
+    setValues((cur) => {
+      const next = { ...cur };
+      if (value === undefined) delete next[key];
+      else next[key] = value;
+      return next;
+    });
+  };
+  const schema = form?.requested_schema;
+  const check = validate(schema, values);
+  const canFill = form?.mode === "form" && check.supported;
+  const ready = Boolean(elicitationResolution(ix, "accept", values, opened));
+  const target = urlTarget(form?.url);
+  const source = elicitationSource(ix);
+  const hint = "text-[12px] leading-snug text-ink-3";
+  return (
+    <Card
+      kicker={url ? t("chat-interactions.url_kicker") : t("chat-interactions.form_kicker")}
+      title={url ? t("chat-interactions.url_title") : t("chat-interactions.form_title")}
+      onDismiss={() => go({ dismiss: true }, "dismiss")}
+      footer={
+        <>
+          <Button tone="quiet" busy={busy === "cancel"} disabled={busy !== null} onClick={() => act("cancel")}>
+            {t("chat-interactions.elicitation_cancel")}
+          </Button>
+          <span className="flex gap-1.5">
+            <Button tone="quiet" busy={busy === "decline"} disabled={busy !== null} onClick={() => act("decline")}>
+              {t("chat-interactions.elicitation_decline")}
+            </Button>
+            {(url || canFill) && (
+              <Button tone="primary" busy={busy === "accept"} disabled={busy !== null || !ready} onClick={() => act("accept")}>
+                {url ? t("chat-interactions.opened_continue") : t("chat-interactions.submit")}
+              </Button>
+            )}
+          </span>
+        </>
+      }
+    >
+      {source.length > 0 && <div className={cx("mb-1.5", hint)}>{source.map((l) => <span key={l} className="block">{l}</span>)}</div>}
+      {form?.message?.trim() && (
+        <div className="mb-2 text-ink-2">
+          <Markdown text={form.message} small />
+        </div>
+      )}
+      {url ? (
+        <div className="flex flex-col gap-1.5">
+          <div className={hint}>
+            <span className="block">{t("chat-interactions.url_server", { server: ix.mcp_server_name?.trim() ? mcpServerLabel(ix.mcp_server_name.trim()) : t("chat-interactions.url_server_unknown") })}</span>
+            <span className="block">{t("chat-interactions.url_host", { host: urlHost(form?.url) ?? t("chat-interactions.url_invalid") })}</span>
+          </div>
+          <code className="rounded-[8px] bg-inset px-2.5 py-2 font-mono text-[11.5px] leading-[1.5] break-all text-ink-2 shadow-hairline">{form?.url}</code>
+          <p className={hint}>{t("chat-interactions.url_hint")}</p>
+          <div className="flex items-center gap-2">
+            {/* a link, not window.open: a click on it is never blocked, and the MCP server's page gets neither a handle on
+                this one (noopener) nor the hub's address (noreferrer) */}
+            <Button icon="external" href={target} disabled={!target || !canApprove || busy !== null} onClick={() => setOpened(target)}>
+              {t("chat-interactions.open_link")}
+            </Button>
+            {opened && <Icon name="check" size={13} stroke={2.6} className="text-green" />}
+          </div>
+        </div>
+      ) : !canFill ? (
+        <p className="text-[12.5px] leading-relaxed text-ink-2">{t("chat-interactions.unsupported_form")}</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {fields(schema).map((f) => (
+            <ElicitationField key={f.key} field={f} value={values[f.key]} error={check.errors[f.key]} onChange={(v) => set(f.key, v)} />
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+const inputType = (f: Field) =>
+  f.secret ? "password" : f.type !== "string" ? "text" : ({ email: "email", uri: "url", date: "date" } as Record<string, string>)[String(f.schema.format)] ?? "text";
+
+/** One field of an MCP form: its title (必填 / 选填), what it is for, the control, and what is wrong with it. */
+function ElicitationField({ field: f, value, error, onChange }: { field: Field; value: unknown; error?: string; onChange: (v: unknown) => void }) {
+  const id = useId();
+  const text = f.type !== "boolean" && f.choices.length === 0;
+  const list = Array.isArray(value) ? value : [];
+  const label = f.required ? t("chat-interactions.field_required", { title: f.title }) : t("chat-interactions.field_optional", { title: f.title });
+  return (
+    <div role={text ? undefined : "group"} aria-labelledby={text ? undefined : `${id}-label`} className="flex flex-col gap-1">
+      <label id={`${id}-label`} htmlFor={text ? id : undefined} className="text-[12.5px] font-medium text-ink">{label}</label>
+      {f.description && <span className="text-[12px] leading-snug text-ink-3">{f.description}</span>}
+      {f.type === "boolean" ? (
+        <div className="flex gap-3">
+          {([true, false] as const).map((b) => (
+            <Choice key={String(b)} on={value === b} label={b ? t("chat-interactions.yes") : t("chat-interactions.no")} onClick={() => onChange(b)} />
+          ))}
+        </div>
+      ) : f.choices.length > 0 ? (
+        <div className="flex flex-col gap-0.5">
+          {f.choices.map((c, i) => {
+            const on = f.type === "array" ? list.includes(c) : value === c;
+            const pick = () => onChange(f.type === "array" ? (on ? list.filter((x) => x !== c) : [...list, c]) : c);
+            return <Choice key={String(c)} on={on} multi={f.type === "array"} label={f.choiceLabels[i] ?? String(c)} onClick={pick} />;
+          })}
+        </div>
+      ) : (
+        <input
+          id={id}
+          type={inputType(f)}
+          inputMode={numberInputMode(f)}
+          value={value === undefined ? "" : String(value)}
+          // an emptied field is not filled in: a required one says so, an optional one is left out
+          onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
+          placeholder={f.schema.format === "date-time" ? "2026-01-01T09:00:00Z" : undefined}
+          autoComplete={f.secret ? "new-password" : "off"}
+          spellCheck={f.secret ? false : undefined}
+          aria-invalid={error ? true : undefined}
+          className={cx(
+            "h-8 w-full min-w-0 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3",
+            error && "ring-1 ring-red",
+          )}
+        />
+      )}
+      {error && <span role="alert" className="text-[12px] text-red">{error}</span>}
+      {f.secret && <span className="text-[12px] leading-snug text-ink-3">{t("chat-interactions.secret_note")}</span>}
+      {!f.required && value !== undefined && (
+        <button type="button" onClick={() => onChange(undefined)} className="touch-hit self-start rounded-[5px] text-[12px] whitespace-nowrap text-ink-3 hover:text-ink">
+          {t("chat-interactions.clear_field")}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** A card this page answered: what was asked and the picks, read-only, for a moment (lib/store.ts endInteraction). */
 export function AnsweredCard({ card }: { card: Answered }) {
   const lines = answerLines(card.ix, card.resolution);
@@ -491,7 +645,8 @@ export function InteractionCard({ ix }: { ix: Interaction }) {
   const canApprove = useStore(() => sessionCan(getSession(ix.machine_id, ix.session_id), "approve"));
   const card = ix.kind === "question" ? <QuestionCard ix={ix} />
     : ix.kind === "plan" ? <PlanCard ix={ix} />
-    : ix.kind === "permission" ? <PermissionCard ix={ix} /> : <ScreenCard ix={ix} />;
+    : ix.kind === "permission" ? <PermissionCard ix={ix} />
+    : ix.kind === "elicitation" ? <ElicitationCard ix={ix} /> : <ScreenCard ix={ix} />;
   return canApprove ? card : <fieldset disabled>{card}</fieldset>;
 }
 

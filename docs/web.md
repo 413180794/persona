@@ -225,7 +225,15 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     已经进了队列的不再同时显示成「发送中」气泡。
   - **「@」**（`MentionMenu.tsx`、`lib/mentions.ts`）：输入框打 `@` 或点工具条的 @：这段对话工具用过的文件、会话目录第一层（带 `/` 逐级进入，`/machines/{mid}/fs`）、其他会话；
     选文件插 `@路径`，选会话不插字、加一个上下文胶囊（随消息作为 `<jarvis-context>` 发出）。邮箱地址里的 @ 不弹。工具步骤折叠时（`fold_work`）没展开的那些文件不在列表里。
-  - 交互卡片（提问 / 计划 / 授权 / 终端对话框）在输入框上方，Approval Card 的样子；× 是「交回电脑处理」（`dismiss`）。
+  - 交互卡片（提问 / 计划 / 授权 / 终端对话框 / MCP 表单和链接）在输入框上方，Approval Card 的样子；× 是「交回电脑处理」（`dismiss`）。
+    MCP 的表单和链接（`ElicitationCard`，校验在 `lib/elicitation.ts`）：提交 / 拒绝 / 取消是 `action: accept / decline / cancel`；
+    表单按 schema 子集画（文本、数字、是 / 否、单选 / 多选枚举、邮箱、日期、密码，必填 / 选填、默认值、清空此项），
+    子集外的（`pattern`、对象、未知格式……）只能拒绝 / 取消或交回电脑；链接模式写出 MCP 服务器和目标主机，从卡片打开那个链接后才能「已打开，继续」。
+    和 Android 一致的细节：MCP 服务器名经 `mcpServerLabel`（Persona 自己的显示成 Persona，去掉 `plugin_`）；链接是 `<a target="_blank" rel="noopener noreferrer">`，
+    对方页面拿不到这个页面，也收不到 hub 的地址（Referer）；没填的必填项一开始就标「请填写这一项」；密码项下注明不会保存；
+    数字项只在不能为负数时才要数字键盘（手机的数字键盘没有负号）；卡片还没答时，填过的内容（密码除外）和打开过的链接按 id 留在内存里，
+    窄屏上前一张答完、这张换了位置重新画出来也还在，卡片结束就丢。
+    只有 WebSocket 的 `client_hello.features` 里有 `elicitation` 时 hub 才推这类卡片，REST 的 `/interactions` 靠同样的 `X-Jarvis-Client` 对上这条连接（[protocol.md](protocol.md)「MCP elicitation」）。
   - 输入框（Prompt Bar）：Enter 发送、Shift+Enter 换行、输入法组字时 Enter 不发送；`/` 命令（同 App 的快捷消息，`/clear` 先确认；#2978 起按会话能力过滤，同 iOS：`/model` 只给能切换模型的 herdr 窗格里的 Claude，`/clear` 只给窗格里的 Claude 且不在工作、不需要你，Codex / TRAEX / 只读来源都没有，`lib/composer-commands.ts`）；
     `/loop`（#1586，`lib/loop-command.ts`，App 还没有）：选中填入 `/loop `，草稿是 `/loop …` 时输入框下面一行说会做什么（「每 10 分钟重复：…」「由 Claude 自己定节奏重复：…」）或还缺什么，
     原样发给 Claude Code；只有 Claude 的 Agent 有，Codex / TRAEX 的会话不显示；
@@ -920,6 +928,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 对话展示（工作行、折叠、轨迹、diff、图片、待办） | 有 | — | |
 | 展示逻辑对齐 `ChatLines`：合并的交换、工作中插入、已中断、来自 X、循环唤醒 | 有 | #433 | `chatLines()` / `buildBlocks()` |
 | 交互卡片（提问 / 计划 / 授权 / 终端对话框、Codex） | 有 | — | |
+| MCP elicitation（表单、链接授权） | 网页先有（Android 也有） | #2985 | 对齐 Android 的 `ElicitationFields` / `AnswerBuilder`：`client_hello` 声明 `elicitation`、请求带 `X-Jarvis-Client: web/1`；表单只认同一个 schema 子集，超出的提示到终端处理；链接要先从卡片打开（新标签页）才能「已打开，继续」。iOS / Mac / 手表还没有，hub 只把它推给声明过的连接 |
 | 输入框（/ 命令、附件、建议、中断、草稿、被拒时清空并发送） | 有 | — | |
 | 输入框细节：出错停下提示和重试、/ 列表按会话能力过滤、可点的建议条、工作中「会排队发送」、一次最多 4 张图 | 有 | #2978 | 同 iOS；录音上下文、视频附件仍是手机专属 |
 | 「@」引用文件和其他会话 | 有 | #433 | 工具步骤折叠（`fold_work`）时没展开的文件不在候选里；没有全目录模糊搜索（iOS 也没有） |

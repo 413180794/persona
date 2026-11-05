@@ -154,6 +154,7 @@ export function Button({
   icon,
   busy,
   title,
+  href,
 }: {
   children: React.ReactNode;
   tone?: BtnTone;
@@ -164,7 +165,26 @@ export function Button({
   icon?: IconName;
   busy?: boolean;
   title?: string;
+  /** Opens this in a new tab, as a link (noopener, noreferrer: the page gets no handle on this one, nor its address). */
+  href?: string;
 }) {
+  const base = "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-control px-3 text-[12.5px] font-medium transition-[background-color,color,transform,opacity,filter] duration-150";
+  if (href && !disabled && !busy) {
+    // an <a> is never :enabled, so the link has its own hover / press
+    const links: Record<BtnTone, string> = {
+      primary: "bg-ink text-surface shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] hover:opacity-90",
+      accent: "bg-accent text-white hover:brightness-105",
+      secondary: "bg-surface text-ink shadow-btn hover:bg-hover",
+      quiet: "text-ink-2 hover:bg-hover hover:text-ink",
+      danger: "bg-red text-white hover:brightness-105",
+    };
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" title={title} onClick={onClick} className={cx(base, "active:scale-[0.96]", links[tone], className)}>
+        {icon ? <Icon name={icon} size={14} stroke={2.1} /> : null}
+        {children}
+      </a>
+    );
+  }
   const tones: Record<BtnTone, string> = {
     primary: "bg-ink text-surface shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] enabled:hover:opacity-90",
     accent: "bg-accent text-white enabled:hover:brightness-105",
@@ -179,7 +199,8 @@ export function Button({
       disabled={disabled || busy}
       onClick={onClick}
       className={cx(
-        "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-control px-3 text-[12.5px] font-medium transition-[background-color,color,transform,opacity,filter] duration-150 enabled:active:scale-[0.96] disabled:opacity-45",
+        base,
+        "enabled:active:scale-[0.96] disabled:opacity-45",
         tones[tone],
         className,
       )}

@@ -18,5 +18,12 @@
   "ended_expired": "这个请求已经过期，回答没有送到",
   "ended_cancelled": "电脑上已经撤回了这个请求，回答没有送到",
   "ended_dismissed": "这个请求已经交回电脑处理，回答没有送到",
-  "ended_generic": "这个请求已经结束，回答没有送到"
+  "ended_generic": "这个请求已经结束，回答没有送到",
+  "elicitation_submitted": "已提交",
+  "elicitation_opened": "已打开链接，继续",
+  "elicitation_declined": "已拒绝",
+  "elicitation_cancelled": "已取消",
+  "elicitation_yes": "是",
+  "elicitation_no": "否",
+  "elicitation_hidden": "（已填写）"
 }

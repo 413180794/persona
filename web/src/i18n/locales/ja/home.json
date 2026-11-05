@@ -36,5 +36,6 @@
   "offline": "オフライン",
   "online": "オンライン",
   "mark_all_seen_title_other": "未確認のセッション{count}件を確認済みにする",
-  "agent_preview": "{agent}：{preview}"
+  "agent_preview": "{agent}：{preview}",
+  "kind_elicitation": "MCPリクエスト"
 }

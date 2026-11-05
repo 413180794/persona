@@ -106,5 +106,6 @@
   "preview": "Preview",
   "preview_todo": "To-do · {title}",
   "launch_and_hand": "Start and hand over",
-  "send_and_hand": "Send and hand over"
+  "send_and_hand": "Send and hand over",
+  "kicker_elicitation": "MCP request"
 }

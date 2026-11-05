@@ -366,7 +366,7 @@ function TodoListItem({
   const urgentIx = urgent
     ? interactions.find((i) => i.machine_id === urgent.agent.machine_id && i.session_id === urgent.agent.session_id)
     : undefined;
-  const urgentKicker = urgentIx?.kind === "plan" ? t("todos.kicker_plan") : urgentIx?.kind === "permission" ? t("todos.kicker_permission") : urgentIx?.kind === "screen" ? t("todos.kicker_screen") : t("todos.kicker_question");
+  const urgentKicker = urgentIx?.kind === "plan" ? t("todos.kicker_plan") : urgentIx?.kind === "permission" ? t("todos.kicker_permission") : urgentIx?.kind === "screen" ? t("todos.kicker_screen") : urgentIx?.kind === "elicitation" ? t("todos.kicker_elicitation") : t("todos.kicker_question");
 
   return (
     <div
@@ -708,7 +708,7 @@ function TodoDetail({
                 : `${mName} · ${shortPath(session?.cwd || agent.cwd)}`;
 
               const ix = interactions.find((i) => i.machine_id === agent.machine_id && i.session_id === agent.session_id);
-              const kicker = ix?.kind === "plan" ? t("todos.kicker_plan") : ix?.kind === "permission" ? t("todos.kicker_permission") : ix?.kind === "screen" ? t("todos.kicker_screen") : t("todos.kicker_question");
+              const kicker = ix?.kind === "plan" ? t("todos.kicker_plan") : ix?.kind === "permission" ? t("todos.kicker_permission") : ix?.kind === "screen" ? t("todos.kicker_screen") : ix?.kind === "elicitation" ? t("todos.kicker_elicitation") : t("todos.kicker_question");
               const sourceLabel = formatAgentSource(agent, todo.spaces, lookup);
 
               return (
