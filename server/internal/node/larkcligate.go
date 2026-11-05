@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,12 +57,12 @@ func parseLarkCLI(args []string, risk larkRisk) (c larkCall, deny string, ok boo
 	c.Path = "/" + strings.Join(words, "/")
 	switch {
 	case len(words) == 0:
-		if hasFlag(flags, "-h", "--help", "-v", "--version") {
+		if flagOn(flags, "-h", "--help", "-v", "--version") {
 			c.Risk = "read"
 			return c, "", true
 		}
 		return c, "", false
-	case hasFlag(flags, "-h", "--help"):
+	case flagOn(flags, "-h", "--help"):
 		c.Risk = "read"
 	case words[0] == "auth":
 		if len(words) > 1 && larkCLIAuthRead[words[1]] {
@@ -71,7 +72,7 @@ func parseLarkCLI(args []string, risk larkRisk) (c larkCall, deny string, ok boo
 		return c, "lark-cli 的登录、退出和授权由他自己在 hub 所在的机器上做（lark-cli auth login），不要替他运行。", false
 	case words[0] == "config" || words[0] == "profile" || words[0] == "update":
 		return c, "不要改 lark-cli 的配置、配置档或版本：这些由他自己做。", false
-	case hasFlag(flags, "--dry-run"):
+	case flagOn(flags, "--dry-run"):
 		c.Risk = "read" // prints the request, runs nothing
 	case larkCLIRead[words[0]]:
 		c.Risk = "read"
@@ -133,10 +134,19 @@ func shellJoin(args []string) string {
 	return strings.Join(out, " ")
 }
 
-func hasFlag(flags []string, names ...string) bool {
-	for _, f := range flags {
+// flagOn says a switch (--help, --dry-run…) is on. lark-cli's flags are pflag's: "--dry-run=false" turns it off,
+// and a flag written without "=" may take the next word as its value ("--text --dry-run" sends the text
+// "--dry-run"), so a bare switch counts only when the word before it is not a flag that may be waiting for one.
+func flagOn(flags []string, names ...string) bool {
+	for i, f := range flags {
 		for _, n := range names {
-			if f == n || strings.HasPrefix(f, n+"=") {
+			if v, ok := strings.CutPrefix(f, n+"="); ok {
+				if on, err := strconv.ParseBool(v); err == nil && on {
+					return true
+				}
+				continue
+			}
+			if f == n && (i == 0 || !strings.HasPrefix(flags[i-1], "-") || strings.Contains(flags[i-1], "=")) {
 				return true
 			}
 		}

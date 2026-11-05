@@ -47,6 +47,8 @@ func TestLarkCLIGate(t *testing.T) {
 		{`lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 30s --as bot`, "allow"},
 		{`lark-cli api GET /open-apis/calendar/v4/calendars`, "allow"},
 		{`/usr/local/bin/lark-cli calendar +agenda`, "allow"},
+		{`lark-cli im +messages-send --chat-id oc_x --text hi --dry-run=true`, "allow"},
+		{`lark-cli im +messages-send --help=1`, "allow"},
 		// Writes, high-risk writes and commands lark-cli gives no risk for: confirmed.
 		{`lark-cli im +messages-send --chat-id oc_x --text "你好"`, "confirm"},
 		{`lark-cli im +messages-reply --message-id om_x --markdown '**好**' --reply-in-thread`, "confirm"},
@@ -56,6 +58,14 @@ func TestLarkCLIGate(t *testing.T) {
 		{`lark-cli api POST /open-apis/im/v1/messages --data '{"msg_type":"text"}'`, "confirm"},
 		{`lark-cli api delete /open-apis/im/v1/messages/om_x`, "confirm"},
 		{`lark-cli im +chat-list && lark-cli im +messages-send --chat-id oc_x --text hi`, "confirm"},
+		// lark-cli's flags are pflag's: "=false" turns --dry-run and --help off, and a flag written without "=" may take
+		// the next word as its value (--text --dry-run sends the text "--dry-run"). Each of these sends for real.
+		{`lark-cli im +messages-send --chat-id oc_x --text hi --dry-run=false`, "confirm"},
+		{`lark-cli im +messages-send --chat-id oc_x --text hi --dry-run=0`, "confirm"},
+		{`lark-cli im +messages-send --chat-id oc_x --text hi --help=false`, "confirm"},
+		{`lark-cli im +messages-send --chat-id oc_x --text hi -h=false`, "confirm"},
+		{`lark-cli im +messages-send --chat-id oc_x --text --dry-run`, "confirm"},
+		{`lark-cli im +messages-send --chat-id oc_x --text --help`, "confirm"},
 		// Refused.
 		{`lark-cli auth login --domain all`, "deny"},
 		{`lark-cli auth logout`, "deny"},
