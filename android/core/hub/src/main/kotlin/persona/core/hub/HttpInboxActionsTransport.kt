@@ -29,7 +29,7 @@ class HttpInboxActionsTransport(
 
     private fun url(vararg segments: String): HttpUrl {
         if (!isCurrent()) throw CancellationException("Pairing changed")
-        return endpoint().newBuilder().encodedPath("/api/v1/inbox").query(null)
+        return endpoint().hubUrl("/api/v1/inbox").newBuilder()
             .apply { segments.forEach(::addPathSegment) }.build()
     }
 

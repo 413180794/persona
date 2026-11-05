@@ -56,11 +56,14 @@ func newClaudeDirs() *claudeDirs {
 }
 
 // defaultClaudeDir is where a claude started without CLAUDE_CONFIG_DIR keeps its files.
-func (n *Node) defaultClaudeDir() string {
+func (n *Node) defaultClaudeDir() string { return claudeDirOf(n.home) }
+
+// claudeDirOf is the node's own default Claude Code directory for home: $CLAUDE_CONFIG_DIR, else ~/.claude.
+func claudeDirOf(home string) string {
 	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
 		return d
 	}
-	return filepath.Join(n.home, ".claude")
+	return filepath.Join(home, ".claude")
 }
 
 // claudeConfigDirs lists every config directory in use, the default first, each once (by real path), existing only.

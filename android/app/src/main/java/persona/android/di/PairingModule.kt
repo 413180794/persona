@@ -29,6 +29,8 @@ object PairingModule {
     @Provides @Singleton fun pairing(service: persona.android.platform.PlatformPairing): PairingService = service
     @Provides @Singleton fun diagnostics(service: persona.android.platform.LockScreenTests): SettingsDiagnostics = service
     @Provides @Singleton fun updates(service: WiredPairingService): AppUpdates = service
+    /** The last pairing attempt, in memory, for 连接诊断 before (or without) a working connection. */
+    @Provides @Singleton fun attempts(): PairingAttempts = PairingAttempts()
 
     @Provides @Singleton fun settings(
         pairing: PairingService, connection: HubConnection, sessions: SessionsRepository,
@@ -36,12 +38,13 @@ object PairingModule {
         machines: MachineManagement, models: ModelConfiguration, extensions: ExtensionManagement, providers: ProviderSetup,
         connectors: ConnectorsManagement, channels: ChannelManagement, platform: persona.android.platform.PlatformPairing,
         hubUpdates: HubUpdates, translation: TranslationSettings, triage: AgentTriage, capsule: persona.android.capsule.CapsuleRuntime,
+        attempts: PairingAttempts,
     ) = SettingsServices(pairing, connection, sessions, updates, diagnostics, binding = devices.binding,
         // Explicit: the runtime cannot be a ConnectionEndpoints itself (its HubConnection.state has another type).
         disconnect = { pairing.unpair() }, endpoints = runtime.endpoints, machines = machines, models = models, extensions = extensions, providers = providers,
         channels = channels, hubUpdates = hubUpdates,
         hubs = runtime.hubGroups, addHub = platform.adding, connectors = connectors,
-        translation = translation, triage = triage, capsule = capsule)
+        translation = translation, triage = triage, capsule = capsule, pairingAttempts = attempts)
 }
 
 /** Pairs with pinned probing and hands verified credentials to the connection runtime, which stores and connects. */

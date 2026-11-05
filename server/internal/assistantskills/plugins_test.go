@@ -99,3 +99,35 @@ func TestPluginSkillAfterTheUsersGoes(t *testing.T) {
 		t.Fatal("a stamp without its directory stopped the copy")
 	}
 }
+
+// PluginIssues says what WritePlugin would change, without writing; WritePlugin repairs a plugin whose stamp is
+// current but whose files are not.
+func TestPluginIssuesAndRepair(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "agent-plugin")
+	if got := PluginIssues(dir); len(got) != 1 || got[0] != "missing" {
+		t.Fatalf("no plugin: %v", got)
+	}
+	if err := WritePlugin(dir); err != nil {
+		t.Fatal(err)
+	}
+	if got := PluginIssues(dir); len(got) != 0 {
+		t.Fatalf("fresh plugin: %v", got)
+	}
+	script := filepath.Join(dir, "skills", "persona-office", "scripts", "office.sh")
+	if err := os.Remove(script); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".claude-plugin", "plugin.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := PluginIssues(dir)
+	if len(got) != 2 || got[0] != "differs .claude-plugin/plugin.json" || got[1] != "missing skills/persona-office/scripts/office.sh" {
+		t.Fatalf("damaged plugin: %v", got)
+	}
+	if err := WritePlugin(dir); err != nil { // the stamp is still current: it used to be skipped
+		t.Fatal(err)
+	}
+	if got := PluginIssues(dir); len(got) != 0 {
+		t.Fatalf("after WritePlugin: %v", got)
+	}
+}

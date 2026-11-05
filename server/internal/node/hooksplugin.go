@@ -23,26 +23,28 @@ const hooksPluginName = "persona-hooks"
 // claude-settings.json) or "assistant" (its assistant, assistant-settings.json's).
 func (n *Node) hooksPlugin(kind string) string { return filepath.Join(n.dir, kind+"-hooks") }
 
-// writeHooksPlugin makes dir the plugin with hooks (a settings file's "hooks"); its version is theirs (a hash), so
-// it changes when they do. Each file is replaced whole (writeJSON): a claude starting meanwhile reads the old one or
-// the new one.
-func writeHooksPlugin(dir string, hooks any) error {
+// hooksPluginFiles is the plugin with hooks (a settings file's "hooks") as files, by path under its directory; its
+// version is theirs (a hash), so it changes when they do.
+func hooksPluginFiles(hooks any) (map[string][]byte, error) {
 	b, err := json.Marshal(hooks)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	sum := sha256.Sum256(b)
-	for _, d := range []string{".claude-plugin", "hooks"} {
-		if err := os.MkdirAll(filepath.Join(dir, d), 0o700); err != nil {
-			return err
-		}
-	}
 	manifest := map[string]any{"name": hooksPluginName, "version": "1.0.0-" + hex.EncodeToString(sum[:6]),
 		"description": "Persona's hooks for the sessions it starts: questions, permission requests and turn ends go to the phone"}
-	if err := writeJSON(filepath.Join(dir, ".claude-plugin", "plugin.json"), manifest); err != nil {
-		return err
+	mb, err := marshalJSON(manifest)
+	if err != nil {
+		return nil, err
 	}
-	return writeJSON(filepath.Join(dir, "hooks", "hooks.json"), map[string]any{"hooks": hooks})
+	hb, err := marshalJSON(map[string]any{"hooks": hooks})
+	if err != nil {
+		return nil, err
+	}
+	return map[string][]byte{
+		filepath.Join(".claude-plugin", "plugin.json"): mb,
+		filepath.Join("hooks", "hooks.json"):           hb,
+	}, nil
 }
 
 // claudeStartSettings is how a claude start of launcher gets Persona's hooks for kind ("claude" / "assistant") and a

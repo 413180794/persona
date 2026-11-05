@@ -118,8 +118,9 @@ class HttpInboxAssistantTransport private constructor(
     }
 
     override suspend fun documentMedia(ref: String): ByteArray {
-        val path = requireNotNull(mediaOrigin().resolve(ref))
-        require(path.encodedPath.startsWith("/api/v1/lark/raw/documents/")) { "Invalid document media path" }
+        val base = mediaOrigin()
+        val path = base.hubResolve(ref)?.let(base::hubPath)
+        require(path?.startsWith("/api/v1/lark/raw/documents/") == true) { "Invalid document media path" }
         return readMedia(ref, document = true)
     }
 
@@ -144,13 +145,13 @@ class HttpInboxAssistantTransport private constructor(
     private suspend fun readMedia(ref: String, document: Boolean): ByteArray {
         checkScope()
         val base = mediaOrigin()
-        val media = requireNotNull(base.resolve(ref))
-        require(media.scheme == base.scheme && media.host == base.host && media.port == base.port &&
-            media.username.isEmpty() && media.password.isEmpty() && media.fragment == null) { "Invalid media origin" }
-        require(document && media.encodedPath.startsWith("/api/v1/lark/raw/documents/") ||
-            media.encodedPath.startsWith("/api/v1/lark/media/") ||
-            Regex("/api/v1/lark/messages/[^/]+/media/.+").matches(media.encodedPath)) { "Invalid media path" }
-        return request(media.apiPath(), "GET", null).use { response ->
+        // The hub's media paths are under the base's path prefix (a hub behind a reverse proxy at a sub-path).
+        val media = requireNotNull(base.hubResolve(ref)) { "Invalid media origin" }
+        val path = requireNotNull(base.hubPath(media)) { "Invalid media origin" }
+        require(document && path.startsWith("/api/v1/lark/raw/documents/") ||
+            path.startsWith("/api/v1/lark/media/") ||
+            Regex("/api/v1/lark/messages/[^/]+/media/.+").matches(path)) { "Invalid media path" }
+        return request(path + (media.encodedQuery?.let { "?$it" } ?: ""), "GET", null).use { response ->
                 checkScope()
                 requireNotNull(response.body).bytes()
             }
@@ -165,7 +166,7 @@ class HttpInboxAssistantTransport private constructor(
             val http = client.newBuilder().followRedirects(false).followSslRedirects(false)
                 .retryOnConnectionFailure(false).build()
             return { path, method, body ->
-                val target = requireNotNull(base.resolve(path))
+                val target = base.hubUrl(path)
                 http.newCall(Request.Builder().url(target).header("Authorization", "Bearer $token")
                     .method(method, body).build()).awaitResponse().also { response ->
                     if (!response.isSuccessful) throw response.use { HubFailure.from(it) }

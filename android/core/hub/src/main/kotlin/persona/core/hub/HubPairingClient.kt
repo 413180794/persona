@@ -104,8 +104,8 @@ class HubPairingClient private constructor(
         if (fingerprint != null && !metadata.fp.isNullOrBlank() && metadata.fp != fingerprint) {
             throw HubFailure(HubError.CertificateMismatch)
         }
-        val discovered = metadata.endpoints.map { endpoint(it.url) }
-            .filter { fingerprint != null || !it.url.startsWith("https://") }
+        // Without a pinned fingerprint, HTTPS candidates are checked against the system CAs (HubHttpClient.systemTrusted).
+        val discovered = metadata.endpoints.mapNotNull { runCatching { endpoint(it.url) }.getOrNull() }
         endpoints = (endpoints + discovered).distinctBy { endpointKey(it.url) }
         candidates = endpoints.map { item -> candidates.firstOrNull { it.url == item.url }
             ?: ConnectionCandidate(item.url, item.kind, "尚未探测") }
@@ -114,7 +114,7 @@ class HubPairingClient private constructor(
     suspend fun diagnostics(token: String, deviceId: String?): ConnectionDiagnostics {
         val snapshot = ConnectionDiagnostics(
             currentPath = "${endpoint(address).kind} · $address", candidates = candidates,
-            fingerprint = fingerprint, lastDisconnectReason = lastFailure, legacyHub = fingerprint == null,
+            fingerprint = fingerprint, lastDisconnectReason = lastFailure, legacyHub = fingerprint == null && !address.startsWith("https://"),
         )
         if (deviceId == null) return snapshot
         val path = "/api/v1/devices/${deviceId.encodeSegment()}/sessions"
@@ -141,14 +141,14 @@ class HubPairingClient private constructor(
 
     suspend fun download(token: String, update: AppUpdate, destination: OutputStream) = withContext(Dispatchers.IO) {
         val base = updateOrigin()
-        val target = base.resolve(update.downloadUrl) ?: throw HubFailure(HubError.Protocol)
-        require(target.scheme == base.scheme && target.host == base.host && target.port == base.port &&
-            target.username.isEmpty() && target.password.isEmpty() && target.fragment == null) { "Invalid APK origin" }
+        // Same origin and path prefix as the hub (hubResolve), never another host.
+        val target = requireNotNull(base.hubResolve(update.downloadUrl)) { "Invalid APK origin" }
+        val path = requireNotNull(base.hubPath(target)) { "Invalid APK origin" }
         val checksum = update.sha256?.takeIf { it.matches(Regex("[A-Fa-f0-9]{64}")) }
             ?: throw HubFailure(HubError.Protocol)
         val digest = MessageDigest.getInstance("SHA-256")
         val response = if (connection != null) connection.request(
-            target.encodedPath + (target.encodedQuery?.let { "?$it" } ?: ""), buffered = false,
+            path + (target.encodedQuery?.let { "?$it" } ?: ""), buffered = false,
         ) else http.client.newCall(authorized(target, token).build()).awaitResponse(buffered = false)
         response.use { response ->
             if (!response.isSuccessful) throw HubFailure.from(response)
@@ -168,7 +168,6 @@ class HubPairingClient private constructor(
     }
 
     private suspend fun updateOrigin(): HttpUrl {
-        if (fingerprint == null) throw HubFailure(HubError.TlsRequired, retryable = false)
         if (connection != null) return connection.activeRoute().endpoint.baseUrl().also {
             if (!it.isHttps) throw HubFailure(HubError.TlsRequired, retryable = false)
         }
@@ -184,8 +183,10 @@ class HubPairingClient private constructor(
                 JsonCodec.parseToJsonElement(response.body!!.string()).jsonObject
             }
         }
-        val target = address.toHttpUrl().resolve(path) ?: throw HubFailure(HubError.Protocol)
-        require(path.startsWith("/api/") && target.host == address.toHttpUrl().host)
+        require(path.startsWith("/api/"))
+        val base = address.toHttpUrl()
+        val target = base.hubUrl(path)
+        require(base.hubPath(target)?.startsWith("/api/") == true)
         val builder = authorized(target, token)
         headers.forEach { (name, value) -> builder.header(name, value) }
         if (body != null) builder.post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -212,7 +213,8 @@ class HubPairingClient private constructor(
                 add(primary.toString())
                 addAll(request.alt.map { endpoint(it).url })
             }.distinct()
-            if (request.fp == null && urls.any { it.startsWith("https://") }) throw PairingException(PairingFailure.Certificate)
+            // HTTPS without `fp` (a hub behind a reverse proxy with a public CA's certificate, `https://host/prefix`) is
+            // checked against the system CAs and the host name instead of a pinned key; see SpkiTrustManager.
             return urls
         }
 

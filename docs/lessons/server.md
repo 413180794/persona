@@ -33,6 +33,7 @@
   在那台 Mac 上装常驻 node（`scripts/deploy/node-launchd.sh install`，`docs/server.md`「常驻 node」）。
 - Go 的 `UnixListener.Close()` 默认会删掉 socket 文件：重新部署时旧 node 退出会把新 node 的 `~/.jarvis/node.sock` 删掉，
   hook / MCP 全部静默失效（hook 连不上就放行给 TUI）。已 `SetUnlinkOnClose(false)` 并每 15 秒自检重建。
+  怀疑 hook / MCP 没生效先跑 `personad node doctor`（socket 能不能真的应答、生成文件和当前二进制是否一致、命令路径还在不在，`docs/claude-integration.md`「自检」）。
 - macOS 的 `lsof -p a,b,c` 只要其中一个 pid 已经退出或是僵尸就退出 1，但照样把其余进程的结果打到 stdout（2026-11-03，#541）：
   pid 没在监听不算（退出 0）。端口扫描从 `ps` 到 `lsof` 之间，Agent 跑完的短命令常常就没了，曾经每次都按出错丢掉结果，端口列表冻住、日志每 4 秒一行。
   `lsof` 的抱怨只写 stderr，退出 1 时照常解析 stdout；同一个错误只记一次。
@@ -393,3 +394,24 @@ PR 冒烟按路径触发、不含 `integrations/**`，所以合并前没跑。�
   用户在 App 里关掉或清空之后，下次启动又被 hub.json 盖回去。迁不了（名字对不上机器、库写不进）只记日志、不记标记，照旧读 hub.json，下次启动再试：
   迁移失败不能让功能停。旧字段不改不删，留一个版本给回滚：旧 hub 只认它。读设置的连接器要在扩展注册表加载之后才建（`startConnectors` 里 `attachExtensions` 之后），
   建早了只能读到 hub.json。
+
+## 守护进程拉起的用户会话不能留在它自己的 cgroup 里（2026-11-04）
+
+- 起因：这台开发机上另一个工具的常驻服务（systemd 用户单元）把它拉起的 herdr server、shell 和 agent 全放在自己的 cgroup 里，
+  `systemctl --user status` 显示 27.9G 内存、1821 个任务。后果是重启 / 升级这个单元会杀掉所有终端和 agent 会话，
+  单元的内存统计、限额、OOM 都把用户的工作负载算进去，状态输出也没法看。
+- 规则：**会比拉起它的请求、连接甚至守护进程活得久的用户会话，要放进自己的 transient 单元**（Linux：`systemd-run --user --unit=…`，没有用户总线时退回 `setsid`）。
+  Linux 的 `setsid` 只脱离进程组，不脱离 cgroup；服务停 / 重启时 `KillMode=control-group`（Persona 的 hub / node 单元都没写 `KillMode`，是默认值）会杀光同 cgroup 的进程。
+- Persona 现在怎么满足（读代码加实机核对，2026-11-04）：
+  - herdr server 以及里面的所有窗格和 agent：`launchHerdrServer`（`server/internal/node/herdrstart_unix.go`）在 `XDG_RUNTIME_DIR` 下有 `systemd/private` 且找得到 `systemd-run` 时，
+    用 `systemd-run --user --quiet --collect --unit=persona-herdr-server` 起，进的是这个单元的 cgroup，停 / 更新 hub 或 node 的单元碰不到它；
+    容器等没有用户 systemd 的环境退回 `setsid`。实机上 `jarvisd.service` 的 cgroup 里只有 hub、本机的 `node --stdio` 和 `assistant` 三个进程，没有 herdr、claude、codex。
+  - node 自更新的回滚进程：`nodeupdate/watch.go` 用 `systemd-run --user --unit=persona-node-update-<id>`（见上面「jarvis-link 被动模式和 node 服务」）。
+  - 留在 node / hub 单元里的子进程（助手的 claude / codex、Paseo bridge、插件和连接器程序）都用 stdin 管道拴在拉起它的进程上，owner 没了它们就该退出，
+    不属于「比守护进程活得久」；它们各自 `Setpgid`，owner 用进程组整组停。node 更新靠「等空闲」和 `node-launchd.sh restart-idle`（只给主进程发 HUP）避免打断正在跑的对话。
+- 以后加会长期运行、又要独立于守护进程的进程时，照 `launchHerdrServer` 的写法：transient 单元加没有用户总线时的退路，并且把拼出来的命令行单独测一遍。
+- 已知但没处理的：
+  - hub 自更新的回滚看门狗（`hub/selfupdate.go` 的 `startWatchdog`）只做了 `setsid`，在 systemd 下仍在 hub 单元的 cgroup 里。
+  - 这台机器没装常驻 node（`jarvisd-node`）时，hub 起的本机 `node --stdio` 和它的助手 claude 都在 `jarvisd.service` 里，hub 重启会一起停（见 `docs/hub-restart.md`「对话不中断」）。
+  - `herdrstart_test.go` 没有覆盖 `systemd-run` 那条分支的命令行。
+  - macOS 上 `setsid` 能否让 herdr 躲过 launchd 停 job 时的清理，没在 Mac 上核实；Windows 上 node 不拉起 herdr，没有对应问题。

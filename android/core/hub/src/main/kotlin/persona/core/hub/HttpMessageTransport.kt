@@ -110,8 +110,8 @@ class HttpMessageTransport(
         if (!readyToSend.value) return MessageTransportResult.NotSent
         val route = connection.route.value ?: return MessageTransportResult.NotSent
         if (route !== caughtUp.value?.route) return MessageTransportResult.NotSent
-        val url = route.endpoint.baseUrl().newBuilder()
-            .addPathSegments("api/v1/sessions")
+        val base = route.endpoint.baseUrl()
+        val url = base.hubUrl("/api/v1/sessions").newBuilder()
             .addPathSegment(request.session.machineId)
             .addPathSegment(request.session.sessionId)
             .addPathSegment("messages").build()
@@ -123,7 +123,7 @@ class HttpMessageTransport(
         }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         return try {
             // Non-2xx replies throw HubFailure (handled below); a 2xx body may still be a pending receipt.
-            connection.request(url.encodedPath, "POST", body, request.headers, expectedRoute = route).use { response ->
+            connection.request(requireNotNull(base.hubPath(url)), "POST", body, request.headers, expectedRoute = route).use { response ->
                 decodeResult(response.code, response.body?.string().orEmpty())
             }
         } catch (cancelled: CancellationException) {

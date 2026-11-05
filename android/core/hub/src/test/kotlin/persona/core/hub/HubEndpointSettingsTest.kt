@@ -110,10 +110,9 @@ class HubEndpointSettingsTest {
             assertEquals(10, fixture.stored.value.manual.size)
         }
         Fixture(listOf(pairingLan), fingerprint = null).use { fixture ->
-            assertFalse(fixture.settings.state.value.pinned)
-            refused("这次配对没有 hub 的证书指纹，无法校验 HTTPS 地址。请在 hub 开启 TLS 后重新配对。") {
-                fixture.settings.add("https://hub.example.org:18662")
-            }
+            // Without a fingerprint, https addresses are checked against the system CAs (a hub behind a reverse proxy).
+            assertTrue(fixture.settings.state.value.pinned)
+            assertEquals("https://hub.example.org:18662", fixture.settings.add("https://hub.example.org:18662"))
             assertEquals("http://127.0.0.1:18660", fixture.settings.add("http://127.0.0.1:18660"))
         }
     }

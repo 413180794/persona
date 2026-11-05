@@ -40,7 +40,8 @@ class HubEndpointSettings(
     /** Latest result and running count per key; the state shows them under each entry's current url. */
     private val results = MutableStateFlow<Map<String, EndpointTestResult>>(emptyMap())
     private val running = MutableStateFlow<Map<String, Int>>(emptyMap())
-    private val pinned get() = connection.http.fingerprint != null
+    /** https addresses can be verified: by the pinned key, or (a pairing without one) by the system CAs. */
+    private val pinned get() = connection.http.fingerprint != null || connection.http.systemTrusted
     private val policy get() = connection.http.localAddressPolicy
 
     init {

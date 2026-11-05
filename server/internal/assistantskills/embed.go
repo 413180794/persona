@@ -7,6 +7,7 @@ package assistantskills
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -261,12 +262,46 @@ const pluginManifest = `{
 }
 `
 
+// PluginIssues says what differs between dir and the plugin WritePlugin would make there, as slash-separated paths
+// under dir ("missing", alone, when dir is not there): nil when it is current. It reads, never writes.
+func PluginIssues(dir string) []string {
+	if _, err := os.Stat(dir); err != nil {
+		return []string{"missing"}
+	}
+	want := builtinVersion()
+	expected := map[string][]byte{
+		builtinStamp:                 []byte(want + "\n"),
+		".claude-plugin/plugin.json": []byte(fmt.Sprintf(pluginManifest, want)),
+	}
+	for _, name := range ForAgents {
+		_ = fs.WalkDir(builtin, name, func(p string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				b, _ := fs.ReadFile(builtin, p)
+				expected["skills/"+p] = b
+			}
+			return err
+		})
+	}
+	var issues []string
+	for rel, b := range expected {
+		got, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+		switch {
+		case err != nil:
+			issues = append(issues, "missing "+rel)
+		case !bytes.Equal(got, b):
+			issues = append(issues, "differs "+rel)
+		}
+	}
+	slices.Sort(issues)
+	return issues
+}
+
 // WritePlugin makes dir the Claude Code plugin the agents Persona starts load (claude --plugin-dir dir): the
 // ForAgents built-in skills under skills/. Written again only when what this binary carries changed (the stamp), and
 // swapped in whole, so a session reading it never sees half of one.
 func WritePlugin(dir string) error {
 	want := builtinVersion()
-	if old, err := os.ReadFile(filepath.Join(dir, builtinStamp)); err == nil && strings.TrimSpace(string(old)) == want {
+	if len(PluginIssues(dir)) == 0 {
 		return nil
 	}
 	tmp := dir + ".new"

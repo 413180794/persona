@@ -25,8 +25,8 @@ class HttpKnowledgeRepository(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : KnowledgeRepository {
     private val base = baseUrl.toHttpUrl().also {
-        require(it.username.isEmpty() && it.password.isEmpty() && it.query == null &&
-            it.fragment == null && it.encodedPath == "/")
+        // A path prefix is a hub behind a reverse proxy at a sub-path; the segments below are added under it.
+        require(it.username.isEmpty() && it.password.isEmpty() && it.query == null && it.fragment == null)
     }
     private val http = client.newBuilder().followRedirects(false).followSslRedirects(false)
         .retryOnConnectionFailure(false).build()

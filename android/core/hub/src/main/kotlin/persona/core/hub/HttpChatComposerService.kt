@@ -39,7 +39,7 @@ class HttpChatComposerService internal constructor(
         this(hubScope, transport, { path, body, headers ->
             if (!isCurrent()) throw CancellationException("Pairing changed")
             val route = connection.route.value ?: throw HubFailure(HubError.NoNetwork)
-            val url = route.endpoint.baseUrl().resolve(path) ?: throw HubFailure(HubError.Protocol)
+            val url = route.endpoint.baseUrl().hubUrl(path)
             // A file goes up in one request that the hub answers once the computer has all of it: on a slow link that
             // takes minutes (the old app allowed 10), not the 15 s every other call gets.
             val client = if (path.contains("/files?")) connection.http.client.newBuilder()

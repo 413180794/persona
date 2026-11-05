@@ -80,6 +80,10 @@ const usage = `usage:
                            for hub.json (docs/server.md「tailcat 打洞」)
   personad node tailcat addr
                            print this machine's tailcat address again
+  personad node doctor [--json] [--fix]
+                           read-only check of this machine's node: node.sock / runtime.sock answer, the generated hook,
+                           MCP and plugin files match this binary, the programs they run exist, claude's version;
+                           --fix rewrites Persona's own generated files only (docs/claude-integration.md「node doctor」)
   personad node reset-uid   give this computer a new machine uid (~/.persona/machine-uid): for a virtual machine cloned
                            with another's home directory, which hubs would take for that one (docs/mesh.md)
   personad hook             Claude Code hook entry (reads hook JSON on stdin)
@@ -193,6 +197,13 @@ func main() {
 		}
 		if len(os.Args) > 2 && os.Args[2] == "tailcat" {
 			err = runNodeTailcat(ctx, os.Args[3:])
+			break
+		}
+		if len(os.Args) > 2 && os.Args[2] == "doctor" {
+			var failed bool
+			if failed, err = node.DoctorCommand(ctx, os.Args[3:], os.Stdout); err == nil && failed {
+				os.Exit(1)
+			}
 			break
 		}
 		if len(os.Args) > 2 && os.Args[2] == "reset-uid" {

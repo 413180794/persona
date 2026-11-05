@@ -54,6 +54,51 @@ class DiagnosticsStateTest {
         assertEquals("12 毫秒（样本数 1），不作为性能基线", candidate.copy(probeDurationMillis = 12, sampleCount = 1).probeMeasurement())
     }
 
+    @Test fun aFailedPairingShowsWithoutARunningConnection() = runBlocking {
+        val connection = LiveConnection()
+        val attempts = PairingAttempts()
+        val controller = DiagnosticsState(connection, connection, null, attempts)
+        assertNull(controller.pairing.value)
+        val request = PairingRequest("https://hub.example.com/jarvis", "secret-code", hub = "test-hub")
+        val handshake = javax.net.ssl.SSLHandshakeException("PKIX path building failed").apply {
+            initCause(java.security.cert.CertificateException("secret-code is not trusted"))
+        }
+        val error = PairingException(PairingFailure.Certificate).apply {
+            initCause(persona.core.hub.HubFailure(persona.core.hub.HubError.CertificateMismatch, cause = handshake))
+        }
+        val candidates = listOf(ConnectionCandidate("https://hub.example.com/jarvis", "name", "证书指纹不符"))
+        attempts.record(pairingAttempt(request, error, PairingStage.Probe, candidates, java.time.Instant.parse("2026-11-05T01:02:03Z")))
+        val attempt = requireNotNull(controller.pairing.value)
+        assertTrue(attempt.failed)
+        assertEquals("https://hub.example.com/jarvis", attempt.address)
+        assertEquals(PairingAttemptStep.Tls, attempt.step)
+        assertEquals("2026-11-05T01:02:03Z", attempt.at)
+        assertEquals(candidates, attempt.candidates)
+        // The text names the failure, never the pairing code.
+        assertTrue(attempt.error!!.contains("PKIX path building failed"))
+        assertFalse(attempt.error!!.contains("secret-code"))
+        assertEquals(listOf("地址", "结果", "错误", "时间"), attempt.rows().map { it.first })
+        assertEquals("失败，停在「TLS 证书」", attempt.rows()[1].second)
+        attempts.record(pairingAttempt(request, null))
+        assertFalse(controller.pairing.value!!.failed)
+        assertEquals("成功", controller.pairing.value!!.rows()[1].second)
+    }
+
+    @Test fun pairingStepsNameWhereItStopped() {
+        fun hub(kind: persona.core.hub.HubError, status: Int? = null) = persona.core.hub.HubFailure(kind, status = status)
+        assertEquals(PairingAttemptStep.Parse, pairingStep(PairingException(PairingFailure.InvalidCode)))
+        assertEquals(PairingAttemptStep.Parse, pairingStep(PairingException(PairingFailure.TlsRequired)))
+        assertEquals(PairingAttemptStep.Network, pairingStep(java.net.UnknownHostException("hub.example.com"), PairingStage.Probe))
+        assertEquals(PairingAttemptStep.Network, pairingStep(hub(persona.core.hub.HubError.Timeout), PairingStage.Probe))
+        assertEquals(PairingAttemptStep.Tls, pairingStep(hub(persona.core.hub.HubError.CertificateMismatch), PairingStage.Probe))
+        assertEquals(PairingAttemptStep.Http, pairingStep(hub(persona.core.hub.HubError.Server, 404), PairingStage.ExchangeCredentials))
+        assertEquals(PairingAttemptStep.Auth, pairingStep(hub(persona.core.hub.HubError.PairingExpired, 401), PairingStage.ExchangeCredentials))
+        assertEquals(PairingAttemptStep.Protocol, pairingStep(hub(persona.core.hub.HubError.Protocol), PairingStage.LoadMachines))
+        assertEquals(PairingAttemptStep.Protocol, pairingStep(hub(persona.core.hub.HubError.HubMismatch), PairingStage.VerifyIdentity))
+        assertEquals("Server · HTTP 404：HTTP 404", describePairingError(hub(persona.core.hub.HubError.Server, 404).let {
+            persona.core.hub.HubFailure(it.kind, "HTTP 404", 404) }, "code"))
+    }
+
     private class LiveConnection : HubConnection, ConnectionDiagnosticsSource {
         override val state = MutableStateFlow(ConnectionState.Online)
         override val events = MutableSharedFlow<ServerEvent>()

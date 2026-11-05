@@ -327,8 +327,9 @@ class OkHttpHubConnection(
         val selected = awaitRoute()
         if (expectedRoute != null && selected !== expectedRoute) throw HubFailure(HubError.NoNetwork)
         require(path.startsWith("/api/") && !path.contains('#')) { "Expected an API path" }
-        val url = selected.endpoint.baseUrl().resolve(path) ?: throw HubFailure(HubError.Protocol, retryable = false)
-        require(url.encodedPath.startsWith("/api/")) { "Expected an API path" }
+        val base = selected.endpoint.baseUrl()
+        val url = base.hubUrl(path)
+        require(base.hubPath(url)?.startsWith("/api/") == true) { "Expected an API path" }
         val owner = ownerOf(selected)
         val request = Request.Builder().url(url).apply {
             headers.forEach { (name, value) -> header(name, value) }
@@ -709,7 +710,7 @@ class OkHttpHubConnection(
 
     /** The socket's URL; with the stream and last broadcast seen, so the hub replays what was missed (#1574). */
     internal fun socketUrl(base: HttpUrl, resumeFrom: Pair<String, Long>?): HttpUrl =
-        base.newBuilder().encodedPath("/api/v1/ws").apply {
+        base.hubUrl("/api/v1/ws").newBuilder().apply {
             resumeFrom?.let { (stream, seq) ->
                 addQueryParameter("event_stream", stream)
                 addQueryParameter("event_seq", seq.toString())
@@ -795,7 +796,10 @@ class OkHttpHubConnection(
     private suspend fun probe(endpoint: Endpoint): Health {
         if (members.isEmpty()) return http.health(endpoint)
         val owner = ownerFor(endpoint)
-        if (endpoint.baseUrl().isHttps && owner.fingerprint == null) throw HubFailure(HubError.CertificateMismatch, retryable = false)
+        // HTTPS without a pin is only checked against the system CAs when the group's own pairing had no fingerprint.
+        if (endpoint.baseUrl().isHttps && owner.fingerprint == null && !http.systemTrusted) {
+            throw HubFailure(HubError.CertificateMismatch, retryable = false)
+        }
         return http.health(endpoint, expectedHubId = owner.hubId, expectedPin = owner.fingerprint)
     }
 

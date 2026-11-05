@@ -32,7 +32,7 @@ class HubChatTransport internal constructor(
 
     /** Fixed origins are only available to tests in this module. */
     internal constructor(http: HubHttpClient, endpoint: Endpoint, token: String) : this({ path, method, body, headers ->
-        val url = endpoint.baseUrl().resolve(path) ?: throw HubFailure(HubError.Protocol, retryable = false)
+        val url = endpoint.baseUrl().hubUrl(path)
         http.client.newCall(Request.Builder().url(url).apply { headers.forEach { (name, value) -> header(name, value) } }
             .header("Authorization", "Bearer $token")
             .method(method, body).build()).awaitResponse().also { response ->

@@ -26,7 +26,6 @@ dependencies {
     implementation(libs.compose.icons)
     implementation(libs.compose.preview)
     testImplementation(libs.junit)
-    testImplementation(project(":core:hub"))
     // An inbox item's page in pictures: the inbox's header over a plugin's body (InboxItemShotsTest).
     testImplementation(project(":feature:inbox"))
     testImplementation(libs.coroutines.test)
@@ -36,6 +35,7 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.17")
     testImplementation("androidx.test.ext:junit:1.3.0")
     implementation(project(":core:contracts"))
+    implementation(project(":core:hub"))
     implementation(project(":core:domain"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:navigation"))

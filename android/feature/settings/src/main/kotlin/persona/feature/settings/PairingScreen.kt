@@ -49,6 +49,8 @@ fun PairingScreen(
     machines: MachineManagement? = null,
     /** Start at the connect step instead of the welcome page (adding another hub). */
     skipWelcome: Boolean = false,
+    /** Where the last attempt is kept for 连接诊断, which has nothing else to show before a pairing succeeds. */
+    attempts: PairingAttempts? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -73,13 +75,22 @@ fun PairingScreen(
     var manual by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableStateOf<PairingAttempt?>(null) }
+    fun recordAttempt(request: PairingRequest?, error: Throwable?) {
+        attempt = pairingAttempt(request, error, progress.lastOrNull()?.stage,
+            progress.lastOrNull { it.candidates.isNotEmpty() }?.candidates.orEmpty())
+        attempts?.record(attempt)
+    }
     fun accept(link: String) {
         welcome = false; readiness = false; credentialsSaved = false; lastRequest = null
         try {
             val request = PairingInput.parse(link)
             metadata = request; address = request.url; token = request.token; failure = null
             progress = emptyList(); confirm = request; notice = null
-        } catch (error: Exception) { failure = pairingFailure(error) }
+        } catch (error: Exception) {
+            failure = pairingFailure(error)
+            recordAttempt(null, error)
+        }
     }
     LaunchedEffect(initialLink) { if (!readiness) initialLink?.let(::accept) }
     // After the credentials: the hub's machine's engine when the hub reports engines, else the checklist. The list
@@ -118,6 +129,7 @@ fun PairingScreen(
                 record(PairingProgress(PairingStage.Parse))
                 if (PairingLocalNetwork.needsPermission(context, request)) {
                     failure = PairingFailure.LocalPermission
+                    recordAttempt(request, PairingException(PairingFailure.LocalPermission))
                     return@launch
                 }
                 if (!credentialsSaved) {
@@ -125,6 +137,7 @@ fun PairingScreen(
                     records.finishing(true)
                     pairing.pair(request) { record(it) }
                     credentialsSaved = true
+                    recordAttempt(request, null)
                     records.pending(true)
                     // The link's pairing code is spent; the host must not offer it for confirmation again.
                     onCredentialsSaved()
@@ -150,6 +163,8 @@ fun PairingScreen(
                 if (failure == PairingFailure.Timeout && PairingLocalNetwork.needsPermission(context, request)) {
                     failure = PairingFailure.LocalPermission
                 }
+                // A saved pairing that only missed the machine list is not a failed pairing.
+                if (!credentialsSaved) recordAttempt(request, error)
             }
             finally { running = false }
         }
@@ -217,6 +232,9 @@ fun PairingScreen(
                 val recovery = reason.recovery()
                 item { PairingHeading("连接未完成", "按下面的提示处理后，再试一次。") }
                 item { JNotice(reason.explanation(), status = Status.NeedsYou) }
+                attempt?.takeIf { it.failed }?.let { last ->
+                    item { SettingsCaption("停在「${last.step?.label()}」：${last.error.orEmpty()}", Modifier.padding(top = Tokens.Space.s)) }
+                }
                 item {
                     PairingActions {
                         JButton(if (credentialsSaved && recovery == PairingRecovery.Retry) "重新读取机器" else recovery.label, {
@@ -270,7 +288,10 @@ fun PairingScreen(
                     PairingActions {
                         JButton("下一步", {
                             try { confirm = metadata ?: PairingInput.manual(address, token) }
-                            catch (error: Exception) { failure = pairingFailure(error) }
+                            catch (error: Exception) {
+                                failure = pairingFailure(error)
+                                recordAttempt(PairingRequest(address.trim(), token), error)
+                            }
                         }, Modifier.fillMaxWidth(), enabled = address.isNotBlank() && token.isNotBlank())
                         JButton("粘贴链接", ::paste, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
                         JTextButton("返回扫码配对", { manual = false })
@@ -279,7 +300,7 @@ fun PairingScreen(
             }
             else -> {
                 item { PairingHeading("连接你的 hub", "在 hub 所在的机器上运行下面的命令，再扫描显示的二维码。") }
-                item { JCodeBlock("jarvisd hub pair") }
+                item { JCodeBlock("personad hub pair") }
                 item {
                     PairingActions {
                         JButton("扫码配对", ::requestScan, Modifier.fillMaxWidth(), icon = PhIcons.Scan)
@@ -325,6 +346,9 @@ private fun LazyListScope.pairingDetails(request: PairingRequest) {
     if (request.url.startsWith("http://")) item {
         JNotice(if (request.fp != null) "二维码带有公钥指纹，连接时会探测并校验加密地址。"
             else "HTTP 不加密，只在内网或 VPN 里使用。在外面请使用加密连接。", Modifier.padding(top = Tokens.Space.m))
+    }
+    if (request.url.startsWith("https://") && request.fp == null) item {
+        JNotice("二维码没有公钥指纹，会按系统信任的证书和域名校验这个 HTTPS 地址。", Modifier.padding(top = Tokens.Space.m))
     }
     item { JSectionHeader("候选地址") }
     val addresses = (listOf(request.url) + request.alt).distinct()

@@ -135,6 +135,29 @@ node 启动时把同一组 hooks 写两份（命令是 node 二进制自身的 `
   等的过程中 node 没了（部署重启 hub / node）→ hook 重连下一个 node，手机上的卡片不丢（`docs/protocol.md`「交互挺过重启」）。
   hook 进程被杀（用户在电脑上 Esc）→ node 发现 socket 断开 → 通知 hub 撤销交互。
 
+### 自检：`personad node doctor`
+
+hooks、MCP 和技能插件都是 node 启动时写出来的文件，坏了没有任何提示（hook 连不上 node 就放行给 TUI，见 `docs/lessons/server.md` node.sock 被删那条）。
+`personad node doctor [--json] [--fix]` 在这台电脑上只读检查（`node/doctor.go`），每项一行（`正常｜名字：发现了什么；怎么办`，和 `hub doctor` 同一种写法，三档 `正常` / `注意` / `有问题` 对应 JSON 里的 `ok` / `warn` / `fail`），有 `fail` 时退出码非 0（`hub doctor` 没有 `--json` 也不看退出码）：
+
+| 检查 | 内容 | 状态 |
+| --- | --- | --- |
+| `node.sock` | 文件在，且发 `{"kind":"ping"}` 能收到应答（真走一遍 `serveSock`） | 不存在或连不上 `fail` |
+| `runtime.sock` | 文件在且能连上 | 不存在 `warn`（没用 runtime 可忽略），连不上 `fail` |
+| `claude-settings.json`、`claude-hooks`、`assistant-settings.json`、`assistant-hooks`、`mcp.json`、`agent-plugin` | 和**当前这个二进制现在会写的**逐字节比：`current` / `stale`（有差异或插件缺文件，`items` 列出哪些）/ `missing` | `stale` 为 `warn`；hooks / settings / MCP `missing` 为 `fail`，`agent-plugin` `missing` 为 `warn`（只是没有 persona-office 技能） |
+| `command-paths` | 这些文件里 hook 和 MCP 的命令（按 `shellQuote` 的写法取第一个词）指向的程序存在且可执行 | 不可用 `fail` |
+| `claude-version` | 本机 claude 的版本是否 ≥ `pluginMinVersion`（能不能 `--plugin-dir`） | 读不到或太旧 `warn`（hooks 退回 `--settings`，仍然有效） |
+| `herdr` | herdr 的 API socket 能连上 | 连不上 `warn`：引擎由 hub 连上时选定，不存在本机，不是 herdr 时可忽略 |
+| `global-permission-hooks` | 用户自己的 `$CLAUDE_CONFIG_DIR/settings.json`（默认 `~/.claude`）里同步（非 `async`）的 `PermissionRequest` 钩子个数和命令（截断到 80 字） | 有就 `warn`：别的工具的审批钩子会和手机审批同时拦着请求；**只看不改** |
+
+- 比较和 `--fix` 共用 `generatedFiles`：node 启动时的 `writeClaudeConfig` 与 `--fix` 是同一条写入路径（`writeGeneratedConfig`），所以 doctor 说 `current` 就是 node 重启后会写出的样子。
+  `agent-plugin` 的比较在 `assistantskills.PluginIssues`；`WritePlugin` 也改成只在它报告无差异时才跳过（以前只看戳记，文件被删而戳记还在就一直不补）。
+- `--fix` 只重写 Persona 自己生成的文件（发现有 `stale` / `missing` 才写，输出 `fixed`），不碰用户的全局配置，也不会替 node 重建 socket（那要重启 node）。
+  **要用 node 实际在跑的那个二进制来跑**：生成文件里写的是「当前二进制」的路径，换了二进制跑 `--fix` 会把 hook 指到它上面。
+- `--json`：`{"ok", "dir", "checks": [{"name", "status", "state", "detail", "hint", "items"}], "fixed": []}`，字段一直都在，列表不会是 `null`，检查的顺序和名字固定（`TestDoctorJSONIsStable`）。
+- `hub doctor` 管 hub 的配置和网络，不管这些；node 这边的检查另起 `node doctor`，没有往 `hub doctor` 里塞。
+- 测试在临时目录里跑（`node/doctor_test.go`）；手动试 `--fix` 用临时 `HOME`，别对真实的 `~/.persona` 跑。
+
 ## MCP elicitation hooks
 
 2026-10-31 在本机只读核对：`claude --version` 输出 **2.1.306（Claude Code）**，安装包的 `package.json` 版本同为 `2.1.306`。这是本次实际运行的版本，和本文其他章节此前记录的版本分开看。

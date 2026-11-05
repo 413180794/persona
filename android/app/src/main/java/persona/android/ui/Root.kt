@@ -133,6 +133,7 @@ fun PersonaRoot(
                         onReady = { MainActivity.pendingPairLink.value = null; entering = false; onPaired() },
                         onDiagnostics = { diagnostics = true }, diagnostics = services.diagnostics,
                         onCredentialsSaved = { MainActivity.pendingPairLink.value = null }, machines = services.machines,
+                        attempts = services.pairingAttempts,
                         footer = {
                             if (hub == null) JTextButton("没有 hub？先体验一下", onClick = { scope.launch {
                                 try { shell.enterDemo(); MainActivity.pendingPairLink.value = null }

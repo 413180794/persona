@@ -315,43 +315,8 @@ func (n *Node) loadState(ctx context.Context) {
 	n.mu.Unlock()
 }
 
-func (n *Node) writeClaudeConfig() error {
-	cmd := shellQuote(n.bin) + " hook"
-	blocking := func(matcher string) map[string]any {
-		return map[string]any{"matcher": matcher, "hooks": []any{map[string]any{"type": "command", "command": cmd, "timeout": 86400}}}
-	}
-	notify := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": cmd, "timeout": 10}}}
-	settings := map[string]any{"hooks": map[string]any{
-		"PreToolUse":        []any{blocking("AskUserQuestion")},
-		"PermissionRequest": []any{blocking("*")},
-		"Elicitation":       []any{blocking("*")},
-		"Notification":      []any{notify},
-		"Stop":              []any{notify},
-		"UserPromptSubmit":  []any{notify},
-		"SessionStart":      []any{notify},
-	}}
-	// Each set twice: as a plugin for a claude that loads plugins, in a settings file for one that does not
-	// (hooksplugin.go).
-	if err := writeJSON(filepath.Join(n.dir, "claude-settings.json"), settings); err != nil {
-		return err
-	}
-	if err := writeHooksPlugin(n.hooksPlugin("claude"), settings["hooks"]); err != nil {
-		return err
-	}
-	// The assistant's own settings add the lark-connector gate on Bash (larkgate.go); herdr agents never pay for that hook.
-	settings["hooks"].(map[string]any)["PreToolUse"] = []any{blocking("AskUserQuestion"), blocking("Bash")}
-	if err := writeJSON(filepath.Join(n.dir, "assistant-settings.json"), settings); err != nil {
-		return err
-	}
-	if err := writeHooksPlugin(n.hooksPlugin("assistant"), settings["hooks"]); err != nil {
-		return err
-	}
-	mcp := map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{"command": n.bin, "args": []string{"mcp"}}}}
-	if err := writeJSON(filepath.Join(n.dir, "mcp.json"), mcp); err != nil {
-		return err
-	}
-	return assistantskills.WritePlugin(n.pluginDir()) // the skills the agents Persona starts load (agentplugin.go)
-}
+// writeClaudeConfig writes the files the sessions Persona starts load (hooks, MCP, skills; generatedFiles).
+func (n *Node) writeClaudeConfig() error { return writeGeneratedConfig(n.dir, n.bin) }
 
 func (n *Node) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	if strings.HasPrefix(method, "node.update.") {
@@ -1133,11 +1098,10 @@ func loginShell(ctx context.Context, script string) *exec.Cmd {
 	return cmd
 }
 
-func writeJSON(path string, v any) error {
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return err
-	}
+func marshalJSON(v any) ([]byte, error) { return json.MarshalIndent(v, "", "  ") }
+
+// writeFileAtomic replaces path whole: a reader sees the old file or the new one.
+func writeFileAtomic(path string, b []byte) error {
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err

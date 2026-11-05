@@ -54,7 +54,10 @@ data class ConnectionEndpointsState(
     val activeUrl: String? = null,
     /** The user arranged the order; false while the default rule applies (恢复默认顺序 has nothing to do). */
     val customOrder: Boolean = false,
-    /** The pairing pinned the hub's TLS key, so https addresses can be added and verified. */
+    /**
+     * https addresses can be added and verified: the pairing pinned the hub's TLS key, or it had none and https is
+     * checked against the system CAs (a hub behind a reverse proxy).
+     */
     val pinned: Boolean = false,
     /** The latest test of each candidate in this process, keyed by [EndpointEntry.url]. */
     val tests: Map<String, EndpointTestResult> = emptyMap(),

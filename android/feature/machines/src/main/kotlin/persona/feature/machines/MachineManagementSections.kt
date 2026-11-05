@@ -15,14 +15,14 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.engines.Engines
 
-/** What the machine card says about its jarvisd build, with 重新部署 while it differs from the hub's (iOS `DeployRow`). */
+/** What the machine card says about its personad build, with 重新部署 while it differs from the hub's (iOS `DeployRow`). */
 @Composable
 internal fun MachineDeployLine(machine: Machine, starting: Boolean, onDeploy: (() -> Unit)?) {
     val busy = machine.deploying || starting
     val text = when {
-        busy -> "正在把 hub 这一版的 jarvisd 装到这台电脑…"
+        busy -> "正在把 hub 这一版的 Persona 装到这台电脑…"
         !machine.deployError.isNullOrBlank() -> "上次部署没成：${machine.deployError}"
-        else -> "jarvisd 和 hub 不是同一次部署"
+        else -> "这台电脑上的 Persona 和 hub 不是同一次部署"
     }
     JInlineStatus(
         text, Modifier.padding(top = Tokens.Space.s),

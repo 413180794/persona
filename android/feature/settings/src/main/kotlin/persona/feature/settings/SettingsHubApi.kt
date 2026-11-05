@@ -1,6 +1,8 @@
 package persona.feature.settings
 
 import persona.core.contracts.api.*
+import persona.core.hub.hubResolve
+import persona.core.hub.hubUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -23,7 +25,7 @@ class SettingsHubApi(
 
     override suspend fun check(): AppUpdate? = withContext(Dispatchers.IO) {
         require(baseUrl.isHttps) { "Updates require the paired TLS origin" }
-        val url = baseUrl.newBuilder().encodedPath("/api/v1/app/android/latest").query(null).build()
+        val url = baseUrl.hubUrl("/api/v1/app/android/latest")
         client.newCall(request(url)).execute().use { response ->
             if (response.code == 404 || response.code == 204) return@withContext null
             check(response.isSuccessful) { "Update metadata request failed" }
@@ -33,8 +35,8 @@ class SettingsHubApi(
     }
 
     override suspend fun download(update: AppUpdate, destination: OutputStream) = withContext(Dispatchers.IO) {
-        val url = baseUrl.resolve(update.downloadUrl) ?: error("Invalid download URL")
-        require(url.isHttps && url.host == baseUrl.host && url.port == baseUrl.port && url.username.isEmpty() && url.password.isEmpty()) { "Update must use the paired TLS origin" }
+        val url = baseUrl.hubResolve(update.downloadUrl) ?: error("Invalid download URL")
+        require(url.isHttps) { "Update must use the paired TLS origin" }
         client.newCall(request(url)).execute().use { response ->
             check(response.isSuccessful) { "Update download failed" }
             requireNotNull(response.body).byteStream().use { it.copyTo(destination) }
@@ -45,7 +47,7 @@ class SettingsHubApi(
     override suspend fun read(): ConnectionDiagnostics {
         val current = snapshot()
         val sessions = withContext(Dispatchers.IO) {
-            val url = baseUrl.newBuilder().encodedPath("/api/v1/devices").addPathSegment(deviceId).addPathSegment("sessions").query(null).build()
+            val url = baseUrl.hubUrl("/api/v1/devices").newBuilder().addPathSegment(deviceId).addPathSegment("sessions").build()
             client.newCall(request(url)).execute().use { response ->
                 check(response.isSuccessful) { "Device sessions request failed" }
                 val rows = JSONObject(requireNotNull(response.body).string()).optJSONArray("sessions")

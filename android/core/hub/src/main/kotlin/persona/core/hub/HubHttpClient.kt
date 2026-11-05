@@ -5,6 +5,7 @@ import persona.core.contracts.Health
 import persona.core.contracts.JsonCodec
 import java.net.InetAddress
 import java.net.Proxy
+import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
@@ -13,6 +14,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
@@ -25,6 +27,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.internal.tls.OkHostnameVerifier
 import java.io.IOException
 import kotlin.coroutines.resumeWithException
 
@@ -32,8 +35,15 @@ import kotlin.coroutines.resumeWithException
  * Trust is established by pairing, never by the unauthenticated health response. [pins] are further fingerprints this
  * client accepts: the other hubs of a group, which were learned from a paired hub's authenticated hello. Which of them
  * an endpoint must present is checked per request ([HubHttpClient.health], [spkiFingerprint]).
+ *
+ * [system] is set only for a pairing without a fingerprint (`fp`): a hub without its own TLS behind a reverse proxy
+ * whose certificate comes from a public CA. A certificate that matches no pin is then checked like any HTTPS site:
+ * the system's trust store here, the host name in [HubHttpClient]'s verifier. That trusts every CA the system trusts
+ * (the same as the iOS app and the web client) instead of one key; a pairing with `fp` never falls back to it.
  */
-class SpkiTrustManager(fingerprint: String?, pins: Set<String> = emptySet()) : X509TrustManager {
+class SpkiTrustManager(
+    fingerprint: String?, pins: Set<String> = emptySet(), private val system: X509TrustManager? = null,
+) : X509TrustManager {
     private val expected = fingerprint?.let(::decodePin)
     @Volatile private var extra: List<ByteArray> = decodePins(pins)
 
@@ -45,7 +55,9 @@ class SpkiTrustManager(fingerprint: String?, pins: Set<String> = emptySet()) : X
     }
 
     override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-        if (chain.isNullOrEmpty() || !matches(chain[0])) throw CertificateException("Hub SPKI mismatch")
+        if (chain.isNullOrEmpty()) throw CertificateException("Hub SPKI mismatch")
+        if (matches(chain[0])) return
+        system?.checkServerTrusted(chain, authType) ?: throw CertificateException("Hub SPKI mismatch")
     }
 
     override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
@@ -71,6 +83,13 @@ class SpkiTrustManager(fingerprint: String?, pins: Set<String> = emptySet()) : X
 internal fun spkiFingerprint(certificate: X509Certificate): String =
     Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(certificate.publicKey.encoded))
 
+/** The platform's default trust manager: the system CAs (on Android, as the network security config allows). */
+fun systemTrustManager(): X509TrustManager {
+    val factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+    factory.init(null as KeyStore?)
+    return factory.trustManagers.filterIsInstance<X509TrustManager>().first()
+}
+
 /** How TLS pins are keyed: the host as OkHttp hands it to the hostname verifier, and the port. */
 internal fun tlsKey(host: String, port: Int) = "${host.lowercase()}:$port"
 
@@ -95,9 +114,13 @@ class HubHttpClient(
     dns: Dns = Dns.SYSTEM,
     pins: Set<String> = emptySet(),
     socketFactory: SocketFactory = SocketFactory.getDefault(),
+    /** Where HTTPS without a pinned fingerprint is checked ([SpkiTrustManager]); tests pass their own CA. */
+    systemTrust: () -> X509TrustManager = ::systemTrustManager,
 ) : AutoCloseable {
     val client: OkHttpClient
-    private val trust = SpkiTrustManager(fingerprint, pins)
+    /** No fingerprint from pairing: HTTPS endpoints are checked against the system CAs and the host name. */
+    val systemTrusted: Boolean = fingerprint == null
+    private val trust = SpkiTrustManager(fingerprint, pins, if (systemTrusted) systemTrust() else null)
     @Volatile private var extraPins = pins
     /** For a group: which hub's pin each TLS endpoint must present, set by the connection. */
     private val expectedPins = java.util.concurrent.ConcurrentHashMap<String, String>()
@@ -126,7 +149,10 @@ class HubHttpClient(
             .sslSocketFactory(tls.socketFactory, trust)
             .hostnameVerifier { host, session ->
                 val leaf = session.peerCertificates.firstOrNull() as? X509Certificate
-                if (leaf == null || !trust.matches(leaf)) false else {
+                if (leaf != null && !trust.matches(leaf) && systemTrusted) {
+                    // Passed the system CAs in the trust manager: the name must be this endpoint's, as for any site.
+                    OkHostnameVerifier.verify(host, session)
+                } else if (leaf == null || !trust.matches(leaf)) false else {
                     val key = tlsKey(host, session.peerPort)
                     val pin = spkiFingerprint(leaf)
                     seenPins[key] = pin
@@ -184,7 +210,7 @@ class HubHttpClient(
         /** The pin the TLS leaf must have. Defaults to this client's own when it also trusts other hubs' pins. */
         expectedPin: String? = null,
     ): Health {
-        val url = endpoint.baseUrl().newBuilder().encodedPath("/api/v1/health").query(null).build()
+        val url = endpoint.baseUrl().hubUrl("/api/v1/health")
         val caller = if (!fresh) client else client.newBuilder().connectionPool(ConnectionPool(0, 1, TimeUnit.SECONDS)).build()
         caller.newCall(Request.Builder().url(url).build()).awaitResponse().use { response ->
             if (url.isHttps) {
@@ -214,13 +240,53 @@ class HubHttpClient(
     }
 }
 
+/**
+ * The endpoint's base: its origin and, for a hub behind a reverse proxy at a sub-path (`https://hub.example.com/jarvis`,
+ * the proxy strips the prefix), that path prefix. Every API URL is built from it with [hubUrl], never with
+ * `resolve("/api/…")`, which would drop the prefix.
+ */
 internal fun Endpoint.baseUrl(): HttpUrl = try {
     url.toHttpUrl().also {
         require(it.username.isEmpty() && it.password.isEmpty() && it.query == null && it.fragment == null)
-        require(it.encodedPath == "/")
     }
 } catch (error: IllegalArgumentException) {
     throw HubFailure(HubError.Protocol, retryable = false, cause = error)
+}
+
+/** The base's path prefix without its trailing slash: "" at the root, "/jarvis" under a sub-path. */
+private val HttpUrl.hubPrefix: String get() = encodedPath.trimEnd('/')
+
+/**
+ * The URL of the hub's [path] (absolute and already encoded, `/api/v1/…`, optionally with `?query`) under this base,
+ * keeping the base's path prefix: `https://hub.example.com/jarvis` + `/api/v1/ws` is
+ * `https://hub.example.com/jarvis/api/v1/ws`. A trailing slash on the base makes no difference.
+ */
+fun HttpUrl.hubUrl(path: String): HttpUrl {
+    require(path.startsWith("/") && !path.startsWith("//") && '#' !in path) { "Expected an absolute hub path" }
+    val query = path.substringAfter('?', missingDelimiterValue = "").takeIf { '?' in path }
+    return newBuilder().encodedPath(hubPrefix + path.substringBefore('?')).encodedQuery(query).fragment(null).build()
+}
+
+/**
+ * The hub path (`/api/…`) of [url] when it is on this base: same scheme, host and port, under the base's path prefix.
+ * Null for anything else, so a same-host check also keeps requests inside the prefix.
+ */
+fun HttpUrl.hubPath(url: HttpUrl): String? {
+    if (url.scheme != scheme || url.host != host || url.port != port || url.username.isNotEmpty() || url.password.isNotEmpty()) return null
+    val prefix = hubPrefix
+    if (!url.encodedPath.startsWith("$prefix/")) return null
+    return url.encodedPath.removePrefix(prefix)
+}
+
+/**
+ * A reference the hub hands out (a media `src`, an update's `download_url`) as a URL under this base. The hub does not
+ * know the proxy's prefix, so its absolute paths (`/api/…`) are under the base's prefix; a full URL is taken as is and
+ * must stay on this base ([hubPath]). Null for anything else.
+ */
+fun HttpUrl.hubResolve(reference: String): HttpUrl? {
+    val target = if (reference.startsWith("/") && !reference.startsWith("//")) runCatching { hubUrl(reference) }.getOrNull()
+        else resolve(reference)
+    return target?.takeIf { hubPath(it) != null && it.fragment == null }
 }
 
 /**

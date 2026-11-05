@@ -5,13 +5,18 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/** Uses only observations from the running transport, never pairing snapshots. */
+/**
+ * Uses only observations from the running transport, never pairing snapshots; apart from them, the last pairing
+ * attempt ([pairing]), which is all there is to show while pairing keeps failing.
+ */
 internal class DiagnosticsState(
     private val connection: HubConnection,
     private val source: ConnectionDiagnosticsSource?,
     private val history: SettingsDiagnostics?,
+    attempts: PairingAttempts? = null,
 ) {
     val data: StateFlow<ConnectionDiagnostics> = source?.diagnostics ?: MutableStateFlow(ConnectionDiagnostics())
+    val pairing: StateFlow<PairingAttempt?> = attempts?.last ?: MutableStateFlow(null)
     val busy = MutableStateFlow(false)
     val message = MutableStateFlow<String?>(null)
     val summary = MutableStateFlow<DeviceDisconnectSummary?>(null)
@@ -49,3 +54,9 @@ internal fun routeKind(kind: String): String = when (kind) {
     "unknown" -> "未知类型"
     else -> kind
 }
+
+/** The rows 连接诊断 shows for the last pairing attempt. */
+internal fun PairingAttempt.rows(): List<Pair<String, String?>> = listOf(
+    "地址" to address,
+    "结果" to (step?.let { "失败，停在「${it.label()}」" } ?: "成功"),
+) + listOfNotNull(error?.let { "错误" to it }) + listOf("时间" to at)

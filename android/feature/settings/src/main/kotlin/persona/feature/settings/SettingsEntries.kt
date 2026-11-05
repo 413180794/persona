@@ -66,6 +66,8 @@ data class SettingsServices(
     /** 设置 › 会话分诊 on the paired hub (docs/agent-work.md「开关」); null in 体验模式. */
     val triage: AgentTriage? = null,
     val capsule: FloatingCapsuleSettings? = null,
+    /** The last pairing attempt (recorded by the pairing page, shown in 连接诊断); null in 体验模式. */
+    val pairingAttempts: PairingAttempts? = null,
 )
 
 fun EntryProviderScope<NavKey>.settingsEntries(navigator: Navigator, services: SettingsServices? = null) {

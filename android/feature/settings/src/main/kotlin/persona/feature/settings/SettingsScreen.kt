@@ -178,7 +178,7 @@ private fun SettingsContent(
         "pair" -> PairingScreen(services.pairing, services.sessions, onReady = back,
             onDiagnostics = { open(SettingsPage.Diagnostics) }, diagnostics = services.diagnostics, onBack = back,
             footer = { onDemo?.let { Action("没有 hub？先体验一下", onClick = it) }; deviceFeedback() },
-            machines = services.machines.takeUnless { services.demo })
+            machines = services.machines.takeUnless { services.demo }, attempts = services.pairingAttempts)
         "capsule" -> CapsuleSettingsPage(services.capsule, back)
         "claude" -> ClaudeSettingsPage(services.sessions, services.machines.takeUnless { services.demo }, back)
         "models" -> purpose?.let { id -> ModelPurposePage(services.models.takeUnless { services.demo }, id, onBack = { purpose = null },
@@ -208,7 +208,7 @@ private fun SettingsContent(
         // Adding a hub is the pairing page with an adding service; it returns to the hub list.
         "hubs-add" -> PairingScreen(services.addHub ?: services.pairing, services.sessions,
             onReady = { page = "hubs" }, onDiagnostics = { open(SettingsPage.Diagnostics) }, diagnostics = services.diagnostics,
-            onBack = { page = "hubs" }, skipWelcome = true)
+            onBack = { page = "hubs" }, skipWelcome = true, attempts = services.pairingAttempts)
         "diag" -> DiagnosticsScreen(services, onBack = back, footer = deviceFeedback)
         "style" -> JListPage(title = "界面风格", onBack = back) {
             item { AppearanceSettings() }

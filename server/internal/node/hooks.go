@@ -163,6 +163,8 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		} else {
 			resp = map[string]any{"output": out}
 		}
+	case "ping": // personad node doctor: a round trip that changes nothing
+		resp = map[string]any{"ok": true}
 	case "launcher.env": // jarvisd launch <name>
 		resp = n.launcherEnv(req.Name)
 	case "mcp.tools":
@@ -519,8 +521,13 @@ var resumeRetry = time.Second
 // DialSocket sends one request to the local node and returns the raw response line. It fails with ErrNoNode when no
 // node listens.
 func DialSocket(ctx context.Context, req any) ([]byte, error) {
+	return dialSocketAt(ctx, SocketPath(), req)
+}
+
+// dialSocketAt is DialSocket for the node socket at path.
+func dialSocketAt(ctx context.Context, path string, req any) ([]byte, error) {
 	var d net.Dialer
-	c, err := d.DialContext(ctx, "unix", SocketPath())
+	c, err := d.DialContext(ctx, "unix", path)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNoNode, err)
 	}

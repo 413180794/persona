@@ -24,7 +24,7 @@ class HttpDeviceSettings(
 
     private suspend fun request(vararg path: String, method: String = "GET", body: JsonObject? = null): JsonObject {
         if (!isCurrent()) throw CancellationException("Pairing changed")
-        val url = base.newBuilder().encodedPath("/api/v1").query(null).fragment(null).apply {
+        val url = base.hubUrl("/api/v1").newBuilder().apply {
             path.forEach(::addPathSegment)
         }.build()
         val request = Request.Builder().url(url).header("Authorization", "Bearer $token")

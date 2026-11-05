@@ -41,7 +41,7 @@
         android:layout_height="wrap_content"
         android:padding="24dp"
         android:gravity="center"
-        android:text="在 hub 所在的机器上运行\njarvisd hub pair\n将显示的二维码放入取景框"
+        android:text="在 hub 所在的机器上运行\npersonad hub pair\n将显示的二维码放入取景框"
         android:textSize="16sp"
         android:textColor="@android:color/white" />
 

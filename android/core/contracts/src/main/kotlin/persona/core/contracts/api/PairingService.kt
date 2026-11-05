@@ -36,3 +36,27 @@ interface PairingService {
     }
     suspend fun unpair()
 }
+
+/** Where a pairing attempt stopped, for 连接诊断 (the running connection's probes only exist once paired). */
+enum class PairingAttemptStep { Parse, Network, Tls, Http, Auth, Protocol }
+
+/**
+ * The last pairing attempt on this phone: the address tried, where it stopped ([step] null when it succeeded), the
+ * error, when, and each address's probe result. Kept in memory only: it holds no credentials, and a restart forgets it.
+ */
+data class PairingAttempt(
+    val address: String?,
+    val step: PairingAttemptStep?,
+    val error: String?,
+    val at: String,
+    val candidates: List<ConnectionCandidate> = emptyList(),
+) {
+    val failed: Boolean get() = step != null
+}
+
+/** The last pairing attempt, shared by the pairing page (which records it) and 连接诊断 (which shows it). */
+class PairingAttempts {
+    private val mutable = kotlinx.coroutines.flow.MutableStateFlow<PairingAttempt?>(null)
+    val last: StateFlow<PairingAttempt?> = mutable
+    fun record(attempt: PairingAttempt?) { mutable.value = attempt }
+}

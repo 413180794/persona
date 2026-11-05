@@ -29,8 +29,11 @@ import java.util.Locale
 internal fun DiagnosticsScreen(services: SettingsServices, onBack: (() -> Unit)? = null, footer: @Composable () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val controller = remember(services) { DiagnosticsState(services.connection, services.liveDiagnostics, services.diagnostics) }
+    val controller = remember(services) {
+        DiagnosticsState(services.connection, services.liveDiagnostics, services.diagnostics, services.pairingAttempts)
+    }
     val data by controller.data.collectAsStateWithLifecycle()
+    val pairing by controller.pairing.collectAsStateWithLifecycle()
     val busy by controller.busy.collectAsStateWithLifecycle()
     val message by controller.message.collectAsStateWithLifecycle()
     val summary by controller.summary.collectAsStateWithLifecycle()
@@ -46,6 +49,8 @@ internal fun DiagnosticsScreen(services: SettingsServices, onBack: (() -> Unit)?
     }
     JListPage(title = "连接诊断", onBack = onBack, state = list) {
         item { ConnectionStatus(state) }
+        // A failed pairing comes first: before a pairing works there is no connection to show anything about.
+        pairing?.takeIf { it.failed }?.let { pairingAttempt(it) }
         if (endpoints != null) editableCurrentConnection(endpoints, data, state)
         else diagnosticGroup("当前连接", listOf(
             "当前路径" to data.currentPath?.let { path ->
@@ -88,6 +93,7 @@ internal fun DiagnosticsScreen(services: SettingsServices, onBack: (() -> Unit)?
             diagnosticGroup("连接时段", listOf("连接时间" to localTime(session.connectedAt),
                 "断开时间" to (localTime(session.disconnectedAt) ?: "仍在连接"), "断线原因" to session.reason))
         }
+        pairing?.takeUnless { it.failed }?.let { pairingAttempt(it) }
         diagnosticGroup("蜂窝网络测试", listOf("测试结果" to context.getSharedPreferences("settings-readiness", 0).getString("cellular-test", null)))
         item {
             Column(Modifier.padding(vertical = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
@@ -112,6 +118,16 @@ internal fun localTime(value: String?, zone: ZoneId = ZoneId.systemDefault(), to
         ?: runCatching { OffsetDateTime.parse(value).toInstant() }.getOrNull() ?: return value
     val time = instant.atZone(zone)
     return DateTimeFormatter.ofPattern(if (time.toLocalDate() == today) "HH:mm:ss" else "MM-dd HH:mm:ss").format(time)
+}
+
+private fun LazyListScope.pairingAttempt(attempt: PairingAttempt) {
+    diagnosticGroup("最近一次配对", attempt.rows().map { (label, value) -> label to if (label == "时间") localTime(value) else value })
+    attempt.candidates.forEach { candidate ->
+        diagnosticGroup("配对时探测 · ${routeKind(candidate.kind)}", listOf(
+            "地址" to candidate.url, "探测结果" to candidate.result.takeUnless { it.isBlank() },
+            "探测时间" to localTime(candidate.checkedAt),
+        ))
+    }
 }
 
 private fun LazyListScope.diagnosticGroup(title: String, values: List<Pair<String, String?>>, note: String? = null) {

@@ -28,7 +28,7 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize|stateAlwaysHidden">
-            <!-- jarvis://pair?url=…&token=… from `jarvisd hub pair` -->
+            <!-- jarvis://pair?url=…&token=… from `personad hub pair` -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
