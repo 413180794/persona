@@ -92,6 +92,10 @@ class AppServices @Inject constructor(
     private val app = application as PersonaApp
     /** Terminal, files, chat actions and machine metrics of every hub group (docs/android.md「多 hub」). */
     private val shell = persona.android.di.MergedShellServices(stacks)
+    /** 终端's pane lists of every hub group (feature terminal_panes). */
+    val terminalPanes: TerminalPanes get() = shell.panes
+    /** The terminal of another hub group's machine (`~group` ids, as 终端 lists them); null for this hub's own. */
+    fun groupTerminal(key: SessionKey): TerminalTransport? = if (mutableSession.value?.demo != null) null else shell.groupTerminal(key.machineId)
     private val mergedMetrics = shell.metrics { stack ->
         val route = stack.connection.route.value ?: return@metrics null
         HttpMachineMetricsApi(route.endpoint.url, stack.connection.token, stack.connection.http.client,

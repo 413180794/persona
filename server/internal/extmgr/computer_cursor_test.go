@@ -44,7 +44,7 @@ func TestTheCursorAndTheClickSound(t *testing.T) {
 	if told() {
 		t.Fatal("turned off")
 	}
-	if _, err := h.computerCall(ctx, mac, "persona-c1", "run_steps", map[string]any{"steps": []any{}}); err != nil {
+	if _, err := h.computerCall(ctx, mac, "persona-c1", "", "run_steps", map[string]any{"steps": []any{}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, calls := seen(); len(calls) == 0 || calls[len(calls)-1].ClickSound != "foreground" {

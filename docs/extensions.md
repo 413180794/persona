@@ -1953,8 +1953,8 @@ GitHub 连接器在搬进官方扩展仓库 `nwverse/persona-extensions` 的扩�
 
 ## 内置扩展：操控电脑（`cua`）
 
-纯声明扩展（不跑进程），贡献扩展点 `computer`（版本 1，`{id, name?}`）。**默认关**；配置是 `machines`（打开了的机器，机器页的开关写这里）和 `confirm`
-（操作前在手机上确认）。打开后助手才有 `computer_state` / `computer_run`，机器页才有「操控电脑」。见 [computer-use.md](computer-use.md)。
+纯声明扩展（不跑进程），贡献扩展点 `computer`（版本 1，`{id, name?}`）。**默认关**；配置是 `machines`（打开了的机器，机器页的开关写这里）、`backend`（Cua Driver / LCU / 自动）和 `confirm`
+（操作前在手机上确认）。打开后助手才有 `computer_state` / `computer_run`，机器页才有「操控电脑」。LCU 的运行时确认也回到这些卡片上，不进 Claude / Codex。见 [computer-use.md](computer-use.md)。
 
 ## hub.json 里的扩展
 

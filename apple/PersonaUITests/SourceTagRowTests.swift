@@ -1,8 +1,8 @@
 import XCTest
 
-/// The BeautifulUI style's Agents rows (#3004): the 终端 / 飞书群 tag sits on the title's line, before the title, and the
-/// state badge keeps its column to itself. The tag used to share the badge's 24 pt column, which spilled both ways: the
-/// badge half out of the capsule and the tag over the title's first characters.
+/// The Agents rows' 终端 / 飞书群 tag sits under the row's time, at its end (#3043), in the default and the BeautifulUI
+/// style: not before the title, which it pushed onto two lines, nor in the badge's 24 pt column (#3004), which spilled
+/// both ways (the badge half out of the capsule, the tag over the title's first characters).
 ///   MOCK_BOTMUX=1 PORT=<port> python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/SourceTagRowTests
 /// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the list (`…_SHOTS_APPEARANCE` names the simulator's appearance).
@@ -10,14 +10,18 @@ final class SourceTagRowTests: XCTestCase {
     /// The capsule's own padding and the badge's column (`TaskRow.badgeColumn` less its gap): a tag starts after them.
     private static let badgeColumnEnd: CGFloat = 10 + 24
 
-    @MainActor func testTheTagSitsBeforeTheTitleNotInTheBadgeColumn() throws {
+    @MainActor func testTheTagSitsUnderTheTimeAtTheRowsEnd() throws {
+        for style in ["glass", "beautiful"] { try check(style: style) }
+    }
+
+    @MainActor private func check(style: String) throws {
         let env = ProcessInfo.processInfo.environment
         guard let hub = env["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)") }
         continueAfterFailure = false
         _ = try Data(contentsOf: URL(string: hub + "/mock/reset")!)
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES", "-ui.style", "beautiful"]
+        app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES", "-ui.style", style]
         app.launchPersona()
 
         // The 需要你处理 cards fill the first screen: the list's own 终端 / 飞书群 filters bring those rows up.
@@ -30,12 +34,12 @@ final class SourceTagRowTests: XCTestCase {
             XCTAssertTrue(tags.firstMatch.waitForExistence(timeout: 10), "no \(label) tag in the list:\n\(app.debugDescription)")
             sleep(1)
             checkTags(app, label)
-            shot(app, filter)
+            shot(app, "\(style)-\(filter)")
             chip.tap() // off again
         }
     }
 
-    /// Every tag on screen starts after its row's badge column, on its row.
+    /// Every tag on screen is out of its row's badge column and in the row's right half: at its end, under the time.
     @MainActor private func checkTags(_ app: XCUIApplication, _ label: String) {
         let rows = app.descendants(matching: .any).matching(identifier: "agents.row").allElementsBoundByIndex.map(\.frame)
         let screen = app.windows.firstMatch.frame
@@ -45,6 +49,7 @@ final class SourceTagRowTests: XCTestCase {
             guard !f.isEmpty, screen.contains(f), let row = rows.first(where: { $0.minY <= f.midY && f.midY <= $0.maxY }) else { continue }
             XCTAssertGreaterThanOrEqual(f.minX - row.minX, Self.badgeColumnEnd,
                                         "the \(label) tag at \(f) is in the badge's column of the row at \(row)")
+            XCTAssertGreaterThan(f.minX, row.midX, "the \(label) tag at \(f) is not at the end of the row at \(row)")
             checked += 1
         }
         XCTAssertGreaterThan(checked, 0, "no \(label) tag on a row on screen to check:\n\(app.debugDescription)")

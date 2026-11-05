@@ -10,5 +10,7 @@
   "missing_permissions": "Cua Driver 还没有{permissions}权限",
   "ready": "现在可以操控",
   "ready_version": "现在可以操控 · Cua Driver {version}",
-  "unknown": "还不知道能不能操控"
+  "unknown": "还不知道能不能操控",
+  "not_installed_lcu": "这台 Mac 上还没有装 LCU",
+  "ready_version_lcu": "现在可以操控 · LCU {version}"
 }

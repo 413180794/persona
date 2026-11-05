@@ -7,5 +7,6 @@
   "err_outdated_install": "The personad on this computer is too old to install Cua Driver. Redeploy it",
   "confirm_script": "Run a script on “{machine}”: {line}",
   "confirm_steps": "Run on “{machine}” in order: {steps}",
-  "list_sep": ", "
+  "list_sep": ", ",
+  "err_outdated_lcu": "The personad on this computer is too old to recognize LCU. Redeploy it"
 }

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -31,26 +32,41 @@ var errNoBuiltinMethod = errors.New("no such method")
 
 // builtinCall answers method of the built-in program id (cua: status, call, install, grant, cancel, clipboard, cursor,
 // nolock, lock; ego: status, install, open, cancel, call, cookies.list, cookies.import, cookies.clear).
-func builtinCall(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
+// lcuCaller runs one computer.call on LCU, with the node's elicitations going to Persona's confirmation cards (lcu_mcp.go).
+type lcuCaller func(ctx context.Context, params json.RawMessage) (*proto.ComputerResult, error)
+
+func builtinCall(ctx context.Context, id, method string, params json.RawMessage, lcu lcuCaller) (any, error) {
 	switch id {
 	case "cua":
+		backend := computerBackend(params) // the plugin's 操控后端: cua, lcu, or auto (lcu_status.go)
 		switch method {
-		case "status": // Cua Driver on this Mac, asked only while the user has it on (computer.go)
-			return computerStatus(ctx), nil
+		case "status": // Cua Driver or LCU on this Mac, asked only while the user has it on (computer.go)
+			return computerStatusFor(ctx, backend), nil
 		case "call":
+			if useLCU(backend) {
+				if lcu == nil {
+					return nil, errors.New("LCU 还没连上 hub，确认卡片发不出去")
+				}
+				return lcu(ctx, params)
+			}
 			return computerCall(ctx, params)
 		case "install", "grant": // background jobs; their state comes back with status
+			if backend == "lcu" && method == "grant" {
+				return nil, fmt.Errorf("LCU 用 ChatGPT 应用自己的权限，第一次使用时在这台 Mac 上允许，不用单独授权")
+			}
 			run := installCua
 			if method == "grant" {
 				run = grantCua
+			} else if backend == "lcu" {
+				run = installLCU
 			}
 			if err := startJob(method, run); err != nil {
 				return nil, err
 			}
-			return computerStatus(ctx), nil
+			return computerStatusFor(ctx, backend), nil
 		case "cancel":
 			cancelJob()
-			return computerStatus(ctx), nil
+			return computerStatusFor(ctx, backend), nil
 		case "clipboard": // the live screen's 剪贴板: text RFB cannot carry (Chinese), and reading it (clipboard.go)
 			return macClipboard(ctx, params)
 		case "cursor": // 「显示 Agent 的光标」: Cua Driver's daemon with or without its cursor overlay (cua_extras.go)
@@ -66,7 +82,7 @@ func builtinCall(ctx context.Context, id, method string, params json.RawMessage)
 			if err := lockScreen(ctx); err != nil {
 				return nil, err
 			}
-			return computerStatus(ctx), nil
+			return computerStatusFor(ctx, backend), nil
 		}
 	case "ego":
 		switch method {
@@ -100,13 +116,13 @@ func builtinCall(ctx context.Context, id, method string, params json.RawMessage)
 
 // legacyBuiltinCall answers a built-in program's method by its old name (computer.status, browser.call…), for a hub
 // from before builtin_programs; a name it does not have is an unknown method, as it was.
-func legacyBuiltinCall(ctx context.Context, method string, params json.RawMessage) (any, error) {
+func legacyBuiltinCall(ctx context.Context, method string, params json.RawMessage, lcu lcuCaller) (any, error) {
 	for id, prefix := range builtinPrograms {
 		if prefix == "" {
 			continue
 		}
 		if short, ok := strings.CutPrefix(method, prefix); ok {
-			out, err := builtinCall(ctx, id, short, params)
+			out, err := builtinCall(ctx, id, short, params, lcu)
 			if errors.Is(err, errNoBuiltinMethod) {
 				return nil, fmt.Errorf("unknown method %s", method)
 			}
@@ -117,8 +133,8 @@ func legacyBuiltinCall(ctx context.Context, method string, params json.RawMessag
 }
 
 // callBuiltin is plugin.node.call for a built-in program: its answer as the JSON a program's would be.
-func callBuiltin(ctx context.Context, id, method string, params json.RawMessage) (json.RawMessage, error) {
-	out, err := builtinCall(ctx, id, method, params)
+func callBuiltin(ctx context.Context, id, method string, params json.RawMessage, lcu lcuCaller) (json.RawMessage, error) {
+	out, err := builtinCall(ctx, id, method, params, lcu)
 	if errors.Is(err, errNoBuiltinMethod) {
 		return nil, &rpc.Error{Code: extension.CodeUnknownMethod, Message: "unknown method " + method + " of the built-in program " + id}
 	}

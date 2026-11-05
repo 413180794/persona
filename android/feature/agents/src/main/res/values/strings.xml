@@ -73,6 +73,7 @@
     <string name="agents_menu_collapse_all">Collapse all</string>
     <string name="agents_menu_expand_all">Expand all</string>
     <string name="agents_menu_machines">Machine monitor</string>
+    <string name="agents_menu_terminals">Terminal</string>
     <string name="agents_menu_note">Pins and mutes sync to the hub; read marks only affect this device.</string>
     <string name="agents_filter_all">All</string>
     <string name="agents_filter_needs_you">Needs you</string>

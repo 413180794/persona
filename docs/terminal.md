@@ -575,7 +575,7 @@ hub：`GET /api/v1/machines/{mid}/panes`，feature `terminal_panes`。
 
 ### 没做
 
-- iOS / Android 还没有独立终端（它们只有会话里的终端，`terminal_subscribe` 只用会话 id）。协议已经够用：同一个接口、同一个地址。
+- iOS 还没有独立终端（只有会话里的终端，`terminal_subscribe` 只用会话 id）。协议已经够用：同一个接口、同一个地址。Android 有了（#2972）：Agents「列表设置」里的「终端」，见 `docs/android.md`「第二批模块入口」。
 - 关闭窗格 / 标签页、重命名、分屏：不在这一版，需要时在电脑上做。
 - 没有会话也没有 herdr 的宿主（Paseo、botmux）：没有窗格，列表为空。
 - ⌘K 搜索面板现在也搜窗格（#2330，见 `docs/web.md`「快捷键」）：打开时读一次各在线电脑的 `panes.list`，只列普通 shell 和没有会话的窗格（有会话的 Agent 窗格已经是一条会话结果）；终端页自己的 Jump To 照旧。

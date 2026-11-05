@@ -524,6 +524,19 @@ App 和网页按 `machine_id` + `session_id` 把卡放进对话；没有会话�
 #2645 给 `rpc.Peer` 加取消时，每个请求的 ctx 改成了处理器返回就 `cancel()`。`session.watch` 的 transcript 循环原来直接 `WithCancel(ctx)` 这个 ctx，于是 watch 刚回复就被取消：hub 订阅了、node 也回了 ok，但之后一条 `session.items` 都不推，页面只剩 `sessions_delta`，要刷新才有新内容——主会话和子 Agent 一样（子 Agent 是先被用户发现的）。单测都绿，因为测试直接调 `n.watch(...)`（用 `context.Background()`），不经 `rpc.Peer`。
 回复之后还要继续的东西（watch、流）用 `rpc.ConnContext(ctx)`；测 watch 要走一对真的 `rpc.Peer`（`node/subagent_watch_test.go` 的 `servedNode`），别绕过请求这一层。其余用请求 ctx 起 goroutine 的地方（终端流、完整界面已经用 `context.Background()`）也照这个检查。
 
+## 进程原地 exec 会丢掉 systemd 给的 socket（2026-11-05，蓝绿切换）
+
+hub 启动时从 `LISTEN_FDS` 拿 socket，拿完就清掉环境变量；`net.FileListener` 复制出的 fd 带 close-on-exec，原来的 fd 又被关掉了。
+所以自更新 `syscall.Exec` 出来的新进程既没有 fd 也没有环境变量，只能自己 `bind`，端口却在 `jarvisd.socket` 手里，于是 `address already in use`。
+在 Linux 上用最小程序复现过（同一份 `listen.go`，模拟 systemd → hub → exec 三层）。
+
+现在 hub 跑在入口后面，入口一直持有端口，换版本不再 exec（`docs/hub-restart.md`「蓝绿切换」）。没有入口时，systemd 的 fd 保留并设成 close-on-exec，
+exec 前清掉标志、带上 `LISTEN_FDS` / `LISTEN_PID`（`execListenEnv`）。
+别用 `os.File.Fd()` 去取 fd 号：它会把 fd 改成阻塞模式，而 fd 和 listener 的副本共享同一个 file description，listener 也会跟着变成阻塞的。要先把 fd 号记下来。
+
+在 Synology NAS 上跑测试：`/tmp` 是 noexec。测试二进制、假的 `systemctl` 都要放家目录（`TMPDIR=$HOME/…`）。
+Windows 上 `git archive` 会按 `core.autocrlf` 导出 CRLF，传到 Linux 的脚本和嵌入的提示词就坏了，要用 `git -c core.autocrlf=false archive`。
+
 ## 装扩展慢：卡在下载，不是编译或启动（2026-11-06，#3277）
 
 在隔离的测试 hub 上实测装 lark-connector、github、codebase 等：落盘、写库、启动加起来不到 1 秒，几乎全部时间都在「预览」里的下载。

@@ -1656,13 +1656,13 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
   );
 }
 
-/** Where the agent was opened, before its title (#2526): 飞书群 (botmux; a click opens its Feishu topic) or 终端
- *  (herdr), each on its own tint. Nothing for other hosts. */
-export function SourceTag({ s }: { s: Session }) {
+/** Where the agent was opened (#2526): 飞书群 (botmux; a click opens its Feishu topic) or 终端 (herdr), each on its
+ *  own tint. Nothing for other hosts. At the row's end, so the title starts where an untagged one does (#3043). */
+export function SourceTag({ s, className }: { s: Session; className?: string }) {
   const source = sessionSource(s);
   if (!source) return null;
   const label = t(`lib-agent-groups.source_${source}`);
-  const cls = cx("shrink-0 rounded-[4px] px-1 text-[10.5px] font-medium leading-4 whitespace-nowrap", source === "feishu" ? "bg-source-feishu-tint text-source-feishu" : "bg-source-terminal-tint text-source-terminal");
+  const cls = cx("shrink-0 rounded-[4px] px-1 text-[10.5px] font-medium leading-4 whitespace-nowrap", className, source === "feishu" ? "bg-source-feishu-tint text-source-feishu" : "bg-source-terminal-tint text-source-terminal");
   if (source === "feishu" && s.external_url) {
     // a link inside the row's link: opened by hand, so the row does not navigate too
     const open = (e: React.SyntheticEvent) => {
@@ -1738,7 +1738,6 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusMark state={st} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
       {showState && !s.assistant && <SessionMark s={s} size={14} />}
-      {showState && !s.assistant && <SourceTag s={s} />}
       {prefix && <span className={prefixClass}>{prefix}</span>}
       {detail.length > 0 || workflow || line ? (
         <span className="flex min-w-0 flex-1 flex-col">
@@ -1782,6 +1781,7 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
           <Icon name="todo" size={10} stroke={2} />
         </span>
       )}
+      {showState && !s.assistant && <SourceTag s={s} className={aside} />}
       {/* the row's ⋯ takes the end on hover: what is there steps aside instead of showing half under it */}
       {tail && <span className={cx("max-w-[72px] shrink-0 truncate text-[11px] text-ink-3", aside)}>{tail}</span>}
       {!tail && (st === "offline" || !showState) && <span className={cx("shrink-0 text-[11px] text-ink-3", aside)}>{ago(s.updated_at)}</span>}

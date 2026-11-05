@@ -2362,15 +2362,15 @@ struct StateCounts: View {
     }
 }
 
-/// Where an agent was opened, before its title (#2526): 飞书群 (botmux; a tap opens its Feishu topic) or 终端 (herdr),
-/// each on its own tint.
+/// Where an agent was opened (#2526): 飞书群 (botmux; a tap opens its Feishu topic) or 终端 (herdr), each on its own
+/// tint. A small chip under the row's time, so the title keeps its whole line (#3043).
 struct SourceLabel: View {
     var source: SessionSource
     var link: URL?
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        let chip = Chip(text: source.label, look: .tint(source == .feishu ? Theme.sourceFeishu : Theme.sourceTerminal))
+        let chip = Chip(text: source.label, look: .tint(source == .feishu ? Theme.sourceFeishu : Theme.sourceTerminal), compact: true)
         if source == .feishu, let link {
             Button { openURL(link) } label: { chip }
                 .buttonStyle(.plain)
@@ -2423,7 +2423,7 @@ nonisolated struct SlotRow: View, Equatable {
         }
     }
 
-    /// The tag before the title: where it was opened, for an agent (Persona's own conversations carry none).
+    /// The tag under the time: where it was opened, for an agent (Persona's own conversations carry none).
     private var rowSource: SessionSource? { session.assistant ? nil : session.source }
 
     private var indented: Bool { if case .cardRow = surface { true } else { false } }
@@ -2442,11 +2442,12 @@ nonisolated struct SlotRow: View, Equatable {
                                  status: .pending(step: 0)),
                         shape: taskShape(), isOpen: session.leadWorkflow != nil,
                         accessory: surface == .none ? .none : .disclosure, titleLines: 2, subtitleLines: 1) {
-                    // The badge's column is 24 pt: the source tag goes before the title (#3004), not beside the badge.
+                    // The badge's column is 24 pt: only the badge goes there (#3004); the source tag is under the time (#3043).
                     if dot { AgentStateBadge(state: session.state).padding(.leading, indented ? Theme.Space.l : 0) }
                 } trailing: {
                     VStack(alignment: .trailing, spacing: Theme.Space.xs) {
                         AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
+                        sourceLabel
                         #if os(macOS)
                         // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
                         if pendingCount { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
@@ -2459,53 +2460,63 @@ nonisolated struct SlotRow: View, Equatable {
                 } detail: {
                     if !session.runningWorkflows.isEmpty { WorkflowLine(runs: session.runningWorkflows) }
                 }
-                .titleLeading(rowSource.map { source in { SourceLabel(source: source, link: session.externalLink) } })
             } else {
                 HStack(alignment: .top, spacing: Theme.Space.m) {
                     if dot { StatusDot(state: session.state, size: 9).padding(.top, Theme.Space.sm) }
-                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
-                            if let source = rowSource { SourceLabel(source: source, link: session.externalLink) }
+                    // The words on the left, the time with its source under it on the right (#3043): the title
+                    // starts at the row's edge, and the tag takes no room from it nor pushes the preview down.
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
+                        VStack(alignment: .leading, spacing: Theme.Space.xs) {
                             Text(session.displayTitle)
                                 .font(session.state == .unread ? Theme.Font.bodyHeavy : Theme.Font.bodyStrong)
                                 .lineLimit(2)
                                 .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 4)
-                            AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
-                            #if os(macOS)
-                            // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
-                            if pendingCount { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
-                            #endif
-                        }
-                        if let last = session.listPreview {
-                            Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
-                        }
-                        // A workflow running in the background (#2935): its name, phase and progress.
-                        if !session.runningWorkflows.isEmpty { WorkflowLine(runs: session.runningWorkflows) }
-                        HStack(spacing: Theme.Space.xs) {
-                            metaText.lineLimit(1)
-                            if let todo = session.todo {
-                                ViewThatFits(in: .horizontal) {
-                                    Chip(text: todo.title, symbol: Theme.Icon.todo, look: .outline)
-                                    Image(systemName: Theme.Icon.todo)
-                                        .font(Theme.Font.caption)
-                                        .foregroundStyle(.secondary)
-                                        .help(todo.title)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if let last = session.listPreview {
+                                Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
+                            }
+                            // A workflow running in the background (#2935): its name, phase and progress.
+                            if !session.runningWorkflows.isEmpty { WorkflowLine(runs: session.runningWorkflows) }
+                            HStack(spacing: Theme.Space.xs) {
+                                metaText.lineLimit(1)
+                                if let todo = session.todo {
+                                    ViewThatFits(in: .horizontal) {
+                                        Chip(text: todo.title, symbol: Theme.Icon.todo, look: .outline)
+                                        Image(systemName: Theme.Icon.todo)
+                                            .font(Theme.Font.caption)
+                                            .foregroundStyle(.secondary)
+                                            .help(todo.title)
+                                    }
+                                }
+                                if muted {
+                                    Image(systemName: Theme.Icon.muted).font(Theme.Font.label).accessibilityLabel("已屏蔽通知")
                                 }
                             }
-                            if muted {
-                                Image(systemName: Theme.Icon.muted).font(Theme.Font.label).accessibilityLabel("已屏蔽通知")
-                            }
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 1)
                         }
-                        .font(Theme.Font.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 1)
+                        VStack(alignment: .trailing, spacing: Theme.Space.xs) {
+                            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
+                                AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
+                                #if os(macOS)
+                                // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
+                                if pendingCount { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
+                                #endif
+                            }
+                            sourceLabel
+                        }
                     }
                 }
                 .padding(.vertical, Theme.Space.xs)
             }
         }
         .opacity(muted ? 0.8 : 1) // quieter than live agents, never fainter than the idle spaces below
+    }
+
+    /// Where it was opened, under the time; not for the assistant's own conversation.
+    @MainActor @ViewBuilder private var sourceLabel: some View {
+        if let source = rowSource { SourceLabel(source: source, link: session.externalLink) }
     }
 
     /// Mac: the red count of the questions and approvals waiting at the row's end, as the web's (#2695); it says 需要你
@@ -2573,10 +2584,13 @@ struct AgentTimeText: View {
         let _ = PerfTrace.body("AgentTimeText")
         #endif
         let at = time?.updatedAt ?? fallback
-        TimelineView(.periodic(from: .now, by: 30)) { ctx in
-            Text(Fmt.relative(at, now: ctx.date)).font(font).foregroundStyle(.secondary).lineLimit(1)
+        // No time: nothing, not an empty line the source label under it would sit below (#3043).
+        if let at, at.isMeaningful {
+            TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                Text(Fmt.relative(at, now: ctx.date)).font(font).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .fixedSize()
         }
-        .fixedSize()
     }
 }
 

@@ -152,6 +152,11 @@ type Computer struct {
 	ScreenSharing bool `json:"screen_sharing"`
 	// NoAutoLock: 「扩展开着时不自动锁屏」 is on for this Mac (the hub's, from the plugin's settings).
 	NoAutoLock bool `json:"no_auto_lock,omitempty"`
+	// Backend is which driver this status is for: "cua" (Cua Driver) or "lcu" (amontlabs/lcu). Empty from a hub that
+	// only knows Cua Driver.
+	Backend string `json:"backend,omitempty"`
+	// ChatGPT: the official ChatGPT desktop app is installed. LCU needs it for the runtime; Cua Driver does not.
+	ChatGPT bool `json:"chatgpt,omitempty"`
 	// Ready: all of the above in place. Note says what is missing and what to do, in Chinese for the app.
 	Ready   bool      `json:"ready"`
 	Note    string    `json:"note,omitempty"`

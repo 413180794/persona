@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/hubedge"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/update"
 )
@@ -63,6 +64,9 @@ type Hub struct {
 	// stopping: a planned stop has begun (beginStop, docs/hub-restart.md): what the stop itself causes (machines going
 	// offline, their questions ending) is not news for the apps, which reconnect to the next hub in a moment.
 	stopping atomic.Bool
+	// slot: the hub's edge started this process (hub_edge.go, docs/hub-restart.md「蓝绿切换」); it listens on the edge's
+	// sockets, and an update or a rollback hands over to the next slot instead of exec'ing. nil: the hub listens itself.
+	slot *hubedge.Slot
 	// deltas: the live text of each session's message being generated, as last relayed (machine, session -> text): a
 	// client subscribing in the middle of it gets it after the backlog instead of waiting for the next token.
 	deltas     map[[2]string]string
@@ -170,19 +174,20 @@ func Run(ctx context.Context, b update.Build) error {
 	if err != nil {
 		return err
 	}
-	return runConfigured(ctx, b, cfg, updating)
+	return runConfigured(ctx, b, cfg, updating, nil)
 }
 
-// runConfigured runs the hub until ctx ends; updating: an update is under way, this process confirms it.
-func runConfigured(ctx context.Context, b update.Build, cfg *Config, updating bool) error {
+// runConfigured runs the hub until ctx ends; updating: an update is under way, this process confirms it. slot: the
+// edge started it (nil: it listens itself).
+func runConfigured(ctx context.Context, b update.Build, cfg *Config, updating bool, slot *hubedge.Slot) error {
 	budget := newShutdownBudget(cfg)
 	defer budget.close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	return budget.run(ctx, func() error { return runHub(ctx, b, cfg, budget, updating) })
+	return budget.run(ctx, func() error { return runHub(ctx, b, cfg, budget, updating, slot) })
 }
 
-func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBudget, updating bool) error {
+func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBudget, updating bool, slot *hubedge.Slot) error {
 	// The stop asked for (stop) begins with beginStop, before anything sees its context end (restart.go).
 	stop := ctx
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
@@ -190,8 +195,9 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 
 	h := &Hub{
 		deployCtx: ctx,
-		shutdown:  budget, cfg: cfg, version: b.Version, build: b, logger: log.New(os.Stderr, "", log.LstdFlags),
+		shutdown:  budget, cfg: cfg, version: b.Version, build: b, logger: slotLogger(slot),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, calls: map[string]chan proto.ToolResult{},
+		slot: slot,
 	}
 	h.builtinLooks = builtinPersonaFS()
 	h.live = newLiveActivities(h)

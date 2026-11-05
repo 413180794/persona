@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/hubedge"
 	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
@@ -85,10 +86,11 @@ func (h *Hub) startPublic(ctx context.Context) error {
 		if err := h.refreshTLS(time.Now()); err != nil {
 			return err
 		}
-		ln, activated, err = listenTCP(h.cfg.Public.TLSListen)
-		if err != nil && tlsAddressGone(h.cfg.Public.TLSListen, err) {
+		ln, activated, err = h.listen(h.cfg.Public.TLSListen)
+		if err != nil && (tlsAddressGone(h.cfg.Public.TLSListen, err) || errors.Is(err, hubedge.ErrNoSocket)) {
 			// A new install binds TLS to the LAN address only (docs/onboarding.md 4.1), and DHCP may have moved it:
-			// start without TLS rather than not at all; the plaintext port still works on the LAN.
+			// start without TLS rather than not at all; the plaintext port still works on the LAN. Behind the edge
+			// the edge found it gone (hub_edge.go Serve) and has no socket for that port.
 			h.logf("hub TLS: %s is not an address of this machine now (has the LAN address changed?): TLS is off; "+
 				"set public.tls_listen to this machine's LAN address, or \":%s\" (every address), and restart",
 				h.cfg.Public.TLSListen, portOf(h.cfg.Public.TLSListen))
@@ -269,7 +271,7 @@ func (h *Hub) serveHTTP(ctx context.Context) error {
 		servers = append(servers, srv)
 		go func() { errs <- srv.ServeTLS(h.public.listener, "", "") }()
 	}
-	ln, activated, err := listenTCP(plain.Addr)
+	ln, activated, err := h.listen(plain.Addr)
 	if err != nil {
 		return err
 	}
@@ -281,6 +283,10 @@ func (h *Hub) serveHTTP(ctx context.Context) error {
 	listeners = append(listeners, ln)
 	go func() { errs <- plain.Serve(ln) }()
 	h.logf("jarvisd hub %s listening on %s (%s)", h.version, h.cfg.Listen, h.cfg.PublicURL)
+	if h.slot != nil {
+		h.logf("hub: slot %s, relayed by the hub's edge: the route moves here now", h.slot.Name)
+		h.slot.Ready()
+	}
 	select {
 	case <-ctx.Done():
 		return nil

@@ -26,5 +26,8 @@
   "busy_redeploying": "Redeploying",
   "err_no_image": "Don’t know which image this hub is: compose didn’t pass JARVIS_IMAGE into the container",
   "image_private": "Couldn’t check for a new image: {error}. Set JARVIS_REGISTRY_TOKEN in .env (a token that can read this image), or make the image public",
-  "image_failed": "Couldn’t check for a new image: {error}"
+  "image_failed": "Couldn’t check for a new image: {error}",
+  "err_no_start": "The new version did not start; the old one keeps running: {error}",
+  "reason_no_takeover": "The new version could not take over: {error}",
+  "reason_not_confirmed": "The new version was not confirmed within 3 minutes"
 }

@@ -88,6 +88,7 @@ func computerStatus(ctx context.Context) proto.Computer {
 	}
 	c.ScreenSharing = screenSharing(ctx)
 	c.Ready, c.Note = computerReady(c)
+	c.Backend = "cua"
 	c.Job = currentJob()
 	// Last, after the job was read: the hub keeps the answer with the latest checked, whatever order the answers of
 	// questions asked at once arrive in.

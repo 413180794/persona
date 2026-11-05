@@ -36,6 +36,8 @@ class GroupStack internal constructor(
     internal val names = GroupNames(group.namespace)
     val namespace: String? get() = names.namespace
     internal val terminal by lazy { HubTerminalTransport(connection) }
+    /** [terminal] in the merged lists' ids. */
+    internal val mergedTerminal: TerminalTransport by lazy { terminal.inGroup(names) }
     internal val files: SessionFiles by lazy { HubSessionFiles(connection).inGroup(names) }
     internal val actions: ChatActions by lazy { HttpChatActions(connection).inGroup(names) }
     val current: Boolean get() = group.data === data && group.active

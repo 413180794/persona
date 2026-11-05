@@ -24,6 +24,10 @@ export interface MachineComputer {
   /** active | locked | away */
   desktop?: string;
   screen_sharing?: boolean;
+  /** cua (Cua Driver) or lcu. Empty from a hub that only knows Cua Driver. */
+  backend?: string;
+  /** The official ChatGPT desktop app is installed (LCU's runtime). */
+  chatgpt?: boolean;
   ready?: boolean;
   note?: string;
   checked?: string;
@@ -66,7 +70,8 @@ export function computerView(c: MachineComputer, online: boolean): ComputerView 
   }
   if (!c.installed) {
     const failed = job?.kind === "install" && job.state === "failed";
-    return { kind: "install", text: failed ? t("lib-computer.install_failed", { error: job.error || t("lib-computer.installer_error") }) : t("lib-computer.not_installed"), retry: job?.state === "failed" };
+    const notInstalled = c.backend === "lcu" ? t("lib-computer.not_installed_lcu") : t("lib-computer.not_installed");
+    return { kind: "install", text: failed ? t("lib-computer.install_failed", { error: job.error || t("lib-computer.installer_error") }) : notInstalled, retry: job?.state === "failed" };
   }
   const missing = missingPermissions(c);
   if (c.daemon && missing.length) {
@@ -74,7 +79,10 @@ export function computerView(c: MachineComputer, online: boolean): ComputerView 
     const failed = job?.kind === "grant" && job.state === "failed" ? job.error : undefined;
     return { kind: "grant", text: failed || t("lib-computer.missing_permissions", { permissions: formatList(missing, { type: "conjunction", style: "narrow" }) }) };
   }
-  if (c.ready) return { kind: "ready", text: c.version ? t("lib-computer.ready_version", { version: c.version }) : t("lib-computer.ready"), screen };
+  if (c.ready) {
+    const readyVersion = c.backend === "lcu" ? "lib-computer.ready_version_lcu" : "lib-computer.ready_version";
+    return { kind: "ready", text: c.version ? t(readyVersion, { version: c.version }) : t("lib-computer.ready"), screen };
+  }
   return { kind: "unknown", text: c.note || t("lib-computer.unknown") };
 }
 

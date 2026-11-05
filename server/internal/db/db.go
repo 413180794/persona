@@ -33,6 +33,30 @@ type DB struct {
 
 // Open connects and applies pending migrations. It retries for a while so the hub can start alongside the container.
 func Open(ctx context.Context, url string) (*DB, error) {
+	pool, err := connect(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	d := &DB{pool: pool}
+	if err := d.migrate(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return d, nil
+}
+
+// Check connects the way Open does and lets go again, migrating nothing: a new hub binary waiting to take over
+// (hubedge, a standby slot) checks it can reach the database while the one serving still owns the schema.
+func Check(ctx context.Context, url string) error {
+	pool, err := connect(ctx, url)
+	if err != nil {
+		return err
+	}
+	pool.Close()
+	return nil
+}
+
+func connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	if url == "" {
 		return nil, errors.New("hub 的数据库还没装好。运行 personad hub setup，它会帮你建好。")
 	}
@@ -59,12 +83,7 @@ func Open(ctx context.Context, url string) (*DB, error) {
 		}
 		time.Sleep(time.Second)
 	}
-	d := &DB{pool: pool}
-	if err := d.migrate(ctx); err != nil {
-		pool.Close()
-		return nil, err
-	}
-	return d, nil
+	return pool, nil
 }
 
 func (d *DB) Close() { _ = d.CloseContext(context.Background()) }

@@ -755,6 +755,7 @@ Claude 调 `phone_*` 时 hub 把同名工具合并成一份定义（说明更长
 - 对话页终端按钮进入完整终端；助手对话隐藏该按钮。通知的终端兜底（`jarvis://open?target=terminal&machine=…&session=…`）打开同一页面，下面垫着原对话。
 - 收件箱事项和飞书会话深链（`target=inbox&item=…`、`target=lark&chat=…`）先等事项列表刷新，再换成收件箱列表会打开的飞书或邮件页面；事项已不在列表时显示说明。
 - Agents「列表设置」面板里的「机器监控」进入机器列表；树里每台电脑栏头右边的仪表按钮直接进这台电脑的详情。
+- 独立终端（#2972，`docs/terminal.md` 第十九节）：hub 的 features 有 `terminal_panes` 时，「列表设置」面板在「机器监控」下面多一个「终端」（网页侧边栏「机器」下面的「终端」），列出每台在线电脑的空间 → 标签页 → 窗格（`GET …/machines/{mid}/panes`，在前台时每 8 秒重读），Agent 窗格写会话标题和状态、按会话 id 打开，shell 窗格按地址 `pane:<窗格>` 打开同一个终端页（`TerminalAddress`；`/keys` 不认地址，只读时打字会提示没发出去）；空间旁的「新标签页」`POST …/panes {workspace_id, kind}` 后打开新窗格。多 hub 时按机器 id 的组后缀发到那个组（`MergedShellServices.panes`），带后缀机器的终端也走那个组的连接和 features（`groupTerminal`，订阅 / 输入去掉后缀、事件加回后缀）；列表项按「主机类型/空间 id」区分，同一台电脑的 herdr 和 orca 都有 `w1` 时不会撞。关闭 / 拆分 / 重命名不做。
 - Agents 操作和对话页菜单确认关闭成功后，从所有 tab 移除该会话的聊天、请求和终端页面；结果未知时保留页面供核对。分享目标与 Agents 共用 `agentRank`，同状态再按时间和稳定标识排序。
 - Agent 对话页 ⋯ 菜单进入文件；确认是仓库后显示 Git 和改动数。文件和 Git 在原会话内切换，插入路径保留草稿和有效选区，并返回输入框。
 - Persona 抽屉的「知识库」进入档案、搜索及详情，链接在应用内打开。

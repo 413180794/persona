@@ -40,6 +40,8 @@ internal fun AgentsScreen(
     creationModel: NewAgentViewModel? = null,
     onMachineSelected: (String) -> Unit = {},
     groups: List<persona.core.contracts.api.HubGroupInfo> = emptyList(),
+    /** The hub lists terminal panes (feature terminal_panes): the menu offers 终端 under 机器, as the web's sidebar does. */
+    terminalPanes: Boolean = false,
 ) {
     val page by model.page.collectAsStateWithLifecycle()
     val connection by model.connection.state.collectAsStateWithLifecycle()
@@ -400,6 +402,8 @@ internal fun AgentsScreen(
             // under 按机器 a tab group folded by hand is not expanded either (#2792)
             (page.preferences.grouping != AgentGrouping.MachineSpace || page.preferences.foldedTabs.isEmpty()), onClick = { model.foldAll(false) }))
         add(JAction(stringResource(R.string.agents_menu_machines), icon = PhIcons.Gauge, onClick = { navigator.navigate(MachinesRoute) }))
+        if (terminalPanes) add(JAction(stringResource(R.string.agents_menu_terminals), icon = PhIcons.TerminalWindow,
+            onClick = { navigator.navigate(persona.core.navigation.TerminalPanesRoute) }))
     }, { menu = false }, title = stringResource(R.string.agents_action_list_settings), note = stringResource(R.string.agents_menu_note))
     if (historyMachine != null && historySession != null) {
         val target = page.sessions.firstOrNull { it.machineId == historyMachine && it.sessionId == historySession }

@@ -87,6 +87,44 @@ Mac 上的 ssh 机器离线 2–8 s，列表里它的会话先消失再出现。
 `hub-systemd.sh` 负责写两个 unit：第一次（或地址变了）要停一次服务把端口交给 socket（只这一次有约 1 s 的空窗），以后每次都只 `restart jarvisd`。
 `TimeoutStopSec=20`（停机预算 8 s 之外留余量）。
 
+### 蓝绿切换：hub 的入口（`internal/hubedge`，2026-11-06）
+
+参考 relay-history 的做法：入口进程常驻并持有端口，后面挂两个槽位。起因是 2026-11-05 在 Linux 上复现的问题：自更新原地 `syscall.Exec` 新二进制时，systemd 传来的监听 socket 丢了。
+启动时清掉了 `LISTEN_FDS`，`net.FileListener` 复制出的 fd 又带 close-on-exec，新进程只能自己 `bind`，端口却还在 `jarvisd.socket` 手里，于是报 `address already in use` 退出，
+要等 systemd 用 `Restart=always` 再拉起来，还白白多算一次启动次数。自更新这条路也不走计划内停机，客户端收不到 `hub_restarting`。
+
+现在 `personad hub run`（Linux、macOS）是一个**入口**：
+
+- 入口持有 hub 的端口：systemd 给的 socket，没有就自己监听。整个服务运行期间一直不放。
+- hub 本身作为**槽位**运行：`personad hub slot`，入口的子进程，在 `~/.persona/run/slot-<a|b>-<端口>.sock` 上监听。
+- 入口逐字节转发每条连接，转发前先写一个 PROXY v2 头说明来源。槽位的 `RemoteAddr` / `LocalAddr` 因此还是客户端和它连上的地址，
+  按来源判断信任（回环、局域网、VPN 网卡、用户自己的 PROXY protocol 上游）照旧。
+- TLS 证书、公钥钉扎、数据库都归槽位，入口只转发 TCP。
+
+切换一次（自更新、`personad hub switch`、deploy.sh），按顺序：
+
+1. 新二进制作为 **standby** 槽位启动：报出版本和 build 号，自检配置，连得上数据库（`db.Check`，不迁移），然后等着。
+   这期间旧槽位照常服务；版本不对、起不来、连不上库，就杀掉新的，旧的继续跑，没有任何中断。
+2. 入口开始 **hold**：新连接在入口排队，不拒绝。然后通知旧槽位 **release**，它照计划内停机的流程停下：`hub_restarting`、交出机器和事件日志、1001。
+3. 通知新槽位 **activate**：迁移数据库，接管机器，开始监听，报 ready。入口把路由切过去，排着的连接放给它。
+4. 新槽位没能接手（迁移失败、退出、超时），就换回上一版：`--prev`，或者自更新时由入口把 pending 标记里的文件换回去。
+
+另外几点：
+
+- 连接在旧槽位的 socket 队列里还没被接、旧槽位就被 release 了：入口把客户端已经发出的字节（最多 64 KiB）原样交给下一个槽位，客户端看不出来。
+  槽位崩溃时不这样重放，因为它可能已经处理了没来得及回答的请求。
+- 槽位意外退出：入口 hold 住连接，按退避时间重新启动它；连续 5 次起不来，入口自己退出，交给服务管理器。
+- `public.tls_listen` 指定的局域网地址已经不在这台机器上（DHCP 换了地址）：入口不持有这个端口，槽位也拿不到它的 socket（`ErrNoSocket`），
+  于是关掉 TLS 照常启动，和 hub 自己监听时的做法一样（`docs/onboarding.md` 4.1）。
+- 入口本身不跟着 hub 自动更新，只在服务重启时换（unit 变了、或者 `hub switch` 发现入口协议比新二进制旧，退出码 3）。
+  所以入口要保持很薄：转发、排队、两个槽位、控制 socket（`~/.persona/run/hub-edge.sock`，0600）。
+
+为什么不做两个 hub 同时服务（relay-history 的并行切换）：hub 里有很多同一时刻只能有一个的东西，机器连接、助手进程、机器人、连接器、扩展，还有数据库迁移。
+新旧并存的只有 standby 自检这一段，交接时有 1–2 秒的 hold。实测（NAS，2026-11-06）：一次切换 0.68 秒，期间 4 路并发请求共 607 次，失败 0 次。
+
+不经入口的情况：Windows、Docker（镜像更新）、`PERSONA_HUB_EDGE=0`、数据目录路径太长（Unix socket 地址超限）。这时 hub 照旧自己监听。
+这条路上原地 exec 的问题也修了：systemd 给的 fd 保留下来（close-on-exec），exec 前清掉标志，再带上 `LISTEN_FDS` / `LISTEN_PID`（`listen.go` 的 `execListenEnv`）。
+
 ### 计划内停机（`hub/restart.go`）
 
 SIGTERM 不再直接取消 hub 的 ctx，而是先 `beginStop`：
@@ -188,6 +226,23 @@ hub 记住每个会话最后一条 `session.delta`（空串清掉，机器真正
 
 不动的：Docker 部署（`deploy/docker/`，没有 `LISTEN_FDS`，照旧自己监听）、Mac 上的 hub（launchd）、数据库和数据。
 
+蓝绿切换（上面「蓝绿切换」）之后：
+
+- deploy.sh 换 hub 的二进制前先把旧的留成 `jarvisd.prev`。
+- `hub-systemd.sh` 在 unit 没变、hub 正在运行时，先跑 `jarvisd hub switch --prev …`：
+  - 退出码 0：切换完成，什么都不重启；
+  - 退出码 1：新版没能接手，旧版照常服务，脚本把 `jarvisd.prev` 放回原位，部署失败；
+  - 其他退出码：没有入口（第一次部署这一版、旧二进制），或者入口协议更旧，就照原来的方式重启服务。
+- Mac（launchd）也是先切换，不行再 `kickstart`。
+- 回滚：在 hub 的机器上跑 `PERSONA_HUB_EDGE=0 scripts/deploy/hub-systemd.sh`。它把这个变量写进 unit 的 `Environment=`，服务重启后 hub 自己监听；
+  以后的部署会保留它，直到用 `PERSONA_HUB_EDGE=1` 再跑一次。手动运行时直接设置这个环境变量。
+
+入口要注意：
+
+- `systemctl --user stop jarvisd` 停的是入口，入口先 release 槽位再退出（`TimeoutStopSec=20` 够用）。
+  槽位卡住超过 20 秒才会被杀；被杀时扩展各在自己的进程组里，可能留下来，下次启动前看一眼 `ps`。
+- 两个槽位交接时写同一个日志，每行前面带 `[slot a]` / `[slot b]`；入口自己的行以 `hub edge:` 开头。
+
 用了 socket 之后要注意：
 
 - **换回旧二进制之前先回滚 socket**：不认识 `LISTEN_FDS` 的旧 hub 会自己 `net.Listen`，端口在 socket 手里，起不来（`address already in use`）、反复重启。
@@ -197,6 +252,11 @@ hub 记住每个会话最后一条 `session.delta`（空串清掉，机器真正
 
 ## 怎么验证
 
+- 蓝绿切换：
+  - `internal/hubedge` 的测试（Linux / macOS）：测试二进制自己扮演槽位。覆盖来源地址、切换期间请求零失败、6 次连续切换下的并发、起不来的新版、
+    接手失败回到上一版、槽位自己请求切换、构建号不对被拒、未确认的更新回滚、崩溃后重启。
+  - `hub` 的 `TestUpdateHandsOverToTheEdge` 等；`scripts/test/test_hub_switch_deploy.py`（hub-systemd.sh 的三种结果）。
+  - 真实 personad 的端到端测试：私有 Postgres，v1 → `hub switch` → v2，同时持续打 `/api/v1/health`，再试一个起不来的二进制。
 - 单元 / 集成测试（`server/`）：`TestEventLogSince`、`TestHelloResumes`、`TestStampEvent`、`TestListenInherited`（像 systemd 那样传 fd 3 给子进程）、
   `TestEventLogHandOver`、`TestRestartIsPlanned`（真跑两次 `hub.Run`：客户端先收到 `hub_restarting` 和 1001「hub restarting」，下一个 hub 接着同一条流、`resumed: true`），
   `node` 的 `TestResidentNodeKeepsConversations`（连接结束后对话进程还在，下一条连接的 `Node` 接管后收到它的输出）。

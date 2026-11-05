@@ -155,3 +155,31 @@ func (c *countingReader) Read(p []byte) (int, error) {
 	c.n += n
 	return n, err
 }
+
+func TestAppendV2RoundTrips(t *testing.T) {
+	for _, c := range []struct{ src, dst string }{
+		{"192.0.2.7:51000", "198.51.100.1:18660"},
+		{"[::ffff:192.0.2.7]:51000", "[::ffff:127.0.0.1]:18660"}, // a dual-stack listener's IPv4: INET
+		{"[2001:db8::7]:51000", "[2001:db8::1]:18661"},
+		{"192.0.2.7:51000", "[2001:db8::1]:18661"}, // mixed: both as INET6
+	} {
+		src, dst := netip.MustParseAddrPort(c.src), netip.MustParseAddrPort(c.dst)
+		b := append(AppendV2(nil, src, dst), "GET / HTTP/1.1\r\n"...)
+		r := bufio.NewReader(bytes.NewReader(b))
+		h, err := Read(r)
+		if err != nil {
+			t.Fatalf("%v -> %v: %v", src, dst, err)
+		}
+		if h.Source.Addr().Unmap() != src.Addr().Unmap() || h.Source.Port() != src.Port() ||
+			h.Destination.Addr().Unmap() != dst.Addr().Unmap() || h.Destination.Port() != dst.Port() {
+			t.Fatalf("%v -> %v: read %+v", src, dst, h)
+		}
+		if rest, _ := io.ReadAll(r); string(rest) != "GET / HTTP/1.1\r\n" {
+			t.Fatalf("what follows the header: %q", rest)
+		}
+	}
+	h, err := Read(bufio.NewReader(bytes.NewReader(AppendV2(nil, netip.AddrPort{}, netip.AddrPort{}))))
+	if err != nil || !h.Local {
+		t.Fatalf("no addresses: %+v %v, want LOCAL", h, err)
+	}
+}

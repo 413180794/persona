@@ -16,17 +16,24 @@ import (
 const listenFDsStart = 3 // SD_LISTEN_FDS_START
 
 var inherited struct {
-	once sync.Once
-	mu   sync.Mutex
-	lns  []net.Listener
+	once  sync.Once
+	mu    sync.Mutex
+	lns   []net.Listener
+	files []*os.File // the fds systemd passed, kept open (close-on-exec) for a hub that execs another binary
+	fds   []int      // their numbers (File.Fd would put the shared sockets in blocking mode)
+	names string
 }
 
 // inheritedListeners takes the sockets systemd passed to this process, once: the environment is cleared so the
-// processes the hub starts (nodes, plugins) do not take them for theirs.
+// processes the hub starts (nodes, plugins) do not take them for theirs, and the fds are made close-on-exec so they
+// do not inherit them either. The fds themselves stay open: execListenEnv passes them on to a binary this process
+// execs (selfupdate.go without an edge), which would otherwise find the port taken by systemd's own socket and fail
+// to listen (address already in use).
 func inheritedListeners() []net.Listener {
 	inherited.once.Do(func() {
 		pid, err := strconv.Atoi(os.Getenv("LISTEN_PID"))
 		n, err2 := strconv.Atoi(os.Getenv("LISTEN_FDS"))
+		inherited.names = os.Getenv("LISTEN_FDNAMES")
 		_ = os.Unsetenv("LISTEN_PID")
 		_ = os.Unsetenv("LISTEN_FDS")
 		_ = os.Unsetenv("LISTEN_FDNAMES")
@@ -35,9 +42,10 @@ func inheritedListeners() []net.Listener {
 		}
 		for fd := listenFDsStart; fd < listenFDsStart+n; fd++ {
 			f := os.NewFile(uintptr(fd), "listen-fd-"+strconv.Itoa(fd))
-			ln, err := net.FileListener(f) // a dup with close-on-exec; the original goes
-			_ = f.Close()
-			if err == nil {
+			closeOnExec(fd)
+			inherited.files = append(inherited.files, f)
+			inherited.fds = append(inherited.fds, fd)
+			if ln, err := net.FileListener(f); err == nil { // a dup; f stays for execListenEnv
 				inherited.lns = append(inherited.lns, ln)
 			}
 		}
@@ -45,6 +53,25 @@ func inheritedListeners() []net.Listener {
 	inherited.mu.Lock()
 	defer inherited.mu.Unlock()
 	return inherited.lns
+}
+
+// execListenEnv readies the sockets systemd passed for the binary this process is about to exec (the same process:
+// LISTEN_PID stays right) and returns the environment that says so; none when systemd passed none.
+func execListenEnv() []string {
+	inheritedListeners()
+	inherited.mu.Lock()
+	defer inherited.mu.Unlock()
+	if len(inherited.files) == 0 {
+		return nil
+	}
+	for _, fd := range inherited.fds {
+		keepOnExec(fd)
+	}
+	env := []string{"LISTEN_FDS=" + strconv.Itoa(len(inherited.files)), "LISTEN_PID=" + strconv.Itoa(os.Getpid())}
+	if inherited.names != "" {
+		env = append(env, "LISTEN_FDNAMES="+inherited.names)
+	}
+	return env
 }
 
 // listenTCP is the listener for addr (host:port as in hub.json): a socket systemd passed on the same port, else a
@@ -66,4 +93,14 @@ func listenTCP(addr string) (net.Listener, bool, error) {
 	inherited.mu.Unlock()
 	ln, err := net.Listen("tcp", addr)
 	return ln, false, err
+}
+
+// listen is the hub's listener for addr: the edge's socket for that port when the edge started this hub (a slot),
+// else listenTCP's.
+func (h *Hub) listen(addr string) (net.Listener, bool, error) {
+	if h.slot != nil {
+		ln, err := h.slot.Listen(addr)
+		return ln, false, err
+	}
+	return listenTCP(addr)
 }

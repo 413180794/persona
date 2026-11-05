@@ -55,4 +55,16 @@
     <!-- The font size steps: the same in every language (a full-width plus, as the minus beside it). -->
     <string name="terminal_font_down" translatable="false">A−</string>
     <string name="terminal_font_up" translatable="false">A＋</string>
+    <string name="terminal_panes_title">Terminal</string>
+    <string name="terminal_panes_summary">Agents and plain shells open as terminals. While you have control, the pane takes the phone\'s size and goes back when you leave.</string>
+    <string name="terminal_panes_refresh">Refresh list</string>
+    <string name="terminal_panes_offline">Offline</string>
+    <string name="terminal_panes_loading">Loading…</string>
+    <string name="terminal_panes_no_panes">No panes</string>
+    <string name="terminal_panes_no_computers">No computers yet</string>
+    <string name="terminal_panes_no_computers_detail">Connect a computer and its terminals show up here.</string>
+    <string name="terminal_panes_tab">Tab %1$s</string>
+    <string name="terminal_panes_untitled">Terminal</string>
+    <string name="terminal_panes_new_tab">New tab</string>
+    <string name="terminal_panes_new_tab_failed">Couldn\'t open a new tab: %1$s</string>
 </resources>

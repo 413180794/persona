@@ -126,6 +126,27 @@ internal fun HubConnection.inGroup(names: GroupNames, scope: CoroutineScope): Hu
     }
 }
 
+/**
+ * A group's terminal as the merged pages use it: keys lose the suffix on the way to its hub (a `pane:` address passes
+ * as it is), its stream comes back in merged ids, and its connection and features are that hub's own.
+ */
+internal fun TerminalTransport.inGroup(names: GroupNames): TerminalTransport {
+    if (names.plain) return this
+    val source = this
+    return object : TerminalTransport {
+        override val connection = source.connection
+        override val features = source.features
+        override val events = source.events.map(names::event)
+        override fun subscribe(key: SessionKey, epoch: String?, after: Int, size: TerminalSize?, takeover: Boolean) =
+            source.subscribe(names.raw(key), epoch, after, size, takeover)
+        override fun unsubscribe(key: SessionKey) = source.unsubscribe(names.raw(key))
+        override fun input(key: SessionKey, text: String, size: TerminalSize?, scroll: Int, at: TerminalCellPosition?, click: TerminalCellPosition?) =
+            source.input(names.raw(key), text, size, scroll, at, click)
+        override suspend fun screen(key: SessionKey) = source.screen(names.raw(key))
+        override suspend fun keys(key: SessionKey, keys: List<String>, text: String) = source.keys(names.raw(key), keys, text)
+    }
+}
+
 internal fun ChatActions.inGroup(names: GroupNames): ChatActions {
     if (names.plain) return this
     val source = this

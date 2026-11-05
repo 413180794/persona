@@ -190,3 +190,27 @@ func readV2(r *bufio.Reader) (Header, error) {
 	}
 	return h, nil
 }
+
+// AppendV2 appends a v2 PROXY header for a TCP connection from src to dst: INET when both are IPv4 (or IPv4-mapped),
+// INET6 otherwise. An invalid src or dst writes LOCAL (no addresses). Zones are not carried.
+func AppendV2(b []byte, src, dst netip.AddrPort) []byte {
+	b = append(b, v2Signature...)
+	if !src.IsValid() || !dst.IsValid() {
+		return append(b, 0x20, 0x00, 0, 0) // LOCAL, UNSPEC, no payload
+	}
+	s, d := src.Addr().Unmap(), dst.Addr().Unmap()
+	var payload []byte
+	if s.Is4() && d.Is4() {
+		b = append(b, 0x21, 0x11)
+		s4, d4 := s.As4(), d.As4()
+		payload = append(append(payload, s4[:]...), d4[:]...)
+	} else {
+		b = append(b, 0x21, 0x21)
+		s16, d16 := s.As16(), d.As16()
+		payload = append(append(payload, s16[:]...), d16[:]...)
+	}
+	payload = binary.BigEndian.AppendUint16(payload, src.Port())
+	payload = binary.BigEndian.AppendUint16(payload, dst.Port())
+	b = binary.BigEndian.AppendUint16(b, uint16(len(payload)))
+	return append(b, payload...)
+}

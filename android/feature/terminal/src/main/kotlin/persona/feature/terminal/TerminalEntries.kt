@@ -10,22 +10,39 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import persona.core.contracts.SessionKey
+import persona.core.contracts.api.SessionsRepository
+import persona.core.contracts.api.TerminalPanes
 import persona.core.contracts.api.TerminalTransport
 import persona.core.navigation.Navigator
+import persona.core.navigation.TerminalPanesRoute
 import persona.core.navigation.TerminalRoute
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface TerminalServices { fun terminal(): TerminalTransport }
 
-fun EntryProviderScope<NavKey>.terminalEntries(navigator: Navigator, transport: TerminalTransport? = null, title: (SessionKey) -> String? = { null }) {
+/**
+ * The terminal page, and with [panes] and [sessions] the 终端 page that lists every machine's panes (docs/terminal.md
+ * 「独立终端」). A pane's terminal comes with its own title in the route; a session's is [title]'s. [routed] gives the
+ * terminal of a machine in another hub group (its own hub, its own features); others use [transport].
+ */
+fun EntryProviderScope<NavKey>.terminalEntries(navigator: Navigator, transport: TerminalTransport? = null, title: (SessionKey) -> String? = { null },
+                                               panes: TerminalPanes? = null, sessions: SessionsRepository? = null,
+                                               routed: (SessionKey) -> TerminalTransport? = { null }) {
     entry<TerminalRoute> { route ->
         val context = LocalContext.current.applicationContext
         val services = remember(context, transport) { if (transport == null) EntryPointAccessors.fromApplication(context, TerminalServices::class.java) else null }
         val model = viewModel {
-            TerminalViewModel(SessionKey(route.machineId, route.sessionId), transport ?: requireNotNull(services).terminal(),
+            val key = SessionKey(route.machineId, route.sessionId)
+            TerminalViewModel(key, routed(key) ?: transport ?: requireNotNull(services).terminal(),
                 preferences = SharedTerminalPreferences(context))
         }
-        TerminalScreen(model, navigator::back, title(model.key) ?: model.key.sessionId)
+        TerminalScreen(model, navigator::back, route.title.ifEmpty { null } ?: title(model.key) ?: model.key.sessionId)
+    }
+    if (panes != null && sessions != null) entry<TerminalPanesRoute> {
+        val model = viewModel(key = "terminal-panes:${System.identityHashCode(panes)}:${System.identityHashCode(sessions)}") {
+            TerminalPanesViewModel(panes, sessions)
+        }
+        TerminalPanesScreen(model, navigator)
     }
 }

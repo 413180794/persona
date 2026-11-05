@@ -10,5 +10,7 @@
   "missing_permissions": "Cua Driver still needs {permissions} permission",
   "ready": "Ready to control",
   "ready_version": "Ready to control · Cua Driver {version}",
-  "unknown": "Not sure yet whether it can be controlled"
+  "unknown": "Not sure yet whether it can be controlled",
+  "not_installed_lcu": "LCU isn't installed on this Mac yet",
+  "ready_version_lcu": "Ready to control · LCU {version}"
 }

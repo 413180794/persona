@@ -58,7 +58,11 @@ func buildInfo() update.Build {
 
 const usage = `usage:
   personad launch <name> …   run claude with a launcher kept in 设置 › 模型 (from the local node)
-  personad hub [run]        run the hub (config ~/.persona/hub.json)
+  personad hub [run]        run the hub (config ~/.persona/hub.json); behind its edge on Linux and macOS, which
+                           holds the ports and switches to a new binary with no restart (docs/hub-restart.md「蓝绿切换」)
+  personad hub switch [--binary <path>] [--prev <path>] [--status]
+                           have the running edge start <path> (default: the hub's binary) and switch to it once it is up;
+                           exit 0 switched, 1 it did not (the hub serves on), 3 no edge here (restart the service instead)
   personad hub setup [--yes] [--listen :18660] [--tls :18662] [--outside] [--no-service] [--json]
                                            set this machine up as the hub: hub.json, database, service, pairing (docs/onboarding.md)
   personad hub pair [--legacy] [--android] print a pairing QR code and optional Android download link
@@ -152,7 +156,11 @@ func main() {
 		}
 		switch sub {
 		case "run":
-			err = hub.Run(ctx, buildInfo())
+			err = hub.Serve(ctx, buildInfo())
+		case "slot": // the hub as its edge runs it (hub_edge.go): not for people
+			err = hub.RunSlot(ctx, buildInfo())
+		case "switch":
+			err = runHubSwitch(os.Args[3:])
 		case "doctor":
 			if len(os.Args) != 3 {
 				err = fmt.Errorf("hub doctor 不接受额外参数")

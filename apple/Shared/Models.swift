@@ -230,14 +230,19 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
     var screenSharing = false
     /// 「扩展开着时不自动锁屏」 is on for it (#1507 b2).
     var noAutoLock = false
+    /// cua or lcu. Nil from a hub that only knows Cua Driver.
+    var backend: String? = nil
+    /// The official ChatGPT desktop app is installed (LCU's runtime).
+    var chatgpt = false
 
     enum CodingKeys: String, CodingKey {
-        case enabled, installed, version, daemon, accessibility, desktop, ready, note, job
+        case enabled, installed, version, daemon, accessibility, desktop, ready, note, job, backend, chatgpt
         case screenRecording = "screen_recording", screenSharing = "screen_sharing", noAutoLock = "no_auto_lock"
     }
 
     init(enabled: Bool = false, installed: Bool = false, version: String? = nil, daemon: Bool = false, accessibility: String? = nil,
-         screenRecording: String? = nil, desktop: String? = nil, ready: Bool = false, note: String? = nil, job: ComputerJob? = nil) {
+         screenRecording: String? = nil, desktop: String? = nil, ready: Bool = false, note: String? = nil, job: ComputerJob? = nil,
+         backend: String? = nil, chatgpt: Bool = false) {
         self.enabled = enabled
         self.installed = installed
         self.version = version
@@ -248,6 +253,8 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
         self.ready = ready
         self.note = note
         self.job = job
+        self.backend = backend
+        self.chatgpt = chatgpt
     }
 
     init(from decoder: Decoder) throws {
@@ -264,6 +271,8 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
         job = try? c.decodeIfPresent(ComputerJob.self, forKey: .job)
         screenSharing = try c.decodeIfPresent(Bool.self, forKey: .screenSharing) ?? false
         noAutoLock = try c.decodeIfPresent(Bool.self, forKey: .noAutoLock) ?? false
+        backend = try c.decodeIfPresent(String.self, forKey: .backend)
+        chatgpt = try c.decodeIfPresent(Bool.self, forKey: .chatgpt) ?? false
     }
 
     /// The node has said how it is (a never-asked one has neither a verdict nor a note).

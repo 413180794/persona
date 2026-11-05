@@ -122,6 +122,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - 共用页面里一直在动的 `TimelineView(.animation)` 在 Mac 上可能每帧整窗重新布局（实测：「需要你」圆点的呼吸圈让 Agents 页空闲占一个核的 14%）：Mac 上常驻动画交给 Core Animation（`MacBreathingRing`）。（`lessons/macos.md`）
 - hub 的内存状态随时会被别人重新部署清掉：跨请求的流程要自包含或落库。（`server.md`）
 - hub 的端口归 systemd 的 `jarvisd.socket`（socket activation）：换回不认识 `LISTEN_FDS` 的旧二进制前先 `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`，否则抢不到端口反复重启；`stop jarvisd` 后来一个连接又会被拉起，要停连 `jarvisd.socket` 一起停。（`hub-restart.md`）
+- Linux / macOS 上 `personad hub run` 是入口，hub 本身是它的槽位（`hub slot`）：换版本用 `hub switch` 蓝绿切换，不再 exec 或重启。入口自己只在服务重启时换；要回到 hub 自己监听，用 `PERSONA_HUB_EDGE=0`。（`hub-restart.md`「蓝绿切换」）
 - 按来源地址判断信任时：容器里经端口映射进来的连接常常都显示成网桥网关（私网地址，公网来的也是），同机反向代理让公网请求像回环；网关用 `containerGateway` 排除，转发头只用来收紧，同机 TCP 转发 / 透传开 `security.proxy_protocol`。（`server.md`「管理界面」、`network.md`「PROXY protocol」）
 - Claude Code 的配置目录不一定是 `~/.claude`（`CLAUDE_CONFIG_DIR`），同一会话 id 可能在两个目录各有一份，按 id 找一律取最近修改的。（`agents.md`）
 - 改 transcript 解析或同步协议用真实语料验证；改了 item 结构把 App 的 `ChatCache` 目录版本号加一。（`transcript.md`）

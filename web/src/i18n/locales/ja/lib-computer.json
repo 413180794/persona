@@ -10,5 +10,7 @@
   "missing_permissions": "Cua Driverにはまだ{permissions}の権限がありません",
   "ready": "操作できます",
   "ready_version": "操作できます · Cua Driver {version}",
-  "unknown": "操作できるかどうかまだわかりません"
+  "unknown": "操作できるかどうかまだわかりません",
+  "not_installed_lcu": "このMacにはまだLCUがインストールされていません",
+  "ready_version_lcu": "操作できます · LCU {version}"
 }

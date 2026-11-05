@@ -25,5 +25,8 @@
   "busy_redeploying": "正在重新部署",
   "err_no_image": "不知道这个 hub 是哪个镜像：compose 没把 JARVIS_IMAGE 传进容器",
   "image_private": "查不了新镜像：{error}。在 .env 里设 JARVIS_REGISTRY_TOKEN（能读这个镜像的 token），或者把镜像改成公开",
-  "image_failed": "查不了新镜像：{error}"
+  "image_failed": "查不了新镜像：{error}",
+  "err_no_start": "新版本没能启动，旧版本照常在跑：{error}",
+  "reason_no_takeover": "新版本没能接手：{error}",
+  "reason_not_confirmed": "新版本 3 分钟内没有确认"
 }

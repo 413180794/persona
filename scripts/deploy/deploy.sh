@@ -137,18 +137,23 @@ is_here() {
 }
 
 install_bin() { # machine-id binary
-  local id=$1 bin=$2 host via root command role=node
+  local id=$1 bin=$2 host via root command keep role=node
   [ "$id" != "$HUB" ] || role=hub
   host=$(field "$id" ssh); host=${host:-$id}
   via=$(field "$id" via)
   if is_here "$id"; then
     root=$(state_root "$role")
     mkdir -p "$root/bin"
+    # The hub's binary before it is replaced: hub-systemd.sh switches the running edge to the new one and goes back
+    # to this one if it fails while taking over (docs/hub-restart.md「蓝绿切换」).
+    if [ "$role" = hub ] && [ -f "$root/bin/jarvisd" ]; then cp -p "$root/bin/jarvisd" "$root/bin/jarvisd.prev"; fi
     cp "$bin" "$root/bin/jarvisd.new" && mv "$root/bin/jarvisd.new" "$root/bin/jarvisd"
     [ ! -d "$root/bin/personad" ] && ln -sfn jarvisd "$root/bin/personad"
     PERSONA_HOME="$root" JARVIS_HOME="$root" restart_resident
   else
-    command='mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/jarvisd.new" && chmod 755 "$PERSONA_HOME/bin/jarvisd.new" && mv "$PERSONA_HOME/bin/jarvisd.new" "$PERSONA_HOME/bin/jarvisd" && [ ! -d "$PERSONA_HOME/bin/personad" ] && ln -sfn jarvisd "$PERSONA_HOME/bin/personad"'
+    keep=
+    [ "$role" = hub ] && keep='{ [ ! -f "$PERSONA_HOME/bin/jarvisd" ] || cp -p "$PERSONA_HOME/bin/jarvisd" "$PERSONA_HOME/bin/jarvisd.prev"; } && '
+    command=$keep'mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/jarvisd.new" && chmod 755 "$PERSONA_HOME/bin/jarvisd.new" && mv "$PERSONA_HOME/bin/jarvisd.new" "$PERSONA_HOME/bin/jarvisd" && [ ! -d "$PERSONA_HOME/bin/personad" ] && ln -sfn jarvisd "$PERSONA_HOME/bin/personad"'
     if [ -n "$via" ]; then
       local vh quoted
       vh=$(field "$via" ssh); vh=${vh:-$via}
@@ -234,7 +239,7 @@ for t in "${TARGETS[@]}"; do
       ensure_herdr "$t"
       hub_admin_access
       python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/hub-systemd.sh | ssh "$JARVIS_HUB_SSH" 'bash -s'
-      echo "$t: hub restarted"
+      echo "$t: hub on the new binary"
       upload_web ;;
     *)
       [[ " $JARVIS_MACHINES " == *" $t "* ]] || { echo "unknown machine $t (not in the config)" >&2; exit 2; }

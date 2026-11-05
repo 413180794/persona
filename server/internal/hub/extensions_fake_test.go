@@ -253,3 +253,7 @@ func (f *fakeExt) AssistantSummary(context.Context, string, string) (string, boo
 func (f *fakeExt) AssistantLark(context.Context) (proto.AssistantLark, error) {
 	return proto.AssistantLark{}, nil
 }
+
+func (f *fakeExt) AnswerComputerElicit(context.Context, string, json.RawMessage) (map[string]any, error) {
+	return map[string]any{"action": "cancel"}, nil
+}

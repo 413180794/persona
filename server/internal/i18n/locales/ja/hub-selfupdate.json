@@ -25,5 +25,8 @@
   "busy_redeploying": "再デプロイ中",
   "err_no_image": "このハブのイメージがわかりません：composeがJARVIS_IMAGEをコンテナに渡していません",
   "image_private": "新しいイメージを確認できません：{error}。.envでJARVIS_REGISTRY_TOKEN（このイメージを読めるトークン）を設定するか、イメージを公開にしてください",
-  "image_failed": "新しいイメージを確認できません：{error}"
+  "image_failed": "新しいイメージを確認できません：{error}",
+  "err_no_start": "新しいバージョンが起動しなかったため、旧バージョンがそのまま動いています：{error}",
+  "reason_no_takeover": "新しいバージョンが引き継げませんでした：{error}",
+  "reason_not_confirmed": "新しいバージョンが3分以内に確認されませんでした"
 }

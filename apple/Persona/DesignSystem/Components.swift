@@ -127,9 +127,20 @@ struct Chip: View {
     var look: Look = .neutral
     /// Truncates instead of keeping its full width when offered less (in a FlowLayoutRow, a chip longer than the line).
     var shrinks = false
+    /// A step quieter, for a tag that sits under a row's time (the Agents row's source, #3043): the label's size in
+    /// regular weight, on a tighter capsule, in every style.
+    var compact = false
 
     var body: some View {
-        if AppStyle.current.usesBeautifulUI {
+        if compact {
+            Text(text).lineLimit(1)
+                .font(Theme.Font.label)
+                .foregroundStyle(words)
+                .padding(.horizontal, Theme.Space.sm)
+                .padding(.vertical, Theme.Space.xxs / 2)
+                .background(Capsule().fill(fill))
+                .fixedSize()
+        } else if AppStyle.current.usesBeautifulUI {
             BUIPill(text, tone: pillTone, icon: symbol.map { .symbol($0) }, truncates: shrinks)
         } else {
             plain

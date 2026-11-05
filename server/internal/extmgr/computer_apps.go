@@ -122,8 +122,10 @@ func (h *Manager) appsOn(ctx context.Context, m *Machine, names []string) []appr
 			BundleID string `json:"bundle_id"`
 		} `json:"apps"`
 	}
-	if slices.ContainsFunc(names, func(n string) bool { return n != wholeScreen }) {
-		if res, err := h.computerCall(ctx, m, "persona-apps", "list_apps", map[string]any{}); err == nil {
+	// LCU's own elicitation names the app. Probing list_apps first would start the runtime, and might ask, before
+	// this card exists.
+	if h.callBackend(m) != "lcu" && slices.ContainsFunc(names, func(n string) bool { return n != wholeScreen }) {
+		if res, err := h.computerCall(ctx, m, "persona-apps", "", "list_apps", map[string]any{}); err == nil {
 			_ = json.Unmarshal(res.Output, &known)
 		}
 	}

@@ -17,6 +17,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/lcuconfirm"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -28,6 +29,7 @@ const cuaConfig = `{
   "type": "object",
   "properties": {
     "machines": {"type": "array", "title": "能操控的电脑", "description": "打开的 Mac，助手才能操控。开关即时生效，和它机器页上的「允许助手操控这台电脑」是同一个", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}, "uniqueItems": true},
+    "backend": {"type": "string", "title": "操控后端", "description": "Cua Driver 用 cua.ai 的驱动。LCU 用本机的 amontlabs/lcu（需要已安装的官方 ChatGPT 桌面版提供运行时，Persona 不下载、不登录它）。确认都在手机和网页上，不在 Claude 或 Codex 里。自动：装好了 LCU 和 ChatGPT 就用 LCU，否则用 Cua Driver。点击音效和 Agent 光标只对 Cua Driver 生效", "oneOf": [{"const": "cua", "title": "Cua Driver"}, {"const": "lcu", "title": "LCU"}, {"const": "auto", "title": "自动"}], "default": "cua"},
     "confirm": {"type": "boolean", "title": "操作前在手机上确认", "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志", "default": false},
     "app_approval": {"type": "boolean", "title": "第一次操作一个 App 时先问", "description": "助手第一次在一台 Mac 上操作某个 App（或看整个屏幕）时在手机上问一次，选「一直允许」后记住，在机器页可以移除；终端、系统设置、钥匙串访问、密码管理器和 Persona 每次都问", "default": true},
     "no_auto_lock": {"type": "array", "title": "扩展开着时不自动锁屏", "description": "打开的 Mac 在扩展开着时一直不因空闲锁屏（node 持有 caffeinate，不改系统设置）；和 hub 断开 30 分钟后自动恢复。手动锁屏、合盖照常", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}, "uniqueItems": true, "x-confirm": "打开后这台 Mac 在扩展开着时一直不会因为空闲锁屏，坐在它前面的人能直接用它。和 hub 断开 30 分钟后自动恢复。"},
@@ -40,7 +42,7 @@ const cuaConfig = `{
 func cuaManifest(h *Manager) *extension.Manifest {
 	items, _ := json.Marshal([]extension.ComputerItem{{ID: cuaExtensionID, Name: "Cua Driver"}})
 	return &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: cuaExtensionID, Name: "操控电脑（Cua）", Version: h.version,
-		Description: "让助手经 Cua Driver 操控你的 Mac：看窗口和屏幕、点按、输入、截图。要在那台 Mac 上装好 Cua Driver 并给它辅助功能和屏幕录制权限。",
+		Description: "让助手操控你的 Mac：看窗口和屏幕、点按、输入、截图。后端用 Cua Driver，或用 LCU（amontlabs/lcu，需要官方 ChatGPT 桌面版）。确认都在手机和网页上。",
 		Homepage:    "https://github.com/trycua/cua", Contributes: map[string]json.RawMessage{"computer": items},
 		Configuration: json.RawMessage(cuaConfig), Node: builtinNode("machines")}
 }
@@ -58,12 +60,25 @@ type cuaSettings struct {
 	NoAutoLock []string `json:"no_auto_lock"`
 	// ClickSound: 「点击音效」, none (or empty), foreground or all; the node plays it (node/cua_extras.go).
 	ClickSound string `json:"click_sound"`
+	// Backend: cua (Cua Driver, the default), lcu, or auto (lcu_status.go).
+	Backend string `json:"backend"`
 	// ShowCursor: 「显示 Agent 的光标」, on unless turned off (computer_cursor.go).
 	ShowCursor *bool `json:"show_cursor"`
 }
 
 // cursor: Cua Driver draws the agent's cursor.
 func (s cuaSettings) cursor() bool { return s.ShowCursor == nil || *s.ShowCursor }
+
+// backend is which driver the plugin is set to. Anything but lcu and auto is Cua Driver, including an empty value
+// from a hub whose settings were saved before the choice existed.
+func (s cuaSettings) backend() string {
+	switch s.Backend {
+	case "lcu", "auto":
+		return s.Backend
+	default:
+		return "cua"
+	}
+}
 
 // awake: a Mac it operates, or whose live screen is open, is kept awake.
 func (s cuaSettings) awake() bool { return s.KeepAwake == nil || *s.KeepAwake }
@@ -122,7 +137,7 @@ func (h *Manager) refreshComputer(ctx context.Context, m *Machine) *proto.Comput
 	defer cancel()
 	asked := time.Now()
 	var c proto.Computer
-	if err := m.callBuiltin(ctx, "computer.status", map[string]any{}, &c); err != nil {
+	if err := m.callBuiltin(ctx, "computer.status", map[string]any{"backend": h.cua().backend()}, &c); err != nil {
 		if !strings.Contains(err.Error(), "unknown method") {
 			return h.computerOf(m)
 		}
@@ -273,7 +288,7 @@ func (h *Manager) postComputerJob(w http.ResponseWriter, r *http.Request, m *Mac
 	defer cancel()
 	asked := time.Now()
 	var c proto.Computer
-	if err := m.callBuiltin(ctx, "computer."+action, map[string]any{}, &c); err != nil {
+	if err := m.callBuiltin(ctx, "computer."+action, map[string]any{"backend": h.cua().backend()}, &c); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
 			err = i18n.Err("hub-computer." + map[bool]string{true: "err_outdated_lock", false: "err_outdated_install"}[action == "lock"])
 		}
@@ -322,6 +337,7 @@ func (h *Manager) callComputerTool(ctx context.Context, sessionID, name string, 
 		return proto.TextResult(err.Error(), true)
 	}
 	session := "persona-" + convID(sessionID)
+	lcu := h.callBackend(m) == "lcu"
 	declined := func(what string) proto.ToolResult {
 		h.logf("[%s] %s declined on the phone (%s)", m.cfg.ID, name, what)
 		return proto.TextResult("The user declined this on the phone. Do not retry it unless they ask.", true)
@@ -332,7 +348,7 @@ func (h *Manager) callComputerTool(ctx context.Context, sessionID, name string, 
 			return declined("look")
 		}
 		shot := a.Screenshot == nil || *a.Screenshot
-		return h.computerState(ctx, m, session, a.App, a.Query, shot)
+		return h.computerState(ctx, m, session, sessionID, a.App, a.Query, shot)
 	}
 	var tool string
 	in := map[string]any{}
@@ -340,17 +356,32 @@ func (h *Manager) callComputerTool(ctx context.Context, sessionID, name string, 
 	case a.Script != "" && len(a.Steps) > 0:
 		return proto.TextResult("give script or steps, not both", true)
 	case a.Script != "":
-		tool, in["script"] = "run_script", a.Script
-		if a.TimeoutMS > 0 {
-			in["timeout_ms"] = a.TimeoutMS
+		if lcu {
+			tool, in["code"] = "js", a.Script
+			if a.TimeoutMS > 0 {
+				in["timeout_ms"] = a.TimeoutMS
+			}
+		} else {
+			tool, in["script"] = "run_script", a.Script
+			if a.TimeoutMS > 0 {
+				in["timeout_ms"] = a.TimeoutMS
+			}
 		}
 	case len(a.Steps) > 0:
-		tool, in["steps"] = "run_steps", a.Steps
-		if a.App != "" {
-			in["app"] = a.App
-		}
-		if len(a.Observe) > 0 {
-			in["observe"] = a.Observe
+		if lcu {
+			code, err := lcuconfirm.StepsJS(a.App, a.Steps)
+			if err != nil {
+				return proto.TextResult(err.Error(), true)
+			}
+			tool, in["code"] = "js", code
+		} else {
+			tool, in["steps"] = "run_steps", a.Steps
+			if a.App != "" {
+				in["app"] = a.App
+			}
+			if len(a.Observe) > 0 {
+				in["observe"] = a.Observe
+			}
 		}
 	default:
 		return proto.TextResult("give script (run_script) or steps (run_steps)", true)
@@ -361,7 +392,7 @@ func (h *Manager) callComputerTool(ctx context.Context, sessionID, name string, 
 		return declined(computerLogWhat(tool, a.Script, a.Steps))
 	}
 	start := time.Now()
-	res, err := h.computerCall(ctx, m, session, tool, in)
+	res, err := h.computerCall(ctx, m, session, sessionID, tool, in)
 	h.logf("[%s] computer_run for %s: %s, %v, %s", m.cfg.ID, convID(sessionID), computerLogWhat(tool, a.Script, a.Steps),
 		time.Since(start).Round(time.Millisecond), map[bool]string{true: "failed", false: "ok"}[err != nil])
 	if err != nil {
@@ -395,15 +426,26 @@ func (h *Manager) computerMachineIDs() string {
 
 // computerState: one window of app (its accessibility tree, and its screenshot), or without app the whole screen and
 // the apps and windows on it.
-func (h *Manager) computerState(ctx context.Context, m *Machine, session, app, query string, shot bool) proto.ToolResult {
+func (h *Manager) computerState(ctx context.Context, m *Machine, session, conversation, app, query string, shot bool) proto.ToolResult {
+	if h.callBackend(m) == "lcu" {
+		res, err := h.computerCall(ctx, m, session, conversation, "js", map[string]any{"code": lcuconfirm.StateJS(app, query)})
+		if err != nil {
+			return proto.TextResult(err.Error(), true)
+		}
+		if !shot {
+			res.Image = nil
+		}
+		return computerResult(res)
+	}
+
 	if app == "" {
-		tree, err := h.computerCall(ctx, m, session, "get_accessibility_tree", map[string]any{})
+		tree, err := h.computerCall(ctx, m, session, conversation, "get_accessibility_tree", map[string]any{})
 		if err != nil {
 			return proto.TextResult(err.Error(), true)
 		}
 		out := computerResult(tree)
 		if shot {
-			desk, err := h.computerCall(ctx, m, session, "get_desktop_state", map[string]any{})
+			desk, err := h.computerCall(ctx, m, session, conversation, "get_desktop_state", map[string]any{})
 			if err != nil {
 				return proto.TextResult(err.Error(), true)
 			}
@@ -416,7 +458,7 @@ func (h *Manager) computerState(ctx context.Context, m *Machine, session, app, q
 	// The window cua-driver's own lookup picks (the app's frontmost), then its state under the same session label, so
 	// its element tokens work in computer_run.
 	script := "const a = await cua.getApp(" + jsString(app) + "); return {pid: a.pid, window_id: a.windowId};"
-	found, err := h.computerCall(ctx, m, session, "run_script", map[string]any{"script": script})
+	found, err := h.computerCall(ctx, m, session, conversation, "run_script", map[string]any{"script": script})
 	if err != nil {
 		return proto.TextResult(err.Error(), true)
 	}
@@ -436,18 +478,42 @@ func (h *Manager) computerState(ctx context.Context, m *Machine, session, app, q
 	if query != "" {
 		in["query"] = query
 	}
-	state, err := h.computerCall(ctx, m, session, "get_window_state", in)
+	state, err := h.computerCall(ctx, m, session, conversation, "get_window_state", in)
 	if err != nil {
 		return proto.TextResult(err.Error(), true)
 	}
 	return computerResult(state)
 }
 
-// computerCall runs one Cua Driver tool on m's node.
-func (h *Manager) computerCall(ctx context.Context, m *Machine, session, tool string, args map[string]any) (*proto.ComputerResult, error) {
+// callBackend is what this call should drive. Explicit lcu always does. auto does once a status has come back saying
+// the Mac is on LCU; until then the node is told auto and decides itself, and the hub still speaks Cua Driver's tools
+// (the node translates them when it picks LCU).
+func (h *Manager) callBackend(m *Machine) string {
+	switch h.cua().backend() {
+	case "lcu":
+		return "lcu"
+	case "auto":
+		if c := h.computerOf(m); c != nil && c.Backend == "lcu" {
+			return "lcu"
+		}
+		return "auto"
+	default:
+		return "cua"
+	}
+}
+
+// computerCall runs one computer-use tool on m's node.
+func (h *Manager) computerCall(ctx context.Context, m *Machine, session, conversation, tool string, args map[string]any) (*proto.ComputerResult, error) {
 	var res proto.ComputerResult
 	s := h.cua()
-	if err := m.callBuiltin(ctx, "computer.call", map[string]any{"session": session, "tool": tool, "args": args, "keep_awake": s.awake(), "click_sound": s.ClickSound}, &res); err != nil {
+	backend := h.callBackend(m)
+	if err := m.callBuiltin(ctx, "computer.call", map[string]any{
+		"session": session, "conversation": conversation, "tool": tool, "args": args,
+		"backend": backend, "keep_awake": s.awake(), "click_sound": s.ClickSound,
+	}, &res); err != nil {
+		if backend == "lcu" && strings.Contains(err.Error(), "is not a tool") {
+			return nil, errors.New(i18n.T(h.userLang(), "hub-computer.err_outdated_lcu"))
+		}
 		return nil, err
 	}
 	return &res, nil
@@ -474,8 +540,10 @@ func computerResult(r *proto.ComputerResult) proto.ToolResult {
 }
 
 // computerSummary is what the confirmation card says, in l: on which Mac, a script's first line or the steps' actions.
+// script != "" covers Cua Driver's run_script and LCU's js (tool name differs; a.Script is still passed).
 func computerSummary(l i18n.Lang, machine, tool, script string, steps json.RawMessage) string {
-	if tool == "run_script" {
+	if script != "" {
+
 		line, _, _ := strings.Cut(strings.TrimSpace(script), "\n")
 		return i18n.T(l, "hub-computer.confirm_script", i18n.Args{"machine": machine, "line": line})
 	}
@@ -485,7 +553,7 @@ func computerSummary(l i18n.Lang, machine, tool, script string, steps json.RawMe
 
 // computerLogWhat is the log's account of a run: the kind and the actions, never what is typed or clicked.
 func computerLogWhat(tool, script string, steps json.RawMessage) string {
-	if tool == "run_script" {
+	if script != "" {
 		return fmt.Sprintf("run_script (%d bytes)", len(script))
 	}
 	return "run_steps [" + strings.Join(stepActions(steps), " ") + "]"

@@ -1,0 +1,138 @@
+package persona.feature.terminal
+
+import persona.core.contracts.AgentState
+import persona.core.contracts.Session
+import persona.core.contracts.SessionKey
+import persona.core.contracts.api.PaneItem
+import persona.core.contracts.api.PaneSpace
+import persona.core.contracts.api.PaneTab
+import persona.core.contracts.api.PanesResponse
+import persona.core.contracts.api.TerminalAddress
+
+// The terminal browser's tree (docs/terminal.md「独立终端」), as the web builds it (web/src/lib/terminals.ts): what a
+// machine's `GET /machines/{mid}/panes` lists turned into workspaces → tabs → panes, each pane with the key its
+// terminal opens by. Pure, so it is tested without Android.
+
+/** One pane's row. [state] is null for a plain shell. */
+data class TermPane(
+    /** What the terminal opens by: the agent's session when there is one (it shares that stream), else the pane's address. */
+    val key: SessionKey,
+    /** The agent's session title, the shell's title or folder; empty when the host says nothing (the page says 终端). */
+    val title: String,
+    /** The line under the title: the agent, the folder. */
+    val detail: String,
+    val state: AgentState?,
+    /** The host's own id for the pane ("w1:p2"). */
+    val pane: String,
+)
+
+data class TermTab(val id: String, val label: String, val panes: List<TermPane>)
+
+data class TermSpace(
+    val id: String,
+    /** The host kind the workspace belongs to: 新标签页 names it. */
+    val host: String,
+    val label: String,
+    val branch: String,
+    /** A shell tab can be opened here (新标签页). */
+    val canOpen: Boolean,
+    val tabs: List<TermTab>,
+) {
+    /** Workspace ids are the host's own: a machine with two hosts can list the same one twice, so the page keys by both. */
+    val key: String get() = "$host/$id"
+}
+
+/** The page's item keys, unique across a machine's hosts (tab and pane ids are host-local too). */
+internal fun spaceItemKey(machineId: String, space: TermSpace) = "space-$machineId-${space.key}"
+internal fun tabItemKey(machineId: String, space: TermSpace, tab: TermTab) = "tab-$machineId-${space.key}/${tab.id}"
+/** 新标签页's in-flight marker: the workspace on its machine and host. */
+internal fun openingKey(machineId: String, space: TermSpace) = "$machineId\n${space.key}"
+internal fun paneItemKey(machineId: String, space: TermSpace, pane: TermPane) = "pane-$machineId-${space.host}/${pane.pane}"
+
+/**
+ * [machineId]'s workspaces → tabs → panes. [sessions] are the machine's agent sessions (their titles and states);
+ * [home] shortens folders to `~`. Panes whose workspace or tab the host did not list still show, under one of their
+ * own id; a workspace with no panes shows only when a tab can be opened in it.
+ */
+fun terminalTree(machineId: String, response: PanesResponse?, sessions: List<Session> = emptyList(), home: String? = null): List<TermSpace> {
+    val bySession = sessions.filter { it.machineId == machineId }.associateBy { it.sessionId }
+    val out = mutableListOf<TermSpace>()
+    for (host in response?.hosts.orEmpty()) {
+        val tabsOf = host.tabs.groupBy { it.workspaceId }
+        // A pane goes under its own workspace and tab, so a tab id repeated in two workspaces (or empty) lists each pane once.
+        val panesOf = host.panes.groupBy { it.workspaceId to it.tabId }
+        val known = host.workspaces.mapTo(HashSet()) { it.id }
+        val orphans = host.panes.map { it.workspaceId }.distinct().filter { it !in known }.map { PaneSpace(it, it) }
+        for (space in host.workspaces.sortedWith(byNumber({ it.number }, { it.id })) + orphans) {
+            val listed = tabsOf[space.id].orEmpty().sortedWith(byNumber({ it.number }, { it.id }))
+            val listedIds = listed.mapTo(HashSet()) { it.id }
+            val strays = host.panes.filter { it.workspaceId == space.id && it.tabId !in listedIds }.map { it.tabId }.distinct()
+                .map { PaneTab(it, space.id, it) }
+            val tabs = (listed + strays).map { tab ->
+                TermTab(tab.id, tab.label.ifEmpty { tab.id }, panesOf[space.id to tab.id].orEmpty()
+                    .sortedWith(compareBy<PaneItem> { paneNumber(it.pane) }.thenBy { it.pane })
+                    .map { pane(machineId, it, it.sessionId?.let(bySession::get), home) })
+            }.filter { it.panes.isNotEmpty() }
+            if (tabs.isEmpty() && !host.newTab) continue
+            out += TermSpace(space.id, host.kind, space.label.ifEmpty { space.id }, space.branch.orEmpty(), host.newTab, tabs)
+        }
+    }
+    return out
+}
+
+/** A pane's row: an agent by its session's title, a shell by what the terminal says (its title, else its folder). */
+internal fun pane(machineId: String, item: PaneItem, session: Session?, home: String?): TermPane {
+    val folder = shortPath(item.cwd, home)
+    val agent = item.agent.orEmpty()
+    // A pane with a session opens by it; one without by its address (`terminal`, or `pane:` + its id from an older node).
+    val key = if (!item.sessionId.isNullOrEmpty()) SessionKey(machineId, item.sessionId!!)
+        else TerminalAddress.key(machineId, item.terminal.ifEmpty { item.pane })
+    return when {
+        session != null -> TermPane(key, session.displayTitle, listOf(agent, folder).filter(String::isNotEmpty).joinToString(" · "),
+            session.agentState, item.pane)
+        agent.isNotEmpty() -> TermPane(key, item.title?.trim().orEmpty().ifEmpty { agent },
+            listOf(agent, folder).filter(String::isNotEmpty).joinToString(" · "), AgentState.of(null, item.status), item.pane)
+        else -> {
+            val title = item.title?.trim().orEmpty().ifEmpty { item.cwd.orEmpty().trimEnd('/').substringAfterLast('/') }
+            TermPane(key, title, if (title == folder) "" else folder, null, item.pane)
+        }
+    }
+}
+
+/** The pane's place, for the terminal's title: 空间 › 标签页 › title (a tab named like its workspace, or a pane like its tab, once). */
+fun paneTrail(space: TermSpace, tab: TermTab, pane: TermPane, untitled: String): String {
+    val title = pane.title.ifEmpty { untitled }
+    return listOf(space.label, tab.label.takeIf { it != space.label }, title.takeIf { it != tab.label })
+        .filterNot { it.isNullOrEmpty() }.joinToString(" › ")
+}
+
+/** `/home/me/x` → `~/x` under the machine's home; other folders as they are. */
+internal fun shortPath(path: String?, home: String?): String {
+    val value = path.orEmpty().trimEnd('/')
+    val root = home.orEmpty().trimEnd('/')
+    return when {
+        value.isEmpty() -> ""
+        root.isNotEmpty() && value == root -> "~"
+        root.isNotEmpty() && value.startsWith("$root/") -> "~" + value.removePrefix(root)
+        else -> value
+    }
+}
+
+/** herdr numbers a tab's panes ("w9:p1", "w9:p2"); ids with no number go last. */
+private fun paneNumber(pane: String): Int = Regex(":p(\\d+)$").find(pane)?.groupValues?.get(1)?.toIntOrNull() ?: Int.MAX_VALUE
+
+/** By the host's number (absent counts as 0), then by id with its digits compared as numbers. */
+private fun <T> byNumber(number: (T) -> Int?, id: (T) -> String): Comparator<T> =
+    compareBy<T> { number(it) ?: 0 }.then { a, b -> naturalOrder(id(a), id(b)) }
+
+private fun naturalOrder(a: String, b: String): Int {
+    val parts = Regex("\\d+|\\D+")
+    val left = parts.findAll(a).map { it.value }.toList()
+    val right = parts.findAll(b).map { it.value }.toList()
+    for (i in 0 until minOf(left.size, right.size)) {
+        val x = left[i]; val y = right[i]
+        val c = if (x[0].isDigit() && y[0].isDigit()) x.toBigInteger().compareTo(y.toBigInteger()) else x.compareTo(y)
+        if (c != 0) return c
+    }
+    return left.size - right.size
+}

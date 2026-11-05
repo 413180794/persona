@@ -11,5 +11,9 @@
   "ask_again": "再请求一次",
   "grant": "去授权",
   "install": "安装",
-  "install_confirm": "在这台 Mac 上从 Cua 官网下载安装器，校验后装进「应用程序」，并关掉它的使用统计。装好后会请求辅助功能和屏幕录制权限，要在那台 Mac 的屏幕上点「允许」。"
+  "install_confirm": "在这台 Mac 上从 Cua 官网下载安装器，校验后装进「应用程序」，并关掉它的使用统计。装好后会请求辅助功能和屏幕录制权限，要在那台 Mac 的屏幕上点「允许」。",
+  "allow_detail_lcu": "经 LCU 看屏幕、点按、输入。确认在手机和网页上",
+  "install_detail_lcu": "从 GitHub 下载 LCU 的发行包并校验。不注册 Claude / Codex 的审批界面，也不安装 ChatGPT；ChatGPT 桌面版要自己先装好。",
+  "install_title_lcu": "安装 LCU",
+  "install_confirm_lcu": "在这台 Mac 上从 GitHub 下载 LCU 的发行包，校验后安装。不会注册 Claude 或 Codex，确认仍在手机和网页上。需要已经安装官方 ChatGPT 桌面版；Persona 不会下载或登录它。第一次使用时在那台 Mac 上允许 ChatGPT 的辅助功能和屏幕录制。"
 }

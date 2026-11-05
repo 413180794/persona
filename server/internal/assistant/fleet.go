@@ -350,6 +350,12 @@ func (s *Service) NodeRequest(ctx context.Context, machine, method string, param
 		return nil, false, nil
 	}
 	switch method {
+	case "computer.elicit": // LCU asked the person something; the card is the same one as app approval
+		if s.ext == nil {
+			return map[string]any{"action": "cancel"}, true, nil
+		}
+		out, err := s.ext.AnswerComputerElicit(ctx, machine, params)
+		return out, true, err
 	case "interaction.create":
 		var p struct {
 			Interaction proto.Interaction `json:"interaction"`

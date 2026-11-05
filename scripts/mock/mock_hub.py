@@ -713,6 +713,20 @@ if os.environ.get("MOCK_BOTMUX"):
              failure_reason="⚠️ Claude 本轮执行失败，且当前错误不能安全自动续跑。请检查 Web 终端和模型服务状态后，再发送一条消息继续。",
              external_url="https://applink.example.com/client/thread/open?chat=demo&thread=t3"),
     ]
+# MOCK_ROW_EDGES=1: the Agents row's edge cases (#3043): a terminal agent with a title long enough to wrap, one with no
+# time (no updated_at) and one with no source label (no pane: a runtime's), each beside its source chip or without one.
+ROW_LONG = "e3043000-0000-4000-8000-000000000001"
+ROW_NOTIME = "e3043000-0000-4000-8000-000000000002"
+ROW_NOSOURCE = "e3043000-0000-4000-8000-000000000003"
+if os.environ.get("MOCK_ROW_EDGES"):
+    SESSIONS += [
+        sess("server", ROW_LONG, "把周报导出脚本拆成按部门分批跑，并在失败时只重试失败的那一批", "/home/me/code/report",
+             "idle", "idle", "edges", 8, "long", 1, 2, "拆好了，正在补重试的测试。"),
+        dict(sess("server", ROW_NOTIME, "整理发布说明", "/home/me/code/report", "idle", "idle", "edges", 8, "notime", 2, 0,
+                  "草稿写好了。"), updated_at=None),
+        sess("server", ROW_NOSOURCE, "核对看板的筛选条件", "/home/me/code/report", "working", "working", "edges", 8, "nosource", 3, 6,
+             "条件都对上了。", pane_id=None),
+    ]
 # MOCK_ORCA_CHILDREN=1: an Orca worktree with three child worktrees (#2073, parent_space_id), one of them with a child of
 # its own: the web folds them under the parent and sums their states on its row.
 if os.environ.get("MOCK_ORCA_CHILDREN"):

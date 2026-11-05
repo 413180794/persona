@@ -86,7 +86,9 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="min-w-0 flex-1">
             <div className="truncate text-[13px] text-ink">{t("machines-computersection.allow")}</div>
-            <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{t("machines-computersection.allow_detail")}</div>
+            <div className="mt-0.5 truncate text-[11.5px] text-ink-3">
+              {t(shown.backend === "lcu" ? "machines-computersection.allow_detail_lcu" : "machines-computersection.allow_detail")}
+            </div>
           </div>
           {saving && <Spinner />}
           <Switch on={enabled} onChange={(on) => void set(on)} disabled={saving || !online} label={t("machines-computersection.allow")} />
@@ -111,8 +113,16 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
             {v.kind === "install" && (
               <>
                 <Line text={v.text} />
-                <p className="text-[11.5px] leading-relaxed text-ink-3">{t("machines-computersection.install_detail")}</p>
-                {action(v.retry ? t("machines-computersection.reinstall") : t("machines-computersection.install_title"), "install", true)}
+                <p className="text-[11.5px] leading-relaxed text-ink-3">
+                  {t(shown.backend === "lcu" ? "machines-computersection.install_detail_lcu" : "machines-computersection.install_detail")}
+                </p>
+                {action(
+                  v.retry
+                    ? t("machines-computersection.reinstall")
+                    : t(shown.backend === "lcu" ? "machines-computersection.install_title_lcu" : "machines-computersection.install_title"),
+                  "install",
+                  true,
+                )}
               </>
             )}
             {v.kind === "granted" && (
@@ -144,7 +154,7 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
       <Dialog
         open={confirmInstall}
         onClose={() => setConfirmInstall(false)}
-        title={t("machines-computersection.install_title")}
+        title={t(shown.backend === "lcu" ? "machines-computersection.install_title_lcu" : "machines-computersection.install_title")}
         footer={
           <>
             <Button tone="quiet" onClick={() => setConfirmInstall(false)}>
@@ -162,7 +172,9 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
           </>
         }
       >
-        <p className="text-[12.5px] leading-relaxed text-ink-2">{t("machines-computersection.install_confirm")}</p>
+        <p className="text-[12.5px] leading-relaxed text-ink-2">
+          {t(shown.backend === "lcu" ? "machines-computersection.install_confirm_lcu" : "machines-computersection.install_confirm")}
+        </p>
       </Dialog>
     </section>
   );

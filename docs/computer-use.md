@@ -1,7 +1,17 @@
-# 操控电脑（Cua Driver）
+# 操控电脑（Cua Driver / LCU）
 
-Persona 助手经 [Cua Driver](https://github.com/trycua/cua)（`libs/cua-driver`，MIT，外部安装，不进仓库）操控用户的 Mac：
-看窗口和屏幕、点按、输入、截图。做成 hub 的**内置插件 `cua`**（[extensions.md](extensions.md)），**默认关**，打开后再**按机器**逐台打开。
+Persona 助手操控用户的 Mac：看窗口和屏幕、点按、输入、截图。做成 hub 的**内置插件 `cua`**（[extensions.md](extensions.md)），**默认关**，打开后再**按机器**逐台打开。
+后端有两个，插件设置里的「操控后端」选：
+
+| 后端 | 是什么 | 什么时候用 |
+| --- | --- | --- |
+| **Cua Driver**（默认） | [trycua/cua](https://github.com/trycua/cua) 的 `cua-driver`（MIT，外部安装，不进仓库） | 装好 Cua Driver、给了辅助功能和屏幕录制 |
+| **LCU** | [amontlabs/lcu](https://github.com/amontlabs/lcu)（[lcu.amontlabs.com](https://lcu.amontlabs.com)）。它不自己实现键鼠和截图，而是把官方 ChatGPT 桌面版里的 Codex computer-use 运行时以 stdio MCP（命令 `lcu`）暴露出来 | 本机已经有官方 ChatGPT 桌面版，并且装了 LCU |
+| **自动** | 装好了 LCU、并且 ChatGPT（或安装器记下的 Node）在，就用 LCU，否则用 Cua Driver | 想让每台 Mac 自己认 |
+
+助手的工具还是 `computer_state` / `computer_run`。LCU 把它们翻成运行时的 `js`（`cua.getState()`、`cua.getApp(...)`）。确认不走 LCU 的 Claude / Codex 审批界面，见下面「LCU 的确认」。
+
+点击音效和 Agent 光标只对 Cua Driver 生效。LCU 没有单独的 daemon，进程在第一次调用时由 node 拉起，对话期间保持着，这样运行时自己记住的「本会话允许」还在。
 
 | 块 | issue | 状态 |
 | --- | --- | --- |
@@ -25,13 +35,35 @@ Persona 助手经 [Cua Driver](https://github.com/trycua/cua)（`libs/cua-driver
 
 **插件开着、某台没打开时**：hub 照样问它的 node（连上时、插件改了时），这台 Mac 的 `computer` 带着状态，只是 `enabled` 为 false：机器页只有开关，插件页的那一行写出 Cua 的状态（「在线 · Cua 没装」）。助手的工具只在至少一台打开后才出现，而且只能操作打开了的机器。
 
-关掉插件或某台的开关时，撤掉的是工具和入口；那台 Mac 上装好的 Cua Driver 不动。
+关掉插件或某台的开关时，撤掉的是工具和入口；那台 Mac 上装好的 Cua Driver 或 LCU 不动。
+
+## LCU 的确认
+
+LCU 的运行时在真正碰到一个 App（以及开了 Chrome 时的网站来源）时，会用 MCP 的 `elicitation/create` 问客户端：允许一次、本会话允许、一直允许、拒绝，高风险时带它自己的警告，网站是允许或拒绝。官方适配器把这些交给 Claude、Codex、Pi 自己的界面。
+
+Persona 不注册那些适配器。node 作为 MCP 客户端自己接这条 elicitation，经 hub 的 `computer.elicit` 变成手机和网页上**已经有的**授权卡（和「第一次操作一个 App 时先问」「操作前在手机上确认」同一套 `permission` / 选项多的时候用 `question`）：
+
+| 运行时问的 | 卡片 |
+| --- | --- |
+| 只允许一次，或另加「本会话」/「一直允许」里的一个 | 授权卡：允许 / 总是允许（文案写明是本会话还是一直）/ 拒绝 |
+| 「本会话」和「一直允许」都有 | 提问卡：允许一次、本会话允许、一直允许、拒绝。授权卡只有一个「总是允许」，装不下两个时长 |
+| 网站来源、没有字段的表单 | 授权卡：允许 / 拒绝。不写成运行时没提供的「一直允许」 |
+| 要打开一个 URL | 授权卡里带上那个 URL，允许或拒绝 |
+| 一个枚举字段 | 提问卡，选项是枚举本身加拒绝 |
+| 要填的简单字段 | 授权卡的输入框（手机能填；网页这张卡填不了，所以填不上就不算允许） |
+| 认不出的结构 | 仍出一张卡，点允许也按取消送回，不假装已经同意 |
+
+没人答、关掉卡片、超时、或者助手自己用 `interaction_answer` 去答，一律回 `cancel`。运行时就当没批准。模型看不到「已经允许」，也不能自己批准。
+
+Persona 自己的「第一次操作一个 App 时先问」仍然先问一遍（认得出 App 的时候）。运行时之后再问的那一次也要人在卡片上答，不会因为上一张已经允许就自动过。
+
+安装用发行包里的 `scripts/install.sh --runtime-only --yes`：只装运行时、记下 ChatGPT 自带的 Node，**不**跑 `lcu setup --agent`。那个参数会把审批登记进 Claude 或 Codex。ChatGPT 桌面版要用户自己先装好（macOS 默认 `/Applications/ChatGPT.app`），Persona 不下载、不登录。第一次使用时，辅助功能和屏幕录制是 ChatGPT 应用自己的，要在那台 Mac 上点允许。装好后的命令一般在 `~/.local/share/lcu/current/bin/lcu`。
 
 ## 两条路
 
 | | 助手（Persona 主对话等） | 电脑上的 Agent（Claude Code、Codex……） |
 | --- | --- | --- |
-| 怎么调 | hub 的 MCP 工具 `computer_state` / `computer_run` → hub → node 的 `computer.call` → `cua-driver call` | 在那台电脑的 Agent 里直接注册 Cua Driver 的 MCP：`cua-driver mcp-config --client claude --no-skills` 打印配置，`cua-driver mcp` 保持一个会话 |
+| 怎么调 | hub 的 MCP 工具 `computer_state` / `computer_run` → hub → node 的 `computer.call` → Cua Driver 的 `cua-driver call`，或 LCU 的 stdio MCP（`js`） | 在那台电脑的 Agent 里直接注册 Cua Driver 的 MCP：`cua-driver mcp-config --client claude --no-skills` 打印配置，`cua-driver mcp` 保持一个会话。LCU 不从这里登记进 Agent，避免审批出现在 Agent 自己的界面 |
 | 能操作哪台 | 插件打开了的任何一台 Mac | 只有自己所在的那台 |
 | 开关、确认、日志 | 本插件的 | Cua Driver 自己的，以及 Agent 自己的工具授权 |
 

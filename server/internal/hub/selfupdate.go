@@ -22,6 +22,7 @@ import (
 	"github.com/nwverse/persona/server/internal/osproc"
 
 	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/hubedge"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/transcript"
 	"github.com/nwverse/persona/server/internal/update"
@@ -88,13 +89,18 @@ type updater struct {
 	client *http.Client
 	// Hooks the tests replace: run another binary in this process, start the watchdog, find the running binary,
 	// alert the phones.
-	exec       func(path string) error
-	startWatch func(prev, pendingPath string) error
-	target     func() (string, error)
-	notify     func(title, body string)
-	confirmIn  time.Duration
-	idleEvery  time.Duration
-	manualIdle time.Duration
+	exec func(path string) error
+	// handover asks the edge to switch to target, the update to build (a slot only, else nil); nil once this slot is
+	// released, else why the new one did not come up.
+	handover func(ctx context.Context, target string, build int64) error
+	// edgeConfirmed tells the edge the update this slot is the result of is confirmed (a slot only, else nil).
+	edgeConfirmed func()
+	startWatch    func(prev, pendingPath string) error
+	target        func() (string, error)
+	notify        func(title, body string)
+	confirmIn     time.Duration
+	idleEvery     time.Duration
+	manualIdle    time.Duration
 
 	mu          sync.Mutex
 	settings    updateSettings
@@ -112,9 +118,10 @@ type updater struct {
 }
 
 func newUpdater(h *Hub) *updater {
-	return &updater{h: h, dir: update.Dir(), client: &http.Client{Timeout: 10 * time.Minute},
+	u := &updater{h: h, dir: update.Dir(), client: &http.Client{Timeout: 10 * time.Minute},
 		exec: func(path string) error {
-			return syscall.Exec(path, append([]string{path}, os.Args[1:]...), os.Environ())
+			// The sockets systemd passed go on to the new binary (listen.go): it could not listen otherwise.
+			return syscall.Exec(path, append([]string{path}, os.Args[1:]...), append(os.Environ(), execListenEnv()...))
 		},
 		startWatch: startWatchdog, target: runningBinary, confirmIn: updateConfirmIn, idleEvery: updateIdleEvery,
 		manualIdle: updateManualIdle, state: "idle", confirmed: true,
@@ -123,6 +130,25 @@ func newUpdater(h *Hub) *updater {
 				"alert": map[string]any{"title": title, "body": body}, "sound": "default", "thread-id": "hub_update",
 			}}, "hub_update", nil)
 		}}
+	if h.slot != nil {
+		u.exec = u.slotExec
+		u.handover = func(ctx context.Context, target string, build int64) error {
+			return h.slot.Switch(ctx, target, "", hubedge.KindUpdate, build)
+		}
+		u.edgeConfirmed = h.slot.Confirmed
+	}
+	return u
+}
+
+// slotExec is how a slot (the edge started it, hub_edge.go) runs the binary at path instead of exec'ing it: once it
+// serves, the edge switches to path (rollback: it stops this one); before that (boot) it exits and the edge starts it
+// again at once on the binary now at its path.
+func (u *updater) slotExec(path string) error {
+	if !u.h.slot.Serving() {
+		u.h.logf("update: starting again on %s", path)
+		os.Exit(hubedge.RespawnCode)
+	}
+	return u.h.slot.Switch(context.Background(), path, "", hubedge.KindRollback, 0)
 }
 
 func runningBinary() (string, error) {
@@ -301,6 +327,9 @@ func (u *updater) confirm(ctx context.Context, p update.Pending) {
 	if p.Auto { // one the user started is watched in the app
 		l := u.h.userLang()
 		u.notify(su(l, "push_updated_title", i18n.Args{"version": p.ToVersion}), su(l, "push_updated_body"))
+	}
+	if u.edgeConfirmed != nil {
+		u.edgeConfirmed() // the edge's own check of this update ends (it would go back after 3 minutes)
 	}
 	u.updateNodes(ctx, p.Nodes)
 }
@@ -632,6 +661,19 @@ func (u *updater) install(ctx context.Context, auto bool) {
 	if err := update.Save(update.PendingPath(u.dir), p); err != nil {
 		_ = update.RestoreAll(p)
 		fail(err)
+		return
+	}
+	if u.handover != nil {
+		// Blue-green (docs/hub-restart.md「蓝绿切换」): the edge starts the new binary next to this one and hands over
+		// only once it checked itself; this process goes on serving until then, and stops when the edge releases it.
+		// The edge is the watchdog too (it goes back when the new one does not confirm the update in time).
+		u.set("restarting", "", "")
+		u.h.logf("update: handing over to %s", m.Version)
+		if err := u.handover(ctx, target, m.Build); err != nil {
+			_ = update.RestoreAll(p)
+			_ = os.Remove(update.PendingPath(u.dir))
+			fail(i18n.Err("hub-selfupdate.err_no_start", i18n.Args{"error": err.Error()}))
+		}
 		return
 	}
 	if err := u.startWatch(prev, update.PendingPath(u.dir)); err != nil {

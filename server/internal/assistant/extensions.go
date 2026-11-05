@@ -74,6 +74,8 @@ type ExtensionTools interface {
 	CallTool(ctx context.Context, machine, session, name string, args json.RawMessage, assistant bool) (proto.ToolResult, bool)
 	AssistantSummary(ctx context.Context, tool, summary string) (string, bool)
 	AssistantLark(ctx context.Context) (proto.AssistantLark, error)
+	// AnswerComputerElicit answers the node's computer.elicit (LCU runtime confirmations on the phone/web cards).
+	AnswerComputerElicit(ctx context.Context, machine string, params json.RawMessage) (map[string]any, error)
 }
 
 // SetExtensions gives the service the extensions' tools (before Run).

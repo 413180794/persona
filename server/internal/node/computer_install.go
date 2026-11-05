@@ -32,8 +32,11 @@ var cuaScripts = []string{"install.sh", "_install-rust.sh", "_install-common.sh"
 // cuaScriptMost: the installer is about 1,800 lines; anything much bigger is not it.
 const cuaScriptMost = 2 << 20
 
-// installOS is the OS the node installs on (tests say darwin).
-var installOS = runtime.GOOS
+// installOS is the OS the node installs on (tests say darwin). installArch is its architecture (tests say arm64).
+var (
+	installOS   = runtime.GOOS
+	installArch = runtime.GOARCH
+)
 
 var jobTimeout = map[string]time.Duration{"install": 15 * time.Minute, "grant": 10 * time.Minute, "open": time.Minute}
 

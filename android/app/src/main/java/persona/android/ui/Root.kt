@@ -523,7 +523,8 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                     todoCount = uncompletedTodosCount,
                     showTodos = todosSupported)
             }
-            agentsEntries(navigator, agents, machine, { machine = it })
+            agentsEntries(navigator, agents, machine, { machine = it },
+                terminalPanes = if (session.demo == null) shell.terminalPanes.available else kotlinx.coroutines.flow.flowOf(false))
             spaceEntries(navigator, agents)
             chatEntries(navigator) { ShellChat(it, session, navigator, shell.feedback, onSessionClosed = navigator::sessionClosed) }
             entry<InteractionRoute> { ShellChat(it.chat, session, navigator, shell.feedback, it.requestId, navigator::sessionClosed) }
@@ -541,8 +542,13 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             entry<PairingRoute> { ShellSettings(services, navigator, shell, "pair") }
             entry<PhoneToolsRoute> { session.phone?.let { PhoneToolsScreen(it, navigator) }
                 ?: UnavailablePage(stringResource(R.string.app_unavailable_phone_tools), navigator) }
-            session.terminal?.let { terminalEntries(navigator, it) { key -> sessions.firstOrNull { s -> s.key == key }?.displayTitle } }
-                ?: run { entry<TerminalRoute> { UnavailablePage(stringResource(R.string.app_demo_no_terminal), navigator) } }
+            session.terminal?.let { terminalEntries(navigator, it, { key -> sessions.firstOrNull { s -> s.key == key }?.displayTitle },
+                panes = shell.terminalPanes.takeIf { session.demo == null }, sessions = session.sessions,
+                routed = shell::groupTerminal) }
+                ?: run {
+                    entry<TerminalRoute> { UnavailablePage(stringResource(R.string.app_demo_no_terminal), navigator) }
+                    entry<persona.core.navigation.TerminalPanesRoute> { UnavailablePage(stringResource(R.string.app_demo_no_terminal), navigator) }
+                }
             session.metrics?.let { machinesEntries(navigator, it, session.sessions, session.machines,
                 launcherPages = services.extensions?.takeUnless { services.demo }?.available ?: kotlinx.coroutines.flow.flowOf(false),
                 extensionSections = { id -> persona.feature.settings.rememberMachineExtensionSections(services.extensionSlots, id, onOpen = navigator::navigate) }) } ?: run {

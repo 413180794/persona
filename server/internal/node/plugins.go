@@ -74,6 +74,7 @@ func (n *Node) plugins() *pluginHost {
 	if peer := n.peer; peer != nil { // the hub's latest connection is where the programs' events go
 		ph.mu.Lock()
 		ph.notify = func(event string, params any) { _ = peer.Notify(event, params) }
+		ph.lcu = n.lcuComputerCall
 		ph.mu.Unlock()
 	}
 	return ph
@@ -88,6 +89,7 @@ type pluginHost struct {
 	running map[string]*pluginRun
 	uploads map[string]*pluginUpload
 	notify  func(event string, params any)
+	lcu     lcuCaller // the latest connection's, so LCU's confirmations reach the hub that is there now
 }
 
 type pluginRun struct {
@@ -582,7 +584,10 @@ func (ph *pluginHost) status() proto.PluginNodeStates {
 
 func (ph *pluginHost) call(ctx context.Context, p proto.PluginNodeCall) (json.RawMessage, error) {
 	if _, ok := builtinPrograms[p.ID]; ok { // cua, ego, imessage: in this process, always there (builtin.go)
-		return callBuiltin(ctx, p.ID, p.Method, p.Params)
+		ph.mu.Lock()
+		lcu := ph.lcu
+		ph.mu.Unlock()
+		return callBuiltin(ctx, p.ID, p.Method, p.Params, lcu)
 	}
 	ph.mu.Lock()
 	r := ph.running[p.ID]

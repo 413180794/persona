@@ -260,6 +260,31 @@ class GroupRoutingTest {
         assertEquals(listOf("doctor macbook", "browser macbook"), home.calls)
     }
 
+    @Test fun anotherGroupsTerminalSendsPlainIdsAndHearsMergedOnes() = runBlocking {
+        val sent = mutableListOf<String>()
+        val hub = object : TerminalTransport {
+            override val connection = MutableStateFlow(ConnectionState.Online)
+            override val features = MutableStateFlow(setOf("terminal_stream"))
+            override val events = flowOf<ServerEvent>(TerminalEvent("desk", "pane:w1:p2"))
+            override fun subscribe(key: SessionKey, epoch: String?, after: Int, size: TerminalSize?, takeover: Boolean) = sent.add("subscribe $key")
+            override fun unsubscribe(key: SessionKey) { sent.add("unsubscribe $key") }
+            override fun input(key: SessionKey, text: String, size: TerminalSize?, scroll: Int, at: TerminalCellPosition?, click: TerminalCellPosition?) =
+                sent.add("input $key $text")
+            override suspend fun screen(key: SessionKey) = throw UnsupportedOperationException()
+        }
+        val merged = hub.inGroup(other)
+        val pane = SessionKey("desk~g0a1b2c3d", "pane:w1:p2")
+        merged.subscribe(pane, null, 0, null)
+        merged.input(pane, "ls")
+        merged.unsubscribe(pane)
+        // The pane address passes as it is; only the machine loses its suffix.
+        val plain = SessionKey("desk", "pane:w1:p2")
+        assertEquals(listOf("subscribe $plain", "input $plain ls", "unsubscribe $plain"), sent)
+        assertEquals(TerminalEvent("desk~g0a1b2c3d", "pane:w1:p2"), merged.events.first())
+        assertSame(hub.features, merged.features)
+        assertSame(hub, hub.inGroup(primary))
+    }
+
     @Test fun fleetsAddUpAndTheMostUrgentPhaseWins() {
         val one = FleetState(phase = "working", working = 2, items = listOf(FleetItem("a")))
         assertSame(one, mergeFleets(listOf(one), one))

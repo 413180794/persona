@@ -6,6 +6,7 @@ import persona.core.contracts.*
 import persona.core.contracts.api.*
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
+import persona.core.hub.HttpTerminalPanes
 import persona.feature.agents.AgentsDraftSource
 import persona.feature.agents.AgentsOperationsBindings
 import persona.feature.agents.AgentsWiringState
@@ -150,6 +151,31 @@ internal class MergedShellServices(private val stacks: GroupStacks) {
     private fun stack(machineId: String) = stacks.of(machineId) ?: throw IllegalStateException(AppText.get(R.string.app_error_terminal_unavailable))
 
     fun terminal(key: SessionKey): TerminalTransport = stack(key.machineId).terminal
+
+    /**
+     * The terminal of a machine in another group (its id carries the suffix), in merged ids and on that group's own
+     * connection; null for the primary group's machines, or when the group is not open.
+     */
+    fun groupTerminal(machineId: String): TerminalTransport? =
+        if (GroupKeys.namespaceOf(machineId) == null) null else stacks.of(machineId)?.mergedTerminal
+
+    /**
+     * 终端's pane lists and new tabs (docs/terminal.md「独立终端」): each call goes to the machine's group with its plain
+     * id. What comes back names no machine (host-local ids, session ids, `pane:` addresses), so it needs no translating.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val panes: TerminalPanes = object : TerminalPanes {
+        override val available: Flow<Boolean> = stacks.stacks.flatMapLatest { list ->
+            if (list.isEmpty()) flowOf(false)
+            else combine(list.map { it.connection.serverFeatures }) { features -> features.any { HttpTerminalPanes.TERMINAL_PANES in it } }
+        }.distinctUntilChanged()
+        override fun lists(machineId: String) =
+            stacks.of(machineId)?.connection?.serverFeatures?.value?.contains(HttpTerminalPanes.TERMINAL_PANES) == true
+        override suspend fun panes(machineId: String) =
+            stacks.use(GroupKeys.namespaceOf(machineId)) { HttpTerminalPanes(it.connection).panes(GroupKeys.raw(machineId)) }
+        override suspend fun newTab(machineId: String, workspaceId: String, kind: String?) =
+            stacks.use(GroupKeys.namespaceOf(machineId)) { HttpTerminalPanes(it.connection).newTab(GroupKeys.raw(machineId), workspaceId, kind) }
+    }
 
     val files: SessionFiles = object : SessionFiles {
         private fun of(machineId: String) = stacks.of(machineId)?.files ?: throw HubFailure(HubError.NoNetwork)

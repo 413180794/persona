@@ -38,7 +38,8 @@ struct ComputerSection: View {
                 Toggle(isOn: Binding(get: { shown.enabled }, set: { on in Task { await set(on) } })) {
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                         Text("允许助手操控这台电脑").font(Theme.Font.body).lineLimit(1).minimumScaleFactor(0.8)
-                        Text("经 Cua Driver 看屏幕、点按、输入、截图").font(Theme.Font.label).foregroundStyle(.secondary)
+                        Text(shown.backend == "lcu" ? "经 LCU 看屏幕、点按、输入。确认在手机和网页上" : "经 Cua Driver 看屏幕、点按、输入、截图")
+                            .font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
                 .disabled(saving || !online)
@@ -100,11 +101,13 @@ struct ComputerSection: View {
                 if let job = c.job, job.kind == "install", job.state == "failed" {
                     line("没装上：\(job.error ?? "安装器出错了")", ok: false)
                 } else {
-                    line("这台 Mac 上还没有装 Cua Driver", ok: false)
+                    line(c.backend == "lcu" ? "这台 Mac 上还没有装 LCU" : "这台 Mac 上还没有装 Cua Driver", ok: false)
                 }
-                Text("从 Cua 官网下载安装器，校验后装进「应用程序」，并关掉它的使用统计。")
+                Text(c.backend == "lcu"
+                     ? "从 GitHub 下载 LCU 的发行包并校验。不注册 Claude / Codex 的审批界面，也不安装 ChatGPT；ChatGPT 桌面版要自己先装好。"
+                     : "从 Cua 官网下载安装器，校验后装进「应用程序」，并关掉它的使用统计。")
                     .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                action(c.job?.state == "failed" ? "重新安装" : "安装 Cua Driver", "install", prominent: true, identifier: "computer-install")
+                action(c.job?.state == "failed" ? "重新安装" : (c.backend == "lcu" ? "安装 LCU" : "安装 Cua Driver"), "install", prominent: true, identifier: "computer-install")
             }
         } else if c.desktop == "locked" {
             // Locked: nothing gets through to its apps (Cua refuses, screen_locked), so unlocking comes first. Its live
@@ -140,7 +143,7 @@ struct ComputerSection: View {
             grantGuide(c, asking: false)
         } else if c.ready {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                line("现在可以操控" + (c.version.map { " · Cua Driver \($0)" } ?? ""), ok: true)
+                line("现在可以操控" + (c.version.map { " · \(c.backend == "lcu" ? "LCU" : "Cua Driver") \($0)" } ?? ""), ok: true)
                 if c.screenSharing {
                     HStack(spacing: Theme.Space.s) {
                         look(prominent: false)

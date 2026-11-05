@@ -77,6 +77,8 @@ fun EntryProviderScope<NavKey>.agentsEntries(
     // Retained for source compatibility; the migrated route owns its screen now.
     agentsContent: @Composable () -> Unit = {},
     connectionSettingsContent: @Composable () -> Unit = { PlaceholderScreen(stringResource(R.string.agents_connection_settings)) },
+    /** Whether a hub lists terminal panes (feature terminal_panes): the list menu then opens 终端. */
+    terminalPanes: kotlinx.coroutines.flow.Flow<Boolean> = flowOf(false),
 ) {
     entry<AgentsRoute> {
         val context = LocalContext.current.applicationContext
@@ -125,7 +127,8 @@ fun EntryProviderScope<NavKey>.agentsEntries(
                 }
             }
             val groups by dependencies.groups().groups.collectAsStateWithLifecycle()
-            AgentsScreen(model, navigator, metadata.copy(rows = rows), creationModel, onMachineSelected, groups)
+            val panes by terminalPanes.collectAsStateWithLifecycle(false)
+            AgentsScreen(model, navigator, metadata.copy(rows = rows), creationModel, onMachineSelected, groups, panes)
         }
     }
     entry<ConnectionSettingsRoute> { connectionSettingsContent() }

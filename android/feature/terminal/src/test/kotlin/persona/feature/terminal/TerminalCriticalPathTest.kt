@@ -100,11 +100,13 @@ internal class FakeTerminal : TerminalTransport {
     data class Input(val text: String, val scroll: Int, val at: TerminalCellPosition?)
     data class Keys(val keys: List<String>, val text: String)
     val subscriptions = mutableListOf<Subscription>()
+    /** The key each subscription named (a session's, or a pane's address). */
+    val subscribedKeys = mutableListOf<SessionKey>()
     val inputs = mutableListOf<Input>()
     val keys = mutableListOf<Keys>()
     var unsubscribes = 0
     override fun subscribe(key: SessionKey, epoch: String?, after: Int, size: TerminalSize?, takeover: Boolean): Boolean {
-        subscriptions += Subscription(epoch, after, size, takeover); return true
+        subscriptions += Subscription(epoch, after, size, takeover); subscribedKeys += key; return true
     }
     override fun unsubscribe(key: SessionKey) { unsubscribes++ }
     override fun input(key: SessionKey, text: String, size: TerminalSize?, scroll: Int, at: TerminalCellPosition?, click: TerminalCellPosition?): Boolean {

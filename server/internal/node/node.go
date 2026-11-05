@@ -61,6 +61,9 @@ type Node struct {
 	engEpoch uint64
 	peer     *rpc.Peer
 	logger   *log.Logger
+	// lcu drives amontlabs/lcu for the computer-use plugin when that backend is selected (lcu_mcp.go).
+	lcuMu   sync.Mutex
+	lcuSess *lcuSession
 
 	// claudeStartDir: the CLAUDE_CONFIG_DIR plain `claude` is started with (hub.json machines[].claude_start_dir,
 	// managed.go); "" leaves claude to its default.
@@ -1000,7 +1003,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		"computer.cursor", "computer.nolock", "computer.lock",
 		"browser.status", "browser.install", "browser.open", "browser.cancel", "browser.call",
 		"browser.cookies.list", "browser.cookies.import", "browser.cookies.clear":
-		return legacyBuiltinCall(ctx, method, params)
+		return legacyBuiltinCall(ctx, method, params, n.lcuComputerCall)
 	case "fs.stat":
 		return map[string]any{"stats": n.statPaths(p.Paths, p.Cwd)}, nil
 	case "space.rename":

@@ -62,6 +62,7 @@
     <string name="agents_menu_collapse_all">全部折叠</string>
     <string name="agents_menu_expand_all">全部展开</string>
     <string name="agents_menu_machines">机器监控</string>
+    <string name="agents_menu_terminals">终端</string>
     <string name="agents_menu_note">置顶和屏蔽同步到 hub；已读仅影响本机列表</string>
     <string name="agents_filter_all">全部</string>
     <string name="agents_filter_needs_you">需要你</string>

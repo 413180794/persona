@@ -11,6 +11,8 @@ describe("computer section", () => {
 
   it("is ready with the version and the screen when Screen Sharing is on", () => {
     expect(computerView(base, true)).toEqual({ kind: "ready", text: "现在可以操控 · Cua Driver 0.38.0", screen: true });
+    expect(computerView({ ...base, backend: "lcu", version: "0.13.5" }, true)).toEqual({ kind: "ready", text: "现在可以操控 · LCU 0.13.5", screen: true });
+    expect(computerView({ enabled: true, backend: "lcu", installed: false }, true)).toEqual({ kind: "install", text: "这台 Mac 上还没有装 LCU", retry: false });
     expect(computerView({ ...base, screen_sharing: false }, true)).toMatchObject({ kind: "ready", screen: false });
   });
 
