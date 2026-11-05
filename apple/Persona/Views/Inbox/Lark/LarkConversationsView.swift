@@ -36,7 +36,19 @@ private struct LarkConversationsPage: View {
     @State private var pins = LarkPinnedInteraction()
     @State private var canExpandPins = false
     @State private var scroll = LarkConversationScroll()
+    /// The end of the list (the spinner) is on screen: pages keep coming while it stays there.
+    @State private var endVisible = false
+    /// Pages a search has asked for since the query last changed (`searchPageLimit`).
+    @State private var searchPages = 0
     var choice: LarkAccountChoice
+
+    /// A search reads on through this many pages by itself, then asks before going further back (#2823).
+    private static let searchPageLimit = 8
+    /// At least this long between two refreshes of the list: each one reads every loaded page again, and a busy account
+    /// sends an event for every message (#2823).
+    private static let refreshGap: Duration = .seconds(1)
+    /// The next page is asked for when the row this far from the end comes on screen.
+    private static let prefetchRows = 10
 
     init(config: ServerConfig, choice: LarkAccountChoice) {
         self.choice = choice
@@ -73,6 +85,8 @@ private struct LarkConversationsPage: View {
                     empty
                         .listRowSeparator(.hidden)
                 } else {
+                    // Once per update: with a query it filters every loaded chat (`listed`), and three places read it.
+                    let rows = filtered
                     if store.failed {
                         Button { Task { await store.refresh() } } label: {
                             Label(store.needsUpgrade ? "更新 Hub 后可同步置顶 · 重新检查" : "暂未更新 · 重试", systemImage: Theme.Icon.retry)
@@ -80,24 +94,52 @@ private struct LarkConversationsPage: View {
                         }
                         .listRowSeparator(.hidden)
                     }
-                    ForEach(filtered) { conversation in
+                    let prefetch = query.isEmpty ? rows.dropLast(Self.prefetchRows).last?.id : nil
+                    ForEach(rows) { conversation in
                         NavigationLink(value: conversation) { row(conversation) }
                             .accessibilityIdentifier("feishu-chat-" + conversation.id)
                             .id(conversation.id)
                             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { scroll.reader.row(conversation.id, top: $0) }
                             .onDisappear { scroll.reader.gone(conversation.id) }
+                            .onScrollVisibilityChange(threshold: 0.01) { visible in
+                                if visible, conversation.id == prefetch { Task { await store.more() } }
+                            }
                             .listRowInsets(EdgeInsets(top: 0, leading: Theme.Space.page, bottom: 0, trailing: Theme.Space.page))
                             .themedRow()
                     }
-                    if store.nextCursor != nil, query.isEmpty {
+                    if rows.isEmpty, !query.isEmpty, !searchingOn {
+                        EmptyStateView(symbol: Theme.Icon.search, title: "没有找到「\(query)」",
+                                       message: store.nextCursor == nil ? "会话的名称和最近消息都能搜，换个词试试。"
+                                                                        : "已搜索最近 \(store.conversations.count) 个会话。")
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+                    if store.nextCursor != nil {
                         Group {
                             if store.pageFailed {
                                 Button("重试加载") { Task { await store.more() } }.lineLimit(1)
+                            } else if !query.isEmpty, searchPages >= Self.searchPageLimit {
+                                Button("搜索更早的会话") { searchPages = 0; Task { await loadAtEnd() } }.lineLimit(1)
                             } else {
-                                ProgressView().frame(maxWidth: .infinity)
-                                    .task(id: store.nextCursor) { await store.more() }
+                                VStack(spacing: Theme.Space.xs) {
+                                    ProgressView()
+                                    if !query.isEmpty {
+                                        Text("已搜索 \(store.conversations.count) 个会话，正在找更早的")
+                                            .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, Theme.Space.s)
+                                // Loads while it is on screen and goes on while it stays there (a short search's
+                                // results leave it in view); a task keyed on the cursor ran off screen too (#1034).
+                                .onScrollVisibilityChange(threshold: 0.01) { visible in
+                                    endVisible = visible
+                                    if visible { Task { await loadAtEnd() } }
+                                }
+                                .onDisappear { endVisible = false }
                             }
                         }
+                        .frame(maxWidth: .infinity)
                         .listRowSeparator(.hidden)
                     }
                 }
@@ -128,7 +170,7 @@ private struct LarkConversationsPage: View {
                 } else if old == .tracking && phase != .interacting { pins.cancelDrag() }
             }
             .themedPage()
-            .pageSearchable(text: $query, prompt: "搜索已加载的会话")
+            .pageSearchable(text: $query, prompt: "搜索会话")
             .navigationTitle("消息")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(shell == nil ? .visible : .hidden, for: .navigationBar)
@@ -144,7 +186,13 @@ private struct LarkConversationsPage: View {
             .navigationDestination(for: LarkConversation.self) { LarkChatView(conversation: $0, messageComposer: true) }
         }
         .onChange(of: store.accountID) { _, _ in path = []; pins = LarkPinnedInteraction() }
-        .onChange(of: query) { _, _ in pins = LarkPinnedInteraction(); scroll.resetShelf() }
+        .onChange(of: query) { _, _ in
+            pins = LarkPinnedInteraction(); scroll.resetShelf()
+            searchPages = 0
+            if endVisible { Task { await loadAtEnd() } }
+        }
+        // A page held for a moving list lands when it rests: the end may still be on screen and want the next one.
+        .onChange(of: store.nextCursor) { _, cursor in if cursor != nil, endVisible { Task { await loadAtEnd() } } }
         .onChange(of: store.pinned.isEmpty) { _, empty in
             if empty { pins = LarkPinnedInteraction(); scroll.resetShelf() }
         }
@@ -160,9 +208,29 @@ private struct LarkConversationsPage: View {
                 async let accounts: Void = choice.load()
                 await store.refresh()
                 await accounts
+                // Events that come meanwhile fold into one (the stream keeps the newest), and the next page gets its turn.
+                try? await Task.sleep(for: Self.refreshGap)
             }
         }
 
+    }
+
+    /// A search with too little to show is still reading on through older pages.
+    private var searchingOn: Bool {
+        store.nextCursor != nil && !store.pageFailed && searchPages < Self.searchPageLimit
+    }
+
+    /// Pages while the end of the list is on screen; a search counts its pages and stops at `searchPageLimit`.
+    private func loadAtEnd() async {
+        while endVisible, let cursor = store.nextCursor, !store.pageFailed, !Task.isCancelled {
+            let searching = !query.isEmpty
+            if searching, searchPages >= Self.searchPageLimit { return }
+            await store.more()
+            // Nothing new on screen yet (another request had it, or the page waits for the list to rest): the cursor's
+            // change asks again.
+            if store.nextCursor == cursor { return }
+            if searching { searchPages += 1 }
+        }
     }
 
     /// One chip per signed-in account, its unread count beside the name; the chosen one is filled.

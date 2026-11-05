@@ -54,6 +54,24 @@ final class LarkPinnedShelfFlowTests: XCTestCase {
             .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.82)))
     }
 
+    /// #2823: a search reads on into pages not loaded yet (the fixture has 83 chats, 60 a page: 会话 75 is on the
+    /// second), and one that matches nothing says so instead of leaving the page blank.
+    @MainActor func testSearchReadsOnIntoLaterPagesAndSaysWhenNothingMatches() async throws {
+        let app = try await open()
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "no search field")
+        field.tap()
+        field.typeText("会话 75")
+        XCTAssertTrue(app.buttons["feishu-chat-pin-75"].firstMatch.waitForExistence(timeout: 15),
+                      "a chat on the second page was not found")
+        shot(app, "lark-search-later-page")
+        field.buttons.firstMatch.tap() // clear
+        field.typeText("没有这个会话")
+        XCTAssertTrue(app.staticTexts["没有找到「没有这个会话」"].firstMatch.waitForExistence(timeout: 15), "no empty result")
+        XCTAssertEqual(chats(app).count, 0)
+        shot(app, "lark-search-nothing")
+    }
+
     @MainActor func testExpandPullCollapseAndOpenSharedChat() async throws {
         let app = try await open()
         let toggle = app.buttons["feishu-pins-toggle"]

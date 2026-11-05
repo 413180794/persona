@@ -338,4 +338,40 @@ import Testing
         #expect(store.conversations.map(\.id) == ["head", "tail"])
         #expect(store.nextCursor == nil)
     }
+
+    /// #2823: a fling that reaches the end asks for the next page at once, not once it rests; the page lands at rest.
+    @Test func aMovingListAsksForTheNextPageAtOnce() async {
+        var asked: [String?] = []
+        let store = LarkConversationsModel(deps: .init(
+            page: { cursor, _ in
+                asked.append(cursor)
+                return reply(conversations: [chat(cursor ?? "head")], nextCursor: cursor == nil ? "tail" : nil)
+            }, pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) },
+            cached: { nil }, save: { _ in }))
+        await store.refresh()
+        store.holdScrolling(true)
+        await store.more()
+        #expect(asked == [nil, "tail"])
+        #expect(store.conversations.map(\.id) == ["head"])
+        store.holdScrolling(false)
+        #expect(store.conversations.map(\.id) == ["head", "tail"])
+        #expect(store.nextCursor == nil)
+    }
+
+    /// A page asked for while a refresh is held for the moving list builds on that refresh, not on the rows on screen.
+    @Test func aPageDuringADragBuildsOnTheHeldRefresh() async {
+        var version = 0
+        let store = LarkConversationsModel(deps: .init(
+            page: { cursor, _ in
+                reply(conversations: [chat(cursor ?? "head", "version \(version)")], nextCursor: cursor == nil ? "tail" : nil)
+            }, pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) },
+            cached: { nil }, save: { _ in }))
+        await store.refresh()
+        store.holdScrolling(true)
+        version = 1; await store.refresh()
+        await store.more()
+        store.holdScrolling(false)
+        #expect(store.conversations.map(\.id) == ["head", "tail"])
+        #expect(store.conversations.first?.preview == "version 1")
+    }
 }

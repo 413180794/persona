@@ -166,11 +166,14 @@ final class LarkConversationsModel {
     private enum PageOutcome { case done, superseded }
 
     private func morePage() async -> PageOutcome {
-        while loading || scrolling {
+        // Only a refresh holds the page back. A moving list asks at once (#2823: waiting for the fling to rest left the
+        // spinner at the end for a whole round trip after it stopped); what comes back waits in `pending` like a refresh.
+        while loading {
             await withCheckedContinuation { pageWaiters.append($0) }
             guard !Task.isCancelled else { return .done }
         }
-        guard let cursor = nextCursor, let owner = accountID, !loadingMore, !Task.isCancelled else { return .done }
+        let base = current
+        guard let cursor = base.nextCursor, let owner = accountID, !loadingMore, !Task.isCancelled else { return .done }
         let request = revision
         loadingMore = true
         defer { loadingMore = false; wakePageWaiters() }
@@ -178,8 +181,11 @@ final class LarkConversationsModel {
             let page = try await deps.page(cursor, owner)
             try check(request)
             guard try Self.owner(page) == owner, accountID == owner else { throw LoadError.accountChanged }
-            let fresh = Snapshot(accountID: owner, conversations: Self.merge(conversations, page.conversations), pinned: pinned,
-                                 nextCursor: page.nextCursor.flatMap { $0.isEmpty || $0 == cursor ? nil : $0 }, loadedPages: loadedPages + 1)
+            // A snapshot held while this page was on its way (`pending`) is the newer base, as long as it still ends here.
+            let now = current
+            guard now.nextCursor == cursor else { return .done }
+            let fresh = Snapshot(accountID: owner, conversations: Self.merge(now.conversations, page.conversations), pinned: now.pinned,
+                                 nextCursor: page.nextCursor.flatMap { $0.isEmpty || $0 == cursor ? nil : $0 }, loadedPages: now.loadedPages + 1)
             pageFailed = false
             publish(fresh)
         } catch {
@@ -199,6 +205,12 @@ final class LarkConversationsModel {
             if let fresh = pending { pending = nil; apply(fresh) }
             wakePageWaiters()
         }
+    }
+
+    /// The newest snapshot: one held back for a moving list, or what is on screen.
+    private var current: Snapshot {
+        pending ?? Snapshot(accountID: accountID ?? "", conversations: conversations, pinned: pinned, nextCursor: nextCursor,
+                            loadedPages: loadedPages)
     }
 
     private func apply(_ fresh: Snapshot) {
