@@ -5,7 +5,7 @@ import persona.core.contracts.Question
 import persona.core.contracts.Resolution
 
 enum class AnswerAction(val wire: String) {
-    ApproveAll("approve_all"), ApproveEdits("approve_edits"), Reject("reject"), Allow("allow"),
+    ApproveAll("approve_all"), ApproveEdits("approve_edits"), ApproveStepwise("approve_stepwise"), Reject("reject"), Allow("allow"),
     Deny("deny"), Always("always"), Dismiss("dismiss"), PickOption("pick_option"),
     Advance("advance"), Submit("submit"), ScreenOption("screen_option"),
     TerminalText("terminal_text"), TerminalKeys("terminal_keys"), SubmitElicitation("submit_elicitation"),
@@ -107,7 +107,7 @@ object AnswerBuilder {
         }) return blocked()
 
         // Reasons and feedback are mutually exclusive with approval across all entries.
-        if (action in listOf(AnswerAction.ApproveAll, AnswerAction.ApproveEdits) &&
+        if (action in listOf(AnswerAction.ApproveAll, AnswerAction.ApproveEdits, AnswerAction.ApproveStepwise) &&
             (context.rejecting || draft.feedback.isNotEmpty())) return blocked()
         if (action in listOf(AnswerAction.Allow, AnswerAction.Always) && draft.message.isNotEmpty()) return blocked()
         if (action == AnswerAction.Deny && draft.message.length > 4000) return blocked()
@@ -123,7 +123,7 @@ object AnswerBuilder {
         }
 
         return when (action) {
-            AnswerAction.ApproveAll, AnswerAction.ApproveEdits -> resolved(Resolution(approve = true, mode = policy.mode))
+            AnswerAction.ApproveAll, AnswerAction.ApproveEdits, AnswerAction.ApproveStepwise -> resolved(Resolution(approve = true, mode = policy.mode))
             AnswerAction.Reject -> resolved(Resolution(approve = false, feedback =
                 if (context.entry == AnswerEntry.Notification) draft.feedback.trim() else draft.feedback))
             AnswerAction.Allow -> resolved(Resolution(allow = true))

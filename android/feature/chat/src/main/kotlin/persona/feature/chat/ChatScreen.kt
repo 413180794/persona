@@ -35,6 +35,7 @@ import persona.core.domain.sort.canSend
 import persona.core.domain.sort.canTerminal
 import persona.core.domain.sort.canTypeClaudeCommands
 import persona.feature.chat.media.ChatImageViewer
+import persona.core.domain.rewind.Rewind
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.internal.GeneratedComponentManager
 import androidx.compose.ui.platform.LocalContext
@@ -368,6 +369,87 @@ private fun ChatPage(
     }
     // Chat content (group A): the message menu, the image viewer, photos and paths in messages, the API error retry.
     val messageMenu = remember { MessageMenuState() }
+    // A swipe to the left quotes (iOS #1058) wherever the long-press menu's 引用 is offered.
+    val quoteTarget: (MessageTarget) -> Unit = { target ->
+        // Over the box as a quote that goes with the next message, the draft left as it is (iOS #986).
+        linkContexts = withQuote(linkContexts, messageQuote(target.text, target.user, session?.agentLabel ?: "Claude", target.id))
+        composer.focusRequest++
+    }
+    val swipeQuote by rememberUpdatedState(quoteTarget)
+    val menuWrites = messageMenuWrites(readOnly, session)
+    LaunchedEffect(menuWrites) { messageMenu.quote = if (menuWrites) ({ target: MessageTarget -> swipeQuote(target) }) else null }
+    // 分支到新聊天 (#2137) from a reply, 回退到这里 (#2436) on your message: the menu's session-wide extras (web ⋯).
+    var forking by remember { mutableStateOf(false) }
+    var rewindBusy by remember { mutableStateOf(false) }
+    val actionsService = chrome.actions
+    val openFork = chrome.forkOpener(renderStyle)
+    val onFork: ((String) -> Unit)? = if (actionsService != null && openFork != null && session?.canFork == true && !readOnly) { itemId ->
+        val from = session
+        if (!forking) {
+            forking = true
+            scope.launch {
+                try {
+                    val id = actionsService.fork(from, itemId)
+                    notice = res.getString(R.string.chat_menu_forked)
+                    try { sessions.refresh() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+                    openFork(SessionKey(from.machineId, id))
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { notice = res.getString(R.string.chat_menu_fork_failed, operationFeedback(e).message) }
+                finally { forking = false }
+            }
+        }
+    } else null
+    val rewindBlock = Rewind.block(session, busy = sending || Rewind.outgoing(messages.map { it.state }) || rewindBusy)
+    val rewindMenu = if (actionsService != null && canSend && !readOnly && renderStyle != ChatRenderStyle.Assistant) RewindMenu(
+        block = rewindBlock?.let { res.getString(when (it) {
+            Rewind.Block.ClaudeOnly -> R.string.chat_rewind_block_claude_only
+            Rewind.Block.Offline -> R.string.chat_rewind_block_offline
+            Rewind.Block.NeedsYou -> R.string.chat_rewind_block_needs_you
+            Rewind.Block.Working -> R.string.chat_rewind_block_working
+        }) },
+        run = { target, restore ->
+            val at = Rewind.target(snapshot.items, target.id)
+            val on = session
+            if (at == null) notice = res.getString(R.string.chat_rewind_no_text)
+            else if (on != null && !rewindBusy) {
+                rewindBusy = true
+                notice = res.getString(R.string.chat_rewind_running)
+                scope.launch {
+                    try {
+                        val done = actionsService.rewind(on, at, restore)
+                        // The message goes back into the composer, as Claude's own /rewind puts it back in its box.
+                        if (done.inputCleared) composer.edit(target.editText)
+                        notice = res.getString(when {
+                            !done.inputCleared -> R.string.chat_rewind_input_kept
+                            restore == RewindRestore.CodeAndConversation && !done.codeRestored -> R.string.chat_rewind_done_no_code_changes
+                            done.codeRestored -> R.string.chat_rewind_done_code_and_conversation
+                            else -> R.string.chat_rewind_done_conversation
+                        })
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: RewindFailure) {
+                        notice = when (e.reason) {
+                            RewindFailure.Reason.HubUnsupported -> res.getString(R.string.chat_rewind_hub_unsupported)
+                            RewindFailure.Reason.NeedsFullDevice -> res.getString(R.string.chat_rewind_needs_full_device)
+                            RewindFailure.Reason.Refused -> res.getString(R.string.chat_rewind_failed,
+                                e.hubMessage ?: operationFeedback(e.cause ?: e).message)
+                        }
+                    }
+                    catch (e: Exception) { notice = res.getString(R.string.chat_rewind_failed, operationFeedback(e).message) }
+                    finally {
+                        rewindBusy = false
+                        try { sessions.refresh() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+                    }
+                }
+            }
+        }) else null
+    // 「查看子 Agent」 under Task / Agent steps (iOS): the session's sub-agents by the call that started them, done ones too.
+    val subagentLinks = remember(session?.subagents, chrome.onOpenSession, readOnly, key.machineId) {
+        val open = chrome.onOpenSession
+        if (readOnly || open == null) null
+        else session?.subagents.orEmpty().filter { !it.toolUseId.isNullOrBlank() && it.sessionId.isNotBlank() }
+            .associate { it.toolUseId!! to SessionKey(key.machineId, it.sessionId) }
+            .takeIf { it.isNotEmpty() }?.let { ChatSubagents(it, open) }
+    }
     var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
     val photos = remember(chrome.files, key, session?.cwd) { chrome.files?.let { AttachedPhotos(it, key.machineId, session?.cwd.orEmpty()) } }
     // A 「继续」 already on its way counts as working: the card offers no second one.
@@ -475,7 +557,7 @@ private fun ChatPage(
     }
     CompositionLocalProvider(LocalChatMarkdownCache provides markdownCache, LocalChatRowActions provides rowActions,
         LocalContentColor provides PersonaTheme.palette.ink, LocalChatPorts provides chatPorts,
-        persona.core.designsystem.LocalAssistantCards provides cardsHost) {
+        persona.core.designsystem.LocalAssistantCards provides cardsHost, LocalChatSubagents provides subagentLinks) {
         ChatLinkHost(Modifier.fillMaxSize().background(PersonaTheme.palette.background)
             .then(if (embedded) Modifier else Modifier.imePadding()), preloadUrls, list.isScrollInProgress,
             onContext = { if (readOnly || !canSend) notice = res.getString(R.string.chat_screen_read_only_context) else linkContexts = linkContexts + it },
@@ -672,6 +754,21 @@ private fun ChatPage(
                                 JEmptyState(stringResource(R.string.chat_screen_empty_title),
                                     stringResource(if (readOnly) R.string.chat_screen_empty_read_only else R.string.chat_screen_empty_hint),
                                     Modifier.align(Alignment.Center).padding(padding).padding(horizontal = horizontalPadding))
+                            // The newest plan card scrolled out of view: 「Step N/M」 above the composer brings it back (web PlanPill).
+                            val anchor = remember(lines, contentPlans, renderStyle) { latestPlanLine(lines, contentPlans, renderStyle.compactToolSummary) }
+                            val planOut by remember(anchor) { derivedStateOf {
+                                anchor != null && list.layoutInfo.totalItemsCount > 0 &&
+                                    list.layoutInfo.visibleItemsInfo.none { it.key == anchor.lineId }
+                            } }
+                            if (anchor != null && planOut) {
+                                val progress = remember(anchor.plan.todos) { planProgress(anchor.plan.todos) }
+                                PlanPill(progress.step, progress.total, progress.done, onClick = {
+                                    scope.launch {
+                                        timeline.freeze(currentItems, currentLive); timelineVersion++
+                                        chatList.scrollToRecord(anchor.lineId)
+                                    }
+                                }, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = padding.calculateBottomPadding() + Tokens.Space.l))
+                            }
                             if (!chatList.followsEnd) JumpToLatest(timeline.newMessageCount(snapshot.items, newestVisibleItem, readThrough),
                                 onClick = chatList::returnToLatest,
                                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = horizontalPadding, bottom = padding.calculateBottomPadding() + 16.dp))
@@ -695,15 +792,11 @@ private fun ChatPage(
             fullText?.let { FullTextReader(it, onDismiss = { fullText = null }) }
             val menuTitle = session?.displayTitle ?: stringResource(R.string.chat_screen_untitled)
             MessageMenuSheet(messageMenu, messageMenuWrites(readOnly, session),
-                onQuote = { target ->
-                    // Over the box as a quote that goes with the next message, the draft left as it is (iOS #986).
-                    linkContexts = withQuote(linkContexts, messageQuote(target.text, target.user, session?.agentLabel ?: "Claude", target.id))
-                    composer.focusRequest++
-                }, onEdit = composer::edit,
+                onQuote = quoteTarget, onEdit = composer::edit,
                 onContext = { text -> linkContexts = linkContexts + messageContext(menuTitle, text, context.resources); notice = res.getString(R.string.chat_screen_added_context) },
                 onHandToPersona = chrome.onHandToPersona?.takeIf { renderStyle != ChatRenderStyle.Assistant }
                     ?.let { hand -> { text: String -> hand(handoffMessage(menuTitle, text, context.resources)) } },
-                onNotice = { notice = it })
+                onNotice = { notice = it }, onFork = onFork, rewind = rewindMenu)
             viewer?.let { request ->
                 ChatImageViewer(request.images, request.index, onDismiss = { viewer = null },
                     onEdited = if (readOnly) null else ({ attachment -> composer.beginEdit(); composer.attachments += attachment }),

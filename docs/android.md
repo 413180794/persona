@@ -832,8 +832,17 @@ Debug 包的设置页底部另有一行「组件目录（调试版）」，自�
 - 计划（TodoWrite）画成计划卡（设计系统 `PlanCard`）：标题是「完成数/总数」和正在做的那项（进行中的用它的 activeForm），右边「Step N/M」（全部做完是一个对勾），
   点标题收起成一条进度细线；列表里做完的变淡打勾，进行中的在跑时转圈，待办是空心圆；更新失败写「更新失败」（收起时也显示，`planProgress`）。
   和网页 `planSteps` 一样，一个工作行只画最新一份两项以上的计划（`latestPlan`）：更早的 TodoWrite、清空用的空列表、只有一项的都不画；没写 content 的项用它的 activeForm。
+- 对齐 iOS / 网页的一批（#2967）：
+  - 计划卡滚出视野后，输入框上方居中浮出「Step N/M」胶囊（设计系统 `PlanPill`，进度环，全部做完是对勾；同网页 `PlanPill`），点一下滚回最新那张计划卡（`latestPlanLine`：打开的工作行里的计划步，或运行中工作行的预览）。
+  - 消息菜单的分支和回退（同网页 MessageActions）：Agent 的回复是 transcript 里的一行（id 形如 `<uuid>#<n>`，`line…` 不算）、会话 `can_fork` 时多「分支到新聊天」（`POST …/fork {at_item_id}`，成功提示「已分支到新聊天」并打开新会话；Persona 助手对话的分支按助手对话打开，同网页 `forkAt`）；你的消息上多「回退到这里」（只在 Agent 对话、能发送时出现；不是 Claude、未运行、待回答、工作中时变灰，标签里写原因；发送失败、等你处理的消息不算工作中，同网页 `outgoing`），选了再挑「只回退对话 / 回退代码和对话」，后者再确认一次。请求 `POST …/rewind`（`prompt` / `occurrence` / `prompts_after` / `restore`，算法同网页 `rewindTarget`，在 `core:domain` `Rewind`），等 110 秒；成功后消息回到输入框，hub 的 404 / 403 / 409 分别写「这个 hub 还不支持回退」「要用完整权限的设备」和节点给的原因。
+  - 左滑引用（同 iOS #1058）：消息往左拖，右边的回复图标跟着出来，过了阈值（44pt × 1.5）轻震一下、图标填满，松手引用这条；拖过阈值后有阻尼；无障碍服务里整条消息是一个焦点，「引用」是它的操作（设计系统 `swipeToReply`，消息里的链接和按钮仍各自可选）。只在菜单有「引用」的对话里有。
+  - Persona 自己的工具的名字用 #3100 的 `namedToolVerb`（`core:domain` `Rows.kt`）；这一批补上：`computer_run` 带步骤或脚本时标题写成一句「MacBook · 点 AC → 6 → ×」（同 iOS `ComputerSteps`，代码 `PersonaTools.kt`），ask_user、Agent、知识库、卡片、提醒类工具有各自的图标，标题就是工具名（没有对象）时看板风格不再把动词标签重复一遍。
+  - 展开 ask_user 步骤：列出每个问题和选项，按 hub 的回答（「The user answered: - 问题 → 答案」）勾出选中的，自填的答案单独一行，没人回答写「没有回答」（同 iOS `AskUserDetail`）；回答过的不再在下面重复原始输出，出错的才显示。
+  - Task / Agent 步骤下面有「查看子 Agent」（同 iOS）：会话的 `subagents` 里有这次调用（`tool_use_id`）就给，跑完的也能进，打开它的只读对话。
+  - 回复里写了语言的代码块（```kotlin）按语言上色（设计系统 `CodeSyntax`：注释、字符串、数字、常见关键字，颜色取调色板的角色色）；`//`、`/* */` 只在 C 一族的语言里算注释（bash 的 URL、Python 的 `//` 不算）；没写语言的、text / log / output / diff / markdown 这类不是编程语言的、工具输出都不上色，同网页只给认识的语言高亮。
+  - 计划审批多「批准，每步确认」（`mode: default`，同网页），和「批准并自动执行」一起排在两个主按钮下面，放不下换行。
   运行中的工作行把这份计划钉在预览最上面，点开的工作行在它原来的位置画这一张。
-  和网页的差别：网页的计划卡不随工作收起、滚出视野后输入框上方有「Step N / M」胶囊，安卓做完的计划仍在收起的工作行里，没有胶囊；
+  和网页的差别：网页的计划卡不随工作收起，滚出视野后总有「Step N / M」胶囊；安卓的胶囊只对打开的工作行里的计划步或运行中工作行的预览出现，做完的计划收在关着的工作行里，没有能滚回去的卡片，也就没有胶囊；
   标题里正在做的那项，网页写它的 content，安卓写进行中那项的 activeForm（没有才写 content）。
 - Claude 给的下一条建议（会话的 `suggestion`）：会话空闲、输入框为空、没有附加上下文时，在输入框上方显示一个标签，点一下填进输入框（X1）。
 - 代码：`core/domain` 的 `MessageText.kt`（`messageText`、`imagePaths`、`FilePaths`）、`lines/ApiErrors.kt`（`ApiErrorInfo`、`foldApiErrors`、`foldRecaps`；`ChatLine.ApiError` / `ChatLine.Recaps` 在 `LineModels.kt`，`chatLines` 最后做这两步）；`feature/chat` 的 `ChatRowActions.kt`（对话页给每一行的能力：全文、打开路径、照片、查看器、菜单、重试，经 `LocalChatRowActions`）、`AttachedPhotos.kt`、`MessageMenu.kt`、`MessageHandoff.kt`（`handToJarvis`、`rememberHandToJarvis`）、`ToolDetails.kt`、`ApiErrorCard.kt`（报错卡和回顾行）、`MessageExtras.kt`（看全文、相对时间、建议）、`ContentPresentation.kt`（`messageModel`、`patchDiff`、`unifiedDiffLines`）；设计系统的 `ChatParts.kt`（`ChatPictureFrame`、`PhotoThumbnail`、`PhotoRow`、`PathChip`、`ChatNoteChip`、`ErrorCard`、`DetailField`，组件目录「对话里的附件和报错」一节）。App 只在 `ShellChat.kt` 传 `files`、`onOpenPath`、`onHandToJarvis`，在 `ChatWiringModule.kt` 给 `ChatAppBindings.files`。

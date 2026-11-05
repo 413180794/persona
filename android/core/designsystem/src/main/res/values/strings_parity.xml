@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="designsystem_plan_pill_spoken">Back to the plan: step %1$d of %2$d</string>
+</resources>

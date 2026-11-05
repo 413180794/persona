@@ -347,6 +347,7 @@ fun DecisionOption(
  * The answer buttons of a decision: [secondary] on the left, [primary] on the right, [more] as quiet buttons
  * underneath. On the board the primary is wider.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DecisionButtons(primary: JAction, modifier: Modifier = Modifier, secondary: JAction? = null, more: List<JAction> = emptyList(), busy: Boolean = false) {
     val wide = if (PersonaTheme.style == AppStyle.Board) 1.5f else 1f
@@ -355,7 +356,8 @@ fun DecisionButtons(primary: JAction, modifier: Modifier = Modifier, secondary: 
             secondary?.let { JButton(it.label, it.onClick, Modifier.weight(1f), kind = if (it.destructive) JButtonKind.Destructive else JButtonKind.Secondary, enabled = it.enabled && !busy) }
             JButton(primary.label, primary.onClick, Modifier.weight(wide), kind = if (primary.destructive) JButtonKind.Destructive else JButtonKind.Primary, enabled = primary.enabled, loading = busy)
         }
-        if (more.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.Center) {
+        // Several secondary choices (a plan's 批准并自动执行 and 每步确认) wrap to a second line instead of squeezing.
+        if (more.isNotEmpty()) FlowRow(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.Center) {
             more.forEach { JTextButton(it.label, it.onClick, enabled = it.enabled && !busy) }
         }
     }

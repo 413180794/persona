@@ -500,6 +500,47 @@ fun JumpToLatest(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier)
     }
 }
 
+/**
+ * Above the composer while the latest plan card is out of view (web `PlanPill`): a ring with how far along it is and
+ * 「Step N/M」 (a check once all are done); a tap scrolls back to the card. Shaped like [JumpToLatest] in each style.
+ */
+@Composable
+fun PlanPill(step: Int, total: Int, done: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val palette = PersonaTheme.palette
+    val style = PersonaTheme.style
+    val shape = if (style == AppStyle.Board) RoundedCornerShape(8.dp) else RoundedCornerShape(50)
+    val ink = if (style == AppStyle.Brief) palette.onAction else palette.ink
+    val allDone = total in 1..done
+    val spoken = stringResource(R.string.designsystem_plan_pill_spoken, step, total)
+    Row(
+        modifier.heightIn(min = 44.dp)
+            .then(when (style) {
+                AppStyle.Glass -> Modifier.floatingSurface(RoundedCornerShape(50))
+                AppStyle.Brief -> Modifier.clip(shape).background(palette.action)
+                AppStyle.Board -> Modifier.clip(shape).background(palette.surface).border(1.dp, palette.line, shape)
+            })
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = spoken; progressBarRangeInfo = ProgressBarRangeInfo(done.toFloat(), 0f..total.toFloat().coerceAtLeast(1f)) }
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (allDone) JIcon(PhIcons.Check, null, size = 14.dp, tint = ink)
+        else {
+            val fraction = if (total > 0) step.toFloat() / total else 0f
+            Box(Modifier.size(16.dp).drawBehind {
+                val stroke = 2.dp.toPx()
+                val arc = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+                val at = Offset(stroke / 2, stroke / 2)
+                drawArc(ink.copy(alpha = 0.3f), 0f, 360f, false, at, arc, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
+                drawArc(ink, -90f, 360f * fraction, false, at, arc,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+            })
+        }
+        Text(stringResource(R.string.designsystem_plan_step, step, total), style = PersonaTheme.type.caption, color = ink, maxLines = 1)
+    }
+}
+
 /** A thin line between turns or a dated separator ("2026-10-31", "这件事从这里开始"). */
 @Composable
 fun TimelineMark(text: String, modifier: Modifier = Modifier, emphasized: Boolean = false) {

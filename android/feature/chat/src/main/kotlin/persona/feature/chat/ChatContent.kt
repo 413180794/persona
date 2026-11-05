@@ -100,11 +100,11 @@ private fun ChatMarkdownCards(text: String, id: String, fences: List<persona.cor
             text.substring(at, fence.start).takeIf { it.isNotBlank() }?.let { ChatMarkdownBody(it, "$id/m$n", bodyStyle, color, null) }
             at = fence.end
             when {
-                blocks == null -> CodeText(fence.raw.trimEnd('\n', '\r'), fence.language)
+                blocks == null -> CodeText(fence.raw.trimEnd('\n', '\r'), fence.language, syntax = true)
                 fence.isView -> key(fence.index) { blocks.block(viewKeys?.invoke(fence.index) ?: "$id/local/${fence.index}", fence.raw, fence.complete) }
                 else -> {
                     val card = remember(blocks, fence.raw, fence.complete) { if (fence.complete) blocks.parse(fence.language, fence.raw) else null }
-                    if (card != null) blocks.draw(card) else CodeText(fence.raw.trimEnd('\n', '\r'), fence.language)
+                    if (card != null) blocks.draw(card) else CodeText(fence.raw.trimEnd('\n', '\r'), fence.language, syntax = true)
                 }
             }
         }
@@ -156,7 +156,7 @@ private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, col
                     MarkdownFence(model.content.substring(model.node.startOffset, model.node.endOffset), color, bodyStyle) {
                         // A card fence the hub's rules do not take as standalone (in a list or a quote): an example, drawn as
                         // code. Standalone ones never get here (ChatMarkdownCards).
-                        CodeText(it.code, it.language)
+                        CodeText(it.code, it.language, syntax = true)
                     }
                 },
                 codeBlock = { model -> CodeText(model.content.substring(model.node.startOffset, model.node.endOffset).trimIndent()) },
@@ -164,11 +164,17 @@ private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, col
     }
 }
 
+/**
+ * A code block with its caption ([language]) and 复制. [syntax]: [language] is a fence's language, so the code is
+ * coloured by it (web highlights fenced blocks that name one, no guessing); tool output and inputs stay plain.
+ */
 @Composable
-internal fun CodeText(text: String, language: String = "") {
+internal fun CodeText(text: String, language: String = "", syntax: Boolean = false) {
     var expanded by remember(text) { mutableStateOf(false) }
     val preview = remember(text, expanded) { if (expanded) text else text.lineSequence().take(40).joinToString("\n") }
     val clipboard = LocalClipboardManager.current
+    val palette = PersonaTheme.palette
+    val colour = syntax && language.isNotBlank()
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(language, Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
@@ -176,11 +182,13 @@ internal fun CodeText(text: String, language: String = "") {
         }
         if (remember(preview) { ChatLinks.matches(preview).isNotEmpty() }) {
             SelectionContainer {
-                Text(chatLinkAnnotations(preview), style = PersonaTheme.type.code, color = PersonaTheme.palette.ink,
+                val linked = chatLinkAnnotations(preview)
+                Text(if (colour) remember(linked, language, palette) { CodeSyntax.highlight(linked, language, palette) } else linked, style = PersonaTheme.type.code, color = PersonaTheme.palette.ink,
                     softWrap = false, modifier = Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape)
                         .background(PersonaTheme.palette.sunken).horizontalScroll(rememberScrollState()).padding(Tokens.Space.m))
             }
-        } else JCodeBlock(preview)
+        } else if (colour) JCodeBlock(remember(preview, language, palette) { CodeSyntax.highlight(AnnotatedString(preview), language, palette) })
+        else JCodeBlock(preview)
         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             if (preview.length < text.length) JTextButton(stringResource(R.string.chat_content_show_all), { expanded = true })
             ReaderEntry(text, language.ifBlank { stringResource(R.string.chat_content_full_text) })
@@ -330,7 +338,8 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
             }
             val presentation = toolPresentation(LocalResources.current, call.use.item)
             Column(Modifier.fillMaxWidth()) {
-                TimelineStep(toolCategory(call.name), presentation.title, verb = presentation.verb,
+                // A named tool with nothing to name (「读 Agent 对话」) is its title already: no verb tag saying it twice.
+                TimelineStep(toolCategory(call.name), presentation.title, verb = presentation.verb.takeUnless { it == presentation.title },
                     detail = listOfNotNull(presentation.detail, if (call.running) stringResource(if (running) R.string.chat_content_tool_running else R.string.chat_content_tool_no_result) else null)
                         .joinToString(stringResource(R.string.chat_status_clause_separator)).ifBlank { null },
                     state = when {
@@ -342,6 +351,7 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
                     last = last, mono = presentation.mono, added = diff?.added ?: 0, removed = diff?.removed ?: 0,
                     onClick = { open = !open })
                 if (todos != null) TodoList(todos, call.failed)
+                if (call.name == "Task" || call.name == "Agent") SubagentEntry(call.use.item.toolUseId)
                 if (call.failed && !open) call.result?.text?.takeIf { it.isNotBlank() }?.let {
                     Text(it, maxLines = 3, overflow = TextOverflow.Ellipsis, color = PersonaTheme.palette.danger.text,
                         style = PersonaTheme.type.caption)
@@ -351,9 +361,10 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
                     if (diff != null) {
                         toolPath(call.use.item)?.let { DiffHeader(it, diff.added, diff.removed) }
                         DiffView(diff, call.id)
-                    } else if (todos == null) ToolInputDetail(call.use.item)
-                    // A truncated output opens in full from 原始输出 below. An edit's own result only says it worked.
-                    call.result?.item?.let { result -> if (todos == null && (diff == null || call.failed)) CodeText(result.text.orEmpty(), stringResource(R.string.chat_content_output)) }
+                    } else if (todos == null) ToolInputDetail(call.use.item, call.result?.item)
+                    // A truncated output opens in full from 原始输出 below. An edit's own result only says it worked; an
+                    // answered ask_user's result repeats the ticked choices above in the model's words (iOS ToolViews).
+                    call.result?.item?.let { result -> if (todos == null && (diff == null || call.failed) && (!PersonaTools.isAskUser(call.name) || call.failed)) CodeText(result.text.orEmpty(), stringResource(R.string.chat_content_output)) }
                     // A dev server saying where it listens (docs/ports.md).
                     if (call.name == "Bash") call.result?.text?.let { PortBadges(it) }
                     call.images.forEach { ChatPicture(session, it.item, loader) }

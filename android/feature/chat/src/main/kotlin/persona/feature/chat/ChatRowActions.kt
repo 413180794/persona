@@ -48,6 +48,15 @@ internal class ChatRowActions(
 internal val LocalChatRowActions = compositionLocalOf<ChatRowActions?> { null }
 
 /**
+ * The session's sub-agents by the Task / Agent call that started them ([keys], running or done) and how to open one:
+ * what 「查看子 Agent」 under those steps needs. Null where they cannot be opened (a read-only conversation, no navigation).
+ */
+@androidx.compose.runtime.Immutable
+internal data class ChatSubagents(val keys: Map<String, SessionKey>, val open: (SessionKey) -> Unit)
+
+internal val LocalChatSubagents = compositionLocalOf<ChatSubagents?> { null }
+
+/**
  * A picture of the conversation for the viewer: its bytes come inline with the page when the hub sent them, else
  * from the repository by item id (pages drop picture bytes, docs/android.md「缓存体积预算」).
  */

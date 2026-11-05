@@ -22,9 +22,13 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import persona.core.contracts.Session
+import persona.core.contracts.api.RewindRestore
+import persona.core.domain.rewind.Rewind
 import persona.core.domain.sort.canSend
 import persona.core.designsystem.JAction
 import persona.core.designsystem.JActionSheet
+import persona.core.designsystem.JDialog
+import persona.core.designsystem.swipeToReply
 import persona.core.designsystem.icons.PhIcons
 import persona.core.designsystem.onLongPress
 import persona.core.designsystem.onSecondaryClick
@@ -42,6 +46,9 @@ internal data class MessageTarget(val id: String, val text: String, val user: Bo
 internal class MessageMenuState {
     var target by mutableStateOf<MessageTarget?>(null)
         private set
+
+    /** What a swipe to the left quotes with (iOS #1058); null where messages cannot be quoted (read-only). */
+    var quote by mutableStateOf<((MessageTarget) -> Unit)?>(null)
 
     fun open(target: MessageTarget) {
         this.target = target
@@ -67,10 +74,21 @@ internal fun Modifier.messageMenu(target: MessageTarget?): Modifier {
             menu.open(target)
         }
     }
+    val quote = menu.quote
+    val label = stringResource(R.string.chat_menu_quote)
     return this.stableAlpha(if (menu.target?.id == target.id) 0.6f else 1f)
         .onSecondaryClick(open)
         .onLongPress(open, open)
+        // Drag it left to quote it (iOS #1058); accessibility services get 引用 as an action of the message.
+        .then(if (quote != null) Modifier.swipeToReply(label) { menu.close(); quote(target) } else Modifier)
 }
+
+/**
+ * 回退到这里 on your messages (#2436): [block] is why the session cannot right now (shown on the disabled row), null
+ * when it can; [run] asks the node to go back to before the message.
+ */
+@Immutable
+internal data class RewindMenu(val block: String?, val run: (MessageTarget, RewindRestore) -> Unit)
 
 /**
  * The long-press menu as an action sheet (docs/android-design.md 2.3 rule 7): 复制, 选择 (the message as text to
@@ -87,13 +105,18 @@ internal fun MessageMenuSheet(
     onContext: (String) -> Unit,
     onHandToPersona: ((String) -> Unit)?,
     onNotice: (String) -> Unit,
+    onFork: ((String) -> Unit)? = null,
+    rewind: RewindMenu? = null,
 ) {
     var selecting by remember { mutableStateOf<String?>(null) }
+    var rewinding by remember { mutableStateOf<MessageTarget?>(null) }
+    var confirmCode by remember { mutableStateOf<MessageTarget?>(null) }
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val target = menu.target
     val resources = LocalResources.current
-    if (target != null) JActionSheet(messageMenuActions(target, writes, onHandToPersona != null, resources) { action ->
+    val extras = MessageExtras(fork = onFork != null, rewind = rewind != null, rewindBlock = rewind?.block)
+    if (target != null) JActionSheet(messageMenuActions(target, writes, onHandToPersona != null, resources, extras) { action ->
         when (action) {
             MessageAction.Copy -> {
                 clipboard.setText(AnnotatedString(target.text))
@@ -105,8 +128,25 @@ internal fun MessageMenuSheet(
             MessageAction.HandToPersona -> onHandToPersona?.invoke(target.text)
             MessageAction.Context -> onContext(target.text)
             MessageAction.Edit -> onEdit(target.editText)
+            MessageAction.Fork -> onFork?.invoke(target.id)
+            MessageAction.Rewind -> rewinding = target
         }
     }, onDismiss = menu::close)
+    // 只回退对话 / 回退代码和对话 (web's submenu); the second asks again: it puts files back too.
+    rewinding?.let { at ->
+        JActionSheet(listOf(
+            JAction(stringResource(R.string.chat_rewind_conversation), PhIcons.ArrowUUpLeft) { rewind?.run?.invoke(at, RewindRestore.Conversation) },
+            JAction(stringResource(R.string.chat_rewind_code_and_conversation), PhIcons.ArrowUUpLeft, destructive = true) { confirmCode = at },
+        ), onDismiss = { rewinding = null }, title = stringResource(R.string.chat_rewind_title))
+    }
+    confirmCode?.let { at ->
+        JDialog(onDismiss = { confirmCode = null }, title = stringResource(R.string.chat_rewind_confirm_code),
+            text = stringResource(R.string.chat_rewind_confirm_code_note),
+            confirm = stringResource(R.string.chat_rewind_code_and_conversation) to {
+                confirmCode = null
+                rewind?.run?.invoke(at, RewindRestore.CodeAndConversation)
+            }, destructive = true)
+    }
     selecting?.let { FullTextReader(it, onDismiss = { selecting = null }, title = stringResource(R.string.chat_menu_select_title), plain = true) }
 }
 
@@ -114,10 +154,18 @@ internal fun MessageMenuSheet(
 internal enum class MessageAction(@StringRes val label: Int) {
     Copy(R.string.chat_menu_copy), Select(R.string.chat_menu_select), Quote(R.string.chat_menu_quote), Share(R.string.chat_menu_share),
     HandToPersona(R.string.chat_menu_hand_to_persona), Context(R.string.chat_menu_context), Edit(R.string.chat_menu_edit),
+    Fork(R.string.chat_menu_fork), Rewind(R.string.chat_menu_rewind),
 }
 
+/**
+ * The menu's session-wide extras (web MessageActions' ⋯): [fork] when the session can branch, [rewind] when 回退到这里
+ * is offered (blocked for [rewindBlock] while it cannot).
+ */
+internal data class MessageExtras(val fork: Boolean = false, val rewind: Boolean = false, val rewindBlock: String? = null)
+
 /** The menu's actions for [target]: [writes] for the composer ones, [handOff] when 交给 Persona is offered. */
-internal fun messageActions(target: MessageTarget, writes: Boolean, handOff: Boolean): List<MessageAction> = buildList {
+internal fun messageActions(target: MessageTarget, writes: Boolean, handOff: Boolean,
+    extras: MessageExtras = MessageExtras()): List<MessageAction> = buildList {
     add(MessageAction.Copy)
     add(MessageAction.Select)
     if (writes) add(MessageAction.Quote)
@@ -125,12 +173,17 @@ internal fun messageActions(target: MessageTarget, writes: Boolean, handOff: Boo
     if (handOff) add(MessageAction.HandToPersona)
     if (writes) add(MessageAction.Context)
     if (writes && target.user) add(MessageAction.Edit)
+    // 分支到新聊天 on a reply that is a transcript line of its own; 回退到这里 on your messages.
+    if (extras.fork && !target.user && Rewind.forkable(target.id)) add(MessageAction.Fork)
+    if (extras.rewind && writes && target.user) add(MessageAction.Rewind)
 }
 
 private fun messageMenuActions(target: MessageTarget, writes: Boolean, handOff: Boolean, resources: Resources,
-    run: (MessageAction) -> Unit): List<JAction> =
-    messageActions(target, writes, handOff).map { action ->
-        JAction(resources.getString(action.label), when (action) {
+    extras: MessageExtras, run: (MessageAction) -> Unit): List<JAction> =
+    messageActions(target, writes, handOff, extras).mapIndexed { index, action ->
+        val label = if (action == MessageAction.Rewind && extras.rewindBlock != null)
+            resources.getString(R.string.chat_menu_rewind_blocked, extras.rewindBlock) else resources.getString(action.label)
+        JAction(label, when (action) {
             MessageAction.Copy -> PhIcons.Copy
             MessageAction.Select -> PhIcons.CursorText
             MessageAction.Quote -> PhIcons.Quotes
@@ -138,7 +191,11 @@ private fun messageMenuActions(target: MessageTarget, writes: Boolean, handOff: 
             MessageAction.HandToPersona -> PhIcons.Sparkle
             MessageAction.Context -> PhIcons.Paperclip
             MessageAction.Edit -> PhIcons.PencilSimple
-        }) { run(action) }
+            MessageAction.Fork -> PhIcons.GitBranch
+            MessageAction.Rewind -> PhIcons.ArrowUUpLeft
+        }, enabled = action != MessageAction.Rewind || extras.rewindBlock == null,
+            // The session-wide ones under a rule, as web's ⋯ items after the message's own.
+            separatorBefore = index > 0 && action in setOf(MessageAction.Fork, MessageAction.Rewind)) { run(action) }
     }
 
 /**

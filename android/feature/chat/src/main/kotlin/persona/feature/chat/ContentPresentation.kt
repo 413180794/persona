@@ -253,6 +253,24 @@ internal fun latestPlan(steps: List<WorkItem>): LinePlan? = steps.asReversed().f
     }
 }
 
+/** Where the newest plan card is drawn: its line ([lineId]) and the plan. */
+internal data class PlanAnchor(val lineId: String, val plan: LinePlan)
+
+/**
+ * The newest plan card the list draws ([lines] newest first, as the page lists them): an open work line's plan step,
+ * or a running line's peek ([compact]: Persona's own chat draws no peek). What the 「Step N/M」 pill scrolls back to.
+ */
+internal fun latestPlanLine(lines: List<ChatLine>, plans: Map<String, LinePlan?>, compact: Boolean): PlanAnchor? {
+    for (line in lines) {
+        when (line) {
+            is ChatLine.Step -> plans[line.groupId]?.takeIf { it.id == line.step.id }?.let { return PlanAnchor(line.id, it) }
+            is ChatLine.Work -> if (line.live && !compact && !line.open) workPeek(line.steps).plan?.let { return PlanAnchor(line.id, it) }
+            else -> Unit
+        }
+    }
+    return null
+}
+
 /** What a running work line shows under its header (web #1990 `previewSteps`): the latest plan, and the newest steps. */
 internal data class WorkPeek(val plan: LinePlan?, val steps: List<WorkItem>)
 
@@ -341,7 +359,8 @@ internal fun toolPresentation(res: Resources, item: Item): ToolPresentation {
         val command = input?.string("command")?.lineSequence()?.firstOrNull().orEmpty()
         return ToolPresentation(command.ifBlank { res.getString(R.string.chat_tool_command) }, verb, input?.string("description"), mono = true, kind = kind)
     }
-    val subject = persona.core.domain.toolSubjectText(item).resolve(res).trim()
+    // A computer_run with steps or a script says what it does (iOS ComputerSteps): 「MacBook · 点 AC → 6 → ×」.
+    val subject = ComputerSteps.subject(res, name, input) ?: persona.core.domain.toolSubjectText(item).resolve(res).trim()
     return ToolPresentation(subject.ifBlank { when (name) {
         "TodoWrite" -> res.getString(R.string.chat_tool_todo_list)
         "Task", "Agent" -> res.getString(R.string.chat_tool_subagent)

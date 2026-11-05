@@ -89,6 +89,7 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
                 gitLabel = "Git${git?.files?.size?.takeIf { it > 0 }?.let { " · $it" }.orEmpty()}",
                 actions = actions, connection = wiring?.connection ?: session.connection, requestId = requestId, covered = pane != null,
                 onOpenSession = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) },
+                onOpenAssistant = { navigator.navigate(persona.feature.chat.conversationRoute(it, assistant = true)) },
                 onConnectionDetails = { navigator.navigate(SettingsPageRoute(SettingsPage.Diagnostics)) },
                 files = session.files, ports = wiring?.ports, onOpenPath = if (filesAvailable) ({ path, line -> open(FilesPane.Files, path, line) }) else null,
                 onHandToPersona = if (assistant) null else handToPersona,

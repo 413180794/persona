@@ -197,6 +197,8 @@ class HubChatRepository(
         }
         override suspend fun editQueue(session: Session, keep: List<Int>) = delegate.editQueue(session, keep)
         override suspend fun info(session: Session) = delegate.info(session)
+        override suspend fun fork(session: Session, atItemId: String) = delegate.fork(session, atItemId)
+        override suspend fun rewind(session: Session, target: RewindTarget, restore: RewindRestore) = delegate.rewind(session, target, restore)
     }
 
     /** The composer shares interruption state with menu actions. Failed requests leave it unchanged. */

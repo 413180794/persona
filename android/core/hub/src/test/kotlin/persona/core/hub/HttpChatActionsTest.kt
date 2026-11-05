@@ -61,6 +61,45 @@ class HttpChatActionsTest {
         }
     }
 
+    @Test fun forkPostsTheReplyAndReturnsTheNewSession() = runBlocking {
+        MockWebServer().use { server ->
+            val actions = actions(server)
+            server.enqueue(MockResponse().setBody("""{"session_id":"new-1"}"""))
+            assertEquals("new-1", actions.fork(Session("m", "s1"), "abc#3"))
+            val request = server.takeRequest()
+            assertEquals("/api/v1/sessions/m/s1/fork", request.path)
+            assertEquals("abc#3", JsonCodec.parseToJsonElement(request.body.readUtf8()).jsonObject["at_item_id"]!!.jsonPrimitive.content)
+            server.enqueue(MockResponse().setResponseCode(409).setBody("""{"error":"busy"}"""))
+            val refused = try { actions.fork(Session("m", "s1"), "abc#3"); null } catch (e: Exception) { e }
+            assertTrue(refused is HubFailure)
+        }
+    }
+
+    @Test fun rewindSendsWhichMessageAndNamesWhyItDidNot() = runBlocking {
+        MockWebServer().use { server ->
+            val actions = actions(server)
+            val target = RewindTarget("run the tests", occurrence = 2, promptsAfter = 1)
+            server.enqueue(MockResponse().setBody("""{"prompt":"run the tests","restore":"conversation","code_restored":false,"input_cleared":true}"""))
+            val done = actions.rewind(Session("m", "s1"), target, RewindRestore.Conversation)
+            assertTrue(done.inputCleared)
+            val body = JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+            assertEquals(listOf("run the tests", "2", "1", "conversation"),
+                listOf("prompt", "occurrence", "prompts_after", "restore").map { body[it]!!.jsonPrimitive.content })
+            suspend fun failure(code: Int, json: String): RewindFailure? {
+                server.enqueue(MockResponse().setResponseCode(code).setBody(json))
+                val error = try { actions.rewind(Session("m", "s1"), target, RewindRestore.CodeAndConversation); null }
+                    catch (e: Exception) { e }
+                server.takeRequest()
+                return error as? RewindFailure
+            }
+            assertEquals(RewindFailure.Reason.HubUnsupported, failure(404, "{}")?.reason)
+            assertEquals(RewindFailure.Reason.NeedsFullDevice, failure(403, """{"error":"full device"}""")?.reason)
+            val refused = failure(409, """{"error":"the message is not in /rewind","code":"rewind_mismatch"}""")
+            assertEquals(RewindFailure.Reason.Refused, refused?.reason)
+            assertEquals("the message is not in /rewind", refused?.hubMessage)
+        }
+    }
+
     @Test fun deleteSendsTheSessionsDeleteAndVerifiesItLeftTheList() = runBlocking {
         MockWebServer().use { server ->
             val actions = actions(server)

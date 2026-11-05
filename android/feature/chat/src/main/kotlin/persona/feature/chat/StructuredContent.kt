@@ -178,13 +178,13 @@ internal fun toolCategory(name: String) = when (val base = persona.core.domain.t
     "Task", "Agent" -> PhIcons.Robot
     "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList" -> PhIcons.ListChecks
     "EnterPlanMode", "ExitPlanMode" -> PhIcons.Lightbulb
-    // Persona's own tools (iOS ToolPresentation.symbol).
+    // Persona's own tools (iOS ToolPresentation.symbol); PersonaTools knows the rest of the mcp__ ones.
     "conversation_rename" -> PhIcons.PencilSimple
     "conversation_archive", "conversation_unarchive" -> PhIcons.Archive
     "conversations_list", "conversation_read", "conversation_new", "conversation_send" -> PhIcons.ChatCircle
     "computer_state", "computer_run" -> PhIcons.Desktop
     "browser_run", "browser_look" -> PhIcons.GlobeSimple
-    else -> when {
+    else -> PersonaTools.icon(name) ?: when {
         base.startsWith("phone_") -> PhIcons.DeviceMobile
         base.startsWith("mail_") -> PhIcons.EnvelopeSimple
         else -> PhIcons.Wrench

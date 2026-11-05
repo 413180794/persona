@@ -46,6 +46,12 @@ class MessageMenuTest {
         assertEquals(listOf(Copy, Select, Share), messageActions(mine, writes = false, handOff = false))
         // An agent's reply cannot be edited.
         assertEquals(listOf(Copy, Select, Quote, Share, Context), messageActions(MessageTarget("a", "回复", user = false), true, false))
+        // 分支到新聊天 on a reply that is a transcript line; 回退到这里 on yours, only where the composer is the user's.
+        val extras = MessageExtras(fork = true, rewind = true)
+        assertEquals(listOf(Copy, Select, Quote, Share, Context, Fork), messageActions(MessageTarget("u#1", "回复", user = false), true, false, extras))
+        assertEquals(listOf(Copy, Select, Quote, Share, Context), messageActions(MessageTarget("line3", "回复", user = false), true, false, extras))
+        assertEquals(listOf(Copy, Select, Quote, Share, Context, Edit, Rewind), messageActions(mine, true, false, extras))
+        assertEquals(listOf(Copy, Select, Share), messageActions(mine, writes = false, handOff = false, extras))
         assertTrue(messageMenuWrites(readOnly = false, session = null))
         assertTrue(!messageMenuWrites(readOnly = true, session = null))
         // A Codex history session takes no messages: no quote, edit or context either.

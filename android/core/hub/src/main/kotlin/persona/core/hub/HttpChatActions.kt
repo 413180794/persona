@@ -15,9 +15,15 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 class HttpChatActions internal constructor(
+    /** For a rewind (null: [request]): the node walks Claude's /rewind for up to 90 s and the hub waits 100 s to hear why. */
+    private val slowRequest: (suspend (String, String, RequestBody?) -> Response)? = null,
     private val request: suspend (String, String, RequestBody?) -> Response,
 ) : ChatActions {
-    constructor(connection: OkHttpHubConnection) : this(connection::request)
+    constructor(connection: OkHttpHubConnection) : this(
+        { path, method, body -> connection.request(path, method, body, readTimeoutSeconds = REWIND_READ_TIMEOUT_SECONDS) },
+        connection::request)
+
+    private val slow get() = slowRequest ?: request
 
     private val lock = Mutex()
     private val uncertain = mutableMapOf<Pair<SessionKey, String>, ChatAction>()
@@ -86,6 +92,43 @@ class HttpChatActions internal constructor(
         }
     }
 
+    override suspend fun fork(session: Session, atItemId: String): String {
+        val body = buildJsonObject { put("at_item_id", atItemId) }
+        return request(api("sessions", session.machineId, session.sessionId, "fork"), "POST",
+            body.toString().toRequestBody("application/json; charset=utf-8".toMediaType())).use {
+            if (!it.isSuccessful) throw HubFailure.from(it)
+            JsonCodec.parseToJsonElement(it.body!!.string()).jsonObject["session_id"]?.jsonPrimitive?.contentOrNull
+                ?.takeIf(String::isNotBlank) ?: throw HubFailure(HubError.Server, "fork returned no session")
+        }
+    }
+
+    override suspend fun rewind(session: Session, target: RewindTarget, restore: RewindRestore): RewindResult {
+        val body = buildJsonObject {
+            put("prompt", target.prompt)
+            put("occurrence", target.occurrence)
+            put("prompts_after", target.promptsAfter)
+            put("restore", restore.wire)
+        }
+        val response = try {
+            slow(api("sessions", session.machineId, session.sessionId, "rewind"), "POST",
+                body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+        } catch (error: HubFailure) { throw rewindFailure(error) }
+        return response.use {
+            if (!it.isSuccessful) throw rewindFailure(HubFailure.from(it))
+            JsonCodec.decodeFromString<RewindResult>(it.body!!.string())
+        }
+    }
+
+    /** The hub's answer to a rewind that did not happen (web `rewindFailure`); a network failure stays what it is. */
+    private fun rewindFailure(failure: HubFailure): Exception = when {
+        (failure.status == 404 || failure.status == 405) && failure.code != "gone" ->
+            RewindFailure(RewindFailure.Reason.HubUnsupported, cause = failure)
+        failure.status == 403 -> RewindFailure(RewindFailure.Reason.NeedsFullDevice, cause = failure)
+        failure.status != null -> RewindFailure(RewindFailure.Reason.Refused,
+            (failure.detail ?: failure.message).takeUnless { it.isBlank() || it.startsWith("HTTP ") }, failure)
+        else -> failure
+    }
+
     override suspend fun info(session: Session): SessionInfo =
         request(api("sessions", session.machineId, session.sessionId, "info"), "GET", null).use {
             if (!it.isSuccessful) throw HubFailure.from(it)
@@ -143,3 +186,5 @@ class HttpChatActions internal constructor(
     private fun api(vararg segments: String) = HttpUrl.Builder().scheme("https").host("example.com")
         .addPathSegment("api").addPathSegment("v1").apply { segments.forEach(::addPathSegment) }.build().encodedPath
 }
+
+private const val REWIND_READ_TIMEOUT_SECONDS = 110L

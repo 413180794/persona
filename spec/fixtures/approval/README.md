@@ -35,7 +35,7 @@
 
 | 动作字段 | 含义 |
 | --- | --- |
-| `id` | `approve_all`、`approve_edits`、`reject`、`allow`、`deny`、`always`、`answer`、`screen_answer`、`choose_option`、`open_app`、`dismiss` |
+| `id` | `approve_all`、`approve_edits`、`approve_stepwise`（对话页的计划：批准，每步确认，mode default）、`reject`、`allow`、`deny`、`always`、`answer`、`screen_answer`、`choose_option`、`open_app`、`dismiss` |
 | `mode` | 仅计划批准有值，直接传入 Resolution；其他动作不应带 mode |
 | `authentication` | `required` 要求认证或打开已解锁 App；`none` 不要求额外认证；`platform_default` 当前源码未声明；`unspecified` 设计没有明确规定 |
 | `requires_unlock` | 锁定且明确要求认证时为 true；已解锁或明确无需解锁时为 false；未知时为 null |

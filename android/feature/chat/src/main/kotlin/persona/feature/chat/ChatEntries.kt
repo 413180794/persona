@@ -164,6 +164,7 @@ fun ChatDestination(
         onTerminal = onTerminal ?: { navigator.navigate(TerminalRoute(it.machineId, it.sessionId)) },
         chrome = ChatChromeBindings(actions = wiring?.actions.takeUnless { historyReadOnly }, connection = wiring?.connection,
             onOpenSession = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) },
+            onOpenAssistant = { navigator.navigate(conversationRoute(it, assistant = true)) },
             onConnectionDetails = { navigator.navigate(SettingsPageRoute(SettingsPage.Diagnostics)) },
             files = wiring?.files, ports = wiring?.ports, onHandToPersona = handToPersona,
             tasks = wiring?.tasks?.takeIf { style == ChatRenderStyle.Assistant && !historyReadOnly }),

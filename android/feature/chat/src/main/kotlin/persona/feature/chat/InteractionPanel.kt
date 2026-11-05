@@ -177,7 +177,9 @@ internal fun InteractionForm(
                 DecisionButtons(
                     primary = JAction(stringResource(R.string.chat_plan_approve_edits), enabled = enabled(AnswerAction.ApproveEdits)) { act(AnswerAction.ApproveEdits) },
                     secondary = JAction(stringResource(R.string.chat_plan_reject), enabled = enabled(AnswerAction.Reject)) { act(AnswerAction.Reject) },
-                    more = listOf(JAction(stringResource(R.string.chat_plan_approve_all), enabled = enabled(AnswerAction.ApproveAll)) { act(AnswerAction.ApproveAll) }),
+                    // Web's three ways to approve (Interactions.tsx MODES): 每步确认 keeps Claude asking before each edit.
+                    more = listOf(JAction(stringResource(R.string.chat_plan_approve_all), enabled = enabled(AnswerAction.ApproveAll)) { act(AnswerAction.ApproveAll) },
+                        JAction(stringResource(R.string.chat_plan_approve_stepwise), enabled = enabled(AnswerAction.ApproveStepwise)) { act(AnswerAction.ApproveStepwise) }),
                 )
                 Text(stringResource(if (planRead) R.string.chat_plan_approve_all_note else R.string.chat_plan_read_first_note),
                     style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)

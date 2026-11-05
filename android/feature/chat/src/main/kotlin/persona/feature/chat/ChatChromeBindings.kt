@@ -19,6 +19,8 @@ data class ChatChromeBindings(
     val actions: ChatActions? = null,
     val connection: HubConnection? = null,
     val onOpenSession: ((SessionKey) -> Unit)? = null,
+    /** Opens an assistant conversation (a branch of the Persona conversation, web `forkAt`); null: assistant branches are not offered. */
+    val onOpenAssistant: ((SessionKey) -> Unit)? = null,
     val onConnectionDetails: (() -> Unit)? = null,
     val renamer: SessionRenamer? = null,
     /** Read-only access to the session's machine: the photos sent with messages (`<attached_images>`) load from it. */
@@ -36,6 +38,14 @@ data class ChatChromeBindings(
     val tasks: persona.core.domain.tasks.TasksStore? = null,
     val onOpenTodo: ((String) -> Unit)? = null,
 )
+
+/** Where a branch made by 分支到新聊天 opens: an assistant's branch is an assistant conversation, an agent's an agent chat. */
+internal fun ChatChromeBindings.forkOpener(style: ChatRenderStyle): ((SessionKey) -> Unit)? =
+    if (style == ChatRenderStyle.Assistant) onOpenAssistant else onOpenSession
+
+/** The page of [key]'s conversation; [assistant] opens it as an assistant conversation whatever the session list says yet. */
+fun conversationRoute(key: SessionKey, assistant: Boolean = false) = persona.core.navigation.ChatRoute(
+    key.machineId, key.sessionId, kind = if (assistant) persona.core.navigation.ConversationKind.Assistant else null)
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)

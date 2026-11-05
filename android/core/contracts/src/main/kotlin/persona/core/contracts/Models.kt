@@ -338,6 +338,8 @@ data class Session(
     /** Where it stands in its work (docs/agent-work.md): set by the hub once it triaged a stopped turn. */
     val work: WorkState? = null,
     @SerialName("pending_interactions") val pendingInteractions: Int = 0,
+    /** 分支到新聊天 works for it (a Claude Code conversation, node/fork.go); older nodes never say so. */
+    @SerialName("can_fork") val canFork: Boolean = false,
     @SerialName("rev") val rev: Long? = null,
     @SerialName("suggestion") val suggestion: String? = null,
     /** Persona is still opening its tab and starting the agent (docs/protocol.md「新建会话」); sends wait for it. */

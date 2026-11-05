@@ -40,6 +40,16 @@
             "mode": "acceptEdits"
           },
           {
+            "id": "approve_stepwise",
+            "authentication": "required",
+            "requires_unlock": false,
+            "available_now": true,
+            "requirements": [
+              "feedback_empty"
+            ],
+            "mode": "default"
+          },
+          {
             "id": "reject",
             "authentication": "required",
             "requires_unlock": false,
@@ -92,6 +102,16 @@
               "feedback_empty"
             ],
             "mode": "acceptEdits"
+          },
+          {
+            "id": "approve_stepwise",
+            "authentication": "required",
+            "requires_unlock": true,
+            "available_now": false,
+            "requirements": [
+              "feedback_empty"
+            ],
+            "mode": "default"
           },
           {
             "id": "reject",
