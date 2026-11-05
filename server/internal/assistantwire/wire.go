@@ -27,6 +27,9 @@ type Hello struct {
 	DoneDelayMS int64 `json:"done_delay_ms"`
 	// PersonaView is hub.json's assistant.persona_view: teach ```persona-view rather than ```persona-card (#1850).
 	PersonaView bool `json:"persona_view,omitempty"`
+	// HTMLViews is hub.json's assistant.html_views (default on) while PersonaView is on: the HTML bridge
+	// (…/views/{key}/html-actions) answers. An older hub never sends it, so the bridge stays off there.
+	HTMLViews bool `json:"html_views,omitempty"`
 	// Agents is hub.json's agents section: the triage's limits and default switches (agents.go).
 	Agents AgentsConfig `json:"agents,omitzero"`
 	// KB is hub.json's kb section: the knowledge base the assistant keeps (kb.go).
@@ -569,6 +572,7 @@ var Routes = []string{
 	"PUT /api/v1/channels/{id}",
 	"DELETE /api/v1/channels/{id}/binding",
 	"POST /api/v1/assistant/conversations/{id}/views/{key}/actions",
+	"POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions",
 	"POST /api/v1/channels/{id}/test",
 	// The knowledge base (the assistant's kb_routes.go, docs/knowledge.md「App 接口」).
 	"GET /api/v1/kb/{kind}",

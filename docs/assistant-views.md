@@ -60,7 +60,9 @@ open 只接受 https 或明确支持的 `persona://session/<机器>/<会话>`、
 
 ### 持久化提交
 
-接口：`POST /api/v1/assistant/conversations/{conversation}/views/{key}/actions`，参数为 `{action, page?, values?, client_msg_id, confirmed?}`。**reply 原文和 submit 定义由服务端从已保存的 View 取出，不接受客户端覆盖**。
+接口：`POST /api/v1/assistant/conversations/{conversation}/views/{key}/actions`，参数为生成类型 `ViewActionInput` `{action, page?, values?, client_msg_id, confirmed?, expected_version?}`。**reply 原文和 submit 定义由服务端从已保存的 View 取出，不接受客户端覆盖**。字段和错误响应以 `docs/protocol.md`「助手」为准。
+
+- `expected_version` 是用户看到并确认的整卡版本（正文卡固定 1）。带 confirm 的动作必须带；hub 在锁住卡片的事务里比对，不同就回 409 `view_changed` 和当前卡片，客户端保留草稿、刷新、让用户重新确认，不能自动换成新版本重发。这样确认框打开期间卡片在 hub 上被更新、而更新事件还没到手机的情况，也不会把新定义当成用户确认过的。
 
 - 活卡片从 `assistant_views` 读取；正文卡片只从可信 node 提交的完整 transcript text item 注册，保存来源机器、会话、item id、块序号。用户消息、工具结果和其他对话不能注册成助手卡片。
 - hub 校验设备权限、会话归属、卡片来源、动作是否存在、page 是否匹配、字段名／类型／选项／长度以及必需的确认。表单只收当前页允许的字段，拒绝额外字段。
@@ -94,6 +96,8 @@ schema 加 `html` 组件：`{type: "html", html, height?, title?}`，HTML 自包
 用户已选择**默认自动运行**：进入可见区域加载，离开即销毁，不保留后台执行；提供原生「停止／重试」入口。`assistant.html_views` 关闭、平台不支持或安全验收未通过时显示 fallback。
 
 bridge 只允许 `persona.reply(text)` 和 `persona.open(url)`，文本最多 2000 字，与 Action.reply 一致。两种调用都在卡片外的原生确认框显示原文；只有用户确认才执行。reply 走同一动作存储，一张卡片只发一次；拒绝后限制继续弹框。不能把 hub token、cookie、文件访问或任意原生对象暴露给脚本。
+
+接口是独立的 `POST …/views/{key}/html-actions`（生成类型 `AssistantHTMLActionInput`）：`{kind, component_key, page?, expected_version, text? | url?, client_msg_id, confirmed: true}`。只有带 `key` 的 html 组件有 bridge，hub 核对它确实在保存的那一页上；reply 和声明式 reply 共用一次选择／outbox（记录 `kind: html`），open 校验后返回 `{open, version}`，不锁卡片。feature `assistant_html_bridge` 只说明这个接口可用，不代表客户端可以运行 HTML。
 
 ### 各端必须验证的安全边界
 
@@ -140,7 +144,7 @@ Claude 的助手 Stop hook 用 `last_assistant_message` 校验，首次失败返
 | --- | --- | --- |
 | 设计 | #2017 | 规格已合并；阶段进展与验收继续写回总 issue |
 | schema | #2018 | 基础协议／生成类型／校验已合并；新共享组件仍待小 PR |
-| hub | #2019 | 存储、工具、声明式 reply、正文注册和摘要已实现；HTML bridge、最终 feature 与端到端验收未完成 |
+| hub | #2019 | 存储、工具、声明式 reply、正文注册和摘要已实现；expected_version、HTML bridge 接口和 feature（`assistant_views`／`assistant_html_bridge`）在合并中；端到端验收未完成 |
 | 提示词 | #2020 | 专用 Stop、主动组件选择／动作／活卡片提示词和 golden 已实现；下一轮错误反馈与 Codex 验收未完成 |
 | 网页 | #2021 | 复用 ViewBody 接好正文／活卡片的 reply、open、push／pop、确认、expected_version、409 处理和多设备同步（`web/src/lib/assistant-views.ts`、`web/src/ui/AssistantCard.tsx`），实际提交等 hub 发出 `assistant_views`；HTML 只显示文字 fallback：网页还没有通过网络／导航／死循环验收的隔离运行时，不运行 allow-scripts iframe |
 | 安卓 | #2022 | 复用 #1851 组件，动作、活卡片、HTML、三风格深浅色截图 |

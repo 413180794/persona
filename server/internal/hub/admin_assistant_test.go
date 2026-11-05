@@ -185,15 +185,21 @@ func TestAdminAssistantSwitchReachesTheAssistant(t *testing.T) {
 	t.Cleanup(database.Close)
 	h, store, mux := adminTestHub(t)
 	store.Store = database // the admin sign-in stays in memory, the rest is the test database
-	connectAssistant(t, h)
+	connectAssistant(t, h, database)
 	app := h.routes()
-	action := func() int {
+	action := func(html bool) int {
 		t.Helper()
-		status, _ := call(t, app, "POST", "/api/v1/assistant/conversations/example/views/view_x/actions", h.cfg.Token, `not json`)
+		suffix := "/actions"
+		if html {
+			suffix = "/html-actions"
+		}
+		status, _ := call(t, app, "POST", "/api/v1/assistant/conversations/example/views/view_x"+suffix, h.cfg.Token, `not json`)
 		return status
 	}
-	if got := action(); got != 403 {
-		t.Fatalf("off: %d", got)
+	for _, html := range []bool{false, true} {
+		if got := action(html); got != 403 {
+			t.Fatalf("off html=%v: %d", html, got)
+		}
 	}
 	c := signedIn(t, mux, ip4(192, 168, 1, 20)+":1")
 	if code, _, _ := c.do("PUT", "/api/v1/admin/assistant", `{"persona_view":true}`); code != 200 {
@@ -204,13 +210,13 @@ func TestAdminAssistantSwitchReachesTheAssistant(t *testing.T) {
 		t.Helper()
 		deadline := time.Now().Add(5 * time.Second)
 		for {
-			got := action()
+			got, gotHTML := action(false), action(true)
 			has := slices.ContainsFunc(h.assistantToolsNow(), func(t proto.Tool) bool { return t.Name == "view_show" })
-			if got == want && has == tools {
+			if got == want && gotHTML == want && has == tools {
 				return
 			}
 			if time.Now().After(deadline) {
-				t.Fatalf("want %d, tools %v: got %d, %v", want, tools, got, has)
+				t.Fatalf("want %d, tools %v: got action %d, html %d, tools %v", want, tools, got, gotHTML, has)
 			}
 			time.Sleep(50 * time.Millisecond)
 		}

@@ -1,17 +1,20 @@
 package assistant
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"math"
 	"net/http"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/nwverse/persona/sdk/go/wire"
@@ -31,92 +34,166 @@ type viewActionStore interface {
 	PendingAssistantViewActions(context.Context, int) ([]db.AssistantViewActionRow, error)
 }
 
-type viewActionInput struct {
-	Action      string            `json:"action"`
-	Page        string            `json:"page,omitempty"`
-	Values      map[string]string `json:"values,omitempty"`
-	ClientMsgID string            `json:"client_msg_id"`
-	Confirmed   bool              `json:"confirmed,omitempty"`
-}
+// viewActionInput and htmlActionInput are generated from schema/extension/view.schema.json (the apps share them).
+type (
+	viewActionInput = wire.ViewActionInput
+	htmlActionInput = wire.AssistantHTMLActionInput
+)
+
+const viewActionKindHTML = "html"
 
 func wireViewAction(a db.AssistantViewActionRow) wire.ViewAction {
 	values := map[string]string{}
 	_ = json.Unmarshal(a.Values, &values)
-	return wire.ViewAction{Key: a.Key, Action: a.Action, Page: a.Page, Values: values, ClientMsgID: a.ClientMsgID, Status: a.Status, At: a.At, Error: clip(a.Error, 2000), UpdatedAt: a.UpdatedAt, Revision: a.Revision}
+	return wire.ViewAction{Key: a.Key, Action: a.Action, Page: a.Page, Values: values, ClientMsgID: a.ClientMsgID, Status: a.Status, At: a.At, Error: clip(a.Error, 2000), UpdatedAt: a.UpdatedAt, Revision: a.Revision,
+		Kind: a.Kind, Version: a.Version, Text: a.Reply}
+}
+
+// decodeViewBody reads a card request strictly: the schema's limits, then no field the schema does not declare.
+func decodeViewBody(w http.ResponseWriter, r *http.Request, def string, into any) bool {
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<10))
+	if err == nil {
+		err = wire.ValidateJSON(def, raw)
+	}
+	if err == nil {
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		err = decoder.Decode(into)
+	}
+	if err != nil {
+		apierr.Write(w, http.StatusBadRequest, err)
+		return false
+	}
+	return true
+}
+
+// viewActionGate is what both card routes require: a full device, persona_view (and html_views for the bridge) and
+// durable storage. Extension tokens never reach here: the hub grants them no scope for these routes.
+func (s *Service) viewActionGate(w http.ResponseWriter, r *http.Request, html bool) (viewActionStore, bool) {
+	if !fullRole(r) {
+		apierr.WriteBody(w, http.StatusForbidden, apierr.Body(http.StatusForbidden, "permission_denied", errors.New("read-only role cannot reply from a card")))
+		return nil, false
+	}
+	hello := s.hello(r.Context())
+	if !hello.PersonaView {
+		apierr.Write(w, http.StatusForbidden, errors.New("assistant views are disabled"))
+		return nil, false
+	}
+	if html && !hello.HTMLViews {
+		apierr.Write(w, http.StatusForbidden, errors.New("assistant HTML views are disabled"))
+		return nil, false
+	}
+	st, ok := s.store().(viewActionStore)
+	if !ok {
+		apierr.Write(w, http.StatusServiceUnavailable, errors.New("durable card actions are unavailable"))
+		return nil, false
+	}
+	return st, true
+}
+
+// storedCard reads the card from this conversation; expected > 0 must be its version, or the client gets the
+// current one to show and confirm again (never resubmitted for the user).
+func storedCard(w http.ResponseWriter, r *http.Request, st viewActionStore, conversation, key string, expected int64) (*db.AssistantViewRow, *wire.View, bool) {
+	row, err := st.AssistantCard(r.Context(), conversation, key)
+	if errors.Is(err, db.ErrAssistantViewNotFound) {
+		apierr.Write(w, http.StatusNotFound, err)
+		return nil, nil, false
+	}
+	if err != nil {
+		apierr.Write(w, http.StatusServiceUnavailable, err)
+		return nil, nil, false
+	}
+	v, err := wire.ParseAssistantView(row.View)
+	if expected > 0 && row.Version != expected {
+		writeViewChanged(w, *row, v)
+		return nil, nil, false
+	}
+	if err != nil {
+		apierr.Write(w, http.StatusConflict, err)
+		return nil, nil, false
+	}
+	return row, v, true
+}
+
+// writeViewChanged: version is the stored one; view the card's envelope as feed.views carries it, when it parses.
+func writeViewChanged(w http.ResponseWriter, row db.AssistantViewRow, v *wire.View) {
+	body := apierr.Body(http.StatusConflict, "view_changed", errors.New("card changed; review it and confirm again"))
+	body["version"] = row.Version
+	if v != nil {
+		body["view"] = wire.AssistantView{ID: row.ID, Conversation: row.Conversation, Version: row.Version, View: *v, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	}
+	apierr.WriteBody(w, http.StatusConflict, body)
+}
+
+// viewChangedNow answers a commit whose version check lost to a concurrent update with the card as it is now.
+func viewChangedNow(w http.ResponseWriter, r *http.Request, st viewActionStore, conversation, key string) {
+	row, err := st.AssistantCard(r.Context(), conversation, key)
+	if err != nil {
+		apierr.Write(w, http.StatusConflict, errors.New("card changed; reload before submitting"))
+		return
+	}
+	v, _ := wire.ParseAssistantView(row.View)
+	writeViewChanged(w, *row, v)
 }
 
 func (s *Service) viewActionRoutes() {
-	s.handle("POST /api/v1/assistant/conversations/{id}/views/{key}/actions", func(w http.ResponseWriter, r *http.Request) {
-		if !fullRole(r) {
-			apierr.Write(w, http.StatusForbidden, errors.New("read-only role cannot reply from a card"))
-			return
-		}
-		if !s.hello(r.Context()).PersonaView {
-			apierr.Write(w, http.StatusForbidden, errors.New("assistant views are disabled"))
-			return
-		}
-		var in viewActionInput
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&in); err != nil {
-			apierr.Write(w, http.StatusBadRequest, err)
-			return
-		}
-		if in.Action == "" || in.ClientMsgID == "" || len(in.ClientMsgID) > 128 {
-			apierr.Write(w, http.StatusBadRequest, errors.New("action and client_msg_id are required"))
-			return
-		}
-		st, ok := s.store().(viewActionStore)
-		if !ok {
-			apierr.Write(w, http.StatusServiceUnavailable, errors.New("durable card actions are unavailable"))
-			return
-		}
-		conversation, key := r.PathValue("id"), r.PathValue("key")
-		old, err := st.AssistantViewAction(r.Context(), conversation, key)
-		if err != nil {
-			apierr.Write(w, http.StatusServiceUnavailable, err)
-			return
-		}
-		if old != nil {
-			writeViewAction(w, *old, in)
-			return
-		}
-		row, err := st.AssistantCard(r.Context(), conversation, key)
-		if errors.Is(err, db.ErrAssistantViewNotFound) {
-			apierr.Write(w, http.StatusNotFound, err)
-			return
-		}
-		if err != nil {
-			apierr.Write(w, http.StatusServiceUnavailable, err)
-			return
-		}
-		v, err := wire.ParseAssistantView(row.View)
-		if err != nil {
-			apierr.Write(w, http.StatusConflict, err)
-			return
-		}
-		text, values, err := viewReplyMessage(v, key, in)
-		if err != nil {
-			apierr.Write(w, http.StatusBadRequest, err)
-			return
-		}
-		at := time.Now().UTC()
-		a := db.AssistantViewActionRow{Conversation: conversation, Key: key, Action: in.Action, Page: in.Page, Values: values, ClientMsgID: in.ClientMsgID, MessageID: "view-reply-" + randomHex(16), MachineID: row.MachineID, Text: text, At: at}
-		stored, first, err := st.BeginAssistantViewAction(r.Context(), a, row.Version)
-		if errors.Is(err, db.ErrAssistantViewVersion) {
-			apierr.Write(w, http.StatusConflict, errors.New("card changed; reload before submitting"))
-			return
-		}
-		if err != nil {
-			apierr.Write(w, http.StatusServiceUnavailable, err)
-			return
-		}
-		if first {
-			s.viewActionChanged(r.Context(), *stored)
-			go s.deliverViewAction(context.Background(), conversation, key)
-		}
-		writeViewAction(w, *stored, in)
-	})
+	s.handle("POST /api/v1/assistant/conversations/{id}/views/{key}/actions", s.postViewAction)
+	s.handle("POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions", s.postHTMLViewAction)
+}
+
+func (s *Service) postViewAction(w http.ResponseWriter, r *http.Request) {
+	st, ok := s.viewActionGate(w, r, false)
+	if !ok {
+		return
+	}
+	var in viewActionInput
+	if !decodeViewBody(w, r, "ViewActionInput", &in) {
+		return
+	}
+	conversation, key := r.PathValue("id"), r.PathValue("key")
+	old, err := st.AssistantViewAction(r.Context(), conversation, key)
+	if err != nil {
+		apierr.Write(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	if old != nil {
+		writeViewAction(w, *old, in)
+		return
+	}
+	row, v, ok := storedCard(w, r, st, conversation, key, in.ExpectedVersion)
+	if !ok {
+		return
+	}
+	text, values, err := viewReplyMessage(v, key, in)
+	if err != nil {
+		apierr.Write(w, http.StatusBadRequest, err)
+		return
+	}
+	version := in.ExpectedVersion
+	if version == 0 {
+		version = row.Version // only an action without confirm: bound to the version the hub validated it against
+	}
+	a := db.AssistantViewActionRow{Conversation: conversation, Key: key, Action: in.Action, Page: in.Page, Values: values, ClientMsgID: in.ClientMsgID,
+		MessageID: "view-reply-" + randomHex(16), MachineID: row.MachineID, Text: text, At: time.Now().UTC()}
+	s.commitViewAction(w, r, st, a, version, func(stored db.AssistantViewActionRow) { writeViewAction(w, stored, in) })
+}
+
+// commitViewAction stores the card's one selection with its outbox message, then delivers it.
+func (s *Service) commitViewAction(w http.ResponseWriter, r *http.Request, st viewActionStore, a db.AssistantViewActionRow, version int64, answer func(db.AssistantViewActionRow)) {
+	stored, first, err := st.BeginAssistantViewAction(r.Context(), a, version)
+	if errors.Is(err, db.ErrAssistantViewVersion) {
+		viewChangedNow(w, r, st, a.Conversation, a.Key)
+		return
+	}
+	if err != nil {
+		apierr.Write(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	if first {
+		s.viewActionChanged(r.Context(), *stored)
+		go s.deliverViewAction(context.Background(), a.Conversation, a.Key)
+	}
+	answer(*stored)
 }
 
 func writeViewAction(w http.ResponseWriter, a db.AssistantViewActionRow, in viewActionInput) {
@@ -127,13 +204,126 @@ func writeViewAction(w http.ResponseWriter, a db.AssistantViewActionRow, in view
 	var old, current any
 	_ = json.Unmarshal(a.Values, &old)
 	_ = json.Unmarshal(values, &current)
-	same := a.ClientMsgID == in.ClientMsgID && a.Action == in.Action && a.Page == in.Page
+	same := a.Kind != viewActionKindHTML && a.ClientMsgID == in.ClientMsgID && a.Action == in.Action && a.Page == in.Page && sameVersion(a.Version, in.ExpectedVersion)
 	oldJSON, _ := json.Marshal(old)
 	currentJSON, _ := json.Marshal(current)
 	if !same || string(oldJSON) != string(currentJSON) {
-		body := apierr.Body(http.StatusConflict, "already_answered", errors.New("card already answered"))
-		body["action"] = wireViewAction(a)
-		apierr.WriteBody(w, http.StatusConflict, body)
+		writeAlreadyAnswered(w, a)
+		return
+	}
+	apierr.WriteJSON(w, map[string]any{"action": wireViewAction(a)})
+}
+
+// sameVersion: a retry carries the version of its first attempt; an action sent without one (no confirm) and a row
+// stored before versions were recorded match any.
+func sameVersion(stored, expected int64) bool {
+	return stored == 0 || expected == 0 || stored == expected
+}
+
+func writeAlreadyAnswered(w http.ResponseWriter, a db.AssistantViewActionRow) {
+	body := apierr.Body(http.StatusConflict, "already_answered", errors.New("card already answered"))
+	body["action"] = wireViewAction(a)
+	apierr.WriteBody(w, http.StatusConflict, body)
+}
+
+// postHTMLViewAction is the bridge of a keyed html component (persona.reply / persona.open), each call confirmed
+// natively by the user. A reply is the card's one selection, exclusive with its declared replies; open locks nothing.
+func (s *Service) postHTMLViewAction(w http.ResponseWriter, r *http.Request) {
+	st, ok := s.viewActionGate(w, r, true)
+	if !ok {
+		return
+	}
+	var in htmlActionInput
+	if !decodeViewBody(w, r, "AssistantHTMLActionInput", &in) {
+		return
+	}
+	if err := checkHTMLActionInput(in); err != nil {
+		apierr.Write(w, http.StatusBadRequest, err)
+		return
+	}
+	conversation, key := r.PathValue("id"), r.PathValue("key")
+	if in.Kind == "reply" {
+		old, err := st.AssistantViewAction(r.Context(), conversation, key)
+		if err != nil {
+			apierr.Write(w, http.StatusServiceUnavailable, err)
+			return
+		}
+		if old != nil {
+			writeHTMLAction(w, *old, in)
+			return
+		}
+	}
+	row, v, ok := storedCard(w, r, st, conversation, key, in.ExpectedVersion)
+	if !ok {
+		return
+	}
+	if err := findHTMLComponent(v, in.Page, in.ComponentKey); err != nil {
+		apierr.Write(w, http.StatusBadRequest, err)
+		return
+	}
+	if in.Kind == "open" {
+		if err := wire.CheckAssistantOpen(in.URL); err != nil {
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		}
+		apierr.WriteJSON(w, wire.AssistantHTMLOpenResult{Open: in.URL, Version: row.Version})
+		return
+	}
+	// The same trailing tag as a declared reply (clients hide exactly this form); action is the html component's key.
+	text := in.Text + "\n<persona-action view=\"" + html.EscapeString(key) + "\" action=\"" + html.EscapeString(in.ComponentKey) + "\">{\"html\":true,\"values\":{}}</persona-action>"
+	a := db.AssistantViewActionRow{Conversation: conversation, Key: key, Action: in.ComponentKey, Page: in.Page, ClientMsgID: in.ClientMsgID,
+		MessageID: "view-reply-" + randomHex(16), MachineID: row.MachineID, Text: text, At: time.Now().UTC(), Kind: viewActionKindHTML, Reply: in.Text}
+	s.commitViewAction(w, r, st, a, in.ExpectedVersion, func(stored db.AssistantViewActionRow) { writeHTMLAction(w, stored, in) })
+}
+
+func checkHTMLActionInput(in htmlActionInput) error {
+	if !in.Confirmed {
+		return errors.New("confirmed: the user must confirm the call natively")
+	}
+	switch in.Kind {
+	case "reply":
+		if in.URL != "" || strings.TrimSpace(in.Text) == "" {
+			return errors.New("reply takes text and no url")
+		}
+		if !utf8.ValidString(in.Text) || strings.IndexFunc(in.Text, func(c rune) bool { return unicode.IsControl(c) && c != '\n' && c != '\t' }) >= 0 {
+			return errors.New("text: no control characters")
+		}
+		if strings.Contains(strings.ToLower(in.Text), "persona-action") {
+			return errors.New("text: must not contain a persona-action tag")
+		}
+	case "open":
+		if in.Text != "" || in.URL == "" {
+			return errors.New("open takes url and no text")
+		}
+	default:
+		return errors.New("kind: reply or open")
+	}
+	return nil
+}
+
+// findHTMLComponent: the bridge only exists for an html component with a stable key on that page of the stored card.
+func findHTMLComponent(root *wire.View, page, key string) error {
+	v := root
+	if page != "" {
+		detail, ok := root.Pages[page]
+		if !ok {
+			return errors.New("no such card page")
+		}
+		v = &detail
+	}
+	for _, section := range v.Sections {
+		for _, e := range section.Items {
+			if e.Type == "html" && e.Key == key {
+				return nil
+			}
+		}
+	}
+	return errors.New("component_key: no html component with this key on that page")
+}
+
+func writeHTMLAction(w http.ResponseWriter, a db.AssistantViewActionRow, in htmlActionInput) {
+	if a.Kind != viewActionKindHTML || a.ClientMsgID != in.ClientMsgID || a.Action != in.ComponentKey || a.Page != in.Page || a.Reply != in.Text || !sameVersion(a.Version, in.ExpectedVersion) {
+		writeAlreadyAnswered(w, a)
 		return
 	}
 	apierr.WriteJSON(w, map[string]any{"action": wireViewAction(a)})
@@ -160,6 +350,9 @@ func viewReplyMessage(root *wire.View, key string, in viewActionInput) (string, 
 	}
 	if selected.Confirm != "" && !in.Confirmed {
 		return "", nil, errors.New("confirm this action before submitting")
+	}
+	if selected.Confirm != "" && in.ExpectedVersion == 0 {
+		return "", nil, errors.New("expected_version: send the card version the user confirmed")
 	}
 	fields := map[string]wire.Component{}
 	for _, section := range page.Sections {

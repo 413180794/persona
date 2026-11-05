@@ -105,7 +105,13 @@ type AssistantProfile struct {
 	// PersonaView: the assistant is taught ```persona-view (a View of the extensions' components, #1850) instead of
 	// ```persona-card. Off until every app the user has draws it (UI version 3); a persona-card draws on all of them.
 	PersonaView bool `json:"persona_view,omitempty"`
+	// HTMLViews: cards' html components may run (sandboxed, where a client passed its security checks) and call the
+	// persona.reply / persona.open bridge. Only with PersonaView; nil (absent) is on, false turns them into fallback.
+	HTMLViews *bool `json:"html_views,omitempty"`
 }
+
+// HTMLViewsOn is assistant.html_views with its default (on); it means nothing while PersonaView is off.
+func (p AssistantProfile) HTMLViewsOn() bool { return p.HTMLViews == nil || *p.HTMLViews }
 
 // MicrosoftConfig is Outlook's "Sign in with Microsoft" (docs/mail.md「Outlook 接入方式」): an optional default client
 // ID (the user normally enters their own in the app; it is never built in) and the redirect URI registered with it.

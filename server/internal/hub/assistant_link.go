@@ -134,9 +134,8 @@ func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	out.OwnerNotes = strings.TrimSpace(h.cfg.Assistant.Notes)
 	out.Assistant = assistantwire.Placement{MachineID: h.defaultAssistantMachine(), Launcher: h.cfg.Assistant.Launcher, Standby: h.isMember()}
 	out.Assistant.Machines = h.machineIDs()
+	out.PersonaView, out.HTMLViews = h.assistantCards()
 	out.DoneDelayMS = taskSettleDelay(h.cfg.Notify).Milliseconds()
-	// The admin UI may have switched it since the hub started (admin_assistant.go).
-	out.PersonaView = h.assistantPersonaView()
 	out.Agents = h.cfg.Agents  // the Agents business's defaults (agents_link.go)
 	out.Models = h.hubModels() // what hub.json says about models (assistant_models.go)
 	return out, nil

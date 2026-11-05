@@ -20,13 +20,14 @@ func TestViewReplyValidatedByServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := viewActionInput{Action: "submit", Values: map[string]string{"priority": "high", "notify": "true"}, ClientMsgID: "client", Confirmed: true}
+	base := viewActionInput{Action: "submit", Values: map[string]string{"priority": "high", "notify": "true"}, ClientMsgID: "client", Confirmed: true, ExpectedVersion: 1}
 	text, values, err := viewReplyMessage(v, `item#0/1<"`, base)
 	if err != nil || !strings.HasPrefix(text, "Server reply") || !strings.Contains(text, "优先级：high") || !strings.Contains(text, `&lt;&#34;`) || !json.Valid(values) {
 		t.Fatalf("%s %s %v", text, values, err)
 	}
 	for _, change := range []func(*viewActionInput){
 		func(in *viewActionInput) { in.Confirmed = false },
+		func(in *viewActionInput) { in.ExpectedVersion = 0 }, // confirm binds the version the user saw
 		func(in *viewActionInput) { in.Action = "unknown" },
 		func(in *viewActionInput) { in.Values = map[string]string{"priority": "urgent", "notify": "true"} },
 		func(in *viewActionInput) { in.Values = map[string]string{"priority": "normal", "notify": "yes"} },
@@ -53,6 +54,7 @@ func TestViewReplyIdempotentResponse(t *testing.T) {
 		{viewActionInput{Action: "yes", ClientMsgID: "other", Values: map[string]string{"a": "b"}}, 409},
 		{viewActionInput{Action: "no", ClientMsgID: "client", Values: map[string]string{"a": "b"}}, 409},
 		{viewActionInput{Action: "yes", ClientMsgID: "client", Values: map[string]string{"a": "changed"}}, 409},
+		{viewActionInput{Action: "yes", ClientMsgID: "client", Values: map[string]string{"a": "b"}, ExpectedVersion: 3}, 200}, // stored before versions
 	} {
 		w := httptest.NewRecorder()
 		writeViewAction(w, a, tc.in)

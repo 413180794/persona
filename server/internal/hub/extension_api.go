@@ -85,6 +85,15 @@ func (h *Hub) extensionAPIs(next http.Handler, mux *http.ServeMux) http.Handler 
 // features are the hub's features with those of the plugins serving part of the API.
 func (h *Hub) features() []string {
 	out := slices.Clone(proto.Features)
+	// The assistant's card interfaces that answer now (docs/assistant-views.md): assistant_views is declarative actions
+	// (expected_version), live cards and transcript cards; assistant_html_bridge is …/html-actions with both switches
+	// on. Neither says a client may run HTML: that is each platform's own security sign-off, else fallback.
+	if views, bridge := h.assistantCards(); views {
+		out = append(out, "assistant_views")
+		if bridge {
+			out = append(out, "assistant_html_bridge")
+		}
+	}
 	if h.extensions == nil {
 		return out
 	}

@@ -25,13 +25,19 @@ type AssistantViewActionRow struct {
 	UpdatedAt    time.Time
 	Revision     int64
 	LeaseUntil   time.Time
+	// Version is the card version the user confirmed (0: committed before it was recorded).
+	Version int64
+	// Kind is "action" (a declared reply) or "html" (an HTML bridge reply: Action is the component key).
+	Kind string
+	// Reply is an HTML bridge reply's confirmed text; Text is the full message sent to the assistant.
+	Reply string
 }
 
-const viewActionColumns = `conversation, key, action, page, values, client_msg_id, message_id, machine_id, text, status, error, at, updated_at, revision`
+const viewActionColumns = `conversation, key, action, page, values, client_msg_id, message_id, machine_id, text, status, error, at, updated_at, revision, version, kind, reply`
 
 func scanViewAction(row pgx.Row) (*AssistantViewActionRow, error) {
 	var a AssistantViewActionRow
-	err := row.Scan(&a.Conversation, &a.Key, &a.Action, &a.Page, &a.Values, &a.ClientMsgID, &a.MessageID, &a.MachineID, &a.Text, &a.Status, &a.Error, &a.At, &a.UpdatedAt, &a.Revision)
+	err := row.Scan(&a.Conversation, &a.Key, &a.Action, &a.Page, &a.Values, &a.ClientMsgID, &a.MessageID, &a.MachineID, &a.Text, &a.Status, &a.Error, &a.At, &a.UpdatedAt, &a.Revision, &a.Version, &a.Kind, &a.Reply)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -42,13 +48,20 @@ func scanViewAction(row pgx.Row) (*AssistantViewActionRow, error) {
 }
 
 // BeginAssistantViewAction reserves one reply per card, storing its text before any delivery attempt.
-// expected binds the server-validated action to the view version still stored at commit time.
+// expected binds the server-validated action to the view version still stored at commit time, and is recorded as the
+// version the user confirmed. Any existing selection (an action or an HTML reply) is returned instead.
 func (d *DB) BeginAssistantViewAction(ctx context.Context, a AssistantViewActionRow, expected int64) (*AssistantViewActionRow, bool, error) {
 	if a.Conversation == "" || a.Key == "" || a.Action == "" || a.ClientMsgID == "" || a.MessageID == "" || a.MachineID == "" || a.Text == "" || a.At.IsZero() {
 		return nil, false, errors.New("assistant action identity, message and time are required")
 	}
 	if len(a.Values) == 0 {
 		a.Values = json.RawMessage(`{}`)
+	}
+	if a.Kind == "" {
+		a.Kind = "action"
+	}
+	if expected < 1 || a.Kind != "action" && a.Kind != "html" || (a.Kind == "html") != (a.Reply != "") {
+		return nil, false, errors.New("assistant action version, kind or reply is invalid")
 	}
 	tx, err := d.pool.Begin(ctx)
 	if err != nil {
@@ -76,13 +89,14 @@ func (d *DB) BeginAssistantViewAction(ctx context.Context, a AssistantViewAction
 	if version != expected {
 		return nil, false, ErrAssistantViewVersion
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO assistant_view_actions (conversation,key,action,page,values,client_msg_id,message_id,machine_id,text,status,at,updated_at)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10,$10)`, a.Conversation, a.Key, a.Action, a.Page, []byte(a.Values), a.ClientMsgID, a.MessageID, a.MachineID, a.Text, a.At)
+	_, err = tx.Exec(ctx, `INSERT INTO assistant_view_actions (conversation,key,action,page,values,client_msg_id,message_id,machine_id,text,status,at,updated_at,version,kind,reply)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10,$10,$11,$12,$13)`, a.Conversation, a.Key, a.Action, a.Page, []byte(a.Values), a.ClientMsgID, a.MessageID, a.MachineID, a.Text, a.At, expected, a.Kind, a.Reply)
 	if err != nil {
 		return nil, false, err
 	}
 	a.Status = "pending"
 	a.Revision = 1
+	a.Version = expected
 	a.UpdatedAt = a.At
 	return &a, true, tx.Commit(ctx)
 }

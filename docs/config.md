@@ -330,6 +330,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   hub 机器自己那台的 `node --stdio` 都在那台上）；它没连着时机器显示离线、机器的接口回 `503 assistant_offline`。
 - `assistant.persona_view`（默认 `false`）：助手回答里的卡片写成 ```` ```persona-view ````（扩展的组件，`docs/extensions.md`「UI 版本 3」），不再写 `persona-card`。
   各端（iOS / Mac、安卓、网页）都画得了 UI 版本 3 以后再打开；`persona-card` 在所有端都照样能画。
+- `assistant.html_views`（默认开，不写即开；写 `false` 关）：卡片的 `html` 组件可以经 `persona.reply` / `persona.open` 调用 hub（`…/views/{key}/html-actions`）。
+  只在 `assistant.persona_view` 打开时生效；关掉后 HTML 一律显示 fallback。各端还要自己通过 HTML 执行的安全验收才运行，见 `docs/assistant-views.md`。
 - `ai`（2026-10-31 起没有默认值）：App 里几个直接调模型 API（不经过 Claude Code）的小功能用的模型：收件箱分拣、代写回复、粘贴文字识别邮箱配置。
   不写时这些用途自动用 hub 上能直接调用的接入（「设置 › 模型供应商」里带 Key 的，见 `docs/model-config.md`「编辑与继承」）；一个都没有才报「还没有能直接调用的模型」。
   `api` 取 `messages`（Anthropic Messages，默认）或 `responses`（OpenAI Responses，总是流式请求，兼容只接受 `stream: true` 的转发服务）；

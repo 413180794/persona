@@ -37,7 +37,7 @@ type testAssistant struct {
 
 // connectAssistant connects the assistant to h, on a server with h's bus endpoint alone (identities in memory when
 // the hub has no database), and waits until the hub has its tools and its snapshot.
-func connectAssistant(t *testing.T, h *Hub) *testAssistant {
+func connectAssistant(t *testing.T, h *Hub, stores ...assistant.Store) *testAssistant {
 	t.Helper()
 	if h.busStore() == nil {
 		h.bus.idents = &memIdents{}
@@ -46,12 +46,21 @@ func connectAssistant(t *testing.T, h *Hub) *testAssistant {
 	h.busRoutes(mux)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return dialAssistant(t, h, srv.URL, false)
+	var store assistant.Store
+	if len(stores) > 0 {
+		store = stores[0]
+	}
+	return dialAssistantWithStore(t, h, srv.URL, false, store)
 }
 
 // dialAssistant runs the assistant against the hub at url with a new token, and waits as connectAssistant does.
 // schedule runs its schedule loop too (as `personad assistant` does; the other tests run due tasks themselves).
 func dialAssistant(t *testing.T, h *Hub, url string, schedule bool, opts ...func(*assistant.BusOptions)) *testAssistant {
+	t.Helper()
+	return dialAssistantWithStore(t, h, url, schedule, nil, opts...)
+}
+
+func dialAssistantWithStore(t *testing.T, h *Hub, url string, schedule bool, store assistant.Store, opts ...func(*assistant.BusOptions)) *testAssistant {
 	t.Helper()
 	tok, err := h.createBusToken(context.Background(), assistantwire.AssistantID, "助手")
 	if err != nil {
@@ -72,6 +81,9 @@ func dialAssistant(t *testing.T, h *Hub, url string, schedule bool, opts ...func
 	}
 	bh := assistant.NewBusHub(o)
 	svc := assistant.New(assistant.Options{Hub: bh, Logf: logf, Store: func() assistant.Store {
+		if store != nil {
+			return store
+		}
 		s, _ := h.store.(assistant.Store)
 		return s
 	}, KB: testKBOf(h)}) // the knowledge base a test gave it (kb_test.go)
