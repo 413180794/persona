@@ -109,6 +109,9 @@
 - 链接行里不能嵌按钮：行的 ⋯ 做成 `<a>` 的兄弟节点，绝对定位、`group-hover/row:flex`（Tailwind v4 的 `group-hover` 本来就只在 `@media (hover:hover)` 生效）；悬停时行尾的提示和角标
   `group-hover/row:invisible` 让开，否则被 ⋯ 盖住一半。右键 / 菜单键走 `<a>` 的 `onContextMenu`。
 - `Icon` 是 `aria-hidden` 的、不收 `aria-label`（TS 不检查带连字符的 JSX 属性，传了也不报错）：要读出来就在外面包 `<span title>` + `sr-only` 文字。
+- 会话行 `SessionRow` 是 `memo` 的（#3026）：没变的会话推送后还是同一个对象（`lib/sessions-delta.ts`），只有自己的会话变了的那行重渲染。给它的函数要稳定（`useGo`、`onRowMenu` 用 `useCallback`），
+  `prefix` 传字符串不传 JSX，路由按 `routePath` 比；新加一个每次渲染都新建的 prop（行内箭头、对象、元素）就又是每次推送整列表重渲染（mock 下 /agents 20 秒 580 次 vs 100 次）。
+  行里按 `Date.now()` 算的「N 分钟前」（离线行行尾、详情行）不再跟着别人的推送更新：显示年龄的行自己 `useNow(60_000)` 每分钟重渲染一次。
 - 侧边栏宽约 280 px，四个筛选胶囊（带圆点和件数）按 `px-2 gap-1` 会折成两行：收紧到 `px-[7px] gap-0.5`。
 - 曲线图上的参考线标签（负载图的「N 核」）画在线条下面会被数据线穿过：画在线条之后，加一圈页面底色的描边（`paint-order: stroke`）。
 

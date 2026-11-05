@@ -1,7 +1,7 @@
 // Beautiful UI's Sidebar Nav: workspace row, quick search, sections, one gliding highlight. Persona's main conversation
 // is the first entry (the app opens on 助手); a new conversation and a new agent are the「+」of their sections (#1239).
 import { BASE } from "../lib/base";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n";
 import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, BOTMUX_HIDDEN_KEY, botmuxAndFilter, filterCounts, isBotmux, isSpaceMuted, matchingKeys, shownFilters, unreadOf, withoutBotmux, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
@@ -24,7 +24,7 @@ import { ConversationRowMenu, pinnedSectionItems } from "./ConversationMenu";
 import { useExtensionSlot } from "../lib/extension-slots";
 import { toneOf } from "../lib/extension-ui";
 import { BADGE_TONE, navIcon, pageRoute } from "./extensions/ExtensionSlots";
-import { href, navigate, useRoute, type Route } from "../lib/router";
+import { href, navigate, routePath, useRoute, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { terminalTarget } from "../lib/session-view";
 import { refresh, reset, useLarkOn, useStore } from "../lib/store";
@@ -197,13 +197,22 @@ function useActiveKey(route: Route): string {
   return route.name === "tab" ? (tabPane ? rowKey(tabPane) : "") : sidebarActiveKey(route, assistant?.main);
 }
 
+// One function for the component's life, so the rows given it skip a re-render (memo); a click still calls the
+// latest onNavigate (the phone's drawer closing).
 function useGo(onNavigate?: () => void): GoFn {
-  return (to: Route) => (e: React.MouseEvent) => {
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-    e.preventDefault();
-    navigate(to);
-    onNavigate?.();
-  };
+  const latest = useRef(onNavigate);
+  useLayoutEffect(() => {
+    latest.current = onNavigate;
+  });
+  return useCallback(
+    (to: Route) => (e: React.MouseEvent) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      navigate(to);
+      latest.current?.();
+    },
+    [],
+  );
 }
 
 /** One entry of the pages under Persona (总览, 收件箱 … 设置, and the extensions' pages). */
@@ -489,7 +498,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const [renamingSpace, setRenamingSpace] = useState<Session | null>(null);
   const [deleting, setDeleting] = useState<Session | null>(null);
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
-  const onRowMenu: RowMenuFn = (s, anchor, at) => setRowMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at }));
+  // stable, like `go`: every row gets it, and a new one each render would re-render them all (SessionRow's memo)
+  const onRowMenu = useCallback<RowMenuFn>((s, anchor, at) => setRowMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at })), []);
   const onSpaceMenu: SpaceMenuFn = (sp, anchor, at, fold) => setSpaceMenu((m) => (!at && m?.anchor === anchor ? null : { sp, anchor, at, fold }));
   const onNodeMenu: NodeMenuFn = (node, at, header, toggle) => setNodeMenu((m) => (toggle && m?.at.anchor && m.at.anchor === at.anchor ? null : { node, at, header }));
   const [recentFolded, toggleRecent] = useFolded("recent", true, { holds: holdsRow(recent, activeKey), scope: AGENTS_FOLD });
@@ -1253,7 +1263,8 @@ function TabRow({ t: tab, ...p }: { t: HerdrTab } & TreeProps) {
       to={to}
       go={go}
       // a long tab name gives way: it would run under the 「N 个 Agent」 button (endRoom) and hide the agent's title
-      prefix={tab.label && <span className="min-w-0 max-w-[50%] shrink-0 truncate text-[11.5px] text-ink-3 tabular-nums">{tab.label}</span>}
+      prefix={tab.label}
+      prefixClass="min-w-0 max-w-[50%] shrink-0 truncate text-[11.5px] text-ink-3 tabular-nums"
       showTodoTag={single}
       // a tab with several panes has a menu of its own: rename, split, git, close it
       onMenu={single ? onRowMenu : (_s, anchor, at) => onNodeMenu(tabNode(tab, machines), at ?? { anchor }, t("sidebar.tab_named", { label: tab.label || "" }).trim(), !at)}
@@ -1295,7 +1306,8 @@ function TabRow({ t: tab, ...p }: { t: HerdrTab } & TreeProps) {
                 active={activeKey === key}
                 to={paneRoute(s)}
                 go={go}
-                prefix={<span className="shrink-0 text-[11px] text-ink-3">{agentLabel(s)}</span>}
+                prefix={agentLabel(s)}
+                prefixClass="shrink-0 text-[11px] text-ink-3"
                 host={s === tab.launcher ? t("sidebar.launcher") : undefined}
                 showTodoTag
                 onMenu={onRowMenu}
@@ -1565,7 +1577,19 @@ export function SourceTag({ s }: { s: Session }) {
   return <span className={cls}>{label}</span>;
 }
 
-export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu, menuLabel = t("sidebar.agent_actions"), endRoom, icon = "chat" }: { menuLabel?: string; /** The mark at the start when the state is not shown (a Persona conversation's; pinned: the pin). */ icon?: IconName; s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; endRoom?: boolean }) {
+// `prefix`: a word before the title (a tab's name, a pane's agent), in `prefixClass`
+type SessionRowProps = { menuLabel?: string; /** The mark at the start when the state is not shown (a Persona conversation's; pinned: the pin). */ icon?: IconName; s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: string; prefixClass?: string; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; endRoom?: boolean };
+
+// Every sessions push re-renders the sidebar and the Agents list, while lib/sessions-delta.ts keeps the object of each
+// session that did not change: a row renders again only when one of its props did. The props compare by identity
+// (`go` and the menus are stable), except the route, which the call sites build anew and which is its path (routePath).
+function sameRow(a: SessionRowProps, b: SessionRowProps): boolean {
+  const keys = Object.keys(a) as (keyof SessionRowProps)[];
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => (key === "to" ? routePath(a.to) === routePath(b.to) : Object.is(a[key], b[key])));
+}
+
+export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, prefixClass, hint, host, showState = true, showTodoTag, onMenu, menuLabel = t("sidebar.agent_actions"), endRoom, icon = "chat" }: SessionRowProps) {
   const st = stateOf(s);
   const tail = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
@@ -1573,9 +1597,14 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
   // 设置 › 外观 › Agent 行显示详情 (#2430): a second line under an agent's title — folder · model · context · age
   const details = useAgentDetails();
   const contextUsed = useContextAsUsed();
-  const detail = details && showState && !s.assistant ? rowDetail(s, contextUsed) : [];
-  // a background workflow it waits for (#2935): its progress in the second line, whatever the details setting
-  const now = useNow(60_000, runningWorkflows(s).length > 0);
+  const withDetail = details && showState && !s.assistant;
+  // the age at the row's end (an offline or stateless row), in the details line, or a background workflow's progress
+  // (#2935) moves on with the clock: the memo keeps an unchanged row from re-rendering on a push, so a minute tick
+  // does it, and only in a row that shows one of them. The ages read the clock when the row renders: `now` is the
+  // mount time until the first tick, and a row may only start showing an age long after it mounted
+  const showsAge = (!tail && (st === "offline" || !showState)) || (withDetail && !!s.updated_at);
+  const now = useNow(60_000, showsAge || runningWorkflows(s).length > 0);
+  const detail = withDetail ? rowDetail(s, contextUsed) : [];
   const workflow = showState && !s.assistant && st !== "offline" ? workflowShortLine(s) : "";
   const workflowTitle = workflow ? workflowLine(s, now) : "";
   // what sits at the row's end steps aside for the hover ⋯; the open row leaves room for its ⋯ instead
@@ -1604,7 +1633,7 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
       {showState && !s.assistant && <SourceTag s={s} />}
-      {prefix}
+      {prefix && <span className={prefixClass}>{prefix}</span>}
       {detail.length > 0 || workflow ? (
         <span className="flex min-w-0 flex-1 flex-col">
           <span className={cx("truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
@@ -1666,7 +1695,7 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
       </button>
     </div>
   );
-}
+}, sameRow);
 
 // 个人 Agent: lark-connector's personal agents with a view menu (分组 / 排序 / 显示), a search field, pins and custom
 // sections — the prefs live on the hub so iOS sees the same pins.
