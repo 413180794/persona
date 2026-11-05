@@ -517,6 +517,10 @@ func (h *Hub) proxyBody(method string) http.HandlerFunc {
 				return
 			}
 		}
+		if p == nil {
+			writeErr(w, http.StatusBadRequest, errors.New("request body must be a JSON object"))
+			return
+		}
 		p["session_id"] = r.PathValue("sid")
 		// Resuming an offline session can take a while (shell + claude startup).
 		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)

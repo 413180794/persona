@@ -260,6 +260,10 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	if p == nil {
+		writeErr(w, http.StatusBadRequest, errors.New("request body must be a JSON object"))
+		return
+	}
 	sid := r.PathValue("sid")
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()

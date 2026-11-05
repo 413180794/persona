@@ -90,6 +90,10 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 			return
 		}
 	}
+	if p == nil {
+		writeErr(w, http.StatusBadRequest, errors.New("request body must be a JSON object"))
+		return
+	}
 	sid := r.PathValue("sid")
 	p["session_id"] = sid
 	todoID, _ := p["todo_id"].(string)
