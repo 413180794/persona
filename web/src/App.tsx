@@ -28,6 +28,7 @@ import { Sidebar } from "./views/Sidebar";
 import { SidePanel } from "./views/SidePanel";
 import { ExtensionNavPage } from "./views/extensions/ExtensionSlots";
 import { useExtensionPlace } from "./lib/extension-slots";
+import { useAttentionSignals } from "./lib/attention-signals";
 
 // The pages a first screen doesn't need load when they are opened (#1996); 对话, Persona and 总览 stay in the main
 // bundle (the extensions' page too: the sidebar already has ExtensionSlots for its icons).
@@ -234,9 +235,7 @@ function Shell() {
     pane ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱" : route.name === "messages" ? "消息"
       : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "workspace-board" ? "工作流看板" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "terminal" ? "终端" : route.name === "settings" ? "设置"
       : route.name === "agents" ? "个人 Agent" : route.name === "agent-list" ? "Agents" : route.name === "extension" ? extensionTitle || "扩展" : "总览";
-  useEffect(() => {
-    document.title = title === "Persona" ? title : `${title} · Persona`;
-  }, [title]);
+  useAttentionSignals(title, pane); // tab title with the 需要你 count, favicon badge, optional sounds (#2332)
 
   // never reached the hub: say so with a way to try again, instead of pages loading forever (kept through a retry)
   const [away, setAway] = useState(false);

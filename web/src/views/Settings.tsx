@@ -11,6 +11,7 @@ import { Icon, type IconName } from "../ui/icons";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { Group, Row, Pill, RowConfirm, Switch } from "./settings/SettingsParts";
 import { setReplyMotionEnabled, useReplyMotionSetting } from "../ui/stream/motion";
+import { setAttentionSoundEnabled, useAttentionSoundSetting } from "../lib/attention";
 import { HubList } from "./Hubs";
 import { ModelConfiguration } from "./settings/ModelConfiguration";
 import { AgentSettings } from "./settings/AgentSettings";
@@ -240,6 +241,7 @@ interface AssistantState {
 function General({ onTriageModel }: { onTriageModel: () => void }) {
   const theme = useTheme();
   const replyMotion = useReplyMotionSetting();
+  const attentionSound = useAttentionSoundSetting();
   const machines = useStore((s) => s.machines);
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
 
@@ -276,6 +278,9 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
         </div>
         <Row label="回复动效" hint="新到的回复逐词淡入；系统开了「减弱动态效果」时不播。">
           <Switch on={replyMotion} onChange={setReplyMotionEnabled} label="回复动效" />
+        </Row>
+        <Row label="提示音" hint="需要你或完成时响一声；正在看的会话不响。">
+          <Switch on={attentionSound} onChange={setAttentionSoundEnabled} label="提示音" />
         </Row>
       </Group>
 
