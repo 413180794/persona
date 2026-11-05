@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/pprof"
 	"strings"
 	"testing"
+	"time"
 )
 
 // loginShells are the shells on this machine an ssh target's login shell could be: sshd hands the remote command to
@@ -135,5 +138,40 @@ func TestNodeCommandRunsInEveryShell(t *testing.T) {
 		if got, _ := os.ReadFile(calls); string(got) != "node|--stdio|" {
 			t.Errorf("%s: %q ran the node with %q", filepath.Base(shell), remote, got)
 		}
+	}
+}
+
+// An ssh that fails before reading the binary (auth failure, connect timeout) must not leave the goroutine that gzips
+// the binary into it blocked on the pipe for good (#2377).
+func TestDeployOverFailedSSHDoesNotLeakTheWriter(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte("#!/bin/sh\necho 'Permission denied (publickey).' >&2\nexit 255\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Incompressible and far larger than any pipe buffer, so the writer is still writing when ssh exits.
+	data := make([]byte, 8<<20)
+	if _, err := rand.Read(data); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(dir, "jarvisd")
+	if err := os.WriteFile(bin, data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m := &Machine{cfg: MachineConfig{ID: "test-node"}}
+	err := m.deploy(context.Background(), bin)
+	if err == nil || !strings.Contains(err.Error(), "Permission denied") {
+		t.Fatalf("deploy: %v", err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		var stacks bytes.Buffer
+		_ = pprof.Lookup("goroutine").WriteTo(&stacks, 2)
+		if !strings.Contains(stacks.String(), "(*Machine).deploy.func") {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the gzip writer is still running after deploy returned:\n%s", stacks.String())
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

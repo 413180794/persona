@@ -151,6 +151,10 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 	defer f.Close()
 	cmd := exec.CommandContext(ctx, "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", host, deployScript(remote))
 	pr, pw := io.Pipe()
+	// exec copies a non-*os.File Stdin in its own goroutine and never closes it: once ssh exits early (auth failure,
+	// connect timeout, the remote script failing, ctx done) nothing reads pr, and the gzip writer below would block on
+	// pw for good (#2377). Closing pr makes its Write fail with io.ErrClosedPipe so it returns.
+	defer pr.Close()
 	cmd.Stdin = pr
 	go func() {
 		zw, _ := gzip.NewWriterLevel(pw, gzip.BestSpeed)
