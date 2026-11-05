@@ -223,6 +223,7 @@ hub 重启保留未来预约；发送记录与 WS 写入无法原子完成，所
 外部 Codex 会话继续使用 `(machine_id, session_id)`。固定 legacy home 保持既有 raw thread ID，其他 canonical home 的 thread 使用 `c0de-` 加确定性摘要的 opaque ID；PID、endpoint 或连接代际变化不换会话 ID。`source_thread_id` 是原 thread ID，不可将 opaque ID 放进 `claude --resume`。
 
 Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server` / `identity_conflict`；Agent 运行时的会话是 `runtime`，见「Runtime ↔ node」；Claude Code 的后台会话是 `claude_bg`，只读，见 `docs/claude-integration.md`「后台会话」）、`source_thread_id`、`source_instance_id`、`parent_thread_id`、`read_only_reason`、`attached`、`capabilities`（read/send/interrupt/approve/terminal/attach 六个布尔值）。旧来源缺这些字段维持兼容，新来源缺能力默认拒写。没有终端能力就不显示终端/按键/关闭窗格。
+Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间在宿主里挂在哪个空间下面，同机器、同 `space_kind`，顶层空间不带。Orca 宿主按 `worktree.ps` 的 `parentWorktreeId` 填（指向自己的当没有），hub 原样转发；旧客户端忽略它照旧平铺，网页的「按机器」把子空间折叠在父空间下（`docs/web.md`）。
 
 `POST /api/v1/sessions/{mid}/{sid}/attach`：用户要求实时接入，node 只对原实例仍 loaded、owner 唯一的 thread 请求 resume，且不带运行配置覆盖。发现/普通读历史不调用 resume。加入许可按 thread/稳定实例记在 settings；断线重验 owner，不自动冷恢复或换实例。loaded/list 与 resume 不原子，不能承诺中间没有 unload 竞态。
 

@@ -86,6 +86,43 @@ describe("buildMachineTree", () => {
     expect(mostUrgent([])).toBeUndefined();
   });
 
+  it("nests a child space under its parent and sums the children's states on the parent (#2073)", () => {
+    const orca = (space: string, idx: number, st: AgentState, parent?: string) =>
+      pane({ space, slot: 1, st, space_kind: "orca", space_index: idx, ...(parent ? { parent_space_id: parent } : {}) });
+    const list = [
+      orca("main", 1, "idle"),
+      orca("a", 2, "needs_you", "main"),
+      orca("b", 3, "working", "main"),
+      orca("b1", 4, "unread", "b"),
+      orca("c", 5, "idle", "main"),
+      orca("other", 6, "idle"),
+    ];
+    const m = buildMachineTree([mac], list)[0]!;
+    expect(m.spaces.map((s) => s.name)).toEqual(["ws-main", "ws-other"]);
+    const main = m.spaces[0]!;
+    expect(main.children.map((s) => s.name)).toEqual(["ws-a", "ws-b", "ws-c"]);
+    expect(main.children[1]!.children.map((s) => s.name)).toEqual(["ws-b1"]);
+    expect(main.childStates).toEqual({ needs_you: 1, working: 1, done: 2 });
+    expect(main.state).toBe("needs_you");
+    expect(main.sessions).toHaveLength(1);
+    expect(main.tree).toHaveLength(5);
+    expect(m.spaces[1]!.children).toEqual([]);
+  });
+
+  it("keeps a child at the top when its parent has no live agent, is another host's, or the parents loop", () => {
+    const list = [
+      pane({ space: "w1", slot: 1, space_kind: "orca", parent_space_id: "gone" }),
+      pane({ space: "w2", slot: 1, space_kind: "orca", parent_space_id: "w3" }),
+      pane({ space: "w3", slot: 1, space_kind: "orca", parent_space_id: "w2" }),
+      pane({ space: "w4", slot: 1, space_kind: "herdr", parent_space_id: "w5" }),
+      pane({ space: "w5", slot: 1, space_kind: "orca" }),
+      pane({ space: "w6", slot: 1, space_kind: "orca", parent_space_id: "w6" }),
+    ];
+    const m = buildMachineTree([mac], list)[0]!;
+    expect(m.spaces.map((s) => s.name)).toEqual(["ws-w1", "ws-w2", "ws-w3", "ws-w4", "ws-w5", "ws-w6"]);
+    expect(m.spaces.every((s) => s.children.length === 0)).toBe(true);
+  });
+
   it("leaves out assistant and offline sessions, and lists an offline machine empty", () => {
     const list = [pane({ space: "w1", slot: 1, assistant: true }), pane({ space: "w1", slot: 1, st: "offline" }), pane({ machine_id: "away", space: "w1", slot: 1, st: "working" })];
     const tree = buildMachineTree([mac, away], list);

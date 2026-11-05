@@ -603,9 +603,12 @@ type Session struct {
 	SpaceID    string `json:"space_id,omitempty"`
 	SpaceName  string `json:"space_name,omitempty"`
 	SpaceIndex int    `json:"space_index,omitempty"`
-	SlotID     string `json:"slot_id,omitempty"`
-	SlotName   string `json:"slot_name,omitempty"`
-	SlotIndex  int    `json:"slot_index,omitempty"`
+	// ParentSpaceID is the space this one is nested under in its host, same kind and machine (Orca: a child
+	// worktree's parent, #2073); empty for a top-level space. Clients that know it fold the child under its parent.
+	ParentSpaceID string `json:"parent_space_id,omitempty"`
+	SlotID        string `json:"slot_id,omitempty"`
+	SlotName      string `json:"slot_name,omitempty"`
+	SlotIndex     int    `json:"slot_index,omitempty"`
 	// State is the unified agent state the apps render (needs_you, working, unread, idle, offline, unknown),
 	// computed by the hub from the host status, pending interactions and whether the user has seen the result.
 	State  string    `json:"state"`

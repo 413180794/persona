@@ -521,6 +521,23 @@ if os.environ.get("MOCK_BOTMUX"):
              failure_reason="⚠️ Claude 本轮执行失败，且当前错误不能安全自动续跑。请检查 Web 终端和模型服务状态后，再发送一条消息继续。",
              external_url="https://applink.example.com/client/thread/open?chat=demo&thread=t3"),
     ]
+# MOCK_ORCA_CHILDREN=1: an Orca worktree with three child worktrees (#2073, parent_space_id), one of them with a child of
+# its own: the web folds them under the parent and sums their states on its row.
+if os.environ.get("MOCK_ORCA_CHILDREN"):
+    def _orca(sid, title, wt, idx, status, state, minutes, last, parent=None):
+        wid = "app::/Users/me/code/app" + ("" if wt == "main" else "/.worktrees/" + wt)
+        kw = dict(space_kind="orca", space_id=wid, space_name=wt, space_index=idx, slot_id="tab-" + wt, slot_name="claude",
+                  slot_index=1, tab_id="tab-" + wt, workspace_id=wid, pane_id="orca:tab-" + wt + ":leaf1")
+        if parent:
+            kw["parent_space_id"] = "app::/Users/me/code/app" + ("" if parent == "main" else "/.worktrees/" + parent)
+        return sess("macbook", sid, title, "/Users/me/code/app", status, state, wt, idx, "claude", 1, minutes, last, **kw)
+    SESSIONS += [
+        _orca("c2073000-0000-4000-8000-000000000001", "拆分登录流程", "main", 1, "done", "idle", 20, "拆成三个子任务，各开了一个工作区。"),
+        _orca("c2073000-0000-4000-8000-000000000002", "登录页表单", "login-form", 2, "blocked", "needs_you", 1, "要不要保留旧的记住我选项？", parent="main"),
+        _orca("c2073000-0000-4000-8000-000000000003", "会话续期", "session-refresh", 3, "working", "working", 0, "在补续期失败的测试。", parent="main"),
+        _orca("c2073000-0000-4000-8000-000000000004", "续期的文档", "refresh-docs", 4, "done", "unread", 3, "文档写好了。", parent="session-refresh"),
+        _orca("c2073000-0000-4000-8000-000000000005", "登录埋点", "login-metrics", 5, "done", "unread", 6, "埋点加好了，等你看。", parent="main"),
+    ]
 # MOCK_WORK=1: stopped agents the hub triaged (docs/agent-work.md): one done with its conclusion, one waiting for a
 # deploy the hub will wake it after, one cut off by a 503 the hub retries, one waiting for the user's decision on a card;
 # 设置 › 会话分诊 reads and writes TRIAGE.
@@ -8021,6 +8038,7 @@ VOICE_VOICES = {
 }
 # What --help lists after the options.
 MOCK_HELP = [
+    "MOCK_ORCA_CHILDREN=1  MacBook 上一个 Orca 工作区带三个子工作区（其中一个还有子项，parent_space_id，#2073）",
     "MOCK_PLUGINS=1  设置 › 插件：五个示例插件（需要设置 / 运行中 / hub.json / 已停用 / 不兼容），表单、密钥、开关在内存里",
     "MOCK_CONNECTOR_PLUGIN=1  设置 › 连接器：一个插件提供的通用连接器「示例笔记」，令牌 example-token 一步登录",
     "PORT=<端口>  监听端口，默认 18760；0 表示自动分配（启动时打印 mock hub on <地址>:<端口>）",

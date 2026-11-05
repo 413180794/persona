@@ -5,7 +5,7 @@ import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
 import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, isQuiet, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoTree, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
-import { buildMachineTree, resolveTab, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
+import { buildMachineTree, resolveTab, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
 import { api, setToken } from "../lib/api";
 import { useInboxBadge } from "../lib/inbox";
@@ -755,20 +755,60 @@ function WorkspaceBlock({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
   return (
     <TreeBlock
       foldKey={sp.foldKey}
-      sessions={sp.sessions}
+      sessions={sp.tree}
       state={sp.state}
       title={<><span className="min-w-0 truncate font-medium">{sp.name}</span><SpaceMarks pinned={sp.pinned} muted={isSpaceMuted(sp, p.mutes)} /></>}
       right={(folded) => (
         <span className="flex shrink-0 items-center gap-1">
           <SpaceTodoTag sp={sp} onNavigate={p.onNavigate} />
-          {folded ? <SessionTally sessions={sp.sessions} folded /> : tabs > 0 && <span title={`${tabs} 个标签页`} className="text-[10.5px] text-ink-3 tabular-nums">{tabs}<span className="sr-only"> 个标签页</span></span>}
+          {sp.children.length > 0 && <ChildSummary counts={sp.childStates} />}
+          {folded ? <SessionTally sessions={sp.tree} folded /> : tabs > 0 && !sp.children.length && <span title={`${tabs} 个标签页`} className="text-[10.5px] text-ink-3 tabular-nums">{tabs}<span className="sr-only"> 个标签页</span></span>}
           <SpaceMenuButton sp={sp} onMenu={p.onSpaceMenu} />
         </span>
       )}
     >
       {sp.tabs.map((t) => <TabRow key={t.key} t={t} {...p} />)}
       {sp.loose.map((s) => <TreeSessionRow key={s.session_id} s={s} {...p} />)}
+      {sp.children.length > 0 && <ChildSpaces sp={sp} {...p} />}
     </TreeBlock>
+  );
+}
+
+// A space's child spaces (Orca's「N 个子项」), folded at first like Orca's sidebar: the parent's row already sums up
+// what they are doing (ChildSummary), and the fold is kept by 机器/空间名 like the space's own.
+function ChildSpaces({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
+  const [folded, toggle] = useFolded(`${sp.foldKey}/子项`, true);
+  const n = sp.children.length;
+  return (
+    <div>
+      <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 w-full min-w-0 items-center gap-1.5 pr-2 pl-2 text-left text-[11.5px] whitespace-nowrap text-ink-3 hover:text-ink [@media(pointer:coarse)]:min-h-11">
+        <Icon name="chevron" size={9} stroke={2.4} className="shrink-0 transition-transform duration-200" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+        <span className="min-w-0 flex-1 truncate">{n} 个子项</span>
+        {folded && <SessionTally sessions={sp.tree.slice(sp.sessions.length)} folded />}
+      </button>
+      <Collapse open={!folded}>
+        <div className="flex flex-col gap-px" inert={folded || undefined}>
+          {sp.children.map((c) => <WorkspaceBlock key={c.key} sp={c} {...p} />)}
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
+// What a parent space's children are doing, as Orca's parent row shows it: how many need you, work, are done.
+function ChildSummary({ counts }: { counts: ChildStates }) {
+  const parts = ([["needs_you", "需要你"], ["working", "工作中"], ["done", "完成"]] as const).filter(([k]) => counts[k] > 0);
+  if (!parts.length) return null;
+  return (
+    <span title={`子项：${parts.map(([k, label]) => `${counts[k]} 个${label}`).join("，")}`} className="flex items-center gap-1.5 text-[10.5px] text-ink-3 tabular-nums">
+      {parts.map(([k, label]) => (
+        <span key={k} className="flex items-center gap-0.5">
+          <span aria-hidden className="flex"><StatusDot state={k === "done" ? "unread" : k} size={6} /></span>
+          {counts[k]}
+          <span className="sr-only"> 个子项{label}</span>
+        </span>
+      ))}
+    </span>
   );
 }
 

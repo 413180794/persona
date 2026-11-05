@@ -284,6 +284,8 @@ type Space struct {
 	// Cwd and Branch come from the host; empty means the host did not report them.
 	Cwd    string
 	Branch string
+	// ParentID is the space this one is nested under in the host (Orca: a child worktree's parent); empty at the top.
+	ParentID string
 }
 
 // Slot holds panes inside a space (herdr: a tab).

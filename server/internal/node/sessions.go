@@ -1111,7 +1111,7 @@ func (n *Node) placeIn(s *proto.Session, a host.Agent) {
 	n.mu.Unlock()
 	s.SpaceKind, s.SpaceID, s.SlotID = kind, a.WorkspaceID, a.TabID
 	if wok {
-		s.SpaceName, s.SpaceIndex = w.Label, w.Number
+		s.SpaceName, s.SpaceIndex, s.ParentSpaceID = w.Label, w.Number, w.ParentID
 	}
 	if tok {
 		s.SlotName, s.SlotIndex = t.Label, t.Number
@@ -1610,7 +1610,7 @@ func (n *Node) revsChanged(list []proto.Session) map[string]int64 {
 func listKey(list []proto.Session) string {
 	var b strings.Builder
 	for _, s := range list {
-		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%d|%q|%s|%s\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued, s.Suggestion, s.SpawnFrom)
+		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%s|%d|%q|%s|%s\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.ParentSpaceID, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued, s.Suggestion, s.SpawnFrom)
 		if s.Activity != "" { // a new step shows at once, not with the next 10 s of updated_at
 			fmt.Fprintf(&b, "activity:%s/%d\n", s.Activity, unixOf(s.ActivityAt))
 		}

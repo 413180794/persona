@@ -51,6 +51,7 @@ Agents 列表另有「待唤醒」：状态是已看，但 `/loop` 还没到点�
 | `space_kind` | `herdr` | 工具名 |
 | `space_id` / `space_name` / `space_index` | workspace id / label / number | 项目、房间、会话组 |
 | `slot_id` / `slot_name` / `slot_index` | tab id / label / number | 角色、窗口、频道 |
+| `parent_space_id`（可选，#2073） | 不填 | 这个空间挂在哪个空间下面（同机器、同 `space_kind`）：Orca 的子工作区填父工作区的 `worktreeId`（`worktree.ps` 的 `parentWorktreeId`） |
 
 DSH（`docs/dsh.md`）：`space_kind` 是 `dsh`，空间是会话的目录（`space_id` = 目录、`space_name` = 目录名），没有槽位；
 状态由插件给：在跑 → working，有授权 / 提问等着 → blocked，其余 done（hub 照常按看没看过分完成未看 / 已看）。

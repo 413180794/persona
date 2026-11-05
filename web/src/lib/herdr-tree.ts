@@ -2,6 +2,8 @@
 // slot) → panes. A Session is one agent pane; the sessions of one slot are that tab's panes, which the chat shows as
 // tabs of their own (PaneTabs). Hosts without tabs (Paseo, botmux, runtimes) list their sessions right under the
 // space; sessions outside any space go to the machine's「其他」. Shell panes never reach the hub, so they are not here.
+// A space the host nests under another (Orca's child worktrees, `parent_space_id`) is listed inside its parent, as
+// Orca's sidebar does with「N 个子项」; when the parent has no live agent the child stays at the top (#2073).
 import { splitAgentSessions } from "./agent-groups";
 import { stateOf, tabLabel } from "./format";
 import { isSpacePinned, type AgentPins } from "./pins";
@@ -100,6 +102,18 @@ export interface HerdrSpace {
   loose: Session[];
   state?: AgentState;
   pinned: boolean;
+  /** Spaces nested under this one (Orca's child worktrees), in the machine's space order. */
+  children: HerdrSpace[];
+  /** Its own sessions and every descendant's: what the space's row stands for when folded. `state` sums these. */
+  tree: Session[];
+  /** How many of its children (at any depth) need you, are working, or are done (unread or seen). */
+  childStates: ChildStates;
+}
+
+export interface ChildStates {
+  needs_you: number;
+  working: number;
+  done: number;
 }
 
 export interface HerdrMachine {
@@ -140,7 +154,7 @@ export function buildMachineTree(machines: Machine[], sessions: Session[], opts:
       key: `machine:${m.id}`,
       machine: m,
       foldKey: `tree:${m.id}`,
-      spaces: built,
+      spaces: nestChildren(m.id, built),
       other: mine.filter((s) => !s.space_id).sort(paneOrder),
       otherFoldKey: `tree:${m.id}/其他`,
       sessions: mine,
@@ -149,6 +163,50 @@ export function buildMachineTree(machines: Machine[], sessions: Session[], opts:
     });
   }
   return out;
+}
+
+const spaceKey = (machineId: string, kind: string | undefined, id: string) => `${machineId}/${kind ?? ""}:${id}`;
+
+/** `spaces` (sorted) with each child moved under its parent; a child whose parent is not there, or whose parents
+ *  loop back to it, stays where it is. Fills every space's `tree`, `state` and `childStates` from its descendants. */
+function nestChildren(machineId: string, spaces: HerdrSpace[]): HerdrSpace[] {
+  const byKey = new Map(spaces.map((sp) => [sp.key, sp]));
+  const parentOf = (sp: HerdrSpace): HerdrSpace | undefined => {
+    const first = sp.sessions[0]!;
+    const pid = first.parent_space_id;
+    const parent = pid ? byKey.get(spaceKey(machineId, first.space_kind, pid)) : undefined;
+    return parent === sp ? undefined : parent;
+  };
+  const loops = (sp: HerdrSpace) => {
+    const seen = new Set<HerdrSpace>([sp]);
+    for (let p = parentOf(sp); p; p = parentOf(p)) {
+      if (seen.has(p)) return true;
+      seen.add(p);
+    }
+    return false;
+  };
+  const top: HerdrSpace[] = [];
+  for (const sp of spaces) {
+    const parent = loops(sp) ? undefined : parentOf(sp);
+    if (parent) parent.children.push(sp);
+    else top.push(sp);
+  }
+  const fill = (sp: HerdrSpace): Session[] => {
+    const below = sp.children.flatMap(fill);
+    const counts: ChildStates = { needs_you: 0, working: 0, done: 0 };
+    for (const c of sp.children) {
+      for (const [k, v] of Object.entries(c.childStates) as [keyof ChildStates, number][]) counts[k] += v;
+      const st = summaryState(c.sessions);
+      if (st === "needs_you" || st === "working") counts[st]++;
+      else if (st === "unread" || st === "idle") counts.done++;
+    }
+    sp.childStates = counts;
+    sp.tree = [...sp.sessions, ...below];
+    sp.state = summaryState(sp.tree);
+    return sp.tree;
+  };
+  top.forEach(fill);
+  return top;
 }
 
 function groupBy<T>(list: T[], key: (x: T) => string): Map<string, T[]> {
@@ -186,5 +244,8 @@ function buildSpace(key: string, machineId: string, list: Session[], pins?: Agen
     loose,
     state: summaryState(sessions),
     pinned: Boolean(pins && isSpacePinned(machineId, name, pins)),
+    children: [],
+    tree: sessions,
+    childStates: { needs_you: 0, working: 0, done: 0 },
   };
 }

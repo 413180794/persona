@@ -143,6 +143,8 @@ export interface Session {
   space_id?: string;
   space_name?: string;
   space_index?: number;
+  /** The space this one is nested under in its host, same machine and kind (Orca: a child worktree's parent, #2073). */
+  parent_space_id?: string;
   slot_id?: string;
   slot_name?: string;
   slot_index?: number;

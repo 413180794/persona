@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -921,5 +922,46 @@ func TestOrcaHookPaneBinding(t *testing.T) {
 	n.mu.Unlock()
 	if !bound {
 		t.Error("an Orca pane not bound on an Orca machine")
+	}
+}
+
+// A child worktree (Orca's「N 个子项」) carries its parent's id as its space's parent, on the space and on the sessions
+// in it; a top-level one, and one that names itself, has none (#2073).
+func TestOrcaChildWorktreeNamesItsParent(t *testing.T) {
+	n, _, o, procs, home := orcaNode(t)
+	writeTranscript(t, home, orcaCwd, sidA, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"x"}`)
+	writeClaudePID(t, home, 4242, sidA)
+	o.SetTerminals(orcaTerm("term_1", "tab1", "leaf1", "claude"))
+	parent := orcarttest.Worktree("repo::/code/main", "/code/main", "refs/heads/main")
+	child := orcarttest.Worktree("repo::"+orcaCwd, orcaCwd, "refs/heads/feature-x", orcarttest.Agent("tab1:leaf1", "claude", "working"))
+	child["parentWorktreeId"] = "repo::/code/main"
+	self := orcarttest.Worktree("repo::/code/self", "/code/self", "refs/heads/self")
+	self["parentWorktreeId"] = "repo::/code/self"
+	o.SetWorktrees(parent, child, self)
+	procs.set("tab1:leaf1", orcaProc{pid: 4242, agent: "claude"})
+
+	if s := byID(listSessions(t, n))[sidA]; s.SpaceID != "repo::"+orcaCwd || s.ParentSpaceID != "repo::/code/main" {
+		t.Errorf("child session: space %q parent %q", s.SpaceID, s.ParentSpaceID)
+	}
+	h := n.hosts.Get(host.Orca)
+	snap, err := h.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := h.(interface {
+		Spaces(context.Context) ([]host.Space, error)
+	}).Spaces(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, spaces := range map[string][]host.Space{"snapshot": snap.Spaces, "catalog": catalog} {
+		got := map[string]string{}
+		for _, sp := range spaces {
+			got[sp.ID] = sp.ParentID
+		}
+		want := map[string]string{"repo::/code/main": "", "repo::" + orcaCwd: "repo::/code/main", "repo::/code/self": ""}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s parents %v, want %v", name, got, want)
+		}
 	}
 }
