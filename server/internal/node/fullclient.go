@@ -59,6 +59,10 @@ type fullClient struct {
 	// is how a focus change is attributed to it (focus.go).
 	activeAt time.Time
 	once     sync.Once
+
+	// leaseFor is fullLease when the client opened: watch outlives the call that opened it, so it does not read the
+	// package variable again.
+	leaseFor time.Duration
 }
 
 var errNoFullClient = fmt.Errorf("%w: this machine has no host that can run a full client (herdr on Linux or macOS)", host.ErrUnsupported)
@@ -104,7 +108,7 @@ func (n *Node) fullOpen(ctx context.Context, params json.RawMessage) (any, error
 
 	cctx, cancel := context.WithCancel(context.Background())
 	f := &fullClient{n: n, id: a.ClientID, ctx: cctx, end: cancel, in: make(chan []byte, fullInputQueue),
-		acked: make(chan struct{}, 1), gone: make(chan struct{}), lease: time.Now()}
+		acked: make(chan struct{}, 1), gone: make(chan struct{}), lease: time.Now(), leaseFor: fullLease}
 	n.mu.Lock()
 	switch {
 	case n.fulls[f.id] != nil:
@@ -189,7 +193,7 @@ func (f *fullClient) watch() {
 	f.mu.Lock()
 	hc := f.hc
 	f.mu.Unlock()
-	t := time.NewTicker(fullLease / 5)
+	t := time.NewTicker(f.leaseFor / 5)
 	defer t.Stop()
 	for {
 		select {
@@ -204,7 +208,7 @@ func (f *fullClient) watch() {
 			return
 		case <-t.C:
 			f.mu.Lock()
-			over := time.Since(f.lease) > fullLease
+			over := time.Since(f.lease) > f.leaseFor
 			f.mu.Unlock()
 			if over {
 				f.stop("the hub stopped renewing the full herdr view", true)

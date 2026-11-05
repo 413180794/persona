@@ -71,7 +71,9 @@ func newScriptHub(t *testing.T, create func(ctx context.Context, ix proto.Intera
 		}
 	}
 	go func() { _ = hub.Serve(ctx, n2hR) }()
-	go func() { _ = n.peer.Serve(ctx, h2nR) }()
+	// The peer read here, not in the goroutine: a test sets n.peer = nil for "no hub" while this one serves.
+	peer := n.peer
+	go func() { _ = peer.Serve(ctx, h2nR) }()
 	t.Cleanup(func() { cancel(); _ = n2hW.Close(); _ = h2nW.Close() })
 
 	// Not t.TempDir(): with a subtest's long name the socket path passes sun_path, 104 bytes on macOS (#2278).

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -56,8 +57,9 @@ func runTestPlugin(mode string) {
 	os.Exit(0)
 }
 
-// pluginTestNode is a node with its own directory, its events kept.
-func pluginTestNode(t *testing.T) (*Node, *[]string) {
+// pluginTestNode is a node with its own directory, its events kept; the returned func reads them, one per line.
+// The host sends events from several goroutines, so they are kept and read under a lock.
+func pluginTestNode(t *testing.T) (*Node, func() string) {
 	t.Helper()
 	// Not t.TempDir(): a program's socket, <home>/.persona/node-plugins/<id>/run.sock, must fit sun_path, which is
 	// 104 bytes on macOS, where $TMPDIR alone is about 49 and t.TempDir() adds the test's name (#2278).
@@ -68,12 +70,17 @@ func pluginTestNode(t *testing.T) (*Node, *[]string) {
 	t.Cleanup(func() { os.RemoveAll(home) })
 	n := &Node{home: home, logger: log.New(os.Stderr, "", 0)}
 	n.dir = filepath.Join(n.home, ".persona")
-	var events []string
+	var (
+		eventsMu sync.Mutex
+		events   []string
+	)
 	ph := n.plugins()
 	ph.mu.Lock()
 	ph.notify = func(event string, params any) {
 		b, _ := json.Marshal(params)
+		eventsMu.Lock()
 		events = append(events, event+" "+string(b))
+		eventsMu.Unlock()
 	}
 	ph.mu.Unlock()
 	t.Cleanup(func() {
@@ -84,7 +91,11 @@ func pluginTestNode(t *testing.T) (*Node, *[]string) {
 		delete(pluginHosts.byDir, n.dir)
 		pluginHosts.Unlock()
 	})
-	return n, &events
+	return n, func() string {
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
+		return strings.Join(events, "\n")
+	}
 }
 
 // testPackage is a plugin package for this test's program, as the hub sends it: a script that runs the test binary.
@@ -184,7 +195,7 @@ func TestPluginProgramOnThisComputer(t *testing.T) {
 		t.Fatalf("no hub token, its data directory, its own variables: %v", env)
 	}
 	waitFor(t, "the program's event", func() bool {
-		return strings.Contains(strings.Join(*events, "\n"), `plugin.node.event {"id":"notes","event":"notes.ready"`)
+		return strings.Contains(events(), `plugin.node.event {"id":"notes","event":"notes.ready"`)
 	})
 
 	// The same start (another lease) leaves it running: the same process.

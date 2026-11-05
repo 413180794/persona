@@ -179,14 +179,16 @@ func (n *Node) statPaths(paths []string, cwd string) []PathStat {
 	// Buffered for every path, so a stat that answers after the deadline does not block its goroutine.
 	answers := make(chan answer, len(paths))
 	slots := make(chan struct{}, statWorkers)
+	// Read once: a stat past the deadline keeps running after this returns, and must not read the variables again.
+	stat, timeout := statOne, statTimeout
 	for i, asked := range paths {
 		go func() {
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			answers <- answer{i, statOne(n, asked, cwd)}
+			answers <- answer{i, stat(n, asked, cwd)}
 		}()
 	}
-	deadline := time.NewTimer(statTimeout)
+	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 	for range paths {
 		select {
