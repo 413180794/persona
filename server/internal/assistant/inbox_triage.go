@@ -129,7 +129,8 @@ func (s *Service) askTriage(ctx context.Context, it *InboxItem, timeout time.Dur
 	if rules == "" {
 		rules = s.inboxConfig(ctx).Rules
 	}
-	system := prompts.RenderInboxTriage(prompts.InboxTriage{Owner: s.hello(ctx).Owner, Rules: rules})
+	hello := s.hello(ctx)
+	system := prompts.RenderInboxTriage(prompts.InboxTriage{Owner: hello.Owner, Rules: rules, Language: answerLanguage(hello.Locale)})
 	var out struct {
 		Tier    string `json:"tier"`
 		Summary string `json:"summary"`
@@ -228,7 +229,8 @@ func (s *Service) draftReply(ctx context.Context, id, instruction string) (strin
 		return "", errNoInboxItem
 	}
 	hello := s.hello(ctx)
-	system := prompts.RenderInboxDraft(prompts.InboxDraft{Owner: hello.Owner, Notes: strings.TrimSpace(hello.OwnerNotes)})
+	system := prompts.RenderInboxDraft(prompts.InboxDraft{Owner: hello.Owner, Notes: strings.TrimSpace(hello.OwnerNotes),
+		Language: answerLanguage(hello.Locale)})
 	input := prompts.RenderInboxDraftInput(prompts.InboxDraftInput{Item: item, Instruction: strings.TrimSpace(instruction)})
 	cctx, cancel := context.WithTimeout(ctx, draftModelWait)
 	defer cancel()

@@ -11,6 +11,7 @@ import (
 
 	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -31,7 +32,7 @@ import (
 var titleKinds = []string{"功能", "设计", "修复", "优化", "发布", "探索", "文档", "研究", "评审", "定时"}
 
 const (
-	maxTitleTopic = 14 // characters
+	maxTitleTopic = 14 // characters, in Chinese; titleTopicMax for the user's language
 	titlesKey     = "assistant.titles"
 	titleTask     = "定时"
 	titleFallback = "探索"
@@ -280,13 +281,15 @@ func (s *Service) makeTitle(ctx context.Context, started time.Time, first, reply
 	reply = wire.AssistantCardText(reply)
 	day := titleDay(started, s.location(ctx))
 	if strings.TrimSpace(first) != "" {
-		retry := ""
+		locale := s.hello(ctx).Locale
+		retry, max := "", titleTopicMax(locale)
+		system := prompts.RenderSessionTitle(prompts.SessionTitle{Language: answerLanguage(locale), TopicMax: max})
 		for range 2 {
 			cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 			var res struct {
 				Text string `json:"text"`
 			}
-			err := s.appCall(cctx, AppModels, ModelsComplete, map[string]any{"purpose": "assistant.title", "system": prompts.RenderSessionTitle(),
+			err := s.appCall(cctx, AppModels, ModelsComplete, map[string]any{"purpose": "assistant.title", "system": system,
 				"input": prompts.RenderSessionTitleInput(prompts.SessionTitleInput{First: first, Reply: reply, Retry: retry}), "max_tokens": 200}, &res)
 			cancel()
 			if err != nil {
@@ -295,12 +298,12 @@ func (s *Service) makeTitle(ctx context.Context, started time.Time, first, reply
 				}
 				break
 			}
-			kind, topic, ok := parseTitle(res.Text)
+			kind, topic, ok := parseTitleMax(res.Text, max)
 			if ok {
 				return day + " | " + kind + " | " + topic
 			}
 			if kind != "" && retry != "" { // a known kind and a topic that is still too long: cut it
-				return day + " | " + kind + " | " + titleTopic(topic)
+				return day + " | " + kind + " | " + cutRunes(topic, max)
 			}
 			retry = cutRunes(oneLine(res.Text), 60)
 		}
@@ -317,9 +320,25 @@ func titleDay(t time.Time, loc *time.Location) string { return t.In(loc).Format(
 
 var titleDate = regexp.MustCompile(`^\d{4}\s*$`)
 
-// parseTitle reads 「类型 | 主题」 from what the model said (one line; a date it added anyway, quotes, a full-width
-// bar are tolerated). kind is "" when it isn't one of titleKinds; ok when the topic fits too.
-func parseTitle(out string) (kind, topic string, ok bool) {
+// titleTopicMax is how many characters a topic in the user's language may have: 14 in Chinese (and when the hub says
+// no language), more where a word takes more characters.
+func titleTopicMax(locale string) int {
+	switch l := i18n.Lang(locale); {
+	case !i18n.Valid(l) || l == i18n.ZhHans:
+		return maxTitleTopic
+	case l == i18n.Ja:
+		return 20
+	default:
+		return 32
+	}
+}
+
+// parseTitle is parseTitleMax for a Chinese topic.
+func parseTitle(out string) (kind, topic string, ok bool) { return parseTitleMax(out, maxTitleTopic) }
+
+// parseTitleMax reads 「类型 | 主题」 from what the model said (one line; a date it added anyway, quotes, a full-width
+// bar are tolerated). kind is "" when it isn't one of titleKinds; ok when the topic fits in max characters too.
+func parseTitleMax(out string, max int) (kind, topic string, ok bool) {
 	line := ""
 	for l := range strings.SplitSeq(out, "\n") {
 		if l = strings.TrimSpace(l); l != "" {
@@ -341,7 +360,7 @@ func parseTitle(out string) (kind, topic string, ok bool) {
 	}
 	topic = strings.Trim(strings.Join(strings.Fields(parts[1]), " "), "「」\"'“”。.，, ")
 	n := utf8.RuneCountInString(topic)
-	return kind, topic, kind != "" && n > 0 && n <= maxTitleTopic
+	return kind, topic, kind != "" && n > 0 && n <= max
 }
 
 var contextBlock = regexp.MustCompile(`(?s)<jarvis-context\b[^>]*>.*?</jarvis-context>`)

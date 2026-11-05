@@ -17,6 +17,8 @@ func RenderInboxItem(it InboxItem) string { return render("inbox/item", it) }
 type InboxTriage struct {
 	Owner string // "" is 你
 	Rules string // the user's own rules, trimmed: the item's source's (InboxThing.Rules), else inbox.rules
+	// Language is the summary's language by its own name ("English", "日本語"); "" is Chinese, as before i18n.
+	Language string
 }
 
 func RenderInboxTriage(t InboxTriage) string { return render("inbox/triage", t) }
@@ -29,6 +31,9 @@ type InboxGroup struct {
 	Rules           string // the user's own rules, trimmed: the batch's source's (InboxThing.Rules), else inbox.rules
 	MaxCalls        int    // tool calls the batch may make
 	NewMax          int    // new events one batch may open
+	// Language is the titles' and summaries' language by its own name ("English", "日本語"); "" leaves the title's
+	// unsaid and the summary in Chinese, as before i18n.
+	Language string
 }
 
 func RenderInboxGroup(g InboxGroup) string { return render("inbox/group", g) }
@@ -54,6 +59,9 @@ func RenderInboxGroupInput(in InboxGroupInput) string { return render("inbox/gro
 type InboxDraft struct {
 	Owner string // "" is 你
 	Notes string // what the assistant knows about the user, trimmed
+	// Language is the user's language by its own name ("English", "日本語"), for a WeChat reply when the other side's
+	// is unclear; "" keeps WeChat replies in Chinese, as before i18n.
+	Language string
 }
 
 func RenderInboxDraft(d InboxDraft) string { return render("inbox/draft", d) }

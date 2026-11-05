@@ -1,0 +1,333 @@
+package hub
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// The node writes a transcript's notices, task lines and activities in Chinese (internal/transcript): it does not know
+// the user's language, and the node↔hub RPC stays as it is. On their way to the apps the hub rewrites the ones it can
+// tell apart, from the item's structured fields (a task note's kind and status) or from the node's exact Chinese
+// wording, into the reader's language (docs/i18n.md). zh-Hans, and anything the hub does not recognize (an older or
+// newer node's wording), go out as the node wrote them. The items the assistant and the channels read are not touched:
+// they match some of these lines (assistant/done.go's 已中断).
+//
+// Kept in Chinese because the apps parse them: 上下文已压缩 / 已从压缩的上下文继续 (the compaction divider), API 错误：…
+// (the API error card), …（已截断…） (cut text), 压缩上下文 (the /compact echo).
+
+const transcriptNS = "hub-transcript_text."
+
+func tt(l i18n.Lang, key string, args ...i18n.Args) string {
+	return i18n.T(l, transcriptNS+key, args...)
+}
+
+// localizedItems is items as an app reading l gets them: a copy with the node's Chinese lines rewritten, or items
+// itself when nothing changes (zh-Hans, nothing recognized). items is never written to: the node's slice is shared.
+func localizedItems(l i18n.Lang, items []proto.Item) []proto.Item {
+	if l == i18n.ZhHans || !i18n.Valid(l) {
+		return items
+	}
+	var out []proto.Item
+	for i := range items {
+		it, ok := localizedItem(l, items[i])
+		if !ok {
+			continue
+		}
+		if out == nil {
+			out = append([]proto.Item(nil), items...)
+		}
+		out[i] = it
+	}
+	if out == nil {
+		return items
+	}
+	return out
+}
+
+// localizedItem is it in l, ok when anything changed.
+func localizedItem(l i18n.Lang, it proto.Item) (proto.Item, bool) {
+	changed := false
+	set := func(dst *string, s string) {
+		if s != *dst {
+			*dst, changed = s, true
+		}
+	}
+	switch {
+	case it.Kind == proto.KindNotice && it.Task != nil:
+		set(&it.Text, taskNoteText(l, it.Task, it.Text))
+	case it.Kind == proto.KindNotice:
+		set(&it.Text, noticeText(l, it.Text))
+	case it.Kind == proto.KindText && it.Role == "user" && it.From != "":
+		set(&it.From, fromName(l, it.From))
+		set(&it.Text, teammateText(l, it.Text))
+	case it.Kind == proto.KindText && it.Role == "assistant" && strings.Contains(it.Text, codexNewChatLink):
+		set(&it.Text, strings.ReplaceAll(it.Text, codexNewChatLink, "["+tt(l, "open_new_chat")+"](jarvis://session/"))
+	case it.Kind == proto.KindToolResult && strings.Contains(it.Text, loadedToolPrefix):
+		set(&it.Text, loadedTools(l, it.Text))
+	}
+	return it, changed
+}
+
+// ---- notices ----
+
+const (
+	loopFired       = "/loop 到点，开始新一轮"
+	codexExtension  = "Codex 扩展事件："
+	codexEvent      = "Codex 事件："
+	codexRecordNote = "（完整记录在原会话中）"
+)
+
+// noticeText is one of the node's fixed notices in l; anything else stays as it is.
+func noticeText(l i18n.Lang, s string) string {
+	switch {
+	case s == "已中断":
+		return tt(l, "interrupted")
+	case s == loopFired:
+		return tt(l, "loop_fired")
+	case strings.HasPrefix(s, loopFired+"："):
+		return tt(l, "loop_fired_prompt", i18n.Args{"prompt": strings.TrimPrefix(s, loopFired+"：")})
+	case strings.HasPrefix(s, codexExtension) && strings.HasSuffix(s, codexRecordNote):
+		return tt(l, "codex_extension", i18n.Args{"kind": strings.TrimSuffix(strings.TrimPrefix(s, codexExtension), codexRecordNote)})
+	case strings.HasPrefix(s, codexEvent) && strings.HasSuffix(s, codexRecordNote):
+		return tt(l, "codex_event", i18n.Args{"type": strings.TrimSuffix(strings.TrimPrefix(s, codexEvent), codexRecordNote)})
+	}
+	return s
+}
+
+// taskNoteHead is the key of a task note's heading (transcript/tasknote.go noteText), "" for a task of another kind.
+func taskNoteHead(n *proto.TaskNote) (key string, args i18n.Args) {
+	failed := func(prefix string) (string, i18n.Args) {
+		if n.ExitCode != nil {
+			return prefix + "_failed_code", i18n.Args{"code": strconv.Itoa(*n.ExitCode)}
+		}
+		return prefix + "_failed", nil
+	}
+	switch n.Kind {
+	case "shell":
+		switch n.Status {
+		case "completed":
+			return "shell_completed", nil
+		case "failed":
+			return failed("shell")
+		case "killed", "stopped":
+			return "shell_stopped", nil
+		}
+		return "shell", nil
+	case "monitor":
+		switch n.Status {
+		case "event":
+			return "monitor_event", nil
+		case "ended", "completed":
+			return "monitor_ended", nil
+		case "stopped", "killed":
+			return "monitor_stopped", nil
+		case "failed":
+			return failed("monitor")
+		}
+		return "monitor", nil
+	case "agent":
+		switch n.Status {
+		case "completed":
+			return "agent_completed", nil
+		case "failed":
+			return "agent_failed", nil
+		case "waiting":
+			return "agent_waiting", nil
+		case "killed", "stopped":
+			return "agent_stopped", nil
+		}
+		return "agent", nil
+	}
+	return "", nil
+}
+
+// taskNoteText is a task note's line in l: its heading rewritten from the note's kind and status when text is what the
+// node wrote for them (「后台命令完成 · <title>」), what follows the heading (the title, a Monitor's event) kept.
+func taskNoteText(l i18n.Lang, n *proto.TaskNote, text string) string {
+	key, args := taskNoteHead(n)
+	if key == "" {
+		if text == "后台任务有更新" {
+			return tt(l, "task_updated")
+		}
+		return text
+	}
+	zh := tt(i18n.ZhHans, key, args)
+	switch {
+	case text == zh:
+		return tt(l, key, args)
+	case strings.HasPrefix(text, zh+" · "):
+		return tt(l, key, args) + text[len(zh):]
+	}
+	return text
+}
+
+// ---- who a message is from, and what it says ----
+
+// fromName is the sender's name in l when it is the node's stand-in for a sender without one.
+func fromName(l i18n.Lang, from string) string {
+	switch from {
+	case "另一个会话":
+		return tt(l, "from_session")
+	case "队友":
+		return tt(l, "from_teammate")
+	}
+	return from
+}
+
+// teammateLabels are the bold headings transcript/teammate.go puts on an agent-teams note, by key; labeled ones are
+// followed by 「：<what>」.
+var (
+	teammateLabels = map[string]string{"被中断": "tm_interrupted", "同意结束": "tm_shutdown_approved",
+		"提交了计划，等批准": "tm_plan_submitted", "计划已批准": "tm_plan_approved", "计划被退回": "tm_plan_rejected", "分配任务": "tm_assigned"}
+	teammateLabeled = map[string]string{"出错停下": "tm_failed", "请求结束": "tm_shutdown_request", "拒绝结束": "tm_shutdown_rejected",
+		"分配任务": "tm_assigned"}
+)
+
+// teammateText is an agent-teams note (transcript/teammate.go teammateNote: Markdown paragraphs) with the node's
+// headings in l; the teammate's own words stay.
+func teammateText(l i18n.Lang, s string) string {
+	if s == "空闲，等待新的任务" {
+		return tt(l, "tm_idle")
+	}
+	if !strings.Contains(s, "**") {
+		return s
+	}
+	parts := strings.Split(s, "\n\n")
+	for i, p := range parts {
+		if !strings.HasPrefix(p, "**") {
+			continue
+		}
+		end := strings.Index(p[2:], "**")
+		if end < 0 {
+			continue
+		}
+		label, rest := p[2:2+end], p[2+end+2:]
+		head, ok := teammateHead(l, label)
+		if !ok {
+			continue
+		}
+		switch {
+		case rest == "":
+			parts[i] = "**" + head + "**"
+		case strings.HasPrefix(rest, "："):
+			if _, ok := teammateLabeled[strings.SplitN(label, " #", 2)[0]]; ok {
+				parts[i] = tt(l, "tm_labeled", i18n.Args{"label": "**" + head + "**", "text": strings.TrimPrefix(rest, "：")})
+			}
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// teammateHead is one of teammateNote's headings in l (「分配任务 #3」 with its task's number).
+func teammateHead(l i18n.Lang, label string) (string, bool) {
+	if id, ok := strings.CutPrefix(label, "分配任务 #"); ok && id != "" {
+		return tt(l, "tm_assigned_id", i18n.Args{"id": id}), true
+	}
+	if key, ok := teammateLabels[label]; ok {
+		return tt(l, key), true
+	}
+	if key, ok := teammateLabeled[label]; ok {
+		return tt(l, key), true
+	}
+	return "", false
+}
+
+// codexNewChatLink starts the link transcript/codex.go puts where the Codex app created a thread.
+const codexNewChatLink = "[打开新建的对话](jarvis://session/"
+
+const loadedToolPrefix = "已加载工具 "
+
+// loadedTools rewrites the 「已加载工具 <name>」 lines of a ToolSearch result (transcript.go's tool_reference).
+func loadedTools(l i18n.Lang, s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if name, ok := strings.CutPrefix(line, loadedToolPrefix); ok && name != "" && !strings.ContainsAny(name, " \t") {
+			lines[i] = tt(l, "loaded_tool", i18n.Args{"name": name})
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// ---- a session's activity, background tasks and queue ----
+
+// activityPhrases are transcript.Activity's fixed lines, activityVerbs its verbs (「在读 tasks.go」, or alone), by key.
+var (
+	activityPhrases = map[string]string{
+		"在更新计划": "act_plan", "在问你问题": "act_asking", "在等你批准计划": "act_plan_approval", "在等待": "act_waiting",
+		"在等后台任务": "act_waiting_task", "在停后台任务": "act_stopping_task", "在找工具": "act_finding_tools", "在查代码": "act_lsp",
+		"在等 CI": "act_ci", "在提 PR": "act_pr_create", "在合并 PR": "act_pr_merge", "在发版": "act_release", "在部署": "act_deploy",
+		"在跑测试": "act_test", "在检查代码": "act_lint", "在编译": "act_build", "在装依赖": "act_install", "在推送代码": "act_push",
+		"在提交代码": "act_commit", "在同步代码": "act_sync", "在看改动": "act_diff", "在用模拟器": "act_simulator",
+		"在搜代码": "act_search_code", "在读文件": "act_read_files", "在跑命令": "act_command",
+	}
+	activityVerbs = map[string]string{
+		"在读": "act_read", "在改": "act_edit", "在写": "act_write", "在搜": "act_grep", "在找文件": "act_glob", "在看目录": "act_ls",
+		"在看网页": "act_fetch", "在搜网页": "act_web_search", "在派子任务": "act_subtask", "在用技能": "act_skill", "在调用": "act_tool",
+		"在跑": "act_run",
+	}
+)
+
+// activityLen is transcript's: an activity is one short line on a task card.
+const activityLen = 40
+
+// activityText is transcript.Activity's line in l; one it does not know stays as it is.
+func activityText(l i18n.Lang, s string) string {
+	if key, ok := activityPhrases[s]; ok {
+		return tt(l, key)
+	}
+	if key, ok := activityVerbs[s]; ok {
+		return tt(l, key)
+	}
+	verb, what, ok := strings.Cut(s, " ")
+	if !ok || what == "" {
+		return s
+	}
+	key, ok := activityVerbs[verb]
+	if !ok {
+		return s
+	}
+	out := tt(l, key+"_what", i18n.Args{"what": what})
+	if r := []rune(out); len(r) > activityLen {
+		out = strings.TrimSuffix(string(r[:activityLen-1]), "…") + "…"
+	}
+	return out
+}
+
+// queuedFrom starts a queued message another session sent (transcript.go applyQueue).
+const queuedFrom = "【来自 "
+
+// localizeSession rewrites s's node-written lines in l: its activity, a background command's stand-in description, the
+// sender of a queued message. The node's slices are shared: changed ones are copied.
+func localizeSession(l i18n.Lang, s *proto.Session) {
+	if l == i18n.ZhHans || !i18n.Valid(l) {
+		return
+	}
+	s.Activity = activityText(l, s.Activity)
+	copied := false
+	for i, b := range s.Background {
+		if b.Description == "超时转到后台的命令" {
+			if !copied {
+				s.Background, copied = append([]proto.BackgroundTask(nil), s.Background...), true
+			}
+			s.Background[i].Description = tt(l, "background_moved")
+		}
+	}
+	copied = false
+	for i, q := range s.Queued {
+		rest, ok := strings.CutPrefix(q, queuedFrom)
+		if !ok {
+			continue
+		}
+		from, body, ok := strings.Cut(rest, "】")
+		if !ok {
+			continue
+		}
+		if !copied {
+			s.Queued, copied = append([]string(nil), s.Queued...), true
+		}
+		s.Queued[i] = tt(l, "queued_from", i18n.Args{"from": fromName(l, from)}) + body
+	}
+}

@@ -96,6 +96,10 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 - 包初始化时解析全部模板（`template.Must`，`missingkey=error`）：语法错误启动即崩，测试里先暴露；渲染出错（字段名写错）直接 panic，
   不会把半截提示词交给模型。`TestEveryTemplateIsUsed` 抓没人用的模板。
 - 提示词里要写字面的 `{{`：`{{"{{"}}`。
+- 写给用户看的输出要求「用中文」的地方换成 `Language` 字段（语言的自称，`English`、`日本語`；调用方用 `assistant.answerLanguage(hello.Locale)`，zh-Hans 传空），
+  模板里 `{{if .Language}}用{{.Language}}{{else}}用中文{{end}}`：为空时和原来一字不差，原来的 golden 不变，en / ja 另有 `*.en.golden` / `*.ja.golden`
+  （`assistant/claude_md.md`、`inbox/triage.md`、`inbox/group.md`、`inbox/draft.md`、`tools/session_title.md`；`docs/i18n.md`）。
+  知识库的提示词（`kb/`）保持中文，见 `docs/i18n.md`「后续工作」。
 
 ## 改一个提示词
 

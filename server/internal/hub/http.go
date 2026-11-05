@@ -473,7 +473,7 @@ func (h *Hub) sessionItems(w http.ResponseWriter, r *http.Request, m *Machine) {
 		callErr(w, err)
 		return
 	}
-	res.Items = h.withInjected(res.Items)
+	res.Items = localizedItems(h.requestLang(r), h.withInjected(res.Items))
 	if q.Get("lazy_images") == "1" {
 		res.Items = proto.WithoutImageData(res.Items)
 	}
@@ -491,7 +491,7 @@ func (h *Hub) sessionItemFull(w http.ResponseWriter, r *http.Request, m *Machine
 		return
 	}
 	h.followedItems(m.cfg.ID, r.PathValue("sid"), []proto.Item{it})
-	writeJSON(w, h.withInjected([]proto.Item{it})[0])
+	writeJSON(w, localizedItems(h.requestLang(r), h.withInjected([]proto.Item{it}))[0])
 }
 
 // sessionImage serves one item's image as raw bytes. An item's image never changes, so the app may cache it forever.
@@ -843,7 +843,12 @@ func (h *Hub) itemsToSubscribers(machineID, sessionID string, items []proto.Item
 		b, _ := json.Marshal(span.into(map[string]any{"type": "items", "machine_id": machineID, "session_id": sessionID, "items": items}))
 		return b
 	}
-	var full, lazy []byte
+	// One message per language and image mode: the node's Chinese lines read in each connection's (transcript_text.go).
+	type form struct {
+		lang i18n.Lang
+		lazy bool
+	}
+	msgs := map[form][]byte{}
 	key := [2]string{machineID, sessionID}
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -854,17 +859,15 @@ func (h *Hub) itemsToSubscribers(machineID, sessionID string, items []proto.Item
 		if !sub {
 			continue
 		}
-		var b []byte
-		if wantsLazy {
-			if lazy == nil {
-				lazy = msg(proto.WithoutImageData(items))
+		f := form{c.lang(), wantsLazy}
+		b, ok := msgs[f]
+		if !ok {
+			its := localizedItems(f.lang, items)
+			if f.lazy {
+				its = proto.WithoutImageData(its)
 			}
-			b = lazy
-		} else {
-			if full == nil {
-				full = msg(items)
-			}
-			b = full
+			b = msg(its)
+			msgs[f] = b
 		}
 		select {
 		case c.out <- b:
@@ -1173,7 +1176,7 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 			c.sendJSON(map[string]any{"type": "error", "machine_id": m.cfg.ID, "session_id": sid, "error": err.Error()})
 			return
 		}
-		res.Items = h.withInjected(res.Items)
+		res.Items = localizedItems(c.lang(), h.withInjected(res.Items))
 		if lazy {
 			res.Items = proto.WithoutImageData(res.Items)
 		}

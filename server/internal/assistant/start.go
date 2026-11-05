@@ -567,8 +567,9 @@ func (s *Service) Rename(ctx context.Context, p RenameParams) (json.RawMessage, 
 	return out, nil
 }
 
-// answerLanguage is what the CLAUDE.md asks the assistant to answer in: the user's language by its own name, "" for
-// zh-Hans (the CLAUDE.md then says 用中文, as it did before i18n).
+// answerLanguage is what the CLAUDE.md asks the assistant to answer in, and the language the inbox's summaries and
+// the conversations' titles are written in: the user's language by its own name, "" for zh-Hans (the prompts then
+// say 用中文, as they did before i18n).
 func answerLanguage(locale string) string {
 	l := i18n.Lang(locale)
 	if !i18n.Valid(l) || l == i18n.ZhHans {

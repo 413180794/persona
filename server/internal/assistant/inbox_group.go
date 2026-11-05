@@ -264,8 +264,9 @@ func (s *Service) askGroup(ctx context.Context, c assistantwire.InboxSource, t c
 	if rules == "" {
 		rules = s.inboxConfig(ctx).Rules
 	}
-	system := prompts.RenderInboxGroup(prompts.InboxGroup{Owner: s.hello(ctx).Owner, MetaDescription: strings.TrimSpace(c.MetaDescription),
-		Rules: rules, MaxCalls: groupCalls, NewMax: groupNewMax})
+	hello := s.hello(ctx)
+	system := prompts.RenderInboxGroup(prompts.InboxGroup{Owner: hello.Owner, MetaDescription: strings.TrimSpace(c.MetaDescription),
+		Rules: rules, MaxCalls: groupCalls, NewMax: groupNewMax, Language: answerLanguage(hello.Locale)})
 	seen := map[string]groupEvent{} // every event the model was shown: the only ones its answer may name
 	for _, e := range events {
 		seen[e.ID] = e

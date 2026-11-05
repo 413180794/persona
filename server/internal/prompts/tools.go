@@ -19,8 +19,15 @@ func RenderTranslateMailInput(subject, text string) string {
 // RenderLauncherCheck is the one-word prompt 设置 › 模型's 测试可用性 runs a launcher with (tools/launcher_check).
 func RenderLauncherCheck() string { return render("tools/launcher_check", nil) }
 
-// RenderSessionTitle names an assistant conversation after its first turn (tools/session_title): "类型 | 主题".
-func RenderSessionTitle() string { return render("tools/session_title", nil) }
+// SessionTitle is the system prompt naming an assistant conversation after its first turn (tools/session_title):
+// "类型 | 主题". The 类型 words stay Chinese whatever the language (the assistant parses them, titleKinds).
+type SessionTitle struct {
+	// Language is the topic's language by its own name ("English", "日本語"); "" is Chinese, as before i18n.
+	Language string
+	TopicMax int // the topic's characters with a Language (Chinese's 14 stays in the template)
+}
+
+func RenderSessionTitle(t SessionTitle) string { return render("tools/session_title", t) }
 
 // SessionTitleInput is what the title model reads: the first exchange, and its last answer when that broke the format.
 type SessionTitleInput struct{ First, Reply, Retry string }
