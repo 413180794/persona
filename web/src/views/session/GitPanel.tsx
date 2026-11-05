@@ -20,9 +20,9 @@ import {
   type GitStatus,
 } from "../../lib/files";
 import { ago, shortPath } from "../../lib/format";
-import { openPanel } from "../../lib/panel";
+import { openPanel, type GitSpot } from "../../lib/panel";
 import { useFsLive } from "../../lib/use-fs-live";
-import { Button, copyText, cx, IconButton, Loading, Spinner } from "../../ui/atoms";
+import { Button, copyText, cx, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { PanelHeader } from "../SidePanel";
 import { CompareView, compareKind } from "./files/CompareView";
@@ -30,11 +30,15 @@ import { DiffLines } from "./files/DiffLines";
 import { BackHeader, Empty, GitBadge, Segmented } from "./files/parts";
 import { formatDate, t } from "../../i18n";
 
-type View = { kind: "diff"; file: GitFile; staged: boolean } | { kind: "commit"; commit: GitCommit } | { kind: "commitFile"; commit: GitCommit; file: GitFile; diff: string; truncated: boolean };
+// `at`: a line to show and mark when the view opens (a comment card's click, lib/comments.ts openSpot)
+type View =
+  | { kind: "diff"; file: GitFile; staged: boolean; at?: GitSpot }
+  | { kind: "commit"; commit: GitCommit; at?: GitSpot }
+  | { kind: "commitFile"; commit: GitCommit; file: GitFile; diff: string; truncated: boolean; at?: GitSpot };
 
 const PAGE = 50;
 
-export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string; cwd: string; onClose: () => void }) {
+export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: string; cwd: string; at?: GitSpot; onClose: () => void }) {
   const base = `/machines/${enc(mid)}/git`;
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [error, setError] = useState("");
@@ -89,6 +93,20 @@ export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string;
     }
   };
 
+  // opened at a spot: the diff it names, once the status is read (a commit's list is read by its own view)
+  const opened = useRef<GitSpot | undefined>(undefined);
+  useEffect(() => {
+    if (!at || opened.current === at || !status?.is_repo) return;
+    opened.current = at;
+    if (at.diff.kind === "commit") {
+      const sha = at.diff.sha;
+      setViews([{ kind: "commit", commit: { hash: sha, short: sha.slice(0, 8), subject: "", author: "" }, at }]);
+      return;
+    }
+    const file = status.files.find((f) => f.path === at.path);
+    if (file) setViews([{ kind: "diff", file, staged: at.diff.kind === "staged", at }]);
+    else toast(t("chat-comments.jump_code_gone"));
+  }, [at, status]);
   const push = (v: View) => setViews((vs) => [...vs, v]);
   const back = () => setViews((vs) => vs.slice(0, -1));
   const top = views[views.length - 1];
@@ -146,16 +164,16 @@ export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string;
         </div>
       </div>
       {top?.kind === "diff" && (
-        <DiffView key={top.file.path} mid={mid} root={status?.root ?? cwd} base={base} cwd={cwd} file={top.file} staged={top.staged} refreshed={live} onStaged={(staged) => setViews((vs) => [...vs.slice(0, -1), { ...top, staged }])} onBack={back} onClose={onClose} />
+        <DiffView key={`${top.file.path}:${top.at?.line ?? ""}`} mid={mid} sid={sid} root={status?.root ?? cwd} base={base} cwd={cwd} file={top.file} staged={top.staged} at={top.at} refreshed={live} onStaged={(staged) => setViews((vs) => [...vs.slice(0, -1), { ...top, staged, at: undefined }])} onBack={back} onClose={onClose} />
       )}
-      {top?.kind === "commit" && <CommitView key={top.commit.hash} base={base} cwd={cwd} commit={top.commit} onOpen={push} onBack={back} onClose={onClose} />}
+      {top?.kind === "commit" && <CommitView key={top.commit.hash} base={base} cwd={cwd} commit={top.commit} at={top.at} onOpen={push} onBack={back} onClose={onClose} />}
       {top?.kind === "commitFile" && (
         <>
           <BackHeader title={fileName(top.file.path)} subtitle={`${top.commit.short} · ${dirName(top.file.path) || t("session-gitpanel.repo_root")}`} onBack={back} onClose={onClose} actions={<IconButton icon="copy" label={t("session-gitpanel.copy_diff")} onClick={() => copyText(top.diff)} />} />
           {compareKind(top.file.path) ? (
             <CompareView mid={mid} cwd={cwd} root={status?.root ?? cwd} path={top.file.path} before={`${top.commit.hash}^`} after={top.commit.hash} />
           ) : (
-            <DiffLines diff={top.diff} truncated={top.truncated} />
+            <DiffLines diff={top.diff} truncated={top.truncated} comment={{ mid, sid, cwd, path: top.file.path, diff: { kind: "commit", sha: top.commit.hash }, at: top.at && { line: top.at.line, to: top.at.to, old: top.at.old } }} />
           )}
         </>
       )}
@@ -286,22 +304,26 @@ function CommitRow({ c, onOpen }: { c: GitCommit; onOpen: () => void }) {
 
 function DiffView({
   mid,
+  sid,
   root,
   base,
   cwd,
   file,
   staged,
+  at,
   refreshed,
   onStaged,
   onBack,
   onClose,
 }: {
   mid: string;
+  sid: string;
   root: string;
   base: string;
   cwd: string;
   file: GitFile;
   staged: boolean;
+  at?: GitSpot;
   /** Counts the Git changes seen on the computer: the diff is read again, in place, when it moves. */
   refreshed: number;
   onStaged: (staged: boolean) => void;
@@ -353,7 +375,7 @@ function DiffView({
         // documents and pictures: the two versions themselves (unstaged: index → disk; staged: HEAD → index)
         <CompareView key={staged ? "s" : "w"} mid={mid} cwd={cwd} root={root} path={file.path} before={staged ? "HEAD" : "INDEX"} after={staged ? "INDEX" : "WORKTREE"} deleted={!staged && file.worktree === "D"} />
       ) : diff ? (
-        <DiffLines diff={diff.diff} truncated={diff.truncated} />
+        <DiffLines diff={diff.diff} truncated={diff.truncated} comment={{ mid, sid, cwd, path: file.path, diff: { kind: staged ? "staged" : "unstaged" }, at: at && { line: at.line, to: at.to, old: at.old } }} />
       ) : error ? (
         <Empty icon="info" title={t("session-gitpanel.diff_failed")} detail={error} action={<Button icon="retry" onClick={() => load()}>{t("session-gitpanel.retry")}</Button>} />
       ) : (
@@ -365,7 +387,7 @@ function DiffView({
   );
 }
 
-function CommitView({ base, cwd, commit, onOpen, onBack, onClose }: { base: string; cwd: string; commit: GitCommit; onOpen: (v: View) => void; onBack: () => void; onClose: () => void }) {
+function CommitView({ base, cwd, commit, at, onOpen, onBack, onClose }: { base: string; cwd: string; commit: GitCommit; at?: GitSpot; onOpen: (v: View) => void; onBack: () => void; onClose: () => void }) {
   const [show, setShow] = useState<GitShow | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -376,6 +398,20 @@ function CommitView({ base, cwd, commit, onOpen, onBack, onClose }: { base: stri
     return () => ac.abort();
   }, [base, cwd, commit.hash]);
   const chunks = show ? splitDiff(show.diff) : {};
+  // opened at a spot in this commit: on to the file's diff as soon as the commit is read
+  const went = useRef(false);
+  useEffect(() => {
+    if (!at || !show || went.current) return;
+    went.current = true;
+    const f = show.files.find((x) => x.path === at.path);
+    if (!f) {
+      toast(t("chat-comments.jump_code_gone"));
+      return;
+    }
+    const d = splitDiff(show.diff)[f.path];
+    onOpen({ kind: "commitFile", commit: show.commit, file: f, diff: d ?? "", truncated: show.truncated && d === undefined, at });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show]);
   const body = show?.commit.body ?? commit.body;
   const when = commit.date ? new Date(commit.date) : null;
   return (

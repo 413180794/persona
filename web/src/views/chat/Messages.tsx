@@ -2,7 +2,7 @@
 // messages in one bubble, a message another Claude session sent, and a /loop waking the agent again.
 import { useState } from "react";
 import { clock } from "../../lib/format";
-import { splitQuote } from "../../lib/drafts";
+import { splitQuotes } from "../../lib/drafts";
 import { taskOfInjected } from "../../lib/injected";
 import { openPanel } from "../../lib/panel";
 import { getSession, useStore } from "../../lib/store";
@@ -13,7 +13,7 @@ import { Icon, type IconName } from "../../ui/icons";
 import { AttachedPhotos } from "./AttachedPhotos";
 import { FileCards } from "./FileCards";
 import { MessageActions } from "./MessageActions";
-import { QuoteBlock } from "./Quote";
+import { QuoteStack } from "./Quote";
 import { Markdown } from "../../ui/Markdown";
 import { PathText } from "../../ui/PathLinks";
 import { Thumb } from "./Steps";
@@ -48,11 +48,11 @@ export function MergedBubble({ msg, mid, sid }: { msg: UserMessage; mid: string;
 
 /** One of the merged messages; one sent with 引用 starts with its quote card (Quote.tsx). */
 function MergedPart({ text, mid, sid }: { text: string; mid: string; sid: string }) {
-  const split = splitQuote(text);
+  const split = splitQuotes(text);
   const words = split ? split.rest : text;
   return (
     <>
-      {split && <QuoteBlock text={split.quote} />}
+      {split && <QuoteStack blocks={split.quotes} mid={mid} sid={sid} />}
       {words && (
         <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">
           <PathText text={words} mid={mid} cwd={getSession(mid, sid)?.cwd} />

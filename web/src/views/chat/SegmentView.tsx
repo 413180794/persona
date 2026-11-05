@@ -8,7 +8,7 @@ import { exchangeSteps, isLoopTick, isOwnMessage, type Segment, type UserMessage
 import type { Item, SessionLive } from "../../lib/types";
 import { planSteps, thinkingDurations, workBlocks, type ToolStep } from "../../lib/work-groups";
 import { channelOf, useChannels } from "../../lib/channels";
-import { splitQuote } from "../../lib/drafts";
+import { splitQuotes } from "../../lib/drafts";
 import { EASE } from "../../ui/atoms";
 import { ChannelMark } from "../../ui/ChannelMark";
 import { Markdown } from "../../ui/Markdown";
@@ -20,7 +20,7 @@ import { AttachedPhotos } from "./AttachedPhotos";
 import { useFullText } from "./FullText";
 import { FileCards, ReplyFiles } from "./FileCards";
 import { MessageActions } from "./MessageActions";
-import { QuoteBlock } from "./Quote";
+import { QuoteStack } from "./Quote";
 import { PathText } from "../../ui/PathLinks";
 import { Thumb } from "./Steps";
 import { useFoldScroll } from "./fold-scroll";
@@ -77,7 +77,7 @@ function BubbleText({ text: full, ts, mid, sid, own, pending }: { text: string; 
   // a reply sent from a card (in an assistant conversation): its words, without the hub's tag, marked 来自卡片
   const fromCard = useContext(CardConversation) ? cardReply(full) : undefined;
   const whole = fromCard ? fromCard.text : full;
-  const split = useMemo(() => splitQuote(whole), [whole]);
+  const split = useMemo(() => splitQuotes(whole), [whole]);
   const text = split ? split.rest : whole;
   const ref = useRef<HTMLDivElement>(null);
   const [long, setLong] = useState(() => bubbleLines(text) > BUBBLE_MAX_LINES);
@@ -111,7 +111,7 @@ function BubbleText({ text: full, ts, mid, sid, own, pending }: { text: string; 
       )}
       {split ? (
         <div className={`flex max-w-full flex-col gap-1.5 rounded-[12px] ${fill} px-4 py-2.5 text-ink ${pending ? "opacity-60" : ""}`} title={clock(ts)}>
-          <QuoteBlock text={split.quote} />
+          <QuoteStack blocks={split.quotes} mid={mid} sid={sid} />
           {words}
         </div>
       ) : (

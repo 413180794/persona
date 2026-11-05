@@ -3,12 +3,15 @@
 // the whole passage. The message itself still carries the `> ` block (lib/drafts.ts withQuoteBlock / splitQuote). A
 // task's card quotes as its title (and todo id, on the block's first line) and what its agent said last.
 import { useLayoutEffect, useRef, useState } from "react";
-import { parseQuote, type DraftQuote } from "../../lib/drafts";
+import { openSpot } from "../../lib/comments";
+import { parseQuote, parseQuotes, useQuotes, type DraftQuote } from "../../lib/drafts";
+import { getSession } from "../../lib/store";
 import { clock } from "../../lib/format";
 import { plainMarkdown } from "../../lib/plain-markdown";
 import { cx, EASE } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
+import { CommentBlock, CommentCard } from "./CommentCard";
 import { t } from "../../i18n";
 
 /** 「引用 Persona · 16:45」 / 「引用任务「…」 · 16:45」: who said it, or which task, and when, as far as is known. */
@@ -45,6 +48,42 @@ export function QuoteBar({ quote, onRemove }: { quote: DraftQuote; onRemove: () 
         <Icon name="x" size={12} stroke={2.4} />
       </button>
     </div>
+  );
+}
+
+/** Everything waiting above the input: the message quote (at most one), then the comments numbered in order. */
+export function QuoteBars({ draftKey, quotes, onRemove }: { draftKey: string; quotes: readonly DraftQuote[]; onRemove: (id: string) => void }) {
+  const { editing } = useQuotes(draftKey);
+  let n = 0;
+  return (
+    <div className="flex flex-col gap-1.5 px-0.5 pt-0.5" data-quotes>
+      {quotes.map((q) =>
+        q.comment ? (
+          <CommentCard key={q.id} draftKey={draftKey} quote={q} n={++n} editing={editing === q.id} onRemove={() => onRemove(q.id!)} />
+        ) : (
+          <QuoteBar key={q.id} quote={q} onRemove={() => onRemove(q.id!)} />
+        ),
+      )}
+    </div>
+  );
+}
+
+/** A sent message's leading quote blocks (splitQuotes): the quote card, and a comment card for each comment. `mid`/`sid`
+ *  let a code comment open its file or diff again. */
+export function QuoteStack({ blocks, mid, sid }: { blocks: readonly string[]; mid?: string; sid?: string }) {
+  const quotes = parseQuotes(blocks);
+  let n = 0;
+  return (
+    <>
+      {quotes.map((q, i) => {
+        if (!q.comment) return <QuoteBlock key={i} text={blocks[i]} />;
+        const spot = q.comment.spot;
+        const cwd = mid && sid ? getSession(mid, sid)?.cwd : undefined;
+        // the path the agent read is relative to the session's folder; with the folder known it opens again
+        const open = spot && mid && cwd ? () => openSpot({ ...spot, mid, sid, cwd, path: spot.diff || spot.file.startsWith("/") ? spot.path : `${cwd.replace(/\/+$/, "")}/${spot.file}` }) : undefined;
+        return <CommentBlock key={i} quote={q} n={++n} open={open} />;
+      })}
+    </>
   );
 }
 

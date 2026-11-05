@@ -42,6 +42,7 @@ import { scrollsAFold } from "./fold-scroll";
 import { ActivityChips, GoalChip } from "./Activity";
 import { paneRoute, tabSessions } from "../../lib/herdr-tree";
 import { useSessionLive } from "../../lib/live";
+import { CommentMarks } from "./CommentMarks";
 import { PaneTabs } from "./PaneTabs";
 import { RunningStatusBar } from "./RunningStatusBar";
 import { latestPlan, PlanPill, usePlanOutOfView } from "./PlanCard";
@@ -756,7 +757,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       <ViewLayer bare={!switchable} on={view === "chat"} from="start">
       <div className="relative min-h-0 flex-1">
         {tr.notLive && <NotLivePill onReload={tr.reload} lower={Boolean(picked && !search.open)} />}
-        <div ref={scroller} onScroll={onScroll} data-chat-scroll className="h-full overflow-y-auto [overflow-anchor:none]">
+        <div ref={scroller} onScroll={onScroll} data-chat-scroll className="relative h-full overflow-y-auto [overflow-anchor:none]">
           <ChatActionsContext.Provider value={actions}>
           <div className="mx-auto flex w-full max-w-[880px] flex-col gap-7 px-5 pt-6 pb-10 sm:px-8">
             {session?.start_error && <div role="alert" className="rounded-control bg-inset px-3 py-2 text-[13px] text-red">{t("chat-chatview.start_failed", { error: session.start_error })}</div>}
@@ -831,6 +832,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
               </div>
             )}
           </div>
+          {!readOnly && <CommentMarks scroller={scroller} />}
           </ChatActionsContext.Provider>
         </div>
         {away && !jumpInDock && <JumpPill label={jumpLabel(newSince)} onClick={toEnd} />}

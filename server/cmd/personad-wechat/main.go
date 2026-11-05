@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/nwverse/persona/server/internal/connector"
@@ -19,6 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/update"
 	"github.com/nwverse/persona/server/internal/wechat"
+	"golang.org/x/term"
 )
 
 // What the build wrote in (-X), as for jarvisd: they must say the same.
@@ -31,19 +33,9 @@ var (
 )
 
 func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "version", "--version", "-v":
-			fmt.Println(version)
-			if len(os.Args) > 2 && os.Args[2] == "-v" {
-				b := update.Make(version, channel, build, updateURL)
-				fmt.Printf("channel %s, build %d\n", b.Channel, b.Number)
-			}
-			return
-		default:
-			fmt.Fprintln(os.Stderr, "usage: jarvisd-wechat [version [-v]]: started by the hub, which talks to it over stdin / stdout")
-			os.Exit(2)
-		}
+	name := filepath.Base(os.Args[0])
+	if code, done := commandLine(name, os.Args[1:], stdinIsTerminal(), os.Stdout, os.Stderr); done {
+		os.Exit(code)
 	}
 	_ = commit
 	log.SetFlags(0) // the hub prefixes each line it keeps
@@ -56,4 +48,40 @@ func main() {
 		log.Printf("stopped: %v", err)
 		os.Exit(1)
 	}
+}
+
+// commandLine handles what a person types: the hub starts the program with no arguments and a pipe on stdin. done
+// says to exit with code instead of serving. Run by hand in a terminal with no arguments it would wait on stdin
+// without a word, so it says what it is instead.
+func commandLine(name string, args []string, terminal bool, stdout, stderr io.Writer) (code int, done bool) {
+	usage := fmt.Sprintf("usage: %s [version [-v]]\n"+
+		"The WeChat plugin's program (docs/wechat.md): the hub starts it and talks to it over stdin / stdout, so there is\n"+
+		"nothing to run by hand. To check a build, run: %s version -v", name, name)
+	if len(args) == 0 {
+		if terminal {
+			fmt.Fprintln(stderr, usage)
+			return 2, true
+		}
+		return 0, false
+	}
+	switch args[0] {
+	case "version", "--version", "-v":
+		fmt.Fprintln(stdout, version)
+		if len(args) > 1 && args[1] == "-v" {
+			b := update.Make(version, channel, build, updateURL)
+			fmt.Fprintf(stdout, "channel %s, build %d\n", b.Channel, b.Number)
+		}
+		return 0, true
+	case "help", "-h", "-help", "--help":
+		fmt.Fprintln(stdout, usage)
+		return 0, true
+	default:
+		fmt.Fprintf(stderr, "unknown argument %q\n%s\n", args[0], usage)
+		return 2, true
+	}
+}
+
+// stdinIsTerminal says whether stdin is a terminal rather than the hub's pipe.
+func stdinIsTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }

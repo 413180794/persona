@@ -2077,6 +2077,36 @@ hub 自己没有个人 Agent 来源，来源全部来自在跑的扩展的 `agen
 | 改名（#3182）：标签正在从 `<jarvis-context>` 改成 `<persona-context>`，属性不变 | | 读取端（hub、node、网页、安卓、Apple、DSH）两个名字都认，开闭标签可以混着；块正文里两个名字的结束标签都去掉。无属性的实时快照和运行说明已经只写 `<persona-context>`（同一个 node 写、node 剥，App 看不到）；带属性的块（hub 模板、三端客户端）仍写 `<jarvis-context>`，等认新名字的 App 普及后再切：旧版 App 只认 `jarvis-context`，会把 `<persona-context …>` 整块当正文显示 |
 | `<cross-session-message from-name="…">…</cross-session-message>` | Claude Code（会话间消息） | 左侧「来自 名字」卡片，正文按 Markdown 显示 |
 
+### 消息开头的引用块和评论块（网页，#2427、#2437）
+
+网页的「引用」和「评论」不用标签，也没有结构化字段：发送时写成消息开头的 `> ` 块（`web/src/lib/drafts.ts` `withQuoteBlock`，`web/src/lib/comments.ts`），助手和电脑上的 Agent 照文字读，其他客户端不认识也只是看到 `>` 行。
+一条消息开头最多一个引用块（引用的话，任务卡片的第一行是 `任务「标题」（todo id: …）`），后面跟任意个评论块，块之间空一行，最后才是用户打的字：
+
+```text
+> 引用的话                      ← 引用块（可没有）
+
+> Comment 1                     ← 评论选中的话：序号、原文（再套一层 `> `）、空行、评论
+> Selected text:
+> > 被选中的几行
+>
+> 这里要写清来源
+
+> Code comment 2                ← 评论代码：序号、位置、可选的 Side / Diff / Truncated、围栏里的代码、评论
+> File: src/app.ts:12-14        ← 相对会话目录的路径（目录外是原路径）；行号是新文件的，只选了删掉的行时加 `Side: old`
+> Diff: staged                  ← 文件里的评论没有这行；staged | unstaged | commit <前 8 位>；代码行带 `+` `-` 空格，围栏写 `diff`
+> Truncated: the first 60 of 80 lines
+> ```ts
+> const a = 1;
+> ```
+>
+> 为什么不用常量？
+
+用户打的字
+```
+
+上限：评论最多 4000 字，随消息的代码最多 60 行（多出的行数写在 `Truncated`，不带）；围栏比代码里最长的反引号多一个。序号按评论在输入框上方的顺序，从 1 数。
+网页读回时只在第一个块后面认「首行是 `Comment N` / `Code comment N`」的块（`splitQuotes`），所以普通的 `> ` 引用不受影响；编辑一条发出去的消息会把评论放回输入框上方。
+
 ## Persona 注入的消息
 
 hub 会以「用户输入」的身份往对话里发一些给模型看的消息（#2360、#2358）。transcript 里它们和用户打的字一样是 `role:"user", kind:"text"`，

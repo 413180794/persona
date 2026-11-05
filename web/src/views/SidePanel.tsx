@@ -105,9 +105,9 @@ function body(p: Panel) {
     case "files":
       return <FilesPanel key={directoryPanelKey(p)} mid={p.mid} sid={p.sid} cwd={p.cwd} path={p.path} onClose={closePanel} />;
     case "git":
-      return <GitPanel key={directoryPanelKey(p)} mid={p.mid} sid={p.sid} cwd={p.cwd} onClose={closePanel} />;
+      return <GitPanel key={directoryPanelKey(p)} mid={p.mid} sid={p.sid} cwd={p.cwd} at={p.at} onClose={closePanel} />;
     case "file":
-      return <FileViewerPanel key={`${p.mid}:${p.path}:${p.line ?? ""}`} mid={p.mid} path={p.path} cwd={p.cwd} line={p.line} onClose={closePanel} />;
+      return <FileViewerPanel key={`${p.mid}:${p.path}:${p.line ?? ""}-${p.to ?? ""}`} mid={p.mid} sid={p.sid} path={p.path} cwd={p.cwd} line={p.line} to={p.to} onClose={closePanel} />;
     case "link":
       return <LinkPanel key={p.url} url={p.url} title={p.title} onClose={closePanel} />;
     case "task":

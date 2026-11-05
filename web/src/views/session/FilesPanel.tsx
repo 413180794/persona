@@ -185,6 +185,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
         <FileView
           key={viewing}
           mid={mid}
+          sid={sid}
           path={viewing}
           cwd={cwd}
           onBack={() => setOpen((o) => o.slice(0, -1))}

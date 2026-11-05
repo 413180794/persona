@@ -3,11 +3,25 @@
 // One panel at a time; opening another replaces it. Session panels close when the page moves to another conversation;
 // a link stays until closed (it is not tied to the conversation it came from).
 import { useSyncExternalStore } from "react";
+import type { DiffScope } from "./comments";
+
+/** A diff opened straight at a line (a comment's card, lib/comments.ts): which diff, which file, which line. */
+export interface GitSpot {
+  /** The repository-relative path git reports. */
+  path: string;
+  diff: DiffScope;
+  line: number;
+  /** The last line of the range, when it is one. */
+  to?: number;
+  /** The line number is the old file's. */
+  old?: boolean;
+}
 
 export type Panel =
   | { kind: "files"; mid: string; sid: string; cwd: string; path?: string }
-  | { kind: "git"; mid: string; sid: string; cwd: string }
-  | { kind: "file"; mid: string; path: string; cwd?: string; line?: number }
+  | { kind: "git"; mid: string; sid: string; cwd: string; at?: GitSpot }
+  /** `sid`: the session whose message box takes the comments made in it (else the one last used). */
+  | { kind: "file"; mid: string; path: string; cwd?: string; line?: number; to?: number; sid?: string }
   | { kind: "link"; url: string; title?: string }
   /** A task of the assistant's conversation: its agent's chat (docs/unified-entry.md). */
   | { kind: "task"; todo: string }

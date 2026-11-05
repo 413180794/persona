@@ -28,12 +28,16 @@ import {
   type Token,
   type TokenKind,
 } from "../../../lib/files";
+import { addCodeComment, commentKey, markedLines } from "../../../lib/comment-target";
+import { codeQuote, rangeLabel, relativeTo } from "../../../lib/comments";
+import { useQuotes } from "../../../lib/drafts";
 import { bytes, shortPath } from "../../../lib/format";
 import { Button, copyText, cx, IconButton, Loading, toast } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
 import { Markdown } from "../../../ui/Markdown";
 import { ImageViewer, type ViewerImage } from "../../chat/ImageViewer";
 import { PanelHeader } from "../../SidePanel";
+import { GutterNumber, LineBox, useLinePick, type LinePick } from "./LineComment";
 import { BackHeader, Empty, FileGlyph, Segmented, useWindow } from "./parts";
 import { parseNotebook } from "../../../lib/notebook";
 import { HtmlPreview } from "./HtmlPreview";
@@ -195,17 +199,23 @@ type Mode = "rendered" | "source";
  */
 export function FileView({
   mid,
+  sid,
   path,
   cwd,
   line,
+  lineTo,
   onBack,
   onClose,
   onOpenPath,
 }: {
   mid: string;
+  /** The session whose message box takes the comments made on this file's lines (else the box last used). */
+  sid?: string;
   path: string;
   cwd?: string;
   line?: number;
+  /** The last line of the range marked, when it is one. */
+  lineTo?: number;
   onBack?: () => void;
   onClose: () => void;
   onOpenPath: (path: string) => void;
@@ -373,7 +383,7 @@ export function FileView({
             : json?.error
               ? t("session-files-fileview.invalid_json", { error: json.error })
               : "";
-    body = <CodeView doc={doc} file={f} text={shown} line={line} note={note} />;
+    body = <CodeView doc={doc} file={f} text={shown} line={line} lineTo={lineTo} note={note} where={{ mid, sid, cwd }} />;
   }
 
   return (
@@ -403,7 +413,7 @@ export const TOKEN_CLASS: Record<TokenKind, string> = {
   meta: "text-ink-3",
 };
 
-function CodeView({ doc, file, text, line, note }: { doc: FileDoc; file: FileContent; text: string; line?: number; note: string }) {
+function CodeView({ doc, file, text, line, lineTo, note, where }: { doc: FileDoc; file: FileContent; text: string; line?: number; lineTo?: number; note: string; where: { mid: string; sid?: string; cwd?: string } }) {
   const name = file.name;
   const lines = useMemo(() => splitLines(text), [text]);
   const lang = useMemo<Lang | null>(() => (text.length <= COLOR_BYTES && lines.length <= COLOR_LINES ? languageOf(name, lines[0]) : null), [name, text.length, lines]);
@@ -430,6 +440,13 @@ function CodeView({ doc, file, text, line, note }: { doc: FileDoc; file: FileCon
     el.scrollTop = Math.max(0, PAD + (line - 1) * LH - el.clientHeight / 3);
   }, [line, lines.length]);
 
+  // comments on lines (LineComment.tsx): the + in the gutter, the box under the code, the cards' numbers beside their lines
+  const key = commentKey(where.mid, where.sid);
+  const pick = useLinePick(Boolean(key));
+  const quotes = useQuotes(key ?? "").list;
+  const marked = useMemo(() => markedLines(quotes, (s) => !s.diff && s.path === file.path), [quotes, file.path]);
+  const picked = pick.sweeping ?? pick.range;
+
   const notes = [note, file.truncated && !file.next ? t("session-files-fileview.truncated_start") : "", plainBecauseBig ? t("session-files-fileview.too_big_uncolored") : ""].filter(Boolean);
   const rows: React.ReactNode[] = [];
   for (let i = start; i < end; i++) {
@@ -437,7 +454,20 @@ function CodeView({ doc, file, text, line, note }: { doc: FileDoc; file: FileCon
     const cut = raw.length > MAX_LINE;
     const shown = cut ? raw.slice(0, MAX_LINE) : raw;
     const tokens = lang ? lexLine(shown, lang, states[i] ?? null).tokens : [];
-    rows.push(<CodeRow key={i} n={i + 1} digits={digits} text={shown} tokens={tokens} cut={cut} mark={i + 1 === line} />);
+    const n = i + 1;
+    rows.push(
+      <CodeRow
+        key={i}
+        n={n}
+        digits={digits}
+        text={shown}
+        tokens={tokens}
+        cut={cut}
+        mark={line !== undefined && n >= line && n <= (lineTo ?? line)}
+        picked={Boolean(picked && n >= picked.from && n <= picked.to)}
+        gutter={key ? { pick, marked: marked.get(n) } : undefined}
+      />,
+    );
   }
 
   return (
@@ -470,11 +500,25 @@ function CodeView({ doc, file, text, line, note }: { doc: FileDoc; file: FileCon
           </div>
         </div>
       )}
+      {key && pick.range && (
+        <LineBox
+          where={`${relativeTo(where.cwd, file.path)}:${rangeLabel(pick.range.from, pick.range.to)}`}
+          onCancel={pick.clear}
+          onAdd={(body) => {
+            const r = pick.range!;
+            const quote = codeQuote({ file: relativeTo(where.cwd, file.path), path: file.path, from: r.from, to: r.to, lines: lines.slice(r.from - 1, r.to), lang: extOf(file.name), mid: where.mid, sid: where.sid, cwd: where.cwd });
+            addCodeComment(key, quote, body);
+            pick.clear();
+          }}
+        />
+      )}
     </>
   );
 }
 
-function CodeRow({ n, digits, text, tokens, cut, mark }: { n: number; digits: number; text: string; tokens: Token[]; cut: boolean; mark: boolean }) {
+const NO_PICK: LinePick = { range: null, sweeping: null, down: () => {}, enter: () => {}, clear: () => {} };
+
+function CodeRow({ n, digits, text, tokens, cut, mark, picked, gutter }: { n: number; digits: number; text: string; tokens: Token[]; cut: boolean; mark: boolean; picked: boolean; gutter?: { pick: LinePick; marked?: number } }) {
   const parts: React.ReactNode[] = [];
   let at = 0;
   for (const t of tokens) {
@@ -488,13 +532,15 @@ function CodeRow({ n, digits, text, tokens, cut, mark }: { n: number; digits: nu
   }
   if (at < text.length) parts.push(text.slice(at));
   return (
-    <div className={cx("flex", mark && "bg-accent-tint")} style={{ height: LH }} data-line={n}>
-      <span
-        className={cx("sticky left-0 shrink-0 border-r border-line pr-3 pl-3 text-right tabular-nums select-none", mark ? "font-semibold text-accent-ink" : "bg-inset text-ink-3")}
-        style={{ width: `calc(${digits}ch + 25px)`, ...(mark ? { background: "linear-gradient(var(--accent-tint), var(--accent-tint)), var(--inset)" } : {}) }}
-      >
-        {n}
-      </span>
+    <div className={cx("group/row flex", (mark || picked) && "bg-accent-tint")} style={{ height: LH }} data-line={n}>
+      <GutterNumber
+        n={n}
+        pick={gutter?.pick ?? NO_PICK}
+        marked={gutter?.marked}
+        enabled={Boolean(gutter)}
+        className={cx("sticky left-0 shrink-0 border-r border-line pr-3 pl-3 text-right tabular-nums select-none", mark || picked ? "font-semibold text-accent-ink" : "bg-inset text-ink-3")}
+        style={{ width: `calc(${digits}ch + 25px)`, ...(mark || picked ? { background: "linear-gradient(var(--accent-tint), var(--accent-tint)), var(--inset)" } : {}) }}
+      />
       <span className="pr-6 pl-3 whitespace-pre text-ink">
         {parts}
         {cut && <span className="text-ink-3 select-none">{t("session-files-fileview.line_cut", { max: MAX_LINE })}</span>}

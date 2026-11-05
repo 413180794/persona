@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyDraft, onDraftEvent, parseQuote, replaceNeedsConfirm, sendDraft, splitQuote, storedQuote, withAppended, withQuote, withQuoteBlock, withUnsent } from "./drafts";
+import { applyDraft, onDraftEvent, parseQuote, replaceNeedsConfirm, sendDraft, splitQuote, storedQuotes, withAppended, withQuote, withQuoteBlock, withUnsent } from "./drafts";
 import { browseTarget, byPrefix, chatFiles, displayTitle, mentionAt, nameMatches, otherSessions, relPath, replaceToken, sessionQuote } from "./mentions";
 import { keepAllBut, sameMessage } from "./queue";
 import { boxRect, burnWidth, fitRect, keepMark, toImage, toScreen } from "./image-edit";
@@ -73,9 +73,9 @@ describe("drafts", () => {
     expect(sendDraft("m/s", { type: "quote", text: "q", from: "Persona", ts: "2026-11-05T08:45:00Z" })).toBe(true);
     // the quote waits for the bar above the input; the typed text is left alone
     expect(store.get("draft:m/s")).toBe("typed");
-    expect(storedQuote("m/s")).toEqual({ text: "q", from: "Persona", ts: "2026-11-05T08:45:00Z" });
+    expect(storedQuotes("m/s")).toMatchObject([{ text: "q", from: "Persona", ts: "2026-11-05T08:45:00Z" }]);
     sendDraft("m/s", { type: "quote", text: "", task: { title: "整理发布说明", id: "todo_1" } });
-    expect(storedQuote("m/s")?.task).toEqual({ title: "整理发布说明", id: "todo_1" });
+    expect(storedQuotes("m/s")[0]?.task).toEqual({ title: "整理发布说明", id: "todo_1" });
     expect(sendDraft("m/s", { type: "image", image: { name: "a.png", mime: "image/png", data: "AA" } })).toBe(false);
 
     const got: string[] = [];
