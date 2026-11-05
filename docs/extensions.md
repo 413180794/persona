@@ -236,7 +236,7 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `agents.read` | 看各台电脑上的 Agent 和对话 | `GET /api/v1/sessions…`（列表、信息、条目、图片、屏幕）、`/interactions`、`/agents…`（个人 Agent）、`/workspaces`、`/workspace-board` |
 | `agents.control` | 驱动 Agent | `POST /api/v1/sessions`（新建）、对话的 `messages` / `interrupt` / `queue` / `seen`、`POST /api/v1/interactions/{id}/resolve`、个人 Agent 的发消息和已读 |
 | `machines.read` | 看你的各台电脑 | `GET /api/v1/machines`、`/machines/{id}/metrics`、`/machines/{mid}/stat` |
-| `notify` | 给你的设备发通知 | `POST /api/v1/notify`（#1576 合并后登记） |
+| `notify` | 给你的设备发通知 | `POST /api/v1/notify`（见「发通知」） |
 | `assistant.ask` | 给 Persona 开对话、读对话动态 | `GET /api/v1/assistant`、`POST /api/v1/assistant/conversations`、`GET …/conversations/{id}/feed` |
 | `extensions.call:<扩展 id>` | 调用扩展「…」的接口 | 那个扩展自己的 HTTP：`/api/v1/extensions/<id>/…`（不含 hub 的 `/-/` 接口） |
 
@@ -1165,6 +1165,15 @@ schema 在 `schema/extension/`（`WidgetFamily`、`WidgetPlace`、`WidgetAnswer`
 | `agent.finished` | `machine_id`、`machine`、`session_id`、`title`：有 Agent 做完了 |
 
 用 SDK 写的程序在 `Namespaces["event"]` 里收（方法名是事件名）。
+
+## 发通知
+
+扩展判断出「这件事该叫人了」，经 hub 给手机发提醒：`POST /api/v1/notify`（范围 `notify`，或完整权限；用 `PERSONA_HUB_URL` / `PERSONA_HUB_TOKEN`），参数见 `docs/protocol.md`。
+
+- **级别由扩展定**：`active`（默认，普通通知）或 `time-sensitive`（突破专注模式，锁屏时转到手表震动，用户可在系统设置里关）。iOS 要 App 带 `com.apple.developer.usernotifications.time-sensitive` 这项 entitlement 才真按时间敏感显示，没带时系统当 `active` 处理（hub 自己的「需要你」推送同样受影响，见 #1572）。不提供 `critical`（要苹果单独批）和 `passive`。
+- **分工**：什么时候发、同一会话多久发一次、怎么判断卡住，都是扩展的事；hub 只负责送达，并守住用户的设置：设备关了「需要你」（`input`）、会话被屏蔽、手机静音时都不发。hub 自己的推送（提问、授权、做完了）照旧，扩展不能拦，也不会被它重复发。
+- **点开**：带 `machine_id` + `session_id` 的提醒按会话归组，点开进那个会话；不带的只是一条消息。按钮见「系统级位置」的「通知按钮」。
+- 例子：扩展订 `agent.needs_you` / `agent.finished`，再轮询 `GET /api/v1/sessions`，发现一个会话停在等确认（读不了屏、hub 没建交互卡片的）或空转了 30 分钟，就发一条 `time-sensitive`，同一会话 30 分钟内只发一次。
 
 ## 模型供应商
 

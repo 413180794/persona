@@ -252,6 +252,7 @@ agents.control       POST /api/v1/interactions/{id}/resolve
 -                    POST /api/v1/machines/{mid}/ports/{port}/open
 -                    POST /api/v1/machines/{mid}/reconnect
 -                    POST /api/v1/machines/{mid}/spaces/{wid}/rename
+notify               POST /api/v1/notify
 -                    POST /api/v1/phone/runtime-cli
 agents.control       POST /api/v1/sessions
 -                    POST /api/v1/sessions/{mid}/{sid}/attach

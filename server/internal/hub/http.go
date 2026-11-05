@@ -238,6 +238,7 @@ func (h *Hub) routes() http.Handler {
 	})
 	h.assistantRoutes(api)
 	h.pinRoutes(api)
+	h.notifyRoutes(api)
 	h.personaRoutes(api)
 	h.botRoutes(api) // the channels' routes are the assistant's (assistantwire.Routes)
 	h.agentRoutes(api)

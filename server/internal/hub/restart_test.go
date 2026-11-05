@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -80,6 +81,45 @@ func TestEventLogSince(t *testing.T) {
 	l.add([]byte(`{"type":"t"}`), false, now.Add(eventLogAge+time.Minute))
 	if len(l.events) != 1 {
 		t.Fatalf("aged events kept: %d", len(l.events))
+	}
+}
+
+// A full log drops its oldest event on every add. It must keep the latest eventLogMax, in order and resumable, without
+// copying them all each time: that was 2000 events' worth of copying per broadcast, under Hub.mu.
+func TestEventLogFullDropsOldestCheaply(t *testing.T) {
+	l := newEventLog()
+	now := time.Now()
+	body := []byte(`{"type":"sessions","title":"` + strings.Repeat("t", 200) + `"}`)
+	for range eventLogMax {
+		l.add(body, false, now)
+	}
+	const adds = 1000
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	for range adds {
+		l.add(body, false, now)
+	}
+	runtime.ReadMemStats(&after)
+	if per := (after.TotalAlloc - before.TotalAlloc) / adds; per > 8<<10 {
+		t.Errorf("an add to a full log allocates %d bytes", per)
+	}
+	if len(l.events) != eventLogMax || cap(l.events) > 2*eventLogMax {
+		t.Fatalf("log holds %d events in an array of %d", len(l.events), cap(l.events))
+	}
+	size := 0
+	for i, e := range l.events {
+		if e.Seq != l.seq-int64(eventLogMax-1-i) {
+			t.Fatalf("events[%d].Seq = %d, latest %d", i, e.Seq, l.seq)
+		}
+		size += len(e.Body)
+	}
+	if size != l.bytes {
+		t.Fatalf("bytes = %d, events hold %d", l.bytes, size)
+	}
+	missed, ok := l.since(l.stream, l.seq-10)
+	if !ok || len(missed) != 10 || missed[0].Seq != l.seq-9 ||
+		!strings.HasPrefix(string(missed[0].Body), `{"event_seq":`+strconv.FormatInt(l.seq-9, 10)+`,`) {
+		t.Fatalf("resume over the last 10: %d events, ok %v", len(missed), ok)
 	}
 }
 

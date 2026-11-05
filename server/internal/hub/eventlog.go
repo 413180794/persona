@@ -81,7 +81,11 @@ func (l *eventLog) trim(now time.Time) {
 		drop++
 	}
 	if drop > 0 {
-		l.events = append(l.events[:0:0], l.events[drop:]...)
+		// Copying what is kept into a new array on every add cost a full log's worth (2000 events) per broadcast, under
+		// Hub.mu. Slicing the front off lets append move the kept events only when the array is full, every few
+		// hundred adds; clearing the dropped slots lets their bodies go now, not at that move.
+		clear(l.events[:drop])
+		l.events = l.events[drop:]
 	}
 }
 
