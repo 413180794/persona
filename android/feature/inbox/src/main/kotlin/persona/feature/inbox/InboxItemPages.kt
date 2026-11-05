@@ -54,7 +54,7 @@ data class InboxItemPages(
     fun swaps(stack: List<NavKey>, provisional: Set<NavKey>, records: List<InboxRecord>): List<Pair<NavKey, InboxItemUiRoute>> =
         stack.filter { it in provisional }.mapNotNull { key ->
             val itemId = when (key) { is LarkRoute -> key.itemId; is MailRoute -> key.itemId; is LarkMomentRoute -> key.itemId
-                is InboxItemDetailRoute -> key.itemId; else -> null }
+                is InboxItemDetailRoute -> key.itemId; is ConnectorThreadRoute -> key.itemId; else -> null }
             records.firstOrNull { it.item.id == itemId }?.let(::route)?.let { key to it }
         }
 
@@ -67,12 +67,14 @@ data class InboxItemPages(
 val LocalInboxItemPages = compositionLocalOf { InboxItemPages() }
 
 /**
- * The item's own page: a 公司圈 post, its Feishu chat at the item's first message, the mail, or else its detail page (a
- * Feishu document's notice, and any item of a shape this app does not know: the mail page could only fail for it, #2323).
+ * The item's own page: a 公司圈 post, its Feishu chat at the item's first message, the mail, a hub connector's thread
+ * (any connector, #2726), or else its detail page (a Feishu document's notice, and any item of a shape this app does not
+ * know: the mail page could only fail for it, #2323).
  */
 fun inboxItemPage(record: InboxRecord): NavKey = record.moment?.let { LarkMomentRoute(it.postId, record.item.id) }
     ?: record.feedId?.let { LarkRoute(it, record.item.id, record.startPosition) }
     ?: MailRoute(record.item.id).takeIf { record.isMail && record.doc == null }
+    ?: ConnectorThreadRoute(record.item.id).takeIf { record.isConnector && record.connector?.thread?.isNotBlank() == true && record.doc == null }
     ?: InboxItemDetailRoute(record.item.id)
 
 /** What opening [record] shows: its extension's page when [pages] has one for its connector, else its own page. */

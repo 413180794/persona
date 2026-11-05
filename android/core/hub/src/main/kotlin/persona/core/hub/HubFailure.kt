@@ -59,9 +59,10 @@ class HubFailure(
 
         /**
          * 403 codes that refuse one request of a valid pairing: a read-only device, a role or an extension's grant, a
-         * switched-off feature. The pairing stays; any other 403 (a credential not usable from here) ends it as before.
+         * switched-off feature, a connector write the hub's gate (or the user on the phone) turned down (`declined`).
+         * The pairing stays; any other 403 (a credential not usable from here) ends it as before.
          */
-        private val refusedHere = setOf("forbidden", "permission_denied")
+        private val refusedHere = setOf("forbidden", "permission_denied", "declined")
 
         internal fun from(response: Response): HubFailure {
             val raw = runCatching { response.peekBody(64 * 1024).string() }.getOrNull()

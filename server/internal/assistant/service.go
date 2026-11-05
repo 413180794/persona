@@ -36,6 +36,8 @@ type Service struct {
 	hub   Hub
 	store func() Store
 	logf  func(format string, args ...any)
+	// runRetry is how long after a failed run the retry goes (0: runRetryDelay; tests shorten it).
+	runRetry time.Duration
 
 	mux    *http.ServeMux
 	routes []string

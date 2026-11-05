@@ -887,6 +887,11 @@ class RealInboxRepository(
                 }
             }?.toMap().orEmpty(),
             doc = persona.feature.inbox.inboxDocRef(data.obj("doc")),
+            connector = data.obj("connector")?.let { c ->
+                c.optional("thread")?.let { thread ->
+                    persona.feature.inbox.InboxConnectorRef(thread, c.optional("label"), c.flag("can_reply"), c.optional("reply_to"))
+                }
+            },
         )
     }
 

@@ -99,6 +99,43 @@ class HttpConnectorsManagement internal constructor(
         return (pinned + recent).distinctBy { it.id }
     }
 
+    override suspend fun connectorLogin(id: String, step: String, values: Map<String, String>): BindPrompt {
+        val body = buildJsonObject {
+            put("step", step)
+            putJsonObject("values") { values.forEach { (key, value) -> put(key, value) } }
+        }
+        return read(call("${connectorPath(id)}/login", "POST", body), BindPrompt.serializer())
+    }
+
+    override suspend fun connectorLogout(id: String) {
+        call("${connectorPath(id)}/logout", "POST")
+    }
+
+    override suspend fun connectorThread(id: String, thread: String, before: String?, limit: Int): ConnectorThreadPage {
+        val query = buildList {
+            add("thread=${encode(thread)}")
+            before?.takeIf { it.isNotEmpty() }?.let { add("before=${encode(it)}") }
+            add("limit=$limit")
+        }.joinToString("&")
+        return read(call("${connectorPath(id)}/thread?$query", "GET"), ConnectorThreadPage.serializer())
+    }
+
+    override suspend fun connectorThreadReply(id: String, thread: String, action: String, text: String, replyTo: String?): ConnectorReplyOutcome {
+        val body = buildJsonObject {
+            put("thread", thread)
+            put("action", action)
+            put("text", text)
+            replyTo?.takeIf { it.isNotEmpty() }?.let { put("reply_to", it) }
+        }
+        return try {
+            val answer = parse(call("${connectorPath(id)}/thread/reply", "POST", body)) as? JsonObject
+            ConnectorReplyOutcome.Sent(replyNote(answer?.get("result")))
+        } catch (failure: HubFailure) {
+            val reason = failure.detail?.takeIf { it.isNotBlank() } ?: failure.message
+            if (failure.status == 403 && failure.code == "declined") ConnectorReplyOutcome.Declined(reason) else ConnectorReplyOutcome.Failed(reason)
+        }
+    }
+
     private fun <T> read(body: String, serializer: KSerializer<T>): T =
         decode { JsonCodec.decodeFromJsonElement(serializer, parse(body)) }
 
@@ -129,5 +166,16 @@ class HttpConnectorsManagement internal constructor(
 
     private companion object {
         val json = "application/json; charset=utf-8".toMediaType()
+
+        fun encode(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
+
+        fun connectorPath(id: String) = "/api/v1/connectors/${encode(id)}"
+
+        /** The connector's answer to a reply, when it is words (a JSON string, or an object's `message` / `text`). */
+        fun replyNote(result: JsonElement?): String? = when (result) {
+            is JsonPrimitive -> result.contentOrNull
+            is JsonObject -> listOf("message", "text", "summary").firstNotNullOfOrNull { (result[it] as? JsonPrimitive)?.contentOrNull }
+            else -> null
+        }?.trim()?.takeIf { it.isNotEmpty() }
     }
 }

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings › Connectors: signing in to a hub connector a step at a time (ConnectorsScreens.kt). -->
+<resources>
+    <string name="settings_src_connector_signin_header">ログイン</string>
+    <string name="settings_src_connector_account">アカウント</string>
+    <string name="settings_src_connector_signed_in">ログイン済み</string>
+    <string name="settings_src_connector_sign_out">ログアウト</string>
+    <string name="settings_src_connector_sign_in">%1$s にログイン</string>
+    <string name="settings_src_connector_enable_first">先に下のスイッチをオンにしてからログインしてください。</string>
+    <string name="settings_src_connector_signin_footer">入力する内容は %1$s が決めます。ログイン状態は hub に暗号化して保存され、ログアウトすると削除されます。</string>
+    <string name="settings_src_connector_qr_label">%1$s にログインする QR コード</string>
+    <string name="settings_src_connector_waiting_scan">スキャンして確認するのを待っています…</string>
+    <string name="settings_src_connector_waiting_confirm">確認を待っています…</string>
+    <string name="settings_src_connector_copy_code">コードをコピー</string>
+    <string name="settings_src_connector_code_clip">コード</string>
+    <string name="settings_src_connector_signed_in_as">%1$s としてログインしました</string>
+    <string name="settings_src_connector_signed_out">ログアウトしました</string>
+    <string name="settings_src_connector_logout_title">%1$s からログアウトしますか？</string>
+    <string name="settings_src_connector_logout_body">hub に保存されたログイン状態と認証情報は削除されます。使うにはもう一度ログインしてください。相手側サービスの許可は一緒に取り消されるとは限らないので、必要ならそちらで取り消してください。</string>
+    <string name="settings_src_connector_not_signed_in">ログインできませんでした：%1$s</string>
+    <string name="settings_src_connector_not_signed_out">ログアウトできませんでした：%1$s</string>
+</resources>

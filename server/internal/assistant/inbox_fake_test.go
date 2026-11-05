@@ -167,6 +167,13 @@ func (in *fakeInbox) conn(id string) connector.Connector {
 	return nil
 }
 
+// setModel sets every inbox purpose's model; the hello reads it meanwhile (a started task's snapshot).
+func (in *fakeInbox) setModel(m *ai.Client) {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	in.model = m
+}
+
 // hubModels are the hello's models: model as hub.json's "ai", models' as the connections the purposes' categories
 // fall back to (models.go legacyModelConfig).
 func (in *fakeInbox) hubModels() HubModels {

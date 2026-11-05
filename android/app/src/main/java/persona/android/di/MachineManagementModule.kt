@@ -152,5 +152,10 @@ object MachineManagementModule {
         override suspend fun larkStatus() = api().larkStatus()
         override suspend fun larkAccounts() = api().larkAccounts()
         override suspend fun larkChatChoices() = api().larkChatChoices()
+        override suspend fun connectorLogin(id: String, step: String, values: Map<String, String>) = api().connectorLogin(id, step, values)
+        override suspend fun connectorLogout(id: String) = api().connectorLogout(id)
+        override suspend fun connectorThread(id: String, thread: String, before: String?, limit: Int) = api().connectorThread(id, thread, before, limit)
+        override suspend fun connectorThreadReply(id: String, thread: String, action: String, text: String, replyTo: String?) =
+            api().connectorThreadReply(id, thread, action, text, replyTo)
     }
 }

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Inbox › a connector's conversation (ConnectorThread.kt) -->
+    <string name="inbox_connector_thread_failed">この会話を読み込めません：%1$s</string>
+    <string name="inbox_connector_older">以前のメッセージを読み込む</string>
+    <string name="inbox_connector_older_failed">以前のメッセージを読み込めません：%1$s</string>
+    <string name="inbox_connector_empty">まだメッセージはありません</string>
+    <string name="inbox_connector_read_only">この会話はここでは閲覧のみで、返信できません</string>
+    <string name="inbox_connector_quote_jump">引用されたメッセージへ移動：%1$s</string>
+    <string name="inbox_connector_quote_not_found">引用されたメッセージは最近のページにありません</string>
+    <string name="inbox_connector_group">グループ</string>
+    <string name="inbox_connector_channel">チャンネル</string>
+    <string name="inbox_connector_edited">編集済み</string>
+    <string name="inbox_connector_reply">返信</string>
+    <string name="inbox_connector_replying_to">%1$s に返信</string>
+    <string name="inbox_connector_cancel_reply">引用をやめる</string>
+    <string name="inbox_connector_reply_goes">返信先：%1$s</string>
+    <string name="inbox_connector_placeholder">返信…</string>
+    <string name="inbox_connector_sending">送信中です。承認が必要な場合は、スマートフォンで確認した後に送信されます</string>
+    <string name="inbox_connector_sent">送信しました</string>
+    <string name="inbox_connector_sent_note">送信しました：%1$s</string>
+    <string name="inbox_connector_declined">送信されませんでした（未承認）：%1$s</string>
+    <string name="inbox_connector_failed">送信できません：%1$s</string>
+    <string name="inbox_connector_media_image">画像</string>
+    <string name="inbox_connector_media_sticker">スタンプ</string>
+    <string name="inbox_connector_media_video">動画</string>
+    <string name="inbox_connector_media_voice">音声</string>
+    <string name="inbox_connector_media_file">ファイル</string>
+    <string name="inbox_connector_media_other">添付ファイル</string>
+    <plurals name="inbox_connector_group_members">
+        <item quantity="other">グループ · %1$d 人</item>
+    </plurals>
+    <plurals name="inbox_connector_channel_members">
+        <item quantity="other">チャンネル · %1$d 人の登録者</item>
+    </plurals>
+    <plurals name="inbox_connector_seconds">
+        <item quantity="other">%1$d 秒</item>
+    </plurals>
+</resources>

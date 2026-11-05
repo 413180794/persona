@@ -57,6 +57,21 @@ class InboxItemPagesTest {
         assertEquals(LarkMomentRoute("post-1", "moment-1"), inboxItemPage(moment))
     }
 
+    // A hub connector's item (any connector, #2726) opens its thread; one without a thread, its detail page.
+    @Test fun aConnectorsItemOpensItsThread() {
+        val chat = InboxRecord(InboxItem("example:1", kind = "dm", title = "Example"), sourceLabel = "Example", source = "example",
+            connector = InboxConnectorRef("wxid_example_a", label = "转账", canReply = true))
+        assertTrue(chat.isConnector)
+        assertEquals(ConnectorThreadRoute("example:1"), inboxItemPage(chat))
+        assertEquals(InboxItemDetailRoute("example:1"), inboxItemPage(chat.copy(connector = InboxConnectorRef(""))))
+        // The row's tag is the connector's own label, never one guessed from the kind.
+        assertEquals("转账", kindLabel(res, chat))
+        assertEquals("", kindLabel(res, chat.copy(connector = InboxConnectorRef("t1"))))
+        // Feishu's and mail's items stay theirs even when the hub adds a connector block.
+        assertEquals(MailRoute("mail-1"), inboxItemPage(mail.copy(connector = InboxConnectorRef("t1"))))
+        assertFalse(lark.copy(connector = InboxConnectorRef("t1")).isConnector)
+    }
+
     // persona://inbox/<id>/source from an extension's page: that item's own page, as the list opened it before.
     @Test fun theSourceLinkOpensTheItemsOwnPage() {
         val records = listOf(lark, mail, moment)

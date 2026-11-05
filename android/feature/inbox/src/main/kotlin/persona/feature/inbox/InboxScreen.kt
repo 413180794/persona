@@ -322,8 +322,10 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
             titleIcon = translated?.let { PhIcons.Translate }, titleIconLabel = translated?.let { stringResource(R.string.inbox_translated) },
             selected = isInboxItemSelected(LocalDetailKey.current, item.id, record.feedId),
             position = position, avatar = rememberLarkAvatar(record.avatar.takeIf { record.doc == null }, onlineSince), avatarIcon = record.doc?.let { docIcon(it.type) },
-            source = if (record.feedId != null || record.source == "lark") MessageSource.Lark else MessageSource.Mail,
-            sourceLabel = stringResource(if (record.feedId != null || record.source == "lark") R.string.inbox_source_lark else R.string.inbox_source_mail),
+            // A hub connector's item is any connector's (#2726): a neutral mark and the hub's name for it, never a brand.
+            source = when { record.isConnector -> MessageSource.Other; record.feedId != null || record.source == "lark" -> MessageSource.Lark; else -> MessageSource.Mail },
+            sourceLabel = if (record.isConnector) record.sourceLabel
+                else stringResource(if (record.feedId != null || record.source == "lark") R.string.inbox_source_lark else R.string.inbox_source_mail),
             group = item.title.takeIf { record.feedId != null && item.kind in setOf("group", "mention", "bot") },
             time = item.updatedAt?.let(::displayTime),
             preview = item.summary?.takeIf { it.isNotBlank() } ?: translated?.preview?.ifBlank { null }
@@ -331,7 +333,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
             status = when { done -> null; record.agent?.state in setOf("running", "queued") -> Status.Working; item.triage == InboxTier.Action -> Status.NeedsYou; else -> null },
             // The hub names its own sources 飞书 and 邮件; the row already shows those as its source.
             tags = listOfNotNull(kindLabel(res, record).takeIf { it.isNotBlank() },
-                record.sourceLabel.takeIf { it.isNotBlank() && it !in setOf("飞书", "邮件") }, // i18n-ignore: hub source labels it matches
+                record.sourceLabel.takeIf { !record.isConnector && it.isNotBlank() && it !in setOf("飞书", "邮件") }, // i18n-ignore: hub source labels it matches
                 pluralStringResource(R.plurals.inbox_messages_count, record.count, record.count).takeIf { record.count > 0 }),
             // An extension may draw the page of its connector's items (inbox_item); the rest open their own page.
             onClick = { navigator.navigate(pages.open(record)) }, onLongClick = { menu = true }, extra = {
@@ -385,6 +387,8 @@ private fun kindLabel(res: Resources, kind: String) = when (kind) {
 
 /** The row's kind: an @ of everyone is 「@所有人」, a mail the user was only copied on is 「抄送」 (the old app's labels). */
 internal fun kindLabel(res: Resources, record: InboxRecord): String = when {
+    // A connector names its own kinds (私聊, @我, 转账, 通知…): its label, never one this app guesses from the kind.
+    record.isConnector -> record.connector?.label.orEmpty()
     record.item.kind == "mention" && record.read -> res.getString(R.string.inbox_kind_group)
     record.item.kind == "mention" && record.atAll -> res.getString(R.string.inbox_kind_at_all)
     record.item.kind == "mail" && record.mail?.direct == false -> res.getString(R.string.inbox_kind_cc)

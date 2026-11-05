@@ -129,11 +129,28 @@ data class InboxRecord(
     val translations: Map<String, persona.core.contracts.api.ItemTranslation> = emptyMap(),
     /** A Feishu document's notice (`doc`): no chat behind it, its own page (InboxDocDetail.kt). */
     val doc: InboxDocRef? = null,
+    /** A hub connector's item (GitHub, Telegram, an extension's): its thread opens as a conversation (ConnectorThread.kt). */
+    val connector: InboxConnectorRef? = null,
 ) {
+    /** A hub connector's item (not Feishu's, not mail): it opens as its connector's thread. */
+    val isConnector: Boolean get() = connector != null && !isLark && !isMail && moment == null
+
     val isLark: Boolean get() = feedId != null || source == "lark"
     /** A mail item: only these open the mail page; the kind says it too in records cached without their source. */
     val isMail: Boolean get() = mail != null || source == "mail" || (source.isEmpty() && item.kind == "mail")
 }
+
+/**
+ * An item's `connector` block (docs/protocol.md「收件箱」): the [thread] its connector reads it as, the [label] the
+ * connector gave it (the row's tag, its words: 私聊, @我, 转账…), and whether and where a reply goes.
+ */
+@Serializable
+data class InboxConnectorRef(
+    val thread: String,
+    val label: String? = null,
+    val canReply: Boolean = false,
+    val replyTo: String? = null,
+)
 
 /** A 公司圈 post reference on an inbox item. */
 data class InboxMomentRef(

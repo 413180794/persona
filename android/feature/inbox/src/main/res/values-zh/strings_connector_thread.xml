@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Inbox › a connector's conversation (ConnectorThread.kt) -->
+    <string name="inbox_connector_thread_failed">读不到这个会话：%1$s</string>
+    <string name="inbox_connector_older">加载更早的消息</string>
+    <string name="inbox_connector_older_failed">没有加载到更早的消息：%1$s</string>
+    <string name="inbox_connector_empty">还没有消息</string>
+    <string name="inbox_connector_read_only">这个会话在这里只能看，不能回复</string>
+    <string name="inbox_connector_quote_jump">跳到被引用的消息：%1$s</string>
+    <string name="inbox_connector_quote_not_found">引用的消息不在最近几页里</string>
+    <string name="inbox_connector_group">群聊</string>
+    <string name="inbox_connector_channel">频道</string>
+    <string name="inbox_connector_edited">已编辑</string>
+    <string name="inbox_connector_reply">回复</string>
+    <string name="inbox_connector_replying_to">回复 %1$s</string>
+    <string name="inbox_connector_cancel_reply">取消引用</string>
+    <string name="inbox_connector_reply_goes">回复会发到：%1$s</string>
+    <string name="inbox_connector_placeholder">回复…</string>
+    <string name="inbox_connector_sending">正在发送；需要批准时，在手机上确认后才会发出</string>
+    <string name="inbox_connector_sent">已发送</string>
+    <string name="inbox_connector_sent_note">已发送：%1$s</string>
+    <string name="inbox_connector_declined">没有发送（未获批准）：%1$s</string>
+    <string name="inbox_connector_failed">发送失败：%1$s</string>
+    <string name="inbox_connector_media_image">图片</string>
+    <string name="inbox_connector_media_sticker">表情</string>
+    <string name="inbox_connector_media_video">视频</string>
+    <string name="inbox_connector_media_voice">语音</string>
+    <string name="inbox_connector_media_file">文件</string>
+    <string name="inbox_connector_media_other">附件</string>
+    <plurals name="inbox_connector_group_members">
+        <item quantity="other">群聊 · %1$d 人</item>
+    </plurals>
+    <plurals name="inbox_connector_channel_members">
+        <item quantity="other">频道 · %1$d 位订阅者</item>
+    </plurals>
+    <plurals name="inbox_connector_seconds">
+        <item quantity="other">%1$d 秒</item>
+    </plurals>
+</resources>

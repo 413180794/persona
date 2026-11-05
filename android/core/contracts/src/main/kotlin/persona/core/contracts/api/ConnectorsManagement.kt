@@ -158,4 +158,108 @@ interface ConnectorsManagement {
 
     /** 设置 › 翻译's chat picker: `GET /api/v1/lark/pinned` (when the hub has it), then `/api/v1/lark/conversations?scope=chats`. */
     suspend fun larkChatChoices(): List<LarkChatChoice>
+
+    // Any connector with `login` / `threads` (docs/protocol.md「连接器 API」): what the hub hands down, nothing per source.
+
+    /**
+     * `POST /api/v1/connectors/{id}/login` `{step, values}`: one sign-in step ([step] empty starts over). The answer has
+     * the same shape as a channel's binding (`connector.Prompt`): fields the hub asks for, a QR code or a device code to
+     * wait on, or done.
+     */
+    suspend fun connectorLogin(id: String, step: String, values: Map<String, String>): BindPrompt =
+        throw UnsupportedOperationException("Connector sign-in unavailable")
+
+    /** `POST /api/v1/connectors/{id}/logout`: the hub forgets the connector's sign-in. */
+    suspend fun connectorLogout(id: String): Unit = throw UnsupportedOperationException("Connector sign-out unavailable")
+
+    /** `GET /api/v1/connectors/{id}/thread?thread=&before=&limit=`: a page of an inbox item's conversation, oldest first. */
+    suspend fun connectorThread(id: String, thread: String, before: String? = null, limit: Int = ConnectorThreadPage.Limit): ConnectorThreadPage =
+        throw UnsupportedOperationException("Connector threads unavailable")
+
+    /**
+     * `POST /api/v1/connectors/{id}/thread/reply` `{thread, action, text, reply_to?}`: a reply through the action the page
+     * named ([ConnectorThreadChat.reply]). Never throws for what the hub answered: the outcome says it as it was.
+     */
+    suspend fun connectorThreadReply(id: String, thread: String, action: String, text: String, replyTo: String?): ConnectorReplyOutcome =
+        throw UnsupportedOperationException("Connector replies unavailable")
+}
+
+/** A person in a connector's thread. */
+@Serializable
+data class ConnectorThreadPerson(val id: String? = null, val name: String = "", val avatar: String? = null)
+
+/** A message's media: drawn as a placeholder of its kind (image, sticker, video, voice, file) with its name and size. */
+@Serializable
+data class ConnectorThreadMedia(
+    val kind: String = "",
+    val ref: String? = null,
+    val thumb: String? = null,
+    val mime: String? = null,
+    val name: String? = null,
+    val size: Long? = null,
+    /** Seconds. */
+    val duration: Int? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val emoji: String? = null,
+)
+
+/** What a message answers (`reply_to`): the quoted message's id, who wrote it and a line of it. */
+@Serializable
+data class ConnectorThreadQuote(val id: String = "", val from: String? = null, val text: String? = null)
+
+@Serializable
+data class ConnectorThreadMessage(
+    val id: String,
+    /** RFC 3339. */
+    val at: String = "",
+    val sender: ConnectorThreadPerson = ConnectorThreadPerson(),
+    val mine: Boolean = false,
+    /** A line about the conversation (someone joined), drawn centred. */
+    val event: Boolean = false,
+    val text: String? = null,
+    val format: String? = null,
+    val media: List<ConnectorThreadMedia> = emptyList(),
+    @SerialName("reply_to") val replyTo: ConnectorThreadQuote? = null,
+    val edited: Boolean = false,
+    val url: String? = null,
+)
+
+@Serializable
+data class ConnectorThreadChat(
+    val id: String = "",
+    val name: String = "",
+    /** dm | group | channel | pr | issue */
+    val kind: String = "",
+    val url: String? = null,
+    val avatar: String? = null,
+    /** How many are in a group / subscribe to a channel; the first page only, absent when the hub does not know. */
+    val members: Int? = null,
+    /** The action that answers here; null: read-only. */
+    val reply: String? = null,
+) {
+    /** A chat app's conversation, drawn as bubbles; a pull request or issue is not (its page shows what the hub collected). */
+    val isChat: Boolean get() = kind == "dm" || kind == "group" || kind == "channel"
+}
+
+@Serializable
+data class ConnectorThreadPage(
+    val chat: ConnectorThreadChat = ConnectorThreadChat(),
+    val messages: List<ConnectorThreadMessage> = emptyList(),
+    /** Goes back one more page; null: the thread's start. */
+    val before: String? = null,
+) {
+    companion object {
+        const val Limit = 30
+    }
+}
+
+/** How a reply in a connector's thread went, as the hub said it. */
+sealed interface ConnectorReplyOutcome {
+    /** Done; [note] is what the connector answered when it said something (it may not be delivered yet). */
+    data class Sent(val note: String?) : ConnectorReplyOutcome
+    /** Not sent: not allowed or not approved (403 `declined`), with the hub's words. */
+    data class Declined(val reason: String) : ConnectorReplyOutcome
+    /** Not sent: anything else (the connector failed, a rate limit, the network), with why. */
+    data class Failed(val reason: String) : ConnectorReplyOutcome
 }

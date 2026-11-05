@@ -1,6 +1,8 @@
 package persona.feature.settings
 
 import persona.core.designsystem.text
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
@@ -14,9 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -586,6 +592,10 @@ internal fun HubConnectorPage(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmingDelete by remember { mutableStateOf(false) }
+    var confirmingLogout by remember { mutableStateOf(false) }
+    val signIn = remember(connectors, connectorId) { connectors?.let { ConnectorSignInModel(it, connectorId) } }
+    val idle = remember { kotlinx.coroutines.flow.MutableStateFlow(ConnectorSignIn()) }
+    val signInState by (signIn?.state ?: idle).collectAsState()
 
     fun load() {
         if (connectors == null) {
@@ -610,6 +620,15 @@ internal fun HubConnectorPage(
 
     LaunchedEffect(connectors, connectorId) { load() }
     BackHandler(onBack = onBack)
+    // A code on screen: ask the hub again on its own until it is scanned or entered (and the page is open).
+    val polled = signInState.bind.prompt?.takeIf { it.polled }
+    LaunchedEffect(signIn, polled?.step, polled?.kind, polled?.userCode, polled?.url) { if (polled != null) signIn?.poll() }
+    LaunchedEffect(signInState.signedInAs) {
+        val who = signInState.signedInAs ?: return@LaunchedEffect
+        feedback?.notice(if (who.isBlank()) res.getString(R.string.settings_src_connector_signed_in) else res.getString(R.string.settings_src_connector_signed_in_as, who))
+        signIn?.signedInShown()
+        load()
+    }
 
     val c = connector
     val title = c?.name ?: connectorId
@@ -645,6 +664,10 @@ internal fun HubConnectorPage(
                 item("guide") {
                     SettingsCaption(guide.joinToString("\n"), Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s))
                 }
+            }
+
+            if (signIn != null && ConnectorText.signsInHere(c)) {
+                connectorSignIn(c, signInState.bind, signIn, scope, onSignOut = { confirmingLogout = true })
             }
 
             item("settings-header") { JSectionHeader(stringResource(R.string.settings_src_settings_header)) }
@@ -715,6 +738,25 @@ internal fun HubConnectorPage(
         }
     }
 
+    if (confirmingLogout && c != null && signIn != null) {
+        JDialog(
+            title = stringResource(R.string.settings_src_connector_logout_title, c.name),
+            content = {
+                Text(stringResource(R.string.settings_src_connector_logout_body), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+            },
+            confirm = stringResource(R.string.settings_src_connector_sign_out) to {
+                confirmingLogout = false
+                scope.launch {
+                    val failed = signIn.logout()
+                    feedback?.notice(failed?.resolve(res) ?: res.getString(R.string.settings_src_connector_signed_out))
+                    load()
+                }
+            },
+            dismiss = stringResource(R.string.settings_src_cancel) to { confirmingLogout = false },
+            onDismiss = { confirmingLogout = false },
+        )
+    }
+
     if (confirmingDelete && c != null) {
         JDialog(
             title = stringResource(R.string.settings_src_delete_data_title, c.name),
@@ -740,5 +782,116 @@ internal fun HubConnectorPage(
             dismiss = stringResource(R.string.settings_src_cancel) to { confirmingDelete = false },
             onDismiss = { confirmingDelete = false },
         )
+    }
+}
+
+/**
+ * 登录 on a connector's page: who it is signed in as with 退出登录, or 登录, or the step the hub asks for now (the same
+ * shapes as a channel's binding: fields, a QR code, a device code).
+ */
+private fun LazyListScope.connectorSignIn(
+    c: HubConnector, bind: BindState, model: ConnectorSignInModel, scope: kotlinx.coroutines.CoroutineScope, onSignOut: () -> Unit,
+) {
+    val prompt = bind.prompt
+    item("signin-header") { JSectionHeader(stringResource(R.string.settings_src_connector_signin_header)) }
+    when {
+        prompt == null && ConnectorText.isSignedIn(c) -> item("signed-in") {
+            Column {
+                JGroupItem(GroupPosition.of(0, 2)) {
+                    JRow(stringResource(R.string.settings_src_connector_account),
+                        value = c.account?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_src_connector_signed_in))
+                }
+                JGroupItem(GroupPosition.of(1, 2)) {
+                    JRow(stringResource(R.string.settings_src_connector_sign_out), leadingIcon = PhIcons.X, destructive = true,
+                        onClick = onSignOut, chevron = false)
+                }
+            }
+        }
+        prompt == null && c.enabled == false -> item("signin-off") {
+            SettingsCaption(stringResource(R.string.settings_src_connector_enable_first), Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
+        }
+        prompt == null -> item("signin-start") {
+            Column(Modifier.padding(top = Tokens.Space.xs), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+                JButton(stringResource(R.string.settings_src_connector_sign_in, c.name), { scope.launch { model.start() } }, Modifier.fillMaxWidth(),
+                    icon = PhIcons.Key, loading = bind.sending)
+                bind.error?.let { JInlineStatus(it.text(), tone = InlineTone.Failed) }
+                SettingsCaption(stringResource(R.string.settings_src_connector_signin_footer, c.name),
+                    Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
+            }
+        }
+        else -> item("signin-step-${prompt.step}-${prompt.kind}") { ConnectorSignInStep(c, prompt, bind, model) }
+    }
+}
+
+/** One sign-in step: its hint and the hub's word on it, then a QR code, a code to enter elsewhere, or fields to fill in. */
+@Composable
+private fun ConnectorSignInStep(c: HubConnector, prompt: BindPrompt, bind: BindState, model: ConnectorSignInModel) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val res = LocalResources.current
+    val feedback = LocalAppFeedback.current
+    val uri = LocalUriHandler.current
+    Column(Modifier.fillMaxWidth().padding(top = Tokens.Space.xs), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
+        prompt.hint?.takeIf { it.isNotBlank() }?.let {
+            Text(it, Modifier.padding(horizontal = rowPadding), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+        }
+        prompt.error?.takeIf { it.isNotBlank() }?.let { JInlineStatus(it, tone = InlineTone.Failed) }
+        bind.error?.let { JInlineStatus(it.text(), tone = InlineTone.Failed) }
+        val rows = prompt.qr?.rows.orEmpty()
+        when {
+            prompt.kind == "qr" && rows.isNotEmpty() -> {
+                JQrCode(rows, Modifier.align(Alignment.CenterHorizontally), label = stringResource(R.string.settings_src_connector_qr_label, c.name))
+                SignInWaiting(stringResource(R.string.settings_src_connector_waiting_scan))
+                JButton(stringResource(R.string.settings_src_cancel), model::cancel, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
+            }
+            prompt.kind == "device_code" -> {
+                val code = prompt.userCode.orEmpty()
+                Row(Modifier.padding(start = rowPadding), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
+                    JCodeDisplay(code, Modifier.weight(1f))
+                    JIconButton(PhIcons.Copy, stringResource(R.string.settings_src_connector_copy_code), {
+                        context.getSystemService(ClipboardManager::class.java)
+                            ?.setPrimaryClip(ClipData.newPlainText(res.getString(R.string.settings_src_connector_code_clip), code))
+                        feedback?.notice(res.getString(R.string.settings_src_copied))
+                    }, enabled = code.isNotEmpty())
+                }
+                SignInWaiting(stringResource(R.string.settings_src_channel_waiting_authorize))
+                Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                    prompt.url?.takeIf { it.startsWith("https://") }?.let { url ->
+                        JButton(stringResource(R.string.settings_src_open_web), { runCatching { uri.openUri(url) } }, Modifier.weight(1f),
+                            kind = JButtonKind.Secondary, icon = PhIcons.ArrowSquareOut)
+                    }
+                    JButton(stringResource(R.string.settings_src_cancel), model::cancel, Modifier.weight(1f), kind = JButtonKind.Secondary)
+                }
+            }
+            prompt.polled -> {
+                // A step to wait on with nothing to draw (a QR step whose code did not come): it still goes on.
+                SignInWaiting(stringResource(R.string.settings_src_connector_waiting_confirm))
+                JButton(stringResource(R.string.settings_src_cancel), model::cancel, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
+            }
+            else -> {
+                prompt.fields.forEach { field ->
+                    JTextField(bind.values[field.name].orEmpty(), { model.setValue(field.name, it) }, Modifier.fillMaxWidth(),
+                        label = field.label.ifBlank { field.name }, placeholder = field.placeholder?.takeIf { it.isNotBlank() } ?: field.label,
+                        singleLine = true, enabled = !bind.sending,
+                        visualTransformation = if (field.secret) PasswordVisualTransformation() else VisualTransformation.None,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false,
+                            keyboardType = if (field.secret) KeyboardType.Password else KeyboardType.Ascii))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                    JButton(stringResource(R.string.settings_src_next), { scope.launch { model.submit() } }, Modifier.weight(1f), loading = bind.sending,
+                        loadingText = stringResource(R.string.settings_src_verifying), enabled = bind.canSubmit)
+                    JButton(stringResource(R.string.settings_src_cancel), model::cancel, Modifier.weight(1f), kind = JButtonKind.Secondary, enabled = !bind.sending)
+                }
+            }
+        }
+    }
+}
+
+/** A spinner and what the step waits for, on one line. */
+@Composable
+private fun SignInWaiting(text: String) {
+    Row(Modifier.padding(horizontal = rowPadding), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+        JSpinner()
+        Text(text, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

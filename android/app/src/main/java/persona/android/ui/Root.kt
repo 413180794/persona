@@ -516,7 +516,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             spaceEntries(navigator, agents)
             chatEntries(navigator) { ShellChat(it, session, navigator, shell.feedback, onSessionClosed = navigator::sessionClosed) }
             entry<InteractionRoute> { ShellChat(it.chat, session, navigator, shell.feedback, it.requestId, navigator::sessionClosed) }
-            inboxEntries(navigator, session.inbox)
+            inboxEntries(navigator, session.inbox, connectors = services.connectors.takeUnless { services.demo })
             entry<InboxItemRoute> { InboxLink(it, session.inbox, navigator, ::replace) }
             entry<LarkChatRoute> { InboxLink(it, session.inbox, navigator, ::replace) }
             entry<InboxItemUiRoute> { InboxItemUi(it, session.inbox, services.extensionSlots, navigator, ::replace, itemPageFailures) }

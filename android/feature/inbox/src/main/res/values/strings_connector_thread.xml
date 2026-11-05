@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Inbox › a connector's conversation (ConnectorThread.kt) -->
+    <string name="inbox_connector_thread_failed">Couldn\'t read this conversation: %1$s</string>
+    <string name="inbox_connector_older">Load earlier messages</string>
+    <string name="inbox_connector_older_failed">Couldn\'t load earlier messages: %1$s</string>
+    <string name="inbox_connector_empty">No messages yet</string>
+    <string name="inbox_connector_read_only">This conversation can be read here but not answered</string>
+    <string name="inbox_connector_quote_jump">Go to the quoted message: %1$s</string>
+    <string name="inbox_connector_quote_not_found">The quoted message is not in the recent pages</string>
+    <string name="inbox_connector_group">Group</string>
+    <string name="inbox_connector_channel">Channel</string>
+    <string name="inbox_connector_edited">Edited</string>
+    <string name="inbox_connector_reply">Reply</string>
+    <string name="inbox_connector_replying_to">Replying to %1$s</string>
+    <string name="inbox_connector_cancel_reply">Stop quoting</string>
+    <string name="inbox_connector_reply_goes">Replies go to %1$s</string>
+    <string name="inbox_connector_placeholder">Reply…</string>
+    <string name="inbox_connector_sending">Sending. If it needs approval, it goes out only after you confirm on your phone</string>
+    <string name="inbox_connector_sent">Sent</string>
+    <string name="inbox_connector_sent_note">Sent: %1$s</string>
+    <string name="inbox_connector_declined">Not sent (not approved): %1$s</string>
+    <string name="inbox_connector_failed">Couldn\'t send: %1$s</string>
+    <string name="inbox_connector_media_image">Image</string>
+    <string name="inbox_connector_media_sticker">Sticker</string>
+    <string name="inbox_connector_media_video">Video</string>
+    <string name="inbox_connector_media_voice">Voice message</string>
+    <string name="inbox_connector_media_file">File</string>
+    <string name="inbox_connector_media_other">Attachment</string>
+    <plurals name="inbox_connector_group_members">
+        <item quantity="one">Group · %1$d member</item>
+        <item quantity="other">Group · %1$d members</item>
+    </plurals>
+    <plurals name="inbox_connector_channel_members">
+        <item quantity="one">Channel · %1$d subscriber</item>
+        <item quantity="other">Channel · %1$d subscribers</item>
+    </plurals>
+    <plurals name="inbox_connector_seconds">
+        <item quantity="one">%1$d second</item>
+        <item quantity="other">%1$d seconds</item>
+    </plurals>
+</resources>

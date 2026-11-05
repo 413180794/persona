@@ -280,10 +280,12 @@ func TestInboxItemAboutATask(t *testing.T) {
 	h.inboxReady(ctx)
 	todo := startedTask(t, s, f)
 	model, calls := captureModel(t, `{"handle":true,"task":"回复修复进度","reason":"问进度","task_id":"`+todo.ID+`"}`)
-	in.model = model
+	in.setModel(model)
 	it := actionItem("lark:f1:12", time.Now())
 	it.Title, it.Sender, it.Preview, it.Source, it.AccountName = "客户端发版群", "陈晓", "登录那个崩溃今天能修好吗？", "lark", "飞书"
+	h.inbox.mu.Lock() // the started task's snapshot reads the inbox meanwhile
 	h.inbox.items[it.ID] = it
+	h.inbox.mu.Unlock()
 	if !h.judgeOne(ctx, it) {
 		t.Fatal("not judged")
 	}
@@ -300,7 +302,7 @@ func TestInboxItemAboutATask(t *testing.T) {
 
 	// A task id it was not shown is not taken.
 	model2, _ := captureModel(t, `{"handle":true,"task":"x","reason":"r","task_id":"todo_made_up"}`)
-	in.model = model2
+	in.setModel(model2)
 	other := actionItem("lark:f2:12", time.Now())
 	h.inbox.mu.Lock()
 	h.inbox.items[other.ID] = other

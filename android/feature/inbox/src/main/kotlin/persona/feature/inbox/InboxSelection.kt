@@ -13,5 +13,6 @@ internal fun isInboxItemSelected(detail: NavKey?, itemId: String, feedId: String
     is MailRoute -> feedId == null && detail.itemId == itemId
     is InboxItemUiRoute -> detail.itemId == itemId
     is InboxItemDetailRoute -> detail.itemId == itemId
+    is ConnectorThreadRoute -> detail.itemId == itemId
     else -> false
 }

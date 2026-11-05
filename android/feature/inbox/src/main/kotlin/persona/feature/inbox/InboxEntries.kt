@@ -20,6 +20,8 @@ data class LarkRoute(val feedId: String, val itemId: String? = null, val startPo
 fun EntryProviderScope<NavKey>.inboxEntries(
     navigator: Navigator,
     repository: InboxRepository? = null,
+    /** The hub's connectors (their threads and replies); null in 体验模式: a connector's item opens its detail page. */
+    connectors: persona.core.contracts.api.ConnectorsManagement? = null,
     mailTransport: persona.core.contracts.api.MailTransport? = null,
     onMailAskAi: ((MailAiContext) -> Unit)? = null,
     onMailOpenLink: ((String) -> Unit)? = null,
@@ -49,6 +51,15 @@ fun EntryProviderScope<NavKey>.inboxEntries(
             LarkLinkHost(source) { InboxItemDetailScreen(source, route, navigator) }
         }
     }
+    entry<ConnectorThreadRoute> { route ->
+        val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
+        CompositionLocalProvider(LocalInboxNavigator provides navigator) {
+            LarkLinkHost(source) {
+                if (connectors == null) InboxItemDetailScreen(source, InboxItemDetailRoute(route.itemId), navigator)
+                else ConnectorThreadScreen(source, connectors, route, navigator)
+            }
+        }
+    }
     entry<LarkMomentRoute> { route ->
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
         CompositionLocalProvider(LocalInboxNavigator provides navigator) {
@@ -66,5 +77,9 @@ data class LarkMomentRoute(val postId: String, val itemId: String? = null) : Nav
 /** The own page of an item that is neither a chat, a 公司圈 post nor a mail: a Feishu document's notice, or an unknown item. */
 @Serializable @SerialName("persona.feature.inbox.InboxItemDetailRoute")
 data class InboxItemDetailRoute(val itemId: String) : NavKey
+
+/** A hub connector's item opened as its conversation (ConnectorThread.kt): the thread its `connector` block names. */
+@Serializable @SerialName("persona.feature.inbox.ConnectorThreadRoute")
+data class ConnectorThreadRoute(val itemId: String) : NavKey
 
 val LocalMailTransport = staticCompositionLocalOf<persona.core.contracts.api.MailTransport?> { null }

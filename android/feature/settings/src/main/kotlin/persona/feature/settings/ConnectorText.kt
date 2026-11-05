@@ -1,9 +1,16 @@
 package persona.feature.settings
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import persona.core.contracts.api.ConnectorsManagement
 import persona.core.contracts.api.HubConnector
 import persona.core.contracts.api.LarkStatus
 import persona.core.contracts.api.MailAccount
 import persona.core.designsystem.Status
+import persona.core.designsystem.failureReason
 import android.content.res.Resources
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalResources
@@ -54,6 +61,88 @@ object ConnectorText {
         "ok" -> Status.Idle
         "rate_limited", "error", "no_permission" -> Status.NeedsYou
         else -> Status.Offline
+    }
+
+    /** The user signs in to it here, a step at a time (its capabilities say `login`; the web's `signsInHere`). */
+    fun signsInHere(c: HubConnector): Boolean = c.capabilities?.contains("login") == true
+
+    /** Signed in as far as the hub knows (a rate limit is still signed in). */
+    fun isSignedIn(c: HubConnector): Boolean = c.status == "ok" || c.status == "rate_limited"
+}
+
+/** Signing in to a connector: the step on screen ([bind]), and who signed in once it finished (said once). */
+internal data class ConnectorSignIn(val bind: BindState = BindState(), val signedInAs: String? = null)
+
+/**
+ * Signing in to a hub connector a step at a time (`POST /api/v1/connectors/{id}/login`, the same `connector.Prompt` as a
+ * channel's binding): the fields the hub names, a QR code or a device code asked about again every interval, or done;
+ * and signing out. What a step asks for is the hub's, nothing per connector.
+ */
+internal class ConnectorSignInModel(private val api: ConnectorsManagement, private val id: String) {
+    private val mutable = MutableStateFlow(ConnectorSignIn())
+    val state = mutable.asStateFlow()
+
+    /** 登录: the first step. */
+    suspend fun start(): Boolean = step("", emptyMap())
+
+    fun setValue(name: String, value: String) = update { it.copy(values = it.values + (name to value)) }
+
+    /** 下一步: the step's fields as typed (trimmed; empty ones left out). */
+    suspend fun submit(): Boolean {
+        val bind = state.value.bind
+        val prompt = bind.prompt ?: return false
+        if (!bind.canSubmit) return false
+        val values = prompt.fields.mapNotNull { f -> bind.values[f.name]?.trim()?.takeIf { it.isNotEmpty() }?.let { f.name to it } }.toMap()
+        return step(prompt.step.orEmpty(), values)
+    }
+
+    /** 取消: the step goes away. */
+    fun cancel() = update { BindState() }
+
+    /**
+     * While a code is on screen, asks the hub again every interval until the answer is another step or done; a failed
+     * ask is tried again next time. Returns when there is nothing to wait on.
+     */
+    suspend fun poll(wait: suspend (Long) -> Unit = { delay(it) }) {
+        while (true) {
+            val bind = state.value.bind
+            val prompt = bind.prompt?.takeIf { it.polled } ?: return
+            wait(bind.pollMillis)
+            // Cancelled or replaced while waiting: whatever is on screen now is the one to ask about.
+            if (state.value.bind.prompt !== prompt) continue
+            step(prompt.step.orEmpty(), emptyMap(), quiet = true)
+        }
+    }
+
+    /** 退出登录; why it did not go, null when it did. */
+    suspend fun logout(): ResText? = try {
+        api.connectorLogout(id)
+        update { BindState() }
+        null
+    } catch (cancelled: CancellationException) { throw cancelled }
+    catch (error: Exception) { ResText.of(R.string.settings_src_connector_not_signed_out, failureReason(error)) }
+
+    /** The page has said that signing in finished. */
+    fun signedInShown() = mutable.update { it.copy(signedInAs = null) }
+
+    private fun update(change: (BindState) -> BindState) = mutable.update { it.copy(bind = change(it.bind)) }
+
+    private suspend fun step(step: String, values: Map<String, String>, quiet: Boolean = false): Boolean {
+        if (!quiet) {
+            if (state.value.bind.sending) return false
+            update { it.copy(sending = true, error = null) }
+        }
+        return try {
+            val prompt = api.connectorLogin(id, step, values)
+            if (prompt.done) mutable.update { ConnectorSignIn(signedInAs = prompt.account.orEmpty()) }
+            // A new step starts empty; the same step asked again (a mistake) keeps what was typed.
+            else update { BindState(prompt, if (it.prompt?.step == prompt.step) it.values else emptyMap()) }
+            true
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            if (!quiet) update { it.copy(sending = false, error = ResText.of(R.string.settings_src_connector_not_signed_in, failureReason(error))) }
+            false
+        }
     }
 }
 

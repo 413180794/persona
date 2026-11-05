@@ -213,9 +213,7 @@ func scheduleMux(h *Service) http.Handler { return h }
 func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
-	old := runRetryDelay
-	runRetryDelay = 50 * time.Millisecond
-	t.Cleanup(func() { runRetryDelay = old })
+	h.runRetry = 50 * time.Millisecond
 	n.items = []proto.Item{{Role: "assistant", Kind: "text", Text: "API Error: 503 upstream attempt budget is exhausted"}}
 	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 
@@ -270,9 +268,7 @@ func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
 func TestTaskTurnEndingInSessionTurnErrorFailsAndRetriesOnce(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
-	old := runRetryDelay
-	runRetryDelay = 50 * time.Millisecond
-	t.Cleanup(func() { runRetryDelay = old })
+	h.runRetry = 50 * time.Millisecond
 	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 
 	// The turn runs, then ends: the session carries TurnError and no assistant text item.
@@ -350,9 +346,7 @@ func TestTaskSwitchedOffOrDeletedAfterFailureIsNotRetried(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			n := newFakeHub().withMachine()
 			h := newStorelessService(t, n)
-			old := runRetryDelay
-			runRetryDelay = 50 * time.Millisecond
-			t.Cleanup(func() { runRetryDelay = old })
+			h.runRetry = 50 * time.Millisecond
 			n.items = []proto.Item{{Role: "assistant", Kind: "text", Text: "API Error: 503 upstream attempt budget is exhausted"}}
 			setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 			n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
@@ -381,7 +375,7 @@ func TestTaskSwitchedOffOrDeletedAfterFailureIsNotRetried(t *testing.T) {
 				t.Fatalf("the failure is pushed: %+v", p)
 			}
 			// ... and the retry does not go.
-			time.Sleep(20 * runRetryDelay)
+			time.Sleep(20 * h.runRetry)
 			if got := n.sent(); got != 1 {
 				t.Fatalf("sent %d times, want the first run only", got)
 			}
@@ -401,9 +395,7 @@ func TestTaskSwitchedOffOrDeletedAfterFailureIsNotRetried(t *testing.T) {
 func TestTaskFailingBeforeTheWatcherSeesItWorking(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
-	old := runRetryDelay
-	runRetryDelay = 50 * time.Millisecond
-	t.Cleanup(func() { runRetryDelay = old })
+	h.runRetry = 50 * time.Millisecond
 	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 	n.items = []proto.Item{{ID: "before", Role: "assistant", Kind: "text", Text: "old"}}
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusOffline, State: proto.StateIdle, Assistant: true,

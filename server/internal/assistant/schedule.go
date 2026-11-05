@@ -1134,8 +1134,9 @@ func (s *Service) skipRun(run ScheduleRun, why error) error {
 
 const runWatchTimeout = 30 * time.Minute
 
-// runRetryDelay is how long after a failed run the automatic retry goes (a var: tests shorten it).
-var runRetryDelay = 3 * time.Minute
+// runRetryDelay is how long after a failed run the automatic retry goes (Service.runRetry shortens it in tests: a
+// package variable raced with the watchers earlier tests left running).
+const runRetryDelay = 3 * time.Minute
 
 // startRun records a sent run and follows its turn. The node accepts `assistant.send` before the model answers, so a
 // run whose turn ends in an API error (quota, no such model, upstream 503) used to stay "ok" and the user was never
@@ -1171,10 +1172,14 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	if run.Retried {
 		return
 	}
+	delay := runRetryDelay
+	if s.runRetry > 0 {
+		delay = s.runRetry
+	}
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(runRetryDelay):
+	case <-time.After(delay):
 	}
 	// The failure push sends the user to the task's page; by now they may have switched it off, deleted it or changed
 	// its prompt. The retry goes by what the schedule holds now, not by the copy the run started with: that copy ran
