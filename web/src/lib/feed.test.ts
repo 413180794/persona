@@ -36,6 +36,14 @@ function seg(id: string, userMin: number, steps: Segment["steps"] = []): ChatLin
 
 const feed = (id: string, min: number, kind: FeedItem["kind"] = "task"): FeedItem => ({ id, conversation: "c1", at: ago(min), kind, ref: "t" });
 
+// Minutes ago of noon `n` days back, `m` minutes later: whatever the time now, never across midnight.
+const noon = (n: number, m = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(12, m, 0, 0);
+  return (Date.now() - d.getTime()) / 60_000;
+};
+
 describe("the assistant's feed among the chat's lines (docs/unified-entry.md)", () => {
   it("keeps one copy of each item, oldest first", () => {
     const a = feed("a", 5), b = feed("b", 10);
@@ -43,8 +51,9 @@ describe("the assistant's feed among the chat's lines (docs/unified-entry.md)", 
   });
 
   it("puts an item at the end of the exchange it happened in, the rest last, with a day line per day", () => {
-    const lines = [seg("s1", 60 * 26), seg("s2", 30)];
-    const out = displayLines(lines, [feed("early", 60 * 26 - 1), feed("mid", 20)]);
+    // Two days apart at noon: minutes before now crossed midnight between s2 and mid from 00:20 to 00:30 (#3290).
+    const lines = [seg("s1", noon(2)), seg("s2", noon(1))];
+    const out = displayLines(lines, [feed("early", noon(2, 1)), feed("mid", noon(1, 10))]);
     const ids = out.map((l) => l.id);
     expect(ids.filter((i) => i.startsWith("day-"))).toHaveLength(2);
     expect(ids.filter((i) => !i.startsWith("day-"))).toEqual(["s1", "feed-early", "s2", "feed-mid"]);
@@ -63,13 +72,6 @@ describe("the assistant's feed among the chat's lines (docs/unified-entry.md)", 
   });
 
   it("never puts a day line back in time, nor the same one twice, when the lines are out of order (#1996)", () => {
-    // minutes ago of noon `n` days back (whatever the time now, never across midnight), `m` minutes later
-    const noon = (n: number, m = 0) => {
-      const d = new Date();
-      d.setDate(d.getDate() - n);
-      d.setHours(12, m, 0, 0);
-      return (Date.now() - d.getTime()) / 60_000;
-    };
     // yesterday, then a line from two days ago (a clock that was behind), then yesterday again, then a day later
     const lines = [seg("s1", noon(2)), seg("s2", noon(3)), seg("s3", noon(2, 10)), seg("s4", noon(1))];
     const out = displayLines(lines, []);
