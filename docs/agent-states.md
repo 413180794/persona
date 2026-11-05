@@ -8,7 +8,7 @@ App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计�
 | 状态 | 含义 | 来自 herdr | Persona 补充 | 颜色 |
 | --- | --- | --- | --- | --- |
 | `needs_you` 需要你 | 卡在需要人参与的地方 | `blocked`（TUI 里的提问 / 确认框） | 有待处理的提问、计划、授权、终端交互（hook 拦下来时 herdr 还显示 working） | 红，呼吸 |
-| `working` 工作中 | 正在跑 | `working` | Claude：herdr 报 `done` / `idle` / `unknown`，但终端标题是 Claude Code 工作中的转圈字形（◐◓◑◒，旧版是盲文点阵），或 transcript 里这一轮已经开始、还没结束（没有 `turn_duration`、没被中断）且 45 秒内写过（#2069；transcript 里这一轮已经结束时照 herdr 的） | 琥珀，呼吸 |
+| `working` 工作中 | 正在跑 | `working` | Claude：herdr 报 `done` / `idle` / `unknown`，但终端标题是 Claude Code 工作中的转圈字形（◐◓◑◒，旧版是盲文点阵），或 transcript 里这一轮已经开始、还没结束（没有 `turn_duration`、没被中断）且 45 秒内写过（#2069；transcript 里这一轮已经结束时照 herdr 的）；或这一轮停了、但它的后台命令 / 子 Agent 还在跑（#2228：跑完会把结果交给它、它接着做；不含助手对话） | 琥珀，呼吸 |
 | `unread` 完成未看 | 一轮做完，结果还没看 | `done`（herdr 没被聚焦过） | 且 App 里在它完成之后没看过 | 绿 |
 | `idle` 已看 | 做完且看过，等输入 | `idle`（herdr 里看过） | 或 herdr 还是 `done` 但 App 里看过 | 灰 |
 | `offline` 未运行 | 不在宿主里，只有 transcript，发消息会 `--resume` | — | — | 浅灰 |
@@ -22,7 +22,8 @@ App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计�
 算状态时多看一眼它：**做完了**、**卡在 hub 会替它等的事上**（hub 自动重试、到点叫醒）的不再是 `unread`，是 `idle`；
 等你决定的 hub 开一张提问卡片，于是是 `needs_you`。没分诊出来（刚停、模型失败、看不出来）的照旧是 `unread`。
 颜色只有一份：`apple/Shared/StatusPalette.swift`，App、手表和实时活动共用（`docs/ios.md`「设计语言」）。
-Agents 列表另有「待唤醒」：状态是已看，但 `/loop` 还没到点、或后台命令 / 子代理还在跑（`Session.isWaiting`），之后会有新消息。
+Agents 列表另有「待唤醒」：状态是已看，但 `/loop` 还没到点（`Session.isWaiting`），之后会有新消息。后台命令 / 子 Agent 还在跑的，hub 直接算工作中（#2228，`backgroundState`），不再进待唤醒；助手对话的后台任务和 Monitor 常驻，不算。
+后台起的常驻进程（如开发服务器）会让 Agent 一直是工作中，直到它退出（node 不再列出超过 24 小时的后台任务）。「完成」推送、hub 自更新等一轮结束的判断看宿主状态，不受这一条影响。
 列表的排序（三种分组都一样）：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，同状态按最后更新时间（`docs/ios.md`）。
 
 ### 「看过」

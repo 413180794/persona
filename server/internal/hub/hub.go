@@ -442,7 +442,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 			}
 		}
 		list[i].SeenAt = seen[list[i].SessionID]
-		list[i].State = agentState(list[i], list[i].SeenAt)
+		list[i].State = backgroundState(agentState(list[i], list[i].SeenAt), list[i])
 		list[i].TurnError, list[i].TurnErrorKind = turnError(list[i])
 		h.decorateWork(m.cfg.ID, &list[i], asking) // the manager's work report (agents_link.go)
 	}

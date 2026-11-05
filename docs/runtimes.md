@@ -162,7 +162,7 @@ Agent 把活交出去再结束这一轮（后台子 Agent、workflow、后台跑
   `tool_use_id` 是启动它的那次工具调用，App 从那条调用点进去看它（调用名要对成 `Agent`，参数 `{description, prompt}`）。子 Agent 不单列成会话。
 - `background`：还在跑、这一轮结束后会回来的任务 `[{id, kind, description, command, started_at}]`，`kind` 是 `shell`（`command` 是命令）或 `agent`；
   `output_file` 是本机文件，runtime 的不给（node 清掉）。前台正在等结果的调用不算。
-- 有在跑的时：会话进 App 的「待唤醒」，hub 的「完成」推送等它们跑完、会话被叫醒的那一轮结束后再发。开始、结束时重推 `runtime.sessions`。
+- 有在跑的时：会话算工作中（#2228），hub 的「完成」推送等它们跑完、会话被叫醒的那一轮结束后再发。开始、结束时重推 `runtime.sessions`。
 - 每行最多 50 个子 Agent、50 个后台任务，文字截到 500 字；不合法的 id 去掉。daemon 的子 Agent id 同样带前缀：`<daemon>.<会话>@<id>`。
 - 对子 Agent 发消息、改名这类控制：runtime 不支持就回 `unsupported`（DSH 不支持：子 Agent 归父会话管）。
 

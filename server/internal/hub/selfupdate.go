@@ -697,7 +697,9 @@ func (h *Hub) updateBusy() []busyItem {
 			out = append(out, busyItem{MachineID: m.cfg.ID, Machine: m.cfg.Name, Title: "正在重新部署"})
 		}
 		for _, s := range h.decorated(m) {
-			if s.State == proto.StateWorking || s.State == proto.StateNeedsYou || s.Status == proto.StatusWorking {
+			// On a turn, not working on in the background (#2228): a server an agent left running would hold the
+			// update back for as long as it runs, and the restart does not stop it.
+			if s.Status == proto.StatusWorking || s.State == proto.StateNeedsYou {
 				out = append(out, busyItem{MachineID: m.cfg.ID, Machine: m.cfg.Name, SessionID: s.SessionID, Title: agentTitle(s)})
 			}
 		}

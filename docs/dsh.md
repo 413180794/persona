@@ -179,7 +179,7 @@ DSH 的 Agent 常把活交出去再结束这一轮：后台子 Agent（`subagent
 | 子 Agent 的内容 | id `<父会话>@<子会话>`：翻页用 DSH 的子 Agent 地址 `{kind: "subagent", parentSessionId, childSessionId, mode: "unknown"}`（DSH 不让按普通会话读子会话），`history` = `dsh:<父>@<子>`；watch、逐字也按这个 id 推 |
 | 状态变化 | 子 Agent 开始 / 结束、后台任务登记 / 结束都会重推列表 |
 
-于是：父会话这一轮结束、子 Agent 还在跑时，App 把它放在 Agents 的「待唤醒」，点开父会话能看到子 Agent 和后台任务，从那次调用点进去看子 Agent 的过程；
+于是：父会话这一轮结束、子 Agent 还在跑时，hub 把它算作工作中（#2228），点开父会话能看到子 Agent 和后台任务，从那次调用点进去看子 Agent 的过程；
 hub 的「完成」推送等这些跑完、父会话被叫醒的那一轮结束后再发（`notify.go` 的 `backgroundRunning`）。子 Agent 完成时父会话里有一条「子 Agent 完成」的提示（`map.js`）。
 
 子 Agent 只能看，不能发消息、改名（回 `unsupported`）：它归父会话管，要它干什么在父会话里说。

@@ -123,7 +123,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   - **为什么等你、在飞书打开**（#1752，iOS `AttentionNote`，`lib/format.ts` 的 `sessionPreview` / `externalLink`）：会话「需要你」且 hub 带了 `attention_reason`（botmux 举手的原因，`docs/engines.md`「botmux」）时，
     列表行（总览、机器页、侧边栏的悬停提示）用原因代替最后一句话，输入框上方一条提示写原因；有 `external_url`（只认 https）时提示条、对话 ⋯ 和「会话信息」里有「在飞书打开」（经 `openLink`，新标签页）。列表行还包括知识库详情的会话。没有这两个字段时界面不变。截图用 `MOCK_BOTMUX=1` 的假 hub。
 - **会话在等什么**（#1837，[agent-work.md](agent-work.md)）：hub 分诊过的停着的会话，列表行的那一行字换成工作态：做完的「✓ 结论」，在等的「在等什么（N 分钟后叫醒）」；
-  hub 会替它等的（自动重试、到点叫醒、它自己的后台任务）排进「待唤醒」。开关在「设置 › 通用 › 会话分诊」（默认全关）。截图用 `MOCK_WORK=1` 的假 hub。
+  hub 会替它等的（自动重试、到点叫醒）排进「待唤醒」；后台任务还在跑的 hub 直接算工作中（#2228）。开关在「设置 › 通用 › 会话分诊」（默认全关）。截图用 `MOCK_WORK=1` 的假 hub。
   - **排队消息**（`QueueStrip.tsx`，`POST …/queue {keep}`，hub 转 node 的 `session.queue.edit`）：输入框上方「排队中 N 条」，每条「撤回编辑」（取回放进输入框末尾）、拷贝、删除；
     已经进了队列的不再同时显示成「发送中」气泡。
   - **「@」**（`MentionMenu.tsx`、`lib/mentions.ts`）：输入框打 `@` 或点工具条的 @：这段对话工具用过的文件、会话目录第一层（带 `/` 逐级进入，`/machines/{mid}/fs`）、其他会话；

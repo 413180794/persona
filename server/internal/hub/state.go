@@ -36,6 +36,22 @@ func agentState(s proto.Session, seenAt time.Time) string {
 	return proto.StateUnknown
 }
 
+// backgroundState is an agent's state once its background work counts (#2228): a Claude whose turn ended while its
+// background commands or subagents still run is working, not 完成未看 or 已看 — they wake it with their results, and it
+// goes on. Needs-you stays first; a stopped one (offline) has nothing running. Not the assistant's conversations:
+// their Monitors and background tasks stay on, and a conversation always 工作中 would skip every scheduled run.
+// What waits for a turn to end (the finished push, scheduled runs, the hub's own update) reads the host's status.
+func backgroundState(state string, s proto.Session) string {
+	if s.Assistant || !backgroundRunning(s) {
+		return state
+	}
+	switch state {
+	case proto.StateUnread, proto.StateIdle, proto.StateUnknown:
+		return proto.StateWorking
+	}
+	return state
+}
+
 // turnError is the model API error that cut s's latest turn off, while it has stopped (unread or idle): not finished
 // (#1516), and its kind when the agent's record gives one. The node's word comes first: the agent's own record said
 // the turn failed (Codex, #2185). Otherwise s's last words when they are the error, as Claude Code writes it; only an

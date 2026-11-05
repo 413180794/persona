@@ -680,6 +680,33 @@ func TestAgentState(t *testing.T) {
 	}
 }
 
+// A turn that ended with background commands or subagents still running is working (#2228); needs-you, offline and
+// the assistant's conversations keep their state, and a subagent that finished is no background work.
+func TestBackgroundState(t *testing.T) {
+	shell := []proto.BackgroundTask{{ID: "b1", Kind: "shell"}}
+	running := []proto.Subagent{{ID: "a1", Running: true}}
+	cases := []struct {
+		name  string
+		state string
+		s     proto.Session
+		want  string
+	}{
+		{"unread with a background command", proto.StateUnread, proto.Session{Background: shell}, proto.StateWorking},
+		{"seen with a background command", proto.StateIdle, proto.Session{Background: shell}, proto.StateWorking},
+		{"unknown with a subagent running", proto.StateUnknown, proto.Session{Subagents: running}, proto.StateWorking},
+		{"a finished subagent", proto.StateIdle, proto.Session{Subagents: []proto.Subagent{{ID: "a1"}}}, proto.StateIdle},
+		{"nothing in the background", proto.StateUnread, proto.Session{}, proto.StateUnread},
+		{"needs you first", proto.StateNeedsYou, proto.Session{Background: shell}, proto.StateNeedsYou},
+		{"offline", proto.StateOffline, proto.Session{Background: shell}, proto.StateOffline},
+		{"the assistant's own tasks", proto.StateIdle, proto.Session{Assistant: true, Background: shell, Subagents: running}, proto.StateIdle},
+	}
+	for _, c := range cases {
+		if got := backgroundState(c.state, c.s); got != c.want {
+			t.Errorf("%s: %s, want %s", c.name, got, c.want)
+		}
+	}
+}
+
 func TestMarkStates(t *testing.T) {
 	h := &Hub{}
 	t0 := time.Now()
