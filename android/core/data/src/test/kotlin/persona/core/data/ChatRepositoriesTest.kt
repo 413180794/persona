@@ -18,6 +18,24 @@ import org.junit.rules.TemporaryFolder
 class ChatRepositoriesTest {
     @get:Rule val temporary = TemporaryFolder()
 
+    @Test fun olderPagesNotifyTranscriptWithoutChangingTheLastItem() = runTest {
+        val recent = listOf(item(3).copy(role = "user"), item(4))
+        val older = listOf(item(1).copy(role = "user"), item(2))
+        val transport = Transport().apply { fetch = { query ->
+            if (query.beforeSeq != null) ItemsResponse(older, hasMore = false, history = "h")
+            else ItemsResponse(recent, hasMore = true, history = "h", toSeq = 4)
+        } }
+        val observed = mutableListOf<List<String>>()
+        val repository = HubChatRepository(transport, Connection(), Cache(CachedChat()), Sessions(), backgroundScope,
+            transcript = { _, items -> observed += items.map { it.id } })
+        backgroundScope.launch { repository.observe(key).collect() }
+        runCurrent()
+        assertEquals(recent.map { it.id }, observed.last())
+        repository.loadOlder(key)
+        runCurrent()
+        assertEquals((older + recent).map { it.id }, observed.last())
+    }
+
     @Test fun listsRestoreBeforeNetworkAndKeepSnapshotWhenRefreshFails() = runTest {
         val directory = temporary.newFolder()
         val disk = ListSnapshotStore(directory)

@@ -174,6 +174,7 @@
 
 - 多 hub（#634）：新接一个按机器 id 调用的服务时，别用「当前配对」的连接（`ConnectionRuntime.scopedData` / `connectionFor`）。页面拿到的机器 id 来自合并列表，别的组的带 `~<组 id>`，发给选中组的 hub 只会「找不到机器」，主组和别的组恰好有同名机器时更糟：改到了另一台。
   按 `GroupStacks.use(GroupKeys.namespaceOf(id))` 找组、在组里用 `inGroup(names)` 去掉后缀、把返回的机器再加上后缀；只有一台 hub 一份的（模型配置、语音、收件箱）才跟选中的组。
+- 历史页也要触发 transcript 对账（#899）：末尾 item ID 不变并不等于对话没有新增记录。向前加载旧消息和补洞都会在末尾不变时增加用户消息；outbox 的 transcript 回调须按完整记录变化触发，不能只看最后一条，否则早期已送达气泡要到重开页面后才可能消失。
 
 ## 连接和 TLS
 

@@ -69,6 +69,8 @@ class AgentsPreferences @Inject constructor(private val store: DataStore<Prefere
     suspend fun foldTab(key: String, folded: Boolean) {
         store.edit { it[foldedTabsKey] = it[foldedTabsKey].orEmpty().let { keys -> if (folded) keys + key else keys - key } }
     }
+    /** 全部展开 opens every tab group too, as it opens every space (#2792). */
+    suspend fun openAllTabs() { store.edit { it.remove(foldedTabsKey) } }
     suspend fun togglePin(id: String) = hub.togglePin(id)
     suspend fun toggleMute(id: String) = hub.toggleMute(id)
     suspend fun markSeen(sessions: List<Session>) {

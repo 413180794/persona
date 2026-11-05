@@ -358,6 +358,7 @@ internal class AgentsViewModel(
             folded = if (fold) (page.value.list.groups.map { group -> group.id } + page.value.list.machines.map { machine -> machine.id }).toSet() else emptySet(),
             expandedQuiet = if (fold) emptySet() else page.value.list.groups.filter { group -> group.parent == "quiet" }.map { group -> group.id }.toSet(),
         ) }
+        if (!fold) localChange { preferences.openAllTabs() }
     }
     fun showIdle(group: AgentListGroup) {
         val key = when {

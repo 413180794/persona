@@ -56,7 +56,7 @@ class HubChatRepository(
         var durationAfterSeq: Int = 0
         var lastUserId: String? = null
         var eventError: String? = null
-        var observedLast: String? = null
+        var observedTranscript: List<Item>? = null
     }
 
     private val entries = LinkedHashMap<SessionKey, Entry>(64, 0.75f, true)
@@ -539,14 +539,13 @@ class HubChatRepository(
             stopping = runtime.stopping, turnDurationSeconds = runtime.turnDurationSeconds,
             recordedTurnDurations = durations.mapValues { it.value.seconds }) }
         // However the items came (an event, a page, a catch-up), a message sent from here that is in them is shown.
-        val last = entry.reducer.items.lastOrNull()?.id
-        if (transcript != null && last != null && last != entry.observedLast) {
-            entry.observedLast = last
-            val observed = entry.reducer.items
+        val observed = entry.reducer.items
+        if (transcript != null && observed.isNotEmpty() && observed != entry.observedTranscript) {
+            entry.observedTranscript = observed
             entry.scope.launch {
                 try { transcript.invoke(entry.key, observed) }
                 catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { entry.observedLast = null }
+                catch (_: Exception) { entry.observedTranscript = null }
             }
         }
     }
