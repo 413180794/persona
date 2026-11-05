@@ -627,7 +627,10 @@ private struct AgentsList: View {
             // leaving a blurred gap, TestFlight 35). Beside the split (regular width) it stays above the list.
             if widthClass != .regular {
                 Section {
-                    filterBar(base)
+                    VStack(alignment: .leading, spacing: 0) {
+                        filterBar(base)
+                        machineFilterChip
+                    }
                         #if os(iOS) || os(visionOS)
                         .background { DrawerPan.NoRowSwipe() } // no swipe of its own: a drag to the right pages to 助手
                         #endif
@@ -879,6 +882,26 @@ private struct AgentsList: View {
     /// `base`: as the body worked it out (working it out again here went through every agent twice more per push).
     private func filterBar(_ base: [Session]) -> some View {
         QuickFilterBar(selection: quick, counts: Self.counts(base, muted: model.isMuted)) { choose($0, self.base) }.equatable()
+    }
+
+    /// The machine the list is narrowed to, in the shell: its menu sits behind the selected Agents switch and says
+    /// nothing while closed, so a machine chosen once hid every other computer's agents with no trace (#1659). A tap
+    /// shows every machine again.
+    @ViewBuilder private var machineFilterChip: some View {
+        if shell != nil, !machineFilter.isEmpty, let chosen = model.machineChoices.first(where: { $0.id == machineFilter }) {
+            Button {
+                Haptics.tap()
+                withAnimation(Theme.Motion.standard) { machineFilter = "" }
+            } label: {
+                Chip(text: "只看 \(chosen.name)", symbol: Theme.Icon.clear, look: .tint(Theme.accent))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, Theme.Space.page)
+            .padding(.bottom, Theme.Space.sm)
+            .accessibilityIdentifier("agents.machineFilter")
+            .accessibilityLabel("只看 \(chosen.name)")
+            .accessibilityHint("显示全部机器")
+        }
     }
 
     /// Each quick filter's count. Out of the body's modifier chain: closures in a long chain are type-checked with all

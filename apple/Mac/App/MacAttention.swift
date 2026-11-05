@@ -74,7 +74,8 @@ extension MacAttention {
     static let shared = MacAttentionWatcher()
 
     private var last: [Session] = []
-    /// When the socket first connected (MacAttention.armed); nil until then.
+    /// When the current connected stretch began (MacAttention.connectedAt); nil until the first connect, and again
+    /// while the socket is down, so a reconnect runs the settle instead of diffing the offline list at once.
     private var connectedAt: Date?
     private var asked = false
 
@@ -102,8 +103,10 @@ extension MacAttention {
         let muted: (Session) -> Bool = { model.isMuted($0) || model.isQuiet($0) }
         NSApp.dockTile.badgeLabel = model.isPaired ? MacAttention.badge(sessions, muted: muted) : nil
         defer { last = sessions }
-        if connectedAt == nil, model.live.state == .connected {
-            connectedAt = Date()
+        let now = Date()
+        let startingToConnect = connectedAt == nil && model.live.state == .connected
+        connectedAt = MacAttention.connectedAt(connectedAt, state: model.live.state, now: now)
+        if startingToConnect {
             // Nothing else may change after the settle time: look again then.
             DispatchQueue.main.asyncAfter(deadline: .now() + MacAttention.settle + 0.1) { [weak self] in
                 MainActor.assumeIsolated { self?.last = model.allSessions }
@@ -157,5 +160,18 @@ extension MacAttention {
     static func armed(connectedAt: Date?, now: Date) -> Bool {
         guard let connectedAt else { return false }
         return now.timeIntervalSince(connectedAt) >= settle
+    }
+
+    /// When the current connected stretch began, from the watcher's stored value and the socket state. The first
+    /// `.connected` arms at `now`; leaving `.connected` (a drop, a failed attempt, `.idle`) clears it, so when the
+    /// socket reconnects `armed` and the settle run again instead of replaying the offline list's jumps as banners
+    /// (which the hub may also have delivered as remote pushes). Staying `.connected` keeps the original value.
+    static func connectedAt(_ current: Date?, state: LiveConnection.State, now: Date) -> Date? {
+        switch state {
+        case .connected:
+            return current ?? now
+        case .idle, .connecting, .failed:
+            return nil
+        }
     }
 }

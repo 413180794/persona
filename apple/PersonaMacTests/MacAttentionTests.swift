@@ -88,4 +88,52 @@ struct MacAttentionTests {
         #expect(done.userInfo["interaction_id"] == nil)
         #expect(done.userInfo["machine_id"] as? String == "m")
     }
+
+    /// The first `.connected` arms at `now`, so the launch settle (MacAttention.armed) can run from that moment.
+    @Test func connectedAtStartsWhenTheSocketFirstConnects() {
+        #expect(MacAttention.connectedAt(nil, state: .connected, now: now) == now)
+    }
+
+    /// Nothing armed before the first connect either: a non-connected state with no value stays nil.
+    @Test func connectedAtStaysNilBeforeTheFirstConnection() {
+        #expect(MacAttention.connectedAt(nil, state: .idle, now: now) == nil)
+        #expect(MacAttention.connectedAt(nil, state: .connecting, now: now) == nil)
+        #expect(MacAttention.connectedAt(nil, state: .failed("hub away"), now: now) == nil)
+    }
+
+    /// The socket leaving `.connected` (a drop, a failed reconnect attempt, `.idle`) clears the timestamp, even though
+    /// it ignores the passed `now`: the next `.connected` starts a fresh settle (#3469).
+    @Test func connectedAtClearsWhenTheSocketLeavesConnected() {
+        let connected = now.addingTimeInterval(-100)
+        #expect(MacAttention.connectedAt(connected, state: .connecting, now: now) == nil)
+        #expect(MacAttention.connectedAt(connected, state: .idle, now: now) == nil)
+        #expect(MacAttention.connectedAt(connected, state: .failed("gone"), now: now) == nil)
+    }
+
+    /// Staying `.connected` keeps the original timestamp; ordinary list refreshes must not extend or restart the
+    /// settle window.
+    @Test func connectedAtKeepsTheOriginalValueWhileStayingConnected() {
+        let connected = now.addingTimeInterval(-100)
+        #expect(MacAttention.connectedAt(connected, state: .connected, now: now) == connected)
+    }
+
+    /// End-to-end semantics of the two pure functions the watcher drives: a drop and reconnect run the settle a second
+    /// time. The first refresh after the reconnect (which folds in everything that changed offline) lands inside the
+    /// new settle window, so it cannot be diffed into banners; only a change after the new settle would notify.
+    @Test func reconnectRunsTheSettleASecondTime() {
+        var at = MacAttention.connectedAt(nil, state: .connected, now: now)
+        #expect(at == now)
+        #expect(!MacAttention.armed(connectedAt: at, now: now.addingTimeInterval(1)))
+        #expect(MacAttention.armed(connectedAt: at, now: now.addingTimeInterval(MacAttention.settle + 0.1)))
+
+        // The socket drops at t + 100 and only comes back at t + 120.
+        at = MacAttention.connectedAt(at, state: .connecting, now: now.addingTimeInterval(100))
+        #expect(at == nil)
+        #expect(!MacAttention.armed(connectedAt: at, now: now.addingTimeInterval(110)))
+        at = MacAttention.connectedAt(at, state: .connected, now: now.addingTimeInterval(120))
+        #expect(at == now.addingTimeInterval(120))
+        // With the old timestamp kept, this would be armed immediately and replay the offline jumps as banners.
+        #expect(!MacAttention.armed(connectedAt: at, now: now.addingTimeInterval(121)))
+        #expect(MacAttention.armed(connectedAt: at, now: now.addingTimeInterval(120 + MacAttention.settle + 0.1)))
+    }
 }

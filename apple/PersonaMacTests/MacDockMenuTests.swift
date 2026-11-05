@@ -32,4 +32,17 @@ struct MacDockMenuTests {
         let s = MacMenuBar.Sections(needsYou: (1...12).map { session("n\($0)", .needsYou) })
         #expect(MacDockMenu.shared.menu(s, machineName: { $0 }, paired: true).items.count == 1 + 8 + 2)
     }
+
+    /// A quiet task (#1731) is the main conversation's to tell: the Dock menu runs the same filter the menu bar
+    /// does before grouping into sections, so none of its agents shows, in either section.
+    @Test func quietTaskAgentsAreLeftOutOfBothSections() {
+        let list = [session("qn", .needsYou), session("n", .needsYou),
+                    session("qu", .unread), session("u", .unread)]
+        let sections = MacMenuBar.sections(MacMenuBar.menuSessions(list, quiet: { $0.sessionID.hasPrefix("q") }),
+                                           muted: { _ in false })
+        let titles = MacDockMenu.shared.menu(sections, machineName: { _ in "MacBook" }, paired: true)
+            .items.map(\.title)
+        #expect(titles == ["需要你", "t-n · MacBook", "做完了", "t-u · MacBook", "", "新建 Agent 对话…"])
+        #expect(titles.allSatisfy { !$0.contains("t-qn") && !$0.contains("t-qu") })
+    }
 }

@@ -20,7 +20,7 @@ struct MacChatWindow: View {
                 EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "没有对话"), message: String(localized: "这个窗口打开的对话已经不在了。"))
             }
         }
-        .frame(minWidth: Theme.Size.macWindowMinHeight, minHeight: Theme.Size.macWindowMinHeight)
+        .frame(minWidth: Theme.Size.macWindowMinWidth, minHeight: Theme.Size.macWindowMinHeight)
         .macLook(model)
         .overlay(alignment: .top) { ToastOverlay() }
     }
@@ -77,7 +77,7 @@ struct MacTerminalWindow: View {
                 EmptyStateView(symbol: Theme.Icon.terminal, title: String(localized: "没有终端"), message: String(localized: "这个窗口打开的 Agent 已经不在了。"))
             }
         }
-        .frame(minWidth: Theme.Size.macWindowMinHeight, minHeight: Theme.Size.macWindowMinHeight)
+        .frame(minWidth: Theme.Size.macWindowMinWidth, minHeight: Theme.Size.macWindowMinHeight)
         .macLook(model)
         .overlay(alignment: .top) { ToastOverlay() }
     }

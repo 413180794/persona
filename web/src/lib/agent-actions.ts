@@ -3,22 +3,19 @@
 import { t } from "../i18n";
 import { toast } from "../ui/atoms";
 import { agentHandoffText } from "./agent-handoff";
-import { api, attachSession, errorText } from "./api";
+import { attachSession, errorText } from "./api";
 import { sessionCan } from "./format";
 import { askPersona } from "./outbox";
 import { isPinned, isSpacePinned, spaceKey, togglePin, toggleSpacePin, toggled, type AgentPins } from "./pins";
 import { isMuted, toggleMute } from "./session-actions";
-import { getSession, getState, refresh, setMutes, setPins } from "./store";
+import { getSession, getState, refresh, saveMutes, savePins } from "./store";
 import type { Session } from "./types";
 
 async function putPins(next: AgentPins, done: string) {
-  const before = getState().pins;
-  setPins(next);
   try {
-    await api("/pins", { method: "PUT", json: next });
+    await savePins(next);
     toast(done, "ok");
   } catch (e) {
-    setPins(before);
     toast(t("lib-agent-actions.save_failed", { error: errorText(e) }), "error");
   }
 }
@@ -34,13 +31,10 @@ export function flipSpacePin(machineId: string, spaceName: string) {
 }
 
 async function putMutes(next: ReturnType<typeof getState>["mutes"], done: string) {
-  const before = getState().mutes;
-  setMutes(next);
   try {
-    await api("/mutes", { method: "PUT", json: next });
+    await saveMutes(next);
     toast(done, "ok");
   } catch (e) {
-    setMutes(before);
     toast(t("lib-agent-actions.save_failed", { error: errorText(e) }), "error");
   }
 }

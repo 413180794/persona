@@ -30,6 +30,14 @@ struct MacMenuBarTests {
         #expect(MacMenuBar.sections(list, muted: { $0.sessionID == "c" }).needsYou.map(\.sessionID) == ["b", "a"])
     }
 
+    /// Agents of a quiet task (#1731) are the main conversation's to tell: the shared menu filter drops them in
+    /// every state before the menu bar or the Dock menu groups sessions into sections.
+    @Test func quietTaskSessionsAreFilteredBeforeSections() {
+        let list = [session("qn", .needsYou), session("w", .working), session("qu", .unread), session("n", .needsYou)]
+        let visible = MacMenuBar.menuSessions(list, quiet: { $0.sessionID.hasPrefix("q") })
+        #expect(visible.map(\.sessionID) == ["w", "n"])
+    }
+
     @Test func finishedListIsShort() {
         let list = (0..<12).map { session("u\($0)", .unread, ago: TimeInterval($0)) }
         #expect(MacMenuBar.sections(list, muted: { _ in false }).unread.count == MacMenuBar.unreadLimit)

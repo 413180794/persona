@@ -6,7 +6,9 @@ import AppKit
     static let shared = MacDockMenu()
 
     func menu(_ model: AppModel) -> NSMenu {
-        menu(MacMenuBar.sections(model.allSessions, muted: { model.isMuted($0) }),
+        // Same quiet-task filter (#1731) as the menu bar: its agents are the main conversation's to tell.
+        menu(MacMenuBar.sections(MacMenuBar.menuSessions(model.allSessions, quiet: { model.isQuiet($0) }),
+                                 muted: { model.isMuted($0) }),
              machineName: { id in model.machines.first { $0.id == id }?.name ?? id }, paired: model.isPaired)
     }
 

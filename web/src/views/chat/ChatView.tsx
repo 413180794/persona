@@ -11,7 +11,7 @@ import { hasEffortOnly, hasModes, isMuted, toggleMute } from "../../lib/session-
 import { attachLive, flipPin } from "../../lib/agent-actions";
 import { isPinned } from "../../lib/pins";
 import { acknowledgeLaunch, launchMessageId } from "../../lib/new-agent";
-import { getSession, getState, listenSession, markSeenLocally, refresh, refreshTodos, setMutes, useStore } from "../../lib/store";
+import { getSession, getState, listenSession, markSeenLocally, refresh, refreshTodos, saveMutes, useStore } from "../../lib/store";
 import { buildTaskIndex, STOP_LOOP_MESSAGE, subagentParent, type TaskIndex } from "../../lib/tasks";
 import { stabilizeLines, stableValue } from "../../lib/stable-lines";
 import { planProgress } from "../../lib/work-groups";
@@ -1207,14 +1207,11 @@ export function Header({
   // 屏蔽通知: the hub stops pushing this agent's 需要你 / 做完了 (an agent's switch sits on top of its space's)
   const flipMute = async () => {
     if (!session) return;
-    const before = getState().mutes;
-    const next = toggleMute(session, before);
-    setMutes(next);
+    const next = toggleMute(session, getState().mutes);
     try {
-      await api("/mutes", { method: "PUT", json: next });
+      await saveMutes(next);
       toast(isMuted(session, next) ? t("chat-chatview.muted") : t("chat-chatview.unmuted"), "ok");
     } catch (e) {
-      setMutes(before);
       toast(t("chat-chatview.change_failed", { error: errorText(e) }), "error");
     }
   };

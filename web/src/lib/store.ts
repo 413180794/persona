@@ -433,9 +433,31 @@ function onMessage(msg: Record<string, unknown>) {
   if (typeof msg.type === "string") hubListeners.get(msg.type)?.forEach((l) => l(msg));
 }
 
-/** Replace the mutes after a PUT /mutes (the chat's 屏蔽通知). */
-export function setMutes(mutes: AgentMutes) {
-  set({ mutes });
+// This page's changes to the mutes and the pins: numbered, and how many PUTs are still on their way. Each goes out as a
+// whole PUT and the hub pushes nothing back, so a refresh() sent before a change lands (or while its PUT is out, the
+// hub may read before it writes) answers the old value, and a failed change put back over a later one undoes it.
+const mutesSaves = { rev: 0, out: 0 };
+const pinsSaves = { rev: 0, out: 0 };
+
+/** Shows `next` at once and PUTs it; on failure puts back what was before, unless a later change came, and throws. */
+async function save<K extends "mutes" | "pins">(key: K, path: string, next: State[K], saves: { rev: number; out: number }) {
+  const before = state[key];
+  const change = ++saves.rev;
+  saves.out++;
+  set({ [key]: next } as Partial<State>);
+  try {
+    await api(path, { method: "PUT", json: next });
+  } catch (e) {
+    if (change === saves.rev) set({ [key]: before } as Partial<State>);
+    throw e;
+  } finally {
+    saves.out--;
+  }
+}
+
+/** 屏蔽通知 (optimistic): PUT /mutes; throws when the hub refuses, with the mutes put back. */
+export function saveMutes(mutes: AgentMutes): Promise<void> {
+  return save("mutes", "/mutes", mutes, mutesSaves);
 }
 
 /** One machine as the hub answered a change to it (PUT …/engine), over what the list has: the hub's next \`machines\`
@@ -445,9 +467,9 @@ export function applyMachine(m: Machine) {
   set({ machines: state.machines.map((x) => (x.id === m.id ? { ...x, ...m } : x)) });
 }
 
-/** Replace the pins after a PUT /pins (optimistic; put back on failure). */
-export function setPins(pins: AgentPins) {
-  set({ pins });
+/** 置顶 (optimistic): PUT /pins; throws when the hub refuses, with the pins put back. */
+export function savePins(pins: AgentPins): Promise<void> {
+  return save("pins", "/pins", pins, pinsSaves);
 }
 
 /** 全部标为已读: every finished-unread one of these is seen now, in one update of the list (iOS AppModel.markSeen). The
@@ -592,6 +614,9 @@ const assistantAsked = numbered<AssistantInfo>("/assistant");
 
 export async function refresh() {
   const before = ixRev;
+  // the answers count only if this page changes nothing while they are on their way, and had no change out when they left
+  const mutesAt = mutesSaves.out ? -1 : mutesSaves.rev;
+  const pinsAt = pinsSaves.out ? -1 : pinsSaves.rev;
   const asked = todosAsked.ask();
   const askedAssistant = assistantAsked.ask();
   const [sessions, interactions, assistant, machines, mutes, pins, todos] = await Promise.allSettled([
@@ -617,8 +642,8 @@ export async function refresh() {
   if (interactions.status === "fulfilled") patch.interactions = mergeInteractions(interactions.value.interactions ?? [], before);
   if (assistant.status === "fulfilled" && askedAssistant.fresh()) patch.assistant = { ...assistant.value, conversations: assistant.value.conversations ?? [] };
   if (machines.status === "fulfilled") patch.machines = machines.value.machines ?? [];
-  if (mutes.status === "fulfilled") patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
-  if (pins.status === "fulfilled") patch.pins = pinsOf(pins.value);
+  if (mutes.status === "fulfilled" && mutesAt === mutesSaves.rev) patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
+  if (pins.status === "fulfilled" && pinsAt === pinsSaves.rev) patch.pins = pinsOf(pins.value);
   if (todos.status === "fulfilled") {
     if (asked.fresh()) {
       const list = todos.value.todos ?? [];
@@ -683,6 +708,9 @@ export function reset() {
   // a /todos or /assistant answer still on its way belongs to the old login
   todosAsked.forget();
   assistantAsked.forget();
+  // and so do the pins and mutes of a refresh() or a failed save still on its way
+  mutesSaves.rev++;
+  pinsSaves.rev++;
   resetAgents();
   Object.values(state.launches).forEach((launch) => releaseAttachments(launch.attachments));
   set({

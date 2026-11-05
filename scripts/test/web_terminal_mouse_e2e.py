@@ -43,7 +43,8 @@ def clicks(hub):
 
 
 def fresh(browser, token, viewport, scheme="light", mode=None):
-    ctx = browser.new_context(viewport=viewport, color_scheme=scheme, device_scale_factor=2)
+    # the checks find controls by their Chinese names: the page follows the browser's language, not the machine's (#4027)
+    ctx = browser.new_context(viewport=viewport, color_scheme=scheme, device_scale_factor=2, locale="zh-CN")
     init = f"localStorage.setItem('jarvis.token', {token!r}); localStorage.setItem('jarvis.theme', {scheme!r});"
     if mode:
         init += f"localStorage.setItem('jarvis.terminal.mouse', {mode!r});"

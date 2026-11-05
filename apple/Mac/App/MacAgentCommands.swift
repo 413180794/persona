@@ -87,14 +87,16 @@ struct MacAgentMenu: Commands {
             .disabled(choices.isEmpty || current?.canApprove != true)
             Divider()
             Button("下一个需要你的") {
-                if let next = MacAgentCommands.nextNeedsYou(after: key, in: model.sessionsNow, muted: { model.isMuted($0) }) {
+                if let next = MacAgentCommands.nextNeedsYou(after: key, in: model.sessionsNow,
+                                                            muted: { model.isMuted($0) || model.isQuiet($0) }) {
                     MacShellState.shared.open(next, model)
                     // The chat shows in the main window: bring it up (a chat window may be the key one, or none open).
                     MacShellState.shared.showMain()
                 }
             }
             .keyboardShortcut("n", modifiers: [.command, .control]) // ⌥⌘N is 收件箱's 写邮件
-            .disabled(!model.allSessions.contains { $0.state == .needsYou && !model.isMuted($0) })
+            // Quiet tasks (#1731) are the main conversation's to tell: they never enable the jump either.
+            .disabled(!model.allSessions.contains { $0.state == .needsYou && !model.isMuted($0) && !model.isQuiet($0) })
             Button("在新窗口打开") { if let key { MacShellState.shared.chatWindow = key } }
                 .disabled(key == nil)
             // Only an Agent in a herdr pane has a terminal (the Persona conversation runs headless).

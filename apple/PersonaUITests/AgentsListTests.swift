@@ -181,6 +181,37 @@ final class AgentsListTests: XCTestCase {
         reach(text("给天气 App 加主屏幕小组件"), "everything again under 全部")
     }
 
+    /// In the shell the list's menu hides behind the selected Agents switch: a machine chosen there says so on the page,
+    /// and one tap shows every machine again (#1659: one machine chosen once hid the other computers' agents).
+    @MainActor func testMachineFilterShowsInShell() throws {
+        app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES",
+                               "-ui.oldLayout", "NO"]
+        app.launchPinned()
+        see(filter("all"), "the quick filters", timeout: 15)
+        let chip = app.buttons["agents.machineFilter"]
+        XCTAssertFalse(chip.exists, "no machine chosen: nothing more on the page")
+        let all = filter("unread").label
+
+        see(app.buttons["shell-agents"], "the selected Agents switch").tap()
+        see(app.buttons["MacBook"], "MacBook in the menu").tap()
+        see(chip, "the chosen machine on the page")
+        XCTAssertEqual(chip.label, "只看 MacBook")
+        wait("未读 counts MacBook's only (\(filter("unread").label))") { filter("unread").label == "未读 6" }
+        shot("agents-shell-machine-filter")
+
+        chip.tap()
+        gone(chip, "the chip goes with the filter")
+        wait("every machine again (\(filter("unread").label))") { filter("unread").label == all }
+
+        app.terminate()
+        app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", "", "-tab", "dev", "-ui.oldLayout", "NO"]
+        app.launchPinned()
+        see(filter("all"), "the list after a relaunch", timeout: 15)
+        XCTAssertFalse(app.buttons["agents.machineFilter"].exists, "cleared for good, not only for this run")
+    }
+
     // MARK: Compact rows
 
     /// 细列表 in the menu: one line per agent, several times as many on screen; remembered across launches.

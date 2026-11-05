@@ -14,6 +14,12 @@ enum MacMenuBar {
         var isEmpty: Bool { needsYou.isEmpty && working.isEmpty && unread.isEmpty }
     }
 
+    /// The sessions the menu bar and the Dock menu list. Agents of a task found quiet (#1731) are the main
+    /// conversation's to tell, so both menus drop them before grouping into sections.
+    static func menuSessions(_ sessions: [Session], quiet: (Session) -> Bool) -> [Session] {
+        sessions.filter { !quiet($0) }
+    }
+
     /// Waiting the longest first; finished ones newest first and only the last few. Muted agents are left out of
     /// what needs you (as the badges do) but still show while they work.
     static func sections(_ sessions: [Session], muted: (Session) -> Bool) -> Sections {
@@ -79,7 +85,8 @@ enum MacMenuBar {
     private func observe(_ model: AppModel) {
         let next = withObservationTracking {
             // Agents of quiet tasks (#1731) are the main conversation's to tell: not in the menu at all.
-            MacMenuBar.shown(MacMenuBar.sections(model.allSessions.filter { !model.isQuiet($0) }, muted: { model.isMuted($0) }), paired: model.isPaired,
+            MacMenuBar.shown(MacMenuBar.sections(MacMenuBar.menuSessions(model.allSessions, quiet: { model.isQuiet($0) }),
+                                                 muted: { model.isMuted($0) }), paired: model.isPaired,
                              interactions: model.pendingInteractions,
                              machineName: names(model.machines))
         } onChange: {

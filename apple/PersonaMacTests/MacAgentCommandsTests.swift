@@ -73,6 +73,21 @@ struct MacAgentCommandsTests {
         #expect(MacAgentCommands.nextNeedsYou(after: k("a"), in: list, muted: { _ in false }) == k("j"))
         #expect(MacAgentCommands.nextNeedsYou(after: nil, in: [session("c", .working)], muted: { _ in false }) == nil)
     }
+
+    /// ⌃⌘N passes `isMuted || isQuiet` as the muted closure, so an agent of a quiet task (#1731) is never a target:
+    /// the longest-waiting quiet agent is skipped, cycling wraps within the visible agents, and a quiet agent that is
+    /// the only one waiting leaves nothing to jump to (the menu item stays disabled).
+    @Test func nextNeedsYouSkipsAgentsHiddenAsQuiet() {
+        let list = [session("a", .needsYou, ago: 10), session("q", .needsYou, ago: 300),
+                    session("d", .needsYou, ago: 60)]
+        let k = { SessionKey(machineID: "m", sessionID: $0) }
+        let hidden: (Session) -> Bool = { $0.sessionID == "q" }
+        #expect(MacAgentCommands.nextNeedsYou(after: nil, in: list, muted: hidden) == k("d"))
+        #expect(MacAgentCommands.nextNeedsYou(after: k("d"), in: list, muted: hidden) == k("a"))
+        #expect(MacAgentCommands.nextNeedsYou(after: k("a"), in: list, muted: hidden) == k("d"))
+        #expect(MacAgentCommands.nextNeedsYou(after: k("q"), in: list, muted: hidden) == k("d"))
+        #expect(MacAgentCommands.nextNeedsYou(after: nil, in: [session("q", .needsYou, ago: 1)], muted: hidden) == nil)
+    }
 }
 
 /// Which chat the Agent menu acts on: the key window's (a chat can be open in the main window and in a window of its
