@@ -249,8 +249,10 @@ private fun ChatPage(
         .collectAsStateWithLifecycle()
     val feed = feeds[key.sessionId].orEmpty()
     LaunchedEffect(key, tasks) { tasks?.load(key.sessionId); tasks?.loadTodayIfMain(key.sessionId) }
-    val lines = remember(projection, search.selected, feed, tasks) {
-        searchVisibleLines(projection.lines, search.selected?.itemId)
+    // The message a hub link named (`?at=`, #2194) while it is being landed on: like a search hit, its drawer opens.
+    var jumpItem by remember { mutableStateOf<String?>(null) }
+    val lines = remember(projection, search.selected, jumpItem, feed, tasks) {
+        searchVisibleLines(projection.lines, search.selected?.itemId ?: jumpItem)
             .let { if (tasks != null) persona.core.domain.tasks.AssistantLines.lines(it, feed) else it }.asReversed()
     }
     val searchableItems by produceState(emptyList<Item>(), snapshot.items, timelineVersion, search.visible) {
@@ -526,6 +528,8 @@ private fun ChatPage(
             catch (e: Exception) { if (feedback?.failure(e) != true) notice = operationFeedback(e).message }
         })
     ChatSearchNavigation(search, chatList, lines)
+    ChatMessageJump(key, repository, chatList, lines, snapshot.hasOlder, snapshot.loading || snapshot.loadingOlder, search,
+        onItem = { jumpItem = it }, onNotice = { notice = it })
     LaunchedEffect(list, chrome.covered, search.visible, search.pending, search.returning, chatList.restored, chatList.programmaticScroll, overlay, chromeOverlay, fullText, linkVisible, statusSheet, terminalHelp, taskPageVisible, lifecycle, snapshot.verified) {
         if (chrome.covered || search.visible || search.pending || search.returning || !chatList.restored || chatList.programmaticScroll || overlay || chromeOverlay || fullText != null || linkVisible || statusSheet || terminalHelp || taskPageVisible || lifecycle != Lifecycle.State.RESUMED || !snapshot.verified) return@LaunchedEffect
         snapshotFlow {

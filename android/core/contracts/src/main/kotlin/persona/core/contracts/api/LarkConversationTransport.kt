@@ -10,6 +10,8 @@ interface LarkConversationTransport : InboxAssistantTransport {
     suspend fun userProfile(userId: String, feedId: String? = null): JsonObject = JsonObject(emptyMap())
     suspend fun quickReactions(): List<String> = emptyList()
     suspend fun emojis(): JsonObject = JsonObject(emptyMap())
+    /** The account's message display settings (`GET /api/v1/lark/message-display`), shared with the web and iOS. */
+    suspend fun messageDisplay(): JsonObject = JsonObject(emptyMap())
 }
 
 /** Decode raw socket frames before the compatibility event decoder discards unknown events. */

@@ -193,6 +193,7 @@ class InboxDataOwner @Inject constructor(
         override suspend fun userProfile(userId: String, feedId: String?) = use { it.inbox.userProfile(userId, feedId) }
         override suspend fun quickReactions() = use { it.inbox.quickReactions() }
         override suspend fun emojis() = use { it.inbox.emojis() }
+        override suspend fun larkMessageDisplay() = use { it.inbox.larkMessageDisplay() }
     }
     val assistant = object : AssistantConversations {
         override val assistant = observe(AssistantSnapshot()) { it.assistant.assistant }

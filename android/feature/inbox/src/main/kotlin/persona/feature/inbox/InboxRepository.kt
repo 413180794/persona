@@ -87,6 +87,8 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun userProfile(userId: String, feedId: String? = null): kotlinx.serialization.json.JsonObject? = null
     suspend fun quickReactions(): List<String> = emptyList()
     suspend fun emojis(): kotlinx.serialization.json.JsonObject? = null
+    /** The account''t be read (then nothing is decoded). */
+    suspend fun larkMessageDisplay(): LarkMessageDisplay? = null
 }
 
 data class InboxSnapshot(
@@ -190,58 +192,12 @@ sealed interface ReplyTarget {
 data class ReplyRequest(val text: String, @SerialName("client_id") val clientId: String,
     val mailTarget: persona.core.contracts.api.MailReplyTarget? = null)
 
-/** [ai]: the text came from AI (the AI 分身, or AI 草拟); sending it asks first, sending the user's own words does not. */
-@Serializable
-data class ReplyDraft(val text: String, val clientId: String = UUID.randomUUID().toString(), val ai: Boolean = false)
-
-data class LarkConversation(
-    val title: String = "",
-    val messages: List<LarkMessage> = emptyList(),
-    val loading: Boolean = false,
-    val hasOlder: Boolean = false,
-    val loadingOlder: Boolean = false,
-    val error: String? = null,
-    /** A failure the Lark window itself ran into, worded by the page. */
-    val failure: LarkFailure? = null,
-    val hasNewer: Boolean = false,
-    val loadingNewer: Boolean = false,
-    val verified: Boolean = false,
-    val windowRevision: Long = 0,
-)
-
-enum class LarkFailure(@androidx.annotation.StringRes val text: Int) {
-    NotPaired(R.string.inbox_lark_not_paired),
-    Incomplete(R.string.inbox_lark_incomplete),
-    LoadFailed(R.string.inbox_lark_messages_failed),
-}
-
-enum class LarkDelivery { Sent, Sending, Failed, WaitingForNetwork }
-
-data class LarkMessage(
-    val id: String,
-    val senderId: String,
-    val senderName: String,
-    val position: Long? = null,
-    val time: String = "",
-    val mine: Boolean = false,
-    val parts: List<LarkPart>,
-    val clientId: String? = null,
-    val delivery: LarkDelivery = LarkDelivery.Sent,
-    val pendingDelivery: persona.core.contracts.api.DeliveryState? = null,
-    val avatar: AuthenticatedLarkImage? = null,
-    val bot: Boolean = false,
-    val system: Boolean = false,
-    val edited: Boolean = false,
-    val quote: LarkQuote? = null,
-    val badgeCount: Long? = null,
-    val isRead: Boolean = false,
-    val replyCount: Long = 0,
-    val thread: LarkThreadSource? = null,
-    val reactions: List<LarkReaction> = emptyList(),
-    /** False for what is not the sender's own text (recalled, encrypted): 设置 › 翻译 leaves it alone. */
+/** [ai]: the text came from AI (the AI 分身, or AI 草拟); sending it asks first, sending the user''s own text (recalled, encrypted): 设置 › 翻译 leaves it alone. */
     val translatable: Boolean = true,
     /** Recalled by its sender: it has no parts and reads 「消息已撤回」. */
     val recalled: Boolean = false,
+    /** Shown decoded from [removed] words ([LarkMessage.shown]): the bubble says so under them. */
+    val braveClimb: Boolean = false,
 )
 
 data class LarkQuote(val id: String, val sender: String, val text: String, val recalled: Boolean = false)

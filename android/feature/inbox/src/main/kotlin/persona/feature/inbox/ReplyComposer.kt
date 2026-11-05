@@ -52,6 +52,7 @@ enum class ReplyError(@StringRes val text: Int) {
     NotSent(R.string.inbox_reply_error_not_sent),
     CantConfirm(R.string.inbox_reply_error_cant_confirm),
     CheckFailed(R.string.inbox_reply_error_check_failed),
+    BraveClimbTooLong(R.string.inbox_reply_error_brave_climb_too_long),
 }
 
 /**
@@ -121,7 +122,7 @@ class ReplyComposer(
         val current = state.value
         if (!current.canEdit || text.isBlank()) return false
         pristine = false
-        val draft = ReplyDraft(text, ai = true)
+        val draft = ReplyDraft(text, ai = true, braveClimb = current.draft.braveClimb)
         mutableState.value = current.copy(draft = draft, error = null, sent = false, delivery = ReplyDelivery.Ready, targetChanged = false)
         save(draft)
         return true
@@ -146,8 +147,19 @@ class ReplyComposer(
         if (!current.canEdit || current.draft.text == text) return
         pristine = false
         // Edited AI text is still AI's draft; clearing it makes the reply the user's own.
-        val draft = ReplyDraft(text, ai = current.draft.ai && text.isNotBlank())
+        val draft = ReplyDraft(text, ai = current.draft.ai && text.isNotBlank(), braveClimb = current.draft.braveClimb)
         mutableState.value = current.copy(draft = draft, error = null, sent = false, delivery = ReplyDelivery.Ready)
+        save(draft)
+    }
+
+    /** Whether the words go as [removed] words (#882), kept with the draft; the page offers it while the switch is on. */
+    fun setBraveClimb(on: Boolean) {
+        val current = state.value
+        if (!current.canEdit || current.draft.braveClimb == on) return
+        pristine = false
+        // Other words on the wire: a new request ID, as an edit gets.
+        val draft = ReplyDraft(current.draft.text, ai = current.draft.ai, braveClimb = on)
+        mutableState.value = current.copy(draft = draft, error = null)
         save(draft)
     }
 
@@ -168,6 +180,9 @@ class ReplyComposer(
         if (current.loading || current.sending || current.draft.text.isBlank()) return
         if (current.delivery in setOf(ReplyDelivery.Queued, ReplyDelivery.WaitingForNetwork, ReplyDelivery.Verifying)) return
         if (current.delivery in setOf(ReplyDelivery.Unknown, ReplyDelivery.NeedsConfirmation)) { verify(); return }
+        // [removed] words go encoded, as the web sends them; the draft keeps the words typed.
+        val text = if (!current.draft.braveClimb) current.draft.text else try { LarkBraveClimbCodec.encode(current.draft.text) }
+            catch (_: LarkBraveClimbCodec.TooLong) { mutableState.value = current.copy(error = ReplyError.BraveClimbTooLong); return }
         mutableState.value = current.copy(sending = true, error = null, sent = false, delivery = ReplyDelivery.Sending, targetChanged = false)
         scope.launch {
             var submitted = false
@@ -175,7 +190,7 @@ class ReplyComposer(
                 writes.withLock {
                     repository.saveDraft(target, current.draft)
                     submitted = true
-                    repository.reply(target, ReplyRequest(current.draft.text, current.draft.clientId, mailTarget))
+                    repository.reply(target, ReplyRequest(text, current.draft.clientId, mailTarget))
                 }
                 mutableState.value = ReplyComposerState(draft = ReplyDraft(""), loading = false, sent = true)
             } catch (error: CancellationException) {
@@ -201,7 +216,7 @@ class ReplyComposer(
     }
 
     private suspend fun targetChanged(previous: ReplyDraft) {
-        val draft = ReplyDraft(previous.text, ai = previous.ai)
+        val draft = ReplyDraft(previous.text, ai = previous.ai, braveClimb = previous.braveClimb)
         mutableState.value = state.value.copy(draft = draft, sending = false, targetChanged = true,
             delivery = ReplyDelivery.Ready, error = ReplyError.TargetChanged)
         try { writes.withLock { repository.saveDraft(target, draft) } }
@@ -218,7 +233,7 @@ class ReplyComposer(
                 mutableState.value = if (result == ReplyDelivery.Sent) {
                     ReplyComposerState(draft = ReplyDraft(""), loading = false, sent = true)
                 } else if (result == ReplyDelivery.Ready) {
-                    val fresh = ReplyDraft(draft.text, ai = draft.ai)
+                    val fresh = ReplyDraft(draft.text, ai = draft.ai, braveClimb = draft.braveClimb)
                     writes.withLock { repository.saveDraft(target, fresh) }
                     state.value.copy(draft = fresh, sending = false, delivery = ReplyDelivery.Ready, error = ReplyError.NotSent)
                 } else state.value.copy(sending = false, delivery = result,

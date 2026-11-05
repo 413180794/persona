@@ -19,6 +19,10 @@
     <string name="inbox_lark_loading">Loading…</string>
     <string name="inbox_lark_older">Show earlier messages</string>
     <string name="inbox_lark_edited">Edited</string>
+    <string name="inbox_lark_brave_climb_decoded">Brave Climb · decoded</string>
+    <string name="inbox_lark_brave_climb_placeholder">Brave Climb encoded message</string>
+    <string name="inbox_lark_brave_climb_mode">Brave Climb code</string>
+    <string name="inbox_lark_brave_climb_off">Turn on Brave Climb code in lark-connector\'s settings first</string>
     <plurals name="inbox_lark_replies">
         <item quantity="one">%1$d reply</item>
         <item quantity="other">%1$d replies</item>

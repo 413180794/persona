@@ -18,9 +18,21 @@ class HubLinksTest {
 
     @Test fun ignoresTheQueryAndFragment() {
         assertEquals(HubPage.Agent("m1", "abc-1"), page("$hub/s/m1/abc-1?view=chat#item-42"))
-        assertEquals(HubPage.Agent("m1", "abc-1"), page("$hub/s/m1/abc-1?at=item-42"))
         assertEquals(HubPage.Conversation("abc-1"), page("$hub/j/abc-1#at"))
         assertEquals(HubPage.Screen(TodoDetailRoute("todo 1")), page("$hub/todos?view=x&id=todo%201"))
+    }
+
+    @Test fun aMessageOfAConversation() {
+        // Claude's item ids hold `#`: the hub query-escapes them (#2531)
+        assertEquals(HubPage.Agent("m1", "abc-1", "a1b2#3"), page("$hub/s/m1/abc-1?at=a1b2%233"))
+        assertEquals(HubPage.Agent("m1", "abc-1", "item-42"), page("$hub/s/m1/abc-1?view=chat&at=item-42#x"))
+        assertEquals(HubPage.Agent("m1", "abc-1", "item-42"), page("$hub/t/m1/space/slot/abc-1?at=item-42"))
+        assertEquals(HubPage.Conversation("abc-1", "item 7"), page("$hub/j/abc-1?at=item+7"))
+        assertEquals(HubPage.Conversation("abc-1", "item-7"), page("$hub/persona/abc-1?at=item-7"))
+        // an empty anchor is no anchor; Persona's own page has no message to land on
+        assertEquals(HubPage.Agent("m1", "abc-1"), page("$hub/s/m1/abc-1?at="))
+        assertEquals(HubPage.Conversation(null), page("$hub/j?at=item-7"))
+        assertEquals(HubPage.Screen(TodoDetailRoute("todo_1")), page("$hub/todos?id=todo_1&at=item-7"))
     }
 
     @Test fun decodesPathSegments() {

@@ -27,6 +27,20 @@ class ShellHubLinksTest {
         assertEquals(listOf<NavKey>(ChatRoute("m1", "abc-1")), opened)
     }
 
+    @Test fun aLinkToAMessageLeavesItForItsChat() {
+        MessageJumps.take("m1~gcafe00a1", "abc-123")
+        val sessions = listOf(SessionKey("m1~gcafe00a1", "abc-123"))
+        assertTrue(open("$hub/s/m1/abc?at=item%231", namespace = "gcafe00a1", sessions = sessions))
+        assertEquals(listOf<NavKey>(ChatRoute("m1~gcafe00a1", "abc-123")), opened)
+        assertEquals(MessageJumps.Jump("m1~gcafe00a1", "abc-123", "item#1"), MessageJumps.pending)
+        assertTrue(open("$hub/j/side-1?at=item-2"))
+        assertEquals(MessageJumps.Jump("hub-m", "side-1", "item-2"), MessageJumps.pending)
+        assertEquals("item-2", MessageJumps.take("hub-m", "side-1"))
+        // no message: nothing waits
+        assertTrue(open("$hub/s/m1/abc-1"))
+        assertNull(MessageJumps.pending)
+    }
+
     @Test fun anotherGroupsMachinesCarryItsSuffix() {
         assertTrue(open("$hub/s/m1/abc-1", namespace = "gcafe00a1"))
         assertTrue(open("$hub/machines/m1", namespace = "gcafe00a1"))

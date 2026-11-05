@@ -374,6 +374,7 @@
     <string name="chat_tasks_origin_gone">元の記録は現在のリストにありません</string>
     <string name="chat_tasks_load_failed">関連する記録を読み込めませんでした。作業の過程を展開してもう一度お試しください</string>
     <string name="chat_tasks_record_gone">関連する記録は現在のリストにありません</string>
+    <string name="chat_link_message_gone">リンク先のメッセージはこの会話にありません</string>
     <string name="chat_tasks_return">タスクを見る前の位置に戻る</string>
     <string name="chat_tasks_bar">%1$d/%2$d件完了、%3$d件進行中</string>
     <string name="chat_tasks_view_all">すべてのタスクを表示</string>

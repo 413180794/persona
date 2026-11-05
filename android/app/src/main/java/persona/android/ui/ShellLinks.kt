@@ -15,6 +15,7 @@ import persona.core.navigation.ConversationKind
 import persona.core.navigation.HubLinks
 import persona.core.navigation.HubPage
 import persona.core.navigation.MachineDetailRoute
+import persona.core.navigation.MessageJumps
 import persona.core.navigation.Navigator
 import persona.feature.chat.*
 import persona.feature.inbox.InboxWebSelection
@@ -99,7 +100,8 @@ internal fun ShellLinkHost(session: ShellSession, navigator: Navigator, feedback
 /**
  * Opens the app's screen for [link] when it is a page of the selected group's hubs ([HubLinks]; [hubs] their
  * addresses, [namespace] the group's machine id suffix); false for other sites, the hub's pages the app has no
- * screen for, and an assistant conversation before the assistant is known.
+ * screen for, and an assistant conversation before the assistant is known. A link to one message of a conversation
+ * (`?at=`) leaves it in [MessageJumps] for that chat's page, which lands on it.
  */
 internal fun openHubPage(link: String, hubs: List<String>, namespace: String?, sessions: List<SessionKey>,
     assistant: AssistantSnapshot, navigator: Navigator): Boolean {
@@ -112,6 +114,7 @@ internal fun openHubPage(link: String, hubs: List<String>, namespace: String?, s
             // The web page also takes the first characters of a session id (#2464): the one session they name.
             val sessionId = sessions.filter { it.machineId == machineId && it.sessionId.startsWith(page.sessionId) }
                 .let { keys -> keys.firstOrNull { it.sessionId == page.sessionId } ?: keys.singleOrNull() }?.sessionId ?: page.sessionId
+            page.itemId?.let { MessageJumps.request(machineId, sessionId, it) }
             navigator.navigate(ChatRoute(machineId, sessionId))
         }
         is HubPage.Conversation -> {
@@ -123,7 +126,10 @@ internal fun openHubPage(link: String, hubs: List<String>, namespace: String?, s
                     ?: main?.let { SessionKey(it.machineId, id) } ?: return false
             }
             if (key == null) navigator.selectTab(AppTab.Jarvis)
-            else navigator.navigate(ChatRoute(key.machineId, key.sessionId, ConversationKind.Assistant))
+            else {
+                page.itemId?.let { MessageJumps.request(key.machineId, key.sessionId, it) }
+                navigator.navigate(ChatRoute(key.machineId, key.sessionId, ConversationKind.Assistant))
+            }
         }
         is HubPage.Screen -> navigator.navigate(page.key.let { if (it is MachineDetailRoute) it.copy(machineId = machine(it.machineId)) else it })
     }

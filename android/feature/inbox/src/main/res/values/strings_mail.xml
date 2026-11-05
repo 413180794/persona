@@ -88,6 +88,7 @@
     <string name="inbox_reply_error_not_sent">Not sent yet. You can try again.</string>
     <string name="inbox_reply_error_cant_confirm">Can\'t tell yet whether it arrived. Check the original chat. It won\'t be sent again on its own.</string>
     <string name="inbox_reply_error_check_failed">Couldn\'t finish checking. Try again later.</string>
+    <string name="inbox_reply_error_brave_climb_too_long">Too long to send as Brave Climb code. The draft is kept.</string>
     <string name="inbox_reply_confirm_title">Send as you?</string>
     <string name="inbox_reply_to_lark">Send to “%1$s” in Lark</string>
     <string name="inbox_reply_to_mail">Reply to “%1$s”</string>

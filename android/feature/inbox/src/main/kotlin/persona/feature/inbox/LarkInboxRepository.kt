@@ -95,6 +95,8 @@ class LarkInboxRepository(
     override suspend fun emojis(): JsonObject? {
         return transports.value?.emojis()
     }
+    override suspend fun larkMessageDisplay(): LarkMessageDisplay? =
+        transports.value?.messageDisplay()?.let(::larkMessageDisplay)?.takeIf { it.accountId.isNotBlank() }
     override suspend fun latestConversation(feedId: String) {
         val w = window(feedId)
         w.lock.withLock {

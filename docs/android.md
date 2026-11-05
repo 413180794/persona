@@ -551,6 +551,7 @@ Android 用一个判断（`core/contracts` 的 `LarkFeatures.of(features)`，和
 - 原生阅读器（#3064，对齐 iOS FeishuDocReader）：标题下面是作者 · 「（某人）更新于」，再下面阅读 / 看过 / 赞 / 评论数；飞书已经生成好的 AI 摘要放一张可展开的卡；有标题时有「目录」（浮层，点了滚到那一节）；正文末尾「在飞书中打开」。这几样读 `/api/v1/lark/raw/documents/reader/info`、`header`、`ai-summary`（`InboxAssistantTransport.documentExtra`），和正文同时读，哪个读不到就不显示，不挡正文。
 - 文档缓存和预读（#3064，对齐网页 `loadDoc` / iOS 预加载跳过飞书链接）：读过的文档正文在内存里每个配对各留最近 12 篇（`LarkDocumentCache.shared`，读失败的不留），再打开直接显示；所有者、阅读数、AI 摘要这些不缓存，每次打开和刷新都重新读（和网页、iOS 一样），预读也只读正文。原生视图打开的飞书链接不进 WebView 池预加载，打开时也不加载网页，点「切换网页」（或读失败自动退回网页）才取 WebView 加载，这之后卡片的刷新、进度条和「网页意外退出了 / 重新载入」都按网页走。飞书文档改成预读进这个缓存。
 - 收件箱里带 `lark` / `doc` / `moment` 的事项只有扩展给，照常画，点开照旧进飞书会话 / 云文档事项页 / 公司圈帖子页（云文档见「收件箱：云文档事项」）。Android 没有「消息」页和后台拉飞书会话，知识库也不显示存档的公司圈帖子，这几处 iOS / 网页有的开关这里没有对应。
+- [removed]编码（#882）：开关打开时会话里解码显示、输入框可以选这个模式发送，开关本身在网页 / iOS 改，见 [lark-connector-migration.md](lark-connector-migration.md)「[removed]」。
 - 「removed」一律叫「公司圈」。单测 `LarkFeaturesTest`（`core:contracts`）、`LarkNativeLinkTest`（`feature:inbox`）、`SettingsConnectorsTest.feishuRowOnlyWhileTheHubHasFeishu`；截图用 `MOCK_NO_LARK=1` 的假 hub 对比设置页。
 
 ## 助手回答里的 hub 链接（#2680）
@@ -566,9 +567,15 @@ Android 用一个判断（`core/contracts` 的 `LarkFeatures.of(features)`，和
 | `/todos?id=<待办>`、`/todos/<待办>`、`/todos` | 待办详情、待办列表 |
 | `/inbox/<id>`、`/inbox`、`/agents`、`/settings`、`/machines[/<机器>]` | 对应页 |
 
-机器 id 按 hub 的原样加上组后缀（`GroupKeys.machine`）。查询参数和锚点（`?view=`、以后的「定位到某条消息」）不影响识别，现在也不用。
+机器 id 按 hub 的原样加上组后缀（`GroupKeys.machine`）。查询参数和锚点（`?view=`、`#…`）不影响识别。
+
+**定位到某条消息**（`?at=<条目 id>`，#2921，对齐 iOS #2762）：`/s/…`、`/t/…/<会话>`、`/j/<对话>`、`/persona/<对话>` 的 `at` 解析成
+`HubPage.Agent` / `HubPage.Conversation` 的 `itemId`。路由还是那个对话的 `ChatRoute`（栈上一个对话一项，Persona 首页原地显示助手对话），
+`openHubPage` 把要跳的消息记在 `core/navigation` 的 `MessageJumps`，那个对话的页面（刚打开的，或者已经开着的）取走一次，
+`ChatMessageJump`（`feature/chat`）按对话内搜索的办法落过去：等首次落位（上次读到的地方 / 最新处）做完，在所在的工作组里就先展开，
+不在已加载的范围里就往前翻页（最多 20 页），找到后滚到顶部、像搜索命中一样描边 3 秒；找不到停在原处，提示「链接里的这条消息不在这段对话里了」。
 体验模式没有 hub 地址，什么都不拦。别的 App / 浏览器里点 hub 链接拉起 App（App Links）还没做（#2194 第 4 步的后半）。
-单测 `HubLinksTest`（`core:navigation`）、`ShellHubLinksTest`（`app`）。
+单测 `HubLinksTest`（`core:navigation`）、`ShellHubLinksTest`（`app`）、`ChatMessageJumpTest`（`feature:chat`）。
 
 ## 常驻通知和桌面入口（2026-11-02 从主线旧 App 移植）
 

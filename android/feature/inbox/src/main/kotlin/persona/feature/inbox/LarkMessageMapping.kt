@@ -120,3 +120,56 @@ internal fun larkTime(time: String): String = runCatching {
 }.getOrDefault(time)
 
 internal fun LarkMessage.listKey() = clientId?.let { "client:$it" } ?: "message:$id"
+
+/** `GET /api/v1/lark/message-display`: no `brave_climb_codec` from an older Feishu extension (no such switch). */
+internal fun larkMessageDisplay(data: JsonObject): LarkMessageDisplay =
+    LarkMessageDisplay(accountId = data.text("account_id"),
+        braveClimb = (data["brave_climb_codec"] as? JsonPrimitive)?.booleanOrNull)
+
+/**
+ * The message as the chat shows it: [removed] words decoded while the switch is on, as they came otherwise (#882).
+ * Rich text can split one envelope over several runs: a run of text parts is joined first, and its slots go so
+ * later parts keep their order. A quote and forwarded messages read decoded too.
+ */
+internal fun LarkMessage.shown(display: LarkMessageDisplay): LarkMessage {
+    if (!display.climbs || recalled) return this
+    val decoded = larkBraveClimbParts(parts)
+    val shownQuote = quote?.takeUnless { it.recalled }?.let { q -> LarkBraveClimbCodec.decodeText(q.text)?.let { q.copy(text = it) } }
+    if (decoded == null && shownQuote == null) return this
+    return copy(parts = decoded ?: parts, quote = shownQuote ?: quote, braveClimb = decoded != null,
+        // Decoded words are not what the wire carries: 设置 › 翻译 would translate the envelope.
+        translatable = translatable && decoded == null)
+}
+
+internal fun larkBraveClimbParts(parts: List<LarkPart>): List<LarkPart>? {
+    val result = mutableListOf<LarkPart>()
+    var decodedAny = false
+    var index = 0
+    while (index < parts.size) {
+        val part = parts[index]
+        if (part is LarkPart.MergeForward) {
+            val messages = part.messages.map { m ->
+                val text = LarkBraveClimbCodec.decodeText(m.text)
+                val inner = larkBraveClimbParts(m.parts)
+                if (text != null || inner != null) decodedAny = true
+                m.copy(text = text ?: m.text, parts = inner ?: m.parts)
+            }
+            result += part.copy(messages = messages); index++; continue
+        }
+        if (part !is LarkPart.Text) { result += part; index++; continue }
+        var end = index + 1
+        while (end < parts.size && parts[end] is LarkPart.Text) end++
+        val run = parts.subList(index, end).map { it as LarkPart.Text }
+        val whole = LarkBraveClimbCodec.decodeContent(run.joinToString("") { it.text })
+        if (whole != null) {
+            result += LarkPart.Text(whole, run.first().source)
+            decodedAny = true
+        } else run.forEach { text ->
+            val words = LarkBraveClimbCodec.decodeText(text.text)
+            if (words != null) decodedAny = true
+            result += text.copy(text = words ?: text.text)
+        }
+        index = end
+    }
+    return result.takeIf { decodedAny }
+}

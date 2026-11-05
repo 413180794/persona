@@ -113,4 +113,15 @@ class HttpLarkConversationTransport(
             Json.parseToJsonElement(raw.ifBlank { "{}" }).jsonObject
         }
     }
+
+    override suspend fun messageDisplay(): JsonObject {
+        if (!isCurrent()) throw CancellationException("Pairing changed")
+        val url = base.newBuilder().addPathSegments("api/v1/lark/message-display").build()
+        val request = Request.Builder().url(url).header("Authorization", "Bearer $token").get().build()
+        return http.newCall(request).awaitResponse().use {
+            if (!isCurrent()) throw CancellationException("Pairing changed")
+            if (!it.isSuccessful) throw HubFailure.from(it)
+            Json.parseToJsonElement(it.body?.string().orEmpty().ifBlank { "{}" }).jsonObject
+        }
+    }
 }

@@ -117,3 +117,5 @@ lark-connector 的「[removed]消息编码」把文字编成 `**字…**`：34 �
 - 话题详情（回复话题）的输入框暂不提供这个模式。
 
 [模拟器截图](screenshots/lark-brave-climb/README.md)。
+
+Android（`feature/inbox` 的 `LarkBraveClimb.kt`，同一组已知向量）：打开飞书会话时读一次 `/api/v1/lark/message-display`，开关打开时气泡（含合并转发、话题浮层）和引用解码，下方标「[removed] · 已解码」；关闭时气泡保持原文，整条编码的引用写「[removed]编码消息」。会话页输入框上方多一个「[removed]编码」开关 chip（开关打开、或草稿已在这个模式时出现），模式记进草稿（`InboxStoredDraft.braveClimb`），发出的是编码后的文字，草稿和失败后放回的仍是原文。Android 没有「风灵月影」设置页，开关要在网页或 iOS 上改；Android 的飞书会话只发文字、不分辨话题群，也没有会话列表摘要和编辑历史，这几处不涉及。截图：`./gradlew :feature:inbox:testDebugUnitTest --tests '*LarkBraveClimbShotsTest*'`。

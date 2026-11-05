@@ -11,10 +11,16 @@ import java.net.URLDecoder
  * shell adds the group suffix ([persona.core.contracts.GroupKeys]) of the hub the link was on.
  */
 sealed interface HubPage {
-    /** `/s/<machine>/<session>`, or `/t/<machine>/<space>/<slot>/<session>`: that agent's conversation. */
-    data class Agent(val machineId: String, val sessionId: String) : HubPage
-    /** `/j/<conversation>`: one of the assistant's conversations; `/`, `/j` and `/j/new` are Persona's page (null). */
-    data class Conversation(val sessionId: String?) : HubPage
+    /**
+     * `/s/<machine>/<session>`, or `/t/<machine>/<space>/<slot>/<session>`: that agent's conversation; [itemId] the
+     * message `?at=<item id>` names (#2194), to land on.
+     */
+    data class Agent(val machineId: String, val sessionId: String, val itemId: String? = null) : HubPage
+    /**
+     * `/j/<conversation>`: one of the assistant's conversations, at the message `?at=` names ([itemId]); `/`, `/j` and
+     * `/j/new` are Persona's page (null, no message).
+     */
+    data class Conversation(val sessionId: String?, val itemId: String? = null) : HubPage
     /** A page with no ids to resolve: a todo, the todo list, an inbox item, a tab, the machines. */
     data class Screen(val key: NavKey) : HubPage
 }
@@ -23,8 +29,9 @@ object HubLinks {
     /**
      * The page [url] opens when it is on one of [hubs] (the hub's addresses: its pairing address, alternatives and
      * the ones it advertises, `public_url` first); null for other sites and the hub's pages the app has no screen for,
-     * which stay web pages. A hub behind a reverse proxy's sub-path serves its pages under that path. The query
-     * (`?view=`, a future message anchor) and the fragment never stop a page from opening.
+     * which stay web pages. A hub behind a reverse proxy's sub-path serves its pages under that path. A conversation's
+     * `?at=<item id>` is the message to land on; the rest of the query (`?view=`) and the fragment never stop a page
+     * from opening.
      */
     fun page(url: String, hubs: Collection<String>): HubPage? {
         val link = uri(url.trim()) ?: return null
@@ -44,15 +51,15 @@ object HubLinks {
 
     private fun route(p: List<String>, query: Map<String, String>): HubPage? = when (p.firstOrNull()) {
         null -> HubPage.Conversation(null)
-        "s" -> if (p.size == 3) HubPage.Agent(p[1], p[2]) else null
+        "s" -> if (p.size == 3) HubPage.Agent(p[1], p[2], at(query)) else null
         "t" -> when (p.size) {
-            5 -> HubPage.Agent(p[1], p[4])
+            5 -> HubPage.Agent(p[1], p[4], at(query))
             4 -> HubPage.Screen(AgentsRoute)
             else -> null
         }
         "j", "persona" -> when {
             p.size == 1 || p.size == 2 && p[1] == "new" -> HubPage.Conversation(null)
-            p.size == 2 -> HubPage.Conversation(p[1])
+            p.size == 2 -> HubPage.Conversation(p[1], at(query))
             else -> null
         }
         "todos" -> when {
@@ -74,6 +81,9 @@ object HubLinks {
         }
         else -> null
     }
+
+    /** The message a conversation's link names (`?at=<item id>`; Claude's ids hold `#`, written `%23`). */
+    private fun at(query: Map<String, String>): String? = query["at"]?.takeIf { it.isNotBlank() }
 
     private data class Base(val host: String, val port: Int, val path: String)
 

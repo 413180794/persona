@@ -300,16 +300,19 @@ class RealInboxRepository(
         fun restored(text: String, clientId: String) =
             if (document.outbox.any { it.request.clientId == clientId && it.state == "target_changed" }) ReplyDraft(text)
             else ReplyDraft(text, clientId)
-        return document.drafts[target.storageKey()]?.let { restored(it.text, it.clientId).copy(ai = it.ai) }
+        return document.drafts[target.storageKey()]?.let { restored(it.text, it.clientId).copy(ai = it.ai, braveClimb = it.braveClimb) }
             ?: document.outbox.lastOrNull { it.target == target && it.state != "sent" }?.let {
-                restored(it.request.text, it.request.clientId)
+                // [removed] words go back as the words typed, in that mode; encoding them again gives the same request.
+                val words = LarkBraveClimbCodec.decodeMessage(it.request.text)
+                if (words != null) restored(words, it.request.clientId).copy(braveClimb = true)
+                else restored(it.request.text, it.request.clientId)
             }
     }
     override suspend fun saveDraft(target: ReplyTarget, draft: ReplyDraft) {
         val transport = requireTransport()
         val version = refreshLock.withLock { (target as? ReplyTarget.Inbox)?.let { versions[it.itemId] } }
         val saved = journal.update(transport.scope) {
-            it.copy(drafts = it.drafts + (target.storageKey() to InboxStoredDraft(draft.text, draft.clientId, version, draft.ai)))
+            it.copy(drafts = it.drafts + (target.storageKey() to InboxStoredDraft(draft.text, draft.clientId, version, draft.ai, draft.braveClimb)))
         }
         if (owns(transport)) publishLocal(saved)
     }
