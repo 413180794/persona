@@ -266,7 +266,7 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
   Codex rollout 第一行 `session_meta.originator`（平台自己起的名字；Persona 起的是 `jarvis`），Claude Code（SDK 起的，`entrypoint: sdk-ts`）
   在第一条消息后紧跟的 `attachment.type: environment` 里有 `additionalWorkingDirectories`（平台给的技能目录）。首条消息的前缀只能兜底：用户自己讨论这个平台的会话也会提到它的名字。
 - Claude 的离线会话只列最新 80 个：过滤要在截断前做，否则一天几百个平台会话把用户自己的挤出去（`scanOffline`）。
-- 实测（example-machine，7 天）：Codex 约 1300 个是平台的 originator、自己的约 30 个；Claude 约 210 个带平台目录，另有 1 个只有前缀。冷读约 2300 个文件的开头 2.8 秒，之后按文件缓存。
+- 实测（hub 所在的机器，7 天）：Codex 约 1300 个是平台的 originator、自己的约 30 个；Claude 约 210 个带平台目录，另有 1 个只有前缀。冷读约 2300 个文件的开头 2.8 秒，之后按文件缓存。
 
 ## herdr 的 pane id 和布局（#2320）
 
