@@ -1,0 +1,23 @@
+{
+  "step_download": "Download",
+  "step_verify": "Verify",
+  "step_unpack": "Unpack",
+  "step_check": "Check",
+  "step_consent": "Waiting for you",
+  "step_install": "Install",
+  "step_upgrade": "Upgrade",
+  "step_start": "Start",
+  "step_nodes": "Sync to computers",
+  "step_stop": "Stop",
+  "step_remove": "Remove",
+  "cached": "From cache",
+  "bytes_of": "{done} of {total}",
+  "machines": "{done} of {total}",
+  "needs_consent": "Waiting for you to review permissions",
+  "installed": "Installed",
+  "upgraded": "Upgraded",
+  "uninstalled": "Uninstalled",
+  "failed_at": "Stopped at “{step}”",
+  "canceled": "Canceled",
+  "starting": "Getting ready…"
+}

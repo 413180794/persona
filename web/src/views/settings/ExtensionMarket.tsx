@@ -16,6 +16,9 @@ import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast, useNow }
 import { Icon } from "../../ui/icons";
 import { dependentError, dependencyText, previewBlocked, type Dependent, type PackMember } from "../../lib/extension-model";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
+import { agreeTo, cancelOperation, forget, getOperation, isActive, operationsOn, retryOperation, startFromMarket } from "../../lib/extension-operations";
+import { useStore } from "../../lib/store";
+import { OperationSteps, useOperation } from "./ExtensionOperation";
 
 const inputClass =
   "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
@@ -200,6 +203,11 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
   const [preview, setPreview] = useState<MarketPreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [removing, setRemoving] = useState(false);
+  // A hub with extension_operations installs in steps the page draws (and finds again when opened later, #3277).
+  const stepped = useStore((s) => operationsOn(s.features));
+  const op = useOperation(id, market);
+  const [previewOf, setPreviewOf] = useState(""); // the operation whose preview is open
+  const seen = useRef<string>("");
   const load = () => {
     setLoading(true);
     getCatalog("", market)
@@ -213,9 +221,40 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
   };
   useEffect(load, [market, id]);
 
+  // An operation of this page's extension: when it waits for the user, its preview opens; when it is done, the page
+  // moves on as after a synchronous install.
+  useEffect(() => {
+    if (!op) return;
+    const key = `${op.id}:${op.state}`;
+    const was = seen.current;
+    seen.current = key;
+    if (op.state === "needs_consent" && previewOf !== op.id && was !== key) {
+      getOperation(op.id)
+        .then((full) => {
+          if (full.preview) {
+            setPreview(full.preview);
+            setPreviewOf(op.id);
+          }
+        })
+        .catch((e) => toast(t("settings-extensionmarket.preview_failed", { error: errorText(e) }), "error"));
+    }
+    if (op.state === "succeeded" && was.startsWith(`${op.id}:`) && was !== key) {
+      if (op.kind === "uninstall") load();
+      else {
+        toast(op.kind === "upgrade" ? t("settings-extensionmarket.upgraded", { name: op.name ?? op.extension, version: op.version ?? "" }) : t("settings-extensionmarket.installed", { name: op.name ?? op.extension }), "ok");
+        onInstalled(op.extension);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [op?.id, op?.state]);
+
   const look = async () => {
     setPreviewing(true);
     try {
+      if (stepped) {
+        await startFromMarket(market, id); // the steps show below; its preview opens when it is ready
+        return;
+      }
       setPreview(await previewFromMarket(market, id));
     } catch (e) {
       toast(t("settings-extensionmarket.preview_failed", { error: errorText(e) }), "error");
@@ -270,11 +309,35 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
             )}
             <span className="flex-1" />
             {(st.kind === "install" || st.kind === "upgrade") && (
-              <Button tone="primary" icon={st.kind === "upgrade" ? "up" : "download"} busy={previewing} onClick={() => void look()}>
+              <Button tone="primary" icon={st.kind === "upgrade" ? "up" : "download"} busy={previewing || (stepped && isActive(op))} onClick={() => void look()}>
                 {st.kind === "upgrade" ? t("settings-extensionmarket.upgrade_to", { version: it.version }) : t("settings-extensionmarket.install")}
               </Button>
             )}
           </div>
+        )}
+        {stepped && op && op.state !== "succeeded" && op.state !== "canceled" && (
+          <OperationSteps
+            op={op}
+            onRetry={async () => {
+              try {
+                await retryOperation(op.id);
+              } catch (e) {
+                toast(errorText(e), "error");
+              }
+            }}
+            onCancel={op.state === "running" && op.steps.some((s) => s.id === "consent" && s.state === "pending") ? () => cancelOperation(op.id).then(() => undefined, (e) => toast(errorText(e), "error")) : undefined}
+            onReview={() => {
+              seen.current = "";
+              setPreviewOf("");
+              getOperation(op.id).then((full) => {
+                if (full.preview) {
+                  setPreview(full.preview);
+                  setPreviewOf(op.id);
+                }
+              }, (e) => toast(errorText(e), "error"));
+            }}
+            onDismiss={() => forget(op.id)}
+          />
         )}
       </section>
 
@@ -324,8 +387,18 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
       {preview && it && (
         <PreviewDialog
           pv={preview}
-          onClose={() => setPreview(null)}
+          onClose={() => {
+            setPreview(null);
+            if (previewOf) void cancelOperation(previewOf).catch(() => undefined); // turned down: the hub drops the preview
+            setPreviewOf("");
+          }}
           onAgree={async () => {
+            if (previewOf) {
+              await agreeTo(preview, preview.upgrade ? it.id : undefined); // installs in the background, in steps
+              setPreview(null);
+              setPreviewOf("");
+              return;
+            }
             const d = preview.upgrade ? await upgradePreview(it.id, preview) : await installPreview(preview);
             toast(preview.upgrade ? t("settings-extensionmarket.upgraded", { name: d.name, version: d.version ?? "" }) : t("settings-extensionmarket.installed", { name: d.name }), "ok");
             setPreview(null);

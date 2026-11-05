@@ -837,6 +837,7 @@ export function TaskQuestions({ conversation }: { conversation: string }) {
  * in the main conversation, each agent going on that no task stands for (#1113), scrolling on their own (iOS TaskDock). */
 export function TaskDock({ conversation }: { conversation: string }) {
   const todos = useStore((s) => s.todos);
+  const interactions = useStore((s) => s.interactions);
   const sessions = useStore((s) => s.sessions);
   const main = useStore((s) => s.assistant?.main);
   const lookup = useTaskLookup();
@@ -871,10 +872,16 @@ export function TaskDock({ conversation }: { conversation: string }) {
         // The scroller pads by the focus ring's width and takes it back, so the ring is not clipped and the row
         // stays a pill high.
         <div className="scrollbar-none -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1">
-          {going.map(({ t: todo, st }) => (
+          {going.map(({ t: todo, st }) => {
+            // a waiting task says what it waits on when hovered or read out (#3463)
+            const ask = st === "needs_you" ? taskAsk(taskInteraction(todo, interactions, mostUrgentAgent(todo, lookup)?.session)) : undefined;
+            const label = ask ? t("assistant-tasks.dock_task_asks", { title: todo.title, ask }) : undefined;
+            return (
             <button
               key={todo.id}
               type="button"
+              title={label}
+              aria-label={label}
               onClick={() => openTask(todo.id)}
               onContextMenu={(e) => {
                 if (!isRemovable(st)) return;
@@ -888,7 +895,8 @@ export function TaskDock({ conversation }: { conversation: string }) {
               {st === "needs_you" && <span className="shrink-0">{t("assistant-tasks.waiting")}</span>}
               {st === "interrupted" && <span className="shrink-0">{t("assistant-tasks.interrupted_short")}</span>}
             </button>
-          ))}
+            );
+          })}
           {agents.map(({ session: s, state }) => (
             <button
               key={`${s.machine_id}/${s.session_id}`}

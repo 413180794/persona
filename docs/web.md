@@ -476,6 +476,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   「浏览扩展市场」（`&extension=-market`）：搜索（停顿 250 ms 后查 hub）、按市场筛选的 chip、重新读取全部，读不到的市场在顶上写原因；每行名字、版本、说明、市场、标签和状态（未安装 / 可升级到 x / 已装 x / hub 自带 / 装不了和原因）。
   点进是详情（`&extension=-market/<市场>/<扩展>`）：说明、标签、「它可以」、「提供」、「关于」；「安装」/「升级到 x」先 `POST …/catalog/preview`，弹出预览（权限、升级的 `旧 → 新`、权限变多时的红色提示和「新增」、剩几分钟，过期就不能点），
   「同意并安装」/「升级」/「同意新权限并升级」带着预览的 id 和摘要调 `/extensions/-/install` / `/extensions/<id>/-/upgrade`，装好跳到这个扩展的详情；从这个市场装的有「卸载」（可留数据），扩展详情里也有（`origin` 是 `market:` 的）。
+  hub 有 `extension_operations` 时（#3277，`settings/ExtensionOperation.tsx`，逻辑 `lib/extension-operations.ts`）改成分步骤：「安装」发异步预览，卡片下面一列步骤（下载带字节数和进度条、用了缓存写「用本机缓存」、同步到电脑写台数），停在「等你同意」时自动弹出原来的权限确认，同意后同一个操作接着装；失败停在那一步、写原因、能重试；关掉再打开（或重连后）照样接着画进行中的。连 WebSocket 时在 `client_hello.features` 里声明 `extension_operations`。卸载照旧同步调用（依赖它的扩展照旧问），进行中也显示步骤。
   「管理市场」（`&extension=-markets`）：每个市场的名字、token、地址、几个扩展 · 多久前读过、说明、读不到的原因和警告；重新读取、填 / 换 / 去掉 token（只写；`git:` 的市场没有这个按钮）、删除（就地确认）；「添加市场」填地址和可选 token，占位文字和说明写三种写法（https、`github:owner/repo`、`git:…`，#1373），
   页面不查地址的写法，原样交给 hub，hub 读不到时原因写在对话框里；`git:` 的市场用 hub 机器自己的 SSH 凭据，token 一栏不能填。逻辑和文字（`MARKET_SPEC_HINT`）网页和管理界面共用。
   「模型供应商」是全部接入（搜索；Persona 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、

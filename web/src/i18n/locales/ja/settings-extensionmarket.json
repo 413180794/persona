@@ -102,5 +102,15 @@
   "token_input_replace": "新しいトークンを入力して置き換え",
   "token_input": "トークンを入力",
   "token_reload_note": "保存後、ハブはこのトークンでインデックスを再読み込みします。",
-  "not_saved": "保存できませんでした：{error}"
+  "not_saved": "保存できませんでした：{error}",
+  "op_title": "インストールの進行状況",
+  "op_title_upgrade": "アップグレードの進行状況",
+  "op_title_uninstall": "アンインストールの進行状況",
+  "op_retry": "再試行",
+  "op_dismiss": "閉じる",
+  "op_cancel": "キャンセル",
+  "op_review": "権限を確認",
+  "op_error": "理由：{error}",
+  "op_machine_error": "{machine}：{error}",
+  "op_progress": "{done}/{total} ステップ"
 }

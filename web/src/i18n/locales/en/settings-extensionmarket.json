@@ -105,5 +105,15 @@
   "token_input_replace": "Enter a new token to replace it",
   "token_input": "Enter token",
   "token_reload_note": "After saving, the hub reads the index again with it.",
-  "not_saved": "Couldn't save: {error}"
+  "not_saved": "Couldn't save: {error}",
+  "op_title": "Installing",
+  "op_title_upgrade": "Upgrading",
+  "op_title_uninstall": "Uninstalling",
+  "op_retry": "Retry",
+  "op_dismiss": "Dismiss",
+  "op_cancel": "Cancel",
+  "op_review": "Review",
+  "op_error": "Why: {error}",
+  "op_machine_error": "{machine}: {error}",
+  "op_progress": "Step {done} of {total}"
 }

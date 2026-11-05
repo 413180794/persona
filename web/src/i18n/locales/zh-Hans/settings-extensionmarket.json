@@ -102,5 +102,15 @@
   "token_input_replace": "输入新的 token 替换",
   "token_input": "输入 token",
   "token_reload_note": "保存后 hub 用它重新读一次索引。",
-  "not_saved": "没有保存：{error}"
+  "not_saved": "没有保存：{error}",
+  "op_title": "安装进度",
+  "op_title_upgrade": "升级进度",
+  "op_title_uninstall": "卸载进度",
+  "op_retry": "重试",
+  "op_dismiss": "关闭",
+  "op_cancel": "取消",
+  "op_review": "查看权限",
+  "op_error": "原因：{error}",
+  "op_machine_error": "{machine}：{error}",
+  "op_progress": "{done}/{total} 步"
 }

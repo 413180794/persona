@@ -1,0 +1,23 @@
+{
+  "step_download": "下载",
+  "step_verify": "校验",
+  "step_unpack": "解包",
+  "step_check": "检查",
+  "step_consent": "等你同意",
+  "step_install": "安装",
+  "step_upgrade": "升级",
+  "step_start": "启动",
+  "step_nodes": "同步到电脑",
+  "step_stop": "停止",
+  "step_remove": "删除",
+  "cached": "用本机缓存",
+  "bytes_of": "{done} / {total}",
+  "machines": "{done} / {total} 台",
+  "needs_consent": "等你确认权限",
+  "installed": "已安装",
+  "upgraded": "已升级",
+  "uninstalled": "已卸载",
+  "failed_at": "卡在「{step}」",
+  "canceled": "已取消",
+  "starting": "准备中…"
+}

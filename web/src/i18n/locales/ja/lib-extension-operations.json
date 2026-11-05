@@ -1,0 +1,23 @@
+{
+  "step_download": "ダウンロード",
+  "step_verify": "検証",
+  "step_unpack": "展開",
+  "step_check": "確認",
+  "step_consent": "同意待ち",
+  "step_install": "インストール",
+  "step_upgrade": "アップグレード",
+  "step_start": "起動",
+  "step_nodes": "コンピュータに同期",
+  "step_stop": "停止",
+  "step_remove": "削除",
+  "cached": "キャッシュを使用",
+  "bytes_of": "{done} / {total}",
+  "machines": "{done} / {total} 台",
+  "needs_consent": "権限の確認待ち",
+  "installed": "インストールしました",
+  "upgraded": "アップグレードしました",
+  "uninstalled": "アンインストールしました",
+  "failed_at": "「{step}」で止まりました",
+  "canceled": "キャンセルしました",
+  "starting": "準備中…"
+}
