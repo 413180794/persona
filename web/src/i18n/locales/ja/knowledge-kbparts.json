@@ -1,7 +1,11 @@
 {
-  "importance": "重要度{level}",
-  "relevance_title": "自分との関連度",
-  "relevance": "関連{value}",
+  "importance": "重要度 {level}",
+  "importance_P0": "P0 最重要",
+  "importance_P1": "P1 重要",
+  "importance_P2": "P2 普通",
+  "importance_P3": "P3 低",
+  "relevance_title": "自分との関連度（0〜100、大きいほど関連が強い）",
+  "relevance": "関連度 {value}/100",
   "collapse": "折りたたむ",
   "project_kind": "{kind}プロジェクト"
 }

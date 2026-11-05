@@ -7,6 +7,42 @@ import (
 	"time"
 )
 
+// titleTopic takes markdown only for syntax at the start of a line and a paired inline wrap; the same characters
+// mid-line are text (#3869). Tag blocks keep coming out whole.
+func TestTitleTopic(t *testing.T) {
+	for in, want := range map[string]string{
+		"修复 C# 编译错误":                     "修复 C# 编译错误",
+		"A* 寻路":                          "A* 寻路",
+		"跟进 #3471":                       "跟进 #3471",
+		"a>b":                            "a>b",
+		"### 修复 C#":                      "修复 C#",
+		"> 引用风格标题":                       "引用风格标题",
+		"- 待办":                           "待办",
+		"+ 加号列表":                         "加号列表",
+		">x 无空格引用":                       "x 无空格引用",
+		"`code` 包裹":                      "code 包裹",
+		"**加粗**标题":                       "加粗标题",
+		"**没闭合的加粗":                       "**没闭合的加粗", // a lone marker is not a wrap
+		"`只有左反引号":                        "`只有左反引号",
+		"⏰ 定时任务":                         "定时任务",
+		"提醒 ⏰ 开会":                        "提醒 ⏰ 开会", // the clock only goes at the start of a line
+		`<at id="u1">某人</at> 跟进`:         "跟进",
+		`<at>某人 跟进`:                      `<at>某人 跟进`, // a tag without its closing pair is not a block, and the > stays
+		"# A\n- B\n* C#":                 "A B C#",
+		"> - 嵌套的引用列表":                    "嵌套的引用列表",
+		"- # 修复 #3471":                   "修复 #3471",
+		">>>> 多层引用":                      "多层引用",
+		"####### 七级井号":                   "####### 七级井号", // seven hashes are not a heading
+		"##no-space":                     "##no-space",
+		strings.Repeat(">", 20000) + "x": "x", // a long quote chain is one anchored, linear match
+		strings.Repeat("修", 20):          strings.Repeat("修", maxTitleTopic),
+	} {
+		if got := titleTopic(in); got != want {
+			t.Errorf("titleTopic(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestParseTitle(t *testing.T) {
 	for _, c := range []struct {
 		out, kind, topic string

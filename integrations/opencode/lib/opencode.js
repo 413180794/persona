@@ -345,6 +345,7 @@ export function createOpencodeHost(deps, options = {}) {
       if (list.length === 0) return
       const toSeq = list.at(-1).seq
       const [r] = await rows('select revert from session_v2 where id = ?', id)
+      if (sessions.get(id) !== s) return // deleted meanwhile (forget): nothing more of it goes out
       const fresh = rt.watching(id) ? list.flatMap((m) => messageItems(fromRow(m), m.seq)) : []
       rt.append(id, { items: fresh, fromSeq: s.lastSeq, toSeq, history: historyOf(id, r?.revert) })
       s.lastSeq = toSeq
@@ -483,6 +484,28 @@ export function createOpencodeHost(deps, options = {}) {
     }
   }
 
+  /**
+   * A session deleted in opencode: nothing of it stays behind. Its polling and pending commits stop (they would make
+   * it again), and its cards leave the phone (an aborted ask withdraws its card).
+   */
+  function forget(id) {
+    const s = sessions.get(id)
+    if (s) {
+      clearInterval(s.poll)
+      for (const ac of s.blocked.values()) ac.abort()
+    }
+    for (const key of [id, `${id}:late`]) {
+      clearTimeout(commitTimers.get(key))
+      commitTimers.delete(key)
+    }
+    sessions.delete(id)
+    roots.delete(id)
+    derived.delete(id)
+    listCache.at = 0
+    rt.streamEnd(id)
+    rt.sessionsChanged()
+  }
+
   function resolvePermission(root, requestID) {
     const s = sessions.get(root)
     const ac = s?.blocked.get(requestID)
@@ -522,19 +545,13 @@ export function createOpencodeHost(deps, options = {}) {
     // Everything below is about a session the user works in; a subagent's own turns are not (its root's are).
     const { root } = await rootOf(id)
     if (root !== id) return
+    if (ev.type === 'session.deleted') return forget(id)
     if (st(id).lastSeq === undefined) void commit(id) // the conversation as it is now is the baseline of what is pushed
     switch (ev.type) {
       case 'session.created':
       case 'session.renamed':
         if (ev.type === 'session.renamed' && typeof d.title === 'string') st(id).title = d.title
         listCache.at = 0
-        return rt.sessionsChanged()
-      case 'session.deleted':
-        sessions.delete(id)
-        roots.delete(id)
-        derived.delete(id)
-        listCache.at = 0
-        rt.streamEnd(id)
         return rt.sessionsChanged()
       case 'session.inbox.enqueued':
         if (d.item?.type === 'user') running(id, true)

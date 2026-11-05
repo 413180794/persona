@@ -1,7 +1,11 @@
 {
   "importance": "Importance {level}",
-  "relevance_title": "Relevance to me",
-  "relevance": "Relevance {value}",
+  "importance_P0": "P0 Top",
+  "importance_P1": "P1 High",
+  "importance_P2": "P2 Medium",
+  "importance_P3": "P3 Low",
+  "relevance_title": "How relevant to me, 0–100, higher is more",
+  "relevance": "Relevance {value}/100",
   "collapse": "Show less",
   "project_kind": "{kind} project"
 }

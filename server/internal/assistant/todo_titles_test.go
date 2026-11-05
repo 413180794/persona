@@ -26,6 +26,18 @@ func TestCleanTodoTitle(t *testing.T) {
 		"ultrathink ultracode 主人 11-05 19:47 反馈，直接做：把待办标题改成短标题": "把待办标题改成短标题",
 		"一二三四五六七八九十一二三四五👨‍👩‍👧‍👦 家庭相册":                           "一二三四五六七八九十一二三四五",
 		"🚀 把首页加载速度提上来": "🚀 把首页加载速度提上来",
+		// # * > and a backtick mid-line are text, not noise (#3869).
+		"修复 C# 编译错误":               "修复 C# 编译错误",
+		"A* 寻路":                    "A* 寻路",
+		"跟进 #3471 的回归":             "跟进 #3471 的回归",
+		"检查 a>b 的边界":               "检查 a>b 的边界",
+		"### 修复 C# 编译错误":           "修复 C# 编译错误",
+		"- 跟进 #3471":               "跟进 #3471",
+		"+ 列表待办":                   "列表待办",
+		"`code` 路径也要保留":            "code 路径也要保留",
+		"**加粗**的待办":                "加粗的待办",
+		"**只有开头两个星号":               "**只有开头两个星号", // a lone marker is not a wrap
+		`<at id="u1">某人</at> 跟进回归`: "跟进回归",
 	} {
 		if got := cleanTodoTitle(in, maxTodoTitle); got != want {
 			t.Errorf("cleanTodoTitle(%q) = %q, want %q", in, got, want)

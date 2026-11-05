@@ -54,7 +54,7 @@ var (
 // nothing is left.
 func cleanTodoTitle(s string, max int) string {
 	s = strings.TrimSpace(contextBlock.ReplaceAllString(s, " "))
-	s = strings.Join(strings.Fields(titleNoise.ReplaceAllString(s, " ")), " ")
+	s = strings.Join(strings.Fields(cleanTitleNoise(s)), " ")
 	for {
 		before := s
 		for _, re := range []*regexp.Regexp{todoTitleKeyword, todoTitleStamp, todoTitleBracket, todoTitleGrant, todoTitleGo} {

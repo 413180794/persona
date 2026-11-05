@@ -75,14 +75,30 @@ export function TonePill({ tone = "neutral", strong, children, title }: { tone?:
   );
 }
 
-/** The importance, the project's kind and status, and the relevance, as pills. */
+/** P0–P3 with a word saying how important that is; any other level as 「重要级 X」. */
+export function importanceLabel(level: string): string {
+  switch (level) {
+    case "P0":
+      return t("knowledge-kbparts.importance_P0");
+    case "P1":
+      return t("knowledge-kbparts.importance_P1");
+    case "P2":
+      return t("knowledge-kbparts.importance_P2");
+    case "P3":
+      return t("knowledge-kbparts.importance_P3");
+    default:
+      return t("knowledge-kbparts.importance", { level });
+  }
+}
+
+/** The importance, the project's kind and status, and the relevance, as pills that say what they are without a hover (phones have none). */
 export function Badges({ entry, status, asProject = false }: { entry: KBEntry; status?: string | null; asProject?: boolean }) {
   const kind = projectKindLabel(entry);
   return (
     <>
       {entry.importance && (
-        <TonePill tone={importanceTone(entry.importance)} strong title={t("knowledge-kbparts.importance", { level: entry.importance })}>
-          {entry.importance}
+        <TonePill tone={importanceTone(entry.importance)} strong>
+          {importanceLabel(entry.importance)}
         </TonePill>
       )}
       {kind && <TonePill tone={entry.extra?.startsWith("long") ? "accent" : "neutral"}>{asProject ? t("knowledge-kbparts.project_kind", { kind }) : kind}</TonePill>}

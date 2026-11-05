@@ -380,12 +380,33 @@ func parseTitleMax(out string, max int) (kind, topic string, ok bool) {
 
 var contextBlock = regexp.MustCompile(`(?s)<(?:jarvis|persona)-context\b[^>]*>.*?</(?:jarvis|persona)-context>`)
 
-var titleNoise = regexp.MustCompile(`(?s)<[a-zA-Z][\w-]*[^>]*>.*?</[a-zA-Z][\w-]*>|[⏰#*>` + "`" + `]`)
+var (
+	// A whole tag block a source channel wraps text in (an at mention or font tag from a card, an older node's
+	// injected context block): nothing inside it is part of the title.
+	titleTagBlock = regexp.MustCompile(`(?s)<[a-zA-Z][\w-]*[^>]*>.*?</[a-zA-Z][\w-]*>`)
+	// Markdown punctuation that is only syntax at the start of a line: an ATX heading, a quote, a list bullet and
+	// the clock a scheduled task opens with. The same character mid-line is text: C#, A*, #3471, a>b (#3869). The
+	// anchored group repeats, so a whole prefix chain (">>>", "> - x", "- # x") goes in one linear-time match.
+	titleLineHead = regexp.MustCompile(`(?m)^[ \t]*(?:[ \t]{0,3}#{1,6}[ \t]+|[ \t]*>+[ \t]?|[ \t]*[-*+][ \t]+|[ \t]*⏰)+`)
+	// A paired inline wrap is unwrapped and the text inside is kept; a lone marker is not a wrap and stays.
+	titleCodeWrap = regexp.MustCompile("`([^`\n]+)`")
+	titleBoldWrap = regexp.MustCompile(`\*\*([^*\n]+)\*\*`)
+)
+
+// cleanTitleNoise drops the tag blocks and markdown wrapping a title comes with, without deleting characters that
+// are part of the text (# in C#, * in A*, a #-number, > in a>b, a path fragment): line syntax is only taken at the
+// start of a line, inline markers only when they pair around text.
+func cleanTitleNoise(s string) string {
+	s = titleTagBlock.ReplaceAllString(s, " ")
+	s = titleCodeWrap.ReplaceAllString(s, "$1")
+	s = titleBoldWrap.ReplaceAllString(s, "$1")
+	return titleLineHead.ReplaceAllString(s, "")
+}
 
 // titleTopic is at most maxTitleTopic characters of s on one line: a task's name, or the fallback from the first
 // message (without the tags and markdown around what the user wrote).
 func titleTopic(s string) string {
-	s = strings.Join(strings.Fields(titleNoise.ReplaceAllString(s, " ")), " ")
+	s = strings.Join(strings.Fields(cleanTitleNoise(s)), " ")
 	s = strings.Trim(s, "，。,.：:；; ")
 	return cutRunes(s, maxTitleTopic)
 }

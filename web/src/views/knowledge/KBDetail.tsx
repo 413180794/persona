@@ -44,7 +44,7 @@ import { askPersona } from "../../lib/outbox";
 import { openNewAgent } from "../../lib/new-agent";
 import { DayDialog, MessageView, MomentDialog, TagEditor } from "./KBDialogs";
 import { ErrorBox } from "./KBList";
-import { Badges, Card, KBIcon, Marked, MoreRow, onPlainClick, SectionTitle, Tile, TonePill } from "./KBParts";
+import { Badges, Card, importanceLabel, KBIcon, Marked, MoreRow, onPlainClick, SectionTitle, Tile, TonePill } from "./KBParts";
 import { t } from "../../i18n";
 
 /** Timeline lines shown before 显示全部. */
@@ -344,7 +344,7 @@ export function EntryDetail({
                           </span>
                           {x.importance && (
                             <TonePill tone={importanceTone(x.importance)} strong>
-                              {x.importance}
+                              {importanceLabel(x.importance)}
                             </TonePill>
                           )}
                           <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3" />

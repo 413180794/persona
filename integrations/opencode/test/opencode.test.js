@@ -256,3 +256,26 @@ test('without the database the runtime still answers: an empty list, no pages, s
   const p = await n.peer.call('session.items', { session_id: 'ses_none', turns: 1 })
   assert.deepEqual(p.items, [])
 })
+
+test('a deleted session: its card leaves the phone, its polling stops, and it is not brought back', async (t) => {
+  const d = fakeDb()
+  d.session('ses_del')
+  d.user('ses_del', 4, 'go')
+  const { n, host } = await setup(t, { db: d, answerFirst: 'phone' })
+  const ctx = fakeCtx()
+  host.register(ctx)
+  await n.ready
+  await until('listed', () => n.last('runtime.sessions')?.sessions.some((s) => s.session_id === 'ses_del'))
+  await n.peer.call('session.watch', { session_id: 'ses_del', since_seq: 0 })
+  n.resolve = () => new Promise(() => {}) // the phone does not answer
+  ctx.emit('session.execution.started', { sessionID: 'ses_del' })
+  ctx.emit('permission.asked', { id: 'per_d', sessionID: 'ses_del', action: 'shell', resources: ['ls'] })
+  await until('the card', () => n.asked.length === 1)
+  assert.equal(host.runtime.busy(), true)
+
+  ctx.emit('session.deleted', { sessionID: 'ses_del' })
+  await until('the card withdrawn', () => n.all('interaction.cancel').some((c) => c.id === n.asked[0].id))
+  assert.equal(host.runtime.busy(), false)
+  await new Promise((r) => setTimeout(r, 2500)) // past a poll
+  assert.equal(host.sessions.has('ses_del'), false, 'not brought back by its polling')
+})
