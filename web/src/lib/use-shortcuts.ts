@@ -1,0 +1,107 @@
+// The shell's side of the keyboard shortcuts (lib/shortcuts.ts, docs/web.md「快捷键」): what each command does here,
+// and the one keydown listener that dispatches them. Mounted once, by the shell.
+import { useEffect, useRef } from "react";
+import { toast } from "../ui/atoms";
+import { AGENT_GROUPINGS } from "./agent-groups";
+import { adjacentTab, machineAt, panelToggle, terminalChat, type PaneRef } from "./shortcut-nav";
+import { toggleHelp } from "./shortcut-help";
+import { toggleMaximized, toggleSidebarColumn } from "./layout";
+import { togglePalette } from "./palette";
+import { closePanel, getPanel, openPanel, type Panel } from "./panel";
+import { navigate, type Route } from "./router";
+import { cycleGrouping, groupingLabel, setAllFolded, stepSidebarRow } from "./sidebar-api";
+import { dispatchKey, registerShortcut } from "./shortcuts";
+import { getState } from "./store";
+
+export interface ShortcutContext {
+  route: Route;
+  /** The conversation on the page. */
+  pane?: PaneRef;
+  /** A phone-width screen: the sidebar is a drawer, there is no column to hide. */
+  narrow: boolean;
+  toggleDrawer: () => void;
+}
+
+/** The panel ⌘B closed last, to bring back. */
+let lastPanel: Panel | null = null;
+
+/** A dialog or the palette is open: the shortcuts that act on the page stand aside. */
+export function overlayOpen(doc: Pick<Document, "querySelector"> = document): boolean {
+  return Boolean(doc.querySelector('[data-shortcut-layer], [role="dialog"][aria-modal="true"]:not([aria-label="侧边栏"])'));
+}
+
+const visible = (el: Element) => el.getClientRects().length > 0;
+
+/** ⌘I: the conversation's input box, else the terminal that is showing. */
+function focusInput(route: Route): boolean {
+  const chat = ["session", "tab", "jarvis", "persona-new", "agents"].includes(route.name);
+  const box = chat ? [...document.querySelectorAll<HTMLTextAreaElement>("main textarea:not(.xterm-helper-textarea)")].find((t) => !t.disabled && visible(t)) : undefined;
+  const el = box ?? [...document.querySelectorAll<HTMLTextAreaElement>(".xterm-helper-textarea")].find((t) => visible(t.closest(".xterm") ?? t));
+  if (!el) return false;
+  el.focus();
+  return true;
+}
+
+/** Registers the commands while the shell is mounted, and listens for the keys that run them. */
+export function useShortcuts(ctx: ShortcutContext) {
+  const at = useRef(ctx);
+  at.current = ctx;
+
+  useEffect(() => {
+    const off = [
+      registerShortcut("jump", () => togglePalette("jump")),
+      registerShortcut("commands", () => togglePalette("command")),
+      registerShortcut("help", () => toggleHelp()),
+      registerShortcut("settings", () => navigate({ name: "settings" })),
+      registerShortcut("machine", ({ digit }) => {
+        const m = machineAt(getState().machines, digit ?? 0);
+        if (!m) return false;
+        navigate({ name: "machine", mid: m.id });
+      }),
+      registerShortcut("left-sidebar", () => {
+        if (at.current.narrow) at.current.toggleDrawer();
+        else toggleSidebarColumn();
+      }),
+      registerShortcut("maximize", () => (at.current.narrow ? false : void toggleMaximized())),
+      registerShortcut("terminal-chat", () => {
+        const to = terminalChat(at.current.route, getPanel(), at.current.pane);
+        if (!to) return false;
+        if ("go" in to) navigate(to.go);
+        else if ("open" in to) openPanel(to.open);
+        else closePanel();
+      }),
+      registerShortcut("right-panel", () => {
+        const current = getPanel();
+        const to = panelToggle(current, lastPanel, at.current.pane);
+        if (!to) return false;
+        if ("close" in to) {
+          lastPanel = current;
+          closePanel();
+        } else openPanel(to.open);
+      }),
+      registerShortcut("focus-input", () => focusInput(at.current.route)),
+      registerShortcut("prev-tab", () => step(-1)),
+      registerShortcut("next-tab", () => step(1)),
+      registerShortcut("sidebar-grouping", () => {
+        const offered = AGENT_GROUPINGS.map((g) => g.key).filter((k) => getState().todosSupported !== false || k !== "todo");
+        toast(`Agent 分组：${groupingLabel(cycleGrouping(offered))}`);
+      }),
+      registerShortcut("prev-row", () => stepSidebarRow(-1)),
+      registerShortcut("next-row", () => stepSidebarRow(1)),
+      registerShortcut("collapse-tree", () => setAllFolded(true)),
+      registerShortcut("expand-tree", () => setAllFolded(false)),
+    ];
+    function step(dir: 1 | -1): boolean | void {
+      const s = getState();
+      const to = adjacentTab(s.machines, Object.values(s.sessions).flat(), at.current.pane, dir);
+      if (!to) return false;
+      navigate(to);
+    }
+    const key = (e: KeyboardEvent) => void dispatchKey(e, { overlay: overlayOpen() });
+    addEventListener("keydown", key);
+    return () => {
+      removeEventListener("keydown", key);
+      off.forEach((f) => f());
+    };
+  }, []);
+}

@@ -35,6 +35,11 @@
   验证要经 hub 订阅拿到完整终端帧，不能只看 WebSocket 握手成功或会话列表带 `pane_id`。
   Hub 的 `decorated` 也会重新判断 `assistant`，手机 Agents 又按这个字段过滤；只修 node 能打开终端，但列表仍会消失。
   Hub 的列表、发送和重命名分类要共用含 `PaneID` 的判断，验收同时检查 HTTP、普通 WebSocket 和增量 WebSocket 快照中的 `assistant:false`，无窗格助手仍为 true。
+- 网页终端里的应用快捷键（⌘K / Ctrl+K 等，#2330）要在 xterm 之前放行：`attachCustomKeyEventHandler` 返回 `false` 时 xterm 在 `_keyDown` 里直接返回，**不** `preventDefault` 也不 `stopPropagation`，
+  事件继续冒泡到 window，页面的 keydown 监听才收得到；返回 `true` 的键 xterm 自己处理后会 `stopPropagation`，页面永远看不到，Ctrl+K 因此一直给程序发 `\x0b`。
+  放行只认「带 Mod 且已登记」的键（`passesToApp`）；Mac 的 ⌥ 组合会打出别的字符（⌥B → ∫），页面分发时必须 `preventDefault`，否则字符还是会进 xterm 的 textarea。
+  按物理键（`event.code`）认数字和标点，字母认 `event.key`，⌥ 组出非字母时才退回 `code`；AltGr（Windows 上是 Ctrl+Alt）要排除，否则打 `@` 会触发 Mod+Alt。
+  验证要在真浏览器里看假 hub 的 `/mock/terminal_input`：按 Ctrl+K 后里面不能有 `\x0b`，同时 Ctrl+C / Ctrl+R / Alt+B 要照旧到达。
 - `@xterm/addon-search` 带 decorations（才有匹配数和 `onDidChangeResults`）要 `allowProposedApi: true`，否则 `findNext` 抛错；它在比较前先把新选项写进自己的状态，
   所以只切「区分大小写」、搜索词没变时不会重新算高亮，新搜索前先 `clearDecorations()`（`docs/terminal.md` 第二十节）。
 - xterm 有焦点时会吞掉它处理的按键（`stopPropagation`）：页面上 window 级的 Esc / 方向键监听（弹出菜单、浮层）收不到，要先让 xterm 失焦；

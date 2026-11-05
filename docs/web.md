@@ -55,7 +55,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   标签页进后台时只留正在看的那个，离开页面全部放手。窗格终端等于那台电脑的 shell，只有完整设备能开（手表令牌、扩展令牌都不行）。截图用 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 的假 hub。
   路由为什么是整页而不是侧边面板：侧边面板挨着一段对话，没有对话时没有可挨的；整页有地址，可以收藏和前进后退。
 
-- **侧边栏**（宽屏常驻，窄屏是抽屉，两者同一份）：连接状态和在线电脑数、⌘K 搜索；第一项是 **Persona**（形象头像、加粗，打开主对话，主对话在工作 / 需要你时带状态点或件数），
+- **侧边栏**（宽屏常驻，窄屏是抽屉，两者同一份）：连接状态和在线电脑数、⌘K 搜索（会话和终端窗格，`>` 是命令，见「快捷键和命令面板」）；第一项是 **Persona**（形象头像、加粗，打开主对话，主对话在工作 / 需要你时带状态点或件数），
   下面是总览 / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 / 终端（hub 有 `terminal_panes` 才有）/（扩展的页面，见「设置」里的「UI 插槽」）/ 设置；再下面「Persona 对话」（除主对话外最近 5 段，末尾「全部对话」；
   标题右边「+」开一次性的新对话 `/j/new`）、个人 Agent、Agents（标题右边「+」是新建 Agent，⌘K 面板里也有）。
   **为什么默认落在 Persona**（#1239）：和 iOS 一致（App 打开是「助手」，Agents 是第二个 tab），主对话本身带任务坞和「需要你」（#930），
@@ -426,6 +426,47 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 - **浏览器登录**（#1304，`machines/BrowserLogins.tsx`、`lib/cookies.ts`）：扩展 ego 打开、这台 Mac 的 ego lite 做完首次设置后，机器页列出 ego 里有登录的网站（条数、最晚过期，不显示内容），可按网站或全部清除，可导入 cookies.txt / JSON（页面里解析，勾选网站后经 hub 直转那台 Mac，hub 不保存），见 `docs/plan-ego-browser.md`。
 - **链接**：见下面「链接在页面里打开」。
 
+### 快捷键和命令面板（#2330）
+
+对照 Moshi 的键位（`src/lib/shortcuts.ts` 是登记表：id、中文名称、默认键、作用范围；App 里 `useShortcuts`（`src/lib/use-shortcuts.ts`）登记每一项做什么并挂唯一的 keydown 监听）。
+**每个快捷键都必须带 Mod**（Mac 是 ⌘，Windows / Linux 是 Ctrl；Mac 上的 ⌃ 不算，留给终端），所以单个按键永远不会被抢走。
+
+| 键（Mod = ⌘ / Ctrl） | 做什么 | 对应 Moshi |
+| --- | --- | --- |
+| Mod+K | 跳转：搜会话，也搜终端窗格；再按一次关闭 | 跳转 |
+| Mod+Shift+P | 命令面板（等于在搜索框里先输入 `>`） | 命令面板 |
+| Mod+/ | 快捷键帮助（当前的键，改过的显示改过的） | — |
+| Mod+, | 设置 | 设置 |
+| Mod+1…9 | 切到第 N 台电脑（机器详情页，按侧边栏的顺序） | 切机器 |
+| Mod+J | 会话页：右边开 / 关这条对话的终端；终端页：Agent 的窗格回到它的对话（普通 shell 没有对话） | 终端 ⇄ 对话 |
+| Mod+B | 右侧面板收起 / 恢复（恢复上一次关的；没有就开这条对话的终端） | 右面板 |
+| Mod+Alt+B | 宽屏：收起 / 显示侧边栏列；窄屏：抽屉 | 左侧栏 |
+| Mod+Shift+Enter | 宽屏：只留中间（侧边栏和右侧面板不画，面板里的终端照常挂着）；再按恢复 | 最大化中间 |
+| Mod+I | 聚焦这页的输入框（对话），没有就聚焦正在看的终端 | 聚焦输入 |
+| Mod+E | 切换侧边栏 Agents 的分组方式（按机器 / 仓库 / 项目 / 状态 / 待办），和分组菜单是同一个设置 | 侧边栏模式 |
+| Mod+Alt+↑ / ↓ | 侧边栏上 / 下一行（打开它；折叠起来的不算，到头绕回） | 上 / 下一行 |
+| Mod+Alt+Shift+↑ / ↓ | 折叠 / 展开侧边栏的全部分组 | 折叠 / 展开树 |
+| Mod+Alt+← / → | 这台电脑上的上 / 下一个标签页（按侧边栏的顺序，到头绕回） | 本机上 / 下一个标签 |
+
+没有搬过来的：Moshi 的 Mod+Alt+1–3（在右面板里选 Web / 文件 / Diff）——Persona 的文件和 Git 是各自的面板，没有一个统一的选项卡；这三个面板还用头上的按钮开。
+**浏览器可能先截走**：Mac 的 Chrome 把 ⌘⌥← / → 留给切标签页，网页收不到，需要时在设置里换一个键；其它被浏览器和系统留着的键见下面的保留表。
+
+- **改键**（设置 › 快捷键，`views/settings/ShortcutSettings.tsx`）：点一行，按下新的组合键，Esc 取消；记在当前浏览器（`localStorage` 的 `persona.shortcuts`，只存改过的，值写成平台无关的 `Mod+Shift+P`）。
+  提示：「需要带 Ctrl / ⌘」（没带 Mod）、「已被「X」占用」（另一项在用，不抢）、「… 浏览器 / 文字编辑 / 终端 / 系统要用，换一个」（保留表 `RESERVED`：⌘T / W / N / R / L、⌘C / V / X / A / Z、对话框的 Mod+Enter、Windows / Linux 上终端的 Ctrl+W / R / L / U / D / Z…）。每行有自己的「恢复默认」，右上角「全部恢复默认」。
+  录入时全局快捷键暂停（`holdShortcuts`）；Tab 照常移走焦点。第 1–9 台电脑这一项只改修饰键，数字固定。侧边栏搜索框上的 ⌘K 提示在默认键时不变，改了键就显示新的。
+- **组件自己处理的键**（`LOCAL_SHORTCUTS`）：终端里的查找（Mac ⌘F；Windows / Linux Ctrl+Shift+F，没接管时 Ctrl+F 也行，#2350）由终端面板自己判断，不登记成命令、分发器看不到；
+  只是列在帮助和设置「终端里（固定）」里，并进保留表（Ctrl+Shift+F）让别的命令占不了。放行函数 `passesToApp` 和终端的 `lineEdit`（⌘⌫ / ⌘← / ⌘→）是两件事，互不干扰。
+- **键怎么认**：字母按键面上写的（Dvorak / AZERTY 跟着标签），Mac 的 ⌥ 组合出的字符（⌥B 是 ∫）按物理键认，数字和标点按物理键认；AltGr（Windows 上的 Ctrl+Alt）不算 Mod+Alt；输入法组字中（`isComposing` / keyCode 229）不触发；按住不放的键只触发一次（上 / 下一行除外）。
+- **和输入框、终端的关系**：因为都带 Mod，在输入框里照样触发（⌘K 一直如此）。终端里见 `docs/terminal.md`「网页」：已登记的键 xterm 一个字节都不发，Ctrl+K 打开面板而不是 `^K`；没登记的键（Ctrl+C 等）照旧进程序。
+  有对话框（`Dialog`）或面板开着时，只有跳转 / 命令面板 / 帮助三个还能用，其余暂停；某项当前用不了（比如没有对话时的 Mod+J）返回 `false`，键原样放行。
+- **命令面板**（`views/Palette.tsx`、`lib/palette.ts`）：Mod+K 的搜索框里先输入 `>`（或 Mod+Shift+P）进入命令模式，列出登记了处理函数的命令，按「全局 / 会话页 / 侧边栏」分组、右边是当前的键，再加「新建 Agent」「新对话」，过滤按标题 / 分组 / 关键词；第 1–9 台电脑展开成每台一条。
+  Mod+K 的搜索也找终端窗格（用终端页的数据：每台在线电脑的 `GET /machines/{mid}/panes` + `buildTerminalTree`，面板打开时读一次；有会话的 Agent 窗格不重复列），点开是 `/terminal/<机器>/<id>`；什么都没输入时只列前 8 个窗格，排在会话后面。
+- **给别的模块的钩子**：`registerContextCommands(provider)`（`lib/palette.ts`）。provider 在每次列命令时被调用，参数是 `{ route, pane }`（当前页和页面上的对话），返回 `PaletteCommand[]`（`id`、`title`、`section`、`icon`、`chord`、`keywords`、`danger`、`run`）；抛错的 provider 被跳过，重复 id 取第一个，返回值是取消登记的函数。
+  这些命令排在命令模式的最前面，用自己的 `section` 当分组标题。用法：`useEffect(() => registerContextCommands((ctx) => ctx.pane ? nodeActions(ctx.pane) : []), [])`。每个节点的操作（重命名、复制路径、置顶、关闭……）由节点菜单那条线提供，合并后在这里接上，不需要改面板。
+- **侧边栏的小接口**（`lib/sidebar-api.ts`，`Sidebar.tsx` 只多几行订阅）：`setAllFolded`（`useFolded` 订阅，折叠 / 展开写进同一个 `fold:*` 键）、`cycleGrouping`（写同一个 `jarvis.agentGrouping`，`AgentsBlock` 订阅）、`stepSidebarRow`（在带 `data-sidebar-rows` 的列表里找看得见的行，点它）。
+  布局状态（`lib/layout.ts`：侧边栏列收起、最大化）只在当前页面里，刷新就回来，不会因为忘了键而找不到侧边栏。
+- 测试：`lib/shortcuts.test.ts`（解析 / 格式化 / 冲突 / 保留 / 事件转键 / 分发 / 终端放行）、`lib/palette.test.ts`、`lib/shortcut-nav.test.ts`、`lib/sidebar-api.test.ts`、`views/Palette.test.tsx`。
+
 ### 链接在页面里打开
 
 CLAUDE.md 要求链接在 App 内打开；网页上浏览器本身就是「App」，按链接分：
@@ -680,6 +721,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 连接器：Telegram、扩展提供的连接器（开关、分步登录、进知识库 / 进收件箱、退出、删除） | 有 | #1324、#1425 | 品牌、页脚、「在 X 里回复」按连接器 id 查 `lib/connectors.ts` 的一张表；表里没有的扩展连接器用通用图标和通用文案（带它自己的名字）；微信的品牌图未定，先用通用图标 |
 | 连接器：信息（iMessage） | 部分 | #1324 | 只看状态；「交给 Persona」开关和删除数据只在手机上 |
 | 扩展（列表、开关、按 schema 的表单、只写的密钥） | 有 | #1207 | 安装、升级、卸载在 hub 机器上（同 iOS） |
+| 键盘快捷键、命令面板 | 有 | #2330 | 见「快捷键和命令面板」；手机端没有实体键盘 |
 | 翻译 | 有 | #433 | 存在当前浏览器、不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上，网页没有；网页打开时按需翻 |
 | 设备（token 列表、撤销） | 有 | — | |
 | 扫码连新设备 | 另有 PR | — | #241 |

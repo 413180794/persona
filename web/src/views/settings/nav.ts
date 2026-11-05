@@ -4,8 +4,8 @@
 import { settingsTab } from "../../lib/channels";
 import type { IconName } from "../../ui/icons";
 
-export type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "channels" | "connectors" | "extensions" | "translate" | "devices" | "hub";
-export const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "channels", "connectors", "extensions", "translate", "devices", "hub"];
+export type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "channels" | "connectors" | "extensions" | "translate" | "shortcuts" | "devices" | "hub";
+export const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "channels", "connectors", "extensions", "translate", "shortcuts", "devices", "hub"];
 // The tab whose page opens one of its items, and the query parameter that names it.
 const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", channels: "channel", extensions: "extension", connectors: "connector" };
 
@@ -20,13 +20,14 @@ export const TAB_INFO: Record<Tab, { label: string; icon: IconName }> = {
   connectors: { label: "连接器", icon: "link" },
   extensions: { label: "扩展", icon: "extension" },
   translate: { label: "翻译", icon: "translate" },
+  shortcuts: { label: "快捷键", icon: "keyboard" },
   devices: { label: "设备", icon: "key" },
   hub: { label: "hub", icon: "hub" },
 };
 
 /** The phone's list: groups of categories, in the tab bar's order. */
 export const LIST_GROUPS: { title: string; tabs: Tab[] }[] = [
-  { title: "通用", tabs: ["general", "assistant", "translate"] },
+  { title: "通用", tabs: ["general", "assistant", "translate", "shortcuts"] },
   { title: "模型和 Agent", tabs: ["models", "model-config", "claude", "codex"] },
   { title: "连接", tabs: ["channels", "connectors", "extensions", "devices", "hub"] },
 ];

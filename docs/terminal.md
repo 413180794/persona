@@ -553,13 +553,16 @@ hub：`GET /api/v1/machines/{mid}/panes`，feature `terminal_panes`。
 - 每台机器最近打开的 2 个终端保持挂着（藏起来但保持原尺寸，流不断），切回去立刻有画面（`keepRecent`）。注意它们还「接管」着窗格，电脑上的窗格保持这个网页的尺寸，直到被挤出这 2 个、点 ×、
   离开这个页面（组件卸载，`terminal_unsubscribe`）或浏览器标签页进后台（只留正在看的那个，`keepOnlyShown`）。
 - 旧 hub（没有 `terminal_panes`）不显示入口；node 旧（不认 `panes.list`）时列表读不出，显示错误和「重试」。
+- **应用快捷键不进程序**（#2330，`lib/shortcuts.ts`、`feed.ts` 的 `key`）：焦点在终端里时，带 ⌘（Mac）/ Ctrl（Windows、Linux）的、已登记的快捷键（⌘K 面板、⌘J 终端 ⇄ 对话、⌘B 面板……）
+  由 `passesToApp` 先判断，`attachCustomKeyEventHandler` 返回 `false`，xterm 什么都不发，页面的 keydown 接手；所以 Ctrl+K 在终端里打开面板，不再给程序发 `^K`（`\x0b`）。
+  没登记的键照旧进程序：单个按键、Shift+Enter、Ctrl+C / R / Z / D、Alt+B……；Mac 上 ⌃（真正的 Ctrl）从来不算 Mod，readline 的 ^K ^E ^J 都在。Windows / Linux 上 Ctrl 组合键会盖过程序里同名的键，在设置 › 快捷键里改键即可。
 
 ### 没做
 
 - iOS / Android 还没有独立终端（它们只有会话里的终端，`terminal_subscribe` 只用会话 id）。协议已经够用：同一个接口、同一个地址。
 - 关闭窗格 / 标签页、重命名、分屏：不在这一版，需要时在电脑上做。
 - 没有会话也没有 herdr 的宿主（Paseo、botmux）：没有窗格，列表为空。
-- ⌘K 搜索面板没有并入窗格（它只搜会话）；窗格的 Jump To 在终端页自己的输入框里。
+- ⌘K 搜索面板现在也搜窗格（#2330，见 `docs/web.md`「快捷键」）：打开时读一次各在线电脑的 `panes.list`，只列普通 shell 和没有会话的窗格（有会话的 Agent 窗格已经是一条会话结果）；终端页自己的 Jump To 照旧。
 
 ### 验证
 

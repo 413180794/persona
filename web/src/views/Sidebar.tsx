@@ -33,6 +33,8 @@ import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 import { hubMenuItems, useHubs } from "./Hubs";
 import { PersonaAvatar } from "./assistant/Persona";
 import { foldedNow } from "../lib/fold";
+import { onFoldAll, onGrouping } from "../lib/sidebar-api";
+import { jumpHint, useBindings } from "../lib/shortcuts";
 
 // follow: until the user folds or opens it, the section takes its default as it is now, not as it was on the first
 // render (未归属 is folded only once the todos above it have loaded, #2249); other sections keep their first default.
@@ -49,6 +51,13 @@ function useFolded(key: string, initial = false, { follow = false, holds = false
     if (holds) setOpened(true);
   }
   const folded = !opened && foldedNow(stored, follow ? initial : first);
+  // 折叠 / 展开全部 (the keyboard shortcut, lib/sidebar-api.ts)
+  useEffect(() => onFoldAll((all) => {
+    const next = all ? "1" : "0";
+    localStorage.setItem(`fold:${key}`, next);
+    setStored(next);
+    setOpened(false);
+  }), [key]);
   return [
     folded,
     () => {
@@ -155,6 +164,7 @@ export type NavPage = { k: string; to: Route; icon: IconName; label: string; sho
 
 export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Route; onSearch: () => void; onNewAgent: () => void; onNavigate?: () => void }) {
   const conn = useStore((s) => s.conn);
+  const searchHint = jumpHint(useBindings());
   const machines = useStore((s) => s.machines);
   // 终端 (docs/terminal.md「独立终端」) is there where the hub can list panes
   const terminalPanes = useStore((s) => s.features.includes("terminal_panes"));
@@ -210,11 +220,11 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         <button type="button" onClick={onSearch} className="touch-hit mb-1 flex h-8 w-full items-center gap-2 rounded-control bg-inset px-2.5 text-left shadow-hairline transition-colors hover:bg-hover">
           <Icon name="search" size={12} stroke={2} className="text-ink-3" />
           <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-3">搜索会话</span>
-          <span className="hidden sm:inline-flex"><Kbd>⌘K</Kbd></span>
+          <span className="hidden sm:inline-flex"><Kbd>{searchHint}</Kbd></span>
         </button>
       </div>
 
-      <div ref={nav} onMouseLeave={() => hover(null)} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-3">
+      <div ref={nav} data-sidebar-rows onMouseLeave={() => hover(null)} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-3">
         {highlight}
         <div className="flex flex-col gap-px pt-1">
           <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} />
@@ -301,6 +311,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const todosSupported = useStore((s) => s.todosSupported);
   const launches = useStore((s) => Object.values(s.launches).filter((launch) => launch.phase !== "ready"));
   const [grouping, setGrouping] = useState(() => agentGrouping(localStorage.getItem("jarvis.agentGrouping")));
+  // the switch-grouping shortcut (lib/sidebar-api.ts)
+  useEffect(() => onGrouping(setGrouping), []);
   const groupingMenu = useMenu();
   const availableGroupings = useMemo(() => {
     if (todosSupported === false) return AGENT_GROUPINGS.filter((g) => g.key !== "todo");

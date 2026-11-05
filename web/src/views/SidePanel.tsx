@@ -2,7 +2,8 @@
 // Wide screens (lg+) get a resizable column that pushes the page; narrower ones an overlay over the page.
 import { useEffect, useRef, useState } from "react";
 import { directoryPanelKey, closePanel, usePanel, type Panel } from "../lib/panel";
-import { EASE, IconButton } from "../ui/atoms";
+import { useLayout } from "../lib/layout";
+import { cx, EASE, IconButton } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
 import { FilesPanel } from "./session/FilesPanel";
 import { FileViewerPanel } from "./session/FileViewer";
@@ -24,6 +25,8 @@ function clampWidth(w: number) {
 
 export function SidePanel() {
   const panel = usePanel();
+  // ⌘⇧↵ shows only the middle: the panel stays open (its terminal keeps running) but is not drawn, on a wide screen
+  const maximized = useLayout().maximized;
   // narrow, it covers the page: Back closes it first (and stays on the conversation)
   useCloseOnBack(Boolean(panel), closePanel, useMedia(NARROW));
   const [width, setWidth] = useState(() => clampWidth(Number(localStorage.getItem(WIDTH_KEY)) || 600));
@@ -55,7 +58,10 @@ export function SidePanel() {
       aria-label={panelLabel(panel)}
       // narrow: over the visible part of the page (--kb-top / --kb-h, lib/viewport.ts), so on iOS the terminal's key
       // bar sits on the keyboard instead of under it
-      className="fixed inset-x-0 top-(--kb-top) z-30 flex h-(--kb-h) flex-col bg-page shadow-overlay lg:relative lg:inset-auto lg:top-auto lg:z-auto lg:h-auto lg:w-(--panel-w) lg:shrink-0 lg:border-l lg:border-line lg:shadow-none"
+      className={cx(
+        "fixed inset-x-0 top-(--kb-top) z-30 flex h-(--kb-h) flex-col bg-page shadow-overlay lg:relative lg:inset-auto lg:top-auto lg:z-auto lg:h-auto lg:w-(--panel-w) lg:shrink-0 lg:border-l lg:border-line lg:shadow-none",
+        maximized && "lg:hidden",
+      )}
       style={{ "--panel-w": `${width}px`, animation: `slide-in-right 260ms ${EASE} both` } as React.CSSProperties}
     >
       <div

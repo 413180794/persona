@@ -24,6 +24,10 @@ import { NewAgent } from "./views/NewAgent";
 import { onOpenNewAgent, type NewAgentPreset } from "./lib/new-agent";
 import { StartingAgent } from "./views/StartingAgent";
 import { Palette } from "./views/Palette";
+import { ShortcutHelp } from "./views/ShortcutHelp";
+import { closePalette, openPalette, usePalette } from "./lib/palette";
+import { sidebarShown, useLayout } from "./lib/layout";
+import { useShortcuts } from "./lib/use-shortcuts";
 import { Sidebar } from "./views/Sidebar";
 import { SidePanel } from "./views/SidePanel";
 import { ExtensionNavPage } from "./views/extensions/ExtensionSlots";
@@ -137,7 +141,8 @@ function Shell() {
     if (picked && route.name === "tab") navigate({ ...route, sid: picked }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picked]);
-  const [palette, setPalette] = useState(false);
+  const palette = usePalette();
+  const layout = useLayout();
   const [newAgent, setNewAgent] = useState(false);
   const [preset, setPreset] = useState<NewAgentPreset | null>(null);
   useEffect(() => onOpenNewAgent((p) => {
@@ -209,16 +214,8 @@ function Shell() {
     back?.focus({ preventScroll: true });
   }, [drawer, narrow]);
 
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPalette((p) => !p);
-      }
-    };
-    addEventListener("keydown", key);
-    return () => removeEventListener("keydown", key);
-  }, []);
+  // the keyboard shortcuts (⌘K and the rest, lib/shortcuts.ts): what they do here, and the listener that runs them
+  useShortcuts({ route, pane, narrow, toggleDrawer: toggle });
 
   useEffect(() => setDrawer(false), [route.name, pane ? pane.sid : route.name === "jarvis" ? route.sid : route.name === "agents" ? route.id : ""]);
   // a session's terminal / files / Git belong to that conversation: moving to another page closes them (a link and a
@@ -318,10 +315,12 @@ function Shell() {
         className={cx(
           "fixed inset-y-0 left-0 z-30 w-[284px] border-r border-line transition-transform duration-300 max-lg:w-[calc(284px+env(safe-area-inset-left))] max-lg:bg-canvas max-lg:pb-[env(safe-area-inset-bottom)] max-lg:pl-[env(safe-area-inset-left)] lg:static lg:z-auto lg:translate-x-0 lg:shadow-none",
           drawer ? "translate-x-0 shadow-overlay" : "-translate-x-full",
+          // ⌘⌥B / ⌘⇧↵ on a wide screen
+          !sidebarShown(layout) && "lg:hidden",
         )}
         style={{ transitionTimingFunction: EASE }}
       >
-        <Sidebar route={route} onSearch={() => setPalette(true)} onNewAgent={openNewAgent} onNavigate={close} />
+        <Sidebar route={route} onSearch={() => openPalette("jump")} onNewAgent={openNewAgent} onNavigate={close} />
       </div>
       {/* the scrim fades out as well as in; a drag sets its opacity as it goes (lib/drawer.ts) */}
       <div
@@ -342,7 +341,8 @@ function Shell() {
         <PageBoundary page={href(route)}><Suspense fallback={<div className="flex h-full items-center justify-center"><Loading /></div>}>{main}</Suspense></PageBoundary>
       </main>
       <SidePanel />
-      <Palette open={palette} onClose={() => setPalette(false)} onNewAgent={openNewAgent} />
+      <Palette open={palette.open} onClose={closePalette} onNewAgent={openNewAgent} pane={pane} route={route} />
+      <ShortcutHelp />
       <NewAgent open={newAgent} preset={preset} onClose={() => {
         setNewAgent(false);
         setPreset(null);

@@ -21,6 +21,7 @@ import { Connectors } from "./settings/Connectors";
 import { TriageSettings } from "./settings/TriageSettings";
 import { TranslationSettings } from "./settings/TranslationSettings";
 import { Extensions } from "./settings/Extensions";
+import { ShortcutSettings } from "./settings/ShortcutSettings";
 import { ChannelList, ChannelPage } from "./settings/Channels";
 import { settingsTarget } from "../lib/channels";
 import { routeSub } from "../lib/extension-market";
@@ -194,6 +195,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("channels", id)} />}
             {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} />}
             {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
+            {tab === "shortcuts" && <ShortcutSettings />}
             {tab === "devices" && <Devices />}
             {tab === "hub" && <HubSettings />}
           </div>

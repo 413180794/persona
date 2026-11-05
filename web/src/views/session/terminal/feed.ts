@@ -11,6 +11,7 @@ import type { SearchAddon as XSearch } from "@xterm/addon-search";
 import { api, errorText, isAbort, sessionPath } from "../../../lib/api";
 import { openLink } from "../../../lib/links";
 import { getState, isOpen, onHubEvent, send } from "../../../lib/store";
+import { passesToApp } from "../../../lib/shortcuts";
 import {
   FrameOrder,
   HISTORY_PAGE,
@@ -718,6 +719,8 @@ export class TerminalFeed {
    * program as ever), shift+enter is a new line in Claude Code's box (ESC CR, as iOS), an IME composition is left alone.
    */
   private key = (e: KeyboardEvent) => {
+    // one of the app's shortcuts (Ctrl+K opens the palette, not ^K; lib/shortcuts.ts): the page takes it, xterm sends nothing
+    if (passesToApp(e)) return false;
     if (this.lineEdit(e)) return false;
     const d = keyDecision(e, this.term?.hasSelection() ?? false);
     if (d === "xterm") return true;
