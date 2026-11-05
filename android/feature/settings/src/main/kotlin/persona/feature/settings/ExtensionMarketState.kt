@@ -199,7 +199,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
     /** The user agreed: installs or upgrades with the preview's permissions. Returns what to tell them, or null. */
     suspend fun confirm(): String? {
         val preview = state.value.preview ?: return null
-        if (state.value.acting) return null
+        if (state.value.acting || !preview.canConfirm) return null
         mutable.update { it.copy(acting = true, actionError = null) }
         return try {
             val detail = if (preview.upgrade) api.upgrade(id, preview) else api.install(preview)

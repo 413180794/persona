@@ -193,6 +193,8 @@ fun ChatComposer(
     // A read-only session (enabled = false) offers nothing to type with: no +, no mic, no "/" list, no send.
     val dictate = dictation?.takeIf { enabled }
     val suggestions = if (enabled) SlashCommand.suggestions(state.value.text, canClear && !working) else emptyList()
+    val extensionPrompts = if (enabled) LocalExtensionPrompts.current else emptyList()
+    val quick = ExtensionPromptText.matching(extensionPrompts, state.value.text)
     // Picking a quick message puts its words in the box to send; /clear empties the box and asks first.
     fun pick(command: SlashCommand) {
         state.beginEdit()
@@ -234,6 +236,9 @@ fun ChatComposer(
             modeHint?.let { JChip(it, icon = PhIcons.SlidersHorizontal) }
             if (working && hasContent && enabled) Text("会排队发送", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             // A draft that is one "/" word: the quick messages it can be, right above the field.
+            ComposerSuggestions(quick.map { ComposerSuggestion(it.title, it.extensionName, key = "${it.extension}/${it.id}", flexible = true) },
+                onPick = { picked -> quick.firstOrNull { "${it.extension}/${it.id}" == picked.key }?.let { state.fillQuickPrompt(it) } },
+                modifier = Modifier.padding(vertical = Tokens.Space.xs))
             ComposerSuggestions(suggestions.map { ComposerSuggestion(it.word, it.detail, destructive = it.clear) },
                 onPick = { picked -> suggestions.firstOrNull { it.word == picked.word }?.let(::pick) },
                 modifier = Modifier.padding(vertical = Tokens.Space.xs))
@@ -259,6 +264,7 @@ fun ChatComposer(
         add(JAction("拍照", enabled = service != null && state.attachments.count { it.image } < 4) { takePhoto() })
         add(JAction("文件", enabled = service != null) { launchPicker { files.launch(arrayOf("*/*")) } })
         // Quick messages go out at once; /clear asks first, and only while nothing is running or being cleared.
+        extensionPrompts.forEach { prompt -> add(JAction(prompt.title) { menu = false; state.fillQuickPrompt(prompt) }) }
         SlashCommand.all.forEach { command -> add(JAction(command.title) { menu = false; onCommand(command.text) }) }
         if (canClear && !working) add(JAction(SlashCommand.clearCommand.title, destructive = true) { menu = false; confirmClear = true })
     })

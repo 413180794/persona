@@ -87,9 +87,17 @@ object MachineManagementModule {
         // A hub without the `extensions` feature (before #1844, or no hello yet) answers under /api/v1/plugins only;
         // a newer one under both.
         private fun api() = runtime.connection().let { HttpExtensionManagement(it, available, legacy = "extensions" !in it.serverFeatures.value) }
+        private val updates = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        override val changes: Flow<Unit> = updates
+        private suspend fun <T> changed(block: suspend () -> T): T = block().also { updates.tryEmit(Unit) }
+        override suspend fun quickPrompts() = api().quickPrompts()
+        override suspend fun themes() = api().themes()
+        override suspend fun triageTemplates() = api().triageTemplates()
+        override suspend fun setContribution(id: String, point: String, contribution: String, enabled: Boolean) =
+            changed { api().setContribution(id, point, contribution, enabled) }
         override suspend fun extensions() = api().extensions()
         override suspend fun extension(id: String) = api().extension(id)
-        override suspend fun setEnabled(id: String, enabled: Boolean) = api().setEnabled(id, enabled)
+        override suspend fun setEnabled(id: String, enabled: Boolean) = changed { api().setEnabled(id, enabled) }
         override suspend fun setConfig(id: String, config: JsonObject) = api().setConfig(id, config)
         override suspend fun setSecret(id: String, name: String, value: String) = api().setSecret(id, name, value)
         override suspend fun clearSecret(id: String, name: String) = api().clearSecret(id, name)
@@ -107,9 +115,9 @@ object MachineManagementModule {
         override suspend fun setMarketToken(id: String, token: String) = api().setMarketToken(id, token)
         override suspend fun catalog(query: String, market: String?, refresh: Boolean) = api().catalog(query, market, refresh)
         override suspend fun previewFromMarket(market: String, extension: String) = api().previewFromMarket(market, extension)
-        override suspend fun install(preview: ExtensionPreview) = api().install(preview)
-        override suspend fun upgrade(id: String, preview: ExtensionPreview) = api().upgrade(id, preview)
-        override suspend fun uninstall(id: String, keepData: Boolean) = api().uninstall(id, keepData)
+        override suspend fun install(preview: ExtensionPreview) = changed { api().install(preview) }
+        override suspend fun upgrade(id: String, preview: ExtensionPreview) = changed { api().upgrade(id, preview) }
+        override suspend fun uninstall(id: String, keepData: Boolean) = changed { api().uninstall(id, keepData) }
     }
 
     // 设置 › hub 版本 (docs/hub-update.md「App 里」): the selected group's hub, following its `hub_update` pushes.

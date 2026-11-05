@@ -46,6 +46,10 @@ data class PersonaPalette(
     val terminalText: Color,
     val scrim: Color,
     val dark: Boolean,
+    val ai: Color = accent,
+    val positiveRole: StatusColors? = null,
+    val cautionRole: StatusColors? = null,
+    val customRoles: Boolean = false,
 ) {
     fun status(status: Status): StatusColors = when (status) {
         Status.NeedsYou -> needsYou
@@ -193,7 +197,7 @@ data class PersonaColors(
 /** The older colour set, now derived from the active style so existing call sites follow it. */
 internal fun PersonaPalette.legacy() = PersonaColors(
     brand = accent, danger = danger.dot, positive = positive, caution = caution, cautionText = cautionText,
-    ai = accent, loop = working.dot, countBadge = needsYou.dot, onCountBadge = needsYou.onDot,
+    ai = ai, loop = working.dot, countBadge = needsYou.dot, onCountBadge = needsYou.onDot,
     codeBackground = sunken, terminalBackground = terminalBackground, terminalText = terminalText,
 )
 
@@ -205,8 +209,8 @@ enum class Tone { Neutral, Positive, Caution, Danger }
 
 /** [tone]'s colours: positive is the done green, caution the needs-you amber, danger red, neutral the idle grey. */
 fun PersonaPalette.tone(tone: Tone): StatusColors = when (tone) {
-    Tone.Positive -> done
-    Tone.Caution -> needsYou
+    Tone.Positive -> positiveRole ?: done
+    Tone.Caution -> cautionRole ?: needsYou
     Tone.Danger -> danger
     Tone.Neutral -> idle
 }

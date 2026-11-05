@@ -16,6 +16,9 @@ import persona.core.contracts.api.ExtensionUiPlace
 import persona.core.contracts.api.ExtensionUiResult
 import persona.core.contracts.api.ExtensionUiUnsupported
 import persona.core.contracts.api.ExtensionView
+import persona.core.contracts.api.ExtensionQuickPrompt
+import persona.core.contracts.api.ExtensionTheme
+import persona.core.contracts.api.ExtensionTriageTemplate
 import kotlinx.serialization.KSerializer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -71,6 +74,22 @@ class HttpExtensionManagement internal constructor(
 
     override suspend fun setEnabled(id: String, enabled: Boolean) =
         detail(call(path(id, "-", "enabled"), "PUT", buildJsonObject { put("enabled", enabled) }))
+
+    override suspend fun setContribution(id: String, point: String, contribution: String, enabled: Boolean) =
+        detail(call(path(id, "-", "contributions", point.also { require(it.matches(ContributionPoint)) }, id(contribution)),
+            "PUT", buildJsonObject { put("enabled", enabled) }))
+
+    override suspend fun quickPrompts() = declared("prompts", "prompts", ExtensionQuickPrompt.serializer())
+    override suspend fun themes() = declared("themes", "themes", ExtensionTheme.serializer())
+    override suspend fun triageTemplates() = declared("triage-templates", "templates", ExtensionTriageTemplate.serializer())
+
+    private suspend fun <T> declared(route: String, key: String, serializer: KSerializer<T>): List<T> = try {
+        val list = (parse(call(hubPath(route), "GET")) as? JsonObject)?.get(key) as? JsonArray
+            ?: throw HubFailure(HubError.Protocol)
+        decode { JsonCodec.decodeFromJsonElement(ListSerializer(serializer), list) }
+    } catch (failure: HubFailure) {
+        if (failure.status == 404) emptyList() else throw failure
+    }
 
     override suspend fun setConfig(id: String, config: JsonObject) =
         detail(call(path(id, "-", "config"), "PUT", buildJsonObject { put("config", config) }))
@@ -190,8 +209,13 @@ class HttpExtensionManagement internal constructor(
 
     /** The preview and the permissions the user saw and agreed to. */
     private fun agreed(preview: ExtensionPreview) = buildJsonObject {
+        require(preview.canConfirm) { "Unresolved extension dependencies" }
         put("preview_id", preview.previewId)
         put("permissions_digest", preview.permissionsDigest)
+        if (preview.bundle.isNotEmpty()) put("bundle", JsonArray(preview.bundle.map { p -> buildJsonObject {
+            put("preview_id", p.previewId)
+            put("permissions_digest", p.permissionsDigest)
+        } }))
     }
 
     private fun <T> read(body: String, serializer: KSerializer<T>): T = decode { JsonCodec.decodeFromJsonElement(serializer, parse(body)) }
@@ -255,6 +279,7 @@ class HttpExtensionManagement internal constructor(
 
         private val json = "application/json; charset=utf-8".toMediaType()
         private val ExtensionId = Regex("[A-Za-z0-9_-]{1,64}")
+        private val ContributionPoint = Regex("[a-z][a-z0-9_-]{0,63}(?:\\.[a-z][a-z0-9_-]{0,63})?")
         private val SecretName = Regex("[A-Za-z][A-Za-z0-9_]{0,63}")
     }
 }

@@ -26,6 +26,7 @@ data class HubExtension(
     /** What it still needs before it runs, in words. */
     @SerialName("needs_setup") val needsSetup: List<String>? = null,
     val warnings: List<String>? = null,
+    val sandbox: ExtensionSandbox? = null,
 ) {
     val isRunningVoice: Boolean get() = kind == "voice" && status == "running"
 }

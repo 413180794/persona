@@ -94,7 +94,8 @@ fun PersonaTheme(
     style: AppStyle = LocalAppStyle.current,
     content: @Composable () -> Unit,
 ) {
-    val palette = Palettes.of(style, darkTheme)
+    val roleTheme = LocalExtensionRoleTheme.current
+    val palette = roleTheme?.let { ExtensionThemeColors.palette(it, style, darkTheme) } ?: Palettes.of(style, darkTheme)
     val type = Types.of(style)
     val shapes = Shapes.of(style)
     CompositionLocalProvider(
@@ -115,7 +116,8 @@ fun PersonaTheme(
 
 private fun PersonaPalette.materialScheme(style: AppStyle): ColorScheme {
     val primary = if (style == AppStyle.Brief) action else accent
-    val onPrimary = if (style == AppStyle.Brief) onAction else if (dark) Palettes.GlassDark.onAction else androidx.compose.ui.graphics.Color.White
+    val onPrimary = if (customRoles) ExtensionThemeColors.on(primary)
+        else if (style == AppStyle.Brief) onAction else if (dark) Palettes.GlassDark.onAction else androidx.compose.ui.graphics.Color.White
     val base = if (dark) darkColorScheme() else lightColorScheme()
     return base.copy(
         primary = primary, onPrimary = onPrimary, primaryContainer = accentSoft, onPrimaryContainer = ink,

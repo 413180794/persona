@@ -917,6 +917,21 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
   invalidate 在前台马上画 / 不在前台回来再画、被推过的页回来重画、哪些事件让哪个界面重画、新组件画不画、表格补齐和截断、只认 https 的图、首字母、markdown 的清理、key、图标），
   `PersonaViewBlocksTest`、`ExtensionUiContractTest.aVersionThreeView` / `theSchemasVersionThreeExampleReads`、`HttpExtensionManagementTest.theDeviceContextIsThePhones`（UI 版本 3）。
 
+### 扩展模型和纯声明贡献（#2226）
+
+规格见 [extensions.md](extensions.md)「贡献的开关」「依赖、导出和合集」「纯声明贡献」「沙箱」。只接安卓的界面和 HTTP；不运行扩展里的程序，也不改生成的 `ExtensionWire.kt`。
+
+- **贡献开关**：详情的 `contributions` 有值时按项显示，能关的经 `setContribution` 发 `PUT …/-/contributions/{point}/{id}`，返回详情后更新开关；未保存的设置仍留着，失败保留原状态并显示错误。`can_disable: false` 的项只显示状态；`via: connector` 明确写跟随连接器，在连接器设置里改，hub.json 来的仍只读。旧 hub 没有这个字段时，继续按 `contributes` 显示原来的「提供」列表。
+- **依赖和合集安装**：`ExtensionPreview` 读 `depends`、`bundle`、`unresolved`，清单预览读 `extension_pack`。确认页的 `BundlePreview` 列依赖状态、合集成员和这次要一起装 / 升级的每个扩展、各自权限、新增权限及警告。不满足的依赖（含停用、未知状态）、找不到的成员不能确认；hub 的扁平 `bundle` 里，成员之间的依赖按同一整组判断。确认后原顺序回传全部 `{preview_id, permissions_digest}`，不会悄悄只装主扩展。没有新字段的旧预览仍按原流程走。
+- **声明贡献的装配**：`Root.kt` 的 `ExtensionDeclarationsHost` 按当前 hub 身份提供快捷提示、主题和分拣模板（`ExtensionDeclarationsModel`）。只有 App resumed 时才读，回来立即刷新，前台每 30 秒再读；在本机安装 / 升级 / 卸载、停用扩展或改变贡献后立即重读。新 API 的 404 是旧 hub，表示没有该类贡献；其他错误保留上次数据，不把网络失败当成扩展已停用。体验模式没有这些贡献。
+- **快捷提示**：`GET …/-/prompts` → `LocalExtensionPrompts`。`ChatComposer` 的斜杠候选和加号菜单列出它们，标题单行截断，以 `<扩展>/<id>` 区分同标题。选中只替换输入框文字、移光标到末尾并请求焦点；附件留着，不调用发送或命令回调。原有内置命令的行为不改，助手主对话和 Agent 对话共用这个输入框。
+- **主题色**：`GET …/-/themes` → 设置 › 外观的「主题色」。hub 有 `problems` 的不列；`ExtensionThemeColors` 再校验两种深浅色 × 三套风格的页面、半透明卡片合成后、实心面板、抬起 / 下沉底色以及提示底色上的对比度（accent 至少 3，其他给出的文字角色至少 4.5）。只收 `accent`、`positive`、`caution`、`danger`、`ai`；其他角色和全部布局 token 不变。用户不选时原配色完全不变；选择按 hub 身份保存，另一个 hub 同名主题不冒用；停用后刷新不到该项时清掉本机选择、回默认。主题只覆盖声明的角色色，不改 Agent 状态色；自定义角色的按钮 / 勾选标记从设计系统取可读的前景色。
+- **分拣模板**：`GET …/-/triage-templates` → 扩展设置顶层 `triage_rules` 文字字段的「从模板填」。选择后先显示标题、来源和全文，确认只修改 `ExtensionModel` 的草稿，不调用 `setConfig`；仍需用户再点「保存」。其他字段不动，规则可多行编辑。没有模板就不增加按钮。
+- **沙箱**：`HubExtension.sandbox` 对应列表 / 详情的实际状态；详情「运行隔离」区分正在生效、已要求但未生效、未启用，显示 `why` 和出网计数。旧 hub 不带这个字段就不画。不再写「扩展都不在沙箱里」或「都能读写系统用户的文件」；安装页只说明到安装后的详情核对，手机不提供沙箱开关。
+- **仍未接成安卓 UI 的协议**：`exports` 的 schema / `contributions_to_me`、依赖的 `cascade` 确认、合集 `members=1` 连同成员卸载没有新增编辑 / 删除入口；卸合集仍是原有卸载，只卸合集自身，成员留着。`skills` 和 instructions prompts 是 hub 的助手准备过程，不是 App 本地执行。分拣模板接的是已有扩展配置表单，不新增一套来源规则浏览页。
+- **验证入口**：`HttpExtensionModelTest`（新 / 旧路径、贡献开关、sandbox、依赖摘要、404 / 503）、`ExtensionModelTest`（旧字段缺失、扁平依赖、开关保留草稿、阻止不完整预览）、`ExtensionThemesTest`、`UnselectedExtensionThemeTest`（安装但未选主题时，设计系统组件三风格 × 深浅色逐像素不变）、`ExtensionDeclarationsHostTest`（停用主题回默认）、`ExtensionPromptsTest`。`ExtensionModelShotsTest` 和 `ExtensionPromptsShotsTest` 用 Robolectric Native 检查实际扩展页、安装确认、模板确认、主题选择器和输入框的三风格 × 深浅色，PNG 在各模块 `build/extension-model-shots/`、`build/extension-prompt-shots/`。这不是模拟器 / 真机实测，设备上仍要另验。
+- **截图经验**：Robolectric Native 截 `ModalBottomSheet` 最外层可能得到全黑 PNG，语义断言和图像尺寸都正常也不能算看过界面；安装确认改截实际内容节点，并检查非背景像素后再打开图片。确认对话框截 dialog 节点，不能截被遮住的主页面。
+
 ## 渠道（设置 › 扩展 › 渠道，#1466）
 
 规格见 [channels.md](channels.md)「接口」「界面」「来源标记」。hub 的 hello 带 `channels` 时，设置首页「扩展」一节在「扩展」下面多一行「渠道」，右边写「N 个已连接」（Persona 自己的各端不算），有出错的写成「N 个已连接 · M 个出错」、危险色带警告图标（`ChannelText.listSummary`，回到设置首页、重连后重读）；hub 没有 `plugin_manager` 只有 `channels` 时这一节只有「渠道」。体验模式没有。

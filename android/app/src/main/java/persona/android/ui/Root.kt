@@ -91,6 +91,23 @@ fun PersonaRoot(
     shell: AppServices,
     onPaired: () -> Unit = {},
 ) {
+    val active by shell.session.collectAsStateWithLifecycle()
+    val features = persona.core.designsystem.LocalHubFeatures.current
+    val api = services.extensions?.takeIf { active != null && active?.demo == null &&
+        ("extension_manager" in features || "plugin_manager" in features) }
+    persona.feature.settings.ExtensionDeclarationsHost(api, active?.identity.orEmpty()) {
+        PersonaRootContent(hub, openNavigation, services, shell, onPaired)
+    }
+}
+
+@Composable
+private fun PersonaRootContent(
+    hub: Hub?,
+    openNavigation: MutableState<((Router) -> ResolvedRoute?)?>,
+    services: SettingsServices,
+    shell: AppServices,
+    onPaired: () -> Unit = {},
+) {
     val session by shell.session.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()

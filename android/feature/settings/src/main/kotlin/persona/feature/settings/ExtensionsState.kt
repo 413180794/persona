@@ -33,9 +33,10 @@ internal object ExtensionText {
     }
 
     /** Whether an enabled extension's program runs right now (the detail page's small print); null for any other state. */
-    fun runNote(p: HubExtension): String? = when (p.status) {
-        "running" -> "正在运行"
-        "stopped" -> "暂未运行，用到时自动启动"
+    fun runNote(p: HubExtension): String? = when {
+        p.kind == "extension_pack" -> "合集本身不运行程序；成员独立启用、设置和卸载。"
+        p.status == "running" -> "正在运行"
+        p.status == "stopped" -> "暂未运行，用到时自动启动"
         else -> null
     }
 
@@ -67,6 +68,14 @@ internal object ExtensionText {
         "events" -> "事件"
         "assistant" -> "助手"
         "api" -> "App 接口"
+        "skills" -> "技能"
+        "prompts" -> "提示词"
+        "themes" -> "主题色"
+        "triage_templates" -> "分拣规则模板"
+        "computer" -> "操控电脑"
+        "browser" -> "浏览器"
+        "widgets" -> "小组件"
+        "shortcuts" -> "快捷指令"
         else -> name
     }
 
@@ -205,6 +214,9 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
     }
 
     suspend fun setEnabled(on: Boolean) = busy { run { api.setEnabled(id, on) } }
+    suspend fun setContribution(item: persona.core.contracts.api.ExtensionContribution, on: Boolean) = busy {
+        run { api.setContribution(id, item.point, item.id, on) }
+    }
 
     fun edit(path: List<String>, value: JsonElement?) = mutable.update {
         val key = path.joinToString(".")

@@ -144,7 +144,8 @@ fun ExtensionPage(
             if (onPage != null) extensionPages(detail.ui, onPage)
             if (hasForm) form(detail, state, model, onChoose = { field, path -> choosing = field to path })
             if (!detail.readOnly && detail.secrets.isNotEmpty()) secrets(detail, state, onEdit = { editingSecret = it })
-            contributions(detail)
+            contributions(detail, state.busy || state.saving) { item, on -> scope.launch { model.setContribution(item, on) } }
+            sandbox(detail.extension.sandbox)
             permissions(detail)
             about(detail)
         }
@@ -256,9 +257,10 @@ private fun ExtensionFieldBlock(field: ExtensionField, path: List<String>, state
                     keyboardOptions = KeyboardOptions(keyboardType = if (field.type == "integer") KeyboardType.Number else KeyboardType.Decimal))
             }
             else -> {
+                if (field.name == "triage_rules" && path.size == 1) TriageTemplatePicker(enabled) { model.edit(path, JsonPrimitive(it)) }
                 val text = (state.value(path) as? JsonPrimitive)?.contentOrNull.orEmpty()
                 JTextField(text, { model.edit(path, it.takeIf { v -> v.isNotEmpty() }?.let(::JsonPrimitive)) }, Modifier.fillMaxWidth(),
-                    label = title, placeholder = ExtensionText.placeholder(field), supportingText = error ?: description, singleLine = true,
+                    label = title, placeholder = ExtensionText.placeholder(field), supportingText = error ?: description, singleLine = field.name != "triage_rules",
                     enabled = enabled, isError = error != null,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None,
                         keyboardType = when (field.format) { "uri" -> KeyboardType.Uri; "email" -> KeyboardType.Email; else -> KeyboardType.Text }))
@@ -332,7 +334,25 @@ private fun LazyListScope.secrets(detail: ExtensionDetail, state: ExtensionState
     item("secrets-note") { Note("密钥加密存在 hub 上，只交给这个扩展；存好后不再显示，只能换新的或清除。") }
 }
 
-private fun LazyListScope.contributions(detail: ExtensionDetail) {
+private fun LazyListScope.contributions(
+    detail: ExtensionDetail, busy: Boolean,
+    change: (persona.core.contracts.api.ExtensionContribution, Boolean) -> Unit,
+) {
+    detail.contributions?.takeIf { it.isNotEmpty() }?.let { list ->
+        item("contributes-title") { JSectionHeader("提供") }
+        itemsIndexed(list, key = { _, it -> "point-${it.point}/${it.id}" }) { index, contribution ->
+            JGroupItem(GroupPosition.of(index, list.size)) {
+                if (contribution.canDisable && !detail.readOnly) JSwitchRow(
+                    contribution.title?.ifBlank { null } ?: contribution.id, contribution.enabled,
+                    { change(contribution, it) }, subtitle = ExtensionText.point(contribution.point), enabled = !busy,
+                ) else JRow(contribution.title?.ifBlank { null } ?: contribution.id,
+                    subtitle = ExtensionText.point(contribution.point) + if (contribution.via == "connector") " · 跟随连接器开关，在连接器设置里修改" else " · 只读",
+                    value = if (contribution.enabled) "启用" else "停用")
+            }
+        }
+        item("contributes-note") { Note("关掉一项不会减少扩展的权限；其余贡献照常，修改后扩展会重新启动。") }
+        return
+    }
     val points = detail.extension.contributes.orEmpty().filterValues { it.isNotEmpty() }.toSortedMap().toList()
     if (points.isEmpty()) return
     item("contributes-title") { JSectionHeader("提供") }

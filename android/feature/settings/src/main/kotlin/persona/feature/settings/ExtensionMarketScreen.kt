@@ -84,7 +84,7 @@ fun ExtensionMarketPage(extensions: ExtensionManagement?, onBack: () -> Unit, on
                 }
             }
             item("footer") {
-                SettingsCaption("装之前会列出它能做什么，你同意了才装。扩展在 hub 所在的机器上运行，不在沙箱里。",
+                SettingsCaption("装之前会列出它能做什么，你同意了才装。扩展在 hub 所在的机器上运行；安装后的沙箱实际状态在扩展详情里查看。",
                     Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
             }
         }
@@ -262,32 +262,36 @@ private fun Tags(tags: List<String>) {
  * and lists the new lines alone, and its button turns red. Nothing is installed without the yes.
  */
 @Composable
-private fun PreviewSheet(extension: CatalogExtension?, preview: ExtensionPreview, busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+internal fun PreviewSheet(
+    extension: CatalogExtension?, preview: ExtensionPreview, busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val name = preview.manifest?.name?.takeIf { it.isNotBlank() } ?: extension?.label ?: preview.manifest?.id.orEmpty()
     val more = CatalogText.asksForMore(preview)
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     JSheet(onDismiss, title = if (preview.upgrade) "升级 $name" else "安装 $name", dismissible = !busy, scrollable = true) {
-        Column(Modifier.padding(vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
+        Column(modifier.padding(vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
             val version = preview.manifest?.version.orEmpty()
             Text(if (preview.upgrade) "版本 ${preview.from.orEmpty()} → $version" else "版本 $version", style = type.callout, color = palette.ink2)
             if (more) {
                 JInlineStatus("新版本要的权限变多了", tone = InlineTone.Failed)
                 PermissionList("新增", preview.addedPermissions.orEmpty())
             }
+            BundlePreview(preview)
             PermissionList(if (preview.upgrade) "升级后它可以" else "它可以", preview.permissions)
             preview.warnings.orEmpty().forEach { JInlineStatus(it, tone = InlineTone.Caution) }
-            SettingsCaption("包已经下载并核对过 sha256。扩展在 hub 所在的机器上运行，能读写 hub 的系统用户能读写的文件。" +
+            SettingsCaption("包已经下载并核对过 sha256。扩展在 hub 所在的机器上运行；沙箱是否实际生效以安装后的详情为准。" +
                 (preview.expiresAt?.let(CatalogText::time)?.let { "这次预览到 $it（UTC）失效。" } ?: ""))
             JButton(CatalogText.confirmLabel(preview), onConfirm, Modifier.fillMaxWidth(),
-                kind = if (more) JButtonKind.Destructive else JButtonKind.Primary, loading = busy, enabled = !busy)
+                kind = if (more) JButtonKind.Destructive else JButtonKind.Primary, loading = busy, enabled = !busy && preview.canConfirm)
             JButton("不装了", onDismiss, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary, enabled = !busy)
         }
     }
 }
 
 @Composable
-private fun PermissionList(title: String, permissions: List<ExtensionPermission>) {
+internal fun PermissionList(title: String, permissions: List<ExtensionPermission>) {
     if (permissions.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
         Text(title, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)

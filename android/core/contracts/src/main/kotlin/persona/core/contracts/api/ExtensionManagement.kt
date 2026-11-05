@@ -41,6 +41,14 @@ interface ExtensionManagement : ExtensionUi, ExtensionMarkets {
     /** `PUT /api/v1/extensions/{id}/-/enabled`. */
     suspend fun setEnabled(id: String, enabled: Boolean): ExtensionDetail
 
+    suspend fun setContribution(id: String, point: String, contribution: String, enabled: Boolean): ExtensionDetail =
+        throw UnsupportedOperationException("当前 hub 不支持贡献开关")
+
+    val changes: Flow<Unit> get() = kotlinx.coroutines.flow.emptyFlow()
+    suspend fun quickPrompts(): List<ExtensionQuickPrompt> = emptyList()
+    suspend fun themes(): List<ExtensionTheme> = emptyList()
+    suspend fun triageTemplates(): List<ExtensionTriageTemplate> = emptyList()
+
     /** `PUT /api/v1/extensions/{id}/-/config`, the whole configuration; a field the hub refuses is a [ExtensionConfigRejected]. */
     suspend fun setConfig(id: String, config: JsonObject): ExtensionDetail
 
@@ -125,6 +133,7 @@ data class ExtensionDetail(
     val permissions: List<ExtensionPermission> = emptyList(),
     /** The pages it draws: its `extension_page` and `nav_page` UI (both whole pages, opened from its settings too). */
     val ui: List<ExtensionUiPlace> = emptyList(),
+    val contributions: List<ExtensionContribution>? = null,
 ) {
     /** Installed from an extension market (`market:<market>/<extension>`): a phone may upgrade and remove it. */
     val fromMarket: Boolean get() = origin?.startsWith("market:") == true
@@ -141,6 +150,7 @@ data class ExtensionDetail(
         val secrets: List<ExtensionSecret> = emptyList(),
         val permissions: List<ExtensionPermission> = emptyList(),
         val ui: List<ExtensionUiPlace> = emptyList(),
+        val contributions: List<ExtensionContribution>? = null,
     )
 
     @Serializable
@@ -155,6 +165,7 @@ data class ExtensionDetail(
                 extension, extra.publisher, extra.homepage, extra.origin, extra.previousVersion, extra.readOnly,
                 extra.form?.fields.orEmpty(), extra.config ?: JsonObject(emptyMap()), extra.secrets, extra.permissions,
                 extra.ui.filter { it.placement.isEmpty() || it.placement == "extension_page" || it.placement == "plugin_page" || it.placement == "nav_page" },
+                extra.contributions,
             )
         }
     }

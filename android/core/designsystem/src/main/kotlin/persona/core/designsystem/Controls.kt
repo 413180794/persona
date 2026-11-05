@@ -315,7 +315,7 @@ fun JCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier:
             Modifier.size(22.dp).clip(shape).background(if (checked) on else Color.Transparent)
                 .border(if (checked) 0.dp else 1.5.dp, palette.ink3, shape),
             contentAlignment = Alignment.Center,
-        ) { if (checked) JIcon(PhIcons.Check, null, size = 15.dp, tint = if (style == AppStyle.Brief) palette.onAction else Color.White, selected = false) }
+        ) { if (checked) JIcon(PhIcons.Check, null, size = 15.dp, tint = if (palette.customRoles) ExtensionThemeColors.on(on) else if (style == AppStyle.Brief) palette.onAction else Color.White, selected = false) }
     }
 }
 

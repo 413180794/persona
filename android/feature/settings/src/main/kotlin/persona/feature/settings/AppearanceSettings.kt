@@ -55,6 +55,7 @@ fun AppearanceSettings(modifier: Modifier = Modifier) {
             StyleOption(style, selected = style == current) { store.setStyle(style) }
             Spacer(Modifier.height(12.dp))
         }
+        ExtensionThemeOptions()
         if (current == AppStyle.Glass) {
             JSectionHeader("透明效果")
             JSegmented(GlassPreference.entries.map { JSegment(it.label) }, GlassPreference.entries.indexOf(glass), { store.setGlass(GlassPreference.entries[it]) })

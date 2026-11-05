@@ -42,6 +42,12 @@ class AppStyleStore(context: Context) {
     private val currentGlass = MutableStateFlow(GlassPreference.fromKey(preferences.getString(KEY_GLASS, null)))
     val style: StateFlow<AppStyle> = currentStyle.asStateFlow()
     val glass: StateFlow<GlassPreference> = currentGlass.asStateFlow()
+    private val currentTheme = MutableStateFlow(preferences.getString(KEY_THEME, null))
+    val themeKey: StateFlow<String?> = currentTheme.asStateFlow()
+    fun setTheme(key: String?) {
+        preferences.edit().putString(KEY_THEME, key).apply()
+        currentTheme.value = key
+    }
     private val currentPersona = MutableStateFlow(preferences.getString(KEY_PERSONA, null) ?: PersonaDesign.Default.id)
     /** 设置 › 外观 › 形象: a built-in's id or a hub package's ([PersonaStore]), kept while the package is away. */
     val personaId: StateFlow<String> = currentPersona.asStateFlow()
@@ -84,6 +90,7 @@ class AppStyleStore(context: Context) {
         const val KEY_STYLE = "style"
         const val KEY_GLASS = "glass"
         const val KEY_PERSONA = "persona"
+        const val KEY_THEME = "extension-theme"
     }
 }
 

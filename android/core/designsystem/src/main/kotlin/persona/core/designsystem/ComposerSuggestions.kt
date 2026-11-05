@@ -28,7 +28,10 @@ import androidx.compose.ui.unit.dp
 
 /** One suggestion for what is being typed: the [word] to type, what it does; [destructive] marks /clear. */
 @Immutable
-data class ComposerSuggestion(val word: String, val detail: String, val destructive: Boolean = false)
+data class ComposerSuggestion(
+    val word: String, val detail: String, val destructive: Boolean = false,
+    val key: String = word, val flexible: Boolean = false,
+)
 
 /**
  * Suggestions for the word being typed (the "/" quick messages), above the field inside the composer's accessory: the
@@ -58,7 +61,8 @@ fun ComposerSuggestions(items: List<ComposerSuggestion>, onPick: (ComposerSugges
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(item.word, style = PersonaTheme.type.bodyStrong, color = if (item.destructive) palette.danger.text else palette.ink,
-                    maxLines = 1, modifier = Modifier.widthIn(min = 84.dp))
+                    maxLines = 1, overflow = if (item.flexible) TextOverflow.Ellipsis else TextOverflow.Clip,
+                    modifier = if (item.flexible) Modifier.weight(1f) else Modifier.widthIn(min = 84.dp))
                 Text(item.detail, style = PersonaTheme.type.callout, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f))
             }

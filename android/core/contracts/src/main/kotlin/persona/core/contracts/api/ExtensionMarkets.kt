@@ -139,7 +139,18 @@ data class ExtensionPreview(
     /** What an upgrade asks for beyond the installed version. */
     @SerialName("added_permissions") val addedPermissions: List<ExtensionPermission>? = null,
     val market: String? = null,
-)
+    val depends: List<ExtensionDependency> = emptyList(),
+    val bundle: List<ExtensionPreview> = emptyList(),
+    val unresolved: List<String> = emptyList(),
+) {
+    val canConfirm: Boolean get() {
+        val previews = listOf(this) + bundle
+        val bundled = bundle.mapNotNull { it.manifest?.id }.toSet()
+        return previews.all { p -> p.unresolved.isEmpty() && p.depends.all { d ->
+            d.state == "ok" || d.state in setOf("missing", "old") && d.id in bundled
+        } }
+    }
+}
 
 /** The few keys of the previewed manifest the app shows. */
 @Serializable
@@ -149,4 +160,5 @@ data class PreviewManifest(
     val version: String? = null,
     val description: String? = null,
     val publisher: String? = null,
+    @SerialName("extension_pack") val extensionPack: List<ExtensionPackMember> = emptyList(),
 )
