@@ -173,6 +173,7 @@ class InboxDataOwner @Inject constructor(
         override suspend fun markVisible(feedId: String, messages: List<LarkMessage>) = use { it.inbox.markVisible(feedId, messages) }
         override suspend fun setDone(itemId: String, done: Boolean) = use { it.inbox.setDone(itemId, done) }
         override suspend fun setDone(items: List<persona.core.contracts.api.InboxDoneTarget>, done: Boolean) = use { it.inbox.setDone(items, done) }
+        override suspend fun bulk(items: List<persona.core.contracts.api.InboxDoneTarget>, action: persona.core.contracts.api.InboxBulkAction) = use { it.inbox.bulk(items, action) }
         override suspend fun readDraft(target: ReplyTarget) = use { it.inbox.readDraft(target) }
         override suspend fun saveDraft(target: ReplyTarget, draft: ReplyDraft) = use { it.inbox.saveDraft(target, draft) }
         override suspend fun reply(target: ReplyTarget, request: ReplyRequest) = use { it.inbox.reply(target, request) }

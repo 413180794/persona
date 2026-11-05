@@ -74,7 +74,7 @@ type InboxItem struct {
 	Reason      string     `json:"reason,omitempty"`
 	Read        bool       `json:"read,omitempty"` // read somewhere else (Feishu, another mail client)
 	DoneAt      *time.Time `json:"done_at,omitempty"`
-	DoneBy      string     `json:"done_by,omitempty"` // user | read | replied
+	DoneBy      string     `json:"done_by,omitempty"` // user | dismissed | read | replied
 	Lark        *InboxLark `json:"lark,omitempty"`
 	Mail        *InboxMail `json:"mail,omitempty"`
 	Doc         *InboxDoc  `json:"doc,omitempty"` // a Feishu document's @me / comment (inbox_blocks.go)
@@ -104,6 +104,10 @@ type InboxItem struct {
 	JudgedAt  string `json:"judged_at,omitempty"`  // Last when model 2 looked at it
 	// Rules are the item's own triage rules, from its connector (InboxThing.Rules): they replace inbox.rules for it.
 	Rules string `json:"rules,omitempty"`
+	// ArrivedAt is the clock here when the item first held Last (ArrivedOf), as listed or saved: a bulk 已处理 over a
+	// filter leaves what arrived after the list it acted on (inbox_bulk.go). Rows stored before have UpdatedAt.
+	ArrivedOf string    `json:"arrived_of,omitempty"`
+	ArrivedAt time.Time `json:"arrived_at,omitzero"`
 	// Meta is an event's meta as its connector wrote it (which messages are in it…): kept and handed back as it is,
 	// never read here. Group is the event's conversation (inbox_group.go).
 	Meta  json.RawMessage `json:"meta,omitempty"`
@@ -155,7 +159,8 @@ func (it *InboxItem) open() bool { return it.DoneAt == nil }
 // listed is the item as the list shows it (no context).
 func (it *InboxItem) listed() InboxItem {
 	c := *it
-	c.Context, c.Last, c.TriagedAt, c.BodyOf, c.JudgedAt, c.Rules = "", "", "", "", "", ""
+	c.Context, c.Last, c.TriagedAt, c.BodyOf, c.JudgedAt, c.Rules, c.ArrivedOf = "", "", "", "", "", "", ""
+	c.ArrivedAt = time.Time{}
 	c.Meta, c.Group = nil, nil
 	c.Mutes = mutesOf(it)
 	c.Version = inboxVersion(it)
@@ -386,6 +391,9 @@ func (s *Service) loadInbox(ctx context.Context) bool {
 				continue // newer in memory than in the database
 			}
 			b.larkRequestAccount(&it)
+			if it.ArrivedOf == "" { // stored before arrivals were stamped
+				it.ArrivedOf, it.ArrivedAt = it.Last, it.UpdatedAt
+			}
 			b.items[it.ID] = &it
 		}
 	}
@@ -493,7 +501,9 @@ func (s *Service) saveInbox(ctx context.Context, changed []*InboxItem) {
 	var told []assistantwire.InboxChangedItem
 	b.mu.Lock()
 	rows := make([]db.InboxRow, 0, len(changed))
+	now := time.Now()
 	for i, it := range changed {
+		it.arrived(now)
 		raw, _ := json.Marshal(it)
 		rows = append(rows, db.InboxRow{ID: it.ID, Data: raw, UpdatedAt: it.UpdatedAt, DoneAt: it.DoneAt})
 		if i < 50 { // a first round's hundreds: the plugin reads the inbox if it wants them all
@@ -607,6 +617,19 @@ func (b *inboxBook) readSource(id, name string) {
 	if b.batch != nil {
 		b.batch.read[id] = name
 	}
+}
+
+// arrived stamps when the item came to hold what it holds (ArrivedAt), the first time it is listed or saved so. Under
+// b.mu.
+func (it *InboxItem) arrived(now time.Time) {
+	if it.ArrivedOf != it.Last || it.ArrivedAt.IsZero() {
+		it.ArrivedOf, it.ArrivedAt = it.Last, now
+	}
+}
+
+// arrivedAfter: the item took what it holds after asOf (or has not been stamped yet: it is coming in now). Under b.mu.
+func (it *InboxItem) arrivedAfter(asOf time.Time) bool {
+	return it.ArrivedOf != it.Last || it.ArrivedAt.After(asOf)
 }
 
 func (it *InboxItem) done(at time.Time, by string) {
@@ -849,7 +872,8 @@ func (s *Service) inboxRoutes() {
 		if !s.inboxUp(w, r) {
 			return
 		}
-		apierr.WriteJSON(w, map[string]any{"items": s.inboxList(r.URL.Query().Get("sources") == "all"), "triage": s.inboxTriage()})
+		items, asOf := s.inboxListAt(r.URL.Query().Get("sources") == "all")
+		apierr.WriteJSON(w, map[string]any{"items": items, "as_of": asOf, "triage": s.inboxTriage()})
 	})
 	s.handle("GET /api/v1/inbox/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if !s.inboxUp(w, r) {
@@ -878,13 +902,14 @@ func (s *Service) inboxRoutes() {
 			return
 		}
 		var in struct {
-			Done bool `json:"done"`
+			Done    bool `json:"done"`
+			Dismiss bool `json:"dismiss"` // 忽略: filed as not for the user, done_by=dismissed
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
-		it, err := s.setInboxDone(r.Context(), r.PathValue("id"), in.Done)
+		it, err := s.setInboxDone(r.Context(), r.PathValue("id"), in.Done, in.Dismiss)
 		if err != nil {
 			apierr.Write(w, http.StatusNotFound, err)
 			return
@@ -987,7 +1012,8 @@ func (s *Service) inboxRoutes() {
 		if err := s.appCall(r.Context(), AppInbox, assistantwire.InboxCollect, map[string]any{"round": assistantwire.RoundFull}, nil); err != nil {
 			s.logf("inbox: refresh: %v", err)
 		}
-		apierr.WriteJSON(w, map[string]any{"items": s.inboxList(r.URL.Query().Get("sources") == "all"), "triage": s.inboxTriage()})
+		items, asOf := s.inboxListAt(r.URL.Query().Get("sources") == "all")
+		apierr.WriteJSON(w, map[string]any{"items": items, "as_of": asOf, "triage": s.inboxTriage()})
 	})
 }
 
@@ -1035,22 +1061,30 @@ func (s *Service) replyInboxChecked(ctx context.Context, id, text, clientID stri
 // inboxList is every open item and the recently done ones, newest first; connectors' only when all (rows stored
 // before Source was set have none, so it is the connector block that tells).
 func (s *Service) inboxList(all bool) []InboxItem {
+	out, _ := s.inboxListAt(all)
+	return out
+}
+
+// inboxListAt is inboxList and the moment it was read (as_of): everything listed arrived by then.
+func (s *Service) inboxListAt(all bool) ([]InboxItem, time.Time) {
 	b := &s.inbox
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	cutoff := time.Now().Add(-inboxKeepDone)
+	now := time.Now()
+	cutoff := now.Add(-inboxKeepDone)
 	out := make([]InboxItem, 0, len(b.items))
 	for _, it := range b.items {
 		if it.DoneAt != nil && it.DoneAt.Before(cutoff) || !all && it.Connector != nil {
 			continue
 		}
+		it.arrived(now)
 		out = append(out, it.listed())
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
-	return out
+	return out, now
 }
 
-func (s *Service) setInboxDone(ctx context.Context, id string, done bool) (InboxItem, error) {
+func (s *Service) setInboxDone(ctx context.Context, id string, done, dismiss bool) (InboxItem, error) {
 	b := &s.inbox
 	b.mu.Lock()
 	it, ok := b.items[id]
@@ -1059,7 +1093,7 @@ func (s *Service) setInboxDone(ctx context.Context, id string, done bool) (Inbox
 		return InboxItem{}, errNoInboxItem
 	}
 	if done {
-		it.done(time.Now(), "user")
+		it.done(time.Now(), doneByOf(dismiss))
 	} else {
 		it.DoneAt, it.DoneBy = nil, ""
 	}

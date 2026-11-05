@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.domain.isOwnMessage
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.*
 import androidx.compose.ui.draw.alpha
@@ -118,11 +119,13 @@ internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUp
     })
     val uri = LocalUriHandler.current
     val streaming = items.any { updates[it.id]?.streaming == true }
+    // Typed by the user: the pale blue; another session's or conversation's keeps the style's tint (#2643).
+    val own = remember(items) { items.all(::isOwnMessage) }
     // Only blocks, no words, photos or cursor: the folded row alone, no empty bubble.
     val bubble = contexts.isEmpty() || parts.isNotEmpty() || photos.isNotEmpty() || images != null || streaming
     Column(Modifier.fillMaxWidth()) {
         MessageContextGroup(contexts, "${items.firstOrNull()?.id.orEmpty()}/contexts", uri::openUri)
-        if (bubble) UserBubbleFrame(Modifier.messageMenu(target.takeIf { menu }), footer = footer) {
+        if (bubble) UserBubbleFrame(Modifier.messageMenu(target.takeIf { menu }), footer = footer, own = own) {
             images?.invoke()
             if (photos.isNotEmpty()) {
                 AttachedPhotoRow(photos)

@@ -60,5 +60,14 @@ class InboxBulkTest {
         assertEquals("已将 2 件标为已处理", bulkNotice(res, result.copy(changedSince = emptyList())))
         assertEquals("有新消息进来，1 件没有标记", bulkNotice(res, result.copy(changed = emptyList())))
         assertNull(bulkNotice(res, InboxBulkResult(unchanged = listOf("c"))))
+        assertEquals("已忽略 2 件，1 件有新消息没动", bulkNotice(res, result, dismissed = true))
+        assertEquals("已忽略 2 件", bulkNotice(res, result.copy(changedSince = emptyList()), dismissed = true))
+    }
+
+    @Test fun dismissAndTheConfirmationSayHowManyOverWhat() {
+        assertEquals("全部忽略 · 12 件", bulkLabel(res, 12, null, dismiss = true))
+        assertEquals("忽略当前筛选 · 3 件", bulkLabel(res, 3, "飞书", dismiss = true))
+        assertEquals("将处理 12 件（整个收件箱）。之后进来的新消息不受影响，完成后可以撤销。", bulkConfirmText(res, 12, null))
+        assertEquals("将处理 3 件（飞书 · 私聊）。之后进来的新消息不受影响，完成后可以撤销。", bulkConfirmText(res, 3, "飞书 · 私聊"))
     }
 }

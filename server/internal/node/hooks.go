@@ -168,6 +168,12 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		} else {
 			resp = map[string]any{"output": out}
 		}
+	case "hook.decided": // another PermissionRequest hook answered a call (hookdecided.go)
+		var in hookInput
+		if json.Unmarshal(req.Input, &in) == nil && in.HookEventName == "PermissionRequest" && validID(in.SessionID) {
+			n.decided.decide(in, time.Now())
+		}
+		resp = map[string]any{"ok": true}
 	case "ping": // personad node doctor: a round trip that changes nothing
 		resp = map[string]any{"ok": true}
 	case "ask": // personad ask (scriptcli.go)
@@ -385,7 +391,17 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 			// What the session rule below allows, kept by the hub past this process (a resumed one has no rules).
 			ix.AlwaysKeys = []string{"tool:" + in.ToolName}
 		}
+		// Another hook may answer it first (hookdecided.go): then nothing is shown, or what was is withdrawn.
+		key := permissionKey(in)
+		ctx, stop := n.decided.watch(ctx, key)
+		defer stop()
+		if n.decided.grace(ctx, key) {
+			return nil, nil
+		}
 		res, ok, err := n.ask(ctx, ix)
+		if n.decided.answered(key) {
+			return nil, nil
+		}
 		if err != nil || !ok || res.Allow == nil {
 			return nil, err
 		}

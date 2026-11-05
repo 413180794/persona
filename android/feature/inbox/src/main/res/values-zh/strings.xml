@@ -90,6 +90,30 @@
     <plurals name="inbox_bulk_marked">
         <item quantity="other">已将 %1$d 件标为已处理</item>
     </plurals>
+    <string name="inbox_bulk_scope_all">整个收件箱</string>
+    <string name="inbox_bulk_confirm_done_title">全部标为已处理？</string>
+    <string name="inbox_bulk_confirm_dismiss_title">全部忽略？</string>
+    <plurals name="inbox_bulk_dismiss_all">
+        <item quantity="other">全部忽略 · %1$d 件</item>
+    </plurals>
+    <plurals name="inbox_bulk_dismiss_filtered">
+        <item quantity="other">忽略当前筛选 · %1$d 件</item>
+    </plurals>
+    <plurals name="inbox_bulk_confirm_body">
+        <item quantity="other">将处理 %1$d 件（%2$s）。之后进来的新消息不受影响，完成后可以撤销。</item>
+    </plurals>
+    <plurals name="inbox_bulk_confirm_done">
+        <item quantity="other">标为已处理 %1$d 件</item>
+    </plurals>
+    <plurals name="inbox_bulk_confirm_dismiss">
+        <item quantity="other">忽略 %1$d 件</item>
+    </plurals>
+    <plurals name="inbox_bulk_dismissed">
+        <item quantity="other">已忽略 %1$d 件</item>
+    </plurals>
+    <plurals name="inbox_bulk_dismissed_newer">
+        <item quantity="other">已忽略 %1$d 件，%2$d 件有新消息没动</item>
+    </plurals>
     <string name="inbox_doc_sheet">表格</string>
     <string name="inbox_doc_base">多维表格</string>
     <string name="inbox_doc_doc">文档</string>

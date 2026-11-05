@@ -249,6 +249,9 @@ struct PeerMessage: View {
                 .markdownSoftBreakMode(.lineBreak)
                 .markdownTheme(.jarvis)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                #if os(macOS)
+                .textSelection(.enabled) // drag to select and ⌘C, as on the web (#2542)
+                #endif
         }
         .padding(Theme.Space.m)
         .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
@@ -456,6 +459,10 @@ struct AssistantText: View, Equatable {
                 .modifier(QuietMarkdown(on: quiet))
                 .markdownTheme(.jarvis)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                #if os(macOS)
+                // Drag to select and ⌘C, as on the web (#2542); iOS keeps the long-press menu's 选择.
+                .textSelection(.enabled)
+                #endif
                 .contentShape(.rect)
                 .messageLongPress(id: item.id)
             if let openFile {

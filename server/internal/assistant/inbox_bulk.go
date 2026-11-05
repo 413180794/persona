@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/apierr"
@@ -51,16 +53,86 @@ func inboxVersion(it *InboxItem) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// setInboxDoneBulk files (done) or brings back (!done) the targets in one go, written and announced once.
-// Filing is idempotent (an item already done keeps when and why it was done) and checks the version: an item that
-// took new messages since the user's list stays open, so what came in meanwhile is not filed unseen. Bringing back
-// does not check it (an item done meanwhile by a reply elsewhere comes back too, as with 移回 on one item).
+// Bulk actions (POST /api/v1/inbox/bulk).
+const (
+	bulkDone    = "done"    // 全部标为已处理
+	bulkDismiss = "dismiss" // 全部忽略: done_by=dismissed
+	bulkReopen  = "reopen"  // 移回 / 撤销
+)
+
+// doneByOf is done_by for the user filing an item: 已处理 or 忽略.
+func doneByOf(dismiss bool) string {
+	if dismiss {
+		return "dismissed"
+	}
+	return "user"
+}
+
+// inboxBulkFilter picks the open items a bulk action without ids is for: what the list shows under a source / tier /
+// kind filter. A search, or anything the client filters by itself, goes as ids.
+type inboxBulkFilter struct {
+	Sources string   `json:"sources,omitempty"` // "all": connectors' too (as GET /api/v1/inbox?sources=all)
+	Source  string   `json:"source,omitempty"`  // lark / mail / a connector's id
+	Account string   `json:"account,omitempty"` // feishu / a mail account id
+	Tier    string   `json:"tier,omitempty"`    // action / fyi / noise / untriaged
+	Kinds   []string `json:"kinds,omitempty"`
+}
+
+func (f *inboxBulkFilter) valid() bool {
+	switch f.Tier {
+	case "", TierAction, TierFYI, TierNoise, "untriaged":
+		return true
+	}
+	return false
+}
+
+func (f *inboxBulkFilter) match(it *InboxItem) bool {
+	tier := it.Tier
+	if tier == "" {
+		tier = "untriaged"
+	}
+	return it.open() && (f.Sources == "all" || it.Connector == nil) && (f.Source == "" || it.Source == f.Source) &&
+		(f.Account == "" || it.Account == f.Account) && (f.Tier == "" || tier == f.Tier) &&
+		(len(f.Kinds) == 0 || slices.Contains(f.Kinds, it.Kind))
+}
+
+// setInboxDoneBulk files (done) or brings back (!done) the targets in one go: setInboxBulk without a filter.
 func (s *Service) setInboxDoneBulk(ctx context.Context, targets []inboxBulkTarget, done bool, now time.Time) inboxBulkResult {
+	action := bulkReopen
+	if done {
+		action = bulkDone
+	}
+	return s.setInboxBulk(ctx, action, targets, nil, time.Time{}, now)
+}
+
+// setInboxBulk files (done / dismiss) or brings back (reopen) the targets, or with a filter the open items it picks
+// that arrived by asOf, in one go, written and announced once: what one item's 已处理 does (setInboxDone), many times.
+// Filing is idempotent (an item already done keeps when and why it was done) and leaves what changed since the list
+// the user acted on (a target's version, or under a filter what arrived after asOf), so what came in meanwhile is
+// not filed unseen. Bringing back does not check it (an item done meanwhile by a reply elsewhere comes back too, as
+// with 移回 on one item).
+func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inboxBulkTarget, filter *inboxBulkFilter,
+	asOf, now time.Time) inboxBulkResult {
+	done := action != bulkReopen
 	res := inboxBulkResult{Changed: []InboxItem{}, Unchanged: []string{}, Skipped: []inboxBulkSkip{}}
 	var changed []*InboxItem
 	seen := map[string]bool{}
 	b := &s.inbox
 	b.mu.Lock()
+	if filter != nil {
+		targets = nil
+		for _, it := range b.items {
+			if filter.match(it) {
+				if it.arrivedAfter(asOf) {
+					res.Skipped = append(res.Skipped, inboxBulkSkip{it.ID, bulkSkipChanged})
+				} else {
+					targets = append(targets, inboxBulkTarget{ID: it.ID})
+				}
+			}
+		}
+		slices.SortFunc(targets, func(a, b inboxBulkTarget) int { return strings.Compare(a.ID, b.ID) })
+		slices.SortFunc(res.Skipped, func(a, b inboxBulkSkip) int { return strings.Compare(a.ID, b.ID) })
+	}
 	for _, t := range targets {
 		if seen[t.ID] {
 			continue
@@ -76,7 +148,7 @@ func (s *Service) setInboxDoneBulk(ctx context.Context, targets []inboxBulkTarge
 			res.Skipped = append(res.Skipped, inboxBulkSkip{t.ID, bulkSkipChanged})
 		default:
 			if done {
-				it.done(now, "user")
+				it.done(now, doneByOf(action == bulkDismiss))
 			} else {
 				it.DoneAt, it.DoneBy = nil, ""
 			}
@@ -91,8 +163,22 @@ func (s *Service) setInboxDoneBulk(ctx context.Context, targets []inboxBulkTarge
 
 var errBulkTooMany = errors.New("too many items in one request")
 
+// inboxBulkReply is POST /api/v1/inbox/bulk's answer: the result, the changed ids, and the request that undoes it.
+type inboxBulkReply struct {
+	Action string `json:"action"`
+	inboxBulkResult
+	IDs  []string       `json:"ids"`
+	Undo *inboxBulkUndo `json:"undo,omitempty"`
+}
+
+type inboxBulkUndo struct {
+	Action string   `json:"action"`
+	IDs    []string `json:"ids"`
+}
+
 func (s *Service) inboxBulkRoutes() {
-	// Many items at once: {"done": true|false, "items": [{"id", "version"}]}.
+	// Many items at once: {"done": true|false, "items": [{"id", "version"}]} (#1105; POST /api/v1/inbox/bulk is the
+	// general one).
 	s.handle("POST /api/v1/inbox/done", func(w http.ResponseWriter, r *http.Request) {
 		if !s.inboxUp(w, r) {
 			return
@@ -110,5 +196,49 @@ func (s *Service) inboxBulkRoutes() {
 			return
 		}
 		apierr.WriteJSON(w, s.setInboxDoneBulk(r.Context(), in.Items, *in.Done, time.Now()))
+	})
+	// {"action": "done"|"dismiss"|"reopen", "items"?: [{"id","version"}], "ids"?: [...], "filter"?: {...}, "as_of"?}:
+	// the ids (items) the user sees, or the filter's open items as of the list (as_of from GET /api/v1/inbox).
+	s.handle("POST /api/v1/inbox/bulk", func(w http.ResponseWriter, r *http.Request) {
+		if !s.inboxUp(w, r) {
+			return
+		}
+		var in struct {
+			Action string            `json:"action"`
+			Items  []inboxBulkTarget `json:"items"`
+			IDs    []string          `json:"ids"`
+			Filter *inboxBulkFilter  `json:"filter"`
+			AsOf   time.Time         `json:"as_of"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		}
+		for _, id := range in.IDs {
+			in.Items = append(in.Items, inboxBulkTarget{ID: id})
+		}
+		switch {
+		case in.Action != bulkDone && in.Action != bulkDismiss && in.Action != bulkReopen:
+			apierr.Write(w, http.StatusBadRequest, errors.New("action is done, dismiss or reopen"))
+			return
+		case in.Filter != nil && len(in.Items) > 0, in.Filter == nil && in.Items == nil:
+			apierr.Write(w, http.StatusBadRequest, errors.New("either ids (items) or a filter"))
+			return
+		case in.Filter != nil && (in.Action == bulkReopen || in.AsOf.IsZero() || !in.Filter.valid()):
+			apierr.Write(w, http.StatusBadRequest, errors.New("a filter files open items as of a list: as_of is required, and reopen takes ids"))
+			return
+		case len(in.Items) > inboxBulkMax:
+			apierr.Write(w, http.StatusRequestEntityTooLarge, errBulkTooMany)
+			return
+		}
+		res := s.setInboxBulk(r.Context(), in.Action, in.Items, in.Filter, in.AsOf, time.Now())
+		out := inboxBulkReply{Action: in.Action, inboxBulkResult: res, IDs: make([]string, 0, len(res.Changed))}
+		for _, it := range res.Changed {
+			out.IDs = append(out.IDs, it.ID)
+		}
+		if in.Action != bulkReopen && len(out.IDs) > 0 {
+			out.Undo = &inboxBulkUndo{Action: bulkReopen, IDs: out.IDs}
+		}
+		apierr.WriteJSON(w, out)
 	})
 }

@@ -2,6 +2,7 @@ package persona.core.hub
 
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.InboxAssistantTransport
+import persona.core.contracts.api.InboxBulkAction
 import persona.core.contracts.api.InboxDoneTarget
 import persona.core.contracts.api.LarkThreadTransport
 import persona.core.contracts.api.MailReplyTarget
@@ -77,6 +78,18 @@ class HttpInboxAssistantTransport private constructor(
                 items.forEach { t -> add(buildJsonObject { put("id", t.id); t.version?.let { put("version", it) } }) }
             })
         })
+    override suspend fun bulk(items: List<InboxDoneTarget>, action: InboxBulkAction): JsonObject = try {
+        json(url("api", "v1", "inbox", "bulk"), buildJsonObject {
+            put("action", action.wire)
+            put("items", buildJsonArray {
+                items.forEach { t -> add(buildJsonObject { put("id", t.id); t.version?.let { put("version", it) } }) }
+            })
+        })
+    } catch (e: HubFailure) {
+        // A hub from before /inbox/bulk: 已处理 and 移回 the old way; it has no 忽略.
+        if (action == InboxBulkAction.Dismiss || (e.status != 404 && e.status != 405)) throw e
+        setDone(items, action == InboxBulkAction.Done)
+    }
     override suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String): JsonObject {
         require(clientId.isNotBlank() && text.isNotBlank())
         require((itemId == null) != (feedId == null))

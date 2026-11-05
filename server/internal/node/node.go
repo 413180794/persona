@@ -33,6 +33,9 @@ type Node struct {
 	Version string
 	updater *nodeupdate.Manager // resident-owned, shared across attach connections
 
+	// decided: calls another PermissionRequest hook answered (hookdecided.go).
+	decided decisions
+
 	// bootAt: when this node started. A session whose record says it was started in a pane before this ran in the
 	// previous herdr server, so the restart is what ended it (interrupted.go).
 	bootAt time.Time

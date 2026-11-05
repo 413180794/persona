@@ -4,7 +4,7 @@ import { getSession, getState } from "../../lib/store";
 import { agentStatus, subagentFor } from "../../lib/tasks";
 import { turnImages } from "../../lib/turn-images";
 import { TurnImages } from "./TurnImages";
-import { exchangeSteps, isLoopTick, type Segment, type UserMessage } from "../../lib/turns";
+import { exchangeSteps, isLoopTick, isOwnMessage, type Segment, type UserMessage } from "../../lib/turns";
 import type { Item, SessionLive } from "../../lib/types";
 import { planSteps, thinkingDurations, workBlocks, type ToolStep } from "../../lib/work-groups";
 import { channelOf, useChannels } from "../../lib/channels";
@@ -37,6 +37,7 @@ export function bubbleLines(text: string, perLine = CHARS_PER_LINE): number {
 }
 
 export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: string; sid: string; pending?: boolean }) {
+  const own = isOwnMessage(msg);
   return (
     <div className="ml-auto flex max-w-[488px] min-w-0 flex-col items-end gap-1.5 pl-[12%]" style={pending ? { animation: `fade-up 300ms ${EASE} both` } : undefined} data-user-bubble>
       {msg.images.length > 0 && (
@@ -50,10 +51,10 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
       {msg.files && <FileCards files={msg.files} mid={mid} />}
       {msg.text &&
         (pending ? (
-          <BubbleText text={msg.text} mid={mid} sid={sid} pending />
+          <BubbleText text={msg.text} mid={mid} sid={sid} own={own} pending />
         ) : (
           <MessageActions text={msg.text} isUser ts={msg.ts} side messageId={msg.id} className="max-w-full">
-            <BubbleText text={msg.text} ts={msg.ts} mid={mid} sid={sid} />
+            <BubbleText text={msg.text} ts={msg.ts} mid={mid} sid={sid} own={own} />
           </MessageActions>
         ))}
       {(pending || msg.queued) && <span className="text-[11px] text-ink-3">{pending ? t("chat-segmentview.sending") : t("chat-segmentview.queued")}</span>}
@@ -65,7 +66,8 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
 /** The bubble's words, folded to ten lines past fourteen; the fold scrolls (the wheel, a trackpad, a finger), with a
  *  fade at its bottom while there is more (fold-scroll.ts). `pending` (still being sent): dimmed, the same fold. A
  *  leading `> ` block (引用) is a folded quote card at its top instead of `>` lines (Quote.tsx). */
-function BubbleText({ text: whole, ts, mid, sid, pending }: { text: string; ts?: string; mid: string; sid: string; pending?: boolean }) {
+function BubbleText({ text: whole, ts, mid, sid, own, pending }: { text: string; ts?: string; mid: string; sid: string; own: boolean; pending?: boolean }) {
+  const fill = own ? "bg-user-bubble" : "bg-neutral-bubble";
   const split = useMemo(() => splitQuote(whole), [whole]);
   const text = split ? split.rest : whole;
   const ref = useRef<HTMLDivElement>(null);
@@ -93,12 +95,12 @@ function BubbleText({ text: whole, ts, mid, sid, pending }: { text: string; ts?:
   return (
     <div className="flex max-w-full flex-col items-end gap-1">
       {split ? (
-        <div className={`flex max-w-full flex-col gap-1.5 rounded-[12px] bg-user-bubble px-4 py-2.5 text-ink ${pending ? "opacity-60" : ""}`} title={clock(ts)}>
+        <div className={`flex max-w-full flex-col gap-1.5 rounded-[12px] ${fill} px-4 py-2.5 text-ink ${pending ? "opacity-60" : ""}`} title={clock(ts)}>
           <QuoteBlock text={split.quote} />
           {words}
         </div>
       ) : (
-        <div className={`max-w-full rounded-[12px] bg-user-bubble px-4 py-2.5 text-ink ${pending ? "opacity-60" : ""}`} title={clock(ts)}>
+        <div className={`max-w-full rounded-[12px] ${fill} px-4 py-2.5 text-ink ${pending ? "opacity-60" : ""}`} title={clock(ts)}>
           {words}
         </div>
       )}

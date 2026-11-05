@@ -12,7 +12,7 @@ import persona.core.domain.inbox.InboxGroup
 import persona.core.domain.inbox.InboxRowType
 
 /**
- * What a bulk 已处理 (`POST /api/v1/inbox/done`) did: [changed] moved (撤销 sends these back), [unchanged] were already
+ * What a bulk 已处理 / 忽略 / 移回 (`POST /api/v1/inbox/bulk`) did: [changed] moved (撤销 sends these back), [unchanged] were already
  * so, [changedSince] took new messages after the list was drawn and stay open, [missing] are gone from the hub.
  */
 data class InboxBulkResult(
@@ -58,17 +58,32 @@ internal fun bulkScope(res: Resources, section: String, sourceLabel: String?, ki
         query.trim().takeIf { it.isNotEmpty() }?.let { res.getString(R.string.inbox_bulk_search, it) },
     ).joinToString(" · ").ifEmpty { null }
 
-/** The menu entry: the count, and whether it is the whole inbox or the current filter. */
-internal fun bulkLabel(res: Resources, count: Int, scope: String?): String =
-    res.getQuantityString(if (scope == null) R.plurals.inbox_bulk_all else R.plurals.inbox_bulk_filtered, count, count)
+/** From this many items on, 全部已处理 / 全部忽略 asks first (「将处理 N 件」); fewer go at once, with 撤销. */
+internal const val BULK_CONFIRM_AT = 10
 
-/** What the notice says after a bulk 已处理; null when nothing moved and nothing needs saying. */
-internal fun bulkNotice(res: Resources, result: InboxBulkResult): String? {
+/** The menu entry (全部已处理, or 全部忽略 when [dismiss]): the count, and whether it is the whole inbox or the filter. */
+internal fun bulkLabel(res: Resources, count: Int, scope: String?, dismiss: Boolean = false): String =
+    res.getQuantityString(when {
+        dismiss && scope == null -> R.plurals.inbox_bulk_dismiss_all
+        dismiss -> R.plurals.inbox_bulk_dismiss_filtered
+        scope == null -> R.plurals.inbox_bulk_all
+        else -> R.plurals.inbox_bulk_filtered
+    }, count, count)
+
+/** The confirmation's text: how many, over what, and that what comes in later stays. */
+internal fun bulkConfirmText(res: Resources, count: Int, scope: String?): String =
+    res.getQuantityString(R.plurals.inbox_bulk_confirm_body, count, count, scope ?: res.getString(R.string.inbox_bulk_scope_all))
+
+/** What the notice says after a bulk 已处理 (or 忽略 when [dismissed]); null when nothing moved and nothing needs saying. */
+internal fun bulkNotice(res: Resources, result: InboxBulkResult, dismissed: Boolean = false): String? {
     val newer = result.changedSince.size
+    val moved = result.changed.size
     return when {
         result.changed.isEmpty() && newer > 0 -> res.getQuantityString(R.plurals.inbox_bulk_newer, newer, newer)
         result.changed.isEmpty() -> null
-        newer > 0 -> res.getQuantityString(R.plurals.inbox_bulk_marked_newer, result.changed.size, result.changed.size, newer)
-        else -> res.getQuantityString(R.plurals.inbox_bulk_marked, result.changed.size, result.changed.size)
+        dismissed && newer > 0 -> res.getQuantityString(R.plurals.inbox_bulk_dismissed_newer, moved, moved, newer)
+        dismissed -> res.getQuantityString(R.plurals.inbox_bulk_dismissed, moved, moved)
+        newer > 0 -> res.getQuantityString(R.plurals.inbox_bulk_marked_newer, moved, moved, newer)
+        else -> res.getQuantityString(R.plurals.inbox_bulk_marked, moved, moved)
     }
 }

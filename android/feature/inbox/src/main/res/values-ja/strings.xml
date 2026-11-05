@@ -90,6 +90,30 @@
     <plurals name="inbox_bulk_marked">
         <item quantity="other">%1$d件を対応済みにしました</item>
     </plurals>
+    <string name="inbox_bulk_scope_all">受信トレイ全体</string>
+    <string name="inbox_bulk_confirm_done_title">すべて対応済みにしますか？</string>
+    <string name="inbox_bulk_confirm_dismiss_title">すべて無視しますか？</string>
+    <plurals name="inbox_bulk_dismiss_all">
+        <item quantity="other">すべて無視 · %1$d件</item>
+    </plurals>
+    <plurals name="inbox_bulk_dismiss_filtered">
+        <item quantity="other">絞り込みを無視 · %1$d件</item>
+    </plurals>
+    <plurals name="inbox_bulk_confirm_body">
+        <item quantity="other">%1$d件を処理します（%2$s）。この後に届く新着は対象外で、完了後に元に戻せます。</item>
+    </plurals>
+    <plurals name="inbox_bulk_confirm_done">
+        <item quantity="other">%1$d件を対応済みにする</item>
+    </plurals>
+    <plurals name="inbox_bulk_confirm_dismiss">
+        <item quantity="other">%1$d件を無視</item>
+    </plurals>
+    <plurals name="inbox_bulk_dismissed">
+        <item quantity="other">%1$d件を無視しました</item>
+    </plurals>
+    <plurals name="inbox_bulk_dismissed_newer">
+        <item quantity="other">%1$d件を無視しました。新着のある%2$d件はそのままです</item>
+    </plurals>
     <string name="inbox_doc_sheet">シート</string>
     <string name="inbox_doc_base">Base</string>
     <string name="inbox_doc_doc">ドキュメント</string>

@@ -502,9 +502,15 @@ struct ToolDetail: View {
                 path(i["file_path"]?.string ?? i["notebook_path"]?.string)
             case "ExitPlanMode":
                 Markdown(MarkdownMemo.content(i["plan"]?.string ?? "")).markdownTheme(.jarvis)
+                    #if os(macOS)
+                    .textSelection(.enabled)
+                    #endif
             case "AskUserQuestion":
                 ForEach(Array((i["questions"]?.array ?? []).enumerated()), id: \.offset) { _, q in
                     Text(q["question"]?.string ?? "").font(Theme.Font.captionMedium)
+                        #if os(macOS)
+                        .textSelection(.enabled)
+                        #endif
                 }
             case "ask_user":
                 AskUserDetail(call: call)
@@ -948,6 +954,9 @@ struct DiffView: View {
         return HStack(spacing: Theme.Space.sm) {
             Text(sign).foregroundStyle(color).scaledFrame(width: Theme.Size.dotXL)
             Text(l.text.isEmpty ? " " : l.text).foregroundStyle(quiet ? Color.secondary : .primary)
+                #if os(macOS)
+                .textSelection(.enabled) // the text, not the +/− column, as on the web
+                #endif
         }
         .font(Theme.Font.code)
         .padding(.horizontal, Theme.Space.s)

@@ -88,6 +88,7 @@ var routeScopes = map[string]string{
 	"GET /api/v1/inbox/{id}":                             extension.ScopeInboxRead,
 	"GET /api/v1/inbox/mutes":                            extension.ScopeInboxRead,
 	"POST /api/v1/inbox/done":                            extension.ScopeInboxWrite,
+	"POST /api/v1/inbox/bulk":                            extension.ScopeInboxWrite,
 	"POST /api/v1/inbox/{id}/done":                       extension.ScopeInboxWrite,
 	"POST /api/v1/inbox/{id}/draft":                      extension.ScopeInboxWrite,
 	"POST /api/v1/inbox/{id}/reply":                      extension.ScopeInboxWrite,

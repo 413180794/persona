@@ -362,7 +362,7 @@ func TestInboxTriageKeepsWhatTheUserFiled(t *testing.T) {
 	done := make(chan bool, 1)
 	go func() { done <- h.triageOne(context.Background(), it) }()
 	time.Sleep(100 * time.Millisecond) // the model is thinking
-	if _, err := h.setInboxDone(context.Background(), it.ID, true); err != nil {
+	if _, err := h.setInboxDone(context.Background(), it.ID, true, false); err != nil {
 		t.Fatal(err)
 	}
 	<-done

@@ -11,6 +11,31 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class InboxAssistantTransportTest {
+    @Test fun bulkPostsTheActionAndAnOldHubGetsDoneTheOldWay() = runBlocking {
+        MockWebServer().use { server ->
+            val transport = HttpInboxAssistantTransport("scope", server.url("/").toString(), "test-token", OkHttpClient())
+            val targets = listOf(persona.core.contracts.api.InboxDoneTarget("a", "va"), persona.core.contracts.api.InboxDoneTarget("b"))
+            server.enqueue(MockResponse().setBody("{\"action\":\"dismiss\",\"changed\":[],\"ids\":[]}"))
+            transport.bulk(targets, persona.core.contracts.api.InboxBulkAction.Dismiss)
+            val bulk = server.takeRequest()
+            assertEquals("/api/v1/inbox/bulk", bulk.path)
+            assertEquals("""{"action":"dismiss","items":[{"id":"a","version":"va"},{"id":"b"}]}""", bulk.body.readUtf8())
+
+            // A hub from before /inbox/bulk: 已处理 goes to /inbox/done; 忽略 says it can't.
+            server.enqueue(MockResponse().setResponseCode(405).setBody("{\"error\":\"method not allowed\"}"))
+            server.enqueue(MockResponse().setBody("{\"changed\":[]}"))
+            transport.bulk(targets, persona.core.contracts.api.InboxBulkAction.Done)
+            server.takeRequest()
+            val old = server.takeRequest()
+            assertEquals("/api/v1/inbox/done", old.path)
+            assertEquals("""{"done":true,"items":[{"id":"a","version":"va"},{"id":"b"}]}""", old.body.readUtf8())
+            server.enqueue(MockResponse().setResponseCode(405).setBody("{\"error\":\"method not allowed\"}"))
+            try { transport.bulk(targets, persona.core.contracts.api.InboxBulkAction.Dismiss); fail("An old hub has no dismiss") }
+            catch (e: HubFailure) { assertEquals(405, e.status) }
+            assertEquals(4, server.requestCount)
+        }
+    }
+
     @Test fun documentReadsUseTheReadonlyProxyAndMediaRemainsPairingBound() = runBlocking {
         MockWebServer().use { server ->
             var current = true

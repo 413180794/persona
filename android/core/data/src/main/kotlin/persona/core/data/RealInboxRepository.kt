@@ -262,7 +262,11 @@ class RealInboxRepository(
         }
     }
 
-    override suspend fun setDone(items: List<InboxDoneTarget>, done: Boolean): InboxBulkResult {
+    override suspend fun setDone(items: List<InboxDoneTarget>, done: Boolean): InboxBulkResult =
+        bulk(items, if (done) InboxBulkAction.Done else InboxBulkAction.Reopen)
+
+    override suspend fun bulk(items: List<InboxDoneTarget>, action: InboxBulkAction): InboxBulkResult {
+        val done = action != InboxBulkAction.Reopen
         val result = refreshLock.withLock {
             val transport = requireTransport()
             val ids = items.map { it.id }.toSet()
@@ -272,7 +276,7 @@ class RealInboxRepository(
                 if (record.item.id in ids) record.copy(item = record.item.copy(doneAt = doneAt)) else record
             }) }
             try {
-                val data = transport.setDone(items, done)
+                val data = transport.bulk(items, action)
                 val result = InboxBulkResult.from(data)
                 if (owns(transport)) {
                     data.array("changed").forEach { replaceRecord(record(it.jsonObject, transport)) }

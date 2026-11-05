@@ -276,7 +276,7 @@ hub 在转给管理者之前就拦下（403，管理者那边也查）；连接�
 - hub 后台采集（`server/internal/hub/inbox.go`，采到的交给管理者合成条目）：飞书实时事件来了 3 秒后采一次，这一轮只读飞书会话；每 2 分钟一轮再读文档通知、
   公司圈和其它连接器（连接器自己的事件、改设置也触发这种轮）；邮件每 3 分钟。以前每个飞书事件都把这些全读一遍（#674）。下拉刷新
   （`POST /api/v1/inbox/refresh`）立刻采全部。有变化就存库（`inbox_items`）并推 `{"type":"inbox"}`，App 再拉列表；插件连接器新起的条目分拣完才存、才推（「AI 分拣」）。
-- **已处理**只记在 Persona（`done_at`，`done_by=user`），不回写飞书已读、不改邮件的已读。已处理的保留 3 天（列表底部可移回），
+- **已处理**只记在 Persona（`done_at`，`done_by=user`；忽略的是 `dismissed`，见「一键清理」），不回写飞书已读、不改邮件的已读。已处理的保留 3 天（列表底部可移回），
   8 天后从库里删掉（期间用来挡住「飞书里一直未读」的旧消息重新冒出来）。
 - 在别处看过（飞书里读了、别的邮件客户端读了）：标 `read`；不是「需要你」的直接算处理完（`done_by=read`），「需要你」的留着，但未读数清零、不再标 @我 / @所有人（已经不是未读的 @ 了）。按规则分级的条目读过后按现在的规则重新分级，不再是「需要你」的也算处理完；
   已经标了 `read` 还开着、但仍有未读数或规则分级过时的条目（规则改之前读的），下一轮整理一次（#798）。
@@ -300,6 +300,26 @@ hub 在转给管理者之前就拦下（403，管理者那边也查）；连接�
 - iOS 的 toast 在新外壳里是一个不接触摸的窗口（`ToastWindow`）：带按钮的 toast 只在按钮附近接触摸，别处照样点到下面。
 - 测试：`inbox_bulk_test.go`（范围、版本变了不标、幂等、撤销、读消息期间被标处理的另开一件、并发）；`InboxBulkTests`；UI 测试 `InboxMarkAllTests`
   （假 hub 在 `/mock/inbox_bulk` 记下每次请求）；网页 `inbox.test.ts`。
+
+## 一键清理：全部已处理 / 全部忽略（2026-11-05，#2609）
+
+上面「全部标为已处理」的扩展：多了「全部忽略」，hub 能按筛选处理，客户端多的时候先确认。
+
+- **忽略**是「这件不用我管」：和已处理一样只记在 Persona（`done_at`，`done_by=dismissed`），不回写来源、不是静音（同一会话以后的新消息照常进来，要不再进来用「静音」）。
+  副作用和单件已处理完全一样：整批写一次库、推一次 `inbox`（各端的列表、Tab 角标、侧边栏的数跟着变）；排着队的 AI 分身不再开始（只给未处理的开），
+  已经起好的草稿留在这件上，撤销以后还在。单件也能忽略：`POST /api/v1/inbox/{id}/done {done:true, dismiss:true}`。
+- **接口**：`POST /api/v1/inbox/bulk {action: done|dismiss|reopen, items?|ids?, filter?, as_of?}`（`docs/protocol.md`）。
+  客户端照旧带列表里每件的 `id` 和 `version`（这样搜索、Agent 之类只有客户端知道的筛选也准）；不给 ids 时给 `filter`（来源 / 账号 / 分段 / 类型）和 `as_of`。
+- **截止**：`GET /api/v1/inbox` 回 `as_of`（读出列表那一刻）。每件记下它装着现在这些内容是什么时候到 hub 的（`arrived_at`，第一次列出或存下的时刻；
+  `Last` 变了就重记，旧数据用 `updated_at` 补）。按筛选处理时，`arrived_at` 晚于 `as_of` 的（之后新进来的、之后又并进新消息的）都不动，回在 `skipped`（`reason=changed`）。
+  不用消息时间比：飞书 / 邮件的消息时间可能早于用户看列表的时刻，却在那之后才采到。
+- **撤销**：回答里的 `ids` 是这次改了的，`undo` 是 `{action:"reopen", ids}`，原样发回去就只移回这次改的。toast 上 5 秒的「撤销」就发它。
+- **确认**：10 件及以上先确认（「将处理 N 件（范围）。之后进来的新消息不受影响，完成后可以撤销。」），少的直接做、靠撤销。范围和件数是点的那一刻列表上的。
+- **入口**：网页筛选那一行右边的「全部标为已处理」按钮照旧，旁边的「⋯」里是「全部标为已处理」「全部忽略」（手机宽度只有「⋯」）；
+  Android 顶栏「更多」的动作表里两项。iOS / Mac / 手表另做（同一个接口）。手表（只能作答的设备）调不了 `/bulk`，扩展要 `inbox.write`。
+- **旧 hub**：没有 `/bulk`（404 / 405）时，已处理和移回退回 `/done`，忽略报错。
+- 测试：`inbox_bulk_test.go`（`TestInboxBulkFilterAsOf`：截止之后的新条目和新消息不动、忽略、撤销只移回这次的；ids、单件忽略、坏请求），
+  `hub/inbox_test.go` `TestInboxBulkPermissions`（手表、只有 `inbox.read` 的扩展不行）；网页 `inbox.test.ts`；Android `InboxBulkTest`、`InboxRepositoryTest`、`InboxAssistantTransportTest`。
 
 ## App
 

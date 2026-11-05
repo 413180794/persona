@@ -7,6 +7,9 @@ import kotlinx.serialization.json.JsonObject
 /** An item of a bulk 已处理: its id and the `version` it was listed at (null: as it is now). */
 data class InboxDoneTarget(val id: String, val version: String? = null)
 
+/** What a bulk request does (`POST /api/v1/inbox/bulk`): 全部标为已处理, 全部忽略 (done_by=dismissed), 移回 (撤销). */
+enum class InboxBulkAction(val wire: String) { Done("done"), Dismiss("dismiss"), Reopen("reopen") }
+
 /** One immutable pairing owns a transport and all its requests, including media. */
 interface InboxAssistantTransport {
     val scope: String
@@ -19,6 +22,13 @@ interface InboxAssistantTransport {
      */
     suspend fun setDone(items: List<InboxDoneTarget>, done: Boolean): JsonObject =
         throw UnsupportedOperationException("Bulk done unavailable")
+    /**
+     * [action] on many items in one request (`POST /api/v1/inbox/bulk`), each with the version it was listed at.
+     * Answers what [setDone] does, plus `ids` (the changed ones) and `undo`. Without it, 已处理 / 移回 go the old way.
+     */
+    suspend fun bulk(items: List<InboxDoneTarget>, action: InboxBulkAction): JsonObject =
+        if (action == InboxBulkAction.Dismiss) throw UnsupportedOperationException("Bulk dismiss unavailable")
+        else setDone(items, action == InboxBulkAction.Done)
     suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String): JsonObject
     suspend fun replyMail(itemId: String, text: String, clientId: String, target: MailReplyTarget): JsonObject =
         throw UnsupportedOperationException("Checked mail replies unavailable")

@@ -1740,6 +1740,22 @@ if MOCK_TASKS:
         _base = min(x["seq"] for x in ITEMS[ASK1])
         for _i, _x in enumerate(ITEMS[ASK1]):
             _x["seq"] = _base + _i
+    # MOCK_RELAYED=1: a message another Persona conversation sent with conversation_send (prompts/assistant/relay.md),
+    # then one you typed: only yours is the pale blue bubble (#2643).
+    if os.environ.get("MOCK_RELAYED") == "1":
+        _relay = ('<jarvis-context kind="context" title="来自对话「写周报」" url="">\n这条消息不是用户本人发的，是 Persona 的另一段对话'
+                  '（b2e4d6f8-0000-4000-8000-000000000002）用 conversation_send 发来的，第 1 跳（最多 3 跳）。\n</jarvis-context>\n'
+                  "周报草稿写好了，放在 docs/weekly.md，请转告用户过目。")
+        ITEMS[ASK1] += [
+            it("user", "text", 0.9, text=_relay),
+            it("assistant", "text", 0.8, text="另一段对话说周报草稿写好了，在 docs/weekly.md。"),
+            it("user", "text", 0.5, text="好，我晚点看", client_msg_id="mock-relayed-1"),
+            it("assistant", "text", 0.4, text="好的。"),
+        ]
+        ITEMS[ASK1].sort(key=lambda x: x["ts"])
+        _base = min(x["seq"] for x in ITEMS[ASK1])
+        for _i, _x in enumerate(ITEMS[ASK1]):
+            _x["seq"] = _base + _i
     # MOCK_TASKS_CUT=1: the model service cut the release-notes task off (#1516): its agent's last words are the API
     # error (the hub's turn_error) and its receipt is interrupted; 继续 (POST …/retry) makes it work and then finish.
     if os.environ.get("MOCK_TASKS_CUT") == "1":
@@ -3103,7 +3119,7 @@ INBOX_TRIAGE = inbox_triage_from(os.environ.get("MOCK_INBOX_TRIAGE", ""))
 
 def inbox_list(query):
     """GET /api/v1/inbox (and POST …/refresh): the items, with `triage` when MOCK_INBOX_TRIAGE is set."""
-    body = {"items": inbox_for(query)}
+    body = {"items": inbox_for(query), "as_of": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
     if INBOX_TRIAGE is not None:
         body["triage"] = INBOX_TRIAGE
     return body
@@ -3114,12 +3130,17 @@ INBOX_BULK = []
 
 
 def inbox_bulk(body):
-    """POST /api/v1/inbox/done: files (or brings back) the items named, as the hub does: an item already in that state
-    is unchanged, one whose version moved since the list is skipped."""
+    """POST /api/v1/inbox/done and /bulk: files (or brings back) the items named, as the hub does: an item already in
+    that state is unchanged, one whose version moved since the list is skipped. /bulk's `action` dismiss files as
+    done_by=dismissed; its `filter` takes every open item (the mock has no arrivals: as_of is not compared)."""
     INBOX_BULK.append(body)
-    done, out = bool(body.get("done")), {"changed": [], "unchanged": [], "skipped": []}
+    action = body.get("action") or ("done" if body.get("done") else "reopen")
+    done, out = action != "reopen", {"changed": [], "unchanged": [], "skipped": []}
+    targets = list(body.get("items") or []) + [{"id": i} for i in body.get("ids") or []]
+    if body.get("filter") is not None:
+        targets = [{"id": x["id"]} for x in INBOX if not x.get("done_at")]
     seen = set()
-    for t in body.get("items") or []:
+    for t in targets:
         if t.get("id") in seen: continue
         seen.add(t.get("id"))
         x = next((x for x in INBOX if x["id"] == t.get("id")), None)
@@ -3131,7 +3152,7 @@ def inbox_bulk(body):
             out["skipped"].append({"id": x["id"], "reason": "changed"})
         else:
             if done:
-                x["done_at"], x["done_by"] = ago(minutes=0), "user"
+                x["done_at"], x["done_by"] = ago(minutes=0), "dismissed" if action == "dismiss" else "user"
             else:
                 x.pop("done_at", None), x.pop("done_by", None)
             out["changed"].append(dict({k: v for k, v in x.items() if k != "context"}, version=inbox_version(x)))
@@ -3886,6 +3907,13 @@ IMESSAGE_MESSAGES = {
 if os.environ.get("MOCK_INBOX") == "empty":
     INBOX.clear()
 
+# MOCK_INBOX_EXTRA=<n>: n more 知悉即可 mails (示例通知), for 一键清理's confirmation over many items (docs/inbox.md).
+for _i in range(int(os.environ.get("MOCK_INBOX_EXTRA", "0"))):
+    INBOX.append({"id": "mail:acc1:x%d" % _i, "source": "mail", "kind": "mail", "account": "acc1", "account_name": "个人邮箱",
+                  "title": "示例通知 %d" % (_i + 1), "sender": "示例商城", "preview": "你的订单已发货", "count": 1,
+                  "started_at": ago(hours=3, minutes=_i), "updated_at": ago(hours=3, minutes=_i), "tier": "fyi", "read": False,
+                  "mail": {"account_id": "acc1", "mailbox": "INBOX", "uids": [900 + _i], "from": {"name": "示例商城", "email": "shop@example.com"}}})
+
 # MOCK_INBOX_LINE=1: a 线索 (#2128): 设计评审 grew out of the chat with 韩梅梅 (continues), which hangs under a todo; the
 # 周末徒步群 item grew out of 设计评审. GET /api/v1/inbox/tree/{kind}/{id} answers from the items' parents.
 if os.environ.get("MOCK_INBOX_LINE") == "1":
@@ -4051,12 +4079,66 @@ def lark_pin_rows():
     return rows
 
 LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
-                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB""MOCK_LARK_OLD_DISPLAY"):
+                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB"))}
+# MOCK_LARK_OLD_DISPLAY=1: a Feishu extension older than 0.10.0, whose settings have no [removed] switch.
+if os.environ.get("MOCK_LARK_OLD_DISPLAY"):
     del LARK_DISPLAY["brave_climb_codec"]
 
 BRAVE_CLIMB_ALPHABET = "[removed]"
 def brave_climb(text):
-    """lark-connector''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+    """"""
+    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
+    while True:
+        n, d = divmod(n, 34)
+        out = BRAVE_CLIMB_ALPHABET[d] + out
+        if n == 0:
+            return "**字" + out + "**"
+
+# MOCK_LARK_BRAVE_CLIMB=1 (#882): the switch is on and 设计评审 (f2) has [removed] words: a whole message, one split over
+# two runs of rich text, words inside a sentence, a quote of one, and the older four-character encoding; its summary in
+# the list is words too.
+if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
+    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
+    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
+    words = brave_climb("标签栏改粗一号")
+    split = _lm("211", "Lucy Wang", words, mins=39)
+    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
+    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
+    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
+    legacy = _lm("213", "Lucy Wang", "**" + "".join(""[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
+    reply = _lm("214", "我", "好的", mine=True, mins=36)
+    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
+    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
+    LARK_CHATS[0]["preview"] = whole["text"]
+if os.environ.get("MOCK_LARK_TRAINER"):
+    retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
+    retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
+    missing = _lm("201", "李雷", "不能展示的占位原文", mins=54)
+    missing.update(recalled=True, retained=False)
+    edited = _lm("202", "李雷", "评审地点改为线上", mins=53)
+    edited.update(edited=True, edit_history=[
+        {"edited_at": "2026-01-01T10:00:00.123Z", "text": "原定会议室 A", "parts": [{"kind": "text", "text": "原定会议室 A"}]},
+        {"edited_at": "2026-01-01T10:05:00Z", "text": "不得缓存的旧加密正文", "olk": {
+            "version": 1, "state": "locked", "publicParts": [{"kind": "text", "text": "稍后确认"}]}}
+    ])
+    quoted = _lm("203", "我", "收到，按新的安排。", mine=True, mins=52)
+    quoted["reply_to"] = {"id": retained["id"], "sender_name": "李雷", "text": retained["text"], "recalled": True, "retained": True}
+    recalled_system = _lm("204", "系统成员", "不得展示的系统撤回原文", mins=51)
+    recalled_system.update(type="SYSTEM", recalled=True, retained=True)
+    anonymous_system = _lm("205", "", "不得展示的匿名系统原文", mins=50)
+    anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
+    LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
+
+# The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
+# one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
+# thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
+# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose lark-connector
+# lost its Feishu session.
+LARK_LOGGED_OUT = "lark: lark-connector 未登录飞书 (AUTH_SESSION_EXPIRED)"
+_LARK_EMOJI_SET = (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"), ("HEART", "爱心"), ("SMILE", "微笑"), ("LAUGH", "大笑"),
+                   ("SURPRISED", "惊讶"), ("CRY", "流泪"), ("DONE", "完成"))
+# Keyed in lower case like the hub's catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
 # flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
 LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
 LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}
@@ -10339,6 +10421,16 @@ class H(BaseHTTPRequestHandler):
                 try: send({"type": "inbox"})
                 except Exception: pass
             return self.send_json(res)
+        if p == "/api/v1/inbox/bulk" and self.command == "POST":  # 一键清理：全部已处理 / 全部忽略 / 撤销
+            body = json.loads(self.last_body or b"{}")
+            if body.get("action") not in ("done", "dismiss", "reopen"): return self.send_json({"error": "action is done, dismiss or reopen"}, 400)
+            res = inbox_bulk(body)
+            res["action"], res["ids"] = body["action"], [x["id"] for x in res["changed"]]
+            if body["action"] != "reopen" and res["ids"]: res["undo"] = {"action": "reopen", "ids": res["ids"]}
+            for send, _ in list(LIVE):
+                try: send({"type": "inbox"})
+                except Exception: pass
+            return self.send_json(res)
         if p == "/api/v1/inbox/mutes" and self.command == "POST":
             body = json.loads(self.last_body or b"{}")
             mute, settled = mute_item(body.get("item_id"), body.get("tag"))
@@ -11311,6 +11403,7 @@ def features():
 
 
 MOCK_HELP.append("MOCK_REWIND=1  检查 PR 的对话里有四条你的消息（两条同样的「继续」），试「回退到这里」（#2436）；POST …/rewind 记在 REWINDS，MOCK_REWIND_ERROR=<code>:<提示> 让它像节点一样拒绝，MOCK_REWIND_DELAY=<秒> 调等待")
+MOCK_HELP.append("MOCK_INBOX_EXTRA=<n>  收件箱多 n 封知悉即可的示例通知，试一键清理的「将处理 N 件」确认")
 MOCK_HELP.append("MOCK_CHANNELS=1  设置 › 插件 › 渠道：App、飞书机器人和微信已连接、飞书 /agent 只读、一个待绑定（令牌 example-token）、一个出错、一个在市场里；主对话第一条来自微信")
 
 

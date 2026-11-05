@@ -54,6 +54,8 @@ data class PersonaPalette(
     val positiveRole: StatusColors? = null,
     val cautionRole: StatusColors? = null,
     val customRoles: Boolean = false,
+    /** The user's own messages: iOS 液态玻璃's pale blue (ColorSpec.blue), the same in every style (#2643). */
+    val userBubble: Color = if (dark) Tokens.Semantic.Glass.Dark.userBubble else Tokens.Semantic.Glass.Light.userBubble,
 ) {
     fun status(status: Status): StatusColors = when (status) {
         Status.NeedsYou -> needsYou

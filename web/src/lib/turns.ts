@@ -688,6 +688,20 @@ export function wakeDrawer(t: Turn): { groups: { id: string; notices: Item[]; an
   return { groups: groups.reverse(), process };
 }
 
+/** The title of the context a message another Persona conversation sent carries (prompts/assistant/relay.md). */
+const RELAY_TITLE = "来自对话「"; // i18n-ignore: matches the hub's relay text
+
+/** Sent by another Persona conversation (conversation_new / conversation_send), not typed by you. */
+export function isRelayed(msg: UserMessage): boolean {
+  return msg.contexts.some((c) => c.title?.startsWith(RELAY_TITLE));
+}
+
+/** Typed (or dictated, or a quick command expanded) by you: the pale blue bubble. Persona's own messages, another
+ *  session's and another conversation's are not. */
+export function isOwnMessage(msg: UserMessage): boolean {
+  return !msg.injected && !msg.from && !isRelayed(msg);
+}
+
 /** A /loop wakeup (the transcript records each as the "/loop …" prompt again): a quiet line, not a bubble. */
 export function isLoopTick(msg: UserMessage): boolean {
   return msg.text.startsWith("/loop") && !msg.parts;

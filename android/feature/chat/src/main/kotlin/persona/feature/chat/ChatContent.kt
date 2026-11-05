@@ -368,7 +368,7 @@ private fun userPictures(images: List<Item>, session: SessionKey, loader: ImageL
 /** A message not in the transcript yet (the outbox): no long-press menu, its own status line has the actions. */
 @Composable
 internal fun UserBubble(text: String) {
-    MergedUserBubble(listOf(Item("pending", text = text)), menu = false)
+    MergedUserBubble(listOf(Item("pending", role = "user", kind = "text", text = text)), menu = false)
 }
 
 @Composable

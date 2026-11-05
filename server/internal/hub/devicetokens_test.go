@@ -293,6 +293,8 @@ func TestAnswerRoleOnlyWhatTheWatchDoes(t *testing.T) {
 		{"POST", "/api/v1/sessions/m/s/attach", false},
 		{"POST", "/api/v1/inbox/refresh", false},
 		{"POST", "/api/v1/inbox/x/doc/status", false},
+		{"POST", "/api/v1/inbox/done", false},
+		{"POST", "/api/v1/inbox/bulk", false},
 		{"POST", "/api/v1/auth/tokens", false},
 		{"POST", "/api/v1/machines", false},
 		{"PUT", "/api/v1/interactions/x/resolve", false},

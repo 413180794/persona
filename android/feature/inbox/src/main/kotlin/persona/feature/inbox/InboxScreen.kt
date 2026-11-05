@@ -1,5 +1,6 @@
 package persona.feature.inbox
 
+import persona.core.contracts.api.InboxBulkAction
 import persona.core.designsystem.text
 import androidx.compose.ui.platform.LocalResources
 import persona.core.designsystem.*
@@ -123,18 +124,19 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     }
     // 全部标为已处理 / 全部看过 / 全部清除, and their 撤销: one request for them all (the hub skips the ones that took new
     // messages since this list), shown at once, then a notice with 撤销 when something was filed.
-    fun markAll(targets: List<persona.core.contracts.api.InboxDoneTarget>, done: Boolean, undoable: Boolean = true) {
+    fun markAll(targets: List<persona.core.contracts.api.InboxDoneTarget>, action: InboxBulkAction, undoable: Boolean = true) {
+        val done = action != InboxBulkAction.Reopen
         val asked = targets.filter { it.id !in pending }
         if (asked.isEmpty()) return
         asked.forEach { pending[it.id] = done }
         scope.launch {
             try {
-                val result = repository.setDone(asked, done)
+                val result = repository.bulk(asked, action)
                 error = null
-                val notice = if (undoable) bulkNotice(res, result) else null
+                val notice = if (undoable) bulkNotice(res, result, action == InboxBulkAction.Dismiss) else null
                 if (notice != null) {
                     val back = result.changed.map { persona.core.contracts.api.InboxDoneTarget(it) }
-                    val undo = if (back.isEmpty()) null else FeedbackAction(res.getString(R.string.inbox_undo)) { markAll(back, false, undoable = false) }
+                    val undo = if (back.isEmpty()) null else FeedbackAction(res.getString(R.string.inbox_undo)) { markAll(back, InboxBulkAction.Reopen, undoable = false) }
                     if (undo != null) feedback?.notice(notice, undo) else feedback?.notice(notice)
                 }
             }
@@ -148,10 +150,28 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     val scopeText = bulkScope(res, section, sources.firstOrNull { it.first == source && source.isNotEmpty() }?.second,
         if (kind == "agent") "Agent" else kindLabel(res, kind), query)
     var showMore by remember { mutableStateOf(false) }
+    // 全部已处理 / 全部忽略 over BULK_CONFIRM_AT items or more asks first, for the items shown when it was asked.
+    var confirmBulk by remember { mutableStateOf<Pair<InboxBulkAction, List<persona.core.contracts.api.InboxDoneTarget>>?>(null) }
+    fun bulkAll(action: InboxBulkAction) {
+        if (bulk.size >= BULK_CONFIRM_AT) confirmBulk = action to bulk else markAll(bulk, action)
+    }
     if (showMore) {
         JActionSheet(title = stringResource(R.string.inbox_title), onDismiss = { showMore = false },
-            actions = listOf(JAction(bulkLabel(res, bulk.size, scopeText), PhIcons.Checks, enabled = bulk.isNotEmpty()) { markAll(bulk, true) }),
+            actions = listOf(
+                JAction(bulkLabel(res, bulk.size, scopeText), PhIcons.Checks, enabled = bulk.isNotEmpty()) { bulkAll(InboxBulkAction.Done) },
+                JAction(bulkLabel(res, bulk.size, scopeText, dismiss = true), PhIcons.Prohibit, enabled = bulk.isNotEmpty()) { bulkAll(InboxBulkAction.Dismiss) },
+            ),
             note = if (scopeText == null) stringResource(R.string.inbox_bulk_note_all) else stringResource(R.string.inbox_bulk_note_scope, scopeText))
+    }
+    confirmBulk?.let { (action, targets) ->
+        val dismiss = action == InboxBulkAction.Dismiss
+        JDialog(onDismiss = { confirmBulk = null },
+            title = stringResource(if (dismiss) R.string.inbox_bulk_confirm_dismiss_title else R.string.inbox_bulk_confirm_done_title),
+            text = bulkConfirmText(res, targets.size, scopeText),
+            confirm = res.getQuantityString(if (dismiss) R.plurals.inbox_bulk_confirm_dismiss else R.plurals.inbox_bulk_confirm_done, targets.size, targets.size) to {
+                confirmBulk = null
+                markAll(targets, action)
+            })
     }
     if (showFilters) {
         JActionSheet(title = stringResource(R.string.inbox_filter_title), onDismiss = { showFilters = false }, actions = listOf(
@@ -242,7 +262,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                         }),
                         action = if (group.id in setOf("fyi", "noise")) ({
                             JTextButton(if (group.id == "fyi") stringResource(R.string.inbox_mark_all_seen) else stringResource(R.string.inbox_clear_all), {
-                                markAll(bulkTargets(listOf(group), records), true)
+                                markAll(bulkTargets(listOf(group), records), InboxBulkAction.Done)
                             })
                         }) else null,
                     )

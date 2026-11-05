@@ -97,6 +97,37 @@
         <item quantity="one">Marked %1$d item done</item>
         <item quantity="other">Marked %1$d items done</item>
     </plurals>
+    <string name="inbox_bulk_scope_all">the whole inbox</string>
+    <string name="inbox_bulk_confirm_done_title">Mark all as done?</string>
+    <string name="inbox_bulk_confirm_dismiss_title">Dismiss all?</string>
+    <plurals name="inbox_bulk_dismiss_all">
+        <item quantity="one">Dismiss all · %1$d item</item>
+        <item quantity="other">Dismiss all · %1$d items</item>
+    </plurals>
+    <plurals name="inbox_bulk_dismiss_filtered">
+        <item quantity="one">Dismiss filtered · %1$d item</item>
+        <item quantity="other">Dismiss filtered · %1$d items</item>
+    </plurals>
+    <plurals name="inbox_bulk_confirm_body">
+        <item quantity="one">This will handle %1$d item (%2$s). Anything new that comes in afterwards stays, and you can undo.</item>
+        <item quantity="other">This will handle %1$d items (%2$s). Anything new that comes in afterwards stays, and you can undo.</item>
+    </plurals>
+    <plurals name="inbox_bulk_confirm_done">
+        <item quantity="one">Mark %1$d as done</item>
+        <item quantity="other">Mark %1$d as done</item>
+    </plurals>
+    <plurals name="inbox_bulk_confirm_dismiss">
+        <item quantity="one">Dismiss %1$d</item>
+        <item quantity="other">Dismiss %1$d</item>
+    </plurals>
+    <plurals name="inbox_bulk_dismissed">
+        <item quantity="one">Dismissed %1$d item</item>
+        <item quantity="other">Dismissed %1$d items</item>
+    </plurals>
+    <plurals name="inbox_bulk_dismissed_newer">
+        <item quantity="one">Dismissed %1$d item; %2$d with new messages left as is</item>
+        <item quantity="other">Dismissed %1$d items; %2$d with new messages left as is</item>
+    </plurals>
     <string name="inbox_doc_sheet">Sheet</string>
     <string name="inbox_doc_base">Base</string>
     <string name="inbox_doc_doc">Doc</string>

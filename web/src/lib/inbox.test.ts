@@ -10,7 +10,7 @@ vi.mock("./store", () => ({
 vi.mock("../ui/atoms", () => ({ toast: vi.fn() }));
 
 import {
-  badgeCount, bulkMessage, bulkScope, canDraft, cardText, connectorReference, connectorSources, contextXML, openTitle, openURL, sourceLine, conversationRoute, docChangeLine, emojiLabel, fromLine, getInbox, handOffMessage, interactionAsk,
+  badgeCount, bulkMessage, bulkScope, bulkScopeName, canDraft, cardText, connectorReference, connectorSources, contextXML, openTitle, openURL, sourceLine, conversationRoute, docChangeLine, emojiLabel, fromLine, getInbox, handOffMessage, interactionAsk,
   interactionMuted, interactionTitle, itemPath, kindLabel, labelIsUrgent, mailAccounts, mergeMessages, momentText, nextLarkPosition, partRuns, reloadInbox,
   replyLarkMessage, resetInboxForTests, sections, sendLarkMessage, sendReply, setAllDone, setDocStatus, setDone, shortTime, triage, triageBanner, TRIAGE_REASONS, TRIAGE_SETTINGS,
   unsentReplies, waitingAgents, withToken, type InboxFilter, type InboxItem, type InboxTriage, type LarkMessage,
@@ -299,7 +299,12 @@ describe("全部标为已处理的文案", () => {
     expect(bulkScope([], " 周报 ", 2)).toBe("搜索「周报」 · 2 件");
     expect(bulkScope(["飞书"], "", 0)).toBe("没有未处理的");
   });
+  it("范围的名字不带件数", () => {
+    expect(bulkScopeName(["飞书", ""], "周报")).toBe("飞书 · 搜索「周报」");
+    expect(bulkScopeName([], "")).toBe("全部");
+  });
   it("结果", () => {
+    expect(bulkMessage("dismiss", { changed: [dm], unchanged: [], skipped: [{ id: "b", reason: "changed" }] })).toBe("已忽略 1 件，1 件有新消息，留在收件箱");
     expect(bulkMessage(true, { changed: [], unchanged: ["a"], skipped: [] })).toBe("没有要标的");
     expect(bulkMessage(false, { changed: [], unchanged: [], skipped: [{ id: "a", reason: "missing" }] })).toBe("没有要移回的");
   });
@@ -370,8 +375,8 @@ describe("列表状态", () => {
       .mockResolvedValueOnce(ok({ items: versioned }));
     await setAllDone([a, b, a], true);
     const [url, init] = fetcher.mock.calls[1];
-    expect(url).toBe("/api/v1/inbox/done");
-    expect(JSON.parse(init.body)).toEqual({ done: true, items: [{ id: a.id, version: "v1" }, { id: b.id, version: "v2" }] });
+    expect(url).toBe("/api/v1/inbox/bulk");
+    expect(JSON.parse(init.body)).toEqual({ action: "done", items: [{ id: a.id, version: "v1" }, { id: b.id, version: "v2" }] });
     expect(fetcher).toHaveBeenCalledTimes(3); // the list again, for b's new message
     const [message, tone, action] = vi.mocked(toast).mock.lastCall!;
     expect([message, tone]).toEqual(["已将 1 件标为已处理，1 件有新消息，留在收件箱", "ok"]);
@@ -382,7 +387,7 @@ describe("列表状态", () => {
     fetcher.mockReset().mockResolvedValueOnce(ok({ changed: [a], unchanged: [], skipped: [] }));
     action!.run();
     await vi.waitFor(() => expect(toast).toHaveBeenCalled());
-    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ done: false, items: [{ id: a.id, version: "v1" }] });
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ action: "reopen", items: [{ id: a.id, version: "v1" }] });
     expect(vi.mocked(toast).mock.lastCall).toEqual(["已移回 1 件", "ok", undefined]);
 
     // A failure puts every item back.
@@ -390,6 +395,41 @@ describe("列表状态", () => {
     await setAllDone(getInbox().items, true);
     expect(getInbox().items.every((x) => !x.done_at)).toBe(true);
     expect(toast).toHaveBeenLastCalledWith("没标成已处理：boom", "error");
+  });
+
+  it("全部忽略：done_by=dismissed，撤销移回；失败恢复", async () => {
+    const [a, b] = getInbox().items;
+    fetcher.mockResolvedValueOnce(ok({ action: "dismiss", changed: [{ ...a, done_at: at(0), done_by: "dismissed" }, { ...b, done_at: at(0), done_by: "dismissed" }], unchanged: [], skipped: [], ids: [a.id, b.id] }));
+    const p = setAllDone([a, b], "dismiss");
+    expect(getInbox().items[0].done_by).toBe("dismissed");
+    await p;
+    expect(JSON.parse(fetcher.mock.calls[1][1].body).action).toBe("dismiss");
+    const [message, , action] = vi.mocked(toast).mock.lastCall!;
+    expect(message).toBe("已忽略 2 件");
+    fetcher.mockResolvedValueOnce(ok({ action: "reopen", changed: [a, b], unchanged: [], skipped: [], ids: [a.id, b.id] }));
+    action!.run();
+    await vi.waitFor(() => expect(getInbox().items[0].done_by).toBeFalsy());
+    expect(JSON.parse(fetcher.mock.calls[2][1].body).action).toBe("reopen");
+
+    fetcher.mockResolvedValueOnce(fail(502, "boom"));
+    await setAllDone([a], "dismiss");
+    expect(getInbox().items[0].done_at).toBeFalsy();
+    expect(toast).toHaveBeenLastCalledWith("没忽略成：boom", "error");
+  });
+
+  it("老 hub 没有 /inbox/bulk：已处理退回 /inbox/done，忽略照实报错", async () => {
+    const [a] = getInbox().items;
+    fetcher.mockResolvedValueOnce(fail(405, "method not allowed")).mockResolvedValueOnce(ok({ changed: [{ ...a, done_at: at(0), done_by: "user" }], unchanged: [], skipped: [] }));
+    await setAllDone([a], "done");
+    expect(fetcher.mock.calls[2][0]).toBe("/api/v1/inbox/done");
+    expect(JSON.parse(fetcher.mock.calls[2][1].body)).toEqual({ done: true, items: [{ id: a.id }] });
+    expect(getInbox().items[0].done_by).toBe("user");
+
+    const [, b] = getInbox().items;
+    fetcher.mockResolvedValueOnce(fail(404, "not found"));
+    await setAllDone([b], "dismiss");
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(getInbox().items[1].done_at).toBeFalsy();
   });
 
   it("发送：成功标为已处理；失败放回、留下草稿", async () => {

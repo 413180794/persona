@@ -105,9 +105,11 @@ fun ChatTopBar(
     }
 }
 
-/** The user's message: a tinted glass bubble, a wash bubble, or a bordered box. Right-aligned, at most 86% wide. */
+/** The user's message: a glass bubble, a wash bubble, or a bordered box. Right-aligned, at most 86% wide. [own]: typed by
+ *  the user, filled with [PersonaPalette.userBubble]; otherwise (another session's, Feishu's) the style's own tint. */
 @Composable
-fun UserBubbleFrame(modifier: Modifier = Modifier, footer: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+fun UserBubbleFrame(modifier: Modifier = Modifier, footer: (@Composable () -> Unit)? = null, own: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit) {
     val palette = PersonaTheme.palette
     val style = PersonaTheme.style
     val shape = when (style) {
@@ -119,10 +121,10 @@ fun UserBubbleFrame(modifier: Modifier = Modifier, footer: (@Composable () -> Un
         Column(
             Modifier.fillMaxWidth(0.86f).wrapContentWidth(Alignment.End).clip(shape)
                 .then(when (style) {
-                    AppStyle.Glass -> Modifier.background(palette.working.dot.copy(alpha = if (palette.dark) 0.28f else 0.16f))
+                    AppStyle.Glass -> Modifier.background(if (own) palette.userBubble else palette.working.dot.copy(alpha = if (palette.dark) 0.28f else 0.16f))
                         .border(1.dp, Brush.verticalGradient(listOf(palette.strokeTop.copy(alpha = 0.6f), Color.Transparent)), shape)
-                    AppStyle.Brief -> Modifier.background(palette.surface)
-                    AppStyle.Board -> Modifier.background(palette.surface).border(1.dp, palette.line, shape)
+                    AppStyle.Brief -> Modifier.background(if (own) palette.userBubble else palette.surface)
+                    AppStyle.Board -> Modifier.background(if (own) palette.userBubble else palette.surface).border(1.dp, palette.line, shape)
                 })
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             content = content,

@@ -447,6 +447,22 @@ class InboxRepositoryTest {
             val after = repository.snapshot.value.records.associate { it.item.id to (it.item.isDone to it.item.version) }
             assertEquals(mapOf("a" to (true to "va"), "b" to (false to "vb2"), "c" to (false to "vc")), after)
 
+            assertEquals(listOf(InboxBulkAction.Done), transport.actions)
+            // 全部忽略 is the same request with its own action; c is filed.
+            transport.onBulk = { _, _ -> buildJsonObject {
+                put("changed", JsonArray(listOf(buildJsonObject {
+                    put("id", "c"); put("source", "mail"); put("kind", "mail"); put("title", "c"); put("version", "vc")
+                    put("done_at", "2026-11-04T08:00:00Z"); put("done_by", "dismissed")
+                })))
+            } }
+            assertEquals(listOf("c"), repository.bulk(listOf(InboxDoneTarget("c", "vc")), InboxBulkAction.Dismiss).changed)
+            assertEquals(InboxBulkAction.Dismiss, transport.actions.last())
+            assertTrue(repository.snapshot.value.records.first { it.item.id == "c" }.item.isDone)
+            // 撤销 is reopen.
+            transport.onBulk = { _, _ -> buildJsonObject { put("changed", JsonArray(listOf(item("c", "vc")))) } }
+            repository.bulk(listOf(InboxDoneTarget("c")), InboxBulkAction.Reopen)
+            assertEquals(InboxBulkAction.Reopen, transport.actions.last())
+
             // A failure puts every item back.
             transport.onBulk = { _, _ -> throw IOException("offline") }
             assertThrows(IOException::class.java) { runBlocking { repository.setDone(listOf(InboxDoneTarget("c", "vc")), true) } }
@@ -637,6 +653,11 @@ class InboxRepositoryTest {
         val bulk = mutableListOf<Pair<List<InboxDoneTarget>, Boolean>>()
         var onBulk: suspend (List<InboxDoneTarget>, Boolean) -> JsonObject = { _, _ -> JsonObject(emptyMap()) }
         override suspend fun setDone(items: List<InboxDoneTarget>, done: Boolean): JsonObject { bulk += items to done; return onBulk(items, done) }
+        val actions = mutableListOf<InboxBulkAction>()
+        override suspend fun bulk(items: List<InboxDoneTarget>, action: InboxBulkAction): JsonObject {
+            actions += action
+            return setDone(items, action != InboxBulkAction.Reopen)
+        }
         override suspend fun messages(feedId: String, around: Long?, before: String?, after: String?) = onMessages(around, before, after)
         override suspend fun assistant() = JsonObject(emptyMap())
         override suspend fun createConversation(main: Boolean) = JsonObject(emptyMap())

@@ -201,7 +201,7 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
         </div>
       )}
       {open && (
-        <div className="mx-2 mt-1 mb-1 cursor-text rounded-[6px] border border-line bg-user-bubble px-[10px] py-2 font-mono text-[12px] leading-[17px] text-ink select-text" data-inline-detail>
+        <div className="mx-2 mt-1 mb-1 cursor-text rounded-[6px] border border-line bg-neutral-bubble px-[10px] py-2 font-mono text-[12px] leading-[17px] text-ink select-text" data-inline-detail>
           {input && <pre className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{input}</pre>}
           {result?.text && (
             <>

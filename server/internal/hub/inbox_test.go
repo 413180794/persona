@@ -22,6 +22,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/github"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/prompts"
@@ -974,4 +975,24 @@ func inboxSourcesListed(t *testing.T, h *Hub) []string {
 	}
 	slices.Sort(got)
 	return got
+}
+
+// Clearing the inbox in one go is a full device's or an extension's with inbox.write: a watch (answer-only) files one
+// item at a time, an extension that may only read the inbox may not.
+func TestInboxBulkPermissions(t *testing.T) {
+	h := newTestHub(t)
+	_ = h.routes()
+	if allowed(principal{ID: "dev_watch", Role: roleAnswer}, "POST", "/api/v1/inbox/bulk") {
+		t.Fatal("an answer-only device may clear the inbox")
+	}
+	req := httptest.NewRequest("POST", "/api/v1/inbox/bulk", strings.NewReader(`{}`))
+	ext := func(scopes ...string) principal {
+		return principal{ID: "extension:x", Role: roleExtension, Extension: "x", Scopes: scopes}
+	}
+	if ok, scope := h.extensionMay(ext(extension.ScopeInboxRead), req); ok || scope != extension.ScopeInboxWrite {
+		t.Fatalf("inbox.read clears the inbox: %v %q", ok, scope)
+	}
+	if ok, _ := h.extensionMay(ext(extension.ScopeInboxWrite), req); !ok {
+		t.Fatal("inbox.write may not clear the inbox")
+	}
 }

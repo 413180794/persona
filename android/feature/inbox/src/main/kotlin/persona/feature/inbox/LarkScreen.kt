@@ -460,7 +460,7 @@ internal fun LarkBubble(
             }
         }
     }
-    if (message.mine) UserBubbleFrame(modifier, footer = footer, content = body)
+    if (message.mine) UserBubbleFrame(modifier, footer = footer, own = false, content = body)
     else IncomingBubbleFrame(modifier, author = message.senderName.takeIf { showSender },
         time = larkTime(message.time).takeIf { showSender }, avatar = {
             Box(Modifier.clickable {

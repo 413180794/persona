@@ -87,14 +87,19 @@ class StyleContrastTest {
     }
 
     @Test fun wordsOnTheUsersBubble() {
-        // UserBubbleFrame: glass tints the bubble with the working light (28% in dark, 16% in light); the others use a card.
+        // UserBubbleFrame: the user's own are the pale blue (userBubble, #2643); another session's keep the style's tint
+        // (glass: the working light, 28% in dark, 16% in light; the others a card). Links in either are the accent.
         val found = mutableListOf<String>()
         each { style, dark, p ->
-            val bubble = if (style == AppStyle.Glass) p.working.dot.copy(alpha = if (dark) 0.28f else 0.16f) else p.surface
-            val r = ratio(p.ink, bubble, p.background)
-            if (r < 4.5) found += "${style.name} ${if (dark) "dark" else "light"}: ${"%.2f".format(r)}"
+            val other = if (style == AppStyle.Glass) p.working.dot.copy(alpha = if (dark) 0.28f else 0.16f) else p.surface
+            for ((name, bubble) in listOf("own" to p.userBubble, "other" to other)) {
+                val r = ratio(p.ink, bubble, p.background)
+                if (r < 4.5) found += "${style.name} ${if (dark) "dark" else "light"} $name: ${"%.2f".format(r)}"
+            }
+            val link = ratio(p.accent, p.userBubble, p.background)
+            if (link < 3.0) found += "${style.name} ${if (dark) "dark" else "light"} own link: ${"%.2f".format(link)}"
         }
-        assertTrue("words on the user's bubble under 4.5:1: $found", found.isEmpty())
+        assertTrue("words on the user's bubble under 4.5:1 (links 3:1): $found", found.isEmpty())
     }
 
     /**

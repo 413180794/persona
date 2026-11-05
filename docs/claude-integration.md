@@ -144,6 +144,12 @@ node 启动时把同一组 hooks 写两份（命令是 node 二进制自身的 `
 - hook 等待手机超过 30 分钟（`hook_timeout_minutes`）或连不上 node → 不输出，TUI 照常弹框；手机上也可以点「交给电脑上的终端处理」。
   等的过程中 node 没了（部署重启 hub / node）→ hook 重连下一个 node，手机上的卡片不丢（`docs/protocol.md`「交互挺过重启」）。
   hook 进程被杀（用户在电脑上 Esc）→ node 发现 socket 断开 → 通知 hub 撤销交互。
+- **别的 PermissionRequest hook 先答了**（#2648）：Claude Code 同时跑所有 PermissionRequest hook，第一个 `allow` 就放行，其余的**不会被结束**，
+  一直跑到各自的超时（2.1.308 实测）。Persona 的 hook 那时还在等手机，手机上就留着一张过期的卡。作答的 hook 可以告诉 node：往 node.sock
+  （`~/.persona/node.sock`，`personad hook` 连的那个）写一行 `{"kind": "hook.decided", "input": <Claude Code 给它的 PermissionRequest 输入，原样>}`，
+  回 `{"ok": true}`。node 按会话、子 Agent、工具和输入认出是哪一次调用：卡还没发就不发，已经发了就撤掉（`node/hookdecided.go`）。
+  这台电脑上一旦有 hook 这样说过（node 启动以来），工具授权的卡先等 1 秒再发，免得手机先收到推送、马上又撤；没有的电脑不等，和以前一样。
+  扩展 claude-bypass-allow（bypass 模式下自动允许 Bash 的安全确认）就是这样做的。
 
 ### 自检：`personad node doctor`
 

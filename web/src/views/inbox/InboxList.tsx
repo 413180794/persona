@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
-  bulkScope, connectorSources, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
-  useInbox, waitingAgents, type InboxItem, type Tier,
+  BULK_CONFIRM_AT, bulkScope, bulkScopeName, connectorSources, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
+  useInbox, waitingAgents, type BulkAction, type InboxItem, type Tier,
 } from "../../lib/inbox";
 import { useMailAccounts } from "../../lib/mail";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
@@ -13,7 +13,7 @@ import { href, onLinkClick } from "../../lib/router";
 import { useStore } from "../../lib/store";
 import type { Interaction } from "../../lib/types";
 import { t } from "../../i18n";
-import { Collapse, cx, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
+import { Button, Collapse, cx, Dialog, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { DraftDialog } from "./InboxDialogs";
 import { TriageBanner } from "./TriageBanner";
@@ -45,6 +45,8 @@ export function InboxList({ selected }: { selected?: string }) {
   const [editing, setEditing] = useState<InboxItem | null>(null);
   const accounts = useMailAccounts();
   const more = useMenu();
+  // 全部已处理 / 全部忽略 over many items asks first; the items are the ones shown when it was asked.
+  const [confirm, setConfirm] = useState<{ action: Exclude<BulkAction, "reopen">; items: InboxItem[]; scope: string } | null>(null);
 
   // The opened item stays in sight in the list (a link straight to it, a click in the detail).
   useEffect(() => {
@@ -64,6 +66,11 @@ export function InboxList({ selected }: { selected?: string }) {
     KIND_FILTERS.find((k) => k.key === kind)?.label ?? "",
   ];
   const scope = bulkScope(filterNames, query, openInView.length);
+  const runBulk = (action: Exclude<BulkAction, "reopen">) => {
+    if (!openInView.length) return;
+    if (openInView.length >= BULK_CONFIRM_AT) setConfirm({ action, items: openInView, scope: bulkScopeName(filterNames, query) });
+    else void setAllDone(openInView, action);
+  };
   const toggle = (k: string) => setOpen((o) => {
     const n = new Set(o);
     if (n.has(k)) n.delete(k);
@@ -107,7 +114,7 @@ export function InboxList({ selected }: { selected?: string }) {
             type="button"
             disabled={!openInView.length}
             title={t("inbox-inboxlist.mark_all_done_scope", { scope })}
-            onClick={() => void setAllDone(openInView, true)}
+            onClick={() => runBulk("done")}
             className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-control bg-surface px-2.5 text-[12px] whitespace-nowrap text-ink-2 shadow-btn transition-colors duration-150 hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-45 max-sm:hidden"
           >
             <Icon name="check" size={12} stroke={2.6} />
@@ -115,12 +122,16 @@ export function InboxList({ selected }: { selected?: string }) {
             <span className="text-ink-3">{scope}</span>
           </button>
         </div>
-        <IconButton icon="more" label={t("inbox-inboxlist.more")} onClick={more.open} active={Boolean(more.anchor)} className="sm:hidden" />
+        <IconButton icon="more" label={t("inbox-inboxlist.more")} onClick={more.open} active={Boolean(more.anchor)} />
         </div>
         {more.anchor && (
           <Menu anchor={more.anchor} onClose={more.close} align="right" width={240}
-            items={[{ key: "all-done", label: t("inbox-inboxlist.mark_all_done"), hint: scope, icon: "check", disabled: !openInView.length, onSelect: () => void setAllDone(openInView, true) }]} />
+            items={[
+              { key: "all-done", label: t("inbox-inboxlist.mark_all_done"), hint: scope, icon: "check", disabled: !openInView.length, onSelect: () => runBulk("done") },
+              { key: "all-dismiss", label: t("inbox-inboxlist.dismiss_all"), hint: scope, icon: "x", disabled: !openInView.length, onSelect: () => runBulk("dismiss") },
+            ]} />
         )}
+        <BulkConfirm confirm={confirm} onClose={() => setConfirm(null)} />
 
         <TriageBanner triage={triage} />
         {error && !items.length && <p className="mt-4 text-[12.5px] text-red">{error}</p>}
@@ -285,5 +296,36 @@ function AgentRow({ ix }: { ix: Interaction }) {
         )}
       </span>
     </a>
+  );
+}
+
+/** 「将处理 N 件」: asked before 全部已处理 / 全部忽略 over BULK_CONFIRM_AT items or more. */
+function BulkConfirm({ confirm, onClose }: { confirm: { action: "done" | "dismiss"; items: InboxItem[]; scope: string } | null; onClose: () => void }) {
+  const n = confirm?.items.length ?? 0;
+  const dismiss = confirm?.action === "dismiss";
+  return (
+    <Dialog
+      open={Boolean(confirm)}
+      onClose={onClose}
+      title={t(dismiss ? "inbox-inboxlist.confirm_dismiss_title" : "inbox-inboxlist.confirm_done_title")}
+      width={380}
+      footer={
+        <>
+          <Button tone="quiet" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button
+            tone="primary"
+            icon={dismiss ? "x" : "check"}
+            onClick={() => {
+              if (confirm) void setAllDone(confirm.items, confirm.action);
+              onClose();
+            }}
+          >
+            {t(dismiss ? "inbox-inboxlist.confirm_dismiss" : "inbox-inboxlist.confirm_done", { count: n })}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-[13px] leading-relaxed text-ink-2">{t("inbox-inboxlist.confirm_body", { count: n, scope: confirm?.scope ?? "" })}</p>
+    </Dialog>
   );
 }

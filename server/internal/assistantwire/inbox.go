@@ -27,6 +27,7 @@ var InboxRoutes = []string{
 	"GET /api/v1/inbox/tree/{kind}/{id...}",
 	"POST /api/v1/inbox/refresh",
 	"POST /api/v1/inbox/done",
+	"POST /api/v1/inbox/bulk",
 	"GET /api/v1/inbox/mutes",
 	"POST /api/v1/inbox/mutes",
 	"DELETE /api/v1/inbox/mutes/{id}",

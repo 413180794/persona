@@ -98,7 +98,7 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 | `DecisionOption` / `DecisionButtons` / `DecisionAdvice` | 选项（推荐的那个在三种风格里各有突出方式）、回答按钮、Persona 的建议 |
 | `MachineChip` | Agents 页顶部的电脑芯片（全部机器 + 每台电脑）：该风格的筛选 chip，设备图标的角上一个在线点，名字后面是计数 |
 | `AgentTreeHeader` / `AgentSpaceHeader` / `AgentRow` / `AgentIdleRow` | Agents 树（见 2.4 节）：第一层（电脑，也用于置顶、按状态、历史项目这些段）、空间（按仓库时也是仓库和工作树，带 `icon`）、会话行（玻璃和晨报是背景上的一行，看板是进程单；行上的标记 `RowFlag`、事实 `RowFact`）、「还有 N 个空闲」。栏头上的小图标按钮（仪表、空间的 `⋯`）是 `HeadingAction`。Agents 页、空间页、组件目录和界面风格的预览用的都是这一套，不另写 |
-| `UserBubbleFrame` / `UserBubble` / `WorkGroup` / `WorkStep` / `PlanCard` / `TimelineMark` | 对话：用户消息、折叠的工作过程（`peek`：运行中露出的最新几步）、每一步、计划卡（Step N/M）、分隔线 |
+| `UserBubbleFrame` / `UserBubble` / `WorkGroup` / `WorkStep` / `PlanCard` / `TimelineMark` | 对话：用户消息（自己发的三套风格都填 `palette.userBubble`，即 iOS 液态玻璃的浅蓝 `#DCEAFF` / `#1D3557`；别的会话、别的对话转来的和飞书的传 `own = false` 保持各风格原来的底，判断在 `core/domain` `isOwnMessage`，#2643）、折叠的工作过程（`peek`：运行中露出的最新几步）、每一步、计划卡（Step N/M）、分隔线 |
 | `ComposerFrame` / `ComposerTextField` / `SendButton` / `JumpToLatest` | 输入框的外框、输入、发送 / 停止、回到最新 |
 | `MessageItem` / `DraftPreview` | 收件箱的一项、Persona 拟好的回复 |
 | `HubCard` | 设置页顶部的 hub 状态 |

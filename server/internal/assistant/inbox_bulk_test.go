@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -142,5 +143,138 @@ func TestInboxBulkDoneConcurrent(t *testing.T) {
 		if n != 1 {
 			t.Fatalf("%s filed %d times", id, n)
 		}
+	}
+}
+
+// POST /api/v1/inbox/bulk with a filter files what the list as of as_of showed under it: an item that arrived after
+// (a new one, or new mail into a listed one) stays open; 忽略 is done_by=dismissed; the undo it answers brings back
+// exactly what it filed.
+func TestInboxBulkFilterAsOf(t *testing.T) {
+	h := muteHub(t)
+	mux := h.routes()
+	for _, id := range []string{"a", "b", "c"} {
+		h.inbox.items[id] = mailItem(id, "shop@example.com", "示例商城")
+		h.inbox.items[id].Last, h.inbox.items[id].Tier = "1", TierFYI
+	}
+	h.inbox.items["c"].Tier = TierAction // another section
+	h.inbox.items["l"] = &InboxItem{ID: "l", Source: "lark", Kind: "dm", Account: "feishu", Last: "9", Tier: TierFYI, UpdatedAt: time.Now()}
+
+	_, list := inboxCall(t, mux, "GET", "/api/v1/inbox", "")
+	asOf, _ := list["as_of"].(string)
+	if asOf == "" {
+		t.Fatalf("the list says no as_of: %v", list)
+	}
+	time.Sleep(2 * time.Millisecond)
+	h.inbox.mu.Lock()
+	h.inbox.items["b"].Last = "2" // new mail into b after the list
+	h.inbox.items["n"] = mailItem("n", "new@example.com", "新的")
+	h.inbox.items["n"].Last, h.inbox.items["n"].Tier = "1", TierFYI // a new item, not listed yet
+	h.inbox.mu.Unlock()
+	before := len(h.in.changes())
+
+	body := fmt.Sprintf(`{"action":"dismiss","filter":{"source":"mail","tier":"fyi"},"as_of":%q}`, asOf)
+	code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", body)
+	if code != 200 || out["action"] != "dismiss" {
+		t.Fatalf("bulk dismiss: %d %v", code, out)
+	}
+	if got := fmt.Sprint(out["ids"]); got != "[a]" {
+		t.Fatalf("filed %s, want only a", got)
+	}
+	if got := fmt.Sprint(bulkIDs(out["skipped"].([]any))); got != "[b:changed n:changed]" {
+		t.Fatalf("skipped = %s", got)
+	}
+	if a := h.inbox.items["a"]; a.open() || a.DoneBy != "dismissed" {
+		t.Fatalf("a: %v %s", a.DoneAt, a.DoneBy)
+	}
+	for _, id := range []string{"b", "c", "l", "n"} {
+		if !h.inbox.items[id].open() {
+			t.Fatalf("%s was filed", id)
+		}
+	}
+	if !h.st.saved("a") || len(h.in.changes()) != before+1 {
+		t.Fatalf("filed but not saved and announced once: saved %v, %d announcements", h.st.ids, len(h.in.changes())-before)
+	}
+
+	undo, _ := out["undo"].(map[string]any)
+	raw, _ := json.Marshal(undo)
+	if code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", string(raw)); code != 200 || fmt.Sprint(out["ids"]) != "[a]" || out["undo"] != nil {
+		t.Fatalf("undo %s: %d %v", raw, code, out)
+	}
+	if a := h.inbox.items["a"]; !a.open() || a.DoneBy != "" {
+		t.Fatalf("a after the undo: %v %s", a.DoneAt, a.DoneBy)
+	}
+
+	// The same list again, everything 已处理: b and n still did not arrive by then.
+	body = fmt.Sprintf(`{"action":"done","filter":{},"as_of":%q}`, asOf)
+	_, out = inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", body)
+	if got := fmt.Sprint(out["ids"]); got != "[a c l]" || h.inbox.items["a"].DoneBy != "user" {
+		t.Fatalf("all done: %s", got)
+	}
+}
+
+// ids file what they name (no version check), dismissed items list as such, and the single item's 忽略 matches.
+func TestInboxBulkIDsAndSingleDismiss(t *testing.T) {
+	h := muteHub(t)
+	mux := h.routes()
+	for _, id := range []string{"a", "b"} {
+		h.inbox.items[id] = mailItem(id, "shop@example.com", "示例商城")
+	}
+	if code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", `{"action":"dismiss","ids":["a","x"]}`); code != 200 ||
+		fmt.Sprint(out["ids"]) != "[a]" || fmt.Sprint(bulkIDs(out["skipped"].([]any))) != "[x:missing]" {
+		t.Fatalf("ids: %d %v", code, out)
+	}
+	if code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/b/done", `{"done":true,"dismiss":true}`); code != 200 || out["done_by"] != "dismissed" {
+		t.Fatalf("one item dismissed: %d %v", code, out)
+	}
+	if code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", `{"action":"done","ids":["a","b"]}`); code != 200 ||
+		fmt.Sprint(out["unchanged"]) != "[a b]" || h.inbox.items["a"].DoneBy != "dismissed" {
+		t.Fatalf("filing dismissed items again: %v", out)
+	}
+}
+
+func TestInboxBulkBadRequests(t *testing.T) {
+	h := muteHub(t)
+	mux := h.routes()
+	for _, body := range []string{
+		`{"ids":["a"]}`, // no action
+		`{"action":"archive","ids":["a"]}`,
+		`{"action":"done"}`, // neither ids nor a filter
+		`{"action":"done","ids":["a"],"filter":{}}`,
+		`{"action":"done","filter":{}}`,                                  // no as_of
+		`{"action":"reopen","filter":{},"as_of":"2026-11-05T10:00:00Z"}`, // reopen takes ids
+		`{"action":"done","filter":{"tier":"urgent"},"as_of":"2026-11-05T10:00:00Z"}`,
+		`not json`,
+	} {
+		if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", body); code != 400 {
+			t.Errorf("%s: %d, want 400", body, code)
+		}
+	}
+	ids := make([]string, inboxBulkMax+1)
+	for i := range ids {
+		ids[i] = fmt.Sprint(i)
+	}
+	raw, _ := json.Marshal(map[string]any{"action": "done", "ids": ids})
+	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", string(raw)); code != 413 {
+		t.Fatalf("too many: %d", code)
+	}
+}
+
+// Rows stored before arrivals were stamped count as arrived when they were last updated.
+func TestInboxArrivedOfLegacyRows(t *testing.T) {
+	it := &InboxItem{ID: "a", Last: "1"}
+	if !it.arrivedAfter(time.Now()) {
+		t.Fatal("an unstamped item counts as arrived")
+	}
+	now := time.Now()
+	it.arrived(now)
+	if it.arrivedAfter(now) || !it.arrivedAfter(now.Add(-time.Second)) {
+		t.Fatal("stamped arrival")
+	}
+	it.arrived(now.Add(time.Hour)) // the same Last: kept
+	if !it.ArrivedAt.Equal(now) {
+		t.Fatal("re-stamped without anything new")
+	}
+	if l := it.listed(); l.ArrivedOf != "" || !l.ArrivedAt.IsZero() {
+		t.Fatal("bookkeeping listed")
 	}
 }

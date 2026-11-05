@@ -272,3 +272,7 @@
   等那段行排好（约 0.1 s）再滚一次就准了（`MacRowOrder.scroll`）。
 - 页面常驻以后，系统的返回键会漏到别的分区（2026-11-05，#2318）：知识库、机器在自己的 `NavigationStack` 里推一页，系统把 ‹ 画成红绿灯旁的圆形玻璃按钮，它是窗口工具栏的一项，不归 `pageToolbar` 管。
   切到设置以后它还在，点一下退的是藏着的知识库。这类栈（Persona、知识库、机器）设 `macSectionStack`，推进去的页用 `pageTitle` / `detailTitle` 就会自己在标题行画 ‹；判断「推进去的」用 `isPresented`，栈的第一页不画。
+- 对话里的回答开 `.textSelection(.enabled)`（#2542，和网页一样能拖选、⌘C）：体验模式下 `-showPerfRun chats` 各量 6 轮，
+  第一次打开对话主线程 CPU 中位数 162 → 177 ms（约 +9%），再次打开 139 → 141 ms（持平），轮与轮之间差得比这还多。
+  比 `docs/lessons/ios.md` 里文件查看器长文档的 +40% 小，所以只给回答、用户气泡、别的 Agent 的消息和工具详情开；
+  还在生成的回复（`StreamingText`，每 80 ms 重排一次）不开，生成完就能选。MarkdownUI 一块一个 Text，只能在块内选，整条用悬停的「拷贝」。

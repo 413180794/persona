@@ -288,6 +288,9 @@ struct UserBubbleBody: View {
     private var words: some View {
         PathText(text: text, refs: paths, link: Theme.userBubbleLink(shell: shell))
             .font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText(shell: shell))
+            #if os(macOS)
+            .textSelection(.enabled) // drag to select and ⌘C, as on the web (#2542)
+            #endif
     }
 
     private var quoted: some View {
