@@ -38,9 +38,12 @@ data class PersonaShapes(
     val sheetShape get() = RoundedCornerShape(topStart = sheet, topEnd = sheet)
 }
 
-/** Durations and curves; [PersonaTheme.reduceMotion] collapses them to instant changes. */
+/**
+ * Durations and curves; [PersonaTheme.reduceMotion] collapses them to instant changes. [count] is how long a number
+ * that changed takes to count to its new value, and a chart's marks to move (#2811).
+ */
 @Immutable
-data class PersonaMotion(val quick: Int, val standard: Int, val springy: Boolean) {
+data class PersonaMotion(val quick: Int, val standard: Int, val springy: Boolean, val count: Int) {
     fun <T> enter(): FiniteAnimationSpec<T> =
         if (springy) spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow) else tween(standard, easing = FastOutSlowInEasing)
     fun size(): FiniteAnimationSpec<IntSize> =
@@ -56,9 +59,9 @@ internal object Shapes {
 
 internal object Motions {
     fun of(style: AppStyle) = when (style) {
-        AppStyle.Glass -> PersonaMotion(quick = 160, standard = 320, springy = true)
-        AppStyle.Brief -> PersonaMotion(quick = 140, standard = 240, springy = false)
-        AppStyle.Board -> PersonaMotion(quick = 100, standard = 160, springy = false)
+        AppStyle.Glass -> PersonaMotion(quick = 160, standard = 320, springy = true, count = 600)
+        AppStyle.Brief -> PersonaMotion(quick = 140, standard = 240, springy = false, count = 520)
+        AppStyle.Board -> PersonaMotion(quick = 100, standard = 160, springy = false, count = 400)
     }
 }
 

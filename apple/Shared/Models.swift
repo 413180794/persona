@@ -546,6 +546,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var slotID: String?
     var slotName: String?
     var slotIndex: Int?
+    /// The pane's place in its tab (`pane_index`, #2320): 0 is the top left one, the others split from it, whose agent is
+    /// the tab's 发起者. Nil when the host does not say (older nodes, hosts without layouts).
+    var paneIndex: Int? = nil
     var state: AgentState
     var seenAt: Date?
     /// When the hub saw it enter its current state (`state_since`).
@@ -692,7 +695,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
-             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, ports,
+             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", paneIndex = "pane_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
              attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, compaction,
@@ -739,6 +742,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         slotID = try c.decodeIfPresent(String.self, forKey: .slotID)
         slotName = try c.decodeIfPresent(String.self, forKey: .slotName)
         slotIndex = try c.decodeIfPresent(Int.self, forKey: .slotIndex)
+        paneIndex = try c.decodeIfPresent(Int.self, forKey: .paneIndex)
         seenAt = try c.decodeIfPresent(Date.self, forKey: .seenAt)
         stateSince = try c.decodeIfPresent(Date.self, forKey: .stateSince)
         queued = try c.decodeIfPresent([String].self, forKey: .queued)

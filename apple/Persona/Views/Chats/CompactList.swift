@@ -21,7 +21,11 @@ enum CompactList {
     /// Every row: the same height whatever it holds.
     static let rowInsets = EdgeInsets(top: Theme.Space.s, leading: Theme.Space.l, bottom: Theme.Space.s, trailing: Theme.Space.m)
     /// A row a level in, under a working tree's row (按仓库).
-    static let nestedRowInsets = EdgeInsets(top: Theme.Space.s, leading: Theme.Space.l + Theme.Space.l, bottom: Theme.Space.s, trailing: Theme.Space.m)
+    static let nestedRowInsets = rowInsets(level: 1)
+    /// A row `level` levels in: under a working tree's row, under a tab's 发起者 (#2320), or both.
+    static func rowInsets(level: Int) -> EdgeInsets {
+        EdgeInsets(top: Theme.Space.s, leading: Theme.Space.l + Theme.Space.l * CGFloat(level), bottom: Theme.Space.s, trailing: Theme.Space.m)
+    }
 }
 
 extension EnvironmentValues {
@@ -79,7 +83,7 @@ struct CompactQuietSpaceRow: View {
     var machine: Machine?
     var showMachine: Bool
     var expanded: Bool
-    /// A repository (按仓库's 空闲的仓库), not a space: its folder, and its agents counted rather than its tabs.
+    /// A repository (按仓库's 空闲的仓库), not a space: its folder.
     var repo = false
     @Environment(AgentsFeed.self) private var feed: AgentsFeed?
 
@@ -107,7 +111,8 @@ struct CompactQuietSpaceRow: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private var count: String { "\(group.sessions.count) 个" + (repo ? " Agent" : "标签") }
+    /// Agents counted, not tabs: a tab may hold several (#2320).
+    private var count: String { "\(group.sessions.count) 个 Agent" }
 }
 
 /// 细列表: something waiting for you (a plan, a question, a permission) as one row like an agent's: its kind's mark in

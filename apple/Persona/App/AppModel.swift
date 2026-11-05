@@ -1693,7 +1693,8 @@ final class AppModel {
         Haptics.success()
     }
 
-    /// Other live agents in the same space as this session (herdr tabs of one workspace), slot order.
+    /// Other live agents in the same space as this session (herdr tabs of one workspace), slot order, a tab's agents in
+    /// pane order.
     func siblings(of key: SessionKey) -> [Session] {
         guard let s = session(key), let space = s.spaceKey else { return [] }
         let cell: SpaceCell
@@ -1730,9 +1731,8 @@ final class AppModel {
         return out
     }
 
-    private static func slotOrder(_ a: Session, _ b: Session) -> Bool {
-        (a.slotIndex ?? 0, a.sessionID) < (b.slotIndex ?? 0, b.sessionID)
-    }
+    /// Tab order, as in herdr; the agents of one tab together, in the order of their panes (#2320).
+    private static func slotOrder(_ a: Session, _ b: Session) -> Bool { TabPanes.inTabOrder(a, b) }
 
     /// The same tabs, as far as the views about one session show them (`Session.sameForItsPage`).
     private static func sameForTheirPages(_ a: [Session], _ b: [Session]) -> Bool {
@@ -1804,6 +1804,7 @@ final class AppModel {
                 copy.slotID = nil
                 copy.slotName = nil
                 copy.slotIndex = nil
+                copy.paneIndex = nil
                 copy.queued = nil
                 copy.pendingInteractions = 0
                 adopt(copy)

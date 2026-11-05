@@ -7,7 +7,8 @@ extension EnvironmentValues {
 }
 
 /// The space's tabs (its agents) in the chat's header, one capsule each in its state's color (no dots: the pulsing ones
-/// were too busy in a row of them), the current one bold with a ring. As many as the width holds show around the current one; a swipe scrolls through the rest. ⋯ at the end
+/// were too busy in a row of them), the current one bold with a ring. The agents of one tab sit together in the order
+/// of their panes, each named by its agent, the 发起者 marked 「发起」 (#2320). As many as the width holds show around the current one; a swipe scrolls through the rest. ⋯ at the end
 /// lists every tab with its state, and the space's page, for a quick pick.
 struct SiblingTabs: View {
     @Environment(AppModel.self) private var model
@@ -67,9 +68,10 @@ struct SiblingTabs: View {
     }
 
     private func strip(_ siblings: [Session]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        let roles = TabPanes.roles(siblings)
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Space.sm) {
-                ForEach(siblings) { s in tab(s) }
+                ForEach(siblings) { s in tab(s, role: roles[s.key]) }
             }
             .scrollTargetLayout()
             .padding(.horizontal, Theme.Space.xxs)
@@ -82,22 +84,24 @@ struct SiblingTabs: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func tab(_ s: Session) -> some View {
+    private func tab(_ s: Session, role: TabPanes.Role?) -> some View {
         let on = s.key == current
         let tone = s.state.tone
         let quiet = s.state == .idle || s.state == .unknown || s.state == .offline
+        let label = TabPanes.tabLabel(s, role: role)
+        let launcher = role?.launcher == true
         return Group {
             if AppStyle.current.usesBeautifulUI {
                 // Its filter chip: the state's dot (none for a quiet, seen or idle one) and the tab's name; the current
                 // one is the raised capsule.
-                BUIFilterChip(s.slotLabel ?? s.displayTitle, dot: quiet ? nil : tone.dot, isActive: on) {
+                BUIFilterChip(launcher ? label + " · 发起" : label, dot: quiet ? nil : tone.dot, isActive: on) {
                     if !on { Haptics.tap(); select(s.key) }
                 }
             } else {
-                plainTab(s, on: on, tone: tone, quiet: quiet)
+                plainTab(s, label: label, launcher: launcher, on: on, tone: tone, quiet: quiet)
             }
         }
-        .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)")
+        .accessibilityLabel("\(label)\(launcher ? "（发起者）" : "")，\(s.state.label)")
         .accessibilityAddTraits(on ? .isSelected : [])
         .contextMenu {
             if s.canTerminal {
@@ -111,11 +115,15 @@ struct SiblingTabs: View {
         .id(s.key)
     }
 
-    private func plainTab(_ s: Session, on: Bool, tone: StatusTone, quiet: Bool) -> some View {
+    private func plainTab(_ s: Session, label: String, launcher: Bool, on: Bool, tone: StatusTone, quiet: Bool) -> some View {
         Button { if !on { Haptics.tap(); select(s.key) } } label: {
-            Text(s.slotLabel ?? s.displayTitle)
-                .lineLimit(1)
-                .font(on ? Theme.Font.labelHeavy : Theme.Font.labelMedium)
+            HStack(spacing: Theme.Space.xs) {
+                Text(label)
+                    .lineLimit(1)
+                    .font(on ? Theme.Font.labelHeavy : Theme.Font.labelMedium)
+                // The 发起者's mark, quieter than the name (the web's 「发起」).
+                if launcher { Text("发起").font(Theme.Font.caption).opacity(0.75).lineLimit(1).fixedSize() }
+            }
                 .padding(.horizontal, Theme.Space.m)
                 .scaledFrame(height: Theme.Size.wellS)
                 // The state is the capsule's color; a quiet (seen, idle) one is the plain gray.
@@ -197,7 +205,7 @@ private struct SiblingList: View {
         List {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: Theme.Space.s) {
-                    Text("\(siblings.count) 个标签页").font(Theme.Font.heading).lineLimit(1)
+                    Text("\(siblings.count) 个 Agent").font(Theme.Font.heading).lineLimit(1)
                     Spacer(minLength: Theme.Space.s)
                     if preset != nil {
                         Button { Haptics.tap(); showNew = true } label: {
@@ -240,15 +248,19 @@ private struct SiblingList: View {
             .listRowInsets(EdgeInsets())
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
+            let roles = TabPanes.roles(siblings)
             ForEach(siblings) { s in
                     let on = s.key == current
+                    let role = roles[s.key]
+                    let label = TabPanes.tabLabel(s, role: role)
                     Button { pick(s.key) } label: {
                         HStack(spacing: Theme.Space.m) {
                             Circle().fill(s.state.color).scaledFrame(width: Theme.Size.dotL, height: Theme.Size.dotL).scaledFrame(width: Theme.Size.iconS) // a still dot
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                                Text(s.slotLabel ?? s.displayTitle).font(on ? Theme.Font.secondaryStrong : Theme.Font.secondary).lineLimit(1)
+                                Text(label).font(on ? Theme.Font.secondaryStrong : Theme.Font.secondary).lineLimit(1)
                                 // The state in its color, then the model the tab runs on (2026-10-31: which tab is which model).
                                 (Text(s.state.label).foregroundStyle(s.state.tone.text)
+                                    + Text(role?.launcher == true ? " · 发起者" : "").foregroundStyle(.secondary)
                                     + Text(Fmt.model(s.model).map { " · " + $0 } ?? "").foregroundStyle(.secondary))
                                     .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
                             }
@@ -257,11 +269,13 @@ private struct SiblingList: View {
                             else if on { Image(systemName: Theme.Icon.done).font(Theme.Font.captionStrong).foregroundStyle(Theme.accent) }
                         }
                         .padding(.horizontal, Theme.Space.l)
+                        // A tab's other agents hang a level in under its 发起者.
+                        .padding(.leading, role?.branch == true ? Theme.Space.l : 0)
                         .scaledFrame(minHeight: Theme.Size.box50)
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)" + (Fmt.model(s.model).map { "，\($0)" } ?? ""))
+                    .accessibilityLabel("\(label)\(role?.launcher == true ? "（发起者）" : "")，\(s.state.label)" + (Fmt.model(s.model).map { "，\($0)" } ?? ""))
                     .accessibilityAddTraits(on ? .isSelected : [])
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
@@ -272,7 +286,7 @@ private struct SiblingList: View {
                                 Label("关闭", systemImage: Theme.Icon.end).lineLimit(1)
                             }
                             .tint(Theme.danger)
-                            .accessibilityLabel("停止并关闭 \(s.slotLabel ?? s.displayTitle)")
+                            .accessibilityLabel("停止并关闭 \(label)")
                         }
                     }
                     .contextMenu {
@@ -314,13 +328,15 @@ struct SpaceView: View {
     @State private var started: SessionKey?
     @State private var renaming: SpaceGroup?
 
+    /// The most urgent first; the agents of one tab together where the first of them is, in the order of their panes.
     private var sessions: [Session] {
-        model.allSessions.filter { $0.spaceKey == spaceKey && $0.state.isLive }
-            .sorted { ($0.state.priority, $0.slotIndex ?? 0, $0.sessionID) < ($1.state.priority, $1.slotIndex ?? 0, $1.sessionID) }
+        TabPanes.grouped(model.allSessions.filter { $0.spaceKey == spaceKey && $0.state.isLive }
+            .sorted { ($0.state.priority, $0.slotIndex ?? 0, $0.sessionID) < ($1.state.priority, $1.slotIndex ?? 0, $1.sessionID) })
     }
 
     var body: some View {
         let sessions = sessions
+        let roles = TabPanes.roles(sessions)
         let first = sessions.first
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
@@ -350,7 +366,7 @@ struct SpaceView: View {
                 }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     ForEach(sessions) { s in
-                        NavigationLink(value: s.key) { SlotCard(session: s, pending: model.interactions(for: s.key).count) }
+                        NavigationLink(value: s.key) { SlotCard(session: s, pending: model.interactions(for: s.key).count, pane: roles[s.key]) }
                             .buttonStyle(.plain)
                     }
                     Button { showNew = true } label: {
@@ -402,6 +418,8 @@ struct SpaceView: View {
 struct SlotCard: View {
     var session: Session
     var pending: Int
+    /// Its place in a tab of several agents (#2320): the tab's chip names the agent too, the 发起者 marked.
+    var pane: TabPanes.Role? = nil
 
     var body: some View {
         let tone = session.state.tone
@@ -412,7 +430,7 @@ struct SlotCard: View {
                 header(agent: true)
                 header(agent: false)
                 HStack(spacing: Theme.Space.xs) {
-                    Text(session.slotLabel ?? "—")
+                    Text(tabChip)
                         .font(Theme.Font.labelMedium)
                         .foregroundStyle(tone.text)
                         .lineLimit(1)
@@ -424,7 +442,8 @@ struct SlotCard: View {
                 }
             }
             Text(session.displayTitle).font(Theme.Font.secondaryStrong).lineLimit(2)
-            Text(session.state.label + (pending > 0 ? " · \(pending) 件待处理" : ""))
+            // The 发起者 says so beside its state: the header's chips are cut first in a narrow card.
+            Text(session.state.label + (pane?.launcher == true ? " · 发起者" : "") + (pending > 0 ? " · \(pending) 件待处理" : ""))
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(tone.text)
             if let t = session.listPreview {
@@ -438,10 +457,13 @@ struct SlotCard: View {
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(session.state == .needsYou ? Theme.needsYou.opacity(0.5) : .clear, lineWidth: 1.5))
     }
 
+    private var tabChip: String { pane.map { TabPanes.tabLabel(session, role: $0) } ?? session.slotLabel ?? "—" }
+
     private func header(agent: Bool) -> some View {
         HStack {
-            Chip(text: session.slotLabel ?? "—", look: .tone(session.state.tone))
-            if agent { Chip(text: session.agentLabel, look: .outline) }
+            Chip(text: tabChip, look: .tone(session.state.tone))
+            // Beside its tab mates the tab's chip names the agent already.
+            if agent, pane == nil { Chip(text: session.agentLabel, look: .outline) }
             Spacer(minLength: 4)
             StatusDot(state: session.state, size: 9)
         }

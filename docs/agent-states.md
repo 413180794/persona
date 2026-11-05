@@ -131,7 +131,13 @@ node 用 herdr 的 `session.snapshot`（一次拿到 workspace、tab、agent）�
   左上是 shell 不是 Agent 时，组里没有 0 号，几个 Agent 平级（网页不标发起者）。
 - 不推断跨 tab 的父子关系（Agent 把子任务开在别的 tab / workspace）；以后需要时再约定显式标记（类似待办的 `persona_from`）。
 
-网页的表现见 `docs/web.md`；Android 见 `docs/android.md`「同一个 tab 里的几个 Agent」（#2515）；iOS 还按空间列每个会话（网页验收后再跟上）。
+网页的表现见 `docs/web.md`；Android 见 `docs/android.md`「同一个 tab 里的几个 Agent」（#2515）。iOS / Mac（#2516，纯逻辑在 `apple/Persona/Views/Chats/TabPanes.swift`，规则和网页的 `herdr-tree.ts` 一样）：
+
+- Agents 列表（按仓库 / 按项目，卡片、胶囊、细列表）里一个 tab 有几个 Agent 时先是一行 tab：最需要处理的那个的状态点、tab 名和它的标题、「N 个 Agent」，点它收起 / 展开；
+  下面按 pane 的位置排，发起者在上、标「发起者」，其余缩进一级挂在下面；每行写自己的 Agent（两个都是 Claude 时编号「Claude 2」，发起者靠标记区分），不再写 tab 名。
+  默认展开，收起状态按 `机器/空间名/tab 编号` 记住（`dev.folded` 里的 `tab/…`，改名后照样认得）；整组算一项：组里有一个忙的就不进「还有 N 个空闲」。
+  空闲的空间 / 仓库展开后不再加 tab 行，同一 tab 的排在一起、照样标发起者。空间上的数字数 Agent（「N 个 Agent」）。按状态 / 按机器 / 按待办不分组。
+- 对话页顶部的同伴胶囊和 ⋯ 浮层、Mac 的同伴菜单、空间页：同一 tab 的排在一起、按位置排，名字是「#1 · Codex」，发起者带「发起」（浮层和菜单写「发起者」，分支缩进；Mac 菜单按 tab 分节）。
 
 App 里的表现：
 

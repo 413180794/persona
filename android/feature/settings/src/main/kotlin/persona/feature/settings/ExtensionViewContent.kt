@@ -11,7 +11,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -127,11 +130,13 @@ internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewS
             val run = items.subList(start, i)
             run.forEachIndexed { index, item ->
                 item(keys[start + index]?.let { "$key-s$s-k-$it" } ?: "$key-s$s-i${start + index}") {
+                    // drawn again, a block whose key is new fades in and one that went fades out (#2811)
+                    val moving = Modifier.itemMotion(this, PersonaTheme.reduceMotion, PersonaTheme.motion.standard)
                     if (ExtensionViewText.grouped(item)) {
-                        JGroupItem(GroupPosition.of(index, run.size), if (index == 0 && start > 0) Modifier.padding(top = Tokens.Space.s) else Modifier) {
+                        JGroupItem(GroupPosition.of(index, run.size), moving.then(if (index == 0 && start > 0) Modifier.padding(top = Tokens.Space.s) else Modifier)) {
                             GroupedItem(item, state, handle)
                         }
-                    } else StandaloneItem(item, state, handle, first = start == 0)
+                    } else Box(moving) { StandaloneItem(item, state, handle, first = start == 0) }
                 }
             }
         }
@@ -143,6 +148,15 @@ internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewS
         }
     }
 }
+
+/**
+ * How a block of a page's list comes and goes when the view is drawn again: fades in where its key is new, out where
+ * its key went, the rest slide to their new places; nothing with reduced motion (the list's first draw never moves).
+ */
+private fun Modifier.itemMotion(scope: LazyItemScope, reduce: Boolean, duration: Int): Modifier =
+    if (reduce) this else with(scope) {
+        animateItem(fadeInSpec = tween(duration), placementSpec = tween(duration, easing = FastOutSlowInEasing), fadeOutSpec = tween(duration))
+    }
 
 /** A row, a link, a switch or a choice: one line of a group. */
 @Composable
@@ -156,10 +170,10 @@ internal fun GroupedItem(item: ExtensionViewItem, state: ExtensionViewState, han
                 leadingIcon = item.icon?.takeIf { it.isNotBlank() }?.let(ExtensionIcons::of), leading = rowLeading(item),
                 trailing = when {
                     action != null && state.acting == action.id -> ({ JSpinner() })
-                    badge != null -> ({ JTag(badge.text, ExtensionViewText.tone(badge.tone)) })
+                    badge != null -> ({ JTag(badge.text, ExtensionViewText.tone(badge.tone), animated = true) })
                     else -> null
                 },
-                chevron = action != null, enabled = enabled || action == null,
+                chevron = action != null, enabled = enabled || action == null, changingValue = true,
                 onClick = action?.let { a -> { handle.press(item, a) } })
         }
         "link" -> JRow(item.title.orEmpty(), leadingIcon = PhIcons.ArrowSquareOut, chevron = false, onClick = { handle.open(item.url.orEmpty()) })
@@ -197,8 +211,7 @@ internal fun StandaloneItem(item: ExtensionViewItem, state: ExtensionViewState, 
             Column(Modifier.fillMaxWidth().padding(horizontal = rowPadding, vertical = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
                 Text(item.label.orEmpty(), style = type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val tone = ExtensionViewText.tone(item.tone)
-                Text(item.value.orEmpty(), style = type.number, color = if (tone == Tone.Neutral) palette.ink else palette.tone(tone).text, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
+                JChangingText(item.value.orEmpty(), style = type.number, color = if (tone == Tone.Neutral) palette.ink else palette.tone(tone).text)
                 item.detail?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = palette.ink3) }
             }
         }
@@ -386,11 +399,11 @@ private fun CardLine(item: ExtensionViewItem, state: ExtensionViewState, handle:
         }
         item.value?.takeIf { it.isNotBlank() && !link }?.let {
             Spacer(Modifier.width(Tokens.Space.s))
-            Text(it, style = type.callout, color = palette.ink3, maxLines = 1)
+            JChangingText(it, style = type.callout, color = palette.ink3)
         }
         item.badge?.takeIf { it.text.isNotBlank() && !link }?.let {
             Spacer(Modifier.width(Tokens.Space.s))
-            JTag(it.text, ExtensionViewText.tone(it.tone))
+            JTag(it.text, ExtensionViewText.tone(it.tone), animated = true)
         }
         if (action != null && state.acting == action.id) { Spacer(Modifier.width(Tokens.Space.s)); JSpinner() }
         else if (click != null) {

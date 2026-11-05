@@ -51,7 +51,8 @@ struct SpaceGroup: Identifiable {
         return groups.values.map { g -> (group: SpaceGroup, priority: Int, sortDate: Date) in
             var g = g
             // Tab order, as in herdr: an agent keeps its place whatever its state (the state shows on the row).
-            g.sessions.sort { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
+            // The agents of one tab together, in the order of their panes (#2320).
+            g.sessions.sort(by: TabPanes.inTabOrder)
             return (group: g, priority: g.state.priority, sortDate: g.sortDate)
         }
         .sorted { a, b in
@@ -949,26 +950,28 @@ private struct AgentsList: View {
     }
 
     /// The row follows its own agent (`AgentsFeed.Row`): what only it shows changes it, not the list.
-    @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool? = nil, showHost: Bool = false) -> some View {
+    @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool? = nil, showHost: Bool = false,
+                                             pane: TabPanes.Role? = nil) -> some View {
         if feed.following {
             FeedRow(row: feed.row(s), reader: feed.reader) { live, time in
-                slotRowDrawn(live, time: time, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
+                slotRowDrawn(live, time: time, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost, pane: pane)
             }
         } else {
-            slotRowDrawn(s, time: nil, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
+            slotRowDrawn(s, time: nil, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost, pane: pane)
         }
     }
 
-    @ViewBuilder private func slotRowDrawn(_ s: Session, time: AgentTime?, context: Bool, inStateSection: Bool, cardLast: Bool?, showHost: Bool = false) -> some View {
+    @ViewBuilder private func slotRowDrawn(_ s: Session, time: AgentTime?, context: Bool, inStateSection: Bool, cardLast: Bool?, showHost: Bool = false,
+                                           pane: TabPanes.Role? = nil) -> some View {
         // herdr is where most agents run: only the others name their host
         let host = showHost ? s.hostKind.flatMap { $0 == "herdr" ? nil : $0 } : nil
         if compact {
-            CompactSlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil, host: host, time: time)
+            CompactSlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil, host: host, time: time, pane: pane)
                 .equatable()
         } else {
             SlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil,
                     machine: context && grouping != .machine && machineFilter.isEmpty ? machine(s.machineRef)?.title : nil, host: host,
-                    hideState: inStateSection, surface: cardLast.map { .cardRow(last: $0) } ?? .capsule, time: time)
+                    hideState: inStateSection, surface: cardLast.map { .cardRow(last: $0) } ?? .capsule, time: time, pane: pane)
                 .equatable()
         }
     }
@@ -1021,18 +1024,47 @@ private struct AgentsList: View {
 
     /// The agents of a space or a working tree: busy (and pinned / looping) ones first, idle ones behind one 还有 N 个空闲
     /// row (`key` remembers it open). `indent`: a level in, under a working tree's row.
+    /// The agents of a tab with several together, under the tab's row (`tabRows`, #2320).
     @ViewBuilder private func agentRows(_ list: [Session], key: String, indent: Bool = false) -> some View {
-        let sessions = ordered(list)
-        let idle = quick == .all ? sessions.filter { !stays($0) } : []
-        ForEach(quick == .all ? sessions.filter(stays) : sessions) { s in slotRow(s, indent: indent) }
-        if !idle.isEmpty {
+        let rows = order.tabEntries(list, all: quick == .all)
+        ForEach(rows.busy) { e in entryRows(e, indent: indent) }
+        if !rows.idle.isEmpty {
+            let idle = rows.idle.flatMap(\.sessions)
             if expandedIdle.contains(key) || !query.isEmpty {
-                ForEach(idle) { s in slotRow(s, indent: indent) }
+                ForEach(rows.idle) { e in entryRows(e, indent: indent) }
                 if query.isEmpty { collapseRow("收起空闲的 \(idle.count) 个", key: key, indent: indent) }
             } else {
                 expandRow(idle, key: key, indent: indent)
             }
         }
+    }
+
+    /// One agent's row, or a tab's: its row, then (unless folded) its agents, the 发起者 on top marked, the others a
+    /// level in under it.
+    @ViewBuilder private func entryRows(_ e: TabPanes.Entry, indent: Bool = false) -> some View {
+        switch e {
+        case .agent(let s):
+            slotRow(s, indent: indent)
+        case .tab(let g):
+            tabRow(g, indent: indent)
+            if !isFolded(g.foldID) {
+                ForEach(g.sessions) { s in slotRow(s, indent: indent, pane: g.role(of: s), branch: g.isBranch(s)) }
+            }
+        }
+    }
+
+    /// A tab's row: its name, what its most urgent agent is doing in that one's state, 「N 个 Agent」; tap to fold it.
+    private func tabRow(_ g: TabPanes.Group, indent: Bool) -> some View {
+        let folded = isFolded(g.foldID)
+        return Button { toggleFold(g.foldID) } label: {
+            TabGroupRow(group: g, folded: folded).padding(.leading, nested(indent ? 1 : 0))
+        }
+        .buttonStyle(.plain)
+        .modifier(FoldAnchor(id: g.foldID, reader: feed.reader))
+        .listRowInsets(compact ? rowInsets(level: indent ? 1 : 0) : capsules ? Self.tabCapsuleInsets(level: indent ? 1 : 0) : nil)
+        .listRowBackground(capsules ? Color.clear : nil)
+        .listRowSeparator(capsules ? .hidden : .automatic)
+        .accessibilityIdentifier("agents.tab")
     }
 
     /// A visible ⋯ for open / mark read / pin / mute: long press on a list section header does not reach a context menu.
@@ -1078,7 +1110,8 @@ private struct AgentsList: View {
                             get: { expandedQuiet.contains(g.id) || !query.isEmpty },
                             set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
                         )) {
-                            ForEach(g.sessions) { s in slotRow(s) }
+                            let roles = TabPanes.roles(g.sessions)
+                            ForEach(TabPanes.grouped(g.sessions)) { s in slotRow(s, pane: roles[s.key]) }
                         } label: {
                             QuietSpaceRow(group: g, machine: machine(g.machineRef), showMachine: namesMachine, repo: repos)
                         }
@@ -1234,7 +1267,7 @@ private struct AgentsList: View {
         .accessibilityIdentifier("agents.worktree")
         if open {
             if quiet {
-                ForEach(ordered(w.sessions)) { s in slotRow(s, indent: true) }
+                ForEach(TabPanes.entries(ordered(w.sessions))) { e in entryRows(e, indent: true) }
             } else {
                 agentRows(w.sessions, key: w.id, indent: true)
             }
@@ -1420,15 +1453,19 @@ private struct AgentsList: View {
 
     /// A row's edges in 细列表 and the capsules; `indent`: a level in, under a working tree (按仓库). Nil: the grouped
     /// list's own, the row's content moved in instead (`nested`).
-    private func rowInsets(indent: Bool) -> EdgeInsets? {
-        if compact { return indent ? CompactList.nestedRowInsets : CompactList.rowInsets }
-        if capsules { return indent ? Self.nestedCapsuleInsets : Self.capsuleInsets }
+    private func rowInsets(indent: Bool) -> EdgeInsets? { rowInsets(level: indent ? 1 : 0) }
+
+    /// `level` levels in: under a working tree, under a tab's 发起者, or both.
+    private func rowInsets(level: Int) -> EdgeInsets? {
+        if compact { return CompactList.rowInsets(level: level) }
+        if capsules { return Self.capsuleInsets(level: level) }
         return nil
     }
 
     /// How far a row's content moves in under a working tree in the grouped list (its row keeps the list's insets, so
     /// its line starts where its text does).
-    private func nested(_ indent: Bool) -> CGFloat { indent && !compact && !capsules ? Theme.Space.l : 0 }
+    private func nested(_ indent: Bool) -> CGFloat { nested(indent ? 1 : 0) }
+    private func nested(_ level: Int) -> CGFloat { !compact && !capsules ? Theme.Space.l * CGFloat(level) : 0 }
 
     /// 细列表: a quiet space as one row like an agent's, its agents under it when opened (a DisclosureGroup's own row
     /// is taller and its arrow heavier than everything else in the list).
@@ -1444,7 +1481,10 @@ private struct AgentsList: View {
         .buttonStyle(.plain)
         .listRowInsets(CompactList.rowInsets)
         .accessibilityIdentifier("agents.quietSpace")
-        if open { ForEach(g.sessions) { s in slotRow(s) } }
+        if open {
+            let roles = TabPanes.roles(g.sessions)
+            ForEach(TabPanes.grouped(g.sessions)) { s in slotRow(s, pane: roles[s.key]) }
+        }
     }
 
     /// The agents as BeautifulUI's capsules: its style, cards (not 细列表).
@@ -1462,9 +1502,15 @@ private struct AgentsList: View {
 
     /// A capsule's room: the page's edges, a little air above and below.
     private static let capsuleInsets = EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page, bottom: Theme.Space.xs, trailing: Theme.Space.page)
-    /// A capsule a level in, under a working tree's row: as far in as a quiet space's opened card sets its agents.
-    private static let nestedCapsuleInsets = EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page + Theme.Space.l, bottom: Theme.Space.xs,
-                                                        trailing: Theme.Space.page)
+    /// A capsule `level` levels in, under a working tree's row or a tab's 发起者: a level is as far in as a quiet space's
+    /// opened card sets its agents.
+    private static func capsuleInsets(level: Int) -> EdgeInsets {
+        EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page + Theme.Space.l * CGFloat(level), bottom: Theme.Space.xs, trailing: Theme.Space.page)
+    }
+    /// A tab's row among the capsules: a line of text on the page over its agents' capsules, as a working tree's.
+    private static func tabCapsuleInsets(level: Int) -> EdgeInsets {
+        EdgeInsets(top: Theme.Space.s, leading: Theme.Space.page + Theme.Space.l * CGFloat(level), bottom: Theme.Space.xxs, trailing: Theme.Space.page)
+    }
     /// A working tree's row among the capsules: a line of text on the page, over its agents' capsules.
     private static let worktreeCapsuleInsets = EdgeInsets(top: Theme.Space.s, leading: Theme.Space.page, bottom: Theme.Space.xxs,
                                                           trailing: Theme.Space.page)
@@ -1506,23 +1552,27 @@ private struct AgentsList: View {
         .listRowSeparator(.hidden)
         .accessibilityIdentifier("agents.quietSpace")
         if open {
-            ForEach(g.sessions) { s in slotRow(s, cardLast: s.id == g.sessions.last?.id) }
+            // A card is one surface: a tab's agents sit together in it, named and marked, without a row of the tab's own.
+            let rows = TabPanes.grouped(g.sessions), roles = TabPanes.roles(g.sessions)
+            ForEach(rows) { s in slotRow(s, cardLast: s.id == rows.last?.id, pane: roles[s.key]) }
         }
     }
 
     /// `context`: also name the space (and machine) — when the list is not grouped by space.
     /// `cardLast`: a row of a quiet space's card (`quietSpaceCard`), and whether it ends the card.
     /// `indent`: a level in, under a working tree's row (按仓库).
+    /// `pane`, `branch`: an agent of a tab with several, and one hanging off its 发起者 (a level further in).
     private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false, cardLast: Bool? = nil,
-                         showHost: Bool = false, indent: Bool = false) -> some View {
-        Group {
+                         showHost: Bool = false, indent: Bool = false, pane: TabPanes.Role? = nil, branch: Bool = false) -> some View {
+        let level = (indent ? 1 : 0) + (branch ? 1 : 0)
+        return Group {
             if searching {
                 // A search result is a button, not a link: a link pushed at once, the push was refused (the search has
                 // to close first) and slid back, and the push made after it was lost (2026-10-31).
                 Button { openFromSearch(s.key) } label: {
                     HStack(spacing: Theme.Space.s) {
-                        slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
-                            .padding(.leading, nested(indent))
+                        slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost, pane: pane)
+                            .padding(.leading, nested(level))
                         // 胶囊 draws its own chevron; 列表 and Persona' own rows get the one a link would show.
                         if !capsules { Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary) }
                     }
@@ -1531,8 +1581,8 @@ private struct AgentsList: View {
                 .buttonStyle(.plain)
             } else {
                 NavigationLink(value: s.key) {
-                    slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
-                        .padding(.leading, nested(indent))
+                    slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost, pane: pane)
+                        .padding(.leading, nested(level))
                         #if os(macOS)
                         // The open one shaded as a selected row: the list does not select (#2213), ↑ / ↓ go from it.
                         .background {
@@ -1553,8 +1603,8 @@ private struct AgentsList: View {
             .listRowBackground(capsules ? Color.clear : nil)
             .listRowSeparator(capsules ? .hidden : .automatic)
             .listRowInsets(capsules ? cardLast.map { EdgeInsets(top: 0, leading: Theme.Space.page, bottom: $0 ? Theme.Space.xs : 0, trailing: Theme.Space.page) }
-                               ?? rowInsets(indent: indent)
-                           : rowInsets(indent: indent)) // a card's rows touch (the card is one surface); capsules keep a little air between them
+                               ?? rowInsets(level: level)
+                           : rowInsets(level: level)) // a card's rows touch (the card is one surface); capsules keep a little air between them
             .swipeActions(edge: .trailing) {
                 if s.state.isLive && s.canTerminal {
                     Button { closingSession = s } label: { Label("关闭", systemImage: Theme.Icon.close) }.tint(Theme.danger)
@@ -2236,6 +2286,9 @@ nonisolated struct SlotRow: View, Equatable {
     var surface: Surface = .none
     /// When it last moved, followed apart from the row (`AgentsFeed.Row.time`); nil: the session's own.
     var time: AgentTime? = nil
+    /// Its place in a tab of several agents (#2320): named by its agent, the 发起者 marked; the tab's row above says
+    /// which tab, so the row does not.
+    var pane: TabPanes.Role? = nil
 
     enum Surface: Equatable {
         /// Bare: a List's row that has its own background and chevron.
@@ -2350,9 +2403,10 @@ nonisolated struct SlotRow: View, Equatable {
         if session.state == .needsYou && !muted && !hideState && !pendingCount {
             parts.append(Text(session.state.label).fontWeight(.semibold).foregroundStyle(session.state.tone.text))
         }
-        parts.append(Text(session.sourceSubtitle ?? session.agentLabel))
+        parts.append(Text(pane?.name ?? session.sourceSubtitle ?? session.agentLabel))
+        if pane?.launcher == true { parts.append(Text("发起者").fontWeight(.semibold)) }
         if let host { parts.append(Text(host)) }
-        let slot = session.slotLabel
+        let slot = pane == nil ? session.slotLabel : nil
         if let space, !space.isEmpty {
             parts.append(Text(slot.map { space + " › " + $0 } ?? space))
         } else if let slot {
@@ -2364,9 +2418,10 @@ nonisolated struct SlotRow: View, Equatable {
 
     /// "Claude · app › tests · MacBook": the end gives way when the line is short.
     @MainActor private var meta: String {
-        var parts = [session.sourceSubtitle ?? session.agentLabel]
+        var parts = [pane?.name ?? session.sourceSubtitle ?? session.agentLabel]
+        if pane?.launcher == true { parts.append("发起者") }
         if let host { parts.append(host) }
-        let slot = session.slotLabel
+        let slot = pane == nil ? session.slotLabel : nil
         if let space, !space.isEmpty {
             parts.append(slot.map { space + " › " + $0 } ?? space)
         } else if let slot {
@@ -2413,6 +2468,8 @@ nonisolated struct CompactSlotRow: View, Equatable {
     /// As SlotRow's `host`.
     var host: String? = nil
     var time: AgentTime? = nil
+    /// As SlotRow's `pane`.
+    var pane: TabPanes.Role? = nil
 
     @MainActor
     var body: some View {
@@ -2429,6 +2486,8 @@ nonisolated struct CompactSlotRow: View, Equatable {
                     .font(session.state == .unread ? CompactList.titleUnread : CompactList.title)
                     .lineLimit(1)
                     .layoutPriority(1)
+                // The 发起者's mark stays whole: the line's other words give way to the title.
+                if pane?.launcher == true { Text("发起者").font(CompactList.metaStrong).foregroundStyle(.secondary).lineLimit(1).fixedSize() }
                 if let place, !place.isEmpty {
                     // Tail: "photo-sy…" still says where; the head cut to "…to-sync › #1".
                     Text(place).font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
@@ -2461,9 +2520,11 @@ nonisolated struct CompactSlotRow: View, Equatable {
     }
 
     @MainActor private var place: String? {
-        let slot = session.slotLabel
+        let slot = pane == nil ? session.slotLabel : nil
         let location = space.flatMap { $0.isEmpty ? nil : $0 }.map { name in slot.map { name + " › " + $0 } ?? name } ?? slot
-        let parts = [session.sourceSubtitle, host, location].compactMap { $0 }
+        // The 发起者's mark stands in for its agent's name (one line has no room for both; the web's phone strip does so).
+        let name = pane.map { $0.launcher ? nil : $0.name } ?? session.sourceSubtitle
+        let parts = [name, host, location].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
@@ -2502,7 +2563,7 @@ struct QuietSpaceRow: View {
     var group: SpaceGroup
     var machine: Machine?
     var showMachine: Bool
-    /// A repository (按仓库's 空闲的仓库), not a space: its folder, and its agents counted rather than its tabs.
+    /// A repository (按仓库's 空闲的仓库), not a space: its folder.
     var repo = false
     @Environment(AgentsFeed.self) private var feed: AgentsFeed?
 
@@ -2511,7 +2572,7 @@ struct QuietSpaceRow: View {
             Image(systemName: repo ? Theme.Icon.folder : Theme.Icon.space).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(group.name).font(Theme.Font.heading).lineLimit(1)
-                Text([showMachine ? machine?.title : nil, "\(group.sessions.count) 个" + (repo ? " Agent" : "标签"),
+                Text([showMachine ? machine?.title : nil, "\(group.sessions.count) 个 Agent",
                       group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
@@ -2548,13 +2609,13 @@ struct QuietSpaceCardHead: View {
     var machine: Machine?
     var showMachine: Bool
     var open: Bool
-    /// A repository (按仓库's 空闲的仓库), not a space: its folder, and its agents counted rather than its tabs.
+    /// A repository (按仓库's 空闲的仓库), not a space: its folder.
     var repo = false
     @Environment(AgentsFeed.self) private var feed: AgentsFeed?
 
     var body: some View {
         TaskRow(TaskItem(id: group.id, title: group.name,
-                         subtitle: [showMachine ? machine?.title : nil, "\(group.sessions.count) 个" + (repo ? " Agent" : "标签"),
+                         subtitle: [showMachine ? machine?.title : nil, "\(group.sessions.count) 个 Agent",
                                     group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
                          status: .pending(step: 0)),

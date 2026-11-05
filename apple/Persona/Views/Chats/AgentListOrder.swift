@@ -49,6 +49,16 @@ struct AgentListOrder {
         .map(\.session)
     }
 
+    /// The rows of a space or a working tree (`ordered`), each tab's agents together where its first one ranks
+    /// (`TabPanes.entries`, #2320): those that stay out of the idle fold (a tab when any of its agents does) and the
+    /// idle ones; with `all` off (a quick filter), every row stays.
+    func tabEntries(_ list: [Session], all: Bool = true) -> (busy: [TabPanes.Entry], idle: [TabPanes.Entry]) {
+        let entries = TabPanes.entries(ordered(list))
+        guard all else { return (entries, []) }
+        let stays = { (e: TabPanes.Entry) in e.sessions.contains(where: self.stays) }
+        return (entries.filter(stays), entries.filter { !stays($0) })
+    }
+
     /// A space that folds into 空闲的空间: every agent in it quiet, and not the held one's.
     func isQuiet(_ g: SpaceGroup) -> Bool { g.isQuiet && !g.sessions.contains { $0.key == held } }
     /// Newest first by `date`, then by `id` so equal times never swap between renders: spaces under a quick filter,

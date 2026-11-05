@@ -18,19 +18,27 @@ struct AgentListRows {
 
     private func folded(_ id: String) -> Bool { !searching && isFolded(id) }
 
-    /// Busy rows, then the idle ones while their 还有 N 个空闲 is open (`ChatsView.agentRows`).
+    /// Busy rows, then the idle ones while their 还有 N 个空闲 is open (`ChatsView.agentRows`); a tab's agents together,
+    /// none of them while the tab is folded.
     func agentRows(_ list: [Session], key: String) -> [Session] {
-        let sessions = order.ordered(list)
-        guard all else { return sessions }
-        let idle = sessions.filter { !order.stays($0) }
-        return sessions.filter(order.stays) + (idle.isEmpty || !(searching || expandedIdle.contains(key)) ? [] : idle)
+        let rows = order.tabEntries(list, all: all)
+        let shown = rows.busy + (rows.idle.isEmpty || !(searching || expandedIdle.contains(key)) ? [] : rows.idle)
+        return entryRows(shown)
+    }
+
+    /// The agents of `entries`, a folded tab's left out.
+    func entryRows(_ entries: [TabPanes.Entry]) -> [Session] {
+        entries.flatMap { e -> [Session] in
+            if case .tab(let g) = e, folded(g.foldID) { return [] }
+            return e.sessions
+        }
     }
 
     /// 按项目: active spaces (each foldable), then the quiet ones that were opened; per machine when `byHost`.
     func spaces(active: [SpaceGroup], quiet: [SpaceGroup], hosts: [MachineRef]?) -> [Session] {
         func section(_ active: [SpaceGroup], _ quiet: [SpaceGroup]) -> [Session] {
             active.flatMap { g in folded(g.id) ? [] : agentRows(g.sessions, key: g.id) }
-                + quiet.flatMap { g in searching || expandedQuiet.contains(g.id) ? g.sessions : [] }
+                + quiet.flatMap { g in searching || expandedQuiet.contains(g.id) ? TabPanes.grouped(g.sessions) : [] }
         }
         guard let hosts else { return section(active, quiet) }
         return hosts.flatMap { ref in
@@ -48,7 +56,7 @@ struct AgentListRows {
                 if r.flat { return agentRows(r.worktrees[0].sessions, key: r.worktrees[0].id) }
                 return r.worktrees.flatMap(worktree)
             }
-            return busy + quiet.flatMap { r in searching || expandedQuiet.contains(r.id) ? order.ordered(r.sessions) : [] }
+            return busy + quiet.flatMap { r in searching || expandedQuiet.contains(r.id) ? TabPanes.grouped(order.ordered(r.sessions)) : [] }
         }
     }
 
@@ -59,7 +67,7 @@ struct AgentListRows {
         let quiet = all && w.sessions.allSatisfy { !order.stays($0) }
         let open = searching || (quiet ? expandedQuiet.contains(w.id) : !isFolded(w.id))
         guard open else { return [] }
-        return quiet ? order.ordered(w.sessions) : agentRows(w.sessions, key: w.id)
+        return quiet ? entryRows(TabPanes.entries(order.ordered(w.sessions))) : agentRows(w.sessions, key: w.id)
     }
 
     /// 按状态: a section per rank, each foldable (已看 starts folded).

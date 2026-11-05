@@ -188,9 +188,11 @@ fun JRow(
     selected: Boolean = false,
     /** Drawn right after the title on its line (a small source mark); the title gives way to it when space is short. */
     titleAccessory: (@Composable () -> Unit)? = null,
+    /** Drawn again with a new [value], its numbers count to the new ones and other text fades in (#2811). */
+    changingValue: Boolean = false,
 ) {
     val palette = PersonaTheme.palette
-    RowFrame(modifier, onClick, onLongClick, null, enabled, selected, value, trailing, chevron) {
+    RowFrame(modifier, onClick, onLongClick, null, enabled, selected, value, trailing, chevron, changingValue) {
         if (leading != null) { leading(); Spacer(Modifier.width(14.dp)) }
         else if (leadingIcon != null) {
             JIcon(leadingIcon, null, size = 22.dp, tint = if (destructive) palette.danger.dot else palette.ink2, decorative = true)
@@ -245,6 +247,7 @@ private fun RowFrame(
     value: String?,
     trailing: (@Composable () -> Unit)?,
     chevron: Boolean,
+    changingValue: Boolean = false,
     content: @Composable RowScope.() -> Unit,
 ) {
     val palette = PersonaTheme.palette
@@ -258,8 +261,9 @@ private fun RowFrame(
         content()
         value?.let {
             Spacer(Modifier.width(10.dp))
-            Text(it, style = if (style == AppStyle.Board) PersonaTheme.type.micro.copy(fontSize = androidx.compose.ui.unit.TextUnit(14f, androidx.compose.ui.unit.TextUnitType.Sp)) else PersonaTheme.type.callout,
-                color = palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp))
+            val valueStyle = if (style == AppStyle.Board) PersonaTheme.type.micro.copy(fontSize = androidx.compose.ui.unit.TextUnit(14f, androidx.compose.ui.unit.TextUnitType.Sp)) else PersonaTheme.type.callout
+            if (changingValue) JChangingText(it, style = valueStyle, color = palette.ink3, modifier = Modifier.widthIn(max = 180.dp))
+            else Text(it, style = valueStyle, color = palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp))
         }
         trailing?.let { Spacer(Modifier.width(10.dp)); it() }
         if (chevron) { Spacer(Modifier.width(6.dp)); JIcon(PhIcons.CaretRight, null, size = 16.dp, tint = palette.ink3) }

@@ -59,7 +59,7 @@
 | `JarvisTheme.palette` | `JarvisPalette`：background、surface（玻璃里半透明）、surfaceOpaque、surfaceStrong、sunken、line、ink / ink2 / ink3、action / onAction、accent、marker、各状态的 `StatusColors(dot, text, tint, onDot)`、diff 和终端色 |
 | `JarvisTheme.type` | `JarvisType`：largeTitle、title、headline、body、bodyStrong、callout、caption、micro（等宽数字）、label、labelSmall、number、voice（Persona 说话的那句）、code |
 | `JarvisTheme.shapes` | 卡片、面板、控件、chip、按钮、底部面板的圆角 |
-| `JarvisTheme.motion` | 时长和曲线（玻璃是弹簧） |
+| `JarvisTheme.motion` | 时长和曲线（玻璃是弹簧）；`count` 是数字滚到新值、图表柱子到新高度的时长（#2811） |
 | `JarvisTheme.glass` | 玻璃的实际渲染级别 |
 
 Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没改完的 Material 组件会跟着变色和换字体，但页面应当换成下面的组件。
@@ -88,6 +88,7 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 | `JSegmented`、`JChip`、`QuickFilterBar` | 互斥筛选、chip、列表顶部的快速筛选（玻璃是 chip，晨报是带下划线的文字 tab，看板是大数字计数板） |
 | `JSwitch` / `JCheckbox` / `JRadio` | 开关、勾选、单选 |
 | `JBadge` / `JTag` | 等你的计数、静态小标签（草稿、体验） |
+| `JChangingText` | 重画时会变的值：数字数到新值、别的文字淡入（扩展 View 的数字、行的值） |
 | `JStatusDot` / `JStatusMark` / `StatusLabel` / `StatusLine` / `PendingBadge` | 状态：小点、会话行前的标记（玻璃发光、晨报转圈和对勾、看板方块）、状态文字、对话里那一行状态 |
 | `JAvatar` | 人、群、来源；角标标出飞书 / 邮件 |
 | `JSwipeActions` | 行的左右滑动操作（收件箱：右滑已处理，左滑交给 Persona） |
@@ -107,6 +108,11 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 | `PaneDivider` | 宽屏两栏之间的把手：玻璃是半透明的墨色药丸，晨报是细墨线，看板是带描边的小格；拖动、悬停光标、TalkBack 的「左栏变宽 / 变窄 / 收起 / 展开」，外壳用（见 3.1 节） |
 | `VoiceOrb` / `VoiceStatus` / `VoiceCaption` / `VoiceControl` / `VoiceControlBar` | 语音对话页：光球（连接中、在听、正在说、静音、结束）、状态行、字幕、底部带字圆按钮（`feature:voice` 用，`docs/android.md`「语音对话」） |
 | `AmbientLight` / `floatingSurface` / `glassSource` | 玻璃的状态光（`inWindow` 按窗口排布，缩略预览按自己的框）、浮层、浮层采样的内容（由页面脚手架处理，页面一般不直接用） |
+
+扩展的 View 重画时（刷新、`ui.invalidate`、按钮回来一个新 View）显示变了什么（#2811，和网页 #2757 一样）：同一个 key 的
+`metric` / `stat_grid` / 行的值只有数字变了就数到新值（`JChangingText`：只动数字，每一帧按原值的写法写，`2/8 → 6/8`、`¥1.20 → ¥36.20`），
+别的文字变化淡入；行的 badge 换 tone 时颜色过渡（`JTag(…, animated = true)`）；列表按 item key 新增的块淡入、去掉的淡出、其余挪到新位置；
+图表 labels 和系列数不变时柱子 / 折线到新值，刻度直接换成新的。第一次画不动，系统关掉动画（动画倍率 0）时什么都不动，停下来时显示的就是扩展发来的原文。
 
 ### 2.3 写页面的规矩
 

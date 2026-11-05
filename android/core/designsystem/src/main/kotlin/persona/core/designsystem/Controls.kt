@@ -1,7 +1,9 @@
 package persona.core.designsystem
 
 import androidx.compose.ui.res.stringResource
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -455,20 +457,31 @@ fun JBadge(count: Int, modifier: Modifier = Modifier, text: String? = null) {
 fun JTag(text: String, modifier: Modifier = Modifier, status: Status? = null) =
     JTagColored(text, modifier, status?.let { PersonaTheme.palette.status(it) })
 
-/** A small static label in a role colour ([Tone]): an extension's badge (有效, 快过期). */
+/**
+ * A small label in a role colour ([Tone]): an extension's badge (有效, 快过期). [animated]: drawn again with another tone
+ * its colours go over to the new ones and a new text fades in (an extension's row badge, #2811).
+ */
 @Composable
-fun JTag(text: String, tone: Tone, modifier: Modifier = Modifier) =
-    JTagColored(text, modifier, PersonaTheme.palette.tone(tone).takeIf { tone != Tone.Neutral })
+fun JTag(text: String, tone: Tone, modifier: Modifier = Modifier, animated: Boolean = false) =
+    JTagColored(text, modifier, PersonaTheme.palette.tone(tone).takeIf { tone != Tone.Neutral }, animated)
 
 @Composable
-private fun JTagColored(text: String, modifier: Modifier, tone: StatusColors?) {
+private fun JTagColored(text: String, modifier: Modifier, tone: StatusColors?, animated: Boolean = false) {
     val palette = PersonaTheme.palette
     val shape = RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 4.dp else 6.dp)
-    Text(
-        text, style = PersonaTheme.type.micro.copy(fontWeight = FontWeight.SemiBold), color = tone?.text ?: palette.ink2, maxLines = 1,
-        modifier = modifier.clip(shape).background(tone?.tint ?: palette.surfaceStrong).padding(horizontal = 6.dp, vertical = 2.dp),
-    )
+    val style = PersonaTheme.type.micro.copy(fontWeight = FontWeight.SemiBold)
+    var ink = tone?.text ?: palette.ink2
+    var fill = tone?.tint ?: palette.surfaceStrong
+    if (animated) {
+        val spec: AnimationSpec<Color> = if (PersonaTheme.reduceMotion) snap() else tween(PersonaTheme.motion.standard)
+        ink = animateColorAsState(ink, spec, label = "tag ink").value
+        fill = animateColorAsState(fill, spec, label = "tag fill").value
+        Box(modifier.clip(shape).drawBehind { drawRect(fill) }.padding(TagPadding)) { JChangingText(text, style = style, color = ink) }
+    } else Text(text, style = style, color = ink, maxLines = 1, modifier = modifier.clip(shape).background(fill).padding(TagPadding))
 }
+
+private val TagPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+
 
 // ------------------------------------------------------------------ progress
 

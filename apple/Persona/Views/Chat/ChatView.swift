@@ -307,14 +307,28 @@ struct ChatView: View {
         .ignoresSafeArea(.container, edges: inTitleBar ? .top : [])
     }
 
+    /// One agent of the Mac's sibling menu: its title (its agent beside its tab mates), its state; the open one ticked.
+    @ViewBuilder private func macSiblingButton(_ s: Session, role: TabPanes.Role?) -> some View {
+        let title = s.title.isEmpty ? s.agentLabel : s.title
+        let name = role.map { "\($0.name)\($0.launcher ? "（发起者）" : "") · \(title)" } ?? title
+        Button { if s.key != key { switchTo(s.key) } } label: {
+            if s.key == key { Label(name, systemImage: Theme.Icon.success) } else { Text("\(name) · \(s.state.label)") }
+        }
+    }
+
     @ViewBuilder private var macTitleButtons: some View {
         let siblings = model.siblings(of: key)
         if siblings.count > 1 {
             Menu {
-                ForEach(siblings) { s in
-                    let name = s.title.isEmpty ? s.agentLabel : s.title
-                    Button { if s.key != key { switchTo(s.key) } } label: {
-                        if s.key == key { Label(name, systemImage: Theme.Icon.success) } else { Text("\(name) · \(s.state.label)") }
+                // A tab's agents under its name, in the order of their panes, the 发起者 marked (#2320).
+                ForEach(TabPanes.entries(siblings)) { e in
+                    switch e {
+                    case .agent(let s):
+                        macSiblingButton(s, role: nil)
+                    case .tab(let g):
+                        Section("\(g.label ?? "标签页") · \(g.sessions.count) 个 Agent") {
+                            ForEach(g.sessions) { s in macSiblingButton(s, role: g.role(of: s)) }
+                        }
                     }
                 }
             } label: {

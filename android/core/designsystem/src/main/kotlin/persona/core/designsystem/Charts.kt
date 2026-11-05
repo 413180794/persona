@@ -188,7 +188,7 @@ fun JChart(data: JChartData, modifier: Modifier = Modifier, compact: Boolean = f
                 s.name?.let { labeled.format(it, values) } ?: values
             }
         }
-        ChartPlot(data, colors, compact, index, onPick = { picked = it },
+        ChartPlot(data, chartValues(data), colors, compact, index, onPick = { picked = it },
             Modifier.fillMaxWidth().height(if (compact) 72.dp else 180.dp).semantics { contentDescription = summary })
         if (detail != null) Text(detail, style = type.caption, color = palette.ink3)
     }
@@ -211,7 +211,7 @@ private fun Swatch(color: Color, name: String?, value: String?) {
 }
 
 @Composable
-private fun ChartPlot(data: JChartData, colors: List<Color>, compact: Boolean, picked: Int?, onPick: (Int?) -> Unit, modifier: Modifier) {
+private fun ChartPlot(data: JChartData, values: List<List<Double>>, colors: List<Color>, compact: Boolean, picked: Int?, onPick: (Int?) -> Unit, modifier: Modifier) {
     val palette = PersonaTheme.palette
     val measurer = rememberTextMeasurer()
     val textStyle = PersonaTheme.type.micro.copy(color = palette.ink3)
@@ -280,16 +280,16 @@ private fun ChartPlot(data: JChartData, colors: List<Color>, compact: Boolean, p
                     if (data.stacked && data.series.size > 1) {
                         var up = 0.0
                         var down = 0.0
-                        data.series.forEachIndexed { k, s ->
-                            val v = s.values.getOrNull(i)?.takeIf(Double::isFinite) ?: return@forEachIndexed
+                        data.series.forEachIndexed { k, _ ->
+                            val v = values[k].getOrNull(i)?.takeIf(Double::isFinite) ?: return@forEachIndexed
                             val (from, to) = if (v >= 0) (up to up + v).also { up += v } else (down to down + v).also { down += v }
                             val y1 = y(to); val y0 = y(from)
                             drawRect(colors[k].copy(alpha = alpha), Offset(cx(i) - group / 2, min(y0, y1)), Size(group, abs(y0 - y1)))
                         }
                     } else {
                         val bar = group / data.series.size
-                        data.series.forEachIndexed { k, s ->
-                            val v = s.values.getOrNull(i)?.takeIf(Double::isFinite) ?: return@forEachIndexed
+                        data.series.forEachIndexed { k, _ ->
+                            val v = values[k].getOrNull(i)?.takeIf(Double::isFinite) ?: return@forEachIndexed
                             val y0 = y(0.0); val y1 = y(v)
                             val x = cx(i) - group / 2 + bar * k
                             val inset = if (data.series.size > 1) 1.dp.toPx() else 0f
@@ -301,7 +301,7 @@ private fun ChartPlot(data: JChartData, colors: List<Color>, compact: Boolean, p
             JChartKind.Line -> {
                 if (picked != null) drawLine(palette.ink3, Offset(cx(picked), 0f), Offset(cx(picked), plotHeight), 1.dp.toPx())
                 data.series.forEachIndexed { k, s ->
-                    val points = (0 until n).mapNotNull { i -> s.values.getOrNull(i)?.takeIf(Double::isFinite)?.let { Offset(cx(i), y(it)) } }
+                    val points = (0 until n).mapNotNull { i -> values[k].getOrNull(i)?.takeIf(Double::isFinite)?.let { Offset(cx(i), y(it)) } }
                     if (points.isEmpty()) return@forEachIndexed
                     val line = Path().apply { points.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) } }
                     if (data.series.size == 1 && points.size > 1) {
@@ -310,7 +310,7 @@ private fun ChartPlot(data: JChartData, colors: List<Color>, compact: Boolean, p
                     }
                     drawPath(line, colors[k], style = Stroke((if (compact) 1.5.dp else 2.dp).toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
                     if (points.size == 1 || (!compact && n <= 24)) points.forEach { drawCircle(colors[k], 2.5.dp.toPx(), it) }
-                    picked?.let { i -> s.values.getOrNull(i)?.takeIf(Double::isFinite)?.let { v ->
+                    picked?.let { i -> values[k].getOrNull(i)?.takeIf(Double::isFinite)?.let { v ->
                         drawCircle(palette.background, 5.dp.toPx(), Offset(cx(i), y(v)))
                         drawCircle(colors[k], 3.5.dp.toPx(), Offset(cx(i), y(v)))
                     } }
@@ -318,6 +318,39 @@ private fun ChartPlot(data: JChartData, colors: List<Color>, compact: Boolean, p
             }
         }
     }
+}
+
+/**
+ * The values a chart's marks are drawn at this frame (#2811): the data's own, but when a chart is drawn again with the
+ * same labels and series its marks go from where they were to the new values. The scale goes to the new one at once.
+ * Nothing moves the first time or with reduced motion.
+ */
+@Composable
+private fun chartValues(data: JChartData): List<List<Double>> {
+    val target = data.series.map { it.values }
+    val shape = data.kind to data.labels to target.map { it.size }
+    val reduce = PersonaTheme.reduceMotion
+    val duration = PersonaTheme.motion.count
+    var last by remember { mutableStateOf(shape to target) }
+    var shown by remember { mutableStateOf(target) }
+    val progress = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(target, shape) {
+        val (lastShape, lastTarget) = last
+        last = shape to target
+        if (reduce || lastShape != shape || lastTarget == target) { shown = target; return@LaunchedEffect }
+        val from = shown.takeIf { it.map(List<Double>::size) == target.map(List<Double>::size) } ?: lastTarget
+        progress.snapTo(0f)
+        progress.animateTo(1f, androidx.compose.animation.core.tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)) {
+            val p = value.toDouble()
+            shown = target.mapIndexed { k, row -> row.mapIndexed { i, to ->
+                val f = from[k][i]
+                if (f.isFinite() && to.isFinite()) f + (to - f) * p else to
+            } }
+        }
+        shown = target
+    }
+    // the frame the data changed in still draws the old marks (same shape), the effect moves them from there
+    return if (last.first == shape && shown.map(List<Double>::size) == target.map(List<Double>::size)) shown else target
 }
 
 /** One number of a [JStatGrid]: [detail] is coloured by [tone] (neutral is the quiet grey). */
@@ -357,7 +390,7 @@ private fun StatCell(stat: JStat, modifier: Modifier) {
     val type = PersonaTheme.type
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(stat.label, style = type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(stat.value, style = type.number, color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        JChangingText(stat.value, style = type.number, color = palette.ink)
         stat.detail?.takeIf { it.isNotBlank() }?.let {
             Text(it, style = type.caption, color = if (stat.tone == Tone.Neutral) palette.ink3 else palette.tone(stat.tone).text, maxLines = 2,
                 overflow = TextOverflow.Ellipsis)
