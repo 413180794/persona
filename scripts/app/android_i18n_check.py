@@ -9,7 +9,7 @@
   sent to the model) says why on its line with `// i18n-ignore: <reason>`.
 
   python3 scripts/app/android_i18n_check.py            # check
-  python3 scripts/app/android_i18n_check.py --update   # record the lower counts after moving text to resources
+  python3 scripts/app/android_i18n_check.py --update   # record the lower counts (even while another file is over)
 """
 import argparse
 import json
@@ -229,8 +229,12 @@ def main():
     counts = count()
     baseline = counts if args.init else baselines()
     problems += regressions(counts, baseline)
-    if (args.update or args.init) and not problems:
+    if args.init and not problems:
         write_baselines(counts)
+    elif args.update:
+        # Record what went down even while another module is over its baseline (that one stays reported): agents
+        # migrating different modules at once must not block each other.
+        write_baselines({path: min(n, baseline[path]) for path, n in counts.items() if path in baseline})
     for problem in problems:
         print(problem, file=sys.stderr)
     total, before = sum(counts.values()), sum(baseline.values())

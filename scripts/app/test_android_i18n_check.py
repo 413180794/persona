@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android_i18n_check import count, literals, regressions, resource_problems
+from android_i18n_check import count, literals, regressions, resource_problems, write_baselines, baselines
 
 
 def write(root, path, text):
@@ -79,6 +79,16 @@ class I18nCheckTest(unittest.TestCase):
         self.assertEqual([], regressions({'a.kt': 2}, {'a.kt': 3}))
         self.assertEqual(1, len(regressions({'a.kt': 4}, {'a.kt': 3})))
         self.assertEqual(1, len(regressions({'new.kt': 1}, {})))
+
+    def test_update_records_decreases_per_module(self):
+        (self.module / 'src').mkdir(exist_ok=True)
+        write(self.root, 'feature/other/build.gradle.kts', '')
+        (self.root / 'feature/other/src').mkdir(parents=True)
+        write_baselines({'feature/demo/src/main/kotlin/A.kt': 2}, self.root)
+        self.assertEqual({'feature/demo/src/main/kotlin/A.kt': 2}, baselines(self.root))
+        self.assertFalse((self.root / 'feature/other/i18n-baseline.json').exists())
+        write_baselines({}, self.root)
+        self.assertFalse((self.module / 'i18n-baseline.json').exists())
 
     def test_escaped_quotes_stay_inside_the_literal(self):
         self.assertEqual([(1, r'"a \" 中"')], literals(r'val x = "a \" 中"'))
