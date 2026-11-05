@@ -30,7 +30,7 @@ func TestShowcaseIsDrawable(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, version := range []int{2, 3, 4} {
+		for _, version := range []int{2, 3, 4, 5} {
 			var v View
 			if err := json.Unmarshal(raw, &v); err != nil {
 				t.Fatalf("%s: %v", name, err)

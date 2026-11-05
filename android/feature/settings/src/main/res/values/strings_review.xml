@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UI version 5 code review (#3136): ExtensionCodeReviewUi.kt -->
+<resources>
+    <string name="settings_ext_review_add_to_review">Add to review</string>
+    <string name="settings_ext_review_comment_now">Comment now</string>
+    <string name="settings_ext_review_comment_on_lines">Comment on line %1$s</string>
+    <string name="settings_ext_review_discard">Discard drafts</string>
+    <string name="settings_ext_review_draft">Draft</string>
+    <string name="settings_ext_review_expand_all">All</string>
+    <string name="settings_ext_review_expand_up">Show lines above</string>
+    <string name="settings_ext_review_folded_big">Large change, folded</string>
+    <string name="settings_ext_review_folded_generated">Generated file, folded</string>
+    <string name="settings_ext_review_folded_viewed">Viewed</string>
+    <string name="settings_ext_review_generated">Generated</string>
+    <string name="settings_ext_review_ignore_whitespace">Ignore whitespace</string>
+    <string name="settings_ext_review_lines_range">Lines %1$s</string>
+    <string name="settings_ext_review_load_generated">Load generated file</string>
+    <string name="settings_ext_review_loading_diff">Loading the diff…</string>
+    <string name="settings_ext_review_quiet_failed">Couldn\'t reach the extension</string>
+    <string name="settings_ext_review_renamed_only">Renamed without changes</string>
+    <string name="settings_ext_review_reopen">Reopen</string>
+    <string name="settings_ext_review_resolve">Resolve</string>
+    <string name="settings_ext_review_rest_of_file">To the end of the file</string>
+    <string name="settings_ext_review_review">Review</string>
+    <string name="settings_ext_review_show_diff">Show</string>
+    <string name="settings_ext_review_similar">%1$d%% similar</string>
+    <string name="settings_ext_review_start_review">Start a review</string>
+    <string name="settings_ext_review_suggest">Suggest</string>
+    <string name="settings_ext_review_suggest_delete">Suggests removing these lines</string>
+    <string name="settings_ext_review_suggested_change">Suggested change</string>
+    <string name="settings_ext_review_summary">Leave a summary (optional)</string>
+    <string name="settings_ext_review_viewed">Viewed</string>
+    <string name="settings_ext_review_viewed_of">%1$d / %2$d viewed</string>
+    <string name="settings_ext_review_whitespace_only">Whitespace-only changes</string>
+    <plurals name="settings_ext_review_drafts">
+        <item quantity="one">Review draft · %1$d comment</item>
+        <item quantity="other">Review draft · %1$d comments</item>
+    </plurals>
+    <plurals name="settings_ext_review_open_threads">
+        <item quantity="one">%1$d unresolved</item>
+        <item quantity="other">%1$d unresolved</item>
+    </plurals>
+    <plurals name="settings_ext_review_submit_drafts">
+        <item quantity="one">Submit %1$d</item>
+        <item quantity="other">Submit %1$d</item>
+    </plurals>
+</resources>

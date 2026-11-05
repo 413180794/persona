@@ -37,7 +37,12 @@
 - **CLAUDE.md**：健康空间有自己的一份 `server/internal/prompts/assistant/health_claude_md.md`（golden：`server/internal/assistant/testdata/prompts/health_claude_md.golden`）：
   只聊健康；用 `phone_health_summary` 读数据、`phone_health_write_sample` 记数据（手机上确认）；不写知识库、不把健康内容发到别的对话；用户要分享给别人（医生、教练、家人）就帮他发，发送在手机上确认；
   不诊断、不开药，危险信号先让用户就医；讲一组数字时附图表卡片。连接器和插件的 skill 和助手目录一样装进去，但插件给助手的说明（`plugins.Instructions`）不拼进健康的 CLAUDE.md：那些说明是给主对话的工作场景写的，第一版有意不带。
-- **记忆**：Claude Code 的 auto memory 按工作目录分（`~/.claude/projects/<编码后的目录>/memory/`），健康目录的记忆只有健康对话读写，主对话读不到，反过来也一样。
+- **记忆**：Claude Code 的 auto memory 按工作目录分（`~/.claude/projects/<编码后的目录>/memory/`），健康目录的记忆只有健康对话读写，主对话的上下文里没有它，反过来也一样。
+- **文件**（#3282）：主对话的 Claude 能用 Read / Bash 读电脑上的文件，目录分开不等于读不到。所以主对话（不是健康空间的助手对话）启动时带上拒绝规则：
+  Read、Edit 不许碰健康目录和它的 Claude 项目目录（记忆、对话记录），`server/internal/node/healthdeny.go`，CLI 经 `--disallowedTools`、Agent SDK 经 settings 的 `permissions.deny`。
+  拒绝规则压过一切放行：点过「本会话总是允许」、切到 bypass 模式都读不到（实测 Claude Code 2.1.318）。
+  主对话里文件类工具的「本会话总是允许」也只放行那个文件所在的目录（`hooks.go` `fileRuleScope`），不再放开整个工具。
+  **没拦住的**：Bash 可以用任意写法拼出路径（`cd .. && cat he*`），按命令文本拦不全；要彻底拦住得用 Claude Code 的沙箱或系统层的隔离。主对话跑在 Codex 上时也还没有这条规则。
   记忆接口带 `?space=health` 读写的就是这一份。
 - **node**：node 认得健康目录对应的 Claude 项目目录（`server/internal/node/sessions.go` 的 `isAssistantProject`），健康对话的 transcript 和助手的一样当作助手的对话。
 - **哪个空间**：hub 发出的会话列表里，健康对话的每一项带 `space: "health"`（`proto.Session.Space`，`server/internal/hub/hub.go`、`server/internal/hub/assistant_link.go` 按 cwd 填）；
@@ -114,7 +119,7 @@
 - 手机上的健康 tab，首页显示最近的趋势卡片（#886 的结构化卡片）。
 - 主对话聊到健康时建议「去健康里继续」。
 - diet-advice 的推送进健康空间。
-- 主对话能不能直接读健康目录的文件（Read / Bash）：要实测，目录分开不等于文件读不到。
+- 主对话经 Bash、经 Codex 读健康目录：用沙箱或系统层隔离彻底拦住（#3282 之后）。
 - 更多数据源：病历、体检报告上传、录音里的心率 / HRV（#1950）。
 
 ## 怎么验证

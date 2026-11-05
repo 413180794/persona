@@ -68,7 +68,7 @@ private struct LarkConversationsPage: View {
             ScrollViewReader { proxy in
             List {
                 if query.isEmpty, choice.accounts.count > 1 {
-                    accountChips
+                    LarkAccountChips(choice: choice)
                         .listRowInsets(EdgeInsets(top: Theme.Space.s, leading: 0, bottom: Theme.Space.s, trailing: 0))
                         .listRowSeparator(.hidden)
                         .themedRow()
@@ -96,7 +96,7 @@ private struct LarkConversationsPage: View {
                     }
                     let prefetch = query.isEmpty ? rows.dropLast(Self.prefetchRows).last?.id : nil
                     ForEach(rows) { conversation in
-                        NavigationLink(value: conversation) { row(conversation) }
+                        NavigationLink(value: conversation) { LarkConversationRow(conversation: conversation, display: display) }
                             .accessibilityIdentifier("feishu-chat-" + conversation.id)
                             .id(conversation.id)
                             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { scroll.reader.row(conversation.id, top: $0) }
@@ -238,21 +238,6 @@ private struct LarkConversationsPage: View {
         }
     }
 
-    /// One chip per signed-in account, its unread count beside the name; the chosen one is filled.
-    private var accountChips: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: Theme.Space.s) {
-                ForEach(choice.accounts) { account in
-                    FilterChip(title: account.title, count: account.unread > 0 ? account.unread : nil,
-                               on: account.id == choice.selectedID) { choice.select(account.id) }
-                        .accessibilityIdentifier("feishu-account-\(account.id)")
-                }
-            }
-            .padding(.horizontal, Theme.Space.page)
-        }
-        .accessibilityLabel("飞书账号")
-    }
-
     private func shelfPassed(_ offset: Double) -> Bool {
         scroll.shelfHeight > 0 && offset >= Double(scroll.shelfHeight) - LarkPinnedInteraction.topTolerance
     }
@@ -285,28 +270,6 @@ private struct LarkConversationsPage: View {
             Button(action, action: perform).lineLimit(1).themedButton()
         }
         .frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xxl)
-    }
-
-    private func row(_ conversation: LarkConversation) -> some View {
-        HStack(spacing: Theme.Space.m) {
-            LarkAvatarImage(name: conversation.name, url: conversation.avatar, isGroup: conversation.isGroup, size: Theme.Size.avatarXL)
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(spacing: Theme.Space.s) {
-                    Text(conversation.name).font(Theme.Font.bodyStrong).foregroundStyle(.primary).lineLimit(1)
-                    Spacer(minLength: 0)
-                    if let date = conversation.updatedAt {
-                        Text(Fmt.relative(date)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                }
-                HStack(spacing: Theme.Space.s) {
-                    Text(display.summary(conversation.preview)).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
-                    Spacer(minLength: 0)
-                    if conversation.badge > 0 { CountBadge(count: conversation.badge) }
-                    if conversation.muted { Image(systemName: Theme.Icon.muted).font(Theme.Font.caption).foregroundStyle(.secondary) }
-                }
-            }
-        }
-        .padding(.vertical, Theme.Space.s)
     }
 
     private func openConnectionSettings() {

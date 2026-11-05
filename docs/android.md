@@ -1112,13 +1112,19 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 
 ### UI 版本 4：代码托管（#2951）
 
-规格见 [extensions.md](extensions.md)「UI 版本 4：代码托管」。App 发 `ui_version: 4`。
+规格见 [extensions.md](extensions.md)「UI 版本 4：代码托管」。App 现在发 `ui_version: 5`（见下一节）。
 
 - **画法**：`ExtensionCodeViews.kt`（`header`、`breadcrumb`、`file_tree`、`code`、`diff`、`comment_thread`、`composer`），逻辑和高亮在 `ExtensionCodeText.kt`（没有第三方高亮库：关键字、字符串、注释、数字的轻量分词，
   块注释跨行）。手机屏窄，`diff` 只有统一看法；评论串插在行下面、和屏幕一样宽（不随代码横向滚动），点一行开评论框。长文件、长 diff 先画 400 行，「显示全部」再画其余。
   `tabs` 是列表顶上一排标签（`ExtensionTabs`），`layout: split` 的侧栏收成顶上一条可展开的「文件 · N」（`SidePane`，选了文件收起）。动作的 `values` 按「字段 → 组件的值 → 动作自带的」合并（`ExtensionViewText.sent`）。
 - **入口**：宽屏（rail）在四个标签下面列出扩展的 `nav_page`（`AppNavigationRail(extra = …)`），点了在设置的详情栏里打开；手机上照旧在「设置」首页顶上。
 - **单测 / 截图**：`ExtensionCodeTest`；`ExtensionShowcaseShotsTest` 会把 `code-overview` / `code-review` / `code-browse` 三页和其余组件展示页一起画（三套风格 × 深浅色）。
+
+### UI 版本 5：代码 review（#3136）
+
+规格见 [extensions.md](extensions.md)「UI 版本 5：代码 review」。App 发 `ui_version: 5`。逻辑在 `ExtensionCodeReview.kt`（和网页的 `lib/code-review.ts` 同一套算法和用例），画法在 `ExtensionCodeReviewUi.kt`：
+字级高亮、按 `context` 取行展开、已看（`mark_viewed`，或按 `path@revision` 存在 SharedPreferences）、生成 / 大 / 已看的文件先收起、点两下行号选一段评论、草稿和底部评审条（弹层里写总结）、suggestion、忽略空白。
+`context` / `mark_viewed` / 自动 `load` 走 `ExtensionUiState.fetch`（不占 busy），回答的 `items` 按 key 原地换。只有统一视图。单测 `ExtensionCodeReviewTest`，截图 `ExtensionReviewShotsTest`。
 
 ### 扩展模型和纯声明贡献（#2226）
 

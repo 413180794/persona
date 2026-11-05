@@ -1,0 +1,3 @@
+/* A page of diffs for reviewing (DiffReview.tsx): a long hunk off screen costs no layout, as a whole diff does
+   (code-view.css's code-lazy). */
+.code-chunk { content-visibility: auto; contain-intrinsic-size: auto 6000px; }

@@ -923,6 +923,7 @@ export interface View {
   filter?: Filter;
   tabs?: Tabs;
   layout?: Layout;
+  review?: Review;
   /** Plain text for an assistant card: required by CheckAssistantView; not required for extension views. */
   fallback?: string;
   /**
@@ -1207,6 +1208,11 @@ export interface CodeComponent {
   highlight?: LineRange;
   truncated?: boolean;
   load?: Action;
+  /**
+   * An https link to lines of this file on its site, {start} and {end} standing for the lines
+   * (…/blob/<sha>/a.go#L{start}-L{end}).
+   */
+  line_url?: string;
 }
 
 /**
@@ -1231,6 +1237,28 @@ export interface DiffComponent {
   load?: Action;
   expand?: Action;
   comment?: Action;
+  /**
+   * Fetch hidden lines of the file (UI version 5): values {path, side: new or old, from, to: a line or end}; the
+   * extension answers with lines (ActionResult.lines), the page is not drawn again.
+   */
+  context?: Action;
+  /** The user has marked this file viewed. */
+  viewed?: boolean;
+  /**
+   * Mark the file viewed or not: values {path, viewed: true or false}. Without it the app keeps viewed on the device,
+   * by path and revision.
+   */
+  mark_viewed?: Action;
+  /** What this file's change is (a blob id): a viewed mark kept on the device holds for it only. */
+  revision?: string;
+  /** A generated file or a lockfile: folded at first. */
+  generated?: boolean;
+  /** How alike a renamed file is to its old one, in percent. */
+  similarity?: number;
+  /** Add a comment to the pending review instead of sending it alone: values as comment's. */
+  draft?: Action;
+  /** The extension takes ```suggestion blocks in comments. */
+  suggestions?: boolean;
 }
 
 /**
@@ -1321,6 +1349,8 @@ export interface TreeEntry {
   deletions?: number;
   comments?: number;
   badge?: Badge;
+  viewed?: boolean;
+  generated?: boolean;
 }
 
 export type TreeEntryKind = "file" | "dir" | (string & {});
@@ -1354,6 +1384,10 @@ export interface Thread {
   outdated?: boolean;
   comments: Comment[];
   reply?: Action;
+  /** A draft of the pending review, not sent yet. */
+  pending?: boolean;
+  /** Resolve or reopen: values {thread: id, resolved: true or false}. */
+  resolve?: Action;
 }
 
 /**
@@ -1641,6 +1675,37 @@ export interface ActionResult {
   push?: Push;
   /** Then go back a page; the page below is drawn again. */
   pop?: boolean;
+  /** Lines of a file a diff's context asked for: the page is not drawn again. */
+  lines?: FileLines;
+  /**
+   * Components to put in place of those with the same key on the page (each has a key): the rest is not drawn again.
+   */
+  items?: Component[];
+}
+
+/**
+ * Lines of one side of a file from start (1 the first), as many as the extension has at hand (all of it, say); total
+ * is how many the file has.
+ */
+export interface FileLines {
+  path: string;
+  side?: DiffSide;
+  start: number;
+  lines: string[];
+  total?: number;
+}
+
+/**
+ * The pending review (UI version 5): a bar at the page's foot saying how many drafts there are, a summary box (name)
+ * and buttons (comment, approve, request changes) that send them all, discard throws them away. An older app gets a
+ * text and a composer on top.
+ */
+export interface Review {
+  count: number;
+  name: string;
+  placeholder?: string;
+  buttons: ComposerButton[];
+  discard?: Action;
 }
 
 export type PersonaCardKind = "stat" | "stacked_bar" | "line" | "bar" | (string & {});

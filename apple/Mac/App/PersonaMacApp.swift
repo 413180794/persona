@@ -158,7 +158,7 @@ struct MacCommands: Commands {
         }
         CommandGroup(after: .sidebar) {
             ForEach(Array(MacSection.shortcutOrder.enumerated()), id: \.element) { i, section in
-                if MacSection.visible(supportsTodos: TodoStore.shared.isSupported).contains(section) {
+                if MacSection.visibleNow.contains(section) {
                     Button(section.title) { MacShellState.shared.go(section, model) }
                         .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
                 }

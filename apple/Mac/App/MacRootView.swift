@@ -3,21 +3,30 @@ import SwiftUI
 
 /// The window's sidebar sections: the iPhone's four tabs, plus 知识库 and 机器 (on the phone a page inside
 /// Persona, and 机器 inside Agents / 设置), which a Mac with room for a sidebar shows as sections of their own
-/// (docs/mac.md「主窗口」). ⌘1…⌘7: see `shortcutOrder`.
+/// (docs/mac.md「主窗口」), and 消息 while 设置 › 飞书 › 首页显示消息 is on (the iPhone's extra tab, #392). ⌘1…⌘8: see
+/// `shortcutOrder`.
 enum MacSection: String, CaseIterable, Identifiable {
-    case assistant, agents, todos, inbox, knowledge, machines, settings
+    case assistant, agents, todos, messages, inbox, knowledge, machines, settings
 
     var id: String { rawValue }
 
-    /// The sections in ⌘ order. ⌘1…⌘6 stay where they were; 「待办」 (added later) takes ⌘7. The sidebar shows `allCases`
-    /// (「待办」 after Agents), so the two orders are kept apart.
-    static let shortcutOrder: [MacSection] = [.assistant, .agents, .inbox, .knowledge, .machines, .settings, .todos]
+    /// The sections in ⌘ order. ⌘1…⌘6 stay where they were; 「待办」 (added later) takes ⌘7, 「消息」 ⌘8. The sidebar shows
+    /// `allCases` (「待办」 after Agents, 「消息」 before 收件箱 as on the iPhone), so the two orders are kept apart.
+    static let shortcutOrder: [MacSection] = [.assistant, .agents, .inbox, .knowledge, .machines, .settings, .todos, .messages]
 
     /// The ⌘ number of the section, 1-based.
     var shortcut: Int? { MacSection.shortcutOrder.firstIndex(of: self).map { $0 + 1 } }
 
-    /// The sections the window shows: 「待办」 only when the hub has todos (an old hub answers 404, #397).
-    static func visible(supportsTodos: Bool) -> [MacSection] { allCases.filter { supportsTodos || $0 != .todos } }
+    /// The sections the window shows: 「待办」 only when the hub has todos (an old hub answers 404, #397), 「消息」 only while
+    /// its switch is on and the hub has Feishu chats (`LarkHomePreference.shows`).
+    static func visible(supportsTodos: Bool, showsMessages: Bool = false) -> [MacSection] {
+        allCases.filter { (supportsTodos || $0 != .todos) && (showsMessages || $0 != .messages) }
+    }
+
+    /// What the window shows right now (the shell's sidebar, the ⌘ menu, ⌘K).
+    @MainActor static var visibleNow: [MacSection] {
+        visible(supportsTodos: TodoStore.shared.isSupported, showsMessages: LarkHomePreference.shared.shows)
+    }
 
     /// The iPhone tab it is; nil for the Mac's own sections.
     var tab: AppTab? {
@@ -26,7 +35,7 @@ enum MacSection: String, CaseIterable, Identifiable {
         case .agents: .chats
         case .inbox: .mail
         case .settings: .settings
-        case .todos, .knowledge, .machines: nil
+        case .todos, .messages, .knowledge, .machines: nil
         }
     }
 
@@ -66,6 +75,7 @@ enum MacSection: String, CaseIterable, Identifiable {
         case .assistant: "Persona"
         case .agents: "Agents"
         case .todos: "待办"
+        case .messages: "消息"
         case .inbox: "收件箱"
         case .knowledge: "知识库"
         case .machines: "机器"
@@ -78,6 +88,7 @@ enum MacSection: String, CaseIterable, Identifiable {
         case .assistant: Theme.Icon.ai
         case .agents: Theme.Icon.agents
         case .todos: Theme.Icon.todo
+        case .messages: Theme.Icon.feishuChats
         case .inbox: Theme.Icon.inbox
         case .knowledge: Theme.Icon.knowledge
         case .machines: Theme.Icon.machines
@@ -250,6 +261,13 @@ private struct MacShell: View {
                 MacSection.remember(nil)
             }
         }
+        .onChange(of: LarkHomePreference.shared.shows) { _, shows in
+            // 首页显示消息 switched off (or the hub lost its Feishu chats): the window leaves 消息 as the iPhone leaves its tab.
+            if !shows, shell.section == .messages {
+                shell.section = nil
+                MacSection.remember(nil)
+            }
+        }
         .onChange(of: model.assistantCurrent) { shell.section = nil; shell.pluginPage = nil }
         .onChange(of: sidebarHidden, initial: true) { _, hidden in if chrome.sidebarHidden != hidden { chrome.sidebarHidden = hidden } }
         .onAppear { chrome.openWindow = openWindow }
@@ -263,14 +281,18 @@ private struct MacShell: View {
     @State private var chrome = MacPageChrome()
 
     /// The section on screen: the one picked in the column, else the tab's.
-    private var shown: MacSection { MacSection.shown(override: shell.section, tab: model.selectedTab) }
+    private var shown: MacSection {
+        let s = MacSection.shown(override: shell.section, tab: model.selectedTab)
+        // A remembered 消息 while its switch is off (or before the hub says it has Feishu chats): the tab's section.
+        return s == .messages && !LarkHomePreference.shared.shows ? MacSection(model.selectedTab) : s
+    }
 
     /// The sections, with the rows the Persona page's own list draws (`AssistantSidebar`): the same icon box, type and
     /// rounded selection (2026-11-02 user: the system's source list beside it looked unstyled). Flush with the window's
     /// edges, up behind the traffic lights; inset from them it looked like a card on a backing board (same day).
     private var sections: some View {
         return VStack(spacing: Theme.Space.xxs) {
-            ForEach(MacSection.visible(supportsTodos: TodoStore.shared.isSupported)) { section in
+            ForEach(MacSection.visibleNow) { section in
                 // The plugins' pages go with 机器 and 设置, right before 设置 (docs/extensions.md「UI 插槽」).
                 if section == .settings { pluginRows }
                 MacSidebarRow(icon: section.icon, title: section.title, selected: section == shown && shell.pluginPage == nil,
@@ -314,7 +336,7 @@ private struct MacShell: View {
     private func badge(_ section: MacSection) -> MacSidebarRow.Badge? {
         let n: Int
         switch section {
-        case .knowledge, .machines: return nil
+        case .knowledge, .machines, .messages: return nil // 消息: the iPhone's tab has no badge either
         case .todos: n = TodoStore.shared.badgeCount
         case .assistant: n = model.badges.assistant
         case .agents: n = model.badges.agents
@@ -354,6 +376,7 @@ private struct MacShell: View {
         case .assistant: AssistantView() // its own headers are the title bar's row (#830, `AssistantView`)
         case .agents: ChatsView()
         case .todos: MacTodosPage()
+        case .messages: MacLarkMessagesPage() // the chats beside the open one (#3162)
         case .inbox: MacInboxPage()
         case .knowledge: MacKnowledgePage() // the list and the open entry side by side (#2318)
         case .machines: MacMachinesPage()

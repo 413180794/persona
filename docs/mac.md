@@ -23,6 +23,10 @@
   - **Persona**：主对话 + 置顶的对话；「全部对话」进列表栏看按天分组的历史。
   - **Agents**：全部 / 需要你 / 未读 / 工作中（带数量，需要你是红色角标）；下面是置顶的空间和各台机器（点机器 = 按机器筛）。分组菜单支持「按仓库」「按待办」，没选过时默认按仓库（和 iOS 同一套，#2108）。
   - **待办**：待办列表（左侧）与详情（右侧，⌘7 打开；旧 hub 上不显示），带未完成数量角标；新建待办、完成/重新打开、删除、交给 Agent。
+  - **消息**（#3162，iOS 的 #392 / #530）：只在 设置 › 连接器 › 飞书 打开「首页显示消息」、且 hub 有飞书会话（`LarkHomePreference.shows`）时出现，在收件箱上面，⌘8；开关关掉时窗口回到原来的分区。
+    飞书的私聊和群聊列表在左（约 340pt，宽度可拖、记住，`MacListBeside`），点一个在右边打开聊天（收件箱同一个 `LarkChatView`，可以直接发消息），列表里选中那个；没选时右边一行提示。
+    和 iPhone 的「消息」页同一个列表模型、同一种行（`LarkConversationRow`）、账号胶囊（`LarkAccountChips`）和置顶栏（`LarkPinnedShelf`，Mac 上用「展开 / 收起」按钮，没有下拉展开）；搜索在工具栏，标题行右端是「飞书设置」。
+    聊天里点开的人、别的会话在右栏里推进（‹ 在标题行），飞书文档、网页在右侧的链接面板里开，同收件箱（`Mac/Inbox/MacLarkMessagesPage.swift`）。截图：`-integrations.lark-connector.enabled YES -macSection messages`，加 `-openMacLarkChat <会话名>` 打开一个。
   - **收件箱**：全部 / 飞书 / 各个邮箱 / @我 / 私聊 / 群聊 / 邮件 / Agent。
   - **知识库**：项目 / 会话 / 人 / 文档 / 会议 / 日程。
     列表在左（约 340pt，宽度可拖、记住，`MacListBeside`），点一条在右边打开详情、列表里选中那条（`macSelected`），没选时右边一行提示；搜索结果同样在右边打开，详情里再点进去的（某一天、关联条目、合并到的项目）在右栏里推进，‹ 和标题在右栏的标题行（`MacKnowledgePage`、`KBOpenEntry`，#2318）。手机和 Persona 里推进去的知识库照旧是推页面。
@@ -45,7 +49,7 @@
 | 显示 | 刷新 ⌘R、显示 / 隐藏侧边栏 ⌃⌘S、显示 Inspector ⌥⌘I、紧凑列表、分组方式（仓库 / 项目 / 状态 / 机器 / 按待办，默认按仓库）、全部折叠 / 展开、字号放大缩小 ⌘+ ⌘- ⌘0 |
 | Agent | 发送 ⏎（输入框里，⇧⏎ 换行，↑↓ 取回发过的、⌃R 搜索）、中断 ⌘.、批准当前待处理 ⇧⌘⏎、拒绝 ⇧⌘⌫、回答选项 ⌥⌘1–9、聚焦输入框 ⌘I（同网页的 Mod+I）、切换终端 / 对话 ⇧⌘J（网页是 Mod+J，Mac 的 ⌘J 已是交给 Persona）、重命名、屏蔽、置顶、标为已读、清空上下文、关闭 Agent… |
 | 收件箱 | 全部标为已处理 ⇧⌘E、全部忽略 ⌥⇧⌘E（收件箱在前时；当前筛选和搜索下未处理的，10 件起先确认，见 `docs/inbox.md`「一键清理」） |
-| 前往 | Persona ⌘1 … 机器 ⌘5、设置 ⌘6、待办 ⌘7（侧边栏获焦时）、上一个 / 下一个 Agent ⌘[ ⌘]、下一个需要你的 ⌃⌘N、快速打开 ⌘K、回到最新 ⌘↓ |
+| 前往 | Persona ⌘1 … 机器 ⌘5、设置 ⌘6、待办 ⌘7、消息 ⌘8（侧边栏获焦时）、上一个 / 下一个 Agent ⌘[ ⌘]、下一个需要你的 ⌃⌘N、快速打开 ⌘K、回到最新 ⌘↓ |
 | 窗口 | 系统的；每个对话可以单独开窗口（`WindowGroup(for: SessionKey.self)`），终端也可以单独开窗口 |
 
 ### 和 iOS 的对应
@@ -462,7 +466,7 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 选中的 知识库 / 机器 跨启动记住（`mac.section`；tab 由 AppModel 记）。启动参数指定了 tab / 对话（`-tab`、`-openSession`…）时以参数为准、清掉记住的选择。
 
 壳的侧边栏在 iPhone 的四个 tab 之外多两项：知识库（`KnowledgeView`，手机上在 Persona 里）、机器（`MachinesView`，手机上在抽屉 / Agents / 设置里），
-⌘1…⌘7 依次是 Persona、Agents、收件箱、知识库、机器、设置、待办。这两项不是 AppTab：选中时记在 `MacShellState.section`，`AppModel.selectedTab` 不动；
+⌘1…⌘8 依次是 Persona、Agents、收件箱、知识库、机器、设置、待办、消息（只在开关打开时有）。这两项不是 AppTab：选中时记在 `MacShellState.section`，`AppModel.selectedTab` 不动；
 通知、⌘K、链接把 tab 换走（或打开对话）时清掉，回到 tab 对应的那一项（`MacSection.shown / pick`，有测试）。DEBUG：`-macSection knowledge|machines`。
 
 ## Agent 菜单（Mac）
@@ -1015,6 +1019,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Summary cards (merge forward, share chat/user, meeting, calendar, vote) — Views/Inbox/Lark/LarkSummaryCards.swift
 - [x] Media: authenticated image cache, gallery, video player, Quick Look files — Views/Inbox/Lark/LarkMedia.swift
 - [x] Profile card (发消息) — Views/Inbox/Lark/LarkPeople.swift
+- [x] 消息 page (设置 › 飞书 › 首页显示消息, #392): every chat, account chips, pinned shelf, search, the chat beside the list — iOS Views/Inbox/Lark/LarkConversationsView.swift; Mac sidebar section 消息 (#3162) Mac/Inbox/MacLarkMessagesPage.swift, shared row Views/Inbox/Lark/LarkConversationRow.swift
 - [x] Reaction picker, 公司圈 (Moments) card + post view — Views/Inbox/Lark/LarkReactionsMoments.swift
 - [x] Translation line under messages — LarkChatView.swift (LarkTranslationLine)
 - [x] 「让 Persona 总结」 action — LarkChatView.swift

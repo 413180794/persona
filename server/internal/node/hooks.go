@@ -387,9 +387,17 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 
 	case in.HookEventName == "PermissionRequest":
 		ix.Kind, ix.Summary = proto.IxPermission, toolSummary(in.ToolName, in.ToolInput)
+		// The session rule 本会话总是允许 adds: the whole tool, but for an assistant conversation's file tools only the
+		// file's directory, so allowing one read does not open every file on the machine (#3282).
+		rule := map[string]any{"toolName": in.ToolName}
 		if n.isAssistantSession(in.SessionID) {
+			alwaysKey := "tool:" + in.ToolName
+			if scope := fileRuleScope(in.ToolName, in.ToolInput); scope != "" {
+				rule["ruleContent"] = scope
+				alwaysKey += "(" + scope + ")"
+			}
 			// What the session rule below allows, kept by the hub past this process (a resumed one has no rules).
-			ix.AlwaysKeys = []string{"tool:" + in.ToolName}
+			ix.AlwaysKeys = []string{alwaysKey}
 		}
 		// Another hook may answer it first (hookdecided.go): then nothing is shown, or what was is withdrawn.
 		key := permissionKey(in)
@@ -417,7 +425,7 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 		d := map[string]any{"behavior": "allow", "updatedInput": input}
 		if res.Always {
 			d["updatedPermissions"] = []any{map[string]any{
-				"type": "addRules", "rules": []any{map[string]any{"toolName": in.ToolName}},
+				"type": "addRules", "rules": []any{rule},
 				"behavior": "allow", "destination": "session",
 			}}
 		}
@@ -527,6 +535,33 @@ func (n *Node) ask(ctx context.Context, ix proto.Interaction) (proto.Resolution,
 		return res, false, nil
 	}
 	return res, true, nil
+}
+
+// fileRuleScope is the permission rule content for a file tool's call: its file's directory and below
+// ("//abs/dir/**"), or "" for another tool or a path that is not absolute.
+func fileRuleScope(name string, input json.RawMessage) string {
+	switch name {
+	case "Read", "Edit", "Write", "MultiEdit", "NotebookEdit":
+	default:
+		return ""
+	}
+	var a struct {
+		FilePath     string `json:"file_path"`
+		NotebookPath string `json:"notebook_path"`
+	}
+	_ = json.Unmarshal(input, &a)
+	p := a.FilePath
+	if p == "" {
+		p = a.NotebookPath
+	}
+	if p == "" || !filepath.IsAbs(p) {
+		return ""
+	}
+	dir := filepath.ToSlash(filepath.Dir(p))
+	if !strings.HasPrefix(dir, "/") {
+		dir = "/" + dir // a Windows drive path
+	}
+	return "/" + strings.TrimSuffix(dir, "/") + "/**"
 }
 
 func toolSummary(name string, input json.RawMessage) string {

@@ -31,7 +31,7 @@ enum MacViewCommands {
         case .inbox: .inbox
         case .todos: .todos
         case .assistant: .assistant
-        case .agents, .knowledge, .machines, .settings: .hub
+        case .agents, .messages, .knowledge, .machines, .settings: .hub
         }
     }
 }

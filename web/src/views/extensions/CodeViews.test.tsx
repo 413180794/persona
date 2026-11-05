@@ -99,6 +99,30 @@ describe("代码托管组件", () => {
     expect(sent.at(-1)).toEqual(["load_diff", { path: "docs/upload.md" }]);
   });
 
+  it("finds in a file, goes to a line, wraps, and links the lines picked", () => {
+    const view = structuredClone(SHOWCASE["code-browse"]);
+    const code = view.sections.flatMap((x) => x.items).find((it) => it.type === "code")!;
+    code.line_url = "https://example.com/blob/main/retry.go#L{start}-L{end}";
+    host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    flush(() => root.render(<ViewSections view={view} {...INERT} onAct={() => {}} />));
+    const card = host.querySelector(".code-hl")!.parentElement!;
+    click(card.querySelector('[aria-label="查找"], [aria-label="Find"]'));
+    const input = card.querySelector("input")!;
+    flush(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "retry");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(card.querySelectorAll("mark").length).toBeGreaterThan(0);
+    click(card.querySelector('[aria-label="长行换行"], [aria-label="Wrap long lines"]'));
+    expect(localStorage.getItem("persona.code.wrap")).toBe("1");
+    const nums = [...card.querySelectorAll<HTMLButtonElement>("button[aria-label^='选中第'], button[aria-label^='Select line']")];
+    click(nums[1]);
+    flush(() => nums[3].dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true })));
+    expect(byText(card, "button", "复制链接") ?? byText(card, "button", "Copy link")).toBeTruthy();
+  });
+
   it("sends what is typed with the composer's button", () => {
     const sent: [string, Record<string, string> | undefined][] = [];
     const root = mount("code-overview", (a, v) => sent.push([a.id, v]));

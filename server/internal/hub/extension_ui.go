@@ -327,6 +327,12 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 			return extension.ActionResult{}, err
 		}
 	}
+	if err := extension.FitResult(&res, slot, params.UIVersion); err != nil {
+		return extension.ActionResult{}, i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
+	}
+	if err := checkPushes(p.Manifest, *item, &extension.View{Sections: []extension.Section{{Items: res.Items}}}, nil); err != nil {
+		return extension.ActionResult{}, err
+	}
 	if err := checkPushes(p.Manifest, *item, res.View, res.Push); err != nil {
 		return extension.ActionResult{}, err
 	}

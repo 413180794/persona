@@ -432,6 +432,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   偏好存在这个浏览器）、行内评论串、点行号开评论框、hunk 之间「展开」；`code` 和 `diff` 用 lowlight（highlight.js 的常用语法，第一次画代码时才加载）高亮、颜色是页面的 token；
   `layout: split` 宽屏左栏（停在视野里）、窄屏顶上一条可展开的「文件 · N」；`tabs` 是标题下的一排标签。View 里有 `split`、`code` 或 `diff` 时侧边栏打开的扩展页用整页宽度（`max-w-[1680px]`，其余仍是 880）。
   不在屏幕上的长文件、长 diff 用 `content-visibility: auto`，不占排版。
+  **UI 版本 5：代码 review**（#3136，`docs/extensions.md`「UI 版本 5：代码 review」；diff 画在 `views/extensions/DiffReview.tsx`，逻辑 `lib/code-review.ts`，页面状态 `views/extensions/review-context.ts`）：
+  字级高亮、hunk 之间按 `context` 取行展开（按文件缓存，不重画页面）、已看（`mark_viewed`，或按 `path@revision` 存在这个浏览器）、生成 / 大 / 已看的文件先收起、拖选行号评论、草稿和底部评审条、suggestion、
+  忽略空白（存在这个浏览器）、页面顶上「已看 x / y」「未解决 N」和快捷键（`?` 看全部）。`context`、`mark_viewed` 和滚到附近自动 `load` 走 `ExtensionView` 的安静请求（不占 busy），回答的 `items` 原地换组件。
   **UI 版本 3**（#1850，`docs/extensions.md`「声明式 UI」；画法 `views/extensions/ViewBody.tsx`，加载和跳转 `settings/ExtensionView.tsx`，读法 `lib/extension-ui.ts`）：
   `markdown` 只画安全的一部分（标题、段落、列表、强调、代码、引用、https 链接；不认 HTML 和图片，链接在网页里打开），`table` 窄时横向滚动、单元格不换行，`empty` 是空状态加一个按钮，`loading` 是一行转圈；
   行可以带固定图标（`icon`，换成网页的图标）、头像（https 图片，加载不了画首字母）或缩略图（https，不带任何凭据）；组件的 `key` 用作 React 的 key，重画时列表停在原处。

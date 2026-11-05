@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
@@ -56,6 +57,8 @@ internal class ExtensionViewHandle(
     val tab: (String) -> Unit = {},
     /** UI version 4: a file tree without an action shows that file's diff on the page. */
     val reveal: (String) -> Unit = {},
+    /** UI version 5: a page of diffs' viewed marks, whitespace, lines and quiet actions; none where nothing acts. */
+    val review: CodeReviewState? = null,
 )
 
 /**
@@ -87,6 +90,17 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
         if (outcome.pop) pop()
     }
     fun run(action: ExtensionViewAction, values: Map<String, String>? = null) = scope.launch { show(model.press(action, values)) }
+    val prefs = LocalContext.current.getSharedPreferences(CodeReviewState.Prefs, android.content.Context.MODE_PRIVATE)
+    val review = remember(model) {
+        CodeReviewState(prefs) { action, values, done ->
+            scope.launch {
+                val result = model.fetch(action, values)
+                if (result == null) feedback?.notice(res.getString(R.string.settings_ext_review_quiet_failed))
+                else result.toast?.takeIf { it.isNotBlank() }?.let { feedback?.notice(it) }
+                done(result)
+            }
+        }
+    }
     val handle = remember(model) {
         ExtensionViewHandle(
             press = { item, action -> if (!action.confirm.isNullOrBlank()) confirming = item to action else run(action) },
@@ -101,6 +115,7 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
                 if (!action.confirm.isNullOrBlank()) { confirmingValues = values; confirming = ExtensionViewItem(type = "button") to action } else run(action, values)
             },
             tab = { value -> scope.launch { show(model.tab(value)) } },
+            review = review,
         )
     }
     confirming?.let { (item, action) ->
@@ -127,6 +142,8 @@ internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewS
     view.tabs?.takeIf { it.items.size >= 2 && it.name.isNotEmpty() }?.let { tabs ->
         item("$key-tabs") { ExtensionTabs(tabs, state.values[tabs.name] ?: tabs.value, state, handle, Modifier.padding(bottom = Tokens.Space.s)) }
     }
+    // a page of diffs (UI version 5): viewed so far, open threads, whitespace, the pending review
+    if (reviewing(view) && handle.review != null) item("$key-review-tools") { ReviewToolbar(view, state, handle, Modifier.padding(bottom = Tokens.Space.s)) }
     if (view.search != null || view.filter != null) item("$key-search") {
         ExtensionSearchBar(view, state, handle, Modifier.padding(bottom = Tokens.Space.s))
     }
@@ -167,6 +184,7 @@ internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewS
             item("$key-s$s-footer") { SettingsCaption(footer, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s)) }
         }
     }
+    if (reviewing(view) && view.review != null && handle.review != null) item("$key-review-bar") { ReviewBar(view, state, handle, Modifier.padding(top = Tokens.Space.l)) }
 }
 
 /**

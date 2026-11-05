@@ -64,6 +64,12 @@ func CheckView(v *View) error {
 			return errors.New("tabs: value is one of its items")
 		}
 	}
+	if r := v.Review; r != nil {
+		if names[r.Name] {
+			return fmt.Errorf("review: field %q twice", r.Name)
+		}
+		names[r.Name] = true
+	}
 	code := 0
 	if f := v.Filter; f != nil {
 		if names[f.Name] {
@@ -139,6 +145,8 @@ func CheckView(v *View) error {
 				code += len(e.Text)
 				if h := e.Highlight; h != nil && h.End < h.Start {
 					err = errors.New("highlight: end is not before start")
+				} else if e.LineURL != "" {
+					err = checkLineURL(e.LineURL)
 				}
 			case "diff":
 				var lines int
@@ -182,6 +190,39 @@ func checkDiff(e Component) (int, error) {
 		}
 	}
 	return size, nil
+}
+
+// checkLineURL holds a code's line link to https.
+func checkLineURL(raw string) error {
+	u, err := url.Parse(strings.NewReplacer("{start}", "1", "{end}", "1").Replace(raw))
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return errors.New("line_url: an https link")
+	}
+	return nil
+}
+
+// CheckLines holds the lines a diff's context answered with (ActionResult.lines) to DiffLinesMost and CodeMost.
+func CheckLines(l *FileLines) error {
+	if l == nil {
+		return nil
+	}
+	if l.Path == "" || l.Start < 1 {
+		return errors.New("lines: a path and a start from 1")
+	}
+	if l.Side != "" && l.Side != "old" && l.Side != "new" {
+		return errors.New("lines: side is old or new")
+	}
+	if len(l.Lines) > DiffLinesMost {
+		return fmt.Errorf("lines: at most %d", DiffLinesMost)
+	}
+	size := 0
+	for _, line := range l.Lines {
+		size += len(line)
+	}
+	if size > CodeMost {
+		return fmt.Errorf("lines: at most %d bytes", CodeMost)
+	}
+	return nil
 }
 
 func checkComments(comments []Comment) error {
@@ -307,6 +348,14 @@ func Actions(v *View) []*Action {
 	if v.Tabs != nil {
 		out = append(out, &v.Tabs.Action)
 	}
+	if r := v.Review; r != nil {
+		for k := range r.Buttons {
+			out = append(out, &r.Buttons[k].Action)
+		}
+		if r.Discard != nil {
+			out = append(out, r.Discard)
+		}
+	}
 	for i := range v.Sections {
 		s := &v.Sections[i]
 		for j := range s.Items {
@@ -317,7 +366,7 @@ func Actions(v *View) []*Action {
 			if e.Button != nil {
 				out = append(out, &e.Button.Action)
 			}
-			for _, a := range []*Action{e.Expand, e.Load, e.Comment, e.Reply} {
+			for _, a := range []*Action{e.Expand, e.Load, e.Comment, e.Reply, e.Context, e.MarkViewed, e.Draft} {
 				if a != nil {
 					out = append(out, a)
 				}
@@ -333,6 +382,9 @@ func Actions(v *View) []*Action {
 			for k := range e.Threads {
 				if e.Threads[k].Reply != nil {
 					out = append(out, e.Threads[k].Reply)
+				}
+				if e.Threads[k].Resolve != nil {
+					out = append(out, e.Threads[k].Resolve)
 				}
 			}
 		}

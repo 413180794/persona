@@ -121,3 +121,44 @@ func TestLarkGateHealthAsksEachTime(t *testing.T) {
 		t.Fatalf("the assistant's own allowed write: %q, %d cards", d, len(fh.interactions()))
 	}
 }
+
+// 本会话总是允许 on an assistant conversation's file read allows that file's directory only, in the session rule
+// and in the key the hub keeps (#3282); an Agents session's still allows the whole tool.
+func TestPermissionHookAlwaysFileScope(t *testing.T) {
+	n := codexTestNode(t)
+	fh := withFakeHub(t, n)
+	fh.mu.Lock()
+	fh.answer = func(proto.Interaction) proto.Resolution {
+		yes := true
+		return proto.Resolution{Allow: &yes, Always: true}
+	}
+	fh.mu.Unlock()
+	const assistant, agent = "33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"
+	n.mu.Lock()
+	n.procs[assistant] = &assistantProc{id: assistant, agent: "claude", exited: make(chan struct{})}
+	n.mu.Unlock()
+	read := func(session string) string {
+		t.Helper()
+		raw, _ := json.Marshal(hookInput{HookEventName: "PermissionRequest", SessionID: session, ToolName: "Read",
+			ToolUseID: "toolu_" + session[:4], ToolInput: json.RawMessage(`{"file_path":"/home/me/work/report.md"}`)})
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		out, err := n.handleHook(ctx, sockRequest{Input: raw, Attempt: "a1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := json.Marshal(out)
+		return string(b)
+	}
+	out := read(assistant)
+	ix := fh.interactions()
+	if got := ix[len(ix)-1].AlwaysKeys; !slices.Equal(got, []string{"tool:Read(//home/me/work/**)"}) {
+		t.Fatalf("assistant's always keys %q", got)
+	}
+	if !strings.Contains(out, `"ruleContent":"//home/me/work/**"`) {
+		t.Fatalf("assistant's session rule: %s", out)
+	}
+	if out := read(agent); strings.Contains(out, "ruleContent") || !strings.Contains(out, `"toolName":"Read"`) {
+		t.Fatalf("an Agents session's rule changed: %s", out)
+	}
+}

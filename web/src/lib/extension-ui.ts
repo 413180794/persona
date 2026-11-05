@@ -11,7 +11,7 @@ import { t } from "../i18n";
 import type { Comment, Hunk, Thread, TreeEntry } from "./code-view";
 
 /** The UI version the web draws (context.ui_version). */
-export const UI_VERSION = 4;
+export const UI_VERSION = 5;
 
 export type UITone = "neutral" | "positive" | "caution" | "danger";
 
@@ -113,6 +113,17 @@ export interface UIItem {
   reply?: UIAction;
   /** composer */
   buttons?: { title: string; action: UIAction; tone?: UITone }[];
+  /** UI version 5 (#3136), diff: hidden lines asked for, viewed marks, generated files, drafts, suggestions */
+  context?: UIAction;
+  viewed?: boolean;
+  mark_viewed?: UIAction;
+  revision?: string;
+  generated?: boolean;
+  similarity?: number;
+  draft?: UIAction;
+  suggestions?: boolean;
+  /** code: a link to lines on the site, {start} and {end} filled in */
+  line_url?: string;
 }
 
 /** A view's tabs on top (UI version 4): choosing one sends {name: value} (with the search's q) at once. */
@@ -189,6 +200,17 @@ export interface UIView {
   /** UI version 4 */
   tabs?: UITabs;
   layout?: "stack" | "split" | string;
+  /** UI version 5: the pending review's bar */
+  review?: UIReview;
+}
+
+/** The pending review (UI version 5): how many drafts, a summary sent as name with the button pressed, discard. */
+export interface UIReview {
+  count: number;
+  name: string;
+  placeholder?: string;
+  buttons: { title: string; action: UIAction; tone?: UITone }[];
+  discard?: UIAction;
 }
 
 /** Where an extension draws (GET /api/v1/extensions/-/ui, and an extension detail's `ui`). */
@@ -224,6 +246,9 @@ export interface UIActionResult {
   /** UI version 3: open another page (a saved form's detail), or go back a page (the one below is drawn again). */
   push?: UIPush;
   pop?: boolean;
+  /** UI version 5: lines of a file a diff's context asked for; components in place of those with the same key */
+  lines?: { path: string; side?: string; start: number; lines: string[]; total?: number };
+  items?: UIItem[];
 }
 
 /** Where a view is drawn: the launcher (launcher_section), the machine (machine_section), the inbox item (inbox_item), the size (a card). */
@@ -289,7 +314,12 @@ export const actUI = (extension: string, ui: string, action: string, opts: { con
   api<UIActionResult>(uiPath(extension, ui), {
     method: "POST",
     json: { context: uiContext(opts.context), ...(opts.state ? { state: opts.state } : {}), action, ...(opts.values ? { values: opts.values } : {}) },
-  }).then((r) => ({ ...r, view: r.view ? readView(r.view) : undefined }));
+  }).then((r) => ({
+    ...r,
+    view: r.view ? readView(r.view) : undefined,
+    // UI version 5: components in place, read as a view's are
+    items: Array.isArray(r.items) ? readView({ sections: [{ items: r.items }] }).sections[0]?.items.filter((it) => it.key) : undefined,
+  }));
 
 /**
  * The extension said this is not its gateway (a launcher_section without `hosts` is listed on every launcher; docs/extensions.md
@@ -377,14 +407,16 @@ export function blocks(items: UIItem[]): UIBlock[] {
 export function outcome(
   r: UIActionResult,
   item?: string,
-): { view?: UIView; reload: boolean; toast?: string; url?: string; source?: true; push?: UIPush; pop?: true } {
+): { view?: UIView; items?: UIItem[]; reload: boolean; toast?: string; url?: string; source?: true; push?: UIPush; pop?: true } {
   const url = r.open_url && isHttps(r.open_url) ? r.open_url : undefined;
   const source = !!item && !!r.open_url && inboxSourceItem(r.open_url) === item;
   const push = readPush(r.push);
   const pop = r.pop === true && !push;
   return {
     view: r.view,
-    reload: !r.view && !r.toast && !r.open_url && !push && !pop,
+    ...(r.items?.length ? { items: r.items } : {}),
+    // UI version 5: lines for a diff, or components in place, say enough
+    reload: !r.view && !r.toast && !r.open_url && !push && !pop && !r.items?.length && !r.lines,
     toast: r.toast || undefined,
     url,
     ...(source ? { source: true as const } : {}),
@@ -542,6 +574,19 @@ export function readView(raw: unknown): UIView {
     );
     if (items.length > 1) view.tabs = { name: tb.name, value: typeof tb.value === "string" ? tb.value : items[0].value, items, action: readAction(tb.action)! };
   }
+  // UI version 5: the pending review's bar
+  const rv = raw.review;
+  if (isObject(rv) && typeof rv.name === "string" && rv.name && Array.isArray(rv.buttons)) {
+    const buttons = rv.buttons.flatMap((b) => (isObject(b) && typeof b.title === "string" && readAction(b.action) ? [{ title: b.title, action: readAction(b.action)!, ...(typeof b.tone === "string" ? { tone: b.tone as UITone } : {}) }] : []));
+    if (buttons.length)
+      view.review = {
+        count: typeof rv.count === "number" && rv.count > 0 ? Math.floor(rv.count) : 0,
+        name: rv.name,
+        buttons,
+        ...(typeof rv.placeholder === "string" ? { placeholder: rv.placeholder } : {}),
+        ...(readAction(rv.discard) ? { discard: readAction(rv.discard) } : {}),
+      };
+  }
   const f = raw.filter;
   if (isObject(f) && typeof f.name === "string" && f.name && readAction(f.action) && Array.isArray(f.choices)) {
     const choices = f.choices.filter((c): c is UIChoice => isObject(c) && typeof c.value === "string");
@@ -597,12 +642,13 @@ function readItem(it: UIItem): UIItem {
   const out: UIItem = { ...it };
   if (isObject(raw.action)) out.action = readAction(raw.action);
   // UI version 4: the other places an action sits, each read the same way
-  for (const k of ["expand", "load", "comment", "reply"] as const) if (k in raw) out[k] = readAction(raw[k]);
+  for (const k of ["expand", "load", "comment", "reply", "context", "mark_viewed", "draft"] as const) if (k in raw) out[k] = readAction(raw[k]);
+  if ("line_url" in raw && !isHttps(String(raw.line_url).replaceAll("{start}", "1").replaceAll("{end}", "1"))) delete out.line_url;
   if (Array.isArray(raw.crumbs)) out.crumbs = (raw.crumbs as Record<string, unknown>[]).map((c) => ({ title: String(c.title), ...(readAction(c.action) ? { action: readAction(c.action) } : {}) }));
   if (Array.isArray(raw.buttons))
     out.buttons = (raw.buttons as unknown[]).flatMap((b) => (isObject(b) && typeof b.title === "string" && readAction(b.action) ? [{ title: b.title, action: readAction(b.action)!, ...(typeof b.tone === "string" ? { tone: b.tone as UITone } : {}) }] : []));
   if (Array.isArray(raw.threads))
-    out.threads = (raw.threads as unknown[]).flatMap((th) => (isObject(th) && Array.isArray(th.comments) && typeof th.line === "number" ? [{ ...(th as unknown as Thread), reply: readAction(th.reply) }] : []));
+    out.threads = (raw.threads as unknown[]).flatMap((th) => (isObject(th) && Array.isArray(th.comments) && typeof th.line === "number" ? [{ ...(th as unknown as Thread), reply: readAction(th.reply), resolve: readAction(th.resolve) }] : []));
   return out;
 }
 

@@ -1062,6 +1062,7 @@ type View struct {
 	Filter       *Filter `json:"filter,omitempty"`
 	Tabs         *Tabs   `json:"tabs,omitempty"`
 	Layout       string  `json:"layout,omitempty"`
+	Review       *Review `json:"review,omitempty"`
 	// Plain text for an assistant card: required by CheckAssistantView; not required for extension views.
 	Fallback string `json:"fallback,omitempty"`
 	// Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page refers
@@ -1094,46 +1095,67 @@ type Component struct {
 	Badge    *Badge   `json:"badge,omitempty"`
 	Action   *Action  `json:"action,omitempty"`
 	// At most one of icon, avatar and thumbnail.
-	Icon        string           `json:"icon,omitempty"`
-	Avatar      *Avatar          `json:"avatar,omitempty"`
-	Thumbnail   *Thumbnail       `json:"thumbnail,omitempty"`
-	Role        string           `json:"role,omitempty"`
-	URL         string           `json:"url,omitempty"`
-	Name        string           `json:"name,omitempty"`
-	Kind        string           `json:"kind,omitempty"`
-	Choices     []Choice         `json:"choices,omitempty"`
-	Placeholder string           `json:"placeholder,omitempty"`
-	Series      []ChartSeries    `json:"series,omitempty"`
-	Unit        string           `json:"unit,omitempty"`
-	Stacked     bool             `json:"stacked,omitempty"`
-	Stats       []Stat           `json:"stats,omitempty"`
-	Columns     []TableColumn    `json:"columns,omitempty"`
-	Rows        [][]string       `json:"rows,omitempty"`
-	Caption     string           `json:"caption,omitempty"`
-	Button      *EmptyButton     `json:"button,omitempty"`
-	Html        string           `json:"html,omitempty"`
-	Height      int              `json:"height,omitempty"`
-	Badges      []Badge          `json:"badges,omitempty"`
-	Facts       []Fact           `json:"facts,omitempty"`
-	Crumbs      []Crumb          `json:"crumbs,omitempty"`
-	Entries     []TreeEntry      `json:"entries,omitempty"`
-	Selected    string           `json:"selected,omitempty"`
-	Expand      *Action          `json:"expand,omitempty"`
-	Path        string           `json:"path,omitempty"`
-	Language    string           `json:"language,omitempty"`
-	StartLine   int              `json:"start_line,omitempty"`
-	Highlight   *LineRange       `json:"highlight,omitempty"`
-	Truncated   bool             `json:"truncated,omitempty"`
-	Load        *Action          `json:"load,omitempty"`
-	OldPath     string           `json:"old_path,omitempty"`
-	Status      string           `json:"status,omitempty"`
-	Additions   int              `json:"additions,omitempty"`
-	Deletions   int              `json:"deletions,omitempty"`
-	Binary      bool             `json:"binary,omitempty"`
-	Collapsed   bool             `json:"collapsed,omitempty"`
-	Hunks       []Hunk           `json:"hunks,omitempty"`
-	Threads     []Thread         `json:"threads,omitempty"`
-	Comment     *Action          `json:"comment,omitempty"`
+	Icon        string        `json:"icon,omitempty"`
+	Avatar      *Avatar       `json:"avatar,omitempty"`
+	Thumbnail   *Thumbnail    `json:"thumbnail,omitempty"`
+	Role        string        `json:"role,omitempty"`
+	URL         string        `json:"url,omitempty"`
+	Name        string        `json:"name,omitempty"`
+	Kind        string        `json:"kind,omitempty"`
+	Choices     []Choice      `json:"choices,omitempty"`
+	Placeholder string        `json:"placeholder,omitempty"`
+	Series      []ChartSeries `json:"series,omitempty"`
+	Unit        string        `json:"unit,omitempty"`
+	Stacked     bool          `json:"stacked,omitempty"`
+	Stats       []Stat        `json:"stats,omitempty"`
+	Columns     []TableColumn `json:"columns,omitempty"`
+	Rows        [][]string    `json:"rows,omitempty"`
+	Caption     string        `json:"caption,omitempty"`
+	Button      *EmptyButton  `json:"button,omitempty"`
+	Html        string        `json:"html,omitempty"`
+	Height      int           `json:"height,omitempty"`
+	Badges      []Badge       `json:"badges,omitempty"`
+	Facts       []Fact        `json:"facts,omitempty"`
+	Crumbs      []Crumb       `json:"crumbs,omitempty"`
+	Entries     []TreeEntry   `json:"entries,omitempty"`
+	Selected    string        `json:"selected,omitempty"`
+	Expand      *Action       `json:"expand,omitempty"`
+	Path        string        `json:"path,omitempty"`
+	Language    string        `json:"language,omitempty"`
+	StartLine   int           `json:"start_line,omitempty"`
+	Highlight   *LineRange    `json:"highlight,omitempty"`
+	Truncated   bool          `json:"truncated,omitempty"`
+	Load        *Action       `json:"load,omitempty"`
+	// An https link to lines of this file on its site, {start} and {end} standing for the lines
+	// (…/blob/<sha>/a.go#L{start}-L{end}).
+	LineURL   string   `json:"line_url,omitempty"`
+	OldPath   string   `json:"old_path,omitempty"`
+	Status    string   `json:"status,omitempty"`
+	Additions int      `json:"additions,omitempty"`
+	Deletions int      `json:"deletions,omitempty"`
+	Binary    bool     `json:"binary,omitempty"`
+	Collapsed bool     `json:"collapsed,omitempty"`
+	Hunks     []Hunk   `json:"hunks,omitempty"`
+	Threads   []Thread `json:"threads,omitempty"`
+	Comment   *Action  `json:"comment,omitempty"`
+	// Fetch hidden lines of the file (UI version 5): values {path, side: new or old, from, to: a line or end}; the
+	// extension answers with lines (ActionResult.lines), the page is not drawn again.
+	Context *Action `json:"context,omitempty"`
+	// The user has marked this file viewed.
+	Viewed bool `json:"viewed,omitempty"`
+	// Mark the file viewed or not: values {path, viewed: true or false}. Without it the app keeps viewed on the device,
+	// by path and revision.
+	MarkViewed *Action `json:"mark_viewed,omitempty"`
+	// What this file's change is (a blob id): a viewed mark kept on the device holds for it only.
+	Revision string `json:"revision,omitempty"`
+	// A generated file or a lockfile: folded at first.
+	Generated bool `json:"generated,omitempty"`
+	// How alike a renamed file is to its old one, in percent.
+	Similarity int `json:"similarity,omitempty"`
+	// Add a comment to the pending review instead of sending it alone: values as comment's.
+	Draft *Action `json:"draft,omitempty"`
+	// The extension takes ```suggestion blocks in comments.
+	Suggestions bool             `json:"suggestions,omitempty"`
 	Comments    []Comment        `json:"comments,omitempty"`
 	Resolved    bool             `json:"resolved,omitempty"`
 	Reply       *Action          `json:"reply,omitempty"`
@@ -1249,6 +1271,8 @@ type TreeEntry struct {
 	Deletions int    `json:"deletions,omitempty"`
 	Comments  int    `json:"comments,omitempty"`
 	Badge     *Badge `json:"badge,omitempty"`
+	Viewed    bool   `json:"viewed,omitempty"`
+	Generated bool   `json:"generated,omitempty"`
 }
 
 // Values of TreeEntryKind.
@@ -1284,6 +1308,10 @@ type Thread struct {
 	Outdated  bool      `json:"outdated,omitempty"`
 	Comments  []Comment `json:"comments"`
 	Reply     *Action   `json:"reply,omitempty"`
+	// A draft of the pending review, not sent yet.
+	Pending bool `json:"pending,omitempty"`
+	// Resolve or reopen: values {thread: id, resolved: true or false}.
+	Resolve *Action `json:"resolve,omitempty"`
 }
 
 // Comment: A comment: its author, when (the app draws it relative), a body in the markdown subset, a badge (已批准). An
@@ -1558,6 +1586,31 @@ type ActionResult struct {
 	Push *Push `json:"push,omitempty"`
 	// Then go back a page; the page below is drawn again.
 	Pop bool `json:"pop,omitempty"`
+	// Lines of a file a diff's context asked for: the page is not drawn again.
+	Lines *FileLines `json:"lines,omitempty"`
+	// Components to put in place of those with the same key on the page (each has a key): the rest is not drawn again.
+	Items []Component `json:"items,omitempty"`
+}
+
+// FileLines: lines of one side of a file from start (1 the first), as many as the extension has at hand (all of it,
+// say); total is how many the file has.
+type FileLines struct {
+	Path  string   `json:"path"`
+	Side  string   `json:"side,omitempty"`
+	Start int      `json:"start"`
+	Lines []string `json:"lines"`
+	Total int      `json:"total,omitempty"`
+}
+
+// Review: the pending review (UI version 5): a bar at the page's foot saying how many drafts there are, a summary box
+// (name) and buttons (comment, approve, request changes) that send them all, discard throws them away. An older app
+// gets a text and a composer on top.
+type Review struct {
+	Count       int              `json:"count"`
+	Name        string           `json:"name"`
+	Placeholder string           `json:"placeholder,omitempty"`
+	Buttons     []ComposerButton `json:"buttons"`
+	Discard     *Action          `json:"discard,omitempty"`
 }
 
 // Values of PersonaCardKind.
@@ -1771,7 +1824,12 @@ type MessagingReaction struct {
 	Key   string   `json:"key"`
 	Count int      `json:"count"`
 	Mine  bool     `json:"mine,omitempty"`
-	Users []string `json:"users,omitempty"``json:"text"`
+	Users []string `json:"users,omitempty"`
+}
+
+// MessagingDecoration: A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
+type MessagingDecoration struct {
+	Text string `json:"text"`
 	Icon string `json:"icon,omitempty"`
 	Tone string `json:"tone,omitempty"`
 }
@@ -2326,6 +2384,8 @@ var newDef = map[string]func() any{
 	"ChartPoint":                func() any { return new(ChartPoint) },
 	"Stat":                      func() any { return new(Stat) },
 	"ActionResult":              func() any { return new(ActionResult) },
+	"FileLines":                 func() any { return new(FileLines) },
+	"Review":                    func() any { return new(Review) },
 	"PersonaCard":               func() any { return new(PersonaCard) },
 	"CardAmount":                func() any { return new(CardAmount) },
 	"CardPart":                  func() any { return new(CardPart) },

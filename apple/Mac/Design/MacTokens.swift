@@ -42,6 +42,8 @@ extension Theme.Size {
     static let macInboxFiltersWidth: CGFloat = 190
     /// 知识库's list beside the open entry (#2318): its chips and rows, the rest for the entry.
     static let macKnowledgeListIdeal: CGFloat = 340
+    /// 消息's chats beside the open one (#3162), as wide as 收件箱's list.
+    static let macMessagesListIdeal: CGFloat = 340
     /// The todos' list column on Mac.
     static let macTodosListMin: CGFloat = 260
     static let macTodosListIdeal: CGFloat = 340

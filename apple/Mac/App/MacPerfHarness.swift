@@ -250,7 +250,7 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
             // `-showPerfSections agents,knowledge` (once each, in that order) instead of every section three times.
             let asked = (UserDefaults.standard.string(forKey: "showPerfSections") ?? "").split(separator: ",").compactMap { MacSection(rawValue: String($0)) }
             let order = asked.isEmpty
-                ? MacSection.shortcutOrder.filter { MacSection.visible(supportsTodos: TodoStore.shared.isSupported).contains($0) } : asked
+                ? MacSection.shortcutOrder.filter { MacSection.visibleNow.contains($0) } : asked
             let rounds = UserDefaults.standard.integer(forKey: "showPerfRounds")
             for _ in 0..<(rounds > 0 ? rounds : asked.isEmpty ? 3 : 1) {
                 for s in order { steps.append((s.rawValue, { MacShellState.shared.go(s, model) })) }

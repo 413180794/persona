@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UI version 5 code review (#3136): ExtensionCodeReviewUi.kt -->
+<resources>
+    <string name="settings_ext_review_add_to_review">レビューに追加</string>
+    <string name="settings_ext_review_comment_now">今すぐコメント</string>
+    <string name="settings_ext_review_comment_on_lines">%1$s 行目にコメント</string>
+    <string name="settings_ext_review_discard">下書きを破棄</string>
+    <string name="settings_ext_review_draft">下書き</string>
+    <string name="settings_ext_review_expand_all">すべて</string>
+    <string name="settings_ext_review_expand_up">上の行を表示</string>
+    <string name="settings_ext_review_folded_big">変更が多いため折りたたみました</string>
+    <string name="settings_ext_review_folded_generated">生成ファイルのため折りたたみました</string>
+    <string name="settings_ext_review_folded_viewed">確認済み</string>
+    <string name="settings_ext_review_generated">生成ファイル</string>
+    <string name="settings_ext_review_ignore_whitespace">空白を無視</string>
+    <string name="settings_ext_review_lines_range">%1$s 行目</string>
+    <string name="settings_ext_review_load_generated">生成ファイルを読み込む</string>
+    <string name="settings_ext_review_loading_diff">差分を読み込み中…</string>
+    <string name="settings_ext_review_quiet_failed">拡張機能に接続できませんでした</string>
+    <string name="settings_ext_review_renamed_only">名前の変更のみ</string>
+    <string name="settings_ext_review_reopen">再開</string>
+    <string name="settings_ext_review_resolve">解決</string>
+    <string name="settings_ext_review_rest_of_file">ファイルの最後まで</string>
+    <string name="settings_ext_review_review">レビュー</string>
+    <string name="settings_ext_review_show_diff">表示</string>
+    <string name="settings_ext_review_similar">類似度 %1$d%%</string>
+    <string name="settings_ext_review_start_review">レビューを開始</string>
+    <string name="settings_ext_review_suggest">変更を提案</string>
+    <string name="settings_ext_review_suggest_delete">これらの行の削除を提案</string>
+    <string name="settings_ext_review_suggested_change">提案された変更</string>
+    <string name="settings_ext_review_summary">まとめ（任意）</string>
+    <string name="settings_ext_review_viewed">確認済み</string>
+    <string name="settings_ext_review_viewed_of">確認済み %1$d / %2$d</string>
+    <string name="settings_ext_review_whitespace_only">空白のみの変更</string>
+    <plurals name="settings_ext_review_drafts">
+        <item quantity="other">レビューの下書き · %1$d 件</item>
+    </plurals>
+    <plurals name="settings_ext_review_open_threads">
+        <item quantity="other">未解決 %1$d</item>
+    </plurals>
+    <plurals name="settings_ext_review_submit_drafts">
+        <item quantity="other">送信 %1$d</item>
+    </plurals>
+</resources>

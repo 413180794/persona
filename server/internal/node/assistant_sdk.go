@@ -123,6 +123,7 @@ type sdkStart struct {
 	resume                         bool
 	mcp                            map[string]any // --mcp-config's {"mcpServers": …}
 	allowedTools                   string         // --allowedTools
+	deny                           []string       // permission rules denied whatever allows them (healthdeny.go)
 	settings                       string         // --settings: a file, or ""
 	plugin                         string         // --plugin-dir, or ""
 	launcherArgs                   []string       // a managed launcher's own claude args
@@ -173,6 +174,18 @@ func (s sdkStart) options(claude string) (map[string]any, error) {
 			env[k] = v
 		}
 		settings["env"] = env
+	}
+	if len(s.deny) > 0 {
+		perms, _ := settings["permissions"].(map[string]any)
+		if perms == nil {
+			perms = map[string]any{}
+		}
+		have, _ := perms["deny"].([]any)
+		for _, r := range s.deny {
+			have = append(have, r)
+		}
+		perms["deny"] = have
+		settings["permissions"] = perms
 	}
 	if len(settings) > 0 {
 		o["settings"] = settings

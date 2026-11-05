@@ -18,7 +18,8 @@ import { t } from "../../i18n";
 import { Button, cx, EASE, Spinner } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Pill, Switch } from "../settings/SettingsParts";
-import { Breadcrumb, CodeView, CommentThread, Composer, DiffView, FileTree, Header } from "./CodeViews";
+import { Breadcrumb, CodeView, CommentThread, Composer, FileTree, Header } from "./CodeViews";
+import { DiffView } from "./DiffReview";
 
 const TEXT: Record<UITone, string> = { neutral: "text-ink", positive: "text-green", caution: "text-orange", danger: "text-red" };
 const BAR: Record<UITone, string> = { neutral: "bg-accent", positive: "bg-green", caution: "bg-orange", danger: "bg-red" };

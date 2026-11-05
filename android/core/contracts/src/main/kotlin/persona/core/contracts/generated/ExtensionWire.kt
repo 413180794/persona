@@ -1365,6 +1365,7 @@ data class ExtensionView(
     val filter: ExtensionFilter? = null,
     val tabs: ExtensionTabs? = null,
     val layout: String? = null,
+    val review: ExtensionReview? = null,
     /**
      * Plain text for an assistant card: required by CheckAssistantView; not required for extension views.
      */
@@ -1734,6 +1735,11 @@ data class ExtensionCodeComponent(
     val highlight: ExtensionLineRange? = null,
     val truncated: Boolean? = null,
     val load: ExtensionAction? = null,
+    /**
+     * An https link to lines of this file on its site, {start} and {end} standing for the lines
+     * (…/blob/<sha>/a.go#L{start}-L{end}).
+     */
+    @SerialName("line_url") val lineUrl: String? = null,
 ) : ExtensionComponent
 
 /**
@@ -1759,6 +1765,40 @@ data class ExtensionDiffComponent(
     val load: ExtensionAction? = null,
     val expand: ExtensionAction? = null,
     val comment: ExtensionAction? = null,
+    /**
+     * Fetch hidden lines of the file (UI version 5): values {path, side: new or old, from, to: a line or end}; the
+     * extension answers with lines (ActionResult.lines), the page is not drawn again.
+     */
+    val context: ExtensionAction? = null,
+    /**
+     * The user has marked this file viewed.
+     */
+    val viewed: Boolean? = null,
+    /**
+     * Mark the file viewed or not: values {path, viewed: true or false}. Without it the app keeps viewed on the
+     * device, by path and revision.
+     */
+    @SerialName("mark_viewed") val markViewed: ExtensionAction? = null,
+    /**
+     * What this file's change is (a blob id): a viewed mark kept on the device holds for it only.
+     */
+    val revision: String? = null,
+    /**
+     * A generated file or a lockfile: folded at first.
+     */
+    val generated: Boolean? = null,
+    /**
+     * How alike a renamed file is to its old one, in percent.
+     */
+    val similarity: Int? = null,
+    /**
+     * Add a comment to the pending review instead of sending it alone: values as comment's.
+     */
+    val draft: ExtensionAction? = null,
+    /**
+     * The extension takes ```suggestion blocks in comments.
+     */
+    val suggestions: Boolean? = null,
 ) : ExtensionComponent
 
 /**
@@ -1876,6 +1916,8 @@ data class ExtensionTreeEntry(
     val deletions: Int? = null,
     val comments: Int? = null,
     val badge: ExtensionBadge? = null,
+    val viewed: Boolean? = null,
+    val generated: Boolean? = null,
 )
 
 /**
@@ -1918,6 +1960,14 @@ data class ExtensionThread(
     val outdated: Boolean? = null,
     val comments: List<ExtensionComment> = emptyList(),
     val reply: ExtensionAction? = null,
+    /**
+     * A draft of the pending review, not sent yet.
+     */
+    val pending: Boolean? = null,
+    /**
+     * Resolve or reopen: values {thread: id, resolved: true or false}.
+     */
+    val resolve: ExtensionAction? = null,
 )
 
 /**
@@ -2297,6 +2347,42 @@ data class ExtensionActionResult(
      * Then go back a page; the page below is drawn again.
      */
     val pop: Boolean? = null,
+    /**
+     * Lines of a file a diff's context asked for: the page is not drawn again.
+     */
+    val lines: ExtensionFileLines? = null,
+    /**
+     * Components to put in place of those with the same key on the page (each has a key): the rest is not drawn
+     * again.
+     */
+    val items: List<ExtensionComponent>? = null,
+)
+
+/**
+ * Lines of one side of a file from start (1 the first), as many as the extension has at hand (all of it, say); total
+ * is how many the file has.
+ */
+@Serializable
+data class ExtensionFileLines(
+    val path: String = "",
+    val side: String? = null,
+    val start: Int = 0,
+    val lines: List<String> = emptyList(),
+    val total: Int? = null,
+)
+
+/**
+ * The pending review (UI version 5): a bar at the page's foot saying how many drafts there are, a summary box (name)
+ * and buttons (comment, approve, request changes) that send them all, discard throws them away. An older app gets a
+ * text and a composer on top.
+ */
+@Serializable
+data class ExtensionReview(
+    val count: Int = 0,
+    val name: String = "",
+    val placeholder: String? = null,
+    val buttons: List<ExtensionComposerButton> = emptyList(),
+    val discard: ExtensionAction? = null,
 )
 
 /**

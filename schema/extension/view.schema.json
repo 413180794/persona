@@ -46,6 +46,7 @@
         "filter": {"$ref": "#/$defs/Filter", "x-since": 3},
         "tabs": {"$ref": "#/$defs/Tabs", "x-since": 4},
         "layout": {"$ref": "#/$defs/Layout", "x-since": 4},
+        "review": {"$ref": "#/$defs/Review", "x-since": 5},
         "fallback": {"type": "string", "minLength": 1, "maxLength": 2000, "description": "Plain text for an assistant card: required by CheckAssistantView; not required for extension views."},
         "pages": {"type": "object", "additionalProperties": {"$ref": "#/$defs/View"}, "description": "Assistant card details keyed by page name; at most 8. A detail page cannot contain pages itself. Push.page refers to this root map."}
       },
@@ -355,7 +356,9 @@
         "start_line": {"type": "integer", "minimum": 1},
         "highlight": {"$ref": "#/$defs/LineRange"},
         "truncated": {"type": "boolean"},
-        "load": {"$ref": "#/$defs/Action"}
+        "load": {"$ref": "#/$defs/Action"},
+        "line_url": {"type": "string", "maxLength": 4096, "x-since": 5,
+          "description": "An https link to lines of this file on its site, {start} and {end} standing for the lines (…/blob/<sha>/a.go#L{start}-L{end})."}
       },
       "required": ["type", "text"]
     },
@@ -377,7 +380,18 @@
         "threads": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/Thread"}},
         "load": {"$ref": "#/$defs/Action"},
         "expand": {"$ref": "#/$defs/Action"},
-        "comment": {"$ref": "#/$defs/Action"}
+        "comment": {"$ref": "#/$defs/Action"},
+        "context": {"$ref": "#/$defs/Action", "x-since": 5,
+          "description": "Fetch hidden lines of the file (UI version 5): values {path, side: new or old, from, to: a line or end}; the extension answers with lines (ActionResult.lines), the page is not drawn again."},
+        "viewed": {"type": "boolean", "x-since": 5, "description": "The user has marked this file viewed."},
+        "mark_viewed": {"$ref": "#/$defs/Action", "x-since": 5,
+          "description": "Mark the file viewed or not: values {path, viewed: true or false}. Without it the app keeps viewed on the device, by path and revision."},
+        "revision": {"type": "string", "maxLength": 256, "x-since": 5, "description": "What this file's change is (a blob id): a viewed mark kept on the device holds for it only."},
+        "generated": {"type": "boolean", "x-since": 5, "description": "A generated file or a lockfile: folded at first."},
+        "similarity": {"type": "integer", "minimum": 0, "maximum": 100, "x-since": 5, "description": "How alike a renamed file is to its old one, in percent."},
+        "draft": {"$ref": "#/$defs/Action", "x-since": 5,
+          "description": "Add a comment to the pending review instead of sending it alone: values as comment's."},
+        "suggestions": {"type": "boolean", "x-since": 5, "description": "The extension takes ```suggestion blocks in comments."}
       },
       "required": ["type", "path"]
     },
@@ -462,7 +476,9 @@
         "additions": {"type": "integer", "minimum": 0},
         "deletions": {"type": "integer", "minimum": 0},
         "comments": {"type": "integer", "minimum": 0},
-        "badge": {"$ref": "#/$defs/Badge"}
+        "badge": {"$ref": "#/$defs/Badge"},
+        "viewed": {"type": "boolean", "x-since": 5},
+        "generated": {"type": "boolean", "x-since": 5}
       },
       "required": ["path"]
     },
@@ -497,7 +513,9 @@
         "resolved": {"type": "boolean"},
         "outdated": {"type": "boolean"},
         "comments": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"$ref": "#/$defs/Comment"}},
-        "reply": {"$ref": "#/$defs/Action"}
+        "reply": {"$ref": "#/$defs/Action"},
+        "pending": {"type": "boolean", "x-since": 5, "description": "A draft of the pending review, not sent yet."},
+        "resolve": {"$ref": "#/$defs/Action", "x-since": 5, "description": "Resolve or reopen: values {thread: id, resolved: true or false}."}
       },
       "required": ["side", "line", "comments"]
     },
@@ -829,8 +847,35 @@
         "toast": {"type": "string"},
         "open_url": {"type": "string"},
         "push": {"$ref": "#/$defs/Push", "x-since": 3, "description": "Then open this page on top (after a submit: list, detail, edit)."},
-        "pop": {"type": "boolean", "x-since": 3, "description": "Then go back a page; the page below is drawn again."}
+        "pop": {"type": "boolean", "x-since": 3, "description": "Then go back a page; the page below is drawn again."},
+        "lines": {"$ref": "#/$defs/FileLines", "x-since": 5, "description": "Lines of a file a diff's context asked for: the page is not drawn again."},
+        "items": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/Component"}, "x-since": 5,
+          "description": "Components to put in place of those with the same key on the page (each has a key): the rest is not drawn again."}
       }
+    },
+    "FileLines": {
+      "description": "Lines of one side of a file from start (1 the first), as many as the extension has at hand (all of it, say); total is how many the file has.",
+      "type": "object",
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "side": {"$ref": "#/$defs/DiffSide"},
+        "start": {"type": "integer", "minimum": 1},
+        "lines": {"type": "array", "maxItems": 20000, "items": {"type": "string", "maxLength": 20000}},
+        "total": {"type": "integer", "minimum": 0}
+      },
+      "required": ["path", "start", "lines"]
+    },
+    "Review": {
+      "description": "The pending review (UI version 5): a bar at the page's foot saying how many drafts there are, a summary box (name) and buttons (comment, approve, request changes) that send them all, discard throws them away. An older app gets a text and a composer on top.",
+      "type": "object",
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "name": {"type": "string", "minLength": 1},
+        "placeholder": {"type": "string", "maxLength": 2000},
+        "buttons": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"$ref": "#/$defs/ComposerButton"}},
+        "discard": {"$ref": "#/$defs/Action"}
+      },
+      "required": ["count", "name", "buttons"]
     },
     "PersonaCardKind": {"type": "string", "enum": ["stat", "stacked_bar", "line", "bar"]},
     "PersonaCard": {

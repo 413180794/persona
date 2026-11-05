@@ -4034,11 +4034,33 @@ else:
                      "hint": "在示例笔记的「设置 › 开发者」里生成一个访问令牌，粘贴到这里。"}
 
 
+# MOCK_wechat-connector_MORE=1 (with MOCK_CONNECTOR_PLUGIN=wechat-connector): a group that @-mentions you, with a drafted reply, and
+# a second private chat, for the README pictures (scripts/assets/wechat-connector_shots.py). All made up.
+PLUGIN_WECHAT_MORE = PLUGIN_WECHAT and os.environ.get("MOCK_wechat-connector_MORE") == "1"
+WECHAT_GROUP = "10000000001@chatroom"
+
+
+def plugin_wechat_group_thread(at):
+    a, c = {"id": "wxid_example_c", "name": "示例同事"}, {"id": "wxid_example_d", "name": "示例设计师"}
+    return {"chat": {"id": WECHAT_GROUP, "name": "示例项目群", "kind": "group", "members": 8}, "messages": [
+        {"id": "g1", "at": at(95), "sender": c, "text": "新版的示例海报放群文件了，大家看看"},
+        {"id": "g2", "at": at(90), "sender": a, "text": "[图片]"},
+        {"id": "g3", "at": at(42), "sender": a, "text": "周五的示例活动场地定了吗？"},
+        {"id": "g4", "at": at(12), "sender": a, "text": "@我 场地和预算今天能定吗？我下午要报给示例客户"},
+    ]}
+
+
 def plugin_wechat_thread(thread):
-    if thread != "wxid_example_b":
-        return None
     now = datetime.now(timezone.utc)
     def at(m): return (now - timedelta(minutes=m)).isoformat().replace("+00:00", "Z")
+    if PLUGIN_WECHAT_MORE and thread == WECHAT_GROUP:
+        return plugin_wechat_group_thread(at)
+    if PLUGIN_WECHAT_MORE and thread == "wxid_example_e":
+        e = {"id": "wxid_example_e", "name": "示例房东"}
+        return {"chat": {"id": thread, "name": "示例房东", "kind": "dm", "reply": "wechat-connector_send"}, "messages": [
+            {"id": "e1", "at": at(200), "sender": e, "text": "这周六上午来修热水器，家里留个人就行"}]}
+    if thread != "wxid_example_b":
+        return None
     you = {"id": "wxid_example_b", "name": "示例好友"}
     return {"chat": {"id": thread, "name": "示例好友", "kind": "dm", "reply": "wechat-connector_send"}, "messages": [
         {"id": "1", "at": at(50), "sender": you, "text": "明天的示例会议改到下午了", "url": "https://wechat-connector.example.com/m/1"},
@@ -4092,6 +4114,25 @@ if PLUGIN_WECHAT:
          "context": "示例好友（微信私聊）\n今天 示例好友：明天的示例会议改到下午了\n今天 示例好友：三点，地点不变",
          "connector": {"thread": "wxid_example_b", "label": "私聊", "open_url": "https://wechat-connector.example.com/c/wxid_example_b"}},
     ]
+if PLUGIN_WECHAT_MORE:
+    INBOX[1:1] = [
+        {"id": "wechat-connector:" + WECHAT_GROUP, "source": "wechat-connector", "kind": "mention", "account": "wechat-connector", "account_name": "微信",
+         "title": "示例项目群", "sender": "示例同事", "preview": "@我 场地和预算今天能定吗？我下午要报给示例客户", "count": 2,
+         "started_at": ago(minutes=42), "updated_at": ago(minutes=12), "tier": "action",
+         "summary": "示例同事在群里 @你，问周五活动的场地和预算今天能不能定", "reason": "@了你，下午要用", "read": False,
+         "context": "示例项目群（微信群）\n今天 示例同事：周五的示例活动场地定了吗？\n今天 示例同事：@我 场地和预算今天能定吗？我下午要报给示例客户",
+         "agent": {"state": "drafted", "task": "查周五活动的场地和预算进展，回复示例同事",
+                   "draft": "场地定了，就用上次那个示例会议室；预算下午两点前发群里。",
+                   "note": "知识库里周三记过：场地已确认，预算表还差报价。"},
+         "connector": {"thread": WECHAT_GROUP, "label": "@你", "open_url": "https://wechat-connector.example.com/c/" + WECHAT_GROUP}},
+    ]
+    INBOX.append(
+        {"id": "wechat-connector:wxid_example_e", "source": "wechat-connector", "kind": "dm", "account": "wechat-connector", "account_name": "微信",
+         "title": "示例房东", "sender": "示例房东", "preview": "这周六上午来修热水器，家里留个人就行", "count": 1,
+         "started_at": ago(hours=3), "updated_at": ago(hours=3), "tier": "fyi",
+         "summary": "示例房东周六上午来修热水器", "reason": "知悉即可", "read": True,
+         "context": "示例房东（微信私聊）\n今天 示例房东：这周六上午来修热水器，家里留个人就行",
+         "connector": {"thread": "wxid_example_e", "label": "私聊", "open_url": "https://wechat-connector.example.com/c/wxid_example_e"}})
 
 # 信息 (GET /api/v1/imessage…, docs/plan-connectors.md「五」): one Mac's Messages, read for the user's own eyes. Every
 # name, number (+1 555 01xx) and text is made up. MOCK_IMESSAGE=denied: that Mac's node has no Full Disk Access.

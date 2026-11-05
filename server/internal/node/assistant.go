@@ -272,6 +272,10 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 	resume := id != ""
 	st, _ := n.state.get(id)
+	if own, switched := n.assistantResumeLauncher(ctx, id, launcher, st); switched {
+		n.logger.Printf("assistant %s: resumes on %s, the kind of agent it was started on, not on %s", short(id), launcherOr(own, st.Launcher), launcher)
+		launcher, options = own, nil // the model picked for the other launcher is not this one's
+	}
 	// An agent runtime's launcher, or a conversation one runs (assistant_runtime.go): it keeps its model; the node
 	// keeps the conversation's state, snapshot, mode and memory.
 	rl := launcherOr(launcher, st.Launcher)
@@ -542,7 +546,7 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool, opti
 	return n.spawnClaude(id, cwd, launcher, resume, spare, options...)
 }
 
-func (n *Node) claudeAssistantMCPAndTools(id string) (mcpJSON string, toolFlags []string) {
+func (n *Node) claudeAssistantMCPAndTools(id, cwd string) (mcpJSON string, toolFlags []string) {
 	// Per-process MCP config: the assistant-only tools (ask_user, agents_*, lark_*…) and the conversation they act for.
 	servers := map[string]any{"jarvis": map[string]any{
 		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
@@ -555,8 +559,14 @@ func (n *Node) claudeAssistantMCPAndTools(id string) (mcpJSON string, toolFlags 
 	allowed, disallowed := assistantToolFlags(n.assistantTools(), olBin != "")
 	mcp, _ := json.Marshal(map[string]any{"mcpServers": servers})
 	toolFlags = []string{"--mcp-config", string(mcp), "--allowedTools", allowed}
+	// One --disallowedTools with a word per rule (it takes several, up to the next flag): a path may hold a comma.
+	var deny []string
 	if disallowed != "" {
-		toolFlags = append(toolFlags, "--disallowedTools", disallowed)
+		deny = append(deny, disallowed)
+	}
+	deny = append(deny, n.healthDenyRules(cwd)...) // healthdeny.go
+	if len(deny) > 0 {
+		toolFlags = append(toolFlags, append([]string{"--disallowedTools"}, deny...)...)
 	}
 	return string(mcp), toolFlags
 }
@@ -579,7 +589,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	if hooks != "" {
 		args = append(args, "--plugin-dir", hooks)
 	}
-	_, toolFlags := n.claudeAssistantMCPAndTools(id)
+	_, toolFlags := n.claudeAssistantMCPAndTools(id, cwd)
 	args = append(args, toolFlags...)
 	if execution.Model != "" {
 		args = append(args, "--model", execution.Model)
@@ -623,7 +633,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 			"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
 		}}}
 		start := sdkStart{id: id, cwd: cwd, model: execution.Model, permissionMode: startMode, resume: resume, mcp: mcpConfig,
-			allowedTools: n.assistantTools(), settings: settings, plugin: hooks}
+			allowedTools: n.assistantTools(), deny: n.healthDenyRules(cwd), settings: settings, plugin: hooks}
 		var err error
 		if cmd, first, err = n.sdkCommand(bridge, launcher, start, env); err != nil {
 			return nil, err
@@ -1193,6 +1203,53 @@ func (n *Node) assistantAgent(ctx context.Context, launcher string) (string, err
 		return "codex", nil
 	}
 	return "", fmt.Errorf("启动器 %s 跑的是 %s，Persona 助手只能用启动 Claude Code、Codex 或能当助手的 runtime 的启动器（比如 DSH 插件的）：在 设置 › 助手 换一个", launcher, d.Agent)
+}
+
+// assistantResumeLauncher is what an existing conversation id resumes on when launcher was asked for. A conversation keeps the
+// kind of agent it was started on: Claude Code can't resume a Codex thread, nor Codex a Claude transcript, nor either
+// a runtime's conversation. The main conversation follows 模型配置 › 主对话 on every message (#1518), so a setting
+// moved to another kind made every message to it fail (`claude --resume <thread>`: "No conversation found", 2026-11-05).
+// A launcher of another kind gives way to the conversation's own launcher, or the plain agent when that one is of
+// another kind too (it was overwritten by such a failed start); "" for a runtime's conversation is its own (launcherOr).
+// switched reports the change; a conversation of unknown kind (no transcript yet) takes launcher as asked.
+func (n *Node) assistantResumeLauncher(ctx context.Context, id, launcher string, st sessionState) (own string, switched bool) {
+	if id == "" || launcher == "" {
+		return launcher, false
+	}
+	if n.runtimeAssistant(id) {
+		if n.assistantRuntime(launcher) == nil {
+			return "", true
+		}
+		return launcher, false
+	}
+	kind := n.conversationAgent(id)
+	if kind == "" || n.launcherKind(ctx, launcher) == kind {
+		return launcher, false
+	}
+	if st.Launcher != "" && n.launcherKind(ctx, st.Launcher) == kind {
+		return st.Launcher, true
+	}
+	return kind, true
+}
+
+// conversationAgent is the agent whose transcript conversation id has: "claude", "codex", or "" with none yet.
+func (n *Node) conversationAgent(id string) string {
+	switch p := n.transcriptPath(id); {
+	case p == "":
+		return ""
+	case strings.HasPrefix(filepath.Base(p), "rollout-"):
+		return "codex"
+	}
+	return "claude"
+}
+
+// launcherKind is the agent launcher runs for the assistant (assistantAgent), "" when it can't run it.
+func (n *Node) launcherKind(ctx context.Context, launcher string) string {
+	kind, err := n.assistantAgent(ctx, launcher)
+	if err != nil {
+		return ""
+	}
+	return kind
 }
 
 // launcherOr is launcher, or the conversation's own when none is given.

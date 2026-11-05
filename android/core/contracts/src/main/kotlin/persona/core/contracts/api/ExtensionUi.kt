@@ -100,6 +100,18 @@ data class ExtensionView(
     val tabs: ExtensionViewTabs? = null,
     /** UI version 4: `split` puts the sections of the `side` pane beside the rest where there is room, above them folded where not. */
     val layout: String? = null,
+    /** UI version 5: the pending review's bar at the page's foot. */
+    val review: ExtensionViewReview? = null,
+)
+
+/** The pending review (UI version 5): [count] drafts; a summary sent under [name] with the button pressed; [discard]. */
+@Serializable
+data class ExtensionViewReview(
+    val count: Int = 0,
+    val name: String = "",
+    val placeholder: String? = null,
+    val buttons: List<ExtensionComposerButton> = emptyList(),
+    val discard: ExtensionViewAction? = null,
 )
 
 /** A view's tabs (UI version 4): 2 to 8 [items], the chosen [value], sent under [name]. */
@@ -263,6 +275,23 @@ data class ExtensionViewItem(
     val reply: ExtensionViewAction? = null,
     /** composer: 1 to 4 buttons, each sending the text typed under [name]. */
     val buttons: List<ExtensionComposerButton>? = null,
+    // UI version 5's code review (#3136)
+    /** diff: hidden lines asked for (`{path, side, from, to}`), answered with [ExtensionUiResult.lines]. */
+    val context: ExtensionViewAction? = null,
+    /** diff: marked viewed; [markViewed] changes it (`{path, viewed}`); without it the device keeps the mark by [revision]. */
+    val viewed: Boolean? = null,
+    @SerialName("mark_viewed") val markViewed: ExtensionViewAction? = null,
+    val revision: String? = null,
+    /** diff: a generated file or a lockfile (folded at first). */
+    val generated: Boolean? = null,
+    /** diff: how alike a renamed file is to its old one, percent. */
+    val similarity: Int? = null,
+    /** diff: a comment kept as a draft of the pending review (values as [comment]'s). */
+    val draft: ExtensionViewAction? = null,
+    /** diff: the extension takes suggestion blocks. */
+    val suggestions: Boolean? = null,
+    /** code: an https link to lines on the site, `{start}` and `{end}` filled in. */
+    @SerialName("line_url") val lineUrl: String? = null,
 )
 
 @Serializable
@@ -281,6 +310,9 @@ data class ExtensionTreeEntry(
     val deletions: Int? = null,
     val comments: Int? = null,
     val badge: ExtensionViewBadge? = null,
+    /** UI version 5 */
+    val viewed: Boolean? = null,
+    val generated: Boolean? = null,
 )
 
 @Serializable
@@ -306,6 +338,9 @@ data class ExtensionDiffThread(
     val outdated: Boolean = false,
     val comments: List<ExtensionViewComment> = emptyList(),
     val reply: ExtensionViewAction? = null,
+    /** UI version 5: a draft of the pending review; resolving it (`{thread, resolved}`). */
+    val pending: Boolean = false,
+    val resolve: ExtensionViewAction? = null,
 )
 
 /** A comment: [at] is RFC 3339 (drawn relative), [body] the markdown subset; an [event] is a quiet line. */
@@ -392,6 +427,20 @@ data class ExtensionUiResult(
     val push: ExtensionViewPush? = null,
     /** UI version 3: back to the page underneath (after 保存), which is drawn again. */
     val pop: Boolean = false,
+    /** UI version 5: lines of a file a diff's context asked for (the page is not drawn again). */
+    val lines: ExtensionFileLines? = null,
+    /** UI version 5: components in place of those with the same key (the rest is not drawn again). */
+    @Serializable(with = LenientItemsSerializer::class) val items: List<ExtensionViewItem> = emptyList(),
+)
+
+/** Lines of one side of a file from [start] (1 the first); [total] is how many the file has. */
+@Serializable
+data class ExtensionFileLines(
+    val path: String = "",
+    val side: String? = null,
+    val start: Int = 1,
+    val lines: List<String> = emptyList(),
+    val total: Int? = null,
 )
 
 /**

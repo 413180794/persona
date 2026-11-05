@@ -916,7 +916,7 @@ App 画一个插槽时在 `context` 里说清楚是给谁画、画在哪，hub �
 | --- | --- | --- |
 | `placement` | — | 这个贡献的插槽 |
 | `size` | 可选：`compact` / `full` | 不发就是插槽表里的尺寸；`compact` 是卡片，要紧凑（见「新条目」下面的限制） |
-| `ui_version` | App 画得了的 UI 版本：现在是 `4`（网页、安卓；iOS 跟进中）；**老 App 不发，算 1** | `min(App 的, hub 的)`；扩展可以给老 App 画一个它画得了的版本（比如用 `progress` 代替 `chart`） |
+| `ui_version` | App 画得了的 UI 版本：现在是 `5`（网页、安卓；iOS 跟进中）；**老 App 不发，算 1** | `min(App 的, hub 的)`；扩展可以给老 App 画一个它画得了的版本（比如用 `progress` 代替 `chart`） |
 | `tz` | 用户的时区（IANA 名字，`Asia/Shanghai`） | 能加载的才转；没发或不对时是 hub 知道的用户时区（App 上报的、助手设置里的），都没有就空。「今天」按它算 |
 | `locale` | App 的语言（`zh-Hans-CN`） | 像个语言标签的才转，不然空 |
 | `platform` | `ios` / `mac` / `android` / `web` | 别的值丢掉 |
@@ -1058,7 +1058,7 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 
 ### 兼容
 
-**UI 版本**：1 是最早的八种条目、两个插槽；2 加了三个插槽、`chart` / `stat_grid` / `segmented`、`refresh_after`、上下文；3 见上面「UI 版本 3」；4 见「UI 版本 4：代码托管」。扩展点 `ui` 的版本跟着变（`initialize` 的 `hub.extension_points.ui`，现在是 4）。
+**UI 版本**：1 是最早的八种条目、两个插槽；2 加了三个插槽、`chart` / `stat_grid` / `segmented`、`refresh_after`、上下文；3 见上面「UI 版本 3」；4 见「UI 版本 4：代码托管」；5 见「UI 版本 5：代码 review」。扩展点 `ui` 的版本跟着变（`initialize` 的 `hub.extension_points.ui`，现在是 5）。
 
 - **老 App 遇到新插槽**：它只按 `placement` 问自己认识的插槽，看不到新插槽，不出错。`nav_page` 同时出现在扩展详情的 `ui` 里，老 App（网页）在设置 › 扩展 › 这个扩展 里照样能点进去；
   所以重要的内容放 `nav_page` 就行，`plugin_page` 可以不要。
@@ -1246,6 +1246,54 @@ App 在 `context.ui_version` 里发 `4`；`initialize` 的 `hub.extension_points
   `comment_thread` → 每条一行 `row`（作者、时间、徽标）加 `markdown` 正文（版本 1、2 再变成文字；最多 30 条）；`composer` → 一个 `text` 字段加每个按钮一个 `submit` 的 `button`；
   动作的 `values` 和新图标拿掉。换完超过 300 个条目的，截掉并在末尾写一句。老 App 点那些行、按钮时不带 `values`：要照顾老 App 的扩展看 `ui_version` 自己画（比如用 push + `state`）。
 - **扩展比 hub 新**：照旧（不认识的组件拿掉、记一行日志）。
+
+## UI 版本 5：代码 review（#3136）
+
+在 UI 版本 4 的代码组件上把「看 diff」做到能每天 review：取被隐藏的行、已看、生成文件、多行评论、草稿评审、suggestion、解决讨论串、行链接，
+以及动作只回数据或只换一个组件（不重画整页）。App 在 `context.ui_version` 里发 `5`；`hub.extension_points.ui` 是 `5`。字段以 `schema/extension/view.schema.json` 为准，
+方案和取舍见 #3136。演示快照 `schema/extension/examples/showcase/code-review-v5.json`。
+
+### 字段
+
+| 在哪 | 字段 | 做什么 |
+| --- | --- | --- |
+| `diff` | `context` | 取被隐藏的行：App 发 `values {path, side: new\|old, from, to}`（含两端，`to` 可以是 `end`），扩展回 `{lines: {path, side, start, lines, total?}}`（见下），**页面不重画**。可以多给（整个文件最好：App 按文件缓存，之后的展开不再问）。有 `context` 时 App 不用 `expand` |
+| `diff` | `viewed`、`mark_viewed` | 已看。勾 / 取消调 `mark_viewed`，`values {path, viewed: "true"\|"false"}`，App 先改了再发，回什么都行（空的 `{}` 最好）。没有 `mark_viewed` 的扩展，App 把已看存在本机，按 `path` + `revision`（没有时按 diff 的内容）记，文件变了自动失效 |
+| `diff` | `revision` | 这个文件这次改动的标识（blob id、版本的 head）：本机记的已看只对它算数 |
+| `diff`、`TreeEntry` | `generated` | 生成的文件、lockfile：先收起，不自动加载。扩展不说时 App 按路径认（`go.sum`、`package-lock.json`、`*.pb.go`、`*_gen.go`、`dist/`、`vendor/`……），改动超过 400 行的也先收起 |
+| `TreeEntry` | `viewed` | 文件树里的已看 |
+| `diff` | `similarity` | 重命名的相似度（0–100） |
+| `diff` | `draft` | 评论框多一个「加入评审」：`values` 同 `comment`。草稿存在扩展那边（GitHub 的 pending review；没有的平台存在扩展的数据里），画在 `threads` 里、`pending: true` |
+| `diff` | `suggestions` | 扩展认 ```` ```suggestion ```` 代码块：评论框多一个「建议修改」，评论里的 suggestion 画成那几行的小 diff |
+| `diff.comment` / `draft` 的 `values` | `start_line` | 多行评论：从 `start_line` 到 `line`（同一侧）。App 让用户拖选或先后点两个行号 |
+| `Thread` | `pending` | 草稿（还没发出）：画「草稿」徽标，不算未解决 |
+| `Thread` | `resolve` | 解决 / 重新打开：`values {thread: id, resolved: "true"\|"false"}` |
+| `View` | `review` | 页面底部的评审条：`{count, name, placeholder?, buttons: [{title, action, tone?}]（1–4）, discard?}`。显示「评审草稿 · N 条」，展开是总结输入框（作为 `name` 发出）+ 按钮（评论 / 请求修改 / 批准，按钮自带 `values {event}`）；`discard` 放弃全部草稿 |
+| `code` | `line_url` | 行链接模板（https）：`{start}`、`{end}` 换成行号，如 `https://github.com/o/r/blob/<sha>/a.go#L{start}-L{end}` |
+
+### 动作的回答
+
+`ui.action` 的回答多两种，**都不重画整页**（扩展只在 `ui_version >= 5` 时回）：
+
+- `lines: {path, side?, start, lines: [string], total?}`：`context` 要的行（≤ 2 万行、每行 ≤ 2 万字、合起来 ≤ 4 MB）；`total` 是文件一共几行（App 用它算最后一段还藏了多少）。
+- `items: [Component]`（≤ 50）：换掉页面上 `key` 相同的组件（每个都要有 `key`），比如 `load` 回这一个 `diff`。App 在之后整页重画时，扩展又给了不带 `hunks` 的同一个 `diff`，App 留着已经加载的那份。
+
+hub 照常校验（`lines` 的上限、`items` 按插槽校验、`line_url` 只能 https），发给 `ui_version < 5` 的 App 时去掉 `lines`、`items`（App 就整页重画）。
+
+### 各端怎么画
+
+- 字级高亮：一段删除和紧跟的新增按行配对，配上的两行按词比较（最长公共子序列），改了的词加深底色；太长（> 1000 字）或太不像的不标。
+- 隐藏的行：hunk 之间的条上「向下 20 行 / 向上 20 行 / 全部」，开头一段只有向上，最后一段只有向下（文件有多长取到行之后才知道）。
+- 已看：文件头的勾和文件树的勾，勾上就收起这个文件；页面顶上「已看 x / y」、「未解决 N」（点了跳到下一个）、「忽略空白」开关。
+- 忽略空白（App 侧）：一对删除 / 新增只差空白的画成不变的行。
+- 网页的快捷键：`n` / `p` 文件、`j` / `k` 改动、`]` / `[` 未解决的评论、`c` 评论、`v` 已看并跳到下一个、`x` 收起、`s` 统一 / 并排、`w` 忽略空白、`/` 筛选文件、`?` 快捷键表。
+- 窄屏：只有统一视图；底部浮一条「‹ 3 / 52 ›」和草稿条，「提交」在弹层里写总结。
+- 性能：扩展先给前 10 个文件（或 3000 行）的 `hunks`，其余 `collapsed + load`，App 滚到附近自动 `load`（生成文件除外）；网页每个文件和每个超过 300 行的 hunk 都 `content-visibility: auto`。
+
+### 兼容
+
+- **UI 版本 4 的 App**：hub 拿掉上面这些字段和动作；`review` 换成页面最前一节（「评审草稿 · N 条」+ `composer` + 放弃按钮），草稿评论串的第一条加「草稿」徽标。再老的照 UI 版本 4 的降级。
+- 扩展给 `ui_version < 5` 的 App 照旧回整页 View（`load` 时把那个文件一起画出来）。
 
 ## 系统级位置（#1858）
 

@@ -14,7 +14,12 @@ const realFetch = window.fetch.bind(window);
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   if (url.includes("/-/ui/")) {
-    const body = JSON.parse(String(init?.body ?? "{}")) as { state?: string };
+    const body = JSON.parse(String(init?.body ?? "{}")) as { state?: string; action?: string; values?: Record<string, string> };
+    // a diff's hidden lines (UI version 5): made-up lines, the file 90 long
+    if (body.action === "context" && body.values?.path) {
+      const lines = Array.from({ length: 90 }, (_, i) => `\t// ${body.values!.path} line ${i + 1}`);
+      return new Response(JSON.stringify({ lines: { path: body.values.path, side: "new", start: 1, lines, total: 90 } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
     const view = SHOWCASE[body.state ?? ""] ?? SHOWCASE.home;
     return new Response(JSON.stringify({ view: { ...view, state: body.state } }), { status: 200, headers: { "Content-Type": "application/json" } });
   }

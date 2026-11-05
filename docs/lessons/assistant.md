@@ -80,3 +80,7 @@
 - Agent 自己的「本会话」授权只活在它的进程里（2026-11-05，#2202）：Claude 的 `addRules … destination: session`、Codex 的 `acceptForSession`、
   飞书闸门的 node 内存，主对话进程一换（空闲回收、部署、换启动器）、node 一重启就没了，`--resume` 不带回来，用户看到的是「点了总是允许还一直问」。
   助手对话里要跨进程的状态都得落到 hub 的库：授权卡带 `always_keys`，hub 记进 `assistant_always` 并自己回答同样的卡（`docs/assistant.md`「本会话总是允许」）。
+- 一段对话的 Agent 类型是它的对话记录定的，不是这一条消息带的启动器（2026-11-05）：主对话每条都按「模型配置 › 主对话」（#1518），设置从 Codex 换成 Claude 的启动器后，
+  node 只在进程还活着时拒绝换类型，进程一退就 `claude --resume <Codex 线程 id>`，回 `No conversation found`，消息停在「没能确认是否送达」，界面是「会话已结束」，从 19:39 坏到深夜。
+  更糟的是失败的那次启动已把会话状态的 `launcher` 改成了 Claude 的，原来的 Codex 启动器名丢了。现在续聊前先看对话记录是哪一种（`assistantResumeLauncher`），
+  类型不合就用它自己的、或同类的 `claude` / `codex`；查这类问题先 `rg <id> ~/.persona/node-attach.log`，看是哪个启动器、什么时候开始退的。

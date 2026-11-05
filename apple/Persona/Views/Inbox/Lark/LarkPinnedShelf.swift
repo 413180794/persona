@@ -1,6 +1,5 @@
 import SwiftUI
 
-#if os(iOS) || os(visionOS)
 /// The compact shelf and its expanded rows use the same ordering and unread state.
 struct LarkPinnedShelf: View {
     let conversations: [LarkConversation]
@@ -71,6 +70,7 @@ struct LarkPinnedShelf: View {
     }
 }
 
+#if os(iOS) || os(visionOS)
 /// Offset compensation belongs to the scroll view, not every frame of the page's state.
 @MainActor final class LarkConversationScroll {
     let reader = ReaderAnchor()

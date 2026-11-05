@@ -8,6 +8,7 @@ import persona.core.contracts.api.ExtensionUi
 import persona.core.contracts.api.ExtensionUiContext
 import persona.core.contracts.api.ExtensionUiNotFound
 import persona.core.contracts.api.ExtensionUiPlace
+import persona.core.contracts.api.ExtensionUiResult
 import persona.core.contracts.api.ExtensionUiUnsupported
 import persona.core.contracts.api.ExtensionView
 import persona.core.contracts.api.ExtensionViewAction
@@ -293,7 +294,8 @@ internal class ExtensionViewModel(
         mutable.update { it.copy(loading = true) }
         try {
             val view = api.renderUi(extension, ui, context, currentState())
-            mutable.update { it.copy(view = view, values = ExtensionViewText.fields(view), error = null, failure = null, unsupported = false) }
+            // drawn again for the same page: the diffs loaded since stay (UI version 5)
+            mutable.update { it.copy(view = ExtensionCodeReview.keepLoaded(it.view, view), values = ExtensionViewText.fields(view), error = null, failure = null, unsupported = false) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: ExtensionUiUnsupported) { mutable.update { it.copy(unsupported = true, error = null) } }
         catch (_: ExtensionUiNotFound) { mutable.update { it.copy(unsupported = true, error = null) } }
@@ -378,6 +380,25 @@ internal class ExtensionViewModel(
     }
 
     /**
+     * An action that does not hold the page (UI version 5: a diff's hidden lines, a viewed mark, a diff loaded as it
+     * comes near): sent with the action's own [values]; its components go in place, a new view replaces the page keeping
+     * what is typed. Says what was answered; null when it failed.
+     */
+    suspend fun fetch(action: ExtensionViewAction, values: Map<String, String>): ExtensionUiResult? = try {
+        val result = api.uiAction(extension, ui, action.id, context, currentState(), values + action.values.orEmpty())
+        val view = result.view
+        when {
+            view != null -> mutable.update { s ->
+                val fresh = ExtensionViewText.fields(view)
+                s.copy(view = ExtensionCodeReview.keepLoaded(s.view, view), values = fresh + s.values.filterKeys { it in fresh }, drawnAt = now())
+            }
+            result.items.isNotEmpty() -> mutable.update { s -> s.copy(view = s.view?.let { ExtensionCodeReview.patchView(it, result.items) }) }
+        }
+        result
+    } catch (cancelled: CancellationException) { throw cancelled }
+    catch (_: Exception) { null }
+
+    /**
      * A button or a row was pressed (after its confirm, which the page asks): sends it, with the fields when it
      * submits. A new view replaces the page; nothing back draws it again.
      */
@@ -392,6 +413,9 @@ internal class ExtensionViewModel(
                 ExtensionViewText.sent(action, current.values, values))
             when {
                 result.view != null -> mutable.update { it.copy(view = result.view, values = ExtensionViewText.fields(result.view), error = null, drawnAt = now()) }
+                // UI version 5: components in place, or lines for a diff, say enough
+                result.items.isNotEmpty() -> mutable.update { s -> s.copy(view = s.view?.let { ExtensionCodeReview.patchView(it, result.items) }) }
+                result.lines != null -> Unit
                 result.toast == null && result.openUrl == null && result.push == null && !result.pop -> { mutable.update { it.copy(acting = null) }; load() }
             }
             ExtensionActionOutcome(result.toast?.takeIf { it.isNotBlank() }, result.openUrl?.takeIf(opens), push = result.push, pop = result.pop)

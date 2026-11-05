@@ -119,9 +119,11 @@ var (
 // chart and stat_grid, refresh_after and the render context; 3 markdown, table, empty and loading, a row's icon, avatar
 // and thumbnail, components' keys, a view's search and filter, a section's more, pushing and popping pages,
 // ui.invalidate; 4 the code hosting components (header, breadcrumb, file_tree, code, diff, comment_thread, composer), a
-// view's tabs and split layout, an action's values (#2951). An app says which it draws (context.ui_version, 1 when it
+// view's tabs and split layout, an action's values (#2951); 5 code review (#3136): a diff's context lines, viewed marks,
+// generated files, drafts of a pending review and its bar, resolving threads, a code's line links, and an action
+// answering with lines or with components in place. An app says which it draws (context.ui_version, 1 when it
 // says nothing); the hub leaves out of a View what the app does not know, or draws it with what it knows (Fit).
-const UIVersion = 4
+const UIVersion = 5
 
 // PageSlot says whether placement is the extension's own page: extension_page, or plugin_page as it was called.
 func PageSlot(placement string) bool {
@@ -255,6 +257,9 @@ type (
 	Comment        = wire.Comment
 	ComposerButton = wire.ComposerButton
 	LineRange      = wire.LineRange
+	// UI version 5's code review parts (#3136): lines of a file a diff's context asked for, the pending review's bar.
+	FileLines = wire.FileLines
+	Review    = wire.Review
 )
 
 // InboxSourceURL is the one link besides https an action may open, and only on an inbox_item, for the item it is
@@ -329,6 +334,9 @@ func Fit(v *View, slot UISlot, uiVersion int) (dropped []string, err error) {
 	dropped = wire.StripAssistantFields(v)
 	if v.Sections == nil {
 		v.Sections = []Section{}
+	}
+	if uiVersion < 5 {
+		downgrade5(v)
 	}
 	if uiVersion < 4 {
 		downgrade4(v)
@@ -604,6 +612,72 @@ func downgrade4(v *View) {
 		total += len(items)
 		s.Items = items
 	}
+}
+
+// downgrade5 leaves out UI version 5's fields (code review, #3136), in place: a diff's context, viewed marks, generated
+// files, drafts and suggestions, a thread's resolve, a code's line link. A draft thread's first comment gets a badge
+// saying so; the pending review's bar becomes a section on top: a line saying how many drafts, its composer and discard
+// as a button.
+func downgrade5(v *View) {
+	if r := v.Review; r != nil {
+		items := []UIElem{
+			{Type: "text", Text: fmt.Sprintf("评审草稿 · %d 条", r.Count), Style: "secondary"},
+			{Type: "composer", Name: r.Name, Placeholder: r.Placeholder, Buttons: r.Buttons},
+		}
+		if r.Discard != nil {
+			items = append(items, UIElem{Type: "button", Title: "放弃草稿", Action: r.Discard, Role: "destructive"})
+		}
+		v.Sections = append([]Section{{Items: items}}, v.Sections...)
+		v.Review = nil
+	}
+	for i := range v.Sections {
+		for j := range v.Sections[i].Items {
+			e := &v.Sections[i].Items[j]
+			e.Context, e.MarkViewed, e.Draft = nil, nil, nil
+			e.Viewed, e.Generated, e.Suggestions = false, false, false
+			e.Revision, e.Similarity, e.LineURL = "", 0, ""
+			for k := range e.Entries {
+				e.Entries[k].Viewed, e.Entries[k].Generated = false, false
+			}
+			for k := range e.Threads {
+				t := &e.Threads[k]
+				if t.Pending && len(t.Comments) > 0 && t.Comments[0].Badge == nil {
+					t.Comments[0].Badge = &Badge{Text: "草稿", Tone: "caution"}
+				}
+				t.Pending, t.Resolve = false, nil
+			}
+		}
+	}
+}
+
+// FitResult makes what ui.action answered something the app can use, past the view (Fit): lines and components in
+// place (UI version 5) are checked and the components fitted one by one; an older app gets neither, so it draws the
+// page again.
+func FitResult(res *ActionResult, slot UISlot, uiVersion int) error {
+	if uiVersion < 5 {
+		res.Lines, res.Items = nil, nil
+		return nil
+	}
+	if err := wire.CheckLines(res.Lines); err != nil {
+		return err
+	}
+	if len(res.Items) == 0 {
+		return nil
+	}
+	v := View{Sections: []Section{{Items: res.Items}}}
+	for _, e := range res.Items {
+		if e.Key == "" {
+			return errors.New("items: each has the key of the one it stands for")
+		}
+	}
+	if _, err := Fit(&v, slot, uiVersion); err != nil {
+		return err
+	}
+	if len(v.Sections) == 0 || len(v.Sections[0].Items) != len(res.Items) {
+		return errors.New("items: of types this app draws")
+	}
+	res.Items = v.Sections[0].Items
+	return nil
 }
 
 // fileStatusBadge is how an older app shows a file's status.

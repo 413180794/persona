@@ -3,8 +3,8 @@ import { initials, MAX_STACK, outcome, pushPage, readAction, readView, rowIcon, 
 
 describe("UI 版本 3：新组件", () => {
   it("asks for version 4", () => {
-    expect(UI_VERSION).toBe(4);
-    expect(uiContext().ui_version).toBe(4);
+    expect(UI_VERSION).toBe(5);
+    expect(uiContext().ui_version).toBe(5);
   });
 
   it("reads markdown, table, empty and loading, and leaves out what cannot be drawn", () => {

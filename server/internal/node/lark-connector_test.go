@@ -152,7 +152,7 @@ func TestClaudeAssistantMCPAndToolsWiring(t *testing.T) {
 	bin := writeFakelark-connectorBin(t, dir, "lark-connector-agent", "Usage: lark-connector-agent mcp-server --control")
 	t.Setenv("PERSONA_lark-connector_AGENT", bin)
 
-	mcpJSON, flags := n.claudeAssistantMCPAndTools("sess-123")
+	mcpJSON, flags := n.claudeAssistantMCPAndTools("sess-123", "")
 	var cfg struct {
 		MCPServers map[string]map[string]any `json:"mcpServers"`
 	}
@@ -180,7 +180,7 @@ func TestClaudeAssistantMCPAndToolsWiring(t *testing.T) {
 
 	// When disabled via PERSONA_lark-connector_AGENT="", lark-connector server and --disallowedTools are omitted.
 	t.Setenv("PERSONA_lark-connector_AGENT", "")
-	mcpJSONOff, flagsOff := n.claudeAssistantMCPAndTools("sess-123")
+	mcpJSONOff, flagsOff := n.claudeAssistantMCPAndTools("sess-123", "")
 	var cfgOff struct {
 		MCPServers map[string]map[string]any `json:"mcpServers"`
 	}

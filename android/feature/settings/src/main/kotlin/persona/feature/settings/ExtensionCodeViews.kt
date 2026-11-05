@@ -52,14 +52,14 @@ import java.time.Instant
 // UI version 4's code hosting components (docs/extensions.md「UI 版本 4」, #2951) with this app's design system: a detail
 // page's header, a breadcrumb, a file tree, a file's code, a file's diff (one column: a phone has no room for two;
 // threads under their lines, a comment box at any line, hidden lines to show), a discussion and a comment box with its
-// buttons. What they send goes through ExtensionViewHandle.act: the action with the component's own values. Logic in
+// buttons; the diff is ExtensionCodeReviewUi.kt. What they send goes through ExtensionViewHandle.act: the action with the component's own values. Logic in
 // ExtensionCodeText.kt.
 
 /** How many lines of a file or a diff are drawn before 「显示全部」: a long one costs nothing until asked for. */
-private const val LinesShown = 400
+internal const val LinesShown = 400
 
 @Composable
-private fun tokenColor(kind: TokenKind): Color {
+internal fun tokenColor(kind: TokenKind): Color {
     val palette = PersonaTheme.palette
     return when (kind) {
         TokenKind.Keyword -> palette.accent
@@ -71,7 +71,7 @@ private fun tokenColor(kind: TokenKind): Color {
 }
 
 @Composable
-private fun highlighted(tokens: List<CodeToken>?, text: String): AnnotatedString {
+internal fun highlighted(tokens: List<CodeToken>?, text: String): AnnotatedString {
     if (tokens == null) return AnnotatedString(text.ifEmpty { " " })
     val colors = TokenKind.entries.associateWith { tokenColor(it) }
     return buildAnnotatedString {
@@ -196,7 +196,7 @@ internal fun CodeFileTree(item: ExtensionViewItem, state: ExtensionViewState, ha
 // ── code ──
 
 @Composable
-private fun FileBar(path: String, trailing: @Composable () -> Unit, lead: (@Composable () -> Unit)? = null, onClick: (() -> Unit)? = null) {
+internal fun FileBar(path: String, trailing: @Composable () -> Unit, lead: (@Composable () -> Unit)? = null, onClick: (() -> Unit)? = null) {
     val palette = PersonaTheme.palette
     Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
         .padding(horizontal = rowPadding, vertical = Tokens.Space.m), verticalAlignment = Alignment.CenterVertically) {
@@ -251,7 +251,7 @@ internal fun CodeFile(item: ExtensionViewItem, state: ExtensionViewState, handle
 }
 
 @Composable
-private fun LoadLine(title: String, busy: Boolean, enabled: Boolean, onClick: () -> Unit) {
+internal fun LoadLine(title: String, busy: Boolean, enabled: Boolean, onClick: () -> Unit) {
     JDivider()
     Row(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).padding(vertical = Tokens.Space.m), horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically) {
@@ -263,7 +263,7 @@ private fun LoadLine(title: String, busy: Boolean, enabled: Boolean, onClick: ()
 // ── comments ──
 
 @Composable
-private fun CommentLine(c: ExtensionViewComment) {
+internal fun CommentLine(c: ExtensionViewComment) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val res = LocalResources.current
@@ -291,7 +291,7 @@ private fun CommentLine(c: ExtensionViewComment) {
 
 /** A text box and one button (a reply, a comment at a line), with 取消 when it can close. */
 @Composable
-private fun MiniComposer(placeholder: String, busy: Boolean, enabled: Boolean, onCancel: (() -> Unit)?, send: (String) -> Unit) {
+internal fun MiniComposer(placeholder: String, busy: Boolean, enabled: Boolean, onCancel: (() -> Unit)?, send: (String) -> Unit) {
     var body by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxWidth().padding(horizontal = rowPadding, vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         JTextField(body, { body = it }, Modifier.fillMaxWidth(), placeholder = placeholder, singleLine = false, enabled = enabled)
@@ -304,7 +304,7 @@ private fun MiniComposer(placeholder: String, busy: Boolean, enabled: Boolean, o
 }
 
 @Composable
-private fun ReplyBox(action: ExtensionViewAction, values: Map<String, String>, state: ExtensionViewState, handle: ExtensionViewHandle) {
+internal fun ReplyBox(action: ExtensionViewAction, values: Map<String, String>, state: ExtensionViewState, handle: ExtensionViewHandle) {
     var open by rememberSaveable { mutableStateOf(false) }
     val palette = PersonaTheme.palette
     if (open) MiniComposer(stringResource(R.string.settings_ext_code_reply), busy = state.acting == action.id, enabled = !state.busy, onCancel = { open = false }) { body ->
@@ -350,142 +350,8 @@ internal fun CodeComposer(item: ExtensionViewItem, state: ExtensionViewState, ha
     }
 }
 
-// ── diff ──
-
-@Composable
-private fun ThreadCard(thread: ExtensionDiffThread, state: ExtensionViewState, handle: ExtensionViewHandle) {
-    val palette = PersonaTheme.palette
-    var open by rememberSaveable(thread.id) { mutableStateOf(!thread.resolved) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = Tokens.Space.s, vertical = Tokens.Space.s).clip(RoundedCornerShape(Tokens.Radius.control))
-        .background(palette.surfaceOpaque)) {
-        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = rowPadding, vertical = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
-            JIcon(if (open) PhIcons.CaretDown else PhIcons.CaretRight, null, size = Tokens.Space.m, tint = palette.ink3)
-            Spacer(Modifier.width(Tokens.Space.s))
-            val first = thread.comments.firstOrNull()
-            Text(if (open) pluralStringResource(R.plurals.settings_ext_code_comments, thread.comments.size, thread.comments.size) else "${first?.author.orEmpty()}: ${first?.body.orEmpty()}",
-                Modifier.weight(1f), style = PersonaTheme.type.caption, color = palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (thread.outdated) JTag(stringResource(R.string.settings_ext_code_outdated), Tone.Caution)
-            if (thread.resolved) JTag(stringResource(R.string.settings_ext_code_resolved), Tone.Positive)
-        }
-        if (open) {
-            thread.comments.forEach { JDivider(); CommentLine(it) }
-            thread.reply?.takeIf { it.id.isNotEmpty() }?.let { JDivider(); ReplyBox(it, thread.id?.let { id -> mapOf("thread" to id) }.orEmpty(), state, handle) }
-        }
-    }
-}
-
-@Composable
-internal fun CodeDiff(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle, modifier: Modifier) {
-    val palette = PersonaTheme.palette
-    val type = PersonaTheme.type
-    val path = item.path.orEmpty()
-    val hunks = item.hunks.orEmpty()
-    var open by rememberSaveable(item.key ?: path, item.collapsed) { mutableStateOf(item.collapsed != true) }
-    var all by rememberSaveable(item.key ?: path) { mutableStateOf(false) }
-    var spot by rememberSaveable(item.key ?: path) { mutableStateOf<String?>(null) }
-    val language = ExtensionCodeText.language(item.language, path)
-    val lit = remember(hunks, language) {
-        hunks.map { h -> ExtensionCodeText.sides(h).let { (o, n) -> ExtensionCodeText.highlight(o, language) to ExtensionCodeText.highlight(n, language) } }
-    }
-    val (at, rest) = remember(item.threads, hunks) { ExtensionCodeText.placeThreads(item.threads.orEmpty(), hunks) }
-    val comment = item.comment?.takeIf { it.id.isNotEmpty() }
-    val expand = item.expand?.takeIf { it.id.isNotEmpty() }
-    val mark = ExtensionCodeText.status(item.status)
-    val add = palette.tone(Tone.Positive).tint
-    val del = palette.tone(Tone.Danger).tint
-    JGroupItem(GroupPosition.Single, modifier) {
-        FileBar(path, lead = {
-            JIcon(if (open) PhIcons.CaretDown else PhIcons.CaretRight, null, size = Tokens.Space.m, tint = palette.ink3)
-            mark?.let { (letter, tone) -> Spacer(Modifier.width(Tokens.Space.s)); Text(letter, style = type.micro.copy(fontWeight = FontWeight.Bold), color = palette.tone(tone).text) }
-        }, trailing = {
-            item.threads?.size?.takeIf { it > 0 }?.let { JIcon(PhIcons.ChatCircle, null, size = Tokens.Space.m, tint = palette.ink3); Text(" $it  ", style = type.micro, color = palette.ink3) }
-            Text("+${item.additions ?: 0}", style = type.micro, color = palette.diffAdd, maxLines = 1)
-            Text(" −${item.deletions ?: 0}", style = type.micro, color = palette.diffDel, maxLines = 1)
-        }, onClick = { open = !open })
-        item.oldPath?.takeIf { it.isNotBlank() && it != path }?.let {
-            Text(stringResource(R.string.settings_ext_code_renamed_from, it), Modifier.padding(start = rowPadding, end = rowPadding, bottom = Tokens.Space.s),
-                style = type.micro, color = palette.ink3, maxLines = 1, overflow = TextOverflow.StartEllipsis)
-        }
-        when {
-            item.binary == true -> { JDivider(); Text(stringResource(R.string.settings_ext_code_binary), Modifier.fillMaxWidth().padding(Tokens.Space.l), style = type.caption, color = palette.ink3) }
-            hunks.isEmpty() -> item.load?.takeIf { it.id.isNotEmpty() }?.let { load ->
-                LoadLine(stringResource(R.string.settings_ext_code_load_diff), busy = state.acting == load.id, enabled = !state.busy) { handle.act(load, mapOf("path" to path)) }
-            } ?: run { JDivider(); Text(stringResource(R.string.settings_ext_code_no_changes), Modifier.fillMaxWidth().padding(Tokens.Space.l), style = type.caption, color = palette.ink3) }
-            open -> {
-                JDivider()
-                var drawn = 0
-                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).background(palette.sunken)) {
-                // as wide as the widest line (the screen at least): a line's colour runs the whole row
-                Column(Modifier.width(IntrinsicSize.Max).widthIn(min = screenWidth())) {
-                    hunks.forEachIndexed { hi, h ->
-                        if (!all && drawn >= LinesShown) return@forEachIndexed
-                        val gap = ExtensionCodeText.gapBefore(hunks, hi)
-                        if (expand != null && gap > 0) GapLine(pluralStringResource(R.plurals.settings_ext_code_hidden_lines, gap, gap), !state.busy) {
-                            handle.act(expand, mapOf("path" to path, "hunk" to "$hi", "direction" to "up"))
-                        } else h.header?.takeIf { it.isNotBlank() }?.let {
-                            Text(it, Modifier.padding(horizontal = Tokens.Space.s, vertical = Tokens.Space.xs), style = type.codeSmall, color = palette.ink3, maxLines = 1, softWrap = false)
-                        }
-                        val (oldLit, newLit) = lit[hi]
-                        var oi = 0
-                        var ni = 0
-                        ExtensionCodeText.rows(h).forEach { r ->
-                            val tokens = when (r.kind) { DiffKind.Del -> oldLit.getOrNull(oi++); DiffKind.Add -> newLit.getOrNull(ni++); DiffKind.Context -> { oi++; newLit.getOrNull(ni++) }; DiffKind.Note -> null }
-                            if (!all && drawn >= LinesShown) return@forEach
-                            drawn++
-                            if (r.kind == DiffKind.Note) {
-                                Text(r.text, Modifier.padding(horizontal = Tokens.Space.s), style = type.micro, color = palette.ink3)
-                                return@forEach
-                            }
-                            val target = if (r.kind == DiffKind.Del) ExtensionCodeText.spot("old", r.old!!) else ExtensionCodeText.spot("new", r.new!!)
-                            Row(Modifier.fillMaxWidth().then(when (r.kind) { DiffKind.Add -> Modifier.background(add); DiffKind.Del -> Modifier.background(del); else -> Modifier })
-                                .then(if (comment != null) Modifier.clickable { spot = if (spot == target) null else target } else Modifier)) {
-                                Text(r.old?.toString().orEmpty(), Modifier.widthIn(min = Tokens.Space.xxxl).padding(horizontal = Tokens.Space.xs), style = type.codeSmall, color = palette.ink3,
-                                    maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End)
-                                Text(r.new?.toString().orEmpty(), Modifier.widthIn(min = Tokens.Space.xxxl).padding(horizontal = Tokens.Space.xs), style = type.codeSmall, color = palette.ink3,
-                                    maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End)
-                                Text(when (r.kind) { DiffKind.Add -> "+"; DiffKind.Del -> "−"; else -> " " }, Modifier.padding(horizontal = Tokens.Space.xs), style = type.codeSmall,
-                                    color = when (r.kind) { DiffKind.Add -> palette.diffAdd; DiffKind.Del -> palette.diffDel; else -> palette.ink3 })
-                                Text(highlighted(tokens, r.text), Modifier.padding(end = Tokens.Space.l), style = type.codeSmall, maxLines = 1, softWrap = false)
-                            }
-                            // threads and the comment box sit under their line, as wide as the screen (not the code)
-                            ExtensionCodeText.spotsOf(r).flatMap { at[it].orEmpty() }.forEach { th -> Box(Modifier.width(screenWidth())) { ThreadCard(th, state, handle) } }
-                            if (comment != null && spot == target) Box(Modifier.width(screenWidth()).background(palette.surfaceOpaque)) {
-                                val side = target.substringBefore(':')
-                                val line = target.substringAfter(':')
-                                MiniComposer(stringResource(R.string.settings_ext_code_comment_on, line.toInt()), busy = state.acting == comment.id, enabled = !state.busy,
-                                    onCancel = { spot = null }) { body -> handle.act(comment, mapOf("path" to path, "side" to side, "line" to line, "body" to body)); spot = null }
-                            }
-                        }
-                    }
-                    if (expand != null && (all || drawn < LinesShown)) GapLine(stringResource(R.string.settings_ext_code_expand_down), !state.busy, down = true) {
-                        handle.act(expand, mapOf("path" to path, "hunk" to "${hunks.lastIndex}", "direction" to "down"))
-                    }
-                }
-                }
-                if (!all && drawn >= LinesShown) LoadLine(stringResource(R.string.settings_ext_code_show_all_diff), busy = false, enabled = true) { all = true }
-                if (rest.isNotEmpty()) {
-                    JDivider()
-                    Text(stringResource(R.string.settings_ext_code_elsewhere), Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s), style = type.caption, color = palette.ink3)
-                    rest.forEach { ThreadCard(it, state, handle) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun GapLine(title: String, enabled: Boolean, down: Boolean = false, onClick: () -> Unit) {
-    val palette = PersonaTheme.palette
-    Row(Modifier.width(screenWidth()).background(palette.accentSoft).clickable(enabled = enabled, onClick = onClick)
-        .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
-        JIcon(if (down) PhIcons.ArrowDown else PhIcons.ArrowUp, null, size = Tokens.Space.m, tint = palette.accent)
-        Spacer(Modifier.width(Tokens.Space.s))
-        Text(title, style = PersonaTheme.type.caption, color = palette.accent, maxLines = 1)
-    }
-}
-
 /** The window's width less the page's sides: what a thread under a line of code takes, however wide the code is. */
 @Composable
-private fun screenWidth() = with(androidx.compose.ui.platform.LocalDensity.current) {
+internal fun screenWidth() = with(androidx.compose.ui.platform.LocalDensity.current) {
     androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width.toDp()
 } - Tokens.Space.l * 2 - Tokens.Space.s

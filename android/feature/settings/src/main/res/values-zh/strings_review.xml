@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UI version 5 code review (#3136): ExtensionCodeReviewUi.kt -->
+<resources>
+    <string name="settings_ext_review_add_to_review">加入评审</string>
+    <string name="settings_ext_review_comment_now">直接评论</string>
+    <string name="settings_ext_review_comment_on_lines">评论第 %1$s 行</string>
+    <string name="settings_ext_review_discard">放弃草稿</string>
+    <string name="settings_ext_review_draft">草稿</string>
+    <string name="settings_ext_review_expand_all">全部</string>
+    <string name="settings_ext_review_expand_up">展开上面的行</string>
+    <string name="settings_ext_review_folded_big">改动较多，先收起了</string>
+    <string name="settings_ext_review_folded_generated">生成的文件，先收起了</string>
+    <string name="settings_ext_review_folded_viewed">已看过</string>
+    <string name="settings_ext_review_generated">生成的文件</string>
+    <string name="settings_ext_review_ignore_whitespace">忽略空白</string>
+    <string name="settings_ext_review_lines_range">第 %1$s 行</string>
+    <string name="settings_ext_review_load_generated">加载生成的文件</string>
+    <string name="settings_ext_review_loading_diff">正在加载改动…</string>
+    <string name="settings_ext_review_quiet_failed">没连上扩展</string>
+    <string name="settings_ext_review_renamed_only">只改了名字</string>
+    <string name="settings_ext_review_reopen">重新打开</string>
+    <string name="settings_ext_review_resolve">解决</string>
+    <string name="settings_ext_review_rest_of_file">展开到文件末尾</string>
+    <string name="settings_ext_review_review">评审</string>
+    <string name="settings_ext_review_show_diff">显示</string>
+    <string name="settings_ext_review_similar">相似 %1$d%%</string>
+    <string name="settings_ext_review_start_review">开始评审</string>
+    <string name="settings_ext_review_suggest">建议修改</string>
+    <string name="settings_ext_review_suggest_delete">建议删除这几行</string>
+    <string name="settings_ext_review_suggested_change">建议的修改</string>
+    <string name="settings_ext_review_summary">写一句总结（可选）</string>
+    <string name="settings_ext_review_viewed">已看</string>
+    <string name="settings_ext_review_viewed_of">已看 %1$d / %2$d</string>
+    <string name="settings_ext_review_whitespace_only">只有空白的改动</string>
+    <plurals name="settings_ext_review_drafts">
+        <item quantity="other">评审草稿 · %1$d 条</item>
+    </plurals>
+    <plurals name="settings_ext_review_open_threads">
+        <item quantity="other">未解决 %1$d</item>
+    </plurals>
+    <plurals name="settings_ext_review_submit_drafts">
+        <item quantity="other">提交 %1$d</item>
+    </plurals>
+</resources>

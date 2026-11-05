@@ -350,9 +350,7 @@ private struct ConnectorRowLabel: View {
 /// itself is signed in on the hub's machine (docs/feishu.md), not here.
 struct FeishuConnectorView: View {
     @Environment(AppModel.self) private var model
-    #if os(iOS) || os(visionOS)
     @Bindable private var larkHome = LarkHomePreference.shared
-    #endif
     @State private var status: LarkStatus?
     @State private var accounts: APIClient.LarkAccounts?
     @State private var loading = true
@@ -402,14 +400,16 @@ struct FeishuConnectorView: View {
                 }
             }
 
-            #if os(iOS) || os(visionOS)
             Section {
                 Toggle("首页显示消息", isOn: $larkHome.enabled)
                 .accessibilityIdentifier("feishu-home-enabled")
             } footer: {
+                #if os(macOS)
+                Text("在侧边栏增加「消息」，查看全部私聊和群聊。与收件箱共用账号和聊天记录。")
+                #else
                 Text("在首页增加「消息」入口，查看全部私聊和群聊。与收件箱共用账号和聊天记录。")
+                #endif
             }
-            #endif
 
             Section {
                 NavigationLink("风灵月影") { LarkMessageDisplaySettingsView() }

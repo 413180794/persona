@@ -14,6 +14,9 @@ export interface TreeEntry {
   deletions?: number;
   comments?: number;
   badge?: { text: string; tone?: string };
+  /** UI version 5 */
+  viewed?: boolean;
+  generated?: boolean;
 }
 
 export interface Hunk {
@@ -42,6 +45,9 @@ export interface Thread {
   outdated?: boolean;
   comments: Comment[];
   reply?: { id: string; confirm?: string; submit?: boolean; values?: Record<string, string> };
+  /** UI version 5: a draft of the pending review; resolving it */
+  pending?: boolean;
+  resolve?: { id: string; confirm?: string; submit?: boolean; values?: Record<string, string> };
 }
 
 // ── file tree ─────────────────────────────────────────

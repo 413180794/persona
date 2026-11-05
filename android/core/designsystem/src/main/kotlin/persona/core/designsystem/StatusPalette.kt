@@ -255,3 +255,7 @@ data class StatusTone(val dot: Color, val text: Color, val tint: Color)
 /** Status colours of the active style. Prefer [PersonaTheme.palette] in new code. */
 fun statusTone(status: Status, darkTheme: Boolean): StatusTone =
     Palettes.of(ActiveStyle.value, darkTheme).status(status).let { StatusTone(it.dot, it.text, it.tint) }
+
+/** A diff's words that changed in a line (UI version 5, #3136): the add / delete colour, deeper than the line's own tint. */
+val PersonaPalette.diffAddWord: Color get() = diffAdd.copy(alpha = 0.30f)
+val PersonaPalette.diffDelWord: Color get() = diffDel.copy(alpha = 0.30f)

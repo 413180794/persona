@@ -7,11 +7,12 @@ import Testing
 @MainActor
 struct MacSectionTests {
     @Test func orderAndShortcuts() {
-        #expect(MacSection.allCases.map(\.title) == ["Persona", "Agents", "待办", "收件箱", "知识库", "机器", "设置"])
-        #expect(MacSection.shortcutOrder.map(\.title) == ["Persona", "Agents", "收件箱", "知识库", "机器", "设置", "待办"])
+        #expect(MacSection.allCases.map(\.title) == ["Persona", "Agents", "待办", "消息", "收件箱", "知识库", "机器", "设置"])
+        #expect(MacSection.shortcutOrder.map(\.title) == ["Persona", "Agents", "收件箱", "知识库", "机器", "设置", "待办", "消息"])
         #expect(MacSection.assistant.shortcut == 1)
         #expect(MacSection.inbox.shortcut == 3)
         #expect(MacSection.todos.shortcut == 7)
+        #expect(MacSection.messages.shortcut == 8)
     }
 
     /// An old hub has no todos: the window does not offer the section at all.
@@ -19,6 +20,16 @@ struct MacSectionTests {
         #expect(!MacSection.visible(supportsTodos: false).contains(.todos))
         #expect(MacSection.visible(supportsTodos: true).contains(.todos))
         #expect(MacSection.visible(supportsTodos: false).count == 6)
+    }
+
+    /// 消息 is the iPhone's extra tab (设置 › 飞书 › 首页显示消息, #392): only while it is on, before 收件箱 as on the phone.
+    @Test func messagesAreOfferedOnlyWhileTheirSwitchIsOn() {
+        #expect(!MacSection.visible(supportsTodos: true).contains(.messages))
+        let on = MacSection.visible(supportsTodos: true, showsMessages: true)
+        #expect(on.contains(.messages))
+        #expect(on.firstIndex(of: .messages)! + 1 == on.firstIndex(of: .inbox)!)
+        #expect(MacSection.messages.tab == nil)
+        #expect(MacSection.pick(.messages) == (tab: nil, override: .messages))
     }
 
     @Test func tabSectionsFollowTheTab() {
@@ -38,6 +49,10 @@ struct MacSectionTests {
         #expect(t == ["机器"])
         let k = MacQuickOpen.sections("knowledge", sessions: [], machines: [], inbox: []).flatMap(\.hits).map(\.title)
         #expect(k == ["知识库"])
+        let off = MacQuickOpen.sections("飞书私聊", sessions: [], machines: [], inbox: []).flatMap(\.hits).map(\.title)
+        #expect(!off.contains("消息"))
+        let m = MacQuickOpen.sections("私聊", sessions: [], machines: [], inbox: [], showsMessages: true).flatMap(\.hits).map(\.title)
+        #expect(m == ["消息"])
     }
 
     /// 知识库 / 机器 are not iPhone tabs, so AppModel does not remember them: the shell keeps the pick itself, and a

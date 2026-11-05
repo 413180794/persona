@@ -281,6 +281,8 @@ lark-connector 的 `lark-connector-agent` 带一套控制命令（上游 agent-h
 - 「设置 › 模型配置 › 主对话」选的启动器（存在 `model_config.assistant`，旧的 settings `assistant.launcher` 兼容；#1291 起「设置 › 助手」不再有这个入口）管主对话和新对话：hub 给主对话发消息、App 没指定启动器时用它，
   node 发现和正在跑的不一样就用新启动器 `--resume` 接着原来的会话（2026-11-01 修：以前只影响新对话，主对话一直用最初的启动器，
   看起来「换了不生效」）。主对话每条消息都按这个设置，不看它上一轮在跑什么：#1355 一度改成沿用正在跑的，被一条跟进切到别的启动器后就一直回不来（#1518）。
+  但一段对话只能用开始时那一种 Agent 续：设置换成另一种（Codex 的主对话换成 Claude 的启动器，或反过来、或换成 / 换出运行时）时，node 用这段对话自己的启动器续，记得的也是另一种（被失败的启动覆盖过）就用同类的 `claude` / `codex`，hub 配的模型这一条不用（`node/assistant.go` 的 `assistantResumeLauncher`）。
+  以前 node 只在进程还活着时拒绝，进程退出后就拿 `claude --resume <thread>` 去续 Codex 的线程，每条都报 `No conversation found`，主对话显示「会话已结束」、消息停在「没能确认是否送达」（2026-11-05）。要换另一种 Agent 就新建主对话。
   助手用 `schedule_followup` 给自己定的跟进发回原对话时走同一套规则（主对话按设置，其他对话沿用自己的），不按 Agents 分类（`assistant/start.go` 的 `sendModel`，hub 经 `assistant.send_params` 问）。定时任务自己的对话（早报等）也按「主对话」分类，在里面发消息、跟进发回来都和主对话一样每条按设置（#1544）。顶栏菜单里的「启动器」只换当前这一段对话的下一条消息；点开启动器还能选它模型列表里的模型（`/model` 那份），
   随消息的 `model` 发出，hub 据此算执行指纹并让 node 重启进程；不选就是该启动器的默认模型。
 - **对话在忙时不换**（#1554）：进程正在回答或有后台任务时，启动器 / 模型变了也照样把这条消息交给正在跑的进程（会话状态仍记它实际在跑的），
@@ -615,7 +617,7 @@ AI 分身 / 飞书 `/agent` / 定时任务（都走 `assistant.send`）。
 - **飞书**：token 不进运行时。模型用 `lark-connector` 工具（参数就是 `ol` 后面的词），node 先过同一个飞书闸门（`larkCheck`），再在 node 上
   带 token 跑 lark-connector skill 的 `ol.sh`；shell 里直接跑 `ol` 被拦下（拿不到 token，也绕不过闸门）。
 - **模型和思考强度**在运行时里选（DSH 的 Web GUI），模型配置对这种启动器不选具体模型；**预热**不需要（运行时常驻）。
-- 关闭对话只停正在跑的这一轮，对话留在运行时里；一段对话换成 Claude / Codex（或反过来）要新建对话。
+- 关闭对话只停正在跑的这一轮，对话留在运行时里；一段对话换成 Claude / Codex（或反过来）要新建对话：发消息时指定了别的启动器，node 仍交给这个运行时（`assistantResumeLauncher`）。
 - 运行时没连上（`dsh web` 没在跑）时发消息回 `runtime_away`，什么都没发。
 
 DSH 的细节（权限预设的对应、要常驻 `dsh web`）见 `docs/dsh.md`「助手」；端到端 `integrations/dsh/e2e/assistant.mjs`。

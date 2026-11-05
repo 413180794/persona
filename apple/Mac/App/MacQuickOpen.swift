@@ -58,7 +58,8 @@ enum MacQuickOpen {
     /// a better kind of match (typing 设置 puts the section above an agent that merely mentions it). `files`: what
     /// `MacFileFind` matched in the open conversation's directory, best first.
     static func sections(_ query: String, sessions: [Session], machines: [Machine], inbox: [InboxItem],
-                         files: [MacFileFind.Hit] = [], supportsTodos: Bool = true) -> [Group] {
+                         files: [MacFileFind.Hit] = [], supportsTodos: Bool = true,
+                         showsMessages: Bool = false) -> [Group] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let names = Dictionary(machines.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         var agents: [Hit] = [], conversations: [Hit] = []
@@ -95,7 +96,7 @@ enum MacQuickOpen {
             Group(title: "Persona 对话", hits: Array(ranked(conversations).prefix(otherLimit))),
             Group(title: "文件", hits: fileHits),
             Group(title: "收件箱", hits: Array(ranked(mail).prefix(otherLimit))),
-            Group(title: "前往", hits: places(q, supportsTodos: supportsTodos)),
+            Group(title: "前往", hits: places(q, supportsTodos: supportsTodos, showsMessages: showsMessages)),
             Group(title: "动作", hits: actions(q)),
         ].filter { !$0.hits.isEmpty }
         let tier = { (g: Group) in (g.hits.map(\.score).max() ?? 0) / 20 }
@@ -117,17 +118,18 @@ enum MacQuickOpen {
     }
 
     /// The window's sections, with the other words they answer to.
-    private static func places(_ q: String, supportsTodos: Bool) -> [Hit] {
+    private static func places(_ q: String, supportsTodos: Bool, showsMessages: Bool) -> [Hit] {
         let words: [MacSection: [String]] = [
             .assistant: ["jarvis", "assistant", "助手", "主对话"],
             .agents: ["agents", "claude", "codex", "会话"],
             .inbox: ["inbox", "mail", "lark", "邮件", "飞书"],
             .todos: ["todo", "todos", "待办"],
+            .messages: ["messages", "chats", "lark", "feishu", "飞书", "私聊", "群聊", "会话"],
             .knowledge: ["knowledge", "kb", "项目", "人", "文档", "会议"],
             .machines: ["machines", "monitor", "电脑", "监控", "cpu", "内存"],
             .settings: ["settings", "preferences", "偏好"],
         ]
-        return MacSection.visible(supportsTodos: supportsTodos).compactMap { s in
+        return MacSection.visible(supportsTodos: supportsTodos, showsMessages: showsMessages).compactMap { s in
             let sc = score(title: s.title, hay: words[s] ?? [], query: q)
             guard sc > 0 else { return nil }
             return Hit(id: "p:\(s.rawValue)", title: s.title, subtitle: "", icon: s.icon, target: .section(s), score: sc)

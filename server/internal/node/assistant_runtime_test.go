@@ -156,9 +156,13 @@ func TestAssistantOnARuntimeStartsAndSendsWithTheSnapshot(t *testing.T) {
 	if _, err := nodeCall(t, n, "session.interrupt", map[string]any{"session_id": sid}); err != nil || len(host.got("session.interrupt")) != 1 {
 		t.Fatalf("interrupt: %v", err)
 	}
-	// Another kind of agent in the same conversation: refused, not sent.
-	if _, err := nodeCall(t, n, "assistant.send", map[string]any{"session_id": sid, "launcher": "claude", "text": "x"}); err == nil {
-		t.Fatal("switching a runtime conversation to claude was accepted")
+	// Another kind of agent asked for (the main conversation follows 模型配置 › 主对话): the conversation stays on its
+	// runtime, the only one that can resume it.
+	if _, err := nodeCall(t, n, "assistant.send", map[string]any{"session_id": sid, "launcher": "claude", "text": "on claude"}); err != nil {
+		t.Fatalf("a claude launcher for a runtime conversation: %v", err)
+	}
+	if got := host.got("session.send"); len(got) != 4 || !strings.Contains(string(got[3]), "on claude") {
+		t.Fatalf("sends %d", len(got))
 	}
 }
 

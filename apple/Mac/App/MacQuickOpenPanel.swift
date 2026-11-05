@@ -65,7 +65,8 @@ struct MacQuickOpenPanel: View {
 
     var body: some View {
         let groups = MacQuickOpen.sections(query, sessions: model.allSessions, machines: model.machines, inbox: InboxStore.shared.items,
-                                           files: fileHits, supportsTodos: TodoStore.shared.isSupported)
+                                           files: fileHits, supportsTodos: TodoStore.shared.isSupported,
+                                           showsMessages: LarkHomePreference.shared.shows)
         let hits = groups.flatMap(\.hits)
         VStack(spacing: 0) {
             HStack(spacing: Theme.Space.s) {

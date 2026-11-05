@@ -19,6 +19,8 @@ import { onHubEvent } from "../../lib/store";
 import { wideView } from "../../lib/code-view";
 import { ViewSections } from "../extensions/ViewBody";
 import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
+import { keepLoaded, patchView } from "../../lib/code-review";
+import { KeysHelp, ReviewBar, ReviewKeys, ReviewProvider, ReviewToolbar, reviewing } from "../extensions/DiffReview";
 import { Icon } from "../../ui/icons";
 import { t } from "../../i18n";
 
@@ -145,7 +147,8 @@ export function ExtensionUI({
 
   // keep: drawn again for the same thing, the fields typed into stay as typed
   const show = (v: UIView, keep = false) => {
-    setView(v);
+    // drawn again for the same page: the diffs loaded since stay (UI version 5)
+    setView((before) => (keep ? keepLoaded(before, v) : v));
     const start = fieldValues(v);
     setValues((old) => (keep ? Object.fromEntries(Object.entries(start).map(([k, x]) => [k, old[k] ?? x])) : start));
     stateRef.current = v.state;
@@ -242,6 +245,7 @@ export function ExtensionUI({
     try {
       const r = outcome(await actUI(extension, top.ui, action.id, { context, state: stateRef.current, values: sent }), context?.item);
       if (r.view) show(r.view, !!(extra && "q" in extra)); // a search keeps what is typed
+      if (r.items) setView((v) => (v ? patchView(v, r.items) : v));
       if (r.toast) toast(r.toast, "ok");
       if (r.url) openLink(r.url);
       if (r.source) onOpenSource?.();
@@ -255,6 +259,26 @@ export function ExtensionUI({
       setBusy("");
     }
   };
+  // an action that does not hold the page (UI version 5: a diff's lines, a viewed mark, a diff loaded as it comes near):
+  // its components go in place, a new view is shown as a redraw; it says what was answered, null when it failed
+  const fetchQuiet = useCallback(
+    async (action: UIAction, extra?: Record<string, string>) => {
+      try {
+        const r = await actUI(extension, top.ui, action.id, { context, state: stateRef.current, values: { ...extra, ...action.values } });
+        if (r.items?.length) setView((v) => (v ? patchView(v, r.items) : v));
+        if (r.view) show(r.view, true);
+        if (r.toast) toast(r.toast, "ok");
+        return r;
+      } catch (e) {
+        toast(t("settings-extensionview.action_failed", { error: errorText(e) }), "error");
+        return null;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [extension, pageKey, ctxKey],
+  );
+  const [keysOpen, setKeysOpen] = useState(false);
+  const isReview = !compact && !embedded && reviewing(view);
   const press = (action: UIAction, destructive = false) => {
     if (busy) return;
     if (action.confirm?.trim()) setConfirming({ action, destructive });
@@ -403,18 +427,28 @@ export function ExtensionUI({
         </div>
       )}
       {view && (
-        <ViewSections
-          view={view}
-          embedded={embedded}
-          compact={compact}
-          values={values}
-          setValue={(k, v) => setValues((x) => ({ ...x, [k]: v }))}
-          busy={busy}
-          onPress={press}
-          onChoose={choose}
-          onMore={more}
-          onAct={act}
-        />
+        <ReviewProvider view={isReview ? view : null} page={pageKey} fetch={fetchQuiet}>
+          {isReview && <ReviewToolbar view={view} onHelp={() => setKeysOpen(true)} />}
+          <ViewSections
+            view={view}
+            embedded={embedded}
+            compact={compact}
+            values={values}
+            setValue={(k, v) => setValues((x) => ({ ...x, [k]: v }))}
+            busy={busy}
+            onPress={press}
+            onChoose={choose}
+            onMore={more}
+            onAct={act}
+          />
+          {isReview && (
+            <>
+              <ReviewBar view={view} act={act} busy={busy} />
+              <ReviewKeys onHelp={() => setKeysOpen(true)} />
+              <KeysHelp open={keysOpen} onClose={() => setKeysOpen(false)} />
+            </>
+          )}
+        </ReviewProvider>
       )}
       {confirming && (
         <Dialog

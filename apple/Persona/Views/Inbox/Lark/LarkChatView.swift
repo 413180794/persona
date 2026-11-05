@@ -486,8 +486,14 @@ struct LarkChatView: View {
                     .font(Theme.Font.label).lineLimit(1)
                     .padding(.horizontal, Theme.Space.page)
                 #else
-                Text("请从消息列表继续编辑加密草稿")
-                    .font(Theme.Font.label).padding(.horizontal, Theme.Space.page)
+                if LarkHomePreference.shared.shows {
+                    Button("前往消息，继续编辑加密草稿") { MacShellState.shared.go(.messages, model) }
+                        .font(Theme.Font.label).lineLimit(1)
+                        .padding(.horizontal, Theme.Space.page)
+                } else {
+                    Text("请从消息列表继续编辑加密草稿")
+                        .font(Theme.Font.label).padding(.horizontal, Theme.Space.page)
+                }
                 #endif
             }
             if !attachments.isEmpty {

@@ -9,6 +9,8 @@ const P: Record<string, React.ReactNode> = {
   filter: <path d="M3 5h18M6 12h12M10 19h4" />,
   chevronRight: <path d="M9 6l6 6-6 6" />,
   chevronLeft: <path d="M15 18l-6-6 6-6" />,
+  // show all the lines hidden between two hunks of a diff
+  unfold: <path d="M12 3v7M8.5 6.5L12 3l3.5 3.5M12 21v-7M8.5 17.5L12 21l3.5-3.5" />,
   up: <path d="M12 19V5M5 12l7-7 7 7" />,
   plus: <path d="M12 5v14M5 12h14" />,
   x: <path d="M18 6L6 18M6 6l12 12" />,

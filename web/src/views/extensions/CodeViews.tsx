@@ -1,16 +1,14 @@
 // UI version 4's code hosting components (docs/extensions.md「UI 版本 4」, #2951), in the web's design system: a detail
 // page's header, a breadcrumb, a file tree, a file's code, a file's diff (one column or side by side, inline threads, a
-// comment box at any line, hidden lines to show), a discussion and a comment box with its buttons. What they send goes
+// comment box at any line, hidden lines to show: DiffReview.tsx), a discussion and a comment box with its buttons. What they send goes
 // through `act` (ViewBody's onAct): the action with the values it carries and the component's own (a path, a line, the
 // text typed). Logic in lib/code-view.ts; how a section holds them is ViewBody.tsx.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ago } from "../../lib/format";
-import {
-  ancestors, buildTree, filterEntries, gapBefore, highlightLines, hunkRows, hunkSides, languageOf, placeThreads, splitRows, statusMark,
-  useDiffMode, useHighlighter, type Comment, type DiffRow, type Hunk, type Thread, type Token, type TreeNode,
-} from "../../lib/code-view";
+import { ancestors, buildTree, filterEntries, highlightLines, languageOf, statusMark, useHighlighter, type Comment, type Token, type TreeNode } from "../../lib/code-view";
+import { findIn, isGenerated, lineLink, lineTyped, overlay, type Span } from "../../lib/code-review";
+import { useReview } from "./review-context";
 import { imageURL, initials, rowIcon, toneOf, type UIAction, type UIItem, type UITone } from "../../lib/extension-ui";
-import { useMedia } from "../../lib/viewport";
 import { t } from "../../i18n";
 import { Button, cx, Spinner, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
@@ -26,13 +24,13 @@ export interface CodeHandlers {
   reveal?: (path: string) => void;
 }
 
-const PILL: Record<UITone, "green" | "orange" | "red" | undefined> = { neutral: undefined, positive: "green", caution: "orange", danger: "red" };
-const MARK: Record<UITone, string> = { neutral: "text-ink-3", positive: "text-green", caution: "text-orange", danger: "text-red" };
+export const PILL: Record<UITone, "green" | "orange" | "red" | undefined> = { neutral: undefined, positive: "green", caution: "orange", danger: "red" };
+export const MARK: Record<UITone, string> = { neutral: "text-ink-3", positive: "text-green", caution: "text-orange", danger: "text-red" };
 
-const card = "overflow-hidden rounded-card bg-surface shadow-card";
-const LH = 20; // a code line's height, px
+export const card = "overflow-hidden rounded-card bg-surface shadow-card";
+export const LH = 20; // a code line's height, px
 
-function Avatar({ avatar, name, size = 28 }: { avatar?: { url?: string; text?: string }; name: string; size?: number }) {
+export function Avatar({ avatar, name, size = 28 }: { avatar?: { url?: string; text?: string }; name: string; size?: number }) {
   const [failed, setFailed] = useState(false);
   const url = imageURL(avatar?.url);
   return (
@@ -117,6 +115,7 @@ export function Breadcrumb({ item, act, busy }: { item: UIItem } & CodeHandlers)
 
 export function FileTree({ item, act, busy, reveal, onPicked }: { item: UIItem; onPicked?: () => void } & CodeHandlers) {
   const entries = item.entries ?? [];
+  const review = useReview();
   const [q, setQ] = useState("");
   const shown = useMemo(() => filterEntries(entries, q), [entries, q]);
   const tree = useMemo(() => buildTree(shown), [shown]);
@@ -185,6 +184,8 @@ export function FileTree({ item, act, busy, reveal, onPicked }: { item: UIItem; 
       const e = n.entry!;
       const mark = statusMark(e.status);
       const on = n.path === selected;
+      const seen = review.viewed(n.path) || !!e.viewed;
+      const generated = isGenerated(n.path, e.generated);
       rows.push(
         <button
           key={`f:${n.path}`}
@@ -195,8 +196,14 @@ export function FileTree({ item, act, busy, reveal, onPicked }: { item: UIItem; 
           className={cx("flex h-7 w-full items-center gap-1.5 pr-2.5 text-left text-[12.5px] whitespace-nowrap transition-colors", on ? "bg-accent-tint text-ink" : "text-ink hover:bg-hover")}
           style={{ paddingLeft: 10 + depth * 14 + 17 }}
         >
-          <Icon name="read" size={13} className="shrink-0 text-ink-3" />
-          <span className={cx("min-w-0 flex-1 truncate", e.status === "deleted" && "text-ink-3 line-through")}>{n.name}</span>
+          {seen ? (
+            <span className="flex size-[13px] shrink-0 items-center justify-center rounded-[4px] bg-green text-white" aria-label={t("extensions-review.viewed")}>
+              <Icon name="check" size={9} stroke={3} />
+            </span>
+          ) : (
+            <Icon name="read" size={13} className="shrink-0 text-ink-3" />
+          )}
+          <span className={cx("min-w-0 flex-1 truncate", (e.status === "deleted" || seen || generated) && "text-ink-3", e.status === "deleted" && "line-through")}>{n.name}</span>
           {!!e.comments && (
             <span className="flex shrink-0 items-center gap-0.5 text-[11px] text-ink-3 tabular-nums">
               <Icon name="chat" size={11} />
@@ -226,6 +233,8 @@ export function FileTree({ item, act, busy, reveal, onPicked }: { item: UIItem; 
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              data-file-filter=""
+              onKeyDown={(e) => e.key === "Escape" && (e.currentTarget.blur(), setQ(""))}
               placeholder={t("extensions-codeviews.filter_files")}
               aria-label={t("extensions-codeviews.filter_files")}
               spellCheck={false}
@@ -269,7 +278,33 @@ function copy(text: string) {
   );
 }
 
-/** A file: line numbers, highlighting, the highlighted lines, and the rest to load when it was cut. */
+const WRAP_KEY = "persona.code.wrap";
+
+/** The text with the spans found marked (the one gone to stronger), over its highlighting. */
+function Found({ tokens, text, spans, current }: { tokens?: Token[] | null; text: string; spans?: Span[]; current: boolean }) {
+  if (!spans?.length) return <Tokens tokens={tokens} text={text} />;
+  return (
+    <>
+      {overlay(tokens, text, spans).map((p, i) =>
+        p.changed ? (
+          <mark key={i} className={cx("rounded-[2px] text-ink", current ? "bg-orange/60" : "bg-orange/25", p.cls)}>
+            {p.text}
+          </mark>
+        ) : (
+          <span key={i} className={p.cls || undefined}>
+            {p.text}
+          </span>
+        ),
+      )}
+    </>
+  );
+}
+
+/**
+ * A file: line numbers, highlighting, the highlighted lines, and the rest to load when it was cut. To read it: find
+ * in it (⌘/Ctrl+F while in it, Enter for the next), go to a line, long lines wrapped or not (kept in this browser), and
+ * lines picked on their numbers (shift for a range) to copy a link to them on the site (line_url, UI version 5).
+ */
 export function CodeView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
   const text = item.text ?? "";
   const lines = useMemo(() => text.replace(/\n$/, "").split("\n"), [text]);
@@ -277,40 +312,137 @@ export function CodeView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
   const ready = useHighlighter(!!lang);
   const tokens = useMemo(() => (ready ? highlightLines(text, lang) : null), [ready, text, lang]);
   const start = item.start_line ?? 1;
+  const last = start + lines.length - 1;
   const digits = String(start + lines.length).length;
   const hl = item.highlight;
   const marked = useRef<HTMLDivElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const [wrap, setWrap] = useState(() => {
+    try {
+      return localStorage.getItem(WRAP_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [tool, setTool] = useState<"" | "find" | "goto">("");
+  const [q, setQ] = useState("");
+  const [at, setAt] = useState(0);
+  const [pick, setPick] = useState<{ start: number; end: number } | null>(null);
+  const anchor = useRef<number | null>(null);
+  const found = useMemo(() => (tool === "find" ? findIn(lines, q) : []), [tool, lines, q]);
+  const spansAt = useMemo(() => new Map(found.map((f) => [f.line, f.spans])), [found]);
+  const link = pick ? lineLink(item.line_url, pick.start, pick.end) : undefined;
   useEffect(() => {
     marked.current?.scrollIntoView?.({ block: "nearest" });
   }, [hl?.start, item.path]);
+  const show = (i: number) => rowsRef.current?.children[i]?.scrollIntoView?.({ block: "center" });
+  useEffect(() => {
+    if (found.length) show(found[Math.min(at, found.length - 1)].line);
+  }, [found, at]);
+  const toggleWrap = () => {
+    setWrap((w) => {
+      try {
+        localStorage.setItem(WRAP_KEY, w ? "0" : "1");
+      } catch {
+        // private mode
+      }
+      return !w;
+    });
+  };
+  const pickLine = (n: number, shift: boolean) => {
+    if (shift && anchor.current !== null) setPick({ start: Math.min(anchor.current, n), end: Math.max(anchor.current, n) });
+    else {
+      anchor.current = n;
+      setPick((p) => (p && p.start === n && p.end === n ? null : { start: n, end: n }));
+    }
+  };
+  const tbtn = "flex size-7 shrink-0 items-center justify-center rounded-[8px] transition-colors hover:bg-hover hover:text-ink";
   return (
-    <div className={card}>
-      <div className="flex h-10 items-center gap-2 border-b border-line px-3.5">
-        <Icon name="read" size={13} className="shrink-0 text-ink-3" />
+    <div
+      className={card}
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+          e.preventDefault();
+          setTool("find");
+        }
+      }}
+    >
+      <div className="flex h-10 items-center gap-1 border-b border-line pr-2 pl-3.5">
+        <Icon name="read" size={13} className="mr-1 shrink-0 text-ink-3" />
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink select-text">{item.path || t("extensions-codeviews.file")}</span>
-        <span className="shrink-0 text-[11.5px] text-ink-3 tabular-nums">{t("extensions-codeviews.lines", { count: lines.length })}</span>
-        <button
-          type="button"
-          onClick={() => copy(text)}
-          aria-label={t("extensions-codeviews.copy")}
-          title={t("extensions-codeviews.copy")}
-          className="flex size-7 shrink-0 items-center justify-center rounded-[8px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
-        >
+        <span className="mr-1 hidden shrink-0 text-[11.5px] text-ink-3 tabular-nums sm:inline">{t("extensions-codeviews.lines", { count: lines.length })}</span>
+        {link && (
+          <button type="button" onClick={() => copy(link)} title={t("extensions-review.copy_link")} className={cx(tbtn, "w-auto gap-1 px-1.5 text-[11.5px] whitespace-nowrap text-accent-ink")}>
+            <Icon name="link" size={13} />
+            <span className="hidden sm:inline">{t("extensions-review.copy_link")}</span>
+          </button>
+        )}
+        <button type="button" onClick={() => setTool((x) => (x === "find" ? "" : "find"))} aria-pressed={tool === "find"} aria-label={t("extensions-review.find")} title={`${t("extensions-review.find")} (⌘F)`} className={cx(tbtn, tool === "find" ? "text-accent-ink" : "text-ink-3")}>
+          <Icon name="search" size={13} />
+        </button>
+        <button type="button" onClick={() => setTool((x) => (x === "goto" ? "" : "goto"))} aria-pressed={tool === "goto"} aria-label={t("extensions-review.go_to_line")} title={t("extensions-review.go_to_line")} className={cx(tbtn, tool === "goto" ? "text-accent-ink" : "text-ink-3")}>
+          <Icon name="enter" size={13} />
+        </button>
+        <button type="button" onClick={toggleWrap} aria-pressed={wrap} aria-label={t("extensions-review.wrap")} title={t("extensions-review.wrap")} className={cx(tbtn, wrap ? "text-accent-ink" : "text-ink-3")}>
+          <Icon name="wrap" size={13} />
+        </button>
+        <button type="button" onClick={() => copy(text)} aria-label={t("extensions-codeviews.copy")} title={t("extensions-codeviews.copy")} className={cx(tbtn, "text-ink-3")}>
           <Icon name="copy" size={13} />
         </button>
       </div>
-      <div className="code-hl overflow-x-auto bg-inset font-mono text-[12px]" style={{ lineHeight: `${LH}px` }}>
-        <div className="min-w-max py-1.5">
+      {tool && (
+        <div className="flex h-10 items-center gap-2 border-b border-line px-3">
+          <input
+            autoFocus
+            key={tool}
+            type={tool === "goto" ? "number" : "search"}
+            value={q}
+            onChange={(e) => (setQ(e.target.value), setAt(0))}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") (setTool(""), setQ(""));
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              if (tool === "goto") {
+                const n = lineTyped(q, start, last);
+                if (n !== null) (show(n - start), setPick({ start: n, end: n }), (anchor.current = n));
+              } else if (found.length) setAt((a) => (a + (e.shiftKey ? found.length - 1 : 1)) % found.length);
+            }}
+            placeholder={tool === "goto" ? t("extensions-review.line_of", { first: start, last }) : t("extensions-review.find_in_file")}
+            aria-label={tool === "goto" ? t("extensions-review.go_to_line") : t("extensions-review.find_in_file")}
+            className="h-7 min-w-0 flex-1 rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]"
+          />
+          {tool === "find" && q && (
+            <>
+              <span className="shrink-0 text-[11.5px] text-ink-3 tabular-nums">{found.length ? `${Math.min(at, found.length - 1) + 1} / ${found.length}` : t("extensions-review.none_found")}</span>
+              <button type="button" disabled={!found.length} onClick={() => setAt((a) => (a + found.length - 1) % found.length)} aria-label={t("extensions-review.prev_found")} className={cx(tbtn, "text-ink-3")}>
+                <Icon name="up" size={12} stroke={2.2} />
+              </button>
+              <button type="button" disabled={!found.length} onClick={() => setAt((a) => (a + 1) % found.length)} aria-label={t("extensions-review.next_found")} className={cx(tbtn, "text-ink-3")}>
+                <Icon name="arrowDown" size={12} stroke={2.2} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      <div className={cx("code-hl bg-inset font-mono text-[12px]", !wrap && "overflow-x-auto")} style={{ lineHeight: `${LH}px` }}>
+        <div ref={rowsRef} className={cx("py-1.5", !wrap && "min-w-max")}>
           {lines.map((l, i) => {
             const n = start + i;
-            const on = !!hl && n >= hl.start && n <= hl.end;
+            const on = (!!hl && n >= hl.start && n <= hl.end) || (!!pick && n >= pick.start && n <= pick.end);
+            const cur = found.length > 0 && found[Math.min(at, found.length - 1)].line === i;
             return (
-              <div key={i} ref={on && n === hl!.start ? marked : undefined} className={cx("flex", on && "bg-accent-tint")}>
-                <span className="sticky left-0 shrink-0 bg-inset pr-3 pl-3 text-right text-ink-3 tabular-nums select-none" style={{ width: `calc(${digits}ch + 24px)`, background: on ? "transparent" : undefined }}>
+              <div key={i} ref={hl && n === hl.start ? marked : undefined} className={cx("flex", on && "bg-accent-tint")}>
+                <button
+                  type="button"
+                  onClick={(e) => pickLine(n, e.shiftKey)}
+                  aria-label={t("extensions-review.pick_line", { n })}
+                  className={cx("sticky left-0 shrink-0 cursor-pointer self-start pr-3 pl-3 text-right tabular-nums select-none hover:text-accent-ink", on ? "text-accent-ink" : "bg-inset text-ink-3")}
+                  style={{ width: `calc(${digits}ch + 24px)`, background: on ? "transparent" : undefined }}
+                >
                   {n}
-                </span>
-                <span className="pr-6 whitespace-pre text-ink">
-                  <Tokens tokens={tokens?.[i]} text={l} />
+                </button>
+                <span className={cx("pr-6 text-ink", wrap ? "min-w-0 flex-1 break-all whitespace-pre-wrap" : "whitespace-pre")}>
+                  <Found tokens={tokens?.[i]} text={l} spans={spansAt.get(i)} current={cur} />
                 </span>
               </div>
             );
@@ -324,7 +456,7 @@ export function CodeView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
   );
 }
 
-function LoadLine({ busy, disabled, onClick, title }: { busy: boolean; disabled: boolean; onClick: () => void; title: string }) {
+export function LoadLine({ busy, disabled, onClick, title }: { busy: boolean; disabled: boolean; onClick: () => void; title: string }) {
   return (
     <button
       type="button"
@@ -340,7 +472,7 @@ function LoadLine({ busy, disabled, onClick, title }: { busy: boolean; disabled:
 
 // ── comments ──────────────────────────────────────────
 
-function CommentLine({ c }: { c: Comment }) {
+export function CommentLine({ c }: { c: Comment }) {
   if (c.event)
     return (
       <div className="flex items-center gap-2 px-4 py-2 text-[12px] text-ink-3">
@@ -373,7 +505,7 @@ function CommentLine({ c }: { c: Comment }) {
 }
 
 /** A text box that grows with what is typed; ⌘/Ctrl+Enter presses the first button. */
-function Box({ value, onChange, placeholder, autoFocus, onSubmit, disabled }: { value: string; onChange: (v: string) => void; placeholder?: string; autoFocus?: boolean; onSubmit?: () => void; disabled?: boolean }) {
+export function Box({ value, onChange, placeholder, autoFocus, onSubmit, disabled }: { value: string; onChange: (v: string) => void; placeholder?: string; autoFocus?: boolean; onSubmit?: () => void; disabled?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -488,303 +620,6 @@ export function Composer({ item, act, busy }: { item: UIItem } & CodeHandlers) {
           </Button>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ── diff ──────────────────────────────────────────────
-
-const ROW_BG: Record<DiffRow["kind"], string> = { add: "bg-diff-add-bg", del: "bg-diff-del-bg", context: "", note: "" };
-const GUTTER_BG: Record<DiffRow["kind"], string> = { add: "bg-diff-add-bg", del: "bg-diff-del-bg", context: "bg-surface", note: "bg-surface" };
-const SIGN: Record<DiffRow["kind"], string> = { add: "+", del: "−", context: " ", note: "" };
-
-/** Where a comment box is open: a side and a line. */
-type Spot = { side: "old" | "new"; line: number };
-const spotKey = (s: Spot) => `${s.side}:${s.line}`;
-
-function ThreadCard({ thread, act, busy }: { thread: Thread } & CodeHandlers) {
-  const [open, setOpen] = useState(!thread.resolved);
-  const [replying, setReplying] = useState(false);
-  const first = thread.comments[0];
-  return (
-    <div className="mx-3 my-2 overflow-hidden rounded-control bg-surface font-sans shadow-card sm:max-w-[760px]">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center gap-2 border-b border-line px-3 py-1.5 text-left text-[11.5px] whitespace-nowrap text-ink-3 transition-colors hover:bg-hover">
-        <Icon name="chevronRight" size={10} stroke={2.2} className={cx("shrink-0 transition-transform", open && "rotate-90")} />
-        <span className="min-w-0 flex-1 truncate">
-          {open ? t("extensions-codeviews.thread_lines", { count: thread.comments.length }) : `${first?.author ?? ""}: ${first?.body ?? ""}`}
-        </span>
-        {thread.outdated && <Pill tone="orange">{t("extensions-codeviews.outdated")}</Pill>}
-        {thread.resolved && <Pill tone="green">{t("extensions-codeviews.resolved")}</Pill>}
-      </button>
-      {open && (
-        <>
-          <div className="divide-y divide-line">
-            {thread.comments.map((c, i) => (
-              <CommentLine key={c.id ?? i} c={c} />
-            ))}
-          </div>
-          {thread.reply && (
-            <div className="border-t border-line px-3 py-2.5">
-              {replying ? (
-                <MiniComposer
-                  autoFocus
-                  placeholder={t("extensions-codeviews.reply")}
-                  busy={busy === thread.reply.id}
-                  disabled={!!busy}
-                  onCancel={() => setReplying(false)}
-                  send={(body) => {
-                    act(thread.reply as UIAction, { ...(thread.id ? { thread: thread.id } : {}), body });
-                    setReplying(false);
-                  }}
-                />
-              ) : (
-                <button type="button" onClick={() => setReplying(true)} className="h-8 w-full rounded-control bg-field px-3 text-left text-[12.5px] text-ink-3 shadow-inset-field transition-colors hover:text-ink-2">
-                  {t("extensions-codeviews.reply")}
-                </button>
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-/** A number in the gutter: a button that opens a comment box at its line when the diff takes comments. */
-function LineNo({ n, kind, canComment, onComment, width }: { n?: number; kind: DiffRow["kind"]; canComment: boolean; onComment: () => void; width: string }) {
-  const cls = cx("group/ln shrink-0 pr-2 text-right text-ink-3 tabular-nums select-none", GUTTER_BG[kind]);
-  if (n === undefined) return <span className={cls} style={{ width }} />;
-  if (!canComment)
-    return (
-      <span className={cls} style={{ width }}>
-        {n}
-      </span>
-    );
-  return (
-    <button type="button" onClick={onComment} aria-label={t("extensions-codeviews.comment_on", { n })} className={cx(cls, "relative cursor-pointer hover:text-accent-ink")} style={{ width }}>
-      <span className="absolute top-1/2 left-1 flex size-4 -translate-y-1/2 items-center justify-center rounded-[4px] bg-accent text-white opacity-0 transition-opacity group-hover/ln:opacity-100">
-        <Icon name="plus" size={10} stroke={2.6} />
-      </span>
-      {n}
-    </button>
-  );
-}
-
-/** One file's diff. */
-export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
-  const hunks = item.hunks ?? [];
-  const path = item.path ?? "";
-  const [mode, setMode] = useDiffMode();
-  const roomy = useMedia("(min-width: 1024px)");
-  const split = mode === "split" && roomy;
-  const [open, setOpen] = useState(!item.collapsed);
-  useEffect(() => setOpen(!item.collapsed), [item.collapsed]);
-  const [spot, setSpot] = useState<Spot | null>(null);
-  const lang = languageOf(item.language, path);
-  const ready = useHighlighter(open && !!lang && hunks.length > 0);
-  const lit = useMemo(
-    () =>
-      ready && open
-        ? hunks.map((h) => {
-            const s = hunkSides(h);
-            return { old: highlightLines(s.old, lang), new: highlightLines(s.new, lang) };
-          })
-        : null,
-    [ready, open, hunks, lang],
-  );
-  const rowsOf = useMemo(() => hunks.map(hunkRows), [hunks]);
-  const { at, rest } = useMemo(() => placeThreads(item.threads ?? [], hunks), [item.threads, hunks]);
-  const digits = useMemo(() => String(hunks.reduce((m, h) => Math.max(m, h.old_start + h.lines.length, h.new_start + h.lines.length), 99)).length, [hunks]);
-  const num = `calc(${digits}ch + 14px)`;
-  const comment = item.comment;
-  const mark = statusMark(item.status);
-  const threads = item.threads?.length ?? 0;
-
-  const sendComment = (s: Spot, body: string) => {
-    if (!comment) return;
-    act(comment, { path, side: s.side, line: String(s.line), body });
-    setSpot(null);
-  };
-  const boxAt = (s: Spot) =>
-    spot && spotKey(spot) === spotKey(s) ? (
-      <div key={`box:${spotKey(s)}`} className="border-y border-line bg-surface px-3 py-2.5 font-sans">
-        <div className="sm:max-w-[760px]">
-          <MiniComposer autoFocus placeholder={t("extensions-codeviews.comment_on", { n: s.line })} busy={busy === comment?.id} disabled={!!busy} onCancel={() => setSpot(null)} send={(b) => sendComment(s, b)} />
-        </div>
-      </div>
-    ) : null;
-  const threadsAt = (s: Spot) => (at.get(spotKey(s)) ?? []).map((th, i) => <ThreadCard key={th.id ?? i} thread={th} act={act} busy={busy} />);
-  // what goes under a row: the threads at its lines, and the open comment box
-  const under = (r: { old?: DiffRow; new?: DiffRow }) => {
-    const spots: Spot[] = [];
-    if (r.old?.old !== undefined && r.old.kind !== "context") spots.push({ side: "old", line: r.old.old });
-    if (r.new?.new !== undefined) spots.push({ side: "new", line: r.new.new });
-    else if (r.old?.kind === "context" && r.old.new !== undefined) spots.push({ side: "new", line: r.old.new });
-    if (r.old?.kind === "context" && r.old.old !== undefined) spots.push({ side: "old", line: r.old.old });
-    const out = spots.flatMap((s) => [...threadsAt(s), boxAt(s)]).filter(Boolean);
-    return out.length ? <div className="sticky left-0 w-full max-w-[calc(100vw-2rem)]">{out}</div> : null;
-  };
-  const tokensOf = (h: number, r: DiffRow, side: "old" | "new"): Token[] | null | undefined => {
-    const at = side === "old" ? r.oldAt : r.newAt;
-    return at === undefined ? undefined : lit?.[h]?.[side]?.[at];
-  };
-  const gap = (h: number) => {
-    const n = gapBefore(hunks, h);
-    if (!item.expand || (h > 0 && n === 0)) return null;
-    if (h === 0 && n === 0) return null;
-    return (
-      <div className="flex h-8 items-center gap-1 bg-accent-tint/50 font-sans text-[11.5px] text-accent-ink">
-        <span className="sticky left-0 flex items-center gap-1 px-2">
-          {(["up", ...(h > 0 && n > 20 ? ["down"] : [])] as const).map((dir) => (
-            <button
-              key={dir}
-              type="button"
-              disabled={!!busy}
-              onClick={() => act(item.expand!, { path, hunk: String(h), direction: dir })}
-              aria-label={dir === "up" ? t("extensions-codeviews.expand_up") : t("extensions-codeviews.expand_down")}
-              title={dir === "up" ? t("extensions-codeviews.expand_up") : t("extensions-codeviews.expand_down")}
-              className="flex size-6 items-center justify-center rounded-[6px] transition-colors enabled:hover:bg-hover"
-            >
-              <Icon name={dir === "up" ? "up" : "arrowDown"} size={12} stroke={2.2} />
-            </button>
-          ))}
-          <span className="whitespace-nowrap text-ink-3">{n > 0 ? t("extensions-codeviews.hidden_lines", { count: n }) : hunks[h].header}</span>
-        </span>
-      </div>
-    );
-  };
-  const hunkHeader = (h: Hunk, i: number) =>
-    h.header && (!item.expand || gapBefore(hunks, i) === 0) ? (
-      <div className="flex h-7 items-center bg-accent-tint/40 text-[11.5px] text-ink-3">
-        <span className="sticky left-0 truncate px-3 whitespace-pre">{h.header}</span>
-      </div>
-    ) : null;
-
-  const body = () => {
-    if (item.binary) return <p className="px-4 py-4 text-center text-[12.5px] text-ink-3">{t("extensions-codeviews.binary")}</p>;
-    if (!hunks.length)
-      return item.load ? (
-        <LoadLine busy={busy === item.load.id} disabled={!!busy} onClick={() => act(item.load!, { path })} title={t("extensions-codeviews.load_diff")} />
-      ) : (
-        <p className="px-4 py-4 text-center text-[12.5px] text-ink-3">{t("extensions-codeviews.no_changes")}</p>
-      );
-    return (
-      <div className="code-hl overflow-x-auto font-mono text-[12px]" style={{ lineHeight: `${LH}px` }}>
-        <div className={cx(split ? "min-w-full" : "min-w-max")}>
-          {hunks.map((h, hi) => (
-            <Fragment key={hi}>
-              {gap(hi)}
-              {hunkHeader(h, hi)}
-              {split
-                ? splitRows(rowsOf[hi]).map((r, k) =>
-                    r.note !== undefined ? (
-                      <div key={k} className="px-3 text-[11.5px] text-ink-3 italic">{r.note}</div>
-                    ) : (
-                      <Fragment key={k}>
-                        <div className="grid grid-cols-2">
-                          {(["old", "new"] as const).map((side) => {
-                            const row = r[side];
-                            const n = side === "old" ? row?.old : row?.new;
-                            const kind = row ? (row.kind === "context" ? "context" : row.kind) : "context";
-                            return (
-                              <div key={side} className={cx("flex min-w-0", row ? ROW_BG[kind] : "bg-hover/60", side === "new" && "border-l border-line")}>
-                                <LineNo n={n} kind={row ? kind : "context"} width={num} canComment={!!comment && n !== undefined} onComment={() => row && setSpot(row.kind === "context" ? { side: "new", line: row.new! } : { side, line: n! })} />
-                                <span className={cx("w-[2ch] shrink-0 text-center select-none", kind === "add" ? "text-green" : kind === "del" ? "text-red" : "text-ink-3")}>{row ? SIGN[kind] : ""}</span>
-                                <span className="min-w-0 flex-1 overflow-hidden pr-4 whitespace-pre text-ink">{row && <Tokens tokens={tokensOf(hi, row, side)} text={row.text} />}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        {under(r)}
-                      </Fragment>
-                    ),
-                  )
-                : rowsOf[hi].map((r, k) =>
-                    r.kind === "note" ? (
-                      <div key={k} className="px-3 text-[11.5px] text-ink-3 italic">{r.text}</div>
-                    ) : (
-                      <Fragment key={k}>
-                        <div className={cx("flex", ROW_BG[r.kind])}>
-                          <LineNo n={r.old} kind={r.kind} width={num} canComment={!!comment && r.old !== undefined && r.kind === "del"} onComment={() => setSpot({ side: "old", line: r.old! })} />
-                          <LineNo n={r.new} kind={r.kind} width={num} canComment={!!comment && r.new !== undefined} onComment={() => setSpot({ side: "new", line: r.new! })} />
-                          <span className={cx("w-[2ch] shrink-0 text-center select-none", r.kind === "add" ? "text-green" : r.kind === "del" ? "text-red" : "text-ink-3")}>{SIGN[r.kind]}</span>
-                          <span className="pr-6 whitespace-pre text-ink">
-                            <Tokens tokens={tokensOf(hi, r, r.kind === "del" ? "old" : "new")} text={r.text} />
-                          </span>
-                        </div>
-                        {under(r.kind === "context" ? { old: r } : r.kind === "del" ? { old: r } : { new: r })}
-                      </Fragment>
-                    ),
-                  )}
-            </Fragment>
-          ))}
-          {item.expand && hunks.length > 0 && (
-            <div className="flex h-8 items-center bg-accent-tint/50 font-sans text-[11.5px] text-accent-ink">
-              <span className="sticky left-0 flex items-center gap-1 px-2">
-                <button
-                  type="button"
-                  disabled={!!busy}
-                  onClick={() => act(item.expand!, { path, hunk: String(hunks.length - 1), direction: "down" })}
-                  aria-label={t("extensions-codeviews.expand_down")}
-                  title={t("extensions-codeviews.expand_down")}
-                  className="flex size-6 items-center justify-center rounded-[6px] transition-colors enabled:hover:bg-hover"
-                >
-                  <Icon name="arrowDown" size={12} stroke={2.2} />
-                </button>
-              </span>
-            </div>
-          )}
-        </div>
-        {rest.length > 0 && (
-          <div className="border-t border-line py-1 font-sans">
-            <p className="px-4 pt-1.5 text-[11.5px] text-ink-3">{t("extensions-codeviews.elsewhere")}</p>
-            {rest.map((th, i) => (
-              <ThreadCard key={th.id ?? i} thread={th} act={act} busy={busy} />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className={cx(card, "code-lazy")} data-diff-path={path}>
-      <div className={cx("sticky top-0 z-[2] flex h-10 items-center gap-2 bg-surface px-2.5", open && "border-b border-line")}>
-        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={open ? t("extensions-codeviews.collapse") : t("extensions-codeviews.expand")} className="flex size-7 shrink-0 items-center justify-center rounded-[8px] text-ink-3 transition-colors hover:bg-hover hover:text-ink">
-          <Icon name="chevronRight" size={12} stroke={2.2} className={cx("transition-transform duration-150", open && "rotate-90")} />
-        </button>
-        {mark && <span className={cx("w-3 shrink-0 text-center font-mono text-[11px] font-semibold", MARK[mark.tone])} aria-label={item.status}>{mark.letter}</span>}
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink select-text" title={path}>
-          {item.old_path && item.old_path !== path && <span className="text-ink-3">{item.old_path} → </span>}
-          {path}
-        </span>
-        {threads > 0 && (
-          <span className="flex shrink-0 items-center gap-0.5 text-[11.5px] text-ink-3 tabular-nums">
-            <Icon name="chat" size={12} />
-            {threads}
-          </span>
-        )}
-        <span className="shrink-0 font-mono text-[11.5px] tabular-nums">
-          <span className="text-green">+{item.additions ?? 0}</span> <span className="text-red">−{item.deletions ?? 0}</span>
-        </span>
-        {roomy && open && hunks.length > 0 && (
-          <div role="radiogroup" aria-label={t("extensions-codeviews.view_mode")} className="ml-1 hidden shrink-0 rounded-[8px] bg-field p-0.5 lg:flex">
-            {(["unified", "split"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                role="radio"
-                aria-checked={mode === m}
-                onClick={() => setMode(m)}
-                className={cx("h-6 rounded-[6px] px-2 text-[11.5px] whitespace-nowrap transition-colors", mode === m ? "bg-surface text-ink shadow-btn" : "text-ink-3 hover:text-ink")}
-              >
-                {m === "unified" ? t("extensions-codeviews.unified") : t("extensions-codeviews.split")}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      {(open || !hunks.length) && body()}
     </div>
   );
 }
