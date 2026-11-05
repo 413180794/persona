@@ -45,5 +45,11 @@
   "voice": "语音",
   "video": "视频",
   "file": "文件",
-  "card_placeholder": "[卡片]"
+  "card_placeholder": "[卡片]",
+  "older_loading": "正在加载更早的消息",
+  "older_failed": "更早的消息未加载，点击重试",
+  "older_stopped": "暂时无法加载更早的消息，点击重试",
+  "older_account_changed": "飞书账号已切换，请重新打开会话",
+  "older_signed_out": "飞书已退出登录，请重新连接",
+  "jump_latest": "回到最新"
 }

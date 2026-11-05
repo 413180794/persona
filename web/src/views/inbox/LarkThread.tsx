@@ -3,7 +3,7 @@
 // and reporting seen messages to Feishu (docs/inbox.md「看过的飞书消息按可见即读上报」, lark-read.ts). The chat's Pins
 // (lark-pins.ts) open over it; a Pin found in the chat replaces the window around it, a reply opens its thread.
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { api, enc, errorText, getToken } from "../../lib/api";
+import { api, ApiError, enc, errorText, getToken } from "../../lib/api";
 import { clock } from "../../lib/format";
 import {
   cardText, comparePosition, emojiLabel, isDone, mergeMessages, nextLarkPosition, partRuns, replyLarkMessage,
@@ -12,6 +12,7 @@ import {
 import { larkPath, olAccount } from "../../lib/lark-accounts";
 import { larkAccount } from "../../lib/lark-chats";
 import { canAddPin, changeChatPin, needsRecheck, pinProblemText, type ChatPinTarget } from "../../lib/lark-pins";
+import { historyProblem, type HistoryProblem, latestOf, nearTop, OlderPaging, screensFromEnd, showsJumpToLatest } from "../../lib/lark-history";
 import { initialCursor, LarkReadTracker } from "../../lib/lark-read";
 import { clickLink, linkHref, prefetchLink } from "../../lib/links";
 import { navigate } from "../../lib/router";
@@ -64,11 +65,11 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   const focus = chat.focus;
   const [page, setPage] = useState<LarkPage | null>(null);
   const [error, setError] = useState("");
-  const [more, setMore] = useState<"" | "older" | "newer">("");
+  const [newerBusy, setNewerBusy] = useState(false);
   const [replyTo, setReplyTo] = useState<LarkReplyTarget | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const anchor = useRef<{ height: number; top: number } | null>(null);
+  const anchor = useRef<{ height: number; top: number; id?: string; offset?: number } | null>(null);
   const placed = useRef(false);
   const base = `/lark/conversations/${enc(feed)}/messages`;
   const topic = Boolean(chat.topic);
@@ -79,6 +80,14 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   const [adding, setAdding] = useState<LarkMessage | null>(null);
   const [changingPin, setChangingPin] = useState(false);
   const [pinRecheck, setPinRecheck] = useState(false);
+  // Older pages as the list nears its top (lark-history.ts); 回到最新 from the newest messages this window kept.
+  const paging = useRef(new OlderPaging());
+  const [, setPagingTick] = useState(0);
+  const latest = useRef<LarkPage | null>(null);
+  const toEnd = useRef(false);
+  const windowGen = useRef(0);
+  const [jumpShown, setJumpShown] = useState(false);
+  const [jumping, setJumping] = useState(false);
   const prefs = useTranslatePrefs();
   const translateTo = translatesChat(prefs, feed) ? prefs.target : undefined;
   // A topic group: a card per topic, its newest replies on it, its thread in a dialog (LarkTopicCard.tsx).
@@ -95,6 +104,12 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     setFlash(null);
     setPinThread(null);
     setOpenTopic(null);
+    paging.current.reset();
+    latest.current = null;
+    toEnd.current = false;
+    windowGen.current++;
+    setJumpShown(false);
+    setJumping(false);
     api<LarkPage>(larkPath(`${base}?limit=${PAGE}${focus ? `&around=${enc(focus)}` : ""}`, ol))
       .then((r) => {
         if (!live) return;
@@ -118,8 +133,15 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
         const p = pageRef.current;
         // another account's push names its own chats (the same group can be in two accounts)
         if (!ids.includes(feed) || olAccount(msg.ol_account) !== ol || !p || p.has_newer) return;
+        const gen = windowGen.current;
         api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol))
-          .then((r) => setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, r.messages ?? []) }))
+          .then((r) => {
+            if (gen !== windowGen.current) return;
+            // A list showing its newest message keeps showing it as more come in (iOS larkFollowsEnd).
+            const el = scroller.current;
+            if (el && screensFromEnd(el) < 0.05) toEnd.current = true;
+            setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, r.messages ?? []) });
+          })
           .catch(() => {});
       }),
     [base, feed, ol],
@@ -131,6 +153,11 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el || !page) return;
+    if (toEnd.current) {
+      toEnd.current = false;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
     if (jumpTo.current) {
       const target = el.querySelector<HTMLElement>(`[data-mid="${CSS.escape(jumpTo.current)}"]`);
       jumpTo.current = null;
@@ -138,8 +165,11 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       return;
     }
     if (anchor.current) {
-      el.scrollTop = anchor.current.top + (el.scrollHeight - anchor.current.height);
+      const a = anchor.current;
       anchor.current = null;
+      const held = a.id ? el.querySelector<HTMLElement>(`[data-mid="${CSS.escape(a.id)}"]`) : null;
+      if (held && a.offset !== undefined) el.scrollTop += held.getBoundingClientRect().top - el.getBoundingClientRect().top - a.offset;
+      else el.scrollTop = a.top + (el.scrollHeight - a.height);
       return;
     }
     if (placed.current) return;
@@ -149,26 +179,104 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     else el.scrollTop = el.scrollHeight;
   }, [page, focus]);
 
-  const loadMore = useCallback(async (dir: "older" | "newer") => {
+  const loadNewer = useCallback(async () => {
     const p = pageRef.current;
-    const el = scroller.current;
     if (!p) return;
-    const cursor = dir === "older" ? p.older_cursor : p.newer_cursor;
-    setMore(dir);
+    const gen = windowGen.current;
+    setNewerBusy(true);
     try {
-      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&${dir === "older" ? "before" : "after"}=${enc(cursor ?? "")}`, ol));
-      if (dir === "older" && el) anchor.current = { height: el.scrollHeight, top: el.scrollTop };
-      setPage((cur) => cur && {
-        ...cur,
-        messages: mergeMessages(cur.messages, r.messages ?? []),
-        ...(dir === "older" ? { has_older: r.has_older, older_cursor: r.older_cursor } : { has_newer: r.has_newer, newer_cursor: r.newer_cursor }),
-      });
+      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&after=${enc(p.newer_cursor ?? "")}`, ol));
+      if (gen !== windowGen.current) return;
+      setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, r.messages ?? []), has_newer: r.has_newer, newer_cursor: r.newer_cursor });
     } catch (e) {
       setError(errorText(e));
     } finally {
-      setMore("");
+      setNewerBusy(false);
     }
-  }, [base]);
+  }, [base, ol]);
+
+  // One older page at a time (iOS LarkHistoryPaging): the page goes in above with the message being read held where
+  // it is; a failed or non-progressing page waits for a click on the header line; a reply for another window is dropped.
+  const loadOlder = useCallback(async (retry = false) => {
+    const p = pageRef.current;
+    if (!p?.has_older) return;
+    const req = paging.current.begin(p.older_cursor, retry);
+    if (!req) return;
+    setPagingTick((n) => n + 1);
+    try {
+      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&before=${enc(req.cursor)}`, ol));
+      const got = paging.current.finish(req, r, pageRef.current?.messages ?? []);
+      if (!got) return;
+      const el = scroller.current;
+      if (el) anchor.current = holdAnchor(el);
+      setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, got.messages), has_older: got.has_older, older_cursor: got.older_cursor });
+    } catch (e) {
+      paging.current.fail(req, historyProblem(e instanceof ApiError ? e.code : undefined));
+    } finally {
+      setPagingTick((n) => n + 1);
+    }
+  }, [base, ol]);
+
+  const autoOlder = page !== null && !topic && !page.topic;
+  // Near the top (also right after a page landed, when a short page does not fill the list) asks for the next one.
+  const checkScroll = useCallback(() => {
+    const el = scroller.current;
+    const p = pageRef.current;
+    if (!el || !p) return;
+    if (autoOlder && placed.current && p.has_older && nearTop(el)) void loadOlder();
+    setJumpShown(showsJumpToLatest(p.has_newer, el));
+  }, [autoOlder, loadOlder]);
+  useEffect(() => {
+    checkScroll();
+  }, [page, checkScroll]);
+
+  // The newest messages, kept while the window reaches them, so 回到最新 goes back without waiting for the hub.
+  useEffect(() => {
+    if (page && !page.has_newer && page.messages.length) latest.current = latestOf(page);
+  }, [page]);
+
+  // 回到最新 (iOS #1034): a window that reaches the newest messages scrolls to them; one moved away (the first unread,
+  // a Pin) goes back to the newest ones it kept at once, then reads the newest page quietly and joins it on when it
+  // follows on; across a gap it takes the newest page only while the list is still at its end.
+  const jumpToLatest = useCallback(async () => {
+    const p = pageRef.current;
+    const el = scroller.current;
+    if (!p || !el) return;
+    if (!p.has_newer) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      return;
+    }
+    const gen = ++windowGen.current;
+    paging.current.reset();
+    anchor.current = null;
+    jumpTo.current = null;
+    placed.current = true;
+    const kept = latest.current;
+    if (kept) {
+      toEnd.current = true;
+      setPage({ ...p, ...kept });
+    } else {
+      setJumping(true);
+    }
+    try {
+      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol));
+      if (gen !== windowGen.current) return;
+      const fresh = mergeMessages([], r.messages ?? []);
+      const box = scroller.current;
+      setPage((cur) => {
+        if (!cur) return cur;
+        if (!kept) return { ...cur, ...r, messages: fresh };
+        const have = new Set(cur.messages.map((m) => m.id));
+        if (fresh.some((m) => have.has(m.id))) return { ...cur, messages: mergeMessages(cur.messages, fresh) };
+        return box && screensFromEnd(box) < 0.05 ? { ...cur, ...r, messages: fresh } : cur;
+      });
+      if (!kept || (box && screensFromEnd(box) < 0.05)) toEnd.current = true;
+    } catch (e) {
+      if (!kept) toast(errorText(e), "error");
+    } finally {
+      if (gen === windowGen.current) setJumping(false);
+    }
+  }, [base, ol]);
 
   const handleReply = useCallback((m: LarkMessage) => {
     setReplyTo({
@@ -188,6 +296,8 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     }
     placed.current = true;
     anchor.current = null;
+    paging.current.reset();
+    windowGen.current++;
     jumpTo.current = target.message.id;
     setPage((cur) => ({ ...(cur ?? {}), ...target.page, messages: mergeMessages([], target.page.messages ?? []) }));
     setFlash((f) => ({ id: target.message.id, n: (f?.n ?? 0) + 1 }));
@@ -335,12 +445,11 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   const topicGroup = topic || Boolean(page.topic);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={scroller} onScroll={checkScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[760px] px-2 py-3 sm:px-4">
           {page.has_older && (
-            <div className="flex justify-center pb-2">
-              <Button tone="quiet" busy={more === "older"} onClick={() => void loadMore("older")}>{t("inbox-larkthread.older")}</Button>
-            </div>
+            <OlderHeader auto={autoOlder} loading={paging.current.loading} problem={paging.current.problem} onLoad={() => void loadOlder(true)} />
           )}
           {!page.messages.length && <p className="py-10 text-center text-[12.5px] text-ink-3">{t("inbox-larkthread.empty")}</p>}
           {page.messages.map((m, i) => (
@@ -379,11 +488,26 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
           ))}
           {page.has_newer && (
             <div className="flex justify-center pt-2">
-              <Button tone="quiet" busy={more === "newer"} onClick={() => void loadMore("newer")}>{t("inbox-larkthread.newer")}</Button>
+              <Button tone="quiet" busy={newerBusy} onClick={() => void loadNewer()}>{t("inbox-larkthread.newer")}</Button>
             </div>
           )}
           {error && <p className="px-2 pt-2 text-[12px] text-red">{error}</p>}
         </div>
+      </div>
+      {jumpShown && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
+          <button
+            type="button"
+            onClick={() => void jumpToLatest()}
+            disabled={jumping}
+            className="pointer-events-auto inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface px-3 text-[12px] font-medium text-ink shadow-raised transition-transform duration-150 active:scale-[0.96]"
+            style={{ animation: "fade-up 180ms ease-out both" }}
+          >
+            {jumping ? <Spinner size={12} /> : <Icon name="arrowDown" size={13} />}
+            {t("inbox-larkthread.jump_latest")}
+          </button>
+        </div>
+      )}
       </div>
       <LarkComposer
         replyTo={replyTo}
@@ -408,6 +532,56 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
         <p className="text-[12.5px] leading-relaxed text-ink-2">{t("inbox-larkthread.pin_hint")}</p>
         {adding && <p className="mt-2 line-clamp-3 rounded-[8px] bg-inset px-3 py-2 text-[12.5px] text-ink shadow-hairline">{adding.text || (adding.parts ?? []).map((p) => p.text ?? "").join("") || t("inbox-larkthread.message")}</p>}
       </Dialog>
+    </div>
+  );
+}
+
+/** Where the list stands before a page goes in above: the message in the middle of the list and how far it is from
+ * the list's top (iOS LarkHistoryHold). The oldest row is not used: its own header can change once older rows join it. */
+function holdAnchor(el: HTMLElement): { height: number; top: number; id?: string; offset?: number } {
+  const box = el.getBoundingClientRect();
+  const mid = box.top + box.height / 2;
+  const rows = [...el.querySelectorAll<HTMLElement>(":scope > div > div > [data-mid]")];
+  const pick = rows.slice(1).find((r) => r.getBoundingClientRect().bottom >= mid) ?? rows[1];
+  return { height: el.scrollHeight, top: el.scrollTop, id: pick?.dataset.mid, offset: pick ? pick.getBoundingClientRect().top - box.top : undefined };
+}
+
+function olderProblemText(p: HistoryProblem): string {
+  switch (p) {
+    case "stopped": return t("inbox-larkthread.older_stopped");
+    case "account_changed": return t("inbox-larkthread.older_account_changed");
+    case "signed_out": return t("inbox-larkthread.older_signed_out");
+    default: return t("inbox-larkthread.older_failed");
+  }
+}
+
+/** Above the oldest message loaded: a small spinner while a page loads by itself (a topic group keeps the button,
+ * iOS #333), and one clickable line when paging stopped. */
+function OlderHeader({ auto, loading, problem, onLoad }: { auto: boolean; loading: boolean; problem: HistoryProblem | null; onLoad: () => void }) {
+  if (problem) {
+    return (
+      <div className="flex justify-center pb-2">
+        <button type="button" onClick={onLoad} className="truncate whitespace-nowrap px-2 py-1 text-[12px] font-medium text-accent-ink hover:underline">
+          {olderProblemText(problem)}
+        </button>
+      </div>
+    );
+  }
+  if (!auto) {
+    return (
+      <div className="flex justify-center pb-2">
+        <Button tone="quiet" busy={loading} onClick={onLoad}>{t("inbox-larkthread.older")}</Button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-7 justify-center pb-2" aria-live="polite">
+      {loading && (
+        <span className="inline-flex items-center">
+          <Spinner size={14} />
+          <span className="sr-only">{t("inbox-larkthread.older_loading")}</span>
+        </span>
+      )}
     </div>
   );
 }

@@ -46,5 +46,11 @@
   "voice": "Voice message",
   "video": "Video",
   "file": "File",
-  "card_placeholder": "[Card]"
+  "card_placeholder": "[Card]",
+  "older_loading": "Loading earlier messages",
+  "older_failed": "Earlier messages didn't load. Click to retry",
+  "older_stopped": "Can't load earlier messages right now. Click to retry",
+  "older_account_changed": "Feishu account changed. Reopen the chat",
+  "older_signed_out": "Signed out of Feishu. Reconnect it",
+  "jump_latest": "Back to latest"
 }
