@@ -173,30 +173,38 @@ func KindTags(list []Entry, n int) []string {
 
 // Update is a change by hand (the app) or by the assistant. Set fields only; tagging set here is locked.
 type Update struct {
-	Name       string   `json:"name,omitempty"`
-	Kind       string   `json:"project_kind,omitempty"` // projects: short | long
-	Status     string   `json:"status,omitempty"`
-	Goal       string   `json:"goal,omitempty"`
-	MyRole     string   `json:"my_role,omitempty"`
-	Note       string   `json:"note,omitempty"` // people / items
-	Importance string   `json:"importance,omitempty"`
-	Relevance  *int     `json:"relevance,omitempty"`
-	Tags       []string `json:"tags,omitempty"`
-	Summary    string   `json:"summary,omitempty"` // replaces summary.md
-	Log        string   `json:"log,omitempty"`     // projects: appended to the timeline
-	Source     string   `json:"source,omitempty"`  // who writes the log line (default Persona)
-	Aliases    []string `json:"aliases,omitempty"`
-	Chats      []string `json:"chats,omitempty"`    // projects: chat ids to link
-	People     []string `json:"people,omitempty"`   // projects: person ids to link
-	Dirs       []string `json:"dirs,omitempty"`     // projects: "<machine>:<path>" code directories
-	Projects   []string `json:"projects,omitempty"` // chats / people / items: project slugs to link
+	Pinned         *string  `json:"pinned,omitempty"`
+	Lock           *bool    `json:"lock,omitempty"`
+	RemovePeople   []string `json:"remove_people,omitempty"`
+	RemoveChats    []string `json:"remove_chats,omitempty"`
+	RemoveAliases  []string `json:"remove_aliases,omitempty"`
+	RemoveProjects []string `json:"remove_projects,omitempty"`
+	Name           string   `json:"name,omitempty"`
+	Kind           string   `json:"project_kind,omitempty"` // projects: short | long
+	Status         string   `json:"status,omitempty"`
+	Goal           string   `json:"goal,omitempty"`
+	MyRole         string   `json:"my_role,omitempty"`
+	Note           string   `json:"note,omitempty"` // people / items
+	Importance     string   `json:"importance,omitempty"`
+	Relevance      *int     `json:"relevance,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+	Summary        string   `json:"summary,omitempty"` // replaces summary.md
+	Log            string   `json:"log,omitempty"`     // projects: appended to the timeline
+	Source         string   `json:"source,omitempty"`  // who writes the log line (default Persona)
+	Aliases        []string `json:"aliases,omitempty"`
+	Chats          []string `json:"chats,omitempty"`    // projects: chat ids to link
+	People         []string `json:"people,omitempty"`   // projects: person ids to link
+	Dirs           []string `json:"dirs,omitempty"`     // projects: "<machine>:<path>" code directories
+	Projects       []string `json:"projects,omitempty"` // chats / people / items: project slugs to link
 	// MergeInto (projects): fold this project into that one (MergeProjects); nothing else in the update applies.
 	MergeInto string `json:"merge_into,omitempty"`
 }
 
 func (u Update) tag(t *Tagging) {
 	if u.Importance != "" || u.Relevance != nil {
-		t.Locked = true
+		if u.Lock == nil || *u.Lock {
+			t.Locked = true
+		}
 	}
 	if importanceRe.MatchString(u.Importance) {
 		t.Importance = u.Importance
@@ -211,6 +219,8 @@ func (u Update) tag(t *Tagging) {
 
 // Apply changes one entity; for projects it creates the project when it does not exist (id = name or slug).
 func (e *Engine) Apply(kind, id string, u Update) (string, error) {
+	e.Store.applyMu.Lock()
+	defer e.Store.applyMu.Unlock()
 	now := time.Now().UTC()
 	switch kind {
 	case KindProject:
@@ -226,7 +236,7 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 			if from == nil || to == nil {
 				return "", ErrNotFound
 			}
-			if err := e.MergeProjects(to.Slug, from.Slug, "手动合并"); err != nil {
+			if err := e.mergeProjects(to.Slug, from.Slug, "手动合并", true); err != nil {
 				return "", err
 			}
 			return to.Slug, nil
@@ -261,31 +271,59 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 			p.MyRole = oneLine(u.MyRole)
 		}
 		u.tag(&p.Tagging)
+		u.protect(&p.Tagging)
 		p.Aliases = addUnique(p.Aliases, u.Aliases...)
 		p.Dirs = addUnique(p.Dirs, u.Dirs...)
 		p.People = addUnique(p.People, u.People...)
+		for _, pid := range u.People {
+			if person, ok := e.Store.Person(pid); ok {
+				person.Projects = addUnique(person.Projects, p.Slug)
+				if u.Lock == nil || *u.Lock {
+					person.LockedFields = addUnique(person.LockedFields, "projects")
+				}
+				if err := e.Store.putEntity(KindPerson, person.ID, person, &person.Tagging, true); err != nil {
+					return "", err
+				}
+			}
+		}
 		for _, cid := range u.Chats {
 			if c, ok := e.Store.Chat(cid); ok {
 				p.Chats = addUnique(p.Chats, c.ID)
 				c.Projects = addUnique(c.Projects, p.Slug)
+				if u.Lock == nil || *u.Lock {
+					c.LockedFields = addUnique(c.LockedFields, "projects")
+				}
 				p.People = addUnique(p.People, c.People...)
-				_ = e.Store.PutChat(c)
+				if err := e.Store.putEntity(KindChat, c.ID, c, &c.Tagging, true); err != nil {
+					return "", err
+				}
 			}
-		}
-		if u.Summary != "" {
-			_ = e.Store.PutSummary(KindProject, p.Slug, u.Summary)
 		}
 		if u.Log != "" {
 			src := u.Source
 			if src == "" {
 				src = "Persona"
 			}
-			_ = e.Store.AppendLog(p.Slug, now, src, u.Log)
+			if err := e.Store.AppendLog(p.Slug, now, src, u.Log); err != nil {
+				return "", err
+			}
 			if u.Summary == "" {
 				p.Dirty = true
 			}
 		}
-		if err := e.Store.PutProject(p); err != nil {
+		p.Aliases = removeStrings(p.Aliases, u.RemoveAliases)
+		p.People = removeStrings(p.People, u.RemovePeople)
+		p.Chats = removeStrings(p.Chats, u.RemoveChats)
+		p.Updated = now
+		if err := e.Store.putEntity(KindProject, p.Slug, p, &p.Tagging, true); err != nil {
+			return "", err
+		}
+		if u.Summary != "" {
+			if err := e.Store.putSummary(KindProject, p.Slug, u.Summary, true); err != nil {
+				return "", err
+			}
+		}
+		if err := e.unlink(KindProject, p.Slug, u); err != nil {
 			return "", err
 		}
 		e.index(KindProject, p.Slug, p.Name, p.Tagging, p.OneLine, p.Updated)
@@ -296,6 +334,7 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 			return "", ErrNotFound
 		}
 		u.tag(&c.Tagging)
+		u.protect(&c.Tagging)
 		if u.Name != "" {
 			c.Name = u.Name
 		}
@@ -303,13 +342,25 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 			if pr, ok := e.Store.Project(slug); ok {
 				c.Projects = addUnique(c.Projects, pr.Slug)
 				pr.Chats = addUnique(pr.Chats, c.ID)
-				_ = e.Store.PutProject(pr)
+				if u.Lock == nil || *u.Lock {
+					pr.LockedFields = addUnique(pr.LockedFields, "chats")
+				}
+				if err := e.Store.putEntity(KindProject, pr.Slug, pr, &pr.Tagging, true); err != nil {
+					return "", err
+				}
 			}
 		}
-		if u.Summary != "" {
-			_ = e.Store.PutSummary(KindChat, c.ID, u.Summary)
+		c.People = removeStrings(c.People, u.RemovePeople)
+		c.Projects = removeStrings(c.Projects, u.RemoveProjects)
+		if err := e.Store.putEntity(KindChat, c.ID, c, &c.Tagging, true); err != nil {
+			return "", err
 		}
-		if err := e.Store.PutChat(c); err != nil {
+		if u.Summary != "" {
+			if err := e.Store.putSummary(KindChat, c.ID, u.Summary, true); err != nil {
+				return "", err
+			}
+		}
+		if err := e.unlink(KindChat, c.ID, u); err != nil {
 			return "", err
 		}
 		e.index(KindChat, c.ID, c.Name, c.Tagging, c.OneLine, c.LastAt)
@@ -320,6 +371,7 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 			return "", ErrNotFound
 		}
 		u.tag(&p.Tagging)
+		u.protect(&p.Tagging)
 		if u.Note != "" {
 			p.Note = oneLine(u.Note)
 		}
@@ -327,10 +379,20 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 			if pr, ok := e.Store.Project(slug); ok {
 				p.Projects = addUnique(p.Projects, pr.Slug)
 				pr.People = addUnique(pr.People, p.ID)
-				_ = e.Store.PutProject(pr)
+				if u.Lock == nil || *u.Lock {
+					pr.LockedFields = addUnique(pr.LockedFields, "people")
+				}
+				if err := e.Store.putEntity(KindProject, pr.Slug, pr, &pr.Tagging, true); err != nil {
+					return "", err
+				}
 			}
 		}
-		if err := e.Store.PutPerson(p); err != nil {
+		p.Chats = removeStrings(p.Chats, u.RemoveChats)
+		p.Projects = removeStrings(p.Projects, u.RemoveProjects)
+		if err := e.Store.putEntity(KindPerson, p.ID, p, &p.Tagging, true); err != nil {
+			return "", err
+		}
+		if err := e.unlink(KindPerson, p.ID, u); err != nil {
 			return "", err
 		}
 		e.WritePersonSummary(p.ID)
@@ -342,6 +404,7 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 			return "", ErrNotFound
 		}
 		u.tag(&it.Tagging)
+		u.protect(&it.Tagging)
 		if u.Note != "" {
 			it.Note = oneLine(u.Note)
 		}
@@ -349,10 +412,19 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 			if pr, ok := e.Store.Project(slug); ok {
 				it.Projects = addUnique(it.Projects, pr.Slug)
 				pr.Items = addUnique(pr.Items, kind+"/"+SafeID(it.ID))
-				_ = e.Store.PutProject(pr)
+				if u.Lock == nil || *u.Lock {
+					pr.LockedFields = addUnique(pr.LockedFields, "items")
+				}
+				if err := e.Store.putEntity(KindProject, pr.Slug, pr, &pr.Tagging, true); err != nil {
+					return "", err
+				}
 			}
 		}
-		if err := e.Store.PutItem(it); err != nil {
+		it.Projects = removeStrings(it.Projects, u.RemoveProjects)
+		if err := e.Store.putEntity(kind, it.ID, it, &it.Tagging, true); err != nil {
+			return "", err
+		}
+		if err := e.unlink(kind, it.ID, u); err != nil {
 			return "", err
 		}
 		e.index(kind, it.ID, it.Title, it.Tagging, it.Note, it.At)

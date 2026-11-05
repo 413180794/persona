@@ -57,7 +57,9 @@ var (
 
 // kbState is the knowledge base's part of the Service.
 type kbState struct {
-	dir, keyDir string // "" dir: none (unit tests that do not need one)
+	owner       kbOwnerState // encrypted owner identities and their source provenance (kb_owner.go)
+	events      kbEventQueue // bounded, asynchronous notifications (kb_events.go)
+	dir, keyDir string       // "" dir: none (unit tests that do not need one)
 	kick        chan struct{}
 	wake        chan struct{}            // the loop looks again at once (kbWake)
 	cur         atomic.Pointer[kbOpened] // nil while not open
@@ -180,10 +182,14 @@ func (s *Service) kbOpenLocked(ctx context.Context, set assistantwire.KBSettings
 			}
 		}
 		k.store, k.unlock = st, unlock
+		if err := s.kbOwnerOpen(k.key); err != nil {
+			s.logf("kb: owner identities unavailable")
+		}
 	}
 	s.kbRezone(k.store, loc)
 	e := &kb.Engine{Store: k.store, Model: s.kbModel("inbox.triage"), ModelFor: func(id string) kb.Model { return s.kbModel(id) },
-		Owner: s.owner(ctx), Logf: s.logf, TextDays: set.TextDays, AttachmentDays: set.AttachmentDays, HandleKey: k.key, Index: s.kbIndexEntity}
+		Owner: s.owner(ctx), Logf: s.logf, TextDays: set.TextDays, AttachmentDays: set.AttachmentDays, HandleKey: k.key, Index: s.kbIndexEntity, Changed: s.kbChanged, MineObserved: s.kbObserveOwner}
+	e.ObserveChanges()
 	for _, d := range set.ExtraDirs {
 		if d = expandHome(strings.TrimSpace(d)); filepath.IsAbs(d) {
 			e.ExtraDirs = append(e.ExtraDirs, d)

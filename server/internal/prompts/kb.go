@@ -17,6 +17,7 @@ func RenderKBReadme() string { return render("kb/readme", nil) }
 
 // KnownProject is a project the models may name (kb/known_projects).
 type KnownProject struct {
+	Pinned  string
 	Name    string
 	Aliases []string
 	OneLine string // where it is now: lets the model see that differently named work is the same project
@@ -24,6 +25,8 @@ type KnownProject struct {
 
 // KBCompressInput is a chat's summary so far and its new messages (kb/compress_input).
 type KBCompressInput struct {
+	Pinned    string
+	People    []KBPinnedPerson
 	Name      string
 	Kind      string // dm | group | bot | mail | moment | pr | issue
 	Automated bool   // mail from a notification / marketing address
@@ -35,6 +38,9 @@ type KBCompressInput struct {
 
 func RenderKBCompressInput(in KBCompressInput) string { return render("kb/compress_input", in) }
 
+// KBPinnedPerson is a person whose confirmed facts constrain compression.
+type KBPinnedPerson struct{ Name, Pinned string }
+
 // KBProjectChat is a chat linked to a project, its summary clipped.
 type KBProjectChat struct {
 	ID, Summary string
@@ -42,6 +48,7 @@ type KBProjectChat struct {
 
 // KBProjectInput is a project's file, timeline and chats (kb/project_input).
 type KBProjectInput struct {
+	Pinned     string
 	Name, Kind string
 	Aliases    []string
 	Tags       []string
@@ -93,11 +100,12 @@ func RenderKBProjectInput(in KBProjectInput) string { return render("kb/project_
 
 // KBItem is one document, meeting or event to tag.
 type KBItem struct {
-	Key   string // kind/id
-	Kind  string // docs | meetings | events
-	Title string
-	At    time.Time // local time; zero when unknown
-	Where string
+	Pinned string
+	Key    string // kind/id
+	Kind   string // docs | meetings | events
+	Title  string
+	At     time.Time // local time; zero when unknown
+	Where  string
 }
 
 // KBItemsInput is a batch of items to tag (kb/items_input).

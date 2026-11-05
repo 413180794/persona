@@ -18,6 +18,8 @@ type Forgotten struct {
 // over). A project that had them is marked dirty, so its summary is written again from what is left. Nothing else
 // is touched. Callers stop the source first: a chat ingested meanwhile would come back.
 func (e *Engine) ForgetSource(source string) (Forgotten, error) {
+	e.Store.applyMu.Lock()
+	defer e.Store.applyMu.Unlock()
 	var out Forgotten
 	prefix := source + "-"
 	names := map[string]bool{} // the forgotten chats' names: the source of their timeline lines
@@ -39,7 +41,7 @@ func (e *Engine) ForgetSource(source string) (Forgotten, error) {
 			continue
 		}
 		p.Chats, p.People, p.Dirty = chats, people, true
-		if err := e.Store.PutProject(p); err != nil {
+		if err := e.Store.putEntity(KindProject, p.Slug, p, &p.Tagging, true); err != nil {
 			return out, err
 		}
 		if err := e.Store.dropLogLines(p.Slug, func(source string) bool { return names[source] }); err != nil {
@@ -47,6 +49,8 @@ func (e *Engine) ForgetSource(source string) (Forgotten, error) {
 		}
 		out.Projects = append(out.Projects, p.Slug)
 	}
+	e.Store.metaMu.Lock()
+	defer e.Store.metaMu.Unlock()
 	for _, id := range out.Chats {
 		if err := os.RemoveAll(e.Store.path(KindChat, id)); err != nil {
 			return out, err
@@ -64,9 +68,14 @@ func (e *Engine) ForgetSource(source string) (Forgotten, error) {
 }
 
 // dropLogLines rewrites a project's timeline without the lines whose source (「- 时间 · 来源 · 内容」) gone says.
-func (s *Store) dropLogLines(slug string, gone func(source string) bool) error {
+func (s *Store) dropLogLines(slug string, gone func(source string) bool) (err error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	defer func() {
+		s.mu.Unlock()
+		if err == nil {
+			s.notify(KindProject, slug, "log")
+		}
+	}()
 	if _, err := s.settleLogLocked(slug); err != nil {
 		return err
 	}

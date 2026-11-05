@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -20,7 +21,7 @@ import (
 func (h *Hub) kbSourcesCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, bool, error) {
 	switch p.Method {
 	case assistantwire.ConnectorsArchives, assistantwire.ConnectorsChanges, assistantwire.ConnectorsArchiveMedia,
-		assistantwire.ConnectorsItems, assistantwire.ConnectorsDocTitle:
+		assistantwire.ConnectorsItems, assistantwire.ConnectorsDocTitle, assistantwire.ConnectorsOwner:
 	default:
 		return nil, false, nil
 	}
@@ -51,6 +52,8 @@ func (h *Hub) kbSourcesCall(ctx context.Context, p assistantwire.AppCall) (json.
 	switch p.Method {
 	case assistantwire.ConnectorsArchives:
 		out = h.kbArchives(ctx)
+	case assistantwire.ConnectorsOwner:
+		out, err = h.kbConnectorOwner(ctx)
 	case assistantwire.ConnectorsChanges:
 		var arch connector.Archive
 		if arch, err = h.kbArchive(a.ID); err == nil {
@@ -168,4 +171,27 @@ func (h *Hub) archiveSources(c connector.Connector) []string {
 		}
 	}
 	return out
+}
+
+// kbConnectorOwner exposes only identity metadata to the assistant, never account credentials or server settings.
+// Other connectors supply their owner's hints with Mine messages while the user lets them into the KB.
+func (h *Hub) kbConnectorOwner(ctx context.Context) (assistantwire.KBOwnerSources, error) {
+	out := assistantwire.KBOwnerSources{Sources: []assistantwire.KBOwnerSource{}}
+	if h.mail == nil || h.connectors == nil || !h.connectors.Feeds("mail", connector.FeedArchive) {
+		return out, nil
+	}
+	accounts, err := h.mail.ListAccounts()
+	if err != nil {
+		return out, errors.New("mail owner identities could not be read")
+	}
+	handles := []kb.Handle{}
+	for _, account := range accounts {
+		if address := strings.TrimSpace(account.Email); address != "" {
+			handles = append(handles, kb.Handle{Kind: kb.HandleEmail, Value: address})
+		}
+	}
+	if len(handles) > 0 {
+		out.Sources = append(out.Sources, assistantwire.KBOwnerSource{Source: "mail", Handles: handles})
+	}
+	return out, nil
 }

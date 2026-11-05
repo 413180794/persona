@@ -249,9 +249,14 @@ func (s *Store) writeLogLocked(slug string, lines []string) error {
 }
 
 // WriteLog replaces a project's timeline (merging two projects): lines in the archive's zone.
-func (s *Store) WriteLog(slug string, lines []string) error {
+func (s *Store) WriteLog(slug string, lines []string) (err error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	defer func() {
+		s.mu.Unlock()
+		if err == nil {
+			s.notify(KindProject, slug, "log")
+		}
+	}()
 	if _, err := s.settleLogLocked(slug); err != nil {
 		return err
 	}

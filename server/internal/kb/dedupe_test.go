@@ -188,3 +188,97 @@ func TestCompressAnOldMomentChat(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestManualMergeRetargetsLockedRelationshipsAndKeepsCorrections(t *testing.T) {
+	e := testEngine(t, nil)
+	for _, slug := range []string{"keep", "drop"} {
+		if _, err := e.Apply(KindProject, slug, Update{Name: slug, Goal: slug + " goal"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = e.Store.PutChat(&Chat{ID: "chat"})
+	_ = e.Store.PutPerson(&Person{ID: "person"})
+	for _, kind := range []string{KindDoc, KindMeeting, KindEvent} {
+		_ = e.Store.PutItem(&Item{Kind: kind, ID: "item"})
+		if _, err := e.Apply(kind, "item", Update{Projects: []string{"drop"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := e.Apply(KindChat, "chat", Update{Projects: []string{"drop"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Apply(KindPerson, "person", Update{Projects: []string{"drop"}}); err != nil {
+		t.Fatal(err)
+	}
+	keepFact, dropFact := "Target confirmed fact", "Source confirmed fact"
+	if _, err := e.Apply(KindProject, "keep", Update{Pinned: &keepFact}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Apply(KindProject, "drop", Update{Pinned: &dropFact}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Apply(KindProject, "drop", Update{MergeInto: "keep"}); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := e.Store.Chat("chat")
+	person, _ := e.Store.Person("person")
+	if strings.Join(c.Projects, ",") != "keep" || strings.Join(person.Projects, ",") != "keep" || !c.fieldLocked("projects") || !person.fieldLocked("projects") {
+		t.Fatalf("locked reverse relationships not retargeted: %+v %+v", c, person)
+	}
+	for _, kind := range []string{KindDoc, KindMeeting, KindEvent} {
+		it, _ := e.Store.Item(kind, "item")
+		if strings.Join(it.Projects, ",") != "keep" || !it.fieldLocked("projects") {
+			t.Fatal("item relationship not retargeted", kind, it)
+		}
+	}
+	keep, _ := e.Store.Project("keep")
+	drop, _ := e.Store.Project("drop")
+	if !strings.Contains(keep.Pinned, keepFact) || !strings.Contains(keep.Pinned, dropFact) || keep.Goal != "keep goal" || !keep.fieldLocked("goal") || drop.Pinned != dropFact || drop.Goal != "drop goal" || drop.MergedInto != "keep" {
+		t.Fatalf("corrections lost: keep=%+v drop=%+v", keep, drop)
+	}
+}
+
+func TestAutoMergeDoesNotHideProtectedProjects(t *testing.T) {
+	for _, field := range []string{"pinned", "locked_fields", "locked"} {
+		t.Run(field, func(t *testing.T) {
+			m := &scriptModel{replies: []string{`{"same":true,"keep":"A"}`}}
+			e := testEngine(t, m)
+			_ = e.Store.PutProject(&Project{Slug: "keep", Name: "Shared target", People: []string{"a", "b", "c"}})
+			tag := Tagging{}
+			switch field {
+			case "pinned":
+				tag.Pinned = "Confirmed"
+			case "locked_fields":
+				tag.LockedFields = []string{"goal"}
+			case "locked":
+				tag.Locked = true
+			}
+			_ = e.Store.PutProject(&Project{Slug: "drop", Name: "Shared source", People: []string{"a", "b", "c"}, Tagging: tag})
+			if n := e.DedupeProjects(context.Background(), 5); n != 0 || m.calls != 0 {
+				t.Fatal("protected project sent for automatic dedupe", n, m.calls)
+			}
+			if err := e.MergeProjects("keep", "drop", "automatic"); err == nil {
+				t.Fatal("automatic merge accepted protected project")
+			}
+			p, _ := e.Store.Project("drop")
+			if !p.Live() {
+				t.Fatal("protected source was hidden")
+			}
+		})
+	}
+}
+
+func TestAutoMergeDoesNotRewriteLockedReverseRelationships(t *testing.T) {
+	e := testEngine(t, nil)
+	_ = e.Store.PutProject(&Project{Slug: "keep", Name: "Keep"})
+	_ = e.Store.PutProject(&Project{Slug: "drop", Name: "Drop", Chats: []string{"chat"}})
+	_ = e.Store.PutChat(&Chat{ID: "chat", Projects: []string{"drop"}, Tagging: Tagging{LockedFields: []string{"projects"}}})
+	if err := e.MergeProjects("keep", "drop", "automatic"); err == nil {
+		t.Fatal("automatic merge accepted locked reverse relationship")
+	}
+	p, _ := e.Store.Project("drop")
+	c, _ := e.Store.Chat("chat")
+	if !p.Live() || strings.Join(c.Projects, ",") != "drop" {
+		t.Fatal("automatic merge changed protected relationship")
+	}
+}

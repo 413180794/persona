@@ -1,0 +1,27 @@
+package assistantwire
+
+import "github.com/nwverse/persona/server/internal/kb"
+
+const (
+	// MethodKBOwner: {} → KBOwner: the user's name, editable aliases and channel identities (kb.read).
+	MethodKBOwner = "kb.owner"
+	// ConnectorsOwner: {} → KBOwnerSources: only the connectors' owner identities, without credentials.
+	ConnectorsOwner = "connectors.owner"
+)
+
+// KBOwner is the knowledge base's account of the user. Raw identities are only exposed by this explicit read.
+type KBOwner struct {
+	Name    string      `json:"name"`
+	Aliases []string    `json:"aliases"`
+	Handles []kb.Handle `json:"handles"`
+}
+
+// KBOwnerSource keeps identity provenance so forgetting one source leaves identities supplied by another.
+type KBOwnerSource struct {
+	Source  string      `json:"source"`
+	Handles []kb.Handle `json:"handles"`
+}
+
+type KBOwnerSources struct {
+	Sources []KBOwnerSource `json:"sources"`
+}

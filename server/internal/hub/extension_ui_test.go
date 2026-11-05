@@ -119,7 +119,7 @@ func serveUIExtensionForTest() {
 				return ui(ctx, method, params)
 			},
 			"event": func(_ context.Context, method string, _ json.RawMessage) (any, error) {
-				if method == "agent.finished" {
+				if method == "agent.finished" || method == "kb.changed" || method == "kb.forgotten" {
 					finished.Add(1)
 				}
 				return nil, nil

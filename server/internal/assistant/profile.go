@@ -40,6 +40,8 @@ type Settings struct {
 	Timezone string `json:"timezone,omitempty"`
 	// Notes, once edited in the app, replace hub.json's assistant.notes.
 	Notes *string `json:"notes,omitempty"`
+	// OwnerAliases are the names the user explicitly adds for kb.owner; an empty list clears them.
+	OwnerAliases []string `json:"owner_aliases,omitempty"`
 	// Main is the main conversation (the Persona tab opens it): one long-running conversation, the others are side ones.
 	Main string `json:"main,omitempty"`
 	// Former are the main conversations replaced since (newest first, POST /api/v1/assistant/main/new): their machine
@@ -367,6 +369,9 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if in.Notes != nil {
 			v.Notes = in.Notes
+		}
+		if in.OwnerAliases != nil {
+			v.OwnerAliases = ownerAliases(in.OwnerAliases)
 		}
 		if in.MainTasksQuiet != nil {
 			v.MainTasksQuiet = in.MainTasksQuiet

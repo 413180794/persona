@@ -252,6 +252,42 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
   完整 token 涵盖所有范围：从 `hub_api` 升级到只要几个范围的新版本不用重新同意；反过来要。
 - 权限摘要算上范围（规范化：排序、去重）；没有 `hub` 的扩展摘要和以前一样。升级时多了范围要重新同意，`added_permissions` 里是「使用 hub 的更多功能」。
 
+### 知识库 RPC（#1908）
+
+扩展的程序可直接调用下面六个方法，不需要经 HTTP 传 token。权限仍只声明在 `permissions.hub`，hub 按已获准的权限检查，
+不是按清单中申请的权限放行；`kb.write` 不隐含 `kb.read`。旧 `hub_api` 完整权限兼容。所有调用都由 hub 转给管理者的知识库，
+不要求扩展能读 hub 或管理者的数据目录。
+
+| 方法 | 参数 | 返回 | 范围 |
+| --- | --- | --- | --- |
+| `kb.list` | `{kind,tag?,limit?,offset?}` | `{items,tags,total,next_offset?}` | `kb.read` |
+| `kb.get` | `{kind,id,recent_chars?}` | `{detail}` | `kb.read` |
+| `kb.day` | `{id,day}`，day 为 `YYYY-MM-DD` | `{day,messages,prev,next}`；`messages[].n` 是源文件中从 1 开始的行号 | `kb.read` |
+| `kb.search` | `{query,messages?,limit?}` | `{hits}` | `kb.read` |
+| `kb.update` | `{kind,id,...更新字段}` | `{id}` | `kb.write` |
+| `kb.owner` | `{}` | `{name,aliases,handles:[{kind,value}]}` | `kb.read` |
+
+kind 是 `projects`、`chats`、`people`、`docs`、`meetings`、`events`。list 默认 30 条、最多 200 条，offset 从 0 开始；
+未读完时按 next_offset 继续。跨请求发生变化时分页不构成快照，扩展应去重并在需要时重读。search 默认搜消息，默认 40 条、最多 200 条；
+get 默认带最近 12000 字符的消息，recent_chars 可为 0、最多 20000。空列表返回 `[]`。
+`kb.get` 不附带实时 Agents，读取 Agent 状态仍须相应权限。缺少范围回 `permission_denied`，错误 data 带 `scope`；
+未知字段、必填或格式错误回 `invalid_params`，缺实体回 `not_found`，管理者不在线回 `assistant_offline`，知识库未准备好回 `kb_unavailable`。
+内部 `kb.forget`、`kb.context`、`kb.posts_*` 等不在此白名单内，完整权限的扩展也不能借此调用。
+
+更新字段继承原有知识库更新接口，另加 `pinned`、`lock` 和 `remove_people/remove_chats/remove_aliases/remove_projects`。
+保护规则、适用实体、本人身份的加密和历史限制见 [知识库](knowledge.md#扩展整理知识库1908)。本人别名由用户编辑 assistant 设置，
+不另开扩展写本人身份的 RPC。
+
+订阅例子：
+
+```json
+{"permissions":{"hub":["kb.read","kb.write"]},"activation_events":["on_startup"],
+ "contributes":{"events":[{"id":"knowledge","subscribe":["kb.changed","kb.forgotten"]}]}}
+```
+
+hub 推送 `event.kb.changed {kind,id,what}` 和 `event.kb.forgotten {source}`。只有仍启用、对应贡献开启、程序运行中，且实际获准
+`kb.read`（或旧完整权限）的订阅者收到；只写权限不够。通知只带上述标识字段，不附加正文、本人 handles 或绝对路径，也不持久补发，扩展启动/重连后先读全量状态。
+
 ### 出网（#1856）
 
 hub 里有一个**出网代理**（`server/internal/extension/egress`），第一次有扩展要用时起，只听本机：

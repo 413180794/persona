@@ -140,6 +140,8 @@ type extensions struct {
 	dev devTaps
 	// badges are the plugins' badges on their nav_pages' entries ("<plugin>/<ui>" → plugin.Badge; plugin_ui.go).
 	badges sync.Map
+	// kbEvents keep slow extension programs out of the assistant bus read loop.
+	kbEvents kbExtensionEvents
 	// invalid are the extensions' ui.invalidate waiting to be told to the apps (extension_ui.go), at most one a second.
 	invalid invalidations
 	// widgets are the views drawn for widgets and the widgets each device has (extension_system.go).
@@ -455,6 +457,10 @@ func (ps *extensions) apply(ctx context.Context, id string) {
 			old.proc.Stop()
 		}
 	}
+	if ps.h != nil {
+		// Stop waits for the old start/initialize callbacks too: a token minted during shutdown must not survive.
+		ps.h.extTokens.revoke(id)
+	}
 	p := ps.reg.Get(id)
 	if p == nil {
 		ps.forgetSandbox(ctx, id)
@@ -583,6 +589,11 @@ func (ps *extensions) spec(ctx context.Context, p *extension.Extension, hp *hubE
 
 // specOf is spec with only the old names of the extension's variables (PERSONA_PLUGIN_*).
 func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hubExtension) (host.Spec, error) {
+	if ps.reg != nil {
+		if snapshot := ps.reg.Snapshot(p.Record.ID); snapshot != nil {
+			p = snapshot
+		}
+	}
 	m := p.Manifest
 	id := p.Record.ID
 	s := host.Spec{ID: id, Name: m.Name, Logf: ps.hostLogf()}
@@ -741,6 +752,10 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 	}
 	byID := map[string]*proc.Conn{}
 	s.Handle = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
+		switch method {
+		case "kb.list", "kb.get", "kb.day", "kb.search", "kb.update", "kb.owner":
+			return ps.extensionKBCall(ctx, id, method, params)
+		}
 		if rest, ok := strings.CutPrefix(method, serve.Namespace+"."); ok {
 			c := byID[contributionOf(params)]
 			if c == nil && len(byID) == 1 {

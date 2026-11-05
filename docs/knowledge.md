@@ -255,6 +255,46 @@ hub.json 的 `kb.extra_dirs` 列出管理者所在机器（默认就是 hub 机�
 
 `kb.ai` 不写就用 `inbox.triage_ai`，再没有就用 `ai`。`enabled: false` 整个关掉。hub 在握手时把这一节交给管理者（上面「谁管什么」），`kb.ai` 是 hub 的模型配置读的（`kb.*` 用途的默认）。
 
+## 扩展整理知识库（#1908）
+
+扩展可以直接经 RPC 调用 `kb.list`、`kb.get`、`kb.day`、`kb.search`、`kb.update`、`kb.owner`，不用拿完整 hub token。
+hub 检查扩展实际获准的 `kb.read` / `kb.write`，再把调用转给拥有知识库的管理者；管理者跑在别的机器上也一样。
+`kb.write` 不包含读取权限。旧 `hub_api` 的 HTTP 和 RPC 调用继续可用，但内部的 `kb.forget`、`kb.posts_*` 等不对扩展开放。
+参数、分页、错误和事件订阅见 [扩展文档](extensions.md#知识库-rpc1908)。
+
+### 更正、锁与解除关联
+
+六类实体的 metadata 都可带 `pinned`（用户确认的事实）和 `locked_fields`（受保护的字段）。`kb.update`、原来的 HTTP PUT 和助手的 `kb_update` 共用写入逻辑：
+
+- `pinned` 只由显式更新修改，传空字符串可以清除。压缩、项目重写会把它作为只读输入，模型不能改写存下的事实；人物更正也会带入相关会话的压缩。
+- 手工写入默认锁住本次触及的字段，包括人物 `note`、摘要、项目描述和关联。后台写入在落盘时重读当前保护字段，防止模型调用期间的新更正被旧对象覆盖。
+- `lock: false` 表示本次不增加锁，供扩展选择让后台继续维护；它不解除已有锁。旧 `locked` 的打标保护继续生效。
+- `remove_people`、`remove_chats`、`remove_projects`、`remove_aliases` 移除关联或项目别名，不删除实体。同批先添加再移除，移除优先；存在的反向关系一起解除。`remove_aliases` 用于项目。
+- 自动去重跳过带人工保护的项目与关联。显式合并沿用既有合并优先级，更新已锁定的反向关系、拼接双方 pinned；源项目以 merged 记录保留，原有受保护 metadata 仍可读取。
+
+例如，从项目移除一位成员并留下已确认事实：
+
+```json
+{"kind":"projects","id":"example","remove_people":["person-a"],"pinned":"此项目由团队共同维护。"}
+```
+
+这不是跨文件事务，也没有新增 `If-Match` 或修订日志。写入失败返回错误，不应把失败自动重试成一次新的用户确认。
+
+### 本人信息与变更通知
+
+`kb.owner` 返回 `{name, aliases, handles:[{kind,value}]}`。名字来自 `assistant.owner`，别名由完整权限的用户通过现有
+`PUT /api/v1/assistant` 的 `owner_aliases` 编辑（省略保持，`[]` 清空）；只有 `kb.write` 的扩展不能改全局本人身份。
+handles 汇总仍启用知识库归档的已配置邮箱地址与后续归档里明确标为 `Mine` 的发送者身份，不从他人的身份哈希反推，也不猜测历史消息里的「我」是谁。
+
+普通人物的原始身份线索仍不落盘。本人身份使用独立的私有加密记录，与普通实体、全文搜索和 profile 快照隔离；密钥来自管理者的
+`handles.key`，使用不同的加密用途。没有密钥时只在内存保存观察到的身份，重启后需要重新同步。来源删除会清除该来源的观察结果；
+由其他来源共同证实的同一身份继续保留；关闭邮箱归档来源后，也不再返回该来源的实时账户身份。
+密文损坏、密钥不匹配或已有密文却缺少密钥时，owner 读取与身份清理返回错误，普通知识库功能仍可用；不会用新观察结果覆盖无法打开的记录。
+
+扩展声明 `events` 订阅 `kb.changed`、`kb.forgotten`，并获准 `kb.read`，就能收到不含正文的通知：
+`{kind,id,what}`（what 为 `metadata`、`summary`、`messages`、`log`）或 `{source}`。人工更新和后台落盘走同一条通知链；
+来源文件与索引删除成功后才发 forgotten。通知是尽力投递，不是持久变更日志；断线或拥塞期间可能错过，扩展启动后应重新 list/get 校准状态。
+
 ## App 接口
 
 2026-11-04 起这些接口由 hub 原样转给管理者（`assistantwire.Routes`，`assistant/kb_routes.go`），路径、字段都不变；管理者没连着时回 `503 assistant_offline`，

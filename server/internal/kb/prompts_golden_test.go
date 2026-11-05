@@ -150,6 +150,7 @@ func TestGoldenProject(t *testing.T) {
 				if i == 1 {
 					sum = long
 				}
+				_ = e.Store.PutChat(&Chat{ID: id})
 				_ = e.Store.PutSummary(KindChat, id, sum)
 			}
 			p.Chats = append(p.Chats, "lark-none")

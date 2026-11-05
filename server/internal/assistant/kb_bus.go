@@ -22,6 +22,9 @@ import (
 
 // kbRequest answers one of the hub's kb.* calls; false for any other method.
 func (s *Service) kbRequest(ctx context.Context, method string, params json.RawMessage) (any, bool, error) {
+	if out, ok, err := s.kbRPCRequest(ctx, method, params); ok {
+		return out, true, err
+	}
 	decode := func(v any) error {
 		if err := json.Unmarshal(params, v); err != nil {
 			return &rpc.Error{Code: bus.CodeInvalidParams, Message: method + ": " + err.Error()}
@@ -29,6 +32,12 @@ func (s *Service) kbRequest(ctx context.Context, method string, params json.RawM
 		return nil
 	}
 	switch method {
+	case assistantwire.MethodKBOwner:
+		if err := kbDecodeParams(method, params, &struct{}{}); err != nil {
+			return nil, true, err
+		}
+		out, err := s.kbOwner(ctx)
+		return out, true, kbError(err)
 	case assistantwire.MethodKBContext:
 		var p struct {
 			ChatID string `json:"chat_id"`
@@ -152,6 +161,10 @@ func (s *Service) kbForget(ctx context.Context, source string) (assistantwire.KB
 			return assistantwire.KBForgotten{}, err
 		}
 	}
+	if err := s.kbForgetOwner(source); err != nil {
+		return assistantwire.KBForgotten{}, err
+	}
+	s.kbForgotten(source)
 	return assistantwire.KBForgotten{Chats: len(f.Chats), People: len(f.People)}, nil
 }
 

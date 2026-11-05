@@ -268,7 +268,7 @@ func (e *Engine) SeedKeywords(recent time.Duration) int {
 			continue
 		}
 		p.Dirty = true
-		if writeJSON(e.Store.path(KindProject, p.Slug, "meta.json"), p) == nil { // not PutProject: Updated stays
+		if e.Store.putEntity(KindProject, p.Slug, p, &p.Tagging, false) == nil { // not PutProject: Updated stays
 			n++
 		}
 	}

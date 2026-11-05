@@ -64,7 +64,7 @@ type dedupeCandidate struct {
 func dedupeCandidates(projects []*Project) []dedupeCandidate {
 	var live []*Project
 	for _, p := range projects {
-		if p.Live() && p.Status != "ignored" {
+		if p.Live() && p.Status != "ignored" && !protectedProject(p) {
 			live = append(live, p)
 		}
 	}
@@ -172,10 +172,6 @@ func (e *Engine) DedupeProjects(ctx context.Context, max int) int {
 		if !keepA {
 			keep, drop = c.b, c.a
 		}
-		// A project named or tagged by hand stays: the other one goes into it.
-		if drop.Locked && !keep.Locked {
-			keep, drop = drop, keep
-		}
 		if err := e.MergeProjects(keep.Slug, drop.Slug, "去重 · "+reason); err != nil {
 			e.logf("dedupe merge %s → %s: %v", drop.Slug, keep.Slug, err)
 			continue
@@ -220,6 +216,14 @@ func (e *Engine) judgeDuplicate(ctx context.Context, c dedupeCandidate) (same, k
 // that named drop name keep. drop stays on disk as merged (merged_into), hidden from lists, so it can be undone by
 // hand. keep is marked dirty: its profile is rewritten from both.
 func (e *Engine) MergeProjects(keepSlug, dropSlug, why string) error {
+	e.Store.applyMu.Lock()
+	defer e.Store.applyMu.Unlock()
+	return e.mergeProjects(keepSlug, dropSlug, why, false)
+}
+
+func protectedProject(p *Project) bool { return p.Pinned != "" || p.Locked || len(p.LockedFields) > 0 }
+
+func (e *Engine) mergeProjects(keepSlug, dropSlug, why string, manual bool) error {
 	if keepSlug == dropSlug {
 		return errors.New("a project cannot be merged into itself")
 	}
@@ -230,6 +234,30 @@ func (e *Engine) MergeProjects(keepSlug, dropSlug, why string) error {
 	drop, ok := e.Store.Project(dropSlug)
 	if !ok || !drop.Live() {
 		return fmt.Errorf("%s: %w", dropSlug, ErrNotFound)
+	}
+	if !manual {
+		if protectedProject(keep) || protectedProject(drop) {
+			return errors.New("automatic merge would change a protected project")
+		}
+		for _, id := range drop.Chats {
+			if c, ok := e.Store.Chat(id); ok && c.fieldLocked("projects") {
+				return errors.New("automatic merge would change protected chat relationships")
+			}
+		}
+		for _, id := range drop.People {
+			if p, ok := e.Store.Person(id); ok && p.fieldLocked("projects") {
+				return errors.New("automatic merge would change protected person relationships")
+			}
+		}
+		for _, ref := range drop.Items {
+			kind, id, ok := strings.Cut(ref, "/")
+			if !ok {
+				continue
+			}
+			if it, ok := e.Store.Item(kind, id); ok && it.fieldLocked("projects") {
+				return errors.New("automatic merge would change protected item relationships")
+			}
+		}
 	}
 	for _, a := range append([]string{drop.Name}, drop.Aliases...) {
 		if a = strings.TrimSpace(a); a != "" && normName(a) != normName(keep.Name) {
@@ -268,17 +296,34 @@ func (e *Engine) MergeProjects(keepSlug, dropSlug, why string) error {
 	if drop.Created.Before(keep.Created) {
 		keep.Created = drop.Created
 	}
+	var mergedSummary string
+	if manual {
+		// The target keeps its identity and scalar priorities. The merged source remains readable with its original
+		// protected metadata, while both sets of confirmed facts remain visible on the target.
+		if keep.Pinned == "" {
+			keep.Pinned = drop.Pinned
+		} else if drop.Pinned != "" && drop.Pinned != keep.Pinned {
+			keep.Pinned += "\n\n" + drop.Pinned
+		}
+		keep.LockedFields = addUnique(keep.LockedFields, drop.LockedFields...)
+		keep.Locked = keep.Locked || drop.Locked
+		if e.Store.Summary(KindProject, keep.Slug) == "" {
+			mergedSummary = e.Store.Summary(KindProject, drop.Slug)
+		}
+	}
 	if err := e.mergeLogs(keep.Slug, drop.Slug); err != nil {
 		return err
 	}
 	_ = e.Store.AppendLog(keep.Slug, time.Now(), "Persona", fmt.Sprintf("合并了项目「%s」（%s）", drop.Name, why))
 	keep.Dirty = true
-	if err := e.Store.PutProject(keep); err != nil {
+	keep.Updated = time.Now().UTC()
+	if err := e.Store.putEntity(KindProject, keep.Slug, keep, &keep.Tagging, manual); err != nil {
 		return err
 	}
-	drop.Status, drop.MergedInto, drop.Dirty = "merged", keep.Slug, false
-	if err := e.Store.PutProject(drop); err != nil {
-		return err
+	if mergedSummary != "" {
+		if err := e.Store.putSummary(KindProject, keep.Slug, mergedSummary, true); err != nil {
+			return err
+		}
 	}
 	// Who named drop names keep.
 	swap := func(list []string) ([]string, bool) {
@@ -296,7 +341,9 @@ func (e *Engine) MergeProjects(keepSlug, dropSlug, why string) error {
 		if c, ok := e.Store.Chat(id); ok {
 			if l, ch := swap(c.Projects); ch {
 				c.Projects = l
-				_ = e.Store.PutChat(c)
+				if err := e.Store.putEntity(KindChat, c.ID, c, &c.Tagging, manual); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -304,7 +351,9 @@ func (e *Engine) MergeProjects(keepSlug, dropSlug, why string) error {
 		if p, ok := e.Store.Person(id); ok {
 			if l, ch := swap(p.Projects); ch {
 				p.Projects = l
-				_ = e.Store.PutPerson(p)
+				if err := e.Store.putEntity(KindPerson, p.ID, p, &p.Tagging, manual); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -316,9 +365,16 @@ func (e *Engine) MergeProjects(keepSlug, dropSlug, why string) error {
 		if it, ok := e.Store.Item(kind, id); ok {
 			if l, ch := swap(it.Projects); ch {
 				it.Projects = l
-				_ = e.Store.PutItem(it)
+				if err := e.Store.putEntity(it.Kind, it.ID, it, &it.Tagging, manual); err != nil {
+					return err
+				}
 			}
 		}
+	}
+	drop.Status, drop.MergedInto, drop.Dirty = "merged", keep.Slug, false
+	drop.Updated = time.Now().UTC()
+	if err := e.Store.putEntity(KindProject, drop.Slug, drop, &drop.Tagging, manual); err != nil {
+		return err
 	}
 	e.index(KindProject, keep.Slug, keep.Name, keep.Tagging, keep.OneLine, keep.Updated)
 	return nil

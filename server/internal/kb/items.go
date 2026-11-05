@@ -97,7 +97,7 @@ func (e *Engine) TagItems(ctx context.Context) error {
 			if c, ok := e.Store.Chat(it.Where); ok {
 				where = c.Name
 			}
-			in.Items = append(in.Items, prompts.KBItem{Key: key, Kind: it.Kind, Title: it.Title, At: at, Where: where})
+			in.Items = append(in.Items, prompts.KBItem{Pinned: it.Pinned, Key: key, Kind: it.Kind, Title: it.Title, At: at, Where: where})
 		}
 		var out itemTags
 		cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)

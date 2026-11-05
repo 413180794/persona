@@ -288,6 +288,60 @@ func (r *Registry) Get(id string) *Extension {
 	return r.extensions[id]
 }
 
+// Snapshot is an extension's stable state for one process specification. Parsed manifests, schemas and legacy
+// configuration are immutable and shared; the mutable record and its slices are copied under the registry lock.
+func (r *Registry) Snapshot(id string) *Extension {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p := r.extensions[id]
+	if p == nil {
+		return nil
+	}
+	out := *p
+	out.Record.Manifest = slices.Clone(p.Record.Manifest)
+	out.Record.Config = slices.Clone(p.Record.Config)
+	out.Record.Granted.Network = slices.Clone(p.Record.Granted.Network)
+	out.Record.Granted.Hub = slices.Clone(p.Record.Granted.Hub)
+	out.Record.DisabledContributions = slices.Clone(p.Record.DisabledContributions)
+	if p.Record.Remote != nil {
+		remote := *p.Record.Remote
+		out.Record.Remote = &remote
+	}
+	out.Warnings = slices.Clone(p.Warnings)
+	return &out
+}
+
+// HubScopeAllowed checks the live permission record while holding the registry lock. Callers must not read the
+// pointer returned by Get to authorize a request: SetEnabled can change its record concurrently.
+func (r *Registry) HubScopeAllowed(id, scope string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p := r.extensions[id]
+	return p != nil && p.Record.Enabled && p.Problem == "" &&
+		(p.Record.Granted.FullHub() || slices.Contains(p.Record.Granted.Hub, scope))
+}
+
+// EventSubscribers snapshots the enabled, compatible extensions subscribed to topic. A nonempty scope additionally
+// requires that actual grant (or the legacy full-hub grant); an empty scope preserves the other event topics' rules.
+func (r *Registry) EventSubscribers(topic, scope string) []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ids := []string{}
+	for id, p := range r.extensions {
+		if !p.Record.Enabled || p.Problem != "" || p.Manifest == nil {
+			continue
+		}
+		if scope != "" && !p.Record.Granted.FullHub() && !slices.Contains(p.Record.Granted.Hub, scope) {
+			continue
+		}
+		if slices.Contains(p.Manifest.Topics(), topic) {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
 // Preview is a staged package (or a remote plugin) and what installing it means, shown before the user agrees.
 type Preview struct {
 	ID          string           `json:"preview_id"`

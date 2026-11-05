@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -48,12 +49,16 @@ type Source interface {
 
 // Engine runs the pipeline: archive, compress, evolve, tag, prune (docs/knowledge.md).
 type Engine struct {
-	Store    *Store
-	Sources  []Source
-	Model    Model
-	ModelFor func(string) Model
-	Owner    string // how the owner is called (the AI writes "我" for them)
-	Logf     func(string, ...any)
+	// Changed is installed on Store by ObserveChanges before the pipeline starts.
+	Changed func(Change)
+	// MineObserved reports only owner identity metadata, never message contents.
+	MineObserved func(source, name string, handles []Handle)
+	Store        *Store
+	Sources      []Source
+	Model        Model
+	ModelFor     func(string) Model
+	Owner        string // how the owner is called (the AI writes "我" for them)
+	Logf         func(string, ...any)
 	// ExtraDirs are directories outside the data dir that Search also reads (Markdown files, read only): notes the
 	// user keeps elsewhere, e.g. a git repository of facts. Absolute paths.
 	ExtraDirs []string
@@ -273,7 +278,17 @@ func extOf(media, typ string) string {
 
 // notePerson links the sender and the chat both ways.
 func (e *Engine) notePerson(c *Chat, source string, m SourceMessage) {
-	if m.Mine || m.SenderID == "" {
+	if m.Mine {
+		if e.MineObserved != nil {
+			handles := slices.Clone(m.SenderHandles)
+			if m.SenderID != "" {
+				handles = append(handles, Handle{Kind: source, Value: m.SenderID})
+			}
+			e.MineObserved(source, m.SenderName, handles)
+		}
+		return
+	}
+	if m.SenderID == "" {
 		return
 	}
 	pid := PersonID(source, m.SenderID)

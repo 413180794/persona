@@ -38,6 +38,11 @@ type Tagging struct {
 	Tags       []string  `json:"tags,omitempty"`
 	Locked     bool      `json:"locked,omitempty"`
 	TaggedAt   time.Time `json:"tagged_at,omitempty"`
+	// Pinned contains confirmed facts; pipeline writes cannot replace or clear it.
+	Pinned string `json:"pinned,omitempty"`
+	// LockedFields names update fields that automatic writes must preserve.
+	LockedFields []string `json:"locked_fields,omitempty"`
+	persisted    bool
 }
 
 // Chat is one conversation: a Feishu chat (lark-<feedId>) or the mail exchanged with one address (mail-<account>-<addr>).
@@ -132,9 +137,13 @@ type Item struct {
 
 // Store reads and writes the data dir. Writes of one entity are serialized; files are replaced atomically.
 type Store struct {
-	Dir  string
-	mu   sync.Mutex
-	zone *time.Location // the user's zone, the archive's days and times are written in (zone.go); nil: time.Local
+	Dir       string
+	mu        sync.Mutex
+	metaMu    sync.Mutex
+	applyMu   sync.Mutex
+	observeMu sync.RWMutex
+	changed   func(Change)
+	zone      *time.Location // the user's zone, the archive's days and times are written in (zone.go); nil: time.Local
 	// settled: the zone every file was last moved into without an error (Rezone skips the walk while it holds).
 	settled string
 }
@@ -214,10 +223,11 @@ func (s *Store) Chat(id string) (*Chat, bool) {
 	if !ok || err != nil {
 		return nil, false
 	}
+	c.persisted = true
 	return &c, true
 }
 
-func (s *Store) PutChat(c *Chat) error { return writeJSON(s.path(KindChat, c.ID, "meta.json"), c) }
+func (s *Store) PutChat(c *Chat) error { return s.putEntity(KindChat, c.ID, c, &c.Tagging, false) }
 
 func (s *Store) Person(id string) (*Person, bool) {
 	var p Person
@@ -225,11 +235,12 @@ func (s *Store) Person(id string) (*Person, bool) {
 	if !ok || err != nil {
 		return nil, false
 	}
+	p.persisted = true
 	return &p, true
 }
 
 func (s *Store) PutPerson(p *Person) error {
-	return writeJSON(s.path(KindPerson, p.ID, "meta.json"), p)
+	return s.putEntity(KindPerson, p.ID, p, &p.Tagging, false)
 }
 
 func (s *Store) Project(slug string) (*Project, bool) {
@@ -238,12 +249,13 @@ func (s *Store) Project(slug string) (*Project, bool) {
 	if !ok || err != nil {
 		return nil, false
 	}
+	p.persisted = true
 	return &p, true
 }
 
 func (s *Store) PutProject(p *Project) error {
 	p.Updated = time.Now().UTC()
-	return writeJSON(s.path(KindProject, p.Slug, "meta.json"), p)
+	return s.putEntity(KindProject, p.Slug, p, &p.Tagging, false)
 }
 
 func (s *Store) Item(kind, id string) (*Item, bool) {
@@ -252,11 +264,12 @@ func (s *Store) Item(kind, id string) (*Item, bool) {
 	if !ok || err != nil {
 		return nil, false
 	}
+	it.persisted = true
 	return &it, true
 }
 
 func (s *Store) PutItem(it *Item) error {
-	return writeJSON(filepath.Join(s.Dir, it.Kind, SafeID(it.ID)+".json"), it)
+	return s.putEntity(it.Kind, it.ID, it, &it.Tagging, false)
 }
 
 // IDs lists the entities of a kind (directory names, or file names without .json for items).
@@ -324,13 +337,18 @@ func (s *Store) Summary(kind, id string) string {
 }
 
 func (s *Store) PutSummary(kind, id, text string) error {
-	return writeFile(s.path(kind, id, "summary.md"), []byte(strings.TrimSpace(text)+"\n"))
+	return s.putSummary(kind, id, text, false)
 }
 
 // AppendLog adds a line to a project's timeline (its time in the archive's zone).
-func (s *Store) AppendLog(slug string, at time.Time, source, line string) error {
+func (s *Store) AppendLog(slug string, at time.Time, source, line string) (err error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	defer func() {
+		s.mu.Unlock()
+		if err == nil {
+			s.notify(KindProject, slug, "log")
+		}
+	}()
 	if _, err := s.settleLogLocked(slug); err != nil {
 		return err
 	}
@@ -392,7 +410,13 @@ func (l Line) Format(zone *time.Location) string {
 // AppendMessages writes lines to their day files (messages/YYYY-MM-DD.md, in the archive's zone).
 func (s *Store) AppendMessages(c *Chat, lines []Line) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	written := false
+	defer func() {
+		s.mu.Unlock()
+		if written {
+			s.notify(KindChat, c.ID, "messages")
+		}
+	}()
 	if _, err := s.settleChatLocked(c.ID); err != nil {
 		return err
 	}
@@ -403,6 +427,7 @@ func (s *Store) AppendMessages(c *Chat, lines []Line) error {
 		if err := appendFile(s.path(KindChat, c.ID, "messages", day+".md"), header, l.Format(zone)); err != nil {
 			return err
 		}
+		written = true
 	}
 	return nil
 }

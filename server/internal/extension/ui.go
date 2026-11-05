@@ -214,6 +214,8 @@ type EventsItem struct {
 // Events this hub has.
 var (
 	EventTopics = map[string]string{
+		"kb.changed":      "知识库里的条目有变化（类型、标识、变化部分；需读知识库权限）",
+		"kb.forgotten":    "知识库删除了一个来源的数据（来源；需读知识库权限）",
 		"inbox.changed":   "收件箱里有新的或更新了的条目（来源、种类、标题）",
 		"agent.needs_you": "有 Agent 在等你回答或批准（哪台电脑、哪个会话、问的什么）",
 		"agent.finished":  "有 Agent 做完了（哪台电脑、哪个会话、标题）",

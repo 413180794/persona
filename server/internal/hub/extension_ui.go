@@ -559,18 +559,12 @@ func (ps *extensions) emit(topic string, payload map[string]any) {
 	if ps == nil {
 		return
 	}
-	for _, p := range ps.reg.List() {
-		if !p.Record.Enabled || p.Problem != "" {
-			continue
-		}
-		subscribed := false
-		for _, t := range p.Manifest.Topics() {
-			subscribed = subscribed || t == topic
-		}
-		if !subscribed {
-			continue
-		}
-		if hp := ps.get(p.Record.ID); hp != nil && hp.proc != nil {
+	var scope string
+	if topic == "kb.changed" || topic == "kb.forgotten" {
+		scope = extension.ScopeKBRead
+	}
+	for _, id := range ps.reg.EventSubscribers(topic, scope) {
+		if hp := ps.get(id); hp != nil && hp.proc != nil {
 			_ = hp.proc.Notify("event."+topic, payload)
 		}
 	}

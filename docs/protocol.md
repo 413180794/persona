@@ -1201,6 +1201,10 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 两边共用的只有消息的类型、方法名、错误码和助手的路由表（`server/internal/assistantwire`），以及写字用的几个小函数（`server/internal/textfmt`）。方法和参数的意思见 `docs/assistant.md`「和 hub 的边界」；
 `app.call` 的交互队列、收件箱的方法（`interactions.answer`、`inbox.draft`…）只收发数据，用它们的工具（`interaction_answer`、`inbox_draft`）的规则和文字在助手。
 知识库 2026-11-04 起是助手的（`docs/knowledge.md`「谁管什么」）：hub 只给来源（`app.call connectors.*`），它自己的功能要读知识库时问助手（`kb.*`）。
+扩展也可经自己的 RPC 调用六个公开知识库方法（#1908）：hub 先检查实际获准的 `kb.read` / `kb.write`，再代问助手，
+并不是恢复助手旧的 `app.call kb.*` 工具链。字段、分页和权限见 [扩展文档](extensions.md#知识库-rpc1908)。
+助手用 `app.call connectors.owner {}` 获取最小的本人来源元数据 `{sources:[{source,handles:[{kind,value}]}]}`，当前由 hub 提供已配置邮箱地址，不返回账户凭据。
+助手的专用单向事件 `kb.changed {kind,id,what}`、`kb.forgotten {source}` 只由当前助手连接发送；hub 仅给获准 `kb.read` 的扩展订阅者转成 `event.kb.*`，不广播给 App。
 
 - 助手 → hub：`device.call`、`app.call` → 结果原样；`notify.request {notification}` → `{ok:true}`；`manager.snapshot` → `{ok,seq}`（快照带 `profile`：助手的设置里 hub 自己的功能要用的，hub 留最后一份）；单向事件 `ws.broadcast`（见下）。
   2026-11-04 加的：`device.call` 交给 node 的 `assistant.prepare`、`assistant.warm`、`assistant.memory`、`assistant.compact`、`assistant.handoff`、`launchers.list`、`launchers.probe`（`devices.list` 多了 `kind`、`data_dir`），去掉 hub 自己答的 `assistant.start`；

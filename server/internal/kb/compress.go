@@ -68,6 +68,11 @@ func (e *Engine) DueForCompression(now time.Time) []*Chat {
 
 // Compress folds a chat's new messages into its summary and tags, then evolves the projects and people it mentions.
 func (e *Engine) Compress(ctx context.Context, c *Chat) error {
+	current, ok := e.Store.Chat(c.ID)
+	if !ok {
+		return nil
+	}
+	c = current
 	if e.Model == nil {
 		return nil
 	}
@@ -87,7 +92,7 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 		return e.Store.PutChat(c)
 	}
 	in := prompts.RenderKBCompressInput(prompts.KBCompressInput{Name: c.Name, Kind: c.Kind, Automated: c.Kind == "mail" && !HasPeople(c),
-		Projects: e.knownProjects(), Tags: e.TopTags(40), Summary: e.Store.Summary(KindChat, c.ID), News: news})
+		Pinned: c.Pinned, People: e.pinnedPeople(c.People), Projects: e.knownProjects(), Tags: e.TopTags(40), Summary: e.Store.Summary(KindChat, c.ID), News: news})
 
 	var d chatDigest
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
@@ -296,7 +301,7 @@ func (e *Engine) knownProjects() []prompts.KnownProject {
 		}
 		// With its one line: names alone made the model start a second project for the same work under the name
 		// of the group it was reading (2026-11-01, SS codex 方案 / SS 支持单 agent 多 Session 窗口).
-		out = append(out, prompts.KnownProject{Name: p.Name, Aliases: p.Aliases, OneLine: p.OneLine})
+		out = append(out, prompts.KnownProject{Name: p.Name, Aliases: p.Aliases, OneLine: p.OneLine, Pinned: p.Pinned})
 	}
 	return out
 }
@@ -401,7 +406,23 @@ func (e *Engine) RefreshProjects(ctx context.Context, max int) int {
 }
 
 func (e *Engine) refreshProject(ctx context.Context, p *Project) error {
-	in := prompts.KBProjectInput{Name: p.Name, Kind: p.Kind, Aliases: p.Aliases, Tags: e.TopTags(40),
+	current, ok := e.Store.Project(p.Slug)
+	if !ok {
+		return nil
+	}
+	p = current
+	in := e.projectInput(p)
+	var d projectDigest
+	cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+	if err := e.modelFor("kb.project").JSONMax(cctx, prompts.RenderKBProject(prompts.KBOwner{Owner: e.Owner}), prompts.RenderKBProjectInput(in), 8000, &d); err != nil {
+		return err
+	}
+	return e.commitProject(p, in, d)
+}
+
+func (e *Engine) projectInput(p *Project) prompts.KBProjectInput {
+	in := prompts.KBProjectInput{Pinned: p.Pinned, Name: p.Name, Kind: p.Kind, Aliases: p.Aliases, Tags: e.TopTags(40),
 		Summary: e.Store.Summary(KindProject, p.Slug), Log: e.Store.Log(p.Slug, 40)}
 	for i, cid := range p.Chats {
 		if i >= 8 {
@@ -414,38 +435,7 @@ func (e *Engine) refreshProject(ctx context.Context, p *Project) error {
 		in.Chats = append(in.Chats, prompts.KBProjectChat{ID: cid, Summary: sum})
 	}
 	in.Moments = e.projectMomentsForPrompt(p, 5)
-	var d projectDigest
-	cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-	defer cancel()
-	if err := e.modelFor("kb.project").JSONMax(cctx, prompts.RenderKBProject(prompts.KBOwner{Owner: e.Owner}), prompts.RenderKBProjectInput(in), 8000, &d); err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	if strings.TrimSpace(d.Summary) != "" {
-		if err := e.Store.PutSummary(KindProject, p.Slug, "# "+p.Name+"\n\n"+d.Summary); err != nil {
-			return err
-		}
-	}
-	p.OneLine = oneLine(d.OneLine)
-	if d.Goal != "" {
-		p.Goal = oneLine(d.Goal)
-	}
-	if d.Kind == "short" || d.Kind == "long" {
-		p.Kind = d.Kind
-	}
-	if (d.Status == "active" || d.Status == "paused" || d.Status == "done") && p.Status != "ignored" {
-		p.Status = d.Status
-	}
-	applyTags(&p.Tagging, d.Importance, d.Relevance, d.Tags, now)
-	if kw := cleanKeywords(d.Keywords); len(kw) > 0 {
-		p.Keywords = kw
-	}
-	p.Dirty = false
-	if err := e.Store.PutProject(p); err != nil {
-		return err
-	}
-	e.index(KindProject, p.Slug, p.Name, p.Tagging, p.OneLine, p.Updated)
-	return nil
+	return in
 }
 
 // --- people ---
@@ -474,6 +464,9 @@ func (e *Engine) WritePersonSummary(pid string) {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", p.Name)
+	if p.Pinned != "" {
+		fmt.Fprintf(&b, "## 已确认的事实\n%s\n\n", p.Pinned)
+	}
 	if p.Note != "" {
 		fmt.Fprintf(&b, "%s\n\n", p.Note)
 	}

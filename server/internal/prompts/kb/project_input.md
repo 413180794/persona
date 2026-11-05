@@ -4,7 +4,10 @@
 
 # 已有档案
 {{if blank .Summary}}（还没有）{{else}}{{.Summary}}{{end}}
-
+{{with .Pinned}}
+# 已确认的事实（只读，以此为准，不得改写）
+{{.}}
+{{end}}
 # 最近的时间线
 {{join .Log "\n"}}
 
