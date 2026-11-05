@@ -3,10 +3,12 @@ package persona.feature.inbox
 import persona.core.contracts.api.MailAddress
 import persona.core.contracts.api.MailMessage
 import persona.core.contracts.api.SendMailRequest
+import android.content.res.Resources
+import persona.core.designsystem.LocalizedFormats
 import java.net.URLDecoder
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /** A mail being written (写邮件 / 回复 / 转发): addresses as typed, the quote already in [body]. */
 data class MailDraft(
@@ -20,11 +22,11 @@ data class MailDraft(
     val references: List<String> = emptyList(),
 ) {
     /** The page's title. */
-    val title: String
+    @get:androidx.annotation.StringRes val title: Int
         get() = when {
-            inReplyTo != null -> "回复"
-            subject.startsWith("Fwd:") -> "转发"
-            else -> "写邮件"
+            inReplyTo != null -> R.string.inbox_mail_reply
+            subject.startsWith("Fwd:") -> R.string.inbox_mail_forward
+            else -> R.string.inbox_mail_new
         }
 }
 
@@ -34,8 +36,6 @@ data class MailDraft(
 object MailCompose {
     /** How many lines of the original a reply quotes (the hub's /reply quotes the same 40). */
     const val QUOTE_LINES = 40
-
-    private val DATE = DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm")
 
     /**
      * Addresses typed into 收件人 / 抄送 / 密送: split on commas, semicolons (half and full width) and new lines;
@@ -77,20 +77,22 @@ object MailCompose {
     fun replySubject(subject: String?): String {
         val s = subject.orEmpty().trim()
         val l = s.lowercase()
-        return if (l.startsWith("re:") || l.startsWith("re：") || s.startsWith("回复：") || s.startsWith("回复:")) s else "Re: $s"
+        return if (l.startsWith("re:") || l.startsWith("re：") || s.startsWith("回复：") || s.startsWith("回复:")) s else "Re: $s" // i18n-ignore: matches subjects other clients wrote
     }
 
     fun forwardSubject(subject: String?): String {
         val s = subject.orEmpty().trim()
         val l = s.lowercase()
-        return if (l.startsWith("fwd:") || l.startsWith("fw:") || s.startsWith("转发：") || s.startsWith("转发:")) s else "Fwd: $s"
+        return if (l.startsWith("fwd:") || l.startsWith("fw:") || s.startsWith("转发：") || s.startsWith("转发:")) s else "Fwd: $s" // i18n-ignore: matches subjects other clients wrote
     }
 
     /** The References header of a reply: the original's chain plus its own Message-ID, without duplicates. */
     fun replyReferences(original: MailMessage): List<String> =
         (original.references + listOfNotNull(original.messageId.takeIf { it.isNotBlank() })).distinct()
 
-    fun formatDate(t: Instant?, zone: ZoneId = ZoneId.systemDefault()): String = t?.atZone(zone)?.format(DATE).orEmpty()
+    /** A full date and time in [locale]'s own order (2026年11月4日 18:00 · Nov 4, 2026, 6:00 PM). */
+    fun formatDate(t: Instant?, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String =
+        t?.let { LocalizedFormats.format(it, LocalizedFormats.DATE_TIME, locale, zone) }.orEmpty()
 
     /** The original's text for quoting / forwarding: plain text, or the HTML reduced to text. */
     fun plainText(m: MailMessage): String =
@@ -103,20 +105,29 @@ object MailCompose {
         null
     }
 
-    /** 「\n\n<date>，<sender> 写道：\n> …」 (first [QUOTE_LINES] lines). */
-    fun quote(m: MailMessage, zone: ZoneId = ZoneId.systemDefault()): String {
+    /**
+     * 「\n\n<date>，<sender> 写道：\n> …」 (first [QUOTE_LINES] lines), in the language of [res]: it goes into the mail
+     * the user sends.
+     */
+    fun quote(res: Resources, m: MailMessage, zone: ZoneId = ZoneId.systemDefault()): String {
         val lines = plainText(m).trimEnd().split('\n').take(QUOTE_LINES).joinToString("\n") { "> $it" }
         val who = m.from.display()
         val instant = parseDate(m.date)
-        val date = if (instant != null) formatDate(instant, zone) else m.date
-        return "\n\n" + listOf(date, who).filter { it.isNotBlank() }.joinToString("，") + " 写道：\n" + lines
+        val date = if (instant != null) formatDate(instant, res.mailLocale, zone) else m.date
+        val known = listOf(date, who).filter { it.isNotBlank() }
+        val line = when (known.size) {
+            2 -> res.getString(R.string.inbox_mail_quote_both, date, who)
+            1 -> res.getString(R.string.inbox_mail_quote_one, known[0])
+            else -> res.getString(R.string.inbox_mail_quote_none)
+        }
+        return "\n\n" + line + "\n" + lines
     }
 
     /**
      * 回复 / 回复全部. [me] = the receiving account's address (left out of reply-all). Reply-all sends to the sender plus
      * the original 收件人, and copies the original 抄送.
      */
-    fun reply(m: MailMessage, accountId: String, me: String?, all: Boolean, zone: ZoneId = ZoneId.systemDefault()): MailDraft {
+    fun reply(res: Resources, m: MailMessage, accountId: String, me: String?, all: Boolean, zone: ZoneId = ZoneId.systemDefault()): MailDraft {
         val mine = me?.lowercase()?.trim()
         val sender = listOfNotNull(m.from.takeIf { it.email.isNotBlank() })
         var to = sender
@@ -134,23 +145,24 @@ object MailCompose {
             to = formatAddresses(to),
             cc = formatAddresses(cc),
             subject = replySubject(m.subject),
-            body = quote(m, zone),
+            body = quote(res, m, zone),
             inReplyTo = m.messageId.takeIf { it.isNotBlank() },
             references = replyReferences(m),
         )
     }
 
     /** 转发: no recipients, the original's header block and full text below. */
-    fun forward(m: MailMessage, accountId: String, zone: ZoneId = ZoneId.systemDefault()): MailDraft {
+    fun forward(res: Resources, m: MailMessage, accountId: String, zone: ZoneId = ZoneId.systemDefault()): MailDraft {
         val instant = parseDate(m.date)
-        val dateText = if (instant != null) formatDate(instant, zone) else m.date
+        val dateText = if (instant != null) formatDate(instant, res.mailLocale, zone) else m.date
+        fun line(label: Int, value: String) = res.getString(R.string.inbox_mail_header_line, res.getString(label), value) + "\n"
         val head = buildString {
-            append("\n\n---------- 转发的邮件 ----------\n")
-            if (m.from.email.isNotBlank()) append("发件人：").append(formatAddresses(listOf(m.from))).append('\n')
-            if (dateText.isNotBlank()) append("日期：").append(dateText).append('\n')
-            append("主题：").append(m.subject).append('\n')
-            if (m.to.isNotEmpty()) append("收件人：").append(formatAddresses(m.to)).append('\n')
-            if (m.cc.isNotEmpty()) append("抄送：").append(formatAddresses(m.cc)).append('\n')
+            append("\n\n").append(res.getString(R.string.inbox_mail_forward_header)).append('\n')
+            if (m.from.email.isNotBlank()) append(line(R.string.inbox_mail_from, formatAddresses(listOf(m.from))))
+            if (dateText.isNotBlank()) append(line(R.string.inbox_mail_date, dateText))
+            append(line(R.string.inbox_mail_subject, m.subject))
+            if (m.to.isNotEmpty()) append(line(R.string.inbox_mail_to, formatAddresses(m.to)))
+            if (m.cc.isNotEmpty()) append(line(R.string.inbox_mail_cc, formatAddresses(m.cc)))
             append('\n')
         }
         return MailDraft(
@@ -228,3 +240,6 @@ object MailCompose {
         references = draft.references.takeIf { it.isNotEmpty() }?.joinToString(" "),
     )
 }
+
+/** The language [this]'s text is in; dates in a mail use it. */
+internal val Resources.mailLocale: Locale get() = configuration.locales[0]

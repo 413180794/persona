@@ -1,5 +1,7 @@
 package persona.feature.inbox
 
+import android.content.res.Resources
+
 import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.api.InboxActionsTransport
 import kotlinx.coroutines.*
@@ -19,6 +21,8 @@ class InboxExperienceRepository(
     private val ownerScope: CoroutineScope,
     private val sendToPersona: suspend (itemId: String, action: InboxAiAction, context: String) -> Unit,
     invalidations: Flow<Unit> = emptyFlow(),
+    /** The app's strings, for the errors the snapshot carries. */
+    private val resources: Resources,
 ) : InboxRepository by delegate {
     private val json = Json { ignoreUnknownKeys = true }
     private val lock = Mutex()
@@ -51,7 +55,7 @@ class InboxExperienceRepository(
                     refreshes = value.refreshes
                 }
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { current.update { it.copy(loading = false, error = "本地收件箱读取失败，请重新打开") } }
+            catch (_: Exception) { current.update { it.copy(loading = false, error = resources.getString(R.string.inbox_local_read_failed)) } }
         }
         ownerScope.launch {
             ready.await()
@@ -62,7 +66,7 @@ class InboxExperienceRepository(
                         verifyReply(it.target, it.request.clientId)
                     }
                 } catch (e: CancellationException) { throw e }
-                catch (_: Exception) { current.update { it.copy(loading = false, error = "同步未完成，已保留本地内容") } }
+                catch (_: Exception) { current.update { it.copy(loading = false, error = resources.getString(R.string.inbox_sync_incomplete)) } }
             }
         }
     }
@@ -80,8 +84,8 @@ class InboxExperienceRepository(
         val pending = local.value.replies.values.lastOrNull { it.target.localKey() in keys && it.delivery != ReplyDelivery.Sent }
         val draft = keys.firstNotNullOfOrNull { local.value.drafts[it]?.text?.takeIf(String::isNotBlank) }
         record.copy(localStatus = when {
-            pending != null -> "结果待确认 · 打开核对"
-            draft != null -> "草稿 · $draft"
+            pending != null -> LOCAL_UNCONFIRMED
+            draft != null -> LOCAL_DRAFT + draft
             local.value.replies.values.any { it.target.localKey() in keys } -> null
             else -> record.localStatus
         })

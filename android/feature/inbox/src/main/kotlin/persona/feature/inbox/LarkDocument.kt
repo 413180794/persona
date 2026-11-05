@@ -81,11 +81,11 @@ fun parseLarkDocument(data: JsonObject): LarkDocument {
                 visit(child, level + 1, if (index == 0) marker else "")
             }
             "horizontalRule" -> out += LarkDocumentBlock("divider")
-            else -> out += LarkDocumentBlock("unsupported", plain(n).ifBlank { "此内容块暂不支持显示，可切换网页查看" })
+            else -> out += LarkDocumentBlock("unsupported", plain(n))
         }
     }
     visit(root)
     val authority = data["authority"] as? JsonObject
-    return LarkDocument(data.text("title").ifBlank { "飞书文档" }, out, data.flag("partial"),
+    return LarkDocument(data.text("title"), out, data.flag("partial"),
         (authority?.get("copy") as? JsonPrimitive)?.booleanOrNull != false)
 }

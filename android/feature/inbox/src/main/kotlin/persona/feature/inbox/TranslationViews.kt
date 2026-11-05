@@ -1,5 +1,7 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -35,15 +37,15 @@ internal fun MailTranslationBar(target: String, translating: Boolean, translated
         translating -> Row(modifier, verticalAlignment = Alignment.CenterVertically) {
             JSpinner(Modifier.size(Tokens.Space.m))
             Spacer(Modifier.width(Tokens.Space.s))
-            Text("正在翻译成$language…", style = PersonaTheme.type.caption, color = palette.ink3, maxLines = 1)
+            Text(stringResource(R.string.inbox_translating, language), style = PersonaTheme.type.caption, color = palette.ink3, maxLines = 1)
         }
         translated -> Row(modifier, verticalAlignment = Alignment.CenterVertically) {
             JIcon(PhIcons.Translate, null, size = Tokens.Space.l, tint = palette.ink3, decorative = true)
             Spacer(Modifier.width(Tokens.Space.xs))
-            Text(if (showingOriginal) "原文" else "已翻译成$language", Modifier.weight(1f, fill = false),
+            Text(if (showingOriginal) stringResource(R.string.inbox_translation_original) else stringResource(R.string.inbox_translated_into, language), Modifier.weight(1f, fill = false),
                 style = PersonaTheme.type.caption, color = palette.ink3, maxLines = 1)
             Spacer(Modifier.width(Tokens.Space.xs))
-            JTextButton(if (showingOriginal) "显示译文" else "显示原文", onToggle)
+            JTextButton(stringResource(if (showingOriginal) R.string.inbox_show_translation else R.string.inbox_show_original), onToggle)
         }
         error != null -> Row(modifier, verticalAlignment = Alignment.CenterVertically) {
             JIcon(PhIcons.WarningCircle, null, size = Tokens.Space.l, tint = palette.ink3, decorative = true)
@@ -71,7 +73,7 @@ internal fun LarkTranslationLine(message: LarkMessage, feedId: String?) {
     }.collectAsStateWithLifecycle(translator.translation(text, prefs.target))
     val shown = translation ?: return
     Row(verticalAlignment = Alignment.Top) {
-        JIcon(PhIcons.Translate, "译文", size = Tokens.Space.l, tint = PersonaTheme.palette.ink3)
+        JIcon(PhIcons.Translate, stringResource(R.string.inbox_translation), size = Tokens.Space.l, tint = PersonaTheme.palette.ink3)
         Spacer(Modifier.width(Tokens.Space.xs))
         Text(shown, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
     }

@@ -1,5 +1,8 @@
 package persona.feature.inbox
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
@@ -7,7 +10,11 @@ import org.junit.Test
 import persona.core.contracts.LarkReaction
 import persona.core.contracts.api.InboxAssistantTransport
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class LarkAdvancedChatFeaturesTest {
+    /** The app's strings; Robolectric runs in 简体中文 (robolectric.properties). */
+    private val res get() = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources
     private fun json(value: String) = Json.parseToJsonElement(value).jsonObject
 
     private val fakeTransport = object : InboxAssistantTransport {
@@ -59,20 +66,20 @@ class LarkAdvancedChatFeaturesTest {
     @Test
     fun emojiHelperMapsSymbolsAndLabels() {
         assertEquals("👍", LarkEmojiHelper.symbol("THUMBSUP"))
-        assertEquals("赞", LarkEmojiHelper.label("THUMBSUP"))
+        assertEquals("赞", LarkEmojiHelper.label(res, "THUMBSUP"))
 
         assertEquals("👌", LarkEmojiHelper.symbol("ok"))
-        assertEquals("OK", LarkEmojiHelper.label("ok"))
+        assertEquals("OK", LarkEmojiHelper.label(res, "ok"))
 
         assertEquals("❤️", LarkEmojiHelper.symbol("HEART"))
-        assertEquals("爱心", LarkEmojiHelper.label("HEART"))
+        assertEquals("爱心", LarkEmojiHelper.label(res, "HEART"))
 
         assertEquals("✅", LarkEmojiHelper.symbol("DONE"))
         assertEquals("+1", LarkEmojiHelper.symbol("JIAYI"))
 
         // Unknown fallback
         assertEquals("[CUSTOM_EMOJI]", LarkEmojiHelper.symbol("CUSTOM_EMOJI"))
-        assertEquals("CUSTOM_EMOJI", LarkEmojiHelper.label("CUSTOM_EMOJI"))
+        assertEquals("CUSTOM_EMOJI", LarkEmojiHelper.label(res, "CUSTOM_EMOJI"))
     }
 
     // --- 2. Rich Text Syntax Rendering (富文本语法渲染) ---
@@ -294,7 +301,7 @@ class LarkAdvancedChatFeaturesTest {
             ]
         }""")
 
-        val profile = parseProfile(profileJson, "默认名字")
+        val profile = parseProfile(res, profileJson, "默认名字")
         assertEquals("阿四", profile.displayName)
         assertEquals("Fourth Li", profile.enName)
         assertEquals("架构师阿四", profile.groupNickname)

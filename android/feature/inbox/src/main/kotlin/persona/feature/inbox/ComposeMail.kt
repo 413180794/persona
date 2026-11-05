@@ -1,5 +1,8 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -53,6 +56,7 @@ fun ComposeMailPage(
 ) {
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
+    val res = LocalResources.current
 
     var accounts by remember { mutableStateOf<List<MailAccount>>(emptyList()) }
     var accountId by rememberSaveable { mutableStateOf(draft.accountId) }
@@ -112,12 +116,12 @@ fun ComposeMailPage(
                     bcc = bcc,
                 )
                 transport.sendMail(req)
-                feedback?.notice("已发送")
+                feedback?.notice(res.getString(R.string.inbox_sent))
                 onDone()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "发送失败"
+                error = e.message ?: res.getString(R.string.inbox_mail_send_failed)
             } finally {
                 sending = false
             }
@@ -125,11 +129,11 @@ fun ComposeMailPage(
     }
 
     JListPage(
-        title = draft.title,
+        title = stringResource(draft.title),
         onBack = ::leave,
         actions = {
             JButton(
-                "发送",
+                stringResource(R.string.inbox_send),
                 onClick = ::send,
                 kind = JButtonKind.Primary,
                 size = JButtonSize.Small,
@@ -143,24 +147,24 @@ fun ComposeMailPage(
                 Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                     FromRow(accounts, accountId) { accountId = it }
                     JDivider()
-                    FieldRow("收件人", to, { to = it }, valid = MailCompose.fieldValid(to, required = true), email = true)
+                    FieldRow(stringResource(R.string.inbox_mail_to), to, { to = it }, valid = MailCompose.fieldValid(to, required = true), email = true)
                     JDivider()
                     FieldRow(
-                        label = "抄送",
+                        label = stringResource(R.string.inbox_mail_cc),
                         value = cc,
                         onValue = { cc = it },
                         valid = MailCompose.fieldValid(cc, required = false),
                         email = true,
                         trailing = if (!showBcc) ({
-                            JTextButton("密送", onClick = { showBcc = true })
+                            JTextButton(stringResource(R.string.inbox_mail_bcc), onClick = { showBcc = true })
                         }) else null,
                     )
                     if (showBcc) {
                         JDivider()
-                        FieldRow("密送", bcc, { bcc = it }, valid = MailCompose.fieldValid(bcc, required = false), email = true)
+                        FieldRow(stringResource(R.string.inbox_mail_bcc), bcc, { bcc = it }, valid = MailCompose.fieldValid(bcc, required = false), email = true)
                     }
                     JDivider()
-                    FieldRow("主题", subject, { subject = it }, valid = true, email = false)
+                    FieldRow(stringResource(R.string.inbox_mail_subject), subject, { subject = it }, valid = true, email = false)
                 }
             }
         }
@@ -178,7 +182,7 @@ fun ComposeMailPage(
                         .padding(Tokens.Space.m),
                 ) {
                     if (body.isEmpty()) {
-                        Text("正文", style = PersonaTheme.type.body, color = PersonaTheme.palette.ink3)
+                        Text(stringResource(R.string.inbox_mail_body), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink3)
                     }
                     BasicTextField(
                         value = body,
@@ -196,13 +200,13 @@ fun ComposeMailPage(
     if (confirmDiscard) {
         JDialog(
             onDismiss = { confirmDiscard = false },
-            title = "放弃这封邮件？",
-            text = "写的内容不会保存。",
-            confirm = "放弃" to {
+            title = stringResource(R.string.inbox_mail_discard_title),
+            text = stringResource(R.string.inbox_mail_discard_text),
+            confirm = stringResource(R.string.inbox_mail_discard) to {
                 confirmDiscard = false
                 onDone()
             },
-            dismiss = "继续编辑" to { confirmDiscard = false },
+            dismiss = stringResource(R.string.inbox_mail_keep_editing) to { confirmDiscard = false },
             destructive = true,
         )
     }
@@ -223,7 +227,7 @@ private fun FieldLabel(text: String) {
 private fun FromRow(accounts: List<MailAccount>, selected: String, onSelect: (String) -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
     val currentAccount = accounts.firstOrNull { it.id == selected }
-    val displayText = currentAccount?.email ?: selected.ifBlank { "未选择邮箱" }
+    val displayText = currentAccount?.email ?: selected.ifBlank { stringResource(R.string.inbox_mail_no_account) }
 
     Box {
         Row(
@@ -235,7 +239,7 @@ private fun FromRow(accounts: List<MailAccount>, selected: String, onSelect: (St
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m),
         ) {
-            FieldLabel("发件人")
+            FieldLabel(stringResource(R.string.inbox_mail_from))
             Text(
                 displayText,
                 modifier = Modifier.weight(1f),
@@ -245,7 +249,7 @@ private fun FromRow(accounts: List<MailAccount>, selected: String, onSelect: (St
                 overflow = TextOverflow.Ellipsis,
             )
             if (accounts.size > 1) {
-                JIcon(PhIcons.CaretDown, "切换账户", size = 16.dp, tint = PersonaTheme.palette.ink3)
+                JIcon(PhIcons.CaretDown, stringResource(R.string.inbox_mail_switch_account), size = 16.dp, tint = PersonaTheme.palette.ink3)
             }
         }
         if (accounts.size > 1) {

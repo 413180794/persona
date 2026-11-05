@@ -122,7 +122,7 @@ class InboxTriageShotsTest {
         for (s in AppStyle.entries) for (d in listOf(false, true)) for (next in Shot.entries) {
             style = s; dark = d; shot = next; run++
             rule.waitForIdle()
-            rule.onNodeWithText(InboxTriageText.banner(next.triage)!!.text).assertExists()
+            rule.onNodeWithText(InboxTriageText.banner(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources, next.triage)!!.text).assertExists()
             val offered = rule.onAllNodes(hasText("去配置") and hasClickAction()).fetchSemanticsNodes().size
             assertEquals("$next: 去配置 only for a model not set up", if (next == Shot.Unconfigured) 1 else 0, offered)
             capture("inbox-triage-${next.name.lowercase()}-${s.name.lowercase()}-${if (d) "dark" else "light"}")

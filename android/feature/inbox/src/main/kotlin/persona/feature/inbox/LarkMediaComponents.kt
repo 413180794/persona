@@ -1,5 +1,8 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+
 import android.net.Uri
 import android.widget.MediaController
 import android.widget.VideoView
@@ -48,7 +51,7 @@ fun LarkMergeForwardCard(
         ) {
             JIcon(PhIcons.ChatsCircle, modifier = Modifier.size(20.dp), tint = palette.accent)
             Text(
-                part.title.ifBlank { "合并转发的聊天记录" },
+                part.title.ifBlank { stringResource(R.string.inbox_lark_forward) },
                 style = PersonaTheme.type.callout,
                 color = palette.ink,
                 maxLines = 1,
@@ -77,7 +80,7 @@ fun LarkMergeForwardCard(
         Spacer(Modifier.height(Tokens.Space.xs))
 
         Text(
-            "查看共 ${part.messages.size} 条记录",
+            pluralStringResource(R.plurals.inbox_lark_forward_more, part.messages.size, part.messages.size),
             style = PersonaTheme.type.micro,
             color = palette.accent
         )
@@ -94,7 +97,7 @@ fun LarkForwardedSheet(
 
     JSheet(
         onDismiss = onDismiss,
-        title = part.title.ifBlank { "聊天记录" },
+        title = part.title.ifBlank { stringResource(R.string.inbox_lark_chat_history) },
         skipPartiallyExpanded = false
     ) {
         LazyColumn(
@@ -107,7 +110,7 @@ fun LarkForwardedSheet(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)
                 ) {
-                    LarkAvatar(msg.senderName.ifBlank { "信" }, msg.senderAvatar)
+                    LarkAvatar(msg.senderName.ifBlank { stringResource(R.string.inbox_lark_avatar_fallback) }, msg.senderAvatar)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                         Row(
                             Modifier.fillMaxWidth(),
@@ -310,7 +313,7 @@ fun LarkVideoPlayerDialog(
                     .padding(Tokens.Space.m)
                     .align(Alignment.TopStart)
             ) {
-                JButton("关闭", onClick = onDismiss, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+                JButton(stringResource(R.string.inbox_close), onClick = onDismiss, kind = JButtonKind.Secondary, size = JButtonSize.Small)
             }
         }
     }
@@ -327,7 +330,7 @@ fun LarkStickerView(
 
     AsyncImage(
         model = part.model,
-        contentDescription = part.description,
+        contentDescription = part.description.ifBlank { stringResource(R.string.inbox_lark_sticker) },
         modifier = modifier
             .sizeIn(maxWidth = 160.dp, maxHeight = 160.dp)
             .aspectRatio(ratio)

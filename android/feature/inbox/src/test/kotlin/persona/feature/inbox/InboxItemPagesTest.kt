@@ -1,5 +1,8 @@
 package persona.feature.inbox
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.api.ExtensionUiPlace
 import persona.core.domain.inbox.InboxItem
 import persona.core.navigation.InboxItemUiRoute
@@ -8,7 +11,11 @@ import org.junit.Test
 
 // docs/extensions.md「UI 插槽」inbox_item (#1683): an item whose connector's extension draws its page opens that page; every
 // other item, and every item on a hub that lists no such page, opens its own page as before.
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class InboxItemPagesTest {
+    /** The app's strings; Robolectric runs in 简体中文 (robolectric.properties). */
+    private val res get() = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources
     private val lark = InboxRecord(InboxItem("lark:F1:1051", kind = "group", title = "周四的评审"), feedId = "F1", startPosition = 1051, source = "lark")
     private val mail = InboxRecord(InboxItem("mail-1", kind = "mail", title = "订单"), source = "mail")
     private val moment = InboxRecord(InboxItem("moment-1", kind = "moment"), source = "lark", moment = InboxMomentRef(postId = "post-1"))
@@ -68,10 +75,10 @@ class InboxItemPagesTest {
 
     // The header's source line says what the item's row says.
     @Test fun theSourceLineIsTheRows() {
-        assertEquals(listOf("飞书", "群聊", "3 条消息"), inboxSourceTags(lark.copy(sourceLabel = "飞书", count = 3)))
-        assertEquals(listOf("工作账号", "群聊"), inboxSourceTags(lark.copy(sourceLabel = "工作账号")))
+        assertEquals(listOf("飞书", "群聊", "3 条消息"), inboxSourceTags(res, lark.copy(sourceLabel = "飞书", count = 3)))
+        assertEquals(listOf("工作账号", "群聊"), inboxSourceTags(res, lark.copy(sourceLabel = "工作账号")))
         // A mail is a mail once.
-        assertEquals(listOf("邮件"), inboxSourceTags(mail))
+        assertEquals(listOf("邮件"), inboxSourceTags(res, mail))
     }
 
     // At launch, before the hub's list is read, an item opens its own page and the shell hears of it; once the list
@@ -141,8 +148,8 @@ class InboxItemPagesTest {
         assertEquals(InboxItemDetailRoute("x"), inboxItemPage(InboxRecord(InboxItem("x"))))
         // The list marks it, its row says what kind of notice, and a cached copy still opens as a document.
         assertTrue(isInboxItemSelected(InboxItemDetailRoute("doc:T1:1730700000000"), "doc:T1:1730700000000", null))
-        assertEquals("@我", kindLabel(doc))
-        assertEquals("评论", kindLabel(doc.copy(doc = ref.copy(notice = "comment"))))
+        assertEquals("@我", kindLabel(res, doc))
+        assertEquals("评论", kindLabel(res, doc.copy(doc = ref.copy(notice = "comment"))))
         val cached = doc.cached().record()
         assertEquals(ref, cached.doc)
         assertEquals(InboxItemDetailRoute("doc:T1:1730700000000"), inboxItemPage(cached))

@@ -2,11 +2,19 @@ package persona.feature.inbox
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.robolectric.annotation.Config
+import org.junit.runner.RunWith
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.core.app.ApplicationProvider
 import persona.core.contracts.api.MailAddress
 import persona.core.contracts.api.MailMessage
 import java.time.ZoneId
 
+@RunWith(AndroidJUnit4::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class MailComposeTest {
+    private val res = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     @Test
     fun parseAndFormatAddresses() {
         val input = "Alice <alice@example.com>, bob@example.com； Charlie <charlie@example.com>\nDavid <david@example.com>，,"
@@ -67,7 +75,7 @@ class MailComposeTest {
         )
 
         // 单人回复
-        val draftSingle = MailCompose.reply(original, "acc-1", me = "me@example.com", all = false, zone = zone)
+        val draftSingle = MailCompose.reply(res, original, "acc-1", me = "me@example.com", all = false, zone = zone)
         assertEquals("Boss <boss@example.com>", draftSingle.to)
         assertEquals("", draftSingle.cc)
         assertEquals("Re: 周会纪要", draftSingle.subject)
@@ -75,9 +83,11 @@ class MailComposeTest {
         assertEquals(listOf("<root@example.com>", "<msg-100@example.com>"), draftSingle.references)
         assertTrue(draftSingle.body.contains("Boss"))
         assertTrue(draftSingle.body.contains("> 今天讨论了Q4目标。"))
+        // The quote line is in the app's language, with the date in its own order.
+        assertTrue(draftSingle.body, draftSingle.body.contains("2026年11月4日 18:00，Boss <boss@example.com> 写道：\n> 今天"))
 
         // 全部回复（应排除我自己的邮箱 me@example.com）
-        val draftAll = MailCompose.reply(original, "acc-1", me = "me@example.com", all = true, zone = zone)
+        val draftAll = MailCompose.reply(res, original, "acc-1", me = "me@example.com", all = true, zone = zone)
         assertEquals("Boss <boss@example.com>, Alice <alice@example.com>", draftAll.to)
         assertEquals("Bob <bob@example.com>", draftAll.cc)
         assertEquals("Re: 周会纪要", draftAll.subject)
@@ -95,12 +105,13 @@ class MailComposeTest {
             date = "2026-11-04T10:00:00Z",
             text = "附上初版设计稿供评审。",
         )
-        val fwd = MailCompose.forward(original, "acc-1", zone = zone)
+        val fwd = MailCompose.forward(res, original, "acc-1", zone = zone)
         assertEquals("Fwd: 产品设计案", fwd.subject)
         assertEquals("", fwd.to)
         assertTrue(fwd.body.contains("---------- 转发的邮件 ----------"))
         assertTrue(fwd.body.contains("发件人：Designer <designer@example.com>"))
         assertTrue(fwd.body.contains("主题：产品设计案"))
+        assertTrue(fwd.body, fwd.body.contains("日期：2026年11月4日 18:00"))
         assertTrue(fwd.body.contains("附上初版设计稿供评审。"))
     }
 
@@ -135,5 +146,20 @@ class MailComposeTest {
         assertEquals("你好", req.text)
         assertEquals("<m1>", req.inReplyTo)
         assertEquals("<root> <m1>", req.references)
+    }
+
+    @Config(sdk = [35], qualifiers = "en")
+    @Test
+    fun quoteAndForwardInEnglish() {
+        val zone = ZoneId.of("Asia/Shanghai")
+        val original = MailMessage(accountId = "acc-1", uid = 7, subject = "Plan", from = MailAddress("Boss", "boss@example.com"),
+            date = "2026-11-04T10:00:00Z", text = "See you.")
+        val reply = MailCompose.reply(res, original, "acc-1", me = null, all = false, zone = zone).body
+        assertTrue(reply, reply.contains("On Nov 4, 2026"))
+        assertTrue(reply, reply.contains("Boss <boss@example.com> wrote:\n> See you."))
+        val fwd = MailCompose.forward(res, original, "acc-1", zone = zone).body
+        assertTrue(fwd, fwd.contains("---------- Forwarded message ----------\nFrom: Boss <boss@example.com>\nDate: Nov 4, 2026"))
+        assertTrue(fwd, fwd.contains("Subject: Plan"))
+        assertEquals(R.string.inbox_mail_new, MailDraft("acc-1").title)
     }
 }

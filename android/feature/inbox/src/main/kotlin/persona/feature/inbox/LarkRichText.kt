@@ -1,5 +1,8 @@
 package persona.feature.inbox
 
+import android.content.res.Resources
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,33 +35,37 @@ import persona.core.designsystem.Tokens
 import persona.core.designsystem.icons.PhIcons
 
 object LarkEmojiHelper {
-    private val EMOJI_MAP = mapOf(
-        "thumbsup" to ("👍" to "赞"),
-        "ok" to ("👌" to "OK"),
-        "done" to ("✅" to "完成"),
-        "heart" to ("❤️" to "爱心"),
-        "smile" to ("😄" to "微笑"),
-        "laugh" to ("😂" to "大笑"),
-        "surprised" to ("😮" to "惊讶"),
-        "cry" to ("😭" to "流泪"),
-        "clap" to ("👏" to "鼓掌"),
-        "fire" to ("🔥" to "火"),
-        "party" to ("🎉" to "庆祝"),
-        "thinking" to ("🤔" to "思考"),
-        "muscle" to ("💪" to "加油"),
-        "sob" to ("😭" to "流泪"),
-        "wave" to ("👋" to "再见"),
-        "jiayi" to ("+1" to "+1"),
-        "fist" to ("👊" to "拳头"),
-        "shake" to ("🤝" to "握手"),
-        "rose" to ("🌹" to "玫瑰"),
-        "beer" to ("🍺" to "啤酒"),
-        "cake" to ("🎂" to "蛋糕"),
-        "coffee" to ("☕" to "咖啡"),
+    /** Each key's symbol and its name for accessibility. */
+    private val EMOJI_MAP: Map<String, Pair<String, Int>> = mapOf(
+        "thumbsup" to ("👍" to R.string.inbox_lark_emoji_thumbsup),
+        "ok" to ("👌" to R.string.inbox_lark_emoji_ok),
+        "done" to ("✅" to R.string.inbox_lark_emoji_done),
+        "heart" to ("❤️" to R.string.inbox_lark_emoji_heart),
+        "smile" to ("😄" to R.string.inbox_lark_emoji_smile),
+        "laugh" to ("😂" to R.string.inbox_lark_emoji_laugh),
+        "surprised" to ("😮" to R.string.inbox_lark_emoji_surprised),
+        "cry" to ("😭" to R.string.inbox_lark_emoji_cry),
+        "clap" to ("👏" to R.string.inbox_lark_emoji_clap),
+        "fire" to ("🔥" to R.string.inbox_lark_emoji_fire),
+        "party" to ("🎉" to R.string.inbox_lark_emoji_party),
+        "thinking" to ("🤔" to R.string.inbox_lark_emoji_thinking),
+        "muscle" to ("💪" to R.string.inbox_lark_emoji_muscle),
+        "sob" to ("😭" to R.string.inbox_lark_emoji_cry),
+        "wave" to ("👋" to R.string.inbox_lark_emoji_wave),
+        "jiayi" to ("+1" to R.string.inbox_lark_emoji_jiayi),
+        "fist" to ("👊" to R.string.inbox_lark_emoji_fist),
+        "shake" to ("🤝" to R.string.inbox_lark_emoji_shake),
+        "rose" to ("🌹" to R.string.inbox_lark_emoji_rose),
+        "beer" to ("🍺" to R.string.inbox_lark_emoji_beer),
+        "cake" to ("🎂" to R.string.inbox_lark_emoji_cake),
+        "coffee" to ("☕" to R.string.inbox_lark_emoji_coffee),
     )
 
     fun symbol(key: String): String = EMOJI_MAP[key.lowercase()]?.first ?: "[$key]"
-    fun label(key: String): String = EMOJI_MAP[key.lowercase()]?.second ?: key
+    fun label(res: Resources, key: String): String {
+        val entry = EMOJI_MAP[key.lowercase()] ?: return key
+        return res.getString(entry.second)
+    }
 }
 
 /** Ancestor chain block descriptor from lark-connector rich text metadata. */
@@ -283,7 +290,7 @@ fun LarkCodeBlock(code: String, language: String, modifier: Modifier = Modifier)
                 horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)
             ) {
                 JIcon(PhIcons.Copy, modifier = Modifier.size(12.dp), tint = palette.accent)
-                Text("复制", style = PersonaTheme.type.micro, color = palette.accent)
+                Text(stringResource(R.string.inbox_lark_code_copy), style = PersonaTheme.type.micro, color = palette.accent)
             }
         }
         SelectionContainer {

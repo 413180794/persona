@@ -1,5 +1,6 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import androidx.compose.foundation.layout.*
@@ -9,6 +10,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import android.content.res.Resources
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import persona.core.contracts.api.ConnectionState
 import persona.core.domain.inbox.*
@@ -27,6 +32,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     val shownConnection = rememberSettledConnection(connection)
     val savedPreferences by repository.preferences.collectAsStateWithLifecycle(InboxPreferences())
     val feedback = persona.core.designsystem.LocalAppFeedback.current
+    val res = LocalResources.current
     val scope = rememberCoroutineScope()
     val composers = rememberReplyComposers(repository)
     var filters by remember(repository) { mutableStateOf<InboxPreferences?>(null) }
@@ -77,15 +83,15 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     }
     val displayGroups = buildList {
         triageGroups.firstOrNull { it.id == "action" }?.let { add(it) }
-        if (workingRows.isNotEmpty()) add(InboxGroup("working", "Persona 在办", workingRows, workingRows, false))
+        if (workingRows.isNotEmpty()) add(InboxGroup("working", res.getString(R.string.inbox_group_working), workingRows, workingRows, false))
         addAll(triageGroups.filter { it.id != "action" })
     }
     val groups = displayGroups.filter { section.isEmpty() || it.id == section }
     val needsCount = displayGroups.firstOrNull { it.id == "action" }?.count ?: 0
     val doneCount = result.groups.firstOrNull { it.id == "done" }?.count ?: 0
     val allCount = result.groups.sumOf { it.count }
-    val sources = listOf("" to "所有来源") + snapshot.records.map { record ->
-        record.item.account to record.sourceLabel.ifBlank { if (record.feedId != null) "飞书" else record.item.account.ifBlank { "邮件" } }
+    val sources = listOf("" to res.getString(R.string.inbox_all_sources)) + snapshot.records.map { record ->
+        record.item.account to record.sourceLabel.ifBlank { if (record.feedId != null) res.getString(R.string.inbox_source_lark) else record.item.account.ifBlank { res.getString(R.string.inbox_source_mail) } }
     }.filter { it.first.isNotEmpty() }.distinctBy { it.first }
     var showFilters by remember { mutableStateOf(false) }
     var filterPage by remember { mutableStateOf<String?>(null) }
@@ -100,7 +106,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             try { if (collectNow) repository.refreshNow() else repository.refresh(); error = null }
             catch (e: CancellationException) { throw e }
             // Background refreshes stay quiet; a pull or tap reports its result.
-            catch (e: Exception) { if (feedback?.failure(e, operation = collectNow) != true) error = "收件箱刷新失败，请重试" }
+            catch (e: Exception) { if (feedback?.failure(e, operation = collectNow) != true) error = res.getString(R.string.inbox_refresh_failed) }
             finally { refreshing = false }
         }
     }
@@ -110,7 +116,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
         scope.launch {
             try { repository.setDone(id, done); error = null }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (feedback?.failure(e) != true) error = "操作失败，已恢复原来的状态" }
+            catch (e: Exception) { if (feedback?.failure(e) != true) error = res.getString(R.string.inbox_failed_restored) }
             finally { pending.remove(id) }
         }
     }
@@ -124,38 +130,38 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             try {
                 val result = repository.setDone(asked, done)
                 error = null
-                val notice = if (undoable) bulkNotice(result) else null
+                val notice = if (undoable) bulkNotice(res, result) else null
                 if (notice != null) {
                     val back = result.changed.map { persona.core.contracts.api.InboxDoneTarget(it) }
-                    val undo = if (back.isEmpty()) null else FeedbackAction("撤销") { markAll(back, false, undoable = false) }
+                    val undo = if (back.isEmpty()) null else FeedbackAction(res.getString(R.string.inbox_undo)) { markAll(back, false, undoable = false) }
                     if (undo != null) feedback?.notice(notice, undo) else feedback?.notice(notice)
                 }
             }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (feedback?.failure(e) != true) error = "操作失败，已恢复原来的状态" }
+            catch (e: Exception) { if (feedback?.failure(e) != true) error = res.getString(R.string.inbox_failed_restored) }
             finally { asked.forEach { pending.remove(it.id) } }
         }
     }
     LaunchedEffect(repository) { refresh(collectNow = false) }
     val bulk = bulkTargets(groups, records)
-    val scopeText = bulkScope(section, sources.firstOrNull { it.first == source && source.isNotEmpty() }?.second,
-        if (kind == "agent") "Agent" else kindLabel(kind), query)
+    val scopeText = bulkScope(res, section, sources.firstOrNull { it.first == source && source.isNotEmpty() }?.second,
+        if (kind == "agent") "Agent" else kindLabel(res, kind), query)
     var showMore by remember { mutableStateOf(false) }
     if (showMore) {
-        JActionSheet(title = "收件箱", onDismiss = { showMore = false },
-            actions = listOf(JAction(bulkLabel(bulk.size, scopeText), PhIcons.Checks, enabled = bulk.isNotEmpty()) { markAll(bulk, true) }),
-            note = (if (scopeText == null) "整个收件箱里还没处理的。" else "只标当前筛选：$scopeText。") + "只记在 Persona，不改飞书和邮件里的已读。")
+        JActionSheet(title = stringResource(R.string.inbox_title), onDismiss = { showMore = false },
+            actions = listOf(JAction(bulkLabel(res, bulk.size, scopeText), PhIcons.Checks, enabled = bulk.isNotEmpty()) { markAll(bulk, true) }),
+            note = if (scopeText == null) stringResource(R.string.inbox_bulk_note_all) else stringResource(R.string.inbox_bulk_note_scope, scopeText))
     }
     if (showFilters) {
-        JActionSheet(title = "筛选收件箱", onDismiss = { showFilters = false }, actions = listOf(
-            JAction("来源：${sources.firstOrNull { it.first == source }?.second ?: "所有来源"}", PhIcons.Tray) { filterPage = "source" },
-            JAction("类型：${kindLabel(kind).ifBlank { if (kind == "agent") "Agent" else "所有类型" }}", PhIcons.FunnelSimple) { filterPage = "kind" },
-            JAction("清除筛选", enabled = source.isNotEmpty() || kind.isNotEmpty()) {
+        JActionSheet(title = stringResource(R.string.inbox_filter_title), onDismiss = { showFilters = false }, actions = listOf(
+            JAction(stringResource(R.string.inbox_filter_source, sources.firstOrNull { it.first == source }?.second ?: stringResource(R.string.inbox_all_sources)), PhIcons.Tray) { filterPage = "source" },
+            JAction(stringResource(R.string.inbox_filter_kind, kindLabel(res, kind).ifBlank { if (kind == "agent") "Agent" else res.getString(R.string.inbox_all_kinds) }), PhIcons.FunnelSimple) { filterPage = "kind" },
+            JAction(stringResource(R.string.inbox_filter_clear), enabled = source.isNotEmpty() || kind.isNotEmpty()) {
                 filter(currentFilters.copy(source = "", kind = ""))
             },
         ))
     }
-    if (filterPage == "source") JSheet(onDismiss = { filterPage = null }, title = "来源") {
+    if (filterPage == "source") JSheet(onDismiss = { filterPage = null }, title = stringResource(R.string.inbox_source)) {
         // The source list can grow with connected accounts, so keep the choices scrollable.
         androidx.compose.foundation.lazy.LazyColumn {
             itemsIndexed(sources) { index, option ->
@@ -166,8 +172,9 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             }
         }
     }
-    if (filterPage == "kind") JActionSheet(title = "类型", onDismiss = { filterPage = null }, actions =
-        listOf("" to "所有类型", "mention" to "@我", "dm" to "私聊", "group" to "群聊", "mail" to "邮件", "agent" to "Agent").map { (value, label) ->
+    if (filterPage == "kind") JActionSheet(title = stringResource(R.string.inbox_kind), onDismiss = { filterPage = null }, actions =
+        listOf("" to res.getString(R.string.inbox_all_kinds), "mention" to res.getString(R.string.inbox_mention_me), "dm" to res.getString(R.string.inbox_kind_dm),
+            "group" to res.getString(R.string.inbox_kind_group), "mail" to res.getString(R.string.inbox_source_mail), "agent" to "Agent").map { (value, label) ->
             JAction(label, checked = kind == value) { filter(currentFilters.copy(kind = value)) }
         })
     // Loading shows only while there is nothing to show yet: a row put in over a shown list pushes it down, then goes.
@@ -178,61 +185,62 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     listStates.SaveableStateProvider(listOf(source, kind, section).toString()) {
         val scroll = rememberLazyListState()
         JListPage(
-            title = "收件箱",
-            summary = inboxSummary(overall, ::working),
+            title = stringResource(R.string.inbox_title),
+            summary = inboxSummary(res, overall, ::working),
             subtitle = inboxTitle(shownConnection).takeIf { shownConnection != ConnectionState.Online },
             titleBusy = shownConnection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
             onTitleClick = if (shownConnection == ConnectionState.Online) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
             state = scroll, refreshing = refreshing, onRefresh = { refresh() },
             actions = {
                 if (mailTransport != null) {
-                    JIconButton(PhIcons.PencilSimple, "写邮件", {
+                    JIconButton(PhIcons.PencilSimple, stringResource(R.string.inbox_compose_mail), {
                         composeDraft = MailDraft(accountId = "")
                     })
                 }
-                JIconButton(PhIcons.FunnelSimple, "筛选", { showFilters = true }, badge = source.isNotEmpty() || kind.isNotEmpty())
-                JIconButton(PhIcons.DotsThree, "更多", { showMore = true })
+                JIconButton(PhIcons.FunnelSimple, stringResource(R.string.inbox_filter), { showFilters = true }, badge = source.isNotEmpty() || kind.isNotEmpty())
+                JIconButton(PhIcons.DotsThree, stringResource(R.string.inbox_more), { showMore = true })
             },
         ) {
             item("filters") {
-                QuickFilterBar(listOf(Bay("需要你", needsCount, Status.NeedsYou), Bay("全部", allCount), Bay("已处理", doneCount)),
+                QuickFilterBar(listOf(Bay(stringResource(R.string.inbox_bay_needs_you), needsCount, Status.NeedsYou), Bay(stringResource(R.string.inbox_bay_all), allCount),
+                    Bay(stringResource(R.string.inbox_done), doneCount)),
                     selected = when (section) { "action" -> 0; "done" -> 2; else -> 1 },
                     onSelect = { filter(currentFilters.copy(section = listOf("action", "", "done")[it])) })
                 Spacer(Modifier.height(Tokens.Space.s))
-                JSearchField(query, { filter(currentFilters.copy(query = it)) }, "搜索标题、发件人和内容")
+                JSearchField(query, { filter(currentFilters.copy(query = it)) }, stringResource(R.string.inbox_search_hint))
             }
             // New items waiting outside the list for triage (#1773): one line over the first item until triage is ok.
-            InboxTriageText.banner(snapshot.triage)?.let { banner -> item("triage") { InboxTriageNotice(banner) } }
-            if (loadingFirst) item("loading") { JLoading(text = "正在读取收件箱") }
+            InboxTriageText.banner(res, snapshot.triage)?.let { banner -> item("triage") { InboxTriageNotice(banner) } }
+            if (loadingFirst) item("loading") { JLoading(text = stringResource(R.string.inbox_loading)) }
             if (!failedEmpty) (error ?: snapshot.error?.takeIf { feedback == null || connection == ConnectionState.Online })?.let { message ->
                 item("error") { StatusText(message, isError = true) }
             }
-            if (preferenceError) item("preference-error") { StatusText("筛选条件未能保存，请重试", isError = true) }
+            if (preferenceError) item("preference-error") { StatusText(stringResource(R.string.inbox_filters_not_saved), isError = true) }
             if (groups.isEmpty() && !loadingFirst) item("empty") {
                 val filtered = query.isNotEmpty() || source.isNotEmpty() || kind.isNotEmpty() || section.isNotEmpty()
                 when {
-                    !filtered && failedEmpty -> JEmptyState("收件箱没能加载", "检查连接后再试一次。", action = {
-                        JButton("重试", { refresh() }, enabled = !refreshing, kind = JButtonKind.Secondary)
+                    !filtered && failedEmpty -> JEmptyState(stringResource(R.string.inbox_empty_failed_title), stringResource(R.string.inbox_empty_failed_text), action = {
+                        JButton(stringResource(R.string.inbox_retry), { refresh() }, enabled = !refreshing, kind = JButtonKind.Secondary)
                     })
-                    query.isNotBlank() -> JEmptyState("没有找到", "没有和「${query.trim()}」匹配的消息或邮件。", icon = PhIcons.MagnifyingGlass)
-                    snapshot.records.isEmpty() && snapshot.interactions.isEmpty() -> JEmptyState("收件箱是空的",
-                        "hub 配好飞书（lark-connector）或在设置里加了邮箱后，需要你看的消息和邮件会出现在这里。", icon = PhIcons.Tray)
-                    else -> JEmptyState("都看完了", "这个筛选下没有东西。", icon = PhIcons.CheckCircle)
+                    query.isNotBlank() -> JEmptyState(stringResource(R.string.inbox_empty_search_title), stringResource(R.string.inbox_empty_search_text, query.trim()), icon = PhIcons.MagnifyingGlass)
+                    snapshot.records.isEmpty() && snapshot.interactions.isEmpty() -> JEmptyState(stringResource(R.string.inbox_empty_title),
+                        stringResource(R.string.inbox_empty_text), icon = PhIcons.Tray)
+                    else -> JEmptyState(stringResource(R.string.inbox_empty_filtered_title), stringResource(R.string.inbox_empty_filtered_text), icon = PhIcons.CheckCircle)
                 }
             }
             groups.forEach { group ->
                 item("section:${group.id}", contentType = "section") {
                     JSectionHeader(
-                        title = if (group.id == "fyi") "看看就好" else group.title,
+                        title = inboxGroupTitle(group),
                         count = group.count,
                         status = when (group.id) { "action" -> Status.NeedsYou; "working" -> Status.Working; else -> null },
-                        trailing = if (group.id == "working") null else if (group.folded) "展开" else "收起",
+                        trailing = if (group.id == "working") null else if (group.folded) stringResource(R.string.inbox_expand) else stringResource(R.string.inbox_collapse),
                         onClick = if (group.id == "working") null else ({
                             filter(currentFilters.copy(section = if (section == group.id) "" else section,
                                 expanded = if (group.id in expanded) expanded - group.id else expanded + group.id))
                         }),
                         action = if (group.id in setOf("fyi", "noise")) ({
-                            JTextButton(if (group.id == "fyi") "全部看过" else "全部清除", {
+                            JTextButton(if (group.id == "fyi") stringResource(R.string.inbox_mark_all_seen) else stringResource(R.string.inbox_clear_all), {
                                 markAll(bulkTargets(listOf(group), records), true)
                             })
                         }) else null,
@@ -278,27 +286,32 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
     val pages = LocalInboxItemPages.current
     val translated = rememberItemTranslation(record)
     var menu by remember { mutableStateOf(false) }
+    val res = LocalResources.current
+    val doneLabel = stringResource(if (done) R.string.inbox_move_back else R.string.inbox_done)
+    val handOffLabel = stringResource(R.string.inbox_hand_to_ai)
     if (menu) JActionSheet(title = item.title, onDismiss = { menu = false }, actions = listOf(
-        JAction(if (done) "移回收件箱" else "已处理", PhIcons.Check, enabled = !busy, onClick = onDone),
-        JAction("交给 AI", PhIcons.Robot, onClick = onHandOff),
+        JAction(doneLabel, PhIcons.Check, enabled = !busy, onClick = onDone),
+        JAction(handOffLabel, PhIcons.Robot, onClick = onHandOff),
     ))
     JSwipeActions(
-        start = if (busy) null else SwipeAction(if (done) "移回收件箱" else "已处理", PhIcons.Check, Status.Unread, onDone),
-        end = SwipeAction("交给 AI", PhIcons.Robot, Status.Working, onHandOff),
+        start = if (busy) null else SwipeAction(doneLabel, PhIcons.Check, Status.Unread, onDone),
+        end = SwipeAction(handOffLabel, PhIcons.Robot, Status.Working, onHandOff),
     ) {
         MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = translated?.subject?.ifBlank { null } ?: item.title,
-            titleIcon = translated?.let { PhIcons.Translate }, titleIconLabel = translated?.let { "已翻译" },
+            titleIcon = translated?.let { PhIcons.Translate }, titleIconLabel = translated?.let { stringResource(R.string.inbox_translated) },
             selected = isInboxItemSelected(LocalDetailKey.current, item.id, record.feedId),
             position = position, avatar = rememberLarkAvatar(record.avatar.takeIf { record.doc == null }, onlineSince), avatarIcon = record.doc?.let { docIcon(it.type) },
             source = if (record.feedId != null || record.source == "lark") MessageSource.Lark else MessageSource.Mail,
-            sourceLabel = if (record.feedId != null || record.source == "lark") "飞书" else "邮件",
+            sourceLabel = stringResource(if (record.feedId != null || record.source == "lark") R.string.inbox_source_lark else R.string.inbox_source_mail),
             group = item.title.takeIf { record.feedId != null && item.kind in setOf("group", "mention", "bot") },
             time = item.updatedAt?.let(::displayTime),
             preview = item.summary?.takeIf { it.isNotBlank() } ?: translated?.preview?.ifBlank { null }
-                ?: record.doc?.let { listOf(docTypeName(it.type), item.preview).filter { s -> s.isNotBlank() }.joinToString(" · ") } ?: item.preview,
+                ?: record.doc?.let { listOf(docTypeName(res, it.type), item.preview).filter { s -> s.isNotBlank() }.joinToString(" · ") } ?: item.preview,
             status = when { done -> null; record.agent?.state in setOf("running", "queued") -> Status.Working; item.triage == InboxTier.Action -> Status.NeedsYou; else -> null },
-            tags = listOfNotNull(kindLabel(record).takeIf { it.isNotBlank() }, record.sourceLabel.takeIf { it.isNotBlank() && it !in setOf("飞书", "邮件") },
-                "${record.count} 条消息".takeIf { record.count > 0 }),
+            // The hub names its own sources 飞书 and 邮件; the row already shows those as its source.
+            tags = listOfNotNull(kindLabel(res, record).takeIf { it.isNotBlank() },
+                record.sourceLabel.takeIf { it.isNotBlank() && it !in setOf("飞书", "邮件") }, // i18n-ignore: hub source labels it matches
+                pluralStringResource(R.plurals.inbox_messages_count, record.count, record.count).takeIf { record.count > 0 }),
             // An extension may draw the page of its connector's items (inbox_item); the rest open their own page.
             onClick = { navigator.navigate(pages.open(record)) }, onLongClick = { menu = true }, extra = {
                 record.localDelivery?.pendingStatus()?.let { PendingBadge(it) }
@@ -307,6 +320,25 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
             })
     }
 }
+
+/** A section's title by its id; :core:domain's titles are Chinese, and a group this app does not know keeps its own. */
+@Composable
+private fun inboxGroupTitle(group: InboxGroup): String = when (group.id) {
+    "action" -> stringResource(R.string.inbox_bay_needs_you)
+    "working" -> stringResource(R.string.inbox_group_working)
+    "fyi" -> stringResource(R.string.inbox_group_fyi)
+    "noise" -> stringResource(R.string.inbox_section_folded)
+    "done" -> stringResource(R.string.inbox_done)
+    else -> group.title
+}
+
+/** A tier's name, as the item's header tags it. */
+@Composable
+internal fun inboxTierTitle(tier: InboxTier): String = stringResource(when (tier) {
+    InboxTier.Action -> R.string.inbox_bay_needs_you
+    InboxTier.Fyi -> R.string.inbox_tier_fyi
+    InboxTier.Noise -> R.string.inbox_section_folded
+})
 
 @Composable
 internal fun StatusText(text: String, isError: Boolean = false) {
@@ -317,26 +349,28 @@ internal fun StatusText(text: String, isError: Boolean = false) {
  * The page's one line, for the whole inbox: give it the unfiltered list, since a search or a filter that shows nothing
  * is not 「都处理完了」. Rows an agent is working on are Persona's, not the user's to answer.
  */
-internal fun inboxSummary(inbox: InboxListResult, working: (InboxRow) -> Boolean): String {
+internal fun inboxSummary(res: Resources, inbox: InboxListResult, working: (InboxRow) -> Boolean): String {
     val open = inbox.groups.filter { it.id != "done" }
     val busy = open.sumOf { group -> group.rows.count(working) }
     val needs = open.firstOrNull { it.id == "action" }?.rows?.count { !working(it) } ?: 0
-    return if (needs == 0) "都处理完了" else "$needs 条要回，Persona 在办 $busy 件"
+    return if (needs == 0) res.getString(R.string.inbox_summary_clear) else res.getString(R.string.inbox_summary, needs, busy)
 }
 
-private fun kindLabel(kind: String) = when (kind) {
-    "mention" -> "@我"; "dm" -> "私聊"; "group" -> "群聊"; "bot" -> "机器人"; "mail" -> "邮件"; "moment" -> "公司圈"; else -> ""
+private fun kindLabel(res: Resources, kind: String) = when (kind) {
+    "mention" -> res.getString(R.string.inbox_mention_me); "dm" -> res.getString(R.string.inbox_kind_dm)
+    "group" -> res.getString(R.string.inbox_kind_group); "bot" -> res.getString(R.string.inbox_bot)
+    "mail" -> res.getString(R.string.inbox_source_mail); "moment" -> res.getString(R.string.inbox_moments); else -> ""
 }
 
 /** The row's kind: an @ of everyone is 「@所有人」, a mail the user was only copied on is 「抄送」 (the old app's labels). */
-internal fun kindLabel(record: InboxRecord): String = when {
-    record.item.kind == "mention" && record.read -> "群聊"
-    record.item.kind == "mention" && record.atAll -> "@所有人"
-    record.item.kind == "mail" && record.mail?.direct == false -> "抄送"
-    record.doc != null || record.item.kind == "doc" -> docKindLabel(record.doc)
+internal fun kindLabel(res: Resources, record: InboxRecord): String = when {
+    record.item.kind == "mention" && record.read -> res.getString(R.string.inbox_kind_group)
+    record.item.kind == "mention" && record.atAll -> res.getString(R.string.inbox_kind_at_all)
+    record.item.kind == "mail" && record.mail?.direct == false -> res.getString(R.string.inbox_kind_cc)
+    record.doc != null || record.item.kind == "doc" -> docKindLabel(res, record.doc)
     record.moment != null || record.item.kind == "moment" ->
-        if (record.moment?.notice?.startsWith("atIn") == true) "@我" else "公司圈"
-    else -> kindLabel(record.item.kind)
+        res.getString(if (record.moment?.notice?.startsWith("atIn") == true) R.string.inbox_mention_me else R.string.inbox_moments)
+    else -> kindLabel(res, record.item.kind)
 }
 
 private fun displayTime(value: String): String = runCatching {
@@ -359,24 +393,37 @@ internal fun rememberSettledConnection(connection: ConnectionState, delayMillis:
     return shown
 }
 
-internal fun inboxTitle(state: ConnectionState): String = when (state) {
-    ConnectionState.Online -> "收件箱"
-    ConnectionState.Connecting -> "连接中…"
-    ConnectionState.Updating -> "更新中…"
-    ConnectionState.WaitingForNetwork -> "等待网络"
-    ConnectionState.NeedsLocalNetworkPermission -> "需要本地网络权限"
-    ConnectionState.CertificateMismatch -> "hub 的证书变了"
-    ConnectionState.Revoked -> "配对已失效"
-}
+@Composable
+internal fun inboxTitle(state: ConnectionState): String = stringResource(when (state) {
+    ConnectionState.Online -> R.string.inbox_title
+    ConnectionState.Connecting -> R.string.inbox_conn_connecting
+    ConnectionState.Updating -> R.string.inbox_conn_updating
+    ConnectionState.WaitingForNetwork -> R.string.inbox_conn_waiting_network
+    ConnectionState.NeedsLocalNetworkPermission -> R.string.inbox_conn_local_network
+    ConnectionState.CertificateMismatch -> R.string.inbox_conn_certificate
+    ConnectionState.Revoked -> R.string.inbox_conn_revoked
+})
+
+/** [InboxRecord.localStatus] tokens the repositories write (`RealInboxRepository`, [InboxExperienceRepository]). */
+internal const val LOCAL_DRAFT = "草稿 · " // i18n-ignore: token the repositories write, shown via inbox_local_draft
+internal const val LOCAL_UNCONFIRMED = "结果待确认 · 打开核对" // i18n-ignore: token, shown via inbox_local_unconfirmed
 
 @Composable
 private fun InboxLocalStatus(label: String) {
+    // The repositories write these labels in Chinese as tokens (a pending state's label, 草稿 · …); they turn into
+    // the shown language here.
     val pending = PendingStatus.entries.firstOrNull { label.startsWith(it.label) }
     if (pending != null) {
-        PendingBadge(pending, reason = if (pending == PendingStatus.Refused) label.substringAfter("：", "").takeIf { it.isNotBlank() } else null)
+        PendingBadge(pending, reason = if (pending == PendingStatus.Refused) label.substringAfter("：", "").takeIf { it.isNotBlank() } else null) // i18n-ignore: separator of the token
     } else {
-        Text(label, style = PersonaTheme.type.micro,
-            color = if (label.startsWith("草稿")) PersonaTheme.palette.cautionText else PersonaTheme.palette.ink3)
+        val draft = label.removePrefix(LOCAL_DRAFT).takeIf { label.startsWith(LOCAL_DRAFT) }
+        val shown = when {
+            draft != null -> stringResource(R.string.inbox_local_draft, draft)
+            label == LOCAL_UNCONFIRMED -> stringResource(R.string.inbox_local_unconfirmed)
+            else -> label
+        }
+        Text(shown, style = PersonaTheme.type.micro,
+            color = if (draft != null) PersonaTheme.palette.cautionText else PersonaTheme.palette.ink3)
     }
 }
 
@@ -384,5 +431,5 @@ private fun InboxLocalStatus(label: String) {
 internal fun ReplyStatus(state: ReplyComposerState) {
     state.delivery.pendingStatus()?.let { PendingBadge(it) }
         ?: if (state.sending) PendingBadge(PendingStatus.Sending) else Unit
-    state.error?.let { JNotice(it, status = Status.NeedsYou) }
+    state.error?.let { JNotice(androidx.compose.ui.res.stringResource(it.text), status = Status.NeedsYou) }
 }

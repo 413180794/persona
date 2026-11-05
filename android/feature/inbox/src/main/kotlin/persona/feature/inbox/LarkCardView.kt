@@ -1,5 +1,9 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -46,7 +50,7 @@ internal fun LarkInteractiveCard(part: LarkPart.Card, repository: InboxRepositor
             Spacer(Modifier.height(Tokens.Space.s))
         }
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            if (card.blocks.isEmpty()) LarkLinkedText(card.summary, part.source)
+            if (card.blocks.isEmpty()) LarkLinkedText(card.summary.ifBlank { stringResource(R.string.inbox_lark_card_unsupported) }, part.source)
             else CardBlocks(card.blocks, part.source, part.messageId, repository, onError)
         }
     }
@@ -64,9 +68,11 @@ private fun CardBlocks(
     val uriHandler = LocalUriHandler.current
     val linkOpener = LocalLarkLinkOpener.current
 
+    val res = LocalResources.current
     blocks.forEach { block ->
         when (block) {
             is LarkCardBlock.Text -> LarkLinkedText(block.text, source)
+            is LarkCardBlock.Placeholder -> LarkLinkedText(stringResource(block.text), source)
             is LarkCardBlock.Button -> {
                 var pending by remember(block) { mutableStateOf(false) }
                 val hasLink = !block.url.isNullOrBlank()
@@ -74,7 +80,7 @@ private fun CardBlocks(
                 val enabled = !pending && (hasLink || (isCallback && messageId != null))
 
                 JButton(
-                    text = if (pending) "正在处理…" else block.label,
+                    text = if (pending) stringResource(R.string.inbox_lark_processing) else block.label.ifBlank { stringResource(R.string.inbox_lark_card_action) },
                     onClick = {
                         if (hasLink) {
                             val targetUrl = block.url ?: return@JButton
@@ -86,7 +92,7 @@ private fun CardBlocks(
                                 try {
                                     repository.cardAction(messageId, block.actionId)
                                 } catch (e: Exception) {
-                                    onError(e.message ?: "操作失败")
+                                    onError(e.message ?: res.getString(R.string.inbox_lark_action_failed))
                                 } finally {
                                     pending = false
                                 }
@@ -98,7 +104,7 @@ private fun CardBlocks(
                     kind = if (isCallback) JButtonKind.Primary else JButtonKind.Secondary
                 )
             }
-            is LarkCardBlock.Image -> LarkPartContent(source.image(block.url).copy(description = block.alt,
+            is LarkCardBlock.Image -> LarkPartContent(source.image(block.url).copy(description = block.alt.ifBlank { stringResource(R.string.inbox_lark_card_image) },
                 width = block.width, height = block.height), repository, onError)
             is LarkCardBlock.Group -> Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                 CardBlocks(block.children, source, messageId, repository, onError)

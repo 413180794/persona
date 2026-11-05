@@ -4,6 +4,8 @@ import persona.core.designsystem.*
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import persona.core.contracts.api.MailReplyTarget
 import persona.core.contracts.api.MailReplyTargetChanged
 import kotlinx.coroutines.CancellationException
@@ -22,19 +24,34 @@ data class ReplyComposerState(
     val draft: ReplyDraft = ReplyDraft(""),
     val loading: Boolean = true,
     val sending: Boolean = false,
-    val error: String? = null,
+    val error: ReplyError? = null,
     val sent: Boolean = false,
     val delivery: ReplyDelivery = ReplyDelivery.Ready,
     val targetChanged: Boolean = false,
 ) {
     val canEdit: Boolean get() = !loading && !sending && delivery in setOf(ReplyDelivery.Ready, ReplyDelivery.Refused)
-    val actionLabel: String get() = when {
+    val actionLabel: String @Composable get() = when {
         delivery == ReplyDelivery.Verifying -> PendingStatus.Verifying.label
-        delivery in setOf(ReplyDelivery.Unknown, ReplyDelivery.NeedsConfirmation) -> "核对结果"
+        delivery in setOf(ReplyDelivery.Unknown, ReplyDelivery.NeedsConfirmation) -> stringResource(R.string.inbox_check_result)
         delivery in setOf(ReplyDelivery.Queued, ReplyDelivery.WaitingForNetwork) -> PendingStatus.Waiting.label
         sending -> PendingStatus.Sending.label
-        else -> "发送"
+        else -> stringResource(R.string.inbox_send)
     }
+}
+
+/** Why a reply did not go (or may not have): the composer runs outside composition, so it keeps the text's id. */
+enum class ReplyError(@StringRes val text: Int) {
+    Unconfirmed(R.string.inbox_reply_error_unconfirmed),
+    UnconfirmedShort(R.string.inbox_reply_error_unconfirmed_short),
+    DraftRead(R.string.inbox_reply_error_draft_read),
+    DraftSave(R.string.inbox_reply_error_draft_save),
+    Refused(R.string.inbox_reply_error_refused),
+    NotSaved(R.string.inbox_reply_error_not_saved),
+    TargetChanged(R.string.inbox_reply_error_target_changed),
+    TargetChangedNotSaved(R.string.inbox_reply_error_target_changed_not_saved),
+    NotSent(R.string.inbox_reply_error_not_sent),
+    CantConfirm(R.string.inbox_reply_error_cant_confirm),
+    CheckFailed(R.string.inbox_reply_error_check_failed),
 }
 
 /**
@@ -66,13 +83,13 @@ class ReplyComposer(
                     draft = if (delivery == ReplyDelivery.Sent) ReplyDraft("") else draft,
                     loading = false, sent = delivery == ReplyDelivery.Sent,
                     delivery = if (delivery == ReplyDelivery.Sent) ReplyDelivery.Ready else delivery,
-                    error = if (delivery == ReplyDelivery.Unknown) "结果待确认，请先核对，避免重复发送" else null,
+                    error = if (delivery == ReplyDelivery.Unknown) ReplyError.Unconfirmed else null,
                 )
                 applyOffer()
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                mutableState.value = mutableState.value.copy(error = "草稿读取失败，请重新打开")
+                mutableState.value = mutableState.value.copy(error = ReplyError.DraftRead)
             }
         }
     }
@@ -141,7 +158,7 @@ class ReplyComposer(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                mutableState.value = state.value.copy(error = "草稿保存失败，发送时会重试保存")
+                mutableState.value = state.value.copy(error = ReplyError.DraftSave)
             }
         }
     }
@@ -162,7 +179,7 @@ class ReplyComposer(
                 }
                 mutableState.value = ReplyComposerState(draft = ReplyDraft(""), loading = false, sent = true)
             } catch (error: CancellationException) {
-                mutableState.value = state.value.copy(sending = false, delivery = ReplyDelivery.Unknown, error = "结果待确认，请先核对")
+                mutableState.value = state.value.copy(sending = false, delivery = ReplyDelivery.Unknown, error = ReplyError.UnconfirmedShort)
                 throw error
             } catch (_: MailReplyTargetChanged) {
                 targetChanged(current.draft)
@@ -175,9 +192,9 @@ class ReplyComposer(
                 mutableState.value = state.value.copy(sending = false, delivery = delivery,
                     error = when (delivery) {
                         ReplyDelivery.Queued, ReplyDelivery.WaitingForNetwork -> null
-                        ReplyDelivery.Refused -> "没有发出，请修改后再发送"
-                        ReplyDelivery.Ready -> "草稿未能保存，尚未发送，请重试"
-                        else -> "结果待确认，请先核对，避免重复发送"
+                        ReplyDelivery.Refused -> ReplyError.Refused
+                        ReplyDelivery.Ready -> ReplyError.NotSaved
+                        else -> ReplyError.Unconfirmed
                     })
             }
         }
@@ -186,10 +203,10 @@ class ReplyComposer(
     private suspend fun targetChanged(previous: ReplyDraft) {
         val draft = ReplyDraft(previous.text, ai = previous.ai)
         mutableState.value = state.value.copy(draft = draft, sending = false, targetChanged = true,
-            delivery = ReplyDelivery.Ready, error = "邮件回复对象已变化，尚未发送。请查看最新邮件并确认收件人")
+            delivery = ReplyDelivery.Ready, error = ReplyError.TargetChanged)
         try { writes.withLock { repository.saveDraft(target, draft) } }
         catch (e: CancellationException) { throw e }
-        catch (_: Exception) { mutableState.value = state.value.copy(error = "回复对象已变化；草稿保存失败，发送时会重试保存") }
+        catch (_: Exception) { mutableState.value = state.value.copy(error = ReplyError.TargetChangedNotSaved) }
     }
 
     private fun verify() {
@@ -203,12 +220,12 @@ class ReplyComposer(
                 } else if (result == ReplyDelivery.Ready) {
                     val fresh = ReplyDraft(draft.text, ai = draft.ai)
                     writes.withLock { repository.saveDraft(target, fresh) }
-                    state.value.copy(draft = fresh, sending = false, delivery = ReplyDelivery.Ready, error = "尚未发送，可以重试")
+                    state.value.copy(draft = fresh, sending = false, delivery = ReplyDelivery.Ready, error = ReplyError.NotSent)
                 } else state.value.copy(sending = false, delivery = result,
                     error = when (result) {
-                        ReplyDelivery.Refused -> "没有发出，请修改后再发送"
+                        ReplyDelivery.Refused -> ReplyError.Refused
                         ReplyDelivery.Queued, ReplyDelivery.WaitingForNetwork -> null
-                        else -> "暂时无法确认是否送达，请查看原会话；不会自动重发"
+                        else -> ReplyError.CantConfirm
                     })
             } catch (e: CancellationException) {
                 mutableState.value = state.value.copy(sending = false, delivery = ReplyDelivery.Unknown)
@@ -216,7 +233,7 @@ class ReplyComposer(
             } catch (_: MailReplyTargetChanged) {
                 targetChanged(draft)
             } catch (_: Exception) {
-                mutableState.value = state.value.copy(sending = false, delivery = ReplyDelivery.Unknown, error = "核对未完成，请稍后再试")
+                mutableState.value = state.value.copy(sending = false, delivery = ReplyDelivery.Unknown, error = ReplyError.CheckFailed)
             }
         }
     }
@@ -240,7 +257,7 @@ internal fun ReplyComposerField(
         },
         trailing = {
             if (state.delivery in setOf(ReplyDelivery.Unknown, ReplyDelivery.NeedsConfirmation)) {
-                JButton("核对", onSend,
+                JButton(stringResource(R.string.inbox_reply_check), onSend,
                     size = JButtonSize.Small,
                     enabled = sendEnabled && !state.loading && !state.sending && state.draft.text.isNotBlank())
             } else SendButton(onSend,

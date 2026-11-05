@@ -1,5 +1,7 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.res.stringResource
+
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -82,13 +84,13 @@ internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -
                                 .background(PersonaTheme.palette.ink3, PersonaTheme.shapes.controlShape))
                             Row(Modifier.fillMaxWidth().padding(end = Tokens.Space.m), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                                InboxConnectionTitle(repository, if (link.source != null && isLarkDocumentUrl(link.url)) "飞书文档" else "网页",
+                                InboxConnectionTitle(repository, stringResource(if (link.source != null && isLarkDocumentUrl(link.url)) R.string.inbox_lark_doc else R.string.inbox_lark_webpage),
                                     Modifier.weight(1f).padding(start = Tokens.Space.m))
                                 JIconButton(if (drag.currentValue == ReaderDetent.Full) PhIcons.CaretDown else PhIcons.CaretUp,
-                                    if (drag.currentValue == ReaderDetent.Full) "收起" else "展开", onClick = {
+                                    stringResource(if (drag.currentValue == ReaderDetent.Full) R.string.inbox_collapse else R.string.inbox_expand), onClick = {
                                     scope.launch { drag.animateTo(if (drag.currentValue == ReaderDetent.Full) ReaderDetent.Peek else ReaderDetent.Full) }
                                 })
-                                JIconButton(PhIcons.X, "关闭", onClick = { scope.launch { drag.animateTo(ReaderDetent.Hidden); target = null } })
+                                JIconButton(PhIcons.X, stringResource(R.string.inbox_close), onClick = { scope.launch { drag.animateTo(ReaderDetent.Hidden); target = null } })
                             }
                         }
                         LarkDocumentReader(link.url, link.source, repository, Modifier.weight(1f), showConnectionTitle = false)
@@ -136,12 +138,12 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
     }
     val navigator = LocalInboxNavigator.current
     val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
-    JPage(title = if (connection == ConnectionState.Online) document?.title ?: "飞书文档" else inboxTitle(connection), modifier = modifier,
+    JPage(title = if (connection == ConnectionState.Online) document?.title?.ifBlank { null } ?: stringResource(R.string.inbox_lark_doc) else inboxTitle(connection), modifier = modifier,
         titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
         onTitleClick = if (connection == ConnectionState.Online || navigator == null) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
         onBack = navigator?.let { { it.back() } },
         topBar = if (showConnectionTitle) null else ({}),
-        actions = { JTextButton("切换网页", { webpage = true }) }) { padding ->
+        actions = { JTextButton(stringResource(R.string.inbox_lark_switch_web), { webpage = true }) }) { padding ->
         if (webpage) {
             Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = pagePadding)) {
                 if (webpageContent != null) webpageContent() else LarkDocumentWebView(url, Modifier.fillMaxSize())
@@ -149,8 +151,8 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
         } else if (document == null) {
             LazyColumn(contentPadding = PaddingValues(start = pagePadding, end = pagePadding,
                 top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
-                item { JLoading(text = "正在读取文档") }
-                item { JButton("切换网页", onClick = { webpage = true }) }
+                item { JLoading(text = stringResource(R.string.inbox_lark_reading_doc)) }
+                item { JButton(stringResource(R.string.inbox_lark_switch_web), onClick = { webpage = true }) }
             }
         } else {
             val loaded = requireNotNull(document)
@@ -159,8 +161,8 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
                     top = padding.calculateTopPadding() + Tokens.Space.m, bottom = padding.calculateBottomPadding() + Tokens.Space.m),
                     verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
                     item {
-                        Text(loaded.title, style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
-                        if (!showConnectionTitle) JTextButton("切换网页", { webpage = true })
+                        Text(loaded.title.ifBlank { stringResource(R.string.inbox_lark_doc) }, style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
+                        if (!showConnectionTitle) JTextButton(stringResource(R.string.inbox_lark_switch_web), { webpage = true })
                     }
                     items(loaded.blocks) { block ->
                         when (block.kind) {
@@ -170,17 +172,18 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
                                 if (block.language.isNotBlank()) Text(block.language, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
                                 Text(block.text, Modifier.horizontalScroll(rememberScrollState()), style = PersonaTheme.type.code, color = PersonaTheme.palette.ink)
                             }
-                            "image" -> if (block.image.isBlank()) Text(block.text.ifBlank { "图片暂不可用，可切换网页查看" },
+                            "image" -> if (block.image.isBlank()) Text(block.text.ifBlank { stringResource(R.string.inbox_lark_doc_image_unavailable) },
                                 style = PersonaTheme.type.body, color = PersonaTheme.palette.ink2)
                                 else LarkPartContent(requireNotNull(source).image(block.image, document = true), repository) { }
                             "divider" -> JDivider()
                             else -> Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                                 if (block.marker.isNotEmpty()) Text(block.marker, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink3)
-                                LarkLinkedText(block.text, source, Modifier.weight(1f))
+                                LarkLinkedText(block.text.ifBlank { if (block.kind == "unsupported") stringResource(R.string.inbox_lark_doc_block_unsupported) else "" },
+                                    source, Modifier.weight(1f))
                             }
                         }
                     }
-                    if (loaded.partial) item { JNotice("文档较长，只显示了部分内容，可切换网页继续阅读") }
+                    if (loaded.partial) item { JNotice(stringResource(R.string.inbox_lark_doc_partial)) }
                 }
             }
             if (loaded.copyAllowed) SelectionContainer { body() } else body()
@@ -226,8 +229,8 @@ private fun LarkDocumentWebView(url: String, modifier: Modifier) {
     BackHandler(enabled = web.canGoBack()) { web.goBack() }
     Column(modifier) {
         if (failed) Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("网页加载失败", Modifier.weight(1f).padding(Tokens.Space.m), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
-            JButton("重试", onClick = { failed = false; web.reload() })
+            Text(stringResource(R.string.inbox_lark_web_failed), Modifier.weight(1f).padding(Tokens.Space.m), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+            JButton(stringResource(R.string.inbox_retry), onClick = { failed = false; web.reload() })
         }
         AndroidView(factory = { web }, modifier = Modifier.fillMaxWidth().weight(1f))
     }

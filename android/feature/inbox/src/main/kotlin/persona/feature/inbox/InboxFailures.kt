@@ -10,7 +10,7 @@ import java.io.IOException
  * (a draft the model could not write), the usual operation feedback for the connection, the local reason otherwise.
  */
 internal fun failureReason(error: Throwable): String {
-    if (error !is IOException) return error.message?.takeIf { it.isNotBlank() } ?: "请稍后重试"
+    if (error !is IOException) return error.message?.takeIf { it.isNotBlank() } ?: operationFeedback(error).message
     val failure = HubFailure.from(error)
     // Only the hub's own refusals carry words worth showing; pairing, certificates and the network have their own.
     val hubSaid = failure.message.takeIf {

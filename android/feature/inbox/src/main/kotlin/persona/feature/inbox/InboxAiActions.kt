@@ -1,5 +1,7 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.res.stringResource
+
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import androidx.compose.foundation.horizontalScroll
@@ -26,11 +28,11 @@ internal fun InboxAiActions(
         modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
     ) {
-        JChip("AI 草拟", icon = PhIcons.Sparkle, onClick = { if (draftEnabled) onDraft() })
-        JChip("交给 AI", icon = PhIcons.Robot, onClick = onHandOff)
+        JChip(stringResource(R.string.inbox_ai_draft), icon = PhIcons.Sparkle, onClick = { if (draftEnabled) onDraft() })
+        JChip(stringResource(R.string.inbox_hand_to_ai), icon = PhIcons.Robot, onClick = onHandOff)
     } else DecisionButtons(primary = primaryAction, modifier = modifier,
-        secondary = JAction("交给 AI", PhIcons.Robot, onClick = onHandOff),
-        more = listOf(JAction("AI 草拟", PhIcons.Sparkle, enabled = draftEnabled, onClick = onDraft)))
+        secondary = JAction(stringResource(R.string.inbox_hand_to_ai), PhIcons.Robot, onClick = onHandOff),
+        more = listOf(JAction(stringResource(R.string.inbox_ai_draft), PhIcons.Sparkle, enabled = draftEnabled, onClick = onDraft)))
 }
 
 @Preview(showBackground = true, widthDp = 320)

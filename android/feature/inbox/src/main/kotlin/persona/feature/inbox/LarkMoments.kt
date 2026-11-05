@@ -1,5 +1,9 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
@@ -75,8 +79,8 @@ internal fun LarkMomentsCard(
     val card = preview?.card
     JCard(modifier.fillMaxWidth().clickable(onClick = onClick), padding = Tokens.Space.m) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            Icon(PhIcons.ChatsCircle.regular, contentDescription = "公司圈", tint = PersonaTheme.palette.accent, modifier = Modifier.size(20.dp))
-            Text(preview?.title ?: "公司圈动态", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+            Icon(PhIcons.ChatsCircle.regular, contentDescription = stringResource(R.string.inbox_moments), tint = PersonaTheme.palette.accent, modifier = Modifier.size(20.dp))
+            Text(preview?.title ?: stringResource(R.string.inbox_moments_post), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
         }
         card?.author?.let { author ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
@@ -104,6 +108,7 @@ fun LarkMomentsScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val res = LocalResources.current
     val scope = rememberCoroutineScope()
     val inbox by repository.snapshot.collectAsStateWithLifecycle()
     val record = inbox.records.firstOrNull { it.item.id == route.itemId || it.moment?.postId == route.postId }
@@ -129,7 +134,7 @@ fun LarkMomentsScreen(
                 post = repository.momentsPost(route.postId)
                 comments = repository.momentsComments(route.postId)
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = e.message ?: "加载失败，请重试" }
+            catch (e: Exception) { error = e.message ?: res.getString(R.string.inbox_load_failed_retry) }
             finally { loading = false }
         }
     }
@@ -146,8 +151,8 @@ fun LarkMomentsScreen(
     val feishuUrl = "https://applink.feishu.cn/client/moments/detail?postId=${route.postId}"
 
     JListPage(
-        title = "公司圈",
-        subtitle = post?.userName?.takeIf { it.isNotBlank() }?.let { "$it 的动态" },
+        title = stringResource(R.string.inbox_moments),
+        subtitle = post?.userName?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.inbox_moments_user_posts, it) },
         onBack = navigator::back,
         refreshing = loading,
         onRefresh = ::reload,
@@ -155,7 +160,7 @@ fun LarkMomentsScreen(
             if (record != null) {
                 JIconButton(
                     PhIcons.CheckCircle,
-                    if (record.item.isDone) "移回收件箱" else "已处理",
+                    stringResource(if (record.item.isDone) R.string.inbox_move_back else R.string.inbox_done),
                     enabled = !markingDone,
                     onClick = {
                         markingDone = true
@@ -164,13 +169,13 @@ fun LarkMomentsScreen(
                                 repository.setDone(record.item.id, !record.item.isDone)
                                 navigator.back()
                             } catch (e: CancellationException) { throw e }
-                            catch (e: Exception) { error = "操作失败，请重试" }
+                            catch (e: Exception) { error = res.getString(R.string.inbox_failed_retry) }
                             finally { markingDone = false }
                         }
                     }
                 )
             }
-            JIconButton(PhIcons.ArrowSquareOut, "在飞书中打开", onClick = {
+            JIconButton(PhIcons.ArrowSquareOut, stringResource(R.string.inbox_open_in_lark), onClick = {
                 try {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(feishuUrl)).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -185,7 +190,7 @@ fun LarkMomentsScreen(
                     onDraft = { drafting = true },
                     onHandOff = { handingOff = true },
                     modifier = Modifier.imePadding().padding(Tokens.Space.m),
-                    primaryAction = JAction("评论", PhIcons.ArrowBendUpLeft) { drafting = true },
+                    primaryAction = JAction(stringResource(R.string.inbox_moments_comment), PhIcons.ArrowBendUpLeft) { drafting = true },
                     draftEnabled = true,
                 )
             }
@@ -195,16 +200,16 @@ fun LarkMomentsScreen(
         item("plugin-notice") { InboxExtensionNotice(route.itemId, route) }
         if (error != null) {
             item("error") {
-                JNotice(error ?: "加载失败", status = Status.NeedsYou, actionLabel = "重试", onAction = ::reload)
+                JNotice(error ?: stringResource(R.string.inbox_load_failed), status = Status.NeedsYou, actionLabel = stringResource(R.string.inbox_retry), onAction = ::reload)
             }
         }
         if (loading && post == null) {
-            item("loading") { JLoading(text = "正在读取帖子与评论") }
+            item("loading") { JLoading(text = stringResource(R.string.inbox_moments_loading)) }
         }
 
         record?.item?.summary?.takeIf { it.isNotBlank() }?.let { summary ->
             item("summary") {
-                JNotice(summary, Modifier.padding(bottom = Tokens.Space.m), title = "AI 摘要", icon = PhIcons.Sparkle)
+                JNotice(summary, Modifier.padding(bottom = Tokens.Space.m), title = stringResource(R.string.inbox_ai_summary), icon = PhIcons.Sparkle)
             }
         }
 
@@ -228,12 +233,12 @@ fun LarkMomentsScreen(
             }
 
             item("comments-header") {
-                JSectionHeader(title = "${p.commentCount ?: comments.size} 条评论")
+                JSectionHeader(title = (p.commentCount ?: comments.size).let { pluralStringResource(R.plurals.inbox_moments_comments, it, it) })
             }
 
             if (comments.isEmpty() && !loading) {
                 item("empty-comments") {
-                    JEmptyState("暂无评论", "这篇帖子还没有人评论。")
+                    JEmptyState(stringResource(R.string.inbox_moments_no_comments_title), stringResource(R.string.inbox_moments_no_comments_text))
                 }
             }
 
@@ -274,6 +279,7 @@ internal fun LarkMomentsSheet(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val res = LocalResources.current
     var post by remember(postId) { mutableStateOf<LarkMomentsPost?>(null) }
     var comments by remember(postId) { mutableStateOf<List<LarkMomentsComment>>(emptyList()) }
     var loading by remember(postId) { mutableStateOf(true) }
@@ -289,7 +295,7 @@ internal fun LarkMomentsSheet(
                 post = repository.momentsPost(postId)
                 comments = repository.momentsComments(postId)
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = e.message ?: "加载失败" }
+            catch (e: Exception) { error = e.message ?: res.getString(R.string.inbox_load_failed) }
             finally { loading = false }
         }
     }
@@ -298,10 +304,10 @@ internal fun LarkMomentsSheet(
 
     val feishuUrl = link ?: "https://applink.feishu.cn/client/moments/detail?postId=$postId"
 
-    JSheet(onDismiss = onDismiss, title = "公司圈", scrollable = false) {
+    JSheet(onDismiss = onDismiss, title = stringResource(R.string.inbox_moments), scrollable = false) {
         Row(Modifier.fillMaxWidth().padding(bottom = Tokens.Space.s), horizontalArrangement = Arrangement.End) {
             JButton(
-                "在飞书中打开",
+                stringResource(R.string.inbox_open_in_lark),
                 onClick = {
                     try {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(feishuUrl)).apply {
@@ -317,10 +323,10 @@ internal fun LarkMomentsSheet(
         }
 
         if (error != null) {
-            JNotice(error ?: "加载失败", status = Status.NeedsYou, actionLabel = "重试", onAction = ::reload)
+            JNotice(error ?: stringResource(R.string.inbox_load_failed), status = Status.NeedsYou, actionLabel = stringResource(R.string.inbox_retry), onAction = ::reload)
         }
         if (loading && post == null) {
-            JLoading(text = "正在读取帖子与评论")
+            JLoading(text = stringResource(R.string.inbox_moments_loading))
         }
 
         val p = post
@@ -333,11 +339,11 @@ internal fun LarkMomentsSheet(
                     MomentsPostCard(post = p, onOpenImage = { images, idx -> viewerImage = images to idx })
                 }
                 item("comments-header") {
-                    JSectionHeader(title = "${p.commentCount ?: comments.size} 条评论")
+                    JSectionHeader(title = (p.commentCount ?: comments.size).let { pluralStringResource(R.plurals.inbox_moments_comments, it, it) })
                 }
                 if (comments.isEmpty() && !loading) {
                     item("empty-comments") {
-                        JEmptyState("暂无评论", "这篇帖子还没有人评论。")
+                        JEmptyState(stringResource(R.string.inbox_moments_no_comments_title), stringResource(R.string.inbox_moments_no_comments_text))
                     }
                 }
                 items(comments.size, key = { comments[it].id }) { index ->
@@ -419,7 +425,7 @@ private fun MomentsCommentRow(
                     }
                 }
                 if (!comment.replyUserName.isNullOrBlank()) {
-                    Text("回复 @${comment.replyUserName}：", style = PersonaTheme.type.caption, color = PersonaTheme.palette.accent)
+                    Text(stringResource(R.string.inbox_moments_reply_to, comment.replyUserName.orEmpty()), style = PersonaTheme.type.caption, color = PersonaTheme.palette.accent)
                 }
                 val commentText = comment.content?.text
                     ?: comment.content?.segments?.joinToString("") { it.text ?: it.key ?: "" }.orEmpty()
@@ -460,7 +466,7 @@ private fun MomentsImagesLayout(
         val shape = RoundedCornerShape(8.dp)
         AsyncImage(
             model = img.url,
-            contentDescription = "图片",
+            contentDescription = stringResource(R.string.inbox_image),
             modifier = Modifier
                 .fillMaxWidth(0.7f)
                 .aspectRatio(1.2f)
@@ -476,7 +482,7 @@ private fun MomentsImagesLayout(
                         val shape = RoundedCornerShape(6.dp)
                         AsyncImage(
                             model = img.url,
-                            contentDescription = "图片",
+                            contentDescription = stringResource(R.string.inbox_image),
                             modifier = Modifier
                                 .weight(1f)
                                 .aspectRatio(1f)

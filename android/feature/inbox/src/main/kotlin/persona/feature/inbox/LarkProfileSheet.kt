@@ -1,5 +1,10 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
+import android.content.res.Resources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
+
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -60,7 +65,7 @@ data class LarkParsedProfile(
     )
 }
 
-fun parseProfile(json: JsonObject, fallbackName: String): LarkParsedProfile {
+fun parseProfile(res: Resources, json: JsonObject, fallbackName: String): LarkParsedProfile {
     val alias = json.cursor("alias")
     val displayName = alias ?: json.cursor("displayName") ?: json.cursor("display_name") ?: fallbackName
     val enName = json.cursor("enName") ?: json.cursor("en_name")
@@ -76,8 +81,8 @@ fun parseProfile(json: JsonObject, fallbackName: String): LarkParsedProfile {
     val customStatus = json["customStatus"] as? JsonObject
     val workStatus = json["workStatus"] as? JsonObject
     val statusText = when (workStatus?.number("status")?.toInt()) {
-        1 -> "请假中"
-        2 -> "会议中"
+        1 -> res.getString(R.string.inbox_lark_on_leave)
+        2 -> res.getString(R.string.inbox_lark_in_meeting)
         else -> customStatus?.cursor("title")
     }
 
@@ -87,9 +92,9 @@ fun parseProfile(json: JsonObject, fallbackName: String): LarkParsedProfile {
         val value = (f["value"] as? JsonPrimitive)?.content ?: return@mapNotNull null
         if (value.isBlank()) return@mapNotNull null
         val label = when (key) {
-            "B-DEPARTMENT" -> "部门"
-            "B-LEADER" -> "直属上级"
-            "B-EMPLOYEETYPE" -> "人员类型"
+            "B-DEPARTMENT" -> res.getString(R.string.inbox_lark_department)
+            "B-LEADER" -> res.getString(R.string.inbox_lark_manager)
+            "B-EMPLOYEETYPE" -> res.getString(R.string.inbox_lark_employee_type)
             else -> f.cursor("label") ?: key
         }
         val url = f.cursor("url")
@@ -133,7 +138,7 @@ fun LarkProfileSheet(
 
     JSheet(
         onDismiss = onDismiss,
-        title = "名片",
+        title = stringResource(R.string.inbox_lark_profile),
         skipPartiallyExpanded = false
     ) {
         LarkProfileCardContent(
@@ -157,6 +162,7 @@ private fun LarkProfileCardContent(
     var profileData by remember(person) { mutableStateOf<LarkParsedProfile?>(null) }
     var loading by remember(person) { mutableStateOf(true) }
     var error by remember(person) { mutableStateOf<String?>(null) }
+    val res = LocalResources.current
 
     LaunchedEffect(person) {
         loading = true
@@ -164,12 +170,12 @@ private fun LarkProfileCardContent(
         try {
             val json = repository.userProfile(person.id, person.feedId)
             if (json != null) {
-                profileData = parseProfile(json, person.name)
+                profileData = parseProfile(res, json, person.name)
             } else {
                 profileData = LarkParsedProfile(person.name)
             }
         } catch (e: Exception) {
-            error = e.message ?: "加载资料失败"
+            error = e.message ?: res.getString(R.string.inbox_lark_profile_failed)
             profileData = LarkParsedProfile(person.name)
         } finally {
             loading = false
@@ -190,7 +196,7 @@ private fun LarkProfileCardContent(
             if (!profile.coverUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = profile.coverUrl,
-                    contentDescription = "封面",
+                    contentDescription = stringResource(R.string.inbox_lark_cover),
                     modifier = Modifier.fillMaxWidth().height(120.dp)
                 )
             } else {
@@ -239,10 +245,10 @@ private fun LarkProfileCardContent(
                         overflow = TextOverflow.Ellipsis
                     )
                     if (profile.userType == "bot") {
-                        JTag("机器人")
+                        JTag(stringResource(R.string.inbox_bot))
                     }
                     if (profile.isExternal) {
-                        JTag("外部")
+                        JTag(stringResource(R.string.inbox_lark_external))
                     }
                 }
 
@@ -250,7 +256,7 @@ private fun LarkProfileCardContent(
                 val subtitleParts = listOfNotNull(
                     profile.enName,
                     profile.alias?.takeIf { it != profile.displayName },
-                    profile.groupNickname?.let { "群昵称：$it" }
+                    profile.groupNickname?.let { stringResource(R.string.inbox_lark_group_nickname, it) }
                 ).filter { it.isNotBlank() }
 
                 if (subtitleParts.isNotEmpty()) {
@@ -297,7 +303,7 @@ private fun LarkProfileCardContent(
             // Direct Chat Button
             if (profile.userType != "bot" && onDirectChat != null) {
                 JButton(
-                    "发消息",
+                    stringResource(R.string.inbox_lark_message),
                     onClick = { onDirectChat(person.id) },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -353,7 +359,7 @@ private fun LarkProfileCardContent(
             }
 
             if (error != null) {
-                JNotice(error ?: "加载失败", status = Status.NeedsYou)
+                JNotice(error ?: stringResource(R.string.inbox_load_failed), status = Status.NeedsYou)
             }
         }
     }

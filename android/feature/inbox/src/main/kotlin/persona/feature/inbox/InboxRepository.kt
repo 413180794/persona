@@ -43,10 +43,10 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
      * A reply in the user's voice drafted by the hub (`POST /api/v1/inbox/{id}/draft`); [instruction] may be empty.
      * The text only fills the reply for the user to edit: sending it is a separate, confirmed step.
      */
-    suspend fun draftReply(itemId: String, instruction: String): String = error("AI 草拟尚未接入")
+    suspend fun draftReply(itemId: String, instruction: String): String = error("AI 草拟尚未接入") // i18n-ignore: developer error for a repository without the hub
 
     /** 交给 AI: the item as context with what to do, queued for Persona's main conversation or a running Agent. */
-    suspend fun handOff(request: InboxHandOffRequest): Unit = error("交给 AI 尚未接入")
+    suspend fun handOff(request: InboxHandOffRequest): Unit = error("交给 AI 尚未接入") // i18n-ignore: developer error for a repository without the hub
     fun replyUpdates(target: ReplyTarget): Flow<Unit> = kotlinx.coroutines.flow.emptyFlow()
     suspend fun replyStatus(target: ReplyTarget, clientId: String): ReplyDelivery = ReplyDelivery.Ready
     suspend fun verifyReply(target: ReplyTarget, clientId: String): ReplyDelivery = ReplyDelivery.Unknown
@@ -62,7 +62,7 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
      * that took new messages since stays open ([InboxBulkResult.changedSince]).
      */
     suspend fun setDone(items: List<persona.core.contracts.api.InboxDoneTarget>, done: Boolean): InboxBulkResult =
-        error("批量处理尚未接入")
+        error("批量处理尚未接入") // i18n-ignore: developer error for a repository without the hub
     suspend fun readDraft(target: ReplyTarget): ReplyDraft?
     suspend fun saveDraft(target: ReplyTarget, draft: ReplyDraft)
 
@@ -175,17 +175,25 @@ data class ReplyRequest(val text: String, @SerialName("client_id") val clientId:
 data class ReplyDraft(val text: String, val clientId: String = UUID.randomUUID().toString(), val ai: Boolean = false)
 
 data class LarkConversation(
-    val title: String = "飞书会话",
+    val title: String = "",
     val messages: List<LarkMessage> = emptyList(),
     val loading: Boolean = false,
     val hasOlder: Boolean = false,
     val loadingOlder: Boolean = false,
     val error: String? = null,
+    /** A failure the Lark window itself ran into, worded by the page. */
+    val failure: LarkFailure? = null,
     val hasNewer: Boolean = false,
     val loadingNewer: Boolean = false,
     val verified: Boolean = false,
     val windowRevision: Long = 0,
 )
+
+enum class LarkFailure(@androidx.annotation.StringRes val text: Int) {
+    NotPaired(R.string.inbox_lark_not_paired),
+    Incomplete(R.string.inbox_lark_incomplete),
+    LoadFailed(R.string.inbox_lark_messages_failed),
+}
 
 enum class LarkDelivery { Sent, Sending, Failed, WaitingForNetwork }
 
@@ -212,9 +220,11 @@ data class LarkMessage(
     val reactions: List<LarkReaction> = emptyList(),
     /** False for what is not the sender's own text (recalled, encrypted): 设置 › 翻译 leaves it alone. */
     val translatable: Boolean = true,
+    /** Recalled by its sender: it has no parts and reads 「消息已撤回」. */
+    val recalled: Boolean = false,
 )
 
-data class LarkQuote(val id: String, val sender: String, val text: String)
+data class LarkQuote(val id: String, val sender: String, val text: String, val recalled: Boolean = false)
 
 data class LarkForwardedMessage(
     val id: String = "",
@@ -229,13 +239,13 @@ sealed interface LarkPart {
     data class Text(val text: String, val source: LarkContentSource? = null) : LarkPart
     data class Card(val content: LarkCardContent, val source: LarkContentSource, val messageId: String? = null) : LarkPart
     // Models may carry an authenticated Coil ImageRequest supplied by the data layer.
-    data class Image(val model: Any, val description: String = "图片", val width: Int = 1, val height: Int = 1) : LarkPart
+    data class Image(val model: Any, val description: String = "", val width: Int = 1, val height: Int = 1) : LarkPart
     data class File(val ref: String, val name: String, val mimeType: String = "application/octet-stream") : LarkPart
     data class External(val title: String, val larkUrl: String, val kind: String, val duration: String = "", val cover: Image? = null) : LarkPart
     data class Code(val code: String, val language: String = "") : LarkPart
     data class Audio(val ref: String, val durationMs: Long, val source: LarkContentSource? = null) : LarkPart
     data class Video(val ref: String, val durationMs: Long, val cover: Image? = null, val source: LarkContentSource? = null) : LarkPart
-    data class Sticker(val model: Any, val description: String = "表情", val width: Int = 1, val height: Int = 1) : LarkPart
+    data class Sticker(val model: Any, val description: String = "", val width: Int = 1, val height: Int = 1) : LarkPart
     data class MergeForward(val title: String, val messages: List<LarkForwardedMessage>, val source: LarkContentSource? = null) : LarkPart
 }
 

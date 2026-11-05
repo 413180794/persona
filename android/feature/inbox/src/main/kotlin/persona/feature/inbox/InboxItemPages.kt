@@ -1,5 +1,7 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
@@ -90,5 +92,5 @@ fun inboxSourcePage(itemId: String, records: List<InboxRecord>): NavKey? = recor
 internal fun InboxExtensionNotice(itemId: String?, from: NavKey, modifier: Modifier = Modifier.padding(bottom = Tokens.Space.s)) {
     val pages = LocalInboxItemPages.current
     val message = itemId?.let { pages.failures[it] } ?: return
-    JNotice(message, modifier, status = Status.NeedsYou, actionLabel = "重试", onAction = { pages.retry(from, itemId) })
+    JNotice(message, modifier, status = Status.NeedsYou, actionLabel = stringResource(R.string.inbox_retry), onAction = { pages.retry(from, itemId) })
 }

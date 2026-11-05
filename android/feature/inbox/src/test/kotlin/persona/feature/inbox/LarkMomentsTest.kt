@@ -1,5 +1,8 @@
 package persona.feature.inbox
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import org.junit.Assert.*
 import org.junit.Test
 import persona.core.contracts.JsonCodec
@@ -8,7 +11,11 @@ import persona.core.contracts.LarkMomentsCommentsResponse
 import persona.core.contracts.LarkMomentsPost
 import persona.core.domain.inbox.InboxItem
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class LarkMomentsTest {
+    /** The app's strings; Robolectric runs in 简体中文 (robolectric.properties). */
+    private val res get() = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources
 
     @Test
     fun postIdExtractedFromLarkShareLinks() {
@@ -37,25 +44,25 @@ class LarkMomentsTest {
             item = InboxItem("i1", kind = "moment"),
             moment = InboxMomentRef(postId = "p1", notice = "atInPost")
         )
-        assertEquals("@我", kindLabel(atMePost))
+        assertEquals("@我", kindLabel(res, atMePost))
 
         val atMeComment = InboxRecord(
             item = InboxItem("i2", kind = "moment"),
             moment = InboxMomentRef(postId = "p1", notice = "atInComment")
         )
-        assertEquals("@我", kindLabel(atMeComment))
+        assertEquals("@我", kindLabel(res, atMeComment))
 
         val comment = InboxRecord(
             item = InboxItem("i3", kind = "moment"),
             moment = InboxMomentRef(postId = "p1", notice = "comment")
         )
-        assertEquals("公司圈", kindLabel(comment))
+        assertEquals("公司圈", kindLabel(res, comment))
 
         val reply = InboxRecord(
             item = InboxItem("i4", kind = "moment"),
             moment = InboxMomentRef(postId = "p1", notice = "reply")
         )
-        assertEquals("公司圈", kindLabel(reply))
+        assertEquals("公司圈", kindLabel(res, reply))
     }
 
     @Test

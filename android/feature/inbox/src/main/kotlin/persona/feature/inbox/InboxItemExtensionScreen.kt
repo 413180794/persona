@@ -1,5 +1,10 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -26,10 +31,10 @@ internal fun inboxHeaderTier(record: InboxRecord): InboxTier? = record.item.tria
  * The words of an item's source line, as its row in the list says them: where it comes from (the account's name when
  * there are several), what kind it is, how many messages.
  */
-internal fun inboxSourceTags(record: InboxRecord): List<String> = listOfNotNull(
-    record.sourceLabel.takeIf { it.isNotBlank() } ?: if (record.isLark) "飞书" else "邮件",
-    kindLabel(record).takeIf { it.isNotBlank() },
-    "${record.count} 条消息".takeIf { record.count > 0 },
+internal fun inboxSourceTags(res: Resources, record: InboxRecord): List<String> = listOfNotNull(
+    record.sourceLabel.takeIf { it.isNotBlank() } ?: res.getString(if (record.isLark) R.string.inbox_source_lark else R.string.inbox_source_mail),
+    kindLabel(res, record).takeIf { it.isNotBlank() },
+    res.getQuantityString(R.plurals.inbox_messages_count, record.count, record.count).takeIf { record.count > 0 },
 ).distinct()
 
 /**
@@ -59,16 +64,17 @@ fun InboxItemExtensionScreen(
     var handingOff by remember { mutableStateOf(false) }
     var markingDone by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val heading = record?.item?.title?.takeIf { it.isNotBlank() } ?: title?.takeIf { it.isNotBlank() } ?: route.title.ifBlank { "事项" }
+    val res = LocalResources.current
+    val heading = record?.item?.title?.takeIf { it.isNotBlank() } ?: title?.takeIf { it.isNotBlank() } ?: route.title.ifBlank { stringResource(R.string.inbox_item) }
     JListPage(title = heading, onBack = navigator::back, largeTitle = false, refreshing = refreshing, onRefresh = onRefresh,
         actions = {
-            if (record != null) JIconButton(PhIcons.CheckCircle, if (record.item.isDone) "移回收件箱" else "已处理", enabled = !markingDone,
+            if (record != null) JIconButton(PhIcons.CheckCircle, stringResource(if (record.item.isDone) R.string.inbox_move_back else R.string.inbox_done), enabled = !markingDone,
                 onClick = {
                     markingDone = true
                     scope.launch {
                         try { repository.setDone(record.item.id, !record.item.isDone); error = null; navigator.back() }
                         catch (e: CancellationException) { throw e }
-                        catch (e: Exception) { if (feedback?.failure(e, operation = true) != true) error = "操作失败，请重试" }
+                        catch (e: Exception) { if (feedback?.failure(e, operation = true) != true) error = res.getString(R.string.inbox_failed_retry) }
                         finally { markingDone = false }
                     }
                 })
@@ -77,12 +83,12 @@ fun InboxItemExtensionScreen(
             item("item-source") {
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = Tokens.Space.s),
                     horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-                    inboxHeaderTier(record)?.let { JTag(it.title, status = if (it == InboxTier.Action && !record.item.isDone) Status.NeedsYou else null) }
-                    inboxSourceTags(record).forEach { JTag(it) }
+                    inboxHeaderTier(record)?.let { JTag(inboxTierTitle(it), status = if (it == InboxTier.Action && !record.item.isDone) Status.NeedsYou else null) }
+                    inboxSourceTags(res, record).forEach { JTag(it) }
                 }
             }
             record.item.summary?.takeIf { it.isNotBlank() }?.let { summary ->
-                item("item-summary") { JNotice(summary, Modifier.padding(bottom = Tokens.Space.s), title = "AI 摘要", icon = PhIcons.Sparkle) }
+                item("item-summary") { JNotice(summary, Modifier.padding(bottom = Tokens.Space.s), title = stringResource(R.string.inbox_ai_summary), icon = PhIcons.Sparkle) }
             }
             item("item-ai") { InboxAiActions(onDraft = { drafting = true }, onHandOff = { handingOff = true }) }
             if (!record.item.isDone) item("item-agent-draft") {

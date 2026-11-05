@@ -1,5 +1,8 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -23,7 +26,7 @@ import kotlinx.coroutines.launch
  */
 fun draftInstruction(request: String, draft: String): String = listOfNotNull(
     request.trim().takeIf { it.isNotEmpty() },
-    draft.trim().takeIf { it.isNotEmpty() }?.let { "在这版上改：$it" },
+    draft.trim().takeIf { it.isNotEmpty() }?.let { "在这版上改：$it" }, // i18n-ignore: instruction for the model
 ).joinToString("\n")
 
 /** Replies whose last send has an unclear result are checked, never sent again: no confirmation for that. */
@@ -44,22 +47,23 @@ internal fun InboxAiDraftRow(repository: InboxRepository, itemId: String, compos
     val revising = state.draft.text.isNotBlank()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            JTextField(request, { request = it }, Modifier.weight(1f), placeholder = if (revising) "让 AI 改：…" else "要怎么回（可以不填）",
+            JTextField(request, { request = it }, Modifier.weight(1f), placeholder = stringResource(if (revising) R.string.inbox_reply_ai_revise_placeholder else R.string.inbox_reply_ai_request_placeholder),
                 singleLine = true, enabled = !busy && state.canEdit)
-            JButton(if (revising) "AI 改" else "AI 草拟", {
+            val res = LocalResources.current
+            JButton(stringResource(if (revising) R.string.inbox_reply_ai_revise else R.string.inbox_ai_draft), {
                 busy = true
                 error = null
                 val instruction = draftInstruction(request, state.draft.text)
                 scope.launch {
                     try {
                         val text = repository.draftReply(itemId, instruction)
-                        if (composer.replaceWithAi(text)) request = "" else error = "回复正在发送或待核对，稍后再改"
+                        if (composer.replaceWithAi(text)) request = "" else error = res.getString(R.string.inbox_reply_busy)
                     } catch (e: CancellationException) { throw e }
-                    catch (e: Exception) { error = "没草拟出来：${failureReason(e)}" }
+                    catch (e: Exception) { error = res.getString(R.string.inbox_reply_draft_failed, failureReason(e)) }
                     finally { busy = false }
                 }
             }, kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.Sparkle,
-                enabled = state.canEdit, loading = busy, loadingText = "草拟中…")
+                enabled = state.canEdit, loading = busy, loadingText = stringResource(R.string.inbox_reply_drafting))
         }
         error?.let { JNotice(it, status = Status.NeedsYou) }
     }
@@ -85,21 +89,21 @@ internal fun InboxDraftSheet(
     val dismiss by rememberUpdatedState(onDismiss)
     // Close once this sheet's reply has gone (not because an earlier one had when it opened).
     LaunchedEffect(composer) { composer.state.map { it.sent }.distinctUntilChanged().drop(1).collect { if (it) dismiss() } }
-    JSheet(onDismiss = onDismiss, title = if (record.isLark) "回复 ${record.item.title}" else "回复邮件「${record.item.title}」",
+    JSheet(onDismiss = onDismiss, title = stringResource(if (record.isLark) R.string.inbox_reply_sheet_lark else R.string.inbox_reply_to_mail, record.item.title),
         dismissible = !state.sending, scrollable = true) {
         // The sheet is opaque: the composer must not sample (and show) the page behind it as glass.
         CompositionLocalProvider(LocalGlassSource provides null) {
         Column(Modifier.fillMaxWidth().imePadding(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
             if (agent != null && agent.state == "drafted" && agent.basis.isNotBlank()) {
-                Text("AI 分身的依据：${agent.basis}", style = PersonaTheme.type.callout, color = palette.ink2)
+                Text(stringResource(R.string.inbox_reply_ai_basis, agent.basis), style = PersonaTheme.type.callout, color = palette.ink2)
             }
             if (agent?.machineId != null && agent.sessionId != null) {
-                JButton("查看处理过程", { onDismiss(); navigator?.navigate(ChatRoute(agent.machineId, agent.sessionId)) },
+                JButton(stringResource(R.string.inbox_reply_view_process), { onDismiss(); navigator?.navigate(ChatRoute(agent.machineId, agent.sessionId)) },
                     kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.ListChecks)
             }
             ReplyComposerField(state, composer::update, onSend = {
                 if (!state.checksResult && state.draft.ai) confirming = true else composer.send()
-            }, placeholder = "自己写，或者让 AI 草拟")
+            }, placeholder = stringResource(R.string.inbox_reply_placeholder))
             InboxAiDraftRow(repository, record.item.id, composer)
         }
         }

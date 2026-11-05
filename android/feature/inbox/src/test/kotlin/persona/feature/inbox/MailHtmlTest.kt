@@ -3,8 +3,15 @@ package persona.feature.inbox
 import org.jsoup.Jsoup
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.core.app.ApplicationProvider
 
+@RunWith(AndroidJUnit4::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class MailHtmlTest {
+    private val res = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     @Test fun stripsActiveContentTrackingAndStylesButKeepsReadableBodyAndSafeLinks() {
         val html = safeMailHtml("""
             <script>alert(1)</script><iframe src="https://example.com"></iframe>
@@ -52,14 +59,14 @@ class MailHtmlTest {
     }
 
     @Test fun mailDetailsShowReadableSizesAndLocalTimes() {
-        assertEquals("812 字节", readableSize(812))
-        assertEquals("178 KB", readableSize(182400))
-        assertEquals("2.5 MB", readableSize(2_621_440))
+        assertEquals("812 字节", readableSize(res, 812))
+        assertEquals("178 KB", readableSize(res, 182400))
+        assertEquals("2.5 MB", readableSize(res, 2_621_440))
         val zone = java.time.ZoneId.of("Asia/Shanghai")
         val today = java.time.LocalDate.of(2026, 10, 31)
-        assertEquals("今天 03:42", mailTime("2026-10-30T19:42:55.439273Z", zone, today))
-        assertEquals("昨天 09:00", mailTime("Fri, 30 Oct 2026 09:00:00 +0800", zone, today))
-        assertEquals("1月2日 08:00", mailTime("2026-01-02T08:00:00+08:00", zone, today))
-        assertEquals("not a date", mailTime("not a date", zone, today))
+        assertEquals("今天 03:42", mailTime(res, "2026-10-30T19:42:55.439273Z", zone, today))
+        assertEquals("昨天 09:00", mailTime(res, "Fri, 30 Oct 2026 09:00:00 +0800", zone, today))
+        assertEquals("1月2日 08:00", mailTime(res, "2026-01-02T08:00:00+08:00", zone, today))
+        assertEquals("not a date", mailTime(res, "not a date", zone, today))
     }
 }

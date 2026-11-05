@@ -42,7 +42,7 @@ data class LarkThreadState(
     val loading: Boolean = false,
     val loaded: Boolean = false,
     val hasOlder: Boolean = false,
-    val error: String? = null,
+    @androidx.annotation.StringRes val error: Int? = null,
     val failedOlder: Boolean = false,
     val revision: Int = 0,
 )
@@ -80,7 +80,7 @@ class LarkThreadLoader(private val rootId: String, private val source: LarkThrea
             mutable.value = previous
             throw e
         } catch (_: Exception) {
-            mutable.value = previous.copy(error = "回复加载失败，请重试", failedOlder = older)
+            mutable.value = previous.copy(error = R.string.inbox_lark_thread_failed, failedOlder = older)
         } finally {
             lock.unlock()
         }

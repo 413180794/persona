@@ -1,5 +1,8 @@
 package persona.feature.inbox
 
+import android.content.res.Resources
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,11 +60,11 @@ data class InboxTriageBanner(val text: String, val configure: Boolean)
 internal object InboxTriageText {
     /** What a state says when the hub gives no reason (the same words on the web and iOS). */
     val reasons = mapOf(
-        "unconfigured" to "还没配分拣模型",
-        "paused" to "分拣模型暂停了",
-        "error" to "分拣模型出错了",
-        "timeout" to "分拣模型太慢了",
-        "behind" to "新消息太多，正在排队",
+        "unconfigured" to R.string.inbox_triage_unconfigured,
+        "paused" to R.string.inbox_triage_paused,
+        "error" to R.string.inbox_triage_error,
+        "timeout" to R.string.inbox_triage_timeout,
+        "behind" to R.string.inbox_triage_behind,
     )
 
     /**
@@ -69,12 +72,14 @@ internal object InboxTriageText {
      * names it (「有 3 条飞书消息在等分拣：…」), several do not; the reason is the hub's, else the state's words (an
      * unknown state without a reason says only how many wait).
      */
-    fun banner(triage: InboxTriage?): InboxTriageBanner? {
+    fun banner(res: Resources, triage: InboxTriage?): InboxTriageBanner? {
         if (triage == null || triage.state.isEmpty() || triage.state == "ok" || triage.waiting <= 0) return null
         val waiting = triage.sources.filter { it.waiting > 0 }
         val name = waiting.singleOrNull()?.name?.trim().orEmpty()
-        val reason = triage.reason?.trim()?.takeIf { it.isNotEmpty() } ?: reasons[triage.state].orEmpty()
-        return InboxTriageBanner("有 ${triage.waiting} 条${name}消息在等分拣" + (if (reason.isNotEmpty()) "：$reason" else ""),
+        val reason = triage.reason?.trim()?.takeIf { it.isNotEmpty() } ?: reasons[triage.state]?.let(res::getString).orEmpty()
+        val waitingText = if (name.isEmpty()) res.getQuantityString(R.plurals.inbox_triage_waiting, triage.waiting, triage.waiting)
+            else res.getQuantityString(R.plurals.inbox_triage_waiting_source, triage.waiting, triage.waiting, name)
+        return InboxTriageBanner(if (reason.isNotEmpty()) res.getString(R.string.inbox_triage_with_reason, waitingText, reason) else waitingText,
             configure = triage.state == "unconfigured")
     }
 }
@@ -98,5 +103,5 @@ internal fun InboxTriageNotice(banner: InboxTriageBanner, modifier: Modifier = M
         value = banner.configure && setup != null && runCatching { setup.mayConfigure() }.getOrDefault(false)
     }
     JNotice(banner.text, modifier, status = Status.NeedsYou, icon = PhIcons.Clock,
-        actionLabel = "去配置".takeIf { allowed }, onAction = setup?.configure?.takeIf { allowed })
+        actionLabel = stringResource(R.string.inbox_triage_configure).takeIf { allowed }, onAction = setup?.configure?.takeIf { allowed })
 }

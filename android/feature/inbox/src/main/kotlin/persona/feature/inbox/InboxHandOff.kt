@@ -1,11 +1,14 @@
 package persona.feature.inbox
 
+import android.content.res.Resources
+
 import persona.core.contracts.Session
 import persona.core.domain.sort.canSend
 import java.time.Instant
 
 /** What to ask for, as iOS and the old app offer it; an empty request means the first. */
-val HANDOFF_PRESETS = listOf("总结一下，告诉我要做什么，给出建议的回复", "查清楚背景再告诉我", "直接帮我处理，回复前先问我")
+fun handoffPresets(res: Resources): List<String> = listOf(R.string.inbox_handoff_preset_summary, R.string.inbox_handoff_preset_background,
+    R.string.inbox_handoff_preset_handle).map(res::getString)
 
 /** Where a mail is, so the agent can read and answer it with its own mail tools. */
 data class HandOffMail(val accountId: String, val mailbox: String, val uid: Long)
@@ -31,13 +34,13 @@ fun handOffItem(record: InboxRecord, context: String?): HandOffItem = HandOffIte
  * The item as a `<jarvis-context>` tag the chat shows as a card, then the request (iOS `InboxHandOffSheet.message`):
  * attributes escaped, and the item's text can't close the tag early.
  */
-fun handoffPrompt(item: HandOffItem, ask: String = HANDOFF_PRESETS[0]): String {
-    val title = (if (item.lark) "飞书 · " else "邮件 · ") + item.title
+fun handoffPrompt(res: Resources, item: HandOffItem, ask: String = ""): String {
+    val title = res.getString(if (item.lark) R.string.inbox_handoff_title_lark else R.string.inbox_handoff_title_mail, item.title)
     var text = item.context?.takeIf { it.isNotBlank() }
-        ?: listOfNotNull(item.sender, item.preview).filter { it.isNotBlank() }.joinToString("：")
-    item.feedId?.takeIf { it.isNotBlank() }?.let { text += "\n\n（飞书会话 feedId $it，可用飞书工具读更多上下文或回复）" }
-    item.mail?.let { text += "\n\n（邮件 account_id ${it.accountId}，mailbox ${it.mailbox}，uid ${it.uid}，可用 mail_read 读全文、mail_send 回复）" }
-    return contextTag(title, text) + "\n\n" + ask.trim().ifEmpty { HANDOFF_PRESETS[0] }
+        ?: listOfNotNull(item.sender, item.preview).filter { it.isNotBlank() }.joinToString("：") // i18n-ignore: context for the agent
+    item.feedId?.takeIf { it.isNotBlank() }?.let { text += "\n\n（飞书会话 feedId $it，可用飞书工具读更多上下文或回复）" } // i18n-ignore: tool hint for the agent
+    item.mail?.let { text += "\n\n（邮件 account_id ${it.accountId}，mailbox ${it.mailbox}，uid ${it.uid}，可用 mail_read 读全文、mail_send 回复）" } // i18n-ignore: tool hint for the agent
+    return contextTag(title, text) + "\n\n" + ask.trim().ifEmpty { handoffPresets(res)[0] }
 }
 
 /** `<jarvis-context kind="context" title="…" url="">`, as iOS `ContextRef.xml` writes it. */

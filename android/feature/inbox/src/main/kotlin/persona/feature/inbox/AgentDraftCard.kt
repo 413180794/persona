@@ -1,5 +1,6 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.res.stringResource
 import persona.core.designsystem.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -26,9 +27,9 @@ internal fun AgentDraftCard(record: InboxRecord, composers: ReplyComposers, navi
     val drafted = agent != null && agent.state == "drafted" && agent.draft.isNotBlank()
     if (agent?.state == "running" || agent?.state == "queued") {
         StatusLine(StatusLineState(waiting = agent.state == "queued", working = agent.state == "running",
-            waitingDetail = "AI 分身等待处理", workDetail = agent.task))
+            waitingDetail = stringResource(R.string.inbox_reply_ai_waiting), workDetail = agent.task))
     } else if (agent?.state == "failed") {
-        StatusText("AI 分身处理失败，你可以直接回复", isError = true)
+        StatusText(stringResource(R.string.inbox_reply_ai_failed), isError = true)
     }
     // Rows without an AI draft make no reply of their own (one per row would read every draft at once).
     val target = ReplyTarget.Inbox(record.item.id)
@@ -60,9 +61,9 @@ private fun DraftCardBody(
     DisposableEffect(Unit) { onDispose { editingChanged(false) } }
     val canEdit = onEdit != null || repository != null
     if (state.sent || state.draft.ai && state.draft.text.isNotBlank()) DraftPreview(
-        text = if (state.sent) "已发送" else state.draft.text,
+        text = if (state.sent) stringResource(R.string.inbox_sent) else state.draft.text,
         actions = {
-            if (canEdit) JButton("改一改", { if (onEdit != null) onEdit() else editing = true }, kind = JButtonKind.Secondary,
+            if (canEdit) JButton(stringResource(R.string.inbox_reply_edit), { if (onEdit != null) onEdit() else editing = true }, kind = JButtonKind.Secondary,
                 size = JButtonSize.Small, enabled = state.canEdit && !state.sent)
             JButton(state.actionLabel, {
                 when {

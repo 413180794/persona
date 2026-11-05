@@ -6,10 +6,17 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.core.app.ApplicationProvider
 
 /** AI 草拟 / AI 改 and the confirmation an AI draft needs before it goes out in the user's name. */
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(AndroidJUnit4::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class InboxDraftTest {
+    private val res = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     @Test fun instructionIsTheRequestThenTheDraftToRevise() {
         assertEquals("", draftInstruction("  ", ""))
         assertEquals("语气轻松一点", draftInstruction(" 语气轻松一点 ", ""))
@@ -91,14 +98,15 @@ class InboxDraftTest {
 
     @Test fun confirmationSaysWhereAndEveryWord() {
         val lark = InboxRecord(InboxItem("l", title = "设计评审"), feedId = "f2", source = "lark")
-        val confirmation = sendConfirmation(lark, "  好的，下午看。\n")
-        assertEquals("以你的身份发送？", confirmation.title)
-        assertEquals("发到飞书「设计评审」：\n\n好的，下午看。", confirmation.message)
+        val confirmation = sendConfirmation(res, lark, "  好的，下午看。\n")
+        assertEquals("以你的身份发送？", res.getString(R.string.inbox_reply_confirm_title))
+        assertEquals("发到飞书「设计评审」：", res.getString(R.string.inbox_reply_destination, confirmation.destination))
+        assertEquals("好的，下午看。", confirmation.text)
         val mail = InboxRecord(InboxItem("m", kind = "mail", title = "周报"), source = "mail")
-        assertEquals("回复邮件「周报」", sendConfirmation(mail, "收到").destination)
-        val reply = mailSendConfirmation("", "示例联系人 <contact@example.com>", "收到", targetChanged = true)
+        assertEquals("回复邮件「周报」", sendConfirmation(res, mail, "收到").destination)
+        val reply = mailSendConfirmation(res, "", "示例联系人 <contact@example.com>", "收到", targetChanged = true)
         assertEquals("回复邮件「无主题」，发给 示例联系人 <contact@example.com>", reply.destination)
         assertNotNull(reply.warning)
-        assertNull(mailSendConfirmation("周报", "", "收到", targetChanged = false).warning)
+        assertNull(mailSendConfirmation(res, "周报", "", "收到", targetChanged = false).warning)
     }
 }

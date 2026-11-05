@@ -20,7 +20,8 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
     val source = LarkContentSource(transport)
     val id = data.text("id")
     val external = "https://applink.feishu.cn/client/chat/open?chatId=${URLEncoder.encode(feed, "UTF-8")}&messageId=${URLEncoder.encode(id, "UTF-8")}"
-    val parts = if (data.flag("recalled")) listOf(LarkPart.Text("消息已撤回")) else
+    val recalled = data.flag("recalled")
+    val parts = if (recalled) emptyList() else
         (data["parts"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { part ->
             val meta = part["metadata"] as? JsonObject ?: JsonObject(emptyMap())
             val text = part.text("text").ifBlank { data.text("text") }
@@ -30,14 +31,14 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
                     val url = part.text("url")
                     if (url.isNotBlank()) {
                         LarkPart.Sticker(image(url, meta.number("width")?.toInt() ?: 1, meta.number("height")?.toInt() ?: 1),
-                            text.ifBlank { "表情" }, meta.number("width")?.toInt() ?: 1, meta.number("height")?.toInt() ?: 1)
+                            text, meta.number("width")?.toInt() ?: 1, meta.number("height")?.toInt() ?: 1)
                     } else {
                         val key = part.text("refId").ifBlank { text }
                         LarkPart.Text(LarkEmojiHelper.symbol(key), source)
                     }
                 }
                 "code" -> LarkPart.Code(text, meta.text("languageName").ifBlank { meta.text("language") })
-                "file" -> LarkPart.File(part.text("url"), meta.text("name").ifBlank { text.ifBlank { "文件" } }, meta.text("mimeType").ifBlank { "application/octet-stream" })
+                "file" -> LarkPart.File(part.text("url"), meta.text("name").ifBlank { text }, meta.text("mimeType").ifBlank { "application/octet-stream" })
                 "text", "at" -> LarkPart.Text(text, source)
                 "card", "interactive" -> larkInteractivePart(meta, text, transport, id)
                 "link" -> LarkPart.Text(listOf(text, part.text("url")).filter { it.isNotBlank() }.distinct().joinToString("\n"), source)
@@ -54,7 +55,7 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
                             }
                         )
                     }
-                    LarkPart.MergeForward(meta.text("title").ifBlank { text.ifBlank { "合并转发的聊天记录" } }, forwardMessages, source)
+                    LarkPart.MergeForward(meta.text("title").ifBlank { text }, forwardMessages, source)
                 }
                 "media" -> {
                     val mime = meta.text("mime")
@@ -78,7 +79,7 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
                                 text = fm.text("textPreview").ifBlank { fm.text("text") }
                             )
                         }
-                        LarkPart.MergeForward(meta.text("title").ifBlank { text.ifBlank { "合并转发的聊天记录" } }, forwardMessages, source)
+                        LarkPart.MergeForward(meta.text("title").ifBlank { text }, forwardMessages, source)
                     } else {
                         LarkPart.External(text, external, if (part.text("kind") == "media") "video" else "card", meta.text("duration"))
                     }
@@ -102,12 +103,12 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
             else -> LarkDelivery.Sent
         },
         avatar = larkAvatar(data.cursor("sender_avatar"), transport.scope, transport::media), bot = data.text("sender_type") == "bot",
-        system = data.text("type") == "SYSTEM" || data.flag("recalled"), edited = data.flag("edited"),
-        quote = quote?.let { LarkQuote(it.text("id"), it.text("sender_name"), if (it.flag("recalled")) "消息已撤回" else it.text("text")) },
+        system = data.text("type") == "SYSTEM" || recalled, edited = data.flag("edited"),
+        quote = quote?.let { LarkQuote(it.text("id"), it.text("sender_name"), if (it.flag("recalled")) "" else it.text("text"), it.flag("recalled")) },
         badgeCount = data.number("badge_count"), isRead = data.flag("is_read"),
         replyCount = maxOf(0L, data.number("reply_count") ?: 0L, data.number("thread_reply_count") ?: 0L),
         thread = larkThreadSource(data, transport, feed),
-        reactions = reactions)
+        reactions = reactions, recalled = recalled)
 }
 
 internal fun larkDate(time: String): LocalDate? = runCatching {

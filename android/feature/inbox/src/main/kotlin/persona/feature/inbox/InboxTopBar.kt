@@ -1,5 +1,7 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -15,7 +17,7 @@ internal fun InboxTopBar(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
-        JIconButton(PhIcons.ArrowLeft, "返回", onBack, enabled = backEnabled)
+        JIconButton(PhIcons.ArrowLeft, stringResource(R.string.inbox_back), onBack, enabled = backEnabled)
         Box(Modifier.weight(1f)) { title() }
         actions()
     }

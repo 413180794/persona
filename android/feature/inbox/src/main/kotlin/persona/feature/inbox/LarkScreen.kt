@@ -1,5 +1,9 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.contracts.api.ConnectionState
@@ -111,6 +115,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     var handingOff by remember { mutableStateOf(false) }
     var readPosition by remember { mutableStateOf(navigation.readPosition) }
     var error by remember { mutableStateOf<String?>(null) }
+    val res = LocalResources.current
     var markingDone by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     var loadingOlder by remember { mutableStateOf(false) }
@@ -137,13 +142,13 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
             if (latestConversation.hasNewer) scope.launch {
                 try { repository.latestConversation(route.feedId) }
                 catch (e: CancellationException) { throw e }
-                catch (_: Exception) { chatList.holdPosition(); error = "最新消息加载失败，请重试" }
+                catch (_: Exception) { chatList.holdPosition(); error = res.getString(R.string.inbox_lark_latest_failed) }
             }
         },
         loadOlder = {
             try { repository.loadOlder(route.feedId) }
             catch (e: CancellationException) { throw e }
-            catch (_: Exception) { error = "更早的消息加载失败，请重试" }
+            catch (_: Exception) { error = res.getString(R.string.inbox_lark_older_failed) }
         })
 
     LaunchedEffect(repository, route, chatList, positioned, lifecycle, focused, occluded, conversation.verified, messages) {
@@ -175,7 +180,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
             if (atNewerEdge && latestConversation.hasNewer && !latestConversation.loadingNewer) try {
                 repository.loadNewer(route.feedId)
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { error = "消息加载失败，请重试" }
+            catch (_: Exception) { error = res.getString(R.string.inbox_lark_messages_failed) }
         }
     }
     LaunchedEffect(chatList, conversation.windowRevision) {
@@ -185,7 +190,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         if (reply.sent) {
             try { repository.latestConversation(route.feedId); chatList.returnToLatest() }
             catch (e: CancellationException) { throw e }
-            catch (_: Exception) { error = "消息已发送，刷新失败，请重试" }
+            catch (_: Exception) { error = res.getString(R.string.inbox_lark_sent_refresh_failed) }
         }
     }
     fun retry(message: LarkMessage) {
@@ -195,9 +200,9 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         scope.launch {
             try {
                 val result = repository.verifyReply(ReplyTarget.Lark(route.feedId), clientId)
-                error = if (result == ReplyDelivery.Sent) null else "暂时无法确认是否送达，不会自动重发"
+                error = if (result == ReplyDelivery.Sent) null else res.getString(R.string.inbox_lark_unconfirmed)
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { error = "核对未完成，请稍后再试" }
+            catch (_: Exception) { error = res.getString(R.string.inbox_lark_check_unfinished) }
             finally { retrying.remove(clientId) }
         }
     }
@@ -214,7 +219,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
                         repository.react(msg.id, key, remove = false)
                         repository.refreshConversation(route.feedId)
                     } catch (e: Exception) {
-                        error = e.message ?: "回应失败"
+                        error = e.message ?: res.getString(R.string.inbox_lark_react_failed)
                     }
                 }
             },
@@ -242,34 +247,35 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         scope.launch {
             try { repository.refreshConversation(route.feedId); error = null }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (feedback?.failure(e) != true) error = "会话刷新失败，请重试" }
+            catch (e: Exception) { if (feedback?.failure(e) != true) error = res.getString(R.string.inbox_lark_refresh_failed) }
             finally { refreshing = false }
         }
     }
-    if (more) JActionSheet(title = "会话操作", onDismiss = { more = false }, actions = buildList {
-        navigation.mention?.let { mention -> add(JAction("跳到 @我 的消息", PhIcons.At) { jumpTo(mention) }) }
-        add(JAction("刷新会话", PhIcons.ArrowClockwise, enabled = !refreshing) { refreshConversation() })
+    if (more) JActionSheet(title = stringResource(R.string.inbox_lark_actions), onDismiss = { more = false }, actions = buildList {
+        navigation.mention?.let { mention -> add(JAction(res.getString(R.string.inbox_lark_jump_mention), PhIcons.At) { jumpTo(mention) }) }
+        add(JAction(res.getString(R.string.inbox_lark_refresh), PhIcons.ArrowClockwise, enabled = !refreshing) { refreshConversation() })
     })
-    JPage(title = conversation.title, topBar = {
-        ChatTopBar(title = conversation.title, onBack = navigator::back,
-            statusText = if (connection == ConnectionState.Online) "飞书" else inboxTitle(connection),
+    val title = conversation.title.ifBlank { stringResource(R.string.inbox_lark_conversation) }
+    JPage(title = title, topBar = {
+        ChatTopBar(title = title, onBack = navigator::back,
+            statusText = if (connection == ConnectionState.Online) stringResource(R.string.inbox_source_lark) else inboxTitle(connection),
             busy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
             onTitleClick = if (connection == ConnectionState.Online) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
             actions = {
-                if (record != null) JIconButton(PhIcons.CheckCircle, if (record.item.isDone) "移回收件箱" else "已处理",
+                if (record != null) JIconButton(PhIcons.CheckCircle, stringResource(if (record.item.isDone) R.string.inbox_move_back else R.string.inbox_done),
                     enabled = !markingDone, onClick = {
                         markingDone = true
                         scope.launch {
                             try { repository.setDone(record.item.id, !record.item.isDone); error = null; navigator.back() }
                             catch (e: CancellationException) { throw e }
-                            catch (e: Exception) { if (feedback?.failure(e, operation = true) != true) error = "操作失败，请重试" }
+                            catch (e: Exception) { if (feedback?.failure(e, operation = true) != true) error = res.getString(R.string.inbox_failed_retry) }
                             finally { markingDone = false }
                         }
                     })
-                JIconButton(PhIcons.DotsThree, "更多", { more = true })
+                JIconButton(PhIcons.DotsThree, stringResource(R.string.inbox_more), { more = true })
             })
     }, bottomBar = {
-        ReplyComposerField(reply, composer::update, composer::send, "回复 ${conversation.title}",
+        ReplyComposerField(reply, composer::update, composer::send, stringResource(R.string.inbox_lark_reply_to, title),
             modifier = Modifier.imePadding(), accessory = {
                 // Opened in place of the item's extension page, which broke: one line with 重试 (inbox_item, #1683).
                 InboxExtensionNotice(route.itemId, route, Modifier)
@@ -277,9 +283,9 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
                 record?.item?.summary?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                 if (record != null && !record.item.isDone) AgentDraftCard(record, composers, navigator, onEditingChange = { editingDraft = it },
                     repository = repository, onEdit = { drafting = true }, keepComposer = true)
-                if (conversation.loading || refreshing || conversation.loadingNewer) JChip("正在加载消息", status = Status.Working)
-                (error ?: conversation.error)?.let { message ->
-                    JNotice(message, status = Status.NeedsYou, actionLabel = "重试", onAction = { refreshConversation() })
+                if (conversation.loading || refreshing || conversation.loadingNewer) JChip(stringResource(R.string.inbox_lark_loading_messages), status = Status.Working)
+                (error ?: conversation.failure?.let { stringResource(it.text) } ?: conversation.error)?.let { message ->
+                    JNotice(message, status = Status.NeedsYou, actionLabel = stringResource(R.string.inbox_retry), onAction = { refreshConversation() })
                 }
             })
     }) { padding ->
@@ -294,7 +300,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
                     (box.bottom - bottomInset).coerceAtLeast(box.top + topInset).coerceAtMost(box.bottom))
             }, contentPadding = PaddingValues(start = pagePadding, end = pagePadding,
                 top = padding.calculateTopPadding() + Tokens.Space.m, bottom = padding.calculateBottomPadding() + Tokens.Space.m)) {
-                if (messages.isEmpty() && !conversation.loading) item("empty") { JEmptyState("暂无消息", "新的消息会显示在这里。") }
+                if (messages.isEmpty() && !conversation.loading) item("empty") { JEmptyState(stringResource(R.string.inbox_lark_empty_title), stringResource(R.string.inbox_lark_empty_text)) }
                 itemsIndexed(messages.asReversed(), key = { _, message -> message.listKey() }, contentType = { _, message -> if (message.system) "system" else "message" }) { reversedIndex, message ->
                     val index = messages.lastIndex - reversedIndex
                     val previous = messages.getOrNull(index - 1)
@@ -303,8 +309,8 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
                     val dateBoundary = date != null && date != previous?.let { larkDate(it.time) }
                     DisposableEffect(message.listKey()) { onDispose { bounds.remove(message.listKey()) } }
                     Column {
-                        if (dateBoundary) TimelineMark(date.toString())
-                        if (boundary) TimelineMark("这件事从这里开始", emphasized = true)
+                        if (dateBoundary) TimelineMark(LocalizedFormats.formatter(LocalizedFormats.DATE, currentLocale).format(date))
+                        if (boundary) TimelineMark(stringResource(R.string.inbox_lark_starts_here), emphasized = true)
                         LarkBubble(message, showsSender(message, previous, boundary || dateBoundary), repository, onlineSince,
                             modifier = Modifier.onGloballyPositioned { bounds[message.listKey()] = it.boundsInWindow() },
                             retrying = retrying[message.clientId] == true, onRetry = { retry(message) }, onError = { error = it },
@@ -316,7 +322,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
                                         repository.react(msg.id, key, remove = isMine)
                                         repository.refreshConversation(route.feedId)
                                     } catch (e: Exception) {
-                                        error = e.message ?: "回应失败"
+                                        error = e.message ?: res.getString(R.string.inbox_lark_react_failed)
                                     }
                                 }
                             },
@@ -327,12 +333,12 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
                     }
                 }
                 if (conversation.hasOlder) item("older") {
-                    JButton(text = if (loadingOlder || conversation.loadingOlder) "正在加载…" else "查看更早的消息", modifier = Modifier.fillMaxWidth(), enabled = !loadingOlder && !conversation.loadingOlder, onClick = {
+                    JButton(text = stringResource(if (loadingOlder || conversation.loadingOlder) R.string.inbox_lark_loading else R.string.inbox_lark_older), modifier = Modifier.fillMaxWidth(), enabled = !loadingOlder && !conversation.loadingOlder, onClick = {
                         loadingOlder = true
                         scope.launch {
                             try { repository.loadOlder(route.feedId); error = null }
                             catch (e: CancellationException) { throw e }
-                            catch (e: Exception) { if (feedback?.failure(e) != true) error = "更早的消息加载失败，请重试" }
+                            catch (e: Exception) { if (feedback?.failure(e) != true) error = res.getString(R.string.inbox_lark_older_failed) }
                             finally { loadingOlder = false }
                         }
                     })
@@ -371,7 +377,8 @@ internal fun LarkBubble(
     feedId: String? = null,
 ) {
     if (message.system) {
-        TimelineMark(message.parts.filterIsInstance<LarkPart.Text>().joinToString("\n") { it.text }, modifier)
+        TimelineMark(if (message.recalled) stringResource(R.string.inbox_lark_recalled)
+            else message.parts.filterIsInstance<LarkPart.Text>().joinToString("\n") { it.text }, modifier)
         return
     }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -387,7 +394,7 @@ internal fun LarkBubble(
                 )
             ) {
                 message.quote?.let { quote ->
-                    JNotice(quote.text, title = quote.sender)
+                    JNotice(if (quote.recalled) stringResource(R.string.inbox_lark_recalled) else quote.text, title = quote.sender)
                 }
                 message.parts.forEach { part ->
                     LarkPartContent(
@@ -399,7 +406,7 @@ internal fun LarkBubble(
                         onOpenProfile = { uid -> onProfile?.invoke(LarkPersonRef(uid, uid, null, feedId)) }
                     )
                 }
-                if (message.edited) Text("已编辑", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+                if (message.edited) Text(stringResource(R.string.inbox_lark_edited), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
             }
 
             LarkMessageActionMenu(
@@ -431,22 +438,22 @@ internal fun LarkBubble(
                 )
             }
             if (message.mine) Text(larkTime(message.time), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
-            if (message.bot) JTag("机器人")
+            if (message.bot) JTag(stringResource(R.string.inbox_bot))
             if (message.replyCount > 0 && onThread != null) {
-                JTextButton("${message.replyCount} 条回复", onClick = onThread)
+                JTextButton(pluralStringResource(R.plurals.inbox_lark_replies, message.replyCount.toQuantity(), message.replyCount), onClick = onThread)
             }
             val pending = message.pendingDelivery?.pendingStatus()
             if (pending != null) {
                 PendingBadge(if (retrying) PendingStatus.Verifying else pending)
                 if (pending in setOf(PendingStatus.Unconfirmed, PendingStatus.NeedsReview))
-                    JButton("核对结果", onClick = onRetry, enabled = message.clientId != null && !retrying,
+                    JButton(stringResource(R.string.inbox_check_result), onClick = onRetry, enabled = message.clientId != null && !retrying,
                         kind = JButtonKind.Secondary, size = JButtonSize.Small)
             } else when (message.delivery) {
                 LarkDelivery.Sending -> PendingBadge(PendingStatus.Sending)
                 LarkDelivery.WaitingForNetwork -> PendingBadge(PendingStatus.Waiting)
                 LarkDelivery.Failed -> {
                     PendingBadge(if (retrying) PendingStatus.Verifying else PendingStatus.Unconfirmed)
-                    JButton("核对结果", onClick = onRetry, enabled = message.clientId != null && !retrying,
+                    JButton(stringResource(R.string.inbox_check_result), onClick = onRetry, enabled = message.clientId != null && !retrying,
                         kind = JButtonKind.Secondary, size = JButtonSize.Small)
                 }
                 LarkDelivery.Sent -> Unit
@@ -461,7 +468,7 @@ internal fun LarkBubble(
                     onProfile(LarkPersonRef(message.senderId, message.senderName, message.avatar, feedId))
                 }
             }) {
-                LarkAvatar(message.senderName.ifBlank { if (message.bot) "机器人" else "信" }, message.avatar, onlineSince)
+                LarkAvatar(message.senderName.ifBlank { stringResource(if (message.bot) R.string.inbox_bot else R.string.inbox_lark_avatar_fallback) }, message.avatar, onlineSince)
             }
         }, footer = footer, content = body)
 }
@@ -476,6 +483,7 @@ internal fun LarkPartContent(
     onOpenProfile: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val res = LocalResources.current
     val scope = rememberCoroutineScope()
     var opening by remember { mutableStateOf(false) }
     when (part) {
@@ -510,12 +518,13 @@ internal fun LarkPartContent(
             val model = if (authenticated == null) part.model else bytes?.let {
                 ImageRequest.Builder(context).data(it).memoryCacheKey(authenticated.cacheKey).build()
             }
-            AsyncImage(model = model, contentDescription = part.description,
+            AsyncImage(model = model, contentDescription = part.description.ifBlank { stringResource(R.string.inbox_image) },
                 modifier = Modifier.fillMaxWidth().aspectRatio((part.width.toFloat() / part.height.coerceAtLeast(1)).coerceIn(.2f, 5f)),
                 onError = { failed = true }, onSuccess = { failed = false })
-            if (failed) Text("图片加载失败", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink3)
+            if (failed) Text(stringResource(R.string.inbox_lark_image_failed), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink3)
         }
-        is LarkPart.File -> JButton(text = if (opening) "正在打开…" else "文件：${part.name}", enabled = !opening, onClick = {
+        is LarkPart.File -> JButton(text = if (opening) stringResource(R.string.inbox_lark_opening)
+            else stringResource(R.string.inbox_lark_file, part.name.ifBlank { stringResource(R.string.inbox_lark_file_untitled) }), enabled = !opening, onClick = {
             opening = true
             scope.launch {
                 try {
@@ -523,20 +532,24 @@ internal fun LarkPartContent(
                     check(uri.scheme == "content")
                     context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, part.mimeType).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
                 } catch (e: CancellationException) { throw e }
-                catch (_: Exception) { onError("文件打开失败，请重试或安装可打开此文件的应用") }
+                catch (_: Exception) { onError(res.getString(R.string.inbox_lark_file_failed)) }
                 finally { opening = false }
             }
         })
         is LarkPart.External -> Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             part.cover?.let { LarkPartContent(it, repository, onError, onOpenForward, onPlayVideo, onOpenProfile) }
-            Text(listOf(when (part.kind) { "video" -> "视频"; "audio" -> "语音"; else -> "卡片" }, part.title, part.duration).filter { it.isNotBlank() }.joinToString("，"), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
-            JButton(text = "在飞书中打开", onClick = {
+            Text(listOf(stringResource(when (part.kind) { "video" -> R.string.inbox_lark_video; "audio" -> R.string.inbox_lark_audio; else -> R.string.inbox_lark_card }),
+                part.title, part.duration).filter { it.isNotBlank() }.joinToString(stringResource(R.string.inbox_lark_part_separator)), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+            JButton(text = stringResource(R.string.inbox_open_in_lark), onClick = {
                 try {
                     val uri = Uri.parse(part.larkUrl)
                     check(uri.scheme in setOf("https", "lark", "feishu"))
                     context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                } catch (_: Exception) { onError("无法打开飞书，请确认已安装飞书") }
+                } catch (_: Exception) { onError(res.getString(R.string.inbox_lark_cannot_open)) }
             }, enabled = part.larkUrl.isNotBlank())
         }
     }
 }
+
+/** A count for a plural lookup: the quantity rules take an Int. */
+internal fun Long.toQuantity(): Int = coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()

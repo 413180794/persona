@@ -1,5 +1,9 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,12 +43,11 @@ val DEFAULT_QUICK_REACTIONS = listOf(
     "THUMBSUP", "OK", "DONE", "HEART", "SMILE", "LAUGH", "SURPRISED"
 )
 
-val DEFAULT_EMOJI_GROUPS = listOf(
-    "默认表情" to listOf(
+/** The picker's own group when the hub sends none, titled 默认表情 (inbox_lark_emoji_default). */
+val DEFAULT_EMOJI_KEYS = listOf(
         "THUMBSUP", "OK", "DONE", "HEART", "SMILE", "LAUGH", "SURPRISED",
         "CRY", "CLAP", "FIRE", "PARTY", "THINKING", "MUSCLE", "SOB",
         "WAVE", "JIAYI", "FIST", "SHAKE", "ROSE", "BEER", "CAKE", "COFFEE"
-    )
 )
 
 /** Reaction chip underneath a message. */
@@ -57,7 +60,7 @@ fun LarkReactionChip(
     val palette = PersonaTheme.palette
     val isMine = reaction.mine == true
     val symbol = LarkEmojiHelper.symbol(reaction.key)
-    val label = LarkEmojiHelper.label(reaction.key)
+    val label = LarkEmojiHelper.label(LocalResources.current, reaction.key)
     val shape = RoundedCornerShape(Tokens.Radius.badge)
 
     val bg = if (isMine) palette.accent.copy(alpha = 0.15f) else palette.ink.copy(alpha = 0.05f)
@@ -79,7 +82,7 @@ fun LarkReactionChip(
         Text(symbol, fontSize = 14.sp)
         val text = when {
             reaction.users != null && reaction.users!!.isNotEmpty() && reaction.users!!.size <= 3 ->
-                reaction.users!!.joinToString("、")
+                reaction.users!!.joinToString(stringResource(R.string.inbox_lark_name_separator))
             reaction.count > 0 -> "${reaction.count}"
             else -> ""
         }
@@ -106,6 +109,7 @@ fun LarkReactionRow(
 ) {
     if (reactions.isEmpty()) return
     val palette = PersonaTheme.palette
+    val reactLabel = stringResource(R.string.inbox_lark_react)
 
     FlowRow(
         modifier = modifier.fillMaxWidth(),
@@ -125,7 +129,7 @@ fun LarkReactionRow(
                 .clip(CircleShape)
                 .background(palette.ink.copy(alpha = 0.05f))
                 .clickable(onClick = onOpenPicker)
-                .semantics { contentDescription = "表情回复" },
+                .semantics { contentDescription = reactLabel },
             contentAlignment = Alignment.Center
         ) {
             JIcon(PhIcons.Plus, modifier = Modifier.size(12.dp), tint = palette.ink3)
@@ -146,6 +150,8 @@ fun LarkMessageActionMenu(
 ) {
     val palette = PersonaTheme.palette
     val clipboard = LocalClipboardManager.current
+    val res = LocalResources.current
+    val moreLabel = stringResource(R.string.inbox_lark_more_emoji)
 
     DropdownMenu(
         expanded = expanded,
@@ -167,7 +173,7 @@ fun LarkMessageActionMenu(
                             onDismiss()
                             onReact(key)
                         }
-                        .semantics { contentDescription = LarkEmojiHelper.label(key) },
+                        .semantics { contentDescription = LarkEmojiHelper.label(res, key) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(LarkEmojiHelper.symbol(key), fontSize = 18.sp)
@@ -181,7 +187,7 @@ fun LarkMessageActionMenu(
                         onDismiss()
                         onOpenPicker()
                     }
-                    .semantics { contentDescription = "更多表情" },
+                    .semantics { contentDescription = moreLabel },
                 contentAlignment = Alignment.Center
             ) {
                 JIcon(PhIcons.Plus, modifier = Modifier.size(16.dp), tint = palette.accent)
@@ -192,7 +198,7 @@ fun LarkMessageActionMenu(
 
         // Copy
         DropdownMenuItem(
-            text = { Text("拷贝", style = PersonaTheme.type.callout, color = palette.ink) },
+            text = { Text(stringResource(R.string.inbox_lark_copy), style = PersonaTheme.type.callout, color = palette.ink) },
             leadingIcon = { JIcon(PhIcons.Copy, modifier = Modifier.size(16.dp), tint = palette.ink) },
             onClick = {
                 onDismiss()
@@ -203,7 +209,7 @@ fun LarkMessageActionMenu(
         // View Sender Profile
         if (onOpenProfile != null && message.senderId.isNotBlank()) {
             DropdownMenuItem(
-                text = { Text("查看名片", style = PersonaTheme.type.callout, color = palette.ink) },
+                text = { Text(stringResource(R.string.inbox_lark_view_profile), style = PersonaTheme.type.callout, color = palette.ink) },
                 leadingIcon = { JIcon(PhIcons.User, modifier = Modifier.size(16.dp), tint = palette.ink) },
                 onClick = {
                     onDismiss()
@@ -227,23 +233,24 @@ fun LarkReactionPicker(
         message.reactions.filter { it.mine == true }.map { it.key.lowercase() }.toSet()
     }
 
+    val res = LocalResources.current
     // Parse custom groups if available, or fallback to default
-    val groups = remember(customEmojis) {
+    val groups = remember(customEmojis, res) {
         val parsed = mutableListOf<Pair<String, List<String>>>()
         if (customEmojis != null) {
             val rawGroups = customEmojis["groups"] as? JsonArray
             rawGroups?.mapNotNull { it as? JsonObject }?.forEach { g ->
-                val title = (g["title"] as? JsonPrimitive)?.content ?: "表情"
+                val title = (g["title"] as? JsonPrimitive)?.content ?: res.getString(R.string.inbox_lark_emoji_group)
                 val keys = (g["keys"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
                 if (keys.isNotEmpty()) parsed.add(title to keys)
             }
         }
-        if (parsed.isEmpty()) DEFAULT_EMOJI_GROUPS else parsed
+        if (parsed.isEmpty()) listOf(res.getString(R.string.inbox_lark_emoji_default) to DEFAULT_EMOJI_KEYS) else parsed
     }
 
     JSheet(
         onDismiss = onDismiss,
-        title = "表情回应",
+        title = stringResource(R.string.inbox_lark_reactions),
         skipPartiallyExpanded = false
     ) {
         LazyVerticalGrid(
@@ -263,7 +270,7 @@ fun LarkReactionPicker(
                         .clip(RoundedCornerShape(Tokens.Radius.control))
                         .background(if (selected) palette.accent.copy(alpha = 0.15f) else Color.Transparent)
                         .clickable { onPick(key); onDismiss() }
-                        .semantics { contentDescription = LarkEmojiHelper.label(key) },
+                        .semantics { contentDescription = LarkEmojiHelper.label(res, key) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(LarkEmojiHelper.symbol(key), fontSize = 22.sp)
@@ -288,7 +295,7 @@ fun LarkReactionPicker(
                             .clip(RoundedCornerShape(Tokens.Radius.control))
                             .background(if (selected) palette.accent.copy(alpha = 0.15f) else Color.Transparent)
                             .clickable { onPick(key); onDismiss() }
-                            .semantics { contentDescription = LarkEmojiHelper.label(key) },
+                            .semantics { contentDescription = LarkEmojiHelper.label(res, key) },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(LarkEmojiHelper.symbol(key), fontSize = 22.sp)

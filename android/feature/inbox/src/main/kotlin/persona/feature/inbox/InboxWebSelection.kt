@@ -38,7 +38,7 @@ internal class InboxSelectionWebView(context: Context) : WebView(context) {
             menu.removeItem(HAND_TO_JARVIS)
             if (onPick == null) return changed
             val group = (0 until menu.size()).map { menu.getItem(it) }.minByOrNull { it.order }?.groupId ?: Menu.NONE
-            menu.add(group, HAND_TO_JARVIS, 0, "交给 Persona").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+            menu.add(group, HAND_TO_JARVIS, 0, context.getString(R.string.inbox_hand_to_persona)).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             return true
         }
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {

@@ -1,5 +1,8 @@
 package persona.feature.inbox
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.api.InboxEntry
 import persona.core.contracts.api.InboxActionsTransport
 import persona.core.contracts.api.ConnectionState
@@ -21,7 +24,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class InboxFeatureTest {
+    /** The app's strings; Robolectric runs in 简体中文 (robolectric.properties). */
+    private val res get() = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources
     @Test fun mailConflictKeepsDraftAndRequiresNewConfirmedTarget() = runTest {
         val base = FakeInboxRepository()
         val requests = mutableListOf<ReplyRequest>()
@@ -60,7 +67,7 @@ class InboxFeatureTest {
             override suspend fun collectNow() = Unit
             override suspend fun context(itemId: String) = "事项上下文"
         }
-        val first = InboxExperienceRepository(repository, storage, actions, connection, owner, { _, _, _ -> })
+        val first = InboxExperienceRepository(repository, storage, actions, connection, owner, { _, _, _ -> }, resources = res)
         repository.snapshot.value = InboxSnapshot(records = listOf(InboxRecord(InboxItem("item", title = "事项"), feedId = "feed")))
         runCurrent()
         first.savePreferences(InboxPreferences(source = "account", kind = "mention", query = "搜索"))
@@ -82,7 +89,7 @@ class InboxFeatureTest {
         owner.cancel()
 
         repository.snapshot.value = InboxSnapshot()
-        val restored = InboxExperienceRepository(repository, storage, actions, connection, backgroundScope, { _, _, _ -> })
+        val restored = InboxExperienceRepository(repository, storage, actions, connection, backgroundScope, { _, _, _ -> }, resources = res)
         runCurrent()
         assertEquals("事项", restored.snapshot.value.records.single().item.title)
         assertEquals("account", restored.preferences.first().source)
@@ -115,7 +122,7 @@ class InboxFeatureTest {
             override suspend fun context(itemId: String) = ""
         }
         val experience = InboxExperienceRepository(repository, MemoryInboxStorage(), actions,
-            MutableStateFlow(ConnectionState.Connecting), owner, { _, _, _ -> })
+            MutableStateFlow(ConnectionState.Connecting), owner, { _, _, _ -> }, resources = res)
         val record = InboxRecord(InboxItem("item", title = "事项"), feedId = "feed")
         repository.snapshot.value = InboxSnapshot(records = listOf(record), refreshes = 1)
         runCurrent()

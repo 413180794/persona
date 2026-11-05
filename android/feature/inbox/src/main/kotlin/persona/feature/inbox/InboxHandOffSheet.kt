@@ -1,5 +1,9 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -47,44 +51,46 @@ internal fun InboxHandOffSheet(
     val targets = remember(snapshot.sessions, snapshot.machines) { handOffTargets(snapshot.sessions.map { it.session }, snapshot.machines) }
     val target = targets.firstOrNull { it.key == targetKey }
     val palette = PersonaTheme.palette
+    val res = LocalResources.current
+    val presets = handoffPresets(res)
     fun send() {
         if (busy) return
         busy = true
         error = null
         scope.launch {
             try {
-                val text = handoffPrompt(handOffItem(record, context ?: repository.personaContext(itemId)), instruction)
+                val text = handoffPrompt(res, handOffItem(record, context ?: repository.personaContext(itemId)), instruction)
                 val operation = attempt.operationId(text, target)
                 repository.handOff(InboxHandOffRequest(itemId, text, target?.machineId, target?.sessionId, operation))
                 attempt.done()
                 if (markDone && !record.item.isDone) {
                     try { repository.setDone(itemId, true) }
                     catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { feedback?.notice("已经交过去了，但没能标为已处理") }
+                    catch (_: Exception) { feedback?.notice(res.getString(R.string.inbox_handoff_done_failed)) }
                 }
                 onDismiss()
                 onHandedOff(target)
                 if (target == null) navigator?.selectTab(AppTab.Jarvis)
                 else navigator?.navigate(ChatRoute(target.machineId, target.sessionId, ConversationKind.Agent))
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = "没交过去：${failureReason(e)}" }
+            catch (e: Exception) { error = res.getString(R.string.inbox_handoff_failed, failureReason(e)) }
             finally { busy = false }
         }
     }
-    JSheet(onDismiss = onDismiss, title = "交给 AI", dismissible = !busy, scrollable = true) {
+    JSheet(onDismiss = onDismiss, title = stringResource(R.string.inbox_hand_to_ai), dismissible = !busy, scrollable = true) {
         Column(Modifier.fillMaxWidth().imePadding()) {
-            JSectionHeader("要它做什么")
-            JTextField(instruction, { instruction = it }, placeholder = HANDOFF_PRESETS[0], minLines = 2, maxLines = 5, enabled = !busy)
+            JSectionHeader(stringResource(R.string.inbox_handoff_what))
+            JTextField(instruction, { instruction = it }, placeholder = presets[0], minLines = 2, maxLines = 5, enabled = !busy)
             Spacer(Modifier.height(Tokens.Space.s))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                HANDOFF_PRESETS.forEach { preset ->
+                presets.forEach { preset ->
                     JChip(preset, selected = instruction.trim() == preset, onClick = { if (!busy) instruction = preset })
                 }
             }
-            JSectionHeader("交给谁")
+            JSectionHeader(stringResource(R.string.inbox_handoff_who))
             val rows = targets.size + 1
             JGroupItem(GroupPosition.of(0, rows)) {
-                JRow("Persona", subtitle = "主对话", leadingIcon = PhIcons.Sparkle, onClick = { if (!busy) targetKey = null }, chevron = false,
+                JRow("Persona", subtitle = stringResource(R.string.inbox_handoff_main_chat), leadingIcon = PhIcons.Sparkle, onClick = { if (!busy) targetKey = null }, chevron = false,
                     trailing = { JRadio(target == null, null) })
             }
             targets.forEachIndexed { index, agent ->
@@ -95,18 +101,18 @@ internal fun InboxHandOffSheet(
             }
             if (targets.isEmpty()) {
                 Spacer(Modifier.height(Tokens.Space.s))
-                Text("没有在线的 Agent；可以先交给 Persona。", style = PersonaTheme.type.caption, color = palette.ink3)
+                Text(stringResource(R.string.inbox_handoff_no_agents), style = PersonaTheme.type.caption, color = palette.ink3)
             }
             if (!record.item.isDone) {
                 Spacer(Modifier.height(Tokens.Space.l))
-                JGroupItem(GroupPosition.Single) { JSwitchRow("同时标为已处理", markDone, { if (!busy) markDone = it }) }
+                JGroupItem(GroupPosition.Single) { JSwitchRow(stringResource(R.string.inbox_handoff_mark_done), markDone, { if (!busy) markDone = it }) }
             }
             error?.let {
                 Spacer(Modifier.height(Tokens.Space.m))
                 JNotice(it, status = Status.NeedsYou)
             }
             Spacer(Modifier.height(Tokens.Space.xl))
-            JButton("发送", ::send, Modifier.fillMaxWidth(), icon = PhIcons.PaperPlaneTilt, loading = busy, loadingText = "正在交过去…")
+            JButton(stringResource(R.string.inbox_send), ::send, Modifier.fillMaxWidth(), icon = PhIcons.PaperPlaneTilt, loading = busy, loadingText = stringResource(R.string.inbox_handoff_sending))
         }
     }
 }

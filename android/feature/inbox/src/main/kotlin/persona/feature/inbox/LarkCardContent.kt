@@ -19,6 +19,8 @@ data class LarkCardContent(val title: String, val blocks: List<LarkCardBlock>, v
 
 sealed interface LarkCardBlock {
     data class Text(val text: String) : LarkCardBlock
+    /** The app's own line where the card has none to show (a part not shown, an unsupported element). */
+    data class Placeholder(@androidx.annotation.StringRes val text: Int) : LarkCardBlock
     data class Button(
         val label: String,
         val actionId: String? = null,
@@ -49,7 +51,7 @@ fun parseLarkCard(meta: JsonObject, fallback: String): LarkCardContent {
     }
     fun objects(value: JsonElement?) = (value as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
     fun node(n: JsonObject, depth: Int = 0): List<LarkCardBlock> {
-        if (depth > 24 || --remaining < 0) return listOf(LarkCardBlock.Text("部分卡片内容未显示"))
+        if (depth > 24 || --remaining < 0) return listOf(LarkCardBlock.Placeholder(R.string.inbox_lark_card_partial))
         val kids = objects(n["children"] ?: n["elements"] ?: n["actions"] ?: n["columns"])
         fun children() = kids.flatMap { node(it, depth + 1) }
         fun text() = readableLarkText(plain(n)).trim()
@@ -58,13 +60,14 @@ fun parseLarkCard(meta: JsonObject, fallback: String): LarkCardContent {
                 val actionId = n.text("actionId").ifBlank { n.text("action_id") }.ifBlank { null }
                 val actionMethod = n.number("actionMethod")?.toInt() ?: n.number("action_method")?.toInt() ?: 1
                 val url = n.text("url").ifBlank { null }
-                listOf(LarkCardBlock.Button(text().ifBlank { "操作" }, actionId, actionMethod, url))
+                listOf(LarkCardBlock.Button(text(), actionId, actionMethod, url))
             }
             "img", "image" -> {
                 val image = n["image"] as? JsonObject
                 val url = image?.text("url").orEmpty().ifBlank { n.text("url") }
-                if (url.isBlank()) listOf(LarkCardBlock.Text(text().ifBlank { "图片暂不可用" }))
-                else listOf(LarkCardBlock.Image(url, plain(n["alt"]).ifBlank { "卡片图片" },
+                if (url.isBlank()) listOf(text().takeIf { it.isNotBlank() }?.let { LarkCardBlock.Text(it) }
+                    ?: LarkCardBlock.Placeholder(R.string.inbox_lark_image_unavailable))
+                else listOf(LarkCardBlock.Image(url, plain(n["alt"]),
                     image?.number("width")?.toInt()?.coerceAtLeast(1) ?: 1,
                     image?.number("height")?.toInt()?.coerceAtLeast(1) ?: 1))
             }
@@ -98,14 +101,14 @@ fun parseLarkCard(meta: JsonObject, fallback: String): LarkCardContent {
             "plain_text", "markdown", "lark_md", "link", "at", "text_tag", "code_span" ->
                 text().takeIf { it.isNotBlank() }?.let { listOf(LarkCardBlock.Text(it)) }.orEmpty()
             else -> text().takeIf { it.isNotBlank() }?.let { listOf(LarkCardBlock.Text(it)) }
-                ?: listOf(LarkCardBlock.Text("此内容暂不支持显示"))
+                ?: listOf(LarkCardBlock.Placeholder(R.string.inbox_lark_content_unsupported))
         }
     }
     val title = readableLarkText(plain(meta["header"])).ifBlank { meta.text("title") }
     val body = meta["body"] as? JsonObject
     val blocks = if (body != null) node(body) else objects(meta["elements"]).flatMap { node(it) }
     val summary = (meta["fallback"] as? JsonArray).orEmpty().joinToString("\n") { plain(it) }
-        .ifBlank { fallback }.ifBlank { "此卡片暂不支持显示" }
+        .ifBlank { fallback }
     return LarkCardContent(title, blocks, readableLarkText(summary))
 }
 

@@ -1,5 +1,10 @@
 package persona.feature.inbox
 
+import androidx.compose.ui.platform.LocalResources
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -72,11 +77,19 @@ fun inboxDocRef(doc: JsonObject?): InboxDocRef? {
 }
 
 /** What kind of document, as Feishu names it. */
-internal fun docTypeName(type: String?): String = when (type) {
-    "sheet" -> "表格"
-    "base" -> "多维表格"
-    "docx", "doc" -> "文档"
-    else -> "云文档"
+internal fun docTypeName(res: Resources, type: String?): String = res.getString(when (type) {
+    "sheet" -> R.string.inbox_doc_sheet
+    "base" -> R.string.inbox_doc_base
+    "docx", "doc" -> R.string.inbox_doc_doc
+    else -> R.string.inbox_doc_other
+})
+
+/** The button that opens the document, named for its kind. */
+private fun docOpenLabel(type: String?): Int = when (type) {
+    "sheet" -> R.string.inbox_doc_open_sheet
+    "base" -> R.string.inbox_doc_open_base
+    "docx", "doc" -> R.string.inbox_doc_open_doc
+    else -> R.string.inbox_doc_open_other
 }
 
 /** The list row's square in place of a chat avatar. */
@@ -87,7 +100,8 @@ internal fun docIcon(type: String?): PhIcon = when (type) {
 }
 
 /** @我 or 评论, as the web and iOS tag a document's notice. */
-internal fun docKindLabel(doc: InboxDocRef?): String = if (doc?.notice in setOf("comment", "reply")) "评论" else "@我"
+internal fun docKindLabel(res: Resources, doc: InboxDocRef?): String =
+    res.getString(if (doc?.notice in setOf("comment", "reply")) R.string.inbox_doc_comment else R.string.inbox_mention_me)
 
 /** The item's own page when it is neither a chat, a 公司圈 post nor a mail: a document's notice, or an unknown item. */
 @Composable
@@ -106,7 +120,7 @@ fun InboxItemDetailScreen(repository: InboxRepository, route: InboxItemDetailRou
             }
         }) {
         item("item-extension-notice") { InboxExtensionNotice(route.itemId, route) }
-        if (record == null) item("item-missing") { StatusText("没有找到这条事项，可能已经处理或被移除") }
+        if (record == null) item("item-missing") { StatusText(stringResource(R.string.inbox_item_missing)) }
         else inboxItemBody(record) { url -> open?.invoke(url, inbox.contentSource) }
     }
 }
@@ -119,20 +133,20 @@ internal fun LazyListScope.inboxItemBody(record: InboxRecord, onOpen: (String) -
         }
         return
     }
-    val kind = docTypeName(doc.type)
     item("doc-open") {
+        val kind = docTypeName(LocalResources.current, doc.type)
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             Text(listOf(kind, record.item.preview).filter { it.isNotBlank() }.joinToString(" · "),
                 style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
-            JButton("打开$kind", { onOpen(doc.url) }, kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.ArrowSquareOut)
-            doc.reply?.let { Text("回复会$it", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3) }
+            JButton(stringResource(docOpenLabel(doc.type)), { onOpen(doc.url) }, kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.ArrowSquareOut)
+            doc.reply?.let { Text(stringResource(R.string.inbox_doc_reply_to, it), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3) }
         }
     }
     doc.error?.let { error ->
-        item("doc-error") { JNotice("读不到文档内容：$error", Modifier.padding(top = Tokens.Space.s), status = Status.NeedsYou) }
+        item("doc-error") { JNotice(stringResource(R.string.inbox_doc_error, error), Modifier.padding(top = Tokens.Space.s), status = Status.NeedsYou) }
     }
     if (doc.rows.isEmpty()) return
-    item("doc-rows") { JSectionHeader("提到你的行", Modifier.padding(top = Tokens.Space.l)) }
+    item("doc-rows") { JSectionHeader(stringResource(R.string.inbox_doc_rows), Modifier.padding(top = Tokens.Space.l)) }
     // A row's table is worth naming when the rows come from more than one, or from a Base's tables.
     val tables = doc.type == "base" || doc.rows.mapNotNull { it.table }.distinct().size > 1
     itemsIndexed(doc.rows, key = { index, _ -> "doc-row-$index" }) { _, row ->
@@ -149,7 +163,7 @@ internal fun LazyListScope.inboxItemBody(record: InboxRecord, onOpen: (String) -
             }
             if (row.status.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = Tokens.Space.xs),
                 horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-                row.status.forEach { JTag("${it.name}：${it.value.ifBlank { "未设置" }}") }
+                row.status.forEach { JTag(stringResource(R.string.inbox_doc_field, it.name, it.value.ifBlank { stringResource(R.string.inbox_doc_not_set) })) }
             }
         }
     }

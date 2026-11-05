@@ -35,7 +35,7 @@ class LarkInboxRepository(
     private fun owns(w: Window) = transports.value === w.transport
 
     override fun conversation(feedId: String, startPosition: Long?): Flow<LarkConversation> = transports.flatMapLatest { transport ->
-        if (transport == null) flowOf(LarkConversation(error = "请先配对 hub")) else channelFlow {
+        if (transport == null) flowOf(LarkConversation(failure = LarkFailure.NotPaired)) else channelFlow {
             val w = synchronized(windows) {
                 windows.entries.removeAll { it.value.transport !== transport }
                 windows[feedId]?.takeIf { it.around == startPosition } ?: Window(transport, feedId, startPosition).also { windows[feedId] = it }
@@ -72,9 +72,9 @@ class LarkInboxRepository(
         catch (_: WindowGap) {
             try { latestConversation(w.feed) }
             catch (e: CancellationException) { throw e }
-            catch (_: Exception) { w.state.update { it.copy(verified = false, loading = false, error = "消息记录尚未同步完整") } }
+            catch (_: Exception) { w.state.update { it.copy(verified = false, loading = false, failure = LarkFailure.Incomplete) } }
         }
-        catch (_: Exception) { if (owns(w)) w.state.update { it.copy(loading = false, loadingOlder = false, loadingNewer = false, verified = false, error = "消息加载失败，请重试") } }
+        catch (_: Exception) { if (owns(w)) w.state.update { it.copy(loading = false, loadingOlder = false, loadingNewer = false, verified = false, failure = LarkFailure.LoadFailed) } }
     }
 
     override suspend fun refreshConversation(feedId: String) = safely(window(feedId)) { reconcile(window(feedId)) }
@@ -109,7 +109,7 @@ class LarkInboxRepository(
         if (!owns(w)) return@withLock
         val last = w.raw.lastOrNull()?.number("position")
         val wasTail = w.raw.isNotEmpty() && !w.state.value.hasNewer
-        w.state.update { it.copy(verified = false, error = null) }
+        w.state.update { it.copy(verified = false, error = null, failure = null) }
         val firstPosition = w.raw.firstOrNull()?.number("position")
         var page = fetch(w, around = firstPosition ?: w.around)
         var first = page
@@ -139,7 +139,7 @@ class LarkInboxRepository(
         val state = w.state.value
         if (!owns(w) || !state.verified || if (older) !state.hasOlder else !state.hasNewer) return@withLock
         val cursor = requireNotNull(if (older) w.older else w.newer)
-        w.state.update { it.copy(loadingOlder = older, loadingNewer = !older, error = null) }
+        w.state.update { it.copy(loadingOlder = older, loadingNewer = !older, error = null, failure = null) }
         try {
             val page = fetch(w, before = cursor.takeIf { older }, after = cursor.takeUnless { older })
             if (!owns(w)) return@withLock
@@ -171,7 +171,7 @@ class LarkInboxRepository(
                 return
             }
             w.state.update { it.copy(verified = false, loading = false, loadingOlder = false,
-                loadingNewer = false, error = "消息记录尚未同步完整") }
+                loadingNewer = false, failure = LarkFailure.Incomplete) }
             return
         }
         w.raw = rows.associateBy { it.text("id") }.values.sortedBy { it.number("position") ?: Long.MAX_VALUE }
@@ -179,7 +179,7 @@ class LarkInboxRepository(
         w.newer = page.cursor("newer_cursor")
         w.state.update { it.copy(messages = w.raw.map { row -> larkMessage(row, w.transport, w.feed) }, loading = false,
             hasOlder = page.flag("has_older"), hasNewer = page.flag("has_newer"), loadingOlder = false, loadingNewer = false,
-            verified = verified, error = null, windowRevision = it.windowRevision + if (revision) 1 else 0) }
+            verified = verified, error = null, failure = null, windowRevision = it.windowRevision + if (revision) 1 else 0) }
         if (verified) {
             onMessages(w.feed, w.raw)
             try { cache.write(w.transport.scope, w.feed, w.around, JsonObject(page + ("messages" to JsonArray(w.raw)))) }
