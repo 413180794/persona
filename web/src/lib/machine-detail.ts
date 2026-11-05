@@ -197,6 +197,16 @@ export function bytesBin(v: number | undefined): string {
   return `${x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x.toFixed(2)} ${units[i]}`;
 }
 
+/** Used of total for a tile's narrow sub line: one unit when both share it ("56.5 / 64.0 GB"), else both
+ * ("812 MB / 8.00 GB"). Three tiles a row on a 390-wide phone leave about 94 px, and "56.5 GB / 64.0 GB" needs 92 (#3637). */
+export function usedOfTotal(used: number | undefined, total: number | undefined): string {
+  const a = bytesBin(used),
+    b = bytesBin(total);
+  const ua = a.split(" ")[1],
+    ub = b.split(" ")[1];
+  return ua !== undefined && ua === ub ? `${a.split(" ")[0]} / ${b}` : `${a} / ${b}`;
+}
+
 /** An axis label: the same units without trailing zeros ("1.5 MB", "512 KB"). */
 export function bytesAxis(v: number): string {
   if (v <= 0) return "0";

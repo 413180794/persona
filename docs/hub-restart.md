@@ -7,17 +7,19 @@
 
 ## 现状（2026-11-04 核实，改动前，master `2fe55f92`）
 
+代码位置写的是现在的文件和函数（2026-11-06 对过；`2fe55f92` 之后，机器连接（拉起 node、断线处理）从 hub/machine.go、hub/machine_conn.go 搬到了 `devices/`；`hub/machine.go` 还在，转发 node 事件的 `onEvent` 留在那里），行为说的仍是改动前。
+
 ### 重启的过程
 
 - `scripts/deploy/deploy.sh:200-215` 部署 hub：`db.sh` → 拷 node 二进制 → `install_bin`（`jarvisd.new` 再 `mv`，原子替换）→ 插件程序 → `hub-systemd.sh`。
   `install_bin` 顺手重启这台的常驻 node（`deploy.sh:126`、`:137`，`node-launchd.sh restart`）。
 - `scripts/deploy/hub-systemd.sh:34-55` 每次重写 `~/.config/systemd/user/jarvisd.service`（`Restart=always`、`RestartSec=3`，没写 `KillMode`，
   即 control-group），然后 `systemctl --user restart jarvisd`。除了 `is-active` 没有健康检查。
-- 收到 SIGTERM（`cmd/personad/main.go:106` 的 `signal.NotifyContext`）：hub 的 ctx 立刻取消，各台机器的连接同时被杀（`hub/hub.go:276-278`）。
-  `hub/public.go:187-212` 的停机顺序：先关监听 → `stopWebSockets` 给每个客户端发 1001「hub stopping」，等 0.5 s 后强关（`hub/shutdown.go:89-146`）
-  → `http.Server.Shutdown`（每步 2 s，总预算 8 s，`shutdown.go:14-17`）→ 等 node 连接 → 关数据库。**先关监听再排空**，排空期间端口是关着的。
-- 监听是进程自己 `net.Listen`（`public.go:234`，TLS 端口 `:67-71`），没有 `SO_REUSEPORT`、`LISTEN_FDS` 或 socket activation。
-  新进程在 `db.Open`（迁移）、插件、知识库等全部起来以后才监听（`hub.go:291-380`）。
+- 收到 SIGTERM（`cmd/personad/main.go` 的 `main` 里的 `signal.NotifyContext`）：hub 的 ctx 立刻取消，各台机器的连接同时被杀（`hub/hub.go` 的 `runHub` 里 `startDevices(ctx)` 起的连接）。
+  `hub/public.go` 的 `serveHTTP` 里的停机顺序：先关监听 → `stopWebSockets` 给每个客户端发 1001「hub stopping」，等 0.5 s 后强关（`hub/shutdown.go` 的 `stopWebSockets`）
+  → `http.Server.Shutdown`（每步 2 s，总预算 8 s，`shutdown.go` 的 `defaultShutdownTimeout` / `shutdownStepTimeout`）→ 等 node 连接 → 关数据库。**先关监听再排空**，排空期间端口是关着的。
+- 监听是进程自己 `net.Listen`（`public.go` 的 `serveHTTP`，TLS 端口在 `startPublic`），没有 `SO_REUSEPORT`、`LISTEN_FDS` 或 socket activation。
+  新进程在 `db.Open`（迁移）、插件、知识库等全部起来以后才监听（`hub.go` 的 `runHub`）。
 - 实测（这台开发机 2026-11-04 19:30 那次重启的 journal）：19:30:29.88 开始停，30.93 停完，31.14 新进程开始监听，**端口关了约 1.3 s**，
   这期间的连接被拒绝（connection refused）。
 
@@ -25,13 +27,13 @@
 
 | 连接 | 重启时 | 位置 |
 | --- | --- | --- |
-| 客户端的 WebSocket（`/api/v1/ws`） | 收到 1001 关闭；之后 1.3 s 里重连被拒绝，新进程起来后才连上 | `shutdown.go:107`，`http.go:872-875`（停机中的升级给 503） |
-| 进行中的 HTTP 请求 | `Shutdown` 最多等 2 s，超过就强关；这 1.3 s 里新发的请求被拒绝 | `public.go:198-208` |
-| 各台电脑的 node | hub 的 ctx 一取消就杀掉 `jarvisd node --stdio` / `ssh` 子进程（SIGKILL，`machine.go:220` 的 `WaitDelay` 2 s），**同时**把机器标成离线、广播 `machines`、结束这台机器上不可续的交互（`machine_conn.go:408-439`），这些广播客户端在被断开前就收到了 | `hub/machine.go:157-269` |
-| 本机 node | 是 hub 的子进程（`node --stdio`），和 hub 一起被 systemd 的 cgroup 杀掉 | `machine.go:157-178` |
-| 插件（lark-connector 插件、removed 等） | hub 的子进程（stdio RPC），随 hub 的 cgroup 被杀，新 hub 再拉起；登录态在插件自己的目录里，重启只丢 hub 侧的会话和就绪状态 | `extension/host/host.go:658-738` |
-| 连接器程序（telegram、wechat） | 同上，退避 5 s 起 | `connector/proc/proc.go:162-199` |
-| jarvis-link（kind link 的电脑） | 收到 1001，1–60 s 指数退避重连，状态文字「hub 重启了」 | `link/client.go:368-377, 602` |
+| 客户端的 WebSocket（`/api/v1/ws`） | 收到 1001 关闭；之后 1.3 s 里重连被拒绝，新进程起来后才连上 | `shutdown.go` 的 `stopWebSockets`，`http.go` 的 `serveWS`（停机中的升级给 503） |
+| 进行中的 HTTP 请求 | `Shutdown` 最多等 2 s，超过就强关；这 1.3 s 里新发的请求被拒绝 | `public.go` 的 `serveHTTP` |
+| 各台电脑的 node | hub 的 ctx 一取消就杀掉 `jarvisd node --stdio` / `ssh` 子进程（SIGKILL，`devices/machine.go` 的 `open` 里 `WaitDelay` 2 s），**同时**把机器标成离线、广播 `machines`、结束这台机器上不可续的交互（`devices/conn.go` 的 `detach`），这些广播客户端在被断开前就收到了 | `devices/machine.go` 的 `command`、`open` |
+| 本机 node | 是 hub 的子进程（`node --stdio`），和 hub 一起被 systemd 的 cgroup 杀掉 | `devices/machine.go` 的 `command`（`local` 那支） |
+| 插件（lark-connector 插件、removed 等） | hub 的子进程（stdio RPC），随 hub 的 cgroup 被杀，新 hub 再拉起；登录态在插件自己的目录里，重启只丢 hub 侧的会话和就绪状态 | `extension/host/host.go` 的 `spawn` |
+| 连接器程序（telegram、wechat） | 同上，退避 5 s 起 | `connector/proc/proc.go` 的 `Conn.Run`（`restartFirst`） |
+| jarvis-link（kind link 的电脑） | 收到 1001，1–60 s 指数退避重连，状态文字「hub 重启了」 | `link/client.go` 的 `backoff`、`summary` |
 
 新 hub 起来后：本机 node 0.2 s 内连上，ssh 的 Mac 要 2–8 s（实测一台 +2.4 s、另一台 +8 s）。这段时间里机器显示离线、它的会话列表是空的。
 
@@ -46,7 +48,7 @@
 | 断线期间的写操作 | 消息进持久化发件箱，连上后补发（`client_msg_id`）；审批 / 回答乐观移除、失败恢复，不重试、不带 op id | 发消息立刻失败（「没发出去：连不上 hub」）；审批失败弹「没送到」；不带 op id | 消息走持久化发件箱，带 `client_msg_id` 和 `X-Jarvis-Op-Id`，回执核对；审批不带 op id、不重试 |
 
 共同点：**全局的实时事件没有序号**，断线期间的广播（`todos`、`inbox`、`lark`、`revs`、`interaction_resolved`……）全部丢失，只能靠重连后全量重拉；
-只有对话内容能按 `since_seq` 续（`http.go:1029-1048`、`docs/protocol.md`「items 的连续性」）。hub 已经有幂等回执（`X-Jarvis-Op-Id`，`hub/clientops.go`、
+只有对话内容能按 `since_seq` 续（`http.go` 的 `onClientMessage` 里的 `subscribe` 和 `sendBacklog`、`docs/protocol.md`「items 的连续性」）。hub 已经有幂等回执（`X-Jarvis-Op-Id`，`hub/clientops.go`、
 `docs/protocol.md`「操作回执」）和 `client_msg_id` 去重，但只有安卓的发消息用了 op id。
 
 一次重启客户端看到的：网页立刻变「连接中」（约 1.3 s 后连上，全量重拉一遍）；iOS / 安卓超过 1.5 s 才显示，一般刚好看得到「连接中…」或「更新中…」闪一下；
@@ -55,15 +57,15 @@ Mac 上的 ssh 机器离线 2–8 s，列表里它的会话先消失再出现。
 ### hub 里正在进行的工作
 
 - 助手（Persona tab 主对话、副对话、定时任务、AI 分身、飞书 /agent、机器人、频道插件，`hub/assistant*.go`、AI 分身是管理者的 `assistant/inbox_agent.go`、飞书 /agent 在接飞书的插件里（#1571 起，经 hub 的公开接口开对话）、
-  `bots_chat.go:416`、`channels_extension.go:371`）都走 `assistant.send`，由**助手所在机器的 node** 起无头 claude：
-  `zsh -ic "<启动器> \"$@\"" … -p --input-format stream-json --output-format stream-json --include-partial-messages`（`node/assistant.go:394-490`），
+  飞书机器人 `assistant/feishu.go` 的 `botSend`、频道插件 `assistant/channels_plugin.go` 的 `channelForward`）都走 `assistant.send`（机器人和频道插件现在只有开新对话走它，接着说走 `sendOnce` 的 `session.send_once`），由**助手所在机器的 node** 起无头 claude：
+  `zsh -ic "<启动器> \"$@\"" … -p --input-format stream-json --output-format stream-json --include-partial-messages`（`node/assistant.go` 的 `spawnClaude`），
   独立进程组（`Setpgid`），stdin / stdout 是管道。
-- 流式输出：`readAssistant` 把 `text_delta` 攒在内存的 `p.partial`，每 80 ms 发一次 `session.delta`（`node/assistant.go:497-641`），hub 转给订阅者
-  （`hub/machine.go:481-489`）。正在生成的文字只在内存里；写完的消息在 Claude Code 自己的 transcript 里。
-- hub 重启时：node 的连接断开 → `Node.Serve` 返回 → `reapAssistants` 停掉所有助手进程（`node/assistant.go:771-787`）；本机的 node 本来就和 hub 一起被 cgroup 杀掉。
-  **常驻 node（`node --attach`）也一样**：每条 hub 连接一个 `Node`，新连接进来旧的就停（`node/attach.go:120-143`），它的助手进程一起停。
+- 流式输出：`readAssistant` 把 `text_delta` 攒在内存的 `p.partial`，每 80 ms 发一次 `session.delta`（`node/assistant.go` 的 `readAssistant`、`emitDelta`），hub 转给订阅者
+  （`hub/machine.go` 的 `onEvent`，`session.delta` 那支）。正在生成的文字只在内存里；写完的消息在 Claude Code 自己的 transcript 里。
+- hub 重启时：node 的连接断开 → `Node.Serve` 返回 → `reapAssistants` 停掉所有助手进程（`node/assistant.go` 的 `reapAssistants`）；本机的 node 本来就和 hub 一起被 cgroup 杀掉。
+  **常驻 node（`node --attach`）也一样**：每条 hub 连接一个 `Node`，新连接进来旧的就停（`node/attach.go` 的 `Attach`），它的助手进程一起停。
 - Monitor、`run_in_background` 的后台命令是 claude 的子进程，随它一起死。node 记着每个对话的后台任务（`background_tasks_changed` → `state.put`），
-  重启后 `recoverAssistantTasks` 给这些对话发一条「jarvisd 刚重启过……后台任务停了」（`node/assistant.go:737-764`、`prompts/assistant/lost_tasks.md`），让它自己重新布置。
+  重启后 `recoverAssistantTasks` 给这些对话发一条「jarvisd 刚重启过……后台任务停了」（`node/assistant.go`、`prompts/assistant/lost_tasks.md`），让它自己重新布置。
 - 用户看到的：正在回答的那条停在半截（流式的部分没了，只剩 transcript 里已写完的块），下一条消息时 `--resume` 接着；后台任务没了，对话收到一条「刚重启过」。
   herdr 里的 Agent 不受影响（herdr 是独立进程，只有观察它的辅助子进程会断）。
 

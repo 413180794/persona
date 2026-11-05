@@ -24,6 +24,7 @@ import {
   rate,
   systemFacts,
   systemLine,
+  usedOfTotal,
   type DetailMachine,
   type DetailMetrics,
   type Level,
@@ -489,10 +490,10 @@ function NowTiles({ s, cores }: { s: NonNullable<DetailMetrics["latest"]>; cores
   const perCore = s.load !== undefined && cores ? s.load / cores : undefined;
   const tiles: { label: string; value: string; sub?: string; frac?: number; lv: Level }[] = [
     { label: "CPU", value: percent(s.cpu), sub: cores ? t("machines-machinedetail.cores", { count: cores }) : undefined, frac: s.cpu, lv: level(s.cpu, 75, 90) },
-    { label: t("machines-machinedetail.memory"), value: percent(memPct), sub: s.mem_used !== undefined ? `${bytesBin(s.mem_used)} / ${bytesBin(s.mem_total)}` : undefined, frac: memPct, lv: level(memPct, 80, 90) },
+    { label: t("machines-machinedetail.memory"), value: percent(memPct), sub: s.mem_used !== undefined ? usedOfTotal(s.mem_used, s.mem_total) : undefined, frac: memPct, lv: level(memPct, 80, 90) },
     { label: t("machines-machinedetail.network"), value: `↓ ${rate(s.net_rx)}`, sub: `↑ ${rate(s.net_tx)}`, lv: "normal" },
     { label: t("machines-machinedetail.load"), value: loadText(s.load), sub: cores ? t("machines-machinedetail.cores", { count: cores }) : undefined, lv: level(perCore, 1, 2) },
-    { label: t("machines-machinedetail.disk"), value: percent(diskPct), sub: s.disk_used !== undefined ? `${bytesBin(s.disk_used)} / ${bytesBin(s.disk_total)}` : undefined, frac: diskPct, lv: level(diskPct, 80, 90) },
+    { label: t("machines-machinedetail.disk"), value: percent(diskPct), sub: s.disk_used !== undefined ? usedOfTotal(s.disk_used, s.disk_total) : undefined, frac: diskPct, lv: level(diskPct, 80, 90) },
     { label: t("machines-machinedetail.swap"), value: s.swap_total ? bytesBin(s.swap_used) : t("machines-machinedetail.swap_off"), sub: s.swap_total ? t("machines-machinedetail.swap_total", { total: bytesBin(s.swap_total) }) : undefined, frac: swapPct, lv: "normal" },
   ];
   return (
@@ -509,7 +510,7 @@ function NowTiles({ s, cores }: { s: NonNullable<DetailMetrics["latest"]>; cores
             )}
           </div>
           <div className="mt-0.5 truncate text-[15px] leading-6 font-medium text-ink tabular-nums sm:text-[17px]" title={tile.value}>{tile.value}</div>
-          <div className="truncate text-[10.5px] text-ink-3 tabular-nums">{tile.sub ?? " "}</div>
+          <div className="truncate text-[10.5px] text-ink-3 tabular-nums" title={tile.sub}>{tile.sub ?? " "}</div>
           <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-field">
             {tile.frac !== undefined && (
               <div

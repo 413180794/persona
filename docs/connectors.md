@@ -135,7 +135,7 @@ App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读�
 `Poller`、`Chats`、`Items`、`Archive`、`Inbox`、`InboxReplier`、`InboxSettler`、`Login`、`Capabler`）。问题不只是多：
 
 - 两套声明。hub 里的连接器靠「实现了哪个接口」，子进程靠 `Capabler` 自己报；而 `proc.Conn` 为了能代表任何程序，把能用 RPC 转的方法全实现了，
-  hub 的类型断言对它永远成立，正确性靠程序「没有就回空」。`Capabilities()`（`registry.go:309`）只报得出其中 11 个，
+  hub 的类型断言对它永远成立，正确性靠程序「没有就回空」。`Capabilities()`（当时在 `connector/registry.go`，现在是 `connector/manifest.go` 的 `Capabilities`）只报得出其中 11 个，
   `AgentTools`、`Validator`、`Poller`、`InboxReplier`、`InboxSettler` 这些在 `GET /api/v1/connectors` 里看不到。
 - 有几项其实是数据，不是行为：`Hosts`、`AgentTools`、`Poller` 各是一个返回不变的值（常量或配置）的方法。
 
@@ -227,7 +227,7 @@ type Batch struct {
 现状：三种跑法三套约定。
 
 - 子进程：没有版本号，靠「同一次构建」。字段大多没有 JSON 标签，线上的键是 Go 的字段名（`Cursor`、`Batches`），第三方很难照着写。
-- node 中转：只为 iMessage 写的 5 个方法，`node/node.go:370` 写死。
+- node 中转：只为 iMessage 写的 5 个方法，当时在 `node/node.go` 里写死（现在是 `node/connectors.go` 的 `serveLocalConnector`）。
 - 第三方：`plan-connectors.md` 的「外部进程」一节设计过 HTTP + MCP，没实现。
 
 方案：
@@ -283,8 +283,8 @@ CI 的「仓库 + 分支」→ `Group`；后来成功 → `Supersedes`；CI 模�
 
 **同意，v2 只记录不合并；线索只存 HMAC 哈希，不给模型看，只用来认人（已拍板）。**
 
-现状：知识库的人（`kb/store.go:71` `Person`）只有一个 `Source` + `SourceID`，同一个人在飞书、邮件、信息、Telegram 里各一份。
-信息为了不让号码落盘，人的 id 已经是号码 / 邮箱的哈希（`imessage/jarvis.go:92` `PersonKey`）。
+现状：知识库的人（`kb/store.go` 的 `Person`）只有一个 `Source` + `SourceID`，同一个人在飞书、邮件、信息、Telegram 里各一份。
+信息为了不让号码落盘，人的 id 已经是号码 / 邮箱的哈希（`connector/imessage/jarvis.go` 的 `PersonKey`）。
 
 方案：
 

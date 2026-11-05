@@ -24,6 +24,7 @@ import {
   timeAt,
   timeTicks,
   uptime,
+  usedOfTotal,
   yAxis,
   type DetailMachine,
   type DetailPoint,
@@ -119,6 +120,16 @@ describe("scales", () => {
 });
 
 describe("formats", () => {
+  it("say used of total with one shared unit so the 390-wide tile shows the total (#3637)", () => {
+    expect(usedOfTotal(56.5 * GB, 64 * GB)).toBe("56.5 / 64.0 GB");
+    expect(usedOfTotal(640 * GB, 1000 * GB)).toBe("640 / 1000 GB");
+    expect(usedOfTotal(1.2 * 1024 * GB, 2 * 1024 * GB)).toBe("1.20 / 2.00 TB");
+    expect(usedOfTotal(812 * MB, 8 * GB)).toBe("812 MB / 8.00 GB");
+    expect(usedOfTotal(800, 1000)).toBe("800 / 1000 B");
+    expect(usedOfTotal(undefined, 64 * GB)).toBe("— / 64.0 GB");
+    expect(usedOfTotal(5 * GB, undefined)).toBe("5.00 GB / —");
+  });
+
   it("say bytes, rates, percents and uptimes like the app", () => {
     expect(bytesBin(48 * GB)).toBe("48.0 GB");
     expect(bytesBin(512 * 1024)).toBe("512 KB");
