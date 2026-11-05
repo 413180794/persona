@@ -114,7 +114,7 @@ node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之
   这些和它的 Claude Code 会话一样留在飞书和电脑上。挂起超过 7 天、botmux 不再列的 Codex 会话按 Codex 历史只读显示，去飞书里回。
 - **同一个会话两边都有**：它也开在 herdr 等引擎的窗格里（以前从手机 `--resume` 过）时，以在跑的窗格为准，botmux 的挂起记录让开。
 - **检测时机**：node 连上 hub、知道这台要不要列 botmux 时（见下一条），以及切换引擎时找 `botmux`：PATH 上的，没有就是 botmux 安装时写的 `~/.botmux/bin/botmux`（launchd 常驻的 node 只有系统的 PATH）；之后才装 botmux 的，重启那台电脑的 personad 才会显示。
-- **关掉**：机器详情「引擎」下的开关「同时显示 botmux 会话」（网页、iOS，#2575），默认开，改了马上发 `node.configure {"botmux": …}`，存在 hub 的 settings；
+- **关掉**：机器详情「引擎」下的开关「同时显示 botmux 会话」（网页、iOS，#2575；Android 在机器页「引擎与连接」里、紧挨引擎那一行，点一下就存，#2899），默认开，改了马上发 `node.configure {"botmux": …}`，存在 hub 的 settings；
   hub.json 那台电脑的 `machines[]` 里写 `"botmux": false` 是没设过开关时的默认值（`docs/config.md`；老 node 不认这一项）：不再跑 `botmux observe`、`botmux dashboard current`（正在跑的那次跑完作废），Agents 里没有 `botmux:` 窗格的会话。
   hub 连上时在 `node.configure` 里说开不开；说之前 node 不挂 botmux，装了 botmux 的电脑也先不推会话列表（免得 botmux 的会话先消失再回来）；老 hub 不说，来要会话列表时照旧挂上。
   关掉后，botmux 用 tmux 跑的会话照旧凭对话记录按「未运行」列出，在手机上回它会在引擎里 `claude --resume`，可能和 botmux 自己的那个撞上：这类会话去飞书里回。

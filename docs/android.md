@@ -154,7 +154,7 @@ Agents、机器、要你处理的请求把各组合在一起显示；Persona、�
 | `PairingModule` | 配对就是替换 | 原来的配对页仍是替换；设置 › hub › 添加 hub 是 `WiredPairingService.addHub` |
 | `ChatDataOwner`、`AgentsWiringModule`、`AppServices` 的终端 / 文件 / 动作 / 机器监控 | 按唯一的作用域构造 | 每组一份（`GroupStacks`），再合并（`MergedServices.kt`） |
 | `InboxDataOwner`（收件箱、Persona 会话列表）、设备设置、检查更新、锁屏测试、分享、手机数据工具、知识库 | 唯一的 hub | 选中的组 |
-| `MachineManagementModule` 的机器管理（重连、重新部署、启动器、引擎、Claude Code / Codex 设置） | 当前配对 | 机器 id 的后缀所在的组（`mergedMachineManagement` + `MachineManagement.inGroup`，#634）：别的组的机器原来被拿去问选中组的 hub，找不到机器或改错了地方；配对后选引擎的那台也从合并列表来，同样按后缀走 |
+| `MachineManagementModule` 的机器管理（重连、重新部署、启动器、引擎、botmux 开关、Claude Code / Codex 设置） | 当前配对 | 机器 id 的后缀所在的组（`mergedMachineManagement` + `MachineManagement.inGroup`，#634）：别的组的机器原来被拿去问选中组的 hub，找不到机器或改错了地方；配对后选引擎的那台也从合并列表来，同样按后缀走 |
 | 模型配置（`MachineManagementModule.models`）、语音（`AppServices` 的 `VoiceExtensions`） | 当前配对 | 选中的组：都是 hub 级的（一台 hub 一份配置、一个语音扩展），和收件箱、Persona 一样一次看一组（#634 定的）；模型配置里的机器是那台 hub 自己报的，原样用它的 id |
 | 连接诊断的候选地址 | 唯一的配对 | 选中的组自己的 hub（组里第一台已配对的 hub）；同组别的 hub 的候选也参与选路，诊断里一起列出 |
 | `Notify.install(connection.events)`、前台服务 | 一条 WebSocket 的事件 | 各组事件合成一条流（ID 已加后缀，见下）；常驻通知的状态是选中组的，Agent 计数各组相加 |
@@ -1000,9 +1000,10 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 - **机器页**（Agents › 列表设置 › 机器监控 › 点一台，或树里电脑栏头的仪表按钮；`MachinesRoute` / `MachineDetailRoute`）：
   - 卡片上的部署行：在线且 `node_mismatch` 或 `deploying` 时出现，「重新部署」= `POST /api/v1/machines/{id}/deploy`；进行中、上次失败（`deploy_error`）跟着 `machines` 推送变，发出失败提示「部署失败：原因」（409 的原因原样显示）。列表和详情是同一张卡片。
   - 「引擎与连接」一组：「引擎」打开引擎选择（`EngineRoute`）；「重新连接」= `POST …/reconnect`，之后最多等 15 秒看这台变成在线，等的时候每 3 秒读一次机器列表（推送丢了也能等到），提示「已连上」「还没连上：<机器的 error>」「重新连接失败：原因」。脚注写接入方式（hub 所在的机器 / hub 通过 ssh <别名> 接入）。
+  - 同一组里「引擎」下面是「同时显示 botmux 会话」开关（#2899，iOS `BotmuxSwitchModel`、网页 #2575 / #2842）：`GET / PUT /api/v1/machines/{id}/botmux {"on"}`，打开页面读一次，老 hub 回 404（或读失败）就不显示这一行；点一下立刻翻、马上保存（不跟引擎的「保存」走），失败翻回去并提示「botmux 开关没有保存：原因」。有这一行时脚注换成「这台电脑装了 botmux 时……」的说明。放在机器页而不是引擎选择页，是跟网页 #2842 的结论：和引擎挨着、一眼能看到、一点就改。
   - 「启动器 N」：`GET …/launchers`，名字等宽、模型取路径最后一段；机器离线不读，上线后自动重读，读失败显示原因。
   - 历史曲线多一张磁盘图（历史里是已用字节，按最新一次的磁盘总量算成百分比，总量未知时不画）；系统信息多开机于、herdr、Claude Code、Persona node 版本。hub 上已经没有这台机器时页面写明。
-  - 代码：`feature/machines` 的 `MachineActions.kt`（重连 / 部署 / 启动器，有单测）、`MachineManagementSections.kt`；接口 `core:contracts` 的 `MachineManagement`，实现 `core:hub` 的 `HttpMachineManagement`（走配对连接的 `request`），`app/…/di/MachineManagementModule.kt` 每次调用按机器 id 的组后缀找那组的连接（多 hub，#634）。体验模式没有这些操作。
+  - 代码：`feature/machines` 的 `MachineActions.kt`（重连 / 部署 / 启动器 / botmux 开关，有单测）、`MachineManagementSections.kt`；接口 `core:contracts` 的 `MachineManagement`，实现 `core:hub` 的 `HttpMachineManagement`（走配对连接的 `request`），`app/…/di/MachineManagementModule.kt` 每次调用按机器 id 的组后缀找那组的连接（多 hub，#634）。体验模式没有这些操作。
 - **引擎**（[engines.md](engines.md)）：
   - 配对完成后、准备清单之前插入必选的一步（`PairingScreen`）：hub 所在的机器（`kind: local`，没有就第一台）报了 `engines` 才有；没有返回键、不能跳过，保存失败（「保存失败：原因」+「必须选一个引擎才能继续……」）停在本页；预选现在的引擎（没选过是 herdr），不按检测结果猜，推送更新会跟着动，直到用户自己改过。
   - 进程被杀后能恢复：配对时把要问的机器记在 `ReadinessRecords`（`engine-pending`），App 重启后 `OnboardingScreen` 先显示这一步再进准备清单；读不到那台机器时可以重试或「先继续」。

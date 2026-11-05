@@ -178,6 +178,8 @@ internal fun MachineManagement.inGroup(names: GroupNames): MachineManagement {
         override suspend fun herdr(machineId: String) = source.herdr(names.rawMachine(machineId))
         override suspend fun startHerdr(machineId: String) = source.startHerdr(names.rawMachine(machineId))
         override suspend fun setEngine(machineId: String, engine: String) = names.machine(source.setEngine(names.rawMachine(machineId), engine))
+        override suspend fun botmux(machineId: String) = source.botmux(names.rawMachine(machineId))
+        override suspend fun setBotmux(machineId: String, on: Boolean) = source.setBotmux(names.rawMachine(machineId), on)
         override suspend fun claudeSettings(machineId: String) = source.claudeSettings(names.rawMachine(machineId))
         override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) =
             source.setClaudeSetting(names.rawMachine(machineId), key, value)

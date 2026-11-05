@@ -62,6 +62,19 @@ class HttpMachineManagement internal constructor(
         return machine
     }
 
+    override suspend fun botmux(machineId: String): Boolean? = try {
+        botmuxOn(call(api("machines", machineId, "botmux"), "GET"))
+    } catch (failure: HubFailure) {
+        // An older hub has no such route: the page shows no switch rather than an error.
+        if (failure.status == 404) null else throw failure
+    }
+
+    override suspend fun setBotmux(machineId: String, on: Boolean): Boolean =
+        botmuxOn(call(api("machines", machineId, "botmux"), "PUT", buildJsonObject { put("on", on) }))
+
+    private fun botmuxOn(body: JsonObject): Boolean = (body["on"] as? JsonPrimitive)?.booleanOrNull
+        ?: throw HubFailure(HubError.Protocol, "hub answered botmux without on", retryable = false)
+
     override suspend fun claudeSettings(machineId: String): List<ClaudeSetting> =
         settings(call(api("machines", machineId, "claude-settings"), "GET"))
 

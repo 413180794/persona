@@ -35,6 +35,8 @@ internal fun MachinesScreen(
     if (actions != null && machineId != null) LaunchedEffect(actions, machineId, machine?.online) {
         actions.loadLaunchers(machineId, machine?.online == true)
     }
+    // 同时显示 botmux 会话: read once per machine page; an older hub leaves it unanswered and the page draws no switch.
+    if (actions != null && machineId != null) LaunchedEffect(actions, machineId) { actions.loadBotmux(machineId) }
     val deployLine: @Composable (Machine?) -> Unit = { info ->
         if (info != null && showsDeploy(info)) MachineDeployLine(info, info.id in acting.deployStarting, actions?.let { { it.deploy(info.id) } })
     }
@@ -87,7 +89,8 @@ internal fun MachinesScreen(
             item("machine") { MachineCard(machine, metric, agents, state.now, state.history?.step ?: state.range.step, deploy = deployLine) }
             if (machine == null && machines.isNotEmpty()) item("gone") { JNotice(stringResource(R.string.machines_gone)) }
             if (machine != null && actions != null) machineControls(machine, acting.reconnecting,
-                onEngine = { navigator.navigate(EngineRoute(machine.id)) }, onReconnect = { actions.reconnect(machine.id) })
+                onEngine = { navigator.navigate(EngineRoute(machine.id)) }, onReconnect = { actions.reconnect(machine.id) },
+                botmux = acting.botmux, botmuxSaving = acting.botmuxSaving, onBotmux = { actions.setBotmux(machine.id, it) })
             // As iOS: what the computer can do and its browser come before the monitoring.
             if (machine != null && health != null) {
                 machineHealth(machine, healthState, allChecks, { allChecks = !allChecks }, { health.check(machine.id) }, { confirmFix = true },

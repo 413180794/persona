@@ -17,7 +17,7 @@ import kotlinx.serialization.json.contentOrNull
 
 /**
  * What the app changes on a machine (docs/protocol.md「REST」): its launchers, reconnecting and redeploying its node,
- * its terminal engine and its whitelisted Claude Code and Codex settings. Bound to the active pairing; every call goes to the
+ * its terminal engine, whether botmux's sessions are listed, and its whitelisted Claude Code and Codex settings. Bound to the active pairing; every call goes to the
  * hub that is paired when it is made.
  */
 interface MachineManagement {
@@ -44,6 +44,15 @@ interface MachineManagement {
 
     /** `PUT /api/v1/machines/{id}/engine`: allowed offline (applied when it connects); returns the updated machine. */
     suspend fun setEngine(machineId: String, engine: String): Machine
+
+    /**
+     * `GET /api/v1/machines/{id}/botmux`: whether 同时显示 botmux 会话 is on for the machine (#2575; on unless hub.json's
+     * `machines[].botmux` or the switch turned it off). Null when the hub has no such route (an older hub): no switch.
+     */
+    suspend fun botmux(machineId: String): Boolean? = null
+
+    /** `PUT /api/v1/machines/{id}/botmux {"on"}`: saved at once, also while offline; returns the setting in force. */
+    suspend fun setBotmux(machineId: String, on: Boolean): Boolean = throw UnsupportedOperationException("botmux switch")
 
     /** `GET /api/v1/machines/{id}/claude-settings`. */
     suspend fun claudeSettings(machineId: String): List<ClaudeSetting>

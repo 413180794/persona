@@ -23,6 +23,8 @@ internal sealed interface MachineNotice {
     data class NotYet(val reason: String?) : MachineNotice
     data class ReconnectFailed(val reason: String) : MachineNotice
     data class DeployFailed(val reason: String) : MachineNotice
+    /** 同时显示 botmux 会话 was not saved; the switch is back where it was. */
+    data class BotmuxFailed(val reason: String) : MachineNotice
 
     fun text(resources: Resources): String = when (this) {
         Connected -> resources.getString(R.string.machines_notice_connected)
@@ -30,6 +32,7 @@ internal sealed interface MachineNotice {
             ?: resources.getString(R.string.machines_notice_not_yet)
         is ReconnectFailed -> resources.getString(R.string.machines_notice_reconnect_failed, reason)
         is DeployFailed -> resources.getString(R.string.machines_notice_deploy_failed, reason)
+        is BotmuxFailed -> resources.getString(R.string.machines_notice_botmux_failed, reason)
     }
 }
 
@@ -44,10 +47,13 @@ internal data class MachineActionsState(
     val reconnecting: Boolean = false,
     /** Machines whose 重新部署 was sent and not answered yet; the hub's `deploying` takes over after that. */
     val deployStarting: Set<String> = emptySet(),
+    /** 同时显示 botmux 会话 (#2575); null until the hub answered, and on an older hub without the route: no switch. */
+    val botmux: Boolean? = null,
+    val botmuxSaving: Boolean = false,
 )
 
 /**
- * What the machine pages change on a machine (iOS `MachineDetailView`): its launchers, 重新连接 (waits up to
+ * What the machine pages change on a machine (iOS `MachineDetailView`): its launchers, 同时显示 botmux 会话, 重新连接 (waits up to
  * [reconnectWaitMillis] for it to come online and says how it went) and 重新部署. Results are short notices.
  */
 internal class MachineActionsViewModel(
@@ -78,6 +84,33 @@ internal class MachineActionsViewModel(
             catch (error: Exception) {
                 mutable.update { it.copy(launchersLoading = false, launchersError = failureReason(error)) }
             }
+        }
+    }
+
+    /** Reads 同时显示 botmux 会话; a hub that cannot answer leaves it null, so the page draws no switch (iOS `BotmuxSwitchModel`). */
+    fun loadBotmux(machineId: String) {
+        viewModelScope.launch {
+            val on = try { management.botmux(machineId) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
+            mutable.update { it.copy(botmux = on) }
+        }
+    }
+
+    /** Shows [on] at once and saves it (not part of the engine choice); a failed save puts the old value back and says why. */
+    fun setBotmux(machineId: String, on: Boolean) {
+        val before = state.value.botmux ?: return
+        if (state.value.botmuxSaving) return
+        mutable.update { it.copy(botmux = on, botmuxSaving = true) }
+        viewModelScope.launch {
+            try {
+                val saved = management.setBotmux(machineId, on)
+                mutable.update { it.copy(botmux = saved) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                mutable.update { it.copy(botmux = before) }
+                noticeChannel.trySend(MachineNotice.BotmuxFailed(failureReason(error)))
+            } finally { mutable.update { it.copy(botmuxSaving = false) } }
         }
     }
 

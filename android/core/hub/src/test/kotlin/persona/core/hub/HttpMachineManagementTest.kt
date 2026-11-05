@@ -58,6 +58,35 @@ class HttpMachineManagementTest {
         assertTrue(requireNotNull(timeout) > 40)
     }
 
+    @Test fun botmuxSwitchReadsAndSavesOnTheMachine() = withHub { server, machines ->
+        server.enqueue(MockResponse().setBody("""{"on":true}"""))
+        assertEquals(true, machines.botmux("desk/name"))
+        server.takeRequest().let {
+            assertEquals("GET", it.method)
+            assertEquals("/api/v1/machines/desk%2Fname/botmux", it.path)
+        }
+        server.enqueue(MockResponse().setBody("""{"on":false}"""))
+        assertEquals(false, machines.setBotmux("desk", false))
+        server.takeRequest().let {
+            assertEquals("PUT", it.method)
+            assertEquals("/api/v1/machines/desk/botmux", it.path)
+            assertEquals(false, Json.parseToJsonElement(it.body.readUtf8()).jsonObject["on"]?.jsonPrimitive?.boolean)
+        }
+    }
+
+    @Test fun anOlderHubWithoutTheBotmuxRouteHasNoSwitch() = withHub { server, machines ->
+        server.enqueue(MockResponse().setResponseCode(404).setBody("404 page not found"))
+        assertNull(machines.botmux("desk"))
+        server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"database is down"}"""))
+        val failed = runCatching { machines.setBotmux("desk", true) }.exceptionOrNull() as HubFailure
+        assertEquals(500, failed.status)
+        server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":"machine is offline"}"""))
+        assertEquals(503, (runCatching { machines.botmux("desk") }.exceptionOrNull() as HubFailure).status)
+        // An answer without "on" is not a setting.
+        server.enqueue(MockResponse().setBody("""{}"""))
+        assertEquals(HubError.Protocol, (runCatching { machines.botmux("desk") }.exceptionOrNull() as HubFailure).kind)
+    }
+
     @Test fun launchersReconnectAndDeployGoToTheMachine() = withHub { server, machines ->
         server.enqueue(MockResponse().setBody("""{"launchers":[{"name":"claude","model":"opus"},{"name":"codex","agent_type":"codex"}]}"""))
         val launchers = machines.launchers("mac/one")

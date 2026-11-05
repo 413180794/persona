@@ -41,6 +41,13 @@ class MachineActionsTest {
         override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) = emptyList<ClaudeSetting>()
         override suspend fun codexSettings(machineId: String) = emptyList<ClaudeSetting>()
         override suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement) = emptyList<ClaudeSetting>()
+        /** Null: an older hub without the route. */
+        var botmuxOn: Boolean? = true
+        var botmuxFailure: Exception? = null
+        override suspend fun botmux(machineId: String): Boolean? { calls += "botmux:$machineId"; return botmuxOn }
+        override suspend fun setBotmux(machineId: String, on: Boolean): Boolean {
+            calls += "set-botmux:$machineId:$on"; botmuxFailure?.let { throw it }; botmuxOn = on; return on
+        }
     }
 
     private fun <T> test(block: suspend TestScope.() -> T) = runTest {
@@ -139,6 +146,51 @@ class MachineActionsTest {
             // What was read before stays listed.
             assertEquals(2, model.state.value.launchers?.size)
         } finally { model.viewModelScope.cancel() }
+    }
+
+    @Test fun botmuxSwitchSavesAtOnceAndAFailedSaveFlipsBack() = test {
+        val management = Management()
+        val model = MachineActionsViewModel(management, Sessions(emptyList()))
+        try {
+            assertNull(model.state.value.botmux)
+            model.loadBotmux("mac")
+            runCurrent()
+            assertEquals(true, model.state.value.botmux)
+            model.setBotmux("mac", false)
+            // Shown at once, before the hub answers; a second flip while saving is ignored.
+            assertEquals(false, model.state.value.botmux)
+            assertTrue(model.state.value.botmuxSaving)
+            model.setBotmux("mac", true)
+            runCurrent()
+            assertEquals(listOf("botmux:mac", "set-botmux:mac:false"), management.calls)
+            assertEquals(false, model.state.value.botmux)
+            assertFalse(model.state.value.botmuxSaving)
+            management.botmuxFailure = HubFailure(HubError.Server, "database is down", 500)
+            model.setBotmux("mac", true)
+            runCurrent()
+            assertEquals(false, model.state.value.botmux)
+            assertEquals(MachineNotice.BotmuxFailed("database is down"), model.notices.first())
+        } finally { model.viewModelScope.cancel() }
+    }
+
+    @Test fun anOlderHubOrAFailedReadShowsNoBotmuxSwitch() = test {
+        val older = Management().apply { botmuxOn = null }
+        val model = MachineActionsViewModel(older, Sessions(emptyList()))
+        val broken = object : Management() {
+            override suspend fun botmux(machineId: String): Boolean? = throw HubFailure(HubError.Server, "machine is offline", 503)
+        }
+        val other = MachineActionsViewModel(broken, Sessions(emptyList()))
+        try {
+            model.loadBotmux("mac")
+            other.loadBotmux("mac")
+            runCurrent()
+            assertNull(model.state.value.botmux)
+            assertNull(other.state.value.botmux)
+            // Nothing to flip: no switch, no call.
+            model.setBotmux("mac", false)
+            runCurrent()
+            assertEquals(listOf("botmux:mac"), older.calls)
+        } finally { model.viewModelScope.cancel(); other.viewModelScope.cancel() }
     }
 
     @Test fun deployLineDiskShareAndBootTime() {

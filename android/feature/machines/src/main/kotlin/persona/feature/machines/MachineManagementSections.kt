@@ -37,28 +37,41 @@ internal fun MachineDeployLine(machine: Machine, starting: Boolean, onDeploy: ((
 /** Whether the card shows the deploy line: a node that is not the hub's build, or one being replaced. */
 internal fun showsDeploy(machine: Machine?): Boolean = machine != null && (machine.nodeMismatch == true || machine.deploying)
 
-/** The machine page's controls: its engine (opens the choice) and 重新连接, with how the hub reaches it. */
+/**
+ * The machine page's controls: its engine (opens the choice), 同时显示 botmux 会话 right under it when the hub has the
+ * switch ([botmux] non-null; flipped in place, like the web page's header pill, #2842) and 重新连接, with how the hub
+ * reaches it.
+ */
 internal fun LazyListScope.machineControls(
     machine: Machine,
     reconnecting: Boolean,
     onEngine: () -> Unit,
     onReconnect: () -> Unit,
+    botmux: Boolean? = null,
+    botmuxSaving: Boolean = false,
+    onBotmux: (Boolean) -> Unit = {},
 ) {
+    val rows = if (botmux != null) 3 else 2
     item("controls-title") { JSectionHeader(stringResource(R.string.machines_controls_title)) }
     item("engine") {
-        JGroupItem(GroupPosition.of(0, 2)) {
+        JGroupItem(GroupPosition.of(0, rows)) {
             JRow(stringResource(R.string.machines_engine), leadingIcon = PhIcons.TerminalWindow, value = Engines.currentName(machine), onClick = onEngine)
         }
     }
+    if (botmux != null) item("botmux") {
+        JGroupItem(GroupPosition.of(1, rows)) {
+            JSwitchRow(stringResource(R.string.machines_botmux), botmux, onBotmux, leadingIcon = PhIcons.Stack, enabled = !botmuxSaving)
+        }
+    }
     item("reconnect") {
-        JGroupItem(GroupPosition.of(1, 2)) {
+        JGroupItem(GroupPosition.of(rows - 1, rows)) {
             JRow(stringResource(if (reconnecting) R.string.machines_reconnecting else R.string.machines_reconnect), leadingIcon = PhIcons.ArrowClockwise, enabled = !reconnecting,
                 onClick = onReconnect, chevron = false, trailing = if (reconnecting) ({ JSpinner() }) else null)
         }
     }
     item("controls-note") {
         Column(Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            MachineCaption(stringResource(R.string.machines_engine_note))
+            MachineCaption(stringResource(if (botmux == null) R.string.machines_engine_note else R.string.machines_botmux_note))
             MachineCaption(if (machine.kind == "local") stringResource(R.string.machines_local_note)
                 else stringResource(R.string.machines_ssh_note, machine.sshHost?.takeIf { it.isNotBlank() } ?: machine.id))
         }

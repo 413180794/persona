@@ -52,17 +52,17 @@ class MachinesShotsTest {
     @Config(sdk = [35], qualifiers = "zh-w400dp-h5200dp-xhdpi")
     @Test fun simplifiedChinese() {
         assertEquals("2026年11月2日 08:30", MetricFormat.boot(1_793_579_400.0, Locale.SIMPLIFIED_CHINESE, ZoneOffset.ofHours(8)))
-        shots("zh", listTitle = "机器监控", detail = "引擎与连接")
+        shots("zh", listTitle = "机器监控", detail = "引擎与连接", botmux = "同时显示 botmux 会话")
     }
 
     @Config(sdk = [35], qualifiers = "en-w400dp-h5200dp-xhdpi")
     @Test fun english() {
         assertTrue(MetricFormat.boot(1_793_579_400.0, Locale.ENGLISH, ZoneOffset.ofHours(8))!!.startsWith("Nov 2, 2026"))
-        shots("en", listTitle = "Machines", detail = "Engine and connection")
+        shots("en", listTitle = "Machines", detail = "Engine and connection", botmux = "Also show botmux sessions")
     }
 
     @Config(sdk = [35], qualifiers = "ja-w400dp-h5200dp-xhdpi")
-    @Test fun japanese() = shots("ja", listTitle = "マシン", detail = "エンジンと接続")
+    @Test fun japanese() = shots("ja", listTitle = "マシン", detail = "エンジンと接続", botmux = "botmux のセッションも表示")
 
     private val now = 1_793_600_000L
     private val lab = Machine("lab", name = "Lab", kind = "ssh", sshHost = "lab.example.com", online = true, hostname = "lab.local",
@@ -106,6 +106,7 @@ class MachinesShotsTest {
         override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) = emptyList<ClaudeSetting>()
         override suspend fun codexSettings(machineId: String) = emptyList<ClaudeSetting>()
         override suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement) = emptyList<ClaudeSetting>()
+        override suspend fun botmux(machineId: String): Boolean? = true
     }
     private val navigator = object : Navigator {
         override fun navigate(key: NavKey) = Unit
@@ -113,11 +114,12 @@ class MachinesShotsTest {
         override fun selectTab(tab: AppTab) = Unit
     }
 
-    private fun shots(language: String, listTitle: String, detail: String) {
+    private fun shots(language: String, listTitle: String, detail: String, botmux: String) {
         val list = MachinesViewModel(api, repository, null) { now }
         val page = MachinesViewModel(api, repository, "lab") { now }
         runBlocking { list.load(MetricRange.Hour); page.load(MetricRange.Hour) }
         val actions = MachineActionsViewModel(management, repository)
+        actions.loadBotmux("lab")
         var style by mutableStateOf(AppStyle.Glass)
         var dark by mutableStateOf(false)
         var detailPage by mutableStateOf(false)
@@ -136,6 +138,7 @@ class MachinesShotsTest {
             val name = "machines-${if (d) "detail" else "list"}-$language-${s.name.lowercase()}-${if (dk) "dark" else "light"}.png"
             File(out(), name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             rule.onNodeWithText(if (d) detail else listTitle).assertExists()
+            if (d) rule.onNodeWithText(botmux).assertExists()
         }
     }
 }

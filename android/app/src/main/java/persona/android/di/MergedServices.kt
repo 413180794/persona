@@ -121,6 +121,8 @@ internal fun mergedMachineManagement(
     override suspend fun herdr(machineId: String) = routes.on(machineId) { it.herdr(machineId) }
     override suspend fun startHerdr(machineId: String) = routes.on(machineId) { it.startHerdr(machineId) }
     override suspend fun setEngine(machineId: String, engine: String) = routes.on(machineId) { it.setEngine(machineId, engine) }
+    override suspend fun botmux(machineId: String) = routes.on(machineId) { it.botmux(machineId) }
+    override suspend fun setBotmux(machineId: String, on: Boolean) = routes.on(machineId) { it.setBotmux(machineId, on) }
     override suspend fun claudeSettings(machineId: String) = routes.on(machineId) { it.claudeSettings(machineId) }
     override suspend fun setClaudeSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
         routes.on(machineId) { it.setClaudeSetting(machineId, key, value) }
