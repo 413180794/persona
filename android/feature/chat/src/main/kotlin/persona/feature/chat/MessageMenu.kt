@@ -6,7 +6,6 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.res.Resources
 import androidx.annotation.StringRes
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
@@ -16,7 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -30,6 +28,7 @@ import persona.core.domain.sort.canSend
 import persona.core.designsystem.JAction
 import persona.core.designsystem.JActionSheet
 import persona.core.designsystem.icons.PhIcons
+import persona.core.designsystem.onLongPress
 import persona.core.designsystem.onSecondaryClick
 import persona.core.designsystem.stableAlpha
 
@@ -72,7 +71,7 @@ internal fun Modifier.messageMenu(target: MessageTarget?): Modifier {
     }
     return this.stableAlpha(if (menu.target?.id == target.id) 0.6f else 1f)
         .onSecondaryClick(open)
-        .pointerInput(menu, target) { detectTapGestures(onLongPress = { open() }) }
+        .onLongPress(open, open)
 }
 
 /**

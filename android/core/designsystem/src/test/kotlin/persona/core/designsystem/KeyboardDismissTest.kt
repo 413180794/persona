@@ -77,6 +77,7 @@ class KeyboardDismissTest {
                                 withLink(LinkAnnotation.Clickable("message-link") { linkClicks++ }) { append("消息链接") }
                             }, Modifier.testTag("link"))
                             Box(Modifier.size(120.dp, 48.dp).testTag("card").pointerInput(Unit) { detectTapGestures(onLongPress = { longPresses++ }) })
+                            Box(Modifier.fillMaxWidth().height(48.dp).testTag("message").onLongPress(Unit) { longPresses++ })
                             LazyColumn(Modifier.fillMaxWidth().height(200.dp).testTag("list"), state = state) {
                                 items(50) { Text("消息 $it", Modifier.fillMaxWidth().height(40.dp)) }
                             }
@@ -147,6 +148,19 @@ class KeyboardDismissTest {
     @Test fun longPressStillFiresAndKeepsFocus() {
         setPage()
         rule.onNodeWithTag("card").performTouchInput { longClick() }
+        rule.waitForIdle()
+        assertEquals(1, longPresses)
+        assertTrue(focused)
+    }
+
+    @Test fun tapOnWhatOnlyHasALongPressClearsFocus() {
+        setPage()
+        rule.onNodeWithTag("message").performTouchInput { click() }
+        rule.waitForIdle()
+        assertFalse(focused)
+        assertEquals(0, longPresses)
+        focusField()
+        rule.onNodeWithTag("message").performTouchInput { longClick() }
         rule.waitForIdle()
         assertEquals(1, longPresses)
         assertTrue(focused)

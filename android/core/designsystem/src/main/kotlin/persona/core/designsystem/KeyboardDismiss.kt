@@ -29,6 +29,26 @@ fun Modifier.dismissKeyboardOnBlankTap(): Modifier = this then DismissKeyboardEl
  */
 fun Modifier.keepsKeyboardOnTap(): Modifier = pointerInput(Unit) { detectTapGestures {} }
 
+/**
+ * A long press runs [action] and keeps the rest of its press to itself; a shorter tap is left unconsumed, so a tap on
+ * something that only has a long press (a message, all the row's width) still reaches [dismissKeyboardOnBlankTap].
+ * `detectTapGestures(onLongPress = …)` consumes every tap, which kept the keyboard up over a whole conversation.
+ */
+fun Modifier.onLongPress(key: Any?, action: () -> Unit): Modifier = pointerInput(key) {
+    awaitEachGesture {
+        // A link or a button inside took the press: theirs.
+        awaitFirstDown()
+        // Lifted, scrolled away or left the area in time: not a long press, and nothing taken from it.
+        val ended = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation(); true }
+        if (ended != null) return@awaitEachGesture
+        action()
+        do {
+            val event = awaitPointerEvent()
+            event.changes.forEach { it.consume() }
+        } while (event.changes.any { it.pressed })
+    }
+}
+
 private data object DismissKeyboardElement : ModifierNodeElement<DismissKeyboardNode>() {
     override fun create() = DismissKeyboardNode()
     override fun update(node: DismissKeyboardNode) = Unit
