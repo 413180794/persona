@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/apns"
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -28,6 +29,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/pushcrypto"
 	"github.com/nwverse/persona/server/internal/relayproto"
+	"github.com/nwverse/persona/server/internal/textfmt"
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
@@ -722,7 +724,7 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 	case proto.IxPlan:
 		body = firstLine(ix.Plan)
 	case proto.IxScreen:
-		body = i18n.T(l, "push.screen_body")
+		body = screenAlertBody(l, ix)
 	}
 	if d := ix.Delegate; d != nil && d.Recommend != "" { // the assistant left it to the user (assistant/fleet_delegate.go)
 		body += i18n.T(l, "push.delegate_recommend_suffix", i18n.Args{"answer": d.Recommend})
@@ -746,6 +748,28 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 		},
 		"interaction_id": ix.ID, "machine_id": ix.MachineID, "session_id": ix.SessionID,
 	}
+}
+
+// screenAlertMost is how many characters of a screen card's dialog its push shows.
+const screenAlertMost = 300
+
+// screenAlertBody is a screen card's push body: what its dialog asks (the command or text above the question, then
+// the question), as the Feishu card and the channels say it; the generic line when no dialog was read off the screen
+// or the screen asks for a password.
+func screenAlertBody(l i18n.Lang, ix proto.Interaction) string {
+	if d := ix.Dialog; d != nil && !ix.Secret {
+		// The question is kept whole; a long command above it is what gets cut.
+		q := textfmt.Clip(strings.TrimSpace(d.Question), screenAlertMost)
+		if detail := strings.TrimSpace(d.Detail); detail != "" {
+			if room := screenAlertMost - utf8.RuneCountInString(q); room > 0 {
+				q = strings.TrimSpace(textfmt.Clip(detail, room) + "\n" + q)
+			}
+		}
+		if q != "" {
+			return q
+		}
+	}
+	return i18n.T(l, "push.screen_body")
 }
 
 func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string, wants func(NotifyPrefs) bool) {

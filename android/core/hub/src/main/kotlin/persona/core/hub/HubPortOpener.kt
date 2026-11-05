@@ -10,7 +10,10 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** [PortOpener] on the active pairing: `…/open` through [connection], the bytes through [forwarder]. */
+/**
+ * [PortOpener] on the active pairing: `…/open` through [connection], the bytes through [forwarder]. [close] when the
+ * group's services are torn down (re-pair, unpair) frees its loopback ports.
+ */
 class HubPortOpener(
     private val connection: OkHttpHubConnection,
     // Each connection to a forwarded port follows the live route with the pairing's pinned client and token.
@@ -18,7 +21,7 @@ class HubPortOpener(
         val route = connection.route.value ?: throw HubFailure(HubError.NoNetwork)
         route.endpoint.baseUrl() to connection.token
     },
-) : PortOpener {
+) : PortOpener, java.io.Closeable {
     override suspend fun open(machineId: String, port: Int, path: String, secure: Boolean, listed: Boolean): String {
         if (!listed) {
             try {
@@ -36,6 +39,8 @@ class HubPortOpener(
             val o = persona.core.contracts.JsonCodec.parseToJsonElement(response.body?.string().orEmpty()).jsonObject
             PortProbe(o["listening"]?.jsonPrimitive?.booleanOrNull == true, o["title"]?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank))
         }
+
+    override fun close() = forwarder.close()
 
     private fun encode(segment: String) = java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
 

@@ -295,7 +295,7 @@ describe("extensions", () => {
     expect(extensionStatus({ status: "stopped" })).toEqual({ tone: "green", label: "启动" });
     expect(extensionStatus({ status: "disabled" })).toEqual({ tone: "gray", label: "停用" });
     expect([extensionRunNote({ status: "running" }), extensionRunNote({ status: "stopped" }), extensionRunNote({ status: "error" })]).toEqual([
-      "正在运行", "暂未运行，用到时自动启动", "",
+      "正在运行", "现在没在运行，要用时会自己启动", "",
     ]);
     expect(extensionStatus({ status: "needs_setup" }).tone).toBe("orange");
     expect(extensionStatus({ status: "incompatible" }).tone).toBe("red");

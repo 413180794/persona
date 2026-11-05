@@ -137,6 +137,47 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 	}
 }
 
+// Friday's 早报 ran 72 hours before Monday's, a weekly task's last run 168 hours before: a hub that comes up five
+// minutes late on Monday still sends them, and one too late records the miss, as on any other weekday (#3397: it looked
+// back two minutes only, and the run was dropped without a trace).
+func TestWeekdayTaskCatchesUpOnMonday(t *testing.T) {
+	f := newFakeHub()
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
+	h := newStorelessService(t, f)
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	friday := time.Date(2026, 10, 30, 9, 0, 0, 0, loc)
+	monday := time.Date(2026, 11, 2, 9, 0, 0, 0, loc)
+	setTasks(h,
+		Task{ID: "r", Title: "早报", Prompt: "x", Repeat: repeatDaily, Time: "09:00", Weekdays: []int{1, 2, 3, 4, 5}, Enabled: true, LastRun: friday},
+		Task{ID: "w", Title: "周报", Prompt: "y", Repeat: repeatDaily, Time: "09:00", Weekdays: []int{1}, Enabled: true, LastRun: monday.Add(-7 * 24 * time.Hour)},
+		Task{ID: "early", Title: "更早", Prompt: "z", Repeat: repeatDaily, Time: "08:00", Weekdays: []int{1, 2, 3, 4, 5}, Enabled: true, LastRun: friday.Add(-time.Hour)},
+		Task{ID: "new", Title: "新建", Prompt: "n", Repeat: repeatDaily, Time: "09:00", Enabled: true})
+
+	at := monday.Add(5 * time.Minute)
+	h.runDue(context.Background(), at)
+	h.sched.inflight.Wait() // the runs it started give up (no machine) before we look
+	for _, id := range []string{"r", "w"} {
+		if r, _ := taskByID(h, id); !r.LastRun.Equal(at) || r.LastStatus == runSkipped {
+			t.Fatalf("%s, five minutes late on Monday, runs: %+v", id, r)
+		}
+	}
+	if r, _ := taskByID(h, "early"); r.LastStatus != runSkipped || !r.LastRun.Equal(at) {
+		t.Fatalf("an hour past its time it is not sent stale, but the miss is recorded: %+v", r)
+	}
+	if r, _ := taskByID(h, "new"); !r.LastRun.IsZero() {
+		t.Fatalf("a task that never ran still only catches up the last couple of minutes (#664): %+v", r)
+	}
+	// Tuesday goes by the run Monday recorded, as before.
+	h.runDue(context.Background(), monday.Add(24*time.Hour+time.Minute))
+	h.sched.inflight.Wait()
+	if r, _ := taskByID(h, "r"); !r.LastRun.Equal(monday.Add(24*time.Hour + time.Minute)) {
+		t.Fatalf("Tuesday's run: %+v", r)
+	}
+	if r, _ := taskByID(h, "w"); !r.LastRun.Equal(at) {
+		t.Fatalf("the weekly one waits for next Monday: %+v", r)
+	}
+}
+
 // A run that ends after a newer run or skip of its task started is history only: the slow 09:01 run (an assistant
 // that takes a while to give up) records its failure after the 11:00 skip, and the task still says skipped (#556).
 func TestALateRunDoesNotOverwriteANewerStatus(t *testing.T) {

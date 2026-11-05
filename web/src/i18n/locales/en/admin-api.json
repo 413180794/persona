@@ -9,7 +9,7 @@
   "err_csrf": "This page is out of date. Refresh and try again.",
   "err_tls_required": "Open this through the TLS port",
   "err_widen_cli_only": "Widening access only works from the command line or deploy script on the hub machine",
-  "err_from_env": "This is set by environment variables at deploy time (JARVIS_ADMIN_ACCESS / JARVIS_PUBLIC_URL) and can't be changed here",
+  "err_from_env": "Can't be changed here: it's set by environment variables at deploy time (JARVIS_ADMIN_ACCESS / JARVIS_PUBLIC_URL)",
   "err_would_lock_you_out": "This change would lock you out",
   "err_invalid_cidr": "Invalid range. Example: 192.0.2.0/24",
   "err_invalid_id": "IDs use lowercase letters, digits and - _ . and start with a letter or digit",

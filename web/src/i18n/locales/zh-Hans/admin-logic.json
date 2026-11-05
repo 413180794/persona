@@ -51,7 +51,7 @@
   "ext_error": "出错了",
   "ext_unknown": "状态未知",
   "run_running": "正在运行",
-  "run_stopped": "暂未运行，用到时自动启动",
+  "run_stopped": "现在没在运行，要用时会自己启动",
   "source_builtin": "内置",
   "source_installed": "已安装",
   "point_connectors": "连接器",

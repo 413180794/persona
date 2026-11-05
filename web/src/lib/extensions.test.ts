@@ -32,7 +32,7 @@ describe("扩展的文字", () => {
     expect(["running", "needs_setup", "error", "incompatible", "disabled", "stopped"].map((s) => extensionTone(extension(s)))).toEqual([
       "green", "orange", "red", "red", "idle", "green",
     ]);
-    expect(["running", "stopped", "disabled", "error"].map((s) => runNote(extension(s)))).toEqual(["正在运行", "暂未运行，用到时自动启动", "", ""]);
+    expect(["running", "stopped", "disabled", "error"].map((s) => runNote(extension(s)))).toEqual(["正在运行", "现在没在运行，要用时会自己启动", "", ""]);
     expect(extensionTone(null)).toBe("idle");
     expect(listSummary(null)).toBe("");
     expect(listSummary([])).toBe("没有");
@@ -223,7 +223,7 @@ describe("nodeProgramStatus", () => {
 describe("sandbox and channel", () => {
   it("says whether the sandbox is in effect and what went through the egress proxy", () => {
     expect(sandboxState({ enabled: true, active: true })).toBe("沙箱正在生效");
-    expect(sandboxState({ enabled: true, active: false, why: "no bwrap" })).toBe("已要求沙箱，但当前未生效");
+    expect(sandboxState({ enabled: true, active: false, why: "no bwrap" })).toBe("要求了沙箱，但现在没开起来");
     expect(sandboxState({ enabled: false, active: false })).toBe("未启用沙箱");
     expect(sandboxEgress({ enabled: true, active: true })).toBeNull();
     expect(sandboxEgress({ enabled: true, active: true, egress: { allowed: 12, denied: 1, last_denied: "example.com:443" } })).toBe("经出网代理：放行 12 次 · 拒绝 1 次");

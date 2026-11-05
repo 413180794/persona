@@ -97,6 +97,8 @@ class GroupStacks @Inject constructor(application: Application, private val runt
 
     private fun closeStack(stack: GroupStack) {
         app.scope.launch { runCatching { stack.repositories.close() } }
+        // Its forwarded ports' listeners, or the next pairing cannot bind the same numbers (#3483).
+        (stack.plainBindings.ports as? AutoCloseable)?.let { ports -> runCatching { ports.close() } }
     }
 
     /** The open group a merged-list machine id belongs to. */

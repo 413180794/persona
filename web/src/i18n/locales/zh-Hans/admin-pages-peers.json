@@ -28,7 +28,7 @@
   "disconnected_at": "{time}断开",
   "disconnect": "断开",
   "group_title": "组里的 hub · {count} 台",
-  "group_footer": "中心服务所有 App、保存所有状态、连所有电脑；成员把请求和自己的电脑交给中心。中心连不上时不会自动换，需要时在这里手动设。任期 {term}。",
+  "group_footer": "中心 hub 管全组：所有 App 都连它，状态都存在它那里，所有电脑也由它来连。成员 hub 把请求和自己的电脑都交给中心。中心连不上时不会自动换，要换就在这里手动设。任期号 {term}。",
   "this_hub_tag": "这台",
   "online": "在线",
   "unreachable": "连不上",

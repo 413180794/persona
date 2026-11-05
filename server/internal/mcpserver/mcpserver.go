@@ -10,6 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/node"
@@ -35,25 +36,82 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
+// Serve answers MCP requests from in until it closes. Each request runs on its own: Claude Code calls tools in
+// parallel, and one waiting for the phone (ask_user, an approval) must not hold the others back. A tool call Claude
+// Code gives up on (notifications/cancelled: the user stopped the turn) is cancelled: the node hears the hang-up and
+// the hub takes its card off the phone, instead of leaving a card nobody waits for until it expires.
 func Serve(ctx context.Context, version string, in io.Reader, out io.Writer) error {
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 64*1024), 32*1024*1024)
 	enc := json.NewEncoder(out)
+	var (
+		mu       sync.Mutex // enc, inflight
+		inflight = map[string]context.CancelFunc{}
+		wg       sync.WaitGroup
+		werr     error
+	)
 	for sc.Scan() {
 		var req request
 		if err := json.Unmarshal(sc.Bytes(), &req); err != nil {
 			continue
 		}
 		if len(req.ID) == 0 { // notification
+			if req.Method == "notifications/cancelled" {
+				var p struct {
+					RequestID json.RawMessage `json:"requestId"`
+				}
+				_ = json.Unmarshal(req.Params, &p)
+				mu.Lock()
+				if cancel := inflight[idKey(p.RequestID)]; cancel != nil {
+					cancel()
+				}
+				mu.Unlock()
+			}
 			continue
 		}
-		res, rerr := handle(ctx, version, req)
-		resp := response{JSONRPC: "2.0", ID: req.ID, Result: res, Error: rerr}
-		if err := enc.Encode(resp); err != nil {
-			return err
-		}
+		rctx, cancel := context.WithCancel(ctx)
+		key := idKey(req.ID)
+		mu.Lock()
+		inflight[key] = cancel
+		mu.Unlock()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			res, rerr := handle(rctx, version, req)
+			mu.Lock()
+			defer mu.Unlock()
+			cancelled := rctx.Err() != nil
+			if inflight[key] != nil {
+				delete(inflight, key)
+			}
+			cancel()
+			if cancelled { // the client gave up on it: no answer (MCP: a cancelled request is not responded to)
+				return
+			}
+			if err := enc.Encode(response{JSONRPC: "2.0", ID: req.ID, Result: res, Error: rerr}); err != nil && werr == nil {
+				werr = err
+			}
+		}()
+	}
+	// stdin closed: the client is gone, nobody reads the answers of what still runs.
+	stop()
+	wg.Wait()
+	if werr != nil {
+		return werr
 	}
 	return sc.Err()
+}
+
+// idKey names a JSON-RPC id the same however it was spaced (a number or a string).
+func idKey(id json.RawMessage) string {
+	var v any
+	if json.Unmarshal(id, &v) != nil {
+		return string(id)
+	}
+	b, _ := json.Marshal(v)
+	return string(b)
 }
 
 func handle(ctx context.Context, version string, req request) (any, *rpcError) {
@@ -110,9 +168,10 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 	return nil, &rpcError{Code: -32601, Message: "method not found: " + req.Method}
 }
 
-// dialNode and retryEvery are swapped out by tests.
+// dialNode and retryEvery are swapped out by tests. dialNode hangs up when its ctx is cancelled, so a cancelled tool
+// call ends on the node too (and with it the hub's call and its card, rpc.Peer.Cancels).
 var (
-	dialNode   = node.DialSocket
+	dialNode   = node.DialSocketInterruptible
 	retryEvery = 500 * time.Millisecond
 )
 

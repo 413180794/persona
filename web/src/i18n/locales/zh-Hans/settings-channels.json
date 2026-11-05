@@ -3,7 +3,7 @@
   "link_label": "在 设置 › 渠道 里设置{name}",
   "refresh_channels": "刷新渠道",
   "title": "渠道",
-  "intro": "在哪里都能和 Persona 说话：消息进主对话（或你选的对话），这一轮的回答发回原处，Agent 要你回答或批准的也发过去，在别处答过就不再等。",
+  "intro": "在哪儿都能和 Persona 说话。你发的消息进主对话（或你选的对话），回答发回你发消息的地方。Agent 要你回答或批准时，也发到那里；你在别处答过了，就不再等。",
   "load_failed": "读不到渠道：{error}",
   "retry": "重试",
   "extension": "扩展",

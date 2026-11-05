@@ -1997,6 +1997,8 @@ GitHub 连接器在搬进官方扩展仓库 `nwverse/persona-extensions` 的扩�
 
 全双工：手机一直送麦克风（包括静音），什么时候该说话由模型决定，App 不做 VAD、不做「按住说话」。
 
+本节是协议 1。语音模式的协议 2（设计中，#3502 实现；`start` 带 `protocol: 2`：绑定所在的对话，加 `run` / `ask` / `link` 帧和 `GET /info`）见 `docs/voice.md`；不带的客户端收到的帧不变，iOS 只给 `GET /info` 回 `protocol` ≥ 2 的语音扩展出入口。
+
 ### `GET /models`
 
 ```json
@@ -2049,6 +2051,8 @@ App → 扩展：
 
 personad 自带一个 kind = `voice` 的扩展，语音来自说 **GPT-Live 协议**的实时服务（代码在 `server/internal/voice`，提示词在
 `server/internal/prompts/voice/`、工具说明在 `prompts/mcp/voice/`）。不用另装 node 和 SDK；可选：hub.json 里没有这个条目就没有它。
+
+语音模式（按一轮跟踪委派、绑定所在的对话、在 App 里配上游并把 Key 加密存在 hub、接管 hub.json 条目）的设计见 `docs/voice.md`；下面 hub.json 的写法照常可用。
 
 ```json
 {

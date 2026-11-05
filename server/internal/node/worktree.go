@@ -68,10 +68,16 @@ func (n *Node) repoOfWorkspace(ctx context.Context, kind, workspace string) (hos
 		repo.branch = strings.TrimSpace(b)
 	}
 	repo.name = filepath.Base(repo.root)
-	if common, err := git(ctx, repo.root, "rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
-		if c := filepath.Clean(strings.TrimSpace(common)); filepath.Base(c) == ".git" {
+	// Not --path-format=absolute: git before 2.31 echoes that option back as a line of output instead of failing
+	// (#3442). --git-common-dir is relative to the directory it ran in unless it is absolute.
+	if common, err := git(ctx, repo.root, "rev-parse", "--git-common-dir"); err == nil && strings.TrimSpace(common) != "" {
+		c := strings.TrimSpace(common)
+		if !filepath.IsAbs(c) {
+			c = filepath.Join(repo.root, c)
+		}
+		if c = filepath.Clean(c); filepath.Base(c) == ".git" {
 			repo.name = filepath.Base(filepath.Dir(c)) // a linked worktree is named for its repository
-		} else if c != "." {
+		} else if c != filepath.Clean(repo.root) {
 			repo.name = strings.TrimSuffix(filepath.Base(c), ".git") // a bare repository
 		}
 	}

@@ -1845,6 +1845,8 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 
 ## MCP 工具（`personad mcp`）
 
+`personad mcp` 每个请求单独处理（等手机的工具不挡别的工具）；Claude Code 发 `notifications/cancelled`（这一轮被停掉）时取消那次调用、不再回答，连 node 的 socket 随之挂断，hub 经 `rpc.cancel` 撤下它的卡（#3525、#2597）。
+
 | 工具 | 执行方 | 说明 |
 | --- | --- | --- |
 | `phone_*` | iPhone App | 由 App `register_phone` 声明（通讯录、日历、提醒、位置、健康、照片、剪贴板、设备信息、通知……） |

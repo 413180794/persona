@@ -14,7 +14,7 @@
   "feature_agents_title": "驱动 Agent",
   "feature_agents_detail": "/agents 选各台电脑上的 Claude Code / Codex，在飞书里和它聊；/start 开新的",
   "step_create_app": "在飞书开放平台建一个企业自建应用，开启「机器人」能力",
-  "step_permissions": "权限里开通：读取与发送单聊消息（im:message、im:message:send_as_bot）、获取单聊中发给机器人的消息、上传和下载消息里的资源；能读通讯录名字更好（contact:user.base:readonly）",
+  "step_permissions": "在「权限管理」里开通这几项：读和发单聊消息（im:message、im:message:send_as_bot）；收单聊里发给机器人的消息；上传、下载消息里的图片、文件等内容。最好再开读通讯录名字（contact:user.base:readonly）",
   "step_events": "「事件与回调」里选「使用长连接接收事件」，订阅「接收消息」和「卡片回传交互」",
   "step_publish": "发布版本（公司里可能要管理员审核），把 App ID、App Secret 填到上面",
   "status_error": "读不到机器人的状态：{error}",

@@ -55,7 +55,7 @@
   "ext_error": "Error",
   "ext_unknown": "Unknown",
   "run_running": "Running",
-  "run_stopped": "Not running yet; starts when needed",
+  "run_stopped": "Not running; starts when needed",
   "source_builtin": "Built-in",
   "source_installed": "Installed",
   "point_connectors": "Connectors",

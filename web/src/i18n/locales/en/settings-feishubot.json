@@ -14,7 +14,7 @@
   "feature_agents_title": "Drive agents",
   "feature_agents_detail": "Use /agents to pick Claude Code or Codex on any of your computers and chat with it in Lark; /start begins a new one",
   "step_create_app": "On the Lark Developer Console, create a custom app and turn on the Bot feature",
-  "step_permissions": "Under permissions, grant: read and send direct messages (im:message, im:message:send_as_bot), receive direct messages sent to the bot, and upload and download message resources. Reading contact names helps too (contact:user.base:readonly)",
+  "step_permissions": "Under permissions, turn on: read and send direct messages (im:message, im:message:send_as_bot); receive direct messages sent to the bot; upload and download images, files and other attachments in messages. Reading contact names is also worth turning on (contact:user.base:readonly)",
   "step_events": "Under Events & callbacks, choose to receive events through a persistent connection, and subscribe to Message received and Card action",
   "step_publish": "Publish a version (your company's admin may need to approve it), then enter the App ID and App Secret above",
   "status_error": "Couldn't read the bot's status: {error}",

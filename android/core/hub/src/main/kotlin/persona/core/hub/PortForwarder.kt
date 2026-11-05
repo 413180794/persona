@@ -28,7 +28,7 @@ import okio.ByteString.Companion.toByteString
  * WebSocket (HMR), redirects and cookies need nothing rewritten. Only loopback is bound: nothing on the LAN reaches it.
  *
  * [connect] gives the hub's base URL and the token for each new connection (the live route, so a network change is
- * followed); listeners last until [close], and one found closed is opened again when next asked for.
+ * followed); listeners and their connections last until [close], and one found closed is opened again when next asked for.
  */
 class PortForwarder(
     private val client: OkHttpClient,
@@ -37,6 +37,7 @@ class PortForwarder(
     data class Key(val machineId: String, val port: Int)
 
     private val forwards = ConcurrentHashMap<Key, Forward>()
+    private val pumps = ConcurrentHashMap.newKeySet<Pump>()
     private val sockets = client.newBuilder().readTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS).build()
 
     /** The phone's port for a machine's port, listening from now on. */
@@ -54,9 +55,13 @@ class PortForwarder(
     /** Which machine port a page on the phone's loopback is (the sheet names it). */
     fun keyOf(localPort: Int): Key? = forwards.values.firstOrNull { it.localPort == localPort && it.open }?.key
 
+    /** Frees every port (the next pairing binds the same numbers) and ends the connections through them; never throws. */
     fun close() {
-        forwards.values.forEach { it.close() }
-        forwards.clear()
+        synchronized(forwards) {
+            forwards.values.forEach { it.close() }
+            forwards.clear()
+        }
+        pumps.toList().forEach { it.cancel() }
     }
 
     /** The hub's WebSocket for one connection to [key]. */
@@ -108,11 +113,15 @@ class PortForwarder(
     private inner class Pump(private val conn: Socket, private val request: Request) : WebSocketListener() {
         private val done = AtomicBoolean(false)
         private val output: OutputStream = conn.getOutputStream()
+        @Volatile private var socket: WebSocket? = null
 
         fun start() {
             conn.tcpNoDelay = true
-            sockets.newWebSocket(request, this)
+            pumps += this
+            socket = sockets.newWebSocket(request, this)
         }
+
+        fun cancel() { runCatching { socket?.cancel() }; finish() }
 
         override fun onOpen(webSocket: WebSocket, response: Response) {
             Thread({ readLocal(webSocket, conn.getInputStream()) }, "port-pump").apply { isDaemon = true }.start()
@@ -147,7 +156,7 @@ class PortForwarder(
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = finish()
 
         private fun finish() {
-            if (done.compareAndSet(false, true)) runCatching { conn.close() }
+            if (done.compareAndSet(false, true)) { pumps -= this; runCatching { conn.close() } }
         }
     }
 

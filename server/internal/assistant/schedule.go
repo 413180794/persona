@@ -891,6 +891,9 @@ func (s *Service) nextDue(ctx context.Context, now time.Time) time.Time {
 	return next
 }
 
+// dailyCatchUp is how late a daily task still runs (the hub was down at its time); later it is skipped and recorded.
+const dailyCatchUp = 30 * time.Minute
+
 type dueTask struct {
 	t   Task
 	due time.Time
@@ -913,15 +916,22 @@ func (s *Service) runDue(ctx context.Context, now time.Time) {
 		switch t.Repeat {
 		case repeatDaily:
 			last := t.LastRun
-			if last.IsZero() || now.Sub(last) > 36*time.Hour {
-				last = now.Add(-2 * time.Minute) // never ran, or the hub was down: only catch up the last couple of minutes
+			switch {
+			case last.IsZero():
+				last = now.Add(-2 * time.Minute) // never ran: only the last couple of minutes (#664)
+			case now.Sub(last) > 36*time.Hour:
+				// The hub was down, or the task skips days: Friday's 早报 is 72 hours before Monday's, a weekly one 168.
+				// Looking back only two minutes lost Monday's run (nothing run, nothing recorded) whenever the hub came
+				// up a few minutes late. Looking back a day treats it as any other day: run within the catch-up
+				// window, else skipped and recorded (#3397).
+				last = now.Add(-24 * time.Hour)
 			}
 			next := nextRun(*t, last, loc)
 			if next.IsZero() || next.After(now) {
 				continue
 			}
 			t.LastRun, changed = now.UTC(), true // saved before it starts: a restart in between loses the run rather than repeating it
-			if now.Sub(next) < 30*time.Minute {
+			if now.Sub(next) < dailyCatchUp {
 				due = append(due, dueTask{*t, next})
 			} else { // missed by a long hub outage: skip rather than send a stale 早报 at noon
 				t.LastStatus, t.LastError = runSkipped, i18n.T(s.lang(ctx), "assistant-schedule.missed")

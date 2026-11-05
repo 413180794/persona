@@ -52,7 +52,7 @@ describe("运行隔离", () => {
   });
   it("says why a sandbox asked for is not in effect", () => {
     const html = renderToStaticMarkup(<SandboxGroup s={{ enabled: true, active: false, why: "这台机器没有 bubblewrap" }} />);
-    expect(html).toContain("已要求沙箱，但当前未生效");
+    expect(html).toContain("要求了沙箱，但现在没开起来");
     expect(html).toContain("这台机器没有 bubblewrap");
     expect(html).not.toContain("经出网代理");
   });
@@ -69,7 +69,7 @@ describe("扩展详情里的渠道", () => {
     const onChannel = vi.fn();
     act(() => root.render(<Extensions open="example-wechat" onOpen={() => {}} onChannel={onChannel} />));
     await flush();
-    expect(host.textContent).toContain("已要求沙箱，但当前未生效");
+    expect(host.textContent).toContain("要求了沙箱，但现在没开起来");
     const link = [...host.querySelectorAll<HTMLElement>("button, a, [role=button]")].find((b) => b.textContent?.includes("在 设置 › 渠道 里设置微信"));
     expect(link).toBeTruthy();
     act(() => link!.click());

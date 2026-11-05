@@ -14,7 +14,7 @@
   "feature_agents_title": "エージェントを操作",
   "feature_agents_detail": "/agents でお使いのコンピューター上の Claude Code / Codex を選んで Lark でチャットします。/start で新しく開始します",
   "step_create_app": "Lark 開発者コンソールでカスタムアプリを作成し、「ボット」機能を有効にします",
-  "step_permissions": "権限で次を有効にします：個別チャットのメッセージの読み取りと送信（im:message、im:message:send_as_bot）、ボット宛ての個別チャットのメッセージの取得、メッセージ内のリソースのアップロードとダウンロード。連絡先の名前も読めるとさらに便利です（contact:user.base:readonly）",
+  "step_permissions": "権限で次を有効にします：個別チャットのメッセージの読み取りと送信（im:message、im:message:send_as_bot）、ボット宛ての個別チャットのメッセージの取得、メッセージ内の画像やファイルなどのアップロードとダウンロード。連絡先の名前の読み取りも有効にしておくと便利です（contact:user.base:readonly）",
   "step_events": "「イベントとコールバック」で「永続接続でイベントを受信」を選び、「メッセージの受信」と「カードのアクション」を購読します",
   "step_publish": "バージョンを公開し（管理者の承認が必要な場合があります）、App ID と App Secret を上に入力します",
   "status_error": "ボットの状態を読み込めませんでした：{error}",
