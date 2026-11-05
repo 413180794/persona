@@ -128,4 +128,45 @@ class AssistantDrawerShotsTest {
         rule.onNodeWithText("归档").performClick()
         assertEquals(recent.first(), archived)
     }
+
+    // #3264: 自动对话 folded (its count, the red count of those waiting for the user) and open (a chip per origin, the
+    // picked origin's conversations), in every style, light and dark.
+    @Test fun drawsTheAutomaticConversations() {
+        var style by mutableStateOf(AppStyle.Glass)
+        var dark by mutableStateOf(false)
+        var open by mutableStateOf(false)
+        val auto = listOf(
+            Session(machineId = "hub", sessionId = "a1", title = "1106 | 收件箱 | 张三问 1013 合了吗", status = "idle", origin = "inbox",
+                updatedAt = minutesAgo(8), lastText = "草稿：已经合入主干。"),
+            Session(machineId = "hub", sessionId = "a2", title = "1106 | 收件箱 | 报销单要补发票", status = "idle", state = "needs_you",
+                origin = "inbox", updatedAt = minutesAgo(40), lastText = "需要你确认：发票抬头用哪个？"),
+            Session(machineId = "hub", sessionId = "a3", title = "1106 | 定时 | 早报", status = "working", origin = "task", updatedAt = minutesAgo(3)),
+            Session(machineId = "hub", sessionId = "a4", title = "1105 | 研究 | 群里的发布计划", status = "idle", origin = "lark_agent", updatedAt = minutesAgo(600)),
+        )
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
+                Box(Modifier.testTag("shot").width(400.dp).height(1300.dp).background(PersonaTheme.palette.background)) {
+                    AssistantDrawer(PersonaState.Idle, "", {}, ConversationGroups(main, emptyList(), recent, auto), active = null,
+                        hasMain = true, onEnd = null, onMain = {}, onOpen = {}, onInfo = {}, onNew = {}, onHome = {}, onSettings = {},
+                        autoOpen = open, onAutoOpen = { open = it })
+                }
+            }
+        }
+        rule.onNodeWithText("自动对话").assertExists()
+        rule.onAllNodesWithText("1106 | 收件箱 | 张三问 1013 合了吗").assertCountEquals(0) // folded
+        for (s in AppStyle.entries) for (d in listOf(false, true)) {
+            style = s; dark = d
+            capture("drawer-auto-folded-${s.name.lowercase()}-${if (d) "dark" else "light"}")
+        }
+        rule.onNodeWithText("自动对话").performClick()
+        assertTrue(open)
+        rule.onNodeWithText("1106 | 收件箱 | 张三问 1013 合了吗").assertExists()
+        rule.onAllNodesWithText("1106 | 定时 | 早报").assertCountEquals(0) // the first origin is picked
+        for (s in AppStyle.entries) for (d in listOf(false, true)) {
+            style = s; dark = d
+            capture("drawer-auto-open-${s.name.lowercase()}-${if (d) "dark" else "light"}")
+        }
+        rule.onAllNodesWithText("定时任务")[0].performClick() // the chip (更多 has a 定时任务 row too)
+        rule.onNodeWithText("1106 | 定时 | 早报").assertExists()
+    }
 }

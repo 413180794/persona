@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contextLabel, contextTooltip, contextUsage, contextWarn, modelShort, rowDetail } from "./context-usage";
+import { contextLabel, contextTier, contextTooltip, contextUsage, contextWarn, modelShort, rowDetail } from "./context-usage";
 import type { Session } from "./types";
 
 const base: Session = { machine_id: "m", session_id: "s", title: "t", cwd: "/code/weather", status: "idle" };
@@ -29,6 +29,14 @@ describe("labels", () => {
     expect(contextWarn(contextUsage({ context_tokens: 158000, context_window: 200000 })!)).toBe(false);
     expect(contextWarn(contextUsage({ context_tokens: 160000, context_window: 200000 })!)).toBe(true);
   });
+  it("has three tiers: ok below 80% used, warn from 80%, danger from 90% (10% or less left)", () => {
+    const tier = (tokens: number) => contextTier(contextUsage({ context_tokens: tokens, context_window: 200000 })!);
+    expect(tier(158000)).toBe("ok"); // 79%
+    expect(tier(160000)).toBe("warn"); // 80%
+    expect(tier(178000)).toBe("warn"); // 89%
+    expect(tier(180000)).toBe("danger"); // 90%, 10% left
+    expect(tier(200000)).toBe("danger");
+  });
 });
 
 describe("modelShort", () => {
@@ -53,5 +61,10 @@ describe("rowDetail", () => {
   it("marks a nearly full window", () => {
     const s = { ...base, context_tokens: 190000, context_window: 200000 };
     expect(rowDetail(s, false, now).find((p) => p.warn)?.text).toBe("5%");
+    expect(rowDetail(s, false, now).find((p) => p.warn)?.danger).toBe(true);
+  });
+  it("marks 80–89% used as a warning but not a danger", () => {
+    const s = { ...base, context_tokens: 170000, context_window: 200000 };
+    expect(rowDetail(s, false, now).find((p) => p.warn)).toMatchObject({ text: "15%", warn: true, danger: false });
   });
 });

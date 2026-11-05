@@ -8,7 +8,7 @@
   "rarely_needed_body": "You only need linked hubs when two places each have an always-on hub that can't reach the other, or when you already run several hubs and want to merge them. We recommend a single hub: install the node service on your other computers and add them under Computers.",
   "tls_only": "Linking requires TLS",
   "enable": "Turn on",
-  "tls_only_body": "This hub has no TLS port yet. Links between hubs are pinned to the public key fingerprint, even on a local network.",
+  "tls_only_body": "This hub has no TLS port yet, so it can't link to other hubs. Hubs always talk over TLS and check each other's public key fingerprint, even on a local network.",
   "missing_title": "This hub version doesn't support linking",
   "missing_body": "After you update the hub, you can see hubs found on your LAN, create and enter link codes, and check link status here.",
   "linked": "Linked",

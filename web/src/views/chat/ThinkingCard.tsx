@@ -76,7 +76,7 @@ function LiveThinking() {
       <span className="translate-y-[1px] text-[length:var(--chat-secondary)] text-tool-ink">Thinking</span>
       <span aria-hidden className="flex translate-y-[2px] items-center gap-[3px]">
         {[0, 200, 400].map((d) => (
-          <span key={d} className="size-1 rounded-full bg-tool-ink motion-safe:animate-[breathe_1.2s_ease-in-out_infinite]" style={{ animationDelay: `${d}ms` }} />
+          <span key={d} className="size-1 rounded-full bg-tool-ink animate-[breathe_1.2s_ease-in-out_infinite] busy-motion" style={{ animationDelay: `${d}ms` }} />
         ))}
       </span>
       <span className="flex-1" />

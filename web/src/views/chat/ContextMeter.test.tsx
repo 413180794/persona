@@ -35,9 +35,19 @@ describe("ContextMeter", () => {
     setAgentDetails(true);
     setContextAsUsed(true);
     expect(renderToStaticMarkup(<ContextMeter session={s} />)).toContain("已用 39%");
-    const html = renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 180000 }} />);
-    expect(html).toContain("已用 90%");
+    const html = renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 170000 }} />);
+    expect(html).toContain("已用 85%");
     expect(html).toContain("bg-orange");
+    expect(html).toContain("text-orange");
+    expect(html).not.toContain("red");
+  });
+  it("turns red from 90% used (10% left), on the bar and the number", () => {
+    const html = renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 180000 }} />);
+    expect(html).toContain("bg-red");
+    expect(html).toContain("text-red");
+    expect(html).not.toContain("orange");
+    const left = renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 178000 }} />);
+    expect(left).toContain("bg-orange"); // 89% used: still the warning
   });
   it("shows the model alone when the window is unknown, and nothing when neither is", () => {
     setAgentDetails(true);

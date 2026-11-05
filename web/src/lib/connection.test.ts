@@ -42,10 +42,10 @@ describe("connFacts", () => {
 });
 
 describe("the dot and the sidebar's footer follow the same phase as the pill", () => {
-  it("phaseTone: red steady once given up, orange breathing while trying or restarting, orange steady without network", () => {
+  it("phaseTone: red steady once given up, orange breathing (and marked busy for reduced motion) while trying or restarting, orange steady without network", () => {
     expect(phaseTone("unreachable")).toEqual({ color: "bg-red", breathing: false });
-    expect(phaseTone("restarting")).toEqual({ color: "bg-orange", breathing: true });
-    expect(phaseTone("connecting")).toEqual({ color: "bg-orange", breathing: true });
+    expect(phaseTone("restarting")).toEqual({ color: "bg-orange busy-motion", breathing: true });
+    expect(phaseTone("connecting")).toEqual({ color: "bg-orange busy-motion", breathing: true });
     expect(phaseTone("no_network")).toEqual({ color: "bg-orange", breathing: false });
     expect(phaseTone("online")).toEqual({ color: "bg-green", breathing: false });
   });

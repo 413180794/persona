@@ -23,7 +23,29 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.util.UUID
 
-internal data class ConversationGroups(val main: Session?, val pinned: List<Session>, val recent: List<Session>)
+/** [auto]: the conversations the hub opened by itself (#3264), out of [recent] while nothing is searched. */
+internal data class ConversationGroups(
+    val main: Session?, val pinned: List<Session>, val recent: List<Session>, val auto: List<Session> = emptyList(),
+)
+
+/** The drawer's groups of automatic conversations, in its order; [Other] is any origin this app doesn't know. */
+internal enum class AutoOrigin(val wire: String) { Inbox("inbox"), Task("task"), LarkAgent("lark_agent"), Spawned("spawned"), Extension("extension"), Other("other") }
+
+/** The automatic group of a conversation; null for the user's own (none, user, channel). */
+internal fun Session.autoOrigin(): AutoOrigin? = when (val o = origin.orEmpty()) {
+    "", "user", "channel" -> null
+    else -> AutoOrigin.entries.firstOrNull { it.wire == o } ?: AutoOrigin.Other
+}
+
+/** How a set of automatic conversations stands: how many, how many run, how many wait for the user. */
+internal data class OriginTally(val origin: AutoOrigin?, val count: Int, val working: Int, val needsYou: Int)
+
+internal fun tally(origin: AutoOrigin?, list: List<Session>) = OriginTally(origin, list.size,
+    list.count { it.agentState == AgentState.Working }, list.count { it.agentState == AgentState.NeedsYou })
+
+/** The automatic conversations by origin, only the origins that have any, in the drawer's order. */
+internal fun autoGroups(auto: List<Session>): List<OriginTally> =
+    AutoOrigin.entries.map { o -> tally(o, auto.filter { it.autoOrigin() == o }) }.filter { it.count > 0 }
 
 internal fun conversationGroups(
     snapshot: AssistantSnapshot,
@@ -35,9 +57,13 @@ internal fun conversationGroups(
         !it.archived && (query.isBlank() || it.conversationTitle(words).contains(query.trim(), ignoreCase = true) ||
                 it.lastText.orEmpty().contains(query.trim(), ignoreCase = true))
     }.sortedWith(compareByDescending<Session> { it.updated }.thenBy { it.key.path })
+    val others = matches.filter { it.key != snapshot.mainSession && it.key !in pinned }
+    // A search finds every conversation, wherever it comes from; otherwise 最近 is the user's own.
+    val searching = query.isNotBlank()
     return ConversationGroups(matches.firstOrNull { it.key == snapshot.mainSession },
         matches.filter { it.key != snapshot.mainSession && it.key in pinned },
-        matches.filter { it.key != snapshot.mainSession && it.key !in pinned })
+        if (searching) others else others.filter { it.autoOrigin() == null },
+        if (searching) emptyList() else others.filter { it.autoOrigin() != null })
 }
 
 /** How many recent conversations the history lists before folding the rest into 「查看全部 N 个」. */

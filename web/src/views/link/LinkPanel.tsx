@@ -407,11 +407,11 @@ const BARS = [92, 86, 58, 95, 80, 44, 90, 84, 52];
 function Skeleton({ title }: { title?: string }) {
   return (
     <div aria-busy="true" aria-label={t("link-linkpanel.loading")} className="flex flex-col gap-3">
-      {title ? <h1 className="text-[22px] leading-[1.3] font-semibold tracking-tight text-ink">{title}</h1> : <div className="h-6 w-2/3 animate-pulse rounded-[6px] bg-field" />}
-      <div className="h-3 w-1/3 animate-pulse rounded-[4px] bg-field" />
+      {title ? <h1 className="text-[22px] leading-[1.3] font-semibold tracking-tight text-ink">{title}</h1> : <div className="h-6 w-2/3 animate-pulse busy-motion rounded-[6px] bg-field" />}
+      <div className="h-3 w-1/3 animate-pulse busy-motion rounded-[4px] bg-field" />
       <div className="mt-3 flex flex-col gap-2.5">
         {BARS.map((w, i) => (
-          <div key={i} className="h-3.5 animate-pulse rounded-[4px] bg-field" style={{ width: `${w}%`, animationDelay: `${i * 60}ms` }} />
+          <div key={i} className="h-3.5 animate-pulse busy-motion rounded-[4px] bg-field" style={{ width: `${w}%`, animationDelay: `${i * 60}ms` }} />
         ))}
       </div>
     </div>

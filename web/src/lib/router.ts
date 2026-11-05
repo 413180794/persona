@@ -19,7 +19,8 @@ export type Route =
   // one herdr tab (a slot) of a workspace; `sid` picks its pane (lib/herdr-tree.ts resolveTab)
   | { name: "tab"; mid: string; space: string; slot: string; sid?: string; view?: SessionView }
   | { name: "jarvis"; sid?: string }
-  | { name: "history" }
+  // 全部对话; `origin` filters it (lib/conversation-origins.ts): the sidebar's 自动对话 rows open it so
+  | { name: "history"; origin?: string }
   // the health space (docs/health.md): its home, or one of its conversations
   | { name: "health"; sid?: string }
   | { name: "profile" }
@@ -57,7 +58,7 @@ export function parse(path: string, search = ""): Route {
   if (p[0] === "j" || p[0] === "persona") return p[1] === "new" && !p[2] ? { name: "persona-new" } : { name: "jarvis", sid: p[1] };
   if (p[0] === "workspace-board") return { name: "workspace-board" };
   if (p[0] === "overview") return { name: "home" };
-  if (p[0] === "history") return { name: "history" };
+  if (p[0] === "history") return p[1] ? { name: "history", origin: p[1] } : { name: "history" };
   if (p[0] === "health") return { name: "health", sid: p[1] || undefined };
   if (p[0] === "assistant") return { name: "profile" };
   if (p[0] === "inbox") return { name: "inbox", id: p[1] };
@@ -96,7 +97,7 @@ export function routePath(r: Route): string {
     case "persona-new":
       return "/j/new";
     case "history":
-      return "/history";
+      return r.origin ? `/history/${encodeURIComponent(r.origin)}` : "/history";
     case "health":
       return r.sid ? `/health/${encodeURIComponent(r.sid)}` : "/health";
     case "profile":

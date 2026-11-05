@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -315,6 +316,7 @@ func (m *Market) get(ctx context.Context, u, accept string, w io.Writer, limit i
 	if m.Spec.Kind == "github" {
 		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	}
+	sent := req.Header.Get("Authorization") != "" // the token goes to the market's own origin only
 	res, err := m.client().Do(req)
 	if err != nil {
 		return err
@@ -325,6 +327,14 @@ func (m *Market) get(ctx context.Context, u, accept string, w io.Writer, limit i
 		return notFound{errors.New("找不到（404）：地址不对，或者是私有的，要填 token")}
 	case res.StatusCode == http.StatusNotFound:
 		return notFound{errors.New("没有权限（HTTP 404）：token 不对或没有读这个仓库的权限")}
+	case rateLimited(res):
+		msg := fmt.Sprintf("被限流了（HTTP %d）：%s再试", res.StatusCode, retryIn(res.Header, time.Now()))
+		if !sent && m.Spec.Kind == "github" {
+			msg += "；常用这个市场就填一个 token，额度更高"
+		}
+		return errors.New(msg)
+	case (res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden) && !sent:
+		return fmt.Errorf("要登录才能读（HTTP %d）：填一个能读它的 token", res.StatusCode)
 	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
 		return fmt.Errorf("没有权限（HTTP %d）：token 不对或没有读这个仓库的权限", res.StatusCode)
 	case res.StatusCode != http.StatusOK:
@@ -335,6 +345,39 @@ func (m *Market) get(ctx context.Context, u, accept string, w io.Writer, limit i
 		err = fmt.Errorf("大于 %d 字节", limit)
 	}
 	return err
+}
+
+// rateLimited says whether a market refused a request for its rate limit, not for rights: a 429, or GitHub's 403
+// with no requests left (X-RateLimit-Remaining: 0), a Retry-After, or a body that says so (its secondary limit may
+// come with neither header). It reads at most the first KB of a 403's body.
+func rateLimited(res *http.Response) bool {
+	switch {
+	case res.StatusCode == http.StatusTooManyRequests:
+		return true
+	case res.StatusCode != http.StatusForbidden:
+		return false
+	case res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "":
+		return true
+	}
+	head, _ := io.ReadAll(io.LimitReader(res.Body, 1<<10))
+	return strings.Contains(strings.ToLower(string(head)), "rate limit")
+}
+
+// retryIn says when a rate-limited request may be tried again, from Retry-After (seconds) or X-RateLimit-Reset
+// (Unix seconds); "过一会儿" when neither says.
+func retryIn(h http.Header, now time.Time) string {
+	var wait time.Duration
+	if s, err := strconv.ParseInt(strings.TrimSpace(h.Get("Retry-After")), 10, 64); err == nil && s >= 0 {
+		wait = time.Duration(s) * time.Second
+	} else if s, err := strconv.ParseInt(strings.TrimSpace(h.Get("X-RateLimit-Reset")), 10, 64); err == nil && s > 0 {
+		wait = time.Unix(s, 0).Sub(now)
+	} else {
+		return "过一会儿"
+	}
+	if wait <= time.Minute {
+		return "1 分钟后"
+	}
+	return fmt.Sprintf("约 %d 分钟后", int((wait+time.Minute-1)/time.Minute))
 }
 
 // origin is where the token may go.

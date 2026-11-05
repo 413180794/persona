@@ -16,7 +16,7 @@ describe("machine deployment", () => {
   it.each(["link", "service"])("requires advertised capability for %s nodes", (kind) => {
     const legacy = machineDeployment(machine({ kind }));
     expect(legacy).toMatchObject({ supported: false, canDeploy: false });
-    expect(legacy.reason).toContain("本地升级 node");
+    expect(legacy.reason).toContain("手动更新一次 node");
     expect(legacy.reason).toContain("hub");
     expect(machineDeployment(machine({ kind, can_deploy: true }))).toMatchObject({ supported: true, canDeploy: true });
   });
@@ -71,7 +71,7 @@ describe("machine deployment", () => {
   it("preserves errors even without a mismatch or while capability is unavailable", () => {
     const result = machineDeployment(machine({ kind: "link", can_deploy: false, node_mismatch: false, deploy_error: "当前 node 不支持远程更新" }));
     expect(result).toMatchObject({ visible: true, canDeploy: false, error: "上次部署没成：当前 node 不支持远程更新" });
-    expect(result.reason).toContain("本地升级");
+    expect(result.reason).toContain("手动更新");
   });
 
   it("allows retry after a failed supported deployment and retains errors during a retry", () => {

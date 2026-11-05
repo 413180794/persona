@@ -32,6 +32,8 @@
   跑 `python3 scripts/test/web_comments_e2e.py <网页地址> [--only transcript|code|diff] [--shots <目录>]`（浏览器用已装的 Chrome，或 `PERSONA_E2E_CHROMIUM` 指的那个）。
   定时任务「跑完推送」的端到端检查（#2570：hub 有 `task_push` 时编辑页的两个选项、选「只在它自己提醒时」藏起「接着原来的对话」并保存 `push`、列表的标记、选回「每次」；桌面 / 手机宽度 × 浅色 / 深色）：起假 hub 和 `npx vite` 后跑
   `python3 scripts/test/web_task_push_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`，用法见脚本开头。
+  视觉打磨的端到端检查（#3475：减弱动态时转圈和工作中圆点仍以 2.4 秒转 / 呼吸、其他动画被压掉；侧边栏机器行和工作区行的计数右缘对齐，⋯ 叠在计数上、悬停 / 键盘焦点才出现，触屏一直在；上下文条 ≥ 90% 变红；toast 的错误图标和关闭按钮；浅色 / 深色 × 宽屏 / 390 抽屉 × 减弱动态开 / 关，再加一个触屏）：假 hub 带 `MOCK_SPLIT_TABS=1 MOCK_SOURCES=1 MOCK_CONTEXT_DANGER=1` 起，网页用 `npx vite`（toast 检查要从它 import 应用自己的模块），
+  跑 `python3 scripts/test/web_visual_polish_e2e.py <网页地址> [--shots <目录>]`。
   侧栏分组收起的端到端检查（「其他 Agent」收起 / 展开 / 刷新后保持，五种分组方式下每组都能收起，触屏常显箭头，#1417）：假 hub 带 `MOCK_SOURCES=1` 起，再跑
   `python3 scripts/test/web_sidebar_fold_e2e.py <网页地址> [--shots <目录>]`。
   侧边栏收成图标栏的端到端检查（#2524：按钮和 Ctrl+Alt+B、刷新后保持、页面 / Agents / 状态分组收起并保持、窄屏还是抽屉）：假 hub 带 `MOCK_SOURCES=1` 起，
@@ -123,6 +125,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   同 iOS 侧栏的长按菜单（#2988，`views/ConversationMenu.tsx`）；置顶记在这个浏览器（`localStorage` 的 `assistant.pinned`，同 iOS 按设备记，`lib/conversation-pins.ts`），置顶的几段上面有「置顶」小标题，它的 ⋯ / 右键是「全部取消置顶」，置顶的行用图钉代替对话图标；Persona 那一行的 ⋯ / 右键是主对话的菜单，只有拷贝会话 ID 和结束…）、个人 Agent、Agents（标题右边「+」是新建 Agent，⌘K 面板里也有）。
   **为什么默认落在 Persona**（#1239）：和 iOS 一致（App 打开是「助手」，Agents 是第二个 tab），主对话本身带任务坞和「需要你」（#930），
   要处理的事在这里就能看到、能交代；总览更像 Agents 的仪表盘，挪到 `/overview`。主对话只有一个入口：`/`、旧的 `/j`、`/persona`、`/j/<主对话 id>` 都选中 Persona 这一行，
+  「Persona 对话」的「最近」只列用户自己开的对话；hub 自己开的（收件箱 AI 分身、定时任务、飞书 /agent、对话派生、扩展，会话的 `origin`，#3264）收在下面一行「自动对话 N」，默认收起（`localStorage` 的 `fold:auto-chats`），
+  收起时有等你的显示红色个数、在跑的显示状态点；展开后每个来源一行，点开是 `/history/<来源>`：「全部对话」按来源筛好，顶部的「全部 · 我的 · 收件箱 · …」可以换（`lib/conversation-origins.ts`）。
+  置顶的照旧列在置顶里；打开的自动对话没有自己的行时，它所在来源的那一行亮着。截图用 `MOCK_ORIGINS=1` 的假 hub。规矩见 `docs/protocol.md`「助手对话的来源」。
   「Persona 对话」列表和新对话页顶栏不再重复列「主对话」。主对话的顶栏标题固定是「Persona」（形象头像在左），没有副标题行（同 iOS 的 Persona 顶栏），菜单里没有「重命名…」（#1313）；
   旁支对话照旧是对话标题 +「启动器 · 多久以前」。还没有主对话时 `/` 是新对话页，第一条消息带 `main: true` 开出主对话。
   主对话的 ⋯ 菜单还有「压缩上下文」和「新建主对话…」（hub 的 `features` 有 `assistant_compact` / `assistant_main_new` 时才有，#1727，`lib/compaction.ts`）：
@@ -735,7 +740,7 @@ Agent 行的菜单保留原来的全部项（置顶 P、重命名 R、拷贝目�
   行尾悬停出 ⋯（触屏一直在）。
 - **侧边栏显示终端**（设置 › 通用 › 外观，默认关，只对这个浏览器；`lib/sidebar-terminals.ts`）：Agents 按机器分组里，每台电脑的 Agent 下面多一组「终端」，列它终端里的**普通 shell**（Agent 在上面已经有了），点开是 `/terminal/<机器>/<id>`（有会话的 Agent 窗格进它的会话页的终端视图），同一套菜单。
 - **Agent 行的第二行**（#3195，`lib/row-line.ts` 的 `rowLine`，`Sidebar.tsx` 的 `SessionRow`）：侧边栏里「需要你」的 Agent 标题下直接写它要你做什么，有卡片时是卡片的种类加内容（「在问你：用哪个测试框架？」「需要授权：swift test」「计划待批准」，前缀红色，说法同待办页的 Agent 行），没有卡片时是原因（`attention_reason` / 出错原因 / 分诊结果，同 `sessionPreview`）；「完成未看」的写它做了什么（分诊的「✓ 结论」，没有就是最后一句话，去掉 Markdown 记号）。工作中、已看、未运行的行和 Persona 对话还是一行；悬停提示照旧。不用再悬停或点进去才知道它为什么红、为什么绿。
-- **Agent 行显示详情 / 上下文显示为已用**（#2430，设置 › 通用 › 外观，都默认关，只对这个浏览器；`lib/context-usage.ts`）：开了「Agent 行显示详情」，侧边栏每个 Agent 行标题下多一行小字「模型 · 上下文 · 多久没动 · 目录」（放不下的从末尾起折到看不见，不挤别的）。会话顶栏标题行末**始终**有模型名和一条细的上下文条（`views/chat/ContextMeter.tsx`，照 Moshi 的会话头部，用户要求照 Moshi 做；窄屏只剩条和百分比），悬停写「还剩 N% 上下文」；「上下文显示为已用」改成「已用 N%」，两处一起变。已用 ≥ 80% 变警告色（`--orange`）。两个开关都关时侧边栏和以前一像素不差。数字来自会话的 `context_tokens` / `context_window`（node 从 transcript 尾部读，见 `protocol.md`）；没有这两个字段（还没回复、node 不认识的模型、老 node）就不画上下文，只剩模型和其余几项。iOS / Mac 在会话信息的「用量」里画同样的余量条（#3289），不在顶栏。
+- **Agent 行显示详情 / 上下文显示为已用**（#2430，设置 › 通用 › 外观，都默认关，只对这个浏览器；`lib/context-usage.ts`）：开了「Agent 行显示详情」，侧边栏每个 Agent 行标题下多一行小字「模型 · 上下文 · 多久没动 · 目录」（放不下的从末尾起折到看不见，不挤别的）。会话顶栏标题行末**始终**有模型名和一条细的上下文条（`views/chat/ContextMeter.tsx`，照 Moshi 的会话头部，用户要求照 Moshi 做；窄屏只剩条和百分比），悬停写「还剩 N% 上下文」；「上下文显示为已用」改成「已用 N%」，两处一起变。已用 ≥ 80% 变警告色（`--orange`），≥ 90%（剩 10% 以下）变危险色（`--red`，#3475；`contextTier`，条、数字和侧边栏行里的百分比一起变）。两个开关都关时侧边栏和以前一像素不差。数字来自会话的 `context_tokens` / `context_window`（node 从 transcript 尾部读，见 `protocol.md`）；没有这两个字段（还没回复、node 不认识的模型、老 node）就不画上下文，只剩模型和其余几项。iOS / Mac 在会话信息的「用量」里画同样的余量条（#3289），不在顶栏。
   关着时没有这一行（「需要你」「完成未看」的行另有一行写在问什么 / 做了什么，见上「Agent 行的第二行」，#3195）。
 - **命令面板**：`lib/node-palette.ts` 向 `registerContextCommands` 登记，在 `>` 命令模式里把当前节点的菜单项列在最前（「Workspace · 窗格标题」「Workspace · 工作区名」两节）；
   重命名弹一个小对话框问名字，危险的再确认一次，失败弹 toast。当前节点来自会话页的对话（`ctx.pane`）或终端页的窗格（终端页把读到的树交给它）。
@@ -942,7 +947,8 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
   来源和条款见文件头注释和 `THIRD_PARTY_NOTICES.md`；条款不清楚的 agent 先用首字，不画。检查：`scripts/test/web_agent_marks_e2e.py`（假 hub 带 `MOCK_AGENT_MARKS=1`）。
 - 按钮文字一律单行（`whitespace-nowrap`），放不下的用图标 + `title`。
 - 链接规则和 App 一样（`Links`）：裸链接在空白或非 ASCII 字符处结束，交给 Markdown 前写成 `<url>`（`src/ui/Markdown.tsx` 的 `linkify`），中文里的链接不会吞掉后半句。
-- 尊重 `prefers-reduced-motion`：所有动画缩成 1ms。脚本里的滚动（`scrollTo` / `scrollIntoView`）不受这条 CSS 管，一律用 `scrollBehavior()`（`src/ui/stream/motion.ts`），
+- 尊重 `prefers-reduced-motion`：所有动画缩成 1ms；**忙碌指示例外**（#3475）：转圈（`Spinner`）、工作中 / 连接中的呼吸圆点、`Loading` 的像素格和流光、骨架的脉动都带 `busy-motion` 类（`src/lib/busy-motion.ts`），
+  减弱动态时照样转，只是放慢到 2.4 秒一圈（Moshi 的做法），呼吸只剩透明度、不缩放，不然「在忙」的信号就没了。新写一个循环的忙碌动画就加这个类，`busy-motion.test.ts` 会扫源码，漏了就报错。脚本里的滚动（`scrollTo` / `scrollIntoView`）不受这条 CSS 管，一律用 `scrollBehavior()`（`src/ui/stream/motion.ts`），
   减弱动态时直接跳到位置（回到底部、计划胶囊、文件路径栏、定时任务编辑器、外部会话的引用跳转、飞书会话的回到最新，#2664）。
 - 展开 / 折叠（#1124）一律用 `Collapse`：CSS 把 grid 的行在 `0fr` / `1fr` 之间过渡、透明度淡入淡出，箭头转 `transform`，不在 JS 里量高度、不按帧 setState。
   对话里的（工作行、工具步骤、思考、上下文、最新一步的预览）用 `lazy`：展开时内容先在 `0fr` 下排一次版、下一帧才开始过渡（长轨迹第一次排版很重，混进过渡里就一下子开到大半）；

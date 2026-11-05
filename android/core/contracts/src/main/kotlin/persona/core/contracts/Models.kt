@@ -297,6 +297,13 @@ data class Session(
     @SerialName("assistant") val assistant: Boolean = false,
     /** An assistant conversation put away (POST /api/v1/assistant/conversations/{id}/archive): kept, not listed. */
     @SerialName("archived") val archived: Boolean = false,
+    /**
+     * Who opened an assistant conversation (docs/protocol.md「助手对话的来源」, #3264): user, channel, inbox, task, spawned,
+     * lark_agent, extension, or one this app doesn't know yet; null is the user's (older hubs never say).
+     */
+    @SerialName("origin") val origin: String? = null,
+    /** What it was opened for: the inbox item, the task, the conversation, the channel, the extension. */
+    @SerialName("origin_ref") val originRef: String? = null,
     @SerialName("space_id") val spaceId: String? = null,
     @SerialName("space_name") val spaceName: String? = null,
     @SerialName("slot_name") val slotName: String? = null,

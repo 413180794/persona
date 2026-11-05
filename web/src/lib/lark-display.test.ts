@@ -75,7 +75,7 @@ describe("LarkDisplayModel", () => {
     expect(m.state.snapshot).toBeUndefined();
     const old = new LarkDisplayModel(deps([async () => { throw new ApiError(404, "not found", {}); }]));
     await old.refresh();
-    expect(old.state.problem).toContain("更新 Hub");
+    expect(old.state.problem).toContain("先更新 hub");
   });
 
   it("reads again when a refresh is asked for during a read, publishing only the later read", async () => {
@@ -101,7 +101,7 @@ describe("LarkDisplayModel", () => {
     await m.change("anti_recall", true);
     expect(bodies).toEqual([{ account_id: "acct", key: "anti_recall", value: true, expected: false }]);
     expect(m.state.snapshot).toBeUndefined();
-    expect(m.state.problem).toContain("重新读取");
+    expect(m.state.problem).toContain("重新加载一下");
     await m.change("anti_recall", true); // nothing known: nothing written
     expect(bodies).toHaveLength(1);
   });

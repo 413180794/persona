@@ -41,7 +41,7 @@ export function useUnseen(root: React.RefObject<HTMLElement | null>): boolean {
 }
 
 const DOT: Record<FullStatus, string> = {
-  connecting: "bg-orange animate-pulse",
+  connecting: "bg-orange animate-pulse busy-motion",
   live: "bg-green",
   closed: "bg-ink-3",
   error: "bg-red",

@@ -35,7 +35,7 @@ describe("a sign-in step", () => {
   it("says a QR step without its modules or a link can't be drawn, and what to do instead", () => {
     const html = draw({ step: "qr", kind: "qr", hint: "用微信扫一扫" }, true);
     expect(html).not.toContain('role="img"'); // no QR code
-    expect(html).toContain("这一步当前页面画不了");
+    expect(html).toContain("这个页面显示不了这一步");
     expect(html).toContain("设置 › 渠道 › 微信");
     expect(html).toContain("重新开始");
     expect(html).not.toContain("下一步");
@@ -50,7 +50,7 @@ describe("a sign-in step", () => {
 
   it("says a kind it doesn't know can't be drawn, without pointing at 渠道 for a connector that isn't one", () => {
     const html = draw({ step: "auth", kind: "open_url", url: "https://example.com/auth" });
-    expect(html).toContain("这一步当前页面画不了");
+    expect(html).toContain("这个页面显示不了这一步");
     expect(html).not.toContain("渠道");
     expect(html).not.toContain("下一步");
   });

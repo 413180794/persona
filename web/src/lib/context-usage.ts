@@ -7,8 +7,13 @@ import { t } from "../i18n";
 import { ago, baseName } from "./format";
 import type { Session } from "./types";
 
-/** At or past this share of the window used, the numbers turn to the warning colour. */
+/** At or past this share of the window used, the numbers turn to the warning colour (orange). */
 export const CONTEXT_WARN_USED = 80;
+/** At or past this share used (10% or less left), they turn to the danger colour (red) instead. */
+export const CONTEXT_DANGER_USED = 90;
+
+/** How full the window is: nothing to say, close to the limit, or about to run out. */
+export type ContextTier = "ok" | "warn" | "danger";
 
 export interface ContextUsage {
   /** Whole percent of the window used, 0–100. */
@@ -33,8 +38,13 @@ export function contextShown(u: ContextUsage, asUsed: boolean): number {
   return asUsed ? u.used : u.left;
 }
 
+export function contextTier(u: ContextUsage): ContextTier {
+  return u.used >= CONTEXT_DANGER_USED ? "danger" : u.used >= CONTEXT_WARN_USED ? "warn" : "ok";
+}
+
+/** Whether the numbers are past the warning line (the danger tier is past it too). */
 export function contextWarn(u: ContextUsage): boolean {
-  return u.used >= CONTEXT_WARN_USED;
+  return contextTier(u) !== "ok";
 }
 
 /** "61%" — the short text of a row or the header. */
@@ -62,8 +72,10 @@ export function modelShort(model: string | undefined): string {
 /** One piece of a sidebar row's second line. */
 export interface DetailPart {
   text: string;
-  /** The context share at the warning colour. */
+  /** The context share at the warning colour (orange; also set with `danger`). */
   warn?: boolean;
+  /** The context share at the danger colour (red): 10% or less left. */
+  danger?: boolean;
   title?: string;
 }
 
@@ -75,7 +87,7 @@ export function rowDetail(s: Session, asUsed: boolean, now = Date.now()): Detail
   const model = modelShort(s.model);
   if (model) parts.push({ text: model, title: s.model });
   const u = contextUsage(s);
-  if (u) parts.push({ text: contextLabel(u, asUsed), warn: contextWarn(u), title: contextTooltip(u, asUsed) });
+  if (u) parts.push({ text: contextLabel(u, asUsed), warn: contextWarn(u), danger: contextTier(u) === "danger", title: contextTooltip(u, asUsed) });
   const age = s.updated_at ? ago(s.updated_at, now) : "";
   if (age) parts.push({ text: age });
   const folder = baseName(s.cwd);

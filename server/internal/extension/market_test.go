@@ -1,10 +1,16 @@
 package extension
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseMarket(t *testing.T) {
@@ -95,6 +101,85 @@ func TestIndexTagsFromTheManifest(t *testing.T) {
 		ix, warnings, err := ParseIndex(b)
 		if err != nil || len(warnings) != 0 || len(ix.Extensions) != 1 || !slices.Equal(ix.Extensions[0].Tags, c.want) {
 			t.Fatalf("%v %v %+v", err, warnings, ix)
+		}
+	}
+}
+
+// A market GitHub rate-limits says so and when to try again, not that the token is wrong (#3450); a 401/403 to a
+// market without a token asks for one instead of calling it wrong.
+func TestMarketRefusalSaysWhy(t *testing.T) {
+	cases := []struct {
+		name, token string
+		status      int
+		header      map[string]string
+		want, not   string
+	}{
+		{"primary limit", "", http.StatusForbidden, map[string]string{"X-RateLimit-Remaining": "0"}, "被限流了（HTTP 403）", "token 不对"},
+		{"secondary limit", "secret", http.StatusForbidden, map[string]string{"Retry-After": "120"}, "约 2 分钟后再试", "token 不对"},
+		{"429", "", http.StatusTooManyRequests, nil, "被限流了（HTTP 429）：过一会儿再试", "token 不对"},
+		{"no token", "", http.StatusForbidden, map[string]string{"X-RateLimit-Remaining": "59"}, "要登录才能读（HTTP 403）", "token 不对"},
+		{"wrong token", "secret", http.StatusUnauthorized, nil, "token 不对", "限流"},
+		// A token's own hour used up: rate-limited, and no advice to add the token it has.
+		{"token limit", "secret", http.StatusForbidden, map[string]string{"X-RateLimit-Remaining": "0"}, "被限流了（HTTP 403）", "填一个 token"},
+		// The secondary limit, at times with no header at all: only the body says it.
+		{"secondary limit body", "secret", http.StatusForbidden, map[string]string{"body": "You have exceeded a secondary rate limit."}, "被限流了（HTTP 403）：过一会儿再试", "token 不对"},
+		{"reset", "", http.StatusForbidden, map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": fmt.Sprint(time.Now().Add(30 * time.Minute).Unix())}, "约 30 分钟后再试；常用这个市场就填一个 token", "token 不对"},
+	}
+	for _, c := range cases {
+		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			for k, v := range c.header {
+				if k != "body" {
+					w.Header().Set(k, v)
+				}
+			}
+			w.WriteHeader(c.status)
+			_, _ = w.Write([]byte(c.header["body"]))
+		}))
+		s, err := ParseMarket("github:example/market")
+		if err != nil {
+			t.Fatal(err)
+		}
+		mk := &Market{Spec: s, Token: c.token, Client: srv.Client(), GitHubAPI: srv.URL}
+		_, _, err = mk.Fetch(context.Background())
+		srv.Close()
+		if err == nil || !strings.Contains(err.Error(), c.want) || strings.Contains(err.Error(), c.not) {
+			t.Errorf("%s: %v, want %q and not %q", c.name, err, c.want, c.not)
+		}
+	}
+}
+
+func TestRetryIn(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	for _, c := range []struct {
+		header map[string]string
+		want   string
+	}{
+		{nil, "过一会儿"},
+		{map[string]string{"Retry-After": "30"}, "1 分钟后"},
+		{map[string]string{"Retry-After": "61"}, "约 2 分钟后"},
+		{map[string]string{"X-RateLimit-Reset": "1001800"}, "约 30 分钟后"},
+		{map[string]string{"X-RateLimit-Reset": "999000"}, "1 分钟后"}, // already past: the clocks differ
+		{map[string]string{"Retry-After": "soon"}, "过一会儿"},
+	} {
+		h := http.Header{}
+		for k, v := range c.header {
+			h.Set(k, v)
+		}
+		if got := retryIn(h, now); got != c.want {
+			t.Errorf("%v: %q, want %q", c.header, got, c.want)
+		}
+	}
+}
+
+// A 404 is still notFound (an index then falls back to its old name), with or without a token.
+func TestMarket404StaysNotFound(t *testing.T) {
+	srv := httptest.NewTLSServer(http.NotFoundHandler())
+	defer srv.Close()
+	for _, token := range []string{"", "secret"} {
+		mk := &Market{Spec: MarketSpec{Kind: "github", Owner: "example", Repo: "market"}, Token: token, Client: srv.Client(), GitHubAPI: srv.URL}
+		var b strings.Builder
+		if err := mk.get(context.Background(), mk.contentsURL(IndexFile), "", &b, 1<<10); !errors.As(err, new(notFound)) {
+			t.Errorf("token %q: %v, want notFound", token, err)
 		}
 	}
 }

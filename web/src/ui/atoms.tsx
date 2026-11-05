@@ -7,6 +7,7 @@ import { Icon, type IconName } from "./icons";
 import { collapseMounted } from "../lib/disclosure";
 import { FeedbackGate, offlineNow } from "../lib/feedback";
 import { useCloseOnBack } from "../lib/back-close";
+import { BUSY_MOTION } from "../lib/busy-motion";
 import { keyboardFrame } from "../lib/viewport";
 import { accelLabel, activation, edge, enabled, keyIntent, renameCommit, rowLabel, type MenuItem } from "./menu-model";
 import { focusables, NARROW_QUERY, placeMenu, placeSubmenu, SHEET_QUERY, trapTab, useMedia, type MenuPlace } from "./overlay";
@@ -21,7 +22,7 @@ export function cx(...c: (string | false | null | undefined)[]) {
 export function Shimmer({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <span
-      className={`bg-clip-text text-transparent ${className}`}
+      className={`bg-clip-text text-transparent ${BUSY_MOTION} ${className}`}
       style={{
         backgroundImage: "linear-gradient(90deg, var(--ink-3) 35%, var(--ink) 50%, var(--ink-3) 65%)",
         backgroundSize: "200% 100%",
@@ -44,7 +45,7 @@ export function PixelGrid({ className = "" }: { className?: string }) {
   return (
     <span aria-hidden className={`grid shrink-0 grid-cols-[repeat(3,4px)] gap-[1.5px] ${className}`}>
       {CHEVRON.map((d, i) => (
-        <span key={i} className="size-[4px] rounded-[1px] bg-ink" style={{ opacity: 0.15, animation: `pixel-on 650ms ease-in-out ${d}ms infinite` }} />
+        <span key={i} className={`size-[4px] rounded-[1px] bg-ink ${BUSY_MOTION}`} style={{ opacity: 0.15, animation: `pixel-on 650ms ease-in-out ${d}ms infinite` }} />
       ))}
     </span>
   );
@@ -75,7 +76,7 @@ export function StatusDot({ state, size = 8, ring }: { state: AgentState; size?:
     <span
       role="img"
       aria-label={STATE_LABEL[state]}
-      className="inline-block shrink-0 rounded-full"
+      className={cx("inline-block shrink-0 rounded-full", breathe && BUSY_MOTION)}
       style={{
         width: size,
         height: size,
@@ -215,7 +216,7 @@ export function Spinner({ size = 12 }: { size?: number }) {
   return (
     <span
       aria-hidden
-      className="inline-block shrink-0 rounded-full border-[1.5px] border-line-strong border-t-ink-2"
+      className={`inline-block shrink-0 rounded-full border-[1.5px] border-line-strong border-t-ink-2 ${BUSY_MOTION}`}
       style={{ width: size, height: size, animation: "spin 700ms linear infinite" }}
     />
   );
@@ -827,17 +828,26 @@ export function Toasts() {
   }, []);
   return createPortal(
     <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-5 z-50 flex flex-col items-center gap-2 px-4">
-      {toasts.map((t) => (
-        <div key={t.id} className="pointer-events-auto flex max-w-md items-center gap-2 rounded-[10px] border border-tooltip-border bg-tooltip-bg px-3 py-2 text-[12.5px] text-tooltip-fg shadow-overlay" style={{ animation: `slide-up 220ms ${EASE} both` }}>
-          {t.tone === "error" && <span className="size-1.5 shrink-0 rounded-full bg-red" />}
-          {t.tone === "ok" && <Icon name="check" size={13} stroke={2.6} className="text-green" />}
-          <span className="min-w-0">{t.text}</span>
-          {t.action && (
+      {toasts.map((item) => (
+        <div key={item.id} className="pointer-events-auto flex max-w-md items-center gap-2 rounded-[10px] border border-tooltip-border bg-tooltip-bg px-3 py-2 text-[12.5px] text-tooltip-fg shadow-overlay" style={{ animation: `slide-up 220ms ${EASE} both` }}>
+          {item.tone === "error" && <Icon name="warning" size={13} stroke={2.2} className="shrink-0 text-red" />}
+          {item.tone === "ok" && <Icon name="check" size={13} stroke={2.6} className="text-green" />}
+          <span className="min-w-0">{item.text}</span>
+          {item.action && (
             <button type="button" className="ml-1 shrink-0 whitespace-nowrap font-semibold text-accent hover:underline"
-              onClick={() => { t.action?.run(); dropToast(t.id); }}>
-              {t.action.label}
+              onClick={() => { item.action?.run(); dropToast(item.id); }}>
+              {item.action.label}
             </button>
           )}
+          <button
+            type="button"
+            aria-label={t("ui-atoms.close")}
+            title={t("ui-atoms.close")}
+            onClick={() => dropToast(item.id)}
+            className="touch-hit -mr-1.5 ml-0.5 flex size-5 shrink-0 items-center justify-center rounded-[5px] text-tooltip-muted transition-colors duration-150 hover:bg-tooltip-border hover:text-tooltip-fg"
+          >
+            <Icon name="x" size={12} stroke={2.2} />
+          </button>
         </div>
       ))}
     </div>,

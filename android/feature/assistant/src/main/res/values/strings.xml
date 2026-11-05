@@ -71,6 +71,21 @@
     <string name="assistant_pinned_actions">Pinned actions</string>
     <string name="assistant_unpin_all">Unpin all</string>
     <string name="assistant_recent">Recent</string>
+    <string name="assistant_auto">Automatic</string>
+    <string name="assistant_origin_inbox">Inbox</string>
+    <string name="assistant_origin_task">Scheduled</string>
+    <string name="assistant_origin_lark_agent">Feishu /agent</string>
+    <string name="assistant_origin_spawned">From a chat</string>
+    <string name="assistant_origin_extension">Extensions</string>
+    <string name="assistant_origin_other">Other</string>
+    <plurals name="assistant_auto_needs_you">
+        <item quantity="one">%d needs you</item>
+        <item quantity="other">%d need you</item>
+    </plurals>
+    <plurals name="assistant_auto_working">
+        <item quantity="one">%d running</item>
+        <item quantity="other">%d running</item>
+    </plurals>
     <string name="assistant_empty_title">No chats yet</string>
     <string name="assistant_empty_detail">Send a message to start chatting with Persona.</string>
     <string name="assistant_no_match">No matching chats</string>

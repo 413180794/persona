@@ -2,6 +2,7 @@
 import { t } from "../i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { visiblePoll } from "../lib/visible-poll";
+import { BUSY_MOTION } from "../lib/busy-motion";
 import { Button, copyText, cx, EASE, IconButton, PixelGrid, Shimmer } from "../ui/atoms";
 import { errorText } from "./api";
 import { AdminIcon, type AdminIconName } from "./icons";
@@ -28,7 +29,7 @@ export function Tag({ children, tone = "gray", title }: { children: React.ReactN
 }
 
 export function Dot({ tone, pulse }: { tone: Tone; pulse?: boolean }) {
-  return <span aria-hidden className={cx("inline-block size-2 shrink-0 rounded-full", DOT[tone])} style={pulse ? { animation: "breathe 1.8s ease-in-out infinite" } : undefined} />;
+  return <span aria-hidden className={cx("inline-block size-2 shrink-0 rounded-full", DOT[tone], pulse && BUSY_MOTION)} style={pulse ? { animation: "breathe 1.8s ease-in-out infinite" } : undefined} />;
 }
 
 export function PageHeader({ title, subtitle, right }: { title: string; subtitle?: React.ReactNode; right?: React.ReactNode }) {

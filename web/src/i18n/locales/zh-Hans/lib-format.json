@@ -4,7 +4,7 @@
   "source_identity_conflict": "身份冲突",
   "source_claude_background": "Claude 后台",
   "read_only": "{source} · 仅查看：{reason}",
-  "read_only_default_reason": "此来源尚未允许发送",
+  "read_only_default_reason": "这个来源还不能发消息",
   "state_needs_you": "需要你",
   "state_working": "工作中",
   "state_unread": "完成未看",

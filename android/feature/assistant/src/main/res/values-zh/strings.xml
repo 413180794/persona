@@ -70,6 +70,19 @@
     <string name="assistant_pinned_actions">置顶操作</string>
     <string name="assistant_unpin_all">全部取消置顶</string>
     <string name="assistant_recent">最近</string>
+    <string name="assistant_auto">自动对话</string>
+    <string name="assistant_origin_inbox">收件箱</string>
+    <string name="assistant_origin_task">定时任务</string>
+    <string name="assistant_origin_lark_agent">飞书 /agent</string>
+    <string name="assistant_origin_spawned">对话派生</string>
+    <string name="assistant_origin_extension">扩展</string>
+    <string name="assistant_origin_other">其他</string>
+    <plurals name="assistant_auto_needs_you">
+        <item quantity="other">%d 段需要你</item>
+    </plurals>
+    <plurals name="assistant_auto_working">
+        <item quantity="other">%d 段在运行</item>
+    </plurals>
     <string name="assistant_empty_title">还没有对话</string>
     <string name="assistant_empty_detail">发一句话，开始和 Persona 聊聊。</string>
     <string name="assistant_no_match">没有找到匹配的对话</string>

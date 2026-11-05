@@ -230,8 +230,8 @@ function ReplyPreview({ topic, count, replies, open }: { topic: LarkMessage; cou
         ))}
         {Array.from({ length: pending }, (_, i) => (
           <span key={i} aria-hidden className="flex h-[19px] items-center gap-1.5">
-            <span className="h-2.5 w-10 animate-pulse rounded-full bg-field" />
-            <span className="h-2.5 w-40 animate-pulse rounded-full bg-field" />
+            <span className="h-2.5 w-10 animate-pulse busy-motion rounded-full bg-field" />
+            <span className="h-2.5 w-40 animate-pulse busy-motion rounded-full bg-field" />
           </span>
         ))}
       </button>

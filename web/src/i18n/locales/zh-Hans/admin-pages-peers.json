@@ -8,7 +8,7 @@
   "rarely_needed_body": "只有两处各有一台常开、互相连不通的 hub，或者已经装了好几台 hub 想合并时才需要互联。推荐只装一台 hub，其他电脑都装 node 服务，在「电脑」里添加。",
   "tls_only": "互联只走 TLS",
   "enable": "去开启",
-  "tls_only_body": "这台 hub 还没开 TLS 端口。hub 之间的链路按公钥指纹钉扎，内网也不例外。",
+  "tls_only_body": "这台 hub 还没开 TLS 端口，不能互联。hub 之间一律走 TLS，并核对对方的公钥指纹，内网也一样。",
   "missing_title": "这个版本的 hub 还没有互联功能",
   "missing_body": "升级 hub 之后，这里能看到局域网里发现的 hub、生成和输入互联码、查看链路状态。",
   "linked": "已互联",

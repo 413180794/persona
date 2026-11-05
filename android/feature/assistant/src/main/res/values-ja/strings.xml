@@ -70,6 +70,19 @@
     <string name="assistant_pinned_actions">ピン留めの操作</string>
     <string name="assistant_unpin_all">すべてのピン留めを解除</string>
     <string name="assistant_recent">最近</string>
+    <string name="assistant_auto">自動のチャット</string>
+    <string name="assistant_origin_inbox">受信箱</string>
+    <string name="assistant_origin_task">定期タスク</string>
+    <string name="assistant_origin_lark_agent">Feishu /agent</string>
+    <string name="assistant_origin_spawned">チャットから</string>
+    <string name="assistant_origin_extension">拡張機能</string>
+    <string name="assistant_origin_other">その他</string>
+    <plurals name="assistant_auto_needs_you">
+        <item quantity="other">%d 件が対応待ち</item>
+    </plurals>
+    <plurals name="assistant_auto_working">
+        <item quantity="other">%d 件実行中</item>
+    </plurals>
     <string name="assistant_empty_title">チャットはまだありません</string>
     <string name="assistant_empty_detail">メッセージを送って、Personaと話してみましょう。</string>
     <string name="assistant_no_match">一致するチャットはありません</string>

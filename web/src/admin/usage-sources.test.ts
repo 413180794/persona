@@ -36,7 +36,7 @@ describe("a test of the connection", () => {
     expect(r.text).toBe("连上了：12 个账号、31 个窗口 (codex 8 · claude 4)");
   });
   it("says so when it connected but nothing can be drawn", () => {
-    expect(testText({ ok: true, accounts: 0, windows: 0, listed: 3, providers: {} })).toEqual({ ok: true, text: "连上了，但没有能画出来的额度窗口（网关共列出 3 个账号）" });
+    expect(testText({ ok: true, accounts: 0, windows: 0, listed: 3, providers: {} })).toEqual({ ok: true, text: "连上了，但没有能显示的额度（网关一共列出 3 个账号）" });
   });
   it("says why it did not", () => {
     expect(testText({ ok: false, code: "unauthorized" })).toEqual({ ok: false, text: "没连上：Key 不对或已过期" });

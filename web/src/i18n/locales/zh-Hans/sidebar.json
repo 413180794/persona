@@ -124,5 +124,9 @@
   "folded_unread": "{count} 个完成未看",
   "folded_working": "{count} 个工作中",
   "unread_messages_count": "{count} 条未读消息",
-  "inbox_badge_title": "收件箱：只数需要你处理的 {count} 条消息，在等你的 Agent 看「总览」"
+  "inbox_badge_title": "收件箱：只数需要你处理的 {count} 条消息，在等你的 Agent 看「总览」",
+  "auto_chats": "自动对话",
+  "auto_chats_label": "自动对话 {count} 段",
+  "auto_working": "{count} 段在运行",
+  "auto_needs_you": "{count} 段需要你"
 }

@@ -2,6 +2,7 @@
 // sidebar's footer), after the app's ConnectionTitle / ConnectionDetails: which phase, why, since when, the next try.
 // Pure: store.ts keeps the facts (`State.link`), the tests drive these directly.
 import { t } from "../i18n";
+import { BUSY_MOTION } from "./busy-motion";
 import type { Conn } from "./store";
 
 /** The socket's facts behind the phase. Times in ms, 0: none. */
@@ -33,9 +34,12 @@ export function connPhase(conn: Conn, link: ConnLink): ConnPhase {
 }
 
 /** The dot beside the phase (the pill, its details, the sidebar's footer and rail): red once it gave up for now,
- *  green online, orange otherwise; it breathes while trying. */
-export function phaseTone(p: ConnPhase): { color: "bg-red" | "bg-green" | "bg-orange"; breathing: boolean } {
-  return { color: p === "unreachable" ? "bg-red" : p === "online" ? "bg-green" : "bg-orange", breathing: p === "connecting" || p === "restarting" };
+ *  green online, orange otherwise; it breathes while trying. `color` is the dot's classes: its colour, and for a dot that
+ *  breathes the busy-motion mark too, so it keeps breathing (slowly) under reduced motion (lib/busy-motion.ts). */
+export function phaseTone(p: ConnPhase): { color: string; breathing: boolean } {
+  const breathing = p === "connecting" || p === "restarting";
+  const color = p === "unreachable" ? "bg-red" : p === "online" ? "bg-green" : "bg-orange";
+  return { color: breathing ? `${color} ${BUSY_MOTION}` : color, breathing };
 }
 
 /** The breathing of a dot that is still trying (the `breathe` keyframes in index.css). */

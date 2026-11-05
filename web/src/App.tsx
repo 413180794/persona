@@ -269,7 +269,7 @@ function Shell() {
       main = <PersonaAssistant fresh onToggleSidebar={toggle} />;
       break;
     case "history":
-      main = <History onToggleSidebar={toggle} />;
+      main = <History origin={route.origin} onToggleSidebar={toggle} />;
       break;
     case "health":
       main = <Health key={route.sid ?? ""} sid={route.sid} onToggleSidebar={toggle} />;

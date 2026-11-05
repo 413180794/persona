@@ -190,6 +190,11 @@ export interface Session {
   suggestion?: string;
   /** An assistant conversation moved out of the list (docs/assistant.md「管理自己的对话」). */
   archived?: boolean;
+  /** Who opened an assistant conversation (docs/protocol.md「助手对话的来源」): user, channel, inbox, task, spawned,
+   *  lark_agent, extension, or one this page doesn't know; none is the user's (older hubs never say). */
+  origin?: string;
+  /** What it was opened for: the inbox item, the task, the conversation, the channel, the extension. */
+  origin_ref?: string;
   /** The channels messages came into it from, newest first (docs/channels.md「来源标记」). */
   channels?: string[];
   todo?: { id: string; title: string };

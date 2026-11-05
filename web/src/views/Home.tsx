@@ -7,6 +7,7 @@ import { hubLabel, machineWithHub } from "../lib/mesh";
 import { href, onLinkClick, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { useStore } from "../lib/store";
+import { BUSY_MOTION } from "../lib/busy-motion";
 import type { AgentState, Interaction, Session } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, StatusDot, useNow } from "../ui/atoms";
 import { Icon } from "../ui/icons";
@@ -254,7 +255,7 @@ function Badge({ state }: { state: AgentState }) {
       c = 2 * Math.PI * r;
     return (
       <span className="relative inline-flex size-6 shrink-0 items-center justify-center" aria-label={STATE_LABEL[state]}>
-        <svg width={size} height={size} className="absolute inset-0" style={{ animation: "spin 1.1s linear infinite" }}>
+        <svg width={size} height={size} className={`absolute inset-0 ${BUSY_MOTION}`} style={{ animation: "spin 1.1s linear infinite" }}>
           <circle cx={12} cy={12} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
           <circle cx={12} cy={12} r={r} fill="none" stroke="var(--orange)" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${c * 0.28} ${c * 0.72}`} />
         </svg>

@@ -56,7 +56,7 @@
   "clear_key": "去掉已保存的 Key",
   "test": "测试连接",
   "test_ok": "连上了：{accounts}、{windows}",
-  "test_none": "连上了，但没有能画出来的额度窗口（网关共列出 {listed} 个账号）",
+  "test_none": "连上了，但没有能显示的额度（网关一共列出 {listed} 个账号）",
   "test_failed": "没连上：{reason}",
   "test_note": "测试只读一次、不保存任何东西。",
   "save": "保存"

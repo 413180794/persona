@@ -56,7 +56,7 @@
   "clear_key": "Remove the saved key",
   "test": "Test connection",
   "test_ok": "Connected: {accounts}, {windows}",
-  "test_none": "Connected, but no allowance window can be drawn (the gateway lists {listed} accounts)",
+  "test_none": "Connected, but there's no allowance to show (the gateway lists {listed} accounts)",
   "test_failed": "Couldn't connect: {reason}",
   "test_note": "A test reads once and saves nothing.",
   "save": "Save"

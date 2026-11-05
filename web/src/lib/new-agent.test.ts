@@ -169,7 +169,7 @@ describe("本地优先启动", () => {
     const id = launchAgent({ ...input, attachments: [pickAttachment(new File(["image"], "figure.png", { type: "image/png" }))] });
     await vi.advanceTimersByTimeAsync(0);
     expect(getState().launches[id]).toMatchObject({ phase: "failed", uncertain: false });
-    expect(getState().launches[id].error).toContain("暂不支持首条消息带附件");
+    expect(getState().launches[id].error).toContain("第一条消息不能带附件");
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

@@ -49,4 +49,17 @@ describe("the sidebar's Persona chats", () => {
     const { recent } = sidebarConversations(list, "main", [], 2, "a");
     expect(recent.map((c) => c.session_id)).toEqual(["b", "c", "a"]);
   });
+
+  it("leaves the hub's automatic conversations out of 最近 unless pinned (#3264)", () => {
+    const withOrigins = [
+      { ...conv("inbox", "2026-11-06T09:00:00Z"), origin: "inbox" },
+      { ...conv("task", "2026-11-06T08:00:00Z"), origin: "task" },
+      { ...conv("wechat", "2026-11-06T07:00:00Z"), origin: "channel" },
+      { ...conv("mine", "2026-11-06T06:00:00Z"), origin: "user" },
+      conv("old", "2026-11-06T05:00:00Z"),
+    ] as Session[];
+    const { pinned, recent } = sidebarConversations(withOrigins, undefined, ["task"], 5);
+    expect(pinned.map((c) => c.session_id)).toEqual(["task"]);
+    expect(recent.map((c) => c.session_id)).toEqual(["wechat", "mine", "old"]);
+  });
 });

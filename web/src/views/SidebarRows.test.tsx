@@ -63,6 +63,9 @@ describe("an agent's row with 「Agent 行显示详情」 (#2430)", () => {
     setContextAsUsed(true);
     expect(render(detailed)).toContain("39%");
     expect(render({ ...detailed, context_tokens: 170000 })).toContain("text-orange");
+    const danger = render({ ...detailed, context_tokens: 185000 });
+    expect(danger).toContain("text-red");
+    expect(danger).not.toContain("text-orange");
   });
   it("draws no second line for a session that says nothing, or for a conversation of the assistant", () => {
     setAgentDetails(true);

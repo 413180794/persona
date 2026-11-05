@@ -1,8 +1,8 @@
 {
-  "hub_upgrade": "Update the hub to use pinned messages. Open Hub in Settings and check for updates.",
+  "hub_upgrade": "Update the hub to use pinned messages: open Hub in Settings and check for updates.",
   "account_changed": "The Lark account changed. Reopen the chat.",
   "result_unknown": "Couldn't confirm the result. Reload the pin list to check; it won't retry on its own.",
-  "page_incomplete": "The pin list is incomplete right now. Reload it.",
+  "page_incomplete": "The pin list didn't fully load. Reload it.",
   "message_unavailable": "Original message is no longer available",
   "message_recalled": "Message recalled",
   "fallback_image": "[Image]",

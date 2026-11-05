@@ -3,5 +3,14 @@
   "earlier": "更早",
   "today": "今天",
   "yesterday": "昨天",
-  "last_7_days": "最近 7 天"
+  "last_7_days": "最近 7 天",
+  "origin_inbox": "收件箱",
+  "origin_task": "定时任务",
+  "origin_lark_agent": "飞书 /agent",
+  "origin_spawned": "对话派生",
+  "origin_extension": "扩展",
+  "origin_other": "其他",
+  "origin_all": "全部",
+  "origin_mine": "我的",
+  "origin_filter": "按来源筛选"
 }

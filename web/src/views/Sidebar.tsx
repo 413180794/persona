@@ -20,6 +20,7 @@ import { ago, baseName, sessionPreview, sourceSubtitle, sessionTitle, stateOf, t
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { NAV_PAGES, firstAndCurrent, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
 import { sidebarConversations, usePinnedConversations } from "../lib/conversation-pins";
+import { autoConversations, autoOrigin, isAutoConversation, originLabel, type AutoOrigin, type OriginTally } from "../lib/conversation-origins";
 import { ConversationRowMenu, pinnedSectionItems } from "./ConversationMenu";
 import { useExtensionSlot } from "../lib/extension-slots";
 import { toneOf } from "../lib/extension-ui";
@@ -285,7 +286,8 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [convMenu, setConvMenu] = useState<{ s: Session; anchor: HTMLElement; at?: MenuAt } | null>(null);
   const onConvMenu: RowMenuFn = (s, anchor, at) => setConvMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at }));
   const [chatsMenu, setChatsMenu] = useState<MenuAt | null>(null);
-  const [jarvisFolded, toggleJarvis] = useFolded("jarvis", false, { holds: activeKey === "history" || convs.some((c) => activeKey === `j:${c.session_id}`) });
+  const autoHolds = activeKey.startsWith("auto:") || isOpenAuto(assistant?.conversations, activeKey, convs);
+  const [jarvisFolded, toggleJarvis] = useFolded("jarvis", false, { holds: activeKey === "history" || autoHolds || convs.some((c) => activeKey === `j:${c.session_id}`) });
   // the pages fold under their own title (#2524); the drawer's grid of icons doesn't
   const [pagesFolded, togglePages] = useFolded("pages", false, { all: false });
   const { nav, reg, hover, highlight } = useGlide(activeKey);
@@ -324,6 +326,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
             {convs.map((c) => (
               <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={hover} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} showState={false} icon={pinnedIds.includes(c.session_id) ? "pin" : undefined} onMenu={onConvMenu} menuLabel={t("conversation-menu.actions")} />
             ))}
+            <AutoConversations conversations={assistant.conversations} main={assistant.main} shown={convs} activeKey={activeKey} holds={autoHolds} reg={reg} hover={hover} go={go} />
             <NavRow k="history" reg={reg} hover={hover} active={activeKey === "history"} to={{ name: "history" }} go={go} icon="list" label={t("sidebar.all_chats")} hint={assistant.conversations.length > convs.length ? String(assistant.conversations.length) : undefined} />
           </Section>
         )}
@@ -766,10 +769,80 @@ function AccountRow({ phase, online, total }: { phase: ConnPhase; online: number
 }
 
 // Every group in the sidebar is one of these: its title folds it, and the fold is kept in this browser (useFolded).
+const ORIGIN_ICON: Record<AutoOrigin, IconName> = { inbox: "inbox", task: "clock", lark_agent: "at", spawned: "fork", extension: "extension", other: "more" };
+
+/** The open conversation is an automatic one with no row of its own above (not pinned): its group's row stands for it. */
+function isOpenAuto(conversations: readonly Session[] | undefined, activeKey: string, shown: readonly Session[]): boolean {
+  if (!activeKey.startsWith("j:")) return false;
+  const c = conversations?.find((x) => `j:${x.session_id}` === activeKey);
+  return !!c && isAutoConversation(c) && !shown.includes(c);
+}
+
+/** A folded row's state: someone waiting for the user first (its count), else a dot while some run. */
+function TallyMark({ tally }: { tally: OriginTally }) {
+  if (tally.needsYou > 0) {
+    return (
+      <span title={t("sidebar.auto_needs_you", { count: tally.needsYou })} className={cx("flex h-4.5 min-w-4.5 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-1 text-[10.5px] font-semibold tabular-nums", BADGE_CLASS.red)}>
+        {tally.needsYou}
+      </span>
+    );
+  }
+  if (tally.working > 0) {
+    return (
+      <span title={t("sidebar.auto_working", { count: tally.working })} className="flex">
+        <StatusDot state="working" size={6} />
+      </span>
+    );
+  }
+  return null;
+}
+
+/** 自动对话 (#3264): the conversations the hub opened by itself, out of 最近, as one row folded by default (per browser);
+ *  open, a row per origin that has any, each opening 全部对话 filtered to it. Folded, the row still shows what runs and
+ *  what waits for the user. Nothing on a hub that doesn't tell origins. */
+function AutoConversations({ conversations, main, shown, activeKey, holds, reg, hover, go }: { conversations: readonly Session[]; main?: string; shown: readonly Session[]; activeKey: string; holds: boolean; reg: RegFn; hover: (k: string | null) => void; go: GoFn }) {
+  const { total, groups } = autoConversations(conversations, main);
+  const [folded, toggle] = useFolded("auto-chats", true, { holds });
+  if (total.count === 0) return null;
+  const open = activeKey.startsWith("j:") ? conversations.find((c) => `j:${c.session_id}` === activeKey && !shown.includes(c)) : undefined;
+  const openGroup = open ? autoOrigin(open) : undefined;
+  return (
+    <div>
+      <button
+        type="button"
+        ref={reg("auto-chats")}
+        aria-expanded={!folded}
+        aria-label={t("sidebar.auto_chats_label", { count: total.count })}
+        onClick={toggle}
+        onMouseEnter={() => hover("auto-chats")}
+        onFocus={() => hover("auto-chats")}
+        onBlur={() => hover(null)}
+        className="relative z-10 flex w-full items-center gap-2 whitespace-nowrap rounded-[7px] px-2 py-1.5 text-left transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11"
+      >
+        <span className="text-ink-3"><Icon name="bolt" size={14} stroke={1.8} /></span>
+        <span className="min-w-0 flex-1 truncate text-[13px] text-ink-2">{t("sidebar.auto_chats")}</span>
+        {folded && <TallyMark tally={total} />}
+        <span className="text-[11px] text-ink-3 tabular-nums">{total.count}</span>
+        <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+      </button>
+      <Collapse open={!folded}>
+        <div className="flex flex-col gap-px pl-3" inert={folded || undefined}>
+          {groups.map((g) => {
+            const k = `auto:${g.origin}`;
+            return (
+              <NavRow key={g.origin} k={k} reg={reg} hover={hover} active={activeKey === k || openGroup === g.origin} to={{ name: "history", origin: g.origin }} go={go} icon={ORIGIN_ICON[g.origin]} label={originLabel(g.origin)} hint={String(g.count)} badge={g.needsYou || undefined} badgeTone="red" dot={!g.needsYou && g.working > 0 ? "working" : undefined} />
+            );
+          })}
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
 function Section({ title, children, folded, onToggle, right, onMenu, first, hint }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement) => void; first?: boolean; hint?: string }) {
   return (
     <div className={first ? "mt-1" : "mt-3"}>
-      <div className="group/sec flex items-center gap-1 px-2 pb-1" {...(onMenu ? contextMenuProps(onMenu) : {})}>
+      <div className="group/sec relative flex items-center gap-1 px-2 pb-1" {...(onMenu ? contextMenuProps(onMenu) : {})}>
         <button type="button" aria-expanded={!folded} onClick={onToggle} title={hint} className="touch-hit relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase hover:text-ink-2">
           <span className="min-w-0 truncate">{title}</span>
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
@@ -1019,11 +1092,13 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
         </span>
       }
       right={
-        <span className="flex items-center gap-1">
-          <SpaceTodoTag sp={sp} onNavigate={onNavigate} />
-          <SessionTally sessions={sp.sessions} folded={folded} />
+        <>
+          <span className={cx("flex items-center gap-1", MENU_STEP_ASIDE, MENU_TOUCH_ROOM)}>
+            <SpaceTodoTag sp={sp} onNavigate={onNavigate} />
+            <span className={MENU_HIDES}><SessionTally sessions={sp.sessions} folded={folded} /></span>
+          </span>
           <SpaceMenuButton sp={sp} onMenu={onMenu} />
-        </span>
+        </>
       }
     >
       {sp.sessions.map((s) => (
@@ -1067,19 +1142,31 @@ function SpaceTodoTag({ sp, onNavigate }: { sp: Space; onNavigate?: () => void }
   );
 }
 
+// A header row's ⋯ lies over the row's right end (absolute, so it reserves no width and every row's count keeps the
+// same right edge, the machine row's, which has none). With a pointer it shows on hover or keyboard focus and the count
+// under it steps aside (MENU_HIDES) with whatever sits beside the count (MENU_STEP_ASIDE); on a touch screen it is
+// always there and the row keeps room for it (MENU_TOUCH_ROOM here, the 44px the tree's headers reserve).
+// (Written out in full: Tailwind finds class names by scanning the source for them.)
+const MENU_HIDES = "group-hover/sec:invisible group-has-[[data-row-menu]:focus-visible]/sec:invisible";
+const MENU_STEP_ASIDE = "group-hover/sec:-translate-x-5 group-has-[[data-row-menu]:focus-visible]/sec:-translate-x-5";
+const MENU_TOUCH_ROOM = "[@media(hover:none)]:mr-9";
+
 // A space's ⋯ (rename, pin, mute, mark seen, link a todo): on hover with a pointer, always on a touch screen.
 function SpaceMenuButton({ sp, onMenu }: { sp: Space; onMenu: (sp: Space, anchor: HTMLElement) => void }) {
   return (
-    <button
-      type="button"
-      aria-label={t("sidebar.space_actions_named", { name: sp.name })}
-      aria-haspopup="menu"
-      title={t("sidebar.space_actions")}
-      onClick={(e) => onMenu(sp, e.currentTarget)}
-      className="touch-hit relative z-10 -my-1 flex size-5 items-center justify-center rounded-[5px] text-ink-3 opacity-0 transition-opacity duration-150 group-hover/sec:opacity-100 hover:bg-hover-2 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:size-8 [@media(hover:none)]:opacity-100"
-    >
-      <Icon name="more" size={12} />
-    </button>
+    <span className="absolute top-1/2 right-2 z-10 -translate-y-1/2">
+      <button
+        type="button"
+        data-row-menu
+        aria-label={t("sidebar.space_actions_named", { name: sp.name })}
+        aria-haspopup="menu"
+        title={t("sidebar.space_actions")}
+        onClick={(e) => onMenu(sp, e.currentTarget)}
+        className="touch-hit relative flex size-5 items-center justify-center rounded-[5px] text-ink-3 opacity-0 transition-opacity duration-150 group-hover/sec:opacity-100 hover:bg-hover-2 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:size-8 [@media(hover:none)]:opacity-100"
+      >
+        <Icon name="more" size={12} />
+      </button>
+    </span>
   );
 }
 
@@ -1094,7 +1181,7 @@ function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpa
   const name = machineWithHub(m.machine.id, p.machines);
   return (
     <div className="mt-3">
-      <div className="group/sec flex items-center gap-1 px-2 pb-0.5" {...contextMenuProps((at) => p.onNodeMenu(machineNode(m.machine, { fold: { folded, toggle } }), at, name))}>
+      <div className="group/sec flex items-center gap-1 px-2 pb-0.5 [@media(hover:none)]:pr-11" {...contextMenuProps((at) => p.onNodeMenu(machineNode(m.machine, { fold: { folded, toggle } }), at, name))}>
         <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left [@media(pointer:coarse)]:min-h-11">
           <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", online ? "bg-green" : "bg-line-strong")} />
           <span className={cx("min-w-0 truncate text-[12.5px] font-semibold", online ? "text-ink" : "text-ink-3")}>{machineWithHub(m.machine.id, p.machines)}</span>
@@ -1133,7 +1220,7 @@ function TreeBlock({ foldKey, sessions, activeKey, state, title, right, children
   const [folded, toggle] = useFolded(foldKey, sessions.every(isQuiet) && sessions.length > 3, { holds: holdsRow(sessions, activeKey) });
   return (
     <div>
-      <div className="group/sec flex items-center gap-1 pr-2 pl-2" {...(onMenu ? contextMenuProps((at, el) => onMenu(at, el, { folded, toggle })) : {})}>
+      <div className="group/sec relative flex items-center gap-1 pr-2 pl-2 [@media(hover:none)]:pr-11" {...(onMenu ? contextMenuProps((at, el) => onMenu(at, el, { folded, toggle })) : {})}>
         <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left text-[12px] text-ink-2 hover:text-ink [@media(pointer:coarse)]:min-h-11">
           <Icon name="chevron" size={9} stroke={2.4} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
           {state ? <StatusDot state={state} size={6} /> : <span className="size-1.5 shrink-0" />}
@@ -1159,15 +1246,19 @@ function WorkspaceBlock({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
       onMenu={(at, el, fold) => p.onSpaceMenu(sp, el, at, fold)}
       title={<><span className="min-w-0 truncate font-medium">{sp.name}</span><SpaceMarks pinned={sp.pinned} muted={isSpaceMuted(sp, p.mutes)} /></>}
       right={(folded) => (
-        <span className="flex shrink-0 items-center gap-1">
-          <SpaceTodoTag sp={sp} onNavigate={p.onNavigate} />
-          {sp.children.length > 0 && <ChildSummary counts={sp.childStates} />}
-          {folded ? <SessionTally sessions={sp.tree} folded /> : tabs > 0 && !sp.children.length && (
-            // agents, as the machine and the quick filter count them: a tab with several agents is one row (#2320)
-            <span title={t("sidebar.space_tally", { count: sp.sessions.length, tabs })} className="text-[10.5px] text-ink-3 tabular-nums">{sp.sessions.length}<span className="sr-only"> {t("sidebar.agent_suffix", { count: sp.sessions.length })}</span></span>
-          )}
+        <>
+          <span className={cx("flex shrink-0 items-center gap-1", MENU_STEP_ASIDE)}>
+            <SpaceTodoTag sp={sp} onNavigate={p.onNavigate} />
+            {sp.children.length > 0 && <ChildSummary counts={sp.childStates} />}
+            <span className={MENU_HIDES}>
+              {folded ? <SessionTally sessions={sp.tree} folded /> : tabs > 0 && !sp.children.length && (
+                // agents, as the machine and the quick filter count them: a tab with several agents is one row (#2320)
+                <span title={t("sidebar.space_tally", { count: sp.sessions.length, tabs })} className="text-[10.5px] text-ink-3 tabular-nums">{sp.sessions.length}<span className="sr-only"> {t("sidebar.agent_suffix", { count: sp.sessions.length })}</span></span>
+              )}
+            </span>
+          </span>
           <SpaceMenuButton sp={sp} onMenu={p.onSpaceMenu} />
-        </span>
+        </>
       )}
     >
       {sp.tabs.map((t) => <TabRow key={t.key} t={t} {...p} />)}
@@ -1519,7 +1610,7 @@ function SectionAdd({ label, to, go, onClick }: { label: string; to?: Route; go?
 
 const BADGE_CLASS = { red: "bg-red-tint text-red", orange: "bg-orange-tint text-orange", green: "bg-green-tint text-green", accent: "bg-accent-tint text-accent-ink" } as const;
 
-function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint, title, onMenu, menuLabel }: { onMenu?: (at: MenuAt, el: HTMLElement, button: boolean) => void; menuLabel?: string; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string }) {
+function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint, title, onMenu, menuLabel, dot }: { onMenu?: (at: MenuAt, el: HTMLElement, button: boolean) => void; menuLabel?: string; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string; /** A state shown as a dot before the hint (自动对话's rows: some run). */ dot?: AgentState }) {
   const row = useRef<HTMLAnchorElement | null>(null);
   const link = (
     <a
@@ -1541,6 +1632,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
         <Icon name={icon} size={14} stroke={1.8} />
       </span>
       <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : "text-ink-2")}>{label}</span>
+      {dot && <StatusDot state={dot} size={6} />}
       {hint && <span className="text-[11px] text-ink-3 tabular-nums">{hint}</span>}
       {badge !== undefined && (
         <span className={cx("flex h-4.5 min-w-4.5 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-1 text-[10.5px] font-semibold tabular-nums", BADGE_CLASS[badgeTone ?? "accent"])} style={{ animation: `pop-in 250ms ${EASE} both` }} key={badge}>
@@ -1673,7 +1765,7 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
           )}
           {detail.length > 0 && <span className="flex h-4 min-w-0 flex-wrap gap-x-1 overflow-hidden whitespace-nowrap text-[11px] leading-4 text-ink-3">
             {detail.map((d, i) => (
-              <span key={i} title={d.title} className={cx("flex shrink-0 items-center gap-1 tabular-nums", d.warn && "font-medium text-orange")}>
+              <span key={i} title={d.title} className={cx("flex shrink-0 items-center gap-1 tabular-nums", d.danger ? "font-medium text-red" : d.warn && "font-medium text-orange")}>
                 {i > 0 && <span aria-hidden="true">·</span>}
                 {d.text}
               </span>

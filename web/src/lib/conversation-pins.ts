@@ -1,6 +1,7 @@
 // Pinned Persona conversations (the iOS sidebar's 置顶, `assistant.pinned`; Android's drawer): kept per browser, as the
 // app keeps them per device. The main conversation is always first and is never in the list. The newest pin comes first.
 import { useSyncExternalStore } from "react";
+import { isAutoConversation } from "./conversation-origins";
 import { firstAndCurrent } from "./persona-nav";
 import { toggled } from "./pins";
 import type { Session } from "./types";
@@ -67,11 +68,12 @@ export function usePinnedConversations(): string[] {
 }
 
 /** The sidebar's「Persona 对话」apart from the main one: the pinned ones in pin order (all of them), then the newest
- *  `limit` others, plus the open one when it is further down (#2283). An id pinned for a conversation that is gone is skipped. */
+ *  `limit` others, plus the open one when it is further down (#2283). An id pinned for a conversation that is gone is skipped.
+ *  最近 has the user's own only: the ones the hub opened by itself are under 自动对话 (#3264), unless pinned. */
 export function sidebarConversations(conversations: readonly Session[], main: string | undefined, pins: readonly string[], limit = 5, current?: string): { pinned: Session[]; recent: Session[] } {
   const others = conversations.filter((c) => c.session_id !== main);
   const order = new Map(pins.map((id, i) => [id, i]));
   const pinned = others.filter((c) => order.has(c.session_id)).sort((a, b) => order.get(a.session_id)! - order.get(b.session_id)!);
-  const rest = others.filter((c) => !order.has(c.session_id)).sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
+  const rest = others.filter((c) => !order.has(c.session_id) && !isAutoConversation(c)).sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
   return { pinned, recent: firstAndCurrent(rest, limit, (c) => c.session_id === current) };
 }

@@ -129,5 +129,9 @@
   "folded_needs_you_one": "{count} needs you",
   "folded_needs_you_other": "{count} need you",
   "inbox_badge_title_one": "Inbox: counts messages only, {count} needs you; agents waiting on you are under Overview",
-  "inbox_badge_title_other": "Inbox: counts messages only, {count} need you; agents waiting on you are under Overview"
+  "inbox_badge_title_other": "Inbox: counts messages only, {count} need you; agents waiting on you are under Overview",
+  "auto_chats": "Automatic",
+  "auto_chats_label": "{count} automatic chats",
+  "auto_working": "{count} running",
+  "auto_needs_you": "{count} need you"
 }

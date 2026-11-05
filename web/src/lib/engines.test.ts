@@ -69,8 +69,8 @@ describe("engine choice (iOS EngineSelectionModel)", () => {
     expect(detectionText("herdr", on)).toBe("检测到可用 · 0.9.5");
     expect(detectionText("herdr-core", on)).toBe("检测到可用");
     expect(detectionText("orca", on)).toBe("没检测到");
-    expect(detectionText("paseo", on)).toBe("暂无检测信息");
-    expect(detectionText("herdr", machine({ engines }))).toBe("离线，暂无检测信息");
+    expect(detectionText("paseo", on)).toBe("还没有检测结果");
+    expect(detectionText("herdr", machine({ engines }))).toBe("电脑离线，没有检测结果");
   });
 
   it("offers 保存 only for a change the hub can take", () => {

@@ -67,6 +67,27 @@ class AssistantTest {
         assertNull(handoffTitle("早报 <persona-context", words))
     }
 
+    // #3264: the hub's own conversations leave 最近 for 自动对话 (a search still finds them), pinned ones stay pinned.
+    @Test fun automaticConversationsFoldAwayFromRecent() {
+        val mine = Session(machineId = "demo", sessionId = "mine", title = "周报", origin = "user")
+        val old = Session(machineId = "demo", sessionId = "old", title = "旧的")
+        val wechat = Session(machineId = "demo", sessionId = "wechat", title = "微信里开的", origin = "channel")
+        val inbox = Session(machineId = "demo", sessionId = "inbox", title = "1106 | 收件箱 | 周报", origin = "inbox", state = "needs_you")
+        val task = Session(machineId = "demo", sessionId = "task", title = "1106 | 定时 | 早报", origin = "task", state = "working")
+        val future = Session(machineId = "demo", sessionId = "future", title = "新来源", origin = "something_new")
+        val pinnedTask = Session(machineId = "demo", sessionId = "pinned", title = "1105 | 定时 | 晚报", origin = "task")
+        val all = listOf(mine, old, wechat, inbox, task, future, pinnedTask)
+        val result = conversationGroups(AssistantSnapshot(null, all), "", setOf(pinnedTask.key), words)
+        assertEquals(setOf(mine, old, wechat), result.recent.toSet())
+        assertEquals(setOf(inbox, task, future), result.auto.toSet())
+        assertEquals(listOf(pinnedTask), result.pinned)
+        assertEquals(listOf(AutoOrigin.Inbox, AutoOrigin.Task, AutoOrigin.Other), autoGroups(result.auto).map { it.origin })
+        assertEquals(OriginTally(null, 3, 1, 1), tally(null, result.auto))
+        val searched = conversationGroups(AssistantSnapshot(null, all), "周报", emptySet(), words)
+        assertEquals(setOf(mine, inbox), searched.recent.toSet())
+        assertTrue(searched.auto.isEmpty())
+    }
+
     @Test fun archivedConversationsLeaveTheHistory() {
         val kept = Session(machineId = "demo", sessionId = "kept", title = "留着")
         val archived = Session(machineId = "demo", sessionId = "gone", title = "归档了", archived = true)

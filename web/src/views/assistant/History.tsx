@@ -14,11 +14,14 @@ import { Button, Collapse, copyText, cx, Dialog, IconButton, Loading, Menu, Stat
 import { Icon } from "../../ui/icons";
 import { arrange, conversationTitle, filterConversations, mergeConversations, splitTitle, type Conversation } from "./conversations";
 import { Empty, inputClass, SectionTitle } from "./parts";
+import { Chip } from "../inbox/InboxParts";
+import { autoConversations, matchesOrigin, originLabel, parseOriginFilter, type OriginFilter } from "../../lib/conversation-origins";
 import { t } from "../../i18n";
 
 const NONE: Session[] = [];
 
-export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+export function History({ origin, onToggleSidebar }: { origin?: string; onToggleSidebar: () => void }) {
+  const filter = parseOriginFilter(origin);
   const assistant = useStore((s) => s.assistant);
   const mid = assistant?.machine_id;
   const live = useStore((s) => (mid ? s.sessions[mid] ?? NONE : NONE));
@@ -48,7 +51,9 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     () => mergeConversations(fetched ?? [], assistant?.conversations ?? [], live.filter((s) => s.assistant)).map((s) => (titles[s.session_id] ? { ...s, title: titles[s.session_id] } : s)),
     [fetched, assistant?.conversations, live, titles],
   );
-  const hits = useMemo(() => filterConversations(all, query), [all, query]);
+  const hits = useMemo(() => filterConversations(all.filter((s) => matchesOrigin(s, filter)), query), [all, query, filter]);
+  // the sources there are (#3264): 全部 · 我的 · one per kind of automatic conversation, when there are any
+  const sources = useMemo(() => autoConversations(all, assistant?.main).groups, [all, assistant?.main]);
   const { main, days, archived } = useMemo(() => arrange(hits, assistant?.main, new Date(nowMs)), [hits, assistant?.main, nowMs]);
   const total = all.filter((s) => !s.archived).length;
   const searching = query.trim() !== "";
@@ -97,6 +102,17 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             />
             {query && <IconButton icon="x" label={t("assistant-history.clear_search")} size={22} iconSize={12} onClick={() => setQuery("")} />}
           </label>
+
+          {(sources.length > 0 || filter !== "all") && (
+            <div role="group" aria-label={t("assistant-conversations.origin_filter")} className="-mt-2 mb-5 flex flex-wrap gap-1.5">
+              {(["all", "mine", ...sources.map((g) => g.origin)] as OriginFilter[]).map((f) => (
+                <Chip key={f} on={filter === f} onClick={() => navigate({ name: "history", origin: f === "all" ? undefined : f }, true)}>
+                  {f === "all" ? t("assistant-conversations.origin_all") : f === "mine" ? t("assistant-conversations.origin_mine") : originLabel(f)}
+                  {f !== "all" && f !== "mine" && <span className="ml-1 tabular-nums opacity-60">{sources.find((g) => g.origin === f)?.count}</span>}
+                </Chip>
+              ))}
+            </div>
+          )}
 
           {loading && (
             <div className="flex justify-center py-16">

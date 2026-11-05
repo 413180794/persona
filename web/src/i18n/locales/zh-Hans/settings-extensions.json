@@ -52,7 +52,7 @@
   "pack_title": "合集成员",
   "pack_footer": "卸载合集时可以只卸载合集，也可以选择一起卸载成员。",
   "contributions_title": "贡献开关",
-  "contributions_footer": "只关这一项，其余能力和设置不变；跟着连接器的项目请在连接器设置里改，跟着扩展设置的在上面的设置里改。",
+  "contributions_footer": "只关掉这一项，别的能力和设置不变。跟着连接器走的项，到连接器设置里改；跟着扩展设置走的项，在上面的设置里改。",
   "via_connector": " · 跟着连接器",
   "via_config": " · 跟着扩展设置",
   "provides_title": "提供",
@@ -93,6 +93,6 @@
   "secret_placeholder": "输入",
   "secret_hint": "存在 hub 上，只交给这个扩展。",
   "sandbox_title": "运行隔离",
-  "sandbox_footer": "沙箱只隔离 hub 运行的已安装扩展；是否生效以上面实际状态为准。只能在 hub 所在的机器或管理界面修改。",
+  "sandbox_footer": "沙箱只隔离 hub 上运行的已装扩展；到底开没开，看上面显示的状态。只能在 hub 所在的机器上或管理界面里改。",
   "sandbox_last_denied": "最近拒绝：{target}"
 }

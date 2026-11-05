@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { firstAndCurrent, NAV_PAGES, otherConversations, extensionNavKey, sidebarActiveKey } from "./persona-nav";
-import { href, parse } from "./router";
+import { href, parse, routePath } from "./router";
 import type { Session } from "./types";
 
 const conv = (id: string, updated: string) => ({ machine_id: "hub", session_id: id, updated_at: updated }) as Session;
@@ -30,6 +30,8 @@ describe("Persona is the front door (#1239)", () => {
   it("keeps the other old links", () => {
     expect(parse("/s/mac/abc")).toEqual({ name: "session", mid: "mac", sid: "abc" });
     expect(parse("/history")).toEqual({ name: "history" });
+    expect(parse("/history/inbox")).toEqual({ name: "history", origin: "inbox" });
+    expect(routePath({ name: "history", origin: "task" })).toBe("/history/task");
     expect(parse("/inbox/x")).toEqual({ name: "inbox", id: "x" });
     expect(parse("/machines/mac")).toEqual({ name: "machine", mid: "mac" });
   });
@@ -40,6 +42,8 @@ describe("Persona is the front door (#1239)", () => {
     expect(sidebarActiveKey({ name: "jarvis", sid: "other" }, "main")).toBe("j:other");
     expect(sidebarActiveKey({ name: "jarvis" }, undefined)).toBe("persona");
     expect(sidebarActiveKey({ name: "persona-new" }, "main")).toBe("j:new");
+    expect(sidebarActiveKey({ name: "history" }, "main")).toBe("history");
+    expect(sidebarActiveKey({ name: "history", origin: "inbox" }, "main")).toBe("auto:inbox");
     expect(sidebarActiveKey({ name: "home" }, "main")).toBe("home");
     expect(sidebarActiveKey({ name: "machine", mid: "mac" }, "main")).toBe("machines");
     expect(sidebarActiveKey({ name: "session", mid: "mac", sid: "s" }, "main")).toBe("s:mac/s");

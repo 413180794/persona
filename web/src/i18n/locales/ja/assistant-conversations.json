@@ -3,5 +3,14 @@
   "earlier": "それ以前",
   "today": "今日",
   "yesterday": "昨日",
-  "last_7_days": "過去7日間"
+  "last_7_days": "過去7日間",
+  "origin_inbox": "受信箱",
+  "origin_task": "定期タスク",
+  "origin_lark_agent": "Feishu /agent",
+  "origin_spawned": "チャットから",
+  "origin_extension": "拡張機能",
+  "origin_other": "その他",
+  "origin_all": "すべて",
+  "origin_mine": "自分の",
+  "origin_filter": "ソースで絞り込む"
 }

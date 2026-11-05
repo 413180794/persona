@@ -8,7 +8,7 @@
   "link_copied": "已复制链接",
   "copy_failed": "没复制上",
   "waiting_confirm": "等你在{app}里确认…",
-  "unsupported": "这一步当前页面画不了。刷新页面用上最新的网页版后点「重新开始」再试。",
-  "unsupported_elsewhere": "这一步当前页面画不了。刷新页面用上最新的网页版后点「重新开始」再试；{elsewhere}",
+  "unsupported": "这个页面显示不了这一步。刷新页面换成最新的网页版，再点「重新开始」。",
+  "unsupported_elsewhere": "这个页面显示不了这一步。刷新页面换成最新的网页版，再点「重新开始」；{elsewhere}",
   "restart": "重新开始"
 }

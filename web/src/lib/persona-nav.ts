@@ -14,6 +14,8 @@ export function sidebarActiveKey(route: Route, main?: string): string {
       return "j:new";
     case "health":
       return "health";
+    case "history":
+      return route.origin ? `auto:${route.origin}` : "history";
     case "machine":
       return "machines";
     case "agents":

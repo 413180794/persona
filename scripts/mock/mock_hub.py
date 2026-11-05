@@ -551,6 +551,10 @@ _CONTEXT = {
     ORDERS: ("gpt-5.5", 392_000, 475_000),                   # Codex records its own window: 83% used
     REVIEW: ("claude-opus-5-5", 0, 0),                       # nothing to say yet
 }
+# MOCK_CONTEXT_DANGER=1 (#3475): the tests session at 92% used, the danger colour (the warning one starts at 80%); with
+# MOCK_SPLIT_TABS=1 see below.
+if os.environ.get("MOCK_CONTEXT_DANGER"):
+    _CONTEXT[TESTS] = ("claude-sonnet-5-5", 184_000, 200_000)
 for _s in SESSIONS:
     if _s["session_id"] in _CONTEXT:
         _model, _tokens, _window = _CONTEXT[_s["session_id"]]
@@ -876,6 +880,13 @@ def split_tabs_items():
 if os.environ.get("MOCK_SPLIT_TABS"):
     MACHINES[:] = [m for m in MACHINES if m["id"] in ("server", "nas")]
     SESSIONS[:] = split_tabs_sessions()
+    # MOCK_CONTEXT_DANGER=1 (#3475) on these sessions: the Claude at 92% used (the danger colour, from 90%), the Codex at 86%
+    # (the warning colour, from 80%), the dependency one at 39%.
+    if os.environ.get("MOCK_CONTEXT_DANGER"):
+        for _s in SESSIONS:
+            _used = {SPLIT_CLAUDE: 184_000, SPLIT_CODEX: 172_000, SPLIT_SINGLE: 78_000}.get(_s["session_id"])
+            if _used:
+                _s.update(model="claude-opus-5-5", context_tokens=_used, context_window=200_000)
 
 # MOCK_TAB_PANES=1: one herdr tab holding three agents (#2320): the 发起者 in the tab's first pane (pane_index 0) and two
 # panes it split off (a Codex that stopped on a dialog on the computer, a Claude that is done), with herdr's real-looking
@@ -986,6 +997,27 @@ ASSISTANT = [
     assistant_sess(ASK3, "帮我约周五和韩梅梅吃饭", 60 * 28, "已经在日历里加好了。"),
     assistant_sess(ASK4, "整理这个季度的读书笔记", 60 * 50, "第 30 本整理好了。"),
 ]
+
+# MOCK_ORIGINS=1 (#3264, docs/protocol.md「助手对话的来源」): conversations the hub opened by itself — the inbox's AI 分身,
+# scheduled tasks, a Feishu /agent, one another conversation started — next to the user's own; one of them runs, one
+# waits for the user. The sidebar keeps them out of 最近 under 自动对话.
+if os.environ.get("MOCK_ORIGINS") == "1":
+    ASSISTANT[1]["origin"], ASSISTANT[1]["origin_ref"] = "task", "morning"
+    ASSISTANT[1]["title"] = "1106 | 定时 | 早报"
+    for i, (origin, ref, title, minutes, last, state) in enumerate([
+        ("inbox", "lark:f1:11", "1106 | 收件箱 | 张三问 1013 合了吗", 8, "草稿：已经合入主干，今晚的构建会带上。", "idle"),
+        ("inbox", "mail:2", "1106 | 收件箱 | 李四的周报", 25, "草稿：收到，周五前给你反馈。", "working"),
+        ("inbox", "mail:3", "1106 | 收件箱 | 报销单要补发票", 90, "需要你确认：发票抬头用哪个？", "needs_you"),
+        ("inbox", "lark:f4:2", "1105 | 收件箱 | 设计评审的时间", 60 * 20, "草稿：周四下午三点可以。", "idle"),
+        ("task", "evening", "1105 | 定时 | 晚间复盘", 60 * 16, "今天完成了 4 件事……", "working"),
+        ("lark_agent", "lark-connector", "1105 | 研究 | 群里的发布计划", 60 * 30, "整理好了，三个风险点……", "idle"),
+        ("spawned", ASK1, "1105 | 研究 | 竞品定价", 60 * 40, "三家的定价对比如下……", "idle"),
+    ]):
+        c = assistant_sess(f"auto{i:04d}-0000-4000-8000-{i:012d}", title, minutes, last)
+        c.update({"origin": origin, "origin_ref": ref, "state": state, "status": "working" if state == "working" else "idle"})
+        ASSISTANT.append(c)
+    for c in ASSISTANT[:4]:
+        c.setdefault("origin", "user")
 
 # The health space (docs/health.md): its conversations run in a directory of their own and carry space "health"; they
 # are listed by GET /api/v1/assistant?space=health only, and its memory is its own (?space=health).

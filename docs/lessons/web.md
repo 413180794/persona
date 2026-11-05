@@ -266,3 +266,9 @@
 
 - `styles.css` 里 `prefers-reduced-motion` 的全局规则只把 CSS 动画、过渡压到 1 ms，管不到 JS 里显式传的 `scrollTo({ behavior: "smooth" })` / `scrollIntoView({ behavior: "smooth" })`，照样动画滚过去。
   脚本滚动一律传 `scrollBehavior()`（`src/ui/stream/motion.ts`，复用 `prefersReducedMotion`），别再各写一遍 `matchMedia` 字符串。
+
+## 减弱动态与忙碌指示（2026-11-05，#3475）
+
+- **全局「动画压到 1ms × 1 次」会把转圈和呼吸圆点一起冻住**，用户看不出还在忙。忙碌指示（转圈、工作中 / 连接中的圆点、加载的流光和像素格、骨架脉动）带 `busy-motion` 类，样式里用类选择器压过 `*` 的 `!important`（两边都是 `!important`，看选择器优先级），放慢到 2.4 秒循环；`breathe` 在减弱动态下重定义成只有透明度。`phaseTone().color` 带着这个类，所以不改 `Sidebar.tsx` 的两处圆点也生效。
+- **Tailwind 靠扫源码找类名**：`group-hover/sec:invisible` 这类变体要整串写在源码里，不能用 `replaceAll` 拼，拼出来的不会进 CSS。
+- **一排计数要对齐，就别给右边的按钮留宽度**：机器行没有 ⋯，工作区行有，留了宽度的那行计数就左移 24px。⋯ 改成绝对定位叠在行尾，悬停 / 键盘焦点时计数 `invisible`；触屏的 ⋯ 一直在，整个树的标题行一起留出 44px（和会话行一样），右缘照样对齐。

@@ -3,5 +3,14 @@
   "earlier": "Earlier",
   "today": "Today",
   "yesterday": "Yesterday",
-  "last_7_days": "Previous 7 days"
+  "last_7_days": "Previous 7 days",
+  "origin_inbox": "Inbox",
+  "origin_task": "Scheduled",
+  "origin_lark_agent": "Feishu /agent",
+  "origin_spawned": "From a chat",
+  "origin_extension": "Extensions",
+  "origin_other": "Other",
+  "origin_all": "All",
+  "origin_mine": "Mine",
+  "origin_filter": "Filter by source"
 }

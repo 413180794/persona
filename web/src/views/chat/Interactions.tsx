@@ -2,6 +2,7 @@
 import { useEffect, useId, useState } from "react";
 import { ApiError, enc, errorText } from "../../lib/api";
 import { apiOp } from "../../lib/ops";
+import { BUSY_MOTION } from "../../lib/busy-motion";
 import type { Interaction } from "../../lib/types";
 import { defaults, elicitationDraft, elicitationResolution, elicitationSource, fields, numberInputMode, saveElicitationDraft, urlHost, urlTarget, validate, type ElicitationAction, type Field, type Values } from "../../lib/elicitation";
 import { answerLines, endedText, type Resolution, type ResolveResult } from "../../lib/answered";
@@ -45,7 +46,7 @@ function Card({ title, kicker, onDismiss, children, footer }: { title: string; k
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-medium text-red">
-              <span className="size-1.5 rounded-full bg-red" style={{ animation: "breathe 1.8s ease-in-out infinite" }} />
+              <span className={`size-1.5 rounded-full bg-red ${BUSY_MOTION}`} style={{ animation: "breathe 1.8s ease-in-out infinite" }} />
               {kicker}
             </div>
             <div className="text-[13.5px] font-medium text-ink">{title}</div>
@@ -362,7 +363,7 @@ function ScreenCard({ ix }: { ix: Interaction }) {
                   <span className="block text-[13px] text-ink">{o.label}</span>
                   {o.detail && <span className="block text-[12px] text-ink-3">{o.detail}</span>}
                 </span>
-                {busy === o.key && <span className="ml-auto mt-1 size-3 shrink-0 rounded-full border-[1.5px] border-line-strong border-t-ink-2" style={{ animation: "spin 700ms linear infinite" }} />}
+                {busy === o.key && <span className={`ml-auto mt-1 size-3 shrink-0 rounded-full border-[1.5px] border-line-strong border-t-ink-2 ${BUSY_MOTION}`} style={{ animation: "spin 700ms linear infinite" }} />}
               </button>
             ),
           )}

@@ -51,7 +51,7 @@
   "bundle_no_permissions": "不运行程序、不要权限。",
   "unresolved": "还不能安装：{items}。补齐后重新预览。",
   "preview_expired": "这份预览过期了，关掉再点一次安装。",
-  "preview_valid_other": "这份预览 {count} 分钟内有效；装的就是你看到的这一份（按权限摘要核对）。",
+  "preview_valid_other": "这份预览 {count} 分钟内有效。装的时候会核对，权限和你看到的一模一样才装。",
   "not_done": "没有完成：{error}",
   "uninstalled": "已卸载「{name}」",
   "uninstall_title": "卸载「{name}」",

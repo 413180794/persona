@@ -147,6 +147,7 @@ fun AssistantScreen(
     var menu by remember { mutableStateOf(false) }
     var info by rememberSaveable { mutableStateOf<AssistantInfo?>(null) }
     var showAllRecent by rememberSaveable { mutableStateOf(false) }
+    var autoOpen by rememberAutoOpen() // 自动对话, folded until opened (kept on this phone)
     var pinning by remember { mutableStateOf(false) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val resources = androidx.compose.ui.platform.LocalResources.current
@@ -450,6 +451,7 @@ fun AssistantScreen(
             onArchive = if (management != null && !demo) ::archive else null,
             showAllRecent = showAllRecent,
             onShowAllRecent = { showAllRecent = true },
+            autoOpen = autoOpen, onAutoOpen = { autoOpen = it },
             onTodos = onTodos?.let { action -> { scope.launch { drawerOpen = false }; action() } },
             todoCount = todoCount,
             showTodos = showTodos,
@@ -733,8 +735,11 @@ internal fun AssistantDrawer(
     onPin: ((Session) -> Unit)? = null, onUnpinAll: (() -> Unit)? = null, onCopy: (Session) -> Unit = {},
     onArchive: ((Session) -> Unit)? = null,
     showAllRecent: Boolean = false, onShowAllRecent: () -> Unit = {},
+    autoOpen: Boolean = false, onAutoOpen: (Boolean) -> Unit = {},
     onTodos: (() -> Unit)? = null, todoCount: Int = 0, showTodos: Boolean = true,
 ) {
+    // The origin 自动对话 lists when open (the first one there is, until another is picked).
+    var autoPicked by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxHeight().padding(horizontal = 12.dp)) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
             item {
@@ -791,7 +796,32 @@ internal fun AssistantDrawer(
                     DrawerItem(pluralStringResource(R.plurals.assistant_show_all_recent, groups.recent.size, groups.recent.size), PhIcons.ChatsCircle, onShowAllRecent)
                 }
             }
-            if (groups.main == null && groups.pinned.isEmpty() && groups.recent.isEmpty()) {
+            // 自动对话 (#3264): what the hub opened by itself, one row folded by default; open, a chip per origin and that
+            // origin's conversations. Folded, the row still shows what waits for the user and what runs.
+            if (groups.auto.isNotEmpty()) {
+                val origins = autoGroups(groups.auto)
+                val picked = origins.firstOrNull { it.origin?.wire == autoPicked } ?: origins.first()
+                val shown = groups.auto.filter { it.autoOrigin() == picked.origin }
+                val autoCount = if (autoOpen) 2 + shown.size else 1
+                item(key = "auto-header") {
+                    JGroupItem(GroupPosition.of(0, autoCount), Modifier.padding(top = Tokens.Space.m)) {
+                        AutoConversationsRow(tally(null, groups.auto), autoOpen) { onAutoOpen(!autoOpen) }
+                    }
+                }
+                if (autoOpen) {
+                    item(key = "auto-origins") {
+                        JGroupItem(GroupPosition.of(1, autoCount)) { AutoOriginChips(origins, picked.origin) { autoPicked = it.wire } }
+                    }
+                    itemsIndexed(shown, key = { _, session -> "auto/" + session.key.path }) { index, session ->
+                        ConversationRow(session, main = false, selected = session.key == active,
+                            position = GroupPosition.of(index + 2, autoCount),
+                            onOpen = { onOpen(session.key) }, onEnd = onEnd?.let { action -> { action(session) } },
+                            pinned = false, onPin = onPin?.let { pin -> { pin(session) } }, onCopy = { onCopy(session) },
+                            onArchive = onArchive?.let { action -> { action(session) } })
+                    }
+                }
+            }
+            if (groups.main == null && groups.pinned.isEmpty() && groups.recent.isEmpty() && groups.auto.isEmpty()) {
                 item { JEmptyState(stringResource(if (query.isBlank()) R.string.assistant_empty_title else R.string.assistant_no_match),
                     stringResource(if (query.isBlank()) R.string.assistant_empty_detail else R.string.assistant_no_match_detail)) }
             }
@@ -869,6 +899,63 @@ internal fun conversationActions(
         onArchive?.let { add(JAction(resources.getString(R.string.assistant_archive), PhIcons.Archive, onClick = it)) }
         if (onEnd != null && live) add(JAction(resources.getString(R.string.assistant_end), PhIcons.Stop, destructive = true, separatorBefore = true, onClick = onEnd))
     }
+
+private val AutoOrigin.icon: PhIcon get() = when (this) {
+    AutoOrigin.Inbox -> PhIcons.Tray
+    AutoOrigin.Task -> PhIcons.Clock
+    AutoOrigin.LarkAgent -> PhIcons.At
+    AutoOrigin.Spawned -> PhIcons.GitBranch
+    AutoOrigin.Extension -> PhIcons.PuzzlePiece
+    AutoOrigin.Other -> PhIcons.DotsThree
+}
+
+@Composable
+private fun AutoOrigin.label(): String = stringResource(when (this) {
+    AutoOrigin.Inbox -> R.string.assistant_origin_inbox
+    AutoOrigin.Task -> R.string.assistant_origin_task
+    AutoOrigin.LarkAgent -> R.string.assistant_origin_lark_agent
+    AutoOrigin.Spawned -> R.string.assistant_origin_spawned
+    AutoOrigin.Extension -> R.string.assistant_origin_extension
+    AutoOrigin.Other -> R.string.assistant_origin_other
+})
+
+/** The state a tally shows: someone waiting for the user first, else running, else none. */
+private fun OriginTally.status(): Status? = when {
+    needsYou > 0 -> Status.NeedsYou
+    working > 0 -> Status.Working
+    else -> null
+}
+
+/** 自动对话's row: its count, and while folded what waits for the user (their count) or a dot while some run. */
+@Composable
+private fun AutoConversationsRow(total: OriginTally, open: Boolean, onToggle: () -> Unit) {
+    val needs = pluralStringResource(R.plurals.assistant_auto_needs_you, total.needsYou, total.needsYou)
+    val running = pluralStringResource(R.plurals.assistant_auto_working, total.working, total.working)
+    JRow(stringResource(R.string.assistant_auto), leadingIcon = PhIcons.Lightning, onClick = onToggle, chevron = false,
+        subtitle = if (open) null else listOfNotNull(needs.takeIf { total.needsYou > 0 }, running.takeIf { total.working > 0 })
+            .joinToString(" · ").ifBlank { null },
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                if (!open && total.needsYou > 0) JBadge(total.needsYou)
+                else if (!open && total.working > 0) JStatusDot(Status.Working)
+                Text("${total.count}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 1)
+                JIcon(if (open) PhIcons.CaretDown else PhIcons.CaretRight, null, size = Tokens.Space.l, tint = PersonaTheme.palette.ink3)
+            }
+        })
+}
+
+/** The origins 自动对话 has, one chip each with its count and state; [onPick] lists that origin's conversations. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AutoOriginChips(origins: List<OriginTally>, picked: AutoOrigin?, onPick: (AutoOrigin) -> Unit) {
+    FlowRow(Modifier.fillMaxWidth().padding(horizontal = Tokens.Space.l, vertical = Tokens.Space.m),
+        horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+        for (o in origins) {
+            val origin = o.origin ?: continue
+            JChip(origin.label(), selected = origin == picked, onClick = { onPick(origin) }, icon = origin.icon, status = o.status(), count = o.count)
+        }
+    }
+}
 
 /** Persona's face, still, in a row's icon slot: the main conversation's mark. */
 @Composable
