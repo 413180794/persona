@@ -930,3 +930,12 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - 现象：hub 的「需要你」推送从一开始就带 `interruption-level: time-sensitive`，通知服务扩展也照样设了 `interruptionLevel`，但开着专注模式时横幅不出来（专注模式会同步到手表，所以手表上也收不到）。
 - 原因：App 的 entitlements 里没有 `com.apple.developer.usernotifications.time-sensitive`。缺了它，系统静默把时间敏感当 `active`，日志和 API 都不报错；`requestAuthorization` 里的 `.timeSensitive` 选项早已废弃，不起作用。
 - 做法：entitlements 加这一项，App ID 开 `USERNOTIFICATIONS_TIMESENSITIVE` 并重建描述文件（`scripts/release/asc_signing.py`），发版前 `scripts/release/entitlements.py check` 会查。模拟器上看不出差别，要真机开着专注模式验证。
+
+## 量掉帧时测试自己就在制造掉帧；补偿动画跨过一帧卡顿会一下走完（2026-11-05，#1123）
+
+- 第一轮量展开 / 折叠，每次点击都晚到 15–20 帧，连什么都没重画的点击也一样：是 UI 测试每 0.1 s 查一次 `probe.unfold`，每查一次无障碍树都占 App 主线程。
+  测试点完安静地等，再读一次结果；`probe.chat-rows` 这种每秒 10 次的探针也要关掉。先量一段什么都不点的（0/96 帧晚到）作对照，才知道数字能不能信。
+- 按时间算的动画（`exp(-dt/τ)`）碰上一帧卡顿（步骤刚排出来那一帧 80–100 ms），dt 很大，一帧就走了大半，看起来还是「窜」：dt 封顶一帧（1/60 s）。
+- 一个状态被「上一个动作」借走：在最新处打开的工作行可以往上升到顶栏下面，再点里面的思考，思考展开的高度就把标题剩下的上升量用掉了，被点的行跟着上去 46 pt；
+  BeautifulUI 的工具胶囊则把工作行的「一直按住」换成了普通的 1.5 s，1.5 s 后跟随又起来，把列表拉到最新处、胶囊上去 119–381 pt。
+  里面的东西被点了，外面的那个就从此原地不动、状态也不变（`ChatPin.hold` 重新以当前位置按住，`changeWork` 对 run 不动跟随状态）。

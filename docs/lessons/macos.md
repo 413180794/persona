@@ -214,6 +214,16 @@
 - `Button(role: .destructive)` 在 Mac 的 grouped `Form` 里画成主题色（蓝），不像 iPhone 的列表那样自动变红（2026-11-04，#1512 截图发现）。
   要红就 `.tint(Theme.danger)`（Form 里的按钮）或 `.foregroundStyle(Theme.danger)`（borderless 按钮）；确认框（`confirmationDialog`）里的不用管，系统按 role 画。
 
+## 滚到列表外面再滑回来：`NSClipView` 不让停（2026-11-05，#1123）
+
+- iOS 在最新处收起工作行，是先让列表停在越过最新端的位置（标题不动），再 `setContentOffset(animated:)` 滑回去。Mac 上照做不行：
+  - `clipView.animator().setBoundsOrigin` 滑不起来，下一次布局就到终点了；
+  - 越过最新端的偏移 `scroll(to:)` 当时收下了，但列表变短后的那次布局又把它夹回最新端，那一帧画的是终点，再从原处往下滑，看起来是闪了一下；
+  - 在 AppKit 那边临时把 `contentInsets.top` 加大：SwiftUI 下一步就改回它自己的 content margin；
+  - 改成在 SwiftUI 里临时加大最新端的 content margin：它到的那一下 SwiftUI 把列表跟着挪了这么多，标题闪到顶上。
+- 现在的做法：滑动是一帧一步自己放的；滑的过程中听 clip view 的 `boundsDidChangeNotification`（同步发，在同一次布局里），谁把列表挪走就马上放回滑到的位置，那一帧画出来之前已经放回去了。
+- 只看行自己报的位置会看漏：夹回去的那一帧行还没报新位置。要在每帧（`CADisplayLink`）读 clip view 的 `bounds.origin` 才看得到。
+
 ## 系统权限的「现在是什么状态」别在主线程上问（2026-11-05，#1337）
 
 - `EKEventStore.authorizationStatus(for:)` 是一次同步的 XPC（Mac 上第一次还要建到日历守护进程的连接）。连上 hub 时注册手机工具，

@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// How the whole app is drawn, picked in 设置 › 界面风格: panels, cards and buttons, the page they sit on, the type,
 /// the components. The colors are 主题色 (`ThemeColor`), a choice of its own; `StyleSpec` puts the two together.
@@ -424,6 +429,17 @@ nonisolated enum Theme {
         static let concealTime = 0.2
         static let reveal = Animation.easeOut(duration: revealTime)
         static let conceal = Animation.easeIn(duration: concealTime)
+        /// The system's Reduce Motion, outside a view (a view reads `\.accessibilityReduceMotion`): what would move or fade
+        /// on its own is there, or gone, at once.
+        @MainActor static var reduced: Bool {
+            #if os(iOS)
+            UIAccessibility.isReduceMotionEnabled
+            #elseif os(macOS)
+            NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            #else
+            false
+            #endif
+        }
         /// A drawer let go by the finger (the Persona tab's sidebar): no bounce, carrying on at the finger's speed.
         /// `velocity` is the share of the remaining way covered per second when it lets go (0 from a button).
         static func drawer(velocity: Double = 0) -> Animation {

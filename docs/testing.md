@@ -519,6 +519,20 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
   测试用隔离 HOME/Git 配置的临时仓库验证真实提交钩子、暂存区与工作树差异，不操作主工作区的暂存区或历史。
 - hooksPath 是每个克隆的本地配置；新克隆仍需运行上面的 `git config` 命令，不能因为仓库里有 hooks 文件就以为它已经生效。
 
+## 展开 / 折叠（`UnfoldTests`，#1123）
+
+`-unfoldTrace YES`（DEBUG）让 App 自己量每一次展开 / 折叠（`UnfoldTrace`，`toggleInPlace` 和工作行的 `toggleWork` / `toggleRun`）：点下后 1.6 s 里
+每帧被点那一行在屏幕上的位置（它自己报的，`ChatPin`）、晚到的帧、最长的一帧，加上 `-perfCounts YES` 时画了哪些视图，结果放在 `probe.unfold`。
+用例点工作行（在最新处、在中间）、打开的工作行里的思考、工具、BeautifulUI 的工具胶囊，各开一次收一次，打印 `UNFOLD <场景> <什么>: moved … step …`；
+App 刚打开 6 s 时还量一段什么都不点的作对照（`idle`）。mock：`MOCK_LONG_HISTORY=1 MOCK_AGENTS=1`。
+
+- 量的时候测试不能去问 App：XCUITest 每查一次无障碍树都占 App 的主线程，0.1 s 查一次时每次点击都「掉」15–20 帧，安静地等 2.2 s 再读才是 0–3 帧；
+  同理 `probe.chat-rows` 每秒 10 次的更新也要关掉（开了 `-unfoldTrace` 就只画 `probe.unfold`）。
+- 位置以录屏为准（`scripts/diag/stream-scroll/vidpick.swift` 取帧）：App 自己报的位置可能差一帧。
+- 帧耗时要用开了优化的构建量（见下面「卡顿测量」），默认 Debug 的数字只能前后对比。
+- Mac 没有 UI 测试：`-unfoldTrace YES -showUnfoldLab YES` 让对话自己在最新处点开 / 收起最新的工作行两次，再往历史挪 40 pt 做两次，
+  每次的 `UNFOLD …` 打在控制台（启动时加 `NSUnbufferedIO=YES`，否则输出留在缓冲里，杀进程就丢）。mock 同上，`-openSession` 打开那个 Agent 对话。
+
 ## 新对话的第一条消息（`FirstMessageTests`）
 
 发出后每 50 ms 记一次消息到输入框的距离（`FIRST <用例> <秒> <距离>`），断言不变（#1911）：助手的新对话（「新对话」页 → 对话页接手）、

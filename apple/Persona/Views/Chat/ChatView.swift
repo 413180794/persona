@@ -26,6 +26,8 @@ struct ChatView: View {
     #endif
     /// Hide the arrow for the first moment on entry (it would flash while the list settles at the end).
     @State private var settled = false
+    /// The pin is bringing a header up to show what opened under it (`ChatPin.onRising`): no ↓ for that moment.
+    @State private var pinRising = false
     @State private var showTerminal = false
     @State private var file: FileRef?
     @State private var showActivity = false
@@ -511,6 +513,25 @@ struct ChatView: View {
     #endif
 
     #if DEBUG
+    /// `-showUnfoldLab YES` with `-unfoldTrace YES`: the newest work line opened and folded from its header twice at the
+    /// newest end, then twice with the list 40 pt into the history (reading), 2.5 s apart, each measured by
+    /// `UnfoldTrace`: what `UnfoldTests` taps on iOS, for the Mac, which has no UI tests.
+    private func unfoldLab() async {
+        func pause() async { try? await Task.sleep(for: .seconds(2.5)) }
+        try? await Task.sleep(for: .seconds(8))
+        let newest = currentLines().last { if case .work(let id, let items, _, _, _) = $0.content { id.hasPrefix("w-") && !items.isEmpty } else { false } }
+        guard let w = newest?.id else { return print("UNFOLD lab: no work line") }
+        for _ in 0..<4 { toggleWork(w, fromHeader: true); await pause() }
+        userScrolled = true
+        setFollow { $0.read() }
+        // 40 pt into the history: reading, its header still on a Mac window's screen.
+        scrollList(to: chrome.offset + 40)
+        await pause()
+        print("UNFOLD lab reading: header at \(Int(scratch.workHeadY[w] ?? -1)), newest end \(scratch.atNewest ? "here" : "away")")
+        for _ in 0..<4 { toggleWork(w, fromHeader: true); await pause() }
+        print("UNFOLD lab done")
+    }
+
     /// Scrolls into the history while the agent keeps working (`MOCK_STREAM=1`), then logs, every 2 s, where a line on
     /// screen is and how many items have arrived (the line must not move); back at the newest, the new lines show.
     private func freezeProbe() async {
@@ -614,6 +635,11 @@ struct ChatView: View {
     private func toggleWork(_ id: String, fromHeader: Bool, run: Bool = false) {
         Haptics.tap()
         let wasOpen = run ? isRunOpen(id) : isOpen(id)
+        #if DEBUG
+        UnfoldTrace.shared.begin("\(run ? "run" : "work") \(wasOpen ? "fold" : "open")") { [pin] in
+            pin.screenY(headLine(id, open: run ? isRunOpen(id) : isOpen(id)))
+        }
+        #endif
         guard run || !wasOpen else { return concealWork(id, fromHeader: fromHeader) }
         // Its steps reveal themselves (a fade from nothing) as they appear, unless the list is at its newest end: the
         // steps come in there first and the pin brings the header back a frame later, and for that frame the screen
@@ -629,6 +655,9 @@ struct ChatView: View {
     /// They are already loaded, so only the ones appearing in this pass reveal (`revealUntil` of the work line, briefly).
     private func toggleRun(_ id: String, calls: [ToolCall]) {
         let line = id.components(separatedBy: "/run-")[0] // a run's id is "<work line>/run-<first call>"
+        #if DEBUG
+        UnfoldTrace.shared.begin("run \(isRunOpen(id) ? "fold" : "open")") { [pin] in pin.screenY(id) }
+        #endif
         guard isRunOpen(id) else {
             Haptics.tap()
             revealUntil[line] = max(revealUntil[line] ?? .distantPast, .now.addingTimeInterval(Theme.Motion.revealTime))
@@ -673,7 +702,10 @@ struct ChatView: View {
         if wasOpen { scratch.foldedAt = .now }
         // Not taking the list: while the header settles nothing pulls it away (the pin has it) and nothing is held
         // back (the running turn opened at the newest keeps growing: it froze, #1046); then the chat goes on as before.
-        holdFollow(anchored: anchored)
+        // A run of chips in a work line kept in place (opened while following): it stays kept. Handed to the usual
+        // hold, following came back 1.5 s later and took the list to the newest end, the tapped chips up by what had
+        // opened under them (BeautifulUI, 119–381 pt, #1123).
+        if !(run && follow.anchored) { holdFollow(anchored: anchored) }
         if anchored { keepHeader(headLine(id, open: true), rise: workRise(id)) }
         var t = Transaction()
         t.disablesAnimations = true
@@ -1004,7 +1036,7 @@ struct ChatView: View {
     }
 
     /// ↓ shows: the follow state says so, once the chat has settled on entry.
-    private var arrowShows: Bool { follow.arrow && settled }
+    private var arrowShows: Bool { follow.arrow && settled && !pinRising }
 
     /// Changes the follow state; written back only if it changed (the geometry reports every frame of a scroll, and
     /// each write would evaluate the page again).
@@ -1168,7 +1200,13 @@ struct ChatView: View {
                     .overlay(alignment: .topLeading) { if Self.scrollProbe { scrollState } }
                     .screenProbe("chat", page: style == .assistant ? "assistant" : "agents",
                                  ChatShown(key: shownKey.machineID + "/" + shownKey.sessionID, appeared: appearCount))
-                    .overlay(alignment: .topLeading) { if ScreenProbe.enabled { rowsProbe } }
+                    .overlay(alignment: .topLeading) {
+                        #if DEBUG
+                        if UnfoldTrace.enabled { unfoldProbe } else if ScreenProbe.enabled { rowsProbe }
+                        #else
+                        if ScreenProbe.enabled { rowsProbe }
+                        #endif
+                    }
                     #endif
             }
             // It may get as short as the cards make it while the keyboard is up (its margins set no minimum of their own).
@@ -1331,6 +1369,16 @@ struct ChatView: View {
                                            dragging: scratch.userDragging, held: pin.holding))
         }
     }
+
+    #if DEBUG
+    /// `probe.unfold` (`-unfoldTrace YES`): what each open and fold cost (`UnfoldTrace`). Drawn instead of
+    /// `probe.chat-rows`, whose ten updates a second were frames of their own in what it measures.
+    private var unfoldProbe: some View {
+        Color.clear.frame(width: Theme.Size.line, height: Theme.Size.line)
+            .screenProbe("unfold", page: style == .assistant ? "assistant" : "agents", UnfoldTrace.shared.results)
+            .onAppear { UnfoldTrace.shared.idle(after: 6) }
+    }
+    #endif
 
     /// `-showScrollState YES`: where the list is, for UI tests (`ChatFollowTests`). XCUITest's frames of rows in the
     /// flipped list are wrong; the list itself knows which lines are on screen.
@@ -1631,7 +1679,10 @@ struct ChatView: View {
         }
         .environment(menu)
         .environment(\.chatPin, pin)
-        .onAppear { pin.letGo = { [position = $position] in position.wrappedValue = ScrollPosition(idType: String.self) } }
+        .onAppear {
+            pin.letGo = { [position = $position] in position.wrappedValue = ScrollPosition(idType: String.self) }
+            pin.onRising = { [rising = $pinRising] in rising.wrappedValue = $0 }
+        }
         #if os(macOS)
         .onAppear {
             wheel.start(list: { [pin] in pin.list }) { on in
@@ -2246,6 +2297,9 @@ struct ChatView: View {
             }
             if UserDefaults.standard.bool(forKey: "showFoldProbe") { // folding keeps what you read in place: Documents/fold.txt
                 Task { await foldProbe() }
+            }
+            if UnfoldTrace.enabled, UserDefaults.standard.bool(forKey: "showUnfoldLab") { // UNFOLD lines on the console
+                Task { await unfoldLab() }
             }
             if UserDefaults.standard.bool(forKey: "showFreezeProbe") { // reading history holds still: Documents/freeze.txt
                 Task { await freezeProbe() }

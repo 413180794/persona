@@ -14,6 +14,9 @@ import SwiftUI
     /// Set by the chat: forget the position it last asked its list for. At the newest that is the newest end, and the
     /// list went back to it for a frame when a work line's steps arrived.
     var letGo: () -> Void = {}
+    /// Set by the chat: a held header began, or ended, rising to show what opened under it (`rising`). Meanwhile the
+    /// newest end is off the screen for a moment, and ↓ came up for that moment only (#1123).
+    var onRising: (Bool) -> Void = { _ in }
 
     /// The coordinate space of the list's content: a place in it does not change when the list scrolls.
     nonisolated static let space = "chatContent"
@@ -30,6 +33,12 @@ import SwiftUI
         /// The content's height when the hold began, and whether the header has reported since (`watch`).
         var height: CGFloat = 0
         var reported = false
+        /// It has glided once to where the list can be (`moved`): from then on the list follows the header at once.
+        var glided = false
+        /// How far it has risen so far (`wanted`), and when that was worked out.
+        var risen: CGFloat = 0
+        var risenAt: CFTimeInterval = 0
+        var rising = false
     }
     private var held: Held?
     /// The offset that puts the held header back, when the list could not go there yet (`settle`).
@@ -38,6 +47,8 @@ import SwiftUI
     /// scroll view's content size says so.
     private var reach: CGFloat = 0
     private var last: [String: Spot] = [:]
+    /// The list is gliding to where the held header goes (`moved`): nothing puts it meanwhile.
+    private var gliding: Date?
     /// A kept hold a tap above its header interrupted: taken up again once that one ends (`ended`).
     private var resume: String?
 
@@ -53,7 +64,14 @@ import SwiftUI
             // A row under the kept header (a step of the open work line): the kept hold has it in place already, as it
             // has all between the header and what grows. Replaced by this one, it let go when this one ended, and what
             // streamed in from then on pushed the screen up and back (#1046).
-            if let kept = last[k.key], at.content < kept.content { return }
+            // From now on the kept hold keeps the header where it is: the rise it was allowed (to show its steps) is
+            // over. Left to it, what opened under a header not yet at the top went up by its own height, the tapped
+            // row with it (a thought, BeautifulUI: 46 pt, #1123).
+            if let kept = last[k.key], at.content < kept.content {
+                held = Held(key: k.key, at: kept, base: list.contentOffset.y, until: k.until, slow: true, rise: 0,
+                            height: list.contentSize.height, reported: k.reported)
+                return
+            }
             resume = k.key
         } else if keep {
             resume = nil
@@ -76,8 +94,10 @@ import SwiftUI
                 guard let self, let h = self.held, !h.reported, let list = self.list else { return }
                 if list.isTracking || list.isDecelerating { return }
                 let grown = list.contentSize.height - h.height
-                guard grown > h.rise + 0.5 else { continue }
-                let target = Self.within(list, h.base + grown - h.rise)
+                guard grown > 0.5 else { continue }
+                self.rising(grown)
+                guard let h = self.held else { return }
+                let target = Self.within(list, self.wanted(h, grown: grown))
                 if abs(target - list.contentOffset.y) >= 0.5 { list.contentOffset.y = target }
             }
         }
@@ -90,6 +110,7 @@ import SwiftUI
     /// Lets go of what is held (a kept hold: ↓, sending, the user's scrolling).
     func release() {
         held = nil
+        gliding = nil
         want = nil
         resume = nil
     }
@@ -113,6 +134,11 @@ import SwiftUI
     }
 
     /// A header moved (layout or scrolling).
+    #if DEBUG
+    /// Where `key` last reported itself on screen (`UnfoldTrace`).
+    func screenY(_ key: String) -> CGFloat? { last[key]?.y }
+    #endif
+
     func moved(_ key: String, to spot: Spot) {
         last[key] = spot
         guard var h = held, h.key == key, let list else { return }
@@ -123,13 +149,91 @@ import SwiftUI
         // and the offset has to grow by as much to keep it on screen where it was (as far as the list can go). Allowed to
         // rise, the header goes up by that much first: the list moves only for what opened past it.
         let grown = spot.content - h.at.content
-        let wanted = h.base + (grown > 0 ? max(grown - h.rise, 0) : grown)
-        let settling = want != nil
-        want = wanted
         reach = spot.content
+        held = h
+        rising(grown)
+        guard let h = held else { return }
+        let goal = wanted(h, grown: grown)
+        if let g = gliding, Date.now < g { want = goal; return }
+        // Folded at the newest end, the list cannot keep the header where it was: it stays for this frame and the list
+        // glides to where it can be. In one frame it went 400–470 pt down (#1123).
+        let still = h.base + grown, target = Self.within(list, goal, content: spot.content)
+        if !h.glided, target - still >= 0.5, !Theme.Motion.reduced {
+            var h = h
+            h.glided = true
+            held = h
+            want = nil
+            glide(list, from: still, to: target)
+            return
+        }
+        let settling = want != nil
+        want = goal
         put(list)
         if !settling { settle() }
     }
+
+    /// Where the list keeps the held header: where it was, but for how far it may rise to show what opened under it
+    /// (`rise`, as far as that has grown). That rise takes `glideTime` from when the growth began (`rising`), worked out
+    /// again each frame from what has grown by then: the steps come in more than one pass, and a rise in one frame went
+    /// 400–470 pt up at once on opening at the newest end (#1123).
+    private func wanted(_ h: Held, grown: CGFloat) -> CGFloat {
+        grown > 0 ? h.base + grown - h.risen : h.base + grown
+    }
+
+    /// How far the header may rise by now (`rise`, as far as what opened has grown) is reached a part at a time: each
+    /// frame closes the gap with a time constant of `riseTau` (90 % in a quarter second), so however the steps come in,
+    /// in one pass or several, the header goes up smoothly. With Reduce Motion, at once.
+    private func rising(_ grown: CGFloat) {
+        guard var h = held else { return }
+        let full = min(max(grown, 0), h.rise)
+        if Theme.Motion.reduced || full <= h.risen + 0.5 {
+            if h.risen > full || Theme.Motion.reduced { h.risen = full; held = h }
+            return
+        }
+        guard !h.rising else { return }
+        h.rising = true
+        h.risenAt = CACurrentMediaTime()
+        held = h
+        onRising(true)
+        Task { @MainActor [weak self] in
+            defer { self?.onRising(false) }
+            while true {
+                try? await Task.sleep(for: .milliseconds(8))
+                guard let self, var h = self.held, let list = self.list, !list.isTracking, !list.isDecelerating else { return }
+                let grown = h.reported ? self.reach - h.at.content : list.contentSize.height - h.height
+                let full = min(max(grown, 0), h.rise), now = CACurrentMediaTime()
+                // At most a frame's worth at a time: after a long frame (the steps laid out) it went most of the way at once.
+                h.risen += (full - h.risen) * (1 - exp(-min(now - h.risenAt, 1.0 / 60) / Self.riseTau))
+                h.risenAt = now
+                if full - h.risen < 0.5 { h.risen = full; h.rising = false }
+                self.held = h
+                self.want = self.wanted(h, grown: grown)
+                self.put(list)
+                if !h.rising { return }
+            }
+        }
+    }
+
+    /// The rise's time constant (`rising`).
+    nonisolated static let riseTau: Double = 0.1
+
+    /// The list from `from` (where it keeps the header still, beyond its ends if need be) to `to`, as UIKit glides a
+    /// scroll view (`setContentOffset(_:animated:)`, about 0.3 s): offset by offset, so the lazy list draws the rows
+    /// each one shows. Then anything that came meanwhile.
+    private func glide(_ list: UIScrollView, from: CGFloat, to: CGFloat) {
+        list.contentOffset.y = from
+        list.setContentOffset(CGPoint(x: list.contentOffset.x, y: to), animated: true)
+        gliding = .now.addingTimeInterval(Self.glideTime)
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.glideTime))
+            guard let self, let list = self.list else { return }
+            self.gliding = nil
+            if self.want != nil, !list.isTracking { self.put(list) }
+        }
+    }
+
+    /// How long UIKit's animated scroll takes.
+    nonisolated static let glideTime: Double = 0.35
 
     /// After something opened under `key`'s header: brings its far edge (`bottom`, on screen) above the list's bottom
     /// edge (the chat's last row: to the newest end), the header staying on screen. The header is held where it was, so a row at the newest end grows past the
@@ -172,6 +276,8 @@ import SwiftUI
             for _ in 0..<30 {
                 try? await Task.sleep(for: .milliseconds(16))
                 guard let self, self.want != nil, let h = self.held, let list = self.list else { return }
+                if let g = self.gliding, Date.now < g { continue }
+                if h.rising { continue } // `rising` puts it
                 if Date.now > h.until || list.isTracking || list.isDecelerating { self.want = nil; return self.ended(list) }
                 self.put(list)
             }
@@ -248,6 +354,9 @@ private struct ChatPinReport: ViewModifier {
 /// it. Elsewhere: the animation as before.
 @MainActor func toggleInPlace(_ pin: ChatPin?, _ key: String, animation: Animation, unfold: Binding<Unfolding>? = nil,
                               closing: Bool = false, _ change: @escaping () -> Void) {
+    #if DEBUG
+    UnfoldTrace.shared.begin("\(key.split(separator: "-").first ?? "row") \(closing ? "fold" : "toggle")") { [weak pin] in pin?.screenY(key) }
+    #endif
     guard let pin else { withAnimation(animation, change); return }
     func now() {
         pin.hold(key)
@@ -255,7 +364,7 @@ private struct ChatPinReport: ViewModifier {
         t.disablesAnimations = true
         withTransaction(t, change)
     }
-    guard let unfold else { return now() }
+    guard let unfold, !Theme.Motion.reduced else { return now() }
     if closing {
         unfold.wrappedValue.concealing = true
         Task { @MainActor in
@@ -297,12 +406,19 @@ private struct Reveal: ViewModifier {
         _shown = State(initialValue: revealing ? 0 : 1)
     }
 
+    /// Reduce Motion: it is there, or not, at once.
+    @Environment(\.accessibilityReduceMotion) private var still
+
     func body(content: Content) -> some View {
-        content
-            .clipShape(RevealShape(shown: shown))
-            .opacity(shown)
-            .onAppear { if shown < 1 { withAnimation(Theme.Motion.reveal) { shown = 1 } } }
-            .onChange(of: concealing) { _, c in withAnimation(c ? Theme.Motion.conceal : Theme.Motion.reveal) { shown = c ? 0 : 1 } }
+        if still {
+            content
+        } else {
+            content
+                .clipShape(RevealShape(shown: shown))
+                .opacity(shown)
+                .onAppear { if shown < 1 { withAnimation(Theme.Motion.reveal) { shown = 1 } } }
+                .onChange(of: concealing) { _, c in withAnimation(c ? Theme.Motion.conceal : Theme.Motion.reveal) { shown = c ? 0 : 1 } }
+        }
     }
 }
 

@@ -96,6 +96,9 @@ final class RunningChatTests: XCTestCase {
         let work = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "正在工作")).firstMatch
         XCTAssertTrue(work.waitForExistence(timeout: 10), "the running work line")
         work.tap()
+        // Opened at the newest end the header rises under the top bar over about half a second (#1123): asked whether it
+        // can be tapped while it moves, XCUITest could not tell.
+        sleep(1)
         // Up to where the turn starts (the user reading it from the top, not at the newest), then its first step open
         // on its output, as in the recording.
         for _ in 0..<6 {
