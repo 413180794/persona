@@ -51,7 +51,7 @@ import java.io.File
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h1400dp-xhdpi")
+@Config(sdk = [35], qualifiers = "zh-w400dp-h1400dp-xhdpi")
 class TranslationSettingsShotsTest {
     @get:Rule val rule = createComposeRule()
 

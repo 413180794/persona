@@ -37,7 +37,7 @@ import java.io.File
 /** The loading row and its neighboring notice actions, in all three styles and both appearances. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h700dp-xhdpi")
+@Config(sdk = [35], qualifiers = "zh-w400dp-h700dp-xhdpi")
 class HubNoticeRowShotsTest {
     @get:Rule val rule = createComposeRule()
 

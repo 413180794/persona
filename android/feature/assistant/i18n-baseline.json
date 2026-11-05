@@ -1,0 +1,17 @@
+{
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/AssistantData.kt": 14,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/AssistantInjection.kt": 1,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/AssistantPendingConversation.kt": 4,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/AssistantScreen.kt": 68,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/CompactionStatusLine.kt": 1,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/MainConversationActions.kt": 11,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/NeedsYou.kt": 3,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/proactive/AssistantProactiveScreen.kt": 18,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/proactive/ProactiveComponents.kt": 11,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/proactive/ProactiveModel.kt": 7,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/proactive/ProactivePages.kt": 31,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/proactive/ProactiveText.kt": 74,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/proactive/RoutineEditor.kt": 32,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/settings/AssistantSettingsScreen.kt": 89,
+  "feature/assistant/src/main/kotlin/persona/feature/assistant/settings/AssistantSettingsState.kt": 20
+}

@@ -17,6 +17,9 @@ import persona.core.designsystem.*
  * `VIEW_PERMISSION_USAGE` alias in the manifest instead).
  */
 class HealthRationaleActivity : ComponentActivity() {
+    /** Text in the language of 设置 › 语言 (docs/i18n.md). */
+    override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

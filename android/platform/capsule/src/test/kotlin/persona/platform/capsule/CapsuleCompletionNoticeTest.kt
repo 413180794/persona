@@ -24,7 +24,7 @@ import persona.core.designsystem.PersonaTheme
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w411dp-h900dp-xhdpi")
+@Config(sdk = [35], qualifiers = "zh-w411dp-h900dp-xhdpi")
 class CapsuleCompletionNoticeTest {
     @get:Rule val rule = createComposeRule()
 

@@ -49,6 +49,12 @@ class PersonaApp : Application() {
     private val _hub = MutableStateFlow<Hub?>(null)
     val hub: StateFlow<Hub?> = _hub.asStateFlow()
 
+    /** Notifications, the widget and the tile are built from this context: their text follows 设置 › 语言 too. */
+    override fun attachBaseContext(base: android.content.Context) {
+        persona.core.designsystem.AppLanguages.init(base)
+        super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
+    }
+
     override fun onCreate() {
         super.onCreate()
         pairings = PairingStore(this)

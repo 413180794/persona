@@ -1,0 +1,15 @@
+{
+  "core/hub/src/main/kotlin/persona/core/hub/HttpAgentCreationService.kt": 1,
+  "core/hub/src/main/kotlin/persona/core/hub/HttpChatActions.kt": 1,
+  "core/hub/src/main/kotlin/persona/core/hub/HttpChatComposerService.kt": 12,
+  "core/hub/src/main/kotlin/persona/core/hub/HttpChatRecoveryService.kt": 3,
+  "core/hub/src/main/kotlin/persona/core/hub/HttpDeviceSettings.kt": 2,
+  "core/hub/src/main/kotlin/persona/core/hub/HttpInboxActionsTransport.kt": 1,
+  "core/hub/src/main/kotlin/persona/core/hub/HttpMachineManagement.kt": 1,
+  "core/hub/src/main/kotlin/persona/core/hub/HttpVoiceExtensions.kt": 1,
+  "core/hub/src/main/kotlin/persona/core/hub/HubEndpointSettings.kt": 5,
+  "core/hub/src/main/kotlin/persona/core/hub/HubEndpoints.kt": 35,
+  "core/hub/src/main/kotlin/persona/core/hub/HubPairingClient.kt": 4,
+  "core/hub/src/main/kotlin/persona/core/hub/HubPhoneToolsTransport.kt": 2,
+  "core/hub/src/main/kotlin/persona/core/hub/OkHttpHubConnection.kt": 10
+}

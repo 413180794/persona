@@ -54,6 +54,9 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    /** Text in the language of 设置 › 语言 (docs/i18n.md). */
+    override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
+
     @Inject lateinit var settingsServices: SettingsServices
     /** The hubs' channels, for the 「来自 微信」 marks on messages and conversations (docs/channels.md「来源标记」). */
     @Inject lateinit var channelDirectory: persona.core.contracts.api.ChannelDirectory
@@ -111,6 +114,7 @@ class MainActivity : ComponentActivity() {
             val lark = remember(features) { LarkFeatures.of(features) }
             AppearanceOverride(forced) { CompositionLocalProvider(
                 LocalDeveloperTools provides launchAdapter?.tools,
+                persona.core.designsystem.LocalLanguageHost provides this@MainActivity,
                 persona.core.designsystem.LocalChannels provides channels,
                 persona.core.designsystem.LocalLarkFeatures provides lark,
                 persona.core.designsystem.LocalHubFeatures provides features,

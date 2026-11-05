@@ -43,6 +43,9 @@ import kotlinx.coroutines.flow.first
 
 @AndroidEntryPoint
 class ShareActivity : ComponentActivity() {
+    /** Text in the language of 设置 › 语言 (docs/i18n.md). */
+    override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
+
     @Inject lateinit var preferences: AgentsPreferences
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {

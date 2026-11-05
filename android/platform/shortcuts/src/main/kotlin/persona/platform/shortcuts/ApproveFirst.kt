@@ -114,6 +114,9 @@ class ApproveFirstModel(
  * link from another app can never approve anything. Only its dialog shows, over whatever was on screen.
  */
 class ApproveFirstActivity : ComponentActivity() {
+    /** Text in the language of 设置 › 语言 (docs/i18n.md). */
+    override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

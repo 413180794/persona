@@ -452,6 +452,7 @@ class OkHttpHubConnection(
         mailbox = messages
         _weakNetwork.value = false
         var features = emptySet<String>()
+        val languageWatch = launch { persona.core.contracts.ClientLanguage.changes.drop(1).collect { messages.trySend(Signal.Language) } }
         var receivedHello = false
         var synchronizedData = false
         var pingJob: Job? = null
@@ -552,6 +553,7 @@ class OkHttpHubConnection(
                     if (foreground) { checkAlive(); probe() }
                     else probe(immediate = false)
                 }
+                Signal.Language -> if ("client_hello" in features) ws.send(clientHello(features).toString())
                 Signal.Wake -> {
                     checkAlive()
                     pingJob?.cancelAndJoin()
@@ -677,6 +679,7 @@ class OkHttpHubConnection(
                 }
             }
         } finally {
+            languageWatch.cancel()
             inactivity.cancel()
             helloDeadline.cancel()
             recheck.cancel()
@@ -697,6 +700,8 @@ class OkHttpHubConnection(
         config.deviceId?.let { put("device_id", it) }
         config.build?.let { put("build", it) }
         config.os?.let { put("os", it) }
+        // The language the app shows (docs/i18n.md「协议」): this socket's notices, and the user's language.
+        put("locale", persona.core.contracts.ClientLanguage.tag)
         putJsonArray("features") {
             (setOf("endpoints", "ws_notify", "app_ping", "elicitation") + config.clientFeatures).forEach { add(it) }
         }
@@ -936,6 +941,8 @@ class OkHttpHubConnection(
         data object Open : Signal
         data object Foreground : Signal
         data object Wake : Signal
+        /** 设置 › 语言 or the phone's language changed: say hello again with the new locale. */
+        data object Language : Signal
         data object Synced : Signal
         data class ProbeResult(val timely: Boolean) : Signal
         data class Text(val value: String) : Signal

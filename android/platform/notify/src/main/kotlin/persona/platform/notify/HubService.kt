@@ -39,6 +39,9 @@ import javax.inject.Inject
 @AndroidEntryPoint
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 open class HubService : Service() {
+    /** Text in the language of 设置 › 语言 (docs/i18n.md). */
+    override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
+
     @Inject lateinit var connection: HubConnection
     @Inject lateinit var pairing: PairingService
     @Inject lateinit var notifier: Notifier

@@ -36,7 +36,7 @@ import persona.core.designsystem.PersonaTheme
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w411dp-h900dp-xhdpi")
+@Config(sdk = [35], qualifiers = "zh-w411dp-h900dp-xhdpi")
 class CapsuleSurfaceTest {
     @get:Rule val rule = createComposeRule()
     private val sections = listOf(CapsuleSection("unread", "未读", 3),

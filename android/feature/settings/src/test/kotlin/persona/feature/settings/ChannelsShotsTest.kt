@@ -57,7 +57,7 @@ import java.time.Instant
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h2100dp-xhdpi")
+@Config(sdk = [35], qualifiers = "zh-w400dp-h2100dp-xhdpi")
 class ChannelsShotsTest {
     @get:Rule val rule = createComposeRule()
 

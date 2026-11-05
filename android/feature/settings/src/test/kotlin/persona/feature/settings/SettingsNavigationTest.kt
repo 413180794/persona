@@ -27,6 +27,7 @@ class SettingsNavigationTest {
             SettingsPage.Translation to "translate",
             SettingsPage.Triage to "triage",
             SettingsPage.Capsule to "capsule",
+            SettingsPage.Language to "language",
         )
         assertEquals(SettingsPage.entries.toSet(), pages.keys)
         assertEquals(pages.size, pages.values.toSet().size)

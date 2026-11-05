@@ -33,7 +33,7 @@ import java.io.File
 /** The actual composer and its production hint helper, rendered with fake session data and no service. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h900dp-xhdpi")
+@Config(sdk = [35], qualifiers = "zh-w400dp-h900dp-xhdpi")
 class ComposerModelLabelsShotsTest {
     @get:Rule val rule = createComposeRule()
 

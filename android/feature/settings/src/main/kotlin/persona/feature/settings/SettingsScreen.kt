@@ -214,6 +214,7 @@ private fun SettingsContent(
             item { AppearanceSettings() }
             item { deviceFeedback() }
         }
+        "language" -> LanguagePage(onBack = back, footer = deviceFeedback)
         "persona" -> JListPage(title = "形象", onBack = back) {
             item { PersonaSettings(demo = services.demo) }
             item { deviceFeedback() }
@@ -354,8 +355,9 @@ private fun SettingsContent(
                 )
             }
             item { JSectionHeader("外观") }
-            item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Persona), title = "形象", leadingIcon = PhIcons.Robot, value = LocalPersonaDesign.current.title, onClick = { open(SettingsPage.Persona) }) } }
-            item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Appearance), title = "界面风格", leadingIcon = PhIcons.SquaresFour, value = PersonaTheme.style.label, onClick = { open(SettingsPage.Appearance) }) } }
+            item { JGroupItem(GroupPosition.of(0, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Persona), title = "形象", leadingIcon = PhIcons.Robot, value = LocalPersonaDesign.current.title, onClick = { open(SettingsPage.Persona) }) } }
+            item { JGroupItem(GroupPosition.of(1, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Appearance), title = "界面风格", leadingIcon = PhIcons.SquaresFour, value = PersonaTheme.style.label, onClick = { open(SettingsPage.Appearance) }) } }
+            item { JGroupItem(GroupPosition.of(2, 3)) { LanguageRow(selected = detailKey == SettingsPageRoute(SettingsPage.Language), onClick = { open(SettingsPage.Language) }) } }
             item { JSectionHeader("关于") }
             item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.About), title = "关于", leadingIcon = PhIcons.Info, subtitle = "当前版本和构建号", onClick = { open(SettingsPage.About) }) } }
             item { JGroupItem(GroupPosition.of(1, 2)) {

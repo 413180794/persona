@@ -26,6 +26,10 @@ android {
     lint {
         baseline = file("lint-baseline.xml")
     }
+    // Only the app's languages (docs/i18n.md): a library's French strings would mix into an English screen.
+    androidResources {
+        localeFilters += listOf("en", "zh", "ja")
+    }
     defaultConfig {
         applicationId = appId
         versionCode = 1

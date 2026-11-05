@@ -174,7 +174,9 @@ class HubHttpClient(
                 if (request.url.username.isNotEmpty() || request.url.password.isNotEmpty()) {
                     throw HubFailure(HubError.Protocol, retryable = false)
                 }
+                // The language the app shows, so the hub answers in it (docs/i18n.md); also on WebSocket upgrades.
                 val builder = request.newBuilder().header("X-Jarvis-Client", "android/$version")
+                    .header("Accept-Language", persona.core.contracts.ClientLanguage.tag)
                 if (!request.url.isHttps) {
                     // WebSocket upgrades skip network interceptors. Freeze the checked DNS
                     // result into the URL so the upgrade cannot resolve to a different peer.

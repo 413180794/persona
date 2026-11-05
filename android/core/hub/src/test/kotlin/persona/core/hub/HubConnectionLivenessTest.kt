@@ -44,6 +44,24 @@ class HubConnectionLivenessTest {
         }
     }
 
+    /** client_hello carries the shown language and is sent again when it changes (docs/i18n.md「协议」). */
+    @Test fun helloCarriesTheLanguageAndRepeatsWhenItChanges() = runBlocking {
+        try {
+            persona.core.contracts.ClientLanguage.current = persona.core.contracts.AppLanguage.Ja
+            Fixture(appPing = true).use { fixture ->
+                val socket = fixture.start()
+                fun hellos() = socket.sent.filter { it["type"]?.jsonPrimitive?.content == "client_hello" }
+                assertEquals("ja", hellos().last()["locale"]?.jsonPrimitive?.content)
+                val before = hellos().size
+                persona.core.contracts.ClientLanguage.current = persona.core.contracts.AppLanguage.ZhHans
+                fixture.scheduler.runCurrent()
+                assertEquals(before + 1, hellos().size)
+                assertEquals("zh-Hans", hellos().last()["locale"]?.jsonPrimitive?.content)
+                assertEquals("test-device", hellos().last()["device_id"]?.jsonPrimitive?.content)
+            }
+        } finally { persona.core.contracts.ClientLanguage.current = persona.core.contracts.AppLanguage.En }
+    }
+
     @Test fun backgroundUsesAcknowledgedHeartbeatAndRestartsNegotiationOnForeground() = runBlocking {
         Fixture(appPing = true).use { fixture ->
             val socket = fixture.start()

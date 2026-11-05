@@ -27,7 +27,7 @@ import java.io.File
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h800dp-xhdpi")
+@Config(sdk = [35], qualifiers = "zh-w400dp-h800dp-xhdpi")
 class DeleteSessionShotsTest {
     @get:Rule val rule = createComposeRule()
 

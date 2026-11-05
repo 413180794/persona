@@ -224,6 +224,28 @@ plan 第 4 节「会话键要能区分组」的 Android 做法（主持人 2026-
 
 预算不涉及 outbox、草稿和持久偏好。飞书行内图片沿用已有编码字节内存缓存，不新增原图磁盘副本。图片解码峰值、SQLite 物理占用、冷启动及滚动性能均未实测，仍需真机验收。
 
+## 国际化（简体中文 / English / 日本語，#2453）
+
+公共约定（语言列表、回退、术语表、协议字段）以 `docs/i18n.md` 为准；这里只写安卓端怎么做。
+
+- **语言和回退**：`AppLanguage`（`core/contracts`）是跟随系统、简体中文、English、日本語四个选项。跟随系统时只看系统的第一首选语言（`docs/i18n.md`，不往后找）：任何中文（包括繁体）显示简体中文，日文显示日文，其他都是英文。
+- **切换**：设置 › 外观 › 语言（`LanguageSettings.kt`）。Android 13 及以上写系统的按应用语言（`LocaleManager`，`res/xml/locales_config.xml` 登记三种语言），系统设置里的「应用语言」看到、改的是同一个值；更早的系统存在 App 自己的偏好里，切换后 `recreate()`。没用 `AppCompatDelegate.setApplicationLocales`：App 的 Activity 是 `ComponentActivity`，AppCompat 在 13 以下要求 `AppCompatActivity` 和 AppCompat 主题，代价比自己套 Configuration 大。
+- **套到界面**：每个 Activity、`HubService` 和 Application 在 `attachBaseContext` 里经 `AppLanguages.wrap` 把资源固定到要显示的语言（只覆盖 locale，深浅色和尺寸照常跟系统）。这样系统是繁体中文时也落到 `values-zh`（`zh-TW` 本来匹配不到 `values-zh`，会掉到英文）。
+- **资源**：`values/` 是英文兜底，中文在 `values-zh/`，日文在 `values-ja/`。英文做兜底是因为回退规则就是「其他语言都显示英文」：系统是法语时 Android 直接取 `values/`；要是 `values/` 是中文，法语用户会看到中文，而小组件、磁贴、通知渠道名这些由系统直接读资源、不经 App 套 Configuration 的地方也没法补救。`values-zh` 不带地区，覆盖 `zh-CN`、`zh-Hans`、`zh-SG`。App 打包时 `localeFilters` 只留 en / zh / ja，免得库自带的法文等翻译混进英文界面。
+- **key**：所有模块的资源合进一张表，key 以模块名开头（`settings_…`、`chat_…`），各模块各放自己的 `strings.xml`。语言的自称（「简体中文」「English」「日本語」）和 Persona 这个名字标 `translatable="false"`，只放 `values/`。复数用 `plurals`（英文要 one / other，中日文只要 other）。
+- **日期和数字**：`LocalizedFormats`（`core/designsystem`）按 skeleton（要显示哪些字段）取格式（`MMMd`、`jmm`…），语言决定顺序和用词；页面里不写带字的 pattern（`M月d日`）。Compose 里用 `currentLocale`，Composable 之外用 `LocalizedFormats.locale(context)`。
+- **传给 hub**：`ClientLanguage`（`core/contracts`）记着当前显示的语言（`zh-Hans` / `en` / `ja`），hub 客户端每个请求和 WebSocket 升级都带 `Accept-Language`，`client_hello` 带 `locale`；语言一变就在当前连接上再发一次 `client_hello`（`docs/i18n.md`「协议」）。安卓不登记推送设备，没有设备的 `locale`。
+- **测试**：Robolectric 测试默认跑在简体中文（`android/build-logic/robolectric/robolectric.properties`，写了 `qualifiers` 的测试要带上 `zh-` 前缀）；测别的语言用 `@Config(qualifiers = "en-…")` / `"ja-…"`，例子是 `LanguageShotsTest`。
+- **检查**（无需 Android SDK，CI 的 Privacy and workflow checks 里也跑）：
+
+```sh
+python3 scripts/app/android_i18n_check.py            # 三套 key / 占位符 / plurals 一致，key 前缀，values/ 没有中日文，写死的中日文不超过基线
+python3 scripts/app/android_i18n_check.py --update   # 把文案挪进 strings.xml 之后记下更低的数
+(cd scripts/app && python3 test_android_i18n_check.py)
+```
+
+  基线是每个模块的 `i18n-baseline.json`（按模块分文件，几个模块可以同时迁移），只能减少，目标是全部删掉。不是界面文字的字面量（要匹配的 hub 文本、发给模型的提示词）在那一行写 `// i18n-ignore: <原因>`。
+
 ## 设计 token 采用率基线
 
 在仓库根目录运行独立检查，无需 Android SDK：

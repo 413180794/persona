@@ -24,7 +24,7 @@ import persona.core.navigation.Navigator
  * Connecting / Updating of a reconnect does not put a line under the title unless it lasts.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35], qualifiers = "w400dp-h900dp-xhdpi")
+@Config(sdk = [35], qualifiers = "zh-w400dp-h900dp-xhdpi")
 class InboxBackgroundRefreshTest {
     @get:Rule val rule = createComposeRule()
 

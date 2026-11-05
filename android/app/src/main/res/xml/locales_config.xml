@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The languages of the phone's App language settings (Android 13+); same list as AppLanguage (docs/i18n.md). -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="zh-Hans" />
+    <locale android:name="en" />
+    <locale android:name="ja" />
+</locale-config>

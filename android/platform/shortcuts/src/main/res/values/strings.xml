@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The widget, the tile and the launcher shortcuts (docs/android.md「桌面入口」). -->
+<!-- The widget, the tile and the launcher shortcuts (docs/android.md「桌面入口」). English is the fallback (docs/i18n.md). -->
 <resources>
-    <string name="widget_label">Persona</string>
-    <string name="widget_description">几个 Agent 需要你、在工作、做完了</string>
-    <string name="tile_label">Persona</string>
+    <string name="shortcuts_widget_label" translatable="false">Persona</string>
+    <string name="shortcuts_widget_description">Which agents need you, are working, or are done</string>
+    <string name="shortcuts_tile_label" translatable="false">Persona</string>
 </resources>

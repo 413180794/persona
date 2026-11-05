@@ -5,7 +5,7 @@
         <receiver
             android:name="persona.platform.shortcuts.PersonaWidgetReceiver"
             android:exported="true"
-            android:label="@string/widget_label">
+            android:label="@string/shortcuts_widget_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -15,7 +15,7 @@
             android:name="persona.platform.shortcuts.PersonaTileService"
             android:exported="true"
             android:icon="@drawable/ic_stat"
-            android:label="@string/tile_label"
+            android:label="@string/shortcuts_tile_label"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

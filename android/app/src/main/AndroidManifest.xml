@@ -18,6 +18,7 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="${appLabel}"
+        android:localeConfig="@xml/locales_config"
         android:networkSecurityConfig="@xml/network_security"
         android:supportsRtl="true"
         android:theme="@style/Theme.Jarvis">

@@ -25,7 +25,7 @@ import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h1800dp-xhdpi")
+@Config(sdk = [35], qualifiers = "zh-w400dp-h1800dp-xhdpi")
 class ExtensionModelShotsTest {
     @get:Rule val rule = createComposeRule()
     private val theme = ExtensionTheme("example", "示例外观", "ocean", "海蓝", mapOf("accent" to "#0059A6"), mapOf("accent" to "#8BC4FF"))

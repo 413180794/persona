@@ -39,7 +39,7 @@ class PersonaTileService : TileService() {
         val paired = feed.paired.value
         val fleet = feed.state.value
         val subtitle = ShortcutText.tileSubtitle(paired, fleet)
-        tile.label = getString(R.string.tile_label)
+        tile.label = getString(R.string.shortcuts_tile_label)
         tile.subtitle = subtitle
         tile.icon = Icon.createWithResource(this, persona.core.designsystem.R.drawable.ic_stat)
         tile.state = when {

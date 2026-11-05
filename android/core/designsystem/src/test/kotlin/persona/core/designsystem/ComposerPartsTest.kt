@@ -19,7 +19,7 @@ import org.robolectric.annotation.Config
 
 /** The composer's parts answer the taps they promise, in every style, and nothing else. */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35], qualifiers = "w400dp-h900dp-mdpi")
+@Config(sdk = [35], qualifiers = "zh-w400dp-h900dp-mdpi")
 class ComposerPartsTest {
     @get:Rule val rule = createComposeRule()
 

@@ -37,7 +37,10 @@ class ApiClient(
 
     // Compatibility callers also use this client for streaming uploads.
     val http = http.newBuilder().addInterceptor { chain ->
-        chain.proceed(chain.request()).also { response ->
+        // The language the app shows, so the hub answers in it (docs/i18n.md).
+        val request = chain.request().newBuilder()
+            .header("Accept-Language", persona.core.contracts.ClientLanguage.tag).build()
+        chain.proceed(request).also { response ->
             if (response.code == 401 || response.code == 403) onUnauthorized()
         }
     }.build()

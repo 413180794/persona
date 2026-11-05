@@ -1,0 +1,17 @@
+{
+  "feature/files/src/main/kotlin/persona/feature/files/AudioFile.kt": 7,
+  "feature/files/src/main/kotlin/persona/feature/files/FilePreview.kt": 22,
+  "feature/files/src/main/kotlin/persona/feature/files/FileShare.kt": 1,
+  "feature/files/src/main/kotlin/persona/feature/files/FilesErrors.kt": 5,
+  "feature/files/src/main/kotlin/persona/feature/files/FilesPaths.kt": 6,
+  "feature/files/src/main/kotlin/persona/feature/files/FilesScreen.kt": 23,
+  "feature/files/src/main/kotlin/persona/feature/files/FilesState.kt": 1,
+  "feature/files/src/main/kotlin/persona/feature/files/GitPages.kt": 29,
+  "feature/files/src/main/kotlin/persona/feature/files/GitText.kt": 7,
+  "feature/files/src/main/kotlin/persona/feature/files/HtmlPreview.kt": 5,
+  "feature/files/src/main/kotlin/persona/feature/files/Notebook.kt": 4,
+  "feature/files/src/main/kotlin/persona/feature/files/NotebookView.kt": 4,
+  "feature/files/src/main/kotlin/persona/feature/files/PdfPages.kt": 2,
+  "feature/files/src/main/kotlin/persona/feature/files/SheetView.kt": 16,
+  "feature/files/src/main/kotlin/persona/feature/files/Sheets.kt": 5
+}

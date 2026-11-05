@@ -28,7 +28,7 @@ import java.io.File
 /** Only supplied fake models are rendered; no hub or model catalog is consulted. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w400dp-h1000dp-xhdpi")
+@Config(sdk = [35], qualifiers = "zh-w400dp-h1000dp-xhdpi")
 class ModelLabelsShotsTest {
     @get:Rule val rule = createComposeRule()
 
