@@ -114,16 +114,18 @@ describe("the editor", () => {
     expect(sameTask(t, { ...t, enabled: false })).toBe(false);
     expect(sameTask(t, { ...t, permission_mode: "auto" })).toBe(false);
     expect(sameTask(t, { ...t, title: "早报 " })).toBe(true);
+    expect(sameTask(t, { ...t, launcher: "legacy", effort: "high" })).toBe(true); // models are configured by category
   });
 
-  it("saves every field the hub replaces, and the model ones only when changed", () => {
+  it("saves editable fields without task model overrides", () => {
     const saved = task({ repeat: "daily", time: "09:00", weekdays: [1, 2, 3, 4, 5, 6, 7], launcher: "claude", effort: "low", session_id: "s1", at: "0001-01-01T00:00:00Z" });
-    const body = taskBody({ ...saved, title: " 早报 ", permission_mode: "auto" }, saved);
+    const body = taskBody({ ...saved, title: " 早报 ", permission_mode: "auto" });
     expect(body).toEqual({ title: "早报", prompt: "给我早报", repeat: "daily", enabled: true, time: "09:00", weekdays: [], every_minutes: 0, session_id: "s1", permission_mode: "auto" });
-    expect(taskBody({ ...saved, launcher: "", effort: "high" }, saved)).toMatchObject({ launcher: "", effort: "high" });
-    expect(taskBody({ ...saved, session_id: undefined }, saved).session_id).toBe(""); // runs go to the task's own conversation
+    expect(taskBody({ ...saved, session_id: undefined }).session_id).toBe(""); // runs go to the task's own conversation
     const once = taskBody(task({ repeat: "once", at: iso(at(2, 15)) }));
-    expect(once).toMatchObject({ repeat: "once", at: iso(at(2, 15)), launcher: "", effort: "", time: "", weekdays: [] });
+    expect(once).toMatchObject({ repeat: "once", at: iso(at(2, 15)), time: "", weekdays: [] });
+    expect(once).not.toHaveProperty("launcher");
+    expect(once).not.toHaveProperty("effort");
     expect(taskBody(task({ repeat: "interval", every_minutes: 45 }))).toMatchObject({ every_minutes: 45, time: "" });
     expect("at" in taskBody(task({ repeat: "interval", every_minutes: 45 }))).toBe(false);
   });

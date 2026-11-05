@@ -256,8 +256,6 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         <TaskEditor
           key={editing.id || "new"}
           task={editing}
-          machineID={assistant?.machine_id}
-          defaultLauncher={assistant?.launcher}
           onClose={() => setEditing(null)}
           onSaved={saved}
           onDeleted={deleted}

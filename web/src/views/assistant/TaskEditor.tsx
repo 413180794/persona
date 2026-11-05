@@ -1,12 +1,12 @@
 // One scheduled task in a dialog (the iOS app's AssistantTaskEditor): when (once / every day / every N minutes), the
-// prompt, what a run starts with (launcher, permission mode, effort; "" = the assistant's default), which conversation
-// runs go into, 立即运行, the last result and the task's own runs. A new one has 取消 / 添加, so trying a template and
-// backing out creates nothing; an existing one is saved with 保存 and deleted after an inline confirmation.
+// prompt, permission mode, which conversation runs go into, 立即运行, the last result and the task's own runs.
+// A new one has 取消 / 添加, so trying a template and backing out creates nothing; an existing one is saved with
+// 保存 and deleted after an inline confirmation.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, enc, errorText } from "../../lib/api";
 import { navigate } from "../../lib/router";
 import {
-  BYPASS, DAY_NAMES, EFFORTS, everyLabel, fromLocalInput, INTERVALS, lastRunText, MAX_EVERY, MIN_EVERY, momentLabel, nextRun, normalizeDays,
+  BYPASS, DAY_NAMES, everyLabel, fromLocalInput, INTERVALS, lastRunText, MAX_EVERY, MIN_EVERY, momentLabel, nextRun, normalizeDays,
   parseTime, PERMISSION_MODES, repeatsLabel, runDetail, runStatusWord, sameTask, taskBody, taskTitle, toLocalInput, untilLabel, validateTask,
   TASK_PUSH_FEATURE, WEEKEND, withPush, withRepeat, WORKDAYS, type Push, type Repeat, type Run, type Task,
 } from "../../lib/routines";
@@ -22,24 +22,13 @@ const reveal = (el: HTMLElement | null) => el?.scrollIntoView({ block: "nearest"
 
 const everyOk = (m?: number) => Number.isInteger(m) && (m ?? 0) >= MIN_EVERY && (m ?? 0) <= MAX_EVERY;
 
-interface LauncherOption {
-  name: string;
-  model?: string;
-  agent?: string;
-}
-
 export function TaskEditor({
   task,
-  machineID,
-  defaultLauncher,
   onClose,
   onSaved,
   onDeleted,
 }: {
   task: Task;
-  /** The assistant's machine: its launchers are the ones a run can start. */
-  machineID?: string;
-  defaultLauncher?: string;
   onClose: () => void;
   onSaved: (t: Task) => void;
   onDeleted: (t: Task) => void;
@@ -50,7 +39,6 @@ export function TaskEditor({
   const [busy, setBusy] = useState<"" | "save" | "run" | "delete" | "fresh">("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [askBypass, setAskBypass] = useState(false);
-  const [launchers, setLaunchers] = useState<LauncherOption[] | null>(null);
   const [central, setCentral] = useState(false);
   const [runs, setRuns] = useState<Run[]>([]);
   const nowMs = useNow(30_000);
@@ -59,17 +47,6 @@ export function TaskEditor({
   const origin = task.session_id;
   /** 跑完推送 shows when the hub takes it (task_push), or the task already has it. */
   const hasPush = useStore((s) => hubHas(s.features, TASK_PUSH_FEATURE)) || task.push === "asked";
-
-  useEffect(() => {
-    if (!machineID) return;
-    let live = true;
-    api<{ launchers: LauncherOption[] }>(`/machines/${enc(machineID)}/launchers`)
-      .then((r) => live && setLaunchers((r.launchers ?? []).filter((l) => !l.agent || l.agent === "claude" || l.agent === "codex")))
-      .catch(() => live && setLaunchers([]));
-    return () => {
-      live = false;
-    };
-  }, [machineID]);
 
   useEffect(() => {
     let live = true;
@@ -268,16 +245,7 @@ export function TaskEditor({
 
           <section>
             <SectionTitle>{t("assistant-taskeditor.section_run")}</SectionTitle>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label={t("assistant-taskeditor.launcher_label")}>
-                <select className={inputClass} value={draft.launcher ?? ""} onChange={(e) => set({ launcher: e.target.value || undefined })}>
-                  <option value="">{defaultLauncher ? t("assistant-taskeditor.assistant_default_named", { launcher: defaultLauncher }) : t("assistant-taskeditor.assistant_default")}</option>
-                  {draft.launcher && !launchers?.some((l) => l.name === draft.launcher) && <option value={draft.launcher}>{draft.launcher}</option>}
-                  {(launchers ?? []).map((l) => (
-                    <option key={l.name} value={l.name}>{l.model ? t("assistant-taskeditor.launcher_with_model", { launcher: l.name, model: l.model }) : l.name}</option>
-                  ))}
-                </select>
-              </Field>
+            <div>
               <Field label={t("assistant-taskeditor.permission_label")}>
                 <select
                   className={draft.permission_mode === BYPASS ? inputClass.replace(" text-ink ", " font-medium text-red ") : inputClass}
@@ -297,15 +265,6 @@ export function TaskEditor({
                   )}
                   {PERMISSION_MODES.map((m) => (
                     <option key={m.id} value={m.id}>{m.title}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t("assistant-taskeditor.effort_label")}>
-                <select className={inputClass} value={draft.effort ?? ""} onChange={(e) => set({ effort: e.target.value || undefined })}>
-                  <option value="">{t("assistant-taskeditor.assistant_default")}</option>
-                  {draft.effort && !EFFORTS.some((x) => x.id === draft.effort) && <option value={draft.effort}>{draft.effort}</option>}
-                  {EFFORTS.map((x) => (
-                    <option key={x.id} value={x.id}>{x.title}</option>
                   ))}
                 </select>
               </Field>
@@ -345,11 +304,11 @@ export function TaskEditor({
                 type="button"
                 onClick={() => {
                   onClose();
-                  navigate(`/settings?tab=model-config&purpose=${enc(saved ? `task.${saved.id}` : "schedule")}`);
+                  navigate("/settings?tab=model-config&purpose=assistant");
                 }}
                 className="mt-1 inline-flex items-center gap-1 whitespace-nowrap px-1 text-[11.5px] text-accent-ink hover:underline"
               >
-                {saved ? t("assistant-taskeditor.model_config_task") : t("assistant-taskeditor.model_config_default")}
+                {t("assistant-taskeditor.model_config_assistant")}
                 <Icon name="chevronRight" size={11} stroke={2.2} />
               </button>
             )}

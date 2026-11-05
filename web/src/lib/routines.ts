@@ -266,8 +266,8 @@ export function validateTask(d: Task, now: Date): string | null {
  *  another rule uses don't count). */
 export function sameTask(a: Task, b: Task): boolean {
   if (a.title.trim() !== b.title.trim() || a.prompt.trim() !== b.prompt.trim() || a.repeat !== b.repeat || a.enabled !== b.enabled) return false;
-  if ((a.session_id ?? "") !== (b.session_id ?? "") || (a.launcher ?? "") !== (b.launcher ?? "")) return false;
-  if ((a.permission_mode ?? "") !== (b.permission_mode ?? "") || (a.effort ?? "") !== (b.effort ?? "")) return false;
+  if ((a.session_id ?? "") !== (b.session_id ?? "")) return false;
+  if ((a.permission_mode ?? "") !== (b.permission_mode ?? "")) return false;
   if ((a.push ?? "") !== (b.push ?? "")) return false;
   switch (a.repeat) {
     case "once":
@@ -279,9 +279,8 @@ export function sameTask(a: Task, b: Task): boolean {
   }
 }
 
-/** The JSON for POST (no `saved`) or PUT. The hub replaces every field it takes except the model ones, which it keeps
- *  when they are left out: they go only when changed here, so a model just set in 模型配置 isn't put back (docs/model-config.md).
- *  `session_id` "" makes runs use the task's own conversation; `at` is left out when there is none (Go can't read ""). */
+/** The JSON for POST (no `saved`) or PUT. Models follow 模型配置 › 主对话; tasks only configure permissions.
+ *  `push` goes only when changed from `saved`. `session_id` "" makes runs use the task's own conversation; `at` is left out when there is none (Go can't read ""). */
 export function taskBody(d: Task, saved?: Task | null): Record<string, unknown> {
   const body: Record<string, unknown> = {
     title: d.title.trim(),
@@ -296,8 +295,6 @@ export function taskBody(d: Task, saved?: Task | null): Record<string, unknown> 
   };
   const at = d.repeat === "daily" ? null : parseTime(d.at);
   if (at) body.at = at.toISOString();
-  if (!saved || (d.launcher ?? "") !== (saved.launcher ?? "")) body.launcher = d.launcher ?? "";
-  if (!saved || (d.effort ?? "") !== (saved.effort ?? "")) body.effort = d.effort ?? "";
   // Only when changed: a hub keeps it when left out, and one that does not know it never gets it.
   if ((d.push ?? "") !== (saved?.push ?? "")) body.push = d.push ?? "";
   return body;
