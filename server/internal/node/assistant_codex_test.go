@@ -17,6 +17,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // fakeAppServer plays `codex app-server` on the other end of a codexConn: it records what the node sends, answers
@@ -687,5 +688,77 @@ func TestCodexGetsRealWritableRoots(t *testing.T) {
 				t.Fatalf("writable roots %v, want the memory directory %s", roots, mem)
 			}
 		})
+	}
+}
+
+// A Codex assistant turn that fails on the model service reports its error and kind on the session until the next turn
+// starts (#2571).
+func TestAssistantCodexTurnError(t *testing.T) {
+	n := codexTestNode(t)
+	cwd := t.TempDir()
+	p, c, f := newFakeCodex(t, n, cwd)
+	p.id = "proc-err"
+	c.threadID = testThread
+	n.procs["proc-err"] = p
+
+	turn := func(id string) {
+		f.push(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": testThread, "turn": map[string]any{"id": id, "status": "inProgress"}}})
+		waitFor(t, "turn "+id+" runs", func() bool {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			return p.busy
+		})
+	}
+	end := func(id, status string, err any) {
+		f.push(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": testThread,
+			"turn": map[string]any{"id": id, "status": status, "error": err}}})
+		waitFor(t, "turn "+id+" ends", func() bool {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			return !p.busy
+		})
+	}
+	session := func() proto.Session {
+		list := n.assistantSessions()
+		for _, s := range list {
+			if s.SessionID == "proc-err" {
+				return s
+			}
+		}
+		t.Fatal("session not found")
+		return proto.Session{}
+	}
+
+	turn("t1")
+	end("t1", "failed", map[string]any{"message": "unexpected status 503", "codexErrorInfo": map[string]any{"httpConnectionFailed": map[string]any{"httpStatusCode": 503}}})
+	if s := session(); s.TurnError != "unexpected status 503" || s.TurnErrorKind != proto.TurnErrorTransient {
+		t.Fatalf("failed turn: %q, %q", s.TurnError, s.TurnErrorKind)
+	}
+
+	turn("t2")
+	if s := session(); s.TurnError != "" || s.TurnErrorKind != "" {
+		t.Fatalf("new turn still has error: %q, %q", s.TurnError, s.TurnErrorKind)
+	}
+	end("t2", "failed", map[string]any{"message": "You've hit your usage limit.", "codexErrorInfo": "usageLimitExceeded"})
+	if s := session(); s.TurnError != "You've hit your usage limit." || s.TurnErrorKind != proto.TurnErrorUser {
+		t.Fatalf("usage limit error: %q, %q", s.TurnError, s.TurnErrorKind)
+	}
+
+	turn("t3")
+	end("t3", "failed", nil)
+	if s := session(); s.TurnError != transcript.CodexTurnFailed {
+		t.Fatalf("failed with no error: %q", s.TurnError)
+	}
+
+	turn("t4")
+	end("t4", "interrupted", map[string]any{"message": "interrupted"})
+	if s := session(); s.TurnError != "" {
+		t.Fatalf("interrupted turn should have no error: %q", s.TurnError)
+	}
+
+	turn("t5")
+	end("t5", "completed", nil)
+	if s := session(); s.TurnError != "" {
+		t.Fatalf("completed turn: %q", s.TurnError)
 	}
 }

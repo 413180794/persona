@@ -1152,6 +1152,11 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	}
 	text := s.lastTurnAPIError(ctx, m.ID, run.SessionID)
 	if text == "" {
+		if c, ok := s.session(ctx, m.ID, run.SessionID); ok {
+			text = c.TurnError
+		}
+	}
+	if text == "" {
 		return
 	}
 	text = clip(oneLine(text), 300)

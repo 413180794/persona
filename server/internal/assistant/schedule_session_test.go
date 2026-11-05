@@ -266,6 +266,64 @@ func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
 	t.Fatal("the failed run was not recorded")
 }
 
+// A run where the turn ends and the session carries a TurnError (e.g. a Codex turn failure on the model service)
+// is failed, pushed and retried once (#2571).
+func TestTaskTurnEndingInSessionTurnErrorFailsAndRetriesOnce(t *testing.T) {
+	n := newFakeHub().withMachine()
+	h := newStorelessService(t, n)
+	old := runRetryDelay
+	runRetryDelay = 50 * time.Millisecond
+	t.Cleanup(func() { runRetryDelay = old })
+	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
+
+	// The turn runs, then ends: the session carries TurnError and no assistant text item.
+	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
+		Cwd: "/home/me/.jarvis/assistant"})
+	go func() {
+		time.Sleep(3 * time.Second)
+		n.mu.Lock()
+		for i := range n.sessions["server"] {
+			n.sessions["server"][i].Status, n.sessions["server"][i].State = proto.StatusOffline, proto.StateIdle
+			n.sessions["server"][i].TurnError = "unexpected status 503 upstream attempt budget is exhausted"
+			n.sessions["server"][i].TurnErrorKind = proto.TurnErrorTransient
+		}
+		n.mu.Unlock()
+	}()
+
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		sc := h.loadSchedule(context.Background())
+		sc.mu.Lock()
+		failed := len(sc.runs) > 0 && slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool {
+			return r.RefID == "p" && r.Status == runFailed && strings.Contains(r.Error, "503")
+		})
+		sc.mu.Unlock()
+		if failed {
+			if p := n.pushed(); len(p) == 0 || p[0].Title != "定时任务失败：值守" || p[0].SessionID != "s1" || p[0].DeviceID != "server" {
+				t.Fatalf("the failure is pushed: %+v", p)
+			}
+			// and the retry went, marked as such
+			for time.Now().Before(deadline) {
+				if n.sent() >= 2 {
+					sc.mu.Lock()
+					retried := slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Retried })
+					sc.mu.Unlock()
+					if retried {
+						return
+					}
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("the failed run was not recorded")
+}
+
 // The failure push sends the user to the task's page. A task switched off or deleted while the retry waited must not
 // run again: the retry used the copy the run started with, so it went anyway, with the old prompt, and silently (a
 // retry that fails is not pushed).

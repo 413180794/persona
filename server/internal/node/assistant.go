@@ -115,6 +115,9 @@ type assistantProc struct {
 	requested   bool     // its first request was logged
 	stderrTail  []string // its last assistantStderrTail stderr lines (watchAssistantStderr)
 
+	turnError     string // the latest turn failed on the model service (#2571)
+	turnErrorKind string // proto.TurnErrorTransient or proto.TurnErrorUser
+
 	// owner: the Node that took it over from an earlier connection of a resident node (assistant_keep.go); nil: the
 	// one that started it.
 	owner atomic.Pointer[Node]
@@ -386,6 +389,8 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	if p.agent == "codex" {
 		p.mu.Lock()
 		p.busy = true
+		p.turnError = ""
+		p.turnErrorKind = ""
 		p.lastActive = time.Now()
 		p.mu.Unlock()
 		if err := p.cx.deliver(ctx, live, text, images); err != nil {
@@ -414,6 +419,8 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		n.syncAssistantModes(p) // a new or resumed process starts without them
 		p.mu.Lock()
 		p.busy = true
+		p.turnError = ""
+		p.turnErrorKind = ""
 		p.compacted = false // a new turn: compact again when it is idle and long
 		p.lastActive = time.Now()
 		p.partial.Reset()
@@ -760,6 +767,8 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 				p.mu.Lock()
 				had := p.partial.Len() > 0
 				p.partial.Reset()
+				p.turnError = ""
+				p.turnErrorKind = ""
 				resumed := !p.busy
 				p.busy = true
 				p.lastActive = time.Now()
@@ -1045,13 +1054,20 @@ func (n *Node) assistantSessions() []proto.Session {
 	var out []proto.Session
 	for _, p := range procs {
 		p.mu.Lock()
+		busy := p.busy
 		status := proto.StatusDone // finished turn; the hub turns it into idle once seen
-		if p.busy {
+		if busy {
 			status = proto.StatusWorking
 		}
 		updated := p.lastActive
+		turnError := p.turnError
+		turnErrorKind := p.turnErrorKind
 		p.mu.Unlock()
 		s := proto.Session{SessionID: p.id, Cwd: p.cwd, Status: status, Launcher: p.launcher, UpdatedAt: updated.UTC()}
+		if !busy {
+			s.TurnError = turnError
+			s.TurnErrorKind = turnErrorKind
+		}
 		if p.agent == "codex" {
 			s.Agent = "codex"
 		}
@@ -1062,8 +1078,12 @@ func (n *Node) assistantSessions() []proto.Session {
 				s.PermissionMode, s.Effort = n.currentModes(p.id, m)
 				setContext(&s, m)
 				untitled(&s, m)
-				if !p.busy {
+				if !busy {
 					s.UpdatedAt = lastUsed(m, st)
+					if s.TurnError == "" && m.turnError != "" {
+						s.TurnError = m.turnError
+						s.TurnErrorKind = m.turnErrorKind
+					}
 				}
 			}
 		}

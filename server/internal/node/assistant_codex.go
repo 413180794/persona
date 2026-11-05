@@ -23,6 +23,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // The assistant on a Codex launcher runs `codex app-server` (Codex's JSON-RPC server for IDEs, newline-delimited JSON
@@ -575,11 +576,9 @@ func (c *codexConn) notification(method string, params json.RawMessage) {
 		TurnID   string `json:"turnId"`
 		Delta    string `json:"delta"`
 		Turn     struct {
-			ID     string `json:"id"`
-			Status string `json:"status"`
-			Error  *struct {
-				Message string `json:"message"`
-			} `json:"error"`
+			ID     string          `json:"id"`
+			Status string          `json:"status"`
+			Error  json.RawMessage `json:"error"`
 		} `json:"turn"`
 		Item struct {
 			Type    string `json:"type"`
@@ -612,6 +611,8 @@ func (c *codexConn) notification(method string, params json.RawMessage) {
 		p.mu.Lock()
 		had := p.partial.Len() > 0
 		p.partial.Reset()
+		p.turnError = ""
+		p.turnErrorKind = ""
 		resumed := !p.busy
 		p.busy = true
 		p.lastActive = time.Now()
@@ -678,22 +679,29 @@ func (c *codexConn) notification(method string, params json.RawMessage) {
 			c.turnID = ""
 		}
 		c.mu.Unlock()
-		if ev.Turn.Error != nil && ev.Turn.Error.Message != "" {
-			n.logger.Printf("assistant codex %s: turn %s: %s", short(p.id), ev.Turn.Status, ev.Turn.Error.Message)
+		var failure, failureKind string
+		if ev.Turn.Status != "interrupted" {
+			if len(ev.Turn.Error) > 0 && string(ev.Turn.Error) != "null" {
+				failure, failureKind = transcript.CodexTurnError(ev.Turn.Error)
+			}
+			if failure == "" && (ev.Turn.Status == "failed" || (ev.Turn.Status != "completed" && ev.Turn.Status != "")) {
+				failure = transcript.CodexTurnFailed
+			}
+		}
+		if failure != "" {
+			n.logger.Printf("assistant codex %s: turn %s: %s", short(p.id), ev.Turn.Status, failure)
 		}
 		p.mu.Lock()
 		p.busy = false
+		p.turnError = failure
+		p.turnErrorKind = failureKind
 		p.lastActive = time.Now()
 		p.partial.Reset()
 		manual := p.manual
 		p.manual, p.compacting = false, false
 		p.mu.Unlock()
 		if manual { // the turn the compaction ran in ended before its item came: done, unless it failed
-			failure := ""
-			if ev.Turn.Error != nil && ev.Turn.Error.Message != "" {
-				failure = snippet(ev.Turn.Error.Message)
-			}
-			n.compactionEnded(p.id, failure)
+			n.compactionEnded(p.id, snippet(failure))
 		}
 		if f, err := n.file(p.id); err == nil {
 			n.refresh(p.id, f)
