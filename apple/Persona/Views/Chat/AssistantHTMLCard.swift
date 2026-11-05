@@ -6,7 +6,7 @@ import WebKit
 // rule list blocks every load but the page itself and inline data), no cookies or storage of the app (a non-persistent
 // data store), no navigation away, no new windows, no downloads. Its only way out is `window.persona.reply(text)` /
 // `window.persona.open(url)`, one message handler named `persona`; both are shown to the user in a native dialog first,
-// and a card sends at most one reply. It does not run until the user taps 运行, and it is torn down when it scrolls away.
+// and a card sends at most one reply. It runs only while visible in the active tab and scene, and is torn down otherwise.
 
 /// What a card's page asked the app for, read from what it posted to the `persona` handler.
 nonisolated enum HTMLCardRequest: Equatable, Sendable {
@@ -18,7 +18,7 @@ nonisolated enum HTMLCardRequest: Equatable, Sendable {
     /// A reply's longest text (the same as an action's `reply`).
     static let maxReply = 2000
     /// A link's longest text.
-    static let maxURL = 2048
+    static let maxURL = 4096
 
     /// The request in a posted message, nil for anything else: another frame's, another shape, too long, empty, or a
     /// link the app does not open.
@@ -31,7 +31,7 @@ nonisolated enum HTMLCardRequest: Equatable, Sendable {
             guard !text.isEmpty, text.count <= maxReply else { return nil }
             return .reply(text)
         case "open":
-            guard let s = m["url"] as? String, s.count <= maxURL, let url = URL(string: s), AssistantViewLink.allowed(url) else { return nil }
+            guard let s = m["url"] as? String, s.count <= maxURL, AssistantViewLink.allowed(s), let url = URL(string: s) else { return nil }
             return .open(url)
         default:
             return nil
@@ -44,17 +44,96 @@ nonisolated enum HTMLCardRequest: Equatable, Sendable {
 nonisolated enum AssistantViewLink {
     static let places: Set<String> = ["session", "task", "kb", "file"]
 
-    static func allowed(_ url: URL) -> Bool {
-        switch url.scheme?.lowercased() {
+    static func allowed(_ url: URL) -> Bool { allowed(url.absoluteString) }
+
+    /// Inspect the original spelling before URL normalizes malformed percent escapes or control characters.
+    static func allowed(_ raw: String) -> Bool {
+        guard raw.count <= HTMLCardRequest.maxURL, !raw.contains("\\"), validEscapes(raw),
+              let decoded = raw.removingPercentEncoding,
+              !decoded.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
+              let components = URLComponents(string: raw), let url = components.url,
+              components.user == nil, components.password == nil else { return false }
+        switch components.scheme?.lowercased() {
         case "https":
             return url.host()?.isEmpty == false
-        case "persona":
-            guard let host = url.host()?.lowercased(), places.contains(host) else { return false }
-            return url.path().split(separator: "/").contains { !$0.isEmpty }
+        case "persona", "jarvis":
+            guard let host = components.host?.lowercased(), places.contains(host),
+                  components.port == nil, components.query == nil, components.fragment == nil else { return false }
+            let path = components.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false)
+            guard path.first == "" else { return false }
+            let parts = path.dropFirst().compactMap { String($0).removingPercentEncoding }
+            guard parts.count == path.count - 1,
+                  parts.allSatisfy({ !$0.isEmpty && !$0.contains("\\") }) else { return false }
+            if host == "file" {
+                // The hub's wire format is machine plus one percent-encoded absolute path, not many URL segments.
+                return parts.count == 2 && !parts[0].contains("/") && parts[1].hasPrefix("/")
+            }
+            guard parts.allSatisfy({ !$0.contains("/") }) else { return false }
+            switch host {
+            case "session": return parts.count == 2
+            case "task": return parts.count == 1
+            case "kb": return !parts.isEmpty && parts.allSatisfy { $0 != "." && $0 != ".." }
+            default: return false
+            }
         default:
             return false
         }
     }
+
+    private static func validEscapes(_ text: String) -> Bool {
+        let bytes = Array(text.utf8)
+        func hex(_ byte: UInt8) -> Bool { (48...57).contains(byte) || (65...70).contains(byte) || (97...102).contains(byte) }
+        var i = 0
+        while i < bytes.count {
+            if bytes[i] == 37 {
+                guard i + 2 < bytes.count, hex(bytes[i + 1]), hex(bytes[i + 2]) else { return false }
+                i += 3
+            } else {
+                i += 1
+            }
+        }
+        return true
+    }
+}
+
+/// One native confirmation at a time and one accepted reply for the card's lifetime. Opens remain usable.
+/// Restarting a page may unmute declined requests, but does not clear a completed reply.
+nonisolated struct HTMLCardActions: Equatable, Sendable {
+    private(set) var pending: HTMLCardRequest?
+    private(set) var sending = false
+    private(set) var consumed = false
+    private(set) var muted = false
+
+    mutating func receive(_ request: HTMLCardRequest, answered: Bool) {
+        guard !muted, !sending, pending == nil else { return }
+        if case .reply = request, answered || consumed { return }
+        pending = request
+    }
+
+    mutating func approve(_ request: HTMLCardRequest, answered: Bool) -> Bool {
+        guard pending == request, !sending else { return false }
+        if case .reply = request, answered || consumed {
+            pending = nil
+            return false
+        }
+        pending = nil
+        sending = true
+        return true
+    }
+
+    mutating func complete(_ request: HTMLCardRequest, success: Bool) {
+        sending = false
+        if case .reply = request { consumed = consumed || success }
+    }
+
+    mutating func decline() {
+        guard pending != nil else { return }
+        pending = nil
+        muted = true
+    }
+
+    mutating func dismiss() { pending = nil }
+    mutating func restart() { pending = nil; muted = false }
 }
 
 /// An `html` component in the assistant's reply: its title and 运行; once run, the page in its sandbox. A page asking
@@ -68,18 +147,22 @@ struct AssistantHTMLCard: View {
     var fallback: String?
     /// A reply from this card was already sent (here or on another device): it sends no more.
     var answered = false
-    /// Runs as soon as it is shown instead of after 运行 (#2017 decision 1).
-    var autoRun = false
+    /// Whether this platform and hub allow execution. Disabled cards show only their fallback.
+    var enabled = true
+    /// Cards automatically run only while visible. The sample may opt out to exercise a manual retry.
+    var autoRun = true
     /// Sends the reply (the view action endpoint); false when it did not go.
     var onReply: (String) async -> Bool
     var onOpen: (URL) -> Void
 
+    @Environment(\.scenePhase) private var phase
+    @Environment(\.tabIsActive) private var tabActive
+    @State private var onScreen = false
+    @State private var stopped = false
     @State private var running = false
-    @State private var asking: HTMLCardRequest?
-    @State private var sending = false
-    @State private var sent = false
-    /// The user said no to a request this run: the page asks nothing more until it is run again.
-    @State private var muted = false
+    @State private var actions = HTMLCardActions()
+
+    private var executing: Bool { enabled && onScreen && tabActive && phase == .active && (running || (autoRun && !stopped)) }
 
     static let minHeight = 160
     static let maxHeight = 640
@@ -96,18 +179,18 @@ struct AssistantHTMLCard: View {
                     Text(title).font(Theme.Font.heading).lineLimit(2).accessibilityAddTraits(.isHeader)
                 }
                 Spacer(minLength: Theme.Space.s)
-                if running {
+                if executing {
                     Button("停止", systemImage: Theme.Icon.interrupt) { stop() }
                         .labelStyle(.iconOnly)
                         .themedButton()
                         .accessibilityIdentifier("html-card-stop")
                 }
             }
-            if running {
+            if executing {
+                Text("助手画的页面 · 隔离运行").font(Theme.Font.caption).foregroundStyle(.secondary)
                 SandboxedHTMLView(html: html) { request in
-                    guard !muted, !sending, asking == nil else { return }
-                    if case .reply = request, answered || sent { return }
-                    asking = request
+                    guard executing else { return }
+                    actions.receive(request, answered: answered)
                 }
                 .frame(height: Self.clampedHeight(height))
                 .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
@@ -118,12 +201,19 @@ struct AssistantHTMLCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card(padding: Theme.Space.m)
-        .onAppear { if autoRun { running = true } }
-        // Off screen it costs nothing: the page and its scripts go away and come back from the start.
-        .onDisappear { stop() }
-        .alert(alertTitle, isPresented: Binding(get: { asking != nil }, set: { if !$0 { decline() } }), presenting: asking) { request in
-            Button(confirmTitle(request)) { Task { await accept(request) } }
-            Button("取消", role: .cancel) { decline() }
+        .onScrollVisibilityChange(threshold: Theme.Visibility.richCardThreshold) { onScreen = $0 }
+        // Scrolling away, inactive tabs and background scenes release the WebView even in retained shells.
+        .onChange(of: executing) { _, executing in if !executing { actions.dismiss() } }
+        .onDisappear { onScreen = false; running = false; actions.dismiss() }
+        .onChange(of: answered) { _, answered in if answered { actions.dismiss() } }
+        .onChange(of: html) { _, _ in actions.dismiss() }
+        .alert(alertTitle, isPresented: Binding(get: { actions.pending != nil }, set: { if !$0 { actions.decline() } }), presenting: actions.pending) { request in
+            Button(confirmTitle(request)) {
+                // Claim the confirmation before yielding: a second tap or an automatic dismissal cannot race it.
+                guard actions.approve(request, answered: answered) else { return }
+                Task { await accept(request) }
+            }
+            Button("取消", role: .cancel) { actions.decline() }
         } message: { request in
             switch request {
             case .reply(let text): Text(text)
@@ -137,18 +227,20 @@ struct AssistantHTMLCard: View {
             if let fallback, !fallback.isEmpty {
                 Text(fallback).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(4)
             }
-            Button { running = true; muted = false } label: {
-                Label("运行", systemImage: Theme.Icon.run).lineLimit(1)
+            if enabled {
+                Button { running = true; stopped = false; actions.restart() } label: {
+                    Label(autoRun ? "重试" : "运行", systemImage: Theme.Icon.run).lineLimit(1)
+                }
+                .themedButton(prominent: true)
+                .accessibilityIdentifier("html-card-run")
             }
-            .themedButton(prominent: true)
-            .accessibilityIdentifier("html-card-run")
-            Text("在隔离的环境里运行：不联网，拿不到你的数据；要回复或打开链接时会先问你。")
+            Text(enabled ? "助手画的页面 · 隔离运行；回复或打开链接前需要确认。" : "助手画的页面 · 已显示文字摘要")
                 .font(Theme.Font.caption).foregroundStyle(.secondary)
         }
     }
 
     private var alertTitle: String {
-        switch asking {
+        switch actions.pending {
         case .open: "卡片要打开链接"
         default: "卡片要替你回复"
         }
@@ -161,24 +253,17 @@ struct AssistantHTMLCard: View {
 
     private func stop() {
         running = false
-        asking = nil
-    }
-
-    private func decline() {
-        guard asking != nil else { return }
-        asking = nil
-        muted = true
+        stopped = true
+        actions.dismiss()
     }
 
     private func accept(_ r: HTMLCardRequest) async {
-        asking = nil
         switch r {
         case .open(let url):
             onOpen(url)
+            actions.complete(r, success: true)
         case .reply(let text):
-            sending = true
-            defer { sending = false }
-            if await onReply(text) { sent = true }
+            actions.complete(r, success: await onReply(text))
         }
     }
 }
@@ -193,12 +278,18 @@ private let sandboxRules = "[" + (
     ["about", "data", "blob"].map { #"{"trigger":{"url-filter":"^\#($0):"},"action":{"type":"ignore-previous-rules"}}"# }
 ).joined(separator: ",") + "]"
 
+private let sandboxDocumentPrefix = """
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+"""
+
 /// The only script the app adds: `window.persona`, which posts to the `persona` handler, and a quiet light / dark
 /// default the page's own CSS overrides.
-private let bridgeScript = """
+private func bridgeScript(instance: String) -> String {
+    """
 (() => {
   const h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.persona;
-  const send = (m) => { try { h && h.postMessage(m); } catch (_) {} };
+  const send = (m) => { try { h && h.postMessage({ ...m, instance: "\(instance)" }); } catch (_) {} };
   Object.defineProperty(window, "persona", {
     value: Object.freeze({
       reply(text) { send({ kind: "reply", text: String(text) }); },
@@ -211,6 +302,7 @@ private let bridgeScript = """
   (document.head || document.documentElement).prepend(s);
 })();
 """
+}
 
 /// A web view for a card's page that can reach nothing (see the top of this file); its requests come to `onRequest`.
 @MainActor
@@ -219,13 +311,33 @@ final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelega
     /// The page was put in: from now on every main-frame navigation is cancelled.
     private var started = false
     private var loaded: String?
+    private var generation: UInt = 0
+    private var loadTask: Task<Void, Never>?
+    private var navigation: WKNavigation?
+    private var acceptsMessages = false
+    private(set) var instance: String?
+    private let rulesLoader: @MainActor () async throws -> WKContentRuleList
 
-    init(onRequest: @escaping (HTMLCardRequest) -> Void) { self.onRequest = onRequest }
+    init(rulesLoader: @escaping @MainActor () async throws -> WKContentRuleList = SandboxedHTMLCoordinator.compiledRules,
+         onRequest: @escaping (HTMLCardRequest) -> Void) {
+        self.rulesLoader = rulesLoader
+        self.onRequest = onRequest
+    }
 
     static let handler = "persona"
 
     /// The rules compiled once for the app's life (a few ms; the store keeps them).
     private static var rules: WKContentRuleList?
+
+    static func compiledRules() async throws -> WKContentRuleList {
+        if let rules { return rules }
+        guard let compiled = try await WKContentRuleListStore.default().compileContentRuleList(
+            forIdentifier: "persona-html-card-sandbox", encodedContentRuleList: sandboxRules) else {
+            throw CocoaError(.featureUnsupported)
+        }
+        rules = compiled
+        return compiled
+    }
 
     static func makeWebView(_ coordinator: SandboxedHTMLCoordinator) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -241,7 +353,6 @@ final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelega
         config.allowsInlineMediaPlayback = true
         #endif
         let content = config.userContentController
-        content.addUserScript(WKUserScript(source: bridgeScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         // A weak hop: the controller keeps its handler alive, which would keep the coordinator (and its closures).
         content.add(WeakScriptHandler(coordinator), name: handler)
         let web = WKWebView(frame: .zero, configuration: config)
@@ -261,22 +372,56 @@ final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelega
     /// Puts the page in once the rules are in place; without the rules nothing is loaded at all.
     func load(_ html: String, in web: WKWebView) {
         guard loaded != html else { return }
+        loadTask?.cancel()
+        generation &+= 1
+        let ticket = generation
+        let loader = rulesLoader
         loaded = html
-        Task {
-            if Self.rules == nil {
-                Self.rules = try? await WKContentRuleListStore.default().compileContentRuleList(
-                    forIdentifier: "persona-html-card-sandbox", encodedContentRuleList: sandboxRules)
-            }
+        navigation = nil
+        instance = nil
+        acceptsMessages = false
+        web.stopLoading()
+        loadTask = Task { [weak self, weak web] in
+            let rules = try? await loader()
+            // Compilation may finish after a page update or teardown. Never resurrect that old page.
+            guard !Task.isCancelled, let self, let web, generation == ticket else { return }
             started = false
-            guard let rules = Self.rules else {
-                // No rules, no page: never run it with the network open by accident.
+            guard let rules else {
                 web.loadHTMLString("<p>无法隔离网络，不运行这张卡片</p>", baseURL: nil)
                 return
             }
-            web.configuration.userContentController.removeAllContentRuleLists()
-            web.configuration.userContentController.add(rules)
-            web.loadHTMLString(html, baseURL: nil)
+            let controller = web.configuration.userContentController
+            controller.removeAllContentRuleLists()
+            controller.add(rules)
+            controller.removeAllUserScripts()
+            let instance = UUID().uuidString
+            self.instance = instance
+            controller.addUserScript(WKUserScript(source: bridgeScript(instance: instance), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+            navigation = web.loadHTMLString(sandboxDocumentPrefix + html, baseURL: nil)
         }
+    }
+
+    /// Cancel pending compilation as well as navigation, and detach every bridge before the representable disappears.
+    func dismantle(_ web: WKWebView) {
+        generation &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        loaded = nil
+        navigation = nil
+        instance = nil
+        acceptsMessages = false
+        web.stopLoading()
+        web.navigationDelegate = nil
+        web.uiDelegate = nil
+        web.configuration.userContentController.removeAllScriptMessageHandlers()
+        web.configuration.userContentController.removeAllUserScripts()
+        // Clear running timers even if a snapshot temporarily retains the view after SwiftUI releases it.
+        web.loadHTMLString("", baseURL: nil)
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        guard let navigation, navigation === self.navigation else { return }
+        acceptsMessages = true
     }
 
     // MARK: Navigation: the page itself, nothing else
@@ -307,11 +452,22 @@ final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelega
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
                  windowFeatures: WKWindowFeatures) -> WKWebView? { nil }
 
+    /// Page-script dialogs are not a bridge: ignore them instead of letting arbitrary HTML open native prompts.
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) { completionHandler() }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) { completionHandler(false) }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) { completionHandler(nil) }
+
     // MARK: The bridge
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.name == Self.handler,
-              let request = HTMLCardRequest.parse(message.body, mainFrame: message.frameInfo.isMainFrame) else { return }
+        guard acceptsMessages, message.name == Self.handler,
+              let instance, let body = message.body as? [String: Any], body["instance"] as? String == instance,
+              let request = HTMLCardRequest.parse(body, mainFrame: message.frameInfo.isMainFrame) else { return }
         onRequest(request)
     }
 }
@@ -346,8 +502,7 @@ struct SandboxedHTMLView: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ web: WKWebView, coordinator: SandboxedHTMLCoordinator) {
-        web.stopLoading()
-        web.configuration.userContentController.removeAllScriptMessageHandlers()
+        coordinator.dismantle(web)
     }
 }
 #else
@@ -369,8 +524,7 @@ struct SandboxedHTMLView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ web: WKWebView, coordinator: SandboxedHTMLCoordinator) {
-        web.stopLoading()
-        web.configuration.userContentController.removeAllScriptMessageHandlers()
+        coordinator.dismantle(web)
     }
 }
 #endif
@@ -382,8 +536,16 @@ extension View {
 }
 
 private struct HTMLCardSample: ViewModifier {
-    @State private var shown = UserDefaults.standard.bool(forKey: "showSampleHTMLCard")
+    @State private var shown = UserDefaults.standard.bool(forKey: "showSampleHTMLCard") || UserDefaults.standard.string(forKey: "showSampleHTMLCard") == "open"
     @State private var replied: String?
+    @State private var opened: URL?
+    private let showingLinks = UserDefaults.standard.string(forKey: "showSampleHTMLCard") == "open"
+
+    private static let linkPage = """
+        <!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+        <p>只有确认后才会打开链接。</p>
+        <button onclick="persona.open('https://example.com/card')">打开链接</button>
+        """
 
     static let page = """
         <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -408,11 +570,16 @@ private struct HTMLCardSample: ViewModifier {
             NavigationStack {
                 ScrollView {
                     VStack(spacing: Theme.Space.l) {
-                        AssistantHTMLCard(title: "三个方案的得分", html: Self.page, height: 240, fallback: "A 62 分，B 88 分，C 45 分；B 最高。",
-                                          onReply: { replied = $0; return true }, onOpen: { _ in })
-                        AssistantHTMLCard(title: "三个方案的得分（运行中）", html: Self.page, height: 240, fallback: "A 62 分，B 88 分，C 45 分。",
-                                          autoRun: true, onReply: { replied = $0; return true }, onOpen: { _ in })
+                        AssistantHTMLCard(title: showingLinks ? "链接确认" : "三个方案的得分",
+                                          html: showingLinks ? Self.linkPage : Self.page, height: 240,
+                                          fallback: showingLinks ? "打开前需要确认。" : "A 62 分，B 88 分，C 45 分；B 最高。",
+                                          autoRun: false, onReply: { replied = $0; return true }, onOpen: { opened = $0 })
+                        AssistantHTMLCard(title: showingLinks ? "链接确认（运行中）" : "三个方案的得分（运行中）",
+                                          html: showingLinks ? Self.linkPage : Self.page, height: 240,
+                                          fallback: showingLinks ? "打开前需要确认。" : "A 62 分，B 88 分，C 45 分。",
+                                          autoRun: true, onReply: { replied = $0; return true }, onOpen: { opened = $0 })
                         if let replied { Text("已回复：\(replied)").font(Theme.Font.secondary).accessibilityIdentifier("html-card-replied") }
+                        if let opened { Text("已打开：\(opened.absoluteString)").font(Theme.Font.secondary).accessibilityIdentifier("html-card-opened") }
                     }
                     .padding(Theme.Space.page)
                 }

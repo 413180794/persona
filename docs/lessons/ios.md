@@ -5,6 +5,12 @@
 - 共享视图引用的辅助扩展也必须编进每个目标：watchOS 10 兼容把 `Color.mix` 换成 `blended` 后，扩展若仍留在 `Theme.swift`，
   只编入 `PersonaFace` 的灵动岛小组件会在 Release 归档失败。辅助扩展随 `PersonaFace.swift` 编入每个目标；不要把整套 App 主题拖进扩展，也不要在两个文件里重复声明。
 
+## HTML 沙箱的异步加载与销毁（#2025）
+
+规则表编译是异步的；只在 `dismantleUIView` 调 `stopLoading()`，不能阻止尚未完成的编译稍后重新加载页面。每次加载取消旧任务并更新代次，编译返回后同时检查取消状态和代次；销毁时撤掉脚本、message handler 与 delegate，再清空页面。用可控暂停的规则表加载器，分别验证旧编译晚完成和销毁后才完成，不靠偶然的编译速度。
+
+卡片位于保留页面的外壳中时，`onDisappear` 也不代表已滚出屏幕。执行条件同时检查滚动可见性、`tabIsActive` 和 `scenePhase`，条件不成立就移除 WebView。bridge 每次加载换实例标记，旧页面排队的消息不能在更新后生效；这不等同于对脚本提供硬性 CPU／内存配额。
+
 ## 无内容的平台替身用 EmptyView（#2001）
 
 visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内容背景。用 `Color.clear.frame(width: 0, height: 0)` 会引入不必要的固定尺寸；iOS 的 token 检查扫描共享源码，不会因为它位于 visionOS 分支就忽略。直接返回 `EmptyView()`，既不绘制内容，也不占布局空间；不为这个空替身新增零尺寸 token，不提高基线或添加豁免。

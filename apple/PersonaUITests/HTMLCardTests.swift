@@ -15,6 +15,38 @@ final class HTMLCardTests: XCTestCase {
         add(a)
     }
 
+    @MainActor func testOpenRequiresConfirmationAndDeclinesMuteThePage() {
+        app = XCUIApplication()
+        app.launchArguments = ["-showSampleHTMLCard", "open"]
+        app.launchPinned()
+        let choose = app.webViews.buttons["打开链接"].firstMatch
+        XCTAssertTrue(choose.waitForExistence(timeout: 20))
+        choose.tap()
+        let alert = app.alerts["卡片要打开链接"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts["https://example.com/card"].exists)
+        shot("open asking")
+        alert.buttons["取消"].tap()
+        choose.tap()
+        XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 2), "a declined page kept asking")
+        XCTAssertFalse(app.staticTexts["html-card-opened"].exists)
+
+        // The second card is the running one; restart that same card, not the first waiting card.
+        app.buttons["html-card-stop"].firstMatch.tap()
+        app.buttons.matching(identifier: "html-card-run").element(boundBy: 1).tap()
+        XCTAssertTrue(choose.waitForExistence(timeout: 5))
+        choose.tap()
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.buttons["打开"].tap()
+        XCTAssertTrue(app.staticTexts["html-card-opened"].waitForExistence(timeout: 5))
+        choose.tap()
+        XCTAssertTrue(alert.waitForExistence(timeout: 5), "a repeat open must still ask")
+        alert.buttons["取消"].tap()
+        choose.tap()
+        XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 2), "a declined page kept asking")
+        shot("open completed")
+    }
+
     @MainActor func testRunsOnTapAndAsksBeforeReplying() {
         app = XCUIApplication()
         app.launchArguments = ["-showSampleHTMLCard", "YES"]

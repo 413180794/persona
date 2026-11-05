@@ -8,12 +8,64 @@ import WebKit
 /// The assistant's free drawing (#2025): what a card's page may ask for, and that its sandbox reaches nothing.
 @MainActor
 struct AssistantHTMLCardTests {
+    @Test func aReplyIsUsedOnceButOpensRemainUsable() {
+        let reply = HTMLCardRequest.reply("选 B")
+        let open = HTMLCardRequest.open(URL(string: "https://example.com/card")!)
+        var actions = HTMLCardActions()
+        actions.receive(reply, answered: false)
+        #expect(actions.pending == reply)
+        #expect({ actions.approve(reply, answered: false) }())
+        #expect({ !actions.approve(reply, answered: false) }())
+        actions.receive(open, answered: false)
+        #expect(actions.pending == nil)
+        actions.complete(reply, success: true)
+        actions.restart()
+        actions.receive(reply, answered: false)
+        #expect(actions.pending == nil)
+        for _ in 0..<2 {
+            actions.receive(open, answered: true)
+            #expect(actions.pending == open)
+            #expect({ actions.approve(open, answered: true) }())
+            actions.complete(open, success: true)
+        }
+    }
+
+    @Test func decliningMutesUntilRestartAndAReplyFailureCanRetry() {
+        let reply = HTMLCardRequest.reply("选 B")
+        var actions = HTMLCardActions()
+        actions.receive(reply, answered: false)
+        actions.decline()
+        actions.receive(reply, answered: false)
+        #expect(actions.pending == nil)
+        actions.restart()
+        actions.receive(reply, answered: false)
+        #expect({ actions.approve(reply, answered: false) }())
+        actions.complete(reply, success: false)
+        actions.receive(reply, answered: false)
+        #expect(actions.pending == reply)
+    }
+
+    @Test func anAnswerOnAnotherDeviceRevokesPendingConfirmation() {
+        let reply = HTMLCardRequest.reply("选 B")
+        var actions = HTMLCardActions()
+        actions.receive(reply, answered: true)
+        #expect(actions.pending == nil)
+        actions.receive(reply, answered: false)
+        #expect({ !actions.approve(reply, answered: true) }())
+        #expect(actions.pending == nil && !actions.sending)
+        actions.receive(reply, answered: false)
+        actions.dismiss()
+        #expect({ !actions.approve(reply, answered: false) }())
+    }
+
     @Test func repliesAndLinksAPageMaySend() {
         #expect(HTMLCardRequest.parse(["kind": "reply", "text": "  选 B  "], mainFrame: true) == .reply("选 B"))
         #expect(HTMLCardRequest.parse(["kind": "open", "url": "https://example.com/a"], mainFrame: true)
             == .open(URL(string: "https://example.com/a")!))
         #expect(HTMLCardRequest.parse(["kind": "open", "url": "persona://session/my-mac/abc"], mainFrame: true) != nil)
         #expect(HTMLCardRequest.parse(["kind": "open", "url": "persona://kb/people/x.md"], mainFrame: true) != nil)
+        #expect(HTMLCardRequest.parse(["kind": "open", "url": "jarvis://task/example"], mainFrame: true) != nil)
+        #expect(HTMLCardRequest.parse(["kind": "open", "url": "persona://file/my-mac/%2FUsers%2Fme%2Freport.txt"], mainFrame: true) != nil)
     }
 
     @Test func whatAPageCannotSend() {
@@ -30,6 +82,19 @@ struct AssistantHTMLCardTests {
             (["kind": "open", "url": "persona://settings/hub"], true),
             (["kind": "open", "url": "persona://session"], true),
             (["kind": "open", "url": "tel:10086"], true),
+            (["kind": "open", "url": "https://user:password@example.com/"], true),
+            (["kind": "open", "url": "https://example.com/%ZZ"], true),
+            (["kind": "open", "url": "https://example.com/%0A"], true),
+            (["kind": "open", "url": "persona://session/one-part"], true),
+            (["kind": "open", "url": "persona://task/example/extra"], true),
+            (["kind": "open", "url": "persona://kb/../secret"], true),
+            (["kind": "open", "url": "persona://kb/%2e%2e/secret"], true),
+            (["kind": "open", "url": "persona://kb/%2fetc"], true),
+            (["kind": "open", "url": "persona://file/my-mac/../secret"], true),
+            (["kind": "open", "url": "persona://file/my-mac/report.txt"], true),
+            (["kind": "open", "url": "persona://file/my-mac/Users/me/report.txt"], true),
+            (["kind": "open", "url": "persona://kb/folder//file"], true),
+            (["kind": "open", "url": "persona://kb/file?path=other"], true),
             (["kind": "open", "url": "https://" + String(repeating: "a", count: HTMLCardRequest.maxURL)], true),
         ]
         for (body, main) in refused { #expect(HTMLCardRequest.parse(body, mainFrame: main) == nil, "\(body)") }
@@ -121,6 +186,97 @@ struct AssistantHTMLCardTests {
         Issue.record("the page never finished loading")
     }
 
+    /// Explicitly suspended compilation lets the test finish old and new requests in either order.
+    private final class RulesLatch {
+        private var waiting: [CheckedContinuation<WKContentRuleList, any Error>] = []
+        var count: Int { waiting.count }
+
+        func next() async throws -> WKContentRuleList {
+            try await withCheckedThrowingContinuation { waiting.append($0) }
+        }
+
+        func finish(_ index: Int, with rules: WKContentRuleList) { waiting.remove(at: index).resume(returning: rules) }
+        func cancelAll() {
+            let pending = waiting
+            waiting.removeAll()
+            for wait in pending { wait.resume(throwing: CancellationError()) }
+        }
+
+        func waitFor(_ count: Int) async throws {
+            for _ in 0..<100 {
+                if waiting.count >= count { return }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            throw CocoaError(.featureUnsupported)
+        }
+    }
+
+    @Test func obsoleteCompilationCannotReplaceTheLatestPage() async throws {
+        let rules = try await SandboxedHTMLCoordinator.compiledRules()
+        let latch = RulesLatch()
+        defer { latch.cancelAll() }
+        let c = SandboxedHTMLCoordinator(rulesLoader: { try await latch.next() }) { _ in }
+        let web = SandboxedHTMLCoordinator.makeWebView(c)
+        defer { c.dismantle(web) }
+        c.load("<p>old</p>", in: web)
+        try await latch.waitFor(1)
+        c.load("<p>latest</p>", in: web)
+        try await latch.waitFor(2)
+        latch.finish(1, with: rules)
+        try await waitLoaded(web, "latest")
+        latch.finish(0, with: rules)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(try await web.evaluateJavaScript("document.querySelector('p')?.textContent") as? String == "latest")
+    }
+
+    @Test func dismantleCancelsCompilationAndRemovesTheBridge() async throws {
+        let rules = try await SandboxedHTMLCoordinator.compiledRules()
+        let latch = RulesLatch()
+        defer { latch.cancelAll() }
+        let c = SandboxedHTMLCoordinator(rulesLoader: { try await latch.next() }) { _ in Issue.record("a destroyed card sent a request") }
+        let web = SandboxedHTMLCoordinator.makeWebView(c)
+        c.load("<p>must not run</p><script>persona.reply('late')</script>", in: web)
+        try await latch.waitFor(1)
+        c.dismantle(web)
+        latch.finish(0, with: rules)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(web.navigationDelegate == nil && web.uiDelegate == nil)
+        #expect(web.configuration.userContentController.userScripts.isEmpty)
+        #expect(try await web.evaluateJavaScript("document.querySelector('p')?.textContent ?? ''") as? String == "")
+        #expect(try await web.evaluateJavaScript("typeof window.webkit?.messageHandlers?.persona") as? String == "undefined")
+    }
+
+    @Test func oldPageMessagesAreIgnoredAfterAnUpdate() async throws {
+        var got: [HTMLCardRequest] = []
+        let c = SandboxedHTMLCoordinator { got.append($0) }
+        let web = SandboxedHTMLCoordinator.makeWebView(c)
+        defer { c.dismantle(web) }
+        c.load("<p>old</p>", in: web)
+        try await waitLoaded(web, "old")
+        let oldInstance = try #require(c.instance)
+        c.load("<p>new</p>", in: web)
+        try await waitLoaded(web, "new")
+        #expect(c.instance != oldInstance)
+        _ = try await web.callAsyncJavaScript("""
+            window.webkit.messageHandlers.persona.postMessage({kind:'reply',text:'stale',instance:oldInstance});
+            persona.reply('current');
+            await new Promise(r => setTimeout(r, 100));
+            """, arguments: ["oldInstance": oldInstance], contentWorld: .page)
+        #expect(got == [.reply("current")])
+    }
+
+    @Test func failureToCompileRulesNeverLoadsAssistantHTML() async throws {
+        let c = SandboxedHTMLCoordinator(rulesLoader: { throw CocoaError(.featureUnsupported) }) { _ in
+            Issue.record("a card ran without its rules")
+        }
+        let web = SandboxedHTMLCoordinator.makeWebView(c)
+        defer { c.dismantle(web) }
+        c.load("<p>unsafe</p><script>persona.reply('unsafe')</script>", in: web)
+        try await waitLoaded(web, "无法隔离网络，不运行这张卡片")
+        #expect(try await web.evaluateJavaScript("document.querySelector('p')?.textContent") as? String == "无法隔离网络，不运行这张卡片")
+    }
+
+    /// The assistant's free drawing in a real web view.
     private func run(sandboxed: Bool) async throws -> (out: [String: Any], connections: Int) {
         let listener = try Listener()
         let port = try await listener.start()

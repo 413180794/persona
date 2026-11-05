@@ -300,6 +300,11 @@ nonisolated enum Theme {
         var extraLeading: CGFloat { max(0, lineHeight - 1.19) * size }
     }
 
+    /// How much of a rich card must intersect the scroll viewport before its isolated content runs.
+    enum Visibility {
+        static let richCardThreshold: Double = 0.01
+    }
+
     /// The watch's list rows: rounded cards with room around and inside them, like the system's lists (rows at least
     /// 44 pt). The phone does not use these.
     enum Watch {
