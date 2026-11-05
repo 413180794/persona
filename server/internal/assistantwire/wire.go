@@ -31,6 +31,9 @@ type Hello struct {
 	Agents AgentsConfig `json:"agents,omitzero"`
 	// KB is hub.json's kb section: the knowledge base the assistant keeps (kb.go).
 	KB *KBSettings `json:"kb,omitempty"`
+	// Locale is the user's language (zh-Hans / en / ja, docs/i18n.md): the assistant answers in it. "" (an older hub)
+	// is zh-Hans.
+	Locale string `json:"locale,omitempty"`
 }
 
 // Placement is the hub's defaults for where the assistant runs.

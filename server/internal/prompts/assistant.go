@@ -26,6 +26,8 @@ type AssistantClaudeMD struct {
 	// PersonaView: every app draws ```persona-view (hub.json assistant.persona_view); else the assistant writes
 	// ```persona-card, which they all draw.
 	PersonaView bool
+	// Language is the language the user reads, by its own name ("English", "日本語"); "" is Chinese, as before i18n.
+	Language string
 }
 
 func RenderAssistantClaudeMD(d AssistantClaudeMD) string { return render("assistant/claude_md", d) }

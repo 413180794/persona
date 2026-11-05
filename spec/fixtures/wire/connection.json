@@ -15,6 +15,7 @@
       "client_id": "000000000001",
       "endpoints": [],
       "features": [
+        "locale",
         "assistant_compact",
         "assistant_main_new",
         "android_update",
@@ -68,6 +69,7 @@
       "fp": "",
       "hub_id": "00000000-0000-4000-8000-000000000001",
       "hub_name": "家里",
+      "locale": "zh-Hans",
       "mesh": {
         "hubs": [
           {
@@ -90,6 +92,7 @@
       "accepted": true,
       "fields": {
         "/features": [
+          "locale",
           "assistant_compact",
           "assistant_main_new",
           "android_update",
@@ -157,6 +160,7 @@
       "build": 0,
       "channel": "",
       "features": [
+        "locale",
         "assistant_compact",
         "assistant_main_new",
         "android_update",
@@ -223,6 +227,7 @@
       "accepted": true,
       "fields": {
         "/features": [
+          "locale",
           "assistant_compact",
           "assistant_main_new",
           "android_update",

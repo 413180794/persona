@@ -33,5 +33,7 @@ func (h *Hub) hello() map[string]any {
 		"hub_id": h.hubID(), "hub_name": h.hubName(), "endpoints": h.endpointList(), "tls_port": port, "fp": fp,
 		// The hubs of this hub's mesh group, itself included (docs/plan-hub-mesh.md 2.6): only after authentication.
 		"mesh": map[string]any{"hubs": h.meshHubs()},
+		// the user's language (feature locale, locale.go)
+		"locale": string(h.userLang()),
 	}
 }

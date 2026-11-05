@@ -138,3 +138,26 @@ func TestGoldenMainHandoff(t *testing.T) {
 	golden(t, "main_handoff.empty", prompts.RenderMainHandoff(prompts.MainHandoff{FromID: "a1b2c3d4-0000-4000-8000-000000000001",
 		Until: "11月4日 21:30", Text: "你好"}))
 }
+
+// The CLAUDE.md asks for the user's language (docs/i18n.md); zh-Hans, or a hub that says none, keeps it as it was.
+func TestAssistantClaudeMDLanguage(t *testing.T) {
+	ctx := context.Background()
+	f := claudeMDHub(Device{ID: "server", Name: "服务器", Kind: "local"})
+	s := newTestService(t, f)
+	s.kb.dir = "<hub>/data"
+	before := s.claudeMD(ctx, "server", false)
+	if !strings.Contains(before, "；用中文。") {
+		t.Fatal("the Chinese CLAUDE.md lost 用中文")
+	}
+	f.hello.Locale = "zh-Hans"
+	if got := s.claudeMD(ctx, "server", false); got != before {
+		t.Fatal("zh-Hans changed the CLAUDE.md")
+	}
+	for locale, want := range map[string]string{"en": "用English回答", "ja": "用日本語回答"} {
+		f.hello.Locale = locale
+		got := s.claudeMD(ctx, "server", false)
+		if !strings.Contains(got, want) || strings.Contains(got, "；用中文。") {
+			t.Fatalf("%s: no %q", locale, want)
+		}
+	}
+}

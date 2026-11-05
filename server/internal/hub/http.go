@@ -19,6 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/link"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -178,6 +179,7 @@ func (h *Hub) routes() http.Handler {
 		}
 		// Both name the device token that registered it: credential_id picks the phone a tool call or wake goes to,
 		// credential stops the pushes when it is revoked (Pusher.signedOut).
+		d.Locale = string(i18n.Resolve(d.Locale)) // its pushes' language; "" (an older app) is the user's
 		d.CredentialID = principalOf(r.Context()).ID
 		d.Credential = d.CredentialID
 		h.push.register(d)
@@ -337,9 +339,13 @@ type statusWriter struct {
 	http.ResponseWriter
 	status          int
 	securityFailure bool
+	lang            i18n.Lang
 }
 
 func (s *statusWriter) WriteHeader(code int) { s.status = code; s.ResponseWriter.WriteHeader(code) }
+
+// Lang is the request's language: apierr writes an i18n.Message error in it.
+func (s *statusWriter) Lang() i18n.Lang { return s.lang }
 
 // Unwrap lets websocket.Accept reach the underlying Hijacker.
 func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
@@ -354,7 +360,10 @@ func logRequests(h *Hub, next http.Handler) http.Handler {
 		r = r.WithContext(context.WithValue(r.Context(), requestClientKey{}, client))
 		id := requestID(r.Header.Get("X-Client-Request-Id"))
 		w.Header().Set("X-Request-Id", id)
-		sw := &statusWriter{ResponseWriter: w, status: 200}
+		// the language of this response's text for people: its Accept-Language, else the user's (locale.go)
+		lang := i18n.FromRequest(r).Or(h.userLang())
+		r = r.WithContext(i18n.With(r.Context(), lang))
+		sw := &statusWriter{ResponseWriter: w, status: 200, lang: lang}
 		next.ServeHTTP(sw, r)
 		// Auth and ingress refusals are logged by securityError (masked, rate limited), WebSocket ones included.
 		if !sw.securityFailure && (sw.status >= 400 || (!longLived(r.URL.Path) && time.Since(start) > 2*time.Second)) {
@@ -740,6 +749,7 @@ type client struct {
 	name            string
 	since           time.Time
 	meta            clientMeta // what it said about itself in client_hello (clientmeta.go)
+	acceptLang      i18n.Lang  // its upgrade request's Accept-Language (locale.go)
 	deviceSessionID int64      // immutable after registration in Hub.clients
 }
 
@@ -899,7 +909,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	who := principalOf(r.Context())
 	c := &client{cancel: cancel, hub: h, conn: conn, out: make(chan []byte, 512), subs: map[[2]string]bool{}, since: time.Now(),
 		device: who.ID, role: who.Role, delta: wantsFeature(r, featureSessionsDelta), have: map[string]map[string][]byte{},
-		urlFeatures: urlFeatures(r), meta: clientMeta{updates: make(chan heartbeatConfig, 512), done: ctx.Done()}}
+		urlFeatures: urlFeatures(r), acceptLang: i18n.FromRequest(r), meta: clientMeta{updates: make(chan heartbeatConfig, 512), done: ctx.Done()}}
 	h.mu.Lock()
 	if h.wsStopping || h.isDeviceRevoked(c.device) {
 		h.mu.Unlock()

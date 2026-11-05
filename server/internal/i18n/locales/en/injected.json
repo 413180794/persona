@@ -1,0 +1,12 @@
+{
+  "task_done": "Task “{title}” is done",
+  "task_needs": "Task “{title}” is waiting for you",
+  "task_interrupted": "Task “{title}” was interrupted",
+  "task_failed": "Task “{title}” didn’t start",
+  "wake": "Persona woke it up to check on “{title}”",
+  "followup_due": "Time to follow up on “{title}”",
+  "routine_started": "Scheduled task “{title}” started",
+  "lost_tasks": "The node restarted and background tasks stopped",
+  "lost_tasks_n_one": "The node restarted and {count} background task stopped",
+  "lost_tasks_n_other": "The node restarted and {count} background tasks stopped"
+}

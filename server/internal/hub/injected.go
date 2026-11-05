@@ -1,6 +1,9 @@
 package hub
 
 import (
+	"strings"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -23,6 +26,7 @@ func (h *Hub) withInjected(items []proto.Item) []proto.Item {
 		if in.Kind == proto.InjectedTaskNotice {
 			in.TodoID = h.taskByTitle(in.Title)
 		}
+		in.Line = injectedLine(h.userLang(), in)
 		it.Injected = in
 	}
 	return items
@@ -44,4 +48,45 @@ func (h *Hub) taskByTitle(title string) string {
 		id = l.TodoID
 	}
 	return id
+}
+
+// injectedLine is the one line the apps show for an injected message, in l (docs/i18n.md). The message itself stays as
+// the model read it (Chinese: prompts.ParseInjected reads it back); only the line is the user's language. zh-Hans is
+// what ParseInjected wrote.
+func injectedLine(l i18n.Lang, in *proto.Injected) string {
+	if l == i18n.ZhHans {
+		return in.Line
+	}
+	args := i18n.Args{"title": in.Title}
+	switch in.Kind {
+	case proto.InjectedTaskNotice:
+		if in.State != "" {
+			return i18n.T(l, "injected.task_"+in.State, args)
+		}
+	case proto.InjectedFollowup:
+		switch in.State {
+		case "wake":
+			return i18n.T(l, "injected.wake", args)
+		case "once":
+			return i18n.T(l, "injected.followup_due", args)
+		case "daily", "interval":
+			return i18n.T(l, "injected.routine_started", args)
+		}
+	case proto.InjectedSystem:
+		if in.State == "lost_tasks" {
+			// the count is in the Chinese line: "node 重启过，3 个后台任务停了"
+			n := 0
+			for _, f := range strings.FieldsFunc(in.Line, func(r rune) bool { return r < '0' || r > '9' }) {
+				for _, c := range f {
+					n = n*10 + int(c-'0')
+				}
+				break
+			}
+			if n > 0 {
+				return i18n.T(l, "injected.lost_tasks_n", i18n.Args{"count": n})
+			}
+			return i18n.T(l, "injected.lost_tasks")
+		}
+	}
+	return in.Line
 }

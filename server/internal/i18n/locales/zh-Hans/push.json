@@ -1,0 +1,14 @@
+{
+  "elicitation_title": "MCP 请求等你处理",
+  "question_title": "Claude 在问你",
+  "plan_title": "计划等你审批",
+  "permission_title": "需要你授权",
+  "screen_title": "终端等你处理",
+  "assistant_asks": "Persona 在问你",
+  "decide_title": "等你决定",
+  "agent_asks": "{agent} 在问你",
+  "agent_permission": "{agent} 需要你授权",
+  "screen_body": "打开 Persona 查看屏幕并操作",
+  "fill_in_suffix": "（打开 Persona 填写）",
+  "done_body": "已完成"
+}

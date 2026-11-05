@@ -237,6 +237,7 @@ const (
 // Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for
 // clients that need to know before they try (docs/protocol.md).
 var Features = []string{
+	"locale",                 // Accept-Language, client_hello.locale and a device's locale pick the language of text for people (docs/i18n.md)
 	"assistant_compact",      // POST /api/v1/assistant/conversations/{id}/compact, session.compaction
 	"assistant_main_new",     // POST /api/v1/assistant/main/new: archive the main conversation, the next message starts one
 	"android_update",         // authenticated Android release metadata and APK downloads

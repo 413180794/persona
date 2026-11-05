@@ -1,0 +1,14 @@
+{
+  "elicitation_title": "An MCP request needs you",
+  "question_title": "Claude has a question",
+  "plan_title": "A plan needs your approval",
+  "permission_title": "Permission needed",
+  "screen_title": "The terminal needs you",
+  "assistant_asks": "Persona has a question",
+  "decide_title": "Your call",
+  "agent_asks": "{agent} has a question",
+  "agent_permission": "{agent} needs permission",
+  "screen_body": "Open Persona to see the screen and respond",
+  "fill_in_suffix": " (open Persona to fill in)",
+  "done_body": "Done"
+}

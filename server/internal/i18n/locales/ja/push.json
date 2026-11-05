@@ -1,0 +1,14 @@
+{
+  "elicitation_title": "MCPのリクエストが対応を待っています",
+  "question_title": "Claudeから質問があります",
+  "plan_title": "プランの承認を待っています",
+  "permission_title": "許可が必要です",
+  "screen_title": "ターミナルが対応を待っています",
+  "assistant_asks": "Personaから質問があります",
+  "decide_title": "判断を待っています",
+  "agent_asks": "{agent}から質問があります",
+  "agent_permission": "{agent}が許可を求めています",
+  "screen_body": "Personaを開いて画面を確認・操作してください",
+  "fill_in_suffix": "（Personaを開いて入力）",
+  "done_body": "完了しました"
+}

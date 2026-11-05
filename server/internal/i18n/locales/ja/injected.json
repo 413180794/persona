@@ -1,0 +1,11 @@
+{
+  "task_done": "タスク「{title}」が完了しました",
+  "task_needs": "タスク「{title}」があなたを待っています",
+  "task_interrupted": "タスク「{title}」が中断されました",
+  "task_failed": "タスク「{title}」を開始できませんでした",
+  "wake": "Personaが「{title}」の進み具合を確認するため起こしました",
+  "followup_due": "「{title}」のフォローアップの時間です",
+  "routine_started": "定期タスク「{title}」を開始しました",
+  "lost_tasks": "ノードが再起動し、バックグラウンドタスクが停止しました",
+  "lost_tasks_n_other": "ノードが再起動し、{count}件のバックグラウンドタスクが停止しました"
+}

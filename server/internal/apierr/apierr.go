@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -29,8 +30,13 @@ func Write(w http.ResponseWriter, status int, err error) {
 }
 
 // WriteCode preserves error for old clients and adds a stable machine-readable code.
+// An i18n.Message reads in the request's language (docs/i18n.md「协议」).
 func WriteCode(w http.ResponseWriter, status int, code string, err error) {
-	WriteBody(w, status, Body(status, code, err))
+	body := Body(status, code, err)
+	if l := i18n.OfWriter(w); l != "" {
+		body["error"] = i18n.Localize(err, l)
+	}
+	WriteBody(w, status, body)
 }
 
 func WriteBody(w http.ResponseWriter, status int, body map[string]any) {

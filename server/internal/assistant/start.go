@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -41,7 +42,7 @@ var errRenameMain = errors.New("主对话没有标题可以改")
 func (s *Service) claudeMD(ctx context.Context, here string, larkCLI bool) string {
 	hello := s.hello(ctx)
 	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(hello.Owner), Notes: s.notes(ctx), ExtraDirs: s.kbExtraDirs(ctx),
-		KnowledgeDir: s.kb.dir, LarkCLI: larkCLI, PersonaView: hello.PersonaView}
+		KnowledgeDir: s.kb.dir, LarkCLI: larkCLI, PersonaView: hello.PersonaView, Language: answerLanguage(hello.Locale)}
 	devices := s.devices(ctx)
 	if i := slices.IndexFunc(devices, func(d Device) bool { return d.ID == here }); i >= 0 {
 		d.OnHub = devices[i].Kind == "local"
@@ -559,4 +560,14 @@ func (s *Service) Rename(ctx context.Context, p RenameParams) (json.RawMessage, 
 		s.titleSet(p.MachineID, p.SessionID, title, titleByUser)
 	}
 	return out, nil
+}
+
+// answerLanguage is what the CLAUDE.md asks the assistant to answer in: the user's language by its own name, "" for
+// zh-Hans (the CLAUDE.md then says 用中文, as it did before i18n).
+func answerLanguage(locale string) string {
+	l := i18n.Lang(locale)
+	if !i18n.Valid(l) || l == i18n.ZhHans {
+		return ""
+	}
+	return l.Name()
 }

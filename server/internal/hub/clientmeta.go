@@ -3,6 +3,8 @@ package hub
 import (
 	"encoding/json"
 	"math/rand/v2"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // clientMeta is what a client says about itself in client_hello. A zero value is a legacy iOS client.
@@ -12,7 +14,9 @@ type clientMeta struct {
 	Platform string          `json:"platform"`
 	Version  string          `json:"version"`
 	Build    json.RawMessage `json:"build"`
-	OS       struct {
+	// Locale: the interface language the client shows (zh-Hans / en / ja, docs/i18n.md); kept when a later hello omits it.
+	Locale string `json:"locale"`
+	OS     struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
 		SDK     int    `json:"sdk"`
@@ -83,9 +87,15 @@ func (h *Hub) onClientHello(c *client, data []byte) {
 		msg.features[f] = true
 	}
 	msg.heartbeat, msg.updates, msg.done = hb, c.meta.updates, c.meta.done
+	if !i18n.Valid(i18n.Lang(msg.Locale)) {
+		msg.Locale = c.meta.Locale
+	}
 	c.meta = msg.clientMeta
 	updates, done := c.meta.updates, c.meta.done
 	c.mu.Unlock()
+	if c.role == roleFull && c.hub != nil {
+		c.hub.setUserLang(i18n.Lang(msg.Locale)) // only a valid one, and only a change, is saved
+	}
 	if !wasElicitation && c.has("elicitation") {
 		defer h.sendPendingInteractions(c, true)
 	}

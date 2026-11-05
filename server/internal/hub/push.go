@@ -23,6 +23,7 @@ import (
 	"github.com/nwverse/persona/server/internal/apns"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/pushcrypto"
 	"github.com/nwverse/persona/server/internal/relayproto"
@@ -53,6 +54,8 @@ type Pusher struct {
 	desktopOnline func() bool
 	// hubID is this hub's hub_id: every push says which hub sent it, so the app knows the group (plan 2.6「推送」).
 	hubID func() string
+	// userLang is the user's language (Hub.userLang): pushes to a device that registered without one read in it.
+	userLang func() i18n.Lang
 	// desktopOpen: the desktop app with this push device id is connected (Hub.desktopOpen); it posts its own
 	// notifications for agents then (the Mac's MacAttentionWatcher).
 	desktopOpen func(device string) bool
@@ -167,12 +170,17 @@ func (p *Pusher) reachable(d Device) bool {
 // A device that chose 手机静音 gets none while a desktop app is connected (desktops.go), and a desktop app that is
 // connected gets none of these: it shows them itself. What was asked for explicitly (nil) goes to it all the same.
 func (p *Pusher) send(payload map[string]any, collapseID string, wants func(NotifyPrefs) bool) {
+	p.sendLocalized(func(i18n.Lang) map[string]any { return payload }, collapseID, wants)
+}
+
+// sendLocalized is send with the alert written per device, in its language (langOf).
+func (p *Pusher) sendLocalized(build localized, collapseID string, wants func(NotifyPrefs) bool) {
 	if p == nil {
 		return
 	}
 	online := p.desktopOnline != nil && p.desktopOnline()
 	byPrefs := alertWanted(wants, online)
-	p.sendAs(payload, collapseID, "alert", "10", func(d Device) bool {
+	p.sendBuilt(build, collapseID, "alert", "10", func(d Device) bool {
 		if wants != nil && p.desktopOpen != nil && p.desktopOpen(d.DeviceID) {
 			return false
 		}
@@ -527,6 +535,24 @@ func (p *Pusher) wakeDevices(reason string, ids map[string]bool) {
 
 // sendAs pushes to every reachable device that to picks (nil: all of them). to runs outside p.mu: it may ask the hub.
 func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority string, to func(Device) bool) {
+	p.sendBuilt(func(i18n.Lang) map[string]any { return payload }, collapseID, pushType, priority, to)
+}
+
+// localized builds a push (or WebSocket notification) in a language.
+type localized func(i18n.Lang) map[string]any
+
+// langOf is the language of what is pushed to d: the one it registered with, else the user's (locale.go).
+func (p *Pusher) langOf(d Device) i18n.Lang {
+	if l := i18n.Lang(d.Locale); i18n.Valid(l) {
+		return l
+	}
+	if p.userLang != nil {
+		return p.userLang()
+	}
+	return i18n.Default
+}
+
+func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority string, to func(Device) bool) {
 	if p == nil {
 		return
 	}
@@ -547,12 +573,24 @@ func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority s
 	if len(devices) == 0 {
 		return
 	}
-	if p.hubID != nil {
-		payload = maps.Clone(payload)
-		payload["hub_id"] = p.hubID()
+	type built struct {
+		payload map[string]any
+		body    []byte
 	}
-	body, _ := json.Marshal(payload)
+	byLang := map[i18n.Lang]built{}
 	for _, d := range devices {
+		lang := p.langOf(d)
+		b, ok := byLang[lang]
+		if !ok {
+			b.payload = build(lang)
+			if p.hubID != nil {
+				b.payload = maps.Clone(b.payload)
+				b.payload["hub_id"] = p.hubID()
+			}
+			b.body, _ = json.Marshal(b.payload)
+			byLang[lang] = b
+		}
+		payload, body := b.payload, b.body
 		if p.relayed(d) {
 			sealed, err := p.sealFor(d, payload)
 			if err != nil {
@@ -590,22 +628,30 @@ func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority s
 }
 
 func (p *Pusher) notifyInteraction(ix proto.Interaction, machine string) {
-	p.send(interactionPayload(ix, machine), ix.ID, func(p NotifyPrefs) bool { return p.Input })
+	p.sendLocalized(func(l i18n.Lang) map[string]any { return interactionPayloadIn(l, ix, machine) }, ix.ID, func(p NotifyPrefs) bool { return p.Input })
 }
 
 // interactionPayload is the alert for a new interaction. `category` must match a UNNotificationCategory the app
 // registers (apple/Persona/App/NotificationActions.swift): that is what puts 允许 / 拒绝 / 批准 on the notification, and the
 // buttons answer `interaction_id` through the resolve API.
 func interactionPayload(ix proto.Interaction, machine string) map[string]any {
-	title := map[string]string{
-		proto.IxElicitation: "MCP 请求等你处理",
-		proto.IxQuestion:    "Claude 在问你", proto.IxPlan: "计划等你审批", proto.IxPermission: "需要你授权", proto.IxScreen: "终端等你处理",
-	}[ix.Kind]
+	return interactionPayloadIn(i18n.Default, ix, machine)
+}
+
+// interactionPayloadIn is interactionPayload written in l.
+func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map[string]any {
+	title := ""
+	if key, ok := map[string]string{
+		proto.IxElicitation: "push.elicitation_title",
+		proto.IxQuestion:    "push.question_title", proto.IxPlan: "push.plan_title", proto.IxPermission: "push.permission_title", proto.IxScreen: "push.screen_title",
+	}[ix.Kind]; ok {
+		title = i18n.T(l, key)
+	}
 	if ix.ToolName == "ask_user" {
-		title = "Persona 在问你"
+		title = i18n.T(l, "push.assistant_asks")
 	}
 	if ix.ToolName == workCardTool { // the manager asks on an agent's behalf (agents_link.go)
-		title = "等你决定"
+		title = i18n.T(l, "push.decide_title")
 	}
 	name := map[string]string{"codex": "Codex", "traex": "TRAEX"}[ix.Agent]
 	if name == "" && ix.Agent != "" && ix.Agent != "claude" {
@@ -614,9 +660,9 @@ func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	if name != "" {
 		switch ix.Kind {
 		case proto.IxQuestion:
-			title = name + " 在问你"
+			title = i18n.T(l, "push.agent_asks", i18n.Args{"agent": name})
 		case proto.IxPermission:
-			title = name + " 需要你授权"
+			title = i18n.T(l, "push.agent_permission", i18n.Args{"agent": name})
 		}
 	}
 	body := ix.Summary
@@ -628,12 +674,12 @@ func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	case proto.IxPlan:
 		body = firstLine(ix.Plan)
 	case proto.IxScreen:
-		body = "打开 Persona 查看屏幕并操作"
+		body = i18n.T(l, "push.screen_body")
 	}
 	category := "INTERACTION_" + strings.ToUpper(ix.Kind)
 	if len(ix.Fields) > 0 { // something to fill in first: no buttons on the notification, a tap opens the card
 		category = "INTERACTION_INPUT"
-		body += "（打开 Persona 填写）"
+		body += i18n.T(l, "push.fill_in_suffix")
 	}
 	return map[string]any{
 		"aps": map[string]any{
@@ -648,13 +694,17 @@ func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 }
 
 func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string, wants func(NotifyPrefs) bool) {
-	p.send(donePayload(machineID, machine, sessionID, title, text), "", wants)
+	p.sendLocalized(func(l i18n.Lang) map[string]any { return donePayloadIn(l, machineID, machine, sessionID, title, text) }, "", wants)
 }
 
 func donePayload(machineID, machine, sessionID, title, text string) map[string]any {
+	return donePayloadIn(i18n.Default, machineID, machine, sessionID, title, text)
+}
+
+func donePayloadIn(l i18n.Lang, machineID, machine, sessionID, title, text string) map[string]any {
 	text = plainMarkdown(text) // an agent's last words are Markdown; a notification shows them as they are
 	if text == "" {
-		text = "已完成"
+		text = i18n.T(l, "push.done_body")
 	}
 	return map[string]any{
 		"aps": map[string]any{

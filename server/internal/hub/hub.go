@@ -98,9 +98,11 @@ type Hub struct {
 	ports portOpens // ports the user opened in the app (ports.go)
 	// assistant: what the assistant (internal/assistant, its own process on the bus) last reported (assistant_link.go).
 	assistant assistantState
-	deleted   deletedBook  // conversations taken out of the apps' lists (deleted_sessions.go)
-	inbox     inboxSources // the inbox's sources and wake-ups; the inbox itself is the manager's (inbox.go)
-	kb        kbLink       // what the hub keeps for the knowledge base, the assistant's (kb.go)
+	// userLocale: the user's language, an i18n.Lang (locale.go)
+	userLocale atomic.Value
+	deleted    deletedBook  // conversations taken out of the apps' lists (deleted_sessions.go)
+	inbox      inboxSources // the inbox's sources and wake-ups; the inbox itself is the manager's (inbox.go)
+	kb         kbLink       // what the hub keeps for the knowledge base, the assistant's (kb.go)
 	// bots: the chat apps' bots the user talks to Persona through (bots.go).
 	bots     botHub
 	channels channelsHub
@@ -323,6 +325,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	}
 	h.importLegacy(ctx)
 	h.loadSeen(ctx)
+	h.loadUserLang(ctx)
 	h.loadPhoneTools()
 	if NewMail != nil {
 		if h.mail, err = NewMail(cfg.dir, h.store, cfg.Google, cfg.Microsoft); err != nil {
@@ -343,6 +346,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		h.logf("hub.json lark.container / token / base_url are not read any more: Feishu through lark-connector is a plugin's now; set them in its settings (docs/feishu.md)")
 	}
 	h.push.hubID = h.hubID
+	h.push.userLang = h.userLang
 	h.initAgents()
 	h.connectors = connector.NewRegistry(cfg.ConnectorGate)
 	// The machines are the manager's to connect (devices_link.go); until it reports them they show as before a

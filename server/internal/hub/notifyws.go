@@ -3,6 +3,7 @@ package hub
 import (
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -26,40 +27,41 @@ func (w pushWants) fn() func(NotifyPrefs) bool {
 // notifyDone delivers the same alert and preference decision through both channels. Only the center has apps and
 // devices: a member's computers are the center's machines.
 func (h *Hub) notifyDone(kind, machineID, machine, sessionID, title, text string, wants pushWants) {
-	payload := donePayload(machineID, machine, sessionID, title, text)
+	build := func(l i18n.Lang) map[string]any { return donePayloadIn(l, machineID, machine, sessionID, title, text) }
 	h.extensions.emit("agent.finished", map[string]any{"machine_id": machineID, "machine": machine, "session_id": sessionID, "title": title})
-	h.push.send(payload, "", wants.fn())
-	h.notifyWS(kind, payload, wants.fn())
+	h.push.sendLocalized(build, "", wants.fn())
+	h.notifyWSIn(kind, build, wants.fn())
 }
 
 func (h *Hub) notifyInteraction(ix proto.Interaction, machine string) {
-	payload := interactionPayload(ix, machine)
+	build := func(l i18n.Lang) map[string]any { return interactionPayloadIn(l, ix, machine) }
 	h.extensions.emit("agent.needs_you", map[string]any{"machine_id": ix.MachineID, "machine": machine, "session_id": ix.SessionID,
 		"interaction_id": ix.ID, "kind": ix.Kind, "summary": ix.Summary})
 	wants := pushWants{Kind: "input"}
 	if ix.Kind == proto.IxElicitation {
-		h.notifyWS("interaction", payload, wants.fn(), "elicitation")
+		h.notifyWSIn("interaction", build, wants.fn(), "elicitation")
 	} else {
-		h.push.send(payload, ix.ID, wants.fn())
-		h.notifyWS("interaction", payload, wants.fn())
+		h.push.sendLocalized(build, ix.ID, wants.fn())
+		h.notifyWSIn("interaction", build, wants.fn())
 	}
 }
 
 // notifyWS projects the APNs alert onto the opt-in WebSocket notification event.
 // It uses the authenticated device's preferences, even without an APNs token or key.
 func (h *Hub) notifyWS(kind string, payload map[string]any, wants func(NotifyPrefs) bool, required ...string) {
-	aps := payload["aps"].(map[string]any)
-	alert := aps["alert"].(map[string]any)
-	msg := map[string]any{
-		"type": "notify", "kind": kind,
-		"machine_id": payload["machine_id"], "session_id": payload["session_id"],
-		"title": alert["title"], "subtitle": alert["subtitle"], "body": alert["body"],
-	}
-	if id, ok := payload["interaction_id"]; ok {
-		msg["interaction_id"] = id
-	}
-	if en, ok := payload["extension_notification"]; ok {
-		msg["extension_notification"] = en
+	h.notifyWSIn(kind, func(i18n.Lang) map[string]any { return payload }, wants, required...)
+}
+
+// notifyWSIn is notifyWS with the alert written in each connection's language (client.lang).
+func (h *Hub) notifyWSIn(kind string, build localized, wants func(NotifyPrefs) bool, required ...string) {
+	msgs := map[i18n.Lang]map[string]any{}
+	msgIn := func(l i18n.Lang) map[string]any {
+		if m, ok := msgs[l]; ok {
+			return m
+		}
+		m := notifyMessage(kind, build(l))
+		msgs[l] = m
+		return m
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -75,7 +77,24 @@ func (h *Hub) notifyWS(kind string, payload map[string]any, wants func(NotifyPre
 			prefs = h.push.prefs(c.device)
 		}
 		if wants == nil || wants(prefs) {
-			c.sendJSON(msg)
+			c.sendJSON(msgIn(c.lang()))
 		}
 	}
+}
+
+func notifyMessage(kind string, payload map[string]any) map[string]any {
+	aps := payload["aps"].(map[string]any)
+	alert := aps["alert"].(map[string]any)
+	msg := map[string]any{
+		"type": "notify", "kind": kind,
+		"machine_id": payload["machine_id"], "session_id": payload["session_id"],
+		"title": alert["title"], "subtitle": alert["subtitle"], "body": alert["body"],
+	}
+	if id, ok := payload["interaction_id"]; ok {
+		msg["interaction_id"] = id
+	}
+	if en, ok := payload["extension_notification"]; ok {
+		msg["extension_notification"] = en
+	}
+	return msg
 }

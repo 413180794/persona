@@ -101,7 +101,7 @@ type assistantLink struct{ h *Hub }
 // the hub's own the assistant needs.
 func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	h := l.h
-	out := assistantwire.Hello{KB: h.kbSettings()} // hub.json's kb section: the knowledge base it keeps (kb.go)
+	out := assistantwire.Hello{KB: h.kbSettings(), Locale: string(h.userLang())} // hub.json's kb section: the knowledge base it keeps (kb.go)
 	if h.cfg == nil {
 		return out, nil
 	}
