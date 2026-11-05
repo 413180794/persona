@@ -148,9 +148,11 @@ function ItemButton({ item, busy, onPress }: { item: UIItem; busy: string; onPre
       busy={busy === item.action.id}
       disabled={!!busy && busy !== item.action.id}
       onClick={() => onPress(item.action!, destructive)}
-      className={cx(destructive && "text-red")}
+      title={item.title}
+      className={cx("max-w-full min-w-0", destructive && "text-red")}
     >
-      {item.title}
+      {/* one line: a title too long for the card is cut short, never wider than it */}
+      <span className="truncate">{item.title}</span>
     </Button>
   );
 }

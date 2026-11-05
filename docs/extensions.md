@@ -1075,6 +1075,23 @@ hub 的 `features` 有 `extension_ui_v3`；`initialize` 的 `hub.extension_point
   扩展在 `ui.render` 的 `placement` 里收到的是它清单里写的那个。清单写 `extension_page` 的扩展装不到老 hub 上（清单严格读），要在 `engines.persona` 里写上带 UI 版本 3 的 hub 构建号。
 - **扩展比 hub 新**：照旧（不认识的组件拿掉、记一行日志）。
 
+### 组件展示（`showcase`，#1852）
+
+`persona-extensions` 仓库的 `extensions/showcase`：每一种组件、每一种状态各一页（目录页 push 进每一页；列表的搜索 / 筛选 / 加载更多和「详情 → 编辑 → 保存 → 返回」；
+先回加载中、3 秒后 `ui.invalidate` 的一页；总览卡片、每种尺寸的小组件、两个快捷指令），纯本地数据、不要权限。写扩展时看效果，也是**各端截图对齐的基准**：
+
+- 每一页画出来的 View 存成快照（扩展里 `go test ./extensions/showcase -run TestSnapshots -update`），拷一份到本仓库的 `schema/extension/examples/showcase/`；
+  `scripts/test/test_extension_schema.py` 按 schema 查，`server/internal/extension` 的 `TestShowcaseIsDrawable` 按 hub 的 `CheckView` / `Fit` 查（schema 允许、hub 不收的写法，
+  比如 Markdown 里的图片、http 链接，快照里不能有）。
+- 各端的截图测试直接读这些快照画，不连 hub：网页 `web/showcase.html`（只在 `npx vite` 开发时有，不进构建；`?theme=dark`、`?pages=a,b`、`?only=<页>`，用真的 `ExtensionUI` 画，
+  假的 hub 按 `state` 回那一页的快照），单元测试 `web/src/showcase/showcase.test.tsx`；安卓 `ExtensionShowcaseShotsTest`（Robolectric，35 页 × 三套风格 × 深浅色，共 210 张，
+  出到 `feature/settings/build/extension-showcase-shots/`）；iOS / Mac 见 #1860。
+- 改了组件：先改展示扩展（加一页或一种状态）、重新生成快照、拷过来，各端的截图跟着看一遍。
+
+![组件展示：网页（左）和安卓（右）画同一页（浅色）](screenshots/extension-showcase-light.png)
+
+![组件展示：网页（左）和安卓（右）画同一页（深色）](screenshots/extension-showcase-dark.png)
+
 ## 系统级位置（#1858）
 
 扩展的东西放到 **App 外**：主屏幕小组件、锁屏和 Apple Watch 表盘上的复杂功能（`ui` 的插槽 `widget`），快捷指令和 Siri 里的动作（扩展点 `shortcuts`），

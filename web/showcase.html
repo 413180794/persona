@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>组件展示（开发用）</title>
+    <!-- Dev only (not in the build's inputs): every page of the 组件展示 extension drawn from its snapshots, for screenshots.
+         ?theme=dark|light, ?only=<page> (one page, as the full page it is), ?pages=<a>,<b> (these), ?width=<px>. -->
+    <script>
+      var q = new URLSearchParams(location.search);
+      var dark = q.get("theme") === "dark" || (!q.get("theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.classList.toggle("dark", dark);
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/showcase/main.tsx"></script>
+  </body>
+</html>

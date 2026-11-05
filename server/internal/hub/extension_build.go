@@ -231,12 +231,14 @@ func openProject(dir string) (*devProject, error) {
 	}
 	p := &devProject{dir: abs, manifest: m}
 	switch {
+	case m.Runtime == nil:
+		p.kind = "" // declarations only: nothing to build
 	case exists(filepath.Join(abs, "go.mod")):
 		p.kind = "go"
 	case exists(filepath.Join(abs, "src", "main.ts")):
 		p.kind = "ts"
-	case m.Runtime == nil:
-		p.kind = "" // declarations only: nothing to build
+	case goModule(abs):
+		p.kind = "go"
 	default:
 		return nil, errors.New("不知道怎么构建：Go 的扩展有 go.mod，TypeScript 的有 src/main.ts")
 	}
@@ -244,6 +246,19 @@ func openProject(dir string) (*devProject, error) {
 }
 
 func exists(path string) bool { _, err := os.Stat(path); return err == nil }
+
+// goModule: dir is in a Go module, its own or a repository's whose go.mod is further up (the extension repositories
+// keep one go.mod at the root for every extensions/<id>/).
+func goModule(dir string) bool {
+	for d := dir; ; d = filepath.Dir(d) {
+		if exists(filepath.Join(d, "go.mod")) {
+			return true
+		}
+		if exists(filepath.Join(d, ".git")) || filepath.Dir(d) == d {
+			return false
+		}
+	}
+}
 
 // platforms are those the manifest has a program for (this machine's, for a single command).
 func (p *devProject) platforms() []string {

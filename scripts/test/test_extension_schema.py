@@ -152,6 +152,21 @@ class ExtensionSchemaTests(unittest.TestCase):
                 if c["view"] is not None:
                     self.assertEqual(self.v.validate("View", c["view"]), [])
 
+    def test_showcase_snapshots_hold_to_the_schema(self):
+        # examples/showcase/<page>.json: every page of the 组件展示 extension (persona-extensions, #1852), which each
+        # app's screenshot tests draw; copied from the extension's snapshots/.
+        pages = sorted((SCHEMA_DIR / "examples" / "showcase").glob("*.json"))
+        self.assertGreater(len(pages), 30)
+        seen = set()
+        for f in pages:
+            with self.subTest(page=f.name):
+                v = json.loads(f.read_text())
+                self.assertEqual(self.v.validate("View", v), [])
+                seen |= {i["type"] for s in v["sections"] for i in s["items"]}
+        view = self.v.files["view.schema.json"]["$defs"]
+        tags = {view[o["$ref"].split("/")[-1]]["properties"]["type"]["const"] for o in view["Component"]["oneOf"]}
+        self.assertEqual(tags - seen, set(), "the showcase shows every component")
+
     def test_every_component_has_an_example(self):
         view = self.v.files["view.schema.json"]["$defs"]
         tags = {view[o["$ref"].split("/")[-1]]["properties"]["type"]["const"] for o in view["Component"]["oneOf"]}

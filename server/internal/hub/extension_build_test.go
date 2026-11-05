@@ -112,3 +112,43 @@ func TestNewRefusesBadInput(t *testing.T) {
 		}
 	}
 }
+
+// An extension of an extension repository (extensions/<id>/, one go.mod at the repository's root) is built as Go; a
+// TypeScript one there is still TypeScript, and the search for a go.mod stops at the repository.
+func TestOpenProjectInARepository(t *testing.T) {
+	repo := t.TempDir()
+	write := func(path, s string) {
+		p := filepath.Join(repo, path)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest := func(id string) string {
+		return `{"manifest_version": 1, "id": "` + id + `", "name": "` + id + `", "version": "1.0.0", "engines": {"extension_protocol": 1},
+ "runtime": {"command": "bin/` + id + `"}, "contributes": {"ui": [{"id": "` + id + `", "title": "x", "placement": "nav_page"}]}}`
+	}
+	write("go.mod", "module example.com/exts\n")
+	write("extensions/gox/persona-extension.json", manifest("gox"))
+	write("extensions/tsx/persona-extension.json", manifest("tsx"))
+	write("extensions/tsx/src/main.ts", "")
+	for id, kind := range map[string]string{"gox": "go", "tsx": "ts"} {
+		p, err := openProject(filepath.Join(repo, "extensions", id))
+		if err != nil || p.kind != kind {
+			t.Fatalf("%s: %+v %v", id, p, err)
+		}
+	}
+	write("extensions/decl/persona-extension.json", `{"manifest_version": 1, "id": "decl", "name": "Decl", "version": "1.0.0",
+ "contributes": {"providers": [{"id": "decl", "name": "Decl", "base_url": "https://example.com"}]}}`)
+	if p, err := openProject(filepath.Join(repo, "extensions", "decl")); err != nil || p.kind != "" {
+		t.Fatalf("a declarative extension in a Go repository: %+v %v", p, err)
+	}
+	// a repository of its own (.git) without a go.mod: not Go, even if a directory above has one
+	write("inner/.git/HEAD", "ref: refs/heads/main\n")
+	write("inner/extensions/x/persona-extension.json", manifest("x"))
+	if _, err := openProject(filepath.Join(repo, "inner", "extensions", "x")); err == nil {
+		t.Fatal("a go.mod above the repository is not the extension's")
+	}
+}
