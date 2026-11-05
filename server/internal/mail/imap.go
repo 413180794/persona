@@ -678,7 +678,7 @@ func renderText(mediaType string, s string) string {
 // stripHTML removes tags and script/style content and unescapes entities.
 func stripHTML(s string) string {
 	var b strings.Builder
-	lower := strings.ToLower(s)
+	lower := asciiLower(s) // same length as s: tags are matched at s's offsets
 	i := 0
 	for i < len(s) {
 		if s[i] != '<' {
@@ -707,6 +707,18 @@ func stripHTML(s string) string {
 		}
 	}
 	return html.UnescapeString(b.String())
+}
+
+// asciiLower lowers A–Z only, byte for byte. strings.ToLower can change the length (U+0130 and the Kelvin sign lower
+// to one byte, an invalid byte becomes U+FFFD's three), and stripHTML indexes the lowered copy with s's offsets.
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	return string(b)
 }
 
 func truncateRunes(s string, n int) string {
