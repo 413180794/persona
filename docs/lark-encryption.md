@@ -31,7 +31,7 @@ lark-connector 的 Agent 接口保留旧 `parts` / `textPreview`，新增版本�
 
 1. 在 lark-connector 网页创建密钥库；读取解密正文的 Agent 授权仍沿用网页现有设置，原生发送授权不会开启它。
 2. 在 lark-connector 部署环境设置独立的 `lark-connector_NATIVE_OLK_TOKEN` 和 `lark-connector_NATIVE_OLK_ACCOUNT_ID`。凭据使用新生成的 43–128 位 base64url 字符，不能复用普通 Agent token；账号是实际飞书用户 ID，不是 lark-connector 的账号槽位编号。
-3. Hub 的私有 `hub.json` 中设置 `lark.native_olk_token` 为同一个独立凭据；`lark.account` 仍选择已登录的 lark-connector 账号槽位。重启两侧服务使配置生效。不要把凭据放进 App、仓库、PR、助手环境或二维码。
+3. 在接飞书插件的设置里把密钥 `native_olk_token` 设为同一个独立凭据（#1571 起 hub 不再读 `hub.json` 的 `lark.native_olk_token`，见 `docs/config.md`）；`lark.account` 仍选择已登录的 lark-connector 账号槽位。重启两侧服务使配置生效。不要把凭据放进 App、仓库、PR、助手环境或二维码。
 4. 撤销时移除或轮换 lark-connector 的原生凭据并重启；旧 Hub 无法继续原生解锁、准备密文或提交新的加密发送。已经被上游接受的消息不受撤销影响。普通 Agent 访问及读取解密授权互相独立。
 
 没有独立授权、账号已变化、旧版本没有接口、密码错误或加密失败，都明确失败并保留输入，不回退明文。首次创建、密码重置后恢复以及授权配置仍在网页/部署端完成；手机负责解锁和发送，不导出私钥。公网沿用 Hub TLS 要求。

@@ -324,7 +324,7 @@ func (h *Hub) meshViewChanged(old, v *meshView) {
 	if reachableHubs(old) != reachableHubs(v) {
 		h.sendLinkEndpoints() // jarvis-link shows how many hubs the group has
 	}
-	h.fleetRegroup() // the members' computers (mesh_paths.go)
+	h.fleetRegroup() // the members' computers (machines.go)
 	h.handOverCredentials()
 	h.sendRevocations(newlyReachable(old, v))
 }

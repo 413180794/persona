@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// A machine's connection to its node, over one of its paths at a time (mesh_paths.go): the run loop picks the best
+// A machine's connection to its node, over one of its paths at a time (paths.go): the run loop picks the best
 // path that can be tried, connects (establish: the node answers node.info), serves the connection until it ends
 // (serve), and starts over. While a connection is up, a path that stays clearly better for mesh.path_switch_seconds is
 // connected next to it; once its node answers, it takes over and the old one is let go — the apps see no offline in

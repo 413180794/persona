@@ -648,8 +648,8 @@ func (n *Node) rememberLarkAlways(session, pattern string) {
 	n.larkAllowed[session+" "+pattern] = true
 }
 
-// assistantLark asks the hub for lark-connector's base, token and gate rules, at most once a minute (the token may
-// rotate); an empty config when the hub has none or is unreachable (no env, ol fails with a clear error).
+// assistantLark asks the hub for the assistant's Lark config (gate rules, lark-cli, plugins' command gates), at
+// most once a minute (it may change); an empty config when the hub has none or is unreachable.
 func (n *Node) assistantLark(ctx context.Context) proto.AssistantLark {
 	n.mu.Lock()
 	cached, at := n.larkCfg, n.larkCfgAt

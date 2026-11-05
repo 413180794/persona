@@ -240,6 +240,15 @@ struct AssistantView: View {
         showRoutines = false
         showKnowledge = false
         showTodos = false
+        #if os(iOS)
+        // A task pushed beside the sidebar (regular width, `detailPresentation`) is a page of this stack too: going
+        // back to the root, or to another conversation, takes it away (else the next chat would push it again). A
+        // phone's task sheet stays as it was.
+        if widthClass == .regular {
+            TasksStore.shared.detailTask = nil
+            TasksStore.shared.detailAgent = nil
+        }
+        #endif
     }
 
     private func newConversation() {

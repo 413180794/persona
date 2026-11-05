@@ -428,6 +428,11 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   iPhone Duo 不设宽度（系统按折痕分栏）。
 - iPad 支持四个方向（分屏和台前调度要求）；iPhone 仍然只竖屏。
 - 欢迎页的内容宽度不超过 `Theme.Size.readable`（560），不在大屏上铺满。
+- 从对话里打开的详情页（任务详情、坞里的 Agent、对话里的待办条、hub 链接 `/todos?id=`）在常规宽度下推进对话所在的栈、铺满详情栏，
+  不用 sheet：`presentationDetents` 在常规宽度下不起作用，sheet 会是屏幕中间的小表单（2026-11-05 用户反馈，#2816）。统一用
+  `detailPresentation`（`Views/DetailPresentation.swift`）：手机上仍是 sheet，Mac / visionOS 不变；页面自己的 `NavigationStack` 换成
+  `DetailStack`（推进去时不再套一层）。没有栈可推的（会话信息 sheet 里再开的待办）至少 `.presentationSizing(.page)`。
+  测试 `IPadTaskDetailTests`（只在 iPad 上跑，`MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1`）。
 - 左栏顶到屏幕顶：分栏的左栏从状态栏下面开始画、自己画不进状态栏，那一条原来是窗口的白色，看起来列表「没顶到头」（2026-10-31）。
   `SidebarTopFill` 在整个分栏后面按左栏的宽度把那一条涂成左栏的颜色（玻璃风格是系统左栏色 `Theme.systemSidebar`，其他风格是页面底色）；
   左栏收起时不涂（看分栏的 `columnVisibility`，收起后左栏最后的位置还会留着上报）。`IPadLayoutTests.testSidebarReachesTheTop` 按像素查。

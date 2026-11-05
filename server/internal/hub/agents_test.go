@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/lark"
 )
 
-// agentsHub is a hub with no personal agents sources (they come from plugins: plugin_agents_test.go).
+// agentsHub is a hub with no personal agents sources (they come from plugins: extension_agents_test.go).
 func agentsHub(t *testing.T) (*Hub, http.Handler, *[]string) {
 	h := newTestHub(t)
 	h.initAgents()

@@ -43,7 +43,7 @@ type adminState struct {
 	failures       authLimiter // failed sign-ins per source
 	publicFailures authLimiter // failed sign-ins from outside the LAN, all together
 	doctorMu       sync.Mutex
-	extensions     extensionGate // plugin previews (admin_plugins.go)
+	extensions     extensionGate // plugin previews (admin_extensions.go)
 
 	ifCache       []ifacePrefix
 	ifCached      time.Time

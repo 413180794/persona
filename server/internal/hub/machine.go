@@ -588,7 +588,7 @@ func (m *Machine) notifyFinished(id string, gen int) {
 		m.hub.kbAgentDone(m.cfg.ID, s)
 	}
 	if ok && s.Work != nil && s.Work.Phase == proto.WorkBlocked && (s.Work.WakeAt != nil || s.Work.InteractionID != "") {
-		return // the hub goes on with it (继续, a wake), or its card already rang (work.go)
+		return // the hub goes on with it (继续, a wake), or its card already rang (assistant/agents_work.go)
 	}
 	// An inbox agent's result is the draft in the inbox; a turn asked for through the bot is answered there; a quiet
 	// task's is told in the main conversation (the assistant's taskTurnEnded, #1731).

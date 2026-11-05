@@ -403,8 +403,9 @@ struct ChatView: View {
                 .presentationDragIndicator(.visible)
         }
         // The assistant's tasks (docs/unified-entry.md): a task's detail rises like a link; 全部 is the board.
-        .sheet(isPresented: Binding(get: { style == .assistant && (TasksStore.shared.detailTask != nil || TasksStore.shared.detailAgent != nil) },
-                                    set: { if !$0 { TasksStore.shared.detailTask = nil; TasksStore.shared.detailAgent = nil } })) {
+        // In regular width (iPad) it fills the detail column instead, as an agent opened from the Agents list (#2816).
+        .detailPresentation(isPresented: Binding(get: { style == .assistant && (TasksStore.shared.detailTask != nil || TasksStore.shared.detailAgent != nil) },
+                                                 set: { if !$0 { TasksStore.shared.detailTask = nil; TasksStore.shared.detailAgent = nil } })) {
             if let id = TasksStore.shared.detailTask { TaskDetailSheet(todoID: id) }
             else if let key = TasksStore.shared.detailAgent { TaskDetailSheet(agent: key) }
         }
@@ -508,18 +509,19 @@ struct ChatView: View {
             }
         }
         #endif
-        .sheet(item: $linkedTodo) { r in
-            NavigationStack {
+        // Pushed into the detail column in regular width (iPad, #2816), a sheet otherwise.
+        .detailPresentation(item: $linkedTodo) { r in
+            DetailStack {
                 TodoDetailView(todoID: r.id).macSheetDone { linkedTodo = nil }
             }
             #if os(macOS)
             .macSheet()
             #endif
         }
-        .sheet(isPresented: $showTodoDetail) {
+        .detailPresentation(isPresented: $showTodoDetail) {
             if let s = session, let todoID = s.todo?.id,
                 TodosLogic.isOnTodosHub(sessionGroup: s.key.group, hubGroup: model.hub?.group) {
-                NavigationStack {
+                DetailStack {
                     TodoDetailView(todoID: todoID).macSheetDone { showTodoDetail = false }
                 }
                 #if os(macOS)
@@ -3933,6 +3935,10 @@ struct SessionInfoSheet: View {
                                 NavigationStack { TodoDetailView(todoID: todo.id).macSheetDone { showTodo = false } }
                                     #if os(macOS)
                                     .macSheet()
+                                    #elseif os(iOS)
+                                    // Over the info sheet there is no stack to push onto: on an iPad at least a
+                                    // page's size, not the small form (#2816). A phone's sheet is the same either way.
+                                    .presentationSizing(.page)
                                     #endif
                             }
                         }

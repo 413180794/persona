@@ -266,28 +266,21 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `microsoft`（可选）：Outlook 的「使用 Microsoft 账号登录」（`docs/mail.md`「Outlook 接入方式」）。`client_id` 是默认的 client ID
   （一般不用写：用户在 App 里填自己在 Microsoft Entra 注册的那个，加密存 hub，优先于这里）；`redirect_uri` 默认
   `jarvis-mail-oauth://outlook`，改了要和 Entra 里登记的一致。
-- `lark.token` / `lark.container`：lark-connector Agent API 的 token。优先写 `lark.token`；不写时才用 `lark.container`
-  （lark-connector 所在的 docker 容器名，从它的环境变量 `lark-connector_AGENT_TOKEN` 读），两个都不写就不接飞书，没有默认容器名。
-  配置的 token 整个进程期间都保留：lark-connector 未登录飞书时回 401 + `AUTH_*`（如 `AUTH_SESSION_EXPIRED`），这不是 token 错，
-  hub 照样用这个 token 重试，用户在 lark-connector 里重新登录后收件箱和实时事件自己恢复，不用重启。
-- `lark.account`（可选整数）：默认账号的 lark-connector 账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号。
-  例如 `"lark": {"base_url": "http://127.0.0.1:<隧道端口>/agent/v1", "token": "<Agent Token>", "account": 2}`。
-  账号编号来自 lark-connector `/accounts` 的 `id`，不是飞书用户 ID。允许范围为 1–999999999，账号不存在时上游报错，不会回退到主账号。
-  lark-connector 上登录的其他账号不用配置，hub 都会读（收件箱、实时事件、App 的「消息」页切换，见 `docs/feishu.md`「多账号」）；
-  默认账号是不带 `ol_account` 的请求用的那个，也是助手、知识库、`/agent` 用的那个。修改后重启 hub（`systemctl --user restart jarvisd`）。
-  助手的 `ol` 在新进程启动时继承所选账号；已有助手进程保留启动时的环境，需要重新启动才切换。
-  不同账号的服务端收件箱记录隔离并保留，切回后可继续查看；不会同时聚合多个账号。
-- `lark.native_olk_token`（可选）：手机解锁与加密发送的独立授权，默认关闭，不从普通 Agent token 自动派生或读取。
-  必须与 lark-connector 的 `lark-connector_NATIVE_OLK_TOKEN` 相同，并在 lark-connector 绑定实际飞书用户 ID；不会下发给 App 或助手。
-  需要两侧升级并重启，详见 [加密消息部署与授权](lark-encryption.md#部署与授权)。
-- `lark.cli`（可选）：飞书官方的开放平台命令行 lark-cli，作为 lark-connector 之外的第二种飞书来源（`docs/plan-lark-cli.md`）：
+- `lark.token` / `lark.container` / `lark.base_url` / `lark.native_olk_token`（老写法，**不再生效**）：#1571 起经 lark-connector 接飞书由插件提供
+  （`docs/feishu.md` 开头、`docs/extensions.md`），hub 还会读到这几个键，但不拿它们连 lark-connector，也不交给助手；写了 `token` 或 `container` 时
+  hub 启动时在日志里提示一行。Agent token、容器、地址和加密消息的独立授权（`native_olk_token`）改在接飞书插件的设置里填，hub.json 里的可以删掉。
+- `lark.account`（可选整数，仍生效）：默认的 lark-connector 账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号，允许范围 1–999999999，
+  例如 `"lark": {"account": 2}`。账号编号来自 lark-connector `/accounts` 的 `id`，不是飞书用户 ID。收件箱里来自默认账号的飞书条目操作时不带 `ol_account`，
+  来自其他账号的带上它们自己的编号；收件箱 Agent 处理飞书条目时也以它为默认账号（`docs/feishu.md`「多账号」）。修改后重启 hub（`systemctl --user restart jarvisd`）。
+  不同账号的服务端收件箱记录隔离并保留，切回后可继续查看。
+- `lark.cli`（可选）：飞书官方的开放平台命令行 lark-cli，作为接飞书插件（lark-connector）之外的第二种飞书来源（`docs/plan-lark-cli.md`）：
   `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`。`bin` 是命令名或绝对路径，默认 `lark-cli`，不是绝对路径时在登录 shell 里找
   （npm 全局装的常在 nvm 这类目录下，systemd 的 PATH 里没有）；`profile` 是 lark-cli 的 `--profile`，空的用它的默认档。
   应用和用户的登录都留在 lark-cli 自己那里（`~/.lark-cli`），不进 `hub.json`：在助手所在的机器上自己跑一次
   `lark-cli auth login --domain all`（全部领域的用户权限；没有浏览器加 `--no-wait --json`，在手机上点链接授权），一周内没用过要重新登录。
   现在（L1）只给助手用：它的 PATH 上有 `lark-cli`（带上配置的 `profile`），写操作过闸门（`docs/assistant.md`「飞书：lark-cli」）。
-- `lark.prefer`（可选）：lark-connector 和 lark-cli 都配了时谁是主来源，`lark-connector`（默认）或 `cli`；现在只影响助手的提示词怎么分工。
-- `lark_gate`（可选，老写法，照样生效；新规则写进下面的 `connector_gate`，`connector` 写 `lark`）：助手用 lark-connector skill 写飞书时的闸门规则，排在内置规则前面，第一条匹配的说了算：
+- `lark.prefer`（可选）：接飞书的插件（lark-connector）和 lark-cli 都有时谁是主来源，`lark-connector`（默认）或 `cli`；现在只影响助手的提示词怎么分工。
+- `lark_gate`（可选，老写法，照样生效；新规则写进下面的 `connector_gate`，`connector` 写 `lark`）：助手写飞书时的闸门规则（接飞书插件的命令闸门，以及 lark-cli），排在 `connector_gate` 的 `lark` 规则之后、内置规则前面，第一条匹配的说了算：
   `[{"method":"POST","path":"/conversations/*/messages","action":"allow"}]`（`action` 是 `allow` / `confirm` / `deny`，可加 `body` 按顶层字段匹配；
   `docs/assistant.md`「飞书：lark-connector skill」）。lark-cli 的命令写成 `{"method":"CLI","path":"/im/+messages-send","action":"allow"}`
   （`path` 是命令的词用 `/` 连起来，`*` / `**` 通配同上），匹配上就不再看 lark-cli 自报的风险等级。

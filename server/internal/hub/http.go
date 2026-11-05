@@ -586,7 +586,8 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID     string `json:"workspace_id"`
 		PermissionMode  string `json:"permission_mode,omitempty"`
 		Effort          string `json:"effort,omitempty"`
-		// TabName names the herdr tab; empty: one made from the first message (tabname.go), else agent-<n>.
+		// TabName names the herdr tab; empty: one made from the first message (tabName, assistant/agents_start.go),
+		// else agent-<n>.
 		TabName string `json:"tab_name,omitempty"`
 		// Async: answer at once with the session it is going to be and start it in the background (node/starting.go);
 		// messages sent to it meanwhile go in once it is ready. NameHint: what the tab name is made from when the

@@ -72,7 +72,7 @@ type ExtensionView struct {
 	NeedsSetup  []string            `json:"needs_setup,omitempty"`
 	Warnings    []string            `json:"warnings,omitempty"`
 
-	// A plugin from a market (plugin_autoupgrade.go): its own auto-upgrade switch, its newer version and what
+	// A plugin from a market (extension_autoupgrade.go): its own auto-upgrade switch, its newer version and what
 	// happened last with an upgrade.
 	AutoUpgrade *bool                 `json:"auto_upgrade,omitempty"`
 	Upgrade     *ExtensionUpgrade     `json:"upgrade,omitempty"`
@@ -107,7 +107,7 @@ type hubExtension struct {
 	status  string       // when proc is nil
 	err     string
 
-	// agentSources are its agent_sources registered with the agents service (plugin_agents.go).
+	// agentSources are its agent_sources registered with the agents service (extension_agents.go).
 	agentSources []string
 	// stats count its calls, runs and log (extension_metrics.go); nil in tests that make one by hand.
 	stats *extensionStats
@@ -136,12 +136,13 @@ type extensions struct {
 	// skillsSent remembers which skill digests each machine was sent (machine id → *sync.Map of name → digest), so
 	// the files go once (again after the hub restarts).
 	skillsSent sync.Map
-	// markets are the plugin markets (plugin_market.go); upgrades their plugins' auto-upgrade (plugin_autoupgrade.go).
+	// markets are the plugin markets (extension_market.go); upgrades their plugins' auto-upgrade
+	// (extension_autoupgrade.go).
 	markets  markets
 	upgrades extensionUpgrades
 	// dev streams what the extensions being written log (extension_dev.go).
 	dev devTaps
-	// badges are the plugins' badges on their nav_pages' entries ("<plugin>/<ui>" → plugin.Badge; plugin_ui.go).
+	// badges are the plugins' badges on their nav_pages' entries ("<plugin>/<ui>" → plugin.Badge; extension_ui.go).
 	badges sync.Map
 	// kbEvents keep slow extension programs out of the assistant bus read loop.
 	kbEvents kbExtensionEvents
@@ -309,7 +310,7 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 		}
 	}
 	reg.Reserve("connectors", own...)
-	// The hub's own personal agents sources, but those a plugin may take over (plugin_agents.go).
+	// The hub's own personal agents sources, but those a plugin may take over (extension_agents.go).
 	for _, id := range []string{agents.OLKBridge} {
 		if !slices.Contains(agents.MigratableSources, id) {
 			reg.Reserve("agent_sources", id)
@@ -332,7 +333,7 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 	if err := reg.Load(ctx); err != nil {
 		h.logf("plugins: %v", err)
 	}
-	h.fixMachineSettings(ctx, reg) // machine names typed into settings become ids (plugin_machines.go)
+	h.fixMachineSettings(ctx, reg) // machine names typed into settings become ids (extension_machines.go)
 	reg.OnChange = ps.changed
 	ps.mu.Lock()
 	ps.reg = reg

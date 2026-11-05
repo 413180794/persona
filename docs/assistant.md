@@ -29,7 +29,7 @@
 | 代答提问 | `interaction_answer`：主人说「帮我回那个问题，选 A」时，助手替他把别的 Agent 的**提问类**交互答掉。只认 `kind: question` 且不是助手自己的对话——`permission` / `plan` / `screen` 一律拒绝并说明只有主人能在 App 里答（批准类不代答是硬边界）。答案逐题核对：每题都要答、键必须是题目原文、选项必须在列表里、单选只能一个，多选按 App 的格式拼成 `A, B`；自由文本拒收（那要在 App 里答，或用 `agent_send`）。过期、已答、已忽略、已取消、不存在各自给出对应错误（后四种查交互历史）。`Resolution.AnsweredBy = "assistant"` 随交互历史（`GET /api/v1/interactions/history`）和 `interaction_resolved` 广播带出去，App 据此标「Jarvis 代答」。`agents_list` 的「等你」行带上 `interaction_id` 和每道题的选项，助手不必再查一次（工具和这些规则都在助手：`assistant/tools_apps.go` `toolInteractionAnswer`，测试 `assistant/tools_apps_test.go`；hub 只经 `interactions.get` 给出这条交互、不在等了就给交互历史里的结局，经 `interactions.answer` 把核对过的答案记成助手代答，`hub/interaction_answer.go`） |
 | 派发任务 | `task_plan`：把要 Agent 干的活交给用户，一个任务一个待办（`origin` = 这段对话）；只读的、用户记住过的直接开，其余在对话里成计划卡等用户「开始」，不阻塞这一轮。任务的进展在实时快照的「从对话开的任务」里，完成回执、答过的问题、直接对任务说的话进对话动态（[unified-entry.md](unified-entry.md)，`assistant/tasks.go`） |
 | Telegram | 装了 Telegram 扩展（扩展市场 `nwverse/persona-extensions`，#1704、#2057）才有：只读 MCP `telegram_chats` / `telegram_messages` / `telegram_search`；更灵活的读和写用扩展带的 telegram skill（Bash 里 `tg …`，即 `personad tool --cli telegram`，经 hub，写操作手机上确认），`tg` 只在 Telegram 登录着时在 PATH 上（`docs/connector-protocol.md`「命令行」） |
-| 飞书 | 主要用 lark-connector 自带的 lark-connector skill（Bash 里 `ol METHOD PATH [JSON]`，读写都能做），见下「飞书：lark-connector skill」；高频结构化的查询仍有 MCP `lark_chats` / `lark_messages` / `lark_search`（hub 的 lark-connector 客户端）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
+| 飞书 | 开源版用飞书官方的 lark-cli（见下「飞书：lark-cli」）。装了经 lark-connector 接飞书的插件时，主要用插件给的 lark-connector skill（Bash 里 `ol METHOD PATH [JSON]`，读写都能做），见下「飞书：lark-connector skill」；MCP `lark_chats` / `lark_messages` / `lark_search` 也由插件提供（#1571 起 hub 里没有 lark-connector 客户端，`docs/plan-extensions.md`「第 3 步」）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
 | 操作 Persona 自己 | `jarvis_settings`（先 `list`，助手自己的工具，`assistant/settings_tool.go`：关于我、默认启动器、`main_tasks_quiet` 是助手自己的设置，它自己读写、自己在手机上弹确认卡片；其余是 hub 的设置，清单经 `app.call settings.list` 拿，读写经 `app.tool jarvis_settings` 交给 hub，hub 自己弹卡片）：读写分拣规则（全局的 `inbox.rules`，和设置里声明了 `triage_rules` 的插件来源各自的 `inbox.rules.<插件>`，有就代替全局的）、AI 分身规则、关于我、默认启动器、「主对话派的任务只在主对话里通知」（`assistant.main_tasks_quiet`）、各台机器屏蔽的 Claude 配置目录（`agents.blocked_claude_dirs`），以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
 | 实时快照 | 每条发给助手的消息开头一个 `<jarvis-context>` 块（不进系统提示，见下面「实时快照和前缀缓存」）：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。Agent 和任务各带网页版的链接：hub 的 `public_url`（没写时是默认的 `http://<主机名>:18660`）加 `/s/<机器>/<会话 id>`、`/todos?id=<待办 id>`，助手提到它们时写成 Markdown 链接；hub 没答上地址时不带（#2194）。只带和这段对话上一份比变了的部分（时间每次都带）。hub 每个来源 3 秒超时，45 秒内复用上次读的，消息最多等 1.5 秒新的 |
 | 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，Persona 工具不再延迟加载 |
@@ -183,14 +183,13 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
 
 用户要求：「lark-connector 自带 skill……现在只走我们的 MCP lark_* 工具，自由度低」「skill 弄一个副本就行，不搞整个 lark-connector 仓库丢进去」。
 
-- **副本**：仓库的 `skills/lark-connector/` 是 lark-connector 仓库 `.agents/skills/lark-connector` 的原样副本（`SKILL.md`、`references/`、
-  `scripts/ol.sh`；不要 `evals/` 和要 Node 的 `*.mjs`，hub 上没有 Node），来源 commit 记在 `skills/SOURCE.md`。
-  同步上游：`scripts/deploy/sync_lark-connector_skill.sh <lark-connector checkout>`，看 diff 后提交。
+- **副本**：原来仓库里有一份 lark-connector 仓库 `.agents/skills/lark-connector` 的原样副本（`SKILL.md`、`references/`、`scripts/ol.sh`，
+  带来源 commit 和同步上游的脚本）；#1571 起副本和脚本都删了，skill 由接飞书的插件提供（`docs/lark-agent.md` 开头的说明）。
 - **怎么到助手手里**（2026-11-02 起，`docs/hub-update.md`「skill 从二进制里拿出来」）：它**不在 personad 里**（不能再分发），
   放在跑助手那台机器的 `~/.persona/skills/lark-connector`（用户自己的 skill 空间），node 每次起助手进程时把它链接到 `~/.persona/assistant/.claude/skills/lark-connector`。
   旧版本 jarvisd 装进去的副本，node 第一次起助手时自动搬到 `~/.persona/skills/`。没有这个 skill 时没有 `ol`，助手的 CLAUDE.md 也改成只用 MCP 的 `lark_*`。
   有的话 `~/.persona/assistant-bin/ol` 是一行包装，放在助手进程的 PATH 最前，助手直接 `ol GET /me`。
-- **token**：node 起进程前向 hub 要（RPC `assistant.lark`，只回给 assistant 所在的机器）：hub.json `lark.base_url` 去掉 `/agent/v1` 作为
+- **token**（#1317、#1571 之前的做法，现在不成立：token 留在 node 的代理里，hub.json 的 `lark.base_url`、`lark.token` 已不生效，见 `docs/config.md`）：node 起进程前向 hub 要（RPC `assistant.lark`，只回给 assistant 所在的机器）：hub.json `lark.base_url` 去掉 `/agent/v1` 作为
   `lark-connector_AGENT_BASE`，`lark.token`（没写就照旧从 lark-connector 容器读）作为 `lark-connector_AGENT_TOKEN`，只放进这个进程的环境变量，不落盘、不进日志。
   ol.sh 找 token 的顺序是这个环境变量 → `lark-connector_ENV_FILE` → 所在仓库的 `.env`；副本不在仓库里，只靠环境变量（实测通）。
 - **闸门**（`node/larkgate.go`）：助手进程用单独的一组 hooks（插件 `assistant-hooks`，更老的 Claude Code 是 `assistant-settings.json`，`docs/claude-integration.md`「Hooks」），多一个 Bash 的 PreToolUse hook（herdr 里的 Agent 不受影响）。
@@ -216,7 +215,7 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
 
 - **怎么开**：hub.json `lark.cli`（`docs/config.md`），lark-cli 装在助手所在的机器上，用户自己 `lark-cli auth login --domain all` 登录一次。
   lark-connector 可以同时配着，`lark.prefer` 定提示词里谁优先。
-- **怎么到助手手里**：node 起助手进程前向 hub 要配置（RPC `assistant.lark` 多了 `cli`、`prefer`；只配 lark-cli 时不去问 lark-connector，也就没有它的 token），
+- **怎么到助手手里**：node 起助手进程前向 hub 要配置（RPC `assistant.lark` 多了 `cli`、`prefer`；只配 lark-cli 时不去问 lark-connector；现在 hub 本来就不再给 lark-connector 的 token），
   在 `~/.persona/assistant-bin/lark-cli` 写一行包装：配置的那个 lark-cli（不是绝对路径时在登录 shell 里找）加上配置的 `--profile`，
   并把 lark-cli 所在目录放进 PATH（npm 的 lark-cli 是 `env node` 的脚本，要找得到 node）。没配 `lark.cli` 或找不到 lark-cli 就不写。
   lark-cli 的凭据留在它自己的 `~/.lark-cli`，hub 和 node 都不碰。

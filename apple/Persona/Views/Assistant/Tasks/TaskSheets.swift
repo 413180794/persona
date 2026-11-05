@@ -3,7 +3,8 @@ import SwiftUI
 /// A task's detail, risen from the bottom like a link (docs/unified-entry.md「任务详情」): opens full, pulled down to
 /// 0.6 the conversation behind stays usable. Its agent's page is the Agents page's own chat (`ChatView(style: .dev)`),
 /// so everything that page does works here; a task with several agents switches between them at the top. An agent no
-/// task stands for (the main conversation's dock, #1113) opens in the same sheet, its page under its own header.
+/// task stands for (the main conversation's dock, #1113) opens in the same sheet, its page under its own header. In
+/// regular width (iPad) the same page is pushed into the detail column instead (`detailPresentation`, #2816).
 struct TaskDetailSheet: View {
     private var todoID: String?
     private var agentKey: SessionKey?
@@ -11,13 +12,15 @@ struct TaskDetailSheet: View {
     @State private var picked: SessionKey?
     @State private var removing: TodoItem?
     @Environment(\.dismiss) private var dismiss
+    /// Pushed into the chat's stack (regular width): its back goes back, and the agent's page is the column's.
+    @Environment(\.detailPushed) private var pushed
     private var store: TasksStore { .shared }
 
     init(todoID: String) { self.todoID = todoID }
     init(agent: SessionKey) { agentKey = agent }
 
     var body: some View {
-        NavigationStack {
+        DetailStack {
             Group {
                 if let agentKey {
                     agentContent(agentKey)
@@ -47,8 +50,7 @@ struct TaskDetailSheet: View {
             Divider()
             Group {
                 if let key {
-                    ChatView(key: key, style: .dev)
-                        .id(key)
+                    agentPage(key)
                 } else if let failure = store.startFailure(todo) ?? todo.agents.first?.startError {
                     EmptyStateView(symbol: Theme.Icon.errorFilled, title: "Agent 没开起来", message: failure,
                                    action: (title: "移除任务", run: { store.askRemove(todo, pending: $removing) }))
@@ -67,6 +69,7 @@ struct TaskDetailSheet: View {
         let state = store.state(todo)
         return VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: Theme.Space.s) {
+                if pushed { closeButton }
                 TaskMark(state: state).scaledFrame(width: Theme.Size.markM)
                 Text(todo.title).font(Theme.Font.heading).lineLimit(2)
                 Spacer(minLength: Theme.Space.s)
@@ -81,7 +84,7 @@ struct TaskDetailSheet: View {
                     .clipShape(.circle)
                     .accessibilityLabel("更多")
                 }
-                closeButton
+                if !pushed { closeButton }
             }
             if sessions.count > 1 {
                 ScrollView(.horizontal) {
@@ -118,13 +121,14 @@ extension TaskDetailSheet {
         GeometryReader { geo in
         VStack(spacing: 0) {
             HStack(spacing: Theme.Space.s) {
+                if pushed { closeButton }
                 if let session { StatusDot(state: session.state, size: Theme.Size.dotL).scaledFrame(width: Theme.Size.markM) }
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(session?.displayTitle ?? "Agent").font(Theme.Font.heading).lineLimit(2)
                     AgentMarkLine(text: "Agent · 不是从对话开的")
                 }
                 Spacer(minLength: Theme.Space.s)
-                closeButton
+                if !pushed { closeButton }
             }
             .padding(.horizontal, Theme.Space.page)
             .padding(.top, Theme.Space.l) // below the sheet's grabber
@@ -133,7 +137,7 @@ extension TaskDetailSheet {
             Divider()
             Group {
                 if session != nil {
-                    ChatView(key: key, style: .dev).id(key)
+                    agentPage(key)
                 } else {
                     EmptyStateView(symbol: Theme.Icon.agents, title: "没有这个 Agent 了", message: "它可能已经关掉了。")
                 }
@@ -145,14 +149,26 @@ extension TaskDetailSheet {
         }
     }
 
+    /// The agent's own page (the Agents page's chat). Pushed, it is the detail column's page as it is beside the
+    /// Agents list (`SplitDetail`): the tab bar stays and its ‹ gives way to the task header's.
+    @ViewBuilder private func agentPage(_ key: SessionKey) -> some View {
+        if pushed {
+            ChatView(key: key, style: .dev).id(key)
+                .environment(\.splitDetail, SplitDetail(isFirstPage: true))
+        } else {
+            ChatView(key: key, style: .dev).id(key)
+        }
+    }
+
+    /// ✕ at the sheet's trailing edge; ‹ at the pushed page's leading one.
     private var closeButton: some View {
         Button { dismiss() } label: {
-            Image(systemName: Theme.Icon.close).font(Theme.Font.secondaryStrong)
+            Image(systemName: pushed ? Theme.Icon.back : Theme.Icon.close).font(Theme.Font.secondaryStrong)
                 .scaledFrame(width: Theme.Size.well, height: Theme.Size.well)
         }
         .themedButton()
         .clipShape(.circle)
-        .accessibilityLabel("关闭")
+        .accessibilityLabel(pushed ? "返回" : "关闭")
     }
 }
 

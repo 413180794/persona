@@ -10,7 +10,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - skill 拿出二进制：`internal/assistantskills` 只放内置 skill（现在为空）；node 每次起助手时 `Sync`：链接 `~/.persona/skills/` 里用户的 skill，
     删掉失效的链接，旧版本装的 lark-connector 自动搬过去（`TestSyncMovesTheOldCopy`）；`ol` 只在有 lark-connector 时出现（`TestOlOnlyWithTheSkill`）；
     助手的 CLAUDE.md 在没有 lark-connector 时只讲 MCP 的 `lark_*`（golden `assistant_claude_md.no_lark-connector`），hub 问 node 的 `skills.list`；
-    `GET /api/v1/skills` 给 App 的只读列表。lark-connector 的副本挪到仓库的 `skills/lark-connector`。
+    `GET /api/v1/skills` 给 App 的只读列表。lark-connector 的副本挪到仓库的 `skills/lark-connector`（#1571 已删这份副本和同步脚本，skill 由接飞书的插件提供）。
   - 一种二进制：没有按 `public` 区分的文件了（`TestOneBuild`）；publish.sh 留着 `-tags public` 只当隐私扫描的标记（扫描靠它认出可以跳过的依赖常量）。
   - 渠道和 build 号：`main.channel`、`main.build`、`main.updateURL`；publish.sh、deploy.sh 打 `release`，Docker 打 `docker`；
     `personad version -v` 显示渠道和 build 号；`/api/v1/health`、`hello` 带 `channel`、`build`、`protocol`、`min_app_build`。
@@ -72,6 +72,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - **手动**（我们的 hub 上，主会话执行）：
     `mkdir -p ~/.persona/skills && cp -R <仓库>/skills/lark-connector ~/.persona/skills/lark-connector`，
     或者从助手目录的 `.claude/skills/lark-connector` 拷过去。
+    （#1571 起仓库里没有 `skills/lark-connector` 了，第一种拷法的源路径不存在；skill 由接飞书的插件提供，见 `docs/lark-agent.md` 开头。）
   - 这样新版本起来时助手照常有 lark-connector。lark-connector 的副本挪到仓库的 `skills/lark-connector`（同步上游的脚本照旧，改成写那里），不进任何二进制；
     公开版没有它也不要紧，用户把它（或自己的 skill）放进 `~/.persona/skills/` 就行。
 - **去掉 `-tags public`**：两边没有区别了，`files_public.go` / `files_bundled.go` 合成一个只放内置 skill 的 embed。

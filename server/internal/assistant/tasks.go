@@ -80,7 +80,7 @@ type FeedItem struct {
 const (
 	feedPlan     = "plan"     // ref: the plan id
 	feedTask     = "task"     // ref: the todo id
-	feedAnswered = "answered" // ref: the todo id; body: answeredBody (tasks_answered.go)
+	feedAnswered = "answered" // ref: the todo id; body: answeredBody (answered.go)
 	feedReceipt  = "receipt"  // ref: the todo id; body: title, state, summary, pr, machine
 	feedRouted   = "routed"   // ref: the todo id; body: text
 	feedMessage  = "message"  // ref: the inbox item id; body: MessageCard (a message about a task, with its draft reply)

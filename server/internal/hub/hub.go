@@ -374,7 +374,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.personaTiersLoop(ctx)
 	h.upd.start(ctx)
 	h.startExtensions(ctx)
-	// Market plugins' newer versions (plugin_autoupgrade.go).
+	// Market plugins' newer versions (extension_autoupgrade.go).
 	go h.extensionUpgradeLoop(ctx)
 	// How they run, to the database once an hour (extension_metrics.go).
 	go h.extensionMetricsLoop(ctx)

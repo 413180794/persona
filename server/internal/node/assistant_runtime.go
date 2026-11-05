@@ -3,8 +3,8 @@ package node
 // The assistant on an agent runtime (docs/runtimes.md「助手」; DSH first, docs/dsh.md「助手」): a runtime that declares
 // the assistant capability runs the conversation, driven with the runtime protocol's own session calls. What is the
 // assistant's stays here, as for Claude and Codex: the conversation's state (launcher, directory), the live snapshot
-// each message starts with, the permission mode, the shared memory, and Feishu through the lark-connector tool (the token
-// never leaves the node). Nothing in this file is any one runtime's.
+// each message starts with, the permission mode, the shared memory, and the gated skill commands Feishu goes through
+// (larkgate.go; their credentials never leave the node). Nothing in this file is any one runtime's.
 
 import (
 	"context"

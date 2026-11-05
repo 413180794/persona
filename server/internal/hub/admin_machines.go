@@ -43,7 +43,7 @@ type adminMachine struct {
 	Address      string             `json:"address,omitempty"` // service: the connector's host:port
 	Proxy        string             `json:"proxy,omitempty"`   // service: the socks5 proxy it is dialed through
 	HubID        string             `json:"hub_id,omitempty"`  // the hub it is reached through now
-	Paths        []pathInfo         `json:"paths,omitempty"`   // every way to it (mesh_paths.go)
+	Paths        []pathInfo         `json:"paths,omitempty"`   // every way to it (devices/paths.go)
 	// State: active (running), pending_add (in hub.json, connects after a restart), pending_remove (gone from
 	// hub.json, still running until the restart).
 	State string `json:"state"`

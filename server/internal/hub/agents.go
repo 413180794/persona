@@ -19,7 +19,7 @@ func (h *Hub) initAgents() {
 	if h.store != nil {
 		kv = h.store
 	}
-	// The sources come from plugins (agent_sources, plugin_agents.go).
+	// The sources come from plugins (agent_sources, extension_agents.go).
 	h.agents = agents.NewService(kv, h.agentsChanged, h.logf)
 }
 

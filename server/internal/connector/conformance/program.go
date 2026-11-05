@@ -22,7 +22,7 @@ import (
 // What CheckProgram asks for, the way the hub does: a thread's page, an archive call's conversations.
 const (
 	programThreadLimit = 20
-	programArchiveMost = 20 // hub/kb_connectors.go: kbConnectorLimit
+	programArchiveMost = 20 // assistant/kb_sources.go: kbConnectorLimit
 	programArchiveCall = 6  // calls to follow the archive's cursor to its end
 	programCallTimeout = 30 * time.Second
 	programSignInWait  = 15 * time.Second

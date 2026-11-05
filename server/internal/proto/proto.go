@@ -691,8 +691,8 @@ type Session struct {
 	// Space is the assistant's space it runs in: "health" for the health space's (docs/health.md), "" for the
 	// assistant's own. Set by the hub on the assistant's conversations.
 	Space string `json:"space,omitempty"`
-	// Archived: an assistant conversation moved out of the sidebar's list (kept, listed under 已归档; hub
-	// assistant_conversations.go).
+	// Archived: an assistant conversation moved out of the sidebar's list (kept, listed under 已归档;
+	// internal/assistant/conversations.go).
 	Archived bool `json:"archived,omitempty"`
 	// Compaction is the last compaction the user asked for in an assistant conversation (POST …/compact), kept by the
 	// node until the next one: running, then done or failed (docs/assistant.md「手动压缩」).
@@ -1395,16 +1395,14 @@ type LarkRule struct {
 	Action string         `json:"action"`
 }
 
-// AssistantLark is what the assistant process needs to drive lark-connector itself (the lark-connector skill's ol.sh): the
-// agent API's base (without /agent/v1), its token, and the write gate's extra rules. Sent by the hub to the assistant's
-// node only; never written to disk or logs.
+// AssistantLark is what the assistant's machine needs to gate its skills' Feishu commands: the write gate's extra
+// rules, lark-cli and the plugins' command gates. Sent by the hub to the assistant's node only; never written to disk
+// or logs. (It no longer carries lark-connector's base and token: lark-connector is a plugin's now, which supplies its own gate
+// and credentials through Gates; an older hub's "account", "base" and "token" are unknown keys and ignored.)
 type AssistantLark struct {
-	Account int        `json:"account,omitempty"`
-	Base    string     `json:"base"`
-	Token   string     `json:"token"`
-	Rules   []LarkRule `json:"rules,omitempty"`
-	CLI     *LarkCLI   `json:"cli,omitempty"`    // lark-cli is configured (hub.json lark.cli, docs/plan-lark-cli.md)
-	Prefer  string     `json:"prefer,omitempty"` // "lark-connector" | "cli": the primary source when both are there
+	Rules  []LarkRule `json:"rules,omitempty"`
+	CLI    *LarkCLI   `json:"cli,omitempty"`    // lark-cli is configured (hub.json lark.cli, docs/plan-lark-cli.md)
+	Prefer string     `json:"prefer,omitempty"` // "lark-connector" | "cli": the primary source when both are there
 	// Gates are the command gates of the assistant's skills (plugins' assistant.gate, docs/extensions.md「助手」):
 	// a command calling an HTTP API as the user, its credentials and the rules its calls go by.
 	Gates []CommandGate `json:"gates,omitempty"`

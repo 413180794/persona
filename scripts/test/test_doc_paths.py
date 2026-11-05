@@ -2,7 +2,8 @@
 
 Files move often (the Persona rename, scripts split by purpose, Persona Link moving under apple/); a doc that still points
 at the old place sends the next reader, or Agent, looking for a file that is gone. This checks every `backticked` path that
-starts with a top-level directory of the repository, and Go paths written relative to server/ (internal/hub/...). Dated
+starts with a top-level directory of the repository, and Go paths written relative to server/ (internal/hub/...), in the
+top-level docs and in the tracked Markdown under the module directories (MODULE_DOC_DIRS). Dated
 records under docs/archive/ and the redesign drafts keep the paths of their own time and are not checked; neither are the
 rename docs, which name the retired paths on purpose.
 
@@ -10,6 +11,7 @@ Every top-level doc must also be listed in CLAUDE.md's 文档索引, the place A
 """
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -18,7 +20,11 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 
 # Top-level directories whose paths docs quote. Paths under scripts/ are often written relative to it (deploy/deploy.sh).
-TOP = ("android", "apple", "deploy", "docs", "integrations", "scripts", "server", "site", "spec", "web", "prototypes")
+TOP = ("android", "apple", "deploy", "docs", "integrations", "schema", "scripts", "sdk", "server", "site", "spec", "web",
+       "prototypes")
+
+# Module directories whose tracked Markdown (READMEs, integration notes) is checked along with the top-level docs.
+MODULE_DOC_DIRS = ("android", "integrations", "schema", "sdk", "spec")
 
 # Go paths docs write relative to server/, the module root (go test ./internal/hub, internal/hub/hub.go).
 SERVER_RELATIVE = ("internal",)
@@ -58,6 +64,7 @@ ELSEWHERE = {
     "docs/guide.pdf",  # mock_hub.py's fake browse tree (docs/android.md)
     "docs/icon.png",  # a file the mock hub does not have (docs/mac.md)
     "scripts/ol.sh",  # inside skills/lark-connector/ (docs/assistant.md)
+    "sdk/VERSION",  # written by scripts/gen/sync-sdk.sh into the extension repository (docs/extensions.md)
     # The Go check's overlay maps this absent path to a test source in /tmp (spec/fixtures/sort/README.md).
     "server/internal/hub/spec_sort_fixture_test.go",
     "internal/authflow/flow.go",  # in the cli/cli source (docs/connectors.md)
@@ -77,8 +84,15 @@ UNINDEXED = {"docs/plugins.md"}
 def doc_files():
     files = [ROOT / name for name in ("CLAUDE.md", "README.md", "THIRD_PARTY_NOTICES.md", "scripts/README.md")]
     files += sorted((ROOT / "docs").glob("*.md")) + sorted((ROOT / "docs/lessons").glob("*.md"))
-    files += [ROOT / "spec/README.md"] + sorted((ROOT / "spec/fixtures").glob("*/README.md"))
+    files += module_docs()
     return [f for f in files if f.exists() and f.relative_to(ROOT).as_posix() not in SKIP_FILES]
+
+
+def module_docs():
+    # Tracked files only, so build output and node_modules under these directories are never scanned.
+    listed = subprocess.run(["git", "ls-files", "-z", "--", *(f"{d}/*.md" for d in MODULE_DOC_DIRS)],
+                            cwd=ROOT, check=True, capture_output=True, text=True).stdout
+    return sorted(ROOT / name for name in listed.split("\0") if name)
 
 
 def quoted_paths(line):
@@ -148,10 +162,19 @@ class DocPathTests(unittest.TestCase):
         self.assertEqual(["apple/Shared/Models.swift"], list(quoted_paths("`apple/Shared/Models.swift：Interaction`")))
         self.assertEqual(["server/internal/hub/hub.go"], list(quoted_paths("`server/internal/hub/hub.go:120`")))
 
-    def test_spec_readmes_are_checked(self):
+    def test_module_docs_are_checked(self):
         checked = {doc.relative_to(ROOT).as_posix() for doc in doc_files()}
-        self.assertIn("spec/README.md", checked)
-        self.assertIn("spec/fixtures/wire/README.md", checked)
+        for doc in ("spec/README.md", "spec/fixtures/wire/README.md", "spec/tokens/README.md", "sdk/README.md",
+                    "sdk/templates/go/README.md", "schema/extension/README.md", "integrations/pi/README.md",
+                    "android/feature/chat/INTEGRATION.md"):
+            self.assertIn(doc, checked)
+        self.assertEqual(len(checked), len(doc_files()), "a doc is listed twice")
+
+    def test_sdk_and_schema_paths_are_checked(self):
+        paths = list(quoted_paths("`sdk/go/sdk.go` and `schema/extension/view.schema.json：Card`"))
+        self.assertEqual(["sdk/go/sdk.go", "schema/extension/view.schema.json"], paths)
+        self.assertTrue(all(exists(path) for path in paths))
+        self.assertFalse(exists("sdk/go/missing.go"))
 
     def test_server_relative_go_paths_resolve_under_server(self):
         self.assertEqual(["internal/hub/hub.go"], list(quoted_paths("see `internal/hub/hub.go` and `internal` and `go`")))

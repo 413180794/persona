@@ -31,7 +31,7 @@ export async function startNode({ jarvisd, keep = false, home: given, env = {} }
   h.tools = [] // the hub's tools (mcp.tools), and how a call of one is answered (mcp.call)
   h.assistantTools = [] // listed besides h.tools when the node asks for the assistant's
   h.assistantContext = () => '' // the live snapshot the hub gives an assistant conversation's next message
-  h.lark = {} // lark-connector's config for the assistant (assistant.lark)
+  h.lark = {} // the assistant's Feishu gate settings: rules, lark-cli, command gates (assistant.lark)
   h.toolCalls = []
   h.callTool = (params) => ({ content: [{ type: 'text', text: `${params.name} ran` }], is_error: false })
   h.hub = new Peer(stdio, {

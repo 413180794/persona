@@ -61,7 +61,7 @@ type NotifyPrefs struct {
 	LockDetails bool `json:"lock_details"`
 	// Island: what the compact Dynamic Island shows on each side.
 	Island IslandPrefs `json:"island"`
-	// Translate: the app's 设置 › 翻译, so the hub can translate new mail before it is opened (translate.go).
+	// Translate: the app's 设置 › 翻译, so the hub can translate new mail before it is opened (assistant/inbox_translate.go).
 	Translate TranslatePrefs `json:"translate"`
 	// MuteWhileDesktop: 手机静音 (WeChat's) — no alert pushes to this device while a desktop app (the Mac app) is
 	// connected; it shows them there (desktops.go).

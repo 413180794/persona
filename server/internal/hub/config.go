@@ -133,10 +133,12 @@ type Config struct {
 	DatabaseURL string `json:"database_url"`
 	// AI configures the Messages API used for in-app AI helpers (defaults to the launcher's gateway on the hub machine).
 	AI ai.Config `json:"ai"`
-	// Lark points at the user's lark-connector agent API (Feishu messages in the 信息 tab).
+	// Lark is how the hub and the assistant run lark-cli, and the lark-connector account Feishu items a plugin hands over
+	// came to (internal/lark). lark-connector itself is a plugin's now; its old fields here are not read.
 	Lark lark.Config `json:"lark"`
-	// LarkGate: extra rules for the assistant's Feishu writes through the lark-connector skill, before the built-in ones
-	// (node/larkgate.go; e.g. {"method":"POST","path":"/conversations/*/messages","action":"allow"}).
+	// LarkGate: extra rules for the assistant's Feishu writes through the Feishu plugin's command gate, after
+	// connector_gate's lark rules and before the built-in ones (connector.LarkRules, node/larkgate.go; e.g.
+	// {"method":"POST","path":"/conversations/*/messages","action":"allow"}).
 	LarkGate []proto.LarkRule `json:"lark_gate,omitempty"`
 	// ConnectorGate: rules for connectors' writes (github_comment…), the first match decides; without one the user
 	// allows each write on the phone (internal/connector/gate.go; e.g. {"connector":"github","action":"github_comment",

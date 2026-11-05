@@ -25,13 +25,11 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/main_handoff.md` | 新建主对话后第一条消息前面的 `<jarvis-context>`：旧主对话的 id、最近一次压缩的摘要、之后的几条消息（`docs/assistant.md`「新建主对话」） | `assistant/start.go` `renderHandoff` `startMain` |
 | `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |
 | `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |
-| `assistant/runtime_instructions.md` | 助手跑在 Agent 运行时（DSH）上时，新对话第一条消息前面的 `<jarvis-context>`：共用的记忆（目录、格式、当前索引），有 lark-connector skill 时说明飞书走 `lark-connector` 工具 | `node/assistant_runtime.go` |
+| `assistant/runtime_instructions.md` | 助手跑在 Agent 运行时（DSH）上时，新对话第一条消息前面的 `<jarvis-context>`：共用的记忆（目录、格式、当前索引），插件的命令闸门带运行时工具时，说明技能里的命令改用那个工具跑（`{{range .Gates}}`） | `node/assistant_runtime.go` |
 | `agents/triage.md`、`triage_input.md` | Agent 一轮停下后的分诊：做完了 / 卡在什么上（等你决定、等另一个 Agent、等外部事件），抽出问题和选项、授权链接、等的事和过多久再看、产物（[agent-work.md](agent-work.md)）；用途 `agent.triage` | `assistant/agents_triage.go` |
 | `agents/wake.md` | 到点叫醒在等的 Agent：上一轮说在等什么、好了接着做、推代码 / 部署 / 发消息前先问用户 | `assistant/agents_triage.go` |
 | `agents/answer.md` | 用户在分诊开的卡片上的回答，发回给那个 Agent | `assistant/agents_triage.go` |
 | `bot/message.md` | 在飞书里私聊机器人发的一条消息进对话的样子：发给 Persona 时加「回答会发回飞书」的说明，引用的消息、转发的聊天记录、附件路径 | `hub/bots_chat.go` `botSend`（`docs/bots.md`） |
-| `lark/chat_agent.md`、`doc_agent.md`（#1571 起在接飞书的插件里，不在本仓库） | 飞书 `/agent`（会话里 / 文档评论里）的第一条消息 | 插件（原来是 hub 的 lark_agent.go、lark_agent_docs.go） |
-| `lark/chat_context.md`、`doc_context.md`、`line.md`（同上，在插件里） | 上面两种请求的上下文：位置、聊天记录 / 评论讨论、引用、文档、知识库 | 同上 |
 | `inbox/triage.md` | 收件箱分拣（需要你 / 知悉即可 / 噪音）的 system | `assistant/inbox_triage.go` |
 | `inbox/tiers.md` | 三档的判断标准，分拣和事件合成共用 | 同上 |
 | `inbox/group.md`、`group_input.md` | 事件合成：一个会话的一批新消息各归哪件事，给动到的事写标题、总结、分级；输入里带着这个会话的事和已经调过的工具（`docs/inbox.md`「事件合成」） | `assistant/inbox_group.go` |
@@ -58,6 +56,8 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `shared/kb_blocks.md` | 会话档案 + 项目档案的 `<jarvis-context>` 块（飞书 /agent 和 AI 分身共用） | |
 | `shared/user_rules.md` | 「用户自己定的规则」段（分拣、判断共用） | |
 
+飞书 `/agent`（会话里 / 文档评论里）的提示词和上下文 #1571 起随 `/agent` 在接飞书的插件里，本仓库没有 `lark/` 目录（`docs/lark-agent.md`）。
+
 Go 那一侧：`prompts.go`（解析、模板函数），`assistant.go`、`inbox.go`、`kb.go`、`tools.go`（每个提示词一个数据结构和一个 `RenderXxx`；飞书 /agent 的 lark.go #1571 起随提示词在插件里）。
 
 ## MCP 工具
@@ -72,12 +72,14 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 | `mcp/schedule/` | `schedule_followup`、`schedule_routine`、`delete_routine`、`list_followups`、`cancel_followup` | 同上 |
 | `mcp/agents/` | `agents_list`、`agent_read`、`agent_send`、`agent_start`、`interaction_answer` | 同上 |
 | `mcp/inbox/` | `inbox_draft`（AI 分身交草稿） | 同上 |
-| `mcp/assistant/lark-connector.md`（#1571 起在接飞书的插件里，不在本仓库） | `lark-connector`：助手跑在 Agent 运行时上时的飞书（lark-connector skill 的 `ol` 在 node 上跑，先过飞书闸门） | node（`node/assistant_runtime.go`，经 `runtime.sock` 的 `mcp.tools` 给运行时） |
-| `mcp/lark/`（#1571 起在接飞书的插件里，不在本仓库） | `lark_agent_reply`（飞书 /agent 交答案）；`lark_chats`、`lark_messages`、`lark_search`（插件的连接器工具） | 插件 |
 | `mcp/kb/` | `kb_search`、`kb_list`、`kb_get`、`kb_update` | 同上 |
 | `mcp/mail/` | `mail_accounts`、`mail_search`、`mail_read`、`mail_send` | 所有对话（`mail/mcp.go` 的 `Tools`） |
 | `mcp/github/` | `github_search`、`github_read`、`github_diff`、`github_checks`（只读）；`github_comment`、`github_review`（写，过闸门） | 助手，GitHub 连接器状态是 `ok` 时（`connector/github/tools.go`；golden `mcp_tools.assistant_with_github`） |
 | `mcp/voice/` | `search_knowledge`、`list_agents`、`send_to_agent`、`ask_jarvis` | 内置语音插件开了 `tools` 的上游（`voice/tools.go`，作为 GPT-Live 的函数工具声明在 `session.start` 里） |
+
+#1571 起没有 `mcp/lark/`：`lark_agent_reply`、`lark_chats`、`lark_messages`、`lark_search` 由接飞书的插件提供（`docs/plan-extensions.md`「第 3 步」）。
+助手跑在 Agent 运行时上时，`ol` 这类命令的工具也不在这里：名字和描述来自插件命令闸门的 `tool`（`proto.CommandGate.Tool`），
+node 的 `gateTools` 经 `runtime.sock` 交给运行时（`node/assistant_runtime.go`）。
 
 工具的**列表和顺序**还在代码里（上面两个函数按名字取 `prompts.Tool(name)`），处理调用的代码也在原处。加一个工具：在对应目录加文件，
 把名字加进列表，写处理代码，`UPDATE_GOLDEN=1` 更新 `mcp_tools.*` / `mail_tools` 的 golden。`TestEveryMCPToolIsUsed` 抓没人提供的工具文件。
