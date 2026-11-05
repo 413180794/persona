@@ -48,7 +48,7 @@
 | interaction_resolved 按 id 撤回交互。 | `server/internal/hub/hub.go`：`resolve`；`ServerEvent.decode` | `interaction_resolved` |
 | Fleet 保留驼峰键名，时间使用 Unix 秒数字。 | `server/internal/hub/liveactivity.go`：`FleetState`、`buildFleet`；`apple/Shared/FleetState.swift` | `fleet_snapshot`、`fleet_event` |
 | 收件箱列表统一承载飞书和邮件，移除 context 等内部字段并保留草拟回复。 | `server/internal/assistant/inbox.go`：`InboxItem.listed`；`apple/Shared/InboxModels.swift`：`InboxItem` | `inbox_list` |
-| 飞书 parts 保留 refId 和任意 metadata 键名，媒体 URL 改写到 hub。 | `server/internal/lark/lark.go`：`normalize`、`rewriteMedia`；`apple/Persona/Views/Inbox/Lark/LarkModels.swift`：`LarkPart` | `lark_message_parts` |
+| 飞书 parts 保留 refId 和任意 metadata 键名，媒体 URL 改写到 hub。 | #1571 起在接飞书的插件里（原来是 hub 的 lark.go 的 normalize、rewriteMedia）；`apple/Persona/Views/Inbox/Lark/LarkModels.swift`：`LarkPart` | `lark_message_parts` |
 | 回答记录保留一行摘要，`items` 成对保存完整问答并保留换行；旧记录没有 `items`。 | `server/internal/assistant/answered.go`：`answeredBody`、`answeredItems`；`apple/Shared/Tasks.swift`：`FeedItem` | `feed_answered_items` |
 | 401 保留字符串 error，409 的 code、delivered、draft、clearable 与 error 平铺。 | `Hub.auth`、`callErr`；`apple/Shared/APIClient.swift`：`APIError.fields(in:)`；`docs/protocol.md`「发消息」 | `unauthorized`、`conflict_input_draft`、`conflict_dialog_open`、`conflict_prompt_changed` |
 | 未知事件忽略，未知键忽略，旧 hello 缺 features 时返回空数组。 | `apple/Shared/LiveConnection.swift`：`ServerEvent.decode`、`Envelope` | `unknown_event_ignored`、`hello_unknown_field`、`hello_missing_features` |

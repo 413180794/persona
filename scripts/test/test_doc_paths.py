@@ -52,6 +52,8 @@ ELSEWHERE = {
     "docs/guide.pdf",  # mock_hub.py's fake browse tree (docs/android.md)
     "docs/icon.png",  # a file the mock hub does not have (docs/mac.md)
     "scripts/ol.sh",  # inside skills/lark-connector/ (docs/assistant.md)
+    # The Go check's overlay maps this absent path to a test source in /tmp (spec/fixtures/sort/README.md).
+    "server/internal/hub/spec_sort_fixture_test.go",
 }
 
 QUOTED = re.compile(r"`([^`\s]+)`")
@@ -60,12 +62,14 @@ QUOTED = re.compile(r"`([^`\s]+)`")
 def doc_files():
     files = [ROOT / name for name in ("CLAUDE.md", "README.md", "THIRD_PARTY_NOTICES.md", "scripts/README.md")]
     files += sorted((ROOT / "docs").glob("*.md")) + sorted((ROOT / "docs/lessons").glob("*.md"))
+    files += [ROOT / "spec/README.md"] + sorted((ROOT / "spec/fixtures").glob("*/README.md"))
     return [f for f in files if f.exists() and f.relative_to(ROOT).as_posix() not in SKIP_FILES]
 
 
 def quoted_paths(line):
     for token in QUOTED.findall(line):
-        path = token.split("#", 1)[0].split(":", 1)[0].rstrip(".,;/")
+        # The spec READMEs name a symbol after a full-width colon: `apple/Shared/Models.swift：Interaction`.
+        path = re.split(r"[:：]", token.split("#", 1)[0], maxsplit=1)[0].rstrip(".,;/")
         if "/" not in path or path.split("/", 1)[0] not in TOP:
             continue
         # Placeholders, globs, prefixes of a family of files and elided paths are not literal paths.
@@ -120,6 +124,15 @@ class DocPathTests(unittest.TestCase):
                 self.assertFalse(exists(path))
                 self.assertFalse(exists(path + "-unknown"))
                 self.assertFalse(exists("android/feature/missing/src/Unknown.kt"))
+
+    def test_symbol_after_a_colon_is_not_part_of_the_path(self):
+        self.assertEqual(["apple/Shared/Models.swift"], list(quoted_paths("`apple/Shared/Models.swift：Interaction`")))
+        self.assertEqual(["server/internal/hub/hub.go"], list(quoted_paths("`server/internal/hub/hub.go:120`")))
+
+    def test_spec_readmes_are_checked(self):
+        checked = {doc.relative_to(ROOT).as_posix() for doc in doc_files()}
+        self.assertIn("spec/README.md", checked)
+        self.assertIn("spec/fixtures/wire/README.md", checked)
 
     def test_quoted_repository_paths_exist(self):
         missing = []
