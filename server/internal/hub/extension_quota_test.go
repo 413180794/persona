@@ -175,3 +175,27 @@ func TestProviderPresets(t *testing.T) {
 		t.Fatalf("%+v", stored)
 	}
 }
+
+// Outside a launcher's page an extension reaches the gateways its quota and launcher sections name, every one when one
+// of them names none.
+func TestGatewayHosts(t *testing.T) {
+	for _, c := range []struct {
+		contributes string
+		hosts       string
+		any         bool
+	}{
+		{`{"quota": [{"id": "q", "name": "Q", "hosts": ["gw.example.com"]}], "ui": [{"id": "s", "title": "S", "placement": "launcher_section", "hosts": ["*.example.org"]}, {"id": "n", "title": "N", "placement": "nav_page"}]}`, "[gw.example.com *.example.org]", false},
+		{`{"quota": [{"id": "q", "name": "Q", "hosts": ["gw.example.com"]}], "ui": [{"id": "s", "title": "S", "placement": "launcher_section"}]}`, "[]", true},
+		{`{"quota": [{"id": "q", "name": "Q"}]}`, "[]", true},
+	} {
+		m, err := extension.Parse([]byte(`{"manifest_version": 1, "id": "gw", "name": "GW", "version": "1.0.0", "engines": {"plugin_protocol": 1},
+			"runtime": {"command": {"linux-amd64": "bin/gw"}}, "permissions": {"launcher_keys": true}, "contributes": ` + c.contributes + `}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		hosts, any := gatewayHosts(&extension.Extension{Manifest: m, Full: m})
+		if fmt.Sprint(hosts) != c.hosts && !(c.hosts == "[]" && hosts == nil) || any != c.any {
+			t.Fatalf("%s: %v %v", c.contributes, hosts, any)
+		}
+	}
+}

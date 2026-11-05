@@ -792,6 +792,9 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		if method == "quota.http" || method == "gateway.http" {
 			return ps.quotaHTTP(ctx, id, params)
 		}
+		if (method == "gateway.launchers" || method == "gateway.open") && ps.h != nil {
+			return ps.h.gatewayCall(ctx, id, method, params)
+		}
 		if method == "nodes.call" && ps.h != nil { // its program on a computer (extension_nodes.go)
 			return ps.h.nodesCall(ctx, id, params)
 		}

@@ -134,3 +134,95 @@ func (ps *extensions) quotaHTTP(ctx context.Context, id string, raw json.RawMess
 	}
 	return q.send(ctx, p.Request)
 }
+
+// Outside a launcher's page (docs/extensions.md「额度」, outside a launcher page): an extension granted launcher_keys lists the
+// launchers that have a gateway (gateway.launchers) and opens a short session on one (gateway.open), whose query id
+// gateway.http takes as a launcher section's — for a nav_page, a card or a widget that draws a launcher's quota. It
+// reaches no more than its launcher sections would: the gateways its quota and launcher_section hosts match (any, when
+// one of them names none). The key stays with whoever holds it.
+
+// gatewaySessionLife is how long a gateway.open session takes requests.
+const gatewaySessionLife = time.Minute
+
+// gatewayLauncher is one of gateway.launchers' launchers.
+type gatewayLauncher struct {
+	Name    string `json:"name"`
+	BaseURL string `json:"base_url"`
+}
+
+// gatewayHosts are the gateway hosts extension p may reach outside a launcher's page; any: every gateway.
+func gatewayHosts(p *extension.Extension) (hosts []string, any bool) {
+	m := p.Full
+	if m == nil {
+		m = p.Manifest
+	}
+	named := 0
+	for _, q := range m.Quotas() {
+		if len(q.Hosts) == 0 {
+			return nil, true
+		}
+		hosts, named = append(hosts, q.Hosts...), named+1
+	}
+	for _, u := range m.UIs() {
+		if u.Placement != "launcher_section" {
+			continue
+		}
+		if len(u.Hosts) == 0 {
+			return nil, true
+		}
+		hosts, named = append(hosts, u.Hosts...), named+1
+	}
+	return hosts, named == 0
+}
+
+// gatewayCall answers gateway.launchers and gateway.open for extension id.
+func (h *Hub) gatewayCall(ctx context.Context, id, method string, raw json.RawMessage) (any, error) {
+	p := h.extensions.reg.Get(id)
+	if p == nil || !p.Record.Granted.LauncherKeys {
+		return nil, &rpc.Error{Code: extension.CodePermissionDenied, Message: method + " needs the permission launcher_keys"}
+	}
+	hosts, anyHost := gatewayHosts(p)
+	allowed := func(base string) (string, bool) {
+		root, err := quota.Root(base)
+		if err != nil {
+			return "", false
+		}
+		return root.String(), anyHost || hostMatches(root.Hostname(), hosts)
+	}
+	if method == "gateway.launchers" {
+		out := []gatewayLauncher{}
+		for _, v := range h.launcherViews(ctx) {
+			if v.BaseURL == "" {
+				continue
+			}
+			if base, ok := allowed(v.BaseURL); ok {
+				out = append(out, gatewayLauncher{Name: v.Name, BaseURL: base})
+			}
+		}
+		return map[string]any{"launchers": out}, nil
+	}
+	var in struct {
+		Launcher string `json:"launcher"`
+		Machine  string `json:"machine"`
+	}
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return nil, err
+	}
+	if in.Launcher == "" {
+		return nil, errors.New("gateway.open needs a launcher")
+	}
+	gw, err := h.launcherGateway(ctx, in.Launcher, in.Machine)
+	if err != nil {
+		return nil, err
+	}
+	base, ok := allowed(gw.base)
+	if !ok {
+		return nil, &rpc.Error{Code: extension.CodeUnsupported, Message: "launcher " + in.Launcher + "'s gateway is not one this extension reads"}
+	}
+	var b [12]byte
+	_, _ = rand.Read(b[:])
+	qid := hex.EncodeToString(b[:])
+	quotaQueries.Store(qid, &quotaQuery{extension: id, send: gw.send})
+	time.AfterFunc(gatewaySessionLife, func() { quotaQueries.Delete(qid) })
+	return map[string]any{"query_id": qid, "base_url": base, "machine": gw.machine}, nil
+}

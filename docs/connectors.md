@@ -11,6 +11,7 @@
 - **三、迁移顺序**，**四、拍板结果**。
 
 过程和历史（为什么这样拆、每一步的验收）在 `docs/plan-connectors.md`；Telegram 的在 `docs/archive/plan-telegram.md`（2026-11-05 起它是扩展，#1704；代码在 `nwverse/persona-extensions`，#2057）。
+计划中的 Discord（用户自己的机器人，扩展，#2828）在 `docs/plan-discord.md`。
 
 ## 一、现在的样子（v1）
 

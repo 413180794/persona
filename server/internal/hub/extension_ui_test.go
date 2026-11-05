@@ -67,6 +67,34 @@ func serveUIExtensionForTest() {
 		case p.Contribution == "badpush":
 			return map[string]any{"sections": []any{map[string]any{"items": []any{map[string]any{"type": "row", "title": "x",
 				"action": map[string]any{"id": "x", "push": map[string]any{"ui": "card"}}}}}}}, nil
+		case method == "action" && p.Action == "gateway":
+			// Outside the launcher's page: list the launchers, open a session on one, read its gateway.
+			var l struct {
+				Launchers []struct {
+					Name    string `json:"name"`
+					BaseURL string `json:"base_url"`
+				} `json:"launchers"`
+			}
+			if err := hub.Call(ctx, "gateway.launchers", map[string]any{}, &l); err != nil {
+				return nil, err
+			}
+			if len(l.Launchers) != 1 || strings.HasSuffix(l.Launchers[0].BaseURL, "/v1") {
+				return nil, fmt.Errorf("launchers: %+v", l.Launchers)
+			}
+			var o struct {
+				QueryID string `json:"query_id"`
+				BaseURL string `json:"base_url"`
+			}
+			if err := hub.Call(ctx, "gateway.open", map[string]any{"launcher": l.Launchers[0].Name}, &o); err != nil {
+				return nil, err
+			}
+			var r quota.Response
+			if err := hub.Call(ctx, "gateway.http", map[string]any{"query_id": o.QueryID, "url": "/panel",
+				"headers": map[string]string{"Authorization": "Bearer " + quota.KeyPlaceholder}}, &r); err != nil {
+				return nil, err
+			}
+			err := hub.Call(ctx, "gateway.open", map[string]any{"launcher": "nosuch"}, &o)
+			return map[string]any{"toast": l.Launchers[0].Name + " " + r.Body + " " + fmt.Sprint(err != nil)}, nil
 		case method == "action" && p.Action == "badge":
 			_ = hub.Notify("ui.badge", map[string]any{"contribution": "nav", "text": p.Values["n"], "tone": "danger"})
 			return map[string]any{"toast": "ok"}, nil
@@ -212,6 +240,10 @@ func TestExtensionUIAndEvents(t *testing.T) {
 	}
 	if code, _ := call(t, mux, "POST", "/api/v1/plugins/example-ui/-/ui/panel", master, `{}`); code == 200 {
 		t.Fatal("a launcher section needs its launcher")
+	}
+	_, out = call(t, mux, "POST", "/api/v1/plugins/example-ui/-/ui/nav", master, `{"action": "gateway"}`)
+	if got := fmt.Sprint(out["toast"]); got != "panellauncher auth=Bearer "+quota.KeyPlaceholder+" true" {
+		t.Fatalf("a page outside the launcher's reaches its gateway with the key it does not see: %v", out)
 	}
 }
 

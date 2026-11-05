@@ -758,6 +758,15 @@ hub 按扩展记它跑得怎么样，管理界面的扩展页看（[admin.md](ad
 3. 扩展回 `{report}`（`server/internal/quota` 的 `Report`：`key_name`、`usage`、`budget`、`pools`、`note`…；`gateway` / `gateway_name` 不写时用贡献的 id / 名字；App 显示 `gateway_name`），
    不是它的网关就回错误码 `unsupported`，hub 去问下一个。
 
+**启动器页以外**（#2846）：侧边栏页（`nav_page`）、卡片、小组件没有启动器的上下文，接受了 `launcher_keys` 的扩展可以自己找启动器：
+
+- `gateway.launchers {}` → `{launchers: [{name, base_url}]}`：有网关地址的启动器（`base_url` 是网关的根，不带 Key）。
+- `gateway.open {launcher, machine?}` → `{query_id, base_url, machine}`：在这个启动器上开一次会话，`query_id` 和启动器页那一节的一样交给 `gateway.http`
+  （`${launcher_key}` 由手里有 Key 的一方换上，一次会话最多 16 个请求），**1 分钟后失效**，要再读就再开一次。没有这个启动器回错误，
+  网关不归这个扩展回 `unsupported`。
+- 能到的网关和启动器页那一节一样：扩展的 `quota` 和 `launcher_section` 都写了 `hosts` 时只列、只开主机对得上的；有一项没写 `hosts`（任何网关）就是全部。
+  没接受 `launcher_keys` 的扩展调这两个回 `permission_denied`。老 hub 没有这两个方法（`unknown_method`），扩展当作没有数据。
+
 开源仓库不带任何具体网关的额度扩展。
 
 > 账号池网关**养着的上游账号**的订阅窗口（侧边栏的用量条，#2595）不走这个扩展点：额度扩展回答的是「这把启动器 Key 还剩多少」，要用启动器的 Key；
@@ -789,7 +798,7 @@ hub 先按 schema 查（`wire.Validate`，`sdk/go/wire`），再查 schema 说�
 **hub 调扩展**：`ui.render {contribution, state, placement, size, ui_version, tz?, locale?, platform?, machine?, launcher?, item?}` → View；
 `ui.action {…同上, action, values}` → `{view?, toast?, open_url?}`（参数是 `extension.UIParams`，各项见「UI 插槽」「上下文」）。
 `launcher` 是 `{name, base_url, query_id}`：`launcher_section` 才有，扩展拿 `query_id` 调 hub 的 `gateway.http`（和「额度」的 `quota.http` 一样：
-`${launcher_key}` 由手里有 Key 的一方换上，只发到这个网关，一次最多 16 个请求），画完就失效。
+`${launcher_key}` 由手里有 Key 的一方换上，只发到这个网关，一次最多 16 个请求），画完就失效。别的插槽要读启动器的网关用 `gateway.open`（「额度」「启动器页以外」）。
 
 **View**：`{title?, sections: [{title?, footer?, items: [条目], more?}], state?, refresh_after?, search?, filter?}`。`state` 是扩展自己的（第几页、哪个标签），App 下次画、点按钮时原样带回，最多 16 KB。
 `refresh_after` 见「UI 插槽」「刷新」；`search`、`filter`、`more` 见下面「UI 版本 3」。

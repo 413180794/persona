@@ -305,6 +305,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/plan-hub-center.md` | 计划第二版：有且只有一台中心 hub（其余 hub 当成员、把电脑交给中心）、电脑经预装服务接入（连接器主动 / 被动两种模式，不用 SSH）、一台电脑多条路去重选路；两路分工和被动模式协议 |
 | `docs/redesign/` | 客户端重设计与 Android 首版的方案（2026-10-30 草案）：功能对齐矩阵、交互规格、流程图、hub 改动；外观部分已被 `docs/android-design.md` 取代，调研笔记在 `research/` |
 | `docs/plan-lark-cli.md` | 计划：没有 lark-connector 时用官方 lark-cli 接飞书：能力对照和降级、两种来源并存、做成连接器、闸门认 lark-cli、收件箱收什么、分步计划和已拍板项 |
+| `docs/plan-discord.md` | 计划：Discord 连接器（#2828）：Discord 只允许用自己的机器人（不做 self-bot），机器人看到的服务器频道 + 自己点「发给 Persona」的消息，扩展的形态、登录、知识库（不建人）、收件箱、工具、网络、Discord 开发者政策的约束、分步和已拍板项 |
 | `docs/plan-ego-browser.md` | 计划：ego lite 浏览器插件（#1304）：照 Cua 插件的模式接入（默认关、按 Mac 开、安装校验、首次设置引导），助手的 `browser_*` 工具和 Agent 用自带 skill 的分工，看浏览器（实时画面 / 定时截图 / CDP 投屏），导入 cookies 的来源、存储与安全、写入方式，要拍板的 |
 | `docs/plan-antigravity.md` | 计划：支持 Antigravity CLI（#281，第 0 步调研，待定）：能接入的口子（TUI、`agy -p`、`agy acp`、hooks、MCP）、会话存储、herdr Agent 还是 runtime、无头能力表、账号和条款风险、要维护者定的 |
 | `docs/plan-extensions.md` | 计划：扩展系统（#1101，#1843 改名）：关键取舍（只在 hub 机器上装、权限不是沙箱、表单子集）、实现和方案的出入、分步进度、语音和连接器 v2 怎么迁上来 |
