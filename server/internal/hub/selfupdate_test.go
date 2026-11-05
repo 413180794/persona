@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -289,6 +290,36 @@ func TestUpdateCrashLoopGoesBack(t *testing.T) {
 	h.upd.boot()
 	if b, _ := os.ReadFile(target); string(b) != "old" || len(*execd) != 1 {
 		t.Fatal("a crash loop did not go back")
+	}
+}
+
+// A start count that cannot be saved (full or read-only disk, wrong owner) would leave a crash loop uncounted
+// forever: the new version goes back on that start instead, and says why in the log.
+func TestUpdateUnsavedStartCountGoesBack(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a directory the test cannot write to")
+	}
+	p := newPublisher(t, "v2-202611021700", 202611021700)
+	h, _, target, execd := updatingHub(t, p, "release")
+	var logs bytes.Buffer
+	h.logger = log.New(&logs, "", 0)
+	h.build = update.Make("v2-202611021700", "release", "202611021700", p.srv.URL+"/dl")
+	os.WriteFile(target+".prev", []byte("old"), 0o755)
+	if err := update.Save(update.PendingPath(h.upd.dir), update.Pending{ToBuild: 202611021700, Target: target, Prev: target + ".prev", Starts: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(h.upd.dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(h.upd.dir, 0o700) })
+	h.upd.boot()
+	if b, _ := os.ReadFile(target); string(b) != "old" || len(*execd) != 1 {
+		t.Fatalf("an unsaved start count kept the new version (execd %v)", *execd)
+	}
+	for _, want := range []string{"save start count", "save rollback marker", "remove pending marker"} {
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("log misses %q:\n%s", want, logs.String())
+		}
 	}
 }
 

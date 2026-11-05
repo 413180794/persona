@@ -6,6 +6,7 @@
   "err_auto_off": "自动更新已关",
   "reason_went_back": "回到了旧版本",
   "reason_no_start_other": "新版本启动了 {count} 次都没起来",
+  "reason_marker_unsaved": "更新标记写不进去，没法发现新版本反复崩溃",
   "rolled_back": "更新到 {to} 没成功，已回到 {from}：{reason}",
   "push_failed_title": "hub 更新没成功",
   "push_failed_body": "{why}。这一版不会再自动装。",

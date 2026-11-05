@@ -6,6 +6,7 @@
   "err_auto_off": "自動更新はオフです",
   "reason_went_back": "旧バージョンに戻りました",
   "reason_no_start_other": "新しいバージョンが{count}回起動に失敗しました",
+  "reason_marker_unsaved": "更新の起動回数を保存できず、起動失敗の繰り返しを検知できません",
   "rolled_back": "{to}への更新に失敗したため、{from}に戻しました：{reason}",
   "push_failed_title": "ハブの更新に失敗しました",
   "push_failed_body": "{why}。このバージョンは今後自動でインストールされません。",

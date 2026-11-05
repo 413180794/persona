@@ -169,7 +169,13 @@ func (u *updater) boot() (pending bool) {
 	}
 	u.confirmed = false
 	p.Starts++
-	_ = update.Save(update.PendingPath(u.dir), p)
+	if err := update.Save(update.PendingPath(u.dir), p); err != nil {
+		// Without the count on disk every restart reads the same Starts, so a build that keeps crashing would never
+		// reach updateMaxStarts: go back to the version that ran before while this process still can.
+		u.h.logf("update: save start count: %v", err)
+		u.rollback(p, su(u.h.userLang(), "reason_marker_unsaved"))
+		return true
+	}
 	if p.Starts > updateMaxStarts {
 		u.rollback(p, su(u.h.userLang(), "reason_no_start", i18n.Args{"count": p.Starts - 1}))
 	}
@@ -226,10 +232,14 @@ func (u *updater) record(ctx context.Context, r updateRecord) {
 func (u *updater) markRolledBack(p update.Pending, reason string) {
 	path := update.RolledBackPath(u.dir)
 	if _, err := os.Stat(path); err != nil {
-		_ = update.Save(path, update.RolledBack{FromVersion: p.FromVersion, ToVersion: p.ToVersion, ToBuild: p.ToBuild,
-			Started: p.Started, At: time.Now(), Reason: reason, Auto: p.Auto})
+		if err := update.Save(path, update.RolledBack{FromVersion: p.FromVersion, ToVersion: p.ToVersion, ToBuild: p.ToBuild,
+			Started: p.Started, At: time.Now(), Reason: reason, Auto: p.Auto}); err != nil {
+			u.h.logf("update: save rollback marker (history and bad builds miss it): %v", err)
+		}
 	}
-	_ = os.Remove(update.PendingPath(u.dir))
+	if err := os.Remove(update.PendingPath(u.dir)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		u.h.logf("update: remove pending marker: %v", err)
+	}
 }
 
 // recordRolledBack puts an update that went back into the history and the bad builds, once the database is there.
