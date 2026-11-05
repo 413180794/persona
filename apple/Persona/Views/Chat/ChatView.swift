@@ -3141,10 +3141,8 @@ struct Composer: View, Equatable {
         Binding(get: { model.composerContexts[key] ?? [] }, set: { model.composerContexts[key] = $0.isEmpty ? nil : $0 })
     }
 
-    var body: some View {
-        #if DEBUG || PERF_SIGNPOST
-        let _ = PerfTrace.body("Composer")
-        #endif
+    /// The notes over the box, the attachments and the box itself (`body` adds what happens around them).
+    private var composerStack: some View {
         VStack(spacing: Theme.Space.s) {
             if let s = model.session(key), s.starting == true || s.startError != nil {
                 StartingNote(error: s.startError, agent: s.agentLabel)
@@ -3253,6 +3251,14 @@ struct Composer: View, Equatable {
                 }
             }
         }
+    }
+
+    var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("Composer")
+        #endif
+        // In parts: as one expression Swift 6.2 could not type-check it in time on the Mac (#2539).
+        let top = composerStack
         .disabled(!allowsSend)
         #if DEBUG
         .task { // `-showSampleQuotes YES`: a page's text and another session quoted over the box (#986, screenshots)
@@ -3301,6 +3307,7 @@ struct Composer: View, Equatable {
             confirmClear = canClear && !status.isActive && !clearing // as the composer's own /clear item
         }
         #endif
+        return top
         .confirmationDialog("清空上下文？", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("清空", role: .destructive) {
                 clearing = true
