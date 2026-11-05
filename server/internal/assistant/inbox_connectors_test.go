@@ -119,6 +119,41 @@ func TestConnectorThingReadElsewhere(t *testing.T) {
 	}
 }
 
+// A new move is unread even when an earlier action in the same open thread was read elsewhere.
+func TestConnectorNewMoveIsUnreadAfterReadElsewhere(t *testing.T) {
+	h := newInboxHub(t)
+	h.in.model, _ = captureModel(t, `{"tier":"fyi","summary":"A new update","reason":"FYI"}`)
+	now := time.Now()
+	first := thing("a", now.Add(-time.Minute))
+	h.inbox.mu.Lock()
+	h.inbox.applyConnector("example", "Example", []connector.InboxThing{first}, now)
+	it := openItems(h)[0]
+	first.Read = true
+	h.inbox.applyConnector("example", "Example", []connector.InboxThing{first}, now)
+	if !it.Read || !it.open() {
+		h.inbox.mu.Unlock()
+		t.Fatal("an action read elsewhere should stay open")
+	}
+	fresh := thing("b", now)
+	fresh.Tier = "" // An ordinary comment leaves its tier to the model.
+	h.inbox.applyConnector("example", "Example", []connector.InboxThing{fresh}, now)
+	h.inbox.mu.Unlock()
+
+	if !h.triageOne(context.Background(), it) {
+		t.Fatal("the new move was not triaged")
+	}
+	if it.Read || !it.open() || it.Tier != TierFYI {
+		t.Fatalf("new unread content was treated as read: read=%v done_by=%q tier=%q", it.Read, it.DoneBy, it.Tier)
+	}
+	fresh.Read = true
+	h.inbox.mu.Lock()
+	h.inbox.applyConnector("example", "Example", []connector.InboxThing{fresh}, now)
+	h.inbox.mu.Unlock()
+	if !it.Read || it.open() || it.DoneBy != "read" {
+		t.Fatalf("the new move read elsewhere stayed open: %+v", it)
+	}
+}
+
 // Old apps never see a connector's items (they would draw a PR as a mail); new ones ask for them. Reply goes to the
 // connector once, and files the item as replied.
 func TestConnectorItemsListAndReply(t *testing.T) {

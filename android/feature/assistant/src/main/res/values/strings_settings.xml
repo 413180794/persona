@@ -113,6 +113,16 @@
     <string name="assistant_settings_memory_saved">Memory updated</string>
     <string name="assistant_settings_delete_failed">Couldn\'t delete. Try again.</string>
     <string name="assistant_settings_memory_deleted">Memory deleted</string>
+    <!-- Skills: the skills on the assistant's machine (GET /api/v1/skills). -->
+    <string name="assistant_settings_skills">Skills</string>
+    <string name="assistant_settings_skills_subtitle">What Persona can do on its machine</string>
+    <string name="assistant_settings_skills_builtin">Built in</string>
+    <string name="assistant_settings_skills_user">Mine</string>
+    <string name="assistant_settings_skills_empty_title">No skills yet</string>
+    <string name="assistant_settings_skills_empty_text">Put skills in ~/.persona/skills/ on “%1$s”, one directory each (with a SKILL.md inside).</string>
+    <string name="assistant_settings_skills_failed_title">Can\'t read skills</string>
+    <string name="assistant_settings_skills_failed_text">Can\'t read the skills on the assistant\'s machine. Try again later.</string>
+    <string name="assistant_settings_skills_caption">Kept in ~/.persona/skills/ on “%1$s”, one directory each (with a SKILL.md inside). Updating personad leaves them alone; changes apply from the next new chat.</string>
     <plurals name="assistant_settings_memory_count">
         <item quantity="one">%1$d memory</item>
         <item quantity="other">%1$d memories</item>

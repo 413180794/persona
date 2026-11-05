@@ -212,6 +212,7 @@ internal fun AssistantManagement.inGroup(names: GroupNames): AssistantManagement
         override suspend fun memory() = source.memory()
         override suspend fun saveMemory(name: String, content: String) = source.saveMemory(name, content)
         override suspend fun deleteMemory(name: String) = source.deleteMemory(name)
+        override suspend fun skills() = source.skills().let { it.copy(machineId = names.machineId(it.machineId)) }
     }
 }
 

@@ -3,6 +3,9 @@ package persona.feature.assistant.settings
 import persona.core.contracts.Machine
 import persona.core.contracts.api.AssistantConfig
 import persona.core.contracts.api.AssistantConfigUpdate
+import persona.core.contracts.api.AgentSkill
+import persona.core.contracts.api.AssistantRefused
+import persona.core.contracts.api.AssistantSkills
 import persona.core.contracts.api.MemoryFile
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -35,6 +38,7 @@ class AssistantSettingsStateTest {
         val saved = mutableListOf<Pair<String, String>>()
         val deleted = mutableListOf<String>()
         var fail = false
+        var skillsAnswer: () -> AssistantSkills = { AssistantSkills("server", "服务器", listOf(AgentSkill("lark-connector", "飞书", "builtin"))) }
 
         override suspend fun config(): AssistantConfig { check(!fail) { "hub unreachable" }; return config }
         override suspend fun updateConfig(update: AssistantConfigUpdate): AssistantConfig {
@@ -61,6 +65,7 @@ class AssistantSettingsStateTest {
             deleted += name
             memory = memory.filterNot { it.name == name }
         }
+        override suspend fun skills(): AssistantSkills = skillsAnswer()
     }
 
     private class Zone(override val phoneZone: String = "Asia/Shanghai", override var followPhone: Boolean = true) : TimezoneChoice
@@ -291,5 +296,51 @@ class AssistantSettingsStateTest {
         assertTrue(zoneMatches("America/New_York", "new york", Locale.ENGLISH))
         assertTrue(zoneMatches("Asia/Shanghai", "shanghai", Locale.ENGLISH))
         assertFalse(zoneMatches("Asia/Shanghai", "Paris", Locale.ENGLISH))
+    }
+
+    @Test fun skillsListTheMachinesAndAnEmptyListIsTheEmptyState() = runTest {
+        val api = FakeApi()
+        val state = AssistantSettingsState(api, Zone())
+        assertFalse("nothing is shown as empty before the hub answers", state.state.value.skills.empty)
+        state.loadSkills()
+        with(state.state.value.skills) {
+            assertEquals(listOf("lark-connector"), list?.skills?.map { it.name })
+            assertTrue(list!!.skills.single().builtin)
+            assertEquals("服务器", list?.machine)
+            assertFalse(empty)
+        }
+        api.skillsAnswer = { AssistantSkills("server", "服务器", emptyList()) }
+        state.loadSkills()
+        with(state.state.value.skills) {
+            assertTrue(empty)
+            assertFalse(failed)
+            assertNull(reason)
+        }
+    }
+
+    @Test fun skillsThatCannotBeReadShowTheHubsReasonAndKeepWhatWasListed() = runTest {
+        val api = FakeApi()
+        val state = AssistantSettingsState(api, Zone())
+        api.skillsAnswer = { throw AssistantRefused("conflict", "还没有选助手所在的机器") }
+        state.loadSkills()
+        with(state.state.value.skills) {
+            assertTrue(failed)
+            assertTrue(empty)
+            assertEquals("还没有选助手所在的机器", reason)
+        }
+        // Without the hub's words (a dropped connection) the page says it in its own.
+        api.skillsAnswer = { error("socket closed") }
+        state.loadSkills()
+        assertNull(state.state.value.skills.reason)
+
+        api.skillsAnswer = { AssistantSkills("server", null, listOf(AgentSkill("weekly-report"))) }
+        state.loadSkills()
+        api.skillsAnswer = { error("socket closed") }
+        state.loadSkills()
+        with(state.state.value.skills) {
+            assertEquals(listOf("weekly-report"), list?.skills?.map { it.name })
+            assertFalse("a failed reload keeps the list", empty)
+            assertFalse(loading)
+        }
     }
 }

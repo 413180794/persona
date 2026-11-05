@@ -109,6 +109,16 @@
     <string name="assistant_settings_memory_saved">メモリを更新しました</string>
     <string name="assistant_settings_delete_failed">削除できませんでした。再試行してください。</string>
     <string name="assistant_settings_memory_deleted">このメモリを削除しました</string>
+    <!-- Skills: the skills on the assistant's machine (GET /api/v1/skills). -->
+    <string name="assistant_settings_skills">スキル</string>
+    <string name="assistant_settings_skills_subtitle">Personaがそのマシンで使える機能</string>
+    <string name="assistant_settings_skills_builtin">内蔵</string>
+    <string name="assistant_settings_skills_user">自分の</string>
+    <string name="assistant_settings_skills_empty_title">スキルはまだありません</string>
+    <string name="assistant_settings_skills_empty_text">「%1$s」の ~/.persona/skills/ にスキルを置いてください。1つにつき1ディレクトリ（中に SKILL.md）です。</string>
+    <string name="assistant_settings_skills_failed_title">スキルを読み込めません</string>
+    <string name="assistant_settings_skills_failed_text">アシスタントのマシンのスキルを読み込めません。しばらくしてから再試行してください。</string>
+    <string name="assistant_settings_skills_caption">「%1$s」の ~/.persona/skills/ に、1つにつき1ディレクトリ（中に SKILL.md）で置かれています。personadを更新しても変わりません。変更は次の新しいチャットから有効です。</string>
     <plurals name="assistant_settings_memory_count">
         <item quantity="other">%1$d件</item>
     </plurals>

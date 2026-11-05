@@ -46,6 +46,11 @@ interface AssistantManagement {
     suspend fun memory(): List<MemoryFile>
     suspend fun saveMemory(name: String, content: String)
     suspend fun deleteMemory(name: String)
+    /**
+     * The skills on the machine that runs the assistant (GET /api/v1/skills), read only. A hub that cannot read them
+     * (no assistant machine, the node did not answer) throws [AssistantRefused] with its own words.
+     */
+    suspend fun skills(): AssistantSkills = throw UnsupportedOperationException("Skills unavailable")
 }
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -111,3 +116,17 @@ data class NewMainResult(val archived: String = "", val carried: Boolean = false
 
 /** The hub refused an assistant action (409 with a `code`); [message] is the hub's own words, fit to show as they are. */
 class AssistantRefused(val code: String, message: String) : Exception(message)
+
+/** One skill as the assistant's machine lists it: a directory with SKILL.md; [source] is `user` or `builtin`. */
+@Serializable
+data class AgentSkill(val name: String = "", val description: String? = null, val source: String = "user") {
+    val builtin: Boolean get() = source == "builtin"
+}
+
+/** GET /api/v1/skills: the machine that runs the assistant and its skills. */
+@Serializable
+data class AssistantSkills(
+    @SerialName("machine_id") val machineId: String = "",
+    val machine: String? = null,
+    val skills: List<AgentSkill> = emptyList(),
+)

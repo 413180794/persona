@@ -8,6 +8,8 @@ import persona.core.contracts.Machine
 import persona.core.contracts.api.AssistantConfig
 import persona.core.contracts.api.AssistantConfigUpdate
 import persona.core.contracts.api.AssistantManagement
+import persona.core.contracts.api.AssistantRefused
+import persona.core.contracts.api.AssistantSkills
 import persona.core.contracts.api.MemoryFile
 import persona.core.contracts.parseTime
 import kotlinx.coroutines.CancellationException
@@ -26,6 +28,7 @@ internal interface AssistantSettingsApi {
     suspend fun memory(): List<MemoryFile>
     suspend fun saveMemory(name: String, content: String)
     suspend fun deleteMemory(name: String)
+    suspend fun skills(): AssistantSkills = throw UnsupportedOperationException("Skills unavailable")
 }
 
 internal fun AssistantManagement.settingsApi(): AssistantSettingsApi {
@@ -36,6 +39,7 @@ internal fun AssistantManagement.settingsApi(): AssistantSettingsApi {
         override suspend fun memory() = management.memory()
         override suspend fun saveMemory(name: String, content: String) = management.saveMemory(name, content)
         override suspend fun deleteMemory(name: String) = management.deleteMemory(name)
+        override suspend fun skills() = management.skills()
     }
 }
 
@@ -103,6 +107,20 @@ internal data class MemoryState(
     val failed: Boolean = false,
 )
 
+/**
+ * The skills on the assistant's machine (Skills, like iOS): null until read. [failed] when they could not be read,
+ * with the hub's own reason when it gave one ([reason], shown as it is).
+ */
+internal data class SkillsState(
+    val list: AssistantSkills? = null,
+    val loading: Boolean = false,
+    val failed: Boolean = false,
+    val reason: String? = null,
+) {
+    /** The page shows the empty state once it has an answer (or a failure) and no skill to list. */
+    val empty: Boolean get() = !loading && (failed || list != null) && list?.skills.isNullOrEmpty()
+}
+
 internal data class AssistantSettingsUiState(
     val config: AssistantConfig? = null,
     val loading: Boolean = false,
@@ -111,6 +129,7 @@ internal data class AssistantSettingsUiState(
     val notice: SettingsNotice? = null,
     val move: MachineMove? = null,
     val memory: MemoryState = MemoryState(),
+    val skills: SkillsState = SkillsState(),
     val followPhone: Boolean = true
 )
 
@@ -203,6 +222,19 @@ internal class AssistantSettingsState(
             set { copy(memory = MemoryState(entries, index)) }
         } catch (error: CancellationException) { throw error }
         catch (_: Exception) { set { copy(memory = memory.copy(loading = false, failed = true)) } }
+    }
+
+    /** A failed reload keeps the list it had, like iOS; the reason shows only while there is nothing to list. */
+    suspend fun loadSkills() {
+        set { copy(skills = skills.copy(loading = true)) }
+        try {
+            val list = api.skills()
+            set { copy(skills = SkillsState(list)) }
+        } catch (error: CancellationException) { throw error }
+        catch (error: Exception) {
+            val reason = (error as? AssistantRefused)?.message?.trim()?.ifEmpty { null }
+            set { copy(skills = skills.copy(loading = false, failed = true, reason = reason)) }
+        }
     }
 
     suspend fun saveMemory(name: String, content: String): Boolean {

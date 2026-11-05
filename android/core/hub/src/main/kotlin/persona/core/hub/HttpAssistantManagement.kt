@@ -119,4 +119,14 @@ class HttpAssistantManagement(
         assistant("PUT", "memory", memoryName(name), body = buildJsonObject { put("content", content) })
     }
     override suspend fun deleteMemory(name: String) { assistant("DELETE", "memory", memoryName(name)) }
+    override suspend fun skills(): AssistantSkills = try {
+        val out = request("GET", listOf("api", "v1", "skills"))
+        AssistantSkills((out["machine_id"] as? JsonPrimitive)?.contentOrNull.orEmpty(), (out["machine"] as? JsonPrimitive)?.contentOrNull,
+            out.list<AgentSkill>("skills").filter { it.name.isNotBlank() })
+    } catch (failure: HubFailure) {
+        // 409 (no machine runs the assistant) and 502 (its node did not answer) carry the hub's reason, fit to show.
+        val code = failure.code
+        if ((failure.status == 409 || (failure.status ?: 0) >= 500) && !code.isNullOrBlank()) throw AssistantRefused(code, failure.message)
+        throw failure
+    }
 }

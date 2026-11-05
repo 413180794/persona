@@ -2,7 +2,9 @@ package persona.core.hub
 
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.SessionKey
+import persona.core.contracts.api.AgentSkill
 import persona.core.contracts.api.AssistantRefused
+import persona.core.contracts.api.AssistantSkills
 import persona.core.contracts.api.NewMainResult
 import persona.core.contracts.api.Routine
 import kotlinx.coroutines.CancellationException
@@ -108,6 +110,40 @@ class AssistantManagementTest {
             server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"boom"}"""))
             try { api.newMainConversation(true, "main-1"); fail("A failure must throw") }
             catch (failure: HubFailure) { assertEquals(500, failure.status) }
+        }
+    }
+
+    @Test fun skillsReadTheAssistantsMachineAndTurnItsReasonIntoTheHubsWords() = runBlocking {
+        MockWebServer().use { server ->
+            val api = HttpAssistantManagement(server.url("/").toString(), "test-token", OkHttpClient())
+            server.enqueue(MockResponse().setBody("""{"machine_id":"macbook","machine":"MacBook","skills":[
+                {"name":"lark-connector","description":"Feishu / Lark","source":"builtin"},
+                {"name":"weekly-report","source":"user","extra":1},{"name":""}]}"""))
+            assertEquals(AssistantSkills("macbook", "MacBook", listOf(AgentSkill("lark-connector", "Feishu / Lark", "builtin"), AgentSkill("weekly-report", null, "user"))),
+                api.skills())
+            val get = server.takeRequest()
+            assertEquals("GET", get.method)
+            assertEquals("/api/v1/skills", get.path)
+
+            server.enqueue(MockResponse().setBody("""{"machine_id":"macbook","skills":[]}"""))
+            assertEquals(AssistantSkills("macbook", null, emptyList()), api.skills())
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("{}"))
+            assertEquals(AssistantSkills(), api.skills())
+            server.takeRequest()
+
+            server.enqueue(MockResponse().setResponseCode(409).setBody("""{"code":"conflict","error":"no machine runs the assistant"}"""))
+            try { api.skills(); fail("A refusal must throw") }
+            catch (refused: AssistantRefused) { assertEquals("no machine runs the assistant", refused.message) }
+            server.takeRequest()
+            server.enqueue(MockResponse().setResponseCode(502).setBody("""{"code":"offline","error":"machine is offline"}"""))
+            try { api.skills(); fail("A refusal must throw") }
+            catch (refused: AssistantRefused) { assertEquals("offline", refused.code) }
+            server.takeRequest()
+
+            server.enqueue(MockResponse().setResponseCode(401).setBody("""{"code":"invalid_token","error":"invalid token"}"""))
+            try { api.skills(); fail("A failure must throw") }
+            catch (failure: HubFailure) { assertEquals(HubError.PairingExpired, failure.kind) }
         }
     }
 }

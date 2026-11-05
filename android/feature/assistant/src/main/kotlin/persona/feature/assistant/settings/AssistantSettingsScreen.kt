@@ -34,7 +34,7 @@ object AssistantSettingsPreview {
     @Volatile var open: String? = null
 }
 
-private enum class SettingsPart { Home, Notes, Memory, MemoryFile, Proactive }
+private enum class SettingsPart { Home, Notes, Memory, MemoryFile, Proactive, Skills }
 private enum class SettingsSheet { Machine, Zone }
 
 /**
@@ -67,6 +67,7 @@ internal fun AssistantSettingsScreen(
         "notes" -> SettingsPart.Notes
         "memory", "memory-file", "memory-edit", "memory-delete" -> SettingsPart.Memory
         "proactive" -> SettingsPart.Proactive
+        "skills" -> SettingsPart.Skills
         else -> SettingsPart.Home
     }) }
     var memoryName by rememberSaveable { mutableStateOf<String?>(null) }
@@ -78,6 +79,10 @@ internal fun AssistantSettingsScreen(
     LaunchedEffect(controller) {
         controller.load()
         controller.loadMemory()
+    }
+    // Read each time the page opens, like iOS: a skill put on the machine shows up without a refresh.
+    LaunchedEffect(part == SettingsPart.Skills) {
+        if (part == SettingsPart.Skills) controller.loadSkills()
     }
     // Captures of a memory file and of the move warning wait for the data they show.
     LaunchedEffect(state.memory.entries, state.config, machines) {
@@ -121,6 +126,8 @@ internal fun AssistantSettingsScreen(
         SettingsPart.MemoryFile -> MemoryFilePart(shown, memoryName, preview, onBack = { part = SettingsPart.Memory },
             onSave = { name, content -> controller.saveMemory(name, content) },
             onDelete = { name -> if (controller.deleteMemory(name)) part = SettingsPart.Memory })
+        SettingsPart.Skills -> SkillsPart(shown.skills, machineName, onBack = { part = SettingsPart.Home },
+            onRefresh = { scope.launch { controller.loadSkills() } })
         // Keeps its own sub-pages and back; back on its first page returns here (the handler above).
         SettingsPart.Proactive -> AssistantProactiveScreen(onBack = { part = SettingsPart.Home }, onOpenConversation = onOpenConversation,
             management = management, machines = machines)
@@ -201,6 +208,8 @@ private fun SettingsHome(
                     enabled = ready, onClick = { sheet(SettingsSheet.Machine) }) },
                 { JRow(stringResource(R.string.assistant_settings_cwd), value = homeRelative(config.cwd, machine?.home).ifBlank { "~/.jarvis/assistant" },
                     leadingIcon = PhIcons.FolderSimple) },
+                { JRow(stringResource(R.string.assistant_settings_skills), subtitle = stringResource(R.string.assistant_settings_skills_subtitle),
+                    leadingIcon = PhIcons.PuzzlePiece, onClick = { open(SettingsPart.Skills) }) },
             ))
             if (machine != null && !machine.online) item("offline") {
                 JNotice(stringResource(R.string.assistant_settings_offline_notice, machineName), Modifier.padding(top = Tokens.Space.m),
@@ -352,6 +361,30 @@ private fun MemoryPart(
                 }
             }
         }
+    }
+}
+
+/** The skills on the assistant's machine, read only (iOS SkillsPage): name, description, built in or the user's. */
+@Composable
+private fun SkillsPart(state: SkillsState, machineName: String, onBack: () -> Unit, onRefresh: () -> Unit) {
+    val skills = state.list?.skills.orEmpty()
+    val machine = state.list?.machine?.takeIf { it.isNotBlank() } ?: machineName
+    JListPage(title = stringResource(R.string.assistant_settings_skills), onBack = onBack, refreshing = state.loading && state.list != null, onRefresh = onRefresh) {
+        if (state.list == null && state.loading) item("loading") { JLoading(text = stringResource(R.string.assistant_settings_loading)) }
+        if (state.empty) item("empty") {
+            if (state.failed) JEmptyState(stringResource(R.string.assistant_settings_skills_failed_title),
+                state.reason ?: stringResource(R.string.assistant_settings_skills_failed_text), icon = PhIcons.PuzzlePiece,
+                action = { JButton(stringResource(R.string.assistant_settings_retry), onRefresh, kind = JButtonKind.Secondary) })
+            else JEmptyState(stringResource(R.string.assistant_settings_skills_empty_title),
+                stringResource(R.string.assistant_settings_skills_empty_text, machine), icon = PhIcons.PuzzlePiece)
+        }
+        itemsIndexed(skills, key = { _, skill -> "skill-${skill.name}" }) { index, skill ->
+            JGroupItem(GroupPosition.of(index, skills.size)) {
+                JRow(skill.name, subtitle = skill.description?.takeIf { it.isNotBlank() }, subtitleLines = 3, leadingIcon = PhIcons.PuzzlePiece,
+                    trailing = { JTag(stringResource(if (skill.builtin) R.string.assistant_settings_skills_builtin else R.string.assistant_settings_skills_user)) })
+            }
+        }
+        if (skills.isNotEmpty()) item("caption") { Caption(stringResource(R.string.assistant_settings_skills_caption, machine)) }
     }
 }
 

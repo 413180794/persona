@@ -109,6 +109,16 @@
     <string name="assistant_settings_memory_saved">记忆已更新</string>
     <string name="assistant_settings_delete_failed">没删掉，请重试。</string>
     <string name="assistant_settings_memory_deleted">已删除这条记忆</string>
+    <!-- Skills: the skills on the assistant's machine (GET /api/v1/skills). -->
+    <string name="assistant_settings_skills">Skills</string>
+    <string name="assistant_settings_skills_subtitle">Persona 在它那台电脑上会用的本事</string>
+    <string name="assistant_settings_skills_builtin">内置</string>
+    <string name="assistant_settings_skills_user">我的</string>
+    <string name="assistant_settings_skills_empty_title">还没有 skill</string>
+    <string name="assistant_settings_skills_empty_text">把 skill 放进「%1$s」的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。</string>
+    <string name="assistant_settings_skills_failed_title">读不到 skill</string>
+    <string name="assistant_settings_skills_failed_text">读不到助手那台电脑上的 skill，请稍后重试。</string>
+    <string name="assistant_settings_skills_caption">放在「%1$s」的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。更新 personad 不会动它们；改了以后，下一段新对话起生效。</string>
     <plurals name="assistant_settings_memory_count">
         <item quantity="other">%1$d 条</item>
     </plurals>

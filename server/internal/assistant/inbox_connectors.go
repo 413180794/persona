@@ -94,6 +94,7 @@ func (b *inboxBook) applyConnector(id, name string, things []connector.InboxThin
 			if open.Last != t.Last {
 				open.Count++
 				fillConnectorItem(open, t)
+				open.Read = false
 				b.offerParent(open, thingParent(t))
 				changed = append(changed, open)
 			} else if t.Tier != "" && (open.Tier != string(t.Tier) || open.Reason != t.Why) {
