@@ -23,6 +23,7 @@ import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Monogram } from "./InboxParts";
 import { LarkPinsDialog } from "./LarkPins";
+import { LarkTopicCard, LarkTopicDialog, useTopicReplies } from "./LarkTopicCard";
 
 const PAGE = 30;
 
@@ -80,6 +81,9 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   const [pinRecheck, setPinRecheck] = useState(false);
   const prefs = useTranslatePrefs();
   const translateTo = translatesChat(prefs, feed) ? prefs.target : undefined;
+  // A topic group: a card per topic, its newest replies on it, its thread in a dialog (LarkTopicCard.tsx).
+  const topicReplies = useTopicReplies(feed, ol);
+  const [openTopic, setOpenTopic] = useState<LarkMessage | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -90,6 +94,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     setReplyTo(null);
     setFlash(null);
     setPinThread(null);
+    setOpenTopic(null);
     api<LarkPage>(larkPath(`${base}?limit=${PAGE}${focus ? `&around=${enc(focus)}` : ""}`, ol))
       .then((r) => {
         if (!live) return;
@@ -327,6 +332,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label={t("inbox-larkthread.loading")} />}</div>;
   }
   const firstNew = focus ? page.messages.find((m) => comparePosition(m.position, focus) >= 0)?.id : undefined;
+  const topicGroup = topic || Boolean(page.topic);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
@@ -346,7 +352,19 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
                   <span className="h-px flex-1 bg-accent/40" />
                 </div>
               )}
-              <Message
+              {topicGroup && !isSystem(m) ? (
+                <LarkTopicCard
+                  topic={m}
+                  replies={topicReplies}
+                  onOpen={setOpenTopic}
+                  onReply={handleReply}
+                  onCopy={handleCopy}
+                  onPin={onPinsOpen && !changingPin && !pinRecheck && canAddPin(m) ? setAdding : undefined}
+                  flash={flash?.id === m.id ? flash.n : undefined}
+                >
+                  <MessageBody m={m} translateTo={translateTo} />
+                </LarkTopicCard>
+              ) : <Message
                 m={m}
                 prev={m.id === firstNew ? undefined : page.messages[i - 1]}
                 translateTo={translateTo}
@@ -356,7 +374,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
                 onRetry={handleRetry}
                 onPin={onPinsOpen && !changingPin && !pinRecheck ? setAdding : undefined}
                 flash={flash?.id === m.id ? flash.n : undefined}
-              />
+              />}
             </div>
           ))}
           {page.has_newer && (
@@ -374,6 +392,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
         inputRef={inputRef}
       />
       {pinsOpen && <LarkPinsDialog feed={feed} topic={topic} account={ol} onClose={closePins} onOpen={openPin} />}
+      {openTopic && <LarkTopicDialog topic={openTopic} account={ol} onClose={() => setOpenTopic(null)} renderMessage={(m) => <Message m={m} nested translateTo={translateTo} />} />}
       {pinThread && <PinThreadDialog target={pinThread} translateTo={translateTo} onClose={() => setPinThread(null)} />}
       <Dialog
         open={adding !== null}
@@ -510,6 +529,21 @@ function TranslationLine({ m, target }: { m: LarkMessage; target: string }) {
       <Icon name="translate" size={12} className="mt-[3px] shrink-0 text-ink-3" />
       <span className="min-w-0 break-words whitespace-pre-wrap">{tr}</span>
     </p>
+  );
+}
+
+/** A topic's own content on its card: what a chat row holds under its header. */
+function MessageBody({ m, translateTo }: { m: LarkMessage; translateTo?: string }) {
+  return (
+    <>
+      {m.reply_to && (
+        <p className="mb-1 truncate border-l-2 border-line-strong pl-2 text-[12px] text-ink-3">
+          {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{m.reply_to.recalled ? t("inbox-larkthread.recalled") : m.reply_to.text}
+        </p>
+      )}
+      {m.recalled ? <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p> : <Parts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} />}
+      {translateTo && <TranslationLine m={m} target={translateTo} />}
+    </>
   );
 }
 
