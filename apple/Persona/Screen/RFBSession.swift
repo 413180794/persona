@@ -45,10 +45,15 @@ import SwiftUI
             if AppModel.shared.api(ref.group) == nil { phase = .closed("连不上 hub") }
             return
         }
-        let c = RFBClient(transport: RFBWebSocket(api: api, machine: ref.id)) { [weak self] in await self?.credentials() }
+        run(RFBClient(transport: RFBWebSocket(api: api, machine: ref.id)) { [weak self] in await self?.credentials() })
+    }
+
+    /// Follows this client and starts it: start's over the hub's relay, or a test's over a scripted transport.
+    func run(_ c: RFBClient) {
         c.onState = { [weak self] s in Task { @MainActor in self?.state(s) } }
         c.onCutText = { [weak self] text in Task { @MainActor in self?.macClipboard = text } }
         c.onCursor = { [weak self] cursor in Task { @MainActor in self?.cursor = cursor } }
+        c.onResize = { [weak self] w, h in Task { @MainActor in self?.resized(width: w, height: h) } }
         sink.attach(c) { [weak self] fps, latency in
             Task { @MainActor in
                 self?.fps = fps
@@ -141,11 +146,23 @@ import SwiftUI
         }
     }
 
+    /// The Mac's screen took a new size mid-session (DesktopSize, #2372): the geometry follows it and the pointer is
+    /// kept on it, without sending anything (the next move sends where it is).
+    private func resized(width: Int, height: Int) {
+        size = CGSize(width: width, height: height)
+        pointer = Self.clamped(pointer, to: size)
+    }
+
     // MARK: Pointer, keys, clipboard
+
+    /// p kept on a screen of this size (its last pixel at most).
+    nonisolated static func clamped(_ p: CGPoint, to size: CGSize) -> CGPoint {
+        CGPoint(x: min(max(0, p.x), max(0, size.width - 1)), y: min(max(0, p.y), max(0, size.height - 1)))
+    }
 
     /// The pointer to p on the Mac's screen, with these buttons down.
     func move(to p: CGPoint, buttons: UInt8? = nil) {
-        let q = CGPoint(x: min(max(0, p.x), max(0, size.width - 1)), y: min(max(0, p.y), max(0, size.height - 1)))
+        let q = Self.clamped(p, to: size)
         pointer = q
         if let buttons { self.buttons = buttons }
         client?.pointer(x: Int(q.x), y: Int(q.y), buttons: self.buttons)

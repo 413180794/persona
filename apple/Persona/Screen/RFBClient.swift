@@ -120,6 +120,8 @@ nonisolated final class RFBClient: @unchecked Sendable {
     var onFrame: @Sendable (RFBFramebuffer, CGRect) -> Void = { _, _ in }
     var onCutText: @Sendable (String) -> Void = { _ in }
     var onCursor: @Sendable (Cursor) -> Void = { _ in }
+    /// The Mac's screen took a new size mid-session (DesktopSize): its width and height, before the frame drawn at it.
+    var onResize: @Sendable (Int, Int) -> Void = { _, _ in }
 
     /// Encodings asked for, best first: ZRLE, CopyRect, Raw, then DesktopSize, Cursor and LastRect.
     static let encodings: [Int32] = [16, 1, 0, -223, -239, -224]
@@ -289,6 +291,7 @@ nonisolated final class RFBClient: @unchecked Sendable {
                 try framebufferLock.withLock { try zrle.draw(tiles, x: x, y: y, w: w, h: h, into: framebuffer) }
             case -223:
                 framebufferLock.withLock { framebuffer.resize(width: w, height: h) }
+                onResize(w, h)
                 dirty = CGRect(x: 0, y: 0, width: w, height: h)
                 continue
             case -239:

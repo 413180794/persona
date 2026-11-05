@@ -10,7 +10,9 @@ import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 import java.io.IOException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -100,5 +102,17 @@ class VoiceTextTest {
         assertEquals(1, preferredRoute(listOf(speaker, AudioDeviceInfo.TYPE_USB_HEADSET)))
         assertNull(preferredRoute(listOf(earpiece)))
         assertNull(preferredRoute(emptyList()))
+    }
+
+    @Test fun beforeApi31TheLoudspeakerIsOnUnlessAHeadsetIsConnected() {
+        val earpiece = AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+        val speaker = AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+        assertTrue(legacySpeakerphone(listOf(earpiece, speaker)))
+        assertFalse(legacySpeakerphone(listOf(earpiece, speaker, AudioDeviceInfo.TYPE_WIRED_HEADSET)))
+        assertFalse(legacySpeakerphone(listOf(earpiece, speaker, AudioDeviceInfo.TYPE_USB_HEADSET)))
+        assertFalse(legacySpeakerphone(listOf(speaker, AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO)))
+        // Nothing to route to (only the earpiece, or no outputs listed): still the loudspeaker, never the earpiece.
+        assertTrue(legacySpeakerphone(listOf(earpiece)))
+        assertTrue(legacySpeakerphone(emptyList()))
     }
 }

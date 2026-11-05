@@ -12,6 +12,7 @@ import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AudioEffect
 import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import java.util.concurrent.LinkedBlockingQueue
@@ -66,6 +67,13 @@ internal fun preferredRoute(types: List<Int>): Int? =
     types.indexOfFirst { it in Headsets }.takeIf { it >= 0 } ?: types.indexOf(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER).takeIf { it >= 0 }
 
 /**
+ * Before API 31 there is no communication device to pick: whether the loudspeaker is on, given the output devices of
+ * [types]. Off when [preferredRoute] picks a headset, on otherwise, so the conversation never lands on the earpiece.
+ */
+internal fun legacySpeakerphone(types: List<Int>): Boolean =
+    preferredRoute(types)?.let { types[it] !in Headsets } ?: true
+
+/**
  * The real thing: `VOICE_COMMUNICATION` recording with the system's echo canceller and noise suppressor (on the
  * loudspeaker the model must not hear itself), communication mode routed to a headset or the loudspeaker, audio focus
  * for the call, and a stream player for what the extension says. Everything is put back in [stop].
@@ -75,6 +83,8 @@ internal class AndroidVoiceAudio(context: Context) : VoiceAudio {
     private val lock = Any()
     @Volatile private var closed = false
     private var savedMode: Int? = null
+    private var savedSpeakerphone: Boolean? = null
+    private var startedSco = false
     private var focus: AudioFocusRequest? = null
     private var effects = emptyList<AudioEffect>()
     private var track: AudioTrack? = null
@@ -104,12 +114,49 @@ internal class AndroidVoiceAudio(context: Context) : VoiceAudio {
     }
 
     private fun route() {
-        savedMode = manager.mode
+        val previous = manager.mode
         manager.mode = AudioManager.MODE_IN_COMMUNICATION
-        val devices = manager.availableCommunicationDevices
-        preferredRoute(devices.map { it.type })?.let { manager.setCommunicationDevice(devices[it]) }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val devices = manager.availableCommunicationDevices
+                preferredRoute(devices.map { it.type })?.let { manager.setCommunicationDevice(devices[it]) }
+            } else {
+                routeLegacy()
+            }
+        } catch (error: Exception) {
+            // Put the mode back here: stop() only restores what route() finished setting up.
+            restoreLegacyRoute()
+            manager.mode = previous
+            throw error
+        }
+        savedMode = previous
         focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT).setAudioAttributes(attributes).build()
             .also { manager.requestAudioFocus(it) }
+    }
+
+    /** API 30: the loudspeaker for a call without a headset, Bluetooth SCO for a Bluetooth headset. */
+    @Suppress("DEPRECATION")
+    private fun routeLegacy() {
+        val types = manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.type }
+        savedSpeakerphone = manager.isSpeakerphoneOn
+        manager.isSpeakerphoneOn = legacySpeakerphone(types)
+        // Without SCO a Bluetooth headset is not used for a call, and the voice would come out of the earpiece.
+        if (preferredRoute(types)?.let { types[it] } == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+            startedSco = true
+            manager.startBluetoothSco()
+            manager.isBluetoothScoOn = true
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun restoreLegacyRoute() {
+        if (startedSco) {
+            startedSco = false
+            manager.isBluetoothScoOn = false
+            manager.stopBluetoothSco()
+        }
+        savedSpeakerphone?.let { manager.isSpeakerphoneOn = it }
+        savedSpeakerphone = null
     }
 
     private fun startPlayer(rate: Int, listener: VoiceAudio.Listener): AudioTrack {
@@ -216,7 +263,7 @@ internal class AndroidVoiceAudio(context: Context) : VoiceAudio {
         if (mic == null) recorder?.release()
         focus?.let { manager.abandonAudioFocusRequest(it) }
         savedMode?.let { mode ->
-            manager.clearCommunicationDevice()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) manager.clearCommunicationDevice() else restoreLegacyRoute()
             manager.mode = mode
         }
     }

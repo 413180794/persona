@@ -164,6 +164,31 @@ struct PhoneToolsTests {
         #expect(summary?.contains("14:00") == true)
     }
 
+    @Test func completingAReminderNamesItOnTheCard() {
+        let summary = RemindersTool.completeSummary(
+            id: "ABC-123",
+            target: .init(title: "Buy milk", list: "Groceries", due: "2026-10-24T18:00:00+08:00")
+        )
+        #expect(summary == "把「Buy milk」（Groceries）标记为已完成\n到期：2026-10-24T18:00:00+08:00")
+        #expect(!summary.contains("ABC-123"))
+
+        let bare = RemindersTool.completeSummary(id: "ABC-123", target: .init(title: "", list: nil, due: nil))
+        #expect(bare == "把「(无标题)」标记为已完成")
+    }
+
+    @Test func completingAnUnknownReminderSaysSoAndKeepsTheId() {
+        #expect(RemindersTool.completeSummary(id: "ABC-123", target: nil) == "找不到这条提醒（或没有提醒事项权限）：ABC-123")
+        #expect(RemindersTool.completeSummary(id: nil, target: nil) == "找不到这条提醒（或没有提醒事项权限）：?")
+    }
+
+    /// The approval card the registry shows looks the id up (#2381): a made-up one matches nothing, and the card says
+    /// so instead of asking to complete a bare id.
+    @Test func theCompleteCardLooksTheReminderUp() {
+        let tool = PhoneToolRegistry.all.first { $0.spec.name == "phone_reminders_complete" }
+        let summary = tool?.confirmation?(.object(["id": .string("no-such-reminder")]))
+        #expect(summary == "找不到这条提醒（或没有提醒事项权限）：no-such-reminder")
+    }
+
     @Test func readOnlyToolsDoNotAskForConfirmation() async {
         var asked = false
         // Developer tools need no permission at all, so this runs end to end.

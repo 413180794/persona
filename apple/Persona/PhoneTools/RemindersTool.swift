@@ -61,9 +61,7 @@ enum RemindersTool {
                     ], required: ["id"])
                 ),
                 source: .reminders,
-                confirmation: { args in
-                    "把提醒事项标记为已完成：\(ToolArgs.string(args, "id") ?? "?")"
-                },
+                confirmation: { args in completeConfirmation(args) },
                 run: { args in try await complete(args) }
             ),
         ]
@@ -191,12 +189,51 @@ enum RemindersTool {
     /// Takes back a reminder the conversation added (its 撤销, docs/unified-entry.md); false when it is gone already.
     static func remove(id: String) throws -> Bool {
         let store = EKEventStore()
-        guard let item = store.calendarItem(withIdentifier: id) as? EKReminder else { return false }
+        guard let item = reminder(id: id, in: store) else { return false }
         try store.remove(item, commit: true)
         return true
     }
 
     // MARK: - Completing
+
+    /// The reminder an id points at, or nil when it is gone or reminders access is missing
+    /// (EventKit answers nil in both cases).
+    private static func reminder(id: String, in store: EKEventStore) -> EKReminder? {
+        store.calendarItem(withIdentifier: id) as? EKReminder
+    }
+
+    /// What the approval card names for a reminder about to be completed.
+    struct CompletionTarget: Equatable {
+        var title: String
+        var list: String?
+        var due: String?
+    }
+
+    /// Approval text for phone_reminders_complete. It runs before the permission check,
+    /// so it looks the reminder up itself and names it; an opaque id alone tells the
+    /// user nothing about what they approve.
+    static func completeConfirmation(_ args: JSONValue) -> String {
+        let id = ToolArgs.string(args, "id")
+        let target = id.flatMap { reminder(id: $0, in: EKEventStore()) }.map { item in
+            CompletionTarget(title: item.title ?? "", list: item.calendar?.title, due: dueString(item.dueDateComponents))
+        }
+        return completeSummary(id: id, target: target)
+    }
+
+    /// Pure formatting half of `completeConfirmation`. Without a target the card keeps the id
+    /// and says why nothing matched; the confirmation cannot skip the prompt, and `complete`
+    /// then fails with invalidArgument, so the text does not promise anything about running.
+    static func completeSummary(id: String?, target: CompletionTarget?) -> String {
+        guard let target else {
+            return "找不到这条提醒（或没有提醒事项权限）：\(id ?? "?")"
+        }
+        let title = target.title.isEmpty ? "(无标题)" : target.title
+        var summary = "把「\(title)」"
+        if let list = target.list { summary += "（\(list)）" }
+        summary += "标记为已完成"
+        if let due = target.due { summary += "\n到期：\(due)" }
+        return summary
+    }
 
     static func complete(_ args: JSONValue) async throws -> [ToolContent] {
         try CalendarAccess.requireReminders()
@@ -204,7 +241,7 @@ enum RemindersTool {
             throw ToolFailure(.invalidArgument, "id is required")
         }
         let store = EKEventStore()
-        guard let item = store.calendarItem(withIdentifier: id) as? EKReminder else {
+        guard let item = reminder(id: id, in: store) else {
             throw ToolFailure(.invalidArgument, "no reminder with id \"\(id)\"; call phone_reminders_list to get a current id")
         }
         item.isCompleted = true

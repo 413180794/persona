@@ -140,6 +140,52 @@ struct RFBClientTests {
         #expect(await seen.snapshot.states.contains(.refused("Authentication failed")))
     }
 
+    /// DesktopSize (-223) mid-session (#2372): the framebuffer takes the new size, onResize says so before the frame
+    /// drawn at it, and a later update draws on the new screen; the session keeps its pointer on that screen.
+    @Test func desktopSizeMidSession() async throws {
+        func u16(_ v: Int) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xff)] }
+        func rect(_ x: Int, _ y: Int, _ w: Int, _ h: Int, _ e: Int32) -> [UInt8] { u16(x) + u16(y) + u16(w) + u16(h) + RFBAuth.be32(UInt32(bitPattern: e)) }
+        let resize: [UInt8] = [0, 0] + u16(1) + rect(0, 0, 200, 100, -223)
+        let raw: [UInt8] = [0, 0] + u16(1) + rect(199, 99, 1, 1, 0) + [1, 2, 3, 0]
+        let t = ScriptedTransport([Array("RFB 003.889\n".utf8), [1, 1], RFBAuth.be32(0),
+                                   [0, 4, 0, 3] + [UInt8](repeating: 0, count: 16) + RFBAuth.be32(0), resize, raw])
+        let seen = Seen()
+        let client = RFBClient(transport: t) { nil }
+        client.onState = { s in Task { await seen.state(s) } }
+        client.onResize = { w, h in Task { await seen.resized(w, h) } }
+        client.onFrame = { fb, _ in
+            let size = [UInt8(fb.width), UInt8(fb.height)], corner = fb.width == 200 ? fb.pixel(199, 99) : []
+            Task { await seen.frame(size, corner, []) }
+        }
+        client.start()
+        try await seen.until { $0.ended }
+        let s = await seen.snapshot
+        #expect(s.states.contains(.live(width: 4, height: 3, name: "")))
+        #expect(s.resizes.count == 1 && s.resizes.first == [200, 100])
+        #expect(s.frames.map(\.0) == [[200, 100], [200, 100]], "both frames at the new size")
+        #expect(s.frames.last?.1 == [1, 2, 3, 0], "Raw at the new screen's last pixel")
+        #expect(RFBSession.clamped(CGPoint(x: 1000, y: -5), to: CGSize(width: 200, height: 100)) == CGPoint(x: 199, y: 0))
+        #expect(RFBSession.clamped(CGPoint(x: 150, y: 80), to: CGSize(width: 100, height: 50)) == CGPoint(x: 99, y: 49))
+    }
+
+    /// The session follows a smaller screen mid-session (#2372): its size is the new one, not the one it went live with,
+    /// and the pointer (the middle of the old screen) is kept on the new one, without anything sent for it.
+    @MainActor @Test func sessionFollowsDesktopSize() async throws {
+        func u16(_ v: Int) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xff)] }
+        let resize: [UInt8] = [0, 0] + u16(1) + u16(0) + u16(0) + u16(100) + u16(50) + RFBAuth.be32(UInt32(bitPattern: -223))
+        let t = ScriptedTransport([Array("RFB 003.889\n".utf8), [1, 1], RFBAuth.be32(0),
+                                   u16(300) + u16(200) + [UInt8](repeating: 0, count: 16) + RFBAuth.be32(0), resize], holds: true)
+        let session = RFBSession(ref: MachineRef(id: "mac"))
+        defer { session.close() }
+        session.run(RFBClient(transport: t) { nil })
+        for _ in 0..<300 where session.size != CGSize(width: 100, height: 50) { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(session.phase == .live)
+        #expect(session.size == CGSize(width: 100, height: 50), "the size it went live with: \(session.size)")
+        #expect(session.pointer == CGPoint(x: 99, y: 49))
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(!t.sent.contains { $0.first == 5 }, "no PointerEvent sent for the resize")
+    }
+
     /// The pointer, keys and clipboard go out once signed in, in the order they came (a key's down before its up).
     @Test func pointerKeysAndClipboardOutInOrder() async throws {
         let t = ScriptedTransport([Array("RFB 003.889\n".utf8), [1, 1], RFBAuth.be32(0),
@@ -200,6 +246,7 @@ private actor Seen {
         var states: [RFBClient.State] = []
         var frames: [([UInt8], [UInt8], [UInt8])] = []
         var cuts: [String] = []
+        var resizes: [[Int]] = []
         var ended: Bool { states.contains { if case .failed = $0 { true } else if case .refused = $0 { true } else { $0 == .closed } } }
     }
 
@@ -208,6 +255,7 @@ private actor Seen {
     func state(_ s: RFBClient.State) { snapshot.states.append(s) }
     func frame(_ a: [UInt8], _ b: [UInt8], _ c: [UInt8]) { snapshot.frames.append((a, b, c)) }
     func cut(_ s: String) { snapshot.cuts.append(s) }
+    func resized(_ w: Int, _ h: Int) { snapshot.resizes.append([w, h]) }
 
     func until(_ done: (Snapshot) -> Bool) async throws {
         for _ in 0..<500 where !done(snapshot) { try await Task.sleep(for: .milliseconds(10)) }
