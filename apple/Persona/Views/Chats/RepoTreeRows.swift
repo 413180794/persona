@@ -60,6 +60,39 @@ struct WorktreeRow: View {
     }
 }
 
+/// The「N 个子项」row under a working tree (按仓库): the spaces its host nests under it (Orca's child worktrees, #3075),
+/// their agents' state counts, and the chevron that turns as it opens.
+struct ChildSpacesRow: View {
+    var count: Int
+    var open: Bool
+    /// Everything nested under it, for the counts.
+    var group: SpaceGroup
+    @Environment(\.compactList) private var compact
+
+    var body: some View {
+        HStack(spacing: Theme.Space.s) {
+            Image(systemName: Theme.Icon.childSpaces)
+                .font(compact ? CompactList.meta : Theme.Font.caption)
+                .foregroundStyle(.secondary)
+                .scaledFrame(width: compact ? CompactList.mark : Theme.Size.iconXS)
+            Text("\(count) 个子项")
+                .font(compact ? CompactList.metaStrong : Theme.Font.secondaryMedium)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+            Spacer(minLength: Theme.Space.xs)
+            StateCounts(group: group)
+            FoldChevron(folded: !open)
+        }
+        .padding(.vertical, compact ? 0 : Theme.Space.xxs)
+        .contentShape(.rect)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(["\(count) 个子项", StateCounts.spoken(group), open ? "已展开" : "已折叠"].filter { !$0.isEmpty }
+            .joined(separator: "，"))
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
 /// The ⋯ of a repository whose agents are in more than one space (按仓库): what applies to all of them. Equal while
 /// its unread agents are: the menu held open is not rebuilt by every push.
 struct RepoMenuItems: View, Equatable {

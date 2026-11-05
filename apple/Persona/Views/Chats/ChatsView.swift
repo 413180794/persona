@@ -512,10 +512,15 @@ private struct AgentsList: View {
     /// or "!<id>" once the user chose, nothing until then (#1836).
     private static let foldedByChoice: Set<String> = ["todo:none"]
 
+    /// Starts folded: `foldedByDefault`, and a working tree's「N 个子项」(#3075).
+    private static func foldsByDefault(_ id: String) -> Bool {
+        foldedByDefault.contains(id) || id.hasSuffix(RepoTree.childFoldSuffix)
+    }
+
     private func isFolded(_ id: String, otherwise fallback: Bool = false) -> Bool {
         guard query.isEmpty else { return false }
         if Self.foldedByChoice.contains(id) { return folded.contains(id) || (fallback && !folded.contains("!" + id)) }
-        return Self.foldedByDefault.contains(id) ? !folded.contains("!" + id) : folded.contains(id)
+        return Self.foldsByDefault(id) ? !folded.contains("!" + id) : folded.contains(id)
     }
 
     private func setFolded(_ ids: Set<String>) { foldedList = ids.sorted().joined(separator: "\n") }
@@ -530,8 +535,8 @@ private struct AgentsList: View {
                 f.insert(fold ? id : "!" + id)
                 continue
             }
-            let key = Self.foldedByDefault.contains(id) ? "!" + id : id
-            let marks = Self.foldedByDefault.contains(id) ? !fold : fold // a default-folded section marks being open
+            let key = Self.foldsByDefault(id) ? "!" + id : id
+            let marks = Self.foldsByDefault(id) ? !fold : fold // a default-folded section marks being open
             if marks { f.insert(key) } else { f.remove(key) }
         }
         return f
@@ -1025,48 +1030,48 @@ private struct AgentsList: View {
     }
 
     /// The agents of a space or a working tree: busy (and pinned / looping) ones first, idle ones behind one 还有 N 个空闲
-    /// row (`key` remembers it open). `indent`: a level in, under a working tree's row.
+    /// row (`key` remembers it open). `depth`: levels in, under a working tree's row (2 under a nested one's).
     /// The agents of a tab with several together, under the tab's row (`tabRows`, #2320).
-    @ViewBuilder private func agentRows(_ list: [Session], key: String, indent: Bool = false) -> some View {
+    @ViewBuilder private func agentRows(_ list: [Session], key: String, depth: Int = 0) -> some View {
         let rows = order.tabEntries(list, all: quick == .all)
-        ForEach(rows.busy) { e in entryRows(e, indent: indent) }
+        ForEach(rows.busy) { e in entryRows(e, depth: depth) }
         if !rows.idle.isEmpty {
             let idle = rows.idle.flatMap(\.sessions)
             if expandedIdle.contains(key) || !query.isEmpty {
-                ForEach(rows.idle) { e in entryRows(e, indent: indent) }
-                if query.isEmpty { collapseRow("收起空闲的 \(idle.count) 个", key: key, indent: indent) }
+                ForEach(rows.idle) { e in entryRows(e, depth: depth) }
+                if query.isEmpty { collapseRow("收起空闲的 \(idle.count) 个", key: key, depth: depth) }
             } else {
-                expandRow(idle, key: key, indent: indent)
+                expandRow(idle, key: key, depth: depth)
             }
         }
     }
 
     /// One agent's row, or a tab's: its row, then (unless folded) its agents, the 发起者 on top marked, the others a
     /// level in under it.
-    @ViewBuilder private func entryRows(_ e: TabPanes.Entry, indent: Bool = false) -> some View {
+    @ViewBuilder private func entryRows(_ e: TabPanes.Entry, depth: Int = 0) -> some View {
         switch e {
         case .agent(let s):
-            slotRow(s, indent: indent)
+            slotRow(s, depth: depth)
         case .tab(let g):
-            tabRow(g, indent: indent)
+            tabRow(g, depth: depth)
             if !isFolded(g.foldID) {
-                ForEach(g.sessions) { s in slotRow(s, indent: indent, pane: g.role(of: s), branch: g.isBranch(s)) }
+                ForEach(g.sessions) { s in slotRow(s, depth: depth, pane: g.role(of: s), branch: g.isBranch(s)) }
             }
         }
     }
 
     /// A tab's row: its name, what its most urgent agent is doing in that one's state, 「N 个 Agent」; tap to fold it.
-    private func tabRow(_ g: TabPanes.Group, indent: Bool) -> some View {
+    private func tabRow(_ g: TabPanes.Group, depth: Int) -> some View {
         let folded = isFolded(g.foldID)
         return Button { toggleFold(g.foldID) } label: {
-            TabGroupRow(group: g, folded: folded).padding(.leading, nested(indent ? 1 : 0))
+            TabGroupRow(group: g, folded: folded).padding(.leading, nested(depth))
         }
         .buttonStyle(.plain)
         #if os(iOS) || os(visionOS)
         .background { DrawerPan.NoRowSwipe() } // no swipe of its own: a drag to the right pages to 助手
         #endif
         .modifier(FoldAnchor(id: g.foldID, reader: feed.reader))
-        .listRowInsets(compact ? rowInsets(level: indent ? 1 : 0) : capsules ? Self.tabCapsuleInsets(level: indent ? 1 : 0) : nil)
+        .listRowInsets(compact ? rowInsets(level: depth) : capsules ? Self.tabCapsuleInsets(level: depth) : nil)
         .listRowBackground(capsules ? Color.clear : nil)
         .listRowSeparator(capsules ? .hidden : .automatic)
         .accessibilityIdentifier("agents.tab")
@@ -1248,11 +1253,25 @@ private struct AgentsList: View {
         }
     }
 
-    /// A working tree in its repository's card: its row (⌂ for the main checkout), then its agents a level in. One with
-    /// nothing going on starts folded, as a quiet space does; a busy one folds from its row, remembered.
+    /// A working tree in its repository's card: its row and agents (`worktreeRow`), then the spaces nested under it
+    /// behind one「N 个子项」row.
     @ViewBuilder private func worktreeRows(_ w: RepoTree.Worktree) -> some View {
-        let quiet = quick == .all && w.sessions.allSatisfy { !stays($0) }
-        let open = !query.isEmpty || (quiet ? expandedQuiet.contains(w.id) : !isFolded(w.id))
+        worktreeRow(w, depth: 0)
+        if !w.children.isEmpty && worktreeFold(w).open { childWorktreeRows(w) }
+    }
+
+    /// Whether a working tree has nothing going on (its children included: it then folds as a quiet space does, not
+    /// remembered) and whether it is open.
+    private func worktreeFold(_ w: RepoTree.Worktree) -> (quiet: Bool, open: Bool) {
+        let quiet = quick == .all && w.allSessions.allSatisfy { !stays($0) }
+        return (quiet, !query.isEmpty || (quiet ? expandedQuiet.contains(w.id) : !isFolded(w.id)))
+    }
+
+    /// A working tree's row (⌂ for the main checkout), then its agents a level in; `depth` 1: a nested space's, under
+    /// its parent's「N 个子项」. One with nothing going on (its children included) starts folded, as a quiet space does;
+    /// a busy one folds from its row, remembered.
+    @ViewBuilder private func worktreeRow(_ w: RepoTree.Worktree, depth: Int) -> some View {
+        let (quiet, open) = worktreeFold(w)
         Button {
             if quiet {
                 Haptics.tap()
@@ -1264,18 +1283,42 @@ private struct AgentsList: View {
             }
         } label: {
             WorktreeRow(name: w.name, main: w.main, count: w.sessions.count, quiet: quiet, open: open)
+                .padding(.leading, nested(depth))
         }
         .buttonStyle(.plain)
-        .listRowInsets(compact ? CompactList.rowInsets : capsules ? Self.worktreeCapsuleInsets : nil)
+        .listRowInsets(compact ? CompactList.rowInsets(level: depth) : capsules ? Self.tabCapsuleInsets(level: depth) : nil)
         .listRowBackground(capsules ? Color.clear : nil)
         .listRowSeparator(capsules ? .hidden : .automatic)
         .accessibilityIdentifier("agents.worktree")
         if open {
             if quiet {
-                ForEach(TabPanes.entries(ordered(w.sessions))) { e in entryRows(e, indent: true) }
+                ForEach(TabPanes.entries(ordered(w.sessions))) { e in entryRows(e, depth: depth + 1) }
             } else {
-                agentRows(w.sessions, key: w.id, indent: true)
+                agentRows(w.sessions, key: w.id, depth: depth + 1)
             }
+        }
+    }
+
+    /// The spaces nested under a working tree (Orca's child worktrees, #3075): one「N 个子项」row a level in, with the
+    /// state counts of everything under it, folded until opened (remembered); open, each nested space as a working tree
+    /// a level in.
+    @ViewBuilder private func childWorktreeRows(_ w: RepoTree.Worktree) -> some View {
+        let id = w.childrenFoldID
+        let open = !isFolded(id)
+        let below = w.children.flatMap(\.sessions)
+        Button { toggleFold(id) } label: {
+            ChildSpacesRow(count: w.children.count, open: open,
+                           group: SpaceGroup(id: id, machineID: below.first?.machineID ?? "", spaceID: "-", name: w.name, index: 0, sessions: below))
+                .padding(.leading, nested(1))
+        }
+        .buttonStyle(.plain)
+        .modifier(FoldAnchor(id: id, reader: feed.reader))
+        .listRowInsets(compact ? CompactList.rowInsets(level: 1) : capsules ? Self.tabCapsuleInsets(level: 1) : nil)
+        .listRowBackground(capsules ? Color.clear : nil)
+        .listRowSeparator(capsules ? .hidden : .automatic)
+        .accessibilityIdentifier("agents.childSpaces")
+        if open {
+            ForEach(w.children) { c in worktreeRow(c, depth: 1) }
         }
     }
 
@@ -1425,21 +1468,21 @@ private struct AgentsList: View {
     }
 
     /// 还有 N 个空闲: the idle agents behind one row.
-    private func expandRow(_ rows: [Session], key: String, indent: Bool = false) -> some View {
+    private func expandRow(_ rows: [Session], key: String, depth: Int = 0) -> some View {
         Button {
             Haptics.tap()
             withAnimation(Theme.Motion.standard) { _ = expandedIdle.insert(key) }
         } label: {
             Group { if compact { CompactFoldRow(sessions: rows) } else { IdleFoldRow(sessions: rows) } }
-                .padding(.leading, nested(indent))
+                .padding(.leading, nested(depth))
         }
         .buttonStyle(.plain)
-        .listRowInsets(rowInsets(indent: indent))
+        .listRowInsets(rowInsets(level: depth))
         .listRowBackground(capsules ? Color.clear : nil)
         .listRowSeparator(capsules ? .hidden : .automatic)
     }
 
-    private func collapseRow(_ title: String, key: String, indent: Bool = false) -> some View {
+    private func collapseRow(_ title: String, key: String, depth: Int = 0) -> some View {
         Button {
             withAnimation(Theme.Motion.standard) { _ = expandedIdle.remove(key) }
         } label: {
@@ -1450,18 +1493,15 @@ private struct AgentsList: View {
                     Label(title, systemImage: Theme.Icon.collapse).font(Theme.Font.secondaryMedium).lineLimit(1)
                 }
             }
-            .padding(.leading, nested(indent))
+            .padding(.leading, nested(depth))
         }
-        .listRowInsets(rowInsets(indent: indent))
+        .listRowInsets(rowInsets(level: depth))
         .listRowBackground(capsules ? Color.clear : nil)
         .listRowSeparator(capsules ? .hidden : .automatic)
     }
 
-    /// A row's edges in 细列表 and the capsules; `indent`: a level in, under a working tree (按仓库). Nil: the grouped
-    /// list's own, the row's content moved in instead (`nested`).
-    private func rowInsets(indent: Bool) -> EdgeInsets? { rowInsets(level: indent ? 1 : 0) }
-
-    /// `level` levels in: under a working tree, under a tab's 发起者, or both.
+    /// A row's edges in 细列表 and the capsules, `level` levels in: under a working tree, under a tab's 发起者, or both.
+    /// Nil: the grouped list's own, the row's content moved in instead (`nested`).
     private func rowInsets(level: Int) -> EdgeInsets? {
         if compact { return CompactList.rowInsets(level: level) }
         if capsules { return Self.capsuleInsets(level: level) }
@@ -1470,7 +1510,6 @@ private struct AgentsList: View {
 
     /// How far a row's content moves in under a working tree in the grouped list (its row keeps the list's insets, so
     /// its line starts where its text does).
-    private func nested(_ indent: Bool) -> CGFloat { nested(indent ? 1 : 0) }
     private func nested(_ level: Int) -> CGFloat { !compact && !capsules ? Theme.Space.l * CGFloat(level) : 0 }
 
     /// 细列表: a quiet space as one row like an agent's, its agents under it when opened (a DisclosureGroup's own row
@@ -1513,14 +1552,10 @@ private struct AgentsList: View {
     private static func capsuleInsets(level: Int) -> EdgeInsets {
         EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page + Theme.Space.l * CGFloat(level), bottom: Theme.Space.xs, trailing: Theme.Space.page)
     }
-    /// A tab's row among the capsules: a line of text on the page over its agents' capsules, as a working tree's.
+    /// A tab's or a working tree's row among the capsules: a line of text on the page over its agents' capsules.
     private static func tabCapsuleInsets(level: Int) -> EdgeInsets {
         EdgeInsets(top: Theme.Space.s, leading: Theme.Space.page + Theme.Space.l * CGFloat(level), bottom: Theme.Space.xxs, trailing: Theme.Space.page)
     }
-    /// A working tree's row among the capsules: a line of text on the page, over its agents' capsules.
-    private static let worktreeCapsuleInsets = EdgeInsets(top: Theme.Space.s, leading: Theme.Space.page, bottom: Theme.Space.xxs,
-                                                          trailing: Theme.Space.page)
-
     /// A section. The capsules are a plain list (every row sets its own edges, all on `Theme.Space.page`): its title is
     /// its first row on the page's edge (a plain list's headers stick to the top, and a grouped list pads its first
     /// section about 35 pt). Elsewhere the grouped list's header.
@@ -1566,11 +1601,11 @@ private struct AgentsList: View {
 
     /// `context`: also name the space (and machine) — when the list is not grouped by space.
     /// `cardLast`: a row of a quiet space's card (`quietSpaceCard`), and whether it ends the card.
-    /// `indent`: a level in, under a working tree's row (按仓库).
+    /// `depth`: levels in, under a working tree's row (按仓库).
     /// `pane`, `branch`: an agent of a tab with several, and one hanging off its 发起者 (a level further in).
     private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false, cardLast: Bool? = nil,
-                         showHost: Bool = false, indent: Bool = false, pane: TabPanes.Role? = nil, branch: Bool = false) -> some View {
-        let level = (indent ? 1 : 0) + (branch ? 1 : 0)
+                         showHost: Bool = false, depth: Int = 0, pane: TabPanes.Role? = nil, branch: Bool = false) -> some View {
+        let level = depth + (branch ? 1 : 0)
         let closes = s.state.isLive && s.canTerminal // the row's 关闭, and its mark for the strip (#2822)
         return Group {
             if searching {

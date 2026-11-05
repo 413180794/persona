@@ -543,6 +543,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var spaceID: String?
     var spaceName: String?
     var spaceIndex: Int?
+    /// The space this one is nested under in its host (same machine and `spaceKind`): an Orca child worktree's parent
+    /// (`parent_space_id`, #2073). Nil for a top-level space and from older nodes.
+    var parentSpaceID: String? = nil
     var slotID: String?
     var slotName: String?
     var slotIndex: Int?
@@ -697,7 +700,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case permissionMode = "permission_mode"
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
-             spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
+             spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index", parentSpaceID = "parent_space_id",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", paneIndex = "pane_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
@@ -742,6 +745,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         spaceID = try c.decodeIfPresent(String.self, forKey: .spaceID)
         spaceName = try c.decodeIfPresent(String.self, forKey: .spaceName)
         spaceIndex = try c.decodeIfPresent(Int.self, forKey: .spaceIndex)
+        parentSpaceID = try c.decodeIfPresent(String.self, forKey: .parentSpaceID)
         slotID = try c.decodeIfPresent(String.self, forKey: .slotID)
         slotName = try c.decodeIfPresent(String.self, forKey: .slotName)
         slotIndex = try c.decodeIfPresent(Int.self, forKey: .slotIndex)

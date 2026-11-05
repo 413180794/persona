@@ -143,6 +143,24 @@ import Testing
         #expect(rows(.state, folded: ["state/idle"], held: read.key).states(live).map(\.sessionID) == ["read", "work"])
     }
 
+    /// 按仓库: a working tree's nested spaces (Orca's child worktrees, #3075) follow its agents while「N 个子项」is open.
+    @Test func nestedSpacesFollowTheirParentWhileOpened() {
+        func orca(_ id: String, space: String, parent: String? = nil) -> Session {
+            let parentField = parent.map { #","parent_space_id":"\#($0)""# } ?? ""
+            let json = """
+            {"machine_id":"m","session_id":"\(id)","title":"\(id)","cwd":"/code/\(space)","status":"working","state":"working",
+             "space_kind":"orca","space_id":"\(space)","space_name":"\(space)"\(parentField)}
+            """
+            do { return try JSON.decoder.decode(Session.self, from: Data(json.utf8)) }
+            catch { fatalError("bad fixture: \(error)") }
+        }
+        let tree = RepoTree.build([orca("p", space: "main"), orca("c", space: "child", parent: "main")], machines: [])
+        let main = tree[0].repos[0].worktrees[0]
+        #expect(rows(.repo, folded: [main.childrenFoldID]).repos(tree, byHost: false).map(\.sessionID) == ["p"])
+        #expect(rows(.repo).repos(tree, byHost: false).map(\.sessionID) == ["p", "c"])
+        #expect(rows(.repo, folded: [main.id]).repos(tree, byHost: false).isEmpty, "a folded working tree hides its children too")
+    }
+
     @Test func stepGoesToTheNeighbourAndStopsAtTheEnds() {
         let keys = ["a", "b", "c"].map { session($0, "working").key }
         #expect(AgentListRows.step(keys, from: keys[1], by: 1) == keys[2])

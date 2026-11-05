@@ -63,11 +63,14 @@ struct AgentListRows {
     /// A repository with nothing going on: in 空闲的仓库 (`ChatsView.isQuiet`).
     func isQuiet(_ r: RepoTree.Repo) -> Bool { all && r.sessions.allSatisfy { !order.stays($0) } }
 
+    /// A working tree's agents, then its nested spaces' while its「N 个子项」is open (`ChatsView.childWorktreeRows`).
     private func worktree(_ w: RepoTree.Worktree) -> [Session] {
-        let quiet = all && w.sessions.allSatisfy { !order.stays($0) }
+        let quiet = all && w.allSessions.allSatisfy { !order.stays($0) }
         let open = searching || (quiet ? expandedQuiet.contains(w.id) : !isFolded(w.id))
         guard open else { return [] }
-        return quiet ? entryRows(TabPanes.entries(order.ordered(w.sessions))) : agentRows(w.sessions, key: w.id)
+        let own = quiet ? entryRows(TabPanes.entries(order.ordered(w.sessions))) : agentRows(w.sessions, key: w.id)
+        guard !w.children.isEmpty, !folded(w.childrenFoldID) else { return own }
+        return own + w.children.flatMap(worktree)
     }
 
     /// 按状态: a section per rank, each foldable (已看 starts folded).

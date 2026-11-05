@@ -91,6 +91,8 @@ extension Theme {
         static let save = "square.and.arrow.down"
         static let down = "arrow.down"
         static let gitBranch = "arrow.triangle.branch"
+        /// The spaces a host nests under another (Orca's child worktrees,「N 个子项」, #3075).
+        static let childSpaces = "square.3.layers.3d.down.right"
         /// 分支到新聊天: a new conversation from a reply (#2137).
         static let forkChat = "arrow.branch"
         /// 回退到这里: back to before one of your messages in a Claude session (#2915).
@@ -366,17 +368,7 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video's thumbnail: it plays elsewhere (the chat app).
-        static let playMedia = "play.circle.fill"
-        /// Send someone a message.
-        static let message = "bubble.left.fill"
-        static let credentials = "key"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
-        /// Feishu [removed] words: encoded for the eye, not encrypted.
-        static let braveClimb = "shield"
-        static let memory = "brain"
-        /// Search (a list's, the sidebar's).
+        /// A video''s, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"
