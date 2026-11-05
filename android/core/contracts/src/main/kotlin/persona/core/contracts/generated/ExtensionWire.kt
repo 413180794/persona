@@ -746,6 +746,10 @@ data class ExtensionHubInfo(
     @SerialName("extension_points") val extensionPoints: Map<String, Int> = emptyMap(),
     val role: String? = null,
     val timezone: String? = null,
+    /**
+     * The user's language (zh-Hans, en, ja; see docs/i18n.md); empty means zh-Hans.
+     */
+    val locale: String? = null,
     val capabilities: List<String>? = null,
     /**
      * The hub's API on this machine, for the token below.
@@ -2114,17 +2118,7 @@ data class ExtensionMessagingReaction(
 )
 
 /**
- * A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
- */
-@Serializable
-data class ExtensionMessagingDecoration(
-    val text: String = "",
-    val icon: String? = null,
-    val tone: String? = null,
-)
-
-/**
- * An action of the extension's on a message, in its long-press menu: POST messages/{id}/actions/{id}.
+ * A small line under a message''s on a message, in its long-press menu: POST messages/{id}/actions/{id}.
  */
 @Serializable
 data class ExtensionMessagingAction(

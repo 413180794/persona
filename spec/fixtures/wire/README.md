@@ -16,12 +16,11 @@
 | [interactions.json](interactions.json) | GET `/api/v1/interactions`；WS `interaction`、`interaction_resolved` | `proto.Interaction` 使用实际列表或信封结构；屏幕经 `ParseDialog`、`SecretPrompt` 处理 |
 | [fleet.json](fleet.json) | GET `/api/v1/fleet`；WS `fleet` | 调用 `buildFleet`，再使用实际快照或信封结构 |
 | [inbox.json](inbox.json) | GET `/api/v1/inbox` | `InboxItem.listed` 清理列表中的内部字段，再经 `writeJSON` |
-| [lark.json](lark.json) | GET `/api/v1/lark/conversations/{id}/messages` | 本地假上游 → `Client.Messages` → normalize / rewriteMedia → hub 路由 |
 | [feed.json](feed.json) | GET `/api/v1/assistant/conversations/{id}/feed` | `answeredBody` 由 `answeredItems` 等生成，再经 `writeJSON` |
 | [errors.json](errors.json) | 未鉴权请求的 401；发送及屏幕操作拒绝的 409 | 调用 `Hub.auth`、`callErr`，同时断言 HTTP 状态 |
 | [compatibility.json](compatibility.json) | 上述类型的旧格式、未知字段及异常类型 | 用 Go 编码器构造兼容性输入，交当前 iOS 解码；异常输入不代表 hub 正常输出 |
 
-`wireNode` 通过内存管道提供固定的 `session.items` RPC 响应；hub 仍执行真实的分页包装、图片处理和补发逻辑。飞书假上游仅监听测试启动的本地端口，结束后关闭。其余样本没有启动完整 hub、node、herdr 或访问数据库。
+`wireNode` 通过内存管道提供固定的 `session.items` RPC 响应；hub 仍执行真实的分页包装、图片处理和补发逻辑。所有样本都没有启动完整 hub、node、herdr，不监听端口，也不访问数据库。
 
 时间固定为 `2026-01-02T03:04:05Z`，零时间用 Go 原值；`hello.client_id` 是唯一在生产构造函数返回后替换的随机字段。标识、域名、路径、消息正文均为占位数据；示例核数、内存容量等也是编造输入，不代表实测结果。
 
@@ -40,15 +39,17 @@
 | 懒加载图片的 `data` 仍是空字符串，并携带尺寸和 lazy 标记，普通图片保留 base64。 | `proto.Image.Placeholder`、`WithoutImageData`；`apple/Shared/Models.swift`：`ImagePayload` | `items_all_kinds`、`items_inline_image`、`items_live_lazy`、`items_http_after` |
 | 后台任务通知仍是 notice，task 区分 shell、monitor 和 agent，退出码零值也可显式出现。 | `proto.TaskNote`；`apple/Shared/Models.swift`：`TaskNote` | `items_all_kinds`、`items_task_notifications` |
 | fold 保存被折叠条目的计数和终点，展开范围分页使用 more。 | `server/internal/transcript/fold.go`：`FoldWork`；`apple/Shared/Models.swift`：`Fold`；`APIClient.foldedWork` | `items_folded_work`、`items_fold_range` |
+| fold 的 tasks 保存折叠掉的任务快照及其原调用位置（source_item_id、source_tool_use_id、source_seq），旧 iOS 忽略这些新增字段。 | `server/internal/transcript/fold.go`：`FoldWork`；`proto.FoldTaskSnapshot`；`apple/Shared/Models.swift`：`Fold`；`docs/protocol.md`「折叠的工作」 | `items_folded_tasks` |
+| 轮次耗时是 `turn_duration` 条目，保留耗时来源和原生关联，实时下发沿用订阅 items 事件，不新增事件或顶层字段；旧客户端把它当未知 kind。 | `server/internal/transcript/transcript.go`：`ParseLine`；`proto.TurnDuration`；`Hub.itemsToSubscribers`；`apple/Shared/Models.swift`：`ItemKind.init`；`ServerEvent.decode` | `items_recorded_turn_duration`、`items_live_recorded_turn_duration` |
 | 实时事件的 from_seq 可以是零，空 items 也能推进 to_seq。 | `Hub.itemsToSubscribers`；`ServerEvent.decode`；`docs/protocol.md`「items 的连续性」 | `items_live_lazy`、`items_empty_advance` |
 | 最新页补发携带 has_more，接续补发不携带它，达到补发上限时最后一批带 more_after。 | `Hub.sendBacklog`；`ServerEvent.decode`；`docs/protocol.md`「WebSocket」 | `items_backlog_latest`、`items_backlog_catchup`、`items_backlog_capped` |
 | HTTP 增量页携带 history、from_seq、to_seq 和 more_after。 | `Hub.sessionItems`；`apple/Shared/APIClient.swift`：`NewerResponse` | `items_http_after` |
 | question、plan、permission、screen 分别携带相应载荷，question 支持单选和多选。 | `proto.Interaction`；`apple/Shared/Models.swift`：`Interaction`、`Question` | `interaction_question`、`interaction_plan`、`interaction_permission`、`interaction_screen`、`interactions_list` |
 | 屏幕对话框携带选项和 rev，密码提示使用 secret 且不记录密码输入。 | `server/internal/screen/dialog.go`：`ParseDialog`；`secret.go`：`SecretPrompt`；`apple/Shared/Models.swift`：`ScreenDialog`、`Interaction` | `interaction_screen`、`interaction_secret` |
+| elicitation 交互携带 MCP 服务名和 form（requested_schema）或 url 载荷，只发给声明 elicitation 能力的连接，旧 iOS 收不到。 | `server/internal/hub/http.go`：`Hub.broadcast`、`broadcastTo`；`proto.Elicitation`；`android/core/contracts/src/main/kotlin/persona/core/contracts/Elicitation.kt` | `interaction_elicitation_form`、`interaction_elicitation_url` |
 | interaction_resolved 按 id 撤回交互。 | `server/internal/hub/hub.go`：`resolve`；`ServerEvent.decode` | `interaction_resolved` |
 | Fleet 保留驼峰键名，时间使用 Unix 秒数字。 | `server/internal/hub/liveactivity.go`：`FleetState`、`buildFleet`；`apple/Shared/FleetState.swift` | `fleet_snapshot`、`fleet_event` |
 | 收件箱列表统一承载飞书和邮件，移除 context 等内部字段并保留草拟回复。 | `server/internal/assistant/inbox.go`：`InboxItem.listed`；`apple/Shared/InboxModels.swift`：`InboxItem` | `inbox_list` |
-| 飞书 parts 保留 refId 和任意 metadata 键名，媒体 URL 改写到 hub。 | #1571 起在接飞书的插件里（原来是 hub 的 lark.go 的 normalize、rewriteMedia）；`apple/Persona/Views/Inbox/Lark/LarkModels.swift`：`LarkPart` | `lark_message_parts` |
 | 回答记录保留一行摘要，`items` 成对保存完整问答并保留换行；旧记录没有 `items`。 | `server/internal/assistant/answered.go`：`answeredBody`、`answeredItems`；`apple/Shared/Tasks.swift`：`FeedItem` | `feed_answered_items` |
 | 401 保留字符串 error，409 的 code、delivered、draft、clearable 与 error 平铺。 | `Hub.auth`、`callErr`；`apple/Shared/APIClient.swift`：`APIError.fields(in:)`；`docs/protocol.md`「发消息」 | `unauthorized`、`conflict_input_draft`、`conflict_dialog_open`、`conflict_prompt_changed` |
 | 未知事件忽略，未知键忽略，旧 hello 缺 features 时返回空数组。 | `apple/Shared/LiveConnection.swift`：`ServerEvent.decode`、`Envelope` | `unknown_event_ignored`、`hello_unknown_field`、`hello_missing_features` |
@@ -84,7 +85,6 @@
 | `items_after` | `APIClient.NewerResponse` |
 | `items_range` | `APIClient.foldedWork` 中的 `Range` |
 | `fleet` | 用默认 `JSONDecoder` 解码 `FleetState`，与 ActivityKit 一致 |
-| `lark` | `APIClient.LarkMessages`，内部使用真实 `LarkMessage`、`LarkPart` |
 | `error` | `APIError.fields(in:)`，返回平铺的字符串字段 |
 | `health` | 与 `APIClient.health` 相同的 `ok: Bool` 解码；version、features 是额外的线上 JSON 字段断言 |
 

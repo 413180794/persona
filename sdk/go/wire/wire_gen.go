@@ -540,7 +540,9 @@ type HubInfo struct {
 	ExtensionPoints map[string]int `json:"extension_points"`
 	Role            string         `json:"role,omitempty"`
 	Timezone        string         `json:"timezone,omitempty"`
-	Capabilities    []string       `json:"capabilities,omitempty"`
+	// The user's language (zh-Hans, en, ja; see docs/i18n.md); empty means zh-Hans.
+	Locale       string   `json:"locale,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
 	// The hub's API on this machine, for the token below.
 	URL string `json:"url,omitempty"`
 	// A token of the scopes it was granted (permissions.hub): new each start.
@@ -1463,12 +1465,10 @@ type MessagingReaction struct {
 	Key   string   `json:"key"`
 	Count int      `json:"count"`
 	Mine  bool     `json:"mine,omitempty"`
-	Users []string `json:"users,omitempty"``json:"text"`
-	Icon string `json:"icon,omitempty"`
-	Tone string `json:"tone,omitempty"`
+	Users []string `json:"users,omitempty"`
 }
 
-// MessagingAction: an action of the extension's on a message, in its long-press menu: POST
+// MessagingDecoration: A small line under a message''s on a message, in its long-press menu: POST
 // messages/{id}/actions/{id}.
 type MessagingAction struct {
 	ID          string `json:"id"`

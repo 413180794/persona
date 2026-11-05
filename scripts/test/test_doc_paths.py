@@ -7,6 +7,9 @@ top-level docs and in the tracked Markdown under the module directories (MODULE_
 records under docs/archive/ and the redesign drafts keep the paths of their own time and are not checked; neither are the
 rename docs, which name the retired paths on purpose.
 
+Relative Markdown link targets in the same docs, [text](path) and [text](path#anchor), must exist too; only the file is
+checked, not the anchor.
+
 Every top-level doc must also be listed in CLAUDE.md's 文档索引, the place Agents look for the design docs.
 """
 from pathlib import Path
@@ -14,6 +17,7 @@ import re
 import subprocess
 import tempfile
 import unittest
+from urllib.parse import unquote
 from unittest.mock import patch
 
 
@@ -77,6 +81,13 @@ ELSEWHERE = {
 
 QUOTED = re.compile(r"`([^`\s]+)`")
 
+# A Markdown link target: [text](target) or [text](target "title"); <target> is unwrapped below.
+# A bare target may hold one level of balanced parentheses, as in foo(1).md.
+LINK = re.compile(r"\]\(\s*(<[^>]*>|(?:[^()\s]|\([^()\s]*\))+)(?:\s+\"[^\"]*\")?\s*\)")
+FENCE = re.compile(r"^\s*(```|~~~)")
+INLINE_CODE = re.compile(r"(`+).*?\1")
+SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+
 # Top-level docs that stay out of CLAUDE.md's 文档索引: a redirect left by a rename.
 UNINDEXED = {"docs/plugins.md"}
 
@@ -105,6 +116,38 @@ def quoted_paths(line):
         if any(mark in path for mark in ("<", ">", "*", "{", "$", "…", "...")) or path.endswith(("-", "_")):
             continue
         yield path
+
+
+def link_targets(text):
+    """Yield (line number, path) for each relative link target outside code blocks and inline code."""
+    fence = None
+    for number, line in enumerate(text.splitlines(), 1):
+        mark = FENCE.match(line)
+        if mark:
+            if fence is None:
+                fence = mark.group(1)
+            elif mark.group(1) == fence:
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        for target in LINK.findall(INLINE_CODE.sub("", line)):
+            target = target.strip("<>")
+            if not target or target.startswith("#") or SCHEME.match(target):  # anchors, URLs, mailto:
+                continue
+            path = unquote(target.split("#", 1)[0].split("?", 1)[0])
+            if path:
+                yield number, path
+
+
+def missing_links(doc):
+    """Return doc:line: target for every relative link whose file is not on disk."""
+    found = []
+    for number, path in link_targets(doc.read_text(errors="ignore")):
+        resolved = ROOT / path.lstrip("/") if path.startswith("/") else doc.parent / path
+        if not resolved.exists():
+            found.append(f"{doc.relative_to(ROOT)}:{number}: {path}")
+    return found
 
 
 def generated_screenshot(path):
@@ -198,6 +241,34 @@ class DocPathTests(unittest.TestCase):
                     continue
                 missing += [f"{doc.relative_to(ROOT)}:{number}: {path}" for path in quoted_paths(line) if not exists(path)]
         self.assertEqual([], missing, "docs quote paths that are not in the repository; update them to where the file is now")
+
+    def test_markdown_link_targets_exist(self):
+        missing = [entry for doc in doc_files() for entry in missing_links(doc)]
+        self.assertEqual([], missing, "docs link to files that are not in the repository; update the link targets")
+
+    def test_missing_link_targets_are_reported(self):
+        with tempfile.TemporaryDirectory(prefix="doc-links-") as directory:
+            root = Path(directory)
+            with patch(__name__ + ".ROOT", root):
+                (root / "spec/fixtures/wire").mkdir(parents=True)
+                (root / "spec/fixtures/wire/inbox.json").write_text("{}\n")
+                (root / "docs").mkdir()
+                (root / "docs/protocol.md").write_text("# protocol\n")
+                (root / "spec/fixtures/wire/foo(1).md").write_text("# foo\n")
+                doc = root / "spec/fixtures/wire/README.md"
+                doc.write_text("\n".join([
+                    "| [inbox.json](inbox.json) | [lark.json](lark.json) |",
+                    "[协议](../../../docs/protocol.md#hello) [root](/docs/protocol.md) [gone](../../../docs/gone.md \"t\")",
+                    "[web](https://example.com/x.md) [mail](mailto:me@example.com) [top](#规则与用例)",
+                    "`[code](inline-missing.md)` and <a href=x>",
+                    "[paren](foo(1).md) [paren gone](bar(2).md)",
+                    "```md",
+                    "[fenced](fenced-missing.md)",
+                    "```",
+                ]) + "\n")
+                self.assertEqual(["spec/fixtures/wire/README.md:1: lark.json",
+                                  "spec/fixtures/wire/README.md:2: ../../../docs/gone.md",
+                                  "spec/fixtures/wire/README.md:5: bar(2).md"], missing_links(doc))
 
     def test_top_level_docs_are_in_the_index(self):
         index = (ROOT / "CLAUDE.md").read_text().split("\n## 文档索引\n", 1)[1]

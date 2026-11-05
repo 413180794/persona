@@ -501,6 +501,8 @@ export interface HubInfo {
   extension_points: Record<string, number>;
   role?: HubRole;
   timezone?: string;
+  /** The user's language (zh-Hans, en, ja; see docs/i18n.md); empty means zh-Hans. */
+  locale?: string;
   capabilities?: string[];
   /** The hub's API on this machine, for the token below. */
   url?: string;
@@ -1502,7 +1504,16 @@ export interface MessagingReaction {
 }
 
 /**
- * A small line under a message''s on a message, in its long-press menu: POST messages/{id}/actions/{id}.
+ * A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
+ */
+export interface MessagingDecoration {
+  text: string;
+  icon?: string;
+  tone?: Tone;
+}
+
+/**
+ * An action of the extension's on a message, in its long-press menu: POST messages/{id}/actions/{id}.
  */
 export interface MessagingAction {
   id: string;

@@ -1530,6 +1530,8 @@ nonisolated struct ExtensionHubInfo: Codable, Hashable, Sendable {
     var extensionPoints: [String: Int]
     var role: String?
     var timezone: String?
+    /// The user's language (zh-Hans, en, ja; see docs/i18n.md); empty means zh-Hans.
+    var locale: String?
     var capabilities: [String]?
     /// The hub's API on this machine, for the token below.
     var url: String?
@@ -1537,11 +1539,12 @@ nonisolated struct ExtensionHubInfo: Codable, Hashable, Sendable {
     var token: String?
     var scopes: [String]?
 
-    init(build: Int64 = 0, extensionPoints: [String: Int] = [:], role: String? = nil, timezone: String? = nil, capabilities: [String]? = nil, url: String? = nil, token: String? = nil, scopes: [String]? = nil) {
+    init(build: Int64 = 0, extensionPoints: [String: Int] = [:], role: String? = nil, timezone: String? = nil, locale: String? = nil, capabilities: [String]? = nil, url: String? = nil, token: String? = nil, scopes: [String]? = nil) {
         self.build = build
         self.extensionPoints = extensionPoints
         self.role = role
         self.timezone = timezone
+        self.locale = locale
         self.capabilities = capabilities
         self.url = url
         self.token = token
@@ -1553,6 +1556,7 @@ nonisolated struct ExtensionHubInfo: Codable, Hashable, Sendable {
         case extensionPoints = "extension_points"
         case role
         case timezone
+        case locale
         case capabilities
         case url
         case token
@@ -1565,6 +1569,7 @@ nonisolated struct ExtensionHubInfo: Codable, Hashable, Sendable {
         self.extensionPoints = (try? c.decodeIfPresent([String: Int].self, forKey: .extensionPoints)) ?? [:]
         self.role = try? c.decodeIfPresent(String.self, forKey: .role)
         self.timezone = try? c.decodeIfPresent(String.self, forKey: .timezone)
+        self.locale = try? c.decodeIfPresent(String.self, forKey: .locale)
         self.capabilities = try? c.decodeIfPresent([String].self, forKey: .capabilities)
         self.url = try? c.decodeIfPresent(String.self, forKey: .url)
         self.token = try? c.decodeIfPresent(String.self, forKey: .token)
@@ -4348,320 +4353,7 @@ nonisolated struct ExtensionMessagingAccounts: Codable, Hashable, Sendable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.accounts = (try? c.decodeIfPresent([ExtensionMessagingAccount].self, forKey: .accounts)) ?? []
-        self.default = try? c.decodeIfPresent(String.self, forKey: .`default`)
-    }
-}
-
-/// Values of MessagingConversationKind.
-nonisolated enum ExtensionMessagingConversationKind {
-    static let direct = "direct"
-    static let group = "group"
-    static let topicGroup = "topic_group"
-    static let bot = "bot"
-    static let all = ["direct", "group", "topic_group", "bot"]
-}
-
-nonisolated struct ExtensionMessagingConversation: Codable, Hashable, Sendable {
-    var id: String
-    var name: String
-    var avatar: String?
-    var kind: String
-    var unread: Int
-    var markedUnread: Bool?
-    var mentioned: Bool?
-    var muted: Bool?
-    var pinned: Bool?
-    var preview: String
-    var previewSender: String?
-    var previewMine: Bool?
-    var updatedAt: String?
-    var readPosition: String?
-    var mentionPosition: String?
-
-    init(id: String = "", name: String = "", avatar: String? = nil, kind: String = "", unread: Int = 0, markedUnread: Bool? = nil, mentioned: Bool? = nil, muted: Bool? = nil, pinned: Bool? = nil, preview: String = "", previewSender: String? = nil, previewMine: Bool? = nil, updatedAt: String? = nil, readPosition: String? = nil, mentionPosition: String? = nil) {
-        self.id = id
-        self.name = name
-        self.avatar = avatar
-        self.kind = kind
-        self.unread = unread
-        self.markedUnread = markedUnread
-        self.mentioned = mentioned
-        self.muted = muted
-        self.pinned = pinned
-        self.preview = preview
-        self.previewSender = previewSender
-        self.previewMine = previewMine
-        self.updatedAt = updatedAt
-        self.readPosition = readPosition
-        self.mentionPosition = mentionPosition
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case avatar
-        case kind
-        case unread
-        case markedUnread = "marked_unread"
-        case mentioned
-        case muted
-        case pinned
-        case preview
-        case previewSender = "preview_sender"
-        case previewMine = "preview_mine"
-        case updatedAt = "updated_at"
-        case readPosition = "read_position"
-        case mentionPosition = "mention_position"
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
-        self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
-        self.avatar = try? c.decodeIfPresent(String.self, forKey: .avatar)
-        self.kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? ""
-        self.unread = (try? c.decodeIfPresent(Int.self, forKey: .unread)) ?? 0
-        self.markedUnread = try? c.decodeIfPresent(Bool.self, forKey: .markedUnread)
-        self.mentioned = try? c.decodeIfPresent(Bool.self, forKey: .mentioned)
-        self.muted = try? c.decodeIfPresent(Bool.self, forKey: .muted)
-        self.pinned = try? c.decodeIfPresent(Bool.self, forKey: .pinned)
-        self.preview = (try? c.decodeIfPresent(String.self, forKey: .preview)) ?? ""
-        self.previewSender = try? c.decodeIfPresent(String.self, forKey: .previewSender)
-        self.previewMine = try? c.decodeIfPresent(Bool.self, forKey: .previewMine)
-        self.updatedAt = try? c.decodeIfPresent(String.self, forKey: .updatedAt)
-        self.readPosition = try? c.decodeIfPresent(String.self, forKey: .readPosition)
-        self.mentionPosition = try? c.decodeIfPresent(String.self, forKey: .mentionPosition)
-    }
-}
-
-nonisolated struct ExtensionMessagingConversationPage: Codable, Hashable, Sendable {
-    var account: String?
-    var conversations: [ExtensionMessagingConversation]
-    var nextCursor: String?
-
-    init(account: String? = nil, conversations: [ExtensionMessagingConversation] = [], nextCursor: String? = nil) {
-        self.account = account
-        self.conversations = conversations
-        self.nextCursor = nextCursor
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case account
-        case conversations
-        case nextCursor = "next_cursor"
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.account = try? c.decodeIfPresent(String.self, forKey: .account)
-        self.conversations = (try? c.decodeIfPresent([ExtensionMessagingConversation].self, forKey: .conversations)) ?? []
-        self.nextCursor = try? c.decodeIfPresent(String.self, forKey: .nextCursor)
-    }
-}
-
-nonisolated struct ExtensionMessagingPerson: Codable, Hashable, Sendable {
-    var id: String?
-    var name: String
-    var avatar: String?
-    var kind: String?
-
-    init(id: String? = nil, name: String = "", avatar: String? = nil, kind: String? = nil) {
-        self.id = id
-        self.name = name
-        self.avatar = avatar
-        self.kind = kind
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case avatar
-        case kind
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = try? c.decodeIfPresent(String.self, forKey: .id)
-        self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
-        self.avatar = try? c.decodeIfPresent(String.self, forKey: .avatar)
-        self.kind = try? c.decodeIfPresent(String.self, forKey: .kind)
-    }
-}
-
-nonisolated struct ExtensionMessagingMembers: Codable, Hashable, Sendable {
-    var members: [ExtensionMessagingPerson]
-
-    init(members: [ExtensionMessagingPerson] = []) {
-        self.members = members
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case members
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.members = (try? c.decodeIfPresent([ExtensionMessagingPerson].self, forKey: .members)) ?? []
-    }
-}
-
-nonisolated struct ExtensionMessagingReplyTo: Codable, Hashable, Sendable {
-    var id: String
-    var senderName: String?
-    var summary: String
-    var recalled: Bool?
-
-    init(id: String = "", senderName: String? = nil, summary: String = "", recalled: Bool? = nil) {
-        self.id = id
-        self.senderName = senderName
-        self.summary = summary
-        self.recalled = recalled
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case senderName = "sender_name"
-        case summary
-        case recalled
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
-        self.senderName = try? c.decodeIfPresent(String.self, forKey: .senderName)
-        self.summary = (try? c.decodeIfPresent(String.self, forKey: .summary)) ?? ""
-        self.recalled = try? c.decodeIfPresent(Bool.self, forKey: .recalled)
-    }
-}
-
-nonisolated struct ExtensionMessagingThread: Codable, Hashable, Sendable {
-    var count: Int
-    var latestAt: String?
-
-    init(count: Int = 0, latestAt: String? = nil) {
-        self.count = count
-        self.latestAt = latestAt
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case count
-        case latestAt = "latest_at"
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.count = (try? c.decodeIfPresent(Int.self, forKey: .count)) ?? 0
-        self.latestAt = try? c.decodeIfPresent(String.self, forKey: .latestAt)
-    }
-}
-
-nonisolated struct ExtensionMessagingReaction: Codable, Hashable, Sendable {
-    var key: String
-    var count: Int
-    var mine: Bool?
-    var users: [String]?
-
-    init(key: String = "", count: Int = 0, mine: Bool? = nil, users: [String]? = nil) {
-        self.key = key
-        self.count = count
-        self.mine = mine
-        self.users = users
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case key
-        case count
-        case mine
-        case users
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.key = (try? c.decodeIfPresent(String.self, forKey: .key)) ?? ""
-        self.count = (try? c.decodeIfPresent(Int.self, forKey: .count)) ?? 0
-        self.mine = try? c.decodeIfPresent(Bool.self, forKey: .mine)
-        self.users = try? c.decodeIfPresent([String].self, forKey: .users)
-    }
-}
-
-/// A small line under a message''s on a message, in its long-press menu: POST messages/{id}/actions/{id}.
-nonisolated struct ExtensionMessagingAction: Codable, Hashable, Sendable {
-    var id: String
-    var title: String
-    var icon: String?
-    var destructive: Bool?
-    var confirm: String?
-
-    init(id: String = "", title: String = "", icon: String? = nil, destructive: Bool? = nil, confirm: String? = nil) {
-        self.id = id
-        self.title = title
-        self.icon = icon
-        self.destructive = destructive
-        self.confirm = confirm
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case title
-        case icon
-        case destructive
-        case confirm
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
-        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
-        self.icon = try? c.decodeIfPresent(String.self, forKey: .icon)
-        self.destructive = try? c.decodeIfPresent(Bool.self, forKey: .destructive)
-        self.confirm = try? c.decodeIfPresent(String.self, forKey: .confirm)
-    }
-}
-
-nonisolated struct ExtensionMessagingEditVersion: Codable, Hashable, Sendable {
-    var editedAt: String?
-    var text: String
-    var parts: [ExtensionMessagingPart]?
-
-    init(editedAt: String? = nil, text: String = "", parts: [ExtensionMessagingPart]? = nil) {
-        self.editedAt = editedAt
-        self.text = text
-        self.parts = parts
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case editedAt = "edited_at"
-        case text
-        case parts
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.editedAt = try? c.decodeIfPresent(String.self, forKey: .editedAt)
-        self.text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
-        self.parts = try? c.decodeIfPresent([ExtensionMessagingPart].self, forKey: .parts)
-    }
-}
-
-nonisolated struct ExtensionMessagingMessage: Codable, Hashable, Sendable {
-    var id: String
-    var position: String
-    var createdAt: String?
-    var sender: ExtensionMessagingPerson
-    var mine: Bool
-    var clientId: String?
-    var state: String?
-    var parts: [ExtensionMessagingPart]
-    var text: String
-    var replyTo: ExtensionMessagingReplyTo?
-    var thread: ExtensionMessagingThread?
-    var reactions: [ExtensionMessagingReaction]?
-    var edited: Bool?
-    var editHistory: [ExtensionMessagingEditVersion]?
-    var recalled: Bool?
-    var decorations: [ExtensionMessagingDecoration]?
-    /// The body must not be written to disk (an opened sealed message): caches keep private_text.
-    var `private`: Bool?
+        self.default = try? c.decodeIfPresent(String.self, forKey: .`default``private`: Bool?
     var privateText: String?
     var actions: [ExtensionMessagingAction]?
     var canPin: Bool?

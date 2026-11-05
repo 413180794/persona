@@ -1537,7 +1537,7 @@ hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pa
 （或 hub 看到不对就停掉它）；`id`、`version` 必须和清单一致；`contributes` 是清单的子集，和清单不一致时 hub 记日志、以清单为准。
 
 基础方法：`initialize`、`ping`（`initialize` 之后，回 `{}`）、`manifest`（`initialize` 之前也能调，回 `persona-extension.json`；跑在别处的扩展必须有，hub 从包里起的可以没有）。
-`initialize` 之前调别的回 `not_initialized`。hub 关掉 stdin（或断开 socket）时程序退出。
+`initialize` 之前调别的回 `not_initialized`；紧跟在 `initialize` 后面、没等它应答就发来的调用，两个 SDK 都等它做完再答。hub 关掉 stdin（或断开 socket）时程序退出。
 
 **按扩展点分命名空间**：其余方法是 `<命名空间>.<方法>`，参数是对象，带 `contribution`（贡献的 id；只有一项时可以省）。
 程序调 hub 的方法和发给 hub 的事件也一样（`connector.secrets.load`、事件 `connector.changed`）。
