@@ -271,7 +271,7 @@ struct ExtensionSearchRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
-            TextField(search.placeholder ?? "搜索", text: Binding(get: { model.query }, set: { model.query = $0 }))
+            TextField(search.placeholder ?? String(localized: "搜索"), text: Binding(get: { model.query }, set: { model.query = $0 }))
                 .font(Theme.Font.body).textInputAutocapitalization(.never).autocorrectionDisabled()
                 .onSubmit { run() }
             Button { run() } label: { Image(systemName: Theme.Icon.search) }

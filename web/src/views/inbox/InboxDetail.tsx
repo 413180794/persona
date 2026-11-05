@@ -12,6 +12,7 @@ import { Icon } from "../../ui/icons";
 import { ConnectorBody, openSystem } from "./ConnectorThread";
 import { DocBody, MailBody, MomentBody } from "./InboxBodies";
 import { DraftDialog, HandOffDialog } from "./InboxDialogs";
+import { markFromRow } from "./InboxList";
 import { AgentWorking, ItemAvatar, Spark, Tag } from "./InboxParts";
 import { InboxExtensionBody } from "./InboxExtensionBody";
 import { InboxLine } from "./InboxLine";
@@ -70,7 +71,8 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
                 tone="secondary"
                 icon="check"
                 onClick={() => {
-                  void setDone(item, true);
+                  // the page leaves the item at once, so say so with 撤销 on any screen (#4162), as a row does on touch
+                  void markFromRow(item, true, true);
                   navigate({ name: "inbox" });
                 }}
               >

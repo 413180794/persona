@@ -87,8 +87,8 @@ struct InteractiveAssistantViewCard: View {
         .card(padding: Theme.Space.m)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("assistant-view-card")
-        .accessibilityValue(model.pending != nil ? "等待确认" : model.record != nil ? "已选择" : "可以操作")
-        .alert(model.pending?.action.confirm ?? (model.changed ? "卡片已更新，按新内容提交？" : "确认卡片操作"), isPresented: Binding(
+        .accessibilityValue(model.pending != nil ? String(localized: "等待确认") : model.record != nil ? String(localized: "已选择") : String(localized: "可以操作"))
+        .alert(model.pending?.action.confirm ?? (model.changed ? String(localized: "卡片已更新，按新内容提交？") : String(localized: "确认卡片操作")), isPresented: Binding(
             get: { model.pending != nil }, set: { if !$0 { model.decline() } }), presenting: model.pending) { _ in
                 Button {
                     guard let selection = model.claimConfirmation() else { return }
@@ -130,27 +130,27 @@ struct InteractiveAssistantViewCard: View {
             openedFile = FileRef(group: location.scope.group, machineID: parts[0], path: parts[1])
         case "kb" where parts.count >= 2:
             guard KBKind(rawValue: parts[0]) != nil else {
-                app.toast = Toast("不能打开这个知识库路径", style: .error)
+                app.toast = Toast(String(localized: "不能打开这个知识库路径"), style: .error)
                 return
             }
             app.selectHub(location.scope.group)
             let id = parts.dropFirst().joined(separator: "/")
             openedKnowledge = KBEntry(kind: parts[0], id: id, name: id, relevance: 0)
-        default: app.toast = Toast("不能打开这个卡片目标", style: .error)
+        default: app.toast = Toast(String(localized: "不能打开这个卡片目标"), style: .error)
         }
     }
     private var confirmationText: String {
         guard let selection = model.pending else { return "" }
         var text = selection.action.reply ?? selection.action.open ?? ""
-        for (name, value) in selection.values.sorted(by: { $0.key < $1.key }) { text += "\n\(name)：\(value)" }
+        for (name, value) in selection.values.sorted(by: { $0.key < $1.key }) { text += String(localized: "\n\(name)：\(value)") }
         return text
     }
     private func status(_ record: ExtensionViewAction) -> String {
         switch record.status {
-        case "pending": "已选择 · 等待发送"
-        case "sent": "已选择 · 已发送"
-        case "failed": "已选择 · 发送失败"
-        default: "已选择 · 正在同步状态"
+        case "pending": String(localized: "已选择 · 等待发送")
+        case "sent": String(localized: "已选择 · 已发送")
+        case "failed": String(localized: "已选择 · 发送失败")
+        default: String(localized: "已选择 · 正在同步状态")
         }
     }
 }

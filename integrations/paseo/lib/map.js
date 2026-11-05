@@ -503,9 +503,18 @@ export function interactionOf(sessionId, request) {
   const ix = {
     ...base, id: interactionId(RUNTIME, sessionId, 'permission', r.id), kind: 'permission',
     tool_name: call.name, tool_input: call.input,
-    summary: snippet(r.title || r.description || summaryOf(call.name, call.input) || call.name),
   }
-  if (r.description && r.title) ix.reason = snippet(r.description)
+  // The line the owner decides on is what will run (the command, the file, the URL); Paseo's title ("Run a command")
+  // and description only say why, so they go under reason, and stand in as the summary when the input names nothing.
+  const what = summaryOf(call.name, call.input)
+  const said = [r.title, r.description].filter((x) => typeof x === 'string' && x.trim())
+  if (what && what !== call.name) {
+    ix.summary = what
+    if (said.length) ix.reason = snippet(said.at(-1))
+  } else {
+    ix.summary = snippet(said[0] || call.name || '')
+    if (said.length > 1) ix.reason = snippet(said[1])
+  }
   const always = alwaysLabel(r.suggestions)
   if (always) ix.always_label = always
   return ix

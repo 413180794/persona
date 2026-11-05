@@ -80,7 +80,8 @@ internal object MetricFormat {
         var v = value?.toDouble()?.takeIf { it.isFinite() && it >= 0 } ?: return "—"
         val units = listOf("B", "KB", "MB", "GB", "TB")
         var unit = 0
-        while (v >= 1024 && unit < units.lastIndex) { v /= 1024; unit++ }
+        // Pick the unit after rounding to the one decimal shown, so 1023.96 KB reads 1.0 MB, not 1,024.0 KB (#4260).
+        while (Math.round(v * 10) >= 10240 && unit < units.lastIndex) { v /= 1024; unit++ }
         return "${number(v, locale)} ${units[unit]}"
     }
     fun rate(value: Double?, locale: Locale): String = if (value == null) "—" else "${bytes(value, locale)}/s"

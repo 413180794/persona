@@ -71,6 +71,8 @@ internal fun AgentsScreen(
     val feedback = persona.core.designsystem.LocalAppFeedback.current
     var menu by remember { mutableStateOf(false) }
     var newAgent by rememberSaveable { mutableStateOf(false) }
+    var addComputerHelp by rememberSaveable { mutableStateOf(false) }
+    if (addComputerHelp) ReadinessHelpDialog(ReadinessHelp.AddComputer, null, onDismiss = { addComputerHelp = false }, onAction = {})
     var historyMachine by rememberSaveable { mutableStateOf<String?>(null) }
     var historySession by rememberSaveable { mutableStateOf<String?>(null) }
     val creation = creationModel?.state?.collectAsStateWithLifecycle()?.value
@@ -99,9 +101,10 @@ internal fun AgentsScreen(
         }
     }
     val failure by model.failure.collectAsStateWithLifecycle()
+    val failureResources = agentResources()
     LaunchedEffect(failure) {
         failure?.let {
-            if (feedback?.failure(it) != true) snackbar.showSnackbar(persona.core.designsystem.operationFeedback(it).message)
+            if (feedback?.failure(it) != true) snackbar.showSnackbar(persona.core.designsystem.operationFeedback(it).text.resolve(failureResources))
             model.clearFailure()
         }
     }
@@ -303,6 +306,11 @@ internal fun AgentsScreen(
                     page.allCount == 0 && page.settings.query.isNotEmpty() -> JEmptyState(
                         stringResource(R.string.agents_empty_search_title, page.settings.query),
                         stringResource(R.string.agents_empty_search_hint), icon = PhIcons.MagnifyingGlass)
+                    // No computer at all: no session can start anywhere, so the step is adding one (docs/onboarding.md 4.5).
+                    page.allCount == 0 && page.machines.isEmpty() && page.settings.machineFilter.isEmpty() -> JEmptyState(
+                        stringResource(R.string.agents_empty_no_computer_title), stringResource(R.string.agents_empty_no_computer_hint),
+                        icon = PhIcons.Desktop,
+                        action = { JButton(stringResource(ReadinessActionId.AddComputer.label), { addComputerHelp = true }) })
                     page.allCount == 0 -> JEmptyState(
                         stringResource(if (page.settings.machineFilter.isEmpty()) R.string.agents_empty_first_title else R.string.agents_empty_machine_title),
                         stringResource(R.string.agents_empty_first_hint), icon = PhIcons.Robot,

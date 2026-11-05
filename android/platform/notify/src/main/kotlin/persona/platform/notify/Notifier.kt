@@ -260,6 +260,18 @@ class Notifier @Inject constructor(
             .forEach { manager.cancel(it.tag, it.id) }
     }
 
+    /** Tags of the 做完了 notifications showing now, with when each was posted (#4088). Empty when the system cannot be asked. */
+    fun showingDone(): Map<String, Long> = runCatching {
+        context.getSystemService(NotificationManager::class.java).activeNotifications
+            .filter { it.id == EVENT_ID && it.tag?.startsWith(StaleDoneNotifications.DONE_PREFIX) == true }
+            .associate { it.tag to it.postTime }
+    }.getOrDefault(emptyMap())
+
+    /** Cancels a 做完了 notification only if the one showing was posted before [before]: a fresh one under the same tag stays. */
+    fun retractDone(tag: String, before: Long) {
+        if (showingDone()[tag]?.let { it < before } == true) manager.cancel(tag, EVENT_ID)
+    }
+
     /** Takes away a session's 做完了 / assistant notifications once its result has been seen (#3567). */
     fun retractSeen(session: SessionKey) = NotificationPolicy.resultTags(session).forEach { manager.cancel(it, EVENT_ID) }
 

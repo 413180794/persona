@@ -47,6 +47,7 @@
   "look": "表示",
   "receipt_restarting": "「{title}」を再起動中",
   "receipt_restarted": "「{title}」を再試行して開始しました",
+  "receipt_failed_above": "「{title}」を開始できませんでした（上のカードを参照）",
   "outcome_failed": "{title}を開始できませんでした",
   "outcome_done": "{title}が完了",
   "reminder_added": "リマインダーを追加しました",

@@ -402,7 +402,7 @@
     <string name="agents_empty_search_hint">スペース、タブ、セッションのタイトルと内容を検索できます。別の言葉で試してください。</string>
     <string name="agents_empty_first_title">最初の開発セッションを始めましょう</string>
     <string name="agents_empty_machine_title">このコンピューターにはセッションがありません</string>
-    <string name="agents_empty_first_hint">どのコンピューターでも herdr で Claude を起動すると、ここでリアルタイムに見て、いつでも引き継げます。</string>
+    <string name="agents_empty_first_hint">どのパソコンでもセッションを始めると、ここでリアルタイムに見て、いつでも引き継げます。</string>
     <string name="agents_empty_filter_title">%1$sのセッションはありません</string>
     <string name="agents_empty_filter_hint">各コンピューターの Agent に動きがあるとここに表示されます。</string>
     <string name="agents_empty_filter_machine_hint">このコンピューターの Agent に動きがあるとここに表示されます。</string>
@@ -420,4 +420,6 @@
     <string name="agents_herdr_why_old_node">このコンピューターの Persona が古く herdr を起動できません。更新してからもう一度試してください。</string>
     <string name="agents_herdr_why_offline">このコンピューターは現在オフラインです</string>
     <string name="agents_herdr_why_timeout">herdr の起動に時間がかかっています。しばらくしてからもう一度確認してください</string>
+    <string name="agents_empty_no_computer_title">まだパソコンがありません</string>
+    <string name="agents_empty_no_computer_hint">1 台追加すると、Persona がそのパソコンで作業できます。</string>
 </resources>

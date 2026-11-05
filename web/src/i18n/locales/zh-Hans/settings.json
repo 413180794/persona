@@ -8,8 +8,6 @@
   "appearance": "外观",
   "reply_motion": "回复动效",
   "reply_motion_hint": "新到的回复逐词淡入；系统开了「减弱动态效果」时不播。",
-  "sound": "提示音",
-  "sound_hint": "需要你或完成时响一声，按「通知」里的设置；正在看的会话不响。",
   "sidebar_terminals": "侧边栏显示终端",
   "sidebar_terminals_hint": "在 Agent 按机器分组里，每台电脑的 Agent 下面列出它终端里的普通 shell，点开就是「终端」页。默认关；只对这个浏览器生效。",
   "avatar": "形象",

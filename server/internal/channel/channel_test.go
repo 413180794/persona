@@ -108,14 +108,17 @@ func TestRunCheck(t *testing.T) {
 	if s := r.Check(Look{Now: t0.Add(2 * time.Second), Exists: true, Waiting: true}); s.Do != Wait {
 		t.Fatalf("asking the owner: %+v", s)
 	}
-	if s := r.Check(Look{Now: t0.Add(4 * time.Minute), Online: true}); s.Do != Finish || !strings.Contains(s.Note, "不见了") {
+	if s := r.Check(Look{Now: t0.Add(5 * time.Hour)}); s.Do != Finish || s.End != EndOffline {
+		t.Fatalf("offline past RunMost: %+v", s)
+	}
+	if s := r.Check(Look{Now: t0.Add(4 * time.Minute), Online: true}); s.Do != Finish || s.End != EndGone || !strings.Contains(s.Note, "不见了") {
 		t.Fatalf("gone: %+v", s)
 	}
 	if s := r.Check(Look{Now: t0.Add(5 * time.Hour), Exists: true}); s.Do != Finish || !strings.Contains(s.Note, "先不等了") {
 		t.Fatalf("too long: %+v", s)
 	}
 	held := &Run{Started: t0, Held: true}
-	if s := held.Check(Look{Now: t0.Add(3 * time.Hour), Exists: true}); s.Do != Finish || s.Note != "" {
+	if s := held.Check(Look{Now: t0.Add(3 * time.Hour), Exists: true}); s.Do != Finish || s.Note != "" || s.End != EndGaveUp {
 		t.Fatalf("held too long: %+v", s)
 	}
 }
@@ -130,6 +133,15 @@ func TestRunDecide(t *testing.T) {
 	r.Hold(res.Last, t0.Add(time.Minute))
 	if !r.Held || r.Base != 20 || r.MsgIDs != nil {
 		t.Fatalf("held %+v", r)
+	}
+	if res := (&Run{Started: t0, Seen: true}).Decide(Reading{Answer: "做了一半", Found: true, Stopped: "已中断"}, Look{Now: t0.Add(time.Minute), Failed: true}); res.End != EndStopped {
+		t.Fatalf("stopped: %+v", res)
+	}
+	if res := (&Run{Started: t0, Seen: true}).Decide(Reading{Answer: "API Error: overloaded", Found: true}, Look{Now: t0.Add(time.Minute), Failed: true}); res.End != EndError {
+		t.Fatalf("failed: %+v", res)
+	}
+	if res := (&Run{Started: t0, Seen: true}).Decide(Reading{Answer: "写了一半", Found: true}, Look{Now: t0.Add(time.Minute), Offline: true}); res.End != EndOffline {
+		t.Fatalf("offline with words: %+v", res)
 	}
 	if res := r.Decide(Reading{Found: true, Last: 21}, Look{Now: t0.Add(2 * time.Minute)}); res != nil {
 		t.Fatalf("held, quiet, soon: %+v", res)

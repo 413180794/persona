@@ -268,3 +268,83 @@ func TestReportTurnPushedHoweverShort(t *testing.T) {
 	turn("好的")
 	wantLong(5, 60_000)
 }
+
+// A turn told elsewhere (answered in a channel, a quiet task's told in the main conversation) is over all the same:
+// the next turn there counts from its own start, so a quick answer is not pushed as a long one and the Live
+// Activity's timer does not start hours ago (#4133).
+func TestToldElsewhereTurnDoesNotLendItsStart(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	fastDone(ft)
+	cases := []struct {
+		id          string
+		elsewhere   Snapshot
+		backToPhone Snapshot
+	}{
+		{"c1", Snapshot{Channels: &ChannelsReport{Turns: []ChannelTurn{{MachineID: "mac", SessionID: "c1"}}}},
+			Snapshot{Channels: &ChannelsReport{Turns: []ChannelTurn{}}}},
+		{"q1", Snapshot{Todos: &TodoReport{Quiet: []SessionRef{{MachineID: "mac", SessionID: "q1"}}}},
+			Snapshot{Todos: &TodoReport{}}},
+		{"in1", Snapshot{Inbox: &assistantwire.InboxReport{Agents: []SessionRef{{MachineID: "mac", SessionID: "in1"}}}},
+			Snapshot{Inbox: &assistantwire.InboxReport{}}},
+	}
+	for i, c := range cases {
+		work := proto.Session{SessionID: c.id, Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p-" + c.id,
+			UpdatedAt: time.Now()}
+		done := work
+		done.Status, done.LastText = proto.StatusDone, "好了"
+		ft.s.fleetTakeSnapshot(c.elsewhere)
+		ft.sessions("mac", work)
+		tb := ft.s.turnsBook()
+		tb.mu.Lock()
+		tb.turns["mac/"+c.id].start = time.Now().Add(-2 * time.Hour) // a long turn, told elsewhere
+		tb.mu.Unlock()
+		ft.sessions("mac", done)
+		for deadline := time.Now().Add(2 * time.Second); !tb.startOf("mac/" + c.id).IsZero(); time.Sleep(10 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatalf("%s: the turn told elsewhere is still tracked from %v", c.id, tb.startOf("mac/"+c.id))
+			}
+		}
+		if got := ft.pushesOf(assistantwire.NotifyDone, i+1, 0); len(got) != i {
+			t.Fatalf("%s: the turn told elsewhere was pushed: %+v", c.id, got)
+		}
+		// The next turn is the user's in the app, and quick.
+		ft.s.fleetTakeSnapshot(c.backToPhone)
+		work.UpdatedAt = time.Now()
+		ft.sessions("mac", work)
+		done.UpdatedAt, done.LastText = time.Now(), "又好了"
+		ft.sessions("mac", done)
+		got := ft.pushesOf(assistantwire.NotifyDone, i+1, 2*time.Second)
+		if len(got) != i+1 || got[i].SessionID != c.id || got[i].LongMS != 60_000 || got[i].TookMS >= got[i].LongMS {
+			t.Fatalf("%s: the quick turn after it: %+v", c.id, got)
+		}
+	}
+}
+
+// A task notice answered by a turn told elsewhere is used up by it: the user's quick turn right after goes by the
+// device's setting, not pushed as a report (#4133).
+func TestToldElsewhereTurnUsesUpItsReportMark(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	fastDone(ft)
+	ft.s.fleetTakeSnapshot(Snapshot{Channels: &ChannelsReport{Turns: []ChannelTurn{{MachineID: "mac", SessionID: "c1"}}}})
+	work := proto.Session{SessionID: "c1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p-c1", UpdatedAt: time.Now()}
+	done := work
+	done.Status, done.LastText = proto.StatusDone, "好了"
+	ft.s.noteReportTurn("c1")
+	ft.sessions("mac", work)
+	ft.sessions("mac", done)
+	tb := ft.s.turnsBook()
+	for deadline := time.Now().Add(2 * time.Second); !tb.startOf("mac/c1").IsZero(); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the turn told elsewhere is still tracked")
+		}
+	}
+	ft.s.fleetTakeSnapshot(Snapshot{Channels: &ChannelsReport{Turns: []ChannelTurn{}}})
+	work.UpdatedAt = time.Now()
+	ft.sessions("mac", work)
+	done.UpdatedAt, done.LastText = time.Now(), "又好了"
+	ft.sessions("mac", done)
+	got := ft.pushesOf(assistantwire.NotifyDone, 1, 2*time.Second)
+	if len(got) != 1 || got[0].LongMS != 60_000 {
+		t.Fatalf("the user's turn after it: %+v", got)
+	}
+}

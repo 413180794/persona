@@ -68,6 +68,8 @@ data class SettingsServices(
     val capsule: FloatingCapsuleSettings? = null,
     /** The last pairing attempt (recorded by the pairing page, shown in 连接诊断); null in 体验模式. */
     val pairingAttempts: PairingAttempts? = null,
+    /** The main conversation's steps on 准备清单 (docs/onboarding.md 4.5); null or unavailable: the phone's items only. */
+    val readiness: AssistantReadinessSource? = null,
     /** The desktop apps connected to the selected hub now (its `desktops` event); null in 体验模式. */
     val desktops: kotlinx.coroutines.flow.StateFlow<List<persona.core.contracts.HubDesktop>>? = null,
     /** 设置 › 存储空间's deleting of cache files, keeping the ones the data layer has open; null deletes them directly. */

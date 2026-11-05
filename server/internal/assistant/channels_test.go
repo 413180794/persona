@@ -654,7 +654,7 @@ func TestBotTextInLanguages(t *testing.T) {
 func TestFeishuMirrorSendsTheWholeAnswer(t *testing.T) {
 	f, posts := feishuHub("ou_a", time.Unix(100, 0))
 	f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
-		return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_a", PairedAt: time.Unix(100, 0), Features: FeishuFeatures{Main: true, Sync: true}}, nil
+		return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_a", PairedAt: time.Unix(100, 0), PublicURL: "https://hub.example.com", Features: FeishuFeatures{Main: true, Sync: true}}, nil
 	})
 	f.settings = &Settings{MachineID: "server", Main: "m1"}
 	f.setSessions("server", proto.Session{SessionID: "m1", Assistant: true})
@@ -678,6 +678,37 @@ func TestFeishuMirrorSendsTheWholeAnswer(t *testing.T) {
 	}
 	if got := s.botTargetFor("om_card", ""); got.Kind != targetJarvis || got.SessionID != "m1" {
 		t.Fatalf("thread %+v", got)
+	}
+}
+
+// Without the hub's web address (no public_url) a card carries no 「打开网页版」 button with an empty link, which does
+// nothing and may get the whole card refused; a question card keeps its answer buttons. With one, the button is there.
+func TestFeishuOpenButtonNeedsAWebAddress(t *testing.T) {
+	for _, web := range []string{"", "jarvis://x", "https://hub.example.com/"} {
+		f, posts := feishuHub("ou_a", time.Unix(100, 0))
+		f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
+			return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_a", PairedAt: time.Unix(100, 0), PublicURL: web, Features: FeishuFeatures{Main: true, Cards: true}}, nil
+		})
+		f.settings = &Settings{MachineID: "server", Main: "a1"} // the main conversation: Feishu drives it
+		f.setSessions("server", proto.Session{SessionID: "a1", Assistant: true})
+		s := newTestService(t, f)
+		ix := proto.Interaction{ID: "ix_q", MachineID: "server", SessionID: "a1", Kind: proto.IxQuestion,
+			Questions: []proto.Question{{Question: "用哪个？", Options: []proto.QuestionOption{{Label: "甲"}, {Label: "乙"}}}}}
+		s.feishuInteraction(ix)
+		if len(*posts) != 1 {
+			t.Fatalf("%q: posts %v", web, *posts)
+		}
+		card, _ := (*posts)[0]["card"].(string)
+		if !strings.Contains(card, `"甲"`) || !strings.Contains(card, `"乙"`) {
+			t.Fatalf("%q: answer buttons gone: %s", web, card)
+		}
+		hasLink := strings.Contains(card, "open_url")
+		if strings.Contains(card, `"default_url":""`) || hasLink != strings.HasPrefix(web, "https://") {
+			t.Fatalf("%q: link %v in %s", web, hasLink, card)
+		}
+		if hasLink && !strings.Contains(card, "https://hub.example.com/j/a1") {
+			t.Fatalf("link %s", card)
+		}
 	}
 }
 
@@ -723,5 +754,113 @@ func TestFeishuPushIsLaidOutAndWhole(t *testing.T) {
 	}
 	if got := s.botTargetFor("om_card", ""); got.Kind != targetJarvis || got.SessionID != "m1" {
 		t.Fatalf("thread %+v", got)
+	}
+}
+
+// The progress card's lines: the newest call still running and its age, the last steps, the subagents; counters in a
+// note. Noted from the items as they come (liveNote).
+func TestProgressCardLines(t *testing.T) {
+	t0 := time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC)
+	use := func(id, name, in string, ts time.Time) proto.Item {
+		return proto.Item{Kind: proto.KindToolUse, ToolUseID: id, ToolName: name, ToolInput: json.RawMessage(in), TS: ts}
+	}
+	res := func(id string) proto.Item { return proto.Item{Kind: proto.KindToolResult, ToolUseID: id} }
+	for _, c := range []struct {
+		name  string
+		items []proto.Item
+		steps []string
+		want  []string // each must be in the card
+		not   []string
+	}{
+		{"open call and its age", []proto.Item{use("1", "Bash", `{"command":"go test ./..."}`, t0.Add(-40*time.Second))},
+			[]string{"运行 `go test ./...`"}, []string{"正在：运行 `go test ./...`（已 40 秒）", "调用了 1 次工具"}, []string{"等 ", "读了", "子任务"}},
+		{"no time on the item: when it was seen", []proto.Item{use("1", "Bash", `{"command":"ls"}`, time.Time{})},
+			nil, []string{"正在：运行 `ls`（已 0 秒）"}, nil},
+		{"several open: the newest", []proto.Item{
+			use("1", "Bash", `{"command":"a"}`, t0.Add(-time.Minute)), use("2", "Bash", `{"command":"b"}`, t0.Add(-time.Minute)),
+			use("3", "Read", `{"file_path":"/x/c.go"}`, t0.Add(-5*time.Second)), res("2")},
+			nil, []string{"正在：读 `c.go`（已 5 秒） 等 1 个"}, []string{"`a`（"}},
+		{"none open: no now line", []proto.Item{use("1", "Bash", `{"command":"a"}`, t0), res("1")},
+			[]string{"运行 `a`"}, []string{"- 运行 `a`"}, []string{"正在："}},
+		{"counters: distinct files", []proto.Item{
+			use("1", "Read", `{"file_path":"/a.go"}`, t0), res("1"), use("2", "Read", `{"file_path":"/a.go"}`, t0), res("2"),
+			use("3", "Read", `{"file_path":"/b.go"}`, t0), res("3"), use("4", "Edit", `{"file_path":"/a.go"}`, t0), res("4"),
+			use("5", "NotebookEdit", `{"notebook_path":"/n.ipynb"}`, t0), res("5")},
+			nil, []string{"调用了 5 次工具 · 读了 2 个文件 · 改了 2 个文件"}, nil},
+		{"subtasks running and done", []proto.Item{
+			use("1", "Task", `{"description":"查 *日志*","subagent_type":"Explore"}`, t0), use("2", "Agent", `{"description":"写测试"}`, t0), res("1")},
+			nil, []string{"子任务", "- 查 &#42;日志&#42; `Explore` · 完成", "- 写测试 · 进行中"}, nil},
+		{"no steps at all", nil, nil, []string{"工作中 · 已用 3 分 12 秒"}, []string{"正在：", "调用了", "子任务", "前面还有"}},
+	} {
+		p := &chanLive{}
+		for _, it := range c.items {
+			p.liveNote("", it, t0)
+		}
+		v := liveView{open: p.open, calls: p.calls, read: len(p.read), edited: len(p.edited), subs: p.subs, subsMore: p.subsMore, now: t0}
+		b, _ := json.Marshal(progressCard("", "Persona", 192*time.Second, c.steps, "", "", v))
+		var s string
+		for _, md := range progressLines("", c.steps, v) {
+			s += md + "\n"
+		}
+		all := string(b) + "\n" + s
+		for _, w := range c.want {
+			if !strings.Contains(all, w) {
+				t.Errorf("%s: no %q in\n%s\n%s", c.name, w, s, b)
+			}
+		}
+		for _, w := range c.not {
+			if strings.Contains(all, w) {
+				t.Errorf("%s: %q should not be in\n%s", c.name, w, all)
+			}
+		}
+	}
+}
+
+// Many subtasks: the last six, then 「等 N 个」; the 「前面还有 N 步」 of more than five steps stays.
+func TestProgressCardManySubtasks(t *testing.T) {
+	p := &chanLive{}
+	for i := range 60 {
+		p.liveNote("", proto.Item{Kind: proto.KindToolUse, ToolUseID: fmt.Sprint(i), ToolName: "Task", ToolInput: json.RawMessage(fmt.Sprintf(`{"description":"t%d"}`, i))}, time.Now())
+	}
+	if len(p.subs) != liveSubsMost || p.subsMore != 10 || len(p.open) != liveOpenMost {
+		t.Fatalf("bounds: %d subs, %d more, %d open", len(p.subs), p.subsMore, len(p.open))
+	}
+	steps := []string{"1", "2", "3", "4", "5", "6", "7"}
+	s := strings.Join(progressLines("", steps, liveView{subs: p.subs, subsMore: p.subsMore}), "\n")
+	if !strings.Contains(s, "- t59 · 进行中") || strings.Contains(s, "- t53 ") || !strings.Contains(s, "等 54 个") ||
+		!strings.Contains(s, "前面还有 2 步") || strings.Contains(s, "- 2\n") {
+		t.Fatalf("%s", s)
+	}
+}
+
+// A held run's next turn starts from nothing: not the first turn's open calls, counters or subtasks.
+func TestHeldRunsNextTurnStartsItsCountsAgain(t *testing.T) {
+	s, _, _ := cotHub(t, false)
+	r, prog := cotRun(s)
+	s.chans.mu.Lock()
+	prog.from = 1
+	noteRunItems("", r, prog, []proto.Item{
+		{Seq: 2, Kind: proto.KindToolUse, ToolUseID: "a", ToolName: "Read", ToolInput: json.RawMessage(`{"file_path":"/a.go"}`)},
+		{Seq: 3, Kind: proto.KindToolUse, ToolUseID: "b", ToolName: "Task", ToolInput: json.RawMessage(`{"description":"查"}`)},
+	}, time.Now())
+	s.chans.mu.Unlock()
+	if v := s.runLiveView(r.ID); v.calls != 2 || v.read != 1 || len(v.open) != 2 || len(v.subs) != 1 {
+		t.Fatalf("first turn: %+v", v)
+	}
+	s.finishChannelRun(r, &channel.Result{Answer: "先答一部分", Held: true})
+	if v := s.runLiveView(r.ID); v.calls != 0 || v.read != 0 || v.edited != 0 || len(v.open) != 0 || len(v.subs) != 0 || v.subsMore != 0 {
+		t.Fatalf("second turn starts with %+v", v)
+	}
+}
+
+// A file counter at its cap says so: 「1000+」.
+func TestProgressCardFileCountAtItsCap(t *testing.T) {
+	b, _ := json.Marshal(progressCard("", "Persona", time.Second, nil, "", "", liveView{calls: 1, read: liveFilesMost, edited: 3}))
+	if !strings.Contains(string(b), "读了 1000+ 个文件 · 改了 3 个文件") {
+		t.Fatalf("%s", b)
+	}
+	b, _ = json.Marshal(progressCard(i18n.En, "Persona", time.Second, nil, "", "", liveView{calls: 1, edited: 1}))
+	if !strings.Contains(string(b), "1 tool call · changed 1 file") {
+		t.Fatalf("%s", b)
 	}
 }

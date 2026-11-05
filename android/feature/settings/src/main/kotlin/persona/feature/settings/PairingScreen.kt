@@ -56,6 +56,8 @@ fun PairingScreen(
     skipWelcome: Boolean = false,
     /** Where the last attempt is kept for 连接诊断, which has nothing else to show before a pairing succeeds. */
     attempts: PairingAttempts? = null,
+    /** The main conversation's steps on the checklist that follows a pairing (docs/onboarding.md 4.5). */
+    mainReadiness: AssistantReadinessSource? = null,
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -66,6 +68,7 @@ fun PairingScreen(
     // The machine whose engine must be chosen first; kept on disk so a restarted app asks again rather than skipping.
     var engineStep by rememberSaveable { mutableStateOf(if (paired && machines != null) records.enginePending() else null) }
     var welcome by rememberSaveable { mutableStateOf(initialLink == null && !skipWelcome) }
+    var otherWays by rememberSaveable { mutableStateOf(false) }
     var credentialsSaved by remember { mutableStateOf(false) }
     var lastRequest by remember { mutableStateOf<PairingRequest?>(null) }
     var awaitingSettings by remember { mutableStateOf(false) }
@@ -222,7 +225,8 @@ fun PairingScreen(
         })
     } else if (readiness) {
         ReadinessScreen(sessions, diagnostics, notificationsOnly = false,
-            onDiagnostics = onDiagnostics, onDone = { records.pending(false); onReady() }, onBack = onBack ?: onReady, footer = footer)
+            onDiagnostics = onDiagnostics, onDone = { records.pending(false); onReady() }, onBack = onBack ?: onReady, footer = footer,
+            readiness = mainReadiness)
     } else JListPage(title = stringResource(R.string.settings_pairing_title), onBack = onBack, largeTitle = false) {
         when {
             welcome -> {
@@ -306,7 +310,6 @@ fun PairingScreen(
             }
             else -> {
                 item { PairingHeading(stringResource(R.string.settings_pairing_connect_title), stringResource(R.string.settings_pairing_connect_body)) }
-                item { JCodeBlock("personad hub pair") }
                 item {
                     PairingActions {
                         JButton(stringResource(R.string.settings_pairing_scan), ::requestScan, Modifier.fillMaxWidth(), icon = PhIcons.Scan)
@@ -315,6 +318,17 @@ fun PairingScreen(
                             JButton(stringResource(R.string.settings_pairing_manual), { manual = true }, Modifier.weight(1f), kind = JButtonKind.Secondary)
                         }
                         SettingsCaption(stringResource(R.string.settings_pairing_connect_push))
+                    }
+                }
+                // The command line is for people who installed the hub themselves (docs/onboarding.md 4.5): folded away.
+                item {
+                    JTextButton(stringResource(R.string.settings_pairing_other_ways), { otherWays = !otherWays },
+                        Modifier.padding(top = Tokens.Space.m))
+                }
+                if (otherWays) item {
+                    Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                        SettingsCaption(stringResource(R.string.settings_pairing_other_ways_command))
+                        JCodeBlock(PairCommand, small = true)
                     }
                 }
             }
@@ -423,3 +437,6 @@ private fun LazyListScope.pairingProgress(progress: List<PairingProgress>, runni
         }
     }
 }
+
+/** The hub's own command for a new pairing code, under 其他方式 only. */
+private const val PairCommand = "personad hub pair"

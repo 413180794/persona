@@ -46,6 +46,8 @@ interface OutboxStore {
     suspend fun mainConversation(): SessionKey? = null
     suspend fun claimMainCreation(): Boolean = error("Main conversation creation is not supported by this store")
     suspend fun bindMainConversation(session: SessionKey): Unit = error("Main conversation binding is not supported by this store")
+    /** Gives back an unbound [claimMainCreation]: the hub refused to start it, so the next try asks again. */
+    suspend fun releaseMainCreation() = Unit
     /** Unbinds [session] if it is the bound main conversation (it was put away); messages already bound to it stay. */
     suspend fun forgetMainConversation(session: SessionKey) = Unit
     suspend fun transition(id: String, from: Set<OutboxState>, to: OutboxState, error: String? = null): Boolean

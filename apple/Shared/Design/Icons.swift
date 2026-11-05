@@ -62,6 +62,8 @@ extension Theme {
         /// The two little arrows after a value that opens a menu of choices.
         static let choices = "chevron.up.chevron.down"
         static let effort = "gauge.with.dots.needle.50percent"
+        /// The effort level left to the model (its own default, 思考强度「自动」).
+        static let effortAuto = "gauge.with.dots.needle.bottom.50percent"
         static let missingFile = "doc.questionmark"
 
         // MARK: Actions

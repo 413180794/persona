@@ -22,7 +22,21 @@ import (
 // TUI sessions are driven like a person would: shift+tab cycles the mode, and the /effort picker's "s" sets the
 // level for this session only (`/effort <level>` would also save it as the default for new sessions).
 
-var effortLevels = proto.EffortLevels
+// "auto" is the model's own default level (Claude Code 2.1.316). It is not a level Claude Code takes everywhere:
+// --effort rejects it (with a warning, falling back to the default), settings.json ignores it, and the /effort
+// picker has no slot for it; only `/effort auto` knows it, and that also clears the model's saved default. So
+// auto starts a session without --effort, is `effortLevel: null` for a headless one, and in a TUI is the picker's
+// slot marked as the model's default. Transcripts record the level replies actually ran at, never "auto".
+
+const effortAuto = "auto"
+
+var effortLevels = append([]string{effortAuto}, proto.EffortLevels...)
+
+// effortPickerLevels are the slots of the /effort picker, left to right.
+var effortPickerLevels = proto.EffortLevels
+
+// effortPickerDefault is the hint under the picker's marker when it is on the model's default level.
+const effortPickerDefault = "The default effort for this model"
 
 var permissionModes = proto.PermissionModes
 
@@ -57,7 +71,7 @@ func modeFlags(mode, effort string) string {
 	if mode != "" {
 		b.WriteString(" --permission-mode " + mode)
 	}
-	if effort != "" {
+	if effort != "" && effort != effortAuto { // no flag is the model's default
 		b.WriteString(" --effort " + effort)
 	}
 	return b.String()
@@ -360,12 +374,12 @@ func (n *Node) tuiSetEffort(ctx context.Context, pane, effort string) error {
 		_ = n.sendKeys(ctx, pane, "esc")
 		return fmt.Errorf("没打开思考强度的选择器（这个 Claude Code 版本可能不支持 /effort）")
 	}
-	// From the left end (low) one stop right per level; the slider has stops past max (ultracode), the list does not.
-	keys := []string{"left", "left", "left", "left", "left", "left"}
-	for range slices.Index(effortLevels, effort) {
-		keys = append(keys, "right")
-	}
-	if err := n.sendKeys(ctx, pane, keys...); err != nil {
+	if effort == effortAuto {
+		if err := n.tuiPickDefaultEffort(ctx, pane); err != nil {
+			_ = n.sendKeys(ctx, pane, "esc")
+			return err
+		}
+	} else if err := n.sendKeys(ctx, pane, effortPickerKeys(effort)...); err != nil {
 		return err
 	}
 	time.Sleep(150 * time.Millisecond)
@@ -387,6 +401,41 @@ func (n *Node) tuiSetEffort(ctx context.Context, pane, effort string) error {
 	return fmt.Errorf("思考强度的选择器没有关闭，已取消")
 }
 
+// effortPickerKeys moves the /effort picker from wherever it opened to a level: all the way left, then right.
+// From the left end (low) one stop right per level; the slider has stops past max (ultracode), so 6 lefts reach low.
+func effortPickerKeys(effort string) []string {
+	keys := []string{"left", "left", "left", "left", "left", "left"}
+	for range slices.Index(effortPickerLevels, effort) {
+		keys = append(keys, "right")
+	}
+	return keys
+}
+
+// tuiPickDefaultEffort walks the open /effort picker from the left until its marker is on the model's default level
+// (the picker shows effortPickerDefault under it). That is auto for this session, without `/effort auto` clearing
+// the saved default for new sessions; it stays at that level if the session later switches models.
+func (n *Node) tuiPickDefaultEffort(ctx context.Context, pane string) error {
+	if err := n.sendKeys(ctx, pane, effortPickerKeys(effortPickerLevels[0])...); err != nil {
+		return err
+	}
+	for i := range effortPickerLevels {
+		if i > 0 {
+			if err := n.sendKeys(ctx, pane, "right"); err != nil {
+				return err
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+		s, err := n.readPane(ctx, pane, "visible", 60)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(s, effortPickerDefault) {
+			return nil
+		}
+	}
+	return fmt.Errorf("思考强度的选择器里没找到模型的默认档位（可能被组织设置覆盖了），已取消")
+}
+
 // effortPicker says which /effort picker is on screen: "list", "slider" or "" (none).
 func effortPicker(screen string) string {
 	switch {
@@ -400,7 +449,7 @@ func effortPicker(screen string) string {
 
 // effortOutcome reads what Claude Code printed once the picker closed. An effort set in the environment
 // (CLAUDE_CODE_EFFORT_LEVEL: the env block of Claude's settings.json, or a launcher) wins over the session's: say so
-// instead of claiming it changed.
+// instead of claiming it changed. Auto lands on whichever level is the model's default, so any level counts.
 func effortOutcome(screen, effort string) error {
 	flat := strings.Join(strings.Fields(screen), " ")
 	if i := strings.LastIndex(flat, "CLAUDE_CODE_EFFORT_LEVEL="); i >= 0 {
@@ -409,7 +458,11 @@ func effortOutcome(screen, effort string) error {
 			return fmt.Errorf("这台电脑设了 CLAUDE_CODE_EFFORT_LEVEL=%s（Claude 的 settings.json 的 env 或启动器里），它优先于会话里改的值，要改得先去掉它", v)
 		}
 	}
-	if strings.Contains(flat, "effort level to "+effort) || strings.Contains(flat, "● "+effort+" ") || strings.Contains(flat, "◈ "+effort+" ") {
+	if effort == effortAuto {
+		if strings.Contains(flat, "effort level to ") {
+			return nil
+		}
+	} else if strings.Contains(flat, "effort level to "+effort) || strings.Contains(flat, "● "+effort+" ") || strings.Contains(flat, "◈ "+effort+" ") {
 		return nil
 	}
 	return fmt.Errorf("思考强度可能没改成 %s，请在终端里确认", effort)
@@ -422,6 +475,13 @@ func (n *Node) syncAssistantModes(p *assistantProc) {
 		return // Codex gets them with each turn (codexPolicy), and the node answers approvals by the mode it reads then
 	}
 	mode, effort := n.modesOf(p.id)
+	n.mu.Lock()
+	if n.modes[p.id].Effort == effortAuto {
+		// Only the app changes a headless conversation's effort; the concrete level in its transcript is just what
+		// auto resolved to, and sending it back would pin the conversation to that level.
+		effort = effortAuto
+	}
+	n.mu.Unlock()
 	p.mu.Lock()
 	if p.model.UseEffort {
 		effort = p.model.Effort
@@ -432,7 +492,11 @@ func (n *Node) syncAssistantModes(p *assistantProc) {
 		p.mode = mode
 	}
 	if effort != "" && effort != p.effort {
-		reqs = append(reqs, map[string]any{"subtype": "apply_flag_settings", "settings": map[string]any{"effortLevel": effort}})
+		var level any = effort
+		if effort == effortAuto {
+			level = nil // what Claude Code itself sends for auto: clear the session's level
+		}
+		reqs = append(reqs, map[string]any{"subtype": "apply_flag_settings", "settings": map[string]any{"effortLevel": level}})
 		p.effort = effort
 	}
 	p.mu.Unlock()

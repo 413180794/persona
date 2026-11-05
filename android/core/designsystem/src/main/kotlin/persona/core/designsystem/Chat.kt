@@ -469,6 +469,17 @@ fun ComposerTextField(
 enum class SendKind { Send, Stop }
 
 /** The send (or stop) button of a composer: a filled circle, or a square on the board. */
+/**
+ * The send button while nothing can be sent yet (先接上模型, 先添加电脑: docs/onboarding.md 4.4): a one-line pill in the
+ * send button's place, centred on the same 48 dp row, that opens the missing step.
+ */
+@Composable
+fun BlockedSendButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier.heightIn(min = 48.dp).padding(start = Tokens.Space.xs, end = Tokens.Space.xxs), contentAlignment = Alignment.Center) {
+        JButton(label, onClick, size = JButtonSize.Medium)
+    }
+}
+
 @Composable
 fun SendButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, kind: SendKind = SendKind.Send, loading: Boolean = false) {
     val palette = PersonaTheme.palette

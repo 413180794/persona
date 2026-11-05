@@ -17,7 +17,10 @@ nonisolated enum SessionModes {
         Option(id: "bypassPermissions", title: String(localized: "全部放行"), detail: String(localized: "什么都不问；只能在新开时选"), symbol: Theme.Icon.allowEverything),
     ]
 
+    /// "auto" is the model's own default level (node/modes.go). Replies are recorded at the level they actually ran at,
+    /// so after the next reply the chip shows that level instead.
     static let effortLevels: [Option] = [
+        Option(id: "auto", title: String(localized: "自动", comment: "Thinking effort level"), detail: String(localized: "用模型自己的默认档"), symbol: Theme.Icon.effortAuto),
         Option(id: "low", title: String(localized: "低", comment: "Thinking effort level"), detail: String(localized: "最快，简单的事够用"), symbol: "gauge.with.dots.needle.0percent"),
         Option(id: "medium", title: String(localized: "中", comment: "Thinking effort level"), detail: String(localized: "快一些"), symbol: Theme.Icon.context),
         Option(id: "high", title: String(localized: "高", comment: "Thinking effort level"), detail: String(localized: "大多数任务的默认"), symbol: Theme.Icon.effort),
@@ -25,19 +28,23 @@ nonisolated enum SessionModes {
         Option(id: "max", title: String(localized: "最高", comment: "Thinking effort level"), detail: String(localized: "最慢最仔细"), symbol: "gauge.with.dots.needle.100percent"),
     ]
 
-    /// Codex's reasoning efforts (node/codex_effort.go); a thread offers its model's, in `Session.efforts`.
+    /// Codex's reasoning efforts (node/codex_effort.go); a thread offers its model's, in `Session.efforts`. Their symbols
+    /// come from Claude Code's levels without auto (`startEffortLevels`), so `[0]` is low.
     static let codexEffortLevels: [Option] = [
-        Option(id: "minimal", title: String(localized: "极低", comment: "Thinking effort level"), detail: String(localized: "几乎不思考，最快"), symbol: effortLevels[0].symbol),
-        Option(id: "low", title: String(localized: "低", comment: "Thinking effort level"), detail: String(localized: "快，简单的事够用"), symbol: effortLevels[0].symbol),
-        Option(id: "medium", title: String(localized: "中", comment: "Thinking effort level"), detail: String(localized: "快慢适中"), symbol: effortLevels[1].symbol),
-        Option(id: "high", title: String(localized: "高", comment: "Thinking effort level"), detail: String(localized: "更仔细"), symbol: effortLevels[2].symbol),
-        Option(id: "xhigh", title: String(localized: "很高", comment: "Thinking effort level"), detail: String(localized: "更仔细，也更慢、更贵"), symbol: effortLevels[3].symbol),
-        Option(id: "max", title: String(localized: "最高", comment: "Thinking effort level"), detail: String(localized: "最慢最仔细"), symbol: effortLevels[4].symbol),
-        Option(id: "ultra", title: String(localized: "极高", comment: "Thinking effort level"), detail: String(localized: "最仔细，还会主动分给多个子 Agent 一起做"), symbol: effortLevels[4].symbol),
+        Option(id: "minimal", title: String(localized: "极低", comment: "Thinking effort level"), detail: String(localized: "几乎不思考，最快"), symbol: startEffortLevels[0].symbol),
+        Option(id: "low", title: String(localized: "低", comment: "Thinking effort level"), detail: String(localized: "快，简单的事够用"), symbol: startEffortLevels[0].symbol),
+        Option(id: "medium", title: String(localized: "中", comment: "Thinking effort level"), detail: String(localized: "快慢适中"), symbol: startEffortLevels[1].symbol),
+        Option(id: "high", title: String(localized: "高", comment: "Thinking effort level"), detail: String(localized: "更仔细"), symbol: startEffortLevels[2].symbol),
+        Option(id: "xhigh", title: String(localized: "很高", comment: "Thinking effort level"), detail: String(localized: "更仔细，也更慢、更贵"), symbol: startEffortLevels[3].symbol),
+        Option(id: "max", title: String(localized: "最高", comment: "Thinking effort level"), detail: String(localized: "最慢最仔细"), symbol: startEffortLevels[4].symbol),
+        Option(id: "ultra", title: String(localized: "极高", comment: "Thinking effort level"), detail: String(localized: "最仔细，还会主动分给多个子 Agent 一起做"), symbol: startEffortLevels[4].symbol),
     ]
 
     /// Modes a running session can switch to (bypassPermissions only at start, see node/modes.go).
     static let switchableModes = permissionModes.filter { $0.id != "bypassPermissions" }
+
+    /// Levels for something not started yet: auto starts without --effort, which is what 跟随启动器 already does.
+    static let startEffortLevels = effortLevels.filter { $0.id != "auto" }
 
     /// Every mode for an assistant conversation (the main one too, new or running): the node restarts its Claude in
     /// 全部放行 (#2416), so the option doesn't say "only when new".
@@ -363,7 +370,7 @@ struct NewSessionModePicker: View {
             Menu {
                 Picker("思考强度", selection: $effort) {
                     Text("跟随启动器").tag("")
-                    ForEach(SessionModes.effortLevels) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
+                    ForEach(SessionModes.startEffortLevels) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
                 }
                 .pickerStyle(.inline)
             } label: {

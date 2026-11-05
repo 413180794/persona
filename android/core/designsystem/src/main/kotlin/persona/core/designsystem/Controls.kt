@@ -42,6 +42,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -292,7 +294,7 @@ fun JSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: M
         modifier.size(width, height).clip(RoundedCornerShape(corner)).background(track)
             .then(if (!checked) Modifier.border(1.dp, palette.line, RoundedCornerShape(corner)) else Modifier)
             .then(if (onCheckedChange != null) Modifier.clickable(enabled = enabled, role = Role.Switch) { onCheckedChange(!checked) } else Modifier)
-            .semantics { selected = checked }
+            .semantics { toggleableState = ToggleableState(checked) }
             .stableAlpha(if (enabled) 1f else 0.4f).padding(3.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -313,7 +315,7 @@ fun JCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier:
     val on = if (style == AppStyle.Brief) palette.action else palette.accent
     Box(
         modifier.size(48.dp).then(if (onCheckedChange != null) Modifier.clickable(enabled = enabled, role = Role.Checkbox) { onCheckedChange(!checked) } else Modifier)
-            .semantics { selected = checked }.stableAlpha(if (enabled) 1f else 0.4f),
+            .semantics { toggleableState = ToggleableState(checked) }.stableAlpha(if (enabled) 1f else 0.4f),
         contentAlignment = Alignment.Center,
     ) {
         Box(

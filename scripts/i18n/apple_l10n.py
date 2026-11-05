@@ -8,6 +8,9 @@
                                       compiler did not extract as localizable is marked `// i18n-ignore`
   apple_l10n.py sync <DerivedData>    adds the strings the compiler extracted to the catalogs (xcstringstool sync),
                                       the step Xcode's IDE does on build and xcodebuild does not
+  apple_l10n.py merge <ours> <theirs> <out>
+                                      merges two versions of a catalog by key (a rebase conflict in the JSON: git's
+                                      text merge breaks it): every key of both; where both have it, the complete one
 
 Markers: `// i18n-ignore` at the end of the literal's line or alone on the line above it; `// i18n-ignore-file:
 <reason>` in a file's first 20 lines. For text that is not UI: prompts and messages for the hub / agents, protocol
@@ -286,7 +289,26 @@ def sync(derived):
     print(f"synced {len(files)} .stringsdata into the catalogs")
 
 
+def merge(ours, theirs, out):
+    a = json.load(open(ours, encoding="utf-8"))
+    b = json.load(open(theirs, encoding="utf-8"))
+    def complete(e):
+        locs = e.get("localizations", {})
+        return all(lang in locs for lang in LANGS)
+    merged = dict(b.get("strings", {}))
+    for key, entry in a.get("strings", {}).items():
+        if key not in merged or (complete(entry) and not complete(merged[key])):
+            merged[key] = entry
+    b["strings"] = dict(sorted(merged.items()))
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(b, f, ensure_ascii=False, indent=2, separators=(",", " : "))
+    print(f"merged {len(merged)} strings into {out}")
+
+
 def main():
+    if len(sys.argv) >= 5 and sys.argv[1] == "merge":
+        merge(*sys.argv[2:5])
+        return
     if len(sys.argv) < 2 or sys.argv[1] not in ("check", "strict", "sync"):
         sys.exit(__doc__)
     cmd = sys.argv[1]

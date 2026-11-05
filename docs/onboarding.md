@@ -242,6 +242,8 @@ P1：**电脑发起、手机允许**。Persona Link 首屏显示一个二维码�
 
 网页的实现（#3847，细节见 `docs/web.md`「主对话还缺什么」）和上面不同的地方：发送失败的卡片不带「重试」，没发出去的话回到输入框里，再点发送就是重试；`add_computer` 在 hub 有 `machines_add` 时就地打开机器页的添加流程，老 hub 是一个说明弹窗加「打开管理界面」（hub 的 `/admin/machines`）；`confirm_computer` 就地打开那台待确认电脑的确认界面（#4037）；总览零电脑的空状态由 #3729 单独做。
 
+Android 的实现（#4032，细节见 `docs/android.md`「主对话还缺什么」）和上面不同的地方：发送失败只在开主对话被拒（409 `no_machine` / `machine_pending` / `claude_missing` / `launcher_missing` / `not_logged_in` / `auth_failed`）时出卡片：那条消息停在「没有发出」、卡片钉在它下面，带那一步的按钮和「重试」（重试前先重拉就绪度，还缺就打开那一步，不再发）；以前这种消息会一直排着等，hub 拒绝后也不再重试创建。`add_computer` 在 7.2 第 16 项合进来之前是说明弹窗，指到网页版的「机器 › 添加电脑」；「试一句」和网页一样跑 `?probe=1`，不真开一轮主对话；首次配对后的整页清单没有导航，`connect_model` / `edit_provider` 打开「怎么接模型」的说明（说明里不再给「接上模型」「改用 API Key」，只有「知道了」），`confirm_computer` 不画按钮；只有「跳过未完成项」才 `dismiss`，「完成」不发。
+
 #### 「只聊天」模式（P1，单独一个 issue，拍板 9）
 
 只有 API Key、没有电脑（Docker / NAS / 公司电脑不让装）的人，今天主对话永远是空的。本期给引导卡，不给死胡同里的空白；P1 做一个受限的模式：

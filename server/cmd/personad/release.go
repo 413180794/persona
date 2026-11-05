@@ -63,6 +63,9 @@ func runRelease(args []string) error {
 		fs := flag.NewFlagSet("release check-next", flag.ContinueOnError)
 		num := fs.String("build", "", "this release's build number")
 		commit := fs.String("commit", "", "this release's commit")
+		if len(args) >= 2 && (args[1] == "-h" || args[1] == "-help" || args[1] == "--help") {
+			return fs.Parse(args[1:]) // prints the help; main exits 0 on flag.ErrHelp
+		}
 		if len(args) < 2 {
 			return errors.New("usage: jarvisd release check-next <served latest.json> --build N --commit C")
 		}

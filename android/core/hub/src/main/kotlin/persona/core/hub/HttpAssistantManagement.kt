@@ -29,9 +29,15 @@ class HttpAssistantManagement(
 
     private fun checkScope() { if (!isCurrent()) throw CancellationException("Pairing changed") }
 
-    private suspend fun request(method: String, segments: List<String>, body: JsonElement? = null, client: OkHttpClient = http): JsonObject {
+    private suspend fun request(
+        method: String, segments: List<String>, body: JsonElement? = null, client: OkHttpClient = http,
+        query: Map<String, String> = emptyMap(),
+    ): JsonObject {
         checkScope()
-        val url = base.newBuilder().apply { segments.forEach(::addPathSegment) }.build()
+        val url = base.newBuilder().apply {
+            segments.forEach(::addPathSegment)
+            query.forEach { (name, value) -> addQueryParameter(name, value) }
+        }.build()
         val payload = body?.toString()?.toRequestBody("application/json".toMediaType())
         val request = Request.Builder().url(url).header("Authorization", "Bearer $token")
             .method(method, payload).build()
@@ -50,6 +56,13 @@ class HttpAssistantManagement(
         (this[name] as? JsonArray).orEmpty().map { JsonCodec.decodeFromJsonElement<T>(it) }
 
     override suspend fun warm() { assistant("POST", "warm", body = buildJsonObject { }) }
+    // The hub waits up to 12 s for the computer's self-check, and a probe runs a real one-word turn on top of it.
+    override suspend fun readiness(probe: Boolean): AssistantReadiness = JsonCodec.decodeFromJsonElement(
+        request("GET", listOf("api", "v1", "assistant", "readiness"), client = if (probe) runHttp else http,
+            query = if (probe) mapOf("probe" to "1") else emptyMap()))
+    override suspend fun dismissReadiness(dismissed: Boolean) {
+        assistant("POST", "readiness", "dismiss", body = buildJsonObject { put("dismissed", dismissed) })
+    }
     override suspend fun config(): AssistantConfig = JsonCodec.decodeFromJsonElement(assistant())
     override suspend fun updateConfig(update: AssistantConfigUpdate): AssistantConfig =
         JsonCodec.decodeFromJsonElement(assistant("PUT", body = JsonCodec.encodeToJsonElement(update)))

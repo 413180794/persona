@@ -29,6 +29,16 @@ describe("收件箱的行菜单", () => {
     expect(calls.done.at(-1)).toEqual([expect.objectContaining({ id: "lark:f1:1" }), true]);
   });
 
+  it("已处理 from the menu says so with 撤销 even with a mouse (#4162)", async () => {
+    calls.toast.length = 0;
+    rowMenu(item(), false)[0].onSelect();
+    await vi.waitFor(() => expect(calls.toast).toHaveLength(1));
+    const [text, action] = [calls.toast[0][0], calls.toast[0][2] as { label: string; run: () => void }];
+    expect([text, action.label]).toEqual(["已标为已处理", "撤销"]);
+    action.run();
+    expect(calls.done.at(-1)?.[1]).toBe(false);
+  });
+
   it("offers 移回 for a done item", () => {
     const m = rowMenu(item({ done_at: "2026-11-01T09:00:00Z" }), true);
     expect(m.map((x) => x.key)).toEqual(["undone"]);

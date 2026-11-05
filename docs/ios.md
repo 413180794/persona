@@ -495,7 +495,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 
 ## 思考强度和权限模式
 
-对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（低 … 最高），
+对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（自动 / 低 … 最高），
 相当于 Claude Code 终端底栏，点开就能改（`SessionModeBar`，文案和图标在 `SessionModes`）。新外壳里没有这两个标签，收进了输入框右下角的
 「模型 · 思考强度」按钮（#1091，见上面「新外壳」的输入框）。新开 Agent 的表单、助手首页的输入框上方
 也能选（不选就是「跟随启动器」）。Codex / TRAEX 的会话不显示；经 app-server 驱动的 Codex 会话（hub 给了 `efforts`，`Session.setsEffortOnly`）
@@ -516,6 +516,16 @@ herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模�
 - 助手对话（Persona 页，主对话也一样）新开和在跑都能选「全部放行」（#2416），菜单最上面标红写明后果（`BypassWarning`）。Persona 不带
   `--dangerously-skip-permissions` 启动 claude，控制请求切不到 bypassPermissions：进程空闲就停掉，下一条消息带 `--permission-mode bypassPermissions`
   续上；正在回答或有后台任务就等这一轮之后的第一条消息再换进程。
+- 思考强度「自动」（`auto`，用模型自己的默认档）。Claude Code 2.1.316 实测：`--effort` 不认 auto（打一条警告、按默认档跑），
+  settings.json 的 `effortLevel` 也不认（被静默忽略），`/effort` 选择器里没有这一格；只有 `/effort auto` 命令认，而它会顺手清掉
+  这个模型存在 settings 里的默认档。所以三条路分别是：
+  - 新开：不传 `--effort`。这和「跟随启动器」一样，新开的表单里就不放这一项（`SessionModes.startEffortLevels`）。
+  - 助手（无头）：`apply_flag_settings {"effortLevel": null}`，Claude Code 自己表达 auto 就是这样发的。transcript 里记的是实际档位，
+    node 不能把它当成 App 的新选择再发回去（否则 auto 被钉成那一档），助手的思考强度只有 App 会改，App 选过 auto 就一直按 auto。
+  - herdr 里的 Agent：打开 `/effort` 选择器，从最左一格格往右，停在下面写着「The default effort for this model」的那一格，按 `s`（滑块式按 `enter`）。
+    这是近似：本会话钉在当前模型的默认档，之后换模型不会跟着变；组织设置改了默认档、选择器里找不到这行时，node 取消并报错。
+  - 显示：transcript 每条回复只记实际档位、从不记 auto，所以「自动」标签只维持到下一条回复，之后显示成那一档（比如「中」）。
+  - 设置 › Claude Code 设置里的思考强度选 auto 就是删掉 `effortLevel`（`claudeconfig.go`）。
 - 选择器开着时 herdr 把 Agent 报成 blocked，hub 1.5 秒后会把它当成要处理的终端对话框推给手机：node 操作期间不报 blocked。
 
 ## 会话分诊（设置 › 会话分诊，#3078）

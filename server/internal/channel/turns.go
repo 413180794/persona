@@ -91,6 +91,7 @@ type Look struct {
 	Waiting        bool      // blocked on the owner, or a card waits for an answer
 	Offline        bool      // the conversation's own status is offline
 	Background     int       // background work still running (commands, Monitors, subagents)
+	Failed         bool      // its last turn ended in a model API error
 	Lang           i18n.Lang // what the notes are written in (the user's language; zh-Hans when unknown)
 }
 
@@ -103,25 +104,42 @@ const (
 	Finish        // stop waiting: Step.Note says why
 )
 
+// End is how a run ended, for a sink that shows it (the Feishu card's last line).
+type End string
+
+const (
+	EndDone    End = ""
+	EndStopped End = "stopped" // interrupted (/stop, the app, the terminal)
+	EndError   End = "error"   // the turn ended in a model API error
+	EndGaveUp  End = "gave_up" // not done in RunMost (HeldMost for a held run)
+	EndGone    End = "gone"    // the conversation was closed or deleted
+	EndOffline End = "offline" // its machine is offline
+)
+
 // Step is Check's verdict.
 type Step struct {
 	Do   Action
 	Note string
+	End  End // with Finish
 }
 
 // Check looks at a run against the conversation now: wait, read the answer, or give up. It marks the run Seen when
 // the conversation works.
 func (r *Run) Check(l Look) Step {
 	age := l.Now.Sub(r.Started)
+	gaveUp := EndGaveUp
+	if l.Offline || !l.Exists && !l.Online {
+		gaveUp = EndOffline
+	}
 	if r.Held && age > HeldMost {
-		return Step{Do: Finish}
+		return Step{Do: Finish, End: gaveUp}
 	}
 	if age > RunMost {
-		return Step{Do: Finish, Note: i18n.T(l.Lang, "channel-turns.gave_up", i18n.Args{"took": Duration(l.Lang, age)})}
+		return Step{Do: Finish, End: gaveUp, Note: i18n.T(l.Lang, "channel-turns.gave_up", i18n.Args{"took": Duration(l.Lang, age)})}
 	}
 	if !l.Exists {
 		if age > MissingAfter && l.Online {
-			return Step{Do: Finish, Note: i18n.T(l.Lang, "channel-turns.gone")}
+			return Step{Do: Finish, End: EndGone, Note: i18n.T(l.Lang, "channel-turns.gone")}
 		}
 		return Step{Do: Wait}
 	}
@@ -155,6 +173,7 @@ type Result struct {
 	Answer string
 	Note   string
 	Held   bool
+	End    End // how a final one ended
 	Last   int
 	// Quiet: nothing to send (a held run whose background work ended without a word).
 	Quiet bool
@@ -183,8 +202,15 @@ func (r *Run) Decide(rd Reading, l Look) *Result {
 	if strings.TrimSpace(rd.Answer) == "" {
 		res.Stopped = rd.Stopped
 	}
-	if held {
+	switch {
+	case held:
 		res.Note = i18n.T(l.Lang, "channel-turns.background", i18n.Args{"count": l.Background})
+	case rd.Stopped == transcript.InterruptedNotice:
+		res.End = EndStopped
+	case strings.HasPrefix(rd.Stopped, transcript.APIErrorPrefix) || l.Failed:
+		res.End = EndError
+	case l.Offline:
+		res.End = EndOffline // cut off by its machine going offline, words or not
 	}
 	return res
 }

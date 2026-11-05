@@ -225,6 +225,12 @@ internal fun AssistantManagement.inGroup(names: GroupNames): AssistantManagement
     val source = this
     return object : AssistantManagement {
         override suspend fun warm() = source.warm()
+        // The hub's plain machine ids, as the merged lists name them.
+        override suspend fun readiness(probe: Boolean) = source.readiness(probe).let { r ->
+            r.copy(machine = r.machine?.let { it.copy(id = names.machineId(it.id)) },
+                steps = r.steps.map { step -> step.copy(machine = step.machine?.takeIf(String::isNotBlank)?.let(names::machineId)) })
+        }
+        override suspend fun dismissReadiness(dismissed: Boolean) = source.dismissReadiness(dismissed)
         override suspend fun config() = source.config().let { it.copy(machineId = names.machineId(it.machineId)) }
         override suspend fun updateConfig(update: AssistantConfigUpdate) =
             source.updateConfig(update.copy(machineId = update.machineId?.let(names::rawMachine)))

@@ -154,7 +154,7 @@ private fun PersonaRootContent(
                         onReady = { MainActivity.pendingPairLink.value = null; entering = false; onPaired() },
                         onDiagnostics = { diagnostics = true }, diagnostics = services.diagnostics,
                         onCredentialsSaved = { MainActivity.pendingPairLink.value = null }, machines = services.machines,
-                        attempts = services.pairingAttempts,
+                        attempts = services.pairingAttempts, mainReadiness = services.readiness,
                         footer = {
                             if (hub == null) JTextButton(stringResource(R.string.app_try_demo), onClick = { scope.launch {
                                 try { shell.enterDemo(); MainActivity.pendingPairLink.value = null }

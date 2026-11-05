@@ -15,6 +15,9 @@ import persona.feature.chat.*
 import persona.feature.files.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flow
 
 @Composable
 internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navigator, feedback: AppFeedback, requestId: String? = null,
@@ -67,12 +70,10 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
     var insertionFocused by remember { mutableStateOf(false) }
     var git by remember { mutableStateOf<persona.core.contracts.api.SessionGitStatus?>(null) }
     val cwd = metadata?.cwd.orEmpty()
-    LaunchedEffect(cwd, session.files, pane) {
-        if (!assistant && cwd.isNotBlank()) {
-            try { git = session.files?.status(route.machineId, cwd) }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { git = null }
-        }
+    val connectionState = (wiring?.connection ?: session.connection).state
+    LaunchedEffect(cwd, session.files, pane, connectionState) {
+        val files = session.files
+        if (!assistant && cwd.isNotBlank() && files != null) followGitStatus(connectionState, { files.status(route.machineId, cwd) }) { git = it }
     }
     val filesAvailable = !assistant && cwd.isNotBlank() && session.files != null
     fun open(p: FilesPane, path: String? = null, line: Int? = null) {
@@ -108,7 +109,7 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
                 openedLine = null
                 composer.focusRequest++
             }, initialPane = pane!!, initialPath = openedPath, initialLine = openedLine,
-                connection = (wiring?.connection ?: session.connection).state)
+                connection = connectionState)
         }
     }
 }
@@ -130,5 +131,26 @@ private fun GroupGoneRedirect(route: ChatRoute, session: ShellSession, navigator
         if (moved == null) kotlinx.coroutines.delay(2_000)
         navigator.back()
         moved?.let { navigator.navigate(ChatRoute(it.machineId, it.sessionId, kind = route.kind)) }
+    }
+}
+
+/**
+ * The chat's Git button status: read now, and again each time [states] goes from not-Online back to Online (#4239,
+ * as the files pane does since #4211), so a read that failed while the hub was away does not leave the button gone
+ * or on an old count. A read still on its way at reconnect is started again. A failed read shows null. Never returns.
+ * A StateFlow can fold a quick drop and return into one Online, and nothing is read again then.
+ */
+internal suspend fun followGitStatus(states: StateFlow<ConnectionState>?, read: suspend () -> SessionGitStatus, show: (SessionGitStatus?) -> Unit) {
+    flow {
+        emit(Unit)
+        states?.let { connection ->
+            var was = connection.value
+            connection.collect { now ->
+                if (now == ConnectionState.Online && was != ConnectionState.Online) emit(Unit)
+                was = now
+            }
+        }
+    }.collectLatest {
+        show(try { read() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null })
     }
 }

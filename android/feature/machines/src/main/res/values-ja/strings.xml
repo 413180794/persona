@@ -5,9 +5,9 @@
     <string name="machines_summary">%1$d/%2$d台がオンライン、%3$d台が要注意</string>
     <string name="machines_refresh">更新</string>
     <string name="machines_sessions_failure">マシンとセッションの一覧はまだ更新されていません。</string>
-    <string name="machines_empty_title">マシンはまだありません</string>
+    <string name="machines_empty_title">まだパソコンがありません</string>
     <string name="machines_empty_unavailable">現在マシンを表示できません</string>
-    <string name="machines_empty_body">ハブがお使いのコンピューターに接続すると、ここに状態が表示されます。</string>
+    <string name="machines_empty_body">1 台追加すると、Persona がそのパソコンで作業できます。</string>
     <string name="machines_failure_unavailable">監視機能はまだ使えません。マシンが一覧にあることを確認し、新しいバージョンのハブとノードをデプロイしてから再度ご確認ください。</string>
     <string name="machines_failure_offline">現在更新できません。ハブに接続すると自動で再試行します。</string>
     <string name="machines_gone">このマシンはハブにありません。</string>

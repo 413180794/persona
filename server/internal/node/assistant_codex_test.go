@@ -219,6 +219,35 @@ func codexTestNode(t *testing.T) *Node {
 
 const testThread = "01a19300-7e92-7073-9bb8-d2ad3126f328"
 
+// The effort left to the model (auto) is no effort in turn/start: Codex takes only its own levels.
+func TestCodexTurnWithoutEffortOnAuto(t *testing.T) {
+	n := codexTestNode(t)
+	withFakeHub(t, n)
+	cwd := t.TempDir()
+	rollout := filepath.Join(t.TempDir(), "rollout-2026-11-01T01-27-25-"+testThread+".jsonl")
+	_ = os.WriteFile(rollout, []byte(`{"timestamp":"2026-11-01T00:00:00Z","type":"session_meta","payload":{"id":"`+testThread+`","cwd":"`+cwd+`"}}`+"\n"), 0o600)
+	_, c, f := newFakeCodex(t, n, cwd)
+	f.results["thread/start"] = map[string]any{"thread": map[string]any{"id": testThread, "path": rollout}}
+	f.results["turn/start"] = map[string]any{"turn": map[string]any{"id": "turn-1", "status": "inProgress"}}
+	ctx := context.Background()
+	if err := c.start(ctx, "", cwd, false); err != nil {
+		t.Fatal(err)
+	}
+	n.noteModes(testThread, "default", effortAuto)
+	if err := c.deliver(ctx, "", "你好", nil); err != nil {
+		t.Fatal(err)
+	}
+	ts := f.sent("turn/start")
+	if len(ts) != 1 {
+		t.Fatalf("turn/start sent %d times", len(ts))
+	}
+	var turn map[string]any
+	_ = json.Unmarshal(ts[0].Params, &turn)
+	if _, ok := turn["effort"]; ok {
+		t.Fatalf("turn/start carries effort %v for auto", turn["effort"])
+	}
+}
+
 func TestCodexStartAndTurns(t *testing.T) {
 	n := codexTestNode(t)
 	fh := withFakeHub(t, n)

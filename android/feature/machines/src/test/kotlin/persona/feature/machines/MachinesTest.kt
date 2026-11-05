@@ -10,6 +10,18 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MachinesTest {
+    @Test fun bytesPickTheUnitAfterRounding() {
+        val en = java.util.Locale.ENGLISH
+        assertEquals("1,023.0 B", MetricFormat.bytes(1023, en))
+        assertEquals("1.0 KB", MetricFormat.bytes(1023.96, en))
+        assertEquals("1.0 KB", MetricFormat.bytes(1024, en))
+        assertEquals("1,023.9 KB", MetricFormat.bytes(1023.94 * 1024, en))
+        assertEquals("1.0 MB", MetricFormat.bytes(1024.0 * 1024 - 20, en))
+        assertEquals("1.0 GB/s", MetricFormat.rate(1023.97 * 1024 * 1024, en))
+        assertEquals("16.0 GB", MetricFormat.bytes(16L shl 30, en))
+        assertEquals("2,048.0 TB", MetricFormat.bytes(2048.0 * (1L shl 40), en))
+    }
+
     @Test fun historyPreservesGapsAndPollingStopsWithThePage() = runTest {
         val points = listOf(MetricPoint(100, cpu = 20.0), MetricPoint(110, cpu = 30.0),
             MetricPoint(120, gap = true), MetricPoint(200, cpu = 95.0), MetricPoint(210), MetricPoint(220, cpu = 0.0))

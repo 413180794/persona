@@ -37,15 +37,15 @@ struct HealthTrendsSection: View {
         case .loading:
             ProgressView().frame(maxWidth: .infinity).padding(Theme.Space.xl)
         case .needsAccess:
-            EmptyStateView(symbol: Theme.Icon.healthTrends, title: "读取健康数据",
-                           message: "允许 Persona 读取步数、睡眠和体重后，这里会画出趋势。",
-                           action: (title: "允许读取", run: { Task { await model.requestAccess() } }))
+            EmptyStateView(symbol: Theme.Icon.healthTrends, title: String(localized: "读取健康数据"),
+                           message: String(localized: "允许 Persona 读取步数、睡眠和体重后，这里会画出趋势。"),
+                           action: (title: String(localized: "允许读取"), run: { Task { await model.requestAccess() } }))
         case .unavailable:
-            EmptyStateView(symbol: Theme.Icon.healthTrends, title: "这台设备没有健康数据",
-                           message: "步数、睡眠和体重的趋势在装有「健康」的 iPhone 上显示。", action: nil)
+            EmptyStateView(symbol: Theme.Icon.healthTrends, title: String(localized: "这台设备没有健康数据"),
+                           message: String(localized: "步数、睡眠和体重的趋势在装有「健康」的 iPhone 上显示。"), action: nil)
         case .loaded(let cards) where cards.isEmpty:
-            EmptyStateView(symbol: Theme.Icon.healthTrends, title: "暂时没有数据",
-                           message: "这段时间里没有步数、睡眠或体重记录。若没有允许读取，可在 iOS 设置 › 健康 › 数据访问与设备 › Persona 里打开。",
+            EmptyStateView(symbol: Theme.Icon.healthTrends, title: String(localized: "暂时没有数据"),
+                           message: String(localized: "这段时间里没有步数、睡眠或体重记录。若没有允许读取，可在 iOS 设置 › 健康 › 数据访问与设备 › Persona 里打开。"),
                            action: nil)
         case .loaded(let cards):
             ForEach(HealthTrendMetric.allCases) { metric in

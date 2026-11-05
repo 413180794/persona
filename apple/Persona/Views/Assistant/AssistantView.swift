@@ -994,7 +994,7 @@ struct StarterModesMenu: View {
         Section("思考强度") {
             Picker("思考强度", selection: modes.$effort) {
                 Text("跟随启动器").tag("")
-                ForEach(SessionModes.effortLevels) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
+                ForEach(SessionModes.startEffortLevels) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
             }
             .pickerStyle(.inline)
         }

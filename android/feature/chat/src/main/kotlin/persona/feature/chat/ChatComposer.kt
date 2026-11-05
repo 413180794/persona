@@ -74,6 +74,12 @@ fun ChatComposer(
     onModel: (() -> Unit)? = null,
     /** /loop in the "/" list, with a line under the box saying what it will do (Claude Code only, web `hasLoop`). */
     loop: Boolean = false,
+    /**
+     * What has to happen before anything can be sent (先接上模型, 先添加电脑: docs/onboarding.md 4.4): the send button says
+     * it and [onBlocked] opens that step. The box still takes typing and keeps the draft; nothing is queued.
+     */
+    blockedLabel: String? = null,
+    onBlocked: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -294,6 +300,7 @@ fun ChatComposer(
             // something to send, else a stop while the agent works; nothing else while the box is empty.
             dictate?.let { JIconButton(PhIcons.Microphone, stringResource(R.string.chat_composer_dictate), it, enabled = !sending) }
             when {
+                blockedLabel != null && enabled -> BlockedSendButton(blockedLabel, onBlocked)
                 hasContent -> SendButton(onClick = onSend, enabled = enabled && state.ready && !sending, loading = sending)
                 working && canInterrupt -> {
                     SendButton(onClick = {

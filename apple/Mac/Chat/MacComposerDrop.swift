@@ -153,10 +153,17 @@ struct MacComposerPaste: ViewModifier {
     var image: (NSImage) -> Void
     var files: ([URL]) -> Void
 
+    /// Whether `event` is the plain ⌘V shortcut. Caps Lock is not a modifier here (it is not in the intersection and
+    /// charactersIgnoringModifiers keeps the uppercase "V" it produces, so the character is compared case-insensitively);
+    /// shift still disqualifies the shortcut, since ⌘⇧V means something else.
+    static func isPasteShortcut(_ event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command else { return false }
+        return (event.charactersIgnoringModifiers ?? "").lowercased() == "v"
+    }
+
     func body(content: Content) -> some View {
         content.modifier(MacComposerEventMonitor(focused: focused) { event in
-            guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
-                  event.charactersIgnoringModifiers == "v" else { return event }
+            guard Self.isPasteShortcut(event) else { return event }
             switch MacPaste.current() {
             case .text: return event
             case .image:

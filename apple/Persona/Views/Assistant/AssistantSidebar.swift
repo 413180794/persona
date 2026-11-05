@@ -1048,7 +1048,7 @@ struct AssistantSidebar: View {
                 } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
                 Button {
                     UIPasteboard.general.string = ChatTrace.shared.text(main.key) // structure only, to paste into a report
-                    model.toast = Toast("已拷贝诊断", style: .success)
+                    model.toast = Toast(String(localized: "已拷贝诊断"), style: .success)
                 } label: { Label("拷贝诊断", systemImage: Theme.Icon.diagnostics) }
                 if main.status.isLive {
                     Button(role: .destructive) { ending = main } label: { Label("结束…", systemImage: Theme.Icon.end) }
@@ -1392,7 +1392,7 @@ struct AssistantSidebar: View {
             } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
             Button {
                 UIPasteboard.general.string = ChatTrace.shared.text(s.key) // structure only, to paste into a report
-                model.toast = Toast("已拷贝诊断", style: .success)
+                model.toast = Toast(String(localized: "已拷贝诊断"), style: .success)
             } label: { Label("拷贝诊断", systemImage: Theme.Icon.diagnostics) }
             if s.status.isLive {
                 Button(role: .destructive) { ending = s } label: { Label("结束…", systemImage: Theme.Icon.end) }

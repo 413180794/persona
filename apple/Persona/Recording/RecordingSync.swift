@@ -184,7 +184,7 @@ final class RecordingSync {
     private func pass() async {
         purgeExpired()
         guard let api = api(), !api.config.isDemo else {
-            problem = api == nil ? nil : "体验模式不同步录音"
+            problem = api == nil ? nil : String(localized: "体验模式不同步录音")
             return
         }
         if lastReconcile == nil, await reconcile(api) { lastReconcile = now() }
@@ -247,7 +247,7 @@ final class RecordingSync {
         } catch let error as APIError where error.status == 400 || error.status == 413 {
             store.rejected[entry.id] = body.revision
             save()
-            problem = "有一条录音知识库没有收下：\(error.message)"
+            problem = String(localized: "有一条录音知识库没有收下：\(error.message)")
             return true
         } catch {
             note(error)
@@ -297,15 +297,15 @@ final class RecordingSync {
 
     private func note(_ error: Error) {
         if let e = error as? APIError, e.status == 404 {
-            problem = "hub 还不支持录音同步，升级后会自动补传"
+            problem = String(localized: "hub 还不支持录音同步，升级后会自动补传")
         } else if let e = error as? APIError, e.status == 503 {
-            problem = "知识库暂时不可用，稍后自动重试"
+            problem = String(localized: "知识库暂时不可用，稍后自动重试")
         } else {
-            problem = "连不上 hub，录音的文字稍后自动同步"
+            problem = String(localized: "连不上 hub，录音的文字稍后自动同步")
         }
     }
 
     private func save() {
-        do { try JSONEncoder().encode(store).write(to: file, options: .atomic) } catch { problem = "同步记录没有保存" }
+        do { try JSONEncoder().encode(store).write(to: file, options: .atomic) } catch { problem = String(localized: "同步记录没有保存") }
     }
 }

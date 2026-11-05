@@ -1345,7 +1345,7 @@ private struct AgentsList: View {
             listSection {
                 ForEach(AgentListOrder.recent(sessions)) { s in slotRow(s, context: true) }
             } header: {
-                SectionHeader(title: "最近使用", count: sessions.count, tone: StatusPalette.idle)
+                SectionHeader(title: String(localized: "最近使用"), count: sessions.count, tone: StatusPalette.idle)
             }
         }
     }

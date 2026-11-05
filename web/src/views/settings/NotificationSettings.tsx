@@ -1,9 +1,11 @@
 // 设置 › 通知 (#2971, the app's NotificationSettingsView): this browser's system notifications, and what it is told
 // about: 需要你处理时 and Agent 做完时 (不推送 / 只推长任务 / 每次都推). The two choices are kept by the hub per device
-// (GET / PUT /devices/{id}/prefs, lib/notify.ts), as the phone's are; the sounds (设置 › 通用 › 提示音) follow them too.
+// (GET / PUT /devices/{id}/prefs, lib/notify.ts), as the phone's are. The 提示音 switch sits here too, under the system
+// one (#4057): it is this browser's alone (lib/attention.ts), so it shows while the hub's prefs load, and it follows them.
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";
 import { errorText } from "../../lib/api";
+import { setAttentionSoundEnabled, useAttentionSoundSetting } from "../../lib/attention";
 import { durationText, loadNotifyPrefs, saveNotifyPrefs, setSystemNotify, useNotifyPrefs, useSystemNotify, type DonePref, type Permission } from "../../lib/notify";
 import { Button, cx, Loading, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -25,6 +27,7 @@ function permissionHint(p: Permission, on: boolean): string | undefined {
 export function NotificationSettings() {
   const prefs = useNotifyPrefs();
   const system = useSystemNotify();
+  const sound = useAttentionSoundSetting();
   const [state, setState] = useState<"loading" | "ready" | { error: string }>("loading");
   const [asking, setAsking] = useState(false);
 
@@ -66,6 +69,12 @@ export function NotificationSettings() {
             disabled={asking || system.permission === "unsupported" || system.permission === "denied"}
             label={t("settings-notifications.system")}
           />
+        </Row>
+      </Group>
+
+      <Group footer={t("settings-notifications.sound_footer")}>
+        <Row icon="volume" label={t("settings-notifications.sound")} hint={t("settings-notifications.sound_hint")}>
+          <Switch on={sound} onChange={setAttentionSoundEnabled} label={t("settings-notifications.sound")} />
         </Row>
       </Group>
 

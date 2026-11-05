@@ -105,7 +105,7 @@ internal fun ChatSessionInfoSheet(
         try { info = state.info(session) }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) {
-            error = res.getString(R.string.chat_info_unreadable, (e as? UnsupportedOperationException)?.message ?: operationFeedback(e).message)
+            error = res.getString(R.string.chat_info_unreadable, (e as? UnsupportedOperationException)?.message ?: operationFeedback(e).text.resolve(res))
         }
     }
     JSheet(onDismiss = onDismiss, title = stringResource(R.string.chat_info_title), scrollable = true) {

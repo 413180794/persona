@@ -241,6 +241,8 @@ func TestInboxForgetsASource(t *testing.T) {
 	if n := len(h.inboxList(true)); n != 2 {
 		t.Fatalf("a source read with nothing lost its items: %d left", n)
 	}
+	h.inbox.triaging.Lock() // the mail's triage pass runs in the background, writing the store and telling the apps: wait for it (#4236)
+	h.inbox.triaging.Unlock()
 	before := len(h.in.changes())
 	if n, err := h.InboxForget(ctx, "example"); err != nil || n != 1 {
 		t.Fatalf("forget: %d %v", n, err)

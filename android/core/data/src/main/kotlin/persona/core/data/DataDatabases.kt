@@ -89,6 +89,9 @@ interface PersistentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putMainConversation(row: MainConversationRow)
 
+    @Query("DELETE FROM main_conversation WHERE scope = :scope AND machine IS NULL AND session IS NULL")
+    suspend fun releaseMainCreation(scope: String)
+
     @Query("DELETE FROM main_conversation WHERE scope = :scope AND machine = :machine AND session = :session")
     suspend fun forgetMainConversation(scope: String, machine: String, session: String)
 
@@ -152,6 +155,8 @@ class RoomOutboxStore(private val database: PersistentDatabase, private val scop
 
     override suspend fun claimMainCreation(): Boolean =
         dao.claimMainCreation(MainConversationRow(scope.path, null, null)) != -1L
+
+    override suspend fun releaseMainCreation() = dao.releaseMainCreation(scope.path)
 
     override suspend fun bindMainConversation(session: SessionKey) = database.withTransaction {
         require(session.machineId.isNotBlank() && session.sessionId.isNotBlank())

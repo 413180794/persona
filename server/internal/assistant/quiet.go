@@ -197,7 +197,12 @@ func (s *Service) quietAgentTask(ctx context.Context, conversation string, m Dev
 	if retitle {
 		s.nameTodoLater(ctx, todo.ID, title, prompt)
 	}
-	s.superviseTodo(ctx, todo.ID, conversation, nil, 0) // the main conversation follows it up (supervise.go)
+	// The main conversation follows up what it hands out (supervise.go), as task_plan has it; a reporting
+	// conversation's task is not supervised: its notices go back to that conversation, not into a 督办 message for the
+	// main one (#4101).
+	if s.isMain(ctx, conversation) {
+		s.superviseTodo(ctx, todo.ID, conversation, nil, 0)
+	}
 	if err := s.linkTodoAgent(ctx, todo.ID, m.ID, sid, title, cwd, ""); err != nil {
 		s.logf("agent_start %s: link %s: %v", short(sid), todo.ID, err)
 	}

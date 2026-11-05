@@ -402,7 +402,7 @@
     <string name="agents_empty_search_hint">空间、标签、会话的标题和内容都能搜，换个词试试。</string>
     <string name="agents_empty_first_title">开始第一个开发会话</string>
     <string name="agents_empty_machine_title">这台机器上没有会话</string>
-    <string name="agents_empty_first_hint">在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。</string>
+    <string name="agents_empty_first_hint">在任意一台电脑上新建会话，手机上实时看、随时接手。</string>
     <string name="agents_empty_filter_title">没有%1$s的会话</string>
     <string name="agents_empty_filter_hint">各台电脑上的 Agent 有新动静会出现在这里。</string>
     <string name="agents_empty_filter_machine_hint">这台机器上的 Agent 有新动静会出现在这里。</string>
@@ -420,4 +420,6 @@
     <string name="agents_herdr_why_old_node">这台电脑上的 Persona 版本太旧，不会启动 herdr，更新后再试</string>
     <string name="agents_herdr_why_offline">这台电脑现在离线</string>
     <string name="agents_herdr_why_timeout">等了很久 herdr 还没起来，稍后再看看</string>
+    <string name="agents_empty_no_computer_title">还没有电脑</string>
+    <string name="agents_empty_no_computer_hint">添加一台，Persona 就能在上面替你干活。</string>
 </resources>

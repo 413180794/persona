@@ -402,4 +402,19 @@
     <plurals name="settings_translation_chats">
         <item quantity="other">%1$d 个会话</item>
     </plurals>
+    <string name="settings_ready_main_header">主对话</string>
+    <string name="settings_ready_main_about">Persona 的主对话要一台电脑、Claude Code 和一个能用的模型。哪一步接好了，这里会自己变好。</string>
+    <string name="settings_ready_step_computer">电脑</string>
+    <string name="settings_ready_step_claude">Claude Code</string>
+    <string name="settings_ready_step_model">模型</string>
+    <string name="settings_ready_step_first_message">第一句话</string>
+    <string name="settings_ready_state_checking">正在检查</string>
+    <string name="settings_ready_state_skipped">不需要</string>
+    <string name="settings_ready_state_unknown">还没验证</string>
+    <string name="settings_ready_step_computer_ok">%1$s 在线</string>
+    <string name="settings_ready_step_claude_ok">版本 %1$s</string>
+    <string name="settings_ready_step_model_ok">能用</string>
+    <string name="settings_ready_step_first_message_ok">已经答过一次</string>
+    <string name="settings_ready_state_not_tried">还没试过</string>
+    <string name="settings_ready_phone_header">这台手机</string>
 </resources>

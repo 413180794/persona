@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the main conversation still needs (docs/onboarding.md 4.4–4.6). -->
+<resources>
+    <string name="designsystem_feedback_no_machine">Persona works on one of your computers, and none is connected yet.</string>
+    <string name="designsystem_feedback_machine_pending">This computer isn\'t confirmed as yours yet.</string>
+    <string name="designsystem_feedback_computer_offline">Your computer is offline. It may be asleep, or Persona Link isn\'t running.</string>
+    <string name="designsystem_feedback_claude_missing">Claude Code isn\'t installed on that computer yet.</string>
+    <string name="designsystem_feedback_launcher_missing">That computer can\'t find this model. It may have been removed.</string>
+    <string name="designsystem_feedback_not_logged_in">Claude Code on that computer isn\'t signed in yet.</string>
+    <string name="designsystem_feedback_auth_failed">The model\'s key is wrong or has expired.</string>
+    <string name="designsystem_feedback_assistant_restarting">The assistant is restarting. It\'ll be back in a few seconds.</string>
+    <string name="designsystem_readiness_one_more_step">One more step</string>
+    <string name="designsystem_readiness_action_add_computer">Add a computer</string>
+    <string name="designsystem_readiness_action_confirm_computer">It\'s my computer</string>
+    <string name="designsystem_readiness_action_wake_computer">How to wake it</string>
+    <string name="designsystem_readiness_action_install_claude">How to install</string>
+    <string name="designsystem_readiness_action_login_claude">How to sign in</string>
+    <string name="designsystem_readiness_action_connect_model">Connect a model</string>
+    <string name="designsystem_readiness_action_edit_provider">Change the key</string>
+    <string name="designsystem_readiness_action_test_assistant">Try it</string>
+    <string name="designsystem_readiness_send_add_computer">Add a computer first</string>
+    <string name="designsystem_readiness_send_wake_computer">Wake the computer first</string>
+    <string name="designsystem_readiness_send_confirm_computer">Confirm the computer first</string>
+    <string name="designsystem_readiness_send_update_computer">Update the computer first</string>
+    <string name="designsystem_readiness_send_connect_model">Connect a model first</string>
+    <string name="designsystem_readiness_that_computer">that computer</string>
+    <string name="designsystem_readiness_got_it">Got it</string>
+    <string name="designsystem_readiness_use_api_key">Use an API key</string>
+    <string name="designsystem_readiness_chat_only">Chat only for now. Connect your computer and Persona can work on it for you.</string>
+    <string name="designsystem_readiness_probe_ok">Tried it. The answer: %1$s</string>
+    <string name="designsystem_readiness_probe_failed">Tried it, and it failed: %1$s</string>
+    <string name="designsystem_readiness_help_add_title">Add a computer</string>
+    <string name="designsystem_readiness_help_add_why">Persona works on your computer for you: reading files, running commands, using Claude Code there. Connect one first; Mac, Windows and Linux all work.</string>
+    <string name="designsystem_readiness_help_add_how">On that computer, open Persona on the web, go to Machines and choose Add computer. Follow the steps to install Persona Link; it connects by itself.</string>
+    <string name="designsystem_readiness_help_add_note">Once the computer connects, this updates by itself.</string>
+    <string name="designsystem_readiness_help_wake_title">Wake %1$s</string>
+    <string name="designsystem_readiness_help_wake_body">%1$s is offline. It may be asleep, or Persona Link isn\'t running on it. Open the lid or wake it, and make sure Persona Link is running.</string>
+    <string name="designsystem_readiness_help_wake_after">Once it\'s back, this updates by itself.</string>
+    <string name="designsystem_readiness_help_install_title">Install Claude Code</string>
+    <string name="designsystem_readiness_help_install_body">On %1$s, open Terminal, paste this line and press Return:</string>
+    <string name="designsystem_readiness_help_install_after">Come back here once it\'s installed; this updates shortly after.</string>
+    <string name="designsystem_readiness_help_login_title">Sign in to Claude Code</string>
+    <string name="designsystem_readiness_help_login_body">On %1$s, open Terminal, type this word, press Return and sign in once in the browser:</string>
+    <string name="designsystem_readiness_help_login_after">When you\'re signed in, come back and send a message.</string>
+    <string name="designsystem_readiness_help_what_title">What Persona can do</string>
+    <string name="designsystem_readiness_help_what_body">Persona is your personal assistant. With a computer and a model connected, it can:</string>
+    <string name="designsystem_readiness_help_what_computer">• Read files and run commands on your computer for you (it asks before it acts)</string>
+    <string name="designsystem_readiness_help_what_data">• Look at your calendar, mail, Lark and inbox, sort things out and draft replies</string>
+    <string name="designsystem_readiness_help_what_memory">• Remember what you talked about and pick it up next time</string>
+    <string name="designsystem_readiness_help_model_title">How to connect a model</string>
+    <string name="designsystem_readiness_help_model_body">Persona needs a working model to answer. Pick one of two ways:</string>
+    <string name="designsystem_readiness_help_model_key">• You have an API key: in Settings › Model providers, pick a provider and paste the key. It\'s tested for you.</string>
+    <string name="designsystem_readiness_help_model_claude">• You already use Claude Code: sign in once on that computer, nothing else to fill in.</string>
+</resources>

@@ -8,7 +8,8 @@ import { stateOf } from "./format";
 import { agentKey } from "./pins";
 import { isMuted } from "./session-actions";
 import type { AgentMutes } from "./agent-groups";
-import type { AgentState, Session } from "./types";
+import { byTime } from "./times";
+import type { AgentState, Interaction, Session } from "./types";
 
 const SITE = "Persona";
 
@@ -24,7 +25,8 @@ export function badgeText(needs: number): string {
   return needs > 9 ? "9+" : String(needs);
 }
 
-export type AttentionEvent = { kind: "needs" | "finished"; key: string };
+/** `card`: a 需要你 one about a new card of a session that was already 需要你 (detectNewCards). */
+export type AttentionEvent = { kind: "needs" | "finished"; key: string; card?: Interaction; follows?: boolean };
 
 /**
  * What changed between two snapshots of the sessions' states (`prev`: the states of the last one, by agentKey).
@@ -66,6 +68,50 @@ export function settledTags(prev: ReadonlyMap<string, AgentState>, next: Readonl
     else if (was === "unread") out.push(`${key}#finished`);
   }
   return out;
+}
+
+/** A new card for a session that was already 需要你 (#4058). `follows`: the session's 需要你 came before any card
+ *  (a Codex approval is read off the screen after the pane blocks), so this card is that same wait: its notification
+ *  is written again from the card, without a sound. */
+export type CardEvent = { kind: "needs"; key: string; card: Interaction; follows?: boolean };
+
+/** How long a card id is remembered after it was last pending: one that drops out and comes back (a reconnect, a
+ *  screen re-read) is not new. */
+export const FORGET_CARD_MS = 10 * 60_000;
+
+/**
+ * The cards that arrived between two snapshots for a session that stayed 需要你 (`was` the states of the last snapshot,
+ * `next` this one's, as detectTransitions works them out). A session that only now becomes 需要你 is detectTransitions'
+ * (its notification is about its oldest card), so a card is announced once: by the transition or here; `bare` is the
+ * sessions whose transition had no card yet, whose first card follows it (CardEvent.follows). `known` is the card ids
+ * seen pending, with when they last were, undefined before the first snapshot (opening the page announces nothing).
+ * Quiet tasks' sessions are left out, as detectTransitions does; several new cards for one session make one event, the oldest.
+ */
+export function detectNewCards(known: ReadonlyMap<string, number> | undefined, interactions: readonly Interaction[], was: ReadonlyMap<string, AgentState>, next: ReadonlyMap<string, AgentState>, sessions: readonly Session[], bare: ReadonlySet<string>, now: number): { ids: Map<string, number>; events: CardEvent[] } {
+  const ids = new Map<string, number>();
+  for (const [id, at] of known ?? []) if (now - at < FORGET_CARD_MS) ids.set(id, at);
+  for (const ix of interactions) ids.set(ix.id, now);
+  if (!known) return { ids, events: [] };
+  const quiet = new Set(sessions.filter((s) => s.quiet).map(agentKey));
+  const first = new Map<string, Interaction>();
+  for (const ix of interactions) {
+    if (known.has(ix.id)) continue;
+    const key = agentKey(ix);
+    if (quiet.has(key) || was.get(key) !== "needs_you" || next.get(key) !== "needs_you") continue;
+    const had = first.get(key);
+    if (!had || byTime(ix.created_at, had.created_at) < 0) first.set(key, ix);
+  }
+  return { ids, events: [...first].map(([key, card]) => (bare.has(key) ? { kind: "needs", key, card, follows: true } : { kind: "needs", key, card })) };
+}
+
+/**
+ * The 需要你 tags whose notification was about a card that is no longer pending (answered here or elsewhere, withdrawn),
+ * while the session may still be 需要你 for another one: taken back as settledTags does for a state change (#3610).
+ * `announced` is the card each session's notification is about, by agentKey.
+ */
+export function answeredTags(announced: ReadonlyMap<string, string>, pending: readonly Interaction[]): string[] {
+  const ids = new Set(pending.map((ix) => ix.id));
+  return [...announced].filter(([, card]) => !ids.has(card)).map(([key]) => `${key}#needs`);
 }
 
 /** A session's current turn as the page saw it: when it started working, and when it last stopped (ms). */
@@ -129,7 +175,7 @@ export function rateLimiter(gap = MIN_GAP_MS) {
   };
 }
 
-// ── 提示音 setting (设置 › 通用), kept in this browser, off by default ──────────────
+// ── 提示音 setting (设置 › 通知), kept in this browser, off by default ──────────────
 
 const KEY = "persona.attentionSound";
 const listeners = new Set<() => void>();

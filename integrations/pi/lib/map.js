@@ -113,6 +113,8 @@ export function entryItems(entry, seq) {
       }
       if (m.stopReason === 'aborted') add({ role: 'system', kind: 'notice', text: '已中断' })
       else if (m.stopReason === 'error') add({ role: 'system', kind: 'notice', text: m.errorMessage ? `出错了：${snippet(m.errorMessage)}` : '出错了' })
+      // The output limit stopped the turn mid-way: say so, or the phone shows half a sentence (or nothing) as the answer.
+      else if (m.stopReason === 'length') add({ role: 'system', kind: 'notice', text: '输出达到上限，这一轮停了' })
       break
     }
     case 'toolResult': {

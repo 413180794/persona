@@ -102,7 +102,7 @@ extension AssistantViewModel.Deps {
     /// Uses only the protocol's generated inputs and restores snapshots from this card's own hub group.
     static func live(_ location: AssistantCardLocation) -> Self {
         .init(send: { submission in
-            guard let api = AppModel.shared.api(location.scope.group) else { throw APIError(status: 0, message: "还没连接 hub") }
+            guard let api = AppModel.shared.api(location.scope.group) else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
             if let text = submission.htmlText {
                 let input = ExtensionAssistantHTMLActionInput(kind: "reply", componentKey: submission.action, page: submission.page,
                     expectedVersion: submission.version, text: text, clientMsgId: submission.clientMsgID, confirmed: submission.confirmed)
@@ -120,7 +120,7 @@ extension AssistantViewModel.Deps {
             store.receiveActions(feed.viewActions ?? [:], conversation: location.scope.conversation, group: location.scope.group)
             store.receiveBlocks(feed.viewBlocks ?? [], conversation: location.scope.conversation, group: location.scope.group)
         }, htmlOpen: { input in
-            guard let api = AppModel.shared.api(location.scope.group) else { throw APIError(status: 0, message: "还没连接 hub") }
+            guard let api = AppModel.shared.api(location.scope.group) else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
             return try await api.assistantHTMLOpen(conversation: location.scope.conversation, key: location.key, input: input)
         })
     }

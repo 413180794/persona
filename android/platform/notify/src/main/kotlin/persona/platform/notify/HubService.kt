@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.Process
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -17,6 +19,7 @@ import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.PairingService
 import persona.core.contracts.api.InteractionCenter
 import persona.core.contracts.api.SessionsRepository
+import persona.core.contracts.api.VerifiedSessionsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.CoroutineScope
@@ -127,6 +130,15 @@ open class HubService : Service() {
                 InteractionNotificationReconciler(notifier::showingRequests, notifier::retract)
                     .run(interactions.pending, connection.state.map { it == ConnectionState.Online },
                         sessions.machines.map { list -> list.mapTo(HashSet()) { GroupKeys.namespaceOf(it.id) } })
+            }
+            // 做完了 notifications left by an earlier process, for sessions seen meanwhile (#4088).
+            (sessions as? VerifiedSessionsRepository)?.let { verified ->
+                scope.launch(Dispatchers.Default) {
+                    // Process start on the wall clock (postTime's clock); a clock change since then only shifts the cut-off.
+                    val since = System.currentTimeMillis() - (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime())
+                    StaleDoneNotifications(notifier::showingDone, { verified.verifiedSessions().values.flatten() }, notifier::retractDone, since)
+                        .run(connection.state.map { it == ConnectionState.Online }.distinctUntilChanged())
+                }
             }
             scope.launch {
                 pairing.isPaired.collect { if (!it && !starts.deferStop()) stopSelf() }

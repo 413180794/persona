@@ -188,7 +188,8 @@ private fun SettingsContent(
         "pair" -> PairingScreen(services.pairing, services.sessions, onReady = back,
             onDiagnostics = { open(SettingsPage.Diagnostics) }, diagnostics = services.diagnostics, onBack = back,
             footer = { onDemo?.let { Action(stringResource(R.string.settings_try_demo), onClick = it) }; deviceFeedback() },
-            machines = services.machines.takeUnless { services.demo }, attempts = services.pairingAttempts)
+            machines = services.machines.takeUnless { services.demo }, attempts = services.pairingAttempts,
+            mainReadiness = services.readiness.takeUnless { services.demo })
         "capsule" -> CapsuleSettingsPage(services.capsule, back)
         "claude" -> ClaudeSettingsPage(services.sessions, services.machines.takeUnless { services.demo }, back)
         "codex" -> ClaudeSettingsPage(services.sessions, services.machines.takeUnless { services.demo }, back, AgentSettingsKind.Codex)
@@ -213,6 +214,7 @@ private fun SettingsContent(
                     desktops, onDesktops = { open(SettingsPage.Desktops) }) else ({})
             ReadinessScreen(services.sessions, services.diagnostics,
                 notificationsOnly = page == "notify", showTitle = page == "notify",
+                readiness = services.readiness.takeUnless { services.demo }, onNavigate = onNavigate,
                 onDiagnostics = { open(SettingsPage.Diagnostics) }, onDone = back, onBack = back,
                 header = preferences, footer = {
                     if (page == "notify") SettingsCaption(stringResource(R.string.settings_notify_system_footer), Modifier.padding(vertical = Tokens.Space.s))
@@ -478,10 +480,32 @@ fun ReadinessScreen(
     onBack: (() -> Unit)? = onDone,
     header: LazyListScope.() -> Unit = {},
     footer: @Composable () -> Unit = {},
+    /** The main conversation's steps before the phone's (docs/onboarding.md 4.5), on hubs that offer them. */
+    readiness: AssistantReadinessSource? = null,
+    /** Opens a step's page (模型供应商, 机器); null during the first checklist, whose buttons then open help only. */
+    onNavigate: ((androidx.navigation3.runtime.NavKey) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val preferences = remember { context.getSharedPreferences("settings-readiness", android.content.Context.MODE_PRIVATE) }
+    val readinessOn by remember(readiness) { readiness?.available ?: kotlinx.coroutines.flow.flowOf(false) }.collectAsState(false)
+    var main by remember(readiness) { mutableStateOf<AssistantReadiness?>(null) }
+    var probing by remember { mutableStateOf(false) }
+    var mainHelp by remember { mutableStateOf<ReadinessHelp?>(null) }
+    suspend fun loadMain(probe: Boolean = false) {
+        val source = readiness ?: return
+        if (probe) probing = true
+        try { main = source.readiness(probe) }
+        catch (error: CancellationException) { throw error }
+        catch (_: Exception) { /* An older hub or a moment offline: the phone's items as before. */ }
+        finally { if (probe) probing = false }
+    }
+    fun mainAction(action: ReadinessActionId, step: ReadinessStep) {
+        action.help?.let { mainHelp = it; return }
+        if (action == ReadinessActionId.TestAssistant) { scope.launch { loadMain(probe = true) }; return }
+        val destination = action.settingsDestination(step.launcher ?: main?.launcher)
+        if (destination != null && onNavigate != null) onNavigate(destination) else mainHelp = ReadinessHelp.HowToConnectModel
+    }
     val records = remember(context) { ReadinessRecords(context) }
     var system by remember { mutableStateOf<SystemKind?>(null) }
     var items by remember { mutableStateOf(emptyList<ReadyItem>()) }
@@ -494,14 +518,16 @@ fun ReadinessScreen(
         items = PhoneReadiness.items(context, detected)
         if (detected.name == PhoneReadiness.HyperOS) { delay(1_000); items = PhoneReadiness.items(context, detected) }
     } }
+    val machinesSeen = machines.joinToString(",") { "${it.id}:${it.online}" }
+    LaunchedEffect(readinessOn, machinesSeen) { if (readinessOn && !notificationsOnly) loadMain() }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh() }
     val localNetwork = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh() }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh(); if (readinessOn && !notificationsOnly) scope.launch { loadMain() } }
     LaunchedEffect(Unit) {
         refresh()
         try { sessions.refresh() } catch (error: CancellationException) { throw error } catch (_: Exception) { }
     }
-    fun finish() {
+    fun finish(later: Boolean) {
         items.filter { !notificationsOnly || it.id == "notifications" || it.id.startsWith("channel") }.forEach { item ->
             val decision = when {
                 item.satisfied == true -> "verified"
@@ -515,11 +541,28 @@ fun ReadinessScreen(
                 if (records.decision(id) == null) records.record(id, "skipped")
             }
             records.pending(false)
+            // 以后再说 for the main conversation too: the hub stops offering the whole list (its card still shows).
+            // onDone() leaves the page and cancels its scope, so the request starts now and is not cancelled with it.
+            if (later && main?.ready == false && main?.dismissed == false) readiness?.let { source ->
+                scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                    withContext(kotlinx.coroutines.NonCancellable) { try { source.dismiss(true) } catch (_: Exception) { } }
+                }
+            }
         }
         onDone()
     }
     JListPage(title = stringResource(if (notificationsOnly) R.string.settings_ready_notifications else R.string.settings_ready_title), onBack = onBack, largeTitle = showTitle && onBack == null) {
         header()
+        val mainSteps = main?.takeIf { readinessOn && !notificationsOnly }
+        if (mainSteps != null) {
+            item("main-header") { JSectionHeader(stringResource(R.string.settings_ready_main_header)) }
+            item("main-steps") {
+                MainConversationSteps(mainSteps, probing, ::mainAction,
+                    // Without a page to go to, 确认电脑 has nothing to open; 接上模型 opens how to.
+                    allowed = { onNavigate != null || it != ReadinessActionId.ConfirmComputer })
+            }
+            item("phone-header") { JSectionHeader(stringResource(R.string.settings_ready_phone_header)) }
+        }
         if (notificationsOnly) item { JSectionHeader(stringResource(R.string.settings_ready_channels_header)) }
         item {
             Column(Modifier.padding(vertical = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
@@ -572,19 +615,22 @@ fun ReadinessScreen(
             }
         }
         if (!notificationsOnly) {
-            item { JSectionHeader(stringResource(R.string.settings_section_computers), count = machines.size) }
-            if (machines.isEmpty()) item { JEmptyState(stringResource(R.string.settings_ready_no_machines), stringResource(R.string.settings_ready_no_machines_detail)) }
-            itemsIndexed(machines) { index, machine ->
-                JGroupItem(GroupPosition.of(index, machines.size)) {
-                    val missing = stringResource(R.string.settings_not_provided)
-                    JRow(machine.displayName, value = stringResource(if (machine.online) R.string.settings_online else R.string.settings_offline))
-                    JRow("node", value = machine.nodeVersion ?: missing)
-                    JRow("herdr", value = machine.herdrVersion ?: missing)
-                    JRow("Claude", value = machine.claudeVersion ?: missing)
-                    if (machine.nodeMismatch == true) SettingsCaption(stringResource(R.string.settings_ready_node_mismatch), Modifier.padding(Tokens.Space.m))
+            // The hub's computer step says it for the beginner; the per-machine versions stay for older hubs.
+            if (mainSteps == null) {
+                item { JSectionHeader(stringResource(R.string.settings_section_computers), count = machines.size) }
+                if (machines.isEmpty()) item { JEmptyState(stringResource(R.string.settings_ready_no_machines), stringResource(R.string.settings_ready_no_machines_detail)) }
+                itemsIndexed(machines) { index, machine ->
+                    JGroupItem(GroupPosition.of(index, machines.size)) {
+                        val missing = stringResource(R.string.settings_not_provided)
+                        JRow(machine.displayName, value = stringResource(if (machine.online) R.string.settings_online else R.string.settings_offline))
+                        JRow("node", value = machine.nodeVersion ?: missing)
+                        JRow("herdr", value = machine.herdrVersion ?: missing)
+                        JRow("Claude", value = machine.claudeVersion ?: missing)
+                        if (machine.nodeMismatch == true) SettingsCaption(stringResource(R.string.settings_ready_node_mismatch), Modifier.padding(Tokens.Space.m))
+                    }
                 }
+                item { Action(stringResource(R.string.settings_ready_skip_machines)) { records.record("machines", "skipped"); revision++; testMessage = R.string.settings_ready_skipped_machines } }
             }
-            item { Action(stringResource(R.string.settings_ready_skip_machines)) { records.record("machines", "skipped"); revision++; testMessage = R.string.settings_ready_skipped_machines } }
             item { LockScreenTestSection(diagnostics, onCheckSettings = ::refresh) }
             item { Action(stringResource(R.string.settings_ready_skip_lock)) { records.record("lock-test", "skipped"); revision++; testMessage = R.string.settings_ready_skipped_lock } }
             item {
@@ -610,12 +656,18 @@ fun ReadinessScreen(
                 testMessage?.let { JNotice(stringResource(it)) }
                 SettingsCaption(stringResource(R.string.settings_ready_skip_note))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                    Action(stringResource(R.string.settings_ready_skip_rest), enabled = items.isNotEmpty(), onClick = ::finish)
-                    JButton(stringResource(R.string.settings_done), ::finish, size = JButtonSize.Small, enabled = items.isNotEmpty())
+                    Action(stringResource(R.string.settings_ready_skip_rest), enabled = items.isNotEmpty(), onClick = { finish(later = true) })
+                    JButton(stringResource(R.string.settings_done), { finish(later = false) }, size = JButtonSize.Small, enabled = items.isNotEmpty())
                 }
                 footer()
             }
         }
+    }
+    mainHelp?.let { help ->
+        ReadinessHelpDialog(help, main?.machine?.name, onDismiss = { mainHelp = null }, onAction = { action ->
+            main?.steps?.firstOrNull { it.primaryAction() == action }?.let { mainAction(action, it) }
+                ?: run { if (action == ReadinessActionId.ConnectModel) mainAction(action, ReadinessStep(ReadinessStep.MODEL)) }
+        }, canConnectModel = onNavigate != null)
     }
 }
 
@@ -642,5 +694,5 @@ private fun OnboardingContent(services: SettingsServices, onDone: () -> Unit) {
     if (diagnostics) {
         DiagnosticsScreen(services, onBack = { diagnostics = false })
     } else ReadinessScreen(services.sessions, services.diagnostics, notificationsOnly = false, showTitle = false,
-        onDiagnostics = { diagnostics = true }, onDone = onDone, onBack = onDone)
+        onDiagnostics = { diagnostics = true }, onDone = onDone, onBack = onDone, readiness = services.readiness.takeUnless { services.demo })
 }

@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import persona.core.contracts.GroupKeys
@@ -345,7 +346,7 @@ internal fun ProviderImportPage(providers: ProviderSetup, machines: List<Machine
                                     p.existing?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.settings_providers_import_existing, it) },
                                     stringResource(R.string.settings_providers_import_no_key).takeIf { !p.hasKey },
                                 ).joinToString(" · "), subtitleLines = 3, chevron = false,
-                                    enabled = state.phase == ImportPhase.Preview, onClick = { model.toggle(p.name) },
+                                    enabled = state.phase == ImportPhase.Preview, onClick = { model.toggle(p.name) }, role = Role.Checkbox,
                                     trailing = { JCheckbox(p.name in state.picked, null) })
                             }
                         }

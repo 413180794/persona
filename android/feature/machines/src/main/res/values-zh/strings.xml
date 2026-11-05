@@ -5,9 +5,9 @@
     <string name="machines_summary">%1$d/%2$d 台在线，%3$d 台需要注意</string>
     <string name="machines_refresh">刷新</string>
     <string name="machines_sessions_failure">机器和会话列表暂未更新。</string>
-    <string name="machines_empty_title">还没有机器</string>
+    <string name="machines_empty_title">还没有电脑</string>
     <string name="machines_empty_unavailable">暂时看不到机器</string>
-    <string name="machines_empty_body">hub 连上各台电脑后，这里会显示它们的状态。</string>
+    <string name="machines_empty_body">添加一台，Persona 就能在上面替你干活。</string>
     <string name="machines_failure_unavailable">暂时没有监控接口。请确认机器仍在列表中，部署新版本的 hub 和 node 后再看。</string>
     <string name="machines_failure_offline">暂时无法更新，连上 hub 后会自动重试。</string>
     <string name="machines_gone">hub 上没有这台机器了。</string>

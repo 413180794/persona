@@ -40,4 +40,24 @@ class OperationFeedbackTest {
         runCurrent()
         assertEquals(3, observed.size)
     }
+
+    /** A 502 node_unreachable is the computer, not the hub (docs/onboarding.md 4.4); the hub's own words are kept. */
+    @Test fun codedRefusalsNameTheStep() {
+        // The hub does not word node_unreachable: its error is transport detail, never shown.
+        val offline = HubFailure(HubError.Server, "rpc: connection closed", status = 502, code = "node_unreachable", retryable = true)
+        val feedback = operationFeedback(offline)
+        assertEquals(FailureAction.WakeComputer, feedback.action)
+        assertEquals(UiText.Res(R.string.designsystem_feedback_computer_offline), feedback.text)
+        assertFalse(feedback.message.contains("rpc"))
+        val restarting = operationFeedback(HubFailure(HubError.Server, "assistant offline", status = 503, code = "assistant_offline", retryable = true))
+        assertFalse(restarting.message.contains("assistant offline"))
+        // The ones it words (apierr.codeActions) keep its sentence, in the request's language.
+        val missing = operationFeedback(HubFailure(HubError.Server, "Claude Code is not installed on Laptop.", status = 409, code = "claude_missing", retryable = false))
+        assertEquals("Claude Code is not installed on Laptop.", missing.message)
+        assertEquals(ReadinessActionId.WakeComputer, feedback.action.readinessAction())
+        val noMachine = operationFeedback(HubFailure(HubError.Server, "HTTP 409", status = 409, code = "no_machine", retryable = false))
+        assertEquals(FailureAction.AddComputer, noMachine.action)
+        assertEquals(R.string.designsystem_readiness_action_add_computer, noMachine.actionLabelRes)
+        assertEquals("No computer is connected yet.", noMachine.message)
+    }
 }

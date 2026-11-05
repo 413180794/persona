@@ -12,6 +12,12 @@ import kotlinx.serialization.json.put
 /** Pairing-scoped assistant actions; the composition root supplies the active transport. */
 interface AssistantManagement {
     suspend fun warm()
+    /**
+     * What the main conversation still needs (GET /api/v1/assistant/readiness, hub feature `assistant_readiness`);
+     * [probe] really runs a one-word check (it costs a little, the hub reuses one from the last 30 seconds).
+     */
+    suspend fun readiness(probe: Boolean = false): AssistantReadiness = throw UnsupportedOperationException("Readiness unavailable")
+    suspend fun dismissReadiness(dismissed: Boolean): Unit = throw UnsupportedOperationException("Readiness unavailable")
     // Where the assistant runs (设置 › 助手). Defaults keep transports and fakes written before the page compiling.
     suspend fun config(): AssistantConfig = throw UnsupportedOperationException("Assistant settings unavailable")
     suspend fun updateConfig(update: AssistantConfigUpdate): AssistantConfig = throw UnsupportedOperationException("Assistant settings unavailable")

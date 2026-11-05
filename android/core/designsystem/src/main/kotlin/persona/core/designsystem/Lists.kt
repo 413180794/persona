@@ -190,9 +190,11 @@ fun JRow(
     titleAccessory: (@Composable () -> Unit)? = null,
     /** Drawn again with a new [value], its numbers count to the new ones and other text fades in (#2811). */
     changingValue: Boolean = false,
+    /** What accessibility services call the row's click: a switch row says [Role.Switch] so its on / off is read. */
+    role: Role = Role.Button,
 ) {
     val palette = PersonaTheme.palette
-    RowFrame(modifier, onClick, onLongClick, null, enabled, selected, value, trailing, chevron, changingValue) {
+    RowFrame(modifier, onClick, onLongClick, null, enabled, selected, value, trailing, chevron, changingValue, role) {
         if (leading != null) { leading(); Spacer(Modifier.width(14.dp)) }
         else if (leadingIcon != null) {
             JIcon(leadingIcon, null, size = 22.dp, tint = if (destructive) palette.danger.dot else palette.ink2, decorative = true)
@@ -229,8 +231,10 @@ fun JRow(
     chevron: Boolean = onClick != null && trailing == null,
     enabled: Boolean = true,
     selected: Boolean = false,
+    /** What accessibility services call the row's click; a row that toggles a [JSwitch] passes [Role.Switch]. */
+    role: Role = Role.Button,
     content: @Composable RowScope.() -> Unit,
-) = RowFrame(modifier, onClick, onLongClick, onClickLabel, enabled, selected, value = null, trailing, chevron) {
+) = RowFrame(modifier, onClick, onLongClick, onClickLabel, enabled, selected, value = null, trailing, chevron, role = role) {
     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, content = content)
 }
 
@@ -248,13 +252,14 @@ private fun RowFrame(
     trailing: (@Composable () -> Unit)?,
     chevron: Boolean,
     changingValue: Boolean = false,
+    role: Role = Role.Button,
     content: @Composable RowScope.() -> Unit,
 ) {
     val palette = PersonaTheme.palette
     val style = PersonaTheme.style
     Row(
         modifier.fillMaxWidth().heightIn(min = 56.dp).selectedRow(selected).onSecondaryClick(onLongClick)
-            .then(if (onClick != null || onLongClick != null) Modifier.combinedClickable(enabled = enabled, role = Role.Button, onClickLabel = onClickLabel, onClick = onClick ?: {}, onLongClick = onLongClick) else Modifier)
+            .then(if (onClick != null || onLongClick != null) Modifier.combinedClickable(enabled = enabled, role = role, onClickLabel = onClickLabel, onClick = onClick ?: {}, onLongClick = onLongClick) else Modifier)
             .stableAlpha(if (enabled) 1f else 0.45f).padding(horizontal = rowPadding, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -280,7 +285,7 @@ fun JSwitchRow(
     leadingIcon: PhIcon? = null,
     enabled: Boolean = true,
 ) = JRow(title, modifier, subtitle, leadingIcon, value = null, onClick = { onCheckedChange(!checked) }, chevron = false, enabled = enabled,
-    trailing = { JSwitch(checked, null, enabled = enabled) })
+    trailing = { JSwitch(checked, null, enabled = enabled) }, role = Role.Switch)
 
 /**
  * A card: a frosted panel, a wash card, or a bordered strip. [status] tints the glass edge and gives board

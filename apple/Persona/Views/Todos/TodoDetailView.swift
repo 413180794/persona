@@ -254,7 +254,7 @@ struct TodoDetailView: View {
                     }
                     if let pr {
                         Button { link = LinkTarget(url: pr) } label: {
-                            Label(todo.prLabel ?? "查看 PR", systemImage: Theme.Icon.pullRequest)
+                            Label(todo.prLabel ?? String(localized: "查看 PR"), systemImage: Theme.Icon.pullRequest)
                                 .font(Theme.Font.captionStrong)
                                 .lineLimit(1)
                         }

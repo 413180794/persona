@@ -28,6 +28,8 @@ import persona.core.contracts.SessionKey
 import persona.core.contracts.api.AssistantManagement
 import persona.core.contracts.api.AssistantRefused
 import persona.core.contracts.api.AssistantRepository
+import persona.core.contracts.api.AssistantReadinessFeature
+import persona.core.contracts.api.ReadinessSuggestion
 import persona.core.contracts.api.ChannelSources
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcon
@@ -169,7 +171,7 @@ fun AssistantScreen(
             try { keys.forEach { toggle(it) } }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
-                if (feedback?.failure(error) != true) snackbar.showSnackbar(persona.core.designsystem.operationFeedback(error).message)
+                if (feedback?.failure(error) != true) snackbar.showSnackbar(persona.core.designsystem.operationFeedback(error).text.resolve(resources))
             }
             finally { pinning = false }
         }
@@ -177,6 +179,25 @@ fun AssistantScreen(
     val active = activeSession?.let { SessionKey(activeMachine.orEmpty(), it) }
     // 压缩上下文 and 新建主对话 (#1727): the main conversation's menu, on hubs that offer them.
     val mainActions = if (management != null && !demo) MainActions.of(LocalHubFeatures.current) else MainActions(false, false)
+    // What the main conversation still needs (docs/onboarding.md 4.4), on hubs that work it out: asked when the tab
+    // shows, when a computer comes or goes and after the hub refused to start it.
+    val readinessOn = management != null && !demo && AssistantReadinessFeature in LocalHubFeatures.current
+    val mainReadiness = remember(management) { MainReadiness { probe -> requireNotNull(management).readiness(probe) } }
+    var readinessHelp by remember { mutableStateOf<ReadinessHelp?>(null) }
+    val machinesSeen = machines.joinToString(",") { "${it.id}:${it.online}" }
+    LaunchedEffect(readinessOn, machinesSeen) { if (readinessOn) mainReadiness.refresh() }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+        if (readinessOn) scope.launch { mainReadiness.refresh() }
+    }
+    val refusedMain = mainMessages.filter { it.setupRefusal() != null }.map { it.clientMessageId }
+    LaunchedEffect(readinessOn, refusedMain) { if (readinessOn && refusedMain.isNotEmpty()) mainReadiness.refresh() }
+    val readiness = mainReadiness.readiness.takeIf { readinessOn }
+    val blocking = mainReadiness.blocking.takeIf { readinessOn }
+    fun runReadinessAction(action: ReadinessActionId, launcher: String? = blocking?.launcher ?: readiness?.launcher) {
+        action.help?.let { readinessHelp = it; return }
+        if (action == ReadinessActionId.TestAssistant) { scope.launch { mainReadiness.refresh(probe = true) }; return }
+        action.destination(launcher)?.let(navigator::navigate)
+    }
     val onMain = active != null && active == snapshot.mainSession
     val shownCompaction = if (onMain) snapshot.conversations.firstOrNull { it.key == active }?.compaction else null
     var compaction by remember(active) { mutableStateOf(CompactionStatus()) }
@@ -226,7 +247,7 @@ fun AssistantScreen(
         scope.launch { drawerOpen = false }
     }
     fun refusal(error: Exception): String =
-        if (error is AssistantRefused) error.message.orEmpty() else persona.core.designsystem.operationFeedback(error).message
+        if (error is AssistantRefused) error.message.orEmpty() else persona.core.designsystem.operationFeedback(error).text.resolve(resources)
     fun compactMain() {
         val key = active ?: return
         val api = management ?: return
@@ -286,7 +307,7 @@ fun AssistantScreen(
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 archived = archived - session.key
-                if (feedback?.failure(error) != true) snackbar.showSnackbar(persona.core.designsystem.operationFeedback(error).message)
+                if (feedback?.failure(error) != true) snackbar.showSnackbar(persona.core.designsystem.operationFeedback(error).text.resolve(resources))
             }
         }
     }
@@ -304,14 +325,19 @@ fun AssistantScreen(
                 drawerOpen = false
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                scope.launch { snackbar.showSnackbar(resources.getString(R.string.assistant_new_conversation_failed)) }
+            } catch (error: Exception) {
+                // A coded refusal (no computer, Claude Code missing…) says what is missing instead of 暂时无法新建对话.
+                val coded = persona.core.designsystem.operationFeedback(error).takeIf { it.action.readinessAction() != null }
+                scope.launch { snackbar.showSnackbar(coded?.text?.resolve(context) ?: resources.getString(R.string.assistant_new_conversation_failed)) }
+                if (coded != null && readinessOn) mainReadiness.refresh()
             } finally {
                 sending = false
             }
         }
     }
     fun submit() {
+        // Not ready (setup): the step opens instead and the draft stays; nothing is queued (docs/onboarding.md 4.4).
+        if (active == null && blocking != null) { blocking.primaryAction()?.let { runReadinessAction(it) }; return }
         if (sending || !draftReady || !composer.hasContent || !composer.ready) return
         val sentDraft = composer.draft
         val text = composer.message()
@@ -347,7 +373,7 @@ fun AssistantScreen(
                 throw cancelled
             } catch (error: Exception) {
                 if (feedback?.failure(error) != true) scope.launch {
-                    snackbar.showSnackbar(persona.core.designsystem.operationFeedback(error).message)
+                    snackbar.showSnackbar(persona.core.designsystem.operationFeedback(error).text.resolve(resources))
                 }
             } finally {
                 sending = false
@@ -486,6 +512,19 @@ fun AssistantScreen(
                         JNotice(data.visuals.message, Modifier.padding(horizontal = pagePadding),
                             actionLabel = stringResource(R.string.assistant_got_it), onAction = { data.dismiss() })
                     }
+                    if (hasComposer && active == null && !viewingMainQueue) {
+                        val cardModifier = Modifier.padding(horizontal = pagePadding).padding(bottom = Tokens.Space.s)
+                        if (blocking != null) ReadinessStepCard(blocking, { runReadinessAction(it) }, cardModifier,
+                            busy = ReadinessActionId.TestAssistant.takeIf { mainReadiness.probing },
+                            note = readiness?.probe?.let { probe ->
+                                if (probe.ok) stringResource(persona.core.designsystem.R.string.designsystem_readiness_probe_ok, probe.answer.orEmpty())
+                                else stringResource(persona.core.designsystem.R.string.designsystem_readiness_probe_failed, probe.error.orEmpty())
+                            })
+                        else if (mainReadiness.chatOnly && readinessOn) JNotice(
+                            stringResource(persona.core.designsystem.R.string.designsystem_readiness_chat_only), cardModifier,
+                            actionLabel = stringResource(ReadinessActionId.AddComputer.label),
+                            onAction = { runReadinessAction(ReadinessActionId.AddComputer) })
+                    }
                     if (hasComposer) {
                         draftError?.let { JNotice(androidx.compose.ui.res.stringResource(it), Modifier.padding(horizontal = pagePadding), status = Status.NeedsYou) }
                         val uploadTarget = active ?: snapshot.mainSession
@@ -496,6 +535,8 @@ fun AssistantScreen(
                             onNotice = { message ->
                                 if (feedback?.notice(message) != true) scope.launch { snackbar.showSnackbar(message) }
                             }, enabled = draftReady && !sending, placeholder = stringResource(R.string.assistant_composer_placeholder, LocalPersonaName.current),
+                            blockedLabel = blocking?.takeIf { active == null }?.let { stringResource(blockedSendLabel(it)) },
+                            onBlocked = { blocking?.primaryAction()?.let { runReadinessAction(it) } },
                             // A new conversation's launcher, for it alone (iOS StarterComposer, web StarterLauncherChip).
                             accessory = if (active == null && management != null && startConversationWith != null && !demo) ({
                                 StarterLauncherChip(starterLauncher, defaultLauncher, launchers, launchersFailed, enabled = !sending,
@@ -534,10 +575,20 @@ fun AssistantScreen(
             } else if (viewingMainQueue || (active != null && !hasChat)) {
                 val visible = if (active != null) outbox.filter { it.session == active } else mainMessages
                 AssistantPendingConversation(visible, snapshot.conversations.firstOrNull { it.key == active },
-                    Modifier.fillMaxSize(), contentPadding = padding, demo = demo)
+                    Modifier.fillMaxSize(), contentPadding = padding, demo = demo,
+                    onRefusal = { action -> runReadinessAction(action) },
+                    onRetry = { message -> scope.launch {
+                        // Asked again first: a step still missing opens instead of sending into the same refusal.
+                        if (readinessOn) mainReadiness.refresh()
+                        val missing = mainReadiness.blocking.takeIf { readinessOn }
+                        if (missing != null) missing.primaryAction()?.let { runReadinessAction(it) }
+                        else assistantAttempt { (mainConversationSender as? MessageSender ?: messageSender).retry(message.clientMessageId) }
+                    } })
             } else {
                 AssistantHome(enabled = !sending && draftReady && composer.ready, machines = machines,
                     phoneToolsAvailable = phoneToolsAvailable, contentPadding = padding, demo = demo,
+                    setup = blocking != null, hubSuggestions = readiness?.suggestions?.takeIf { it.isNotEmpty() },
+                    onLocalSuggestion = { readinessHelp = ReadinessHelp.ofSuggestion(it) },
                     onSuggestion = {
                         composer.value = androidx.compose.ui.text.input.TextFieldValue(it, androidx.compose.ui.text.TextRange(it.length))
                         submit()
@@ -635,6 +686,9 @@ fun AssistantScreen(
                 }
             }, dismiss = stringResource(R.string.assistant_cancel) to { if (!endingBusy) ending = null })
     }
+    readinessHelp?.let { help ->
+        ReadinessHelpDialog(help, readiness?.machine?.name, onDismiss = { readinessHelp = null }, onAction = { runReadinessAction(it) })
+    }
     info?.let { topic ->
         JDialog(onDismiss = { info = null }, title = stringResource(topic.title),
             text = when (topic) {
@@ -675,6 +729,11 @@ private fun AssistantHome(
     enabled: Boolean, machines: List<Machine>, phoneToolsAvailable: Boolean?, contentPadding: PaddingValues,
     demo: Boolean, onSuggestion: (String) -> Unit,
     needsYou: NeedsYou = NeedsYou(), onNeed: ((NeedsYouLine) -> Unit)? = null, onMore: () -> Unit = {},
+    /** The main conversation still misses a step (docs/onboarding.md 4.4): the lead says so. */
+    setup: Boolean = false,
+    /** The hub's example questions (readiness `suggestions`), in place of the app's own; null: the app's. */
+    hubSuggestions: List<ReadinessSuggestion>? = null,
+    onLocalSuggestion: (String) -> Unit = {},
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(),
@@ -686,26 +745,24 @@ private fun AssistantHome(
         item(span = { GridItemSpan(2) }) {
             Column(Modifier.padding(vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(stringResource(greeting(LocalTime.now().hour)), style = PersonaTheme.type.largeTitle, color = PersonaTheme.palette.ink)
-                Text(stringResource(R.string.assistant_home_lead), style = PersonaTheme.type.voice, color = PersonaTheme.palette.ink2)
-                Text(stringResource(R.string.assistant_home_note), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
+                Text(stringResource(if (setup) R.string.assistant_home_setup_lead else R.string.assistant_home_lead),
+                    style = PersonaTheme.type.voice, color = PersonaTheme.palette.ink2)
+                if (!setup) Text(stringResource(R.string.assistant_home_note), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
             }
         }
         // What waits on the user comes before what Persona could do: the suggestions stay under it.
         if (onNeed != null && !needsYou.isEmpty) item(key = "needs-you", span = { GridItemSpan(2) }) {
             NeedsYouSection(needsYou, onNeed, onMore)
         }
-        items(suggestions) { suggestion ->
+        if (hubSuggestions != null) items(hubSuggestions, key = { "hub-${it.id}" }) { suggestion ->
+            HubSuggestionCard(suggestion, enabled, onOpen = {
+                val prompt = suggestion.prompt?.takeIf(String::isNotBlank)
+                if (suggestion.local || prompt == null) onLocalSuggestion(suggestion.id) else onSuggestion(prompt)
+            })
+        } else items(suggestions) { suggestion ->
             val prompt = stringResource(suggestion.prompt)
-            JCard(Modifier.fillMaxWidth().heightIn(min = 144.dp), padding = 16.dp,
-                onClick = if (enabled) ({ onSuggestion(prompt) }) else null) {
-                JIcon(suggestion.icon, null, tint = PersonaTheme.palette.accent)
-                Spacer(Modifier.height(12.dp))
-                Text(stringResource(suggestion.title), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
-                Spacer(Modifier.height(4.dp))
-                Text(stringResource(suggestion.detail), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+            SuggestionCard(suggestion.icon, stringResource(suggestion.title), stringResource(suggestion.detail),
+                onClick = if (enabled) ({ onSuggestion(prompt) }) else null)
         }
         item(span = { GridItemSpan(2) }) {
             Column {
@@ -722,6 +779,32 @@ private fun AssistantHome(
                 }
             }
         }
+    }
+}
+
+/** One of the hub's example questions: a local one opens help here, never sent to the model. */
+@Composable
+private fun HubSuggestionCard(suggestion: ReadinessSuggestion, enabled: Boolean, onOpen: () -> Unit) {
+    val detail = when {
+        suggestion.local -> stringResource(R.string.assistant_suggest_local_detail)
+        "phone_calendar" in suggestion.needs -> stringResource(R.string.assistant_suggest_needs_calendar)
+        else -> null
+    }
+    SuggestionCard(if (suggestion.local) PhIcons.Question else PhIcons.Sparkle, suggestion.title, detail,
+        onClick = if (enabled || suggestion.local) onOpen else null)
+}
+
+/** A suggestion card on the home: an icon, a one-line title and a line under it. */
+@Composable
+private fun SuggestionCard(icon: PhIcon, title: String, detail: String?, onClick: (() -> Unit)?) {
+    JCard(Modifier.fillMaxWidth().heightIn(min = 144.dp), padding = 16.dp, onClick = onClick) {
+        JIcon(icon, null, tint = PersonaTheme.palette.accent)
+        Spacer(Modifier.height(12.dp))
+        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+        Spacer(Modifier.height(4.dp))
+        Text(detail.orEmpty(), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

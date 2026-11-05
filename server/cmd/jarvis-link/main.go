@@ -80,6 +80,11 @@ func main() {
 		fmt.Fprintln(stderr, usage)
 		os.Exit(2)
 	}
+	if sub := os.Args[1]; helpTopics[sub] && wantsHelp(os.Args[2:]) {
+		// `jarvis-link <sub> -h`: that subcommand's lines of the usage, and nothing failed
+		fmt.Fprintln(stdout, subcommandHelp(sub))
+		return
+	}
 	e := newEnv()
 	e.stdout, e.stderr = stdout, stderr
 	var err error
@@ -128,6 +133,45 @@ func main() {
 }
 
 var errUsage = errors.New("usage")
+
+// helpTopics are the subcommands `<sub> -h` answers for (supervise is not for people: its -h shows the whole usage).
+var helpTopics = map[string]bool{"pair": true, "mode": true, "node": true, "discover": true, "install": true,
+	"uninstall": true, "status": true, "logs": true, "log": true, "run": true, "supervise": true, "address": true}
+
+// wantsHelp says whether args ask for help (-h, -help or --help anywhere).
+func wantsHelp(args []string) bool {
+	for _, a := range args {
+		if a == "-h" || a == "-help" || a == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
+// subcommandHelp is the usage's entries for sub with their continuation lines, or the whole usage when it has none.
+func subcommandHelp(sub string) string {
+	if sub == "log" {
+		sub = "logs"
+	}
+	var out []string
+	in := false
+	for _, line := range strings.Split(usage, "\n") {
+		switch rest, isEntry := strings.CutPrefix(line, "  jarvis-link "); {
+		case isEntry:
+			name, _, _ := strings.Cut(rest, " ")
+			in = name == sub
+		case strings.TrimSpace(line) == "" || !strings.HasPrefix(line, " "):
+			in = false
+		}
+		if in {
+			out = append(out, line)
+		}
+	}
+	if len(out) == 0 {
+		return usage
+	}
+	return "用法：\n" + strings.Join(out, "\n")
+}
 
 // flagValue reads `--name value` or `--name=value` at args[i]; ok says it was that flag, next is where to go on.
 func flagValue(args []string, i int, name string) (value string, next int, ok bool, err error) {

@@ -26,7 +26,7 @@ final class AssistantViewModel: ExtensionViewControlling {
         var send: (AssistantViewSubmission) async throws -> ExtensionViewAction
         var recover: () async -> Void = {}
         var htmlOpen: (ExtensionAssistantHTMLActionInput) async throws -> ExtensionAssistantHTMLOpenResult = { _ in
-            throw APIError(status: 400, message: "hub 不支持 HTML 卡片链接")
+            throw APIError(status: 400, message: String(localized: "hub 不支持 HTML 卡片链接"))
         }
     }
     struct Confirmation: Equatable {
@@ -111,7 +111,7 @@ final class AssistantViewModel: ExtensionViewControlling {
         return await confirm(selection)
     }
     func confirm(_ selection: Confirmation) async -> ExtensionViewModel.Outcome {
-        guard selection.version == version, selection.page == page else { return .init(error: "卡片已更新，请重新确认") }
+        guard selection.version == version, selection.page == page else { return .init(error: String(localized: "卡片已更新，请重新确认")) }
         return await execute(selection, confirmed: true)
     }
     func choose(_ name: String, _ value: String, action: ExtensionAction) async -> ExtensionViewModel.Outcome {
@@ -142,7 +142,7 @@ final class AssistantViewModel: ExtensionViewControlling {
               view.sections.flatMap(\.items).contains(where: {
                   if case .html(let html) = $0 { return html.key == component && !component.isEmpty }
                   return false
-              }) else { return .init(error: "卡片已更新，请重新确认") }
+              }) else { return .init(error: String(localized: "卡片已更新，请重新确认")) }
         switch request {
         case .reply(let text):
             guard record == nil, attempt == nil else { return .init() }
@@ -156,7 +156,7 @@ final class AssistantViewModel: ExtensionViewControlling {
                 let result = try await deps.htmlOpen(input)
                 guard store.epoch == epoch, version == expectedVersion, result.version == expectedVersion,
                       AssistantViewLink.allowed(result.open), let target = URL(string: result.open) else {
-                    return .init(error: "卡片已更新，请重新确认链接")
+                    return .init(error: String(localized: "卡片已更新，请重新确认链接"))
                 }
                 return .init(url: target)
             } catch {
@@ -174,15 +174,15 @@ final class AssistantViewModel: ExtensionViewControlling {
     private func execute(_ selection: Confirmation, confirmed: Bool) async -> ExtensionViewModel.Outcome {
         let action = selection.action
         guard selection.version == version, complete, Self.actions(view).contains(action) else {
-            return .init(error: "卡片已更新，请重新确认")
+            return .init(error: String(localized: "卡片已更新，请重新确认"))
         }
         if let target = action.open {
-            guard AssistantViewLink.allowed(target), let url = URL(string: target) else { return .init(error: "不能打开这个卡片目标") }
+            guard AssistantViewLink.allowed(target), let url = URL(string: target) else { return .init(error: String(localized: "不能打开这个卡片目标")) }
             return .init(url: url)
         }
         if let page = action.push?.page {
-            guard root.pages?[page] != nil else { return .init(error: "卡片的详情页已不存在") }
-            guard path.count + 1 < Self.maxDepth else { return .init(error: "已到卡片的最深一层") }
+            guard root.pages?[page] != nil else { return .init(error: String(localized: "卡片的详情页已不存在")) }
+            guard path.count + 1 < Self.maxDepth else { return .init(error: String(localized: "已到卡片的最深一层")) }
             path.append(page); return .init()
         }
         if action.pop == true { back(); return .init() }
@@ -200,8 +200,8 @@ final class AssistantViewModel: ExtensionViewControlling {
             changed = false
             guard result.key == key, !result.clientMsgId.isEmpty,
                   store.receive(result, conversation: scope.conversation, group: scope.group) || record != nil else {
-                store.finish(submission, scope: scope, error: "提交结果不完整，请同步状态后重试", uncertain: true)
-                return .init(error: "提交结果不完整，请同步状态后重试")
+                store.finish(submission, scope: scope, error: String(localized: "提交结果不完整，请同步状态后重试"), uncertain: true)
+                return .init(error: String(localized: "提交结果不完整，请同步状态后重试"))
             }
             return .init()
         } catch {
@@ -212,7 +212,7 @@ final class AssistantViewModel: ExtensionViewControlling {
                 changed = true
                 await deps.recover()
                 guard store.epoch == epoch else { return .init() }
-                return .init(error: "卡片已更新，已保留编辑，请查看后重新确认")
+                return .init(error: String(localized: "卡片已更新，已保留编辑，请查看后重新确认"))
             }
             if let api = error as? APIError, api.status == 409, api.code == "already_answered" {
                 // The 409 carries the record another device made; the feed is only needed when it does not read.
@@ -221,13 +221,13 @@ final class AssistantViewModel: ExtensionViewControlling {
                 }
                 if record == nil { await deps.recover() }
                 guard store.epoch == epoch else { return .init() }
-                store.finish(submission, scope: scope, error: record == nil ? "另一台设备已选择，正在同步结果" : nil, uncertain: record == nil)
+                store.finish(submission, scope: scope, error: record == nil ? String(localized: "另一台设备已选择，正在同步结果") : nil, uncertain: record == nil)
                 return .init()
             }
             let status = (error as? APIError)?.status ?? 0
             let uncertain = status == 0 || status >= 500
             store.finish(submission, scope: scope, error: error.localizedDescription, uncertain: uncertain)
-            return .init(error: uncertain ? "提交结果尚未确认。同步状态或重试原选择，不会重复发送。" : error.localizedDescription)
+            return .init(error: uncertain ? String(localized: "提交结果尚未确认。同步状态或重试原选择，不会重复发送。") : error.localizedDescription)
         }
     }
     /// The `action` of an already_answered body (`{"code":"already_answered","action":{…}}`), if it reads.

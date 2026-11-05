@@ -1,18 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
-import { apiOp, isTransient, OP_HEADER, OP_RETRY_MS, untilDelivered, type RetryClock } from "./ops";
+import { apiOp, isTransient, OP_HEADER, OP_OFFLINE_MS, OP_RETRY_MS, untilDelivered, type RetryClock } from "./ops";
 
 function response(body: unknown, status = 200, json = true) {
   return { ok: status < 400, status, text: async () => (json ? JSON.stringify(body) : String(body)) };
 }
 
 /** A clock the test moves: every wait passes at once and is recorded. */
-function fakeClock(): RetryClock & { waits: number[] } {
+function fakeClock(online?: (t: number) => boolean): RetryClock & { waits: number[] } {
   let t = 0;
   const waits: number[] = [];
   return {
     waits,
     now: () => t,
+    online: online && (() => online(t)),
     wait: async (ms) => {
       waits.push(ms);
       t += ms;
@@ -71,6 +72,45 @@ describe("a write through a gap", () => {
     expect(clock.now()).toBe(OP_RETRY_MS);
     expect(clock.waits.slice(0, 4)).toEqual([500, 1000, 2000, 4000]);
     expect(new Set(fetcher.mock.calls.map((c) => (c[1].headers as Headers).get(OP_HEADER)))).toEqual(new Set(["5d1e2f3a-6b7c-4d8e-9f0a-1b2c3d4e5f6a"]));
+  });
+
+  it("keeps trying past the minute while the hub is away, and goes once it is back (#4174)", async () => {
+    // the hub redeploying for three minutes: the socket is down until then, the request fails until then
+    const back = 180_000;
+    const clock = fakeClock((t) => t >= back);
+    const run = vi.fn(async () => {
+      if (clock.now() < back) throw new TypeError("Failed to fetch");
+      return "sent";
+    });
+    await expect(untilDelivered(run, clock)).resolves.toBe("sent");
+    expect(clock.now()).toBeGreaterThanOrEqual(back);
+    expect(clock.now()).toBeLessThan(back + 5_000);
+  });
+
+  it("gives up while the hub is away once the restart window is over", async () => {
+    const clock = fakeClock(() => false);
+    const run = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(untilDelivered(run, clock)).rejects.toBeInstanceOf(TypeError);
+    expect(clock.now()).toBe(OP_OFFLINE_MS);
+  });
+
+  it("gives a whole minute again once the hub is back, when it still answers 502 for a while", async () => {
+    // away 200 s, then the socket is open but a proxy answers 502 for another 30 s
+    const clock = fakeClock((t) => t >= 200_000);
+    const run = vi.fn(async () => {
+      const t = clock.now();
+      if (t < 200_000) throw new TypeError("Failed to fetch");
+      if (t < 230_000) throw new ApiError(502, "HTTP 502", { error: "<html>" }, false);
+      return "sent";
+    });
+    await expect(untilDelivered(run, clock)).resolves.toBe("sent");
+  });
+
+  it("keeps the minute while the socket is open (a proxy answering 502 to a hub that is there)", async () => {
+    const clock = fakeClock(() => true);
+    const run = vi.fn().mockRejectedValue(new ApiError(502, "HTTP 502", { error: "<html>" }, false));
+    await expect(untilDelivered(run, clock)).rejects.toBeInstanceOf(ApiError);
+    expect(clock.now()).toBe(OP_RETRY_MS);
   });
 
   it("does not retry an answer from the hub", async () => {

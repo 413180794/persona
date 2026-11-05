@@ -45,7 +45,7 @@ internal fun KnowledgeTagEditor(entry: KnowledgeEntry, tagging: KnowledgeTagging
             Text(stringResource(R.string.knowledge_tag_locked), style = PersonaTheme.type.caption, color = palette.ink3)
             tagging.error?.let {
                 Spacer(Modifier.height(Tokens.Space.m))
-                JNotice(stringResource(R.string.knowledge_not_saved, it), status = Status.NeedsYou)
+                JNotice(stringResource(R.string.knowledge_not_saved, it.text()), status = Status.NeedsYou)
             }
             Spacer(Modifier.height(Tokens.Space.xl))
             JButton(stringResource(R.string.knowledge_save), {

@@ -22,7 +22,7 @@
   跑 `python3 scripts/test/web_settings_entries_e2e.py <网页地址> [--shots <目录>]`，检查宽屏 / 窄屏 × 浅色 / 深色。
   Agents 列表的「herdr 没在运行」提示行（#1916）：假 hub 的 `GET /mock/herdr?stopped=&start=` 选哪台停着、启动怎么走，
   跑 `python3 scripts/test/web_herdr_notice_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>] [--channel msedge]`（宽屏 / 窄屏 × 浅色 / 深色）。
-  任务「重试」的端到端检查（#1396：卡片、失败回执、计划卡红字、连点、再失败、离线；桌面 / 手机宽度 × 浅色 / 深色）：假 hub 带 `MOCK_TASKS=1` 起，
+  任务「重试」的端到端检查（#1396、#4145：原因和「重试」只在卡片上说一遍、失败回执只指向卡片、连点、再失败、离线；桌面 / 手机宽度 × 浅色 / 深色）：假 hub 带 `MOCK_TASKS=1` 起，
   跑 `python3 scripts/test/web_task_retry_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`（假 hub 的 `GET /mock/retry?mode=|fail|offline` 复原失败的任务、选重试的结果）。
   注入消息的端到端检查（#2360：任务通知、定时任务画成一行，不露出给模型的话，点开任务 / 要求）：假 hub 带 `MOCK_TASKS=1 MOCK_INJECTED=1` 起，
   跑 `python3 scripts/test/web_injected_e2e.py <网页地址> [--shots <目录>]`（桌面 / 手机宽度 × 浅色 / 深色）。
@@ -906,7 +906,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经飞书网关的
 - **标签页标题**：有 N 个需要你时前面加 `(N) `，后面还是原来的页面名（`(2) 设置 · Persona`、`(2) Persona`）；0 个时和原来完全一样。
 - **图标角标**：在 `index.html` 里那两条 `<link rel="icon">`（浅色 / 深色各一条，`media` 按系统）的原图上画一个红点（`--status-needs`），1–9 写数字，更多写 `9+`，把两条的 `href` 各换成画好的 data URL；变成 0 时还原成原来的路径。深浅色各用自己的那张图，不新增图标文件。
   图标文件仍经 service worker 的 `static` 规则（先取 hub 的，取不到用存的），所以离线时也能画；画好的 data URL 不走网络、不进缓存，`sw.ts` 不用改。
-- **提示音**（设置 › 通用 › 外观 › 「提示音」，默认关，存在当前浏览器 `persona.attentionSound`）：用 WebAudio 合成，没有音频文件。需要你时是上行的两个音，完成时是一个低而轻的音。
+- **提示音**（设置 › 通知 › 「提示音」，在「弹出系统通知」下面，默认关，存在当前浏览器 `persona.attentionSound`；原来在设置 › 通用 › 外观，通知页说「系统通知和提示音都按这里的设置来」却找不到它，#4057 挪过来）：用 WebAudio 合成，没有音频文件。需要你时是上行的两个音，完成时是一个低而轻的音。
   - 浏览器在用户第一次点击 / 按键之前不让出声：`armAudio()` 在第一次手势时建 `AudioContext` 并恢复，在此之前什么都不播、也不排队。
   - 正在看的那个会话（当前页是它的对话）且窗口在前台（可见且有焦点）时不响；窗口在后台或在看别的会话照响。
   - 限频：3 秒内最多一声（被拦下的不排队、不顺延）；同一批里需要你优先于完成。
@@ -917,7 +917,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经飞书网关的
   ③ 每台设备的「完成」偏好和轮次时长网页也看了（见下面「通知设置」），但轮次是网页自己按状态变化记的（`trackTurns`：从 hub 的 `state_since` 算起，1.5 秒内又开始干活算同一轮），不是 hub 的 `turnTracker`；④ 同一轮回复的去重（`stopDuplicate`）在 hub 里，网页只靠 1.5 秒的复核和限频。
 - 需要你的声音不看屏蔽（和筛选一致：需要你的永远显示），安静任务的会话两种都不响（侧边栏也不计）。
 - **通知设置**（设置 › 通知，#2971，`src/views/settings/NotificationSettings.tsx`，逻辑 `src/lib/notify.ts`，照 iOS 的 `NotificationSettingsView`）：
-  「需要你处理时」开关和「Agent 做完时」三档（不推送 / 只推长任务 / 每次都推），读写 hub 现有的按设备偏好接口 `GET / PUT /api/v1/devices/{id}/prefs`（`notify.go` 的 `NotifyPrefs`），
+  「弹出系统通知」和「提示音」两个开关（只存在这个浏览器，提示音不等 hub 的偏好读回来就能开关），「需要你处理时」开关和「Agent 做完时」三档（不推送 / 只推长任务 / 每次都推），读写 hub 现有的按设备偏好接口 `GET / PUT /api/v1/devices/{id}/prefs`（`notify.go` 的 `NotifyPrefs`），
   设备 id 是这个浏览器第一次打开时生成的 `web-<uuid>`（存 `persona.notifyDevice`；存不了时是这一页自己的 id，不读也不写 hub）；PUT 只带 `input`、`done`，hub 在这台设备已有的偏好上解码，其余字段不动。长任务的阈值用 hub 回的 `long_turn_seconds`（默认 60 秒），
   「只推长任务」时不知道轮次多长的不算长（和 Mac 的 `MacAttention` 一样）。保存是乐观的，hub 拒绝就退回并提示；连着改两次时只认最后一次的回答（先发的回答晚到、先发的失败都不盖掉后一次）。
   读不到时显示「读不到通知设置」和「重试」。提示音和系统通知都按这两项来；别的标签页改了，这一页经 `storage` 事件马上跟上。
@@ -925,6 +925,9 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经飞书网关的
 - **系统通知**（同一页的「弹出系统通知」，默认关，存 `persona.systemNotify`）：打开时调 `Notification.requestPermission()`，浏览器拒绝了开关就打不开，行上标「已拒绝」，说明怎么在网站设置里改；不支持 Notification API 的浏览器说不支持。
   只在网页开着、但没有一个 Persona 标签页在前台（标签页不可见或窗口没焦点）时发，和 Mac 的 `MacAttention` 一样在本地看会话状态变化：需要你马上发，做完的在 1.5 秒复核后发；标题「<会话名> 做完了」，正文是最后一句（压成一行、最多 200 字）；需要你的按这个会话最早的待处理卡片写（#4056）：标题照手机推送按种类写（在问你 / 要你批准 / 计划等你批准 / 在终端里等你 / MCP 请求），正文是问题、授权的说明或命令、计划第一行，没有卡片用宿主给的原因，再没有才用最后一句，
   屏蔽了通知的 Agent 需要你时不发通知（提示音照响，和手机推送、Mac 一样看屏蔽）。
+  同一个 Agent 已经在需要你、又来一张新卡（先提问再要授权等，#4058）也算一次需要你：提示音、系统通知和第一张一样按开关、屏蔽、限频来，通知写这张新卡，替换这个 Agent 上一条需要你的通知。
+  「新卡」按 store 里待处理卡片的 id 判断（`attention.ts` 的 `detectNewCards`）：上一次没见过的 id，且会话前后都是需要你；会话刚变成需要你的由状态变化那条发（说最早的卡），不响两遍；需要你先到、卡后到（Codex 授权读屏是先停住再出卡）时，这张卡算同一次等你：通知改写成这张卡，不再响一声；刚打开页面时已有的卡只作基线；同一张卡重拉快照、或短暂消失又回来（10 分钟内见过的 id），不再响；一次来几张只响一次。
+  通知说的那张卡答掉或撤回了，即使会话还在等别的卡，这条通知也收回（`answeredTags`，同 #3610 的做法）；只有发这条通知的那个标签页能收回它。
   开着几个标签页时：在前台的那页每 20 秒在 `persona.frontTab` 记一下自己在前台（获得 / 失去焦点、切换可见时也记，超过 60 秒没更新的不算），别的标签页看到就不发；
   同一件事（同一个 `tag`）5 秒内只有先到的标签页发（`persona.notified`）。
   同一个 Agent 同一种事件用同一个 `tag`，后一条替换前一条。点通知把窗口拉到前面、打开那个会话。页面自己建不了通知时（Android 上的 Chrome）交给 service worker 的 `showNotification`，

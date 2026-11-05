@@ -66,6 +66,17 @@ struct MacTodosPage: View {
                 selectedTodoID = openList.first?.id ?? doneList.first?.id
             }
         }
+        .onChange(of: store.todos) { _, todos in
+            // The selected todo can vanish from any path: the row menu, the detail page's delete (its dismiss
+            // runs on the page's own stack root and does nothing here), or a push delete from another device.
+            // Without this the id keeps pointing at the gone todo and the detail shows its tombstone forever.
+            selectedTodoID = MacTodosSelection.resolve(
+                selectedID: selectedTodoID,
+                existing: todos,
+                open: openList,
+                done: doneList
+            )
+        }
     }
 
     private var listColumn: some View {
@@ -290,5 +301,18 @@ struct MacTodosPage: View {
             }
             .macSheet()
         }
+    }
+}
+
+/// Pure rule for the Mac todos page's selection after the store's list changes (#3471).
+nonisolated enum MacTodosSelection {
+    /// The id the detail column should show: the selected id while its todo is still in `existing` (the full
+    /// store list, so a search that hides it does not move the selection); otherwise the first open todo, then
+    /// the first done todo (the lists as currently filtered and sorted), then nil when nothing remains.
+    static func resolve(selectedID: String?, existing: [TodoItem], open: [TodoItem], done: [TodoItem]) -> String? {
+        if let selectedID, existing.contains(where: { $0.id == selectedID }) {
+            return selectedID
+        }
+        return open.first?.id ?? done.first?.id
     }
 }

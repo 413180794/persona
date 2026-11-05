@@ -79,7 +79,7 @@ internal class ChatChromeState(
             try {
                 if (service.rename(session, edit.title, edit.tabName)) notice = res.getString(R.string.chat_action_renamed)
             } catch (error: CancellationException) { throw error }
-            catch (error: Exception) { notice = operationFeedback(error).message }
+            catch (error: Exception) { notice = operationFeedback(error).text.resolve(res) }
             finally { busy = false }
         }
     }

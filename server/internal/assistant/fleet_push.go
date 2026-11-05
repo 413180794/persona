@@ -98,6 +98,19 @@ func (t *turnTracker) ended(key string, now time.Time) int {
 	return tr.gen
 }
 
+// drop forgets the session's turn that ended as gen, when nothing happened since, and says when it started (ok): a
+// turn told elsewhere is over all the same, and left tracked its start would be the next turn's (#4133).
+func (t *turnTracker) drop(key string, gen int) (start time.Time, ok bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	tr := t.turns[key]
+	if tr == nil || tr.gen != gen {
+		return time.Time{}, false
+	}
+	delete(t.turns, key)
+	return tr.start, true
+}
+
 // finishVerdict is what the delayed check decided.
 type finishVerdict int
 
@@ -203,7 +216,14 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	}
 	// An inbox agent's result is the draft in the inbox; a turn asked for through the bot is answered there; a quiet
 	// task's is told in the main conversation (taskTurnEnded, #1731).
+	// The turn is over all the same: its start and its report mark are not the next turn's (#4133).
 	if !ok || s.isInboxAgent(id) || s.channelAnsweredPush(id) || s.quietSession(machine, id) {
+		// Background work still running: the turn its reports start is this one's end (as settle holds it).
+		if !ok || sess.Status != proto.StatusWorking && !backgroundRunning(sess) {
+			if start, dropped := s.turnsBook().drop(machine+"/"+id, gen); dropped {
+				s.reportTurn(id, start) // used up, as by a turn settle drops
+			}
+		}
 		return
 	}
 	s.fleet.mu.Lock()

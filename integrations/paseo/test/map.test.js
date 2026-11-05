@@ -197,7 +197,12 @@ test('requests as cards: a question, a plan, a permission with what "always" add
     suggestions: [{ type: 'addRules', rules: [{ toolName: 'Bash', ruleContent: 'npm test' }], behavior: 'allow', destination: 'localSettings' }] })
   assert.deepEqual([perm.kind, perm.tool_name, perm.tool_input.command, perm.summary, perm.always_label], ['permission', 'Bash', 'npm test', 'npm test', '这个项目不再问：Bash(npm test)'])
   const codex = interactionOf('s2', { id: 'p4', provider: 'codex', name: 'exec', kind: 'tool', title: 'Run a command', detail: { type: 'shell', command: 'make' } })
-  assert.deepEqual([codex.tool_name, codex.tool_input.command, codex.summary, codex.always_label], ['Bash', 'make', 'Run a command', undefined])
+  assert.deepEqual([codex.tool_name, codex.tool_input.command, codex.summary, codex.reason, codex.always_label], ['Bash', 'make', 'make', 'Run a command', undefined],
+    'the card says what will run; the generic title is the reason')
+  const why = interactionOf('s2', { id: 'p5', provider: 'codex', name: 'exec', kind: 'tool', title: 'Run a command', description: 'build the app', detail: { type: 'shell', command: 'make' } })
+  assert.deepEqual([why.summary, why.reason], ['make', 'build the app'])
+  const bare = interactionOf('s2', { id: 'p6', provider: 'codex', name: 'mcp_thing', kind: 'tool', title: 'Use the thing', description: 'needs network' })
+  assert.deepEqual([bare.summary, bare.reason], ['Use the thing', 'needs network'], 'nothing in the input: the title is the summary')
   assert.notEqual(interactionOf('s1', { id: 'permission-1', kind: 'tool' }).id, interactionOf('s2', { id: 'permission-1', kind: 'tool' }).id)
 })
 

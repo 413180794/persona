@@ -33,7 +33,7 @@ const (
 	// On the user's hub (2026-11-02) the fleet changed ~180 times an hour, each one a push.
 	fleetMinGap     = 30 * time.Second
 	fleetStaleIn    = 15 * time.Minute // stale-date: buttons disappear if the hub goes quiet this long
-	fleetRefresh    = 10 * time.Minute // resend unchanged content before it goes stale
+	fleetRefresh    = 10 * time.Minute // resend unchanged content to a device this long after its last push
 	fleetEndAfter   = time.Minute      // empty this long: end the activity
 	fleetDoneLinger = 5 * time.Minute  // only finished agents left: keep showing them this long
 	fleetMaxItems   = 3
@@ -155,7 +155,6 @@ type liveActivities struct {
 	shown     []byte // last state broadcast to the open apps
 	resend    bool   // a device's settings changed: push even if the state did not
 	last      FleetState
-	lastPush  time.Time
 	emptyAt   time.Time // since when the fleet has been over (empty, or only finished agents for a while)
 	doneSince time.Time
 	episode   int                  // bumps each time the fleet becomes active after being over
@@ -310,17 +309,46 @@ func (la *liveActivities) tick() {
 	now := la.now()
 	la.mu.Lock()
 	over := !la.emptyAt.IsZero() && now.Sub(la.emptyAt) >= fleetEndAfter
-	stale := !fleetEmpty(la.last) && now.Sub(la.lastPush) >= fleetRefresh
 	doneLong := la.last.Phase == "done" && !la.doneSince.IsZero() && now.Sub(la.doneSince) >= fleetDoneLinger
 	last := la.last
 	la.mu.Unlock()
 	switch {
 	case over || doneLong:
 		la.endAll()
-	case stale:
-		la.flush(la.snapshot(), false, true)
 	case !fleetEmpty(last):
+		if !la.coal.pending { // a change is being merged: its flush refreshes too, next tick otherwise
+			la.refresh(last, now)
+		}
 		la.metrics(last, now)
+	}
+}
+
+// refresh resends last (the state the last flush went with) to each device whose activity has had no push for
+// fleetRefresh, before it goes stale (fleetStaleIn) and shows "waiting for the hub" without its buttons. Counted per
+// device: a flush that pushed nothing to it (the change was one its island does not show, or went to another device)
+// does not put it off (#4154). Not the snapshot: a request arriving that the run loop has not flushed yet goes out
+// with its own urgent push, which a low priority refresh carrying it first would make look already sent.
+func (la *liveActivities) refresh(last FleetState, now time.Time) {
+	la.mu.Lock()
+	rows := make([]db.LiveActivity, 0, len(la.rows))
+	for _, r := range la.rows {
+		if r.PushToken != "" && now.Sub(r.StartedAt) < fleetMaxAge && now.Sub(la.sentAt[r.DeviceID]) >= fleetRefresh {
+			rows = append(rows, r)
+		}
+	}
+	la.mu.Unlock()
+	if len(rows) == 0 {
+		return
+	}
+	stats := la.h.fleetStats()
+	for _, r := range rows {
+		d, ok := la.h.push.device(r.DeviceID)
+		if !ok || !devicePrefs(d.Prefs).LiveActivity || la.h.phoneOpen(r.DeviceID) {
+			continue // an open app keeps its activity fresh itself
+		}
+		dst := forDevice(last, devicePrefs(d.Prefs), stats)
+		la.markSent(r.DeviceID, dst, now, true)
+		la.send(d, r, liveActivityPayload("update", dst, now), false)
 	}
 }
 
@@ -433,7 +461,7 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 	} else {
 		la.doneSince = time.Time{}
 	}
-	la.last, la.lastPush = st, now
+	la.last = st
 	episode := la.episode
 	rows := make([]db.LiveActivity, 0, len(la.rows))
 	for _, r := range la.rows {

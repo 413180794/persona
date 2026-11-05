@@ -8,8 +8,6 @@
   "appearance": "Appearance",
   "reply_motion": "Reply animation",
   "reply_motion_hint": "New replies fade in word by word. Off when the system's Reduce motion is on.",
-  "sound": "Alert sound",
-  "sound_hint": "Plays a sound when something needs you or finishes, as set in Notifications. Silent for the session you're viewing.",
   "sidebar_terminals": "Show terminals in sidebar",
   "sidebar_terminals_hint": "When agents are grouped by machine, each computer lists the plain shells in its terminal under its agents; click one to open its Terminal page. Off by default; applies to this browser only.",
   "avatar": "Avatar",

@@ -225,7 +225,8 @@ func TestAgentStartFromTheMainConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	todo := onlyTodo(s)
-	if !todo.Quiet || todo.Origin != "conv1" || len(todo.Agents) != 1 || todo.Agents[0].SessionID != "s1" || todo.Title != "看看 CI 为什么挂了" {
+	if !todo.Quiet || todo.Origin != "conv1" || len(todo.Agents) != 1 || todo.Agents[0].SessionID != "s1" || todo.Title != "看看 CI 为什么挂了" ||
+		todo.Supervision == nil || todo.Supervision.Supervisor != "conv1" {
 		t.Fatalf("todo = %+v", todo)
 	}
 	if !strings.Contains(res, "a task of this conversation") || feedKinds(s, "conv1") != "task" {
@@ -340,4 +341,47 @@ func TestStartWithReportTasks(t *testing.T) {
 func TestGoldenTaskNoticeReporting(t *testing.T) {
 	golden(t, "task_notice.reporting_done", renderNotice(&quietNotice{todo: Todo{Title: "提 MR"}, machine: "box", state: "done", text: "MR：https://example.com/mr/7"}, true))
 	golden(t, "task_notice.reporting_needs", renderNotice(&quietNotice{todo: Todo{Title: "提 MR"}, machine: "box", state: "needs", ask: "- 合到哪个分支？"}, true))
+}
+
+// An agent a reporting conversation opens with agent_start is its task as one from task_plan is (#4101): not
+// supervised by the main conversation, so when it is done the reporting conversation gets the notice and the main
+// conversation hears nothing of it.
+func TestReportingConversationAgentStartIsToldThere(t *testing.T) {
+	s, f := newQuietService(t)
+	ctx := context.Background()
+	f.judge = `{"verdict":"done","reason":"MR 提好了"}`
+	f.known["lark1"] = true
+	f.setSessions("server", proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusIdle},
+		proto.Session{SessionID: "lark1", MachineID: "server", Assistant: true, Status: proto.StatusIdle})
+	s.markReporter(ctx, "server", "lark1")
+	args := json.RawMessage(`{"machine":"box","cwd":"/code/app","prompt":"提个 MR 修掉它"}`)
+	if _, err := s.runTool(ctx, "server", "lark1", "agent_start", args); err != nil {
+		t.Fatal(err)
+	}
+	todo := onlyTodo(s)
+	if !todo.Quiet || todo.Origin != "lark1" || todo.Supervision != nil {
+		t.Fatalf("todo = %+v, supervision %+v", todo, todo.Supervision)
+	}
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, "MR 提好了：https://example.com/mr/8", 0)
+	sentTo := func(id string) []string {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		var out []string
+		for _, a := range f.sends {
+			if a["session_id"] == id {
+				text, _ := a["text"].(string)
+				out = append(out, text)
+			}
+		}
+		return out
+	}
+	waitFor(t, "the notice", func() bool { return len(sentTo("lark1")) == 1 })
+	if n := sentTo("lark1")[0]; !strings.Contains(n, "做完了（box）") || !strings.Contains(n, "https://example.com/mr/8") {
+		t.Fatalf("notice:\n%s", n)
+	}
+	time.Sleep(4 * superviseEvery)
+	if got := f.notices(); len(got) != 0 {
+		t.Fatalf("the main conversation was told: %q", got)
+	}
 }

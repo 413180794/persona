@@ -113,7 +113,7 @@ internal data class KnowledgeDetailPage(
 internal data class KnowledgeSending(val busy: Boolean = false, @StringRes val message: Int? = null)
 
 /** The tag editor's save: [saved] counts the saves that went through, so the sheet closes on each; [error] says why one did not. */
-internal data class KnowledgeTagging(val busy: Boolean = false, val error: String? = null, val saved: Int = 0)
+internal data class KnowledgeTagging(val busy: Boolean = false, val error: persona.core.designsystem.UiText? = null, val saved: Int = 0)
 
 internal class KnowledgeDetailViewModel(
     private val kind: KnowledgeKind,
@@ -206,7 +206,7 @@ internal class KnowledgeDetailViewModel(
                 _tagging.value = KnowledgeTagging(saved = saved)
                 throw cancelled
             } catch (error: Exception) {
-                _tagging.value = KnowledgeTagging(error = operationFeedback(error).message, saved = saved)
+                _tagging.value = KnowledgeTagging(error = operationFeedback(error).text, saved = saved)
             }
         }
     }

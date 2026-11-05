@@ -103,6 +103,95 @@ class OutboxMessageSenderTest {
         restarted.close()
     }
 
+    /** A start the hub refuses for a missing step (409 no_machine): the message is refused, not queued, and a retry starts it. */
+    @Test fun refusedMainStartWaitsForTheUserAndARetryStartsIt() = runTest {
+        val store = FakeStore()
+        val transport = FakeTransport(online = true)
+        var creates = 0
+        var computer = false
+        val resolver = object : MainConversationResolver {
+            override suspend fun findMainConversation(): SessionKey? = null
+            override suspend fun createMainConversation(): SessionKey {
+                creates++
+                if (!computer) throw Refusal(409, "no_machine")
+                return session
+            }
+        }
+        val sender = OutboxMessageSender(scope, store, transport, backgroundScope)
+        sender.connectMainConversation(resolver)
+        sender.sendToMain("你好", "main-a")
+        runCurrent()
+        assertEquals(1, creates)
+        assertEquals(OutboxState.Refused, store.state("main-a"))
+        assertEquals("no_machine", store.entries.value.single().error)
+        assertTrue(transport.requests.isEmpty())
+        // Not tried again by itself: nothing comes later as a surprise answer.
+        transport.readyToSend.value = false; runCurrent(); transport.readyToSend.value = true; runCurrent()
+        assertEquals(1, creates)
+
+        computer = true
+        transport.answers += MessageTransportResult.Accepted
+        assertTrue(sender.retry("main-a"))
+        runCurrent()
+        assertEquals(2, creates)
+        assertEquals(OutboxState.Sent, store.state("main-a"))
+        assertEquals(session, transport.requests.single().session)
+        sender.close()
+    }
+
+    /** Any other failure of the start may have created it on the hub: it is looked up, never created twice. */
+    @Test fun aStartFailureWithoutASetupCodeKeepsTheClaim() = runTest {
+        val store = FakeStore()
+        val transport = FakeTransport(online = true)
+        var creates = 0
+        val resolver = object : MainConversationResolver {
+            override suspend fun findMainConversation(): SessionKey? = null
+            override suspend fun createMainConversation(): SessionKey { creates++; throw Refusal(502, "internal") }
+        }
+        val sender = OutboxMessageSender(scope, store, transport, backgroundScope)
+        sender.connectMainConversation(resolver)
+        sender.sendToMain("你好", "main-a")
+        runCurrent()
+        assertEquals(OutboxState.WaitingForNetwork, store.state("main-a"))
+        transport.readyToSend.value = false; runCurrent(); transport.readyToSend.value = true; runCurrent()
+        assertEquals(1, creates)
+        sender.close()
+    }
+
+    /** The computer asleep (502 node_unreachable) or the assistant restarting (503): it is started once they are back. */
+    @Test fun aStartRefusedWhileOfflineIsStartedLater() = runTest {
+        for ((status, code) in listOf(502 to "node_unreachable", 503 to "assistant_offline")) {
+            val store = FakeStore()
+            val transport = FakeTransport(online = false)
+            transport.answers += MessageTransportResult.Accepted
+            var creates = 0
+            var looks = 0
+            val resolver = object : MainConversationResolver {
+                override suspend fun findMainConversation(): SessionKey? { looks++; return null }
+                override suspend fun createMainConversation(): SessionKey {
+                    creates++
+                    if (creates == 1) throw Refusal(status, code)
+                    return SessionKey("machine", "main")
+                }
+            }
+            val sender = OutboxMessageSender(scope, store, transport, backgroundScope)
+            sender.connectMainConversation(resolver)
+            sender.sendToMain("你好", "main-$code")
+            runCurrent()
+            transport.readyToSend.value = true; runCurrent()
+            assertEquals(code, 1, creates)
+            assertEquals(OutboxState.WaitingForNetwork, store.state("main-$code"))
+            transport.readyToSend.value = false; runCurrent(); transport.readyToSend.value = true; runCurrent()
+            assertEquals(code, 2, creates)
+            assertEquals(code, 2, looks)
+            assertEquals(1, transport.requests.size)
+            sender.close()
+        }
+    }
+
+    private class Refusal(override val status: Int?, override val code: String?) :
+        java.io.IOException(code), persona.core.contracts.api.HubCodedFailure
+
     @Test fun lostCreateReceiptNeverCreatesAgainAndRetainsInputUntilMainIsFound() = runTest {
         val store = FakeStore()
         val transport = FakeTransport(online = true)
@@ -632,6 +721,7 @@ class OutboxMessageSenderTest {
                 if (it.mainTarget && it.session == PendingMainConversation) it.copy(session = session) else it
             }
         }
+        override suspend fun releaseMainCreation() { if (main == null) creationClaimed = false }
         override suspend fun forgetMainConversation(session: SessionKey) {
             if (main != session) return
             main = null

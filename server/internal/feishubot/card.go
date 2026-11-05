@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/nwverse/persona/sdk/go/wire"
@@ -134,8 +135,9 @@ func buttonRow(bs []Button) map[string]any {
 	return map[string]any{"tag": "column_set", "flex_mode": "flow", "horizontal_spacing": "8px", "columns": cols}
 }
 
-// Buttons adds a row of buttons.
+// Buttons adds a row of buttons; empty ones (nil) are left out, and no row when none is left.
 func (c *Card) Buttons(bs ...Button) *Card {
+	bs = slices.DeleteFunc(slices.Clone(bs), func(b Button) bool { return len(b) == 0 })
 	if len(bs) == 0 {
 		return c
 	}

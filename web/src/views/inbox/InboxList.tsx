@@ -321,7 +321,7 @@ export function rowMenu(it: InboxItem, done: boolean): MenuItem[] {
   const items: MenuItem[] = [
     done
       ? { key: "undone", label: t("inbox-inboxlist.move_back"), icon: "inbox", onSelect: () => void setDone(it, false) }
-      : { key: "done", label: t("inbox-inboxlist.done"), icon: "check", onSelect: () => void setDone(it, true) },
+      : { key: "done", label: t("inbox-inboxlist.done"), icon: "check", onSelect: () => void markFromRow(it, true, true) }, // a menu pick: 撤销 on any screen (#4162)
   ];
   (it.mutes ?? []).forEach((m, i) => items.push({ key: `mute:${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", divider: i === 0, onSelect: () => void muteItem(it, m) }));
   return items;

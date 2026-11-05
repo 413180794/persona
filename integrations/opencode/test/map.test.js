@@ -49,6 +49,9 @@ test('an assistant message: reasoning, text, tool calls with their results, ids 
 test('failures, interruptions, compactions and user shell commands', () => {
   assert.deepEqual(messageItems({ type: 'assistant', content: [], finish: 'error', error: { type: 'provider.auth', message: 'not available' } }, 3).map((i) => i.text), ['出错了：not available'])
   assert.deepEqual(messageItems({ type: 'assistant', content: [{ type: 'text', text: 'partial' }], finish: 'error', error: { type: 'aborted', message: 'Step interrupted' } }, 3).map((i) => i.text), ['partial', '已中断'])
+  assert.deepEqual(messageItems({ type: 'assistant', content: [{ type: 'text', text: 'half' }], finish: 'length' }, 3).map((i) => i.text), ['half', '输出达到上限，这一轮停了'])
+  assert.deepEqual(messageItems({ type: 'assistant', content: [], finish: 'content-filter' }, 3).map((i) => i.text), ['这一轮被拦下了'])
+  assert.deepEqual(messageItems({ type: 'assistant', content: [{ type: 'text', text: 'done' }], finish: 'stop' }, 3).map((i) => i.text), ['done'])
   assert.deepEqual(messageItems({ type: 'idle', outcome: 'interrupted' }, 4).map((i) => i.text), ['已中断'])
   assert.deepEqual(messageItems({ type: 'idle', outcome: 'succeeded' }, 4), [])
   assert.deepEqual(messageItems({ type: 'compaction', status: 'completed' }, 5).map((i) => i.text), ['已压缩上下文'])

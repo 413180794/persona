@@ -19,7 +19,6 @@ import { TextSizeRow, ThemeColorPicker } from "./settings/LookSettings";
 import { setReplyMotionEnabled, useReplyMotionSetting } from "../ui/stream/motion";
 import { setSidebarTerminals, useSidebarTerminals } from "../lib/sidebar-terminals";
 import { setAgentDetails, setContextAsUsed, useAgentDetails, useContextAsUsed } from "../lib/context-usage";
-import { setAttentionSoundEnabled, useAttentionSoundSetting } from "../lib/attention";
 import { HubList } from "./Hubs";
 import { ModelConfiguration } from "./settings/ModelConfiguration";
 import { AgentSettings } from "./settings/AgentSettings";
@@ -256,7 +255,6 @@ function General({ onTriageModel, onExtensions }: { onTriageModel: () => void; o
   const sidebarTerminals = useSidebarTerminals();
   const agentDetails = useAgentDetails();
   const contextAsUsed = useContextAsUsed();
-  const attentionSound = useAttentionSoundSetting();
   const machines = useStore((s) => s.machines);
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
 
@@ -297,9 +295,6 @@ function General({ onTriageModel, onExtensions }: { onTriageModel: () => void; o
         <LanguageRow />
         <Row label={t("settings.reply_motion")} hint={t("settings.reply_motion_hint")}>
           <Switch on={replyMotion} onChange={setReplyMotionEnabled} label={t("settings.reply_motion")} />
-        </Row>
-        <Row label={t("settings.sound")} hint={t("settings.sound_hint")}>
-          <Switch on={attentionSound} onChange={setAttentionSoundEnabled} label={t("settings.sound")} />
         </Row>
         <TerminalModeRow />
         <Row label={t("settings.sidebar_terminals")} hint={t("settings.sidebar_terminals_hint")}>

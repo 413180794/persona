@@ -18,6 +18,8 @@ import persona.core.contracts.api.PendingMainConversation
 import persona.core.contracts.api.ChatComposerService
 import persona.core.contracts.api.ComposerDelivery
 import persona.core.contracts.api.DeliveryState
+import persona.core.contracts.api.hubCodedFailure
+import persona.core.domain.SetupFailureCodes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -204,7 +206,7 @@ class OutboxMessageSender(
     /** Attachments need the same durably bound target before uploading machine-local files. */
     suspend fun prepareMainConversation(): SessionKey? = processing.withLock {
         check(job.isActive) { "Pairing scope is closed" }
-        if (transport.readyToSend.value) resolveMain() else null
+        if (transport.readyToSend.value) (resolveMain() as? MainTarget.Found)?.session else null
     }
 
     override suspend fun sendDraft(session: SessionKey, draft: DraftSnapshot, clientMessageId: String) = lifecycle.withLock {
@@ -331,10 +333,19 @@ class OutboxMessageSender(
             val allowed = if (transport.supportsClientOps) dispatchable + OutboxState.Unknown else dispatchable
             if (entry.mainTarget && entry.session == PendingMainConversation) {
                 if (entry.state !in dispatchable) continue
-                val target = resolveMain() ?: run {
-                    store.transition(entry.clientMessageId, dispatchable, OutboxState.WaitingForNetwork,
-                        "main_not_ready")
-                    return
+                val target = when (val main = resolveMain()) {
+                    is MainTarget.Found -> main.session
+                    // The hub said why it cannot start (no computer, no Claude Code…): nothing was started, so the
+                    // message is not queued behind it (docs/onboarding.md 4.4); the user fixes the step and retries.
+                    is MainTarget.Refused -> {
+                        store.transition(entry.clientMessageId, dispatchable, OutboxState.Refused, main.code)
+                        continue
+                    }
+                    MainTarget.NotYet -> {
+                        store.transition(entry.clientMessageId, dispatchable, OutboxState.WaitingForNetwork,
+                            "main_not_ready")
+                        return
+                    }
                 }
                 entry = entry.copy(session = target)
             }
@@ -368,20 +379,39 @@ class OutboxMessageSender(
     private fun request(entry: OutboxEntry) =
         MessageRequest(hubScope, entry.session, entry.text, entry.clientMessageId, entry.clearDraft, opId = entry.operationId)
 
-    private suspend fun resolveMain(): SessionKey? {
-        store.mainConversation()?.let { return it }
-        val resolver = mainResolver ?: return null
+    private sealed interface MainTarget {
+        data class Found(val session: SessionKey) : MainTarget
+        /** The hub refused to start it with a setup code: nothing was created. */
+        data class Refused(val code: String) : MainTarget
+        data object NotYet : MainTarget
+    }
+
+    private suspend fun resolveMain(): MainTarget {
+        store.mainConversation()?.let { return MainTarget.Found(it) }
+        val resolver = mainResolver ?: return MainTarget.NotYet
         return try {
             val target = resolver.findMainConversation() ?: if (store.claimMainCreation()) {
                 resolver.createMainConversation()
             } else null
             if (target != null) store.bindMainConversation(target)
-            target
+            target?.let { MainTarget.Found(it) } ?: MainTarget.NotYet
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
-            // A legacy create may have succeeded remotely. Only look up the main pointer on retry.
-            null
+        } catch (error: Exception) {
+            // A 409 with a setup code is the hub refusing before it creates anything: the claim goes back, so the
+            // next try (after the user adds a computer…) starts it. Any other failure may have created it remotely:
+            // only look up the main pointer on retry.
+            val coded = hubCodedFailure(error)
+            val refusal = coded?.takeIf { it.status == 409 }?.code?.takeIf { it in SetupFailureCodes }
+            if (refusal != null) {
+                store.releaseMainCreation()
+                MainTarget.Refused(refusal)
+            } else {
+                // The computer asleep or the assistant restarting: the hub answered and started nothing, so the next
+                // try (still a lookup first) may start it once they are back; the message keeps waiting meanwhile.
+                if (coded?.code in RetryLaterCodes) store.releaseMainCreation()
+                MainTarget.NotYet
+            }
         }
     }
 
@@ -398,6 +428,8 @@ class OutboxMessageSender(
     }
 
     companion object {
+        /** Refusals of the start that come back by themselves (docs/onboarding.md 4.6): nothing was created. */
+        private val RetryLaterCodes = setOf("node_unreachable", "assistant_offline")
         private val uncertain = setOf(OutboxState.Sending, OutboxState.Unknown, OutboxState.Verifying)
         private val reviewable = setOf(OutboxState.Unknown, OutboxState.Verifying)
         /** Delivery unknown, with or without the review deadline passed: the user decides (confirm or discard). */
@@ -417,7 +449,7 @@ class OutboxMessageSender(
             is MessageTransportResult.HubError -> when {
                 result.delivered == "unknown" -> OutboxState.Verifying
                 result.delivered == "yes" -> OutboxState.Sent
-                result.code in refusals -> OutboxState.Refused
+                result.code in refusals || result.code in SetupFailureCodes -> OutboxState.Refused
                 result.delivered == "none" && result.retryable -> OutboxState.WaitingForNetwork
                 result.delivered == "none" -> OutboxState.Refused
                 else -> OutboxState.Unknown

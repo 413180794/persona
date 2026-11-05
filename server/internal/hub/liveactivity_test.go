@@ -655,3 +655,69 @@ func TestSessionsSentOnce(t *testing.T) {
 		t.Fatalf("sent %v, want %v", got, want)
 	}
 }
+
+// TestFleetRefreshPerDevice: each device's activity is refreshed fleetRefresh after its own last push, so it never
+// shows "waiting for the hub" while the hub is up (#4154). A change only another device shows (the assistant
+// answering, on an island that does not show it) is no push for this one and must not put its refresh off.
+func TestFleetRefreshPerDevice(t *testing.T) {
+	h, f, clock := fleetClock(t)
+	la := h.live
+	h.push.register(Device{DeviceID: "pad", Name: "pad", APNSToken: "padtok", Topic: "app.example"})
+	la.update("pad", func(v *db.LiveActivity) { v.ActivityID, v.PushToken, v.StartedAt = "act2", "padact", *clock })
+	if err := h.push.setPrefs("pad", NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true,
+		Island: IslandPrefs{Preset: "custom", Left: SlotStatus, Right: SlotAssistant}}); err != nil {
+		t.Fatal(err)
+	}
+	sentAt := func(device string) time.Time {
+		la.mu.Lock()
+		defer la.mu.Unlock()
+		return la.sentAt[device]
+	}
+	working := FleetState{Phase: "working", Working: 1, Items: []FleetItem{{ID: "m/a", Title: "api", Kind: "working"}}}
+	t0 := *clock
+	reportLive(t, h, working, FleetStats{})
+	la.flush(working, false, false)
+	f.calls(t, 2)
+
+	// 6 minutes on, the assistant answers: only the pad's island shows it.
+	*clock = t0.Add(6 * time.Minute)
+	answering := working
+	answering.Assistant = true
+	reportLive(t, h, answering, FleetStats{})
+	la.flush(answering, false, false)
+	f.calls(t, 3)
+	if !sentAt("phone").Equal(t0) || !sentAt("pad").Equal(*clock) {
+		t.Fatalf("after the assistant: phone %v, pad %v", sentAt("phone").Sub(t0), sentAt("pad").Sub(t0))
+	}
+
+	// The run loop's tick every 15 s: the phone is refreshed fleetRefresh after its own push, the pad after its own.
+	refreshed := map[string]time.Time{}
+	for *clock = t0.Add(6*time.Minute + 15*time.Second); !clock.After(t0.Add(fleetStaleIn + 2*time.Minute)); *clock = clock.Add(15 * time.Second) {
+		la.tick()
+		for _, d := range []string{"phone", "pad"} {
+			if _, ok := refreshed[d]; !ok && sentAt(d).Equal(*clock) {
+				refreshed[d] = *clock
+			}
+		}
+	}
+	for d, last := range map[string]time.Time{"phone": t0, "pad": t0.Add(6 * time.Minute)} {
+		at, ok := refreshed[d]
+		if !ok {
+			t.Fatalf("%s never refreshed (last push at %v)", d, last.Sub(t0))
+		}
+		if wait := at.Sub(last); wait < fleetRefresh || wait > fleetRefresh+15*time.Second {
+			t.Fatalf("%s refreshed %v after its last push, want about %v (stale after %v)", d, wait, fleetRefresh, fleetStaleIn)
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	c := f.calls(t, 5)
+	if len(c) != 5 {
+		t.Fatalf("want one refresh per device, got %d pushes: %+v", len(c), c)
+	}
+	for _, x := range c[3:] {
+		// Each device gets its own version: the pad's island shows the assistant, the phone's does not.
+		if x.Event != "update" || x.Priority != "5" || x.State.Working != 1 || x.State.Assistant != (x.Token == "padact") {
+			t.Fatalf("refresh %+v", x)
+		}
+	}
+}

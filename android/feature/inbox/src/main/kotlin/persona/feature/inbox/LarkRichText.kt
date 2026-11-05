@@ -15,7 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.*
@@ -24,8 +23,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -264,13 +261,14 @@ fun LarkCodeBlock(code: String, language: String, modifier: Modifier = Modifier)
     val tokens = remember(code) { LarkSyntax.tokens(code) }
     val palette = PersonaTheme.palette
     val shape = RoundedCornerShape(Tokens.Radius.control)
+    val codeSize = PersonaTheme.type.code.fontSize
 
     Column(
         modifier
             .fillMaxWidth()
             .clip(shape)
             .background(palette.ink.copy(alpha = 0.05f))
-            .border(1.dp, palette.ink.copy(alpha = 0.1f), shape)
+            .border(RichTextTokens.codeBorder, palette.ink.copy(alpha = 0.1f), shape)
             .padding(Tokens.Space.m)
     ) {
         Row(
@@ -289,7 +287,7 @@ fun LarkCodeBlock(code: String, language: String, modifier: Modifier = Modifier)
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)
             ) {
-                JIcon(PhIcons.Copy, modifier = Modifier.size(12.dp), tint = palette.accent)
+                JIcon(PhIcons.Copy, modifier = Modifier.size(RichTextTokens.codeCopyIcon), tint = palette.accent)
                 Text(stringResource(R.string.inbox_lark_code_copy), style = PersonaTheme.type.micro, color = palette.accent)
             }
         }
@@ -298,12 +296,12 @@ fun LarkCodeBlock(code: String, language: String, modifier: Modifier = Modifier)
                 for (t in tokens) {
                     val color = when (t.kind) {
                         LarkSyntax.Kind.KEYWORD -> palette.accent
-                        LarkSyntax.Kind.STRING -> Color(0xFF2E7D32)
-                        LarkSyntax.Kind.NUMBER -> Color(0xFFE65100)
+                        LarkSyntax.Kind.STRING -> RichTextTokens.Syntax.string
+                        LarkSyntax.Kind.NUMBER -> RichTextTokens.Syntax.number
                         LarkSyntax.Kind.COMMENT -> palette.ink3
                         LarkSyntax.Kind.PLAIN -> palette.ink
                     }
-                    withStyle(SpanStyle(color = color, fontFamily = FontFamily.Monospace, fontSize = 13.sp)) {
+                    withStyle(SpanStyle(color = color, fontFamily = FontFamily.Monospace, fontSize = codeSize)) {
                         append(t.text)
                     }
                 }
@@ -324,8 +322,9 @@ fun LarkRichInlineText(
     val open = LocalLarkLinkOpener.current
     val uri = LocalUriHandler.current
     val palette = PersonaTheme.palette
+    val codeSize = PersonaTheme.type.code.fontSize
 
-    val annotated = remember(text, palette) {
+    val annotated = remember(text, palette, codeSize) {
         buildAnnotatedString {
             // Regex to find: links, @mentions (@someone), inline code `code`, emojis [key]
             val pattern = Regex("""(https?://[^\s<>"]+)|(@[^\s@]+)|(`[^`]+`)|(\[[^\]]+\])""", RegexOption.IGNORE_CASE)
@@ -358,7 +357,7 @@ fun LarkRichInlineText(
                             fontFamily = FontFamily.Monospace,
                             background = palette.ink.copy(alpha = 0.08f),
                             color = palette.accent,
-                            fontSize = 13.sp
+                            fontSize = codeSize
                         )) {
                             append(" $code ")
                         }
@@ -428,7 +427,7 @@ fun LarkRichBlockView(
                                             LarkRichNode.marker(b, i),
                                             style = PersonaTheme.type.caption,
                                             color = palette.ink3,
-                                            modifier = Modifier.widthIn(min = 20.dp),
+                                            modifier = Modifier.widthIn(min = RichTextTokens.listMarkerMinWidth),
                                             textAlign = TextAlign.End
                                         )
                                         Box(Modifier.weight(1f)) {
@@ -445,7 +444,7 @@ fun LarkRichBlockView(
                             ) {
                                 Box(
                                     Modifier
-                                        .width(3.dp)
+                                        .width(RichTextTokens.quoteBar)
                                         .fillMaxHeight()
                                         .clip(RoundedCornerShape(Tokens.Radius.badge))
                                         .background(palette.accent.copy(alpha = 0.5f))

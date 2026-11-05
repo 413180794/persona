@@ -73,7 +73,7 @@ type extensionSink struct {
 
 // answer sends the answer in the pieces the channel takes, each by its ref: tried again (an error) unless there is
 // nowhere to send it (cannot_send, the channel gone).
-func (e extensionSink) answer(ctx context.Context, r *channel.Run, answer, note string, _ time.Duration, _, quiet bool) error {
+func (e extensionSink) answer(ctx context.Context, r *channel.Run, answer, note string, _ time.Duration, _, quiet bool, _ channel.End) error {
 	if quiet {
 		return nil
 	}

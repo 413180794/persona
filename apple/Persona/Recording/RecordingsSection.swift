@@ -17,8 +17,8 @@ struct RecordingsSection: View {
         }
         Section {
             if library.entries.isEmpty {
-                EmptyStateView(symbol: Theme.Icon.recording, title: "还没有录音",
-                               message: "用手机或 Apple Watch 录下会议、口述和现场的内容，转写好的文字会进知识库。")
+                EmptyStateView(symbol: Theme.Icon.recording, title: String(localized: "还没有录音"),
+                               message: String(localized: "用手机或 Apple Watch 录下会议、口述和现场的内容，转写好的文字会进知识库。"))
                     .listRowBackground(Color.clear)
             }
             ForEach(library.entries) { entry in
@@ -74,17 +74,17 @@ struct RecordingStatusText: View {
     }
 
     static func status(_ entry: RecordingEntry, transcription: RecordingTranscription, sync: RecordingSync) -> (String, Color) {
-        if entry.active { return ("录音中", Theme.danger) }
+        if entry.active { return (String(localized: "录音中"), Theme.danger) }
         if let error = transcription.errors[entry.id] { return (error, Theme.danger) }
-        if transcription.current == entry.id { return ("转写中", Theme.accent) }
-        if !entry.receivedAll { return (entry.expectedSegments == 0 ? "没有录到音频" : "等待手表回传", .secondary) }
+        if transcription.current == entry.id { return (String(localized: "转写中"), Theme.accent) }
+        if !entry.receivedAll { return (entry.expectedSegments == 0 ? String(localized: "没有录到音频") : String(localized: "等待手表回传"), .secondary) }
         switch sync.status(entry) {
-        case .synced: return (entry.transcribedAll ? "已同步到知识库" : "已同步一部分", Theme.positive)
-        case .uploading: return ("正在同步", Theme.accent)
-        case .rejected: return ("知识库没有收下", Theme.danger)
-        case .expired: return ("已过保留期", .secondary)
-        case .pending: return (entry.transcribedAll ? "等待同步" : "等待转写", .secondary)
-        case .waiting: return (entry.transcribedAll ? "没有识别到语音" : "等待转写", .secondary)
+        case .synced: return (entry.transcribedAll ? String(localized: "已同步到知识库") : String(localized: "已同步一部分"), Theme.positive)
+        case .uploading: return (String(localized: "正在同步"), Theme.accent)
+        case .rejected: return (String(localized: "知识库没有收下"), Theme.danger)
+        case .expired: return (String(localized: "已过保留期"), .secondary)
+        case .pending: return (entry.transcribedAll ? String(localized: "等待同步") : String(localized: "等待转写"), .secondary)
+        case .waiting: return (entry.transcribedAll ? String(localized: "没有识别到语音") : String(localized: "等待转写"), .secondary)
         }
     }
 }
@@ -140,7 +140,7 @@ struct RecordingDetailView: View {
     var body: some View {
         Group {
             if let entry = library.entry(id) { content(entry) } else {
-                EmptyStateView(symbol: Theme.Icon.recording, title: "录音已删除", message: "这条录音和它在知识库里的文字都已经删掉了。")
+                EmptyStateView(symbol: Theme.Icon.recording, title: String(localized: "录音已删除"), message: String(localized: "这条录音和它在知识库里的文字都已经删掉了。"))
             }
         }
         .themedPage()
@@ -149,7 +149,7 @@ struct RecordingDetailView: View {
         .confirmationDialog("删除这条录音？", isPresented: $deleting, titleVisibility: .visible) {
             Button("删除", role: .destructive) {
                 transcription.cancel(id)
-                do { try sync.delete(id); dismiss() } catch { failure = "录音没有删除，请稍后重试" }
+                do { try sync.delete(id); dismiss() } catch { failure = String(localized: "录音没有删除，请稍后重试") }
             }
         } message: { Text("本机的音频和知识库里的文字都会删掉。") }
         .alert("录音操作未完成", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
@@ -167,7 +167,7 @@ struct RecordingDetailView: View {
                 }
                 .font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                 if !entry.marks.isEmpty {
-                    Label("书签 " + entry.marks.map(RecordingFormat.clock).joined(separator: "、"), systemImage: Theme.Icon.pin)
+                    Label(String(localized: "书签 \(entry.marks.map(RecordingFormat.clock).joined(separator: "、"))"), systemImage: Theme.Icon.pin)
                         .font(Theme.Font.secondary).foregroundStyle(.secondary)
                 }
                 if transcription.current == id { ProgressView().tint(Theme.accent) }

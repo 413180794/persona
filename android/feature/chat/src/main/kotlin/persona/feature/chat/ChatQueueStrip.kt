@@ -60,7 +60,7 @@ internal fun ChatQueueStrip(
                 else pulled.getOrNull(index)?.let { composer.restoreQueued(it); onNotice(resources.getString(R.string.chat_queue_restored)) }
                     ?: onNotice(resources.getString(R.string.chat_queue_not_found))
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { onNotice(resources.getString(R.string.chat_queue_failed, operationFeedback(e).message)) }
+            catch (e: Exception) { onNotice(resources.getString(R.string.chat_queue_failed, operationFeedback(e).text.resolve(resources))) }
             finally {
                 // Stay busy until the queue on screen is the new one, so a stale row cannot be picked.
                 try { refresh() } catch (e: CancellationException) { throw e } catch (_: Exception) { }

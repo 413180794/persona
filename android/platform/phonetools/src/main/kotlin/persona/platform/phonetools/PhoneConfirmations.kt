@@ -3,6 +3,7 @@ package persona.platform.phonetools
 import android.app.*
 import android.content.*
 import android.net.Uri
+import android.os.Build
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.UUID
@@ -53,8 +54,14 @@ class PhoneConfirmations(context: Context) : AutoCloseable {
                     .setAction("jarvis.phone.confirm").setData(Uri.parse("jarvis-phone://confirmation/${current.token}/$allowed"))
                     .putExtra("token", current.token).putExtra("allowed", allowed)
                 val pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-                return Notification.Action.Builder(null, context.getString(if (allowed) R.string.phonetools_allow else R.string.phonetools_deny), pendingIntent)
-                    .setAuthenticationRequired(allowed).build()
+                val builder = Notification.Action.Builder(null, context.getString(if (allowed) R.string.phonetools_allow else R.string.phonetools_deny), pendingIntent)
+                // setAuthenticationRequired is API 31; calling it on API 30 throws NoSuchMethodError (an Error, so the
+                // catch below misses it) and no confirmation ever shows. On API 30 the system does not ask for an unlock
+                // before sending the button, so allow can be tapped straight from the lock screen; resolve() and the
+                // receiver still refuse it while the device is locked, so that tap is dropped (the notification stays):
+                // unlock, then tap allow or open the app. Trade-off: one more step on API 30 instead of no confirmation.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) builder.setAuthenticationRequired(allowed)
+                return builder.build()
             }
             val builder = Notification.Builder(context, CHANNEL).setSmallIcon(persona.core.designsystem.R.drawable.ic_stat)
                 .setContentTitle(context.getString(R.string.phonetools_confirm_notification)).setContentText(current.summary)

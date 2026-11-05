@@ -402,4 +402,19 @@
     <plurals name="settings_translation_chats">
         <item quantity="other">%1$d件のチャット</item>
     </plurals>
+    <string name="settings_ready_main_header">メインチャット</string>
+    <string name="settings_ready_main_about">Persona のメインチャットには、パソコン、Claude Code、使えるモデルが必要です。準備ができた項目は自動で更新されます。</string>
+    <string name="settings_ready_step_computer">パソコン</string>
+    <string name="settings_ready_step_claude">Claude Code</string>
+    <string name="settings_ready_step_model">モデル</string>
+    <string name="settings_ready_step_first_message">最初のメッセージ</string>
+    <string name="settings_ready_state_checking">確認中</string>
+    <string name="settings_ready_state_skipped">不要</string>
+    <string name="settings_ready_state_unknown">未確認</string>
+    <string name="settings_ready_step_computer_ok">%1$s はオンラインです</string>
+    <string name="settings_ready_step_claude_ok">バージョン %1$s</string>
+    <string name="settings_ready_step_model_ok">使えます</string>
+    <string name="settings_ready_step_first_message_ok">一度回答しました</string>
+    <string name="settings_ready_state_not_tried">まだ試していません</string>
+    <string name="settings_ready_phone_header">このスマホ</string>
 </resources>

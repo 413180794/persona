@@ -72,6 +72,23 @@ object MachineManagementModule {
         override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?) = api().providerModels(provider, refresh, machine)
     }
 
+    // 准备清单's main-conversation steps: the selected group's hub, while its hello says assistant_readiness.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Provides @Singleton fun readiness(runtime: ConnectionRuntime, application: Application): AssistantReadinessSource = object : AssistantReadinessSource {
+        override val available: Flow<Boolean> = (application as PersonaApp).hub
+            .flatMapLatest { hub -> hub?.connection?.serverFeatures ?: flowOf(emptySet()) }
+            .map { AssistantReadinessFeature in it }.distinctUntilChanged()
+        private fun api(): AssistantManagement {
+            val connection = runtime.connection()
+            val route = connection.route.value ?: throw HubFailure(HubError.NoNetwork)
+            return persona.core.hub.HttpAssistantManagement(route.endpoint.url, connection.token, connection.http.client) {
+                connection.route.value === route
+            }
+        }
+        override suspend fun readiness(probe: Boolean) = api().readiness(probe)
+        override suspend fun dismiss(dismissed: Boolean) = api().dismissReadiness(dismissed)
+    }
+
     // 新增模型供应商 from 模型配置: the selected group's hub keeps the provider.
     @Provides @Singleton fun providers(runtime: ConnectionRuntime): ProviderSetup = object : ProviderSetup {
         private fun api() = HttpProviderSetup(runtime.connection())

@@ -434,7 +434,7 @@ func (c *codexConn) deliver(ctx context.Context, live, text string, images []pro
 	if c.p.model.Model != "" {
 		params["model"] = c.p.model.Model
 	}
-	if effort != "" {
+	if effort != "" && effort != effortAuto { // auto: the model's own default, which is no effort at all for Codex
 		params["effort"] = effort
 	}
 	var res struct {

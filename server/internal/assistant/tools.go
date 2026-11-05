@@ -12,6 +12,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
@@ -216,7 +217,10 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		var res struct {
 			Session proto.Session `json:"session"`
 		}
-		sctx, cancel := context.WithTimeout(ctx, 100*time.Second)
+		// The node builds the session and starts the agent before answering; a machine waking from sleep or a
+		// launcher cold start can take minutes. Like agent_send's resume branch, this wait is detached from the
+		// conversation's turn and given agentStartTimeout instead of the old 100s.
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), agentStartTimeout)
 		defer cancel()
 		params := map[string]any{"cwd": a.Cwd, "launcher": a.Launcher, "prompt": a.Prompt, "tab_name": s.tabName(sctx, a.Prompt)}
 		if err := s.applyModel(sctx, "agent.new", params); err != nil {
@@ -233,8 +237,20 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		if note != "" {
 			note = " Note: " + note + "."
 		}
+		// Remember the sessions already there, so an unanswered start can adopt only the session it created:
+		// UpdatedAt is last sign of life, so a cwd match alone could be another agent already busy there. The
+		// list failing is non-fatal: it just means an unknown result cannot be turned into an adoption. It gets
+		// its own short bound, so a slow list cannot spend the start's wait before the start is even sent.
+		lctx, lcancel := context.WithTimeout(sctx, agentStartListTimeout)
+		knownIDs := s.knownSessionIDs(lctx, am.ID)
+		lcancel()
 		if err := s.call(sctx, am.ID, DeviceSessionStart, params, &res); err != nil {
 			s.recordStartFailure(ctx, am.ID, launcher, err)
+			if startResultUnknown(err) {
+				// The node may already have the session and a running agent although the answer never came back:
+				// do not report failure (the model would start it again, duplicating the run).
+				return s.startedWithoutAnswer(ctx, self, am, picked, a.Cwd, a.Prompt, params["tab_name"], note, knownIDs), nil
+			}
 			return "", err
 		}
 		if s.quietAgentTask(ctx, self, am, a.Cwd, a.Prompt, params["tab_name"], res.Session.SessionID) {
@@ -244,6 +260,108 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		return fmt.Sprintf("Started on %s in %s: session %s. It shows up in the app's Agents tab.%s", am.Name, a.Cwd, res.Session.SessionID, note), nil
 	}
 	return "", fmt.Errorf("unknown tool %s", name)
+}
+
+// agentStartTimeout bounds the wait for an agent_start answer: the node creates the session and launches the agent
+// first, and a machine waking from sleep or a launcher cold start can take minutes. Same bound as a quiet task's
+// own start (tasks.go's taskStartTimeout). A var so tests shorten it instead of sleeping past it.
+var agentStartTimeout = taskStartTimeout
+
+// agentStartAdoptWindow bounds how fresh a listed session's last sign of life must be to count as the one an
+// unanswered start created.
+var agentStartAdoptWindow = 10 * time.Minute
+
+// agentStartListTimeout bounds the sessions.list calls around a start (the before snapshot and each adoption
+// attempt), so they never spend the start's own wait.
+var agentStartListTimeout = 15 * time.Second
+
+// agentStartAdoptRetry is the one wait before a second adoption list: the hub's held list can lag the node.
+var agentStartAdoptRetry = 200 * time.Millisecond
+
+// startResultUnknown: the answer to session.start never came back (the wait ran out or the link dropped while it
+// was out), though the node may already have built the session and launched the agent. An offline machine, a
+// missing one or a request the node refused is definite and stays an error; rpc.ErrDropped answers the same words
+// as rpc.ErrClosed (a relay passes them through), so the rpc.Error message form counts too.
+func startResultUnknown(err error) bool {
+	var re *rpc.Error
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) ||
+		errors.Is(err, rpc.ErrClosed) || errors.As(err, &re) && re.Message == rpc.ErrClosed.Error()
+}
+
+// startedWithoutAnswer answers an agent_start whose result is unknown. A list showing the new session the node
+// built (not present before the start) adopts and links it like an answered start; otherwise (or when the pre-start
+// list failed) the model gets neutral text: check the Agents list first and never start a second copy.
+func (s *Service) startedWithoutAnswer(ctx context.Context, conversation string, m Device, launcher, cwd, prompt string, tab any, note string, knownIDs map[string]bool) string {
+	if sess, ok := s.adoptStartedSession(ctx, m, launcher, cwd, knownIDs); ok {
+		if s.quietAgentTask(ctx, conversation, m, cwd, prompt, tab, sess.SessionID) {
+			return fmt.Sprintf("Started on %s in %s: session %s (the start took longer than the wait; the session was "+
+				"confirmed from the machine's own list), a task of this conversation (its card is in the conversation; "+
+				"you are told here when it is done or waits for the user, nothing else notifies the user).%s",
+				m.Name, cwd, sess.SessionID, note)
+		}
+		return fmt.Sprintf("Started on %s in %s: session %s (the start took longer than the wait; the session was "+
+			"confirmed from the machine's own list). It shows up in the app's Agents tab.%s", m.Name, cwd, sess.SessionID, note)
+	}
+	return fmt.Sprintf("The agent may already be starting on %s in %s, but the machine did not answer within the wait, "+
+		"so the result is unknown. Do NOT start it again: check the app's Agents tab (or call agents_list) for a new "+
+		"session there, and only start again if no new session appears.%s", m.Name, cwd, note)
+}
+
+// knownSessionIDs is the machine's session ids before a start; nil when the list could not be read (no adoption).
+func (s *Service) knownSessionIDs(ctx context.Context, machine string) map[string]bool {
+	list, err := s.sessions(ctx, machine)
+	if err != nil {
+		return nil
+	}
+	ids := make(map[string]bool, len(list))
+	for _, sess := range list {
+		ids[sess.SessionID] = true
+	}
+	return ids
+}
+
+// adoptStartedSession finds the new session an unanswered start created: not in knownIDs, hub-started, a
+// non-assistant agent of the same launcher and directory, fresh sign of life; newest wins. It lists twice, since
+// the hub's held sessions can lag the node by a changed event. nil knownIDs (the pre-start list failed): nothing.
+//
+// Limit: two unanswered starts in the same directory and launcher at the same instant cannot be told apart, so one
+// could adopt the other's session (a mislabeled card, never a duplicate agent); newest-wins is the best guess and
+// the neutral fallback stays safe otherwise.
+func (s *Service) adoptStartedSession(ctx context.Context, m Device, launcher, cwd string, knownIDs map[string]bool) (proto.Session, bool) {
+	if knownIDs == nil {
+		return proto.Session{}, false
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return proto.Session{}, false
+			case <-time.After(agentStartAdoptRetry):
+			}
+		}
+		lctx, cancel := context.WithTimeout(ctx, agentStartListTimeout)
+		list, err := s.sessions(lctx, m.ID)
+		cancel()
+		if err != nil {
+			return proto.Session{}, false
+		}
+		var best proto.Session
+		found := false
+		for _, sess := range list {
+			if knownIDs[sess.SessionID] || !sess.StartedByJarvis || sess.Assistant || sess.Launcher != launcher ||
+				(sess.Cwd != cwd && sess.WorkspaceCwd != cwd) || sess.UpdatedAt.IsZero() {
+				continue
+			}
+			if time.Since(sess.UpdatedAt) > agentStartAdoptWindow || found && !sess.UpdatedAt.After(best.UpdatedAt) {
+				continue
+			}
+			best, found = sess, true
+		}
+		if found {
+			return best, true
+		}
+	}
+	return proto.Session{}, false
 }
 
 // ---- ask_user ----

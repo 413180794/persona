@@ -51,7 +51,7 @@ final class ChatTrace {
     /// What 拷贝诊断 copies.
     func text(_ key: SessionKey) -> String {
         let lines = lines(key)
-        return (["Persona 对话诊断（只有结构，没有内容）", "行 \(lines.count)"] + lines).joined(separator: "\n")
+        return (["Persona 对话诊断（只有结构，没有内容）", "行 \(lines.count)"] + lines).joined(separator: "\n") // i18n-ignore: diagnostics for a bug report
     }
 
     private static func stamp(_ date: Date) -> String {

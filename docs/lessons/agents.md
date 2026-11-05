@@ -95,6 +95,9 @@
 - Claude Code 2.1.206 的 `/effort` 换成了滑块（「←/→ to adjust · Enter to confirm」，最左是 low、max 右边还有 ultracode），不再有旧列表的「for this session only」；
   node 的 `tuiSetEffort` 两种都认（`effortPicker`）。滑块确认后会写进 `~/.claude/settings.json` 的 `effortLevel`（「saved as your default for new sessions」），
   不只是这一个会话。环境里有 `CLAUDE_CODE_EFFORT_LEVEL`（settings.json 的 `env` 或启动器）时它优先，Claude 只回「… overrides this session」、什么都不改，App 会如实提示。
+- 思考强度 `auto`（Claude Code 2.1.316）只有 `/effort auto` 命令认：`--effort auto` 被警告后忽略，settings.json 的 `effortLevel` 写 auto
+  被静默丢掉（`max` 也一样，settings 只认 low…xhigh），选择器里没有这一格。`/effort auto` 会清掉 settings 里这个模型的默认档，
+  手机上的 auto 要按各条路分开做（`docs/ios.md`「思考强度和权限模式」）。在开发机上试 `/effort …` 也会改真实的 settings.json，别在自己的配置里试。
 - 带图的消息有一次停在了 Claude 的输入框里没发出去（2026-10-31，Claude Code 2.1.206：框里是 `[Image #1]` 和文字，Agent `done`，在电脑上按回车才发出），
   之后在单独的 herdr 会话里试了 42 次（小 PNG、1.8 MB JPEG、CPU 跑满）都没再出现，原因没找到；11-01 用手机拍的照片又出现一次。node 的兜底（`ensureSubmitted`）：发完 2 秒后
   看一次输入框，还是刚发的那段（`[Image #n]` / `[Pasted text #n]` 去掉后比开头几个字）就补一次回车；框空了、或者是别的内容，什么都不按。

@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -21,9 +22,9 @@ import (
 // channelSink is how a channel's runs reach its chat app.
 type channelSink interface {
 	// answer sends a run's answer and note (into its progress message when there is one). final: the run is over
-	// (its messages are marked done); quiet: there is nothing to say (a held run whose background work ended). An
-	// error: it did not go out and may when tried again (the same run, the same refs).
-	answer(ctx context.Context, r *channel.Run, answer, note string, took time.Duration, final, quiet bool) error
+	// (its messages are marked done); quiet: there is nothing to say (a held run whose background work ended); end:
+	// how a final one ended. An error: it did not go out and may when tried again (the same run, the same refs).
+	answer(ctx context.Context, r *channel.Run, answer, note string, took time.Duration, final, quiet bool, end channel.End) error
 }
 
 // channelProgress is a sink that shows a run's progress in a message it changes (the Feishu bot's card).
@@ -66,6 +67,91 @@ type chanLive struct {
 	sentCard   [32]byte
 	backoff    time.Duration
 	quietUntil time.Time
+	// What the progress card shows besides the steps, noted as the items come (liveNote): the calls with no result
+	// yet (oldest first), how many calls, the files read and changed, the subagents.
+	open         []openCall
+	calls        int
+	read, edited map[string]bool
+	subs         []subtask
+	subsMore     int // subtasks dropped from subs (it keeps the latest)
+}
+
+// openCall is a tool call with no result yet.
+type openCall struct {
+	id, step string
+	since    time.Time
+}
+
+// subtask is a Task / Agent call of the turn.
+type subtask struct {
+	id, desc, kind string
+	done           bool
+}
+
+// Bounds of chanLive's notes: a turn of thousands of calls stays small.
+const (
+	liveOpenMost  = 50
+	liveFilesMost = 1000
+	liveSubsMost  = 50
+)
+
+// liveNote notes a new item for the progress card; now is when it was seen (for an item with no time).
+func (p *chanLive) liveNote(l i18n.Lang, it proto.Item, now time.Time) {
+	switch it.Kind {
+	case proto.KindToolUse:
+		p.calls++
+		since := it.TS
+		if since.IsZero() {
+			since = now
+		}
+		if it.ToolUseID != "" && !slices.ContainsFunc(p.open, func(o openCall) bool { return o.id == it.ToolUseID }) {
+			p.open = append(p.open, openCall{id: it.ToolUseID, step: botStep(l, it), since: since})
+			if len(p.open) > liveOpenMost {
+				p.open = p.open[len(p.open)-liveOpenMost:]
+			}
+		}
+		var in struct {
+			FilePath     string `json:"file_path"`
+			NotebookPath string `json:"notebook_path"`
+			Description  string `json:"description"`
+			SubagentType string `json:"subagent_type"`
+		}
+		_ = json.Unmarshal(it.ToolInput, &in)
+		file := in.FilePath
+		if file == "" {
+			file = in.NotebookPath
+		}
+		switch it.ToolName {
+		case "Read":
+			p.read = noteFile(p.read, file)
+		case "Edit", "MultiEdit", "Write", "NotebookEdit":
+			p.edited = noteFile(p.edited, file)
+		case "Task", "Agent":
+			p.subs = append(p.subs, subtask{id: it.ToolUseID, desc: clip(oneLine(in.Description), 60), kind: clip(oneLine(in.SubagentType), 30)})
+			if len(p.subs) > liveSubsMost {
+				p.subsMore += len(p.subs) - liveSubsMost
+				p.subs = p.subs[len(p.subs)-liveSubsMost:]
+			}
+		}
+	case proto.KindToolResult:
+		p.open = slices.DeleteFunc(p.open, func(o openCall) bool { return o.id == it.ToolUseID })
+		for i := range p.subs {
+			if p.subs[i].id == it.ToolUseID {
+				p.subs[i].done = true
+			}
+		}
+	}
+}
+
+func noteFile(m map[string]bool, file string) map[string]bool {
+	if file == "" || len(m) >= liveFilesMost {
+		return m
+	}
+	if m == nil {
+		m = map[string]bool{}
+	}
+	m[file] = true
+	return m
 }
 
 // chanMutex is a mutex the watch loop can try without blocking.
@@ -418,14 +504,14 @@ func (s *Service) SessionItems(ctx context.Context, p SessionItems) {
 			continue
 		}
 		if lp := c.live[r.ID]; lp != nil {
-			noteRunItems(l, r, lp, p.Items)
+			noteRunItems(l, r, lp, p.Items, c.clock())
 		}
 	}
 }
 
 // noteRunItems notes a run's new items as its steps, only from its own message on: a message queued behind another
 // turn would show that turn's steps. Under c.mu.
-func noteRunItems(l i18n.Lang, r *channel.Run, lp *chanLive, items []proto.Item) {
+func noteRunItems(l i18n.Lang, r *channel.Run, lp *chanLive, items []proto.Item, now time.Time) {
 	items = slices.DeleteFunc(slices.Clone(items), func(it proto.Item) bool { return it.Seq <= max(r.Base, lp.upTo) })
 	if lp.from == 0 {
 		i, ok := r.Find(items, nil)
@@ -436,6 +522,7 @@ func noteRunItems(l i18n.Lang, r *channel.Run, lp *chanLive, items []proto.Item)
 	}
 	for _, it := range items {
 		lp.upTo = it.Seq
+		lp.liveNote(l, it, now)
 		if st := botStep(l, it); st != "" {
 			lp.steps = append(lp.steps, st)
 			lp.dirty = true
@@ -476,7 +563,7 @@ func (s *Service) locateRun(ctx context.Context, r *channel.Run, prog *chanLive)
 		return
 	}
 	c.mu.Lock()
-	noteRunItems(l, r, prog, res.Items)
+	noteRunItems(l, r, prog, res.Items, c.clock())
 	c.mu.Unlock()
 }
 
@@ -546,6 +633,7 @@ func (s *Service) checkChannelRun(id string) {
 		look.Online = d.Online
 	} else if !look.Working {
 		look.Waiting = sess.Status == proto.StatusBlocked || s.hasPending(ctx, r.MachineID, r.SessionID)
+		look.Failed = !look.Waiting && func() bool { e, _ := turnError(sess); return e != "" }()
 	}
 	c := &s.chans
 	c.mu.Lock()
@@ -558,7 +646,7 @@ func (s *Service) checkChannelRun(id string) {
 	case channel.Wait:
 		return
 	case channel.Finish:
-		s.finishChannelRun(r, &channel.Result{Note: step.Note, Quiet: step.Note == ""})
+		s.finishChannelRun(r, &channel.Result{Note: step.Note, Quiet: step.Note == "", End: step.End})
 		return
 	}
 	// The end was not seen (it came before the watch, or never), or the message was not there last time: look now and
@@ -674,7 +762,7 @@ func (s *Service) finishChannelRun(r *channel.Run, res *channel.Result) {
 		if strings.TrimSpace(answer) == "" && res.Note == "" && !quiet {
 			answer = emptyAnswer(s.botLang(ctx), res.Stopped)
 		}
-		if err := sink.answer(ctx, &snap, answer, res.Note, took, !res.Held, quiet); err != nil {
+		if err := sink.answer(ctx, &snap, answer, res.Note, took, !res.Held, quiet, res.End); err != nil {
 			if s.answerAgain(prog, now) {
 				s.logf("channels: %s: the answer did not go out: %v; trying again", r.ID, err)
 				return
@@ -692,6 +780,7 @@ func (s *Service) finishChannelRun(r *channel.Run, res *channel.Result) {
 		}
 		prog.steps, prog.live, prog.dirty = nil, "", false
 		prog.from, prog.upTo = 0, 0
+		prog.open, prog.calls, prog.read, prog.edited, prog.subs, prog.subsMore = nil, 0, nil, nil, nil, 0
 		prog.items, prog.cot = nil, cotProgress{}
 	} else {
 		prog.finished = true

@@ -1,9 +1,13 @@
 package node
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -48,6 +52,9 @@ func TestValidModesAndFlags(t *testing.T) {
 	if err := validModes("plan", "xhigh"); err != nil {
 		t.Fatal(err)
 	}
+	if err := validModes("", "auto"); err != nil {
+		t.Fatal(err)
+	}
 	for _, bad := range [][2]string{{"yolo", ""}, {"", "ultra"}, {"plan; rm -rf ~", ""}} {
 		if validModes(bad[0], bad[1]) == nil {
 			t.Errorf("accepted %q", bad)
@@ -55,6 +62,10 @@ func TestValidModesAndFlags(t *testing.T) {
 	}
 	if got := modeFlags("acceptEdits", "low"); got != " --permission-mode acceptEdits --effort low" {
 		t.Errorf("flags %q", got)
+	}
+	// --effort rejects auto (Claude Code 2.1.316 warns and uses the default): auto is starting without the flag.
+	if got := modeFlags("plan", "auto"); got != " --permission-mode plan" {
+		t.Errorf("auto flags %q", got)
 	}
 	if modeFlags("", "") != "" {
 		t.Error("empty flags")
@@ -101,8 +112,100 @@ func TestEffortPickerAndOutcome(t *testing.T) {
 	if err := effortOutcome("  ⎿  Set effort level to high (this session)", "high"); err != nil {
 		t.Fatalf("set: %v", err)
 	}
+	if err := effortOutcome("  ⎿  Set effort level to medium (this session only): Balanced", "auto"); err != nil {
+		t.Fatalf("auto takes whichever level is the default: %v", err)
+	}
+	if err := effortOutcome("❯ /effort\n  ⎿  Cancelled\n", "auto"); err == nil {
+		t.Fatal("cancelled should not count as auto confirmed")
+	}
 	if err := effortOutcome("❯ \n", "low"); err == nil {
 		t.Fatal("nothing said: should not count as changed")
+	}
+}
+
+func TestEffortPickerKeys(t *testing.T) {
+	// The picker opens on the session's level; 6 lefts reach low (past ultracode on the slider), then one right per slot.
+	for level, rights := range map[string]int{"low": 0, "medium": 1, "high": 2, "xhigh": 3, "max": 4} {
+		keys := effortPickerKeys(level)
+		if len(keys) != 6+rights || slices.ContainsFunc(keys[:6], func(k string) bool { return k != "left" }) ||
+			slices.ContainsFunc(keys[6:], func(k string) bool { return k != "right" }) {
+			t.Errorf("%s: %v", level, keys)
+		}
+	}
+	if !slices.Contains(effortLevels, effortAuto) || slices.Contains(effortPickerLevels, effortAuto) {
+		t.Fatal("auto is a level the app offers, not a picker slot")
+	}
+}
+
+func TestTuiPickDefaultEffort(t *testing.T) {
+	picker := func(marker int) string {
+		hint := "~1.5x the estimated cost of medium (the default)"
+		if marker == 1 {
+			hint = effortPickerDefault
+		}
+		return "  Effort\n  " + strings.Repeat("─", marker*10) + "▲\n  low     medium     high     xhigh      max\n  " + hint +
+			"\n  ←/→ to adjust · Enter to confirm · s for this session only · Esc to cancel"
+	}
+	// Opened on xhigh; lefts land on low, one right reaches medium, the model's default.
+	f := &fakePane{screens: []string{picker(3), picker(0), picker(1), picker(2)}}
+	n := &Node{hosts: herdrHosts(f.serve(t))}
+	if err := n.tuiPickDefaultEffort(context.Background(), "w1:p1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.keys) != 2 || len(f.keys[0]) != 6 || f.keys[0][0] != "left" || !slices.Equal(f.keys[1], []string{"right"}) {
+		t.Fatalf("keys %v", f.keys)
+	}
+	// No slot marked as the default (an organization's setting): give up instead of guessing.
+	f = &fakePane{screens: []string{picker(0), picker(0), picker(2), picker(2), picker(2), picker(2)}}
+	n = &Node{hosts: herdrHosts(f.serve(t))}
+	if err := n.tuiPickDefaultEffort(context.Background(), "w1:p1"); err == nil {
+		t.Fatal("no default found but no error")
+	}
+}
+
+type nopWriteCloser struct{ bytes.Buffer }
+
+func (*nopWriteCloser) Close() error { return nil }
+
+func TestSyncAssistantModesAuto(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := os.Stat(path)
+	n := &Node{modes: map[string]sessionModes{}, paths: map[string]string{"s": path},
+		metas: map[string]quickMeta{path: {size: st.Size(), mtime: st.ModTime()}}} // no reply yet
+	out := &nopWriteCloser{}
+	p := &assistantProc{id: "s", stdin: out}
+	sent := func() []any {
+		var got []any
+		for _, l := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+			if l == "" {
+				continue
+			}
+			var r struct{ Request map[string]any }
+			_ = json.Unmarshal([]byte(l), &r)
+			got = append(got, r.Request["settings"].(map[string]any)["effortLevel"])
+		}
+		out.Reset()
+		return got
+	}
+
+	n.noteModes("s", "", "high")
+	n.syncAssistantModes(p)
+	if got := sent(); len(got) != 1 || got[0] != "high" {
+		t.Fatalf("high: %v", got)
+	}
+	n.noteModes("s", "", "auto")
+	n.syncAssistantModes(p)
+	if got := sent(); len(got) != 1 || got[0] != nil { // effortLevel: null
+		t.Fatalf("auto: %v", got)
+	}
+	// The next reply runs at the model's default and the transcript says so; that must not pin it to medium.
+	n.metas[path] = quickMeta{size: st.Size(), mtime: st.ModTime(), effort: "medium", effortAt: time.Now().Add(time.Minute)}
+	n.syncAssistantModes(p)
+	if got := sent(); len(got) != 0 {
+		t.Fatalf("re-sent after the reply: %v", got)
 	}
 }
 

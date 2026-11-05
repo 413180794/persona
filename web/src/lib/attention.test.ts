@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { badgeText, detectTransitions, MIN_GAP_MS, pickEvent, rateLimiter, SETTLE_MS, suppressed, tabTitle, trackTurns } from "./attention";
+import { answeredTags, badgeText, detectNewCards, FORGET_CARD_MS, detectTransitions, MIN_GAP_MS, pickEvent, rateLimiter, SETTLE_MS, suppressed, tabTitle, trackTurns } from "./attention";
 import { stateCounts } from "./sessions";
 import { agentKey } from "./pins";
 import type { AgentMutes } from "./agent-groups";
-import type { AgentState, Session } from "./types";
+import type { AgentState, Interaction, Session } from "./types";
 
 const session = (id: string, state: AgentState, patch: Partial<Session> = {}): Session => ({
   machine_id: "m", session_id: id, title: id, cwd: "/tmp/p", status: state, state, updated_at: "2026-01-01T10:00:00Z", ...patch,
@@ -149,5 +149,61 @@ describe("处理过的通知收回（#3458）", () => {
     const { settledTags } = await import("./attention");
     const s = snap(["m/a", "needs_you"], ["m/b", "unread"]);
     expect(settledTags(s, s)).toEqual([]);
+  });
+});
+
+describe("已在需要你时又来一张卡（#4058）", () => {
+  const card = (id: string, sid: string, at = "2026-01-01T10:00:00Z"): Interaction => ({ id, machine_id: "m", session_id: sid, kind: "permission", created_at: at });
+  const waiting = prevOf(["a", "needs_you"], ["b", "needs_you"]);
+  const sessions = [session("a", "needs_you"), session("b", "needs_you")];
+  const T = 1_000_000;
+  const none = new Set<string>();
+  const seen = (ids: string[]) => new Map(ids.map((id) => [id, T - 1000] as const));
+
+  it("第一次拿到的卡片只作基线，不算新卡", () => {
+    const { ids, events } = detectNewCards(undefined, [card("1", "a")], waiting, waiting, sessions, none, T);
+    expect(events).toEqual([]);
+    expect([...ids.keys()]).toEqual(["1"]);
+  });
+  it("会话一直在需要你，又来一张没见过的卡：算一次", () => {
+    const { events } = detectNewCards(seen(["1"]), [card("1", "a"), card("2", "a")], waiting, waiting, sessions, none, T);
+    expect(events).toEqual([{ kind: "needs", key: "m/a", card: card("2", "a") }]);
+  });
+  it("同一张卡再来一次（别的字段变了、快照重拉）不算", () => {
+    expect(detectNewCards(seen(["1", "2"]), [card("2", "a"), card("1", "a")], waiting, waiting, sessions, none, T).events).toEqual([]);
+  });
+  it("卡片被答掉（变少）不算", () => {
+    expect(detectNewCards(seen(["1", "2"]), [card("2", "a")], waiting, waiting, sessions, none, T).events).toEqual([]);
+  });
+  it("会话刚变成需要你时不算：那一次由状态变化发，不响两遍", () => {
+    const was = prevOf(["a", "working"]);
+    expect(detectNewCards(seen([]), [card("1", "a")], was, prevOf(["a", "needs_you"]), [session("a", "needs_you")], none, T).events).toEqual([]);
+  });
+  it("卡来了但会话已经不在需要你，或还没在需要你：不算", () => {
+    expect(detectNewCards(seen([]), [card("1", "a")], waiting, prevOf(["a", "working"]), [session("a", "working")], none, T).events).toEqual([]);
+    expect(detectNewCards(seen([]), [card("1", "a")], prevOf(["a", "working"]), prevOf(["a", "working"]), [session("a", "working")], none, T).events).toEqual([]);
+  });
+  it("安静任务的会话不算（侧边栏也不计）", () => {
+    expect(detectNewCards(seen([]), [card("1", "q")], prevOf(["q", "needs_you"]), prevOf(["q", "needs_you"]), [session("q", "needs_you", { quiet: true })], none, T).events).toEqual([]);
+  });
+  it("一个会话一次来几张只算一次，说最早的那张；不同会话各算各的", () => {
+    const { events } = detectNewCards(seen([]), [card("3", "a", "2026-01-01T10:00:05Z"), card("2", "a", "2026-01-01T10:00:01Z"), card("4", "b")], waiting, waiting, sessions, none, T);
+    expect(events.map((e) => [e.key, e.card.id])).toEqual([["m/a", "2"], ["m/b", "4"]]);
+  });
+  it("通知说的那张卡没了就收回，会话还在等别的卡也一样", () => {
+    const announced = new Map([["m/a", "1"], ["m/b", "4"]]);
+    expect(answeredTags(announced, [card("2", "a"), card("4", "b")])).toEqual(["m/a#needs"]);
+    expect(answeredTags(announced, [card("1", "a"), card("4", "b")])).toEqual([]);
+  });
+  it("需要你先到、卡后到：这张卡算同一次等你（follows），不另响一声", () => {
+    const { events } = detectNewCards(seen([]), [card("1", "a")], waiting, waiting, sessions, new Set(["m/a"]), T);
+    expect(events).toEqual([{ kind: "needs", key: "m/a", card: card("1", "a"), follows: true }]);
+  });
+  it("卡短暂消失又回来（重连、重读屏幕）不算新卡；很久以前见过的才忘掉", () => {
+    const { ids } = detectNewCards(seen(["1"]), [], waiting, waiting, sessions, none, T);
+    expect(detectNewCards(ids, [card("1", "a")], waiting, waiting, sessions, none, T + 5000).events).toEqual([]);
+    const later = T + FORGET_CARD_MS;
+    const { ids: old } = detectNewCards(seen(["1"]), [], waiting, waiting, sessions, none, later);
+    expect(detectNewCards(old, [card("1", "a")], waiting, waiting, sessions, none, later).events).toHaveLength(1);
   });
 });

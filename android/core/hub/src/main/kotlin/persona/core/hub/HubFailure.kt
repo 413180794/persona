@@ -20,8 +20,8 @@ enum class HubError {
 class HubFailure(
     val kind: HubError,
     override val message: String = kind.name,
-    val status: Int? = null,
-    val code: String? = null,
+    override val status: Int? = null,
+    override val code: String? = null,
     val retryable: Boolean = true,
     val delivered: String? = null,
     val retryAfterSeconds: Long? = null,
@@ -31,7 +31,7 @@ class HubFailure(
     val detail: String? = null,
     /** The hub's whole error body (at most 64 KB), for a caller that reads more of it (a card's 409 carries the card). */
     val body: String? = null,
-) : IOException(message, cause) {
+) : IOException(message, cause), persona.core.contracts.api.HubCodedFailure {
     companion object {
         fun from(error: Throwable): HubFailure {
             if (error is HubFailure) return error

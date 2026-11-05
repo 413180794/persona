@@ -23,7 +23,8 @@ type ClaudeSetting struct {
 var claudeSettings = []ClaudeSetting{
 	{Key: "awaySummaryEnabled", Title: "回来时先说进展", Detail: "离开 5 分钟以上再回来时，Claude 先简单说说这段时间做了什么", Type: "bool", Default: true},
 	{Key: "alwaysThinkingEnabled", Title: "每次都先想清楚", Detail: "每次回答前都先仔细想一想，更准，但更慢、更费额度", Type: "bool", Default: false},
-	{Key: "effortLevel", Title: "思考强度", Detail: "越高想得越仔细，也越慢", Type: "enum", Options: []string{"low", "medium", "high", "xhigh", "max"}, Default: "high"},
+	// "auto" (the model's default) is never written: Claude Code ignores it there, so choosing it removes the key.
+	{Key: "effortLevel", Title: "思考强度", Detail: "越高想得越仔细，也越慢；auto 用模型自己的默认档", Type: "enum", Options: effortLevels, Default: effortAuto},
 	{Key: "language", Title: "回复语言", Detail: "Claude 回答用哪种语言，比如「中文」", Type: "string", Default: ""},
 	{Key: "promptSuggestionEnabled", Title: "猜你下一句", Detail: "在输入框里先替你写出可能要说的下一句", Type: "bool", Default: true},
 	{Key: "spinnerTipsEnabled", Title: "等待时的小提示", Detail: "Claude 干活时，在终端底部显示使用小技巧", Type: "bool", Default: true},
@@ -117,6 +118,9 @@ func (n *Node) setClaudeSetting(key string, value any) error {
 				return fmt.Errorf("%s must be a string", key)
 			}
 		}
+	}
+	if key == "effortLevel" && value == effortAuto {
+		value = nil
 	}
 	for _, path := range n.claudeSettingsPaths() {
 		if err := writeSetting(path, key, value); err != nil {

@@ -9,12 +9,12 @@ nonisolated enum TodoStage: String, CaseIterable, Sendable {
     /// The step's name on the bar (App copy is Chinese, docs/i18n.md).
     var label: String {
         switch self {
-        case .plan: "方案"
-        case .develop: "开发"
-        case .review: "审查"
-        case .merge: "合入"
-        case .deploy: "部署"
-        case .verify: "已验证"
+        case .plan: String(localized: "方案")
+        case .develop: String(localized: "开发")
+        case .review: String(localized: "审查")
+        case .merge: String(localized: "合入")
+        case .deploy: String(localized: "部署")
+        case .verify: String(localized: "已验证")
         }
     }
 

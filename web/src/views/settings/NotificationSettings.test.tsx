@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // 设置 › 通知 (#2971): loading, a load that fails and 重试, a save the hub refuses (the control goes back, a toast says
-// why), and the system switch when the browser has said no or has no notifications at all.
+// why), the system switch when the browser has said no or has no notifications at all, and 提示音 on this page (#4057).
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,6 +36,8 @@ afterEach(() => {
 
 const render = () => act(async () => root.render(<NotificationSettings />));
 const switches = () => [...host.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
+const named = (label: string) => switches().find((b) => b.getAttribute("aria-label") === label);
+const inputSwitch = () => named("需要你处理时")!;
 const answer = async (i: number, v: unknown) => act(async () => pending[i].resolve(v));
 const fail = async (i: number, e: Error) => act(async () => pending[i].reject(e));
 
@@ -43,10 +45,10 @@ describe("设置 › 通知", () => {
   it("先转圈，hub 答了再显示两项设置", async () => {
     vi.stubGlobal("Notification", { permission: "granted", requestPermission: async () => "granted" });
     await render();
-    expect(host.textContent).not.toContain("需要你处理时");
+    expect(named("需要你处理时")).toBeUndefined();
     await answer(0, { input: false, done: "always" });
-    expect(host.textContent).toContain("需要你处理时");
-    expect(switches()[1].getAttribute("aria-checked")).toBe("false");
+    expect(named("需要你处理时")).toBeDefined();
+    expect(inputSwitch().getAttribute("aria-checked")).toBe("false");
     expect(host.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toBe("每次都推");
   });
 
@@ -59,19 +61,18 @@ describe("设置 › 通知", () => {
     await act(async () => retry.click());
     expect(pending).toHaveLength(2);
     await answer(1, { input: true, done: "long" });
-    expect(host.textContent).toContain("需要你处理时");
+    expect(named("需要你处理时")).toBeDefined();
     expect(host.textContent).not.toContain("读不到通知设置");
   });
 
   it("hub 不让保存：开关回到原来的样子，并提示没保存上", async () => {
     await render();
     await answer(0, { input: true, done: "long" });
-    const input = switches()[1];
-    await act(async () => input.click());
-    expect(switches()[1].getAttribute("aria-checked")).toBe("false"); // optimistic
+    await act(async () => inputSwitch().click());
+    expect(inputSwitch().getAttribute("aria-checked")).toBe("false"); // optimistic
     expect(pending[1].method).toBe("PUT");
     await fail(1, new Error("500"));
-    expect(switches()[1].getAttribute("aria-checked")).toBe("true");
+    expect(inputSwitch().getAttribute("aria-checked")).toBe("true");
     expect(toast).toHaveBeenCalledWith(expect.stringContaining("没保存上"), "error");
   });
 
@@ -79,7 +80,7 @@ describe("设置 › 通知", () => {
     vi.stubGlobal("Notification", { permission: "denied", requestPermission: async () => "denied" });
     localStorage.setItem("persona.systemNotify", "1");
     await render();
-    const sys = switches()[0];
+    const sys = named("弹出系统通知")!;
     expect(sys.disabled).toBe(true);
     expect(sys.getAttribute("aria-checked")).toBe("false");
     expect(host.textContent).toContain("已拒绝");
@@ -89,7 +90,29 @@ describe("设置 › 通知", () => {
   it("浏览器不支持：开关点不了，并说明", async () => {
     vi.stubGlobal("Notification", undefined);
     await render();
-    expect(switches()[0].disabled).toBe(true);
+    expect(named("弹出系统通知")!.disabled).toBe(true);
     expect(host.textContent).toContain("这个浏览器不支持系统通知");
+  });
+
+  it("提示音在这一页：hub 还没答就能开关，存在这个浏览器，不发请求", async () => {
+    await render();
+    const sound = () => named("提示音")!;
+    expect(sound().getAttribute("aria-checked")).toBe("false");
+    await act(async () => sound().click());
+    expect(sound().getAttribute("aria-checked")).toBe("true");
+    expect(localStorage.getItem("persona.attentionSound")).toBe("1");
+    expect(pending).toHaveLength(1); // only the prefs load: the sound is not the hub's
+    await act(async () => sound().click());
+    expect(localStorage.getItem("persona.attentionSound")).toBeNull();
+  });
+
+  it("读不到 hub 的设置时提示音照样能开关", async () => {
+    localStorage.setItem("persona.attentionSound", "1");
+    await render();
+    await fail(0, new Error("hub 没回答"));
+    expect(named("提示音")!.getAttribute("aria-checked")).toBe("true");
+    await act(async () => named("提示音")!.click());
+    expect(named("提示音")!.getAttribute("aria-checked")).toBe("false");
+    expect(localStorage.getItem("persona.attentionSound")).toBeNull();
   });
 });

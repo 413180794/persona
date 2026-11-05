@@ -39,7 +39,7 @@
     <string name="settings_pairing_paste">リンクを貼り付け</string>
     <string name="settings_pairing_back_to_scan">スキャンに戻る</string>
     <string name="settings_pairing_connect_title">ハブに接続</string>
-    <string name="settings_pairing_connect_body">ハブのマシンで次のコマンドを実行し、表示されたQRコードをスキャンします。</string>
+    <string name="settings_pairing_connect_body">ハブをインストールすると画面に QR コードが表示されます。接続済みのデバイスで「設定 › デバイス › 新しいデバイスを接続」を開き、そこに出るコードを読み取ることもできます。</string>
     <string name="settings_pairing_scan">スキャンしてペアリング</string>
     <string name="settings_pairing_connect_push">Googleサービスがなくても通知を受け取れます。通知はスマートフォンとハブの常時接続で届きます。</string>
     <string name="settings_pairing_saved_title">ペアリングで保存されるもの</string>
@@ -71,8 +71,8 @@
     <string name="settings_pairing_failure_unreachable">今のネットワークからハブに届きません。ネットワークを切り替えてもう一度お試しください。</string>
     <string name="settings_pairing_failure_timeout">ハブに接続できません。外出先ではルーターがTLSポートへのIPv6着信を許可しているか、自宅では同じネットワークにつながっているかを確認してください。</string>
     <string name="settings_pairing_failure_local">自宅でハブに接続するには、Personaにローカルネットワークへのアクセスを許可してください。</string>
-    <string name="settings_pairing_failure_certificate">証明書かハブの身元が一致しません。ハブのマシンでpersonad hub pairをもう一度実行してから、スキャンしてください。</string>
-    <string name="settings_pairing_failure_expired">ペアリングコードが期限切れか、すでに使われています。personad hub pairをもう一度実行してください。</string>
+    <string name="settings_pairing_failure_certificate">証明書かハブの身元が一致しません。ハブを入れ直した場合は、ログイン済みのデバイスで新しいコードを出してもう一度読み取ってください。</string>
+    <string name="settings_pairing_failure_expired">このコードは期限切れか、すでに使われています。ログイン済みのデバイスで新しいコードを出してください。</string>
     <string name="settings_pairing_failure_incompatible">接続コンポーネントかハブがこのペアリング方法に対応していません。更新してからもう一度お試しください。</string>
     <string name="settings_pairing_failure_tls_required">このアドレスには暗号化された接続が必要です。HTTPSのアドレスでペアリングし直してください。</string>
     <string name="settings_pairing_failure_unknown">接続が完了しませんでした。ネットワークを確認してもう一度お試しいただくか、接続診断を確認してください。</string>
@@ -87,7 +87,7 @@
     <string name="settings_pairing_step_protocol">ハブの応答</string>
     <string name="settings_pairing_scan_close">閉じる</string>
     <string name="settings_pairing_scan_title">ペアリングQRコードをスキャン</string>
-    <string name="settings_pairing_scan_hint">ハブのマシンで\npersonad hub pair\nを実行し、表示されたQRコードを枠に合わせてください</string>
+    <string name="settings_pairing_scan_hint">ハブのインストール時に表示された QR コード、\nまたはログイン済みデバイスの「新しいデバイスを接続」のコードを\n枠に合わせてください</string>
     <string name="settings_pairing_scan_manual">スキャンできない場合は手動で入力</string>
 
     <!-- Hubs -->
@@ -273,4 +273,6 @@
     <string name="settings_endpoint_test_note">「テスト」は新しい接続でハブに1回リクエストします（1回、サンプル数1）。所要時間には接続の確立と、httpsではTLSハンドシェイクが含まれるため、性能の基準にはしません。</string>
     <string name="settings_endpoint_address_forms">https://ドメイン:ポート、https://[IPv6]:ポート、https://IPv4:ポートに対応しています。http://はLANのアドレスのみ使えます。</string>
     <string name="settings_endpoint_unpinned_note">今回のペアリングではハブの証明書フィンガープリントが記録されていないため、httpsのアドレスは身元を確認できません。今はLANのhttp://アドレスのみ追加できます。ペアリングし直すとhttpsのアドレスも追加できます。</string>
+    <string name="settings_pairing_other_ways">その他の方法</string>
+    <string name="settings_pairing_other_ways_command">コマンドラインで：ハブのマシンで次の行を実行すると、新しい QR コードが表示されます。</string>
 </resources>

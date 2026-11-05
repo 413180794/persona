@@ -367,13 +367,17 @@ func (s *Service) ixWhere(ctx context.Context, ix proto.Interaction) string {
 	return where
 }
 
-// openButton opens the conversation in the web app the hub serves. Card links are documented for http(s) and AppLink
+// openButton opens the conversation in the web app the hub serves; nil (Card.Buttons leaves it out) when the hub has
+// no http(s) address for it. Card links are documented for http(s) and AppLink
 // only: a jarvis:// link (the iPhone app) might get the whole card refused, so it is not used.
 func (s *Service) openButton(ctx context.Context, machine, session string) feishubot.Button {
 	st, _ := s.feishuStatusKept(ctx)
 	web := strings.TrimRight(st.PublicURL, "/")
 	if session != "" {
 		web = sessionLink(web, machine, session, s.isAssistantConversation(ctx, machine, session))
+	}
+	if u, err := url.Parse(web); web == "" || err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil // no web app to open (no public_url): a button with an empty link does nothing, or gets the card refused
 	}
 	return feishubot.LinkBtn(i18n.T(s.botLang(ctx), "assistant-feishu_cards.open_web"), web)
 }

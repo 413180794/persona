@@ -281,6 +281,19 @@ python3 scripts/app/android_i18n_check.py --update   # 把文案挪进 strings.x
 
   基线是每个模块的 `i18n-baseline.json`（按模块分文件，几个模块可以同时迁移），只能减少，目标是全部删掉。不是界面文字的字面量（要匹配的 hub 文本、发给模型的提示词）在那一行写 `// i18n-ignore: <原因>`。
 
+## 主对话还缺什么（#4032）
+
+照新用户上手的方案第 4.4–4.6 节（[onboarding.md](onboarding.md)）。hub 带 `assistant_readiness` 时读 `GET /api/v1/assistant/readiness`（`AssistantManagement.readiness`；设置页经 `AssistantReadinessSource`，选中的那组 hub）；老 hub 404 时一切照旧。
+
+- **Persona 首页**（`feature/assistant` 的 `MainReadiness`）：进页面、回到前台、电脑上线 / 下线、开主对话被拒之后重拉。`setup` 时输入框上方一张卡（`ReadinessStepCard`，设计系统里），只画第一个缺的那一步；发送按钮换成「先添加电脑 / 先唤醒电脑 / 先确认电脑 / 先接上模型」（`BlockedSendButton`），点了和卡片主按钮一样，草稿留着，什么都不排队；示例问题换成 hub 给的 `suggestions`，`local` 的打开说明（`ReadinessHelpDialog`），不发给模型；副标题换成「还差一步就能开始」。`chat_only` 是一条提示加「添加电脑」。
+- **按钮去哪**：`connect_model` → 设置 › 模型供应商；`edit_provider` → 那个供应商（有 `launcher` 时）；`confirm_computer` → 机器页；`add_computer`、`wake_computer`、`install_claude`、`login_claude` 是说明弹窗；`test_assistant` 跑 `?probe=1`，结果写在卡片上。配对后的整页清单没有导航：说明弹窗里不给「接上模型」「改用 API Key」（点了只会再打开同一个说明），只有「知道了」。
+- **开主对话被拒**：`OutboxMessageSender` 认出 409 带上面几个码（`SetupFailureCodes`）的创建失败，把那条消息标成被拒（`error` 是码）、交还「创建主对话」的占位，所以接好以后「重试」会重新创建；别的失败照旧只按主对话指针找（可能已经建好了）。消息下面一张卡片（`AssistantPendingConversation`）写原因、给那一步的按钮和「重试」。创建时遇到 `node_unreachable` / `assistant_offline`（电脑睡着、助手在重启）也交还占位，消息照旧等着，电脑回来后先查指针再创建。
+- **按码出文案**：`mapOperationFailure` 认 `no_machine`、`machine_pending`、`node_unreachable`、`claude_missing`、`launcher_missing`、`not_logged_in`、`auth_failed`、`assistant_offline`，`operationFeedback` 给各自的中文和按钮；`node_unreachable` 说电脑不在线，不说连不上 hub；`claude_missing` / `not_logged_in` 的按钮是「怎么安装」/「怎么登录」（和 hub 的 `action` 一致）。页面一律显示 `OperationFeedback.text`（资源里的字，跟随 App 语言），不读 `message`；`message` 只是没有资源时的兜底，hub 自己写字的四个码（`apierr.codeActions`：`no_machine`、`machine_pending`、`claude_missing`、`launcher_missing`）用 hub 的原话，别的码的 `error` 是原始细节（如 `rpc: connection closed`），从不显示。
+- **准备清单**（设置 › 准备清单、配对后的整页清单）：手机的项目前面加「主对话」四项（电脑、Claude Code、模型、第一句话），状态、hub 的原因和按钮；有这四项时不再列每台电脑的 node / herdr 版本。点「跳过未完成项」（以后再说）时主对话还没好，就顺带 `POST …/readiness/dismiss`，请求不随页面关闭而取消；点「完成」不发。
+- **首屏和空状态**：配对的「连接你的 hub」不再显示 `personad hub pair`，收在「其他方式」里；配对码过期 / 证书不符的文案改成「在已登录的设备上重新出一个码」；机器页和 Agents 零电脑时是「还没有电脑」+「添加电脑」（说明弹窗），Agents 的空状态不再提 herdr。
+
+截图：`AssistantReadinessShotsTest`、`ReadinessMainShotsTest`、`PairingOtherWaysTest`（Robolectric，三种风格 × 深浅色，写到各模块的 `build/onboarding-shots/`）。
+
 ## 设计 token 采用率基线
 
 在仓库根目录运行独立检查，无需 Android SDK：

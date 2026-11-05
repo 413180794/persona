@@ -100,9 +100,10 @@ private fun SpacePage(route: SpaceRoute, model: AgentsViewModel, navigator: Navi
             while (true) { now = Instant.now(); delay(1_000) }
         }
     }
+    val failureResources = agentResources()
     LaunchedEffect(failure) {
         failure?.let {
-            if (feedback?.failure(it) != true) snackbar.showSnackbar(operationFeedback(it).message)
+            if (feedback?.failure(it) != true) snackbar.showSnackbar(operationFeedback(it).text.resolve(failureResources))
             model.clearFailure()
         }
     }

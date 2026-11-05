@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.map
 
 /**
  * Folds repeated failure notices. [localize] turns an [OperationFeedback.text] into the app's language (the app
- * passes `{ it.resolve(context) }`); without it the notices are [OperationFeedback.message]'s Simplified Chinese.
+ * passes `{ it.resolve(context) }`); without it the notices are [OperationFeedback.message].
  */
 class FeedbackGate(
     private val connection: () -> ConnectionState,

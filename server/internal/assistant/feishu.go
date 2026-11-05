@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -888,7 +889,7 @@ func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Dura
 	if f.cotProgressNow(ctx, r) {
 		return
 	}
-	c := progressCard(s.botLang(ctx), r.Label, took, steps, live, s.runWaiting(r))
+	c := progressCard(s.botLang(ctx), r.Label, took, steps, live, s.runWaiting(r), s.runLiveView(r.ID))
 	_, prog := s.channelRunByID(r.ID)
 	if prog == nil {
 		prog = &chanLive{} // a run not followed any more: nothing to remember
@@ -927,6 +928,28 @@ func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Dura
 	s.rememberBotThread(mid, botTargetOf(r), r.Label)
 }
 
+// liveView is what the progress card shows besides the steps (a copy of chanLive's notes) and the time now.
+type liveView struct {
+	open                []openCall
+	calls, read, edited int
+	subs                []subtask
+	subsMore            int
+	now                 time.Time
+}
+
+// runLiveView is run id's liveView now.
+func (s *Service) runLiveView(id string) liveView {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	v := liveView{now: c.clock()}
+	if p := c.live[id]; p != nil {
+		v.open, v.subs = slices.Clone(p.open), slices.Clone(p.subs)
+		v.calls, v.read, v.edited, v.subsMore = p.calls, len(p.read), len(p.edited), p.subsMore
+	}
+	return v
+}
+
 // runWaiting is the note for a run whose message is not found in its conversation yet: queued behind a turn that
 // works ("queued_note"), or not in yet ("preparing_note"); "" once it is.
 func (s *Service) runWaiting(r *channel.Run) string {
@@ -953,22 +976,39 @@ func (f feishuSink) folded(ctx context.Context, o *channel.Run) {
 
 // answer writes the answer into the progress card (more cards when long), and marks the messages DONE. When nothing
 // of it got out because the hub could not be reached it says so (tried again later); once a piece is out, the rest
-// is best effort (a card sent twice would show twice).
-func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note string, took time.Duration, final, quiet bool) error {
+// is best effort (a card sent twice would show twice). The card's last line says how the run ended; a quiet end
+// still turns the progress card into that line, so it never stays on 「处理中」.
+func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note string, took time.Duration, final, quiet bool, end channel.End) error {
 	s := f.s
 	l := s.botLang(ctx)
-	foot := i18n.T(l, "assistant-feishu.took", i18n.Args{"label": r.Label, "took": channel.Duration(l, took)})
+	all := f.s.runSteps(r.ID)
+	foot := endFoot(l, r.Label, took, len(all), final, end)
 	if note != "" {
 		foot += "\n" + note
 	}
 	// The process is in the agent message above the answer, or else folded into the answer's first card.
 	var steps []string
 	if !f.cotFinishNow(ctx, r) {
-		steps = append([]string{}, f.s.runSteps(r.ID)...)
+		steps = append([]string{}, all...)
 	}
 	card := r.Ext["card"]
-	for i, ac := range answerCards(l, answer, quiet, steps, foot) {
+	cards := answerCards(l, answer, quiet, steps, foot)
+	if quiet && card != "" {
+		c := feishubot.NewCard("", "", foot)
+		processPanel(l, c, steps)
+		cards = []botAnswerCard{{card: c.Note(foot)}}
+	}
+	for i, ac := range cards {
 		c, piece := ac.card, ac.fallback
+		if i == 0 {
+			endHeader(l, c, end)
+		}
+		if quiet && i == 0 {
+			if err := s.botUpdateCard(ctx, card, c); err != nil {
+				s.logf("bots: the progress card's end: %v", err)
+			}
+			break
+		}
 		var mid string
 		var err error
 		if i == 0 && card != "" {
@@ -1007,6 +1047,35 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 	return nil
 }
 
+// endFoot is an answer's last line: how it ended, the label and time it took, and how many tools it called (one
+// answered first while background work goes on says no end).
+func endFoot(l i18n.Lang, label string, took time.Duration, tools int, final bool, end channel.End) string {
+	foot := i18n.T(l, "assistant-feishu.took", i18n.Args{"label": label, "took": channel.Duration(l, took)})
+	if final {
+		key := "assistant-feishu.end_done"
+		if end != channel.EndDone {
+			key = "assistant-feishu.end_" + string(end)
+		}
+		foot = i18n.T(l, key) + " · " + foot
+	}
+	if tools > 0 {
+		foot += " · " + i18n.T(l, "assistant-feishu.tools_called", i18n.Args{"count": tools})
+	}
+	return foot
+}
+
+// endHeader gives a card of a run that did not end normally a header saying so, unless the answer has its own.
+func endHeader(l i18n.Lang, c *feishubot.Card, end channel.End) {
+	if end == channel.EndDone || c.Header != nil {
+		return
+	}
+	color := feishubot.Grey
+	if end == channel.EndError || end == channel.EndOffline {
+		color = feishubot.Orange
+	}
+	c.Header = feishubot.NewCard(i18n.T(l, "assistant-feishu.end_"+string(end)), color, "").Header
+}
+
 // unreachable: the call did not reach the hub, or did not come back (worth trying again).
 func unreachable(err error) bool {
 	return errors.Is(err, bus.ErrOffline) || errors.Is(err, rpc.ErrClosed) || errors.Is(err, context.DeadlineExceeded)
@@ -1014,23 +1083,37 @@ func unreachable(err error) bool {
 
 // progressCard is a run's card while it goes on; waiting: the note while its message is not found in the
 // conversation yet (runWaiting), "" once it is.
-func progressCard(l i18n.Lang, label string, took time.Duration, steps []string, live, waiting string) *feishubot.Card {
-	c := feishubot.NewCard("", "", i18n.T(l, "assistant-feishu.working_summary"))
+func progressCard(l i18n.Lang, label string, took time.Duration, steps []string, live, waiting string, v liveView) *feishubot.Card {
+	summary := i18n.T(l, "assistant-feishu.working_summary_took", i18n.Args{"took": channel.Duration(l, took)})
 	note := "assistant-feishu.working_note"
-	if waiting != "" {
-		note = waiting
+	switch waiting {
+	case "":
+	case "assistant-feishu.queued_note":
+		summary, note = i18n.T(l, "assistant-feishu.queued_summary"), waiting
+	default:
+		summary, note = i18n.T(l, "assistant-feishu.preparing_summary"), waiting
 	}
+	c := feishubot.NewCard("", "", summary)
 	c.Note("⏳ " + i18n.T(l, note, i18n.Args{"label": label, "took": channel.Duration(l, took)}))
-	if n := len(steps); n > 0 {
-		var b strings.Builder
-		if n > 4 {
-			b.WriteString(i18n.T(l, "assistant-feishu.earlier_steps", i18n.Args{"count": n - 4}))
-			steps = steps[n-4:]
+	for _, md := range progressLines(l, steps, v) {
+		c.Markdown(md)
+	}
+	if n := v.calls; n > 0 {
+		parts := []string{i18n.T(l, "assistant-feishu.count_calls", i18n.Args{"count": n})}
+		for _, f := range []struct {
+			key string
+			n   int
+		}{{"assistant-feishu.count_read", v.read}, {"assistant-feishu.count_edited", v.edited}} {
+			if f.n == 0 {
+				continue
+			}
+			shown := strconv.Itoa(f.n)
+			if f.n >= liveFilesMost {
+				shown += "+" // noteFile stops counting there
+			}
+			parts = append(parts, i18n.T(l, f.key, i18n.Args{"count": f.n, "n": shown}))
 		}
-		for _, st := range steps {
-			b.WriteString("- " + st + "\n")
-		}
-		c.Markdown(strings.TrimSpace(b.String()))
+		c.Note(strings.Join(parts, " · "))
 	}
 	if live = strings.TrimSpace(live); live != "" {
 		r := []rune(live)
@@ -1040,6 +1123,58 @@ func progressCard(l i18n.Lang, label string, took time.Duration, steps []string,
 		c.Markdown(feishubot.EscapeMarkdown(live))
 	}
 	return c
+}
+
+// progressLines are the progress card's Markdown blocks: the newest call still running and for how long, the last
+// steps, the subagents.
+func progressLines(l i18n.Lang, steps []string, v liveView) []string {
+	var out []string
+	if n := len(v.open); n > 0 {
+		o := v.open[n-1]
+		now := i18n.T(l, "assistant-feishu.now_running", i18n.Args{"step": o.step, "took": channel.Duration(l, max(v.now.Sub(o.since), 0))})
+		if n > 1 {
+			now += " " + i18n.T(l, "assistant-feishu.and_more", i18n.Args{"count": n - 1})
+		}
+		out = append(out, now)
+	}
+	if n := len(steps); n > 0 {
+		var b strings.Builder
+		if n > 5 {
+			b.WriteString(i18n.T(l, "assistant-feishu.earlier_steps", i18n.Args{"count": n - 5}))
+			steps = steps[n-5:]
+		}
+		for _, st := range steps {
+			b.WriteString("- " + st + "\n")
+		}
+		out = append(out, strings.TrimSpace(b.String()))
+	}
+	if n := len(v.subs); n > 0 {
+		var b strings.Builder
+		b.WriteString(i18n.T(l, "assistant-feishu.subtasks") + "\n")
+		subs := v.subs
+		if n > 6 {
+			subs = subs[n-6:]
+		}
+		for _, st := range subs {
+			line := feishubot.EscapeMarkdown(st.desc)
+			if line == "" {
+				line = i18n.T(l, "assistant-feishu.step_subtask")
+			}
+			if st.kind != "" {
+				line += " " + feishubot.Code(st.kind)
+			}
+			state := "assistant-feishu.subtask_running"
+			if st.done {
+				state = "assistant-feishu.subtask_done"
+			}
+			b.WriteString("- " + line + " · " + i18n.T(l, state) + "\n")
+		}
+		if more := n - len(subs) + v.subsMore; more > 0 {
+			b.WriteString(i18n.T(l, "assistant-feishu.and_more", i18n.Args{"count": more}))
+		}
+		out = append(out, strings.TrimSpace(b.String()))
+	}
+	return out
 }
 
 // botStep is one line of the progress card for a tool call, in l: the verb, then what it works on (code when it is a

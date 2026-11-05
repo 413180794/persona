@@ -40,7 +40,7 @@
     <string name="settings_pairing_paste">Paste link</string>
     <string name="settings_pairing_back_to_scan">Back to scanning</string>
     <string name="settings_pairing_connect_title">Connect your hub</string>
-    <string name="settings_pairing_connect_body">Run this command on the hub machine, then scan the QR code it shows.</string>
+    <string name="settings_pairing_connect_body">When the hub is installed it shows a QR code on screen. You can also open Settings › Devices › Connect a new device on a device that\'s already connected, and scan the code there.</string>
     <string name="settings_pairing_scan">Scan to pair</string>
     <string name="settings_pairing_connect_push">Notifications work without Google services: they come over a persistent connection to the hub.</string>
     <string name="settings_pairing_saved_title">What pairing saves</string>
@@ -72,8 +72,8 @@
     <string name="settings_pairing_failure_unreachable">The hub can\'t be reached from this network. Switch networks and try again.</string>
     <string name="settings_pairing_failure_timeout">Can\'t reach the hub. Away from home, check that your router allows inbound IPv6 on the TLS port; at home, check that you\'re on the same network.</string>
     <string name="settings_pairing_failure_local">To connect to the hub at home, allow Persona to access the local network.</string>
-    <string name="settings_pairing_failure_certificate">The certificate or hub identity doesn\'t match. Run personad hub pair again on the hub machine, then scan.</string>
-    <string name="settings_pairing_failure_expired">This pairing code has expired or was already used. Run personad hub pair again.</string>
+    <string name="settings_pairing_failure_certificate">The certificate or hub identity doesn\'t match. If you reinstalled the hub, make a new code on a signed-in device and scan again.</string>
+    <string name="settings_pairing_failure_expired">This code has expired or was already used. Make a new one on a signed-in device.</string>
     <string name="settings_pairing_failure_incompatible">The connection or the hub doesn\'t support this kind of pairing. Update, then try again.</string>
     <string name="settings_pairing_failure_tls_required">This address needs an encrypted connection. Pair again with an HTTPS address.</string>
     <string name="settings_pairing_failure_unknown">The connection didn\'t finish. Check the network and try again, or open Diagnostics.</string>
@@ -88,7 +88,7 @@
     <string name="settings_pairing_step_protocol">Hub\'s response</string>
     <string name="settings_pairing_scan_close">Close</string>
     <string name="settings_pairing_scan_title">Scan pairing QR code</string>
-    <string name="settings_pairing_scan_hint">On the hub machine, run\npersonad hub pair\nand fit the QR code it shows in the frame</string>
+    <string name="settings_pairing_scan_hint">Fit the QR code the hub showed when it was installed,\nor the one from Connect a new device on a signed-in device,\nin the frame</string>
     <string name="settings_pairing_scan_manual">Can\'t scan? Enter manually</string>
 
     <!-- Hubs -->
@@ -277,4 +277,6 @@
     <string name="settings_endpoint_test_note">Test sends one request to the hub over a new connection: a single sample. The time includes connecting (and the TLS handshake for https), so it isn\'t a performance baseline.</string>
     <string name="settings_endpoint_address_forms">Supports https://domain:port, https://[IPv6]:port and https://IPv4:port. http:// works only for LAN addresses.</string>
     <string name="settings_endpoint_unpinned_note">This pairing didn\'t record the hub\'s certificate fingerprint, so https addresses can\'t be verified. For now you can only add LAN http:// addresses; pair again to add https addresses.</string>
+    <string name="settings_pairing_other_ways">Other ways</string>
+    <string name="settings_pairing_other_ways_command">With a command line: run this on the hub\'s machine to show a new QR code.</string>
 </resources>

@@ -1269,7 +1269,7 @@ ASSISTANT_CONFIG = {"machine_id": "server", "launcher": "claude", "timezone": "A
                     "main_tasks_quiet": True}  # 主对话派的任务只在主对话里通知 (#1731), on by default
 
 
-def assistant_state(space=""):
+def assistant_state(space="", archived=False):
     """GET /api/v1/assistant: the conversations are the ones on the machine the assistant runs on, of one space
     ("" the assistant's own, "health" the health space's)."""
     cfg = ASSISTANT_CONFIG
@@ -1277,7 +1277,8 @@ def assistant_state(space=""):
     notes = cfg["notes"] if cfg["notes"] is not None else ASSISTANT_HUB_NOTES
     out = {"machine_id": cfg["machine_id"], "launcher": cfg["launcher"], "cwd": home + "/.jarvis/" + (space or "assistant") if home else "",
            "timezone": cfg["timezone"], "notes_effective": notes.strip(), "main_tasks_quiet": cfg["main_tasks_quiet"],
-           "conversations": [s for s in ASSISTANT if s["machine_id"] == cfg["machine_id"] and s.get("space", "") == space]}
+           "conversations": [s for s in ASSISTANT if s["machine_id"] == cfg["machine_id"] and s.get("space", "") == space
+                             and (archived or not s.get("archived"))]}
     if cfg["notes"] is not None:
         out["notes"] = cfg["notes"]
     if cfg["main"]:
@@ -10282,7 +10283,9 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p == "/api/v1/pins": return self.send_json(PINS)
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": TREE_MUTED, "allowed": []})
-        if p == "/api/v1/assistant": return self.send_json(assistant_state(parse_qs(urlparse(self.path).query).get("space", [""])[0]))
+        if p == "/api/v1/assistant":
+            q = parse_qs(urlparse(self.path).query)
+            return self.send_json(assistant_state(q.get("space", [""])[0], q.get("archived", [""])[0] == "1"))
         if p == "/api/v1/model-config": return self.send_json(model_configuration())
         if p.startswith("/api/v1/model-config/purposes/"):
             catalog = model_configuration(include_uses=True)
@@ -10899,6 +10902,15 @@ class H(BaseHTTPRequestHandler):
         if MOCK_LARK and fs_post(self, p, parse_qs(urlparse(self.path).query), self.last_body): return  # area: feishu chat page
         if tasks_area(self, self.command, p, self.last_body): return
         if main_actions_area(self, self.command, p, self.last_body): return
+        m = re.fullmatch(r"/api/v1/assistant/conversations/([^/]+)/(archive|unarchive)", p)
+        if m:  # as the hub's archiveRoutes: the main one can't be archived; the list leaves the archived ones out
+            c = next((x for x in ASSISTANT if x["session_id"] == m.group(1)), None)
+            if c is None: return self.send_json({"error": "not found"}, 404)
+            if m.group(2) == "archive" and c["session_id"] == ASSISTANT_CONFIG["main"]:
+                return self.send_json({"error": "the main conversation can't be archived"}, 400)
+            c["archived"] = m.group(2) == "archive"
+            push_machine(c["machine_id"])
+            return self.send_json({"ok": True, "archived": c["archived"]})
         if p == "/api/v1/todos" and self.command == "POST":
             if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
             body = json.loads(self.last_body or b"{}")

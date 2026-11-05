@@ -1079,6 +1079,10 @@ UIKit 的栈却还推着一页，上面只有系统的返回按钮「Agents」�
 - **原因**：本地化字符串里的整数按 locale 格式化（`Text("\(n)")` 一直是这样）。
 - **做法**：数量照用；端口、id、年份这种不是数量的写 `\(String(port))`。
 
+### `Localizable.xcstrings` 的 rebase 冲突不能按文本合并
+- **现象**：两边都加了词条，git 按行合并 JSON，结果 catalog 读不出来（`The data couldn't be read because it isn't in the correct format`），所有 target 编译失败。
+- **做法**：`git show ORIG_HEAD:<catalog> > ours`、`git show origin/master:<catalog> > theirs`，`python3 scripts/i18n/apple_l10n.py merge ours theirs apple/Shared/Localization/Localizable.xcstrings`（按 key 合并，两边都有时取 en、ja 齐全的那份），再 `check`。
+
 ### 隔离方法直接当函数值传，会让 Xcode 26.6 的 IRGen 崩掉（#4157）
 - **现象**：`Binding(get:set:)` 里写 `set: pick`（`pick` 是 MainActor 隔离的实例方法），PersonaMac 构建必崩在 `LanguageSettingsView.swift` 的 IRGen：`report_at_maximum_capacity`，SIL 函数 demangle 出来是 `reabstraction thunk helper from ... (AppLanguage, Actor?) -> () to ... (AppLanguage) -> ()`。清 DerivedData 全量重建照样崩；同一版代码 iOS 不崩。
 - **原因**：Swift 6.3（Xcode 26.6）给「带隐式 actor 参数的隔离方法值」生成 reabstraction thunk 时编译器自身溢出，是编译器 bug，不是源码错误；日志里没有普通 `error:` 行，要看 `While emitting IR SIL function` 和 stack dump 才能认出。

@@ -62,6 +62,7 @@ type fakeHub struct {
 	agents    int
 	offline   map[string]bool
 	failStart error
+	slowStart bool     // session.start blocks until the call's context ends, then answers with its error (a node that builds the session before answering late)
 	judged    int      // the done judge's calls to the model
 	judge     string   // what they answer ("": an error)
 	retired   []string // session.retire's session ids
@@ -101,6 +102,7 @@ type fakeHub struct {
 	repairRes *proto.LauncherRepair
 	onRepair  func(f *fakeHub)
 	onSend    func(f *fakeHub, p map[string]any) // runs (under the fake's lock) after each session.send
+	onStart   func(f *fakeHub, p map[string]any) // runs (under the fake's lock) when session.start arrives, before slowStart blocks
 	// doctor is each machine's node.doctor claude-version detail (none: the report has no such check).
 	doctor map[string]string
 	// auth is claude.auth_status's answer by "machine/launcher" (nil: the node has no such method), and the
@@ -134,7 +136,7 @@ func (f *fakeHub) Hello(context.Context) (Hello, error) {
 	return h, nil
 }
 
-func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, error) {
+func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, p)
@@ -241,6 +243,13 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 			return nil, fmt.Errorf("%s: %w", p.Device, apierr.ErrOffline)
 		}
 		f.starts = append(f.starts, a)
+		if f.onStart != nil {
+			f.onStart(f, a) // the node changes state (for example its session list) while handling this start
+		}
+		if f.slowStart {
+			<-ctx.Done() // the node builds the session and launches the agent while the caller's wait runs out
+			return nil, ctx.Err()
+		}
 		if f.failStart != nil {
 			return nil, f.failStart
 		}

@@ -230,6 +230,19 @@ export function retryTaskNow(todo: Todo, verb: "retry" | "continue" = "retry") {
 }
 
 
+/** Whether a conversation draws a task's full card (FeedLineView: a task line from today; older ones are a TaskLine with
+ *  no reason or 重试). With its todo known, that card is the one place a failed start says why and offers 重试 / 移除
+ *  (#4145), so the plan and the receipt do not say it again. */
+export function taskCardDrawn(feed: FeedItem[] | undefined, todoId: string | undefined, now = new Date()): boolean {
+  return Boolean(todoId) && (feed ?? []).some((i) => i.kind === "task" && i.ref === todoId && isToday(i.at, now));
+}
+
+function useTaskCardShown(conversation: string, todoId: string | undefined): boolean {
+  const drawn = useFeed((s) => taskCardDrawn(s.feeds[conversation], todoId));
+  const known = useStore((s) => Boolean(todoId) && s.todos.some((t) => t.id === todoId));
+  return drawn && known;
+}
+
 /** A task's 重试 is on its way to the hub. */
 export function useRetrying(todoId: string | undefined): boolean {
   return useFeed((s) => (todoId ? Boolean(s.busy[retryKey(todoId)]) : false));
@@ -238,6 +251,12 @@ export function useRetrying(todoId: string | undefined): boolean {
 // ── the plan card ──
 
 const PERMISSION: Record<string, string> = { acceptEdits: t("assistant-tasks.perm_accept_edits"), plan: t("assistant-tasks.perm_plan"), bypassPermissions: t("assistant-tasks.perm_bypass"), default: t("assistant-tasks.perm_default") };
+
+/** A task of a started plan that did not start: why, unless its task card right below says so already (#4145). */
+function PlanTaskFailed({ task, conversation }: { task: PlanTask; conversation: string }) {
+  if (useTaskCardShown(conversation, task.todo_id)) return null;
+  return <span className="text-red">{t("assistant-tasks.plan_task_failed", { title: task.title, error: task.error ?? "" })}</span>;
+}
 
 export function PlanCard({ plan }: { plan: TaskPlan }) {
   const busy = useFeed((s) => s.busy[plan.id]);
@@ -252,9 +271,7 @@ export function PlanCard({ plan }: { plan: TaskPlan }) {
           {plan.state === "started" ? t("assistant-tasks.plan_started", { count: plan.tasks.length }) : t("assistant-tasks.plan_dismissed", { count: plan.tasks.length })}
         </span>
         {failed.map((task) => (
-          <span key={task.title} className="text-red">
-            {t("assistant-tasks.plan_task_failed", { title: task.title, error: task.error ?? "" })}
-          </span>
+          <PlanTaskFailed key={task.title} task={task} conversation={plan.conversation} />
         ))}
       </div>
     );
@@ -643,6 +660,7 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
   const plans = useFeed((s) => s.plans);
   const retrying = useRetrying(todo?.id);
   const status = useTaskStatus(todo);
+  const cardShown = useTaskCardShown(item.conversation, todo?.id);
   const pr = field(item, "pr");
   const prN = pr?.split("/").at(-1);
   const title = field(item, "title") ?? t("assistant-tasks.task_fallback");
@@ -652,6 +670,16 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
       <button type="button" onClick={() => openTask(todo.id)} className="flex items-center gap-1.5 self-start text-left text-[13px] text-ink-2 hover:text-ink">
         <Icon name={status === "not_started" ? "retry" : "check"} size={13} />
         {again}
+      </button>
+    );
+  }
+  // Still failed with its task card drawn above: that card says why and has 重试 / 移除, so this is one line pointing
+  // there, not the same error and a second 重试 again (#4145). No 复制 / 引用 on it: the card is what to quote.
+  if (failed && todo && status === "failed" && cardShown) {
+    return (
+      <button type="button" onClick={() => openTask(todo.id)} className="flex items-center gap-1.5 self-start text-left text-[13px] text-red hover:underline">
+        <Icon name="info" size={13} />
+        {t("assistant-tasks.receipt_failed_above", { title })}
       </button>
     );
   }

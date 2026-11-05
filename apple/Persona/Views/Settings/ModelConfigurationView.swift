@@ -186,8 +186,8 @@ struct ModelPurposeEditorView: View {
                     if purpose.supports("effort") && allowsEffort {
                         Picker("思考强度", selection: optional(\.effort)) {
                             Text("跟随默认").tag("")
-                            ForEach(SessionModes.effortLevels) { Text($0.title).tag($0.id) }
-                            if let effort = page.draft.effort, !SessionModes.effortLevels.contains(where: { $0.id == effort }) {
+                            ForEach(SessionModes.startEffortLevels) { Text($0.title).tag($0.id) }
+                            if let effort = page.draft.effort, !SessionModes.startEffortLevels.contains(where: { $0.id == effort }) {
                                 Text(effort).tag(effort)
                             }
                         }

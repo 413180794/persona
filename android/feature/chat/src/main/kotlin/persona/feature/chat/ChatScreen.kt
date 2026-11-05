@@ -344,7 +344,7 @@ private fun ChatPage(
         if (command == null && ((!composer.hasContent && linkContexts.isEmpty()) || !composer.ready)) return false
         // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
         if (command == null && tasks != null && linkContexts.isEmpty() && composer.attachments.isEmpty() &&
-            tasks.sendRouted(key.sessionId, composer.value.text.trim()) { notice = operationFeedback(it).message }) {
+            tasks.sendRouted(key.sessionId, composer.value.text.trim()) { notice = operationFeedback(it).text.resolve(res) }) {
             composer.clearIfUnchanged(composer.draft)
             return true
         }
@@ -363,7 +363,7 @@ private fun ChatPage(
                 submittedDraft = null; submittedContexts = emptyList()
                 if (command == SlashCommand.CLEAR) clearingPane = null
                 onFailed()
-                if (feedback?.failure(e) != true) notice = operationFeedback(e).message
+                if (feedback?.failure(e) != true) notice = operationFeedback(e).text.resolve(res)
             }
             finally { sending = false }
         }
@@ -396,7 +396,7 @@ private fun ChatPage(
                     try { sessions.refresh() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
                     openFork(SessionKey(from.machineId, id))
                 } catch (e: CancellationException) { throw e }
-                catch (e: Exception) { notice = res.getString(R.string.chat_menu_fork_failed, operationFeedback(e).message) }
+                catch (e: Exception) { notice = res.getString(R.string.chat_menu_fork_failed, operationFeedback(e).text.resolve(res)) }
                 finally { forking = false }
             }
         }
@@ -433,10 +433,10 @@ private fun ChatPage(
                             RewindFailure.Reason.HubUnsupported -> res.getString(R.string.chat_rewind_hub_unsupported)
                             RewindFailure.Reason.NeedsFullDevice -> res.getString(R.string.chat_rewind_needs_full_device)
                             RewindFailure.Reason.Refused -> res.getString(R.string.chat_rewind_failed,
-                                e.hubMessage ?: operationFeedback(e.cause ?: e).message)
+                                e.hubMessage ?: operationFeedback(e.cause ?: e).text.resolve(res))
                         }
                     }
-                    catch (e: Exception) { notice = res.getString(R.string.chat_rewind_failed, operationFeedback(e).message) }
+                    catch (e: Exception) { notice = res.getString(R.string.chat_rewind_failed, operationFeedback(e).text.resolve(res)) }
                     finally {
                         rewindBusy = false
                         try { sessions.refresh() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
@@ -484,7 +484,7 @@ private fun ChatPage(
     val taskSheet = remember(key) { mutableStateOf<TaskSheet?>(null) }
     val taskHost = tasks?.let { store ->
         AssistantTaskHost(store, key.sessionId, sessionList, { id -> machines.firstOrNull { it.id == id }?.name?.takeIf(String::isNotBlank) ?: id },
-            onOpen = { k -> chrome.onOpenSession?.invoke(k) }, onError = { notice = operationFeedback(it).message },
+            onOpen = { k -> chrome.onOpenSession?.invoke(k) }, onError = { notice = operationFeedback(it).text.resolve(res) },
             say = { text -> scope.launch { runCatching { sender.send(key, text, UUID.randomUUID().toString()) } } },
             sheet = taskSheet, machines = machines)
     }
@@ -525,7 +525,7 @@ private fun ChatPage(
         onFollow = { timeline.follow(); timelineVersion++ },
         loadOlder = {
             try { repository.loadOlder(key) } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (feedback?.failure(e) != true) notice = operationFeedback(e).message }
+            catch (e: Exception) { if (feedback?.failure(e) != true) notice = operationFeedback(e).text.resolve(res) }
         })
     ChatSearchNavigation(search, chatList, lines)
     ChatMessageJump(key, repository, chatList, lines, snapshot.hasOlder, snapshot.loading || snapshot.loadingOlder, search,
@@ -740,7 +740,7 @@ private fun ChatPage(
                                         scope.launch {
                                             try { fullText = repository.fullText(key, item.id) }
                                             catch (e: CancellationException) { throw e }
-                                            catch (e: Exception) { if (feedback?.failure(e) != true) notice = operationFeedback(e).message }
+                                            catch (e: Exception) { if (feedback?.failure(e) != true) notice = operationFeedback(e).text.resolve(res) }
                                         }
                                     }, style = renderStyle, textUpdates = liveTextUpdates,
                                         userImages = contentUserImages[line.id].orEmpty(),
@@ -755,7 +755,7 @@ private fun ChatPage(
                                 }
                                 if (snapshot.loadingOlder) item(key = "loading-older", contentType = "loading") { JLoading() }
                                 if (snapshot.hasOlder && !snapshot.loadingOlder) item(key = "older", contentType = "older") {
-                                    JTextButton(stringResource(R.string.chat_screen_load_older), { scope.launch { try { repository.loadOlder(key) } catch (e: CancellationException) { throw e } catch (e: Exception) { if (feedback?.failure(e) != true) notice = operationFeedback(e).message } } })
+                                    JTextButton(stringResource(R.string.chat_screen_load_older), { scope.launch { try { repository.loadOlder(key) } catch (e: CancellationException) { throw e } catch (e: Exception) { if (feedback?.failure(e) != true) notice = operationFeedback(e).text.resolve(res) } } })
                                 }
                             }
                             // Under the top bar: in glass the list (and this box) runs under it, up to the status bar.

@@ -411,4 +411,19 @@
         <item quantity="one">%1$d chat</item>
         <item quantity="other">%1$d chats</item>
     </plurals>
+    <string name="settings_ready_main_header">Main chat</string>
+    <string name="settings_ready_main_about">Persona\'s main chat needs a computer, Claude Code and a model that works. Each step updates by itself once it\'s done.</string>
+    <string name="settings_ready_step_computer">Computer</string>
+    <string name="settings_ready_step_claude">Claude Code</string>
+    <string name="settings_ready_step_model">Model</string>
+    <string name="settings_ready_step_first_message">First message</string>
+    <string name="settings_ready_state_checking">Checking</string>
+    <string name="settings_ready_state_skipped">Not needed</string>
+    <string name="settings_ready_state_unknown">Not checked yet</string>
+    <string name="settings_ready_step_computer_ok">%1$s is online</string>
+    <string name="settings_ready_step_claude_ok">Version %1$s</string>
+    <string name="settings_ready_step_model_ok">Works</string>
+    <string name="settings_ready_step_first_message_ok">It has answered once</string>
+    <string name="settings_ready_state_not_tried">Not tried yet</string>
+    <string name="settings_ready_phone_header">This phone</string>
 </resources>

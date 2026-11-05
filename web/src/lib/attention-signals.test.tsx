@@ -4,13 +4,14 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentState, Session } from "./types";
+import type { AgentState, Interaction, Session } from "./types";
 
 let sessions: Session[] = [];
 let mutes: { spaces: string[]; sessions: string[]; allowed: string[] } = { spaces: [], sessions: [], allowed: [] };
+let interactions: Interaction[] = [];
 vi.mock("./store", () => ({
-  useStore: (select: (s: { loaded: boolean }) => unknown) => select({ loaded: true }),
-  getState: () => ({ mutes, interactions: [] }),
+  useStore: (select: (s: { loaded: boolean; interactions: Interaction[] }) => unknown) => select({ loaded: true, interactions }),
+  getState: () => ({ mutes, interactions }),
 }));
 vi.mock("./sessions", () => ({ useCounts: () => ({ badge: 0 }), useAgentSessions: () => sessions }));
 vi.mock("./api", () => ({
@@ -28,14 +29,19 @@ const session = (id: string, state: AgentState, since?: string): Session => ({
 });
 
 const posted: { title: string; body?: string }[] = [];
+const closed: string[] = [];
 class FakeNotification {
   static permission = "granted";
   static requestPermission = async () => "granted";
   onclick: (() => void) | null = null;
+  title: string;
   constructor(title: string, opts?: { body?: string }) {
+    this.title = title;
     posted.push({ title, body: opts?.body });
   }
-  close() {}
+  close() {
+    closed.push(this.title);
+  }
 }
 
 function Probe() {
@@ -53,6 +59,8 @@ beforeEach(() => {
   vi.spyOn(document, "hasFocus").mockImplementation(() => focused);
   localStorage.setItem("persona.systemNotify", "1");
   posted.length = 0;
+  closed.length = 0;
+  interactions = [];
   focused = false;
   mutes = { spaces: [], sessions: [], allowed: [] };
   _setTabId("tab-me");
@@ -66,8 +74,9 @@ afterEach(() => {
   localStorage.clear();
 });
 
-async function show(next: Session[]) {
+async function show(next: Session[], cards: Interaction[] = interactions) {
   sessions = next;
+  interactions = cards;
   await act(async () => root.render(<Probe key="p" />));
 }
 
@@ -116,5 +125,54 @@ describe("系统通知", () => {
     await show([session("a", "working"), session("b", "working")]);
     await show([session("a", "needs_you"), session("b", "needs_you")]);
     expect(posted.map((p) => p.title)).toEqual(["b 需要你"]);
+  });
+});
+
+describe("已在需要你时又来一张卡（#4058）", () => {
+  const ask: Interaction = { id: "q1", machine_id: "m", session_id: "a", kind: "question", created_at: "2026-01-01T10:00:00Z", questions: [{ question: "用哪个框架？" } as never] };
+  const perm: Interaction = { id: "p1", machine_id: "m", session_id: "a", kind: "permission", created_at: "2026-01-01T10:00:05Z", tool_name: "Bash", tool_input: { command: "go test ./..." } };
+
+  it("第二张卡也弹，写的是这张卡；同一张卡不重复弹", async () => {
+    await show([session("a", "working")]);
+    await show([session("a", "needs_you")], [ask]);
+    expect(posted).toEqual([{ title: "a 在问你", body: "用哪个框架？" }]);
+    await show([session("a", "needs_you")], [ask, perm]);
+    expect(posted.at(-1)).toEqual({ title: "a 要你批准", body: "go test ./..." });
+    await show([session("a", "needs_you")], [perm, ask]); // a snapshot again, the same cards
+    await show([{ ...session("a", "needs_you"), last_text: "新的一句" }]);
+    expect(posted).toHaveLength(2);
+  });
+
+  it("通知说的那张卡答掉了就收回，会话还在等另一张也收回", async () => {
+    await show([session("a", "needs_you")], [ask]);
+    await show([session("a", "needs_you")], [ask, perm]);
+    expect(posted.map((p) => p.title)).toEqual(["a 要你批准"]);
+    await show([session("a", "needs_you")], [ask]);
+    expect(closed).toEqual(["a 要你批准"]);
+    await show([session("a", "needs_you")], [ask]);
+    expect(closed).toHaveLength(1);
+  });
+
+  it("需要你先到、卡后到（Codex 授权）：通知改写成这张卡，不算第二次", async () => {
+    await show([session("a", "working")]);
+    await show([session("a", "needs_you")], []);
+    expect(posted.map((p) => p.title)).toEqual(["a 需要你"]);
+    vi.setSystemTime(T0 + 10_000);
+    await show([session("a", "needs_you")], [perm]);
+    expect(posted.at(-1)).toEqual({ title: "a 要你批准", body: "go test ./..." });
+    await show([session("a", "needs_you")], [perm, { ...ask, id: "q2" }]);
+    expect(posted.at(-1)?.title).toBe("a 在问你");
+  });
+
+  it("刚打开页面时已有的卡不弹", async () => {
+    await show([session("a", "needs_you")], [ask, perm]);
+    expect(posted).toEqual([]);
+  });
+
+  it("屏蔽了的 Agent 新卡不弹", async () => {
+    mutes = { spaces: [], sessions: ["m/a"], allowed: [] };
+    await show([session("a", "needs_you")], [ask]);
+    await show([session("a", "needs_you")], [ask, perm]);
+    expect(posted).toEqual([]);
   });
 });

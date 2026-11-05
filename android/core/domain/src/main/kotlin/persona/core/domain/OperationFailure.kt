@@ -2,12 +2,24 @@ package persona.core.domain
 
 /** Transport-independent decisions; human-readable server messages never affect recovery. */
 enum class FailureCategory { Network, Pairing, Certificate, Incompatible, LocalPermission, Other }
-enum class FailureAction { None, Retry, Verify, PairAgain, OpenTerminal, ReviewInput, UpdateHub, GrantPermission }
+enum class FailureAction {
+    None, Retry, Verify, PairAgain, OpenTerminal, ReviewInput, UpdateHub, GrantPermission,
+    // What the main conversation still needs (docs/onboarding.md 4.6): the step to open, not a retry.
+    AddComputer, ConfirmComputer, WakeComputer, InstallClaude, LoginClaude, ConnectModel, EditProvider,
+}
 enum class FailureReason {
     Demo, PairingExpired, CertificateChanged, Incompatible, LocalPermission,
     InputDraft, DialogOpen, StaleSession, Invalid, IdReused, PromptChanged, Expired,
     RateLimited, NotDelivered, Unknown, Delivered, Failed,
+    // The hub's coded refusals of the main conversation (docs/onboarding.md 4.6, 5.2).
+    NoMachine, MachinePending, ComputerOffline, ClaudeMissing, LauncherMissing, NotLoggedIn, AuthFailed, AssistantRestarting,
 }
+
+/**
+ * The codes with which the hub refuses to start or answer in the main conversation until a step is done
+ * (docs/onboarding.md 4.6): nothing was started, so the message waits for the user, not for the network.
+ */
+val SetupFailureCodes = setOf("no_machine", "machine_pending", "claude_missing", "launcher_missing", "not_logged_in", "auth_failed")
 data class OperationFailure(val reason: FailureReason, val action: FailureAction, val offline: Boolean = false)
 
 fun mapOperationFailure(
@@ -36,6 +48,16 @@ fun mapOperationFailure(
         "prompt_changed" -> result(FailureReason.PromptChanged, FailureAction.Verify)
         "expired", "request_expired", "already_handled" -> result(FailureReason.Expired, FailureAction.OpenTerminal)
         "rate_limited" -> result(FailureReason.RateLimited, if (retryable) FailureAction.Retry else FailureAction.None)
+        "no_machine" -> result(FailureReason.NoMachine, FailureAction.AddComputer)
+        "machine_pending" -> result(FailureReason.MachinePending, FailureAction.ConfirmComputer)
+        // The computer is asleep or its Persona Link is off: the hub itself answered, so never 连不上 hub.
+        "node_unreachable" -> result(FailureReason.ComputerOffline, FailureAction.WakeComputer)
+        "claude_missing" -> result(FailureReason.ClaudeMissing, FailureAction.InstallClaude)
+        "launcher_missing" -> result(FailureReason.LauncherMissing, FailureAction.ConnectModel)
+        "not_logged_in" -> result(FailureReason.NotLoggedIn, FailureAction.LoginClaude)
+        "auth_failed" -> result(FailureReason.AuthFailed, FailureAction.EditProvider)
+        // The assistant's process restarting: it comes back by itself in a few seconds.
+        "assistant_offline" -> result(FailureReason.AssistantRestarting, FailureAction.Retry)
         else -> null
     }
     if (business != null) return business

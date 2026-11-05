@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.contracts.api.ClaudeSetting
@@ -81,7 +82,7 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
         itemsIndexed(state.settings, key = { _, it -> "setting-${it.key}" }) { index, setting ->
             JGroupItem(GroupPosition.of(index, state.settings.size), if (index == 0) Modifier.padding(top = Tokens.Space.m) else Modifier) {
                 when (setting.type) {
-                    "bool" -> JRow(onClick = { set(setting.key, JsonPrimitive(!setting.boolValue)) }, chevron = false,
+                    "bool" -> JRow(onClick = { set(setting.key, JsonPrimitive(!setting.boolValue)) }, chevron = false, role = Role.Switch,
                         trailing = { JSwitch(setting.boolValue, null) }) { SettingTitle(setting) }
                     "enum" -> JRow(onClick = { choosing = setting }, trailing = {
                         Text(setting.stringValue, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink3, maxLines = 1)

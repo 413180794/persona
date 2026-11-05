@@ -123,6 +123,8 @@ private class RoutedAssistantManagement(
         }
     }
     override suspend fun warm() = api().warm()
+    override suspend fun readiness(probe: Boolean) = api().readiness(probe)
+    override suspend fun dismissReadiness(dismissed: Boolean) = api().dismissReadiness(dismissed)
     override suspend fun config() = api().config()
     override suspend fun updateConfig(update: AssistantConfigUpdate) = api().updateConfig(update)
     override suspend fun launchers(machineId: String) = api().launchers(machineId)

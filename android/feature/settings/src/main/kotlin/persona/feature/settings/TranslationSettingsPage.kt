@@ -13,7 +13,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -190,12 +189,10 @@ internal fun TranslationChatPickerContent(
                         val unpickedText = stringResource(R.string.settings_translation_unpicked)
                         JGroupItem(GroupPosition.of(index, rows.size)) {
                             JRow(
-                                Modifier.semantics {
-                                    role = Role.Checkbox
-                                    stateDescription = if (on) pickedText else unpickedText
-                                },
+                                Modifier.semantics { stateDescription = if (on) pickedText else unpickedText },
                                 trailing = { JCheckbox(on, null) },
                                 onClick = { onToggle(chat) },
+                                role = Role.Checkbox,
                             ) {
                                 JAvatar(chat.name,
                                     icon = if (choice?.isGroup == false) null else PhIcons.ChatsCircle)

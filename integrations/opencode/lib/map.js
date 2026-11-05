@@ -44,6 +44,9 @@ export function toolInput(name, input) {
   }
 }
 
+// The finish reasons that stop a turn short without an error, in the words DSH uses for the same (dsh/lib/map.js).
+const FINISH_NOTES = { length: '输出达到上限，这一轮停了', 'content-filter': '这一轮被拦下了' }
+
 const ts = (ms) => new Date(typeof ms === 'number' && ms > 0 ? ms : Date.now()).toISOString()
 
 /** The text of a tool's result: its text parts, files named, or the error. */
@@ -103,6 +106,9 @@ export function messageItems(msg, seq) {
       if (msg.finish === 'error' || msg.error) {
         if (msg.error?.type === 'aborted') add(2 * parts.length, { role: 'system', kind: 'notice', text: '已中断' })
         else add(2 * parts.length, { role: 'system', kind: 'notice', text: errorText(msg.error) ? `出错了：${snippet(errorText(msg.error))}` : '出错了' })
+      } else if (FINISH_NOTES[msg.finish]) {
+        // A turn the model did not end itself: say why, or the phone shows half a sentence (or nothing) as the answer.
+        add(2 * parts.length, { role: 'system', kind: 'notice', text: FINISH_NOTES[msg.finish] })
       }
       break
     }

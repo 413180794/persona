@@ -73,8 +73,8 @@ struct NewChatView: View {
 
     /// The efforts the model that will run takes (all of them when that is not known).
     private var effortOptions: [SessionModes.Option] {
-        guard let efforts = modelChoice?.efforts else { return SessionModes.effortLevels }
-        return SessionModes.effortLevels.filter { efforts.contains($0.id) }
+        guard let efforts = modelChoice?.efforts else { return SessionModes.startEffortLevels }
+        return SessionModes.startEffortLevels.filter { efforts.contains($0.id) }
     }
 
     private var promptHint: String { codex ? String(localized: "想让 Codex 做什么？（必填：Codex 收到第一条消息才建会话）")

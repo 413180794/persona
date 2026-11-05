@@ -266,7 +266,7 @@ func TestFeishuCardFromTheStartAndAlwaysMoving(t *testing.T) {
 		{Seq: 1, ID: "x", Role: "assistant", Kind: proto.KindToolUse, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"earlier turn"}`)},
 		{Seq: 2, ID: "m", Role: "user", Kind: proto.KindText, Text: "我的问题"},
 		{Seq: 3, ID: "y", Role: "assistant", Kind: proto.KindToolUse, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"mine"}`)},
-	})
+	}, now)
 	s.chans.mu.Unlock()
 	now = now.Add(feishuProgressIdle)
 	s.channelProgressTick(r.ID)

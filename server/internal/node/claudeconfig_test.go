@@ -27,9 +27,18 @@ func TestClaudeSettingsKeepOtherKeys(t *testing.T) {
 	if err := n.setClaudeSetting("language", nil); err != nil {
 		t.Fatal(err)
 	}
+	if err := n.setClaudeSetting("effortLevel", "xhigh"); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.setClaudeSetting("effortLevel", "auto"); err != nil { // auto is "not set": Claude Code ignores the value
+		t.Fatal(err)
+	}
 	var raw map[string]any
 	b, _ := os.ReadFile(path)
 	_ = json.Unmarshal(b, &raw)
+	if _, ok := raw["effortLevel"]; ok {
+		t.Fatalf("auto written as %v", raw["effortLevel"])
+	}
 	if raw["awaySummaryEnabled"] != false || raw["hooks"] == nil || raw["language"] != nil {
 		t.Fatalf("settings = %v", raw)
 	}

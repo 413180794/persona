@@ -26,12 +26,24 @@
         }
       }
     },
-    "\n\n（飞书会话 feedId %@%@，可用飞书工具读更多上下文或回复）": {
+    "\n%@：%@": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "\n\n（飞书会话 feedId %1$@%2$@，可用飞书工具读更多上下文或回复）"
+            "value": "\n%1$@：%2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\\n%1$@: %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\\n%1$@：%2$@"
           }
         }
       }
@@ -2176,6 +2188,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@的更多操作"
+          }
+        }
+      }
+    },
+    "%@的记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entry from %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@の記録"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@的记录"
           }
         }
       }
@@ -11641,6 +11675,28 @@
         }
       }
     },
+    "hub 不支持 HTML 卡片链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub doesn't support HTML card links"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブはHTMLカードのリンクに対応していません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 不支持 HTML 卡片链接"
+          }
+        }
+      }
+    },
     "hub 不认这台设备的凭据（401）": {
       "localizations": {
         "en": {
@@ -11775,6 +11831,18 @@
     },
     "hub 所在机器上的飞书网关没有登录飞书。在那台机器上重新登录飞书网关，再回来重试。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Lark gateway on the hub machine isn't signed in to Lark. Sign in to the Lark gateway again on that machine, then come back and retry."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブのマシンのLarkゲートウェイがLarkにログインしていません。そのマシンでLarkゲートウェイに再ログインしてから、戻ってもう一度お試しください。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -12311,8 +12379,42 @@
         }
       }
     },
+    "hub 还不支持录音同步，升级后会自动补传": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub doesn't support recording sync yet. They'll upload automatically after it's upgraded."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブはまだ録音の同期に対応していません。アップグレード後に自動で送信されます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 还不支持录音同步，升级后会自动补传"
+          }
+        }
+      }
+    },
     "hub 还没接飞书：在 hub 所在的机器上运行飞书网关，并在 hub.json 的 lark 里填上它（docs/feishu.md）。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in hub.json (docs/feishu.md)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブはまだLarkに接続されていません。ハブのマシンでLarkゲートウェイを実行し、hub.jsonのlarkに設定してください（docs/feishu.md）。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -16586,6 +16688,50 @@
         }
       }
     },
+    "不能打开这个卡片目标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't open this card target"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このカードのリンク先を開けません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不能打开这个卡片目标"
+          }
+        }
+      }
+    },
+    "不能打开这个知识库路径": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't open this Knowledge path"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このナレッジのパスを開けません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不能打开这个知识库路径"
+          }
+        }
+      }
+    },
     "不认识的值": {
       "localizations": {
         "en": {
@@ -16786,6 +16932,18 @@
     },
     "与飞书网关的网页共用当前飞书账号的设置。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shares the current Lark account's settings with the Lark gateway's web page."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在のLarkアカウントの設定をLarkゲートウェイのWebページと共有します。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -17518,6 +17676,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "书签"
+          }
+        }
+      }
+    },
+    "书签 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookmarks %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブックマーク%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书签 %@"
           }
         }
       }
@@ -19860,6 +20040,28 @@
         }
       }
     },
+    "体验模式不同步录音": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demo mode doesn't sync recordings"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デモモードでは録音を同期しません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "体验模式不同步录音"
+          }
+        }
+      }
+    },
     "体验模式不能打开端口": {
       "localizations": {
         "en": {
@@ -21567,6 +21769,28 @@
         }
       }
     },
+    "健康趋势": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health Trends"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ヘルスケアの傾向"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康趋势"
+          }
+        }
+      }
+    },
     "像在对话里一样写：看哪些数据、怎么汇报。它可以用 schedule_followup 再安排一次性的跟进，比如会前 10 分钟。": {
       "localizations": {
         "en": {
@@ -21591,6 +21815,18 @@
     },
     "像素": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pixel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ピクセル"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -21601,6 +21837,18 @@
     },
     "像素，颜色随主题色": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pixel, in the theme color"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ピクセル。テーマカラーに合わせた色"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -21671,6 +21919,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "允许 %@ 吗？"
+          }
+        }
+      }
+    },
+    "允许 Persona 读取步数、睡眠和体重后，这里会画出趋势。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Persona to read steps, sleep and weight, and trends will be charted here."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personaに歩数、睡眠、体重の読み取りを許可すると、ここに傾向が表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许 Persona 读取步数、睡眠和体重后，这里会画出趋势。"
           }
         }
       }
@@ -21759,6 +22029,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "允许联网"
+          }
+        }
+      }
+    },
+    "允许读取": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Access"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み取りを許可"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许读取"
           }
         }
       }
@@ -26127,6 +26419,18 @@
     },
     "删除这条录音？": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete This Recording?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この録音を削除しますか？"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -27539,6 +27843,116 @@
           "stringUnit": {
             "state": "translated",
             "value": "卡片"
+          }
+        }
+      }
+    },
+    "卡片已更新，已保留编辑，请查看后重新确认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The card changed; your edits are kept. Review them and confirm again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カードが更新されました。編集内容は保持されています。確認してからもう一度確定してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片已更新，已保留编辑，请查看后重新确认"
+          }
+        }
+      }
+    },
+    "卡片已更新，按新内容提交？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The card changed. Submit with the new content?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カードが更新されました。新しい内容で送信しますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片已更新，按新内容提交？"
+          }
+        }
+      }
+    },
+    "卡片已更新，请重新确认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The card changed. Confirm again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カードが更新されました。もう一度確認してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片已更新，请重新确认"
+          }
+        }
+      }
+    },
+    "卡片已更新，请重新确认链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The card changed. Confirm the link again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カードが更新されました。リンクをもう一度確認してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片已更新，请重新确认链接"
+          }
+        }
+      }
+    },
+    "卡片的详情页已不存在": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The card's detail page no longer exists"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カードの詳細ページはもうありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片的详情页已不存在"
           }
         }
       }
@@ -29459,6 +29873,28 @@
         }
       }
     },
+    "另一台设备已选择，正在同步结果": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chosen on another device. Syncing the result."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "別のデバイスで選択されました。結果を同期中です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一台设备已选择，正在同步结果"
+          }
+        }
+      }
+    },
     "只做计划": {
       "localizations": {
         "en": {
@@ -29891,6 +30327,30 @@
     },
     "只有文字和时间戳进知识库，原始音频不上传；过了保留期（%lld 天）本机和知识库里都会清掉。": {
       "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Only the text and timestamps go into Knowledge; the original audio isn't uploaded. After the retention period (%lld day) it's cleared from this device and Knowledge."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Only the text and timestamps go into Knowledge; the original audio isn't uploaded. After the retention period (%lld days) it's cleared from this device and Knowledge."
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ナレッジに入るのは文字とタイムスタンプだけで、元の音声はアップロードされません。保存期間（%lld日）を過ぎると、このデバイスとナレッジの両方から消去されます。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -30005,6 +30465,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "只看"
+          }
+        }
+      }
+    },
+    "只看 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@のみ表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只看 %@"
           }
         }
       }
@@ -30167,6 +30649,18 @@
     },
     "只让语音停下，正在做的事照常继续": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stops only the voice; the work in progress carries on"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声だけを止め、進行中の作業はそのまま続けます"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -30259,6 +30753,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "可以安装"
+          }
+        }
+      }
+    },
+    "可以操作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作可能"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以操作"
           }
         }
       }
@@ -30769,6 +31285,28 @@
         }
       }
     },
+    "合入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マージ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合入"
+          }
+        }
+      }
+    },
     "合并到 %@": {
       "localizations": {
         "en": {
@@ -31241,6 +31779,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "同步到 Apple Watch"
+          }
+        }
+      }
+    },
+    "同步记录没有保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync record wasn't saved"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同期記録を保存できませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步记录没有保存"
           }
         }
       }
@@ -32370,6 +32930,138 @@
         }
       }
     },
+    "周一": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mon"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "月"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "周一"
+          }
+        }
+      }
+    },
+    "周三": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "水"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "周三"
+          }
+        }
+      }
+    },
+    "周二": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tue"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "火"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "周二"
+          }
+        }
+      }
+    },
+    "周五": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "土"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "周五"
+          }
+        }
+      }
+    },
+    "周六": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "土"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "周六"
+          }
+        }
+      }
+    },
+    "周四": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fri"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "金"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "周四"
+          }
+        }
+      }
+    },
     "周报": {
       "localizations": {
         "en": {
@@ -32388,6 +33080,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "周报"
+          }
+        }
+      }
+    },
+    "周日": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sun"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "周日"
           }
         }
       }
@@ -32615,6 +33329,18 @@
     },
     "回传手机后本机转写，文字自动进知识库，音频不上传。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once sent back to the phone it's transcribed on device; the text goes into Knowledge automatically and the audio isn't uploaded."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スマートフォンに戻った後にデバイス上で文字起こしし、文字は自動でナレッジに入ります。音声はアップロードされません。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -37722,6 +38448,28 @@
         }
       }
     },
+    "审查": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レビュー"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "审查"
+          }
+        }
+      }
+    },
     "容器": {
       "localizations": {
         "en": {
@@ -38369,6 +39117,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "小"
+          }
+        }
+      }
+    },
+    "小时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hr"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "時間"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小时"
           }
         }
       }
@@ -40214,6 +40984,28 @@
         }
       }
     },
+    "已到卡片的最深一层": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already at the card's deepest level"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カードの最下層です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已到卡片的最深一层"
+          }
+        }
+      }
+    },
     "已加到日历": {
       "localizations": {
         "en": {
@@ -40672,6 +41464,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "已合并到另一个项目"
+          }
+        }
+      }
+    },
+    "已同步一部分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partly synced"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一部同期済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已同步一部分"
+          }
+        }
+      }
+    },
+    "已同步到知识库": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synced to Knowledge"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ナレッジに同期済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已同步到知识库"
           }
         }
       }
@@ -41945,6 +42781,18 @@
     },
     "已拷贝诊断": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostics copied"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "診断情報をコピーしました"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -42695,6 +43543,18 @@
     },
     "已登录的账号都会收进收件箱，「消息」页可以切换账号。/agent、助手和知识库使用默认账号；在飞书网关里添加或退出账号。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every signed-in account goes into the Inbox, and you can switch accounts on the Messages page. /agent, the Assistant and Knowledge use the default account. Add or sign out of accounts in the Lark gateway."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログイン済みのアカウントはすべて受信トレイに入り、「メッセージ」ページでアカウントを切り替えられます。/agent、アシスタント、ナレッジはデフォルトのアカウントを使います。アカウントの追加やログアウトはLarkゲートウェイで行います。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -43375,6 +44235,28 @@
         }
       }
     },
+    "已过保留期": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Past retention"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存期間切れ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已过保留期"
+          }
+        }
+      }
+    },
     "已过时间": {
       "localizations": {
         "en": {
@@ -43683,6 +44565,28 @@
         }
       }
     },
+    "已选": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选"
+          }
+        }
+      }
+    },
     "已选 %lld 件": {
       "localizations": {
         "en": {
@@ -43735,6 +44639,94 @@
           "stringUnit": {
             "state": "translated",
             "value": "已选择"
+          }
+        }
+      }
+    },
+    "已选择 · 发送失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected · Send failed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択済み · 送信失敗"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 · 发送失败"
+          }
+        }
+      }
+    },
+    "已选择 · 已发送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected · Sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択済み · 送信済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 · 已发送"
+          }
+        }
+      }
+    },
+    "已选择 · 正在同步状态": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected · Syncing status"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択済み · 状態を同期中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 · 正在同步状态"
+          }
+        }
+      }
+    },
+    "已选择 · 等待发送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected · Waiting to send"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択済み · 送信待ち"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 · 等待发送"
           }
         }
       }
@@ -44013,6 +45005,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "已静音：%@"
+          }
+        }
+      }
+    },
+    "已验证": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verified"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "検証済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证"
           }
         }
       }
@@ -44654,6 +45668,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "开关即时生效。关掉一项只停止这项贡献，其他能力和设置保留。"
+          }
+        }
+      }
+    },
+    "开发": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Develop"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開発"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开发"
           }
         }
       }
@@ -45419,6 +46455,28 @@
         }
       }
     },
+    "录音中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recording"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "録音中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "录音中"
+          }
+        }
+      }
+    },
     "录音中没有识别到语音": {
       "localizations": {
         "en": {
@@ -45481,6 +46539,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "录音回传暂未完成，会自动重试"
+          }
+        }
+      }
+    },
+    "录音已删除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recording Deleted"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "録音を削除しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "录音已删除"
           }
         }
       }
@@ -45569,6 +46649,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "录音正在进行，请先结束录音再听写"
+          }
+        }
+      }
+    },
+    "录音没有删除，请稍后重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The recording wasn't deleted. Try again later."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "録音を削除できませんでした。後でもう一度お試しください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "录音没有删除，请稍后重试"
           }
         }
       }
@@ -49187,6 +50289,18 @@
     },
     "打断语音": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrupt Voice"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声を中断"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -49565,6 +50679,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "扩展提示"
+          }
+        }
+      }
+    },
+    "扩展操作已完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extension Action Done"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能の操作が完了しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展操作已完成"
+          }
+        }
+      }
+    },
+    "扩展操作未完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extension Action Didn't Finish"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能の操作が完了しませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展操作未完成"
           }
         }
       }
@@ -50076,6 +51234,28 @@
         }
       }
     },
+    "找不到通知所属的 hub，请重新连接后在 App 中操作。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't find the hub this notification came from. Reconnect, then do it in the app."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この通知のハブが見つかりません。再接続してからアプリで操作してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到通知所属的 hub，请重新连接后在 App 中操作。"
+          }
+        }
+      }
+    },
     "技能": {
       "localizations": {
         "en": {
@@ -50244,6 +51424,18 @@
     },
     "把一件事发给某个个人 Agent 会话（飞书网关的 agent-bridge），由它去做。不选会话时发给最近活跃、能发送的那个。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sends a task to a personal agent session (the Lark gateway's agent-bridge) to carry out. With no session chosen, it goes to the most recently active one that can receive messages."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タスクを個人エージェントのセッション（Larkゲートウェイのagent-bridge）に送って実行させます。セッションを選ばない場合は、最近アクティブで送信可能なものに送ります。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -51191,6 +52383,18 @@
     },
     "拷贝诊断": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Diagnostics"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "診断情報をコピー"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -52731,6 +53935,72 @@
         }
       }
     },
+    "提交结果不完整，请同步状态后重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The submission result is incomplete. Sync the status and try again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信結果が不完全です。状態を同期してからもう一度お試しください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提交结果不完整，请同步状态后重试"
+          }
+        }
+      }
+    },
+    "提交结果尚未确认。同步状态或重试原选择，不会重复发送。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The submission isn't confirmed yet. Sync the status or retry the original choice; it won't be sent twice."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信結果はまだ確認されていません。状態を同期するか元の選択を再試行してください。二重に送信されることはありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提交结果尚未确认。同步状态或重试原选择，不会重复发送。"
+          }
+        }
+      }
+    },
+    "提交结果尚未确认，不会改选或重复发送。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The submission isn't confirmed yet; it won't change the choice or send twice."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信結果はまだ確認されていません。選択を変えたり二重に送信したりすることはありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提交结果尚未确认，不会改选或重复发送。"
+          }
+        }
+      }
+    },
     "提交计划": {
       "localizations": {
         "en": {
@@ -52777,6 +54047,18 @@
     },
     "提供个人 Agent 的扩展没有开启它：按扩展的说明开启后重启": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The extension that provides personal agents hasn't turned them on. Turn them on as its instructions say, then restart."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "個人エージェントを提供する拡張機能で有効になっていません。拡張機能の説明に従って有効にしてから再起動してください"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -54725,6 +56007,28 @@
         }
       }
     },
+    "数据只在这台 iPhone 上读取和绘制，不会发给 hub。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data is read and charted only on this iPhone and never sent to the hub."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "データはこのiPhone上でのみ読み取って描画し、ハブには送信しません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据只在这台 iPhone 上读取和绘制，不会发给 hub。"
+          }
+        }
+      }
+    },
     "数据已过期": {
       "localizations": {
         "en": {
@@ -56353,6 +57657,28 @@
         }
       }
     },
+    "方案": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plan"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プラン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方案"
+          }
+        }
+      }
+    },
     "无未读消息": {
       "localizations": {
         "en": {
@@ -56377,6 +57703,18 @@
     },
     "无法打开，请在飞书网关里重试或移除": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't open it. Retry or remove it in the Lark gateway."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開けません。Larkゲートウェイで再試行するか削除してください"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -56646,6 +57984,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "日历、提醒、通讯录、健康、照片、Gmail"
+          }
+        }
+      }
+    },
+    "日均 %@（%lld 天有记录）": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日均 %1$@（%2$lld 天有记录）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily average %1$@ (%2$lld days with data)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1日平均%1$@（記録のある日：%2$lld日）"
           }
         }
       }
@@ -57338,6 +58698,28 @@
         }
       }
     },
+    "显示全部机器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows all machines"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてのマシンを表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示全部机器"
+          }
+        }
+      }
+    },
     "显示列表": {
       "localizations": {
         "en": {
@@ -57707,6 +59089,18 @@
     },
     "晶面": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Facet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファセット"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -57717,6 +59111,18 @@
     },
     "晶面，颜色随主题色": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Facet, in the theme color"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファセット。テーマカラーに合わせた色"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -58183,6 +59589,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "暂时无法重试，请检查连接和本机存储空间"
+          }
+        }
+      }
+    },
+    "暂时没有数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Data Yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "データはまだありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时没有数据"
           }
         }
       }
@@ -59223,6 +60651,18 @@
     },
     "最近使用": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recently Used"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近使用した項目"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -59321,6 +60761,18 @@
     },
     "最近的录音": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent Recordings"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近の録音"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -59626,6 +61078,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "有 token"
+          }
+        }
+      }
+    },
+    "有一条录音知识库没有收下：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Knowledge didn't accept a recording: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ナレッジが録音を1件受け付けませんでした：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有一条录音知识库没有收下：%@"
           }
         }
       }
@@ -60136,6 +61610,28 @@
         }
       }
     },
+    "期间变化 %@%@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "期间变化 %1$@%2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change over the period %1$@%2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "期間中の変化%1$@%2$@"
+          }
+        }
+      }
+    },
     "未勾选 %@": {
       "localizations": {
         "en": {
@@ -60264,6 +61760,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "未打开"
+          }
+        }
+      }
+    },
+    "未执行扩展操作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extension Action Not Run"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能の操作は実行されませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未执行扩展操作"
           }
         }
       }
@@ -60930,6 +62448,18 @@
     },
     "本机的音频和知识库里的文字都会删掉。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The audio on this device and the text in Knowledge will both be deleted."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスの音声とナレッジ内の文字の両方が削除されます。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -61554,6 +63084,28 @@
         }
       }
     },
+    "来自卡片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From a card"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カードから"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来自卡片"
+          }
+        }
+      }
+    },
     "来自这台机器的 Claude Code / Codex 启动器，会在终端引擎里新开一个标签页运行。": {
       "localizations": {
         "en": {
@@ -61926,6 +63478,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "查看 AI 分身的处理过程"
+          }
+        }
+      }
+    },
+    "查看 PR": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View PR"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PRを表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看 PR"
           }
         }
       }
@@ -62494,6 +64068,18 @@
     },
     "查看飞书网关已留存的撤回内容，保留「已撤回」标记。未留存的内容无法恢复。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows recalled messages the Lark gateway kept, with the Recalled mark. Content it didn't keep can't be recovered."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larkゲートウェイが保存している取り消し済みの内容を「取り消し済み」の表示付きで確認できます。保存されていない内容は復元できません。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -64044,6 +65630,28 @@
         }
       }
     },
+    "正在同步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Syncing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同期中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在同步"
+          }
+        }
+      }
+    },
     "正在听…": {
       "localizations": {
         "en": {
@@ -65460,6 +67068,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "步数、心率、睡眠等汇总，经你确认后写入"
+          }
+        }
+      }
+    },
+    "步数、睡眠和体重的趋势在装有「健康」的 iPhone 上显示。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trends for steps, sleep and weight appear on an iPhone with the Health app."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歩数、睡眠、体重の傾向は「ヘルスケア」があるiPhoneで表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "步数、睡眠和体重的趋势在装有「健康」的 iPhone 上显示。"
           }
         }
       }
@@ -67031,6 +68661,28 @@
         }
       }
     },
+    "没有可打开的页面": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Page to Open"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開けるページがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可打开的页面"
+          }
+        }
+      }
+    },
     "没有启动起来：%@": {
       "localizations": {
         "en": {
@@ -67269,6 +68921,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有归档的对话"
+          }
+        }
+      }
+    },
+    "没有录到音频": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No audio recorded"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声が録音されませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有录到音频"
           }
         }
       }
@@ -67951,6 +69625,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有访问权限"
+          }
+        }
+      }
+    },
+    "没有识别到语音": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No speech detected"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声が認識されませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有识别到语音"
           }
         }
       }
@@ -71743,6 +73439,28 @@
         }
       }
     },
+    "用手机或 Apple Watch 录下会议、口述和现场的内容，转写好的文字会进知识库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record meetings, dictation and on-site notes with your phone or Apple Watch; the transcribed text goes into Knowledge."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スマートフォンやApple Watchで会議、口述、現場の内容を録音すると、文字起こしした内容がナレッジに入ります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用手机或 Apple Watch 录下会议、口述和现场的内容，转写好的文字会进知识库。"
+          }
+        }
+      }
+    },
     "用手机相机扫码直接在浏览器里打开，或把登录链接拷到另一台电脑的浏览器。": {
       "localizations": {
         "en": {
@@ -71761,6 +73479,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "用手机相机扫码直接在浏览器里打开，或把登录链接拷到另一台电脑的浏览器。"
+          }
+        }
+      }
+    },
+    "用模型自己的默认档": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model's own default level"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデル自身の既定レベル"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用模型自己的默认档"
           }
         }
       }
@@ -73438,6 +75178,50 @@
         }
       }
     },
+    "知识库暂时不可用，稍后自动重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Knowledge is unavailable right now. Retrying automatically later."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ナレッジは一時的に利用できません。後で自動的に再試行します"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "知识库暂时不可用，稍后自动重试"
+          }
+        }
+      }
+    },
+    "知识库没有收下": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not accepted by Knowledge"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ナレッジが受け付けませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "知识库没有收下"
+          }
+        }
+      }
+    },
     "知识库里从 %@ 来的会话和人、收件箱里它的条目都会删掉，同步会关掉。项目的总结在下次更新时不再包含它们。": {
       "localizations": {
         "en": {
@@ -73702,6 +75486,28 @@
         }
       }
     },
+    "确认卡片操作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm Card Action"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カードの操作を確認"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认卡片操作"
+          }
+        }
+      }
+    },
     "确认回退代码": {
       "localizations": {
         "en": {
@@ -73936,6 +75742,18 @@
     },
     "离开此页或锁屏仍会继续录音，结束时请点「结束」。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recording continues if you leave this page or lock the screen. Tap End when you're done."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このページを離れたり画面をロックしたりしても録音は続きます。終わったら「終了」をタップしてください。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -75719,6 +77537,28 @@
         }
       }
     },
+    "等待同步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting to sync"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同期待ち"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待同步"
+          }
+        }
+      }
+    },
     "等待回传": {
       "localizations": {
         "en": {
@@ -75737,6 +77577,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "等待回传"
+          }
+        }
+      }
+    },
+    "等待手表回传": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for Apple Watch"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Watchからの転送待ち"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待手表回传"
           }
         }
       }
@@ -75763,6 +77625,28 @@
         }
       }
     },
+    "等待确认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for confirmation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認待ち"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待确认"
+          }
+        }
+      }
+    },
     "等待网络": {
       "localizations": {
         "en": {
@@ -75781,6 +77665,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "等待网络"
+          }
+        }
+      }
+    },
+    "等待转写": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting to transcribe"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文字起こし待ち"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待转写"
           }
         }
       }
@@ -78386,7 +80292,7 @@
       }
     },
     "自动": {
-      "comment": "How a compaction started\nPermission mode: the agent judges the risk itself",
+      "comment": "How a compaction started\nPermission mode: the agent judges the risk itself\nThinking effort level",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -82002,6 +83908,18 @@
     },
     "请先在飞书网关的网页创建密钥库": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a key vault on the Lark gateway's web page first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にLarkゲートウェイのWebページでキー保管庫を作成してください"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -82012,6 +83930,18 @@
     },
     "请先在飞书网关的网页创建密钥库，再回来重新检查。已输入的内容会保留。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a key vault on the Lark gateway's web page first, then come back and check again. What you've entered is kept."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にLarkゲートウェイのWebページでキー保管庫を作成してから、戻って再確認してください。入力した内容は保持されます。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -82044,6 +83974,18 @@
     },
     "请先更新 Hub 和飞书网关，再使用消息显示设置。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update the hub and the Lark gateway first to use the message display settings."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メッセージ表示の設定を使うには、先にハブとLarkゲートウェイをアップデートしてください。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -82076,6 +84018,18 @@
     },
     "请先更新飞书网关，再修改这些设置。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update the Lark gateway first to change these settings."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "これらの設定を変更するには、先にLarkゲートウェイをアップデートしてください。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -83250,6 +85204,28 @@
         }
       }
     },
+    "读取健康数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read Health Data"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ヘルスケアデータを読み取る"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取健康数据"
+          }
+        }
+      }
+    },
     "读取和写入剪贴板": {
       "localizations": {
         "en": {
@@ -83278,6 +85254,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "读取我飞书会话「%1$@」（飞书网关 feedId %2$@）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read the recent messages in my Lark chat “%1$@” (Lark gateway feedId %2$@), summarize the key points, list what I need to reply to or handle, and suggest replies."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私のLarkチャット「%1$@」（LarkゲートウェイのfeedId %2$@）の最近のメッセージを読み、要点をまとめ、私が返信・対応すべきことを挙げて、返信案を出してください。"
           }
         }
       }
@@ -84140,8 +86128,42 @@
         }
       }
     },
+    "转写中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcribing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文字起こし中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转写中"
+          }
+        }
+      }
+    },
     "软糖": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jelly"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グミ"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -84152,6 +86174,18 @@
     },
     "软糖，颜色随主题色": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jelly, in the theme color"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グミ。テーマカラーに合わせた色"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -84289,6 +86323,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "输入「%@」"
+          }
+        }
+      }
+    },
+    "输入内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type here"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内容を入力"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入内容"
           }
         }
       }
@@ -84839,6 +86895,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "返回"
+          }
+        }
+      }
+    },
+    "返回卡片上一页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to the card's previous page"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カードの前のページに戻る"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回卡片上一页"
           }
         }
       }
@@ -85575,6 +87653,28 @@
         }
       }
     },
+    "还没有录音": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Recordings Yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "録音はまだありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有录音"
+          }
+        }
+      }
+    },
     "还没有快捷命令，点「编辑」添加": {
       "localizations": {
         "en": {
@@ -85731,6 +87831,18 @@
     },
     "还没有能发消息的个人 Agent 会话。先在飞书网关里开一个。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No personal agent session can receive messages yet. Open one in the Lark gateway first."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メッセージを送れる個人エージェントのセッションがまだありません。先にLarkゲートウェイで開いてください。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -85829,6 +87941,18 @@
     },
     "还没有连接个人 Agent 账号：在飞书网关的设置里添加 Cue 或 Grok Bot": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No personal agent account connected yet: add Cue or Grok Bot in the Lark gateway's settings"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "個人エージェントのアカウントがまだ接続されていません。Larkゲートウェイの設定でCueまたはGrok Botを追加してください"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -86477,6 +88601,18 @@
     },
     "这个会话不能从 Persona 发送（canSend=false），请到飞书网关的网页处理。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session can't send from Persona (canSend=false). Handle it on the Lark gateway's web page."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このセッションはPersonaから送信できません（canSend=false）。LarkゲートウェイのWebページで対応してください。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -86749,6 +88885,28 @@
         }
       }
     },
+    "这个扩展不支持该小组件尺寸": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This extension doesn't support this widget size"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この拡張機能はこのウィジェットサイズに対応していません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个扩展不支持该小组件尺寸"
+          }
+        }
+      }
+    },
     "这个扩展不是从这个市场装的，在 hub 的管理界面（/admin）或 hub 所在的机器上卸载。": {
       "localizations": {
         "en": {
@@ -86789,6 +88947,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个扩展写在 hub.json 里：开关和设置在 hub 所在的机器上改。"
+          }
+        }
+      }
+    },
+    "这个扩展所属的 hub 已断开，未执行操作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub this extension belongs to is disconnected. Nothing was done."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この拡張機能のハブが切断されているため、操作は実行されませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个扩展所属的 hub 已断开，未执行操作"
+          }
+        }
+      }
+    },
+    "这个扩展没有提供完整页面。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This extension doesn't provide a full page."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この拡張機能はフルページを提供していません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个扩展没有提供完整页面。"
           }
         }
       }
@@ -88223,6 +90425,28 @@
         }
       }
     },
+    "这台设备没有健康数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Health Data on This Device"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスにはヘルスケアデータがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台设备没有健康数据"
+          }
+        }
+      }
+    },
     "这台设备没有适用于所选语言的本机转写模型": {
       "localizations": {
         "en": {
@@ -88509,6 +90733,28 @@
         }
       }
     },
+    "这条录音和它在知识库里的文字都已经删掉了。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This recording and its text in Knowledge have both been deleted."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この録音とナレッジ内の文字はどちらも削除されました。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这条录音和它在知识库里的文字都已经删掉了。"
+          }
+        }
+      }
+    },
     "这条消息没有文字，没法回退到它": {
       "localizations": {
         "en": {
@@ -88637,6 +90883,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "这段时间这台机器没有连上。"
+          }
+        }
+      }
+    },
+    "这段时间里没有步数、睡眠或体重记录。若没有允许读取，可在 iOS 设置 › 健康 › 数据访问与设备 › Persona 里打开。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No steps, sleep or weight data in this period. If you haven't allowed access, turn it on in iOS Settings › Health › Data Access & Devices › Persona."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この期間には歩数、睡眠、体重の記録がありません。読み取りを許可していない場合は、iOSの設定 › ヘルスケア › データアクセスとデバイス › Personaでオンにしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段时间里没有步数、睡眠或体重记录。若没有允许读取，可在 iOS 设置 › 健康 › 数据访问与设备 › Persona 里打开。"
           }
         }
       }
@@ -89213,6 +91481,28 @@
         }
       }
     },
+    "连不上 hub，录音的文字稍后自动同步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach the hub. Recording text will sync automatically later."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブに接続できません。録音の文字は後で自動的に同期されます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上 hub，录音的文字稍后自动同步"
+          }
+        }
+      }
+    },
     "连不上 hub，读不到这台电脑的配置目录": {
       "localizations": {
         "en": {
@@ -89303,6 +91593,18 @@
     },
     "连不上飞书网关": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach the Lark gateway"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larkゲートウェイに接続できません"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -91282,6 +93584,28 @@
         }
       }
     },
+    "部署": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deploy"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デプロイ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部署"
+          }
+        }
+      }
+    },
     "部署失败：%@": {
       "localizations": {
         "en": {
@@ -92228,6 +94552,28 @@
         }
       }
     },
+    "重试原选择": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry Original Choice"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "元の選択を再試行"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试原选择"
+          }
+        }
+      }
+    },
     "鉴权方式": {
       "localizations": {
         "en": {
@@ -93108,6 +95454,28 @@
         }
       }
     },
+    "阶段：%@（第 %lld 步，共 %lld 步）": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阶段：%1$@（第 %2$lld 步，共 %3$lld 步）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stage: %1$@ (step %2$lld of %3$lld)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ステージ：%1$@（%3$lldステップ中%2$lld）"
+          }
+        }
+      }
+    },
     "附件": {
       "localizations": {
         "en": {
@@ -93771,6 +96139,30 @@
     },
     "音频只留在本机，手表录音会回传这里。本机转写后文字自动同步到知识库，保留最近 %lld 天，助手和 Agent 用知识库搜索就能找到。": {
       "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Audio stays on this device; watch recordings come back here. After on-device transcription the text syncs to Knowledge automatically and is kept for the last %lld day, so the Assistant and agents can find it with a Knowledge search."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Audio stays on this device; watch recordings come back here. After on-device transcription the text syncs to Knowledge automatically and is kept for the last %lld days, so the Assistant and agents can find it with a Knowledge search."
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声はこのデバイスにのみ残り、Apple Watchの録音はここに戻ります。デバイス上で文字起こしした後、文字は自動でナレッジに同期され、直近%lld日分が保存されます。アシスタントとエージェントはナレッジ検索で見つけられます。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -94564,6 +96956,18 @@
     },
     "飞书登录已失效：在 hub 所在的机器上重新登录飞书网关": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lark sign-in expired: sign in to the Lark gateway again on the hub machine"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larkのログインが無効になりました。ハブのマシンでLarkゲートウェイに再ログインしてください"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -94596,6 +97000,18 @@
     },
     "飞书网关登录密码": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lark gateway password"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larkゲートウェイのログインパスワード"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -94606,6 +97022,18 @@
     },
     "飞书网关的版本还没有个人 Agent，升级飞书网关后再试": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Lark gateway version has no personal agents yet. Upgrade the Lark gateway and try again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このバージョンのLarkゲートウェイには個人エージェントがまだありません。Larkゲートウェイをアップグレードしてからもう一度お試しください"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -94770,6 +97198,18 @@
     },
     "飞书账号在 hub 所在机器的飞书网关里登录，会话与收件箱共用这个账号，无需再次登录。": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Lark account is signed in through the Lark gateway on the hub machine. Chats share this account with the Inbox, so there's no need to sign in again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LarkアカウントはハブのマシンのLarkゲートウェイでログインします。チャットは受信トレイとこのアカウントを共有するため、再ログインは不要です。"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -95966,16 +98406,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "、%1$lld/%2$lld件のエージェントが完了"
-          }
-        }
-      }
-    },
-    "，在飞书账号 %lld（lark_messages 传 account=%lld）": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "，在飞书账号 %1$lld（lark_messages 传 account=%2$lld）"
           }
         }
       }

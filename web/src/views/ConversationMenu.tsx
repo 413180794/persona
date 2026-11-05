@@ -6,7 +6,7 @@ import { togglePinnedConversation, unpinAllConversations } from "../lib/conversa
 import { sessionTitle } from "../lib/format";
 import { refreshAssistant } from "../lib/store";
 import type { Session } from "../lib/types";
-import { copyText, Menu, toast, type MenuItem } from "../ui/atoms";
+import { copyText, Menu, toast, type MenuItem, type ToastAction } from "../ui/atoms";
 import type { MenuAt } from "../ui/menu-model";
 import { t } from "../i18n";
 
@@ -14,25 +14,37 @@ import { t } from "../i18n";
 export interface ConversationMenuDeps {
   rename: (s: Session, title: string) => Promise<unknown>;
   archive: (s: Session) => Promise<unknown>;
+  unarchive: (s: Session) => Promise<unknown>;
   end: (s: Session) => Promise<unknown>;
   refresh: () => Promise<unknown>;
   copy: (text: string) => unknown;
-  notify: (text: string, tone: "ok" | "error") => void;
+  notify: (text: string, tone: "ok" | "error", action?: ToastAction) => void;
 }
 
 export const conversationMenuDeps: ConversationMenuDeps = {
   rename: (s, title) => api(`${sessionPath(s.machine_id, s.session_id)}/rename`, { method: "POST", json: { title } }),
   archive: (s) => api(`/assistant/conversations/${enc(s.session_id)}/archive`, { method: "POST", json: {} }),
+  unarchive: (s) => api(`/assistant/conversations/${enc(s.session_id)}/unarchive`, { method: "POST", json: {} }),
   end: (s) => api(`${sessionPath(s.machine_id, s.session_id)}/close`, { method: "POST" }),
   refresh: () => refreshAssistant(),
   copy: copyText,
-  notify: (text, tone) => toast(text, tone),
+  notify: (text, tone, action) => toast(text, tone, action),
 };
 
 /** A running conversation can be ended (iOS `status.isLive`). */
 export const conversationLive = (s: Session) => s.status !== "offline";
 
 const reread = (deps: ConversationMenuDeps) => void deps.refresh().catch(() => {});
+
+async function undoArchive(s: Session, title: string, deps: ConversationMenuDeps) {
+  try {
+    await deps.unarchive(s);
+    deps.notify(t("conversation-menu.unarchived", { title }), "ok");
+  } catch (e) {
+    deps.notify(t("conversation-menu.undo_failed", { error: errorText(e) }), "error");
+  }
+  reread(deps);
+}
 
 export function conversationMenuItems(s: Session, o: { main: boolean; pinned: boolean }, deps: ConversationMenuDeps = conversationMenuDeps): MenuItem[] {
   const title = sessionTitle(s);
@@ -63,7 +75,8 @@ export function conversationMenuItems(s: Session, o: { main: boolean; pinned: bo
           onSelect: async () => {
             try {
               await deps.archive(s);
-              deps.notify(t("conversation-menu.archived", { title }), "ok");
+              // Undo puts it back as it was (an open conversation stays open: its page reads the machine's sessions)
+              deps.notify(t("conversation-menu.archived", { title }), "ok", { label: t("conversation-menu.undo"), run: () => void undoArchive(s, title, deps) });
             } catch (e) {
               deps.notify(errorText(e), "error");
             }

@@ -311,7 +311,16 @@ func (h *Manager) botPostJSON(ctx context.Context, api *feishubot.Client, chatID
 	}
 	send := func(typ, content, uuid string) (string, error) {
 		if replyTo != "" {
-			return api.Reply(ctx, replyTo, typ, content, uuid, false)
+			id, err := api.Reply(ctx, replyTo, typ, content, uuid, false)
+			if feishubot.MessageGone(err) {
+				// The parent was recalled or deleted (230011/230110) before the reply landed: this definitive business
+				// rejection proves the reply did not land, so resending it cannot make a duplicate. Send the same
+				// content into the chat with a fresh one-shot key, and keep answering without the quote.
+				h.logf("bots: parent message %s was withdrawn or deleted; resending the answer into chat %s", replyTo, chatID)
+				replyTo = ""
+				return api.Send(ctx, "chat_id", chatID, typ, content, feishuSendUUID())
+			}
+			return id, err
 		}
 		return api.Send(ctx, "chat_id", chatID, typ, content, uuid)
 	}

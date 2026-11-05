@@ -24,6 +24,7 @@ internal fun ComposerRefusalActions(
     notice: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val resources = androidx.compose.ui.platform.LocalResources.current
     var confirm by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     val refusal = delivery?.refusal
@@ -34,7 +35,7 @@ internal fun ComposerRefusalActions(
         scope.launch {
             try { service.retryRefused(message.clientMessageId, clear) }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { notice(operationFeedback(e).message) }
+            catch (e: Exception) { notice(operationFeedback(e).text.resolve(resources)) }
             finally { busy = false }
         }
     }

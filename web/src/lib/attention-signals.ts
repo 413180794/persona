@@ -5,12 +5,12 @@ import { attentionReason, stateOf } from "./format";
 import { agentKey } from "./pins";
 import { useCounts, useAgentSessions } from "./sessions";
 import { getState, useStore } from "./store";
-import { attentionSoundEnabled, badgeText, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, settledTags, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
+import { answeredTags, attentionSoundEnabled, badgeText, detectNewCards, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, settledTags, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
 import { claimNotification, closeNotification, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, waitingCard, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
 import { isMuted } from "./session-actions";
 import { href, navigate } from "./router";
 import { t } from "../i18n";
-import type { AgentState, Session } from "./types";
+import type { AgentState, Interaction, Session } from "./types";
 
 // ── favicon ──────────────────────────────────────────────
 
@@ -163,13 +163,15 @@ const ASK_TITLE = {
 } as const;
 
 /** A system notification for the event (设置 › 通知): only while no tab of the app is in front (that one's title, badge
- *  and sounds cover it), and once for all the open tabs. Clicking it opens the agent's conversation. */
-function notify(s: Session, kind: "needs" | "finished"): void {
+ *  and sounds cover it), and once for all the open tabs. Clicking it opens the agent's conversation. `card` is the new
+ *  card of a session that was already 需要你 (#4058): it replaces the agent's earlier 需要你 one (same tag), and the tabs
+ *  share it by the card, so a transition just posted does not keep it back. Returns the card a 需要你 one is about. */
+function notify(s: Session, kind: "needs" | "finished", card?: Interaction): string | undefined {
   if (inFront() || otherTabInFront() || !systemNotifyActive()) return;
   const tag = `${agentKey(s)}#${kind}`;
-  if (!claimNotification(tag)) return;
+  if (!claimNotification(card ? `${tag}@${card.id}` : tag)) return;
   // 需要你: what the card asks, not the agent's last words (#4056); the hub tells the card before the session's state
-  const waiting = kind === "needs" ? { ix: waitingCard(getState().interactions, s), reason: attentionReason(s) } : {};
+  const waiting = kind === "needs" ? { ix: card ?? waitingCard(getState().interactions, s), reason: attentionReason(s) } : {};
   const { title, body } = notificationText(
     s,
     kind,
@@ -185,6 +187,7 @@ function notify(s: Session, kind: "needs" | "finished"): void {
   const route = { name: "session", mid: s.machine_id, sid: s.session_id } as const;
   const icon = document.querySelector<HTMLLinkElement>(ICONS)?.dataset.original ?? document.querySelector<HTMLLinkElement>(ICONS)?.href;
   postNotification({ title, body, tag, url: href(route), icon }, () => navigate(route));
+  return waiting.ix?.id;
 }
 
 /**
@@ -224,6 +227,7 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
 
   const sessions = useAgentSessions();
   const loaded = useStore((s) => s.loaded);
+  const interactions = useStore((s) => s.interactions);
   useEffect(() => {
     if (loaded) loadNotifyPrefs().catch(() => {}); // the cached copy stays when the hub can't say
   }, [loaded]);
@@ -237,13 +241,27 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
   const latest = useRef(sessions);
   latest.current = sessions;
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  // the card ids seen pending (undefined before the first run), the card each 需要你 notification is about, and the
+  // sessions whose 需要你 came before any card (its first card is the same wait, CardEvent.follows)
+  const cards = useRef<ReadonlyMap<string, number> | undefined>(undefined);
+  const announced = useRef(new Map<string, string>());
+  const bare = useRef(new Set<string>());
 
   useEffect(() => {
     if (!loaded) return;
     const now = Date.now();
     const { next, events } = detectTransitions(prev.current, sessions, getState().mutes);
-    // answered or seen, here or elsewhere: its system notification goes too (#3458)
-    settledTags(prev.current, next).forEach(closeNotification);
+    // a session already 需要你 that gets another card speaks again (#4058)
+    const fresh = detectNewCards(cards.current, interactions, prev.current, next, sessions, bare.current, now);
+    cards.current = fresh.ids;
+    for (const k of bare.current) if (next.get(k) !== "needs_you") bare.current.delete(k);
+    for (const e of fresh.events) bare.current.delete(e.key);
+    for (const e of events) if (e.kind === "needs" && !interactions.some((ix) => agentKey(ix) === e.key)) bare.current.add(e.key);
+    // answered or seen, here or elsewhere: its system notification goes too (#3458); and one about a card that is gone,
+    // while the session waits on another
+    const settled = new Set([...settledTags(prev.current, next), ...answeredTags(announced.current, interactions)]);
+    settled.forEach(closeNotification);
+    for (const tag of settled) if (tag.endsWith("#needs")) announced.current.delete(tag.slice(0, -"#needs".length));
     prev.current = next;
     turns.current = trackTurns(turns.current, sessions, now);
     const prefs = notifyPrefs();
@@ -251,7 +269,7 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
       const turn = turns.current.get(k);
       return turn?.endedAt !== undefined ? turn.endedAt - turn.start : undefined;
     };
-    const wanted = events.filter((e) => wants(e.kind, prefs, e.kind === "finished" ? ran(e.key) : undefined));
+    const wanted = [...events, ...fresh.events].filter((e) => wants(e.kind, prefs, e.kind === "finished" ? ran(e.key) : undefined));
     const sound = attentionSoundEnabled();
     const speak = (kind: "needs" | "finished", k: string) => {
       if (!sound || suppressed(k, { key: viewing.current, focused: inFront() })) return;
@@ -259,13 +277,16 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
     };
     const find = (k: string) => latest.current.find((x) => agentKey(x) === k);
     const urgent = wanted.filter((e) => e.kind === "needs");
-    const first = pickEvent(urgent);
+    // a card that follows its session's 需要你 rewrites that notification without a second sound
+    const first = pickEvent(urgent.filter((e) => !e.follows));
     if (first) speak(first.kind, first.key);
     // The sound of 需要你 does not look at mutes (detectTransitions); the notification does, as the phone's push and
     // the Mac's do (hub announce, MacAttention.transitions).
     for (const e of urgent) {
       const s = find(e.key);
-      if (s && !isMuted(s, getState().mutes)) notify(s, "needs");
+      if (!s || isMuted(s, getState().mutes)) continue;
+      const about = notify(s, "needs", e.card);
+      if (about) announced.current.set(e.key, about);
     }
     // A finished turn speaks once it has stayed finished (the status flaps working → done → working around a turn).
     // No sound when a 需要你 one is going out with it: that one is the more urgent.
@@ -279,7 +300,7 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
       }, SETTLE_MS);
       timers.current.add(t);
     }
-  }, [sessions, loaded]);
+  }, [sessions, interactions, loaded]);
 
   useEffect(() => {
     const pending = timers.current;

@@ -59,6 +59,8 @@ internal fun MachinesScreen(
         LaunchedEffect(health, machineId, watching) { if (watching) health.watchBrowser(machineId) { health.watchesBrowser(machine?.online == true) } }
     }
     if (confirmFix && health != null && machineId != null) FixDialog(healthState, { confirmFix = false }) { health.fix(machineId) }
+    var addComputerHelp by rememberSaveable { mutableStateOf(false) }
+    if (addComputerHelp) ReadinessHelpDialog(ReadinessHelp.AddComputer, null, onDismiss = { addComputerHelp = false }, onAction = {})
     JListPage(
         title = if (machineId == null) stringResource(R.string.machines_title) else machine?.displayName ?: stringResource(R.string.machines_title_detail),
         summary = if (machineId == null) stringResource(R.string.machines_summary, online, ids.size, attention) else null,
@@ -72,7 +74,11 @@ internal fun MachinesScreen(
             usageWindows(healthState.usage, java.time.Instant.ofEpochSecond(state.now))
             if (!state.loading && ids.isEmpty()) item("empty") {
                 JEmptyState(stringResource(if (state.failure == null) R.string.machines_empty_title else R.string.machines_empty_unavailable),
-                    stringResource(R.string.machines_empty_body))
+                    stringResource(R.string.machines_empty_body), icon = PhIcons.Desktop,
+                    // How to add one (docs/onboarding.md 4.5), until the phone adds computers itself.
+                    action = if (state.failure == null) ({
+                        JButton(stringResource(ReadinessActionId.AddComputer.label), { addComputerHelp = true }, kind = JButtonKind.Secondary)
+                    }) else null)
             }
             items(ids, key = { it }, contentType = { "machine" }) { id ->
                 val info = machines.firstOrNull { it.id == id }

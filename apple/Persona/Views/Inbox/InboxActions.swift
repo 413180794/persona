@@ -349,8 +349,8 @@ struct InboxHandOffSheet: View {
         let title = it.connector != nil ? "\(it.accountName) · \(it.title)" : it.isLark ? String(localized: "飞书 · \(it.title)") : String(localized: "邮件 · \(it.title)")
         var text = it.context?.isEmpty == false ? it.context! : [it.sender ?? "", it.preview].filter { !$0.isEmpty }.joined(separator: "：") // i18n-ignore: context for the agent
         if let l = it.lark {
-            let account = l.olAccount.map { String(localized: "，在飞书账号 \($0)（lark_messages 传 account=\($0)）") } ?? ""
-            text += String(localized: "\n\n（飞书会话 feedId \(l.feedID)\(account)，可用飞书工具读更多上下文或回复）")
+            let account = l.olAccount.map { "，在飞书账号 \($0)（lark_messages 传 account=\($0)）" } ?? "" // i18n-ignore: context for the agent
+            text += "\n\n（飞书会话 feedId \(l.feedID)\(account)，可用飞书工具读更多上下文或回复）" // i18n-ignore: context for the agent
         }
         if let c = it.connector, let url = c.url { text += "\n\n（\(it.accountName)：\(url)）" } // i18n-ignore: context for the agent
         if let m = it.mail, let uid = m.uids.last {

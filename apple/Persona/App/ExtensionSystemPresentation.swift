@@ -31,7 +31,7 @@ extension AppModel {
     @discardableResult func openExtension(_ link: ExtensionSystemLink, action: ExtensionNotifyAction? = nil,
                                          values: [String: String] = [:]) -> Bool {
         guard api(link.group) != nil else {
-            toast = Toast("这个扩展所属的 hub 已断开，未执行操作", style: .error)
+            toast = Toast(String(localized: "这个扩展所属的 hub 已断开，未执行操作"), style: .error)
             return false
         }
         extensionOpen = ExtensionSystemOpen(link: link, action: action, values: values)
@@ -48,11 +48,11 @@ private struct ExtensionSystemPresentation: ViewModifier {
             NavigationStack {
                 Group {
                     if let ui = route.link.ui {
-                        ExtensionPageView(plugin: route.link.owner, ui: ui, title: "扩展",
+                        ExtensionPageView(plugin: route.link.owner, ui: ui, title: String(localized: "扩展"),
                                           state: route.link.state, group: route.link.group, initial: route)
                     } else {
-                        EmptyStateView(symbol: Theme.Icon.plugins, title: "没有可打开的页面",
-                                       message: "这个扩展没有提供完整页面。")
+                        EmptyStateView(symbol: Theme.Icon.plugins, title: String(localized: "没有可打开的页面"),
+                                       message: String(localized: "这个扩展没有提供完整页面。"))
                     }
                 }
                 .toolbar {
@@ -105,7 +105,7 @@ extension View {
     static func handle(_ event: ExtensionNotificationEvent, deps: Deps, deduplicate: Bool = true) async {
         guard !Task.isCancelled, !event.dismissed, event.valid else { return }
         guard let group = deps.group(event), let api = deps.api(group) else {
-            await deps.report(event.notificationID, "未执行扩展操作", "找不到通知所属的 hub，请重新连接后在 App 中操作。")
+            await deps.report(event.notificationID, String(localized: "未执行扩展操作"), String(localized: "找不到通知所属的 hub，请重新连接后在 App 中操作。"))
             return
         }
         let key = DeliveryKey(group: group, notification: event.notificationID, action: event.action?.id)
@@ -126,10 +126,10 @@ extension View {
                                                 action: action.id, values: event.values.isEmpty ? nil : event.values)
             guard !Task.isCancelled else { return }
             // 后台不处理 view、open_url、push 或 pop；只有文字反馈作为本地通知。
-            if let toast = result.toast, !toast.isEmpty { await deps.report(event.notificationID, "扩展操作已完成", toast) }
+            if let toast = result.toast, !toast.isEmpty { await deps.report(event.notificationID, String(localized: "扩展操作已完成"), toast) }
         } catch {
             if !error.isCancellation {
-                await deps.report(event.notificationID, "扩展操作未完成", error.localizedDescription)
+                await deps.report(event.notificationID, String(localized: "扩展操作未完成"), error.localizedDescription)
             }
         }
     }
