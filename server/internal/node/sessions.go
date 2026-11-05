@@ -41,6 +41,10 @@ type sessionState struct {
 	ModelEffort      string    `json:"model_effort,omitempty"`
 	Cwd              string    `json:"cwd"`
 	StartedAt        time.Time `json:"started_at"`
+	// AppMode / AppEffort: the permission mode and effort the app set on an assistant conversation (modes.go). They
+	// win over what its transcript recorded and outlive the node: an old "default" there no longer locks it in.
+	AppMode   string `json:"app_mode,omitempty"`
+	AppEffort string `json:"app_effort,omitempty"`
 	// Tasks: the assistant conversation's background tasks and monitors running right now (node/assistant.go).
 	Tasks []string `json:"tasks,omitempty"`
 	// Compaction: the last compaction the user asked for (assistant_compact.go).

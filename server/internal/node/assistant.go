@@ -90,6 +90,7 @@ type assistantProc struct {
 	effort      string
 	model       modelExecution
 	fingerprint string
+	canBypass   bool // started with --permission-mode bypassPermissions: only then can it switch there (needsRestartFor)
 	busy        bool
 	lastActive  time.Time
 	partial     strings.Builder // text of the assistant message being generated
@@ -291,7 +292,12 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	if p != nil && p.alive() && p.agent != agent {
 		return "", errors.New("换到另一种 Agent 需要新建对话")
 	}
-	if p != nil && (!p.alive() || p.launcher != launcher || p.fingerprint != n.executionFingerprint(launcher, execution) || (p.agent == "claude" && mode == proto.ModeBypass && p.mode != mode)) {
+	// The mode this message runs in: its own, or the one the app set (persisted, it outlives the node).
+	want := mode
+	if want == "" && p != nil {
+		want, _ = n.modesOf(id)
+	}
+	if p != nil && (!p.alive() || p.launcher != launcher || p.fingerprint != n.executionFingerprint(launcher, execution) || p.needsRestartFor(want)) {
 		p.mu.Lock()
 		active := p.busy || len(p.tasks) > 0
 		p.mu.Unlock()
@@ -301,7 +307,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 			// unable to send while the conversation kept starting tasks (#1554).
 			p.mu.Lock()
 			launcher, execution = p.launcher, p.model
-			if p.agent == "claude" && mode == proto.ModeBypass && p.mode != mode {
+			if p.needsRestartForLocked(mode) {
 				mode = "" // start-only: noted as applied, it would never get its new process
 			}
 			p.mu.Unlock()
@@ -312,6 +318,9 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		}
 	}
 	n.noteModes(id, mode, effort)
+	if !resume {
+		n.persistModes(id, mode, effort) // the mode a new conversation was started in, as if set from the app
+	}
 	fresh := p == nil
 	if p == nil {
 		if p, err = n.spawnAssistant(id, cwd, launcher, resume && n.transcriptPath(id) != "", false, execution); err != nil {
@@ -523,7 +532,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		return nil, fmt.Errorf("start %s: %w", launcher, err)
 	}
 	p := &assistantProc{id: id, agent: "claude", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}), ready: make(chan struct{}),
-		born: time.Now(), lastActive: time.Now(), mode: startMode, model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
+		born: time.Now(), lastActive: time.Now(), mode: startMode, canBypass: startMode == proto.ModeBypass, model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
 	if !spare {
 		n.mu.Lock()
 		n.procs[id] = p
@@ -771,6 +780,20 @@ func (n *Node) assistantInterrupt(id string) error {
 	n.stopAssistant(id)
 	n.rememberTasks(id, nil) // stopped on purpose, background tasks included
 	return nil
+}
+
+// needsRestartFor: the process can't switch to mode, a new one has to start in it. Claude refuses
+// set_permission_mode bypassPermissions unless it was started in that mode (Persona doesn't pass
+// --dangerously-skip-permissions), so switching there resumes the conversation in a fresh process.
+func (p *assistantProc) needsRestartFor(mode string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.needsRestartForLocked(mode)
+}
+
+// needsRestartForLocked is needsRestartFor with p.mu held.
+func (p *assistantProc) needsRestartForLocked(mode string) bool {
+	return p.agent == "claude" && mode == proto.ModeBypass && !p.canBypass
 }
 
 func (n *Node) stopAssistant(id string) {

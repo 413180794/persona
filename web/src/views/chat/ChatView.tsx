@@ -770,11 +770,12 @@ function JumpPill({ label, onClick, inline }: { label: string; onClick: () => vo
 function ComposerFooter({ session, assistant }: { session: Session; assistant?: boolean }) {
   // a Persona conversation's launcher and model are its chip (they switch there)
   const parts = [sourceSubtitle(session), ...(assistant ? [] : [session.launcher, session.model?.split("/").pop(), shortPath(session.cwd)])].filter(Boolean);
-  const modes = !assistant && hasModes(session) && stateOf(session) !== "offline";
+  // a Persona conversation (the main one too) switches its modes whatever its state: the hub applies them (#2416)
+  const modes = assistant || (hasModes(session) && stateOf(session) !== "offline");
   const effortOnly = !assistant && hasEffortOnly(session) && stateOf(session) !== "offline"; // a Codex thread on its app-server
   return (
     <span className="flex min-w-0 items-center gap-2">
-      {(modes || effortOnly) && <ModeChips session={session} effortOnly={effortOnly} />}
+      {(modes || effortOnly) && <ModeChips session={session} effortOnly={effortOnly} assistant={assistant} />}
       {assistant && <AssistantLauncherChip session={session} />}
       <span className="min-w-0 truncate" title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>
     </span>

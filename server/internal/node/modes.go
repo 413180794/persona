@@ -16,7 +16,8 @@ import (
 // Permission mode and effort level of a Claude session, chosen from the app (docs/ios.md「思考强度和权限模式」).
 //
 // Shown: the transcript records the mode on every prompt and the effort on every reply; a value set from the app
-// wins until the transcript shows a newer one (a TUI only writes the mode down with the next prompt).
+// wins until the transcript shows a newer one (a TUI only writes the mode down with the next prompt). An assistant
+// conversation's are persisted with its session state and always win (persistModes, #2416).
 // Set: at start as --permission-mode / --effort; later, headless conversations take control requests on stdin and
 // TUI sessions are driven like a person would: shift+tab cycles the mode, and the /effort picker's "s" sets the
 // level for this session only (`/effort <level>` would also save it as the default for new sessions).
@@ -74,11 +75,42 @@ func (n *Node) noteModes(id, mode, effort string) {
 	n.modes[id] = m
 }
 
+// persistModes keeps an assistant conversation's mode / effort set from the app in its session state (the hub's
+// Postgres), so they outlive the node and win over the transcript ("" leaves one as it is).
+func (n *Node) persistModes(id, mode, effort string) {
+	if id == "" || (mode == "" && effort == "") {
+		return
+	}
+	st, _ := n.state.get(id)
+	if (mode == "" || st.AppMode == mode) && (effort == "" || st.AppEffort == effort) {
+		return
+	}
+	if mode != "" {
+		st.AppMode = mode
+	}
+	if effort != "" {
+		st.AppEffort = effort
+	}
+	n.state.put(id, st)
+}
+
 // currentModes is the session's mode and effort: from its transcript, or what the app set since.
 func (n *Node) currentModes(id string, m quickMeta) (mode, effort string) {
 	mode, effort = m.mode, m.effort
 	if mode != "" && !slices.Contains(permissionModes, mode) && n.isAssistantSession(id) {
 		mode = modeFromCodex(mode, m.sandbox) // a Codex rollout records its approval policy and sandbox
+	}
+	// An assistant conversation's mode and effort set from the app (persisted, persistModes) win over its transcript:
+	// only the node changes them, and a transcript keeps recording the mode it was started in until the next prompt.
+	if n.state != nil {
+		if st, ok := n.state.get(id); ok {
+			if st.AppMode != "" {
+				mode = st.AppMode
+			}
+			if st.AppEffort != "" {
+				effort = st.AppEffort
+			}
+		}
 	}
 	n.mu.Lock()
 	set, ok := n.modes[id]
@@ -135,9 +167,23 @@ func (n *Node) setModes(ctx context.Context, id, mode, effort string) error {
 	}
 	if n.isAssistantSession(id) {
 		n.noteModes(id, mode, effort)
+		n.persistModes(id, mode, effort)
 		n.mu.Lock()
 		p := n.procs[id]
 		n.mu.Unlock()
+		if p != nil && p.alive() && p.needsRestartFor(mode) {
+			// bypassPermissions takes a process started with it: an idle one ends now and the next message resumes
+			// the conversation with --permission-mode bypassPermissions (spawnAssistant); a busy one (answering, or
+			// running background tasks a restart would kill) switches with the first message after it is idle
+			// (assistantSend). Effort goes along: the new process starts with it.
+			p.mu.Lock()
+			active := p.busy || len(p.tasks) > 0
+			p.mu.Unlock()
+			if !active {
+				n.stopAssistant(id)
+				p = nil
+			}
+		}
 		if p != nil && p.alive() {
 			if effort != "" {
 				p.mu.Lock()
@@ -379,7 +425,7 @@ func (n *Node) syncAssistantModes(p *assistantProc) {
 		effort = p.model.Effort
 	}
 	var reqs []map[string]any
-	if mode != "" && mode != p.mode {
+	if mode != "" && mode != p.mode && !p.needsRestartForLocked(mode) { // that one waits for a new process
 		reqs = append(reqs, map[string]any{"subtype": "set_permission_mode", "mode": mode})
 		p.mode = mode
 	}

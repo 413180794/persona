@@ -364,6 +364,9 @@ type NodeSession struct {
 	Cwd              string    `json:"cwd"`
 	StartedAt        time.Time `json:"started_at"`
 	Tasks            []string  `json:"tasks,omitempty"` // an assistant conversation's running background tasks
+	// The permission mode / effort the app set on an assistant conversation (node/modes.go); kept with the model.
+	AppMode   string `json:"app_mode,omitempty"`
+	AppEffort string `json:"app_effort,omitempty"`
 }
 
 func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSession) error {
@@ -381,16 +384,18 @@ func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSessi
 		RETURNING machine_id, session_id
 	) INSERT INTO settings (key, value, updated_at)
 		SELECT 'node_model.' || machine_id || '.' || session_id,
-		jsonb_build_object('model', $8::text, 'model_fingerprint', $9::text, 'model_effort', $10::text), now() FROM saved
+		jsonb_build_object('model', $8::text, 'model_fingerprint', $9::text, 'model_effort', $10::text,
+			'app_mode', $11::text, 'app_effort', $12::text), now() FROM saved
 		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-		machine, id, s.Pane, s.Launcher, s.Cwd, s.StartedAt, tasks, s.Model, s.ModelFingerprint, s.ModelEffort)
+		machine, id, s.Pane, s.Launcher, s.Cwd, s.StartedAt, tasks, s.Model, s.ModelFingerprint, s.ModelEffort, s.AppMode, s.AppEffort)
 	return err
 }
 
 // NodeSessions returns a machine's sessions from the last 60 days.
 func (d *DB) NodeSessions(ctx context.Context, machine string) (map[string]NodeSession, error) {
 	rows, err := d.pool.Query(ctx, `SELECT n.session_id, n.pane, n.launcher, n.cwd, n.started_at, n.tasks,
-		COALESCE(s.value->>'model',''), COALESCE(s.value->>'model_fingerprint',''), COALESCE(s.value->>'model_effort','')
+		COALESCE(s.value->>'model',''), COALESCE(s.value->>'model_fingerprint',''), COALESCE(s.value->>'model_effort',''),
+		COALESCE(s.value->>'app_mode',''), COALESCE(s.value->>'app_effort','')
 		FROM node_sessions n LEFT JOIN settings s ON s.key = 'node_model.' || n.machine_id || '.' || n.session_id
 		WHERE n.machine_id = $1 AND n.started_at > now() - interval '60 days'`, machine)
 	if err != nil {
@@ -401,7 +406,7 @@ func (d *DB) NodeSessions(ctx context.Context, machine string) (map[string]NodeS
 	for rows.Next() {
 		var id string
 		var s NodeSession
-		if err := rows.Scan(&id, &s.Pane, &s.Launcher, &s.Cwd, &s.StartedAt, &s.Tasks, &s.Model, &s.ModelFingerprint, &s.ModelEffort); err != nil {
+		if err := rows.Scan(&id, &s.Pane, &s.Launcher, &s.Cwd, &s.StartedAt, &s.Tasks, &s.Model, &s.ModelFingerprint, &s.ModelEffort, &s.AppMode, &s.AppEffort); err != nil {
 			return nil, err
 		}
 		out[id] = s

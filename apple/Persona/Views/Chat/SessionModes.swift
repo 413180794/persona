@@ -39,6 +39,17 @@ nonisolated enum SessionModes {
     /// Modes a running session can switch to (bypassPermissions only at start, see node/modes.go).
     static let switchableModes = permissionModes.filter { $0.id != "bypassPermissions" }
 
+    /// Every mode for an assistant conversation (the main one too, new or running): the node restarts its Claude in
+    /// 全部放行 (#2416), so the option doesn't say "only when new".
+    static let assistantModes = permissionModes.map { o in
+        o.id == "bypassPermissions" ? Option(id: o.id, title: o.title, detail: "改文件、跑命令都不问你", symbol: o.symbol) : o
+    }
+
+    /// The modes a running session can switch to: every one for an assistant conversation, `switchableModes` otherwise.
+    static func switchableModes(_ session: Session?) -> [Option] {
+        session?.assistant == true ? assistantModes : switchableModes
+    }
+
     static func mode(_ id: String?) -> Option? { permissionModes.first { $0.id == id } }
     static func effort(_ id: String?) -> Option? { effortLevels.first { $0.id == id } ?? codexEffortLevels.first { $0.id == id } }
 
@@ -128,7 +139,7 @@ struct SessionModeBar: View {
             if session?.setsEffortOnly != true {
                 Menu {
                     Picker("权限模式", selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
-                        ForEach(options(SessionModes.switchableModes, current: mode)) { o in
+                        ForEach(options(SessionModes.switchableModes(session), current: mode)) { o in
                             Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
                         }
                     }
@@ -231,7 +242,8 @@ struct SessionModesMenu: View {
         }
         if setsModes {
             Picker(selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
-                ForEach(SessionModes.switchableModes + (mode.flatMap { m in SessionModes.switchableModes.contains { $0.id == m } ? nil : SessionModes.mode(m) }.map { [$0] } ?? [])) { o in
+                let list = SessionModes.switchableModes(session)
+                ForEach(list + (mode.flatMap { m in list.contains { $0.id == m } ? nil : SessionModes.mode(m) }.map { [$0] } ?? [])) { o in
                     Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
                 }
             } label: {

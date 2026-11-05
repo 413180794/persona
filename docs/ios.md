@@ -424,12 +424,16 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 只显示思考强度，选项是它的模型的档位（`SessionModes.effortOptions`，`docs/codex.md`「思考强度」）。
 
 - 显示：transcript 每条 user 行带 `permissionMode`、每条回复带 `effort`；在 App 里改过的值在 transcript 写下更新的值之前优先
-  （node/modes.go）。终端里 shift+tab 改的模式要等下一条消息才写进 transcript，开发信息卡片读终端底栏拿实时值。
+  （node/modes.go）。助手对话例外（#2416）：App 设的值存进 hub 的会话状态（`app_mode` / `app_effort`），始终胜过 transcript、node 重启不丢
+  （以前主对话 transcript 里旧的 default 把模式锁死，App 改了 node 一重启又回去）。终端里 shift+tab 改的模式要等下一条消息才写进 transcript，开发信息卡片读终端底栏拿实时值。
 - 新开：`--permission-mode` / `--effort`。
 - 改在跑的会话：助手（无头）往 stdin 发 control request（`set_permission_mode`、`apply_flag_settings {effortLevel}`），下一次请求就生效；
   herdr 里的 Agent 像人一样操作：shift+tab 循环到目标模式（default → acceptEdits → plan → auto），思考强度打开 `/effort` 选择器移到目标档位
   按 `s`（只对本会话生效）。**别发 `/effort <档位>`**：它会顺手存成这个模型以后所有新会话的默认值（写进 settings 的 `modelSettings`）。
-- 改思考强度要等这一轮结束、终端输入框是空的（否则 `/effort` 会接在别人没发出的草稿后面）；「全部放行」只能新开时选，循环里没有它。
+- 改思考强度要等这一轮结束、终端输入框是空的（否则 `/effort` 会接在别人没发出的草稿后面）；herdr 里的 Agent「全部放行」只能新开时选，循环里没有它。
+- 助手对话（Persona 页，主对话也一样）新开和在跑都能选「全部放行」（#2416），菜单最上面标红写明后果（`BypassWarning`）。Persona 不带
+  `--dangerously-skip-permissions` 启动 claude，控制请求切不到 bypassPermissions：进程空闲就停掉，下一条消息带 `--permission-mode bypassPermissions`
+  续上；正在回答或有后台任务就等这一轮之后的第一条消息再换进程。
 - 选择器开着时 herdr 把 Agent 报成 blocked，hub 1.5 秒后会把它当成要处理的终端对话框推给手机：node 操作期间不报 blocked。
 
 ## 翻译（设置 › 翻译，2026-10-31）

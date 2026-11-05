@@ -354,7 +354,7 @@ struct AssistantHome: View {
                     HStack(spacing: Theme.Space.s) {
                         // The BeautifulUI style picks the launcher in the prompt bar's model menu.
                         if !AppStyle.current.usesBeautifulUI { StarterModelChip(launcher: $launcher) }
-                        NewSessionModePicker(mode: $mode, effort: $effort, modes: SessionModes.switchableModes)
+                        NewSessionModePicker(mode: $mode, effort: $effort, modes: SessionModes.assistantModes)
                     }
                     .padding(.horizontal, Theme.Space.xs)
                 }
@@ -904,6 +904,9 @@ struct StarterModesMenu: View {
     }
 
     var body: some View {
+        if modes.mode == "bypassPermissions" { // said first, as in a running conversation's menu (SessionModesMenu)
+            Section { BypassWarning() }
+        }
         if !launchers.isEmpty {
             Section("模型") {
                 Picker("启动器", selection: Binding(get: { modes.launcher ?? model.assistantConfig?.launcher ?? "" }, set: { modes.launcher = $0 })) {
@@ -923,7 +926,7 @@ struct StarterModesMenu: View {
         }
         Picker(selection: modes.$mode) {
             Text("跟随启动器").tag("")
-            ForEach(SessionModes.switchableModes) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
+            ForEach(SessionModes.assistantModes) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
         } label: {
             Label("权限模式：\(SessionModes.mode(modes.mode)?.title ?? "跟随启动器")", systemImage: SessionModes.mode(modes.mode)?.symbol ?? Theme.Icon.askFirst)
         }

@@ -71,3 +71,19 @@ func TestNodeModelMetadataIsPersisted(t *testing.T) {
 		t.Fatalf("failed to restore default: %+v %v", out, err)
 	}
 }
+
+// The mode the app set on an assistant conversation comes back after a node restart (#2416).
+func TestNodeAppModesArePersisted(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	s := NodeSession{Launcher: "claude", Cwd: "/tmp/assistant", StartedAt: time.Now().UTC(), AppMode: "bypassPermissions", AppEffort: "high"}
+	if err := d.PutNodeSession(ctx, "machine", "session", s); err != nil {
+		t.Fatal(err)
+	}
+	out, err := d.NodeSessions(ctx, "machine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out["session"]; got.AppMode != s.AppMode || got.AppEffort != s.AppEffort {
+		t.Fatalf("lost app modes: %+v", got)
+	}
+}

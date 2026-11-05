@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EFFORTS, effortOptions, effortTitle, hasEffortOnly, hasModes, isMuted, modeTitle, renameBody, SWITCHABLE_MODES, toggleMute } from "./session-actions";
+import { EFFORTS, effortOptions, effortTitle, hasEffortOnly, hasModes, isMuted, modeTitle, renameBody, SWITCHABLE_MODES, switchableModes, toggleMute } from "./session-actions";
 import type { Session } from "./types";
 
 const s = (over: Partial<Session> = {}): Session => ({ machine_id: "mac", session_id: "s1", title: "修登录", cwd: "/home/me/app", status: "idle", space_name: "app", slot_id: "p1", slot_name: "login", ...over });
@@ -44,6 +44,14 @@ describe("modes", () => {
 
   it("never offers 全部放行 on a running session", () => {
     expect(SWITCHABLE_MODES.some((m) => m.id === "bypassPermissions")).toBe(false);
+    expect(switchableModes(false)).toBe(SWITCHABLE_MODES);
+    expect(switchableModes(undefined)).toBe(SWITCHABLE_MODES);
+  });
+
+  it("lets an assistant conversation switch to every mode, 全部放行 included (#2416)", () => {
+    const ids = switchableModes(true).map((m) => m.id);
+    expect(ids).toEqual(["default", "acceptEdits", "plan", "auto", "bypassPermissions"]);
+    expect(switchableModes(true).find((m) => m.id === "bypassPermissions")?.detail).not.toContain("新开");
   });
 
   it("only Claude Code agents have the chips", () => {

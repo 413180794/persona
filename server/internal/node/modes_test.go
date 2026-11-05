@@ -1,10 +1,15 @@
 package node
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 func TestTuiMode(t *testing.T) {
@@ -98,5 +103,139 @@ func TestEffortPickerAndOutcome(t *testing.T) {
 	}
 	if err := effortOutcome("❯ \n", "low"); err == nil {
 		t.Fatal("nothing said: should not count as changed")
+	}
+}
+
+// lineSink records what the node writes to an assistant process's stdin.
+type lineSink struct {
+	mu     sync.Mutex
+	b      strings.Builder
+	closed bool
+}
+
+func (s *lineSink) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *lineSink) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	return nil
+}
+
+func (s *lineSink) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+// fakeAssistant puts a running Claude process (no real one) in the node's table.
+func fakeAssistant(n *Node, id, startMode string) (*assistantProc, *lineSink) {
+	sink := &lineSink{}
+	p := &assistantProc{id: id, agent: "claude", launcher: "claude", cmd: &exec.Cmd{}, stdin: sink, exited: make(chan struct{}),
+		ready: make(chan struct{}), mode: startMode, canBypass: startMode == proto.ModeBypass}
+	n.mu.Lock()
+	n.procs[id] = p
+	n.mu.Unlock()
+	return p, sink
+}
+
+// The mode the app set on an assistant conversation wins over its transcript, however new the transcript's word,
+// and survives the node (persisted with the session state): an old "default" there locked the main one in (#2416).
+func TestAssistantAppModeWinsOverTranscript(t *testing.T) {
+	n := assistantNode(t)
+	n.modes = map[string]sessionModes{}
+	const id = "11111111-2222-3333-4444-555555555555"
+	var saved []sessionState
+	n.state.persist = func(_ string, v sessionState) { saved = append(saved, v) }
+	n.state.put(id, sessionState{Launcher: "claude", Cwd: "/home/u/.persona/assistant"})
+
+	if err := n.setModes(context.Background(), id, "acceptEdits", "high"); err != nil {
+		t.Fatal(err)
+	}
+	if len(saved) != 2 || saved[1].AppMode != "acceptEdits" || saved[1].AppEffort != "high" || saved[1].Launcher != "claude" {
+		t.Fatalf("not persisted with the session state: %+v", saved)
+	}
+	n.modes = map[string]sessionModes{} // the node restarted: only the hub's state is left
+	m := quickMeta{mode: "default", modeAt: time.Now().Add(time.Hour), effort: "low", effortAt: time.Now().Add(time.Hour)}
+	if mode, effort := n.currentModes(id, m); mode != "acceptEdits" || effort != "high" {
+		t.Fatalf("transcript won over the app: %s %s", mode, effort)
+	}
+	// Setting the same again writes nothing.
+	n.persistModes(id, "acceptEdits", "")
+	if len(saved) != 2 {
+		t.Fatalf("rewrote an unchanged mode: %d", len(saved))
+	}
+}
+
+// bypassPermissions can't be set with a control request in a process started without it: an idle one ends, so the
+// next message resumes in that mode; a busy one is left alone and no control request claims the switch.
+func TestSetModesBypassOnAssistant(t *testing.T) {
+	n := assistantNode(t)
+	n.modes = map[string]sessionModes{}
+	const id = "11111111-2222-3333-4444-555555555555"
+	n.state.put(id, sessionState{Launcher: "claude", Cwd: "/home/u/.persona/assistant"})
+
+	// Other modes: a control request to the running process.
+	p, sink := fakeAssistant(n, id, "")
+	if err := n.setModes(context.Background(), id, "acceptEdits", ""); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sink.String(), `"mode":"acceptEdits"`) || !strings.Contains(sink.String(), "set_permission_mode") {
+		t.Fatalf("no control request: %q", sink.String())
+	}
+
+	// Busy: kept, and nothing sent for bypassPermissions.
+	p.mu.Lock()
+	p.busy = true
+	p.mu.Unlock()
+	before := sink.String()
+	if err := n.setModes(context.Background(), id, proto.ModeBypass, ""); err != nil {
+		t.Fatal(err)
+	}
+	n.mu.Lock()
+	kept := n.procs[id] == p
+	n.mu.Unlock()
+	if !kept || sink.String() != before {
+		t.Fatalf("busy process: kept %v, sent %q", kept, strings.TrimPrefix(sink.String(), before))
+	}
+	if !p.needsRestartFor(proto.ModeBypass) {
+		t.Fatal("the switch should wait for a new process")
+	}
+	if mode, _ := n.modesOf(id); mode != proto.ModeBypass {
+		t.Fatalf("mode shown: %s", mode)
+	}
+
+	// Idle: the process ends; the next message starts one with --permission-mode bypassPermissions (spawnClaude reads
+	// modesOf).
+	p.mu.Lock()
+	p.busy = false
+	p.mu.Unlock()
+	if err := n.setModes(context.Background(), id, proto.ModeBypass, ""); err != nil {
+		t.Fatal(err)
+	}
+	n.mu.Lock()
+	_, running := n.procs[id]
+	n.mu.Unlock()
+	if running || !sink.closed {
+		t.Fatalf("idle process not stopped: running %v, stdin closed %v", running, sink.closed)
+	}
+	if st, _ := n.state.get(id); st.AppMode != proto.ModeBypass {
+		t.Fatalf("not persisted: %+v", st)
+	}
+
+	// A process started in bypassPermissions switches away and back with control requests.
+	q, sink2 := fakeAssistant(n, id, proto.ModeBypass)
+	if err := n.setModes(context.Background(), id, "default", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.setModes(context.Background(), id, proto.ModeBypass, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(sink2.String(), "set_permission_mode"); got != 2 || q.needsRestartFor(proto.ModeBypass) {
+		t.Fatalf("started in bypass: %d control requests %q", got, sink2.String())
 	}
 }

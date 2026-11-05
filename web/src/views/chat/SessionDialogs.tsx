@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { api, enc, errorText, sessionPath } from "../../lib/api";
 import { ago, externalLink, resumeCommand, sessionTitle, shortPath } from "../../lib/format";
 import { openLink } from "../../lib/links";
-import { effortOptions, effortTitle, modeTitle, renameBody, SWITCHABLE_MODES } from "../../lib/session-actions";
+import { BYPASS_MODE, BYPASS_WARNING, effortOptions, effortTitle, modeTitle, renameBody, switchableModes } from "../../lib/session-actions";
 import { href, navigate } from "../../lib/router";
 import { dropSession, refresh, refreshAssistant, upsertSession } from "../../lib/store";
 import type { Session } from "../../lib/types";
@@ -241,8 +241,9 @@ function Field({ label, value, onChange, autoFocus }: { label: string; value: st
 }
 
 // The two chips under the composer, like Claude Code's bottom bar: permission mode and effort (POST …/modes). A Codex
-// thread on its app-server gets the effort alone, among its own levels (effortOnly; `Session.efforts`).
-export function ModeChips({ session, effortOnly }: { session: Session; effortOnly?: boolean }) {
+// thread on its app-server gets the effort alone, among its own levels (effortOnly; `Session.efforts`). An assistant
+// conversation may also switch to 全部放行 (#2416).
+export function ModeChips({ session, effortOnly, assistant }: { session: Session; effortOnly?: boolean; assistant?: boolean }) {
   const modeMenu = useMenu();
   const effortMenu = useMenu();
   const set = async (patch: { permission_mode?: string; effort?: string }) => {
@@ -256,10 +257,10 @@ export function ModeChips({ session, effortOnly }: { session: Session; effortOnl
     }
   };
   const mode = session.permission_mode;
-  const danger = mode === "bypassPermissions";
+  const danger = mode === BYPASS_MODE;
   return (
     <span className="flex shrink-0 items-center gap-1">
-      {!effortOnly && <Chip label={mode ? modeTitle(mode) : "权限：默认"} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title="权限模式" />}
+      {!effortOnly && <Chip label={mode ? modeTitle(mode) : "权限：默认"} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title={danger ? BYPASS_WARNING : "权限模式"} />}
       <Chip label={session.effort ? `思考 ${effortTitle(session.effort)}` : "思考：默认"} onClick={effortMenu.open} active={Boolean(effortMenu.anchor)} title="思考强度" />
       {modeMenu.anchor && !effortOnly && (
         <Menu
@@ -268,7 +269,7 @@ export function ModeChips({ session, effortOnly }: { session: Session; effortOnl
           side="top"
           width={300}
           header="权限模式"
-          items={SWITCHABLE_MODES.map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: mode === m.id, onSelect: () => void set({ permission_mode: m.id }) }))}
+          items={switchableModes(assistant || session.assistant).map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: mode === m.id, onSelect: () => void set({ permission_mode: m.id }) }))}
         />
       )}
       {effortMenu.anchor && (
