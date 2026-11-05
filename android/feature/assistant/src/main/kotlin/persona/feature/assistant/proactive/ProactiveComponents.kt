@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -28,6 +29,7 @@ import persona.core.contracts.api.Routine
 import persona.core.contracts.api.Run
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
+import persona.feature.assistant.R
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -50,13 +52,14 @@ internal fun SectionNote(text: String) {
 /** A timeline row, like Reminders: the time large on the left, what happens on the right, how long until. */
 @Composable
 internal fun UpcomingRow(item: Upcoming, now: Instant, zone: ZoneId, position: GroupPosition, onClick: (() -> Unit)?) {
+    val say = rememberProactiveText()
     JGroupItem(position) {
         JRow(
-            item.title, subtitle = item.detail, value = ScheduleText.until(item.at, now, zone),
+            item.title, subtitle = item.detail, value = say.until(item.at, now, zone),
             leading = {
                 Column(Modifier.widthIn(min = TimeColumn)) {
-                    Text(ScheduleText.hm(item.at, zone), style = PersonaTheme.type.number, color = PersonaTheme.palette.ink, maxLines = 1)
-                    Text(ScheduleText.day(item.at, now, zone), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
+                    Text(say.hm(item.at, zone), style = PersonaTheme.type.number, color = PersonaTheme.palette.ink, maxLines = 1)
+                    Text(say.day(item.at, now, zone), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             },
@@ -71,21 +74,21 @@ internal fun UpcomingRow(item: Upcoming, now: Instant, zone: ZoneId, position: G
  */
 @Composable
 internal fun RoutineRow(
-    routine: Routine, lastRun: LastRun?, now: Instant, zone: ZoneId, position: GroupPosition, busy: Boolean,
+    routine: Routine, lastRun: LastRun?, say: ProactiveText, now: Instant, zone: ZoneId, position: GroupPosition, busy: Boolean,
     onToggle: (Boolean) -> Unit, onOpen: () -> Unit, onMore: () -> Unit,
 ) {
     val palette = PersonaTheme.palette
     val failed = lastRun?.failed == true
     val lines = listOfNotNull(
-        ScheduleText.sentence(routine.time, routine.weekdays),
-        routine.nextLine(now, zone),
-        lastRun?.line(now, zone),
-        "Persona 在对话里建的".takeIf { routine.byAssistant },
+        say.sentence(routine.time, routine.weekdays),
+        routine.nextLine(say, now, zone),
+        lastRun?.line(say, now, zone),
+        stringResource(R.string.assistant_proactive_made_by_assistant).takeIf { routine.byAssistant },
     )
     JGroupItem(position) {
         JRow(
             // Lines may wrap (a long reason), so leave room for them.
-            routine.title.ifBlank { "定时任务" }, subtitle = lines.joinToString("\n"), subtitleLines = lines.size + 2,
+            routine.title.ifBlank { stringResource(R.string.assistant_proactive_routine) }, subtitle = lines.joinToString("\n"), subtitleLines = lines.size + 2,
             leading = {
                 Box(Modifier.stableAlpha(if (routine.enabled) 1f else 0.55f)) {
                     JAvatar(routine.title, icon = routineIcon(routine.title),
@@ -95,7 +98,10 @@ internal fun RoutineRow(
             },
             trailing = {
                 if (busy) JSpinner(Modifier.size(Tokens.Space.xxl))
-                else JSwitch(routine.enabled, onToggle, Modifier.semantics { contentDescription = "自动运行「${routine.title}」" })
+                else {
+                    val description = stringResource(R.string.assistant_proactive_auto_run, routine.title)
+                    JSwitch(routine.enabled, onToggle, Modifier.semantics { contentDescription = description })
+                }
             },
             onClick = onOpen, onLongClick = onMore,
         )
@@ -105,14 +111,14 @@ internal fun RoutineRow(
 /** A follow-up Persona scheduled for itself: when, where it goes, what it will do. ⋯ holds 立即运行 and 取消. */
 @Composable
 internal fun FollowupRow(
-    followup: Followup, machines: List<Machine>, now: Instant, zone: ZoneId, position: GroupPosition, busy: Boolean,
+    followup: Followup, machines: List<Machine>, say: ProactiveText, now: Instant, zone: ZoneId, position: GroupPosition, busy: Boolean,
     onOpen: (() -> Unit)?, onMore: () -> Unit,
 ) {
-    val title = followup.displayTitle()
+    val title = followup.displayTitle(say)
     val at = parseTime(followup.at)
     val lines = listOfNotNull(
-        at?.let { "${ScheduleText.moment(it, now, zone)}，${ScheduleText.until(it, now, zone)}" },
-        followup.whereLine(machines),
+        at?.let { stringResource(R.string.assistant_proactive_moment_until, say.moment(it, now, zone), say.until(it, now, zone)) },
+        followup.whereLine(say, machines),
         followup.prompt.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.takeIf { it != title },
     )
     JGroupItem(position) {
@@ -121,7 +127,7 @@ internal fun FollowupRow(
             leading = { JAvatar(title, icon = if (followup.conversation() != null) PhIcons.ArrowBendUpLeft else PhIcons.BellRinging) },
             trailing = {
                 if (busy) JSpinner(Modifier.size(Tokens.Space.xxl))
-                else JIconButton(PhIcons.DotsThree, "「$title」的操作", onMore)
+                else JIconButton(PhIcons.DotsThree, stringResource(R.string.assistant_proactive_actions_for, title), onMore)
             },
             onClick = onOpen ?: onMore, onLongClick = onMore, chevron = false,
         )
@@ -131,7 +137,8 @@ internal fun FollowupRow(
 /** One run: how it went, when, and why when it did not run. Opens the conversation it started. */
 @Composable
 internal fun RunRow(
-    run: Run, title: String, time: String, position: GroupPosition, conversation: SessionKey?, onOpen: (SessionKey) -> Unit,
+    run: Run, title: String, time: String, position: GroupPosition, conversation: SessionKey?, say: ProactiveText,
+    onOpen: (SessionKey) -> Unit,
 ) {
     val palette = PersonaTheme.palette
     val outcome = run.outcome
@@ -143,8 +150,8 @@ internal fun RunRow(
     }
     JGroupItem(position) {
         JRow(
-            title, subtitle = listOf(time, run.detail()).filter { it.isNotBlank() && it != title }.joinToString("\n"), subtitleLines = 3,
-            leading = { JIcon(icon, outcome.word, size = Tokens.Space.xxl, tint = tint, selected = true) },
+            title, subtitle = listOf(time, run.detail(say)).filter { it.isNotBlank() && it != title }.joinToString("\n"), subtitleLines = 3,
+            leading = { JIcon(icon, stringResource(outcome.word), size = Tokens.Space.xxl, tint = tint, selected = true) },
             onClick = conversation?.let { key -> { onOpen(key) } },
         )
     }
@@ -170,9 +177,9 @@ internal fun TimeWheel(time: String, onTimeChange: (String) -> Unit, modifier: M
         // The band behind the chosen row.
         Box(Modifier.fillMaxWidth().height(WheelRow).clip(PersonaTheme.shapes.controlShape).background(PersonaTheme.palette.surfaceStrong))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Wheel(24, hour, "小时") { onTimeChange(String.format(Locale.ROOT, "%02d:%02d", it, latest.second)) }
+            Wheel(24, hour, stringResource(R.string.assistant_proactive_hours)) { onTimeChange(String.format(Locale.ROOT, "%02d:%02d", it, latest.second)) }
             Text(":", style = PersonaTheme.type.number, color = PersonaTheme.palette.ink2, modifier = Modifier.padding(horizontal = Tokens.Space.s))
-            Wheel(60, minute, "分钟") { onTimeChange(String.format(Locale.ROOT, "%02d:%02d", latest.first, it)) }
+            Wheel(60, minute, stringResource(R.string.assistant_proactive_minutes)) { onTimeChange(String.format(Locale.ROOT, "%02d:%02d", latest.first, it)) }
         }
     }
 }
@@ -226,11 +233,13 @@ private fun Wheel(count: Int, value: Int, description: String, onValue: (Int) ->
 @Composable
 internal fun WeekdayPicker(days: List<Int>, onDaysChange: (List<Int>) -> Unit, modifier: Modifier = Modifier) {
     val palette = PersonaTheme.palette
+    val say = rememberProactiveText()
     val chosen = normalizeDays(days).ifEmpty { (1..7).toList() }.toSet()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
         Row(Modifier.fillMaxWidth()) {
             (1..7).forEach { day ->
                 val on = day in chosen
+                val name = say.weekday(day)
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Box(
                         Modifier.size(DayButton).clip(PersonaTheme.shapes.chipShape).background(if (on) palette.action else palette.surfaceStrong)
@@ -238,18 +247,18 @@ internal fun WeekdayPicker(days: List<Int>, onDaysChange: (List<Int>) -> Unit, m
                                 val next = if (on) chosen - day else chosen + day
                                 if (next.isNotEmpty()) onDaysChange(normalizeDays(next.toList()))
                             }
-                            .semantics { selected = on; contentDescription = "周${ScheduleText.dayNames[day - 1]}" },
+                            .semantics { selected = on; contentDescription = name },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(ScheduleText.dayNames[day - 1], style = PersonaTheme.type.label, color = if (on) palette.onAction else palette.ink)
+                        Text(say.dayName(day), style = PersonaTheme.type.label, color = if (on) palette.onAction else palette.ink)
                     }
                 }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            JChip("每天", selected = chosen.size == 7, onClick = { onDaysChange(emptyList()) })
-            JChip("工作日", selected = chosen == Workdays.toSet(), onClick = { onDaysChange(Workdays) })
-            JChip("周末", selected = chosen == setOf(6, 7), onClick = { onDaysChange(listOf(6, 7)) })
+            JChip(stringResource(R.string.assistant_proactive_every_day), selected = chosen.size == 7, onClick = { onDaysChange(emptyList()) })
+            JChip(stringResource(R.string.assistant_proactive_weekdays), selected = chosen == Workdays.toSet(), onClick = { onDaysChange(Workdays) })
+            JChip(stringResource(R.string.assistant_proactive_weekends), selected = chosen == setOf(6, 7), onClick = { onDaysChange(listOf(6, 7)) })
         }
     }
 }

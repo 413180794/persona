@@ -16,6 +16,10 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 
 /** A hub that behaves like the real one for the schedule: PUT keeps its own fields by id and hands out ids. */
 private class FakeHub(
@@ -91,8 +95,15 @@ private val review = Followup(id = "fu_review", at = "2026-11-02T03:00:00Z", tit
     machineId = "server", sessionId = "conversation-3")
 private val ci = Followup(id = "fu_ci", at = "2026-11-02T05:00:00Z", prompt = "看看 CI 跑完没有\n跑完告诉我", machineId = "server")
 
+/** The page's words in the tests' language (Simplified Chinese, robolectric.properties). */
+private fun pageText() = ProactiveText(ApplicationProvider.getApplicationContext())
+
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ProactiveStoreTest {
+    private val say by lazy { pageText() }
+
     private fun TestScope.messagesOf(store: ProactiveStore): List<String> {
         val messages = mutableListOf<String>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { store.messages.toList(messages) }
@@ -101,7 +112,7 @@ class ProactiveStoreTest {
 
     @Test fun wholeTablePutCarriesEveryRoutineAndChangesOnlyTheSwitch() = runTest {
         val hub = FakeHub(listOf(byPersona, morning))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         store.refresh()
         // Persona sets up another routine while the page is open; the write must not wipe it.
         val added = Routine(id = "rt_added", title = "巡检", prompt = "看看服务", time = "22:00", createdBy = "assistant")
@@ -117,7 +128,7 @@ class ProactiveStoreTest {
 
     @Test fun switchMovesAtOnceAndAFailedWriteShowsTheHubsValue() = runTest {
         val hub = FakeHub(listOf(morning))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
         hub.failWrite = IOException("no route")
@@ -131,7 +142,7 @@ class ProactiveStoreTest {
 
     @Test fun aLostAnswerIsNotAFailureWhenTheHubHasTheChange() = runTest {
         val hub = FakeHub(listOf(morning))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
         hub.loseAnswer = true
@@ -143,7 +154,7 @@ class ProactiveStoreTest {
 
     @Test fun editWritesTheUserFieldsAndKeepsTheRest() = runTest {
         val hub = FakeHub(listOf(byPersona, morning))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         store.refresh()
         val draft = RoutineDraft("  周报（草稿）  ", " 先给我草稿 ", "16:30", (1..7).toList(), enabled = false)
         assertTrue(store.save(RoutineChange.Edit("rt_weekly", byPersona.draft(), draft)).isSuccess)
@@ -159,12 +170,12 @@ class ProactiveStoreTest {
 
     @Test fun addAppendsTheNewRoutineAndARetryAfterALostAnswerDoesNotAddItTwice() = runTest {
         val hub = FakeHub(listOf(morning))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
         val id = newRoutineId()
         assertTrue(id.matches(Regex("rt_[0-9a-f]{8}")))
-        val saved = store.save(RoutineChange.Add(id, RoutineTemplates.first().draft)).getOrThrow()
+        val saved = store.save(RoutineChange.Add(id, RoutineTemplates.first().draft(say))).getOrThrow()
         val written = hub.puts.single().last()
         assertEquals(id, written.id)
         assertEquals("会前准备", written.title)
@@ -185,7 +196,7 @@ class ProactiveStoreTest {
 
     @Test fun anEditWritesOnlyWhatThePersonChanged() = runTest {
         val hub = FakeHub(listOf(byPersona, morning))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         store.refresh()
         val opened = morning.draft()
         // While the page is open Persona moves the routine to 08:00 from a conversation; the person edits the prompt.
@@ -202,7 +213,7 @@ class ProactiveStoreTest {
 
     @Test fun editingARoutineDeletedMeanwhileDoesNotBringItBack() = runTest {
         val hub = FakeHub(listOf(byPersona, morning))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
         hub.table = listOf(morning)
@@ -215,7 +226,7 @@ class ProactiveStoreTest {
 
     @Test fun deleteTakesOutOnlyThatRoutine() = runTest {
         val hub = FakeHub(listOf(byPersona, morning))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         store.refresh()
         assertTrue(store.save(RoutineChange.Delete("rt_weekly")).isSuccess)
         assertEquals(listOf(morning), hub.puts.single())
@@ -227,7 +238,7 @@ class ProactiveStoreTest {
 
     @Test fun cancellingAFollowupRemovesItAndAFailureKeepsIt() = runTest {
         val hub = FakeHub(listOf(morning), listOf(review, ci))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
         assertTrue(store.cancelFollowup("fu_ci").isSuccess)
@@ -248,7 +259,7 @@ class ProactiveStoreTest {
 
     @Test fun runningAFollowupNowOpensItsConversationAndTakesItOffTheList() = runTest {
         val hub = FakeHub(listOf(morning), listOf(review, ci))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         store.refresh()
         assertEquals(SessionKey("server", "conversation-3"), store.runFollowup("fu_review").getOrThrow())
         assertEquals(listOf("fu_review"), hub.started)
@@ -260,7 +271,7 @@ class ProactiveStoreTest {
 
     @Test fun runningARoutineNowReturnsTheNewConversationOrSaysWhy() = runTest {
         val hub = FakeHub(listOf(morning))
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
         assertEquals(SessionKey("server", "run-morning"), store.runRoutine("morning").getOrThrow())
@@ -277,7 +288,7 @@ class ProactiveStoreTest {
             var fail = false
             override suspend fun followups(): List<Followup> = if (fail) throw IOException("down") else listOf(review)
         }
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         store.refresh()
         hub.fail = true
         store.refresh()
@@ -294,7 +305,7 @@ class ProactiveStoreTest {
             override suspend fun setRoutines(list: List<Routine>): List<Routine> =
                 throw kotlinx.coroutines.CancellationException("Pairing changed")
         }
-        val store = ProactiveStore(hub, this)
+        val store = ProactiveStore(hub, this, say)
         val messages = messagesOf(store)
         store.refresh()
         val result = store.save(RoutineChange.Delete("morning"))
@@ -309,25 +320,28 @@ class ProactiveStoreTest {
             Run(id = "2", kind = "followup", refId = "fu_lunch", at = "2026-11-02T04:00:00Z", status = "ok"),
             Run(id = "3", kind = "routine", refId = "morning", at = "2026-11-02T01:00:00Z", status = "ok"),
         )
-        val store = ProactiveStore(FakeHub(listOf(morning), runs = runs), this)
+        val store = ProactiveStore(FakeHub(listOf(morning), runs = runs), this, say)
         store.refresh()
         assertEquals(listOf("2", "3", "1"), store.state.value.runList!!.map { it.id })
         assertEquals(listOf("3", "1"), store.state.value.runsOf("morning")!!.map { it.id })
     }
 }
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ProactiveTextTest {
+    private val say by lazy { pageText() }
     private val zone = java.time.ZoneId.of("Asia/Shanghai")
     private val now = java.time.Instant.parse("2026-11-02T02:00:00Z") // Monday 10:00 in Shanghai
 
     @Test fun rulesReadLikeReminders() {
-        assertEquals("每个工作日 上午 9:00", ScheduleText.sentence("09:00", listOf(5, 4, 3, 2, 1)))
-        assertEquals("每天 晚上 9:30", ScheduleText.sentence("21:30", (1..7).toList()))
-        assertEquals("每天 早上 7:05", ScheduleText.sentence("07:05", emptyList()))
-        assertEquals("每个周末 中午 12:00", ScheduleText.sentence("12:00", listOf(6, 7)))
-        assertEquals("每周一、三、五 下午 5:00", ScheduleText.sentence("17:00", listOf(5, 1, 3, 3)))
-        assertEquals("凌晨 12:15", ScheduleText.clock("00:15"))
-        assertEquals("工作日", ScheduleText.repeats(listOf(1, 2, 3, 4, 5)))
+        assertEquals("每个工作日 上午 9:00", say.sentence("09:00", listOf(5, 4, 3, 2, 1)))
+        assertEquals("每天 晚上 9:30", say.sentence("21:30", (1..7).toList()))
+        assertEquals("每天 早上 7:05", say.sentence("07:05", emptyList()))
+        assertEquals("每个周末 中午 12:00", say.sentence("12:00", listOf(6, 7)))
+        assertEquals("每周一、三、五 下午 5:00", say.sentence("17:00", listOf(5, 1, 3, 3)))
+        assertEquals("凌晨 12:15", say.clock("00:15"))
+        assertEquals("工作日", say.repeats(listOf(1, 2, 3, 4, 5)))
         assertEquals(emptyList<Int>(), normalizeDays(listOf(7, 6, 5, 4, 3, 2, 1, 9)))
         assertEquals(listOf(1, 3), normalizeDays(listOf(3, 1, 3, 0)))
         assertTrue(validTime("23:59"))
@@ -349,74 +363,74 @@ class ProactiveTextTest {
 
     @Test fun momentsAndCountdowns() {
         val at = { text: String -> java.time.Instant.parse(text) }
-        assertEquals("今天 15:30", ScheduleText.moment(at("2026-11-02T07:30:00Z"), now, zone))
-        assertEquals("明天 09:00", ScheduleText.moment(at("2026-11-03T01:00:00Z"), now, zone))
-        assertEquals("昨天 21:30", ScheduleText.moment(at("2026-11-01T13:30:00Z"), now, zone))
-        assertEquals("周五 17:00", ScheduleText.moment(at("2026-11-06T09:00:00Z"), now, zone))
-        assertEquals("11月20日 09:00", ScheduleText.moment(at("2026-11-20T01:00:00Z"), now, zone))
-        assertEquals("马上", ScheduleText.until(at("2026-11-02T02:00:30Z"), now, zone))
-        assertEquals("40 分钟后", ScheduleText.until(at("2026-11-02T02:40:00Z"), now, zone))
-        assertEquals("2 小时 30 分钟后", ScheduleText.until(at("2026-11-02T04:30:00Z"), now, zone))
-        assertEquals("7 小时后", ScheduleText.until(at("2026-11-02T09:05:00Z"), now, zone))
-        assertEquals("4 天后", ScheduleText.until(at("2026-11-06T09:00:00Z"), now, zone))
-        assertEquals("已过时间", ScheduleText.until(at("2026-11-02T01:00:00Z"), now, zone))
-        assertEquals("准时", ScheduleText.lateness(at("2026-11-02T01:00:00Z"), at("2026-11-02T01:00:01Z")))
-        assertEquals("晚了 21 秒", ScheduleText.lateness(at("2026-11-02T01:00:00Z"), at("2026-11-02T01:00:21Z")))
-        assertEquals("晚了 45 分钟", ScheduleText.lateness(at("2026-11-02T01:00:00Z"), at("2026-11-02T01:45:00Z")))
-        assertNull(ScheduleText.lateness(null, now))
+        assertEquals("今天 15:30", say.moment(at("2026-11-02T07:30:00Z"), now, zone))
+        assertEquals("明天 09:00", say.moment(at("2026-11-03T01:00:00Z"), now, zone))
+        assertEquals("昨天 21:30", say.moment(at("2026-11-01T13:30:00Z"), now, zone))
+        assertEquals("周五 17:00", say.moment(at("2026-11-06T09:00:00Z"), now, zone))
+        assertEquals("11月20日 09:00", say.moment(at("2026-11-20T01:00:00Z"), now, zone))
+        assertEquals("马上", say.until(at("2026-11-02T02:00:30Z"), now, zone))
+        assertEquals("40 分钟后", say.until(at("2026-11-02T02:40:00Z"), now, zone))
+        assertEquals("2 小时 30 分钟后", say.until(at("2026-11-02T04:30:00Z"), now, zone))
+        assertEquals("7 小时后", say.until(at("2026-11-02T09:05:00Z"), now, zone))
+        assertEquals("4 天后", say.until(at("2026-11-06T09:00:00Z"), now, zone))
+        assertEquals("已过时间", say.until(at("2026-11-02T01:00:00Z"), now, zone))
+        assertEquals("准时", say.lateness(at("2026-11-02T01:00:00Z"), at("2026-11-02T01:00:01Z")))
+        assertEquals("晚了 21 秒", say.lateness(at("2026-11-02T01:00:00Z"), at("2026-11-02T01:00:21Z")))
+        assertEquals("晚了 45 分钟", say.lateness(at("2026-11-02T01:00:00Z"), at("2026-11-02T01:45:00Z")))
+        assertNull(say.lateness(null, now))
     }
 
     @Test fun runsAndRoutinesSayWhatHappened() {
-        assertEquals("准时", Run(status = "ok", due = "2026-11-02T01:00:00Z", at = "2026-11-02T01:00:02Z").detail())
-        assertEquals("手动运行", Run(status = "ok", manual = true).detail())
-        assertEquals("没跑起来：助手所在的机器离线（手动运行）", Run(status = "failed", error = "assistant machine is offline", manual = true).detail())
-        assertEquals("跳过了：Persona 停机，错过了时间", Run(status = "skipped", error = "Persona 停机，错过了时间").detail())
-        assertEquals("已跳过", Run(status = "skipped").detail())
+        assertEquals("准时", Run(status = "ok", due = "2026-11-02T01:00:00Z", at = "2026-11-02T01:00:02Z").detail(say))
+        assertEquals("手动运行", Run(status = "ok", manual = true).detail(say))
+        assertEquals("没跑起来：助手所在的机器离线（手动运行）", Run(status = "failed", error = "assistant machine is offline", manual = true).detail(say))
+        assertEquals("跳过了：Persona 停机，错过了时间", Run(status = "skipped", error = "Persona 停机，错过了时间").detail(say))
+        assertEquals("已跳过", Run(status = "skipped").detail(say))
         assertEquals(SessionKey("server", "s"), Run(sessionId = "s").conversation("server"))
         assertNull(Run(sessionId = "s").conversation(null))
-        assertEquals("跟进", Run(kind = "followup").displayTitle())
+        assertEquals("跟进", Run(kind = "followup").displayTitle(say))
         val noHistory = ProactiveState(assistantMachine = "server")
-        assertEquals("上次 周五 17:00 没跑起来：助手所在的机器离线", noHistory.lastRunOf(byPersona)!!.line(now, zone))
-        assertEquals("上次 今天 09:00 已运行", noHistory.lastRunOf(morning)!!.line(now, zone))
+        assertEquals("上次 周五 17:00 没跑起来：助手所在的机器离线", noHistory.lastRunOf(byPersona)!!.line(say, now, zone))
+        assertEquals("上次 今天 09:00 已运行", noHistory.lastRunOf(morning)!!.line(say, now, zone))
         assertEquals(SessionKey("server", "conversation-2"), noHistory.lastRunOf(morning)!!.conversation)
         assertNull(noHistory.lastRunOf(Routine()))
         // 立即运行 does not move the hub's last_run: the history knows better.
         val manual = Run(id = "m", kind = "routine", refId = "morning", at = "2026-11-02T01:30:00Z", status = "failed",
             error = "assistant machine is offline", manual = true, machineId = "laptop", sessionId = "")
         val withHistory = ProactiveState(runs = Loadable(listOf(manual)), assistantMachine = "server")
-        assertEquals("上次 今天 09:30 没跑起来：助手所在的机器离线", withHistory.lastRunOf(morning)!!.line(now, zone))
+        assertEquals("上次 今天 09:30 没跑起来：助手所在的机器离线", withHistory.lastRunOf(morning)!!.line(say, now, zone))
         assertTrue(withHistory.lastRunOf(morning)!!.failed)
         assertNull(withHistory.lastRunOf(morning)!!.conversation)
         val ran = ProactiveState(runs = Loadable(listOf(manual.copy(status = "ok", sessionId = "s1"))))
-        assertEquals("上次 今天 09:30 手动运行", ran.lastRunOf(morning)!!.line(now, zone))
+        assertEquals("上次 今天 09:30 手动运行", ran.lastRunOf(morning)!!.line(say, now, zone))
         assertEquals(SessionKey("laptop", "s1"), ran.lastRunOf(morning)!!.conversation)
-        assertEquals("下次 明天 09:00，23 小时后", morning.nextLine(now, zone))
-        assertEquals("已关闭，不会自动运行", morning.copy(enabled = false).nextLine(now, zone))
-        assertEquals("这个跟进已经不在了", hubErrorText(" no such follow-up "))
-        assertEquals("routine \"x\" needs a title", hubErrorText("routine \"x\" needs a title"))
+        assertEquals("下次 明天 09:00，23 小时后", morning.nextLine(say, now, zone))
+        assertEquals("已关闭，不会自动运行", morning.copy(enabled = false).nextLine(say, now, zone))
+        assertEquals("这个跟进已经不在了", hubErrorText(say, " no such follow-up "))
+        assertEquals("routine \"x\" needs a title", hubErrorText(say, "routine \"x\" needs a title"))
     }
 
     @Test fun followupsSayWhereTheyGo() {
         val machines = listOf(Machine("server", name = "服务器"))
-        assertEquals("会前准备", review.displayTitle())
-        assertEquals("看看 CI 跑完没有", ci.displayTitle())
-        assertEquals("在 服务器 上接着原来的对话", review.whereLine(machines))
-        assertEquals("在 服务器 上开一段新对话", ci.whereLine(machines))
-        assertEquals("在 laptop 上开一段新对话", ci.copy(machineId = "laptop").whereLine(machines))
+        assertEquals("会前准备", review.displayTitle(say))
+        assertEquals("看看 CI 跑完没有", ci.displayTitle(say))
+        assertEquals("在 服务器 上接着原来的对话", review.whereLine(say, machines))
+        assertEquals("在 服务器 上开一段新对话", ci.whereLine(say, machines))
+        assertEquals("在 laptop 上开一段新对话", ci.copy(machineId = "laptop").whereLine(say, machines))
         assertEquals(SessionKey("server", "conversation-3"), review.conversation())
         assertNull(ci.conversation())
     }
 
     @Test fun timelineAndSummary() {
         val off = morning.copy(id = "evening", title = "晚间回顾", enabled = false, nextRun = "2026-11-02T13:30:00Z")
-        val list = upcoming(listOf(byPersona, morning, off), listOf(ci, review))
+        val list = upcoming(say, listOf(byPersona, morning, off), listOf(ci, review))
         assertEquals(listOf("f-fu_review", "f-fu_ci", "r-morning", "r-rt_weekly"), list.map { it.id })
         assertEquals("跟进，接着原来的对话", list.first().detail)
         assertEquals("每个工作日 上午 9:00", list[2].detail)
-        assertEquals("2 个定时任务开着，下一件在今天 11:00。", summaryLine(listOf(byPersona, morning, off), listOf(review, ci), now, zone))
-        assertEquals("定时任务都关着，下一件在今天 11:00。", summaryLine(listOf(off), listOf(review), now, zone))
-        assertEquals("还没有安排，Persona 只在你开口时做事。", summaryLine(emptyList(), emptyList(), now, zone))
-        assertNull(summaryLine(null, null, now, zone))
+        assertEquals("2 个定时任务开着，下一件在今天 11:00。", summaryLine(say, listOf(byPersona, morning, off), listOf(review, ci), now, zone))
+        assertEquals("定时任务都关着，下一件在今天 11:00。", summaryLine(say, listOf(off), listOf(review), now, zone))
+        assertEquals("还没有安排，Persona 只在你开口时做事。", summaryLine(say, emptyList(), emptyList(), now, zone))
+        assertNull(summaryLine(say, null, null, now, zone))
     }
 
     @Test fun pagesSurviveAsKeys() {

@@ -8,11 +8,14 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.SessionKey
 import persona.core.contracts.parseTime
 import persona.core.contracts.api.Routine
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
+import persona.feature.assistant.R
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -106,9 +109,10 @@ internal fun RoutineEditorPage(
         }
     }
 
+    val say = rememberProactiveText()
     val title = when {
-        isNew -> "新建定时任务"
-        else -> routine?.title?.takeIf { it.isNotBlank() } ?: "定时任务"
+        isNew -> stringResource(R.string.assistant_proactive_new_routine)
+        else -> routine?.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.assistant_proactive_routine)
     }
     val showBar = routine != null || isNew
     JListPage(
@@ -117,11 +121,11 @@ internal fun RoutineEditorPage(
             JBottomBar {
                 Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                     if (!draft.valid) Text(
-                        if (!validTime(normalizeTime(draft.time))) "时间要写成 HH:MM" else "名称和要做的事都填好才能保存",
+                        if (!validTime(normalizeTime(draft.time))) stringResource(R.string.assistant_proactive_time_format) else stringResource(R.string.assistant_proactive_fill_in),
                         style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
                     )
-                    JButton(if (isNew) "添加" else "保存", ::save, Modifier.fillMaxWidth(), enabled = draft.valid && !running,
-                        loading = saving, loadingText = "正在保存…")
+                    JButton(if (isNew) stringResource(R.string.assistant_proactive_add) else stringResource(R.string.assistant_proactive_save), ::save, Modifier.fillMaxWidth(), enabled = draft.valid && !running,
+                        loading = saving, loadingText = stringResource(R.string.assistant_proactive_saving))
                 }
             }
         }) else null,
@@ -129,32 +133,32 @@ internal fun RoutineEditorPage(
         if (!isNew && routine == null) {
             when {
                 state.routines.value == null && state.routines.error != null -> item("error") {
-                    JNotice(state.routines.error, title = "读不到定时任务", status = Status.NeedsYou, icon = PhIcons.WarningCircle,
-                        actionLabel = "重试", onAction = { scope.launch { store.loadRoutines() } })
+                    JNotice(state.routines.error, title = stringResource(R.string.assistant_proactive_routine_read_failed), status = Status.NeedsYou, icon = PhIcons.WarningCircle,
+                        actionLabel = stringResource(R.string.assistant_proactive_retry), onAction = { scope.launch { store.loadRoutines() } })
                 }
                 state.routines.value == null -> item("loading") { JLoading() }
                 else -> item("gone") {
-                    JEmptyState("这个定时任务已经不在了", "可能刚在对话里被 Persona 删掉了。", icon = PhIcons.Clock,
-                        action = { JButton("返回", ::close, kind = JButtonKind.Secondary) })
+                    JEmptyState(stringResource(R.string.assistant_proactive_error_no_routine), stringResource(R.string.assistant_proactive_gone_body), icon = PhIcons.Clock,
+                        action = { JButton(stringResource(R.string.assistant_proactive_back), ::close, kind = JButtonKind.Secondary) })
                 }
             }
             return@JListPage
         }
         if (routine?.byAssistant == true) item("by-assistant") {
-            JNotice("Persona 在对话里替你建的，可以照常修改、关掉或删除。", icon = PhIcons.Sparkle)
+            JNotice(stringResource(R.string.assistant_proactive_by_assistant_notice), icon = PhIcons.Sparkle)
         }
         item("name") {
-            JTextField(draft.title, { edit(draft.copy(title = it)) }, Modifier.padding(top = Tokens.Space.s), label = "名称",
-                placeholder = "比如「早报」", singleLine = true, enabled = !busy)
+            JTextField(draft.title, { edit(draft.copy(title = it)) }, Modifier.padding(top = Tokens.Space.s), label = stringResource(R.string.assistant_proactive_name),
+                placeholder = stringResource(R.string.assistant_proactive_name_placeholder), singleLine = true, enabled = !busy)
         }
         item("enabled") {
             Spacer(Modifier.height(Tokens.Space.m))
             JGroupItem(GroupPosition.Single) {
-                JSwitchRow("开启", draft.enabled, { edit(draft.copy(enabled = it)) },
-                    subtitle = if (draft.enabled) "到点自动运行" else "关着时不会自动运行，仍然可以立即运行", enabled = !busy)
+                JSwitchRow(stringResource(R.string.assistant_proactive_enabled), draft.enabled, { edit(draft.copy(enabled = it)) },
+                    subtitle = if (draft.enabled) stringResource(R.string.assistant_proactive_enabled_on) else stringResource(R.string.assistant_proactive_enabled_off), enabled = !busy)
             }
         }
-        item("when-header") { JSectionHeader("什么时候") }
+        item("when-header") { JSectionHeader(stringResource(R.string.assistant_proactive_when)) }
         item("when") {
             JCard {
                 TimeWheel(draft.time, { edit(draft.copy(time = it)) })
@@ -162,61 +166,62 @@ internal fun RoutineEditorPage(
                 WeekdayPicker(draft.weekdays, { edit(draft.copy(weekdays = it)) })
             }
             val next = parseTime(routine?.nextRun)?.takeIf { !dirty && draft.enabled && routine?.enabled == true }
-            SectionNote(next?.let { "下次运行：${ScheduleText.moment(it, now, zone)}（${ScheduleText.until(it, now, zone)}）" }
-                ?: "${ScheduleText.sentence(draft.time, draft.weekdays)}，按助手设置里的时区。")
+            SectionNote(next?.let { stringResource(R.string.assistant_proactive_next_run, say.moment(it, now, zone), say.until(it, now, zone)) }
+                ?: stringResource(R.string.assistant_proactive_rule_note, say.sentence(draft.time, draft.weekdays)))
         }
-        item("prompt-header") { JSectionHeader("要 Persona 做什么") }
+        item("prompt-header") { JSectionHeader(stringResource(R.string.assistant_proactive_what)) }
         item("prompt") {
             JTextField(draft.prompt, { edit(draft.copy(prompt = it)) }, Modifier.fillMaxWidth(),
-                placeholder = "像在对话里一样写：看哪些数据、怎么汇报。", minLines = 6, maxLines = Int.MAX_VALUE, enabled = !busy,
-                supportingText = "到点 Persona 开一段新对话照着做，做完推送到手机。它还可以再安排一次性的跟进，比如会前 10 分钟提醒你。")
+                placeholder = stringResource(R.string.assistant_proactive_prompt_placeholder), minLines = 6, maxLines = Int.MAX_VALUE, enabled = !busy,
+                supportingText = stringResource(R.string.assistant_proactive_prompt_note))
         }
         if (routine == null) return@JListPage
         val runs = state.runsOf(routine.id).orEmpty()
         val last = state.lastRunOf(routine)
         val lastKey = last?.conversation
-        val lastLine = last?.line(now, zone)
+        val lastLine = last?.line(say, now, zone)
         val runRows = 1 + if (lastLine != null) 1 else 0
-        item("run-header") { JSectionHeader("运行") }
+        item("run-header") { JSectionHeader(stringResource(R.string.assistant_proactive_run)) }
         item("run-now") {
             JGroupItem(GroupPosition.of(0, runRows)) {
-                JRow("立即运行", subtitle = if (dirty) "先保存修改，再开一段新对话" else "开一段新对话，跑完在 Persona 里看结果",
+                JRow(stringResource(R.string.assistant_proactive_run_now), subtitle = if (dirty) stringResource(R.string.assistant_proactive_run_now_dirty) else stringResource(R.string.assistant_proactive_run_now_body),
                     leadingIcon = PhIcons.Play, onClick = ::runNow, enabled = !busy && draft.valid, chevron = false,
                     trailing = if (running) ({ JSpinner(Modifier.size(Tokens.Space.xxl)) }) else null)
             }
         }
         if (lastLine != null) item("last") {
             JGroupItem(GroupPosition.of(1, runRows)) {
-                JRow(if (lastKey != null) "查看上次结果" else "上次运行", subtitle = lastLine, subtitleLines = 3,
+                JRow(if (lastKey != null) stringResource(R.string.assistant_proactive_last_result) else stringResource(R.string.assistant_proactive_last_run_title), subtitle = lastLine, subtitleLines = 3,
                     leadingIcon = if (last?.failed == true) PhIcons.WarningCircle else PhIcons.ChatTeardropText,
                     onClick = lastKey?.let { key -> { onOpenConversation(key) } })
             }
         }
         if (runs.isNotEmpty()) {
-            item("history-header") { JSectionHeader("历史记录", count = runs.size) }
+            item("history-header") { JSectionHeader(stringResource(R.string.assistant_proactive_history), count = runs.size) }
             val shown = runs.take(HistoryShown)
             val more = runs.size > HistoryShown
             itemsIndexed(shown, key = { index, run -> "history-$index-${run.id}" }) { index, run ->
-                RunRow(run, parseTime(run.at)?.let { ScheduleText.moment(it, now, zone) } ?: run.displayTitle(), "",
-                    GroupPosition(first = index == 0, last = index == shown.lastIndex && !more), run.conversation(state.assistantMachine), onOpenConversation)
+                RunRow(run, parseTime(run.at)?.let { say.moment(it, now, zone) } ?: run.displayTitle(say), "",
+                    GroupPosition(first = index == 0, last = index == shown.lastIndex && !more), run.conversation(state.assistantMachine), say, onOpenConversation)
             }
-            if (more) item("history-more") { MoreRow("全部 ${runs.size} 次", GroupPosition(first = false, last = true)) { onAllRuns(routine.id) } }
+            if (more) item("history-more") { MoreRow(pluralStringResource(R.plurals.assistant_proactive_all_times, runs.size, runs.size), GroupPosition(first = false, last = true)) { onAllRuns(routine.id) } }
         }
         item("delete") {
             Spacer(Modifier.height(Tokens.Space.xxl))
             JGroupItem(GroupPosition.Single) {
-                JRow("删除定时任务", leadingIcon = PhIcons.Trash, destructive = true, onClick = { askDelete = true }, enabled = !busy, chevron = false)
+                JRow(stringResource(R.string.assistant_proactive_delete_routine), leadingIcon = PhIcons.Trash, destructive = true, onClick = { askDelete = true }, enabled = !busy, chevron = false)
             }
         }
     }
     if (askDiscard) JDialog(
-        onDismiss = { askDiscard = false }, title = "放弃这次修改？", text = "改动还没保存，离开后就没有了。", destructive = true,
-        confirm = "放弃" to { askDiscard = false; forget(); close() }, dismiss = "继续编辑" to { askDiscard = false },
+        onDismiss = { askDiscard = false }, title = stringResource(R.string.assistant_proactive_discard_title), text = stringResource(R.string.assistant_proactive_discard_body),
+        destructive = true, confirm = stringResource(R.string.assistant_proactive_discard) to { askDiscard = false; forget(); close() },
+        dismiss = stringResource(R.string.assistant_proactive_keep_editing) to { askDiscard = false },
     )
     if (askDelete && routine != null) JDialog(
-        onDismiss = { if (!saving) askDelete = false }, title = "删除「${routine.title}」？",
-        text = "删除后不再定时运行，已经跑过的对话还在。", destructive = true, confirmEnabled = !saving,
-        confirm = "删除" to {
+        onDismiss = { if (!saving) askDelete = false }, title = stringResource(R.string.assistant_proactive_delete_title, routine.title),
+        text = stringResource(R.string.assistant_proactive_delete_body), destructive = true, confirmEnabled = !saving,
+        confirm = stringResource(R.string.assistant_proactive_delete) to {
             saving = true
             scope.launch {
                 try {
@@ -227,6 +232,6 @@ internal fun RoutineEditorPage(
                 }
             }
         },
-        dismiss = "取消" to { askDelete = false },
+        dismiss = stringResource(R.string.assistant_proactive_cancel) to { askDelete = false },
     )
 }

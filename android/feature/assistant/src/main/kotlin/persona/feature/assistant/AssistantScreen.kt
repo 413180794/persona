@@ -16,6 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -130,16 +132,19 @@ fun AssistantScreen(
     var assistantMachine by remember(management) { mutableStateOf("") }
     val hasChat = chatContent != null || assistantChatContent != null
     var menu by remember { mutableStateOf(false) }
-    var info by rememberSaveable { mutableStateOf<String?>(null) }
+    var info by rememberSaveable { mutableStateOf<AssistantInfo?>(null) }
     var showAllRecent by rememberSaveable { mutableStateOf(false) }
     var pinning by remember { mutableStateOf(false) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
+    val locale = currentLocale
+    val words = conversationWords()
     fun say(message: String) {
         if (feedback?.notice(message) != true) scope.launch { snackbar.showSnackbar(message) }
     }
     fun copyId(key: SessionKey) {
         clipboard.setText(androidx.compose.ui.text.AnnotatedString(key.sessionId))
-        say("已拷贝会话 ID")
+        say(resources.getString(R.string.assistant_copied_session_id))
     }
     // Pins live on the hub (the Agents list shares them); one change at a time, a failure goes to the usual place.
     fun togglePins(keys: List<SessionKey>) {
@@ -172,10 +177,10 @@ fun AssistantScreen(
             compaction = compaction.dismissed()
         }
     }
-    val groups = remember(snapshot, query, pinnedConversations, ended) {
+    val groups = remember(snapshot, query, pinnedConversations, ended, words) {
         conversationGroups(snapshot.copy(conversations = snapshot.conversations.map {
             if (it.key in ended) it.copy(status = "offline", state = "offline") else it
-        }), query, pinnedConversations)
+        }), query, pinnedConversations, words)
     }
     // Persona's face (top bar and the conversation list) shows the conversation on screen, as on iOS: none on the
     // new-conversation page.
@@ -238,7 +243,7 @@ fun AssistantScreen(
                 assistantAttempt { mainConversationSender?.mainReplaced(previous) }
                 assistantAttempt { repository.refresh() }
                 newConversation()
-                say(newMainNotice(result.carried, carry))
+                say(resources.getString(newMainNotice(result.carried, carry)))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -269,7 +274,7 @@ fun AssistantScreen(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                scope.launch { snackbar.showSnackbar("暂时无法新建对话，输入已保留") }
+                scope.launch { snackbar.showSnackbar(resources.getString(R.string.assistant_new_conversation_failed)) }
             } finally {
                 sending = false
             }
@@ -371,9 +376,9 @@ fun AssistantScreen(
             },
             onOpen = { openConversation(it); scope.launch { drawerOpen = false } },
             onInfo = {
-                if (it == "知识库" && onKnowledge != null) onKnowledge()
-                else if (management != null && it == "启动器") settingsOpen = true
-                else if (management != null && it == "定时任务") proactiveOpen = true
+                if (it == AssistantInfo.Knowledge && onKnowledge != null) onKnowledge()
+                else if (management != null && it == AssistantInfo.Launcher) settingsOpen = true
+                else if (management != null && it == AssistantInfo.Schedule) proactiveOpen = true
                 else info = it
                 scope.launch { drawerOpen = false }
             },
@@ -400,7 +405,7 @@ fun AssistantScreen(
             modifier = Modifier.fillMaxSize().imePadding(),
             topBar = {
                 CompositionLocalProvider(LocalRootLeading provides {
-                    JPersonaButton(faceState, "对话列表", {
+                    JPersonaButton(faceState, stringResource(R.string.assistant_conversation_list), {
                         if (wide) sidebarVisible = !sidebarVisible else drawerOpen = true
                     })
                 }) {
@@ -408,9 +413,9 @@ fun AssistantScreen(
                         title = LocalPersonaName.current, subtitle = connectionLabel,
                         titleBusy = !connectionLabel.isNullOrBlank(), onTitleClick = { menu = true },
                         actions = {
-                            JIconButton(PhIcons.NotePencil, "新对话", ::startNewConversation, enabled = !sending)
-                            JIconButton(PhIcons.UserCircle, "助手资料", {
-                                if (management != null) settingsOpen = true else info = "助手设置"
+                            JIconButton(PhIcons.NotePencil, stringResource(R.string.assistant_new_conversation), ::startNewConversation, enabled = !sending)
+                            JIconButton(PhIcons.UserCircle, stringResource(R.string.assistant_profile), {
+                                if (management != null) settingsOpen = true else info = AssistantInfo.Settings
                             })
                         },
                     )
@@ -420,7 +425,7 @@ fun AssistantScreen(
                 Column {
                     SnackbarHost(snackbar) { data ->
                         JNotice(data.visuals.message, Modifier.padding(horizontal = pagePadding),
-                            actionLabel = "知道了", onAction = { data.dismiss() })
+                            actionLabel = stringResource(R.string.assistant_got_it), onAction = { data.dismiss() })
                     }
                     if (hasComposer) {
                         draftError?.let { JNotice(it, Modifier.padding(horizontal = pagePadding), status = Status.NeedsYou) }
@@ -431,7 +436,7 @@ fun AssistantScreen(
                             onSend = ::submit, onCommand = { composer.insert(it, composer.focused) },
                             onNotice = { message ->
                                 if (feedback?.notice(message) != true) scope.launch { snackbar.showSnackbar(message) }
-                            }, enabled = draftReady && !sending, placeholder = "问 ${LocalPersonaName.current}…")
+                            }, enabled = draftReady && !sending, placeholder = stringResource(R.string.assistant_composer_placeholder, LocalPersonaName.current))
                     }
                 }
             }) else null,
@@ -507,7 +512,7 @@ fun AssistantScreen(
             }
         } else {
             body(false)
-            if (drawerOpen) JSheet(onDismiss = { drawerOpen = false }, title = "对话列表") {
+            if (drawerOpen) JSheet(onDismiss = { drawerOpen = false }, title = stringResource(R.string.assistant_conversation_list)) {
                 Box(Modifier.fillMaxWidth().fillMaxHeight(0.9f)) { sidebar() }
             }
         }
@@ -515,35 +520,37 @@ fun AssistantScreen(
     if (menu) JActionSheet(
         title = LocalPersonaName.current, onDismiss = { menu = false },
         actions = buildList {
-            listOf("助手设置", "知识库").forEach { label ->
-                add(JAction(label, onClick = {
-                    if (label == "知识库" && onKnowledge != null) onKnowledge()
-                    else if (label == "助手设置" && management != null) settingsOpen = true
-                    else info = label
+            listOf(AssistantInfo.Settings, AssistantInfo.Knowledge).forEach { topic ->
+                add(JAction(resources.getString(topic.title), onClick = {
+                    if (topic == AssistantInfo.Knowledge && onKnowledge != null) onKnowledge()
+                    else if (topic == AssistantInfo.Settings && management != null) settingsOpen = true
+                    else info = topic
                 }))
             }
-            onVoice?.let { open -> add(JAction("语音对话", onClick = open)) }
-            add(JAction("会话信息", onClick = { info = "会话信息" }))
-            if (onMain && mainActions.compact) add(JAction("压缩上下文", separatorBefore = true,
+            onVoice?.let { open -> add(JAction(resources.getString(R.string.assistant_voice_chat), onClick = open)) }
+            add(JAction(resources.getString(R.string.assistant_info_session), onClick = { info = AssistantInfo.Session }))
+            if (onMain && mainActions.compact) add(JAction(resources.getString(R.string.assistant_compact), separatorBefore = true,
                 enabled = !compacting && compaction.line != CompactionLine.Running, onClick = ::compactMain))
-            if (onMain && mainActions.newMain) add(JAction("新建主对话", separatorBefore = !mainActions.compact,
+            if (onMain && mainActions.newMain) add(JAction(resources.getString(R.string.assistant_new_main), separatorBefore = !mainActions.compact,
                 enabled = !newMainBusy, onClick = { newMainOpen = true }))
-            active?.let { key -> add(JAction("拷贝会话 ID", separatorBefore = true, onClick = { copyId(key) })) }
+            active?.let { key -> add(JAction(resources.getString(R.string.assistant_copy_session_id), separatorBefore = true, onClick = { copyId(key) })) }
         },
     )
     if (newMainOpen) {
-        JDialog(onDismiss = { if (!newMainBusy) newMainOpen = false }, title = NewMainTitle,
-            text = newMainText(java.time.LocalDate.now()), confirmEnabled = !newMainBusy,
-            confirm = "新建" to ::newMain, dismiss = "取消" to { if (!newMainBusy) newMainOpen = false }) {
-            JSwitchRow(CarrySummaryTitle, carrySummary, { carrySummary = it }, subtitle = CarrySummaryHint,
+        JDialog(onDismiss = { if (!newMainBusy) newMainOpen = false }, title = stringResource(R.string.assistant_new_main_title),
+            text = newMainText(resources, java.time.LocalDate.now(), locale), confirmEnabled = !newMainBusy,
+            confirm = stringResource(R.string.assistant_create) to ::newMain,
+            dismiss = stringResource(R.string.assistant_cancel) to { if (!newMainBusy) newMainOpen = false }) {
+            JSwitchRow(stringResource(R.string.assistant_carry_summary), carrySummary, { carrySummary = it },
+                subtitle = stringResource(R.string.assistant_carry_summary_hint),
                 enabled = !newMainBusy)
         }
     }
     ending?.let { session ->
-        JDialog(onDismiss = { if (!endingBusy) ending = null }, title = "结束这个对话？",
-            text = "「${session.conversationTitle()}」会停止运行。历史记录仍会保留。",
+        JDialog(onDismiss = { if (!endingBusy) ending = null }, title = stringResource(R.string.assistant_end_title),
+            text = stringResource(R.string.assistant_end_text, session.conversationTitle(words)),
             destructive = true, confirmEnabled = !endingBusy,
-            confirm = "结束对话" to {
+            confirm = stringResource(R.string.assistant_end) to {
                 endingBusy = true
                 scope.launch {
                     try {
@@ -553,31 +560,43 @@ fun AssistantScreen(
                         if (active == session.key) newConversation()
                         assistantAttempt { repository.refresh() }
                     } catch (cancelled: CancellationException) { throw cancelled }
-                    catch (_: Exception) { snackbar.showSnackbar("暂时没能结束对话，请刷新列表后重试") }
+                    catch (_: Exception) { snackbar.showSnackbar(resources.getString(R.string.assistant_end_failed)) }
                     finally { endingBusy = false }
                 }
-            }, dismiss = "取消" to { if (!endingBusy) ending = null })
+            }, dismiss = stringResource(R.string.assistant_cancel) to { if (!endingBusy) ending = null })
     }
-    info?.let { title ->
-        JDialog(onDismiss = { info = null }, title = title,
-            text = when (title) {
-                "定时任务" -> "体验模式里没有定时任务。连上自己的 hub 以后，可以在这里管理 Persona 的定时任务、跟进和运行记录。"
-                "知识库" -> "在这里查看人、群和项目的资料。知识库内容尚未接入。"
-                "助手设置" -> "体验模式里没有助手设置。连上自己的 hub 以后，可以选 Persona 在哪台机器上运行，改关于我和记忆。"
-                "会话信息" -> if (active == null) "当前还没有打开对话。" else "当前对话：${active.sessionId}"
-                else -> "启动器配置尚未接入。"
-            }, confirm = "知道了" to { info = null }, dismiss = null)
+    info?.let { topic ->
+        JDialog(onDismiss = { info = null }, title = stringResource(topic.title),
+            text = when (topic) {
+                AssistantInfo.Schedule -> stringResource(R.string.assistant_info_schedule_text)
+                AssistantInfo.Knowledge -> stringResource(R.string.assistant_info_knowledge_text)
+                AssistantInfo.Settings -> stringResource(R.string.assistant_info_settings_text)
+                AssistantInfo.Session -> if (active == null) stringResource(R.string.assistant_info_session_none)
+                    else stringResource(R.string.assistant_info_session_text, active.sessionId)
+                AssistantInfo.Launcher -> stringResource(R.string.assistant_info_launcher_text)
+            }, confirm = stringResource(R.string.assistant_got_it) to { info = null }, dismiss = null)
     }
 }
 
-private data class Suggestion(val icon: PhIcon, val title: String, val detail: String, val prompt: String)
+/** What the drawer's 更多 rows and the title menu explain when there is nothing to open (the demo, a missing hub). */
+internal enum class AssistantInfo(@androidx.annotation.StringRes val title: Int) {
+    Schedule(R.string.assistant_info_schedule),
+    Knowledge(R.string.assistant_info_knowledge),
+    Settings(R.string.assistant_info_settings),
+    Session(R.string.assistant_info_session),
+    Launcher(R.string.assistant_info_launcher),
+}
+
+/** A suggestion card; [prompt] is sent as the user's own message, so it is in the user's language too. */
+private data class Suggestion(val icon: PhIcon, @androidx.annotation.StringRes val title: Int,
+    @androidx.annotation.StringRes val detail: Int, @androidx.annotation.StringRes val prompt: Int)
 private val suggestions = listOf(
-    Suggestion(PhIcons.Tray, "分拣收件箱", "先看 @我 和要回复的", "帮我整理收件箱，先看 @我 和需要回复的消息。"),
-    Suggestion(PhIcons.Terminal, "Agent 进度", "各台电脑上在做什么", "看看各台电脑上的 Agent 在做什么。"),
-    Suggestion(PhIcons.CalendarBlank, "今天的日程", "读手机日历", "看一下我今天的安排，合并手机日历和飞书日历，按时间列出来。"),
-    Suggestion(PhIcons.Clock, "5 点提醒我", "到点在手机上跟进", "请在今天 17 点提醒我，先问我要提醒什么；如果时间已经过了，请先确认日期。"),
-    Suggestion(PhIcons.BookOpen, "查知识库", "人、群、项目", "帮我查知识库，先问我想了解什么。"),
-    Suggestion(PhIcons.FileText, "总结一篇文档", "粘贴链接就行", "帮我总结一篇文档，接下来我会发链接。"),
+    Suggestion(PhIcons.Tray, R.string.assistant_suggest_inbox, R.string.assistant_suggest_inbox_detail, R.string.assistant_suggest_inbox_prompt),
+    Suggestion(PhIcons.Terminal, R.string.assistant_suggest_agents, R.string.assistant_suggest_agents_detail, R.string.assistant_suggest_agents_prompt),
+    Suggestion(PhIcons.CalendarBlank, R.string.assistant_suggest_calendar, R.string.assistant_suggest_calendar_detail, R.string.assistant_suggest_calendar_prompt),
+    Suggestion(PhIcons.Clock, R.string.assistant_suggest_remind, R.string.assistant_suggest_remind_detail, R.string.assistant_suggest_remind_prompt),
+    Suggestion(PhIcons.BookOpen, R.string.assistant_suggest_knowledge, R.string.assistant_suggest_knowledge_detail, R.string.assistant_suggest_knowledge_prompt),
+    Suggestion(PhIcons.FileText, R.string.assistant_suggest_doc, R.string.assistant_suggest_doc_detail, R.string.assistant_suggest_doc_prompt),
 )
 
 @Composable
@@ -596,9 +615,9 @@ private fun AssistantHome(
         if (demo) item(span = { GridItemSpan(2) }) { AssistantDemoNotice() }
         item(span = { GridItemSpan(2) }) {
             Column(Modifier.padding(vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(greeting(LocalTime.now().hour), style = PersonaTheme.type.largeTitle, color = PersonaTheme.palette.ink)
-                Text("消息、日程和手头的事，都可以交给我。", style = PersonaTheme.type.voice, color = PersonaTheme.palette.ink2)
-                Text("发出的内容会进入主对话，离线时先保存在本机。", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
+                Text(stringResource(greeting(LocalTime.now().hour)), style = PersonaTheme.type.largeTitle, color = PersonaTheme.palette.ink)
+                Text(stringResource(R.string.assistant_home_lead), style = PersonaTheme.type.voice, color = PersonaTheme.palette.ink2)
+                Text(stringResource(R.string.assistant_home_note), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
             }
         }
         // What waits on the user comes before what Persona could do: the suggestions stay under it.
@@ -606,28 +625,29 @@ private fun AssistantHome(
             NeedsYouSection(needsYou, onNeed, onMore)
         }
         items(suggestions) { suggestion ->
+            val prompt = stringResource(suggestion.prompt)
             JCard(Modifier.fillMaxWidth().heightIn(min = 144.dp), padding = 16.dp,
-                onClick = if (enabled) ({ onSuggestion(suggestion.prompt) }) else null) {
+                onClick = if (enabled) ({ onSuggestion(prompt) }) else null) {
                 JIcon(suggestion.icon, null, tint = PersonaTheme.palette.accent)
                 Spacer(Modifier.height(12.dp))
-                Text(suggestion.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Text(stringResource(suggestion.title), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
                 Spacer(Modifier.height(4.dp))
-                Text(suggestion.detail, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
+                Text(stringResource(suggestion.detail), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         item(span = { GridItemSpan(2) }) {
             Column {
-                JSectionHeader("在线设备")
+                JSectionHeader(stringResource(R.string.assistant_online_devices))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     machines.filter { it.online }.distinctBy { it.id }.forEach { machine ->
                         JChip(machine.displayName, icon = PhIcons.Desktop)
                     }
                     JChip(when (phoneToolsAvailable) {
-                        true -> "这台手机"
-                        false -> "手机工具暂不可用"
-                        null -> "手机权限待确认"
+                        true -> stringResource(R.string.assistant_this_phone)
+                        false -> stringResource(R.string.assistant_phone_tools_unavailable)
+                        null -> stringResource(R.string.assistant_phone_permissions_pending)
                     }, icon = PhIcons.DeviceMobile)
                 }
             }
@@ -640,7 +660,7 @@ internal fun AssistantDrawer(
     face: PersonaState,
     query: String, onQuery: (String) -> Unit, groups: ConversationGroups, active: SessionKey?, hasMain: Boolean,
     onEnd: ((Session) -> Unit)?,
-    onMain: () -> Unit, onOpen: (SessionKey) -> Unit, onInfo: (String) -> Unit,
+    onMain: () -> Unit, onOpen: (SessionKey) -> Unit, onInfo: (AssistantInfo) -> Unit,
     onNew: () -> Unit, onHome: () -> Unit, onSettings: () -> Unit,
     onPin: ((Session) -> Unit)? = null, onUnpinAll: (() -> Unit)? = null, onCopy: (Session) -> Unit = {},
     showAllRecent: Boolean = false, onShowAllRecent: () -> Unit = {},
@@ -655,7 +675,7 @@ internal fun AssistantDrawer(
                     Text(LocalPersonaName.current, style = PersonaTheme.type.title, color = PersonaTheme.palette.ink)
                 }
             }
-            item { JSearchField(query, onQuery, "搜索对话") }
+            item { JSearchField(query, onQuery, stringResource(R.string.assistant_search_chats)) }
             // The main conversation is always first, under Persona's own name and face (iOS's sidebar): it has no pin
             // of its own. Its session keeps its id and title; only the row reads differently.
             if (groups.main != null) item {
@@ -666,16 +686,17 @@ internal fun AssistantDrawer(
             } else if (query.isBlank()) item {
                 JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
                     JRow(LocalPersonaName.current, leading = { PersonaMark() }, onClick = onMain,
-                        subtitle = if (hasMain) null else "开始主对话")
+                        subtitle = if (hasMain) null else stringResource(R.string.assistant_start_main))
                 }
             }
             if (groups.pinned.isNotEmpty()) item(key = "pinned-header") {
                 var pinMenu by remember { mutableStateOf(false) }
-                JSectionHeader("置顶", count = groups.pinned.size, action = if (onUnpinAll != null) ({
-                    JIconButton(PhIcons.DotsThree, "置顶操作", { pinMenu = true })
+                JSectionHeader(stringResource(R.string.assistant_pinned), count = groups.pinned.size, action = if (onUnpinAll != null) ({
+                    JIconButton(PhIcons.DotsThree, stringResource(R.string.assistant_pinned_actions), { pinMenu = true })
                 }) else null)
                 if (pinMenu && onUnpinAll != null) JActionSheet(
-                    listOf(JAction("全部取消置顶", PhIcons.PushPin, onClick = onUnpinAll)), { pinMenu = false }, title = "置顶",
+                    listOf(JAction(stringResource(R.string.assistant_unpin_all), PhIcons.PushPin, onClick = onUnpinAll)), { pinMenu = false },
+                    title = stringResource(R.string.assistant_pinned),
                 )
             }
             itemsIndexed(groups.pinned, key = { _, session -> session.key.path }) { index, session ->
@@ -687,7 +708,7 @@ internal fun AssistantDrawer(
             // The most recent 30, then one row for the rest (a search shows everything it finds).
             val recent = recentRows(groups.recent, query, showAllRecent)
             val recentCount = recent.shown.size + if (recent.hidden > 0) 1 else 0
-            if (groups.recent.isNotEmpty()) item(key = "recent-header") { JSectionHeader("最近", count = groups.recent.size) }
+            if (groups.recent.isNotEmpty()) item(key = "recent-header") { JSectionHeader(stringResource(R.string.assistant_recent), count = groups.recent.size) }
             itemsIndexed(recent.shown, key = { _, session -> session.key.path }) { index, session ->
                 ConversationRow(session, main = false, selected = session.key == active,
                     position = GroupPosition.of(index, recentCount),
@@ -696,14 +717,14 @@ internal fun AssistantDrawer(
             }
             if (recent.hidden > 0) item(key = "recent-all") {
                 JGroupItem(GroupPosition.of(recentCount - 1, recentCount)) {
-                    DrawerItem("查看全部 ${groups.recent.size} 个", PhIcons.ChatsCircle, onShowAllRecent)
+                    DrawerItem(pluralStringResource(R.plurals.assistant_show_all_recent, groups.recent.size, groups.recent.size), PhIcons.ChatsCircle, onShowAllRecent)
                 }
             }
             if (groups.main == null && groups.pinned.isEmpty() && groups.recent.isEmpty()) {
-                item { JEmptyState(if (query.isBlank()) "还没有对话" else "没有找到匹配的对话",
-                    if (query.isBlank()) "发一句话，开始和 Persona 聊聊。" else "换个关键词再试试。") }
+                item { JEmptyState(stringResource(if (query.isBlank()) R.string.assistant_empty_title else R.string.assistant_no_match),
+                    stringResource(if (query.isBlank()) R.string.assistant_empty_detail else R.string.assistant_no_match_detail)) }
             }
-            item { JSectionHeader("更多") }
+            item { JSectionHeader(stringResource(R.string.assistant_more)) }
             // Assistant details remain available from the Persona tab's toolbar, not as a drawer row.
             val totalMore = if (showTodos && onTodos != null) 6 else 5
             // Each row's place in the group is taken while the list is built: counted inside an item's own content, it
@@ -713,16 +734,16 @@ internal fun AssistantDrawer(
                 val position = GroupPosition.of(moreIndex++, totalMore)
                 item { JGroupItem(position) { content() } }
             }
-            more { DrawerItem("返回首页", PhIcons.House, onHome) }
-            if (showTodos && onTodos != null) more { DrawerItem("待办", PhIcons.ListChecks, badge = todoCount, onClick = onTodos) }
-            more { DrawerItem("定时任务", PhIcons.Clock) { onInfo("定时任务") } }
-            more { DrawerItem("知识库", PhIcons.BookOpen) { onInfo("知识库") } }
-            more { DrawerItem("会话信息", PhIcons.Info) { onInfo("会话信息") } }
-            more { DrawerItem("启动器", PhIcons.RocketLaunch) { onInfo("启动器") } }
+            more { DrawerItem(stringResource(R.string.assistant_home), PhIcons.House, onHome) }
+            if (showTodos && onTodos != null) more { DrawerItem(stringResource(R.string.assistant_todos), PhIcons.ListChecks, badge = todoCount, onClick = onTodos) }
+            more { DrawerItem(stringResource(AssistantInfo.Schedule.title), PhIcons.Clock) { onInfo(AssistantInfo.Schedule) } }
+            more { DrawerItem(stringResource(AssistantInfo.Knowledge.title), PhIcons.BookOpen) { onInfo(AssistantInfo.Knowledge) } }
+            more { DrawerItem(stringResource(AssistantInfo.Session.title), PhIcons.Info) { onInfo(AssistantInfo.Session) } }
+            more { DrawerItem(stringResource(AssistantInfo.Launcher.title), PhIcons.RocketLaunch) { onInfo(AssistantInfo.Launcher) } }
         }
         Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            JButton("新对话", onNew, Modifier.weight(1f), icon = PhIcons.NotePencil)
-            JIconButton(PhIcons.Gear, "设置", onSettings)
+            JButton(stringResource(R.string.assistant_new_conversation), onNew, Modifier.weight(1f), icon = PhIcons.NotePencil)
+            JIconButton(PhIcons.Gear, stringResource(R.string.assistant_open_settings), onSettings)
         }
     }
 }
@@ -741,7 +762,7 @@ private fun ConversationRow(
     // The channel its latest message came in from (WeChat, the Feishu bot…), as a small mark after the title.
     val channels = LocalChannels.current
     val channel = remember(session.channels, channels) { ChannelSources.latest(session.channels, channels) }
-    val title = if (main) LocalPersonaName.current else session.conversationTitle()
+    val title = if (main) LocalPersonaName.current else session.conversationTitle(conversationWords())
     JGroupItem(position, modifier) {
         // The time goes on the line under the title, with the state: beside the title it left the title two or three
         // characters in the wide window's 300dp list (2026-11-02), and a narrow drawer cut it short too.
@@ -750,11 +771,11 @@ private fun ConversationRow(
             subtitle = session.lastText?.takeIf { it.isNotBlank() },
             leading = { if (main) PersonaMark() else JIcon(if (selected) PhIcons.CheckCircle else PhIcons.ChatCircle, null,
                 selected = selected, tint = if (selected) PersonaTheme.palette.accent else PersonaTheme.palette.ink2) },
-            trailing = { JIconButton(PhIcons.DotsThree, "对话操作", { menu = true }) }, chevron = false)
+            trailing = { JIconButton(PhIcons.DotsThree, stringResource(R.string.assistant_conversation_actions), { menu = true }) }, chevron = false)
         Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             StatusLabel(session.conversationStatus())
-            conversationTime(session.updated)?.let { time ->
+            conversationTime(session.updated, currentLocale)?.let { time ->
                 Text(time, Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End)
             }
@@ -762,16 +783,19 @@ private fun ConversationRow(
     }
     if (menu) JActionSheet(
         title = title, onDismiss = { menu = false },
-        actions = conversationActions(pinned, session.isLive, onPin, onCopy, onEnd),
+        actions = conversationActions(androidx.compose.ui.platform.LocalResources.current, pinned, session.isLive, onPin, onCopy, onEnd),
     )
 }
 
 /** The history row's menu: 置顶 / 取消置顶 (when it can be pinned), 拷贝会话 ID, then 结束对话 while it runs. */
-internal fun conversationActions(pinned: Boolean, live: Boolean, onPin: (() -> Unit)?, onCopy: () -> Unit, onEnd: (() -> Unit)?): List<JAction> =
+internal fun conversationActions(
+    resources: android.content.res.Resources, pinned: Boolean, live: Boolean, onPin: (() -> Unit)?, onCopy: () -> Unit,
+    onEnd: (() -> Unit)?,
+): List<JAction> =
     buildList {
-        onPin?.let { add(JAction(if (pinned) "取消置顶" else "置顶", PhIcons.PushPin, onClick = it)) }
-        add(JAction("拷贝会话 ID", PhIcons.Copy, onClick = onCopy))
-        if (onEnd != null && live) add(JAction("结束对话", PhIcons.Stop, destructive = true, separatorBefore = true, onClick = onEnd))
+        onPin?.let { add(JAction(resources.getString(if (pinned) R.string.assistant_unpin else R.string.assistant_pin), PhIcons.PushPin, onClick = it)) }
+        add(JAction(resources.getString(R.string.assistant_copy_session_id), PhIcons.Copy, onClick = onCopy))
+        if (onEnd != null && live) add(JAction(resources.getString(R.string.assistant_end), PhIcons.Stop, destructive = true, separatorBefore = true, onClick = onEnd))
     }
 
 /** Persona's face, still, in a row's icon slot: the main conversation's mark. */
@@ -794,11 +818,12 @@ private fun DrawerItem(title: String, icon: PhIcon, badge: Int, onClick: () -> U
 }
 
 @Composable
-internal fun AssistantDemoNotice() = JNotice("内容仅保存在本次体验中。", title = "体验模式", icon = PhIcons.Info)
+internal fun AssistantDemoNotice() = JNotice(stringResource(R.string.assistant_demo_notice), title = stringResource(R.string.assistant_demo_title), icon = PhIcons.Info)
 
 @Composable
 internal fun AssistantDemo(navigator: Navigator) {
-    val repository = remember { DemoAssistantRepository() }
+    val words = demoWords()
+    val repository = remember { DemoAssistantRepository(words) }
     val messages by repository.outbox.collectAsStateWithLifecycle()
     AssistantScreen(navigator, repository, repository, repository::start, repository.pinned, demo = true,
         chatContent = { session ->
@@ -806,7 +831,7 @@ internal fun AssistantDemo(navigator: Navigator) {
                 items(messages.filter { it.session == session }, key = { it.clientMessageId }) { message ->
                     UserBubble(message.text)
                 }
-                item { Text("这是示例对话。接入助手后，回复会显示在这里。", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2) }
+                item { Text(stringResource(R.string.assistant_demo_reply), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2) }
             }
         })
 }

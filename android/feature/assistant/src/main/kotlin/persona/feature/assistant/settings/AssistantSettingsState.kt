@@ -1,6 +1,9 @@
 package persona.feature.assistant.settings
 
 import android.content.Context
+import android.content.res.Resources
+import androidx.annotation.StringRes
+import persona.feature.assistant.R
 import persona.core.contracts.Machine
 import persona.core.contracts.api.AssistantConfig
 import persona.core.contracts.api.AssistantConfigUpdate
@@ -62,19 +65,36 @@ internal suspend fun followPhoneZone(api: AssistantSettingsApi, choice: Timezone
 }
 
 /** Moving the assistant to another machine, waiting for the user to confirm. */
-internal data class MachineMove(val fromName: String, val to: Machine) {
-    val title: String get() = "换到「${to.displayName}」上运行？"
-    val text: String get() = machineMoveWarning(fromName, to.displayName, to.online)
+internal data class MachineMove(val fromName: SettingsText, val to: Machine) {
+    fun title(resources: Resources): String = resources.getString(R.string.assistant_settings_move_title, to.displayName)
+    fun text(resources: Resources): String = machineMoveWarning(resources, fromName.resolve(resources), to.displayName, to.online)
 }
 
 /** Conversations and memory are files on the machine the assistant runs on: they never move with it. */
-internal fun machineMoveWarning(from: String, to: String, online: Boolean): String = buildString {
-    append("记忆和会话记录在原来那台机器上，不会跟过去。")
-    append("换过去以后，Persona 在「$to」上从头开始：没有之前的记忆，主对话也重新开始；原来的记录留在「$from」上，换回来就还在。")
-    if (!online) append("\n\n「$to」现在离线，连上之前 Persona 不能回复。")
+internal fun machineMoveWarning(resources: Resources, from: String, to: String, online: Boolean): String = buildString {
+    append(resources.getString(R.string.assistant_settings_move_text,
+        resources.getString(R.string.assistant_settings_move_stays), resources.getString(R.string.assistant_settings_move_fresh, to, from)))
+    if (!online) append("\n\n").append(resources.getString(R.string.assistant_settings_move_offline, to))
 }
 
-internal data class SettingsNotice(val text: String, val error: Boolean)
+/**
+ * Text the state hands the page: a string resource and its arguments, resolved in the page's language. An argument
+ * may itself be a [SettingsText] (a fallback name such as 原来那台机器).
+ */
+internal class SettingsText(@StringRes val id: Int, vararg val args: Any) {
+    fun resolve(resources: Resources): String =
+        resources.getString(id, *args.map { if (it is SettingsText) it.resolve(resources) else it }.toTypedArray())
+
+    override fun equals(other: Any?): Boolean = other is SettingsText && other.id == id && other.args.contentEquals(args)
+    override fun hashCode(): Int = 31 * id + args.contentHashCode()
+
+    companion object {
+        /** A name the user or the hub gave: shown as it is in every language. */
+        fun plain(text: String) = SettingsText(R.string.assistant_settings_plain, text)
+    }
+}
+
+internal data class SettingsNotice(val text: SettingsText, val error: Boolean)
 
 internal data class MemoryState(
     val entries: List<MemoryEntry>? = null,
@@ -130,8 +150,8 @@ internal class AssistantSettingsState(
     fun requestMove(to: Machine, machines: List<Machine>) {
         val config = state.value.config ?: return
         if (state.value.busy || to.id == config.machineId) return
-        val from = machines.firstOrNull { it.id == config.machineId }?.displayName ?: config.machineId.ifBlank { "原来那台机器" }
-        set { copy(move = MachineMove(from, to)) }
+        val from = machines.firstOrNull { it.id == config.machineId }?.displayName ?: config.machineId.ifBlank { null }
+        set { copy(move = MachineMove(from?.let(SettingsText::plain) ?: SettingsText(R.string.assistant_settings_move_from_unknown), to)) }
     }
 
     fun cancelMove() = set { copy(move = null) }
@@ -139,11 +159,11 @@ internal class AssistantSettingsState(
     suspend fun confirmMove() {
         val move = state.value.move ?: return
         set { copy(move = null) }
-        val moved = perform("没换成，Persona 还在「${move.fromName}」上运行，请重试。") {
+        val moved = perform(SettingsText(R.string.assistant_settings_move_failed, move.fromName)) {
             // The main conversation is a transcript on the old machine; the next message starts a new one here.
             val config = api.updateConfig(AssistantConfigUpdate(machineId = move.to.id, main = AssistantConfigUpdate.CLEAR_MAIN))
             set { copy(config = config, memory = MemoryState()) }
-            done("Persona 换到「${move.to.displayName}」上了，新对话从这里开始。")
+            done(SettingsText(R.string.assistant_settings_move_done, move.to.displayName))
         }
         if (!moved) return
         quietly { mainChanged() }
@@ -155,7 +175,7 @@ internal class AssistantSettingsState(
         if (state.value.busy || follow == state.value.followPhone) return
         timezone.followPhone = follow
         set { copy(followPhone = follow) }
-        if (follow) perform("时区没同步上，请重试。") {
+        if (follow) perform(SettingsText(R.string.assistant_settings_zone_sync_failed)) {
             val synced = followPhoneZone(api, timezone, state.value.config)
             set { copy(config = synced) }
         }
@@ -163,17 +183,17 @@ internal class AssistantSettingsState(
 
     suspend fun chooseZone(zone: String) {
         if (state.value.followPhone || zone.isBlank() || zone == state.value.config?.timezone) return
-        perform("时区没改成，请重试。") {
+        perform(SettingsText(R.string.assistant_settings_zone_failed)) {
             val updated = api.updateConfig(AssistantConfigUpdate(timezone = zone))
             set { copy(config = updated) }
-            done("定时任务改按 $zone 的时刻运行")
+            done(SettingsText(R.string.assistant_settings_zone_done, zone))
         }
     }
 
-    suspend fun saveNotes(text: String): Boolean = perform("没保存上，修改的内容还在，请重试。") {
+    suspend fun saveNotes(text: String): Boolean = perform(SettingsText(R.string.assistant_settings_save_failed)) {
         val updated = api.updateConfig(AssistantConfigUpdate(notes = text))
         set { copy(config = updated) }
-        done("已保存，新对话起生效")
+        done(SettingsText(R.string.assistant_settings_notes_saved))
     }
 
     suspend fun loadMemory() {
@@ -186,7 +206,7 @@ internal class AssistantSettingsState(
     }
 
     suspend fun saveMemory(name: String, content: String): Boolean {
-        val saved = perform("没保存上，修改的内容还在，请重试。") {
+        val saved = perform(SettingsText(R.string.assistant_settings_save_failed)) {
             api.saveMemory(name, content)
             // Show the edit right away; the reload below picks up anything else that changed meanwhile.
             set {
@@ -194,25 +214,25 @@ internal class AssistantSettingsState(
                 val (entries, index) = memoryEntries(files.map { if (it.name == name) it.copy(content = content) else it })
                 copy(memory = memory.copy(entries = entries, index = index))
             }
-            done("记忆已更新")
+            done(SettingsText(R.string.assistant_settings_memory_saved))
         }
         if (saved) loadMemory()
         return saved
     }
 
     suspend fun deleteMemory(name: String): Boolean {
-        val deleted = perform("没删掉，请重试。") {
+        val deleted = perform(SettingsText(R.string.assistant_settings_delete_failed)) {
             api.deleteMemory(name)
             set { copy(memory = memory.copy(entries = memory.entries?.filterNot { it.file.name == name })) }
-            done("已删除这条记忆")
+            done(SettingsText(R.string.assistant_settings_memory_deleted))
         }
         if (deleted) loadMemory()
         return deleted
     }
 
-    private fun done(text: String) = set { copy(notice = SettingsNotice(text, error = false)) }
+    private fun done(text: SettingsText) = set { copy(notice = SettingsNotice(text, error = false)) }
 
-    private suspend fun perform(failure: String, block: suspend () -> Unit): Boolean {
+    private suspend fun perform(failure: SettingsText, block: suspend () -> Unit): Boolean {
         if (state.value.busy) return false
         set { copy(busy = true, notice = null) }
         return try { block(); true }
@@ -236,12 +256,13 @@ internal data class MemoryEntry(
     val type: String?,
     val body: String,
 ) {
-    val typeLabel: String? get() = when (type) {
+    /** The kind of memory in the page's language; a kind the app does not know is shown as written. */
+    fun typeLabel(resources: Resources): String? = when (type) {
         null -> null
-        "user" -> "用户"
-        "feedback" -> "反馈"
-        "project" -> "项目"
-        "reference" -> "参考"
+        "user" -> resources.getString(R.string.assistant_settings_memory_type_user)
+        "feedback" -> resources.getString(R.string.assistant_settings_memory_type_feedback)
+        "project" -> resources.getString(R.string.assistant_settings_memory_type_project)
+        "reference" -> resources.getString(R.string.assistant_settings_memory_type_reference)
         else -> type
     }
     val updated: Instant? get() = parseTime(file.updatedAt)
@@ -309,9 +330,9 @@ internal fun zoneOffset(zone: String, at: Instant = Instant.now()): String? = ru
     "UTC$sign$hours" + if (minutes != 0) String.format(Locale.ROOT, ":%02d", minutes) else ""
 }.getOrNull()
 
-/** The zone's Chinese name ("中国标准时间"), when the system has one. */
-internal fun zoneName(zone: String): String? = runCatching {
-    TimeZone.getTimeZone(ZoneId.of(zone)).getDisplayName(Locale.SIMPLIFIED_CHINESE).takeIf { it.isNotBlank() && !it.startsWith("GMT") }
+/** The zone's name in [locale] ("中国标准时间", "China Standard Time"), when the system has one. */
+internal fun zoneName(zone: String, locale: Locale): String? = runCatching {
+    TimeZone.getTimeZone(ZoneId.of(zone)).getDisplayName(locale).takeIf { it.isNotBlank() && !it.startsWith("GMT") }
 }.getOrNull()
 
 /** Region zones (Asia/Shanghai …) by offset, then name: what the picker lists. */
@@ -319,8 +340,8 @@ internal fun pickableZones(at: Instant = Instant.now()): List<String> = ZoneId.g
     .filter { '/' in it && !it.startsWith("Etc/") && !it.startsWith("SystemV/") && it.first().isUpperCase() }
     .sortedWith(compareBy<String> { runCatching { ZoneId.of(it).rules.getOffset(at).totalSeconds }.getOrDefault(0) }.thenBy { it })
 
-internal fun zoneMatches(zone: String, query: String): Boolean {
+internal fun zoneMatches(zone: String, query: String, locale: Locale): Boolean {
     val q = query.trim()
     return q.isEmpty() || zone.contains(q, ignoreCase = true) || zone.replace('_', ' ').contains(q, ignoreCase = true) ||
-        zoneName(zone)?.contains(q, ignoreCase = true) == true || zoneOffset(zone)?.contains(q, ignoreCase = true) == true
+        zoneName(zone, locale)?.contains(q, ignoreCase = true) == true || zoneOffset(zone)?.contains(q, ignoreCase = true) == true
 }

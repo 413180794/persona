@@ -7,9 +7,21 @@ import persona.core.contracts.api.MemoryFile
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.robolectric.RuntimeEnvironment
 import java.time.Instant
+import java.util.Locale
 
+/** Runs with Robolectric so the page's text resolves from the Chinese resources (the default test language). */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class AssistantSettingsStateTest {
+    private val res get() = RuntimeEnvironment.getApplication().resources
+    private val SettingsNotice.shown get() = text.resolve(res)
+    private val MemoryEntry.typeLabel get() = typeLabel(res)
+
     private class FakeApi : AssistantSettingsApi {
         var config = AssistantConfig(machineId = "server", launcher = "claude", cwd = "/home/me/.jarvis/assistant",
             timezone = "Asia/Shanghai", notesEffective = "from hub.json", main = "main-id")
@@ -75,10 +87,10 @@ class AssistantSettingsStateTest {
 
         state.requestMove(laptop, listOf(server, laptop))
         val move = requireNotNull(state.state.value.move)
-        assertEquals("换到「笔记本」上运行？", move.title)
-        assertTrue(move.text.startsWith("记忆和会话记录在原来那台机器上，不会跟过去。"))
-        assertTrue(move.text.contains("「服务器」"))
-        assertFalse(move.text.contains("离线"))
+        assertEquals("换到「笔记本」上运行？", move.title(res))
+        assertTrue(move.text(res).startsWith("记忆和会话记录在原来那台机器上，不会跟过去。"))
+        assertTrue(move.text(res).contains("「服务器」"))
+        assertFalse(move.text(res).contains("离线"))
         assertTrue("nothing is written before the user confirms", api.updates.isEmpty())
 
         state.cancelMove()
@@ -125,13 +137,13 @@ class AssistantSettingsStateTest {
         val state = AssistantSettingsState(api, Zone(), mainChanged = { mainChanged++ }) { moved++ }
         state.load()
         state.requestMove(offline, listOf(server, offline))
-        assertTrue(state.state.value.move!!.text.contains("「实验室」现在离线"))
+        assertTrue(state.state.value.move!!.text(res).contains("「实验室」现在离线"))
 
         api.fail = true
         state.confirmMove()
         assertEquals("server", state.state.value.config?.machineId)
         assertEquals("main-id", state.state.value.config?.main)
-        assertEquals("没换成，Persona 还在「服务器」上运行，请重试。", state.state.value.notice?.text)
+        assertEquals("没换成，Persona 还在「服务器」上运行，请重试。", state.state.value.notice?.shown)
         assertEquals(0, moved)
         assertEquals("the main conversation did not change", 0, mainChanged)
     }
@@ -213,11 +225,12 @@ class AssistantSettingsStateTest {
         assertTrue(state.saveMemory("morning.md", edited))
         assertEquals(listOf("morning.md" to edited), api.saved)
         assertEquals("早报一屏以内，先说结论。", state.state.value.memory.entries!!.first { it.file.name == "morning.md" }.body)
-        assertEquals(SettingsNotice("记忆已更新", error = false), state.state.value.notice)
+        assertEquals("记忆已更新", state.state.value.notice?.shown)
+        assertFalse(state.state.value.notice!!.error)
 
         api.fail = true
         assertFalse(state.saveMemory("morning.md", "won't land"))
-        assertEquals("没保存上，修改的内容还在，请重试。", state.state.value.notice?.text)
+        assertEquals("没保存上，修改的内容还在，请重试。", state.state.value.notice?.shown)
         assertFalse(state.deleteMemory("weekly.md"))
         assertEquals(2, state.state.value.memory.entries?.size)
 
@@ -225,7 +238,8 @@ class AssistantSettingsStateTest {
         assertTrue(state.deleteMemory("weekly.md"))
         assertEquals(listOf("weekly.md"), api.deleted)
         assertEquals(listOf("morning.md"), state.state.value.memory.entries?.map { it.file.name })
-        assertEquals(SettingsNotice("已删除这条记忆", error = false), state.state.value.notice)
+        assertEquals("已删除这条记忆", state.state.value.notice?.shown)
+        assertFalse(state.state.value.notice!!.error)
     }
 
     @Test fun unreadableMemoryIsReportedNotThrown() = runTest {
@@ -274,8 +288,8 @@ class AssistantSettingsStateTest {
         assertTrue("Asia/Shanghai" in zones)
         assertFalse(zones.any { it.startsWith("Etc/") })
         assertTrue(zones.indexOf("America/New_York") < zones.indexOf("Asia/Shanghai"))
-        assertTrue(zoneMatches("America/New_York", "new york"))
-        assertTrue(zoneMatches("Asia/Shanghai", "shanghai"))
-        assertFalse(zoneMatches("Asia/Shanghai", "Paris"))
+        assertTrue(zoneMatches("America/New_York", "new york", Locale.ENGLISH))
+        assertTrue(zoneMatches("Asia/Shanghai", "shanghai", Locale.ENGLISH))
+        assertFalse(zoneMatches("Asia/Shanghai", "Paris", Locale.ENGLISH))
     }
 }

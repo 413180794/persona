@@ -16,6 +16,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
@@ -26,6 +27,7 @@ import persona.core.contracts.api.Routine
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.feature.assistant.LocalAssistantHost
+import persona.feature.assistant.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Duration
@@ -51,9 +53,10 @@ fun AssistantProactiveScreen(
     initialPage: String? = null,
 ) {
     if (management == null) {
-        JListPage(title = "主动做事", modifier = modifier, onBack = onBack) {
+        JListPage(title = stringResource(R.string.assistant_proactive_title), modifier = modifier, onBack = onBack) {
             item("unconnected") {
-                JEmptyState("还没有连上 hub", "连上 hub 后，可以在这里管理 Persona 的定时任务、跟进和运行记录。", icon = PhIcons.PlugsConnected)
+                JEmptyState(stringResource(R.string.assistant_proactive_unconnected_title), stringResource(R.string.assistant_proactive_unconnected_body),
+                    icon = PhIcons.PlugsConnected)
             }
         }
         return
@@ -61,7 +64,8 @@ fun AssistantProactiveScreen(
     // Writes and runs the user started go on in the pairing's scope when the page is left halfway.
     val hostScope = LocalAssistantHost.current?.coroutineScope
     val pageScope = rememberCoroutineScope()
-    val store = remember(management, hostScope) { ProactiveStore(management.proactive(), hostScope ?: pageScope) }
+    val say = rememberProactiveText()
+    val store = remember(management, hostScope, say) { ProactiveStore(management.proactive(), hostScope ?: pageScope, say) }
     ProactiveScreen(store, onBack, onOpenConversation, modifier, machines, initialPage)
 }
 
@@ -108,6 +112,7 @@ internal fun ProactiveScreen(
     initialPage: String? = null,
 ) {
     val state by store.state.collectAsStateWithLifecycle()
+    val say = rememberProactiveText()
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
     var notice by remember { mutableStateOf<String?>(null) }
@@ -120,7 +125,7 @@ internal fun ProactiveScreen(
     // Once the soonest thing is due, read again: it moves into the history and the routine's next run moves on.
     // Counted from the last read, not the ticking clock, so a tick cannot cancel the wait.
     val nextDue = remember(state.routines.value, state.followups.value, state.readAt) {
-        state.readAt?.let { read -> upcoming(state.routines.value.orEmpty(), state.followups.value.orEmpty()).firstOrNull { it.at.isAfter(read) }?.at }
+        state.readAt?.let { read -> upcoming(say, state.routines.value.orEmpty(), state.followups.value.orEmpty()).firstOrNull { it.at.isAfter(read) }?.at }
     }
     LaunchedEffect(nextDue) {
         val due = nextDue ?: return@LaunchedEffect
@@ -180,7 +185,7 @@ internal fun ProactiveScreen(
                     ProactivePage.Overview -> OverviewPage(state, machines, now, zone, ::pop, actions)
                     is ProactivePage.EditRoutine -> RoutineEditorPage(page.id, null, state, store, now, zone, ::pop, onOpenConversation,
                         onAllRuns = { push(ProactivePage.RunList(it)) }, onRunNow = runRoutine)
-                    is ProactivePage.AddRoutine -> RoutineEditorPage(null, RoutineTemplates.getOrNull(page.template)?.draft ?: BlankRoutine,
+                    is ProactivePage.AddRoutine -> RoutineEditorPage(null, RoutineTemplates.getOrNull(page.template)?.draft(say) ?: BlankRoutine,
                         state, store, now, zone, ::pop, onOpenConversation, onAllRuns = { push(ProactivePage.RunList(it)) }, onRunNow = runRoutine)
                     ProactivePage.FollowupList -> FollowupsPage(state, machines, now, zone, ::pop, actions)
                     is ProactivePage.RunList -> RunsPage(state, page.ref, now, zone, ::pop, actions)
@@ -189,50 +194,55 @@ internal fun ProactiveScreen(
         }
         notice?.let { message ->
             JNotice(message, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = pagePadding, vertical = Tokens.Space.l),
-                status = Status.NeedsYou, icon = PhIcons.WarningCircle, actionLabel = "知道了", onAction = { notice = null })
+                status = Status.NeedsYou, icon = PhIcons.WarningCircle, actionLabel = stringResource(R.string.assistant_proactive_got_it), onAction = { notice = null })
         }
     }
 
     if (templates) JActionSheet(
-        title = "新建定时任务", note = "从模板开始，保存前都可以改。", onDismiss = { templates = false },
-        actions = RoutineTemplates.mapIndexed { index, template -> JAction(template.name, template.icon) { push(ProactivePage.AddRoutine(index)) } } +
-            JAction("空白", PhIcons.NotePencil) { push(ProactivePage.AddRoutine(-1)) },
+        title = stringResource(R.string.assistant_proactive_new_routine), note = stringResource(R.string.assistant_proactive_templates_note),
+        onDismiss = { templates = false },
+        actions = RoutineTemplates.mapIndexed { index, template ->
+            JAction(stringResource(template.name), template.icon) { push(ProactivePage.AddRoutine(index)) }
+        } + JAction(stringResource(R.string.assistant_proactive_template_blank), PhIcons.NotePencil) { push(ProactivePage.AddRoutine(-1)) },
     )
     routineMenu?.let { routine ->
         JActionSheet(
-            title = routine.title, note = ScheduleText.sentence(routine.time, routine.weekdays), onDismiss = { routineMenu = null },
+            title = routine.title, note = say.sentence(routine.time, routine.weekdays), onDismiss = { routineMenu = null },
             actions = listOf(
-                JAction("立即运行", PhIcons.Play, enabled = !state.routineBusy(routine.id)) { runRoutine(routine.id) },
-                JAction("编辑", PhIcons.PencilSimple) { push(ProactivePage.EditRoutine(routine.id)) },
-                JAction("删除", PhIcons.Trash, destructive = true) { deleting = routine },
+                JAction(stringResource(R.string.assistant_proactive_run_now), PhIcons.Play, enabled = !state.routineBusy(routine.id)) { runRoutine(routine.id) },
+                JAction(stringResource(R.string.assistant_proactive_edit), PhIcons.PencilSimple) { push(ProactivePage.EditRoutine(routine.id)) },
+                JAction(stringResource(R.string.assistant_proactive_delete), PhIcons.Trash, destructive = true) { deleting = routine },
             ),
         )
     }
     followupMenu?.let { followup ->
         JActionSheet(
-            title = followup.displayTitle(), onDismiss = { followupMenu = null },
-            note = parseTime(followup.at)?.let { "到点：${ScheduleText.moment(it, now, zone)}，${ScheduleText.until(it, now, zone)}" },
+            title = followup.displayTitle(say), onDismiss = { followupMenu = null },
+            note = parseTime(followup.at)?.let { stringResource(R.string.assistant_proactive_followup_due, say.moment(it, now, zone), say.until(it, now, zone)) },
             actions = listOfNotNull(
-                JAction("立即运行", PhIcons.Play, enabled = !state.followupBusy(followup.id)) {
+                JAction(stringResource(R.string.assistant_proactive_run_now), PhIcons.Play, enabled = !state.followupBusy(followup.id)) {
                     store.launch { runFollowup(followup.id).onSuccess(onOpenConversation) }
                 },
-                followup.conversation()?.let { key -> JAction("打开原对话", PhIcons.ChatCircle) { onOpenConversation(key) } },
-                JAction("取消这个跟进", PhIcons.XCircle, destructive = true, enabled = !state.followupBusy(followup.id)) { cancelling = followup },
+                followup.conversation()?.let { key -> JAction(stringResource(R.string.assistant_proactive_open_chat), PhIcons.ChatCircle) { onOpenConversation(key) } },
+                JAction(stringResource(R.string.assistant_proactive_cancel_followup_action), PhIcons.XCircle, destructive = true,
+                    enabled = !state.followupBusy(followup.id)) { cancelling = followup },
             ),
         )
     }
     deleting?.let { routine ->
         JDialog(
-            onDismiss = { deleting = null }, title = "删除「${routine.title}」？", text = "删除后不再定时运行，已经跑过的对话还在。",
-            destructive = true, confirm = "删除" to { deleting = null; store.launch { save(RoutineChange.Delete(routine.id)) } },
-            dismiss = "取消" to { deleting = null },
+            onDismiss = { deleting = null }, title = stringResource(R.string.assistant_proactive_delete_title, routine.title),
+            text = stringResource(R.string.assistant_proactive_delete_body), destructive = true,
+            confirm = stringResource(R.string.assistant_proactive_delete) to { deleting = null; store.launch { save(RoutineChange.Delete(routine.id)) } },
+            dismiss = stringResource(R.string.assistant_proactive_cancel) to { deleting = null },
         )
     }
     cancelling?.let { followup ->
         JDialog(
-            onDismiss = { cancelling = null }, title = "取消这个跟进？", text = "「${followup.displayTitle()}」到点就不会再做了。",
-            destructive = true, confirm = "取消跟进" to { cancelling = null; store.launch { cancelFollowup(followup.id) } },
-            dismiss = "保留" to { cancelling = null },
+            onDismiss = { cancelling = null }, title = stringResource(R.string.assistant_proactive_cancel_followup_title),
+            text = stringResource(R.string.assistant_proactive_cancel_followup_body, followup.displayTitle(say)), destructive = true,
+            confirm = stringResource(R.string.assistant_proactive_cancel_followup_confirm) to { cancelling = null; store.launch { cancelFollowup(followup.id) } },
+            dismiss = stringResource(R.string.assistant_proactive_keep) to { cancelling = null },
         )
     }
 }

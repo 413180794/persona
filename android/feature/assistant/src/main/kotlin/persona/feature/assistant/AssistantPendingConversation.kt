@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.Session
@@ -27,7 +28,7 @@ internal fun AssistantPendingConversation(
         if (demo) item { AssistantDemoNotice() }
         item { StatusLine(assistantStatus(session, messages)) }
         if (messages.isEmpty()) item {
-            JEmptyState("问问 Persona", "发出的内容会先保存在本机，连上后继续发送。")
+            JEmptyState(stringResource(R.string.assistant_pending_empty_title), stringResource(R.string.assistant_pending_empty_detail))
         }
         items(messages, key = { it.clientMessageId }) { message ->
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End,
@@ -39,15 +40,15 @@ internal fun AssistantPendingConversation(
     }
 }
 
-@Preview(name = "离线首句（浅色）", showBackground = true, widthDp = 320, heightDp = 480)
-@Preview(name = "离线首句（深色）", showBackground = true, widthDp = 320, heightDp = 480,
+@Preview(name = "Offline first message (light)", showBackground = true, widthDp = 320, heightDp = 480)
+@Preview(name = "Offline first message (dark)", showBackground = true, widthDp = 320, heightDp = 480,
     uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun PendingConversationPreview() {
     PersonaTheme(dynamicColor = false) {
         JPage(title = "Persona") { padding ->
             AssistantPendingConversation(listOf(OutboxMessage("preview", PendingMainConversation,
-                "帮我整理今天的日程。", DeliveryState.WaitingForNetwork, mainTarget = true)), null,
+                stringResource(R.string.assistant_suggest_calendar_prompt), DeliveryState.WaitingForNetwork, mainTarget = true)), null,
                 Modifier.fillMaxSize(), contentPadding = padding)
         }
     }

@@ -1,11 +1,13 @@
 package persona.feature.assistant
 
+import android.content.Context
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dagger.Module
 import dagger.Provides
@@ -93,12 +95,14 @@ fun ConnectedAssistant(
 object AssistantSendingModule {
     @Provides
     @Singleton
-    fun mainConversationSender(data: HubDataStore, messages: MessageSender): MainConversationSender =
+    fun mainConversationSender(
+        @ApplicationContext context: Context, data: HubDataStore, messages: MessageSender,
+    ): MainConversationSender =
         object : MainConversationSender {
             override val outbox = messages.outbox
 
             override suspend fun sendToMain(text: String, clientMessageId: String, draft: DraftSnapshot?) {
-                val pairing = checkNotNull(data.restore()) { "请先配对 hub" }
+                val pairing = checkNotNull(data.restore()) { context.getString(R.string.assistant_pair_first) }
                 pairing.messages.sendToMain(text, clientMessageId, draft)
             }
 

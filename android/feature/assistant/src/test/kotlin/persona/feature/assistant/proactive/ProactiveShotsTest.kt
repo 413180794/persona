@@ -1,0 +1,139 @@
+package persona.feature.assistant.proactive
+
+import android.graphics.Bitmap
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.dp
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import persona.core.contracts.Machine
+import persona.core.contracts.SessionKey
+import persona.core.contracts.api.Followup
+import persona.core.contracts.api.Routine
+import persona.core.contracts.api.Run
+import persona.core.designsystem.*
+import java.io.File
+import java.time.Instant
+
+/**
+ * 设置 › 助手 › 主动做事 in each of the app's languages (docs/i18n.md): the overview, a routine, a new one from a
+ * template, all follow-ups and all runs, Glass light and dark (the overview in every style). The data is fake and
+ * written in the language of the shot, as a person would. Written as PNGs to `build/i18n-shots/` (or
+ * `-Dpersona.shots=<dir>`) to look at.
+ */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class ProactiveShotsTest {
+    @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
+
+    private fun out(): File = File(System.getProperty("persona.shots") ?: "build/i18n-shots").also { it.mkdirs() }
+
+    @Config(sdk = [35], qualifiers = "zh-w400dp-h1500dp-xhdpi")
+    @Test fun simplifiedChinese() = shots("zh", Words("主动做事", "定时任务", "早报", "周报", "晚间回顾", "看看 CI 跑完没有", "会前准备", "服务器"))
+
+    @Config(sdk = [35], qualifiers = "en-w400dp-h1500dp-xhdpi")
+    @Test fun english() = shots("en", Words("Proactive", "Scheduled task", "Morning briefing", "Weekly report", "Evening review",
+        "Check whether CI finished", "Meeting prep", "Server"))
+
+    @Config(sdk = [35], qualifiers = "ja-w400dp-h1500dp-xhdpi")
+    @Test fun japanese() = shots("ja", Words("自動実行", "定期タスク", "朝のまとめ", "週報", "夜の振り返り", "CIが終わったか確認", "会議の準備", "サーバー"))
+
+    /** The page title and the routine editor's title in the shot's language, then the user's own data. */
+    private class Words(
+        val title: String, val routine: String, val morning: String, val weekly: String, val evening: String,
+        val ci: String, val prep: String, val server: String,
+    )
+
+    private class FakeApi(var table: List<Routine>, val followups: List<Followup>, val runs: List<Run>) : ProactiveApi {
+        override suspend fun routines() = table
+        override suspend fun setRoutines(list: List<Routine>) = list.also { table = it }
+        override suspend fun runRoutine(id: String) = SessionKey("server", "run-$id")
+        override suspend fun followups() = followups
+        override suspend fun cancelFollowup(id: String) {}
+        override suspend fun runFollowup(id: String) = SessionKey("server", "run-$id")
+        override suspend fun runs() = runs
+        override suspend fun assistantMachine() = "server"
+    }
+
+    private fun shots(language: String, words: Words) {
+        val now = Instant.now()
+        fun at(minutes: Long) = now.plusSeconds(minutes * 60).toString()
+        val routines = listOf(
+            Routine(id = "morning", title = words.morning, prompt = words.morning, time = "09:00", weekdays = listOf(1, 2, 3, 4, 5),
+                enabled = true, lastRun = at(-60 * 20), lastSessionId = "s1", lastStatus = "ok", nextRun = at(150)),
+            Routine(id = "weekly", title = words.weekly, prompt = words.weekly, time = "17:00", weekdays = listOf(5), enabled = true,
+                createdBy = "assistant", lastRun = at(-60 * 24 * 3), lastStatus = "failed", lastError = "assistant machine is offline",
+                nextRun = at(60 * 24 * 3)),
+            Routine(id = "evening", title = words.evening, prompt = words.evening, time = "21:30", weekdays = listOf(1, 3, 5), enabled = false),
+        )
+        val followups = listOf(
+            Followup(id = "f1", at = at(40), title = words.prep, prompt = words.prep, machineId = "server", sessionId = "s2"),
+            Followup(id = "f2", at = at(60 * 5), prompt = words.ci, machineId = "server"),
+        )
+        val runs = listOf(
+            Run(id = "r1", kind = "routine", refId = "morning", title = words.morning, at = at(-60 * 20), due = at(-60 * 20), status = "ok",
+                machineId = "server", sessionId = "s1"),
+            Run(id = "r2", kind = "followup", title = words.prep, at = at(-60 * 26), status = "skipped"),
+            Run(id = "r3", kind = "routine", refId = "weekly", title = words.weekly, at = at(-60 * 24 * 3), status = "failed",
+                error = "assistant machine is offline"),
+            Run(id = "r4", kind = "routine", refId = "morning", title = words.morning, at = at(-60 * 24 * 2), status = "ok", manual = true),
+        )
+        val machines = listOf(Machine("server", name = words.server))
+        var style by mutableStateOf(AppStyle.Glass)
+        var dark by mutableStateOf(false)
+        var page by mutableStateOf<String?>(null)
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
+                Box(Modifier.testTag("shot").width(400.dp).height(1400.dp).background(PersonaTheme.palette.background)) {
+                    key(page) {
+                        val scope = rememberCoroutineScope()
+                        val say = rememberProactiveText()
+                        val store = remember { ProactiveStore(FakeApi(routines, followups, runs), scope, say) }
+                        ProactiveScreen(store, onBack = {}, onOpenConversation = {}, machines = machines, initialPage = page)
+                    }
+                }
+            }
+        }
+        fun capture(name: String) {
+            rule.waitForIdle()
+            val bitmap = rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap()
+            File(out(), "proactive-$language-$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        rule.waitForIdle()
+        assertTrue(rule.onAllNodesWithText(words.title).fetchSemanticsNodes().isNotEmpty())
+        for (s in AppStyle.entries) for (d in listOf(false, true)) {
+            if (s != AppStyle.Glass && d) continue
+            style = s; dark = d
+            capture("overview-${s.name.lowercase()}-${if (d) "dark" else "light"}")
+        }
+        style = AppStyle.Glass
+        for (target in listOf("routine:morning", "routine:weekly", "new:0", "followups", "runs")) {
+            page = target
+            for (d in listOf(false, true)) {
+                dark = d
+                capture("${target.replace(':', '-')}-glass-${if (d) "dark" else "light"}")
+            }
+        }
+    }
+}

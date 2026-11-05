@@ -5,7 +5,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDate
+import java.util.Locale
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class MainConversationActionsTest {
     private val first = "2026-11-04T00:30:00Z"
     private val second = "2026-11-04T01:00:00Z"
@@ -40,11 +47,9 @@ class MainConversationActionsTest {
     @Test fun aFailureSaysWhyAndStaysUntilClosed() {
         var status = CompactionStatus().observe(running()).observe(failed())
         assertEquals(CompactionLine.Failed("Not enough messages to compact"), status.line)
-        assertEquals("压缩失败：Not enough messages to compact", status.line?.text)
         status = status.observe(failed())
-        assertEquals("压缩失败：Not enough messages to compact", status.line?.text)
+        assertEquals(CompactionLine.Failed("Not enough messages to compact"), status.line)
         assertNull(status.dismissed().line)
-        assertEquals("压缩失败", CompactionLine.Failed("").text)
     }
 
     /** Asked for here: 正在压缩 at once; the old compaction still on the session is not this one's end. */
@@ -77,9 +82,11 @@ class MainConversationActionsTest {
     }
 
     @Test fun theDialogNamesTheDayAndTheNoticeWhatCarriedOver() {
-        assertEquals(true, newMainText(LocalDate.of(2026, 11, 4)).contains("「旧主对话 · 至 11月4日」"))
-        assertEquals("已新建主对话，会带上旧对话的摘要", newMainNotice(carried = true, asked = true))
-        assertEquals("已新建主对话，旧对话没有能带过来的内容", newMainNotice(carried = false, asked = true))
-        assertEquals("已新建主对话", newMainNotice(carried = false, asked = false))
+        val resources = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+        assertEquals(true, newMainText(resources, LocalDate.of(2026, 11, 4), Locale.forLanguageTag("zh-Hans")).contains("「旧主对话 · 至 11月4日」"))
+        fun notice(carried: Boolean, asked: Boolean) = resources.getString(newMainNotice(carried, asked))
+        assertEquals("已新建主对话，会带上旧对话的摘要", notice(carried = true, asked = true))
+        assertEquals("已新建主对话，旧对话没有能带过来的内容", notice(carried = false, asked = true))
+        assertEquals("已新建主对话", notice(carried = false, asked = false))
     }
 }

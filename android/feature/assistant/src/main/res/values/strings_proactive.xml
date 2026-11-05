@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English is the fallback for every language the app does not have (docs/i18n.md); values-zh and values-ja hold the same keys. -->
+<resources>
+    <!-- Settings › Assistant › Proactive -->
+    <string name="assistant_proactive_title">Proactive</string>
+    <string name="assistant_proactive_unconnected_title">Not connected to a hub yet</string>
+    <string name="assistant_proactive_unconnected_body">Once you connect to a hub, you can manage Persona\'s scheduled tasks, follow-ups and runs here.</string>
+    <string name="assistant_proactive_got_it">Got it</string>
+    <string name="assistant_proactive_retry">Retry</string>
+    <string name="assistant_proactive_new_routine">New scheduled task</string>
+    <string name="assistant_proactive_templates_note">Start from a template. You can change anything before saving.</string>
+    <string name="assistant_proactive_template_blank">Blank</string>
+    <string name="assistant_proactive_template_meeting_prep">Meeting prep</string>
+    <string name="assistant_proactive_template_weekly_report">Weekly report</string>
+    <string name="assistant_proactive_template_end_of_day">End-of-day review</string>
+    <string name="assistant_proactive_run_now">Run now</string>
+    <string name="assistant_proactive_edit">Edit</string>
+    <string name="assistant_proactive_delete">Delete</string>
+    <string name="assistant_proactive_cancel">Cancel</string>
+    <string name="assistant_proactive_followup_due">Due %1$s (%2$s)</string>
+    <string name="assistant_proactive_open_chat">Open original chat</string>
+    <string name="assistant_proactive_cancel_followup_action">Cancel this follow-up</string>
+    <string name="assistant_proactive_delete_title">Delete “%1$s”?</string>
+    <string name="assistant_proactive_delete_body">It won\'t run on a schedule anymore. Chats it already ran stay.</string>
+    <string name="assistant_proactive_cancel_followup_title">Cancel this follow-up?</string>
+    <string name="assistant_proactive_cancel_followup_body">“%1$s” won\'t happen when it\'s due.</string>
+    <string name="assistant_proactive_cancel_followup_confirm">Cancel follow-up</string>
+    <string name="assistant_proactive_keep">Keep</string>
+
+    <!-- Overview, follow-ups and runs -->
+    <string name="assistant_proactive_loading">Loading schedule…</string>
+    <string name="assistant_proactive_read_failed">Couldn\'t load the schedule</string>
+    <string name="assistant_proactive_empty_title">Nothing scheduled yet</string>
+    <string name="assistant_proactive_empty_body">Tap + at the top to add a scheduled task, or tell Persona in a chat, like “Give me a briefing every day at 9” or “Remind me in an hour”.</string>
+    <string name="assistant_proactive_upcoming">Coming up</string>
+    <string name="assistant_proactive_routines">Scheduled tasks</string>
+    <string name="assistant_proactive_no_routines">No scheduled tasks yet</string>
+    <string name="assistant_proactive_no_routines_body">Have Persona do something at a set time every day or week.</string>
+    <string name="assistant_proactive_routines_note">When it\'s time, Persona starts a new chat to do it and notifies your phone when done. Times use the time zone in assistant settings.</string>
+    <string name="assistant_proactive_followups">Scheduled follow-ups</string>
+    <string name="assistant_proactive_no_followups">No follow-ups scheduled</string>
+    <string name="assistant_proactive_no_followups_body">Say “Remind me in an hour” in a chat and Persona schedules it here.</string>
+    <plurals name="assistant_proactive_all_followups">
+        <item quantity="one">All %1$d follow-up</item>
+        <item quantity="other">All %1$d follow-ups</item>
+    </plurals>
+    <string name="assistant_proactive_followups_note">One-off follow-ups Persona scheduled for itself in a chat. It comes back and carries on when they\'re due.</string>
+    <string name="assistant_proactive_recent_runs">Recent runs</string>
+    <string name="assistant_proactive_all_runs">All runs</string>
+    <string name="assistant_proactive_followups_read_failed">Couldn\'t load follow-ups</string>
+    <string name="assistant_proactive_followups_empty_body">Say “Remind me in an hour…” or “Help me prepare before tomorrow\'s meeting” in a chat and Persona schedules it here.</string>
+    <string name="assistant_proactive_followups_page_note">Persona comes back and carries on when they\'re due. Tap ⋯ to run now or cancel; tap one that continues a chat to open it.</string>
+    <string name="assistant_proactive_unknown_time">Unknown time</string>
+    <string name="assistant_proactive_routine_runs">Runs of %1$s</string>
+    <string name="assistant_proactive_runs">Runs</string>
+    <string name="assistant_proactive_runs_read_failed">Couldn\'t load runs</string>
+    <string name="assistant_proactive_no_runs">No runs yet</string>
+    <string name="assistant_proactive_no_runs_body">Every run of a scheduled task or follow-up (including failed and skipped ones) is recorded here.</string>
+    <string name="assistant_proactive_no_routine_runs_body">Every run of this scheduled task (including failed and skipped ones) is recorded here.</string>
+
+    <!-- Rows -->
+    <string name="assistant_proactive_made_by_assistant">Made by Persona in a chat</string>
+    <string name="assistant_proactive_auto_run">Run “%1$s” automatically</string>
+    <string name="assistant_proactive_moment_until">%1$s (%2$s)</string>
+    <string name="assistant_proactive_actions_for">Actions for “%1$s”</string>
+    <string name="assistant_proactive_hours">Hours</string>
+    <string name="assistant_proactive_minutes">Minutes</string>
+
+    <!-- Routine editor -->
+    <string name="assistant_proactive_routine">Scheduled task</string>
+    <string name="assistant_proactive_time_format">Write the time as HH:MM</string>
+    <string name="assistant_proactive_fill_in">Fill in the name and what to do to save</string>
+    <string name="assistant_proactive_add">Add</string>
+    <string name="assistant_proactive_save">Save</string>
+    <string name="assistant_proactive_saving">Saving…</string>
+    <string name="assistant_proactive_routine_read_failed">Couldn\'t load the scheduled task</string>
+    <string name="assistant_proactive_gone_body">Persona may have just deleted it in a chat.</string>
+    <string name="assistant_proactive_back">Back</string>
+    <string name="assistant_proactive_by_assistant_notice">Persona made this for you in a chat. You can edit, turn off or delete it as usual.</string>
+    <string name="assistant_proactive_name">Name</string>
+    <string name="assistant_proactive_name_placeholder">For example, “Morning briefing”</string>
+    <string name="assistant_proactive_enabled">On</string>
+    <string name="assistant_proactive_enabled_on">Runs automatically on time</string>
+    <string name="assistant_proactive_enabled_off">Won\'t run automatically while off; you can still run it now</string>
+    <string name="assistant_proactive_when">When</string>
+    <string name="assistant_proactive_next_run">Next run: %1$s (%2$s)</string>
+    <string name="assistant_proactive_rule_note">%1$s, in the time zone from assistant settings.</string>
+    <string name="assistant_proactive_what">What should Persona do</string>
+    <string name="assistant_proactive_prompt_placeholder">Write it like in a chat: what to look at and how to report.</string>
+    <string name="assistant_proactive_prompt_note">When it\'s time, Persona starts a new chat to do it and notifies your phone when done. It can also schedule one-off follow-ups, like a reminder 10 minutes before a meeting.</string>
+    <string name="assistant_proactive_run">Run</string>
+    <string name="assistant_proactive_run_now_dirty">Saves your changes first, then starts a new chat</string>
+    <string name="assistant_proactive_run_now_body">Starts a new chat; see the result in Persona</string>
+    <string name="assistant_proactive_last_result">See last result</string>
+    <string name="assistant_proactive_last_run_title">Last run</string>
+    <string name="assistant_proactive_history">History</string>
+    <plurals name="assistant_proactive_all_times">
+        <item quantity="one">All %1$d run</item>
+        <item quantity="other">All %1$d runs</item>
+    </plurals>
+    <string name="assistant_proactive_delete_routine">Delete scheduled task</string>
+    <string name="assistant_proactive_discard_title">Discard changes?</string>
+    <string name="assistant_proactive_discard_body">Your changes aren\'t saved and will be lost if you leave.</string>
+    <string name="assistant_proactive_discard">Discard</string>
+    <string name="assistant_proactive_keep_editing">Keep editing</string>
+
+    <!-- Schedules and times -->
+    <string name="assistant_proactive_weekday">%1$s</string>
+    <string name="assistant_proactive_day_separator">", "</string>
+    <string name="assistant_proactive_every_week_on">Every %1$s</string>
+    <string name="assistant_proactive_every_day">Every day</string>
+    <string name="assistant_proactive_weekdays">Weekdays</string>
+    <string name="assistant_proactive_weekends">Weekends</string>
+    <string name="assistant_proactive_rule_weekdays">Every weekday</string>
+    <string name="assistant_proactive_rule_weekends">Every weekend</string>
+    <string name="assistant_proactive_rule">%1$s at %2$s</string>
+    <!-- 0–4, 5–8, 9–11, 12, 13–17 and 18–23 o'clock. -->
+    <string-array name="assistant_proactive_day_parts">
+        <item>AM</item>
+        <item>AM</item>
+        <item>AM</item>
+        <item>PM</item>
+        <item>PM</item>
+        <item>PM</item>
+    </string-array>
+    <string name="assistant_proactive_clock">%2$d:%3$02d %1$s</string>
+    <string name="assistant_proactive_today">Today</string>
+    <string name="assistant_proactive_tomorrow">Tomorrow</string>
+    <string name="assistant_proactive_yesterday">Yesterday</string>
+    <string name="assistant_proactive_moment">%1$s, %2$s</string>
+    <string name="assistant_proactive_overdue">Overdue</string>
+    <string name="assistant_proactive_now">Now</string>
+    <plurals name="assistant_proactive_in_minutes">
+        <item quantity="one">in %1$d minute</item>
+        <item quantity="other">in %1$d minutes</item>
+    </plurals>
+    <string name="assistant_proactive_in_hours_minutes">in %1$d hr %2$d min</string>
+    <plurals name="assistant_proactive_in_hours">
+        <item quantity="one">in %1$d hour</item>
+        <item quantity="other">in %1$d hours</item>
+    </plurals>
+    <plurals name="assistant_proactive_in_days">
+        <item quantity="one">in %1$d day</item>
+        <item quantity="other">in %1$d days</item>
+    </plurals>
+    <string name="assistant_proactive_on_time">On time</string>
+    <plurals name="assistant_proactive_late_seconds">
+        <item quantity="one">%1$d second late</item>
+        <item quantity="other">%1$d seconds late</item>
+    </plurals>
+    <plurals name="assistant_proactive_late_minutes">
+        <item quantity="one">%1$d minute late</item>
+        <item quantity="other">%1$d minutes late</item>
+    </plurals>
+    <plurals name="assistant_proactive_late_hours">
+        <item quantity="one">%1$d hour late</item>
+        <item quantity="other">%1$d hours late</item>
+    </plurals>
+
+    <!-- Runs and failures -->
+    <string name="assistant_proactive_outcome_ran">Ran</string>
+    <string name="assistant_proactive_outcome_failed">Didn\'t run</string>
+    <string name="assistant_proactive_outcome_skipped">Skipped</string>
+    <string name="assistant_proactive_outcome_unknown">No result recorded</string>
+    <string name="assistant_proactive_run_manually">Run manually</string>
+    <string name="assistant_proactive_failed_because">Didn\'t run: %1$s</string>
+    <string name="assistant_proactive_run_manually_suffix">%1$s (run manually)</string>
+    <string name="assistant_proactive_skipped_because">Skipped: %1$s</string>
+    <string name="assistant_proactive_followup">Follow-up</string>
+    <string name="assistant_proactive_error_assistant_offline">The assistant\'s machine is offline</string>
+    <string name="assistant_proactive_error_machine_offline">The machine is offline</string>
+    <string name="assistant_proactive_error_no_routine">This scheduled task no longer exists</string>
+    <string name="assistant_proactive_error_no_followup">This follow-up no longer exists</string>
+    <string name="assistant_proactive_load_offline">Can\'t reach the hub. Pull to refresh once connected.</string>
+    <string name="assistant_proactive_load_failed">The hub returned no result: %1$s</string>
+    <string name="assistant_proactive_unknown_error">Unknown error</string>
+    <string name="assistant_proactive_routine_gone">This scheduled task no longer exists; it may have just been deleted</string>
+    <string name="assistant_proactive_connection_changed">The connection just changed, try again</string>
+    <string name="assistant_proactive_offline">Can\'t reach the hub</string>
+    <string name="assistant_proactive_no_answer">The hub didn\'t respond</string>
+    <string name="assistant_proactive_outcome_because">%1$s: %2$s</string>
+    <string name="assistant_proactive_last_run_at">Last: %1$s · %2$s</string>
+    <string name="assistant_proactive_last_run">Last: %1$s</string>
+    <string name="assistant_proactive_off_line">Off, won\'t run automatically</string>
+    <string name="assistant_proactive_next_line">Next: %1$s (%2$s)</string>
+    <string name="assistant_proactive_continues">Continues the original chat</string>
+    <string name="assistant_proactive_starts_new">Starts a new chat</string>
+    <string name="assistant_proactive_continues_on">Continues the original chat on %1$s</string>
+    <string name="assistant_proactive_starts_new_on">Starts a new chat on %1$s</string>
+    <string name="assistant_proactive_followup_continues">Follow-up, continues the original chat</string>
+    <string name="assistant_proactive_followup_starts_new">Follow-up, starts a new chat</string>
+    <string name="assistant_proactive_summary_nothing">Nothing scheduled. Persona only acts when you ask.</string>
+    <plurals name="assistant_proactive_summary_on_next">
+        <item quantity="one">%1$d scheduled task is on. Next: %2$s.</item>
+        <item quantity="other">%1$d scheduled tasks are on. Next: %2$s.</item>
+    </plurals>
+    <plurals name="assistant_proactive_summary_on">
+        <item quantity="one">%1$d scheduled task is on.</item>
+        <item quantity="other">%1$d scheduled tasks are on.</item>
+    </plurals>
+    <string name="assistant_proactive_summary_off_next">All scheduled tasks are off. Next: %1$s.</string>
+    <string name="assistant_proactive_summary_off">All scheduled tasks are off.</string>
+    <string name="assistant_proactive_not_saved">Couldn\'t save: %1$s</string>
+    <string name="assistant_proactive_not_deleted">Couldn\'t delete: %1$s</string>
+    <string name="assistant_proactive_run_failed">Couldn\'t run: %1$s</string>
+    <string name="assistant_proactive_followup_start_failed">Couldn\'t start this follow-up: %1$s</string>
+    <string name="assistant_proactive_followup_cancel_failed">Couldn\'t cancel this follow-up: %1$s</string>
+    <string name="assistant_proactive_template_meeting_prep_prompt">Check today\'s meetings in my Lark calendar and phone calendar. For each meeting that needs preparing, use schedule_followup to set up a prep 10 minutes before it: related docs, notes from the last meeting, open questions, and the points I should make. If no meeting needs preparing today, just say so briefly.</string>
+    <string name="assistant_proactive_template_weekly_report_prompt">Draft this week\'s report for me: from my Lark calendar, meeting notes, docs and messages, sum up what got done this week, progress and results, problems, and next week\'s plan. Include the main changes the agents on my computers finished this week. Give me a draft first and ask whether to change anything. Don\'t send it.</string>
+    <string name="assistant_proactive_template_end_of_day_prompt">End-of-day review: which messages I haven\'t answered today, what I promised others and haven\'t done, which agents on my computers are still running or waiting on me, and which meetings tomorrow morning need preparing. List them by urgency, then ask me which ones need a reminder.</string>
+</resources>

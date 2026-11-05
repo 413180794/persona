@@ -12,6 +12,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
@@ -21,6 +24,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 import persona.feature.assistant.LocalAssistantHost
+import persona.feature.assistant.R
 import persona.feature.assistant.conversationTime
 import persona.feature.assistant.proactive.AssistantProactiveScreen
 import kotlinx.coroutines.launch
@@ -85,9 +89,10 @@ internal fun AssistantSettingsScreen(
         }
     }
     // Results go to the shell's notice when there is one, else stay on the page until the next action.
+    val resources = LocalResources.current
     LaunchedEffect(state.notice) {
         val notice = state.notice ?: return@LaunchedEffect
-        if (feedback?.notice(notice.text) == true) controller.clearNotice()
+        if (feedback?.notice(notice.text.resolve(resources)) == true) controller.clearNotice()
     }
     BackHandler(part != SettingsPart.Home || inPlace) {
         when (part) {
@@ -99,7 +104,7 @@ internal fun AssistantSettingsScreen(
     // With the shell's notice the page draws none of its own (not even for the frame before it is handed over).
     val shown = if (feedback == null) state else state.copy(notice = null)
     val machine = machines.firstOrNull { it.id == state.config?.machineId }
-    val machineName = machine?.displayName ?: state.config?.machineId?.takeIf { it.isNotBlank() } ?: "助手所在的机器"
+    val machineName = machine?.displayName ?: state.config?.machineId?.takeIf { it.isNotBlank() } ?: stringResource(R.string.assistant_settings_machine_unknown)
     fun refresh() {
         scope.launch {
             controller.load()
@@ -132,9 +137,9 @@ internal fun AssistantSettingsScreen(
         null -> Unit
     }
     state.move?.let { move ->
-        JDialog(onDismiss = controller::cancelMove, title = move.title, text = move.text,
-            confirm = "换过去" to { scope.launch { controller.confirmMove() }; Unit },
-            dismiss = "取消" to controller::cancelMove)
+        JDialog(onDismiss = controller::cancelMove, title = move.title(resources), text = move.text(resources),
+            confirm = stringResource(R.string.assistant_settings_move_confirm) to { scope.launch { controller.confirmMove() }; Unit },
+            dismiss = stringResource(R.string.assistant_settings_cancel) to controller::cancelMove)
     }
 }
 
@@ -158,14 +163,17 @@ private fun machineIcon(machine: Machine?): PhIcon = when {
     else -> PhIcons.Desktop
 }
 
-private fun machineState(machine: Machine?): String = when {
-    machine == null -> "不在机器列表里"
-    machine.online && machine.kind == "local" -> "在线，hub 所在的机器"
-    machine.online -> "在线"
-    else -> "离线"
-}
+@Composable
+private fun machineState(machine: Machine?): String = stringResource(when {
+    machine == null -> R.string.assistant_settings_machine_not_listed
+    machine.online && machine.kind == "local" -> R.string.assistant_settings_machine_online_hub
+    machine.online -> R.string.assistant_settings_machine_online
+    else -> R.string.assistant_settings_machine_offline
+})
 
-private fun zoneLabel(zone: String): String = zoneOffset(zone)?.let { "$zone（$it）" } ?: zone
+@Composable
+private fun zoneLabel(zone: String): String =
+    zoneOffset(zone)?.let { stringResource(R.string.assistant_settings_zone_with_offset, zone, it) } ?: zone
 
 @Composable
 private fun SettingsHome(
@@ -175,89 +183,93 @@ private fun SettingsHome(
 ) {
     val config = state.config
     val ready = config != null && !state.busy
+    val resources = LocalResources.current
     JListPage(
-        title = "助手", onBack = onBack, refreshing = state.loading && config != null, onRefresh = onRefresh,
-        summary = config?.let { "Persona 在「$machineName」上运行。" },
+        title = stringResource(R.string.assistant_settings_title), onBack = onBack, refreshing = state.loading && config != null, onRefresh = onRefresh,
+        summary = config?.let { stringResource(R.string.assistant_settings_summary, machineName) },
     ) {
         if (state.loadFailed) item("load-failed") {
-            JNotice("读不到助手的设置，请检查连接后下拉重试。", status = Status.NeedsYou,
-                actionLabel = "重试", onAction = onRefresh)
+            JNotice(stringResource(R.string.assistant_settings_load_failed), status = Status.NeedsYou,
+                actionLabel = stringResource(R.string.assistant_settings_retry), onAction = onRefresh)
         }
-        if (config == null && state.loading) item("loading") { JLoading(text = "正在读取") }
-        state.notice?.let { notice -> item("notice") { JNotice(notice.text, status = if (notice.error) Status.NeedsYou else Status.Unknown) } }
+        if (config == null && state.loading) item("loading") { JLoading(text = stringResource(R.string.assistant_settings_loading)) }
+        state.notice?.let { notice -> item("notice") { JNotice(notice.text.resolve(resources), status = if (notice.error) Status.NeedsYou else Status.Unknown) } }
         if (config != null) {
-            item("where") { JSectionHeader("在哪运行") }
+            item("where") { JSectionHeader(stringResource(R.string.assistant_settings_where_header)) }
             rows("where", listOf(
-                { JRow("机器", value = machineName, subtitle = machineState(machine), leadingIcon = machineIcon(machine),
+                { JRow(stringResource(R.string.assistant_settings_machine), value = machineName, subtitle = machineState(machine), leadingIcon = machineIcon(machine),
                     enabled = ready, onClick = { sheet(SettingsSheet.Machine) }) },
-                { JRow("工作目录", value = homeRelative(config.cwd, machine?.home).ifBlank { "~/.jarvis/assistant" },
+                { JRow(stringResource(R.string.assistant_settings_cwd), value = homeRelative(config.cwd, machine?.home).ifBlank { "~/.jarvis/assistant" },
                     leadingIcon = PhIcons.FolderSimple) },
             ))
             if (machine != null && !machine.online) item("offline") {
-                JNotice("「$machineName」现在离线，连上之前 Persona 不能回复，记忆也读不到。", Modifier.padding(top = Tokens.Space.m),
+                JNotice(stringResource(R.string.assistant_settings_offline_notice, machineName), Modifier.padding(top = Tokens.Space.m),
                     status = Status.Offline)
             }
             item("where-caption") {
-                Caption("每段对话都在这台机器的这个目录里后台运行一个 Claude Code，不进 herdr。用哪个模型在「设置 › 模型配置 › 主对话」里选。")
+                Caption(stringResource(R.string.assistant_settings_where_caption))
             }
 
-            item("proactive") { JSectionHeader("主动做事") }
+            item("proactive") { JSectionHeader(stringResource(R.string.assistant_settings_proactive_header)) }
             rows("proactive", listOf(
-                { JRow("定时任务、跟进和运行记录", subtitle = "到点自己开始做事、回来跟进答应你的事，做完推送到手机",
+                { JRow(stringResource(R.string.assistant_settings_proactive), subtitle = stringResource(R.string.assistant_settings_proactive_subtitle),
                     leadingIcon = PhIcons.Clock, onClick = { open(SettingsPart.Proactive) }) },
             ))
-            item("proactive-caption") { Caption("在对话里说「每天 9 点给我早报」「一小时后提醒我」，Persona 会把它们加到这里。") }
+            item("proactive-caption") { Caption(stringResource(R.string.assistant_settings_proactive_caption)) }
 
-            item("data") { JSectionHeader("数据存在哪里") }
+            item("data") { JSectionHeader(stringResource(R.string.assistant_settings_data_header)) }
             rows("data", listOf(
-                { JRow("会话记录和记忆", value = machineName, leadingIcon = PhIcons.ChatCircle) },
-                { JRow("关于我、定时任务和设置", value = "hub", leadingIcon = PhIcons.SlidersHorizontal) },
-                { JRow("知识库", value = "hub 所在的机器", leadingIcon = PhIcons.BookOpen) },
+                { JRow(stringResource(R.string.assistant_settings_data_conversations), value = machineName, leadingIcon = PhIcons.ChatCircle) },
+                { JRow(stringResource(R.string.assistant_settings_data_hub), value = stringResource(R.string.assistant_settings_hub), leadingIcon = PhIcons.SlidersHorizontal) },
+                { JRow(stringResource(R.string.assistant_settings_data_knowledge), value = stringResource(R.string.assistant_settings_hub_machine), leadingIcon = PhIcons.BookOpen) },
             ))
-            item("data-caption") { Caption("会话记录和记忆跟着 Persona 所在的机器：换一台机器，它们留在原来那台上，不会跟过去。") }
+            item("data-caption") { Caption(stringResource(R.string.assistant_settings_data_caption)) }
 
-            item("you") { JSectionHeader("了解你") }
+            item("you") { JSectionHeader(stringResource(R.string.assistant_settings_you_header)) }
             val memoryCount = state.memory.entries?.size
             rows("you", listOf(
-                { JRow("关于我", value = when {
-                    !config.notes.isNullOrBlank() -> "已填写"
-                    config.notes == null && config.notesEffective.isNotBlank() -> "hub 配置"
-                    else -> "未填写"
-                }, leadingIcon = PhIcons.UserCircle, enabled = ready, onClick = { open(SettingsPart.Notes) }) },
-                { JRow("记忆", value = when {
-                    memoryCount != null -> if (memoryCount == 0) "没有" else "$memoryCount 条"
-                    state.memory.failed -> "读不到"
+                { JRow(stringResource(R.string.assistant_settings_notes), value = stringResource(when {
+                    !config.notes.isNullOrBlank() -> R.string.assistant_settings_notes_filled
+                    config.notes == null && config.notesEffective.isNotBlank() -> R.string.assistant_settings_notes_from_hub
+                    else -> R.string.assistant_settings_notes_empty
+                }), leadingIcon = PhIcons.UserCircle, enabled = ready, onClick = { open(SettingsPart.Notes) }) },
+                { JRow(stringResource(R.string.assistant_settings_memory), value = when {
+                    memoryCount != null -> if (memoryCount == 0) stringResource(R.string.assistant_settings_memory_none)
+                        else pluralStringResource(R.plurals.assistant_settings_memory_count, memoryCount, memoryCount)
+                    state.memory.failed -> stringResource(R.string.assistant_settings_memory_unreadable)
                     else -> null
                 }, leadingIcon = PhIcons.Brain, onClick = { open(SettingsPart.Memory) }) },
             ))
             item("you-caption") {
-                Caption("「关于我」是你告诉 Persona 的，存在 hub；「记忆」是它在对话里自己记下的，存在「$machineName」上。都可以改。")
+                Caption(stringResource(R.string.assistant_settings_you_caption, machineName))
             }
 
-            item("zone") { JSectionHeader("时区") }
+            item("zone") { JSectionHeader(stringResource(R.string.assistant_settings_zone)) }
             val hubZone = config.timezone?.takeIf { it.isNotBlank() }
             val zoneRows = mutableListOf<@Composable () -> Unit>({
-                JSwitchRow("跟随手机", state.followPhone, follow, subtitle = "手机现在是 ${zoneLabel(phoneZone)}",
+                JSwitchRow(stringResource(R.string.assistant_settings_zone_follow), state.followPhone, follow,
+                    subtitle = stringResource(R.string.assistant_settings_zone_phone_now, zoneLabel(phoneZone)),
                     leadingIcon = PhIcons.GlobeSimple, enabled = !state.busy)
             })
             if (!state.followPhone) zoneRows += {
-                JRow("时区", value = hubZone ?: "未设置", subtitle = hubZone?.let { zone -> zoneName(zone) ?: zoneOffset(zone) },
+                JRow(stringResource(R.string.assistant_settings_zone), value = hubZone ?: stringResource(R.string.assistant_settings_zone_unset),
+                    subtitle = hubZone?.let { zone -> zoneName(zone, currentLocale) ?: zoneOffset(zone) },
                     leadingIcon = PhIcons.Clock, enabled = ready, onClick = { sheet(SettingsSheet.Zone) })
             }
             rows("zone", zoneRows)
             if (state.followPhone && hubZone != null && hubZone != phoneZone) item("zone-behind") {
-                JNotice("hub 现在还按 ${zoneLabel(hubZone)} 算时间，下拉刷新会再同步一次。", Modifier.padding(top = Tokens.Space.m))
+                JNotice(stringResource(R.string.assistant_settings_zone_behind, zoneLabel(hubZone)), Modifier.padding(top = Tokens.Space.m))
             }
-            item("zone-caption") { Caption("定时任务按这个时区的时刻运行，Persona 也按它理解「今天」「明早」。") }
+            item("zone-caption") { Caption(stringResource(R.string.assistant_settings_zone_caption)) }
 
-            item("reach") { JSectionHeader("能访问") }
+            item("reach") { JSectionHeader(stringResource(R.string.assistant_settings_reach_header)) }
             rows("reach", listOf(
-                { JRow("各台电脑上的 Agent", subtitle = "看状态、读对话、发消息、开新的", leadingIcon = PhIcons.Desktop) },
-                { JRow("飞书", subtitle = "消息、日历、文档、会议纪要、任务、邮件", leadingIcon = PhIcons.ChatCircle) },
-                { JRow("邮箱", subtitle = "你添加的所有邮箱", leadingIcon = PhIcons.EnvelopeSimple) },
-                { JRow("手机", subtitle = "在手机上问你、给你推送", leadingIcon = PhIcons.DeviceMobile) },
+                { JRow(stringResource(R.string.assistant_settings_reach_agents), subtitle = stringResource(R.string.assistant_settings_reach_agents_subtitle), leadingIcon = PhIcons.Desktop) },
+                { JRow(stringResource(R.string.assistant_settings_reach_lark), subtitle = stringResource(R.string.assistant_settings_reach_lark_subtitle), leadingIcon = PhIcons.ChatCircle) },
+                { JRow(stringResource(R.string.assistant_settings_reach_mail), subtitle = stringResource(R.string.assistant_settings_reach_mail_subtitle), leadingIcon = PhIcons.EnvelopeSimple) },
+                { JRow(stringResource(R.string.assistant_settings_reach_phone), subtitle = stringResource(R.string.assistant_settings_reach_phone_subtitle), leadingIcon = PhIcons.DeviceMobile) },
             ))
-            item("reach-caption") { Caption("发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。") }
+            item("reach-caption") { Caption(stringResource(R.string.assistant_settings_reach_caption)) }
         }
     }
 }
@@ -279,28 +291,28 @@ private fun NotesPart(state: AssistantSettingsUiState, onBack: () -> Unit, onSav
     }
     val back = { if (changed) leaving = true else onBack() }
     BackHandler(changed) { leaving = true }
-    JListPage(title = "关于我", onBack = back, bottomBar = {
+    JListPage(title = stringResource(R.string.assistant_settings_notes), onBack = back, bottomBar = {
         Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
-            JButton("保存", { save() }, Modifier.fillMaxWidth(), enabled = changed && !state.busy, loading = state.busy)
+            JButton(stringResource(R.string.assistant_settings_save), { save() }, Modifier.fillMaxWidth(), enabled = changed && !state.busy, loading = state.busy)
         }
     }) {
         item("intro") {
-            Caption("告诉 Persona 你的情况：代码放在哪、常用哪些工具查工作数据、哪些机器或目录别碰、你习惯的汇报方式。它每次开新对话都会读到，改了以后新对话生效。")
+            Caption(stringResource(R.string.assistant_settings_notes_intro))
         }
         if (config != null && config.notes == null && config.notesEffective.isNotBlank()) item("from-hub") {
-            JNotice("现在 Persona 读到的是 hub 配置文件里写的内容。在这里保存以后，以这里为准。", Modifier.padding(top = Tokens.Space.m))
+            JNotice(stringResource(R.string.assistant_settings_notes_hub_notice), Modifier.padding(top = Tokens.Space.m))
         }
-        state.notice?.takeIf { it.error }?.let { notice -> item("notice") { JNotice(notice.text, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou) } }
+        state.notice?.takeIf { it.error }?.let { notice -> item("notice") { JNotice(notice.text.resolve(LocalResources.current), Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou) } }
         item("text") {
-            JTextField(text.orEmpty(), { text = it }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = "关于我",
-                placeholder = "比如：代码在 ~/code 下；周报每周五下班前给我草稿。", enabled = text != null && !state.busy,
+            JTextField(text.orEmpty(), { text = it }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = stringResource(R.string.assistant_settings_notes),
+                placeholder = stringResource(R.string.assistant_settings_notes_placeholder), enabled = text != null && !state.busy,
                 minLines = 12, maxLines = Int.MAX_VALUE)
         }
     }
-    if (leaving) JDialog(onDismiss = { leaving = false }, title = "关于我还没保存",
-        text = "离开前要保存修改吗？", confirmEnabled = !state.busy,
-        confirm = "保存" to { leaving = false; save(onBack) },
-        dismiss = "不保存" to { leaving = false; onBack() })
+    if (leaving) JDialog(onDismiss = { leaving = false }, title = stringResource(R.string.assistant_settings_notes_unsaved_title),
+        text = stringResource(R.string.assistant_settings_notes_unsaved_text), confirmEnabled = !state.busy,
+        confirm = stringResource(R.string.assistant_settings_save) to { leaving = false; save(onBack) },
+        dismiss = stringResource(R.string.assistant_settings_discard) to { leaving = false; onBack() })
 }
 
 @Composable
@@ -310,31 +322,32 @@ private fun MemoryPart(
 ) {
     val memory = state.memory
     val entries = memory.entries.orEmpty()
-    JListPage(title = "记忆", onBack = onBack, refreshing = memory.loading && memory.entries != null, onRefresh = onRefresh) {
+    JListPage(title = stringResource(R.string.assistant_settings_memory), onBack = onBack, refreshing = memory.loading && memory.entries != null, onRefresh = onRefresh) {
         item("intro") {
-            Caption("Persona 记住的事，一条一个文件，存在「$machineName」上，新对话开始时会读。说错的地方可以直接改，或者在对话里告诉它。")
+            Caption(stringResource(R.string.assistant_settings_memory_intro, machineName))
         }
         if (memory.failed) item("failed") {
-            JNotice(if (machine != null && !machine.online) "「$machineName」现在离线，连上以后才能看记忆。" else "读不到记忆，请稍后重试。",
-                Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = "重试", onAction = onRefresh)
+            JNotice(if (machine != null && !machine.online) stringResource(R.string.assistant_settings_memory_offline, machineName)
+                else stringResource(R.string.assistant_settings_memory_failed),
+                Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = stringResource(R.string.assistant_settings_retry), onAction = onRefresh)
         }
-        if (memory.entries == null && memory.loading) item("loading") { JLoading(text = "正在读取") }
+        if (memory.entries == null && memory.loading) item("loading") { JLoading(text = stringResource(R.string.assistant_settings_loading)) }
         if (memory.entries != null && entries.isEmpty() && !memory.failed) item("empty") {
-            JEmptyState("还没有记忆", "Persona 会把你的偏好、纠正过它的地方记在这里。", icon = PhIcons.Brain)
+            JEmptyState(stringResource(R.string.assistant_settings_memory_empty_title), stringResource(R.string.assistant_settings_memory_empty_text), icon = PhIcons.Brain)
         }
-        if (entries.isNotEmpty()) item("entries") { JSectionHeader("记住的事", count = entries.size) }
+        if (entries.isNotEmpty()) item("entries") { JSectionHeader(stringResource(R.string.assistant_settings_memory_entries), count = entries.size) }
         itemsIndexed(entries, key = { _, entry -> entry.file.name }) { index, entry ->
             JGroupItem(GroupPosition.of(index, entries.size)) {
                 JRow(entry.title, subtitle = entry.description ?: entry.body.lineSequence().firstOrNull { it.isNotBlank() }?.trim(),
-                    leadingIcon = PhIcons.Brain, trailing = entry.typeLabel?.let { label -> @Composable { JTag(label) } },
+                    leadingIcon = PhIcons.Brain, trailing = entry.typeLabel(LocalResources.current)?.let { label -> @Composable { JTag(label) } },
                     chevron = true, onClick = { onOpen(entry.file.name) })
             }
         }
         memory.index?.takeIf { entries.isNotEmpty() }?.let { index ->
-            item("index") { JSectionHeader("索引") }
+            item("index") { JSectionHeader(stringResource(R.string.assistant_settings_memory_index)) }
             item("index-row") {
                 JGroupItem(GroupPosition.Single) {
-                    JRow(index.name, subtitle = "Persona 自己维护的目录，删除记忆时会一起更新", leadingIcon = PhIcons.ListChecks,
+                    JRow(index.name, subtitle = stringResource(R.string.assistant_settings_memory_index_subtitle), leadingIcon = PhIcons.ListChecks,
                         onClick = { onOpen(index.name) })
                 }
             }
@@ -348,30 +361,32 @@ private fun MemoryFilePart(
     onSave: suspend (String, String) -> Boolean, onDelete: suspend (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
+    val indexTitle = stringResource(R.string.assistant_settings_memory_index)
     val entry = state.memory.entries?.firstOrNull { it.file.name == name }
-        ?: state.memory.index?.takeIf { it.name == name }?.let { parseMemory(it).copy(title = "索引") }
+        ?: state.memory.index?.takeIf { it.name == name }?.let { parseMemory(it).copy(title = indexTitle) }
     // The index is Persona's own table of contents: shown, not edited by hand.
     val editable = entry != null && entry.file.name != MEMORY_INDEX
     var editing by remember { mutableStateOf(preview == "memory-edit") }
     var deleting by remember { mutableStateOf(preview == "memory-delete") }
     JListPage(
-        title = entry?.title ?: "记忆", onBack = onBack,
+        title = entry?.title ?: stringResource(R.string.assistant_settings_memory), onBack = onBack,
         actions = {
             if (editable) {
-                JIconButton(PhIcons.PencilSimple, "编辑", { editing = true }, enabled = !state.busy)
-                JIconButton(PhIcons.Trash, "删除", { deleting = true }, enabled = !state.busy, tint = PersonaTheme.palette.danger.text)
+                JIconButton(PhIcons.PencilSimple, stringResource(R.string.assistant_settings_edit), { editing = true }, enabled = !state.busy)
+                JIconButton(PhIcons.Trash, stringResource(R.string.assistant_settings_delete), { deleting = true }, enabled = !state.busy, tint = PersonaTheme.palette.danger.text)
             }
         },
     ) {
         if (entry == null) {
-            item("missing") { JEmptyState("这条记忆不在了", "可能已经被删除，或者 Persona 改了它的名字。", icon = PhIcons.Brain) }
+            item("missing") { JEmptyState(stringResource(R.string.assistant_settings_memory_missing_title), stringResource(R.string.assistant_settings_memory_missing_text), icon = PhIcons.Brain) }
             return@JListPage
         }
         item("meta") {
             Row(Modifier.padding(top = Tokens.Space.s, bottom = Tokens.Space.s), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
                 verticalAlignment = Alignment.CenterVertically) {
-                entry.typeLabel?.let { JTag(it) }
-                conversationTime(entry.updated)?.let { Text("更新于 $it", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3) }
+                entry.typeLabel(resources)?.let { JTag(it) }
+                conversationTime(entry.updated, currentLocale)?.let { Text(stringResource(R.string.assistant_settings_memory_updated, it), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3) }
             }
         }
         entry.description?.let { description ->
@@ -380,7 +395,7 @@ private fun MemoryFilePart(
         item("body") {
             JCard {
                 SelectionContainer {
-                    Text(entry.body.ifBlank { "（空）" }, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
+                    Text(entry.body.ifBlank { stringResource(R.string.assistant_settings_memory_blank) }, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
                 }
             }
         }
@@ -388,40 +403,40 @@ private fun MemoryFilePart(
     }
     if (editing && entry != null) {
         var content by rememberSaveable(entry.file.name) { mutableStateOf(entry.file.content) }
-        JSheet(onDismiss = { if (!state.busy) editing = false }, title = "编辑「${entry.title}」", dismissible = !state.busy) {
+        JSheet(onDismiss = { if (!state.busy) editing = false }, title = stringResource(R.string.assistant_settings_memory_edit_title, entry.title), dismissible = !state.busy) {
             LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), contentPadding = PaddingValues(bottom = Tokens.Space.l),
                 verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                item { Caption("开头两行 --- 之间是 Persona 用的标题、说明和类型，可以一起改。") }
-                state.notice?.takeIf { it.error }?.let { notice -> item { JNotice(notice.text, status = Status.NeedsYou) } }
+                item { Caption(stringResource(R.string.assistant_settings_memory_edit_caption)) }
+                state.notice?.takeIf { it.error }?.let { notice -> item { JNotice(notice.text.resolve(resources), status = Status.NeedsYou) } }
                 item {
-                    JTextField(content, { content = it }, Modifier.fillMaxWidth(), label = "记忆内容", enabled = !state.busy,
+                    JTextField(content, { content = it }, Modifier.fillMaxWidth(), label = stringResource(R.string.assistant_settings_memory_content), enabled = !state.busy,
                         minLines = 8, maxLines = Int.MAX_VALUE)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                JButton("取消", { editing = false }, Modifier.weight(1f), kind = JButtonKind.Secondary, enabled = !state.busy)
-                JButton("保存", { scope.launch { if (onSave(entry.file.name, content)) editing = false } }, Modifier.weight(1f),
+                JButton(stringResource(R.string.assistant_settings_cancel), { editing = false }, Modifier.weight(1f), kind = JButtonKind.Secondary, enabled = !state.busy)
+                JButton(stringResource(R.string.assistant_settings_save), { scope.launch { if (onSave(entry.file.name, content)) editing = false } }, Modifier.weight(1f),
                     enabled = !state.busy && content != entry.file.content, loading = state.busy)
             }
         }
     }
     if (deleting && entry != null) JDialog(
-        onDismiss = { deleting = false }, title = "删掉这条记忆？",
-        text = "Persona 以后不再记得「${entry.title}」。索引（$MEMORY_INDEX）里对应的那一行也会去掉。",
+        onDismiss = { deleting = false }, title = stringResource(R.string.assistant_settings_memory_delete_title),
+        text = stringResource(R.string.assistant_settings_memory_delete_text, entry.title, MEMORY_INDEX),
         destructive = true, confirmEnabled = !state.busy,
-        confirm = "删除" to { deleting = false; scope.launch { onDelete(entry.file.name) }; Unit },
-        dismiss = "取消" to { deleting = false },
+        confirm = stringResource(R.string.assistant_settings_delete) to { deleting = false; scope.launch { onDelete(entry.file.name) }; Unit },
+        dismiss = stringResource(R.string.assistant_settings_cancel) to { deleting = false },
     )
 }
 
 @Composable
 private fun MachineSheet(machines: List<Machine>, current: String?, onDismiss: () -> Unit, onPick: (Machine) -> Unit) {
     val list = machines.distinctBy { it.id }
-    JSheet(onDismiss = onDismiss, title = "在哪台机器上运行") {
-        Text("记忆和会话记录在原来那台机器上，不会跟过去。", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+    JSheet(onDismiss = onDismiss, title = stringResource(R.string.assistant_settings_machine_sheet_title)) {
+        Text(stringResource(R.string.assistant_settings_move_stays), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
         Spacer(Modifier.height(Tokens.Space.m))
         LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), contentPadding = PaddingValues(bottom = Tokens.Space.l)) {
-            if (list.isEmpty()) item { JEmptyState("还没有机器", "hub 接入电脑以后会出现在这里。", icon = PhIcons.Desktop) }
+            if (list.isEmpty()) item { JEmptyState(stringResource(R.string.assistant_settings_machines_empty_title), stringResource(R.string.assistant_settings_machines_empty_text), icon = PhIcons.Desktop) }
             itemsIndexed(list, key = { _, machine -> machine.id }) { index, machine ->
                 JGroupItem(GroupPosition.of(index, list.size)) {
                     JRow(machine.displayName, subtitle = machineState(machine),
@@ -437,21 +452,22 @@ private fun MachineSheet(machines: List<Machine>, current: String?, onDismiss: (
 @Composable
 private fun ZoneSheet(current: String?, phoneZone: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
+    val locale = currentLocale
     val zones = remember { pickableZones() }
     // The zone in use and the phone's own come first; the full list (by offset) follows.
     val pinned = remember(current, phoneZone) { listOfNotNull(current?.takeIf { it.isNotBlank() }, phoneZone.takeIf { it.isNotBlank() }).distinct() }
-    val shown = remember(query, pinned) { zones.filter { zoneMatches(it, query) && (query.isNotBlank() || it !in pinned) } }
-    JSheet(onDismiss = onDismiss, title = "时区") {
-        JSearchField(query, { query = it }, "搜索城市、时区或 UTC+8")
+    val shown = remember(query, pinned, locale) { zones.filter { zoneMatches(it, query, locale) && (query.isNotBlank() || it !in pinned) } }
+    JSheet(onDismiss = onDismiss, title = stringResource(R.string.assistant_settings_zone)) {
+        JSearchField(query, { query = it }, stringResource(R.string.assistant_settings_zone_search))
         Spacer(Modifier.height(Tokens.Space.m))
         LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), contentPadding = PaddingValues(bottom = Tokens.Space.l)) {
             if (query.isBlank() && pinned.isNotEmpty()) {
                 itemsIndexed(pinned, key = { _, zone -> "pinned:$zone" }) { index, zone ->
                     JGroupItem(GroupPosition.of(index, pinned.size)) { ZoneRow(zone, current, phoneZone, onPick) }
                 }
-                item("all") { JSectionHeader("全部时区") }
+                item("all") { JSectionHeader(stringResource(R.string.assistant_settings_zone_all)) }
             }
-            if (shown.isEmpty()) item { JEmptyState("没有找到", "换个城市名或 UTC 偏移试试。", icon = PhIcons.GlobeSimple) }
+            if (shown.isEmpty()) item { JEmptyState(stringResource(R.string.assistant_settings_zone_none_title), stringResource(R.string.assistant_settings_zone_none_text), icon = PhIcons.GlobeSimple) }
             itemsIndexed(shown, key = { _, zone -> zone }) { index, zone ->
                 JGroupItem(GroupPosition.of(index, shown.size)) { ZoneRow(zone, current, phoneZone, onPick) }
             }
@@ -461,7 +477,10 @@ private fun ZoneSheet(current: String?, phoneZone: String, onDismiss: () -> Unit
 
 @Composable
 private fun ZoneRow(zone: String, current: String?, phoneZone: String, onPick: (String) -> Unit) {
-    JRow(zone, subtitle = listOfNotNull(zoneOffset(zone), zoneName(zone), "手机的时区".takeIf { zone == phoneZone }).joinToString("，").ifBlank { null },
+    val phone = stringResource(R.string.assistant_settings_zone_phone)
+    val separator = stringResource(R.string.assistant_settings_list_separator)
+    JRow(zone, subtitle = listOfNotNull(zoneOffset(zone), zoneName(zone, currentLocale), phone.takeIf { zone == phoneZone })
+        .joinToString(separator).ifBlank { null },
         leading = { JRadio(zone == current, null) }, chevron = false, onClick = { onPick(zone) })
 }
 

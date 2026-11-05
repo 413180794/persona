@@ -74,7 +74,7 @@ class AssistantDrawerShotsTest {
         var groups by mutableStateOf(ConversationGroups(main, listOf(pinned), recent))
         var opened: SessionKey? = null
         var mainTapped = false
-        var info: String? = null
+        var info: AssistantInfo? = null
         var settingsTapped = false
         rule.setContent {
             PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
@@ -93,9 +93,9 @@ class AssistantDrawerShotsTest {
         rule.onAllNodesWithText("Persona")[1].performClick()
         assertEquals(main.key, opened)
         rule.onNodeWithText("启动器").performClick()
-        assertEquals("启动器", info)
+        assertEquals(AssistantInfo.Launcher, info)
         rule.onNodeWithText("会话信息").performClick()
-        assertEquals("会话信息", info)
+        assertEquals(AssistantInfo.Session, info)
         rule.onNodeWithContentDescription("设置").performClick()
         assertTrue(settingsTapped)
         for (s in AppStyle.entries) for (d in listOf(false, true)) {

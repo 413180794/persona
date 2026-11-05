@@ -1,6 +1,10 @@
 package persona.feature.assistant
 
+import android.content.res.Resources
+import androidx.annotation.StringRes
 import persona.core.contracts.SessionCompaction
+import persona.core.designsystem.LocalizedFormats
+import java.util.Locale
 
 /** Hub features behind the main conversation's 压缩上下文 and 新建主对话 (docs/assistant.md, #1727). */
 internal const val CompactFeature = "assistant_compact"
@@ -15,12 +19,9 @@ internal data class MainActions(val compact: Boolean, val newMain: Boolean) {
 
 /** What the line over the main conversation says about a compaction. */
 internal sealed interface CompactionLine {
-    val text: String
-    data object Running : CompactionLine { override val text = "正在压缩上下文…" }
-    data object Done : CompactionLine { override val text = "已压缩" }
-    data class Failed(val error: String) : CompactionLine {
-        override val text = if (error.isBlank()) "压缩失败" else "压缩失败：$error"
-    }
+    data object Running : CompactionLine
+    data object Done : CompactionLine
+    data class Failed(val error: String) : CompactionLine
 }
 
 /**
@@ -64,17 +65,15 @@ internal data class CompactionStatus(
 /** How long 已压缩 stays over the conversation. */
 internal const val CompactionDoneMillis = 3_000L
 
-/** 新建主对话's confirmation, as the dialog words it. */
-internal const val NewMainTitle = "新建主对话？"
-internal fun newMainText(today: java.time.LocalDate): String =
-    "当前的主对话会归档，改名为「旧主对话 · 至 ${today.monthValue}月${today.dayOfMonth}日」，以后仍能找到。" +
-        "发出的下一条消息会开始新的主对话。"
-internal const val CarrySummaryTitle = "带上旧对话的摘要"
-internal const val CarrySummaryHint = "没压缩过的只带最近几条，想带完整摘要可以先压缩"
+/** 新建主对话's confirmation text: the archived name carries [today] as a month and day in [locale]. */
+internal fun newMainText(resources: Resources, today: java.time.LocalDate, locale: Locale): String =
+    resources.getString(R.string.assistant_new_main_text,
+        LocalizedFormats.formatter(LocalizedFormats.MONTH_DAY, locale).format(today))
 
 /** What to tell the user after 新建主对话 went through. */
-internal fun newMainNotice(carried: Boolean, asked: Boolean): String = when {
-    !asked -> "已新建主对话"
-    carried -> "已新建主对话，会带上旧对话的摘要"
-    else -> "已新建主对话，旧对话没有能带过来的内容"
+@StringRes
+internal fun newMainNotice(carried: Boolean, asked: Boolean): Int = when {
+    !asked -> R.string.assistant_new_main_done
+    carried -> R.string.assistant_new_main_done_carried
+    else -> R.string.assistant_new_main_done_empty
 }

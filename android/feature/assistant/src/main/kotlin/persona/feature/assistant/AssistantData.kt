@@ -1,5 +1,8 @@
 package persona.feature.assistant
 
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.Session
 import persona.core.contracts.AgentState
 import persona.core.contracts.SessionKey
@@ -11,6 +14,7 @@ import persona.core.contracts.api.OutboxMessage
 import persona.core.contracts.api.MainConversationSender
 import persona.core.contracts.api.DraftSnapshot
 import persona.core.contracts.api.PendingMainConversation
+import persona.core.designsystem.LocalizedFormats
 import persona.core.designsystem.PendingStatus
 import persona.core.designsystem.Status
 import persona.core.designsystem.StatusLineState
@@ -25,9 +29,10 @@ internal fun conversationGroups(
     snapshot: AssistantSnapshot,
     query: String,
     pinned: Set<SessionKey>,
+    words: ConversationWords,
 ): ConversationGroups {
     val matches = snapshot.conversations.distinctBy { it.key }.filter {
-        (query.isBlank() || it.conversationTitle().contains(query.trim(), ignoreCase = true) ||
+        (query.isBlank() || it.conversationTitle(words).contains(query.trim(), ignoreCase = true) ||
                 it.lastText.orEmpty().contains(query.trim(), ignoreCase = true))
     }.sortedWith(compareByDescending<Session> { it.updated }.thenBy { it.key.path })
     return ConversationGroups(matches.firstOrNull { it.key == snapshot.mainSession },
@@ -45,21 +50,34 @@ internal fun recentRows(recent: List<Session>, query: String, showAll: Boolean, 
     if (showAll || query.isNotBlank() || recent.size <= limit) RecentRows(recent, 0)
     else RecentRows(recent.take(limit), recent.size - limit)
 
-internal fun greeting(hour: Int): String = when (hour) {
-    in 5..10 -> "早上好"
-    in 11..13 -> "中午好"
-    in 14..17 -> "下午好"
-    else -> "晚上好"
+@StringRes
+internal fun greeting(hour: Int): Int = when (hour) {
+    in 5..10 -> R.string.assistant_greeting_morning
+    in 11..13 -> R.string.assistant_greeting_noon
+    in 14..17 -> R.string.assistant_greeting_afternoon
+    else -> R.string.assistant_greeting_evening
 }
 
+/** The demo's sample conversations, in the language on screen. */
+internal data class DemoWords(
+    val weekly: String, val weeklyLast: String, val travel: String, val document: String, val newChat: String,
+)
+
+@Composable
+internal fun demoWords() = DemoWords(
+    stringResource(R.string.assistant_demo_weekly), stringResource(R.string.assistant_demo_weekly_last),
+    stringResource(R.string.assistant_demo_travel), stringResource(R.string.assistant_demo_document),
+    stringResource(R.string.assistant_new_conversation),
+)
+
 /** Local fixtures never submit messages to a hub. */
-internal class DemoAssistantRepository : AssistantRepository, MessageSender, MainConversationSender {
+internal class DemoAssistantRepository(private val words: DemoWords) : AssistantRepository, MessageSender, MainConversationSender {
     private val snapshot = MutableStateFlow(AssistantSnapshot(conversations = listOf(
-        Session(machineId = "demo", sessionId = "weekly", title = "周报素材", assistant = true,
-            lastText = "整理这周完成的工作", updatedAt = "2026-10-30T09:00:00Z"),
-        Session(machineId = "demo", sessionId = "travel", title = "下周出差的行程", assistant = true,
+        Session(machineId = "demo", sessionId = "weekly", title = words.weekly, assistant = true,
+            lastText = words.weeklyLast, updatedAt = "2026-10-30T09:00:00Z"),
+        Session(machineId = "demo", sessionId = "travel", title = words.travel, assistant = true,
             updatedAt = "2026-10-29T09:00:00Z"),
-        Session(machineId = "demo", sessionId = "document", title = "文档的要点", assistant = true,
+        Session(machineId = "demo", sessionId = "document", title = words.document, assistant = true,
             updatedAt = "2026-10-28T09:00:00Z"),
     )))
     override val assistant = snapshot.asStateFlow()
@@ -79,7 +97,7 @@ internal class DemoAssistantRepository : AssistantRepository, MessageSender, Mai
         snapshot.update {
             it.copy(mainSession = it.mainSession ?: key, conversations = listOf(
                 Session(machineId = key.machineId, sessionId = key.sessionId,
-                    title = "新对话", assistant = true),
+                    title = words.newChat, assistant = true),
             ) + it.conversations)
         }
         return key
@@ -102,22 +120,31 @@ internal class DemoAssistantRepository : AssistantRepository, MessageSender, Mai
  * 对话. A conversation started from 交给 Persona begins with a `<jarvis-context … title="X">` tag, and Claude names it
  * after that message: it reads 「交给 Persona：X」 instead of the raw tag.
  */
-internal fun Session.conversationTitle(): String {
-    title.takeIf { it.isNotBlank() && it != "Claude Code" }?.let { return handoffTitle(it) ?: it }
-    val line = lastText?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim() ?: return "对话"
-    return handoffTitle(line) ?: line.take(30)
+internal fun Session.conversationTitle(words: ConversationWords): String {
+    title.takeIf { it.isNotBlank() && it != "Claude Code" }?.let { return handoffTitle(it, words) ?: it }
+    val line = lastText?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim() ?: return words.untitled
+    return handoffTitle(line, words) ?: line.take(30)
 }
+
+/** The words a conversation's name falls back to: 对话, 交给 Persona and 交给 Persona：X ([handoffNamed] has `%1$s`). */
+internal data class ConversationWords(val untitled: String, val handoff: String, val handoffNamed: String) {
+    fun handoff(title: String): String = String.format(handoffNamed, title)
+}
+
+@Composable
+internal fun conversationWords() = ConversationWords(stringResource(R.string.assistant_untitled),
+    stringResource(R.string.assistant_handoff), stringResource(R.string.assistant_handoff_named))
 
 private val handoffTag = Regex("""<jarvis-context\b[^>]*?\btitle="([^"]*)"""")
 
 /** 「交给 Persona：X」 for text that is a `<jarvis-context title="X">` tag (attributes decoded), null for any other text. */
-internal fun handoffTitle(text: String): String? {
+internal fun handoffTitle(text: String, words: ConversationWords): String? {
     handoffTag.find(text)?.let { match ->
         val title = match.groupValues[1].replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">")
             .replace("&amp;", "&").trim()
-        return if (title.isEmpty()) "交给 Persona" else "交给 Persona：$title"
+        return if (title.isEmpty()) words.handoff else words.handoff(title)
     }
-    return if (text.trimStart().startsWith("<jarvis-context")) "交给 Persona" else null
+    return if (text.trimStart().startsWith("<jarvis-context")) words.handoff else null
 }
 
 internal fun Session.conversationStatus(): Status = when (agentState) {
@@ -134,7 +161,7 @@ internal suspend fun sendAssistantMessage(
     main: MainConversationSender?, sender: MessageSender, session: SessionKey?, text: String, id: String,
 ) {
     if (session == null || session == PendingMainConversation) {
-        checkNotNull(main) { "主对话发送尚未接入" }.sendToMain(text.trim(), id)
+        checkNotNull(main) { "main conversation sender is not wired" }.sendToMain(text.trim(), id) // A wiring bug, not for the user.
     } else sender.send(session, text.trim(), id)
 }
 
@@ -156,8 +183,9 @@ internal fun assistantStatus(session: Session?, messages: List<OutboxMessage>) =
     working = session?.agentState == AgentState.Working,
 )
 
-internal fun conversationTime(at: java.time.Instant?, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String? =
-    at?.atZone(zone)?.format(java.time.format.DateTimeFormatter.ofPattern("M月d日 HH:mm"))
+internal fun conversationTime(at: java.time.Instant?, locale: java.util.Locale,
+    zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String? =
+    at?.let { LocalizedFormats.format(it, LocalizedFormats.MONTH_DAY_TIME, locale, zone) }
 
 /** The composition root adapts these options to the shared chat lane's presentation parameters. */
 data class AssistantChatOptions(

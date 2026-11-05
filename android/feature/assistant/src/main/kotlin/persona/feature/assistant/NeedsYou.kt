@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.Interaction
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
@@ -52,7 +54,8 @@ sealed interface NeedsYouLine {
         override val key: String get() = "agent:$requestId"
     }
 
-    /** An inbox item the hub sorted into 需要你; [lark] tells a 飞书 message from a mail. */
+    /** An inbox item the hub sorted into 需要你; [lark] tells a 飞书 message from a mail. [who] is blank when the item
+     *  has neither a title nor a sender: the row then reads 飞书 or 邮件 ([needsYouWho]). */
     data class Inbox(
         val itemId: String,
         val lark: Boolean,
@@ -93,7 +96,7 @@ fun needsYou(
     val inbox = orderHubInbox(messages.map { it.item }.distinctBy { it.id }.filter { !it.isDone && it.triage == InboxTier.Action })
         .map { item ->
             NeedsYouLine.Inbox(item.id, item.id in lark, item.kind,
-                who = item.title.ifBlank { item.sender.orEmpty() }.ifBlank { if (item.id in lark) "飞书" else "邮件" },
+                who = item.title.ifBlank { item.sender.orEmpty() },
                 what = oneLine(item.summary?.takeIf { it.isNotBlank() } ?: item.preview))
         }
     val all: List<NeedsYouLine> = agents + inbox
@@ -136,11 +139,11 @@ internal fun NeedsYouSection(needs: NeedsYou, onOpen: (NeedsYouLine) -> Unit, on
     val palette = PersonaTheme.palette
     val count = needs.lines.size + if (needs.more > 0) 1 else 0
     Column(modifier) {
-        JSectionHeader("现在要你处理的事", count = needs.total, status = Status.NeedsYou)
+        JSectionHeader(stringResource(R.string.assistant_needs_you_header), count = needs.total, status = Status.NeedsYou)
         needs.lines.forEachIndexed { index, line ->
             key(line.key) {
                 JGroupItem(GroupPosition.of(index, count)) {
-                    JRow(line.who, subtitle = line.what.ifBlank { null }, subtitleLines = 1, onClick = { onOpen(line) },
+                    JRow(needsYouWho(line), subtitle = line.what.ifBlank { null }, subtitleLines = 1, onClick = { onOpen(line) },
                         leading = {
                             // Regular weight: some fill glyphs (a terminal window, a checklist) read as solid blocks.
                             JIcon(needsYouIcon(line), null, tint = if (line is NeedsYouLine.Agent) palette.needsYou.dot else palette.ink2)
@@ -149,8 +152,16 @@ internal fun NeedsYouSection(needs: NeedsYou, onOpen: (NeedsYouLine) -> Unit, on
             }
         }
         if (needs.more > 0) JGroupItem(GroupPosition.of(count - 1, count)) {
-            JRow("还有 ${needs.more} 件在收件箱", onClick = onMore,
+            JRow(pluralStringResource(R.plurals.assistant_needs_you_more, needs.more, needs.more), onClick = onMore,
                 leading = { JIcon(PhIcons.Tray, null, tint = palette.ink2) })
         }
     }
+}
+
+/** Who a line is from as the row reads it: an inbox item without a title or sender is 飞书 or 邮件. */
+@Composable
+internal fun needsYouWho(line: NeedsYouLine): String = when {
+    line.who.isNotBlank() -> line.who
+    line is NeedsYouLine.Inbox && line.lark -> stringResource(R.string.assistant_source_lark)
+    else -> stringResource(R.string.assistant_source_mail)
 }

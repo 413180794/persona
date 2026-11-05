@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lists of days use the short names (Mon, Wed, Fri); Chinese and Japanese use the narrow ones (一、三、五 · 月・水・金). -->
+    <bool name="assistant_proactive_narrow_day_lists">false</bool>
+</resources>

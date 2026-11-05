@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 設定 › アシスタント › 自動実行 -->
+    <string name="assistant_proactive_title">自動実行</string>
+    <string name="assistant_proactive_unconnected_title">まだハブに接続していません</string>
+    <string name="assistant_proactive_unconnected_body">ハブに接続すると、ここでPersonaの定期タスク、フォローアップ、実行履歴を管理できます。</string>
+    <string name="assistant_proactive_got_it">OK</string>
+    <string name="assistant_proactive_retry">再試行</string>
+    <string name="assistant_proactive_new_routine">新しい定期タスク</string>
+    <string name="assistant_proactive_templates_note">テンプレートから始めます。保存する前にいつでも変更できます。</string>
+    <string name="assistant_proactive_template_blank">空白</string>
+    <string name="assistant_proactive_template_meeting_prep">会議の準備</string>
+    <string name="assistant_proactive_template_weekly_report">週報</string>
+    <string name="assistant_proactive_template_end_of_day">終業前の振り返り</string>
+    <string name="assistant_proactive_run_now">今すぐ実行</string>
+    <string name="assistant_proactive_edit">編集</string>
+    <string name="assistant_proactive_delete">削除</string>
+    <string name="assistant_proactive_cancel">キャンセル</string>
+    <string name="assistant_proactive_followup_due">予定：%1$s（%2$s）</string>
+    <string name="assistant_proactive_open_chat">元のチャットを開く</string>
+    <string name="assistant_proactive_cancel_followup_action">このフォローアップを取り消す</string>
+    <string name="assistant_proactive_delete_title">「%1$s」を削除しますか？</string>
+    <string name="assistant_proactive_delete_body">削除すると定期実行されなくなります。実行済みのチャットは残ります。</string>
+    <string name="assistant_proactive_cancel_followup_title">このフォローアップを取り消しますか？</string>
+    <string name="assistant_proactive_cancel_followup_body">「%1$s」は予定の時刻になっても実行されなくなります。</string>
+    <string name="assistant_proactive_cancel_followup_confirm">取り消す</string>
+    <string name="assistant_proactive_keep">残す</string>
+
+    <!-- Overview, follow-ups and runs -->
+    <string name="assistant_proactive_loading">予定を読み込み中…</string>
+    <string name="assistant_proactive_read_failed">予定を読み込めません</string>
+    <string name="assistant_proactive_empty_title">予定はまだありません</string>
+    <string name="assistant_proactive_empty_body">右上の＋で定期タスクを作成するか、チャットでPersonaに「毎日9時に朝のまとめを送って」「1時間後に知らせて」のように伝えてください。</string>
+    <string name="assistant_proactive_upcoming">この後</string>
+    <string name="assistant_proactive_routines">定期タスク</string>
+    <string name="assistant_proactive_no_routines">定期タスクはまだありません</string>
+    <string name="assistant_proactive_no_routines_body">毎日や毎週の決まった時刻にPersonaに作業してもらいます。</string>
+    <string name="assistant_proactive_routines_note">時刻になるとPersonaが新しいチャットを始めて作業し、終わったらスマートフォンに通知します。時刻はアシスタント設定のタイムゾーンに従います。</string>
+    <string name="assistant_proactive_followups">予定済みのフォローアップ</string>
+    <string name="assistant_proactive_no_followups">予定済みのフォローアップはありません</string>
+    <string name="assistant_proactive_no_followups_body">チャットで「1時間後に知らせて」と言うと、Personaがここに予定を入れます。</string>
+    <plurals name="assistant_proactive_all_followups">
+        <item quantity="other">フォローアップ%1$d件をすべて表示</item>
+    </plurals>
+    <string name="assistant_proactive_followups_note">Personaがチャットの中で自分のために入れた1回限りのフォローアップです。時刻になると戻ってきて続きを行います。</string>
+    <string name="assistant_proactive_recent_runs">最近の実行</string>
+    <string name="assistant_proactive_all_runs">すべての実行履歴</string>
+    <string name="assistant_proactive_followups_read_failed">フォローアップを読み込めません</string>
+    <string name="assistant_proactive_followups_empty_body">チャットで「1時間後に知らせて…」「明日の会議の前に準備を手伝って」と言うと、Personaがここに予定を入れます。</string>
+    <string name="assistant_proactive_followups_page_note">時刻になるとPersonaが戻ってきて続きを行います。⋯から今すぐ実行や取り消しができます。元のチャットを続けるものはタップするとそのチャットを開きます。</string>
+    <string name="assistant_proactive_unknown_time">時刻不明</string>
+    <string name="assistant_proactive_routine_runs">%1$sの実行履歴</string>
+    <string name="assistant_proactive_runs">実行履歴</string>
+    <string name="assistant_proactive_runs_read_failed">実行履歴を読み込めません</string>
+    <string name="assistant_proactive_no_runs">まだ実行されていません</string>
+    <string name="assistant_proactive_no_runs_body">定期タスクとフォローアップの実行（失敗やスキップを含む）はすべてここに記録されます。</string>
+    <string name="assistant_proactive_no_routine_runs_body">この定期タスクの実行（失敗やスキップを含む）はすべてここに記録されます。</string>
+
+    <!-- Rows -->
+    <string name="assistant_proactive_made_by_assistant">Personaがチャットで作成</string>
+    <string name="assistant_proactive_auto_run">「%1$s」を自動実行</string>
+    <string name="assistant_proactive_moment_until">%1$s（%2$s）</string>
+    <string name="assistant_proactive_actions_for">「%1$s」の操作</string>
+    <string name="assistant_proactive_hours">時</string>
+    <string name="assistant_proactive_minutes">分</string>
+
+    <!-- Routine editor -->
+    <string name="assistant_proactive_routine">定期タスク</string>
+    <string name="assistant_proactive_time_format">時刻はHH:MMの形式で入力してください</string>
+    <string name="assistant_proactive_fill_in">名前と内容を入力すると保存できます</string>
+    <string name="assistant_proactive_add">追加</string>
+    <string name="assistant_proactive_save">保存</string>
+    <string name="assistant_proactive_saving">保存中…</string>
+    <string name="assistant_proactive_routine_read_failed">定期タスクを読み込めません</string>
+    <string name="assistant_proactive_gone_body">チャットでPersonaが削除したのかもしれません。</string>
+    <string name="assistant_proactive_back">戻る</string>
+    <string name="assistant_proactive_by_assistant_notice">Personaがチャットであなたのために作成しました。通常どおり編集、オフ、削除ができます。</string>
+    <string name="assistant_proactive_name">名前</string>
+    <string name="assistant_proactive_name_placeholder">例：「朝のまとめ」</string>
+    <string name="assistant_proactive_enabled">オン</string>
+    <string name="assistant_proactive_enabled_on">時刻になると自動で実行します</string>
+    <string name="assistant_proactive_enabled_off">オフの間は自動で実行しません。今すぐ実行はできます</string>
+    <string name="assistant_proactive_when">いつ</string>
+    <string name="assistant_proactive_next_run">次回の実行：%1$s（%2$s）</string>
+    <string name="assistant_proactive_rule_note">%1$s。アシスタント設定のタイムゾーンに従います。</string>
+    <string name="assistant_proactive_what">Personaにしてほしいこと</string>
+    <string name="assistant_proactive_prompt_placeholder">チャットと同じように、見るデータや報告の仕方を書いてください。</string>
+    <string name="assistant_proactive_prompt_note">時刻になるとPersonaが新しいチャットを始めて作業し、終わったらスマートフォンに通知します。会議の10分前に知らせるなど、1回限りのフォローアップを入れることもできます。</string>
+    <string name="assistant_proactive_run">実行</string>
+    <string name="assistant_proactive_run_now_dirty">変更を保存してから新しいチャットを始めます</string>
+    <string name="assistant_proactive_run_now_body">新しいチャットを始め、結果はPersonaで確認できます</string>
+    <string name="assistant_proactive_last_result">前回の結果を見る</string>
+    <string name="assistant_proactive_last_run_title">前回の実行</string>
+    <string name="assistant_proactive_history">履歴</string>
+    <plurals name="assistant_proactive_all_times">
+        <item quantity="other">%1$d回分をすべて表示</item>
+    </plurals>
+    <string name="assistant_proactive_delete_routine">定期タスクを削除</string>
+    <string name="assistant_proactive_discard_title">変更を破棄しますか？</string>
+    <string name="assistant_proactive_discard_body">変更はまだ保存されていません。離れると失われます。</string>
+    <string name="assistant_proactive_discard">破棄</string>
+    <string name="assistant_proactive_keep_editing">編集を続ける</string>
+
+    <!-- Schedules and times -->
+    <string name="assistant_proactive_weekday">%1$s曜日</string>
+    <string name="assistant_proactive_day_separator">・</string>
+    <string name="assistant_proactive_every_week_on">毎週%1$s</string>
+    <string name="assistant_proactive_every_day">毎日</string>
+    <string name="assistant_proactive_weekdays">平日</string>
+    <string name="assistant_proactive_weekends">週末</string>
+    <string name="assistant_proactive_rule_weekdays">平日</string>
+    <string name="assistant_proactive_rule_weekends">毎週末</string>
+    <string name="assistant_proactive_rule">%1$sの%2$s</string>
+    <!-- 0–4, 5–8, 9–11, 12, 13–17 and 18–23 o'clock. -->
+    <string-array name="assistant_proactive_day_parts">
+        <item>深夜</item>
+        <item>朝</item>
+        <item>午前</item>
+        <item>昼</item>
+        <item>午後</item>
+        <item>夜</item>
+    </string-array>
+    <string name="assistant_proactive_clock">%1$s%2$d:%3$02d</string>
+    <string name="assistant_proactive_today">今日</string>
+    <string name="assistant_proactive_tomorrow">明日</string>
+    <string name="assistant_proactive_yesterday">昨日</string>
+    <string name="assistant_proactive_moment">%1$sの%2$s</string>
+    <string name="assistant_proactive_overdue">時刻超過</string>
+    <string name="assistant_proactive_now">まもなく</string>
+    <plurals name="assistant_proactive_in_minutes">
+        <item quantity="other">%1$d分後</item>
+    </plurals>
+    <string name="assistant_proactive_in_hours_minutes">%1$d時間%2$d分後</string>
+    <plurals name="assistant_proactive_in_hours">
+        <item quantity="other">%1$d時間後</item>
+    </plurals>
+    <plurals name="assistant_proactive_in_days">
+        <item quantity="other">%1$d日後</item>
+    </plurals>
+    <string name="assistant_proactive_on_time">定刻どおり</string>
+    <plurals name="assistant_proactive_late_seconds">
+        <item quantity="other">%1$d秒遅れ</item>
+    </plurals>
+    <plurals name="assistant_proactive_late_minutes">
+        <item quantity="other">%1$d分遅れ</item>
+    </plurals>
+    <plurals name="assistant_proactive_late_hours">
+        <item quantity="other">%1$d時間遅れ</item>
+    </plurals>
+
+    <!-- Runs and failures -->
+    <string name="assistant_proactive_outcome_ran">実行済み</string>
+    <string name="assistant_proactive_outcome_failed">実行できませんでした</string>
+    <string name="assistant_proactive_outcome_skipped">スキップ済み</string>
+    <string name="assistant_proactive_outcome_unknown">結果の記録なし</string>
+    <string name="assistant_proactive_run_manually">手動で実行</string>
+    <string name="assistant_proactive_failed_because">実行できませんでした：%1$s</string>
+    <string name="assistant_proactive_run_manually_suffix">%1$s（手動で実行）</string>
+    <string name="assistant_proactive_skipped_because">スキップしました：%1$s</string>
+    <string name="assistant_proactive_followup">フォローアップ</string>
+    <string name="assistant_proactive_error_assistant_offline">アシスタントのマシンがオフラインです</string>
+    <string name="assistant_proactive_error_machine_offline">マシンがオフラインです</string>
+    <string name="assistant_proactive_error_no_routine">この定期タスクはもうありません</string>
+    <string name="assistant_proactive_error_no_followup">このフォローアップはもうありません</string>
+    <string name="assistant_proactive_load_offline">ハブに接続できません。接続したら下に引いて更新してください。</string>
+    <string name="assistant_proactive_load_failed">ハブから結果が返りませんでした：%1$s</string>
+    <string name="assistant_proactive_unknown_error">不明なエラー</string>
+    <string name="assistant_proactive_routine_gone">この定期タスクはもうありません。削除されたばかりかもしれません</string>
+    <string name="assistant_proactive_connection_changed">接続が切り替わりました。もう一度お試しください</string>
+    <string name="assistant_proactive_offline">ハブに接続できません</string>
+    <string name="assistant_proactive_no_answer">ハブから応答がありません</string>
+    <string name="assistant_proactive_outcome_because">%1$s：%2$s</string>
+    <string name="assistant_proactive_last_run_at">前回は%1$s、%2$s</string>
+    <string name="assistant_proactive_last_run">前回は%1$s</string>
+    <string name="assistant_proactive_off_line">オフ。自動では実行しません</string>
+    <string name="assistant_proactive_next_line">次回は%1$s（%2$s）</string>
+    <string name="assistant_proactive_continues">元のチャットを続けます</string>
+    <string name="assistant_proactive_starts_new">新しいチャットを始めます</string>
+    <string name="assistant_proactive_continues_on">%1$sで元のチャットを続けます</string>
+    <string name="assistant_proactive_starts_new_on">%1$sで新しいチャットを始めます</string>
+    <string name="assistant_proactive_followup_continues">フォローアップ、元のチャットを続けます</string>
+    <string name="assistant_proactive_followup_starts_new">フォローアップ、新しいチャットを始めます</string>
+    <string name="assistant_proactive_summary_nothing">予定はまだありません。Personaは話しかけたときだけ動きます。</string>
+    <plurals name="assistant_proactive_summary_on_next">
+        <item quantity="other">%1$d件の定期タスクがオンです。次は%2$sです。</item>
+    </plurals>
+    <plurals name="assistant_proactive_summary_on">
+        <item quantity="other">%1$d件の定期タスクがオンです。</item>
+    </plurals>
+    <string name="assistant_proactive_summary_off_next">定期タスクはすべてオフです。次は%1$sです。</string>
+    <string name="assistant_proactive_summary_off">定期タスクはすべてオフです。</string>
+    <string name="assistant_proactive_not_saved">保存できませんでした：%1$s</string>
+    <string name="assistant_proactive_not_deleted">削除できませんでした：%1$s</string>
+    <string name="assistant_proactive_run_failed">実行できませんでした：%1$s</string>
+    <string name="assistant_proactive_followup_start_failed">このフォローアップを開始できませんでした：%1$s</string>
+    <string name="assistant_proactive_followup_cancel_failed">このフォローアップを取り消せませんでした：%1$s</string>
+    <string name="assistant_proactive_template_meeting_prep_prompt">今日のLarkカレンダーとスマホのカレンダーにある会議を確認してください。準備が必要な会議ごとに、schedule_followupで会議の10分前に事前準備を入れてください：関連ドキュメント、前回の議事録、未決事項、私が話すべきポイント。準備が必要な会議がなければ、簡単にそう伝えてください。</string>
+    <string name="assistant_proactive_template_weekly_report_prompt">今週の週報の下書きを作成してください：Larkカレンダー、議事録、ドキュメント、メッセージから、今週やったこと、進捗と成果、課題、来週の予定をまとめてください。各コンピューターのエージェントが今週終えた主な変更も含めてください。まず下書きを見せて、修正するか聞いてください。そのまま送信はしないでください。</string>
+    <string name="assistant_proactive_template_end_of_day_prompt">終業前の棚卸し：今日まだ返信していないメッセージ、約束したのにまだやっていないこと、各コンピューターでまだ実行中か私を待っているエージェント、明日の午前に準備が必要な会議を挙げてください。緊急度順に並べ、最後にどれにリマインダーを設定するか聞いてください。</string>
+</resources>

@@ -1,11 +1,13 @@
 package persona.feature.assistant.proactive
 
+import androidx.annotation.StringRes
 import persona.core.contracts.SessionKey
 import persona.core.contracts.parseTime
 import persona.core.contracts.api.AssistantManagement
 import persona.core.contracts.api.Followup
 import persona.core.contracts.api.Routine
 import persona.core.contracts.api.Run
+import persona.feature.assistant.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -198,7 +200,8 @@ internal data class ProactiveState(
     }
 }
 
-internal class RoutineGoneException : Exception("这个定时任务已经不在了，可能刚被删掉")
+/** The routine was deleted meanwhile; [failureReason] says so in the page's language. */
+internal class RoutineGoneException : Exception("routine is gone")
 
 /**
  * The page's state and every hub call it makes. Reads and writes of the routine table go one at a time, and a write
@@ -208,6 +211,8 @@ internal class RoutineGoneException : Exception("这个定时任务已经不在�
 internal class ProactiveStore(
     private val api: ProactiveApi,
     private val scope: CoroutineScope,
+    /** Says failures in the page's language. */
+    private val say: ProactiveText,
     private val clock: () -> Instant = Instant::now,
 ) {
     private val mutable = MutableStateFlow(ProactiveState())
@@ -241,20 +246,20 @@ internal class ProactiveStore(
     private suspend fun readRoutines(): List<Routine>? {
         val result = attempt { api.routines() }
         result.onSuccess { list -> mutable.update { it.copy(routines = Loadable(list), readAt = clock()) } }
-            .onFailure { error -> mutable.update { it.copy(routines = it.routines.failed(loadFailure(error))) } }
+            .onFailure { error -> mutable.update { it.copy(routines = it.routines.failed(loadFailure(say, error))) } }
         return result.getOrNull()
     }
 
     suspend fun loadFollowups() {
         attempt { api.followups() }
             .onSuccess { list -> mutable.update { it.copy(followups = Loadable(list), readAt = clock()) } }
-            .onFailure { error -> mutable.update { it.copy(followups = it.followups.failed(loadFailure(error))) } }
+            .onFailure { error -> mutable.update { it.copy(followups = it.followups.failed(loadFailure(say, error))) } }
     }
 
     suspend fun loadRuns() {
         attempt { api.runs() }
             .onSuccess { list -> mutable.update { it.copy(runs = Loadable(list)) } }
-            .onFailure { error -> mutable.update { it.copy(runs = it.runs.failed(loadFailure(error))) } }
+            .onFailure { error -> mutable.update { it.copy(runs = it.runs.failed(loadFailure(say, error))) } }
     }
 
     private suspend fun loadMachine() {
@@ -267,7 +272,7 @@ internal class ProactiveStore(
         mutable.update { it.copy(pending = it.pending + pending) }
         scope.launch {
             try {
-                commit(pending.change).onFailure { error -> report("没保存上", error) }
+                commit(pending.change).onFailure { error -> report(R.string.assistant_proactive_not_saved, error) }
             } finally {
                 mutable.update { it.copy(pending = it.pending - pending) }
             }
@@ -279,7 +284,7 @@ internal class ProactiveStore(
         val busy = "routine:${change.id}"
         mutable.update { it.copy(busy = it.busy + busy) }
         try {
-            return commit(change).onFailure { error -> report(if (change is RoutineChange.Delete) "没删掉" else "没保存上", error) }
+            return commit(change).onFailure { error -> report(if (change is RoutineChange.Delete) R.string.assistant_proactive_not_deleted else R.string.assistant_proactive_not_saved, error) }
         } finally {
             mutable.update { it.copy(busy = it.busy - busy) }
         }
@@ -305,7 +310,7 @@ internal class ProactiveStore(
     suspend fun runRoutine(id: String): Result<SessionKey> {
         mutable.update { it.copy(busy = it.busy + "run:$id") }
         val result = try { attempt { api.runRoutine(id) } } finally { mutable.update { it.copy(busy = it.busy - "run:$id") } }
-        result.onFailure { report("没跑起来", it) }
+        result.onFailure { report(R.string.assistant_proactive_run_failed, it) }
         // A run, failed or not, changes the routine's last run and the history.
         scope.launch { loadRoutines(); loadRuns() }
         return result
@@ -317,7 +322,7 @@ internal class ProactiveStore(
         if (result.isSuccess) mutable.update { state ->
             state.copy(followups = state.followups.copy(value = state.followups.value?.filterNot { it.id == id }))
         }
-        result.onFailure { report("没能开始这个跟进", it) }
+        result.onFailure { report(R.string.assistant_proactive_followup_start_failed, it) }
         // The hub takes a follow-up off its list before running it, so a failed run may still have removed it.
         scope.launch { loadFollowups(); loadRuns() }
         return result
@@ -339,12 +344,13 @@ internal class ProactiveStore(
         if (result.isSuccess) mutable.update { state ->
             state.copy(followups = state.followups.copy(value = state.followups.value?.filterNot { it.id == id }))
         }
-        result.onFailure { report("没能取消这个跟进", it) }
+        result.onFailure { report(R.string.assistant_proactive_followup_cancel_failed, it) }
         return result
     }
 
-    private fun report(what: String, error: Throwable) {
-        notices.tryEmit("$what：${failureReason(error)}")
+    /** [what] is a sentence with the reason as `%1$s` ("没保存上：%1$s"). */
+    private fun report(@StringRes what: Int, error: Throwable) {
+        notices.tryEmit(say.string(what, failureReason(say, error)))
     }
 }
 

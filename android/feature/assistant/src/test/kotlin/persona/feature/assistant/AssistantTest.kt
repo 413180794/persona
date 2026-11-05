@@ -4,50 +4,63 @@ import persona.core.contracts.Session
 import persona.core.contracts.api.AssistantSnapshot
 import java.time.Instant
 import java.time.ZoneId
+import java.util.Locale
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class AssistantTest {
+    /** The app's own words, in Chinese (Robolectric runs in zh, docs/android.md). */
+    private val resources get() = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+    private val words get() = ConversationWords(resources.getString(R.string.assistant_untitled),
+        resources.getString(R.string.assistant_handoff), resources.getString(R.string.assistant_handoff_named))
+
     @Test fun searchSeparatesPinnedAndRecentAndIncludesMainOnlyOnce() {
         val main = Session(machineId = "demo", sessionId = "main", title = "主对话")
         val pinned = Session(machineId = "demo", sessionId = "pinned", title = "周报素材")
         val recent = Session(machineId = "demo", sessionId = "recent", title = "工作安排", lastText = "周报")
-        val result = conversationGroups(AssistantSnapshot(main.key, listOf(main, pinned, recent, recent)), " 周报 ", setOf(pinned.key))
+        val result = conversationGroups(AssistantSnapshot(main.key, listOf(main, pinned, recent, recent)), " 周报 ", setOf(pinned.key), words)
         assertEquals(listOf(pinned), result.pinned)
         assertEquals(listOf(recent), result.recent)
-        val mainOnly = conversationGroups(AssistantSnapshot(main.key, listOf(main, main)), "主对话", setOf(main.key))
+        val mainOnly = conversationGroups(AssistantSnapshot(main.key, listOf(main, main)), "主对话", setOf(main.key), words)
         assertEquals(main, mainOnly.main)
         assertTrue(mainOnly.recent.isEmpty())
         assertTrue(mainOnly.pinned.isEmpty())
-        assertNull(conversationGroups(AssistantSnapshot(main.key, listOf(main)), "周报", emptySet()).main)
+        assertNull(conversationGroups(AssistantSnapshot(main.key, listOf(main)), "周报", emptySet(), words).main)
     }
 
     @Test fun historyFormatting() {
         val session = Session(machineId = "demo", sessionId = "history", title = "Claude Code",
             status = "offline", lastText = "\n继续整理安排")
-        assertEquals("继续整理安排", session.conversationTitle())
+        assertEquals("继续整理安排", session.conversationTitle(words))
         assertEquals(persona.core.designsystem.Status.Offline, session.conversationStatus())
-        assertEquals("10月31日 17:30", conversationTime(Instant.parse("2026-10-31T09:30:00Z"), ZoneId.of("Asia/Shanghai")))
-        assertNull(conversationTime(null))
+        assertEquals("10月31日 17:30", conversationTime(Instant.parse("2026-10-31T09:30:00Z"), Locale.forLanguageTag("zh-Hans"), ZoneId.of("Asia/Shanghai")))
+        assertEquals("31 Oct, 17:30", conversationTime(Instant.parse("2026-10-31T09:30:00Z"), Locale.forLanguageTag("en-GB"), ZoneId.of("Asia/Shanghai")))
+        assertNull(conversationTime(null, Locale.ENGLISH))
     }
 
     @Test fun handoffConversationTitle() {
         // From the old app's InboxTest: the hub names a hand-off after its first message, a <jarvis-context> tag.
         val s = Session(machineId = "m", sessionId = "x", title = "<jarvis-context kind=\"context\" title=\"飞书 · 发布群\">(feed_id=f2)")
-        assertEquals("交给 Persona：飞书 · 发布群", s.conversationTitle())
+        assertEquals("交给 Persona：飞书 · 发布群", s.conversationTitle(words))
         val escaped = Session(machineId = "m", sessionId = "z", title = "<jarvis-context kind=\"context\" title=\"飞书 · a&quot;b &lt;c&gt; &amp;amp;\" url=\"\">")
-        assertEquals("交给 Persona：飞书 · a\"b <c> &amp;", escaped.conversationTitle())
-        assertEquals("早报", Session(machineId = "m", sessionId = "y", title = "早报").conversationTitle())
+        assertEquals("交给 Persona：飞书 · a\"b <c> &amp;", escaped.conversationTitle(words))
+        assertEquals("早报", Session(machineId = "m", sessionId = "y", title = "早报").conversationTitle(words))
         // No title on the tag, or an empty one: still a hand-off, not the raw tag.
-        assertEquals("交给 Persona", Session(machineId = "m", sessionId = "a", title = "<jarvis-context kind=\"context\">").conversationTitle())
-        assertEquals("交给 Persona", Session(machineId = "m", sessionId = "b", title = "<jarvis-context title=\"\" url=\"\">").conversationTitle())
+        assertEquals("交给 Persona", Session(machineId = "m", sessionId = "a", title = "<jarvis-context kind=\"context\">").conversationTitle(words))
+        assertEquals("交给 Persona", Session(machineId = "m", sessionId = "b", title = "<jarvis-context title=\"\" url=\"\">").conversationTitle(words))
         // Untitled: the last message's first line, read before it is cut to 30 characters.
         val untitled = Session(machineId = "m", sessionId = "c", title = "Claude Code",
             lastText = "\n<jarvis-context kind=\"context\" title=\"项目 · 一个名字很长很长很长很长很长很长的项目\" url=\"\">\n正文")
-        assertEquals("交给 Persona：项目 · 一个名字很长很长很长很长很长很长的项目", untitled.conversationTitle())
-        assertEquals("a".repeat(30), Session(machineId = "m", sessionId = "d", lastText = "a".repeat(40)).conversationTitle())
-        assertNull(handoffTitle("早报 <jarvis-context"))
+        assertEquals("交给 Persona：项目 · 一个名字很长很长很长很长很长很长的项目", untitled.conversationTitle(words))
+        assertEquals("a".repeat(30), Session(machineId = "m", sessionId = "d", lastText = "a".repeat(40)).conversationTitle(words))
+        assertNull(handoffTitle("早报 <jarvis-context", words))
     }
 
     @Test fun theRecentGroupShowsThirtyThenTheRest() {
@@ -62,16 +75,16 @@ class AssistantTest {
 
     @Test fun theHistoryRowMenu() {
         fun labels(pinned: Boolean, live: Boolean, pin: Boolean, end: Boolean) =
-            conversationActions(pinned, live, if (pin) ({}) else null, {}, if (end) ({}) else null).map { it.label }
+            conversationActions(resources, pinned, live, if (pin) ({}) else null, {}, if (end) ({}) else null).map { it.label }
         assertEquals(listOf("置顶", "拷贝会话 ID", "结束对话"), labels(pinned = false, live = true, pin = true, end = true))
         assertEquals(listOf("取消置顶", "拷贝会话 ID"), labels(pinned = true, live = false, pin = true, end = true))
         assertEquals("the main conversation has no pin", listOf("拷贝会话 ID", "结束对话"), labels(pinned = false, live = true, pin = false, end = true))
         assertEquals(listOf("拷贝会话 ID"), labels(pinned = false, live = true, pin = false, end = false))
-        assertTrue(conversationActions(false, true, null, {}, {}).last().destructive)
+        assertTrue(conversationActions(resources, false, true, null, {}, {}).last().destructive)
     }
 
     @Test fun firstConversationBecomesMainAndSendUsesOutbox() = runTest {
-        val repository = DemoAssistantRepository()
+        val repository = DemoAssistantRepository(DemoWords("周报素材", "整理这周完成的工作", "下周出差的行程", "文档的要点", "新对话"))
         val main = repository.start()
         val branch = repository.start()
         assertEquals(main, repository.assistant.value.mainSession)
