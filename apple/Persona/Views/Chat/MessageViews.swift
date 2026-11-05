@@ -149,7 +149,6 @@ struct ImageViewing: Identifiable {
 }
 
 struct UserBubble: View, Equatable {
-    @Environment(\.shellChat) private var shellChat
     @Environment(\.rowMemoScope) private var memoScope
     var item: Item
     /// Only the message itself: the chat page re-evaluates its body on every hub push, and without this every row on
@@ -177,7 +176,7 @@ struct UserBubble: View, Equatable {
             if !shown.isEmpty || !quotes.isEmpty {
                 HStack {
                     Spacer(minLength: 48)
-                    UserBubbleBody(quotes: quotes, text: shown, shell: shellChat, paths: d.pathRefs)
+                    UserBubbleBody(quotes: quotes, text: shown, paths: d.pathRefs)
                         .messageLongPress(id: item.id)
                 }
             }
@@ -266,7 +265,6 @@ struct PeerMessage: View {
 /// quiet clock while the request runs, the clock and 连上后自动发送 while it waits for the network (Outbox.swift),
 /// and a red "重发" when it failed.
 struct PendingBubble: View {
-    @Environment(\.shellChat) private var shellChat
     var msg: PendingMessage
     var retry: () -> Void
     var discard: () -> Void
@@ -321,7 +319,7 @@ struct PendingBubble: View {
                     .accessibilityLabel("发送失败，重发或删除")
                 }
                 let parsed = ContextRef.parse(msg.text)
-                UserBubbleBody(quotes: ContextRef.quotes(parsed.refs) ?? [], text: AttachedFile.parse(parsed.rest).rest, shell: shellChat)
+                UserBubbleBody(quotes: ContextRef.quotes(parsed.refs) ?? [], text: AttachedFile.parse(parsed.rest).rest)
                     .opacity(msg.state == .failed || msg.state == .waiting ? 0.6 : 1)
             }
             if msg.state == .waiting {

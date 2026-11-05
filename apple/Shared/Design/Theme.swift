@@ -487,8 +487,6 @@ nonisolated enum Theme {
 
     /// The ChatGPT-style shell (docs/ios.md「新外壳」, iPhone without 旧布局): neutral like ChatGPT's, in every style.
     enum Shell {
-        /// The user's own messages: a soft gray bubble with ordinary text, not the style's colored one.
-        static let userBubble = Color(light: 0xF2F2F2, dark: 0x2F2F2F)
         /// The 助手 | Agents switch's selected segment, inside its glass capsule.
         static let segment = Color(light: 0xE6E6E6, dark: 0x3A3A3C)
         /// The composer's field and its expanded card.

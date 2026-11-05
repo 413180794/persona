@@ -550,12 +550,16 @@ struct WatchSessionView: View {
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
                     } else {
-                        // A bubble as wide as its words, the user's on the right, set off from the other edge.
+                        // A bubble as wide as its words, the user's on the right, set off from the other edge. What the
+                        // user sent wears the phone's bubble (`Theme.userBubble`, #2647); another session's message
+                        // (`from`) stays quiet like a reply.
+                        let own = it.role == "user" && it.from == nil
                         Text(WatchText.shown(it.text ?? ""))
                             .font(.footnote)
                             .lineLimit(8)
+                            .foregroundStyle(own ? Theme.userBubbleText : .primary)
                             .padding(Theme.Watch.bubblePadding)
-                            .background(it.role == "user" ? Theme.accent.opacity(0.25) : Color.white.opacity(0.08), in: .rect(cornerRadius: Theme.Radius.control))
+                            .background(own ? Theme.userBubble : Color.white.opacity(0.08), in: .rect(cornerRadius: Theme.Radius.control))
                             .padding(it.role == "user" ? .leading : .trailing, 14)
                             .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
                         // Came in from a channel (WeChat, the Feishu bot…), as under the phone's bubble.

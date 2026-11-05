@@ -66,13 +66,13 @@ extension Theme {
         static let flashOpacity = 0.18
 
         /// The rule and the heading in a sent bubble: on a colored bubble (white words) its words' color, the accent
-        /// on a pale one and on the shell's gray.
-        static func tint(shell: Bool) -> Color {
-            !shell && StyleSpec.current.deepensBubble ? Theme.userBubbleText(shell: false) : Theme.accent
+        /// on a pale one.
+        static var tint: Color {
+            StyleSpec.current.deepensBubble ? Theme.userBubbleText : Theme.accent
         }
 
-        static func summary(shell: Bool) -> Color {
-            !shell && StyleSpec.current.deepensBubble ? Theme.userBubbleText(shell: false).opacity(summaryOnColor) : .primary
+        static var summary: Color {
+            StyleSpec.current.deepensBubble ? Theme.userBubbleText.opacity(summaryOnColor) : .primary
         }
     }
 }
@@ -171,14 +171,13 @@ extension EnvironmentValues {
 /// the message it quotes (or opens the page it is from); with nothing to go back to, it opens to the whole text.
 struct QuoteBlock: View {
     var ref: ContextRef
-    var shell = false
     @Environment(\.openQuote) private var openQuote
     @Environment(\.openLink) private var openLink
     @State private var open = false
 
     var body: some View {
         QuoteCard(heading: ref.quoteHeading, summary: open ? ref.text : ref.quoteSummary, lines: open ? .max : 2,
-                  tint: Theme.Quote.tint(shell: shell), ink: Theme.Quote.summary(shell: shell), action: tap)
+                  tint: Theme.Quote.tint, ink: Theme.Quote.summary, action: tap)
             .accessibilityHint(ref.msg.isEmpty ? "" : "跳到原消息")
     }
 
@@ -272,22 +271,21 @@ struct WidestColumn: Layout {
 struct UserBubbleBody: View {
     var quotes: [ContextRef]
     var text: String
-    var shell: Bool
     /// The paths in `text`: linked where they are there on the machine (`PathText`).
     var paths: [PathRef] = []
 
     var body: some View {
         if quotes.isEmpty {
             words.padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.m)
-                .background(Theme.userBubbleFill(shell: shell), in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
+                .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
         } else {
             quoted
         }
     }
 
     private var words: some View {
-        PathText(text: text, refs: paths, link: Theme.userBubbleLink(shell: shell))
-            .font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText(shell: shell))
+        PathText(text: text, refs: paths, link: Theme.userBubbleLink)
+            .font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText)
             #if os(macOS)
             .textSelection(.enabled) // drag to select and ⌘C, as on the web (#2542)
             #endif
@@ -297,7 +295,7 @@ struct UserBubbleBody: View {
         WidestColumn {
             if !quotes.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    ForEach(quotes) { QuoteBlock(ref: $0, shell: shell) }
+                    ForEach(quotes) { QuoteBlock(ref: $0) }
                 }
                 .padding(.horizontal, Theme.Space.s)
                 .padding(.top, Theme.Space.s)
@@ -310,7 +308,7 @@ struct UserBubbleBody: View {
                     .padding(.vertical, Theme.Space.m)
             }
         }
-        .background(Theme.userBubbleFill(shell: shell), in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
+        .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
     }
 }
 

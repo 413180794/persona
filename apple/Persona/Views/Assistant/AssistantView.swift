@@ -297,7 +297,7 @@ struct FirstMessagePending: View {
                 }
                 HStack {
                     Spacer(minLength: 48)
-                    UserBubbleBody(quotes: [], text: pending.text, shell: shell)
+                    UserBubbleBody(quotes: [], text: pending.text)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)

@@ -465,7 +465,6 @@ struct TaskLine: View {
 struct FeedLine: View {
     var item: FeedItem
     var group: String = ""
-    @Environment(\.shellChat) private var shellChat
     private var store: TasksStore { .shared }
 
     var body: some View {
@@ -510,10 +509,10 @@ struct FeedLine: View {
                 .lineLimit(1)
             Text(item.text ?? "")
                 .font(Theme.Font.body)
-                .foregroundStyle(Theme.userBubbleText(shell: shellChat))
+                .foregroundStyle(Theme.userBubbleText)
                 .padding(.horizontal, Theme.Space.m)
                 .padding(.vertical, Theme.Space.s)
-                .background(Theme.userBubbleFill(shell: shellChat), in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
+                .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.leading, Theme.Space.xxl)
