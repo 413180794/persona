@@ -5,30 +5,41 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // fakeHub is the hub as the assistant sees it in unit tests: its hello, the machines with their sessions, a node on
 // each that starts and continues conversations (s1, s2…; resume_only refuses one it doesn't know, like a transcript
-// that was cleaned up), a model, and what the assistant pushed and reported. settings are the assistant's own a test
-// service starts with (newTestService…).
+// that was cleaned up), a model (a Messages API the hello's "ai" points at, fakeModel), and what the assistant pushed
+// and reported. settings are the assistant's own a test service starts with (newTestService…).
 type fakeHub struct {
 	mu            sync.Mutex
 	hello         Hello
 	settings      *Settings
-	record        modelRecord                // 模型配置 › 主对话 (models.record / models.save)
-	launcherList  []proto.Launcher           // models.launchers
+	launcherList  []proto.Launcher                   // the nodes' launchers.list (nil: the list fails, so it can't be told)
+	zshrc         map[string][]proto.Launcher        // a machine\'s own launchers.list (over launcherList)
+	agentModels   map[string][]proto.AgentModel      // the nodes' launchers.models, by launcher
+	managed       map[string][]proto.ManagedLauncher // what each node was given (launchers.managed)
+	presets       []assistantwire.LauncherPreset
+	voice         []assistantwire.VoicePlugin
+	needTriage    []string
+	ownModels     bool                       // the test sets hello.Models itself: no fake model
 	devices       []Device                   // devices.list answers these when set (else one per machine with sessions)
-	gone          map[string]bool            // launchers models.launcher_check says are gone
 	sessions      map[string][]proto.Session // by machine: the machines there are
 	items         []proto.Item               // session.items answers this
 	calls         []DeviceCall
@@ -36,7 +47,6 @@ type fakeHub struct {
 	made          int              // conversations started, for the next id
 	sends         []map[string]any // assistant.send params, and {"rename": params}
 	prepared      []map[string]any // assistant.prepare params
-	launcher      string           // what the model configuration runs a purpose on ("" = claude)
 	larkCLI       bool
 	slowSnapshots time.Duration // the connectors' live states come this late (nothing: there are none)
 	replies       []string      // the model's answers, in turn (the last one again when they run out)
@@ -52,8 +62,8 @@ type fakeHub struct {
 	agents    int
 	offline   map[string]bool
 	failStart error
-	judged    int // models.json calls (the done judge)
-	judge     string
+	judged    int      // the done judge's calls to the model
+	judge     string   // what they answer ("": an error)
 	retired   []string // session.retire's session ids
 	retireErr error
 	tokens    map[string][]map[string]map[string]string // todo.sync_session_tokens, by machine, in order
@@ -80,7 +90,7 @@ type modelCall struct{ System, User string }
 func newFakeHub() *fakeHub {
 	// 主对话派的任务只在主对话里通知 is on by default (tasks from the main conversation are quiet, #1731).
 	return &fakeHub{sessions: map[string][]proto.Session{}, known: map[string]bool{}, offline: map[string]bool{},
-		tokens: map[string][]map[string]map[string]string{}, gone: map[string]bool{}}
+		tokens: map[string][]map[string]map[string]string{}, managed: map[string][]proto.ManagedLauncher{}}
 }
 
 // withMachine adds the assistant's machine "server" (no sessions yet).
@@ -92,15 +102,12 @@ func (f *fakeHub) withMachine() *fakeHub {
 
 func (f *fakeHub) Hello(context.Context) (Hello, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.hello, nil
-}
-
-func (f *fakeHub) launcherLocked() string {
-	if f.launcher == "" {
-		return "claude"
+	h, in := f.hello, f.inbox
+	f.mu.Unlock()
+	if in != nil { // the inbox's tests give the models there (inbox_fake_test.go)
+		h.Models = in.hubModels()
 	}
-	return f.launcher
+	return h, nil
 }
 
 func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, error) {
@@ -143,13 +150,32 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 		return json.RawMessage(`{"ok":true}`), nil
 	case DeviceLaunchersProbe: // a launcher named after the agent it starts
 		name, _ := a["name"].(string)
-		agent := "claude"
-		for _, other := range []string{"codex", "gemini"} {
-			if strings.HasPrefix(name, other) {
-				agent = other
-			}
+		return json.Marshal(map[string]any{"detail": proto.LauncherDetail{Agent: launcherAgent(name)}})
+	case assistantwire.DeviceLaunchersModelCheck:
+		name, _ := a["name"].(string)
+		return json.Marshal(map[string]any{"agent": launcherAgent(name)})
+	case DeviceLaunchersList:
+		if l, ok := f.zshrc[p.Device]; ok {
+			return json.Marshal(map[string]any{"launchers": l})
 		}
-		return json.Marshal(map[string]any{"detail": proto.LauncherDetail{Agent: agent}})
+		if f.launcherList == nil {
+			return nil, errors.New("no launcher list here")
+		}
+		return json.Marshal(map[string]any{"launchers": f.launcherList})
+	case assistantwire.DeviceLaunchersModels:
+		name, _ := a["name"].(string)
+		models := f.agentModels[name]
+		if models == nil {
+			models = []proto.AgentModel{}
+		}
+		return json.Marshal(proto.LauncherModels{Agent: launcherAgent(name), Models: models})
+	case assistantwire.DeviceLaunchersManaged:
+		var m struct {
+			Launchers []proto.ManagedLauncher `json:"launchers"`
+		}
+		_ = json.Unmarshal(p.Params, &m)
+		f.managed[p.Device] = m.Launchers
+		return json.RawMessage(`{"ok":true}`), nil
 	case DeviceAssistantPrepare:
 		f.prepared = append(f.prepared, a)
 		return json.Marshal(map[string]any{"cwd": "/home/me/.jarvis/assistant"})
@@ -224,63 +250,6 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	switch p.AppID + " " + p.Method {
-	case AppModels + " " + ModelsComplete:
-		var a struct {
-			Purpose string `json:"purpose"`
-			System  string `json:"system"`
-			Input   string `json:"input"`
-		}
-		_ = json.Unmarshal(p.Params, &a)
-		if a.Purpose == "agent.title" { // a tab's name (agents_start.go)
-			f.tabAsked = append(f.tabAsked, a.System+"\n---\n"+a.Input)
-			return json.Marshal(map[string]any{"text": f.tabReply})
-		}
-		if f.noModel {
-			return nil, errors.New("no model")
-		}
-		f.asked = append(f.asked, modelCall{a.System, a.Input})
-		reply := f.replies[min(len(f.asked), len(f.replies))-1]
-		return json.Marshal(map[string]any{"text": reply})
-	case AppModels + " " + ModelsResolve:
-		return json.Marshal(ModelBinding{Provider: "launcher." + f.launcherLocked()})
-	case AppModels + " " + ModelsApply:
-		var a struct {
-			Params map[string]any `json:"params"`
-		}
-		_ = json.Unmarshal(p.Params, &a)
-		if l, _ := a.Params["launcher"].(string); l == "" {
-			a.Params["launcher"] = f.launcherLocked()
-		}
-		return json.Marshal(map[string]any{"params": a.Params})
-	case AppModels + " " + ModelsApplyPicked: // checked and fingerprinted
-		var a struct {
-			Params map[string]any `json:"params"`
-		}
-		_ = json.Unmarshal(p.Params, &a)
-		a.Params["model_fingerprint"] = "picked"
-		return json.Marshal(map[string]any{"params": a.Params})
-	case AppModels + " " + ModelsRecord:
-		return json.Marshal(f.record)
-	case AppModels + " " + ModelsSave:
-		var a struct {
-			Revision int64        `json:"revision"`
-			Binding  ModelBinding `json:"binding"`
-		}
-		_ = json.Unmarshal(p.Params, &a)
-		if a.Revision != f.record.Revision {
-			return nil, errors.New("配置已被修改，请重新加载后保存")
-		}
-		f.record = modelRecord{Revision: a.Revision + 1, Binding: a.Binding}
-		return json.RawMessage(`{}`), nil
-	case AppModels + " " + ModelsLaunchers:
-		return json.Marshal(map[string]any{"launchers": f.launcherList})
-	case AppModels + " " + ModelsLauncherCheck:
-		var a struct {
-			Launcher string `json:"launcher"`
-			Model    string `json:"model"`
-		}
-		_ = json.Unmarshal(p.Params, &a)
-		return json.Marshal(map[string]any{"available": !f.gone[a.Launcher], "model_ok": !f.gone[a.Launcher+"/"+a.Model]})
 	case AppConnectors + " " + ConnectorsSignedIn:
 		return json.Marshal(map[string]any{"connectors": []string{}, "clis": map[string]string{}, "lark_cli": f.larkCLI})
 	case AppPlugins + " " + PluginsAssistant:
@@ -290,25 +259,12 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 			Value: "a string", Actions: []string{"get", "set"}}}})
 	case AppSettings + " " + AppTool:
 		return json.Marshal(proto.TextResult("the hub's: "+string(p.Params), false))
-	case AppModels + " " + ModelsJSON:
-		var a struct {
-			Purpose string `json:"purpose"`
-			System  string `json:"system"`
-			Input   string `json:"input"`
-		}
-		_ = json.Unmarshal(p.Params, &a)
-		if a.Purpose == "agent.triage" { // the triage (agents_triage.go)
-			f.triageAsked = append(f.triageAsked, modelCall{a.System, a.Input})
-			if f.triage == "" {
-				return nil, errors.New("no model")
-			}
-			return json.RawMessage(f.triage), nil
-		}
-		f.judged++
-		if f.judge == "" {
-			return nil, errors.New("no model")
-		}
-		return json.RawMessage(f.judge), nil
+	case AppPlugins + " " + assistantwire.PluginsPresets:
+		return json.Marshal(map[string]any{"presets": f.presets})
+	case AppPlugins + " " + assistantwire.PluginsVoice:
+		return json.Marshal(map[string]any{"plugins": f.voice})
+	case AppPlugins + " " + assistantwire.PluginsNeedTriage:
+		return json.Marshal(map[string]any{"names": f.needTriage})
 	}
 	if answer := f.apps[p.AppID+" "+p.Method]; answer != nil {
 		f.appCalls = append(f.appCalls, p)
@@ -524,9 +480,10 @@ func newServiceOn(t *testing.T, f *fakeHub, st Store) *Service {
 	return withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf}))
 }
 
-// withSettings saves f.settings as s's own (none: s keeps what it has).
+// withSettings saves f.settings as s's own (none: s keeps what it has), and gives the hub's hello the fake model.
 func withSettings(t *testing.T, f *fakeHub, s *Service) *Service {
 	t.Helper()
+	f.fakeModel(t)
 	if f.settings != nil {
 		setSettings(t, s, func(v *Settings) { *v = *f.settings })
 	}
@@ -663,4 +620,93 @@ func todoCount(s *Service) int {
 	s.todos.mu.RLock()
 	defer s.todos.mu.RUnlock()
 	return len(s.todos.todos)
+}
+
+// launcherAgent is the agent a launcher starts in these tests: the one its name starts with, else claude.
+func launcherAgent(name string) string {
+	for _, other := range []string{"codex", "gemini"} {
+		if strings.HasPrefix(name, other) {
+			return other
+		}
+	}
+	return "claude"
+}
+
+// fakeModel is the model the API purposes run on (hub.json's "ai" in the hello, unless the test set the models
+// itself): a Messages API that answers a tab's name with f.tabReply, the Agents triage with f.triage and the done
+// judge with f.judge (each an error when empty), and the others with f.replies in turn (an error with noModel),
+// keeping what was asked.
+func (f *fakeHub) fakeModel(t *testing.T) {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.ownModels || f.hello.Models.AI.BaseURL != "" {
+		return
+	}
+	jsonOnly := strings.TrimSpace(prompts.RenderJSONOnly(""))
+	tabName := prompts.RenderTabName()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			System   string `json:"system"`
+			Messages []struct {
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		user := ""
+		if len(in.Messages) > 0 {
+			user = in.Messages[0].Content
+		}
+		f.mu.Lock()
+		reply, fail := "", false
+		switch {
+		case in.System == tabName:
+			f.tabAsked = append(f.tabAsked, in.System+"\n---\n"+user)
+			reply = f.tabReply
+		case strings.Contains(in.System, "盯着用户电脑上的编程 Agent"): // the Agents triage (agents_triage.go)
+			f.triageAsked = append(f.triageAsked, modelCall{strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(in.System), jsonOnly)), user})
+			reply, fail = f.triage, f.triage == ""
+		case strings.HasSuffix(strings.TrimSpace(in.System), jsonOnly):
+			f.judged++
+			reply, fail = f.judge, f.judge == ""
+		case f.noModel:
+			fail = true
+		default:
+			f.asked = append(f.asked, modelCall{in.System, user})
+			if len(f.replies) > 0 {
+				reply = f.replies[min(len(f.asked), len(f.replies))-1]
+			}
+		}
+		f.mu.Unlock()
+		if fail {
+			http.Error(w, `{"error":{"message":"no model"}}`, http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": reply}}})
+	}))
+	t.Cleanup(srv.Close)
+	key := filepath.Join(t.TempDir(), "key")
+	if err := os.WriteFile(key, []byte("k"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f.hello.Models.AI = ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "fake"}
+}
+
+// modelRecordOf is what s's model configuration has purpose set to.
+func modelRecordOf(t *testing.T, s *Service, purpose string) modelRecord {
+	t.Helper()
+	r, err := s.modelRecord(context.Background(), purpose)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// setModel sets purpose to b in s's model configuration.
+func setModel(t *testing.T, s *Service, purpose string, b ModelBinding) {
+	t.Helper()
+	r := modelRecordOf(t, s, purpose)
+	if err := s.saveModel(context.Background(), purpose, modelRecord{Revision: r.Revision, Binding: b}); err != nil {
+		t.Fatal(err)
+	}
 }

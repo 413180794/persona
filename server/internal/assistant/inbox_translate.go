@@ -63,19 +63,9 @@ func translateKey(parts ...string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// translateFingerprint names the translation model now, read fresh from the hub: a changed model does not answer
-// from the cache.
+// translateFingerprint names the translation model now (models.go): a changed model does not answer from the cache.
 func (s *Service) translateFingerprint(ctx context.Context) (string, error) {
-	var res struct {
-		Fingerprint string `json:"fingerprint"`
-	}
-	if err := s.appCall(ctx, AppInbox, assistantwire.InboxTranslateFingerprint, map[string]any{}, &res); err != nil {
-		return "", err
-	}
-	if res.Fingerprint == "" {
-		return "", errors.New("no model is set up for translation")
-	}
-	return res.Fingerprint, nil
+	return s.modelFingerprint(ctx, purposeTranslate)
 }
 
 // translateTexts translates short texts, keeping their order; cached ones are not sent again.
@@ -303,9 +293,13 @@ func (s *Service) translateInbox(ctx context.Context) {
 	// Like triageInbox: the pass outlives the caller, since a pull to refresh answers before it is done.
 	ctx = context.WithoutCancel(ctx)
 	cfg := s.inboxConfig(ctx)
-	targets, fingerprint := cfg.Translate, cfg.TranslateFingerprint
+	targets := cfg.Translate
+	if len(targets) == 0 {
+		return
+	}
+	fingerprint, err := s.translateFingerprint(ctx)
 	b := &s.inbox
-	if len(targets) == 0 || fingerprint == "" || !b.translating.TryLock() {
+	if err != nil || !b.translating.TryLock() {
 		return
 	}
 	b.mu.Lock()

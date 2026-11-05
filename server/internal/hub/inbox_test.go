@@ -5,11 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -469,15 +466,10 @@ func TestInboxSourcesAnswerTheManager(t *testing.T) {
 		!slices.Contains(cfg.Extensions, "examplechat") {
 		t.Fatalf("the settings: %s %v", out, err)
 	}
-	// A mail's text for translation keeps the HTML's paragraphs and links; the translation model is named.
+	// A mail's text for translation keeps the HTML's paragraphs and links.
 	if out, err := inbox(assistantwire.InboxMailBody, assistantwire.InboxMailRef{AccountID: "acc1", UID: 9, Mailbox: "INBOX", Readable: true}); err != nil ||
 		!strings.Contains(string(out), "请周五前提交") {
 		t.Fatalf("a mail's readable text: %s %v", out, err)
-	}
-	h.triageAI = fakeModel(t, `{}`)
-	if out, err := inbox(assistantwire.InboxTranslateFingerprint, map[string]any{}); err != nil || !strings.Contains(string(out), `"fingerprint":"`) ||
-		strings.Contains(string(out), `"fingerprint":""`) {
-		t.Fatalf("the translation model: %s %v", out, err)
 	}
 
 	// Asked again under the same send id (the answer was lost on the way), a reply is not sent again; one cut off
@@ -506,40 +498,6 @@ func TestInboxSourcesAnswerTheManager(t *testing.T) {
 	if _, err := inbox(assistantwire.InboxReplyMail, map[string]any{"account_id": "acc1", "uid": 9, "mailbox": "INBOX", "text": "又一次", "send_id": "send-3"}); !errors.As(busCodedError(err), &re) ||
 		re.Code != assistantwire.CodeAssistantInDoubt || len(m.sent) != 2 {
 		t.Fatalf("a send cut off before: %v, %d mails", err, len(m.sent))
-	}
-}
-
-// A model call of the manager's (the inbox's triage) carries how long the manager waits (app.call timeout_ms): the
-// hub stops it then, the request to the model is cancelled, nothing is left running or queued for it.
-func TestModelCallStopsWhenTheManagerStopsWaiting(t *testing.T) {
-	h := newTestHub(t)
-	cancelled := make(chan struct{})
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		if !strings.Contains(string(body), "示例：等不到的分拣") { // the hub's own calls meanwhile are answered at once
-			_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": "{}"}}})
-			return
-		}
-		select {
-		case <-r.Context().Done():
-			close(cancelled)
-		case <-time.After(10 * time.Second):
-		}
-	}))
-	t.Cleanup(srv.Close)
-	h.triageAI = ai.New(ai.Config{BaseURL: srv.URL, APIKey: "test-key", Model: "test-model"})
-	_, link := connectFakeManager(t, h)
-	params, _ := json.Marshal(map[string]any{"purpose": "inbox.triage", "system": "s", "input": "示例：等不到的分拣"})
-	start := time.Now()
-	err := link.call(assistantwire.MethodApp, assistantwire.AppCall{AppID: assistantwire.AppModels, Method: assistantwire.ModelsJSON,
-		Params: params, TimeoutMS: 300}, nil)
-	if err == nil || time.Since(start) > 4*time.Second {
-		t.Fatalf("the call went on past its time: %v after %s", err, time.Since(start))
-	}
-	select {
-	case <-cancelled:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the request to the model was not cancelled")
 	}
 }
 
@@ -806,18 +764,6 @@ func TestAIConfigOver(t *testing.T) {
 func newGitHubForTest(t *testing.T, muted []string) *github.Connector {
 	t.Helper()
 	return github.New(github.Config{Inbox: github.InboxOptions{MutedRepos: muted}}, "Mac", nil)
-}
-
-// fakeModel answers every Messages API call with reply.
-func fakeModel(t *testing.T, reply string) *ai.Client {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": reply}}})
-	}))
-	t.Cleanup(srv.Close)
-	key := filepath.Join(t.TempDir(), "key")
-	_ = os.WriteFile(key, []byte("k"), 0o600)
-	return ai.New(ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"})
 }
 
 // inboxTasks are the tasks going on as the inbox's judge sees them (the connected assistant's).

@@ -5,11 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
@@ -224,3 +227,50 @@ func (m *memIdents) DeleteBusIdentity(_ context.Context, id string) (bool, error
 	}
 	return ok, nil
 }
+
+// useModel makes c hub.json's "ai", the baseline of the assistant's API purposes (its model configuration, in the
+// hello), telling a connected assistant.
+func useModel(t *testing.T, h *Hub, c ai.Config) {
+	t.Helper()
+	h.cfg.AI = c
+	if _, ok := testAssistants.Load(h); ok && h.busConnOf(assistantwire.AssistantID) != nil {
+		helloChanged(t, h)
+	}
+}
+
+// putModel sets purpose's record in the model configuration (the assistant reads it from the same store).
+func putModel(t *testing.T, h *Hub, purpose string, b assistantwire.ModelBinding) {
+	t.Helper()
+	var r struct {
+		Revision int64                      `json:"revision"`
+		Binding  assistantwire.ModelBinding `json:"binding"`
+	}
+	ctx := context.Background()
+	if _, err := h.store.Setting(ctx, "model_config."+purpose, &r); err != nil {
+		t.Fatal(err)
+	}
+	r.Revision++
+	r.Binding = b
+	if err := h.store.PutSetting(ctx, "model_config."+purpose, r); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// keyFile is a key file for a test model.
+func keyFile(t *testing.T) string {
+	t.Helper()
+	key := filepath.Join(t.TempDir(), "key")
+	if err := os.WriteFile(key, []byte("k"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return key
+}
+
+// inboxTestStore is the model configuration's store that also takes inbox items.
+type inboxTestStore struct{ *modelTestStore }
+
+func (inboxTestStore) PutInboxItem(context.Context, string, []byte, time.Time, *time.Time) error {
+	return nil
+}
+
+func (inboxTestStore) DeleteInboxItems(context.Context, []string) error { return nil }

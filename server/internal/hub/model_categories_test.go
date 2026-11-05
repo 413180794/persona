@@ -1,85 +1,12 @@
 package hub
 
 import (
-	"context"
-	"encoding/json"
-	"net/http"
-	"reflect"
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
-
-func TestFourModelCategoriesCatalog(t *testing.T) {
-	h, mux := modelTestHub(t)
-	seedTasks(t, h, assistant.Task{ID: "one", Title: "不应出现在模型配置里的任务", Enabled: true})
-	r := modelRequest(mux, "GET", "", "")
-	if r.Code != http.StatusOK {
-		t.Fatal(r.Body.String())
-	}
-	var catalog struct {
-		Purposes []ModelPurpose `json:"purposes"`
-	}
-	if err := json.Unmarshal(r.Body.Bytes(), &catalog); err != nil {
-		t.Fatal(err)
-	}
-	ids := []string{}
-	for _, p := range catalog.Purposes {
-		ids = append(ids, p.ID)
-		if p.CategoryID != p.ID || len(p.Uses) == 0 || len(p.Fields) == 0 {
-			t.Fatalf("category missing scope or editor: %+v", p)
-		}
-	}
-	if !reflect.DeepEqual(ids, modelCategoryIDs) {
-		t.Fatalf("catalog is not exactly the four ordered categories: %v", ids)
-	}
-}
-
-func TestModelUsesAreReadOnlyAndIgnoreDeprecatedOverrides(t *testing.T) {
-	h, mux := modelTestHub(t)
-	ctx := context.Background()
-	seedTasks(t, h, assistant.Task{ID: "one", Title: "任务", Launcher: "old-task", Model: "old-model", Effort: "low", Enabled: true})
-	connectAssistant(t, h) // the hub knows the tasks as the assistant reports them
-	bindings := map[string]ModelBinding{
-		"assistant":    {Provider: "launcher.conversation", Model: "conversation", Effort: "high"},
-		"agent.new":    {Provider: "launcher.agent", Model: "agent", Effort: "xhigh"},
-		"kb":           {Provider: "legacy.kb", Model: "processing"},
-		"inbox.triage": {Provider: "legacy.triage", Model: "screening"},
-	}
-	for id, binding := range bindings {
-		if err := h.saveModelRecord(ctx, id, 0, binding); err != nil {
-			t.Fatal(err)
-		}
-	}
-	ids := []string{"task.one"}
-	for _, p := range modelPurposes {
-		if p.Parent != "" {
-			ids = append(ids, p.ID)
-		}
-	}
-	for _, id := range ids {
-		old := ModelBinding{Provider: "launcher.deprecated", Model: "deprecated", Effort: "low"}
-		if err := h.saveModelRecord(ctx, id, 0, old); err != nil {
-			t.Fatal(err)
-		}
-		b, err := h.resolveModel(ctx, id)
-		if err != nil || b != bindings[modelCategoryID(id)] {
-			t.Fatalf("%s did not follow its category: %+v %v", id, b, err)
-		}
-		p, err := h.modelPurpose(ctx, id, h.modelProviders(ctx))
-		if err != nil || len(p.Fields) != 0 || p.Override != (ModelBinding{}) || p.CategoryID != modelCategoryID(id) {
-			t.Fatalf("%s exposed an editable use: %+v %v", id, p, err)
-		}
-		if r := modelRequest(mux, "PATCH", id, `{"revision":1,"model":"another"}`); r.Code != http.StatusBadRequest {
-			t.Fatalf("%s accepted an individual override: %d %s", id, r.Code, r.Body.String())
-		}
-		stored, err := h.modelRecord(ctx, id)
-		if err != nil || stored.Binding != old {
-			t.Fatalf("deprecated record was destroyed: %+v %v", stored, err)
-		}
-	}
-}
 
 // A task's own conversation (started, then continued) runs on the 主对话 category (#1544: not Agents, whatever that
 // is set to), never on the task's old fields; delivery into the conversation it came from is a turn of that
@@ -87,16 +14,9 @@ func TestModelUsesAreReadOnlyAndIgnoreDeprecatedOverrides(t *testing.T) {
 func TestScheduledExecutionUsesMainConversationCategoryAndNoOldOverrides(t *testing.T) {
 	h, _ := modelTestHub(t)
 	n := newAssistantNode(t, h)
-	ctx := context.Background()
-	if err := h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.claude", Model: "category-model", Effort: "high"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := h.saveModelRecord(ctx, "agent.new", 0, ModelBinding{Provider: "launcher.agents", Model: "agents-model"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := h.saveModelRecord(ctx, "schedule", 0, ModelBinding{Provider: "launcher.old-schedule"}); err != nil {
-		t.Fatal(err)
-	}
+	putModel(t, h, "assistant", assistantwire.ModelBinding{Provider: "launcher.claude", Model: "category-model", Effort: "high"})
+	putModel(t, h, "agent.new", assistantwire.ModelBinding{Provider: "launcher.agents", Model: "agents-model"})
+	putModel(t, h, "schedule", assistantwire.ModelBinding{Provider: "launcher.old-schedule"})
 	task := assistant.Task{ID: "one", Title: "任务", Prompt: "执行任务", Launcher: "old-task", Model: "old-model", Effort: "low", PermissionMode: "bypassPermissions", Repeat: "interval", EveryMinutes: 30, Enabled: true}
 	fromSource := task // the same task from a conversation: its runs go there first
 	fromSource.ID, fromSource.SessionID, fromSource.MachineID = "two", "source", "server"

@@ -63,9 +63,6 @@ const (
 	InboxKick = "inbox.kick"
 	// InboxConfigMethod: {} → InboxConfig.
 	InboxConfigMethod = "inbox.config"
-	// InboxTranslateFingerprint: {} → {fingerprint}: the translation model now (an error when none is set up), read
-	// fresh for every translation the apps ask for (a changed model must not answer from the cache).
-	InboxTranslateFingerprint = "inbox.translate_fingerprint"
 	// InboxMailBody: InboxMailRef → InboxMailMessage: a mail read in full (peeked: it stays unread).
 	InboxMailBody = "inbox.mail_body"
 	// InboxReplyMail: {account_id, uid, mailbox, text, send_id} → InboxSent: the reply to that mail, sent from the
@@ -99,11 +96,8 @@ type InboxSent struct {
 	Already bool `json:"already,omitempty"`
 }
 
-// Error codes of the inbox's model calls (models.json, models.complete), so the manager tells the kinds apart, and of
-// the inbox on the bus.
+// Error codes of the inbox on the bus.
 const (
-	// CodeModelUnconfigured: nothing is set up for the purpose (ai.IsNotConfigured).
-	CodeModelUnconfigured = "model_unconfigured"
 	// CodeInboxUnavailable: the inbox could not read what it keeps (the database did not answer): it takes nothing
 	// and writes nothing until it can (its routes answer 503 with this code).
 	CodeInboxUnavailable = "inbox_unavailable"
@@ -220,10 +214,8 @@ type InboxConfig struct {
 	Agent      InboxAgentConfig `json:"agent"`
 	// LarkAccount is hub.json's lark.account: the lark-connector account Feishu items came to unless they say another.
 	LarkAccount int `json:"lark_account,omitempty"`
-	// Translate are the languages some device wants mail translated into (设置 › 翻译); TranslateFingerprint names the
-	// translation model now ("" when it can't be told: nothing is translated).
-	Translate            []string `json:"translate,omitempty"`
-	TranslateFingerprint string   `json:"translate_fingerprint,omitempty"`
+	// Translate are the languages some device wants mail translated into (设置 › 翻译).
+	Translate []string `json:"translate,omitempty"`
 	// Extensions are the connectors a plugin provides (installed, or hub.json's), whether or not a round read them:
 	// their items have no fallback tier (a model sorts them, or they wait), from the manager's start on.
 	Extensions []string `json:"extensions,omitempty"`

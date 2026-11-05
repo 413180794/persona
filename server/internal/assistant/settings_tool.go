@@ -264,11 +264,7 @@ func (s *Service) launchers(ctx context.Context) ([]proto.Launcher, error) {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	var res struct {
-		Launchers []proto.Launcher `json:"launchers"`
-	}
-	err := s.appCall(cctx, AppModels, ModelsLaunchers, map[string]any{"machine_id": machine}, &res)
-	return res.Launchers, err
+	return s.machineLaunchers(cctx, machine)
 }
 
 func (s *Service) getLauncher(ctx context.Context) (string, error) {
@@ -319,7 +315,7 @@ func (s *Service) setLauncher(ctx context.Context, v json.RawMessage) (*ownChang
 		return i18n.T(l, "assistant-settings_tool.change_launcher", i18n.Args{"before": before, "after": name})
 	},
 		apply: func(ctx context.Context) (string, error) {
-			if err := s.saveModelRecord(ctx, "assistant", rec); err != nil {
+			if err := s.saveModel(ctx, "assistant", rec); err != nil {
 				return "", err
 			}
 			return "New Persona conversations start with " + name + ".", nil

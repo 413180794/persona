@@ -73,6 +73,14 @@ func Main(ctx context.Context, version string, stdin io.Reader) error {
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
 			return svc.NodeAnswer(ctx, machine, method, params)
 		},
+		// A node's new connection gets the launchers added in Persona, with their keys (models_launchers.go).
+		NodeCalls: func(ctx context.Context, machine string) []devicewire.NodeCall {
+			b, err := json.Marshal(map[string]any{"launchers": svc.managedForNodes(ctx)})
+			if err != nil {
+				return nil
+			}
+			return []devicewire.NodeCall{{MachineID: machine, Method: DeviceLaunchersManaged, Params: b}}
+		},
 		DialRelay: func(ctx context.Context, query string) (*websocket.Conn, error) {
 			return bus.DialAt(ctx, hub, token, nil, devicewire.RelayPath, query)
 		},
@@ -81,8 +89,9 @@ func Main(ctx context.Context, version string, stdin io.Reader) error {
 	bh = NewBusHub(BusOptions{Hub: hub, Token: token, Version: version, Deploy: deploy, Logf: logger.Printf, Devices: devs})
 	// The knowledge base in the data directory here (the hub's own beside it), kept as the hub's hub.json says (hello).
 	home := identity.HomeDir()
+	// The model providers' keys are sealed with secret.key beside hub.json (the hub's; one elsewhere needs a copy).
 	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logger.Printf,
-		KB: &KBOptions{Dir: filepath.Join(home, "data"), KeyDir: home}})
+		KB: &KBOptions{Dir: filepath.Join(home, "data"), KeyDir: home}, SecretKey: filepath.Join(home, "secret.key")})
 	logger.Printf("connecting to %s", hub)
 	done := make(chan struct{})
 	go func() {

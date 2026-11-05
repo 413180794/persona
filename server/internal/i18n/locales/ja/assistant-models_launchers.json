@@ -22,6 +22,8 @@
   "err_api_no_models": "直接API接続には一覧できるモデルがありません",
   "err_no_provider": "このプロバイダーはありません",
   "err_all_offline": "このランチャーがあるコンピューターがすべてオフラインのため、モデルを一覧できません",
+  "no_gateway": "このランチャーにはゲートウェイのアドレスがありません（デフォルトの公式APIを使っています）",
+  "quota_node_outdated": "{name}の node が古いため、アップデートするまで利用枠を確認できません",
   "err_effort_default": "デフォルトの思考の強さ{effort}はサポートされていません（{levels}のいずれかにしてください）",
   "err_effort_model": "モデル{model}の思考の強さ{effort}はサポートされていません（{levels}のいずれかにしてください）",
   "err_effort_model_default": "モデル{model}のデフォルトの思考の強さ{effort}はサポートされていません（{levels}のいずれかにしてください）",

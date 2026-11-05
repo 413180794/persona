@@ -96,7 +96,7 @@ func (d *Devices) Hello(res json.RawMessage) {
 	}
 }
 
-// hubConnected hands the node, through the hub, what is the hub's (Codex settings, managed launchers, the sends it
+// hubConnected hands the node, through the hub, what is the hub's (Codex settings, the sends it
 // remembers), before the manager asks the node for its sessions; the hub also starts what it does on a connection
 // (the plugins' programs, Cua). The hub not there: it does that when it is back (it sees the connection then).
 func (d *Devices) hubConnected(ctx context.Context, m *Machine, at time.Time) *devicewire.ConnectedReply {

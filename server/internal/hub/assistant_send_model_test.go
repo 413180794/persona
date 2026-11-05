@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -23,12 +24,8 @@ func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
 	if err := h.store.PutSetting(ctx, "assistant", assistant.Settings{MachineID: "server", Main: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.conv", Effort: "high"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := h.saveModelRecord(ctx, "agent.new", 0, ModelBinding{Provider: "launcher.agents"}); err != nil {
-		t.Fatal(err)
-	}
+	putModel(t, h, "assistant", assistantwire.ModelBinding{Provider: "launcher.conv", Effort: "high"})
+	putModel(t, h, "agent.new", assistantwire.ModelBinding{Provider: "launcher.agents"})
 	n.m.mu.Lock()
 	n.m.sessions = []proto.Session{
 		{SessionID: "main", Launcher: "claude", Model: "stale", Assistant: true, Status: proto.StatusOffline},
@@ -83,9 +80,7 @@ func TestAssistantModelIsWhatThePhonesMessageRunsOn(t *testing.T) {
 	if err := h.store.PutSetting(ctx, "assistant", assistant.Settings{MachineID: "server", Main: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.conv", Effort: "high"}); err != nil {
-		t.Fatal(err)
-	}
+	putModel(t, h, "assistant", assistantwire.ModelBinding{Provider: "launcher.conv", Effort: "high"})
 	n.m.mu.Lock()
 	n.m.sessions = []proto.Session{{SessionID: "main", Launcher: "conv", Model: "picked-once", Assistant: true, Status: proto.StatusIdle}}
 	n.m.mu.Unlock()

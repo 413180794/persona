@@ -267,7 +267,7 @@ func (h *Hub) deliverOnce(ctx context.Context, m *Machine, p map[string]any) (in
 		}
 		return http.StatusOK, append(out, '\n'), outcome
 	case outcome == sendUnknown && !hasDelivered(err):
-		status, body := callErrBytes(unknownDelivery(h.requestCtxLang(ctx), "hub-send.lost_during"))
+		status, body := callErrBytes(unknownDelivery(h.contextLang(ctx), "hub-send.lost_during"))
 		return status, body, outcome
 	default:
 		status, body := callErrBytes(err)

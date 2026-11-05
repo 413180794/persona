@@ -76,7 +76,7 @@ func TestATaskRunsInItsOwnConversation(t *testing.T) {
 // user reset (下次开新对话) can't be continued: the run starts a new one and that becomes the task's.
 func TestATaskStartsANewConversationWhenItsOwnCannotGoOn(t *testing.T) {
 	n := newFakeHub().withMachine()
-	h := newStorelessService(t, n)
+	h := newTestService(t, n)
 	setTasks(h, Task{ID: "p", Title: "巡检", Prompt: "巡检", Repeat: repeatInterval, EveryMinutes: 30, Enabled: true})
 	first, _ := runNow(t, h, "p")
 
@@ -95,9 +95,8 @@ func TestATaskStartsANewConversationWhenItsOwnCannotGoOn(t *testing.T) {
 		t.Fatalf("a new conversation gets the whole message again: %q", text)
 	}
 
-	n.mu.Lock()
-	n.launcher = "codex" // 模型配置 › 主对话 now runs on another launcher (a task's conversations follow it, #1570)
-	n.mu.Unlock()
+	// 模型配置 › 主对话 now runs on another launcher (a task's conversations follow it, #1570).
+	setModel(t, h, "assistant", ModelBinding{Provider: "launcher.codex"})
 	switched, _ := runNow(t, h, "p")
 	if switched.SessionID == gone.SessionID {
 		t.Fatal("a conversation started with claude isn't continued with codex")

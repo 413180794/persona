@@ -70,8 +70,8 @@ func TestPutSettings(t *testing.T) {
 		out["main_tasks_quiet"] != false || out["notes_effective"] != "关于我" || out["cwd"] != "/home/me/.jarvis/assistant" {
 		t.Fatalf("PUT: %d %v", code, out)
 	}
-	if f.record.Binding.Provider != "launcher.codex-l" {
-		t.Fatalf("模型配置 › 主对话: %+v", f.record)
+	if r := modelRecordOf(t, s, "assistant"); r.Binding.Provider != "launcher.codex-l" {
+		t.Fatalf("模型配置 › 主对话: %+v", r)
 	}
 	if p := f.lastSnapshot().Profile; p == nil || p.Main != "m1" || p.Timezone != "Asia/Shanghai" {
 		t.Fatalf("the hub is told: %+v", p)
@@ -87,17 +87,19 @@ func TestPutSettings(t *testing.T) {
 func TestSendParams(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeHub().withMachine()
-	f.launcher = "conv"
 	f.setSessions("server", proto.Session{SessionID: "side", Launcher: "gone-l", Model: "m", Assistant: true},
 		proto.Session{SessionID: "side2", Launcher: "side-l", Model: "dropped", Assistant: true})
-	f.gone["gone-l"], f.gone["side-l/dropped"] = true, true
+	// gone-l is no launcher of the machine's any more; side-l does not offer "dropped" now.
+	f.launcherList = []proto.Launcher{{Name: "claude"}, {Name: "conv"}, {Name: "side-l"}}
+	f.agentModels = map[string][]proto.AgentModel{"side-l": {{ID: "m"}}}
 	s := newTestService(t, f)
+	setModel(t, s, "assistant", ModelBinding{Provider: "launcher.conv"})
 	if p, err := s.SendParams(ctx, SendParams{MachineID: "server", SessionID: "unlisted", Params: map[string]any{"text": "hi"}}); err != nil ||
 		len(p) != 1 {
 		t.Fatalf("unlisted: %v %v", p, err)
 	}
 	p, err := s.SendParams(ctx, SendParams{MachineID: "server", SessionID: "side", Params: map[string]any{"text": "hi"}})
-	if err != nil || p["launcher"] != "claude" || p["model"] != nil || p["model_fingerprint"] != "picked" {
+	if err != nil || p["launcher"] != "conv" || p["model"] != nil || p["model_fingerprint"] == nil { // 主对话's
 		t.Fatalf("a gone launcher: %v %v", p, err)
 	}
 	p, err = s.SendParams(ctx, SendParams{MachineID: "server", SessionID: "side2", Params: map[string]any{"text": "hi"}})
@@ -158,8 +160,8 @@ func TestSettingsTool(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeHub().withMachine()
 	f.launcherList = []proto.Launcher{{Name: "claude"}, {Name: "fast", Model: "m-fast"}}
-	f.record = modelRecord{Revision: 1, Binding: ModelBinding{Provider: "launcher.claude", Model: "chosen", Effort: "high"}}
 	s := newTestService(t, f)
+	setModel(t, s, "assistant", ModelBinding{Provider: "launcher.claude", Model: "chosen", Effort: "high"})
 	tool := func(args string) string {
 		r := s.Tool(ctx, ToolCall{Name: "jarvis_settings", Arguments: json.RawMessage(args), MachineID: "server", SessionID: "c1"})
 		return r.Content[0].Text
@@ -199,8 +201,8 @@ func TestSettingsTool(t *testing.T) {
 	}
 	go answer(true)
 	if out := tool(`{"action":"set","key":"assistant.launcher","value":"fast"}`); !strings.Contains(out, "fast") ||
-		f.record.Binding != (ModelBinding{Provider: "launcher.fast", Model: "chosen", Effort: "high"}) {
-		t.Fatalf("launcher: %s %+v", out, f.record)
+		modelRecordOf(t, s, "assistant").Binding != (ModelBinding{Provider: "launcher.fast", Model: "chosen", Effort: "high"}) {
+		t.Fatalf("launcher: %s %+v", out, modelRecordOf(t, s, "assistant"))
 	}
 	if out := tool(`{"action":"set","key":"assistant.launcher","value":"nope"}`); !strings.Contains(out, "no launcher") {
 		t.Fatalf("unknown launcher: %s", out)

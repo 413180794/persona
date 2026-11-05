@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	_ "embed"
@@ -15,7 +15,7 @@ import (
 // it. The data is cindy's model registry, the Claude series and the models of the common Chinese gateways
 // (THIRD_PARTY_NOTICES.md); only what that registry states, nothing guessed.
 
-//go:embed model_catalog.json
+//go:embed models_catalog.json
 var modelCatalogJSON []byte
 
 var modelCatalog = sync.OnceValue(func() map[string]proto.ProviderModel {
@@ -23,7 +23,7 @@ var modelCatalog = sync.OnceValue(func() map[string]proto.ProviderModel {
 		Models []proto.ProviderModel `json:"models"`
 	}
 	if err := json.Unmarshal(modelCatalogJSON, &doc); err != nil {
-		panic("model_catalog.json: " + err.Error())
+		panic("models_catalog.json: " + err.Error())
 	}
 	out := make(map[string]proto.ProviderModel, len(doc.Models))
 	for _, m := range doc.Models {

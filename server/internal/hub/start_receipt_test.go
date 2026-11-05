@@ -77,6 +77,7 @@ func TestSessionStartReceipt(t *testing.T) {
 				}
 				return map[string]any{"session": proto.Session{SessionID: "created", Agent: "codex"}}, nil
 			})
+			connectAssistant(t, h) // what a new Agent runs on is the assistant's (models.apply)
 			request := func(h *Hub, body, opID string, ctx context.Context) *httptest.ResponseRecorder {
 				r := httptest.NewRequest("POST", "https://example.com/api/v1/sessions", strings.NewReader(body)).WithContext(ctx)
 				r.RemoteAddr = netip.AddrFrom4([4]byte{127, 0, 0, 1}).String() + ":1234"
@@ -124,26 +125,5 @@ func TestSessionStartReceipt(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestSessionLauncherTypes(t *testing.T) {
-	list := sessionLaunchers([]sessionLauncher{
-		{Launcher: proto.Launcher{Name: "claude", Model: "default"}},
-		{Launcher: proto.Launcher{Name: "codex"}},
-		{Launcher: proto.Launcher{Name: "wrapper", Model: "configured-model"}},
-	}, []sessionLauncher{
-		{Launcher: proto.Launcher{Name: "wrapper"}, AgentType: "traex"},
-		{Launcher: proto.Launcher{Name: "other-wrapper"}, AgentType: "codex"},
-	})
-	if len(list) != 4 || list[0].AgentType != "claude" || list[1].AgentType != "codex" ||
-		list[2].AgentType != "traex" || list[2].Model != "configured-model" || list[3].AgentType != "codex" {
-		t.Fatalf("launchers = %+v", list)
-	}
-	// The old iOS launcher model ignores the optional type and retains its existing fields.
-	raw, _ := json.Marshal(list)
-	var legacy []proto.Launcher
-	if json.Unmarshal(raw, &legacy) != nil || len(legacy) != 4 || legacy[0].Name != "claude" {
-		t.Fatalf("legacy launchers = %s", raw)
 	}
 }

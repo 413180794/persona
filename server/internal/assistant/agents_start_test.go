@@ -2,7 +2,6 @@ package assistant
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -66,9 +65,9 @@ func TestGoldenTabName(t *testing.T) {
 // named when asked; a resume keeps what it runs on; a refusal is the app's to see.
 func TestAgentStartParams(t *testing.T) {
 	f := newFakeHub()
-	f.launcher = "agents-l"
 	f.tabReply = "fix-login"
 	s := newTestService(t, f)
+	setModel(t, s, "agent.new", ModelBinding{Provider: "launcher.agents-l"})
 	ctx := context.Background()
 	p, err := s.AgentStartParams(ctx, AgentStartParams{MachineID: "box", Params: map[string]any{"cwd": "/code", "launcher": ""},
 		NameFrom: "修登录"})
@@ -84,10 +83,15 @@ func TestAgentStartParams(t *testing.T) {
 	if p["launcher"] != nil || p["tab_name"] != nil || len(f.tabAsked) != 1 {
 		t.Fatalf("resume: %v (tab names asked %d)", p, len(f.tabAsked))
 	}
-	f.mu.Lock()
-	f.launcher = "other-l"
-	f.mu.Unlock()
-	s2 := New(Options{Hub: failingApply{newFakeHub()}, Logf: t.Logf})
+	setModel(t, s, "agent.new", ModelBinding{Provider: "launcher.other-l"})
+	// A configuration that cannot run: Agents on a direct API connection that speaks Responses (a Messages one starts
+	// Claude on its gateway, #2455).
+	s2 := newTestService(t, newFakeHub())
+	if err := s2.putSetting(ctx, launchersManagedKey, []storedLauncher{{ManagedLauncher: proto.ManagedLauncher{Name: "direct", Kind: "api",
+		API: "responses", BaseURL: "https://api.example.com", Model: "m"}}}); err != nil {
+		t.Fatal(err)
+	}
+	setModel(t, s2, "agent.new", ModelBinding{Provider: "launcher.direct"})
 	if _, err := s2.AgentStartParams(ctx, AgentStartParams{MachineID: "box", Params: map[string]any{}}); err == nil {
 		t.Fatal("a configuration that cannot run was taken")
 	} else if re := (*rpc.Error)(nil); !errors.As(err, &re) || re.Code != CodeBadRequest {
@@ -103,16 +107,6 @@ func TestAgentStartParams(t *testing.T) {
 	if err != nil || len(p) != 1 || p["text"] != "hi" {
 		t.Fatalf("resume params without a configuration: %v %v", p, err)
 	}
-}
-
-// failingApply is a hub whose model configuration cannot run (models.apply refuses).
-type failingApply struct{ *fakeHub }
-
-func (f failingApply) AppCall(ctx context.Context, p AppCall) (json.RawMessage, error) {
-	if p.AppID == AppModels && p.Method == ModelsApply {
-		return nil, errors.New("这个用途引用了直接 API 接入，不能作为启动器运行")
-	}
-	return f.fakeHub.AppCall(ctx, p)
 }
 
 // POST /api/v1/tabs/autoname renames the tabs nobody named after their sessions' titles, one name per space.

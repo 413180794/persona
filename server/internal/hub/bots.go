@@ -42,7 +42,7 @@ type FeishuBotConfig struct {
 type FeishuBotSettings struct {
 	Enabled   bool        `json:"enabled"`
 	AppID     string      `json:"app_id,omitempty"`
-	SecretEnc string      `json:"secret_enc,omitempty"` // sealed with secret.key (launchers.go sealKey)
+	SecretEnc string      `json:"secret_enc,omitempty"` // sealed with secret.key (secretkey.go sealKey)
 	Domain    string      `json:"domain,omitempty"`
 	Features  BotFeatures `json:"features"`
 	Owner     *BotOwner   `json:"owner,omitempty"`

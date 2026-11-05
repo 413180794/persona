@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"bytes"
@@ -12,11 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// 测试连接 / 获取模型 for a provider being added or edited (#2455, docs/launchers.md): the hub itself talks to the
+// 测试连接 / 获取模型 for a provider being added or edited (#2455, docs/launchers.md): the manager itself talks to the
 // gateway, as cindy's provider-diagnostics / provider-model-fetch do. POST /api/v1/launchers/test sends one 1-token
 // Messages request; POST /api/v1/launchers/discover lists GET <base>/v1/models, filled in from the built-in catalog.
 // Neither ever puts the key or a header value in what it answers.
@@ -39,24 +40,24 @@ type probeTarget struct {
 	base, key, headers, model, proxy string
 }
 
-func (h *Hub) probeTarget(ctx context.Context, in probeInput) (probeTarget, error) {
+func (s *Service) probeTarget(ctx context.Context, in probeInput) (probeTarget, error) {
 	var t probeTarget
 	if in.Name != "" {
-		list := h.storedLaunchers(ctx)
-		i := slices.IndexFunc(list, func(s storedLauncher) bool { return s.Name == in.Name })
+		list := s.storedLaunchers(ctx)
+		i := slices.IndexFunc(list, func(l storedLauncher) bool { return l.Name == in.Name })
 		if i < 0 {
-			return t, i18n.Err("hub-provider_probe.err_no_provider", i18n.Args{"name": in.Name})
+			return t, i18n.Err("assistant-models_probe.err_no_provider", i18n.Args{"name": in.Name})
 		}
-		s := list[i]
-		key, err := h.openKey(s.KeySealed)
+		l := list[i]
+		key, err := s.openKey(l.KeySealed)
 		if err != nil {
-			return t, i18n.Err("hub-provider_probe.err_open_key")
+			return t, i18n.Err("assistant-models_probe.err_open_key")
 		}
-		headers, err := h.openKey(s.HeadersSealed)
+		headers, err := s.openKey(l.HeadersSealed)
 		if err != nil {
-			return t, i18n.Err("hub-provider_probe.err_open_headers")
+			return t, i18n.Err("assistant-models_probe.err_open_headers")
 		}
-		t = probeTarget{base: s.BaseURL, key: key, headers: headers, model: s.Model, proxy: s.Proxy}
+		t = probeTarget{base: l.BaseURL, key: key, headers: headers, model: l.Model, proxy: l.Proxy}
 	}
 	if b := strings.TrimSpace(in.BaseURL); b != "" {
 		// The stored key and headers only go to the stored gateway: another address gets just what the request brings.
@@ -153,9 +154,9 @@ func (t probeTarget) redact(s string) string {
 	return s
 }
 
-// pt is a hub-provider_probe text in l.
+// pt is an assistant-models_probe text in l.
 func pt(l i18n.Lang, key string, args ...i18n.Args) string {
-	return i18n.T(l, "hub-provider_probe."+key, args...)
+	return i18n.T(l, "assistant-models_probe."+key, args...)
 }
 
 // failure is what went wrong, said for a person (in ctx's language): the status first, then what the gateway said (redacted, clipped).
@@ -217,15 +218,15 @@ func gatewayMessage(raw []byte) string {
 }
 
 // providerTest: POST <base>/v1/messages, 1 token of "ping".
-func (h *Hub) providerTest(ctx context.Context, in probeInput) map[string]any {
+func (s *Service) providerTest(ctx context.Context, in probeInput) map[string]any {
 	out := map[string]any{"ok": false, "ms": 0, "model": in.Model}
-	t, err := h.probeTarget(ctx, in)
+	t, err := s.probeTarget(ctx, in)
 	if err != nil {
 		out["error"] = i18n.Localize(err, i18n.From(ctx))
 		return out
 	}
 	if out["model"] = t.model; t.model == "" {
-		out["error"] = i18n.T(i18n.From(ctx), "hub-launchers.err_model_required")
+		out["error"] = i18n.T(i18n.From(ctx), "assistant-models_launchers.err_model_required")
 		return out
 	}
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
@@ -248,10 +249,10 @@ func (h *Hub) providerTest(ctx context.Context, in probeInput) map[string]any {
 }
 
 // providerDiscover: GET <base>/v1/models, its models filled in from the catalog.
-func (h *Hub) providerDiscover(ctx context.Context, in probeInput) map[string]any {
+func (s *Service) providerDiscover(ctx context.Context, in probeInput) map[string]any {
 	models := []proto.ProviderModel{}
 	fail := func(msg string) map[string]any { return map[string]any{"models": models, "error": msg} }
-	t, err := h.probeTarget(ctx, in)
+	t, err := s.probeTarget(ctx, in)
 	if err != nil {
 		return fail(i18n.Localize(err, i18n.From(ctx)))
 	}
@@ -353,21 +354,20 @@ func parseModelsList(raw []byte) ([]proto.ProviderModel, bool) {
 	return out, true
 }
 
-func (h *Hub) providerProbeRoutes(api *http.ServeMux) {
-	// literal patterns: the route scope check (TestRouteScopes) reads them from the source
-	api.HandleFunc("POST /api/v1/launchers/test", h.probeRoute(h.providerTest))
-	api.HandleFunc("POST /api/v1/launchers/discover", h.probeRoute(h.providerDiscover))
+func (s *Service) providerProbeRoutes() {
+	s.handle("POST /api/v1/launchers/test", s.probeRoute(s.providerTest))
+	s.handle("POST /api/v1/launchers/discover", s.probeRoute(s.providerDiscover))
 }
 
 // probeRoute is a test / discover handler: the request is a probeInput, the answer always 200 with ok / error inside.
-func (h *Hub) probeRoute(run func(context.Context, probeInput) map[string]any) http.HandlerFunc {
+func (s *Service) probeRoute(run func(context.Context, probeInput) map[string]any) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in probeInput
-		if err := decodeJSONBody(w, r, &in, 1<<20); err != nil {
-			writeBodyErr(w, err, i18n.Err("hub-provider_probe.err_bad_request"))
+		if err := decodeBody(w, r, &in, 1<<20); err != nil {
+			writeBodyErr(w, err, i18n.Err("assistant-models_probe.err_bad_request"))
 			return
 		}
 		// the answers' texts read in the request's language, else the user's (failure, providerTest)
-		writeJSON(w, run(i18n.With(r.Context(), h.requestCtxLang(r.Context())), in))
+		apierr.WriteJSON(w, run(i18n.With(r.Context(), s.requestCtxLang(r.Context())), in))
 	}
 }

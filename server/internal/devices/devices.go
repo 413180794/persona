@@ -55,6 +55,9 @@ type Options struct {
 	// Answer answers a node's request that is the manager's own (assistant.model, assistant.context); handled false:
 	// not one, it goes to the hub.
 	Answer func(ctx context.Context, machine, method string, params json.RawMessage) (out any, handled bool, err error)
+	// NodeCalls are the manager's own calls to a node right after the hub's part of its connection (the launchers
+	// added in Persona, with their keys: the assistant holds those); nil: none.
+	NodeCalls func(ctx context.Context, machine string) []devicewire.NodeCall
 	// DialRelay opens the hub's relay channel (devicewire.RelayPath) with query.
 	DialRelay func(ctx context.Context, query string) (Relay, error)
 	// Connected says whether the connection to the hub is up now (nil: always).

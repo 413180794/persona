@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -387,10 +388,7 @@ func TestWeChatStateMoves(t *testing.T) {
 // A channel sending to a side conversation whose launcher is deleted falls back to the assistant's launcher (#2007).
 func TestChannelSideConversationLauncherFallback(t *testing.T) {
 	w := newChannelWorld(t)
-	ctx := context.Background()
-	if err := w.h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.asst-launcher"}); err != nil {
-		t.Fatal(err)
-	}
+	putModel(t, w.h, "assistant", assistantwire.ModelBinding{Provider: "launcher.asst-launcher"})
 	w.m.mu.Lock()
 	w.m.sessions = append(w.m.sessions, proto.Session{
 		SessionID: "side-1",

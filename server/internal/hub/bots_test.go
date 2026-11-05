@@ -556,10 +556,7 @@ func TestBotAnswerIsPostedOnceWhenChecksRace(t *testing.T) {
 // When the bot sends to a side conversation whose launcher is deleted, it falls back to the assistant's launcher (#2007).
 func TestBotSideConversationLauncherFallback(t *testing.T) {
 	w := newBotWorld(t)
-	ctx := context.Background()
-	if err := w.h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.asst-launcher"}); err != nil {
-		t.Fatal(err)
-	}
+	putModel(t, w.h, "assistant", assistantwire.ModelBinding{Provider: "launcher.asst-launcher"})
 	w.m.mu.Lock()
 	w.m.sessions = append(w.m.sessions, proto.Session{
 		SessionID: "side-1",

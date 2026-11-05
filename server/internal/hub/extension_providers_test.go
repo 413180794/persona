@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,56 +13,16 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-func TestPresetForPrefersTheAddedFromPresetThenTheGateway(t *testing.T) {
-	presets := []LauncherPreset{
-		{ID: "gw/api", Kind: "api", BaseURL: "https://gw.example.com"},
-		{ID: "gw/team", Kind: "launcher", BaseURL: "https://gw.example.com/"},
-		{ID: "gw/relay", Kind: "launcher", BaseURL: "https://relay.example.com"},
-	}
-	if pr, ok := presetFor(presets, "gw/relay", "https://gw.example.com"); !ok || pr.ID != "gw/relay" {
-		t.Fatal("the preset it was added from wins:", pr.ID, ok)
-	}
-	if pr, ok := presetFor(presets, "", "HTTPS://GW.example.com"); !ok || pr.ID != "gw/team" {
-		t.Fatal("by gateway, launcher kind only, case and trailing slash ignored:", pr.ID, ok)
-	}
-	if _, ok := presetFor(presets, "", "https://other.example.com"); ok {
-		t.Fatal("no preset for another gateway")
-	}
-	if _, ok := presetFor(presets, "", ""); ok {
-		t.Fatal("no gateway matches nothing")
-	}
-}
-
-func TestWithPresetModelsKeepsTheLaunchersOwnFirst(t *testing.T) {
-	res := proto.LauncherModels{Agent: "claude", Models: []proto.AgentModel{
-		{ID: "default", Default: true}, {ID: "opus", Resolved: "m-1"}, {ID: "m-2"},
-	}}
-	pr := LauncherPreset{Name: "Example Gateway", Models: []extension.ProviderModel{
-		{ID: "m-1"}, {ID: "m-2"}, {ID: "m-3", Name: "Model Three"}, {ID: ""}, {ID: "m-4"}, {ID: "m-3"},
-	}}
-	got := withPresetModels(res, pr).Models
-	var ids []string
-	for _, m := range got {
-		ids = append(ids, m.ID)
-	}
-	want := []string{"default", "opus", "m-2", "m-3", "m-4"}
-	if len(ids) != len(want) {
-		t.Fatal(ids)
-	}
-	for i := range want {
-		if ids[i] != want[i] {
-			t.Fatal(ids)
-		}
-	}
-	if got[3].Name != "Model Three" || got[3].Description != "Example Gateway" || got[4].Name != "m-4" {
-		t.Fatalf("%+v", got[3:])
-	}
-}
-
 // 新建 Agent's model picker offers the plugin gateway's models for a ~/.zshrc launcher on that gateway and for a
 // provider added from the preset, after the launcher's own /model entries; another gateway's launcher is left alone.
 func TestLauncherModelsIncludeThePresetsModels(t *testing.T) {
 	h, _ := extensionTestHub(t)
+	// The slow machine's list as last seen, before this run (the manager keeps the machines' lists in settings
+	// launchers.zshrc and reads them when it starts).
+	if err := h.store.PutSetting(context.Background(), "launchers.zshrc", map[string][]proto.Launcher{"slow": {{Name: "gw-alias", BaseURL: "https://gw.example.com"}}}); err != nil {
+		t.Fatal(err)
+	}
+	connectAssistant(t, h) // the providers and the picker's models are the manager's (it asks the hub for the presets)
 	mux := h.routes()
 	master := h.cfg.Token
 	dir := t.TempDir()
@@ -109,12 +70,8 @@ func TestLauncherModelsIncludeThePresetsModels(t *testing.T) {
 	if got := fmt.Sprint(ids("elsewhere")); got != "[default gw-large]" {
 		t.Fatalf("another gateway's launcher got the preset's models: %s", got)
 	}
-	m := h.byID["box"]
-	if !h.launcherHasModel(t.Context(), m, "gw-alias", "gw-small") {
-		t.Fatal("a send with a preset model is checked against the list that offered it")
-	}
 
-	// A machine slow to list its launchers (tailcat right after a restart): the gateway it was last seen with is used,
+	// A machine slow to list its launchers (tailcat right after a restart): the gateway it was last seen with (above) is used,
 	// not a second node call that would time the picker out.
 	modelsNode(t, h, MachineConfig{ID: "slow"}, func(method string, p map[string]any) (any, error) {
 		if method == "launchers.list" {
@@ -125,9 +82,6 @@ func TestLauncherModelsIncludeThePresetsModels(t *testing.T) {
 		}
 		return map[string]any{}, nil
 	})
-	h.launchers.mu.Lock()
-	h.launchersSeen = map[string][]proto.Launcher{"slow": {{Name: "gw-alias", BaseURL: "https://gw.example.com"}}}
-	h.launchers.mu.Unlock()
 	w := modelsRequest(h, "GET", "/api/v1/machines/slow/launchers/gw-alias/models", "")
 	var res proto.LauncherModels
 	_ = json.Unmarshal(w.Body.Bytes(), &res)

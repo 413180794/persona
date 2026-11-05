@@ -170,7 +170,7 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 		}
 		_ = json.Unmarshal(raw, &fields)
 		if fields.Model != "" || fields.Fingerprint != "" {
-			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: i18n.T(m.hub.requestCtxLang(ctx), "hub-machine.node_no_model_config")}
+			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: i18n.T(m.hub.contextLang(ctx), "hub-machine.node_no_model_config")}
 		}
 	}
 	if p == nil {
@@ -658,4 +658,20 @@ func (m *Machine) hasHooks(s proto.Session) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.hooked[s.SessionID] || s.StartedByJarvis
+}
+
+func (m *Machine) isOnline() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.online
+}
+
+// localMachineID is the machine the hub runs on (kind local), "" when none is configured.
+func (h *Hub) localMachineID() string {
+	for _, m := range h.machinesNow() {
+		if m.cfg.Kind == "local" {
+			return m.cfg.ID
+		}
+	}
+	return ""
 }

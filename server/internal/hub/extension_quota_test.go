@@ -68,10 +68,12 @@ func quotaPackage(t *testing.T) string {
 	return dir
 }
 
-// A launcher's quota is read by a quota plugin that never sees its key: the hub sends its requests with the key put
-// in, to the launcher's own gateway only, and takes the key out of the answer.
+// A launcher's quota is read by a quota plugin that never sees its key: whoever holds the key (the assistant for one
+// added in Persona) sends its requests with the key put in, to the launcher's own gateway only, and takes the key out
+// of the answer.
 func TestQuotaThroughAnExtension(t *testing.T) {
 	h, _ := extensionTestHub(t)
+	connectAssistant(t, h) // the launchers added in Persona are the assistant's, and so are their keys
 	mux := h.routes()
 	master := h.cfg.Token
 	const key = "sk-example-launcher-key"
@@ -128,6 +130,7 @@ func TestQuotaThroughAnExtension(t *testing.T) {
 // A plugin's model provider is offered when a launcher is added, and fills in what the user leaves out.
 func TestProviderPresets(t *testing.T) {
 	h, store := extensionTestHub(t)
+	connectAssistant(t, h) // adding a provider is the assistant's; the presets stay the hub's (the plugins')
 	mux := h.routes()
 	master := h.cfg.Token
 	dir := t.TempDir()
@@ -163,8 +166,11 @@ func TestProviderPresets(t *testing.T) {
 	if code, _ := call(t, mux, "POST", "/api/v1/launchers", master, `{"name": "presets", "base_url": "https://x.example.com", "model": "m", "api_key": "k"}`); code != 400 {
 		t.Fatal("presets is not a launcher name:", code)
 	}
-	var stored []storedLauncher
-	_, _ = store.Setting(context.Background(), launchersManagedKey, &stored)
+	var stored []struct {
+		Name   string `json:"name"`
+		Preset string `json:"preset"`
+	}
+	_, _ = store.Setting(context.Background(), "launchers.managed", &stored) // the assistant's
 	if len(stored) != 1 || stored[0].Preset != "example-providers/example-ai" {
 		t.Fatalf("%+v", stored)
 	}

@@ -60,6 +60,19 @@ import Testing
         #expect(order(byRank: false).ordered(list).map(\.sessionID) == ["idle", "needs"])
     }
 
+    @Test func sortedByLatestUpdateOnlyTimeCounts() {
+        // 最近更新 (`AgentSort.updated`) orders rows the way a quick filter does: the state does not lift a row.
+        let list = [session("needs", "needs_you", updated: 1), session("unread", "unread", updated: 5),
+                    session("idle", "idle", updated: 9)]
+        #expect(order(byRank: false).ordered(list).map(\.sessionID) == ["idle", "unread", "needs"])
+    }
+
+    @Test func latestFirstOrdersGroupsByTimeThenId() {
+        let items: [(id: String, at: TimeInterval)] = [("b", 5), ("c", 1), ("a", 5), ("d", 9)]
+        let sorted = AgentListOrder.latestFirst(items, date: { Date(timeIntervalSince1970: $0.at) }, id: { $0.id })
+        #expect(sorted.map { $0.id } == ["d", "a", "b", "c"])
+    }
+
     @Test func pinnedIdleAgentsStayOutOfTheFold() {
         let o = order(pinned: ["p"])
         #expect(o.stays(session("p", "idle")))

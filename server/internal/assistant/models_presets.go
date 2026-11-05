@@ -1,0 +1,163 @@
+package assistant
+
+import (
+	"cmp"
+	"context"
+	"strings"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// The plugins' model providers (docs/extensions.md「模型供应商」), as the hub has them (plugins.presets): 设置 › 模型供应商
+// adds a provider from one (the user fills in only the name and the key), and a launcher on a plugin's gateway offers
+// the gateway's models in 新建 Agent.
+
+type LauncherPreset = assistantwire.LauncherPreset
+
+// launcherPresets are the plugins' providers now.
+func (s *Service) launcherPresets(ctx context.Context) []LauncherPreset {
+	var res struct {
+		Presets []LauncherPreset `json:"presets"`
+	}
+	if err := s.appCall(ctx, AppPlugins, assistantwire.PluginsPresets, map[string]any{}, &res); err != nil {
+		s.logf("launchers: the plugins' providers: %v", err)
+	}
+	return res.Presets
+}
+
+// presetFill fills in what a launcher added from a preset leaves empty.
+func (s *Service) presetFill(ctx context.Context, in *launcherInput) error {
+	if in.Preset == "" {
+		return nil
+	}
+	for _, pr := range s.launcherPresets(ctx) {
+		if pr.ID != in.Preset {
+			continue
+		}
+		if in.Kind == "" {
+			in.Kind = pr.Kind
+		}
+		if in.API == "" {
+			in.API = pr.API
+		}
+		if in.BaseURL == "" {
+			in.BaseURL = pr.BaseURL
+		}
+		if in.Model == "" {
+			in.Model = pr.Model
+			if in.Model == "" && len(pr.Models) > 0 {
+				in.Model = pr.Models[0].ID
+			}
+		}
+		if in.SmallModel == "" && in.Kind != "api" {
+			in.SmallModel = pr.SmallModel
+		}
+		return nil
+	}
+	return errNoPreset
+}
+
+// presetFor is the launcher-kind preset a launcher reaches its gateway through: the one it was added from, else the one
+// whose address is the launcher's gateway (a provider added by hand, or a ~/.zshrc launcher, on a plugin's gateway).
+func presetFor(presets []LauncherPreset, preset, baseURL string) (LauncherPreset, bool) {
+	var byURL *LauncherPreset
+	want := normalGateway(baseURL)
+	for i, pr := range presets {
+		if pr.Kind != "launcher" {
+			continue
+		}
+		if preset != "" && pr.ID == preset {
+			return pr, true
+		}
+		if byURL == nil && want != "" && normalGateway(pr.BaseURL) == want {
+			byURL = &presets[i]
+		}
+	}
+	if byURL != nil {
+		return *byURL, true
+	}
+	return LauncherPreset{}, false
+}
+
+// normalGateway compares gateway addresses: no scheme case, host case or trailing slash differences.
+func normalGateway(u string) string {
+	return strings.TrimRight(strings.ToLower(strings.TrimSpace(u)), "/")
+}
+
+// withPresetModels adds a preset's models to a launcher's /model list (its own entries first, then the gateway's that
+// are not among them): a gateway with a hundred models otherwise shows only the launcher's one in 新建 Agent.
+func withPresetModels(res proto.LauncherModels, pr LauncherPreset) proto.LauncherModels {
+	seen := map[string]bool{}
+	for _, m := range res.Models {
+		seen[m.ID] = true
+		if m.Resolved != "" {
+			seen[m.Resolved] = true
+		}
+	}
+	for _, m := range pr.Models {
+		if m.ID == "" || seen[m.ID] {
+			continue
+		}
+		seen[m.ID] = true
+		res.Models = append(res.Models, proto.AgentModel{ID: m.ID, Name: cmp.Or(m.Name, m.ID), Description: pr.Name})
+	}
+	return res
+}
+
+// presetModels adds the models of the plugin preset behind launcher name on machine (managed: its preset or gateway;
+// ~/.zshrc: the gateway the node read from it) to a Claude Code /model list.
+func (s *Service) presetModels(ctx context.Context, machine, name string, res proto.LauncherModels) proto.LauncherModels {
+	if res.Agent != "" && res.Agent != "claude" {
+		return res
+	}
+	presets := s.launcherPresets(ctx)
+	if len(presets) == 0 {
+		return res
+	}
+	for _, l := range s.storedLaunchers(ctx) {
+		if l.Name == name {
+			if l.Kind == "api" {
+				return res
+			}
+			if pr, ok := presetFor(presets, l.Preset, l.BaseURL); ok {
+				return withPresetModels(res, pr)
+			}
+			return res
+		}
+	}
+	if l, ok := s.knownZshrcLauncher(ctx, machine, name); ok && l.Agent == "" {
+		if pr, ok := presetFor(presets, "", l.BaseURL); ok {
+			return withPresetModels(res, pr)
+		}
+	}
+	return res
+}
+
+// knownZshrcLauncher is machine's ~/.zshrc launcher name as the hub last saw it, so the picker does not wait on a
+// second node call; only a launcher never seen is asked for now.
+func (s *Service) knownZshrcLauncher(ctx context.Context, machine, name string) (proto.Launcher, bool) {
+	find := func(list []proto.Launcher) (proto.Launcher, bool) {
+		for _, l := range list {
+			if l.Name == name {
+				return l, true
+			}
+		}
+		return proto.Launcher{}, false
+	}
+	for _, m := range s.zshrcLaunchers(ctx, false) {
+		if m.MachineID == machine {
+			if l, ok := find(m.Launchers); ok {
+				return l, true
+			}
+		}
+	}
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	list, err := s.machineLaunchers(cctx, machine)
+	if err != nil {
+		return proto.Launcher{}, false
+	}
+	return find(list)
+}

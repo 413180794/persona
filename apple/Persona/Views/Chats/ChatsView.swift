@@ -99,8 +99,27 @@ enum DevGrouping: String, CaseIterable, Identifiable {
         case .repo: Theme.Icon.folder
         case .space: Theme.Icon.space
         case .todo: Theme.Icon.todo
-        case .state: "circle.grid.2x1"
+        case .state: Theme.Icon.byState
         case .machine: Theme.Icon.machine
+        }
+    }
+}
+
+/// How the Agents list orders its agents (the same menu; remembered): the state first (default), or the latest update
+/// only. Under 按状态 the sections are the states, so only the rows' order inside them is the time either way.
+enum AgentSort: String, CaseIterable, Identifiable {
+    case state, updated
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .state: "状态优先"
+        case .updated: "最近更新"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .state: Theme.Icon.byState
+        case .updated: Theme.Icon.time
         }
     }
 }
@@ -373,6 +392,7 @@ private struct AgentsList: View {
     @StoredValue("dev.grouping") private var storedGrouping: DevGrouping = .standard // by repository first (#2108)
     /// The grouping in use (`DevGrouping.resolved`).
     private var grouping: DevGrouping { DevGrouping.resolved(storedGrouping, supportsTodos: TodoStore.shared.isSupported) }
+    @StoredValue("dev.sort") private var sort: AgentSort = .state
     /// 细列表: one line per agent.
     @StoredValue("dev.compact") private var compact = false
     /// Folded sections (spaces, machines, states), one id per line.
@@ -527,10 +547,11 @@ private struct AgentsList: View {
         // recent first: the order must not move while its agents are being seen.
         let pinnedSpaces = groups.filter { model.isPinned($0) && !model.isMuted($0) }
         let order = order
-        let busy: [SpaceGroup] = groups.filter { !order.isQuiet($0) }
+        // 最近更新: the busy spaces by their latest agent, not by state (muted ones still after the rest).
+        let spaces = sort == .updated ? latestFirst(groups) : groups
+        let busy: [SpaceGroup] = spaces.filter { !order.isQuiet($0) }
         let active = quick != .all
-            ? pinnedSpaces + groups.filter { !(model.isPinned($0) && !model.isMuted($0)) }
-                .sorted { $0.sortDate != $1.sortDate ? $0.sortDate > $1.sortDate : $0.id < $1.id }
+            ? pinnedSpaces + latestFirst(groups.filter { !(model.isPinned($0) && !model.isMuted($0)) })
             : pinnedSpaces + busy.filter { !model.isPinned($0) && !model.isMuted($0) } + busy.filter { model.isMuted($0) }
         let quiet = quick != .all ? [] : groups.filter { order.isQuiet($0) && !(model.isPinned($0) && !model.isMuted($0)) }
         let pinnedAgents = filtered.filter { model.isPinned($0.key) }
@@ -546,7 +567,13 @@ private struct AgentsList: View {
         // Agents on more than one machine: 按仓库 and 按项目 split the list by machine first (#2108), and the headers under
         // a machine do not name it. Counted before the quick filter: choosing one does not add or take away headings.
         let byHost = machineFilter.isEmpty && Set(base.lazy.filter { $0.state.isLive }.map(\.machineRef)).count > 1
-        let tree = grouping == .repo ? RepoTree.build(unpinned.filter { $0.state.isLive }, machines: machines.map(\.ref)) : []
+        let built = grouping == .repo ? RepoTree.build(unpinned.filter { $0.state.isLive }, machines: machines.map(\.ref)) : []
+        // 最近更新: each machine's repositories by their latest agent (the machines keep their order, as 按项目's do).
+        let tree = sort == .updated ? built.map { host in
+            var h = host
+            h.repos = AgentListOrder.latestFirst(host.repos, date: { $0.sessions.map(\.sortDate).max() ?? .distantPast }, id: \.id)
+            return h
+        } : built
 
         // What the ⋯ menu's actions act on, kept current without making the open menu a function of the list. Split by
         // machine, 全部折叠 still folds the spaces and repositories, not the machines: every one of them a line, the overview.
@@ -849,7 +876,7 @@ private struct AgentsList: View {
             let groups = TodosLogic.buildTodoAgentGroups(sessions: live, todos: TodoStore.shared.todos, isMuted: model.isMuted)
             shown = rows.todos(groups) { g in g.todoID == nil ? isFolded(g.key, otherwise: g.folded) : isFolded(g.key) }
         case .state: shown = rows.states(live)
-        case .machine: shown = rows.machines(live, order: machines.map(\.ref))
+        case .machine: shown = rows.machines(live, order: machineOrder(live).map(\.ref))
         case .repo: shown = rows.repos(tree, byHost: byHost)
         case .space:
             let hosts = byHost ? RepoTree.hostOrder(Set((active + quiet).map(\.machineRef)), machines: machines.map(\.ref)) : nil
@@ -1205,7 +1232,20 @@ private struct AgentsList: View {
     // MARK: By state / by machine
 
     private var order: AgentListOrder {
-        AgentListOrder(isPinned: model.isPinned, isMuted: model.isMuted, byRank: quick == .all, held: model.heldInList)
+        AgentListOrder(isPinned: model.isPinned, isMuted: model.isMuted, byRank: quick == .all && sort == .state, held: model.heldInList)
+    }
+    /// 按机器's machines: those with live agents, in their own order; under 最近更新 the one with the latest agent first.
+    /// The list and ↑ / ↓ (`rowsInOrder`) both go by it.
+    private func machineOrder(_ live: [Session]) -> [Machine] {
+        let shown = machines.filter { m in live.contains { $0.machineRef == m.ref } }
+        guard sort == .updated else { return shown }
+        return AgentListOrder.latestFirst(shown, date: { m in
+            live.filter { $0.machineRef == m.ref }.map(\.sortDate).max() ?? .distantPast
+        }, id: \.ref.path)
+    }
+
+    private func latestFirst(_ groups: [SpaceGroup]) -> [SpaceGroup] {
+        AgentListOrder.latestFirst(groups, date: \.sortDate, id: \.id)
     }
     private func stays(_ s: Session) -> Bool { order.stays(s) }
     private func rank(_ s: Session) -> Int { order.rank(s) }
@@ -1299,8 +1339,7 @@ private struct AgentsList: View {
 
     /// One section per machine, its agents by state; idle ones fold like in a space.
     @ViewBuilder private func machineSections(_ live: [Session]) -> some View {
-        let machines = self.machines.filter { m in live.contains { $0.machineRef == m.ref } }
-        ForEach(machines, id: \.ref) { m in
+        ForEach(machineOrder(live), id: \.ref) { m in
             let rows = ordered(live.filter { $0.machineRef == m.ref })
             let id = "machine/" + m.ref.path
             let group = SpaceGroup(id: "m-" + m.ref.path, machineID: m.id, spaceID: "-", group: m.group, name: m.title, index: 0, sessions: rows)

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/agents"
-	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -55,13 +54,7 @@ type Hub struct {
 	undelivered heldActs   // answers to the manager's cards given while it was away (agents_link.go)
 	store       Store      // nil in unit tests: nothing is persisted
 	workspaceMu sync.Mutex // serializes read-only workspace discovery and snapshot commits
-	modelMu     sync.Mutex // serializes legacy writes and test stores without a database CAS
-	ai          *ai.Client
-	// The inbox's own models (hub.json inbox.triage_ai / judge_ai, the manager's inbox asks for them by purpose): 1 triages,
-	// 2 decides what the agent (3) should take on.
-	triageAI, judgeAI *ai.Client
-	quotas            quotaCache // launcherquota.go
-	agents            *agents.Service
+	agents      *agents.Service
 
 	terms terminals  // the terminal tab's live streams (terminal.go)
 	fulls fullRelays // the web's full herdr views (herdrclient.go)
@@ -111,17 +104,15 @@ type Hub struct {
 	bots     botHub
 	channels channelsHub
 	// chans is what the assistant reports of the channels, and the conversations they follow (assistant_channels.go).
-	chans managerChannels
-	// launchers: 设置 › 模型 (launchers.go); launchersSeen is every machine's last ~/.zshrc list.
-	launchers     launcherState
-	launchersSeen map[string][]proto.Launcher
-	devtok        devTokens   // device token lookups (devicetokens.go)
-	extTokens     extTokens   // the extensions' tokens (extension_scopes.go)
-	public        publicState // TLS identity, listener and advertised addresses (public.go)
-	sends         sendLog     // messages being / just sent, by client_msg_id (send.go)
-	extensions    *extensions // the extension registry and what runs of it (extensions.go, docs/extensions.md)
-	legacyCalls   legacyCalls // calls under the old /api/v1/plugins paths (extension_compat.go)
-	admin         adminState  // the admin UI (admin.go, docs/admin.md)
+	chans       managerChannels
+	secret      secretState // secretkey.go
+	devtok      devTokens   // device token lookups (devicetokens.go)
+	extTokens   extTokens   // the extensions' tokens (extension_scopes.go)
+	public      publicState // TLS identity, listener and advertised addresses (public.go)
+	sends       sendLog     // messages being / just sent, by client_msg_id (send.go)
+	extensions  *extensions // the extension registry and what runs of it (extensions.go, docs/extensions.md)
+	legacyCalls legacyCalls // calls under the old /api/v1/plugins paths (extension_compat.go)
+	admin       adminState  // the admin UI (admin.go, docs/admin.md)
 
 	apiMux *http.ServeMux // the API's routes: the one a request goes to decides what an extension's token may do
 
@@ -344,13 +335,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.push = newPusher(cfg.dir, h.store, h.logf)
 	h.push.desktopOnline = h.desktopOnline
 	h.push.desktopOpen = h.desktopOpen
-	h.ai = ai.New(cfg.AI)
-	if c := cfg.Inbox.TriageAI; c != nil {
-		h.triageAI = ai.New(c.Over(cfg.AI))
-	}
-	if c := cfg.Inbox.JudgeAI; c != nil {
-		h.judgeAI = ai.New(c.Over(cfg.AI))
-	}
 	if cfg.Lark.lark-connectorConfigured() {
 		h.logf("hub.json lark.container / token / base_url are not read any more: Feishu through lark-connector is a plugin's now; set them in its settings (docs/feishu.md)")
 	}

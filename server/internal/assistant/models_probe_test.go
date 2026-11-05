@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -14,12 +14,10 @@ import (
 
 const fakeKey = "sk-test-probe-0123456789"
 
-func launcherTestHub(t *testing.T) (*Hub, *http.ServeMux) {
-	h := newTestHub(t)
-	h.store = &modelTestStore{values: map[string]json.RawMessage{}}
-	mux := http.NewServeMux()
-	h.launcherRoutes(mux)
-	return h, mux
+// launcherTestService is the manager with its launcher routes (it is the handler too).
+func launcherTestService(t *testing.T) (*Service, http.Handler) {
+	s, _, _ := modelService(t)
+	return s, s
 }
 
 func launcherCall(t *testing.T, mux http.Handler, method, path, body string) (int, string) {
@@ -47,7 +45,7 @@ func probeResult(t *testing.T, mux http.Handler, path, body string) map[string]a
 
 // The test request carries both credential headers, the version, the custom headers and a 1-token "ping".
 func TestProviderTestSendsBothAuthHeaders(t *testing.T) {
-	_, mux := launcherTestHub(t)
+	_, mux := launcherTestService(t)
 	var got *http.Request
 	var body map[string]any
 	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,11 +68,9 @@ func TestProviderTestSendsBothAuthHeaders(t *testing.T) {
 	}
 }
 
-func jsonText(v any) string { b, _ := json.Marshal(v); return string(b) }
-
 // A 401 reads as an auth failure, and the gateway echoing the key back does not put it in the error.
 func TestProviderTest401IsAuthFailureWithoutTheKey(t *testing.T) {
-	_, mux := launcherTestHub(t)
+	_, mux := launcherTestService(t)
 	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(401)
 		_, _ = w.Write([]byte(`{"error":{"message":"invalid key ` + r.Header.Get("x-api-key") + `"}}`))
@@ -88,7 +84,7 @@ func TestProviderTest401IsAuthFailureWithoutTheKey(t *testing.T) {
 }
 
 func TestProviderTestTimesOut(t *testing.T) {
-	_, mux := launcherTestHub(t)
+	_, mux := launcherTestService(t)
 	release := make(chan struct{})
 	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -109,7 +105,7 @@ func TestProviderTestTimesOut(t *testing.T) {
 
 // With a name the stored key and headers are used; what the request gives wins.
 func TestProviderTestUsesTheStoredProvider(t *testing.T) {
-	_, mux := launcherTestHub(t)
+	_, mux := launcherTestService(t)
 	var key, team string
 	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key, team = r.Header.Get("x-api-key"), r.Header.Get("X-Team")
@@ -144,7 +140,7 @@ func TestProviderTestUsesTheStoredProvider(t *testing.T) {
 
 // The three shapes of /v1/models all read; the catalog fills in what the gateway left out.
 func TestProviderDiscoverParsesThreeShapes(t *testing.T) {
-	_, mux := launcherTestHub(t)
+	_, mux := launcherTestService(t)
 	for name, body := range map[string]string{
 		"data":   `{"data":[{"id":"claude-opus-4-8","display_name":"Opus 4.8"},{"id":"own-model","context_length":64000},{"id":"own-model"}]}`,
 		"models": `{"models":[{"slug":"claude-opus-4-8"},{"model_id":"own-model","max_input_tokens":64000}]}`,
@@ -180,7 +176,7 @@ func TestProviderDiscoverParsesThreeShapes(t *testing.T) {
 }
 
 func TestProviderDiscoverErrors(t *testing.T) {
-	_, mux := launcherTestHub(t)
+	_, mux := launcherTestService(t)
 	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("x-api-key") == fakeKey {
 			_, _ = w.Write([]byte(`{"object":"list"}`))
@@ -206,7 +202,7 @@ func TestProviderDiscoverErrors(t *testing.T) {
 // Headers are sealed like the key: GET says has_headers only, PUT without them keeps them, "" clears them; the
 // new fields round-trip, an old client's PUT keeps them, and the node gets the headers in the clear.
 func TestLauncherHeadersSealedAndNewFields(t *testing.T) {
-	h, mux := launcherTestHub(t)
+	s, mux := launcherTestService(t)
 	ctx := context.Background()
 	create := `{"name":"gw","base_url":"https://gw.example.com","model":"glm-5.3","api_key":"` + fakeKey + `",
 		"headers":"X-Team: hdr-secret-value","models":[{"id":"glm-5.3","context_window":1000000,"efforts":["low","high","max"],"default_effort":"high"}],
@@ -215,7 +211,7 @@ func TestLauncherHeadersSealedAndNewFields(t *testing.T) {
 	if code, raw := launcherCall(t, mux, "POST", "/api/v1/launchers", create); code != 200 || strings.Contains(raw, "hdr-secret-value") {
 		t.Fatal(code, raw)
 	}
-	stored := h.storedLaunchers(ctx)
+	stored := s.storedLaunchers(ctx)
 	if len(stored) != 1 || stored[0].HeadersSealed == "" || stored[0].Headers != "" || strings.Contains(jsonText(stored), "hdr-secret-value") {
 		t.Fatalf("stored: %+v", stored)
 	}
@@ -230,7 +226,7 @@ func TestLauncherHeadersSealedAndNewFields(t *testing.T) {
 		v.Proxy == "" || v.NoProxy != "localhost" || v.TimeoutMS != 600000 || v.CompactWindow != 180000 || v.MaxContext != 1000000 || v.Effort != "high" {
 		t.Fatalf("view: %+v", v)
 	}
-	managed := h.managedForNodes(ctx)
+	managed := s.managedForNodes(ctx)
 	if len(managed) != 1 || managed[0].Headers != "X-Team: hdr-secret-value" || !managed[0].HasHeaders || managed[0].APIKey != fakeKey {
 		t.Fatalf("managed: %+v", managed)
 	}
@@ -238,33 +234,33 @@ func TestLauncherHeadersSealedAndNewFields(t *testing.T) {
 	if code, raw := launcherCall(t, mux, "PUT", "/api/v1/launchers/gw", `{"base_url":"https://gw.example.com","model":"glm-5.2"}`); code != 200 {
 		t.Fatal(raw)
 	}
-	s := h.storedLaunchers(ctx)[0]
-	if s.HeadersSealed == "" || len(s.Models) != 1 || s.Effort != "high" || s.Model != "glm-5.2" || s.KeySealed == "" {
-		t.Fatalf("kept: %+v", s)
+	l := s.storedLaunchers(ctx)[0]
+	if l.HeadersSealed == "" || len(l.Models) != 1 || l.Effort != "high" || l.Model != "glm-5.2" || l.KeySealed == "" {
+		t.Fatalf("kept: %+v", l)
 	}
 	if code, raw := launcherCall(t, mux, "PUT", "/api/v1/launchers/gw", `{"base_url":"https://gw.example.com","model":"glm-5.2","headers":"","effort":""}`); code != 200 {
 		t.Fatal(raw)
 	}
-	if s := h.storedLaunchers(ctx)[0]; s.HeadersSealed != "" || s.Effort != "" {
-		t.Fatalf("cleared: %+v", s)
+	if l := s.storedLaunchers(ctx)[0]; l.HeadersSealed != "" || l.Effort != "" {
+		t.Fatalf("cleared: %+v", l)
 	}
-	if m := h.managedForNodes(ctx); m[0].Headers != "" || m[0].HasHeaders {
+	if m := s.managedForNodes(ctx); m[0].Headers != "" || m[0].HasHeaders {
 		t.Fatalf("cleared managed: %+v", m)
 	}
 }
 
 // kind:api Messages providers go to the nodes; Responses ones do not.
 func TestManagedForNodesSendsMessagesAPIProviders(t *testing.T) {
-	h, _ := launcherTestHub(t)
+	s, _ := launcherTestService(t)
 	ctx := context.Background()
-	key, _ := h.sealKey(fakeKey)
-	_ = h.put(ctx, launchersManagedKey, []storedLauncher{
+	key, _ := s.sealKey(fakeKey)
+	_ = s.putSetting(ctx, launchersManagedKey, []storedLauncher{
 		{ManagedLauncher: proto.ManagedLauncher{Name: "msg", Kind: "api", API: "messages", BaseURL: "https://a.example.com", Model: "m"}, KeySealed: key},
 		{ManagedLauncher: proto.ManagedLauncher{Name: "plain", Kind: "api", BaseURL: "https://b.example.com", Model: "m"}, KeySealed: key},
 		{ManagedLauncher: proto.ManagedLauncher{Name: "resp", Kind: "api", API: "responses", BaseURL: "https://c.example.com", Model: "m"}, KeySealed: key},
 	})
 	var names []string
-	for _, l := range h.managedForNodes(ctx) {
+	for _, l := range s.managedForNodes(ctx) {
 		names = append(names, l.Name)
 	}
 	if strings.Join(names, ",") != "msg,plain" {
@@ -345,7 +341,7 @@ func ptr[T any](v T) *T { return &v }
 
 // A redirect is not followed: Go would carry x-api-key and the custom headers to the other host.
 func TestProviderProbeDoesNotFollowRedirects(t *testing.T) {
-	_, mux := launcherTestHub(t)
+	_, mux := launcherTestService(t)
 	var leaked string
 	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		leaked = r.Header.Get("x-api-key") + r.Header.Get("X-Team")
@@ -364,7 +360,7 @@ func TestProviderProbeDoesNotFollowRedirects(t *testing.T) {
 
 // An oversized probe body is refused with 413 before anything is sent.
 func TestProviderProbeBodyTooLarge(t *testing.T) {
-	_, mux := launcherTestHub(t)
+	_, mux := launcherTestService(t)
 	big := `{"base_url":"https://gw.example.com","model":"` + strings.Repeat("m", 2<<20) + `"}`
 	if code, _ := launcherCall(t, mux, "POST", "/api/v1/launchers/test", big); code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("code %d", code)

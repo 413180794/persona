@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -38,7 +40,7 @@ type importedProvider struct {
 	Existing string   `json:"existing,omitempty"` // the stored provider with the same base URL and key
 }
 
-// importGroup is a provider merged from aliases, with its secrets (hub-internal only).
+// importGroup is a provider merged from aliases, with its secrets (the manager's only).
 type importGroup struct {
 	importedProvider
 	key, headers string
@@ -164,31 +166,30 @@ func mergeImportedModels(dst *[]proto.ProviderModel, from []proto.ProviderModel)
 }
 
 // errNoSuchMachine: the import names a machine the hub does not have.
-var errNoSuchMachine = i18n.Err("hub-extension_ui.no_machine")
+var errNoSuchMachine = i18n.Err("assistant-models_import.err_no_machine")
 
 // zshrcAliases asks machine's node for its ~/.zshrc claude aliases (a var so tests give their own).
-var zshrcAliases = func(ctx context.Context, h *Hub, machine string) ([]zshrcAlias, error) {
-	m := h.localMachine(machine)
-	if m == nil {
+var zshrcAliases = func(ctx context.Context, s *Service, machine string) ([]zshrcAlias, error) {
+	if _, ok := s.device(ctx, machine); !ok {
 		return nil, errNoSuchMachine
 	}
 	var out struct {
 		Aliases []zshrcAlias `json:"aliases"`
 	}
-	err := m.call(ctx, "launchers.zshrc", struct{}{}, &out)
+	err := s.call(ctx, machine, assistantwire.DeviceLaunchersZshrc, struct{}{}, &out)
 	return out.Aliases, err
 }
 
 // importGroups is machine's aliases merged against the stored providers.
-func (h *Hub) importGroups(ctx context.Context, machine string) ([]importGroup, error) {
-	aliases, err := zshrcAliases(ctx, h, machine)
+func (s *Service) importGroups(ctx context.Context, machine string) ([]importGroup, error) {
+	aliases, err := zshrcAliases(ctx, s, machine)
 	if err != nil {
 		return nil, err
 	}
 	var known []knownProvider
-	for _, s := range h.storedLaunchers(ctx) {
-		if key, err := h.openKey(s.KeySealed); err == nil {
-			known = append(known, knownProvider{name: s.Name, baseURL: s.BaseURL, key: key})
+	for _, l := range s.storedLaunchers(ctx) {
+		if key, err := s.openKey(l.KeySealed); err == nil {
+			known = append(known, knownProvider{name: l.Name, baseURL: l.BaseURL, key: key})
 		}
 	}
 	return mergeZshrcAliases(machine, aliases, known), nil
@@ -199,57 +200,57 @@ func importErr(w http.ResponseWriter, err error) {
 	var re *rpc.Error
 	switch {
 	case errors.Is(err, errNoSuchMachine):
-		writeErr(w, http.StatusNotFound, err)
-	case errors.Is(err, errOffline):
-		writeErrCode(w, http.StatusServiceUnavailable, "offline", i18n.Err("hub-launcher_import.err_offline"))
+		apierr.Write(w, http.StatusNotFound, err)
+	case errors.Is(err, apierr.ErrOffline):
+		apierr.WriteCode(w, http.StatusServiceUnavailable, "offline", i18n.Err("assistant-models_import.err_offline"))
 	case errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method"):
-		writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, i18n.T(i18n.OfWriter(w), "hub-launcher_import.outdated"), nil)
+		apierr.WriteCode(w, http.StatusConflict, proto.CodeNodeOutdated, i18n.Err("assistant-models_import.outdated"))
 	default:
-		callErr(w, err)
+		apierr.Call(w, err)
 	}
 }
 
 // sealImported makes g a stored launcher: the key and headers sealed.
-func (h *Hub) sealImported(g importGroup, now time.Time) (storedLauncher, error) {
-	s := storedLauncher{ManagedLauncher: g.ManagedLauncher, Created: now, Updated: now}
-	s.HasHeaders = false // the preview's; a stored launcher's comes from its sealed headers
-	if s.Auth == "api_key" {
-		s.Auth = "" // stored as the default
+func (s *Service) sealImported(g importGroup, now time.Time) (storedLauncher, error) {
+	l := storedLauncher{ManagedLauncher: g.ManagedLauncher, Created: now, Updated: now}
+	l.HasHeaders = false // the preview's; a stored launcher's comes from its sealed headers
+	if l.Auth == "api_key" {
+		l.Auth = "" // stored as the default
 	}
 	if g.key != "" {
-		sealed, err := h.sealKey(g.key)
+		sealed, err := s.sealKey(g.key)
 		if err != nil {
-			return s, err
+			return l, err
 		}
-		s.KeySealed = sealed
+		l.KeySealed = sealed
 	}
 	if g.headers != "" {
-		sealed, err := h.sealKey(g.headers)
+		sealed, err := s.sealKey(g.headers)
 		if err != nil {
-			return s, err
+			return l, err
 		}
-		s.HeadersSealed = sealed
+		l.HeadersSealed = sealed
 	}
-	s.APIKey, s.Headers = "", "" // only ever stored sealed
-	return s, nil
+	l.APIKey, l.Headers = "", "" // only ever stored sealed
+	return l, nil
 }
 
 // importLaunchers saves the picked groups: new ones created, ones already stored get the new models only.
-func (h *Hub) importLaunchers(ctx context.Context, groups []importGroup, names []string) (created, updated []string, err error) {
-	list := h.storedLaunchers(ctx)
+func (s *Service) importLaunchers(ctx context.Context, groups []importGroup, names []string) (created, updated []string, err error) {
+	list := s.storedLaunchers(ctx)
 	taken := map[string]bool{}
-	for _, v := range h.launcherViews(ctx) {
+	for _, v := range s.launcherViews(ctx) {
 		taken[v.Name] = true
 	}
 	now := time.Now().UTC()
 	for _, name := range names {
 		i := slices.IndexFunc(groups, func(g importGroup) bool { return g.Name == name })
 		if i < 0 {
-			return nil, nil, i18n.Err("hub-launcher_import.err_nothing_named", i18n.Args{"name": name})
+			return nil, nil, i18n.Err("assistant-models_import.err_nothing_named", i18n.Args{"name": name})
 		}
 		g := groups[i]
 		if g.Existing != "" {
-			j := slices.IndexFunc(list, func(s storedLauncher) bool { return s.Name == g.Existing })
+			j := slices.IndexFunc(list, func(l storedLauncher) bool { return l.Name == g.Existing })
 			if j >= 0 && mergeImportedModels(&list[j].Models, g.Models) {
 				list[j].Updated = now
 			}
@@ -259,31 +260,31 @@ func (h *Hub) importLaunchers(ctx context.Context, groups []importGroup, names [
 		for n := 2; taken[g.Name]; n++ {
 			g.Name = fmt.Sprintf("%s-%d", name, n)
 		}
-		s, err := h.sealImported(g, now)
+		l, err := s.sealImported(g, now)
 		if err != nil {
 			return nil, nil, err
 		}
-		taken[s.Name] = true
-		list = append(list, s)
-		created = append(created, s.Name)
+		taken[l.Name] = true
+		list = append(list, l)
+		created = append(created, l.Name)
 	}
-	if err := h.put(ctx, launchersManagedKey, list); err != nil {
+	if err := s.putSetting(ctx, launchersManagedKey, list); err != nil {
 		return nil, nil, err
 	}
-	h.pushManaged(ctx)
+	s.pushManaged(ctx, "")
 	return created, updated, nil
 }
 
-func (h *Hub) launcherImportRoutes(api *http.ServeMux) {
-	api.HandleFunc("GET /api/v1/launchers/import", func(w http.ResponseWriter, r *http.Request) {
+func (s *Service) launcherImportRoutes() {
+	s.handle("GET /api/v1/launchers/import", func(w http.ResponseWriter, r *http.Request) {
 		machine := r.URL.Query().Get("machine")
 		if machine == "" {
-			writeErr(w, http.StatusBadRequest, i18n.Err("hub-launcher_import.err_machine_required"))
+			apierr.Write(w, http.StatusBadRequest, i18n.Err("assistant-models_import.err_machine_required"))
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
-		groups, err := h.importGroups(ctx, machine)
+		groups, err := s.importGroups(ctx, machine)
 		if err != nil {
 			importErr(w, err)
 			return
@@ -292,34 +293,34 @@ func (h *Hub) launcherImportRoutes(api *http.ServeMux) {
 		for _, g := range groups {
 			providers = append(providers, g.importedProvider) // the key and headers stay in g
 		}
-		writeJSON(w, map[string]any{"machine": machine, "providers": providers})
+		apierr.WriteJSON(w, map[string]any{"machine": machine, "providers": providers})
 	})
-	api.HandleFunc("POST /api/v1/launchers/import", func(w http.ResponseWriter, r *http.Request) {
+	s.handle("POST /api/v1/launchers/import", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Machine   string   `json:"machine"`
 			Providers []string `json:"providers"`
 		}
-		if err := decodeJSONBody(w, r, &in, 64<<10); err != nil {
+		if err := decodeBody(w, r, &in, 64<<10); err != nil {
 			writeBodyErr(w, err, err)
 			return
 		}
 		if in.Machine == "" || len(in.Providers) == 0 {
-			writeErr(w, http.StatusBadRequest, i18n.Err("hub-launcher_import.err_machine_providers_required"))
+			apierr.Write(w, http.StatusBadRequest, i18n.Err("assistant-models_import.err_machine_providers_required"))
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
-		groups, err := h.importGroups(ctx, in.Machine)
+		groups, err := s.importGroups(ctx, in.Machine)
 		if err != nil {
 			importErr(w, err)
 			return
 		}
-		created, updated, err := h.importLaunchers(ctx, groups, in.Providers)
+		created, updated, err := s.importLaunchers(ctx, groups, in.Providers)
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
-		writeJSON(w, map[string]any{"created": nonNil(created), "updated": nonNil(updated)})
+		apierr.WriteJSON(w, map[string]any{"created": nonNil(created), "updated": nonNil(updated)})
 	})
 }
 
@@ -332,18 +333,18 @@ func nonNil(s []string) []string {
 
 // pickerDefault is GET /api/v1/machines/{mid}/launchers's default: ?purpose= (assistant, or 新建 Agent's agent.new
 // when absent).
-func (h *Hub) pickerDefault(ctx context.Context, r *http.Request) map[string]any {
+func (s *Service) pickerDefault(ctx context.Context, r *http.Request) map[string]any {
 	purpose := r.URL.Query().Get("purpose")
 	if purpose == "" {
 		purpose = "agent.new"
 	}
-	return h.launcherDefault(ctx, purpose)
+	return s.launcherDefault(ctx, purpose)
 }
 
 // launcherDefault is what a launcher picker shows as 「默认：…」: purpose's effective provider (the launcher's name),
 // model and effort, and for 主对话 its runtime. Nil when purpose is not a launcher use.
-func (h *Hub) launcherDefault(ctx context.Context, purpose string) map[string]any {
-	p, err := h.modelPurpose(ctx, purpose, h.modelProviders(ctx))
+func (s *Service) launcherDefault(ctx context.Context, purpose string) map[string]any {
+	p, err := s.modelPurpose(ctx, purpose, s.modelProviders(ctx))
 	if err != nil || p.Kind != "launcher" {
 		return nil
 	}

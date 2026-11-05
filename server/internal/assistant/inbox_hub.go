@@ -2,19 +2,17 @@ package assistant
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // What the inbox asks of the hub: its settings, the sources' (a mail's text, a reply, a connector's group tools…),
-// the knowledge base's, and the models. The models are reached in this file only (inboxModelJSON,
-// inboxModelComplete): they are the hub's model configuration today (app.call models.*) and the manager's own later.
+// the knowledge base's. The models are the assistant's own (models.go), reached in this file only (inboxModelJSON,
+// inboxModelComplete).
 
 // The model configuration's purposes the inbox uses.
 const (
@@ -26,39 +24,22 @@ const (
 	purposeTranslate = "translate"
 )
 
-// inboxModelJSON asks purpose's model for a JSON object into out; maxTokens is the room the answer needs (0: the
-// model's default). ctx must have a deadline: the hub gives the call no longer (app.call's timeout_ms), so a call
-// given up on here is not left running there.
+// inboxModelJSON asks purpose's model (the assistant's model configuration, models.go) for a JSON object into out;
+// maxTokens is the room the answer needs (0: the model's default). ctx's deadline bounds the call.
 func (s *Service) inboxModelJSON(ctx context.Context, purpose, system, input string, maxTokens int, out any) error {
-	var raw json.RawMessage
-	params := map[string]any{"purpose": purpose, "system": system, "input": input}
 	if maxTokens > 0 {
-		params["max_tokens"] = maxTokens
+		return s.purposeModel(purpose).JSONMax(ctx, system, input, maxTokens, out)
 	}
-	if err := s.appCall(ctx, AppModels, ModelsJSON, params, &raw); err != nil {
-		return err
-	}
-	return json.Unmarshal(raw, out)
+	return s.purposeModel(purpose).JSON(ctx, system, input, out)
 }
 
 // inboxModelComplete asks purpose's model for text (ctx with a deadline, like inboxModelJSON).
 func (s *Service) inboxModelComplete(ctx context.Context, purpose, system, input string, maxTokens int) (string, error) {
-	var res struct {
-		Text string `json:"text"`
-	}
-	err := s.appCall(ctx, AppModels, ModelsComplete, map[string]any{"purpose": purpose, "system": system, "input": input,
-		"max_tokens": maxTokens}, &res)
-	return res.Text, err
+	return s.purposeModel(purpose).Complete(ctx, system, input, maxTokens)
 }
 
-// modelUnconfigured: nothing is set up for the purpose (the hub's ai.IsNotConfigured).
-func modelUnconfigured(err error) bool {
-	if ai.IsNotConfigured(err) {
-		return true
-	}
-	var re *rpc.Error
-	return errors.As(err, &re) && re.Code == assistantwire.CodeModelUnconfigured
-}
+// modelUnconfigured: nothing is set up for the purpose.
+func modelUnconfigured(err error) bool { return ai.IsNotConfigured(err) }
 
 // modelPaused: the model's connection is held; quota: its quota is used up (rather than busy).
 func modelPaused(err error) (paused, quota bool) {

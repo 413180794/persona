@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyFilter, arrangeSpaces, filterCounts, matchesFilter, matchingKeys, shownFilters, agentFilter, unreadOf, type SpaceLike } from "./agent-filter";
+import { applyFilter, arrangeSpaces, botmuxAndFilter, isBotmux, withoutBotmux, filterCounts, matchesFilter, matchingKeys, shownFilters, agentFilter, unreadOf, type SpaceLike } from "./agent-filter";
 import type { AgentMutes } from "./agent-groups";
 import { NO_PINS } from "./pins";
 import type { AgentState, Session } from "./types";
@@ -71,5 +71,21 @@ describe("空间的顺序", () => {
     // b is working since :02 (its own lines do not move it), c finished at :07, the quiet one at :08
     expect(r.active.map((x) => x.name)).toEqual(["安静", "c", "a", "b"]);
     expect(r.idle).toEqual([]);
+  });
+});
+
+describe("筛选栏的「botmux」显示 / 隐藏（#2786）", () => {
+  it("隐藏时去掉 botmux 会话，herdr、Orca 和没有窗格的留着；显示时原样", () => {
+    const all = [session("b", "working", { pane_id: "botmux:oc_1/t1" }), session("h", "working", { pane_id: "w1:p1" }), session("o", "idle", { pane_id: "orca:x" }), session("r", "idle")];
+    expect(all.filter(isBotmux).map((s) => s.session_id)).toEqual(["b"]);
+    expect(ids(withoutBotmux(all, true))).toEqual(["h", "o", "r"]);
+    expect(withoutBotmux(all, false)).toBe(all);
+  });
+
+  it("飞书群和隐藏 botmux 不同时成立：飞书群下隐藏回到全部，隐藏时选飞书群重新显示", () => {
+    expect(botmuxAndFilter("feishu", true, "botmux")).toEqual({ filter: "all", hidden: true });
+    expect(botmuxAndFilter("feishu", true, "filter")).toEqual({ filter: "feishu", hidden: false });
+    expect(botmuxAndFilter("unread", true, "botmux")).toEqual({ filter: "unread", hidden: true });
+    expect(botmuxAndFilter("feishu", false, "botmux")).toEqual({ filter: "feishu", hidden: false });
   });
 });

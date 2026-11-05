@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/coder/websocket"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Classification must survive both HTTP and WebSocket snapshots, not just the node's terminal guard.

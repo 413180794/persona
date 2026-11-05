@@ -22,6 +22,8 @@
   "err_api_no_models": "A direct API connection has no models to list",
   "err_no_provider": "No such provider",
   "err_all_offline": "No computer with this launcher is online, so its models can’t be listed",
+  "no_gateway": "This launcher has no gateway address (it uses the default official API)",
+  "quota_node_outdated": "The node on {name} is too old. Update it to check usage limits",
   "err_effort_default": "Default thinking effort {effort} isn’t supported (use {levels})",
   "err_effort_model": "Thinking effort {effort} of model {model} isn’t supported (use {levels})",
   "err_effort_model_default": "Default thinking effort {effort} of model {model} isn’t supported (use {levels})",

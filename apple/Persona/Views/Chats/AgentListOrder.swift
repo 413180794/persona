@@ -5,7 +5,8 @@ import Foundation
 struct AgentListOrder {
     var isPinned: (SessionKey) -> Bool
     var isMuted: (Session) -> Bool
-    /// Under a quick filter rows are ordered by time only: an agent seen from there keeps its place.
+    /// Under a quick filter, or sorted by 最近更新 (`AgentSort`), rows are ordered by time only: an agent seen from a
+    /// quick filter keeps its place.
     var byRank = true
     /// The open agent that was 完成未看 when it was opened (`AppModel.heldInList`): until it is left it keeps that place
     /// and stays out of the idle folds, so it does not go from under the pointer while it is read (#2213).
@@ -50,6 +51,13 @@ struct AgentListOrder {
 
     /// A space that folds into 空闲的空间: every agent in it quiet, and not the held one's.
     func isQuiet(_ g: SpaceGroup) -> Bool { g.isQuiet && !g.sessions.contains { $0.key == held } }
+    /// Newest first by `date`, then by `id` so equal times never swap between renders: spaces under a quick filter,
+    /// spaces and machines under 最近更新. `date` is a `sortDate`, so a working agent's every step does not move them.
+    static func latestFirst<T>(_ items: [T], date: (T) -> Date, id: (T) -> String) -> [T] {
+        items.map { (item: $0, at: date($0), id: id($0)) }
+            .sorted { $0.at != $1.at ? $0.at > $1.at : $0.id < $1.id }
+            .map(\.item)
+    }
 
     /// The fold ids of the sections shown now (全部折叠): one per machine with live agents, or one per rank in use.
     func sectionIDs(_ sessions: [Session], byMachine: Bool) -> [String] {

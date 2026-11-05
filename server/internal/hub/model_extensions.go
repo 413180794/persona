@@ -7,13 +7,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-type ModelChoice struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
-}
+// ModelChoice is one model a voice plugin offers (plugin.<id> in the assistant's model configuration).
+type ModelChoice = assistantwire.ModelChoice
 
 type extensionModels struct {
 	Models  []ModelChoice `json:"models"`

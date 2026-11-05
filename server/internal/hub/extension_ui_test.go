@@ -154,6 +154,7 @@ func uiPackage(t *testing.T) string {
 // answered; a launcher section reaches its gateway with the key the plugin never sees; events reach it.
 func TestExtensionUIAndEvents(t *testing.T) {
 	h, _ := extensionTestHub(t)
+	connectAssistant(t, h) // the launcher and its key are the manager's (models.launcher_http sends with it)
 	mux := h.routes()
 	master := h.cfg.Token
 	const key = "sk-example-panel-key"

@@ -4,5 +4,8 @@
   "unread": "未读",
   "working": "工作中",
   "feishu": "飞书群",
-  "terminal": "终端"
+  "terminal": "终端",
+  "botmux": "botmux",
+  "botmux_show": "显示 botmux 会话",
+  "botmux_hide": "隐藏 botmux 会话"
 }

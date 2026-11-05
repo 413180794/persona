@@ -256,7 +256,7 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 
 ## cindy
 
-`server/internal/hub/model_catalog.json` (the built-in model catalog that fills in what a gateway lists) is taken from
+`server/internal/assistant/models_catalog.json` (the built-in model catalog that fills in what a gateway lists) is taken from
 cindy's model registry (`packages/model-providers/catalog/model-registry.json`): for the Claude series and the GLM,
 Kimi, DeepSeek V4, Qwen3, MiniMax, Seed and MiMo models cindy runs on Claude Code, only the id, name, context window,
 thinking levels (low, medium, high, xhigh, max) and default level, as the registry states them, reformatted to a flat

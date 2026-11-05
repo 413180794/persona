@@ -2,7 +2,7 @@
 // grouping. Under a filter the agents it showed when it was chosen stay (`kept`): one opened from 未读 is seen now but
 // keeps its place, so the next one is still right below it.
 import { t } from "../i18n";
-import { sessionSource, type AgentMutes } from "./agent-groups";
+import { sessionHost, sessionSource, type AgentMutes } from "./agent-groups";
 import { stateOf } from "./format";
 import { agentKey, isSpacePinned, type AgentPins } from "./pins";
 import { isMuted } from "./session-actions";
@@ -24,6 +24,24 @@ const SOURCE_FILTERS = { feishu: "feishu", terminal: "terminal" } as const;
 
 export function agentFilter(value: string | null): AgentFilter {
   return AGENT_FILTERS.find((f) => f.key === value)?.key ?? "all";
+}
+
+// 「botmux」 beside the filters (#2786): a show / hide switch for botmux sessions, kept in this browser. It only hides
+// them from this list; the hub's per-machine switch (machine page › 引擎) still decides whether they are listed at all.
+export const BOTMUX_HIDDEN_KEY = "jarvis.agentHideBotmux";
+
+export const isBotmux = (s: Session) => sessionHost(s) === "botmux";
+
+/** 飞书群 only matches botmux sessions, so it and a hidden botmux cannot both hold: hiding botmux under 飞书群 goes back to
+ * 全部, and choosing 飞书群 shows botmux again. Returns the filter and the switch after `change`. */
+export function botmuxAndFilter(filter: AgentFilter, hidden: boolean, change: "filter" | "botmux"): { filter: AgentFilter; hidden: boolean } {
+  if (filter !== "feishu" || !hidden) return { filter, hidden };
+  return change === "botmux" ? { filter: "all", hidden } : { filter, hidden: false };
+}
+
+/** The sessions the list shows: all of them, or all but botmux's while it is hidden. */
+export function withoutBotmux(sessions: Session[], hidden: boolean): Session[] {
+  return hidden ? sessions.filter((s) => !isBotmux(s)) : sessions;
 }
 
 export function filterState(f: AgentFilter): AgentState | undefined {

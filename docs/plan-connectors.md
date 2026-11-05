@@ -67,7 +67,7 @@ type Credentials interface {
 }
 ```
 
-- 凭据存 hub：用 `secret.key` AES-GCM 加密（和启动器的 Key、邮箱凭据同一个主密钥，`hub/launchers.go` 的 `sealKey`），存 Postgres 新表
+- 凭据存 hub：用 `secret.key` AES-GCM 加密（和启动器的 Key、邮箱凭据同一个主密钥，`internal/secretkey`），存 Postgres 新表
   `connector_accounts(connector, account, config jsonb, secret_enc text, created_at, updated_at)`；新迁移号挑之前先看所有 worktree。
   明文只在内存，任何接口都不返回（只回「已设置」和账号名）。也可以写 hub.json 的 `<connector>.token_file`（0600），给不想经过 App 的人用。
 - `not_signed_in` 这类状态统一出现在：设置 › 连接器、收件箱顶部的错误条、助手快照（「GitHub 未登录」时它就不会去调工具）。

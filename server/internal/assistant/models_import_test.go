@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -109,14 +110,12 @@ func TestMergeImportedModelsAddsOnlyNew(t *testing.T) {
 	}
 }
 
-func importTestHub(t *testing.T, aliases []zshrcAlias, err error) (*Hub, *http.ServeMux) {
-	h, _ := modelTestHub(t)
+func importTestHub(t *testing.T, aliases []zshrcAlias, err error) (*Service, http.Handler) {
+	s, _, _ := modelService(t)
 	old := zshrcAliases
-	zshrcAliases = func(context.Context, *Hub, string) ([]zshrcAlias, error) { return aliases, err }
+	zshrcAliases = func(context.Context, *Service, string) ([]zshrcAlias, error) { return aliases, err }
 	t.Cleanup(func() { zshrcAliases = old })
-	mux := http.NewServeMux()
-	h.launcherImportRoutes(mux)
-	return h, mux
+	return s, s
 }
 
 func importRequest(mux http.Handler, method, body string) *httptest.ResponseRecorder {
@@ -158,16 +157,16 @@ func TestLauncherImportPreviewHasNoSecrets(t *testing.T) {
 }
 
 func TestLauncherImportCommitSealsAndMergesExisting(t *testing.T) {
-	h, mux := importTestHub(t, importAliases, nil)
+	s, mux := importTestHub(t, importAliases, nil)
 	ctx := context.Background()
-	sealed, err := h.sealKey(importKeyB)
+	sealed, err := s.sealKey(importKeyB)
 	if err != nil {
 		t.Fatal(err)
 	}
 	existing := storedLauncher{KeySealed: sealed, ManagedLauncher: proto.ManagedLauncher{Name: "kimi", BaseURL: "https://k.example.com",
 		Model: "kept", Effort: "low", Models: []proto.ProviderModel{{ID: "kept"}}}}
 	taken := storedLauncher{ManagedLauncher: proto.ManagedLauncher{Name: "gcc", BaseURL: "https://elsewhere.example.com", Model: "x"}}
-	if err := h.put(ctx, launchersManagedKey, []storedLauncher{existing, taken}); err != nil {
+	if err := s.putSetting(ctx, launchersManagedKey, []storedLauncher{existing, taken}); err != nil {
 		t.Fatal(err)
 	}
 	r := importRequest(mux, "POST", `{"machine":"m1","providers":["gcc","kcc"]}`)
@@ -182,7 +181,7 @@ func TestLauncherImportCommitSealsAndMergesExisting(t *testing.T) {
 			t.Fatal("the answer carries a secret")
 		}
 	}
-	list := h.storedLaunchers(ctx)
+	list := s.storedLaunchers(ctx)
 	if len(list) != 3 {
 		t.Fatalf("%+v", list)
 	}
@@ -198,10 +197,10 @@ func TestLauncherImportCommitSealsAndMergesExisting(t *testing.T) {
 	if strings.Contains(string(raw), importKeyA) || strings.Contains(string(raw), "hdr-test-value") {
 		t.Fatal("a secret stored in the clear")
 	}
-	if key, err := h.openKey(gcc.KeySealed); err != nil || key != importKeyA {
+	if key, err := s.openKey(gcc.KeySealed); err != nil || key != importKeyA {
 		t.Fatalf("key not sealed: %v", err)
 	}
-	if hd, err := h.openKey(gcc.HeadersSealed); err != nil || !strings.Contains(hd, "hdr-test-value") {
+	if hd, err := s.openKey(gcc.HeadersSealed); err != nil || !strings.Contains(hd, "hdr-test-value") {
 		t.Fatalf("headers not sealed: %v", err)
 	}
 	if r := importRequest(mux, "POST", `{"machine":"m1","providers":["nope"]}`); r.Code != 400 {
@@ -215,7 +214,7 @@ func TestLauncherImportMachineErrors(t *testing.T) {
 		code int
 		body string
 	}{
-		{fmt.Errorf("m1: %w", errOffline), 503, `"code":"offline"`},
+		{fmt.Errorf("m1: %w", apierr.ErrOffline), 503, `"code":"offline"`},
 		{&rpc.Error{Message: "unknown method launchers.zshrc"}, 409, `"code":"node_outdated"`},
 		{errNoSuchMachine, 404, ""},
 	}
@@ -231,25 +230,25 @@ func TestLauncherImportMachineErrors(t *testing.T) {
 }
 
 func TestLauncherPickerDefault(t *testing.T) {
-	h, _ := modelTestHub(t)
+	s, _, _ := modelService(t)
 	ctx := context.Background()
-	if err := h.saveModelRecord(ctx, "agent.new", 0, ModelBinding{Provider: "launcher.gw", Model: "m1", Effort: "high"}); err != nil {
+	if err := s.saveModelRecord(ctx, "agent.new", 0, ModelBinding{Provider: "launcher.gw", Model: "m1", Effort: "high"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Runtime: proto.AssistantRuntimeAgentSDK}); err != nil {
+	if err := s.saveModelRecord(ctx, "assistant", 0, ModelBinding{Runtime: proto.AssistantRuntimeAgentSDK}); err != nil {
 		t.Fatal(err)
 	}
-	if got := h.launcherDefault(ctx, "agent.new"); !reflect.DeepEqual(got, map[string]any{"provider": "gw", "model": "m1", "effort": "high"}) {
+	if got := s.launcherDefault(ctx, "agent.new"); !reflect.DeepEqual(got, map[string]any{"provider": "gw", "model": "m1", "effort": "high"}) {
 		t.Fatalf("agent.new: %+v", got)
 	}
-	if got := h.launcherDefault(ctx, "assistant"); got["runtime"] != "agentsdk" || got["provider"] != "claude" {
+	if got := s.launcherDefault(ctx, "assistant"); got["runtime"] != "agentsdk" || got["provider"] != "claude" {
 		t.Fatalf("assistant: %+v", got)
 	}
-	if got := h.launcherDefault(ctx, "kb"); got != nil {
+	if got := s.launcherDefault(ctx, "kb"); got != nil {
 		t.Fatalf("an API use has no launcher default: %+v", got)
 	}
 	r := httptest.NewRequest("GET", "/api/v1/machines/m1/launchers?purpose=assistant", nil)
-	if got := h.pickerDefault(ctx, r); got["runtime"] != "agentsdk" {
+	if got := s.pickerDefault(ctx, r); got["runtime"] != "agentsdk" {
 		t.Fatalf("?purpose= ignored: %+v", got)
 	}
 }

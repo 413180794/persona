@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -158,6 +159,7 @@ func TestAnswerRoleSendsOnlyText(t *testing.T) {
 	m.peer, m.online = hubPeer, true
 	m.sessions = []proto.Session{{SessionID: "s1"}, {SessionID: "s2", Status: proto.StatusOffline}}
 	m.mu.Unlock()
+	connectAssistant(t, h) // a session resumed without a launcher runs on 新建 Agent's, the assistant's to say
 
 	mux := h.routes()
 	_, phone := call(t, mux, "POST", "/api/v1/auth/tokens", h.cfg.Token, `{"name":"iPhone","kind":"phone"}`)
@@ -265,27 +267,27 @@ func TestSendDropsAModelTheLauncherNoLongerOffers(t *testing.T) {
 	}
 }
 
-// newAgentStore answers 新建 Agent's model setting with b.
+// newAgentStore answers 新建 Agent's model setting (the assistant's to read) with b.
 type newAgentStore struct {
 	*memStore
-	b ModelBinding
+	b assistantwire.ModelBinding
 }
 
 func (s *newAgentStore) Setting(_ context.Context, key string, out any) (bool, error) {
-	if key != modelKey("agent.new") {
+	if key != "model_config.agent.new" {
 		return false, nil
 	}
-	raw, _ := json.Marshal(modelRecord{Binding: s.b})
+	raw, _ := json.Marshal(map[string]any{"revision": 1, "binding": s.b})
 	return true, json.Unmarshal(raw, out)
 }
 
 // A message to a session that is not running and whose launcher nobody knows (started outside Jarvis) carries 新建
 // Agent's launcher and model, so the node resumes it on them instead of plain claude; a known launcher, a running
 // session and a launcher the app picked are left alone. Which launcher and model that is is the manager's to say
-// (agents.resume_params); while it is not connected the hub applies 模型配置 › Agents itself.
+// (agents.resume_params); while it is not connected the hub adds nothing.
 func TestOfflineSessionWithoutLauncherResumesOnNewAgents(t *testing.T) {
 	h := newTestHub(t)
-	h.store = &newAgentStore{memStore: newMemStore(), b: ModelBinding{Provider: "launcher.work", Model: "m-1"}}
+	h.store = &newAgentStore{memStore: newMemStore(), b: assistantwire.ModelBinding{Provider: "launcher.work", Model: "m-1"}}
 	m := newMachine(h, MachineConfig{ID: "box", Name: "box"})
 	h.byID["box"] = m
 	h.machines = append(h.machines, m)

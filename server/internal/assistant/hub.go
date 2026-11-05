@@ -43,6 +43,8 @@ type (
 	Placement           = assistantwire.Placement
 	DeviceCall          = assistantwire.DeviceCall
 	Device              = assistantwire.Device
+	ConfiguredLauncher  = assistantwire.ConfiguredLauncher
+	HubModels           = assistantwire.HubModels
 	AppCall             = assistantwire.AppCall
 	ModelBinding        = assistantwire.ModelBinding
 	NotifyRequest       = assistantwire.NotifyRequest
@@ -151,16 +153,7 @@ const (
 	DeviceAssistantHandoff   = assistantwire.DeviceAssistantHandoff
 	DeviceLaunchersList      = assistantwire.DeviceLaunchersList
 	DeviceLaunchersProbe     = assistantwire.DeviceLaunchersProbe
-	AppModels                = assistantwire.AppModels
-	ModelsComplete           = assistantwire.ModelsComplete
-	ModelsApply              = assistantwire.ModelsApply
-	ModelsResolve            = assistantwire.ModelsResolve
-	ModelsJSON               = assistantwire.ModelsJSON
-	ModelsRecord             = assistantwire.ModelsRecord
-	ModelsSave               = assistantwire.ModelsSave
-	ModelsApplyPicked        = assistantwire.ModelsApplyPicked
-	ModelsLaunchers          = assistantwire.ModelsLaunchers
-	ModelsLauncherCheck      = assistantwire.ModelsLauncherCheck
+	DeviceLaunchersManaged   = assistantwire.DeviceLaunchersManaged
 	ConnectorsSignedIn       = assistantwire.ConnectorsSignedIn
 	AppPlugins               = assistantwire.AppPlugins
 	PluginsAssistant         = assistantwire.PluginsAssistant
@@ -198,7 +191,6 @@ const (
 	CodeNoDevice             = assistantwire.CodeNoDevice
 	CodeMachineOffline       = assistantwire.CodeMachineOffline
 	CodeStaleSnapshot        = assistantwire.CodeStaleSnapshot
-	CodeModelPaused          = assistantwire.CodeModelPaused
 	CodeAssistantOffline     = assistantwire.CodeAssistantOffline
 	DeviceAll                = assistantwire.DeviceAll
 	NotifyPush               = assistantwire.NotifyPush

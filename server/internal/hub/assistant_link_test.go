@@ -242,8 +242,8 @@ func testDB(t *testing.T) *db.DB {
 	return database
 }
 
-// The hub answers the assistant's schedule calls with its own functions: the machines, the model configuration, the
-// knowledge base's sources; a push like an agent's, a live update as it is; the tasks it reports are what the hub reads.
+// The hub answers the assistant's schedule calls with its own functions: the machines, their launchers, the plugins'
+// providers, the knowledge base; a push like an agent's, a live update as it is; the tasks it reports are what the hub reads.
 func TestAssistantLinkScheduleCalls(t *testing.T) {
 	h, n := conversationsHub(t)
 	link := assistantLink{h}
@@ -252,14 +252,12 @@ func TestAssistantLinkScheduleCalls(t *testing.T) {
 	if err != nil || string(raw) != `{"devices":[{"id":"server","name":"server","kind":"local","home":"/home/me","online":false,"reachable":true}],"phone_online":false}` {
 		t.Fatalf("devices.list: %s %v", raw, err)
 	}
-	raw, err = link.AppCall(ctx, assistant.AppCall{AppID: assistant.AppModels, Method: assistant.ModelsApply,
-		Params: json.RawMessage(`{"purpose":"assistant","params":{"session_id":"s"}}`)})
-	if err != nil || !strings.Contains(string(raw), `"launcher":"claude"`) || !strings.Contains(string(raw), `"session_id":"s"`) {
-		t.Fatalf("models.apply: %s %v", raw, err)
-	}
-	raw, err = link.AppCall(ctx, assistant.AppCall{AppID: assistant.AppModels, Method: assistant.ModelsResolve, Params: json.RawMessage(`{"purpose":"assistant"}`)})
-	if err != nil || string(raw) != `{"provider":"launcher.claude"}` {
-		t.Fatalf("models.resolve: %s %v", raw, err)
+	// What the model configuration (the assistant's) asks of the hub: the plugins' providers and models.
+	for method, want := range map[string]string{assistantwire.PluginsPresets: `{"presets":[]}`, assistantwire.PluginsVoice: `{"plugins":[]}`,
+		assistantwire.PluginsNeedTriage: `{"names":[]}`} {
+		if raw, err = link.AppCall(ctx, assistant.AppCall{AppID: assistant.AppPlugins, Method: method}); err != nil || string(raw) != want {
+			t.Fatalf("%s: %s %v", method, raw, err)
+		}
 	}
 	if raw, err = link.AppCall(ctx, assistant.AppCall{AppID: assistant.AppConnectors, Method: assistantwire.ConnectorsArchives}); err != nil ||
 		string(raw) != `{"archives":[],"items":[]}` {

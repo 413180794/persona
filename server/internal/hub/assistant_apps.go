@@ -11,21 +11,15 @@ import (
 )
 
 // The hub's plain capabilities the assistant asks for its directory and its settings (app.call, assistantwire): the
-// model configuration's records and launchers, where the knowledge base keeps its files, the connectors signed in,
+// plugins' model providers (assistant_models.go), where the knowledge base keeps its files, the connectors signed in,
 // the plugins' assistant contributions, and the hub's own settings for jarvis_settings. Nothing here knows what the
 // assistant does with them.
 
 // assistantAppCall answers the app.call methods of this file; false for the others.
 func (h *Hub) assistantAppCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, bool, error) {
 	var a struct {
-		Purpose   string         `json:"purpose"`
-		Revision  int64          `json:"revision"`
-		Binding   ModelBinding   `json:"binding"`
-		Params    map[string]any `json:"params"`
-		MachineID string         `json:"machine_id"`
-		Launcher  string         `json:"launcher"`
-		Model     string         `json:"model"`
-		Names     []string       `json:"names"`
+		MachineID string   `json:"machine_id"`
+		Names     []string `json:"names"`
 	}
 	unmarshal := func() error {
 		if len(p.Params) == 0 {
@@ -36,44 +30,6 @@ func (h *Hub) assistantAppCall(ctx context.Context, p assistantwire.AppCall) (js
 	var out any
 	var err error
 	switch p.AppID + " " + p.Method {
-	case assistantwire.AppModels + " " + assistantwire.ModelsRecord:
-		if err = unmarshal(); err == nil {
-			out, err = h.modelRecord(ctx, a.Purpose)
-		}
-	case assistantwire.AppModels + " " + assistantwire.ModelsSave:
-		if err = unmarshal(); err == nil {
-			h.modelMu.Lock()
-			err = h.saveModelRecord(ctx, a.Purpose, a.Revision, a.Binding)
-			h.modelMu.Unlock()
-			out = map[string]any{}
-		}
-	case assistantwire.AppModels + " " + assistantwire.ModelsApplyPicked:
-		if err = unmarshal(); err == nil {
-			if a.Params == nil {
-				a.Params = map[string]any{}
-			}
-			err = h.applyPickedModel(ctx, a.Params)
-			out = map[string]any{"params": a.Params}
-		}
-	case assistantwire.AppModels + " " + assistantwire.ModelsLaunchers:
-		if err = unmarshal(); err == nil {
-			m := h.localMachine(a.MachineID)
-			if m == nil {
-				return nil, true, busCodedError(noDevice(a.MachineID))
-			}
-			list, lerr := h.machineLaunchers(ctx, m)
-			out, err = map[string]any{"launchers": list}, lerr
-		}
-	case assistantwire.AppModels + " " + assistantwire.ModelsLauncherCheck:
-		if err = unmarshal(); err == nil {
-			m := h.localMachine(a.MachineID)
-			if m == nil {
-				return nil, true, busCodedError(noDevice(a.MachineID))
-			}
-			available := h.launcherAvailable(ctx, m, a.Launcher)
-			modelOK := !available || a.Model == "" || h.launcherHasModel(ctx, m, a.Launcher, a.Model)
-			out = map[string]any{"available": available, "model_ok": modelOK}
-		}
 	case assistantwire.AppConnectors + " " + assistantwire.ConnectorsSignedIn:
 		signedIn := h.signedInConnectors(ctx)
 		clis := map[string]string{}

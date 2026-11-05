@@ -36,16 +36,20 @@ func asInbox(fallback, rules bool) func(m map[string]any) {
 	}
 }
 
-// withTriageModel gives the hub a triage model it can call (hub.json's inbox.triage_ai); off, none.
+// withTriageModel gives hub.json a triage model that can be called (inbox.triage_ai); off, none. The manager, whose
+// model configuration it is, is told (manager.updated) when one is connected.
 func withTriageModel(t *testing.T, h *Hub, on bool) {
 	t.Helper()
 	if !on {
 		h.cfg.Inbox.TriageAI = nil
-		return
+	} else {
+		key := filepath.Join(t.TempDir(), "key")
+		_ = os.WriteFile(key, []byte("k"), 0o600)
+		h.cfg.Inbox.TriageAI = &ai.Config{BaseURL: "http://127.0.0.1:9", APIKeyFile: key, Model: "m"}
 	}
-	key := filepath.Join(t.TempDir(), "key")
-	_ = os.WriteFile(key, []byte("k"), 0o600)
-	h.cfg.Inbox.TriageAI = &ai.Config{BaseURL: "http://127.0.0.1:9", APIKeyFile: key, Model: "m"}
+	if _, ok := testAssistants.Load(h); ok {
+		helloChanged(t, h)
+	}
 }
 
 func previewDir(t *testing.T, h *Hub, dir string) map[string]any {
@@ -68,6 +72,7 @@ func install(t *testing.T, h *Hub, pv map[string]any) (int, map[string]any) {
 // model is not changed to one that cannot be called (422 triage_model_in_use, naming it).
 func TestInboxExtensionNeedsTheTriageModel(t *testing.T) {
 	h, _ := extensionTestHub(t)
+	connectAssistant(t, h) // whether 信息筛选 can be called is the manager's answer (models.usable)
 	mux := h.routes()
 	master := h.cfg.Token
 	pkg := notesPackage(t, "1.0.0")
@@ -164,6 +169,7 @@ func (*chatInbox) Reply(context.Context, connector.InboxReply) error { return ni
 // and 设置 › 扩展 says why, until the model can be called.
 func TestHubJSONInboxExtensionWaitsForTheModel(t *testing.T) {
 	h, _ := extensionTestHub(t)
+	connectAssistant(t, h)
 	items, _ := json.Marshal([]extension.ConnectorItem{{ID: "examplechat", Name: "Example Chat", Capabilities: []string{"inbox"}}})
 	m := &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: "example-chat", Name: "Example Chat", Version: "0.0.0",
 		Contributes: map[string]json.RawMessage{"connectors": items}}
@@ -204,6 +210,7 @@ func TestExtensionAutoUpgradeInboxRules(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h, mux, phone, mk, dir, mid := upgradeHub(t)
+			connectAssistant(t, h) // it says whether 信息筛选 can be called
 			ctx := context.Background()
 			setUIVersion(t, dir, "1.2.0")
 			editManifest(t, dir, c.change)

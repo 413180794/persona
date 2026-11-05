@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"net"
 	"net/http"
@@ -17,6 +16,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/identity"
 
 	"github.com/mdp/qrterminal/v3"
 
@@ -53,7 +55,7 @@ type MachineConfig struct {
 	CodexHomes       []string            `json:"codex_homes,omitempty"`
 	CodexServers     []proto.CodexServer `json:"codex_servers,omitempty"`
 	// Launchers adds configured wrappers or overrides the type reported by the node.
-	Launchers []sessionLauncher `json:"launchers,omitempty"`
+	Launchers []assistantwire.ConfiguredLauncher `json:"launchers,omitempty"`
 	// Botmux false: the machine's node does not list botmux's sessions and never runs botmux (docs/engines.md「botmux」);
 	// unset lists them, as before.
 	Botmux *bool `json:"botmux,omitempty"`

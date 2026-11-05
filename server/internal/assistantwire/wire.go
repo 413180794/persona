@@ -31,6 +31,8 @@ type Hello struct {
 	Agents AgentsConfig `json:"agents,omitzero"`
 	// KB is hub.json's kb section: the knowledge base the assistant keeps (kb.go).
 	KB *KBSettings `json:"kb,omitempty"`
+	// Models is what hub.json says about models (models.go).
+	Models HubModels `json:"models,omitzero"`
 	// Locale is the user's language (zh-Hans / en / ja, docs/i18n.md): the assistant answers in it. "" (an older hub)
 	// is zh-Hans.
 	Locale string `json:"locale,omitempty"`
@@ -91,6 +93,10 @@ type Device struct {
 	Online  bool   `json:"online"`
 	// Reachable: a call to it would go out now (its link is up; Online can lag a reconnect).
 	Reachable bool `json:"reachable"`
+	// Version is its node's build ("" while not reported); ModelConfiguration: that node takes a launcher's model
+	// (--model) and effort, which 模型配置 needs of the machine a launcher purpose runs on.
+	Version            string `json:"version,omitempty"`
+	ModelConfiguration bool   `json:"model_configuration,omitempty"`
 }
 
 // ErrNoDevice: the hub has no machine by the id a DeviceCall gave.
@@ -107,19 +113,6 @@ type AppCall struct {
 
 // The apps the hub runs for the assistant and their methods.
 const (
-	// AppModels is the hub's model configuration (docs/model-config.md), outside this package for now: these calls go
-	// away when the assistant has its own model configuration (v9's manager.models).
-	AppModels = "models"
-	// ModelsComplete: {purpose, system, input, max_tokens} → {text}; an error the model's (ai.IsPaused tells a pause).
-	ModelsComplete = "models.complete"
-	// ModelsApply: {purpose, params} → {params}: a node call's params with the purpose's launcher / model filled in.
-	ModelsApply = "models.apply"
-	// ModelsResolve: {purpose} → ModelBinding, what the purpose runs on.
-	ModelsResolve = "models.resolve"
-	// ModelsJSON: {purpose, system, input, max_tokens?} → the JSON object the model answered (max_tokens: the room
-	// for the answer, asked once more with twice that when it is cut off; the knowledge base's calls give it).
-	ModelsJSON = "models.json"
-
 	// AppConnectors is the hub's connectors (docs/connectors.md).
 	AppConnectors = "connectors"
 	// ConnectorsSnapshots: {tz} → {snapshots: [connector.SnapshotData]}, the live states of the signed-in connectors
@@ -493,7 +486,6 @@ const (
 	CodeMachineOffline   = "machine_offline"   // the machine's node is not connected (apierr.ErrOffline)
 	CodeNodeClosed       = "node_closed"       // the link to the machine's node dropped during the call (rpc.ErrClosed)
 	CodeStaleSnapshot    = "stale_snapshot"    // ErrStaleSnapshot
-	CodeModelPaused      = "model_paused"      // the model's connection is held (ai.IsPaused)
 	CodeAssistantOffline = "assistant_offline" // the hub has no connection from the assistant
 )
 
@@ -671,20 +663,6 @@ const CodeBadRequest = "bad_request"
 
 // What the hub's apps tell the assistant for its directory and its settings.
 const (
-	// ModelsRecord: {purpose} → {binding, revision}: what the purpose itself is set to (an empty binding inherits).
-	ModelsRecord = "models.record"
-	// ModelsSave: {purpose, revision, binding} → {}: an error when it changed since revision.
-	ModelsSave = "models.save"
-	// ModelsApplyPicked: {params} → {params}: a launcher (and model) picked for one message, checked and fingerprinted
-	// like a configured one; with no model the launcher's own default stays.
-	ModelsApplyPicked = "models.apply_picked"
-	// ModelsLaunchers: {machine_id} → {launchers}: the machine's launchers as the apps list them (its own but the
-	// hidden ones, and the hub's).
-	ModelsLaunchers = "models.launchers"
-	// ModelsLauncherCheck: {machine_id, launcher, model?} → {available, model_ok}: whether a message can still run on
-	// them (not a renamed launcher, not a model its gateway dropped); true when it can't be told.
-	ModelsLauncherCheck = "models.launcher_check"
-
 	// ConnectorsSignedIn: {} → {connectors, clis, lark_cli}: the connectors switched on and signed in (rate limited
 	// counts), their command lines (name → connector id), and whether hub.json sets up lark-cli.
 	ConnectorsSignedIn = "connectors.signed_in"

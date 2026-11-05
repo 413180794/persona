@@ -58,6 +58,7 @@ struct AgentsListMenu: View {
     /// The grouping the list shows: a stored 按待办 is 按项目 on a hub without todos (`DevGrouping.resolved`).
     private var shownGrouping: DevGrouping { DevGrouping.resolved(grouping, supportsTodos: TodoStore.shared.isSupported) }
     private var groupingChoice: Binding<DevGrouping> { Binding(get: { shownGrouping }, set: { grouping = $0 }) }
+    @StoredValue("dev.sort") private var sort: AgentSort = .state
     @StoredValue("dev.compact") private var compact = false
 
     /// The shell (docs/ios.md「新外壳」) shows these inside its 工作 switch's menu: the items, without a button of their own.
@@ -83,6 +84,12 @@ struct AgentsListMenu: View {
             #endif
             Picker("分组", selection: groupingChoice) {
                 ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { g in Label(g.title, systemImage: g.symbol).tag(g) }
+            }
+            if grouping != .state {
+                // 按状态 is sectioned by state, and the rows in a section are by time already.
+                Picker("排序", selection: $sort) {
+                    ForEach(AgentSort.allCases) { o in Label(o.title, systemImage: o.symbol).tag(o) }
+                }
             }
             Picker("显示", selection: $compact) {
                 Label("卡片", systemImage: "rectangle.grid.1x2").tag(false)

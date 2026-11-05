@@ -90,21 +90,17 @@ func (s *Service) tabName(ctx context.Context, prompt string) string {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	var res struct {
-		Text string `json:"text"`
-	}
 	// Reasoning models think first: 20 tokens came back empty.
-	err := s.appCall(cctx, AppModels, ModelsComplete, map[string]any{"purpose": "agent.title", "system": prompts.RenderTabName(),
-		"input": prompt, "max_tokens": 200}, &res)
+	text, err := s.purposeModel("agent.title").Complete(cctx, prompts.RenderTabName(), prompt, 200)
 	if err != nil {
 		if !ai.IsPaused(err) {
 			s.logf("tab name: %v", err)
 		}
 		return ""
 	}
-	name := tabSlug(res.Text)
+	name := tabSlug(text)
 	if name == "" {
-		s.logf("tab name: nothing usable in %q", clip(oneLine(res.Text), 80))
+		s.logf("tab name: nothing usable in %q", clip(oneLine(text), 80))
 	}
 	return name
 }

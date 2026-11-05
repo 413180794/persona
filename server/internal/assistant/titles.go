@@ -286,11 +286,8 @@ func (s *Service) makeTitle(ctx context.Context, started time.Time, first, reply
 		system := prompts.RenderSessionTitle(prompts.SessionTitle{Language: answerLanguage(locale), TopicMax: max})
 		for range 2 {
 			cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-			var res struct {
-				Text string `json:"text"`
-			}
-			err := s.appCall(cctx, AppModels, ModelsComplete, map[string]any{"purpose": "assistant.title", "system": system,
-				"input": prompts.RenderSessionTitleInput(prompts.SessionTitleInput{First: first, Reply: reply, Retry: retry}), "max_tokens": 200}, &res)
+			text, err := s.purposeModel("assistant.title").Complete(cctx, system,
+				prompts.RenderSessionTitleInput(prompts.SessionTitleInput{First: first, Reply: reply, Retry: retry}), 200)
 			cancel()
 			if err != nil {
 				if !ai.IsPaused(err) {
@@ -298,14 +295,14 @@ func (s *Service) makeTitle(ctx context.Context, started time.Time, first, reply
 				}
 				break
 			}
-			kind, topic, ok := parseTitleMax(res.Text, max)
+			kind, topic, ok := parseTitleMax(text, max)
 			if ok {
 				return day + " | " + kind + " | " + topic
 			}
 			if kind != "" && retry != "" { // a known kind and a topic that is still too long: cut it
 				return day + " | " + kind + " | " + cutRunes(topic, max)
 			}
-			retry = cutRunes(oneLine(res.Text), 60)
+			retry = cutRunes(oneLine(text), 60)
 		}
 	}
 	topic := titleTopic(first)

@@ -613,11 +613,6 @@ func (h *Hub) inboxAppCall(ctx context.Context, p assistantwire.AppCall) (json.R
 		out = map[string]any{}
 	case assistantwire.AppInbox + " " + assistantwire.InboxConfigMethod:
 		out = h.inboxConfigView(ctx)
-	case assistantwire.AppInbox + " " + assistantwire.InboxTranslateFingerprint:
-		var fp string
-		if fp, err = h.modelFingerprint(ctx, "translate"); err == nil {
-			out = map[string]any{"fingerprint": fp}
-		}
 	case assistantwire.AppInbox + " " + assistantwire.InboxMailBody:
 		var ref assistantwire.InboxMailRef
 		if err = json.Unmarshal(p.Params, &ref); err == nil {
@@ -783,11 +778,7 @@ func (h *Hub) inboxConfigView(ctx context.Context) assistantwire.InboxConfig {
 		out.Agent, out.LarkAccount = h.cfg.Inbox.Agent, h.cfg.Lark.Account
 	}
 	if h.push != nil && h.mail != nil {
-		if out.Translate = h.push.mailTargets(); len(out.Translate) > 0 {
-			if fp, err := h.modelFingerprint(ctx, "translate"); err == nil {
-				out.TranslateFingerprint = fp
-			}
-		}
+		out.Translate = h.push.mailTargets()
 	}
 	return out
 }

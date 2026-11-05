@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -51,10 +52,6 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
 	api.HandleFunc("POST /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
 	api.HandleFunc("DELETE /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
-	api.HandleFunc("GET /api/v1/machines/{mid}/launchers", h.withMachine(h.listLaunchers))
-	api.HandleFunc("GET /api/v1/machines/{mid}/launchers/{name}/models", h.withMachine(h.launcherModels))
-	h.launcherRoutes(api)
-	h.modelConfigRoutes(api)
 	api.HandleFunc("GET /api/v1/machines/{mid}/dirs", h.proxy("dirs.list", func(r *http.Request) any {
 		return map[string]any{"path": r.URL.Query().Get("path")}
 	}))
@@ -419,6 +416,10 @@ func atoi(s string) int {
 	}
 	return n
 }
+
+// agentTypeRe is what POST /api/v1/sessions takes as agent_type: claude, codex, traex, or a runtime's agent as the
+// launcher list says (a runtime's launcher starts through its runtime, whatever the type); the node checks the rest.
+var agentTypeRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 
 func (h *Hub) withMachine(fn func(http.ResponseWriter, *http.Request, *Machine)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

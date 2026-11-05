@@ -277,7 +277,7 @@ enum MacLaunchArguments {
         }
         if d.bool(forKey: "openChatsFresh") { ChatCache.removeAll() }
         if d.bool(forKey: "openAgentsFresh") {
-            for k in ["dev.machineFilter", HubFilter.key, "dev.grouping", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
+            for k in ["dev.machineFilter", HubFilter.key, "dev.grouping", "dev.sort", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
         }
         // A tab, a chat or a conversation named on the command line shows that, not the 知识库 / 机器 remembered
         // from last time (MacShell's onChange is not there yet to clear it).

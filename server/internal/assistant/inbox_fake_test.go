@@ -39,21 +39,18 @@ type fakeInbox struct {
 	off       map[string]bool   // read with nothing: 进收件箱 off, not signed in, waiting for the triage model
 	failing   map[string]error  // Collect fails
 	cfg       assistantwire.InboxConfig
-	model     *ai.Client            // every inbox purpose's model (nil: none set up)
-	models    map[string]*ai.Client // by purpose, over model
-	mail      *fakeMail
-	changed   []assistantwire.InboxChanged
-	kicks     int
-	asked     []AppCall // the inbox methods asked, in order
-	// fingerprint names the translation model (inbox.translate_fingerprint; "": none set up).
-	fingerprint string
+	// model is every inbox purpose's model (nil: none set up), models by purpose over it: hub.json's "ai" and its
+	// triage / judge / kb connections in the hello (models.go's baselines; translation and drafts are kb's).
+	model   *ai.Client
+	models  map[string]*ai.Client
+	mail    *fakeMail
+	changed []assistantwire.InboxChanged
+	kicks   int
+	asked   []AppCall // the inbox methods asked, in order
 	// sent are the send ids of the replies that went out (inbox.reply, inbox.reply_mail): the same one again is
 	// answered already, as the hub does; inDoubt makes the next reply's answer cut off after it went out.
 	sent    map[string]bool
 	inDoubt bool
-	// undated are the model calls made without a deadline (the hub would not stop them): newInboxHub's tests fail on
-	// any.
-	undated []string
 }
 
 // fakeMail is the hub's mail: accounts with their latest messages, the full texts, the replies sent.
@@ -170,61 +167,34 @@ func (in *fakeInbox) conn(id string) connector.Connector {
 	return nil
 }
 
-// modelFor is purpose's model (nil: none set up).
-func (in *fakeInbox) modelFor(purpose string) *ai.Client {
+// hubModels are the hello's models: model as hub.json's "ai", models' as the connections the purposes' categories
+// fall back to (models.go legacyModelConfig).
+func (in *fakeInbox) hubModels() HubModels {
 	in.mu.Lock()
 	defer in.mu.Unlock()
-	if m := in.models[purpose]; m != nil {
-		return m
+	var out HubModels
+	if in.model != nil {
+		out.AI = in.model.Config()
 	}
-	return in.model
+	over := func(purposes ...string) *ai.Config {
+		for _, p := range purposes {
+			if m := in.models[p]; m != nil {
+				c := m.Config()
+				return &c
+			}
+		}
+		return nil
+	}
+	out.TriageAI, out.JudgeAI = over(purposeTriage), over(purposeJudge)
+	out.KBAI = over(purposeDraft, purposeTranslate)
+	if out.KBAI == nil {
+		out.KBAI = out.TriageAI
+	}
+	return out
 }
 
-// errUnconfigured is the hub's answer for a purpose with no model.
-var errUnconfigured = &rpc.Error{Code: assistantwire.CodeModelUnconfigured, Message: "还没有能直接调用的模型"}
-
-// answer answers the inbox's app calls (and the models of the inbox's purposes); ok false for any other.
+// answer answers the inbox's app calls; ok false for any other.
 func (in *fakeInbox) answer(ctx context.Context, p AppCall) (json.RawMessage, bool, error) {
-	if p.AppID == AppModels && (p.Method == ModelsJSON || p.Method == ModelsComplete) {
-		var a struct {
-			Purpose   string `json:"purpose"`
-			System    string `json:"system"`
-			Input     string `json:"input"`
-			MaxTokens int    `json:"max_tokens"`
-		}
-		_ = json.Unmarshal(p.Params, &a)
-		if !strings.HasPrefix(a.Purpose, "inbox.") && a.Purpose != purposeTranslate {
-			return nil, false, nil
-		}
-		if _, ok := ctx.Deadline(); !ok {
-			in.mu.Lock()
-			in.undated = append(in.undated, a.Purpose)
-			in.mu.Unlock()
-		}
-		m := in.modelFor(a.Purpose)
-		if m == nil {
-			return nil, true, errUnconfigured
-		}
-		if p.Method == ModelsComplete {
-			text, err := m.Complete(ctx, a.System, a.Input, a.MaxTokens)
-			if err != nil {
-				return nil, true, err
-			}
-			out, _ := json.Marshal(map[string]any{"text": text})
-			return out, true, nil
-		}
-		var out json.RawMessage
-		var err error
-		if a.MaxTokens > 0 {
-			err = m.JSONMax(ctx, a.System, a.Input, a.MaxTokens, &out)
-		} else {
-			err = m.JSON(ctx, a.System, a.Input, &out)
-		}
-		if err != nil {
-			return nil, true, err
-		}
-		return out, true, nil
-	}
 	if p.AppID != AppInbox {
 		return nil, false, nil
 	}
@@ -344,10 +314,6 @@ func (in *fakeInbox) answer(ctx context.Context, p AppCall) (json.RawMessage, bo
 		if thing, err = w.GroupAppend(ctx, a.Append); err == nil {
 			out = map[string]any{"thing": thing}
 		}
-	case assistantwire.InboxTranslateFingerprint:
-		in.mu.Lock()
-		out = map[string]any{"fingerprint": in.fingerprint}
-		in.mu.Unlock()
 	default:
 		return nil, true, fmt.Errorf("unexpected inbox method %s", p.Method)
 	}
@@ -460,13 +426,6 @@ func newInboxHubWith(t *testing.T, kbo *KBOptions) *inboxHub {
 	in.svc = s
 	h := &inboxHub{Service: s, f: f, in: in, st: st}
 	h.inbox.init()
-	t.Cleanup(func() {
-		in.mu.Lock()
-		defer in.mu.Unlock()
-		if len(in.undated) > 0 { // the hub gives a call the caller's deadline (app.call timeout_ms): none, none there
-			t.Errorf("model calls without a deadline: %v", in.undated)
-		}
-	})
 	return h
 }
 

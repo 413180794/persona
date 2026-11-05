@@ -6,7 +6,7 @@
 - **设置 › 模型配置**：只配置四类默认模型：主对话、Agents、信息处理、信息筛选。每类选择供应商、具体模型和支持的思考强度，所属用途统一跟随，不提供用途或任务级覆盖。助手用哪个启动器 / 模型只在这里的「主对话」里选。
 - **设置 › 助手**：Persona 本身：主动做事（定时任务、运行记录）、了解你（关于我、记忆）、Skills、运行在哪台机器和工作目录。不显示、也不配置模型（#1291）：设置首页的「助手」行不带启动器名，页里没有「对话模型」入口；iOS、Mac、网页、安卓一致。单段对话在自己的菜单里临时换启动器不算配置，照旧。
 
-首页四行可编辑；下方「适用范围」默认折叠，展开后只读说明各类对应的情况，没有用途编辑、搜索或重复的供应商管理入口。目录和说明由 hub 提供；模型名为主，供应商详情在编辑页，「未验证」不重复铺在首页，真实异常和限流仍显示。
+首页四行可编辑；下方「适用范围」默认折叠，展开后只读说明各类对应的情况，没有用途编辑、搜索或重复的供应商管理入口。目录和说明由管理者提供（hub 转发，见下「谁管模型」）；模型名为主，供应商详情在编辑页，「未验证」不重复铺在首页，真实异常和限流仍显示。
 
 | 分类 | 保留的配置 ID | 适用范围 |
 | --- | --- | --- |
@@ -21,7 +21,7 @@
 
 | 执行方式 | 用在哪里 | 约束 |
 | --- | --- | --- |
-| 直接 API | 分拣、判断、翻译、草拟、知识处理、标题 | Messages 或 Responses；hub 自己读取/解封凭据 |
+| 直接 API | 分拣、判断、翻译、草拟、知识处理、标题 | Messages 或 Responses；管理者读取 / 解封凭据、自己发请求 |
 | 启动器 | Claude Code / Codex 对话和 Agent | 必须在执行机器上存在，具体模型由 CLI/app-server 真正接收 |
 | 插件模型 | 已接入的语音服务 | 只能选择该插件提供的模型，不修改插件自己的供应商或凭据 |
 
@@ -40,7 +40,7 @@
 
 API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没有覆盖、旧 `hub.json` 的 `ai` 也没配时，自动用 hub 上能直接调用的接入：先找第一个 `kind: api` 的，再找第一个带 Key、Messages 协议的 Persona 管理启动器（隐藏的、缺地址 / 默认模型 / Key 的不算），模型用它的默认模型。「继承来源」显示「自动选择」，不写入覆盖，之后在这里选的照样优先。一个都没有时状态和报错都说清楚去哪配（#388，2026-11-02：只配了「Claude Code 默认」时草拟回复直接报 no model configured）。
 
-「Claude Code 默认」这类启动器只是各台电脑上的 CLI，没有 API 地址和 Key，hub 不能直接调用，所以不会出现在 API 类用途的选项里。
+「Claude Code 默认」这类启动器只是各台电脑上的 CLI，没有 API 地址和 Key，不能直接调用，所以不会出现在 API 类用途的选项里。
 
 ## 旧配置兼容与统一生效（#697）
 
@@ -50,12 +50,36 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 
 任务的新建、普通修改不接受独立模型设置，返回任务视图不展示旧模型字段；定时任务（用途 `schedule`、`task.<任务 id>`）归「主对话」分类（#1544，用户 2026-11-04 拍板；#697 时归 Agents）：它跑在助手的工作目录里，用的是助手的说明、记忆和工具，本来就是助手的对话，不是新建的 Agent；归 Agents 时没配置就是默认的 Claude Code，在没登录它的 hub 机器上「早报」每次都报 `Not logged in`。任务新建运行、续自己的对话两条路径解析主对话分类，不能让任务字段后置覆盖；用户在任务自己的对话里发消息、跟进发回这段对话时，也和主对话一样每条都按「主对话」，不沿用它上一轮在跑的启动器。发回来源对话（助手用 `schedule_followup` 给自己定的跟进）是那段助手对话的一轮，和手机上发的消息走同一套规则：主对话和定时任务自己的对话按「主对话」分类，助手的其他对话沿用自己在跑的启动器和模型（#1518：原来按 Agents 分类，默认的 Claude Code 在 hub 机器上没登录，一条跟进就把主对话切了过去，之后每条消息都报 `Not logged in`）。任务权限、运行历史、会话关联保持不变。旧用途 GET 返回只读信息；旧用途 PATCH 拒绝。Apple 的旧用途编辑链接会打开所属分类编辑页，并明确说明分类内统一生效。四类目录尚未支持的旧 hub 会提示更新，而不是把不同生效模型伪装成四类默认。
 
+## 谁管模型（2026-11-05）
+
+模型配置是**管理者**的（助手的进程 `personad assistant`，`docs/assistant.md`「和 hub 的边界」），hub 不用模型、不存模型配置：
+
+- 管理者有：四类的记录 `model_config.*`、Persona 里加的供应商和它们封好的 Key（settings `launchers.managed`）、隐藏的 ~/.zshrc 启动器（`launchers.hidden`）、
+  各台电脑上次报的 ~/.zshrc 启动器（`launchers.zshrc`，离线的电脑照旧显示上次的）、预设、限流暂停，代码在 `server/internal/assistant/models*.go`。键和表都没变，不迁数据。
+- 路由：`/api/v1/model-config…`、`/api/v1/launchers` 的增删改查和 `…/check`、`…/restore`、`/api/v1/launchers/presets`、`…/quota`、`…/test`、`…/discover`、`…/import`、新建 Agent 的选择器
+  `GET /api/v1/machines/{mid}/launchers…` 是管理者的（`assistantwire.Routes`），hub 原样转发，路径、字段、错误不变，App 不用改。
+- 每个用模型的地方都直接调管理者自己的配置：分拣、判断、草拟、翻译、知识库、标题、Agent 的标签名和分诊、新建 Agent（`applyModel`）、飞书卡片上开的 Agent。
+- Persona 里加的启动器由管理者发给各台 node（改动后、它连上时、某台 node 的连接是新的时，`launchers.managed`），Key 经 hub 到 node 的连接转过去，hub 不存也不解。
+- hub 只把它知道的事实交过去：hub.json 的 `ai`、`kb.ai`、`inbox.triage_ai` / `judge_ai`、`inbox.agent.machine`、各台电脑的 `machines[].launchers`
+  随握手给（`manager.hello` 的 `models`，变了发 `manager.updated`），继承规则照旧；插件的供应商预设、语音插件的模型、哪些开着的插件要「信息筛选」
+  由管理者经 `app.call plugins.presets` / `plugins.voice` / `plugins.quota` / `plugins.need_triage` 问（插件系统挪进管理者后这三个去掉）。
+  `api_key_file` 是路径，由管理者在它那台机器上读：默认的子进程和 hub 同一台、同一个用户，照旧能读。
+- hub 的插件要问的两件事交给管理者回答：「信息筛选」现在调不调得了（`models.usable`，要它的插件能不能启用），和额度插件、插件的启动器面板要带 Key 发的请求
+  （`models.launcher_http`：Persona 里加的由管理者用 Key 发，~/.zshrc 的交给那台电脑的 node 发，Key 不离开那台电脑）。额度的路由 `…/launchers/{name}/quota` 和它一分钟的缓存也是管理者的：它定下网关和机器，请 hub 的额度插件读（`app.call plugins.quota`），插件要发的请求再经 `models.launcher_http` 回到管理者。
+
+**Key 的加密**：`server/internal/secretkey`。管理者用 hub 数据目录里的 `secret.key`（`~/.persona/secret.key`，和 hub.json 同一个目录；hub 以前封 Key 用的就是它，所以已有的 Key 照样打得开）
+封、解供应商的 Key，没有这个文件时建一个（两个进程同时建也只有一个写成）。hub 自己的密钥（飞书机器人、连接器、插件、互联的凭据）照旧用同一个文件、同一个包，但不碰供应商的 Key。
+管理者跑在别处（`assistant.external`）时要把 `secret.key` 拷到它那台的数据目录（0600），否则旧 Key 解不开，状态写「供应商密钥解密失败」，在 设置 › 模型供应商 里重填即可。
+
+**管理者不在时**（重启中、`assistant.external` 那台断了）：上面的路由回 `503 assistant_offline`，回来后照常；配置在 Postgres 里，hub 和管理者重启都不丢。
+额度回 `503 assistant_offline`；要「信息筛选」的插件不能启用（错误同上），hub.json 的这类插件先不收件。用模型的功能本来就在管理者里，跟它一起停。
+
 ## 谁来解析 Agents 分类（2026-11-04）
 
 新建 Agent 跑在哪个启动器和模型上是 Agents 这件事的一部分，归**管理者**（助手进程，`docs/agent-work.md`「谁管什么」）：`POST /api/v1/sessions` 之前 hub 问它
 `agents.start_params`，给一个不知道启动器的停着的会话发消息之前问 `agents.resume_params`；助手自己派的 Agent（`agents_start`、任务）本来就在它那里。
-它照旧用 hub 的模型配置算（`app.call models.apply agent.new`：分类的选择、这一次选的启动器 / 模型 / 思考强度盖在上面、执行指纹），所以 App 看到的生效结果、保存和继承都不变；
-模型配置这一块挪进管理者之前，解析本身还是 hub 的代码。标签名（用途 `agent.title`）、会话分诊（`agent.triage`）也由管理者经 `models.complete` / `models.json` 调。
+它用自己的模型配置算（`applyModel agent.new`：分类的选择、这一次选的启动器 / 模型 / 思考强度盖在上面、执行指纹），App 看到的生效结果、保存和继承都不变。
+标签名（用途 `agent.title`）、会话分诊（`agent.triage`）也是它自己调的模型。
 
 管理者没连着时 hub 只在自己刚起来、它还没连上过的时候等它（最多到起来后 60 秒）；它连上过、现在不在就不等：电脑是管理者连的（`docs/machines.md`「谁连电脑」），
 没有它新建和续上都开不了，回 `503 assistant_offline`（以前 hub 自己套「模型配置 › Agents」照样开）。AI 分身执行经 `assistant.start` 开在助手那边，本来就是它解析；飞书机器人卡片上开的 Agent 也在助手那边（渠道是它的）。
@@ -70,11 +94,11 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 
 ## 从 ~/.zshrc 导入供应商（#2455）
 
-`GET /api/v1/launchers/import?machine=` 预览、`POST` 确认（接口见 `docs/protocol.md`「模型供应商与用途配置」）。hub 调那台机器 node 的 `launchers.zshrc`，拿到调 claude 的 alias 和它们的环境变量，用纯函数 `mergeZshrcAliases`（`hub/launcher_import.go`）合并：
+`GET /api/v1/launchers/import?machine=` 预览、`POST` 确认（接口见 `docs/protocol.md`「模型供应商与用途配置」）。管理者调那台机器 node 的 `launchers.zshrc`（`assistant/models_import.go`），拿到调 claude 的 alias 和它们的环境变量，用纯函数 `mergeZshrcAliases`（同一个文件）合并：
 
 - 一组 `ANTHROPIC_BASE_URL + key`（`ANTHROPIC_AUTH_TOKEN` 优先，按 bearer；否则 `ANTHROPIC_API_KEY`）是一个供应商，名字和其余设置取第一个 alias；每个 alias 的 `ANTHROPIC_MODEL` 合进 `models`。没有网关地址的（普通 Claude Code）跳过。
 - 模型名带 `[1m]` 的去掉后缀，上下文窗口记成 1000000（node 起的时候按窗口再加回去）。
-- 预览不带 key 和请求头，只有 `has_key` / `has_headers`；确认时 hub 重新读一次，key 和请求头只在 hub 里转手，和手动添加的一样加密保存。
+- 预览不带 key 和请求头，只有 `has_key` / `has_headers`；确认时管理者重新读一次，key 和请求头只在管理者里转手，和手动添加的一样加密保存。
 - 已经有同样 `base_url + key` 的供应商（`existing`）只补模型，别的设置以 Persona 里的为准。
 
 ## 启动器选择器的默认值
@@ -96,7 +120,7 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 
 「模型配置」里选了 Claude Code / Codex 启动器类的供应商时，「具体模型」也从这个启动器的 `/model` 列表里选，和新建 Agent 是同一份列表、同一个选择面板（网页 `ui/ModelPicker.tsx`、安卓设计系统的 `JModelSheet`）。
 
-- **问哪台电脑**：模型配置是 hub 的，不属于某台电脑，所以 `GET /api/v1/model-config/providers/{id}/models` 在有这个启动器的电脑里挑一台在线的去问 node 的 `launchers.models`：`?machine=` 指定的、助手所在的、hub 本机、其余的，按这个顺序（和额度查询的 `quotaMachine` 一样）。~/.zshrc 里的启动器只在定义它的电脑上有；Persona 托管的（`jarvisd launch`）和「Claude Code 默认」每台都能跑。回答带 `machine`，页面写明列表来自哪台。
+- **问哪台电脑**：模型配置是管理者的，不属于某台电脑，所以 `GET /api/v1/model-config/providers/{id}/models` 在有这个启动器的电脑里挑一台在线的去问 node 的 `launchers.models`：`?machine=` 指定的、助手所在的、hub 本机、其余的，按这个顺序（和额度查询的 `quotaMachine` 一样）。~/.zshrc 里的启动器只在定义它的电脑上有；Persona 托管的（`jarvisd launch`）和「Claude Code 默认」每台都能跑。回答带 `machine`，页面写明列表来自哪台。
 - **「默认」是留空**：留空在这里是继承。没选供应商、也没单独设模型时，「默认」那行写继承来的模型（「当前生效」里那个）；选了供应商时是这个供应商的默认模型（列表的默认项）。
 - **列表外的 ID 照样能用**：列表不一定全（网关新上的模型、别的电脑上不同的设置），搜索框里输入的 ID 没有完全对上的条目时，多一行「使用「…」」；已经配着的列表外的模型照样显示，标「列表里没有」。保存仍不是付费可用性测试。
 - **没有列表时**：插件的列表跟着插件走（原来就有），API 类的没有列表；旧 hub、node 太旧（404）或列不出来时退回原来的文本框，列不出来的原因和「重试」写在下面。
@@ -115,7 +139,7 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 
 ## 上游限流
 
-hub 直连 API 的用途（知识处理、收件箱分拣 / 判断 / 草拟、翻译、标题）共用 `server/internal/ai` 的客户端，按连接（地址 + Key，不管哪个用途在用）各有一道闸（`ai/limit.go`）：
+直连 API 的用途（知识处理、收件箱分拣 / 判断 / 草拟、翻译、标题）都在管理者里调，共用 `server/internal/ai` 的客户端，按连接（地址 + Key，不管哪个用途在用）各有一道闸（`ai/limit.go`）：
 
 | 上游的回答 | 认作 | 怎么停 |
 | --- | --- | --- |
@@ -158,5 +182,5 @@ hub 直连 API 的用途（知识处理、收件箱分拣 / 判断 / 草拟、�
 
 - 服务端使用真实 Postgres 验证存取、分类并发更新、四类目录、所有用途统一解析、旧覆盖不参与且不删除、任务三条执行路径（发回来源对话不换那段对话的启动器）、权限不变、缓存与执行器参数。
 - Apple 用 `FakeHub` 测分类与只读范围解码、旧用途跳转所属分类、旧 hub 更新提示、PATCH 的 null 语义及草稿/冲突；UI 用 `ModelConfigurationTests` 验证只显示四行、没有搜索、范围默认折叠且只读、真实分类保存。DEBUG 使用 `-openModelConfiguration YES [-openModelPurpose <分类或旧用途 id>]`。
-- 网页和 Android 有相同协议的纯逻辑测试，目录由 hub 收敛为四类。
+- 网页和 Android 有相同协议的纯逻辑测试，目录由管理者收敛为四类。
 - `python3 -I scripts/mock/test_model_config_mock.py` 启独立 mock，覆盖四类目录、只读用途继承和写入拒绝、保存、冲突、恢复默认与未知用途；不会调用真实模型。

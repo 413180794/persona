@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -9,21 +9,22 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/secretkey"
 )
 
-// ModelBinding is a sparse, non-secret selection; missing fields inherit a declared baseline.
-type ModelBinding struct {
-	Provider string `json:"provider,omitempty"`
-	Model    string `json:"model,omitempty"`
-	Effort   string `json:"effort,omitempty"`
-	// Runtime is how 主对话 runs Claude (proto.AssistantRuntimeCLI or AssistantRuntimeAgentSDK; "" is the CLI). Only the
-	// assistant purpose takes it; it is the purpose's, so it stays when the provider changes.
-	Runtime string `json:"runtime,omitempty"`
-}
+// The model configuration (docs/model-config.md) is the assistant's: the four categories' records (settings
+// model_config.<id>), the providers added in Persona with their keys sealed (models_launchers.go), the hidden ~/.zshrc
+// launchers. Only the assistant reads and writes them; the hub hands over what the machines and the plugins have, and
+// asks only what its plugins need (models_hub.go). Every model call is made from here, with the keys only the
+// assistant opens.
 
 // assistantRuntimes is what GET /model-config offers for 主对话's runtime.
 var assistantRuntimes = []string{proto.AssistantRuntimeCLI, proto.AssistantRuntimeAgentSDK}
@@ -33,6 +34,7 @@ type modelRecord struct {
 	Binding  ModelBinding `json:"binding"`
 }
 
+// ModelProvider is one provider as 设置 › 模型配置 offers it: never its key.
 type ModelProvider struct {
 	ID       string        `json:"id"`
 	Name     string        `json:"name"`
@@ -46,10 +48,13 @@ type ModelProvider struct {
 	Status   string        `json:"status,omitempty"`
 }
 
+type ModelChoice = assistantwire.ModelChoice
+
 type ModelUse struct {
 	Name string `json:"name"`
 }
 
+// ModelPurpose is one purpose (a category, or a use under one) with what it runs on.
 type ModelPurpose struct {
 	ID            string       `json:"id"`
 	CategoryID    string       `json:"category_id,omitempty"`
@@ -72,7 +77,7 @@ type ModelPurpose struct {
 
 var modelCategoryIDs = []string{"assistant", "agent.new", "kb", "inbox.triage"}
 
-// modelPurposes are the uses; Name, Group and Uses hold catalog names (hub-model_config), read in a language by
+// modelPurposes are the uses; Name, Group and Uses hold catalog names (assistant-models), read in a language by
 // localized.
 var modelPurposes = []ModelPurpose{
 	{ID: "assistant", Group: "group_default", Kind: "launcher", Runtimes: assistantRuntimes, Uses: []ModelUse{{Name: "use_chat"}, {Name: "use_schedule"}}},
@@ -98,9 +103,9 @@ var modelPurposes = []ModelPurpose{
 	{ID: "schedule", Group: "group_assistant", Kind: "launcher", Parent: "assistant"},
 }
 
-// mc is a hub-model_config text in l.
+// mc is a assistant-models text in l.
 func mc(l i18n.Lang, name string, args ...i18n.Args) string {
-	return i18n.T(l, "hub-model_config."+name, args...)
+	return i18n.T(l, "assistant-models."+name, args...)
 }
 
 // purposeName is a built-in use's name in l.
@@ -123,8 +128,8 @@ func (p ModelPurpose) localized(l i18n.Lang) ModelPurpose {
 
 // requestCtxLang is the language of what ctx is answering: the request's (http.go puts it in the context), else the
 // user's.
-func (h *Hub) requestCtxLang(ctx context.Context) i18n.Lang {
-	return i18n.From(ctx).Or(h.userLang())
+func (s *Service) requestCtxLang(ctx context.Context) i18n.Lang {
+	return i18n.From(ctx).Or(s.lang(ctx))
 }
 
 func modelCategoryID(id string) string {
@@ -139,40 +144,96 @@ func modelCategoryID(id string) string {
 	return id
 }
 
-var errModelPurposeNotFound = i18n.Err("hub-model_config.err_purpose_not_found")
+var errModelPurposeNotFound = i18n.Err("assistant-models.err_purpose_not_found")
+
+var errModelConflict = i18n.Err("assistant-models.err_conflict")
 
 func modelKey(id string) string { return "model_config." + id }
 
-func (h *Hub) modelRecord(ctx context.Context, id string) (modelRecord, error) {
+// modelsState is the model configuration's: one change at a time, the key that seals the providers' keys, the
+// launchers' model lists, the machines' ~/.zshrc launchers as last seen.
+type modelsState struct {
+	mu sync.Mutex // one change of the configuration at a time (and the test stores without compare-and-set)
+
+	secret *secretkey.Box // secret.key; a key made for this run only in tests
+	quotas quotaCache     // the launchers' quota, kept a minute (models_quota.go)
+
+	cacheMu sync.Mutex
+	cacheAt map[string]time.Time
+	have    map[string]map[string]bool // machine \x00 launcher → its models (ids and what aliases resolve to)
+
+	zshrcMu sync.Mutex
+	zshrc   map[string][]proto.Launcher // machine → its ~/.zshrc launchers (nil: not asked since the start)
+}
+
+func (s *Service) modelRecord(ctx context.Context, id string) (modelRecord, error) {
 	var r modelRecord
-	if h.store != nil {
-		_, err := h.store.Setting(ctx, modelKey(id), &r)
+	if st := s.store(); st != nil {
+		_, err := st.Setting(ctx, modelKey(id), &r)
 		return r, err
 	}
 	return r, nil
 }
 
-func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, error) {
-	l := h.requestCtxLang(ctx)
+// saveModelRecord writes purpose id's record if it is still at revision (the database compares and sets; the test
+// stores without that rely on the caller holding models.mu).
+func (s *Service) saveModelRecord(ctx context.Context, id string, revision int64, b ModelBinding) error {
+	st := s.store()
+	if st == nil {
+		return i18n.Err("assistant-models.err_no_database")
+	}
+	r := modelRecord{Revision: revision + 1, Binding: b}
+	if cas, ok := st.(interface {
+		CompareSetting(context.Context, string, int64, any) (bool, error)
+	}); ok {
+		updated, err := cas.CompareSetting(ctx, modelKey(id), revision, r)
+		if err != nil {
+			return err
+		}
+		if !updated {
+			return errModelConflict
+		}
+		return nil
+	}
+	var old modelRecord
+	if _, err := st.Setting(ctx, modelKey(id), &old); err != nil {
+		return err
+	}
+	if old.Revision != revision {
+		return errModelConflict
+	}
+	return st.PutSetting(ctx, modelKey(id), r)
+}
+
+// saveModel is saveModelRecord at r's revision, one change at a time.
+func (s *Service) saveModel(ctx context.Context, id string, r modelRecord) error {
+	s.models.mu.Lock()
+	defer s.models.mu.Unlock()
+	return s.saveModelRecord(ctx, id, r.Revision, r.Binding)
+}
+
+func (s *Service) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, error) {
+	l := s.requestCtxLang(ctx)
 	for _, p := range modelPurposes {
 		if p.ID == id {
 			p = p.localized(l)
 			p.CategoryID = modelCategoryID(id)
 			if p.Kind == "launcher" && p.ID != "agent.new" {
-				p.MachineID = h.assistantProfile().MachineID
+				p.MachineID = s.settings(ctx).MachineID
 			}
-			if h.cfg != nil {
-				if p.ID == "inbox.agent" && h.localMachine(h.cfg.Inbox.Agent.Machine) != nil {
-					p.MachineID = h.cfg.Inbox.Agent.Machine
+			if p.ID == "inbox.agent" {
+				h := s.hello(ctx)
+				if m := h.Models.InboxAgentMachine; m != "" && slices.Contains(h.Assistant.Machines, m) {
+					p.MachineID = m
 				}
 			}
 			return p, nil
 		}
 	}
 	if strings.HasPrefix(id, "task.") {
-		tasks, ok := h.assistantTasks() // the assistant's scheduled tasks, as it reported them
-		if !ok {
-			return ModelPurpose{}, i18n.Err("hub-model_config.err_read_tasks")
+		tasks := s.taskViews(ctx)
+		if tasks == nil {
+			return ModelPurpose{}, i18n.Err("assistant-models.err_read_tasks")
 		}
 		for _, t := range tasks {
 			if id == "task."+t.ID {
@@ -180,9 +241,9 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 			}
 		}
 	}
-	if strings.HasPrefix(id, "plugin.") && h.extensions != nil {
-		for _, p := range h.extensions.list() {
-			if id == "plugin."+p.ID && p.Kind == "voice" {
+	if strings.HasPrefix(id, "plugin.") {
+		for _, p := range s.voicePlugins(ctx) {
+			if id == "plugin."+p.ID {
 				return ModelPurpose{ID: id, Name: p.Name, Group: mc(l, "group_extensions"), Kind: "plugin"}, nil
 			}
 		}
@@ -190,43 +251,45 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 	return ModelPurpose{}, errModelPurposeNotFound
 }
 
-// Legacy connections remain server-side and retain their existing field-wise inheritance.
-func (h *Hub) legacyModelConfig(id string) ai.Config {
-	var c ai.Config
-	if h.cfg != nil {
-		c = h.cfg.AI
-	}
-	if h.ai != nil && c.BaseURL == "" {
-		c = h.ai.Config()
-	}
+// legacyModelConfig is hub.json's connection by its provider id, with its field-wise inheritance (Hello.Models).
+func (s *Service) legacyModelConfig(ctx context.Context, id string) ai.Config {
+	m := s.hello(ctx).Models
+	c := m.AI
 	switch id {
 	case "legacy.triage":
-		if h.cfg != nil && h.cfg.Inbox.TriageAI != nil {
-			c = h.cfg.Inbox.TriageAI.Over(c)
-		} else if h.triageAI != nil {
-			c = h.triageAI.Config()
+		if m.TriageAI != nil {
+			c = m.TriageAI.Over(c)
 		}
 	case "legacy.judge":
-		if h.cfg != nil && h.cfg.Inbox.JudgeAI != nil {
-			c = h.cfg.Inbox.JudgeAI.Over(c)
-		} else if h.judgeAI != nil {
-			c = h.judgeAI.Config()
+		if m.JudgeAI != nil {
+			c = m.JudgeAI.Over(c)
 		}
 	case "legacy.kb":
-		if h.cfg != nil && h.cfg.KB.AI != nil {
-			c = h.cfg.KB.AI.Over(c)
+		if m.KBAI != nil {
+			c = m.KBAI.Over(c)
 		} else {
-			c = h.legacyModelConfig("legacy.triage")
+			c = s.legacyModelConfig(ctx, "legacy.triage")
 		}
 	}
 	return c
 }
 
-func (h *Hub) modelProviders(ctx context.Context) []ModelProvider {
-	l := h.requestCtxLang(ctx)
+// voicePlugins are the voice plugins and their models, as the hub has them (plugins.voice).
+func (s *Service) voicePlugins(ctx context.Context) []assistantwire.VoicePlugin {
+	var res struct {
+		Plugins []assistantwire.VoicePlugin `json:"plugins"`
+	}
+	if err := s.appCall(ctx, AppPlugins, assistantwire.PluginsVoice, map[string]any{}, &res); err != nil {
+		s.logf("assistant: voice plugins: %v", err)
+	}
+	return res.Plugins
+}
+
+func (s *Service) modelProviders(ctx context.Context) []ModelProvider {
+	l := s.requestCtxLang(ctx)
 	out := []ModelProvider{}
 	for _, x := range []struct{ id, name string }{{"legacy.ai", mc(l, "provider_legacy_ai")}, {"legacy.triage", mc(l, "provider_legacy_triage")}, {"legacy.judge", mc(l, "provider_legacy_judge")}, {"legacy.kb", mc(l, "provider_legacy_kb")}} {
-		c := h.legacyModelConfig(x.id)
+		c := s.legacyModelConfig(ctx, x.id)
 		if c.BaseURL == "" {
 			continue
 		}
@@ -236,7 +299,7 @@ func (h *Hub) modelProviders(ctx context.Context) []ModelProvider {
 		}
 		out = append(out, ModelProvider{ID: x.id, Name: x.name, Kind: "api", API: apiName, Model: c.Model, HasKey: c.APIKeyFile != "" || c.APIKey != ""})
 	}
-	for _, v := range h.launcherViews(ctx) {
+	for _, v := range s.launcherViews(ctx) {
 		kind := v.Kind
 		if kind == "" {
 			kind = "launcher"
@@ -250,25 +313,16 @@ func (h *Hub) modelProviders(ctx context.Context) []ModelProvider {
 	if !slices.ContainsFunc(out, func(p ModelProvider) bool { return p.ID == "launcher.claude" }) {
 		out = append(out, ModelProvider{ID: "launcher.claude", Name: mc(l, "provider_claude_default"), Kind: "launcher"})
 	}
-	if h.extensions != nil {
-		for _, p := range h.extensions.list() {
-			if p.Kind == "voice" {
-				models, err := h.extensionModelChoices(ctx, "plugin."+p.ID)
-				provider := ModelProvider{ID: "plugin." + p.ID, Name: p.Name, Kind: "plugin", Model: models.Default, Models: models.Models}
-				if err != nil {
-					provider.Status = i18n.Localize(err, l)
-				}
-				out = append(out, provider)
-			}
-		}
+	for _, p := range s.voicePlugins(ctx) {
+		out = append(out, ModelProvider{ID: "plugin." + p.ID, Name: p.Name, Kind: "plugin", Model: p.Default, Models: p.Models, Status: p.Error})
 	}
 	return out
 }
 
-func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, string, error) {
-	l := h.requestCtxLang(ctx)
+func (s *Service) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, string, error) {
+	l := s.requestCtxLang(ctx)
 	if p.Parent != "" {
-		b, err := h.resolveModel(ctx, p.Parent)
+		b, err := s.resolveModel(ctx, p.Parent)
 		return b, p.Parent, err
 	}
 	if p.Kind == "api" {
@@ -279,18 +333,19 @@ func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, 
 		if p.ID == "kb" {
 			provider = "legacy.kb"
 		}
-		c := h.legacyModelConfig(provider)
+		c := s.legacyModelConfig(ctx, provider)
 		if c.BaseURL == "" {
-			// No hub.json connection for this use: fall back to a provider the hub can call itself, instead of failing
-			// while a keyed Claude connection sits unused (#388). Not stored, so a later explicit choice still wins.
-			if name := h.fallbackAPIProvider(ctx); name != "" {
+			// No hub.json connection for this use: fall back to a provider the assistant can call itself, instead of
+			// failing while a keyed Claude connection sits unused (#388). Not stored, so a later explicit choice still
+			// wins.
+			if name := s.fallbackAPIProvider(ctx); name != "" {
 				return ModelBinding{Provider: "launcher." + name}, mc(l, modelAutoSource), nil
 			}
 		}
 		return ModelBinding{Provider: provider, Model: c.Model, Effort: c.ReasoningEffort}, mc(l, "source_hub_config"), nil
 	}
 	if p.ID == "assistant" { // the assistant's own launcher (its settings, else hub.json's)
-		return ModelBinding{Provider: "launcher." + h.assistantProfile().Launcher}, mc(l, "source_assistant_default"), nil
+		return ModelBinding{Provider: "launcher." + s.settings(ctx).Launcher}, mc(l, "source_assistant_default"), nil
 	}
 	if p.Kind == "launcher" {
 		return ModelBinding{Provider: "launcher.claude"}, mc(l, "source_default"), nil
@@ -312,31 +367,29 @@ const modelUnverified = "未验证"
 // fallbackAPIProvider names the managed connection an unconfigured API use runs on: the first direct API provider,
 // else the first keyed launcher speaking Messages (Responses launchers cannot serve these uses). Hidden ones and
 // ones without an address, a default model or a key are skipped. "" when there is none.
-func (h *Hub) fallbackAPIProvider(ctx context.Context) string {
-	stored := h.storedLaunchers(ctx)
-	hidden := h.hiddenLaunchers(ctx)
-	usable := func(s storedLauncher) bool {
-		return !slices.Contains(hidden, s.Name) && s.BaseURL != "" && s.Model != "" && s.KeySealed != ""
+func (s *Service) fallbackAPIProvider(ctx context.Context) string {
+	stored := s.storedLaunchers(ctx)
+	hidden := s.hiddenLaunchers(ctx)
+	usable := func(l storedLauncher) bool {
+		return !slices.Contains(hidden, l.Name) && l.BaseURL != "" && l.Model != "" && l.KeySealed != ""
 	}
-	for _, s := range stored {
-		if s.Kind == "api" && usable(s) {
-			return s.Name
+	for _, l := range stored {
+		if l.Kind == "api" && usable(l) {
+			return l.Name
 		}
 	}
-	for _, s := range stored {
-		if s.Kind != "api" && s.API != "responses" && usable(s) {
-			return s.Name
+	for _, l := range stored {
+		if l.Kind != "api" && l.API != "responses" && usable(l) {
+			return l.Name
 		}
 	}
 	return ""
 }
 
+// mergeModel puts over's choices on base: another provider starts from nothing (its model and effort are its own).
 func mergeModel(base, over ModelBinding) ModelBinding {
 	if over.Provider != "" && over.Provider != base.Provider {
 		base = ModelBinding{Provider: over.Provider, Runtime: base.Runtime}
-	}
-	if over.Provider != "" {
-		base.Provider = over.Provider
 	}
 	if over.Model != "" {
 		base.Model = over.Model
@@ -350,21 +403,22 @@ func mergeModel(base, over ModelBinding) ModelBinding {
 	return base
 }
 
-func (h *Hub) resolveModel(ctx context.Context, id string) (ModelBinding, error) {
-	p, err := h.modelPurposeDef(ctx, id)
+// resolveModel is what purpose id runs on: its category's record over its baseline.
+func (s *Service) resolveModel(ctx context.Context, id string) (ModelBinding, error) {
+	p, err := s.modelPurposeDef(ctx, id)
 	if err != nil {
 		return ModelBinding{}, err
 	}
 	if p.CategoryID != "" && p.CategoryID != id {
-		return h.resolveModel(ctx, p.CategoryID)
+		return s.resolveModel(ctx, p.CategoryID)
 	}
-	base, _, err := h.modelBaseline(ctx, p)
+	base, _, err := s.modelBaseline(ctx, p)
 	if err != nil {
 		return base, err
 	}
-	r, err := h.modelRecord(ctx, id)
+	r, err := s.modelRecord(ctx, id)
 	if err != nil {
-		return base, i18n.Err("hub-model_config.err_read_config", i18n.Args{"error": err.Error()})
+		return base, i18n.Err("assistant-models.err_read_config", i18n.Args{"error": err.Error()})
 	}
 	return mergeModel(base, r.Binding), nil
 }
@@ -376,21 +430,22 @@ func launcherProvider(name string) string {
 	return "launcher." + name
 }
 
-func (h *Hub) apiConfig(ctx context.Context, b ModelBinding) (ai.Config, error) {
+// apiConfig is the connection an API binding calls, with its key opened.
+func (s *Service) apiConfig(ctx context.Context, b ModelBinding) (ai.Config, error) {
 	var c ai.Config
 	if strings.HasPrefix(b.Provider, "legacy.") {
-		c = h.legacyModelConfig(b.Provider)
+		c = s.legacyModelConfig(ctx, b.Provider)
 	} else if name, ok := strings.CutPrefix(b.Provider, "launcher."); ok {
 		found := false
-		for _, s := range h.storedLaunchers(ctx) {
-			if s.Name == name {
-				if s.Kind != "api" && s.API == "responses" {
-					return c, i18n.Err("hub-model_config.err_launcher_not_responses")
+		for _, l := range s.storedLaunchers(ctx) {
+			if l.Name == name {
+				if l.Kind != "api" && l.API == "responses" {
+					return c, i18n.Err("assistant-models.err_launcher_not_responses")
 				}
-				c = ai.Config{API: s.API, BaseURL: s.BaseURL, Model: s.Model, Bearer: s.BearerAuth()}
-				key, err := h.openKey(s.KeySealed)
+				c = ai.Config{API: l.API, BaseURL: l.BaseURL, Model: l.Model, Bearer: l.BearerAuth()}
+				key, err := s.openKey(l.KeySealed)
 				if err != nil {
-					return c, i18n.Err("hub-model_config.err_key_decrypt")
+					return c, i18n.Err("assistant-models.err_key_decrypt")
 				}
 				c.APIKey = key
 				found = true
@@ -398,17 +453,17 @@ func (h *Hub) apiConfig(ctx context.Context, b ModelBinding) (ai.Config, error) 
 			}
 		}
 		if !found {
-			return c, i18n.Err("hub-model_config.err_not_callable")
+			return c, i18n.Err("assistant-models.err_not_callable")
 		}
 	} else {
-		return c, i18n.Err("hub-model_config.err_not_api")
+		return c, i18n.Err("assistant-models.err_not_api")
 	}
 	if b.Model != "" {
 		c.Model = b.Model
 	}
 	c.ReasoningEffort = b.Effort
 	if c.API != "" && c.API != "messages" && c.API != "responses" {
-		return c, i18n.Err("hub-model_config.err_api_protocol")
+		return c, i18n.Err("assistant-models.err_api_protocol")
 	}
 	if c.API != "responses" && b.Effort != "" {
 		c.ReasoningEffort = ""
@@ -416,13 +471,14 @@ func (h *Hub) apiConfig(ctx context.Context, b ModelBinding) (ai.Config, error) 
 	return c, nil
 }
 
-func (h *Hub) purposeModel(id string) *ai.Client {
+// purposeModel is purpose id's model, resolved at the start of every request.
+func (s *Service) purposeModel(id string) *ai.Client {
 	return ai.NewResolved(func(ctx context.Context) (*ai.Client, error) {
-		b, err := h.resolveModel(ctx, id)
+		b, err := s.resolveModel(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		c, err := h.apiConfig(ctx, b)
+		c, err := s.apiConfig(ctx, b)
 		if err != nil {
 			return nil, err
 		}
@@ -430,16 +486,43 @@ func (h *Hub) purposeModel(id string) *ai.Client {
 	})
 }
 
-func (h *Hub) modelFingerprint(ctx context.Context, id string) (string, error) {
-	b, err := h.resolveModel(ctx, id)
+// modelUsable says whether an API binding can be called: it resolves to an address, a model and a key.
+func (s *Service) modelUsable(ctx context.Context, b ModelBinding) bool {
+	c, err := s.apiConfig(ctx, b)
+	return err == nil && c.Configured()
+}
+
+func (s *Service) modelFingerprint(ctx context.Context, id string) (string, error) {
+	b, err := s.resolveModel(ctx, id)
 	if err != nil {
 		return "", err
 	}
-	return h.modelBindingFingerprint(ctx, b)
+	return s.modelBindingFingerprint(ctx, b), nil
 }
 
-func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProvider) (ModelPurpose, error) {
-	p, err := h.modelPurposeDef(ctx, id)
+// modelBindingFingerprint changes when what the binding runs on does (the provider's settings, the key sealed anew).
+func (s *Service) modelBindingFingerprint(ctx context.Context, b ModelBinding) string {
+	raw, _ := json.Marshal(b)
+	if strings.HasPrefix(b.Provider, "legacy.") {
+		v, _ := json.Marshal(s.legacyModelConfig(ctx, b.Provider))
+		raw = append(raw, v...)
+	}
+	if name, ok := strings.CutPrefix(b.Provider, "launcher."); ok {
+		for _, l := range s.storedLaunchers(ctx) {
+			if l.Name == name {
+				v, _ := json.Marshal(l)
+				raw = append(raw, v...)
+				break
+			}
+		}
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+// modelPurpose is purpose id as 设置 › 模型配置 shows it: what it is set to, what it runs on, and how that stands.
+func (s *Service) modelPurpose(ctx context.Context, id string, providers []ModelProvider) (ModelPurpose, error) {
+	p, err := s.modelPurposeDef(ctx, id)
 	if err != nil {
 		return p, err
 	}
@@ -447,7 +530,7 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 	if p.CategoryID != "" {
 		recordID = p.CategoryID
 	}
-	r, err := h.modelRecord(ctx, recordID)
+	r, err := s.modelRecord(ctx, recordID)
 	if err != nil {
 		return p, err
 	}
@@ -456,14 +539,15 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 	if readOnly {
 		p.Override = ModelBinding{}
 	}
-	p.Effective, err = h.resolveModel(ctx, id)
+	p.Effective, err = s.resolveModel(ctx, id)
 	if err != nil {
 		return p, err
 	}
-	_, p.InheritedFrom, err = h.modelBaseline(ctx, p)
+	_, p.InheritedFrom, err = s.modelBaseline(ctx, p)
 	if err != nil {
 		return p, err
 	}
+	stored := s.storedLaunchers(ctx)
 	p.Fields = []string{"provider", "model"}
 	p.ProviderIDs = []string{}
 	for _, v := range providers {
@@ -472,9 +556,9 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 			compatible = v.API != "responses"
 		}
 		if p.Kind == "api" && v.Kind == "launcher" {
-			for _, s := range h.storedLaunchers(ctx) {
-				if v.ID == "launcher."+s.Name {
-					compatible = s.API != "responses"
+			for _, l := range stored {
+				if v.ID == "launcher."+l.Name {
+					compatible = l.API != "responses"
 					break
 				}
 			}
@@ -503,17 +587,17 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 	if len(p.Runtimes) > 0 {
 		p.Fields = append(p.Fields, "runtime")
 	}
-	l := h.requestCtxLang(ctx)
+	l := s.requestCtxLang(ctx)
 	p.Status = modelUnverified
 	if !slices.Contains(p.ProviderIDs, p.Effective.Provider) {
 		p.Status = mc(l, "status_provider_incompatible")
-		if p.Kind == "api" && strings.HasPrefix(p.Effective.Provider, "legacy.") && h.legacyModelConfig(p.Effective.Provider).BaseURL == "" {
+		if p.Kind == "api" && strings.HasPrefix(p.Effective.Provider, "legacy.") && s.legacyModelConfig(ctx, p.Effective.Provider).BaseURL == "" {
 			p.Status = mc(l, modelNoAPIStatus)
 		}
 	} else if p.Kind == "api" && p.Effective.Model == "" {
 		p.Status = mc(l, "status_no_model")
 	} else if p.Kind == "api" {
-		if config, e := h.apiConfig(ctx, p.Effective); e != nil {
+		if config, e := s.apiConfig(ctx, p.Effective); e != nil {
 			p.Status = i18n.Localize(e, l)
 		} else if config.APIKey == "" && config.APIKeyFile == "" {
 			p.Status = mc(l, "status_no_credentials")
@@ -528,13 +612,10 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 			}
 		}
 	} else if p.Kind == "launcher" && p.MachineID != "" {
-		if m := h.localMachine(p.MachineID); m != nil {
-			m.mu.Lock()
-			online, info := m.online, m.info
-			m.mu.Unlock()
-			if !online {
+		if d, ok := s.device(ctx, p.MachineID); ok {
+			if !d.Online {
 				p.Status = mc(l, "status_machine_offline")
-			} else if info.Version != "" && !info.ModelConfiguration {
+			} else if d.Version != "" && !d.ModelConfiguration {
 				p.Status = mc(l, "status_node_outdated")
 			}
 		}
@@ -564,7 +645,7 @@ func patchModel(b ModelBinding, in modelPatch) (ModelBinding, error) {
 		var provider string
 		if string(in.Provider) != "null" {
 			if err := json.Unmarshal(in.Provider, &provider); err != nil {
-				return b, i18n.Err("hub-model_config.err_provider_type")
+				return b, i18n.Err("assistant-models.err_provider_type")
 			}
 		}
 		if provider != b.Provider {
@@ -584,15 +665,15 @@ func patchModel(b ModelBinding, in modelPatch) (ModelBinding, error) {
 		}
 		var v string
 		if err := json.Unmarshal(f.raw, &v); err != nil {
-			return b, i18n.Err("hub-model_config.err_field_type")
+			return b, i18n.Err("assistant-models.err_field_type")
 		}
 		if v == "" || strings.TrimSpace(v) != v || strings.ContainsAny(v, "\r\n\x00") || len(v) > 512 {
-			return b, i18n.Err("hub-model_config.err_field_invalid")
+			return b, i18n.Err("assistant-models.err_field_invalid")
 		}
 		*f.dst = v
 	}
 	if b.Runtime != "" && !slices.Contains(assistantRuntimes, b.Runtime) {
-		return b, i18n.Err("hub-model_config.err_runtime_invalid")
+		return b, i18n.Err("assistant-models.err_runtime_invalid")
 	}
 	if b.Runtime == proto.AssistantRuntimeCLI {
 		b.Runtime = "" // the default, stored as none: an explicit cli fingerprints like no choice
@@ -600,37 +681,7 @@ func patchModel(b ModelBinding, in modelPatch) (ModelBinding, error) {
 	return b, nil
 }
 
-func (h *Hub) saveModelRecord(ctx context.Context, id string, revision int64, b ModelBinding) error {
-	if h.store == nil {
-		return i18n.Err("hub-model_config.err_no_database")
-	}
-	r := modelRecord{Revision: revision + 1, Binding: b}
-	if s, ok := h.store.(interface {
-		CompareSetting(context.Context, string, int64, any) (bool, error)
-	}); ok {
-		updated, err := s.CompareSetting(ctx, modelKey(id), revision, r)
-		if err != nil {
-			return err
-		}
-		if !updated {
-			return errModelConflict
-		}
-		return nil
-	}
-	// Test stores share this lock with legacy writes; production always uses database CAS.
-	old, err := h.modelRecord(ctx, id)
-	if err != nil {
-		return err
-	}
-	if old.Revision != revision {
-		return errModelConflict
-	}
-	return h.store.PutSetting(ctx, modelKey(id), r)
-}
-
-var errModelConflict = i18n.Err("hub-model_config.err_conflict")
-
-func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding, providers []ModelProvider) error {
+func (s *Service) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding, providers []ModelProvider) error {
 	var provider *ModelProvider
 	for i := range providers {
 		if providers[i].ID == b.Provider {
@@ -639,56 +690,57 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 		}
 	}
 	if provider == nil {
-		return i18n.Err("hub-model_config.err_provider_missing")
+		return i18n.Err("assistant-models.err_provider_missing")
 	}
 	if !slices.Contains(p.ProviderIDs, b.Provider) {
-		return i18n.Err("hub-model_config.err_provider_unsupported")
+		return i18n.Err("assistant-models.err_provider_unsupported")
 	}
 	if b.Effort != "" && !slices.Contains([]string{"low", "medium", "high", "xhigh", "max"}, b.Effort) {
-		return i18n.Err("hub-model_config.err_effort_unsupported")
+		return i18n.Err("assistant-models.err_effort_unsupported")
 	}
 	if p.Kind == "api" {
-		_, err := h.apiConfig(ctx, b)
+		_, err := s.apiConfig(ctx, b)
 		return err
 	}
 	if p.Kind == "plugin" {
 		if b.Effort != "" {
-			return i18n.Err("hub-model_config.err_extension_effort")
+			return i18n.Err("assistant-models.err_extension_effort")
 		}
 		if b.Model != "" {
-			models, err := h.extensionModelChoices(ctx, p.ID)
-			if err != nil {
-				return err
+			if provider.Status != "" {
+				return errors.New(provider.Status)
 			}
-			if !slices.ContainsFunc(models.Models, func(m ModelChoice) bool { return m.ID == b.Model }) {
-				return i18n.Err("hub-model_config.err_extension_model")
+			if !slices.ContainsFunc(provider.Models, func(m ModelChoice) bool { return m.ID == b.Model }) {
+				return i18n.Err("assistant-models.err_extension_model")
 			}
 		}
 		return nil
 	}
 	if p.Kind == "launcher" {
 		if len(provider.Machines) > 0 && p.MachineID != "" && !slices.Contains(provider.Machines, p.MachineID) {
-			return i18n.Err("hub-model_config.err_launcher_not_on_machine")
+			return i18n.Err("assistant-models.err_launcher_not_on_machine")
 		}
 		if b.Model != "" {
-			m := h.localMachine(p.MachineID)
-			if m == nil && len(provider.Machines) > 0 {
-				m = h.localMachine(provider.Machines[0])
+			machine := ""
+			if _, ok := s.device(ctx, p.MachineID); ok {
+				machine = p.MachineID
+			} else if len(provider.Machines) > 0 {
+				if _, ok := s.device(ctx, provider.Machines[0]); ok {
+					machine = provider.Machines[0]
+				}
 			}
-			if m != nil {
+			if machine != "" {
 				var result struct {
 					Agent string `json:"agent"`
 				}
-				name := strings.TrimPrefix(b.Provider, "launcher.")
-				params := map[string]any{"name": name, "model": b.Model, "configured": m.configuredLauncher(name)}
-				if err := m.call(ctx, "launchers.model.check", params, &result); err != nil {
-					return i18n.Err("hub-model_config.err_check_model", i18n.Args{"error": i18n.Localize(err, h.requestCtxLang(ctx))})
+				if err := s.call(ctx, machine, assistantwire.DeviceLaunchersModelCheck, s.launcherParams(ctx, machine, strings.TrimPrefix(b.Provider, "launcher."), map[string]any{"model": b.Model}), &result); err != nil {
+					return i18n.Err("assistant-models.err_check_model", i18n.Args{"error": i18n.Localize(err, s.requestCtxLang(ctx))})
 				}
 				if p.ID == "agent.new" && result.Agent != "claude" && result.Agent != "codex" {
-					return i18n.Err("hub-model_config.err_agent_launcher")
+					return i18n.Err("assistant-models.err_agent_launcher")
 				}
 				if p.ID == "agent.new" && result.Agent == "codex" && b.Effort != "" {
-					return i18n.Err("hub-model_config.err_codex_effort")
+					return i18n.Err("assistant-models.err_codex_effort")
 				}
 			}
 		}
@@ -696,141 +748,166 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 	return nil
 }
 
-func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
-	api.HandleFunc("GET /api/v1/model-config", func(w http.ResponseWriter, r *http.Request) {
+// providerModelUses are the categories that run on provider: a provider in use is not deleted underneath them.
+func (s *Service) providerModelUses(ctx context.Context, provider string) ([]string, error) {
+	uses := []string{}
+	for _, id := range modelCategoryIDs {
+		p, err := s.modelPurposeDef(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		b, err := s.resolveModel(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if b.Provider == provider {
+			uses = append(uses, p.Name)
+		}
+	}
+	return uses, nil
+}
+
+// triageInUse refuses a change that leaves inbox.triage uncallable while plugins that need it are on: 422
+// triage_model_in_use, naming them (not 409: the apps read a 409 from model-config as an edit conflict and would hide
+// the message; a 422 they show as it is). nil when the change may go (docs/extensions.md「收件箱的通用规则」).
+func (s *Service) triageInUse(ctx context.Context, id string, effective ModelBinding) (map[string]any, error) {
+	if id != "inbox.triage" || s.modelUsable(ctx, effective) {
+		return nil, nil
+	}
+	var res struct {
+		Names []string `json:"names"`
+	}
+	if err := s.appCall(ctx, AppPlugins, assistantwire.PluginsNeedTriage, map[string]any{}, &res); err != nil {
+		return nil, err
+	}
+	if len(res.Names) == 0 {
+		return nil, nil
+	}
+	l := s.requestCtxLang(ctx)
+	return map[string]any{"code": "triage_model_in_use", "plugins": res.Names,
+		"error": i18n.T(l, "assistant-models.triage_in_use", i18n.Args{"names": strings.Join(res.Names, i18n.T(l, "assistant-models.list_separator"))})}, nil
+}
+
+func (s *Service) modelConfigRoutes() {
+	s.handle("GET /api/v1/model-config", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		providers := h.modelProviders(ctx)
+		providers := s.modelProviders(ctx)
 		purposes := []ModelPurpose{}
 		for _, id := range modelCategoryIDs {
-			p, err := h.modelPurpose(ctx, id, providers)
+			p, err := s.modelPurpose(ctx, id, providers)
 			if err != nil {
-				writeErr(w, 500, err)
+				apierr.Write(w, 500, err)
 				return
 			}
 			purposes = append(purposes, p)
 		}
-		writeJSON(w, map[string]any{"purposes": purposes, "providers": providers})
+		apierr.WriteJSON(w, map[string]any{"purposes": purposes, "providers": providers})
 	})
 	detail := func(w http.ResponseWriter, r *http.Request) {
-		providers := h.modelProviders(r.Context())
-		p, err := h.modelPurpose(r.Context(), r.PathValue("id"), providers)
+		providers := s.modelProviders(r.Context())
+		p, err := s.modelPurpose(r.Context(), r.PathValue("id"), providers)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if errors.Is(err, errModelPurposeNotFound) {
 				status = http.StatusNotFound
 			}
-			writeErr(w, status, err)
+			apierr.Write(w, status, err)
 			return
 		}
-		writeJSON(w, map[string]any{"purpose": p, "providers": providers})
+		apierr.WriteJSON(w, map[string]any{"purpose": p, "providers": providers})
 	}
-	api.HandleFunc("GET /api/v1/model-config/purposes/{id}", detail)
-	api.HandleFunc("GET /api/v1/model-config/providers/{id}/models", h.providerModels)
-	api.HandleFunc("PATCH /api/v1/model-config/purposes/{id}", func(w http.ResponseWriter, r *http.Request) {
+	s.handle("GET /api/v1/model-config/purposes/{id}", detail)
+	s.handle("GET /api/v1/model-config/providers/{id}/models", s.providerModels)
+	s.handle("PATCH /api/v1/model-config/purposes/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var in modelPatch
 		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&in); err != nil {
-			writeErr(w, 400, err)
+			apierr.Write(w, 400, err)
 			return
 		}
 		if in.Revision == nil || *in.Revision < 0 {
-			writeErr(w, 400, i18n.Err("hub-model_config.err_revision_required"))
+			apierr.Write(w, 400, i18n.Err("assistant-models.err_revision_required"))
 			return
 		}
-		h.modelMu.Lock()
-		defer h.modelMu.Unlock()
+		s.models.mu.Lock()
+		defer s.models.mu.Unlock()
 		ctx, id := r.Context(), r.PathValue("id")
-		providers := h.modelProviders(ctx)
-		p, err := h.modelPurpose(ctx, id, providers)
+		providers := s.modelProviders(ctx)
+		p, err := s.modelPurpose(ctx, id, providers)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if errors.Is(err, errModelPurposeNotFound) {
 				status = http.StatusNotFound
 			}
-			writeErr(w, status, err)
+			apierr.Write(w, status, err)
 			return
 		}
 		if p.CategoryID != "" && p.CategoryID != id {
-			writeErr(w, http.StatusBadRequest, i18n.Err("hub-model_config.err_purpose_readonly"))
+			apierr.Write(w, http.StatusBadRequest, i18n.Err("assistant-models.err_purpose_readonly"))
 			return
 		}
 		if p.Revision != *in.Revision {
-			writeErr(w, 409, errModelConflict)
+			apierr.Write(w, 409, errModelConflict)
 			return
 		}
 		if in.Runtime != nil && string(in.Runtime) != "null" && len(p.Runtimes) == 0 {
-			writeErr(w, 400, i18n.Err("hub-model_config.err_runtime_assistant_only"))
+			apierr.Write(w, 400, i18n.Err("assistant-models.err_runtime_assistant_only"))
 			return
 		}
 		b, err := patchModel(p.Override, in)
 		if err != nil {
-			writeErr(w, 400, err)
+			apierr.Write(w, 400, err)
 			return
 		}
-		base, _, err := h.modelBaseline(ctx, p)
+		base, _, err := s.modelBaseline(ctx, p)
 		if err != nil {
-			writeErr(w, 500, err)
+			apierr.Write(w, 500, err)
 			return
 		}
 		effective := mergeModel(base, b)
-		if body := h.triageInUse(ctx, id, effective); body != nil { // plugins that need it are on (extension_inbox.go)
-			writeErrorBody(w, http.StatusUnprocessableEntity, body)
+		if body, err := s.triageInUse(ctx, id, effective); err != nil {
+			apierr.Write(w, http.StatusServiceUnavailable, err)
+			return
+		} else if body != nil { // plugins that need it are on
+			apierr.WriteBody(w, http.StatusUnprocessableEntity, body)
 			return
 		}
 		if in.Effort != nil && string(in.Effort) != "null" && p.Kind == "api" {
-			config, e := h.apiConfig(ctx, effective)
+			config, e := s.apiConfig(ctx, effective)
 			if e != nil {
-				writeErr(w, 400, e)
+				apierr.Write(w, 400, e)
 				return
 			}
 			if config.API != "responses" {
-				writeErr(w, 400, i18n.Err("hub-model_config.err_api_effort"))
+				apierr.Write(w, 400, i18n.Err("assistant-models.err_api_effort"))
 				return
 			}
 		}
 		if b != (ModelBinding{}) {
-			if err = h.validateModel(ctx, p, effective, providers); err != nil {
-				writeErr(w, 400, err)
+			if err = s.validateModel(ctx, p, effective, providers); err != nil {
+				apierr.Write(w, 400, err)
 				return
 			}
 		}
-		err = h.saveModelRecord(ctx, id, p.Revision, b)
-		if err != nil {
+		if err = s.saveModelRecord(ctx, id, p.Revision, b); err != nil {
 			status := 500
 			if errors.Is(err, errModelConflict) {
 				status = 409
 			}
-			writeErr(w, status, err)
+			apierr.Write(w, status, err)
 			return
 		}
 		detail(w, r)
 	})
 }
 
-func (h *Hub) modelBindingFingerprint(ctx context.Context, b ModelBinding) (string, error) {
-	raw, _ := json.Marshal(b)
-	if strings.HasPrefix(b.Provider, "legacy.") {
-		c := h.legacyModelConfig(b.Provider)
-		v, _ := json.Marshal(c)
-		raw = append(raw, v...)
-	}
-	if name, ok := strings.CutPrefix(b.Provider, "launcher."); ok {
-		for _, s := range h.storedLaunchers(ctx) {
-			if s.Name == name {
-				v, _ := json.Marshal(s)
-				raw = append(raw, v...)
-				break
-			}
-		}
-	}
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:]), nil
-}
+// ---- what a node call runs on ----
 
-// applyModel selects the execution profile without mutating permission mode.
-func (h *Hub) applyModel(ctx context.Context, id string, params map[string]any) error {
-	b, err := h.resolveModel(ctx, id)
+// applyModel fills params (a node call's: session.start, assistant.send…) with what purpose id runs on; a launcher,
+// model or effort already in params is this call's own pick. The permission mode is left as it is.
+func (s *Service) applyModel(ctx context.Context, id string, params map[string]any) error {
+	b, err := s.resolveModel(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -843,12 +920,12 @@ func (h *Hub) applyModel(ctx context.Context, id string, params map[string]any) 
 	if effort, _ := params["effort"].(string); effort != "" {
 		b.Effort = effort
 	}
-	return h.finishModel(ctx, id, params, b)
+	return s.finishModel(ctx, id, params, b)
 }
 
 // applyPickedModel is applyModel for a launcher/model picked for one send (the chat's menu): with no model the
 // launcher's own default stays, instead of the purpose's configured one.
-func (h *Hub) applyPickedModel(ctx context.Context, params map[string]any) error {
+func (s *Service) applyPickedModel(ctx context.Context, params map[string]any) error {
 	name, _ := params["launcher"].(string)
 	if name == "" {
 		return nil
@@ -861,29 +938,29 @@ func (h *Hub) applyPickedModel(ctx context.Context, params map[string]any) error
 		b.Effort = e
 	}
 	// A pick is a launcher and model for one message; the runtime stays 主对话's.
-	configured, err := h.resolveModel(ctx, "assistant")
+	configured, err := s.resolveModel(ctx, "assistant")
 	if err != nil {
 		return err
 	}
 	b.Runtime = configured.Runtime
-	return h.finishModel(ctx, "assistant", params, b)
+	return s.finishModel(ctx, "assistant", params, b)
 }
 
 // finishModel puts a final binding into params: the launcher name, the model / effort set, the execution fingerprint.
-func (h *Hub) finishModel(ctx context.Context, id string, params map[string]any, b ModelBinding) error {
+func (s *Service) finishModel(ctx context.Context, id string, params map[string]any, b ModelBinding) error {
 	name, ok := strings.CutPrefix(b.Provider, "launcher.")
 	if !ok {
 		if strings.HasPrefix(id, "plugin.") {
 			params["model"] = b.Model
 			return nil
 		}
-		return i18n.Err("hub-model_config.err_not_launcher")
+		return i18n.Err("assistant-models.err_not_launcher")
 	}
-	for _, provider := range h.storedLaunchers(ctx) {
+	for _, provider := range s.storedLaunchers(ctx) {
 		// A direct API provider speaking Messages starts Claude on its gateway (node, contract #2455 §2); Responses
 		// cannot.
 		if provider.Name == name && provider.Kind == "api" && provider.API == "responses" {
-			return i18n.Err("hub-model_config.err_api_as_launcher")
+			return i18n.Err("assistant-models.err_api_as_launcher")
 		}
 	}
 	if b.Runtime != "" {
@@ -898,12 +975,8 @@ func (h *Hub) finishModel(ctx context.Context, id string, params map[string]any,
 	if b.Effort != "" {
 		params["effort"] = b.Effort
 	}
-	fingerprint, err := h.modelBindingFingerprint(ctx, b)
-	if err != nil {
-		return err
-	}
 	raw, _ := json.Marshal(b)
-	sum := sha256.Sum256(append([]byte(fingerprint), raw...))
+	sum := sha256.Sum256(append([]byte(s.modelBindingFingerprint(ctx, b)), raw...))
 	params["model_fingerprint"] = hex.EncodeToString(sum[:])
 	return nil
 }

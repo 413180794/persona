@@ -2,7 +2,7 @@
 
 启动器决定 claude 用哪个网关、哪个模型。以前全是各台电脑 `~/.zshrc` 里调用 claude 的函数或 alias（见下「~/.zshrc 里怎么认」，
 node 把名字敲进 herdr 窗格的交互式 shell 里跑，函数和 alias 都会展开）；2026-10-31 起「设置 › 模型供应商」把它们和在 App 里加的放在一起管理。
-代码：`server/internal/hub/launchers.go`、`server/internal/node/managed.go`；App `Views/Settings/ModelLaunchersView.swift`。
+代码：`server/internal/assistant/models_launchers.go`（管理者的，hub 只转发这些路由，`docs/model-config.md`「谁管模型」）、`server/internal/node/managed.go`；App `Views/Settings/ModelLaunchersView.swift`。
 
 ## 两种来源
 
@@ -43,8 +43,8 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
 
 ## Persona 管理的怎么跑
 
-- 存在 settings `launchers.managed`；API Key 用 `~/.persona/secret.key`（和邮箱凭据同一把）AES-GCM 加密，**接口从不返回 Key**。
-- hub 在 node 连上时、每次改动后把完整设置（含 Key）推给所有 node（`launchers.managed`），node 只放内存。
+- 存在 settings `launchers.managed`；API Key 由管理者用 `~/.persona/secret.key`（和邮箱凭据同一把，`server/internal/secretkey`）AES-GCM 加密，**接口从不返回 Key**。
+- 管理者在 node 连上时、每次改动后把完整设置（含 Key）经 hub 推给所有 node（`launchers.managed`），node 只放内存；hub 不存也不解。
 - 启动时 node 敲进 herdr 窗格（或无头助手执行）的是 `jarvisd launch <名字> …`：这个子命令经本机 node.sock 取设置
   （`launcher.env`），去掉 shell 里已有的 `ANTHROPIC_*` 等变量，设上 `ANTHROPIC_BASE_URL`、Key（见下「认证方式」）、各档模型
   （`ANTHROPIC_MODEL`、`ANTHROPIC_DEFAULT_*_MODEL`；小模型给 haiku / small fast；子 Agent 模型给 `CLAUDE_CODE_SUBAGENT_MODEL`，留空时跟主模型；
@@ -59,7 +59,7 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
   （`400 request is not representable on this edge: Claude Code Artifacts are enabled`），herdr 里新开的 Agent 第一轮就失败，`claude -p` 不受影响。
 - **认证方式**（`auth`，2026-11-04）：Key 放哪个变量。`api_key`（默认，已有的启动器都是它）放 `ANTHROPIC_API_KEY`，Claude Code 发
   `x-api-key`，官方 API 只认这个；`bearer` 放 `ANTHROPIC_AUTH_TOKEN`，发 `Authorization: Bearer`，给只认 Bearer 的兼容网关用
-  （relay-history 两种都认，不用改）。hub 拿启动器直接调 Messages API（分拣、翻译等用途）也按它发头；Responses 协议本来就用 Bearer，不用选。
+  （relay-history 两种都认，不用改）。管理者拿启动器直接调 Messages API（分拣、翻译等用途）也按它发头；Responses 协议本来就用 Bearer，不用选。
   改启动器时请求里没带 `auth`（还没升级的 App）就保留原来的值。
 - **另一个认证变量设成空**：Claude Code 把各处 settings 的 `env` 合在一起，启动器**没设**的变量照样从用户的 `~/.claude/settings.json` 来。
   那里放着别的网关的 `ANTHROPIC_AUTH_TOKEN` 时，Claude 会把它当 `Authorization: Bearer` 和启动器的 `x-api-key` 一起发；relay-history 收到两个凭据，
@@ -107,7 +107,7 @@ stdin 是 /dev/null。单测：`launcherprobe_test.go` 用 `testdata/launchers.z
 
 ## 测试可用性（`node/launchercheck.go`）
 
-详情页「测试可用性」：在有这个启动器的每台在线电脑上（Persona 管理的在 hub 所在的机器上）真的发一个只回答一个词的请求
+详情页「测试可用性」：在有这个启动器的每台在线电脑上（Persona 管理的在 hub 所在的机器上，管理者挑）真的发一个只回答一个词的请求
 （`claude -p … --output-format json --max-turns 1`，Codex 是 `codex exec`），在空目录里跑，90 秒超时；显示 ✓ / ✗、用时、哪个模型答的、
 失败的原因（打码）。会花几个 token。`POST /api/v1/launchers/{name}/check?machine=`。
 
@@ -116,7 +116,7 @@ stdin 是 /dev/null。单测：`launcherprobe_test.go` 用 `testdata/launchers.z
 详情页的「删除启动器 / 在 Persona 里隐藏」点一下，在按钮那里弹出「确认删除 / 确认隐藏」（popover，2026-10-31 用户要求），再点才执行。
 
 列表里 ~/.zshrc 的启动器左滑「隐藏」，「已隐藏」里的左滑「恢复」（2026-11-01 用户要求），不再确认：只改 Persona 里显不显示，随时能滑回来。
-Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不能恢复，所以先弹确认。在详情页隐藏、恢复、删除之后列表跟着变：改动都经 `AppModel.launchersChanged()`，列表按 `launchersRevision` 重拉（#1433）。`LauncherSwipeTests` 对着 mock hub（`MOCK_MANAGED_LAUNCHER=1`）覆盖左滑和详情页隐藏。
+Persona 管理的左滑是「删除」，连存着的 Key 一起删、不能恢复，所以先弹确认。在详情页隐藏、恢复、删除之后列表跟着变：改动都经 `AppModel.launchersChanged()`，列表按 `launchersRevision` 重拉（#1433）。`LauncherSwipeTests` 对着 mock hub（`MOCK_MANAGED_LAUNCHER=1`）覆盖左滑和详情页隐藏。
 
 ## 接口
 
@@ -132,7 +132,7 @@ Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不�
 | `POST /api/v1/launchers/discover` | 获取模型：`{name?, base_url?, auth?, api_key?, headers?}` → `{models:[{id, name?, context_window?, efforts?, default_effort?}], error?}` |
 | `DELETE /api/v1/launchers/{name}` | Persona 管理的删除；~/.zshrc 的隐藏 |
 | `POST /api/v1/launchers/{name}/restore` | 取消隐藏 |
-| `GET /api/v1/launchers/{name}/quota?machine=&refresh=1` | 额度（见下）：`{machine, checked_at, quota}`，查不了时 `{error, unsupported}`；hub 缓存一分钟，`refresh=1` 重读 |
+| `GET /api/v1/launchers/{name}/quota?machine=&refresh=1` | 额度（见下）：`{machine, checked_at, quota}`，查不了时 `{error, unsupported}`；管理者缓存一分钟，`refresh=1` 重读 |
 | `GET /api/v1/machines/{mid}/launchers` | 这台能启动的（选择器用）：它的 ~/.zshrc 去掉隐藏的，加上 Persona 管理的；每项带 `source` |
 
 助手的模型只在「模型配置 › 主对话」里选（「设置 › 助手」不再有模型入口，#1291）；定时任务的模型入口打开统一的「模型配置」。供应商负责接入与默认值，用途负责具体选择，见 `docs/model-config.md`。
@@ -151,13 +151,13 @@ Persona 管理的供应商照 cindy 的模型多了这些字段（`proto.Managed
 | `timeout_ms` / `compact_window` / `max_context` | `API_TIMEOUT_MS` / `CLAUDE_CODE_AUTO_COMPACT_WINDOW` / `CLAUDE_CODE_MAX_CONTEXT_TOKENS`，0 是默认 |
 | `effort` | 默认思考档位 |
 
-- **请求头和 Key 一样是机密**：hub 用同一把密钥加密存成 `headers_sealed`，只在下发给 node 时解开；GET 只给 `has_headers`。
+- **请求头和 Key 一样是机密**：管理者用同一把密钥加密存成 `headers_sealed`，只在下发给 node 时解开；GET 只给 `has_headers`。
   PUT 不带 `headers` 保留原值，带空串清掉。其他新字段也一样，不带就不变（旧版 App 改供应商不会把它们清空）。
 - **写入时校验**：Base URL 合法；思考档位只能是 low / medium / high / xhigh / max，模型的默认档位要在它的档位里；数值不能为负；模型 ID 不能为空或重复；请求头每行要有「:」。
 - 读取时 `source` 仍是 `jarvis` / `zshrc`，供应商自己的来源（`zshrc:<alias>@<机器>`、`preset:<id>`）放在 `origin`。
 - 名字 `test`、`discover`、`import`、`presets`、`claude` 留给接口，不能用。
 
-**测试连接和获取模型**由 hub 直接请求网关（照 cindy 的 `buildProbeRequest` / `provider-model-fetch`），新增供应商还没保存时也能用：
+**测试连接和获取模型**由管理者直接请求网关（`assistant/models_probe.go`）（照 cindy 的 `buildProbeRequest` / `provider-model-fetch`），新增供应商还没保存时也能用：
 
 - 带 `name` 时用已存的 Base URL、Key、请求头、默认模型和代理，请求里给了的覆盖已存的（`headers: ""` 就是这次不带请求头）。
 - 测试连接发一次 `POST <base>/v1/messages`（`max_tokens: 1`，内容 `ping`）；获取模型发 `GET <base>/v1/models`。Base URL 已经以 `/v1` 结尾时不重复。
@@ -166,7 +166,7 @@ Persona 管理的供应商照 cindy 的模型多了这些字段（`proto.Managed
   Key 和请求头的值一律换成 `***`。这两个接口本身总是 200，结果看 `ok` / `error`。
 - 模型列表认三种形状：`{data:[…]}`、`{models:[…]}`、裸数组（元素是对象或字符串）；ID 取 `id` / `slug` / `key` / `model_name` / `model_id`，
   名字取 `display_name` / `name`，窗口取 `context_length` / `context_window` / `max_context_length` / `max_input_tokens`。去重，保持顺序。
-- 网关没说的用**内置目录**补全：`server/internal/hub/model_catalog.json`，取自 cindy 的 `model-registry.json`（Apache-2.0，见 `THIRD_PARTY_NOTICES.md`）：
+- 网关没说的用**内置目录**补全：`server/internal/assistant/models_catalog.json`，取自 cindy 的 `model-registry.json`（Apache-2.0，见 `THIRD_PARTY_NOTICES.md`）：
   Claude 系列，以及 GLM、Kimi、DeepSeek V4、Qwen3、MiniMax、Seed、MiMo 等网关常见的模型，只有 id、name、context_window、efforts、default_effort。
   查的时候不分大小写，去掉厂商前缀（`anthropic/…`）、`[1m]` 和日期后缀；目录里没有、但 ID 以 `[1m]` 结尾的记成 1M 窗口。网关自己说了的优先。
   更新目录：照 cindy 的新版重新生成，只收 registry 里写明了的值，不猜。
@@ -174,7 +174,7 @@ Persona 管理的供应商照 cindy 的模型多了这些字段（`proto.Managed
 ## 直接 API 供应商
 
 Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧的启动器行为）和 `api`（`messages` / `responses`）字段。
-`kind: api` 由 hub 直接发请求，不出现在新建 Agent 的启动器列表中；小模型、子 Agent 模型、自定义模型项和 CLI 额外参数不用于这类接入。
+`kind: api` 由管理者直接发请求，不出现在新建 Agent 的启动器列表中；小模型、子 Agent 模型、自定义模型项和 CLI 额外参数不用于这类接入。
 `api` 为空或 `messages` 的也随启动器一起下发给 node（#2455），主对话可以用它的 Base URL 和 Key 起 claude；`responses` 的不下发。
 认证仍使用原有的加密 Key 存储，不需要把 API Key 放进用途配置。原有 `/launchers` 接口与供应商名称保持兼容。
 
@@ -183,10 +183,10 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 插件贡献的模型供应商（`docs/extensions.md`「模型供应商」）在「设置 › 模型供应商 › 新增」里多一个「从插件添加」：hub 的 `GET /api/v1/launchers/presets`
 有预设时，新增页顶上是「自己填写 / 从插件添加」的切换（没有预设就和以前一样只有自己填写）。从插件添加：选一个预设（名字、描述、接入方式和地址），
 只填名字和 Key，默认模型从预设的 `models` 里选（不选就是预设的默认）；`POST /api/v1/launchers` 只带 `name`、`api_key`、`preset`，选了别的模型才带 `model`，
-地址、接入方式、API、小模型由 hub 从预设补上。预设的 `key_hint` 写在 Key 下面，`models_error` 写在模型下面。加好以后和自己填写的一样能编辑。
+地址、接入方式、API、小模型由管理者从预设补上（预设是插件的，管理者经 `app.call plugins.presets` 向 hub 要）。预设的 `key_hint` 写在 Key 下面，`models_error` 写在模型下面。加好以后和自己填写的一样能编辑。
 
 新建 Agent 选模型时（`GET /api/v1/machines/{mid}/launchers/{name}/models`），走插件网关的启动器除了 Claude Code `/model` 自己列的几项，
-还列出预设的全部模型（`hub/extension_providers.go` 的 `presetModels`）：Persona 管理的按它记着的预设，没记的（插件之前自己填写的）和 ~/.zshrc 的
+还列出预设的全部模型（`assistant/models_presets.go` 的 `presetModels`）：Persona 管理的按它记着的预设，没记的（插件之前自己填写的）和 ~/.zshrc 的
 按网关地址对上预设（大小写、末尾的 `/` 不算）。只认 `kind: launcher` 的预设、只给 Claude Code 的启动器；`/model` 已有的同名项不重复，
 补上的项 `description` 是预设的名字。这样一个网关一个启动器就能选到它的所有模型，不用一个模型建一个；插件的 `dynamic_models` 更新了，选择器跟着变。
 
@@ -199,12 +199,12 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 ## 额度
 
 启动器页的「额度」读启动器的 Key 在网关那边还剩多少。**读哪些网关、怎么读是额度插件的事**（`docs/extensions.md`「额度」）：开源仓库里不带任何网关的读法，
-没装额度插件时这一节说明查不了，不报错。代码：通用部分 `server/internal/quota`（报告的形状、代发请求），hub 一侧 `hub/launcherquota.go`、`hub/extension_quota.go`，
+没装额度插件时这一节说明查不了，不报错。代码：通用部分 `server/internal/quota`（报告的形状、代发请求），管理者一侧 `assistant/models_quota.go`（路由、缓存、定网关），hub 一侧 `hub/extension_quota.go`（插件读额度，`app.call plugins.quota`），
 node 一侧 `node/launcherquota.go`。
 
 - 插件**看不到 Key**：它回答 `quota.query`，要发的请求经 `quota.http` 交给手里有 Key 的那一方去发，请求里的 `${launcher_key}` 由那一方换成 Key；
   只能发到这个启动器自己的网关（同源，跟随重定向也不出这个源），回答里出现 Key 的地方换回占位符。
-- 谁去发：Persona 管理的启动器由 hub 用解封的 Key 发；~/.zshrc 的由**有这个启动器的那台电脑**发（node 的 `launchers.http`：跑一遍探测拿到地址和 Key，就地请求网关），
+- 谁去发：Persona 管理的启动器由管理者用解封的 Key 发（hub 经 `models.launcher_http` 交给它，管理者不在时额度回 `503 assistant_offline`）；~/.zshrc 的由**有这个启动器的那台电脑**发（node 的 `launchers.http`：跑一遍探测拿到地址和 Key，就地请求网关），
   Key 不离开那台电脑，地址也是那台电脑能到的地址。优先 hub 自己那台。旧 node 没有 `launchers.http` 时说「node 太旧」。
 - 几个额度插件时：声明了 `hosts` 且对得上网关主机名的先问，再问没声明 `hosts` 的；回 `unsupported` 的跳过，第一个回答的为准。都不认识就是「查不了」。
 - 结果缓存一分钟（`refresh=1` 重读）。报告的 `gateway` 是插件贡献的 id，`gateway_name` 是给人看的名字。

@@ -22,6 +22,8 @@
   "err_api_no_models": "直接 API 接入没有可列的模型",
   "err_no_provider": "没有这个供应商",
   "err_all_offline": "有这个启动器的电脑都不在线，列不出模型",
+  "no_gateway": "这个启动器没有设网关地址（用的是默认的官方接口）",
+  "quota_node_outdated": "{name} 上的 node 太旧：更新后才能查额度",
   "err_effort_default": "默认的思考档位 {effort} 不支持（只能是 {levels}）",
   "err_effort_model": "模型 {model} 的思考档位 {effort} 不支持（只能是 {levels}）",
   "err_effort_model_default": "模型 {model} 默认的思考档位 {effort} 不支持（只能是 {levels}）",

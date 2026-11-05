@@ -132,7 +132,7 @@ func TestRouteErrorsJSON(t *testing.T) {
 		{"GET", "/api/v1/missing", 404, "not_found", ""},
 		{"POST", "/api/v1/machines", 405, "method_not_allowed", "GET, HEAD"},
 		{"DELETE", "/api/v1/sessions", 405, "method_not_allowed", "GET, HEAD, POST"},
-		{"GET", "/api/v1/machines/example/launchers", 404, "not_found", ""},
+		{"GET", "/api/v1/machines/example/dirs", 404, "not_found", ""},
 	} {
 		t.Run(tt.method+tt.path, func(t *testing.T) {
 			r := localRequest(tt.method, tt.path)

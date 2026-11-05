@@ -66,8 +66,8 @@ func (m *Machine) usageWindows() bool { return m.cfg.UsageWindows == nil || *m.c
 
 // configureNode hands the node its config directories and whether it lists botmux's sessions, before the first
 // session list. Older nodes do not know node.configure; they keep looking in ~/.claude only.
-// hub is the hub's part (devices.connected: Codex settings, then managed launchers, the sends it remembers); nil
-// while it is not connected (it is done again when it is).
+// hub is the hub's part (devices.connected: Codex settings, the sends it remembers; nil while it is not
+// connected: it is done again when it is), then the manager's own (Options.NodeCalls: the managed launchers).
 func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer, hub *devicewire.ConnectedReply) {
 	params := map[string]any{"machine_id": m.cfg.ID, "claude_dirs": m.claudeDirs(ctx),
 		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux(ctx), "claude_start_dir": m.cfg.ClaudeStartDir,
@@ -89,15 +89,20 @@ func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer, hub *device
 		}
 	}
 	_ = peer.Call(ctx, "node.configure", params, nil)
+	var calls []devicewire.NodeCall
 	if hub != nil {
-		for _, c := range hub.Calls {
-			p := c.Params
-			if len(p) == 0 {
-				p = json.RawMessage(`{}`)
-			}
-			if err := peer.Call(ctx, c.Method, p, nil); err != nil {
-				m.d.logf("[%s] %s: %v", m.cfg.ID, c.Method, err)
-			}
+		calls = hub.Calls
+	}
+	if f := m.d.opts.NodeCalls; f != nil {
+		calls = append(slices.Clone(calls), f(ctx, m.cfg.ID)...)
+	}
+	for _, c := range calls {
+		p := c.Params
+		if len(p) == 0 {
+			p = json.RawMessage(`{}`)
+		}
+		if err := peer.Call(ctx, c.Method, p, nil); err != nil {
+			m.d.logf("[%s] %s: %v", m.cfg.ID, c.Method, err)
 		}
 	}
 }

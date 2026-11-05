@@ -4,7 +4,7 @@ import { BASE } from "../lib/base";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n";
 import { NARROW, useMedia } from "../lib/viewport";
-import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
+import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, BOTMUX_HIDDEN_KEY, botmuxAndFilter, filterCounts, isBotmux, isSpaceMuted, matchingKeys, shownFilters, unreadOf, withoutBotmux, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
 import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, sessionSource, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { keyedRefs } from "../lib/keyed-refs";
@@ -391,7 +391,21 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   // the quick filter (全部 / 需要你 / 未读 / 工作中), stacked on any grouping; what it showed when chosen stays (`kept`)
   const [filter, setFilter] = useState(() => agentFilter(localStorage.getItem("jarvis.agentFilter")));
   const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
-  const { live, recent: offline } = useMemo(() => splitAgentSessions(all, machines), [all, machines]);
+  // 「botmux」 beside the filters (#2786): botmux sessions shown or hidden in this browser
+  const [botmuxHidden, setBotmuxHidden] = useState(() => botmuxAndFilter(filter, localStorage.getItem(BOTMUX_HIDDEN_KEY) === "1", "filter").hidden);
+  const botmuxCount = useMemo(() => all.filter(isBotmux).length, [all]);
+  const saveBotmuxHidden = (next: boolean) => {
+    localStorage.setItem(BOTMUX_HIDDEN_KEY, next ? "1" : "0");
+    setBotmuxHidden(next);
+  };
+  const toggleBotmux = () => {
+    const next = botmuxAndFilter(filter, !botmuxHidden, "botmux");
+    saveBotmuxHidden(next.hidden);
+    if (next.filter !== filter) choose(next.filter);
+    hover(null);
+  };
+  const listed = useMemo(() => withoutBotmux(all, botmuxHidden), [all, botmuxHidden]);
+  const { live, recent: offline } = useMemo(() => splitAgentSessions(listed, machines), [listed, machines]);
   const seeded = useRef(false);
   useEffect(() => {
     // a filter saved in this browser starts from what it matches once the list has loaded
@@ -422,6 +436,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const mixedHosts = useMemo(() => shownGrouping === "todo" && hostsOf(live).size > 1, [shownGrouping, live]);
   const unreadShown = filter === "unread" ? unreadOf(shown) : [];
   const choose = (f: AgentFilter) => {
+    if (botmuxAndFilter(f, botmuxHidden, "filter").hidden !== botmuxHidden) saveBotmuxHidden(false);
     localStorage.setItem("jarvis.agentFilter", f);
     setFilter(f);
     setKept(matchingKeys(live, f, mutes));
@@ -489,7 +504,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       )}
       <Collapse open={!folded}>
       <div inert={folded || undefined}>
-      <FilterBar selection={filter} counts={filterTotals} onChoose={choose} />
+      <FilterBar selection={filter} counts={filterTotals} onChoose={choose} botmux={botmuxCount > 0 || botmuxHidden ? { hidden: botmuxHidden, onToggle: toggleBotmux } : undefined} />
       {/* 「<电脑> 的 herdr 没在运行」with 启动 (#1916): before a message to an agent there fails */}
       {!folded && <HerdrNotices />}
 
@@ -592,12 +607,14 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
 }
 
 /** 全部 / 需要你 / 未读 / 工作中 with their counts (iOS QuickFilterBar): 全部 and the states that have agents now; the
- * chosen one stays while it empties, so it can be left. Hidden when there is nothing to pick. */
-function FilterBar({ selection, counts, onChoose }: { selection: AgentFilter; counts: FilterCounts; onChoose: (f: AgentFilter) => void }) {
+ * chosen one stays while it empties, so it can be left. Then「botmux」(#2786), when there are botmux sessions: a
+ * show / hide switch that stacks on any filter. Hidden when there is nothing to pick. */
+function FilterBar({ selection, counts, onChoose, botmux }: { selection: AgentFilter; counts: FilterCounts; onChoose: (f: AgentFilter) => void; botmux?: { hidden: boolean; onToggle: () => void } }) {
   const keys = shownFilters(selection, counts);
-  if (keys.length < 2) return null;
+  if (keys.length < 2 && !botmux) return null;
   return (
-    <div role="radiogroup" aria-label={t("sidebar.quick_filters")} className="mt-1.5 flex flex-wrap gap-0.5 px-1">
+    <div className="mt-1.5 flex flex-wrap gap-0.5 px-1">
+      <div role="radiogroup" aria-label={t("sidebar.quick_filters")} className="contents">
       {keys.map((k) => {
         const f = AGENT_FILTERS.find((x) => x.key === k)!;
         const on = k === selection;
@@ -621,6 +638,22 @@ function FilterBar({ selection, counts, onChoose }: { selection: AgentFilter; co
           </button>
         );
       })}
+      </div>
+      {botmux && (
+        <button
+          type="button"
+          aria-pressed={!botmux.hidden}
+          title={t(botmux.hidden ? "lib-agent-filter.botmux_show" : "lib-agent-filter.botmux_hide")}
+          onClick={botmux.onToggle}
+          className={cx(
+            "touch-hit relative z-10 flex h-6 items-center gap-1 whitespace-nowrap rounded-full px-[7px] text-[11.5px] transition-[background-color,color,box-shadow] duration-150",
+            botmux.hidden ? "text-ink-3 line-through hover:bg-hover hover:text-ink-2" : "text-ink-2 hover:bg-hover hover:text-ink",
+          )}
+        >
+          <Icon name={botmux.hidden ? "x" : "check"} size={10} stroke={2.4} />
+          {t("lib-agent-filter.botmux")}
+        </button>
+      )}
     </div>
   );
 }

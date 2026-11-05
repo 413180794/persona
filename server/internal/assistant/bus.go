@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
@@ -238,7 +237,7 @@ func (e *codedError) Error() string { return e.msg }
 func (e *codedError) Unwrap() error { return e.kind }
 
 // busError gives the hub's coded errors back their kind: a machine the hub does not have, one that is offline, a
-// node link that dropped, a stale snapshot, a model that is paused. Other errors (a node's own coded refusal among
+// node link that dropped, a stale snapshot. Other errors (a node's own coded refusal among
 // them) stay *rpc.Error, as they were on the hub.
 func busError(err error) error {
 	var re *rpc.Error
@@ -255,10 +254,6 @@ func busError(err error) error {
 		kind = rpc.ErrClosed
 	case assistantwire.CodeStaleSnapshot:
 		kind = ErrStaleSnapshot
-	case assistantwire.CodeModelPaused:
-		p := &ai.PausedError{}
-		_ = json.Unmarshal(re.Data, &p.Pause) // its reason and until, when the hub sent them
-		kind = p
 	default:
 		return err
 	}
@@ -392,6 +387,9 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 	if out, ok, err := inboxRequest(ctx, s, method, decode); ok { // the inbox's (inbox_bus.go)
 		return out, err
 	}
+	if out, ok, err := s.modelsRequest(ctx, method, params); ok { // the hub's plugins' (models_hub.go)
+		return out, err
+	}
 	if d := b.opts.Devices; d != nil {
 		if out, ok, err := d.Request(ctx, method, params); ok { // devices.* (devices.go)
 			return out, err
@@ -416,6 +414,7 @@ func serveHTTP(ctx context.Context, s http.Handler, p assistantwire.HTTPRequest,
 		r.Header = http.Header{}
 	}
 	r.ContentLength = int64(len(p.Body))
+	r = withRequestLang(r) // what the routes write for people reads in it too (i18n.From)
 	w := &recorder{header: http.Header{}, lang: func() i18n.Lang {
 		if l := i18n.FromRequest(r); l != "" {
 			return l

@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 // 主对话's runtime (#2455): only the assistant takes one, it reaches the node's params, and it is in the fingerprint.
 
 func TestModelRuntimeIsOfferedAndPatchedOnlyForTheAssistant(t *testing.T) {
-	h, mux := modelTestHub(t)
-	r := modelRequest(mux, "GET", "", "")
+	s, _, _ := modelService(t)
+	r := modelRequest(s, "GET", "", "")
 	var list struct {
 		Purposes []ModelPurpose `json:"purposes"`
 	}
@@ -37,27 +37,27 @@ func TestModelRuntimeIsOfferedAndPatchedOnlyForTheAssistant(t *testing.T) {
 		{"assistant", `{"revision":1,"provider":"launcher.claude"}`, 200}, // a provider change keeps the runtime
 	}
 	for _, c := range cases {
-		if r := modelRequest(mux, "PATCH", c.id, c.body); r.Code != c.code {
+		if r := modelRequest(s, "PATCH", c.id, c.body); r.Code != c.code {
 			t.Fatalf("%s %s: %d %s", c.id, c.body, r.Code, r.Body.String())
 		}
 	}
-	b, err := h.resolveModel(context.Background(), "assistant")
+	b, err := s.resolveModel(context.Background(), "assistant")
 	if err != nil || b.Runtime != proto.AssistantRuntimeAgentSDK {
 		t.Fatalf("%+v %v", b, err)
 	}
-	if b, _ := h.resolveModel(context.Background(), "schedule"); b.Runtime != proto.AssistantRuntimeAgentSDK {
+	if b, _ := s.resolveModel(context.Background(), "schedule"); b.Runtime != proto.AssistantRuntimeAgentSDK {
 		t.Fatalf("scheduled tasks run as 主对话: %+v", b)
 	}
-	if r := modelRequest(mux, "PATCH", "assistant", `{"revision":2,"runtime":null}`); r.Code != 200 {
+	if r := modelRequest(s, "PATCH", "assistant", `{"revision":2,"runtime":null}`); r.Code != 200 {
 		t.Fatal(r.Body.String())
 	}
-	if b, _ := h.resolveModel(context.Background(), "assistant"); b.Runtime != "" {
+	if b, _ := s.resolveModel(context.Background(), "assistant"); b.Runtime != "" {
 		t.Fatalf("runtime not cleared: %+v", b)
 	}
 }
 
 func TestModelRuntimeReachesParamsAndFingerprint(t *testing.T) {
-	h, _ := modelTestHub(t)
+	s, _, _ := modelService(t)
 	ctx := context.Background()
 	run := func(apply func(map[string]any) error, params map[string]any) map[string]any {
 		t.Helper()
@@ -66,7 +66,7 @@ func TestModelRuntimeReachesParamsAndFingerprint(t *testing.T) {
 		}
 		return params
 	}
-	assistant := func(p map[string]any) error { return h.applyModel(ctx, "assistant", p) }
+	assistant := func(p map[string]any) error { return s.applyModel(ctx, "assistant", p) }
 	cli := run(assistant, map[string]any{"runtime": "stale"})
 	if _, ok := cli["runtime"]; ok {
 		t.Fatalf("no runtime is the CLI, nothing sent: %+v", cli)
@@ -75,14 +75,14 @@ func TestModelRuntimeReachesParamsAndFingerprint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.saveModelRecord(ctx, "assistant", 0, explicitCLI); err != nil {
+	if err := s.saveModelRecord(ctx, "assistant", 0, explicitCLI); err != nil {
 		t.Fatal(err)
 	}
 	explicit := run(assistant, map[string]any{})
 	if explicit["model_fingerprint"] != cli["model_fingerprint"] {
 		t.Fatal("an explicit cli restarted the process")
 	}
-	if err := h.saveModelRecord(ctx, "assistant", 1, ModelBinding{Runtime: proto.AssistantRuntimeAgentSDK}); err != nil {
+	if err := s.saveModelRecord(ctx, "assistant", 1, ModelBinding{Runtime: proto.AssistantRuntimeAgentSDK}); err != nil {
 		t.Fatal(err)
 	}
 	sdk := run(assistant, map[string]any{})
@@ -92,14 +92,14 @@ func TestModelRuntimeReachesParamsAndFingerprint(t *testing.T) {
 	// Another launcher (warm, a start for one launcher) and a pick from the chat's menu keep 主对话's runtime.
 	for name, p := range map[string]map[string]any{
 		"launcher": run(assistant, map[string]any{"launcher": "other"}),
-		"picked":   run(func(p map[string]any) error { return h.applyPickedModel(ctx, p) }, map[string]any{"launcher": "other", "model": "m"}),
-		"schedule": run(func(p map[string]any) error { return h.applyModel(ctx, "schedule", p) }, map[string]any{}),
+		"picked":   run(func(p map[string]any) error { return s.applyPickedModel(ctx, p) }, map[string]any{"launcher": "other", "model": "m"}),
+		"schedule": run(func(p map[string]any) error { return s.applyModel(ctx, "schedule", p) }, map[string]any{}),
 	} {
 		if p["runtime"] != proto.AssistantRuntimeAgentSDK {
 			t.Fatalf("%s lost the runtime: %+v", name, p)
 		}
 	}
-	if agent := run(func(p map[string]any) error { return h.applyModel(ctx, "agent.new", p) }, map[string]any{}); agent["runtime"] != nil {
+	if agent := run(func(p map[string]any) error { return s.applyModel(ctx, "agent.new", p) }, map[string]any{}); agent["runtime"] != nil {
 		t.Fatalf("Agents took 主对话's runtime: %+v", agent)
 	}
 }
@@ -112,26 +112,26 @@ func TestModelRuntimeSurvivesAProviderChange(t *testing.T) {
 }
 
 func TestModelMessagesAPIProviderRunsAsLauncher(t *testing.T) {
-	h, mux := modelTestHub(t)
+	s, _, _ := modelService(t)
 	ctx := context.Background()
 	stored := []storedLauncher{
 		{ManagedLauncher: proto.ManagedLauncher{Kind: "api", Name: "gw", BaseURL: "https://gw.example.com", Model: "m1"}},
 		{ManagedLauncher: proto.ManagedLauncher{Kind: "api", API: "messages", Name: "gw2", BaseURL: "https://gw2.example.com", Model: "m2"}},
 		{ManagedLauncher: proto.ManagedLauncher{Kind: "api", API: "responses", Name: "resp", BaseURL: "https://r.example.com", Model: "gpt"}},
 	}
-	if err := h.put(ctx, launchersManagedKey, stored); err != nil {
+	if err := s.putSetting(ctx, launchersManagedKey, stored); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"gw", "gw2"} {
 		p := map[string]any{"launcher": name}
-		if err := h.applyModel(ctx, "assistant", p); err != nil || p["launcher"] != name {
+		if err := s.applyModel(ctx, "assistant", p); err != nil || p["launcher"] != name {
 			t.Fatalf("%s: %v %+v", name, err, p)
 		}
 	}
-	if err := h.applyModel(ctx, "assistant", map[string]any{"launcher": "resp"}); err == nil {
+	if err := s.applyModel(ctx, "assistant", map[string]any{"launcher": "resp"}); err == nil {
 		t.Fatal("a Responses provider ran as a launcher")
 	}
-	r := modelRequest(mux, "GET", "assistant", "")
+	r := modelRequest(s, "GET", "assistant", "")
 	var detail struct {
 		Purpose ModelPurpose `json:"purpose"`
 	}

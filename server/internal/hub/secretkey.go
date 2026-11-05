@@ -1,0 +1,26 @@
+package hub
+
+import (
+	"path/filepath"
+	"sync"
+
+	"github.com/nwverse/persona/server/internal/secretkey"
+)
+
+// secret.key in the hub's data directory seals the hub's own secrets in Postgres (the bots' app secrets, the
+// connectors' credentials, the plugins' secrets, the peers' tokens): internal/secretkey. The model providers' keys are
+// sealed with the same file by the manager (internal/assistant): the hub never opens those.
+
+type secretState struct {
+	once sync.Once
+	box  *secretkey.Box
+}
+
+func (h *Hub) secretBox() *secretkey.Box {
+	h.secret.once.Do(func() { h.secret.box = secretkey.New(filepath.Join(h.cfg.dir, "secret.key")) })
+	return h.secret.box
+}
+
+func (h *Hub) sealKey(plain string) (string, error) { return h.secretBox().Seal(plain) }
+
+func (h *Hub) openKey(sealed string) (string, error) { return h.secretBox().Open(sealed) }

@@ -56,8 +56,8 @@ func (s *Service) triageTurnModel(ctx context.Context, v *workView, machine stri
 		Project: strings.Join(first(s.projectsFor(ctx, machine, c.Cwd), 3), "、"),
 	}
 	var out triageOut
-	if err := s.appCall(ctx, AppModels, ModelsJSON, map[string]any{"purpose": "agent.triage",
-		"system": prompts.RenderAgentTriage(prompts.AgentTriage{Owner: s.owner(ctx)}), "input": prompts.RenderAgentTriageInput(in)}, &out); err != nil {
+	if err := s.purposeModel("agent.triage").JSON(ctx, prompts.RenderAgentTriage(prompts.AgentTriage{Owner: s.owner(ctx)}),
+		prompts.RenderAgentTriageInput(in), &out); err != nil {
 		return nil, err
 	}
 	return triageWork(out, byShort, time.Now(), s.lang(ctx)), nil

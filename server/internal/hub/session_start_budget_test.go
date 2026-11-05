@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -50,7 +51,7 @@ func TestSessionStartBudgetMatchesNodeStartup(t *testing.T) {
 				}
 				return map[string]any{"session": proto.Session{SessionID: "created"}}, nil
 			})
-			h.byID["machine"].cfg.Launchers = []sessionLauncher{{Launcher: proto.Launcher{Name: "wrapper"}, AgentType: tc.configured}}
+			h.byID["machine"].cfg.Launchers = []assistantwire.ConfiguredLauncher{{Launcher: proto.Launcher{Name: "wrapper"}, AgentType: tc.configured}}
 			body, err := json.Marshal(map[string]any{
 				"machine_id": "machine", "cwd": "/code", "launcher": "wrapper", "prompt": "hello", "tab_name": "test",
 				"agent_type": tc.agentType, "async": tc.async,

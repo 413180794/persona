@@ -4,5 +4,8 @@
   "unread": "Unread",
   "working": "Working",
   "feishu": "Feishu group",
-  "terminal": "Terminal"
+  "terminal": "Terminal",
+  "botmux": "botmux",
+  "botmux_show": "Show botmux sessions",
+  "botmux_hide": "Hide botmux sessions"
 }

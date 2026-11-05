@@ -18,7 +18,7 @@ import (
 )
 
 // replies is a model that answers each call with the next of its replies (the last one again when they run out).
-func replies(t *testing.T, out ...string) (*ai.Client, func() []capturedCall) {
+func replies(t *testing.T, out ...string) (ai.Config, func() []capturedCall) {
 	t.Helper()
 	var mu sync.Mutex
 	var calls []capturedCall
@@ -48,7 +48,7 @@ func replies(t *testing.T, out ...string) (*ai.Client, func() []capturedCall) {
 	t.Cleanup(srv.Close)
 	key := filepath.Join(t.TempDir(), "key")
 	_ = os.WriteFile(key, []byte("k"), 0o600)
-	return ai.New(ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"}), func() []capturedCall {
+	return ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"}, func() []capturedCall {
 		mu.Lock()
 		defer mu.Unlock()
 		return append([]capturedCall(nil), calls...)
@@ -65,7 +65,7 @@ func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 	n.items = []proto.Item{{Role: "user", Kind: proto.KindText, Text: "帮我查一下竞品的定价"},
 		{Role: "assistant", Kind: proto.KindText, Text: "查到三家……"}}
 	model, calls := replies(t, "研究 | 竞品定价")
-	h.ai = model
+	useModel(t, h, model)
 	connectAssistant(t, h)
 	started := time.Date(2026, 11, 1, 2, 0, 0, 0, time.UTC)
 	noteStarted(t, h, "server", "new", started)
@@ -130,7 +130,7 @@ func TestATaskConversationIsTitledAfterTheTask(t *testing.T) {
 	putAssistantSettings(t, h, assistant.Settings{Timezone: "Asia/Shanghai"})
 	n := newAssistantNode(t, h)
 	model, calls := replies(t, "探索 | 不该用到")
-	h.ai = model
+	useModel(t, h, model)
 	seedTasks(t, h, assistant.Task{ID: "r", Title: "早报", Prompt: "给我今天的早报", Repeat: "daily", Time: "09:00", Enabled: true})
 	connectAssistant(t, h)
 	first, err := runNow(t, h, "r")
@@ -155,7 +155,7 @@ func TestATaskConversationIsTitledAfterTheTask(t *testing.T) {
 func TestTheMainConversationIsAlwaysPersona(t *testing.T) {
 	h, n := conversationsHub(t)
 	model, calls := replies(t, "探索 | 不该用到")
-	h.ai = model
+	useModel(t, h, model)
 	// The node's title for a transcript without one is its first message.
 	n.m.sessions[0].Title = "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"
 	// Named after its first turn (by the model): what the assistant keeps, read when it first shows its titles.

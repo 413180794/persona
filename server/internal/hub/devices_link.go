@@ -774,9 +774,6 @@ func (h *Hub) machineConnected(ctx context.Context, m *Machine, at time.Time) de
 	if b, err := json.Marshal(h.agentFilters()); err == nil { // the extensions' agent filters (agent_filters.go)
 		out.Configure["agent_filters"] = b
 	}
-	if b, err := json.Marshal(map[string]any{"launchers": h.managedForNodes(ctx)}); err == nil {
-		out.Calls = append(out.Calls, devicewire.NodeCall{MachineID: m.cfg.ID, Method: "launchers.managed", Params: b})
-	}
 	if list := m.echoesToSend(ctx); len(list) > 0 {
 		if b, err := json.Marshal(map[string]any{"echoes": list}); err == nil {
 			out.Calls = append(out.Calls, devicewire.NodeCall{MachineID: m.cfg.ID, Method: "session.echoes", Params: b})

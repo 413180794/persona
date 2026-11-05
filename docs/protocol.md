@@ -252,11 +252,11 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
 - `GET /api/v1/model-config/purposes/{id}` → `{purpose, providers}`。
 - `PATCH /api/v1/model-config/purposes/{id}` 接收 `{revision, provider?, model?, effort?, runtime?}`；缺失不改，`null` 清除覆盖，revision 冲突返回 409。成功返回同单项 GET。
   `runtime`（`cli` / `agentsdk`）只有 `assistant` 能写，别的用途带了回 400；`assistant` 这一项的 `fields` 多一个 `runtime`，另带 `runtimes: ["cli","agentsdk"]`。换供应商不清掉 runtime。
-  hub 给 node 的 `assistant.send` / `assistant.start` / `assistant.warm`（以及经 `models.apply` / `models.apply_picked` 填好的 params）带 `runtime: "agentsdk"`；CLI（空或 `cli`）不带。`model_fingerprint` 包含 runtime：变了 node 重启进程并 `--resume` 接回。
+  给 node 的 `assistant.send` / `assistant.start` / `assistant.warm`（管理者按模型配置填好的 params）带 `runtime: "agentsdk"`；CLI（空或 `cli`）不带。`model_fingerprint` 包含 runtime：变了 node 重启进程并 `--resume` 接回。
 - `GET /api/v1/launchers/import?machine=<id>` → `{machine, providers:[{name, base_url, auth, has_key, has_headers, model, models, opus_model, sonnet_model, haiku_model, fable_model, small_model, subagent_model, subagent_force, effort, compact_window, max_context, proxy, no_proxy, timeout_ms, args, source, aliases, existing?}]}`：
-  hub 调那台机器的 `launchers.zshrc`，把调 claude 的 alias 按 `base_url + key` 合成供应商（名字取第一个 alias，不合法的字符换成 `-`；模型名的 `[1m]` 去掉、上下文窗口记 1000000；同组的各个 `ANTHROPIC_MODEL` 合进 `models`）。
+  管理者调那台机器的 `launchers.zshrc`，把调 claude 的 alias 按 `base_url + key` 合成供应商（名字取第一个 alias，不合法的字符换成 `-`；模型名的 `[1m]` 去掉、上下文窗口记 1000000；同组的各个 `ANTHROPIC_MODEL` 合进 `models`）。
   `existing` 是已存的同 `base_url + key` 的供应商名。不返回 key 和请求头。机器离线 503 `code: "offline"`，node 太旧 409 `code: "node_outdated"`，没有这台机器 404。
-- `POST /api/v1/launchers/import` `{machine, providers:[name…]}` → `{created:[…], updated:[…]}`：再读一次 alias，key 和请求头只在 hub 里转手、加密保存，`source` 写 `zshrc:<alias>@<machine>`。
+- `POST /api/v1/launchers/import` `{machine, providers:[name…]}` → `{created:[…], updated:[…]}`：再读一次 alias，key 和请求头只在管理者里转手、加密保存，`source` 写 `zshrc:<alias>@<machine>`。
   已存在的供应商只补 `models`（新的 id 加上，已有的只补未知的上下文窗口），别的字段不动；新建的和已有名字撞了加 `-2`、`-3`。不认识的名字 400。
   `inbox.triage` 改成调不了的、又有要它的插件开着时返回 422 `{code: "triage_model_in_use", plugins: [名字], error}`（`docs/extensions.md`「收件箱的通用规则」）。
 - 用途的 `fields`、`provider_ids` 限定可编辑参数和兼容供应商；`override` 与 `effective` 分开，`inherited_from` 标记来源，`status` 为中文状态说明。真实任务/插件使用 `task.<id>` / `plugin.<id>`。
@@ -302,7 +302,7 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
 // Launcher（来自 zsh：_claude_launchers 列出的函数，以及调用 claude 的 alias；docs/launchers.md）。GET …/launchers 每项另带 agent_type
 // （claude / codex / traex / runtime 的 agent，旧 hub 没有时按 Claude 处理）：没写的按 agent、再按名字（codex、traex）推断，hub.json 的
 // machines[].launchers 可以添加包装函数或覆盖类型，例如 [{"name":"example_wrapper","agent_type":"codex"}]，同名配置保留未覆盖的模型和网关字段
-// （hub/launchers.go 的 sessionLaunchers）。Android 按类型筛选启动器。
+// （管理者的 assistant/models_launchers.go 的 sessionLaunchers）。Android 按类型筛选启动器。
 {"name":"example_launcher","base_url":"https://example.com","model":"<模型名>","agent_type":"claude"}
 // Codex 的启动器（PATH 上的 codex、跑 codex 的 alias）带 agent，新建时必须带 prompt、不能 async（docs/codex.md「从手机新建」）
 {"name":"codex","model":"默认","agent":"codex","agent_type":"codex"}
@@ -1137,7 +1137,7 @@ hub → node 请求：
 | `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}`（`system` 见 Machine，node 启动时读一次；`engine` 是 node 现在用的引擎，`engines` 是它找到的，见「引擎」；旧 node 没有这两个）。连上时 `claude_version` 为空（`claude --version` 那次没跑成），hub 隔 1、2、5、10、30 分钟、之后每小时再问一次，拿到就更新机器并推给 App，连接断了就停（#542） |
 | `engine.use` | `{engine}` → `{engine}`：换成这个引擎（不认识的报错）；和现在一样时什么都不做，否则换掉宿主、丢掉旧引擎的 Agent（切换前开始、切换后才回来的刷新结果作废）、结束所有终端流（每个推 `terminal.end`，error 说引擎换了）、换事件流，并推一次 `sessions.changed`。多个 `engine.use` 依次执行 |
 | `launchers.list` | → `{launchers}` |
-| `launchers.zshrc` | `{}` → `{aliases:[{alias, env:{K:V}, args, command}]}`：这台机器 `~/.zshrc`（`$ZDOTDIR` 优先）里 `alias x="K=V … claude [args]"` 形式的行，只列 `command` 是 claude 的。`env` 带 key，只经这条 RPC 交给 hub（导入），不写日志；旧 node 回 `unknown method` |
+| `launchers.zshrc` | `{}` → `{aliases:[{alias, env:{K:V}, args, command}]}`：这台机器 `~/.zshrc`（`$ZDOTDIR` 优先）里 `alias x="K=V … claude [args]"` 形式的行，只列 `command` 是 claude 的。`env` 带 key，只经这条 RPC 交给管理者（导入，经 hub 到 node 的连接），不写日志；旧 node 回 `unknown method` |
 | `launchers.models` | `{name, agent_type?, refresh?}` → `{agent, models, locked?}`：同 REST 的 `…/launchers/{name}/models`；`agent_type` 是 hub 配置里这个启动器的类型（不给就按 node 自己认出的） |
 | `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.persona/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了 lark-connector（老版本把它编在二进制里） |
 | `dirs.list` | `{path}` → 同 REST |
@@ -1367,6 +1367,13 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
   它下次报快照之后再发 `manager.action`（没连着时马上、它回了错误的过 10 秒），直到它收下、回 `gone`（这张卡片 / 这个提问已经没了：答了、撤了、过期了，不用再给）或卡片本该过期。
   `agents.start_params` / `agents.resume_params` 之前 hub 等它连上（hub 起来后到 60 秒、它断开后 10 秒），等不到 hub 自己套「模型配置 › Agents」。
   它握手时报的版本和 hub 的不一样（开发版不算），hub 在日志里说一句：两边对分诊归谁的理解可能不一样。
+- **模型**（2026-11-05 从 hub 挪进管理者，`docs/model-config.md`「谁管模型」，类型在 `assistantwire/models.go`）：
+  `/api/v1/model-config…`、`/api/v1/launchers…`（连额度 `…/quota`）、`/api/v1/machines/{mid}/launchers…` 是它的路由，hub 转发；
+  握手的回答多 `models`（hub.json 的 `ai`、`kb_ai`、`triage_ai`、`judge_ai`、`inbox_agent_machine`，和各台电脑的 `machines[].launchers`）；
+  去掉 `app.call` 的 `models.complete`、`models.json`、`models.apply`、`models.resolve`、`models.record`、`models.save`、`models.apply_picked`、`models.launchers`、`models.launcher_check`、`inbox.translate_fingerprint`
+  和错误码 `model_paused`、`model_unconfigured`（模型都是它自己调的）；加上 `app.call plugins.presets`、`plugins.voice`、`plugins.quota {name, machine, base_url, tz}` → `{report}`、`plugins.need_triage`（插件的事，插件系统挪进管理者后去掉）、
+  `device.call launchers.managed`（Persona 里加的启动器交给 node，node 的新连接也由管理者给）；hub → 管理者的调用 `models.usable {purpose}` → `{usable}`、
+  `models.launcher_http {name, machine?, http?}`（错误码 `no_launcher`、`no_gateway`、`machine_offline`）。
 - 助手没连着时：转发的接口回 `503 {"code":"assistant_offline","error":"助手暂时连不上，稍后再试"}`，助手的工具同样失败（`is_error`，同一句话），`assistant.context` 也失败（node 那条消息不带实时快照）；
   给它的事件不发（它连上后报整份快照，要的东西现问），只有 `kb.agent_turn` hub 排着（每个 Agent 最新的一条），连上就发。hub 留着它最后报的快照，会话列表照常显示标题和归档。
   知识库的 `kb.*` 调用同样回 `assistant_offline`：删除来源数据的接口回 503（收件箱的条目照删），收件箱 AI 分身的上下文、分诊的项目名就不带；

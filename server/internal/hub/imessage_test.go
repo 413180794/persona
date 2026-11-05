@@ -139,7 +139,7 @@ func TestIMessageThroughTheHub(t *testing.T) {
 	n := len(*calls)
 	for path, want := range map[string]int{
 		"/api/v1/imessage/chats/imessage-0123456789ab/messages": 404, // the Mac has no such conversation
-		"/api/v1/imessage/chats/%2B15550100/messages":            404, // not an id: never sent to the Mac
+		"/api/v1/imessage/chats/%2B15550100/messages":           404, // not an id: never sent to the Mac
 	} {
 		if code, out := call(t, mux, "GET", path, h.cfg.Token, ""); code != want || out["code"] != proto.CodeNoChat {
 			t.Errorf("%s: %d %v", path, code, out)

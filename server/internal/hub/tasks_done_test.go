@@ -16,6 +16,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -51,34 +52,38 @@ func stubJudge(t *testing.T, h *Hub, status int, reply string) *judgeStub {
 	key := filepath.Join(t.TempDir(), "key")
 	_ = os.WriteFile(key, []byte("k"), 0o600)
 	// inbox.judge inherits 信息筛选 (inbox.triage) when nothing else is set, as in the inbox's own tests.
-	h.triageAI = ai.New(ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"})
+	triage := ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"}
+	h.cfg.Inbox.TriageAI = &triage
 	// Naming inherits kb; its requests must not change the judge's count or input.
 	naming := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": "example-task"}}})
 	}))
 	t.Cleanup(naming.Close)
 	h.cfg.KB.AI = &ai.Config{BaseURL: naming.URL, APIKeyFile: key, Model: "m"}
+	if _, ok := testAssistants.Load(h); ok && h.busConnOf(assistantwire.AssistantID) != nil {
+		helloChanged(t, h) // the manager, whose models these are, reads them again
+	}
 	return js
 }
 
 func TestJudgeStubSeparatesNamingCalls(t *testing.T) {
 	h, _ := newTaskHub(t)
 	js := stubJudge(t, h, http.StatusOK, `{"verdict":"done","reason":"Example completed task"}`)
-	if _, err := h.purposeModel("agent.title").Complete(context.Background(), "Example naming system", "Example task", 200); err != nil {
+	if _, err := ai.New(*h.cfg.KB.AI).Complete(context.Background(), "Example naming system", "Example task", 200); err != nil {
 		t.Fatal(err)
 	}
 	if js.calls.Load() != 0 {
 		t.Fatal("a naming request was counted as a completion judgment")
 	}
 	var result struct{ Verdict string }
-	if err := h.purposeModel("inbox.judge").JSON(context.Background(), "Example judgment system", "Example completed work", &result); err != nil {
+	if err := ai.New(*h.cfg.Inbox.TriageAI).JSON(context.Background(), "Example judgment system", "Example completed work", &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Verdict != "done" || js.calls.Load() != 1 {
 		t.Fatalf("judgment result %q, calls %d", result.Verdict, js.calls.Load())
 	}
 	input := js.input.Load()
-	probe, err := http.Get(h.triageAI.Config().BaseURL)
+	probe, err := http.Get(h.cfg.Inbox.TriageAI.BaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +91,7 @@ func TestJudgeStubSeparatesNamingCalls(t *testing.T) {
 	if js.calls.Load() != 1 || js.input.Load() != input {
 		t.Fatal("a non-model probe changed the completion judgment's count or input")
 	}
-	if _, err := h.purposeModel("agent.title").Complete(context.Background(), "Example naming system", "Another example task", 200); err != nil {
+	if _, err := ai.New(*h.cfg.KB.AI).Complete(context.Background(), "Example naming system", "Another example task", 200); err != nil {
 		t.Fatal(err)
 	}
 	if js.calls.Load() != 1 || js.input.Load() != input {

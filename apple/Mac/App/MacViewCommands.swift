@@ -9,7 +9,8 @@ enum MacViewCommands {
         return all[min(max(i, 0), all.count - 1)]
     }
 
-    /// The agent above / below in the Agents list's order (AgentListOrder: needs you → unread → working → seen),
+    /// The agent above / below in the Agents list's order (AgentListOrder: needs you → unread → working → seen, or by
+    /// time alone under 最近更新),
     /// wrapping around; Persona conversations are not in that list. From nothing, the first.
     static func neighbour(of key: SessionKey?, by delta: Int, in sessions: [Session], order: AgentListOrder) -> SessionKey? {
         let list = order.ordered(sessions.filter { !$0.assistant }).map(\.key)
@@ -39,6 +40,7 @@ struct MacViewMenu: Commands {
     let model: AppModel
     // The same settings as the Agents list's ⋯ menu (AgentsListMenu).
     @StoredValue("dev.grouping") private var grouping: DevGrouping = .standard
+    @StoredValue("dev.sort") private var sort: AgentSort = .state
     @StoredValue("dev.compact") private var compact = false
     @StoredValue(MacSection.sidebarHiddenKey) private var sidebarHidden = false
 
@@ -71,6 +73,10 @@ struct MacViewMenu: Commands {
                                                 set: { grouping = $0 })) {
                 ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { Text($0.title).tag($0) }
             }
+            Picker("排序方式", selection: $sort) {
+                ForEach(AgentSort.allCases) { Text($0.title).tag($0) }
+            }
+            .disabled(grouping == .state) // sectioned by state; the rows in a section are by time already
             // The Agents list is kept behind other sections (`MacPageStack`): only while it shows.
             Button("全部折叠") { MacShellState.shared.agentsList?.collapse() }
                 .disabled(MacShellState.shared.agentsList == nil || !agentsShown)
@@ -112,7 +118,8 @@ struct MacViewMenu: Commands {
     }
 
     private func go(_ delta: Int) {
-        let order = AgentListOrder(isPinned: { model.isPinned($0) }, isMuted: { model.isMuted($0) })
+        let order = AgentListOrder(isPinned: { model.isPinned($0) }, isMuted: { model.isMuted($0) },
+                                   byRank: sort == .state || grouping == .state)
         let current = MacShellState.shared.focusedChat(model).flatMap { model.session($0)?.assistant == true ? nil : $0 }
         if let next = MacViewCommands.neighbour(of: current, by: delta, in: model.sessionsNow, order: order) {
             MacShellState.shared.open(next, model)

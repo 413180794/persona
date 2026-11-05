@@ -222,7 +222,7 @@ func (s *Service) judgeTaskDone(ctx context.Context, t Todo) (taskDoneCheck, err
 		Verdict string `json:"verdict"`
 		Reason  string `json:"reason"`
 	}
-	if err := s.appCall(ctx, AppModels, ModelsJSON, map[string]any{"purpose": "inbox.judge", "system": system, "input": input}, &out); err != nil {
+	if err := s.purposeModel("inbox.judge").JSON(ctx, system, input, &out); err != nil {
 		return c, err
 	}
 	switch v := strings.ToLower(strings.TrimSpace(out.Verdict)); v {

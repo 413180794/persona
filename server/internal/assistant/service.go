@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"maps"
 	"net/http"
 	"sort"
 	"strings"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/secretkey"
 )
 
 // Options are what a Service runs with.
@@ -26,6 +26,9 @@ type Options struct {
 	Logf  func(format string, args ...any)
 	// KB is the knowledge base it keeps (kb.go); nil: none.
 	KB *KBOptions
+	// SecretKey is the path of the key the model providers' keys are sealed with (the hub's data directory's
+	// secret.key, models_launchers.go); "" makes one for this run only (tests).
+	SecretKey string
 }
 
 // Service is the assistant. It implements Handler.
@@ -58,6 +61,7 @@ type Service struct {
 	kb         kbState           // kb.go
 	inbox      inboxBook         // inbox.go
 	viewEvents viewNotifications // views.go: only coalesced notifications; contents are stored first
+	models     modelsState       // models.go: the model configuration
 }
 
 var _ Handler = (*Service)(nil)
@@ -72,6 +76,7 @@ func New(o Options) *Service {
 	if s.logf == nil {
 		s.logf = func(string, ...any) {}
 	}
+	s.models.secret = secretkey.New(o.SecretKey)
 	s.archiveRoutes()
 	s.profileRoutes()
 	s.startRoutes()
@@ -85,6 +90,12 @@ func New(o Options) *Service {
 	s.kbInit(o.KB)
 	s.kbRoutes()
 	s.inboxRoutes()
+	s.modelConfigRoutes()
+	s.launcherRoutes()
+	s.machineLauncherRoutes()
+	s.launcherQuotaRoutes()
+	s.providerProbeRoutes()
+	s.launcherImportRoutes()
 	return s
 }
 
@@ -208,26 +219,6 @@ type startParams struct {
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Purpose        string `json:"purpose,omitempty"` // the model configuration's purpose; "" is the assistant's
 	Space          string `json:"space,omitempty"`   // "health" starts it in the health space (docs/health.md)
-}
-
-// applyModel fills params (a node call's) with what purpose runs on (ModelsApply).
-func (s *Service) applyModel(ctx context.Context, purpose string, params map[string]any) error {
-	var res struct {
-		Params map[string]any `json:"params"`
-	}
-	if err := s.appCall(ctx, AppModels, ModelsApply, map[string]any{"purpose": purpose, "params": params}, &res); err != nil {
-		return err
-	}
-	clear(params)
-	maps.Copy(params, res.Params)
-	return nil
-}
-
-// resolveModel is what purpose runs on (ModelsResolve).
-func (s *Service) resolveModel(ctx context.Context, purpose string) (ModelBinding, error) {
-	var b ModelBinding
-	err := s.appCall(ctx, AppModels, ModelsResolve, map[string]any{"purpose": purpose}, &b)
-	return b, err
 }
 
 // kbReady: there is a knowledge base (kb.go; on, opened or about to).

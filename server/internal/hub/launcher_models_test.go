@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -55,7 +56,7 @@ func modelsRequest(h *Hub, method, path, body string) *httptest.ResponseRecorder
 func TestLauncherModelsEndpoint(t *testing.T) {
 	h := newTestHub(t)
 	var got map[string]any
-	cfg := MachineConfig{ID: "box", Launchers: []sessionLauncher{{Launcher: proto.Launcher{Name: "work"}, AgentType: "codex"}}}
+	cfg := MachineConfig{ID: "box", Launchers: []assistantwire.ConfiguredLauncher{{Launcher: proto.Launcher{Name: "work"}, AgentType: "codex"}}}
 	modelsNode(t, h, cfg, func(method string, p map[string]any) (any, error) {
 		if method != "launchers.models" {
 			return map[string]any{}, nil
@@ -63,6 +64,7 @@ func TestLauncherModelsEndpoint(t *testing.T) {
 		got = p
 		return proto.LauncherModels{Agent: "codex", Models: []proto.AgentModel{{ID: "model-a", Name: "Model A", Default: true}}}, nil
 	})
+	connectAssistant(t, h) // the picker's list comes through it (it adds the plugin gateway's models)
 	w := modelsRequest(h, "GET", "/api/v1/machines/box/launchers/work/models?refresh=1", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body)
@@ -83,6 +85,7 @@ func TestLauncherModelsEndpoint(t *testing.T) {
 	modelsNode(t, h2, MachineConfig{ID: "box"}, func(string, map[string]any) (any, error) {
 		return map[string]any{"agent": "traex"}, nil
 	})
+	connectAssistant(t, h2)
 	w = modelsRequest(h2, "GET", "/api/v1/machines/box/launchers/traex/models", "")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"models":[]`) {
 		t.Fatalf("%d %s", w.Code, w.Body)
@@ -96,6 +99,7 @@ func TestLauncherModelsEndpoint(t *testing.T) {
 	modelsNode(t, h3, MachineConfig{ID: "box"}, func(method string, _ map[string]any) (any, error) {
 		return nil, fmt.Errorf("unknown method %s", method)
 	})
+	connectAssistant(t, h3)
 	w = modelsRequest(h3, "GET", "/api/v1/machines/box/launchers/claude/models", "")
 	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), proto.CodeNodeOutdated) {
 		t.Fatalf("old node: %d %s", w.Code, w.Body)
@@ -134,13 +138,20 @@ func TestProviderModelsAsksAMachineWithTheLauncher(t *testing.T) {
 	}
 	var asked []string
 	modelsNode(t, h, MachineConfig{ID: "b"}, func(method string, p map[string]any) (any, error) {
+		if method == "launchers.list" { // b, online, says what it has (the manager asks it when it first lists)
+			return map[string]any{"launchers": []proto.Launcher{{Name: "work"}}}, nil
+		}
 		if method != "launchers.models" {
 			return map[string]any{}, nil
 		}
 		asked = append(asked, p["name"].(string))
 		return proto.LauncherModels{Agent: "claude", Models: []proto.AgentModel{{ID: "opus", Name: "Opus"}}}, nil
 	})
-	h.launchersSeen = map[string][]proto.Launcher{"a": {{Name: "work"}}, "b": {{Name: "work"}}, "c": {{Name: "elsewhere"}}}
+	if err := h.store.PutSetting(context.Background(), "launchers.zshrc", map[string][]proto.Launcher{"a": {{Name: "work"}}, "b": {{Name: "work"}},
+		"c": {{Name: "elsewhere"}}}); err != nil {
+		t.Fatal(err)
+	}
+	connectAssistant(t, h) // the model configuration's route is its (the machines' launchers the hub's: launchers.zshrc)
 	get := func(path string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, httptest.NewRequest("GET", path, nil))

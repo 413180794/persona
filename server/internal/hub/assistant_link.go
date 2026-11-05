@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -136,7 +135,8 @@ func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	out.Assistant.Machines = h.machineIDs()
 	out.DoneDelayMS = taskSettleDelay(h.cfg.Notify).Milliseconds()
 	out.PersonaView = h.cfg.Assistant.PersonaView
-	out.Agents = h.cfg.Agents // the Agents business's defaults (agents_link.go)
+	out.Agents = h.cfg.Agents  // the Agents business's defaults (agents_link.go)
+	out.Models = h.hubModels() // what hub.json says about models (assistant_models.go)
 	return out, nil
 }
 
@@ -148,10 +148,11 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 			list := []assistantwire.Device{}
 			for _, m := range h.machinesNow() {
 				m.mu.Lock()
-				online, home, dataDir := m.online, m.info.Home, m.info.DataDir
+				online, info := m.online, m.info
 				m.mu.Unlock()
-				list = append(list, assistantwire.Device{ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, SSHHost: m.cfg.SSHHost, Home: home,
-					DataDir: dataDir, Online: online, Reachable: m.reachable()})
+				list = append(list, assistantwire.Device{ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, SSHHost: m.cfg.SSHHost, Home: info.Home,
+					DataDir: info.DataDir, Online: online, Reachable: m.reachable(), Version: info.Version,
+					ModelConfiguration: info.ModelConfiguration})
 			}
 			return json.Marshal(map[string]any{"devices": list, "phone_online": h.phoneClient() != nil})
 		case assistantwire.DeviceInteractionsList:
@@ -197,6 +198,9 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 	if out, ok, err := h.assistantAppCall(ctx, p); ok { // assistant_apps.go
 		return out, err
 	}
+	if out, ok, err := h.modelsAppCall(ctx, p); ok { // the plugins' providers and models (assistant_models.go)
+		return out, err
+	}
 	if out, ok, err := h.channelsAppCall(ctx, p); ok { // the channels' transport (assistant_channels.go)
 		return out, err
 	}
@@ -207,69 +211,6 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 		return out, err
 	}
 	switch p.AppID + " " + p.Method {
-	case assistantwire.AppModels + " " + assistantwire.ModelsComplete:
-		var a struct {
-			Purpose   string `json:"purpose"`
-			System    string `json:"system"`
-			Input     string `json:"input"`
-			MaxTokens int    `json:"max_tokens"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil {
-			return nil, err
-		}
-		text, err := h.purposeModel(a.Purpose).Complete(ctx, a.System, a.Input, a.MaxTokens)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(map[string]any{"text": text})
-	case assistantwire.AppModels + " " + assistantwire.ModelsApply:
-		var a struct {
-			Purpose string         `json:"purpose"`
-			Params  map[string]any `json:"params"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil {
-			return nil, err
-		}
-		if a.Params == nil {
-			a.Params = map[string]any{}
-		}
-		if err := h.applyModel(ctx, a.Purpose, a.Params); err != nil {
-			return nil, err
-		}
-		return json.Marshal(map[string]any{"params": a.Params})
-	case assistantwire.AppModels + " " + assistantwire.ModelsResolve:
-		var a struct {
-			Purpose string `json:"purpose"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil {
-			return nil, err
-		}
-		b, err := h.resolveModel(ctx, a.Purpose)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(b)
-	case assistantwire.AppModels + " " + assistantwire.ModelsJSON:
-		var a struct {
-			Purpose   string `json:"purpose"`
-			System    string `json:"system"`
-			Input     string `json:"input"`
-			MaxTokens int    `json:"max_tokens"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil {
-			return nil, err
-		}
-		var out json.RawMessage
-		var err error
-		if a.MaxTokens > 0 { // the knowledge base's calls say how much room the answer needs
-			err = h.purposeModel(a.Purpose).JSONMax(ctx, a.System, a.Input, a.MaxTokens, &out)
-		} else {
-			err = h.purposeModel(a.Purpose).JSON(ctx, a.System, a.Input, &out)
-		}
-		if err != nil {
-			return nil, err
-		}
-		return out, nil
 	case assistantwire.AppConnectors + " " + assistantwire.ConnectorsSnapshots:
 		var a struct {
 			TZ string `json:"tz"`
@@ -531,13 +472,6 @@ func busCodedError(err error) error {
 		return &rpc.Error{Code: assistantwire.CodeNodeClosed, Message: err.Error()}
 	case errors.Is(err, assistantwire.ErrStaleSnapshot):
 		return &rpc.Error{Code: assistantwire.CodeStaleSnapshot, Message: err.Error()}
-	case ai.IsPaused(err):
-		var p *ai.PausedError
-		errors.As(err, &p)
-		data, _ := json.Marshal(p.Pause) // its reason (quota or busy) and until
-		return &rpc.Error{Code: assistantwire.CodeModelPaused, Message: err.Error(), Data: data}
-	case ai.IsNotConfigured(err):
-		return &rpc.Error{Code: assistantwire.CodeModelUnconfigured, Message: err.Error()}
 	}
 	return err
 }

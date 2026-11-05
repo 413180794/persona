@@ -93,7 +93,7 @@ func workMachine(t *testing.T, h *Hub) (*Machine, *workNode) {
 }
 
 // workModel answers every model call with reply.
-func workModel(t *testing.T, reply string) *ai.Client {
+func workModel(t *testing.T, reply string) ai.Config {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.ReadAll(r.Body)
@@ -102,7 +102,7 @@ func workModel(t *testing.T, reply string) *ai.Client {
 	t.Cleanup(srv.Close)
 	key := filepath.Join(t.TempDir(), "key")
 	_ = os.WriteFile(key, []byte("k"), 0o600)
-	return ai.New(ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"})
+	return ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"}
 }
 
 var turnEnd = time.Date(2026, 1, 2, 9, 0, 0, 0, time.UTC)
@@ -255,8 +255,8 @@ func TestAgentWorkOverTheBus(t *testing.T) {
 	h := newTestHub(t)
 	h.cfg.Agents.Triage.SettleSeconds = 1
 	m, n := workMachine(t, h)
-	h.triageAI = workModel(t, `{"phase":"blocked","on":"user","line":"等你选方案",
-		"questions":[{"question":"用哪个方案？","header":"方案","options":[{"label":"用 D4","description":"推荐"},{"label":"用 D2"}]}]}`)
+	useModel(t, h, workModel(t, `{"phase":"blocked","on":"user","line":"等你选方案",
+		"questions":[{"question":"用哪个方案？","header":"方案","options":[{"label":"用 D4","description":"推荐"},{"label":"用 D2"}]}]}`))
 	n.reply = "D2 / D4 选哪个？"
 	connectAssistant(t, h)
 	mux := h.routes()
@@ -415,8 +415,8 @@ func TestWithdrawnCardSaysNothing(t *testing.T) {
 // started); while there is none the hub applies 模型配置 › Agents itself and the tab gets no name.
 func TestAgentStartAsksTheManager(t *testing.T) {
 	h := newTestHub(t)
-	h.store = &newAgentStore{memStore: newMemStore(), b: ModelBinding{Provider: "launcher.work", Model: "m-1"}}
-	h.ai = workModel(t, "fix-login")
+	h.store = &newAgentStore{memStore: newMemStore(), b: assistantwire.ModelBinding{Provider: "launcher.work", Model: "m-1"}}
+	useModel(t, h, workModel(t, "fix-login"))
 	_, n := workMachine(t, h)
 	mux := h.routes()
 	start := func(body string) func(string) string {

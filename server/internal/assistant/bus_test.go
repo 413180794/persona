@@ -2,12 +2,10 @@ package assistant
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
 
-	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -31,20 +29,11 @@ func TestBusErrorKinds(t *testing.T) {
 		assistantwire.CodeMachineOffline: func(err error) bool { return errors.Is(err, apierr.ErrOffline) },
 		assistantwire.CodeNodeClosed:     func(err error) bool { return errors.Is(err, rpc.ErrClosed) },
 		assistantwire.CodeStaleSnapshot:  func(err error) bool { return errors.Is(err, ErrStaleSnapshot) },
-		assistantwire.CodeModelPaused:    ai.IsPaused,
 	} {
 		err := busError(&rpc.Error{Code: code, Message: "说明"})
 		if !is(err) || err.Error() != "说明" {
 			t.Errorf("%s: %v (%T)", code, err, err)
 		}
-	}
-	// A paused model's reason comes with it (the inbox tells a used-up quota from a busy model).
-	if paused, quota := modelPaused(busError(&rpc.Error{Code: assistantwire.CodeModelPaused, Message: "额度用完",
-		Data: json.RawMessage(`{"reason":"quota"}`)})); !paused || !quota {
-		t.Errorf("a paused model's reason: paused %v quota %v", paused, quota)
-	}
-	if !modelUnconfigured(busError(&rpc.Error{Code: assistantwire.CodeModelUnconfigured, Message: "没有模型"})) {
-		t.Error("an unconfigured model is not told")
 	}
 	var re *rpc.Error
 	if err := busError(&rpc.Error{Code: "permission_denied", Message: "不行"}); !errors.As(err, &re) || re.Code != "permission_denied" {

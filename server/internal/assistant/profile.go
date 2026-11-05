@@ -179,22 +179,6 @@ func (s *Service) launcherNow(ctx context.Context) string {
 	return s.settings(ctx).Launcher
 }
 
-// modelRecord is what purpose itself is set to in the hub's model configuration.
-type modelRecord struct {
-	Binding  ModelBinding `json:"binding"`
-	Revision int64        `json:"revision"`
-}
-
-func (s *Service) modelRecord(ctx context.Context, purpose string) (modelRecord, error) {
-	var r modelRecord
-	err := s.appCall(ctx, AppModels, ModelsRecord, map[string]any{"purpose": purpose}, &r)
-	return r, err
-}
-
-func (s *Service) saveModelRecord(ctx context.Context, purpose string, r modelRecord) error {
-	return s.appCall(ctx, AppModels, ModelsSave, map[string]any{"purpose": purpose, "revision": r.Revision, "binding": r.Binding}, nil)
-}
-
 // profile is what the hub's features need of the settings (Snapshot.Profile); tasks are the scheduled tasks as
 // reported (nil: unreadable, and Keep is left out). nil when the settings could not be read.
 func (s *Service) profile(ctx context.Context, tasks []TaskView) *Profile {
@@ -369,7 +353,7 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 		rec, err := s.modelRecord(ctx, "assistant")
 		if err == nil {
 			rec.Binding = mergeModel(rec.Binding, ModelBinding{Provider: "launcher." + in.Launcher})
-			err = s.saveModelRecord(ctx, "assistant", rec)
+			err = s.saveModel(ctx, "assistant", rec)
 		}
 		if err != nil {
 			apierr.Write(w, http.StatusInternalServerError, err)
@@ -410,20 +394,6 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	s.settingsChanged(ctx)
 	apierr.WriteJSON(w, s.view(ctx, false))
-}
-
-// mergeModel puts over's choices on base: another provider starts from nothing (its model and effort are its own).
-func mergeModel(base, over ModelBinding) ModelBinding {
-	if over.Provider != "" && over.Provider != base.Provider {
-		base = ModelBinding{Provider: over.Provider, Runtime: base.Runtime}
-	}
-	if over.Model != "" {
-		base.Model = over.Model
-	}
-	if over.Effort != "" {
-		base.Effort = over.Effort
-	}
-	return base
 }
 
 // checkLauncher: the assistant runs Claude Code (claude -p), Codex (codex app-server) or an agent runtime that says it

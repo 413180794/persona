@@ -42,11 +42,10 @@ func TestContributionSwitchRoute(t *testing.T) {
 	}
 	installForTest(t, h, dir)
 
-	presets := func() []string {
-		_, out := call(t, mux, "GET", "/api/v1/launchers/presets", master, "")
+	presets := func() []string { // what the manager's GET /api/v1/launchers/presets gets (plugins.presets)
 		var ids []string
-		for _, p := range out["presets"].([]any) {
-			ids = append(ids, p.(map[string]any)["id"].(string))
+		for _, p := range h.extensions.launcherPresets(context.Background()) {
+			ids = append(ids, p.ID)
 		}
 		return ids
 	}

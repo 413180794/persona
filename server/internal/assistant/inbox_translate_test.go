@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 )
 
@@ -36,15 +39,15 @@ func TestForeignScript(t *testing.T) {
 }
 
 // translateHub is an inbox whose hub wants mail translated into Chinese (a device asked for it), with mail 7 to read
-// and a translation model (fingerprint fp1) answering what it is given; translated counts the model's calls.
+// and a translation model answering what it is given; translated counts the model's calls.
 func translateHub(t *testing.T) (h *inboxHub, en, zh *InboxItem, translated func() int) {
 	t.Helper()
 	h = newInboxHub(t)
 	h.inboxReady(context.Background())
-	h.setConfig(func(c *assistantwire.InboxConfig) { c.Translate, c.TranslateFingerprint = []string{"zh-Hans"}, "fp1" })
+	h.setConfig(func(c *assistantwire.InboxConfig) { c.Translate = []string{"zh-Hans"} })
 	model, calls := captureModel(t, `{"subject":"设计评审能改期吗？","text":"你好，周四我要出差。"}`)
 	h.in.mu.Lock()
-	h.in.models[purposeTranslate], h.in.fingerprint = model, "fp1"
+	h.in.models[purposeTranslate] = model
 	h.in.mail = &fakeMail{bodies: map[uint32]assistantwire.InboxMailMessage{7: {Subject: "Can we move the design review?",
 		Text: "Hi, I'm travelling on Thursday, so I won't make the review."}}}
 	h.in.mu.Unlock()
@@ -66,13 +69,29 @@ func (h *inboxHub) passOver() {
 	h.inbox.translating.Unlock()
 }
 
+// translateModelAs gives the translation model another model name (on the same server): another fingerprint.
+func (h *inboxHub) translateModelAs(t *testing.T, name string) string {
+	t.Helper()
+	h.in.mu.Lock()
+	c := h.in.models[purposeTranslate].Config()
+	c.Model = name
+	h.in.models[purposeTranslate] = ai.New(c)
+	h.in.mu.Unlock()
+	fp, err := h.translateFingerprint(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fp
+}
+
 func TestNewMailIsTranslatedBeforeItIsOpened(t *testing.T) {
 	h, en, zh, translated := translateHub(t)
 	ctx := context.Background()
+	fp1, _ := h.translateFingerprint(ctx)
 	h.translateInbox(ctx)
 	h.passOver()
 	tr := en.Translations["zh-Hans"]
-	if tr == nil || tr.Subject != "设计评审能改期吗？" || tr.Of != "7" || tr.ModelFingerprint != "fp1" {
+	if tr == nil || tr.Subject != "设计评审能改期吗？" || tr.Of != "7" || tr.ModelFingerprint != fp1 {
 		t.Fatalf("not translated: %+v", tr)
 	}
 	if zh.Translations != nil || translated() != 1 {
@@ -92,13 +111,11 @@ func TestNewMailIsTranslatedBeforeItIsOpened(t *testing.T) {
 	// Opening the mail (POST /api/v1/translate/mail) finds the stored translation, by the same model only.
 	h.inbox.translations = translateCache{} // not from the cache: from the item
 	ref := assistantwire.InboxMailRef{AccountID: "a", UID: 7, Mailbox: "INBOX"}
-	if got, err := h.translateMail(ctx, ref, "zh-Hans"); err != nil || got.Subject != "设计评审能改期吗？" || got.ModelFingerprint != "fp1" || translated() != 1 {
+	if got, err := h.translateMail(ctx, ref, "zh-Hans"); err != nil || got.Subject != "设计评审能改期吗？" || got.ModelFingerprint != fp1 || translated() != 1 {
 		t.Fatalf("opened: %+v %v (%d asked)", got, err, translated())
 	}
-	h.in.mu.Lock()
-	h.in.fingerprint = "fp2"
-	h.in.mu.Unlock()
-	if got, err := h.translateMail(ctx, ref, "zh-Hans"); err != nil || got.ModelFingerprint != "fp2" || translated() != 2 {
+	fp2 := h.translateModelAs(t, "m2")
+	if got, err := h.translateMail(ctx, ref, "zh-Hans"); err != nil || got.ModelFingerprint != fp2 || translated() != 2 {
 		t.Fatalf("another model's translation was taken: %+v %v", got, err)
 	}
 	// Translated already: the next pass asks nothing; another model: translated again.
@@ -107,7 +124,7 @@ func TestNewMailIsTranslatedBeforeItIsOpened(t *testing.T) {
 	if translated() != 2 {
 		t.Fatalf("translated again: %d", translated())
 	}
-	h.setConfig(func(c *assistantwire.InboxConfig) { c.TranslateFingerprint = "fp3" })
+	h.translateModelAs(t, "m3")
 	h.translateInbox(ctx)
 	h.passOver()
 	if translated() != 3 {
@@ -127,9 +144,19 @@ func TestNewMailIsTranslatedBeforeItIsOpened(t *testing.T) {
 func TestTranslateTextsKeepsOrderAndCaches(t *testing.T) {
 	h := newInboxHub(t)
 	ctx := context.Background()
-	set := func(reply, fingerprint string) {
+	// One server answering reply; the model's name is the fingerprint's part a test changes ("": no model).
+	var reply atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": reply.Load()}}})
+	}))
+	t.Cleanup(srv.Close)
+	set := func(answer, name string) {
+		reply.Store(answer)
 		h.in.mu.Lock()
-		h.in.models[purposeTranslate], h.in.fingerprint = fakeModel(t, reply), fingerprint
+		h.in.models[purposeTranslate] = nil
+		if name != "" {
+			h.in.models[purposeTranslate] = ai.New(ai.Config{BaseURL: srv.URL, APIKey: "k", Model: name})
+		}
 		h.in.mu.Unlock()
 	}
 	set(`{"texts":["你好","明天见"]}`, "fp1")
@@ -182,7 +209,7 @@ func TestTranslateRoutes(t *testing.T) {
 	h.in.models[purposeTranslate] = fakeModel(t, `{"subject":"设计评审能改期吗？","text":"你好"}`)
 	h.in.mu.Unlock()
 	if code, out := inboxCall(t, h.routes(), "POST", "/api/v1/translate/mail", `{"account_id":"a","uid":7,"target":"zh-Hans"}`); code != http.StatusOK ||
-		out["subject"] != "设计评审能改期吗？" || out["model_fingerprint"] != "fp1" {
+		out["subject"] != "设计评审能改期吗？" || out["model_fingerprint"] != mustFingerprint(t, h) {
 		t.Fatalf("a mail: %d %v", code, out)
 	}
 	if code, _ := inboxCall(t, h.routes(), "POST", "/api/v1/translate/mail", `{"account_id":"a","uid":99,"target":"zh-Hans"}`); code != http.StatusBadGateway {
@@ -208,7 +235,7 @@ func TestGoldenTranslateTexts(t *testing.T) {
 	h := newInboxHub(t)
 	model, calls := captureModel(t, `{"texts":["你好","明天见"]}`)
 	h.in.mu.Lock()
-	h.in.models[purposeTranslate], h.in.fingerprint = model, "fp1"
+	h.in.models[purposeTranslate] = model
 	h.in.mu.Unlock()
 	if _, err := h.translateTexts(context.Background(), []string{"Hello", "", "See you tomorrow"}, "zh-Hans"); err != nil {
 		t.Fatal(err)
@@ -220,7 +247,7 @@ func TestGoldenTranslateMail(t *testing.T) {
 	h := newInboxHub(t)
 	model, calls := captureModel(t, `{"subject":"季度汇报","text":"请在周五前提交。"}`)
 	h.in.mu.Lock()
-	h.in.models[purposeTranslate], h.in.fingerprint = model, "fp1"
+	h.in.models[purposeTranslate] = model
 	h.in.mail = &fakeMail{bodies: map[uint32]assistantwire.InboxMailMessage{7: {Subject: "Quarterly report", Text: "  Please submit it by Friday.  "}}}
 	h.in.mu.Unlock()
 	if _, err := h.translateMail(context.Background(), assistantwire.InboxMailRef{AccountID: "acc1", UID: 7, Mailbox: "INBOX"}, "zh-Hans"); err != nil {
@@ -249,4 +276,14 @@ func TestTranslationPassOutlivesTheRefreshRequest(t *testing.T) {
 	if tr := en.Translations["zh-Hans"]; tr == nil || tr.Subject != "设计评审能改期吗？" {
 		t.Fatalf("pass stopped with the request: %+v", tr)
 	}
+}
+
+// mustFingerprint is the translation model's fingerprint now.
+func mustFingerprint(t *testing.T, h *inboxHub) string {
+	t.Helper()
+	fp, err := h.translateFingerprint(context.Background())
+	if err != nil || fp == "" {
+		t.Fatalf("fingerprint %q: %v", fp, err)
+	}
+	return fp
 }

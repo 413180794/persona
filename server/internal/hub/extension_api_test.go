@@ -256,7 +256,6 @@ func callReq(t *testing.T, h http.Handler, req *http.Request, token string) (int
 	return w.Code, out
 }
 
-
 // opsStore adds client-op receipts to a test store.
 type opsStore struct {
 	Store

@@ -524,35 +524,19 @@ func (s *Service) sendModel(ctx context.Context, machine, sid string, p map[stri
 	// fall back to the assistant's launcher and its default.
 	if l != "" {
 		model, _ := p["model"].(string)
-		var check struct {
-			Available bool `json:"available"`
-			ModelOK   bool `json:"model_ok"`
-		}
-		err := s.appCall(ctx, AppModels, ModelsLauncherCheck, map[string]any{"machine_id": machine, "launcher": l, "model": model}, &check)
 		switch {
-		case err != nil: // can't be told: as it is
-		case !check.Available:
+		case !s.launcherAvailable(ctx, machine, l): // true when it can't be told
 			l = s.launcherNow(ctx)
 			s.logf("[%s] %s: its launcher is gone, using %s", machine, short(sid), l)
 			p["launcher"] = l
 			delete(p, "model")
-		case model != "" && !check.ModelOK:
+		case model != "" && !s.launcherHasModel(ctx, machine, l, model):
 			s.logf("[%s] %s: model %s is not in %s's list any more, using its default", machine, short(sid), model, l)
 			delete(p, "model")
 		}
 	}
 	if l != "" {
-		var res struct {
-			Params map[string]any `json:"params"`
-		}
-		if err := s.appCall(ctx, AppModels, ModelsApplyPicked, map[string]any{"params": p}, &res); err != nil {
-			return err
-		}
-		clear(p)
-		for k, v := range res.Params {
-			p[k] = v
-		}
-		return nil
+		return s.applyPickedModel(ctx, p)
 	}
 	return s.applyModel(ctx, "assistant", p)
 }

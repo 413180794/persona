@@ -3,5 +3,6 @@
   "outdated": "这台机器上的 personad 太旧，不能读取 ~/.zshrc，需要更新 node",
   "err_nothing_named": "没有可导入的 {name}",
   "err_machine_required": "需要 machine",
-  "err_machine_providers_required": "需要 machine 和 providers"
+  "err_machine_providers_required": "需要 machine 和 providers",
+  "err_no_machine": "没有这台机器"
 }
