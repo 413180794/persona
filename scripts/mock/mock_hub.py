@@ -8560,7 +8560,10 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if p == "/mock/renamed": return self.send_json({"renamed": RENAMED})
         if p == "/mock/served": return self.send_json({"served": SERVED})
-        if p == "/api/v1/inbox": return self.send_json(inbox_list(q))
+        if p == "/api/v1/inbox":
+            # MOCK_INBOX_DELAY_MS=<ms>: a slow hub, for the inbox refreshing in the background (#1947, docs/testing.md)
+            time.sleep(int(os.environ.get("MOCK_INBOX_DELAY_MS", "0")) / 1000)
+            return self.send_json(inbox_list(q))
         if p == "/api/v1/inbox/mutes": return self.send_json({"mutes": MUTES})
         if p == "/api/v1/lark/moments/posts/mp1": return self.send_json(MOMENT_POST)
         if p == "/api/v1/lark/moments/posts/mp1/comments": return self.send_json({"comments": MOMENT_COMMENTS})

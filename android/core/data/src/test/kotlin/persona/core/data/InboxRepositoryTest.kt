@@ -457,11 +457,137 @@ class InboxRepositoryTest {
         }
     }
 
+    // A Feishu chat that keeps announcing itself unchanged, and a burst of inbox changes, over a shown list on a slow
+    // hub: the list never goes back to loading (which inserts a row and pushes it down), Feishu events do not refresh
+    // the inbox (the hub sends {"type":"inbox"} when it changes), the burst is one refresh instead of a queue, and an
+    // event that comes in during a refresh still gets a refresh after it.
+    @Test fun hubEventBurstsOverAShownListRefreshOnceWithoutLoading() = runBlocking<Unit> {
+        val directory = Files.createTempDirectory("inbox-burst-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val window = 200L
+        try {
+            val gate = java.util.concurrent.atomic.AtomicReference<CompletableDeferred<Unit>?>(null)
+            val entered = java.util.concurrent.atomic.AtomicReference(CompletableDeferred<Unit>())
+            val transport = FakeTransport().apply {
+                items = JsonArray(listOf(buildJsonObject { put("id", "lark:chat:1"); put("source", "lark"); put("kind", "group")
+                    put("title", "群"); put("lark", buildJsonObject { put("feed_id", "chat") }) }))
+                onInbox = { entered.get().complete(Unit); gate.get()?.await() ?: delay(50) }
+            }
+            val hub = FakeHub()
+            val repository = repository(transport, directory, owner, hub, refreshWindowMillis = window)
+            // The pairing's first emission clears the list; refresh after it, not before.
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            assertEquals(1, repository.snapshot.value.records.size)
+            val loading = java.util.Collections.synchronizedList(mutableListOf<Boolean>())
+            owner.launch { repository.snapshot.collect { loading += it.loading } }
+            // The page being shown starts the polling fallback with one refresh of its own; let it finish.
+            withTimeout(5_000) { repository.snapshot.first { it.refreshes >= 2 } }
+            loading.clear()
+            suspend fun settled(): Int { delay(window * 4); return transport.inboxCalls.get() }
+            val before = settled()
+
+            repeat(6) { hub.events.emit(LarkEvent(listOf("chat"))) }
+            assertEquals("Feishu events alone do not refresh the inbox", before, settled())
+
+            repeat(6) { hub.events.emit(InboxEvent()) }
+            withTimeout(5_000) { while (transport.inboxCalls.get() == before) delay(10) }
+            val refreshes = settled() - before
+            assertTrue("a burst of inbox events is merged into one refresh, was $refreshes", refreshes in 1..2)
+            assertFalse("a shown list never goes back to loading", loading.any { it })
+            assertEquals(listOf("lark:chat:1"), repository.snapshot.value.records.map { it.item.id })
+
+            val held = CompletableDeferred<Unit>()
+            gate.set(held)
+            entered.set(CompletableDeferred())
+            val during = transport.inboxCalls.get()
+            hub.events.emit(InboxEvent())
+            withTimeout(5_000) { entered.get().await() }
+            entered.set(CompletableDeferred())
+            hub.events.emit(InboxEvent())
+            gate.set(null)
+            held.complete(Unit)
+            withTimeout(5_000) { entered.get().await() }
+            assertEquals("an event during a refresh gets one more refresh", during + 2, settled())
+        } finally {
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
+    // A shown list over a reconnect (the hub goes Connecting and back Online, which refreshes) and over refreshes that
+    // fail: the list stays, it never goes back to loading, and a failure is an error over the list rather than a reset.
+    @Test fun reconnectsAndFailedRefreshesOverAShownListNeverShowLoading() = runBlocking<Unit> {
+        val directory = Files.createTempDirectory("inbox-reconnect-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val failing = java.util.concurrent.atomic.AtomicBoolean(false)
+            val transport = FakeTransport().apply {
+                items = JsonArray(listOf(buildJsonObject { put("id", "lark:chat:1"); put("source", "lark"); put("kind", "group")
+                    put("title", "群"); put("lark", buildJsonObject { put("feed_id", "chat") }) }))
+                onInbox = { delay(50); if (failing.get()) throw IOException("hub went away") }
+            }
+            val hub = FakeHub()
+            val repository = repository(transport, directory, owner, hub, refreshWindowMillis = 100)
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            val seen = java.util.Collections.synchronizedList(mutableListOf<InboxSnapshot>())
+            owner.launch { repository.snapshot.collect { seen += it } }
+            withTimeout(5_000) { repository.snapshot.first { it.refreshes >= 2 } }
+            seen.clear()
+
+            repeat(2) {
+                hub.state.value = ConnectionState.Connecting
+                delay(100)
+                hub.state.value = ConnectionState.Online
+                val done = repository.snapshot.value.refreshes
+                withTimeout(5_000) { repository.snapshot.first { it.refreshes > done } }
+            }
+            failing.set(true)
+            val calls = transport.inboxCalls.get()
+            hub.state.value = ConnectionState.Connecting
+            delay(100)
+            hub.state.value = ConnectionState.Online
+            hub.events.emit(InboxEvent())
+            withTimeout(5_000) { while (transport.inboxCalls.get() < calls + 2) delay(10) }
+            withTimeout(5_000) { repository.snapshot.first { it.error != null } }
+
+            assertFalse("a shown list never goes back to loading", seen.any { it.loading })
+            assertTrue("the list stays through reconnects and failures", seen.all { it.records.map { r -> r.item.id } == listOf("lark:chat:1") })
+            failing.set(false)
+            repository.refresh()
+            assertNull(repository.snapshot.value.error)
+        } finally {
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
+    // An empty list still shows that it is loading while the first refresh runs.
+    @Test fun emptyListShowsLoadingWhileRefreshing() = runBlocking<Unit> {
+        val directory = Files.createTempDirectory("inbox-empty-loading-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val transport = FakeTransport().apply { onInbox = { started.complete(Unit); release.await() } }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { started.await() }
+            withTimeout(5_000) { repository.snapshot.first { it.loading } }
+            release.complete(Unit)
+            withTimeout(5_000) { repository.snapshot.first { !it.loading } }
+        } finally {
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
     private suspend fun awaitState(state: StateFlow<LarkConversation>, predicate: (LarkConversation) -> Boolean) =
         withTimeout(5_000) { state.first(predicate) }
 
     private fun repository(transport: FakeTransport, directory: java.io.File, owner: CoroutineScope,
-        hub: FakeHub, snapshots: ListSnapshotStore? = null, sender: MainConversationSender? = null): RealInboxRepository = RealInboxRepository(
+        hub: FakeHub, snapshots: ListSnapshotStore? = null, sender: MainConversationSender? = null,
+        refreshWindowMillis: Long = 1_000): RealInboxRepository = RealInboxRepository(
         object : InboxAssistantConnection { override val current = MutableStateFlow<InboxAssistantTransport?>(transport) },
         InboxReplyJournal(directory, "hub/generation"),
         object : SessionsRepository {
@@ -474,6 +600,7 @@ class InboxRepositoryTest {
             override suspend fun refresh() = Unit
             override suspend fun resolve(id: String, resolution: Resolution) = Unit
         }, owner, snapshots = snapshots, hubConnection = hub, mainConversationSender = sender,
+        refreshWindowMillis = refreshWindowMillis,
     ) { _, _ -> error("unused") }
 
     private class FakeHub : HubConnection, OpenWindowReconciliationOwner {
@@ -503,7 +630,9 @@ class InboxRepositoryTest {
             put("messages", JsonArray(emptyList())); put("sync_state", "complete")
         } }
         override suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String) = onReply(clientId)
-        override suspend fun inbox() = buildJsonObject { put("items", items) }
+        val inboxCalls = java.util.concurrent.atomic.AtomicInteger()
+        var onInbox: suspend () -> Unit = {}
+        override suspend fun inbox(): JsonObject { inboxCalls.incrementAndGet(); onInbox(); return buildJsonObject { put("items", items) } }
         override suspend fun setDone(itemId: String, done: Boolean) = JsonObject(emptyMap())
         val bulk = mutableListOf<Pair<List<InboxDoneTarget>, Boolean>>()
         var onBulk: suspend (List<InboxDoneTarget>, Boolean) -> JsonObject = { _, _ -> JsonObject(emptyMap()) }

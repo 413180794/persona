@@ -24,6 +24,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     val snapshot by repository.snapshot.collectAsStateWithLifecycle()
     val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
     val onlineSince = rememberOnlineSince(connection)
+    val shownConnection = rememberSettledConnection(connection)
     val savedPreferences by repository.preferences.collectAsStateWithLifecycle(InboxPreferences())
     val feedback = persona.core.designsystem.LocalAppFeedback.current
     val scope = rememberCoroutineScope()
@@ -169,7 +170,9 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
         listOf("" to "所有类型", "mention" to "@我", "dm" to "私聊", "group" to "群聊", "mail" to "邮件", "agent" to "Agent").map { (value, label) ->
             JAction(label, checked = kind == value) { filter(currentFilters.copy(kind = value)) }
         })
-    val failedEmpty = snapshot.records.isEmpty() && !snapshot.loading && (error ?: snapshot.error) != null
+    // Loading shows only while there is nothing to show yet: a row put in over a shown list pushes it down, then goes.
+    val loadingFirst = snapshot.loading && snapshot.records.isEmpty() && snapshot.interactions.isEmpty()
+    val failedEmpty = snapshot.records.isEmpty() && !loadingFirst && (error ?: snapshot.error) != null
     // One remembered list per filter. The query and the folds stay out of the key: a new key recreates the page, so
     // typing would drop the search field's focus (and the keystroke) and folding a section would jump to the top.
     listStates.SaveableStateProvider(listOf(source, kind, section).toString()) {
@@ -177,9 +180,9 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
         JListPage(
             title = "收件箱",
             summary = inboxSummary(overall, ::working),
-            subtitle = inboxTitle(connection).takeIf { connection != ConnectionState.Online },
-            titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
-            onTitleClick = if (connection == ConnectionState.Online) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
+            subtitle = inboxTitle(shownConnection).takeIf { shownConnection != ConnectionState.Online },
+            titleBusy = shownConnection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
+            onTitleClick = if (shownConnection == ConnectionState.Online) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
             state = scroll, refreshing = refreshing, onRefresh = { refresh() },
             actions = {
                 if (mailTransport != null) {
@@ -200,12 +203,12 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             }
             // New items waiting outside the list for triage (#1773): one line over the first item until triage is ok.
             InboxTriageText.banner(snapshot.triage)?.let { banner -> item("triage") { InboxTriageNotice(banner) } }
-            if (snapshot.loading) item("loading") { JLoading(text = "正在读取收件箱") }
+            if (loadingFirst) item("loading") { JLoading(text = "正在读取收件箱") }
             if (!failedEmpty) (error ?: snapshot.error?.takeIf { feedback == null || connection == ConnectionState.Online })?.let { message ->
                 item("error") { StatusText(message, isError = true) }
             }
             if (preferenceError) item("preference-error") { StatusText("筛选条件未能保存，请重试", isError = true) }
-            if (groups.isEmpty() && !snapshot.loading) item("empty") {
+            if (groups.isEmpty() && !loadingFirst) item("empty") {
                 val filtered = query.isNotEmpty() || source.isNotEmpty() || kind.isNotEmpty() || section.isNotEmpty()
                 when {
                     !filtered && failedEmpty -> JEmptyState("收件箱没能加载", "检查连接后再试一次。", action = {
@@ -337,6 +340,22 @@ internal fun kindLabel(record: InboxRecord): String = when {
 private fun displayTime(value: String): String = runCatching {
     java.time.Instant.parse(value).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm"))
 }.getOrDefault("")
+
+/**
+ * The connection state the inbox title shows. Every reconnect passes through Connecting and Updating, usually for a
+ * moment; shown at once, they put a spinner and a line under the title and push the list down, then take them away.
+ * Coming from Online they show once they have lasted [delayMillis]; every other change shows at once.
+ */
+@Composable
+internal fun rememberSettledConnection(connection: ConnectionState, delayMillis: Long = 1_000): ConnectionState {
+    val brief = connection == ConnectionState.Connecting || connection == ConnectionState.Updating
+    var shown by remember { mutableStateOf(if (brief) ConnectionState.Online else connection) }
+    LaunchedEffect(connection) {
+        if (brief && shown == ConnectionState.Online) kotlinx.coroutines.delay(delayMillis)
+        shown = connection
+    }
+    return shown
+}
 
 internal fun inboxTitle(state: ConnectionState): String = when (state) {
     ConnectionState.Online -> "收件箱"

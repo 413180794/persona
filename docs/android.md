@@ -446,6 +446,13 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 - **截图（不用模拟器）**：`./gradlew :feature:inbox:testDebugUnitTest --tests '*InboxTriageShotsTest*'`，Robolectric 原生绘制整个收件箱页，三种风格 × 深浅色 × 三种情况（没配模型带「去配置」、积压、几个来源带 hub 的原因），PNG 在 `build/inbox-triage-shots/`。
 - **单测**：`InboxTriageTest`（解析、老 hub、一个 / 几个来源、hub 的原因和兜底的话、不认识的状态、只有没配模型才有去配置）、`InboxTriageShotsTest`（文案在、去配置只在没配模型时出现且点了打开设置、不能改设置的设备只有文字、回到 ok 和老 hub 不显示）、`core/data` 的 `InboxHandOffRepositoryTest.refreshCarriesTheHubsTriage`。
 
+## 收件箱：后台刷新时列表不动（#1947）
+
+- **刷新**：`RealInboxRepository` 只在收到 `{"type":"inbox"}` 时刷新列表；连续来的几个合成一次（`refreshWindowMillis`，默认 1 秒，用 `sample`），刷新进行中又来的事件，刷新完再补一次。`{"type":"lark"}` 只重读打开着的飞书会话，不刷新列表：hub 改了列表会自己发 `inbox`，iOS 也这样做。连上 hub 时仍立即刷新一次，15 秒轮询仍是兜底。
+- **加载行**：只有列表还空着时，刷新才把 `loading` 置为 true，`InboxScreen` 也只在这时显示「正在读取收件箱」。已经有内容时，后台刷新不插这一行。`InboxSnapshot.refreshes` 记录成功刷新的次数；`InboxExperienceRepository` 按这个计数判断刷新是否完成，以便空列表能替换掉旧记录。
+- **标题**：从在线变成「连接中…」「更新中…」，要持续 1 秒才显示（`rememberSettledConnection`）；证书不符等其他状态立即显示。
+- **单测**：`InboxRepositoryTest.hubEventBurstsOverAShownListRefreshOnceWithoutLoading`、`emptyListShowsLoadingWhileRefreshing`，`InboxFeatureTest.backgroundRefreshToAnEmptyListEmptiesTheExperience`，`InboxBackgroundRefreshTest`。慢 hub 用 mock 的 `MOCK_INBOX_DELAY_MS`（[testing.md](testing.md)）。
+
 ## 飞书经扩展：按 hub 的 features 显示（#1530）
 
 经 lark-connector 接飞书由私有扩展提供，hub 只在装了扩展时有 `/api/v1/lark/…`，扩展往 hello 的 features 里加 `lark`、`lark_moments`（还有 `lark_attachments`、`lark_native_encryption`）。

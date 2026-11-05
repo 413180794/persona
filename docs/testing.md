@@ -623,6 +623,7 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
 会话页用 `-tab mail -openInboxItem lark:f3:300`，收件箱用 `-tab mail`。脚本看到 `page-idle-started` 后推
 `GET /mock/lark_churn?feed=f3&n=14&ms=500&new=1`：按 hub 的方式推 `{"type":"lark"}`，每轮先加一条别人发的消息；收件箱那页加 `&inbox=1`。
 `GET /mock/lark_churned` 返回已经推了几轮。
+`MOCK_INBOX_DELAY_MS=<毫秒>` 让 `/api/v1/inbox` 晚这么多毫秒才回，像一台慢的 hub：推送期间收件箱后台刷新时，列表不该上下跳（#1947）。
 
 2026-11-03 P-19（打开的会话每次推送都重拉最新一页，并在主线程解码 40 条消息）。iPhone 17 模拟器，同一段时间里改前、改后各跑 3 次：
 

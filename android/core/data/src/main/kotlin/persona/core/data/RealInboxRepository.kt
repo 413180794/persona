@@ -18,7 +18,7 @@ import java.io.IOException
 
 enum class LarkWindowSyncState { Cached, Syncing, Complete, Incomplete, Failed }
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class RealInboxRepository(
     private val connection: InboxAssistantConnection,
     private val journal: InboxReplyJournal,
@@ -36,6 +36,8 @@ class RealInboxRepository(
     private val sendThread: (suspend (String, ReplyRequest) -> JsonObject)? = null,
     /** The ordinary sessions' outbox (the one Agents uses): 交给 AI to an Agent queues its message there. */
     private val messageSender: MessageSender? = null,
+    /** How long a burst of hub inbox events is collected before the one refresh it causes. */
+    private val refreshWindowMillis: Long = 1_000,
     // Last, so existing callers that pass it as a trailing lambda keep compiling.
     private val download: suspend (InboxAssistantTransport, LarkPart.File) -> String,
 ) : persona.feature.inbox.InboxRepository {
@@ -54,6 +56,8 @@ class RealInboxRepository(
     private val outbox = MutableStateFlow<List<InboxPendingReply>>(emptyList())
     private val versions = mutableMapOf<String, String>()
     private val refreshLock = Mutex()
+    // The items last written to the list snapshot, so an unchanged list is not written again.
+    private var savedItems: Pair<String, JsonArray>? = null
     private val sendLock = Mutex()
     private val personaLock = Mutex()
     private val personaRequests = mutableMapOf<String, String>()
@@ -64,6 +68,7 @@ class RealInboxRepository(
     private suspend fun restore(transport: InboxAssistantTransport) {
         if (restoredScope == transport.scope) return
         quietly { snapshots.restore<JsonObject>("${transport.scope}:inbox")?.let { data ->
+            savedItems = transport.scope to JsonArray(data.array("items"))
             val records = data.array("items").map { record(it.jsonObject, transport) }
             if (owns(transport)) current.update { it.copy(records = records, loading = false) }
         } }
@@ -161,11 +166,18 @@ class RealInboxRepository(
                         else -> return@collect
                     }
                     val active = invalidateWindows(feeds)
+                    // A Feishu event is about chats: it reloads the open windows only. The hub tells {"type":"inbox"}
+                    // whenever the list itself changes (as the iOS app relies on); an unchanged chat can send Feishu
+                    // events every few seconds, and a full inbox refresh for each one kept the list moving.
                     coroutineScope {
-                        launch { quietly { refresh() } }
                         active.forEach { window -> launch { quietly { load(window, older = false) } } }
                     }
                 }
+            }
+            // A burst of inbox events is one refresh: sample passes at most one event per window, and an event that comes
+            // in while a refresh runs is kept for one more refresh after it.
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                hub.events.filterIsInstance<InboxEvent>().sample(refreshWindowMillis).collect { quietly { refresh() } }
             }
         }
         // Polling remains a fallback for hubs without invalidation events.
@@ -183,7 +195,8 @@ class RealInboxRepository(
         val transport = requireTransport()
         if (!online()) return@withLock
         restore(transport)
-        current.update { it.copy(loading = true, error = null) }
+        // Only an empty list shows that it is loading: a background refresh of a shown list must not change its layout.
+        current.update { if (it.records.isEmpty()) it.copy(loading = true, error = null) else it }
         try {
             val body = transport.inbox()
             val data = body.array("items").map { it.jsonObject }
@@ -203,8 +216,12 @@ class RealInboxRepository(
             outbox.value = saved.outbox
             current.update { it.copy(records = records.map { item -> withLocalStatus(item, saved) },
                 mutes = mute?.let { m -> AgentPreferences(m.strings("spaces"), m.strings("sessions"), m.strings("allowed").toSet()) } ?: it.mutes,
-                loading = false, error = null, triage = triage) }
-            snapshots.save("${transport.scope}:inbox", buildJsonObject { put("items", JsonArray(data)) })
+                loading = false, error = null, triage = triage, refreshes = it.refreshes + 1) }
+            val items = JsonArray(data)
+            if (savedItems != transport.scope to items) {
+                snapshots.save("${transport.scope}:inbox", buildJsonObject { put("items", items) })
+                savedItems = transport.scope to items
+            }
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) {
             if (owns(transport)) current.update { it.copy(loading = false, error = "收件箱刷新失败，请重试") }

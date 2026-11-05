@@ -39,15 +39,16 @@ class InboxExperienceRepository(
             try {
                 ready.await()
                 // The delegate starts empty. Only a successful refresh may replace the disk snapshot with an empty list.
-                var wasLoading = false
+                // A refresh of a shown list leaves `loading` alone, so the refresh count tells when one has completed.
+                var refreshes = delegate.snapshot.value.refreshes
                 delegate.snapshot.collect { value ->
-                    val completed = wasLoading && !value.loading && value.error == null
+                    val completed = value.refreshes > refreshes && value.error == null
                     val hasRecords = value.records.isNotEmpty() || completed
                     current.value = decorate(value.copy(records = if (hasRecords) value.records else current.value.records))
                     if (!value.loading && value.error == null && hasRecords) {
                         update { it.copy(records = value.records.map(InboxRecord::cached)) }
                     }
-                    wasLoading = value.loading
+                    refreshes = value.refreshes
                 }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { current.update { it.copy(loading = false, error = "本地收件箱读取失败，请重新打开") } }

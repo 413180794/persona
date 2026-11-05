@@ -98,6 +98,8 @@ data class InboxSnapshot(
     val machines: Map<String, String> = emptyMap(),
     /** How triage stands: new items waiting outside the list (#1773); null from an older hub. */
     val triage: InboxTriage? = null,
+    /** How many refreshes have succeeded. A new count says the records are the hub's whole list, even when it is empty. */
+    val refreshes: Int = 0,
 )
 
 data class InboxRecord(

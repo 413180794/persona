@@ -104,6 +104,36 @@ class InboxFeatureTest {
         assertEquals(ReplyDelivery.Sent, restored.replyStatus(target, request.clientId))
     }
 
+    // A background refresh of a shown list does not go through loading, so the refresh count is what lets a list that
+    // became empty (items expired, a source closed) replace the shown one; a fresh, empty delegate still does not.
+    @Test
+    fun backgroundRefreshToAnEmptyListEmptiesTheExperience() = runTest {
+        val repository = FakeInboxRepository()
+        val owner = CoroutineScope(backgroundScope.coroutineContext + SupervisorJob(backgroundScope.coroutineContext[Job]))
+        val actions = object : InboxActionsTransport {
+            override suspend fun collectNow() = Unit
+            override suspend fun context(itemId: String) = ""
+        }
+        val experience = InboxExperienceRepository(repository, MemoryInboxStorage(), actions,
+            MutableStateFlow(ConnectionState.Connecting), owner, { _, _, _ -> })
+        val record = InboxRecord(InboxItem("item", title = "事项"), feedId = "feed")
+        repository.snapshot.value = InboxSnapshot(records = listOf(record), refreshes = 1)
+        runCurrent()
+        assertEquals(listOf("item"), experience.snapshot.value.records.map { it.item.id })
+
+        repository.snapshot.value = InboxSnapshot()
+        runCurrent()
+        assertEquals("an empty delegate that has not refreshed keeps the shown list",
+            listOf("item"), experience.snapshot.value.records.map { it.item.id })
+
+        repository.snapshot.value = InboxSnapshot(records = listOf(record), refreshes = 2)
+        runCurrent()
+        repository.snapshot.value = InboxSnapshot(refreshes = 3)
+        runCurrent()
+        assertEquals(emptyList<String>(), experience.snapshot.value.records.map { it.item.id })
+        owner.cancel()
+    }
+
     @Test
     fun leavingPageDoesNotCancelDraftWrite() = runTest {
         val repository = FakeInboxRepository()
