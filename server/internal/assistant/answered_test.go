@@ -158,3 +158,19 @@ func TestAnsweredBodyCompat(t *testing.T) {
 		t.Fatalf("new body = %s", b)
 	}
 }
+
+func TestToolDisplayNameShowsPersonaServer(t *testing.T) {
+	for in, want := range map[string]string{
+		"mcp__jarvis__mail_send":         "Persona · mail send",
+		"mcp__plugin_jarvis__agent_read": "Persona · agent read",
+		"mcp__jarvis":                    "Persona",
+		"mcp__github__create_issue":      "github · create issue",
+		"mcp__jarvis_extra__x":           "jarvis_extra · x",
+		"Bash":                           "Bash",
+		"":                               "",
+	} {
+		if got := toolDisplayName(in); got != want {
+			t.Errorf("toolDisplayName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -11,6 +11,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import persona.core.contracts.Interaction
 import persona.core.designsystem.*
+import persona.core.domain.mcpServerLabel
 import persona.core.domain.answer.*
 import kotlinx.serialization.json.*
 
@@ -22,7 +23,7 @@ internal fun ElicitationFields(request: Interaction, draft: AnswerDraft, update:
         val url = ElicitationUrl.target(form.url)
         val handler = LocalUriHandler.current
         var failed by remember(form.url) { mutableStateOf(false) }
-        Text("MCP 服务器：${request.mcpServerName?.takeIf(String::isNotBlank) ?: "未提供"}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+        Text("MCP 服务器：${request.mcpServerName?.takeIf(String::isNotBlank)?.let(::mcpServerLabel) ?: "未提供"}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         Text("目标主机：${ElicitationUrl.host(form.url) ?: "无效链接"}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         Text(form.url.orEmpty(), style = PersonaTheme.type.callout)
         Text("打开链接不代表授权成功。完成网页操作后，回到这里点「已打开，继续」。", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)

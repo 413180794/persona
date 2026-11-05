@@ -2,13 +2,14 @@ package persona.core.domain.answer
 
 import persona.core.contracts.Interaction
 import persona.core.contracts.Item
+import persona.core.domain.mcpServerLabel
 import kotlinx.serialization.json.*
 
 /** Only metadata supplied by the hook is a source; tool names are not proof. */
 fun Interaction.requestSourceLabel(): String? = listOfNotNull(
     agentType?.trim()?.takeIf(String::isNotEmpty)?.let { "来自子 Agent · $it" },
     mcpServerName?.trim()?.takeIf(String::isNotEmpty)?.let { server ->
-        "来自 MCP 服务器 $server" + mcpConfigSource?.trim()?.takeIf(String::isNotEmpty)?.let { "（配置来源：$it）" }.orEmpty()
+        "来自 MCP 服务器 ${mcpServerLabel(server)}" + mcpConfigSource?.trim()?.takeIf(String::isNotEmpty)?.let { "（配置来源：$it）" }.orEmpty()
     },
     if (kind == "screen") "这个请求来自终端：请不要同时在电脑上处理" else null,
 ).takeIf { it.isNotEmpty() }?.joinToString("\n")

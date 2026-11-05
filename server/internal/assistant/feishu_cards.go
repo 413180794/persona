@@ -232,9 +232,9 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 			feishubot.Submit("打回修改", feishubot.Danger, "plan_reject", val(map[string]any{"approve": "0"})))
 		return c.Buttons(open)
 	case proto.IxPermission:
-		c := feishubot.NewCard("🔐 "+s.ixWhere(ctx, ix)+" 要你批准", feishubot.Orange, "要你批准："+ix.ToolName)
+		c := feishubot.NewCard("🔐 "+s.ixWhere(ctx, ix)+" 要你批准", feishubot.Orange, "要你批准："+toolDisplayName(ix.ToolName))
 		var b strings.Builder
-		fmt.Fprintf(&b, "**%s**", feishubot.EscapeMarkdown(ix.ToolName))
+		fmt.Fprintf(&b, "**%s**", feishubot.EscapeMarkdown(toolDisplayName(ix.ToolName)))
 		if ix.Reason != "" {
 			fmt.Fprintf(&b, "\n%s", feishubot.EscapeMarkdown(ix.Reason))
 		}

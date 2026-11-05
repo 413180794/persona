@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatLines, freshWords, isLoopTick, mergeItems, parseUserText, segments, openRecap, toolChip, toolLabel, wakeDrawer, workSegment, formatDuration } from "./turns";
+import { chatLines, freshWords, isLoopTick, mergeItems, parseUserText, segments, openRecap, toolChip, toolDisplayName, toolLabel, wakeDrawer, workSegment, formatDuration } from "./turns";
 import type { Item } from "./types";
 
 const u = (seq: number, text: string, extra: Partial<Item> = {}): Item => ({ id: `u${seq}#0`, seq, role: "user", kind: "text", text, ...extra });
@@ -241,6 +241,17 @@ it("toolLabel names an MCP tool by its own name, whatever the server is called",
   expect(toolLabel("mcp__plugin_lark_docs__fetch_doc")).toBe("fetch doc");
   expect(toolLabel("mcp__x")).toBe("x");
   expect(toolLabel("Bash")).toBe("运行");
+});
+
+it("toolDisplayName shows Persona's own MCP server (still id `jarvis`) as Persona", () => {
+  expect(toolDisplayName("mcp__jarvis__agent_read")).toBe("Persona · agent read");
+  expect(toolDisplayName("mcp__plugin_jarvis__agent_send")).toBe("Persona · agent send");
+  expect(toolDisplayName("mcp__jarvis")).toBe("Persona");
+  expect(toolDisplayName("mcp__github__create_issue")).toBe("github · create issue");
+  expect(toolDisplayName("mcp__plugin_lark_docs__fetch_doc")).toBe("lark_docs · fetch doc");
+  expect(toolDisplayName("mcp__jarvis_extra__x")).toBe("jarvis_extra · x");
+  expect(toolDisplayName("Bash")).toBe("Bash");
+  expect(toolDisplayName(undefined)).toBe("工具");
 });
 
 describe("jarvis-file tags", () => {

@@ -333,6 +333,28 @@ export function toolLabel(name?: string): string {
   return name;
 }
 
+/** The MCP server's name as shown: Persona's own server keeps its old id `jarvis` (allow lists and hooks match it). */
+export function mcpServerLabel(server: string): string {
+  const s = server.replace(/^plugin_/, "");
+  return s === "jarvis" ? "Persona" : s;
+}
+
+/** The server part of mcp__<server>__<tool> ("mcp__<server>" alone for a server-wide request), else null. */
+export function mcpServer(name?: string): string | null {
+  if (!name?.startsWith("mcp__")) return null;
+  const rest = name.slice(5);
+  const i = rest.lastIndexOf("__");
+  return i > 0 ? rest.slice(0, i) : rest || null;
+}
+
+/** A tool's name for a sentence (a permission card): an MCP tool as 「Persona · mail send」, others as written. */
+export function toolDisplayName(name?: string): string {
+  const server = mcpServer(name);
+  if (server === null) return name || toolLabel();
+  const tool = name!.slice(5 + server.length + 2).replace(/_/g, " ");
+  return tool ? `${mcpServerLabel(server)} · ${tool}` : mcpServerLabel(server);
+}
+
 // ── exchanges and lines (iOS ChatBlock.build + ChatLines) ──────────────────────────
 // Items group into exchanges (`Turn`): what you said (messages typed while the agent worked join the exchange they were
 // sent during), everything the agent did, and its answer; recaps stand between them. A background task that wakes the

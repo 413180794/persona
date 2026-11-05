@@ -5,6 +5,7 @@ import { apiOp } from "../../lib/ops";
 import type { Interaction } from "../../lib/types";
 import { answerLines, endedText, type Resolution, type ResolveResult } from "../../lib/answered";
 import { sessionCan } from "../../lib/format";
+import { toolDisplayName } from "../../lib/turns";
 import { dropAnswered, endInteraction, getSession, useStore, type AnsweredCard as Answered } from "../../lib/store";
 import { Button, Collapse, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -266,7 +267,7 @@ function PermissionCard({ ix }: { ix: Interaction }) {
   return (
     <Card
       kicker="需要授权"
-      title={`允许使用 ${ix.tool_name ?? "工具"}？`}
+      title={`允许使用 ${toolDisplayName(ix.tool_name)}？`}
       onDismiss={() => go({ dismiss: true })}
       footer={
         <>

@@ -32,4 +32,16 @@ class RowsTest {
         assertEquals("[图片]\nlook", cleanText("<attached_images>\n/tmp/a.png\n</attached_images>\nlook"))
         assertEquals("abc", cleanText("<pasted_content id=\"1\">abc</pasted_content>"))
     }
+
+    @Test fun personaOwnMcpServerShowsAsPersona() {
+        assertEquals("Persona · agent read", toolDisplayName("mcp__jarvis__agent_read"))
+        assertEquals("Persona · agent send", toolDisplayName("mcp__plugin_jarvis__agent_send"))
+        assertEquals("Persona", toolDisplayName("mcp__jarvis"))
+        assertEquals("github · create issue", toolDisplayName("mcp__github__create_issue"))
+        assertEquals("jarvis_extra · x", toolDisplayName("mcp__jarvis_extra__x"))
+        assertEquals("Bash", toolDisplayName("Bash"))
+        assertEquals("工具", toolDisplayName(null))
+        assertEquals("Persona", mcpServerLabel("jarvis"))
+        assertEquals("example-service", mcpServerLabel("example-service"))
+    }
 }

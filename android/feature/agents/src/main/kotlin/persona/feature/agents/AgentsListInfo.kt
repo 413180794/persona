@@ -4,6 +4,7 @@ import persona.core.contracts.*
 import persona.core.contracts.api.*
 import persona.core.domain.sort.*
 import persona.core.domain.answer.permissionSummary
+import persona.core.domain.toolDisplayName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import java.time.Instant
@@ -63,7 +64,7 @@ internal val Interaction.cardTitle: String get() {
     val who = agentDisplayName?.let { "$it " }.orEmpty()
     return when (kind) {
         "question" -> "${who}有问题等你回答"
-        "permission" -> "${who}请求使用 ${toolName ?: "工具"}"
+        "permission" -> "${who}请求使用 ${toolDisplayName(toolName)}"
         "plan" -> "计划等你批准"
         "screen" -> "终端里有对话框等你处理"
         else -> "需要你处理"

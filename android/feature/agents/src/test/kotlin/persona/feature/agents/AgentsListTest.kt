@@ -39,6 +39,7 @@ class AgentsListTest {
         assertEquals("终端", request.copy(kind = "screen").sourceLabel(AgentsMetadata()))
         assertNull(request.copy(toolName = "mcp__tools__read").sourceLabel(AgentsMetadata()))
         assertEquals("来自 MCP 服务器 example-service", request.copy(mcpServerName = "example-service").sourceLabel(AgentsMetadata()))
+        assertEquals("来自 MCP 服务器 Persona", request.copy(mcpServerName = "jarvis").sourceLabel(AgentsMetadata()))
     }
 
     @Test fun idleRowsStayCollapsedUntilExpandedAndRemainHiddenInFoldedGroup() {

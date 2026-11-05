@@ -90,6 +90,7 @@ describe("ActionRow", () => {
     const verb = (name: string, input: Record<string, unknown> = {}) => presentAction(use("v", name, input)).verb;
     expect([verb("Edit", { file_path: "/a" }), verb("Write", { file_path: "/a" }), verb("Grep", { pattern: "x" }), verb("WebFetch", { url: "u" }), verb("mcp__github__create_issue")]).toEqual(["编辑", "创建", "搜索", "访问", "调用"]);
     expect(presentAction(use("v", "mcp__github__create_issue", {})).param!.text).toBe("github · create issue");
+    expect(presentAction(use("v", "mcp__jarvis__agent_read", {})).param).toEqual({ text: "Persona · agent read", title: "mcp__jarvis__agent_read" });
   });
 
   it("an edit shows its +N −N from a line diff; a running call a spinner in its 16 px slot", () => {
