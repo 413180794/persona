@@ -15,10 +15,10 @@ struct AgentListOrder {
     /// The sections of 按状态, in rank order.
     static let stateKeys = ["needs", "unread", "working", "waiting", "muted", "idle"]
 
-    /// Rows that stay out of the idle fold: busy, pinned, looping, or with background work.
+    /// Rows that stay out of the idle fold: busy, pinned, or waiting to be woken (`Session.isWaiting`: looping, with
+    /// background work, or the hub waiting it out).
     func stays(_ s: Session) -> Bool {
-        !s.isQuiet || s.key == held || isPinned(s.key) || s.loop != nil || !(s.background ?? []).isEmpty
-            || (s.subagents ?? []).contains(where: \.running)
+        !s.isQuiet || s.key == held || isPinned(s.key) || s.isWaiting
     }
 
     /// One order for every grouping (inside a space, a machine, and the sections of 按状态):

@@ -64,10 +64,12 @@ struct SpaceGroup: Identifiable {
 }
 
 extension Session {
-    /// Nothing to look at now, but a /loop that has not fired yet or background work still running will wake it:
-    /// new messages may come in minutes. 待唤醒 in the list.
+    /// Nothing to look at now, but a /loop that has not fired yet, background work still running, or the hub waiting it
+    /// out (`WorkState.hubWaits`: a retry, a wake after a deploy) will wake it: new messages may come in minutes.
+    /// 待唤醒 in the list.
     var isWaiting: Bool {
-        isQuiet && (loop != nil || !(background ?? []).isEmpty || (subagents ?? []).contains(where: \.running))
+        isQuiet && (loop != nil || !(background ?? []).isEmpty || (subagents ?? []).contains(where: \.running)
+            || work?.hubWaits == true)
     }
 }
 

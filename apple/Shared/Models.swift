@@ -597,6 +597,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// The last compaction the user asked for in an assistant conversation (POST …/compact, #1727): running, done or
     /// failed. Nil from hubs without `assistant_compact`, and before the first one.
     var compaction: CompactionRun? = nil
+    /// Where it stands in its work (docs/agent-work.md): set by the hub once it triaged a stopped turn. Nil from hubs
+    /// without the triage, and before it triaged.
+    var work: WorkState? = nil
     /// An assistant conversation set to run on the Agent SDK (#2455): `agentsdk` while it does; and why the node ran it
     /// on the CLI instead (「找不到 Node.js 22+」). Both nil otherwise.
     var runtime: String? = nil
@@ -698,7 +701,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", paneIndex = "pane_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
-             attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, compaction,
+             attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, compaction, work,
              runtime, runtimeFallback = "runtime_fallback"
     }
 
@@ -768,7 +771,51 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         externalURL = try c.decodeIfPresent(String.self, forKey: .externalURL)
         channels = try c.decodeIfPresent([String].self, forKey: .channels)
         compaction = try? c.decodeIfPresent(CompactionRun.self, forKey: .compaction) // an odd one never drops the session
+        work = try? c.decodeIfPresent(WorkState.self, forKey: .work) // an odd one never drops the session
         hubGroup = try c.decodeIfPresent(String.self, forKey: .hubGroup)
+    }
+}
+
+/// A session's work state (docs/agent-work.md): the hub triages each stopped turn into done or blocked on something
+/// named, with one line for the lists. Only `phase` is always there.
+nonisolated struct WorkState: Codable, Hashable, Sendable {
+    /// working / blocked / done.
+    var phase: String
+    /// What a blocked one waits on: user (a decision), agent, external (a deploy, CI, a time), transient (a model error).
+    var on: String? = nil
+    /// One line for the lists: what it waits for, or what it concluded.
+    var line: String? = nil
+    var wait: String? = nil
+    var then: String? = nil
+    /// When the hub acts next on its own: 继续 (transient) or a wake (external, agent).
+    var wakeAt: Date? = nil
+    var attempts: Int? = nil
+    var max: Int? = nil
+    /// The agent it waits for.
+    var agent: WorkAgent? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case phase, on, line, wait, then, attempts, max, agent
+        case wakeAt = "wake_at"
+    }
+
+    /// The hub waits it out: it wakes it (`wake_at`), or it wakes itself (its background tasks, a /loop). 待唤醒 in the
+    /// lists (the web's `hubWaits`, lib/work.ts).
+    var hubWaits: Bool {
+        guard phase == "blocked", on != "user" else { return false }
+        return wakeAt != nil || (on == "external" && (wait ?? "").isEmpty && agent == nil)
+    }
+}
+
+/// The agent a blocked session waits for (`work.agent`).
+nonisolated struct WorkAgent: Codable, Hashable, Sendable {
+    var machineID: String
+    var sessionID: String
+    var label: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case label
+        case machineID = "machine_id", sessionID = "session_id"
     }
 }
 
@@ -981,11 +1028,35 @@ extension Session {
     }
 
     var displayTitle: String { title.isEmpty || title == "Claude Code" ? folderName : title }
-    /// The line a list row shows under the title: why it waits for you when its host says so, else the last words.
+    /// The line a list row shows under the title: why it waits for you when its host says so, what it concluded or
+    /// waits for once the hub triaged its turn (`workLine`), else the last words.
     var listPreview: String? {
         if state == .needsYou, let r = attentionReason, !r.isEmpty { return r } // a stale reason (offline, seen) stays out
         if state != .working, let r = failureReason, !r.isEmpty { return Session.failureText(r) }
+        if let w = workLine() { return w }
         return lastText.flatMap { $0.isEmpty ? nil : Fmt.plain($0) }
+    }
+    /// The row's line for a stopped session the hub triaged (docs/agent-work.md, the web's `workLine`): 「✓ 结论」 when
+    /// done, what it waits for when blocked, with when the hub acts next; nil while it works or before the triage.
+    func workLine(now: Date = Date()) -> String? {
+        guard let w = work, let line = w.line, !line.isEmpty, w.phase != "working", state != .working else { return nil }
+        if w.phase == "done" { return "✓ " + line }
+        guard let wake = w.wakeAt else { return line }
+        let retry = w.on == "transient"
+        let left = wake.timeIntervalSince(now)
+        let when: String
+        if left < 60 {
+            when = retry ? "马上重试" : "马上叫醒"
+        } else {
+            when = Session.inMinutes(left) + (retry ? "后重试" : "后叫醒")
+        }
+        return "\(line)（\(when)）"
+    }
+    /// 「12 分钟」「1 小时 5 分」「2 小时」: when the hub acts next, minutes are enough.
+    static func inMinutes(_ seconds: TimeInterval) -> String {
+        let m = Int((seconds / 60).rounded())
+        if m < 60 { return "\(m) 分钟" }
+        return m % 60 == 0 ? "\(m / 60) 小时" : "\(m / 60) 小时 \(m % 60) 分"
     }
     /// A failure notice without the warning sign botmux starts it with: the app draws its own.
     static func failureText(_ reason: String) -> String {
