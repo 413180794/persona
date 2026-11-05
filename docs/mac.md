@@ -330,6 +330,10 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   因为它和收件箱、View 菜单、检查器、旁边的列表还拿着 `@AppStorage`，分栏每帧写一次 UserDefaults。改成 `@StoredValue` 后（负载 16–42，各 2 次交替）：
   设置页每帧主线程 19.0 / 22.0 → 5.7 / 6.0 ms，卡顿 288–292 ms/s → 0（60 fps）；收件箱 17.7 / 19.6 → 12.9 / 11.7 ms，卡顿 264–338 → 78 ms/s；
   对话页不变（约 28 ms、约 500 ms/s，大头在别处）。还拿着 `@AppStorage` 的文件只能减少（`AppStorageRatchetTests`）。
+- 拖窗口时对话页每帧约 20 ms（2026-11-05，#1337）：用 `-perfHide`（临时开关，没进代码）把对话页的几块逐个藏起来量，窗口和侧栏约 6.4 ms、
+  顶栏约 5.8、输入框约 4.8、列表约 4.5，每块单独都是 60 fps，加起来超预算、掉到约 30 fps。顶栏副标题和工作行摘要的 `ViewThatFits`
+  每个宽度都把两个候选重新量一遍（顶栏里它约占 3 ms），换成在布局缓存里记下理想宽度的 `FirstFitting`（`Components.swift`，和 `ViewThatFits` 像素一样，`FirstFittingTests`）。
+  11 次交替跑的中位数（长历史、负载 9–13）：卡顿 492 → 206 ms/s，4 秒里的帧 121 → 189（满帧 240），每帧主线程约 20.4 → 15.5 ms。剩下的在输入框和列表。
 - 外壳读 `MacTitleRowTaken` 这个 preference（打开对话时调用树里约 9.4%）：这一块大多是页面自己的更新在合并 preference 时被拉着算，拿掉不一定省这么多，要量过再改。
 
 ## SSH 隧道（Mac）

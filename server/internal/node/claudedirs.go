@@ -183,6 +183,25 @@ func (n *Node) claudeDirBlocked(dir, real string) bool {
 	return n.blockedBy(dir, real, blocked)
 }
 
+// cwdBlocked: true if a session's working directory matches any of the machine's blocked patterns.
+func (n *Node) cwdBlocked(cwd string) bool {
+	if cwd == "" {
+		return false
+	}
+	d := n.cdirs
+	if d == nil {
+		return false
+	}
+	d.mu.Lock()
+	blocked := d.blocked
+	d.mu.Unlock()
+	if len(blocked) == 0 {
+		return false
+	}
+	real, _ := filepath.EvalSymlinks(expandHome(cwd, n.home))
+	return proto.ClaudeDirBlocked(cwd, n.home, blocked) || (real != "" && proto.ClaudeDirBlocked(real, n.home, blocked))
+}
+
 func (n *Node) blockedBy(dir, real string, patterns []string) bool {
 	if len(patterns) == 0 {
 		return false

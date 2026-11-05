@@ -644,3 +644,40 @@ struct FlowLayoutRow: Layout {
         return ideal.width <= width ? ideal : s.sizeThatFits(ProposedViewSize(width: width, height: nil))
     }
 }
+
+/// `ViewThatFits(in: .horizontal)` for candidates of one line, measured once: their ideal sizes are kept in the layout's
+/// cache (made again when a candidate changes), and a new width only picks among them. On the Mac every frame of a
+/// window resize offered the chat's header and work lines a new width, and `ViewThatFits` measured all its candidates
+/// again each time: with the composer and the list that was a whole frame over budget (#1337). Shown: the first whose
+/// ideal width fits, else the last at the offered width, like `ViewThatFits`; the others are placed out of sight.
+/// They are still in the accessibility tree: use it inside a control that says what it is (`accessibilityLabel`).
+struct FirstFitting: Layout {
+    struct Cache { var ideal: [CGSize] }
+
+    func makeCache(subviews: Subviews) -> Cache { Cache(ideal: subviews.map { $0.sizeThatFits(.unspecified) }) }
+    func updateCache(_ cache: inout Cache, subviews: Subviews) { cache = makeCache(subviews: subviews) }
+
+    /// Which candidate a width shows: the first whose ideal width fits (the first when the width is open), else the last.
+    static func pick(_ ideal: [CGFloat], width: CGFloat?) -> Int {
+        guard let width, width.isFinite else { return 0 }
+        return ideal.firstIndex { $0 <= width } ?? max(0, ideal.count - 1)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
+        guard !subviews.isEmpty else { return .zero }
+        let i = Self.pick(cache.ideal.map(\.width), width: proposal.width)
+        if let w = proposal.width, cache.ideal[i].width > w { return subviews[i].sizeThatFits(proposal) } // the last, cut short
+        return cache.ideal[i]
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        let shown = Self.pick(cache.ideal.map(\.width), width: proposal.width ?? bounds.width)
+        for (i, s) in subviews.enumerated() {
+            if i == shown { s.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size)) }
+            else { s.place(at: CGPoint(x: bounds.minX, y: bounds.minY - Self.away), proposal: .unspecified) }
+        }
+    }
+
+    /// How far above its place a candidate not shown goes: off any window.
+    private static let away: CGFloat = 100_000
+}

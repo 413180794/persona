@@ -7,7 +7,7 @@ import (
 
 func TestClaudeDirBlocked(t *testing.T) {
 	home := "/home/me"
-	pats := []string{"~/.automation/*", "/opt/bots/claude-x"}
+	pats := []string{"~/.automation/*", "/opt/bots/claude-x", "*has_workspaces*"}
 	for _, c := range []struct {
 		dir  string
 		want bool
@@ -16,6 +16,7 @@ func TestClaudeDirBlocked(t *testing.T) {
 		{"/home/me/.automation/claude-b", true},        // absolute, the pattern written with ~
 		{"/home/me/.automation/claude-b/", true},       // trailing slash
 		{"/home/me/.automation/claude-b/nested", true}, // under a blocked directory
+		{"/data00/home/me/has_workspaces/uuid/workdir", true}, // matching directory name segment
 		{"/home/me/.automation", false},                // the parent itself is not matched by its children's glob
 		{"/home/me/.automation-other/claude-c", false}, // a prefix of the name is not the directory
 		{"/opt/bots/claude-x", true},                   // an exact path
@@ -41,7 +42,7 @@ func TestCleanClaudeDirPatterns(t *testing.T) {
 	if want := []string{"~/.a/*", "/opt/b"}; !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
-	for p, want := range map[string]bool{"~/.a/*": true, "/opt/b": true, "relative/x": false, "~/[": false} {
+	for p, want := range map[string]bool{"~/.a/*": true, "/opt/b": true, "*has_workspaces*": true, "relative/x": false, "~/[": false} {
 		if ValidClaudeDirPattern(p) != want {
 			t.Errorf("valid %q: want %v", p, want)
 		}

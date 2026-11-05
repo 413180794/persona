@@ -1946,7 +1946,8 @@ struct ChatView: View {
             let machine = model.namedMachine(s.machineRef)?.title ?? s.machineID
             HStack(spacing: Theme.Space.xs) {
                 StatusDot(state: s.state, size: 7)
-                ViewThatFits(in: .horizontal) {
+                // Not ViewThatFits: that measured both lines again at every width of a window resize (#1337).
+                FirstFitting {
                     subtitleLine(s, words, [machine, place])
                     subtitleLine(s, words, [place.isEmpty ? machine : place]) // truncates when it must
                 }
@@ -1965,7 +1966,7 @@ struct ChatView: View {
         return (Text(words).fontWeight(.semibold)
             .foregroundStyle(s.state == .idle || s.state == .offline || s.state == .unknown ? Color.secondary : s.state.tone.text)
             + Text(tail).foregroundStyle(.secondary))
-            .lineLimit(1) // ViewThatFits picks by the ideal (one-line) width; the last one truncates
+            .lineLimit(1) // FirstFitting picks by the ideal (one-line) width; the last one truncates
     }
 
     static func quiet(_ state: AgentState) -> Bool { state == .idle || state == .offline || state == .unknown }
@@ -3991,7 +3992,7 @@ struct WorkLine: View, Equatable {
     }
 
     private func summary(now: Date) -> some View {
-        ViewThatFits(in: .horizontal) {
+        FirstFitting { // ViewThatFits measured both at every width of a window resize (#1337)
             Text(label(now: now, short: false)).fixedSize()
             Text(label(now: now, short: true)).fixedSize()
         }

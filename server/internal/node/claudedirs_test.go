@@ -291,3 +291,17 @@ func TestListClaudeDirs(t *testing.T) {
 		t.Fatalf("dirs %+v", dirs)
 	}
 }
+
+func TestCwdBlocked(t *testing.T) {
+	n, _ := claudeHome(t)
+	n.setBlockedClaudeDirs([]string{"*has_workspaces*", "/opt/ignored"})
+	if !n.cwdBlocked("/data00/home/user/has_workspaces/session-1/workdir") {
+		t.Fatal("has_workspaces cwd should be blocked")
+	}
+	if !n.cwdBlocked("/opt/ignored/sub") {
+		t.Fatal("/opt/ignored/sub should be blocked")
+	}
+	if n.cwdBlocked("/data00/home/user/projects/my-repo") {
+		t.Fatal("normal repo should not be blocked")
+	}
+}

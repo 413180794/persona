@@ -193,6 +193,10 @@
 - `@AppStorage` 在任何 UserDefaults 写入时都让持有它的视图重算，不管写的是哪个键（2026-11-04，#1337，`_printChanges` 和写入计数确认）。
   Mac 上拖窗口改大小时，`NavigationSplitView` 背后的 `NSSplitView` 每一帧都自动保存一次 `NSSplitView Subview Frames …`，外壳和 Agents 列表每帧重算、137 行整表比对，
   窗口拉起来只有约 4 fps。在常显示、重的视图里用 `@StoredValue`（只在自己那个键的值变了时重算）。
+- 一页拖窗口卡、哪块单独量都不卡时，是几块加起来超了预算（2026-11-05，#1337）：Mac 拖窗口每帧给整页一个新宽度，对话页的顶栏、输入框、列表各花 4–6 ms，
+  单独都在 16.7 ms 内，一起就掉到 30 fps；`sample` 里几乎全是 SwiftUI 的布局，看不出是哪个视图。临时加一个启动参数把各块逐个换成 `Color.clear` 量（不提交），
+  再在最贵的那块里逐个去掉子视图。`ViewThatFits` 每个宽度都重新量全部候选，在常随宽度变的一行里换成 `FirstFitting`（理想宽度记在 `Layout` 的缓存里）。
+  `sample` 挂着时 App 会被停住、量出来的帧不能用，量帧和采样分开跑。
 - 这台开发机的 Instruments 录不到 Animation Hitches 的显示数据（开发者模式关着、要 sudo），`CGEvent.postToPid` 发的滚轮事件被系统过滤（发事件的进程没有辅助功能授权），
   看起来都「成功」但什么都没发生。量顺不顺用 App 自己的 display link（`MacPerfHarness`），看主线程用 `sample`。
 - sheet 的最小尺寸要放在 sheet 内容的最外层，中间隔着 `GeometryReader` 就传不出去（2026-11-04，#1502）：Mac 的 sheet 按内容的最小尺寸开，

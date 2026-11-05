@@ -25,19 +25,18 @@ func CleanClaudeDirPatterns(in []string) []string {
 	return out
 }
 
-// ValidClaudeDirPattern: a pattern filepath.Match understands, rooted at / or ~/.
+// ValidClaudeDirPattern: a pattern filepath.Match understands, rooted at /, ~/, or starting with *.
 func ValidClaudeDirPattern(p string) bool {
-	if !strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "~/") {
+	if !strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "~/") && !strings.HasPrefix(p, "*") {
 		return false
 	}
 	_, err := filepath.Match(p, "")
 	return err == nil
 }
 
-// ClaudeDirBlocked: dir (a CLAUDE_CONFIG_DIR value, "~/…" or absolute) matches a pattern, or sits under a directory
-// that does. A pattern is a path or a filepath.Match glob ("~/.automation/*"); "~" in both stands for home, the
-// home directory on the machine the directory is on. With home unknown ("") only patterns and directories written
-// the same way match.
+// ClaudeDirBlocked: dir (a CLAUDE_CONFIG_DIR value, a session's cwd, "~/…" or absolute) matches a pattern, or sits
+// under a directory that does. A pattern is a path ("~/has_workspaces"), a filepath.Match glob ("~/.automation/*"),
+// or a folder name/glob ("*has_workspaces*").
 func ClaudeDirBlocked(dir, home string, patterns []string) bool {
 	return ClaudeDirBlockedBy(dir, home, patterns) != ""
 }
@@ -52,6 +51,9 @@ func ClaudeDirBlockedBy(dir, home string, patterns []string) string {
 		p := filepath.Clean(expandTilde(raw, home))
 		for c := d; ; {
 			if ok, _ := filepath.Match(p, c); ok {
+				return raw
+			}
+			if ok, _ := filepath.Match(p, filepath.Base(c)); ok {
 				return raw
 			}
 			parent := filepath.Dir(c)

@@ -705,11 +705,15 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		n.decorate(&s)
 		out = append(out, s)
 	}
-	for i := range out {
-		// Keep cwd as the runtime reported it for existing clients and controls.
-		// Workspace bindings need the same physical path workspace.resolve returns.
-		out[i].WorkspaceCwd = n.sessionWorkspaceCwd(out[i].Cwd)
+	var keptSessions []proto.Session
+	for _, s := range out {
+		if s.Cwd != "" && n.cwdBlocked(s.Cwd) && !n.isAssistantSession(s.SessionID) && !n.keptSessions()[s.SessionID] {
+			continue
+		}
+		s.WorkspaceCwd = n.sessionWorkspaceCwd(s.Cwd)
+		keptSessions = append(keptSessions, s)
 	}
+	out = keptSessions
 	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
 	return out
 }
@@ -812,6 +816,9 @@ func (n *Node) scanOffline() []proto.Session {
 		}
 		listed[id] = true
 		m := n.meta(c.path, c.st)
+		if m.cwd != "" && n.cwdBlocked(m.cwd) {
+			continue
+		}
 		// Sessions that never produced output (hook probes): small files read whole with no title and no words. A bigger
 		// one only had its tail read, and a tail of tool calls under one huge line says nothing; the main conversation is
 		// listed whatever its tail holds. Dropping it left the app and the web with no session for 主对话, and its composer

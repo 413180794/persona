@@ -155,7 +155,7 @@ func (h *Hub) replyMigrated(ctx context.Context, in connector.Inbox, r inboxRepl
 			clientID = namedClientID(r.id + "\n" + r.text)
 		}
 		h.inbox.mu.Lock()
-		sent := r.live.DoneBy == "replied" && r.once.clientID == clientID
+		sent := r.once.repeated(r.live, clientID)
 		h.inbox.mu.Unlock()
 		if sent {
 			return true, nil

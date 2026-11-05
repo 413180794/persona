@@ -247,11 +247,20 @@ func (h *Hub) draftReply(ctx context.Context, id, instruction string) (string, e
 type inboxReply struct {
 	mu       sync.Mutex
 	clientID string
+	// keptOpen: the last reply went out but the item stayed open, for what came into it while the reply was out.
+	keptOpen bool
+}
+
+// repeated reports whether a reply with key went out last and still stands, so this one is a repeat (pressed on
+// phone and watch, a timed-out request retried): the item filed as replied, or kept open by that reply. Without the
+// second, a retry after new messages came in would go out again (#1828). Under h.inbox.mu, with r.mu held.
+func (r *inboxReply) repeated(live *InboxItem, key string) bool {
+	return r.clientID == key && (live.DoneBy == "replied" || r.keptOpen && live.open())
 }
 
 // replyInbox sends text as the user's reply through the connector the item belongs to — in the Feishu chat, a
 // document's comments, a 公司圈 post, a reply to the newest mail of the thread, a GitHub comment… — and files the item
-// as done.
+// as done, unless something new came into it while the reply was out.
 func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocChange) (InboxItem, error) {
 	return h.replyInboxAs(ctx, id, text, "", changes...)
 }
@@ -322,10 +331,19 @@ func (h *Hub) replyInboxAs(ctx context.Context, id, text, clientID string, chang
 		return out, nil
 	}
 	h.inbox.mu.Lock()
-	it.done(now, "replied")
+	// The reply answers what the item held when it was sent. A move that came in meanwhile (collection runs while the
+	// reply is out) is not answered: the item stays open with it, so it is not filed unseen (#1828). An item filed
+	// meanwhile (read elsewhere) is filed as replied.
+	kept := it.open() && it.Last != c.Last
+	once.keptOpen = kept
+	if !kept {
+		it.done(now, "replied")
+	}
 	out := it.listed()
 	h.inbox.mu.Unlock()
-	h.saveInbox(ctx, []*InboxItem{it})
+	if !kept {
+		h.saveInbox(ctx, []*InboxItem{it})
+	}
 	// The item's cards in the assistant's conversations show it sent, wherever it was sent from.
 	h.markCardsSent(ctx, id, now, text)
 	return out, nil

@@ -226,7 +226,7 @@ func containsItem(list []*InboxItem, it *InboxItem) bool {
 func (h *Hub) replyConnectorItem(ctx context.Context, r inboxReplyReq) (already bool, err error) {
 	c := r.item
 	h.inbox.mu.Lock()
-	sent := r.live.DoneBy == "replied" && r.once.clientID == r.text
+	sent := r.once.repeated(r.live, r.text)
 	h.inbox.mu.Unlock()
 	if sent {
 		return true, nil
