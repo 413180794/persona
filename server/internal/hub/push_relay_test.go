@@ -194,6 +194,205 @@ func TestRelayGoneForgetsDevice(t *testing.T) {
 	t.Fatal("device kept after the relay said its token is gone")
 }
 
+// heldPush holds every push that reaches next until release is closed; arrived gets one value per push held.
+type heldPush struct {
+	arrived chan struct{}
+	release chan struct{}
+}
+
+func newHeldPush() *heldPush {
+	return &heldPush{arrived: make(chan struct{}, 8), release: make(chan struct{})}
+}
+
+func (hp *heldPush) front(match string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, match) {
+				hp.arrived <- struct{}{}
+				<-hp.release
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func (hp *heldPush) waitArrived(t *testing.T) {
+	t.Helper()
+	select {
+	case <-hp.arrived:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the push never reached APNs")
+	}
+}
+
+// deviceRows records the device rows the pusher writes (the rest of Store is unused).
+type deviceRows struct {
+	Store
+	mu      sync.Mutex
+	rows    map[string]db.Device
+	deletes int
+}
+
+func (s *deviceRows) UpsertDevice(_ context.Context, d db.Device) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rows[d.DeviceID] = d
+	return nil
+}
+
+func (s *deviceRows) SetDevicePrefs(_ context.Context, id string, prefs json.RawMessage) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.rows[id]
+	d.DeviceID, d.Prefs = id, prefs
+	s.rows[id] = d
+	return nil
+}
+
+func (s *deviceRows) DeleteDevice(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.rows, id)
+	s.deletes++
+	return nil
+}
+
+func (s *deviceRows) row(id string) (db.Device, bool, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.rows[id]
+	return d, ok, s.deletes
+}
+
+// lockDetailsOn: the default settings with one changed, to see they survive.
+func lockDetailsOn() NotifyPrefs {
+	p := defaultPrefs()
+	p.LockDetails = true
+	return p
+}
+
+// waitGoneHandled waits until the pusher has acted on a gone answer: it logged that it kept the device, or the
+// device is no longer there.
+func waitGoneHandled(t *testing.T, p *Pusher, mu *sync.Mutex, logs *[]string) {
+	t.Helper()
+	for range 500 {
+		if _, ok := p.device("phone"); !ok {
+			return
+		}
+		mu.Lock()
+		for _, l := range *logs {
+			if strings.Contains(l, "its old token is gone; kept") {
+				mu.Unlock()
+				return
+			}
+		}
+		mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the gone answer was never handled")
+}
+
+// assertKeptNewToken: the late gone for the old token left the device that registered newTok, in memory and in the
+// store, with its settings.
+func assertKeptNewToken(t *testing.T, p *Pusher, rows *deviceRows, newTok string) {
+	t.Helper()
+	d, ok := p.device("phone")
+	if !ok || d.APNSToken != newTok {
+		t.Fatalf("device after the old token's gone: %+v (kept %v)", d, ok)
+	}
+	if !devicePrefs(d.Prefs).LockDetails {
+		t.Fatalf("settings lost: %s", d.Prefs)
+	}
+	row, ok, deletes := rows.row("phone")
+	if !ok || row.APNSToken != newTok || deletes != 0 {
+		t.Fatalf("store row %+v kept %v, %d deletes", row, ok, deletes)
+	}
+}
+
+// A relay that says the old token is gone after the app registered a new one does not delete the new registration.
+func TestRelayLateGoneKeepsReregisteredDevice(t *testing.T) {
+	hp := newHeldPush()
+	h, f, _ := relayHubVia(t, hp.front("/v1/push"))
+	f.gone = true
+	rows := &deviceRows{rows: map[string]db.Device{}}
+	var logMu sync.Mutex
+	var logs []string
+	h.push.logf = func(format string, a ...any) {
+		logMu.Lock()
+		logs = append(logs, fmt.Sprintf(format, a...))
+		logMu.Unlock()
+	}
+	h.push.store = rows
+	if err := h.push.setPrefs("phone", lockDetailsOn()); err != nil {
+		t.Fatal(err)
+	}
+	old, _ := h.push.device("phone")
+	h.push.notifyDone("m1", "笔记本", "s1", "t", "x", nil)
+	hp.waitArrived(t)
+
+	renewed := old
+	renewed.APNSToken = "b2c3d4e5f60718a9b2c3d4e5f60718a9"
+	renewed.Prefs = nil // registration carries the token, not the settings
+	h.push.register(renewed)
+	close(hp.release)
+
+	f.wait(t, 1)
+	waitGoneHandled(t, h.push, &logMu, &logs)
+	assertKeptNewToken(t, h.push, rows, renewed.APNSToken)
+}
+
+// The same with the hub's own APNs key: a 410 for the old token keeps a device that registered a new one.
+func TestDirectLateGoneKeepsReregisteredDevice(t *testing.T) {
+	h := newTestHub(t)
+	hp := newHeldPush()
+	direct := &fakeAPNs{gone: map[string]bool{"oldtok": true}}
+	srv := httptest.NewServer(hp.front("/3/device/")(direct))
+	t.Cleanup(srv.Close)
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	h.push.direct = apns.NewWithKey(apnsConfig{KeyID: "K", TeamID: "T", Topic: "app.example"}, key)
+	h.push.direct.Base = srv.URL
+	rows := &deviceRows{rows: map[string]db.Device{}}
+	var logMu sync.Mutex
+	var logs []string
+	h.push.logf = func(format string, a ...any) {
+		logMu.Lock()
+		logs = append(logs, fmt.Sprintf(format, a...))
+		logMu.Unlock()
+	}
+	h.push.store = rows
+	h.push.register(Device{DeviceID: "phone", Name: "phone", APNSToken: "oldtok", Topic: "app.example"})
+	if err := h.push.setPrefs("phone", lockDetailsOn()); err != nil {
+		t.Fatal(err)
+	}
+	h.push.notifyDone("m1", "笔记本", "s1", "t", "x", nil)
+	hp.waitArrived(t)
+	h.push.register(Device{DeviceID: "phone", Name: "phone", APNSToken: "newtok", Topic: "app.example"})
+	close(hp.release)
+
+	if c := direct.calls(t, 1); c[0].Token != "oldtok" {
+		t.Fatalf("pushed to %q", c[0].Token)
+	}
+	waitGoneHandled(t, h.push, &logMu, &logs)
+	assertKeptNewToken(t, h.push, rows, "newtok")
+
+	// A 410 for the token the device still has drops it, from the store too.
+	direct.mu.Lock()
+	direct.gone["newtok"] = true
+	direct.mu.Unlock()
+	h.push.notifyDone("m1", "笔记本", "s1", "t", "x", nil)
+	hp.waitArrived(t)
+	for range 300 {
+		if _, ok := h.push.device("phone"); !ok {
+			if _, kept, _ := rows.row("phone"); kept {
+				t.Fatal("store row kept after APNs said the current token is gone")
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("device kept after APNs said its current token is gone")
+}
+
 // flakyRelay stands in front of the relay and fails the first pushes as told: 0 drops the connection unanswered (what a
 // TLS handshake or connection that timed out comes to), any other value answers with that status. Later pushes go
 // through to the relay.

@@ -63,7 +63,7 @@ Live Activity 的远程更新由 iOS 直接读推送里的 `content-state`，没
 - **只发自己 App 的**：凭据里的 topic 必须在 `relay.json` 的 `topics` 里（App 的 bundle id），中继不替别的 App 推。
 - **限流**：每台设备每分钟 120 条（突发 30）；登记按来源 IP 每分钟 20 次。请求体最大 8 KB，密文最多 3800 个 base64 字符
   （加上外层不超过 APNs 的 4 KB）；hub 加密前把放不下的标题 / 正文截短（完整内容在 App 里）。
-- **吊销**：APNs 报 410 / `BadDeviceToken` / `Unregistered` 时中继回 410，hub 删掉这台设备（和直连一样）；
+- **吊销**：APNs 报 410 / `BadDeviceToken` / `Unregistered` 时中继回 410，hub 删掉这台设备（和直连一样）；只在它现在登记的还是这个 token 时删，回答到之前 App 已经登记了新 token 的（中继重试、换凭据要好几秒）保留新登记和它的通知设置；
   要让所有凭据失效，换掉中继的 `secret_path`：hub 推送时收到 401，会用它记着的设备 token 重新登记一次换新凭据再推，不用等手机。
 - 登记本身不验证设备真伪，这是已知的缺口，要堵上得用 App Attest（还没做）：
   - 知道某台 iPhone 的 APNs 设备 token 的人可以登记到凭据，给它推「有新消息」；

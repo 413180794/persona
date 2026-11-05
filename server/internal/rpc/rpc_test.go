@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -348,9 +349,47 @@ func TestCallCanceledDuringMarshalDoesNotSend(t *testing.T) {
 	}
 }
 
+// stuckWriter blocks every Write until release is closed, like SSH stdin to a frozen node; then it records the
+// bytes. started gets a signal per Write that has begun.
+type stuckWriter struct {
+	release chan struct{}
+	started chan struct{}
+	mu      sync.Mutex
+	wire    bytes.Buffer
+}
+
+func newStuckWriter() *stuckWriter {
+	return &stuckWriter{release: make(chan struct{}), started: make(chan struct{}, 16)}
+}
+
+func (w *stuckWriter) Write(b []byte) (int, error) {
+	w.started <- struct{}{}
+	<-w.release
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.wire.Write(b)
+}
+
+func (w *stuckWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.wire.String()
+}
+
+// blockWriter has p send a Notify that sticks in Write, so the writer is busy for whatever comes next.
+func blockWriter(t *testing.T, p *Peer, w *stuckWriter) {
+	t.Helper()
+	go func() { _ = p.Notify("stuck", nil) }()
+	select {
+	case <-w.started:
+	case <-time.After(time.Second):
+		t.Fatal("first write did not start")
+	}
+}
+
 func TestCallCanceledBeforeWriterAvailableDoesNotSend(t *testing.T) {
-	var wire bytes.Buffer
-	p := New("h", &wire)
+	w := newStuckWriter()
+	p := New("h", w)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	marshaled := make(chan struct{})
@@ -359,27 +398,81 @@ func TestCallCanceledBeforeWriterAvailableDoesNotSend(t *testing.T) {
 		return []byte(`{}`), nil
 	})
 	// Another outbound message owns the writer until after this call loses its caller.
-	p.wmu.Lock()
+	blockWriter(t, p, w)
 	done := make(chan error, 1)
 	go func() { done <- p.Call(ctx, "session.start", params, nil) }()
 	select {
 	case <-marshaled:
 	case <-time.After(time.Second):
-		p.wmu.Unlock()
+		close(w.release)
 		t.Fatal("request did not reach serialization")
 	}
 	cancel()
-	p.wmu.Unlock()
 	select {
 	case err := <-done:
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("call = %v, want canceled", err)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("canceled call did not return after the writer became available")
+		t.Fatal("canceled call did not return while the writer was busy")
 	}
-	if wire.Len() != 0 {
-		t.Fatalf("queued canceled request reached wire: %s", wire.String())
+	close(w.release)
+	time.Sleep(50 * time.Millisecond)
+	if strings.Contains(w.String(), "session.start") {
+		t.Fatalf("queued canceled request reached wire: %s", w.String())
+	}
+}
+
+// A write stuck on the wire must not hold later calls past their own deadline (#2994).
+func TestCallDeadlineWhileWriterBlocked(t *testing.T) {
+	w := newStuckWriter()
+	p := New("h", w)
+	blockWriter(t, p, w)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	done := make(chan error, 1)
+	go func() { done <- p.Call(ctx, "session.start", nil, nil) }()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("call = %v, want deadline exceeded", err)
+		}
+		if took := time.Since(start); took > time.Second {
+			t.Fatalf("call took %v, want about its 200ms deadline", took)
+		}
+	case <-time.After(2 * time.Second):
+		close(w.release)
+		t.Fatal("call still blocked behind a stuck write 2s after its 200ms deadline")
+	}
+	close(w.release)
+	time.Sleep(50 * time.Millisecond)
+	if strings.Contains(w.String(), "session.start") {
+		t.Fatalf("timed-out request reached wire after the writer freed up: %s", w.String())
+	}
+}
+
+// Close wakes calls and notifications waiting for a stuck writer with ErrClosed (#2994).
+func TestCloseWakesWritersWaitingBehindStuckWrite(t *testing.T) {
+	w := newStuckWriter()
+	p := New("h", w)
+	defer close(w.release)
+	blockWriter(t, p, w)
+	callDone := make(chan error, 1)
+	notifyDone := make(chan error, 1)
+	go func() { callDone <- p.Call(context.Background(), "session.start", nil, nil) }()
+	go func() { notifyDone <- p.Notify("later", nil) }()
+	time.Sleep(50 * time.Millisecond)
+	p.Close(nil)
+	for name, ch := range map[string]chan error{"call": callDone, "notify": notifyDone} {
+		select {
+		case err := <-ch:
+			if !errors.Is(err, ErrClosed) {
+				t.Fatalf("%s = %v, want ErrClosed", name, err)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("%s still blocked behind a stuck write after Close", name)
+		}
 	}
 }
 

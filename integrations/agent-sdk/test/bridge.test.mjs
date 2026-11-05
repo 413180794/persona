@@ -102,6 +102,10 @@ test('each control request calls its Query method and is answered like claude -p
   assert.match(resp.r5.error, /unsupported control request: rewind_files/)
   assert.equal(resp.r6.subtype, 'error')
   assert.match(resp.r6.error, /boom with \*\*\*/)
+  // Each control_response is emitted as soon as the Query method's promise settles, while the matching fake_call
+  // still has to travel the SDK output iterator, so a response can precede its call. Wait for all four real calls
+  // (r5 is unsupported, r6 throws before recording a call) before asserting their order.
+  await b.until((m) => m.type === 'fake_call' && m.name === 'applyFlagSettings')
   const calls = b.msgs.filter((m) => m.type === 'fake_call').map((m) => [m.name, m.arg])
   assert.deepEqual(calls.slice(0, 4), [
     ['interrupt', undefined],

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -57,6 +58,11 @@ type Machine struct {
 	lastSeen  time.Time
 	sessions  []proto.Session
 	watchers  map[string]int // session id -> subscribed clients
+	// What the node was told about each session's watch (syncWatch): watchMu orders the session.watch /
+	// session.unwatch calls per session (a 1-slot channel, so a wait for it can end with the caller's ctx), nodeWatch
+	// is what the last of them left (absent: not watched).
+	watchMu   map[string]chan struct{}
+	nodeWatch map[string]nodeWatchState
 	// The web panels' open folders on this machine (fswatch.go): fswMu orders the fs.watch calls, fswSent says the
 	// node was given a non-empty set, fswWarned that a failure was logged (a node without fs.watch).
 	fswMu     sync.Mutex
@@ -270,29 +276,144 @@ func (m *Machine) session(id string) (proto.Session, bool) {
 func (m *Machine) addWatcher(ctx context.Context, id string) {
 	m.mu.Lock()
 	m.watchers[id]++
-	first := m.watchers[id] == 1
-	since := m.lastSeq[id]
 	m.mu.Unlock()
-	if first {
-		if err := m.call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil); err != nil {
-			m.hub.logf("[%s] watch %s: %v", m.cfg.ID, id, err)
-		}
-	}
+	m.syncWatch(ctx, id)
 }
 
 func (m *Machine) removeWatcher(id string) {
 	m.mu.Lock()
 	m.watchers[id]--
-	last := m.watchers[id] <= 0
-	if last {
+	if m.watchers[id] <= 0 {
 		delete(m.watchers, id)
 	}
 	m.mu.Unlock()
-	if last {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = m.call(ctx, "session.unwatch", map[string]any{"session_id": id}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), watchCallTimeout)
+	defer cancel()
+	m.syncWatch(ctx, id)
+}
+
+// watchCallTimeout bounds each session.watch / session.unwatch call, so a node that never answers holds a session's
+// watchLock for at most this long. A variable for the tests.
+var watchCallTimeout = 10 * time.Second
+
+// nodeWatchState is what the node was told about a session's watch. The zero value is not watched.
+type nodeWatchState int
+
+const (
+	nodeUnwatched nodeWatchState = iota
+	nodeWatching
+	nodeWatchUnknown // the last session.watch / session.unwatch failed: either may hold, the next sync sends again
+)
+
+// watchLock takes the lock that orders what the node is asked about session id's watch, giving up when ctx ends
+// first (false). The returned func releases it.
+func (m *Machine) watchLock(ctx context.Context, id string) (func(), bool) {
+	m.mu.Lock()
+	if m.watchMu == nil {
+		m.watchMu = map[string]chan struct{}{}
 	}
+	sem := m.watchMu[id]
+	if sem == nil {
+		sem = make(chan struct{}, 1)
+		m.watchMu[id] = sem
+	}
+	m.mu.Unlock()
+	select {
+	case sem <- struct{}{}:
+		return func() { <-sem }, true
+	case <-ctx.Done():
+		return nil, false
+	}
+}
+
+// syncWatch makes the node watch session id when an app is subscribed to it and stop when none is. The calls for one
+// session go one at a time, and each looks at the subscriber count when its turn comes: the watch of an app that
+// subscribes while the last one's unwatch is on its way goes after it, not before (the node ignores a watch for a
+// session it watches, so the unwatch arriving second would leave the subscriber with no live items).
+//
+// A caller whose ctx ends while another call holds the turn gives up waiting: the holder looks at the count again
+// when its call is done and sends what changed meanwhile (syncWatchLocked), so no change is lost.
+func (m *Machine) syncWatch(ctx context.Context, id string) {
+	unlock, ok := m.watchLock(ctx, id)
+	if !ok {
+		return
+	}
+	defer unlock()
+	m.syncWatchLocked(ctx, id)
+}
+
+// syncWatchLocked is syncWatch with session id's watchLock held. It sends calls until the node was told what the
+// subscriber count wants or a call fails (the next sync sends again then).
+func (m *Machine) syncWatchLocked(ctx context.Context, id string) {
+	for first := true; ; first = false {
+		if !first {
+			// A later round is for subscribers that came or went meanwhile, not for this caller's connection.
+			ctx = context.Background()
+		}
+		if !m.syncWatchOnce(ctx, id) {
+			return
+		}
+	}
+}
+
+// syncWatchOnce sends the one call session id's watch needs now, if any, and records what it left. It reports whether
+// a call went out and succeeded (another may be needed: the count may have changed while it was on its way).
+func (m *Machine) syncWatchOnce(ctx context.Context, id string) bool {
+	m.mu.Lock()
+	want := m.watchers[id] > 0
+	state := m.nodeWatch[id]
+	since := m.lastSeq[id]
+	m.mu.Unlock()
+	var method string
+	var params map[string]any
+	switch {
+	case want && state != nodeWatching:
+		method, params = "session.watch", map[string]any{"session_id": id, "since_seq": since}
+	case !want && state != nodeUnwatched:
+		method, params = "session.unwatch", map[string]any{"session_id": id}
+		ctx = context.Background() // not the leaving app's connection
+	default:
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, watchCallTimeout)
+	defer cancel()
+	err := m.call(ctx, method, params, nil)
+	next := nodeUnwatched
+	switch {
+	case err != nil:
+		next = nodeWatchUnknown
+		if !errors.Is(err, errOffline) {
+			m.hub.logf("[%s] %s %s: %v", m.cfg.ID, method, id, err)
+		}
+	case want:
+		next = nodeWatching
+	}
+	m.mu.Lock()
+	if m.nodeWatch == nil {
+		m.nodeWatch = map[string]nodeWatchState{}
+	}
+	if next == nodeUnwatched {
+		delete(m.nodeWatch, id)
+	} else {
+		m.nodeWatch[id] = next
+	}
+	m.mu.Unlock()
+	return err == nil
+}
+
+// watchAgainFresh syncs session id's watch with a manager that is new: it watches nothing yet, whatever the old one
+// was told.
+func (m *Machine) watchAgainFresh(ctx context.Context, id string) {
+	unlock, ok := m.watchLock(ctx, id)
+	if !ok {
+		m.hub.logf("[%s] watch %s again: an earlier session.watch / session.unwatch is still on its way", m.cfg.ID, id)
+		return
+	}
+	defer unlock()
+	m.mu.Lock()
+	delete(m.nodeWatch, id)
+	m.mu.Unlock()
+	m.syncWatchLocked(ctx, id)
 }
 
 func (m *Machine) onEvent(event string, params json.RawMessage) {

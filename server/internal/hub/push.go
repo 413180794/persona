@@ -218,11 +218,34 @@ func (p *Pusher) signedOut(credential string) {
 	}
 }
 
-// forget drops a device whose token APNs says is dead.
+// forget drops a device, whatever token it has now (signedOut).
 func (p *Pusher) forget(d Device) {
 	p.mu.Lock()
 	delete(p.devices, d.DeviceID)
 	p.mu.Unlock()
+	if p.store != nil {
+		_ = p.store.DeleteDevice(context.Background(), d.DeviceID)
+	}
+}
+
+// forgetIfCurrent drops a device whose token APNs says is dead, only while that token (and relay) is still the one
+// it has: a push's answer can come seconds after the app registered a new token (the relay retries, renews its
+// grant), and that late answer must not delete the new registration and its settings. Under saveMu, so a save of a
+// newer registration is not undone by the delete that follows it, or the other way round.
+func (p *Pusher) forgetIfCurrent(d Device) {
+	p.saveMu.Lock()
+	defer p.saveMu.Unlock()
+	p.mu.Lock()
+	cur, ok := p.devices[d.DeviceID]
+	still := ok && cur.APNSToken == d.APNSToken && cur.RelayURL == d.RelayURL
+	if still {
+		delete(p.devices, d.DeviceID)
+	}
+	p.mu.Unlock()
+	if !still {
+		p.logf("device %s: its old token is gone; kept, it has registered a new one", d.Name)
+		return
+	}
 	if p.store != nil {
 		_ = p.store.DeleteDevice(context.Background(), d.DeviceID)
 	}
@@ -611,7 +634,7 @@ func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority strin
 				if err != nil {
 					p.logf("relay %s: %v", d.Name, err)
 				} else if res.gone {
-					p.forget(d)
+					p.forgetIfCurrent(d)
 				}
 			}(d)
 			continue
@@ -627,7 +650,7 @@ func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority strin
 			if res.Status != 200 {
 				p.logf("apns %s: %d %s", d.Name, res.Status, res.Reason)
 				if res.Gone() {
-					p.forget(d)
+					p.forgetIfCurrent(d)
 				}
 			} else { // when APNs took it: for measuring wake-up latency (docs/assistant.md)
 				p.logf("apns %s: %s push accepted in %d ms", d.Name, pushType, time.Since(sent).Milliseconds())

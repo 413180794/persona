@@ -1193,7 +1193,7 @@ hub → node 请求：
 | `session.items` | `{session_id, before_seq, limit, turns, after_seq, lazy_images, fold_work, from_seq, through_seq}` → `{items, has_more, more_after, history, to_seq, from_seq}`（带 `through_seq` 时是折叠的那几行：`{items, more}`）（`from_seq` 只在 `after_seq` 请求里有；不带 `lazy_images: true` 时 node 把图片数据读回来，兼容旧 hub） |
 | `session.image` | `{session_id, item_id}` → `Image{mime, data}`（node 的 item 不常驻图片数据，按记下的行偏移重读那一行） |
 | `session.item` | `{session_id, item_id}` → `Item`（全文，不带图片） |
-| `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 每 250ms 读一次新行，推 `session.items`（带 `history` / `from_seq` / `to_seq`）；有 `since_seq` 时先按 500 条一页补发其后的全部内容 |
+| `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 每 250ms 读一次新行，推 `session.items`（带 `history` / `from_seq` / `to_seq`）；有 `since_seq` 时先按 500 条一页补发其后的全部内容。hub 对同一个会话一次只发一个 watch / unwatch，轮到时按当时的订阅数决定发哪个、发不发（node 对已在 watch 的会话再 watch 不做事，两者乱序到达会让最后一个订阅者收不到实时内容）；失败的下一次再发 |
 | `session.close` | `{session_id}` |
 | `session.fork` | `{session_id, at_item_id}` → `{session_id}`：见 HTTP 的 `/fork`；旧 node 报 unknown method |
 | `session.retire` | `{session_id}` → `{closed}`：做完的任务的 Agent 停着且以后能恢复时关掉它的窗格（同 `session.close`），没在运行时 `closed: false`；在工作、等用户、恢复不了的回 `code: not_retirable`；旧 node 报 unknown method（助手当作拒绝）。见 `docs/todos.md`「做完的任务关掉 Agent」 |

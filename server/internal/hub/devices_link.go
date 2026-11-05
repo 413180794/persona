@@ -674,26 +674,29 @@ func (h *Hub) watchAgain(list []*Machine) {
 	for _, m := range list {
 		m.mu.Lock()
 		managed := m.managed
-		watch := map[string]int{}
+		// The sessions the apps watch, and those the old manager was told to watch: the new one watches none of them
+		// yet (watchAgainFresh).
+		ids := map[string]bool{}
 		for id, n := range m.watchers {
 			if n > 0 {
-				watch[id] = m.lastSeq[id]
+				ids[id] = true
 			}
+		}
+		for id := range m.nodeWatch {
+			ids[id] = true
 		}
 		m.mu.Unlock()
 		if !managed {
 			continue
 		}
-		for id, since := range watch {
+		for id := range ids {
 			sem <- struct{}{}
 			wg.Add(1)
 			go func() {
 				defer func() { <-sem; wg.Done() }()
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				if err := m.call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil); err != nil && !errors.Is(err, errOffline) {
-					h.logf("[%s] watch %s again: %v", m.cfg.ID, id, err)
-				}
+				m.watchAgainFresh(ctx, id)
 			}()
 		}
 	}

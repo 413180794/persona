@@ -57,9 +57,11 @@ func (droppedError) Error() string        { return ErrClosed.Error() }
 func (droppedError) Is(target error) bool { return target == ErrClosed }
 
 type Peer struct {
-	prefix  string
-	w       io.Writer
-	wmu     sync.Mutex
+	prefix string
+	w      io.Writer
+	// wsem is a one-slot semaphore around w, not a mutex: a write can block for good (SSH stdin to a frozen node,
+	// a stalled relay WebSocket), and whoever waits behind it must still return on its ctx or on Close.
+	wsem    chan struct{}
 	nextID  atomic.Int64
 	mu      sync.Mutex
 	pending map[string]chan message
@@ -84,7 +86,7 @@ const cancelEvent = "rpc.cancel"
 
 // New creates a peer. prefix distinguishes request ids by side ("h" for hub, "n" for node).
 func New(prefix string, w io.Writer) *Peer {
-	return &Peer{prefix: prefix, w: w, pending: map[string]chan message{}, running: map[string]context.CancelFunc{}, closed: make(chan struct{})}
+	return &Peer{prefix: prefix, w: w, pending: map[string]chan message{}, running: map[string]context.CancelFunc{}, closed: make(chan struct{}), wsem: make(chan struct{}, 1)}
 }
 
 // Serve reads messages until r fails; it returns the read error.
@@ -181,9 +183,18 @@ func (p *Peer) writeContext(ctx context.Context, m message) error {
 		return err
 	}
 	b = append(b, '\n')
-	p.wmu.Lock()
-	defer p.wmu.Unlock()
-	// Serialization or another write may have outlasted the caller. Check at dispatch.
+	// Wait for the writer, but not past the caller or the connection: the write ahead may never finish. A write
+	// already under way cannot be interrupted.
+	select {
+	case p.wsem <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-p.closed:
+		return ErrClosed
+	}
+	defer func() { <-p.wsem }()
+	// Both may have become ready together and select picks at random: check again so a cancelled request never
+	// reaches the wire.
 	if err := ctx.Err(); err != nil {
 		return err
 	}
