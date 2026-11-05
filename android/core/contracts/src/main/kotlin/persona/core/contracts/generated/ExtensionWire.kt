@@ -224,6 +224,7 @@ data class ExtensionContributes(
     val themes: List<ExtensionThemeItem>? = null,
     @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
+    val messaging: List<ExtensionMessagingItem>? = null,
     /** Extra keys stay at this object's level on the wire; declared fields always win. */
     val additionalProperties: Map<String, JsonElement> = emptyMap(),
 )
@@ -248,11 +249,12 @@ private data class ExtensionContributesKnown(
     val themes: List<ExtensionThemeItem>? = null,
     @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
+    val messaging: List<ExtensionMessagingItem>? = null,
 )
 
 object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
     private val known = ExtensionContributesKnown.serializer()
-    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters")
+    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters", "messaging")
     override val descriptor: SerialDescriptor = known.descriptor
 
     override fun deserialize(decoder: Decoder): ExtensionContributes {
@@ -279,6 +281,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             themes = fields.themes,
             triageTemplates = fields.triageTemplates,
             agentFilters = fields.agentFilters,
+            messaging = fields.messaging,
             additionalProperties = obj.filterKeys { it !in keys },
         )
     }
@@ -304,6 +307,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             themes = value.themes,
             triageTemplates = value.triageTemplates,
             agentFilters = value.agentFilters,
+            messaging = value.messaging,
         )
         val obj = output.json.encodeToJsonElement(known, fields) as JsonObject
         output.encodeJsonElement(JsonObject(value.additionalProperties.filterKeys { it !in keys } + obj))
@@ -1875,4 +1879,906 @@ data class ExtensionCardPart(
     val label: String = "",
     val value: Double = 0.0,
     val note: String? = null,
+)
+
+/**
+ * What a source supports (docs「三、能力」). The apps show only what is supported; an unknown one is ignored.
+ */
+object ExtensionMessagingCapability {
+    const val ACCOUNTS = "accounts"
+    const val PINNED = "pinned"
+    const val MENTIONS = "mentions"
+    const val ATTACHMENTS = "attachments"
+    const val ATTACHMENT_REPLIES = "attachment_replies"
+    const val THREADS = "threads"
+    const val TOPICS = "topics"
+    const val REACTIONS = "reactions"
+    const val READ_RECEIPTS = "read_receipts"
+    const val CHAT_PINS = "chat_pins"
+    const val PROFILES = "profiles"
+    const val URL_PREVIEWS = "url_previews"
+    const val DOCUMENTS = "documents"
+    const val DOC_COMMENTS = "doc_comments"
+    const val POSTS = "posts"
+    const val EDIT_HISTORY = "edit_history"
+    const val TRANSLATION = "translation"
+    val ALL = listOf("accounts", "pinned", "mentions", "attachments", "attachment_replies", "threads", "topics", "reactions", "read_receipts", "chat_pins", "profiles", "url_previews", "documents", "doc_comments", "posts", "edit_history", "translation")
+}
+
+/**
+ * A message box mode besides plain (docs「七、输入框模式」): what is sent is handled by the extension (encoded, sealed).
+ */
+@Serializable
+data class ExtensionMessagingComposerMode(
+    val id: String = "",
+    val title: String = "",
+    /**
+     * A name from the fixed icon set (NavIcon), or lock / shield; an unknown one draws as the default.
+     */
+    val icon: String? = null,
+    /**
+     * One line over the box while the mode is chosen.
+     */
+    val description: String? = null,
+    /**
+     * Pictures and files can go with it.
+     */
+    val attachments: Boolean = false,
+    /**
+     * @ works in it.
+     */
+    val mentions: Boolean = false,
+    /**
+     * Sending takes a compose step first (POST compose → token or a view to fill).
+     */
+    val prepare: Boolean? = null,
+    /**
+     * It can go into a thread (reply_to + thread).
+     */
+    val threads: Boolean? = null,
+)
+
+/**
+ * Links the source opens when tapped in the apps.
+ */
+@Serializable
+data class ExtensionMessagingLink(
+    val hosts: List<String> = emptyList(),
+    /**
+     * Path prefixes; none is any path.
+     */
+    val paths: List<String>? = null,
+    val opens: String = "",
+)
+
+/**
+ * The manifest's contributes.messaging[]: one messaging source (docs「二、清单」).
+ */
+@Serializable
+data class ExtensionMessagingItem(
+    val id: String = "",
+    val name: String = "",
+    val icon: String? = null,
+    /**
+     * MessagingCapability values; one this hub does not know is kept (a newer extension), the apps ignore it.
+     */
+    val capabilities: List<String>? = null,
+    @SerialName("composer_modes") val composerModes: List<ExtensionMessagingComposerMode>? = null,
+    /**
+     * A ui contribution (extension_page) of the same extension.
+     */
+    @SerialName("settings_ui") val settingsUi: String? = null,
+    val links: List<ExtensionMessagingLink>? = null,
+)
+
+/**
+ * GET /api/v1/messaging: an enabled source, its manifest item and the extension it is in.
+ */
+@Serializable
+data class ExtensionMessagingSource(
+    val extension: String = "",
+    val id: String = "",
+    val name: String = "",
+    val icon: String? = null,
+    val capabilities: List<String>? = null,
+    @SerialName("composer_modes") val composerModes: List<ExtensionMessagingComposerMode>? = null,
+    @SerialName("settings_ui") val settingsUi: String? = null,
+    val links: List<ExtensionMessagingLink>? = null,
+)
+
+@Serializable
+data class ExtensionMessagingSources(
+    val sources: List<ExtensionMessagingSource> = emptyList(),
+)
+
+/**
+ * GET status: whether the source is set up and signed in, and the composer modes usable now.
+ */
+@Serializable
+data class ExtensionMessagingStatus(
+    val configured: Boolean = false,
+    val connected: Boolean = false,
+    @SerialName("signed_in") val signedIn: Boolean = false,
+    val name: String? = null,
+    val error: String? = null,
+    val modes: List<String>? = null,
+)
+
+/**
+ * GET me: who the account is now (the outbox keys sends by it).
+ */
+@Serializable
+data class ExtensionMessagingMe(
+    val account: String = "",
+    @SerialName("user_id") val userId: String = "",
+    val name: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingAccount(
+    val id: String = "",
+    val name: String? = null,
+    val avatar: String? = null,
+    val tenant: String? = null,
+    @SerialName("signed_in") val signedIn: Boolean = false,
+    val unread: Int? = null,
+)
+
+@Serializable
+data class ExtensionMessagingAccounts(
+    val accounts: List<ExtensionMessagingAccount> = emptyList(),
+    val default: String? = null,
+)
+
+/**
+ * Values of MessagingConversationKind.
+ */
+object ExtensionMessagingConversationKind {
+    const val DIRECT = "direct"
+    const val GROUP = "group"
+    const val TOPIC_GROUP = "topic_group"
+    const val BOT = "bot"
+    val ALL = listOf("direct", "group", "topic_group", "bot")
+}
+
+@Serializable
+data class ExtensionMessagingConversation(
+    val id: String = "",
+    val name: String = "",
+    val avatar: String? = null,
+    val kind: String = "",
+    val unread: Int = 0,
+    @SerialName("marked_unread") val markedUnread: Boolean? = null,
+    val mentioned: Boolean? = null,
+    val muted: Boolean? = null,
+    val pinned: Boolean? = null,
+    val preview: String = "",
+    @SerialName("preview_sender") val previewSender: String? = null,
+    @SerialName("preview_mine") val previewMine: Boolean? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("read_position") val readPosition: String? = null,
+    @SerialName("mention_position") val mentionPosition: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingConversationPage(
+    val account: String? = null,
+    val conversations: List<ExtensionMessagingConversation> = emptyList(),
+    @SerialName("next_cursor") val nextCursor: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingPerson(
+    val id: String? = null,
+    val name: String = "",
+    val avatar: String? = null,
+    val kind: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingMembers(
+    val members: List<ExtensionMessagingPerson> = emptyList(),
+)
+
+@Serializable
+data class ExtensionMessagingReplyTo(
+    val id: String = "",
+    @SerialName("sender_name") val senderName: String? = null,
+    val summary: String = "",
+    val recalled: Boolean? = null,
+)
+
+@Serializable
+data class ExtensionMessagingThread(
+    val count: Int = 0,
+    @SerialName("latest_at") val latestAt: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingReaction(
+    val key: String = "",
+    val count: Int = 0,
+    val mine: Boolean? = null,
+    val users: List<String>? = null,
+)
+
+/**
+ * A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
+ */
+@Serializable
+data class ExtensionMessagingDecoration(
+    val text: String = "",
+    val icon: String? = null,
+    val tone: String? = null,
+)
+
+/**
+ * An action of the extension's on a message, in its long-press menu: POST messages/{id}/actions/{id}.
+ */
+@Serializable
+data class ExtensionMessagingAction(
+    val id: String = "",
+    val title: String = "",
+    val icon: String? = null,
+    val destructive: Boolean? = null,
+    val confirm: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingEditVersion(
+    @SerialName("edited_at") val editedAt: String? = null,
+    val text: String = "",
+    val parts: List<ExtensionMessagingPart>? = null,
+)
+
+@Serializable
+data class ExtensionMessagingMessage(
+    val id: String = "",
+    val position: String = "",
+    @SerialName("created_at") val createdAt: String? = null,
+    val sender: ExtensionMessagingPerson = ExtensionMessagingPerson(),
+    val mine: Boolean = false,
+    @SerialName("client_id") val clientId: String? = null,
+    val state: String? = null,
+    val parts: List<ExtensionMessagingPart> = emptyList(),
+    val text: String = "",
+    @SerialName("reply_to") val replyTo: ExtensionMessagingReplyTo? = null,
+    val thread: ExtensionMessagingThread? = null,
+    val reactions: List<ExtensionMessagingReaction>? = null,
+    val edited: Boolean? = null,
+    @SerialName("edit_history") val editHistory: List<ExtensionMessagingEditVersion>? = null,
+    val recalled: Boolean? = null,
+    val decorations: List<ExtensionMessagingDecoration>? = null,
+    /**
+     * The body must not be written to disk (an opened sealed message): caches keep private_text.
+     */
+    val private: Boolean? = null,
+    @SerialName("private_text") val privateText: String? = null,
+    val actions: List<ExtensionMessagingAction>? = null,
+    @SerialName("can_pin") val canPin: Boolean? = null,
+    @SerialName("can_unpin") val canUnpin: Boolean? = null,
+    @SerialName("can_reply") val canReply: Boolean? = null,
+    @SerialName("can_react") val canReact: Boolean? = null,
+    val read: Boolean? = null,
+)
+
+@Serializable
+data class ExtensionMessagingMessagePage(
+    val account: String? = null,
+    val messages: List<ExtensionMessagingMessage> = emptyList(),
+    @SerialName("has_older") val hasOlder: Boolean = false,
+    @SerialName("has_newer") val hasNewer: Boolean? = null,
+    @SerialName("older_cursor") val olderCursor: String? = null,
+    @SerialName("newer_cursor") val newerCursor: String? = null,
+    val root: ExtensionMessagingMessage? = null,
+    /**
+     * The conversation is a topic group and messages are its topics' roots.
+     */
+    val topic: Boolean? = null,
+)
+
+/**
+ * GET messages/{id}.
+ */
+@Serializable
+data class ExtensionMessagingMessageAnswer(
+    val account: String? = null,
+    val message: ExtensionMessagingMessage = ExtensionMessagingMessage(),
+)
+
+/**
+ * Values of MessagingMarks.
+ */
+object ExtensionMessagingMarks {
+    const val BOLD = "bold"
+    const val ITALIC = "italic"
+    const val UNDERLINE = "underline"
+    const val STRIKE = "strike"
+    const val CODE = "code"
+    val ALL = listOf("bold", "italic", "underline", "strike", "code")
+}
+
+/**
+ * Values of MessagingBlock.
+ */
+object ExtensionMessagingBlock {
+    const val PARAGRAPH = "paragraph"
+    const val HEADING1 = "heading1"
+    const val HEADING2 = "heading2"
+    const val HEADING3 = "heading3"
+    const val QUOTE = "quote"
+    const val CODE = "code"
+    const val LIST_ITEM = "list_item"
+    val ALL = listOf("paragraph", "heading1", "heading2", "heading3", "quote", "code", "list_item")
+}
+
+@Serializable
+data class ExtensionMessagingList(
+    val ordered: Boolean = false,
+    val level: Int? = null,
+    val start: Int? = null,
+)
+
+@Serializable
+data class ExtensionMessagingMediaSize(
+    val media: String = "",
+    val width: Int? = null,
+    val height: Int? = null,
+)
+
+@Serializable
+data class ExtensionMessagingField(
+    val label: String = "",
+    val value: String = "",
+)
+
+@Serializable
+data class ExtensionMessagingPreview(
+    @SerialName("sender_name") val senderName: String? = null,
+    val text: String = "",
+)
+
+/**
+ * A piece of a message's body, told apart by kind (docs「五」). An app that does not know a kind draws its text, or
+ * skips it.
+ */
+@Serializable(with = ExtensionMessagingPartSerializer::class)
+sealed interface ExtensionMessagingPart {
+    val kind: String
+
+    /** A kind this app does not know, or a variant it could not read: skipped when drawn. */
+    data class Unknown(override val kind: String, val raw: JsonObject = JsonObject(emptyMap())) : ExtensionMessagingPart
+
+    companion object {
+        val KINDS = listOf("text", "mention", "link", "emoji", "sticker", "image", "file", "video", "audio", "code", "divider", "card", "forward", "share", "system")
+    }
+}
+
+object ExtensionMessagingPartSerializer : KSerializer<ExtensionMessagingPart> {
+    override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionMessagingPart {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionMessagingPart needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: return ExtensionMessagingPart.Unknown("")
+        val tag = (obj["kind"] as? JsonPrimitive)?.contentOrNull ?: ""
+        return try {
+            when (tag) {
+                "text" -> input.json.decodeFromJsonElement(ExtensionMessagingTextPart.serializer(), obj)
+                "mention" -> input.json.decodeFromJsonElement(ExtensionMessagingMentionPart.serializer(), obj)
+                "link" -> input.json.decodeFromJsonElement(ExtensionMessagingLinkPart.serializer(), obj)
+                "emoji" -> input.json.decodeFromJsonElement(ExtensionMessagingEmojiPart.serializer(), obj)
+                "sticker" -> input.json.decodeFromJsonElement(ExtensionMessagingStickerPart.serializer(), obj)
+                "image" -> input.json.decodeFromJsonElement(ExtensionMessagingImagePart.serializer(), obj)
+                "file" -> input.json.decodeFromJsonElement(ExtensionMessagingFilePart.serializer(), obj)
+                "video" -> input.json.decodeFromJsonElement(ExtensionMessagingVideoPart.serializer(), obj)
+                "audio" -> input.json.decodeFromJsonElement(ExtensionMessagingAudioPart.serializer(), obj)
+                "code" -> input.json.decodeFromJsonElement(ExtensionMessagingCodePart.serializer(), obj)
+                "divider" -> input.json.decodeFromJsonElement(ExtensionMessagingDividerPart.serializer(), obj)
+                "card" -> input.json.decodeFromJsonElement(ExtensionMessagingCardPart.serializer(), obj)
+                "forward" -> input.json.decodeFromJsonElement(ExtensionMessagingForwardPart.serializer(), obj)
+                "share" -> input.json.decodeFromJsonElement(ExtensionMessagingSharePart.serializer(), obj)
+                "system" -> input.json.decodeFromJsonElement(ExtensionMessagingSystemPart.serializer(), obj)
+                else -> ExtensionMessagingPart.Unknown(tag, obj)
+            }
+        } catch (_: SerializationException) {
+            ExtensionMessagingPart.Unknown(tag, obj)
+        } catch (_: IllegalArgumentException) {
+            ExtensionMessagingPart.Unknown(tag, obj)
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionMessagingPart) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionMessagingPart needs JSON")
+        val obj = when (value) {
+            is ExtensionMessagingTextPart -> output.json.encodeToJsonElement(ExtensionMessagingTextPart.serializer(), value) as JsonObject
+            is ExtensionMessagingMentionPart -> output.json.encodeToJsonElement(ExtensionMessagingMentionPart.serializer(), value) as JsonObject
+            is ExtensionMessagingLinkPart -> output.json.encodeToJsonElement(ExtensionMessagingLinkPart.serializer(), value) as JsonObject
+            is ExtensionMessagingEmojiPart -> output.json.encodeToJsonElement(ExtensionMessagingEmojiPart.serializer(), value) as JsonObject
+            is ExtensionMessagingStickerPart -> output.json.encodeToJsonElement(ExtensionMessagingStickerPart.serializer(), value) as JsonObject
+            is ExtensionMessagingImagePart -> output.json.encodeToJsonElement(ExtensionMessagingImagePart.serializer(), value) as JsonObject
+            is ExtensionMessagingFilePart -> output.json.encodeToJsonElement(ExtensionMessagingFilePart.serializer(), value) as JsonObject
+            is ExtensionMessagingVideoPart -> output.json.encodeToJsonElement(ExtensionMessagingVideoPart.serializer(), value) as JsonObject
+            is ExtensionMessagingAudioPart -> output.json.encodeToJsonElement(ExtensionMessagingAudioPart.serializer(), value) as JsonObject
+            is ExtensionMessagingCodePart -> output.json.encodeToJsonElement(ExtensionMessagingCodePart.serializer(), value) as JsonObject
+            is ExtensionMessagingDividerPart -> output.json.encodeToJsonElement(ExtensionMessagingDividerPart.serializer(), value) as JsonObject
+            is ExtensionMessagingCardPart -> output.json.encodeToJsonElement(ExtensionMessagingCardPart.serializer(), value) as JsonObject
+            is ExtensionMessagingForwardPart -> output.json.encodeToJsonElement(ExtensionMessagingForwardPart.serializer(), value) as JsonObject
+            is ExtensionMessagingSharePart -> output.json.encodeToJsonElement(ExtensionMessagingSharePart.serializer(), value) as JsonObject
+            is ExtensionMessagingSystemPart -> output.json.encodeToJsonElement(ExtensionMessagingSystemPart.serializer(), value) as JsonObject
+            is ExtensionMessagingPart.Unknown -> value.raw
+        }
+        output.encodeJsonElement(JsonObject(obj + ("kind" to JsonPrimitive(value.kind))))
+    }
+}
+
+@Serializable
+data class ExtensionMessagingTextPart(
+    override val kind: String = "text",
+    val text: String = "",
+    val marks: List<String>? = null,
+    val url: String? = null,
+    val block: String? = null,
+    val list: ExtensionMessagingList? = null,
+    /**
+     * Consecutive text parts with the same block_id are one block; another id starts another.
+     */
+    @SerialName("block_id") val blockId: String? = null,
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingMentionPart(
+    override val kind: String = "mention",
+    val text: String = "",
+    @SerialName("user_id") val userId: String? = null,
+    val all: Boolean? = null,
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingLinkPart(
+    override val kind: String = "link",
+    val text: String = "",
+    val url: String = "",
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingEmojiPart(
+    override val kind: String = "emoji",
+    val key: String = "",
+    val text: String = "",
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingStickerPart(
+    override val kind: String = "sticker",
+    val media: String = "",
+    val width: Int? = null,
+    val height: Int? = null,
+    val text: String? = null,
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingImagePart(
+    override val kind: String = "image",
+    val media: String = "",
+    val width: Int? = null,
+    val height: Int? = null,
+    val text: String? = null,
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingFilePart(
+    override val kind: String = "file",
+    val name: String = "",
+    val media: String? = null,
+    val size: Long? = null,
+    val ext: String? = null,
+    val expired: Boolean? = null,
+    val text: String? = null,
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingVideoPart(
+    override val kind: String = "video",
+    val media: String = "",
+    @SerialName("duration_ms") val durationMs: Int? = null,
+    val poster: ExtensionMessagingMediaSize? = null,
+    val text: String? = null,
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingAudioPart(
+    override val kind: String = "audio",
+    val media: String = "",
+    @SerialName("duration_ms") val durationMs: Int? = null,
+    val text: String? = null,
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingCodePart(
+    override val kind: String = "code",
+    val text: String = "",
+    val language: String? = null,
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingDividerPart(
+    override val kind: String = "divider",
+    val text: String? = null,
+) : ExtensionMessagingPart
+
+/**
+ * A card: the source's card turned into a declarative View by the extension; fallback when it cannot be drawn.
+ */
+@Serializable
+data class ExtensionMessagingCardPart(
+    override val kind: String = "card",
+    val view: ExtensionView = ExtensionView(),
+    /**
+     * The fallback: what to show when the view cannot be drawn.
+     */
+    val text: String? = null,
+) : ExtensionMessagingPart
+
+/**
+ * Forwarded messages, merged: the messages (at most 50) or only previews of them.
+ */
+@Serializable
+data class ExtensionMessagingForwardPart(
+    override val kind: String = "forward",
+    val title: String = "",
+    val messages: List<ExtensionMessagingMessage>? = null,
+    val previews: List<ExtensionMessagingPreview>? = null,
+    val count: Int? = null,
+    val text: String? = null,
+) : ExtensionMessagingPart
+
+/**
+ * Something shared as a card: a group, a person, an event, a meeting, a vote.
+ */
+@Serializable
+data class ExtensionMessagingSharePart(
+    override val kind: String = "share",
+    val title: String = "",
+    val subtitle: String? = null,
+    val image: ExtensionMessagingMediaSize? = null,
+    val fields: List<ExtensionMessagingField>? = null,
+    val url: String? = null,
+    val text: String? = null,
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingSystemPart(
+    override val kind: String = "system",
+    val text: String = "",
+) : ExtensionMessagingPart
+
+@Serializable
+data class ExtensionMessagingMention(
+    @SerialName("user_id") val userId: String = "",
+    val name: String = "",
+)
+
+/**
+ * POST conversations/{id}/messages (docs「六、发送」).
+ */
+@Serializable
+data class ExtensionMessagingOutgoing(
+    @SerialName("client_id") val clientId: String = "",
+    val text: String = "",
+    val mentions: List<ExtensionMessagingMention>? = null,
+    @SerialName("reply_to") val replyTo: String? = null,
+    val thread: Boolean? = null,
+    val mode: String? = null,
+    val prepared: String? = null,
+    /**
+     * GET me's user_id: not sent (409 account_changed) when the account is someone else's now.
+     */
+    @SerialName("expect_user") val expectUser: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingSendReceipt(
+    @SerialName("message_id") val messageId: String? = null,
+)
+
+/**
+ * POST conversations/{id}/compose: a mode that prepares before sending.
+ */
+@Serializable
+data class ExtensionMessagingCompose(
+    val mode: String = "",
+    val text: String = "",
+    @SerialName("reply_to") val replyTo: String? = null,
+    val values: Map<String, String>? = null,
+)
+
+/**
+ * Ready to send with token, or a view (declarative UI) the user fills first.
+ */
+@Serializable
+data class ExtensionMessagingComposeAnswer(
+    val ready: Boolean? = null,
+    val token: String? = null,
+    val view: ExtensionView? = null,
+)
+
+@Serializable
+data class ExtensionMessagingReadReport(
+    val position: String = "",
+    @SerialName("message_ids") val messageIds: List<String>? = null,
+)
+
+@Serializable
+data class ExtensionMessagingReadState(
+    @SerialName("message_id") val messageId: String = "",
+    val read: Int = 0,
+    val unread: Int = 0,
+)
+
+@Serializable
+data class ExtensionMessagingReadStates(
+    val states: List<ExtensionMessagingReadState> = emptyList(),
+)
+
+@Serializable
+data class ExtensionMessagingChatPin(
+    val id: String = "",
+    @SerialName("message_id") val messageId: String = "",
+    val message: ExtensionMessagingMessage? = null,
+    @SerialName("operator_name") val operatorName: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingChatPins(
+    val account: String? = null,
+    val items: List<ExtensionMessagingChatPin> = emptyList(),
+    @SerialName("next_cursor") val nextCursor: String? = null,
+    val total: Int? = null,
+)
+
+@Serializable
+data class ExtensionMessagingPinTarget(
+    val message: ExtensionMessagingMessage = ExtensionMessagingMessage(),
+    val root: ExtensionMessagingMessage? = null,
+    val page: ExtensionMessagingMessagePage = ExtensionMessagingMessagePage(),
+)
+
+@Serializable
+data class ExtensionMessagingPinTargetAnswer(
+    val account: String? = null,
+    val target: ExtensionMessagingPinTarget = ExtensionMessagingPinTarget(),
+)
+
+@Serializable
+data class ExtensionMessagingPinAnswer(
+    val account: String? = null,
+    val pinned: Boolean = false,
+)
+
+@Serializable
+data class ExtensionMessagingEmoji(
+    val label: String = "",
+    val url: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingEmojiGroup(
+    val title: String = "",
+    val keys: List<String> = emptyList(),
+)
+
+@Serializable
+data class ExtensionMessagingEmojis(
+    val emojis: Map<String, ExtensionMessagingEmoji> = emptyMap(),
+    val groups: List<ExtensionMessagingEmojiGroup>? = null,
+)
+
+@Serializable
+data class ExtensionMessagingQuickReactions(
+    val keys: List<String> = emptyList(),
+)
+
+@Serializable
+data class ExtensionMessagingURLPreview(
+    val url: String = "",
+    val title: String? = null,
+    val host: String? = null,
+    val summary: String? = null,
+    val image: ExtensionMessagingMediaSize? = null,
+    val author: ExtensionMessagingPerson? = null,
+)
+
+@Serializable
+data class ExtensionMessagingProfileField(
+    val label: String = "",
+    val value: String = "",
+    val url: String? = null,
+    /**
+     * Another person's id: tapping the row opens their profile.
+     */
+    val person: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingProfile(
+    val id: String = "",
+    val name: String = "",
+    val avatar: String? = null,
+    val cover: String? = null,
+    val kind: String? = null,
+    val subtitle: String? = null,
+    val status: String? = null,
+    val description: String? = null,
+    val fields: List<ExtensionMessagingProfileField>? = null,
+    @SerialName("can_chat") val canChat: Boolean? = null,
+)
+
+@Serializable
+data class ExtensionMessagingChatOpened(
+    @SerialName("conversation_id") val conversationId: String = "",
+)
+
+/**
+ * Values of MessagingDocBlockKind.
+ */
+object ExtensionMessagingDocBlockKind {
+    const val HEADING = "heading"
+    const val PARAGRAPH = "paragraph"
+    const val LIST = "list"
+    const val QUOTE = "quote"
+    const val CODE = "code"
+    const val CALLOUT = "callout"
+    const val TABLE = "table"
+    const val IMAGE = "image"
+    const val DIVIDER = "divider"
+    const val EMBED = "embed"
+    val ALL = listOf("heading", "paragraph", "list", "quote", "code", "callout", "table", "image", "divider", "embed")
+}
+
+/**
+ * A block of a document. Inline content is parts (text / mention / link / emoji); list items and table cells are
+ * blocks.
+ */
+@Serializable
+data class ExtensionMessagingDocBlock(
+    val id: String? = null,
+    val kind: String = "",
+    val level: Int? = null,
+    val ordered: Boolean? = null,
+    val language: String? = null,
+    val parts: List<ExtensionMessagingPart>? = null,
+    val items: List<ExtensionMessagingDocBlock>? = null,
+    val rows: List<List<ExtensionMessagingDocBlock>>? = null,
+    val image: ExtensionMessagingMediaSize? = null,
+    val title: String? = null,
+    val url: String? = null,
+)
+
+@Serializable
+data class ExtensionMessagingDocPermission(
+    val copy: Boolean? = null,
+    val export: Boolean? = null,
+)
+
+@Serializable
+data class ExtensionMessagingDocument(
+    val title: String = "",
+    val url: String = "",
+    val blocks: List<ExtensionMessagingDocBlock> = emptyList(),
+    val permission: ExtensionMessagingDocPermission? = null,
+    val partial: Boolean? = null,
+)
+
+@Serializable
+data class ExtensionMessagingCommentReply(
+    val id: String = "",
+    val author: ExtensionMessagingPerson = ExtensionMessagingPerson(),
+    val parts: List<ExtensionMessagingPart> = emptyList(),
+    @SerialName("created_at") val createdAt: String? = null,
+    val edited: Boolean? = null,
+)
+
+@Serializable
+data class ExtensionMessagingCommentThread(
+    val id: String = "",
+    val quote: String? = null,
+    @SerialName("block_id") val blockId: String? = null,
+    val resolved: Boolean = false,
+    val replies: List<ExtensionMessagingCommentReply> = emptyList(),
+)
+
+@Serializable
+data class ExtensionMessagingCommentThreads(
+    val threads: List<ExtensionMessagingCommentThread> = emptyList(),
+)
+
+/**
+ * POST documents/comments and …/{thread}/replies.
+ */
+@Serializable
+data class ExtensionMessagingCommentWrite(
+    val url: String = "",
+    val parts: List<ExtensionMessagingPart> = emptyList(),
+    val mentions: List<ExtensionMessagingMention>? = null,
+    val quote: String? = null,
+    @SerialName("block_id") val blockId: String? = null,
+    @SerialName("client_id") val clientId: String = "",
+)
+
+/**
+ * POST documents/comments/{thread}/resolve: resolved false opens it again.
+ */
+@Serializable
+data class ExtensionMessagingResolve(
+    val url: String = "",
+    val resolved: Boolean = false,
+)
+
+@Serializable
+data class ExtensionMessagingPostImage(
+    val media: String = "",
+    val width: Int? = null,
+    val height: Int? = null,
+)
+
+@Serializable
+data class ExtensionMessagingPost(
+    val id: String = "",
+    val author: ExtensionMessagingPerson = ExtensionMessagingPerson(),
+    val parts: List<ExtensionMessagingPart> = emptyList(),
+    val images: List<ExtensionMessagingPostImage>? = null,
+    val reactions: List<ExtensionMessagingReaction>? = null,
+    @SerialName("comment_count") val commentCount: Int? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    val categories: List<String>? = null,
+)
+
+@Serializable
+data class ExtensionMessagingPostComment(
+    val id: String = "",
+    val author: ExtensionMessagingPerson = ExtensionMessagingPerson(),
+    val parts: List<ExtensionMessagingPart> = emptyList(),
+    @SerialName("created_at") val createdAt: String? = null,
+    val hot: Boolean? = null,
+)
+
+@Serializable
+data class ExtensionMessagingPostComments(
+    val comments: List<ExtensionMessagingPostComment> = emptyList(),
+)
+
+/**
+ * The event messaging.changed (and the WebSocket {type: messaging, …} the hub pushes with it).
+ */
+@Serializable
+data class ExtensionMessagingChanged(
+    val source: String = "",
+    val conversations: List<String>? = null,
+    val account: String? = null,
+    @SerialName("settings_changed") val settingsChanged: Boolean? = null,
+)
+
+/**
+ * Where an inbox item or a notification opens: a conversation of a source, and where in it.
+ */
+@Serializable
+data class ExtensionMessagingConversationRef(
+    val source: String = "",
+    val id: String = "",
+    val account: String? = null,
+    @SerialName("start_position") val startPosition: String? = null,
+    @SerialName("read_position") val readPosition: String? = null,
+    @SerialName("mention_position") val mentionPosition: String? = null,
+)
+
+/**
+ * An error answer. code is one of the codes the apps act on (docs「四、接口」); view comes with input_required.
+ */
+@Serializable
+data class ExtensionMessagingError(
+    val error: String = "",
+    val code: String? = null,
+    val view: ExtensionView? = null,
 )

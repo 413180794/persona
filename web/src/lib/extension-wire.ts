@@ -173,6 +173,7 @@ export interface Contributes {
   themes?: ThemeItem[];
   triage_templates?: TriageTemplateItem[];
   agent_filters?: AgentFilterItem[];
+  messaging?: MessagingItem[];
   /** Extra keys are opaque JSON; declared properties keep their own types. */
   [key: string]: unknown;
 }
@@ -1326,4 +1327,678 @@ export interface CardPart {
   label: string;
   value: number;
   note?: string;
+}
+
+/**
+ * What a source supports (docs「三、能力」). The apps show only what is supported; an unknown one is ignored.
+ */
+export type MessagingCapability = "accounts" | "pinned" | "mentions" | "attachments" | "attachment_replies" | "threads" | "topics" | "reactions" | "read_receipts" | "chat_pins" | "profiles" | "url_previews" | "documents" | "doc_comments" | "posts" | "edit_history" | "translation" | (string & {});
+export const MESSAGING_CAPABILITIES = ["accounts", "pinned", "mentions", "attachments", "attachment_replies", "threads", "topics", "reactions", "read_receipts", "chat_pins", "profiles", "url_previews", "documents", "doc_comments", "posts", "edit_history", "translation"] as const;
+
+/**
+ * A message box mode besides plain (docs「七、输入框模式」): what is sent is handled by the extension (encoded, sealed).
+ */
+export interface MessagingComposerMode {
+  id: string;
+  title: string;
+  /** A name from the fixed icon set (NavIcon), or lock / shield; an unknown one draws as the default. */
+  icon?: string;
+  /** One line over the box while the mode is chosen. */
+  description?: string;
+  /** Pictures and files can go with it. */
+  attachments: boolean;
+  /** @ works in it. */
+  mentions: boolean;
+  /** Sending takes a compose step first (POST compose → token or a view to fill). */
+  prepare?: boolean;
+  /** It can go into a thread (reply_to + thread). */
+  threads?: boolean;
+}
+
+/**
+ * Links the source opens when tapped in the apps.
+ */
+export interface MessagingLink {
+  hosts: string[];
+  /** Path prefixes; none is any path. */
+  paths?: string[];
+  opens: string;
+}
+
+/**
+ * The manifest's contributes.messaging[]: one messaging source (docs「二、清单」).
+ */
+export interface MessagingItem {
+  id: string;
+  name: string;
+  icon?: string;
+  /** MessagingCapability values; one this hub does not know is kept (a newer extension), the apps ignore it. */
+  capabilities?: string[];
+  composer_modes?: MessagingComposerMode[];
+  /** A ui contribution (extension_page) of the same extension. */
+  settings_ui?: string;
+  links?: MessagingLink[];
+}
+
+/**
+ * GET /api/v1/messaging: an enabled source, its manifest item and the extension it is in.
+ */
+export interface MessagingSource {
+  extension: string;
+  id: string;
+  name: string;
+  icon?: string;
+  capabilities?: string[];
+  composer_modes?: MessagingComposerMode[];
+  settings_ui?: string;
+  links?: MessagingLink[];
+}
+
+export interface MessagingSources {
+  sources: MessagingSource[];
+}
+
+/**
+ * GET status: whether the source is set up and signed in, and the composer modes usable now.
+ */
+export interface MessagingStatus {
+  configured: boolean;
+  connected: boolean;
+  signed_in: boolean;
+  name?: string;
+  error?: string;
+  modes?: string[];
+}
+
+/**
+ * GET me: who the account is now (the outbox keys sends by it).
+ */
+export interface MessagingMe {
+  account: string;
+  user_id: string;
+  name?: string;
+}
+
+export interface MessagingAccount {
+  id: string;
+  name?: string;
+  avatar?: string;
+  tenant?: string;
+  signed_in: boolean;
+  unread?: number;
+}
+
+export interface MessagingAccounts {
+  accounts: MessagingAccount[];
+  default?: string;
+}
+
+export type MessagingConversationKind = "direct" | "group" | "topic_group" | "bot" | (string & {});
+export const MESSAGING_CONVERSATION_KINDS = ["direct", "group", "topic_group", "bot"] as const;
+
+export interface MessagingConversation {
+  id: string;
+  name: string;
+  avatar?: string;
+  kind: MessagingConversationKind;
+  unread: number;
+  marked_unread?: boolean;
+  mentioned?: boolean;
+  muted?: boolean;
+  pinned?: boolean;
+  preview: string;
+  preview_sender?: string;
+  preview_mine?: boolean;
+  updated_at?: string;
+  read_position?: string;
+  mention_position?: string;
+}
+
+export interface MessagingConversationPage {
+  account?: string;
+  conversations: MessagingConversation[];
+  next_cursor?: string;
+}
+
+export interface MessagingPerson {
+  id?: string;
+  name: string;
+  avatar?: string;
+  kind?: string;
+}
+
+export interface MessagingMembers {
+  members: MessagingPerson[];
+}
+
+export interface MessagingReplyTo {
+  id: string;
+  sender_name?: string;
+  summary: string;
+  recalled?: boolean;
+}
+
+export interface MessagingThread {
+  count: number;
+  latest_at?: string;
+}
+
+export interface MessagingReaction {
+  key: string;
+  count: number;
+  mine?: boolean;
+  users?: string[];
+}
+
+/**
+ * A small line under a message''s on a message, in its long-press menu: POST messages/{id}/actions/{id}.
+ */
+export interface MessagingAction {
+  id: string;
+  title: string;
+  icon?: string;
+  destructive?: boolean;
+  confirm?: string;
+}
+
+export interface MessagingEditVersion {
+  edited_at?: string;
+  text: string;
+  parts?: MessagingPart[];
+}
+
+export interface MessagingMessage {
+  id: string;
+  position: string;
+  created_at?: string;
+  sender: MessagingPerson;
+  mine: boolean;
+  client_id?: string;
+  state?: string;
+  parts: MessagingPart[];
+  text: string;
+  reply_to?: MessagingReplyTo;
+  thread?: MessagingThread;
+  reactions?: MessagingReaction[];
+  edited?: boolean;
+  edit_history?: MessagingEditVersion[];
+  recalled?: boolean;
+  decorations?: MessagingDecoration[];
+  /** The body must not be written to disk (an opened sealed message): caches keep private_text. */
+  private?: boolean;
+  private_text?: string;
+  actions?: MessagingAction[];
+  can_pin?: boolean;
+  can_unpin?: boolean;
+  can_reply?: boolean;
+  can_react?: boolean;
+  read?: boolean;
+}
+
+export interface MessagingMessagePage {
+  account?: string;
+  messages: MessagingMessage[];
+  has_older: boolean;
+  has_newer?: boolean;
+  older_cursor?: string;
+  newer_cursor?: string;
+  root?: MessagingMessage;
+  /** The conversation is a topic group and messages are its topics' roots. */
+  topic?: boolean;
+}
+
+/**
+ * GET messages/{id}.
+ */
+export interface MessagingMessageAnswer {
+  account?: string;
+  message: MessagingMessage;
+}
+
+export type MessagingMarks = "bold" | "italic" | "underline" | "strike" | "code" | (string & {});
+export const MESSAGING_MARKSES = ["bold", "italic", "underline", "strike", "code"] as const;
+
+export type MessagingBlock = "paragraph" | "heading1" | "heading2" | "heading3" | "quote" | "code" | "list_item" | (string & {});
+export const MESSAGING_BLOCKS = ["paragraph", "heading1", "heading2", "heading3", "quote", "code", "list_item"] as const;
+
+export interface MessagingList {
+  ordered: boolean;
+  level?: number;
+  start?: number;
+}
+
+export interface MessagingMediaSize {
+  media: string;
+  width?: number;
+  height?: number;
+}
+
+export interface MessagingField {
+  label: string;
+  value: string;
+}
+
+export interface MessagingPreview {
+  sender_name?: string;
+  text: string;
+}
+
+/**
+ * A piece of a message's body, told apart by kind (docs「五」). An app that does not know a kind draws its text, or
+ * skips it.
+ */
+export type MessagingPart =
+  | MessagingTextPart
+  | MessagingMentionPart
+  | MessagingLinkPart
+  | MessagingEmojiPart
+  | MessagingStickerPart
+  | MessagingImagePart
+  | MessagingFilePart
+  | MessagingVideoPart
+  | MessagingAudioPart
+  | MessagingCodePart
+  | MessagingDividerPart
+  | MessagingCardPart
+  | MessagingForwardPart
+  | MessagingSharePart
+  | MessagingSystemPart;
+export const MESSAGING_PART_KINDS = ["text", "mention", "link", "emoji", "sticker", "image", "file", "video", "audio", "code", "divider", "card", "forward", "share", "system"] as const;
+
+export interface MessagingTextPart {
+  kind: "text";
+  text: string;
+  marks?: MessagingMarks[];
+  url?: string;
+  block?: MessagingBlock;
+  list?: MessagingList;
+  /** Consecutive text parts with the same block_id are one block; another id starts another. */
+  block_id?: string;
+}
+
+export interface MessagingMentionPart {
+  kind: "mention";
+  text: string;
+  user_id?: string;
+  all?: boolean;
+}
+
+export interface MessagingLinkPart {
+  kind: "link";
+  text: string;
+  url: string;
+}
+
+export interface MessagingEmojiPart {
+  kind: "emoji";
+  key: string;
+  text: string;
+}
+
+export interface MessagingStickerPart {
+  kind: "sticker";
+  media: string;
+  width?: number;
+  height?: number;
+  text?: string;
+}
+
+export interface MessagingImagePart {
+  kind: "image";
+  media: string;
+  width?: number;
+  height?: number;
+  text?: string;
+}
+
+export interface MessagingFilePart {
+  kind: "file";
+  name: string;
+  media?: string;
+  size?: number;
+  ext?: string;
+  expired?: boolean;
+  text?: string;
+}
+
+export interface MessagingVideoPart {
+  kind: "video";
+  media: string;
+  duration_ms?: number;
+  poster?: MessagingMediaSize;
+  text?: string;
+}
+
+export interface MessagingAudioPart {
+  kind: "audio";
+  media: string;
+  duration_ms?: number;
+  text?: string;
+}
+
+export interface MessagingCodePart {
+  kind: "code";
+  text: string;
+  language?: string;
+}
+
+export interface MessagingDividerPart {
+  kind: "divider";
+  text?: string;
+}
+
+/**
+ * A card: the source's card turned into a declarative View by the extension; fallback when it cannot be drawn.
+ */
+export interface MessagingCardPart {
+  kind: "card";
+  view: View;
+  /** The fallback: what to show when the view cannot be drawn. */
+  text?: string;
+}
+
+/**
+ * Forwarded messages, merged: the messages (at most 50) or only previews of them.
+ */
+export interface MessagingForwardPart {
+  kind: "forward";
+  title: string;
+  messages?: MessagingMessage[];
+  previews?: MessagingPreview[];
+  count?: number;
+  text?: string;
+}
+
+/**
+ * Something shared as a card: a group, a person, an event, a meeting, a vote.
+ */
+export interface MessagingSharePart {
+  kind: "share";
+  title: string;
+  subtitle?: string;
+  image?: MessagingMediaSize;
+  fields?: MessagingField[];
+  url?: string;
+  text?: string;
+}
+
+export interface MessagingSystemPart {
+  kind: "system";
+  text: string;
+}
+
+export interface MessagingMention {
+  user_id: string;
+  name: string;
+}
+
+/**
+ * POST conversations/{id}/messages (docs「六、发送」).
+ */
+export interface MessagingOutgoing {
+  client_id: string;
+  text: string;
+  mentions?: MessagingMention[];
+  reply_to?: string;
+  thread?: boolean;
+  mode?: string;
+  prepared?: string;
+  /** GET me's user_id: not sent (409 account_changed) when the account is someone else's now. */
+  expect_user?: string;
+}
+
+export interface MessagingSendReceipt {
+  message_id?: string;
+}
+
+/**
+ * POST conversations/{id}/compose: a mode that prepares before sending.
+ */
+export interface MessagingCompose {
+  mode: string;
+  text: string;
+  reply_to?: string;
+  values?: Record<string, string>;
+}
+
+/**
+ * Ready to send with token, or a view (declarative UI) the user fills first.
+ */
+export interface MessagingComposeAnswer {
+  ready?: boolean;
+  token?: string;
+  view?: View;
+}
+
+export interface MessagingReadReport {
+  position: string;
+  message_ids?: string[];
+}
+
+export interface MessagingReadState {
+  message_id: string;
+  read: number;
+  unread: number;
+}
+
+export interface MessagingReadStates {
+  states: MessagingReadState[];
+}
+
+export interface MessagingChatPin {
+  id: string;
+  message_id: string;
+  message?: MessagingMessage;
+  operator_name?: string;
+  created_at?: string;
+}
+
+export interface MessagingChatPins {
+  account?: string;
+  items: MessagingChatPin[];
+  next_cursor?: string;
+  total?: number;
+}
+
+export interface MessagingPinTarget {
+  message: MessagingMessage;
+  root?: MessagingMessage;
+  page: MessagingMessagePage;
+}
+
+export interface MessagingPinTargetAnswer {
+  account?: string;
+  target: MessagingPinTarget;
+}
+
+export interface MessagingPinAnswer {
+  account?: string;
+  pinned: boolean;
+}
+
+export interface MessagingEmoji {
+  label: string;
+  url?: string;
+}
+
+export interface MessagingEmojiGroup {
+  title: string;
+  keys: string[];
+}
+
+export interface MessagingEmojis {
+  emojis: Record<string, MessagingEmoji>;
+  groups?: MessagingEmojiGroup[];
+}
+
+export interface MessagingQuickReactions {
+  keys: string[];
+}
+
+export interface MessagingURLPreview {
+  url: string;
+  title?: string;
+  host?: string;
+  summary?: string;
+  image?: MessagingMediaSize;
+  author?: MessagingPerson;
+}
+
+export interface MessagingProfileField {
+  label: string;
+  value: string;
+  url?: string;
+  /** Another person's id: tapping the row opens their profile. */
+  person?: string;
+}
+
+export interface MessagingProfile {
+  id: string;
+  name: string;
+  avatar?: string;
+  cover?: string;
+  kind?: string;
+  subtitle?: string;
+  status?: string;
+  description?: string;
+  fields?: MessagingProfileField[];
+  can_chat?: boolean;
+}
+
+export interface MessagingChatOpened {
+  conversation_id: string;
+}
+
+export type MessagingDocBlockKind = "heading" | "paragraph" | "list" | "quote" | "code" | "callout" | "table" | "image" | "divider" | "embed" | (string & {});
+export const MESSAGING_DOC_BLOCK_KINDS = ["heading", "paragraph", "list", "quote", "code", "callout", "table", "image", "divider", "embed"] as const;
+
+/**
+ * A block of a document. Inline content is parts (text / mention / link / emoji); list items and table cells are
+ * blocks.
+ */
+export interface MessagingDocBlock {
+  id?: string;
+  kind: MessagingDocBlockKind;
+  level?: number;
+  ordered?: boolean;
+  language?: string;
+  parts?: MessagingPart[];
+  items?: MessagingDocBlock[];
+  rows?: (MessagingDocBlock[])[];
+  image?: MessagingMediaSize;
+  title?: string;
+  url?: string;
+}
+
+export interface MessagingDocPermission {
+  copy?: boolean;
+  export?: boolean;
+}
+
+export interface MessagingDocument {
+  title: string;
+  url: string;
+  blocks: MessagingDocBlock[];
+  permission?: MessagingDocPermission;
+  partial?: boolean;
+}
+
+export interface MessagingCommentReply {
+  id: string;
+  author: MessagingPerson;
+  parts: MessagingPart[];
+  created_at?: string;
+  edited?: boolean;
+}
+
+export interface MessagingCommentThread {
+  id: string;
+  quote?: string;
+  block_id?: string;
+  resolved: boolean;
+  replies: MessagingCommentReply[];
+}
+
+export interface MessagingCommentThreads {
+  threads: MessagingCommentThread[];
+}
+
+/**
+ * POST documents/comments and …/{thread}/replies.
+ */
+export interface MessagingCommentWrite {
+  url: string;
+  parts: MessagingPart[];
+  mentions?: MessagingMention[];
+  quote?: string;
+  block_id?: string;
+  client_id: string;
+}
+
+/**
+ * POST documents/comments/{thread}/resolve: resolved false opens it again.
+ */
+export interface MessagingResolve {
+  url: string;
+  resolved: boolean;
+}
+
+export interface MessagingPostImage {
+  media: string;
+  width?: number;
+  height?: number;
+}
+
+export interface MessagingPost {
+  id: string;
+  author: MessagingPerson;
+  parts: MessagingPart[];
+  images?: MessagingPostImage[];
+  reactions?: MessagingReaction[];
+  comment_count?: number;
+  created_at?: string;
+  categories?: string[];
+}
+
+export interface MessagingPostComment {
+  id: string;
+  author: MessagingPerson;
+  parts: MessagingPart[];
+  created_at?: string;
+  hot?: boolean;
+}
+
+export interface MessagingPostComments {
+  comments: MessagingPostComment[];
+}
+
+/**
+ * The event messaging.changed (and the WebSocket {type: messaging, …} the hub pushes with it).
+ */
+export interface MessagingChanged {
+  source: string;
+  conversations?: string[];
+  account?: string;
+  settings_changed?: boolean;
+}
+
+/**
+ * Where an inbox item or a notification opens: a conversation of a source, and where in it.
+ */
+export interface MessagingConversationRef {
+  source: string;
+  id: string;
+  account?: string;
+  start_position?: string;
+  read_position?: string;
+  mention_position?: string;
+}
+
+/**
+ * An error answer. code is one of the codes the apps act on (docs「四、接口」); view comes with input_required.
+ */
+export interface MessagingError {
+  error: string;
+  code?: string;
+  view?: View;
 }

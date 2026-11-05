@@ -199,7 +199,8 @@
         "prompts": {"type": "array", "items": {"$ref": "#/$defs/PromptItem"}},
         "themes": {"type": "array", "items": {"$ref": "#/$defs/ThemeItem"}},
         "triage_templates": {"type": "array", "items": {"$ref": "#/$defs/TriageTemplateItem"}},
-        "agent_filters": {"type": "array", "items": {"$ref": "#/$defs/AgentFilterItem"}}
+        "agent_filters": {"type": "array", "items": {"$ref": "#/$defs/AgentFilterItem"}},
+        "messaging": {"type": "array", "items": {"$ref": "messaging.schema.json#/$defs/MessagingItem"}}
       }
     },
     "SkillItem": {

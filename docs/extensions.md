@@ -85,6 +85,7 @@ hub 给老路径的每次调用按路由计数（`extension_compat.go` 的 `lega
 | `themes`（版本 1） | — | `id`、`name`、`light` / `dark`：角色色 `accent`（必填）、`positive`、`caution`、`danger`、`ai` 的 `#RRGGBB` | 纯声明即可 | 设置 › 外观 › 主题色里多一种，见「纯声明贡献」 |
 | `triage_templates`（版本 1） | — | `id`、`title`（≤ 40 字）、`text`（≤ 4000 字） | 纯声明即可 | 填收件箱分拣规则（`triage_rules`）时能选的模板，见「纯声明贡献」 |
 | `agent_filters`（版本 1） | — | `id`、`title?`（≤ 40 字）、`when?`（配置里一个布尔字段的名字）、`agents?`（`claude` / `codex`）、`originators?`、`added_dirs?`、`first_message_prefixes?`（至少一种） | 纯声明即可 | 各台电脑上哪些 Agent 会话不进 Agents，见下面「Agent 过滤」 |
+| `messaging`（版本 1，#2138） | — | `id`（`^[a-z][a-z0-9_]{0,31}$`，也是接口路径和事件里的来源 id）、`name`、`icon?`、`capabilities?`、`composer_modes?`、`settings_ui?`（同一个扩展的 `extension_page`）、`links?` | `runtime.http`，`activation_events` 有 `on_startup` | App 的「消息」入口：会话、聊天、发送都走 `/api/v1/messaging/<id>/…`，App 用通用的原生消息组件画，见 [extension-messaging.md](extension-messaging.md) |
 
 hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后加扩展点（知识库来源、链接识别……），在这张表里加一行。
 

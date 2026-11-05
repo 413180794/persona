@@ -8,6 +8,7 @@
 | `manifest.schema.json` | 清单 `persona-extension.json`（改名前叫 `persona-plugin.json`，字段一样）：根、`engines`、`runtime`、`secrets`、`permissions`、`contributes` 和每个扩展点的贡献 |
 | `protocol.schema.json` | 进程协议：一行一帧（`Frame`、`RPCError`）、错误码、`initialize` 的参数和回答、`ui.render` / `ui.action` 的参数 `UIParams`、角标事件，以及 App 画一个插槽时发给 hub 的 `UIContext` / `UIRequest` 和 hub 列出的 `UIPlace` |
 | `view.schema.json` | View、节、组件（`Component`，按 `type` 区分）、动作、`ui.action` 的回答，和助手回答里的 `persona-card`（`PersonaCard`，#1850 并进组件） |
+| `messaging.schema.json` | 扩展点 `messaging`（#2138）：清单里的来源（`MessagingItem`）、会话、消息和片段（`MessagingPart`，按 `kind` 区分）、发送、输入框模式、文档、帖子、事件和错误，见 `docs/extension-messaging.md` |
 | `examples/` | 例子：`<定义名>.<名字>.json` 必须合 schema；`examples/invalid/` 下的必须不合 |
 
 ## 生成

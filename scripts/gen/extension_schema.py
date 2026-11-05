@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DIR = ROOT / "schema" / "extension"
-SCHEMA_FILES = ["manifest.schema.json", "protocol.schema.json", "view.schema.json"]
+SCHEMA_FILES = ["manifest.schema.json", "protocol.schema.json", "view.schema.json", "messaging.schema.json"]
 
 GO_OUT = ROOT / "sdk/go/wire/wire_gen.go"
 TS_OUTS = [ROOT / "sdk/ts/src/wire.ts", ROOT / "web/src/lib/extension-wire.ts"]
