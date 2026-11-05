@@ -148,6 +148,28 @@ func linkedDeployFixture(t *testing.T, kind string) (*Devices, *Machine, *updati
 	return h, m, n, bin
 }
 
+// A failed update stops showing once the node runs the hub's build, online; another build or offline, it stays (#2868).
+func TestStaleDeployErrorClearsWhenTheNodeMatches(t *testing.T) {
+	_, m, _, _ := linkedDeployFixture(t, kindLink)
+	hub := m.d.hubVersion()
+	if hub == "" {
+		t.Fatal("the fixture's hub has no version")
+	}
+	m.deployErr = "检查电脑是否空闲失败：machine is offline"
+	m.online, m.info.Version = true, "old-build"
+	if s := m.snapshot(); s.DeployError == "" {
+		t.Fatalf("another build: the failure is still news: %+v", s)
+	}
+	m.online, m.info.Version = false, hub
+	if s := m.snapshot(); s.DeployError == "" {
+		t.Fatalf("offline: the failure stays: %+v", s)
+	}
+	m.online = true
+	if s := m.snapshot(); s.DeployError != "" {
+		t.Fatalf("online with the hub's build: no stale failure: %+v", s)
+	}
+}
+
 func TestLinkedDeployCapabilities(t *testing.T) {
 	for _, kind := range []string{kindLink, kindService} {
 		t.Run(kind, func(t *testing.T) {

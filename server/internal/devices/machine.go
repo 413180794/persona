@@ -157,6 +157,12 @@ func (m *Machine) snapshot() proto.Machine {
 		icon = "laptop"
 	}
 	canDeploy, deployReason := m.canDeployLocked()
+	// A failed update is moot once the node runs the hub's own build (it was updated by hand, or the try that failed
+	// was made while the machine was away): the card would keep 「上次部署没成」 until another deploy (#2868).
+	deployErr := m.deployErr
+	if m.online && version != "" && m.info.Version == version {
+		deployErr = ""
+	}
 	var link *proto.MachineLink
 	if m.link != nil {
 		link = m.link.info()
@@ -166,7 +172,7 @@ func (m *Machine) snapshot() proto.Machine {
 		Hostname: m.info.Hostname, OS: m.info.OS, Arch: m.info.Arch, Home: m.info.Home,
 		HerdrVersion: m.info.HerdrVersion, ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen,
 		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(version, m.info.Version),
-		Deploying: m.deploying, DeployError: m.deployErr,
+		Deploying: m.deploying, DeployError: deployErr,
 		CanDeploy: &canDeploy, DeployReason: deployReason, DeployPhase: m.deployPhase,
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
 		Engine: engine, Engines: engines, Link: link,
