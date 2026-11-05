@@ -245,3 +245,80 @@ describe("applyMachine (PUT …/engine answers the machine)", () => {
     expect(getState().machines.map((m) => m.id)).toEqual(["a", "b"]);
   });
 });
+
+describe("待办列表：先发的 /todos 晚回来不盖掉新的 (#3540)", () => {
+  const todo = (id: string, title: string) => ({ id, title, created_at: "", updated_at: "", spaces: [] });
+  /** Each /todos request waits until its turn is resolved; other paths answer at once. */
+  function heldTodos() {
+    const turns: ((list: unknown[]) => void)[] = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => {
+      if (!url.includes("/todos")) return new Response(JSON.stringify({}), { status: 200 });
+      const list = await new Promise<unknown[]>((r) => turns.push(r));
+      return new Response(JSON.stringify({ todos: list }), { status: 200 });
+    }));
+    return turns;
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  beforeEach(() => {
+    reset();
+    vi.stubGlobal("localStorage", { getItem: () => "mock-token", setItem: () => {}, removeItem: () => {} });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    reset();
+  });
+
+  it("refreshTodos: the later request's answer stays when the earlier one lands after it", async () => {
+    const turns = heldTodos();
+    const a = refreshTodos();
+    const b = refreshTodos();
+    await settle();
+    expect(turns).toHaveLength(2);
+    turns[1]([todo("t1", "done already")]);
+    await b;
+    turns[0]([todo("t1", "old title")]);
+    await a;
+    expect(getState().todos.map((t) => t.title)).toEqual(["done already"]);
+  });
+
+  it("a slow refresh() does not put back the list a later refreshTodos() already applied", async () => {
+    const turns = heldTodos();
+    const slow = refresh();
+    const later = refreshTodos();
+    await settle();
+    turns[1]([todo("t1", "new"), todo("t2", "added")]);
+    await later;
+    turns[0]([todo("t1", "old")]);
+    await slow;
+    const st = getState();
+    expect(st.loaded).toBe(true);
+    expect(st.todos.map((t) => t.title)).toEqual(["new", "added"]);
+  });
+
+  it("an answer still on its way when the store is reset is dropped", async () => {
+    const turns = heldTodos();
+    const old = refreshTodos();
+    await settle();
+    reset();
+    turns[0]([todo("t1", "the old login's")]);
+    await old;
+    expect(getState().todos).toEqual([]);
+    expect(getState().todosLoaded).toBe(false);
+  });
+
+  it("answers that come back in order are all taken", async () => {
+    const turns = heldTodos();
+    const a = refreshTodos();
+    await settle();
+    turns[0]([todo("t1", "first")]);
+    await a;
+    expect(getState().todos.map((t) => t.title)).toEqual(["first"]);
+    const b = refreshTodos();
+    await settle();
+    turns[1]([todo("t1", "second")]);
+    await b;
+    expect(getState().todos.map((t) => t.title)).toEqual(["second"]);
+  });
+});

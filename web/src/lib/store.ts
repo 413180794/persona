@@ -562,8 +562,26 @@ export function dropAnswered(id: string, only?: AnsweredCard) {
   set({ answered });
 }
 
+// Every /todos request, numbered: an answer to a request sent before the one already applied is older than what the
+// page shows (refresh() waits for /sessions too, seconds on a busy hub) and must not put the old list back.
+let todosAsked = 0;
+let todosApplied = 0;
+
+function askTodos() {
+  const n = ++todosAsked;
+  const answer = api<{ todos: Todo[] }>("/todos");
+  /** Whether this answer may be applied (no later request's answer is in place); if so it is the one in place now. */
+  const fresh = () => {
+    if (n < todosApplied) return false;
+    todosApplied = n;
+    return true;
+  };
+  return { answer, fresh };
+}
+
 export async function refresh() {
   const before = ixRev;
+  const asked = askTodos();
   const [sessions, interactions, assistant, machines, mutes, pins, todos] = await Promise.allSettled([
     api<{ sessions: Session[] }>("/sessions"),
     api<{ interactions: Interaction[] }>("/interactions"),
@@ -571,7 +589,7 @@ export async function refresh() {
     api<{ machines: Machine[] }>("/machines"),
     api<AgentMutes>("/mutes"),
     api<Partial<AgentPins>>("/pins"),
-    api<{ todos: Todo[] }>("/todos"),
+    asked.answer,
   ]);
   const patch: Partial<State> = { loaded: true };
   if (sessions.status === "fulfilled") {
@@ -590,14 +608,16 @@ export async function refresh() {
   if (mutes.status === "fulfilled") patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
   if (pins.status === "fulfilled") patch.pins = pinsOf(pins.value);
   if (todos.status === "fulfilled") {
-    const list = todos.value.todos ?? [];
-    patch.todos = list;
-    patch.todosSupported = true;
-    patch.todosLoaded = true;
-    patch.spacesSupported = computeSpacesSupported(list);
+    if (asked.fresh()) {
+      const list = todos.value.todos ?? [];
+      patch.todos = list;
+      patch.todosSupported = true;
+      patch.todosLoaded = true;
+      patch.spacesSupported = computeSpacesSupported(list);
+    }
   } else {
     const reason = todos.reason;
-    if (reason instanceof ApiError && reason.status === 404) {
+    if (reason instanceof ApiError && reason.status === 404 && asked.fresh()) {
       patch.todosSupported = false;
       patch.spacesSupported = false;
     }
@@ -620,12 +640,14 @@ export function putTodo(todo: Todo) {
 }
 
 export async function refreshTodos() {
+  const asked = askTodos();
   try {
-    const res = await api<{ todos: Todo[] }>("/todos");
+    const res = await asked.answer;
+    if (!asked.fresh()) return;
     const todos = res.todos ?? [];
     set({ todos, todosSupported: true, todosLoaded: true, spacesSupported: computeSpacesSupported(todos) });
   } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
+    if (err instanceof ApiError && err.status === 404 && asked.fresh()) {
       set({ todosSupported: false, todosLoaded: true, spacesSupported: false });
     }
   }
@@ -644,6 +666,7 @@ export function reset() {
   disconnect();
   cursor = NO_CURSOR; // another login: another stream
   ixChanges.clear();
+  todosApplied = ++todosAsked; // a /todos answer still on its way belongs to the old login
   resetAgents();
   Object.values(state.launches).forEach((launch) => releaseAttachments(launch.attachments));
   set({
