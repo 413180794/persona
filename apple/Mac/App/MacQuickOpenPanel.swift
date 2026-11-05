@@ -26,6 +26,8 @@ import SwiftUI
     /// window's toolbar while Agents shows, and 显示 › 全部折叠 / 全部展开 use it too. Cleared when the window leaves
     /// the Agents section (`MacShell`): it holds the list's state, which then kept following every push (#1495).
     var agentsList: AgentsListMenu.Actions?
+    /// Counts ⇧Tab presses in a composer: the list beside it takes the keys again (`MacListKeys`).
+    var focusList = 0
     /// The key window's number, and the chat each window shows (ChatView registers itself): what the Agent menu acts on.
     var keyWindow: Int?
     var chatsByWindow: [Int: SessionKey] = [:]

@@ -728,8 +728,9 @@ struct AssistantSidebar: View {
                 .padding(.top, besideBar ? AssistantTopBar.topInset : Theme.Space.s)
                 .padding(.bottom, Theme.Space.s)
                 #endif
-            // A list (not a stack in a scroll view) for its rows' own swipe: a conversation swipes left to 归档.
-            List {
+            // A list (not a stack in a scroll view) for its rows' own swipe: a conversation swipes left to 归档. On the
+            // Mac it selects the open conversation: ↑ / ↓ open the next, Delete archives (`MacListKeys`, #2113).
+            MacSelectingList(selection: Binding(get: { current }, set: { key in if let key, key != current { open(key) } })) {
                 Group {
                     if query.isEmpty {
                         actions(all)
@@ -745,6 +746,12 @@ struct AssistantSidebar: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            #if os(macOS)
+            .modifier(MacListKeys(current: { current }, delete: { key in
+                guard key != model.assistantMain else { return }
+                Task { await model.archiveConversation(key, true) }
+            }))
+            #endif
             .environment(\.defaultMinListRowHeight, 0)
             .contentMargins(.bottom, Theme.Space.l, for: .scrollContent)
             .scrollDismissesKeyboard(.interactively)
@@ -1118,6 +1125,8 @@ struct AssistantSidebar: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .tag(s.key)
+        .macListRow(selected: selected, in: Rectangle(), drawsShade: false) // the row draws its own (`selectedFill`)
         .accessibilityLabel([title, isMain && s.title != title ? s.title : nil, stateWord(s), preview.isEmpty ? nil : preview]
             .compactMap { $0 }.joined(separator: "，"))
         .accessibilityAddTraits(selected ? .isSelected : [])

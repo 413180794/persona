@@ -3045,6 +3045,15 @@ struct Composer: View, Equatable {
             model.composerFocus = nil
             focused = true
         }
+        #if os(macOS)
+        // ⇧Tab: back to the list beside the chat (Agents, Persona's conversations), as Tab there came here (#2113).
+        .onKeyPress(.tab, phases: .down) { press in
+            guard press.modifiers.contains(.shift), focused else { return .ignored }
+            focused = false
+            MacShellState.shared.focusListAgain()
+            return .handled
+        }
+        #endif
         #if DEBUG
         .task { // `-showClearConfirm YES`: the /clear confirmation, for screenshots
             guard UserDefaults.standard.bool(forKey: "showClearConfirm") else { return }

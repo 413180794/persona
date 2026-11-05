@@ -178,6 +178,9 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         MacMenuBarState.shared.start(AppModel.shared)
         MacShellState.shared.watchKeyWindow()
         #if DEBUG
+        MacKeyScript.start()
+        #endif
+        #if DEBUG
         MacSnapshot.scheduleIfAsked()
         MacScrollLab.scheduleIfAsked()
         #endif

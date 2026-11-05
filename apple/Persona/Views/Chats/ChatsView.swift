@@ -647,6 +647,9 @@ private struct AgentsList: View {
             }
         }
         .modifier(AgentsListStyle(capsules: capsules))
+        #if os(macOS)
+        .modifier(MacListKeys(current: { macOpenNow }, delete: { key in deletingSession = session(key) }))
+        #endif
         // Keep the phone's first-row controls close to the bar: active search otherwise adds the grouped list's
         // default first-section margin. The split's sidebar keeps its native content margins.
         .contentMargins(.top, widthClass == .regular ? nil : Theme.Space.xs, for: .scrollContent)
@@ -743,6 +746,9 @@ private struct AgentsList: View {
         quick = f
         kept = Set(base.filter { f != .all && f.matches($0, muted: model.isMuted($0)) }.map(\.key))
     }
+
+    /// The agent open beside the list, if it is one of the list's (not a Persona conversation).
+    private var macOpenNow: SessionKey? { model.visibleSession.flatMap { session($0)?.assistant == true ? nil : $0 } }
 
     /// Something the list opens: in the split it replaces the detail column; in one stack the list is at the root, so
     /// this is the same as pushing it.
