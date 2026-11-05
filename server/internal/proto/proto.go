@@ -709,6 +709,11 @@ type Session struct {
 	FailureReason string `json:"failure_reason,omitempty"`
 	// ExternalURL opens the session where it lives outside Persona (a botmux session's Feishu topic).
 	ExternalURL string `json:"external_url,omitempty"`
+	// Chat, Topic, Dispatched: a botmux session's Feishu chat, its topic's root message and the topics it dispatched
+	// (`botmux dispatch`), for the todos to follow (docs/todos.md「botmux 跟随」); stripped by hub like SpawnFrom.
+	Chat       string   `json:"chat,omitempty"`
+	Topic      string   `json:"topic,omitempty"`
+	Dispatched []string `json:"dispatched,omitempty"`
 }
 
 // Work phases (WorkState.Phase) and what a blocked session waits on (WorkState.On), docs/agent-work.md.

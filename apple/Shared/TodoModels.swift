@@ -115,6 +115,7 @@ nonisolated enum TodosLogic {
                 return "由 \(parent.title) 派出"
             }
             return "派生"
+        case "chat": return "同群"
         default: return nil
         }
     }

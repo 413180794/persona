@@ -14,7 +14,7 @@ func TestCardFallbackPrecedesSummaryClipping(t *testing.T) {
 	if got := clipMarkdown(text, 600); strings.Contains(got, "sections") || !strings.Contains(got, "Readable progress") {
 		t.Fatalf("summary %q", got)
 	}
-	if got := transcriptText("Example", []proto.Item{{Role: "assistant", Kind: proto.KindText, Text: text}}); strings.Contains(got, "sections") || !strings.Contains(got, "Readable progress") {
+	if got := transcriptText("Example", "", []proto.Item{{Role: "assistant", Kind: proto.KindText, Text: text}}); strings.Contains(got, "sections") || !strings.Contains(got, "Readable progress") {
 		t.Fatalf("context %q", got)
 	}
 }

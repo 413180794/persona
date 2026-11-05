@@ -588,7 +588,7 @@ func (s *Service) toolConversationRead(ctx context.Context, args json.RawMessage
 		return "", err
 	}
 	head := fmt.Sprintf("「%s」 %s (%s)", conversationName(c, s.settings(ctx).Main), c.SessionID, stateNames[c.State])
-	return transcriptText(head, res.Items), nil
+	return transcriptText(head, sessionLink(s.webBase(ctx), c.MachineID, c.SessionID, true), res.Items), nil
 }
 
 func (s *Service) toolConversationRename(ctx context.Context, self string, args json.RawMessage) (string, error) {

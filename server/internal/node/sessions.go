@@ -612,7 +612,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		s := proto.Session{
 			SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
 			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, Agent: a.Agent,
-			ExternalURL: a.ExternalURL,
+			ExternalURL: a.ExternalURL, Chat: a.Chat, Topic: a.Topic, Dispatched: a.Dispatched,
 		}
 		viaBotmux := host.ParsePane(a.PaneID).Kind == host.Botmux
 		switch {
@@ -1715,6 +1715,10 @@ func listKey(list []proto.Session) string {
 			fmt.Fprintf(&b, "activity:%s/%d\n", s.Activity, unixOf(s.ActivityAt))
 		}
 		fmt.Fprintf(&b, "attention:%q/%q/%s\n", s.AttentionReason, s.FailureReason, s.ExternalURL) // a new reason or link alone is a change
+		// A topic dispatched or a session's chat known: the todos follow it at once.
+		if s.Chat != "" || len(s.Dispatched) > 0 {
+			fmt.Fprintf(&b, "botmux:%s/%s/%q\n", s.Chat, s.Topic, s.Dispatched)
+		}
 		// The pane's place in its tab, present or not: a swap or a closed shell pane changes only this (and 0 is not none).
 		pane := "none"
 		if s.PaneIndex != nil {

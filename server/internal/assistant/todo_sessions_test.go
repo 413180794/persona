@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -337,5 +338,130 @@ func TestTodoSyncTokensLatestWins(t *testing.T) {
 		got, _ := e.f.lastTokens("macbook")
 		_, s1 := got["s1"]
 		return !s1 && got["s2"]["persona_todo"] == "Second"
+	})
+}
+
+// newTodo makes a todo through the API, its id.
+func (e *todoEnv) newTodo(title string) string {
+	var created struct{ Todo Todo }
+	_ = json.Unmarshal(e.must("POST", "/api/v1/todos", `{"title":"`+title+`"}`).Body.Bytes(), &created)
+	return created.Todo.ID
+}
+
+// A botmux topic dispatched (`botmux dispatch`) by an agent of an open todo joins it, on another machine too and with
+// its parent parked; a dispatcher on no todo brings nothing.
+func TestTodoBotmuxDispatchFollows(t *testing.T) {
+	todoStores(t, func(t *testing.T, e *todoEnv, _ *db.DB) {
+		td := e.newTodo("派活")
+		e.sessions("mac", proto.Session{SessionID: "p1", Status: proto.StatusWorking, Chat: "oc_a", Topic: "om_p1",
+			Dispatched: []string{"om_c1", "om_c2"}},
+			proto.Session{SessionID: "p2", Status: proto.StatusWorking, Dispatched: []string{"om_c3"}})
+		e.must("PUT", "/api/v1/todos/"+td+"/agents/mac/p1", "")
+		// The parent parks; its children start, one on another machine.
+		e.sessions("mac", proto.Session{SessionID: "p1", Status: proto.StatusOffline, Chat: "oc_a", Topic: "om_p1",
+			Dispatched: []string{"om_c1", "om_c2"}},
+			proto.Session{SessionID: "p2", Status: proto.StatusWorking, Dispatched: []string{"om_c3"}},
+			proto.Session{SessionID: "c1", Status: proto.StatusWorking, Topic: "om_c1"})
+		e.sessions("n37", proto.Session{SessionID: "c2", Status: proto.StatusWorking, Topic: "om_c2"},
+			proto.Session{SessionID: "c3", Status: proto.StatusWorking, Topic: "om_c3"})
+		if e.todoOf("mac", "c1") != td || e.todoOf("n37", "c2") != td || e.todoOf("n37", "c3") != "" {
+			t.Fatalf("report = %+v", e.s.todoReport(context.Background()).Links)
+		}
+		if a := agentOf(*e.get(td), "c2"); a.Source != "spawned" || a.Via != "mac/p1" {
+			t.Fatalf("c2 = %+v", a)
+		}
+	})
+}
+
+// A botmux agent with no todo joins the one most of its chat's agents work for, when that one has twice the next at
+// least; a tie or a close second, another chat bring nothing.
+func TestTodoBotmuxChatMajority(t *testing.T) {
+	todoStores(t, func(t *testing.T, e *todoEnv, _ *db.DB) {
+		big, small, other := e.newTodo("三循环"), e.newTodo("工具链"), e.newTodo("别的群")
+		s := func(id, chat string) proto.Session {
+			return proto.Session{SessionID: id, Status: proto.StatusWorking, Chat: chat, Topic: "om_" + id}
+		}
+		list := []proto.Session{s("a1", "oc_x"), s("a2", "oc_x"), s("b1", "oc_x"), s("o1", "oc_y"), s("o2", "oc_y")}
+		e.sessions("mac", list...)
+		for id, td := range map[string]string{"a1": big, "a2": big, "b1": small, "o1": other, "o2": small} {
+			e.must("PUT", "/api/v1/todos/"+td+"/agents/mac/"+id, "")
+		}
+		// oc_x: 2 against 1, twice; oc_y: 1 against 1, a tie.
+		e.sessions("mac", append(list, s("new_x", "oc_x"), s("new_y", "oc_y"), s("new_z", "oc_z"))...)
+		if e.todoOf("mac", "new_x") != big || e.todoOf("mac", "new_y") != "" || e.todoOf("mac", "new_z") != "" {
+			t.Fatalf("report = %+v", e.s.todoReport(context.Background()).Links)
+		}
+		if a := agentOf(*e.get(big), "new_x"); a.Source != "chat" || a.Via != "oc_x" {
+			t.Fatalf("new_x = %+v", a)
+		}
+		// 3 against 2: not twice.
+		e.sessions("n37", s("b2", "oc_x"))
+		e.must("PUT", "/api/v1/todos/"+small+"/agents/n37/b2", "")
+		e.sessions("n37", s("b2", "oc_x"), s("late", "oc_x"))
+		if e.todoOf("n37", "late") != "" {
+			t.Fatal("joined a todo with a close second")
+		}
+	})
+}
+
+func TestChatMajority(t *testing.T) {
+	k := func(s string) [2]string { return [2]string{"m", s} }
+	for _, c := range []struct {
+		agents map[[2]string]string
+		want   string
+	}{
+		{nil, ""},
+		{map[[2]string]string{k("a"): "t1"}, "t1"},
+		{map[[2]string]string{k("a"): "t1", k("b"): "t2"}, ""},
+		{map[[2]string]string{k("a"): "t1", k("b"): "t1", k("c"): "t2"}, "t1"},
+		{map[[2]string]string{k("a"): "t1", k("b"): "t1", k("c"): "t1", k("d"): "t2", k("e"): "t2"}, ""},
+		{map[[2]string]string{k("self"): "t2", k("a"): "t1"}, "t1"}, // self does not count
+	} {
+		if got := chatMajority(c.agents, k("self")); got != c.want {
+			t.Errorf("chatMajority(%v) = %q, want %q", c.agents, got, c.want)
+		}
+	}
+}
+
+// The chat rule does not feed itself: an agent it linked does not vote, so one agent on a todo brings the chat's
+// others once, not their followers' followers. A machine not heard from lately votes no more; an agent removed by hand
+// is not taken back; a done todo takes nobody.
+func TestTodoBotmuxChatLimits(t *testing.T) {
+	todoStores(t, func(t *testing.T, e *todoEnv, _ *db.DB) {
+		td, done := e.newTodo("一个"), e.newTodo("做完的")
+		s := func(id, chat string) proto.Session {
+			return proto.Session{SessionID: id, Status: proto.StatusWorking, Chat: chat, Topic: "om_" + id}
+		}
+		e.sessions("mac", s("a1", "oc_x"), s("d1", "oc_d"))
+		e.must("PUT", "/api/v1/todos/"+td+"/agents/mac/a1", "")
+		e.must("PUT", "/api/v1/todos/"+done+"/agents/mac/d1", "")
+		e.must("PATCH", "/api/v1/todos/"+done, `{"done":true}`)
+		e.sessions("mac", s("a1", "oc_x"), s("d1", "oc_d"), s("x1", "oc_x"), s("d2", "oc_d"))
+		if e.todoOf("mac", "x1") != td || e.todoOf("mac", "d2") != "" {
+			t.Fatalf("report = %+v", e.s.todoReport(context.Background()).Links)
+		}
+		// a1 leaves the todo: x1, linked by the chat, votes for nobody.
+		e.must("DELETE", "/api/v1/todos/"+td+"/agents/mac/a1", "")
+		e.sessions("mac", s("a1", "oc_x"), s("x1", "oc_x"), s("x2", "oc_x"))
+		if e.todoOf("mac", "x2") != "" {
+			t.Fatal("an agent the chat linked brought another")
+		}
+		// Removed by hand, x1 is not taken back by its chat.
+		e.must("PUT", "/api/v1/todos/"+td+"/agents/mac/a1", "")
+		e.must("DELETE", "/api/v1/todos/"+td+"/agents/mac/x1", "")
+		e.sessions("mac", s("a1", "oc_x"), s("x1", "oc_x"))
+		if e.todoOf("mac", "x1") != "" {
+			t.Fatal("removed by hand, taken back")
+		}
+		// A machine whose last list is old does not vote.
+		e.s.todos.mu.Lock()
+		seen := e.s.todos.botmux["mac"]
+		seen.at = seen.at.Add(-2 * botmuxChatStale)
+		e.s.todos.botmux["mac"] = seen
+		e.s.todos.mu.Unlock()
+		e.sessions("n37", s("far", "oc_x"))
+		if e.todoOf("n37", "far") != "" {
+			t.Fatal("a stale machine voted")
+		}
 	})
 }

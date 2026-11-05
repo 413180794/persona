@@ -162,6 +162,11 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 ```
 注：若子 Agent 启动在另一台机器上，读取父 pane 标记的命令在本地执行，向 `$CHILD_PANE` 写入标记的命令发送给目标机器的 herdr 执行。
 
+### botmux 跟随
+botmux 会话没有 herdr pane，不带 `persona_from`。node 从 `botmux observe --include-raw` 读每个会话的飞书群（`raw.chatId`）和话题根消息（`raw.rootMessageId`），再读 botmux 数据目录（`SESSION_DATA_DIR`，否则 `~/.botmux/.data-dir` 指的目录，否则 `~/.botmux/data`）里的 `orchestrate-dispatch.json`：它以派出去的话题根消息为键，`orchSessionId` 是派活的会话（`botmux dispatch --session-id`）。这三样随会话报给 hub（`chat`、`topic`、`dispatched`），hub 推给客户端前去掉。助手在前两条规则之后再试两条，都只挂当前没有活跃待办、也没在目标待办里出现过的 Agent：
+1. **派活跟随**：会话的话题是某个会话（任一台电脑；离线的也算，只要它还在那台电脑的列表里，即离线不超过 `offlineWindow`）用 `botmux dispatch` 派出来的，派活的会话挂在未完成待办上，就挂进同一个待办（`source = "spawned"`，`via = "<machine>/<session>"`）。
+2. **同群跟随**：同一个飞书群里其它在线 botmux Agent 挂的未完成待办，挂得最多的一个至少是第二名的两倍（只有一个待办时直接算），就挂进去（`source = "chat"`，`via` 为群 id，客户端显示「同群」）。打平或差得不够就不挂；挂错了可以手动改挂。靠这条挂进来的 Agent 不参与投票（否则一个待办会从一个 Agent 扩散到整群），10 分钟没报过列表的电脑上的 Agent 也不算。
+
 ## herdr 标记与对账
 
 在 herdr 宿主环境下，待办关联状态会同步映射到 herdr pane 标记中（侧边栏展示）：

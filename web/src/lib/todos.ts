@@ -6,7 +6,7 @@ import { splitAgentSessions, type AgentGroup, type AgentMutes } from "./agent-gr
 import type { AgentState, Machine, Session } from "./types";
 import type { Route } from "./router";
 
-export type TodoAgentSource = "manual" | "space" | "spawned";
+export type TodoAgentSource = "manual" | "space" | "spawned" | "chat";
 
 export interface TodoAgent {
   machine_id: string;
@@ -536,6 +536,7 @@ export function resolveLinkCurrentTodoId(
  * - Spawned from project: "随项目 <space>" (resolved from via, or agent's own session lookup as fallback);
  *   "随项目" if neither is available;
  * - Spawned from parent agent: "由 <parent title> 派出"; "派生" if parent is not in session list;
+ * - Same Feishu chat as most of the todo's botmux agents: "同群";
  * - Manual: undefined (not labeled).
  */
 export function formatAgentSource(
@@ -576,6 +577,8 @@ export function formatAgentSource(
     }
     return t("lib-todos.spawned");
   }
+
+  if (agent.source === "chat") return "同群";
 
   return undefined;
 }

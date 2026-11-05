@@ -514,7 +514,8 @@ func (s *Service) toolAgentRead(ctx context.Context, machine, id string, turns i
 	if err := s.call(ctx, m.ID, DeviceSessionItems, map[string]any{"session_id": c.SessionID, "turns": min(turns, 10)}, &res); err != nil {
 		return "", err
 	}
-	return transcriptText(fmt.Sprintf("%s on %s (%s, %s)", agentLabel(c), m.Name, stateNames[c.State], c.Cwd), res.Items), nil
+	head := fmt.Sprintf("%s on %s (%s, %s)", agentLabel(c), m.Name, stateNames[c.State], c.Cwd)
+	return transcriptText(head, sessionLink(s.webBase(ctx), m.ID, c.SessionID, false), res.Items), nil
 }
 
 // questionSummary is every question of an interaction with its options, so agents_list carries what answering one

@@ -106,9 +106,10 @@ type todoBook struct {
 	mu              sync.RWMutex
 	loaded          bool
 	todos           map[string]*Todo
-	activeBySession map[[2]string]string // (machine_id, session_id) -> the open todo it works for
-	snapshotSyncing map[[2]string]bool   // (machine_id, session_id) whose title is being written
-	spacesByKey     map[string]string    // "<machine_id>/<space>" -> todo_id
+	activeBySession map[[2]string]string  // (machine_id, session_id) -> the open todo it works for
+	snapshotSyncing map[[2]string]bool    // (machine_id, session_id) whose title is being written
+	spacesByKey     map[string]string     // "<machine_id>/<space>" -> todo_id
+	botmux          map[string]botmuxSeen // by machine: its botmux sessions' chats and dispatches (todo_sessions.go)
 
 	tokensMu sync.Mutex
 	tokens   map[string]*tokenSync // by machine (todo_sessions.go)

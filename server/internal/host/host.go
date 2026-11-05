@@ -257,6 +257,10 @@ type Agent struct {
 	FailureAt time.Time
 	// ExternalURL opens the agent where the host shows it (a botmux session's Feishu topic), "" when there is none.
 	ExternalURL string
+	// Chat and Topic are the Feishu chat and the topic's root message a botmux session answers in; Dispatched the
+	// topics it opened for other bots with `botmux dispatch` (its children's Topic). "" and nil elsewhere.
+	Chat, Topic string
+	Dispatched  []string
 	// LastText is the agent's last answer as the host recorded it (the last reply botmux posted in the topic), "" when
 	// the host keeps none: the transcript's last words then.
 	LastText string

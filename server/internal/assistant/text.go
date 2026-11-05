@@ -3,6 +3,7 @@ package assistant
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/nwverse/persona/sdk/go/wire"
@@ -22,8 +23,10 @@ var (
 )
 
 // transcriptText is a conversation's recent items for a model to read (agent_read, conversation_read): the
-// messages, tool calls in one line each, failed results, cut to the last 40 000 bytes.
-func transcriptText(head string, items []proto.Item) string {
+// messages, tool calls in one line each, failed results, cut to the last 40 000 bytes. link is the conversation's web
+// page ("" for none): each message then carries its own link (<page>?at=<item id>, #2194), which opens the page
+// scrolled to it.
+func transcriptText(head, link string, items []proto.Item) string {
 	var b strings.Builder
 	b.WriteString(head + "\n\n")
 	for _, it := range items {
@@ -35,6 +38,9 @@ func transcriptText(head string, items []proto.Item) string {
 				if it.From != "" {
 					who = "Message from " + it.From
 				}
+			}
+			if l := itemLink(link, it.ID); l != "" {
+				who += " (" + l + ")"
 			}
 			text := it.Text
 			if it.Role == "assistant" {
@@ -77,4 +83,12 @@ func toolSummary(name string, input json.RawMessage) string {
 	}
 	b, _ := json.Marshal(m)
 	return string(b)
+}
+
+// itemLink is the link to one item of a conversation whose page is link, "" when either is.
+func itemLink(link, id string) string {
+	if link == "" || id == "" {
+		return ""
+	}
+	return link + "?at=" + url.QueryEscape(id)
 }

@@ -1026,3 +1026,61 @@ func TestBotmuxSpacesByCleanDirectoryAndDistinctLabels(t *testing.T) {
 		t.Fatalf("alone label = %q, want the same as beside its parent", alone[0].Label)
 	}
 }
+
+// A botmux session carries its Feishu chat and topic, and the topics it dispatched as botmux's dispatch registry
+// names them (orchestrate-dispatch.json, by the dispatched topic's root, orchSessionId the dispatcher).
+func TestBotmuxChatTopicAndDispatches(t *testing.T) {
+	n, f, _, home := bmxNode(t)
+	data := t.TempDir()
+	n.hosts = host.NewRegistry(&botmuxHost{run: f.run, client: f.srv.Client(), dataDir: data})
+	parent := bmxRow(sidA, "claude-code", "alive", "idle", false, "parent")
+	parent["raw"] = map[string]any{"title": "parent", "chatId": "oc_1", "rootMessageId": "om_parent"}
+	child := bmxRow(sidB, "claude-code", "alive", "working", false, "child")
+	child["raw"] = map[string]any{"title": "child", "chatId": "oc_1", "rootMessageId": "om_child"}
+	f.rows = []map[string]any{parent, child}
+	if err := os.WriteFile(filepath.Join(data, "orchestrate-dispatch.json"), []byte(`{
+		"om_child": {"orchSessionId": "`+sidA+`", "orchRoot": "om_parent", "status": "accepted"},
+		"om_other": {"orchSessionId": "`+sidA+`"},
+		"om_gone": {"orchSessionId": "someone-else"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{sidA, sidB} {
+		writeTranscript(t, home, bmxCwd, id, time.Now().Add(-time.Minute), `{"type":"user","message":{"role":"user","content":"hi"}}`)
+	}
+	m := byID(listSessions(t, n))
+	if p := m[sidA]; p.Chat != "oc_1" || p.Topic != "om_parent" || !slices.Equal(p.Dispatched, []string{"om_child", "om_other"}) {
+		t.Fatalf("parent = chat %q topic %q dispatched %v", p.Chat, p.Topic, p.Dispatched)
+	}
+	if c := m[sidB]; c.Chat != "oc_1" || c.Topic != "om_child" || len(c.Dispatched) != 0 {
+		t.Fatalf("child = chat %q topic %q dispatched %v", c.Chat, c.Topic, c.Dispatched)
+	}
+	// A registry botmux wrote half of, or no data directory: nothing dispatched.
+	if err := os.WriteFile(filepath.Join(data, "orchestrate-dispatch.json"), []byte(`{"om_child": `), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := botmuxDispatched(data); got != nil {
+		t.Fatalf("a broken registry = %v", got)
+	}
+	if got := botmuxDispatched(""); got != nil {
+		t.Fatalf("no data dir = %v", got)
+	}
+}
+
+// botmux's data directory as botmux resolves it: SESSION_DATA_DIR, the ~/.botmux/.data-dir breadcrumb, ~/.botmux/data.
+func TestBotmuxDataDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SESSION_DATA_DIR", "")
+	if got := botmuxDataDir(); got != filepath.Join(home, ".botmux", "data") {
+		t.Fatalf("default = %q", got)
+	}
+	os.MkdirAll(filepath.Join(home, ".botmux"), 0o700)
+	os.WriteFile(filepath.Join(home, ".botmux", ".data-dir"), []byte("/srv/botmux-data\n"), 0o600)
+	if got := botmuxDataDir(); got != "/srv/botmux-data" {
+		t.Fatalf("breadcrumb = %q", got)
+	}
+	t.Setenv("SESSION_DATA_DIR", "/env/data")
+	if got := botmuxDataDir(); got != "/env/data" {
+		t.Fatalf("env = %q", got)
+	}
+}

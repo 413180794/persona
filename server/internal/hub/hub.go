@@ -451,7 +451,8 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	}
 	h.decorateTodos(m.cfg.ID, list) // the todos the assistant reported (assistant_todos.go)
 	for i := range list {
-		list[i].SpawnFrom = "" // stripped before push to client (#762)
+		// The todos' alone, stripped before push to client (#762).
+		list[i].SpawnFrom, list[i].Chat, list[i].Topic, list[i].Dispatched = "", "", "", nil
 	}
 	h.markStates(m.cfg.ID, list, time.Now())
 	return list

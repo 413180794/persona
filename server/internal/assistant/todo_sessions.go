@@ -74,6 +74,8 @@ func (s *Service) autoLinkTodos(machine string, sessions []proto.Session) bool {
 		pending = append(pending, pendingAutoLink{todoID: target.ID, machineID: machine, sessionID: c.SessionID, title: c.Title,
 			cwd: c.Cwd, agent: c.Agent, startError: c.StartError, source: source, via: via, linkedAt: now})
 	}
+	s.todos.seeBotmux(machine, sessions, now)
+	byChat := s.todos.chatTodos(now)
 	for _, c := range sessions {
 		if c.Status == proto.StatusOffline {
 			continue
@@ -94,6 +96,24 @@ func (s *Service) autoLinkTodos(machine string, sessions []proto.Session) bool {
 					if target, ok := s.todos.todos[targetID]; ok && target.DoneAt == nil {
 						link(c, target, "space", spKey)
 					}
+				}
+			}
+		}
+
+		// 3. botmux dispatch: the topic was opened by `botmux dispatch` from a session working for an open todo
+		if c.Topic != "" && s.todos.activeBySession[key] == "" {
+			if parent, ok := s.todos.dispatcherOf(c.Topic); ok && parent != key {
+				if target, ok := s.todos.todos[s.todos.activeBySession[parent]]; ok && target.DoneAt == nil {
+					link(c, target, "spawned", parent[0]+"/"+parent[1])
+				}
+			}
+		}
+
+		// 4. botmux chat: the todo most of the chat's other online agents work for, by twice the next one at least
+		if c.Chat != "" && s.todos.activeBySession[key] == "" {
+			if targetID := chatMajority(byChat[c.Chat], key); targetID != "" {
+				if target, ok := s.todos.todos[targetID]; ok && target.DoneAt == nil {
+					link(c, target, "chat", c.Chat)
 				}
 			}
 		}
@@ -469,4 +489,109 @@ func (s *Service) quietSessionsLocked(now time.Time) map[[2]string]bool {
 		}
 	}
 	return out
+}
+
+// botmuxSeen is what a machine's last list said of its botmux sessions: each one's Feishu chat (the online ones) and
+// the topics each one dispatched, by the topic's root message; at, when the list came.
+type botmuxSeen struct {
+	chats      map[string]string // session id -> chat
+	dispatched map[string]string // topic root -> the session that dispatched it
+	at         time.Time
+}
+
+// botmuxChatStale: a machine whose last list is older votes no more in its chats. The assistant is not told a machine
+// went away; one with live agents sends a list every 10 s at least (its sessions' updated_at, listKey).
+const botmuxChatStale = 10 * time.Minute
+
+// seeBotmux keeps machine's botmux sessions from its list (b.mu held). Offline ones dispatch still: a child follows
+// its parent's todo while the parent is parked.
+func (b *todoBook) seeBotmux(machine string, sessions []proto.Session, now time.Time) {
+	seen := botmuxSeen{chats: map[string]string{}, dispatched: map[string]string{}, at: now}
+	for _, c := range sessions {
+		if c.Chat != "" && c.Status != proto.StatusOffline && c.Status != proto.StatusUnknown {
+			seen.chats[c.SessionID] = c.Chat
+		}
+		for _, topic := range c.Dispatched {
+			seen.dispatched[topic] = c.SessionID
+		}
+	}
+	if b.botmux == nil {
+		b.botmux = map[string]botmuxSeen{}
+	}
+	if len(seen.chats) == 0 && len(seen.dispatched) == 0 {
+		delete(b.botmux, machine)
+		return
+	}
+	b.botmux[machine] = seen
+}
+
+// dispatcherOf is the session that dispatched topic, of the first machine by id that knows it (b.mu held).
+func (b *todoBook) dispatcherOf(topic string) ([2]string, bool) {
+	machines := make([]string, 0, len(b.botmux))
+	for machine := range b.botmux {
+		machines = append(machines, machine)
+	}
+	sort.Strings(machines)
+	for _, machine := range machines {
+		if sid, ok := b.botmux[machine].dispatched[topic]; ok {
+			return [2]string{machine, sid}, true
+		}
+	}
+	return [2]string{}, false
+}
+
+// chatTodos is, by chat, the open todo each online botmux agent there works for (b.mu held): not those it took by
+// this rule (they would vote for themselves, and a todo would spread through a chat from one agent), nor those of a
+// machine not heard from lately.
+func (b *todoBook) chatTodos(now time.Time) map[string]map[[2]string]string {
+	out := map[string]map[[2]string]string{}
+	for machine, seen := range b.botmux {
+		if now.Sub(seen.at) > botmuxChatStale {
+			continue
+		}
+		for sid, chat := range seen.chats {
+			key := [2]string{machine, sid}
+			if id := b.activeBySession[key]; id != "" && !b.byChat(id, key) {
+				if out[chat] == nil {
+					out[chat] = map[[2]string]string{}
+				}
+				out[chat][key] = id
+			}
+		}
+	}
+	return out
+}
+
+// chatMajority is the todo most of a chat's agents (but self) work for, when it has at least twice the agents of the
+// next one; "" when none does (a tie, or too close: an agent there may well be on either).
+func chatMajority(agents map[[2]string]string, self [2]string) string {
+	count := map[string]int{}
+	for key, id := range agents {
+		if key != self {
+			count[id]++
+		}
+	}
+	ids := make([]string, 0, len(count))
+	for id := range count {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		return count[ids[i]] > count[ids[j]] || count[ids[i]] == count[ids[j]] && ids[i] < ids[j]
+	})
+	if len(ids) == 0 || len(ids) > 1 && count[ids[0]] < 2*count[ids[1]] {
+		return ""
+	}
+	return ids[0]
+}
+
+// byChat: the agent works for todo id because of its chat (source "chat") (b.mu held).
+func (b *todoBook) byChat(id string, key [2]string) bool {
+	if t := b.todos[id]; t != nil {
+		for _, a := range t.Agents {
+			if a.MachineID == key[0] && a.SessionID == key[1] && a.ReleasedAt == nil && a.DismissedAt == nil {
+				return a.Source == "chat"
+			}
+		}
+	}
+	return false
 }

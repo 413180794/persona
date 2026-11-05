@@ -47,6 +47,8 @@ type botmuxHost struct {
 	logged bool   // a failed observe was logged since the last good one
 	logf   func(format string, args ...any)
 	dryRun bool // botmux renders the turn and dispatches nothing (the live test)
+	// dataDir is botmux's data directory (botmuxDataDir), "" for none (tests without one).
+	dataDir string
 }
 
 var (
@@ -157,7 +159,8 @@ func newBotmuxHost(bin string, logf func(format string, args ...any)) *botmuxHos
 		client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		}},
-		logf: logf,
+		logf:    logf,
+		dataDir: botmuxDataDir(),
 	}
 }
 
@@ -202,6 +205,10 @@ type botmuxRow struct {
 		PreviewBotText     string `json:"previewBotText"`
 		PreviewBotState    string `json:"previewBotState"`
 		PreviewBotAt       int64  `json:"previewBotAt"` // epoch ms
+		// The Feishu chat and the topic's root message the session answers in (a dispatched topic's root is the key
+		// of its dispatch, botmuxDispatched).
+		ChatID        string `json:"chatId"`
+		RootMessageID string `json:"rootMessageId"`
 	} `json:"raw"`
 }
 
@@ -320,6 +327,7 @@ func (r botmuxRow) agent() (host.Agent, bool) {
 	if strings.HasPrefix(r.Raw.FeishuThreadLink, "https://") {
 		a.ExternalURL = r.Raw.FeishuThreadLink
 	}
+	a.Chat, a.Topic = r.Raw.ChatID, r.Raw.RootMessageID
 	return a, true
 }
 
@@ -361,14 +369,87 @@ func (h *botmuxHost) Agents(ctx context.Context) ([]host.Agent, error) {
 	if err != nil {
 		return nil, err
 	}
+	dispatched := botmuxDispatched(h.dataDir)
 	var out []host.Agent
 	for _, r := range rows {
 		a, ok := r.agent()
 		if ok && (a.AgentStatus != proto.StatusOffline || time.Since(time.UnixMilli(r.LastActivityAt)) <= offlineWindow) {
+			a.Dispatched = dispatched[r.Identity.SessionID]
 			out = append(out, a)
 		}
 	}
 	return out, nil
+}
+
+// botmuxDataDir is where botmux keeps its state, as botmux resolves it: SESSION_DATA_DIR, else the directory
+// ~/.botmux/.data-dir names, else ~/.botmux/data.
+func botmuxDataDir() string {
+	if d := os.Getenv("SESSION_DATA_DIR"); d != "" {
+		return d
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	if b, err := os.ReadFile(filepath.Join(home, ".botmux", ".data-dir")); err == nil {
+		if d := strings.TrimSpace(string(b)); filepath.IsAbs(d) {
+			return d
+		}
+	}
+	return filepath.Join(home, ".botmux", "data")
+}
+
+// botmuxDispatched is the topics each session opened with `botmux dispatch`, by session: orchestrate-dispatch.json,
+// keyed by the dispatched topic's root message, names the session that dispatched it (orchSessionId, the
+// --session-id). Nil when there is none or it cannot be read: nothing follows then.
+func botmuxDispatched(dataDir string) map[string][]string {
+	if dataDir == "" {
+		return nil
+	}
+	path := filepath.Join(dataDir, "orchestrate-dispatch.json")
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	botmuxRegistry.Lock()
+	defer botmuxRegistry.Unlock()
+	if c := botmuxRegistry.c; c.path == path && c.size == st.Size() && c.mtime.Equal(st.ModTime()) {
+		return c.by
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var reg map[string]struct {
+		OrchSessionID string `json:"orchSessionId"`
+	}
+	if json.Unmarshal(b, &reg) != nil {
+		return nil
+	}
+	out := map[string][]string{}
+	for root, d := range reg {
+		if d.OrchSessionID != "" && root != "" {
+			out[d.OrchSessionID] = append(out[d.OrchSessionID], root)
+		}
+	}
+	for _, roots := range out {
+		slices.Sort(roots) // the same list each time (listKey)
+	}
+	botmuxRegistry.c = botmuxRegistryRead{path: path, size: st.Size(), mtime: st.ModTime(), by: out}
+	return out
+}
+
+// botmuxRegistry is the dispatch registry last read: read again when botmux wrote it (Agents runs every second or so).
+var botmuxRegistry struct {
+	sync.Mutex
+	c botmuxRegistryRead
+}
+
+type botmuxRegistryRead struct {
+	path  string
+	size  int64
+	mtime time.Time
+	by    map[string][]string
 }
 
 // Snapshot: a space per working directory (as herdr-core's terminals the Herdr app did not place), no slots.
