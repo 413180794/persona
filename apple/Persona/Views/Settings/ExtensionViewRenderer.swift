@@ -200,6 +200,9 @@ struct ExtensionItemRow: View {
             .accessibilityIdentifier("plugin-ui-loading")
         // A divider splits sections before this; a component this app does not know (a newer extension's) is left out.
         case .divider, .unknown, .html: EmptyView()
+        // UI version 4's code-hosting components (#2951): the app still says ui_version 3, so the hub sends it the
+        // older components instead; the code page that draws these comes with #2961.
+        case .header, .breadcrumb, .fileTree, .code, .diff, .commentThread, .composer: EmptyView()
         }
     }
 

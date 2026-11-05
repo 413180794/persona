@@ -42,6 +42,8 @@ nonisolated extension ExtensionView {
             section.items.contains { component in
                 switch component {
                 case .unknown, .divider, .button, .field, .segmented, .html: false
+                // UI version 4's code-hosting components are a page's, not a card's.
+                case .header, .breadcrumb, .fileTree, .code, .diff, .commentThread, .composer: false
                 default: true
                 }
             }

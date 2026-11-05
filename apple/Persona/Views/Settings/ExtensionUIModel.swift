@@ -85,6 +85,13 @@ nonisolated extension ExtensionComponent {
         case .empty(let c): c.key
         case .loading(let c): c.key
         case .html(let c): c.key
+        case .header(let c): c.key
+        case .breadcrumb(let c): c.key
+        case .fileTree(let c): c.key
+        case .code(let c): c.key
+        case .diff(let c): c.key
+        case .commentThread(let c): c.key
+        case .composer(let c): c.key
         case .unknown: nil
         }
     }
