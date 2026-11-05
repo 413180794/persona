@@ -83,16 +83,7 @@ struct MacTodosPage: View {
         VStack(spacing: 0) {
             searchField
             List(selection: $selectedTodoID) {
-                if openList.isEmpty && doneList.isEmpty {
-                    Section {
-                        EmptyStateView(
-                            symbol: Theme.Icon.todo,
-                            title: query.isEmpty ? "没有待办" : "没有找到待办",
-                            message: query.isEmpty ? "记下一件要做的事，交给 Agent 执行并跟踪进度。" : "换个搜索词试试",
-                            action: query.isEmpty ? ("新建待办", { showCreate = true }) : nil
-                        )
-                    }
-                } else {
+                if !(openList.isEmpty && doneList.isEmpty) {
                     if !openList.isEmpty {
                         Section("没完成 · \(openList.count)") {
                             ForEach(openList) { todo in
@@ -118,6 +109,17 @@ struct MacTodosPage: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+            // Over the list, not a row of it: a sidebar list's row is one line, and the message was cut to it.
+            .overlay(alignment: .top) {
+                if openList.isEmpty && doneList.isEmpty {
+                    EmptyStateView(
+                        symbol: Theme.Icon.todo,
+                        title: query.isEmpty ? "没有待办" : "没有找到待办",
+                        message: query.isEmpty ? "记下一件要做的事，交给 Agent 执行并跟踪进度。" : "换个搜索词试试",
+                        action: query.isEmpty ? ("新建待办", { showCreate = true }) : nil
+                    )
+                }
+            }
         }
     }
 

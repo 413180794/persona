@@ -405,6 +405,9 @@ enum ExtensionText {
 
     init(deps: Deps = .live) { self.deps = deps }
 
+    /// The hub has no extensions to list (404: an older hub, or 体验模式): the Mac says so instead of the error.
+    private(set) var missing = false
+
     func load() async {
         guard !loading else { return }
         loading = true
@@ -415,8 +418,10 @@ enum ExtensionText {
             plugins = list.plugins
             markets = list.markets
             error = nil
+            missing = false
         } catch {
             self.error = error.localizedDescription
+            missing = (error as? APIError)?.status == 404
         }
     }
 }

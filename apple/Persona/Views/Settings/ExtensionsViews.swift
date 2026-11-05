@@ -48,7 +48,20 @@ struct ExtensionsView: View {
                 }
             }
             if let error = page.error {
+                #if os(macOS)
+                // A page's empty state, not the request's error in red (#2113).
+                Section {
+                    EmptyStateView(symbol: Theme.Icon.plugins, title: page.missing ? "没有扩展" : "扩展没有加载出来",
+                                   message: page.missing
+                                       ? (AppModel.shared.isDemo ? "体验模式里没有扩展。连接自己的 hub 后，装好的扩展在这里开关和设置。"
+                                                                 : "这个 hub 的版本还不支持扩展，升级 hub 后再来看。")
+                                       : error,
+                                   action: page.missing ? nil : ("重试", { Task { await page.load() } }))
+                        .listRowBackground(Color.clear)
+                }
+                #else
                 Section { Text(error).font(Theme.Font.label).foregroundStyle(Theme.danger).textSelection(.enabled) }
+                #endif
             }
         }
         .themedPage()

@@ -244,6 +244,10 @@ struct SettingsView: View {
             #endif
         } empty: {
             SplitPlaceholder(symbol: Theme.Icon.settings, title: "设置", message: "左边选一项。")
+                #if os(macOS)
+                // As System Settings: the window opens on the first page, not on an empty pane.
+                .onAppear { if model.settingsPath.isEmpty { model.settingsPath.append(SettingsPage.persona) } }
+                #endif
         }
     }
 
