@@ -309,6 +309,17 @@ hub 里有一个**出网代理**（`server/internal/extension/egress`），第�
   名字解析到本机回环、链路本地地址（云上的元数据服务）的不放，除非原样列的就是那个 IP。端口不限。
 - **hub 自己的接口**：拿到 hub token 的扩展（`hub` 范围或旧的 `hub_api`）在沙箱里用 `http://hub.persona.internal` 访问 hub（`PERSONA_HUB_URL` 和 `initialize` 的 `hub.url` 就是它），
   代理把它接到 hub 本机的端口；沙箱里的回环不是 hub 的回环。
+- **hub 机器上的本机服务**（#2942）：用保留名 `host.persona.internal`（参照 Docker 的 `host.docker.internal`），代理把 `host.persona.internal:<端口>` 接到 hub 机器的
+  `127.0.0.1:<端口>`（不写端口按 scheme：`http` 80、CONNECT 443），普通 HTTP 转发、CONNECT、明文 HTTP 上的升级（WebSocket）都通；转发时 `Host` 头换成 `127.0.0.1:<端口>`，
+  CONNECT 里的 TLS 代理看不到，`Host` / SNI 仍是这个名字。
+  - 谁能用：`permissions.network` 原样列了回环地址（`127.0.0.1`、`localhost`）或 `host.persona.internal` 本身的扩展；别的照样 403，日志和计数同上。
+    老扩展列了 `127.0.0.1` 的，清单不用改，把服务地址里的 `127.0.0.1` / `localhost` 换成 `host.persona.internal` 就行。
+  - 端口不限，只有代理自己的端口不放（防止经它绕回代理）。
+  - **为什么要换名字**：Go 的 `net/http`（`ProxyFromEnvironment`）对 `localhost` 和回环 IP 写死不走代理（`NO_PROXY` 为空也一样），别的语言的 HTTP 库也常有这个特例，
+    于是程序直连回环、被沙箱拦下（`dial tcp 127.0.0.1:<端口>: connect: operation not permitted`，`sandbox.egress` 的计数是 0）；Linux 沙箱里的回环本来也不是 hub 机器的。
+    所以沙箱里连 hub 机器上的服务（本机的 SSH 隧道、本机起的接口）一律用 `host.persona.internal`。
+  - 这个名字只有代理认：沙箱开着的扩展（包括机器上没有沙箱、只是指向代理的）经代理就能通；不经代理直接解析它会失败（DNS 里没有这个名字），这是预期的。
+    沙箱关着的扩展不经过代理（见上），照旧直连 `127.0.0.1`。
 - **认谁**：本机的 TCP 端口按代理凭据认扩展（`HTTP(S)_PROXY=http://ext:<凭据>@127.0.0.1:<端口>`，每次启动换新，停用、卸载即失效）；Linux 沙箱另有每个扩展一个 unix socket
   （`~/.persona/extensions/run/<id>/proxy.sock`），socket 就说明了是谁。
 - **hub 自己的上游代理**：hub 环境里有 `HTTPS_PROXY` / `HTTP_PROXY`（`NO_PROXY` 照算）时，代理经它出网（CONNECT），扩展不用知道。
@@ -334,7 +345,7 @@ hub 里有一个**出网代理**（`server/internal/extension/egress`），第�
 - 新的用户、PID、网络、IPC、UTS 命名空间；系统目录（`/usr`、`/bin`、`/lib*`、`/etc`、`/opt`）只读，沙箱自己的根也只读，`/tmp` 是私有的空目录，**家目录看不到**（连同它的路径也写不进去）；
   包目录只读，自己的数据目录（`PERSONA_EXTENSION_DATA`，也是 `HOME`）和运行目录（`~/.persona/extensions/run/<id>/`：它的 HTTP socket、代理的 socket）可写。
 - 网络命名空间里只有回环：沙箱的第一个进程是 `personad __sandbox-run`（personad 只读挂在 `/run/persona/personad`），把沙箱自己回环上的 `127.0.0.1:3128` 转到代理的
-  unix socket，再运行扩展的程序（stdin / stdout / stderr 原样、信号转交、退出码照传）。所以任何语言的 HTTP 客户端只要认 `HTTP(S)_PROXY` 就能用，SDK 不用改。
+  unix socket，再运行扩展的程序（stdin / stdout / stderr 原样、信号转交、退出码照传）。所以任何语言的 HTTP 客户端只要认 `HTTP(S)_PROXY` 就能用，SDK 不用改；只是连 hub 机器上的本机服务要写 `host.persona.internal`，不写回环地址（上面「出网」）。
 - `systemd-run --user --scope` 给它上限：`MemoryMax`（默认 1024 MB）、`MemorySwapMax=0`、`CPUQuota`（默认 100%，即一个核）。清单可以申请别的：
   `runtime.resources: {"memory_mb": 64–8192, "cpu_percent": 10–800}`（老 hub 严格读清单，用它的扩展在 `engines.persona` 里写上带 #1856 的构建号）。
   用不了 `systemd-run --user` 时（没有用户的 systemd）只有 bwrap，没有上限。
@@ -1604,7 +1615,9 @@ Swift `apple/Shared/Generated/ExtensionWire.swift`、Kotlin `android/core/contra
 
 ## 写扩展：SDK、模板和命令行
 
-扩展包里只放各平台的可执行文件：hub 不内置 node、不依赖机器上的任何运行时（#1853）。官方 SDK 在主仓库的 `sdk/`，**零依赖、自成一体**，
+扩展包里只放各平台的可执行文件：hub 不内置 node、不依赖机器上的任何运行时（#1853）。
+网络：程序用标准的 HTTP 客户端、认 `HTTP(S)_PROXY` 即可；在沙箱里连 hub 机器上的本机服务时，地址写 `host.persona.internal:<端口>`，不写 `127.0.0.1` / `localhost`（HTTP 库对回环不走代理，见「出网」）。
+官方 SDK 在主仓库的 `sdk/`，**零依赖、自成一体**，
 扩展仓库按版本拷一份（主仓库是私有的，扩展仓库的 CI 不该为拉 SDK 去拿它的 token），生成的协议和 View 类型来自 `schema/extension/`。
 
 ### Go：`sdk/go`

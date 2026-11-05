@@ -66,7 +66,50 @@ func probeInside(args []string) int {
 		}
 		say("get "+host, err)
 	}
+	// A service on the hub machine's loopback: Go's net/http never sends a loopback address through the proxy, so
+	// only LocalHost reaches it (#2942).
+	if len(args) > 2 {
+		port := args[2]
+		for _, host := range []string{"127.0.0.1", egress.LocalHost} {
+			resp, err := http.Get("http://" + net.JoinHostPort(host, port) + "/")
+			if err == nil && resp.StatusCode != 200 {
+				err = fmt.Errorf("%d", resp.StatusCode)
+			}
+			if resp != nil {
+				resp.Body.Close()
+			}
+			say("get loopback as "+host, err)
+		}
+	}
 	return 0
+}
+
+// testProxy is an egress proxy whose open internet is the test server at target; the loopback is the machine's own.
+func testProxy(t *testing.T, target string) *egress.Proxy {
+	t.Helper()
+	px := &egress.Proxy{HubAddr: target, Upstream: func(*url.URL) (*url.URL, error) { return nil, nil },
+		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("192.0.2.1")}, nil },
+		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if h, _, _ := net.SplitHostPort(addr); h != "127.0.0.1" {
+				addr = target
+			}
+			var d net.Dialer
+			return d.DialContext(ctx, network, addr)
+		}}
+	if err := px.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(px.Close)
+	return px
+}
+
+// localPort is a service on this machine's loopback, for LocalHost.
+func localPort(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "local") }))
+	t.Cleanup(srv.Close)
+	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	return port
 }
 
 func TestLinuxCommandLine(t *testing.T) {
@@ -121,7 +164,8 @@ func TestDarwinProfile(t *testing.T) {
 }
 
 // TestLinuxSandboxForReal runs this binary in bubblewrap with the egress proxy: it writes its data, not the home
-// directory, cannot dial out, and reaches through the proxy only the host it may.
+// directory, cannot dial out, and reaches through the proxy only the host it may, and the machine's loopback only as
+// egress.LocalHost.
 func TestLinuxSandboxForReal(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("linux only")
@@ -133,17 +177,9 @@ func TestLinuxSandboxForReal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") }))
 	defer srv.Close()
 	target := strings.TrimPrefix(srv.URL, "http://")
-	px := &egress.Proxy{HubAddr: target, Upstream: func(*url.URL) (*url.URL, error) { return nil, nil },
-		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("192.0.2.1")}, nil },
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, network, target)
-		}}
-	if err := px.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer px.Close()
-	px.Register("probe", egress.Rule{Hosts: []string{"allowed.test"}})
+	px := testProxy(t, target)
+	port := localPort(t)
+	px.Register("probe", egress.Rule{Hosts: []string{"allowed.test", "127.0.0.1"}})
 	self, _ := os.Executable()
 	run, data := t.TempDir(), t.TempDir()
 	sock := filepath.Join(run, "proxy.sock")
@@ -157,7 +193,7 @@ func TestLinuxSandboxForReal(t *testing.T) {
 	if err := os.WriteFile(fixture, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	plan := Plan{ID: "probe", Command: self, Args: []string{"probe", data, home}, Pkg: filepath.Dir(self), Data: data, Run: run,
+	plan := Plan{ID: "probe", Command: self, Args: []string{"probe", data, home, port}, Pkg: filepath.Dir(self), Data: data, Run: run,
 		ProxySocket: sock, Self: self}
 	name, args, env := Linux(sup.Bwrap, plan)
 	cmd := exec.Command(name, args...)
@@ -167,7 +203,8 @@ func TestLinuxSandboxForReal(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	got := string(out)
-	for _, want := range []string{"write data: yes", "write home: no", "write tmp: yes", "read home: no", "dial out: no", "get allowed.test: yes", "get denied.test: no"} {
+	for _, want := range []string{"write data: yes", "write home: no", "write tmp: yes", "read home: no", "dial out: no", "get allowed.test: yes", "get denied.test: no",
+		"get loopback as 127.0.0.1: no", "get loopback as " + egress.LocalHost + ": yes"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("want %q in\n%s", want, got)
 		}
@@ -181,7 +218,7 @@ func TestLinuxSandboxForReal(t *testing.T) {
 	if got, err := os.ReadFile(fixture); err != nil || string(got) != contents {
 		t.Errorf("protected host fixture changed: %v", err)
 	}
-	if st := px.Stats("probe"); st.Allowed != 1 || st.Denied != 1 {
+	if st := px.Stats("probe"); st.Allowed != 2 || st.Denied != 1 {
 		t.Errorf("proxy counts %+v", st)
 	}
 }
@@ -222,7 +259,8 @@ func TestLinksOn(t *testing.T) {
 // TestDarwinSandboxForReal runs a copy of this binary under sandbox-exec from a home directory whose state directory
 // is a symlink (~/.persona -> .jarvis), as the hub names it: it runs, writes its data and temp directories, cannot read
 // or write the rest of the home directory (also not through the link), cannot dial out, and reaches through the
-// proxy only the host it may.
+// proxy only the host it may, and the machine's loopback only as egress.LocalHost (Go's http.Get straight to
+// 127.0.0.1 skips the proxy and is refused, #2942).
 func TestDarwinSandboxForReal(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("darwin only")
@@ -265,19 +303,11 @@ func TestDarwinSandboxForReal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") }))
 	defer srv.Close()
 	target := strings.TrimPrefix(srv.URL, "http://")
-	px := &egress.Proxy{HubAddr: target, Upstream: func(*url.URL) (*url.URL, error) { return nil, nil },
-		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("192.0.2.1")}, nil },
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, network, target)
-		}}
-	if err := px.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer px.Close()
-	proxyURL := px.Register("probe", egress.Rule{Hosts: []string{"allowed.test"}})
+	px := testProxy(t, target)
+	port := localPort(t)
+	proxyURL := px.Register("probe", egress.Rule{Hosts: []string{"allowed.test", "127.0.0.1"}})
 
-	plan := Plan{ID: "probe", Command: command, Args: []string{"probe", data, state}, Pkg: pkg, Data: data, Run: run, ProxyURL: proxyURL}
+	plan := Plan{ID: "probe", Command: command, Args: []string{"probe", data, state, port}, Pkg: pkg, Data: data, Run: run, ProxyURL: proxyURL}
 	name, args, env := Darwin(plan)
 	cmd := exec.Command(name, args...)
 	cmd.Dir = pkg
@@ -287,7 +317,8 @@ func TestDarwinSandboxForReal(t *testing.T) {
 		t.Fatalf("%v\n%s\nprofile:\n%s", err, out, args[1])
 	}
 	got := string(out)
-	for _, want := range []string{"write data: yes", "write home: no", "write tmp: yes", "read home: no", "dial out: no", "get allowed.test: yes", "get denied.test: no"} {
+	for _, want := range []string{"write data: yes", "write home: no", "write tmp: yes", "read home: no", "dial out: no", "get allowed.test: yes", "get denied.test: no",
+		"get loopback as 127.0.0.1: no", "get loopback as " + egress.LocalHost + ": yes"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("want %q in\n%s", want, got)
 		}
@@ -301,7 +332,7 @@ func TestDarwinSandboxForReal(t *testing.T) {
 	if got, err := os.ReadFile(fixture); err != nil || string(got) != contents {
 		t.Errorf("protected home fixture changed: %v", err)
 	}
-	if st := px.Stats("probe"); st.Allowed != 1 || st.Denied != 1 {
+	if st := px.Stats("probe"); st.Allowed != 2 || st.Denied != 1 {
 		t.Errorf("proxy counts %+v", st)
 	}
 }

@@ -268,3 +268,169 @@ func TestMatches(t *testing.T) {
 		}
 	}
 }
+
+// localServer is a service on the hub machine's loopback: it echoes the Host it got and the path, and on an upgrade
+// (a WebSocket's handshake) switches to echoing bytes.
+func localServer(t *testing.T) (*httptest.Server, string) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Upgrade") == "echo" {
+			c, buf, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				return
+			}
+			defer c.Close()
+			fmt.Fprintf(buf, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: echo\r\nConnection: Upgrade\r\nX-Host: %s\r\n\r\n", r.Host)
+			_ = buf.Flush()
+			_, _ = io.Copy(c, buf)
+			return
+		}
+		fmt.Fprintf(w, "local %s %s %s", r.Host, r.URL.Path, r.Header.Get("Proxy-Authorization"))
+	}))
+	t.Cleanup(srv.Close)
+	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	return srv, port
+}
+
+func TestProxyLocalHost(t *testing.T) {
+	_, port := localServer(t)
+	p := newProxy(t, "127.0.0.1:1", nil)
+	get := func(purl, u string) (int, string) {
+		t.Helper()
+		resp, err := client(purl).Get(u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	at := "http://" + LocalHost + ":" + port + "/agent/v1"
+	// Every loopback address listed as it is lets it in; the manifest needs no change.
+	for _, hosts := range [][]string{{"127.0.0.1"}, {"localhost"}, {"::1"}, {LocalHost}, {"api.example.com", "127.0.0.1"}} {
+		purl := p.Register("lark", Rule{Hosts: hosts})
+		code, body := get(purl, at)
+		if code != 200 || body != "local 127.0.0.1:"+port+" /agent/v1 " {
+			t.Fatalf("%v: %d %q (Host goes on as the loopback, no proxy credential)", hosts, code, body)
+		}
+	}
+	// No loopback address listed: refused, counted and logged as any other host.
+	for _, r := range []Rule{{Hosts: []string{"api.example.com"}}, {Hub: true}, {Hosts: []string{"127.0.0.2"}}, {}} {
+		var logged []string
+		p.Logf = func(f string, a ...any) { logged = append(logged, fmt.Sprintf(f, a...)) }
+		purl := p.Register("lark", r)
+		before := p.Stats("lark")
+		code, body := get(purl, at)
+		if code != 403 || !strings.Contains(body, "permissions.network") {
+			t.Fatalf("%+v: %d %q", r, code, body)
+		}
+		if st := p.Stats("lark"); st.Denied != before.Denied+1 || st.LastDenied != LocalHost {
+			t.Fatalf("%+v: counts %+v", r, st)
+		}
+		if len(logged) != 1 || !strings.Contains(logged[0], "refused "+LocalHost) {
+			t.Fatalf("%+v: log %v", r, logged)
+		}
+	}
+	p.Logf = nil
+	// Not back into the proxy itself.
+	purl := p.Register("lark", Rule{Hosts: []string{"127.0.0.1"}})
+	_, own, _ := net.SplitHostPort(p.Addr())
+	if code, body := get(purl, "http://"+LocalHost+":"+own+"/"); code != 403 || !strings.Contains(body, "this proxy") {
+		t.Fatalf("the proxy's own port: %d %q", code, body)
+	}
+	// No port: the scheme's.
+	var dialed []string
+	dial := p.Dial
+	p.Dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		dialed = append(dialed, addr)
+		return nil, fmt.Errorf("not here")
+	}
+	if code, _ := get(purl, "http://"+LocalHost+"/"); code != http.StatusBadGateway || len(dialed) != 1 || dialed[0] != "127.0.0.1:80" {
+		t.Fatalf("no port: %d %v", code, dialed)
+	}
+	p.Dial = dial
+}
+
+func TestProxyLocalHostConnect(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "tls ok "+r.Host) }))
+	defer srv.Close()
+	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "https://"))
+	p := newProxy(t, "127.0.0.1:1", nil)
+	tlsClient := func(purl string) *http.Client {
+		u, _ := url.Parse(purl)
+		tr := srv.Client().Transport.(*http.Transport).Clone()
+		tr.Proxy = http.ProxyURL(u)
+		tr.TLSClientConfig.InsecureSkipVerify = true
+		return &http.Client{Transport: tr}
+	}
+	at := "https://" + LocalHost + ":" + port + "/"
+	resp, err := tlsClient(p.Register("lark", Rule{Hosts: []string{"127.0.0.1"}})).Get(at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(b) != "tls ok "+LocalHost+":"+port { // inside TLS the proxy sees nothing: the name goes on as it is
+		t.Fatalf("CONNECT: %q", b)
+	}
+	if _, err := tlsClient(p.Register("lark", Rule{Hosts: []string{"api.example.com"}})).Get(at); err == nil {
+		t.Fatal("CONNECT to the loopback without it listed went through")
+	}
+	_, own, _ := net.SplitHostPort(p.Addr())
+	if _, err := tlsClient(p.Register("lark", Rule{Hosts: []string{"127.0.0.1"}})).Get("https://" + LocalHost + ":" + own + "/"); err == nil {
+		t.Fatal("CONNECT to the proxy's own port went through")
+	}
+	if st := p.Stats("lark"); st.Allowed != 1 || st.Denied != 2 {
+		t.Fatalf("counts %+v", st)
+	}
+}
+
+func TestProxyLocalHostUpgrade(t *testing.T) {
+	_, port := localServer(t)
+	p := newProxy(t, "127.0.0.1:1", nil)
+	purl := p.Register("lark", Rule{Hosts: []string{"127.0.0.1"}})
+	req, _ := http.NewRequest("GET", "http://"+LocalHost+":"+port+"/agent/v1/events", nil)
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "echo")
+	resp, err := client(purl).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusSwitchingProtocols || resp.Header.Get("X-Host") != "127.0.0.1:"+port {
+		t.Fatalf("%d %v", resp.StatusCode, resp.Header)
+	}
+	rw, ok := resp.Body.(io.ReadWriteCloser)
+	if !ok {
+		t.Fatalf("body %T", resp.Body)
+	}
+	if _, err := io.WriteString(rw, "ping"); err != nil {
+		t.Fatal(err)
+	}
+	b := make([]byte, 4)
+	if _, err := io.ReadFull(rw, b); err != nil || string(b) != "ping" {
+		t.Fatalf("echo %q %v", b, err)
+	}
+	// Refused all the same without the loopback listed.
+	purl = p.Register("lark", Rule{Hosts: []string{"api.example.com"}})
+	resp2, err := client(purl).Do(req.Clone(context.Background()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusForbidden {
+		t.Fatalf("upgrade without the loopback listed: %d", resp2.StatusCode)
+	}
+}
+
+func TestRuleLocal(t *testing.T) {
+	for _, c := range []struct {
+		hosts []string
+		ok    bool
+	}{{[]string{"127.0.0.1"}, true}, {[]string{"::1"}, true}, {[]string{"[::1]"}, true}, {[]string{"localhost"}, true},
+		{[]string{LocalHost}, true}, {[]string{"127.0.0.2"}, false}, {[]string{"*.persona.internal"}, false}, {nil, false}} {
+		if got := (Rule{Hosts: c.hosts}).Local(); got != c.ok {
+			t.Errorf("%v: %v", c.hosts, got)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 // Package egress is the hub's proxy for extensions' outbound connections (docs/extensions.md「出网」): each extension
-// it knows reaches only the hosts of its permissions.network, and the hub's own API under the name HubHost when it
-// was granted any of it. A sandboxed extension has no other way out; one outside a sandbox is pointed at it.
+// it knows reaches only the hosts of its permissions.network, the hub's own API under the name HubHost when it was
+// granted any of it, and the hub machine's loopback under the name LocalHost when its permissions.network lists a
+// loopback address. A sandboxed extension has no other way out; one outside a sandbox is pointed at it.
 package egress
 
 import (
@@ -25,6 +26,15 @@ import (
 // HubHost is the hub's own API as an extension behind the proxy reaches it (its loopback is not the hub's).
 const HubHost = "hub.persona.internal"
 
+// LocalHost is the hub machine's loopback as an extension behind the proxy reaches it: LocalHost:<port> is
+// 127.0.0.1:<port> there. A sandbox's loopback is not the hub machine's, and HTTP clients (Go's net/http among them)
+// never send a request for localhost or a loopback IP through a proxy, so a loopback address in permissions.network
+// works only under this name.
+const LocalHost = "host.persona.internal"
+
+// loopbackNames are what permissions.network lists to let an extension reach LocalHost.
+var loopbackNames = []string{"127.0.0.1", "::1", "localhost", LocalHost}
+
 // User is the proxy's user name in an extension's proxy URL (the password tells which extension it is).
 const User = "ext"
 
@@ -35,6 +45,14 @@ type Rule struct {
 	Hosts []string
 	// Hub: it may reach HubHost (it holds a token of the hub's API).
 	Hub bool
+}
+
+// Local says whether the rule lets its extension reach LocalHost: its permissions.network lists a loopback address
+// (or LocalHost itself) as it is.
+func (r Rule) Local() bool {
+	return slices.ContainsFunc(r.Hosts, func(h string) bool {
+		return slices.Contains(loopbackNames, strings.ToLower(strings.Trim(h, "[]")))
+	})
 }
 
 // Counts are an extension's connections through the proxy.
@@ -90,6 +108,12 @@ func (p *Proxy) Addr() string {
 		return ""
 	}
 	return p.ln.Addr().String()
+}
+
+// ownPort says whether port is the loopback listener's own (LocalHost must not lead back into the proxy).
+func (p *Proxy) ownPort(port string) bool {
+	_, own, err := net.SplitHostPort(p.Addr())
+	return err == nil && own == port
 }
 
 // Close stops every listener.
@@ -281,18 +305,34 @@ func (p *Proxy) handler(fixed string) http.Handler {
 			}
 		}
 		host = strings.ToLower(strings.Trim(host, "[]"))
-		hub := host == HubHost
-		allowed := hub && rule.Hub || !hub && Matches(host, rule.Hosts)
+		hub, local := host == HubHost, host == LocalHost
+		var allowed bool
+		switch {
+		case hub:
+			allowed = rule.Hub
+		case local:
+			allowed = rule.Local() && !p.ownPort(port)
+		default:
+			allowed = Matches(host, rule.Hosts)
+		}
 		p.count(ext, host, allowed)
 		if !allowed {
+			if local && rule.Local() {
+				p.logf("extension %s: refused %s:%s (the proxy itself)", ext, host, port)
+				http.Error(w, fmt.Sprintf("persona: %s:%s is this proxy", host, port), http.StatusForbidden)
+				return
+			}
 			p.logf("extension %s: refused %s (not in its permissions.network)", ext, host)
 			http.Error(w, fmt.Sprintf("persona: %s is not in this extension's permissions.network", host), http.StatusForbidden)
 			return
 		}
 		ctx := r.Context()
 		dial := func() (net.Conn, error) {
-			if hub {
+			switch {
+			case hub:
 				return p.dial(ctx, "tcp", p.HubAddr)
+			case local:
+				return p.dial(ctx, "tcp", net.JoinHostPort("127.0.0.1", port))
 			}
 			return p.dialOut(ctx, host, port, rule)
 		}
@@ -302,6 +342,25 @@ func (p *Proxy) handler(fixed string) http.Handler {
 		}
 		p.forward(w, r, dial)
 	})
+}
+
+// farHost is the Host header a request for hostport goes on with: the hub's address for HubHost, the loopback (with
+// the port as written) for LocalHost, else def.
+func (p *Proxy) farHost(hostport, def string) string {
+	host, port, err := net.SplitHostPort(hostport)
+	if err != nil {
+		host, port = hostport, ""
+	}
+	switch strings.ToLower(host) {
+	case HubHost:
+		return p.HubAddr
+	case LocalHost:
+		if port == "" {
+			return "127.0.0.1"
+		}
+		return net.JoinHostPort("127.0.0.1", port)
+	}
+	return def
 }
 
 func isUpgrade(r *http.Request) bool {
@@ -438,9 +497,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request, dial func() (net.
 		out := r.Clone(context.Background())
 		out.RequestURI = ""
 		out.URL = &url.URL{Path: r.URL.Path, RawPath: r.URL.RawPath, RawQuery: r.URL.RawQuery}
-		if r.URL.Host == HubHost || strings.HasPrefix(r.URL.Host, HubHost+":") {
-			out.Host = p.HubAddr
-		}
+		out.Host = p.farHost(r.URL.Host, out.Host)
 		out.Header.Del("Proxy-Authorization")
 		out.Header.Del("Proxy-Connection")
 		err = out.Write(far)
@@ -482,9 +539,8 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, dial func() (net
 	for _, h := range hop {
 		out.Header.Del(h)
 	}
-	if out.URL.Hostname() == HubHost {
-		out.URL.Host = p.HubAddr
-		out.Host = p.HubAddr
+	if h := p.farHost(out.URL.Host, ""); h != "" {
+		out.URL.Host, out.Host = h, h
 	}
 	resp, err := tr.RoundTrip(out)
 	if err != nil {

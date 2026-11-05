@@ -8,6 +8,12 @@
   「真实所在目录 + 自己的名字」单独 `(allow file-read* (literal …))`：只能读到它指向哪里，后面的东西仍按真实路径判断（实测经软链读家目录里的其他文件仍被拒）；
   只放 `file-read-metadata` 不够。测试临时目录本身在 `/var -> private/var` 下，`TestDarwinSandboxForReal` 用软链的状态目录真跑一遍，去掉放行就复现原报错。
 
+- 沙箱里的扩展连 hub 机器的回环，HTTP 库根本不走代理（2026-11-05，#2942）：出网代理放行原样列在 `permissions.network` 里的 `127.0.0.1`，
+  但 Go 的 `net/http`（`httpproxy`）对 `localhost` 和回环 IP 写死直连、`NO_PROXY` 为空也一样，于是请求没进代理（`sandbox.egress` 计数 0），被 sandbox-exec 拦成
+  `connect: operation not permitted`；Linux 沙箱的回环本来也不是 hub 机器的。做法是保留名 `host.persona.internal`，代理把它接到 hub 机器的 `127.0.0.1:<端口>`，
+  只给列了回环地址的扩展用，代理自己的端口不放（`docs/extensions.md`「出网」）。看到「沙箱里连本机不通、计数是 0」先怀疑客户端没走代理，不是代理的规则。
+  `TestDarwinSandboxForReal` 在真沙箱里用默认的 `http.Get` 同时试 `127.0.0.1`（不通）和这个名字（通）。
+
 - 待办 Agent 的关联与移除要按同一顺序锁行（2026-11-05，#2660）：按会话取事务锁，再按 id 锁目标和其他活动待办的父行，最后更新 Agent 行，避免并发关联／移除的 deadlock 和重复活动链接。自动关联先确认目标不是已有行或 dismissed 标记，再释放旧活动链接，最后插入新行；`todo_agents_active` 是即时唯一索引，先插再释放会报 23505。保留 soft unlink，意外冲突时整笔事务回滚。回归观察真实锁等待并用 `FOR UPDATE NOWAIT` 检查顺序，不靠增加 sleep 或重试绕过。
 
 - 扩展按钮通知要检查普通直连 APNs，不只看 relay（2026-11-05，#2619）：relay 的密文封装已有 `mutable-content: 1`，直连只写动态 category 和 actions 时，App 在后台首次收到新 category 的通知服务扩展不会运行，无法在交付前注册按钮。有扩展按钮时才加这个字段，同时更新 `.apns` 样例；普通、无按钮及静态交互通知保持原行为。回归检查真正进入假 APNs 请求的 JSON，服务端通过不代替 iPhone 首条后台通知验收。
