@@ -1,8 +1,8 @@
 import CoreGraphics
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
-struct ImageViewerTests {
+struct ZoomMathTests {
     @Test func fitsWideAndTallImages() {
         let bounds = CGSize(width: 400, height: 800)
         #expect(ZoomMath.fittedSize(image: CGSize(width: 2000, height: 1000), in: bounds) == CGSize(width: 400, height: 200))

@@ -1,4 +1,5 @@
 import Foundation
+import PersonaKit
 
 /// Keeps Feishu current while the app is open and online. Push: the hub relays lark-connector's realtime events as
 /// `lark` (which conversations changed); the inbox and an open chat refresh on them instead of waiting for a poll.
@@ -138,32 +139,5 @@ final class LarkSync {
                 if dirty.remove(id) != nil { enqueue([id]) }
             }
         }
-    }
-}
-
-/// When a change reaches a listener that wants at most one per `gap`: at once after a quiet spell, else once the gap
-/// since the last one is up, the changes meanwhile folded into that one. A value; `LarkChangeGateTests`.
-nonisolated struct LarkChangeGate {
-    enum When: Equatable { case now, later(ContinuousClock.Instant), pending }
-    let gap: Duration
-    private var last: ContinuousClock.Instant?
-    private var waiting = false
-
-    init(gap: Duration) { self.gap = gap }
-
-    mutating func arrive(at now: ContinuousClock.Instant) -> When {
-        if waiting { return .pending }
-        if let last, now < last + gap {
-            waiting = true
-            return .later(last + gap)
-        }
-        last = now
-        return .now
-    }
-
-    /// The delayed one went out.
-    mutating func fired(at now: ContinuousClock.Instant) {
-        waiting = false
-        last = now
     }
 }

@@ -976,5 +976,6 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   - 包的默认隔离是 nonisolated，App 是 MainActor：原来就标了 `nonisolated` 的值类型直接挪，不用改。
   - 挪 `apple/Shared` 里的文件（第 2 批的 `Links`）之前，先查手表、小组件、通知扩展有没有用它（`grep -rn '\bLinks\b' Shared PersonaWatch PersonaWidgets LiveActivity`）：它们不依赖这个包，用了就编不过。
   - 给 App 文件补 `import PersonaKit` 时按名字 grep，会把只在注释里提到它的文件也算进去；只给代码里真用到的加（第 2 批多加了 8 个，又删掉了）。
+  - 从视图文件里往外抽纯函数（第 2 批的 `StreamChunks`、`ZoomMath` 等）时，连同它上面的 `///` 文档注释和只给它用的 private 扩展一起抽（`ConversationTitle` 的 `Character.isASCIIDigit`）。那个扩展进了包以后保持 internal，不改成 `public`：App 原来就没有它。
   - `swift test` 把编译产物写在包目录下的 `.build/`，仓库根的 `.gitignore` 要盖住它（`/apple/Packages/*/.build/`）。第一次提交时 `git add -A` 把 1,500 多个产物带了进去，里面有本机的路径；推到远端后发现，删了分支。提交前看一眼 `git diff --stat` 的文件数。
 

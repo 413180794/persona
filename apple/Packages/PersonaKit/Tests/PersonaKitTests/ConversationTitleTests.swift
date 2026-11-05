@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 /// The drawer dims a hub title's 「MMDD | 类型 | 」 (docs/assistant.md「对话标题」); any other title is shown as it is.
 struct ConversationTitleTests {

@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 /// A streaming reply cut into finished blocks (`StreamChunks`): what is cut stays the same as the text grows, a code
 /// fence or an indented continuation is never cut, and the gaps follow the theme's margins.

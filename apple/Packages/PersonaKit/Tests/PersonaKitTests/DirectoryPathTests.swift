@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 /// The new chat's directory browser: a typed path goes where it says, and a directory the hub can't list says why
 /// (#1402: an unreadable directory used to do nothing when tapped).

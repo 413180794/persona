@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 /// An open chat hears of its changes at most once per gap (LarkSync.chatGap, #674).
 struct LarkChangeGateTests {

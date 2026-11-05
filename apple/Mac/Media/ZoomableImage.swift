@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import PersonaKit
 import SwiftUI
 
 /// The Mac's `ZoomableImage` (iOS: UIScrollView in ImageViewer.swift): an NSScrollView with magnification, so a

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import PersonaKit
 import SwiftUI
 #if canImport(UIKit)
 import UIKit

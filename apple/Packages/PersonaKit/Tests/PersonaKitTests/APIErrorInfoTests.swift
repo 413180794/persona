@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 /// Model API errors in a chat (`APIErrorInfo`, `ChatView.foldAPIErrors`). The texts follow real ones with the ids,
 /// hosts and regions replaced.

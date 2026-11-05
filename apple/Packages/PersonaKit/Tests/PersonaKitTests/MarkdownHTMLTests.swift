@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 /// README-style HTML turned into markdown MarkdownUI can render.
 struct MarkdownHTMLTests {
