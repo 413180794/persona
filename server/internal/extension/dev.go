@@ -54,6 +54,10 @@ func (r *Registry) AddDev(dir string, config json.RawMessage, secrets map[string
 		r.mu.Unlock()
 		return nil, err
 	}
+	if err := r.checkDependencyGraph(m); err != nil {
+		r.mu.Unlock()
+		return nil, err
+	}
 	raw, _ := json.Marshal(m)
 	now := r.now()
 	p := &Extension{Record: Record{ID: m.ID, Source: SourceDev, Origin: "dev:" + dir, Version: m.Version, Manifest: raw,

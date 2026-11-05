@@ -293,7 +293,10 @@ func (r *Registry) Get(id string) *Extension {
 func (r *Registry) Snapshot(id string) *Extension {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	p := r.extensions[id]
+	return snapshotExtension(r.extensions[id])
+}
+
+func snapshotExtension(p *Extension) *Extension {
 	if p == nil {
 		return nil
 	}
@@ -513,7 +516,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	}
 	pv.Manifest, pv.Digest, pv.Permissions = m, Digest(m), Explain(m)
 	pv.Warnings = m.Lint()
-	pv.Depends = r.Dependencies(m)
+	pv.Depends = r.DependenciesContext(ctx, m)
 	fail := func(err error) (*Preview, error) {
 		if pv.staging != "" {
 			_ = os.RemoveAll(pv.staging)
@@ -541,6 +544,9 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 		return fail(fmt.Errorf("%s 不比已装的 %s 新", m.Version, cur.Record.Version))
 	}
 	if err := r.conflicts(m); err != nil {
+		return fail(err)
+	}
+	if err := r.checkDependencyGraph(m); err != nil {
 		return fail(err)
 	}
 	if upgrade != "" {
@@ -714,30 +720,40 @@ func (r *Registry) Install(ctx context.Context, previewID, digest, actor string)
 	row.Manifest, _ = json.Marshal(m)
 	if pv.source.Kind == "remote" {
 		row.Remote = &Remote{RPCSocket: pv.source.RPCSocket, HTTPSocket: pv.source.HTTPSocket}
-	} else if err := r.place(pv, m); err != nil {
+	}
+	var p, builtin *Extension
+	// Keep the graph check and record publication in one critical section, so concurrent installs cannot close a cycle.
+	err = func() error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		builtin = r.extensions[m.ID]
+		if builtin != nil && !r.yielding(builtin) {
+			return fmt.Errorf("已经有一个叫 %s 的扩展", m.ID)
+		}
+		if err := r.conflicts(m); err != nil {
+			return err
+		}
+		if err := r.checkDependencyGraph(m); err != nil {
+			return err
+		}
+		if row.Remote == nil {
+			if err := r.place(pv, m); err != nil {
+				return err
+			}
+		}
+		if err := r.store.PutExtension(ctx, row); err != nil {
+			return err
+		}
+		p = r.fromRow(row)
+		if builtin != nil {
+			r.yielded[m.ID] = builtin
+		}
+		r.extensions[m.ID] = p
+		return nil
+	}()
+	if err != nil {
 		return nil, err
 	}
-	r.mu.Lock()
-	builtin := r.extensions[m.ID]
-	if builtin != nil && !r.yielding(builtin) {
-		r.mu.Unlock()
-		return nil, fmt.Errorf("已经有一个叫 %s 的扩展", m.ID)
-	}
-	if err := r.conflicts(m); err != nil {
-		r.mu.Unlock()
-		return nil, err
-	}
-	r.mu.Unlock()
-	if err := r.store.PutExtension(ctx, row); err != nil {
-		return nil, err
-	}
-	p := r.fromRow(row)
-	r.mu.Lock()
-	if builtin != nil {
-		r.yielded[m.ID] = builtin
-	}
-	r.extensions[m.ID] = p
-	r.mu.Unlock()
 	r.audit(ctx, m.ID, "install", actor, map[string]any{"version": m.Version, "origin": row.Origin, "permissions": m.Permissions})
 	r.changed(Change{ID: m.ID, Kind: "installed", Old: builtin}) // the hub stops what ran of id first (the built-in)
 	return p, nil
@@ -781,32 +797,46 @@ func (r *Registry) Upgrade(ctx context.Context, id, previewID, digest, actor str
 	if (pv.MorePermissions || digest != "") && digest != pv.Digest {
 		return nil, errors.New("新版本要的权限变多了：确认新的权限后再升级")
 	}
-	old := r.Get(id)
-	if old == nil || old.Record.Version != pv.From {
-		return nil, errors.New("扩展在预览之后变了，重新预览一次")
-	}
-	row := old.Record
-	row.DisabledContributions = m.StartsOff(old.Full, row.DisabledContributions)
-	row.PreviousVersion, row.Version, row.UpdatedAt = row.Version, m.Version, r.now()
-	row.Manifest, _ = json.Marshal(m)
-	row.Granted, row.GrantedDigest = m.Permissions, pv.Digest
-	row.Origin = pv.source.String()
-	if pv.source.Kind == "remote" {
-		row.Remote = &Remote{RPCSocket: pv.source.RPCSocket, HTTPSocket: pv.source.HTTPSocket}
-	} else {
-		row.Remote = nil
-		if err := r.place(pv, m); err != nil {
-			return nil, err
+	var old, p *Extension
+	var row Record
+	err = func() error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		old = snapshotExtension(r.extensions[id])
+		if old == nil || old.Record.Version != pv.From {
+			return errors.New("扩展在预览之后变了，重新预览一次")
 		}
-	}
-	if err := r.store.PutExtension(ctx, row); err != nil {
+		if err := r.conflicts(m); err != nil {
+			return err
+		}
+		if err := r.checkDependencyGraph(m); err != nil {
+			return err
+		}
+		row = old.Record
+		row.DisabledContributions = m.StartsOff(old.Full, row.DisabledContributions)
+		row.PreviousVersion, row.Version, row.UpdatedAt = row.Version, m.Version, r.now()
+		row.Manifest, _ = json.Marshal(m)
+		row.Granted, row.GrantedDigest = m.Permissions, pv.Digest
+		row.Origin = pv.source.String()
+		if pv.source.Kind == "remote" {
+			row.Remote = &Remote{RPCSocket: pv.source.RPCSocket, HTTPSocket: pv.source.HTTPSocket}
+		} else {
+			row.Remote = nil
+			if err := r.place(pv, m); err != nil {
+				return err
+			}
+		}
+		if err := r.store.PutExtension(ctx, row); err != nil {
+			return err
+		}
+		p = r.fromRow(row)
+		r.extensions[id] = p
+		r.prune(id, row.Version, row.PreviousVersion)
+		return nil
+	}()
+	if err != nil {
 		return nil, err
 	}
-	p := r.fromRow(row)
-	r.mu.Lock()
-	r.extensions[id] = p
-	r.mu.Unlock()
-	r.prune(id, row.Version, row.PreviousVersion)
 	r.audit(ctx, id, "upgrade", actor, map[string]any{"from": row.PreviousVersion, "to": row.Version, "permissions": m.Permissions})
 	r.changed(Change{ID: id, Kind: "upgraded", Old: old})
 	return p, nil
@@ -824,7 +854,7 @@ func (r *Registry) prune(id string, keep ...string) {
 
 // Rollback goes back to the version installed before the last upgrade.
 func (r *Registry) Rollback(ctx context.Context, id, actor string) (*Extension, error) {
-	old := r.Get(id)
+	old := r.Snapshot(id)
 	if old == nil || old.Record.Source != SourceInstalled {
 		return nil, fmt.Errorf("没有装过扩展 %s", id)
 	}
@@ -840,18 +870,35 @@ func (r *Registry) Rollback(ctx context.Context, id, actor string) (*Extension, 
 	if err != nil {
 		return nil, err
 	}
-	row := old.Record
-	row.Version, row.PreviousVersion, row.UpdatedAt = prev, "", r.now()
-	row.Manifest, _ = json.Marshal(m)
-	row.Granted, row.GrantedDigest = m.Permissions, Digest(m)
-	if err := r.store.PutExtension(ctx, row); err != nil {
+	var p *Extension
+	err = func() error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		cur := r.extensions[id]
+		if cur == nil || cur.Record.Version != old.Record.Version || cur.Record.PreviousVersion != prev {
+			return errors.New("扩展在回滚之前变了，请重试")
+		}
+		if err := r.conflicts(m); err != nil {
+			return err
+		}
+		if err := r.checkDependencyGraph(m); err != nil {
+			return err
+		}
+		row := snapshotExtension(cur).Record
+		row.Version, row.PreviousVersion, row.UpdatedAt = prev, "", r.now()
+		row.Manifest, _ = json.Marshal(m)
+		row.Granted, row.GrantedDigest = m.Permissions, Digest(m)
+		if err := r.store.PutExtension(ctx, row); err != nil {
+			return err
+		}
+		p = r.fromRow(row)
+		r.extensions[id] = p
+		r.prune(id, prev)
+		return nil
+	}()
+	if err != nil {
 		return nil, err
 	}
-	p := r.fromRow(row)
-	r.mu.Lock()
-	r.extensions[id] = p
-	r.mu.Unlock()
-	r.prune(id, prev)
 	r.audit(ctx, id, "rollback", actor, map[string]any{"from": old.Record.Version, "to": prev})
 	r.changed(Change{ID: id, Kind: "rolled_back", Old: old})
 	return p, nil
@@ -869,20 +916,31 @@ func (r *Registry) Uninstall(ctx context.Context, id string, keepData bool, acto
 	if old.Record.Source != SourceInstalled {
 		return fmt.Errorf("%s 是%s的扩展，只能停用", id, map[string]string{SourceBuiltin: "内置", SourceHubJSON: " hub.json 里"}[old.Record.Source])
 	}
-	if err := r.store.DeleteExtension(ctx, id); err != nil {
+	err := func() error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		cur := r.extensions[id]
+		if cur == nil || cur.Record.Source != SourceInstalled {
+			return fmt.Errorf("扩展 %s 在卸载之前变了，请重试", id)
+		}
+		old = snapshotExtension(cur)
+		if err := r.store.DeleteExtension(ctx, id); err != nil {
+			return err
+		}
+		delete(r.extensions, id)
+		back := r.yielded[id]
+		if back != nil {
+			delete(r.yielded, id)
+			r.extensions[id] = back
+		}
+		_ = os.RemoveAll(filepath.Join(r.dir, "installed", id))
+		if !keepData {
+			_ = os.RemoveAll(r.DataDir(id))
+		}
+		return nil
+	}()
+	if err != nil {
 		return err
-	}
-	r.mu.Lock()
-	delete(r.extensions, id)
-	back := r.yielded[id]
-	if back != nil { // the built-in it took the place of comes back
-		delete(r.yielded, id)
-		r.extensions[id] = back
-	}
-	r.mu.Unlock()
-	_ = os.RemoveAll(filepath.Join(r.dir, "installed", id))
-	if !keepData {
-		_ = os.RemoveAll(r.DataDir(id))
 	}
 	r.audit(ctx, id, "uninstall", actor, map[string]any{"version": old.Record.Version, "keep_data": keepData})
 	r.changed(Change{ID: id, Kind: "removed", Old: old})
@@ -1108,23 +1166,14 @@ func (r *Registry) SecretsSet(ctx context.Context, p *Extension) map[string]bool
 // Missing are what a plugin needs before it can run: required secrets without a value, a configuration its schema
 // does not take (after an upgrade changed it). Empty: ready.
 func (r *Registry) Missing(ctx context.Context, p *Extension) []string {
-	var out []string
-	if p.ReadOnly() {
+	if p == nil {
 		return nil
 	}
-	set := r.SecretsSet(ctx, p)
-	for _, s := range p.Manifest.Secrets {
-		if s.Required && !set[s.Name] {
-			out = append(out, "密钥「"+s.Title+"」")
-		}
+	g := r.dependencyGraph(ctx)
+	if g.nodes[p.Record.ID] == nil {
+		g.nodes[p.Record.ID] = snapshotExtension(p)
 	}
-	r.mu.Lock()
-	raw := p.Record.Config
-	r.mu.Unlock()
-	if err := p.Schema.Check(raw); err != nil {
-		out = append(out, "配置（"+err.Error()+"）")
-	}
-	return append(out, r.dependencyProblems(p.Manifest)...)
+	return slices.Clone(g.problems(p.Record.ID))
 }
 
 // Audit records what the hub changed about extension id outside the registry (its sandbox).

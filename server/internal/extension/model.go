@@ -1,6 +1,7 @@
 package extension
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -272,7 +273,8 @@ const (
 	DepOK       = "ok"
 	DepMissing  = "missing"
 	DepDisabled = "disabled"
-	DepOld      = "old" // installed, its version out of the range
+	DepOld      = "old"       // installed, its version out of the range
+	DepNotReady = "not_ready" // installed, on and compatible, but settings or transitive dependencies are not ready
 )
 
 // DependencyState is one dependency of an extension on this hub.
@@ -286,59 +288,18 @@ type DependencyState struct {
 
 // Dependencies are the states of m's dependencies on this hub.
 func (r *Registry) Dependencies(m *Manifest) []DependencyState {
-	var out []DependencyState
-	for _, d := range m.Depends {
-		s := DependencyState{ID: d.ID, Version: d.Version, State: DepOK}
-		switch p := r.Get(d.ID); {
-		case p == nil:
-			s.State = DepMissing
-		case !d.Allows(p.Record.Version) && p.Record.Source == SourceInstalled:
-			s.State, s.Installed, s.Name = DepOld, p.Record.Version, p.Full.Name
-		case !p.Record.Enabled:
-			s.State, s.Installed, s.Name = DepDisabled, p.Record.Version, p.Full.Name
-		default:
-			s.Installed, s.Name = p.Record.Version, p.Full.Name
-		}
-		out = append(out, s)
-	}
-	return out
+	return r.DependenciesContext(context.Background(), m)
 }
 
-// dependencyProblems are what m still needs of others, for people (Missing): an extension to install, switch on or
-// upgrade, a point its exporter does not have, a contribution its exporter's schema does not take.
-func (r *Registry) dependencyProblems(m *Manifest) []string {
-	var out []string
-	for _, d := range r.Dependencies(m) {
-		name := d.Name
-		if name == "" {
-			name = d.ID
-		}
-		switch d.State {
-		case DepMissing:
-			out = append(out, "先装扩展「"+name+"」")
-		case DepDisabled:
-			out = append(out, "先启用扩展「"+name+"」")
-		case DepOld:
-			out = append(out, fmt.Sprintf("扩展「%s」要 %s（现在是 %s）", name, d.Version, d.Installed))
-		}
+func (r *Registry) DependenciesContext(ctx context.Context, m *Manifest) []DependencyState {
+	var out []DependencyState
+	if m == nil {
+		return out
 	}
-	for _, point := range sortedKeys(m.Contributes) {
-		owner, name, ok := SplitExported(point)
-		if !ok {
-			continue
-		}
-		exporter := r.Get(owner)
-		if exporter == nil {
-			continue // said above: install it first
-		}
-		ep := exporter.Full.Exported(name)
-		if ep == nil {
-			out = append(out, fmt.Sprintf("扩展「%s」没有扩展点 %s", exporter.Full.Name, name))
-			continue
-		}
-		if err := checkExported(ep, m.Contributes[point]); err != nil {
-			out = append(out, fmt.Sprintf("给「%s」的 %s：%v", exporter.Full.Name, name, err))
-		}
+	g := r.dependencyGraph(ctx)
+	g.withManifest(m)
+	for _, d := range m.Depends {
+		out = append(out, g.state(d))
 	}
 	return out
 }
@@ -384,13 +345,19 @@ type ExportedContribution struct {
 // ContributionsTo are the contributions to exporter's points from the other extensions that are on, by point id: what
 // initialize's contributions_to_me says (and extension.contributions_changed).
 func (r *Registry) ContributionsTo(exporter string) map[string][]ExportedContribution {
+	return r.ContributionsToContext(context.Background(), exporter)
+}
+
+func (r *Registry) ContributionsToContext(ctx context.Context, exporter string) map[string][]ExportedContribution {
 	out := map[string][]ExportedContribution{}
-	ex := r.Get(exporter)
-	if ex == nil || ex.Full.Exports == nil {
+	g := r.dependencyGraph(ctx)
+	ex := g.nodes[exporter]
+	if ex == nil || ex.Full.Exports == nil || !g.ready(exporter) {
 		return out
 	}
-	for _, p := range r.List() {
-		if p.Record.ID == exporter || !p.Record.Enabled || p.Problem != "" {
+	for _, id := range sortedKeys(g.nodes) {
+		p := g.nodes[id]
+		if id == exporter || !p.Full.DependsOn(exporter) || !g.ready(id) {
 			continue
 		}
 		for _, point := range sortedKeys(p.Manifest.Contributes) {
@@ -399,9 +366,11 @@ func (r *Registry) ContributionsTo(exporter string) map[string][]ExportedContrib
 				continue
 			}
 			var items []json.RawMessage
-			_ = json.Unmarshal(p.Manifest.Contributes[point], &items)
+			if json.Unmarshal(p.Manifest.Contributes[point], &items) != nil {
+				continue
+			}
 			for _, it := range items {
-				out[name] = append(out[name], ExportedContribution{Extension: p.Record.ID, Item: it})
+				out[name] = append(out[name], ExportedContribution{Extension: id, Item: it})
 			}
 		}
 	}

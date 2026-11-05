@@ -37,6 +37,7 @@
   写成 `(cd … && python3 … > log 2>&1 &)` 时，后台那层 shell 还拿着脚本的 stdout，`脚本 | tail` 永远等不到结尾，
   脚本早跑完了也不会唤醒等它的会话（2026-11-01 停了将近 6 小时）。
 - macOS 的 sed 不认 `\b`，整词替换用 `perl -pi -e 's/\bFoo\b/Bar/g'`。
+- Go 构建临时盘不足时，`GOTMPDIR` 指向**仓库外、短的物理目录**，`GOCACHE` 用本车道独立缓存（#2469）。`go test` 会把该临时目录传给测试：放进 worktree 会让「不在仓库里」的夹具被 Git 当成真实仓库，甚至尝试真实 fetch/push；路径过长会让 Unix socket 报 `bind: invalid argument`。不要用短符号链接掩盖长目录，Git 的 canonical root 与夹具的逻辑路径会不一致，目录拒绝测试也可能改变结果。保留失败记录，换合适目录重跑，不删共享缓存或抬测试基线。
 - 服务端测试以前都连同一个 `jarvis_test` 库：几个车道和部署同时跑，互相清掉、迁移对方的表，测试拿到空的或别人的数据随机失败（#545、#556、#583）。
   现在有库的测试包在 `TestMain` 里调 `dbtest.Main`（`server/internal/db/dbtest`）：每个测试二进制在 `JARVIS_TEST_DATABASE_URL` 旁边建自己的
   `jarvis_test_<时间>_<随机>`，跑完删掉（被杀掉留下的，6 小时后由下一次运行清掉）；测试里再起的子进程（假 node）沿用父进程的库。

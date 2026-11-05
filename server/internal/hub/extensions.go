@@ -338,7 +338,7 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 	ps.reg = reg
 	ps.mu.Unlock()
 	ps.loadSandboxes(ctx) // before any of them starts (extension_sandbox.go)
-	for _, p := range reg.List() {
+	for _, p := range reg.DependencyOrder() {
 		if len(p.Manifest.Items("connectors")) > 0 {
 			ps.apply(ctx, p.Record.ID)
 		}
@@ -364,7 +364,7 @@ func (h *Hub) startExtensions(ctx context.Context) {
 	if ps.h == nil {
 		ps.h, ps.ctx = h, ctx
 	}
-	for _, p := range ps.reg.List() {
+	for _, p := range ps.reg.DependencyOrder() {
 		if hp := ps.get(p.Record.ID); hp == nil || hp.pending {
 			ps.apply(ctx, p.Record.ID)
 		}
@@ -379,8 +379,12 @@ func (ps *extensions) changed(c extension.Change) {
 		ctx = context.Background()
 	}
 	ps.apply(ctx, c.ID)
-	ps.modelChanged(ctx, c)
-	if now := ps.reg.Get(c.ID); ps.h != nil && (now != nil && now.Manifest.NodeProgram() != nil || c.Old != nil && c.Old.Manifest.NodeProgram() != nil) {
+	affected := ps.modelChanged(ctx, c)
+	nodeChanged := c.Old != nil && c.Old.Manifest.NodeProgram() != nil
+	for _, p := range affected {
+		nodeChanged = nodeChanged || p.Manifest.NodeProgram() != nil
+	}
+	if ps.h != nil && nodeChanged {
 		ps.h.syncExtensionNodesEverywhere(ctx) // its program on computers starts, changes or stops there (extension_nodes.go)
 	}
 	if ps.h != nil {
@@ -752,7 +756,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			}
 		}
 		if m.Exports != nil {
-			params.ContributionsToMe = ps.reg.ContributionsTo(id)
+			params.ContributionsToMe = ps.reg.ContributionsToContext(ctx, id)
 		}
 		return params, nil
 	}

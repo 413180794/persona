@@ -77,9 +77,14 @@ func (h *Hub) resolveBundle(ctx context.Context, pv *extension.Preview, market s
 	var walk func(m *extension.Manifest, market string, depth int)
 	walk = func(m *extension.Manifest, market string, depth int) {
 		var wants []want
-		for _, d := range reg.Dependencies(m) {
+		for _, d := range reg.DependenciesContext(ctx, m) {
 			if d.State == extension.DepMissing || d.State == extension.DepOld {
 				wants = append(wants, want{d.ID, "", d.Version})
+			} else if d.State == extension.DepNotReady && !seen[d.ID] {
+				seen[d.ID] = true
+				if cur := reg.Snapshot(d.ID); cur != nil {
+					walk(cur.Full, extension.FromMarket(cur.Record.Origin), depth+1)
+				}
 			}
 		}
 		for _, pm := range m.ExtensionPack {
@@ -125,6 +130,13 @@ func (h *Hub) resolveBundle(ctx context.Context, pv *extension.Preview, market s
 		}
 	}
 	walk(pv.Manifest, market, 1)
+	candidates := []*extension.Manifest{pv.Manifest}
+	for _, member := range pv.Bundle {
+		candidates = append(candidates, member.Manifest)
+	}
+	if err := reg.ValidateDependencyGraph(candidates...); err != nil {
+		pv.Unresolved = append(pv.Unresolved, err.Error())
+	}
 }
 
 // bundleRef is one preview of a bundle as the install request sends it back.
@@ -146,7 +158,7 @@ func (h *Hub) installBundle(ctx context.Context, main *extension.Preview, digest
 	bundled := func(id string) bool {
 		return slices.ContainsFunc(main.Bundle, func(b *extension.Preview) bool { return b.Manifest.ID == id })
 	}
-	for _, d := range h.extensions.reg.Dependencies(main.Manifest) {
+	for _, d := range h.extensions.reg.DependenciesContext(ctx, main.Manifest) {
 		if d.State == extension.DepMissing && !bundled(d.ID) {
 			return i18n.Err("hub-extension_model.install_dependency", i18n.Args{"id": d.ID})
 		}
@@ -160,6 +172,13 @@ func (h *Hub) installBundle(ctx context.Context, main *extension.Preview, digest
 		}
 	}
 	reg := h.extensions.reg
+	candidates := []*extension.Manifest{main.Manifest}
+	for _, member := range main.Bundle {
+		candidates = append(candidates, member.Manifest)
+	}
+	if err := reg.ValidateDependencyGraph(candidates...); err != nil {
+		return err
+	}
 	for _, b := range main.Bundle {
 		var err error
 		if b.Upgrade {
@@ -255,13 +274,18 @@ func (ps *extensions) packMembers(p *extension.Extension) []string {
 
 // modelChanged follows a change of one extension through the others: the ones depending on it start or wait
 // (Missing), and the extensions it contributes to hear of their contributions (extension.contributions_changed).
-func (ps *extensions) modelChanged(ctx context.Context, c extension.Change) {
-	for _, p := range ps.reg.Dependents(c.ID) {
-		ps.apply(ctx, p.Record.ID)
-	}
+func (ps *extensions) modelChanged(ctx context.Context, c extension.Change) []*extension.Extension {
+	affected := ps.reg.DependencyOrder(c.ID)
 	var to []string
-	if now := ps.reg.Get(c.ID); now != nil {
-		to = now.Full.ContributesTo()
+	for _, p := range affected {
+		if p.Record.ID != c.ID {
+			ps.apply(ctx, p.Record.ID)
+		}
+		for _, id := range p.Full.ContributesTo() {
+			if !slices.Contains(to, id) {
+				to = append(to, id)
+			}
+		}
 	}
 	if c.Old != nil {
 		for _, id := range c.Old.Full.ContributesTo() {
@@ -272,7 +296,8 @@ func (ps *extensions) modelChanged(ctx context.Context, c extension.Change) {
 	}
 	for _, id := range to {
 		if hp := ps.get(id); hp != nil && hp.proc != nil {
-			_ = hp.proc.Notify("extension.contributions_changed", map[string]any{"contributions_to_me": ps.reg.ContributionsTo(id)})
+			_ = hp.proc.Notify("extension.contributions_changed", map[string]any{"contributions_to_me": ps.reg.ContributionsToContext(ctx, id)})
 		}
 	}
+	return affected
 }

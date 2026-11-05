@@ -4,5 +4,7 @@
   "needs_version": "Needs {version}, has {installed}",
   "newer_version": "a newer version",
   "older_version": "an older one",
-  "satisfied": "Met"
+  "satisfied": "Met",
+  "not_ready": "Dependency not ready",
+  "unknown_state": "Status not confirmed"
 }

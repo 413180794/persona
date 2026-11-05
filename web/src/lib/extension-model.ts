@@ -53,6 +53,8 @@ export function dependencyText(d: DependencyState): string {
     case "missing": return t("lib-extension-model.not_installed");
     case "disabled": return t("lib-extension-model.enable_first");
     case "old": return t("lib-extension-model.needs_version", { version: d.version || t("lib-extension-model.newer_version"), installed: d.installed || t("lib-extension-model.older_version") });
-    default: return [t("lib-extension-model.satisfied"), d.installed].filter(Boolean).join(" · ");
+    case "not_ready": return t("lib-extension-model.not_ready");
+    case "ok": return [t("lib-extension-model.satisfied"), d.installed].filter(Boolean).join(" · ");
+    default: return t("lib-extension-model.unknown_state");
   }
 }

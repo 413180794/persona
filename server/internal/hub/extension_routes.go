@@ -56,7 +56,7 @@ func (ps *extensions) detail(ctx context.Context, p *extension.Extension) Extens
 	m := p.Full
 	d := ExtensionDetail{ExtensionView: ps.view(ctx, p), Publisher: m.Publisher, Homepage: m.Homepage, Origin: p.Record.Origin,
 		PreviousVersion: p.Record.PreviousVersion, ReadOnly: p.ReadOnly(), Form: p.Schema, Permissions: extension.Explain(m),
-		Contributions: ps.contributionViews(p), Depends: ps.reg.Dependencies(m), ExtensionPack: m.ExtensionPack}
+		Contributions: ps.contributionViews(p), Depends: ps.reg.DependenciesContext(ctx, m), ExtensionPack: m.ExtensionPack}
 	if d.Permissions == nil {
 		d.Permissions = []extension.PermissionLine{}
 	}

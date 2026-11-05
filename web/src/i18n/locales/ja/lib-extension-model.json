@@ -4,5 +4,7 @@
   "needs_version": "{version}が必要（現在は{installed}）",
   "newer_version": "新しいバージョン",
   "older_version": "古いバージョン",
-  "satisfied": "条件を満たしています"
+  "satisfied": "条件を満たしています",
+  "not_ready": "依存先の設定待ち",
+  "unknown_state": "状態の確認待ち"
 }
