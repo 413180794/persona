@@ -1,0 +1,298 @@
+package hub
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// Subscription rate-limit windows across machines (#2432, docs/usage-windows.md). Every node reads its agents'
+// local files and answers usage.windows; the hub asks the machines that are online (at most every usageHubFresh),
+// remembers each machine's last answer, and merges them into one list per account: the same account on two
+// computers shows once, with the newest numbers. Nothing here is stored: a restarted hub asks again, and an offline
+// machine's last answer is only kept in memory until it is older than usageHubMaxAge.
+
+const (
+	usageHubFresh      = 30 * time.Second // the hub's own answer stands this long for every app reading it
+	usageHubAsk        = 8 * time.Second  // per machine
+	usageHubStaleAfter = 30 * time.Minute // a sample older than this is shown as stale
+	usageHubMaxAge     = 3 * 24 * time.Hour
+)
+
+// usageWindows is hub.json machines[].usage_windows: the machine's node reads the windows unless it says false.
+func (m *Machine) usageWindows() bool { return m.cfg.UsageWindows == nil || *m.cfg.UsageWindows }
+
+// usageSource is a machine as the aggregator sees it.
+type usageSource struct {
+	id     string
+	online bool
+	ask    func(ctx context.Context) (proto.UsageSnapshot, error)
+}
+
+type usageAnswer struct {
+	accounts []proto.UsageAccount
+	at       time.Time // when the node answered (the hub's clock)
+}
+
+type usageWindowsHub struct {
+	mu        sync.Mutex
+	byMachine map[string]usageAnswer
+	merged    []proto.UsageAccount
+	at        time.Time
+	loading   chan struct{} // closed when the poll in flight is done
+}
+
+// usageSources are the machines whose node may be asked: the off switch in hub.json is honoured here as well as by
+// the node, so a machine that is off is not even called.
+func (h *Hub) usageSources() []usageSource {
+	var out []usageSource
+	for _, m := range h.machinesNow() {
+		if !m.usageWindows() {
+			continue
+		}
+		m.mu.Lock()
+		online := m.online
+		m.mu.Unlock()
+		out = append(out, usageSource{id: m.cfg.ID, online: online, ask: func(ctx context.Context) (proto.UsageSnapshot, error) {
+			var snap proto.UsageSnapshot
+			err := m.call(ctx, "usage.windows", map[string]any{}, &snap)
+			return snap, err
+		}})
+	}
+	return out
+}
+
+// poll asks the online machines (in parallel) and returns the merged accounts. Concurrent callers share one poll.
+func (u *usageWindowsHub) poll(ctx context.Context, sources []usageSource, now time.Time) []proto.UsageAccount {
+	u.mu.Lock()
+	if u.merged != nil && now.Sub(u.at) < usageHubFresh {
+		out := u.merged
+		u.mu.Unlock()
+		return out
+	}
+	if wait := u.loading; wait != nil { // someone is asking already: take their answer
+		u.mu.Unlock()
+		select {
+		case <-wait:
+		case <-ctx.Done():
+		}
+		u.mu.Lock()
+		out := u.merged
+		u.mu.Unlock()
+		return out
+	}
+	done := make(chan struct{})
+	u.loading = done
+	u.mu.Unlock()
+
+	answers := make([]*usageAnswer, len(sources))
+	var wg sync.WaitGroup
+	for i, s := range sources {
+		if !s.online {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c, cancel := context.WithTimeout(context.WithoutCancel(ctx), usageHubAsk)
+			defer cancel()
+			snap, err := s.ask(c)
+			if err != nil { // an older node does not know usage.windows; a failed call keeps the last answer
+				return
+			}
+			if !snap.Enabled {
+				answers[i] = &usageAnswer{} // the node is off: forget what it said
+				return
+			}
+			answers[i] = &usageAnswer{accounts: snap.Accounts, at: now}
+		}()
+	}
+	wg.Wait()
+
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.byMachine == nil {
+		u.byMachine = map[string]usageAnswer{}
+	}
+	known := map[string]bool{}
+	for i, s := range sources {
+		known[s.id] = true
+		if a := answers[i]; a != nil {
+			if a.at.IsZero() {
+				delete(u.byMachine, s.id)
+			} else {
+				u.byMachine[s.id] = *a
+			}
+		}
+	}
+	var all []proto.UsageAccount
+	for id, a := range u.byMachine {
+		if !known[id] || now.Sub(a.at) > usageHubMaxAge { // a machine taken out of hub.json, or one gone for days
+			delete(u.byMachine, id)
+			continue
+		}
+		all = append(all, a.accounts...)
+	}
+	u.merged, u.at = mergeUsageAccounts(all, now), now
+	u.loading = nil
+	close(done)
+	return u.merged
+}
+
+// mergeUsageAccounts makes one account of the samples that are the same account, drops what has run out and orders
+// the result for the sidebar.
+//
+// Two samples are the same account when they are of one provider and share a window: the same length that resets
+// at the same second (a window's reset time is the account's, wherever it was read). Their windows are then taken
+// per length from the newest sample, so a machine that was idle since the 5-hour window rolled over does not bring
+// the old one back. Windows that have reset by now are dropped (their number is the last period's) and an account
+// with none left is not listed. Older than usageHubMaxAge is dropped, older than usageHubStaleAfter is marked stale.
+// The most used account comes first, stale ones last; two accounts with one name are numbered by their id.
+func mergeUsageAccounts(in []proto.UsageAccount, now time.Time) []proto.UsageAccount {
+	var live []proto.UsageAccount
+	for _, a := range in {
+		if now.Sub(a.SampledAt) > usageHubMaxAge {
+			continue
+		}
+		var wins []proto.UsageWindow
+		for _, w := range a.Windows {
+			if w.ResetsAt != nil && !w.ResetsAt.After(now) {
+				continue
+			}
+			wins = append(wins, w)
+		}
+		if len(wins) == 0 {
+			continue
+		}
+		a.Windows = wins
+		live = append(live, a)
+	}
+
+	// union-find over the samples
+	parent := make([]int, len(live))
+	for i := range parent {
+		parent[i] = i
+	}
+	var find func(i int) int
+	find = func(i int) int {
+		for parent[i] != i {
+			parent[i] = parent[parent[i]]
+			i = parent[i]
+		}
+		return i
+	}
+	type key struct {
+		provider string
+		minutes  int
+		resets   int64
+	}
+	seen := map[key]int{}
+	for i, a := range live {
+		for _, w := range a.Windows {
+			if w.ResetsAt == nil {
+				continue
+			}
+			k := key{a.Provider, w.WindowMinutes, w.ResetsAt.Unix()}
+			if j, ok := seen[k]; ok {
+				parent[find(i)] = find(j)
+			} else {
+				seen[k] = i
+			}
+		}
+	}
+	groups := map[int][]proto.UsageAccount{}
+	var order []int
+	for i, a := range live {
+		r := find(i)
+		if _, ok := groups[r]; !ok {
+			order = append(order, r)
+		}
+		groups[r] = append(groups[r], a)
+	}
+
+	out := []proto.UsageAccount{} // never nil: nil means "not asked yet" to poll
+	for _, r := range order {
+		members := groups[r]
+		sort.SliceStable(members, func(i, j int) bool { return members[i].SampledAt.After(members[j].SampledAt) })
+		acct := proto.UsageAccount{Provider: members[0].Provider, Name: members[0].Name, Plan: members[0].Plan, SampledAt: members[0].SampledAt}
+		byLen := map[int]proto.UsageWindow{}
+		for _, m := range members {
+			if acct.Plan == "" && m.Plan != "" { // the newest sample that knows the plan names the account
+				acct.Plan, acct.Name = m.Plan, m.Name
+			}
+			for _, w := range m.Windows {
+				if _, ok := byLen[w.WindowMinutes]; !ok {
+					byLen[w.WindowMinutes] = w
+				}
+			}
+		}
+		for _, w := range byLen {
+			acct.Windows = append(acct.Windows, w)
+		}
+		sort.Slice(acct.Windows, func(i, j int) bool { return acct.Windows[i].WindowMinutes < acct.Windows[j].WindowMinutes })
+		acct.ID = usageAccountID(acct)
+		acct.Stale = now.Sub(acct.SampledAt) > usageHubStaleAfter
+		out = append(out, acct)
+	}
+
+	// two accounts with one name: "Codex Pro", "Codex Pro 2", numbered by id so that it does not change with the numbers
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	count := map[string]int{}
+	for i := range out {
+		count[out[i].Name]++
+		if n := count[out[i].Name]; n > 1 {
+			out[i].Name = fmt.Sprintf("%s %d", out[i].Name, n)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Stale != out[j].Stale {
+			return !out[i].Stale
+		}
+		if a, b := mostUsed(out[i]), mostUsed(out[j]); a != b {
+			return a > b
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func mostUsed(a proto.UsageAccount) float64 {
+	var m float64
+	for _, w := range a.Windows {
+		m = max(m, w.UsedPercent)
+	}
+	return m
+}
+
+// usageAccountID is stable while the account's longest window is: it names the window by length and reset time, which
+// only change when that window rolls over (a week), not with every number.
+func usageAccountID(a proto.UsageAccount) string {
+	w := a.Windows[len(a.Windows)-1]
+	var resets int64
+	if w.ResetsAt != nil {
+		resets = w.ResetsAt.Unix()
+	}
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d", a.Provider, w.WindowMinutes, resets)))
+	return a.Provider + "-" + hex.EncodeToString(sum[:4])
+}
+
+// usageWindowRoutes: GET /api/v1/usage/windows, the accounts' windows for the sidebar's usage bars. Read-only, from
+// local files on the machines (docs/usage-windows.md); an empty list when no machine has any.
+// (#2432: its own block so that merges with the other route blocks stay additive.)
+func (h *Hub) usageWindowRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/v1/usage/windows", func(w http.ResponseWriter, r *http.Request) {
+		now := time.Now()
+		accounts := h.usageWin.poll(r.Context(), h.usageSources(), now)
+		if accounts == nil {
+			accounts = []proto.UsageAccount{}
+		}
+		writeJSON(w, map[string]any{"accounts": accounts, "checked_at": now.UTC()})
+	})
+}

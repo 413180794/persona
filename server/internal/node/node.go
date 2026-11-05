@@ -95,6 +95,7 @@ type Node struct {
 	cdirs     *claudeDirs                // Claude Code config directories in use (claudedirs.go)
 	hooks     *hookTurns                 // per-session turn counters from Persona's hooks (hookturn.go)
 	codices   *codexRegistry
+	usageWin  usageWindowsState // subscription rate-limit windows (usagewindows.go, #2432)
 	machineID string
 	sends     sentLog         // recent client_msg_ids (sendsafe.go)
 	echoes    echoLog         // sends tied to their transcript lines (echo.go)
@@ -278,6 +279,7 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	go n.warmTranscripts(ctx)
 	go n.reapAssistants(ctx)
 	go n.meterUsage(ctx)
+	go n.runUsageWindows(ctx.Done())
 	go n.sampleMetrics(ctx)
 	go n.watchPorts(ctx)
 	n.startTodoTokensReconciler(ctx)
@@ -497,6 +499,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			// ClaudeGlobalHooks: report-only hooks in the default claude config directory's settings.json
 			// (hub.json machines[].claude_global_hooks, globalhooks.go); nil (an older hub) leaves them as they are.
 			ClaudeGlobalHooks *bool `json:"claude_global_hooks"`
+			// UsageWindows: read the agents' subscription rate-limit windows (hub.json machines[].usage_windows,
+			// usagewindows.go, #2432); nil (an older hub) leaves it as it is.
+			UsageWindows *bool `json:"usage_windows"`
 			// AgentFilters: the extensions' filters of sessions left out (agentfilters.go); nil (an older hub, a call
 			// that says nothing of them) leaves them as they are.
 			AgentFilters *[]proto.AgentFilter `json:"agent_filters"`
@@ -535,10 +540,15 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if c.ClaudeGlobalHooks != nil {
 			n.applyGlobalHooks(*c.ClaudeGlobalHooks)
 		}
+		if c.UsageWindows != nil {
+			n.setUsageWindows(*c.UsageWindows)
+		}
 		if c.AgentFilters != nil {
 			n.setAgentFilters(*c.AgentFilters)
 		}
 		return map[string]any{"claude_dirs": n.claudeConfigDirs()}, nil
+	case "usage.windows": // subscription rate-limit windows read from local files (usagewindows.go, #2432)
+		return n.usageSnapshot(false), nil
 	case "launchers.list":
 		ls, err := n.launchers(ctx)
 		if bl := n.runtimes.launchers(); len(bl) > 0 {

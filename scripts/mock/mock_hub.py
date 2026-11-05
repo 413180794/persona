@@ -7658,6 +7658,22 @@ if MOCK_COMPUTER:
 # MOCK_BROWSER_ANALYTICS=off has them off. 安装 ego lite and 打开 ego lite move on by the clock (MOCK_COMPUTER_STEP
 # seconds a step); an open setup is done a few steps later. Mac Studio is a Mac it is not on for, not installed.
 MOCK_BROWSER = os.environ.get("MOCK_BROWSER", "")
+
+def mock_usage_windows():
+    """GET /api/v1/usage/windows (#2432): two Codex / Claude accounts relative to now; MOCK_USAGE=none has none."""
+    if os.environ.get("MOCK_USAGE") == "none":
+        return {"accounts": []}
+    now = time.time()
+    iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+    win = lambda label, mins, used, left: {"label": label, "window_minutes": mins, "used_percent": used, "resets_at": iso(now + left)}
+    return {"accounts": [
+        {"id": "claude-1", "provider": "claude", "name": "Claude", "sampled_at": iso(now - 12),
+         "windows": [win("5h", 300, 86, 55 * 60), win("7d", 10080, 41, (2 * 24 + 3) * 3600)]},
+        {"id": "codex-1", "provider": "codex", "name": "Codex Pro", "plan": "pro", "sampled_at": iso(now - 190),
+         "windows": [win("5h", 300, 22, 4 * 3600), win("7d", 10080, 63, (3 * 24 + 5) * 3600)]},
+        {"id": "codex-2", "provider": "codex", "name": "Codex Plus", "plan": "plus", "sampled_at": iso(now - 3 * 3600), "stale": True,
+         "windows": [win("7d", 10080, 12, 5 * 24 * 3600)]},
+    ], "checked_at": iso(now)}
 BROWSER_JOBS = {}  # machine id -> {"kind": install|open, "at": started, "started": iso, "cancelled": bool}
 BROWSER_INSTALL_STEPS = ["下载 ego lite", "校验签名和公证", "装进「应用程序」"]
 
@@ -8892,6 +8908,8 @@ class H(BaseHTTPRequestHandler):
             if machine is None or "computer" not in machine:
                 return self.send_json({"error": "操控电脑的插件没打开，或这台不是 Mac"}, 404)
             return self.send_json(computer_now(machine))
+        if p == "/api/v1/usage/windows":  # subscription rate-limit windows (#2432); MOCK_USAGE=none answers no accounts
+            return self.send_json(mock_usage_windows())
         if p == "/api/v1/metrics":
             return self.send_json({"machines": [machine_metrics(m["id"], 3600, 60) for m in MACHINES if kept(m["id"])], "step": 60})
         if p.startswith("/api/v1/machines/") and p.endswith("/metrics"):

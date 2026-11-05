@@ -1,0 +1,1 @@
+{"rate_limits":{"five_hour":{"used_percentage":5,"resets_at":"2026-11-05T12:00:00Z"},"seven_day":{"used_percentage":70,"resets_at":1794300000000},"spend_limit":{"used_usd":3,"limit_usd":10,"period":"month"}}}

@@ -1,0 +1,16 @@
+{
+  "title": "サブスクリプションの利用上限",
+  "stale_title": "データが古くなっています",
+  "stale_age": "古いデータ · {age}",
+  "used_label": "{name}：{percent}使用済み",
+  "window_used_label": "{name} {window}：{percent}使用済み",
+  "pace_over": "ペースが速い",
+  "pace_under": "ペースが遅い",
+  "pace_on": "ペース通り",
+  "due": "まもなくリセット",
+  "minutes": "{m}分",
+  "hours": "{h}時間",
+  "days_hours": "{d}日{h}時間",
+  "reset_in": "{countdown}後にリセット",
+  "reset_at": "{time}にリセット"
+}

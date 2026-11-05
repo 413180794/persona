@@ -64,6 +64,9 @@ type MachineConfig struct {
 	// settings.json, so the sessions Persona did not start report their turns and cards too (docs/claude-integration.md
 	// 「全局只报告的 hooks」). Off unless set; false (or removing the key) takes them out again.
 	ClaudeGlobalHooks bool `json:"claude_global_hooks,omitempty"`
+	// UsageWindows false: the machine's node does not read the agents' subscription rate-limit windows (Codex's
+	// rollouts, a Claude Code status line drop) and the hub does not ask it (docs/usage-windows.md, #2432); unset reads them.
+	UsageWindows *bool `json:"usage_windows,omitempty"`
 
 	// ClaudeStartDir is the CLAUDE_CONFIG_DIR the agents Persona starts with plain claude use on this machine, for a
 	// computer whose claude is logged in under a profile directory rather than ~/.claude (#1459); "~/" is the remote

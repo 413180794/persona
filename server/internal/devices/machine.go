@@ -45,6 +45,8 @@ type MachineConfig struct {
 	ClaudeStartDir   string   `json:"claude_start_dir,omitempty"`
 	// ClaudeGlobalHooks: the node puts report-only hooks into its default claude config directory (hub/config.go).
 	ClaudeGlobalHooks bool `json:"claude_global_hooks,omitempty"`
+	// UsageWindows false: the node does not read the agents' subscription rate-limit windows (hub/config.go, #2432).
+	UsageWindows *bool `json:"usage_windows,omitempty"`
 }
 
 // Machine is the manager's connection to one node: a local subprocess, `ssh host jarvisd node --stdio`, a tailcat

@@ -137,6 +137,9 @@ type Hub struct {
 	// The looks built into personad (persona.go; nil in unit tests) and the tier each tiered look shows (persona_tiers.go).
 	builtinLooks fs.FS
 	tiers        personaTierState
+
+	// usageWin: subscription rate-limit windows across machines (usagewindows.go, #2432)
+	usageWin usageWindowsHub
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.

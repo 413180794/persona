@@ -575,6 +575,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?,"locale"?}`；`locale` 是这台设备的界面语言（`zh-Hans` / `en` / `ja`），推给它的通知用这种语言，没带用用户语言；后三个是推送中继（手机公钥、中继地址、中继给的凭据，`docs/push-relay.md`），hub 没有 APNs key 时据此推送。互联组里只有中心推送：连成员时这条也被转给中心；推送的 payload（直推的和经中继密封的）顶层带 `hub_id`：中心的（[mesh.md](mesh.md)「凭据和推送」）。`mac` 是 Mac App（同一个 bundle id，同一个 topic）：不收静默唤醒，它连着 hub 时不收「需要你处理」「Agent 做完」（App 自己发本地通知）。hub 记下是哪个设备凭据登记的，吊销那个凭据时连这台设备一起删掉，不再推送 |
 | POST | `/api/v1/devices/{id}/live-activity` | 实时活动的 token：`{"push_to_start_token"}`、`{"activity_id","push_token"}`（会轮换，重复发）、`{"activity_id","ended":true}`（`docs/live-activity.md`） |
 | GET | `/api/v1/fleet` | `{"fleet": FleetState}`：当前的实时活动内容（App 回到前台时拉），`stats` 带全部数字和每台机器的负载 |
+| GET | `/api/v1/usage/windows` | `{"accounts": [{id, provider, name, plan?, windows: [{label, window_minutes, used_percent, resets_at?}], sampled_at, stale?}], "checked_at"}`：各台电脑的 node 从本机文件读到的 Codex / Claude 订阅额度窗口，hub 合并同一个账号、按最满的窗口排序；没有数据是 `[]`（`docs/usage-windows.md`，#2432） |
 | GET | `/api/v1/metrics` | `{"machines": [{machine_id, online, system, latest: MetricSample \| 无, points: [MetricPoint]}], "step": 60}`：App「机器」页每张卡片上的现在值和走势，按配置顺序的每台机器，`points` 是最近 1 小时、每分钟一个点；`latest` 只在 30 秒内收到过样本时有（`docs/machines.md`） |
 | GET | `/api/v1/machines/{id}/metrics?range=1h\|6h\|24h` | `{"metrics": {同上一台}, "range", "step"}`：机器详情的曲线，步长 10 / 60 / 240 秒（约 360 个点）；没有这台机器 404，range 不对 400 |
 | GET | `/api/v1/usage` | `{"usage": {tpm, tokens, output, requests, machines:[{id, tpm, tokens, load}]}}`：所有机器的 token 用量（今天按手机时区算，`load` 是 1 分钟负载 / 核数），见 `docs/live-activity.md`「用量」 |
@@ -1082,6 +1083,8 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
   老 node 不带，hub 照旧用 `computer.*`、`browser.*`（新 node 也照答）。见 `docs/extensions.md`「内置的 node 程序」。
 - `herdr.server.start`（hub → node，无参数，回 `{running}`）：用户点了 Agents 列表的「启动」。不受 `herdr_autostart` 约束，
   起不来时按 `engine_missing` 那一套回原因。老 node 没有这个方法，hub 回 502 而不是说 herdr 起不来。
+- `usage.windows`（hub → node，无参数，回 `{enabled, collected_at, accounts: [UsageAccount]}`，#2432）：node 读本机 Codex 的 rollout 和 Claude 状态栏落下的文件得到的订阅额度窗口，
+  只读本机文件、不碰凭据。`node.configure` 的 `usage_windows`（hub.json `machines[].usage_windows`）为 false 时回 `{enabled: false, accounts: []}`。老 node 没有这个方法，hub 当它没有数据（`docs/usage-windows.md`）。
 - 并列时没有窗格的操作（新建、继续会话、改名）固定走经典 herdr（node 的 `defaultHost` / `defaultHostKind`）；
   每个窗格的操作（读屏、发送、按键、关闭）按窗格 id 的 host kind 路由，herdr-core 的窗格只受 herdr-core 能力限制。
 - **`paseo`（显示名「Paseo」，`docs/paseo.md`）不是终端宿主**：node 不注册宿主，自己运行 Paseo 的桥（`node/paseobridge.go`）。

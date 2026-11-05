@@ -636,6 +636,13 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 - **设置 › 通用 ›「这个浏览器」›「安装为 App」**（`lib/pwa.ts`）：浏览器给了安装提示（Chrome、Edge）就是一个「安装」按钮；
   iPhone / iPad 提示 Safari 分享菜单的「添加到主屏幕」，Mac 上的 Safari 提示「文件 › 添加到程序坞」，http 下的其他浏览器说明要 https，别的指向浏览器菜单；已经在独立窗口里时显示「已安装」。
 
+## 订阅额度（侧边栏底部，#2432）
+
+侧边栏最下面（Agents 列表之下）：最满的两个订阅账号各一条细条，≥ 80% 变警示色；点开是浮层，每个账号每个窗口一行（长度、已用 %、条、重置倒计时、节奏提示），
+标题右边是采样时间。**没有数据时整块不画**。数据来自 `GET /api/v1/usage/windows`（每台电脑的 node 读本机文件，hub 合并同一个账号），
+每分钟刷新一次，页面不在前台时不请求。节奏、倒计时的算法和 Claude 额度怎么接入见 [usage-windows.md](usage-windows.md)。
+代码：`lib/usage-windows.ts`（纯函数，有单测）、`views/UsageBars.tsx`；假 hub 有 `MOCK_USAGE=none` 模拟没有数据。
+
 ## 注意力信号（标签页标题、图标角标、提示音，#2332）
 
 人不盯着网页时，也要知道有 Agent 在等自己。逻辑在 `src/lib/attention.ts`（纯函数，有单测），页面副作用在 `src/lib/attention-signals.ts`，`App.tsx` 里只有一次 `useAttentionSignals(title, pane)` 调用（它接管了原来设 `document.title` 的那个 effect）。
@@ -811,6 +818,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 机器详情（Agent、1 / 6 / 24 小时曲线、系统信息、启动器） | 有 | #297 | |
 | 机器详情的「操控电脑」（开关、安装 Cua Driver、授权、屏幕共享、VNC） | 有 | #1326 | 「VNC」在新标签页打开网页的 `/screen/<机器>`（iOS 在 App 内的 WebView） |
 | 负载曲线、Linux 每核柱状图 | 有 | #433 | |
+| 订阅额度（Codex / Claude 的 5 小时、每周窗口，节奏提示） | 有 | #2432 | 侧边栏底部两条细条，点开浮层；手机端暂无 |
 | 机器详情的「引擎」（node 检测到的引擎、版本和说明，离线也能选，保存失败可重试） | 有 | #2071 | 在机器页里直接选，不像 iOS 另开一页 |
 | Orca 启动器、在 Orca 里新建 Agent | 没有 | — | #254（服务端在 #924 / #929） |
 | 外观：跟随系统 / 浅色 / 深色 | 有 | — | |

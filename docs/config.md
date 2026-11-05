@@ -253,6 +253,9 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   让不是 Persona 启动的会话也把回合和提问事件报给 Persona；写 `false` 或删掉这个键，下次连上时把 Persona 加的条目拿掉（没有就什么都不写）。
   不会加会阻塞的 hook：用户全局配置里常有别的工具的同步 PermissionRequest hook，叠加会拖住终端对话框（`docs/claude-integration.md`「全局只报告的 hooks」）。
   node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
+- `machines[].usage_windows`（可选，默认开）：写 `false` 时那台电脑的 node 不读 Codex / Claude 的订阅额度窗口（不读 rollout 里的 `rate_limits`，
+  不读 `~/.persona/usage/claude*.json`），hub 也不问它；不写就读，只读本机文件、不碰任何登录凭据，每 5 分钟一次（`docs/usage-windows.md`）。
+  node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
 - `microsoft`（可选）：Outlook 的「使用 Microsoft 账号登录」（`docs/mail.md`「Outlook 接入方式」）。`client_id` 是默认的 client ID
   （一般不用写：用户在 App 里填自己在 Microsoft Entra 注册的那个，加密存 hub，优先于这里）；`redirect_uri` 默认
   `jarvis-mail-oauth://outlook`，改了要和 Entra 里登记的一致。

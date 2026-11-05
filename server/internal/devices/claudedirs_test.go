@@ -277,3 +277,19 @@ func TestConfigureNodeSaysClaudeGlobalHooks(t *testing.T) {
 		t.Fatalf("claude_global_hooks in node.configure: %v", f.configure)
 	}
 }
+
+// hub.json machines[].usage_windows reaches the node on every connect: on unless it says false (#2432).
+func TestConfigureNodeSaysUsageWindows(t *testing.T) {
+	_, _, m, _ := dirsHub(t)
+	f := connectDirsNode(t, m)
+	ctx := context.Background()
+	m.configureNode(ctx, m.peer, nil)
+	off := false
+	m.cfg.UsageWindows = &off
+	m.configureNode(ctx, m.peer, nil)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.configure) != 2 || string(f.configure[0]["usage_windows"]) != "true" || string(f.configure[1]["usage_windows"]) != "false" {
+		t.Fatalf("usage_windows in node.configure: %v", f.configure)
+	}
+}

@@ -33,6 +33,7 @@ import { DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/Ses
 import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
 import { NodeMenu } from "./NodeMenu";
 import { NodePrompt } from "./NodePrompt";
+import { SidebarUsage } from "./UsageBars";
 import "../lib/node-palette";
 import { machineNode, termPaneNode, termSpaceNode, termTabNode, type MenuNode } from "../lib/node-actions";
 import { contextMenuProps } from "../ui/context-menu";
@@ -304,6 +305,8 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         {/* the phone's Agents page shows them already: the drawer over it doesn't build them twice */}
         {!(narrow && route.name === "agent-list") && <AgentsBlock reg={reg} hover={hover} activeKey={activeKey} go={go} onNewAgent={onNewAgent} onNavigate={onNavigate} foldable />}
       </div>
+      {/* subscription rate-limit windows (#2432): nothing is drawn without data */}
+      <SidebarUsage />
       <NodePrompt />
     </aside>
   );

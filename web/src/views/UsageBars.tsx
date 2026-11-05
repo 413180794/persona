@@ -1,0 +1,120 @@
+// The sidebar's bottom (#2432, docs/usage-windows.md): the two fullest subscription accounts as thin bars; a click opens
+// a popover with every window of every account, its reset countdown, when it was sampled and whether use is ahead of or
+// behind an even pace. Hidden entirely while the hub has no data.
+import { useEffect, useRef, useState } from "react";
+import { t as tr } from "../i18n";
+import { fullest, isWarn, liveAccounts, pace, PACE_LABEL, resetLabel, sampleAge, topAccounts, useUsageWindows, type PaceState, type UsageAccount, type UsageWindow } from "../lib/usage-windows";
+import { cx, EASE } from "../ui/atoms";
+
+const percent = (p: number) => Math.min(100, Math.max(0, p));
+const shown = (p: number) => `${Math.round(p)}%`;
+const fill = (p: number) => (isWarn(p) ? "bg-orange" : "bg-accent");
+const PACE_TEXT: Record<PaceState, string> = { over: "text-orange", under: "text-green", on: "text-ink-3" };
+
+/** A bar: the track, the used part (caution colour from 80%) and, with `expected`, a tick where an even pace would be. */
+export function Meter({ used, expected, label, tall }: { used: number; expected?: number; label: string; tall?: boolean }) {
+  return (
+    <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent(used))} className={cx("relative w-full rounded-full bg-inset", tall ? "h-1.5" : "h-1")}>
+      <div className={cx("h-full rounded-full transition-[width] duration-300", fill(used))} style={{ width: `${percent(used)}%` }} />
+      {expected !== undefined && <span aria-hidden data-pace-tick className="absolute -top-0.5 -bottom-0.5 w-0.5 -translate-x-1/2 rounded-full bg-ink-2" style={{ left: `${percent(expected)}%` }} />}
+    </div>
+  );
+}
+
+/** The sidebar's strip. `accounts` as the hub gave them; renders nothing when none is live. */
+export function UsageBars({ accounts, now = Date.now() }: { accounts: UsageAccount[]; now?: number }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const live = liveAccounts(accounts, now);
+  const top = topAccounts(live);
+
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    addEventListener("pointerdown", down, true);
+    addEventListener("keydown", key);
+    return () => {
+      removeEventListener("pointerdown", down, true);
+      removeEventListener("keydown", key);
+    };
+  }, [open]);
+
+  if (!top.length) return null;
+  return (
+    <div ref={ref} className="relative shrink-0 px-2.5 pb-2.5 pt-1" data-usage-bars>
+      {open && <UsagePopover accounts={live} />}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={tr("usage.title")}
+        className="touch-hit flex w-full flex-col gap-1.5 rounded-control px-2.5 py-2 text-left shadow-hairline transition-colors hover:bg-hover"
+      >
+        {top.map((a) => {
+          const used = fullest(a);
+          return (
+            <span key={a.id} className={cx("flex flex-col gap-1", a.stale && "opacity-60")} title={a.stale ? tr("usage.stale_title") : undefined}>
+              <span className="flex items-baseline gap-2">
+                <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-3">{a.name}</span>
+                <span className={cx("shrink-0 text-[11.5px] tabular-nums", isWarn(used) ? "text-orange" : "text-ink-2")}>{shown(used)}</span>
+              </span>
+              <Meter used={used} label={tr("usage.used_label", { name: a.name, percent: shown(used) })} />
+            </span>
+          );
+        })}
+      </button>
+    </div>
+  );
+}
+
+/** Every live account, window by window. `now` ticks while it is open so the countdowns and sample ages keep up. */
+export function UsagePopover({ accounts, now: fixed }: { accounts: UsageAccount[]; now?: number }) {
+  const [tick, setTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (fixed !== undefined) return;
+    const t = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [fixed]);
+  const now = fixed ?? tick;
+  return (
+    <div role="dialog" aria-label={tr("usage.title")} className="absolute bottom-full left-2.5 right-2.5 z-20 mb-1.5 max-h-[60vh] overflow-y-auto rounded-card bg-surface p-3 shadow-overlay" style={{ animation: `pop-in 160ms ${EASE} both`, transformOrigin: "bottom left" }}>
+      <div className="flex flex-col gap-3">
+        {accounts.map((a) => (
+          <section key={a.id} aria-label={a.name} className={cx("flex flex-col gap-2", a.stale && "opacity-70")}>
+            <header className="flex items-baseline gap-2">
+              <h3 className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ink">{a.name}</h3>
+              <span className="shrink-0 whitespace-nowrap text-[11px] text-ink-3">{a.stale ? tr("usage.stale_age", { age: sampleAge(a.sampled_at, now) }) : sampleAge(a.sampled_at, now)}</span>
+            </header>
+            {a.windows.map((w) => (
+              <WindowRow key={`${w.label}:${w.window_minutes}`} name={a.name} w={w} now={now} />
+            ))}
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WindowRow({ name, w, now }: { name: string; w: UsageWindow; now: number }) {
+  const p = pace(w, now);
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline gap-2 text-[11.5px]">
+        <span className="w-7 shrink-0 text-ink-2">{w.label}</span>
+        <span className={cx("shrink-0 tabular-nums", isWarn(w.used_percent) ? "text-orange" : "text-ink")}>{shown(w.used_percent)}</span>
+        {p && p.state !== "on" && <span className={cx("shrink-0 whitespace-nowrap", PACE_TEXT[p.state])}>{PACE_LABEL[p.state]}</span>}
+        <span className="min-w-0 flex-1 truncate text-right text-ink-3">{resetLabel(w.resets_at, now)}</span>
+      </div>
+      <Meter used={w.used_percent} expected={p?.expected} label={tr("usage.window_used_label", { name, window: w.label, percent: shown(w.used_percent) })} tall />
+    </div>
+  );
+}
+
+/** What the sidebar mounts. */
+export function SidebarUsage() {
+  return <UsageBars accounts={useUsageWindows()} />;
+}

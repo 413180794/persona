@@ -1,0 +1,16 @@
+{
+  "title": "Subscription limits",
+  "stale_title": "Data is out of date",
+  "stale_age": "Out of date · {age}",
+  "used_label": "{name}: {percent} used",
+  "window_used_label": "{name} {window}: {percent} used",
+  "pace_over": "Ahead of pace",
+  "pace_under": "Behind pace",
+  "pace_on": "On pace",
+  "due": "Resets soon",
+  "minutes": "{m}m",
+  "hours": "{h}h",
+  "days_hours": "{d}d {h}h",
+  "reset_in": "Resets in {countdown}",
+  "reset_at": "Resets at {time}"
+}

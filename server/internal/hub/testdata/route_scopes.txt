@@ -160,6 +160,7 @@ agents.read          GET /api/v1/sessions/{mid}/{sid}/screen
 todos.read           GET /api/v1/todos
 todos.read           GET /api/v1/todos/{id}/decisions
 -                    GET /api/v1/usage
+-                    GET /api/v1/usage/windows
 agents.read          GET /api/v1/workspace-board
 -                    GET /api/v1/workspace-board/settings
 agents.read          GET /api/v1/workspaces

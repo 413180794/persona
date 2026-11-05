@@ -243,6 +243,8 @@ func (h *Hub) routes() http.Handler {
 	h.personaRoutes(api)
 	h.botRoutes(api) // the channels' routes are the assistant's (assistantwire.Routes)
 	h.agentRoutes(api)
+	// usage windows (#2432)
+	h.usageWindowRoutes(api)
 	h.inboxRoutesRelayed(api)
 	h.connectorRoutes(api)
 	h.extensionRoutes(api)
