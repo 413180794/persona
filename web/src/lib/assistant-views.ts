@@ -139,9 +139,10 @@ export function applyBlock(conversation: string, key: string | undefined) {
 }
 
 /** The feed's snapshot: every live card, answer and registered block of the conversation (nothing is taken away). */
-export function applySnapshot(conversation: string, res: { views?: Record<string, AssistantView> | null; view_actions?: ViewAction[] | null; view_blocks?: string[] | null }) {
+export function applySnapshot(conversation: string, res: { views?: Record<string, AssistantView> | null; view_actions?: Record<string, ViewAction> | ViewAction[] | null; view_blocks?: string[] | null }) {
   for (const v of Object.values(res.views ?? {})) applyView(conversation, v);
-  for (const a of res.view_actions ?? []) applyAction(conversation, a);
+  // the hub sends the answers keyed by card (docs/protocol.md); Object.values also takes a list
+  for (const a of Object.values(res.view_actions ?? {})) applyAction(conversation, a);
   for (const k of res.view_blocks ?? []) applyBlock(conversation, k);
 }
 

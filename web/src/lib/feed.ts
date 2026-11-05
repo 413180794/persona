@@ -176,7 +176,7 @@ export async function loadFeed(conversation: string) {
   try {
     let last = st.feeds[conversation]?.at(-1)?.at;
     for (let n = 0; n < FEED_PAGES; n++) {
-      const res = await api<{ items: FeedItem[]; plans?: Record<string, TaskPlan>; views?: Record<string, AssistantView>; view_actions?: ViewAction[]; view_blocks?: string[] }>(
+      const res = await api<{ items: FeedItem[]; plans?: Record<string, TaskPlan>; views?: Record<string, AssistantView>; view_actions?: Record<string, ViewAction>; view_blocks?: string[] }>(
         `/assistant/conversations/${enc(conversation)}/feed${last ? `?since=${encodeURIComponent(last)}` : ""}`,
       );
       if (!st.feeds[conversation]) set({ feeds: { ...st.feeds, [conversation]: [] } });

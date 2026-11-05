@@ -20,6 +20,7 @@ import {
   type FeedItem,
   type TaskPlan,
 } from "./feed";
+import { conversationCards } from "./assistant-views";
 import { getPanel, openPanel } from "./panel";
 import { refreshTodos } from "./store";
 import type { Todo } from "./todos";
@@ -355,5 +356,26 @@ describe("loading a conversation's feed (docs/protocol.md: since, oldest first, 
     const got = getFeedState().feeds["c-pages"] ?? [];
     expect(got.length).toBe(1201);
     expect(got.at(-1)?.id).toBe("f1200");
+  });
+
+  it("reads past a full page and applies the snapshot when view_actions is an object, as the hub sends it", async () => {
+    const t0 = Date.parse("2026-01-02T00:00:00Z");
+    const all: FeedItem[] = Array.from({ length: 501 }, (_, i) => ({ id: `g${String(i).padStart(4, "0")}`, conversation: "c-snap", at: new Date(t0 + i * 1000).toISOString(), kind: "routed", ref: "r" }));
+    const answer = { key: "item-1/0", action: "b", client_msg_id: "cid-1", status: "sent", revision: 1, at: "2026-01-02T00:00:00Z" };
+    const fetcher = vi.fn(async (url: string) => {
+      const since = new URL(url, "http://hub").searchParams.get("since");
+      const items = all.filter((it) => !since || Date.parse(it.at) > Date.parse(since)).slice(0, 500);
+      // the hub's snapshot (server/internal/assistant/tasks.go): a map of answers, even when empty
+      const body = { items, plans: {}, views: {}, view_actions: since ? {} : { [answer.key]: answer }, view_blocks: ["item-1/0"] };
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    });
+    vi.stubGlobal("localStorage", { getItem: () => "jd_test" });
+    vi.stubGlobal("fetch", fetcher);
+    await loadFeed("c-snap");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(getFeedState().feeds["c-snap"]?.length).toBe(501);
+    const cards = conversationCards("c-snap");
+    expect(cards.actions["item-1/0"]?.client_msg_id).toBe("cid-1");
+    expect(cards.blocks["item-1/0"]).toBe(true);
   });
 });
