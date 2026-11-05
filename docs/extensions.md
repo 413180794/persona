@@ -238,6 +238,8 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `machines.read` | 看你的各台电脑 | `GET /api/v1/machines`、`/machines/{id}/metrics`、`/machines/{mid}/stat` |
 | `notify` | 给你的设备发通知 | `POST /api/v1/notify`（见「发通知」） |
 | `assistant.ask` | 给 Persona 开对话、读对话动态 | `GET /api/v1/assistant`、`POST /api/v1/assistant/conversations`、`GET …/conversations/{id}/feed` |
+| `todos.read` | 看待办 | `GET /api/v1/todos`、`GET /api/v1/todos/{id}/decisions` |
+| `todos.write` | 新建和修改待办、把对话挂到待办上 | `POST /api/v1/todos`、`PATCH /api/v1/todos/{id}`、待办的 `agents/{mid}/{sid}` 和 `spaces/{mid}/{space…}`（`PUT` / `DELETE`）；删待办、决定、完成检查、重试照旧只认完整权限 |
 | `extensions.call:<扩展 id>` | 调用扩展「…」的接口 | 那个扩展自己的 HTTP：`/api/v1/extensions/<id>/…`（不含 hub 的 `/-/` 接口） |
 
 - **哪条路由属于哪个范围**登记在 `server/internal/hub/extension_scopes.go` 的 `routeScopes`（按路由注册时的 pattern）；**没登记的路由只认完整的凭据**，扩展的 token 一律 403。

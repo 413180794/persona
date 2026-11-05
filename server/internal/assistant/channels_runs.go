@@ -378,7 +378,8 @@ func (s *Service) setRunExt(r *channel.Run, key, value string) {
 }
 
 // SessionItems is session.items: new items of a conversation the runs follow; they note the steps.
-func (s *Service) SessionItems(_ context.Context, p SessionItems) {
+func (s *Service) SessionItems(ctx context.Context, p SessionItems) {
+	s.registerInlineViews(ctx, p)
 	c := &s.chans
 	c.mu.Lock()
 	defer c.mu.Unlock()

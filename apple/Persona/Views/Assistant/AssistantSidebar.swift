@@ -734,7 +734,9 @@ struct AssistantSidebar: View {
                 Group {
                     if query.isEmpty {
                         actions(all)
-                        VStack { Divider() }.padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s) // a row lays a bare Divider out upright
+                        if !macPlacesGroup {
+                            VStack { Divider() }.padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s) // a row lays a bare Divider out upright
+                        }
                         conversations(all, archived: archived)
                     } else {
                         results(AssistantSidebarSearch.filter(all, query))
@@ -871,13 +873,51 @@ struct AssistantSidebar: View {
                 action("机器", Theme.Icon.machines, id: "sidebar-machines", run: onMachines)
             }
         } else {
-            VStack(alignment: .leading, spacing: 0) {
-                action("新对话", Theme.Icon.conversation, id: "sidebar-new", run: newConversation)
-                action("定时任务", Theme.Icon.schedule, run: openRoutines)
-                action("知识库", Theme.Icon.knowledge, run: openKnowledge)
+            #if os(macOS)
+            // One row as the conversations' (#2113): 新对话 is the title row's button and ⇧⌘N, 知识库 the window's
+            // sections column (2026-11-05 user: not twice). Headed by nothing: a heading over one row is noise.
+            if !AppStyle.current.usesBeautifulUI {
+                macPlace("定时任务", Theme.Icon.schedule, run: openRoutines)
+            } else {
+                phoneActions
             }
+            #else
+            phoneActions
+            #endif
         }
     }
+
+    private var phoneActions: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            action("新对话", Theme.Icon.conversation, id: "sidebar-new", run: newConversation)
+            action("定时任务", Theme.Icon.schedule, run: openRoutines)
+            action("知识库", Theme.Icon.knowledge, run: openKnowledge)
+        }
+    }
+
+    #if os(macOS)
+    /// Whether the places to go are one row of the list (the Mac's plain styles) rather than the phone's big rows.
+    private var macPlaces: Bool { !isShell && !AppStyle.current.usesBeautifulUI }
+
+    /// A place to go at the top of the Mac's list: a conversation row's size, its symbol where a conversation has its mark.
+    private func macPlace(_ title: String, _ symbol: String, run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            HStack(spacing: Theme.Space.m) {
+                Image(systemName: symbol).resizable().scaledToFit().foregroundStyle(.secondary)
+                    .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
+                    .scaledFrame(width: Theme.Size.wellM)
+                Text(title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Theme.Space.m)
+            .scaledFrame(minHeight: Theme.Size.box50)
+            .macHoverShade(in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("sidebar-" + title)
+    }
+    #endif
 
     /// The shell's first row: the main conversation as 「Persona」 with the app's logo (#2004). Only the name shown is
     /// Persona's: it is the same conversation, its key and its data unchanged. Its state (working, waiting, unread) on
@@ -1205,10 +1245,31 @@ struct AssistantSidebar: View {
 
     private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
 
+    /// The Mac's place is a row like the conversations': no line between it and them.
+    private var macPlacesGroup: Bool {
+        #if os(macOS)
+        macPlaces
+        #else
+        false
+        #endif
+    }
+
     /// Persona's face and name with where it runs (a tap: its profile), 设置 on the right (the tab bar is hidden while
     /// the drawer is out).
     @ViewBuilder private var footer: some View {
-        if isShell { shellFooter } else { AssistantProfileFooter(machineID: machineID, openProfile: openProfile, openSettings: openSettings) }
+        if isShell {
+            shellFooter
+        } else {
+            #if os(macOS)
+            if macPlacesGroup {
+                AssistantStatusLine(machineID: machineID, openProfile: openProfile)
+            } else {
+                AssistantProfileFooter(machineID: machineID, openProfile: openProfile, openSettings: openSettings)
+            }
+            #else
+            AssistantProfileFooter(machineID: machineID, openProfile: openProfile, openSettings: openSettings)
+            #endif
+        }
     }
 
     /// The shell's foot, ChatGPT's: a 新对话 pill in the 主题色 on the left (#1312), 设置 in a glass circle on the right.
@@ -1302,6 +1363,42 @@ private struct AssistantProfileFooter: View {
         }
     }
 }
+
+#if os(macOS)
+/// The Mac's foot of the list (#2113): one small line, where Persona runs and whether it is up, as a Mac app's status
+/// at the bottom of its sidebar; a click opens its profile, as the phone's card does.
+private struct AssistantStatusLine: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.tabIsActive) private var inFront
+    let machineID: String
+    let openProfile: () -> Void
+
+    var body: some View {
+        let machine = model.machine(model.hubRef(machineID), inFront: inFront)
+        let online = machine?.online ?? false
+        let place = machine?.name ?? machineID
+        VStack(spacing: 0) {
+            Divider()
+            Button(action: openProfile) {
+                HStack(spacing: Theme.Space.s) {
+                    Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5))
+                        .scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
+                    Text("\(model.persona.name) \(online ? "在线" : "离线") · \(place)").lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .font(Theme.Font.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.vertical, Theme.Space.s)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .help("查看 \(model.persona.name) 的资料")
+            .accessibilityLabel("\(model.persona.name)，\(online ? "在线" : "离线")，\(place)，查看资料")
+        }
+    }
+}
+#endif
 
 /// A conversation's round mark in the sidebar: a chat bubble in a soft color picked by its id, so neighbours differ.
 struct ConversationMark: View {

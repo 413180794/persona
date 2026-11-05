@@ -1,6 +1,6 @@
 # 助手对话里的富 UI
 
-总 issue #2017。本文是实现规格，**不代表各阶段已经完成**。2026-11-05 恢复工作时，扩展的 schema、网页和安卓共用渲染器（#1849、#1850、#1851）已合并；Apple 的手表／Siri fallback（#2038）和独立 HTML 沙箱（#2034）已合并，动作、活卡片和对话接线仍待完成。
+总 issue #2017。本文是实现规格，**不代表四端已经完成**。schema 与共用校验（#2251）、扩展的网页／安卓／Apple 共用渲染器（#1850、#1851、#2299）、活卡片工具（#2286）和一次 reply／outbox（#2328）已合并。助手各端的动作、活卡片和 HTML 对话接线仍待完成；Apple 已合并的手表／Siri fallback 和 HTML 沙箱基础继续复用。
 
 已确认的产品决定：HTML 卡片默认启用，进入可见区域自动运行；线上 `assistant.persona_view` 等 Apple 的对应 TestFlight 发出后再开。恢复工作不改变这个发布边界，不使用用户的真实主对话测试。
 
@@ -34,6 +34,10 @@
 | 活卡片 | `view_show` 返回的 id，已经带 `view_` 前缀，不再重复拼接 |
 
 key 是不透明字符串，客户端须 URL 编码整个路径段；不能按 `/` 或 `#` 自行拆解。正文流式阶段先只读绘制，只有 hub 确认完整块和稳定来源后才启用持久化动作。客户端提供的 key、会话和动作都不能直接作为权限依据。
+
+正文注册从可信助手的 text item 读取；收到 transcript 条目和一轮回复结束时均检查，没有客户端订阅也会注册最新一轮。长回复先用 `session.item` 读取全文，不能只查被截断的预览。相同来源重放不修改定义或清除已选状态。首次落库后广播 `assistant_view_block {conversation, key}`，feed 的 `view_blocks` 返回该对话已注册 key 的完整快照，漏掉事件后也能恢复。
+
+fence 规则和 key 的共同向量在 `schema/extension/examples/assistant-text/fences.json`：语言名不区分大小写，支持 LF／CRLF／CR、tilde 和长外层 fence；其他代码块中的示例不注册，坏块也占序号，未关闭的块只显示 fallback。当前识别独立 fence，不把列表或引用里的嵌套 Markdown 当成已经支持；每条 text item 校验最多 3 个 persona-view 块，整轮的显示上限仍须各端和 Stop 校验配合。
 
 ## 动作与多页
 
@@ -114,7 +118,9 @@ HTML 可以伪造登录框和文字，离线也不等于不可能经 reply 泄�
 
 Claude 的助手 Stop hook 用 `last_assistant_message` 校验，首次失败返回 `decision: block` 和原因，`stop_hook_active` 为真时不再阻止，避免死循环。其他运行时把错误持久化到对应会话，下一轮附 `<persona-view-errors>`。只影响助手，不改变普通 Agent 的 hook 行为。
 
-摘要、通知、任务回执和标题中的 persona-view 替换成 fallback；半截或坏 JSON 不打印原始代码。缺 fallback 的历史块可以保留旧只读渲染兼容，新工具和新协议必须校验。
+摘要、通知、任务回执和标题中的 persona-view 替换成 fallback，替换在裁剪之前完成；半截或坏 JSON 不打印原始代码。缺 fallback 的历史块可以保留旧只读渲染兼容，新工具和新协议必须校验精确的 `fallback` 字段名。
+
+正文诊断按机器／对话／item 持久化，同一错误重放不重复报告，修正后不再等待反馈。当前只交付诊断存储；Stop hook 和下一轮 `<persona-view-errors>` 注入仍在 #2020，不能把落库写成助手已经收到反馈。
 
 ## 提示词与开关
 
@@ -128,11 +134,11 @@ Claude 的助手 Stop hook 用 `last_assistant_message` 校验，首次失败返
 
 `schema/extension/examples/assistant/` 提供决策、比较、进度（更新前后）、表单、图表、HTML 各一组。各端读取同一份测试数据，截图只用合成数据。
 
-| 阶段 | issue | 尚需完成 |
+| 阶段 | issue | 状态与剩余工作 |
 | --- | --- | --- |
-| 设计 | #2017 | 提交本文、同步已确认决定和安全修正 |
-| schema | #2018 | 动作／pages／fallback／html 与生成类型、共同校验、示例；新共享组件另拆小 PR |
-| hub | #2019 | 存储、工具、正文注册、动作发送、事件、摘要 |
+| 设计 | #2017 | 规格已合并；阶段进展与验收继续写回总 issue |
+| schema | #2018 | 基础协议／生成类型／校验已合并；新共享组件仍待小 PR |
+| hub | #2019 | 存储、工具、声明式 reply、正文注册和摘要已实现；HTML bridge、最终 feature 与端到端验收未完成 |
 | 提示词 | #2020 | 校验反馈、自修复、生成逻辑和 golden |
 | 网页 | #2021 | 复用 ViewBody，动作、活卡片、通过安全验收的 HTML 路径 |
 | 安卓 | #2022 | 复用 #1851 组件，动作、活卡片、HTML、三风格深浅色截图 |

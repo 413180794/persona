@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -270,12 +271,13 @@ func (s *Service) firstExchange(ctx context.Context, machine, id string) (first,
 	}
 	// A conversation another one started (conversation_new) opens with a note on where it comes from: not its topic.
 	first = strings.TrimSpace(contextBlock.ReplaceAllString(first, ""))
-	return cutRunes(first, 1500), cutRunes(reply, 1500)
+	return cutRunes(first, 1500), cutRunes(wire.AssistantCardText(reply), 1500)
 }
 
 // makeTitle asks the model for 「类型 | 主题」, once more when that breaks the format, and falls back to
 // 「探索 | the first message's first 14 characters」.
 func (s *Service) makeTitle(ctx context.Context, started time.Time, first, reply string) string {
+	reply = wire.AssistantCardText(reply)
 	day := titleDay(started, s.location(ctx))
 	if strings.TrimSpace(first) != "" {
 		retry := ""

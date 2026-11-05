@@ -491,6 +491,7 @@ func (h *Hub) sessionItemFull(w http.ResponseWriter, r *http.Request, m *Machine
 		callErr(w, err)
 		return
 	}
+	h.followedItems(m.cfg.ID, r.PathValue("sid"), []proto.Item{it})
 	writeJSON(w, h.withInjected([]proto.Item{it})[0])
 }
 

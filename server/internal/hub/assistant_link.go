@@ -152,6 +152,9 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 			return nil, err
 		}
 		s, ok := m.session(a.SessionID)
+		if ok {
+			s.Assistant = isAssistant(s, m.assistantCwd())
+		}
 		return json.Marshal(map[string]any{"session": s, "ok": ok})
 	}
 	var out json.RawMessage
@@ -555,7 +558,7 @@ func (h *Hub) assistantUpdated() {
 // goes.
 func (h *Hub) assistantConnected() {
 	go h.inboxManagerConnected() // its inbox gets a full round (inbox.go)
-	h.kbFlush() // the agents' turns that waited for it (kb.go)
+	h.kbFlush()                  // the agents' turns that waited for it (kb.go)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var res struct {

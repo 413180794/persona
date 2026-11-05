@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/textfmt"
 )
@@ -35,7 +36,11 @@ func transcriptText(head string, items []proto.Item) string {
 					who = "Message from " + it.From
 				}
 			}
-			fmt.Fprintf(&b, "%s: %s\n\n", who, clip(it.Text, 4000))
+			text := it.Text
+			if it.Role == "assistant" {
+				text = wire.AssistantCardText(text)
+			}
+			fmt.Fprintf(&b, "%s: %s\n\n", who, clip(text, 4000))
 		case proto.KindThinking:
 			if t := strings.TrimSpace(it.Text); t != "" {
 				fmt.Fprintf(&b, "(agent, between tools) %s\n", clip(oneLine(t), 400))

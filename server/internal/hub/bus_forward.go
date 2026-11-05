@@ -53,7 +53,7 @@ func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send 
 		writeErr(w, http.StatusRequestEntityTooLarge, err)
 		return
 	}
-	req := assistantwire.HTTPRequest{Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery, Header: map[string][]string{}, Body: body}
+	req := assistantwire.HTTPRequest{Method: r.Method, Path: r.URL.EscapedPath(), Query: r.URL.RawQuery, Header: map[string][]string{}, Body: body}
 	for k, v := range r.Header {
 		if !hopHeaders[k] && k != "Authorization" && k != "Cookie" { // the hub's credentials stay with the hub
 			req.Header[k] = v

@@ -31,8 +31,8 @@ inbox.write          DELETE /api/v1/inbox/mutes/{id}
 -                    DELETE /api/v1/sessions/{mid}/{sid}
 -                    DELETE /api/v1/task-trust
 -                    DELETE /api/v1/todos/{id}
--                    DELETE /api/v1/todos/{id}/agents/{mid}/{sid}
--                    DELETE /api/v1/todos/{id}/spaces/{mid}/{space...}
+todos.write          DELETE /api/v1/todos/{id}/agents/{mid}/{sid}
+todos.write          DELETE /api/v1/todos/{id}/spaces/{mid}/{space...}
 -                    DELETE {base}/markets/{mid}
 -                    GET /api/v1/admin/devices
 -                    GET /api/v1/admin/extensions
@@ -157,8 +157,8 @@ agents.read          GET /api/v1/sessions/{mid}/{sid}/screen
 -                    GET /api/v1/skills
 -                    GET /api/v1/task-plans/{id}
 -                    GET /api/v1/task-trust
--                    GET /api/v1/todos
--                    GET /api/v1/todos/{id}/decisions
+todos.read           GET /api/v1/todos
+todos.read           GET /api/v1/todos/{id}/decisions
 -                    GET /api/v1/usage
 agents.read          GET /api/v1/workspace-board
 agents.read          GET /api/v1/workspaces
@@ -170,7 +170,7 @@ agents.read          GET /api/v1/workspaces
 -                    GET {link.StreamPath}
 -                    GET {peerPath}
 -                    PATCH /api/v1/model-config/purposes/{id}
--                    PATCH /api/v1/todos/{id}
+todos.write          PATCH /api/v1/todos/{id}
 -                    PATCH /api/v1/todos/{id}/decisions/{did}
 -                    POST /api/v1/admin/devices/pair
 -                    POST /api/v1/admin/doctor
@@ -279,7 +279,7 @@ agents.control       POST /api/v1/sessions/{mid}/{sid}/seen
 -                    POST /api/v1/tabs/autoname
 -                    POST /api/v1/task-plans/{id}/dismiss
 -                    POST /api/v1/task-plans/{id}/start
--                    POST /api/v1/todos
+todos.write          POST /api/v1/todos
 -                    POST /api/v1/todos/{id}/decisions
 -                    POST /api/v1/todos/{id}/done-check
 -                    POST /api/v1/todos/{id}/retry
@@ -330,8 +330,8 @@ kb.write             PUT /api/v1/kb/{kind}/{id}
 -                    PUT /api/v1/machines/{mid}/herdr
 -                    PUT /api/v1/mutes
 -                    PUT /api/v1/pins
--                    PUT /api/v1/todos/{id}/agents/{mid}/{sid}
--                    PUT /api/v1/todos/{id}/spaces/{mid}/{space...}
+todos.write          PUT /api/v1/todos/{id}/agents/{mid}/{sid}
+todos.write          PUT /api/v1/todos/{id}/spaces/{mid}/{space...}
 -                    PUT {base}/markets/{mid}
 -                    PUT {base}/markets/{mid}/token
 -                    {from}/

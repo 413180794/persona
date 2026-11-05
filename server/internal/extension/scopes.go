@@ -14,13 +14,15 @@ const (
 	ScopeMachinesRead  = "machines.read"
 	ScopeNotify        = "notify"
 	ScopeAssistantAsk  = "assistant.ask"
+	ScopeTodosRead     = "todos.read"
+	ScopeTodosWrite    = "todos.write"
 	// ScopeCallPrefix and an extension's id: calling that extension's own HTTP (/api/v1/extensions/<id>/…).
 	ScopeCallPrefix = "extensions.call:"
 )
 
 // HubScopes are the scopes, in the order the install screen lists them.
 var HubScopes = []string{ScopeKBRead, ScopeKBWrite, ScopeInboxRead, ScopeInboxWrite, ScopeAgentsRead, ScopeAgentsControl,
-	ScopeMachinesRead, ScopeNotify, ScopeAssistantAsk}
+	ScopeMachinesRead, ScopeNotify, ScopeAssistantAsk, ScopeTodosRead, ScopeTodosWrite}
 
 var scopeTitles = map[string]string{
 	ScopeKBRead:        "读知识库",
@@ -32,6 +34,8 @@ var scopeTitles = map[string]string{
 	ScopeMachinesRead:  "看你的各台电脑（在不在线、负载）",
 	ScopeNotify:        "给你的设备发通知",
 	ScopeAssistantAsk:  "给 Persona 开对话、读对话动态",
+	ScopeTodosRead:     "看待办",
+	ScopeTodosWrite:    "新建和修改待办、把对话挂到待办上（不能删待办）",
 }
 
 // ScopeTitle is how the install screen says scope s; ok false for what is not a scope.

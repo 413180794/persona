@@ -58,6 +58,9 @@ func (d *DB) BeginAssistantViewAction(ctx context.Context, a AssistantViewAction
 	var version int64
 	err = tx.QueryRow(ctx, `SELECT version FROM assistant_views WHERE conversation=$1 AND id=$2 AND machine_id=$3 FOR UPDATE`, a.Conversation, a.Key, a.MachineID).Scan(&version)
 	if errors.Is(err, pgx.ErrNoRows) {
+		err = tx.QueryRow(ctx, `SELECT 1 FROM assistant_view_blocks WHERE conversation=$1 AND key=$2 AND machine_id=$3 FOR UPDATE`, a.Conversation, a.Key, a.MachineID).Scan(&version)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, ErrAssistantViewNotFound
 	}
 	if err != nil {

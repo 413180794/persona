@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/nwverse/persona/sdk/go/wire"
+
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -18,6 +20,7 @@ var danglingMarks = regexp.MustCompile("\\*{2,}|_{2,}|~{2,}|`+")
 // plainMarkdown is md without its markup, for places that show text as it is (a push, a one-line preview): a line per
 // block, emphasis and code without their marks, a link as its text. Marks a clip left unpaired are dropped too.
 func plainMarkdown(md string) string {
+	md = wire.AssistantCardText(md)
 	src := []byte(md)
 	var b strings.Builder
 	_ = ast.Walk(plainParser.Parse(text.NewReader(src)), func(n ast.Node, entering bool) (ast.WalkStatus, error) {

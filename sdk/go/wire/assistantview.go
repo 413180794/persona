@@ -33,6 +33,9 @@ func ParseAssistantView(raw json.RawMessage) (*View, error) {
 	if fields == nil {
 		return nil, errors.New("view: an object with sections and fallback is required")
 	}
+	if _, exists := fields["fallback"]; !exists {
+		return nil, errors.New("fallback: include a plain text summary under the exact fallback field name")
+	}
 	if _, component := fields["type"]; component {
 		fallback := fields["fallback"]
 		delete(fields, "fallback")

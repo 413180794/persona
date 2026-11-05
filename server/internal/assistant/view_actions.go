@@ -21,6 +21,7 @@ import (
 
 type viewActionStore interface {
 	viewStore
+	AssistantCard(context.Context, string, string) (*db.AssistantViewRow, error)
 	BeginAssistantViewAction(context.Context, db.AssistantViewActionRow, int64) (*db.AssistantViewActionRow, bool, error)
 	AssistantViewAction(context.Context, string, string) (*db.AssistantViewActionRow, error)
 	AssistantViewActions(context.Context, string) ([]db.AssistantViewActionRow, error)
@@ -79,7 +80,7 @@ func (s *Service) viewActionRoutes() {
 			writeViewAction(w, *old, in)
 			return
 		}
-		row, err := st.AssistantView(r.Context(), conversation, key)
+		row, err := st.AssistantCard(r.Context(), conversation, key)
 		if errors.Is(err, db.ErrAssistantViewNotFound) {
 			apierr.Write(w, http.StatusNotFound, err)
 			return

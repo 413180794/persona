@@ -3,6 +3,8 @@ package assistant
 import (
 	"strings"
 	"unicode/utf8"
+
+	"github.com/nwverse/persona/sdk/go/wire"
 )
 
 // A receipt's summary is the agent's last reply cut for a client to render.
@@ -10,6 +12,7 @@ import (
 // clipMarkdown is md cut to at most about n characters for a client to render: on a line break when one falls in the
 // second half, and never inside a code span, emphasis, link or code block (an unpaired ** or ` would show as it is).
 func clipMarkdown(md string, n int) string {
+	md = wire.AssistantCardText(md)
 	if utf8.RuneCountInString(md) <= n {
 		return md
 	}

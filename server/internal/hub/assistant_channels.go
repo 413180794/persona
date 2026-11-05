@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/feishubot"
@@ -192,8 +193,32 @@ func (h *Hub) followed(machine, session string) bool {
 
 // followedItems: new items of a watched conversation (machine.go), sent on when the assistant follows it.
 func (h *Hub) followedItems(machine, session string, items []proto.Item) {
-	if len(items) == 0 || !h.followed(machine, session) {
+	if len(items) == 0 {
 		return
+	}
+	if !h.followed(machine, session) {
+		if !h.cfg.Assistant.PersonaView {
+			return
+		}
+		m := h.localMachine(machine)
+		if m == nil {
+			return
+		}
+		conversation, known := m.session(session)
+		if !known || !isAssistant(conversation, m.assistantCwd()) {
+			return
+		}
+		var cards []proto.Item
+		for _, it := range items {
+			if it.Role == "assistant" && it.Kind == proto.KindText && (it.FullSize > 0 || wire.HasAssistantView(it.Text)) {
+				it.Image = nil
+				cards = append(cards, it)
+			}
+		}
+		items = cards
+		if len(items) == 0 {
+			return
+		}
 	}
 	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventSessionItems, assistantwire.SessionItems{MachineID: machine, SessionID: session, Items: items})
 }

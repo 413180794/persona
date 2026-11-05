@@ -485,8 +485,8 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/task-plans/{id}` | 一个计划（`TaskPlan`，见下面「任务和对话动态」） → 200 `{"plan":TaskPlan}`；不存在 404 |
 | POST | `/api/v1/task-plans/{id}/start` | 开始计划 `{"tasks"?:[PlanTask],"remember"?:bool}`：`tasks` 按下标覆盖用户在卡片上改过的字段（空的不改），`remember` 记住「这类以后直接开」；每个任务建一个待办（`origin`、`plan_id`）、在后台开 Agent → 200 `{"plan":TaskPlan}`；已开始或不开了 409，不存在 404，只读设备 403 |
 | POST | `/api/v1/task-plans/{id}/dismiss` | 不开了 → 200 `{"plan":TaskPlan}`；已开始 409 |
-| GET | `/api/v1/assistant/conversations/{id}/feed?since=` | 对话动态：`since`（RFC3339）之后的条目，旧的在前，一次最多 500 → `{"items":[FeedItem],"plans":{"plan_…":TaskPlan},"views":{"view_…":AssistantView},"view_actions":{"view_…":ViewAction}}`（plans 和 views 是引用对象的当前状态；views 总是返回该对话完整快照，不受 since 限制，更新不移动原 feed 位置） |
-| POST | `/api/v1/assistant/conversations/{id}/views/{key}/actions` | 活卡片一次 reply：`{action,page?,values?,client_msg_id,confirmed?}` → `{action:ViewAction}`；服务端从保存的 View 取 reply 原文，拒绝客户端覆盖和未声明字段。另一提交 409 `already_answered`，附已有 action；同一 id／动作／值重试返回原记录。提交与待发送文字一起落库，pending／sent／failed 通过事件和 feed 同步。此阶段只支持 view_… 活卡片，正文注册另行接入；key 整段 URL 编码，只读设备 403 |
+| GET | `/api/v1/assistant/conversations/{id}/feed?since=` | 对话动态：`since`（RFC3339）之后的条目，旧的在前，一次最多 500 → `{"items":[FeedItem],"plans":{"plan_…":TaskPlan},"views":{"view_…":AssistantView},"view_actions":{"<key>":ViewAction},"view_blocks":["<item id>/0"]}`（plans 和 views 是引用对象的当前状态；views、view_actions、view_blocks 总是返回该对话完整快照，不受 since 限制，更新不移动原 feed 位置；view_blocks 只含服务端已注册的正文卡片 key，不重复发送正文） |
+| POST | `/api/v1/assistant/conversations/{id}/views/{key}/actions` | 活卡片或已注册正文卡片的一次 reply：`{action,page?,values?,client_msg_id,confirmed?}` → `{action:ViewAction}`；服务端从保存的 View 取 reply 原文，拒绝客户端覆盖和未声明字段。另一提交 409 `already_answered`，附已有 action；同一 id／动作／值重试返回原记录。提交与待发送文字一起落库，pending／sent／failed 通过事件和 feed 同步。key 整段 URL 编码（包括 `/` 和 `#`），只读设备和扩展 token 403；不接受 HTML bridge 的动态文字 |
 | POST | `/api/v1/assistant/conversations/{id}/today` | 这段对话今天的「今天」卡片：已有就回那张，没有就建一张（`today` 条目，`at` 是用户那天的零点）→ `{"item":FeedItem,"new":bool}`；只读设备 403 |
 | GET | `/api/v1/task-trust` | 「这类以后直接开」记住的几类 → `{"kinds":[{"key","machine","cwd","readonly"}]}` |
 | DELETE | `/api/v1/task-trust?key=` | 忘掉一类（以后又要先给计划）→ `{"ok":true}`；没记过 404；只读设备 403 |
@@ -607,6 +607,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `plugin_ui` | `plugin`, `id`, `badge`（`{text, tone}`，`null` 是清掉）：插件改了它主导航入口（`nav_page`）的角标，[extensions.md](extensions.md)「UI 插槽」 |
 | `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条；kind `view` 是活卡片的原始位置，body.view 是 AssistantView |
 | `assistant_view` | `conversation`, `view`（schema 的 AssistantView：id、conversation、version、view、created_at、updated_at）：已存入数据库的活卡片更新；同一卡片每秒最多一次，按 version 忽略旧更新；不另发通知 |
+| `assistant_view_block` | `conversation`, `key`：正文卡片已从可信助手 text item 校验并存入数据库，可以启用其一次 reply；重放同一来源不重复广播，进现有事件续传，漏掉后由 feed.view_blocks 快照补齐 |
 | `assistant_view_action` | `conversation`, `action`（ViewAction：key、action、page?、values、client_msg_id、status、revision、error?、at、updated_at）：卡片提交及发送状态；按 revision 忽略旧状态，进现有事件续传 |
 | `task_plan` | `plan`（`TaskPlan`）：计划交给用户、开始、不开了、某个任务没开起来（`tasks[i].error`） |
 | `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`；可选 `attention_reason`：会话在「需要你」时，宿主说的原因（botmux 的 attention reason）；可选 `external_url`：在 Persona 之外打开它的地方（botmux 会话的飞书话题），见 `docs/engines.md`「botmux」） |
@@ -1290,6 +1291,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 {"id":"h3","result":{"status":200,"header":{"Content-Type":["application/json"]},"body":"<base64>"}}
 ```
 
+- `path` 保留 URL 百分号编码，hub 用 `EscapedPath()` 转发，助手重建请求后由路由解码一次。正文卡片 key 中的 `/`、`#`、`?` 不能在转发前解码成路径分隔符、fragment 或 query。
 - `header` 不带 `Authorization`、`Cookie` 和逐跳的头；`X-Persona-Role` 是 hub 鉴权得出的设备角色（App 自己带的会被换掉）。请求体最大 32 MiB。
 - 助手没连着、或在请求中途断开回 `503 assistant_offline`，它回的 `rpc.Error` 变成 `502`（带它的 `code`）；没给期限的请求 5 分钟后放弃。
 

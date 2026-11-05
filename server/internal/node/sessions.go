@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -918,6 +919,7 @@ func (n *Node) decorate(s *proto.Session) {
 }
 
 func snippet(s string) string {
+	s = wire.AssistantCardText(s)
 	s = strings.Join(strings.Fields(s), " ")
 	r := []rune(s)
 	if len(r) > 200 {

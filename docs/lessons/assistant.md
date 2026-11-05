@@ -4,6 +4,10 @@
 
 - 助手卡片的边界校验不能只看常见写法（2026-11-05，#2018）：重复 key 的错误曾被后续 chart／markdown 检查的 nil 覆盖；Markdown 引用图片和引用链接也能绕过只查内联语法的正则。共同检查应先拒绝重复 key，再检查组件；安全子集明确拒绝引用链接定义，补图片、autolink、缺 hostname 的 URL 回归。剥离 HTML 后清理空 section，否则 compact 限制会把已经清空的卡片判成过大。活卡片 version 要限制到 JavaScript 安全整数范围，不能只看 Go 的 int64。
 
+- 单会话查询也要用可信的助手分类（2026-11-05，#2019）：列表会按专用目录和是否有 pane 判断 Assistant，原来的 session.get 却直接返回 node 的原始记录，字段通常没填。富 UI 的工具和 outbox 用它检查身份，会误拒绝真实助手。查询时复用 isAssistant，pane 仍优先判成普通 Agent；测试不能只手动填 Assistant=true，要用真实 hub 查询路径验证 headless／pane／普通目录。正文注册也用同一分类。
+- Go 的 JSON 解码会忽略字段名大小写（2026-11-05，#2019）：`Fallback` 能填进 Go 的 Fallback，但 Swift／Kotlin 只读 schema 的 `fallback`。助手原始块在转成 Go 类型前必须确认精确字段名，不能拿类型解码成功当跨端合规。
+- HTTP 请求过总线时保留编码路径（2026-11-05，#2019）：正文卡片 key 含 `/`，item id 常带 `#`；客户端正确 URL 编码后，hub 若转发 `r.URL.Path`，助手重建请求就把它们当路径分隔符或 fragment，动作全回 404。用 `EscapedPath()`，并测真实 hub→assistant 中继；只测 Service 的路由会漏掉这层错误。
+
 - 无头 `claude -p` 里 AskUserQuestion 不可用（不是 hook 没接上，是工具本身被禁用）：要在手机上问用户，给它一个会阻塞等答案的 MCP 工具
   （`ask_user`，`docs/assistant.md`）。模型会把它和别的工具并行调用，有副作用的工具要自己在 hub 里批准。
 - 无头助手（`claude -p`）默认权限模式下，连 Persona 自己的 MCP 工具（notify_user、schedule_followup）都要在手机上批准：夜里到点的跟进、

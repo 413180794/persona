@@ -29,7 +29,12 @@ struct AssistantTopBar: View {
     #endif
 
     /// The bar's height below the status bar: what the conversation leaves free at its top so nothing hides under it.
+    /// On the Mac, the title bar's row (`macBar`).
+    #if os(macOS)
+    static let height: CGFloat = Theme.Size.macToolbarHeight
+    #else
     static let height: CGFloat = 70
+    #endif
     /// How far below the bar the fog fades out.
     static let fade: CGFloat = 30
     /// How far below the status bar the round buttons start. The sidebar's header beside the bar in the split starts
@@ -75,8 +80,64 @@ struct AssistantTopBar: View {
     }
 
     @ViewBuilder private var bar: some View {
+        #if os(macOS)
+        if shell != nil { shellBar } else if AppStyle.current.usesBeautifulUI { classicBar } else { macBar }
+        #else
         if shell != nil { shellBar } else { classicBar }
+        #endif
     }
+
+    #if os(macOS)
+    /// The Mac's (#2113): the title bar's row of the conversation's column, as the Agents chat's (`macTitleRow`):
+    /// 历史对话, the name (its menu: 知识库, 详细信息, the copies, the launcher, 中断), and 新对话 (⇧⌘N) at the end,
+    /// instead of the phone's face over a pill in the middle.
+    private var macBar: some View {
+        let link = model.connection.shown
+        return HStack(spacing: Theme.Space.s) {
+            MacTitleRowButton("历史对话", symbol: sidebarIsColumn ? "sidebar.left" : "line.3.horizontal", action: openSidebar)
+                .accessibilityIdentifier("assistant-sidebar-button")
+            Menu { menuItems(link) } label: {
+                HStack(spacing: Theme.Space.xs) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(name).font(Theme.Font.heading).foregroundStyle(Theme.macLabel).lineLimit(1)
+                        Group {
+                            if let hint {
+                                Label(hint, systemImage: Theme.Icon.successFilled).foregroundStyle(Theme.positive)
+                            } else if link != .online {
+                                ConnectionLabel(phase: link, compact: true)
+                            }
+                        }
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    }
+                    Image(systemName: Theme.Icon.expand).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+                }
+                .contentShape(.rect)
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .fixedSize()
+            .help("知识库、详细信息、拷贝目录和对话信息")
+            .accessibilityLabel(link != .online ? "\(name)，\(link.title)" : name)
+            .accessibilityIdentifier("jarvis-avatar")
+            .connectionDetails($showLink)
+            .layoutPriority(-1)
+            Spacer(minLength: Theme.Space.s)
+            MacTitleRowButton("新对话（⇧⌘N）", symbol: Theme.Icon.compose, action: newConversation)
+                .disabled(key == nil)
+                .accessibilityIdentifier("assistant-new")
+        }
+        .padding(.horizontal, Theme.Space.l)
+        // In the title bar's row, past the traffic lights when the bar is at the window's edge (#830).
+        .padding(.leading, max(0, titleRowLeading - Theme.Space.l))
+        .frame(height: Self.height)
+        .frame(maxWidth: .infinity)
+        .background(alignment: .top) { BarFog(solid: Self.height - Theme.Space.sm, fade: Self.fade) }
+        .animation(Theme.Motion.standard, value: hint)
+        .task(id: hint) { await clearHint() }
+    }
+    #endif
 
     /// ChatGPT's top bar: the persona's face (the drawer; a mark while the inbox has something for the user), the
     /// switch, 新对话.

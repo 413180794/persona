@@ -127,6 +127,16 @@ var routeScopes = map[string]string{
 	"GET /api/v1/assistant":                              extension.ScopeAssistantAsk,
 	"POST /api/v1/assistant/conversations":               extension.ScopeAssistantAsk,
 	"GET /api/v1/assistant/conversations/{id}/feed":      extension.ScopeAssistantAsk,
+	// The todos (the assistant's, relayed): reading them, and adding, editing and attaching agents and spaces. Deleting
+	// a todo, its decisions, the done check and a retry stay with full credentials.
+	"GET /api/v1/todos":                                 extension.ScopeTodosRead,
+	"GET /api/v1/todos/{id}/decisions":                  extension.ScopeTodosRead,
+	"POST /api/v1/todos":                                extension.ScopeTodosWrite,
+	"PATCH /api/v1/todos/{id}":                          extension.ScopeTodosWrite,
+	"PUT /api/v1/todos/{id}/agents/{mid}/{sid}":         extension.ScopeTodosWrite,
+	"DELETE /api/v1/todos/{id}/agents/{mid}/{sid}":      extension.ScopeTodosWrite,
+	"PUT /api/v1/todos/{id}/spaces/{mid}/{space...}":    extension.ScopeTodosWrite,
+	"DELETE /api/v1/todos/{id}/spaces/{mid}/{space...}": extension.ScopeTodosWrite,
 	// Another extension's own HTTP: the scope names which (extensionCallScope).
 	"/api/v1/extensions/{id}/": extension.ScopeCallPrefix,
 }

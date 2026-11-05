@@ -462,8 +462,8 @@ const (
 	CodeAssistantOffline = "assistant_offline" // the hub has no connection from the assistant
 )
 
-// HTTPRequest is http.request's params: an app's request on one of Routes, as it came (header without the hub's
-// credentials and hop-by-hop headers, the asking device's role in RoleHeader; body as base64).
+// HTTPRequest is http.request's params: an app's request on one of Routes, with an escaped URL path (header without
+// the hub's credentials and hop-by-hop headers, the asking device's role in RoleHeader; body as base64).
 type HTTPRequest struct {
 	Method string              `json:"method"`
 	Path   string              `json:"path"`
