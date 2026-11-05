@@ -434,6 +434,11 @@ PR 冒烟按路径触发、不含 `integrations/**`，所以合并前没跑。�
 - 一件事要被多处、多次等到时，用关闭 channel 表示「已经发生」，结果另存字段（`close` 之前写好，等到关闭后再读）。
 - 测试里可能卡住的等待（`Stop()` 之类）放到单独的 goroutine 里并加超时：卡住时只让这一个测试失败，不把整个包拖到 `go test` 的超时（#2278 在 macOS 上就拖了 10 分钟）。
 
+## 测试起的 goroutine 要等它结束再换包级变量（2026-11-05，#2959）
+
+- `-race` 下 devices、connector 两个包每次都报竞争：测试只 `defer cancel()` 不等 `Machine.run` / `watchOne` 返回，下一个测试改 `reconnectGrace`、`watchBackoffFirst` 时旧 goroutine 还在读（就算它已经结束，没有同步也算竞争）。devices 测试一律用 `runMachine(t, m)`（Cleanup 里 cancel 再带超时等 `run` 返回）；connector 的 `Start` 只读一次退避参数传给各个 watch。
+- 改成等 `run` 返回后才发现：tailcat 连接卡在一次写上时（对面不读，`configureNode` 里），ctx 结束后 `watchTailcat` 已经退出，没人关连接，`run` 永远不返回，hub 停机时 `workers.Wait()` 也就一直等。`serve` 现在在 ctx 结束时关掉 tailcat 连接（`context.AfterFunc`）。只 cancel 不等的测试把这种挂住藏起来了。
+
 
 ## 知识库更正与扩展权限（#1908）
 

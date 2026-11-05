@@ -36,6 +36,7 @@ type starter struct {
 	ctx     context.Context
 	changed func(id string, scope Scope)
 	logf    func(string, ...any)
+	backoff watchBackoff
 }
 
 // NewRegistry holds no connector yet; rules are the write gate's (hub.json connector_gate, ValidateRules).

@@ -6,7 +6,8 @@ import (
 )
 
 // Backoff between restarts of a failing Watch: doubling from the first to the last, back to the first once a Watch
-// has run for a while.
+// has run for a while. Start reads them once, so a test that changes them does not race with the watches of a
+// registry started earlier.
 var (
 	watchBackoffFirst = 5 * time.Second
 	watchBackoffLast  = 5 * time.Minute
@@ -19,7 +20,8 @@ var (
 // switching it off cancels it, switching it on starts it again (SetEnabled).
 func (r *Registry) Start(ctx context.Context, changed func(id string, scope Scope), logf func(string, ...any)) {
 	r.mu.Lock()
-	r.run = &starter{ctx: ctx, changed: changed, logf: logf}
+	r.run = &starter{ctx: ctx, changed: changed, logf: logf,
+		backoff: watchBackoff{first: watchBackoffFirst, last: watchBackoffLast, healthy: watchHealthy}}
 	r.mu.Unlock()
 	for _, c := range r.All() {
 		r.startOne(c)
@@ -42,20 +44,24 @@ func (r *Registry) startOne(c Connector) {
 		go rn.Run(ctx)
 	}
 	if e, ok := c.(Events); ok {
-		go watchOne(ctx, id, e, run.changed, run.logf)
+		go watchOne(ctx, id, e, run.changed, run.logf, run.backoff)
 	}
 }
 
-func watchOne(ctx context.Context, id string, e Events, changed func(id string, scope Scope), logf func(string, ...any)) {
-	wait := watchBackoffFirst
+// watchBackoff is the restart backoff of the Watches of one Start.
+type watchBackoff struct{ first, last, healthy time.Duration }
+
+func watchOne(ctx context.Context, id string, e Events, changed func(id string, scope Scope), logf func(string, ...any),
+	b watchBackoff) {
+	wait := b.first
 	for ctx.Err() == nil {
 		start := time.Now()
 		err := e.Watch(ctx, func(scope Scope) { changed(id, scope) })
 		if ctx.Err() != nil {
 			return
 		}
-		if time.Since(start) >= watchHealthy {
-			wait = watchBackoffFirst
+		if time.Since(start) >= b.healthy {
+			wait = b.first
 		}
 		logf("connector %s: watch stopped (%v), again in %s", id, err, wait)
 		select {
@@ -63,6 +69,6 @@ func watchOne(ctx context.Context, id string, e Events, changed func(id string, 
 			return
 		case <-time.After(wait):
 		}
-		wait = min(wait*2, watchBackoffLast)
+		wait = min(wait*2, b.last)
 	}
 }

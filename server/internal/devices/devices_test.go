@@ -97,12 +97,28 @@ func connectedMachine(t *testing.T, d *Devices, id string, n *testNode) *Machine
 	m := newMachine(d, MachineConfig{ID: id, Name: id, Kind: "ssh"})
 	m.dialNode = n.dial
 	d.addEntry(m)
+	runMachine(t, m)
+	eventually(t, 5*time.Second, id+" connected", func() bool { return m.reachable() && len(n.seen("sessions.list")) > 0 })
+	return m
+}
+
+// runMachine runs m until the test ends (or the returned cancel) and waits for run to return in t.Cleanup: a run left
+// behind would still read package vars (reconnectGrace) that a later test swaps. A run that does not end fails the
+// test rather than hanging the package.
+func runMachine(t *testing.T, m *Machine) context.CancelFunc {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); m.run(ctx) }()
-	t.Cleanup(func() { cancel(); <-done })
-	eventually(t, 5*time.Second, id+" connected", func() bool { return m.reachable() && len(n.seen("sessions.list")) > 0 })
-	return m
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Errorf("[%s] run did not return after its context ended", m.cfg.ID)
+		}
+	})
+	return cancel
 }
 
 // A call from the hub reaches the node; what goes wrong is coded so the hub knows it again: no such machine, the node
@@ -489,7 +505,7 @@ func TestACallWaitsForTheFirstConnection(t *testing.T) {
 	off := newMachine(d, MachineConfig{ID: "off", Name: "off", Kind: "ssh"})
 	off.dialNode = func(context.Context) (net.Conn, error) { return nil, errors.New("no route") }
 	d.addEntry(off)
-	go off.run(ctx)
+	runMachine(t, off)
 	var re *rpc.Error
 	if _, err := d.Call(context.Background(), devicewire.NodeCall{MachineID: "off", Method: "fs.list"}); !errors.As(err, &re) || re.Code != devicewire.CodeMachineOffline {
 		t.Fatalf("a machine that cannot be reached: %v", err)

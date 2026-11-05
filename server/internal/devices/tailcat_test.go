@@ -104,9 +104,7 @@ func TestFallsBackToTailcatWhenSSHFails(t *testing.T) {
 	m.nodeCmd = func(ctx context.Context) *exec.Cmd { sshTries.Add(1); return sshDown(ctx) }
 	m.dialTailcat = tailcatNode(&dials)
 	m.probeDirect = func(context.Context) error { return errors.New("still down") }
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go m.run(ctx)
+	runMachine(t, m)
 	waitVia(t, m, "tailcat")
 	if sshTries.Load() != 1 {
 		t.Fatalf("ssh tried %d times before tailcat, want 1", sshTries.Load())
@@ -144,9 +142,7 @@ func TestGoesBackToSSHWhenItWorksAgain(t *testing.T) {
 		}
 		return errors.New("down")
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go m.run(ctx)
+	runMachine(t, m)
 	waitVia(t, m, "tailcat")
 	fixed.Store(true)
 	waitVia(t, m, "ssh")
@@ -165,9 +161,7 @@ func TestStaysOnTailcatWhileAnInteractionWaits(t *testing.T) {
 	m.dialTailcat = tailcatNode(&dials)
 	m.probeDirect = func(context.Context) error { probes.Add(1); return nil }
 	m.pending = 1 // a question it asked waits on the phone (interaction.create, through the hub)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go m.run(ctx)
+	runMachine(t, m)
 	waitVia(t, m, "tailcat")
 	time.Sleep(600 * time.Millisecond)
 	if probes.Load() != 0 {
@@ -218,9 +212,7 @@ func TestDeadTailcatConnectionIsNoticed(t *testing.T) {
 	m.cfg.Kind = "tailcat"
 	var dials atomic.Int32
 	m.dialTailcat = func(ctx context.Context) (net.Conn, error) { dials.Add(1); return silentNode(ctx) }
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go m.run(ctx)
+	runMachine(t, m)
 	deadline := time.Now().Add(15 * time.Second)
 	for dials.Load() < 2 {
 		if time.Now().After(deadline) {
@@ -239,9 +231,7 @@ func TestGoingBackToSSHBacksOffWhenItFailsAgain(t *testing.T) {
 	m.nodeCmd = func(ctx context.Context) *exec.Cmd { sshTries.Add(1); return sshDown(ctx) }
 	m.dialTailcat = tailcatNode(&dials)
 	m.probeDirect = func(context.Context) error { return nil } // `ssh host true` works
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go m.run(ctx)
+	runMachine(t, m)
 	deadline := time.Now().Add(20 * time.Second)
 	for {
 		m.mu.Lock()
@@ -282,9 +272,7 @@ func TestStuckWriteStillEndsTheConnection(t *testing.T) {
 		}()
 		return hubSide, nil
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go m.run(ctx)
+	runMachine(t, m)
 	deadline := time.Now().Add(15 * time.Second)
 	for dials.Load() < 2 {
 		if time.Now().After(deadline) {
@@ -322,9 +310,7 @@ func TestBusyConnectionIsKept(t *testing.T) {
 		}()
 		return hubSide, nil
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go m.run(ctx)
+	runMachine(t, m)
 	time.Sleep(1500 * time.Millisecond)
 	if n := dials.Load(); n != 1 {
 		t.Fatalf("a busy connection was dropped (%d dials)", n)

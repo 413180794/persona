@@ -39,14 +39,12 @@ func TestReconnectGivesAWorkingConnection(t *testing.T) {
 		cmd.Env = append(os.Environ(), "JARVIS_FAKE_NODE=1")
 		return cmd
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go m.run(ctx)
+	runMachine(t, m)
 	pid := func() (int, error) {
 		var out struct {
 			PID int `json:"pid"`
 		}
-		cctx, ccancel := context.WithTimeout(ctx, 2*time.Second)
+		cctx, ccancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer ccancel()
 		err := m.call(cctx, "ping", map[string]any{}, &out)
 		return out.PID, err

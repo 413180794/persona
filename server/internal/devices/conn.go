@@ -282,6 +282,11 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	if c.via == "tailcat" && p.src == m {
 		go m.watchTailcat(sctx, c.peer, c.pipe.activity)
 	}
+	if a := c.pipe.activity; a != nil {
+		// Once ctx ends (the hub stopping, the entry removed) watchTailcat is gone: this is what fails a write still
+		// stuck on a dead connection, so run returns and the manager's wait for its workers ends.
+		defer context.AfterFunc(ctx, func() { _ = a.Close() })()
+	}
 
 	// The hub's part (Codex, managed launchers, its sends; it starts the plugins' work on the computer) with it.
 	m.configureNode(ctx, c.peer, m.d.hubConnected(ctx, m, connectedAt))

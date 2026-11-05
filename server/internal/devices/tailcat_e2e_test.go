@@ -99,7 +99,9 @@ func TestTailcatEndToEnd(t *testing.T) {
 	h.cfg.HubVersion = "v2"
 	h.logf = log.New(logTo(t), "", 0).Printf
 	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "ssh", SSHHost: "jarvis-e2e.invalid", TailcatAddr: addr})
-	go m.run(ctx)
+	runDone := make(chan struct{})
+	go func() { defer close(runDone); m.run(ctx) }()
+	t.Cleanup(func() { cancel(); <-runDone })
 	defer h.closeTailcat()
 	snap := waitMachine(t, m, 3*time.Minute, func(s proto.Machine) bool { return s.Online })
 	if snap.Transport != "tailcat" || snap.NodeVersion != "v1" || !snap.NodeMismatch {
