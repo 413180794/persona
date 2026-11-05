@@ -4,6 +4,7 @@
     python3 scripts/privacy_check.py            # tracked files (content and paths)
     python3 scripts/privacy_check.py --staged   # what `git commit` is about to record, plus its message file if given
     python3 scripts/privacy_check.py --staged --message .git/COMMIT_EDITMSG
+    python3 scripts/privacy_check.py --range origin/master..HEAD   # what those commits change, and their messages
 
 What counts as private comes from this machine, never from the repo: the values of ~/.config/jarvis/config.json
 (hosts, hub address, machine names, Apple ids, emails), ~/.config/jarvis/private-words.txt (one word per line:
@@ -309,13 +310,26 @@ def git(*args):
     return subprocess.run(["git", "-C", ROOT, *args], capture_output=True, check=True).stdout
 
 
+def commit_range(spec):
+    """<base>..<head>: the fork point of the two (what a branch adds on top of base), and head."""
+    base, sep, head = spec.partition("..")
+    if not sep or not base or not head or head.startswith("."):
+        sys.exit("privacy_check: --range wants <base>..<head>")
+    head = git("rev-parse", "--verify", head + "^{commit}").decode().strip()
+    base = git("merge-base", base, head).decode().strip()
+    return base, head
+
+
 def main():
     staged = "--staged" in sys.argv
     message = sys.argv[sys.argv.index("--message") + 1] if "--message" in sys.argv else None
+    span = commit_range(sys.argv[sys.argv.index("--range") + 1]) if "--range" in sys.argv else None
     words, public_words = terms()
     modules = module_paths()
     if staged:
         files = git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z").decode().split("\0")
+    elif span:
+        files = git("diff", "--name-only", "--diff-filter=ACMR", "-z", span[0], span[1]).decode().split("\0")
     else:
         files = git("ls-files", "-z").decode().split("\0")
     bad = []
@@ -327,7 +341,12 @@ def main():
         if f in SKIP_FILES:
             continue
         try:
-            data = git("show", ":" + f) if staged else open(os.path.join(ROOT, f), "rb").read()
+            if staged:
+                data = git("show", ":" + f)
+            elif span:
+                data = git("show", span[1] + ":" + f)
+            else:
+                data = open(os.path.join(ROOT, f), "rb").read()
         except (OSError, subprocess.CalledProcessError):
             continue
         npm_lock = os.path.basename(f) in NPM_LOCK_FILES
@@ -346,6 +365,11 @@ def main():
         for n, line in enumerate(text.splitlines(), 1):
             for w in problems(line, allowed, emails=not public):
                 bad.append((f, n, private_kind(w)))
+    if span:
+        for c in filter(None, git("rev-list", span[0] + ".." + span[1]).decode().split()):
+            for n, line in enumerate(git("log", "-1", "--format=%B", c).decode("utf-8", "replace").splitlines(), 1):
+                for w in problems(line, words):
+                    bad.append(("commit " + c[:9] + " message", n, private_kind(w)))
     if message and os.path.exists(message):
         for n, line in enumerate(open(message).read().splitlines(), 1):
             if not line.startswith("#"):

@@ -11,7 +11,7 @@
 | `assets/` | App 图标、可切换图标和形象包生成 | `assets/make_icon.py`、`assets/make_alt_icons.py`、`assets/make_persona.py` |
 | `diag/` | 推送回放、窗格诊断、transcript 脱敏及统计 | `diag/agentsync_replay.py`、`diag/pane_probe.py`、`diag/redact_transcript.py` |
 | `test/` | 服务端、真实运行时联调、GitHub 流程及目录结构回归 | `test/test-server.sh`、`test/test-herdr.sh`、`test/test-codex.sh` |
-| `hooks/` | Git 提交前的隐私检查 | `git config core.hooksPath scripts/hooks` |
+| `hooks/` | Git 提交 / 推送前的隐私检查（`pre-commit`、`commit-msg`、`pre-push`），合并 PR 的 `merge-pr.sh` | `git config core.hooksPath scripts/hooks`；合并：`scripts/hooks/merge-pr.sh <PR 号>` |
 | `gen/` | 从 schema 生成代码：扩展协议和 View 的四端类型（`schema/extension/`）；扩展 SDK 的打包（`personad extension new` 用）和拷进扩展仓库 | `gen/extension_schema.py`（`--check` 只比对）、`gen/sdk_bundle.py`、`gen/sync-sdk.sh` |
 
 ## 顶层公共脚本

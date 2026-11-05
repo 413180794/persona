@@ -161,6 +161,7 @@ Fixes #<号>
 EOF
 ```
 
+- 合并：`scripts/hooks/merge-pr.sh <号>`，不直接 `gh pr merge`：它先用这台机器的私有值扫 PR 改的文件、提交信息和标题正文，通过才 squash 合并、删分支（`docs/testing.md`「隐私扫描」）。
 - `Fixes #N` / `Closes #N`：合并后 GitHub 自动关闭 issue。`Refs #N`：只关联不关闭（一个 issue 拆成几个 PR、只修了一部分）。
 - PR 的标题和正文用英文（squash 合并后就是 master 上的 commit），issue 和评论用中文。
 

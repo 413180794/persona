@@ -417,6 +417,72 @@ class PrivacyCheckIntegrationTests(unittest.TestCase):
         self.assert_blocked(result)
 
 
+class RangeAndPushTests(unittest.TestCase):
+    """--range scans what a branch adds on top of its base (and its messages); pre-push runs it on pushed commits."""
+
+    # The integration tests' temporary repository and helpers, without running their tests again.
+    run_command = PrivacyCheckIntegrationTests.run_command
+    git = PrivacyCheckIntegrationTests.git
+    scan = PrivacyCheckIntegrationTests.scan
+
+    def setUp(self):
+        PrivacyCheckIntegrationTests.setUp(self)
+        words = self.home / ".config/jarvis/private-words.txt"
+        words.parent.mkdir(parents=True)
+        words.write_text("secretbox\n")
+        (self.repo / "old.md").write_text("an old note about secretbox\n")  # on master already: not this branch's doing
+        self.git("add", "old.md")
+        self.git("commit", "-q", "--no-verify", "-m", "base")
+        self.git("branch", "-M", "master")
+        self.git("update-ref", "refs/remotes/origin/master", "HEAD")
+        self.git("checkout", "-q", "-b", "topic")
+
+    def commit(self, name, text, message="change"):
+        (self.repo / name).write_text(text)
+        self.git("add", name)
+        self.git("commit", "-q", "--no-verify", "-m", message)
+
+    def test_range_scans_only_what_the_branch_changes(self):
+        self.commit("clean.md", "nothing private here\n")
+        result = self.scan("--range", "origin/master..HEAD")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.commit("new.md", "runs on secretbox\n")
+        result = self.scan("--range", "origin/master..HEAD")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("new.md:1: private value", result.stdout)
+        self.assertNotIn("old.md", result.stdout)
+        self.assertNotIn("secretbox", result.stdout + result.stderr)
+
+    def test_range_reads_the_head_not_the_worktree(self):
+        self.commit("new.md", "runs on secretbox\n")
+        (self.repo / "new.md").write_text("fixed locally, not committed\n")
+        self.assertNotEqual(self.scan("--range", "origin/master..HEAD").returncode, 0)
+
+    def test_range_scans_commit_messages(self):
+        self.commit("clean.md", "nothing private here\n", message="tested on secretbox")
+        result = self.scan("--range", "origin/master..HEAD")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("message:1: private value", result.stdout)
+
+    def test_range_wants_two_ends(self):
+        self.assertNotEqual(self.scan("--range", "HEAD").returncode, 0)
+
+    def push_to(self, remote):
+        return self.run_command("git", "push", "-q", str(remote), "topic")
+
+    def test_pre_push_refuses_private_values_and_lets_clean_pushes_through(self):
+        remote = self.root / "remote.git"
+        self.run_command("git", "init", "-q", "--bare", str(remote))
+        self.commit("clean.md", "nothing private here\n")
+        result = self.push_to(remote)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.commit("new.md", "runs on secretbox\n")
+        result = self.push_to(remote)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("pre-push: refused", result.stderr)
+        self.assertNotIn("secretbox", result.stdout + result.stderr)
+
+
 class URLTermTests(unittest.TestCase):
     def test_a_shared_host_keeps_the_path(self):
         self.assertEqual(pc.url_term("https://docs.google.com/document/d/abc123/edit?usp=sharing"),

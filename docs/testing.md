@@ -638,7 +638,11 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
 `CLAUDE.local.md` 里只是仓库路径 / 命令 / 配置键名的反引号内容（只有像 ID、主机、邮箱、IP 的才算），以及 `site/` 里的联系邮箱和站点域名
 （`app_store.feedback_email`、`privacy_url`，App Store 和 OAuth 同意屏幕本来就公开）。文档里说到机器用「hub 机器」「另一台 Mac」，
 示例里的机器 id 用 `server` / `laptop` 这类占位符。`release.sh` 打包前跑一遍；
-提交前跑：`git config core.hooksPath scripts/hooks`（`pre-commit` 查暂存的内容，`commit-msg` 查提交信息）。
+提交前跑：`git config core.hooksPath scripts/hooks`（`pre-commit` 查暂存的内容，`commit-msg` 查提交信息，`pre-push` 查推上去的提交相对 `origin/master` 改的文件和提交信息）。
+**合并前再拦一次**（#3696）：`scripts/hooks/merge-pr.sh <PR 号>` 取 PR 的 head，跑 `privacy_check.py --range origin/master..<head> --message <标题和正文>`，
+通过才 `gh pr merge --squash --delete-branch --match-head-commit <head>`（扫过的就是合进去的）。`--range <base>..<head>` 只看这段提交改到的文件（按 head 的内容，不看工作区）和这些提交的信息，几秒跑完。
+为什么不靠 CI：私有值来自每台机器自己的配置，CI 没有，只能查私网 IP、邮箱、npm 源这类通用规则；同理，合并的那台机器有那些值才挡得住。
+2026-11-05～06 定期发版 6 次被 `release.sh` 开头的全仓扫描拦下，都是带机器名的文档已经直接 `gh pr merge` 进了 master。
 
 ### npm 下载源拦截
 
