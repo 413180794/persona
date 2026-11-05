@@ -22,7 +22,7 @@ class PathLinksTest {
             "[链接](https://example.com/src/a.ts) <https://example.com/src/a.ts>"
         val out = PathLinks.markdown(md, setOf("src/a.ts", "~/notes/"))
         assertEquals(
-            "改了 [`src/a.ts:12`](persona-path:src%2Fa.ts)，见 [src/a.ts:40](persona-path:src%2Fa.ts) 和 [~/notes/](persona-path:%7E%2Fnotes%2F) 和 /tmp/other/x.md。\n\n" +
+            "改了 [`src/a.ts:12`](persona-path:src%2Fa.ts#L12)，见 [src/a.ts:40](persona-path:src%2Fa.ts#L40) 和 [~/notes/](persona-path:%7E%2Fnotes%2F) 和 /tmp/other/x.md。\n\n" +
                 "```\ncat src/a.ts\n```\n\n[链接](https://example.com/src/a.ts) <https://example.com/src/a.ts>",
             out,
         )
@@ -39,13 +39,30 @@ class PathLinksTest {
         val path = "~/报告/第 4 季度.docx"
         assertEquals(path, PathLinks.pathOf(PathLinks.uri(path)))
         assertNull(PathLinks.pathOf("https://example.com"))
-        val opened = mutableListOf<String>()
+        val opened = mutableListOf<Pair<String, Int?>>()
         val outer = mutableListOf<String>()
-        val handler = PathLinks.handler(object : androidx.compose.ui.platform.UriHandler { override fun openUri(uri: String) { outer += uri } }) { opened += it }
+        val handler = PathLinks.handler(object : androidx.compose.ui.platform.UriHandler { override fun openUri(uri: String) { outer += uri } }) { path, line -> opened += path to line }
         handler.openUri(PathLinks.uri("src/a.ts"))
+        handler.openUri(PathLinks.uri("src/a.ts", 12))
         handler.openUri("https://example.com")
-        assertEquals(listOf("src/a.ts"), opened)
+        assertEquals(listOf("src/a.ts" to null, "src/a.ts" to 12), opened)
         assertEquals(listOf("https://example.com"), outer)
+    }
+
+    @Test fun aPathsLineTravelsInItsLink() {
+        assertEquals("persona-path:src%2Fa.kt#L12", PathLinks.uri("src/a.kt", 12))
+        assertEquals("src/a.kt", PathLinks.pathOf(PathLinks.uri("src/a.kt", 12)))
+        assertEquals(12, PathLinks.lineOf(PathLinks.uri("src/a.kt", 12)))
+        assertNull(PathLinks.lineOf(PathLinks.uri("src/a.kt")))
+        assertNull(PathLinks.lineOf("https://example.com/#L3"))
+        // Each way of writing a line: the link opens the file at it; the text stays as written.
+        val linkable = setOf("src/a.kt")
+        assertEquals("见 [src/a.kt:12](persona-path:src%2Fa.kt#L12)", PathLinks.markdown("见 src/a.kt:12", linkable))
+        assertEquals("见 [src/a.kt#L12](persona-path:src%2Fa.kt#L12)", PathLinks.markdown("见 src/a.kt#L12", linkable))
+        assertEquals("见 [src/a.kt:12:3](persona-path:src%2Fa.kt#L12)", PathLinks.markdown("见 src/a.kt:12:3", linkable))
+        assertEquals("见 [`src/a.kt:7`](persona-path:src%2Fa.kt#L7)", PathLinks.markdown("见 `src/a.kt:7`", linkable))
+        val t = "改了 src/a.kt:40"
+        assertEquals(listOf(40), PathLinks.plainLinks(t, PathRefs.find(t)) { it in linkable }.map { it.line })
     }
 
     @Test fun plainTextLinksThePathsThereNotInsideAWebLink() {

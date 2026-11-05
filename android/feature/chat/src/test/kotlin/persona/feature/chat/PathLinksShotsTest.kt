@@ -54,7 +54,7 @@ class PathLinksShotsTest {
     private val there = mapOf("/tmp/jarvis-tasks/1664-lark-test.md" to "file", "web/src/lib/api.ts" to "file", "docs/web.md" to "file")
     private val presence = PathPresence(scope, { paths -> SessionPathStats(paths.map { SessionPathStat(it, there[it] ?: "missing") }) })
     private val opened = mutableListOf<String>()
-    private val actions = ChatRowActions(SessionKey("mac", "s1"), fullText = { it.text.orEmpty() }, openPath = { opened += it },
+    private val actions = ChatRowActions(SessionKey("mac", "s1"), fullText = { it.text.orEmpty() }, openPath = { path, _ -> opened += path },
         photos = null, pictures = { emptyList() }, openImages = { _, _ -> }, menu = null, retryLineId = null, onRetry = {}, paths = presence)
 
     private val user = "读 /tmp/jarvis-tasks/1664-lark-test.md 并完整执行这个任务，别动 /tmp/other/notes.md"

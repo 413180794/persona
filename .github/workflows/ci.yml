@@ -68,3 +68,27 @@ jobs:
         run: |
           go build ./...
           go vet ./...
+  web-test:
+    # The web package's vitest suite (docs/testing.md). The privacy job never ran it, so a broken test or a Node
+    # version mismatch (#2745) reached master unnoticed. web/.nvmrc is the version both CI and local nvm use.
+    name: Web tests
+    runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test

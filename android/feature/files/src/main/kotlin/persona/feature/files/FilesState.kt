@@ -13,7 +13,8 @@ enum class FilesPane { Files, Git }
 
 /** A page shown over the browser. Pages stack: a commit's file opens over the commit, a linked file over its README. */
 sealed interface FileSelection {
-    data class File(val path: String) : FileSelection
+    /** [line] (1-based): opened from a message's `path:12`, the text scrolls to that line and marks it. */
+    data class File(val path: String, val line: Int? = null) : FileSelection
     data class Diff(val file: SessionGitFile, val staged: Boolean) : FileSelection
     data class Commit(val hash: String) : FileSelection
     /** One file of a commit: its part of the commit's diff (the commit is read once and kept). */
@@ -83,9 +84,9 @@ class FilesController(
     /**
      * The first load. With [initialPath] (a path from the conversation: absolute, "~…", or relative to the session's
      * folder) a file opens straight away and back returns to the conversation; a folder (a trailing slash, or the hub
-     * saying it is one) opens in the browser as its top.
+     * saying it is one) opens in the browser as its top. [initialLine] opens a file at that line (iOS `goTo(line)`).
      */
-    fun start(initialPath: String? = null) {
+    fun start(initialPath: String? = null, initialLine: Int? = null) {
         refreshGit()
         val asked = initialPath?.trim()?.takeIf { it.isNotEmpty() }
         when {
@@ -93,7 +94,7 @@ class FilesController(
             FilesPaths.namesDirectory(asked) -> browse(FilesPaths.resolve(asked, cwd), top = true)
             else -> {
                 mutable.update { it.copy(direct = true) }
-                preview(FileSelection.File(FilesPaths.resolve(asked, cwd)))
+                preview(FileSelection.File(FilesPaths.resolve(asked, cwd), initialLine?.takeIf { it > 0 }))
             }
         }
     }

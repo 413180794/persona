@@ -61,6 +61,8 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
     var pane by rememberSaveable { mutableStateOf<FilesPane?>(null) }
     // A path opened from a message or a tool card: the files pane opens straight on it.
     var openedPath by rememberSaveable { mutableStateOf<String?>(null) }
+    // Its line (`a.kt:12`): the file opens scrolled to it.
+    var openedLine by rememberSaveable { mutableStateOf<Int?>(null) }
     val handToPersona = rememberHandToPersona(wiring?.mainSender, navigator)
     var insertionFocused by remember { mutableStateOf(false) }
     var git by remember { mutableStateOf<persona.core.contracts.api.SessionGitStatus?>(null) }
@@ -73,7 +75,9 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
         }
     }
     val filesAvailable = !assistant && cwd.isNotBlank() && session.files != null
-    fun open(p: FilesPane, path: String? = null) { insertionFocused = composer.focused; focus.clearFocus(); openedPath = path; pane = p }
+    fun open(p: FilesPane, path: String? = null, line: Int? = null) {
+        insertionFocused = composer.focused; focus.clearFocus(); openedPath = path; openedLine = line; pane = p
+    }
     if (editor != null && storedComposer == null) return
     Box(Modifier.fillMaxSize()) {
         // Keep the composer and conversation mounted while browsing the session directory.
@@ -86,7 +90,7 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
                 actions = actions, connection = wiring?.connection ?: session.connection, requestId = requestId, covered = pane != null,
                 onOpenSession = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) },
                 onConnectionDetails = { navigator.navigate(SettingsPageRoute(SettingsPage.Diagnostics)) },
-                files = session.files, ports = wiring?.ports, onOpenPath = if (filesAvailable) ({ path -> open(FilesPane.Files, path) }) else null,
+                files = session.files, ports = wiring?.ports, onOpenPath = if (filesAvailable) ({ path, line -> open(FilesPane.Files, path, line) }) else null,
                 onHandToPersona = if (assistant) null else handToPersona,
                 onOpenTodo = { todoId -> navigator.navigate(persona.core.navigation.TodoDetailRoute(todoId)) }),
             renderStyle = if (assistant) ChatRenderStyle.Assistant else ChatRenderStyle.Agent,
@@ -95,13 +99,14 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
             statusBindings = ChatStatusBindings(recovery = wiring?.recovery, draftSaveError = draftError?.let { androidx.compose.ui.res.stringResource(it) }),
             onContextCleared = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) })
         if (pane != null && filesAvailable) {
-            BackHandler { pane = null; openedPath = null }
-            SessionFilesScreen(route, cwd, requireNotNull(session.files), { pane = null; openedPath = null }, { path ->
+            BackHandler { pane = null; openedPath = null; openedLine = null }
+            SessionFilesScreen(route, cwd, requireNotNull(session.files), { pane = null; openedPath = null; openedLine = null }, { path ->
                 composer.value = insertFilePath(composer.value, path, insertionFocused)
                 pane = null
                 openedPath = null
+                openedLine = null
                 composer.focusRequest++
-            }, initialPane = pane!!, initialPath = openedPath)
+            }, initialPane = pane!!, initialPath = openedPath, initialLine = openedLine)
         }
     }
 }

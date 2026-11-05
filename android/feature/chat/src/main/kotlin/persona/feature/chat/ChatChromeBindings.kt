@@ -25,8 +25,11 @@ data class ChatChromeBindings(
     val files: SessionFiles? = null,
     /** Opens the session's machine's ports on the phone (docs/ports.md); null: port links open as plain pages. */
     val ports: persona.core.contracts.api.PortOpener? = null,
-    /** Opens a path from a message or a tool card in the session's files pane; null: paths are not offered. */
-    val onOpenPath: ((String) -> Unit)? = null,
+    /**
+     * Opens a path from a message or a tool card in the session's files pane, scrolled to its line (`a.kt:12`) when
+     * it names one; null: paths are not offered.
+     */
+    val onOpenPath: ((path: String, line: Int?) -> Unit)? = null,
     /** 「交给 Persona」 on a message: hands the given text to the main Persona conversation; null: not offered. */
     val onHandToPersona: ((String) -> Unit)? = null,
     /** The assistant conversation's tasks (docs/unified-entry.md); null for an agent's chat. */

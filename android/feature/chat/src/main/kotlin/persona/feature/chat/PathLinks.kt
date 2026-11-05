@@ -20,15 +20,21 @@ import java.net.URLEncoder
  * Paths in messages as links (docs/android.md「对话内容」, the 文件路径 item): those there on the session's machine
  * ([PathPresence]) open in the files pane. A user's plain text gets clickable spans ([messageLinkAnnotations]); a
  * reply's Markdown gets `[path](persona-path:…)` links ([markdown]), which [handler] opens instead of the page's
- * link host. The files pane opens the file, not at its line.
+ * link host. A path with a line (`src/a.kt:12`, `a.kt#L12`) opens the file at that line (iOS `PathLinkURL`).
  */
 internal object PathLinks {
     const val SCHEME = "persona-path:"
 
-    fun uri(path: String): String = SCHEME + URLEncoder.encode(path, "UTF-8").replace("+", "%20")
+    /** The link for [path], with its [line] as `#L12` after it (the encoded path has no `#` of its own). */
+    fun uri(path: String, line: Int? = null): String =
+        SCHEME + URLEncoder.encode(path, "UTF-8").replace("+", "%20") + (line?.takeIf { it > 0 }?.let { "#L$it" }.orEmpty())
 
     fun pathOf(uri: String): String? =
-        if (uri.startsWith(SCHEME)) runCatching { URLDecoder.decode(uri.removePrefix(SCHEME), "UTF-8") }.getOrNull() else null
+        if (uri.startsWith(SCHEME)) runCatching { URLDecoder.decode(uri.removePrefix(SCHEME).substringBefore('#'), "UTF-8") }.getOrNull() else null
+
+    /** The line a `persona-path:` link opens at, or null. */
+    fun lineOf(uri: String): Int? =
+        if (uri.startsWith(SCHEME)) uri.substringAfter('#', "").removePrefix("L").toIntOrNull()?.takeIf { it > 0 } else null
 
     /** The paths to ask the machine about for a message's text (as written: Markdown's code spans are its backticks). */
     fun asked(text: String): List<String> = PathRefs.unique(PathRefs.find(text))
@@ -50,13 +56,13 @@ internal object PathLinks {
         for (m in codeSpan.findAll(text)) {
             if (closed.any { m.range.first in it }) continue
             val ref = PathRefs.codePath(m.groupValues[1])
-            if (ref != null && ref.path in linkable) edits += m.range to "[${m.value}](${uri(ref.path)})"
+            if (ref != null && ref.path in linkable) edits += m.range to "[${m.value}](${uri(ref.path, ref.line)})"
             closed += m.range
         }
         for (ref in PathRefs.findAscii(text)) {
             val range = ref.start until ref.end
             if (ref.path !in linkable || closed.any { it.first <= range.last && range.first <= it.last }) continue
-            edits += range to "[${special.replace(text.substring(ref.start, ref.end)) { "\\" + it.value }}](${uri(ref.path)})"
+            edits += range to "[${special.replace(text.substring(ref.start, ref.end)) { "\\" + it.value }}](${uri(ref.path, ref.line)})"
         }
         if (edits.isEmpty()) return text
         edits.sortBy { it.first.first }
@@ -70,11 +76,11 @@ internal object PathLinks {
         }
     }
 
-    /** Opens `persona-path:` links with [open]; every other link goes on to [outer] (the page's link host). */
-    fun handler(outer: UriHandler, open: (String) -> Unit): UriHandler = object : UriHandler {
+    /** Opens `persona-path:` links with [open] (the path, its line); every other link goes on to [outer] (the page's link host). */
+    fun handler(outer: UriHandler, open: (String, Int?) -> Unit): UriHandler = object : UriHandler {
         override fun openUri(uri: String) {
             val path = pathOf(uri)
-            if (path != null) open(path) else outer.openUri(uri)
+            if (path != null) open(path, lineOf(uri)) else outer.openUri(uri)
         }
     }
 
@@ -106,7 +112,7 @@ internal fun messageLinkAnnotations(text: String): AnnotatedString {
         buildAnnotatedString {
             append(text)
             urls.forEach { addLink(LinkAnnotation.Url(it.url, style), it.start, it.end) }
-            linked.forEach { ref -> addLink(LinkAnnotation.Clickable(ref.path, style) { open(ref.path) }, ref.start, ref.end) }
+            linked.forEach { ref -> addLink(LinkAnnotation.Clickable(ref.path, style) { open(ref.path, ref.line) }, ref.start, ref.end) }
         }
     }
 }

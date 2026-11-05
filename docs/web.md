@@ -496,6 +496,7 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
   **树状视图**（#2439，`session/files/FilesTree.tsx`、`lib/files-tree.ts`，按 Moshi 的形式）：宽屏（≥ 1024 px）默认是可展开的树，文件夹在前、就地展开（缩进一级一级往里）、Git 忽略的行变淡（node 的 `fs.list` 给每项加 `ignored`）、拖动 / 拷贝路径 / Git 标记照旧；
   窄屏仍是逐层进入 + 面包屑（样子没变），面板「⋯」里的「树状视图」可以在两种之间切换（记在浏览器里，`jarvis.files.view`），选了就压过宽窄的默认。展开的文件夹按会话记（`jarvis.files.expanded.<机器>.<会话>`），换会话不带过去；
   列过的文件夹按「机器 + 会话目录」缓存（最近用的 12 个文件夹、总共 8 MB，超了先丢最久没用的），关了再开立刻有内容、同时重新读一遍。
+  **缩略图**（#2907，同 iOS #1370，`lib/file-thumbs.ts`）：树里的图片、PDF、视频和 Office / iWork 文档（`thumbable`，同 iOS 的 `FileThumbnails.extensions`；空文件除外）用电脑画的缩略图（`fileThumbURL`，64px，hub 有 `file_thumb` 时）代替图标，画在比图标略大的圆角框里、不挪动文件名；行进入面板可见范围（上下多 200px）才请求，同时最多 4 个，加载好之前和画不出来（`no_thumbnail`、旧 node、文件没了）时照旧是图标，画不出来的这次页面里不再请求。地址带文件的大小和修改时间（`&v=`），文件变了才重新要，没变就用浏览器的缓存（hub 给一天）。
   **自动刷新**（`lib/fs-live.ts`、`lib/use-fs-live.ts`，`docs/protocol.md`「文件自动刷新」）：面板开着时，页面把打开着的文件夹和是否显示 Git 告诉 hub（`fs_watch`），node 轮询这些文件夹和 `git status`，变了推回 `fs_changed`；页面等 200 ms 去抖后只重新读变了的文件夹、Git 状态和打开着的 diff（原位刷新，不出加载动画）。页面隐藏时不看，回来刷新一遍；socket 重连后也刷新一遍。旧 node 没有 `fs.watch`，面板照旧手动刷新。
   Git 面板标题的副标题和文件面板的 Git 按钮显示 `↑N ↓N *`（领先 / 落后上游的提交、有未提交的改动）；
   查看器：代码带行号和轻量着色（注释 / 字符串 / 数字，只渲染看得见的行，两万行也不卡）、Markdown（可看源码，README 的 HTML 转成 Markdown，相对图片从那台机器读）、

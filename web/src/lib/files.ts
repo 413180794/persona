@@ -314,6 +314,15 @@ export function viewKind(f: FileContent): ViewKind {
   return "code";
 }
 
+/** What a machine can draw a thumbnail of (node file.thumb: images; PDF, video, Office and iWork through Quick Look on
+ * a Mac or pdftoppm / ffmpeg elsewhere), as iOS asks (FileThumbnails.extensions). Code and text keep their glyph; an
+ * empty file has nothing to draw. */
+export function thumbable(name: string, size: number): boolean {
+  if (size <= 0) return false;
+  const ext = extOf(name);
+  return ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tiff", "tif", "bmp", "svg", "avif", "pdf"].includes(ext) || [...VIDEO_EXTS, ...OFFICE_RENDERED, ...OFFICE_CONVERTED, ...WORKBOOK_EXTS].includes(ext);
+}
+
 /** The icon family of a name in a listing. */
 export function glyphOf(name: string): "image" | "doc" | "data" | "sheet" | "pdf" | "code" | "file" {
   const ext = extOf(name);

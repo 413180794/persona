@@ -17,8 +17,8 @@ internal class ChatRowActions(
     val session: SessionKey,
     /** The whole text of an item the hub cut for the page (`full_size`). */
     val fullText: suspend (Item) -> String,
-    /** Opens a path from a message or a tool card on the session's machine; null: paths are not offered. */
-    val openPath: ((String) -> Unit)?,
+    /** Opens a path from a message or a tool card on the session's machine, at its line if any; null: paths are not offered. */
+    val openPath: ((path: String, line: Int?) -> Unit)?,
     /** Which paths messages name are there on the session's machine; null: not asked (paths stay as they were). */
     val paths: PathPresence? = null,
     /** Photos sent with messages (`<attached_images>`), read from the session's machine; null: they cannot load. */

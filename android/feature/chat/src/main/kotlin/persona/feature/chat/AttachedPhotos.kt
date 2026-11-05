@@ -137,7 +137,7 @@ internal fun FileChips(paths: List<String>, alignEnd: Boolean) {
     if (shown.isEmpty()) return
     Box(Modifier.fillMaxWidth().padding(top = Tokens.Space.xs), contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart) {
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            shown.forEach { path -> PathChip(fileLabel(path), fileIcon(path), onClick = { open(path) }) }
+            shown.forEach { path -> PathChip(fileLabel(path), fileIcon(path), onClick = { open(path, null) }) }
         }
     }
 }

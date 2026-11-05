@@ -115,6 +115,21 @@ class FilesControllerTest {
         assertFalse(files.back())
     }
 
+    @Test fun aFileFromTheConversationKeepsItsLine() = runTest {
+        val machine = FakeMachine()
+        val files = controller(machine)
+        files.start("Sources/App/main.swift", initialLine = 12)
+        runCurrent()
+        assertEquals(FileSelection.File("$cwd/Sources/App/main.swift", 12), files.state.value.selection)
+        assertEquals("hello", files.state.value.content?.text)
+
+        // No line, or one that is not a line: the file opens at its top.
+        val other = controller(FakeMachine())
+        other.start("Sources/App/main.swift", initialLine = 0)
+        runCurrent()
+        assertNull((other.state.value.selection as FileSelection.File).line)
+    }
+
     @Test fun homePathsTravelAsWritten() = runTest {
         val machine = FakeMachine()
         val files = controller(machine)

@@ -56,7 +56,7 @@ internal fun PathLink(path: String) {
     val viewFile = stringResource(R.string.chat_tool_view_file)
     Row(
         Modifier.clip(PersonaTheme.shapes.controlShape)
-            .then(if (open != null) Modifier.clickable(role = Role.Button, onClickLabel = viewFile) { open(path) } else Modifier)
+            .then(if (open != null) Modifier.clickable(role = Role.Button, onClickLabel = viewFile) { open(path, null) } else Modifier)
             .padding(vertical = Tokens.Space.xs),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
     ) {
@@ -75,7 +75,7 @@ internal fun DiffHeader(path: String, added: Int, removed: Int) {
     val viewFile = stringResource(R.string.chat_tool_view_file)
     Row(
         Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape)
-            .then(if (open != null) Modifier.clickable(role = Role.Button, onClickLabel = viewFile) { open(path) } else Modifier)
+            .then(if (open != null) Modifier.clickable(role = Role.Button, onClickLabel = viewFile) { open(path, null) } else Modifier)
             .padding(vertical = Tokens.Space.xs),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
     ) {

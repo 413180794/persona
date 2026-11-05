@@ -33,6 +33,7 @@ import java.time.Instant
  * [initialPath] opens a path the conversation mentioned (a file label, a tool's path, a diff's file header): relative
  * paths are in [cwd], "~…" goes to the hub as it is. A file opens straight in its preview and back returns to the
  * conversation; a folder (a trailing slash, or the hub answering `is_dir`) opens in the browser as its top.
+ * [initialLine] (a message's `path:12`) opens the file's text at that line, marked.
  */
 @Composable
 fun SessionFilesScreen(
@@ -44,13 +45,14 @@ fun SessionFilesScreen(
     initialPane: FilesPane = FilesPane.Files,
     modifier: Modifier = Modifier,
     initialPath: String? = null,
+    initialLine: Int? = null,
 ) {
     val asked = initialPath?.trim()?.takeIf { it.isNotEmpty() }
     // A path from the conversation that names its machine fully can open before the session's folder is known.
     val base = cwd.ifBlank { asked?.takeIf { it.startsWith("/") || FilesPaths.isHome(it) }?.let { start ->
         if (FilesPaths.namesDirectory(start)) FilesPaths.resolve(start, "/") else FilesPaths.parent(FilesPaths.resolve(start, "/")) ?: "/"
     }.orEmpty() }
-    key(session, base, api, asked) {
+    key(session, base, api, asked, initialLine) {
         if (base.isBlank()) {
             JListPage(stringResource(R.string.files_title), modifier, onBack = onBackToChat) {
                 item { JEmptyState(stringResource(R.string.files_no_folder_title), stringResource(R.string.files_no_folder_message),
@@ -63,7 +65,7 @@ fun SessionFilesScreen(
             val images = remember { MarkdownImages(api, session.machineId, base) }
             val state by controller.state.collectAsStateWithLifecycle()
             var pane by rememberSaveable { mutableStateOf(if (asked != null) FilesPane.Files else initialPane) }
-            LaunchedEffect(controller) { controller.start(asked) }
+            LaunchedEffect(controller) { controller.start(asked, initialLine) }
             val back: () -> Unit = { if (!controller.back(pane)) onBackToChat() }
             BackHandler(onBack = back)
             Box(modifier.fillMaxSize()) {

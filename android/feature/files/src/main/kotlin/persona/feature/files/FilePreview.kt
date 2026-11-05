@@ -47,7 +47,9 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
     val html = file?.text != null && HtmlPreview.isHtml(file.name)
     // Per file and only while it's open: scripts and the network come back off next time.
     var policy by remember(file?.path) { mutableStateOf(HtmlPreview.Policy()) }
-    var source by rememberSaveable(selection.toString()) { mutableStateOf(false) }
+    // Opened at a line (a message's `path:12`): the source, where lines are (iOS `goTo(line)`); ⋯ still switches back.
+    val line = (selection as? FileSelection.File)?.line
+    var source by rememberSaveable(selection.toString()) { mutableStateOf(line != null) }
     val path = when (selection) {
         is FileSelection.File -> file?.path?.ifEmpty { null } ?: selection.path
         is FileSelection.Diff -> joinRemotePath(state.git?.root ?: controller.cwd, selection.file.path)
@@ -86,7 +88,7 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
                     HtmlFile(file, policy, Modifier.weight(1f))
                 }
             }
-            file != null -> key(file.path) { FileBody(file, markdown && !source, padding, header, controller, images) }
+            file != null -> key(file.path) { FileBody(file, markdown && !source, padding, header, controller, images, line) }
             diff != null -> key(selection) {
                 if (diff.diff.isBlank()) LazyColumn(contentPadding = padding) {
                     header(); item { JEmptyState(stringResource(R.string.files_diff_no_text), stringResource(R.string.files_diff_no_text_message)) }
@@ -125,13 +127,13 @@ internal fun isTable(file: SessionFileContent): Boolean =
 
 @Composable
 private fun FileBody(file: SessionFileContent, rendered: Boolean, padding: PaddingValues, header: LazyListScope.() -> Unit,
-    controller: FilesController, images: MarkdownImages) {
+    controller: FilesController, images: MarkdownImages, line: Int? = null) {
     val text = file.text
     val mime = file.mime.orEmpty()
     when {
         text != null && rendered -> FileMarkdown(text, FilesPaths.parent(file.path) ?: controller.cwd, padding,
             onOpenPath = { controller.push(FileSelection.File(it)) }, loadImage = images::load, header = header)
-        text != null || file.size == 0L -> FileText(text.orEmpty(), contentPadding = padding, header = header)
+        text != null || file.size == 0L -> FileText(text.orEmpty(), contentPadding = padding, focusLine = line, header = header)
         file.data != null && mime.startsWith("image/") -> Column(Modifier.fillMaxSize().padding(padding)) {
             FileMeta(file.size, file.truncated)
             FileImage(file, Modifier.weight(1f))

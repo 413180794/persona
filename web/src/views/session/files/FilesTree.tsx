@@ -1,12 +1,15 @@
 // The Files panel's tree view (#2439, Moshi's form): folders open in place under their parent, folders first, what Git
 // ignores dimmed. Listings are fetched folder by folder when one opens, kept in a small cache (lib/files-tree.ts) and
-// kept fresh while the panel shows them (lib/fs-live.ts). The open folders are remembered per session.
+// kept fresh while the panel shows them (lib/fs-live.ts). The open folders are remembered per session. Pictures,
+// PDFs, videos and documents show the machine's thumbnail instead of their glyph (#2907, lib/file-thumbs.ts).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../../lib/api";
 import { t } from "../../../i18n";
 import { entryPayload, ENTRY_DRAG_TYPE } from "../../../lib/entry-drag";
-import { gitMark, type FsListing, type GitStatus } from "../../../lib/files";
+import { FILE_THUMB_FEATURE, markThumbFailed, thumbFailed, thumbSlots, thumbSrc } from "../../../lib/file-thumbs";
+import { gitMark, thumbable, type FsEntry, type FsListing, type GitStatus } from "../../../lib/files";
 import { expandedKey, listingCache, readExpanded, toggleExpanded, treeRows, visibleDirs, withExpanded, writeExpanded, type Listed, type TreeRow } from "../../../lib/files-tree";
+import { hubHas, useStore } from "../../../lib/store";
 import { useFsLive } from "../../../lib/use-fs-live";
 import { Button, copyText, cx, IconButton, Loading, Spinner } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
@@ -39,6 +42,7 @@ export function FilesTree({
   onShowHidden: () => void;
 }) {
   const cache = useMemo(() => listingCache(mid, cwd), [mid, cwd]);
+  const thumbs = useStore((s) => hubHas(s.features, FILE_THUMB_FEATURE));
   const storeKey = expandedKey(mid, sid);
   const [open, setOpen] = useState<string[]>(() => withExpanded(readExpanded(localStorage, storeKey), reveal));
   useEffect(() => writeExpanded(localStorage, storeKey, open), [storeKey, open]);
@@ -129,7 +133,7 @@ export function FilesTree({
   return (
     <div role="tree" aria-label={t("files-tree.tree")} className="py-1" style={{ animation: "fade-in 160ms ease-out both" }}>
       {rows.map((r) => (
-        <Row key={r.key} r={r} mid={mid} git={git} onToggle={toggle} onOpenFile={onOpenFile} onRetry={fetchDir} />
+        <Row key={r.key} r={r} mid={mid} cwd={cwd} thumbs={thumbs} git={git} onToggle={toggle} onOpenFile={onOpenFile} onRetry={fetchDir} />
       ))}
     </div>
   );
@@ -141,6 +145,8 @@ const indent = (depth: number, extra = 0) => ({ paddingLeft: `calc(var(--spacing
 function Row({
   r,
   mid,
+  cwd,
+  thumbs,
   git,
   onToggle,
   onOpenFile,
@@ -148,6 +154,9 @@ function Row({
 }: {
   r: TreeRow;
   mid: string;
+  cwd: string;
+  /** The hub can ask the machine for thumbnails (`file_thumb`). */
+  thumbs: boolean;
   git: GitStatus | null;
   onToggle: (dir: string) => void;
   onOpenFile: (path: string) => void;
@@ -210,7 +219,7 @@ function Row({
       >
         {e.dir ? <Icon name={r.expanded ? "chevron" : "chevronRight"} size={12} stroke={2.2} className="shrink-0 text-ink-3" /> : <span aria-hidden className="size-3 shrink-0" />}
         <span className={cx("flex shrink-0", e.ignored && "opacity-50")}>
-          <FileGlyph name={e.name} dir={e.dir} />
+          {thumbs && !e.dir && thumbable(e.name, e.size) ? <ThumbGlyph mid={mid} cwd={cwd} path={r.path} entry={e} /> : <FileGlyph name={e.name} dir={e.dir} />}
         </span>
         <span className={cx("truncate text-[13px]", e.ignored ? "text-ink-3" : hidden ? "text-ink-2" : "text-ink")}>{e.name}</span>
         {e.symlink && <Icon name="link" size={11} className="shrink-0 text-ink-3" />}
@@ -222,5 +231,74 @@ function Row({
         <IconButton icon="copy" label={t("files-tree.copyPath")} onClick={() => copyText(r.path)} size={26} iconSize={13} />
       </span>
     </div>
+  );
+}
+
+/** A row's thumbnail: 64px from the machine (sharp at 3x), drawn a little larger than the glyph without moving the
+ *  name. The glyph shows until the picture has loaded, and stays when the machine cannot draw one. */
+const THUMB_PX = 64;
+
+function ThumbGlyph({ mid, cwd, path, entry }: { mid: string; cwd: string; path: string; entry: FsEntry }) {
+  const src = thumbSrc(mid, path, cwd, THUMB_PX, entry.size, entry.mtime);
+  const box = useRef<HTMLSpanElement>(null);
+  const [asked, setAsked] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(() => thumbFailed(src));
+  const give = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    setAsked(false);
+    setLoaded(false);
+    setFailed(thumbFailed(src));
+    if (thumbFailed(src)) return;
+    // asked once the row is near the panel's visible part, then in turn with the other rows
+    const ask = () => {
+      give.current = thumbSlots.take(() => setAsked(true));
+    };
+    const el = box.current;
+    let io: IntersectionObserver | undefined;
+    if (!el || typeof IntersectionObserver === "undefined") ask();
+    else {
+      io = new IntersectionObserver(
+        (es) => {
+          if (!es.some((x) => x.isIntersecting)) return;
+          io?.disconnect();
+          ask();
+        },
+        { rootMargin: "200px 0px" },
+      );
+      io.observe(el);
+    }
+    return () => {
+      io?.disconnect();
+      give.current?.();
+      give.current = null;
+    };
+  }, [src]);
+  const finish = (ok: boolean) => {
+    give.current?.();
+    give.current = null;
+    if (ok) setLoaded(true);
+    else {
+      markThumbFailed(src);
+      setFailed(true);
+    }
+  };
+  return (
+    <span ref={box} className="relative flex size-4 shrink-0 items-center justify-center" data-file-thumb={loaded ? "shown" : failed ? "failed" : "waiting"}>
+      <span className={cx("flex transition-opacity duration-150", loaded && "opacity-0")}>
+        <FileGlyph name={entry.name} />
+      </span>
+      {asked && !failed && (
+        <img
+          src={src}
+          alt=""
+          decoding="async"
+          draggable={false}
+          onLoad={() => finish(true)}
+          onError={() => finish(false)}
+          className={cx("absolute -inset-0.5 size-5 max-w-none rounded-[5px] bg-field object-cover shadow-hairline transition-opacity duration-150", loaded ? "opacity-100" : "opacity-0")}
+        />
+      )}
+    </span>
   );
 }

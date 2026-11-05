@@ -369,7 +369,7 @@ private fun ChatPage(
     val imageDescription = stringResource(R.string.chat_content_image)
     val rowActions = remember(key, repository, photos, retryId, chrome.onOpenPath != null, pathPresence) {
         ChatRowActions(key, fullText = { item -> repository.fullText(key, item.id) },
-            openPath = if (chrome.onOpenPath != null) ({ path -> currentOpenPath?.invoke(path) }) else null,
+            openPath = if (chrome.onOpenPath != null) ({ path, line -> currentOpenPath?.invoke(path, line) }) else null,
             paths = pathPresence,
             photos = photos, pictures = { chatViewerImages(key, currentItems, repository, imageDescription) },
             openImages = { images, index -> viewer = ViewerRequest(images, index) },

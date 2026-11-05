@@ -1,11 +1,13 @@
 package persona.feature.files
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
@@ -21,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import persona.core.designsystem.PersonaTheme
 import persona.core.designsystem.JLoading
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 internal enum class FileLineKind { Code, Context, Add, Delete, Info }
@@ -68,9 +71,22 @@ internal fun highlighted(text: String, keyword: Color, string: Color, comment: C
     return result.toAnnotatedString()
 }
 
-/** Each visible row shares the same horizontal offset and width; gutters stay fixed. */
+/**
+ * The row of [line] (1-based) among [count] lines, as far as the text goes (a file cut at 2 MB ends before it), or
+ * null when there is no line to go to.
+ */
+internal fun focusRow(line: Int?, count: Int): Int? = if (line == null || line < 1 || count < 1) null else minOf(line, count) - 1
+
+/** The list item to scroll to for [row]: the rows come after the page's [headers] items. */
+internal fun focusItem(row: Int, headers: Int): Int = headers.coerceAtLeast(0) + row
+
+/**
+ * Each visible row shares the same horizontal offset and width; gutters stay fixed. [focusLine] (1-based, not for a
+ * diff) is scrolled to a third of the way down and marked, as iOS `CodeLinesView.focus`.
+ */
 @Composable
-internal fun FileText(text: String, diff: Boolean = false, modifier: Modifier = Modifier, contentPadding: PaddingValues = PaddingValues(0.dp), header: LazyListScope.() -> Unit = {}) {
+internal fun FileText(text: String, diff: Boolean = false, modifier: Modifier = Modifier, contentPadding: PaddingValues = PaddingValues(0.dp),
+    focusLine: Int? = null, header: LazyListScope.() -> Unit = {}) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val style = PersonaTheme.type.code
@@ -95,15 +111,27 @@ internal fun FileText(text: String, diff: Boolean = false, modifier: Modifier = 
         return
     }
     val horizontal = rememberScrollState()
+    val list = rememberLazyListState()
+    val focus = if (diff) null else focusRow(focusLine, data.lines.size)
+    LaunchedEffect(data, focus) {
+        if (focus == null) return@LaunchedEffect
+        // The header's items are known once the list has laid out: the rows follow them.
+        val total = snapshotFlow { list.layoutInfo.totalItemsCount }.first { it >= data.lines.size }
+        list.scrollToItem(focusItem(focus, total - data.lines.size))
+        list.scrollBy(-list.layoutInfo.viewportSize.height / 3f)
+    }
     val gutter = if (diff) 104.dp else 60.dp
     BoxWithConstraints(modifier.background(colors.sunken)) {
         val width = maxOf(with(density) { data.widthPx.toDp() } + 24.dp, (maxWidth - gutter).coerceAtLeast(1.dp))
         SelectionContainer {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
+            LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = contentPadding) {
                 header()
                 itemsIndexed(data.lines, key = { index, _ -> index }, contentType = { _, _ -> "line" }) { index, line ->
                     val tone = when (line.kind) { FileLineKind.Add -> colors.diffAdd; FileLineKind.Delete -> colors.diffDel; else -> colors.sunken.copy(alpha = 0f) }
-                    Row(Modifier.fillMaxWidth().background(tone.copy(alpha = if (line.kind != FileLineKind.Add && line.kind != FileLineKind.Delete) 0f else .12f))) {
+                    // The line asked for: the accent's wash, as iOS `Theme.lineFocus`.
+                    val band = if (index == focus) colors.accent.copy(alpha = .18f)
+                        else tone.copy(alpha = if (line.kind != FileLineKind.Add && line.kind != FileLineKind.Delete) 0f else .12f)
+                    Row(Modifier.fillMaxWidth().background(band)) {
                         val marker = when (line.kind) { FileLineKind.Add -> "+"; FileLineKind.Delete -> "−"; else -> " " }
                         val number = if (diff) "${line.old?.toString().orEmpty().padStart(4)} ${line.new?.toString().orEmpty().padStart(4)} $marker"
                             else line.new?.toString().orEmpty()
