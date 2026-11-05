@@ -57,7 +57,7 @@ class AssistantSettingsShotsTest {
 
     private class FakeManagement(memoryTitle: String, memoryBody: String) : AssistantManagement {
         private val updated = Instant.now().minusSeconds(3_600).toString()
-        var config = AssistantConfig(machineId = "example-machine", launcher = "claude", cwd = "/home/me/.jarvis/assistant",
+        var config = AssistantConfig(machineId = "workstation", launcher = "claude", cwd = "/home/me/.jarvis/assistant",
             timezone = "Asia/Shanghai", notesEffective = "~/code", main = "main")
         val files = listOf(
             MemoryFile("MEMORY.md", "- [$memoryTitle](morning.md)", updated),
@@ -73,10 +73,10 @@ class AssistantSettingsShotsTest {
         override suspend fun endConversation(session: SessionKey) {}
         override suspend fun routines(): List<Routine> = emptyList()
         override suspend fun setRoutines(list: List<Routine>) = list
-        override suspend fun runRoutine(id: String) = SessionKey("example-machine", id)
+        override suspend fun runRoutine(id: String) = SessionKey("workstation", id)
         override suspend fun followups(): List<Followup> = emptyList()
         override suspend fun cancelFollowup(id: String) {}
-        override suspend fun runFollowup(id: String) = SessionKey("example-machine", id)
+        override suspend fun runFollowup(id: String) = SessionKey("workstation", id)
         override suspend fun runs(): List<Run> = emptyList()
         override suspend fun notes() = AssistantNotes()
         override suspend fun setNotes(text: String) {}
@@ -86,7 +86,7 @@ class AssistantSettingsShotsTest {
     }
 
     private val machines = listOf(
-        Machine("example-machine", name = "example-machine", kind = "local", online = true, home = "/home/me"),
+        Machine("workstation", name = "workstation", kind = "local", online = true, home = "/home/me"),
         Machine("laptop", name = "laptop", kind = "ssh", icon = "laptop", online = false, home = "/Users/me"),
     )
 
