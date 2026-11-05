@@ -779,15 +779,18 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 
 - **加载**：`main.tsx` / `admin/main.tsx` 先 `await initI18n()` 载入当前语言的词条，再动态 import 其余模块，所以 `t()` 在模块顶层也能用。
   语言在页面的整个生命周期里不变；设置 › 通用 › 外观 › 语言改了就 `location.reload()`（选择存在 `localStorage` 的 `persona.language`，没有就跟随系统）。每种语言单独一个 chunk，只下载用到的那种。
+  客户端的词条（`locales/<语言>/index.ts`）不含管理后台的 `admin-*` 命名空间；它们在 `locales/<语言>/admin.ts`，只有 `admin/main.tsx` 经 `admin/catalog.ts` 叠加载入
+  （`initI18n(undefined, adminCatalog)`，管理后台也用 `common.*` 和共享组件的词条），构建时和管理后台代码一起进 `admin/assets/`。
 - **词条**：`src/i18n/locales/<语言>/<命名空间>.json`，平铺的 `"名字": "文字"`，key 写成 `命名空间.名字`。**一个页面或一块功能一个命名空间**（`settings-general`、`inbox`、`admin-devices`…），
   几个人同时改不会撞同一个文件；`common.json` 只放到处都用的（取消、保存、加载中），别往里堆。
 - **写法**：`t("inbox.empty")`、`t("inbox.count", { count })`（有 `_one` / `_other` 时按 `Intl.PluralRules` 选）；带元素的句子用 `tRich("ns.key", { link: <a…/> })`，
   整句一个词条，不拼半句。日期、数字、列表用 `src/i18n` 的 `formatDate` / `formatNumber` / `formatRelative` / `formatList`（都是 `Intl`），不手拼「月」「日」。
 - **和 hub**：每个请求带 `Accept-Language`（`lib/api.ts`），WebSocket 连上先发 `client_hello.locale`（`lib/store.ts`），hub 据此出错误文案、推送和助手回答的语言（[protocol.md](protocol.md)）。
 - **检查**（`src/i18n/catalog.test.ts`）：三种语言的命名空间、key、占位符一致，`_one` 有 `_other`，「Persona」不翻译；代码里 `t("…")` 的 key 都存在；
+  客户端词条里没有 `admin-*`、两份合起来正好是全部词条，`admin-*` 的 key 只在 `src/admin/` 下用；
   写死的中文（字符串、JSX 文字，注释和测试不算）按文件只能减少，基线 `src/i18n/hardcoded-baseline.json`，减少后 `UPDATE_I18N_BASELINE=1 npx vitest run src/i18n/catalog.test.ts` 重记。
   必须保留的中文（要和别人写的原文匹配的，如解析 hub / 飞书的输出）在那一行或上一行注释写 `i18n-ignore`。
-- **测试**：vitest 的 `setupFiles` 先载入 zh-Hans，现有测试照旧按中文断言。
+- **测试**：vitest 的 `setupFiles` 先载入 zh-Hans（客户端和管理后台的词条都载），现有测试照旧按中文断言。
 - **key 的坑**：key 以 `_zero` / `_one` / `_two` / `_few` / `_many` / `_other` 结尾会被当成复数形式（`doc_other` 要写成 `doc_cloud`）；
   模块里有局部变量叫 `t` 的要改名，别遮住 `t()`。要和别人写的原文匹配的中文（hub 写进对话的通知、`<jarvis-context>` 里的标记、引用的首行）不翻，标 `i18n-ignore`。
 

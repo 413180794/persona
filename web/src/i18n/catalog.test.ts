@@ -8,7 +8,11 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
+import { adminCatalog } from "../admin/catalog";
 import { LANGS } from "./index";
+import enClient from "./locales/en/index";
+import jaClient from "./locales/ja/index";
+import zhClient from "./locales/zh-Hans/index";
 
 const SRC = join(__dirname, "..");
 const LOCALES = join(__dirname, "locales");
@@ -132,9 +136,33 @@ describe("catalogs", () => {
   });
 });
 
+describe("client and admin catalogs", () => {
+  const clients: Record<string, Catalog> = { "zh-Hans": zhClient, en: enClient, ja: jaClient };
+  const ADMIN = /^admin-/;
+
+  it("leaves the admin UI's namespaces out of the client's and puts each namespace in exactly one", async () => {
+    const all = catalogs();
+    for (const lang of LANGS) {
+      const admin = (await adminCatalog[lang]()).default;
+      const client = clients[lang];
+      expect(Object.keys(client).filter((k) => ADMIN.test(k)), `${lang} client`).toEqual([]);
+      expect(Object.keys(admin).filter((k) => !ADMIN.test(k)), `${lang} admin`).toEqual([]);
+      const files = Object.entries(all[lang]).flatMap(([ns, cat]) => Object.keys(cat).map((k) => `${ns}.${k}`));
+      expect([...Object.keys(client), ...Object.keys(admin)].sort(), lang).toEqual(files.sort());
+    }
+  });
+});
+
 describe("code", () => {
   const files = sourceFiles(SRC);
   const scans = new Map(files.map((f) => [relative(SRC, f), scan(f)]));
+
+  it("uses admin-* keys only in the admin UI, whose page is the only one that loads them", () => {
+    const outside = [...scans]
+      .filter(([f]) => !f.startsWith("admin/"))
+      .flatMap(([f, s]) => s.keys.filter((k) => /^admin-/.test(k.key)).map((k) => `${f}:${k.line} ${k.key}`));
+    expect(outside).toEqual([]);
+  });
 
   it("only uses keys that exist", () => {
     const flat = new Set<string>();

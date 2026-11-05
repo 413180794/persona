@@ -3,9 +3,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { initI18n } from "../i18n";
 import "../styles.css";
+import { adminCatalog } from "./catalog";
 
-// The catalog loads before the pages: they call t() as their modules load (docs/web.md「国际化」).
-await initI18n();
+// The catalog (the client's plus the admin UI's own) loads before the pages: they call t() as their modules load
+// (docs/web.md「国际化」).
+await initI18n(undefined, adminCatalog);
 const { AdminApp } = await import("./App");
 
 // Dev only (`npm run dev`, ?mock=<scenario>): canned data instead of a hub, for building and screenshots. The

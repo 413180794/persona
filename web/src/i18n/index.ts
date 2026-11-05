@@ -43,16 +43,24 @@ type Catalog = Record<string, string>;
 let lang: Lang = "zh-Hans";
 let catalog: Catalog = {};
 
-const loaders: Record<Lang, () => Promise<{ default: Catalog }>> = {
+/** One dynamic import per language, so a page downloads only the language it runs in. */
+export type CatalogLoaders = Record<Lang, () => Promise<{ default: Catalog }>>;
+
+/** The web client's catalog. The admin UI's own namespaces (admin-*) are not in it: admin/main.tsx adds them. */
+const loaders: CatalogLoaders = {
   "zh-Hans": () => import("./locales/zh-Hans/index"),
   en: () => import("./locales/en/index"),
   ja: () => import("./locales/ja/index"),
 };
 
-/** Loads the catalog of the preferred language (or `forced`, for tests). Call before importing anything that says t(). */
-export async function initI18n(forced?: Lang): Promise<Lang> {
+/**
+ * Loads the client catalog of the preferred language (or `forced`, for tests), plus the `extra` catalogs of that
+ * language (the admin UI's). Call before importing anything that says t().
+ */
+export async function initI18n(forced?: Lang, ...extra: CatalogLoaders[]): Promise<Lang> {
   lang = forced ?? preferredLanguage();
-  catalog = (await loaders[lang]()).default;
+  const parts = await Promise.all([loaders, ...extra].map((l) => l[lang]()));
+  catalog = Object.assign({}, ...parts.map((p) => p.default));
   if (typeof document !== "undefined") document.documentElement.lang = lang;
   return lang;
 }

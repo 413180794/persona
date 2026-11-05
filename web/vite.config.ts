@@ -9,7 +9,10 @@ const hub = (environment.PERSONA_HUB_URL ?? environment.JARVIS_HUB_URL) || "http
 
 // The hub admin UI (docs/admin.md) is its own page, admin/index.html. Its code goes under admin/assets/, which the hub
 // serves only to sources inside admin.access; the client's bundle never references it.
-const adminOnly = (ids: string[]) => ids.length > 0 && ids.every((id) => id.includes("/src/admin/") || id.endsWith("/admin/index.html"));
+// The admin UI's strings (src/i18n/locales/<lang>/admin.ts and its admin-*.json) are admin code too.
+const adminStrings = /\/src\/i18n\/locales\/[^/]+\/admin(\.ts|-[\w-]+\.json)$/;
+const adminOnly = (ids: string[]) =>
+  ids.length > 0 && ids.every((id) => id.includes("/src/admin/") || id.endsWith("/admin/index.html") || adminStrings.test(id));
 
 // Dev only: /admin and its client-side routes get admin/index.html (Vite's own fallback is the root index.html).
 const adminFallback: Plugin = {
