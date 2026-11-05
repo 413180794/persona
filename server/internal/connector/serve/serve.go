@@ -796,7 +796,8 @@ func (s *server) initialize(params json.RawMessage) (any, error) {
 // ItemOf is a connector's manifest as a contribution to the connectors extension point.
 func ItemOf(m Manifest) extension.ConnectorItem {
 	return extension.ConnectorItem{ID: m.ID, Name: m.Name, Capabilities: m.Capabilities, Hosts: m.Hosts, AgentTools: m.AgentTools,
-		Unlisted: m.Unlisted, ConfirmAlways: m.ConfirmAlways, PollSeconds: m.PollSeconds, Kinds: m.Kinds, MetaDescription: m.MetaDescription}
+		Unlisted: m.Unlisted, ConfirmAlways: m.ConfirmAlways, PollSeconds: m.PollSeconds, Kinds: m.Kinds, ArchiveSources: m.ArchiveSources,
+		MetaDescription: m.MetaDescription, CLI: m.CLI}
 }
 
 // groupCall answers group.tool and group.fallback.
@@ -913,7 +914,7 @@ func ManifestOf(c connector.Connector) Manifest {
 	cm := c.Manifest()
 	m := Manifest{Protocol: Protocol, ID: c.ID(), Name: c.Name(), Capabilities: []string{}, Hosts: cm.Hosts, AgentTools: cm.AgentTools,
 		Unlisted: cm.Unlisted, ConfirmAlways: cm.ConfirmAlways, PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds,
-		MetaDescription: cm.MetaDescription, CLI: cm.CLI}
+		ArchiveSources: cm.ArchiveSources, MetaDescription: cm.MetaDescription, CLI: cm.CLI}
 	for _, cp := range cm.Capabilities {
 		m.Capabilities = append(m.Capabilities, string(cp))
 	}

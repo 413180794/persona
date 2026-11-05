@@ -131,6 +131,70 @@ func TestSettingsAndSignInSource(t *testing.T) {
 	}
 }
 
+// flakySettingsProgram refuses its first sign-in source and its first settings (still loading), takes them after
+// that, and has defaults of its own until it is given the user's.
+type flakySettingsProgram struct {
+	*settingsProgram
+	authCalls, optionsCalls int
+}
+
+func (p *flakySettingsProgram) Options() json.RawMessage {
+	if o := p.settingsProgram.Options(); string(o) != `{"ci":"mine"}` {
+		return o
+	}
+	return json.RawMessage(`{"default":true}`)
+}
+
+func (p *flakySettingsProgram) SetOptions(raw json.RawMessage) error {
+	p.mu.Lock()
+	p.optionsCalls++
+	first := p.optionsCalls == 1
+	p.mu.Unlock()
+	if first {
+		return errors.New("still loading")
+	}
+	return p.settingsProgram.SetOptions(raw)
+}
+
+func (p *flakySettingsProgram) SetAuth(ctx context.Context, a serve.AuthSource) (serve.AuthView, error) {
+	p.mu.Lock()
+	p.authCalls++
+	first := p.authCalls == 1
+	p.mu.Unlock()
+	if first {
+		return serve.AuthView{}, errors.New("still loading")
+	}
+	return p.settingsProgram.SetAuth(ctx, a)
+}
+
+// A program that refuses the user's settings or sign-in source at start does not get its defaults kept in their
+// place: they stay pending and go to it on a later refresh.
+func TestSyncOptionsRetriesAfterFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := program(t, &memSecrets{}, "JARVIS_PROC_KIND=flaky-settings")
+	cfg.Manifest = (&settingsProgram{}).Manifest()
+	c := New(cfg)
+	if err := c.SetOptions(json.RawMessage(`{"user":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.SetAuth(ctx, serve.AuthSource{Source: "machine", Machine: "m1"}); err != nil {
+		t.Fatal(err)
+	}
+	go c.Run(ctx)
+	waitUntil(t, "the first refresh", func() bool { return c.Status(ctx).State == connector.StateOK })
+	if got := string(c.Options()); got != `{"user":1}` {
+		t.Fatal("the user's settings after a refused start:", got)
+	}
+	waitUntil(t, "the program has the settings and the source", func() bool {
+		c.refresh(ctx)
+		return c.Status(ctx).Account == `{"user":1}|[]|m1`
+	})
+	if got := string(c.Options()); got != `{"user":1}` {
+		t.Fatal("options as the program keeps them:", got)
+	}
+}
+
 // Without machines declared, a program is not told of computers (connector.As); without options it has none.
 func TestUndeclaredSettings(t *testing.T) {
 	c := New(Config{ID: "example", Name: "Example", Manifest: (&exampleProgram{}).Manifest()})

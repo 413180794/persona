@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"slices"
 	"testing"
 	"time"
 
@@ -95,4 +96,53 @@ func TestEventsReachAListener(t *testing.T) {
 		t.Fatal("the event did not reach the connector")
 	}
 	_ = hubW.Close()
+}
+
+// archiving is a connector that files conversations under another name too and has a command line.
+type archiving struct{ notes }
+
+func (archiving) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus}, ArchiveSources: []string{"moments"}, CLI: "ex"}
+}
+
+// The init answer and the initialize contribution carry the connector's archive_sources and cli: a program built on
+// serve says what its Go manifest says.
+func TestManifestKeepsArchiveSourcesAndCLI(t *testing.T) {
+	m := ManifestOf(archiving{})
+	if !slices.Equal(m.ArchiveSources, []string{"moments"}) || m.CLI != "ex" {
+		t.Fatalf("init answer %+v", m)
+	}
+	if back := m.Of(); !slices.Equal(back.ArchiveSources, []string{"moments"}) || back.CLI != "ex" {
+		t.Fatalf("round trip %+v", back)
+	}
+	progR, hubW := io.Pipe()
+	hubR, progW := io.Pipe()
+	go func() {
+		_ = Main(context.Background(), progR, progW, func(json.RawMessage, connector.Secrets) (connector.Connector, error) {
+			return archiving{}, nil
+		})
+		_ = progW.Close()
+	}()
+	defer hubW.Close()
+	if _, err := io.WriteString(hubW, `{"id":"i1","method":"initialize","params":{"protocol":1,"plugin":{"id":"example-notes","version":"1.0.0"},"active":{"connectors":["examplenotes"]}}}`+"\n"); err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(hubR).ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _, _ = io.Copy(io.Discard, hubR) }()
+	var answer struct {
+		Result extension.InitializeResult `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(line), &answer); err != nil {
+		t.Fatal(err)
+	}
+	var items []extension.ConnectorItem
+	if err := json.Unmarshal(answer.Result.Contributes["connectors"], &items); err != nil || len(items) != 1 {
+		t.Fatalf("initialize answer %s", line)
+	}
+	if !slices.Equal(items[0].ArchiveSources, []string{"moments"}) || items[0].CLI != "ex" {
+		t.Fatalf("contribution %+v", items[0])
+	}
 }

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	pserve "github.com/nwverse/persona/server/internal/extension/serve"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // The test binary is also the program: run with JARVIS_PROC_CHILD=1 it serves exampleProgram on stdin / stdout.
@@ -32,8 +34,17 @@ func TestMain(m *testing.M) {
 			os.Exit(0)
 		}
 		err := serve.Main(context.Background(), os.Stdin, os.Stdout, func(cfg json.RawMessage, s connector.Secrets) (connector.Connector, error) {
-			if os.Getenv("JARVIS_PROC_KIND") == "settings" {
+			switch os.Getenv("JARVIS_PROC_KIND") {
+			case "settings":
 				return &settingsProgram{}, nil
+			case "slow-tools":
+				return &slowProgram{exampleProgram: &exampleProgram{secrets: s}, tools: true}, nil
+			case "slow-status":
+				return &slowProgram{exampleProgram: &exampleProgram{secrets: s}}, nil
+			case "flaky-settings":
+				return &flakySettingsProgram{settingsProgram: &settingsProgram{}}, nil
+			case "chatty":
+				return &chattyProgram{}, nil
 			}
 			return &exampleProgram{secrets: s, exitSoon: os.Getenv("JARVIS_PROC_EXIT") == "1"}, nil
 		})
@@ -158,6 +169,34 @@ func (*exampleProgram) Watch(ctx context.Context, changed func(connector.Scope))
 	return nil
 }
 
+// slowProgram is exampleProgram hanging (longer than the tests' callTimeout) on its second and later tools list, or
+// status when not tools.
+type slowProgram struct {
+	*exampleProgram
+	tools bool
+	calls atomic.Int32
+}
+
+func (p *slowProgram) hang() {
+	if p.calls.Add(1) > 1 {
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func (p *slowProgram) Tools() []proto.Tool {
+	if p.tools {
+		p.hang()
+	}
+	return p.exampleProgram.Tools()
+}
+
+func (p *slowProgram) Status(ctx context.Context) connector.Status {
+	if !p.tools {
+		p.hang()
+	}
+	return p.exampleProgram.Status(ctx)
+}
+
 // memSecrets is the hub's store for one connector, in memory.
 type memSecrets struct {
 	mu    sync.Mutex
@@ -218,7 +257,7 @@ func TestProgram(t *testing.T) {
 
 // linked is the program run as a plugin by the plugin host, the connector reaching it through its Link (the hub's
 // way, docs/extensions.md); the hub's part (passing the program's calls and events to the connector) is done here.
-func linked(t *testing.T, s connector.Secrets) *Conn {
+func linked(t *testing.T, s connector.Secrets, env ...string) *Conn {
 	t.Helper()
 	exe, err := os.Executable()
 	if err != nil {
@@ -226,7 +265,7 @@ func linked(t *testing.T, s connector.Secrets) *Conn {
 	}
 	var c *Conn
 	p := host.Start(context.Background(), host.Spec{ID: "example-plugin", Name: "Example", Command: exe, RPC: true,
-		Env: []string{"JARVIS_PROC_CHILD=1"}, CallTimeout: callTimeout, Logf: t.Logf,
+		Env: append([]string{"JARVIS_PROC_CHILD=1"}, env...), CallTimeout: callTimeout, Logf: t.Logf,
 		Init: func(context.Context) (extension.InitializeParams, error) {
 			return extension.InitializeParams{Extension: extension.ExtensionInfo{ID: "example-plugin", Version: "1.0.0"},
 				Active: map[string][]string{"connectors": {"example"}}}, nil
@@ -480,5 +519,212 @@ func TestProgramDeclaringOtherwiseIsLogged(t *testing.T) {
 	if !sameManifest(connector.Manifest{Capabilities: []connector.Capability{connector.CapLogin, connector.CapStatus}},
 		connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapLogin}, Proxy: true}) {
 		t.Fatal("order matters")
+	}
+	// Archive sources and the command line are part of the declaration too.
+	if sameManifest(connector.Manifest{ArchiveSources: []string{"moments"}}, connector.Manifest{Proxy: true}) {
+		t.Fatal("archive_sources ignored")
+	}
+	if sameManifest(connector.Manifest{CLI: "ex"}, connector.Manifest{CLI: "other", Proxy: true}) {
+		t.Fatal("cli ignored")
+	}
+}
+
+// shortCalls makes the hub give up on a program's call soon, for the slow programs.
+func shortCalls(t *testing.T) {
+	callTimeout = 500 * time.Millisecond
+	t.Cleanup(func() { callTimeout = 2 * time.Minute })
+}
+
+// runSlow runs the slow program of kind until its first refresh has the tools.
+func runSlow(t *testing.T, kind string) *Conn {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	c := New(program(t, &memSecrets{data: []byte("example session")}, "JARVIS_PROC_KIND="+kind))
+	go c.Run(ctx)
+	waitUntil(t, "the first refresh", func() bool { return len(c.Tools()) > 0 && c.Status(context.Background()).State == connector.StateOK })
+	return c
+}
+
+// A tools list that times out in a refresh keeps the last one: the assistant does not lose the connector's tools
+// until the next refresh.
+func TestRefreshKeepsToolsWhenTheirCallFails(t *testing.T) {
+	shortCalls(t)
+	c := runSlow(t, "slow-tools")
+	if _, err := c.LoginStep(context.Background(), "phone", nil); err != nil { // refreshes after
+		t.Fatal(err)
+	}
+	if got := c.Tools(); len(got) != 1 || got[0].Name != "example_chats" {
+		t.Fatalf("tools after a timed-out list = %+v, want the first list kept", got)
+	}
+	if got := c.Actions(); len(got) != 1 || got[0].Name != "example_send" {
+		t.Fatalf("actions = %+v", got)
+	}
+	if st := c.Status(context.Background()); st.State != connector.StateOK {
+		t.Fatalf("status = %+v, want ok (the status call answered)", st)
+	}
+}
+
+// A status call that times out puts the connector in error instead of leaving a hung program's last ok.
+func TestRefreshStatusTimeoutIsAnError(t *testing.T) {
+	shortCalls(t)
+	c := runSlow(t, "slow-status")
+	if _, err := c.LoginStep(context.Background(), "phone", nil); err != nil {
+		t.Fatal(err)
+	}
+	st := c.Status(context.Background())
+	if st.State != connector.StateError || !strings.Contains(st.Error, "Example 没有回应") {
+		t.Fatalf("status after a hung status call = %+v, want an error", st)
+	}
+	if len(c.Tools()) == 0 {
+		t.Fatal("the tools are gone")
+	}
+}
+
+// A program answering no_capability for tools has none: that is not a failure that keeps an old list.
+func TestRefreshNoCapabilityIsEmpty(t *testing.T) {
+	got, err := listTools(func(string, any, any) error {
+		return &rpc.Error{Code: serve.CodeNoCapability, Message: "none"}
+	}, serve.MTools)
+	if err != nil || got != nil {
+		t.Fatalf("listTools = %v, %v; want none", got, err)
+	}
+	if _, err := listTools(func(string, any, any) error { return context.DeadlineExceeded }, serve.MTools); err == nil {
+		t.Fatal("a timed-out list is not an error")
+	}
+}
+
+// chattyProgram tells of a change many times at once when its chatty_burst tool is called, and its status is slow:
+// it counts how many status calls run at the same time, which chatty_max tells as "most in-flight calls".
+type chattyProgram struct {
+	mu       sync.Mutex
+	changed  func(connector.Scope)
+	inFlight int
+	most     int
+	calls    int
+}
+
+func (*chattyProgram) ID() string   { return "example" }
+func (*chattyProgram) Name() string { return "Example" }
+
+func (*chattyProgram) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapEvents}}
+}
+
+func (p *chattyProgram) Status(context.Context) connector.Status {
+	p.mu.Lock()
+	p.calls++
+	p.inFlight++
+	p.most = max(p.most, p.inFlight)
+	p.mu.Unlock()
+	time.Sleep(100 * time.Millisecond)
+	p.mu.Lock()
+	p.inFlight--
+	p.mu.Unlock()
+	return connector.Status{State: connector.StateOK, Account: "chatty"}
+}
+
+func (p *chattyProgram) Watch(ctx context.Context, changed func(connector.Scope)) error {
+	p.mu.Lock()
+	p.changed = changed
+	p.mu.Unlock()
+	<-ctx.Done()
+	return nil
+}
+
+func (*chattyProgram) Tools() []proto.Tool {
+	return []proto.Tool{{Name: "chatty_burst"}, {Name: "chatty_max"}}
+}
+
+func (p *chattyProgram) Call(_ context.Context, name string, _ json.RawMessage) (string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	switch name {
+	case "chatty_burst":
+		if p.changed == nil {
+			return "", errors.New("not watching yet")
+		}
+		for range 20 {
+			p.changed(connector.ScopeInbox)
+		}
+		return "sent", nil
+	case "chatty_max":
+		return fmt.Sprintf("%d %d %d", p.most, p.inFlight, p.calls), nil
+	}
+	return "", fmt.Errorf("no tool %s", name)
+}
+
+// A burst of changed events is one refresh running at a time (and one more after it), not a status call per event
+// all in flight together, where a slower, older answer could land after a newer one.
+func TestChattyProgramAsPlugin(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := linked(t, &memSecrets{}, "JARVIS_PROC_KIND=chatty")
+	go c.Run(ctx)
+	scopes := make(chan connector.Scope, 64)
+	go func() { _ = c.Watch(ctx, func(s connector.Scope) { scopes <- s }) }()
+	waitUntil(t, "the program's status", func() bool { return c.Status(ctx).Account == "chatty" })
+	stats := func() (most, inFlight, calls int) {
+		out, err := c.Call(ctx, "chatty_max", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fmt.Sscan(out, &most, &inFlight, &calls); err != nil {
+			t.Fatalf("chatty_max said %q: %v", out, err)
+		}
+		return most, inFlight, calls
+	}
+	_, _, before := stats()
+	waitUntil(t, "the program watching", func() bool {
+		out, err := c.Call(ctx, "chatty_burst", nil)
+		return err == nil && out == "sent"
+	})
+	waitUntil(t, "the burst's events", func() bool { return len(scopes) >= 16 })
+	waitUntil(t, "the refreshes to finish", func() bool {
+		_, inFlight, calls := stats()
+		return inFlight == 0 && calls > before
+	})
+	time.Sleep(300 * time.Millisecond) // a refresh still to come shows here
+	if most, inFlight, calls := stats(); most > 1 {
+		t.Fatalf("%d status calls ran at once (%d still running, %d in all) for one burst of changes", most, inFlight, calls)
+	}
+}
+
+// A refresh round several ask for meanwhile still runs when the last of them gave up: a sign-in whose client went
+// away does not cancel the round a changed event asked for too.
+func TestSharedRefreshOutlivesAnAskerWhoGaveUp(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := linked(t, &memSecrets{}, "JARVIS_PROC_KIND=chatty")
+	go c.Run(ctx)
+	waitUntil(t, "the program's status", func() bool { return c.Status(ctx).Account == "chatty" })
+	calls := func() int {
+		out, err := c.Call(ctx, "chatty_max", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var most, inFlight, n int
+		if _, err := fmt.Sscan(out, &most, &inFlight, &n); err != nil {
+			t.Fatalf("chatty_max said %q: %v", out, err)
+		}
+		return n
+	}
+	before := calls()
+	first := c.kick(ctx) // in flight: its status call takes a while
+	shared := c.kick(ctx)
+	gone, giveUp := context.WithCancel(ctx)
+	giveUp()
+	if c.kick(gone) != shared {
+		t.Fatal("an ask while a refresh runs does not share the round due next")
+	}
+	for _, done := range []<-chan struct{}{first, shared} {
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("the refresh did not end")
+		}
+	}
+	if got := calls() - before; got != 2 {
+		t.Fatalf("%d status calls for a round and the one shared after it, want 2", got)
 	}
 }

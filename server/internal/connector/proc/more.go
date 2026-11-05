@@ -43,7 +43,8 @@ func (c *Conn) SetOptions(raw json.RawMessage) error {
 }
 
 // syncOptions, right after the program (re)started, gives it the user's choice of sign-in (SetAuth) and the settings
-// the hub set, then reads the settings it keeps.
+// the hub set, then reads the settings it keeps. When the program does not take either, nothing is marked sent and
+// the hub's settings stay pending, so the next refresh tries again instead of keeping the program's defaults.
 func (c *Conn) syncOptions(ctx context.Context, call func(method string, params, out any) error) {
 	c.mu.Lock()
 	pending, sent, auth := c.options, c.sent, c.auth
@@ -54,6 +55,7 @@ func (c *Conn) syncOptions(ctx context.Context, call func(method string, params,
 	if auth != nil {
 		if err := call(serve.MAuthSet, auth, nil); err != nil {
 			c.cfg.Logf("connector %s: sign-in source: %v", c.cfg.ID, err)
+			return
 		}
 	}
 	if !c.Manifest().Has(connector.CapOptions) {
@@ -65,6 +67,7 @@ func (c *Conn) syncOptions(ctx context.Context, call func(method string, params,
 	if len(pending) > 0 {
 		if err := call(serve.MOptionsSet, serve.OptionsParams{Options: pending}, nil); err != nil {
 			c.cfg.Logf("connector %s: settings: %v", c.cfg.ID, err)
+			return
 		}
 	}
 	c.readOptions(ctx, call)
