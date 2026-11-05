@@ -1610,6 +1610,10 @@ struct ChatView: View {
                 settleChrome() // the finger lifted, the glide ended
                 setFollow { $0.released() } // where the user's scrolling stopped decides (nothing if it was the app's)
             }
+            // On this upside-down list (`flippedBack`) `.scrollDismissesKeyboard(.interactively)` never put the keyboard
+            // away while scrolling (#1823). A real drag does it; a touch that may still be a tap (.tracking) does not, so
+            // a field inside the list ("其他回答…") keeps the keyboard it opens.
+            if phase == .interacting { Keyboard.dismiss() }
             if phase == .tracking || phase == .interacting {
                 scratch.lastUserScroll = .now
                 menu.dismiss()

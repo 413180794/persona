@@ -30,6 +30,9 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
 - 聊天列表用倒置（ScrollView 和每行各 `scaleEffect(x:1,y:-1)`）：最新消息在偏移 0，跳到最新永远精确。倒置后要自己处理安全区
   （`ignoresSafeArea(.container, edges: .vertical)` + `contentMargins` 按实际 inset），并关掉 iOS 26 的 `scrollEdgeEffect`（否则整页发雾）。
   只往偏移 0（最新端）跳；往远端用代码跳、或加 `defaultScrollAnchor(..., for: .sizeChanges)`，懒加载估算不准时照样白屏。
+- 倒置的聊天列表上 `.scrollDismissesKeyboard(.interactively)` 不管用（2026-11-05，#1823）：键盘开着上下滑动对话，键盘一直不收。
+  在 `onScrollPhaseChange` 里进入 `.interacting`（真的在拖）时 `Keyboard.dismiss()`；`.tracking` 不收（可能还是一次点击，列表里的「其他回答…」输入框会被收掉），
+  流式内容把列表顶动是 `.animating`，也不收。正着的列表（助手首页、新外壳首页、GitHub 会话）不受影响，不用加。
 - 聊天列表（LazyVStack + 底部锚定）偶发白屏：按估算高度跳到底会落在没渲染的区域。跳转要按哨兵 id、等布局完成再跳，并在哨兵真正可见前重试；
   `atBottom` 不要默认 true（白屏时就没有箭头可点）。验证：脚本批量冷启动打开会话，按对话区像素标准差判断白屏。
 - 冷启动回到保存的阅读位置（2026-11-03，#597）：冷启动时手里只有最近两轮（磁盘缓存 `ChatCache.tail` 两轮，hub 的第一页 `turns=2`、订阅的 backlog 也一样），
