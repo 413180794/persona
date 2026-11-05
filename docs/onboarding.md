@@ -351,7 +351,7 @@ HTTP 状态：新码走 `rpc.Error{Code}`，`apierr.Call` 对 `internal` / `node
 ### 5.1 主对话就绪度
 
 ```
-GET /api/v1/assistant/readiness            已登录设备（含只读）
+GET /api/v1/assistant/readiness            已登录的完整设备（只能作答的手表、扩展的 token 不开放）
 GET /api/v1/assistant/readiness?probe=1    同上，另外真跑一次一词检查（花钱，30 秒内重复调用直接回上次结果）
 ```
 
@@ -414,6 +414,19 @@ POST /api/v1/assistant/readiness/dismiss   {"dismissed": true}  →  {"ok": true
 `POST /api/v1/assistant/warm` 保持回 `{"ok": true}`，另外带 `readiness` 字段（同一结构，不 probe）。客户端什么时候重拉：进 Persona tab、配对成功、添加 / 确认电脑之后、保存供应商之后、收到 `machines` 变化时。第一版不加新的推送事件。
 
 老 hub 上这个接口 404：客户端退回现在的行为（首屏不画卡片，失败时按 `code` 出卡片）。
+
+实现（#3710，`server/internal/assistant/readiness.go`；接口细节以 `docs/protocol.md`「主对话就绪度」为准），和上面不同或补充的地方：
+
+- 只给 `full` 设备：probe 要花钱，hub 的规矩是能跑启动器的接口不给只能作答的设备；手表现在用不到它。
+- `claude.auth_status` 还没做（7.2 第 3 项），`model` 只看最近一次 probe、主对话最近一轮、启动器健康检查的记录，取最新的一条；失败但认不出原因时也是 `unknown` + `model_unverified`，不算 `problem`。
+- `rate_limited` 是 `problem`，但不让 `mode` 变成 `setup`（会自己好，不该把发送按钮换掉）。
+- `claude` 还读两样：上一次开对话被拒的码（`claude_missing` / `launcher_missing`，开成功一次、被拒之后的自检读到版本、或启动器又在了就清掉：`setup` 时发不出消息，不能只靠开成功来清），和启动器在这台电脑上还在不在；跑 Codex 或 runtime 的启动器这一步是 `skipped`。node 自检没在时限内答完是 `checking`。
+- `node_outdated` 只看 node 认不认模型配置：主对话每次开都带 `model_fingerprint`（`finishModel`），老 node 一定开不了。
+- warm 里的就绪度最多算 2.5 秒，算不完回上一次记下的（从没记过就不带 `readiness`），剩下的在后台算完照样记下；打开 tab 不因此变慢。
+- `machine_pending` 等「确认电脑」（5.3、7.2 第 9 项）合进来后再出；`node_outdated`（node 不认模型配置）没有按钮。
+- 电脑不是 `ok` 时 `?probe=1` 不跑，回答里没有 `probe`；电脑没答（离线、超时）的 probe 只回 `error`，不记、不当作证据。
+- `dismiss` 的 body 可以是 `{"dismissed": false}`（撤销），空 body 等于 `true`。
+- `first_message` 答过一次就一直 `ok`（记在 `assistant.readiness`；换过主对话也算）。
 
 ### 5.2 主对话的结构化错误
 

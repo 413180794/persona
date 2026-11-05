@@ -135,7 +135,9 @@ func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (p
 	var res struct {
 		SessionID string `json:"session_id"`
 	}
-	if err := s.call(ctx, machine, DeviceAssistantSend, params, &res); err != nil {
+	err = s.call(ctx, machine, DeviceAssistantSend, params, &res)
+	s.startRefused(ctx, machine, used, err) // Claude Code or the launcher missing: the readiness's claude step
+	if err != nil {
 		if d, ok := s.device(ctx, machine); ok {
 			err = apierr.OnMachine(err, d.Name) // claude_missing on 小林的 MacBook (docs/onboarding.md 4.6)
 		}

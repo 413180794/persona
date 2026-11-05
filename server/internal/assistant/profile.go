@@ -310,14 +310,21 @@ func (s *Service) profileRoutes() {
 		apierr.WriteJSON(w, s.view(r.Context(), archived == "1" || archived == "true", space))
 	})
 	s.handle("PUT /api/v1/assistant", s.putSettings)
-	// warm: the app opened the 对话 tab; get a process ready so the first message skips claude's startup.
+	// warm: the app opened the 对话 tab; get a process ready so the first message skips claude's startup, and say what
+	// the main conversation still needs.
 	s.handle("POST /api/v1/assistant/warm", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Launcher string `json:"launcher"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		go s.warm(in.Launcher)
-		apierr.WriteJSON(w, map[string]any{"ok": true})
+		// What the main conversation still needs, for the first screen's card (docs/onboarding.md 5.1); no probe, and
+		// bounded so that opening the tab stays quick.
+		out := map[string]any{"ok": true}
+		if rd := s.readinessQuick(r.Context(), readinessWaitWarm); rd != nil {
+			out["readiness"] = rd
+		}
+		apierr.WriteJSON(w, out)
 	})
 	s.handle("GET /api/v1/assistant/memory", func(w http.ResponseWriter, r *http.Request) {
 		var res json.RawMessage

@@ -81,9 +81,10 @@ type Service struct {
 	delegateHook func(context.Context, DelegateParams) (DelegateResult, error)
 	// fleetEnded, when set, sees every card's end the channels are told (tests).
 	fleetEnded func(ix proto.Interaction, r *proto.Resolution)
-	models     modelsState // models.go: the model configuration
-	health     healthBook  // launcher_health.go: each machine's launchers
-	trust      trustBook   // machine_trust.go: the computers waiting to be confirmed
+	models     modelsState   // models.go: the model configuration
+	health     healthBook    // launcher_health.go: each machine's launchers
+	trust      trustBook     // machine_trust.go: the computers waiting to be confirmed
+	ready      readinessBook // readiness.go: the main conversation's readiness
 }
 
 var _ Handler = (*Service)(nil)
@@ -104,6 +105,7 @@ func New(o Options) *Service {
 	s.reporterRoutes()
 	s.originRoutes()
 	s.profileRoutes()
+	s.readinessRoutes()
 	s.startRoutes()
 	s.scheduleRoutes()
 	s.taskRoutes()

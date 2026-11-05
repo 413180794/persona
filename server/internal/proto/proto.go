@@ -250,6 +250,7 @@ var Features = []string{
 	"locale",                 // Accept-Language, client_hello.locale and a device's locale pick the language of text for people (docs/i18n.md)
 	"assistant_compact",      // POST /api/v1/assistant/conversations/{id}/compact, session.compaction
 	"assistant_main_new",     // POST /api/v1/assistant/main/new: archive the main conversation, the next message starts one
+	"assistant_readiness",    // GET /api/v1/assistant/readiness, …/readiness/dismiss, warm's readiness (docs/onboarding.md 5.1)
 	"android_update",         // authenticated Android release metadata and APK downloads
 	"error_codes",            // stable HTTP error codes and optional delivery information
 	"client_hello",           // client platform, version and capabilities

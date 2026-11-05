@@ -45,7 +45,7 @@
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`terminal_mouse`、`herdr_client`（网页的完整 herdr 界面：`herdr_open` 等，见下「完整 herdr 界面」）、`herdr_focus`（完整界面的焦点联动：`herdr_focus` 等，见下「焦点联动」）、`file_upload`。
 - 按 hub.json 出现：`assistant_views`（`assistant.persona_view` 打开：声明式动作带 `expected_version`、活卡片、正文卡片注册的接口可用）、`assistant_html_bridge`（另外 `assistant.html_views` 未关：`…/html-actions` 可用；客户端是否运行 HTML 仍看自己的安全验收，不据此跑 JS），见下面「助手」的卡片接口和 [assistant-views.md](assistant-views.md)。
-- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`extension_operations`（安装、升级、卸载分步骤带进度，见下「扩展的安装、升级、卸载进度」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）、`machine_trust`（机器的 `trust` / `error_code` 和 `POST /machines/{id}/confirm`、`…/reject`，见下面「电脑的信任」）。
+- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`assistant_readiness`（主对话就绪度，见下「主对话就绪度」）；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`extension_operations`（安装、升级、卸载分步骤带进度，见下「扩展的安装、升级、卸载进度」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）、`machine_trust`（机器的 `trust` / `error_code` 和 `POST /machines/{id}/confirm`、`…/reject`，见下面「电脑的信任」）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 
@@ -515,6 +515,50 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 
 移动、归档等看板修改不调用 Agent 或 Git 操作。成功后 WS 推送 `{"type":"workspace_board","revision":<新版本>}`，客户端据此重读。网页还在看板可见期间每 10 秒刷新发现，回到前台时立即刷新，以补足目录和连接状态变化。
 
+## 主对话就绪度（`assistant_readiness`，#3710）
+
+主对话现在能不能用、缺哪一步，由 hub 算好给四端（设计见新用户上手的方案第 4.4、5.1 节）。助手服务回答（经「转发 App 的请求」），只给 `full` 设备；助手没连着时和其他助手接口一样 503 `assistant_offline`；老 hub 404，客户端退回现在的行为。
+
+```
+GET  /api/v1/assistant/readiness            → Readiness
+GET  /api/v1/assistant/readiness?probe=1    → Readiness，另外真跑一次一词检查（花钱；同一台电脑、同一启动器 30 秒内再调直接回上次结果，同一时间只跑一个）
+POST /api/v1/assistant/readiness/dismiss    {"dismissed": true}  →  {"ok": true}（空 body 等于 true；false 撤销）
+POST /api/v1/assistant/warm                 → {"ok": true, "readiness"?: Readiness}（同一结构，不 probe；2.5 秒内算不完时回上一次记下的，从没记过就不带）
+```
+
+```jsonc
+{
+  "version": 1,
+  "mode": "setup",                 // full / setup；chat_only 留给 P1，现在不出
+  "ready": false,                  // mode == "full"
+  "next": "model",                 // 第一个不是 ok / skipped 的步骤；都好了为 null
+  "machine": {"id": "mbp", "name": "小林的 MacBook"},   // 主对话的电脑；没有时 null
+  "launcher": "claude",            // 生效的启动器（模型配置 › 主对话 优先）
+  "steps": [
+    {"id": "computer", "state": "ok", "machine": "mbp"},
+    {"id": "claude", "state": "ok", "version": "2.1.308"},
+    {"id": "model", "state": "problem", "code": "not_logged_in", "machine": "mbp", "launcher": "claude",
+     "title": "Claude Code 还没登录", "detail": "在 小林的 MacBook 上登录一次，或者改用 API Key。",
+     "action": {"id": "connect_model"}, "alt_actions": [{"id": "login_claude"}]},
+    {"id": "first_message", "state": "todo", "code": "never_tried", "title": "试一句", "detail": "…", "action": {"id": "test_assistant"}}
+  ],
+  "suggestions": [{"id": "what_can_you_do", "title": "你能帮我做什么？", "local": true}],
+  "probe": {"ok": false, "agent": "claude", "millis": 2140, "error": "…"},   // 只有 ?probe=1 且电脑 ok 时有
+  "dismissed": false,
+  "checked_at": "2026-11-06T09:00:00Z"
+}
+```
+
+- `steps` 固定四个、固定顺序：`computer`、`claude`、`model`、`first_message`。`state`：`ok` / `todo` / `problem` / `checking` / `unknown` / `skipped`。`todo` / `problem` 一定带 `code`、`title`、`detail`（按 `Accept-Language`），通常带 `action`；`unknown` 的 `model` 也带（`model_unverified`）。
+- `computer`：没有电脑 `todo` + `no_machine`（`add_computer`）；电脑不在线 `problem` + `node_unreachable`（`wake_computer`）；node 太旧（不认模型配置）`problem` + `node_outdated`（没有按钮）。`machine_pending` 等待确认电脑（5.3）落地后才出。电脑不是 `ok` 时后面三步都是 `unknown`。
+- `claude`：node 自检（`node.doctor` 的 `claude-version`，每台电脑缓存：读到版本 10 分钟，读不到 1 分钟）读到版本为 `ok` + `version`；默认启动器 `claude` 读不到为 `problem` + `claude_missing`（`install_claude`，备选 `connect_model`）；上一次开对话被拒为 `claude_missing` / `launcher_missing`（被拒之后的自检读到版本、或启动器又在这台电脑上了，就不再算），或启动器健康检查的记录说找不到命令时同样；自己的启动器在这台电脑上没有了为 `launcher_missing`（`connect_model`；在 Persona 里加的启动器和讲 Messages 的直连 API 供应商在每台电脑上都算有）；启动器跑的是 Codex 或 runtime 为 `skipped`；老 node 没有自检、自己的启动器读不到版本为 `unknown`；自检这次没来得及答完为 `checking`（GET 最多等 12 秒，warm 等 2 秒，结果照样缓存）。模型答过话时它一定是 `ok`。
+- `model`：取最新的一条证据：最近一次 probe（同一台电脑、同一启动器）、主对话最近一轮（会话的 `turn_error` / `turn_error_code`，或正常答完）、启动器健康检查的记录（6 小时内）。最新的是答上了为 `ok`；是失败且认得出为 `problem` + `not_logged_in`（`connect_model`，备选 `login_claude`）/ `auth_failed`（`edit_provider`）/ `model_route` / `rate_limited`（`connect_model`）；没有证据、或失败认不出原因为 `unknown` + `model_unverified`（`test_assistant`），不算问题。不主动花 token；node 的 `claude.auth_status`（免费判断登录）还没做，做了以后接进这一步。
+- `first_message`：主对话答过一次（记下，之后一直 `ok`；换过主对话也算）为 `ok`；没答过而最近一轮失败为 `problem` + 那一轮的码；否则 `todo` + `never_tried`（`test_assistant`）。它不影响 `mode`。
+- `mode`：`computer`、`claude`、`model` 里有 `todo` 或 `problem` 就是 `setup`，例外是 `rate_limited`（会自己好，`mode` 照样 `full`）；`unknown` / `checking` 不挡。
+- `suggestions`：`setup` 时只有 `local: true` 的两条（`what_can_you_do`、`how_to_connect_model`，客户端打开本地帮助，不发给模型）；`full` 时另有 `largest_folders`、`today`（`needs: ["phone_calendar"]`）、`connect_mail`，带 `prompt`（点了发出去的原话）。
+- `probe` 即 `POST /api/v1/launchers/{name}/check` 在主对话电脑上的 `{ok, agent, model, answer, millis, error}`；电脑没答（离线、超时）时只有 `error`，这种结果不记、不当作模型的证据。
+- 存储：最近一次结果、`dismissed`、最近一次 probe、开对话被拒、主对话答过一次，存 Postgres `settings` 的 `assistant.readiness`；结果和上次一样（不算时间）时不写。第一版不推送事件，客户端在进 Persona tab、配对成功、添加 / 确认电脑、保存供应商、收到 `machines` 变化时重拉。
+
 ## 助手对话的来源（`origin`，#3264）
 
 助手对话（`assistant: true` 的会话）带 `origin`：这段对话是谁开的。hub 在开对话时记下（助手的 settings `assistant.origins`：会话 id → 来源、`origin_ref`、开始时间），
@@ -723,7 +767,9 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 | POST | `/api/v1/assistant/conversations/{id}/unarchive` | 取消归档 → `{"ok","archived":false}` |
 | POST | `/api/v1/assistant/conversations/{id}/compact` | `{"machine_id"?}`（空着是助手那台）：手动压缩这段对话（Claude 发 `/compact`，进程不在就先 `--resume`；Codex `thread/compact/start`）→ 开始了就回 `{"ok":true}`，进度看会话的 `compaction`。409 + `code`：`busy`（正在回答）、`compacting`（已经在压）、`gone`（记录不在了）、`unsupported`（runtime 跑的对话）；`error` 是给人看的中文 |
 | POST | `/api/v1/assistant/main/new` | `{"carry":"summary"\|"none","expect"?}`：新建主对话。`carry`（默认 `summary`）带上旧主对话最近一次压缩的摘要和之后的几条消息；`expect` 是 App 看到的主对话 id，对不上回 409 `main_changed`；旧主对话正在回答 / 压缩时 409 `busy`。成功后主对话清空（`GET /api/v1/assistant` 的 `main` 没了），旧的改名「旧主对话 · 至 M月D日」并归档 → `{"ok","archived":"<旧 id，没有主对话时为空>","carried":bool}`。之后第一条带 `main:true` 的 `POST /api/v1/assistant/conversations`（以及飞书机器人、渠道发给主对话的消息）开新的主对话，带过去的背景作为 `<jarvis-context kind="context" title="接上旧主对话">` 放在第一条消息前，只用一次（`docs/assistant.md`「新建主对话」） |
-| POST | `/api/v1/assistant/warm` | `{"launcher"?}`：先起一个备用 claude 进程，新对话直接用 |
+| POST | `/api/v1/assistant/warm` | `{"launcher"?}`：先起一个备用 claude 进程，新对话直接用 → `{"ok":true,"readiness"?}`（`readiness` 见上「主对话就绪度」，不 probe；算不完时回上一次记下的或不带） |
+| GET | `/api/v1/assistant/readiness` | 主对话就绪度（`?probe=1` 真跑一次一词检查，30 秒内复用），见上「主对话就绪度」 |
+| POST | `/api/v1/assistant/readiness/dismiss` | `{"dismissed":bool}`：记住「以后再说」→ `{"ok":true}` |
 | GET | `/api/v1/assistant/tasks` | 定时任务（一张表，`docs/assistant.md`「定时任务」）：`{"tasks":[Task]}`，已经跑过的一次性跟进不列。`Task` = `{id,title,prompt,repeat:"once"\|"daily"\|"interval",at,time:"HH:MM",weekdays:[1..7],every_minutes,enabled,machine_id,session_id,launcher,permission_mode,effort,created_by,created_at,last_run,last_session_id,last_status,last_error,next_run,run_machine_id,run_session_id,run_launcher,push}`：`once` 用 `at`，`daily` 用 `time` + `weekdays`（空 = 每天），`interval` 每 `every_minutes`（5 分钟到 7 天）跑一次、`at` 是下一次；`session_id` 有值时发进那段对话，空 = 任务自己的对话（`run_session_id`，hub 记的：第一次运行开，之后接着用；空 = 下一次开）；`launcher` / `permission_mode`（`default` / `acceptEdits` / `plan` / `auto` / `bypassPermissions`）/ `effort`（`low`…`max`）空 = 助手的默认，只能在 App 里改；`created_by: "assistant"` 是助手在对话里建的；`push`：`""` 每次运行的回答都推送（默认），`"asked"` 只推运行自己用 `notify_user` 发的，这种任务固定在自己的对话里跑、`session_id` 为空（`docs/assistant.md`「跑完推送」）；认这个字段的 hub 在 features 里带 `task_push`，客户端据此显示开关 |
 | POST | `/api/v1/assistant/tasks` | 新建 `Task`（`session_id` 忽略，用任务自己的对话）→ `{"task"}`；不合法 400，消息是给用户看的中文 |
 | PUT | `/api/v1/assistant/tasks/{id}` | 保存用户能改的字段（`title,prompt,repeat,at,time,weekdays,every_minutes,enabled,launcher,permission_mode,effort,push`，`""` = 默认；请求体里没有 `push` 时保留原值，`null` 或不认识的值回 400）→ `{"task"}`；`session_id` 只能清空（改成用任务自己的对话）；`run_*` 只由 hub 写；`interval` 的下一次在间隔或规则变了、或重新开启时从现在算起 |
@@ -1577,7 +1623,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 
 **转发 App 的请求**：App 打到助手接口的请求（鉴权之后）由 hub 作为 `http.request` 交给助手，它的回答原样写回。助手接口是 `assistantwire.Routes`（助手那边有一个测试保证它服务的正是这些）：
 `POST /api/v1/assistant/conversations/{id}/archive`、`…/unarchive`、`…/route`、`…/today`、`…/compact`、`…/stop`，`GET …/{id}/feed`，`GET /api/v1/assistant/reporters`，`/api/v1/assistant/tasks…`、`/api/v1/assistant/runs`、`/api/v1/assistant/routines…`、
-`/api/v1/assistant/followups…`、`/api/v1/task-plans/{id}…`、`/api/v1/task-trust`、`/api/v1/todos…`（待办的全部接口，含 `done-check`、`retry`、决策），`GET/PUT /api/v1/agents/triage`、`GET /api/v1/agents/work/stats`、`POST /api/v1/tabs/autoname`（2026-11-04，Agents），以及（2026-11-04 起）`GET/PUT /api/v1/assistant`、`POST /api/v1/assistant/warm`、
+`/api/v1/assistant/followups…`、`/api/v1/task-plans/{id}…`、`/api/v1/task-trust`、`/api/v1/todos…`（待办的全部接口，含 `done-check`、`retry`、决策），`GET/PUT /api/v1/agents/triage`、`GET /api/v1/agents/work/stats`、`POST /api/v1/tabs/autoname`（2026-11-04，Agents），以及（2026-11-04 起）`GET/PUT /api/v1/assistant`、`POST /api/v1/assistant/warm`、`GET /api/v1/assistant/readiness`、`POST /api/v1/assistant/readiness/dismiss`、
 `GET /api/v1/assistant/memory`、`PUT/DELETE /api/v1/assistant/memory/{name}`、`POST /api/v1/assistant/conversations`、`POST /api/v1/assistant/main/new`，以及知识库的全部接口（2026-11-04 起，下面「知识库 API」），
 以及收件箱和翻译的全部接口（2026-11-04，`assistantwire.InboxRoutes`）：`GET /api/v1/inbox`、`GET /api/v1/inbox/{id}`、`POST /api/v1/inbox/{id}/done`、`…/draft`、`…/reply`（hub 照旧在前面记回执；助手没连着时直接回 503，不记；在路上断了回 `assistant_in_doubt`，也不记，再发能到助手）、`…/doc/status`、`POST /api/v1/inbox/refresh`、`POST /api/v1/inbox/done`、`POST /api/v1/inbox/bulk`、`GET/POST /api/v1/inbox/mutes`、`DELETE /api/v1/inbox/mutes/{id}`、`POST /api/v1/translate`、`POST /api/v1/translate/mail`。`/api/v1/skills` 还是 hub 自己的。
 

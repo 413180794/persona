@@ -616,6 +616,8 @@ var Routes = []string{
 	"GET /api/v1/assistant",
 	"PUT /api/v1/assistant",
 	"POST /api/v1/assistant/warm",
+	"GET /api/v1/assistant/readiness",
+	"POST /api/v1/assistant/readiness/dismiss",
 	"GET /api/v1/assistant/memory",
 	"PUT /api/v1/assistant/memory/{name}",
 	"DELETE /api/v1/assistant/memory/{name}",

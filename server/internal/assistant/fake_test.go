@@ -101,6 +101,8 @@ type fakeHub struct {
 	repairRes *proto.LauncherRepair
 	onRepair  func(f *fakeHub)
 	onSend    func(f *fakeHub, p map[string]any) // runs (under the fake's lock) after each session.send
+	// doctor is each machine's node.doctor claude-version detail (none: the report has no such check).
+	doctor map[string]string
 }
 
 type modelCall struct{ System, User string }
@@ -210,6 +212,12 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 		_ = json.Unmarshal(p.Params, &m)
 		f.managed[p.Device] = m.Launchers
 		return json.RawMessage(`{"ok":true}`), nil
+	case deviceNodeDoctor:
+		checks := []map[string]string{}
+		if detail, ok := f.doctor[p.Device]; ok {
+			checks = append(checks, map[string]string{"name": "claude-version", "status": "ok", "detail": detail})
+		}
+		return json.Marshal(map[string]any{"ok": true, "checks": checks})
 	case DeviceAssistantPrepare:
 		f.prepared = append(f.prepared, a)
 		return json.Marshal(map[string]any{"cwd": "/home/me/.jarvis/assistant"})
@@ -423,6 +431,8 @@ type memStore struct {
 	mu   sync.Mutex
 	vals map[string][]byte
 	puts int
+	// failSetting: what reading a setting fails with (nil: it reads).
+	failSetting error
 }
 
 // noPlans is a store without the task_plans and assistant_feed tables.
@@ -453,6 +463,9 @@ func (noPlans) MarkFeedSent(context.Context, string, string, time.Time, json.Raw
 func (m *memStore) Setting(_ context.Context, key string, out any) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.failSetting != nil {
+		return false, m.failSetting
+	}
 	b, ok := m.vals[key]
 	if !ok {
 		return false, nil
