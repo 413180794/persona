@@ -99,6 +99,15 @@ extension Theme {
         static let rewindChat = "clock.arrow.circlepath"
         static let gitUpstream = "cloud"
         static let gitNoUpstream = "icloud.slash"
+        /// Git 拉取 / 推送 / 获取 in the node menu (docs/terminal.md「节点菜单」).
+        static let gitPull = "arrow.down.to.line.compact"
+        static let gitPush = "arrow.up.to.line.compact"
+        static let gitFetch = "icloud.and.arrow.down"
+        /// Split a terminal pane to the right / below (the node menu's 拆分窗格).
+        static let splitRight = "rectangle.split.2x1"
+        static let splitDown = "rectangle.split.1x2"
+        /// Close a whole terminal tab, every pane in it.
+        static let closeTab = "xmark.rectangle"
         static let retry = "arrow.clockwise"
         /// Put a computer's own Persona files right (机器详情 › 这台电脑能做什么 › 修复).
         static let repair = "wrench.adjustable"
@@ -368,7 +377,17 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video''s, the sidebar's).
+        /// A video's thumbnail: it plays elsewhere (the chat app).
+        static let playMedia = "play.circle.fill"
+        /// Send someone a message.
+        static let message = "bubble.left.fill"
+        static let credentials = "key"
+        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
+        static let locked = "lock"
+        /// Feishu [removed] words: encoded for the eye, not encrypted.
+        static let braveClimb = "shield"
+        static let memory = "brain"
+        /// Search (a list's, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

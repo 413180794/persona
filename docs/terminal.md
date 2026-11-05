@@ -638,6 +638,7 @@ node 里对应 `panes.close` / `panes.split` / `panes.agent` / `panes.git` / `ta
 - **Git**：在窗格的目录（工作区则是它自己的目录）里跑，不是 Git 仓库就拒绝（「不是 Git 仓库」）。**拉取**是现成的 `gitPull`：只快进，有未提交的改动就拒绝；**获取**是 `git fetch --no-recurse-submodules`；
   **推送**要有分支和上游，且有要推的提交（没有就说「没有要推送的提交」），用显式的 `refs/heads/<分支>:<上游分支>`（没有 `+`），所以不会强推，配置里的 `remote.<名>.push = +…` 也不起作用；落后时被远端拒绝，原因原样回到菜单里。
   全部有 60 秒超时，不问密码（`GIT_TERMINAL_PROMPT=0`、askpass 指向 `false`），输出只留最后 2 KB。
+- **iOS / Mac**（#3098）：Agents 列表的 Agent 行长按菜单有拆分、Git、关闭标签页，空间的 ⋯ 有在这里运行 Agent…、Git，同一组路由（`docs/ios.md`「节点菜单」）；没有独立终端页，shell 窗格从「在这里运行 Agent…」的 sheet 里选。
 - **实测**（herdr 0.9.5，本机一个临时标签页）：`go test -tags herdrlive -run TestLiveMenuActions ./internal/herdr/`（`HERDR_LIVE_WORKSPACE=<工作区 id>`）建标签页、改名、拆分两次、关窗格、关标签页，结果和 node 单测里的假 herdr 一致。
 - **测试**：`node/panes_actions_test.go`（假 herdr：关 / 改名 / 拆分的调用、被拒绝时不碰 herdr、shell 窗格里运行、拒绝和失败不关窗格；真 git 仓库：fetch / pull / push、强推的配置不起作用、非仓库 / 脏工作区 / 分离 HEAD 拒绝）、
   `hub/panes_test.go`（每条路由 `answer` / 扩展令牌被拒、node 没听到；只转发点名的字段；不在 `answer` 的允许列表、route scopes 里是 `-`）。

@@ -162,6 +162,8 @@ struct AgentRowMenu: View, Equatable {
     nonisolated var attachable = false
     /// 删除对话 is offered (`Session.canDelete`).
     nonisolated var deletable = false
+    /// The node menu's pane items (split, Git, close the tab): a live herdr pane (`NodeMenu.offersPaneActions`).
+    nonisolated var paneActions = false
     nonisolated let actions: Actions
 
     @MainActor final class Actions {
@@ -187,7 +189,7 @@ struct AgentRowMenu: View, Equatable {
     nonisolated static func == (a: Self, b: Self) -> Bool {
         a.key == b.key && a.pinned == b.pinned && a.muted == b.muted && a.looping == b.looping && a.live == b.live
             && a.terminal == b.terminal && a.attachable == b.attachable && a.deletable == b.deletable
-            && a.actions === b.actions
+            && a.paneActions == b.paneActions && a.actions === b.actions
     }
 
     var body: some View {
@@ -261,6 +263,9 @@ struct AgentRowMenu: View, Equatable {
                 UIPasteboard.general.string = "\(s.resumeCommand) \(s.sourceThreadID ?? s.sessionID)"
             } label: { Label("拷贝恢复命令", systemImage: Theme.Icon.terminal).lineLimit(1) }
         }
+        if paneActions {
+            Section { AgentNodeMenuItems(now: now) }
+        }
         if live && terminal {
             Button(role: .destructive) { if let s = now() { actions.close(s) } } label: { Label("关闭 Agent…", systemImage: Theme.Icon.end) }
         }
@@ -277,6 +282,8 @@ struct AgentRowMenu: View, Equatable {
 struct SpaceHeaderMenu: View, Equatable {
     nonisolated let id: String
     nonisolated let unread: [SessionKey]
+    /// The node menu's space items (run an agent here, Git): a herdr workspace (`NodeMenu.offersSpaceActions`).
+    nonisolated let nodeActions: Bool
     var group: SpaceGroup
     var rename: () -> Void
     var open: () -> Void
@@ -285,15 +292,19 @@ struct SpaceHeaderMenu: View, Equatable {
     init(group: SpaceGroup, rename: @escaping () -> Void, open: @escaping () -> Void, linkTodo: (() -> Void)? = nil) {
         id = group.id + "|" + group.spaceID + "|" + group.name
         unread = group.sessions.filter { $0.state == .unread }.map(\.key)
+        nodeActions = NodeMenu.offersSpaceActions(group)
         self.group = group
         self.rename = rename
         self.open = open
         self.linkTodo = linkTodo
     }
 
-    nonisolated static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.unread == b.unread }
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.unread == b.unread && a.nodeActions == b.nodeActions }
 
     var body: some View {
         SpaceMenuItems(group: group, rename: rename, open: open, linkTodo: linkTodo)
+        if nodeActions {
+            Section { SpaceNodeMenuItems(group: group) }
+        }
     }
 }

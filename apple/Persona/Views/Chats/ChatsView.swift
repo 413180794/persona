@@ -815,6 +815,7 @@ private struct AgentsList: View {
         .renameSessionAlert($renamingSession)
         .confirmClose($closingSession)
         .confirmDeleteSession($deletingSession)
+        .nodeActionPrompts()
         .sheet(item: $linkingSession) { s in
             TodoLinkAgentSheet(session: s)
         }
@@ -1679,7 +1680,7 @@ private struct AgentsList: View {
             .contextMenu {
                 AgentRowMenu(key: s.key, pinned: model.isPinned(s.key), muted: model.isMuted(s), looping: s.loop != nil,
                              live: s.state.isLive, terminal: s.canTerminal, attachable: s.canAttach, deletable: s.canDelete,
-                             actions: rowActions)
+                             paneActions: NodeMenu.offersPaneActions(s), actions: rowActions)
                     .equatable()
             }
     }

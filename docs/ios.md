@@ -93,6 +93,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   当前的打勾，别的 Agent 需要你时「⋯」右上角一个红点），第一项「空间 X 的所有 Agent」进空间页。对话页「…」→「空间里的所有 Agent」同样。
   标签行左滑露出「关闭」（不允许整行滑到底就执行），列表行和顶部胶囊长按也有「停止并关闭 Agent」。工作中、等待交互、状态不明或仍有后台 / 排队 / 循环任务时先确认；空闲、完成的标签直接关闭。
 - 删除对话（#1749，对齐网页 #801）：没在运行的会话（`Session.canDelete`：未运行 / 完成 / 未知，不在启动中，不是助手的）在 Agents 行的长按菜单、对话页「…」（Mac 上还有菜单栏 Agent ›「删除对话…」）里有「删除对话…」，系统确认框说明只从各端列表移除、电脑上的记录不删、再用到会重新出现（`DeleteSessionText`）。确认后 `AppModel.deleteSession` 调 `DELETE /api/v1/sessions/{mid}/{sid}`，成功就从本机列表拿掉（hub 的下一次 sessions 推送一致），开着这个对话的页面都退出（分栏右侧、Mac 的单独窗口也是，`AppModel.deletedSession`）；失败显示 hub 的原话。
+- 节点菜单（#3098，对齐网页 #2329，`docs/terminal.md`「节点菜单」）：herdr 里还在跑的 Agent 行的长按菜单多一组「拆分窗格 ▸ 向右 / 向下拆分」「Git ▸ 拉取 / 推送 / 获取」（在窗格的目录）「关闭标签页…」（系统确认框：标签页里的窗格都会关、Agent 也结束），空间标题的 ⋯ 多「在这里运行 Agent…」和「Git ▸」（在工作区的目录）。「在这里运行 Agent…」是一张 sheet：读 `GET /machines/{mid}/panes`，列出这个工作区里没有 Agent、没有绑定会话的 shell 窗格和这台电脑能直接启动的 Claude Code 启动器（Codex 要第一条消息，走新建 Agent），点「运行」调 `panes/agent`；没有空闲的 shell 时可以「新开终端标签页」（`POST /panes`）再选。只给 herdr 宿主（Orca、herdr-core、botmux 不出现）；改标签页名沿用原来的「重命名…」。逻辑在 `Views/Chats/NodeActions.swift`（`NodeMenu` 纯函数 + `NodeActions` 执行和确认，`nodeActionPrompts()` 挂在 Agents 列表上），菜单本身照旧是 Equatable 的，不读推送里会变的东西；失败把 hub / node 的原话放进红色 toast。测试 `NodeMenuTests`。
   复用 `session.close`：远端确认关闭后才将本地副本标为未运行（历史、标题与会话内容保留），失败时确认卡片留着并显示错误，可重试或取消；不连接 hub 时不能伪报成功。
   列表直接观察同空间的活动会话，关闭其他标签不退出列表、不切换当前对话；关闭当前标签选它后面的活动标签，没有则选前面的，全部关闭后返回。只剩一个标签也保留操作入口。
   10-29 曾改成只剩一个按钮的菜单（`SiblingMenu`），看不到 tab 和状态，用户不喜欢。
