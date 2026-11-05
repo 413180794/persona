@@ -34,7 +34,7 @@ final class WatchModel {
     var groups: [String] { configs.keys.sorted { ($0.isEmpty ? 0 : 1, $0) < ($1.isEmpty ? 0 : 1, $1) } }
     var sessions: [Session] = []
     var interactions: [Interaction] = []
-    /// The inbox's 需要你 (Feishu messages and mail the AI says need the user), newest first.
+    /// The inbox's 需要你 (Feishu messages, mail and connectors' items the AI says need the user), newest first.
     var inbox: [InboxItem] = []
     var machines: [Machine] = []
     var error: String?
@@ -126,7 +126,7 @@ final class WatchModel {
             }
         }
         if failure == nil || !ss.isEmpty || !mm.isEmpty { apply(sessions: ss, interactions: ii, machines: mm) }
-        if let xx = try? await first.inbox() { applyInbox(xx) }
+        if let xx = try? await first.inbox(connectors: true) { applyInbox(xx) }
         error = failure.flatMap { ss.isEmpty && mm.isEmpty ? $0.watchShown : nil }
     }
 
@@ -673,16 +673,24 @@ struct WatchSyncButton: View {
 
 // MARK: - 收件箱
 
-/// One inbox item in 需要你: where it came from, the title, the AI's summary.
+/// One inbox item in 需要你: where it came from, the title, the AI's summary. A connector's item says its source and
+/// the label its connector gave it (the hub's words, not the watch's), with the inbox's own symbol: no source's logo.
 struct WatchInboxRow: View {
     var item: InboxItem
+
+    private var source: String {
+        if item.isLark { return item.kindLabel ?? "飞书" }
+        if item.connector != nil { return WatchInboxText.connectorSource(item) }
+        return "邮件"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {
             Label {
-                Text(item.isLark ? (item.kindLabel ?? "飞书") : "邮件")
+                Text(source).lineLimit(1)
             } icon: {
                 if item.isLark { Image(Theme.Brand.lark).resizable().scaledToFit().frame(width: 14, height: 14) }
+                else if item.connector != nil { Image(systemName: Theme.Icon.inbox) }
                 else { Image(systemName: Theme.Icon.mailFilled) }
             }
                 .font(.footnote.weight(.semibold))
@@ -694,7 +702,7 @@ struct WatchInboxRow: View {
 }
 
 /// An inbox item on the wrist: the summary and the latest message; AI 回复 drafts a reply to read and send,
-/// 已处理 files it.
+/// 已处理 files it. A connector's item is read-only here (its reply goes through its own thread on the phone).
 struct WatchInboxItemView: View {
     @Environment(WatchModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -711,7 +719,9 @@ struct WatchInboxItemView: View {
                 }
                 Text([item.sender, item.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "："))
                     .font(.footnote).foregroundStyle(.secondary)
-                if let draft {
+                if item.connector != nil {
+                    Text("在手机上打开回复").font(.footnote).foregroundStyle(.tertiary)
+                } else if let draft {
                     Text(draft)
                         .font(.footnote)
                         .padding(Theme.Watch.bubblePadding)

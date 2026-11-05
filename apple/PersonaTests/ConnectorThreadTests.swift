@@ -143,4 +143,20 @@ struct ConnectorThreadTests {
         #expect(ThreadLayout.endsRun(b, before: c))
         #expect(ThreadLayout.endsRun(late, before: nil))
     }
+
+    /// The watch lists a connector's item under its connector's name and the label the connector gave it (#2727).
+    @Test func watchSourceLine() throws {
+        func item(_ connector: String, name: String = "Example Chat") throws -> InboxItem {
+            try JSON.decoder.decode(InboxItem.self, from: Data(#"""
+            {"id":"examplechat:1","source":"examplechat","kind":"group","account":"a","account_name":"\#(name)","title":"示例群",
+             "preview":"","count":1,"connector":\#(connector)}
+            """#.utf8))
+        }
+        #expect(WatchInboxText.connectorSource(try item(#"{"thread":"primary.example-group","label":"@我"}"#)) == "Example Chat · @我")
+        #expect(WatchInboxText.connectorSource(try item(#"{"thread":"primary.example-group","label":"转账"}"#)) == "Example Chat · 转账")
+        #expect(WatchInboxText.connectorSource(try item(#"{"thread":"primary.example-group"}"#)) == "Example Chat")
+        #expect(WatchInboxText.connectorSource(try item(#"{"thread":"t"}"#, name: "")) == "examplechat")
+        #expect(try item(#"{"thread":"t","label":"转账"}"#).kindLabel == "转账") // the row's tag on the phone: the connector's word
+    }
 }
+

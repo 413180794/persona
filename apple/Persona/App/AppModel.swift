@@ -2331,8 +2331,8 @@ final class AppModel {
         let (live, asking) = QuietTasks.leavingOut(sessions: allSessions.filter { $0.status.isLive }, interactions: pendingInteractions,
                                                    quiet: isQuiet)
         let sessions = live.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
-        // The watch does not draw connectors' items (GitHub…) yet.
-        let inbox = InboxStore.shared.items.filter { !$0.isDone && $0.triage == .action && $0.connector == nil }
+        // Connectors' items too: the watch lists them read-only under their own label (#2727).
+        let inbox = InboxStore.shared.items.filter { !$0.isDone && $0.triage == .action }
         // A task's agent asking: the watch names the task (docs/unified-entry.md「手表」).
         let tasks = TasksStore.shared
         let interactions = asking.filter { !isQuiet($0.sessionKey) }.map { ix in

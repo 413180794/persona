@@ -52,7 +52,7 @@ final class InboxStore {
         await fetch { try await $0.refreshInbox(connectors: Self.drawsConnectors) }
     }
 
-    /// The connectors' items (GitHub…) are drawn on iOS and the Mac (#2611, #2736); the watch does not draw them yet.
+    /// The connectors' items (GitHub…) are drawn on iOS and the Mac (#2611, #2736); the watch fetches its own (WatchModel, #2727).
     #if os(iOS) || os(visionOS) || os(macOS)
     private static let drawsConnectors = true
     #else
