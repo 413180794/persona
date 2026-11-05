@@ -63,7 +63,7 @@ func TestViewOutboxDeliveryAndSafeRetry(t *testing.T) {
 			f.hello.PersonaView = true
 			f.setSessions("server", proto.Session{SessionID: conversation, Assistant: true})
 			hub := &viewSendHub{fakeHub: f, sendError: tc.firstError}
-			s := withSettings(t, f, New(Options{Hub: hub, Store: func() Store { return database }, Logf: t.Logf}))
+			s := withSettings(t, f, New(Options{Hub: hub, Store: func() Store { return database }, Logf: testLogf(t)}))
 			v := db.AssistantViewRow{ID: id, Conversation: conversation, MachineID: "server", Version: 1, View: json.RawMessage(`{"fallback":"Example","sections":[]}`), CreatedAt: at, UpdatedAt: at}
 			feed := db.FeedRow{ID: "feed_" + id, Conversation: conversation, Kind: "view", Ref: id, At: at}
 			if err := database.CreateAssistantView(ctx, v, feed); err != nil {

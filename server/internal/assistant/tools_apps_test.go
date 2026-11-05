@@ -115,7 +115,7 @@ func TestKBToolsFormatTheData(t *testing.T) {
 func TestKBToolsKnowledgeBaseOff(t *testing.T) {
 	f := newFakeHub()
 	f.hello.KB = &KBSettings{Off: true}
-	s := withSettings(t, f, New(Options{Hub: f, Logf: t.Logf, KB: &KBOptions{Dir: t.TempDir()}}))
+	s := withSettings(t, f, New(Options{Hub: f, Logf: testLogf(t), KB: &KBOptions{Dir: t.TempDir()}}))
 	for _, name := range []string{"kb_search", "kb_list", "kb_get", "kb_update"} {
 		if _, err := runTool(s, "c1", name, map[string]any{"kind": "projects", "id": "x", "query": "x"}); err == nil ||
 			err.Error() != "the knowledge base is off (hub.json kb.enabled)" {

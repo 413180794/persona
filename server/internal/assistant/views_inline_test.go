@@ -120,7 +120,7 @@ func TestInlineTurnRegistersWithoutAnAppAndReadsFullText(t *testing.T) {
 	f.setSessions("server", proto.Session{SessionID: conversation, Assistant: true}, proto.Session{SessionID: "ordinary"})
 	f.setItems(proto.Item{ID: "long#0", Role: "assistant", Kind: proto.KindText, Text: "A long conclusion before the card", FullSize: 100000})
 	h := inlineFullHub{fakeHub: f, full: proto.Item{ID: "long#0", Role: "assistant", Kind: proto.KindText, Text: "Conclusion\n```persona-view\n{\"fallback\":\"Finished\",\"sections\":[]}\n```\n"}}
-	s := withSettings(t, f, New(Options{Hub: h, Store: func() Store { return database }, Logf: t.Logf}))
+	s := withSettings(t, f, New(Options{Hub: h, Store: func() Store { return database }, Logf: testLogf(t)}))
 	ref := SessionRef{MachineID: "server", SessionID: conversation}
 	s.registerInlineTurn(ctx, ref)
 	keys, err := database.AssistantViewBlockKeys(ctx, conversation)

@@ -56,7 +56,7 @@ func settleKBEvents(t *testing.T, s *Service) {
 func TestKBEventsFollowSuccessfulWritesAndForget(t *testing.T) {
 	f := &kbEventTestHub{fakeHub: newFakeHub()}
 	f.hello.KB = &KBSettings{}
-	s := New(Options{Hub: f, KB: &KBOptions{Dir: t.TempDir()}, Logf: t.Logf})
+	s := New(Options{Hub: f, KB: &KBOptions{Dir: t.TempDir()}, Logf: testLogf(t)})
 	t.Cleanup(s.kbClose)
 	setSettings(t, s, func(v *Settings) { v.Timezone = "UTC" })
 	e := kbEng(t, s)
@@ -99,7 +99,7 @@ func TestKBForgottenWaitsForIndexCleanup(t *testing.T) {
 	f := &kbEventTestHub{fakeHub: newFakeHub()}
 	f.hello.KB = &KBSettings{}
 	st := &failingKBIndex{newKBStore()}
-	s := New(Options{Hub: f, Store: func() Store { return st }, KB: &KBOptions{Dir: t.TempDir()}, Logf: t.Logf})
+	s := New(Options{Hub: f, Store: func() Store { return st }, KB: &KBOptions{Dir: t.TempDir()}, Logf: testLogf(t)})
 	t.Cleanup(s.kbClose)
 	setSettings(t, s, func(v *Settings) { v.Timezone = "UTC" })
 	_ = kbEng(t, s)

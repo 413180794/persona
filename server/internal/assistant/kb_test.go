@@ -144,7 +144,7 @@ func TestKBAnswersTheHub(t *testing.T) {
 func TestKBOffAnswersTheHub(t *testing.T) {
 	f := newFakeHub()
 	f.hello.KB = &KBSettings{Off: true} // hub.json kb.enabled false
-	s := New(Options{Hub: f, Logf: t.Logf, KB: &KBOptions{Dir: t.TempDir()}})
+	s := New(Options{Hub: f, Logf: testLogf(t), KB: &KBOptions{Dir: t.TempDir()}})
 	ctx := context.Background()
 	out, _, err := s.kbRequest(ctx, assistantwire.MethodKBContext, json.RawMessage(`{"chat_id":"lark-f1"}`))
 	if err != nil || out.(assistantwire.KBContextResult).Context != nil {
@@ -327,13 +327,13 @@ func TestKBRouteProjectAgents(t *testing.T) {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 	// Off: 503, as before; not open yet (no word from the hub): 503 kb_unavailable.
-	off := New(Options{Hub: f, Logf: t.Logf})
+	off := New(Options{Hub: f, Logf: testLogf(t)})
 	rec = httptest.NewRecorder()
 	off.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/kb/projects", nil))
 	if rec.Code != 503 {
 		t.Fatalf("off: %d", rec.Code)
 	}
-	early := New(Options{Hub: newFakeHub(), Logf: t.Logf, KB: &KBOptions{Dir: t.TempDir()}})
+	early := New(Options{Hub: newFakeHub(), Logf: testLogf(t), KB: &KBOptions{Dir: t.TempDir()}})
 	rec = httptest.NewRecorder()
 	early.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/kb/projects", nil))
 	if rec.Code != 503 || !strings.Contains(rec.Body.String(), assistantwire.CodeKBUnavailable) {

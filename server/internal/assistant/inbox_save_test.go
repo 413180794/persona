@@ -39,7 +39,7 @@ func (s *inboxBatchMemStore) PutInboxItems(ctx context.Context, rows []db.InboxR
 func newInboxBatchService(t *testing.T) (*Service, *inboxBatchMemStore) {
 	t.Helper()
 	st := &inboxBatchMemStore{inboxMemStore: newInboxMemStore()}
-	s := New(Options{Hub: newFakeHub().withMachine(), Store: func() Store { return st }, Logf: t.Logf})
+	s := New(Options{Hub: newFakeHub().withMachine(), Store: func() Store { return st }, Logf: testLogf(t)})
 	if err := s.inboxReady(context.Background()); err != nil {
 		t.Fatal(err)
 	}

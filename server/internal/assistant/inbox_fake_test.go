@@ -419,7 +419,7 @@ func newInboxHubWith(t *testing.T, kbo *KBOptions) *inboxHub {
 	in := newFakeInbox()
 	f.inbox = in
 	st := newInboxMemStore()
-	s := New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf, KB: kbo})
+	s := New(Options{Hub: f, Store: func() Store { return st }, Logf: testLogf(t), KB: kbo})
 	if kbo != nil {
 		t.Cleanup(s.kbClose)
 	}

@@ -25,7 +25,7 @@ func ownerTestService(t *testing.T, dir, keyDir string) *Service {
 	f.answerApp(AppConnectors, assistantwire.ConnectorsOwner, func(json.RawMessage) (any, error) {
 		return assistantwire.KBOwnerSources{Sources: []assistantwire.KBOwnerSource{}}, nil
 	})
-	s := New(Options{Hub: f, KB: &KBOptions{Dir: dir, KeyDir: keyDir}, Logf: t.Logf})
+	s := New(Options{Hub: f, KB: &KBOptions{Dir: dir, KeyDir: keyDir}, Logf: testLogf(t)})
 	setSettings(t, s, func(v *Settings) { v.Timezone = "UTC" })
 	t.Cleanup(s.kbClose)
 	return s

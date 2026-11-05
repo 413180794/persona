@@ -181,7 +181,7 @@ func TestInboxKeptAcrossRestarts(t *testing.T) {
 	}
 
 	h.st.fail = errMuteStoreDown
-	again := New(Options{Hub: h.f, Store: func() Store { return h.st }, Logf: t.Logf})
+	again := New(Options{Hub: h.f, Store: func() Store { return h.st }, Logf: testLogf(t)})
 	h.in.svc = again
 	if n := len(again.inboxList(true)); n != 0 {
 		t.Fatalf("%d items before it was read", n)

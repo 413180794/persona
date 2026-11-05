@@ -86,7 +86,7 @@ func TestMuteFromAnItem(t *testing.T) {
 	}
 
 	// Kept: the manager started again has it, and a later mail of the sender is filed at the next collection.
-	h2 := New(Options{Hub: h.f, Store: func() Store { return h.st }, Logf: t.Logf})
+	h2 := New(Options{Hub: h.f, Store: func() Store { return h.st }, Logf: testLogf(t)})
 	h2.inboxReady(ctx)
 	h2.inbox.items["d"] = mailItem("d", "shop@example.com", "示例商城")
 	h2.inbox.mu.Lock()

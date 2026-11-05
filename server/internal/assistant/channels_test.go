@@ -284,7 +284,7 @@ func TestChannelAnswerWaitsForTheHub(t *testing.T) {
 // The text a followed conversation writes comes many times a second: one per conversation waits in line, with the
 // newest text, and the important events are never crowded out.
 func TestBusDeltasAreTakenTogether(t *testing.T) {
-	b := NewBusHub(BusOptions{Logf: t.Logf})
+	b := NewBusHub(BusOptions{Logf: testLogf(t)})
 	delta := func(sid, text string) json.RawMessage {
 		raw, _ := json.Marshal(SessionDelta{MachineID: "server", SessionID: sid, Text: text})
 		return raw
@@ -369,12 +369,11 @@ func TestChannelsReadFailureNeverOverwrites(t *testing.T) {
 	pairing := "ou_example"
 	_ = store.PutSetting(ctx, botStateKey, botState{Current: botTarget{Kind: targetMain}, Pairing: &pairing,
 		Threads: map[string]*botThread{"om_old": {Target: botTarget{Kind: targetMain}}}})
-	before := map[string]string{}
-	for k, v := range store.data {
-		before[k] = string(v)
-	}
-	store.puts, store.failRead = 0, true
-	h := newServiceOn(t, newFakeHub(), store)
+	before := store.stored()
+	store.failReads(true)
+	// The runs' machine is known: otherwise their watchers drop them (the machine left the configuration) while the
+	// test is still looking.
+	h := newServiceOn(t, newFakeHub().withMachine(), store)
 
 	func() {
 		defer func() {
@@ -395,17 +394,17 @@ func TestChannelsReadFailureNeverOverwrites(t *testing.T) {
 		h.noteChannelConversation("wechat_x", "server", "s1")
 		h.startChannelRun(&channel.Run{ID: "wechat_x_m2", Channel: "wechat_x", MachineID: "server", SessionID: "s1"})
 	}()
-	if store.puts != 0 {
-		t.Fatalf("%d writes while the state could not be read", store.puts)
+	if n := store.writes(); n != 0 {
+		t.Fatalf("%d writes while the state could not be read", n)
 	}
-	for k, v := range store.data {
-		if before[k] != string(v) {
+	for k, v := range store.stored() {
+		if before[k] != v {
 			t.Fatalf("%s changed while unreadable:\n before %s\n after  %s", k, before[k], v)
 		}
 	}
 
 	// Readable again: what was stored is what is read, and a message is taken once.
-	store.failRead = false
+	store.failReads(false)
 	if err := h.ChannelReceive(ctx, ChannelReceive{Channel: "wechat_x", Message: []byte(`{"id":"m0","text":"示例"}`)}); err != nil {
 		t.Fatalf("a message seen before: %v", err)
 	}
@@ -427,12 +426,12 @@ func TestChannelsReadFailureNeverOverwrites(t *testing.T) {
 	var saved channelsState
 	_, _ = store.Setting(ctx, channelsStateKey, &saved)
 	if len(saved.Runs) != 2 || !slices.Contains(saved.Seen["wechat_x"], "m0") {
-		t.Fatalf("the stored state: %s", store.data[channelsStateKey])
+		t.Fatalf("the stored state: %s", store.stored()[channelsStateKey])
 	}
 	var prefs map[string]*channelPrefs
 	_, _ = store.Setting(ctx, channelsKey, &prefs)
 	if prefs["telegram"] == nil {
-		t.Fatalf("the channels' settings: %s", store.data[channelsKey])
+		t.Fatalf("the channels' settings: %s", store.stored()[channelsKey])
 	}
 	if first, err := h.claimBotMessage("om_new"); !first || err != nil {
 		t.Fatalf("a Feishu message once readable: first %v, err %v", first, err)
@@ -440,7 +439,7 @@ func TestChannelsReadFailureNeverOverwrites(t *testing.T) {
 	var bot botState
 	_, _ = store.Setting(ctx, botStateKey, &bot)
 	if bot.Pairing == nil || *bot.Pairing != pairing || bot.Threads["om_old"] == nil {
-		t.Fatalf("the chat's state: %s", store.data[botStateKey])
+		t.Fatalf("the chat's state: %s", store.stored()[botStateKey])
 	}
 }
 

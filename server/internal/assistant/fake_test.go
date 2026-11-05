@@ -437,10 +437,29 @@ func (m *memStore) PutSetting(_ context.Context, key string, v any) error {
 }
 
 // newTestService is an assistant on f with an in-memory store.
+// testLogf is t.Logf until the test ends, nothing after: the service's goroutines (a run's watcher, a snapshot being
+// published) can still log when the test is over, and t.Logf then panics and fails the whole package.
+func testLogf(t *testing.T) func(string, ...any) {
+	var mu sync.Mutex
+	done := false
+	t.Cleanup(func() {
+		mu.Lock()
+		done = true
+		mu.Unlock()
+	})
+	return func(format string, args ...any) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !done {
+			t.Logf(format, args...)
+		}
+	}
+}
+
 func newTestService(t *testing.T, f *fakeHub) *Service {
 	t.Helper()
 	st := &memStore{}
-	return withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf}))
+	return withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: testLogf(t)}))
 }
 
 // newKBService is newTestService with a knowledge base in a directory of its own (kb.go), on as the hub says (its
@@ -453,7 +472,7 @@ func newKBService(t *testing.T, f *fakeHub) *Service {
 		f.hello.KB = &KBSettings{}
 	}
 	f.mu.Unlock()
-	s := withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf, KB: &KBOptions{Dir: t.TempDir()}}))
+	s := withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: testLogf(t), KB: &KBOptions{Dir: t.TempDir()}}))
 	t.Cleanup(s.kbClose)
 	return s
 }
@@ -471,13 +490,13 @@ func kbEng(t *testing.T, s *Service) *kb.Engine {
 // newStorelessService is an assistant on f with no database: its state lives in memory only.
 func newStorelessService(t *testing.T, f *fakeHub) *Service {
 	t.Helper()
-	return withSettings(t, f, New(Options{Hub: f, Logf: t.Logf}))
+	return withSettings(t, f, New(Options{Hub: f, Logf: testLogf(t)}))
 }
 
 // newServiceOn is an assistant on f with st as its database.
 func newServiceOn(t *testing.T, f *fakeHub, st Store) *Service {
 	t.Helper()
-	return withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf}))
+	return withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: testLogf(t)}))
 }
 
 // withSettings saves f.settings as s's own (none: s keeps what it has), and gives the hub's hello the fake model.
