@@ -363,6 +363,9 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		if seen[id] || n.isAssistantSession(id) || n.ownedAssistantSource(src.thread) {
 			continue
 		}
+		if n.programRun(id, src) {
+			continue
+		}
 		s := proto.Session{SessionID: id, Agent: "codex", SourceKind: "codex_history", SourceThreadID: src.thread, Status: proto.StatusOffline,
 			Capabilities: &proto.SessionCapabilities{Read: true}, ReadOnlyReason: "仅查看：未发现可共享的 app-server 入口，请在电脑上打开会话"}
 		var m quickMeta
@@ -445,4 +448,17 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 	sort.Slice(out, func(i, j int) bool { return out[i].SessionID < out[j].SessionID })
 	slotCodexDesktop(out)
 	return out
+}
+
+// programRun: a one-shot run a program started (`codex exec`, an SDK; an evaluation opens dozens at once, #2131),
+// known only from its rollout: not one of the user's agents. A thread a shared app-server holds is drivable and stays,
+// as does a run the Codex App lists in its sidebar.
+func (n *Node) programRun(id string, src codexSource) bool {
+	if src.path == "" || !readCodexOrigin(src.path).exec {
+		return false
+	}
+	if _, _, err := n.codexOwner(id); err != errCodexNoOwner {
+		return false
+	}
+	return !codexDesktopChat(src)
 }

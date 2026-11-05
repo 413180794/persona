@@ -382,11 +382,15 @@ var codexTurnMarks sync.Map
 
 // codexOrigin is where a rollout's thread came from, from its first line (session_meta): the Codex App writes
 // originator "Codex Desktop" (source "vscode" for its chats, "exec" for its background runs, a thread_spawn object for
-// subagents), the Codex CLI "codex-tui" / "cli". Only the App's threads go through its IPC bus.
+// subagents), the Codex CLI "codex-tui" / "cli", `codex exec` and the SDKs over it "codex_exec" / "codex_sdk_*" with
+// source "exec" (their subagents keep the originator). Only the App's threads go through its IPC bus.
 type codexOrigin struct {
 	desktop bool
 	cli     bool
-	parent  string // the thread that spawned this subagent
+	// exec: a one-shot run a program started (`codex exec`, an SDK, the App's background runs) or a subagent of one:
+	// nobody's conversation, not listed in Agents (programRun).
+	exec   bool
+	parent string // the thread that spawned this subagent
 }
 
 var codexOrigins sync.Map // path → codexOrigin (the first line never changes)
@@ -415,6 +419,11 @@ func readCodexOrigin(path string) codexOrigin {
 		return codexOrigin{} // not written yet: read again next time
 	}
 	o := codexOrigin{desktop: m.Payload.Originator == "Codex Desktop", cli: m.Payload.Originator == "codex-tui" || m.Payload.Originator == "codex_cli_rs"}
+	var source string
+	if json.Unmarshal(m.Payload.Source, &source) != nil {
+		source = "" // an object: a subagent
+	}
+	o.exec = source == "exec" || m.Payload.Originator == "codex_exec" || strings.HasPrefix(m.Payload.Originator, "codex_sdk")
 	var spawn struct {
 		Subagent struct {
 			ThreadSpawn struct {
