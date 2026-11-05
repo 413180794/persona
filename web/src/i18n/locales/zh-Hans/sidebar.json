@@ -116,5 +116,12 @@
   "expand": "展开侧边栏",
   "nav_health": "健康",
   "fold_all": "全部折叠",
-  "open_all": "全部展开"
+  "open_all": "全部展开",
+  "launching_count": "{count} 个正在启动",
+  "pane_count": "{count} 个窗格",
+  "folded_states": "收起的 Agent：{list}",
+  "folded_needs_you": "{count} 个需要你",
+  "folded_unread": "{count} 个完成未看",
+  "folded_working": "{count} 个工作中",
+  "unread_messages_count": "{count} 条未读消息"
 }

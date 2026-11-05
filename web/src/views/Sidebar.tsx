@@ -588,7 +588,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
         </Section>
       )}
 
-      {launches.length > 0 && <Section title={t("sidebar.launching")} folded={launchesFolded} onToggle={toggleLaunches} right={<span className="text-[10.5px] text-ink-3 tabular-nums">{launches.length}</span>}>
+      {launches.length > 0 && <Section title={t("sidebar.launching")} folded={launchesFolded} onToggle={toggleLaunches} right={<GroupCount n={launches.length} label={t("sidebar.launching_count", { count: launches.length })} />}>
         {launches.map((launch) => <NavRow key={launch.id} k={`s:${launch.machineId}/${launch.id}`} reg={reg} hover={hover} active={activeKey === `s:${launch.machineId}/${launch.id}`} to={{ name: "session", mid: launch.machineId, sid: launch.id }} go={go} icon={launch.phase === "failed" ? "retry" : "agent"} label={launch.text || baseName(launch.cwd) || t("sidebar.launch_untitled")} hint={launch.phase === "failed" ? t("sidebar.launch_failed") : t("sidebar.launch_background")} />)}
       </Section>}
 
@@ -622,7 +622,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       ))}
 
       {recent.length > 0 && (
-        <Section title={t("sidebar.recent")} folded={recentFolded} onToggle={toggleRecent} right={<span className="text-[10.5px] text-ink-3 tabular-nums">{recent.length}</span>}>
+        <Section title={t("sidebar.recent")} folded={recentFolded} onToggle={toggleRecent} right={<GroupCount n={recent.length} label={t("sidebar.agent_count", { count: recent.length })} />}>
           {recentShown.map((s) => (
             <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} />
           ))}
@@ -819,7 +819,7 @@ function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey
       {statusInfo?.label}
     </span>
   ) : (
-    <span className="text-[10.5px] text-ink-3 tabular-nums">{group.sessions.length}</span>
+    <GroupCount n={group.sessions.length} label={t("sidebar.agent_count", { count: group.sessions.length })} />
   );
 
   return (
@@ -883,7 +883,7 @@ function TreeTodoRows({ td, ...p }: { td: TreeTodo } & TreeRowProps) {
         ) : (
           <button type="button" onClick={toggle} className="min-w-0 flex-1 truncate text-left">{td.name}</button>
         )}
-        <span className="shrink-0 text-[10.5px] text-ink-3 tabular-nums">{td.sessions.length}</span>
+        <GroupCount n={td.sessions.length} label={t("sidebar.agent_count", { count: td.sessions.length })} className="shrink-0" />
         <TreeStateText state={td.state} />
       </div>
       <Collapse open={!folded}>
@@ -973,7 +973,7 @@ function RepoSection({ tree, reg, hover, activeKey, go, onRowMenu }: { tree: Rep
       title={<span className="flex min-w-0 items-center gap-1.5"><Icon name="folder" size={12} stroke={2} className="shrink-0 text-ink-3" /><span className="truncate">{tree.name}</span></span>}
       folded={folded}
       onToggle={toggle}
-      right={<span className="text-[10.5px] text-ink-3 tabular-nums">{tree.count}</span>}
+      right={<GroupCount n={tree.count} label={t("sidebar.agent_count", { count: tree.count })} />}
     >
       {flat ? tree.worktrees[0]!.sessions.map((s) => row(s, tree.name)) : tree.worktrees.map((w) => <RepoWorktreeRows key={w.key} w={w} repo={tree.name} row={row} activeKey={activeKey} />)}
     </Section>
@@ -1330,7 +1330,7 @@ function ShellTree({ mid, online, spaces, reg, hover, go, activeKey, onNodeMenu 
   const sessions = useStore((s) => s.sessions[mid]);
   const count = spaces.reduce((n, sp) => n + sp.tabs.reduce((m, t) => m + t.panes.length, 0), 0);
   return (
-    <TreeBlock foldKey={`term:${mid}`} sessions={[]} activeKey={activeKey} title={<span className="min-w-0 truncate font-medium">{t("sidebar.nav_terminal")}</span>} right={() => <span className="text-[10.5px] text-ink-3 tabular-nums">{count}</span>}>
+    <TreeBlock foldKey={`term:${mid}`} sessions={[]} activeKey={activeKey} title={<span className="min-w-0 truncate font-medium">{t("sidebar.nav_terminal")}</span>} right={() => <GroupCount n={count} label={t("sidebar.pane_count", { count })} />}>
       {spaces.map((sp) => (
         <TreeBlock
           key={`${sp.host}/${sp.id}`}
@@ -1386,15 +1386,28 @@ function LooseSection({ sessions, reg, hover, activeKey, go, onRowMenu }: { sess
 function SessionTally({ sessions, folded }: { sessions: Session[]; folded: boolean }) {
   const states = sessions.map(stateOf);
   const dots = (["needs_you", "unread", "working"] as const).filter((s) => states.includes(s));
-  if (folded && dots.length)
+  if (folded && dots.length) {
+    const label = t("sidebar.folded_states", { list: dots.map((d) => t(`sidebar.folded_${d}`, { count: states.filter((x) => x === d).length })).join(t("sidebar.list_separator")) });
     return (
-      <span className="flex items-center gap-1">
+      <span title={label} className="flex items-center gap-1">
+        <span className="sr-only">{label}</span>
         {dots.map((d) => (
           <StatusDot key={d} state={d} size={6} />
         ))}
       </span>
     );
-  return <span className="text-[10.5px] text-ink-3 tabular-nums">{sessions.length}</span>;
+  }
+  return <GroupCount n={sessions.length} label={t("sidebar.agent_count", { count: sessions.length })} />;
+}
+
+/** A group title's count with what it counts: a tooltip, and the same words for a screen reader. */
+function GroupCount({ n, label, className }: { n: number; label: string; className?: string }) {
+  return (
+    <span title={label} className={cx("text-[10.5px] text-ink-3 tabular-nums", className)}>
+      <span aria-hidden>{n}</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
 }
 
 type RegFn = (k: string) => (el: HTMLElement | null) => void;
@@ -1767,7 +1780,7 @@ function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: 
       onToggle={toggle}
       right={
         <>
-          {unread ? <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-tint px-1 text-[10px] font-semibold text-accent-ink tabular-nums">{unread}</span> : <span className="text-[10.5px] text-ink-3 tabular-nums">{sessions.length || ""}</span>}
+          {unread ? <span title={t("sidebar.unread_messages_count", { count: unread })} className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-tint px-1 text-[10px] font-semibold text-accent-ink tabular-nums"><span aria-hidden>{unread}</span><span className="sr-only">{t("sidebar.unread_messages_count", { count: unread })}</span></span> : sessions.length > 0 && <GroupCount n={sessions.length} label={t("sidebar.agent_count", { count: sessions.length })} />}
           <button type="button" title={t("sidebar.search_personal")} aria-label={t("sidebar.search_personal")} onClick={() => setSearching((x) => !x || !!q)} className={cx("touch-hit relative z-10 flex size-5 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover hover:text-ink-2", (searching || q) && "text-ink-2")}>
             <Icon name="search" size={12} />
           </button>
@@ -1919,11 +1932,14 @@ export function CollapseButton({ collapsed, chord }: { collapsed: boolean; chord
 
 /** The folded 页面 title's right side: a dot when a page in it has a badge, so folding hides nothing to look at. */
 function PagesTally({ pages }: { pages: NavPage[] }) {
-  const tones = [...new Set(pages.filter((p) => p.badge !== undefined).map((p) => p.badgeTone ?? "accent"))];
+  const counted = pages.filter((p) => p.badge !== undefined);
+  const tones = [...new Set(counted.map((p) => p.badgeTone ?? "accent"))];
   if (!tones.length) return null;
+  const label = counted.map((p) => `${p.label} ${p.badge}`).join(t("sidebar.list_separator"));
   return (
-    <span className="flex items-center gap-1" aria-hidden>
-      {tones.map((tone) => <span key={tone} className={cx("size-1.5 rounded-full", DOT_CLASS[tone])} />)}
+    <span title={label} className="flex items-center gap-1">
+      <span className="sr-only">{label}</span>
+      {tones.map((tone) => <span key={tone} aria-hidden className={cx("size-1.5 rounded-full", DOT_CLASS[tone])} />)}
     </span>
   );
 }

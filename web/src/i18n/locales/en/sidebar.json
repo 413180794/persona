@@ -116,5 +116,16 @@
   "expand": "Expand sidebar",
   "nav_health": "Health",
   "fold_all": "Collapse all",
-  "open_all": "Expand all"
+  "open_all": "Expand all",
+  "launching_count_one": "{count} agent starting",
+  "launching_count_other": "{count} agents starting",
+  "pane_count_one": "{count} pane",
+  "pane_count_other": "{count} panes",
+  "folded_states": "Folded agents: {list}",
+  "folded_unread": "{count} unread",
+  "folded_working": "{count} working",
+  "unread_messages_count_one": "{count} unread message",
+  "unread_messages_count_other": "{count} unread messages",
+  "folded_needs_you_one": "{count} needs you",
+  "folded_needs_you_other": "{count} need you"
 }

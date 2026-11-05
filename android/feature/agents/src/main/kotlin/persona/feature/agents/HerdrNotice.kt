@@ -73,7 +73,7 @@ internal data class HerdrFailure(val text: AgentText, val detail: String) {
                 "unknown method herdr.server.start" in m -> AgentText(R.string.agents_herdr_why_old_node)
                 "machine is offline" in m -> AgentText(R.string.agents_herdr_why_offline)
                 // iOS APIError.isTimeoutText: the hub gave up waiting (504, a deadline) before herdr answered.
-                listOf("deadline exceeded", "timed out", "timeout", "超时").any { it in m.lowercase() } ->
+                listOf("deadline exceeded", "timed out", "timeout", "超时").any { it in m.lowercase() } -> // i18n-ignore: matches the hub's error text
                     AgentText(R.string.agents_herdr_why_timeout)
                 else -> AgentText.raw(m)
             }

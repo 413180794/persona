@@ -189,6 +189,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | --- | --- |
 | `docs/collaboration.md` | 多人 / 多 Agent 协作：开工前查重、在 issue 里认领再动手、24 小时没更新视为放弃（续期 / 接手 / 放弃）、PR 必须关联 issue（Action 自动关闭没关联的），评论模板和 gh 命令 |
 | `docs/i18n.md` | 国际化：三种语言（zh-Hans / en / ja）、回退规则、术语表（中英日）、各端机制、协议里怎么传语言、后续工作 |
+| `docs/onboarding.md` | 新用户上手（#287）：给不会命令行的人的心智模型和最短路径、`personad hub setup`、手机添加电脑（待确认、Key 只发确认过的）、模型接入三种情况、主对话就绪度接口和降级、错误码 → 大白话、预设、做 / 暂不做 / 拍板、PR 顺序和 Mac 工作项、真人实测 |
 | `docs/config.md` | 配置：构建 / 部署配置（config.json）、hub 运行配置（hub.json），哪些值不能写进代码 |
 | `docs/rename.md` | Jarvis → Persona 兼容迁移：哪些身份不变、新旧名字和目录的对应、防回退检查；验收和发布边界见 `docs/rename-acceptance.md`，open PR 审计快照 `docs/rename-pr-audit.md` |
 | `docs/architecture.md` | 整体架构、数据流、为什么这样设计（herdr + hooks + transcript） |

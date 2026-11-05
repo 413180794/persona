@@ -160,7 +160,7 @@ data class ChatLinkContext(
          * The text of a whole page picked as context: the agent reads the page itself. The same marker as iOS
          * (`LinkSheet.pick`) and web (`links.ts` WHOLE); iOS's quote row keys on it to show 「引用 <title>」.
          */
-        const val WHOLE = "（整篇）"
+        const val WHOLE = "（整篇）" // i18n-ignore: the wire marker iOS and web send and match
 
         /**
          * What the link card's 作为上下文 sends for the whole of a native Feishu view: a document by [WHOLE], a 公司圈 post
@@ -174,7 +174,7 @@ data class ChatLinkContext(
         /** 引用 on a message of this chat (iOS `ContextRef.quote`): [title] is who wrote it, 「我」 for the user's own. */
         const val QUOTE = "quote"
         /** The author of the user's own quoted message on the wire, whatever the app's language (iOS writes and reads 「我」). */
-        const val QUOTE_ME = "我"
+        const val QUOTE_ME = "我" // i18n-ignore: on the wire in every language, iOS writes and reads it
         fun quote(text: String, from: String, msg: String) = ChatLinkContext(QUOTE, from, "", text.trim(), msg = msg)
 
         private val tags = Regex("<(?:jarvis|persona)-context\\b([^>]*)>([\\s\\S]*?)</(?:jarvis|persona)-context>\\s*")

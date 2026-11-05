@@ -116,5 +116,12 @@
   "expand": "サイドバーを展開",
   "nav_health": "ヘルスケア",
   "fold_all": "すべて折りたたむ",
-  "open_all": "すべて展開"
+  "open_all": "すべて展開",
+  "launching_count": "起動中{count}件",
+  "pane_count": "{count}個のペイン",
+  "folded_states": "折りたたんだエージェント：{list}",
+  "folded_needs_you": "要対応{count}件",
+  "folded_unread": "未確認{count}件",
+  "folded_working": "作業中{count}件",
+  "unread_messages_count": "未読メッセージ{count}件"
 }
