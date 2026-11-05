@@ -241,6 +241,44 @@ function FeedsGroup({ c, a }: { c: HubConnector; a: Actions }) {
   );
 }
 
+/**
+ * An extension's page (设置 › 扩展 › …) for the connectors it contributes: each one's 进收件箱 switch, the hub's own
+ * (the same as on the connector's page), and the way to the connector's page for the rest (persona#3178).
+ */
+export function ExtensionConnectorInbox({ ids, onOpen }: { ids: string[]; onOpen?: (id: string) => void }) {
+  const [list, setList] = useState<HubConnector[]>([]);
+  const key = ids.join(",");
+  const load = useCallback(async () => {
+    try {
+      const all = await listConnectors();
+      setList(key.split(",").flatMap((id) => all.find((c) => c.id === id) ?? []));
+    } catch {
+      setList([]); // the connector page says what is wrong; this group just stays away
+    }
+  }, [key]);
+  useEffect(() => void load(), [load]);
+  return (
+    <>
+      {list.map((c) => (c.inbox === undefined ? null : <ExtensionConnectorGroup key={c.id} c={c} reload={load} onOpen={onOpen} />))}
+    </>
+  );
+}
+
+export function ExtensionConnectorGroup({ c, reload, onOpen }: { c: HubConnector; reload: () => Promise<void>; onOpen?: (id: string) => void }) {
+  const a = useActions(c.id, reload);
+  const label = t("settings-hubconnector.to_inbox");
+  return (
+    <Group title={t("settings-hubconnector.extension_title", { name: c.name })} footer={c.inbox ? t("settings-hubconnector.extension_inbox_on", { name: c.name }) : t("lib-connectors.feeds_inbox_off")}>
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{label}</span>
+        {a.busy === "inbox" && <Spinner />}
+        <Switch on={!!c.inbox} disabled={!!a.busy} label={label} onChange={(v) => void a.run("inbox", () => setConnector(c.id, { inbox: v }))} />
+      </div>
+      {onOpen && <Row label={t("settings-hubconnector.extension_open")} hint={t("settings-hubconnector.extension_open_hint")} onClick={() => onOpen(c.id)} />}
+    </Group>
+  );
+}
+
 function DataGroup({ c, a, logout }: { c: HubConnector; a: Actions; logout: boolean }) {
   const [confirm, setConfirm] = useState<"" | "logout" | "delete">("");
   const [deleted, setDeleted] = useState("");

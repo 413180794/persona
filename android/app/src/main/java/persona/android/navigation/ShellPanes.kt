@@ -17,7 +17,7 @@ internal fun isDetailDestination(key: NavKey): Boolean = when (key) {
     is InboxItemUiRoute, is InboxItemDetailRoute,
     is SettingsPageRoute, PairingRoute, PhoneToolsRoute, MachinesRoute, is MachineDetailRoute,
     is EngineRoute, is ModelPurposeRoute, is ExtensionRoute, is ExtensionUiRoute, ExtensionMarketRoute, is ExtensionCatalogRoute,
-    ExtensionMarketsRoute, is LauncherRoute, is ChannelRoute -> true
+    ExtensionMarketsRoute, is LauncherRoute, is ChannelRoute, is ConnectorRoute -> true
     // A space's page opens beside the Agents list too; a conversation opened from it goes on top of it.
     is SpaceRoute -> true
     else -> false

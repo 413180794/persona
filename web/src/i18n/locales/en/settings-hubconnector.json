@@ -58,5 +58,9 @@
   "imessage_delete_message": "Messages chats and people in the knowledge base and Messages items in the inbox will be deleted. Messages on that Mac are not affected.",
   "imessage_read_only": "Persona only reads and never sends for you; it reads that Mac directly and marks nothing as read.",
   "imessage_ai_failed": "Couldn't change it: {error}",
-  "imessage_delete_failed": "Couldn't delete: {error}"
+  "imessage_delete_failed": "Couldn't delete: {error}",
+  "extension_title": "Connector {name}",
+  "extension_inbox_on": "New {name} items come into the Inbox. This is the same switch as Add to Inbox on the connector's page.",
+  "extension_open": "Connector Settings",
+  "extension_open_hint": "Sign-in, status and more Inbox settings"
 }

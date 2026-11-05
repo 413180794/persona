@@ -58,5 +58,9 @@
   "imessage_delete_message": "知识库里的信息会话和人、收件箱里的信息条目都会删掉；那台 Mac 上的消息不受影响。",
   "imessage_read_only": "Persona 只读，不会替你发消息；直接读那台 Mac，看了也不会标成已读。",
   "imessage_ai_failed": "没改成：{error}",
-  "imessage_delete_failed": "没删成：{error}"
+  "imessage_delete_failed": "没删成：{error}",
+  "extension_title": "连接器 {name}",
+  "extension_inbox_on": "{name} 的新条目进收件箱。和连接器页上的「进收件箱」是同一个开关。",
+  "extension_open": "连接器设置",
+  "extension_open_hint": "登录、状态和更多收件箱设置"
 }

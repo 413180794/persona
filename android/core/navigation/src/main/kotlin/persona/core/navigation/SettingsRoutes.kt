@@ -36,3 +36,6 @@ data class LauncherRoute(val machineId: String, val name: String) : NavKey
 
 /** One channel of 设置 › 渠道 (docs/channels.md「界面」), by the hub's channel id. */
 @Serializable @SerialName("persona.core.navigation.ChannelRoute") data class ChannelRoute(val channelId: String) : NavKey
+
+/** One connector of 设置 › 连接器 (its sign-in, switches and inbox settings), by the hub's connector id; an extension's page opens it. */
+@Serializable @SerialName("persona.core.navigation.ConnectorRoute") data class ConnectorRoute(val connectorId: String) : NavKey

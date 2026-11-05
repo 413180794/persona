@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { ConnectorPrompt } from "../../lib/connectors";
-import { IMessageGroups, SignInStep } from "./HubConnector";
+import type { ConnectorPrompt, HubConnector } from "../../lib/connectors";
+import { ExtensionConnectorGroup, IMessageGroups, SignInStep } from "./HubConnector";
 
 // 设置 › 连接器's login card (#1693): a QR code step is drawn and a step the page can't draw says so, never an empty
 // form whose 下一步 stays grey forever.
@@ -97,5 +97,28 @@ describe("信息's page", () => {
     const html = imessage(false, { busy: "ai", error: "没改成：no database" });
     expect(html).toMatch(/role="switch" aria-checked="false" aria-label="交给 Persona" disabled=""|disabled="".{0,80}role="switch"/);
     expect(html).toContain("没改成：no database");
+  });
+});
+
+// 设置 › 扩展 › GitHub (persona#3178): the connector's own 进收件箱 switch, and the way to its page.
+describe("an extension's connector group", () => {
+  const github = (inbox: boolean) => ({ id: "github", name: "GitHub", inbox }) as HubConnector;
+  const draw = (c: HubConnector, onOpen?: (id: string) => void) =>
+    renderToStaticMarkup(<ExtensionConnectorGroup c={c} reload={async () => {}} onOpen={onOpen} />);
+
+  it("draws the switch on, and the link to the connector's page", () => {
+    const html = draw(github(true), () => {});
+    expect(html).toContain("连接器 GitHub");
+    expect(html).toContain("进收件箱");
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain("GitHub 的新条目进收件箱");
+    expect(html).toContain("连接器设置");
+  });
+
+  it("says what off means, and has no link without a way to open the page", () => {
+    const html = draw(github(false));
+    expect(html).toContain('aria-checked="false"');
+    expect(html).toContain("不再收新的，已有的条目留着");
+    expect(html).not.toContain("连接器设置");
   });
 });

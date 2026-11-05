@@ -21,6 +21,7 @@ import { Icon } from "../../ui/icons";
 import { ChannelLink } from "./Channels";
 import { MarketCatalog, MarketItem, Markets, UninstallDialog } from "./ExtensionMarket";
 import { ExtensionUI } from "./ExtensionView";
+import { ExtensionConnectorInbox } from "./HubConnector";
 import { dependencyText, dependentError, type Contribution, type Dependent } from "../../lib/extension-model";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
 import { formatList, t } from "../../i18n";
@@ -29,7 +30,12 @@ import { formatList, t } from "../../i18n";
  * The tab's pages, by its `extension` parameter (lib/extension-market.ts extensionsRoute): the list, an extension, a page an extension
  * draws, and the market (its catalog, one extension of it, the markets).
  */
-export function Extensions({ open, onOpen, onChannel }: { open: string | null; onOpen: (id: string | null) => void; onChannel?: (id: string) => void }) {
+export function Extensions({ open, onOpen, onChannel, onConnector }: {
+  open: string | null;
+  onOpen: (id: string | null) => void;
+  onChannel?: (id: string) => void;
+  onConnector?: (id: string) => void;
+}) {
   const r = extensionsRoute(open);
   const go = (to: Parameters<typeof routeSub>[0]) => onOpen(routeSub(to));
   switch (r.kind) {
@@ -42,6 +48,7 @@ export function Extensions({ open, onOpen, onChannel }: { open: string | null; o
           onPage={(ui) => go({ kind: "page", id: r.id, ui })}
           onUpgrade={(market, id) => go({ kind: "item", market, id })}
           onChannel={onChannel}
+          onConnector={onConnector}
         />
       );
     case "page":
@@ -244,7 +251,14 @@ function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubExtension; busy:
   );
 }
 
-function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel }: { id: string; onBack: () => void; onPage: (ui: string) => void; onUpgrade: (market: string, id: string) => void; onChannel?: (id: string) => void }) {
+function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector }: {
+  id: string;
+  onBack: () => void;
+  onPage: (ui: string) => void;
+  onUpgrade: (market: string, id: string) => void;
+  onChannel?: (id: string) => void;
+  onConnector?: (id: string) => void;
+}) {
   const [removing, setRemoving] = useState(false);
   const [detail, setDetail] = useState<HubExtensionDetail | null>(null);
   const [error, setError] = useState("");
@@ -464,6 +478,8 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel }: { id: str
               ))}
             </Group>
           )}
+
+          {(p.enabled ?? true) && !!p.contributes?.connectors?.length && <ExtensionConnectorInbox ids={p.contributes.connectors} onOpen={onConnector} />}
 
           {editable && fields.length > 0 && (
             <>

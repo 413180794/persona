@@ -262,6 +262,11 @@
     <string name="settings_ext_token_remove">Remove token</string>
     <string name="settings_ext_dep_not_ready">Not ready yet</string>
     <string name="settings_ext_cannot_confirm_not_ready">Some dependencies aren\'t ready, so it can\'t be installed yet. Finish setting up the extensions it depends on, make sure their own dependencies are ready, then preview again.</string>
+    <string name="settings_ext_connector_title">Connector %1$s</string>
+    <string name="settings_ext_connector_open">Connector Settings</string>
+    <string name="settings_ext_connector_open_subtitle">Sign-in, status and more Inbox settings</string>
+    <string name="settings_ext_connector_inbox_on">New %1$s items come into the Inbox. This is the same switch as Send to Inbox on the connector\'s page.</string>
+    <string name="settings_ext_connector_inbox_off">Not in the Inbox: nothing new comes in; existing items stay.</string>
     <!-- Auto-upgrades (docs/extensions.md「自动升级」) -->
     <string name="settings_ext_upgrade_title">Upgrades</string>
     <string name="settings_ext_upgrade_footer">When the market has a new version, it\'s installed while the extension is idle. If it asks for more permissions, you\'re asked first. A version that fails to start rolls back to the previous one.</string>

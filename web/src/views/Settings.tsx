@@ -194,7 +194,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
               <ChannelList onOpen={(id) => pick("channels", id)} onMarketItem={(market, id) => pick("extensions", routeSub({ kind: "item", market, id }))} />
             ))}
             {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("channels", id)} />}
-            {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} onChannel={(id) => pick("channels", id)} />}
+            {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} onChannel={(id) => pick("channels", id)} onConnector={(id) => pick("connectors", id)} />}
             {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
             {tab === "shortcuts" && <ShortcutSettings />}
             {tab === "devices" && <Devices />}

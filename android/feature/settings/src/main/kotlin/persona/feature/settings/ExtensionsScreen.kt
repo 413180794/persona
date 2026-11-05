@@ -20,6 +20,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import persona.core.contracts.api.ConnectorsManagement
+import persona.core.contracts.api.HubConnector
 import persona.core.contracts.Machine
 import persona.core.contracts.api.HubExtension
 import persona.core.contracts.api.ExtensionDetail
@@ -32,6 +34,7 @@ import persona.core.designsystem.icons.PhIcons
 import persona.core.navigation.LocalDetailKey
 import persona.core.navigation.ExtensionMarketRoute
 import persona.core.navigation.ExtensionRoute
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
@@ -117,6 +120,10 @@ fun ExtensionPage(
     extensions: ExtensionManagement?, extensionId: String, onBack: () -> Unit, onPage: ((ExtensionUiPlace) -> Unit)? = null,
     /** Opens one of the channels it contributes (设置 › 渠道); without it the line is left out. */
     onChannel: ((String) -> Unit)? = null,
+    /** The connectors it contributes, for their 进收件箱 switch (the hub's own, as on 设置 › 连接器); null leaves it out. */
+    connectors: ConnectorsManagement? = null,
+    /** Opens one of those connectors' page; without it the link is left out. */
+    onConnector: ((String) -> Unit)? = null,
     /** The hub's machines, for a field that lists machines (format machine); without them such a list shows only its values. */
     machines: Flow<List<Machine>>? = null,
     /** Opens a newer version in the market (market id, extension id) to review and upgrade it; without it the line only says. */
@@ -140,6 +147,13 @@ fun ExtensionPage(
     }.collectAsState(emptyList())
     LaunchedEffect(model) { model.load() }
     val detail = state.detail
+    val contributed = detail?.takeIf { it.extension.enabled ?: true }?.extension?.contributes.orEmpty()["connectors"].orEmpty()
+    var hubConnectors by remember(connectors, extensionId) { mutableStateOf<List<HubConnector>>(emptyList()) }
+    LaunchedEffect(connectors, contributed) {
+        if (connectors == null || contributed.isEmpty()) return@LaunchedEffect
+        hubConnectors = try { connectors.connectors(all = true).filter { it.id in contributed } }
+        catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() } // the connector's page says what is wrong
+    }
     val hasForm = detail != null && !detail.readOnly && detail.form.isNotEmpty()
     // A form of machine lists only saves each switch at once: nothing waits for 保存.
     val waitsForSave = hasForm && detail.form.flatMap { if (it.type == "object") it.fields.orEmpty() else listOf(it) }.any { it.items?.machines != true }
@@ -171,6 +185,16 @@ fun ExtensionPage(
                     }
                 })
             if (onPage != null) extensionPages(detail.ui, onPage)
+            if (connectors != null) connectorInbox(hubConnectors, onConnector) { c, on ->
+                scope.launch {
+                    try {
+                        val changed = connectors.setConnectorFeed(c.id, "inbox", on)
+                        hubConnectors = hubConnectors.map { if (it.id == changed.id) changed else it }
+                    } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                        feedback?.notice(res.getString(R.string.settings_src_save_failed, e.message.orEmpty()))
+                    }
+                }
+            }
             if (hasForm) form(detail, state, model, machineList, onChoose = { field, path -> choosing = field to path })
             if (!detail.readOnly && detail.secrets.isNotEmpty()) secrets(detail, state, onEdit = { editingSecret = it })
             contributions(detail, state.busy || state.saving, res) { item, on -> scope.launch { model.setContribution(item, on) } }
@@ -242,6 +266,30 @@ private fun LazyListScope.channelLink(detail: ExtensionDetail, onChannel: (Strin
     item("channel-link") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
             JRow(stringResource(R.string.settings_ext_channel_link), subtitle = stringResource(R.string.settings_ext_channel_link_subtitle), leadingIcon = PhIcons.ChatsCircle, onClick = { onChannel(id) })
+        }
+    }
+}
+
+/**
+ * The connectors an extension contributes (persona#3178): each one's 进收件箱 switch, the hub's own switch (the same as on
+ * 设置 › 连接器 › …), and the way to the connector's page for the rest. A connector without an inbox is left out.
+ */
+private fun LazyListScope.connectorInbox(list: List<HubConnector>, onOpen: ((String) -> Unit)?, onInbox: (HubConnector, Boolean) -> Unit) {
+    list.filter { it.inbox != null }.forEach { c ->
+        item("connector-${c.id}-header") { JSectionHeader(stringResource(R.string.settings_ext_connector_title, c.name)) }
+        item("connector-${c.id}-inbox") {
+            JGroupItem(if (onOpen == null) GroupPosition.Single else GroupPosition.of(0, 2)) {
+                JSwitchRow(stringResource(R.string.settings_src_feed_inbox), checked = c.inbox ?: false, onCheckedChange = { onInbox(c, it) })
+            }
+        }
+        if (onOpen != null) item("connector-${c.id}-open") {
+            JGroupItem(GroupPosition.of(1, 2)) {
+                JRow(stringResource(R.string.settings_ext_connector_open), subtitle = stringResource(R.string.settings_ext_connector_open_subtitle),
+                    leadingIcon = PhIcons.PlugsConnected, onClick = { onOpen(c.id) })
+            }
+        }
+        item("connector-${c.id}-note") {
+            Note(if (c.inbox == true) stringResource(R.string.settings_ext_connector_inbox_on, c.name) else stringResource(R.string.settings_ext_connector_inbox_off))
         }
     }
 }

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.map
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import persona.core.navigation.ChannelRoute
+import persona.core.navigation.ConnectorRoute
 import persona.core.navigation.EngineRoute
 import persona.core.navigation.ModelPurposeRoute
 import persona.core.navigation.Navigator
@@ -38,7 +39,11 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
         ExtensionPage(services.extensions.takeUnless { demo }, route.extensionId, onBack = navigator::back,
             onPage = { page -> navigator.navigate(ExtensionUiRoute(page.extension.ifBlank { route.extensionId }, page.id, page.title.ifBlank { page.id })) },
             onChannel = { navigator.navigate(ChannelRoute(it)) }, machines = services.sessions.machines,
-            onUpgrade = { market, id -> navigator.navigate(ExtensionCatalogRoute(market, id)) })
+            onUpgrade = { market, id -> navigator.navigate(ExtensionCatalogRoute(market, id)) },
+            connectors = services.connectors.takeUnless { demo }, onConnector = { navigator.navigate(ConnectorRoute(it)) })
+    }
+    entry<ConnectorRoute> { route ->
+        HubConnectorPage(services.connectors.takeUnless { demo }, route.connectorId, onBack = navigator::back)
     }
     entry<ExtensionUiRoute> { route ->
         ExtensionUiPage(services.extensions.takeUnless { demo }, route.extensionId, route.uiId, route.title, onBack = navigator::back,

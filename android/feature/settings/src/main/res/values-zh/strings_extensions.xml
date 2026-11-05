@@ -255,6 +255,11 @@
     <string name="settings_ext_token_remove">去掉 token</string>
     <string name="settings_ext_dep_not_ready">依赖未就绪</string>
     <string name="settings_ext_cannot_confirm_not_ready">还有依赖未就绪，暂时不能安装；先完成依赖扩展的设置，确认其依赖也已就绪，再重新预览。</string>
+    <string name="settings_ext_connector_title">连接器 %1$s</string>
+    <string name="settings_ext_connector_open">连接器设置</string>
+    <string name="settings_ext_connector_open_subtitle">登录、状态和更多收件箱设置</string>
+    <string name="settings_ext_connector_inbox_on">%1$s 的新条目进收件箱。和连接器页上的「进收件箱」是同一个开关。</string>
+    <string name="settings_ext_connector_inbox_off">不进收件箱：不再收新的，已有的条目留着。</string>
     <!-- 自动升级（docs/extensions.md「自动升级」） -->
     <string name="settings_ext_upgrade_title">升级</string>
     <string name="settings_ext_upgrade_footer">扩展市场里出了新版本，扩展空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。</string>

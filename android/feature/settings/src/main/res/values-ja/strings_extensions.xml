@@ -255,6 +255,11 @@
     <string name="settings_ext_token_remove">トークンを削除</string>
     <string name="settings_ext_dep_not_ready">依存先の準備未完了</string>
     <string name="settings_ext_cannot_confirm_not_ready">準備ができていない依存関係があるため、まだインストールできません。依存先の拡張機能の設定を済ませ、その依存関係も準備できていることを確認してから、もう一度プレビューしてください。</string>
+    <string name="settings_ext_connector_title">コネクタ %1$s</string>
+    <string name="settings_ext_connector_open">コネクタの設定</string>
+    <string name="settings_ext_connector_open_subtitle">サインイン、状態、受信トレイのその他の設定</string>
+    <string name="settings_ext_connector_inbox_on">%1$s の新しい項目が受信トレイに届きます。コネクタのページの「受信トレイに追加」と同じスイッチです。</string>
+    <string name="settings_ext_connector_inbox_off">受信トレイに入れない：新しいものは届かず、既存の項目は残ります。</string>
     <!-- 自動アップグレード（docs/extensions.md「自动升级」） -->
     <string name="settings_ext_upgrade_title">アップグレード</string>
     <string name="settings_ext_upgrade_footer">マーケットに新しいバージョンが出ると、拡張機能がアイドル状態のときに自動でインストールされます。必要な権限が増える場合は先に確認します。インストール後に起動できない場合は元のバージョンに戻ります。</string>

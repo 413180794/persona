@@ -58,5 +58,9 @@
   "imessage_delete_message": "ナレッジベースのメッセージの会話と人、受信箱のメッセージの項目が削除されます。その Mac 上のメッセージには影響しません。",
   "imessage_read_only": "Persona は読むだけで、代わりに送信することはありません。その Mac を直接読み、既読にもしません。",
   "imessage_ai_failed": "変更できませんでした：{error}",
-  "imessage_delete_failed": "削除できませんでした：{error}"
+  "imessage_delete_failed": "削除できませんでした：{error}",
+  "extension_title": "コネクタ {name}",
+  "extension_inbox_on": "{name} の新しい項目が受信トレイに届きます。コネクタのページの「受信トレイに追加」と同じスイッチです。",
+  "extension_open": "コネクタの設定",
+  "extension_open_hint": "サインイン、状態、受信トレイのその他の設定"
 }
