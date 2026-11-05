@@ -46,6 +46,12 @@ type BusHub struct {
 	svc   *Service
 	ctx   context.Context // Serve's
 
+	// helloed is closed once the first hello's answer is kept (setHello): the hub's calls and events can come in on
+	// their own goroutines before that answer is, and what they need of it (the hub's kb settings, its machines)
+	// would be missing — they wait for it (waitHello).
+	helloed   chan struct{}
+	helloOnce sync.Once
+
 	events  chan busEvent // the hub's events, taken in the order they came
 	pending atomic.Int64  // events received and not yet taken
 
@@ -67,7 +73,7 @@ func NewBusHub(o BusOptions) *BusHub {
 	if o.Logf == nil {
 		o.Logf = func(string, ...any) {}
 	}
-	b := &BusHub{opts: o, events: make(chan busEvent, 1024)}
+	b := &BusHub{opts: o, events: make(chan busEvent, 1024), helloed: make(chan struct{})}
 	host, _ := os.Hostname()
 	b.client = &bus.Client{
 		Hub: o.Hub, Token: o.Token, HTTPClient: o.HTTPClient, Logf: o.Logf, Backoff: o.Backoff,
@@ -135,6 +141,26 @@ func (b *BusHub) setHello(h Hello) {
 	b.mu.Lock()
 	b.hello = h
 	b.mu.Unlock()
+	b.helloOnce.Do(func() { close(b.helloed) })
+}
+
+// helloWait bounds how long a call or event of the hub's waits for the first hello's answer to be kept.
+var helloWait = 10 * time.Second
+
+// waitHello returns once the first hello's answer is kept (at once after that), or after helloWait or ctx.
+func (b *BusHub) waitHello(ctx context.Context) {
+	select {
+	case <-b.helloed:
+		return
+	default:
+	}
+	t := time.NewTimer(helloWait)
+	defer t.Stop()
+	select {
+	case <-b.helloed:
+	case <-t.C:
+	case <-ctx.Done():
+	}
 }
 
 // ---- what the assistant asks of the hub ----
@@ -233,6 +259,7 @@ func (b *BusHub) service() *Service {
 }
 
 func (b *BusHub) request(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	b.waitHello(ctx)
 	s := b.service()
 	decode := func(v any) error {
 		if err := json.Unmarshal(params, v); err != nil {
@@ -408,6 +435,7 @@ func (b *BusHub) takeEvents(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case ev := <-b.events:
+			b.waitHello(ctx)
 			if ev.name == assistantwire.EventSessionDelta {
 				ev.params = b.takeDelta(ev.params)
 			}
