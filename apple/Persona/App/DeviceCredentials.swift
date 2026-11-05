@@ -126,9 +126,18 @@ struct DevicesView: View {
     @State private var current: String?
     @State private var loaded = false
     @State private var revoking: APIClient.DeviceToken?
+    @State private var connecting = false
 
     var body: some View {
         SettingsForm {
+            Section {
+                Button { connecting = true } label: {
+                    Label("连接新设备", systemImage: Theme.Icon.pairing).lineLimit(1)
+                }
+                .accessibilityIdentifier("devices.connect")
+            } footer: {
+                Text("给另一台手机、Mac 或浏览器一个一次性的配对码，不用到 hub 所在的机器上操作。")
+            }
             Section {
                 ForEach(tokens.filter { $0.revokedAt == nil }) { t in row(t) }
             } footer: {
@@ -151,6 +160,14 @@ struct DevicesView: View {
         .detailTitle("设备")
         .task { await load() }
         .refreshable { await load() }
+        .sheet(isPresented: $connecting, onDismiss: { Task { await load() } }) {
+            ConnectDeviceSheet { Task { await load() } }
+        }
+        #if DEBUG
+        .task { // `-openConnectDevice YES | web`: 连接新设备 open (on 浏览器), for screenshots
+            if UserDefaults.standard.string(forKey: "openConnectDevice") != nil { try? await Task.sleep(for: .seconds(1)); connecting = true }
+        }
+        #endif
         .confirmationDialog(revoking.map { "撤销「\($0.name)」？" } ?? "", isPresented: Binding(
             get: { revoking != nil }, set: { if !$0 { revoking = nil } }
         ), titleVisibility: .visible, presenting: revoking) { t in

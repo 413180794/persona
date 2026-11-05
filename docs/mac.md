@@ -1128,6 +1128,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Keychain storage — Shared/Keychain.swift
   - 要到 Mac 前看：用真链接配对，退出后不带 `-pairURL` 重开，看是否还是已配对（弹钥匙串授权就允许）。DEBUG 的截图和测试不读钥匙串（锁屏时读别的构建写的条目会卡住），离屏没碰过钥匙串。
 - [ ] Device token exchange, 设置 › 设备 list + revoke — App/DeviceCredentials.swift (DevicesView)
+  - 连接新设备（#3077）：和 iOS 同一张卡片（`Views/Settings/ConnectDeviceView.swift`），Mac 上的二维码给手机扫，拷贝配对链接给另一台 Mac 粘贴；见 `docs/ios.md`「连接新设备」。
   - Mac（2026-11-01 核对）：设备列表、本机 / 只能回答 chip、撤销、已撤销分组截图看过（假 hub）；Mac 原来按 kind "phone" 换凭据、被列成 iPhone，现在要 "desktop"（`MacDeviceCredentialTests`），hub 存成 "other"。要到 Mac 前看：真配对一次，设置 › 设备 里这台 Mac 显示电脑图标、撤销会确认（`-pairURL` 启动不换凭据，截图里看不到）。
 - [x] 重新配对, 断开并忘记服务器 — SettingsView.swift
   - 要到 Mac 前看：点「重新配对」看 sheet 弹出；点「断开并忘记服务器」确认后回到欢迎页。两个按钮在设置 › 服务器 的截图里。

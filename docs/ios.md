@@ -717,6 +717,18 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 - 体验模式下不申请通知权限、不注册 APNs、不 `register_phone`、不推配对信息给手表、不换设备凭据。
 - 审核备注（`app_store.external.review.notes`）写了从配对页进体验模式。
 
+## 连接新设备（#3077）
+
+设置 › 设备 最上面「连接新设备」，照网页的（#2731，`docs/web.md`「设置」）：向 hub 要一个一次性临时配对码（`POST /api/v1/auth/pair-codes`，带 `{"web": hub 的地址}`，
+`docs/protocol.md`「临时配对」），新设备不用再到 hub 所在的机器上 `personad hub pair`。卡片（`Views/Settings/ConnectDeviceView.swift`，逻辑在 `ConnectDeviceModel`）分两种：
+
+- Persona App：配对二维码（hub 画好的 `qr.rows`，`QRCodeView`）、临时码本身（可选中）、「拷贝配对链接」（Mac 和 Android 粘贴配对）。
+- 浏览器：登录链接的二维码（手机相机扫了直接在浏览器里打开）和「拷贝登录链接」；这台设备是经 `127.0.0.1` / `localhost`（SSH 隧道）连的 hub 时提示别的设备打不开。
+- 倒计时（每秒），到 0 显示已过期和「重新生成」；等配对时每 3 秒读一次设备列表，出现一个生成码时没有的凭据就显示「已连接：名字」，设备列表跟着刷新，可以「再连一台」。
+- 手表、临时码本身连着的设备，hub 返回 403，卡片显示 hub 的话和「重试」；旧 hub 不带二维码时只有临时码和链接。
+
+截图：`-openDevices YES -openConnectDevice YES`（`web`：打开在「浏览器」）；假 hub 的 `MOCK_PAIR_SECONDS` 缩短有效期，`POST /api/v1/auth/tokens` 假装新设备连上。
+
 ## Mac 已登录（2026-11-01）
 
 照微信「Mac 微信已登录」：Mac 上的 Persona 连着 hub 时，Agents 列表最上面一行「Mac 上的 Persona 已登录」（几台就写几台），开了手机静音时右边带「手机静音」；

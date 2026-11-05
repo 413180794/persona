@@ -688,6 +688,29 @@ nonisolated struct APIClient: Sendable {
     }
     func revokeToken(_ id: String) async throws { _ = try await request("DELETE", "/api/v1/auth/tokens/\(id)") }
 
+    /// A QR code's modules as the hub draws them: rows of "0" / "1".
+    struct QRRows: Decodable, Hashable, Sendable { var size: Int; var rows: [String] }
+    /// A one-time pairing code (`jp_…`, ten minutes, traded once) for another device (docs/protocol.md「临时配对」).
+    struct PairCode: Decodable, Hashable, Sendable {
+        var token: String
+        var expiresAt: Date
+        var pairURL: String
+        /// The QR code of `pairURL`; an older hub leaves it out.
+        var qr: QRRows?
+        /// `<page>#token=…`, asked for with `web`: opening it signs a browser in.
+        var webURL: String?
+        var webQR: QRRows?
+        enum CodingKeys: String, CodingKey {
+            case token, qr, expiresAt = "expires_at", pairURL = "pair_url", webURL = "web_url", webQR = "web_qr"
+        }
+    }
+    /// 设置 › 设备 › 连接新设备: a signed-in full device asks the hub for a pairing code; `web` is the page address the
+    /// browser sign-in link opens.
+    func pairCode(web: String?) async throws -> PairCode {
+        struct Body: Encodable { var web: String? }
+        return try JSON.decoder.decode(PairCode.self, from: try await request("POST", "/api/v1/auth/pair-codes", body: Body(web: web)))
+    }
+
     struct KeysBody: Encodable { var keys: [String]; var text: String }
     func keys(_ k: SessionKey, keys: [String], text: String = "") async throws {
         try await post(sp(k) + "/keys", body: KeysBody(keys: keys, text: text))

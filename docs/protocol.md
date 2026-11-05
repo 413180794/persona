@@ -54,7 +54,7 @@ Persona Link 的主动 `link` / 被动 `service` 机器，以及经成员 hub �
 
 ### 临时配对
 
-`POST /api/v1/auth/pair-codes` 接受两种调用方：**回环来源 + 主 token**（`personad hub pair`），或**已登录的 `full` 设备 token**（任何来源，#2731：网页「设置 › 设备 › 连接新设备」）。
+`POST /api/v1/auth/pair-codes` 接受两种调用方：**回环来源 + 主 token**（`personad hub pair`），或**已登录的 `full` 设备 token**（任何来源，#2731：网页、#3077：iOS / Mac 的「设置 › 设备 › 连接新设备」）。
 无须请求体；请求体 `{"machine":"<id>"}` 生成给这台 link 机器的
 jarvis-link 用的配对码（只有主 token 可以，设备 token 带 `machine` 返回 403；返回多一个 `machine`，`pair_url` 是 `jarvis://link?…&machine=<id>`，只能兑换成这台的链路凭据，别的请求都 403；
 机器不存在或不是 link 返回 400，hub 没开 TLS 返回 409）。手表（`answer`）、链路、互联、扩展的凭据，临时配对 token 本身（不能用一个码生成下一个码），以及非回环来源的主 token 均返回 403。
