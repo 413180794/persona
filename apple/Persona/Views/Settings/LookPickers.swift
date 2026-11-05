@@ -27,6 +27,33 @@ struct ThemeColorPicker: View {
             LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Space.m) {
                 ForEach(options) { swatch($0) }
             }
+            if !ExtensionThemesModel.shared.offers.isEmpty {
+                Text("扩展主题").font(Theme.Font.sectionHeader).foregroundStyle(.secondary)
+                ForEach(ExtensionThemesModel.shared.offers) { offer in
+                    if let palette = ExtensionThemeContrast.palette(offer) {
+                        Button {
+                            ExtensionThemesModel.shared.select(offer)
+                            Haptics.success()
+                        } label: {
+                            HStack(spacing: Theme.Space.m) {
+                                Circle().fill(palette.accent.color)
+                                    .scaledFrame(width: Theme.Size.iconL, height: Theme.Size.iconL)
+                                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                                    Text(offer.theme.name).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                                    Text(offer.ownerName).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(1)
+                                }
+                                Spacer(minLength: Theme.Space.s)
+                                if model.themeColor == .extensionTheme, ExtensionThemesModel.shared.palette?.id == offer.id {
+                                    Image(systemName: Theme.Icon.done).foregroundStyle(Theme.accent)
+                                }
+                            }
+                        }
+                        .themedButton(prominent: false)
+                        .accessibilityIdentifier("extension-theme-\(offer.id)")
+                        .accessibilityValue(model.themeColor == .extensionTheme && ExtensionThemesModel.shared.palette?.id == offer.id ? "已选择" : "未选择")
+                    }
+                }
+            }
         }
         .padding(.horizontal, Theme.Space.l)
     }

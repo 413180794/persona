@@ -58,18 +58,31 @@ nonisolated enum Theme {
     /// The app icon's coral. Only for Persona' own mark (the glyph in 设置 / 对话, the Live Activity's star), never for
     /// something to tap: that is `accent`, whatever the style.
     static let brand = Palette.coral
-    static let danger = Color(light: 0xD93A3A, dark: 0xFF5F57)
+    static var danger: Color { spec.extensionColors?.danger ?? Role.dangerColor }
 
     // Meanings that are not agent states. Never use a state color (StatusPalette) for these: changing a state color
     // must not recolor diffs, warnings or categories.
     /// Success and "connected / online / usable" outside the agent states (toasts, the hub dot, a finished to-do).
-    static let positive = Color(light: 0x248A3D, dark: 0x30D158)
+    static var positive: Color { spec.extensionColors?.positive ?? Role.positiveColor }
     /// Warnings that are not an agent asking for you (connecting, stale, truncated, a version mismatch): a symbol
     /// beside the words, never a dot. `cautionText` when the words themselves are colored.
-    static let caution = Color(light: 0xF08A00, dark: 0xFF9F0A)
-    static let cautionText = Color(light: 0xB35400, dark: 0xFF9F0A)
+    static var caution: Color { spec.extensionColors?.caution ?? Role.cautionColor }
+    static var cautionText: Color { spec.extensionColors?.cautionText ?? Role.cautionTextColor }
     /// What the AI wrote or suggests (✦ summaries, AI actions): not the accent, which means "tap me".
-    static let ai = Color(light: 0x5B4FD6, dark: 0x9C94FF)
+    static var ai: Color { spec.extensionColors?.ai ?? Role.aiColor }
+
+    enum Role {
+        static let danger = PersonaPalette.Pair(light: 0xD93A3A, dark: 0xFF5F57)
+        static let positive = PersonaPalette.Pair(light: 0x248A3D, dark: 0x30D158)
+        static let caution = PersonaPalette.Pair(light: 0xF08A00, dark: 0xFF9F0A)
+        static let cautionText = PersonaPalette.Pair(light: 0xB35400, dark: 0xFF9F0A)
+        static let ai = PersonaPalette.Pair(light: 0x5B4FD6, dark: 0x9C94FF)
+        static let dangerColor = danger.color
+        static let positiveColor = positive.color
+        static let cautionColor = caution.color
+        static let cautionTextColor = cautionText.color
+        static let aiColor = ai.color
+    }
     /// Where an agent was opened (#2526): a Feishu group's topic (botmux) and a terminal pane (herdr), each its own color.
     static let sourceFeishu = Color(light: 0x1D5FD6, dark: 0x82AAFF)
     static let sourceTerminal = Color(light: 0x6A46C2, dark: 0xBEA3FF)

@@ -9365,7 +9365,7 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a):
         LOG.write("%s %s\n" % (self.command, self.path)); LOG.flush()
 
-    def send_json(self, obj, status=200):
+    def send_json(self, obj, status=200, headers=None):
         global LOST_RECEIPT
         if 200 <= status < 300 and self.command in ("POST", "PUT", "PATCH", "DELETE") and self.path.startswith("/api/v1/"):
             with FAULT_LOCK:
@@ -9383,6 +9383,8 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
 
@@ -10463,7 +10465,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(browser_now(machine))
         if self.command == "POST" and p.startswith("/api/v1/machines/") and p.endswith("/herdr/start"):  # 启动 (#1916)
             out, status = herdr_start(p.split("/")[4])
-            return self.send_json(out, status)
+            # the hub's request id on a failure, as the real one sends it (the clients put it behind 复制详情)
+            return self.send_json(out, status, {"X-Request-Id": "20261105A1B2C3D4"} if status >= 500 else None)
         if self.command == "POST" and p.startswith("/api/v1/machines/") and "/computer/" in p:  # 安装 / 去授权 / 取消
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             action = p.rsplit("/", 1)[1]
@@ -12297,6 +12300,16 @@ if os.environ.get("MOCK_INJECTED_WATCH") == "1":
         state="working", status="working", state_since=ago(), updated_at=ago())
     INTERACTIONS[:] = []
     MOCK_INTERACTIONS[:] = []
+
+
+if os.environ.get("MOCK_EXTENSION_MANAGEMENT") == "1" and EXTENSIONS_API:
+    from extension_management import ExtensionManagementMock
+    _management = ExtensionManagementMock(PLUGINS, CATALOG, _MARKET_A)
+    _plugins_route_without_management = plugins_route
+
+    def plugins_route(handler, p, body):
+        if _management.route(handler, p, body): return True
+        return _plugins_route_without_management(handler, p, body)
 
 
 if __name__ == "__main__":

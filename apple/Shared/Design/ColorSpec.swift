@@ -44,6 +44,7 @@ nonisolated struct ColorSpec: Sendable {
     var wash: Wash
     var larkBlue: Color
     var larkMyBubble: Color
+    var extensionRoles: ExtensionThemePalette? = nil
 
     /// `larksOwn`: 飞书's chrome takes the bubble as it is (飞书蓝, lark-connector's own); otherwise a pale bubble of the accent.
     init(title: String, subtitle: String, accent: Pair, bubble: Color, bubbleText: Color, deepensBubble: Bool,
@@ -57,6 +58,17 @@ nonisolated struct ColorSpec: Sendable {
         self.wash = wash ?? Wash(accent: accent)
         larkBlue = accent.color
         larkMyBubble = larksOwn ? bubble : accent.color.opacity(0.16)
+    }
+
+    init(extensionTheme theme: ExtensionThemePalette, over base: ColorSpec) {
+        self = base
+        title = theme.name
+        subtitle = "扩展主题"
+        accent = theme.accent.color
+        larkBlue = accent
+        larkMyBubble = accent.opacity(0.16)
+        wash = Wash(accent: theme.accent)
+        extensionRoles = theme
     }
 
     /// A persona's colors (docs/persona.md「色系」), the style's own where it brings none.
@@ -91,6 +103,7 @@ nonisolated enum ThemeColor: String, CaseIterable, Identifiable, Sendable {
     case lavender
     case teal
     case lark
+    case extensionTheme
 
     nonisolated(unsafe) static var current: ThemeColor = AppearanceChoice.saved.color {
         didSet { StyleSpec.recompose() }
@@ -105,6 +118,7 @@ nonisolated enum ThemeColor: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .style: "跟随界面风格"
         case .persona: "跟随形象"
+        case .extensionTheme: ExtensionThemePalette.current.map { "扩展 · " + $0.name } ?? "扩展主题"
         default: preset?.title ?? ""
         }
     }
@@ -112,7 +126,7 @@ nonisolated enum ThemeColor: String, CaseIterable, Identifiable, Sendable {
     /// A fixed color's spec; nil for the two that follow something.
     var preset: ColorSpec? {
         switch self {
-        case .style, .persona: nil
+        case .style, .persona, .extensionTheme: nil
         case .blue: .blue
         case .coral: .coral
         case .lavender: .lavender
@@ -125,6 +139,8 @@ nonisolated enum ThemeColor: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .style: style.component.colors
         case .persona: persona.map { ColorSpec(persona: $0, over: style.component.colors) } ?? style.component.colors
+        case .extensionTheme:
+            ExtensionThemePalette.current.map { ColorSpec(extensionTheme: $0, over: style.component.colors) } ?? style.component.colors
         default: preset ?? style.component.colors
         }
     }

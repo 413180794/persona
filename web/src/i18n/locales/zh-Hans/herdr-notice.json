@@ -1,0 +1,18 @@
+{
+  "not_running": "{machine} 的 herdr 没在运行",
+  "starting": "正在启动 {machine} 的 herdr…",
+  "start": "启动",
+  "failed": "没启动：{reason}",
+  "copy_detail": "复制详情",
+  "exited_code": "herdr 起来后马上退出了（退出码 {code}）",
+  "killed": "herdr 起来后马上被结束了（{signal}）",
+  "exited": "herdr 起来后马上退出了",
+  "not_installed": "这台电脑上没装 herdr（PATH 和登录 shell 里都找不到 herdr 命令）",
+  "no_answer_within": "herdr 启动了，但 {seconds} 秒内没有应答",
+  "no_answer": "herdr 启动了，但一直没有应答",
+  "cannot_run": "没能运行 herdr 命令",
+  "node_too_old": "这台电脑上的 Persona 版本太旧，不会启动 herdr，更新后再试",
+  "offline": "这台电脑现在离线",
+  "timeout": "等了很久 herdr 还没起来，稍后再看看",
+  "no_answer_after_start": "叫它启动了，但 herdr 还没有应答"
+}

@@ -1,0 +1,18 @@
+{
+  "not_running": "herdr isn't running on {machine}",
+  "starting": "Starting herdr on {machine}…",
+  "start": "Start",
+  "failed": "Didn't start: {reason}",
+  "copy_detail": "Copy details",
+  "exited_code": "herdr quit right after starting (exit code {code})",
+  "killed": "herdr was stopped right after starting ({signal})",
+  "exited": "herdr quit right after starting",
+  "not_installed": "herdr isn't installed on this computer (no herdr command in PATH or the login shell)",
+  "no_answer_within": "herdr started but didn't answer within {seconds} seconds",
+  "no_answer": "herdr started but never answered",
+  "cannot_run": "Couldn't run the herdr command",
+  "node_too_old": "Persona on this computer is too old to start herdr; update it and try again",
+  "offline": "This computer is offline",
+  "timeout": "herdr is taking a long time to come up; check again in a moment",
+  "no_answer_after_start": "Asked it to start, but herdr isn't answering yet"
+}

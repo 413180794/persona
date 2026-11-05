@@ -3077,6 +3077,7 @@ enum ChatComposerKind {
 }
 
 struct Composer: View, Equatable {
+    @Environment(\.scenePhase) private var phase
     /// What the page hands in; the rest it reads from the model itself. The page re-evaluates on every hub push for its
     /// conversation, and the composer (a text field, its buttons, the mode chips) used to go with it.
     nonisolated static func == (a: Self, b: Self) -> Bool {
@@ -3115,6 +3116,7 @@ struct Composer: View, Equatable {
     @State private var uploads = FileUploads()
     @State private var videos = VideoAttachments()
     @State private var selection: TextSelection?
+    @State private var declarations = ExtensionTextContributions()
     @State private var confirmClear = false
     @State private var clearing = false
     /// The draft a "/" row was picked into: the list stays closed for it until the draft changes.
@@ -3144,6 +3146,29 @@ struct Composer: View, Equatable {
     private var canPickModel: Bool {
         guard let s = model.session(key) else { return false }
         return s.canSend && s.canTerminal && s.paneID != nil && !s.isCodex && !s.isTraex && !s.assistant
+    }
+
+    @ViewBuilder private var extensionPrompts: some View {
+        if !declarations.prompts.isEmpty {
+            Section("扩展提示") {
+                ForEach(declarations.prompts) { prompt in
+                    Button {
+                        text = ExtensionTextContributions.filling(prompt)
+                        selection = TextSelection(insertionPoint: text.endIndex)
+                        focused = true
+                    } label: {
+                        Label { Text(prompt.title).lineLimit(1) } icon: { Image(systemName: Theme.Icon.insert) }
+                    }
+                    .accessibilityIdentifier("extension-prompt-\(prompt.id)")
+                }
+            }
+        }
+    }
+
+    private var promptCommands: [PromptCommand] {
+        PromptItems.commands(clear: canClear && !status.isActive && !clearing) + declarations.prompts.map {
+            PromptCommand("/扩展/" + $0.title, detail: $0.ownerName, insert: $0.text)
+        }
     }
 
     /// Quick messages and /clear in the + menu (`ComposerRow`, and an agent's in the shell).
@@ -3271,6 +3296,7 @@ struct Composer: View, Equatable {
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
                     Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
+                    extensionPrompts
                     if !shellChat { quickCommands } // an agent's, as its composer offered them before the shell's
                 } modes: {
                     SessionModesMenu(key: key, session: model.session(key), picksModel: canPickModel, setsModes: setsModes,
@@ -3284,7 +3310,7 @@ struct Composer: View, Equatable {
                                stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                                attach: PromptItems.attachments(camera: CameraPicker.isAvailable),
                                mentions: mentions,
-                               commands: PromptItems.commands(clear: canClear && !status.isActive && !clearing),
+                               commands: promptCommands,
                                models: canPickModel ? PromptItems.claudeModels : [],
                                modelID: PromptItems.claudeModelID(model.session(key)?.model),
                                pickModel: { id in model.sendNow(key, text: "/model \(id)", images: []) }, // photos and quotes stay for the message
@@ -3325,6 +3351,7 @@ struct Composer: View, Equatable {
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
                     Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
+                    extensionPrompts
                     quickCommands
                 }
             }
@@ -3338,6 +3365,11 @@ struct Composer: View, Equatable {
         // In parts: as one expression Swift 6.2 could not type-check it in time on the Mac (#2539).
         let top = composerStack
         .disabled(!allowsSend)
+        .tabActiveTask(id: ExtensionTextSource(group: key.group, features: model.features(key.group),
+                                               hub: model.api(key.group)?.config.url.absoluteString, active: phase == .active)) {
+            guard phase == .active else { return }
+            await declarations.refreshWhileActive(api: model.api(key.group))
+        }
         #if DEBUG
         .task { // `-showSampleQuotes YES`: a page's text and another session quoted over the box (#986, screenshots)
             guard UserDefaults.standard.bool(forKey: "showSampleQuotes") else { return }

@@ -44,6 +44,8 @@ nonisolated struct APIError: LocalizedError, Sendable {
     var fields: [String: String] = [:]
     /// The hub logs failed requests under this id (X-Request-Id): a server error shows it, to find that line.
     var requestID: String?
+    /// 需要用户确认的结构化错误信息（例如依赖它的扩展列表），不写日志。
+    var details: JSONValue?
     var errorDescription: String? {
         guard status >= 500, let requestID else { return message }
         return "\(message)（请求 \(requestID)）"
@@ -210,7 +212,8 @@ nonisolated struct APIClient: Sendable {
         guard (200..<300).contains(status) else {
             throw APIError(status: status, message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status),
                            fields: APIError.fields(in: data),
-                           requestID: (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "X-Request-Id") ?? requestID)
+                           requestID: (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "X-Request-Id") ?? requestID,
+                           details: try? JSON.decoder.decode(JSONValue.self, from: data))
         }
         return data
     }

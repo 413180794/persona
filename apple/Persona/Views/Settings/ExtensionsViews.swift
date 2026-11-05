@@ -147,6 +147,8 @@ private struct ExtensionStateDot: View {
 struct ExtensionDetailView: View {
     @State private var page: ExtensionModel
     @State private var editingSecret: ExtensionSecret?
+    @State private var declarations = ExtensionTextContributions()
+    @Environment(\.scenePhase) private var phase
 
     init(id: String) { _page = State(initialValue: ExtensionModel(id: id)) }
 
@@ -163,6 +165,7 @@ struct ExtensionDetailView: View {
                         Toggle(isOn: Binding(get: { d.plugin.enabled ?? true }, set: { on in Task { await page.setEnabled(on) } })) {
                             Text("启用").lineLimit(1)
                         }
+                        .disabled(page.changingEnabled || page.saving || page.changingContribution != nil)
                         .accessibilityIdentifier("plugin-enabled")
                     } footer: {
                         Text("停用后它不再运行，提供的连接器等也一起关掉；设置和密钥留着。")
@@ -173,6 +176,7 @@ struct ExtensionDetailView: View {
                 if !d.readOnly && !d.form.isEmpty { form(d) }
                 if !d.readOnly && !d.secrets.isEmpty { secrets(d) }
                 contributions(d)
+                dependencies(d)
                 permissions(d)
                 about(d)
             }
@@ -193,11 +197,25 @@ struct ExtensionDetailView: View {
                 }
             }
         }
+        .confirmationDialog("连带停用依赖它的扩展？", isPresented: Binding(
+            get: { page.disableConfirmation != nil },
+            set: { if !$0 { page.disableConfirmation = nil } }), titleVisibility: .visible) {
+            Button(role: .destructive) { Task { await page.confirmDisable() } } label: { Text("一起停用").lineLimit(1) }
+                .accessibilityIdentifier("extension-cascade-confirm")
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text(page.disableConfirmation?.message ?? "")
+        }
         .sheet(item: $editingSecret) { secret in
             ExtensionSecretSheet(secret: secret, save: { await page.setSecret(secret.name, value: $0) },
                               clear: { await page.clearSecret(secret.name) })
         }
         .task { await page.load() }
+        .tabActiveTask(id: ExtensionTextSource(group: AppModel.shared.hub?.group ?? "", features: AppModel.shared.hubFeatures,
+                                               hub: AppModel.shared.api?.config.url.absoluteString, active: phase == .active)) {
+            guard phase == .active else { return }
+            await declarations.refreshWhileActive(api: AppModel.shared.api)
+        }
         .refreshable { await page.load() }
     }
 
@@ -299,7 +317,7 @@ struct ExtensionDetailView: View {
     private func form(_ d: HubExtensionDetail) -> some View {
         Group {
             Section {
-                ForEach(d.form.filter { $0.type != "object" }) { f in ExtensionFieldRow(field: f, path: [f.name], page: page) }
+                ForEach(d.form.filter { $0.type != "object" }) { f in ExtensionFieldRow(field: f, path: [f.name], page: page, templates: declarations.templates) }
             } header: {
                 SettingsHeading("设置")
             } footer: {
@@ -307,7 +325,7 @@ struct ExtensionDetailView: View {
             }
             ForEach(d.form.filter { $0.type == "object" }) { group in
                 Section {
-                    ForEach(group.fields ?? []) { f in ExtensionFieldRow(field: f, path: [group.name, f.name], page: page) }
+                    ForEach(group.fields ?? []) { f in ExtensionFieldRow(field: f, path: [group.name, f.name], page: page, templates: declarations.templates) }
                 } header: {
                     SettingsHeading(group.label)
                 } footer: {
@@ -340,7 +358,29 @@ struct ExtensionDetailView: View {
     }
 
     @ViewBuilder private func contributions(_ d: HubExtensionDetail) -> some View {
-        if let c = d.plugin.contributes, !c.isEmpty {
+        if let contributions = d.contributions {
+            if !contributions.isEmpty {
+                Section {
+                    ForEach(contributions) { c in
+                        Toggle(isOn: Binding(get: { c.enabled }, set: { on in
+                            Task { await page.setContribution(c, enabled: on) }
+                        })) {
+                            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                                Text(c.label).lineLimit(1)
+                                Text(ExtensionText.point(c.point) + (c.via == "connector" ? " · 跟着连接器" : ""))
+                                    .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                        .disabled(d.readOnly || !c.canDisable || page.changingContribution != nil || page.changingEnabled || page.saving)
+                        .accessibilityIdentifier("extension-contribution-\(c.id)")
+                    }
+                } header: {
+                    SettingsHeading("提供")
+                } footer: {
+                    Text("开关即时生效。关掉一项只停止这项贡献，其他能力和设置保留。")
+                }
+            }
+        } else if let c = d.plugin.contributes, !c.isEmpty {
             Section {
                 ForEach(c.keys.sorted(), id: \.self) { point in
                     LabeledContent(ExtensionText.point(point)) {
@@ -350,6 +390,27 @@ struct ExtensionDetailView: View {
             } header: {
                 SettingsHeading("提供")
             }
+        }
+    }
+
+    @ViewBuilder private func dependencies(_ d: HubExtensionDetail) -> some View {
+        if let dependencies = d.depends, !dependencies.isEmpty {
+            Section {
+                ForEach(dependencies) { dependency in
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        Text(dependency.title).font(Theme.Font.body).lineLimit(1)
+                        Text(dependency.description).font(Theme.Font.label)
+                            .foregroundStyle(dependency.state == "ok" ? Color.secondary : Theme.cautionText)
+                    }
+                }
+            } header: { SettingsHeading("依赖") }
+        }
+        if let members = d.extensionPack, !members.isEmpty {
+            Section {
+                ForEach(members, id: \.id) { member in
+                    LabeledContent(member.id, value: member.version ?? "")
+                }
+            } header: { SettingsHeading("合集成员") }
         }
     }
 
@@ -400,10 +461,16 @@ private struct ExtensionFieldRow: View {
     var field: ExtensionField
     var path: [String]
     @Bindable var page: ExtensionModel
+    var templates: [ExtensionTextTemplate]
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             control
+            if field.name == "triage_rules", field.type == "string" {
+                ExtensionTriageTemplatePicker(text: Binding(
+                    get: { page.value(path)?.string ?? "" },
+                    set: { page.set($0.isEmpty ? nil : .string($0), at: path) }), templates: templates)
+            }
             if let text = field.description, !text.isEmpty {
                 Text(text).font(Theme.Font.label).foregroundStyle(.secondary)
             }

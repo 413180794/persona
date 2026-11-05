@@ -53,6 +53,7 @@ struct RootView: View {
             // Which inbox sources a plugin draws (placement inbox_item): known before an item is opened.
             await InboxItemSlots.shared.reload(for: hub)
         }
+        .extensionThemes()
         // A new style, 主题色 or persona rebuilds the whole tree (tokens are static); the open tab and chat are remembered.
         .id(model.look)
         #if DEBUG

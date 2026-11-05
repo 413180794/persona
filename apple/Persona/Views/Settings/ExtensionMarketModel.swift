@@ -106,6 +106,12 @@ nonisolated struct ExtensionPreview: Decodable, Hashable, Sendable, Identifiable
         var name: String?
         var version: String?
         var description: String?
+        var extensionPack: [ExtensionPackMember]?
+
+        enum CodingKeys: String, CodingKey {
+            case id, name, version, description
+            case extensionPack = "extension_pack"
+        }
     }
 
     var previewID: String
@@ -121,11 +127,36 @@ nonisolated struct ExtensionPreview: Decodable, Hashable, Sendable, Identifiable
     /// What the new version may do that the installed one may not.
     var addedPermissions: [ExtensionPermission]?
     var market: String?
+    var depends: [ExtensionDependencyStatus]?
+    var bundle: [ExtensionPreview]?
+    var unresolved: [String]?
+
+    var canConfirm: Bool { confirmationProblem(at: .now) == nil }
+    var expirationBoundary: Date? { ([self] + (bundle ?? [])).compactMap(\.expiresAt).min() }
+
+    func confirmationProblem(at now: Date) -> String? {
+        let all = [self] + (bundle ?? [])
+        if all.contains(where: { $0.expiresAt.map { $0 <= now } == true }) {
+            return "预览已过期，关闭后重新预览。"
+        }
+        if all.contains(where: { $0.unresolved?.isEmpty == false }) {
+            return "还有未解决的依赖，添加对应市场后重新预览。"
+        }
+        let bundled = Set((bundle ?? []).map { $0.manifest.id })
+        if !all.allSatisfy({ preview in
+            (preview.depends ?? []).allSatisfy { dependency in
+                dependency.state == "ok" || (["missing", "old"].contains(dependency.state) && bundled.contains(dependency.id))
+            }
+        }) {
+            return "依赖尚未就绪，先安装、启用或升级对应扩展，再重新预览。"
+        }
+        return nil
+    }
 
     var id: String { previewID }
 
     enum CodingKeys: String, CodingKey {
-        case manifest, permissions, warnings, upgrade, from, market
+        case manifest, permissions, warnings, upgrade, from, market, depends, bundle, unresolved
         case previewID = "preview_id", permissionsDigest = "permissions_digest", expiresAt = "expires_at"
         case morePermissions = "more_permissions", addedPermissions = "added_permissions"
     }
@@ -168,16 +199,17 @@ extension APIClient {
 
     func installExtension(preview: ExtensionPreview) async throws -> HubExtensionDetail {
         try JSON.decoder.decode(HubExtensionDetail.self, from: try await request(
-            "POST", extensionPath("/-/install"), body: ["preview_id": preview.previewID, "permissions_digest": preview.permissionsDigest], timeout: 120))
+            "POST", extensionPath("/-/install"), body: ExtensionInstallRequest(preview: preview), timeout: 120))
     }
 
     func upgradeExtension(_ id: String, preview: ExtensionPreview) async throws -> HubExtensionDetail {
         try JSON.decoder.decode(HubExtensionDetail.self, from: try await request(
-            "POST", extensionPath("/\(id)/-/upgrade"), body: ["preview_id": preview.previewID, "permissions_digest": preview.permissionsDigest], timeout: 120))
+            "POST", extensionPath("/\(id)/-/upgrade"), body: ExtensionInstallRequest(preview: preview), timeout: 120))
     }
 
-    func uninstallExtension(_ id: String) async throws {
-        _ = try await request("DELETE", extensionPath("/\(id)/-/"), timeout: 60)
+    @discardableResult func uninstallExtension(_ id: String, cascade: Bool = false, members: Bool = false) async throws -> ExtensionRemovalResult {
+        try JSON.decoder.decode(ExtensionRemovalResult.self, from: try await request("DELETE", extensionPath("/\(id)/-/"),
+                              query: ["cascade": cascade ? "1" : "", "members": members ? "1" : ""], timeout: 60))
     }
 }
 
@@ -349,6 +381,10 @@ enum ExtensionMarketText {
     var preview: ExtensionPreview?
     /// Previewing, installing, upgrading or removing.
     private(set) var working = false
+    private(set) var isPack = false
+    private(set) var removingMembers = false
+    private(set) var removalMessage = "已卸载"
+    var uninstallConfirmation: ExtensionDisableConfirmation?
     @ObservationIgnored private let deps: ExtensionMarketModel.Deps
 
     init(market: String, id: String, deps: ExtensionMarketModel.Deps = .live) {
@@ -369,6 +405,11 @@ enum ExtensionMarketText {
                 throw APIError(status: 404, message: "这个市场里已经没有这个扩展了")
             }
             item = it
+            if it.installed != nil, let detail = try? await api().plugin(pluginID) {
+                isPack = detail.plugin.kind == "extension_pack"
+            } else {
+                isPack = false
+            }
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -382,7 +423,7 @@ enum ExtensionMarketText {
 
     /// Installs or upgrades with the preview agreed to. true: done (the catalog read again).
     func confirm() async -> Bool {
-        guard let pv = preview else { return false }
+        guard let pv = preview, pv.canConfirm else { return false }
         let ok = await work {
             if pv.upgrade == true { _ = try await $0.upgradeExtension(self.pluginID, preview: pv) } else { _ = try await $0.installExtension(preview: pv) }
         }
@@ -391,9 +432,22 @@ enum ExtensionMarketText {
         return ok
     }
 
-    func uninstall() async -> Bool {
-        guard canUninstall else { return false }
-        let ok = await work { try await $0.uninstallExtension(self.pluginID) }
+    func uninstall(cascade: Bool = false, members: Bool = false) async -> Bool {
+        guard canUninstall, !working else { return false }
+        removingMembers = members
+        let ok = await work { api in
+            do {
+                let result = try await api.uninstallExtension(self.pluginID, cascade: cascade, members: members)
+                self.removalMessage = members
+                    ? result.removedMembers.map { "合集已卸载；成功卸载 \($0.count) 个成员" } ?? "合集已卸载，成员结果未返回"
+                    : "已卸载"
+                self.uninstallConfirmation = nil
+            } catch let e as APIError where !cascade && e.code == "has_dependents" {
+                self.uninstallConfirmation = ExtensionDisableConfirmation(error: e)
+                throw e
+            }
+        }
+        if uninstallConfirmation != nil { error = nil }
         if ok { await load() }
         return ok
     }

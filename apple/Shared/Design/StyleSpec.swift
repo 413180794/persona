@@ -54,6 +54,8 @@ nonisolated struct StyleSpec: Sendable {
 
     /// What can be tapped. White words on it (solid buttons, selected chips) need ≥ 3.5:1.
     var accent: Color
+    var extensionRoles: ExtensionThemePalette?
+    var extensionColors: ExtensionThemePalette.Colors?
     /// The user's own messages, and the words on them (≥ 4.5:1).
     var userBubble: Color
     var userBubbleText: Color
@@ -83,6 +85,8 @@ nonisolated struct StyleSpec: Sendable {
     /// A style drawn in some colors.
     init(_ style: ComponentSpec, _ colors: ColorSpec, personaPrimary: Color? = nil) {
         accent = colors.accent
+        extensionRoles = colors.extensionRoles
+        extensionColors = colors.extensionRoles.map(ExtensionThemePalette.Colors.init)
         userBubble = colors.userBubble
         userBubbleText = colors.userBubbleText
         deepensBubble = colors.deepensBubble

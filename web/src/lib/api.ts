@@ -18,11 +18,14 @@ export class ApiError extends Error {
   status: number;
   body: Record<string, unknown>;
   isJson: boolean;
-  constructor(status: number, message: string, body: Record<string, unknown>, isJson = true) {
+  /** The hub logs a failed request under this id (X-Request-Id): for a report, not for the message itself. */
+  requestId?: string;
+  constructor(status: number, message: string, body: Record<string, unknown>, isJson = true, requestId?: string) {
     super(message);
     this.status = status;
     this.body = body;
     this.isJson = isJson;
+    this.requestId = requestId;
   }
   get code(): string | undefined {
     return typeof this.body.code === "string" ? this.body.code : undefined;
@@ -58,7 +61,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown;
   if (!res.ok) {
     if (res.status === 401 && init.token === undefined) onUnauthorized();
     const msg = typeof data.error === "string" && data.error ? data.error : `HTTP ${res.status}`;
-    throw new ApiError(res.status, msg, data, isJson);
+    throw new ApiError(res.status, msg, data, isJson, res.headers?.get("X-Request-Id") ?? undefined);
   }
   return data as T;
 }

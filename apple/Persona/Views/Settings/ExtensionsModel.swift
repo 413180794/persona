@@ -198,10 +198,14 @@ nonisolated struct HubExtensionDetail: Decodable, Hashable, Sendable {
     var ui: [ExtensionUIPlace]
     /// The field (format machine) that picks the computers its program runs on; their rows say how it is there.
     var nodeMachines: String?
+    var contributions: [ExtensionContributionSwitch]?
+    var depends: [ExtensionDependencyStatus]?
+    var extensionPack: [ExtensionPackMember]?
 
     private struct Form: Decodable { var fields: [ExtensionField]? }
     private enum CodingKeys: String, CodingKey {
-        case publisher, homepage, origin, form, config, secrets, permissions, ui
+        case publisher, homepage, origin, form, config, secrets, permissions, ui, contributions, depends
+        case extensionPack = "extension_pack"
         case previousVersion = "previous_version", readOnly = "read_only", nodeMachines = "node_machines"
     }
 
@@ -219,6 +223,9 @@ nonisolated struct HubExtensionDetail: Decodable, Hashable, Sendable {
         permissions = try c.decodeIfPresent([ExtensionPermission].self, forKey: .permissions) ?? []
         ui = (try c.decodeIfPresent([ExtensionUIPlace].self, forKey: .ui) ?? []).filter(\.isExtensionPage)
         nodeMachines = try c.decodeIfPresent(String.self, forKey: .nodeMachines)
+        contributions = try c.decodeIfPresent([ExtensionContributionSwitch].self, forKey: .contributions)
+        depends = try c.decodeIfPresent([ExtensionDependencyStatus].self, forKey: .depends)
+        extensionPack = try c.decodeIfPresent([ExtensionPackMember].self, forKey: .extensionPack)
     }
 }
 
@@ -260,8 +267,10 @@ extension APIClient {
         try JSON.decoder.decode(ExtensionUpgrades.self, from: try await request("PUT", extensionPath("/-/upgrades"), body: ["auto": auto]))
     }
 
-    func setExtension(_ id: String, enabled: Bool) async throws -> HubExtensionDetail {
-        try JSON.decoder.decode(HubExtensionDetail.self, from: try await request("PUT", extensionPath("/\(id)/-/enabled"), body: ["enabled": enabled]))
+    func setExtension(_ id: String, enabled: Bool, cascade: Bool = false) async throws -> HubExtensionDetail {
+        var body = ["enabled": enabled]
+        if cascade { body["cascade"] = true }
+        return try JSON.decoder.decode(HubExtensionDetail.self, from: try await request("PUT", extensionPath("/\(id)/-/enabled"), body: body))
     }
 
     func setExtension(_ id: String, config: [String: JSONValue]) async throws -> HubExtensionDetail {
@@ -430,7 +439,8 @@ enum ExtensionText {
 @Observable final class ExtensionModel {
     struct Deps {
         var api: () -> APIClient?
-        static var live: Deps { .init(api: { AppModel.shared.api }) }
+        var drafts: ExtensionDrafts = ExtensionDrafts()
+        static var live: Deps { .init(api: { AppModel.shared.api }, drafts: .shared) }
     }
 
     let id: String
@@ -438,20 +448,24 @@ enum ExtensionText {
     private(set) var loading = false
     private(set) var saving = false
     private(set) var error: String?
+    private(set) var changingContribution: String?
+    private(set) var changingEnabled = false
+    var disableConfirmation: ExtensionDisableConfirmation?
     /// The hub's word on a field it refused, by its dotted path ("proxy.host").
     private(set) var fieldErrors: [String: String] = [:]
     /// The configuration being edited; saved as a whole (PUT replaces it).
-    var draft: [String: JSONValue] = [:]
+    var draft: [String: JSONValue] = [:] { didSet { keepDraft() } }
     /// What number fields hold as typed, by path, until they read as a number.
-    var numberText: [String: String] = [:]
+    var numberText: [String: String] = [:] { didSet { keepDraft() } }
     @ObservationIgnored private let deps: Deps
+    @ObservationIgnored private var draftKey: ExtensionDrafts.Key?
 
     init(id: String, deps: Deps = .live) {
         self.id = id
         self.deps = deps
     }
 
-    var dirty: Bool { detail.map { draft != $0.config } ?? false || !numberProblems.isEmpty }
+    var dirty: Bool { (detail.map { draft != $0.config } ?? false) || !numberProblems.isEmpty }
 
     /// Number fields typed into that do not read as one, by path.
     var numberProblems: [String: String] {
@@ -460,21 +474,56 @@ enum ExtensionText {
         }
     }
 
-    var canSave: Bool { dirty && numberProblems.isEmpty && !saving }
+    var canSave: Bool { dirty && numberProblems.isEmpty && !saving && !changingEnabled && changingContribution == nil }
 
     func load() async {
         guard !loading else { return }
         loading = true
         defer { loading = false }
-        await run { api in try await api.plugin(self.id) }
+        if let api = deps.api() {
+            let source = api.group.isEmpty ? "url:" + api.config.url.absoluteString : "group:" + api.group
+            draftKey = .init(source: source, id: id)
+        }
+        await run(preservingDraft: true) { api in try await api.plugin(self.id) }
     }
 
-    func setEnabled(_ on: Bool) async {
-        await run { api in try await api.setExtension(self.id, enabled: on) }
+    func setEnabled(_ on: Bool, cascade: Bool = false) async {
+        guard !changingEnabled, changingContribution == nil, !saving, detail?.readOnly == false else { return }
+        changingEnabled = true
+        defer { changingEnabled = false }
+        do {
+            guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
+            detail = try await api.setExtension(id, enabled: on, cascade: cascade)
+            error = nil
+            disableConfirmation = nil
+        } catch let e as APIError where !on && !cascade && e.code == "has_dependents" {
+            disableConfirmation = ExtensionDisableConfirmation(error: e)
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func confirmDisable() async {
+        disableConfirmation = nil
+        await setEnabled(false, cascade: true)
+    }
+
+    func setContribution(_ contribution: ExtensionContributionSwitch, enabled: Bool) async {
+        guard changingContribution == nil, !changingEnabled, !saving, contribution.canDisable, detail?.readOnly == false else { return }
+        changingContribution = contribution.id
+        defer { changingContribution = nil }
+        do {
+            guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
+            detail = try await api.setExtensionContribution(id, point: contribution.point, id: contribution.contributionID, enabled: enabled)
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     func setAutoUpgrade(_ on: Bool) async {
-        await run { api in try await api.setExtension(self.id, autoUpgrade: on) }
+        await run(preservingDraft: true) { api in try await api.setExtension(self.id, autoUpgrade: on) }
     }
 
     func save() async -> Bool {
@@ -503,20 +552,27 @@ enum ExtensionText {
     func setSecret(_ name: String, value: String) async -> Bool {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return false }
-        return await run { api in try await api.setExtension(self.id, secret: name, value: value) }
+        return await run(preservingDraft: true) { api in try await api.setExtension(self.id, secret: name, value: value) }
     }
 
     func clearSecret(_ name: String) async {
-        await run { api in try await api.clearExtension(self.id, secret: name) }
+        await run(preservingDraft: true) { api in try await api.clearExtension(self.id, secret: name) }
     }
 
-    /// Puts the hub's answer in (the draft follows it), or its error: a field it refused goes beside that field.
-    @discardableResult private func run(_ call: @escaping (APIClient) async throws -> HubExtensionDetail) async -> Bool {
+    private func keepDraft() {
+        guard let key = draftKey, detail != nil else { return }
+        deps.drafts.values[key] = dirty ? .init(config: draft, numbers: numberText) : nil
+    }
+
+    /// 保存时接收新配置；重新读取和非配置操作保留未保存的草稿。
+    @discardableResult private func run(preservingDraft: Bool = false, _ call: @escaping (APIClient) async throws -> HubExtensionDetail) async -> Bool {
         do {
             guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
             let d = try await call(api)
+            let editing = preservingDraft ? draftKey.flatMap { deps.drafts.values[$0] } : nil
             detail = d
-            draft = d.config
+            draft = editing?.config ?? d.config
+            numberText = editing?.numbers ?? [:]
             error = nil
             return true
         } catch let e as APIError where e.code == "invalid_config" {

@@ -202,6 +202,7 @@ private struct MacShell: View {
             // Which inbox sources a plugin draws (placement inbox_item): known before an item is opened.
             await InboxItemSlots.shared.reload(for: hub)
         }
+        .extensionThemes()
         // A page whose plugin took it away (disabled, uninstalled) goes back to the section.
         .onChange(of: ExtensionSlots.shared.pages) { if shell.pluginPage != nil, pluginPlace == nil { shell.pluginPage = nil } }
         // No page title in the bar: the system puts it after the items beside the traffic lights, over this column, and

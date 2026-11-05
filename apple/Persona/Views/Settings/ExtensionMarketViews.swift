@@ -203,6 +203,21 @@ struct MarketExtensionDetailView: View {
         .overlay { if page.item == nil && page.error == nil { ProgressView() } }
         .detailTitle(page.item?.name ?? "扩展")
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("停用依赖它的扩展后再卸载？", isPresented: Binding(
+            get: { page.uninstallConfirmation != nil }, set: { if !$0 { page.uninstallConfirmation = nil } }),
+            titleVisibility: .visible) {
+            Button(role: .destructive) {
+                Task {
+                    if await page.uninstall(cascade: true, members: page.removingMembers) {
+                        app.toast = Toast(page.removalMessage, style: .success)
+                    }
+                }
+            } label: { Text("停用依赖并卸载").lineLimit(1) }
+            .accessibilityIdentifier("market-uninstall-cascade")
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text(page.uninstallConfirmation?.message ?? "")
+        }
         .sheet(item: $page.preview) { pv in
             ExtensionInstallSheet(preview: pv, name: page.item?.name ?? pv.manifest.name ?? pv.manifest.id) {
                 let upgrade = pv.upgrade == true
@@ -271,11 +286,17 @@ struct MarketExtensionDetailView: View {
                 .confirmationDialog("卸载「\(p.name)」？", isPresented: $confirmRemove, titleVisibility: .visible) {
                     Button(role: .destructive) {
                         Task { if await page.uninstall() { app.toast = Toast("已卸载", style: .success) } }
-                    } label: { Text("卸载").lineLimit(1) }
+                    } label: { Text(page.isPack ? "只卸载合集" : "卸载").lineLimit(1) }
                     .accessibilityIdentifier("market-uninstall-confirm")
+                    if page.isPack {
+                        Button(role: .destructive) {
+                            Task { if await page.uninstall(members: true) { app.toast = Toast(page.removalMessage, style: .success) } }
+                        } label: { Text("连同成员一起卸载").lineLimit(1) }
+                        .accessibilityIdentifier("market-uninstall-members")
+                    }
                     Button("取消", role: .cancel) {}
                 } message: {
-                    Text("它的设置和数据一起删掉；以后可以从市场再装。")
+                    Text(page.isPack ? "只卸载合集会保留成员。连成员一起卸载会删除成员的设置和数据。" : "它的设置和数据一起删掉；以后可以从市场再装。")
                 }
             }
         } footer: {
@@ -344,6 +365,7 @@ private struct ExtensionInstallSheet: View {
     var confirm: () async -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var busy = false
+    @State private var previewTime = Date.now
 
     private var upgrade: Bool { preview.upgrade == true }
 
@@ -355,6 +377,44 @@ private struct ExtensionInstallSheet: View {
                                    value: upgrade ? "\(preview.from ?? "") → \(preview.manifest.version ?? "")" : preview.manifest.version ?? "")
                     if let d = preview.manifest.description, !d.isEmpty { Text(d).font(Theme.Font.secondary).foregroundStyle(.secondary) }
                 }
+                if let dependencies = preview.depends, !dependencies.isEmpty {
+                    Section {
+                        ForEach(dependencies) { dependency in
+                            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                                Text(dependency.title).font(Theme.Font.body).lineLimit(1)
+                                Text(dependency.description).font(Theme.Font.label)
+                                    .foregroundStyle(dependency.state == "ok" ? Color.secondary : Theme.cautionText)
+                            }
+                        }
+                    } header: { SettingsHeading("依赖") }
+                }
+                if let members = preview.manifest.extensionPack, !members.isEmpty {
+                    Section {
+                        ForEach(members, id: \.id) { member in
+                            LabeledContent(member.id, value: member.version ?? "")
+                        }
+                    } header: { SettingsHeading("合集成员") }
+                }
+                if let bundle = preview.bundle, !bundle.isEmpty {
+                    ForEach(bundle) { member in
+                        Section {
+                            LabeledContent(member.manifest.name ?? member.manifest.id, value: member.manifest.version ?? "")
+                            ForEach(member.permissions) { PermissionLine(permission: $0) }
+                        } header: { SettingsHeading("一起安装") }
+                    }
+                }
+                if let unresolved = preview.unresolved, !unresolved.isEmpty {
+                    Section {
+                        Text("市场里找不到：" + unresolved.joined(separator: "、"))
+                            .font(Theme.Font.secondary).foregroundStyle(Theme.cautionText)
+                    } footer: { Text("先添加提供这些扩展的市场，再重新预览。没有装好依赖时不会安装。") }
+                }
+                if let problem = preview.confirmationProblem(at: previewTime) {
+                    Section {
+                        Text(problem).font(Theme.Font.secondary).foregroundStyle(Theme.cautionText)
+                            .accessibilityIdentifier("market-preview-problem")
+                    }
+                }
                 if upgrade, let added = preview.addedPermissions, !added.isEmpty {
                     Section {
                         ForEach(added) { PermissionLine(permission: $0, tone: Theme.caution) }
@@ -365,11 +425,17 @@ private struct ExtensionInstallSheet: View {
                     }
                 }
                 Section {
-                    ForEach(preview.permissions) { PermissionLine(permission: $0) }
+                    if preview.permissions.isEmpty {
+                        Text(preview.manifest.extensionPack?.isEmpty == false
+                             ? "合集本身不申请额外权限；成员按上方各自的权限运行。" : "这个包不申请额外权限。")
+                            .font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    } else {
+                        ForEach(preview.permissions) { PermissionLine(permission: $0) }
+                    }
                 } header: {
                     SettingsHeading(upgrade ? "新版本可以" : "它可以")
                 } footer: {
-                    Text("扩展以 hub 的系统用户运行，不在沙箱里。包已按市场给的校验和核对过。")
+                    Text("扩展按预览列出的权限和 hub 的隔离配置运行。包已按市场给的校验和核对过。")
                 }
                 if let w = preview.warnings, !w.isEmpty {
                     Section {
@@ -384,6 +450,13 @@ private struct ExtensionInstallSheet: View {
             .navigationTitle(upgrade ? "升级 \(name)" : "安装 \(name)")
             .navigationBarTitleDisplayMode(.inline)
             .sheetCancel(unsaved: false) { dismiss() }
+            .task(id: preview.expirationBoundary) {
+                previewTime = .now
+                guard let expires = preview.expirationBoundary else { return }
+                if expires > .now { try? await Task.sleep(for: .seconds(expires.timeIntervalSinceNow)) }
+                guard !Task.isCancelled else { return }
+                previewTime = .now
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -395,7 +468,7 @@ private struct ExtensionInstallSheet: View {
                     } label: {
                         if busy { ProgressView() } else { Text(upgrade ? "升级" : "安装").lineLimit(1) }
                     }
-                    .disabled(busy)
+                    .disabled(busy || preview.confirmationProblem(at: previewTime) != nil)
                     .accessibilityIdentifier("market-confirm")
                 }
             }

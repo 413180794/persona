@@ -32,6 +32,7 @@ import type { AgentState, Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu, type MenuItem } from "../ui/atoms";
 import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
+import { HerdrNotices } from "./agents/HerdrNotices";
 import { DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
 import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
 import { NodeMenu } from "./NodeMenu";
@@ -488,6 +489,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       <Collapse open={!folded}>
       <div inert={folded || undefined}>
       <FilterBar selection={filter} counts={filterTotals} onChoose={choose} />
+      {/* 「<电脑> 的 herdr 没在运行」with 启动 (#1916): before a message to an agent there fails */}
+      {!folded && <HerdrNotices />}
 
       {unreadShown.length > 0 && (
         <button type="button" onClick={() => setConfirmSeen(unreadShown)} className="relative z-10 mt-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-left transition-[background-color,transform] duration-100 hover:bg-hover active:scale-[0.98] [@media(pointer:coarse)]:min-h-11">

@@ -20,6 +20,8 @@
   `python3 scripts/test/web_sidebar_e2e.py <网页地址> [--shots <目录>]`，用法见脚本开头，`--shots` 顺带拍浅色 / 深色 / 窄屏截图。
   设置入口的端到端检查（#2196：渠道在连接器前、旧扩展链接兼容、渠道与连接器互相跳转、窄屏返回设置）：假 hub 带 `MOCK_CHANNELS=1 MOCK_PLUGINS=1` 起，
   跑 `python3 scripts/test/web_settings_entries_e2e.py <网页地址> [--shots <目录>]`，检查宽屏 / 窄屏 × 浅色 / 深色。
+  Agents 列表的「herdr 没在运行」提示行（#1916）：假 hub 的 `GET /mock/herdr?stopped=&start=` 选哪台停着、启动怎么走，
+  跑 `python3 scripts/test/web_herdr_notice_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>] [--channel msedge]`（宽屏 / 窄屏 × 浅色 / 深色）。
   任务「重试」的端到端检查（#1396：卡片、失败回执、计划卡红字、连点、再失败、离线；桌面 / 手机宽度 × 浅色 / 深色）：假 hub 带 `MOCK_TASKS=1` 起，
   跑 `python3 scripts/test/web_task_retry_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`（假 hub 的 `GET /mock/retry?mode=|fail|offline` 复原失败的任务、选重试的结果）。
   注入消息的端到端检查（#2360：任务通知、定时任务画成一行，不露出给模型的话，点开任务 / 要求）：假 hub 带 `MOCK_TASKS=1 MOCK_INJECTED=1` 起，

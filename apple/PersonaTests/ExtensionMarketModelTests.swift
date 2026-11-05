@@ -114,9 +114,10 @@ struct ExtensionMarketModelTests {
             Data(Self.catalog(installed ? #"{"market":"m1","id":"example-calendar","name":"Example 日历","version":"0.9.0","installed":"0.9.0","installed_source":"installed","from_this_market":true}"# : Self.calendar).utf8)
         }
         var previewBody: JSONValue?, installBody: JSONValue?
+        let expires = Date.now.addingTimeInterval(3600).ISO8601Format()
         hub.on("POST", "/api/v1/plugins/-/catalog/preview") { req in
             previewBody = try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data())
-            return Data(#"{"preview_id":"pv1","manifest":{"id":"example-calendar","name":"Example 日历","version":"0.9.0"},"permissions":[{"key":"runs_code","title":"在 hub 机器上运行程序"}],"permissions_digest":"d1","expires_at":"2026-11-04T07:10:00Z","market":"m1"}"#.utf8)
+            return Data(#"{"preview_id":"pv1","manifest":{"id":"example-calendar","name":"Example 日历","version":"0.9.0"},"permissions":[{"key":"runs_code","title":"在 hub 机器上运行程序"}],"permissions_digest":"d1","expires_at":"\#(expires)","market":"m1"}"#.utf8)
         }
         hub.on("POST", "/api/v1/plugins/-/install") { req in
             installBody = try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data())

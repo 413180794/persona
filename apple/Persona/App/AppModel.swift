@@ -1939,12 +1939,16 @@ final class AppModel {
 
     /// What RootView keys the whole tree by: a new style, 主题色 or persona rebuilds it (tokens are static; a persona's
     /// palette is its own primary, and the colors under 跟随形象).
-    var look: Look { Look(style: style, color: themeColor, palette: persona.palette) }
+    var look: Look {
+        Look(style: style, color: themeColor, palette: persona.palette,
+             extensionPalette: themeColor == .extensionTheme ? ExtensionThemesModel.shared.palette : nil)
+    }
 
     nonisolated struct Look: Hashable {
         var style: AppStyle
         var color: ThemeColor
         var palette: PersonaPalette?
+        var extensionPalette: ExtensionThemePalette? = nil
     }
 
     /// The accent the built-in persona is drawn in: the 主题色 as it is with no persona colors.
