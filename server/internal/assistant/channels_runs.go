@@ -543,133 +543,31 @@ func (s *Service) checkChannelRun(id string) {
 	s.finishChannelRun(r, res)
 }
 
-// readTurn is what the conversation answered after the run's base: after its message when the run names one. It
-// reads to the end of the transcript (a long turn has more lines than one page), keeping the items from that message
-// on, or the last ones without one.
+// busTranscript is a conversation's transcript as the assistant reads it, over the hub's bus (channel.ReadTurn's source).
+type busTranscript struct {
+	s                *Service
+	machine, session string
+}
+
+func (b busTranscript) ItemsAfter(ctx context.Context, after int) ([]proto.Item, bool, int, error) {
+	var res struct {
+		Items     []proto.Item `json:"items"`
+		MoreAfter bool         `json:"more_after"`
+		ToSeq     int          `json:"to_seq"`
+	}
+	err := b.s.call(ctx, b.machine, DeviceSessionItems, map[string]any{"session_id": b.session, "after_seq": after, "lazy_images": true}, &res)
+	return res.Items, res.MoreAfter, res.ToSeq, err
+}
+
+func (b busTranscript) Full(ctx context.Context, id string) (proto.Item, error) {
+	var full proto.Item
+	err := b.s.call(ctx, b.machine, "session.item", map[string]any{"session_id": b.session, "item_id": id}, &full)
+	return full, err
+}
+
+// readTurn is what the run's conversation answered after its base (channel.ReadTurn, read over the hub's bus).
 func (s *Service) readTurn(ctx context.Context, r *channel.Run) (channel.Reading, error) {
-	machine, sid := r.MachineID, r.SessionID
-	holds := func(it proto.Item) bool {
-		if strings.Contains(it.Text, r.Probe) {
-			return true
-		}
-		if it.FullSize == 0 {
-			return false
-		}
-		// A long message (a forwarded chat) is cut in pages, maybe before what the user wrote.
-		var full proto.Item
-		return s.call(ctx, machine, "session.item", map[string]any{"session_id": sid, "item_id": it.ID}, &full) == nil && strings.Contains(full.Text, r.Probe)
-	}
-	named := len(r.MsgIDs) > 0 || r.Probe != ""
-	var kept []proto.Item
-	found := !named
-	after := r.Base
-	for page := 0; page < 100; page++ {
-		var res struct {
-			Items     []proto.Item `json:"items"`
-			MoreAfter bool         `json:"more_after"`
-			ToSeq     int          `json:"to_seq"`
-		}
-		if err := s.call(ctx, machine, DeviceSessionItems, map[string]any{"session_id": sid, "after_seq": after, "lazy_images": true}, &res); err != nil {
-			return channel.Reading{Last: r.Base}, err
-		}
-		if named {
-			if i, ok := r.Find(res.Items, holds); ok {
-				kept, found = slices.Clone(res.Items[i:]), true
-			} else if found {
-				kept = append(kept, res.Items...)
-			}
-		} else {
-			kept = append(kept, res.Items...)
-			if len(kept) > 1000 { // the answer is at the end
-				kept = slices.Clone(kept[len(kept)-1000:])
-			}
-		}
-		if res.ToSeq > after {
-			after = res.ToSeq
-		}
-		if !res.MoreAfter {
-			break
-		}
-	}
-	if named && found && !slices.ContainsFunc(kept, func(it proto.Item) bool { return it.Role == "assistant" }) {
-		// Its message is in, nothing after it yet: its turn has not answered (the session's status can come before its
-		// lines, two messages one right after the other): as one still waiting.
-		return channel.Reading{Last: after}, nil
-	}
-	answer, all := runAnswer(r, kept)
-	if !found || !all {
-		return channel.Reading{Last: after}, nil
-	}
-	var out []string
-	for _, it := range answer {
-		text := it.Text
-		if it.FullSize > 0 {
-			var full proto.Item
-			if err := s.call(ctx, machine, "session.item", map[string]any{"session_id": sid, "item_id": it.ID}, &full); err == nil && full.Text != "" {
-				text = full.Text
-			}
-		}
-		out = append(out, strings.TrimSpace(text))
-	}
-	return channel.Reading{Answer: strings.Join(out, "\n\n"), Found: true, Last: after}, nil
-}
-
-// runAnswer is the answer to the run's messages in items (the transcript from the first of them on), and whether all
-// of them are there. A run that took in later messages (folded: the owner sent another before the first was answered,
-// a backlog handed over at once as the hub started) answers them together, once all are in the conversation: in the
-// order the conversation has them (not the order they were sent: a message that had to start the conversation first
-// comes later), each message's own answer — the words after it, up to the next of them. A part that ends without
-// words (the conversation took the next message in mid-turn and went on) has its answer in the next one. Without
-// client message ids on the items (an older node) they can't be told apart: one answer, the last words, as before.
-func runAnswer(r *channel.Run, items []proto.Item) ([]proto.Item, bool) {
-	if len(r.MsgIDs) < 2 {
-		return channel.Answer(items), true
-	}
-	ours := map[string]bool{}
-	for _, id := range r.MsgIDs {
-		ours[id] = true
-	}
-	var parts [][]proto.Item
-	seen, cur, ids := map[string]bool{}, "", false
-	for _, it := range items {
-		ids = ids || it.ClientMsgID != ""
-		if ours[it.ClientMsgID] && it.ClientMsgID != cur || len(parts) == 0 {
-			if ours[it.ClientMsgID] {
-				cur, seen[it.ClientMsgID] = it.ClientMsgID, true
-			}
-			parts = append(parts, nil)
-		}
-		parts[len(parts)-1] = append(parts[len(parts)-1], it)
-	}
-	if !ids {
-		return channel.Answer(items), true
-	}
-	if len(seen) < len(ours) {
-		return nil, false // one of its messages is not in the conversation yet: its answer is still to come
-	}
-	var out []proto.Item
-	for i, p := range parts {
-		if i < len(parts)-1 && !endsInWords(p) {
-			continue
-		}
-		out = append(out, channel.Answer(p)...)
-	}
-	return out, true
-}
-
-// endsInWords: the last of items that says anything is the assistant's text (a turn that ended with its answer).
-func endsInWords(items []proto.Item) bool {
-	for i := len(items) - 1; i >= 0; i-- {
-		it := items[i]
-		switch {
-		case it.Kind == proto.KindThinking, it.Kind == proto.KindText && strings.TrimSpace(it.Text) == "":
-			continue
-		case it.Role == "assistant" && it.Kind == proto.KindText:
-			return true
-		}
-		return false
-	}
-	return false
+	return channel.ReadTurn(ctx, busTranscript{s: s, machine: r.MachineID, session: r.SessionID}, r)
 }
 
 // finishChannelRun sends a run's answer and ends it, or — held — keeps it for the turn its background work starts.

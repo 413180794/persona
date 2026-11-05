@@ -1,6 +1,8 @@
 // 总览: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
 import { useMemo, useState } from "react";
 import { ago, sessionPreview, shortDuration, sourceSubtitle, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
+import { interactionAsk } from "../lib/inbox";
+import { plainMarkdown } from "../lib/plain-markdown";
 import { homeOverview, paneRoute, type TabGroup } from "../lib/herdr-tree";
 import { agentLabel } from "../lib/mentions";
 import { hubLabel, machineWithHub } from "../lib/mesh";
@@ -77,7 +79,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
                     to={{ name: "session", mid: ix.machine_id, sid: ix.session_id }}
                     title={ix.session_title || (s ? sessionTitle(s) : ix.cwd || t("home.session"))}
                     meta={[name(ix.machine_id), s?.space_name, s && tabLabel(s)].filter(Boolean).join(" › ")}
-                    detail={ix.kind === "question" ? ix.questions?.[0]?.question : ix.kind === "permission" ? ix.summary || ix.tool_name : ix.kind === "screen" ? ix.dialog?.question : ix.kind === "elicitation" ? ix.elicitation?.message : t("home.plan_ready")}
+                    detail={ix.kind === "plan" ? t("home.plan_ready") : plainMarkdown(interactionAsk(ix)).replace(/\s+/g, " ").trim() || undefined}
                     pill={<Pill tone="red">{KIND[ix.kind]}</Pill>}
                   />
                 );

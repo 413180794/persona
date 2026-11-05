@@ -105,7 +105,11 @@ func (s *Service) channelReceive(id string, m channel.Message, action string) {
 		if handled {
 			return
 		}
-		m.Text = rest
+		// What a command did not take ("/new 帮我…") goes on without its name: answering a pending ask must not
+		// read "/new" as part of the answer. An unknown command returns the text unchanged, so non-command paths
+		// are identical.
+		text = strings.TrimSpace(rest)
+		m.Text = text
 	}
 	if s.channelAnswerAsk(ctx, id, m, text, action) {
 		return

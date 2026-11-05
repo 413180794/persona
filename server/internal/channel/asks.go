@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -129,7 +128,6 @@ var (
 		"reject", "cancel", "拒否", "いいえ", "だめ", "ダメ", "キャンセル", "却下"}
 	planRun     = []string{"批准并自动执行", "自动执行", "approve and run", "run", "auto", "承認して自動実行", "自動実行"}
 	planApprove = []string{"批准", "approve", "承認"}
-	split       = func(r rune) bool { return unicode.IsSpace(r) || r == ',' || r == '，' || r == '、' }
 )
 
 // trailing is the punctuation a reply may end with, ignored when reading it.
@@ -224,25 +222,13 @@ func ReadAnswer(l i18n.Lang, a *Ask, text string) (r proto.Resolution, done bool
 	return r, false, i18n.T(l, "channel-asks.again_app")
 }
 
-// optionAnswer is text as an answer to q: option numbers become their labels (several for a multi-select), anything
-// else is the answer itself.
+// optionAnswer is text as an answer to q: the options it names (MatchOption: numbers, ordinals, labels; several for a
+// multi-select) become their labels, anything else is the answer itself.
 func optionAnswer(q proto.Question, text string) string {
-	fields := strings.FieldsFunc(text, split)
-	var labels []string
-	for _, f := range fields {
-		if strings.Trim(f, numberEnd) == "" {
-			continue // a stray full stop
-		}
-		n, ok := number(f)
-		if !ok || n < 1 || n > len(q.Options) {
-			return strings.TrimSpace(text)
-		}
-		labels = append(labels, q.Options[n-1].Label)
+	if label, ok := MatchOption(q, text); ok {
+		return label
 	}
-	if len(labels) == 0 || len(labels) > 1 && !q.MultiSelect {
-		return strings.TrimSpace(text)
-	}
-	return strings.Join(labels, ", ")
+	return strings.TrimSpace(text)
 }
 
 // Answered is the line in l saying what a reply did.

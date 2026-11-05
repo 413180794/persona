@@ -57,6 +57,18 @@ const render = (sessions: Session[], interactions: Interaction[] = []) => {
 const markAll = (html: string) => html.match(/<button [^>]*title="把 (\d+) 个完成未看的会话标为已读"[^>]*>/)?.[1];
 
 describe("the overview", () => {
+  it("says what each waiting card asks, from whatever field has it (#3780)", () => {
+    const a = agent(1, 0, "needs_you");
+    const html = render([a], [
+      { id: "q", kind: "question", machine_id: "mac", session_id: a.session_id, summary: "先做 A 还是 B？" } as Interaction,
+      { id: "p", kind: "permission", machine_id: "mac", session_id: a.session_id, tool_name: "Bash", tool_input: { command: "swift test" } } as Interaction,
+      { id: "l", kind: "plan", machine_id: "mac", session_id: a.session_id, plan: "# 计划" } as Interaction,
+    ]);
+    expect(html).toContain("先做 A 还是 B？");
+    expect(html).toContain("swift test");
+    expect(html).toContain("计划写好了，等你批准");
+  });
+
   it("does not say nothing needs you above a waiting card", () => {
     const asking = agent(1, 0, "needs_you");
     const html = render([asking, agent(2, 0, "idle")], [{ id: "i1", kind: "permission", machine_id: "mac", session_id: asking.session_id, tool_name: "Bash" } as Interaction]);

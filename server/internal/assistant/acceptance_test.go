@@ -229,3 +229,30 @@ func TestAcceptanceFeedbackReopensTheClosedTask(t *testing.T) {
 		return m == n+1
 	})
 }
+
+// Approval with a completion particle (通过了, 可以啊, 没问题了呀, ok了, 验收通过了) still marks the task
+// verified. Questions (可以了吗, 通过了？/?) and negations (不通过, 通过不了, 不行) stay feedback for the agent.
+func TestPassWordsParticles(t *testing.T) {
+	pass := []string{
+		"通过", "通过。", "通过了。", "通过啦！", "验收通过了",
+		"可以了", "没问题了", "ok了", "OK啦",
+		"通过呀", "通过咯", "通过喽", "可以呗", "好哒", "可以啊", "没问题啊",
+		"通过了呀",    // two completion particles, still an approval
+		"好", "好的", // bare 好 already matched before this change; the behavior is kept
+	}
+	for _, in := range pass {
+		if !passWords.MatchString(in) {
+			t.Errorf("%q must count as approval", in)
+		}
+	}
+	notPass := []string{
+		"可以了吗", "通过了？", "通过了?", "这能通过？",
+		"不通过", "没通过", "不行", "还不行", "通过不了", "不可以了",
+		"开关名字改成「任务进展」",
+	}
+	for _, in := range notPass {
+		if passWords.MatchString(in) {
+			t.Errorf("%q must not count as approval", in)
+		}
+	}
+}

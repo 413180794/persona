@@ -89,3 +89,9 @@
 - 模型网关报的 `usage` 不一定是一次请求的（2026-11-06，#3300）：有的网关给中间回复报 0、给最后一条报整轮加起来的输入，Claude Code 按最后一条估上下文，
   于是白白自动压缩，摘要也失败时对话从此每条都是「Prompt is too long」。用 usage 的地方都要先过 `transcript.PlausibleContext`；坏了的 transcript 由 node 原地改 0 修好
   （`docs/assistant.md`「网关报的不可能的用量」）。`stream-json` 的 `result.usage` 是 Claude Code 自己把一轮加起来的数，本来就会超过窗口，不能拿来判断上下文。
+- 分页读一轮的回答时，找到这一轮的第一条消息后不能在后面的页里再「找」（2026-11-06，#3497）：合并（Fold）的两条消息落在 transcript 的不同页时，
+  后一页又找到第二条，前面读到的整段被丢掉，`RunAnswer` 看不到第一条、当它还没进对话，一直等到 `QueuedMost`（10 分钟）才退回只取最后的话。
+  现在只在还没找到时找，找到以后的页一律接上（`channel.ReadTurn`，测试 `TestReadTurnFoldedAcrossPages`）。
+- 把用户的话认成提问的某个选项时，拿不准就原样交给 Agent（2026-11-06，#3497 评审）：第一版「句子里有选项名、多说不超过三个词」就算选中，
+  「备份后删除」成了「删除」、「SQLite，加密」成了「SQLite」，条件被丢掉；「all」按子串认成「Small fix」，选项是 1 / 3 / 5 时「3」成了第三个「5」。
+  认错一个选项比交一段原话给 Agent 糟得多：选项名之外只许虚词、英文从词首算、带问号和撞了数字的都不认（`channel.MatchOption`，`docs/channels.md`「提问和批准」）。

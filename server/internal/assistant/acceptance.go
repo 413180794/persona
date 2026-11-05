@@ -195,7 +195,11 @@ func (s *Service) acceptFor(ids ...string) string {
 	return ""
 }
 
-var passWords = regexp.MustCompile(`(?i)^\s*(验收)?(通过|没问题|可以|好的?|ok|okay|lgtm|pass(ed)?|approved?|👍)\s*[。.!！]?\s*$`)
+// passWords accepts bare approval, optionally prefixed with 验收 and followed by one or two completion
+// particles (通过了, 可以啊, 没问题了呀, ok啦) or a stop. Question markers stay out: 吗/么/吧/呢 and
+// both ？/? are neither particles nor stops here, so 可以了吗 and 通过了？ still go to the agent, and
+// negations (不通过, 没通过, 通过不了, 不行) never match because the regex anchors on the approval word.
+var passWords = regexp.MustCompile(`(?i)^\s*(验收)?(通过|没问题|可以|好的?|ok|okay|lgtm|pass(ed)?|approved?|👍)(?:[了啦呀咯喽呗哒啊]{1,2})?\s*[。.!！]?\s*$`)
 
 // acceptReply answers a reply to a 请验收 card (true: it was one): 通过 marks it verified, anything else is the
 // user's change, written into the todo's decisions and sent to its agent.

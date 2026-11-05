@@ -406,43 +406,61 @@ func waitUntil(t *testing.T, ok func() bool) {
 	t.Fatal("timed out")
 }
 
-// A folded run's answer: each of its messages' own answer, in the conversation's order, once all are in; a part the
-// conversation went on from (it took the next message in mid-turn) has its answer in the next one; an older node
-// (no client message ids on the items) gets the last words, as before.
-func TestFoldedRunAnswer(t *testing.T) {
-	r := &channel.Run{MsgIDs: []string{"wechat-1", "wechat-2"}}
-	user := func(id, text string) proto.Item {
-		return proto.Item{Role: "user", Kind: proto.KindText, Text: text, ClientMsgID: id}
+// pagedHub answers session.items a page at a time after the seq asked (more_after while more follow) and session.item
+// whole: the transcript a run's answer is read from over the bus.
+type pagedHub struct {
+	*fakeHub
+	items []proto.Item
+	page  int
+	full  map[string]string
+	after []int // the after_seq of each session.items asked
+}
+
+func (h *pagedHub) DeviceCall(ctx context.Context, p assistantwire.DeviceCall) (json.RawMessage, error) {
+	var a struct {
+		SessionID string `json:"session_id"`
+		After     int    `json:"after_seq"`
+		ItemID    string `json:"item_id"`
+		Lazy      bool   `json:"lazy_images"`
 	}
-	say := func(text string) proto.Item { return proto.Item{Role: "assistant", Kind: proto.KindText, Text: text} }
-	tool := proto.Item{Role: "assistant", Kind: proto.KindToolUse}
-	result := proto.Item{Role: "user", Kind: proto.KindToolResult}
-	texts := func(items []proto.Item) string {
-		var out []string
-		for _, it := range items {
-			out = append(out, it.Text)
+	_ = json.Unmarshal(p.Params, &a)
+	switch {
+	case p.Method == DeviceSessionItems && a.SessionID == "s1" && a.Lazy:
+		h.after = append(h.after, a.After)
+		var page []proto.Item
+		for _, it := range h.items {
+			if it.Seq > a.After && len(page) < h.page {
+				page = append(page, it)
+			}
 		}
-		return strings.Join(out, "|")
-	}
-	for _, c := range []struct {
-		name  string
-		items []proto.Item
-		want  string
-		all   bool
-	}{
-		{"two turns", []proto.Item{user("wechat-1", "一"), tool, result, say("答一"), user("wechat-2", "二"), tool, result, say("答二")}, "答一|答二", true},
-		{"the later one first", []proto.Item{user("wechat-2", "二"), say("答二"), user("wechat-1", "一"), say("答一")}, "答二|答一", true},
-		{"taken in mid-turn", []proto.Item{user("wechat-1", "一"), tool, user("wechat-2", "二"), result, say("一起答")}, "一起答", true},
-		{"one not in yet", []proto.Item{user("wechat-1", "一"), say("答一")}, "", false},
-		{"an older node", []proto.Item{{Role: "user", Kind: proto.KindText, Text: "一"}, say("答一"), {Role: "user", Kind: proto.KindText, Text: "二"}, say("答二")}, "答二", true},
-	} {
-		got, all := runAnswer(r, c.items)
-		if all != c.all || texts(got) != c.want {
-			t.Errorf("%s: %q, %v; want %q, %v", c.name, texts(got), all, c.want, c.all)
+		to := a.After
+		if len(page) > 0 {
+			to = page[len(page)-1].Seq
 		}
+		return json.Marshal(map[string]any{"items": page, "more_after": to < h.items[len(h.items)-1].Seq, "to_seq": to})
+	case p.Method == "session.item" && a.SessionID == "s1":
+		return json.Marshal(proto.Item{ID: a.ItemID, Role: "assistant", Kind: proto.KindText, Text: h.full[a.ItemID]})
 	}
-	if got, _ := runAnswer(&channel.Run{MsgIDs: []string{"wechat-1"}}, []proto.Item{user("wechat-1", "一"), say("答一"), user("x", "y"), say("答y")}); texts(got) != "答y" {
-		t.Errorf("one message: %q (as before: the last words)", texts(got))
+	return h.fakeHub.DeviceCall(ctx, p)
+}
+
+// The assistant reads a run's answer over the bus (channel.ReadTurn): every page after the run's base, its message
+// found, the answer's cut item read whole.
+func TestReadTurnOverTheBus(t *testing.T) {
+	f := newFakeHub().withMachine()
+	h := &pagedHub{fakeHub: f, page: 2, full: map[string]string{"a4": "the whole answer"}, items: []proto.Item{
+		{ID: "u1", Seq: 1, Role: "user", Kind: proto.KindText, Text: "earlier"},
+		{ID: "u2", Seq: 2, Role: "user", Kind: proto.KindText, Text: "ours", ClientMsgID: "wechat-1"},
+		{ID: "t3", Seq: 3, Role: "assistant", Kind: proto.KindToolUse},
+		{ID: "a4", Seq: 4, Role: "assistant", Kind: proto.KindText, Text: "the whole…", FullSize: 16},
+	}}
+	s := withSettings(t, f, New(Options{Hub: h, Store: func() Store { return &memStore{} }, Logf: testLogf(t)}))
+	rd, err := s.readTurn(context.Background(), &channel.Run{MachineID: "server", SessionID: "s1", MsgIDs: []string{"wechat-1"}})
+	if err != nil || !rd.Found || rd.Answer != "the whole answer" || rd.Last != 4 {
+		t.Fatalf("%+v %v", rd, err)
+	}
+	if !slices.Equal(h.after, []int{0, 2}) {
+		t.Fatalf("pages asked after %v", h.after)
 	}
 }
 
@@ -551,5 +569,37 @@ func TestBotTextInLanguages(t *testing.T) {
 	}
 	if err := botAllowed(i18n.Ja, FeishuFeatures{}, botTarget{Kind: targetMain}); err == nil || !strings.Contains(err.Error(), "Larkボット") {
 		t.Fatal(err)
+	}
+}
+
+// A synced turn goes to Feishu whole, laid out like the bot's answers (more cards when long), where it came from and
+// the open button under the last card only; a reply to any card goes back to that conversation.
+func TestFeishuMirrorSendsTheWholeAnswer(t *testing.T) {
+	f, posts := feishuHub("ou_a", time.Unix(100, 0))
+	f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
+		return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_a", PairedAt: time.Unix(100, 0), Features: FeishuFeatures{Main: true, Sync: true}}, nil
+	})
+	f.settings = &Settings{MachineID: "server", Main: "m1"}
+	f.setSessions("server", proto.Session{SessionID: "m1", Assistant: true})
+	long := "# 晚报\n\n" + strings.Repeat("今天做完了很多事情。\n\n", 700) + "| 项 | 状态 |\n| --- | --- |\n| a | 完成 |\n\n结尾这句在最后"
+	f.setItems(proto.Item{Role: "user", Kind: proto.KindText, Text: "写晚报"}, proto.Item{Role: "assistant", Kind: proto.KindText, Text: long})
+	s := newTestService(t, f)
+	s.feishuMirror(context.Background(), "server", "m1")
+	if len(*posts) < 2 {
+		t.Fatalf("one card for a long answer: %d", len(*posts))
+	}
+	first, _ := (*posts)[0]["card"].(string)
+	last, _ := (*posts)[len(*posts)-1]["card"].(string)
+	if strings.Contains(first, `"button"`) || !strings.Contains(last, `"button"`) || !strings.Contains(last, "主对话") || !strings.Contains(last, "写晚报") {
+		t.Fatalf("first %s\nlast %s", first, last)
+	}
+	if !strings.Contains(last, "结尾这句在最后") || !strings.Contains(last, `"tag":"table"`) || strings.Contains(last, "只发了开头") {
+		t.Fatalf("not the whole answer: %s", last)
+	}
+	if !strings.Contains(first, "晚报") || !strings.Contains(first, `"header"`) {
+		t.Fatalf("no header: %s", first)
+	}
+	if got := s.botTargetFor("om_card", ""); got.Kind != targetJarvis || got.SessionID != "m1" {
+		t.Fatalf("thread %+v", got)
 	}
 }

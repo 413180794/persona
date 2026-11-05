@@ -704,22 +704,28 @@ func (s *Service) feishuMirror(ctx context.Context, machine, session string) {
 	if !main {
 		label = i18n.T(l, "assistant-feishu_cards.scheduled_task", i18n.Args{"task": task})
 	}
-	c := feishubot.NewCard("", "", answer)
+	// The whole answer, laid out like the bot's own answers (answerCards: header, tables, link buttons, at most
+	// botAnswerCards cards, a note when cut short); where it came from and the button to open it under the last.
+	foot := label
 	if asked != "" && main {
-		c.Note(i18n.T(l, "assistant-feishu_cards.asked_elsewhere", i18n.Args{"asked": clip(oneLine(stripContext(asked)), 80)}))
+		foot = i18n.T(l, "assistant-feishu_cards.asked_elsewhere", i18n.Args{"asked": clip(oneLine(stripContext(asked)), 80)}) + "\n" + label
 	}
-	pieces := feishubot.Split(feishubot.CardMarkdown(answer), botAnswerPiece)
-	c.Markdown(pieces[0])
-	if len(pieces) > 1 {
-		c.Note(i18n.T(l, "assistant-feishu_cards.only_beginning"))
+	cards := answerCards(l, answer, false, nil, foot)
+	target := botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}
+	for i, ac := range cards {
+		if i == len(cards)-1 {
+			ac.card.Buttons(s.openButton(ctx, machine, session))
+		}
+		mid, err := s.botPost(ctx, "", ac.card, ac.fallback)
+		if err != nil {
+			s.logf("bots: mirror: %v", err)
+			if i == 0 {
+				return // nothing went out: the rest would read as an answer without its beginning
+			}
+			continue
+		}
+		s.rememberBotThread(mid, target, label) // a reply to any of them goes to this conversation
 	}
-	c.Note(label).Buttons(s.openButton(ctx, machine, session))
-	mid, err := s.botPost(ctx, "", c, pieces[0])
-	if err != nil {
-		s.logf("bots: mirror: %v", err)
-		return
-	}
-	s.rememberBotThread(mid, botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}, label)
 }
 
 // --- commands (docs/bots.md「命令」): which conversation or agent messages go to, the lists to pick one from,
