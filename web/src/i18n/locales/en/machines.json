@@ -24,6 +24,16 @@
   "load_failed": "Couldn't load machine monitoring: {error}",
   "empty_title": "No computers yet",
   "empty_unavailable": "Can't see machines right now",
-  "empty_body": "Add one and Persona can work on it for you.",
-  "add_computer": "Add a computer"
+  "empty_body_add": "Add one and Persona can get work done on it for you.",
+  "add": "Add computer",
+  "pending_joined": "A computer wants to join: {name}. Is it yours?",
+  "pending_waiting": "Waiting for this computer to connect with its pairing link. Confirm it here once it does.",
+  "confirm": "It's mine",
+  "reject": "No, remove",
+  "remove": "Remove",
+  "new_code": "New link",
+  "confirmed": "Added {name}",
+  "rejected": "Removed \"{name}\"",
+  "answer_failed": "Didn't work: {error}",
+  "never_connected": "Never connected"
 }

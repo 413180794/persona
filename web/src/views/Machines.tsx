@@ -1,7 +1,9 @@
-// 机器: every computer's CPU / memory / disk now and over the last hour (docs/machines.md), as Insight Cards.
+// 机器: every computer's CPU / memory / disk now and over the last hour (docs/machines.md), as Insight Cards. 添加电脑
+// (feature machines_add) adds one from here, and a computer waiting to be confirmed (trust pending) says so on its card.
 import { useEffect, useState } from "react";
 import { t as tr } from "../i18n";
-import { api, errorText } from "../lib/api";
+import { canAddComputer, isPending, machineErrorText } from "../lib/add-computer";
+import { api, enc, errorText } from "../lib/api";
 import { bytes, stateOf } from "../lib/format";
 import { hubLabel, routeText } from "../lib/mesh";
 import { machineDeployment } from "../lib/machine-deploy";
@@ -13,6 +15,7 @@ import type { MachineMetrics, MetricPoint } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { Empty } from "./assistant/parts";
+import { AddComputer, type PendingComputer } from "./machines/AddComputer";
 import { HelpDialog } from "./assistant/Readiness";
 import { MachineDeploy } from "./machines/MachineDeploy";
 import { t } from "../i18n";
@@ -20,11 +23,14 @@ import { t } from "../i18n";
 export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const machines = useStore((s) => s.machines);
   const loaded = useStore((s) => s.loaded);
+  const canAdd = useStore((s) => canAddComputer(s.features));
+  const [adding, setAdding] = useState<{ again: PendingComputer | null } | null>(null);
+  // Hubs without machines_add get the plain how-to instead of the in-app flow.
+  const [helping, setHelping] = useState(false);
+  const [answering, setAnswering] = useState("");
   const sessions = useAgentSessions();
   const [metrics, setMetrics] = useState<MachineMetrics[] | null>(null);
   const [error, setError] = useState("");
-  // 添加电脑: how, in place (a signed-in device adding one itself comes with docs/onboarding.md 5.3)
-  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     let dead = false;
@@ -49,12 +55,32 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     }
   };
 
+  // 是我的电脑 / 不是我的 for a computer waiting to be confirmed; the hub's next machines push shows the result.
+  const answer = async (m: { id: string; name: string }, what: "confirm" | "reject") => {
+    setAnswering(m.id);
+    try {
+      await api(`/machines/${enc(m.id)}/${what}`, { method: "POST" });
+      toast(t(what === "confirm" ? "machines.confirmed" : "machines.rejected", { name: m.name }), "ok");
+    } catch (e) {
+      toast(t("machines.answer_failed", { error: errorText(e) }), "error");
+    } finally {
+      setAnswering("");
+    }
+  };
+
+  const add = (
+    <Button tone="primary" icon="plus" onClick={() => (canAdd ? setAdding({ again: null }) : setHelping(true))}>
+      {t("machines.add")}
+    </Button>
+  );
+
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
         <IconButton icon="sidebar" label={t("machines.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
         <h1 className="flex-1 text-[14px] font-semibold text-ink">{t("machines.title")}</h1>
-        <span className="text-[11.5px] text-ink-3">{t("machines.refresh_interval", { seconds: 10 })}</span>
+        <span className="text-[11.5px] text-ink-3 max-sm:hidden">{t("machines.refresh_interval", { seconds: 10 })}</span>
+        {machines.length > 0 && canAdd && add}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto grid max-w-[1000px] grid-cols-1 gap-3 px-5 py-6 sm:px-8 md:grid-cols-2">
@@ -68,21 +94,9 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           )}
           {loaded && machines.length === 0 && (metrics || error) && (
             <div className="md:col-span-2">
-              {error && !metrics ? (
-                <Empty icon="machine" title={t("machines.empty_unavailable")} />
-              ) : (
-                <Empty
-                  icon="machine"
-                  title={t("machines.empty_title")}
-                  action={
-                    <Button tone="primary" icon="plus" onClick={() => setAdding(true)}>
-                      {t("machines.add_computer")}
-                    </Button>
-                  }
-                >
-                  {t("machines.empty_body")}
-                </Empty>
-              )}
+              <Empty icon="machine" title={error && !metrics ? t("machines.empty_unavailable") : t("machines.empty_title")} action={add}>
+                {t("machines.empty_body_add")}
+              </Empty>
             </div>
           )}
           {machines.map((m, i) => {
@@ -96,7 +110,10 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             const route = routeText(m, machines);
             const detail = { name: "machine" as const, mid: m.id };
             const { expectedDisconnect } = machineDeployment(m);
-            const connFailure = expectedDisconnect ? null : classifyConnection(m); // why it is offline, from the error text, and what to do
+            const pending = isPending(m);
+            // why it is offline: the hub's error_code in our words, else from the error text, and what to do
+            const coded = pending ? "" : machineErrorText(m.error_code);
+            const connFailure = expectedDisconnect || pending || coded ? null : classifyConnection(m);
             return (
               <section key={m.id} onClick={(e) => openFromCard(e, detail)} className="cursor-pointer overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} ${i * 60}ms both` }}>
                 <div className="flex items-start gap-3 px-4 pt-3.5">
@@ -119,13 +136,47 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                     </div>
                     <p className="truncate text-[11.5px] text-ink-3">{[m.system?.name || m.os, m.system?.model, m.system?.cpu].filter(Boolean).join(" · ") || m.hostname}</p>
                   </a>
-                  {!m.online && !expectedDisconnect && (
+                  {!m.online && !expectedDisconnect && !pending && (
                     <Button tone="secondary" icon="retry" onClick={() => reconnect(m.id)}>
                       {t("machines.reconnect")}
                     </Button>
                   )}
                 </div>
-                {m.online && m.error && <p className="mx-4 mt-2 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">{m.error}</p>}
+                {pending && (
+                  <div className="mx-4 mt-2 flex flex-wrap items-center gap-2 rounded-[8px] bg-orange-tint px-2.5 py-2 text-[12px] text-ink" data-trust="pending">
+                    <Icon name="shield" size={14} className="shrink-0 text-orange" />
+                    <span className="min-w-0 flex-1 basis-48">{m.online ? t("machines.pending_joined", { name: m.name }) : t("machines.pending_waiting")}</span>
+                    <span className="flex shrink-0 gap-1.5">
+                      {m.online ? (
+                        <>
+                          <Button tone="secondary" disabled={answering === m.id} onClick={() => void answer(m, "reject")}>
+                            {t("machines.reject")}
+                          </Button>
+                          <Button tone="primary" busy={answering === m.id} onClick={() => void answer(m, "confirm")}>
+                            {t("machines.confirm")}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button tone="secondary" disabled={answering === m.id} onClick={() => void answer(m, "reject")}>
+                            {t("machines.remove")}
+                          </Button>
+                          {canAdd && (
+                            <Button tone="primary" onClick={() => setAdding({ again: { id: m.id, name: m.name } })}>
+                              {t("machines.new_code")}
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {m.online && !pending && (coded || m.error) && <p className="mx-4 mt-2 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">{coded || m.error}</p>}
+                {!m.online && coded && !expectedDisconnect && (
+                  <p className="mx-4 mt-2 break-words rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red" data-error-code={m.error_code} title={m.error}>
+                    {coded}
+                  </p>
+                )}
                 {connFailure && (
                   <p className="mx-4 mt-2 break-words rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red" data-failure={connFailure.kind}>
                     <span className="font-medium">{tr("node-health.failure_title", { title: connFailure.title })}</span>
@@ -142,7 +193,7 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                   <Spark points={mm?.points ?? []} />
                 </div>
                 <div className="flex items-center justify-between border-t border-line px-4 py-2 text-[11.5px] text-ink-3">
-                  <span className="whitespace-nowrap">{!m.online ? expectedDisconnect ? t("machines.waiting_node") : t("machines.unreachable") : agents.length ? working ? t("machines.agents_working", { count: agents.length, working }) : t("machines.agents", { count: agents.length }) : t("machines.no_agents")}</span>
+                  <span className="whitespace-nowrap">{pending && !m.online ? t("machines.never_connected") : !m.online ? expectedDisconnect ? t("machines.waiting_node") : t("machines.unreachable") : agents.length ? working ? t("machines.agents_working", { count: agents.length, working }) : t("machines.agents", { count: agents.length }) : t("machines.no_agents")}</span>
                   <span className="flex min-w-0 items-center gap-3">
                     <span className="truncate font-mono max-sm:hidden">{[m.claude_version && `claude ${m.claude_version}`, m.herdr_version && `herdr ${m.herdr_version}`].filter(Boolean).join(" · ")}</span>
                     <a href={href(detail)} onClick={(e) => onLinkClick(e, detail)} className="shrink-0 whitespace-nowrap text-ink-2 hover:text-ink">{t("machines.details")}</a>
@@ -153,7 +204,8 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           })}
         </div>
       </div>
-      {adding && <HelpDialog topic="add_computer" machine="" step={null} onClose={() => setAdding(false)} onAction={() => {}} />}
+      <AddComputer open={!!adding} again={adding?.again} onClose={() => setAdding(null)} />
+      {helping && <HelpDialog topic="add_computer" machine="" step={null} onClose={() => setHelping(false)} onAction={() => {}} />}
     </div>
   );
 }

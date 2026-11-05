@@ -20,8 +20,18 @@
   "cpu_last_hour": "直近1時間のCPU",
   "refresh_failed_stale": "いまは更新できません：{error}。前回のデータを表示中、{seconds} 秒ごとに再試行します。",
   "load_failed": "マシンの監視を読み込めません：{error}",
-  "empty_title": "まだパソコンがありません",
+  "empty_title": "まだコンピューターがありません",
   "empty_unavailable": "いまマシンを表示できません",
-  "empty_body": "1 台追加すると、Persona がそこで作業できます。",
-  "add_computer": "パソコンを追加"
+  "empty_body_add": "1台追加すると、Personaがそこで作業を代わりに進めます。",
+  "add": "コンピューターを追加",
+  "pending_joined": "コンピューターが参加しようとしています：{name}。あなたのものですか？",
+  "pending_waiting": "このコンピューターがペアリングリンクで接続するのを待っています。接続したらここで確認します。",
+  "confirm": "自分のもの",
+  "reject": "違う、削除",
+  "remove": "削除",
+  "new_code": "リンクを再発行",
+  "confirmed": "{name}を追加しました",
+  "rejected": "「{name}」を削除しました",
+  "answer_failed": "失敗しました：{error}",
+  "never_connected": "未接続"
 }

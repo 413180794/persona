@@ -1,0 +1,11 @@
+{
+  "code_node_service_down": "Persona's background service isn't running on this computer. Open Persona Link and let it reinstall.",
+  "code_link_offline": "This computer is offline: Persona Link isn't running, or the computer is asleep.",
+  "code_never_connected": "This computer has never connected. Pair it once with its pairing link.",
+  "code_node_outdated": "Persona on this computer is too old to update from here. Reinstall it on that computer.",
+  "err_tls_required": "The hub hasn't turned on secure connections, so computers can't connect. Turn them on in the hub's admin page › Network, then try again.",
+  "err_mesh_member": "This hub is a member of a group. Add computers on the primary hub.",
+  "err_too_many_pending": "3 computers are already waiting for you to confirm them. Confirm or remove them first.",
+  "err_forbidden": "This device can't add computers. Try from an app or browser that's signed in.",
+  "err_invalid_name": "Give it a name of up to 40 characters."
+}

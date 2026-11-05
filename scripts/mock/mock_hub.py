@@ -13019,6 +13019,146 @@ if os.environ.get("MOCK_EXTENSION_NOTIFICATIONS") == "1" and EXTENSIONS_API:
         return _plugins_route_without_notifications(handler, p, body)
 
 
+# ---------- area: adding a computer from a signed-in device (#287, docs/onboarding.md 4.2, 5.3) ----------
+# MOCK_ADD_COMPUTER=1: the hub says machines_add and machine_trust. POST /api/v1/auth/pair-codes {"add": {name, os}} adds a
+# pending kind-link computer (never connected), {"machine": id} gives one a new code; MOCK_ADD_COMPUTER_JOIN seconds later
+# (default 8, 0 = never) its Persona Link "connects" (online, still pending). POST /api/v1/machines/{id}/confirm | reject
+# confirm it / remove it. MOCK_ADD_COMPUTER=seed also lists one pending computer that never connected and makes Mac Studio
+# a link computer that is offline (error_code link_offline). MOCK_ADD_COMPUTER_ERROR=<code> refuses every add with it
+# (tls_required, mesh_member, too_many_pending); MOCK_ADD_COMPUTER_NO_SITE=1: the reply has no install line (a local build).
+ADD_COMPUTER = os.environ.get("MOCK_ADD_COMPUTER", "")
+ADD_COMPUTER_PENDING_TEXT = "等你在新版 App 或网页里确认这是你的电脑"
+ADD_COMPUTER_ERRORS = {
+    "tls_required": (409, "hub 还没打开安全连接，电脑接不进来"),
+    "mesh_member": (409, "这台 hub 是组里的成员，到中心 hub 上添加电脑"),
+    "too_many_pending": (429, "已经有 3 台电脑在等确认"),
+}
+
+
+def _add_computer_push():
+    for send, _ in list(LIVE):
+        try: send({"type": "machines", "machines": out_machines()})
+        except Exception: pass
+
+
+def _add_computer_listed(m):
+    MACHINES.append(m)
+    if MACHINES_KEEP is not None:
+        MACHINES_KEEP.add(m["id"])
+
+
+if ADD_COMPUTER:
+    _features_without_add_computer = features
+
+    def features():
+        f = _features_without_add_computer()
+        return f + [x for x in ("machine_trust", "machines_add") if x not in f]
+
+    if ADD_COMPUTER == "seed":
+        _add_computer_listed({"id": "office", "name": "办公室的台式机", "kind": "link", "icon": "desktop", "online": False,
+                              "trust": "pending", "error_code": "never_connected", "error": ADD_COMPUTER_PENDING_TEXT})
+        for _m in MACHINES:
+            if _m["id"] == "studio":
+                _m.update(kind="link", online=False, error_code="link_offline",
+                          error="link closed: failed to get reader: EOF")
+
+    def _add_computer_join(mid, os_name):
+        m = next((x for x in MACHINES if x["id"] == mid), None)
+        if m is None or m.get("online") or m.get("trust") != "pending":
+            return
+        m.update(online=True, os={"mac": "darwin", "windows": "windows"}.get(os_name, "linux"),
+                 hostname=m["name"], arch="arm64" if os_name == "mac" else "amd64", last_seen=ago(),
+                 herdr_version="0.9.5", claude_version="2.1.320")
+        m.pop("error_code", None)
+        _add_computer_push()
+
+    def _add_computer_route(handler, p, body):
+        if p == "/api/v1/auth/pair-codes":
+            req = json.loads(body or b"{}") or {}
+            add, again = req.get("add"), req.get("machine")
+            if not add and not again:
+                return False  # an app's code: the handler's own
+            code = os.environ.get("MOCK_ADD_COMPUTER_ERROR", "")
+            if add and code:
+                status, text = ADD_COMPUTER_ERRORS.get(code, (409, code))
+                reply = {"error": text, "code": code}
+                if code == "tls_required":
+                    reply["action"] = "enable_tls"
+                handler.send_json(reply, status)
+                return True
+            added = False
+            if add:
+                name = str(add.get("name") or "").strip()
+                if not name or len(name) > 40:
+                    handler.send_json({"error": "名字不能为空，最多 40 个字", "code": "invalid_name"}, 400)
+                    return True
+                m = next((x for x in MACHINES if x.get("name") == name and x.get("trust") == "pending" and not x.get("online")), None)
+                if m is None:
+                    base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or add.get("os") or "computer"
+                    mid, n = base, 2
+                    while any(x["id"] == mid for x in MACHINES):
+                        mid, n = "%s-%d" % (base, n), n + 1
+                    m = {"id": mid, "name": name, "kind": "link", "icon": add.get("icon") or "laptop", "online": False,
+                         "trust": "pending", "error_code": "never_connected", "error": ADD_COMPUTER_PENDING_TEXT}
+                    _add_computer_listed(m)
+                    added = True
+                os_name = add.get("os") or "mac"
+            else:
+                m = next((x for x in MACHINES if x["id"] == again), None)
+                if m is None:
+                    handler.send_json({"error": "没有这台电脑", "code": "not_found"}, 404)
+                    return True
+                if m.get("trust") != "pending":
+                    handler.send_json({"error": "这台电脑已经确认过了", "code": "not_pending"}, 409)
+                    return True
+                os_name = "mac"
+            tok = "jp_mock%d" % (len(TOKENS) + 1)
+            expires = datetime.now(timezone.utc) + timedelta(seconds=int(os.environ.get("MOCK_PAIR_SECONDS") or 600))
+            pair = "jarvis://link?url=https%3A%2F%2Fhub.example.com&token=" + tok + "&machine=" + m["id"]
+            reply = {"token": tok, "expires_at": expires.isoformat().replace("+00:00", "Z"), "url": "https://hub.example.com",
+                     "machine": m["id"], "name": m["name"], "trust": "pending", "pair_url": pair,
+                     "command": "jarvis-link pair '%s'" % pair}
+            if added:
+                reply["added"] = True
+            if not os.environ.get("MOCK_ADD_COMPUTER_NO_SITE"):
+                reply["install"] = {"linux": "curl -fsSL https://example.com/install.sh | sh -s -- --node --pair '%s'" % pair}
+            _add_computer_push()
+            join = float(os.environ.get("MOCK_ADD_COMPUTER_JOIN") or 8)
+            if join > 0:
+                threading.Timer(join, _add_computer_join, (m["id"], os_name)).start()
+            handler.send_json(reply)
+            return True
+        parts = p.split("/")
+        if len(parts) == 6 and p.startswith("/api/v1/machines/") and parts[5] in ("confirm", "reject"):
+            m = next((x for x in MACHINES if x["id"] == parts[4]), None)
+            if m is None:
+                handler.send_json({"error": "没有这台电脑", "code": "not_found"}, 404)
+                return True
+            if parts[5] == "confirm":
+                m.pop("trust", None)
+                if m.get("error") == ADD_COMPUTER_PENDING_TEXT:
+                    m.pop("error", None)
+            elif m.get("trust") != "pending":
+                handler.send_json({"error": "这台电脑已经确认过了", "code": "not_pending"}, 409)
+                return True
+            else:
+                MACHINES.remove(m)
+            _add_computer_push()
+            handler.send_json({"ok": True})
+            return True
+        return False
+
+    _plugins_route_without_add_computer = plugins_route
+
+    def plugins_route(handler, p, body):
+        if _add_computer_route(handler, p, body): return True
+        return _plugins_route_without_add_computer(handler, p, body)
+
+
+MOCK_HELP.append("MOCK_ADD_COMPUTER=1|seed  机器 › 添加电脑（#287）：features 有 machines_add / machine_trust，pair-codes 的 add 加一台待确认的电脑，"
+                 "MOCK_ADD_COMPUTER_JOIN 秒后（默认 8，0 = 不来）它连上来等确认；seed 另列一台没连过的待确认电脑、Mac Studio 离线（link_offline）；"
+                 "MOCK_ADD_COMPUTER_ERROR=tls_required|mesh_member|too_many_pending 拒绝添加，MOCK_ADD_COMPUTER_NO_SITE=1 不给安装命令")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")
     parser.add_argument("--tls-port", type=int, help="额外的 TLS 监听端口；0 表示自动分配")

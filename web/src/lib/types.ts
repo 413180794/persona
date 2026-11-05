@@ -47,6 +47,10 @@ export interface Machine {
   };
   /** ego lite (the hub's extension ego, docs/plan-ego-browser.md): only while the extension is on and it is a Mac. */
   browser?: import("./browser").MachineBrowser;
+  /** feature machine_trust (docs/protocol.md「电脑的信任」): "pending" while the user has not said it is theirs; omitted = confirmed. */
+  trust?: "pending";
+  /** What `error` is about, for words of our own: node_service_down / link_offline / never_connected / node_outdated. */
+  error_code?: string;
 }
 
 /** The hubs of this hub's interconnected group, from the signed-in hello (docs/plan-hub-mesh.md 2.6). */

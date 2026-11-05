@@ -13,10 +13,10 @@ vi.hoisted(() => {
   g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v), removeItem: (k: string) => void kept.delete(k) };
 });
 
-const fake = vi.hoisted(() => ({ machines: [] as Machine[] }));
+const fake = vi.hoisted(() => ({ machines: [] as Machine[], features: [] as string[] }));
 vi.mock("../lib/store", async (importOriginal) => {
   const real = await importOriginal<typeof import("../lib/store")>();
-  return { ...real, useStore: <T,>(select: (s: ReturnType<typeof real.getState>) => T) => select({ ...real.getState(), loaded: true, machines: fake.machines }) };
+  return { ...real, useStore: <T,>(select: (s: ReturnType<typeof real.getState>) => T) => select({ ...real.getState(), loaded: true, machines: fake.machines, features: fake.features }) };
 });
 vi.mock("../lib/sessions", async (importOriginal) => ({ ...(await importOriginal<typeof import("../lib/sessions")>()), useAgentSessions: () => [] }));
 
@@ -25,9 +25,12 @@ const { Machines } = await import("./Machines");
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let replies: number[] = [];
+let posts: string[] = [];
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { "Content-Type": "application/json" } });
-function hub(input: RequestInfo | URL): Promise<Response> {
+function hub(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const path = String(input).split("?")[0]!;
+  if (init?.method === "POST") posts.push(path);
+  if (path.endsWith("/confirm") || path.endsWith("/reject")) return Promise.resolve(json({ ok: true }));
   if (path.endsWith("/reconnect")) return Promise.resolve(json({ ok: true }));
   if (path !== "/api/v1/metrics") return Promise.resolve(json({ error: "not found" }, 404));
   const status = replies.length > 1 ? replies.shift()! : replies[0] ?? 200;
@@ -40,10 +43,13 @@ const flush = async () => {
   for (let i = 0; i < 5; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 };
 const alert = () => host.querySelector('[role="alert"]');
+const buttons = (label: string) => [...host.querySelectorAll("button")].filter((b) => b.textContent?.trim() === label);
 
 beforeEach(() => {
   fake.machines = [];
+  fake.features = [];
   replies = [];
+  posts = [];
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   vi.stubGlobal("fetch", vi.fn(hub));
   history.replaceState(null, "", "/machines");
@@ -147,5 +153,55 @@ describe("Machines", () => {
     expect(host.textContent).toContain("现在看不到机器");
     expect(alert()).not.toBeNull();
     expect(alert()?.textContent).not.toContain("显示的是上次的数据");
+  });
+
+  it("offers 添加电脑 in the empty state, and in the header only when the hub can add one (machines_add)", async () => {
+    // Old hubs: the empty state's button opens the how-to instead of the in-app flow.
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await flush();
+    expect(buttons("添加电脑")).toHaveLength(1);
+    expect(host.textContent).not.toContain("hub 连上后");
+
+    fake.features = ["machine_trust", "machines_add"];
+    act(() => root.render(<Machines onToggleSidebar={() => {}} key="new" />));
+    await flush();
+    expect(buttons("添加电脑")).toHaveLength(1); // the empty state's; the header has none while the page is empty
+    expect(host.textContent).toContain("添加一台，Persona 就能在上面替你干活");
+
+    fake.machines = [{ id: "mac", name: "电脑 A", online: true }];
+    act(() => root.render(<Machines onToggleSidebar={() => {}} key="one" />));
+    await flush();
+    expect(buttons("添加电脑")).toHaveLength(1); // the header's
+  });
+
+  it("asks about an online pending computer on its card and confirms it", async () => {
+    fake.features = ["machine_trust", "machines_add"];
+    fake.machines = [{ id: "home", name: "家里的服务器", online: true, trust: "pending", error: "等你在新版 App 或网页里确认这是你的电脑" }];
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await flush();
+    expect(host.textContent).toContain("有一台电脑想加入：家里的服务器，是你的吗？");
+    expect(host.textContent).not.toContain("等你在新版 App"); // the hub's words for old apps
+    await act(async () => buttons("是我的电脑")[0]!.click());
+    await flush();
+    expect(posts).toEqual(["/api/v1/machines/home/confirm"]);
+  });
+
+  it("gives a pending computer that never connected a new link and no 重新连接", async () => {
+    fake.features = ["machine_trust", "machines_add"];
+    fake.machines = [{ id: "home", name: "家里的服务器", online: false, kind: "link", trust: "pending", error_code: "never_connected", error: "等你确认" }];
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await flush();
+    expect(host.textContent).toContain("等这台电脑用配对链接连上来");
+    expect(buttons("重新出链接")).toHaveLength(1);
+    expect(buttons("删掉")).toHaveLength(1);
+    expect(buttons("重新连接")).toHaveLength(0);
+  });
+
+  it("says a machine's error_code in words instead of its raw error", async () => {
+    fake.machines = [{ id: "mac", name: "电脑 A", online: false, kind: "link", error_code: "link_offline", error: "link closed: failed to get reader" }];
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await flush();
+    expect(host.querySelector('[data-error-code="link_offline"]')?.textContent).toContain("Persona Link 没在运行");
+    expect(host.textContent).not.toContain("failed to get reader");
   });
 });

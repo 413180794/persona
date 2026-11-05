@@ -1,0 +1,77 @@
+import { describe, expect, it } from "vitest";
+import { addBody, addErrorText, addStage, canAddComputer, linuxCommand, machineErrorText, pairCommand, windowsCommand } from "./add-computer";
+import { ApiError } from "./api";
+import type { Machine } from "./types";
+
+const PAIR = "jarvis://link?url=https%3A%2F%2Fhub.example.com&token=jp_x&machine=mac";
+const m = (over: Partial<Machine> = {}): Machine => ({ id: "mac", name: "我的 MacBook", online: false, ...over });
+
+describe("canAddComputer", () => {
+  it("needs the hub to say machines_add; an old hub, or one that said nothing, has no 添加电脑", () => {
+    expect(canAddComputer(["machine_trust", "machines_add"])).toBe(true);
+    expect(canAddComputer(["machine_trust"])).toBe(false);
+    expect(canAddComputer([])).toBe(false);
+  });
+});
+
+describe("addBody", () => {
+  it("sends the name as typed, trimmed, and the system", () => {
+    expect(addBody("  小林的 MacBook ", "mac")).toEqual({ add: { name: "小林的 MacBook", os: "mac" } });
+  });
+});
+
+describe("commands", () => {
+  it("uses the hub's one install line on Linux, else only the pairing", () => {
+    expect(linuxCommand({ pair_url: PAIR, install: { linux: "curl -fsSL https://example.com/install.sh | sh" } })).toEqual({
+      line: "curl -fsSL https://example.com/install.sh | sh",
+      installs: true,
+    });
+    expect(linuxCommand({ pair_url: PAIR, command: `jarvis-link pair '${PAIR}'` })).toEqual({ line: `jarvis-link pair '${PAIR}'`, installs: false });
+  });
+
+  it("builds the pairing line when the hub gave none, and keeps a quote out of the quotes", () => {
+    expect(pairCommand({ pair_url: PAIR })).toBe(`jarvis-link pair '${PAIR}'`);
+    expect(pairCommand({ pair_url: "jarvis://link?x='y" })).toBe("jarvis-link pair 'jarvis://link?x=%27y'");
+  });
+
+  it("runs jarvis-link install with personad beside it on Windows (docs/windows.md)", () => {
+    expect(windowsCommand(PAIR)).toBe(`.\\jarvis-link.exe install --jarvisd .\\personad.exe --pair '${PAIR}'`);
+  });
+});
+
+describe("addStage", () => {
+  it("waits while the code lasts, then has expired", () => {
+    expect(addStage(m({ trust: "pending" }), 30, true)).toBe("waiting");
+    expect(addStage(m({ trust: "pending" }), 0, true)).toBe("expired");
+  });
+
+  it("asks once the computer is online and still pending; is done once it is confirmed", () => {
+    expect(addStage(m({ online: true, trust: "pending" }), 30, true)).toBe("joined");
+    expect(addStage(m({ online: true }), 30, true)).toBe("connected");
+  });
+
+  it("keeps waiting for one the list has not had yet, and says gone for one it had", () => {
+    expect(addStage(undefined, 30, false)).toBe("waiting");
+    expect(addStage(undefined, 0, false)).toBe("expired");
+    expect(addStage(undefined, 30, true)).toBe("gone");
+  });
+});
+
+describe("words", () => {
+  it("says each machine error_code in words, nothing for one it does not know", () => {
+    for (const code of ["node_service_down", "link_offline", "never_connected", "node_outdated"]) {
+      expect(machineErrorText(code)).toMatch(/[一-鿿]/);
+      expect(machineErrorText(code)).not.toContain("lib-add-computer.");
+    }
+    expect(machineErrorText("something_new")).toBe("");
+    expect(machineErrorText(undefined)).toBe("");
+  });
+
+  it("explains the codes of a refused add, and passes the hub's words for the rest", () => {
+    const err = (code: string, message = "hub said so") => new ApiError(409, message, { code, error: message });
+    expect(addErrorText(err("tls_required"))).toContain("安全连接");
+    expect(addErrorText(err("mesh_member"))).toContain("中心 hub");
+    expect(addErrorText(err("too_many_pending"))).toContain("3 台");
+    expect(addErrorText(err("exists", "这个 id 已经有了"))).toBe("这个 id 已经有了");
+  });
+});

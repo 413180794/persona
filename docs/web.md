@@ -494,6 +494,14 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   每 3 秒查一次设备列表，出现生成码之后才有的凭据就是用了这个码的设备，显示「已连接：名字」并刷新列表。页面开在 `127.0.0.1` / `localhost` 上时「浏览器」页提示这个地址只有本机能打开。
   码 10 分钟后失效、只能兑换一次，关掉弹窗不作废（hub 没有作废临时码的接口），过期自然失效。
 - **机器**：每台电脑一张卡片，CPU / 内存 / 磁盘当前值和最近一小时 CPU 曲线（`/api/v1/metrics`，10 秒刷新；空档断线），离线的能重连；点名字或「详情 ›」进机器页。
+  - **添加电脑**（#3883，[onboarding.md](onboarding.md) 4.2、7.2 第 11 项；`src/views/machines/AddComputer.tsx`、`src/lib/add-computer.ts`）：hub 有 `machines_add` 时页头和空状态（「还没有电脑。添加一台，Persona 就能在上面替你干活」）有「添加电脑」，老 hub 不显示。
+    选系统（Mac / Linux / Windows）、填名字（可以中文）→ `POST /api/v1/auth/pair-codes` 带 `add` → 按系统给说明：Linux 一行可拷贝的命令（hub 给了 `install.linux` 就是装 + 配对，没给就是 `jarvis-link pair`）；
+    Mac 先装 Persona Link（如实写「目前要自己从源码编译」，链到 persona-link-install.md）再把配对链接拷贝 / 分享过去，粘贴到它的「配对…」；Windows 照 [windows.md](windows.md) 给 `jarvis-link.exe install --jarvisd .\personad.exe --pair …`。
+    倒计时沿用「连接新设备」的 `connect-device.ts`，每 3 秒读一次机器列表（WebSocket 推得更快就用推的）；连上后同一屏问「有一台电脑想加入：<名字>，是你的吗？」，「是我的电脑」/「不是，删掉」调 `…/confirm` / `…/reject`。
+    过期了「重新生成」（`{"machine": id}`）。`tls_required`、`mesh_member`、`too_many_pending` 等按 code 出中文。
+  - 待确认的电脑（`trust: pending`）卡片上一条橙色提示：在线时「有一台电脑想加入…」+ 确认 / 删掉，没连上过时「等这台电脑用配对链接连上来」+「重新出链接」/「删掉」，不显示「重新连接」和 hub 写给老 App 的 `error`。
+    机器的 `error_code`（`node_service_down` / `link_offline` / `never_connected` / `node_outdated`）用自己的中文代替原文（原文放在悬停提示里），没有 `error_code` 的照旧按原文归类。
+  - 截图：假 hub 带 `MOCK_ADD_COMPUTER=1`（加 `MOCK_MACHINES_KEEP=none` 看空状态）或 `MOCK_ADD_COMPUTER=seed`（列表里有待确认、离线的），`MOCK_ADD_COMPUTER_JOIN=<秒>` 调电脑多久「连上来」。
   一台都没有时是空状态「还没有机器」（读不到监控时是「现在看不到机器」）；刷新失败时顶上一条红色提示，已经有数据时写「显示的是上次的数据，每 10 秒重试」，不再静默。截图用假 hub 的 `MOCK_METRICS_FAIL=after`（前 5 秒正常、之后失败）和 `MOCK_MACHINES_KEEP=<不存在的 id>`（没有机器）。
 - **空间页**（`/space/<机器>/<空间名>`，`src/views/SpacePage.tsx`，iOS `SpaceView`、Android #89，#2887）：一台机器上的一个空间，按名字找（和置顶、屏蔽、待办的 key 一样，herdr 重启后 id 变了照样打开；
   改了名字，这里或别的设备改的，页面跟着换到新名字）。顶上是所在机器（点回机器页）、目录、Agent 数和需要你 / 工作中 / 完成未看的件数；下面是在跑的 Agent（最急的在前，点开对话）、

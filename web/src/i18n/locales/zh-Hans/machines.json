@@ -22,6 +22,16 @@
   "load_failed": "读取不到机器的监控：{error}",
   "empty_title": "还没有电脑",
   "empty_unavailable": "现在看不到机器",
-  "empty_body": "添加一台，Persona 就能在上面替你干活。",
-  "add_computer": "添加电脑"
+  "empty_body_add": "添加一台，Persona 就能在上面替你干活。",
+  "add": "添加电脑",
+  "pending_joined": "有一台电脑想加入：{name}，是你的吗？",
+  "pending_waiting": "等这台电脑用配对链接连上来，连上后在这里确认是你的。",
+  "confirm": "是我的电脑",
+  "reject": "不是，删掉",
+  "remove": "删掉",
+  "new_code": "重新出链接",
+  "confirmed": "已添加：{name}",
+  "rejected": "已删掉「{name}」",
+  "answer_failed": "没有成功：{error}",
+  "never_connected": "还没连上来过"
 }
