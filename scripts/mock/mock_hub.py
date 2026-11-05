@@ -6217,6 +6217,15 @@ def echo_sent(parts, body):
     threading.Timer(float(os.environ.get("MOCK_ECHO_SECONDS", "1.5")), written).start()
 
 
+# MOCK_HUB_LINKS=<origin the web is served at>: the assistant's latest answer links an agent and a task as the hub's own
+# pages (/s/<machine>/<session>, /todos?id=…), plus an outside page; the web opens the first two in its side panel.
+if os.environ.get("MOCK_HUB_LINKS"):
+    _o = os.environ["MOCK_HUB_LINKS"].rstrip("/")
+    ITEMS[ASK1] = ITEMS.get(ASK1, []) + [it("user", "text", 2, text="小组件那件事交给谁了？"), it("assistant", "text", 1, text=(
+        f"已经交给 [给天气 App 加主屏幕小组件]({_o}/s/macbook/{WIDGET}) 去办，挂在任务 [天气 App]({_o}/todos?id=todo_weather) 下面。"
+        "设计参考 [Apple 的小组件指南](https://developer.apple.com/design/human-interface-guidelines/widgets)。"))]
+
+
 # MOCK_COMPACT=1: compactions as Claude Code writes them, after the hub turned them into items: the Jarvis main
 # conversation compacted while idle after its last answer (the boundary, the summary it went on from, the idle note);
 # 检查 PR #42 compacted with /compact, then in the middle of a later turn (auto). For the chat's compaction divider.

@@ -8,7 +8,13 @@ import { ChatView } from "../chat/ChatView";
 import { PanelHeader } from "../SidePanel";
 import { place, removeTaskNow, retryTaskNow, useRetrying, useTaskState, useTodo } from "./Tasks";
 import { sessionTitle, stateOf } from "../../lib/format";
+import { href, type Route } from "../../lib/router";
 import { t } from "../../i18n";
+
+/** The header's 在新窗口打开: the page the panel shows, as its own tab (⌘-click on the link does the same). */
+function OpenInWindow({ to }: { to: Route }) {
+  return <IconButton icon="external" label={t("common.open_in_new_window")} onClick={() => window.open(href(to), "_blank", "noopener")} />;
+}
 
 export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => void }) {
   const todo = useTodo(todoId);
@@ -36,19 +42,22 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
         title={todo.title}
         subtitle={[info.label, place(todo, lead)].filter(Boolean).join(" · ")}
         actions={
-          isRemovable(st.status) ? (
-            <>
-              <IconButton icon="more" label={t("assistant-taskpanel.more")} onClick={more.open} active={Boolean(more.anchor)} />
-              {more.anchor && (
-                <Menu
-                  anchor={more.anchor}
-                  onClose={more.close}
-                  align="right"
-                  items={[{ key: "remove", label: t("assistant-taskpanel.remove_ellipsis"), icon: "trash", danger: true, onSelect: () => removeTaskNow(todo) }]}
-                />
-              )}
-            </>
-          ) : undefined
+          <>
+            <OpenInWindow to={{ name: "todos", id: todo.id }} />
+            {isRemovable(st.status) && (
+              <>
+                <IconButton icon="more" label={t("assistant-taskpanel.more")} onClick={more.open} active={Boolean(more.anchor)} />
+                {more.anchor && (
+                  <Menu
+                    anchor={more.anchor}
+                    onClose={more.close}
+                    align="right"
+                    items={[{ key: "remove", label: t("assistant-taskpanel.remove_ellipsis"), icon: "trash", danger: true, onSelect: () => removeTaskNow(todo) }]}
+                  />
+                )}
+              </>
+            )}
+          </>
         }
         onClose={onClose}
       />
@@ -113,6 +122,7 @@ export function AgentPanel({ mid, sid, onClose }: { mid: string; sid: string; on
           </span>
         }
         subtitle={[machine, session?.agent].filter(Boolean).join(" · ")}
+        actions={<OpenInWindow to={{ name: "session", mid, sid }} />}
         onClose={onClose}
       />
       <div className="flex min-h-0 flex-1 flex-col">

@@ -458,7 +458,7 @@ function MomentsPanel({ id, url, onClose }: { id: string; url: string; onClose: 
 // ── any other page ──
 
 function WebPanel({ url, title, onClose }: { url: string; title?: string; onClose: () => void }) {
-  const web = linkRoute(url, false).kind === "web";
+  const web = linkRoute(url, false, "").kind === "web";
   return (
     <>
       <PanelHeader icon="web" title={title || host(url)} subtitle={host(url)} onClose={onClose} actions={<MoreMenu url={url} />} />

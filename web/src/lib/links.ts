@@ -2,7 +2,9 @@
 // ordinary pages open in a new tab (most sites refuse to be framed and the page cannot tell it was refused, so a
 // framed panel would just be blank), Feishu documents and 公司圈 posts open in the side panel's reader (the same links
 // the phone reads natively, FeishuLinks.route) when the hub reads Feishu (feature `lark`; otherwise they are ordinary
-// pages), and jarvis://session links move to that conversation.
+// pages), and jarvis://session links move to that conversation. This hub's own agent and task pages (/s/<machine>/
+// <session>, /todos?id=…, the links the assistant writes) open in the side panel next to where they were clicked, or
+// move there on a narrow screen, which has no room beside the page.
 //
 // Also the hand-off between the reader and the composers: text picked in the panel goes to the composer the user is
 // writing in, as <jarvis-context> tags in the next message (docs/protocol.md「消息里的标签」).
@@ -12,6 +14,7 @@ import { uuid } from "./format";
 import { openPanel } from "./panel";
 import { navigate } from "./router";
 import { larkOn } from "./store";
+import { mediaMatches, NARROW } from "./viewport";
 
 /** What a Feishu document link points at, from the link alone (FeishuDocsKind.from). A wiki link does not say. */
 export type DocKind = "doc" | "sheet" | "bitable" | "mindnote" | "file" | "slides" | "wiki" | "page" | "whiteboard" | "other";
@@ -20,6 +23,8 @@ export type LinkRoute =
   | { kind: "doc"; doc: DocKind } // a Feishu cloud document: the panel's reader
   | { kind: "moments"; id: string } // a 公司圈 post: the panel
   | { kind: "session"; mid: string; sid: string } // jarvis://session/<machine>/<session>: that conversation
+  | { kind: "agent"; mid: string; sid: string } // this hub's /s/<machine>/<session>: that agent's chat in the panel
+  | { kind: "task"; id: string } // this hub's /todos?id=<todo>: that task in the panel
   | { kind: "web" } // any other http(s) page: a new tab
   | { kind: "system" } // mailto: / tel:: the browser hands it to the system
   | { kind: "none" }; // anything else (javascript:, other apps' schemes, not a URL): not followed
@@ -93,8 +98,30 @@ function momentsPostID(u: URL): string | null {
   return /^\d+$/.test(id) ? id : null;
 }
 
-/** Where `url` opens. `lark`: whether the hub reads Feishu (store.larkOn); without it Feishu links are web pages. */
-export function linkRoute(url: string, lark = larkOn()): LinkRoute {
+const pageOrigin = () => (typeof location !== "undefined" ? location.origin : "");
+
+/** An agent or task page of the hub this page is served by (router.ts's /s/… and /todos), or null. */
+function hubPage(u: URL, origin: string): LinkRoute | null {
+  if (!origin || u.origin !== origin) return null;
+  let p: string[];
+  try {
+    p = u.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+  } catch {
+    return null;
+  }
+  if (p[0] === "s" && p[1] && p[2] && p.length === 3) return { kind: "agent", mid: p[1], sid: p[2] };
+  if (p[0] === "todos" && p.length <= 2) {
+    const id = p[1] || u.searchParams.get("id");
+    if (id) return { kind: "task", id };
+  }
+  return null;
+}
+
+/**
+ * Where `url` opens. `lark`: whether the hub reads Feishu (store.larkOn); without it Feishu links are web pages.
+ * `origin`: this page's, for telling the hub's own pages from other sites.
+ */
+export function linkRoute(url: string, lark = larkOn(), origin = pageOrigin()): LinkRoute {
   const u = parse(url.trim());
   if (!u) return { kind: "none" };
   const scheme = u.protocol.toLowerCase();
@@ -111,6 +138,8 @@ export function linkRoute(url: string, lark = larkOn()): LinkRoute {
   }
   if (scheme === "mailto:" || scheme === "tel:") return { kind: "system" };
   if (scheme !== "http:" && scheme !== "https:") return { kind: "none" };
+  const own = hubPage(u, origin);
+  if (own) return own;
   if (lark && isFeishuHost(u.hostname)) {
     const first = u.pathname.split("/").filter(Boolean)[0] ?? "";
     if (DOC_PATHS.includes(first)) return { kind: "doc", doc: docKind(url) };
@@ -126,7 +155,7 @@ export function linkRoute(url: string, lark = larkOn()): LinkRoute {
  */
 export function opensInApp(url: string): boolean {
   const r = linkRoute(url);
-  return (r.kind === "doc" && r.doc !== "bitable") || r.kind === "moments" || r.kind === "session";
+  return (r.kind === "doc" && r.doc !== "bitable") || r.kind === "moments" || r.kind === "session" || r.kind === "agent" || r.kind === "task";
 }
 
 /** The href to put on an <a>: jarvis://session links become the in-app path, so ⌘-click opens a tab of that page. */
@@ -141,6 +170,14 @@ export function openLink(url: string, title?: string) {
   switch (r.kind) {
     case "session":
       navigate({ name: "session", mid: r.mid, sid: r.sid });
+      return;
+    case "agent":
+      if (mediaMatches(NARROW)) navigate({ name: "session", mid: r.mid, sid: r.sid });
+      else openPanel({ kind: "agent", mid: r.mid, sid: r.sid });
+      return;
+    case "task":
+      if (mediaMatches(NARROW)) navigate({ name: "todos", id: r.id });
+      else openPanel({ kind: "task", todo: r.id });
       return;
     case "doc":
     case "moments":

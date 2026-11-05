@@ -5,6 +5,9 @@ vi.mock("./router", () => ({ navigate: vi.fn() }));
 vi.mock("./api", () => ({ api: vi.fn(), enc: encodeURIComponent, getToken: () => "tok", ApiError: class extends Error {} }));
 
 import { parseUserText } from "./turns";
+import { closePanel, getPanel } from "./panel";
+import { navigate } from "./router";
+import { NARROW } from "./viewport";
 import {
   activeComposer,
   addContext,
@@ -15,6 +18,7 @@ import {
   linkHref,
   linkRoute,
   newContext,
+  openLink,
   opensInApp,
   registerComposer,
   removeContext,
@@ -84,6 +88,49 @@ describe("where a link opens", () => {
     expect(linkRoute("other://session/macbook/abc-1").kind).toBe("none");
     expect(linkHref("https://example.com/a")).toBe("https://example.com/a");
     expect(linkRoute("jarvis://pair?token=x").kind).toBe("none");
+  });
+
+  it("knows this hub's own agent and task pages, and only this hub's", () => {
+    const hub = "https://hub.example.com";
+    expect(linkRoute(`${hub}/s/example-machine/abc-1`, false, hub)).toEqual({ kind: "agent", mid: "example-machine", sid: "abc-1" });
+    expect(linkRoute(`${hub}/s/mac%20book/abc-1?view=chat`, false, hub)).toEqual({ kind: "agent", mid: "mac book", sid: "abc-1" });
+    expect(linkRoute(`${hub}/todos?id=todo_1`, false, hub)).toEqual({ kind: "task", id: "todo_1" });
+    expect(linkRoute(`${hub}/todos/todo_1`, false, hub)).toEqual({ kind: "task", id: "todo_1" });
+    // the same paths elsewhere, other pages of the hub, and what does not name one stay web pages
+    expect(linkRoute("https://other.example.com/s/example-machine/abc-1", false, hub).kind).toBe("web");
+    expect(linkRoute("http://hub.example.com/s/example-machine/abc-1", false, hub).kind).toBe("web");
+    expect(linkRoute(`${hub}/s/example-machine/abc-1`, false, "").kind).toBe("web");
+    expect(linkRoute(`${hub}/s/example-machine`, false, hub).kind).toBe("web");
+    expect(linkRoute(`${hub}/s/example-machine/abc-1/more`, false, hub).kind).toBe("web");
+    expect(linkRoute(`${hub}/todos`, false, hub).kind).toBe("web");
+    expect(linkRoute(`${hub}/inbox`, false, hub).kind).toBe("web");
+    expect(linkRoute(`${hub}/s/example-machine/%E0%A4%A`, false, hub).kind).toBe("web");
+    // the href stays the link itself, so ⌘-click opens that page in a tab
+    expect(linkHref(`${hub}/todos?id=todo_1`)).toBe(`${hub}/todos?id=todo_1`);
+  });
+
+  it("opens this hub's agent and task links in the panel on a wide screen, and moves there on a narrow one", () => {
+    const hub = "https://hub.example.com";
+    vi.stubGlobal("location", { origin: hub });
+    const narrow = { value: false };
+    // viewport.ts keeps the list it got, so `matches` follows `narrow`
+    vi.stubGlobal("matchMedia", (q: string) => ({ get matches() { return q === NARROW && narrow.value; }, addEventListener() {}, removeEventListener() {} }));
+    try {
+      expect(opensInApp(`${hub}/s/example-machine/abc-1`)).toBe(true);
+      expect(opensInApp("https://other.example.com/s/example-machine/abc-1")).toBe(false);
+      openLink(`${hub}/s/example-machine/abc-1`);
+      expect(getPanel()).toEqual({ kind: "agent", mid: "example-machine", sid: "abc-1" });
+      openLink(`${hub}/todos?id=todo_1`);
+      expect(getPanel()).toEqual({ kind: "task", todo: "todo_1" });
+      closePanel();
+      narrow.value = true;
+      openLink(`${hub}/s/example-machine/abc-1`);
+      openLink(`${hub}/todos?id=todo_1`);
+      expect(getPanel()).toBeNull();
+      expect(vi.mocked(navigate).mock.calls.slice(-2)).toEqual([[{ name: "session", mid: "example-machine", sid: "abc-1" }], [{ name: "todos", id: "todo_1" }]]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("ignores malformed percent escapes in conversation links", () => {
