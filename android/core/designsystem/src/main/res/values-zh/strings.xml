@@ -125,6 +125,11 @@
     <plurals name="designsystem_sessions">
         <item quantity="other">%1$d 个会话</item>
     </plurals>
+    <!-- A herdr tab of several agents (#2320) -->
+    <string name="designsystem_tab_launcher">发起者</string>
+    <plurals name="designsystem_tab_agents">
+        <item quantity="other">%1$d 个 Agent</item>
+    </plurals>
     <string name="designsystem_group_expand">展开分组</string>
     <string name="designsystem_group_collapse">折叠分组</string>
     <string name="designsystem_machine_monitor">机器监控</string>

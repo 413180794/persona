@@ -43,6 +43,7 @@ internal fun ChatHeader(
     var tabName by rememberSaveable { mutableStateOf("") }
     val clipboard = LocalClipboardManager.current
     val peers = remember(session, sessions) { spaceCompanions(session, sessions) }
+    val places = remember(session, peers) { companionPlaces(session, peers) }
     val children = session?.subagents.orEmpty().filter { it.running && it.sessionId.isNotBlank() }
     val linkTitle = connectionTitle(connection)
     val online = connection == null || connection == ConnectionState.Online
@@ -155,7 +156,12 @@ internal fun ChatHeader(
             if (peers.isEmpty()) JEmptyState(stringResource(R.string.chat_chrome_peers_empty_title), stringResource(R.string.chat_chrome_peers_empty_text))
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 400.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
                 items(peers, key = { it.key.path }) { peer ->
-                    JRow(peer.displayTitle, subtitle = peer.slotName ?: peer.agentLabel,
+                    val place = places[peer.key]
+                    val where = peer.slotName ?: peer.agentLabel
+                    // the 发起者 says so; the panes it split off sit one step in, as on the Agents list (#2515)
+                    JRow(peer.displayTitle,
+                        modifier = if (place == CompanionPlace.Branch) Modifier.padding(start = Tokens.Space.l) else Modifier,
+                        subtitle = if (place == CompanionPlace.Launcher) stringResource(R.string.chat_tabs_launcher_subtitle, where) else where,
                         leading = { JStatusDot(Status.entries.firstOrNull { it.name == peer.agentState.name } ?: Status.Unknown) },
                         enabled = onOpenSession != null, onClick = { dialog = null; onOpenSession?.invoke(peer.key) })
                 }

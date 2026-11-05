@@ -41,6 +41,7 @@ class AgentsPreferences @Inject constructor(private val store: DataStore<Prefere
             range = AgentRange.entries.firstOrNull { it.name == p[agentRangeKey(scope)] } ?: AgentRange.Running,
             grouping = AgentGrouping.fromPreference(p[stringPreferencesKey("grouping")]),
             compact = p[booleanPreferencesKey("compact")] ?: false,
+            foldedTabs = p[foldedTabsKey].orEmpty(),
             pins = AgentPreferences(remote.pins.spaces, remote.pins.sessions, remote.pins.allowed),
             mutes = AgentPreferences(remote.mutes.spaces, remote.mutes.sessions, remote.mutes.allowed),
             seen = remote.seen,
@@ -64,6 +65,10 @@ class AgentsPreferences @Inject constructor(private val store: DataStore<Prefere
     suspend fun grouping(value: AgentGrouping) { store.edit { it[stringPreferencesKey("grouping")] = value.name } }
     suspend fun range(scope: String, value: AgentRange) { store.edit { it[agentRangeKey(scope)] = value.name } }
     suspend fun compact(value: Boolean) { store.edit { it[booleanPreferencesKey("compact")] = value } }
+    /** Folds or opens a herdr tab's agents in the list (#2320), kept on this phone by [AgentTab.foldKey]. */
+    suspend fun foldTab(key: String, folded: Boolean) {
+        store.edit { it[foldedTabsKey] = it[foldedTabsKey].orEmpty().let { keys -> if (folded) keys + key else keys - key } }
+    }
     suspend fun togglePin(id: String) = hub.togglePin(id)
     suspend fun toggleMute(id: String) = hub.toggleMute(id)
     suspend fun markSeen(sessions: List<Session>) {
@@ -71,9 +76,13 @@ class AgentsPreferences @Inject constructor(private val store: DataStore<Prefere
     }
 }
 
+private val foldedTabsKey = stringSetPreferencesKey("folded-tabs")
+
 data class AgentsPreferencesSnapshot(
     val grouping: AgentGrouping = AgentGrouping.Repo,
     val compact: Boolean = false,
+    /** The herdr tabs whose agents the list folds to the tab's row ([AgentTab.foldKey]); every other tab is open. */
+    val foldedTabs: Set<String> = emptySet(),
     val pins: AgentPreferences = AgentPreferences(),
     val mutes: AgentPreferences = AgentPreferences(),
     val seen: Map<String, String> = emptyMap(),

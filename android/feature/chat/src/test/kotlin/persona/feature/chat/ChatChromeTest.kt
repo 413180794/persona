@@ -68,6 +68,26 @@ class ChatChromeTest {
         assertNotEquals("已重命名", state.notice)
     }
 
+    @Test fun companionsListATabsAgentsTogetherWithTheLauncherFirst() {
+        // tab 1: this session (pane 1) split off from the 发起者 (pane 0), plus a third pane; tab 2: one agent
+        fun pane(id: String, slot: Int, index: Int?, state: String = "idle") = Session(machineId = "machine",
+            sessionId = id, spaceId = "space", slotId = "t$slot", slotIndex = slot, paneId = "w1:p$id", paneIndex = index, state = state)
+        val current = pane("b", 1, 1)
+        val launcher = pane("a", 1, 0)
+        val third = pane("c", 1, 2, "needs_you")
+        val other = pane("d", 2, 0, "working")
+        val peers = spaceCompanions(current, listOf(other, third, current, launcher))
+        // by tab, then by place: urgency no longer pulls a pane out of its tab's group
+        assertEquals(listOf("a", "c", "d"), peers.map { it.sessionId })
+        val places = companionPlaces(current, peers)
+        assertEquals(CompanionPlace.Launcher, places[launcher.key])
+        assertEquals(CompanionPlace.Branch, places[third.key])
+        assertEquals(CompanionPlace.Alone, places[other.key])
+        // the top-left pane a shell: the agents are peers, none marked
+        val peersOnly = listOf(current.copy(paneIndex = 1), third)
+        assertEquals(setOf(CompanionPlace.Alone), companionPlaces(current.copy(paneIndex = 1), peersOnly.drop(1)).values.toSet())
+    }
+
     @Test fun companionsStayInTheSameMachineAndSpaceAndCommandsQuoteShellInput() {
         val current = Session(machineId = "machine", sessionId = "current", spaceId = "space", cwd = "/workspace/project")
         val peer = current.copy(sessionId = "peer")

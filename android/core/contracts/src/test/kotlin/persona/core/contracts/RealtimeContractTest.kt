@@ -93,6 +93,14 @@ class RealtimeContractTest {
         assertFalse(state(listOf(working, replacement)).replaced)
         assertFalse(state(listOf(replacement.copy(machineId = "m_other"))).replaced)
         assertFalse(state(listOf(replacement.copy(spaceId = "other", paneId = "other"))).replaced)
+        // another live agent of the same tab (a pane it split off, #2320) is a sibling, not the gone session's replacement
+        assertEquals(0, existing.paneIndex)
+        val sibling = replacement.copy(paneId = "w1:p2E", paneIndex = 1)
+        assertFalse(state(listOf(sibling)).replaced)
+        assertTrue(state(listOf(sibling)).ended) // gone from the full list all the same
+        assertTrue(state(listOf(sibling, replacement)).replaced)
+        // without pane ids the tab is all there is to go by
+        assertTrue(state(listOf(replacement.copy(paneId = null))).replaced)
         assertTrue(state(listOf(working), stop = true).stopping)
         assertFalse(state(listOf(working.copy(status = "done")), stop = true).stopping)
         assertFalse(state(emptyList(), stop = true).stopping)

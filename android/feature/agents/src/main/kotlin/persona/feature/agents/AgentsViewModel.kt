@@ -234,6 +234,7 @@ internal class AgentsViewModel(
         preferences.grouping(group)
     }
     fun compact() = localChange { preferences.compact(!page.value.preferences.compact) }
+    fun foldTab(tab: AgentTab) = localChange { preferences.foldTab(tab.foldKey, tab.foldKey !in page.value.preferences.foldedTabs) }
     fun pin(row: AgentSession) = change { it.preference(pin = true, space = false, key = row.id) }
     fun mute(row: AgentSession) = change { it.preference(pin = false, space = false, key = row.id, spaceKey = row.spacePreferenceKey) }
     fun spacePin(session: Session) = change { it.preference(true, true, "${session.machineId}/${session.spaceName}") }

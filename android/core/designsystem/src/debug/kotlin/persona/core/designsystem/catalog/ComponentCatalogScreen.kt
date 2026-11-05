@@ -167,6 +167,21 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             }
         }
         item("agents-idle") { AgentIdleRow(2, onClick = { feedback = "展开空闲的会话" }) }
+        item("agents-tab") {
+            // a herdr tab of three agents (#2320): the tab's row, its 发起者 and two panes it split off
+            var folded by remember { mutableStateOf(false) }
+            val (lead, branch, done) = rows
+            Column {
+                AgentTabRow("#2", lead.title, lead.status, agents = rows.size, folded = folded, onToggle = { folded = !folded },
+                    onClick = { feedback = lead.title }, depth = 1, position = GroupPosition(false, folded), preview = lead.preview,
+                    statusText = lead.status.label)
+                if (!folded) rows.forEachIndexed { index, row ->
+                    AgentRow(row.title, row.status, onClick = { feedback = row.title }, depth = if (row === lead) 2 else 3,
+                        position = GroupPosition(false, index == rows.lastIndex), preview = row.preview, time = row.time, agent = row.agent,
+                        statusText = row.status.label, launcher = row === lead, branch = row === branch || row === done)
+                }
+            }
+        }
         item("agents-quiet") { AgentSpaceHeader("dotfiles", folded = true, onToggle = { feedback = "展开 dotfiles" }, quiet = true, sessions = 3) }
         item("agents-offline") {
             AgentTreeHeader("服务器", folded = true, onToggle = { feedback = "展开服务器" }, icon = PhIcons.HardDrives, online = false, detail = "1 个空间，2 个会话")

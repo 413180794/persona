@@ -1,6 +1,6 @@
 package persona.core.domain.sort
 
-/** Space detail always includes pinned members and preserves the terminal's tab order. */
+/** Space detail always includes pinned members and preserves the terminal's tab order, and each tab's pane order. */
 data class AgentSpace(val id: String, val name: String, val members: List<AgentSession>) {
     val machineId: String get() = members.first().session.machineId
     val preferenceKey: String get() = "$machineId/$name"
@@ -14,7 +14,8 @@ fun agentSpaces(sessions: List<AgentSession>): List<AgentSpace> = sessions
     .filter { it.isLive && !it.session.assistant }
     .groupBy { "${it.session.machineId}/${it.session.spaceId ?: "-"}" }
     .map { (id, members) -> AgentSpace(id, members.first().session.let { it.spaceName ?: it.folderName },
-        members.sortedWith(compareBy<AgentSession> { it.session.slotIndex ?: 0 }.thenBy { it.session.sessionId })) }
+        // the tabs in order, a tab's agents by their place in it (#2320: the 发起者 first)
+        members.sortedWith(compareBy<AgentSession> { it.session.slotIndex ?: 0 }.thenBy { it.session.slotId.orEmpty() }.thenBy(PaneOrder) { it.session })) }
     .sortedWith(compareBy<AgentSpace> { it.priority }.thenByDescending { it.updatedAt }.thenBy { it.id })
 
 fun AgentPreferences.togglePin(id: String, space: Boolean = false): AgentPreferences {

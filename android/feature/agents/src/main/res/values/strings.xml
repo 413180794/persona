@@ -389,4 +389,6 @@
     <string name="agents_picker_empty">No open to-dos</string>
     <string name="agents_picker_empty_hint">Create one in the to-do list first.</string>
     <string name="agents_picker_current">Current</string>
+    <!-- A herdr tab's row (#2320): the most urgent agent's latest words, after its name -->
+    <string name="agents_tab_lead_words">%1$s: %2$s</string>
 </resources>

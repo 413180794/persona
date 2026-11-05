@@ -80,6 +80,9 @@
     <string name="chat_starting_failed">起動できませんでした：%1$s</string>
     <string name="chat_starting">%1$sを起動中です。準備ができたらメッセージを送信します</string>
     <string name="chat_tabs_tab_description">%1$s、%2$s</string>
+    <string name="chat_tabs_launcher_chip">%1$s 起点</string>
+    <string name="chat_tabs_launcher_description">%1$s（起点）、%2$s</string>
+    <string name="chat_tabs_launcher_subtitle">起点、%1$s</string>
     <plurals name="chat_tabs_all">
         <item quantity="other">同じスペースのエージェント%1$d件</item>
     </plurals>
@@ -87,7 +90,7 @@
         <item quantity="other">同じスペースのエージェント%1$d件、要対応のエージェントあり</item>
     </plurals>
     <plurals name="chat_tabs_sheet_title">
-        <item quantity="other">%1$d個のタブ</item>
+        <item quantity="other">エージェント%1$d件</item>
     </plurals>
     <string name="chat_handoff_failed">Personaに渡せませんでした。もう一度お試しください</string>
     <string name="chat_request_draft_page_only">下書きはこのページにのみ一時保存されます</string>

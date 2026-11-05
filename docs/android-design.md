@@ -97,7 +97,7 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 | `DecisionDock` | 对话里待处理的请求，代替输入框 |
 | `DecisionOption` / `DecisionButtons` / `DecisionAdvice` | 选项（推荐的那个在三种风格里各有突出方式）、回答按钮、Persona 的建议 |
 | `MachineChip` | Agents 页顶部的电脑芯片（全部机器 + 每台电脑）：该风格的筛选 chip，设备图标的角上一个在线点，名字后面是计数 |
-| `AgentTreeHeader` / `AgentSpaceHeader` / `AgentRow` / `AgentIdleRow` | Agents 树（见 2.4 节）：第一层（电脑，也用于置顶、按状态、历史项目这些段）、空间（按仓库时也是仓库和工作树，带 `icon`）、会话行（玻璃和晨报是背景上的一行，看板是进程单；行上的标记 `RowFlag`、事实 `RowFact`）、「还有 N 个空闲」。栏头上的小图标按钮（仪表、空间的 `⋯`）是 `HeadingAction`。Agents 页、空间页、组件目录和界面风格的预览用的都是这一套，不另写 |
+| `AgentTreeHeader` / `AgentSpaceHeader` / `AgentRow` / `AgentTabRow` / `AgentIdleRow` | Agents 树（见 2.4 节）：第一层（电脑，也用于置顶、按状态、历史项目这些段）、空间（按仓库时也是仓库和工作树，带 `icon`）、会话行（玻璃和晨报是背景上的一行，看板是进程单；行上的标记 `RowFlag`、事实 `RowFact`；发起者的 `launcher` 标记、分支的 `branch` 细线）、一个 tab 里有几个 Agent 时的 tab 行（行尾「N 个 Agent」收起 / 展开）、「还有 N 个空闲」。栏头上的小图标按钮（仪表、空间的 `⋯`）是 `HeadingAction`。Agents 页、空间页、组件目录和界面风格的预览用的都是这一套，不另写 |
 | `UserBubbleFrame` / `UserBubble` / `WorkGroup` / `WorkStep` / `PlanCard` / `TimelineMark` | 对话：用户消息（自己发的三套风格都填 `palette.userBubble`，即 iOS 液态玻璃的浅蓝 `#DCEAFF` / `#1D3557`；别的会话、别的对话转来的和飞书的传 `own = false` 保持各风格原来的底，判断在 `core/domain` `isOwnMessage`，#2643）、折叠的工作过程（`peek`：运行中露出的最新几步）、每一步、计划卡（Step N/M）、分隔线 |
 | `ComposerFrame` / `ComposerTextField` / `SendButton` / `JumpToLatest` | 输入框的外框、输入、发送 / 停止、回到最新 |
 | `MessageItem` / `DraftPreview` | 收件箱的一项、Persona 拟好的回复 |
@@ -134,6 +134,7 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 - 空闲空间（里面全是已看的会话）不再收进单独的「空闲的空间」分组：留在所属电脑下面，排在有动静的空间后面，默认收起，名字用 `callout` 和 `ink2`，右边写「N 个会话」；搜索时自动展开。
 - 只看一台电脑时（芯片选中它），树不再画这台电脑的栏头（标题和芯片已经说了），空间顶到第一层。
 - 按仓库（#2252，没选过分组时的默认，同 iOS #2161；网页也有这种分组）：电脑 → 仓库 → 工作树 → 会话，仍是这套组件。仓库和工作树都用 `AgentSpaceHeader`，靠前面的小图标（`icon`：文件夹是仓库，房子是主工作树，分叉是别的工作树）和多一级缩进区分；只有主工作树的仓库不画工作树一层，会话直接挂在仓库下面。没有动静的仓库和空闲空间一样：排在后面、默认收起、写「N 个会话」；没有动静的工作树也收起，但不挪位置（主工作树在前、其余按名字）。TalkBack 按层读：箭头读「展开 / 折叠仓库（主工作树、工作树）」，图标读层名，栏头带「已展开 / 已折叠」（`AgentSpaceHeader` 的 `kind`）。电脑栏头的第二行写「N 个仓库，M 个会话」。树怎么拍平还是 `agentTreeEntries`：工作树组的 `under` 指向所属仓库，仓库收起时跳过它的工作树。
+- 同一个 herdr tab 里的几个 Agent（#2515，只在按机器时）：空间下面先是 tab 行（`AgentTabRow`，和会话行同一套画法：最急的那个的状态标记、tab 名 + 它的标题、状态字和最新一句，行尾「N 个 Agent」+ 箭头收起 / 展开），下面每个 Agent 一行、缩进一级：发起者标题后面一个 `JTag`「发起者」，它分出的窗格再缩进一级，左边一条从发起者的状态标记垂下来的细线（`AgentRow(branch = true)`；看板从进程单的色块中线垂下）。收起时 tab 行就是这一组。细节见 `docs/android.md`「同一个 tab 里的几个 Agent」。
 - 页面顶部依次是：搜索框、电脑芯片（全部机器 + 每台电脑：设备图标的角上一个在线点、名字、计数，可横滑；再点一次选中的电脑回到全部）、快速筛选。芯片的计数是选中它时列表会显示多少个会话（跟着范围、搜索和快速筛选走）。
 - 机器监控：「列表设置」面板里的「机器监控」进机器列表，电脑栏头的仪表按钮进这台电脑的详情。
 

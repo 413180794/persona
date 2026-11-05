@@ -41,4 +41,24 @@ class ChatSiblingTabsTest {
         assertEquals("#3", tabLabel(s("a", slot = 3)))
         assertEquals("a", tabLabel(Session(sessionId = "a", title = "a")))
     }
+
+    @Test fun aTabsAgentsSitTogetherInPaneOrderTheLauncherMarked() {
+        fun pane(id: String, slot: Int, place: Int?, agent: String = "claude") =
+            Session(machineId = "mac", sessionId = id, spaceId = "ws1", slotId = "t$slot", slotIndex = slot, paneId = "w1:$id",
+                paneIndex = place, agent = agent, status = "working")
+        val lead = pane("lead", 1, 0)
+        val all = listOf(pane("solo", 2, 0), pane("review", 1, 1, agent = "codex"), lead, pane("tests", 1, 2))
+        val tabs = spaceTabs(lead, all)
+        assertEquals(listOf("lead", "review", "tests", "solo"), tabs.map { it.sessionId })
+        val labels = siblingTabs(tabs)
+        // two of one kind told apart by their place
+        assertEquals(listOf("#1 Claude 1", "#1 Codex", "#1 Claude 2", "#2"), labels.map { it.name })
+        assertEquals(listOf(true, false, false, false), labels.map { it.launcher })
+        // the top left pane is a shell: peers, none marked
+        val peers = siblingTabs(spaceTabs(pane("a", 3, 1), listOf(pane("a", 3, 1), pane("b", 3, 2))))
+        assertEquals(listOf(false, false), peers.map { it.launcher })
+        // a shared tab named after a long task: its chips say the tab's number, not the name, so the row is not one chip
+        val named = listOf(lead.copy(slotName = "一个很长很长的任务标题，被 herdr 拿来当标签页的名字"), pane("review", 1, 1, agent = "codex"))
+        assertEquals(listOf("#1 Claude", "#1 Codex"), siblingTabs(spaceTabs(named[0], named)).map { it.name })
+    }
 }

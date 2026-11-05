@@ -149,7 +149,11 @@ internal fun AgentsScreen(
             onMarkRead = unread.takeIf { it.isNotEmpty() }?.let { rows -> { model.markRead(rows) } },
             onOpen = if (inList) ({ navigator.navigate(SpaceRoute(space.id, space.name)) }) else null, compact = inList)
     }
-    val tree = remember(page.list, page.settings.machineFilter) { agentTreeEntries(page.list, page.settings.machineFilter) }
+    // 按机器 shows a herdr tab's agents as a group (#2320), as the web's sidebar; the other groupings list one agent a row
+    val tabs = page.preferences.grouping == AgentGrouping.MachineSpace
+    val tree = remember(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs) {
+        agentTreeEntries(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs)
+    }
     val spacesById = remember(spaces, page.preferences.grouping, page.list) {
         when (page.preferences.grouping) {
             AgentGrouping.MachineSpace -> spaces.associateBy { it.id }
@@ -304,7 +308,11 @@ internal fun AgentsScreen(
                             row.id in page.preferences.pins.sessions, page.preferences.mutes.mutes(row),
                             depth = entry.depth, position = GroupPosition(entry.first, entry.last), located = entry.located,
                             onOpen = { openRow(row) }, menuItems = { rowMenu(row) },
-                            onClose = closeSwipe(row, operations.busy) { operationDialog = AgentOperationDialog.Close(row.session) })
+                            onClose = closeSwipe(row, operations.busy) { operationDialog = AgentOperationDialog.Close(row.session) },
+                            launcher = entry.launcher, branch = entry.branch)
+                    }
+                    is TreeTabEntry -> item(entry.key, contentType = "tab") {
+                        AgentTabEntryRow(entry, now, page.preferences.compact, onOpen = { openRow(entry.tab.lead) }, onToggle = { model.foldTab(entry.tab) })
                     }
                     is TreeIdleEntry -> item(entry.key, contentType = "idle") {
                         AgentIdleRow(entry.hidden, onClick = { model.showIdle(entry.group) }, depth = entry.depth)
@@ -422,6 +430,8 @@ internal fun SlotRow(
     slotLabel: String? = null, requestCount: Int = 0,
     /** Swiping the row left offers 关闭 (iOS); null where the agent cannot be closed from here ([closeSwipe]). */
     onClose: (() -> Unit)? = null,
+    /** Under its herdr tab (#2320): the tab's 发起者, or a pane it split off. */
+    launcher: Boolean = false, branch: Boolean = false,
 ) {
     var menu by remember { mutableStateOf(false) }
     val session = row.session
@@ -464,9 +474,33 @@ internal fun SlotRow(
             if (pinned) add(RowFlag(stringResource(R.string.agents_row_pinned), PhIcons.PushPin))
             if (muted) add(RowFlag(stringResource(R.string.agents_row_muted), PhIcons.Prohibit))
         },
+        launcher = launcher, branch = branch,
     )
     }
     if (menu) JActionSheet(menuItems(), { menu = false }, title = session.displayTitle)
+}
+
+/**
+ * A herdr tab with several agents (#2320), as the web's overview row: its `#N` or name and the task (the 发起者's
+ * title, else the first pane's), then the most urgent agent's state and latest words, after its name when it is not the
+ * one the title is from; tapping it opens that agent, 「N 个 Agent」 folds its agents to this row and opens them again.
+ * Time and agent kind stay on the agents' own rows: the tab's row has 「N 个 Agent」 at its end instead.
+ */
+@Composable
+internal fun AgentTabEntryRow(entry: TreeTabEntry, now: Instant, compact: Boolean, onOpen: () -> Unit, onToggle: () -> Unit) {
+    val lead = entry.tab.lead
+    val session = lead.session
+    val titled = entry.tab.launcher ?: entry.tab.members.first()
+    val words = session.workLine(now)?.text() ?: session.lastText?.takeIf { it.isNotBlank() }
+    AgentTabRow(
+        label = titled.session.slotLabel.orEmpty(), title = titled.session.displayTitle, status = lead.state.designStatus,
+        agents = entry.tab.members.size, folded = entry.folded, onToggle = onToggle, onClick = onOpen,
+        depth = entry.depth, position = GroupPosition(entry.first, entry.last),
+        preview = words?.let { if (lead.id == titled.id) it else stringResource(R.string.agents_tab_lead_words, session.agentLabel, it) },
+        statusText = lead.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label, compact = compact,
+        // folded, the tab's row stands for its agents: it is the one lit while one of them is open
+        selected = entry.folded && entry.tab.members.any { isSessionSelected(LocalDetailKey.current, it.session.key) },
+    )
 }
 
 /** Swiping a row left closes the agent (iOS): only a live agent in a terminal pane, while nothing else is being saved. */

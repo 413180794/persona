@@ -213,6 +213,11 @@ data class Session(
     @SerialName("space_name") val spaceName: String? = null,
     @SerialName("slot_name") val slotName: String? = null,
     @SerialName("slot_index") val slotIndex: Int? = null,
+    /**
+     * The pane's place in its tab (#2320; docs/agent-states.md「一个 tab 里的几个 pane」): 0 is the top-left pane, the one
+     * the others were split from (the tab's 发起者). Absent when the host gives no layout.
+     */
+    @SerialName("pane_index") val paneIndex: Int? = null,
     @WireEnum("needs_you", "unread", "working", "idle", "offline", "unknown")
     @SerialName("state") val state: String? = AgentState.of(null, status).wire,
     @WireTime @SerialName("seen_at") val seenAt: String? = null,

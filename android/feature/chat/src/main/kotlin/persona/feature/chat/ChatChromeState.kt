@@ -10,8 +10,11 @@ import persona.core.contracts.api.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import persona.core.domain.sort.PaneOrder
 import persona.core.domain.sort.SessionRename
 import persona.core.domain.sort.SessionRenamer
+import persona.core.domain.sort.launcherOf
+import persona.core.domain.sort.tabKey
 
 internal fun spaceCompanions(session: Session?, sessions: List<Session>): List<Session> {
     if (session == null) return emptyList()
@@ -20,7 +23,24 @@ internal fun spaceCompanions(session: Session?, sessions: List<Session>): List<S
         other.machineId == session.machineId && other.key != session.key && !other.assistant &&
             if (space != null) (other.spaceId?.takeIf(String::isNotBlank) ?: other.workspaceId) == space
             else !session.spaceName.isNullOrBlank() && other.spaceName == session.spaceName
-    }.sortedWith(compareBy<Session> { it.agentState.priority }.thenBy { it.slotIndex ?: Int.MAX_VALUE }.thenBy { it.sessionId })
+    // tab by tab, a tab's agents together by their place in it (#2515, as the web's tab groups): the 发起者 first
+    }.sortedWith(compareBy<Session> { it.slotIndex ?: Int.MAX_VALUE }.thenBy { it.slotId.orEmpty() }.then(PaneOrder))
+}
+
+/** How a companion sits in its tab's group (#2515): the 发起者, one of the panes it split off, or alone. */
+internal enum class CompanionPlace { Launcher, Branch, Alone }
+
+/**
+ * Each companion's place, counting the open session too: a tab of two agents, this one and a companion, still has its
+ * 发起者 (launcherOf). Without a launcher (the top-left pane is a shell) the tab's agents are peers, all [Alone].
+ */
+internal fun companionPlaces(session: Session?, companions: List<Session>): Map<SessionKey, CompanionPlace> {
+    val all = (listOfNotNull(session) + companions).filter { it.tabKey != null }
+    return all.groupBy { it.tabKey!! }.values.flatMap { tab ->
+        val panes = tab.sortedWith(PaneOrder)
+        val launcher = launcherOf(panes) { it }
+        panes.map { it.key to when { launcher == null -> CompanionPlace.Alone; it.key == launcher.key -> CompanionPlace.Launcher; else -> CompanionPlace.Branch } }
+    }.toMap()
 }
 
 internal fun connectionTitle(res: Resources, state: ConnectionState?): String? = when (state) {

@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -300,6 +301,10 @@ fun AgentRow(
     compact: Boolean = false,
     muted: Boolean = false,
     selected: Boolean = false,
+    label: String? = null,
+    launcher: Boolean = false,
+    branch: Boolean = false,
+    end: (@Composable () -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
@@ -314,10 +319,13 @@ fun AgentRow(
     val text: @Composable ColumnScope.() -> Unit = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    title, style = type.label.copy(fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Medium),
-                    color = if (muted) palette.ink2 else palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
-                )
+                LabeledTitle(label, Modifier.weight(1f, fill = false)) {
+                    Text(
+                        title, style = type.label.copy(fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Medium),
+                        color = if (muted) palette.ink2 else palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (launcher) { Spacer(Modifier.width(Tokens.Space.s - Tokens.Space.xxs)); JTag(stringResource(R.string.designsystem_tab_launcher)) }
                 flags.forEach { flag ->
                     Spacer(Modifier.width(Tokens.Space.xs))
                     JIcon(flag.icon, flag.label, size = Caret, tint = if (flag.caution) palette.cautionText else palette.ink3)
@@ -344,21 +352,27 @@ fun AgentRow(
             )
         }
     }
+    // a branch hangs off its 发起者 one step up: a hairline down from under that row's mark
+    val guide = if (!branch) Modifier else Modifier.drawBehind {
+        val x = (if (board) Step * (depth - 1) + Holder / 2 else (Step * (depth - 1) + (Caret - mark) / 2).coerceAtLeast(None) + mark / 2).toPx()
+        drawLine(palette.line, Offset(x, 0f), Offset(x, size.height), Hairline.toPx())
+    }
     if (board) {
         val shape = RoundedCornerShape(PersonaTheme.shapes.card)
         Row(
-            modifier.fillMaxWidth().padding(start = start, bottom = if (position.last) None else Tokens.Space.s - Tokens.Space.xxs).clip(shape)
+            modifier.fillMaxWidth().then(guide).padding(start = start, bottom = if (position.last) None else Tokens.Space.s - Tokens.Space.xxs).clip(shape)
                 .background(palette.surface).drawBehind { drawRect(tone.dot, size = size.copy(width = Holder.toPx())) }
                 .border(Hairline, palette.line, shape).then(click).stableAlpha(if (muted) 0.75f else 1f),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.width(Holder), contentAlignment = Alignment.Center) { HolderGlyph(shown) }
             Column(Modifier.weight(1f).padding(horizontal = Tokens.Space.m - Tokens.Space.xxs, vertical = Tokens.Space.s - Tokens.Space.xxs), content = text)
+            end?.invoke()
         }
         return
     }
     Row(
-        modifier.fillMaxWidth().then(click)
+        modifier.fillMaxWidth().then(guide).then(click)
             .drawBehind {
                 if (!position.first) drawLine(palette.line, Offset((start + mark + gap).toPx(), 0f), Offset(size.width, 0f), Hairline.toPx())
             }
@@ -368,6 +382,79 @@ fun AgentRow(
         Box(Modifier.size(mark), contentAlignment = Alignment.Center) { JStatusMark(shown) }
         Spacer(Modifier.width(gap))
         Column(Modifier.weight(1f).padding(top = if (compact) None else Tokens.Space.xxs), content = text)
+        end?.let { Box(Modifier.align(Alignment.CenterVertically)) { it() } }
+    }
+}
+
+/**
+ * A herdr tab holding several agents (#2320): drawn as the row of the most urgent of them ([title], [status], its
+ * latest words) after the tab's [label] (`#2` or its name), with 「N 个 Agent」 at the end that folds and opens the
+ * tab's agents ([onToggle]; they are listed under it as [AgentRow]s, the 发起者 marked as the [launcher] and the panes it
+ * split off one step further in as [branch]es). Tapping the row opens that most urgent agent ([onClick]).
+ */
+@Composable
+fun AgentTabRow(
+    label: String,
+    title: String,
+    status: Status,
+    agents: Int,
+    folded: Boolean,
+    onToggle: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    depth: Int = 0,
+    position: GroupPosition = GroupPosition.Single,
+    preview: String? = null,
+    time: String? = null,
+    agent: String? = null,
+    statusText: String? = null,
+    compact: Boolean = false,
+    selected: Boolean = false,
+) = AgentRow(
+    title, status, onClick, modifier, depth = depth, position = position, preview = preview, time = time, agent = agent,
+    statusText = statusText, compact = compact, selected = selected, label = label.takeIf { it.isNotBlank() },
+    end = { TabToggle(agents, folded, onToggle) },
+)
+
+/** 「N 个 Agent」 and a caret: folds a tab's agents to its row and opens them again. */
+@Composable
+private fun TabToggle(agents: Int, folded: Boolean, onToggle: () -> Unit) {
+    val palette = PersonaTheme.palette
+    val count = pluralStringResource(R.plurals.designsystem_tab_agents, agents, agents)
+    val state = stringResource(if (folded) R.string.designsystem_folded else R.string.designsystem_expanded)
+    Row(
+        Modifier.heightIn(min = Action).clip(RoundedCornerShape(PersonaTheme.shapes.chip)).clickable(role = Role.Button, onClick = onToggle)
+            .clearAndSetSemantics { contentDescription = count; stateDescription = state }
+            .padding(horizontal = Tokens.Space.s),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(count, style = PersonaTheme.type.micro, color = palette.ink2, maxLines = 1)
+        Spacer(Modifier.width(Tokens.Space.xs))
+        JIcon(if (folded) PhIcons.CaretRight else PhIcons.CaretDown, null, size = Caret, tint = palette.ink3)
+    }
+}
+
+/**
+ * A row's title after an optional [label] (a tab's `#2` or name): the label takes at most half the width, so a long tab
+ * name truncates instead of hiding the title, and the title gets the rest.
+ */
+@Composable
+private fun LabeledTitle(label: String?, modifier: Modifier, title: @Composable () -> Unit) {
+    if (label == null) { Box(modifier) { title() }; return }
+    val palette = PersonaTheme.palette
+    val gap = Tokens.Space.s - Tokens.Space.xxs
+    Layout({
+        Text(label, style = PersonaTheme.type.caption.copy(fontWeight = FontWeight.Medium), color = palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        title()
+    }, modifier) { measurables, constraints ->
+        val space = gap.roundToPx()
+        val first = measurables[0].measure(constraints.copy(minWidth = 0, maxWidth = constraints.maxWidth / 2))
+        val second = measurables[1].measure(constraints.copy(minWidth = 0, maxWidth = (constraints.maxWidth - first.width - space).coerceAtLeast(0)))
+        val height = maxOf(first.height, second.height)
+        layout(first.width + space + second.width, height) {
+            first.placeRelative(0, (height - first.height) / 2)
+            second.placeRelative(first.width + space, (height - second.height) / 2)
+        }
     }
 }
 

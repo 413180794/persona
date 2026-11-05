@@ -59,9 +59,14 @@ data class SessionRuntimeState(
             )
         }
 
-        private fun sameSlot(a: Session, b: Session): Boolean = when {
+        /**
+         * Whether [b] took [a]'s place: the same tab and, when both name their pane, the same pane. A tab can hold several
+         * agents (#2320): another live pane of the tab is a sibling, not the gone session's replacement.
+         */
+        internal fun sameSlot(a: Session, b: Session): Boolean = when {
             !a.slotId.isNullOrEmpty() && !b.slotId.isNullOrEmpty() ->
-                !a.spaceId.isNullOrEmpty() && a.spaceId == b.spaceId && a.slotId == b.slotId && a.spaceKind == b.spaceKind
+                !a.spaceId.isNullOrEmpty() && a.spaceId == b.spaceId && a.slotId == b.slotId && a.spaceKind == b.spaceKind &&
+                    (a.paneId.isNullOrEmpty() || b.paneId.isNullOrEmpty() || a.paneId == b.paneId)
             !a.paneId.isNullOrEmpty() -> a.paneId == b.paneId
             else -> false
         }

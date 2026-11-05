@@ -128,7 +128,7 @@ node 用 herdr 的 `session.snapshot`（一次拿到 workspace、tab、agent）�
   左上是 shell 不是 Agent 时，组里没有 0 号，几个 Agent 平级（网页不标发起者）。
 - 不推断跨 tab 的父子关系（Agent 把子任务开在别的 tab / workspace）；以后需要时再约定显式标记（类似待办的 `persona_from`）。
 
-网页的表现见 `docs/web.md`；iOS / Android 还按空间列每个会话（网页验收后再跟上）。
+网页的表现见 `docs/web.md`；Android 见 `docs/android.md`「同一个 tab 里的几个 Agent」（#2515）；iOS 还按空间列每个会话（网页验收后再跟上）。
 
 App 里的表现：
 

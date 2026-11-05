@@ -376,4 +376,6 @@
     <string name="agents_picker_empty">未完了のToDoはありません</string>
     <string name="agents_picker_empty_hint">まずToDoリストで作成してください。</string>
     <string name="agents_picker_current">現在</string>
+    <!-- A herdr tab's row (#2320): the most urgent agent's latest words, after its name -->
+    <string name="agents_tab_lead_words">%1$s：%2$s</string>
 </resources>

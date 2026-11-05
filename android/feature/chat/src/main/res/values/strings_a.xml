@@ -82,6 +82,9 @@
     <string name="chat_starting_failed">Didn\'t start: %1$s</string>
     <string name="chat_starting">Starting %1$s. Messages go out once it\'s ready.</string>
     <string name="chat_tabs_tab_description">%1$s, %2$s</string>
+    <string name="chat_tabs_launcher_chip">%1$s Lead</string>
+    <string name="chat_tabs_launcher_description">%1$s (lead), %2$s</string>
+    <string name="chat_tabs_launcher_subtitle">Lead, %1$s</string>
     <plurals name="chat_tabs_all">
         <item quantity="one">%1$d agent in this space</item>
         <item quantity="other">%1$d agents in this space</item>
@@ -91,8 +94,8 @@
         <item quantity="other">%1$d agents in this space, an agent needs you</item>
     </plurals>
     <plurals name="chat_tabs_sheet_title">
-        <item quantity="one">%1$d tab</item>
-        <item quantity="other">%1$d tabs</item>
+        <item quantity="one">%1$d agent</item>
+        <item quantity="other">%1$d agents</item>
     </plurals>
     <string name="chat_handoff_failed">Couldn\'t hand it to Persona. Try again.</string>
     <string name="chat_request_draft_page_only">The draft is kept on this page only</string>

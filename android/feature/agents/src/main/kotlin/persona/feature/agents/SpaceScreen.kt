@@ -44,11 +44,16 @@ internal fun SpaceScreen(
                     JRow(stringResource(R.string.agents_directory), subtitle = space.cwd, leadingIcon = PhIcons.FolderSimple)
                     if (busy) JLinearProgress(null)
                 }
+                // the agents of one tab follow each other in pane order: the 发起者 marked, the panes it split off under it (#2320)
+                val tabs = agentTabs(space.members)
                 itemsIndexed(space.members, key = { _, row -> row.id }) { index, row ->
                     val requests = pending.count { it.sessionKey == row.session.key }
+                    val tab = row.session.tabKey?.let(tabs::get)
+                    val branch = tab?.isBranch(row) == true
                     SlotRow(row, machines.firstOrNull { it.id == row.session.machineId }?.displayName,
                         AgentRowMetadata(), now, false, row.id in preferences.pins.sessions, preferences.mutes.mutes(row),
-                        depth = 0, position = GroupPosition.of(index, space.members.size), located = false,
+                        depth = if (branch) 1 else 0, position = GroupPosition.of(index, space.members.size), located = false,
+                        launcher = tab?.launcher?.id == row.id, branch = branch,
                         onOpen = { onOpen(row) }, menuItems = { sessionMenu(row) },
                         slotLabel = row.session.slotName?.takeIf { it.isNotBlank() && it != row.session.displayTitle }
                             // herdr's default tab names are numbers; a bare 「1」 reads as a count, so say #1.

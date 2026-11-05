@@ -376,4 +376,6 @@
     <string name="agents_picker_empty">暂无未完成待办</string>
     <string name="agents_picker_empty_hint">先在待办列表新建一个待办。</string>
     <string name="agents_picker_current">当前</string>
+    <!-- A herdr tab's row (#2320): the most urgent agent's latest words, after its name -->
+    <string name="agents_tab_lead_words">%1$s：%2$s</string>
 </resources>

@@ -80,6 +80,9 @@
     <string name="chat_starting_failed">没有启动起来：%1$s</string>
     <string name="chat_starting">正在启动 %1$s，消息会在它就绪后发出</string>
     <string name="chat_tabs_tab_description">%1$s，%2$s</string>
+    <string name="chat_tabs_launcher_chip">%1$s 发起</string>
+    <string name="chat_tabs_launcher_description">%1$s（发起者），%2$s</string>
+    <string name="chat_tabs_launcher_subtitle">发起者，%1$s</string>
     <plurals name="chat_tabs_all">
         <item quantity="other">同一空间的 %1$d 个 Agent</item>
     </plurals>
@@ -87,7 +90,7 @@
         <item quantity="other">同一空间的 %1$d 个 Agent，有 Agent 需要你</item>
     </plurals>
     <plurals name="chat_tabs_sheet_title">
-        <item quantity="other">%1$d 个标签页</item>
+        <item quantity="other">%1$d 个 Agent</item>
     </plurals>
     <string name="chat_handoff_failed">没能交给 Persona，请重试</string>
     <string name="chat_request_draft_page_only">草稿暂存于当前页面</string>

@@ -37,9 +37,24 @@ internal data class TreeGroupEntry(val group: AgentListGroup, val space: Boolean
     override val key: String get() = "group:${group.id}"
 }
 
-/** A session. [located] rows sit outside the computer tree and show where they run. */
-internal data class TreeRowEntry(val row: AgentSession, val depth: Int, val first: Boolean, val last: Boolean, val located: Boolean) : AgentTreeEntry {
+/**
+ * A session. [located] rows sit outside the computer tree and show where they run. A row under a [TreeTabEntry] says
+ * whether it is its tab's [launcher] (发起者) or a [branch] the 发起者 split off, drawn one step further in.
+ */
+internal data class TreeRowEntry(
+    val row: AgentSession, val depth: Int, val first: Boolean, val last: Boolean, val located: Boolean,
+    val launcher: Boolean = false, val branch: Boolean = false,
+) : AgentTreeEntry {
     override val key: String get() = "session:${row.id}"
+}
+
+/**
+ * A herdr tab holding several agents of the space (#2320, docs/agent-states.md「一个 tab 里的几个 pane」): its row
+ * speaks for the most urgent of them and says how many there are; its agents follow it in pane order unless [folded].
+ * Open by default (the point is to see which agents belong together); folded by hand it stays folded ([AgentTab.foldKey]).
+ */
+internal data class TreeTabEntry(val tab: AgentTab, val depth: Int, val first: Boolean, val last: Boolean, val folded: Boolean) : AgentTreeEntry {
+    override val key: String get() = "tab:${tab.key}"
 }
 
 /** Finished sessions of an active space that are tucked away until asked for. */
@@ -49,16 +64,46 @@ internal data class TreeIdleEntry(val group: AgentListGroup, val hidden: Int, va
 
 private const val QUIET = "quiet"
 
-/** Flattens the list into tree lines: 置顶 first, then every computer with its spaces, then any other groups. */
-internal fun agentTreeEntries(list: AgentListResult, machineFilter: String): List<AgentTreeEntry> {
+/**
+ * Flattens the list into tree lines: 置顶 first, then every computer with its spaces, then any other groups. With
+ * [tabs] (按机器, as the web's sidebar) a space's agents that share a herdr tab are one [TreeTabEntry] with its agents
+ * under it, listed where its most urgent agent would be; a tab is shown whole once one of its agents is, and the
+ * tabs in [foldedTabs] ([AgentTab.foldKey]) are folded to their row.
+ */
+internal fun agentTreeEntries(
+    list: AgentListResult, machineFilter: String, tabs: Boolean = false, foldedTabs: Set<String> = emptySet(),
+): List<AgentTreeEntry> {
     val entries = mutableListOf<AgentTreeEntry>()
     fun group(group: AgentListGroup, space: Boolean, depth: Int, first: Boolean) {
         entries += TreeGroupEntry(group, space, depth, first)
         if (group.folded) return
-        group.visibleRows.forEachIndexed { index, row ->
-            entries += TreeRowEntry(row, depth, index == 0, index == group.visibleRows.lastIndex, located = !space)
+        val byTab = if (tabs && space) agentTabs(group.rows) else emptyMap()
+        // each line is a row of its own or a tab of several, in the group's order
+        val lines = mutableListOf<Any>()
+        val placed = mutableSetOf<String>()
+        group.visibleRows.forEach { row ->
+            val tab = row.session.tabKey?.let(byTab::get)
+            if (tab == null) lines += row else if (placed.add(tab.key)) lines += tab
         }
-        val hidden = group.rows.size - group.visibleRows.size
+        var shown = 0
+        lines.forEachIndexed { index, line ->
+            val firstLine = index == 0
+            val lastLine = index == lines.lastIndex
+            when (line) {
+                is AgentSession -> { shown++; entries += TreeRowEntry(line, depth, firstLine, lastLine, located = !space) }
+                is AgentTab -> {
+                    val folded = line.foldKey in foldedTabs
+                    shown += line.members.size
+                    entries += TreeTabEntry(line, depth, firstLine, lastLine && folded, folded)
+                    if (!folded) line.members.forEachIndexed { at, row ->
+                        val branch = line.isBranch(row)
+                        entries += TreeRowEntry(row, depth + if (branch) 2 else 1, first = false, last = lastLine && at == line.members.lastIndex,
+                            located = false, launcher = row.id == line.launcher?.id, branch = branch)
+                    }
+                }
+            }
+        }
+        val hidden = group.rows.size - shown
         if (hidden > 0) entries += TreeIdleEntry(group, hidden, depth)
     }
     val byId = list.groups.associateBy { it.id }

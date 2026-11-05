@@ -69,6 +69,7 @@ class AgentRepoTreeShotsTest {
                                 position = GroupPosition(entry.first, entry.last), time = "刚刚",
                                 statusText = entry.row.state.takeIf { it != persona.core.contracts.AgentState.Idle }?.label)
                             is TreeIdleEntry -> AgentIdleRow(entry.hidden, {}, depth = entry.depth)
+                            is TreeTabEntry -> error("按仓库 lists one agent a row")
                         }
                     }
                 }

@@ -112,4 +112,51 @@ class AgentsTreeTest {
         val folded = agentTreeEntries(buildAgentList(repoRows, machines, settings = byRepo.copy(machineFilter = "mac", folded = setOf("repo/mac//code/app"))), "mac")
         assertEquals(listOf("group:repo/mac//code/app", "group:tree/mac//code/notes"), folded.take(2).map { it.key })
     }
+
+    // #2320: a herdr tab holding the 发起者 and two panes it split off, beside a tab of one agent and a tab of two peers
+    private fun pane(id: String, state: String, slot: String, place: Int?, index: Int, at: String = "2026-01-01T00:00:00Z") =
+        AgentSession(Session(machineId = "mac", sessionId = id, state = state, spaceId = "w1", spaceName = "app", slotId = slot,
+            slotIndex = index, paneId = "w1:$id", paneIndex = place, updatedAt = at))
+    private val panes = listOf(
+        pane("review", "needs_you", "t1", 1, 1), pane("lead", "working", "t1", 0, 1), pane("tests", "unread", "t1", 2, 1),
+        pane("deps", "working", "t2", 0, 2), pane("peerA", "unread", "t3", 1, 3), pane("peerB", "idle", "t3", 2, 3),
+    )
+
+    @Test fun aTabOfSeveralAgentsIsOneGroupTheLauncherOnTopItsBranchesUnderIt() {
+        val entries = agentTreeEntries(buildAgentList(panes, machines, settings = MachineSpaceTree), "mac", tabs = true)
+        assertEquals(listOf("group:mac/w1", "tab:mac/:w1/t1", "session:mac/lead", "session:mac/review", "session:mac/tests",
+            "tab:mac/:w1/t3", "session:mac/peerA", "session:mac/peerB", "session:mac/deps"), entries.map { it.key })
+        val tab = entries.filterIsInstance<TreeTabEntry>().first()
+        assertEquals("review", tab.tab.lead.session.sessionId) // the row speaks for the one that needs you
+        assertEquals(3, tab.tab.members.size)
+        assertEquals(0, tab.depth)
+        assertTrue(tab.first)
+        val rows = entries.filterIsInstance<TreeRowEntry>().associateBy { it.row.session.sessionId }
+        assertTrue(rows.getValue("lead").launcher)
+        assertEquals(1, rows.getValue("lead").depth)
+        assertEquals(listOf(true, true), listOf("review", "tests").map { rows.getValue(it).branch })
+        assertEquals(listOf(2, 2), listOf("review", "tests").map { rows.getValue(it).depth })
+        // peers (the top left pane is a shell): no 发起者, side by side under their tab
+        assertEquals(listOf(false, false), listOf("peerA", "peerB").map { rows.getValue(it).launcher || rows.getValue(it).branch })
+        assertEquals(listOf(1, 1), listOf("peerA", "peerB").map { rows.getValue(it).depth })
+        // the idle peer is shown with its tab, so nothing is left for 还有 N 个空闲
+        assertTrue(entries.none { it is TreeIdleEntry })
+        assertTrue(rows.getValue("deps").last)
+        assertEquals(0, rows.getValue("deps").depth)
+    }
+
+    @Test fun aFoldedTabIsItsRowAndTheOtherGroupingsListOneAgentARow() {
+        val list = buildAgentList(panes, machines, settings = MachineSpaceTree)
+        val tab = agentTreeEntries(list, "mac", tabs = true).filterIsInstance<TreeTabEntry>().first().tab
+        val folded = agentTreeEntries(list, "mac", tabs = true, foldedTabs = setOf(tab.foldKey))
+        assertEquals(listOf("group:mac/w1", "tab:mac/:w1/t1", "tab:mac/:w1/t3"), folded.take(3).map { it.key })
+        assertTrue(folded.filterIsInstance<TreeTabEntry>().first().folded)
+        // without tabs (按仓库, 按状态, 按待办, the way the web lists them too) every agent is a row of its own
+        val flat = agentTreeEntries(list, "mac")
+        assertTrue(flat.none { it is TreeTabEntry })
+        assertEquals(panes.size - 1, flat.count { it is TreeRowEntry }) // the seen peer is tucked under 还有 1 个空闲
+        // one agent of the tab left under a quick filter: a row of its own
+        val needs = agentTreeEntries(buildAgentList(panes, machines, settings = MachineSpaceTree.copy(quick = AgentQuickFilter.NeedsYou)), "mac", tabs = true)
+        assertTrue(needs.none { it is TreeTabEntry })
+    }
 }
